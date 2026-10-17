@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 2,
+  "snapshotVersion": "20261017T053000Z",
+  "policyVersion": "2026-10-16",
+  "generatedAt": "2026-10-17T05:30:12Z",
+  "maintenance": {
+    "active": false,
+    "until": null
+  },
+  "minWebBuild": 1,
+  "files": {
+    "beaches": "/data/20261017T053000Z/beaches.json",
+    "status": "/data/20261017T053000Z/status.json",
+    "history": "/data/20261017T053000Z/history.json",
+    "nationwideWarnings": "/data/20261017T053000Z/nationwide-warnings.json"
+  }
+}

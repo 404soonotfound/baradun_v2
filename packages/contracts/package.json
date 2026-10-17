@@ -1,13 +1,25 @@
 {
   "name": "@baradun/contracts",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
-  "devDependencies": {},
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "directories": {
-    "example": "examples"
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./schema.json": "./schemas/contract.schema.json"
+  },
+  "scripts": {
+    "generate": "node scripts/generate.mjs",
+    "check:generated": "npm run generate && git diff --exit-code -- src/generated",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "make:invalid": "node scripts/make-invalid-examples.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "ajv": "^8.20.0",
+    "ajv-formats": "^3.0.1",
+    "json-schema-to-typescript": "^16.0.0",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.5"
   }
 }
