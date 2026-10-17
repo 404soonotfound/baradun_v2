@@ -18,6 +18,7 @@ jobs:
       web: ${{ steps.filter.outputs.web }}
       services: ${{ steps.filter.outputs.services }}
       infra: ${{ steps.filter.outputs.infra }}
+      contracts: ${{ steps.filter.outputs.contracts }} # contracts 변경 여부
     steps:
       - uses: actions/checkout@v4
       - id: filter
@@ -41,6 +42,9 @@ jobs:
             infra:
               - *shared
               - 'infra/**'
+            contracts:                  # 공통 설정 + 계약 폴더가 바뀌면
+              - *shared
+              - 'packages/contracts/**'
 
   # 웹: 린트·타입 검사·정적 빌드
   web:
@@ -90,10 +94,26 @@ jobs:
       - run: npx cdk synth
         working-directory: infra
 
+  # 계약: 생성 타입 일치·타입 검사·예시 검사
+  contracts:
+    needs: changes
+    if: needs.changes.outputs.contracts == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci # lock 파일대로 설치
+      - run: npm run check:generated -w packages/contracts # 생성 타입 = 커밋본
+      - run: npm run typecheck -w packages/contracts # 타입 오류
+      - run: npm run test -w packages/contracts # 예시 통과·거부
+
   # 결과 모음: 건너뜀은 통과, 실패·취소는 실패
   ci-ok:
     if: always()
-    needs: [changes, web, services, infra]
+    needs: [changes, web, services, infra, contracts] # contracts 실패도 빨간불
     runs-on: ubuntu-latest
     steps:
       - name: 결과 확인
