@@ -1,0 +1,12 @@
+{
+  // 공통 규칙 상속: strict·ES2022·Bundler (저장소 루트)
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    // 검사만, 빌드 결과물 없음
+    "noEmit": true,
+    // Node 전역 타입 (테스트의 fs·URL)
+    "types": ["node"]
+  },
+  // 타입 검사 범위: 입구·생성 타입·테스트
+  "include": ["src", "test"]
+}
