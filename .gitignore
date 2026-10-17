@@ -1,0 +1,77 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# dependencies
+node_modules/
+/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# testing
+/coverage/
+apps/*/coverage/
+packages/*/coverage/
+
+# next.js
+.next/
+out/
+
+
+# production
+build/
+
+# misc
+.DS_Store
+*.pem
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# env files (can opt-in for committing if needed)
+.env
+.env.*
+!.env.example
+
+.docs
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# docs: claude.ai 프로젝트용 지침은 로컬 전용 (제품 규칙은 AGENTS.md에 있음)
+docs/prompts/
+
+# tools: 일회성 실측 스크립트·산출물·원본 데이터(V1 데이터 포함)는 로컬 전용.
+# 다시 실행 가능한 스크립트만 tools/ 아래 다른 폴더에 두고 커밋한다.
+tools/coverage/
+tools/**/out/
+tools/**/*.csv
+tools/**/*.xlsx
+tools/**/*.pdf
+__pycache__/
+
+# AI/agent tool outputs
+/.playwright-mcp/
+/.codex-review/
+.claude/settings.local.json
+
+# playwright
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
+
+# storybook
+storybook-static/
+*storybook.log
+
+cdk.out/
