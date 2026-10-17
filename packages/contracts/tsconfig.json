@@ -5,7 +5,9 @@
     // 검사만, 빌드 결과물 없음
     "noEmit": true,
     // Node 전역 타입 (테스트의 fs·URL)
-    "types": ["node"]
+    "types": ["node"],
+    // 테스트에서 scripts/*.mjs 가져오기 허용 (JS 자체 검사는 안 함)
+    "allowJs": true
   },
   // 타입 검사 범위: 입구·생성 타입·테스트
   "include": ["src", "test"]
