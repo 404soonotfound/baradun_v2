@@ -19,6 +19,7 @@ jobs:
       services: ${{ steps.filter.outputs.services }}
       infra: ${{ steps.filter.outputs.infra }}
       contracts: ${{ steps.filter.outputs.contracts }} # contracts 변경 여부
+      beaches: ${{ steps.filter.outputs.beaches }} # 해변 목록 변경 여부
     steps:
       - uses: actions/checkout@v4
       - id: filter
@@ -35,6 +36,7 @@ jobs:
               - *shared
               - 'apps/web/**'
               - 'packages/contracts/**'
+              - 'data/beaches/**' # 해변이 바뀌면 상세 페이지 빌드 확인
             services:
               - *shared
               - 'services/**'
@@ -45,6 +47,11 @@ jobs:
             contracts:                  # 공통 설정 + 계약 폴더가 바뀌면
               - *shared
               - 'packages/contracts/**'
+            beaches: # 해변 목록 또는 검사 규칙이 바뀌면
+              - *shared
+              - 'data/beaches/**'
+              - 'packages/contracts/schemas/**'
+              - 'packages/contracts/scripts/**'
 
   # 웹: 린트·타입 검사·정적 빌드
   web:
@@ -110,10 +117,29 @@ jobs:
       - run: npm run typecheck -w packages/contracts # 타입 오류
       - run: npm run test -w packages/contracts # 예시 통과·거부
 
+  # 해변 목록: 계약 모양·slug 규칙·main과 비교(변경·삭제·재사용 금지)
+  beaches:
+    needs: changes
+    if: needs.changes.outputs.beaches == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # main 비교용 전체 기록
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci # lock 파일대로 설치
+      - run: npm run check:beaches -w packages/contracts # 모양·slug·main 비교
+        env:
+          # PR이면 대상 브랜치, main 푸시면 직전 커밋과 비교
+          BASE_REF: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || github.event.before }}
+
   # 결과 모음: 건너뜀은 통과, 실패·취소는 실패
   ci-ok:
     if: always()
-    needs: [changes, web, services, infra, contracts] # contracts 실패도 빨간불
+    needs: [changes, web, services, infra, contracts, beaches] # 하나라도 실패하면 빨간불
     runs-on: ubuntu-latest
     steps:
       - name: 결과 확인
