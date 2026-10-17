@@ -5,6 +5,10 @@ const nextConfig: NextConfig = {
   output: "export",
   // 페이지별 폴더/index.html 생성 (S3 경로 직접 매핑)
   trailingSlash: true,
+  experimental: {
+    // 루트 레이아웃이 언어별로 둘이라 전역 404 파일 사용 (BRD-47)
+    globalNotFound: true,
+  },
 };
 
 export default nextConfig;
