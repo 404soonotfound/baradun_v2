@@ -1,0 +1,25 @@
+{
+  "name": "@baradun/services",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.164",
+    "@types/node": "^26.6.5",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.5"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "chai": "^6.3.0",
+    "magic-string": "^1.4.3",
+    "picomatch": "^4.0.7",
+    "undici-types": "^8.9.0"
+  }
+}

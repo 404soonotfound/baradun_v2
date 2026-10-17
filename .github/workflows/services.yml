@@ -1,0 +1,39 @@
+# 백엔드 Lambda 검사: 타입·린트·테스트(Vitest)
+name: services
+on:
+  pull_request:
+    paths:
+      [
+        "services/**",
+        "packages/contracts/**",
+        "package.json",
+        "package-lock.json",
+        "tsconfig.base.json",
+        ".github/workflows/services.yml",
+      ]
+  push:
+    branches: [main]
+    paths:
+      [
+        "services/**",
+        "packages/contracts/**",
+        "package.json",
+        "package-lock.json",
+        "tsconfig.base.json",
+        ".github/workflows/services.yml",
+      ]
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run lint -w services --if-present
+      - run: npm run typecheck -w services --if-present
+      - run: npm run test -w services --if-present
