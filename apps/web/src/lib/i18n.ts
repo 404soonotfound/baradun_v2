@@ -1,0 +1,32 @@
+// 언어 주소 도우미 (아키텍처 9.1: 한국어는 접두어 없음, 영어는 /en)
+import type { Metadata } from "next";
+
+export const LOCALES = ["ko", "en"] as const;
+export type Locale = (typeof LOCALES)[number];
+
+// 사이트 주소: hreflang 절대 주소용. 도메인 확정 전에는 로컬 주소 (BRD-40·53)
+export const SITE_URL = new URL(
+  process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000",
+);
+
+// 언어별 경로: localizedPath("en", "/spots/gyeongpo/") → "/en/spots/gyeongpo/"
+export function localizedPath(locale: Locale, path: string): string {
+  const clean = path.startsWith("/") ? path : `/${path}`;
+  return locale === "ko" ? clean : `/en${clean}`;
+}
+
+// 같은 페이지의 두 언어 주소를 서로 연결 (검색 엔진용 hreflang)
+// path는 한국어 기준 경로 (예: "/", "/spots/gyeongpo/")
+export function alternatesFor(
+  locale: Locale,
+  path: string,
+): Metadata["alternates"] {
+  return {
+    canonical: localizedPath(locale, path),
+    languages: {
+      ko: localizedPath("ko", path),
+      en: localizedPath("en", path),
+      "x-default": localizedPath("ko", path), // 언어를 모를 때는 한국어
+    },
+  };
+}
