@@ -1,0 +1,104 @@
+# 통합 검사: 바뀐 영역만 검사하고 ci-ok 하나로 결과를 모음 (main 규칙의 필수 검사)
+name: ci
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+  pull-requests: read
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  # 바뀐 영역 확인
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      web: ${{ steps.filter.outputs.web }}
+      services: ${{ steps.filter.outputs.services }}
+      infra: ${{ steps.filter.outputs.infra }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            shared: &shared
+              - 'package.json'
+              - 'package-lock.json'
+              - 'tsconfig.base.json'
+              - '.nvmrc'
+              - '.github/workflows/ci.yml'
+            web:
+              - *shared
+              - 'apps/web/**'
+              - 'packages/contracts/**'
+            services:
+              - *shared
+              - 'services/**'
+              - 'packages/contracts/**'
+            infra:
+              - *shared
+              - 'infra/**'
+
+  # 웹: 린트·타입 검사·정적 빌드
+  web:
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run lint -w apps/web
+      - run: npm run typecheck -w apps/web
+      - run: npm run build -w apps/web
+
+  # 백엔드: 린트·타입 검사·테스트(Vitest)
+  services:
+    needs: changes
+    if: needs.changes.outputs.services == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run lint -w services --if-present
+      - run: npm run typecheck -w services --if-present
+      - run: npm run test -w services --if-present
+
+  # 인프라: CDK synth
+  infra:
+    needs: changes
+    if: needs.changes.outputs.infra == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run build -w infra
+      - run: npx cdk synth
+        working-directory: infra
+
+  # 결과 모음: 건너뜀은 통과, 실패·취소는 실패
+  ci-ok:
+    if: always()
+    needs: [changes, web, services, infra]
+    runs-on: ubuntu-latest
+    steps:
+      - name: 결과 확인
+        run: |
+          echo '${{ toJSON(needs) }}'
+          if [ "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}" = "true" ]; then
+            exit 1
+          fi
