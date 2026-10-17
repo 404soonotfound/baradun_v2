@@ -11,7 +11,8 @@
     "generate": "node scripts/generate.mjs",
     "check:generated": "npm run generate && git diff --exit-code -- src/generated",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "make:invalid": "node scripts/make-invalid-examples.mjs"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",
