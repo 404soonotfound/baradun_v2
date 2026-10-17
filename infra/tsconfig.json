@@ -3,9 +3,7 @@
     "target": "ES2022",
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
-    "lib": [
-      "es2022"
-    ],
+    "lib": ["es2022"],
     "declaration": true,
     "strict": true,
     "noImplicitAny": true,
@@ -23,13 +21,7 @@
     "skipLibCheck": true,
     "noEmit": true,
     "isolatedModules": true,
-    "types": [
-      "jest",
-      "node"
-    ]
+    "types": ["node"]
   },
-  "exclude": [
-    "node_modules",
-    "cdk.out"
-  ]
+  "exclude": ["node_modules", "cdk.out"]
 }
