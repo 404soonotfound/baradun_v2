@@ -62,7 +62,8 @@ __pycache__/
 # AI/agent tool outputs
 /.playwright-mcp/
 /.codex-review/
-.claude/settings.local.json
+.claude/
+
 
 # playwright
 test-results/
