@@ -47,8 +47,8 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# docs: claude.ai 프로젝트용 지침은 로컬 전용 (제품 규칙은 AGENTS.md에 있음)
-docs/prompts/
+# docs: ADR·조사 기록·프롬프트는 Notion이 원본이라 로컬 전용 (제품 규칙은 AGENTS.md에 있음)
+docs/
 
 # tools: 일회성 실측 스크립트·산출물·원본 데이터(V1 데이터 포함)는 로컬 전용.
 # 다시 실행 가능한 스크립트만 tools/ 아래 다른 폴더에 두고 커밋한다.
