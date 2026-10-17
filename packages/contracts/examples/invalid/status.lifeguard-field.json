@@ -62,7 +62,17 @@
           "openUntil": "2026-08-20",
           "inSeason": false
         },
-        "ripCurrent": null
+        "ripCurrent": null,
+        "nearbyWarnings": [
+          {
+            "type": "dry",
+            "level": "advisory",
+            "zoneCode": "L1999901",
+            "zoneName": "예시 강릉시평지",
+            "publishedAt": "2026-10-17T01:00:00Z",
+            "effectiveFrom": "2026-10-17T01:00:00Z"
+          }
+        ]
       },
       "validUntil": "2026-10-17T06:03:40Z",
       "lifeguard": {
@@ -145,7 +155,8 @@
       },
       "info": {
         "season": null,
-        "ripCurrent": null
+        "ripCurrent": null,
+        "nearbyWarnings": []
       },
       "validUntil": "2026-10-17T06:03:40Z"
     },
@@ -214,7 +225,8 @@
       },
       "info": {
         "season": null,
-        "ripCurrent": null
+        "ripCurrent": null,
+        "nearbyWarnings": []
       },
       "validUntil": "2026-10-17T06:03:40Z"
     }

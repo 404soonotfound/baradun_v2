@@ -296,7 +296,7 @@
         "info": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["season", "ripCurrent"],
+          "required": ["season", "ripCurrent", "nearbyWarnings"],
           "properties": {
             "season": {
               "description": "운영 기간 정보. 대응표가 없으면 null(배지 숨김, N4).",
@@ -333,12 +333,17 @@
                   }
                 }
               ]
+            },
+            "nearbyWarnings": {
+              "description": "주변 특보. 판단에 쓰지 않는 특보(호우·폭염 등)를 정보로만 표시(B3, 10/17 결정). 없으면 빈 목록.",
+              "type": "array",
+              "items": { "$ref": "#/$defs/NearbyWarningItem" }
             }
           }
         },
         "validUntil": {
           "$ref": "#/$defs/DateTime",
-          "description": "min(파고 observedAt + 90분, 특보 lastConfirmedAt + 45분) (B4)."
+          "description": "min(파고 observedAt + 90분, 특보 lastConfirmedAt + 45분) (B4). 파고가 이미 지연(delayed)이면 특보 lastConfirmedAt + 45분만 사용(10/17 결정)."
         }
       },
       "allOf": [
@@ -487,6 +492,28 @@
       "title": "WarningLevel",
       "description": "주의보 / 경보.",
       "enum": ["advisory", "warning"]
+    },
+
+    "NearbyWarningItem": {
+      "title": "NearbyWarningItem",
+      "description": "주변 특보 항목. 분류에 영향 없음.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "level", "zoneCode", "zoneName", "publishedAt", "effectiveFrom"],
+      "properties": {
+        "type": { "$ref": "#/$defs/NearbyWarningType" },
+        "level": { "$ref": "#/$defs/WarningLevel" },
+        "zoneCode": { "type": "string", "pattern": "^[SL][0-9]{7}$" },
+        "zoneName": { "type": "string", "minLength": 1 },
+        "publishedAt": { "$ref": "#/$defs/DateTime" },
+        "effectiveFrom": { "$ref": "#/$defs/DateTime" }
+      }
+    },
+
+    "NearbyWarningType": {
+      "title": "NearbyWarningType",
+      "description": "판단에 쓰지 않는 특보(B3): 호우·폭염·한파·대설·건조·황사.",
+      "enum": ["heavy_rain", "heat_wave", "cold_wave", "heavy_snow", "dry", "yellow_dust"]
     },
 
     "Metric": {

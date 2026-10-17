@@ -77,6 +77,13 @@ export type Metric = Metric1;
  */
 export type NullableDateTime3 = string | null;
 /**
+ * 판단에 쓰지 않는 특보(B3): 호우·폭염·한파·대설·건조·황사.
+ *
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "NearbyWarningType".
+ */
+export type NearbyWarningType = 'heavy_rain' | 'heat_wave' | 'cold_wave' | 'heavy_snow' | 'dry' | 'yellow_dust';
+/**
  * UTC, 예: 2026-10-17T05:30:00Z
  */
 export type DateTime1 = string;
@@ -256,6 +263,10 @@ export interface BeachStatus1 {
       publishedAt: DateTime;
       source: string;
     };
+    /**
+     * 주변 특보. 판단에 쓰지 않는 특보(호우·폭염 등)를 정보로만 표시(B3, 10/17 결정). 없으면 빈 목록.
+     */
+    nearbyWarnings: NearbyWarningItem[];
   };
   validUntil: DateTime1;
 }
@@ -308,6 +319,20 @@ export interface Metric1 {
   state: 'fresh' | 'delayed' | 'none';
   nextExpectedAt: NullableDateTime2;
   expiresAt: NullableDateTime3;
+}
+/**
+ * 주변 특보 항목. 분류에 영향 없음.
+ *
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "NearbyWarningItem".
+ */
+export interface NearbyWarningItem {
+  type: NearbyWarningType;
+  level: WarningLevel;
+  zoneCode: string;
+  zoneName: string;
+  publishedAt: DateTime;
+  effectiveFrom: DateTime;
 }
 /**
  * /data/{v}/history.json. 관측소별 최근 24시간 파고, 1시간 간격(B2).
