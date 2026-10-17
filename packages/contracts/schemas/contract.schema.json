@@ -1,0 +1,635 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://baradun.dev/schemas/contract-v1.json",
+  "title": "Contract",
+  "description": "바라던 바다 V2 공개 데이터 계약 v1 (아키텍처 6.3, 결정 기록 11장 B2). 파일마다 $defs의 *File 정의를 따른다.",
+  "$defs": {
+    "ManifestFile": {
+      "title": "ManifestFile",
+      "description": "/data/manifest.json. 브라우저가 가장 먼저 받는 파일. 60초 캐시.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "snapshotVersion",
+        "policyVersion",
+        "generatedAt",
+        "maintenance",
+        "minWebBuild",
+        "files"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 1,
+          "description": "계약 버전. 화면이 지원하지 않는 값이면 새로고침 후 판단불가(아키텍처 9.1)."
+        },
+        "snapshotVersion": {
+          "type": "string",
+          "pattern": "^[0-9]{8}T[0-9]{6}Z$",
+          "description": "게시 버전. 예: 20261017T053000Z"
+        },
+        "policyVersion": {
+          "type": "string",
+          "minLength": 1,
+          "description": "분류 규칙 버전(지연 기준 등)."
+        },
+        "generatedAt": { "$ref": "#/$defs/DateTime" },
+        "maintenance": { "$ref": "#/$defs/Maintenance" },
+        "minWebBuild": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "이보다 낮은 화면 버전은 강제 업데이트(BRD-43)."
+        },
+        "files": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["beaches", "status", "history", "nationwideWarnings"],
+          "properties": {
+            "beaches": { "$ref": "#/$defs/SnapshotPath" },
+            "status": { "$ref": "#/$defs/SnapshotPath" },
+            "history": { "$ref": "#/$defs/SnapshotPath" },
+            "nationwideWarnings": { "$ref": "#/$defs/SnapshotPath" }
+          }
+        }
+      }
+    },
+
+    "BeachesFile": {
+      "title": "BeachesFile",
+      "description": "/data/{v}/beaches.json. 저장소 data/beaches에서 만든다(17.5).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["beaches"],
+      "properties": {
+        "beaches": { "type": "array", "items": { "$ref": "#/$defs/Beach" } }
+      }
+    },
+
+    "StatusFile": {
+      "title": "StatusFile",
+      "description": "/data/{v}/status.json. 키는 해변 내부 id.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["beaches"],
+      "properties": {
+        "beaches": {
+          "type": "object",
+          "propertyNames": { "$ref": "#/$defs/BeachId" },
+          "additionalProperties": { "$ref": "#/$defs/BeachStatus" }
+        }
+      }
+    },
+
+    "HistoryFile": {
+      "title": "HistoryFile",
+      "description": "/data/{v}/history.json. 관측소별 최근 24시간 파고, 1시간 간격(B2).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stations"],
+      "properties": {
+        "stations": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/WaveHeightHistory" }
+        }
+      }
+    },
+
+    "NationwideWarningsFile": {
+      "title": "NationwideWarningsFile",
+      "description": "/data/{v}/nationwide-warnings.json. 홈의 '전국 해상 특보'.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["lastConfirmedAt", "items"],
+      "properties": {
+        "lastConfirmedAt": { "$ref": "#/$defs/NullableDateTime" },
+        "items": { "type": "array", "items": { "$ref": "#/$defs/WarningItem" } }
+      }
+    },
+
+    "Beach": {
+      "title": "Beach",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "slug",
+        "name",
+        "region",
+        "coords",
+        "activities",
+        "hidden",
+        "warningZones",
+        "stations",
+        "photo",
+        "cctv"
+      ],
+      "properties": {
+        "id": { "$ref": "#/$defs/BeachId" },
+        "slug": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+          "description": "주소용. 한 번 정하면 바꾸지 않음(BRD-45)."
+        },
+        "name": { "$ref": "#/$defs/LocalizedText" },
+        "region": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["sido", "sigungu"],
+          "properties": {
+            "sido": { "$ref": "#/$defs/LocalizedText" },
+            "sigungu": { "$ref": "#/$defs/LocalizedText" }
+          }
+        },
+        "coords": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["lat", "lng"],
+          "properties": {
+            "lat": { "type": "number", "minimum": 33, "maximum": 39 },
+            "lng": { "type": "number", "minimum": 124, "maximum": 132 }
+          }
+        },
+        "activities": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "enum": ["swimming", "surfing", "scuba"] },
+          "description": "스노클링은 출시 제외(B7)."
+        },
+        "hidden": {
+          "type": "boolean",
+          "description": "노출 끔. true면 목록에서 숨기고 상세는 404(BRD-45)."
+        },
+        "warningZones": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["sea", "land"],
+          "properties": {
+            "sea": {
+              "type": "string",
+              "pattern": "^S1[0-9]{6}$",
+              "description": "앞바다 특보구역(풍랑)."
+            },
+            "land": {
+              "type": "string",
+              "pattern": "^L1[0-9]{6}$",
+              "description": "시군 육상 특보구역(강풍)."
+            }
+          }
+        },
+        "stations": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "waveHeight",
+            "wavePeriod",
+            "waveDirection",
+            "waterTemp",
+            "wind"
+          ],
+          "properties": {
+            "waveHeight": { "$ref": "#/$defs/StationRef" },
+            "wavePeriod": { "$ref": "#/$defs/StationRef" },
+            "waveDirection": { "$ref": "#/$defs/StationRef" },
+            "waterTemp": { "$ref": "#/$defs/StationRef" },
+            "wind": { "$ref": "#/$defs/StationRef" }
+          }
+        },
+        "photo": {
+          "oneOf": [
+            { "type": "null" },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["url", "source", "license"],
+              "properties": {
+                "url": {
+                  "type": "string",
+                  "format": "uri",
+                  "pattern": "^https://"
+                },
+                "source": { "type": "string", "minLength": 1 },
+                "license": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "공공누리 유형 원문(D9)."
+                }
+              }
+            }
+          ]
+        },
+        "cctv": {
+          "oneOf": [
+            { "type": "null" },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["url", "source"],
+              "properties": {
+                "url": {
+                  "type": "string",
+                  "format": "uri",
+                  "pattern": "^https://",
+                  "description": "https 직접 표시만(D7)."
+                },
+                "source": { "type": "string", "minLength": 1 }
+              }
+            }
+          ]
+        }
+      }
+    },
+
+    "BeachStatus": {
+      "title": "BeachStatus",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "category",
+        "reasons",
+        "warning",
+        "control",
+        "observation",
+        "info",
+        "validUntil"
+      ],
+      "properties": {
+        "category": { "enum": ["clear", "unavailable", "undetermined"] },
+        "reasons": { "type": "array", "items": { "$ref": "#/$defs/Reason" } },
+        "warning": { "$ref": "#/$defs/WarningState" },
+        "control": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["state"],
+          "properties": {
+            "state": {
+              "const": "not_provided",
+              "description": "출시는 통제를 판단하지 않음(G2)."
+            }
+          }
+        },
+        "observation": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["metrics"],
+          "properties": {
+            "metrics": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "waveHeight",
+                "wavePeriod",
+                "waveDirection",
+                "waterTemp",
+                "wind"
+              ],
+              "properties": {
+                "waveHeight": { "$ref": "#/$defs/Metric" },
+                "wavePeriod": { "$ref": "#/$defs/Metric" },
+                "waveDirection": { "$ref": "#/$defs/Metric" },
+                "waterTemp": { "$ref": "#/$defs/Metric" },
+                "wind": { "$ref": "#/$defs/Metric" }
+              }
+            }
+          }
+        },
+        "info": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["season", "ripCurrent"],
+          "properties": {
+            "season": {
+              "description": "운영 기간 정보. 대응표가 없으면 null(배지 숨김, N4).",
+              "oneOf": [
+                { "type": "null" },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["openFrom", "openUntil", "inSeason"],
+                  "properties": {
+                    "openFrom": { "type": "string", "format": "date" },
+                    "openUntil": { "type": "string", "format": "date" },
+                    "inSeason": { "type": "boolean" }
+                  }
+                }
+              ]
+            },
+            "ripCurrent": {
+              "description": "이안류 지수. 정보 표시만(D5). 제공 해변·기간이 아니면 null. 단계 값 형식은 API 확인 후 확정.",
+              "oneOf": [
+                { "type": "null" },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["label", "publishedAt", "source"],
+                  "properties": {
+                    "label": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "기관 발표 단계 원문."
+                    },
+                    "publishedAt": { "$ref": "#/$defs/DateTime" },
+                    "source": { "type": "string", "minLength": 1 }
+                  }
+                }
+              ]
+            }
+          }
+        },
+        "validUntil": {
+          "$ref": "#/$defs/DateTime",
+          "description": "min(파고 observedAt + 90분, 특보 lastConfirmedAt + 45분) (B4)."
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "category": { "const": "clear" } } },
+          "then": {
+            "properties": {
+              "reasons": { "maxItems": 0 },
+              "warning": { "properties": { "state": { "const": "none" } } }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "category": { "const": "unavailable" } } },
+          "then": {
+            "properties": {
+              "reasons": {
+                "minItems": 1,
+                "contains": { "properties": { "code": { "const": "warning" } } }
+              },
+              "warning": { "properties": { "state": { "const": "active" } } }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "category": { "const": "undetermined" } } },
+          "then": {
+            "properties": {
+              "reasons": {
+                "minItems": 1,
+                "items": {
+                  "properties": {
+                    "code": {
+                      "enum": ["warning_unknown", "observation_delayed"]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+
+    "Reason": {
+      "title": "Reason",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "scope", "source", "at"],
+      "properties": {
+        "code": {
+          "enum": ["warning", "warning_unknown", "observation_delayed"],
+          "description": "통제 code(control_*)는 후속용으로 이름만 예약(아키텍처 6.3)."
+        },
+        "type": { "$ref": "#/$defs/WarningType" },
+        "level": { "$ref": "#/$defs/WarningLevel" },
+        "scope": {
+          "type": "string",
+          "minLength": 1,
+          "description": "범위. 예: 특보구역 이름, 관측소 이름."
+        },
+        "source": {
+          "type": "string",
+          "minLength": 1,
+          "description": "기관. 예: 기상청."
+        },
+        "at": {
+          "$ref": "#/$defs/NullableDateTime",
+          "description": "발표 또는 관측 시각."
+        }
+      },
+      "if": { "properties": { "code": { "const": "warning" } } },
+      "then": { "required": ["type", "level"] },
+      "else": {
+        "not": {
+          "anyOf": [{ "required": ["type"] }, { "required": ["level"] }]
+        }
+      }
+    },
+
+    "WarningState": {
+      "title": "WarningState",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state", "items", "source", "lastConfirmedAt"],
+      "properties": {
+        "state": { "enum": ["none", "active", "unknown"] },
+        "items": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/WarningItem" }
+        },
+        "source": { "type": "string", "minLength": 1 },
+        "lastConfirmedAt": { "$ref": "#/$defs/NullableDateTime" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "state": { "const": "none" } } },
+          "then": {
+            "properties": {
+              "items": { "maxItems": 0 },
+              "lastConfirmedAt": { "type": "string" }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "state": { "const": "active" } } },
+          "then": {
+            "properties": {
+              "items": { "minItems": 1 },
+              "lastConfirmedAt": { "type": "string" }
+            }
+          }
+        }
+      ]
+    },
+
+    "WarningItem": {
+      "title": "WarningItem",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "level",
+        "zoneCode",
+        "zoneName",
+        "publishedAt",
+        "effectiveFrom"
+      ],
+      "properties": {
+        "type": { "$ref": "#/$defs/WarningType" },
+        "level": { "$ref": "#/$defs/WarningLevel" },
+        "zoneCode": { "type": "string", "pattern": "^[SL][0-9]{7}$" },
+        "zoneName": { "type": "string", "minLength": 1 },
+        "publishedAt": { "$ref": "#/$defs/DateTime" },
+        "effectiveFrom": { "$ref": "#/$defs/DateTime" }
+      }
+    },
+
+    "WarningType": {
+      "title": "WarningType",
+      "description": "판단하는 바다 관련 특보 5종(B3): 풍랑·강풍·태풍·폭풍해일·지진해일.",
+      "enum": ["wind_wave", "strong_wind", "typhoon", "storm_surge", "tsunami"]
+    },
+
+    "WarningLevel": {
+      "title": "WarningLevel",
+      "description": "주의보 / 경보.",
+      "enum": ["advisory", "warning"]
+    },
+
+    "Metric": {
+      "title": "Metric",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "value",
+        "unit",
+        "observedAt",
+        "state",
+        "nextExpectedAt",
+        "expiresAt"
+      ],
+      "properties": {
+        "value": { "type": ["number", "null"] },
+        "unit": { "enum": ["m", "s", "deg", "°C", "m/s"] },
+        "observedAt": { "$ref": "#/$defs/NullableDateTime" },
+        "state": {
+          "enum": ["fresh", "delayed", "none"],
+          "description": "none = 20km 안 측정기 없음(분류 영향 없음)."
+        },
+        "nextExpectedAt": { "$ref": "#/$defs/NullableDateTime" },
+        "expiresAt": {
+          "$ref": "#/$defs/NullableDateTime",
+          "description": "파고·수온·바람 observedAt + 90분, 파주기 + 60분(B4)."
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "state": { "const": "fresh" } } },
+          "then": {
+            "properties": {
+              "value": { "type": "number" },
+              "observedAt": { "type": "string" },
+              "expiresAt": { "type": "string" }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "state": { "const": "none" } } },
+          "then": {
+            "properties": {
+              "value": { "type": "null" },
+              "observedAt": { "type": "null" },
+              "expiresAt": { "type": "null" }
+            }
+          }
+        }
+      ]
+    },
+
+    "WaveHeightHistory": {
+      "title": "WaveHeightHistory",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["unit", "points"],
+      "properties": {
+        "unit": { "const": "m" },
+        "points": {
+          "type": "array",
+          "maxItems": 25,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["t", "v"],
+            "properties": {
+              "t": { "$ref": "#/$defs/DateTime" },
+              "v": {
+                "type": ["number", "null"],
+                "minimum": 0,
+                "description": "null = 측정값 없음(차트 빗금)."
+              }
+            }
+          }
+        }
+      }
+    },
+
+    "StationRef": {
+      "title": "StationRef",
+      "description": "대표 관측소. 같은 해상 특보구역 20km 안에 없으면 null → '가까운 관측 없음'.",
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "name", "distanceKm"],
+          "properties": {
+            "id": { "type": "string", "minLength": 1 },
+            "name": { "$ref": "#/$defs/LocalizedText" },
+            "distanceKm": { "type": "number", "minimum": 0, "maximum": 20 }
+          }
+        }
+      ]
+    },
+
+    "Maintenance": {
+      "title": "Maintenance",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["active", "until"],
+      "properties": {
+        "active": { "type": "boolean" },
+        "until": {
+          "$ref": "#/$defs/NullableDateTime",
+          "description": "점검 종료 예정. 모르면 null."
+        }
+      }
+    },
+
+    "LocalizedText": {
+      "title": "LocalizedText",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ko", "en"],
+      "properties": {
+        "ko": { "type": "string", "minLength": 1 },
+        "en": { "type": "string", "minLength": 1 }
+      }
+    },
+
+    "BeachId": {
+      "title": "BeachId",
+      "type": "string",
+      "pattern": "^b[0-9]{4}$",
+      "description": "내부 id. 예: b0001"
+    },
+    "SnapshotPath": {
+      "title": "SnapshotPath",
+      "type": "string",
+      "pattern": "^/data/[0-9]{8}T[0-9]{6}Z/[a-z-]+\\.json$"
+    },
+    "DateTime": {
+      "title": "DateTime",
+      "type": "string",
+      "format": "date-time",
+      "description": "UTC, 예: 2026-10-17T05:30:00Z"
+    },
+    "NullableDateTime": {
+      "title": "NullableDateTime",
+      "type": ["string", "null"],
+      "format": "date-time"
+    }
+  }
+}
