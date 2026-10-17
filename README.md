@@ -26,8 +26,6 @@ npm run lint
 npm run typecheck
 ```
 
-현재 디자인 토큰 생성 스크립트가 없어 `dev`·`build`가 시작되지 않습니다(작업 예정).
-
 ## 기준 문서
 
 요구사항과 아키텍처 결정(ADR 포함)의 원본은 Notion 'V2 공식 문서 인덱스 · 현재 기준'입니다. 이 저장소의 문서와 다르면 Notion을 따릅니다. 작업 규칙은 [AGENTS.md](AGENTS.md)에 있습니다.
