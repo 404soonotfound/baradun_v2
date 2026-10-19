@@ -2,6 +2,9 @@
 @import "tailwindcss";
 @import "../styles/tokens.css";
 
+/* 홈 화면 추가(standalone)로 열었을 때만 적용: standalone:pt-… (BRD-24) */
+@custom-variant standalone (@media (display-mode: standalone));
+
 @layer base {
   html {
     background: var(--color-bg-page);
