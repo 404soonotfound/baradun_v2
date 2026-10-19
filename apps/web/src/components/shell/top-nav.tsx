@@ -2,23 +2,21 @@
 
 import { Search, Settings } from "lucide-react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { useLocale, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
 
 import { cn } from "@/lib/cn";
-import { type Locale, localizedPath } from "@/lib/i18n";
+import { localizedPath } from "@/lib/i18n";
 import { TABS, isTabActive } from "@/lib/nav";
+import { useTabNavigation } from "@/lib/use-tab-navigation";
 
 // 상단 내비 (노션 1장 'PC 흐름', 3장 TopNav): 높이 64, 현재 메뉴는 아래 2px 파란 줄
-// 홈 · 탐색 · 즐겨찾기 + 검색 + 설정. 업데이트 상태는 데이터 연결 이슈에서 추가해요.
-// PC(lg 이상)에서만 보여요.
+// 홈 · 탐색 · 즐겨찾기 + 검색 + 설정. 업데이트 상태는 데이터 연결 이슈에서 추가 예정
+// 메뉴(설정 포함)는 하단 탭과 같은 이동 규칙(마지막 상태·맨 위로) 사용. PC(lg 이상)에서만 표시
 export function TopNav() {
-  const pathname = usePathname();
-  const locale = useLocale() as Locale;
   const t = useTranslations("nav");
   const tMeta = useTranslations("meta");
+  const { pathname, locale, current, hrefFor, onTabClick } = useTabNavigation();
   const menu = TABS.filter((tab) => tab.key !== "settings");
-  const settingsActive = isTabActive(pathname, "/settings/", locale);
   const searchActive = isTabActive(pathname, "/search/", locale);
 
   return (
@@ -34,12 +32,14 @@ export function TopNav() {
 
         <nav aria-label={t("main")} className="h-full">
           <ul className="flex h-full gap-6">
-            {menu.map(({ key, path }) => {
-              const active = isTabActive(pathname, path, locale);
+            {menu.map(({ key }) => {
+              const active = key === current;
               return (
                 <li key={key} className="h-full">
                   <Link
-                    href={localizedPath(locale, path)}
+                    href={hrefFor(key)}
+                    scroll={false}
+                    onClick={(event) => onTabClick(event, key)}
                     aria-current={active ? "page" : undefined}
                     className={cn(
                       "flex h-full items-center border-b-2 text-title-s",
@@ -69,12 +69,14 @@ export function TopNav() {
             {t("search")}
           </Link>
           <Link
-            href={localizedPath(locale, "/settings/")}
-            aria-current={settingsActive ? "page" : undefined}
+            href={hrefFor("settings")}
+            scroll={false}
+            onClick={(event) => onTabClick(event, "settings")}
+            aria-current={current === "settings" ? "page" : undefined}
             aria-label={t("settings")}
             className={cn(
               "flex size-touch items-center justify-center rounded-full hover:bg-bg-subtle",
-              settingsActive ? "text-brand-default" : "text-text-body",
+              current === "settings" ? "text-brand-default" : "text-text-body",
             )}
           >
             <Settings aria-hidden="true" size={21} />
