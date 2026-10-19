@@ -31,5 +31,24 @@
   "notFound": {
     "title": "Page not found",
     "home": "Go to home"
+  },
+  "nav": {
+    "main": "Main menu",
+    "skipToContent": "Skip to content",
+    "home": "Home",
+    "explore": "Explore",
+    "favorites": "Favorites",
+    "settings": "Settings",
+    "search": "Search beaches or regions"
+  },
+  "pages": {
+    "explore": "Explore",
+    "search": "Search",
+    "favorites": "Favorites",
+    "settings": "Settings",
+    "inquiry": "Data inquiry",
+    "guide": "Safety & data guide",
+    "dataSources": "Data sources & terms of use",
+    "terms": "About & terms"
   }
 }

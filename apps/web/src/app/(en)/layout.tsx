@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 import { RootDocument } from "@/components/root-document";
+import { AppShell } from "@/components/shell/app-shell";
 import { SITE_URL } from "@/lib/i18n";
 import "../globals.css";
 
@@ -10,7 +11,7 @@ export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations({ locale: "en", namespace: "meta" });
   return {
     metadataBase: SITE_URL, // hreflang 절대 주소의 기준
-    title: t("siteName"),
+    title: { default: t("siteName"), template: `%s · ${t("siteName")}` },
     description: t("description"),
   };
 }
@@ -21,5 +22,9 @@ export default function EnRootLayout({
   children: React.ReactNode;
 }) {
   getTranslations({ locale: "en" });
-  return <RootDocument locale="en">{children}</RootDocument>;
+  return (
+    <RootDocument locale="en">
+      <AppShell locale="en">{children}</AppShell>
+    </RootDocument>
+  );
 }
