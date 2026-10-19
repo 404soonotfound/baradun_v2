@@ -3,6 +3,7 @@ import { getTranslations } from "next-intl/server";
 import { RootDocument } from "@/components/root-document";
 import { SITE_URL } from "@/lib/i18n";
 import { AppShell } from "@/components/shell/app-shell";
+import { sharedViewport } from "@/lib/viewport";
 
 import "../globals.css";
 
@@ -15,6 +16,9 @@ export async function generateMetadata(): Promise<Metadata> {
     description: t("description"),
   };
 }
+
+// Next가 이 이름을 보고 <meta name="viewport">·theme-color를 만들어줌
+export const viewport = sharedViewport;
 
 export default function KoRootLayout({
   children,
