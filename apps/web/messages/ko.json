@@ -1,0 +1,35 @@
+{
+  "meta": {
+    "siteName": "바라던 바다",
+    "description": "공식 특보와 해양 관측 정보를 해변별로 보여줘요."
+  },
+  "common": {
+    "languages": "언어"
+  },
+  "verdict": {
+    "clear": {
+      "title": "특보 없음"
+    },
+    "unknownWarning": {
+      "title": "특보 확인 못 함"
+    },
+    "stale": {
+      "title": "관측 지연"
+    }
+  },
+  "observation": {
+    "none": "가까운 관측 없음",
+    "measuredAgo": "{minutes}분 전 측정",
+    "issuedAt": "{time} 발표"
+  },
+  "safety": {
+    "finalCall": "최종 판단은 현장 통제와 안전요원 안내가 우선이에요"
+  },
+  "home": {
+    "preparing": "화면을 준비하고 있어요."
+  },
+  "notFound": {
+    "title": "페이지를 찾을 수 없어요",
+    "home": "홈으로"
+  }
+}

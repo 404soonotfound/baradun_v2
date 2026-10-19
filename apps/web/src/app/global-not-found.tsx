@@ -1,28 +1,38 @@
 import type { Metadata } from "next";
-import "./globals.css";
 import Link from "next/link";
+import { getTranslations } from "next-intl/server";
+import { RootDocument } from "@/components/root-document";
+import "./globals.css";
 
 // 전역 404: 루트 레이아웃이 언어별로 둘이라 한 파일로 두 언어를 함께 표시
 // 실제 화면(SYS 404)은 BRD-38
-export const metadata: Metadata = {
-  title: "페이지를 찾을 수 없어요 · Page not found",
-};
+async function bothLocales() {
+  return Promise.all([
+    getTranslations({ locale: "ko", namespace: "notFound" }),
+    getTranslations({ locale: "en", namespace: "notFound" }),
+  ]);
+}
 
-export default function GlobalNotFound() {
+export async function generateMetadata(): Promise<Metadata> {
+  const [ko, en] = await bothLocales();
+  return { title: `${ko("title")} · ${en("title")}` };
+}
+
+export default async function GlobalNotFound() {
+  const [ko, en] = await bothLocales();
+
   return (
-    <html lang="ko">
-      <body>
-        <main>
-          <h1>페이지를 찾을 수 없어요</h1>
-          <p>
-            <Link href="/">홈으로</Link>
-          </p>
-          <h2 lang="en">Page not found</h2>
-          <p lang="en">
-            <a href="/en/">Go to home</a>
-          </p>
-        </main>
-      </body>
-    </html>
+    <RootDocument locale="ko">
+      <main>
+        <h1>{ko("title")}</h1>
+        <p>
+          <Link href="/">{ko("home")}</Link>
+        </p>
+        <h2 lang="en">{en("title")}</h2>
+        <p lang="en">
+          <a href="/en/">{en("home")}</a>
+        </p>
+      </main>
+    </RootDocument>
   );
 }
