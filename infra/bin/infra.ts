@@ -1,20 +1,11 @@
 #!/usr/bin/env node
-import * as cdk from 'aws-cdk-lib/core';
-import { InfraStack } from '../lib/infra-stack';
+import { App } from "aws-cdk-lib";
+import { BaradunStack } from "../lib/baradun-stack";
 
-const app = new cdk.App();
-new InfraStack(app, 'InfraStack', {
-  /* If you don't specify 'env', this stack will be environment-agnostic.
-   * Account/Region-dependent features and context lookups will not work,
-   * but a single synthesized template can be deployed anywhere. */
+const app = new App();
 
-  /* Uncomment the next line to specialize this stack for the AWS Account
-   * and Region that are implied by the current CLI configuration. */
-  // env: { account: process.env.CDK_DEFAULT_ACCOUNT, region: process.env.CDK_DEFAULT_REGION },
-
-  /* Uncomment the next line if you know exactly what Account and Region you
-   * want to deploy the stack to. */
-  // env: { account: '123456789012', region: 'us-east-1' },
-
-  /* For more information, see https://docs.aws.amazon.com/cdk/latest/guide/environments.html */
+new BaradunStack(app, "BaradunV2", {
+  // 리전은 서울 고정 (E5). 계정은 배포할 때 로그인 정보에서 읽어요.
+  // 계정 없이 cdk synth를 해도 동작해요 (계정 자리만 비워 둔 템플릿).
+  env: { account: process.env.CDK_DEFAULT_ACCOUNT, region: "ap-northeast-2" },
 });
