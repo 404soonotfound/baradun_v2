@@ -4,9 +4,9 @@ import type { HTMLAttributes, ReactNode } from "react";
 import { cn } from "@/lib/cn";
 
 // 상태 배지 (노션 4장, 결정 기록 Rev.2.2)
-// 색만으로 구분하지 않아요: 아이콘 + 실제 사유 글자(예: 풍랑주의보, 관측 지연)를 함께 넣어요.
+// 색만으로 구분하지 않음: 아이콘 + 실제 사유 글자(예: 풍랑주의보, 관측 지연)를 함께 넣음.
 // 아이콘(노션 5장): clear 체크 원 · blocked 금지/경고 삼각 · unknown 물음표 원 · stale 시계 · info 달력/달
-// tone은 색만 정해요. 무엇을 보여줄지는 publisher가 게시한 분류를 그대로 따라요(화면에서 다시 계산하지 않음).
+// tone은 색만 정함. 무엇을 보여줄지는 publisher가 게시한 분류를 그대로 따름(화면에서 다시 계산하지 않음).
 //   clear   특보 없음
 //   blocked 이용불가 (특보 발효)
 //   unknown 판단불가 (특보 확인 못 함)
@@ -33,7 +33,7 @@ const statusBadgeVariants = cva(
       },
     },
     defaultVariants: {
-      // 모르는 값이 들어오면 판단불가 모양으로 보여요(위험 정보를 숨기지 않음).
+      // 모르는 값이 들어오면 판단불가 모양으로 보임(위험 정보를 숨기지 않음).
       tone: "unknown",
       size: "md",
     },
@@ -44,7 +44,7 @@ export interface StatusBadgeProps
   extends
     HTMLAttributes<HTMLSpanElement>,
     VariantProps<typeof statusBadgeVariants> {
-  // 상태 아이콘 (예: lucide 아이콘). 장식이라 화면 읽기 프로그램에는 글자만 읽혀요.
+  // 상태 아이콘 (예: lucide 아이콘). 장식이라 화면 읽기 프로그램에는 글자만 읽힘.
   icon?: ReactNode;
 }
 

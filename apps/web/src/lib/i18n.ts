@@ -4,7 +4,7 @@ import type { Metadata } from "next";
 export const LOCALES = ["ko", "en"] as const;
 export type Locale = (typeof LOCALES)[number];
 
-// 언어 이름은 그 언어로 써요(한국어 화면에서도 "English"). 번역하지 않는 값이라 문구 키가 아니라 여기 둬요.
+// 언어 이름은 그 언어로 씀(한국어 화면에서도 "English"). 번역하지 않는 값이라 문구 키가 아니라 여기 둠.
 // 언어를 추가할 때: LOCALES·LOCALE_NAMES에 한 줄씩, messages/{언어}.json, 경로 그룹 (ja)/ja 같은 레이아웃
 export const LOCALE_NAMES: Record<Locale, string> = {
   ko: "한국어",

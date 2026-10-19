@@ -1,5 +1,5 @@
-// 토큰 검사 (BRD-22): 대비 기준 + 금지 색. 패키지 없이 node만으로 돌아요.
-// 실패하면 종료 코드 1 → CI가 막아요.
+// 토큰 검사 (BRD-22): 대비 기준 + 금지 색. 패키지 없이 node만으로 실행됨.
+// 실패하면 종료 코드 1 → CI가 막음.
 import { readFileSync } from "node:fs";
 
 const tokens = JSON.parse(
@@ -92,7 +92,7 @@ for (const mode of ["light", "dark"]) {
   }
 }
 
-// 금지 색: 초록 계열(색상각 90~170°, 채도 있는 색)을 쓰지 않아요 (노션 4장)
+// 금지 색: 초록 계열(색상각 90~170°, 채도 있는 색)을 쓰지 않음 (노션 4장)
 function hue(hex) {
   const n = hex.replace("#", "");
   const [r, g, b] = [0, 2, 4].map((i) => parseInt(n.slice(i, i + 2), 16) / 255);

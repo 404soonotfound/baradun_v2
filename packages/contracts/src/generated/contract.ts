@@ -89,7 +89,7 @@ export type NearbyWarningType = 'heavy_rain' | 'heat_wave' | 'cold_wave' | 'heav
 export type DateTime1 = string;
 
 /**
- * 바라던 바다 V2 공개 데이터 계약 v1 (아키텍처 6.3, 결정 기록 11장 B2). 파일마다 $defs의 *File 정의를 따른다.
+ * 바라던 바다 V2 공개 데이터 계약 v1 (아키텍처 6.3, 결정 기록 11장 B2). 파일마다 $defs의 *File 정의를 따름.
  */
 export interface Contract {
   [k: string]: unknown;
@@ -135,7 +135,7 @@ export interface Maintenance {
   until: NullableDateTime;
 }
 /**
- * /data/{v}/beaches.json. 저장소 data/beaches에서 만든다(17.5).
+ * /data/{v}/beaches.json. 저장소 data/beaches에서 만듦(17.5).
  *
  * This interface was referenced by `Contract`'s JSON-Schema
  * via the `definition` "BeachesFile".

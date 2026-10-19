@@ -2,14 +2,14 @@ import { readdirSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
-// GitHub Actions 워크플로 파일을 글자로 읽어서 배포 가드레일을 검사해요 (11장).
+// GitHub Actions 워크플로 파일을 글자로 읽어서 배포 가드레일을 검사함 (11장).
 const dir = resolve(__dirname, "../../.github/workflows");
 const workflows = readdirSync(dir)
   .filter((f) => /\.ya?ml$/.test(f))
   .map((f) => ({ name: f, text: readFileSync(resolve(dir, f), "utf8") }));
 const deploy = workflows.find((w) => w.name === "deploy.yml");
 
-// 주석(# 뒤)은 빼고 검사해요
+// 주석(# 뒤)은 빼고 검사함
 const codeLines = (text: string) =>
   text
     .split("\n")

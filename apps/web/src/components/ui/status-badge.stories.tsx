@@ -11,7 +11,7 @@ import ko from "../../../messages/ko.json";
 import { StatusBadge } from "./status-badge";
 
 // 상태 배지 확인용 (BRD-22). 아이콘은 노션 5장: 체크 원 · 경고 삼각 · 물음표 원 · 시계 · 달
-// "풍랑주의보"는 데이터에서 오는 실제 사유 예시예요.
+// "풍랑주의보"는 데이터에서 오는 실제 사유 예시임.
 const meta = {
   title: "UI/StatusBadge",
   component: StatusBadge,

@@ -1,4 +1,4 @@
-/* 전역 스타일 (BRD-22). 값은 모두 토큰에서 와요: tokens/tokens.json → npm run tokens */
+/* 전역 스타일 (BRD-22). 값은 모두 토큰에서 옴: tokens/tokens.json → npm run tokens */
 @import "tailwindcss";
 @import "../styles/tokens.css";
 
@@ -17,7 +17,7 @@
     line-height: var(--text-body--line-height);
     font-synthesis: none;
     text-rendering: optimizeLegibility;
-    /* 한국어는 낱말 중간에서 줄을 바꾸지 않아요. 아주 긴 주소 등은 넘치지 않게 끊어요. */
+    /* 한국어는 낱말 중간에서 줄을 바꾸지 않음. 아주 긴 주소 등은 넘치지 않게 끊음. */
     word-break: keep-all;
     overflow-wrap: anywhere;
   }

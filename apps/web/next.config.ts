@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 import createNextIntlPlugin from "next-intl/plugin";
 
-// 문구 키: 요청 설정 파일 위치를 알려 줘요 (BRD-22)
+// 문구 키: 요청 설정 파일 위치를 알려 줌 (BRD-22)
 const withNextIntl = createNextIntlPlugin("./src/i18n/request.ts");
 
 const nextConfig: NextConfig = {

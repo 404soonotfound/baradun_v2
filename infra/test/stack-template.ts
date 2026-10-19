@@ -2,7 +2,7 @@ import { App } from "aws-cdk-lib";
 import { Template } from "aws-cdk-lib/assertions";
 import { BaradunStack } from "../lib/baradun-stack";
 
-// 가드레일 테스트들이 같이 쓰는 템플릿. AWS 계정 없이 만들어요.
+// 가드레일 테스트들이 같이 쓰는 템플릿. AWS 계정 없이 만듦.
 export const template = Template.fromStack(
   new BaradunStack(new App(), "Test", { env: { region: "ap-northeast-2" } }),
 );
@@ -21,7 +21,7 @@ export type PolicyWithStatements = {
   statements: Statement[];
 };
 
-// 템플릿 안의 모든 IAM 정책(역할 인라인 정책 포함)을 문장 목록으로 모아요.
+// 템플릿 안의 모든 IAM 정책(역할 인라인 정책 포함)을 문장 목록으로 모음.
 export function allIamPolicies(): PolicyWithStatements[] {
   const result: PolicyWithStatements[] = [];
 
@@ -62,7 +62,7 @@ export function toList<T>(value: T | T[] | undefined): T[] {
   return Array.isArray(value) ? value : [value];
 }
 
-// CloudFormation 표현({"Fn::Join"...})을 "SiteBucket.Arn/data/*" 같은 글자로 바꿔요.
+// CloudFormation 표현({"Fn::Join"...})을 "SiteBucket.Arn/data/*" 같은 글자로 바꿈.
 export function resourceText(value: unknown): string {
   if (typeof value === "string") return value;
   if (value && typeof value === "object") {
@@ -87,7 +87,7 @@ export function coversDataPrefix(resource: string): boolean {
   return path.endsWith("*") && "data/".startsWith(path.slice(0, -1));
 }
 
-// 객체를 올리거나 지우는 동작인지. "*"·"s3:*"·"s3:Put*" 같은 와일드카드도 잡아요.
+// 객체를 올리거나 지우는 동작인지. "*"·"s3:*"·"s3:Put*" 같은 와일드카드도 잡음.
 export function isObjectWrite(action: string): boolean {
   const pattern = new RegExp(
     `^${action.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*")}$`,
