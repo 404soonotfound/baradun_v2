@@ -14,14 +14,14 @@ export const metadata: Metadata = {
 };
 
 export default async function HomeEn() {
-  // 언어를 직접 넘겨요. 빠뜨리면 한국어 문구가 나와요.
+  // 언어를 직접 넘김. 빠뜨리면 한국어 문구가 나옴.
   const t = await getTranslations({ locale: "en" });
 
   return (
     <main>
       <h1>{t("meta.siteName")}</h1>
       <p>{t("home.preparing")}</p>
-      {/* 지금 언어를 뺀 나머지 언어로 가는 링크. 언어가 늘어도 이 코드는 그대로예요. */}
+      {/* 지금 언어를 뺀 나머지 언어로 가는 링크. 언어가 늘어도 이 코드는 그대로임. */}
       <nav aria-label={t("common.languages")}>
         {LOCALES.filter((locale) => locale !== "en").map((locale) => (
           <Link

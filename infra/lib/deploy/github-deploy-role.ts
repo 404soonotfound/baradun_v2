@@ -13,7 +13,7 @@ export interface GitHubDeployRoleProps {
 }
 
 // GitHub Actions가 장기 키 없이 사이트 파일을 올리는 역할 (OIDC, 11장)
-// 사이트 경로만 쓰고 data/는 건드리지 못해요. 인프라 배포(cdk deploy) 권한은 없어요.
+// 사이트 경로만 쓰고 data/는 건드리지 못함. 인프라 배포(cdk deploy) 권한은 없음.
 export class GitHubDeployRole extends Construct {
   readonly role: iam.Role;
 
@@ -21,7 +21,7 @@ export class GitHubDeployRole extends Construct {
     super(scope, id);
 
     // GitHub가 발급한 토큰을 AWS가 믿게 하는 등록 정보 (계정에 주소당 하나)
-    // Native: CloudFormation 기본 리소스라 별도 Lambda를 만들지 않아요
+    // Native: CloudFormation 기본 리소스라 별도 Lambda를 만들지 않음
     const provider = new iam.OidcProviderNative(this, "GitHubOidc", {
       url: `https://${GITHUB_OIDC_HOST}`,
       clientIds: ["sts.amazonaws.com"],
@@ -47,7 +47,7 @@ export class GitHubDeployRole extends Construct {
       }),
     );
 
-    // data/는 명시적으로 거부. 거부는 허용보다 항상 우선해요 (sync에서 빠뜨려도 안전)
+    // data/는 명시적으로 거부. 거부는 허용보다 항상 우선함 (sync에서 빠뜨려도 안전)
     this.role.addToPolicy(
       new iam.PolicyStatement({
         effect: iam.Effect.DENY,
@@ -56,7 +56,7 @@ export class GitHubDeployRole extends Construct {
       }),
     );
 
-    // sync가 올릴 파일을 고르려면 버킷 목록이 필요해요
+    // sync가 올릴 파일을 고르려면 버킷 목록이 필요함
     this.role.addToPolicy(
       new iam.PolicyStatement({
         actions: ["s3:ListBucket"],

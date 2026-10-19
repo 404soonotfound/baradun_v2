@@ -4,7 +4,7 @@ import type { ButtonHTMLAttributes } from "react";
 
 import { cn } from "@/lib/cn";
 
-// 버튼 (노션 4장: 높이 52, 모서리 14). 색은 브랜드 토큰만 써요(판단 상태 색 아님).
+// 버튼 (노션 4장: 높이 52, 모서리 14). 색은 브랜드 토큰만 씀(판단 상태 색 아님).
 const buttonVariants = cva(
   "inline-flex h-button min-w-touch items-center justify-center gap-2 rounded-button px-5 text-title-s transition-[background-color,opacity,transform] duration-200 ease-standard disabled:pointer-events-none disabled:opacity-45",
   {

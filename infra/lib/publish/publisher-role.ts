@@ -7,8 +7,8 @@ export interface PublisherRoleProps {
   readonly bucket: s3.IBucket;
 }
 
-// publish-snapshot Lambda가 쓸 역할. data/ 쓰기는 이 역할만 가져요 (BRD-52, 6.2 단일 작성자).
-// 함수는 BRD-61에서 만들고 이 역할을 붙여요.
+// publish-snapshot Lambda가 쓸 역할. data/ 쓰기는 이 역할만 가짐 (BRD-52, 6.2 단일 작성자).
+// 함수는 BRD-61에서 만들고 이 역할을 붙임.
 export class PublisherRole extends Construct {
   readonly role: iam.Role;
 
@@ -16,7 +16,7 @@ export class PublisherRole extends Construct {
     super(scope, id);
 
     this.role = new iam.Role(this, "Role", {
-      // Lambda 서비스만 이 역할을 쓸 수 있어요
+      // Lambda 서비스만 이 역할을 쓸 수 있음
       assumedBy: new iam.ServicePrincipal("lambda.amazonaws.com"),
       description: "publish-snapshot: write data/ snapshots and manifest only",
     });
@@ -29,7 +29,7 @@ export class PublisherRole extends Construct {
       }),
     );
 
-    // 보존 개수(최근 48개)를 세려면 목록이 필요해요. 목록도 data/ 아래만
+    // 보존 개수(최근 48개)를 세려면 목록이 필요함. 목록도 data/ 아래만
     this.role.addToPolicy(
       new iam.PolicyStatement({
         actions: ["s3:ListBucket"],

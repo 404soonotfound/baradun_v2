@@ -14,8 +14,8 @@ import {
 } from "../lib/settings";
 import { template, toList } from "./stack-template";
 
-// 아키텍처 11장 '과금·보안 가드레일'을 템플릿으로 검사해요.
-// 지금은 검사 대상이 0개인 항목도 있어요. 다음 묶음에서 리소스가 생기면 바로 걸러요.
+// 아키텍처 11장 '과금·보안 가드레일'을 템플릿으로 검사함.
+// 지금은 검사 대상이 0개인 항목도 있음. 다음 묶음에서 리소스가 생기면 바로 거름.
 
 describe("KMS", () => {
   it("고객 관리형 KMS 키를 만들지 않는다 (키 하나당 월 요금)", () => {
@@ -127,7 +127,7 @@ describe("정액 요금제 web ACL (BRD-51)", () => {
 
 type Capacity = { ReadCapacityUnits: number; WriteCapacityUnits: number };
 
-// 지금은 대상이 0개예요. BRD-55(테이블)·56~58(수집)·61(게시)에서 리소스가 생기면 바로 걸러요.
+// 지금은 대상이 0개임. BRD-55(테이블)·56~58(수집)·61(게시)에서 리소스가 생기면 바로 거름.
 describe("재시도·경보·용량 (11장 기본값 함정)", () => {
   it("Scheduler 일정은 재시도 횟수와 최대 이벤트 나이를 줄여서 명시한다", () => {
     for (const schedule of Object.values(

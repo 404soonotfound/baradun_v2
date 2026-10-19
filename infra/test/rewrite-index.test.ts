@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { rewriteIndexCode } from "../lib/site/rewrite-index";
 
-// CloudFront에 올릴 코드 문자열을 그대로 실행해서 확인해요(올리기 전에 로컬에서 검사).
+// CloudFront에 올릴 코드 문자열을 그대로 실행해서 확인함(올리기 전에 로컬에서 검사).
 const handler = new Function(
   `${rewriteIndexCode}\nreturn handler;`,
 )() as (event: { request: { uri: string } }) => { uri: string };

@@ -6,7 +6,7 @@ import { BaradunStack } from "../lib/baradun-stack";
 // AWS가 만들어 둔 CachingOptimized 정책 ID (모든 계정 공통)
 const CACHING_OPTIMIZED_ID = "658327ea-f89d-4fab-a63d-7e88639e58f6";
 
-// 스택을 CloudFormation 템플릿(JSON)으로 만들어서 검사해요. AWS 계정은 필요 없어요.
+// 스택을 CloudFormation 템플릿(JSON)으로 만들어서 검사함. AWS 계정은 필요 없음.
 const template = Template.fromStack(
   new BaradunStack(new App(), "Test", { env: { region: "ap-northeast-2" } }),
 );

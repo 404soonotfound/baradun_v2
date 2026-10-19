@@ -9,7 +9,7 @@ import {
 } from "./stack-template";
 import { GITHUB_OIDC_SUBJECT } from "../lib/settings";
 
-// 역할의 논리 ID를 찾아요 (CDK가 이름 뒤에 해시를 붙이므로 앞부분으로 찾기)
+// 역할의 논리 ID를 찾음 (CDK가 이름 뒤에 해시를 붙이므로 앞부분으로 찾기)
 function roleId(prefix: string): string {
   const ids = Object.keys(template.findResources("AWS::IAM::Role")).filter(
     (id) => id.startsWith(prefix),

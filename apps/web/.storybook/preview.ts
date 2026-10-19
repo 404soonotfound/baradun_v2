@@ -6,7 +6,7 @@ const preview: Preview = {
     // 접근성 위반을 오류로 표시 (라이트·다크 모두 대비 확인)
     a11y: { test: "error" },
   },
-  // 위쪽 도구 막대에서 테마를 바꿔요. 사이트와 같이 <html data-theme>을 써요.
+  // 위쪽 도구 막대에서 테마를 바꿈. 사이트와 같이 <html data-theme>을 씀.
   globalTypes: {
     theme: {
       description: "화면 테마",

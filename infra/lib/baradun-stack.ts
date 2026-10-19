@@ -13,13 +13,13 @@ import { CostBudget } from "./ops/cost-budget";
 import { PublisherRole } from "./publish/publisher-role";
 import { SiteDelivery } from "./site/site-delivery";
 
-// 바라던 바다 V2 인프라 스택. 기능 묶음(사이트 전달, 수집, 게시…)을 여기에 하나씩 붙여요.
+// 바라던 바다 V2 인프라 스택. 기능 묶음(사이트 전달, 수집, 게시…)을 여기에 하나씩 붙임.
 export class BaradunStack extends Stack {
   constructor(scope: Construct, id: string, props?: StackProps) {
     super(scope, id, props);
 
     // 배포할 때 넘기는 값 (저장소에 남기지 않음). 한 번 넘기면 다음 배포부터는
-    // CloudFormation이 이전 값을 그대로 써요.
+    // CloudFormation이 이전 값을 그대로 씀.
     const alertEmail = new CfnParameter(this, "AlertEmail", {
       type: "String",
       allowedPattern: "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$",
@@ -39,7 +39,7 @@ export class BaradunStack extends Stack {
     });
 
     const site = new SiteDelivery(this, "Site", {
-      // 값이 있으면 그 web ACL을 붙이고, 비어 있으면 속성 자체를 빼요.
+      // 값이 있으면 그 web ACL을 붙이고, 비어 있으면 속성 자체를 뺌.
       webAclId: Fn.conditionIf(
         hasSiteWebAcl.logicalId,
         siteWebAclArn.valueAsString,
@@ -64,7 +64,7 @@ export class BaradunStack extends Stack {
     new CfnOutput(this, "DistributionDomainName", {
       value: site.distribution.distributionDomainName,
     });
-    // GitHub 배포 워크플로가 쓰는 값 (비밀값 아님, GitHub Variables에 넣어요)
+    // GitHub 배포 워크플로가 쓰는 값 (비밀값 아님, GitHub Variables에 넣음)
     new CfnOutput(this, "DistributionId", {
       value: site.distribution.distributionId,
     });

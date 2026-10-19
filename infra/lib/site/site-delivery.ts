@@ -7,12 +7,12 @@ import { rewriteIndexCode } from "./rewrite-index";
 
 export interface SiteDeliveryProps {
   // CloudFront 정액 요금제가 붙인 WAF web ACL의 ARN (us-east-1). 없으면 비워 둠.
-  // 요금제를 쓰는 배포에서 web ACL을 떼면 안 돼서, 구독 뒤에는 꼭 넘겨야 해요.
+  // 요금제를 쓰는 배포에서 web ACL을 떼면 안 돼서, 구독 뒤에는 꼭 넘겨야 함.
   readonly webAclId?: string;
 }
 
 // 사이트 전달: S3 버킷 하나(사이트 파일 + data/ 스냅샷, BRD-52) + CloudFront 하나(G3)
-// 쓰기 권한: data/는 PublisherRole, 사이트 경로는 GitHubDeployRole만 가져요.
+// 쓰기 권한: data/는 PublisherRole, 사이트 경로는 GitHubDeployRole만 가짐.
 export class SiteDelivery extends Construct {
   readonly bucket: s3.Bucket;
   readonly distribution: cloudfront.Distribution;
@@ -48,7 +48,7 @@ export class SiteDelivery extends Construct {
         viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
         // AWS 기본 정책: 파일의 Cache-Control 헤더를 따름.
         // 정액 Free는 직접 만든 캐시 정책을 못 써서, manifest 60초·버전 경로 불변은
-        // publisher가 올릴 때 붙이는 Cache-Control로 정해요 (6.2, 11장 제안)
+        // publisher가 올릴 때 붙이는 Cache-Control로 정함 (6.2, 11장 제안)
         cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
         functionAssociations: [
           {
@@ -57,7 +57,7 @@ export class SiteDelivery extends Construct {
           },
         ],
       },
-      // OAC로 막힌 S3는 없는 파일에 404 대신 403을 줘요. 사용자에게는 404 페이지로 보여 줌
+      // OAC로 막힌 S3는 없는 파일에 404 대신 403을 줌. 사용자에게는 404 페이지로 보여 줌
       errorResponses: [
         {
           httpStatus: 403,

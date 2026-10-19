@@ -1,5 +1,5 @@
-// 문구 키 검사 (BRD-22): ko·en 키가 같은지, 변수 이름이 같은지 확인해요.
-// 화면은 ko.json을 기준으로 타입 검사하니, en.json에 빠지거나 남는 키를 여기서 막아요.
+// 문구 키 검사 (BRD-22): ko·en 키가 같은지, 변수 이름이 같은지 확인함.
+// 화면은 ko.json을 기준으로 타입 검사하니, en.json에 빠지거나 남는 키를 여기서 막음.
 import { readFileSync } from "node:fs";
 
 const load = (locale) =>
@@ -19,7 +19,7 @@ function flatten(node, prefix = "", out = {}) {
   return out;
 }
 
-// ICU 변수 이름만 뽑아요: "{minutes}분 전" → ["minutes"]
+// ICU 변수 이름만 뽑음: "{minutes}분 전" → ["minutes"]
 const vars = (text) =>
   [...text.matchAll(/\{\s*([a-zA-Z0-9_]+)/g)].map((m) => m[1]).sort();
 

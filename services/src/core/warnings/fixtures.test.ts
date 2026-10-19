@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import data from "./fixtures/pwncd-events.json";
 
-// T02 입력 파일이 망가지지 않았는지 지키는 검사. 특보 정규화(BRD-54)가 이 파일을 입력으로 써요.
+// T02 입력 파일이 망가지지 않았는지 지키는 검사. 특보 정규화(BRD-54)가 이 파일을 입력으로 씀.
 const FIELDS = [
   "tmFc",
   "tmSeq",
