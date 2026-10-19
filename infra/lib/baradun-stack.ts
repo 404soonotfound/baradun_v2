@@ -1,6 +1,15 @@
-import { CfnOutput, Stack, type StackProps } from "aws-cdk-lib";
+import {
+  Aws,
+  CfnCondition,
+  CfnOutput,
+  CfnParameter,
+  Fn,
+  Stack,
+  type StackProps,
+} from "aws-cdk-lib";
 import { Construct } from "constructs";
 import { GitHubDeployRole } from "./deploy/github-deploy-role";
+import { CostBudget } from "./ops/cost-budget";
 import { PublisherRole } from "./publish/publisher-role";
 import { SiteDelivery } from "./site/site-delivery";
 
@@ -9,7 +18,34 @@ export class BaradunStack extends Stack {
   constructor(scope: Construct, id: string, props?: StackProps) {
     super(scope, id, props);
 
-    const site = new SiteDelivery(this, "Site");
+    // 배포할 때 넘기는 값 (저장소에 남기지 않음). 한 번 넘기면 다음 배포부터는
+    // CloudFormation이 이전 값을 그대로 써요.
+    const alertEmail = new CfnParameter(this, "AlertEmail", {
+      type: "String",
+      allowedPattern: "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$",
+      description: "Budget and alarm notification email",
+    });
+    const siteWebAclArn = new CfnParameter(this, "SiteWebAclArn", {
+      type: "String",
+      default: "",
+      allowedPattern: "^$|^arn:aws:wafv2:us-east-1:[0-9]{12}:global/webacl/.+$",
+      description:
+        "WAF web ACL ARN attached by the CloudFront flat-rate plan (empty before subscribing)",
+    });
+    const hasSiteWebAcl = new CfnCondition(this, "HasSiteWebAcl", {
+      expression: Fn.conditionNot(
+        Fn.conditionEquals(siteWebAclArn.valueAsString, ""),
+      ),
+    });
+
+    const site = new SiteDelivery(this, "Site", {
+      // 값이 있으면 그 web ACL을 붙이고, 비어 있으면 속성 자체를 빼요.
+      webAclId: Fn.conditionIf(
+        hasSiteWebAcl.logicalId,
+        siteWebAclArn.valueAsString,
+        Aws.NO_VALUE,
+      ).toString(),
+    });
 
     // data/ 쓰기 전용 역할 (BRD-61의 publish-snapshot이 사용)
     new PublisherRole(this, "Publisher", { bucket: site.bucket });
@@ -19,6 +55,9 @@ export class BaradunStack extends Stack {
       bucket: site.bucket,
       distribution: site.distribution,
     });
+
+    // 월 $1 예산 알림 (콘솔의 Zero-Spend 예산을 대신함)
+    new CostBudget(this, "Budget", { email: alertEmail.valueAsString });
 
     // 배포 후 콘솔·터미널에서 바로 확인할 값
     new CfnOutput(this, "SiteBucketName", { value: site.bucket.bucketName });
