@@ -124,3 +124,137 @@ describe("정액 요금제 web ACL (BRD-51)", () => {
     }
   });
 });
+
+type Capacity = { ReadCapacityUnits: number; WriteCapacityUnits: number };
+
+// 지금은 대상이 0개예요. BRD-55(테이블)·56~58(수집)·61(게시)에서 리소스가 생기면 바로 걸러요.
+describe("재시도·경보·용량 (11장 기본값 함정)", () => {
+  it("Scheduler 일정은 재시도 횟수와 최대 이벤트 나이를 줄여서 명시한다", () => {
+    for (const schedule of Object.values(
+      template.findResources("AWS::Scheduler::Schedule"),
+    )) {
+      const retry = schedule.Properties.Target.RetryPolicy;
+      expect(retry).toBeDefined();
+      expect(retry.MaximumRetryAttempts).toBeLessThanOrEqual(
+        RETRY_LIMITS.scheduleMaxRetries,
+      );
+      expect(retry.MaximumEventAgeInSeconds).toBeLessThanOrEqual(
+        RETRY_LIMITS.scheduleMaxEventAgeSeconds,
+      );
+    }
+  });
+
+  it("Lambda는 타임아웃과 비동기 재시도 설정을 명시한다", () => {
+    const configs = Object.values(
+      template.findResources("AWS::Lambda::EventInvokeConfig"),
+    );
+    for (const [id, fn] of Object.entries(
+      template.findResources("AWS::Lambda::Function"),
+    )) {
+      expect(fn.Properties.Timeout).toBeDefined();
+      const config = configs.find((c) => c.Properties.FunctionName?.Ref === id);
+      expect(config, `${id}에 EventInvokeConfig가 없어요`).toBeDefined();
+      expect(config?.Properties.MaximumRetryAttempts).toBeLessThanOrEqual(
+        RETRY_LIMITS.asyncMaxRetries,
+      );
+      expect(config?.Properties.MaximumEventAgeInSeconds).toBeLessThanOrEqual(
+        RETRY_LIMITS.asyncMaxEventAgeSeconds,
+      );
+    }
+  });
+
+  it("CloudWatch 경보는 10개 이하다 (무료 범위)", () => {
+    const alarms =
+      Object.keys(template.findResources("AWS::CloudWatch::Alarm")).length +
+      Object.keys(template.findResources("AWS::CloudWatch::CompositeAlarm"))
+        .length;
+    expect(alarms).toBeLessThanOrEqual(MAX_ALARMS);
+  });
+
+  it("DynamoDB는 Provisioned이고 읽기·쓰기 용량 합계가 각각 25 이하다", () => {
+    template.resourceCountIs("AWS::DynamoDB::GlobalTable", 0);
+    let read = 0;
+    let write = 0;
+    for (const table of Object.values(
+      template.findResources("AWS::DynamoDB::Table"),
+    )) {
+      const p = table.Properties;
+      expect(p.BillingMode).not.toBe("PAY_PER_REQUEST");
+      expect(p.ProvisionedThroughput).toBeDefined();
+      for (const t of [
+        p.ProvisionedThroughput,
+        ...(p.GlobalSecondaryIndexes ?? []).map(
+          (g: { ProvisionedThroughput: Capacity }) => g.ProvisionedThroughput,
+        ),
+      ] as Capacity[]) {
+        read += t.ReadCapacityUnits;
+        write += t.WriteCapacityUnits;
+      }
+    }
+    expect(read).toBeLessThanOrEqual(MAX_DYNAMODB_CAPACITY_UNITS);
+    expect(write).toBeLessThanOrEqual(MAX_DYNAMODB_CAPACITY_UNITS);
+  });
+
+  it("S3 이벤트로 Lambda를 깨우지 않는다 (publisher 순환 방지)", () => {
+    for (const bucket of Object.values(
+      template.findResources("AWS::S3::Bucket"),
+    )) {
+      expect(bucket.Properties.NotificationConfiguration).toBeUndefined();
+    }
+    template.resourceCountIs("Custom::S3BucketNotifications", 0);
+    for (const permission of Object.values(
+      template.findResources("AWS::Lambda::Permission"),
+    )) {
+      expect(permission.Properties.Principal).not.toBe("s3.amazonaws.com");
+    }
+  });
+});
+
+describe("CDK bootstrap 실행 정책 (11장)", () => {
+  const policy = JSON.parse(
+    readFileSync(
+      resolve(__dirname, "../bootstrap/cfn-execution-policy.json"),
+      "utf8",
+    ),
+  ) as {
+    Statement: Array<{
+      Effect: string;
+      Action?: string | string[];
+      NotAction?: unknown;
+      Resource?: string | string[];
+      NotResource?: unknown;
+    }>;
+  };
+
+  it("스택이 쓰는 모든 AWS 서비스가 정책에 들어 있다", () => {
+    // AWS::S3::Bucket → s3, AWS::CloudFront::Function → cloudfront …
+    const services = new Set(
+      Object.values(
+        template.toJSON().Resources as Record<string, { Type: string }>,
+      )
+        .map((r) => r.Type)
+        .filter((t) => t.startsWith("AWS::") && t !== "AWS::CDK::Metadata")
+        .map((t) => t.split("::")[1].toLowerCase()),
+    );
+    const allowed = new Set(
+      policy.Statement.filter((s) => s.Effect === "Allow")
+        .flatMap((s) => toList(s.Action))
+        .map((a) => a.split(":")[0]),
+    );
+
+    for (const service of services) {
+      expect([...allowed], `정책에 ${service}가 없어요`).toContain(service);
+    }
+  });
+
+  it("모든 동작(*)·NotAction을 주지 않고, IAM은 이 스택의 역할로만 제한한다", () => {
+    for (const s of policy.Statement) {
+      expect(s.NotAction).toBeUndefined();
+      expect(s.NotResource).toBeUndefined();
+      for (const a of toList(s.Action)) expect(a).not.toBe("*");
+      if (toList(s.Action).some((a) => a.startsWith("iam:"))) {
+        expect(toList(s.Resource)).not.toContain("*");
+      }
+    }
+  });
+});

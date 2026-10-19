@@ -1,0 +1,38 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "SiteBucket",
+      "Effect": "Allow",
+      "Action": "s3:*",
+      "Resource": ["arn:aws:s3:::baradunv2-*", "arn:aws:s3:::baradunv2-*/*"]
+    },
+    {
+      "Sid": "CloudFront",
+      "Effect": "Allow",
+      "Action": "cloudfront:*",
+      "Resource": "*"
+    },
+    {
+      "Sid": "ReadFlatRateWebAcl",
+      "Effect": "Allow",
+      "Action": "wafv2:GetWebACL",
+      "Resource": "arn:aws:wafv2:us-east-1:*:global/webacl/*"
+    },
+    {
+      "Sid": "StackRolesAndGitHubOidc",
+      "Effect": "Allow",
+      "Action": "iam:*",
+      "Resource": [
+        "arn:aws:iam::*:role/BaradunV2-*",
+        "arn:aws:iam::*:oidc-provider/token.actions.githubusercontent.com"
+      ]
+    },
+    {
+      "Sid": "Budget",
+      "Effect": "Allow",
+      "Action": "budgets:*",
+      "Resource": "*"
+    }
+  ]
+}
