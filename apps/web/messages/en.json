@@ -1,0 +1,35 @@
+{
+  "meta": {
+    "siteName": "Baradun Bada",
+    "description": "Official marine warnings and sea observations by beach."
+  },
+  "common": {
+    "languages": "Languages"
+  },
+  "verdict": {
+    "clear": {
+      "title": "No warnings"
+    },
+    "unknownWarning": {
+      "title": "Couldn't check warnings"
+    },
+    "stale": {
+      "title": "Observation delayed"
+    }
+  },
+  "observation": {
+    "none": "No nearby observation",
+    "measuredAgo": "Measured {minutes} min ago",
+    "issuedAt": "Issued {time}"
+  },
+  "safety": {
+    "finalCall": "On-site control and lifeguard guidance come first."
+  },
+  "home": {
+    "preparing": "This page is being prepared."
+  },
+  "notFound": {
+    "title": "Page not found",
+    "home": "Go to home"
+  }
+}
