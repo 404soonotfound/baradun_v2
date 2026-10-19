@@ -4,17 +4,17 @@ import type { ButtonHTMLAttributes } from "react";
 
 import { cn } from "@/lib/cn";
 
+// 버튼 (노션 4장: 높이 52, 모서리 14). 색은 브랜드 토큰만 써요(판단 상태 색 아님).
 const buttonVariants = cva(
-  "inline-flex min-h-12 items-center justify-center gap-2 rounded-[var(--radius-md)] px-5 text-sm font-bold transition-[background-color,box-shadow,transform] duration-150 disabled:pointer-events-none disabled:opacity-45",
+  "inline-flex h-button min-w-touch items-center justify-center gap-2 rounded-button px-5 text-title-s transition-[background-color,opacity,transform] duration-200 ease-standard disabled:pointer-events-none disabled:opacity-45",
   {
     variants: {
       variant: {
         primary:
-          "bg-[var(--color-action-primary)] text-[var(--color-action-on-primary)] shadow-sm hover:bg-[var(--color-action-primary-hover)] active:translate-y-px",
+          "bg-brand-default text-brand-on shadow-card hover:opacity-90 active:translate-y-px",
         secondary:
-          "border border-[var(--color-border-default)] bg-[var(--color-background-surface)] text-[var(--color-text-primary)] hover:bg-[var(--color-background-subtle)]",
-        ghost:
-          "text-[var(--color-text-primary)] hover:bg-[var(--color-background-subtle)]",
+          "border border-border-strong bg-bg-surface text-text-default hover:bg-bg-subtle",
+        ghost: "text-text-default hover:bg-bg-subtle",
       },
     },
     defaultVariants: {
@@ -24,7 +24,8 @@ const buttonVariants = cva(
 );
 
 export interface ButtonProps
-  extends ButtonHTMLAttributes<HTMLButtonElement>,
+  extends
+    ButtonHTMLAttributes<HTMLButtonElement>,
     VariantProps<typeof buttonVariants> {
   asChild?: boolean;
 }
