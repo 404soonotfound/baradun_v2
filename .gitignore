@@ -1,5 +1,8 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
+# 디자인 토큰 결과: tokens/tokens.json에서 npm run tokens로 생성
+apps/web/src/styles/tokens.css
+
 # dependencies
 node_modules/
 /.pnp

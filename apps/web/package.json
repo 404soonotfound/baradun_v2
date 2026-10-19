@@ -3,14 +3,21 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "predev": "npm run tokens",
     "dev": "next dev",
+    "prebuild": "npm run tokens",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
+    "prestorybook": "npm run tokens",
     "storybook": "storybook dev -p 6006",
+    "prebuild-storybook": "npm run tokens",
     "build-storybook": "storybook build",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "tokens": "node scripts/build-tokens.mjs",
+    "check:tokens": "node scripts/check-tokens.mjs",
+    "check:messages": "node scripts/check-messages.mjs"
   },
   "dependencies": {
     "@radix-ui/react-slot": "^1.5.0",
