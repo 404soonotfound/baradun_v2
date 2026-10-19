@@ -85,7 +85,7 @@ jobs:
       - run: npm run typecheck -w services --if-present
       - run: npm run test -w services --if-present
 
-  # 인프라: CDK synth
+  # 인프라: 타입 검사·테스트(Vitest)·CDK synth
   infra:
     needs: changes
     if: needs.changes.outputs.infra == 'true'
@@ -98,6 +98,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build -w infra
+      - run: npm run test -w infra
       - run: npx cdk synth
         working-directory: infra
 
