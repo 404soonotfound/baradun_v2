@@ -42,7 +42,7 @@ const PAIRS = [
   ["color.brand.on", "color.brand.default", 4.5, "주요 버튼 글자"],
   ["color.brand.default", "color.brand.weak", 4.5, "선택된 칩 글자"],
   ["#FFFFFF", "color.danger-call", 4.5, "119 버튼 흰 글자"],
-  ["color.danger-call", "color.bg.surface", 4.5, "오류 문구", "light"],
+  ["color.danger-text", "color.bg.surface", 4.5, "오류 문구"],
   ["color.status.clear.fg", "color.status.clear.bg", 4.5, "특보 없음 배지"],
   ["color.status.blocked.fg", "color.status.blocked.bg", 4.5, "이용불가 배지"],
   ["color.status.unknown.fg", "color.status.unknown.bg", 4.5, "판단불가 배지"],
@@ -66,14 +66,13 @@ const PAIRS = [
     3,
     "회색 배너 아이콘",
   ],
+  // 점선 테두리: 상태를 구분하는 UI 요소라 3 이상 (10/19 확정)
+  ["color.status.unknown.border", "color.status.unknown.bg", 3, "판단불가 점선"],
+  ["color.status.stale.border", "color.status.stale.bg", 3, "관측 지연 점선"],
 ];
 
-// 점선 테두리는 상태를 구분하는 보조 표시예요(글자·아이콘이 따로 있음).
-// 그래서 실패로 막지 않고 값만 알려 줘요.
-const INFO_PAIRS = [
-  ["color.status.unknown.border", "color.status.unknown.bg", "판단불가 점선"],
-  ["color.status.stale.border", "color.status.stale.bg", "관측 지연 점선"],
-];
+// 참고로만 찍는 조합 (지금은 없음)
+const INFO_PAIRS = [];
 
 let failed = 0;
 for (const mode of ["light", "dark"]) {
