@@ -33,6 +33,12 @@
       "Effect": "Allow",
       "Action": "budgets:*",
       "Resource": "*"
+    },
+    {
+      "Sid": "ReadCdkBootstrapVersion",
+      "Effect": "Allow",
+      "Action": ["ssm:GetParameter", "ssm:GetParameters"],
+      "Resource": "arn:aws:ssm:*:*:parameter/cdk-bootstrap/*"
     }
   ]
 }
