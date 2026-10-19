@@ -50,5 +50,14 @@
     "guide": "Safety & data guide",
     "dataSources": "Data sources & terms of use",
     "terms": "About & terms"
+  },
+  "activity": {
+    "label": "Activity",
+    "choose": "Choose activity",
+    "current": "Selected activity: {name}",
+    "swimming": "Swimming",
+    "surfing": "Surfing",
+    "scuba": "Scuba",
+    "scubaFull": "Scuba diving"
   }
 }

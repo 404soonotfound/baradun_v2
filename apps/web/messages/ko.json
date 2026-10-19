@@ -50,5 +50,14 @@
     "guide": "안전·데이터 안내",
     "dataSources": "데이터 출처·이용 조건",
     "terms": "서비스 정보·약관"
+  },
+  "activity": {
+    "label": "활동",
+    "choose": "활동 고르기",
+    "current": "선택한 활동: {name}",
+    "swimming": "수영",
+    "surfing": "서핑",
+    "scuba": "스쿠버",
+    "scubaFull": "스쿠버다이빙"
   }
 }
