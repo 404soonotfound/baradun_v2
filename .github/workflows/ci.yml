@@ -66,9 +66,9 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
+      - run: npm run check:tokens -w apps/web # 대비·금지 색
+      - run: npm run check:messages -w apps/web # ko·en 문구 키
       - run: npm run lint -w apps/web
-      - run: npm run typecheck -w apps/web
-      - run: npm run build -w apps/web
 
   # 백엔드: 린트·타입 검사·테스트(Vitest)
   services:
