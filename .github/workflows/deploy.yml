@@ -1,0 +1,58 @@
+# 사이트 배포: main에 합친 웹 변경을 S3·CloudFront에 올림 (아키텍처 11장 가드레일)
+# - 장기 키 없음: OIDC로 1시간짜리 임시 키만 받음
+# - production environment 승인 뒤에만 실행 (main 브랜치만 이 environment를 쓸 수 있음)
+# - data/는 publisher 구역이라 동기화에서 빼고, IAM에서도 거부됨
+name: deploy
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/web/**"
+      - "packages/contracts/**"
+      - "data/beaches/**" # 해변이 바뀌면 상세 페이지를 다시 빌드
+      - "package-lock.json"
+      - ".nvmrc"
+      - ".github/workflows/deploy.yml"
+  workflow_dispatch: # Actions 탭에서 수동 실행
+permissions:
+  contents: read
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false # 배포 도중 끊지 않음
+jobs:
+  site:
+    # 첫 인프라 배포 전(변수가 비어 있음)에는 건너뜀
+    if: vars.DEPLOY_ROLE_ARN != ''
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+      id-token: write # OIDC 토큰은 이 작업만 받음
+    env:
+      BUCKET: ${{ vars.SITE_BUCKET }}
+      DISTRIBUTION_ID: ${{ vars.DISTRIBUTION_ID }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run build -w apps/web
+        env:
+          NEXT_PUBLIC_SITE_URL: ${{ vars.SITE_URL }}
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ vars.DEPLOY_ROLE_ARN }}
+          aws-region: ap-northeast-2
+      - name: 사이트 파일 올리기
+        working-directory: apps/web/out
+        run: |
+          # 1) 이름에 해시가 붙은 파일: 1년 캐시. 지우지 않음(열려 있던 탭이 예전 파일을 찾을 수 있게)
+          aws s3 sync . "s3://$BUCKET" --exclude "*" --include "_next/static/*" --exclude "data/*" --cache-control "public, max-age=31536000, immutable"
+          # 2) 나머지(HTML 등): 매번 새로 확인. 빌드에서 사라진 파일은 지움
+          aws s3 sync . "s3://$BUCKET" --delete --exclude "_next/static/*" --exclude "data/*" --cache-control "public, max-age=0, must-revalidate"
+      - name: CloudFront 캐시 비우기
+        run: aws cloudfront create-invalidation --distribution-id "$DISTRIBUTION_ID" --paths "/*"
