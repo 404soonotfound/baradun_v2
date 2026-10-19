@@ -3,7 +3,7 @@ import * as cloudfront from "aws-cdk-lib/aws-cloudfront";
 import * as iam from "aws-cdk-lib/aws-iam";
 import * as s3 from "aws-cdk-lib/aws-s3";
 import { Construct } from "constructs";
-import { DATA_PREFIX, DEPLOY_ENVIRONMENT, GITHUB_REPO } from "../settings";
+import { DATA_PREFIX, GITHUB_OIDC_SUBJECT } from "../settings";
 
 const GITHUB_OIDC_HOST = "token.actions.githubusercontent.com";
 
@@ -32,7 +32,7 @@ export class GitHubDeployRole extends Construct {
         // 와일드카드 없이 정확히 같을 때만 (StringEquals)
         StringEquals: {
           [`${GITHUB_OIDC_HOST}:aud`]: "sts.amazonaws.com",
-          [`${GITHUB_OIDC_HOST}:sub`]: `repo:${GITHUB_REPO}:environment:${DEPLOY_ENVIRONMENT}`,
+          [`${GITHUB_OIDC_HOST}:sub`]: GITHUB_OIDC_SUBJECT,
         },
       }),
       description: "GitHub Actions site deploy (production environment only)",

@@ -7,6 +7,7 @@ import {
   template,
   toList,
 } from "./stack-template";
+import { GITHUB_OIDC_SUBJECT } from "../lib/settings";
 
 // 역할의 논리 ID를 찾아요 (CDK가 이름 뒤에 해시를 붙이므로 앞부분으로 찾기)
 function roleId(prefix: string): string {
@@ -89,11 +90,17 @@ describe("GitHub Actions 배포 역할 (OIDC)", () => {
       expect(Object.keys(s.Condition)).toEqual(["StringEquals"]);
       expect(s.Condition.StringEquals).toEqual({
         "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
-        "token.actions.githubusercontent.com:sub":
-          "repo:404soonotfound/baradun_v2:environment:production",
+        "token.actions.githubusercontent.com:sub": GITHUB_OIDC_SUBJECT,
       });
       expect(JSON.stringify(s.Condition)).not.toContain("*");
     }
+  });
+
+  it("sub는 숫자 ID가 붙은 새 형식이다 (2026-07-15 이후 만든 저장소)", () => {
+    // 예: repo:404soonotfound@123/baradun_v2@456:environment:production
+    expect(GITHUB_OIDC_SUBJECT).toMatch(
+      /^repo:404soonotfound@\d+\/baradun_v2@\d+:environment:production$/,
+    );
   });
 
   it("사이트 배포 역할은 data/ 쓰기를 명시적으로 거부한다", () => {
