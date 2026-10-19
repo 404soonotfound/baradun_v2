@@ -67,6 +67,73 @@ describe("data/ 쓰기 권한", () => {
   });
 });
 
+describe("GitHub Actions 배포 역할 (OIDC)", () => {
+  it("GitHub OIDC 공급자는 하나이고 aud는 sts.amazonaws.com이다", () => {
+    template.resourceCountIs("AWS::IAM::OIDCProvider", 1);
+    template.hasResourceProperties("AWS::IAM::OIDCProvider", {
+      Url: "https://token.actions.githubusercontent.com",
+      ClientIdList: ["sts.amazonaws.com"],
+    });
+  });
+
+  it("신뢰 정책은 저장소·environment를 정확히 고정한다 (와일드카드 없음)", () => {
+    const trusts = Object.values(template.findResources("AWS::IAM::Role"))
+      .flatMap((r) => r.Properties.AssumeRolePolicyDocument.Statement)
+      .filter((s) =>
+        toList(s.Action).includes("sts:AssumeRoleWithWebIdentity"),
+      );
+
+    expect(trusts).toHaveLength(1);
+    for (const s of trusts) {
+      // StringLike(와일드카드 비교)는 쓰지 않고 StringEquals만
+      expect(Object.keys(s.Condition)).toEqual(["StringEquals"]);
+      expect(s.Condition.StringEquals).toEqual({
+        "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
+        "token.actions.githubusercontent.com:sub":
+          "repo:404soonotfound/baradun_v2:environment:production",
+      });
+      expect(JSON.stringify(s.Condition)).not.toContain("*");
+    }
+  });
+
+  it("사이트 배포 역할은 data/ 쓰기를 명시적으로 거부한다", () => {
+    const deploy = roleId("DeployRole");
+    const denies = allIamPolicies()
+      .filter((p) => p.roles.includes(deploy))
+      .flatMap((p) => p.statements)
+      .filter((s) => s.Effect === "Deny");
+
+    // 올리기·지우기 둘 다 data/에서 거부 (순서는 상관없음)
+    const dataDeny = denies.find((s) =>
+      toList(s.Resource)
+        .map(resourceText)
+        .some((r) => r.endsWith("/data/*")),
+    );
+    expect(dataDeny).toBeDefined();
+    expect(toList(dataDeny?.Action)).toEqual(
+      expect.arrayContaining(["s3:PutObject", "s3:DeleteObject"]),
+    );
+  });
+
+  it("사이트 배포 역할은 파일 올리기·목록·캐시 비우기만 할 수 있다", () => {
+    const deploy = roleId("DeployRole");
+    const actions = allIamPolicies()
+      .filter((p) => p.roles.includes(deploy))
+      .flatMap((p) => p.statements)
+      .filter((s) => s.Effect === "Allow")
+      .flatMap((s) => toList(s.Action));
+
+    expect(new Set(actions)).toEqual(
+      new Set([
+        "s3:PutObject",
+        "s3:DeleteObject",
+        "s3:ListBucket",
+        "cloudfront:CreateInvalidation",
+      ]),
+    );
+  });
+});
+
 describe("장기 키·과한 권한", () => {
   it("IAM 사용자와 액세스 키를 만들지 않는다", () => {
     template.resourceCountIs("AWS::IAM::User", 0);
