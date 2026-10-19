@@ -1,0 +1,387 @@
+{
+  "$comment": "BRD-16 T02 입력. 기상청 getPwnCd 원본 행(모든 값 문자열, 시각은 KST yyyymmddHHMM, 0은 값 없음). source가 synthetic인 항목은 실데이터에 없는 종류를 실제 행을 바꿔 만든 예시.",
+  "fields": [
+    "tmFc",
+    "tmSeq",
+    "areaCode",
+    "areaName",
+    "warnVar",
+    "warnStress",
+    "command",
+    "cancel",
+    "startTime",
+    "endTime",
+    "allEndTime"
+  ],
+  "cases": [
+    {
+      "id": "issue-wind-wave-S1",
+      "description": "발표(command 1) · 풍랑주의보 · 앞바다 S1 코드",
+      "source": "getPwnCd 2026-08-18~10-15",
+      "row": {
+        "tmFc": "202610140000",
+        "tmSeq": "39",
+        "areaCode": "S1152010",
+        "areaName": "동해중부안쪽먼바다",
+        "warnVar": "6",
+        "warnStress": "0",
+        "command": "1",
+        "cancel": "0",
+        "startTime": "202610140200",
+        "endTime": "0",
+        "allEndTime": "0"
+      }
+    },
+    {
+      "id": "change-to-warning",
+      "description": "변경발표(command 7) · 풍랑 주의보→경보(warnStress 1)",
+      "source": "getPwnCd 2026-08-18~10-15",
+      "row": {
+        "tmFc": "202610140700",
+        "tmSeq": "46",
+        "areaCode": "S1152010",
+        "areaName": "동해중부안쪽먼바다",
+        "warnVar": "6",
+        "warnStress": "1",
+        "command": "7",
+        "cancel": "0",
+        "startTime": "202610140900",
+        "endTime": "0",
+        "allEndTime": "0"
+      }
+    },
+    {
+      "id": "change-to-advisory",
+      "description": "변경발표(command 7) · 풍랑 경보→주의보(warnStress 0)",
+      "source": "getPwnCd 2026-08-18~10-15",
+      "row": {
+        "tmFc": "202610141300",
+        "tmSeq": "52",
+        "areaCode": "S1152010",
+        "areaName": "동해중부안쪽먼바다",
+        "warnVar": "6",
+        "warnStress": "0",
+        "command": "7",
+        "cancel": "0",
+        "startTime": "202610141400",
+        "endTime": "0",
+        "allEndTime": "0"
+      }
+    },
+    {
+      "id": "release-scheduled-with-allEndTime",
+      "description": "해제(command 2) · 발표 2시간 뒤 해제 발효(endTime > tmFc), allEndTime 있음",
+      "source": "getPwnCd 2026-08-18~10-15",
+      "row": {
+        "tmFc": "202610150100",
+        "tmSeq": "58",
+        "areaCode": "S1152010",
+        "areaName": "동해중부안쪽먼바다",
+        "warnVar": "6",
+        "warnStress": "0",
+        "command": "2",
+        "cancel": "0",
+        "startTime": "0",
+        "endTime": "202610150300",
+        "allEndTime": "202610150300"
+      }
+    },
+    {
+      "id": "release-scheduled-no-allEndTime",
+      "description": "해제(command 2) · 1시간 뒤 해제 발효, allEndTime 0",
+      "source": "getPwnCd 2026-08-18~10-15",
+      "row": {
+        "tmFc": "202610141400",
+        "tmSeq": "53",
+        "areaCode": "S1323400",
+        "areaName": "제주도서부앞바다",
+        "warnVar": "6",
+        "warnStress": "0",
+        "command": "2",
+        "cancel": "0",
+        "startTime": "0",
+        "endTime": "202610141500",
+        "allEndTime": "0"
+      }
+    },
+    {
+      "id": "release-immediate-land",
+      "description": "해제(command 2) · 강풍 육상 L1 · 즉시 해제(endTime = tmFc)",
+      "source": "getPwnCd 2026-08-18~10-15",
+      "row": {
+        "tmFc": "202610151700",
+        "tmSeq": "62",
+        "areaCode": "L1014200",
+        "areaName": "백령도.대청도",
+        "warnVar": "1",
+        "warnStress": "0",
+        "command": "2",
+        "cancel": "0",
+        "startTime": "0",
+        "endTime": "202610151700",
+        "allEndTime": "0"
+      }
+    },
+    {
+      "id": "issue-strong-wind-L1",
+      "description": "발표(command 1) · 강풍주의보 · 육상 L1 코드",
+      "source": "getPwnCd 2026-08-18~10-15",
+      "row": {
+        "tmFc": "202610150630",
+        "tmSeq": "60",
+        "areaCode": "L1014200",
+        "areaName": "백령도.대청도",
+        "warnVar": "1",
+        "warnStress": "0",
+        "command": "1",
+        "cancel": "0",
+        "startTime": "202610150630",
+        "endTime": "0",
+        "allEndTime": "0"
+      }
+    },
+    {
+      "id": "extend",
+      "description": "연장(command 3) · 풍랑 · 먼바다",
+      "source": "getPwnCd 2026-08-18~10-15",
+      "row": {
+        "tmFc": "202609092200",
+        "tmSeq": "64",
+        "areaCode": "S1232220",
+        "areaName": "서해남부남쪽바깥먼바다",
+        "warnVar": "6",
+        "warnStress": "0",
+        "command": "3",
+        "cancel": "0",
+        "startTime": "202609092200",
+        "endTime": "0",
+        "allEndTime": "0"
+      }
+    },
+    {
+      "id": "issue-storm-surge-L1",
+      "description": "발표(command 1) · 폭풍해일(warnVar 5) · 육상 L1 코드로 발표된 실제 사례(B3: S1·L1 모두 연결)",
+      "source": "getPwnCd 2026-08-18~10-15",
+      "row": {
+        "tmFc": "202609092215",
+        "tmSeq": "65",
+        "areaCode": "L1091000",
+        "areaName": "추자도",
+        "warnVar": "5",
+        "warnStress": "0",
+        "command": "1",
+        "cancel": "0",
+        "startTime": "202609092215",
+        "endTime": "0",
+        "allEndTime": "0"
+      }
+    },
+    {
+      "id": "release-storm-surge-L1",
+      "description": "해제(command 2) · 폭풍해일 · 육상 L1",
+      "source": "getPwnCd 2026-08-18~10-15",
+      "row": {
+        "tmFc": "202609092330",
+        "tmSeq": "66",
+        "areaCode": "L1091000",
+        "areaName": "추자도",
+        "warnVar": "5",
+        "warnStress": "0",
+        "command": "2",
+        "cancel": "0",
+        "startTime": "0",
+        "endTime": "202609092330",
+        "allEndTime": "0"
+      }
+    },
+    {
+      "id": "issue-future-start",
+      "description": "발표(command 1) · 발효가 발표보다 늦음(startTime > tmFc) · 발효 전에는 활성 아님",
+      "source": "getPwnCd 2026-08-18~10-15",
+      "row": {
+        "tmFc": "202608311600",
+        "tmSeq": "452",
+        "areaCode": "L1053010",
+        "areaName": "구례군평지",
+        "warnVar": "13",
+        "warnStress": "0",
+        "command": "1",
+        "cancel": "0",
+        "startTime": "202608311800",
+        "endTime": "0",
+        "allEndTime": "0"
+      },
+      "note": "warnVar 13 · 판단 대상 5종이 아님(이름 미확인)"
+    },
+    {
+      "id": "issue-other-type-L1",
+      "description": "발표(command 1) · warnVar 2 · 판단 대상 5종이 아님 → info.nearbyWarnings 후보",
+      "source": "getPwnCd 2026-08-18~10-15",
+      "row": {
+        "tmFc": "202610131140",
+        "tmSeq": "33",
+        "areaCode": "L1080600",
+        "areaName": "창원시",
+        "warnVar": "2",
+        "warnStress": "0",
+        "command": "1",
+        "cancel": "0",
+        "startTime": "202610131140",
+        "endTime": "0",
+        "allEndTime": "0"
+      },
+      "note": "warnVar 2의 이름은 활용가이드로 확인 필요"
+    },
+    {
+      "id": "correction",
+      "description": "정정(command 6) · 실데이터 없음",
+      "source": "synthetic",
+      "row": {
+        "tmFc": "202610140030",
+        "tmSeq": "40",
+        "areaCode": "S1152010",
+        "areaName": "동해중부안쪽먼바다",
+        "warnVar": "6",
+        "warnStress": "0",
+        "command": "6",
+        "cancel": "0",
+        "startTime": "202610140200",
+        "endTime": "0",
+        "allEndTime": "0"
+      },
+      "note": "대상·범위 확인 전에는 unknown(아키텍처 4장)"
+    },
+    {
+      "id": "change-release",
+      "description": "변경해제(command 8) · 실데이터 없음",
+      "source": "synthetic",
+      "row": {
+        "tmFc": "202610141100",
+        "tmSeq": "49",
+        "areaCode": "S1152010",
+        "areaName": "동해중부안쪽먼바다",
+        "warnVar": "6",
+        "warnStress": "0",
+        "command": "8",
+        "cancel": "0",
+        "startTime": "0",
+        "endTime": "202610141200",
+        "allEndTime": "0"
+      }
+    },
+    {
+      "id": "cancelled",
+      "description": "취소(cancel 1) · 실데이터 없음 · 지역 전체 해제와 같지 않음",
+      "source": "synthetic",
+      "row": {
+        "tmFc": "202610140010",
+        "tmSeq": "40",
+        "areaCode": "S1152010",
+        "areaName": "동해중부안쪽먼바다",
+        "warnVar": "6",
+        "warnStress": "0",
+        "command": "1",
+        "cancel": "1",
+        "startTime": "202610140200",
+        "endTime": "0",
+        "allEndTime": "0"
+      }
+    },
+    {
+      "id": "unknown-area-S2",
+      "description": "처음 보는 구역 코드 S2 · 실데이터 없음 → warning_unknown",
+      "source": "synthetic",
+      "row": {
+        "tmFc": "202610140000",
+        "tmSeq": "39",
+        "areaCode": "S2120500",
+        "areaName": "강원중부앞바다중 연안바다",
+        "warnVar": "6",
+        "warnStress": "0",
+        "command": "1",
+        "cancel": "0",
+        "startTime": "202610140200",
+        "endTime": "0",
+        "allEndTime": "0"
+      }
+    },
+    {
+      "id": "unknown-warnVar",
+      "description": "처음 보는 특보 종류 코드 · 실데이터 없음 → warning_unknown",
+      "source": "synthetic",
+      "row": {
+        "tmFc": "202610140000",
+        "tmSeq": "39",
+        "areaCode": "S1152010",
+        "areaName": "동해중부안쪽먼바다",
+        "warnVar": "99",
+        "warnStress": "0",
+        "command": "1",
+        "cancel": "0",
+        "startTime": "202610140200",
+        "endTime": "0",
+        "allEndTime": "0"
+      }
+    }
+  ],
+  "scenarios": [
+    {
+      "id": "S1152010-2026-10-14",
+      "description": "동해중부안쪽먼바다 풍랑: 발표 → 경보로 변경 → 주의보로 변경 → 해제 예고(2시간 뒤 발효)",
+      "rows": [
+        {
+          "tmFc": "202610140000",
+          "tmSeq": "39",
+          "areaCode": "S1152010",
+          "areaName": "동해중부안쪽먼바다",
+          "warnVar": "6",
+          "warnStress": "0",
+          "command": "1",
+          "cancel": "0",
+          "startTime": "202610140200",
+          "endTime": "0",
+          "allEndTime": "0"
+        },
+        {
+          "tmFc": "202610140700",
+          "tmSeq": "46",
+          "areaCode": "S1152010",
+          "areaName": "동해중부안쪽먼바다",
+          "warnVar": "6",
+          "warnStress": "1",
+          "command": "7",
+          "cancel": "0",
+          "startTime": "202610140900",
+          "endTime": "0",
+          "allEndTime": "0"
+        },
+        {
+          "tmFc": "202610141300",
+          "tmSeq": "52",
+          "areaCode": "S1152010",
+          "areaName": "동해중부안쪽먼바다",
+          "warnVar": "6",
+          "warnStress": "0",
+          "command": "7",
+          "cancel": "0",
+          "startTime": "202610141400",
+          "endTime": "0",
+          "allEndTime": "0"
+        },
+        {
+          "tmFc": "202610150100",
+          "tmSeq": "58",
+          "areaCode": "S1152010",
+          "areaName": "동해중부안쪽먼바다",
+          "warnVar": "6",
+          "warnStress": "0",
+          "command": "2",
+          "cancel": "0",
+          "startTime": "0",
+          "endTime": "202610150300",
+          "allEndTime": "202610150300"
+        }
+      ]
+    }
+  ]
+}
