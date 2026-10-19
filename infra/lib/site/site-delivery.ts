@@ -5,13 +5,19 @@ import * as s3 from "aws-cdk-lib/aws-s3";
 import { Construct } from "constructs";
 import { rewriteIndexCode } from "./rewrite-index";
 
+export interface SiteDeliveryProps {
+  // CloudFront 정액 요금제가 붙인 WAF web ACL의 ARN (us-east-1). 없으면 비워 둠.
+  // 요금제를 쓰는 배포에서 web ACL을 떼면 안 돼서, 구독 뒤에는 꼭 넘겨야 해요.
+  readonly webAclId?: string;
+}
+
 // 사이트 전달: S3 버킷 하나(사이트 파일 + data/ 스냅샷, BRD-52) + CloudFront 하나(G3)
 // 쓰기 권한: data/는 PublisherRole, 사이트 경로는 GitHubDeployRole만 가져요.
 export class SiteDelivery extends Construct {
   readonly bucket: s3.Bucket;
   readonly distribution: cloudfront.Distribution;
 
-  constructor(scope: Construct, id: string) {
+  constructor(scope: Construct, id: string, props: SiteDeliveryProps = {}) {
     super(scope, id);
 
     this.bucket = new s3.Bucket(this, "Bucket", {
@@ -34,6 +40,7 @@ export class SiteDelivery extends Construct {
     this.distribution = new cloudfront.Distribution(this, "Distribution", {
       comment: "baradun v2 site and data snapshots",
       defaultRootObject: "index.html",
+      webAclId: props.webAclId,
       httpVersion: cloudfront.HttpVersion.HTTP2_AND_3,
       defaultBehavior: {
         // OAC: CloudFront만 버킷을 읽을 수 있게 하는 서명 방식 (OAI는 정액 요금제 미지원)

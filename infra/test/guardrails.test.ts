@@ -1,11 +1,18 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { Match } from "aws-cdk-lib/assertions";
 import { describe, expect, it } from "vitest";
 import {
   API_KEY_NAMES,
   API_KEY_PARAMETER_PREFIX,
   LOG_RETENTION,
+  MAX_ALARMS,
+  MAX_DYNAMODB_CAPACITY_UNITS,
+  MONTHLY_BUDGET_USD,
+  RETRY_LIMITS,
   apiKeyParameterName,
 } from "../lib/settings";
-import { template } from "./stack-template";
+import { template, toList } from "./stack-template";
 
 // 아키텍처 11장 '과금·보안 가드레일'을 템플릿으로 검사해요.
 // 지금은 검사 대상이 0개인 항목도 있어요. 다음 묶음에서 리소스가 생기면 바로 걸러요.
@@ -67,6 +74,53 @@ describe("이식성 (17.2)", () => {
       ];
       for (const b of behaviors)
         expect(b.LambdaFunctionAssociations).toBeUndefined();
+    }
+  });
+});
+
+describe("예산 (1장)", () => {
+  it("월 $1 비용 예산이 하나 있고, 크레딧은 빼고 계산한다", () => {
+    template.resourceCountIs("AWS::Budgets::Budget", 1);
+    template.hasResourceProperties("AWS::Budgets::Budget", {
+      Budget: Match.objectLike({
+        BudgetType: "COST",
+        TimeUnit: "MONTHLY",
+        BudgetLimit: { Amount: MONTHLY_BUDGET_USD, Unit: "USD" },
+        CostTypes: Match.objectLike({ IncludeCredit: false }),
+      }),
+    });
+  });
+
+  it("알림은 배포 때 넘긴 이메일(AlertEmail)로만 보낸다", () => {
+    for (const budget of Object.values(
+      template.findResources("AWS::Budgets::Budget"),
+    )) {
+      const notifications = budget.Properties.NotificationsWithSubscribers;
+      expect(notifications.length).toBeGreaterThan(0);
+      for (const n of notifications) {
+        expect(n.Subscribers).toEqual([
+          { SubscriptionType: "EMAIL", Address: { Ref: "AlertEmail" } },
+        ]);
+      }
+    }
+  });
+});
+
+describe("정액 요금제 web ACL (BRD-51)", () => {
+  it("web ACL은 배포 때 넘긴 ARN이 있을 때만 붙는다", () => {
+    const params = template.findParameters("SiteWebAclArn");
+    expect(params.SiteWebAclArn.Default).toBe("");
+
+    for (const dist of Object.values(
+      template.findResources("AWS::CloudFront::Distribution"),
+    )) {
+      expect(dist.Properties.DistributionConfig.WebACLId).toEqual({
+        "Fn::If": [
+          "HasSiteWebAcl",
+          { Ref: "SiteWebAclArn" },
+          { Ref: "AWS::NoValue" },
+        ],
+      });
     }
   });
 });
