@@ -6,7 +6,7 @@ import { Construct } from "constructs";
 import { rewriteIndexCode } from "./rewrite-index";
 
 // 사이트 전달: S3 버킷 하나(사이트 파일 + data/ 스냅샷, BRD-52) + CloudFront 하나(G3)
-// 쓰기 권한(data/는 publisher만, 사이트 경로는 배포 역할만)은 IAM 묶음에서 추가해요.
+// 쓰기 권한: data/는 PublisherRole, 사이트 경로는 GitHubDeployRole만 가져요.
 export class SiteDelivery extends Construct {
   readonly bucket: s3.Bucket;
   readonly distribution: cloudfront.Distribution;
