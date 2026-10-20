@@ -1,0 +1,138 @@
+{
+  "$comment": "BRD-54 getTsunamiMsg(기상청_지진정보 조회서비스) 입력. 실데이터 없음(제공 범위 3일, 2026-10-20 호출 결과 resultCode 03) → 모두 합성. 활용가이드 예제(2008-11-25 13:13 발표, fcTp 2, reg \"남해안, 동해안\", stnId 108)를 바탕으로 만듦. data.go.kr JSON은 숫자를 숫자로 줄 수 있어 숫자·문자열을 섞음. 진앙 항목 이름(tmEqk·loc·lat·lon·mt·dep)은 정규화에서 해석하지 않고 원문만 보관.",
+  "responses": [
+    {
+      "id": "list-00",
+      "description": "정상(00) · 경보(활용가이드 예제)·주의보·해제·모르는 fcTp 네 행",
+      "source": "synthetic",
+      "response": {
+        "response": {
+          "header": { "resultCode": "00", "resultMsg": "NORMAL_SERVICE" },
+          "body": {
+            "dataType": "JSON",
+            "items": {
+              "item": [
+                {
+                  "stnId": 108,
+                  "tmFc": 200811251313,
+                  "tmEf": 200811251313,
+                  "fcTp": 2,
+                  "reg": "남해안, 동해안",
+                  "ann": "지진해일 경보 발표",
+                  "rem": "해안가 주민은 높은 곳으로 대피",
+                  "tmEqk": 200811251305,
+                  "loc": "일본 홋카이도 남동쪽 해역",
+                  "lat": 41.8,
+                  "lon": 144.1,
+                  "mt": 7.5,
+                  "dep": 10
+                },
+                {
+                  "stnId": "108",
+                  "tmFc": "200811251200",
+                  "tmEf": "200811251210",
+                  "fcTp": "1",
+                  "reg": "동해안",
+                  "ann": "지진해일 주의보 발표",
+                  "rem": "",
+                  "tmEqk": "200811251150",
+                  "loc": "일본 홋카이도 남동쪽 해역",
+                  "lat": "41.8",
+                  "lon": "144.1",
+                  "mt": "6.8",
+                  "dep": "10"
+                },
+                {
+                  "stnId": 108,
+                  "tmFc": 200811251800,
+                  "tmEf": 200811251800,
+                  "fcTp": 3,
+                  "reg": "남해안, 동해안",
+                  "ann": "지진해일 경보 해제",
+                  "rem": "",
+                  "tmEqk": 200811251305,
+                  "loc": "일본 홋카이도 남동쪽 해역",
+                  "lat": 41.8,
+                  "lon": 144.1,
+                  "mt": 7.5,
+                  "dep": 10
+                },
+                {
+                  "stnId": 108,
+                  "tmFc": 200811251900,
+                  "tmEf": 200811251900,
+                  "fcTp": 9,
+                  "reg": "동해안",
+                  "ann": "모르는 통보문",
+                  "rem": "",
+                  "tmEqk": 200811251305,
+                  "loc": "일본 홋카이도 남동쪽 해역",
+                  "lat": 41.8,
+                  "lon": 144.1,
+                  "mt": 7.5,
+                  "dep": 10
+                }
+              ]
+            },
+            "pageNo": 1,
+            "numOfRows": 10,
+            "totalCount": 4
+          }
+        }
+      }
+    },
+    {
+      "id": "single-item-object",
+      "description": "정상(활용가이드 예제 resultCode \"0\") · 행이 한 개라 item이 배열이 아닌 객체",
+      "source": "synthetic",
+      "response": {
+        "response": {
+          "header": { "resultCode": "0", "resultMsg": "NORMAL_SERVICE" },
+          "body": {
+            "dataType": "JSON",
+            "items": {
+              "item": {
+                "stnId": 108,
+                "tmFc": 200811251313,
+                "tmEf": 200811251313,
+                "fcTp": 2,
+                "reg": "남해안, 동해안",
+                "ann": "지진해일 경보 발표",
+                "rem": "",
+                "tmEqk": 200811251305,
+                "loc": "일본 홋카이도 남동쪽 해역",
+                "lat": 41.8,
+                "lon": 144.1,
+                "mt": 7.5,
+                "dep": 10
+              }
+            },
+            "pageNo": 1,
+            "numOfRows": 10,
+            "totalCount": 1
+          }
+        }
+      }
+    },
+    {
+      "id": "no-data-03",
+      "description": "NO_DATA(03) · 본문 없음 → 지진해일 발표 없음 확인",
+      "source": "synthetic",
+      "response": {
+        "response": {
+          "header": { "resultCode": "03", "resultMsg": "NO_DATA" }
+        }
+      }
+    },
+    {
+      "id": "error-99",
+      "description": "오류(99, 조회 기간 초과 등) → 조회 실패. 없음으로 읽지 않음",
+      "source": "synthetic",
+      "response": {
+        "response": {
+          "header": { "resultCode": "99", "resultMsg": "LIMITED_DATE_RANGE" }
+        }
+      }
+    }
+  ]
+}
