@@ -29,6 +29,15 @@
       ]
     },
     {
+      "Sid": "StackTables",
+      "Effect": "Allow",
+      "Action": "dynamodb:*",
+      "Resource": [
+        "arn:aws:dynamodb:ap-northeast-2:*:table/BaradunV2-*",
+        "arn:aws:dynamodb:ap-northeast-2:*:table/BaradunV2-*/*"
+      ]
+    },
+    {
       "Sid": "Budget",
       "Effect": "Allow",
       "Action": "budgets:*",

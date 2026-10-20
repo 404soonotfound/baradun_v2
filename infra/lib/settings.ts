@@ -49,3 +49,15 @@ export const RETRY_LIMITS = {
 // 무료 범위 상한 (11장 기본값 함정)
 export const MAX_ALARMS = 10;
 export const MAX_DYNAMODB_CAPACITY_UNITS = 25; // 읽기·쓰기 각각, 모든 테이블·GSI 합계
+
+// DynamoDB 테이블 용량 (7장 저장소 3개, 11장 Provisioned 고정·Auto Scaling 없음)
+// 합계 읽기 11·쓰기 11 → 위 상한(25) 안. 테스트가 합계를 다시 확인함.
+export const TABLE_CAPACITY = {
+  state: { read: 5, write: 5 },
+  ops: { read: 5, write: 5 },
+  inquiry: { read: 1, write: 1 },
+} as const;
+
+// TTL 속성 이름 (Ops 슬롯 기록·Inquiry 문의 글 정리용)
+// TTL은 오래된 항목을 지우는 용도만. 유효시간·신선도 판단에 쓰지 않음.
+export const TTL_ATTRIBUTE = "ttl";
