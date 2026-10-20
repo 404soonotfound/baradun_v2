@@ -2,6 +2,7 @@ import type { Preview } from "@storybook/nextjs-vite";
 import "../src/app/globals.css";
 
 const preview: Preview = {
+  tags: ["autodocs"], // 자동으로 컴포넌트 문서(Docs) 탭 생성
   parameters: {
     // 접근성 위반을 오류로 표시 (라이트·다크 모두 대비 확인)
     a11y: { test: "error" },
