@@ -58,3 +58,15 @@
     animation-iteration-count: 1 !important;
   }
 }
+
+/* 시트 열림 (BRD-24): 모바일은 아래에서 위로 400ms 감속, PC 대화상자는 200ms, 뒤 화면은 패널과 같은 시간으로 서서히 나타남 */
+@keyframes sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+}
+@keyframes sheet-fade {
+  from {
+    opacity: 0;
+  }
+}

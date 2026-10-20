@@ -39,8 +39,11 @@
     "explore": "Explore",
     "favorites": "Favorites",
     "settings": "Settings",
-    "search": "Search beaches or regions"
+    "search": "Search beaches or regions",
+    "back": "Back"
   },
+  "sheet": { "close": "Close" },
+  "detail": { "sample": "Sample data. Shown only during development." },
   "pages": {
     "explore": "Explore",
     "search": "Search",
