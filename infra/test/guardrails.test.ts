@@ -127,7 +127,7 @@ describe("정액 요금제 web ACL (BRD-51)", () => {
 
 type Capacity = { ReadCapacityUnits: number; WriteCapacityUnits: number };
 
-// 지금은 대상이 0개임. BRD-55(테이블)·56~58(수집)·61(게시)에서 리소스가 생기면 바로 거름.
+// DynamoDB는 BRD-55 테이블 3개가 대상. 나머지는 BRD-56~58(수집)·61(게시)에서 리소스가 생기면 바로 거름.
 describe("재시도·경보·용량 (11장 기본값 함정)", () => {
   it("Scheduler 일정은 재시도 횟수와 최대 이벤트 나이를 줄여서 명시한다", () => {
     for (const schedule of Object.values(

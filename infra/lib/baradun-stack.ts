@@ -12,6 +12,7 @@ import { GitHubDeployRole } from "./deploy/github-deploy-role";
 import { CostBudget } from "./ops/cost-budget";
 import { PublisherRole } from "./publish/publisher-role";
 import { SiteDelivery } from "./site/site-delivery";
+import { StorageTables } from "./storage/tables";
 
 // 바라던 바다 V2 인프라 스택. 기능 묶음(사이트 전달, 수집, 게시…)을 여기에 하나씩 붙임.
 export class BaradunStack extends Stack {
@@ -47,6 +48,9 @@ export class BaradunStack extends Stack {
       ).toString(),
     });
 
+    // State·Ops·Inquiry 테이블 (BRD-55)
+    const tables = new StorageTables(this, "Storage");
+
     // data/ 쓰기 전용 역할 (BRD-61의 publish-snapshot이 사용)
     new PublisherRole(this, "Publisher", { bucket: site.bucket });
 
@@ -69,5 +73,11 @@ export class BaradunStack extends Stack {
       value: site.distribution.distributionId,
     });
     new CfnOutput(this, "DeployRoleArn", { value: deploy.role.roleArn });
+    // 테이블 이름은 CDK가 붙임. Lambda 환경 변수와 운영 확인(AWS CLI)에 씀
+    new CfnOutput(this, "StateTableName", { value: tables.state.tableName });
+    new CfnOutput(this, "OpsTableName", { value: tables.ops.tableName });
+    new CfnOutput(this, "InquiryTableName", {
+      value: tables.inquiry.tableName,
+    });
   }
 }
