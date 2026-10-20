@@ -16,6 +16,7 @@ const STORAGE_KEY = "baradun:activity";
 
 // 저장소를 못 쓰는 환경(사생활 보호 모드 등)에서도 이번 방문 동안은 유지되게 메모리에도 둠.
 let memory: Activity = DEFAULT_ACTIVITY;
+// 값이 바뀌면 부를 함수 모음. () => void = 인자 없이 부르고 돌려주는 값 없는 함수. Set이라 같은 함수 중복 등록 없음
 const listeners = new Set<() => void>();
 
 function isActivity(value: unknown): value is Activity {
@@ -62,3 +63,6 @@ export function setActivity(activity: Activity) {
 export function useActivity(): Activity {
   return useSyncExternalStore(subscribe, read, () => DEFAULT_ACTIVITY);
 }
+
+// 연습용: 채점 스크립트가 쓰는 줄. 커밋 전에 지움
+export const __test = { isActivity, read, subscribe };
