@@ -179,6 +179,41 @@ describe("T02 · 그 밖의 실데이터", () => {
   });
 });
 
+describe("T02 · 구역명만 다른 중복 수신 (당진 L1031200 실데이터)", () => {
+  // 강풍주의보 발표·호우경보 변경발표 09-01 11:20 KST → 둘 다 해제 13:10 KST
+  // 같은 행을 구역명 "당진군"·"당진시"로 두 번씩 받음 → 충돌 아님
+  const dangjin: PwnCdRow[] = data.scenarios.find(
+    (s) => s.id === "L1031200-2026-09-01-area-name",
+  )!.rows;
+  const byType = (now: string) =>
+    states(dangjin, now).map((s) => [
+      s.zone.kind === "code" && s.zone.code,
+      s.kind.group !== "unknown" && s.kind.type,
+      s.status,
+    ]);
+
+  it("KST 12:00: 강풍 주의보·호우 경보 발효 중", () => {
+    const active = (level: string) => ({
+      state: "active",
+      level,
+      publishedAt: "2026-09-01T02:20:00Z",
+      effectiveFrom: "2026-09-01T02:20:00Z",
+    });
+    expect(byType("2026-09-01T03:00:00Z")).toEqual([
+      ["L1031200", "heavy_rain", active("warning")],
+      ["L1031200", "strong_wind", active("advisory")],
+    ]);
+  });
+
+  it("KST 14:00: 둘 다 해제", () => {
+    const cleared = { state: "cleared", at: "2026-09-01T04:10:00Z" };
+    expect(byType("2026-09-01T05:00:00Z")).toEqual([
+      ["L1031200", "heavy_rain", cleared],
+      ["L1031200", "strong_wind", cleared],
+    ]);
+  });
+});
+
 describe("T02 · 합성: 대상·순서를 알 수 없으면 unknown", () => {
   it.each([
     ["correction", "command:6"],

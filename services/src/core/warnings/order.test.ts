@@ -48,6 +48,56 @@ describe("orderPwnEvents", () => {
     expect(backward).toEqual(forward);
   });
 
+  it("구역명만 다른 중복은 하나로, 충돌 아님 · 받은 순서와 상관없이 같은 행", () => {
+    const dangjin = data.scenarios.find(
+      (s) => s.id === "L1031200-2026-09-01-area-name",
+    )!.rows;
+    const forward = orderPwnEvents(dangjin.map(normalizePwnCdRow));
+    const backward = orderPwnEvents(
+      [...dangjin].reverse().map(normalizePwnCdRow),
+    );
+    expect(
+      forward.map((e) => [e.raw.tmSeq, e.raw.warnVar, e.raw.command]),
+    ).toEqual([
+      ["7", "1", "1"],
+      ["7", "2", "7"],
+      ["9", "1", "2"],
+      ["9", "2", "2"],
+    ]);
+    expect(forward.flatMap((e) => e.unknownReasons)).toEqual([]);
+    expect(forward.map((e) => e.raw.areaName)).toEqual(Array(4).fill("당진군"));
+    expect(backward).toEqual(forward);
+  });
+
+  it("구역명과 다른 값이 함께 다르면 충돌", () => {
+    const a = scenario[0]!;
+    const b = { ...a, areaName: "다른 이름", warnStress: "1" };
+    const forward = orderPwnEvents([a, b].map(normalizePwnCdRow));
+    const backward = orderPwnEvents([b, a].map(normalizePwnCdRow));
+    expect(forward[0]!.unknownReasons).toEqual([
+      "conflict:202610140000|39|S1152010|6|1",
+    ]);
+    expect(backward).toEqual(forward);
+  });
+
+  it("충돌 뒤에 같은 이벤트가 더 와도 충돌 사유 유지", () => {
+    const a = scenario[0]!;
+    const b = { ...a, warnStress: "1" };
+    const c = { ...a, areaName: "가" }; // 비교가 가장 작아 남는 행
+    for (const rows of [
+      [a, b, c],
+      [c, a, b],
+      [b, c, a],
+    ]) {
+      const events = orderPwnEvents(rows.map(normalizePwnCdRow));
+      expect(events).toHaveLength(1);
+      expect(events[0]!.raw.areaName).toBe("가");
+      expect(events[0]!.unknownReasons).toEqual([
+        "conflict:202610140000|39|S1152010|6|1",
+      ]);
+    }
+  });
+
   it("시각을 못 읽은 이벤트는 뒤로", () => {
     const broken = { ...scenario[0]!, tmFc: "x", tmSeq: "1" };
     expect(seqs([broken, scenario[1]!])).toEqual(["46", "1"]);

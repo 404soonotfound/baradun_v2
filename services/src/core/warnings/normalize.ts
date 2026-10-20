@@ -25,7 +25,8 @@ export type PwnCdRow = {
   stnId?: string;
 };
 
-// 구역: S1… 바다, L1… 육상(아키텍처 4장). 그 밖의 코드는 원문만 보관
+// 구역: S1… 바다, L1… 육상(아키텍처 4장). 뒤는 숫자 6자리(계약 zoneCode ^[SL][0-9]{7}$)
+// 그 밖의 코드는 원문만 보관
 export type Zone =
   | { kind: "code"; code: string; scope: "sea" | "land" }
   | { kind: "unknown"; raw: string };
@@ -47,7 +48,7 @@ export type PwnEvent = {
   raw: PwnCdRow; // allEndTime 등 해석하지 않는 값은 여기에만 둠
 };
 
-const ZONE_PATTERN = /^(S1|L1)\d+$/;
+const ZONE_PATTERN = /^(S1|L1)\d{6}$/;
 
 export function parseZone(areaCode: string): Zone {
   const match = ZONE_PATTERN.exec(areaCode);
