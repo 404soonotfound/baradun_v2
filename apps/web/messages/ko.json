@@ -39,8 +39,11 @@
     "explore": "탐색",
     "favorites": "즐겨찾기",
     "settings": "설정",
-    "search": "해변 이름이나 지역 검색"
+    "search": "해변 이름이나 지역 검색",
+    "back": "뒤로"
   },
+  "sheet": { "close": "닫기" },
+  "detail": { "sample": "예시 데이터예요. 개발 중에만 보여요." },
   "pages": {
     "explore": "탐색",
     "search": "검색",
