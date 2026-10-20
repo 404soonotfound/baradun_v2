@@ -382,6 +382,117 @@
           "allEndTime": "202610150300"
         }
       ]
+    },
+    {
+      "id": "L1031200-2026-09-01-area-name",
+      "description": "당진 강풍·호우: 같은 구역 코드 L1031200을 구역명 \"당진군\"·\"당진시\" 두 행으로 중복 수신(구역명 말고 모든 값 같음). 강풍주의보 발표·호우경보 변경발표(11:20 발효) → 둘 다 해제(13:10 발효)",
+      "source": "getPwnCd 2026-08-18~10-15",
+      "rows": [
+        {
+          "tmFc": "202609011120",
+          "tmSeq": "7",
+          "areaCode": "L1031200",
+          "areaName": "당진군",
+          "warnVar": "1",
+          "warnStress": "0",
+          "command": "1",
+          "cancel": "0",
+          "startTime": "202609011120",
+          "endTime": "0",
+          "allEndTime": "0"
+        },
+        {
+          "tmFc": "202609011120",
+          "tmSeq": "7",
+          "areaCode": "L1031200",
+          "areaName": "당진시",
+          "warnVar": "1",
+          "warnStress": "0",
+          "command": "1",
+          "cancel": "0",
+          "startTime": "202609011120",
+          "endTime": "0",
+          "allEndTime": "0"
+        },
+        {
+          "tmFc": "202609011120",
+          "tmSeq": "7",
+          "areaCode": "L1031200",
+          "areaName": "당진군",
+          "warnVar": "2",
+          "warnStress": "1",
+          "command": "7",
+          "cancel": "0",
+          "startTime": "202609011120",
+          "endTime": "0",
+          "allEndTime": "0"
+        },
+        {
+          "tmFc": "202609011120",
+          "tmSeq": "7",
+          "areaCode": "L1031200",
+          "areaName": "당진시",
+          "warnVar": "2",
+          "warnStress": "1",
+          "command": "7",
+          "cancel": "0",
+          "startTime": "202609011120",
+          "endTime": "0",
+          "allEndTime": "0"
+        },
+        {
+          "tmFc": "202609011310",
+          "tmSeq": "9",
+          "areaCode": "L1031200",
+          "areaName": "당진군",
+          "warnVar": "1",
+          "warnStress": "0",
+          "command": "2",
+          "cancel": "0",
+          "startTime": "0",
+          "endTime": "202609011310",
+          "allEndTime": "202609011310"
+        },
+        {
+          "tmFc": "202609011310",
+          "tmSeq": "9",
+          "areaCode": "L1031200",
+          "areaName": "당진시",
+          "warnVar": "1",
+          "warnStress": "0",
+          "command": "2",
+          "cancel": "0",
+          "startTime": "0",
+          "endTime": "202609011310",
+          "allEndTime": "202609011310"
+        },
+        {
+          "tmFc": "202609011310",
+          "tmSeq": "9",
+          "areaCode": "L1031200",
+          "areaName": "당진군",
+          "warnVar": "2",
+          "warnStress": "1",
+          "command": "2",
+          "cancel": "0",
+          "startTime": "0",
+          "endTime": "202609011310",
+          "allEndTime": "202609011310"
+        },
+        {
+          "tmFc": "202609011310",
+          "tmSeq": "9",
+          "areaCode": "L1031200",
+          "areaName": "당진시",
+          "warnVar": "2",
+          "warnStress": "1",
+          "command": "2",
+          "cancel": "0",
+          "startTime": "0",
+          "endTime": "202609011310",
+          "allEndTime": "202609011310"
+        }
+      ]
     }
   ]
 }

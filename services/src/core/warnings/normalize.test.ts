@@ -197,6 +197,15 @@ describe("normalizePwnCdRow · 해석 못 한 값", () => {
     ]);
   });
 
+  it.each(["S11520", "S11520100"])(
+    "구역 코드 자리 수가 다르면(%s) zone unknown + 사유",
+    (areaCode) => {
+      const event = normalizePwnCdRow({ ...BASE, areaCode });
+      expect(event.zone).toEqual({ kind: "unknown", raw: areaCode });
+      expect(event.unknownReasons).toEqual([`zone:${areaCode}`]);
+    },
+  );
+
   it("발표인데 startTime이 없으면 사유", () => {
     const event = normalizePwnCdRow({ ...BASE, startTime: "0" });
     expect(event.effectiveFrom).toBeNull();
@@ -219,6 +228,8 @@ describe("parseZone", () => {
     ["L1014200", land("L1014200")],
     ["S2120500", { kind: "unknown", raw: "S2120500" }],
     ["L2000000", { kind: "unknown", raw: "L2000000" }],
+    ["S11520", { kind: "unknown", raw: "S11520" }],
+    ["S11520100", { kind: "unknown", raw: "S11520100" }],
     ["S1", { kind: "unknown", raw: "S1" }],
     ["", { kind: "unknown", raw: "" }],
   ])("%j", (code, zone) => {
