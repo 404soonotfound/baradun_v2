@@ -52,7 +52,11 @@ export class BaradunStack extends Stack {
     const tables = new StorageTables(this, "Storage");
 
     // data/ 쓰기 전용 역할 (BRD-61의 publish-snapshot이 사용)
-    new PublisherRole(this, "Publisher", { bucket: site.bucket });
+    new PublisherRole(this, "Publisher", {
+      bucket: site.bucket,
+      stateTable: tables.state,
+      opsTable: tables.ops,
+    });
 
     // 사이트 경로 쓰기 전용 역할 (GitHub Actions OIDC)
     const deploy = new GitHubDeployRole(this, "Deploy", {

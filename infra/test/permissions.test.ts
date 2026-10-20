@@ -155,3 +155,80 @@ describe("장기 키·과한 권한", () => {
     }
   });
 });
+
+// 테이블 논리 ID (StorageStateTable… 앞부분으로 찾기)
+function tableId(name: "State" | "Ops" | "Inquiry"): string {
+  const ids = Object.keys(
+    template.findResources("AWS::DynamoDB::Table"),
+  ).filter((id) => id.startsWith(`Storage${name}Table`));
+  expect(ids).toHaveLength(1);
+  return ids[0]!;
+}
+
+// 허용 문장에서 DynamoDB 동작을 "테이블 논리 ID → 동작 집합"으로 모음
+function dynamoActionsByResource(roles?: string[]): Map<string, Set<string>> {
+  const result = new Map<string, Set<string>>();
+  for (const policy of allIamPolicies()) {
+    if (roles && !policy.roles.some((r) => roles.includes(r))) continue;
+    for (const s of policy.statements) {
+      if (s.Effect !== "Allow") continue;
+      const actions = toList(s.Action).filter((a) => /^dynamodb:/i.test(a));
+      if (actions.length === 0) continue;
+      for (const r of toList(s.Resource).map(resourceText)) {
+        const set = result.get(r) ?? new Set<string>();
+        actions.forEach((a) => set.add(a));
+        result.set(r, set);
+      }
+    }
+  }
+  return result;
+}
+
+describe("DynamoDB 권한 (BRD-55)", () => {
+  it("DynamoDB 권한이 있는 역할은 publisher 하나뿐이다 (수집기·문의는 그 역할 이슈에서)", () => {
+    const holders = new Set<string>();
+    for (const policy of allIamPolicies()) {
+      const hasDynamo = policy.statements.some(
+        (s) =>
+          s.Effect === "Allow" &&
+          toList(s.Action).some((a) => /^(\*|dynamodb:)/i.test(a)),
+      );
+      if (hasDynamo) policy.roles.forEach((r) => holders.add(r));
+    }
+    expect([...holders]).toEqual([roleId("PublisherRole")]);
+  });
+
+  it("publisher는 State 읽기, Ops 읽기·쓰기만 갖고 Inquiry 권한은 없다", () => {
+    const byResource = dynamoActionsByResource([roleId("PublisherRole")]);
+
+    expect(Object.fromEntries(byResource)).toEqual({
+      [`${tableId("State")}.Arn`]: new Set([
+        "dynamodb:GetItem",
+        "dynamodb:Query",
+        "dynamodb:BatchGetItem",
+      ]),
+      [`${tableId("Ops")}.Arn`]: new Set([
+        "dynamodb:GetItem",
+        "dynamodb:PutItem",
+        "dynamodb:UpdateItem",
+        "dynamodb:DeleteItem",
+      ]),
+    });
+    expect(
+      [...byResource.keys()].some((r) => r.startsWith(tableId("Inquiry"))),
+    ).toBe(false);
+  });
+
+  it("어떤 역할도 Scan·테이블 관리·와일드카드 DynamoDB 동작을 갖지 않는다", () => {
+    const actions = [...dynamoActionsByResource().values()].flatMap((s) => [
+      ...s,
+    ]);
+    expect(actions.length).toBeGreaterThan(0);
+    for (const a of actions) {
+      expect(a).not.toContain("*");
+      expect(a).not.toMatch(
+        /^dynamodb:(Scan|PartiQL|(Create|Delete|Update|Describe)Table|UpdateTimeToLive|.*Backup|Restore)/i,
+      );
+    }
+  });
+});
