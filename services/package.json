@@ -4,6 +4,7 @@
   "description": "",
   "main": "index.js",
   "devDependencies": {
+    "@baradun/contracts": "0.1.0",
     "@types/aws-lambda": "^8.10.164",
     "@types/node": "^26.6.5",
     "typescript": "^7.0.2",
