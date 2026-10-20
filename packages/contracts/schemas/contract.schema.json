@@ -490,8 +490,8 @@
 
     "WarningLevel": {
       "title": "WarningLevel",
-      "description": "주의보 / 경보.",
-      "enum": ["advisory", "warning"]
+      "description": "주의보 / 경보 / 중대경보(getPwnCd warnStress 0·1·2, 10/20).",
+      "enum": ["advisory", "warning", "severe_warning"]
     },
 
     "NearbyWarningItem": {
@@ -499,7 +499,14 @@
       "description": "주변 특보 항목. 분류에 영향 없음.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["type", "level", "zoneCode", "zoneName", "publishedAt", "effectiveFrom"],
+      "required": [
+        "type",
+        "level",
+        "zoneCode",
+        "zoneName",
+        "publishedAt",
+        "effectiveFrom"
+      ],
       "properties": {
         "type": { "$ref": "#/$defs/NearbyWarningType" },
         "level": { "$ref": "#/$defs/WarningLevel" },
@@ -512,8 +519,16 @@
 
     "NearbyWarningType": {
       "title": "NearbyWarningType",
-      "description": "판단에 쓰지 않는 특보(B3): 호우·폭염·한파·대설·건조·황사.",
-      "enum": ["heavy_rain", "heat_wave", "cold_wave", "heavy_snow", "dry", "yellow_dust"]
+      "description": "판단에 쓰지 않는 특보(B3): 호우·폭염·한파·대설·건조·황사·열대야(10/20).",
+      "enum": [
+        "heavy_rain",
+        "heat_wave",
+        "cold_wave",
+        "heavy_snow",
+        "dry",
+        "yellow_dust",
+        "tropical_night"
+      ]
     },
 
     "Metric": {

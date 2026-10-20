@@ -47,12 +47,12 @@ export type BeachStatus = BeachStatus1;
  */
 export type WarningType = 'wind_wave' | 'strong_wind' | 'typhoon' | 'storm_surge' | 'tsunami';
 /**
- * 주의보 / 경보.
+ * 주의보 / 경보 / 중대경보(getPwnCd warnStress 0·1·2, 10/20).
  *
  * This interface was referenced by `Contract`'s JSON-Schema
  * via the `definition` "WarningLevel".
  */
-export type WarningLevel = 'advisory' | 'warning';
+export type WarningLevel = 'advisory' | 'warning' | 'severe_warning';
 /**
  * 발표 또는 관측 시각.
  */
@@ -77,12 +77,13 @@ export type Metric = Metric1;
  */
 export type NullableDateTime3 = string | null;
 /**
- * 판단에 쓰지 않는 특보(B3): 호우·폭염·한파·대설·건조·황사.
+ * 판단에 쓰지 않는 특보(B3): 호우·폭염·한파·대설·건조·황사·열대야(10/20).
  *
  * This interface was referenced by `Contract`'s JSON-Schema
  * via the `definition` "NearbyWarningType".
  */
-export type NearbyWarningType = 'heavy_rain' | 'heat_wave' | 'cold_wave' | 'heavy_snow' | 'dry' | 'yellow_dust';
+export type NearbyWarningType =
+  'heavy_rain' | 'heat_wave' | 'cold_wave' | 'heavy_snow' | 'dry' | 'yellow_dust' | 'tropical_night';
 /**
  * UTC, 예: 2026-10-17T05:30:00Z
  */
