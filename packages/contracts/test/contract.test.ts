@@ -59,3 +59,15 @@ describe("거부 예시는 실패", () => {
     expect(validate("invalid", file).ok).toBe(false);
   });
 });
+
+// 10/20 추가 코드: 중대경보 단계·열대야 주변 특보 (결정 기록 11장)
+describe("10/20 추가 코드는 통과", () => {
+  it.each([
+    ["WarningLevel", "severe_warning"],
+    ["NearbyWarningType", "tropical_night"],
+  ])("%s: %s", (def, value) => {
+    // $defs 안 정의 하나만 꺼내 값 하나 검사
+    const check = ajv.getSchema(`${schema.$id}#/$defs/${def}`);
+    expect(check?.(value)).toBe(true);
+  });
+});
