@@ -35,7 +35,7 @@ export class MemoryStateStore implements StateStore {
   private readonly records = new Map<string, StateRecord>();
 
   async getState(pk: string, sk: string): Promise<StateRecord | null> {
-    return this.records.get(stateKey(pk, sk)) ?? null;
+    return structuredClone(this.records.get(stateKey(pk, sk)) ?? null);
   }
 
   async putState(
@@ -55,11 +55,12 @@ export class MemoryStateStore implements StateStore {
     if ((latest?.recordVersion ?? null) !== decision.expectedVersion) {
       return "conflict";
     }
-    this.records.set(stateKey(pk, sk), decision.record);
+    this.records.set(stateKey(pk, sk), structuredClone(decision.record));
     return "written";
   }
 }
 
+// 슬롯·잠금 필드와 게시 버전은 숫자·문자열 원시값만 사용하므로 깊은 복사 불필요
 export class MemoryOpsStore implements OpsStore {
   private readonly slots = new Map<string, SlotRecord>();
   private readonly locks = new Map<string, LockRecord>();

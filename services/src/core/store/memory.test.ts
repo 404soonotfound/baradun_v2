@@ -112,6 +112,48 @@ describe("T03 슬롯 멱등", () => {
     expect((await state.getState("wave#1", "latest"))?.recordVersion).toBe(1);
   });
 
+  it("쓰기 뒤 원본의 중첩 객체·배열을 바꿔도 저장값과 recordVersion은 그대로다", async () => {
+    const state = new MemoryStateStore();
+    const value = { wave: { height: 1.2 }, samples: [{ height: 1.1 }] };
+    expect(await state.putState("wave#1", "latest", value, NOW)).toBe(
+      "written",
+    );
+
+    value.wave.height = 9;
+    value.samples[0]!.height = 8;
+    value.samples.push({ height: 7 });
+
+    expect(await state.getState("wave#1", "latest")).toEqual({
+      pk: "wave#1",
+      sk: "latest",
+      value: { wave: { height: 1.2 }, samples: [{ height: 1.1 }] },
+      orderAt: NOW,
+      recordVersion: 1,
+    });
+  });
+
+  it("읽은 값의 중첩 객체·배열을 바꿔도 다시 읽은 저장값은 그대로다", async () => {
+    const state = new MemoryStateStore();
+    const value = { wave: { height: 1.2 }, samples: [{ height: 1.1 }] };
+    await state.putState("wave#1", "latest", value, NOW);
+
+    const record = await state.getState("wave#1", "latest");
+    expect(record).not.toBeNull();
+    // 읽기 전용 타입을 해제하여 호출자의 런타임 변경 재현
+    const received = record!.value as typeof value;
+    received.wave.height = 9;
+    received.samples[0]!.height = 8;
+    received.samples.push({ height: 7 });
+
+    expect(await state.getState("wave#1", "latest")).toEqual({
+      pk: "wave#1",
+      sk: "latest",
+      value: { wave: { height: 1.2 }, samples: [{ height: 1.1 }] },
+      orderAt: NOW,
+      recordVersion: 1,
+    });
+  });
+
   it("값이나 orderAt이 바뀌면 written, recordVersion +1", async () => {
     const state = new MemoryStateStore();
     await state.putState("wave#1", "latest", { height: 1.2 }, NOW);
