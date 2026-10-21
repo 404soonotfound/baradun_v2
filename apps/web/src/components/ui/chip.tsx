@@ -12,15 +12,15 @@ const VARIANTS = {
   sel: "border-brand-default bg-brand-weak font-bold text-status-clear-fg",
 } as const; // 읽기전용 상수
 
-// "VARIANTS 표의 키 이름(default | on | sel) 중 하나 "라는 타입을 만들어  ChipVriant라고 부른다
-export type ChipVriant = keyof typeof VARIANTS;
+// "VARIANTS 표의 키 이름(default | on | sel) 중 하나 "라는 타입을 만들어  ChipVariant라고 부른다
+export type ChipVariant = keyof typeof VARIANTS;
 
 // Omit<A, "x"> = A에서 x 속성만 뺀 타입. 버튼 속성을 다 받되 children은 따로 정함
 export interface ChipProps extends Omit<
   ButtonHTMLAttributes<HTMLButtonElement>,
   "children"
 > {
-  variant?: ChipVriant;
+  variant?: ChipVariant;
   size?: "md" | "lg";
   icon?: ReactNode;
   children: ReactNode;
