@@ -1,0 +1,55 @@
+{
+  "id": "b0217",
+  "slug": "geumgap",
+  "kind": "beach",
+  "name": {
+    "ko": "금갑해수욕장",
+    "en": "Geumgap Beach"
+  },
+  "region": {
+    "sido": {
+      "ko": "전남",
+      "en": "Jeonnam"
+    },
+    "sigungu": {
+      "ko": "진도군",
+      "en": "Jindo"
+    }
+  },
+  "coast": "west",
+  "coords": {
+    "lat": 34.395502,
+    "lng": 126.277775
+  },
+  "activities": [
+    "swimming"
+  ],
+  "hidden": false,
+  "warningZones": {
+    "sea": "S1231500",
+    "land": "L1052300"
+  },
+  "stations": {
+    "waveHeight": {
+      "id": "22503",
+      "name": {
+        "ko": "불무도 파고부이",
+        "en": "Bulmudo wave buoy"
+      },
+      "distanceKm": 12.9
+    },
+    "wavePeriod": null,
+    "waveDirection": null,
+    "waterTemp": {
+      "id": "22503",
+      "name": {
+        "ko": "불무도 파고부이",
+        "en": "Bulmudo wave buoy"
+      },
+      "distanceKm": 12.9
+    },
+    "wind": null
+  },
+  "photo": null,
+  "cctv": null
+}

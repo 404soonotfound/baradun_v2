@@ -1,0 +1,41 @@
+{
+  "id": "b0243",
+  "slug": "yeongildae",
+  "kind": "beach",
+  "name": {
+    "ko": "영일대해수욕장",
+    "en": "Yeongildae Beach"
+  },
+  "region": {
+    "sido": {
+      "ko": "경북",
+      "en": "Gyeongbuk"
+    },
+    "sigungu": {
+      "ko": "포항시",
+      "en": "Pohang"
+    }
+  },
+  "coast": "east",
+  "coords": {
+    "lat": 36.055236,
+    "lng": 129.378129
+  },
+  "activities": [
+    "swimming"
+  ],
+  "hidden": false,
+  "warningZones": {
+    "sea": "S1131200",
+    "land": "L1072400"
+  },
+  "stations": {
+    "waveHeight": null,
+    "wavePeriod": null,
+    "waveDirection": null,
+    "waterTemp": null,
+    "wind": null
+  },
+  "photo": null,
+  "cctv": null
+}

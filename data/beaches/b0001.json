@@ -1,0 +1,76 @@
+{
+  "id": "b0001",
+  "slug": "gangmun",
+  "kind": "beach",
+  "name": {
+    "ko": "강문해수욕장",
+    "en": "Gangmun Beach"
+  },
+  "region": {
+    "sido": {
+      "ko": "강원",
+      "en": "Gangwon"
+    },
+    "sigungu": {
+      "ko": "강릉시",
+      "en": "Gangneung"
+    }
+  },
+  "coast": "east",
+  "coords": {
+    "lat": 37.796618,
+    "lng": 128.917591
+  },
+  "activities": [
+    "swimming"
+  ],
+  "hidden": false,
+  "warningZones": {
+    "sea": "S1151200",
+    "land": "L1022510"
+  },
+  "stations": {
+    "waveHeight": {
+      "id": "22451",
+      "name": {
+        "ko": "연곡 파고부이",
+        "en": "Yeongok wave buoy"
+      },
+      "distanceKm": 8.3
+    },
+    "wavePeriod": {
+      "id": "22520",
+      "name": {
+        "ko": "강릉 해양기상부이",
+        "en": "Gangneung marine buoy"
+      },
+      "distanceKm": 12.6
+    },
+    "waveDirection": {
+      "id": "22520",
+      "name": {
+        "ko": "강릉 해양기상부이",
+        "en": "Gangneung marine buoy"
+      },
+      "distanceKm": 12.6
+    },
+    "waterTemp": {
+      "id": "22451",
+      "name": {
+        "ko": "연곡 파고부이",
+        "en": "Yeongok wave buoy"
+      },
+      "distanceKm": 8.3
+    },
+    "wind": {
+      "id": "22520",
+      "name": {
+        "ko": "강릉 해양기상부이",
+        "en": "Gangneung marine buoy"
+      },
+      "distanceKm": 12.6
+    }
+  },
+  "photo": null,
+  "cctv": null
+}

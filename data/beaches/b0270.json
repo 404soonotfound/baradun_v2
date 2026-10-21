@@ -1,0 +1,55 @@
+{
+  "id": "b0270",
+  "slug": "bijin",
+  "kind": "beach",
+  "name": {
+    "ko": "비진해수욕장",
+    "en": "Bijin Beach"
+  },
+  "region": {
+    "sido": {
+      "ko": "경남",
+      "en": "Gyeongnam"
+    },
+    "sigungu": {
+      "ko": "통영시",
+      "en": "Tongyeong"
+    }
+  },
+  "coast": "south",
+  "coords": {
+    "lat": 34.720006,
+    "lng": 128.460025
+  },
+  "activities": [
+    "swimming"
+  ],
+  "hidden": false,
+  "warningZones": {
+    "sea": "S1311200",
+    "land": "L1082000"
+  },
+  "stations": {
+    "waveHeight": {
+      "id": "22467",
+      "name": {
+        "ko": "한산도 파고부이",
+        "en": "Hansando wave buoy"
+      },
+      "distanceKm": 3.6
+    },
+    "wavePeriod": null,
+    "waveDirection": null,
+    "waterTemp": {
+      "id": "22467",
+      "name": {
+        "ko": "한산도 파고부이",
+        "en": "Hansando wave buoy"
+      },
+      "distanceKm": 3.6
+    },
+    "wind": null
+  },
+  "photo": null,
+  "cctv": null
+}

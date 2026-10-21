@@ -1,0 +1,55 @@
+{
+  "id": "b0269",
+  "slug": "daehang",
+  "kind": "beach",
+  "name": {
+    "ko": "대항해수욕장",
+    "en": "Daehang Beach"
+  },
+  "region": {
+    "sido": {
+      "ko": "경남",
+      "en": "Gyeongnam"
+    },
+    "sigungu": {
+      "ko": "통영시",
+      "en": "Tongyeong"
+    }
+  },
+  "coast": "south",
+  "coords": {
+    "lat": 34.850928,
+    "lng": 128.212953
+  },
+  "activities": [
+    "swimming"
+  ],
+  "hidden": false,
+  "warningZones": {
+    "sea": "S1311200",
+    "land": "L1082000"
+  },
+  "stations": {
+    "waveHeight": {
+      "id": "22450",
+      "name": {
+        "ko": "두미도 파고부이",
+        "en": "Dumido wave buoy"
+      },
+      "distanceKm": 16.7
+    },
+    "wavePeriod": null,
+    "waveDirection": null,
+    "waterTemp": {
+      "id": "22450",
+      "name": {
+        "ko": "두미도 파고부이",
+        "en": "Dumido wave buoy"
+      },
+      "distanceKm": 16.7
+    },
+    "wind": null
+  },
+  "photo": null,
+  "cctv": null
+}

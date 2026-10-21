@@ -1,0 +1,76 @@
+{
+  "id": "b0008",
+  "slug": "gangneung-okgye",
+  "kind": "beach",
+  "name": {
+    "ko": "옥계해수욕장",
+    "en": "Okgye Beach"
+  },
+  "region": {
+    "sido": {
+      "ko": "강원",
+      "en": "Gangwon"
+    },
+    "sigungu": {
+      "ko": "강릉시",
+      "en": "Gangneung"
+    }
+  },
+  "coast": "east",
+  "coords": {
+    "lat": 37.628104,
+    "lng": 129.049433
+  },
+  "activities": [
+    "swimming"
+  ],
+  "hidden": false,
+  "warningZones": {
+    "sea": "S1151200",
+    "land": "L1022510"
+  },
+  "stations": {
+    "waveHeight": {
+      "id": "22520",
+      "name": {
+        "ko": "강릉 해양기상부이",
+        "en": "Gangneung marine buoy"
+      },
+      "distanceKm": 19
+    },
+    "wavePeriod": {
+      "id": "22520",
+      "name": {
+        "ko": "강릉 해양기상부이",
+        "en": "Gangneung marine buoy"
+      },
+      "distanceKm": 19
+    },
+    "waveDirection": {
+      "id": "22520",
+      "name": {
+        "ko": "강릉 해양기상부이",
+        "en": "Gangneung marine buoy"
+      },
+      "distanceKm": 19
+    },
+    "waterTemp": {
+      "id": "22520",
+      "name": {
+        "ko": "강릉 해양기상부이",
+        "en": "Gangneung marine buoy"
+      },
+      "distanceKm": 19
+    },
+    "wind": {
+      "id": "22520",
+      "name": {
+        "ko": "강릉 해양기상부이",
+        "en": "Gangneung marine buoy"
+      },
+      "distanceKm": 19
+    }
+  },
+  "photo": null,
+  "cctv": null
+}

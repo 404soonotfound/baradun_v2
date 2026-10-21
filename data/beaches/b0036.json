@@ -1,0 +1,41 @@
+{
+  "id": "b0036",
+  "slug": "daejin-5-ri",
+  "kind": "beach",
+  "name": {
+    "ko": "대진5리해수욕장",
+    "en": "Daejin 5-ri Beach"
+  },
+  "region": {
+    "sido": {
+      "ko": "강원",
+      "en": "Gangwon"
+    },
+    "sigungu": {
+      "ko": "고성군",
+      "en": "Goseong"
+    }
+  },
+  "coast": "east",
+  "coords": {
+    "lat": 38.496342,
+    "lng": 128.429596
+  },
+  "activities": [
+    "swimming"
+  ],
+  "hidden": false,
+  "warningZones": {
+    "sea": "S1151100",
+    "land": "L1022210"
+  },
+  "stations": {
+    "waveHeight": null,
+    "wavePeriod": null,
+    "waveDirection": null,
+    "waterTemp": null,
+    "wind": null
+  },
+  "photo": null,
+  "cctv": null
+}

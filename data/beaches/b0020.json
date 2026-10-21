@@ -1,0 +1,55 @@
+{
+  "id": "b0020",
+  "slug": "yeongjin",
+  "kind": "beach",
+  "name": {
+    "ko": "영진해수욕장",
+    "en": "Yeongjin Beach"
+  },
+  "region": {
+    "sido": {
+      "ko": "강원",
+      "en": "Gangwon"
+    },
+    "sigungu": {
+      "ko": "강릉시",
+      "en": "Gangneung"
+    }
+  },
+  "coast": "east",
+  "coords": {
+    "lat": 37.869014,
+    "lng": 128.845203
+  },
+  "activities": [
+    "swimming"
+  ],
+  "hidden": false,
+  "warningZones": {
+    "sea": "S1151200",
+    "land": "L1022520"
+  },
+  "stations": {
+    "waveHeight": {
+      "id": "22451",
+      "name": {
+        "ko": "연곡 파고부이",
+        "en": "Yeongok wave buoy"
+      },
+      "distanceKm": 3.6
+    },
+    "wavePeriod": null,
+    "waveDirection": null,
+    "waterTemp": {
+      "id": "22451",
+      "name": {
+        "ko": "연곡 파고부이",
+        "en": "Yeongok wave buoy"
+      },
+      "distanceKm": 3.6
+    },
+    "wind": null
+  },
+  "photo": null,
+  "cctv": null
+}

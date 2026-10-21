@@ -1,0 +1,41 @@
+{
+  "id": "b0028",
+  "slug": "hwajinpo",
+  "kind": "beach",
+  "name": {
+    "ko": "화진포해수욕장",
+    "en": "Hwajinpo Beach"
+  },
+  "region": {
+    "sido": {
+      "ko": "강원",
+      "en": "Gangwon"
+    },
+    "sigungu": {
+      "ko": "고성군",
+      "en": "Goseong"
+    }
+  },
+  "coast": "east",
+  "coords": {
+    "lat": 38.479045,
+    "lng": 128.438589
+  },
+  "activities": [
+    "swimming"
+  ],
+  "hidden": false,
+  "warningZones": {
+    "sea": "S1151100",
+    "land": "L1022210"
+  },
+  "stations": {
+    "waveHeight": null,
+    "wavePeriod": null,
+    "waveDirection": null,
+    "waterTemp": null,
+    "wind": null
+  },
+  "photo": null,
+  "cctv": null
+}

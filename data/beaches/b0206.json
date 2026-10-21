@@ -1,0 +1,41 @@
+{
+  "id": "b0206",
+  "slug": "saengil-geumgok",
+  "kind": "beach",
+  "name": {
+    "ko": "생일금곡해수욕장",
+    "en": "Saengil Geumgok Beach"
+  },
+  "region": {
+    "sido": {
+      "ko": "전남",
+      "en": "Jeonnam"
+    },
+    "sigungu": {
+      "ko": "완도군",
+      "en": "Wando"
+    }
+  },
+  "coast": "south",
+  "coords": {
+    "lat": 34.312041,
+    "lng": 126.963556
+  },
+  "activities": [
+    "swimming"
+  ],
+  "hidden": false,
+  "warningZones": {
+    "sea": "S1321100",
+    "land": "L1053310"
+  },
+  "stations": {
+    "waveHeight": null,
+    "wavePeriod": null,
+    "waveDirection": null,
+    "waterTemp": null,
+    "wind": null
+  },
+  "photo": null,
+  "cctv": null
+}

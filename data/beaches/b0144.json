@@ -1,0 +1,76 @@
+{
+  "id": "b0144",
+  "slug": "sambong",
+  "kind": "beach",
+  "name": {
+    "ko": "삼봉해수욕장",
+    "en": "Sambong Beach"
+  },
+  "region": {
+    "sido": {
+      "ko": "충남",
+      "en": "Chungnam"
+    },
+    "sigungu": {
+      "ko": "태안군",
+      "en": "Taean"
+    }
+  },
+  "coast": "west",
+  "coords": {
+    "lat": 36.568375,
+    "lng": 126.316998
+  },
+  "activities": [
+    "swimming"
+  ],
+  "hidden": false,
+  "warningZones": {
+    "sea": "S1251300",
+    "land": "L1031100"
+  },
+  "stations": {
+    "waveHeight": {
+      "id": "22488",
+      "name": {
+        "ko": "안면도 파고부이",
+        "en": "Anmyeondo wave buoy"
+      },
+      "distanceKm": 3.9
+    },
+    "wavePeriod": {
+      "id": "22446",
+      "name": {
+        "ko": "내파수도 해양기상부이",
+        "en": "Naepasudo marine buoy"
+      },
+      "distanceKm": 14.7
+    },
+    "waveDirection": {
+      "id": "22446",
+      "name": {
+        "ko": "내파수도 해양기상부이",
+        "en": "Naepasudo marine buoy"
+      },
+      "distanceKm": 14.7
+    },
+    "waterTemp": {
+      "id": "22488",
+      "name": {
+        "ko": "안면도 파고부이",
+        "en": "Anmyeondo wave buoy"
+      },
+      "distanceKm": 3.9
+    },
+    "wind": {
+      "id": "22446",
+      "name": {
+        "ko": "내파수도 해양기상부이",
+        "en": "Naepasudo marine buoy"
+      },
+      "distanceKm": 14.7
+    }
+  },
+  "photo": null,
+  "cctv": null
+}

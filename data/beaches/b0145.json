@@ -1,0 +1,76 @@
+{
+  "id": "b0145",
+  "slug": "saetbyeol",
+  "kind": "beach",
+  "name": {
+    "ko": "샛별해수욕장",
+    "en": "Saetbyeol Beach"
+  },
+  "region": {
+    "sido": {
+      "ko": "충남",
+      "en": "Chungnam"
+    },
+    "sigungu": {
+      "ko": "태안군",
+      "en": "Taean"
+    }
+  },
+  "coast": "west",
+  "coords": {
+    "lat": 36.449184,
+    "lng": 126.335153
+  },
+  "activities": [
+    "swimming"
+  ],
+  "hidden": false,
+  "warningZones": {
+    "sea": "S1251300",
+    "land": "L1031100"
+  },
+  "stations": {
+    "waveHeight": {
+      "id": "22446",
+      "name": {
+        "ko": "내파수도 해양기상부이",
+        "en": "Naepasudo marine buoy"
+      },
+      "distanceKm": 8.5
+    },
+    "wavePeriod": {
+      "id": "22446",
+      "name": {
+        "ko": "내파수도 해양기상부이",
+        "en": "Naepasudo marine buoy"
+      },
+      "distanceKm": 8.5
+    },
+    "waveDirection": {
+      "id": "22446",
+      "name": {
+        "ko": "내파수도 해양기상부이",
+        "en": "Naepasudo marine buoy"
+      },
+      "distanceKm": 8.5
+    },
+    "waterTemp": {
+      "id": "22446",
+      "name": {
+        "ko": "내파수도 해양기상부이",
+        "en": "Naepasudo marine buoy"
+      },
+      "distanceKm": 8.5
+    },
+    "wind": {
+      "id": "22446",
+      "name": {
+        "ko": "내파수도 해양기상부이",
+        "en": "Naepasudo marine buoy"
+      },
+      "distanceKm": 8.5
+    }
+  },
+  "photo": null,
+  "cctv": null
+}

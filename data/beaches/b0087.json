@@ -1,0 +1,41 @@
+{
+  "id": "b0087",
+  "slug": "jangyo",
+  "kind": "beach",
+  "name": {
+    "ko": "잔교해수욕장",
+    "en": "Jangyo Beach"
+  },
+  "region": {
+    "sido": {
+      "ko": "강원",
+      "en": "Gangwon"
+    },
+    "sigungu": {
+      "ko": "양양군",
+      "en": "Yangyang"
+    }
+  },
+  "coast": "east",
+  "coords": {
+    "lat": 37.99292,
+    "lng": 128.743369
+  },
+  "activities": [
+    "swimming"
+  ],
+  "hidden": false,
+  "warningZones": {
+    "sea": "S1151100",
+    "land": "L1022320"
+  },
+  "stations": {
+    "waveHeight": null,
+    "wavePeriod": null,
+    "waveDirection": null,
+    "waterTemp": null,
+    "wind": null
+  },
+  "photo": null,
+  "cctv": null
+}

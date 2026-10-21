@@ -1,0 +1,41 @@
+{
+  "id": "b0179",
+  "slug": "yulpo-solbat",
+  "kind": "beach",
+  "name": {
+    "ko": "율포솔밭해수욕장",
+    "en": "Yulpo Solbat Beach"
+  },
+  "region": {
+    "sido": {
+      "ko": "전남",
+      "en": "Jeonnam"
+    },
+    "sigungu": {
+      "ko": "보성군",
+      "en": "Boseong"
+    }
+  },
+  "coast": "south",
+  "coords": {
+    "lat": 34.669997,
+    "lng": 127.089731
+  },
+  "activities": [
+    "swimming"
+  ],
+  "hidden": false,
+  "warningZones": {
+    "sea": "S1321200",
+    "land": "L1050900"
+  },
+  "stations": {
+    "waveHeight": null,
+    "wavePeriod": null,
+    "waveDirection": null,
+    "waterTemp": null,
+    "wind": null
+  },
+  "photo": null,
+  "cctv": null
+}

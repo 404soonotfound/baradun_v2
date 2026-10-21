@@ -1,0 +1,41 @@
+{
+  "id": "b0214",
+  "slug": "gagye",
+  "kind": "beach",
+  "name": {
+    "ko": "가계해수욕장",
+    "en": "Gagye Beach"
+  },
+  "region": {
+    "sido": {
+      "ko": "전남",
+      "en": "Jeonnam"
+    },
+    "sigungu": {
+      "ko": "진도군",
+      "en": "Jindo"
+    }
+  },
+  "coast": "west",
+  "coords": {
+    "lat": 34.435569,
+    "lng": 126.355389
+  },
+  "activities": [
+    "swimming"
+  ],
+  "hidden": false,
+  "warningZones": {
+    "sea": "S1231500",
+    "land": "L1052300"
+  },
+  "stations": {
+    "waveHeight": null,
+    "wavePeriod": null,
+    "waveDirection": null,
+    "waterTemp": null,
+    "wind": null
+  },
+  "photo": null,
+  "cctv": null
+}

@@ -1,0 +1,69 @@
+{
+  "id": "b0097",
+  "slug": "haeundae",
+  "kind": "beach",
+  "name": {
+    "ko": "해운대해수욕장",
+    "en": "Haeundae Beach"
+  },
+  "region": {
+    "sido": {
+      "ko": "부산",
+      "en": "Busan"
+    },
+    "sigungu": {
+      "ko": "해운대구",
+      "en": "Haeundae"
+    }
+  },
+  "coast": "south",
+  "coords": {
+    "lat": 35.15875,
+    "lng": 129.161629
+  },
+  "activities": [
+    "swimming"
+  ],
+  "hidden": false,
+  "warningZones": {
+    "sea": "S1311100",
+    "land": "L1082500"
+  },
+  "stations": {
+    "waveHeight": {
+      "id": "22459",
+      "name": {
+        "ko": "오륙도 파고부이",
+        "en": "Oryukdo wave buoy"
+      },
+      "distanceKm": 7.7
+    },
+    "wavePeriod": {
+      "id": "22511",
+      "name": {
+        "ko": "기장 파고부이",
+        "en": "Gijang wave buoy"
+      },
+      "distanceKm": 11.4
+    },
+    "waveDirection": {
+      "id": "22511",
+      "name": {
+        "ko": "기장 파고부이",
+        "en": "Gijang wave buoy"
+      },
+      "distanceKm": 11.4
+    },
+    "waterTemp": {
+      "id": "22459",
+      "name": {
+        "ko": "오륙도 파고부이",
+        "en": "Oryukdo wave buoy"
+      },
+      "distanceKm": 7.7
+    },
+    "wind": null
+  },
+  "photo": null,
+  "cctv": null
+}

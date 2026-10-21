@@ -1,0 +1,41 @@
+{
+  "id": "b0213",
+  "slug": "anyang-sumun",
+  "kind": "beach",
+  "name": {
+    "ko": "안양수문해수욕장",
+    "en": "Anyang Sumun Beach"
+  },
+  "region": {
+    "sido": {
+      "ko": "전남",
+      "en": "Jeonnam"
+    },
+    "sigungu": {
+      "ko": "장흥군",
+      "en": "Jangheung"
+    }
+  },
+  "coast": "south",
+  "coords": {
+    "lat": 34.635285,
+    "lng": 127.034933
+  },
+  "activities": [
+    "swimming"
+  ],
+  "hidden": false,
+  "warningZones": {
+    "sea": "S1321100",
+    "land": "L1051300"
+  },
+  "stations": {
+    "waveHeight": null,
+    "wavePeriod": null,
+    "waveDirection": null,
+    "waterTemp": null,
+    "wind": null
+  },
+  "photo": null,
+  "cctv": null
+}

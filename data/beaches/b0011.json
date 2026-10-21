@@ -1,0 +1,76 @@
+{
+  "id": "b0011",
+  "slug": "hapyeong",
+  "kind": "beach",
+  "name": {
+    "ko": "하평해수욕장",
+    "en": "Hapyeong Beach"
+  },
+  "region": {
+    "sido": {
+      "ko": "강원",
+      "en": "Gangwon"
+    },
+    "sigungu": {
+      "ko": "강릉시",
+      "en": "Gangneung"
+    }
+  },
+  "coast": "east",
+  "coords": {
+    "lat": 37.846003,
+    "lng": 128.87004
+  },
+  "activities": [
+    "swimming"
+  ],
+  "hidden": false,
+  "warningZones": {
+    "sea": "S1151200",
+    "land": "L1022510"
+  },
+  "stations": {
+    "waveHeight": {
+      "id": "22451",
+      "name": {
+        "ko": "연곡 파고부이",
+        "en": "Yeongok wave buoy"
+      },
+      "distanceKm": 2.7
+    },
+    "wavePeriod": {
+      "id": "22520",
+      "name": {
+        "ko": "강릉 해양기상부이",
+        "en": "Gangneung marine buoy"
+      },
+      "distanceKm": 17.6
+    },
+    "waveDirection": {
+      "id": "22520",
+      "name": {
+        "ko": "강릉 해양기상부이",
+        "en": "Gangneung marine buoy"
+      },
+      "distanceKm": 17.6
+    },
+    "waterTemp": {
+      "id": "22451",
+      "name": {
+        "ko": "연곡 파고부이",
+        "en": "Yeongok wave buoy"
+      },
+      "distanceKm": 2.7
+    },
+    "wind": {
+      "id": "22520",
+      "name": {
+        "ko": "강릉 해양기상부이",
+        "en": "Gangneung marine buoy"
+      },
+      "distanceKm": 17.6
+    }
+  },
+  "photo": null,
+  "cctv": null
+}

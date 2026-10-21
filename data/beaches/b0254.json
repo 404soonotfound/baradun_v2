@@ -1,0 +1,76 @@
+{
+  "id": "b0254",
+  "slug": "muran",
+  "kind": "beach",
+  "name": {
+    "ko": "물안해수욕장",
+    "en": "Muran Beach"
+  },
+  "region": {
+    "sido": {
+      "ko": "경남",
+      "en": "Gyeongnam"
+    },
+    "sigungu": {
+      "ko": "거제시",
+      "en": "Geoje"
+    }
+  },
+  "coast": "south",
+  "coords": {
+    "lat": 35.011024,
+    "lng": 128.652875
+  },
+  "activities": [
+    "swimming"
+  ],
+  "hidden": false,
+  "warningZones": {
+    "sea": "S1311300",
+    "land": "L1082200"
+  },
+  "stations": {
+    "waveHeight": {
+      "id": "22484",
+      "name": {
+        "ko": "잠도 파고부이",
+        "en": "Jamdo wave buoy"
+      },
+      "distanceKm": 5.8
+    },
+    "wavePeriod": {
+      "id": "22513",
+      "name": {
+        "ko": "이수도 해양기상부이",
+        "en": "Isudo marine buoy"
+      },
+      "distanceKm": 10.6
+    },
+    "waveDirection": {
+      "id": "22513",
+      "name": {
+        "ko": "이수도 해양기상부이",
+        "en": "Isudo marine buoy"
+      },
+      "distanceKm": 10.6
+    },
+    "waterTemp": {
+      "id": "22484",
+      "name": {
+        "ko": "잠도 파고부이",
+        "en": "Jamdo wave buoy"
+      },
+      "distanceKm": 5.8
+    },
+    "wind": {
+      "id": "22513",
+      "name": {
+        "ko": "이수도 해양기상부이",
+        "en": "Isudo marine buoy"
+      },
+      "distanceKm": 10.6
+    }
+  },
+  "photo": null,
+  "cctv": null
+}

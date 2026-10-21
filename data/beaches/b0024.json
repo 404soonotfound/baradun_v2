@@ -1,0 +1,76 @@
+{
+  "id": "b0024",
+  "slug": "sampo",
+  "kind": "beach",
+  "name": {
+    "ko": "삼포해수욕장",
+    "en": "Sampo Beach"
+  },
+  "region": {
+    "sido": {
+      "ko": "강원",
+      "en": "Gangwon"
+    },
+    "sigungu": {
+      "ko": "고성군",
+      "en": "Goseong"
+    }
+  },
+  "coast": "east",
+  "coords": {
+    "lat": 38.316508,
+    "lng": 128.533413
+  },
+  "activities": [
+    "swimming"
+  ],
+  "hidden": false,
+  "warningZones": {
+    "sea": "S1151100",
+    "land": "L1022210"
+  },
+  "stations": {
+    "waveHeight": {
+      "id": "22471",
+      "name": {
+        "ko": "토성 파고부이",
+        "en": "Toseong wave buoy"
+      },
+      "distanceKm": 5.7
+    },
+    "wavePeriod": {
+      "id": "22310",
+      "name": {
+        "ko": "고성 해양기상부이",
+        "en": "Goseong marine buoy"
+      },
+      "distanceKm": 9.2
+    },
+    "waveDirection": {
+      "id": "22310",
+      "name": {
+        "ko": "고성 해양기상부이",
+        "en": "Goseong marine buoy"
+      },
+      "distanceKm": 9.2
+    },
+    "waterTemp": {
+      "id": "22471",
+      "name": {
+        "ko": "토성 파고부이",
+        "en": "Toseong wave buoy"
+      },
+      "distanceKm": 5.7
+    },
+    "wind": {
+      "id": "22310",
+      "name": {
+        "ko": "고성 해양기상부이",
+        "en": "Goseong marine buoy"
+      },
+      "distanceKm": 9.2
+    }
+  },
+  "photo": null,
+  "cctv": null
+}

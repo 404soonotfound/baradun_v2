@@ -1,0 +1,76 @@
+{
+  "id": "b0017",
+  "slug": "sungeut",
+  "kind": "beach",
+  "name": {
+    "ko": "순긋해수욕장",
+    "en": "Sungeut Beach"
+  },
+  "region": {
+    "sido": {
+      "ko": "강원",
+      "en": "Gangwon"
+    },
+    "sigungu": {
+      "ko": "강릉시",
+      "en": "Gangneung"
+    }
+  },
+  "coast": "east",
+  "coords": {
+    "lat": 37.817132,
+    "lng": 128.892978
+  },
+  "activities": [
+    "swimming"
+  ],
+  "hidden": false,
+  "warningZones": {
+    "sea": "S1151200",
+    "land": "L1022510"
+  },
+  "stations": {
+    "waveHeight": {
+      "id": "22451",
+      "name": {
+        "ko": "연곡 파고부이",
+        "en": "Yeongok wave buoy"
+      },
+      "distanceKm": 5.6
+    },
+    "wavePeriod": {
+      "id": "22520",
+      "name": {
+        "ko": "강릉 해양기상부이",
+        "en": "Gangneung marine buoy"
+      },
+      "distanceKm": 14.9
+    },
+    "waveDirection": {
+      "id": "22520",
+      "name": {
+        "ko": "강릉 해양기상부이",
+        "en": "Gangneung marine buoy"
+      },
+      "distanceKm": 14.9
+    },
+    "waterTemp": {
+      "id": "22451",
+      "name": {
+        "ko": "연곡 파고부이",
+        "en": "Yeongok wave buoy"
+      },
+      "distanceKm": 5.6
+    },
+    "wind": {
+      "id": "22520",
+      "name": {
+        "ko": "강릉 해양기상부이",
+        "en": "Gangneung marine buoy"
+      },
+      "distanceKm": 14.9
+    }
+  },
+  "photo": null,
+  "cctv": null
+}

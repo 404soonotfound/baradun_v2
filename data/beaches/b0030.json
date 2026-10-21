@@ -1,0 +1,41 @@
+{
+  "id": "b0030",
+  "slug": "geojin-11-ri",
+  "kind": "beach",
+  "name": {
+    "ko": "거진11리해수욕장",
+    "en": "Geojin 11-ri Beach"
+  },
+  "region": {
+    "sido": {
+      "ko": "강원",
+      "en": "Gangwon"
+    },
+    "sigungu": {
+      "ko": "고성군",
+      "en": "Goseong"
+    }
+  },
+  "coast": "east",
+  "coords": {
+    "lat": 38.443797,
+    "lng": 128.455214
+  },
+  "activities": [
+    "swimming"
+  ],
+  "hidden": false,
+  "warningZones": {
+    "sea": "S1151100",
+    "land": "L1022210"
+  },
+  "stations": {
+    "waveHeight": null,
+    "wavePeriod": null,
+    "waveDirection": null,
+    "waterTemp": null,
+    "wind": null
+  },
+  "photo": null,
+  "cctv": null
+}

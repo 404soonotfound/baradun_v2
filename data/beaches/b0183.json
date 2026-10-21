@@ -1,0 +1,76 @@
+{
+  "id": "b0183",
+  "slug": "baekgil",
+  "kind": "beach",
+  "name": {
+    "ko": "백길해수욕장",
+    "en": "Baekgil Beach"
+  },
+  "region": {
+    "sido": {
+      "ko": "전남",
+      "en": "Jeonnam"
+    },
+    "sigungu": {
+      "ko": "신안군",
+      "en": "Sinan"
+    }
+  },
+  "coast": "west",
+  "coords": {
+    "lat": 34.849472,
+    "lng": 126.039477
+  },
+  "activities": [
+    "swimming"
+  ],
+  "hidden": false,
+  "warningZones": {
+    "sea": "S1231400",
+    "land": "L1052200"
+  },
+  "stations": {
+    "waveHeight": {
+      "id": "22493",
+      "name": {
+        "ko": "자은 해양기상부이",
+        "en": "Jaeun marine buoy"
+      },
+      "distanceKm": 17.5
+    },
+    "wavePeriod": {
+      "id": "22493",
+      "name": {
+        "ko": "자은 해양기상부이",
+        "en": "Jaeun marine buoy"
+      },
+      "distanceKm": 17.5
+    },
+    "waveDirection": {
+      "id": "22493",
+      "name": {
+        "ko": "자은 해양기상부이",
+        "en": "Jaeun marine buoy"
+      },
+      "distanceKm": 17.5
+    },
+    "waterTemp": {
+      "id": "22493",
+      "name": {
+        "ko": "자은 해양기상부이",
+        "en": "Jaeun marine buoy"
+      },
+      "distanceKm": 17.5
+    },
+    "wind": {
+      "id": "22493",
+      "name": {
+        "ko": "자은 해양기상부이",
+        "en": "Jaeun marine buoy"
+      },
+      "distanceKm": 17.5
+    }
+  },
+  "photo": null,
+  "cctv": null
+}

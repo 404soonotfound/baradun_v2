@@ -1,0 +1,55 @@
+{
+  "id": "b0278",
+  "slug": "gimnyeong-seongsegi",
+  "kind": "beach",
+  "name": {
+    "ko": "김녕성세기해수욕장",
+    "en": "Gimnyeong Seongsegi Beach"
+  },
+  "region": {
+    "sido": {
+      "ko": "제주",
+      "en": "Jeju"
+    },
+    "sigungu": {
+      "ko": "제주시",
+      "en": "Jeju"
+    }
+  },
+  "coast": "jeju",
+  "coords": {
+    "lat": 33.557734,
+    "lng": 126.759463
+  },
+  "activities": [
+    "swimming"
+  ],
+  "hidden": false,
+  "warningZones": {
+    "sea": "S1323200",
+    "land": "L1091330"
+  },
+  "stations": {
+    "waveHeight": {
+      "id": "22491",
+      "name": {
+        "ko": "김녕 파고부이",
+        "en": "Gimnyeong wave buoy"
+      },
+      "distanceKm": 2.7
+    },
+    "wavePeriod": null,
+    "waveDirection": null,
+    "waterTemp": {
+      "id": "22491",
+      "name": {
+        "ko": "김녕 파고부이",
+        "en": "Gimnyeong wave buoy"
+      },
+      "distanceKm": 2.7
+    },
+    "wind": null
+  },
+  "photo": null,
+  "cctv": null
+}

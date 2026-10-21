@@ -1,0 +1,41 @@
+{
+  "id": "b0207",
+  "slug": "sinji-donggo",
+  "kind": "beach",
+  "name": {
+    "ko": "신지동고해수욕장",
+    "en": "Sinji Donggo Beach"
+  },
+  "region": {
+    "sido": {
+      "ko": "전남",
+      "en": "Jeonnam"
+    },
+    "sigungu": {
+      "ko": "완도군",
+      "en": "Wando"
+    }
+  },
+  "coast": "south",
+  "coords": {
+    "lat": 34.329046,
+    "lng": 126.880006
+  },
+  "activities": [
+    "swimming"
+  ],
+  "hidden": false,
+  "warningZones": {
+    "sea": "S1321100",
+    "land": "L1053310"
+  },
+  "stations": {
+    "waveHeight": null,
+    "wavePeriod": null,
+    "waveDirection": null,
+    "waterTemp": null,
+    "wind": null
+  },
+  "photo": null,
+  "cctv": null
+}

@@ -1,0 +1,76 @@
+{
+  "id": "b0012",
+  "slug": "geumjin",
+  "kind": "beach",
+  "name": {
+    "ko": "금진해수욕장",
+    "en": "Geumjin Beach"
+  },
+  "region": {
+    "sido": {
+      "ko": "강원",
+      "en": "Gangwon"
+    },
+    "sigungu": {
+      "ko": "강릉시",
+      "en": "Gangneung"
+    }
+  },
+  "coast": "east",
+  "coords": {
+    "lat": 37.636379,
+    "lng": 129.045026
+  },
+  "activities": [
+    "swimming"
+  ],
+  "hidden": false,
+  "warningZones": {
+    "sea": "S1151200",
+    "land": "L1022510"
+  },
+  "stations": {
+    "waveHeight": {
+      "id": "22520",
+      "name": {
+        "ko": "강릉 해양기상부이",
+        "en": "Gangneung marine buoy"
+      },
+      "distanceKm": 18.1
+    },
+    "wavePeriod": {
+      "id": "22520",
+      "name": {
+        "ko": "강릉 해양기상부이",
+        "en": "Gangneung marine buoy"
+      },
+      "distanceKm": 18.1
+    },
+    "waveDirection": {
+      "id": "22520",
+      "name": {
+        "ko": "강릉 해양기상부이",
+        "en": "Gangneung marine buoy"
+      },
+      "distanceKm": 18.1
+    },
+    "waterTemp": {
+      "id": "22520",
+      "name": {
+        "ko": "강릉 해양기상부이",
+        "en": "Gangneung marine buoy"
+      },
+      "distanceKm": 18.1
+    },
+    "wind": {
+      "id": "22520",
+      "name": {
+        "ko": "강릉 해양기상부이",
+        "en": "Gangneung marine buoy"
+      },
+      "distanceKm": 18.1
+    }
+  },
+  "photo": null,
+  "cctv": null
+}

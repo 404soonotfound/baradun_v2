@@ -1,0 +1,69 @@
+{
+  "id": "b0096",
+  "slug": "haeundae-songjeong",
+  "kind": "beach",
+  "name": {
+    "ko": "송정해수욕장",
+    "en": "Songjeong Beach"
+  },
+  "region": {
+    "sido": {
+      "ko": "부산",
+      "en": "Busan"
+    },
+    "sigungu": {
+      "ko": "해운대구",
+      "en": "Haeundae"
+    }
+  },
+  "coast": "south",
+  "coords": {
+    "lat": 35.1787,
+    "lng": 129.199542
+  },
+  "activities": [
+    "swimming"
+  ],
+  "hidden": false,
+  "warningZones": {
+    "sea": "S1311100",
+    "land": "L1082500"
+  },
+  "stations": {
+    "waveHeight": {
+      "id": "22459",
+      "name": {
+        "ko": "오륙도 파고부이",
+        "en": "Oryukdo wave buoy"
+      },
+      "distanceKm": 11.4
+    },
+    "wavePeriod": {
+      "id": "22511",
+      "name": {
+        "ko": "기장 파고부이",
+        "en": "Gijang wave buoy"
+      },
+      "distanceKm": 7.3
+    },
+    "waveDirection": {
+      "id": "22511",
+      "name": {
+        "ko": "기장 파고부이",
+        "en": "Gijang wave buoy"
+      },
+      "distanceKm": 7.3
+    },
+    "waterTemp": {
+      "id": "22459",
+      "name": {
+        "ko": "오륙도 파고부이",
+        "en": "Oryukdo wave buoy"
+      },
+      "distanceKm": 11.4
+    },
+    "wind": null
+  },
+  "photo": null,
+  "cctv": null
+}

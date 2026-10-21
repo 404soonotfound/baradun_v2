@@ -1,0 +1,41 @@
+{
+  "id": "b0201",
+  "slug": "gamami",
+  "kind": "beach",
+  "name": {
+    "ko": "가마미해수욕장",
+    "en": "Gamami Beach"
+  },
+  "region": {
+    "sido": {
+      "ko": "전남",
+      "en": "Jeonnam"
+    },
+    "sigungu": {
+      "ko": "영광군",
+      "en": "Yeonggwang"
+    }
+  },
+  "coast": "west",
+  "coords": {
+    "lat": 35.398868,
+    "lng": 126.408538
+  },
+  "activities": [
+    "swimming"
+  ],
+  "hidden": false,
+  "warningZones": {
+    "sea": "S1231300",
+    "land": "L1052710"
+  },
+  "stations": {
+    "waveHeight": null,
+    "wavePeriod": null,
+    "waveDirection": null,
+    "waterTemp": null,
+    "wind": null
+  },
+  "photo": null,
+  "cctv": null
+}

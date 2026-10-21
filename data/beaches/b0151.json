@@ -1,0 +1,76 @@
+{
+  "id": "b0151",
+  "slug": "jangsampo",
+  "kind": "beach",
+  "name": {
+    "ko": "장삼포해수욕장",
+    "en": "Jangsampo Beach"
+  },
+  "region": {
+    "sido": {
+      "ko": "충남",
+      "en": "Chungnam"
+    },
+    "sigungu": {
+      "ko": "태안군",
+      "en": "Taean"
+    }
+  },
+  "coast": "west",
+  "coords": {
+    "lat": 36.422364,
+    "lng": 126.360599
+  },
+  "activities": [
+    "swimming"
+  ],
+  "hidden": false,
+  "warningZones": {
+    "sea": "S1251300",
+    "land": "L1031100"
+  },
+  "stations": {
+    "waveHeight": {
+      "id": "22487",
+      "name": {
+        "ko": "천수만 파고부이",
+        "en": "Cheonsuman wave buoy"
+      },
+      "distanceKm": 8.6
+    },
+    "wavePeriod": {
+      "id": "22446",
+      "name": {
+        "ko": "내파수도 해양기상부이",
+        "en": "Naepasudo marine buoy"
+      },
+      "distanceKm": 11.3
+    },
+    "waveDirection": {
+      "id": "22446",
+      "name": {
+        "ko": "내파수도 해양기상부이",
+        "en": "Naepasudo marine buoy"
+      },
+      "distanceKm": 11.3
+    },
+    "waterTemp": {
+      "id": "22487",
+      "name": {
+        "ko": "천수만 파고부이",
+        "en": "Cheonsuman wave buoy"
+      },
+      "distanceKm": 8.6
+    },
+    "wind": {
+      "id": "22446",
+      "name": {
+        "ko": "내파수도 해양기상부이",
+        "en": "Naepasudo marine buoy"
+      },
+      "distanceKm": 11.3
+    }
+  },
+  "photo": null,
+  "cctv": null
+}

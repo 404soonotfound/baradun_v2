@@ -1,0 +1,76 @@
+{
+  "id": "b0247",
+  "slug": "guyeong",
+  "kind": "beach",
+  "name": {
+    "ko": "구영해수욕장",
+    "en": "Guyeong Beach"
+  },
+  "region": {
+    "sido": {
+      "ko": "경남",
+      "en": "Gyeongnam"
+    },
+    "sigungu": {
+      "ko": "거제시",
+      "en": "Geoje"
+    }
+  },
+  "coast": "south",
+  "coords": {
+    "lat": 35.031331,
+    "lng": 128.691105
+  },
+  "activities": [
+    "swimming"
+  ],
+  "hidden": false,
+  "warningZones": {
+    "sea": "S1311300",
+    "land": "L1082200"
+  },
+  "stations": {
+    "waveHeight": {
+      "id": "22484",
+      "name": {
+        "ko": "잠도 파고부이",
+        "en": "Jamdo wave buoy"
+      },
+      "distanceKm": 3.1
+    },
+    "wavePeriod": {
+      "id": "22513",
+      "name": {
+        "ko": "이수도 해양기상부이",
+        "en": "Isudo marine buoy"
+      },
+      "distanceKm": 9
+    },
+    "waveDirection": {
+      "id": "22513",
+      "name": {
+        "ko": "이수도 해양기상부이",
+        "en": "Isudo marine buoy"
+      },
+      "distanceKm": 9
+    },
+    "waterTemp": {
+      "id": "22484",
+      "name": {
+        "ko": "잠도 파고부이",
+        "en": "Jamdo wave buoy"
+      },
+      "distanceKm": 3.1
+    },
+    "wind": {
+      "id": "22513",
+      "name": {
+        "ko": "이수도 해양기상부이",
+        "en": "Isudo marine buoy"
+      },
+      "distanceKm": 9
+    }
+  },
+  "photo": null,
+  "cctv": null
+}

@@ -1,0 +1,41 @@
+{
+  "id": "b0175",
+  "slug": "pungnyu",
+  "kind": "beach",
+  "name": {
+    "ko": "풍류해수욕장",
+    "en": "Pungnyu Beach"
+  },
+  "region": {
+    "sido": {
+      "ko": "전남",
+      "en": "Jeonnam"
+    },
+    "sigungu": {
+      "ko": "고흥군",
+      "en": "Goheung"
+    }
+  },
+  "coast": "south",
+  "coords": {
+    "lat": 34.66417,
+    "lng": 127.22952
+  },
+  "activities": [
+    "swimming"
+  ],
+  "hidden": false,
+  "warningZones": {
+    "sea": "S1321200",
+    "land": "L1053110"
+  },
+  "stations": {
+    "waveHeight": null,
+    "wavePeriod": null,
+    "waveDirection": null,
+    "waterTemp": null,
+    "wind": null
+  },
+  "photo": null,
+  "cctv": null
+}

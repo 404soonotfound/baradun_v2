@@ -1,0 +1,48 @@
+{
+  "id": "b0235",
+  "slug": "giseong-mangyang",
+  "kind": "beach",
+  "name": {
+    "ko": "기성망양해수욕장",
+    "en": "Giseong Mangyang Beach"
+  },
+  "region": {
+    "sido": {
+      "ko": "경북",
+      "en": "Gyeongbuk"
+    },
+    "sigungu": {
+      "ko": "울진군",
+      "en": "Uljin"
+    }
+  },
+  "coast": "east",
+  "coords": {
+    "lat": 36.842795,
+    "lng": 129.434534
+  },
+  "activities": [
+    "swimming"
+  ],
+  "hidden": false,
+  "warningZones": {
+    "sea": "S1131300",
+    "land": "L1073010"
+  },
+  "stations": {
+    "waveHeight": null,
+    "wavePeriod": null,
+    "waveDirection": null,
+    "waterTemp": {
+      "id": "22465",
+      "name": {
+        "ko": "후포 파고부이",
+        "en": "Hupo wave buoy"
+      },
+      "distanceKm": 14.5
+    },
+    "wind": null
+  },
+  "photo": null,
+  "cctv": null
+}

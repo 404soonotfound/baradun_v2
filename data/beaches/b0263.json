@@ -1,0 +1,76 @@
+{
+  "id": "b0263",
+  "slug": "heungnam",
+  "kind": "beach",
+  "name": {
+    "ko": "흥남해수욕장",
+    "en": "Heungnam Beach"
+  },
+  "region": {
+    "sido": {
+      "ko": "경남",
+      "en": "Gyeongnam"
+    },
+    "sigungu": {
+      "ko": "거제시",
+      "en": "Geoje"
+    }
+  },
+  "coast": "south",
+  "coords": {
+    "lat": 34.960063,
+    "lng": 128.715113
+  },
+  "activities": [
+    "swimming"
+  ],
+  "hidden": false,
+  "warningZones": {
+    "sea": "S1311300",
+    "land": "L1082200"
+  },
+  "stations": {
+    "waveHeight": {
+      "id": "22513",
+      "name": {
+        "ko": "이수도 해양기상부이",
+        "en": "Isudo marine buoy"
+      },
+      "distanceKm": 4.1
+    },
+    "wavePeriod": {
+      "id": "22513",
+      "name": {
+        "ko": "이수도 해양기상부이",
+        "en": "Isudo marine buoy"
+      },
+      "distanceKm": 4.1
+    },
+    "waveDirection": {
+      "id": "22513",
+      "name": {
+        "ko": "이수도 해양기상부이",
+        "en": "Isudo marine buoy"
+      },
+      "distanceKm": 4.1
+    },
+    "waterTemp": {
+      "id": "22513",
+      "name": {
+        "ko": "이수도 해양기상부이",
+        "en": "Isudo marine buoy"
+      },
+      "distanceKm": 4.1
+    },
+    "wind": {
+      "id": "22513",
+      "name": {
+        "ko": "이수도 해양기상부이",
+        "en": "Isudo marine buoy"
+      },
+      "distanceKm": 4.1
+    }
+  },
+  "photo": null,
+  "cctv": null
+}

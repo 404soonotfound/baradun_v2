@@ -1,0 +1,41 @@
+{
+  "id": "b0170",
+  "slug": "balpo",
+  "kind": "beach",
+  "name": {
+    "ko": "발포해수욕장",
+    "en": "Balpo Beach"
+  },
+  "region": {
+    "sido": {
+      "ko": "전남",
+      "en": "Jeonnam"
+    },
+    "sigungu": {
+      "ko": "고흥군",
+      "en": "Goheung"
+    }
+  },
+  "coast": "south",
+  "coords": {
+    "lat": 34.491591,
+    "lng": 127.356183
+  },
+  "activities": [
+    "swimming"
+  ],
+  "hidden": false,
+  "warningZones": {
+    "sea": "S1321200",
+    "land": "L1053120"
+  },
+  "stations": {
+    "waveHeight": null,
+    "wavePeriod": null,
+    "waveDirection": null,
+    "waterTemp": null,
+    "wind": null
+  },
+  "photo": null,
+  "cctv": null
+}

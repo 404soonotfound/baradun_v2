@@ -1,0 +1,55 @@
+{
+  "id": "b0094",
+  "slug": "songdo",
+  "kind": "beach",
+  "name": {
+    "ko": "송도해수욕장",
+    "en": "Songdo Beach"
+  },
+  "region": {
+    "sido": {
+      "ko": "부산",
+      "en": "Busan"
+    },
+    "sigungu": {
+      "ko": "서구",
+      "en": "Seo-gu"
+    }
+  },
+  "coast": "south",
+  "coords": {
+    "lat": 35.076209,
+    "lng": 129.017834
+  },
+  "activities": [
+    "swimming"
+  ],
+  "hidden": false,
+  "warningZones": {
+    "sea": "S1311100",
+    "land": "L1082700"
+  },
+  "stations": {
+    "waveHeight": {
+      "id": "22459",
+      "name": {
+        "ko": "오륙도 파고부이",
+        "en": "Oryukdo wave buoy"
+      },
+      "distanceKm": 10.3
+    },
+    "wavePeriod": null,
+    "waveDirection": null,
+    "waterTemp": {
+      "id": "22459",
+      "name": {
+        "ko": "오륙도 파고부이",
+        "en": "Oryukdo wave buoy"
+      },
+      "distanceKm": 10.3
+    },
+    "wind": null
+  },
+  "photo": null,
+  "cctv": null
+}

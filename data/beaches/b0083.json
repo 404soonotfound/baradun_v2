@@ -1,0 +1,41 @@
+{
+  "id": "b0083",
+  "slug": "dongsanpo",
+  "kind": "beach",
+  "name": {
+    "ko": "동산포해수욕장",
+    "en": "Dongsanpo Beach"
+  },
+  "region": {
+    "sido": {
+      "ko": "강원",
+      "en": "Gangwon"
+    },
+    "sigungu": {
+      "ko": "양양군",
+      "en": "Yangyang"
+    }
+  },
+  "coast": "east",
+  "coords": {
+    "lat": 37.982042,
+    "lng": 128.757011
+  },
+  "activities": [
+    "swimming"
+  ],
+  "hidden": false,
+  "warningZones": {
+    "sea": "S1151100",
+    "land": "L1022310"
+  },
+  "stations": {
+    "waveHeight": null,
+    "wavePeriod": null,
+    "waveDirection": null,
+    "waterTemp": null,
+    "wind": null
+  },
+  "photo": null,
+  "cctv": null
+}

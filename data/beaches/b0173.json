@@ -1,0 +1,41 @@
+{
+  "id": "b0173",
+  "slug": "yongdong",
+  "kind": "beach",
+  "name": {
+    "ko": "용동해수욕장",
+    "en": "Yongdong Beach"
+  },
+  "region": {
+    "sido": {
+      "ko": "전남",
+      "en": "Jeonnam"
+    },
+    "sigungu": {
+      "ko": "고흥군",
+      "en": "Goheung"
+    }
+  },
+  "coast": "south",
+  "coords": {
+    "lat": 34.631135,
+    "lng": 127.18113
+  },
+  "activities": [
+    "swimming"
+  ],
+  "hidden": false,
+  "warningZones": {
+    "sea": "S1321200",
+    "land": "L1053120"
+  },
+  "stations": {
+    "waveHeight": null,
+    "wavePeriod": null,
+    "waveDirection": null,
+    "waterTemp": null,
+    "wind": null
+  },
+  "photo": null,
+  "cctv": null
+}

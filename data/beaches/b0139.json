@@ -1,0 +1,76 @@
+{
+  "id": "b0139",
+  "slug": "baramarae",
+  "kind": "beach",
+  "name": {
+    "ko": "바람아래해수욕장",
+    "en": "Baramarae Beach"
+  },
+  "region": {
+    "sido": {
+      "ko": "충남",
+      "en": "Chungnam"
+    },
+    "sigungu": {
+      "ko": "태안군",
+      "en": "Taean"
+    }
+  },
+  "coast": "west",
+  "coords": {
+    "lat": 36.412252,
+    "lng": 126.377094
+  },
+  "activities": [
+    "swimming"
+  ],
+  "hidden": false,
+  "warningZones": {
+    "sea": "S1251300",
+    "land": "L1031100"
+  },
+  "stations": {
+    "waveHeight": {
+      "id": "22487",
+      "name": {
+        "ko": "천수만 파고부이",
+        "en": "Cheonsuman wave buoy"
+      },
+      "distanceKm": 8.3
+    },
+    "wavePeriod": {
+      "id": "22446",
+      "name": {
+        "ko": "내파수도 해양기상부이",
+        "en": "Naepasudo marine buoy"
+      },
+      "distanceKm": 13
+    },
+    "waveDirection": {
+      "id": "22446",
+      "name": {
+        "ko": "내파수도 해양기상부이",
+        "en": "Naepasudo marine buoy"
+      },
+      "distanceKm": 13
+    },
+    "waterTemp": {
+      "id": "22487",
+      "name": {
+        "ko": "천수만 파고부이",
+        "en": "Cheonsuman wave buoy"
+      },
+      "distanceKm": 8.3
+    },
+    "wind": {
+      "id": "22446",
+      "name": {
+        "ko": "내파수도 해양기상부이",
+        "en": "Naepasudo marine buoy"
+      },
+      "distanceKm": 13
+    }
+  },
+  "photo": null,
+  "cctv": null
+}

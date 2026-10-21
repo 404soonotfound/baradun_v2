@@ -1,0 +1,76 @@
+{
+  "id": "b0110",
+  "slug": "iille",
+  "kind": "beach",
+  "name": {
+    "ko": "이일레해수욕장",
+    "en": "Iille Beach"
+  },
+  "region": {
+    "sido": {
+      "ko": "인천",
+      "en": "Incheon"
+    },
+    "sigungu": {
+      "ko": "옹진군",
+      "en": "Ongjin"
+    }
+  },
+  "coast": "west",
+  "coords": {
+    "lat": 37.165361,
+    "lng": 126.302059
+  },
+  "activities": [
+    "swimming"
+  ],
+  "hidden": false,
+  "warningZones": {
+    "sea": "S1251200",
+    "land": "L1013600"
+  },
+  "stations": {
+    "waveHeight": {
+      "id": "22461",
+      "name": {
+        "ko": "이작도 파고부이",
+        "en": "Ijakdo wave buoy"
+      },
+      "distanceKm": 8.5
+    },
+    "wavePeriod": {
+      "id": "22303",
+      "name": {
+        "ko": "풍도 해양기상부이",
+        "en": "Pungdo marine buoy"
+      },
+      "distanceKm": 9.6
+    },
+    "waveDirection": {
+      "id": "22303",
+      "name": {
+        "ko": "풍도 해양기상부이",
+        "en": "Pungdo marine buoy"
+      },
+      "distanceKm": 9.6
+    },
+    "waterTemp": {
+      "id": "22461",
+      "name": {
+        "ko": "이작도 파고부이",
+        "en": "Ijakdo wave buoy"
+      },
+      "distanceKm": 8.5
+    },
+    "wind": {
+      "id": "22303",
+      "name": {
+        "ko": "풍도 해양기상부이",
+        "en": "Pungdo marine buoy"
+      },
+      "distanceKm": 9.6
+    }
+  },
+  "photo": null,
+  "cctv": null
+}

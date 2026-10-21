@@ -1,0 +1,41 @@
+{
+  "id": "b0050",
+  "slug": "mangsang-resort",
+  "kind": "beach",
+  "name": {
+    "ko": "망상리조트해수욕장",
+    "en": "Mangsang Resort Beach"
+  },
+  "region": {
+    "sido": {
+      "ko": "강원",
+      "en": "Gangwon"
+    },
+    "sigungu": {
+      "ko": "동해시",
+      "en": "Donghae"
+    }
+  },
+  "coast": "east",
+  "coords": {
+    "lat": 37.601139,
+    "lng": 129.079785
+  },
+  "activities": [
+    "swimming"
+  ],
+  "hidden": false,
+  "warningZones": {
+    "sea": "S1151300",
+    "land": "L1021910"
+  },
+  "stations": {
+    "waveHeight": null,
+    "wavePeriod": null,
+    "waveDirection": null,
+    "waterTemp": null,
+    "wind": null
+  },
+  "photo": null,
+  "cctv": null
+}

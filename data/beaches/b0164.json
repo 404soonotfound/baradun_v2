@@ -1,0 +1,76 @@
+{
+  "id": "b0164",
+  "slug": "wido",
+  "kind": "beach",
+  "name": {
+    "ko": "위도해수욕장",
+    "en": "Wido Beach"
+  },
+  "region": {
+    "sido": {
+      "ko": "전북",
+      "en": "Jeonbuk"
+    },
+    "sigungu": {
+      "ko": "부안군",
+      "en": "Buan"
+    }
+  },
+  "coast": "west",
+  "coords": {
+    "lat": 35.6035,
+    "lng": 126.282983
+  },
+  "activities": [
+    "swimming"
+  ],
+  "hidden": false,
+  "warningZones": {
+    "sea": "S1231200",
+    "land": "L1061520"
+  },
+  "stations": {
+    "waveHeight": {
+      "id": "22504",
+      "name": {
+        "ko": "위도 파고부이",
+        "en": "Wido wave buoy"
+      },
+      "distanceKm": 6.4
+    },
+    "wavePeriod": {
+      "id": "22510",
+      "name": {
+        "ko": "위도동부 해양기상부이",
+        "en": "Wido East marine buoy"
+      },
+      "distanceKm": 8.1
+    },
+    "waveDirection": {
+      "id": "22510",
+      "name": {
+        "ko": "위도동부 해양기상부이",
+        "en": "Wido East marine buoy"
+      },
+      "distanceKm": 8.1
+    },
+    "waterTemp": {
+      "id": "22504",
+      "name": {
+        "ko": "위도 파고부이",
+        "en": "Wido wave buoy"
+      },
+      "distanceKm": 6.4
+    },
+    "wind": {
+      "id": "22510",
+      "name": {
+        "ko": "위도동부 해양기상부이",
+        "en": "Wido East marine buoy"
+      },
+      "distanceKm": 8.1
+    }
+  },
+  "photo": null,
+  "cctv": null
+}

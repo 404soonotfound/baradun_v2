@@ -1,0 +1,55 @@
+{
+  "id": "b0281",
+  "slug": "hamdeok-seoubong",
+  "kind": "beach",
+  "name": {
+    "ko": "함덕서우봉해수욕장",
+    "en": "Hamdeok Seoubong Beach"
+  },
+  "region": {
+    "sido": {
+      "ko": "제주",
+      "en": "Jeju"
+    },
+    "sigungu": {
+      "ko": "제주시",
+      "en": "Jeju"
+    }
+  },
+  "coast": "jeju",
+  "coords": {
+    "lat": 33.543276,
+    "lng": 126.669279
+  },
+  "activities": [
+    "swimming"
+  ],
+  "hidden": false,
+  "warningZones": {
+    "sea": "S1323100",
+    "land": "L1091320"
+  },
+  "stations": {
+    "waveHeight": {
+      "id": "22457",
+      "name": {
+        "ko": "제주항 파고부이",
+        "en": "Jejuhang wave buoy"
+      },
+      "distanceKm": 16.5
+    },
+    "wavePeriod": null,
+    "waveDirection": null,
+    "waterTemp": {
+      "id": "22457",
+      "name": {
+        "ko": "제주항 파고부이",
+        "en": "Jejuhang wave buoy"
+      },
+      "distanceKm": 16.5
+    },
+    "wind": null
+  },
+  "photo": null,
+  "cctv": null
+}

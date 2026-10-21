@@ -1,0 +1,76 @@
+{
+  "id": "b0057",
+  "slug": "samcheok",
+  "kind": "beach",
+  "name": {
+    "ko": "삼척해수욕장",
+    "en": "Samcheok Beach"
+  },
+  "region": {
+    "sido": {
+      "ko": "강원",
+      "en": "Gangwon"
+    },
+    "sigungu": {
+      "ko": "삼척시",
+      "en": "Samcheok"
+    }
+  },
+  "coast": "east",
+  "coords": {
+    "lat": 37.468772,
+    "lng": 129.168849
+  },
+  "activities": [
+    "swimming"
+  ],
+  "hidden": false,
+  "warningZones": {
+    "sea": "S1151300",
+    "land": "L1022010"
+  },
+  "stations": {
+    "waveHeight": {
+      "id": "22479",
+      "name": {
+        "ko": "맹방 파고부이",
+        "en": "Maengbang wave buoy"
+      },
+      "distanceKm": 9.2
+    },
+    "wavePeriod": {
+      "id": "22311",
+      "name": {
+        "ko": "삼척 해양기상부이",
+        "en": "Samcheok marine buoy"
+      },
+      "distanceKm": 13.2
+    },
+    "waveDirection": {
+      "id": "22311",
+      "name": {
+        "ko": "삼척 해양기상부이",
+        "en": "Samcheok marine buoy"
+      },
+      "distanceKm": 13.2
+    },
+    "waterTemp": {
+      "id": "22479",
+      "name": {
+        "ko": "맹방 파고부이",
+        "en": "Maengbang wave buoy"
+      },
+      "distanceKm": 9.2
+    },
+    "wind": {
+      "id": "22311",
+      "name": {
+        "ko": "삼척 해양기상부이",
+        "en": "Samcheok marine buoy"
+      },
+      "distanceKm": 13.2
+    }
+  },
+  "photo": null,
+  "cctv": null
+}
