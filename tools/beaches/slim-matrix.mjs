@@ -63,7 +63,8 @@ const stationBasis = (r) => {
     const res = result
       .replace(/^null\(가까운 관측 없음: 20km 안 후보가 모두 다른 구역.*\)$/, "null(다른 구역·값 없음·72h)")
       .replace("null(가까운 관측 없음: 20km 안 B·C 관측소 없음)", "null(20km 안 B·C 없음)")
-      .replace(/^확정 불가\(20km 안 S1 미검증 관측소 (\d+) .*\)$/, "확정 불가($1 S1 미검증)");
+      .replace(/^확정 불가\(20km 안 S1 미검증 관측소 (\d+) .*\)$/, "확정 불가($1 S1 미검증)")
+      .replace(/^확정 불가\(20km 안 관측소 결측·지연으로 부재 확정 불가: (.*)\)$/, (_, g) => `확정 불가(결측·지연 ${[...g.matchAll(/(\d{5}) /g)].map((x) => x[1]).join("·")})`);
     const key = `${source}|${cands}`;
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(`${METRIC_KO[metric] ?? metric} ${res}`);

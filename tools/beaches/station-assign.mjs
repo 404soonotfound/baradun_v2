@@ -3,6 +3,8 @@
 //   + 72시간 미수신 24시간 미만 + 해당 지표 실응답 값 있음
 // null(가까운 관측 없음)은 20km 안 후보가 모두 VERIFIED로 다른 구역이거나 후보가 없을 때만.
 // 20km 안 미검증 관측소가 배정·null 확정을 막으면 UNDETERMINED → 출시 자동 제외
+// 다른 구역으로 확정되지 않은 후보의 결측·지연(72시간 미수신 24시간 이상, 지표별 기록이 있는 지표의 실응답 값 빔)은
+// 배정하지 않지만 '관측 없음'으로도 보지 않음 → 뒤 후보로 배정되지 않으면 UNDETERMINED
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { COVERAGE_DIR } from "./regions.mjs";
@@ -54,6 +56,8 @@ export const METRICS = {
   wavePeriod: { source: "kma_buoy", field: "wp" },
   waveDirection: { source: "kma_buoy", field: "wo" },
 };
+// 지표 자체의 72시간 기록이 있는 지표. 바람은 파고 수신으로 대신 보므로 실응답 값 빔을 결측으로 단정하지 않음(풍속계 없는 파고부이)
+const OWN_HISTORY = new Set(["waveHeight", "waterTemp", "wavePeriod", "waveDirection"]);
 
 // 수집본(stations.csv·72시간 실측)·관측소 독립 검증 입력 읽기
 export function loadAssignContext() {
@@ -96,6 +100,7 @@ export function assignMetric(ctx, beach, metric) {
     .filter((c) => c.km <= LIMIT_KM)
     .sort((a, b) => a.km - b.km);
   const skipped = [];
+  const gaps = []; // 결측·지연으로 건너뛴 같은 구역(또는 구역 미확정) 후보
   const label = (c) => `${c.s.stn_id} ${c.s.name}(${c.s.tp}) ${round1(c.km)}km`;
   if (!beach.seaVerified)
     return { state: "UNDETERMINED", chosen: null, list, skipped, blockers: [], reason: "해변 S1 미검증" };
@@ -105,13 +110,17 @@ export function assignMetric(ctx, beach, metric) {
       skipped.push(`${label(c)}: ${EXCLUDED_ALWAYS[id]}`);
       continue;
     }
+    const ev = ctx.evidenceById.get(id);
+    const live = ev?.metrics?.[metric]?.live_state;
+    const otherZone =
+      (ev?.status === "VERIFIED_NOT_IN_ZONE" && ev.not_in_zones?.includes(beach.seaZone)) ||
+      (ev?.status === "VERIFIED" && ev.zone !== beach.seaZone);
     const miss = ctx.missingHours(id, field);
     if (miss >= MISSING_LIMIT_H) {
       skipped.push(`${label(c)}: ${field} 72시간 중 ${miss}시간 미수신`);
+      if (!otherZone) gaps.push(`${label(c)}(${field} 72시간 중 ${miss}시간 미수신)`);
       continue;
     }
-    const ev = ctx.evidenceById.get(id);
-    const live = ev?.metrics?.[metric]?.live_state;
     // 별표4 광역 경계로 강원 앞바다 밖이 확정된 관측소는 같은 구역 후보로 세지 않음
     if (ev?.status === "VERIFIED_NOT_IN_ZONE" && ev.not_in_zones?.includes(beach.seaZone)) {
       skipped.push(`${label(c)}: VERIFIED_NOT_IN_ZONE(${beach.seaZone} 아님)`);
@@ -121,6 +130,7 @@ export function assignMetric(ctx, beach, metric) {
       // 값이 없다고 확인된 지표만 건너뜀. 값 있음·미확인이면 배정·부재 모두 확정 불가
       if (live && live !== "VALUE_PRESENT") {
         skipped.push(`${label(c)}: S1 미검증이나 실응답 ${live}`);
+        if (OWN_HISTORY.has(metric)) gaps.push(`${label(c)}(S1 미검증, 실응답 ${live})`);
         continue;
       }
       return {
@@ -138,10 +148,20 @@ export function assignMetric(ctx, beach, metric) {
     }
     if (live !== "VALUE_PRESENT" || ev.metrics?.[metric]?.status !== "VERIFIED") {
       skipped.push(`${label(c)}: 같은 구역이나 실응답 ${live ?? "미확인"}`);
+      if (OWN_HISTORY.has(metric)) gaps.push(`${label(c)}(같은 구역, 실응답 ${live ?? "미확인"})`);
       continue;
     }
     return { state: "ASSIGNED", chosen: c.s, km: c.km, list, skipped, blockers: [], reason: `${label(c)} 배정` };
   }
+  if (gaps.length)
+    return {
+      state: "UNDETERMINED",
+      chosen: null,
+      list,
+      skipped,
+      blockers: gaps,
+      reason: `20km 안 관측소 결측·지연으로 부재 확정 불가: ${gaps.join(" / ")}`,
+    };
   return {
     state: "ABSENT",
     chosen: null,
