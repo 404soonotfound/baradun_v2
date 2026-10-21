@@ -16,29 +16,57 @@ export interface ToastMessage {
 }
 
 // 토스트 상태 훅. show(메시지)를 부르면 4초 동안 보이고 사라짐
+// 포인터가 올라가 있거나 안쪽 버튼에 포커스가 있으면(hold) 시간을 멈춤: 되돌리기를 누르기 전에 사라지지 않게
 export function useToast() {
   const [message, setMessage] = useState<ToastMessage | null>(null);
+  const [held, setHeld] = useState(false);
 
-  // 메시지가 바뀔 때마다 4초 타이머를 새로 걸어줌. 화면을 떠나면 타이머 정리(return 함수)
+  // 메시지가 바뀌거나 hold가 풀릴 때마다 4초 타이머를 새로 걸어줌. 화면을 떠나면 타이머 정리(return 함수)
   useEffect(() => {
-    if (message === null) return;
+    if (message === null || held) return;
     const timer = window.setTimeout(() => setMessage(null), TOAST_MS);
     return () => window.clearTimeout(timer);
-  }, [message]);
+  }, [message, held]);
 
+  const hide = useCallback(() => {
+    setMessage(null);
+    setHeld(false);
+  }, []);
+  // 행동 버튼을 누르면 토스트도 닫음(되돌리기를 두 번 누르거나, 되돌린 뒤에도 '지웠어요'가 남지 않게)
   // useCallback = 렌더링마다 새 함수를 만들지 않음(자식에게 넘겨도 불필요한 다시 그리기 없음)
-  const show = useCallback((next: ToastMessage) => setMessage(next), []);
-  const hide = useCallback(() => setMessage(null), []);
+  const show = useCallback(
+    (next: ToastMessage) => {
+      const action = next.action;
+      setMessage(
+        action
+          ? {
+              ...next,
+              action: {
+                label: action.label,
+                onClick: () => {
+                  hide();
+                  action.onClick();
+                },
+              },
+            }
+          : next,
+      );
+    },
+    [hide],
+  );
 
-  return { message, show, hide };
+  return { message, show, hide, hold: setHeld };
 }
 
 export function Toast({
   message,
   icon = <Check size={16} strokeWidth={2.6} />,
+  onHold,
 }: {
   message: ToastMessage | null;
   icon?: ReactNode;
+  // useToast의 hold. 포인터·포커스가 토스트 안에 있는 동안 사라지는 시간을 멈춤
+  onHold?: (held: boolean) => void;
 }) {
   return (
     // 이 상자는 늘 화면에 있어야 함: 비어 있다가 글자가 들어올 때 화면 읽기 프로그램이 읽어 줌
@@ -47,7 +75,13 @@ export function Toast({
       className="pointer-events-none fixed inset-x-0 bottom-[calc(96px+env(safe-area-inset-bottom))] z-50 flex justify-center px-4 lg:bottom-8"
     >
       {message && (
-        <div className="pointer-events-auto flex max-w-full items-center gap-2 rounded-[22px] bg-text-default px-4 py-2.5 text-body-s text-bg-surface shadow-floating">
+        <div
+          onPointerEnter={() => onHold?.(true)}
+          onPointerLeave={() => onHold?.(false)}
+          onFocus={() => onHold?.(true)}
+          onBlur={() => onHold?.(false)}
+          className="pointer-events-auto flex max-w-full items-center gap-2 rounded-[22px] bg-text-default px-4 py-2.5 text-body-s text-bg-surface shadow-floating"
+        >
           <span aria-hidden="true" className="shrink-0">
             {icon}
           </span>
