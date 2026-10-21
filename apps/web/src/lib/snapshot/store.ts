@@ -86,7 +86,14 @@ function safe<T>(run: () => T): T | null {
   }
 }
 
-// manifest 모양 확인. 브라우저에서 스키마 검사기(ajv)를 돌리지 않고 쓰는 필드만 확인함
+// 현재 스냅샷의 status 경로. 같은 출처 상대 주소 + 이 snapshotVersion 폴더만 허용
+export function statusPath(snapshotVersion: string): string {
+  return `/data/${snapshotVersion}/status.json`;
+}
+
+// manifest 모양 확인. 브라우저에서 스키마 검사기(ajv)를 돌리지 않고 쓰는 필드만 확인함.
+// status 경로가 이 snapshotVersion을 가리키지 않으면(배포 중 이전 경로·외부 주소) 읽지 못한 것으로 봄:
+// 다른 스냅샷의 상태를 현재 값으로 저장·표시하지 않게
 function readManifest(value: unknown): ManifestFile | "unsupported" | null {
   if (!isRecord(value)) return null;
   if (!SUPPORTED_SCHEMA_VERSIONS.includes(value.schemaVersion as number)) {
@@ -97,7 +104,7 @@ function readManifest(value: unknown): ManifestFile | "unsupported" | null {
   if (
     typeof value.snapshotVersion !== "string" ||
     !isRecord(files) ||
-    typeof files.status !== "string" ||
+    files.status !== statusPath(value.snapshotVersion) ||
     !isRecord(maintenance) ||
     typeof maintenance.active !== "boolean"
   ) {
@@ -195,9 +202,11 @@ export function createSnapshotStore(deps: SnapshotDeps): SnapshotStore {
     });
   }
 
-  function fail() {
+  // fresh: 이번 조회에서 manifest를 받아 서버 시각을 알았으면 그 시계(status 실패여도 버리지 않음)
+  function fail(fresh?: Clock) {
     showStored();
-    const { manifest, statuses, clock } = state;
+    const { manifest, statuses } = state;
+    const clock = fresh ?? state.clock;
     set({
       // 점검 화면은 그대로 덮어 둠. 처음부터 못 받았으면 데이터 없이 판단불가
       phase: state.phase === "maintenance" ? "maintenance" : "ready",
@@ -273,7 +282,7 @@ export function createSnapshotStore(deps: SnapshotDeps): SnapshotStore {
       return fail();
     }
     if (manifest === "unsupported") return unsupported();
-    if (!manifest) return fail();
+    if (!manifest) return fail(clock);
     safe(() => deps.session?.removeItem(SCHEMA_RELOAD_KEY));
 
     // 점검 중이면 마지막 값도 숨김(화면이 전체를 덮음, 9.1)
@@ -297,7 +306,7 @@ export function createSnapshotStore(deps: SnapshotDeps): SnapshotStore {
       } catch {
         statuses = null;
       }
-      if (!statuses) return fail();
+      if (!statuses) return fail(clock);
       loadedVersion = manifest.snapshotVersion;
       const snapshot = { manifest, status: { beaches: statuses } };
       safe(() =>
