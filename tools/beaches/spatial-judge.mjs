@@ -4,7 +4,6 @@
 //       $BARADUN_DATA_DIR/baradun-coverage의 out/ 수집본·responses/metric-matrix.json(3차 실응답 저장본). API 호출 없음, 서비스 키 읽지 않음
 // 출력: $BARADUN_DATA_DIR/baradun-coverage/beach-zone-evidence.json·station-zone-evidence.json 갱신 (--dry면 요약만 출력)
 // 실행: node tools/beaches/spatial-judge.mjs [--dry] (저장소 맨 위에서)
-import { createHash } from "node:crypto";
 import { readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -13,12 +12,12 @@ import { readFirstSheet } from "./xlsx-lite.mjs";
 import { METRICS, assignMetric, haversineKm, loadAssignContext, readCsv, round1 } from "./station-assign.mjs";
 import { zoneProofVerified } from "./zone-proof.mjs";
 import { ANNEX, ANNEX4_BOUNDARIES, ANNEX5, ANNEX5_URL, ANNEX9_CHECKED, ANNEX9_ITEM, ANNEX9_URL, annex9Lookup, sigunguIsSplit, splitFull, zoneOf, zoneOfFull } from "./annex.mjs";
-import { BJD_CSV, COAST_DBF, COAST_SHP, COVERAGE_DIR, MOF_XLSX, REGIONS, SIGUNGU_ALIAS, emdPaths, gisLabel, regionArg, sigunguMatches } from "./regions.mjs";
+import { BJD_CSV, BJD_LABEL, COAST_DBF, COAST_SHP, COVERAGE_DIR, MOF_XLSX, REGIONS, SIGUNGU_ALIAS, emdPaths, gisLabel, regionArg, sha256, sigunguMatches, verifyPinnedSources } from "./regions.mjs"; // sha256: 고정 해시 대조 때 계산한 값 재사용
 
 const HERE = dirname(fileURLToPath(import.meta.url));
+verifyPinnedSources(); // 원자료가 data-sources.json 고정 해시와 다르면 판정·생성하지 않음
 const DRY = process.argv.includes("--dry");
 const TARGET_REGIONS = regionArg(); // --region 강원(기본)·전국 등
-const sha256 = (path) => createHash("sha256").update(readFileSync(path)).digest("hex"); // 원자료 해시
 const nowKst = () => new Date(Date.now() + 9 * 3600e3).toISOString().replace(/\.\d+Z$/, "+09:00");
 const CHECKED_AT = nowKst();
 const m1 = (x) => Math.round(x * 10) / 10;
@@ -51,7 +50,7 @@ const SOURCES = {
     sha256: sha256(COAST_SHP),
     dbf_sha256: sha256(COAST_DBF),
   },
-  bjd: { name: "국토교통부 법정동코드 2026-09-29", file: "$BARADUN_DATA_DIR/국토교통부_법정동코드_20260929.csv", sha256: sha256(BJD_CSV) },
+  bjd: { name: "국토교통부 법정동코드 2026-09-29", file: BJD_LABEL, sha256: sha256(BJD_CSV) },
 };
 const emdSourceOf = (sido) => ({ name: SOURCES.emd.name, base_date: "2026-10", crs: "EPSG:5186", sido, ...SOURCES.emd.files[sido] });
 

@@ -6,11 +6,12 @@ import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { checkList } from "../../packages/contracts/scripts/beach-rules.mjs";
-import { zoneProofVerified } from "./zone-proof.mjs";
-import { COVERAGE_DIR, regionArg, regionSlug } from "./regions.mjs";
+import { stationSourceOk, zoneProofVerified } from "./zone-proof.mjs";
+import { COVERAGE_DIR, regionArg, regionSlug, verifyPinnedSources } from "./regions.mjs";
 import { readCsv } from "./station-assign.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
+verifyPinnedSources(); // 원자료가 data-sources.json 고정 해시와 다르면 판정·생성하지 않음
 const ROOT = join(HERE, "../..");
 const TARGET_REGIONS = regionArg();
 const draft = JSON.parse(readFileSync(join(COVERAGE_DIR, `${regionSlug(TARGET_REGIONS)}.json`), "utf8"));
@@ -187,7 +188,7 @@ const report = (name, errors) => {
     for (const metric of METRICS) {
       const s = b.stations[metric];
       const proof = s && stationById.get(s.id);
-      if (s && !(proof?.status === "VERIFIED" && proof.zone === b.warningZones?.sea && proof.boundary_source_url && proof.boundary_rule_item && proof.checked_at_kst && proof.basis))
+      if (s && !(proof?.status === "VERIFIED" && proof.zone === b.warningZones?.sea && proof.boundary_source_url && proof.boundary_rule_item && proof.checked_at_kst && proof.basis && stationSourceOk(proof.boundary_source)))
         errors.push(`${b.id} ${metric}: 독립 검증되지 않은 관측소 배정`);
     }
     // 20km 안 미검증 관측소가 배정 관측소보다 가깝고(null이면 하나라도) 그 지표 실응답 값이 있으면 확정 불가
