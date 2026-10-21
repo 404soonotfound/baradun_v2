@@ -199,9 +199,19 @@
                 },
                 "source": { "type": "string", "minLength": 1 },
                 "license": {
+                  "enum": ["kogl-type1"],
+                  "description": "공공누리 유형 코드값(D9). 1유형(출처표시)만 사용(결정 기록 11장 10/21). 화면 표기는 문구 키로."
+                },
+                "title": {
                   "type": "string",
                   "minLength": 1,
-                  "description": "공공누리 유형 원문(D9)."
+                  "description": "저작물명(출처 표시용)."
+                },
+                "pageUrl": {
+                  "type": "string",
+                  "format": "uri",
+                  "pattern": "^https://",
+                  "description": "원본 페이지(출처 표시용)."
                 }
               }
             }

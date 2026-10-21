@@ -59,7 +59,13 @@
           "distanceKm": 6.2
         }
       },
-      "photo": null,
+      "photo": {
+        "url": "https://example.com/sample-beach.jpg",
+        "source": "예시 출처",
+        "license": "kogl-type1",
+        "title": "예시 해변 사진",
+        "pageUrl": "https://example.com/sample-beach"
+      },
       "cctv": null
     },
     {

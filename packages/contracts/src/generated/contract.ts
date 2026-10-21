@@ -236,9 +236,17 @@ export interface Beach2 {
     url: string;
     source: string;
     /**
-     * 공공누리 유형 원문(D9).
+     * 공공누리 유형 코드값(D9). 1유형(출처표시)만 사용(결정 기록 11장 10/21). 화면 표기는 문구 키로.
      */
-    license: string;
+    license: 'kogl-type1';
+    /**
+     * 저작물명(출처 표시용).
+     */
+    title?: string;
+    /**
+     * 원본 페이지(출처 표시용).
+     */
+    pageUrl?: string;
   };
   cctv: null | {
     /**
