@@ -1,0 +1,177 @@
+{
+  "beaches": [
+    {
+      "id": "b0001",
+      "slug": "gyeongpo",
+      "kind": "beach",
+      "name": {
+        "ko": "경포해수욕장",
+        "en": "Gyeongpo Beach"
+      },
+      "region": {
+        "sido": {
+          "ko": "강원",
+          "en": "Gangwon"
+        },
+        "sigungu": {
+          "ko": "강릉시",
+          "en": "Gangneung"
+        }
+      },
+      "coords": {
+        "lat": 37.8055,
+        "lng": 128.9083
+      },
+      "activities": [
+        "swimming",
+        "surfing"
+      ],
+      "hidden": false,
+      "warningZones": {
+        "sea": "S1999901",
+        "land": "L1999901"
+      },
+      "stations": {
+        "waveHeight": {
+          "id": "99001",
+          "name": {
+            "ko": "예시 파고부이",
+            "en": "Sample wave buoy"
+          },
+          "distanceKm": 6.2
+        },
+        "wavePeriod": null,
+        "waveDirection": null,
+        "waterTemp": {
+          "id": "99001",
+          "name": {
+            "ko": "예시 파고부이",
+            "en": "Sample wave buoy"
+          },
+          "distanceKm": 6.2
+        },
+        "wind": {
+          "id": "99001",
+          "name": {
+            "ko": "예시 파고부이",
+            "en": "Sample wave buoy"
+          },
+          "distanceKm": 6.2
+        }
+      },
+      "photo": null,
+      "cctv": null
+    },
+    {
+      "id": "b0002",
+      "slug": "sangju",
+      "kind": "beach",
+      "name": {
+        "ko": "상주은모래비치",
+        "en": "Sangju Eunmorae Beach"
+      },
+      "region": {
+        "sido": {
+          "ko": "경남",
+          "en": "Gyeongnam"
+        },
+        "sigungu": {
+          "ko": "남해군",
+          "en": "Namhae"
+        }
+      },
+      "coast": "east",
+      "coords": {
+        "lat": 34.7187,
+        "lng": 127.9886
+      },
+      "activities": [
+        "swimming"
+      ],
+      "hidden": false,
+      "warningZones": {
+        "sea": "S1999902",
+        "land": "L1999902"
+      },
+      "stations": {
+        "waveHeight": {
+          "id": "99002",
+          "name": {
+            "ko": "예시 해양기상부이",
+            "en": "Sample marine buoy"
+          },
+          "distanceKm": 14.8
+        },
+        "wavePeriod": {
+          "id": "99002",
+          "name": {
+            "ko": "예시 해양기상부이",
+            "en": "Sample marine buoy"
+          },
+          "distanceKm": 14.8
+        },
+        "waveDirection": {
+          "id": "99002",
+          "name": {
+            "ko": "예시 해양기상부이",
+            "en": "Sample marine buoy"
+          },
+          "distanceKm": 14.8
+        },
+        "waterTemp": null,
+        "wind": null
+      },
+      "photo": null,
+      "cctv": null
+    },
+    {
+      "id": "b0003",
+      "slug": "mangsang",
+      "kind": "beach",
+      "name": {
+        "ko": "망상해수욕장",
+        "en": "Mangsang Beach"
+      },
+      "region": {
+        "sido": {
+          "ko": "강원",
+          "en": "Gangwon"
+        },
+        "sigungu": {
+          "ko": "동해시",
+          "en": "Donghae"
+        }
+      },
+      "coast": "east",
+      "coords": {
+        "lat": 37.5926,
+        "lng": 129.0889
+      },
+      "activities": [
+        "swimming",
+        "scuba"
+      ],
+      "hidden": false,
+      "warningZones": {
+        "sea": "S1999903",
+        "land": "L1999903"
+      },
+      "stations": {
+        "waveHeight": {
+          "id": "99003",
+          "name": {
+            "ko": "예시 파고부이",
+            "en": "Sample wave buoy"
+          },
+          "distanceKm": 9.4
+        },
+        "wavePeriod": null,
+        "waveDirection": null,
+        "waterTemp": null,
+        "wind": null
+      },
+      "photo": null,
+      "cctv": null
+    }
+  ]
+}

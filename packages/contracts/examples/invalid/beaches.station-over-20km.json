@@ -3,6 +3,7 @@
     {
       "id": "b0001",
       "slug": "gyeongpo",
+      "kind": "beach",
       "name": {
         "ko": "경포해수욕장",
         "en": "Gyeongpo Beach"
@@ -17,6 +18,7 @@
           "en": "Gangneung"
         }
       },
+      "coast": "east",
       "coords": {
         "lat": 37.8055,
         "lng": 128.9083
@@ -64,6 +66,7 @@
     {
       "id": "b0002",
       "slug": "sangju",
+      "kind": "beach",
       "name": {
         "ko": "상주은모래비치",
         "en": "Sangju Eunmorae Beach"
@@ -78,6 +81,7 @@
           "en": "Namhae"
         }
       },
+      "coast": "east",
       "coords": {
         "lat": 34.7187,
         "lng": 127.9886
@@ -124,6 +128,7 @@
     {
       "id": "b0003",
       "slug": "mangsang",
+      "kind": "beach",
       "name": {
         "ko": "망상해수욕장",
         "en": "Mangsang Beach"
@@ -138,6 +143,7 @@
           "en": "Donghae"
         }
       },
+      "coast": "east",
       "coords": {
         "lat": 37.5926,
         "lng": 129.0889
