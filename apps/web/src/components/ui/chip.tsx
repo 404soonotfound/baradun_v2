@@ -1,0 +1,81 @@
+import { ChevronDown, X } from "lucide-react";
+import type { ButtonHTMLAttributes, ReactNode } from "react";
+
+import { cn } from "@/lib/cn";
+
+// 칩 (BRD-81 · 컴포넌트 명세 Chip, Figma '칩 · 새' 170:2928)
+//   default: 흰 바탕 + 회색 테두리 · on: 파랑 채움(선택됨) · sel: 연한 파랑 + 파랑 테두리(드롭다운에서 고른 값, ⌄ 표시)
+// 높이 36(지역 선택 화면은 42 = size "lg")
+const VARIANTS = {
+  default: "border-border-strong bg-bg-surface font-medium text-text-body",
+  on: "border-brand-default bg-brand-default font-bold text-brand-on",
+  sel: "border-brand-default bg-brand-weak font-bold text-status-clear-fg",
+} as const; // 읽기전용 상수
+
+// "VARIANTS 표의 키 이름(default | on | sel) 중 하나 "라는 타입을 만들어  ChipVriant라고 부른다
+export type ChipVriant = keyof typeof VARIANTS;
+
+// Omit<A, "x"> = A에서 x 속성만 뺀 타입. 버튼 속성을 다 받되 children은 따로 정함
+export interface ChipProps extends Omit<
+  ButtonHTMLAttributes<HTMLButtonElement>,
+  "children"
+> {
+  variant?: ChipVriant;
+  size?: "md" | "lg";
+  icon?: ReactNode;
+  children: ReactNode;
+}
+
+export function Chip({
+  variant = "default",
+  size = "md",
+  icon,
+  children,
+  className,
+  type = "button",
+  ...props
+}: ChipProps) {
+  return (
+    <button
+      type={type}
+      className={cn(
+        "inline-flex shrink-0 items-center justify-center gap-[5px] rounded-full border text-[13.5px] whitespace-nowrap",
+        size === "lg" ? "h-[42px] px-4" : "h-chip px-[13px]",
+        VARIANTS[variant],
+        className,
+      )}
+      {...props}
+    >
+      {icon && <span aria-hidden="true">{icon}</span>}
+      {children}
+      {variant === "sel" && <ChevronDown aria-hidden="true" size={13} />}
+    </button>
+  );
+}
+
+// 지울 수 있는 칩(예: 검색 필터 '수영 · 강원 ✕'). 글자와 ✕ 버튼을 나눠 버튼 안에 버튼이 생기지 않게 함
+export function RemovableChip({
+  children,
+  removeLabel,
+  onRemove,
+}: {
+  children: ReactNode;
+  // ✕의 접근 가능한 이름(예: "강원 빼기"). 화면에는 ✕만 보임
+  removeLabel: string;
+  onRemove: () => void;
+}) {
+  return (
+    <span className="inline-flex h-chip shrink-0 items-center rounded-full border border-brand-default bg-brand-weak pl-[13px] text-[12.5px] font-bold text-status-clear-fg">
+      {children}
+      <button
+        type="button"
+        aria-label={removeLabel}
+        onClick={onRemove}
+        // 보이는 원은 작아도 누르는 영역은 30px(명세 '✕ 30px 터치 영역')
+        className="ml-0.5 flex size-[30px] items-center justify-center rounded-full"
+      >
+        <X aria-hidden="true" size={13} />
+      </button>
+    </span>
+  );
+}
