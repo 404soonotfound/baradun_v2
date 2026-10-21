@@ -21,6 +21,8 @@ export const SUPPORTED_SCHEMA_VERSIONS: readonly number[] = [1];
 // 같은 출처의 상대 주소만 읽음(17.2 이식성 원칙)
 export const MANIFEST_URL = "/data/manifest.json";
 export const POLL_INTERVAL_MS = 5 * 60_000;
+// 요청 하나(manifest·status 각각)의 시간 제한. 응답이 멈춘 망(캡티브 포털 등)에서도 실패로 끝내 다음 조회가 막히지 않게 함
+export const REQUEST_TIMEOUT_MS = 10_000;
 
 // 마지막으로 받은 manifest·status. 오프라인으로 앱을 열었을 때 꺼냄
 const LAST_SNAPSHOT_KEY = "baradun:last-snapshot";
@@ -173,29 +175,29 @@ export function createSnapshotStore(deps: SnapshotDeps): SnapshotStore {
     if (newlyExpired) void refresh();
   }
 
+  // 메모리에 값이 없으면 기기에 저장해 둔 마지막 값을 꺼냄. 서버 시각은 모르는 것으로 둠.
+  // live: false라 B5 규칙(발효 특보 배지 유지, 나머지는 특보 확인 못 함)으로 보임
+  function showStored() {
+    if (state.statuses) return;
+    const stored = safe(() =>
+      JSON.parse(deps.storage?.getItem(LAST_SNAPSHOT_KEY) ?? "null"),
+    );
+    const manifest = isRecord(stored) ? readManifest(stored.manifest) : null;
+    const statuses = isRecord(stored) ? readStatuses(stored.status) : null;
+    if (!manifest || manifest === "unsupported" || !statuses) return;
+    set({
+      phase: state.phase === "loading" ? "ready" : state.phase,
+      manifest,
+      statuses,
+      clock: DEVICE_CLOCK,
+      live: false,
+      nowMs: now(DEVICE_CLOCK),
+    });
+  }
+
   function fail() {
-    // 메모리에 값이 없으면 기기에 저장해 둔 마지막 값을 꺼냄. 서버 시각은 모르는 것으로 둠
-    let { manifest, statuses, clock } = state;
-    if (!statuses) {
-      const stored = safe(() =>
-        JSON.parse(deps.storage?.getItem(LAST_SNAPSHOT_KEY) ?? "null"),
-      );
-      const storedManifest = isRecord(stored)
-        ? readManifest(stored.manifest)
-        : null;
-      const storedStatuses = isRecord(stored)
-        ? readStatuses(stored.status)
-        : null;
-      if (
-        storedManifest &&
-        storedManifest !== "unsupported" &&
-        storedStatuses
-      ) {
-        manifest = storedManifest;
-        statuses = storedStatuses;
-        clock = DEVICE_CLOCK;
-      }
-    }
+    showStored();
+    const { manifest, statuses, clock } = state;
     set({
       // 점검 화면은 그대로 덮어 둠. 처음부터 못 받았으면 데이터 없이 판단불가
       phase: state.phase === "maintenance" ? "maintenance" : "ready",
@@ -223,13 +225,37 @@ export function createSnapshotStore(deps: SnapshotDeps): SnapshotStore {
     set({ phase: "schema_unsupported", live: false, nowMs: now() });
   }
 
+  // 응답 받기 + 본문 읽기를 합쳐 10초 제한. 넘으면 요청을 끊고(abort) 실패로 끝냄.
+  // fetch가 abort를 무시해도 race로 반드시 끝나서 inFlight가 풀림
   async function fetchJson(url: string, init?: RequestInit) {
-    const response = await deps.fetch(url, init);
-    if (!response.ok) throw new Error(`${url}: HTTP ${response.status}`);
-    return { response, body: (await response.json()) as unknown };
+    const controller = new AbortController();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => {
+        controller.abort();
+        reject(new Error(`${url}: ${REQUEST_TIMEOUT_MS}ms 시간 초과`));
+      }, REQUEST_TIMEOUT_MS);
+    });
+    const request = (async () => {
+      const response = await deps.fetch(url, {
+        ...init,
+        signal: controller.signal,
+      });
+      if (!response.ok) throw new Error(`${url}: HTTP ${response.status}`);
+      return { response, body: (await response.json()) as unknown };
+    })();
+    try {
+      return await Promise.race([request, timeout]);
+    } finally {
+      clearTimeout(timer);
+      // 시간 초과로 버려진 요청이 나중에 실패해도 처리 안 된 오류로 남지 않게
+      request.catch(() => {});
+    }
   }
 
   async function run() {
+    // 첫 실행: 응답을 기다리지 않고 저장된 마지막 값부터 보여줌(B5). 응답이 오면 아래에서 교체
+    showStored();
     let manifest: ManifestFile | "unsupported" | null;
     let clock: Clock;
     try {

@@ -7,6 +7,7 @@ import {
   createSnapshotStore,
   MANIFEST_URL,
   POLL_INTERVAL_MS,
+  REQUEST_TIMEOUT_MS,
   type KeyValueStorage,
   type SnapshotDeps,
 } from "./store";
@@ -49,13 +50,24 @@ function fakeServer() {
     sendDate: true,
     down: false,
     statusDown: false,
-    // 응답이 오지 않음(느린 네트워크)
+    // 응답이 끝나지 않음(멈춘 망). 실제 fetch처럼 abort되면 실패함
     hang: false,
+    // abort도 무시하고 끝나지 않음(최악의 경우)
+    ignoreAbort: false,
+    // status 요청만 끝나지 않음
+    hangStatus: false,
     calls: [] as string[],
-    fetch: vi.fn(async (input: RequestInfo | URL) => {
+    fetch: vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       server.calls.push(url);
-      if (server.hang) return new Promise<Response>(() => {});
+      if (server.hang || (server.hangStatus && url !== MANIFEST_URL)) {
+        return new Promise<Response>((_, reject) => {
+          if (server.ignoreAbort) return;
+          init?.signal?.addEventListener("abort", () =>
+            reject(new DOMException("aborted", "AbortError")),
+          );
+        });
+      }
       if (server.down) throw new TypeError("Failed to fetch");
       const headers = new Headers();
       if (server.sendDate) {
@@ -406,5 +418,103 @@ describe("오프라인 (B5)", () => {
     store.start();
     await store.refresh();
     expect(store.getState()).toMatchObject({ live: false, statuses: null });
+  });
+});
+
+describe("요청 시간 제한 (끝나지 않는 응답)", () => {
+  const b0001 = { id: "b0001", hidden: false };
+  const b0002 = { id: "b0002", hidden: false };
+
+  // 한 번 정상으로 받아 기기에 마지막 값을 저장해 둠
+  async function storedSnapshot() {
+    const storage = memoryStorage();
+    const online = setup({ storage });
+    online.store.start();
+    await online.store.refresh();
+    online.store.stop();
+    return storage;
+  }
+
+  it.each([
+    ["abort되면 실패하는 fetch", false],
+    ["abort도 무시하는 fetch", true],
+  ])(
+    "%s: 시간 초과 → 판단불가·마지막 값 → 다시 시도 시 새 요청",
+    async (_, ignoreAbort) => {
+      const storage = await storedSnapshot();
+      const { store, server, manifestCalls } = setup({ storage });
+      server.hang = true;
+      server.ignoreAbort = ignoreAbort;
+      store.start();
+
+      // 응답을 기다리지 않고 저장된 마지막 값부터 B5 규칙으로 보임
+      expect(store.getState()).toMatchObject({ phase: "ready", live: false });
+      expect(deriveBeachView(b0001, store.getState())).toMatchObject({
+        category: "undetermined",
+        badge: { kind: "warning_unknown" },
+      });
+      expect(deriveBeachView(b0002, store.getState())).toMatchObject({
+        category: "unavailable",
+        badge: { kind: "warning", type: "wind_wave" },
+        confirmedAt: "2026-10-17T05:18:40Z",
+      });
+
+      // 10초 직전까지는 같은 요청에 묶임
+      await vi.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS - 1);
+      void store.refresh();
+      expect(manifestCalls()).toBe(1);
+
+      // 10초가 지나면 실패로 끝나고 inFlight가 풀림
+      await vi.advanceTimersByTimeAsync(1);
+      expect(store.getState().live).toBe(false);
+
+      // 다시 시도 → 새 요청이 나가고, 응답이 오면 교체
+      server.hang = false;
+      await store.refresh();
+      expect(manifestCalls()).toBe(2);
+      expect(store.getState().live).toBe(true);
+      expect(deriveBeachView(b0001, store.getState())).toMatchObject({
+        category: "clear",
+      });
+    },
+  );
+
+  it("status 요청이 멈춰도 10초 뒤 실패, 다음 폴링이 새 요청을 보냄", async () => {
+    const { store, server, statusCalls } = setup();
+    store.start();
+    await store.refresh();
+    expect(store.getState().live).toBe(true);
+
+    // 새 스냅샷의 status만 멈춤(manifest는 정상)
+    server.hangStatus = true;
+    server.manifest = {
+      ...manifestExample,
+      snapshotVersion: "20261017T060000Z",
+      files: {
+        ...manifestExample.files,
+        status: "/data/20261017T060000Z/status.json",
+      },
+    };
+    void store.refresh();
+    await vi.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS);
+    expect(store.getState().live).toBe(false);
+
+    server.hangStatus = false;
+    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS - REQUEST_TIMEOUT_MS);
+    // 처음 받기 · 멈춘 요청 · 5분 폴링의 새 요청
+    expect(statusCalls()).toBe(3);
+    expect(store.getState().live).toBe(true);
+  });
+
+  it("저장된 값이 없으면 시간 초과 뒤 모든 해변 판단불가", async () => {
+    const { store, server } = setup();
+    server.hang = true;
+    store.start();
+    expect(store.getState().phase).toBe("loading");
+    await vi.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS);
+    expect(deriveBeachView(b0001, store.getState())).toMatchObject({
+      category: "undetermined",
+      badge: { kind: "unconfirmed" },
+    });
   });
 });
