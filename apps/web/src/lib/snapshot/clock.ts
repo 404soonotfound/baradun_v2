@@ -100,3 +100,47 @@ export function expiryDeadline(
   // trusted: expiresMs를 1ms 넘긴 때, untrusted: 남은 시간이 정확히 5분이 되는 때
   return clock.trusted ? expiresMs + 1 : expiresMs - UNTRUSTED_MARGIN_MS;
 }
+
+// --- 시각 문구용 값 ---
+// 문구 키({minutes}분 전 측정, {time} 발표, {time} 확인)에 넣을 값만 만듦. 문구는 use-time-text.ts가 붙임
+
+// 한국 표준시 = UTC+9
+const KST_OFFSET_MS = 9 * 60 * 60_000;
+
+// "n분 전 측정"의 n. 지난 시간분을 분 단위로 내림(10분 59초 -> 10)
+// 1분이 안됐거나 측정 시각이 조금 뒤(기기 보정 허용 : 2분 안)여도 1 - "0분 전" 음수를 보이지 않음
+// 시각을 읽을 수 없거나 지금 시각을 모르면(NaN) null -> 화면은 시각 줄을 그리지 않음
+export function minutesAgo(
+  observedAt: string | null | undefined,
+  nowMs: number,
+): number | null {
+  const observeMs = parseTime(observedAt);
+  if (!Number.isFinite(observeMs) || !Number.isFinite(nowMs)) return null;
+  return Math.max(1, Math.floor((nowMs - observeMs) / 60_000));
+}
+
+// ms -> 한국 시각 조각. 9시간 더한 뒤 UTC로 읽으면 한국의 날짜 시각이 나옴
+// toISOString() = "2026-10-21T05:00.00.000Z" 꼴. slice(시작, 끝)으로 필요한 글자만 자름
+function kstParts(ms: number) {
+  const iso = new Date(ms + KST_OFFSET_MS).toISOString();
+  return {
+    day: iso.slice(0, 10), // 2026-10-21 (같은 날인지 비교용)
+    month: iso.slice(5, 7), // 10
+    date: iso.slice(8, 10), // 21
+    hour: iso.slice(11, 13), // 14 (24시간제)
+    minute: iso.slice(14, 16), // 05
+  };
+}
+
+// 발표 확인 시각 글자. 한국 시각 기준 오늘이면 "14:05", 날짜가 다르면 "10/20 14:05" (한국어 영어 같은 규칙)
+// 시각을 읽을 수 없거나 지금 시각을 모르면 null
+export function kstStamp(
+  at: string | null | undefined,
+  nowMs: number,
+): string | null {
+  const atMs = parseTime(at);
+  if (!Number.isFinite(atMs) || !Number.isFinite(nowMs)) return null;
+  const a = kstParts(atMs);
+  const time = `${a.hour}:${a.minute}`;
+  return a.day === kstParts(nowMs).day ? time : `${a.month}/${a.date} ${time}`;
+}
