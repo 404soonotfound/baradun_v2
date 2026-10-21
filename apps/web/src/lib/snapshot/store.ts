@@ -2,13 +2,15 @@ import type { ManifestFile } from "@baradun/contracts";
 
 import {
   clockFromHeaders,
+  CLOCK_TOLERANCE_MS,
   correctedNow,
   DEVICE_CLOCK,
   expiryDeadline,
   isExpired,
+  isTime,
   type Clock,
 } from "./clock";
-import { METRIC_KEYS, type ViewSource } from "./view";
+import { isRecord, METRIC_KEYS, type ViewSource } from "./view";
 
 // 바다 정보 조회·갱신 (아키텍처 9.1·그림 2, BRD-41)
 // manifest를 먼저 받고 snapshotVersion이 바뀔 때만 status를 받음.
@@ -18,6 +20,8 @@ import { METRIC_KEYS, type ViewSource } from "./view";
 
 // 이 화면이 읽을 수 있는 계약 버전
 export const SUPPORTED_SCHEMA_VERSIONS: readonly number[] = [1];
+// 스냅샷 버전 형식(계약). 이 형식이라 글자순 = 시간순
+const SNAPSHOT_VERSION_PATTERN = /^[0-9]{8}T[0-9]{6}Z$/;
 // 같은 출처의 상대 주소만 읽음(17.2 이식성 원칙)
 export const MANIFEST_URL = "/data/manifest.json";
 export const POLL_INTERVAL_MS = 5 * 60_000;
@@ -31,8 +35,6 @@ const SCHEMA_RELOAD_KEY = "baradun:schema-reload";
 
 export interface SnapshotState extends ViewSource {
   manifest: ManifestFile | null;
-  // 마지막 조회 성공 시각(보정된 시각, ms)
-  checkedAtMs: number | null;
 }
 
 export type KeyValueStorage = Pick<
@@ -71,12 +73,7 @@ export const INITIAL_STATE: SnapshotState = {
   live: false,
   clock: DEVICE_CLOCK,
   nowMs: 0,
-  checkedAtMs: null,
 };
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 function safe<T>(run: () => T): T | null {
   try {
@@ -96,6 +93,9 @@ export function statusPath(snapshotVersion: string): string {
 // 다른 스냅샷의 상태를 현재 값으로 저장·표시하지 않게
 function readManifest(value: unknown): ManifestFile | "unsupported" | null {
   if (!isRecord(value)) return null;
+  // 정수 버전일 때만 '지원 밖 형식'(새로고침 대상). 버전이 없거나 숫자가 아니면(캡티브 포털·프록시 오류 응답 등)
+  // 그냥 못 읽은 것 → 실패 경로(B5)
+  if (!Number.isInteger(value.schemaVersion)) return null;
   if (!SUPPORTED_SCHEMA_VERSIONS.includes(value.schemaVersion as number)) {
     return "unsupported";
   }
@@ -103,6 +103,8 @@ function readManifest(value: unknown): ManifestFile | "unsupported" | null {
   const maintenance = value.maintenance;
   if (
     typeof value.snapshotVersion !== "string" ||
+    !SNAPSHOT_VERSION_PATTERN.test(value.snapshotVersion) ||
+    !isTime(value.generatedAt) ||
     !isRecord(files) ||
     files.status !== statusPath(value.snapshotVersion) ||
     !isRecord(maintenance) ||
@@ -113,6 +115,11 @@ function readManifest(value: unknown): ManifestFile | "unsupported" | null {
   return value as unknown as ManifestFile;
 }
 
+// 보정된 시각이 게시 시각(generatedAt)보다 2분 넘게 이른지 = 그 시계가 틀린 게 확실함
+function isBeforePublished(nowMs: number, manifest: ManifestFile): boolean {
+  return nowMs < Date.parse(manifest.generatedAt) - CLOCK_TOLERANCE_MS;
+}
+
 function readStatuses(value: unknown): Record<string, unknown> | null {
   return isRecord(value) && isRecord(value.beaches) ? value.beaches : null;
 }
@@ -121,6 +128,8 @@ export function createSnapshotStore(deps: SnapshotDeps): SnapshotStore {
   let state: SnapshotState = INITIAL_STATE;
   // status를 받아 둔 snapshotVersion. status 받기에 실패하면 그대로라 다음 조회 때 다시 받음
   let loadedVersion: string | null = null;
+  // 이번 세션에 네트워크로 받은 manifest 중 가장 새 snapshotVersion(점검·status 실패 포함)
+  let latestVersion: string | null = null;
   let inFlight: Promise<void> | null = null;
   let pollTimer: ReturnType<typeof setInterval> | null = null;
   let deadlineTimer: ReturnType<typeof setTimeout> | null = null;
@@ -133,8 +142,17 @@ export function createSnapshotStore(deps: SnapshotDeps): SnapshotStore {
     scheduleDeadline();
   }
 
-  function now(clock: Clock = state.clock) {
-    return correctedNow(clock, deps.now());
+  // 보정된 지금 시각. 서버 시각을 모르는데 기기 시각이 게시 시각(generatedAt)보다 2분 넘게 이르면
+  // 기기 시계가 틀린 게 확실하므로 NaN(지금 시각 모름 → 모두 만료, clock.ts isExpired)
+  function now(
+    clock: Clock = state.clock,
+    manifest: ManifestFile | null = state.manifest,
+  ) {
+    const nowMs = correctedNow(clock, deps.now());
+    if (!clock.trusted && manifest && isBeforePublished(nowMs, manifest)) {
+      return NaN;
+    }
+    return nowMs;
   }
 
   // 다음 만료 시각(validUntil·지표별 expiresAt 중 가장 이른 미래)에 화면을 다시 계산.
@@ -164,7 +182,11 @@ export function createSnapshotStore(deps: SnapshotDeps): SnapshotStore {
     }
     if (next === Infinity) return;
 
-    deadlineTimer = setTimeout(onDeadline, Math.max(0, next - now()));
+    // 최대 5분 뒤에 깨어나 다시 계산. 먼 미래 값(잘못된 데이터·틀린 기기 시계)으로 setTimeout 한도(약 24.8일)를
+    // 넘기면 즉시 실행돼 끝없이 반복되는 문제를 막음
+    const delay = Math.min(Math.max(0, next - now()), POLL_INTERVAL_MS);
+    if (!Number.isFinite(delay)) return;
+    deadlineTimer = setTimeout(onDeadline, delay);
   }
 
   function onDeadline() {
@@ -179,7 +201,15 @@ export function createSnapshotStore(deps: SnapshotDeps): SnapshotStore {
         isExpired(status.validUntil as string, nowMs, state.clock),
     );
     set({ nowMs });
-    if (newlyExpired) void refresh();
+    if (!newlyExpired) return;
+    // 만료 전에 시작한 조회가 진행 중이면 거기에 합치지 않고, 끝난 뒤 한 번 더 조회
+    // 진행 중 조회가 실패(reject)해도 처리 안 된 오류로 남지 않게 catch 후 다시 조회
+    if (inFlight) {
+      void inFlight
+        .catch(() => {})
+        .then(() => refresh())
+        .catch(() => {});
+    } else void refresh();
   }
 
   // 메모리에 값이 없으면 기기에 저장해 둔 마지막 값을 꺼냄. 서버 시각은 모르는 것으로 둠.
@@ -198,18 +228,22 @@ export function createSnapshotStore(deps: SnapshotDeps): SnapshotStore {
       statuses,
       clock: DEVICE_CLOCK,
       live: false,
-      nowMs: now(DEVICE_CLOCK),
+      nowMs: now(DEVICE_CLOCK, manifest),
     });
   }
 
   // fresh: 이번 조회에서 manifest를 받아 서버 시각을 알았으면 그 시계(status 실패여도 버리지 않음)
-  function fail(fresh?: Clock) {
+  // maintenanceEnded: 이번 manifest가 점검 중이 아님을 확인함(status만 실패) → 점검 화면을 풀고 B5로
+  function fail(fresh?: Clock, maintenanceEnded = false) {
     showStored();
     const { manifest, statuses } = state;
     const clock = fresh ?? state.clock;
+    const keep =
+      state.phase === "schema_unsupported" ||
+      (state.phase === "maintenance" && !maintenanceEnded);
     set({
-      // 점검 화면은 그대로 덮어 둠. 처음부터 못 받았으면 데이터 없이 판단불가
-      phase: state.phase === "maintenance" ? "maintenance" : "ready",
+      // 점검 화면·지원 밖 형식 배너는 그대로 둠. 처음부터 못 받았으면 데이터 없이 판단불가
+      phase: keep ? state.phase : "ready",
       manifest,
       statuses,
       clock,
@@ -282,8 +316,34 @@ export function createSnapshotStore(deps: SnapshotDeps): SnapshotStore {
       return fail();
     }
     if (manifest === "unsupported") return unsupported();
-    if (!manifest) return fail(clock);
+    // 읽을 수 없는 응답(캡티브 포털·프록시 오류 등)의 Date 헤더는 우리 서버 시각이 아닐 수 있어 쓰지 않음
+    if (!manifest) return fail();
     safe(() => deps.session?.removeItem(SCHEMA_RELOAD_KEY));
+
+    // 서버 시각이 게시 시각보다 2분 넘게 이르면(캐시가 오래된 응답을 Age 없이 다시 내준 경우 등) 서버 시각을 믿지 않음
+    const distrustBefore = (published: ManifestFile | null) => {
+      if (
+        clock.trusted &&
+        published &&
+        isBeforePublished(correctedNow(clock, deps.now()), published)
+      ) {
+        clock = DEVICE_CLOCK;
+      }
+    };
+    distrustBefore(manifest);
+
+    // 이번 세션에 네트워크로 받은 것보다 이전 스냅샷(CDN 엣지·캐시 차이)이면 무시하고 지금 값을 유지.
+    // 발효 특보가 이전 스냅샷의 '특보 없음'으로 덮이지 않게. 버전 형식(20261017T053000Z)은 글자순 = 시간순.
+    // 기기에 저장된 버전과는 비교하지 않음: publisher가 버전을 되돌리면 그 기기가 서버 응답을 계속 버리게 됨.
+    // status까지 받은 버전(loadedVersion)이 아니라 받은 manifest 중 가장 새 버전과 비교함:
+    // 새 버전이 점검 중이거나 그 status를 못 받았을 때 이전 스냅샷이 점검을 풀거나 live로 되살리지 않게
+    if (latestVersion && manifest.snapshotVersion < latestVersion) {
+      // 이번 응답으로 안 서버 시각은 반영(저장된 값을 기기 시계로 보던 중이면 보정됨).
+      // 단 이전 스냅샷 응답이라 시각이 늦을 수 있어, 지금 보여주는 manifest 게시 시각보다 이르면 믿지 않음
+      distrustBefore(state.manifest);
+      return set({ clock, nowMs: now(clock) });
+    }
+    latestVersion = manifest.snapshotVersion;
 
     // 점검 중이면 마지막 값도 숨김(화면이 전체를 덮음, 9.1)
     if (manifest.maintenance.active) {
@@ -292,8 +352,7 @@ export function createSnapshotStore(deps: SnapshotDeps): SnapshotStore {
         manifest,
         live: true,
         clock,
-        nowMs: now(clock),
-        checkedAtMs: now(clock),
+        nowMs: now(clock, manifest),
       });
     }
 
@@ -306,7 +365,7 @@ export function createSnapshotStore(deps: SnapshotDeps): SnapshotStore {
       } catch {
         statuses = null;
       }
-      if (!statuses) return fail(clock);
+      if (!statuses) return fail(clock, true);
       loadedVersion = manifest.snapshotVersion;
       const snapshot = { manifest, status: { beaches: statuses } };
       safe(() =>
@@ -320,8 +379,7 @@ export function createSnapshotStore(deps: SnapshotDeps): SnapshotStore {
       statuses,
       live: true,
       clock,
-      nowMs: now(clock),
-      checkedAtMs: now(clock),
+      nowMs: now(clock, manifest),
     });
   }
 

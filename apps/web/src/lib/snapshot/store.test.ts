@@ -11,6 +11,7 @@ import {
   type KeyValueStorage,
   type SnapshotDeps,
 } from "./store";
+import { DEVICE_CLOCK } from "./clock";
 import { deriveBeachView } from "./view";
 
 // 조회·갱신 검사 (BRD-41, 아키텍처 9.1·그림 2). 가짜 서버·가짜 타이머로 돌림
@@ -281,13 +282,16 @@ describe("시계 보정", () => {
     ["20분 빠름", -20 * 60_000],
     ["20분 느림", +20 * 60_000],
   ])("기기 시계가 %s → Date 헤더로 보정", async (_, skewMs) => {
+    // 실제(서버) 시각은 05:30 이후여야 함(manifest generatedAt 05:30:12보다 앞이면 서버 시각을 믿지 않음)
+    const device = DEVICE_START + Math.max(0, -skewMs);
+    vi.setSystemTime(device);
     const { store, server } = setup();
     server.skewMs = skewMs;
     store.start();
     await store.refresh();
     const state = store.getState();
     expect(state.clock).toEqual({ offsetMs: skewMs, trusted: true });
-    expect(state.nowMs).toBe(DEVICE_START + skewMs);
+    expect(state.nowMs).toBe(device + skewMs);
   });
 
   it("2분 이내 차이는 무시", async () => {
@@ -580,5 +584,349 @@ describe("status 실패에도 새로 확인한 서버 시계 유지", () => {
     expect(
       deriveBeachView({ id: "b0001", hidden: false }, state),
     ).toMatchObject({ metrics: { waveHeight: { kind: "hidden" } } });
+  });
+});
+
+describe("전체 재검증", () => {
+  const b0001 = { id: "b0001", hidden: false };
+  const b0002 = { id: "b0002", hidden: false };
+  const v2 = "20261017T060000Z";
+  const manifestV2 = {
+    ...manifestExample,
+    snapshotVersion: v2,
+    generatedAt: "2026-10-17T06:00:10Z",
+    files: { ...manifestExample.files, status: `/data/${v2}/status.json` },
+  };
+
+  it("이전 스냅샷 manifest가 와도 새 상태를 덮지 않음(발효 특보 유지)", async () => {
+    const { store, server, storage, statusCalls } = setup();
+    // 06:00 스냅샷: b0001에 풍랑주의보 발효
+    const statusV2 = structuredClone(statusExample);
+    statusV2.beaches.b0001 = structuredClone(statusExample.beaches.b0002!);
+    server.manifest = manifestV2;
+    server.status = statusV2;
+    vi.setSystemTime(Date.parse("2026-10-17T06:01:00Z"));
+    store.start();
+    await store.refresh();
+    expect(deriveBeachView(b0001, store.getState())).toMatchObject({
+      category: "unavailable",
+    });
+    const saved = storage.data.get("baradun:last-snapshot");
+
+    // CDN 엣지 차이로 05:30 manifest(b0001 특보 없음)가 다시 옴
+    server.manifest = manifestExample;
+    server.status = statusExample;
+    await store.refresh();
+    expect(statusCalls()).toBe(1);
+    expect(store.getState().manifest?.snapshotVersion).toBe(v2);
+    expect(deriveBeachView(b0001, store.getState())).toMatchObject({
+      category: "unavailable",
+    });
+    expect(storage.data.get("baradun:last-snapshot")).toBe(saved);
+  });
+
+  it("이전 스냅샷 응답의 서버 시각이 지금 manifest 게시 시각보다 이르면 믿지 않음", async () => {
+    const { store, server } = setup();
+    server.manifest = manifestV2;
+    vi.setSystemTime(Date.parse("2026-10-17T06:01:00Z"));
+    store.start();
+    await store.refresh();
+    expect(store.getState().clock).toEqual({ offsetMs: 0, trusted: true });
+
+    // 늦은 CDN 엣지가 05:30 manifest를 Age 없이 05:31 Date로 다시 줌(06:00:10 게시보다 이름)
+    server.manifest = manifestExample;
+    server.skewMs = -30 * 60_000;
+    await store.refresh();
+    expect(store.getState().clock).toEqual(DEVICE_CLOCK);
+    expect(store.getState().manifest?.snapshotVersion).toBe(v2);
+  });
+
+  it("새 버전이 점검 중이면 이전 스냅샷 manifest가 와도 점검이 풀리지 않음", async () => {
+    const { store, server } = setup();
+    vi.setSystemTime(Date.parse("2026-10-17T06:01:00Z"));
+    store.start();
+    await store.refresh();
+    expect(store.getState().phase).toBe("ready");
+
+    server.manifest = {
+      ...manifestV2,
+      maintenance: { active: true, until: null },
+    };
+    await store.refresh();
+    expect(store.getState().phase).toBe("maintenance");
+
+    // 늦은 CDN 엣지가 05:30 manifest(점검 아님)를 다시 줌
+    server.manifest = manifestExample;
+    await store.refresh();
+    expect(store.getState().phase).toBe("maintenance");
+  });
+
+  it("새 버전 status를 못 받은 뒤 이전 스냅샷 manifest가 와도 live로 되살리지 않음", async () => {
+    const { store, server, statusCalls } = setup();
+    vi.setSystemTime(Date.parse("2026-10-17T06:01:00Z"));
+    store.start();
+    await store.refresh();
+    expect(store.getState().live).toBe(true);
+
+    server.manifest = manifestV2;
+    server.statusDown = true;
+    await store.refresh();
+    expect(store.getState().live).toBe(false);
+
+    server.manifest = manifestExample;
+    server.statusDown = false;
+    await store.refresh();
+    expect(store.getState().live).toBe(false);
+    expect(statusCalls()).toBe(2);
+  });
+
+  it("기기에 저장된 값보다 이전 스냅샷(publisher 버전 되돌림)이면 네트워크 값을 받음(고착 방지)", async () => {
+    const storage = memoryStorage();
+    const online = setup({ storage });
+    online.server.manifest = manifestV2;
+    vi.setSystemTime(Date.parse("2026-10-17T06:01:00Z"));
+    online.store.start();
+    await online.store.refresh();
+    online.store.stop();
+
+    const { store, statusCalls } = setup({ storage });
+    store.start();
+    await store.refresh();
+    expect(statusCalls()).toBe(1);
+    expect(store.getState()).toMatchObject({ live: true });
+    expect(store.getState().manifest?.snapshotVersion).toBe(
+      manifestExample.snapshotVersion,
+    );
+  });
+
+  it.each([
+    ["빈 객체", {}],
+    ["오류 응답", { error: "captive portal" }],
+    ["문자열 버전", { ...manifestExample, schemaVersion: "1" }],
+  ])(
+    "모양이 틀린 manifest(%s) → 새로고침 없이 실패 경로(B5)",
+    async (_, body) => {
+      const { store, server, reload } = setup();
+      store.start();
+      await store.refresh();
+      server.manifest = body;
+      await store.refresh();
+      expect(reload).not.toHaveBeenCalled();
+      expect(store.getState()).toMatchObject({ phase: "ready", live: false });
+      expect(deriveBeachView(b0002, store.getState())).toMatchObject({
+        category: "unavailable",
+        badge: { kind: "warning", type: "wind_wave" },
+      });
+    },
+  );
+
+  it("모양이 틀린 manifest 응답의 Date 헤더는 서버 시각으로 쓰지 않음", async () => {
+    const { store, server } = setup();
+    server.skewMs = 20 * 60_000;
+    server.manifest = { error: "captive portal" };
+    store.start();
+    await store.refresh();
+    expect(store.getState().clock).toEqual({ offsetMs: 0, trusted: false });
+  });
+
+  it("지원 밖 형식 배너는 네트워크 실패 한 번으로 풀리지 않음", async () => {
+    const session = memoryStorage();
+    session.setItem("baradun:schema-reload", "1");
+    const { store, server } = setup({ session });
+    server.manifest = { ...manifestExample, schemaVersion: 2 };
+    store.start();
+    await store.refresh();
+    server.down = true;
+    await store.refresh();
+    expect(store.getState().phase).toBe("schema_unsupported");
+  });
+
+  it("먼 미래 만료 시각이어도 타이머가 반복 실행되지 않음", async () => {
+    const statuses = structuredClone(statusExample);
+    for (const status of Object.values(statuses.beaches)) {
+      status.validUntil = "2100-01-01T00:00:00Z";
+      for (const metric of Object.values(status.observation.metrics)) {
+        if (metric.expiresAt) metric.expiresAt = "2100-01-01T00:00:00Z";
+      }
+    }
+    const { store, server } = setup();
+    server.status = statuses;
+    // 가짜 타이머는 한도(2^31-1ms)를 넘는 지연을 브라우저처럼 즉시 실행하지 않아서, 넘긴 지연 값을 직접 확인
+    const spy = vi.spyOn(globalThis, "setTimeout");
+    store.start();
+    await store.refresh();
+    const delays = spy.mock.calls.map(([, delay]) => Number(delay ?? 0));
+    spy.mockRestore();
+    expect(delays.length).toBeGreaterThan(0);
+    expect(Math.max(...delays)).toBeLessThanOrEqual(POLL_INTERVAL_MS);
+  });
+
+  it("기기 시계가 30일 늦고 서버 시각을 모름 → 지금 시각 모름(값 숨김), 타이머 반복 없음", async () => {
+    const storage = memoryStorage();
+    const online = setup({ storage });
+    online.store.start();
+    await online.store.refresh();
+    online.store.stop();
+
+    vi.setSystemTime(DEVICE_START - 30 * 24 * 3_600_000);
+    const { store, server } = setup({ storage });
+    server.down = true;
+    const listener = vi.fn();
+    store.subscribe(listener);
+    store.start();
+    await store.refresh();
+    expect(store.getState().nowMs).toBeNaN();
+    expect(deriveBeachView(b0001, store.getState())).toMatchObject({
+      category: "undetermined",
+      metrics: { waveHeight: { kind: "hidden" }, wind: { kind: "hidden" } },
+    });
+    expect(deriveBeachView(b0002, store.getState())).toMatchObject({
+      category: "unavailable",
+    });
+    listener.mockClear();
+    await vi.advanceTimersByTimeAsync(300);
+    expect(listener).not.toHaveBeenCalled();
+  });
+
+  it("서버 시각이 게시 시각보다 2분 넘게 이르면 서버 시각을 믿지 않음", async () => {
+    const { store, server } = setup();
+    server.skewMs = -60 * 60_000; // 서버 04:30 < generatedAt 05:30:12
+    store.start();
+    await store.refresh();
+    expect(store.getState().clock).toEqual({ offsetMs: 0, trusted: false });
+  });
+
+  it("조회 중에 validUntil이 지나면 그 조회가 끝난 뒤 한 번 더 조회", async () => {
+    const { store, server, manifestCalls } = setup();
+    store.start();
+    await store.refresh();
+    // 06:03:35에 시작한 조회가 멈춤(validUntil 06:03:40)
+    await vi.advanceTimersByTimeAsync(
+      Date.parse("2026-10-17T06:03:35Z") - Date.now(),
+    );
+    const before = manifestCalls();
+    server.hang = true;
+    void store.refresh();
+    await vi.advanceTimersByTimeAsync(6_000); // 만료 지남, 조회는 진행 중
+    expect(manifestCalls()).toBe(before + 1);
+    server.hang = false;
+    await vi.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS); // 멈춘 조회가 시간 초과로 끝남
+    expect(manifestCalls()).toBe(before + 2);
+    expect(store.getState().live).toBe(true);
+  });
+
+  it.each([
+    [
+      "손상된 JSON",
+      (s: ReturnType<typeof memoryStorage>) => {
+        s.setItem("baradun:last-snapshot", "{not json");
+      },
+    ],
+    [
+      "읽기 예외",
+      (s: ReturnType<typeof memoryStorage>) => {
+        s.getItem = () => {
+          throw new Error("SecurityError");
+        };
+      },
+    ],
+  ])("저장소 %s → 무시하고 네트워크로 정상", async (_, breakStorage) => {
+    const storage = memoryStorage();
+    breakStorage(storage);
+    const { store } = setup({ storage });
+    store.start();
+    await store.refresh();
+    expect(store.getState()).toMatchObject({ phase: "ready", live: true });
+  });
+
+  it("저장 용량 초과(setItem 예외)여도 화면은 정상", async () => {
+    const storage = memoryStorage();
+    storage.setItem = () => {
+      throw new DOMException("full", "QuotaExceededError");
+    };
+    const { store } = setup({ storage });
+    store.start();
+    await store.refresh();
+    expect(store.getState()).toMatchObject({ live: true });
+  });
+
+  it("조회 중에 화면을 숨겼다 다시 보여도 조회 하나로 합침", async () => {
+    const { store, server, setVisible, manifestCalls } = setup();
+    server.hang = true;
+    store.start();
+    setVisible(false);
+    setVisible(true);
+    expect(manifestCalls()).toBe(1);
+    server.hang = false;
+    await vi.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS);
+    store.stop();
+    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS * 2);
+    expect(manifestCalls()).toBe(1);
+  });
+});
+
+describe("스냅샷 버전 형식·저장된 값의 시계", () => {
+  it("형식이 틀린 snapshotVersion → 못 읽은 것으로 보고 이후 정상 버전을 막지 않음", async () => {
+    const bad = "zzz";
+    const { store, server } = setup();
+    server.manifest = {
+      ...manifestExample,
+      snapshotVersion: bad,
+      files: { ...manifestExample.files, status: `/data/${bad}/status.json` },
+    };
+    store.start();
+    await store.refresh();
+    expect(store.getState().manifest).toBeNull();
+    server.manifest = manifestExample;
+    await store.refresh();
+    expect(store.getState()).toMatchObject({ live: true });
+    expect(store.getState().manifest?.snapshotVersion).toBe(
+      manifestExample.snapshotVersion,
+    );
+  });
+
+  it("기기 시계가 게시 시각보다 한참 이르면 저장된 값을 꺼내는 순간부터 지금 시각 모름", async () => {
+    const storage = memoryStorage();
+    const online = setup({ storage });
+    online.store.start();
+    await online.store.refresh();
+    online.store.stop();
+
+    vi.setSystemTime(DEVICE_START - 30 * 24 * 3_600_000);
+    const { store, server } = setup({ storage });
+    server.hang = true;
+    store.start();
+    expect(store.getState()).toMatchObject({ live: false });
+    expect(store.getState().nowMs).toBeNaN();
+  });
+});
+
+describe("점검 해제 후 status 실패", () => {
+  it("점검이 끝난 manifest를 받고 status만 실패 → 점검 화면을 풀고 B5", async () => {
+    const { store, server } = setup();
+    store.start();
+    await store.refresh();
+    server.manifest = {
+      ...manifestExample,
+      maintenance: { active: true, until: null },
+    };
+    await store.refresh();
+    expect(store.getState().phase).toBe("maintenance");
+
+    server.manifest = {
+      ...manifestExample,
+      snapshotVersion: "20261017T060000Z",
+      generatedAt: "2026-10-17T05:30:30Z",
+      files: {
+        ...manifestExample.files,
+        status: "/data/20261017T060000Z/status.json",
+      },
+    };
+    server.statusDown = true;
+    await store.refresh();
+    expect(store.getState()).toMatchObject({ phase: "ready", live: false });
+    expect(
+      deriveBeachView({ id: "b0002", hidden: false }, store.getState()),
+    ).toMatchObject({ category: "unavailable", stale: true });
   });
 });
