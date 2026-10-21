@@ -137,6 +137,27 @@ function reasonLabels(
   return first ? [first, ...rest] : [genericLabel(category)];
 }
 
+// '특보 없음'의 근거(계약 불변식, 아키텍처 2.1·6.3): 사유 없음, 특보 state none + 출처·확인 시각,
+// 파고 fresh 또는 none. 배포 오류로 하나라도 빠지면 판단불가
+function isConfirmedClear(status: Record<string, unknown>): boolean {
+  const warning = isRecord(status.warning) ? status.warning : null;
+  const observation = isRecord(status.observation) ? status.observation : null;
+  const metrics = isRecord(observation?.metrics) ? observation.metrics : null;
+  const waveHeight = isRecord(metrics?.waveHeight) ? metrics.waveHeight : null;
+  return (
+    Array.isArray(status.reasons) &&
+    status.reasons.length === 0 &&
+    warning?.state === "none" &&
+    Array.isArray(warning.items) &&
+    warning.items.length === 0 &&
+    typeof warning.source === "string" &&
+    warning.source !== "" &&
+    typeof warning.lastConfirmedAt === "string" &&
+    Number.isFinite(Date.parse(warning.lastConfirmedAt)) &&
+    (waveHeight?.state === "fresh" || waveHeight?.state === "none")
+  );
+}
+
 function metricView(metric: unknown, source: ViewSource): MetricView {
   if (!isRecord(metric)) return { kind: "hidden" };
   if (metric.state === "none") return { kind: "none" };
@@ -170,6 +191,10 @@ export function deriveBeachView(
   // status에 없는 해변 → 판단불가(숨기지 않음, 9장)
   const status = source.statuses?.[beach.id];
   if (!isRecord(status) || !includes(CATEGORIES, status.category)) {
+    return UNDETERMINED;
+  }
+  // 근거가 빠지거나 모순된 '특보 없음'은 내보내지 않음. 이용불가는 위험 정보라 그대로 둠
+  if (status.category === "clear" && !isConfirmedClear(status)) {
     return UNDETERMINED;
   }
 
