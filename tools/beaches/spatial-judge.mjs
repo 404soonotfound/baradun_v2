@@ -432,6 +432,7 @@ function linkOfficial(src) {
 }
 const srcRows = readCsv("beaches.csv").filter((b) => TARGET_REGIONS.includes(b.sido_nm));
 const links = new Map(srcRows.map((b) => [`${b.gugun_nm}|${b.sta_nm}`, linkOfficial(b)]));
+const sidoByKey = new Map(srcRows.map((b) => [`${b.gugun_nm}|${b.sta_nm}`, b.sido_nm]));
 if (links.size !== srcRows.length) throw new Error("해변 키(시군|이름) 중복: 시·도를 넘어 같은 키가 있음");
 // 한 행이 두 해변에 연결되면 둘 다 연결하지 않음
 const rowUse = count([...links.values()].filter((l) => l.row), (l) => l.row.row);
@@ -444,11 +445,14 @@ function addressCheck(key, coord) {
   const base = { source: MOF_SOURCE, link_method: link.method, link_basis: link.basis };
   if (!link.row) return { ...base, result: "NO_ADDRESS", candidates: link.candidates, reason: `공식 주소 미연결(${link.basis}) → 좌표 판정만 적용` };
   const { row } = link;
-  // 주소 앞의 시·도 이름(경남·부산광역시 등)은 건너뛰고 시군 다음 낱말을 읍면·동으로 봄. 도로명만 있으면 읍면 없음
+  // 주소 앞의 시·도 이름(경남·부산광역시 등)은 건너뛰고 시군 다음 낱말을 읍면·동으로 봄. 구가 있는 시(포항시 남구 …)는 구 다음 낱말,
+  // 도로명 주소는 괄호 안 동(…길 15-1 (만흥동), 건물명이 붙은 (만흥동, ○○아파트) 포함). 그래도 없으면 읍면 없음
   const tokens = row.address.split(/[\s,]+/);
   const si = tokens.indexOf(sigungu);
-  const locality = si >= 0 && /(읍|면|동|가)$/.test(tokens[si + 1] ?? "") ? tokens[si + 1] : "";
-  const sido = srcRows.find((b) => `${b.gugun_nm}|${b.sta_nm}` === key)?.sido_nm;
+  const next = /시$/.test(sigungu) && /^[가-힣]+구$/.test(tokens[si + 1] ?? "") ? tokens[si + 2] : tokens[si + 1];
+  const paren = row.address.match(/\(([가-힣0-9]+(?:읍|면|동|가))(?:,[^)]*)?\)/)?.[1];
+  const locality = si >= 0 && /(읍|면|동|가)$/.test(next ?? "") ? next : si >= 0 ? (paren ?? "") : "";
+  const sido = sidoByKey.get(key);
   const l1 = locality ? annex9Lookup(sido, sigungu, locality) : [];
   const addr = {
     ...base,
@@ -656,7 +660,7 @@ for (const e of beachDoc.beaches) {
   } else if (r.result === "VERIFIED" && addr.result !== "MISMATCH") {
     e.land_status = "VERIFIED";
     e.land_zone = r.l1_code;
-    e.land_basis = `${addr.result === "MATCH" ? `공식 주소 ① + 좌표 ② 일치: ${addr.reason}` : `공식 주소 미연결 → 좌표 판정만: ${addr.reason}`}. 좌표–법정 읍면동 경계 판정(결정 4-A): ${r.reason}. 원문: ${r.emd.l1_quote}`;
+    e.land_basis = `${addr.result === "MATCH" ? `공식 주소 ① + 좌표 ② 일치: ${addr.reason}` : addr.result === "ADDRESS_NO_LOCALITY" ? `공식 주소 읍면 못 읽음 → 좌표 판정만: ${addr.reason}` : `공식 주소 미연결 → 좌표 판정만: ${addr.reason}`}. 좌표–법정 읍면동 경계 판정(결정 4-A): ${r.reason}. 원문: ${r.emd.l1_quote}`;
   } else if (r.result === "VERIFIED") {
     e.land_status = "UNVERIFIED";
     e.land_zone = "";
