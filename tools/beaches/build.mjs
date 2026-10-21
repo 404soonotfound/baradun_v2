@@ -228,7 +228,7 @@ const matrixEvidence = (e) => ({
     : "",
   land_method: e.land_proof?.method ?? "",
   land_decision: e.land_proof?.decision ?? "",
-  land_emd: e.land_proof ? `${e.land_proof.emd.emd_nm}(${e.land_proof.emd.emd_cd}) ${e.land_proof.emd.distance_m}m` : "",
+  land_emd: e.land_proof?.emd ? `${e.land_proof.emd.emd_nm}(${e.land_proof.emd.emd_cd}) ${e.land_proof.emd.distance_m}m` : "",
   land_neighbors_300m: e.land_proof?.neighbors_within_300m?.map((n) => `${n.emd_nm}(${n.emd_cd}) ${n.distance_m}m ${n.l1_code || "별표9 없음"}`).join(" / ") ?? "",
   land_address_comparison: e.land_proof?.address_comparison
     ? `${e.land_proof.address_comparison.official_locality} ${e.land_proof.address_comparison.same_emd ? "= 좌표 읍면" : "≠ 좌표 읍면"}`

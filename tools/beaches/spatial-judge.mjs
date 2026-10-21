@@ -465,6 +465,8 @@ function addressCheck(key, coord) {
   const coordL1 = coord.result === "VERIFIED" ? coord.l1_code : "";
   const coordText = coord.result === "VERIFIED" ? `좌표 ${coord.emd.emd_nm} ${coord.emd.distance_m}m → ${coord.emd.l1_row}(${coordL1})` : `좌표 판정 ${coord.result}(${coord.reason})`;
   const addrText = `주소 '${row.address}'(${row.row}행) → ${locality || "읍면동 못 읽음"} → ${addr.l1_row || "별표9 행 없음"}${addr.l1_code ? `(${addr.l1_code})` : ""}`;
+  // 좌표 1km 안에 읍면동이 없으면(NO_EMD_WITHIN_1KM, emd: null) 좌표 판정 자체가 자동 제외
+  if (!coord.emd) return { ...addr, same_emd_as_coord: false, result: "COORD_EXCLUDED", reason: `${coordText} — 좌표 판정이 자동 제외라 확정 불가. 참고 ${addrText}` };
   addr.same_emd_as_coord = locality === coord.emd.emd_nm;
   if (!locality) return { ...addr, result: "ADDRESS_NO_LOCALITY", reason: `공식 주소 '${row.address}'에서 읍면·동을 읽지 못함(도로명 등) → 좌표 판정만 적용` };
   // 7차(노션 2.2 L1 근거 순서): 좌표 L1 갈림이어도 공식 주소 읍면이 300m 안 좌표 후보 중 하나이고 L1이 같으면 공식 주소로 확정
@@ -564,22 +566,30 @@ const pwnCount = (code) => pwncd.filter((r) => r.areaCode === code).length;
 const pwnFirst = (code) => pwncd.filter((r) => r.areaCode === code).map((r) => r.tmFc).sort()[0] ?? null;
 const T3 = ANNEX.annex3_transition;
 // 종전 별표3 → 현행 별표9 이행 근거 (강원 기존 기록은 유지)
-function transitionFor(src) {
-  const t = T3.sigungu[`${src.sido_nm}|${src.gugun_nm}`];
+// 실데이터 추론은 해변 단위: 이 해변의 land_zone 코드 자체가 360일 이력에 있어야 확정(시군의 다른 새 코드로 대신하지 않음)
+function transitionFor(sido, sigungu, landZone) {
+  const t = T3.sigungu[`${sido}|${sigungu}`];
   const base = { previous_url: T3.previous_url, previous_rule_item: T3.previous_item, current_url: T3.current_url, current_rule_item: ANNEX9_ITEM, checked_at_kst: CHECKED_AT, previous_quote: t?.previous_quote, current_quote: t?.current_quote, note: t?.note };
   if (!t) return { ...base, status: "NOT_COMPARED", basis: "종전 별표3 대조표에 이 시군 없음" };
   if (t.status === "MATCH") return { ...base, status: "MATCH", basis: "종전 별표3과 현행 별표9의 해당 행 문언이 같음(원문 대조)" };
   const fresh = t.new_codes.map((c) => ({ code: c, count: pwnCount(c), first_tmFc: pwnFirst(c) }));
   const stale = t.old_codes.map((c) => ({ code: c, count: pwnCount(c) }));
-  const ok = fresh.some((x) => x.count > 0) && stale.every((x) => x.count === 0);
+  const own = fresh.find((x) => x.code === landZone);
+  const ok = Boolean(own && own.count > 0) && stale.every((x) => x.count === 0);
+  const ownText = !landZone
+    ? "이 해변 L1 코드 없음"
+    : own
+      ? `이 해변 L1 ${landZone} ${own.count}건`
+      : `이 해변 L1 ${landZone}은 현행 별표9 세부 구역 코드 목록에 없음`;
   return {
     ...base,
     status: ok ? "EMPIRICAL_RESOLVED" : "UNRESOLVED",
     empirical_source_file: "tools/coverage/out/warnings/pwncd_360d.csv",
     empirical_source_sha256: PWNCD_SHA,
+    land_code: landZone || null,
     new_codes: fresh,
     old_codes: stale,
-    basis: `pwncd_360d.csv에서 현행 별표9 세부 구역 코드 ${fresh.map((x) => `${x.code} ${x.count}건${x.first_tmFc ? `(첫 발표 ${x.first_tmFc})` : ""}`).join("·")}, 종전 구역 코드 ${stale.length ? stale.map((x) => `${x.code} ${x.count}건`).join("·") : "현행 코드표에 없음(폐지)"} → ${ok ? "현행 별표9로 발표되는 것으로 봄" : "확인 안 됨"}(실데이터 추론, 기상청 문서 확인 아님)`,
+    basis: `pwncd_360d.csv에서 현행 별표9 세부 구역 코드 ${fresh.map((x) => `${x.code} ${x.count}건${x.first_tmFc ? `(첫 발표 ${x.first_tmFc})` : ""}`).join("·")}, 종전 구역 코드 ${stale.length ? stale.map((x) => `${x.code} ${x.count}건`).join("·") : "현행 코드표에 없음(폐지)"}; ${ownText} → ${ok ? "현행 별표9로 발표되는 것으로 봄" : "확인 안 됨"}(실데이터 추론, 기상청 문서 확인 아님)`,
   };
 }
 // 앞바다 S1: 시군이 읍면으로 나뉘지 않으면 gugun_nm, 나뉘면 공식 주소 읍면과 좌표 읍면이 같은 구역일 때만
@@ -614,7 +624,6 @@ for (const src of srcRows) {
   if (src.sido_nm !== "강원") {
     // 강원 행은 3차까지의 기존 S1·이행 기록 유지, 그 밖 시·도는 이번에 원문 인용표로 생성
     Object.assign(e, seaFor(src, l1.get(key), addrChecks.get(key)));
-    e.land_transition_comparison = transitionFor(src);
   }
 }
 const targetKeys = new Set(srcRows.map((b) => `${b.gugun_nm}|${b.sta_nm}`));
@@ -632,13 +641,14 @@ for (const e of beachDoc.beaches) {
     e.land_basis = "좌표 보류(해수부 수집본 좌표 없음) → 좌표–법정 읍면동 경계 판정 불가(결정 4-A). 주소 기반 이전 판정은 사용하지 않음";
     e.land_checked_at_kst = CHECKED_AT;
     delete e.land_proof;
+    if (e.sido !== "강원") e.land_transition_comparison = transitionFor(e.sido, e.key.split("|")[0], "");
     continue;
   }
   const addr = addrChecks.get(e.key);
   e.land_proof = { ...r, address_check: addr };
   e.land_checked_at_kst = CHECKED_AT;
   e.land_rule_url = ANNEX9_URL;
-  e.land_rule_item = `${ANNEX9_ITEM} — ${r.emd.l1_row || "해당 행 없음"}`;
+  e.land_rule_item = `${ANNEX9_ITEM} — ${r.emd?.l1_row || "해당 행 없음"}`;
   if (addr.result === "MATCH_SPLIT_CANDIDATE") {
     e.land_status = "VERIFIED";
     e.land_zone = addr.resolved_l1_code;
@@ -657,17 +667,31 @@ for (const e of beachDoc.beaches) {
     e.land_zone = ""; // 근거 없는 값은 비움
     e.land_basis = `자동 제외(결정 4-A): ${r.reason}`;
   }
+  // 이행 근거(강원 밖): 이 해변 land_zone 코드로 판정. 확인 안 되면 L1 미검증 → 자동 제외
+  let transitionExclusion = null;
+  if (e.sido !== "강원") {
+    e.land_transition_comparison = transitionFor(e.sido, e.key.split("|")[0], e.land_zone);
+    const cmp = e.land_transition_comparison;
+    if (e.land_status === "VERIFIED" && !["MATCH", "EMPIRICAL_RESOLVED"].includes(cmp.status)) {
+      transitionExclusion = { type: "L1_TRANSITION_UNVERIFIED", reason: `종전 별표3 → 현행 별표9 이행 확인 안 됨(${cmp.status}): ${cmp.basis}` };
+      e.land_status = "UNVERIFIED";
+      e.land_zone = "";
+      e.land_basis = `자동 제외(결정 4-A): ${transitionExclusion.reason}`;
+    }
+  }
   // 주소 기반 이전 판정과 비교만 기록 (판정에는 쓰지 않음)
-  if (e.official_locality) e.land_proof.address_comparison = { official_locality: e.official_locality, same_emd: e.official_locality === r.emd.emd_nm };
+  if (e.official_locality && r.emd) e.land_proof.address_comparison = { official_locality: e.official_locality, same_emd: e.official_locality === r.emd.emd_nm };
 
   const seaVerified = zoneProofVerified(e, "sea", e.key.split("|")[0]);
   const b = beachPts.find((p) => p.key === e.key);
   const exclusions = [];
   if (addr.result === "MATCH_SPLIT_CANDIDATE");
+  else if (r.decision === "NO_EMD_WITHIN_1KM") exclusions.push({ type: "L1_NO_EMD_WITHIN_1KM", reason: r.reason });
   else if (r.result === "EXCLUDED_L1_SPLIT") exclusions.push({ type: "L1_SPLIT", reason: r.reason });
   else if (r.result === "EXCLUDED_OVER_100M") exclusions.push({ type: "L1_OVER_100M", reason: r.reason });
   else if (r.result !== "VERIFIED") exclusions.push({ type: r.result.replace("EXCLUDED_", "L1_"), reason: r.reason });
   else if (addr.result === "MISMATCH") exclusions.push({ type: "L1_ADDRESS_MISMATCH", reason: addr.reason });
+  if (transitionExclusion) exclusions.push(transitionExclusion);
   // 7차(결정 기록 11장 10/21 ⑧): 2026 지정 목록에 후보조차 없는 해변은 출시 제외. 후보가 둘 이상인 미연결은 지정 목록 안이므로 유지
   if (link.method === "UNLINKED" && !link.candidates?.length)
     exclusions.push({ type: "NOT_DESIGNATED_2026", reason: `해수부 '2026 해수욕장 주요 현황' 지정 목록에 연결 후보 없음(${link.basis})` });
