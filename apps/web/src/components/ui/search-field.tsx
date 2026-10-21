@@ -8,14 +8,16 @@ import { cn } from "@/lib/cn";
 export function SearchField({
   label,
   className,
+  id: idProp,
   ...props
 }: {
   // 접근 가능한 이름(예: "해변·지역 검색"). 안내 문구(placeholder)와 같아도 따로 꼭 줌
   label: string;
   className?: string;
 } & Omit<InputHTMLAttributes<HTMLInputElement>, "type" | "className">) {
-  // label과 input을 잇는 id. 화면에 검색창이 둘 있어도 겹치지 않음
-  const id = useId();
+  // label과 input을 잇는 id. 화면에 검색창이 둘 있어도 겹치지 않음. 쓰는 쪽이 id를 주면 그 값으로 label도 이음
+  const generatedId = useId();
+  const id = idProp ?? generatedId;
 
   return (
     <div
@@ -36,8 +38,8 @@ export function SearchField({
       <input
         id={id}
         type="search"
-        // 바깥 상자가 포커스 테두리를 그리므로 input 자체 바깥선은 끔
-        className="min-w-0 flex-1 bg-transparent text-[15px] text-text-default outline-none placeholder:text-text-muted"
+        // 바깥 상자가 포커스 테두리를 그리므로 input 자체 바깥선은 숨김. outline-hidden은 고대비 모드에서는 바깥선을 살려 둠(그림자가 안 그려져서)
+        className="min-w-0 flex-1 bg-transparent text-[15px] text-text-default outline-hidden placeholder:text-text-muted"
         {...props}
       />
     </div>

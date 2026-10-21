@@ -47,6 +47,11 @@ const STATUS: Record<
   },
 };
 
+// removable 변형(최근 본): › 대신 ✕. 둘은 같이 줘야 함(하나만 주면 타입 오류)
+type RemoveProps =
+  | { onRemove: () => void; removeLabel: string }
+  | { onRemove?: undefined; removeLabel?: undefined };
+
 export function BeachRow({
   href,
   name,
@@ -74,14 +79,11 @@ export function BeachRow({
   highlight?: boolean;
   // changed 변형: "방금 바뀜 · 이전: ○○"의 ○○
   changedFrom?: string | null;
-  // removable 변형(최근 본): › 대신 ✕. 둘 다 있어야 ✕가 생김
-  onRemove?: () => void;
-  removeLabel?: string;
-}) {
+} & RemoveProps) {
   const t = useTranslations();
   const { badgeText } = useBadgeText();
   const tone = status ? STATUS[badgeTone(status)] : null;
-  const removable = onRemove !== undefined && removeLabel !== undefined;
+  const removable = onRemove !== undefined;
 
   return (
     <div
@@ -92,7 +94,6 @@ export function BeachRow({
           "bg-brand-weak shadow-[inset_3px_0_0_var(--color-brand-default)]",
       )}
     >
-      {" "}
       <Link
         href={href}
         className="flex min-h-touch min-w-0 flex-1 items-center gap-3 py-[13px] pr-3 pl-3.5"

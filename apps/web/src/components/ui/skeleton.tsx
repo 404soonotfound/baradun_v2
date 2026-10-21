@@ -29,7 +29,11 @@ export function BeachRowSkeleton({
   return (
     // role="status" = 불러오는 중이라는 안내를 조용히 읽어 줌
     <div role="status">
-      <ul className="overflow-hidden rounded-card bg-bg-surface shadow-card">
+      {/* 빈 목록으로 읽히지 않게 모양 상자 전체를 숨김 */}
+      <ul
+        aria-hidden="true"
+        className="overflow-hidden rounded-card bg-bg-surface shadow-card"
+      >
         {/* Array.from({ length: n }) = 길이 n짜리 빈 배열. map의 두 번째 값(i)이 0, 1, 2 … */}
         {Array.from({ length: rows }, (_, i) => (
           <li
