@@ -8,6 +8,10 @@ import type {
 
 import { isExpired, isTime, type Clock } from "./clock";
 
+// 특보 확인 유효시간 45분(아키텍처 14.3 N2), 파고 유효시간 90분(B4). '특보 없음' 근거 검증에만 씀(분류 계산 아님)
+const WARNING_CONFIRM_VALID_MS = 45 * 60_000;
+const WAVE_HEIGHT_VALID_MS = 90 * 60_000;
+
 // 해변 하나의 화면 상태 (아키텍처 9.1, 결정 기록 11장 B4·B5, BRD-41)
 // 분류(category)는 publisher가 게시한 값을 그대로 씀(G1). 여기서 하는 일은 셋뿐:
 //   1. 만료·오프라인이면 판단불가로 내림(발효 중 특보 배지는 유지, B5)
@@ -166,22 +170,42 @@ function isReadableFresh(
 
 // '특보 없음'의 근거(계약 불변식, 아키텍처 2.1·6.3): 사유 없음, 특보 state none + 출처·확인 시각,
 // 파고 fresh(값을 읽을 수 있음) 또는 none. 배포 오류로 하나라도 빠지면 판단불가.
-// 파고 자체 만료는 여기서 보지 않음(받는 중이면 관측 지연, 못 받는 중이면 B5로 deriveBeachView에서 처리)
+// validUntil이 근거(특보 확인 + 45분, 파고 관측 + 90분·파고 expiresAt)보다 길어도 판단불가.
+// 그래서 validUntil 안이면 파고도 만료 전임(파고 자체 만료를 deriveBeachView에서 따로 보지 않음)
 function isConfirmedClear(status: Record<string, unknown>): boolean {
   const warning = isRecord(status.warning) ? status.warning : null;
   const observation = isRecord(status.observation) ? status.observation : null;
   const metrics = isRecord(observation?.metrics) ? observation.metrics : null;
   const waveHeight = isRecord(metrics?.waveHeight) ? metrics.waveHeight : null;
+  if (
+    !Array.isArray(status.reasons) ||
+    status.reasons.length !== 0 ||
+    warning?.state !== "none" ||
+    !Array.isArray(warning.items) ||
+    warning.items.length !== 0 ||
+    typeof warning.source !== "string" ||
+    warning.source === "" ||
+    !isTime(warning.lastConfirmedAt) ||
+    !isTime(status.validUntil)
+  ) {
+    return false;
+  }
+  // 유효 시각이 근거보다 길면 모순(계약 6.3: validUntil = min(파고 observedAt + 90분, 특보 lastConfirmedAt + 45분)).
+  // 오래된 특보 확인이 validUntil만 늘려 '특보 없음'으로 계속 보이지 않게
+  const validUntilMs = Date.parse(status.validUntil);
+  if (
+    validUntilMs >
+    Date.parse(warning.lastConfirmedAt) + WARNING_CONFIRM_VALID_MS
+  ) {
+    return false;
+  }
+  if (waveHeight?.state === "none") return true;
+  // 파고 expiresAt만 늘린 응답도 막도록 관측 시각 + 90분과도 비교
   return (
-    Array.isArray(status.reasons) &&
-    status.reasons.length === 0 &&
-    warning?.state === "none" &&
-    Array.isArray(warning.items) &&
-    warning.items.length === 0 &&
-    typeof warning.source === "string" &&
-    warning.source !== "" &&
-    isTime(warning.lastConfirmedAt) &&
-    (waveHeight?.state === "none" || isReadableFresh(waveHeight, "waveHeight"))
+    isReadableFresh(waveHeight, "waveHeight") &&
+    isTime(waveHeight.expiresAt) &&
+    validUntilMs <= Date.parse(waveHeight.expiresAt) &&
+    validUntilMs <= Date.parse(waveHeight.observedAt) + WAVE_HEIGHT_VALID_MS
   );
 }
 
@@ -251,11 +275,6 @@ export function deriveBeachView(
   );
 
   if (source.live && !expired) {
-    // '특보 없음'인데 파고가 자체 만료(90분)를 넘김 = 계약 위반(validUntil ≤ 파고 expiresAt이어야 함).
-    // 화면이 사유를 지어내지 않고(G1) 일반 '확인 못 함'으로 판단불가. 읽을 수 있는 다른 값은 그대로 둠
-    if (category === "clear" && metrics.waveHeight.kind === "hidden") {
-      return { ...UNDETERMINED, metrics };
-    }
     const reasons = reasonLabels(status.reasons, category);
     return {
       kind: "ready",
