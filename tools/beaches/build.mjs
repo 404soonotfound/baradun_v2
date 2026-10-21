@@ -578,8 +578,9 @@ if (process.argv.includes("--publish")) {
   };
   // 공개본은 해변별 결과 칸만(slim-matrix.mjs). 전체 매트릭스는 위 coverage-<지역>.csv
   const csv2 = [SLIM_COLS.join(","), ...slimMatrix(matrix).map((r) => SLIM_COLS.map((c) => csvCell(r[c])).join(","))].join("\n");
+  // photo는 카탈로그 수집(BRD-58)이 채우는 칸이라 생성기가 덮어쓰지 않고 지금 파일 값을 유지
   for (const r of records)
-    writeFileSync(join(BEACH_DIR, `${r.id}.json`), `${JSON.stringify({ ...strip(r), ...(stillHidden.has(r.id) ? { hidden: true } : {}) }, null, 2)}\n`);
+    writeFileSync(join(BEACH_DIR, `${r.id}.json`), `${JSON.stringify({ ...strip(r), photo: existing.get(r.id)?.photo ?? null, ...(stillHidden.has(r.id) ? { hidden: true } : {}) }, null, 2)}\n`);
   for (const [id, beach] of hidden) writeFileSync(join(BEACH_DIR, `${id}.json`), `${JSON.stringify(beach, null, 2)}\n`);
   if (hidden.length) console.log(`공개 대상에서 빠진 해변 숨김(hidden: true) ${hidden.length}개: ${hidden.map(([id]) => id).join(", ")}`);
   if (stillHidden.size) console.log(`이미 숨긴 해변 숨김 유지 ${stillHidden.size}개: ${[...stillHidden].join(", ")}`);
