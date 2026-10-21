@@ -9,7 +9,7 @@ import { cn } from "@/lib/cn";
 const VARIANTS = {
   default: "border-border-strong bg-bg-surface font-medium text-text-body",
   on: "border-brand-default bg-brand-default font-bold text-brand-on",
-  sel: "border-brand-default bg-brand-weak font-bold text-status-clear-fg",
+  sel: "border-brand-default bg-brand-weak font-bold text-brand-default",
 } as const; // 읽기전용 상수
 
 // "VARIANTS 표의 키 이름(default | on | sel) 중 하나 "라는 타입을 만들어  ChipVariant라고 부른다
@@ -65,7 +65,7 @@ export function RemovableChip({
   onRemove: () => void;
 }) {
   return (
-    <span className="inline-flex h-chip shrink-0 items-center rounded-full border border-brand-default bg-brand-weak pl-[13px] text-[12.5px] font-bold text-status-clear-fg">
+    <span className="inline-flex h-chip shrink-0 items-center rounded-full border border-brand-default bg-brand-weak pl-[13px] text-[12.5px] font-bold text-brand-default">
       {children}
       <button
         type="button"
