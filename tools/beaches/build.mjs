@@ -320,6 +320,7 @@ for (const src of beachesSrc) {
   const excludedHere = [];
   const undetermined = [];
   const absent = [];
+  const gapped = []; // 결측·지연으로 확정 불가인 지표
   for (const metric of Object.keys(METRICS)) {
     const a = assignMetric(assignCtx, { lat, lng, seaZone, seaVerified }, metric);
     const listText = a.list.map((c) => `${c.s.stn_id} ${c.s.name}(${c.s.tp}) ${round1(c.km)}km`).join(" / ") || "20km 안 후보 없음";
@@ -336,6 +337,7 @@ for (const src of beachesSrc) {
       stationsOut[metric] = null;
       if (a.state === "ABSENT") absent.push(metric);
       else undetermined.push(`${metric}: ${a.reason}`);
+      if (a.state === "UNDETERMINED" && a.reason.includes("결측·지연")) gapped.push(metric);
       basisParts.push(`${metric}[${METRICS[metric].source}]: ${listText} → ${a.state === "ABSENT" ? `null(가까운 관측 없음: ${a.reason})` : `확정 불가(${a.reason})`}`);
     }
   }
@@ -373,7 +375,8 @@ for (const src of beachesSrc) {
   const fmt = (metric) => {
     const s = stationsOut[metric];
     if (s) return `${s.id} ${s.name.ko} ${s.distanceKm}km`;
-    return absent.includes(metric) ? "null(가까운 관측 없음)" : "null(미검증 관측소로 확정 불가)";
+    if (absent.includes(metric)) return "null(가까운 관측 없음)";
+    return gapped.includes(metric) ? "null(결측·지연으로 확정 불가)" : "null(미검증 관측소로 확정 불가)";
   };
   const stationCols = {
     st_waveHeight: fmt("waveHeight"),
