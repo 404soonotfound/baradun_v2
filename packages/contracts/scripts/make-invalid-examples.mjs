@@ -46,6 +46,8 @@ add('beaches.photo-kogl-type3', 'beaches', (d) => { d.beaches[0].photo.license =
 add('beaches.photo-license-text', 'beaches', (d) => { d.beaches[0].photo.license = '공공누리 제1유형'; });
 // 사진 주소가 https가 아님
 add('beaches.photo-http-url', 'beaches', (d) => { d.beaches[0].photo.url = 'http://example.com/sample-beach.jpg'; });
+// 원본 페이지 주소가 https가 아님
+add('beaches.photo-page-http-url', 'beaches', (d) => { d.beaches[0].photo.pageUrl = 'http://example.com/sample-beach'; });
 
 // 폴더 만들고 파일 저장 (2칸 들여쓰기)
 mkdirSync('examples/invalid', { recursive: true });

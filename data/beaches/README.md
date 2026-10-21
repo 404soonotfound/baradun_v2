@@ -23,6 +23,11 @@
 
 생성기(`build.mjs --publish`)가 보류·자동 제외로 숨긴 해변은 `data/beach-meta.json`의 `_meta.auto_hidden`에 남고, 근거가 회복되면 다음 생성 때 자동으로 다시 공개돼요. 이런 해변을 근거와 상관없이 계속 숨기려면 `auto_hidden`에서 그 id를 지워요(그러면 사람이 숨긴 해변으로 봐요).
 
+## 대표 사진 (`photo`, BRD-58)
+
+- 공공누리 제1유형 사진만 넣어요. `license`는 코드값 `kogl-type1`로 쓰고, 화면 표기는 문구 키(`photo.license.*`)로 해요
+- 생성기(`build.mjs --publish`)는 `photo`를 덮어쓰지 않고 지금 파일 값을 그대로 둬요. 새 해변은 `null`로 시작해요
+
 ## 검사
 
 ```bash
