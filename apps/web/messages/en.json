@@ -72,6 +72,12 @@
   },
   "sheet": { "close": "Close" },
   "detail": { "sample": "Sample data. Shown only during development." },
+  "photo": {
+    "alt": "Photo of {name}",
+    "credit": "Photo: {source} · {license}",
+    "creditWithTitle": "Photo: {source}, “{title}” · {license}",
+    "license": { "kogl-type1": "KOGL Type 1" }
+  },
   "pages": {
     "explore": "Explore",
     "search": "Search",
