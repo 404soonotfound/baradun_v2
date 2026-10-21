@@ -71,6 +71,11 @@
       "distanceKm": 10.4
     }
   },
-  "photo": null,
+  "photo": {
+    "url": "https://tong.visitkorea.or.kr/cms/resource/58/4075958_image2_1.jpg",
+    "source": "한국관광공사",
+    "license": "kogl-type1",
+    "title": "안목해변"
+  },
   "cctv": null
 }

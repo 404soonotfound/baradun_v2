@@ -71,6 +71,11 @@
       "distanceKm": 19.8
     }
   },
-  "photo": null,
+  "photo": {
+    "url": "https://tong.visitkorea.or.kr/cms/resource_photo/64/3478664_image2_1.jpg",
+    "source": "한국관광공사",
+    "license": "kogl-type1",
+    "title": "장호해변·장호항"
+  },
   "cctv": null
 }

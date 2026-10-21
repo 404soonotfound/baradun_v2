@@ -64,6 +64,11 @@
     },
     "wind": null
   },
-  "photo": null,
+  "photo": {
+    "url": "https://tong.visitkorea.or.kr/cms/resource/22/3495922_image2_1.jpg",
+    "source": "한국관광공사",
+    "license": "kogl-type1",
+    "title": "송정해수욕장"
+  },
   "cctv": null
 }

@@ -71,6 +71,11 @@
       "distanceKm": 9.4
     }
   },
-  "photo": null,
+  "photo": {
+    "url": "https://tong.visitkorea.or.kr/cms/resource/60/3517260_image2_1.jpg",
+    "source": "한국관광공사",
+    "license": "kogl-type1",
+    "title": "천진해변"
+  },
   "cctv": null
 }

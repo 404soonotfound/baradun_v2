@@ -71,6 +71,11 @@
       "distanceKm": 12.6
     }
   },
-  "photo": null,
+  "photo": {
+    "url": "https://tong.visitkorea.or.kr/cms/resource/52/4120552_image2_1.jpg",
+    "source": "한국관광공사",
+    "license": "kogl-type1",
+    "title": "강문해변"
+  },
   "cctv": null
 }

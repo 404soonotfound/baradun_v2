@@ -71,6 +71,11 @@
       "distanceKm": 17.5
     }
   },
-  "photo": null,
+  "photo": {
+    "url": "https://tong.visitkorea.or.kr/cms/resource/63/3558963_image2_1.jpg",
+    "source": "한국관광공사",
+    "license": "kogl-type1",
+    "title": "백길해변"
+  },
   "cctv": null
 }

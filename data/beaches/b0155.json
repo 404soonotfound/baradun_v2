@@ -50,6 +50,11 @@
     },
     "wind": null
   },
-  "photo": null,
+  "photo": {
+    "url": "https://tong.visitkorea.or.kr/cms/resource/15/3096215_image2_1.jpg",
+    "source": "한국관광공사",
+    "license": "kogl-type1",
+    "title": "파도리해식동굴_4"
+  },
   "cctv": null
 }

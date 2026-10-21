@@ -71,6 +71,11 @@
       "distanceKm": 15.1
     }
   },
-  "photo": null,
+  "photo": {
+    "url": "https://tong.visitkorea.or.kr/cms/resource/95/4120695_image2_1.jpg",
+    "source": "한국관광공사",
+    "license": "kogl-type1",
+    "title": "외옹치해변"
+  },
   "cctv": null
 }

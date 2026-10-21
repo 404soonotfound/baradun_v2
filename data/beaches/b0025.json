@@ -71,6 +71,11 @@
       "distanceKm": 9.9
     }
   },
-  "photo": null,
+  "photo": {
+    "url": "https://tong.visitkorea.or.kr/cms/resource/14/3516814_image2_1.jpg",
+    "source": "한국관광공사",
+    "license": "kogl-type1",
+    "title": "송지호 해수욕장"
+  },
   "cctv": null
 }
