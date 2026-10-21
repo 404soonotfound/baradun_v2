@@ -6,11 +6,10 @@ import type {
   WarningType,
 } from "@baradun/contracts";
 
-import { isExpired, isTime, type Clock } from "./clock";
+import { CLOCK_TOLERANCE_MS, isExpired, isTime, type Clock } from "./clock";
 
-// 특보 확인 유효시간 45분(아키텍처 14.3 N2), 파고 유효시간 90분(B4). '특보 없음' 근거 검증에만 씀(분류 계산 아님)
+// 특보 확인 유효시간 45분(아키텍처 14.3 N2). '특보 없음' 근거 검증에만 씀(분류 계산 아님)
 const WARNING_CONFIRM_VALID_MS = 45 * 60_000;
-const WAVE_HEIGHT_VALID_MS = 90 * 60_000;
 
 // 해변 하나의 화면 상태 (아키텍처 9.1, 결정 기록 11장 B4·B5, BRD-41)
 // 분류(category)는 publisher가 게시한 값을 그대로 씀(G1). 여기서 하는 일은 셋뿐:
@@ -154,16 +153,60 @@ function reasonLabels(
   return first ? [first, ...rest] : [genericLabel(category)];
 }
 
-// 값·관측 시각·단위를 읽을 수 있는 fresh 지표인지(만료는 따로 봄)
+// 지표별 유효시간(아키텍처 14.1·B4, 계약 6.3 expiresAt): 파고·수온·바람 90분, 파주기 60분.
+// 파향은 노션에 기준이 없어 대조하지 않음(웹에서 기준을 만들지 않음)
+const METRIC_VALID_MS: Partial<Record<MetricKey, number>> = {
+  waveHeight: 90 * 60_000,
+  wavePeriod: 60 * 60_000,
+  waterTemp: 90 * 60_000,
+  wind: 90 * 60_000,
+};
+
+// 지금(보정 시각)보다 미래인 시각. 시계 보정과 같은 2분 여유(9.1). 미래 관측·확인은 근거로 인정하지 않음(14.1 판정 규칙)
+function isFuture(iso: string, source: ViewSource): boolean {
+  return Date.parse(iso) > source.nowMs + CLOCK_TOLERANCE_MS;
+}
+
+// 읽을 수 있는 fresh 지표: 값·단위·관측 시각이 맞고, 관측 시각이 미래가 아니며,
+// expiresAt이 관측 시각 + 지표별 유효시간을 넘지 않음(만료 시각만 늘린 응답을 믿지 않음)
 function isReadableFresh(
   metric: Record<string, unknown> | null,
   key: MetricKey,
-): metric is Record<string, unknown> & { value: number; observedAt: string } {
+  source: ViewSource,
+): metric is Record<string, unknown> & {
+  value: number;
+  observedAt: string;
+  expiresAt: string;
+} {
+  if (
+    metric?.state !== "fresh" ||
+    typeof metric.value !== "number" ||
+    !Number.isFinite(metric.value) ||
+    metric.unit !== METRIC_UNITS[key] ||
+    !isTime(metric.observedAt) ||
+    !isTime(metric.expiresAt) ||
+    isFuture(metric.observedAt, source)
+  ) {
+    return false;
+  }
+  const limit = METRIC_VALID_MS[key];
   return (
-    metric?.state === "fresh" &&
-    typeof metric.value === "number" &&
-    Number.isFinite(metric.value) &&
-    isTime(metric.observedAt) &&
+    limit === undefined ||
+    Date.parse(metric.expiresAt) <= Date.parse(metric.observedAt) + limit
+  );
+}
+
+// 측정기 없음(none)의 계약 불변식(6.3): value·observedAt·expiresAt이 null, 단위는 지표와 맞음.
+// 어기면 '가까운 관측 없음'으로 보이지 않게 함
+function isNoneMetric(
+  metric: Record<string, unknown> | null,
+  key: MetricKey,
+): boolean {
+  return (
+    metric?.state === "none" &&
+    metric.value === null &&
+    metric.observedAt === null &&
+    metric.expiresAt === null &&
     metric.unit === METRIC_UNITS[key]
   );
 }
@@ -172,7 +215,10 @@ function isReadableFresh(
 // 파고 fresh(값을 읽을 수 있음) 또는 none. 배포 오류로 하나라도 빠지면 판단불가.
 // validUntil이 근거(특보 확인 + 45분, 파고 관측 + 90분·파고 expiresAt)보다 길어도 판단불가.
 // 그래서 validUntil 안이면 파고도 만료 전임(파고 자체 만료를 deriveBeachView에서 따로 보지 않음)
-function isConfirmedClear(status: Record<string, unknown>): boolean {
+function isConfirmedClear(
+  status: Record<string, unknown>,
+  source: ViewSource,
+): boolean {
   const warning = isRecord(status.warning) ? status.warning : null;
   const observation = isRecord(status.observation) ? status.observation : null;
   const metrics = isRecord(observation?.metrics) ? observation.metrics : null;
@@ -186,6 +232,7 @@ function isConfirmedClear(status: Record<string, unknown>): boolean {
     typeof warning.source !== "string" ||
     warning.source === "" ||
     !isTime(warning.lastConfirmedAt) ||
+    isFuture(warning.lastConfirmedAt, source) ||
     !isTime(status.validUntil)
   ) {
     return false;
@@ -199,13 +246,11 @@ function isConfirmedClear(status: Record<string, unknown>): boolean {
   ) {
     return false;
   }
-  if (waveHeight?.state === "none") return true;
-  // 파고 expiresAt만 늘린 응답도 막도록 관측 시각 + 90분과도 비교
+  if (isNoneMetric(waveHeight, "waveHeight")) return true;
+  // fresh 파고: expiresAt ≤ observedAt + 90분은 isReadableFresh가 확인
   return (
-    isReadableFresh(waveHeight, "waveHeight") &&
-    isTime(waveHeight.expiresAt) &&
-    validUntilMs <= Date.parse(waveHeight.expiresAt) &&
-    validUntilMs <= Date.parse(waveHeight.observedAt) + WAVE_HEIGHT_VALID_MS
+    isReadableFresh(waveHeight, "waveHeight", source) &&
+    validUntilMs <= Date.parse(waveHeight.expiresAt)
   );
 }
 
@@ -215,10 +260,12 @@ function metricView(
   source: ViewSource,
 ): MetricView {
   if (!isRecord(metric)) return { kind: "hidden" };
-  if (metric.state === "none") return { kind: "none" };
+  if (metric.state === "none") {
+    return isNoneMetric(metric, key) ? { kind: "none" } : { kind: "hidden" };
+  }
   if (
-    isReadableFresh(metric, key) &&
-    !isExpired(metric.expiresAt as string | null, source.nowMs, source.clock)
+    isReadableFresh(metric, key, source) &&
+    !isExpired(metric.expiresAt, source.nowMs, source.clock)
   ) {
     return {
       kind: "value",
@@ -227,7 +274,8 @@ function metricView(
       observedAt: metric.observedAt,
     };
   }
-  // delayed, 지표별 expiresAt 지남, 읽을 수 없는 값·시각·단위, 모르는 state → 그 값만 숨김(분류에 영향 없음, B4)
+  // delayed, 지표별 expiresAt 지남, 읽을 수 없는 값·시각·단위, 미래 관측, 만료 시각만 늘린 값, 모르는 state
+  // → 그 값만 숨김(분류에 영향 없음, B4)
   return { kind: "hidden" };
 }
 
@@ -252,7 +300,7 @@ export function deriveBeachView(
     return noData;
   }
   // 근거가 빠지거나 모순된 '특보 없음'은 내보내지 않음. 이용불가는 위험 정보라 그대로 둠
-  if (status.category === "clear" && !isConfirmedClear(status)) {
+  if (status.category === "clear" && !isConfirmedClear(status, source)) {
     return noData;
   }
 
@@ -264,10 +312,12 @@ export function deriveBeachView(
 
   const category = status.category;
   const warning = isRecord(status.warning) ? status.warning : {};
-  // B5에서 붙일 마지막 확인 시각. 읽을 수 없으면 null('확인 시각 모름')
-  const confirmedAt = isTime(warning.lastConfirmedAt)
-    ? warning.lastConfirmedAt
-    : null;
+  // B5에서 붙일 마지막 확인 시각. 읽을 수 없거나 미래 시각이면 null('확인 시각 모름', 14.1 판정 규칙)
+  const confirmedAt =
+    isTime(warning.lastConfirmedAt) &&
+    !isFuture(warning.lastConfirmedAt, source)
+      ? warning.lastConfirmedAt
+      : null;
   const expired = isExpired(
     status.validUntil as string | null,
     source.nowMs,
