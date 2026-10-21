@@ -51,6 +51,8 @@ jobs:
             beaches: # 해변 목록 또는 검사 규칙이 바뀌면
               - *shared
               - 'data/beaches/**'
+              - 'data/beach-coverage.csv'
+              - 'data/beach-meta.json'
               - 'packages/contracts/schemas/**'
               - 'packages/contracts/scripts/**'
 
@@ -137,6 +139,7 @@ jobs:
         env:
           # PR이면 대상 브랜치, main 푸시면 직전 커밋과 비교
           BASE_REF: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || github.event.before }}
+      - run: npm run check:coverage -w packages/contracts # 매트릭스 근거·제외 사유·부가 정보(BRD-59)
 
   # 결과 모음: 건너뜀은 통과, 실패·취소는 실패
   ci-ok:

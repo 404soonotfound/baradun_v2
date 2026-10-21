@@ -13,7 +13,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "make:invalid": "node scripts/make-invalid-examples.mjs",
-    "check:beaches": "node scripts/check-beaches.mjs"
+    "check:beaches": "node scripts/check-beaches.mjs",
+    "check:coverage": "node scripts/check-coverage.mjs"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",
