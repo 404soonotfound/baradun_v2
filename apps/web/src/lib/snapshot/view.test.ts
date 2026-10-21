@@ -159,7 +159,7 @@ describe("만료 경계 (아키텍처 14.1)", () => {
     });
   });
 
-  // 파주기 기준 60분(B4): 값만 숨기고 분류는 그대로
+  // 파주기·파향 기준 60분(B4, 파향은 파주기와 같은 kma_buoy): 값만 숨기고 분류는 그대로
   const periodBound = withStatus("b0001", (status) => {
     status.validUntil = "2026-10-17T06:30:00Z";
     status.warning.lastConfirmedAt = "2026-10-17T05:45:00Z";
@@ -171,26 +171,28 @@ describe("만료 경계 (아키텍처 14.1)", () => {
       nextExpectedAt: "2026-10-17T05:50:00Z",
       expiresAt: "2026-10-17T06:20:00Z",
     };
+    status.observation.metrics.waveDirection = {
+      value: 120,
+      unit: "deg",
+      observedAt: "2026-10-17T05:20:00Z",
+      state: "fresh",
+      nextExpectedAt: "2026-10-17T05:50:00Z",
+      expiresAt: "2026-10-17T06:20:00Z",
+    };
   });
 
   it.each([
     ["59:59", "2026-10-17T06:19:59Z", "value"],
     ["60:00", "2026-10-17T06:20:00Z", "value"],
     ["60:01", "2026-10-17T06:20:01Z", "hidden"],
-  ])(
-    "파주기 %s (%s) → 값 %s, 분류는 특보 없음 그대로",
-    (_, now, wavePeriod) => {
-      const view = deriveBeachView(
-        beach("b0001"),
-        source(now, {}, periodBound),
-      );
-      expect(view).toMatchObject({
-        category: "clear",
-        badge: { kind: "clear" },
-        metrics: { wavePeriod: { kind: wavePeriod } },
-      });
-    },
-  );
+  ])("파주기·파향 %s (%s) → 값 %s, 분류는 특보 없음 그대로", (_, now, kind) => {
+    const view = deriveBeachView(beach("b0001"), source(now, {}, periodBound));
+    expect(view).toMatchObject({
+      category: "clear",
+      badge: { kind: "clear" },
+      metrics: { wavePeriod: { kind }, waveDirection: { kind } },
+    });
+  });
 
   it("수온·바람 delayed는 값만 숨김(B4)", () => {
     const statuses = withStatus("b0001", (status) => {
@@ -911,6 +913,34 @@ describe("지표 expiresAt을 관측 시각 + 유효시간과 대조 (B4)", () =
         };
       },
       "wavePeriod",
+    ],
+    [
+      "파향: 어제 관측인데 만료는 내일",
+      (s: BeachStatus) => {
+        s.observation.metrics.waveDirection = {
+          value: 120,
+          unit: "deg",
+          observedAt: "2026-10-16T05:20:00Z",
+          state: "fresh",
+          nextExpectedAt: null,
+          expiresAt: "2026-10-18T05:20:00Z",
+        };
+      },
+      "waveDirection",
+    ],
+    [
+      "파향: 관측 + 60분 1초",
+      (s: BeachStatus) => {
+        s.observation.metrics.waveDirection = {
+          value: 120,
+          unit: "deg",
+          observedAt: "2026-10-17T05:20:00Z",
+          state: "fresh",
+          nextExpectedAt: null,
+          expiresAt: "2026-10-17T06:20:01Z",
+        };
+      },
+      "waveDirection",
     ],
     [
       "수온: 관측 + 90분 1초",

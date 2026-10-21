@@ -153,11 +153,12 @@ function reasonLabels(
   return first ? [first, ...rest] : [genericLabel(category)];
 }
 
-// 지표별 유효시간(아키텍처 14.1·B4, 계약 6.3 expiresAt): 파고·수온·바람 90분, 파주기 60분.
-// 파향은 노션에 기준이 없어 대조하지 않음(웹에서 기준을 만들지 않음)
-const METRIC_VALID_MS: Partial<Record<MetricKey, number>> = {
+// 지표별 유효시간(아키텍처 14.1 N1·결정 기록 B4, 계약 6.3 expiresAt): 파고·수온·바람 90분,
+// 파주기·파향 60분(파향은 파주기와 같은 kma_buoy 출처, 10/21 노션 반영)
+const METRIC_VALID_MS: Record<MetricKey, number> = {
   waveHeight: 90 * 60_000,
   wavePeriod: 60 * 60_000,
+  waveDirection: 60 * 60_000,
   waterTemp: 90 * 60_000,
   wind: 90 * 60_000,
 };
@@ -189,10 +190,9 @@ function isReadableFresh(
   ) {
     return false;
   }
-  const limit = METRIC_VALID_MS[key];
   return (
-    limit === undefined ||
-    Date.parse(metric.expiresAt) <= Date.parse(metric.observedAt) + limit
+    Date.parse(metric.expiresAt) <=
+    Date.parse(metric.observedAt) + METRIC_VALID_MS[key]
   );
 }
 
