@@ -20,7 +20,8 @@ export type SnapshotPath = string;
  * This interface was referenced by `Contract`'s JSON-Schema
  * via the `definition` "Beach".
  */
-export type Beach = Beach1;
+export type Beach = Beach1 & Beach2;
+export type Beach1 = BeachSite | DivePoint;
 /**
  * 내부 id. 예: b0001
  *
@@ -149,16 +150,58 @@ export interface Maintenance {
 export interface BeachesFile {
   beaches: Beach[];
 }
-export interface Beach1 {
+export interface BeachSite {
+  /**
+   * 해변. beach = 해수부 지정 해수욕장, undesignated_beach = 지정 해수욕장이 아닌 해변(결정 기록 11장 10/21, BRD-73).
+   */
+  kind: 'beach' | 'undesignated_beach';
+  warningZones: WarningZones;
+}
+/**
+ * 해변의 특보구역. 앞바다(풍랑)·시군 육상(강풍) 모두 필수.
+ *
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "WarningZones".
+ */
+export interface WarningZones {
+  /**
+   * 앞바다 특보구역(풍랑).
+   */
+  sea: string;
+  /**
+   * 시군 육상 특보구역(강풍).
+   */
+  land: string;
+}
+export interface DivePoint {
+  /**
+   * 스쿠버 포인트(바다 위). 육상 구역 생략 가능(결정 기록 11장 10/21, BRD-73).
+   */
+  kind: 'dive_point';
+  warningZones: SeaWarningZones;
+}
+/**
+ * 스쿠버 포인트의 특보구역. 바다 위라 육상 구역은 생략 가능.
+ *
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "SeaWarningZones".
+ */
+export interface SeaWarningZones {
+  /**
+   * 앞바다 특보구역(풍랑).
+   */
+  sea: string;
+  /**
+   * 시군 육상 특보구역(강풍). 생략 가능.
+   */
+  land?: string;
+}
+export interface Beach2 {
   id: BeachId;
   /**
    * 주소용. 한 번 정하면 바꾸지 않음(BRD-45).
    */
   slug: string;
-  /**
-   * 장소 종류. beach = 해수부 지정 해수욕장, undesignated_beach = 지정 해수욕장이 아닌 해변, dive_point = 스쿠버 포인트(결정 기록 11장 10/21, BRD-73).
-   */
-  kind: 'beach' | 'undesignated_beach' | 'dive_point';
   name: LocalizedText;
   region: {
     sido: LocalizedText;
@@ -182,16 +225,6 @@ export interface Beach1 {
    * 노출 끔. true면 목록에서 숨기고 상세는 404(BRD-45).
    */
   hidden: boolean;
-  warningZones: {
-    /**
-     * 앞바다 특보구역(풍랑).
-     */
-    sea: string;
-    /**
-     * 시군 육상 특보구역(강풍). 바다 위 스쿠버 포인트(dive_point)만 생략 가능.
-     */
-    land?: string;
-  };
   stations: {
     waveHeight: StationRef;
     wavePeriod: StationRef;

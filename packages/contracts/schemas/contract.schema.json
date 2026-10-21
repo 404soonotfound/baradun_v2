@@ -109,7 +109,7 @@
     "Beach": {
       "title": "Beach",
       "type": "object",
-      "additionalProperties": false,
+      "unevaluatedProperties": false,
       "required": [
         "id",
         "slug",
@@ -131,10 +131,6 @@
           "type": "string",
           "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
           "description": "주소용. 한 번 정하면 바꾸지 않음(BRD-45)."
-        },
-        "kind": {
-          "enum": ["beach", "undesignated_beach", "dive_point"],
-          "description": "장소 종류. beach = 해수부 지정 해수욕장, undesignated_beach = 지정 해수욕장이 아닌 해변, dive_point = 스쿠버 포인트(결정 기록 11장 10/21, BRD-73)."
         },
         "name": { "$ref": "#/$defs/LocalizedText" },
         "region": {
@@ -169,23 +165,6 @@
         "hidden": {
           "type": "boolean",
           "description": "노출 끔. true면 목록에서 숨기고 상세는 404(BRD-45)."
-        },
-        "warningZones": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["sea"],
-          "properties": {
-            "sea": {
-              "type": "string",
-              "pattern": "^S1[0-9]{6}$",
-              "description": "앞바다 특보구역(풍랑)."
-            },
-            "land": {
-              "type": "string",
-              "pattern": "^L1[0-9]{6}$",
-              "description": "시군 육상 특보구역(강풍). 바다 위 스쿠버 포인트(dive_point)만 생략 가능."
-            }
-          }
         },
         "stations": {
           "type": "object",
@@ -248,12 +227,56 @@
           ]
         }
       },
-      "allOf": [
+      "oneOf": [
         {
-          "if": { "not": { "properties": { "kind": { "const": "dive_point" } } } },
-          "then": { "properties": { "warningZones": { "required": ["sea", "land"] } } }
+          "title": "BeachSite",
+          "type": "object",
+          "required": ["kind", "warningZones"],
+          "properties": {
+            "kind": {
+              "enum": ["beach", "undesignated_beach"],
+              "description": "해변. beach = 해수부 지정 해수욕장, undesignated_beach = 지정 해수욕장이 아닌 해변(결정 기록 11장 10/21, BRD-73)."
+            },
+            "warningZones": { "$ref": "#/$defs/WarningZones" }
+          }
+        },
+        {
+          "title": "DivePoint",
+          "type": "object",
+          "required": ["kind", "warningZones"],
+          "properties": {
+            "kind": {
+              "const": "dive_point",
+              "description": "스쿠버 포인트(바다 위). 육상 구역 생략 가능(결정 기록 11장 10/21, BRD-73)."
+            },
+            "warningZones": { "$ref": "#/$defs/SeaWarningZones" }
+          }
         }
       ]
+    },
+
+    "WarningZones": {
+      "title": "WarningZones",
+      "description": "해변의 특보구역. 앞바다(풍랑)·시군 육상(강풍) 모두 필수.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sea", "land"],
+      "properties": {
+        "sea": { "type": "string", "pattern": "^S1[0-9]{6}$", "description": "앞바다 특보구역(풍랑)." },
+        "land": { "type": "string", "pattern": "^L1[0-9]{6}$", "description": "시군 육상 특보구역(강풍)." }
+      }
+    },
+
+    "SeaWarningZones": {
+      "title": "SeaWarningZones",
+      "description": "스쿠버 포인트의 특보구역. 바다 위라 육상 구역은 생략 가능.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sea"],
+      "properties": {
+        "sea": { "type": "string", "pattern": "^S1[0-9]{6}$", "description": "앞바다 특보구역(풍랑)." },
+        "land": { "type": "string", "pattern": "^L1[0-9]{6}$", "description": "시군 육상 특보구역(강풍). 생략 가능." }
+      }
     },
 
     "BeachStatus": {

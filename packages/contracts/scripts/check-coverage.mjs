@@ -44,28 +44,38 @@ if (!existsSync(matrixPath)) fail("data/beach-coverage.csv 없음");
 if (!existsSync(metaPath)) fail("data/beach-meta.json 없음");
 const matrix = existsSync(matrixPath) ? parseCsv(readFileSync(matrixPath, "utf8")) : [];
 const meta = existsSync(metaPath) ? JSON.parse(readFileSync(metaPath, "utf8")) : { beaches: {} };
-const byId = new Map(matrix.filter((r) => r.id).map((r) => [r.id, r]));
+// 같은 id가 두 행 이상이면 근거가 모호하므로 실패(마지막 행만 남기지 않음)
+const idCount = new Map();
+for (const r of matrix) if (r.id) idCount.set(r.id, (idCount.get(r.id) ?? 0) + 1);
+for (const [id, n] of idCount) if (n > 1) fail(`${id}: 매트릭스에 ${n}행(중복)`);
+const byId = new Map(matrix.filter((r) => r.id && idCount.get(r.id) === 1).map((r) => [r.id, r]));
+// 공백뿐인 칸은 빈 칸으로 봄
+const filled = (v) => typeof v === "string" && v.trim() !== "";
 
 // 1) 공개 해변: 매트릭스 행이 있고 근거 칸이 채워져 있어야 함
-const REQUIRED = ["sea_zone", "sea_basis", "sea_rule_url", "sea_checked_at_kst", "land_zone", "land_basis", "land_rule_url", "land_checked_at_kst", "coords_source", "station_basis", "response_check"];
+const REQUIRED = ["sea_zone", "sea_basis", "sea_rule_url", "sea_checked_at_kst", "coords_source", "station_basis", "response_check"];
+// 육상 구역 근거: 스쿠버 포인트(dive_point)는 바다 위라 생략 가능(계약 SeaWarningZones), 그 밖은 필수
+const LAND_REQUIRED = ["land_zone", "land_basis", "land_rule_url", "land_checked_at_kst"];
 const METRICS = ["waveHeight", "wavePeriod", "waveDirection", "waterTemp", "wind"];
 for (const b of beaches) {
   const r = byId.get(b.id);
   if (!r) {
-    fail(`${b.id}: 매트릭스 행 없음`);
+    if (!idCount.has(b.id)) fail(`${b.id}: 매트릭스 행 없음`);
     continue;
   }
   if (r.stage !== "SOURCE_CANDIDATE") fail(`${b.id}: 매트릭스 단계가 공개 대상 아님(${r.stage})`);
-  for (const c of REQUIRED) if (!r[c]) fail(`${b.id}: 매트릭스 ${c} 비어 있음`);
-  if (r.sea_status !== "검증" || r.land_status !== "검증") fail(`${b.id}: 구역 근거 미검증(S1 ${r.sea_status}, L1 ${r.land_status})`);
-  if (r.exclusion) fail(`${b.id}: 제외 사유가 있는데 공개됨`);
+  const needLand = b.kind !== "dive_point" || b.warningZones.land !== undefined;
+  for (const c of [...REQUIRED, ...(needLand ? LAND_REQUIRED : [])]) if (!filled(r[c])) fail(`${b.id}: 매트릭스 ${c} 비어 있음`);
+  if (r.sea_status !== "검증") fail(`${b.id}: S1 근거 미검증(${r.sea_status})`);
+  if (needLand && r.land_status !== "검증") fail(`${b.id}: L1 근거 미검증(${r.land_status})`);
+  if (filled(r.exclusion)) fail(`${b.id}: 제외 사유가 있는데 공개됨`);
   if (b.slug !== r.slug) fail(`${b.id}: slug 불일치(${b.slug} ≠ ${r.slug})`);
   if (b.warningZones.sea !== r.sea_zone || (b.warningZones.land ?? "") !== r.land_zone) fail(`${b.id}: 특보구역이 매트릭스 근거와 다름`);
   for (const m of METRICS) {
     const s = b.stations[m];
     const cell = r[`st_${m}`] ?? "";
     if (s && !cell.startsWith(`${s.id} `)) fail(`${b.id} ${m}: 관측소 ${s.id}가 매트릭스 근거(${cell})와 다름`);
-    if (!s && cell !== "null(가까운 관측 없음)") fail(`${b.id} ${m}: null인데 '가까운 관측 없음' 근거 없음(${cell})`);
+    if (!s && cell.trim() !== "null(가까운 관측 없음)") fail(`${b.id} ${m}: null인데 '가까운 관측 없음' 근거 없음(${cell})`);
   }
   const mt = meta.beaches?.[b.id];
   if (!mt) fail(`${b.id}: beach-meta.json 항목 없음`);
@@ -79,7 +89,7 @@ const ids = new Set(beaches.map((b) => b.id));
 for (const r of matrix) {
   if (r.id && ids.has(r.id)) continue;
   if (!["보류", "자동 제외"].includes(r.stage)) fail(`${r.id || r.source_name}: 공개 안 된 행의 단계가 보류·자동 제외 아님(${r.stage})`);
-  if (!r.exclusion) fail(`${r.id || r.source_name}: 보류·제외 사유 없음`);
+  if (!filled(r.exclusion)) fail(`${r.id || r.source_name}: 보류·제외 사유 없음`);
 }
 // 3) meta에 없는 해변 id
 for (const id of Object.keys(meta.beaches ?? {})) if (!ids.has(id)) fail(`beach-meta.json: 없는 해변 ${id}`);
