@@ -68,7 +68,12 @@ export function Banner({
             {children}
             {/* 설명과 행동 사이 가운뎃점. 둘 다 있을 때만 */}
             {children && action ? " · " : null}
-            {action}
+            {/* 행동은 글줄 안에 두되 누르는 영역은 44px: 위아래 음수 여백으로 줄 높이는 그대로 */}
+            {action && (
+              <span className="[&>*]:-my-3.5 [&>*]:inline-flex [&>*]:min-h-touch [&>*]:items-center [&>*]:align-middle">
+                {action}
+              </span>
+            )}
           </span>
         )}
       </span>

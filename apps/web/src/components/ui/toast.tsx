@@ -104,7 +104,8 @@ export function Toast({
             <button
               type="button"
               onClick={message.action.onClick}
-              className="-my-2 ml-1 min-h-touch shrink-0 px-2 font-bold underline"
+              // 반전 바탕 위라 포커스 선도 반전색으로 안쪽에 그림(다크에서 파란 선이 밝은 토스트와 맞닿아 흐려지지 않게)
+              className="-my-2 ml-1 min-h-touch shrink-0 px-2 font-bold underline focus-visible:outline-bg-surface focus-visible:-outline-offset-2"
             >
               {message.action.label}
             </button>
