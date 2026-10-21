@@ -1,0 +1,41 @@
+{
+  "id": "b0037",
+  "slug": "machajin",
+  "kind": "beach",
+  "name": {
+    "ko": "마차진해수욕장",
+    "en": "Machajin Beach"
+  },
+  "region": {
+    "sido": {
+      "ko": "강원",
+      "en": "Gangwon"
+    },
+    "sigungu": {
+      "ko": "고성군",
+      "en": "Goseong"
+    }
+  },
+  "coast": "east",
+  "coords": {
+    "lat": 38.510895,
+    "lng": 128.41981
+  },
+  "activities": [
+    "swimming"
+  ],
+  "hidden": false,
+  "warningZones": {
+    "sea": "S1151100",
+    "land": "L1022210"
+  },
+  "stations": {
+    "waveHeight": null,
+    "wavePeriod": null,
+    "waveDirection": null,
+    "waterTemp": null,
+    "wind": null
+  },
+  "photo": null,
+  "cctv": null
+}

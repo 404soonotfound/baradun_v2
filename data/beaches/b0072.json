@@ -1,0 +1,55 @@
+{
+  "id": "b0072",
+  "slug": "naksan",
+  "kind": "beach",
+  "name": {
+    "ko": "낙산해수욕장",
+    "en": "Naksan Beach"
+  },
+  "region": {
+    "sido": {
+      "ko": "강원",
+      "en": "Gangwon"
+    },
+    "sigungu": {
+      "ko": "양양군",
+      "en": "Yangyang"
+    }
+  },
+  "coast": "east",
+  "coords": {
+    "lat": 38.114572,
+    "lng": 128.636915
+  },
+  "activities": [
+    "swimming"
+  ],
+  "hidden": false,
+  "warningZones": {
+    "sea": "S1151100",
+    "land": "L1022320"
+  },
+  "stations": {
+    "waveHeight": {
+      "id": "22471",
+      "name": {
+        "ko": "토성 파고부이",
+        "en": "Toseong wave buoy"
+      },
+      "distanceKm": 18.9
+    },
+    "wavePeriod": null,
+    "waveDirection": null,
+    "waterTemp": {
+      "id": "22471",
+      "name": {
+        "ko": "토성 파고부이",
+        "en": "Toseong wave buoy"
+      },
+      "distanceKm": 18.9
+    },
+    "wind": null
+  },
+  "photo": null,
+  "cctv": null
+}

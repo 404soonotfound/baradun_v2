@@ -1,0 +1,41 @@
+{
+  "id": "b0177",
+  "slug": "tommeori",
+  "kind": "beach",
+  "name": {
+    "ko": "톱머리해수욕장",
+    "en": "Tommeori Beach"
+  },
+  "region": {
+    "sido": {
+      "ko": "전남",
+      "en": "Jeonnam"
+    },
+    "sigungu": {
+      "ko": "무안군",
+      "en": "Muan"
+    }
+  },
+  "coast": "west",
+  "coords": {
+    "lat": 34.968184,
+    "lng": 126.386218
+  },
+  "activities": [
+    "swimming"
+  ],
+  "hidden": false,
+  "warningZones": {
+    "sea": "S1231400",
+    "land": "L1053410"
+  },
+  "stations": {
+    "waveHeight": null,
+    "wavePeriod": null,
+    "waveDirection": null,
+    "waterTemp": null,
+    "wind": null
+  },
+  "photo": null,
+  "cctv": null
+}

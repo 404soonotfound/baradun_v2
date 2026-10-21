@@ -1,0 +1,41 @@
+{
+  "id": "b0169",
+  "slug": "deokheung",
+  "kind": "beach",
+  "name": {
+    "ko": "덕흥해수욕장",
+    "en": "Deokheung Beach"
+  },
+  "region": {
+    "sido": {
+      "ko": "전남",
+      "en": "Jeonnam"
+    },
+    "sigungu": {
+      "ko": "고흥군",
+      "en": "Goheung"
+    }
+  },
+  "coast": "south",
+  "coords": {
+    "lat": 34.527449,
+    "lng": 127.458821
+  },
+  "activities": [
+    "swimming"
+  ],
+  "hidden": false,
+  "warningZones": {
+    "sea": "S1321200",
+    "land": "L1053120"
+  },
+  "stations": {
+    "waveHeight": null,
+    "wavePeriod": null,
+    "waveDirection": null,
+    "waterTemp": null,
+    "wind": null
+  },
+  "photo": null,
+  "cctv": null
+}

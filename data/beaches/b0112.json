@@ -1,0 +1,76 @@
+{
+  "id": "b0112",
+  "slug": "janggyeong-ri",
+  "kind": "beach",
+  "name": {
+    "ko": "장경리해수욕장",
+    "en": "Janggyeong-ri Beach"
+  },
+  "region": {
+    "sido": {
+      "ko": "인천",
+      "en": "Incheon"
+    },
+    "sigungu": {
+      "ko": "옹진군",
+      "en": "Ongjin"
+    }
+  },
+  "coast": "west",
+  "coords": {
+    "lat": 37.274236,
+    "lng": 126.451235
+  },
+  "activities": [
+    "swimming"
+  ],
+  "hidden": false,
+  "warningZones": {
+    "sea": "S1251200",
+    "land": "L1013600"
+  },
+  "stations": {
+    "waveHeight": {
+      "id": "22303",
+      "name": {
+        "ko": "풍도 해양기상부이",
+        "en": "Pungdo marine buoy"
+      },
+      "distanceKm": 13.4
+    },
+    "wavePeriod": {
+      "id": "22303",
+      "name": {
+        "ko": "풍도 해양기상부이",
+        "en": "Pungdo marine buoy"
+      },
+      "distanceKm": 13.4
+    },
+    "waveDirection": {
+      "id": "22303",
+      "name": {
+        "ko": "풍도 해양기상부이",
+        "en": "Pungdo marine buoy"
+      },
+      "distanceKm": 13.4
+    },
+    "waterTemp": {
+      "id": "22303",
+      "name": {
+        "ko": "풍도 해양기상부이",
+        "en": "Pungdo marine buoy"
+      },
+      "distanceKm": 13.4
+    },
+    "wind": {
+      "id": "22303",
+      "name": {
+        "ko": "풍도 해양기상부이",
+        "en": "Pungdo marine buoy"
+      },
+      "distanceKm": 13.4
+    }
+  },
+  "photo": null,
+  "cctv": null
+}

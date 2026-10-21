@@ -1,0 +1,41 @@
+{
+  "id": "b0051",
+  "slug": "eodal",
+  "kind": "beach",
+  "name": {
+    "ko": "어달해수욕장",
+    "en": "Eodal Beach"
+  },
+  "region": {
+    "sido": {
+      "ko": "강원",
+      "en": "Gangwon"
+    },
+    "sigungu": {
+      "ko": "동해시",
+      "en": "Donghae"
+    }
+  },
+  "coast": "east",
+  "coords": {
+    "lat": 37.567905,
+    "lng": 129.118368
+  },
+  "activities": [
+    "swimming"
+  ],
+  "hidden": false,
+  "warningZones": {
+    "sea": "S1151300",
+    "land": "L1021910"
+  },
+  "stations": {
+    "waveHeight": null,
+    "wavePeriod": null,
+    "waveDirection": null,
+    "waterTemp": null,
+    "wind": null
+  },
+  "photo": null,
+  "cctv": null
+}

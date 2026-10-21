@@ -1,0 +1,76 @@
+{
+  "id": "b0042",
+  "slug": "ayajin",
+  "kind": "beach",
+  "name": {
+    "ko": "아야진해수욕장",
+    "en": "Ayajin Beach"
+  },
+  "region": {
+    "sido": {
+      "ko": "강원",
+      "en": "Gangwon"
+    },
+    "sigungu": {
+      "ko": "고성군",
+      "en": "Goseong"
+    }
+  },
+  "coast": "east",
+  "coords": {
+    "lat": 38.276431,
+    "lng": 128.553295
+  },
+  "activities": [
+    "swimming"
+  ],
+  "hidden": false,
+  "warningZones": {
+    "sea": "S1151100",
+    "land": "L1022210"
+  },
+  "stations": {
+    "waveHeight": {
+      "id": "22471",
+      "name": {
+        "ko": "토성 파고부이",
+        "en": "Toseong wave buoy"
+      },
+      "distanceKm": 1.9
+    },
+    "wavePeriod": {
+      "id": "22310",
+      "name": {
+        "ko": "고성 해양기상부이",
+        "en": "Goseong marine buoy"
+      },
+      "distanceKm": 8.8
+    },
+    "waveDirection": {
+      "id": "22310",
+      "name": {
+        "ko": "고성 해양기상부이",
+        "en": "Goseong marine buoy"
+      },
+      "distanceKm": 8.8
+    },
+    "waterTemp": {
+      "id": "22471",
+      "name": {
+        "ko": "토성 파고부이",
+        "en": "Toseong wave buoy"
+      },
+      "distanceKm": 1.9
+    },
+    "wind": {
+      "id": "22310",
+      "name": {
+        "ko": "고성 해양기상부이",
+        "en": "Goseong marine buoy"
+      },
+      "distanceKm": 8.8
+    }
+  },
+  "photo": null,
+  "cctv": null
+}

@@ -1,0 +1,48 @@
+{
+  "id": "b0230",
+  "slug": "yeongdeok-daejin",
+  "kind": "beach",
+  "name": {
+    "ko": "대진해수욕장",
+    "en": "Daejin Beach"
+  },
+  "region": {
+    "sido": {
+      "ko": "경북",
+      "en": "Gyeongbuk"
+    },
+    "sigungu": {
+      "ko": "영덕군",
+      "en": "Yeongdeok"
+    }
+  },
+  "coast": "east",
+  "coords": {
+    "lat": 36.565298,
+    "lng": 129.426675
+  },
+  "activities": [
+    "swimming"
+  ],
+  "hidden": false,
+  "warningZones": {
+    "sea": "S1131300",
+    "land": "L1072200"
+  },
+  "stations": {
+    "waveHeight": null,
+    "wavePeriod": null,
+    "waveDirection": null,
+    "waterTemp": {
+      "id": "22465",
+      "name": {
+        "ko": "후포 파고부이",
+        "en": "Hupo wave buoy"
+      },
+      "distanceKm": 18
+    },
+    "wind": null
+  },
+  "photo": null,
+  "cctv": null
+}

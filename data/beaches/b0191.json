@@ -1,0 +1,76 @@
+{
+  "id": "b0191",
+  "slug": "hateu",
+  "kind": "beach",
+  "name": {
+    "ko": "하트해수욕장",
+    "en": "Hateu Beach"
+  },
+  "region": {
+    "sido": {
+      "ko": "전남",
+      "en": "Jeonnam"
+    },
+    "sigungu": {
+      "ko": "신안군",
+      "en": "Sinan"
+    }
+  },
+  "coast": "west",
+  "coords": {
+    "lat": 34.751349,
+    "lng": 125.894686
+  },
+  "activities": [
+    "swimming"
+  ],
+  "hidden": false,
+  "warningZones": {
+    "sea": "S1231400",
+    "land": "L1052200"
+  },
+  "stations": {
+    "waveHeight": {
+      "id": "22102",
+      "name": {
+        "ko": "칠발도 해양기상부이",
+        "en": "Chilbaldo marine buoy"
+      },
+      "distanceKm": 11.7
+    },
+    "wavePeriod": {
+      "id": "22102",
+      "name": {
+        "ko": "칠발도 해양기상부이",
+        "en": "Chilbaldo marine buoy"
+      },
+      "distanceKm": 11.7
+    },
+    "waveDirection": {
+      "id": "22102",
+      "name": {
+        "ko": "칠발도 해양기상부이",
+        "en": "Chilbaldo marine buoy"
+      },
+      "distanceKm": 11.7
+    },
+    "waterTemp": {
+      "id": "22102",
+      "name": {
+        "ko": "칠발도 해양기상부이",
+        "en": "Chilbaldo marine buoy"
+      },
+      "distanceKm": 11.7
+    },
+    "wind": {
+      "id": "22102",
+      "name": {
+        "ko": "칠발도 해양기상부이",
+        "en": "Chilbaldo marine buoy"
+      },
+      "distanceKm": 11.7
+    }
+  },
+  "photo": null,
+  "cctv": null
+}

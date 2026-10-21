@@ -1,0 +1,55 @@
+{
+  "id": "b0264",
+  "slug": "dugok-wolpo",
+  "kind": "beach",
+  "name": {
+    "ko": "두곡월포해수욕장",
+    "en": "Dugok Wolpo Beach"
+  },
+  "region": {
+    "sido": {
+      "ko": "경남",
+      "en": "Gyeongnam"
+    },
+    "sigungu": {
+      "ko": "남해군",
+      "en": "Namhae"
+    }
+  },
+  "coast": "south",
+  "coords": {
+    "lat": 34.768279,
+    "lng": 127.907466
+  },
+  "activities": [
+    "swimming"
+  ],
+  "hidden": false,
+  "warningZones": {
+    "sea": "S1311200",
+    "land": "L1082400"
+  },
+  "stations": {
+    "waveHeight": {
+      "id": "22498",
+      "name": {
+        "ko": "남해 파고부이",
+        "en": "Namhae wave buoy"
+      },
+      "distanceKm": 11.2
+    },
+    "wavePeriod": null,
+    "waveDirection": null,
+    "waterTemp": {
+      "id": "22498",
+      "name": {
+        "ko": "남해 파고부이",
+        "en": "Namhae wave buoy"
+      },
+      "distanceKm": 11.2
+    },
+    "wind": null
+  },
+  "photo": null,
+  "cctv": null
+}

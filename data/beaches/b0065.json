@@ -1,0 +1,76 @@
+{
+  "id": "b0065",
+  "slug": "jeungsan",
+  "kind": "beach",
+  "name": {
+    "ko": "증산해수욕장",
+    "en": "Jeungsan Beach"
+  },
+  "region": {
+    "sido": {
+      "ko": "강원",
+      "en": "Gangwon"
+    },
+    "sigungu": {
+      "ko": "삼척시",
+      "en": "Samcheok"
+    }
+  },
+  "coast": "east",
+  "coords": {
+    "lat": 37.474761,
+    "lng": 129.161619
+  },
+  "activities": [
+    "swimming"
+  ],
+  "hidden": false,
+  "warningZones": {
+    "sea": "S1151300",
+    "land": "L1022010"
+  },
+  "stations": {
+    "waveHeight": {
+      "id": "22479",
+      "name": {
+        "ko": "맹방 파고부이",
+        "en": "Maengbang wave buoy"
+      },
+      "distanceKm": 10.1
+    },
+    "wavePeriod": {
+      "id": "22311",
+      "name": {
+        "ko": "삼척 해양기상부이",
+        "en": "Samcheok marine buoy"
+      },
+      "distanceKm": 13.9
+    },
+    "waveDirection": {
+      "id": "22311",
+      "name": {
+        "ko": "삼척 해양기상부이",
+        "en": "Samcheok marine buoy"
+      },
+      "distanceKm": 13.9
+    },
+    "waterTemp": {
+      "id": "22479",
+      "name": {
+        "ko": "맹방 파고부이",
+        "en": "Maengbang wave buoy"
+      },
+      "distanceKm": 10.1
+    },
+    "wind": {
+      "id": "22311",
+      "name": {
+        "ko": "삼척 해양기상부이",
+        "en": "Samcheok marine buoy"
+      },
+      "distanceKm": 13.9
+    }
+  },
+  "photo": null,
+  "cctv": null
+}

@@ -1,0 +1,41 @@
+{
+  "id": "b0146",
+  "slug": "sindu-ri",
+  "kind": "beach",
+  "name": {
+    "ko": "신두리해수욕장",
+    "en": "Sindu-ri Beach"
+  },
+  "region": {
+    "sido": {
+      "ko": "충남",
+      "en": "Chungnam"
+    },
+    "sigungu": {
+      "ko": "태안군",
+      "en": "Taean"
+    }
+  },
+  "coast": "west",
+  "coords": {
+    "lat": 36.837418,
+    "lng": 126.184719
+  },
+  "activities": [
+    "swimming"
+  ],
+  "hidden": false,
+  "warningZones": {
+    "sea": "S1251300",
+    "land": "L1031100"
+  },
+  "stations": {
+    "waveHeight": null,
+    "wavePeriod": null,
+    "waveDirection": null,
+    "waterTemp": null,
+    "wind": null
+  },
+  "photo": null,
+  "cctv": null
+}

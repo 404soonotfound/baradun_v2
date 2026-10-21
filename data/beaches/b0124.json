@@ -1,0 +1,55 @@
+{
+  "id": "b0124",
+  "slug": "daecheon",
+  "kind": "beach",
+  "name": {
+    "ko": "대천해수욕장",
+    "en": "Daecheon Beach"
+  },
+  "region": {
+    "sido": {
+      "ko": "충남",
+      "en": "Chungnam"
+    },
+    "sigungu": {
+      "ko": "보령시",
+      "en": "Boryeong"
+    }
+  },
+  "coast": "west",
+  "coords": {
+    "lat": 36.310454,
+    "lng": 126.513182
+  },
+  "activities": [
+    "swimming"
+  ],
+  "hidden": false,
+  "warningZones": {
+    "sea": "S1251400",
+    "land": "L1031910"
+  },
+  "stations": {
+    "waveHeight": {
+      "id": "22445",
+      "name": {
+        "ko": "삽시도 파고부이",
+        "en": "Sapsido wave buoy"
+      },
+      "distanceKm": 17.1
+    },
+    "wavePeriod": null,
+    "waveDirection": null,
+    "waterTemp": {
+      "id": "22445",
+      "name": {
+        "ko": "삽시도 파고부이",
+        "en": "Sapsido wave buoy"
+      },
+      "distanceKm": 17.1
+    },
+    "wind": null
+  },
+  "photo": null,
+  "cctv": null
+}

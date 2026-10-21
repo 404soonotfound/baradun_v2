@@ -1,0 +1,41 @@
+{
+  "id": "b0194",
+  "slug": "manseong-ri-geomeunmorae",
+  "kind": "beach",
+  "name": {
+    "ko": "만성리검은모래해수욕장",
+    "en": "Manseong-ri Geomeunmorae Beach"
+  },
+  "region": {
+    "sido": {
+      "ko": "전남",
+      "en": "Jeonnam"
+    },
+    "sigungu": {
+      "ko": "여수시",
+      "en": "Yeosu"
+    }
+  },
+  "coast": "south",
+  "coords": {
+    "lat": 34.779548,
+    "lng": 127.745714
+  },
+  "activities": [
+    "swimming"
+  ],
+  "hidden": false,
+  "warningZones": {
+    "sea": "S1321200",
+    "land": "L1051000"
+  },
+  "stations": {
+    "waveHeight": null,
+    "wavePeriod": null,
+    "waveDirection": null,
+    "waterTemp": null,
+    "wind": null
+  },
+  "photo": null,
+  "cctv": null
+}

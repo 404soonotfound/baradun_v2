@@ -1,0 +1,55 @@
+{
+  "id": "b0274",
+  "slug": "pyoseon-haebichi",
+  "kind": "beach",
+  "name": {
+    "ko": "표선해비치",
+    "en": "Pyoseon Haebichi Beach"
+  },
+  "region": {
+    "sido": {
+      "ko": "제주",
+      "en": "Jeju"
+    },
+    "sigungu": {
+      "ko": "서귀포시",
+      "en": "Seogwipo"
+    }
+  },
+  "coast": "jeju",
+  "coords": {
+    "lat": 33.327998,
+    "lng": 126.837355
+  },
+  "activities": [
+    "swimming"
+  ],
+  "hidden": false,
+  "warningZones": {
+    "sea": "S1323200",
+    "land": "L1091430"
+  },
+  "stations": {
+    "waveHeight": {
+      "id": "22495",
+      "name": {
+        "ko": "신산 파고부이",
+        "en": "Sinsan wave buoy"
+      },
+      "distanceKm": 8.4
+    },
+    "wavePeriod": null,
+    "waveDirection": null,
+    "waterTemp": {
+      "id": "22495",
+      "name": {
+        "ko": "신산 파고부이",
+        "en": "Sinsan wave buoy"
+      },
+      "distanceKm": 8.4
+    },
+    "wind": null
+  },
+  "photo": null,
+  "cctv": null
+}

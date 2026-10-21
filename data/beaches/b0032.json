@@ -1,0 +1,76 @@
+{
+  "id": "b0032",
+  "slug": "gonghyeon-1-ri",
+  "kind": "beach",
+  "name": {
+    "ko": "공현1리해수욕장",
+    "en": "Gonghyeon 1-ri Beach"
+  },
+  "region": {
+    "sido": {
+      "ko": "강원",
+      "en": "Gangwon"
+    },
+    "sigungu": {
+      "ko": "고성군",
+      "en": "Goseong"
+    }
+  },
+  "coast": "east",
+  "coords": {
+    "lat": 38.359156,
+    "lng": 128.507976
+  },
+  "activities": [
+    "swimming"
+  ],
+  "hidden": false,
+  "warningZones": {
+    "sea": "S1151100",
+    "land": "L1022210"
+  },
+  "stations": {
+    "waveHeight": {
+      "id": "22471",
+      "name": {
+        "ko": "토성 파고부이",
+        "en": "Toseong wave buoy"
+      },
+      "distanceKm": 10.8
+    },
+    "wavePeriod": {
+      "id": "22310",
+      "name": {
+        "ko": "고성 해양기상부이",
+        "en": "Goseong marine buoy"
+      },
+      "distanceKm": 12.4
+    },
+    "waveDirection": {
+      "id": "22310",
+      "name": {
+        "ko": "고성 해양기상부이",
+        "en": "Goseong marine buoy"
+      },
+      "distanceKm": 12.4
+    },
+    "waterTemp": {
+      "id": "22471",
+      "name": {
+        "ko": "토성 파고부이",
+        "en": "Toseong wave buoy"
+      },
+      "distanceKm": 10.8
+    },
+    "wind": {
+      "id": "22310",
+      "name": {
+        "ko": "고성 해양기상부이",
+        "en": "Goseong marine buoy"
+      },
+      "distanceKm": 12.4
+    }
+  },
+  "photo": null,
+  "cctv": null
+}

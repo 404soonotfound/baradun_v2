@@ -1,0 +1,69 @@
+{
+  "id": "b0095",
+  "slug": "gwangan-ri",
+  "kind": "beach",
+  "name": {
+    "ko": "광안리해수욕장",
+    "en": "Gwangan-ri Beach"
+  },
+  "region": {
+    "sido": {
+      "ko": "부산",
+      "en": "Busan"
+    },
+    "sigungu": {
+      "ko": "수영구",
+      "en": "Suyeong"
+    }
+  },
+  "coast": "south",
+  "coords": {
+    "lat": 35.152134,
+    "lng": 129.11755
+  },
+  "activities": [
+    "swimming"
+  ],
+  "hidden": false,
+  "warningZones": {
+    "sea": "S1311100",
+    "land": "L1082500"
+  },
+  "stations": {
+    "waveHeight": {
+      "id": "22459",
+      "name": {
+        "ko": "오륙도 파고부이",
+        "en": "Oryukdo wave buoy"
+      },
+      "distanceKm": 6.5
+    },
+    "wavePeriod": {
+      "id": "22511",
+      "name": {
+        "ko": "기장 파고부이",
+        "en": "Gijang wave buoy"
+      },
+      "distanceKm": 15.2
+    },
+    "waveDirection": {
+      "id": "22511",
+      "name": {
+        "ko": "기장 파고부이",
+        "en": "Gijang wave buoy"
+      },
+      "distanceKm": 15.2
+    },
+    "waterTemp": {
+      "id": "22459",
+      "name": {
+        "ko": "오륙도 파고부이",
+        "en": "Oryukdo wave buoy"
+      },
+      "distanceKm": 6.5
+    },
+    "wind": null
+  },
+  "photo": null,
+  "cctv": null
+}

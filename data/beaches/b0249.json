@@ -1,0 +1,76 @@
+{
+  "id": "b0249",
+  "slug": "nongso",
+  "kind": "beach",
+  "name": {
+    "ko": "농소해수욕장",
+    "en": "Nongso Beach"
+  },
+  "region": {
+    "sido": {
+      "ko": "경남",
+      "en": "Gyeongnam"
+    },
+    "sigungu": {
+      "ko": "거제시",
+      "en": "Geoje"
+    }
+  },
+  "coast": "south",
+  "coords": {
+    "lat": 35.006743,
+    "lng": 128.70213
+  },
+  "activities": [
+    "swimming"
+  ],
+  "hidden": false,
+  "warningZones": {
+    "sea": "S1311300",
+    "land": "L1082200"
+  },
+  "stations": {
+    "waveHeight": {
+      "id": "22484",
+      "name": {
+        "ko": "잠도 파고부이",
+        "en": "Jamdo wave buoy"
+      },
+      "distanceKm": 6
+    },
+    "wavePeriod": {
+      "id": "22513",
+      "name": {
+        "ko": "이수도 해양기상부이",
+        "en": "Isudo marine buoy"
+      },
+      "distanceKm": 6.4
+    },
+    "waveDirection": {
+      "id": "22513",
+      "name": {
+        "ko": "이수도 해양기상부이",
+        "en": "Isudo marine buoy"
+      },
+      "distanceKm": 6.4
+    },
+    "waterTemp": {
+      "id": "22484",
+      "name": {
+        "ko": "잠도 파고부이",
+        "en": "Jamdo wave buoy"
+      },
+      "distanceKm": 6
+    },
+    "wind": {
+      "id": "22513",
+      "name": {
+        "ko": "이수도 해양기상부이",
+        "en": "Isudo marine buoy"
+      },
+      "distanceKm": 6.4
+    }
+  },
+  "photo": null,
+  "cctv": null
+}

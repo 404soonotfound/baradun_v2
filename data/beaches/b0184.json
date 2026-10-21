@@ -1,0 +1,76 @@
+{
+  "id": "b0184",
+  "slug": "bungye",
+  "kind": "beach",
+  "name": {
+    "ko": "분계해수욕장",
+    "en": "Bungye Beach"
+  },
+  "region": {
+    "sido": {
+      "ko": "전남",
+      "en": "Jeonnam"
+    },
+    "sigungu": {
+      "ko": "신안군",
+      "en": "Sinan"
+    }
+  },
+  "coast": "west",
+  "coords": {
+    "lat": 34.870525,
+    "lng": 125.982168
+  },
+  "activities": [
+    "swimming"
+  ],
+  "hidden": false,
+  "warningZones": {
+    "sea": "S1231400",
+    "land": "L1052200"
+  },
+  "stations": {
+    "waveHeight": {
+      "id": "22493",
+      "name": {
+        "ko": "자은 해양기상부이",
+        "en": "Jaeun marine buoy"
+      },
+      "distanceKm": 11.7
+    },
+    "wavePeriod": {
+      "id": "22493",
+      "name": {
+        "ko": "자은 해양기상부이",
+        "en": "Jaeun marine buoy"
+      },
+      "distanceKm": 11.7
+    },
+    "waveDirection": {
+      "id": "22493",
+      "name": {
+        "ko": "자은 해양기상부이",
+        "en": "Jaeun marine buoy"
+      },
+      "distanceKm": 11.7
+    },
+    "waterTemp": {
+      "id": "22493",
+      "name": {
+        "ko": "자은 해양기상부이",
+        "en": "Jaeun marine buoy"
+      },
+      "distanceKm": 11.7
+    },
+    "wind": {
+      "id": "22493",
+      "name": {
+        "ko": "자은 해양기상부이",
+        "en": "Jaeun marine buoy"
+      },
+      "distanceKm": 11.7
+    }
+  },
+  "photo": null,
+  "cctv": null
+}

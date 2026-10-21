@@ -1,0 +1,41 @@
+{
+  "id": "b0185",
+  "slug": "simok",
+  "kind": "beach",
+  "name": {
+    "ko": "시목해수욕장",
+    "en": "Simok Beach"
+  },
+  "region": {
+    "sido": {
+      "ko": "전남",
+      "en": "Jeonnam"
+    },
+    "sigungu": {
+      "ko": "신안군",
+      "en": "Sinan"
+    }
+  },
+  "coast": "west",
+  "coords": {
+    "lat": 34.672599,
+    "lng": 125.953942
+  },
+  "activities": [
+    "swimming"
+  ],
+  "hidden": false,
+  "warningZones": {
+    "sea": "S1231400",
+    "land": "L1052200"
+  },
+  "stations": {
+    "waveHeight": null,
+    "wavePeriod": null,
+    "waveDirection": null,
+    "waterTemp": null,
+    "wind": null
+  },
+  "photo": null,
+  "cctv": null
+}

@@ -1,0 +1,55 @@
+{
+  "id": "b0275",
+  "slug": "hwasun-geummorae",
+  "kind": "beach",
+  "name": {
+    "ko": "화순금모래해수욕장",
+    "en": "Hwasun Geummorae Beach"
+  },
+  "region": {
+    "sido": {
+      "ko": "제주",
+      "en": "Jeju"
+    },
+    "sigungu": {
+      "ko": "서귀포시",
+      "en": "Seogwipo"
+    }
+  },
+  "coast": "jeju",
+  "coords": {
+    "lat": 33.239967,
+    "lng": 126.333709
+  },
+  "activities": [
+    "swimming"
+  ],
+  "hidden": false,
+  "warningZones": {
+    "sea": "S1323300",
+    "land": "L1091420"
+  },
+  "stations": {
+    "waveHeight": {
+      "id": "22458",
+      "name": {
+        "ko": "중문 파고부이",
+        "en": "Jungmun wave buoy"
+      },
+      "distanceKm": 5.7
+    },
+    "wavePeriod": null,
+    "waveDirection": null,
+    "waterTemp": {
+      "id": "22458",
+      "name": {
+        "ko": "중문 파고부이",
+        "en": "Jungmun wave buoy"
+      },
+      "distanceKm": 5.7
+    },
+    "wind": null
+  },
+  "photo": null,
+  "cctv": null
+}

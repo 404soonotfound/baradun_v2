@@ -1,0 +1,55 @@
+{
+  "id": "b0129",
+  "slug": "guryepo",
+  "kind": "beach",
+  "name": {
+    "ko": "구례포해수욕장",
+    "en": "Guryepo Beach"
+  },
+  "region": {
+    "sido": {
+      "ko": "충남",
+      "en": "Chungnam"
+    },
+    "sigungu": {
+      "ko": "태안군",
+      "en": "Taean"
+    }
+  },
+  "coast": "west",
+  "coords": {
+    "lat": 36.886903,
+    "lng": 126.198056
+  },
+  "activities": [
+    "swimming"
+  ],
+  "hidden": false,
+  "warningZones": {
+    "sea": "S1251300",
+    "land": "L1031100"
+  },
+  "stations": {
+    "waveHeight": {
+      "id": "22509",
+      "name": {
+        "ko": "장안퇴 파고부이",
+        "en": "Jangantoe wave buoy"
+      },
+      "distanceKm": 18
+    },
+    "wavePeriod": null,
+    "waveDirection": null,
+    "waterTemp": {
+      "id": "22509",
+      "name": {
+        "ko": "장안퇴 파고부이",
+        "en": "Jangantoe wave buoy"
+      },
+      "distanceKm": 18
+    },
+    "wind": null
+  },
+  "photo": null,
+  "cctv": null
+}

@@ -1,0 +1,41 @@
+{
+  "id": "b0123",
+  "slug": "waemok-maeul",
+  "kind": "beach",
+  "name": {
+    "ko": "왜목마을해수욕장",
+    "en": "Waemok Maeul Beach"
+  },
+  "region": {
+    "sido": {
+      "ko": "충남",
+      "en": "Chungnam"
+    },
+    "sigungu": {
+      "ko": "당진시",
+      "en": "Dangjin"
+    }
+  },
+  "coast": "west",
+  "coords": {
+    "lat": 37.045,
+    "lng": 126.527126
+  },
+  "activities": [
+    "swimming"
+  ],
+  "hidden": false,
+  "warningZones": {
+    "sea": "S1251300",
+    "land": "L1031200"
+  },
+  "stations": {
+    "waveHeight": null,
+    "wavePeriod": null,
+    "waveDirection": null,
+    "waterTemp": null,
+    "wind": null
+  },
+  "photo": null,
+  "cctv": null
+}

@@ -1,0 +1,69 @@
+{
+  "id": "b0120",
+  "slug": "ilsan",
+  "kind": "beach",
+  "name": {
+    "ko": "일산해수욕장",
+    "en": "Ilsan Beach"
+  },
+  "region": {
+    "sido": {
+      "ko": "울산",
+      "en": "Ulsan"
+    },
+    "sigungu": {
+      "ko": "동구",
+      "en": "Dong-gu"
+    }
+  },
+  "coast": "east",
+  "coords": {
+    "lat": 35.494196,
+    "lng": 129.431157
+  },
+  "activities": [
+    "swimming"
+  ],
+  "hidden": false,
+  "warningZones": {
+    "sea": "S1131100",
+    "land": "L1082800"
+  },
+  "stations": {
+    "waveHeight": {
+      "id": "22518",
+      "name": {
+        "ko": "당사 파고부이",
+        "en": "Dangsa wave buoy"
+      },
+      "distanceKm": 11.4
+    },
+    "wavePeriod": {
+      "id": "22518",
+      "name": {
+        "ko": "당사 파고부이",
+        "en": "Dangsa wave buoy"
+      },
+      "distanceKm": 11.4
+    },
+    "waveDirection": {
+      "id": "22518",
+      "name": {
+        "ko": "당사 파고부이",
+        "en": "Dangsa wave buoy"
+      },
+      "distanceKm": 11.4
+    },
+    "waterTemp": {
+      "id": "22518",
+      "name": {
+        "ko": "당사 파고부이",
+        "en": "Dangsa wave buoy"
+      },
+      "distanceKm": 11.4
+    },
+    "wind": null
+  },
+  "photo": null,
+  "cctv": null
+}

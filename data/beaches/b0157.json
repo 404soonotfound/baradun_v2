@@ -1,0 +1,41 @@
+{
+  "id": "b0157",
+  "slug": "gusipo",
+  "kind": "beach",
+  "name": {
+    "ko": "구시포해수욕장",
+    "en": "Gusipo Beach"
+  },
+  "region": {
+    "sido": {
+      "ko": "전북",
+      "en": "Jeonbuk"
+    },
+    "sigungu": {
+      "ko": "고창군",
+      "en": "Gochang"
+    }
+  },
+  "coast": "west",
+  "coords": {
+    "lat": 35.445761,
+    "lng": 126.435585
+  },
+  "activities": [
+    "swimming"
+  ],
+  "hidden": false,
+  "warningZones": {
+    "sea": "S1231200",
+    "land": "L1060100"
+  },
+  "stations": {
+    "waveHeight": null,
+    "wavePeriod": null,
+    "waveDirection": null,
+    "waterTemp": null,
+    "wind": null
+  },
+  "photo": null,
+  "cctv": null
+}

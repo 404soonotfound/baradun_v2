@@ -1,0 +1,41 @@
+{
+  "id": "b0186",
+  "slug": "sindo",
+  "kind": "beach",
+  "name": {
+    "ko": "신도해수욕장",
+    "en": "Sindo Beach"
+  },
+  "region": {
+    "sido": {
+      "ko": "전남",
+      "en": "Jeonnam"
+    },
+    "sigungu": {
+      "ko": "신안군",
+      "en": "Sinan"
+    }
+  },
+  "coast": "west",
+  "coords": {
+    "lat": 34.588205,
+    "lng": 125.973588
+  },
+  "activities": [
+    "swimming"
+  ],
+  "hidden": false,
+  "warningZones": {
+    "sea": "S1231400",
+    "land": "L1052200"
+  },
+  "stations": {
+    "waveHeight": null,
+    "wavePeriod": null,
+    "waveDirection": null,
+    "waterTemp": null,
+    "wind": null
+  },
+  "photo": null,
+  "cctv": null
+}

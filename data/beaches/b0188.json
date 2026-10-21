@@ -1,0 +1,76 @@
+{
+  "id": "b0188",
+  "slug": "sinan-wonpyeong",
+  "kind": "beach",
+  "name": {
+    "ko": "원평해수욕장",
+    "en": "Wonpyeong Beach"
+  },
+  "region": {
+    "sido": {
+      "ko": "전남",
+      "en": "Jeonnam"
+    },
+    "sigungu": {
+      "ko": "신안군",
+      "en": "Sinan"
+    }
+  },
+  "coast": "west",
+  "coords": {
+    "lat": 34.776015,
+    "lng": 125.921914
+  },
+  "activities": [
+    "swimming"
+  ],
+  "hidden": false,
+  "warningZones": {
+    "sea": "S1231400",
+    "land": "L1052200"
+  },
+  "stations": {
+    "waveHeight": {
+      "id": "22102",
+      "name": {
+        "ko": "칠발도 해양기상부이",
+        "en": "Chilbaldo marine buoy"
+      },
+      "distanceKm": 13.4
+    },
+    "wavePeriod": {
+      "id": "22102",
+      "name": {
+        "ko": "칠발도 해양기상부이",
+        "en": "Chilbaldo marine buoy"
+      },
+      "distanceKm": 13.4
+    },
+    "waveDirection": {
+      "id": "22102",
+      "name": {
+        "ko": "칠발도 해양기상부이",
+        "en": "Chilbaldo marine buoy"
+      },
+      "distanceKm": 13.4
+    },
+    "waterTemp": {
+      "id": "22102",
+      "name": {
+        "ko": "칠발도 해양기상부이",
+        "en": "Chilbaldo marine buoy"
+      },
+      "distanceKm": 13.4
+    },
+    "wind": {
+      "id": "22102",
+      "name": {
+        "ko": "칠발도 해양기상부이",
+        "en": "Chilbaldo marine buoy"
+      },
+      "distanceKm": 13.4
+    }
+  },
+  "photo": null,
+  "cctv": null
+}

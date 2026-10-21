@@ -1,0 +1,55 @@
+{
+  "id": "b0267",
+  "slug": "songjeong-solbaram",
+  "kind": "beach",
+  "name": {
+    "ko": "송정솔바람해수욕장",
+    "en": "Songjeong Solbaram Beach"
+  },
+  "region": {
+    "sido": {
+      "ko": "경남",
+      "en": "Gyeongnam"
+    },
+    "sigungu": {
+      "ko": "남해군",
+      "en": "Namhae"
+    }
+  },
+  "coast": "south",
+  "coords": {
+    "lat": 34.721616,
+    "lng": 128.024114
+  },
+  "activities": [
+    "swimming"
+  ],
+  "hidden": false,
+  "warningZones": {
+    "sea": "S1311200",
+    "land": "L1082400"
+  },
+  "stations": {
+    "waveHeight": {
+      "id": "22498",
+      "name": {
+        "ko": "남해 파고부이",
+        "en": "Namhae wave buoy"
+      },
+      "distanceKm": 4.1
+    },
+    "wavePeriod": null,
+    "waveDirection": null,
+    "waterTemp": {
+      "id": "22498",
+      "name": {
+        "ko": "남해 파고부이",
+        "en": "Namhae wave buoy"
+      },
+      "distanceKm": 4.1
+    },
+    "wind": null
+  },
+  "photo": null,
+  "cctv": null
+}

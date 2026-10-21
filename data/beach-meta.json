@@ -1,0 +1,3111 @@
+{
+  "_meta": {
+    "note": "해변 부가 정보(공개 계약 밖, 결정 기록 11장 10/21 ⑤). 해변 id로 data/beaches와 연결. 검색 별칭·운영 기간",
+    "season_source": "해양수산부 해양레저관광과 '2026 해수욕장 주요 현황'(2026-08-11), https://www.mof.go.kr/doc/ko/selectDoc.do?menuSeq=427&bbsSeq=2&docSeq=67910",
+    "season_rule": "올해 일정이 없거나 연결되지 않으면 '운영 기간 아님' 배지를 숨김(지난해 일정으로 추정 안 함, 결정 기록 11장 10/21 ⑥)"
+  },
+  "beaches": {
+    "b0094": {
+      "aliases": [
+        "송도"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-01",
+          "closeDate": "2026-08-31",
+          "sourceRow": 158,
+          "link": "MAP"
+        }
+      }
+    },
+    "b0095": {
+      "aliases": [
+        "광안리"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-01",
+          "closeDate": "2026-08-31",
+          "sourceRow": 159,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0096": {
+      "aliases": [
+        "송정"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-06-26",
+          "closeDate": "2026-08-31",
+          "sourceRow": 160,
+          "link": "MAP"
+        }
+      }
+    },
+    "b0097": {
+      "aliases": [
+        "해운대"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-06-26",
+          "closeDate": "2026-09-15",
+          "sourceRow": 161,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0107": {
+      "aliases": [
+        "서포리"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-20",
+          "closeDate": "2026-08-16",
+          "sourceRow": 165,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0108": {
+      "aliases": [
+        "십리포"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-04",
+          "closeDate": "2026-08-23",
+          "sourceRow": 167,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0109": {
+      "aliases": [
+        "옹암"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-04",
+          "closeDate": "2026-08-23",
+          "sourceRow": 168,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0110": {
+      "aliases": [
+        "이일레"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-25",
+          "closeDate": "2026-08-25",
+          "sourceRow": 169,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0112": {
+      "aliases": [
+        "장경리"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-04",
+          "closeDate": "2026-08-23",
+          "sourceRow": 170,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0113": {
+      "aliases": [
+        "장골"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-25",
+          "closeDate": "2026-08-25",
+          "sourceRow": 171,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0117": {
+      "aliases": [
+        "왕산"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-06-20",
+          "closeDate": "2026-09-06",
+          "sourceRow": 172,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0118": {
+      "aliases": [
+        "을왕리"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-06-20",
+          "closeDate": "2026-09-06",
+          "sourceRow": 173,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0119": {
+      "aliases": [
+        "하나개"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-06-20",
+          "closeDate": "2026-09-06",
+          "sourceRow": 174,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0120": {
+      "aliases": [
+        "일산"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-01",
+          "closeDate": "2026-08-31",
+          "sourceRow": 162,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0121": {
+      "aliases": [
+        "진하"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-06-26",
+          "closeDate": "2026-08-31",
+          "sourceRow": 163,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0001": {
+      "aliases": [
+        "강문"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-10",
+          "closeDate": "2026-08-23",
+          "sourceRow": 4,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0002": {
+      "aliases": [
+        "경포"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-04",
+          "closeDate": "2026-08-23",
+          "sourceRow": 5,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0003": {
+      "aliases": [
+        "사근진"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-10",
+          "closeDate": "2026-08-23",
+          "sourceRow": 9,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0004": {
+      "aliases": [
+        "사천진"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-10",
+          "closeDate": "2026-08-23",
+          "sourceRow": 11,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0005": {
+      "aliases": [
+        "송정"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-10",
+          "closeDate": "2026-08-23",
+          "sourceRow": 12,
+          "link": "MAP"
+        }
+      }
+    },
+    "b0006": {
+      "aliases": [
+        "안목"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-10",
+          "closeDate": "2026-08-23",
+          "sourceRow": 14,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0007": {
+      "aliases": [
+        "연곡"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-10",
+          "closeDate": "2026-08-23",
+          "sourceRow": 16,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0008": {
+      "aliases": [
+        "옥계"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-10",
+          "closeDate": "2026-08-23",
+          "sourceRow": 18,
+          "link": "MAP"
+        }
+      }
+    },
+    "b0009": {
+      "aliases": [
+        "정동진"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-10",
+          "closeDate": "2026-08-23",
+          "sourceRow": 19,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0010": {
+      "aliases": [
+        "주문진"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-10",
+          "closeDate": "2026-08-23",
+          "sourceRow": 20,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0011": {
+      "aliases": [
+        "하평"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-10",
+          "closeDate": "2026-08-23",
+          "sourceRow": 21,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0012": {
+      "aliases": [
+        "금진"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-10",
+          "closeDate": "2026-08-23",
+          "sourceRow": 6,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0013": {
+      "aliases": [
+        "남항진"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-10",
+          "closeDate": "2026-08-23",
+          "sourceRow": 7,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0014": {
+      "aliases": [
+        "도직"
+      ],
+      "season": {
+        "2026": {
+          "status": "closed",
+          "openDate": null,
+          "closeDate": null,
+          "sourceRow": 22,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0015": {
+      "aliases": [
+        "등명"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-10",
+          "closeDate": "2026-08-23",
+          "sourceRow": 8,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0016": {
+      "aliases": [
+        "사천"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-10",
+          "closeDate": "2026-08-23",
+          "sourceRow": 10,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0017": {
+      "aliases": [
+        "순긋"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-10",
+          "closeDate": "2026-08-23",
+          "sourceRow": 13,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0018": {
+      "aliases": [
+        "안인"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-10",
+          "closeDate": "2026-08-23",
+          "sourceRow": 15,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0020": {
+      "aliases": [
+        "영진"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-10",
+          "closeDate": "2026-08-23",
+          "sourceRow": 17,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0021": {
+      "aliases": [
+        "명파"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-10",
+          "closeDate": "2026-08-17",
+          "sourceRow": 32,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0022": {
+      "aliases": [
+        "백도"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-10",
+          "closeDate": "2026-08-17",
+          "sourceRow": 38,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0023": {
+      "aliases": [
+        "봉수대"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-10",
+          "closeDate": "2026-08-17",
+          "sourceRow": 39,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0024": {
+      "aliases": [
+        "삼포"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-10",
+          "closeDate": "2026-08-17",
+          "sourceRow": 41,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0025": {
+      "aliases": [
+        "송지호"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-10",
+          "closeDate": "2026-08-17",
+          "sourceRow": 43,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0026": {
+      "aliases": [
+        "송지호오토캠핑장"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-10",
+          "closeDate": "2026-08-17",
+          "sourceRow": 44,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0027": {
+      "aliases": [
+        "천진"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-06-27",
+          "closeDate": "2026-08-17",
+          "sourceRow": 46,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0028": {
+      "aliases": [
+        "화진포"
+      ],
+      "season": {
+        "2026": null
+      }
+    },
+    "b0029": {
+      "aliases": [
+        "가진리"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-10",
+          "closeDate": "2026-08-17",
+          "sourceRow": 23,
+          "link": "RULE"
+        }
+      }
+    },
+    "b0030": {
+      "aliases": [
+        "거진11리"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-10",
+          "closeDate": "2026-08-17",
+          "sourceRow": 25,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0031": {
+      "aliases": [
+        "거진1리"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-10",
+          "closeDate": "2026-08-17",
+          "sourceRow": 24,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0032": {
+      "aliases": [
+        "공현1리"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-10",
+          "closeDate": "2026-08-17",
+          "sourceRow": 26,
+          "link": "RULE"
+        }
+      }
+    },
+    "b0033": {
+      "aliases": [
+        "공현2리"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-10",
+          "closeDate": "2026-08-17",
+          "sourceRow": 27,
+          "link": "RULE"
+        }
+      }
+    },
+    "b0034": {
+      "aliases": [
+        "교암리"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-10",
+          "closeDate": "2026-08-17",
+          "sourceRow": 28,
+          "link": "RULE"
+        }
+      }
+    },
+    "b0035": {
+      "aliases": [
+        "대진1리"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-10",
+          "closeDate": "2026-08-17",
+          "sourceRow": 29,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0036": {
+      "aliases": [
+        "대진5리"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-10",
+          "closeDate": "2026-08-17",
+          "sourceRow": 30,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0037": {
+      "aliases": [
+        "마차진"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-10",
+          "closeDate": "2026-08-17",
+          "sourceRow": 31,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0038": {
+      "aliases": [
+        "문암2리"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-10",
+          "closeDate": "2026-08-17",
+          "sourceRow": 34,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0039": {
+      "aliases": [
+        "반암리"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-10",
+          "closeDate": "2026-08-17",
+          "sourceRow": 37,
+          "link": "RULE"
+        }
+      }
+    },
+    "b0040": {
+      "aliases": [
+        "봉포"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-10",
+          "closeDate": "2026-08-17",
+          "sourceRow": 40,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0041": {
+      "aliases": [
+        "삼포2리"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-10",
+          "closeDate": "2026-08-17",
+          "sourceRow": 42,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0042": {
+      "aliases": [
+        "아야진"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-06-12",
+          "closeDate": "2026-08-31",
+          "sourceRow": 45,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0043": {
+      "aliases": [
+        "자작도"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-10",
+          "closeDate": "2026-08-17",
+          "sourceRow": 33,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0044": {
+      "aliases": [
+        "청간"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-10",
+          "closeDate": "2026-08-17",
+          "sourceRow": 47,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0045": {
+      "aliases": [
+        "초도리"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-10",
+          "closeDate": "2026-08-17",
+          "sourceRow": 48,
+          "link": "RULE"
+        }
+      }
+    },
+    "b0046": {
+      "aliases": [
+        "캔싱턴리조트"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-10",
+          "closeDate": "2026-08-17",
+          "sourceRow": 49,
+          "link": "MAP"
+        }
+      }
+    },
+    "b0047": {
+      "aliases": [
+        "노봉"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-08",
+          "closeDate": "2026-08-17",
+          "sourceRow": 53,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0048": {
+      "aliases": [
+        "대진"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-08",
+          "closeDate": "2026-08-17",
+          "sourceRow": 54,
+          "link": "MAP"
+        }
+      }
+    },
+    "b0049": {
+      "aliases": [
+        "망상"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-08",
+          "closeDate": "2026-08-17",
+          "sourceRow": 55,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0050": {
+      "aliases": [
+        "망상리조트"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-08",
+          "closeDate": "2026-08-17",
+          "sourceRow": 56,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0051": {
+      "aliases": [
+        "어달"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-08",
+          "closeDate": "2026-08-17",
+          "sourceRow": 57,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0052": {
+      "aliases": [
+        "추암"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-08",
+          "closeDate": "2026-08-17",
+          "sourceRow": 58,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0053": {
+      "aliases": [
+        "덕산"
+      ],
+      "season": {
+        "2026": {
+          "status": "closed",
+          "openDate": null,
+          "closeDate": null,
+          "sourceRow": 70,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0054": {
+      "aliases": [
+        "맹방"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-08",
+          "closeDate": "2026-08-17",
+          "sourceRow": 59,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0055": {
+      "aliases": [
+        "문암"
+      ],
+      "season": {
+        "2026": {
+          "status": "closed",
+          "openDate": null,
+          "closeDate": null,
+          "sourceRow": 71,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0056": {
+      "aliases": [
+        "부남"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-08",
+          "closeDate": "2026-08-17",
+          "sourceRow": 62,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0057": {
+      "aliases": [
+        "삼척"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-08",
+          "closeDate": "2026-08-17",
+          "sourceRow": 63,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0058": {
+      "aliases": [
+        "상맹방(승공)",
+        "상맹방",
+        "승공"
+      ],
+      "season": {
+        "2026": {
+          "status": "closed",
+          "openDate": null,
+          "closeDate": null,
+          "sourceRow": 60,
+          "link": "RULE"
+        }
+      }
+    },
+    "b0059": {
+      "aliases": [
+        "오분"
+      ],
+      "season": {
+        "2026": {
+          "status": "closed",
+          "openDate": null,
+          "closeDate": null,
+          "sourceRow": 72,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0060": {
+      "aliases": [
+        "용화"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-08",
+          "closeDate": "2026-08-17",
+          "sourceRow": 64,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0061": {
+      "aliases": [
+        "원평"
+      ],
+      "season": {
+        "2026": {
+          "status": "closed",
+          "openDate": null,
+          "closeDate": null,
+          "sourceRow": 65,
+          "link": "MAP"
+        }
+      }
+    },
+    "b0062": {
+      "aliases": [
+        "임원"
+      ],
+      "season": {
+        "2026": {
+          "status": "closed",
+          "openDate": null,
+          "closeDate": null,
+          "sourceRow": 73,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0063": {
+      "aliases": [
+        "작은후진"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-08",
+          "closeDate": "2026-08-17",
+          "sourceRow": 66,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0064": {
+      "aliases": [
+        "장호"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-08",
+          "closeDate": "2026-08-17",
+          "sourceRow": 67,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0065": {
+      "aliases": [
+        "증산"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-08",
+          "closeDate": "2026-08-17",
+          "sourceRow": 68,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0066": {
+      "aliases": [
+        "하맹방(연봉)",
+        "하맹방",
+        "연봉"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-08",
+          "closeDate": "2026-08-17",
+          "sourceRow": 61,
+          "link": "RULE"
+        }
+      }
+    },
+    "b0067": {
+      "aliases": [
+        "한재밑"
+      ],
+      "season": {
+        "2026": {
+          "status": "closed",
+          "openDate": null,
+          "closeDate": null,
+          "sourceRow": 74,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0068": {
+      "aliases": [
+        "궁촌"
+      ],
+      "season": {
+        "2026": {
+          "status": "closed",
+          "openDate": null,
+          "closeDate": null,
+          "sourceRow": 69,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0069": {
+      "aliases": [
+        "등대"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-03",
+          "closeDate": "2026-08-23",
+          "sourceRow": 75,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0070": {
+      "aliases": [
+        "속초"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-03",
+          "closeDate": "2026-08-23",
+          "sourceRow": 76,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0071": {
+      "aliases": [
+        "외옹치"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-03",
+          "closeDate": "2026-08-23",
+          "sourceRow": 77,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0072": {
+      "aliases": [
+        "낙산"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-10",
+          "closeDate": "2026-08-23",
+          "sourceRow": 82,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0073": {
+      "aliases": [
+        "남애3리"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-10",
+          "closeDate": "2026-08-23",
+          "sourceRow": 84,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0074": {
+      "aliases": [
+        "동호"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-10",
+          "closeDate": "2026-08-23",
+          "sourceRow": 87,
+          "link": "MAP"
+        }
+      }
+    },
+    "b0075": {
+      "aliases": [
+        "물치"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-10",
+          "closeDate": "2026-08-23",
+          "sourceRow": 99,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0076": {
+      "aliases": [
+        "설악"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-10",
+          "closeDate": "2026-08-23",
+          "sourceRow": 89,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0077": {
+      "aliases": [
+        "지경"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-10",
+          "closeDate": "2026-08-23",
+          "sourceRow": 97,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0078": {
+      "aliases": [
+        "하조대"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-10",
+          "closeDate": "2026-08-23",
+          "sourceRow": 98,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0079": {
+      "aliases": [
+        "갯마을"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-10",
+          "closeDate": "2026-08-23",
+          "sourceRow": 79,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0080": {
+      "aliases": [
+        "광진"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-10",
+          "closeDate": "2026-08-23",
+          "sourceRow": 80,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0081": {
+      "aliases": [
+        "남애1리"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-10",
+          "closeDate": "2026-08-23",
+          "sourceRow": 83,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0082": {
+      "aliases": [
+        "동산"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-10",
+          "closeDate": "2026-08-23",
+          "sourceRow": 85,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0083": {
+      "aliases": [
+        "동산포"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-10",
+          "closeDate": "2026-08-23",
+          "sourceRow": 86,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0084": {
+      "aliases": [
+        "북분리"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-10",
+          "closeDate": "2026-08-23",
+          "sourceRow": 88,
+          "link": "RULE"
+        }
+      }
+    },
+    "b0085": {
+      "aliases": [
+        "원포"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-10",
+          "closeDate": "2026-08-23",
+          "sourceRow": 91,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0086": {
+      "aliases": [
+        "인구"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-10",
+          "closeDate": "2026-08-23",
+          "sourceRow": 92,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0087": {
+      "aliases": [
+        "잔교"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-10",
+          "closeDate": "2026-08-23",
+          "sourceRow": 93,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0088": {
+      "aliases": [
+        "정암"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-10",
+          "closeDate": "2026-08-23",
+          "sourceRow": 94,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0089": {
+      "aliases": [
+        "죽도"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-10",
+          "closeDate": "2026-08-23",
+          "sourceRow": 95,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0090": {
+      "aliases": [
+        "중광정"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-10",
+          "closeDate": "2026-08-23",
+          "sourceRow": 96,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0122": {
+      "aliases": [
+        "난지섬"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-11",
+          "closeDate": "2026-08-23",
+          "sourceRow": 262,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0123": {
+      "aliases": [
+        "왜목마을"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-11",
+          "closeDate": "2026-08-23",
+          "sourceRow": 261,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0124": {
+      "aliases": [
+        "대천"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-04",
+          "closeDate": "2026-08-23",
+          "sourceRow": 263,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0125": {
+      "aliases": [
+        "무창포"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-11",
+          "closeDate": "2026-08-23",
+          "sourceRow": 264,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0127": {
+      "aliases": [
+        "갈음이"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-11",
+          "closeDate": "2026-08-23",
+          "sourceRow": 266,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0129": {
+      "aliases": [
+        "구례포"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-11",
+          "closeDate": "2026-08-23",
+          "sourceRow": 267,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0131": {
+      "aliases": [
+        "기지포"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-11",
+          "closeDate": "2026-08-23",
+          "sourceRow": 268,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0132": {
+      "aliases": [
+        "꽃지"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-11",
+          "closeDate": "2026-08-23",
+          "sourceRow": 269,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0133": {
+      "aliases": [
+        "꾸지나무꼴"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-11",
+          "closeDate": "2026-08-23",
+          "sourceRow": 270,
+          "link": "MAP"
+        }
+      }
+    },
+    "b0136": {
+      "aliases": [
+        "마검포"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-11",
+          "closeDate": "2026-08-23",
+          "sourceRow": 271,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0137": {
+      "aliases": [
+        "만리포"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-04",
+          "closeDate": "2026-08-23",
+          "sourceRow": 272,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0138": {
+      "aliases": [
+        "몽산포"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-11",
+          "closeDate": "2026-08-23",
+          "sourceRow": 273,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0139": {
+      "aliases": [
+        "바람아래"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-11",
+          "closeDate": "2026-08-23",
+          "sourceRow": 274,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0142": {
+      "aliases": [
+        "방포"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-11",
+          "closeDate": "2026-08-23",
+          "sourceRow": 275,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0144": {
+      "aliases": [
+        "삼봉"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-11",
+          "closeDate": "2026-08-23",
+          "sourceRow": 276,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0145": {
+      "aliases": [
+        "샛별"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-11",
+          "closeDate": "2026-08-23",
+          "sourceRow": 277,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0146": {
+      "aliases": [
+        "신두리"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-11",
+          "closeDate": "2026-08-23",
+          "sourceRow": 278,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0148": {
+      "aliases": [
+        "어은돌"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-11",
+          "closeDate": "2026-08-23",
+          "sourceRow": 279,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0149": {
+      "aliases": [
+        "연포"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-11",
+          "closeDate": "2026-08-23",
+          "sourceRow": 280,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0150": {
+      "aliases": [
+        "의항"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-11",
+          "closeDate": "2026-08-23",
+          "sourceRow": 281,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0151": {
+      "aliases": [
+        "장삼포"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-11",
+          "closeDate": "2026-08-23",
+          "sourceRow": 282,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0152": {
+      "aliases": [
+        "천리포"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-11",
+          "closeDate": "2026-08-23",
+          "sourceRow": 283,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0153": {
+      "aliases": [
+        "청포대"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-11",
+          "closeDate": "2026-08-23",
+          "sourceRow": 284,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0155": {
+      "aliases": [
+        "파도리"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-11",
+          "closeDate": "2026-08-23",
+          "sourceRow": 285,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0156": {
+      "aliases": [
+        "학암포"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-11",
+          "closeDate": "2026-08-23",
+          "sourceRow": 286,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0157": {
+      "aliases": [
+        "구시포"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-10",
+          "closeDate": "2026-08-18",
+          "sourceRow": 241,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0164": {
+      "aliases": [
+        "위도"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-03",
+          "closeDate": "2026-08-17",
+          "sourceRow": 248,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0165": {
+      "aliases": [
+        "금장"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-17",
+          "closeDate": "2026-08-17",
+          "sourceRow": 175,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0166": {
+      "aliases": [
+        "나로우주"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-17",
+          "closeDate": "2026-08-17",
+          "sourceRow": 176,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0167": {
+      "aliases": [
+        "남열해돋이"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-17",
+          "closeDate": "2026-08-17",
+          "sourceRow": 177,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0168": {
+      "aliases": [
+        "대전"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-17",
+          "closeDate": "2026-08-17",
+          "sourceRow": 178,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0169": {
+      "aliases": [
+        "덕흥"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-17",
+          "closeDate": "2026-08-17",
+          "sourceRow": 179,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0170": {
+      "aliases": [
+        "발포"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-17",
+          "closeDate": "2026-08-17",
+          "sourceRow": 180,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0171": {
+      "aliases": [
+        "연소"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-17",
+          "closeDate": "2026-08-17",
+          "sourceRow": 181,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0172": {
+      "aliases": [
+        "염포"
+      ],
+      "season": {
+        "2026": {
+          "status": "closed",
+          "openDate": null,
+          "closeDate": null,
+          "sourceRow": 182,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0173": {
+      "aliases": [
+        "용동"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-17",
+          "closeDate": "2026-08-17",
+          "sourceRow": 183,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0174": {
+      "aliases": [
+        "익금"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-17",
+          "closeDate": "2026-08-17",
+          "sourceRow": 184,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0175": {
+      "aliases": [
+        "풍류"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-17",
+          "closeDate": "2026-08-17",
+          "sourceRow": 185,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0177": {
+      "aliases": [
+        "톱머리"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-17",
+          "closeDate": "2026-08-17",
+          "sourceRow": 187,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0178": {
+      "aliases": [
+        "홀통"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-17",
+          "closeDate": "2026-08-17",
+          "sourceRow": 188,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0179": {
+      "aliases": [
+        "율포솔밭"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-11",
+          "closeDate": "2026-08-23",
+          "sourceRow": 190,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0180": {
+      "aliases": [
+        "대광"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-17",
+          "closeDate": "2026-08-16",
+          "sourceRow": 191,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0181": {
+      "aliases": [
+        "돈목"
+      ],
+      "season": {
+        "2026": {
+          "status": "closed",
+          "openDate": null,
+          "closeDate": null,
+          "sourceRow": 192,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0183": {
+      "aliases": [
+        "백길"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-17",
+          "closeDate": "2026-08-16",
+          "sourceRow": 194,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0184": {
+      "aliases": [
+        "분계"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-17",
+          "closeDate": "2026-08-16",
+          "sourceRow": 195,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0185": {
+      "aliases": [
+        "시목"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-17",
+          "closeDate": "2026-08-16",
+          "sourceRow": 197,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0186": {
+      "aliases": [
+        "신도"
+      ],
+      "season": {
+        "2026": {
+          "status": "closed",
+          "openDate": null,
+          "closeDate": null,
+          "sourceRow": 198,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0187": {
+      "aliases": [
+        "우전"
+      ],
+      "season": {
+        "2026": {
+          "status": "closed",
+          "openDate": null,
+          "closeDate": null,
+          "sourceRow": 199,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0188": {
+      "aliases": [
+        "원평"
+      ],
+      "season": {
+        "2026": {
+          "status": "closed",
+          "openDate": null,
+          "closeDate": null,
+          "sourceRow": 200,
+          "link": "MAP"
+        }
+      }
+    },
+    "b0189": {
+      "aliases": [
+        "짱뚱어"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-17",
+          "closeDate": "2026-08-16",
+          "sourceRow": 201,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0191": {
+      "aliases": [
+        "하트"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-17",
+          "closeDate": "2026-08-16",
+          "sourceRow": 203,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0194": {
+      "aliases": [
+        "만성리검은모래"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-11",
+          "closeDate": "2026-08-23",
+          "sourceRow": 207,
+          "link": "MAP"
+        }
+      }
+    },
+    "b0195": {
+      "aliases": [
+        "모사금"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-11",
+          "closeDate": "2026-08-23",
+          "sourceRow": 208,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0196": {
+      "aliases": [
+        "무술목"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-11",
+          "closeDate": "2026-08-23",
+          "sourceRow": 209,
+          "link": "MAP"
+        }
+      }
+    },
+    "b0197": {
+      "aliases": [
+        "방죽포"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-11",
+          "closeDate": "2026-08-23",
+          "sourceRow": 210,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0198": {
+      "aliases": [
+        "안도"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-11",
+          "closeDate": "2026-08-23",
+          "sourceRow": 211,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0199": {
+      "aliases": [
+        "장등"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-11",
+          "closeDate": "2026-08-23",
+          "sourceRow": 214,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0200": {
+      "aliases": [
+        "웅천"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-11",
+          "closeDate": "2026-08-23",
+          "sourceRow": 212,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0201": {
+      "aliases": [
+        "가마미"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-13",
+          "closeDate": "2026-08-17",
+          "sourceRow": 221,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0202": {
+      "aliases": [
+        "송이도"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-20",
+          "closeDate": "2026-08-17",
+          "sourceRow": 222,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0203": {
+      "aliases": [
+        "금일명사십리"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-25",
+          "closeDate": "2026-08-17",
+          "sourceRow": 223,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0206": {
+      "aliases": [
+        "생일금곡"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-25",
+          "closeDate": "2026-08-17",
+          "sourceRow": 227,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0207": {
+      "aliases": [
+        "신지동고"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-25",
+          "closeDate": "2026-08-17",
+          "sourceRow": 228,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0208": {
+      "aliases": [
+        "신지명사십리"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-11",
+          "closeDate": "2026-08-17",
+          "sourceRow": 229,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0209": {
+      "aliases": [
+        "약산가사동백숲"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-25",
+          "closeDate": "2026-08-17",
+          "sourceRow": 230,
+          "link": "MAP"
+        }
+      }
+    },
+    "b0213": {
+      "aliases": [
+        "안양수문"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-13",
+          "closeDate": "2026-08-17",
+          "sourceRow": 233,
+          "link": "MAP"
+        }
+      }
+    },
+    "b0214": {
+      "aliases": [
+        "가계"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-16",
+          "closeDate": "2026-08-17",
+          "sourceRow": 234,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0215": {
+      "aliases": [
+        "관매도"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-16",
+          "closeDate": "2026-08-17",
+          "sourceRow": 235,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0216": {
+      "aliases": [
+        "신전"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-16",
+          "closeDate": "2026-08-17",
+          "sourceRow": 237,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0217": {
+      "aliases": [
+        "금갑"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-16",
+          "closeDate": "2026-08-17",
+          "sourceRow": 236,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0218": {
+      "aliases": [
+        "돌머리"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-10",
+          "closeDate": "2026-08-17",
+          "sourceRow": 238,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0222": {
+      "aliases": [
+        "관성솔밭"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-10",
+          "closeDate": "2026-08-17",
+          "sourceRow": 130,
+          "link": "RULE"
+        }
+      }
+    },
+    "b0223": {
+      "aliases": [
+        "나정고운모래"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-10",
+          "closeDate": "2026-08-17",
+          "sourceRow": 128,
+          "link": "RULE"
+        }
+      }
+    },
+    "b0224": {
+      "aliases": [
+        "봉길대왕암"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-10",
+          "closeDate": "2026-08-17",
+          "sourceRow": 129,
+          "link": "RULE"
+        }
+      }
+    },
+    "b0225": {
+      "aliases": [
+        "오류고아라"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-10",
+          "closeDate": "2026-08-17",
+          "sourceRow": 127,
+          "link": "RULE"
+        }
+      }
+    },
+    "b0226": {
+      "aliases": [
+        "전촌솔밭"
+      ],
+      "season": {
+        "2026": {
+          "status": "closed",
+          "openDate": null,
+          "closeDate": null,
+          "sourceRow": 131,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0228": {
+      "aliases": [
+        "고래불"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-17",
+          "closeDate": "2026-08-23",
+          "sourceRow": 133,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0229": {
+      "aliases": [
+        "남호"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-17",
+          "closeDate": "2026-08-23",
+          "sourceRow": 134,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0230": {
+      "aliases": [
+        "대진"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-17",
+          "closeDate": "2026-08-23",
+          "sourceRow": 135,
+          "link": "MAP"
+        }
+      }
+    },
+    "b0231": {
+      "aliases": [
+        "오보"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-17",
+          "closeDate": "2026-08-23",
+          "sourceRow": 136,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0232": {
+      "aliases": [
+        "장사"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-17",
+          "closeDate": "2026-08-23",
+          "sourceRow": 137,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0233": {
+      "aliases": [
+        "하저"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-17",
+          "closeDate": "2026-08-23",
+          "sourceRow": 138,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0234": {
+      "aliases": [
+        "구산"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-17",
+          "closeDate": "2026-08-23",
+          "sourceRow": 139,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0235": {
+      "aliases": [
+        "기성망양"
+      ],
+      "season": {
+        "2026": {
+          "status": "closed",
+          "openDate": null,
+          "closeDate": null,
+          "sourceRow": 145,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0236": {
+      "aliases": [
+        "나곡"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-17",
+          "closeDate": "2026-08-23",
+          "sourceRow": 140,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0237": {
+      "aliases": [
+        "망양정"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-17",
+          "closeDate": "2026-08-23",
+          "sourceRow": 141,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0238": {
+      "aliases": [
+        "봉평"
+      ],
+      "season": {
+        "2026": {
+          "status": "closed",
+          "openDate": null,
+          "closeDate": null,
+          "sourceRow": 142,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0239": {
+      "aliases": [
+        "후정"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-17",
+          "closeDate": "2026-08-23",
+          "sourceRow": 143,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0240": {
+      "aliases": [
+        "후포"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-17",
+          "closeDate": "2026-08-23",
+          "sourceRow": 144,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0241": {
+      "aliases": [
+        "구룡포"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-11",
+          "closeDate": "2026-08-23",
+          "sourceRow": 146,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0242": {
+      "aliases": [
+        "도구"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-11",
+          "closeDate": "2026-08-23",
+          "sourceRow": 147,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0243": {
+      "aliases": [
+        "영일대"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-11",
+          "closeDate": "2026-08-23",
+          "sourceRow": 148,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0244": {
+      "aliases": [
+        "월포"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-11",
+          "closeDate": "2026-08-23",
+          "sourceRow": 149,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0245": {
+      "aliases": [
+        "칠포"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-11",
+          "closeDate": "2026-08-23",
+          "sourceRow": 150,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0246": {
+      "aliases": [
+        "화진"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-11",
+          "closeDate": "2026-08-23",
+          "sourceRow": 151,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0247": {
+      "aliases": [
+        "구영"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-04",
+          "closeDate": "2026-08-23",
+          "sourceRow": 100,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0249": {
+      "aliases": [
+        "농소"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-04",
+          "closeDate": "2026-08-23",
+          "sourceRow": 102,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0254": {
+      "aliases": [
+        "물안"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-04",
+          "closeDate": "2026-08-23",
+          "sourceRow": 107,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0255": {
+      "aliases": [
+        "사곡"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-04",
+          "closeDate": "2026-08-23",
+          "sourceRow": 108,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0257": {
+      "aliases": [
+        "옥계"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-04",
+          "closeDate": "2026-08-23",
+          "sourceRow": 110,
+          "link": "MAP"
+        }
+      }
+    },
+    "b0262": {
+      "aliases": [
+        "황포"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-04",
+          "closeDate": "2026-08-23",
+          "sourceRow": 114,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0263": {
+      "aliases": [
+        "흥남"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-04",
+          "closeDate": "2026-08-23",
+          "sourceRow": 115,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0264": {
+      "aliases": [
+        "두곡월포"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-10",
+          "closeDate": "2026-08-23",
+          "sourceRow": 117,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0265": {
+      "aliases": [
+        "사촌"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-10",
+          "closeDate": "2026-08-23",
+          "sourceRow": 118,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0266": {
+      "aliases": [],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-10",
+          "closeDate": "2026-08-23",
+          "sourceRow": 119,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0267": {
+      "aliases": [
+        "송정솔바람"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-10",
+          "closeDate": "2026-08-23",
+          "sourceRow": 121,
+          "link": "RULE"
+        }
+      }
+    },
+    "b0268": {
+      "aliases": [
+        "남일대"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-10",
+          "closeDate": "2026-08-23",
+          "sourceRow": 122,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0269": {
+      "aliases": [
+        "대항"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-11",
+          "closeDate": "2026-08-23",
+          "sourceRow": 125,
+          "link": "MAP"
+        }
+      }
+    },
+    "b0270": {
+      "aliases": [
+        "비진"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-11",
+          "closeDate": "2026-08-23",
+          "sourceRow": 124,
+          "link": "MAP"
+        }
+      }
+    },
+    "b0272": {
+      "aliases": [
+        "신양섭지코지"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-06-24",
+          "closeDate": "2026-09-06",
+          "sourceRow": 257,
+          "link": "MAP"
+        }
+      }
+    },
+    "b0273": {
+      "aliases": [
+        "중문색달"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-06-24",
+          "closeDate": "2026-09-06",
+          "sourceRow": 258,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0274": {
+      "aliases": [],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-06-24",
+          "closeDate": "2026-09-06",
+          "sourceRow": 259,
+          "link": "MAP"
+        }
+      }
+    },
+    "b0275": {
+      "aliases": [
+        "화순금모래"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-06-24",
+          "closeDate": "2026-09-06",
+          "sourceRow": 260,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0276": {
+      "aliases": [
+        "곽지과물"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-06-24",
+          "closeDate": "2026-09-06",
+          "sourceRow": 249,
+          "link": "MAP"
+        }
+      }
+    },
+    "b0278": {
+      "aliases": [
+        "김녕성세기"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-06-24",
+          "closeDate": "2026-09-06",
+          "sourceRow": 251,
+          "link": "MAP"
+        }
+      }
+    },
+    "b0279": {
+      "aliases": [
+        "삼양검은모래"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-06-24",
+          "closeDate": "2026-09-06",
+          "sourceRow": 252,
+          "link": "MAP"
+        }
+      }
+    },
+    "b0280": {
+      "aliases": [
+        "이호테우"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-06-24",
+          "closeDate": "2026-09-06",
+          "sourceRow": 253,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0281": {
+      "aliases": [
+        "함덕서우봉"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-06-24",
+          "closeDate": "2026-09-06",
+          "sourceRow": 254,
+          "link": "MAP"
+        }
+      }
+    }
+  }
+}

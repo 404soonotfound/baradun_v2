@@ -1,0 +1,41 @@
+{
+  "id": "b0062",
+  "slug": "imwon",
+  "kind": "beach",
+  "name": {
+    "ko": "임원해수욕장",
+    "en": "Imwon Beach"
+  },
+  "region": {
+    "sido": {
+      "ko": "강원",
+      "en": "Gangwon"
+    },
+    "sigungu": {
+      "ko": "삼척시",
+      "en": "Samcheok"
+    }
+  },
+  "coast": "east",
+  "coords": {
+    "lat": 37.227054,
+    "lng": 129.3416
+  },
+  "activities": [
+    "swimming"
+  ],
+  "hidden": false,
+  "warningZones": {
+    "sea": "S1151300",
+    "land": "L1022010"
+  },
+  "stations": {
+    "waveHeight": null,
+    "wavePeriod": null,
+    "waveDirection": null,
+    "waterTemp": null,
+    "wind": null
+  },
+  "photo": null,
+  "cctv": null
+}

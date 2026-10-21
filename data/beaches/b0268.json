@@ -1,0 +1,41 @@
+{
+  "id": "b0268",
+  "slug": "namildae",
+  "kind": "beach",
+  "name": {
+    "ko": "남일대해수욕장",
+    "en": "Namildae Beach"
+  },
+  "region": {
+    "sido": {
+      "ko": "경남",
+      "en": "Gyeongnam"
+    },
+    "sigungu": {
+      "ko": "사천시",
+      "en": "Sacheon"
+    }
+  },
+  "coast": "south",
+  "coords": {
+    "lat": 34.926702,
+    "lng": 128.096475
+  },
+  "activities": [
+    "swimming"
+  ],
+  "hidden": false,
+  "warningZones": {
+    "sea": "S1311200",
+    "land": "L1082100"
+  },
+  "stations": {
+    "waveHeight": null,
+    "wavePeriod": null,
+    "waveDirection": null,
+    "waterTemp": null,
+    "wind": null
+  },
+  "photo": null,
+  "cctv": null
+}
