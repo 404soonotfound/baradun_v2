@@ -32,6 +32,9 @@
   - 일부만 하는 PR: `Part of BRD-17` (머지돼도 완료되지 않음)
   - 여러 이슈: `Fixes BRD-17, BRD-19`
 - PR 연결과 자동 상태 변경은 Linear GitHub 연동이 있어야 동작한다.
+- PR 담당자(assignee)는 저장소 소유자(@404soonotfound)로 지정한다: `gh pr create --assignee @me`. 작성자 본인은 리뷰어로 지정할 수 없으므로 리뷰 요청(`--reviewer`)은 하지 않는다.
+- 코드 리뷰는 PR에 `@codex review` 댓글로 요청한다. 리뷰 지적에는 고친 커밋이나 고치지 않은 근거(노션 기준)를 한국어 답글로 남긴다. 머지는 사용자가 한다.
+- 커밋 메시지와 PR 설명에 세션 주소(Claude-Session 등)를 넣지 않는다. Co-Authored-By 줄은 둔다.
 
 ## 이슈 상태
 
