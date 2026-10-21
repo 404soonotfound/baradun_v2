@@ -1,0 +1,211 @@
+{
+  "_meta": {
+    "note": "BRD-59 판정 원자료 목록(원자료는 저장소에 넣지 않음, 아키텍처 2.2 10/21). 스크립트는 BARADUN_GIS_DIR(기본 ~/data/baradun-gis)·BARADUN_DATA_DIR(기본 ~/data)에서 읽음. 수집본(out/: beaches.csv·stations.csv·freshness·warnings)·구역 근거 json·responses/ 실응답 저장본·생성 중간 산출물은 $BARADUN_DATA_DIR/baradun-coverage. 근거에 남은 tools/coverage/… 표기는 수집 당시 위치(기록용)",
+    "checked_at": "2026-10-21"
+  },
+  "files": [
+    {
+      "name": "국립해양조사원 2026 해안선(shp)",
+      "path": "$BARADUN_GIS_DIR/coastline_2026/2026 해안선.shp",
+      "source_url": "https://www.data.go.kr/data/15083948/fileData.do",
+      "base_date": "2026",
+      "sha256": "0a79e42bb96dca54a42a6522119648b58499ba41c915029febc4f1d3744426f4"
+    },
+    {
+      "name": "국립해양조사원 2026 해안선(dbf)",
+      "path": "$BARADUN_GIS_DIR/coastline_2026/2026 해안선.dbf",
+      "source_url": "https://www.data.go.kr/data/15083948/fileData.do",
+      "base_date": "2026",
+      "sha256": "06a60b64c38465360d34eb335d6132cdb6fe48b34caf4969c497f71d9088db9c"
+    },
+    {
+      "name": "브이월드 법정 읍면동 경계 LSMD_ADM_SECT_UMD_12_202610(shp)",
+      "path": "$BARADUN_GIS_DIR/vworld_umd/LSMD_ADM_SECT_UMD_12_202610/LSMD_ADM_SECT_UMD_12_202610.shp",
+      "source_url": "https://www.vworld.kr/dtmk/dtmk_ntads_s002.do?dsId=30603",
+      "base_date": "2026-10",
+      "sha256": "482042d76e2a12c878f1db7c76943124ef013d83aff2a87e70609abbb73ec21e"
+    },
+    {
+      "name": "브이월드 법정 읍면동 경계 LSMD_ADM_SECT_UMD_12_202610(dbf)",
+      "path": "$BARADUN_GIS_DIR/vworld_umd/LSMD_ADM_SECT_UMD_12_202610/LSMD_ADM_SECT_UMD_12_202610.dbf",
+      "source_url": "https://www.vworld.kr/dtmk/dtmk_ntads_s002.do?dsId=30603",
+      "base_date": "2026-10",
+      "sha256": "0bae0211c7dc514415b484b23eb4aaa7d506fb1cbd005d666c13c1f45dfd20c0"
+    },
+    {
+      "name": "브이월드 법정 읍면동 경계 LSMD_ADM_SECT_UMD_26_202610(shp)",
+      "path": "$BARADUN_GIS_DIR/vworld_umd/LSMD_ADM_SECT_UMD_26_202610/LSMD_ADM_SECT_UMD_26_202610.shp",
+      "source_url": "https://www.vworld.kr/dtmk/dtmk_ntads_s002.do?dsId=30603",
+      "base_date": "2026-10",
+      "sha256": "bf7e14aa81b22d860a5dd4f108086b4ec5b9a9b90d5df7b136a2a34e4a7c24e3"
+    },
+    {
+      "name": "브이월드 법정 읍면동 경계 LSMD_ADM_SECT_UMD_26_202610(dbf)",
+      "path": "$BARADUN_GIS_DIR/vworld_umd/LSMD_ADM_SECT_UMD_26_202610/LSMD_ADM_SECT_UMD_26_202610.dbf",
+      "source_url": "https://www.vworld.kr/dtmk/dtmk_ntads_s002.do?dsId=30603",
+      "base_date": "2026-10",
+      "sha256": "e92795bfe16d8ca2685320e1cc362719b82251ebea6fbaf65407f16c678ad47d"
+    },
+    {
+      "name": "브이월드 법정 읍면동 경계 LSMD_ADM_SECT_UMD_28_202610(shp)",
+      "path": "$BARADUN_GIS_DIR/vworld_umd/LSMD_ADM_SECT_UMD_28_202610/LSMD_ADM_SECT_UMD_28_202610.shp",
+      "source_url": "https://www.vworld.kr/dtmk/dtmk_ntads_s002.do?dsId=30603",
+      "base_date": "2026-10",
+      "sha256": "1341ac56f811935e6696558e7b365618a3c450352a48a54f235606302406941b"
+    },
+    {
+      "name": "브이월드 법정 읍면동 경계 LSMD_ADM_SECT_UMD_28_202610(dbf)",
+      "path": "$BARADUN_GIS_DIR/vworld_umd/LSMD_ADM_SECT_UMD_28_202610/LSMD_ADM_SECT_UMD_28_202610.dbf",
+      "source_url": "https://www.vworld.kr/dtmk/dtmk_ntads_s002.do?dsId=30603",
+      "base_date": "2026-10",
+      "sha256": "01bb8e0703e132da7ad84db0c75b32f2b6df2b76a49fc5bc753cecd523285d01"
+    },
+    {
+      "name": "브이월드 법정 읍면동 경계 LSMD_ADM_SECT_UMD_31_202610(shp)",
+      "path": "$BARADUN_GIS_DIR/vworld_umd/LSMD_ADM_SECT_UMD_31_202610/LSMD_ADM_SECT_UMD_31_202610.shp",
+      "source_url": "https://www.vworld.kr/dtmk/dtmk_ntads_s002.do?dsId=30603",
+      "base_date": "2026-10",
+      "sha256": "9fda4a61548448811b6f287d922727d82facd5ca149493b4430c9a2197dc2369"
+    },
+    {
+      "name": "브이월드 법정 읍면동 경계 LSMD_ADM_SECT_UMD_31_202610(dbf)",
+      "path": "$BARADUN_GIS_DIR/vworld_umd/LSMD_ADM_SECT_UMD_31_202610/LSMD_ADM_SECT_UMD_31_202610.dbf",
+      "source_url": "https://www.vworld.kr/dtmk/dtmk_ntads_s002.do?dsId=30603",
+      "base_date": "2026-10",
+      "sha256": "76dcf3a6c771051e62bc5ef8b27ccb0e49b1cc493fd3c97471f3143a6ea14cc3"
+    },
+    {
+      "name": "브이월드 법정 읍면동 경계 LSMD_ADM_SECT_UMD_41_202610(shp)",
+      "path": "$BARADUN_GIS_DIR/vworld_umd/LSMD_ADM_SECT_UMD_41_202610/LSMD_ADM_SECT_UMD_41_202610.shp",
+      "source_url": "https://www.vworld.kr/dtmk/dtmk_ntads_s002.do?dsId=30603",
+      "base_date": "2026-10",
+      "sha256": "a065935109c010c6538a8d41bb9a51167caad58b47f05eda9006f4d5d9c84150"
+    },
+    {
+      "name": "브이월드 법정 읍면동 경계 LSMD_ADM_SECT_UMD_41_202610(dbf)",
+      "path": "$BARADUN_GIS_DIR/vworld_umd/LSMD_ADM_SECT_UMD_41_202610/LSMD_ADM_SECT_UMD_41_202610.dbf",
+      "source_url": "https://www.vworld.kr/dtmk/dtmk_ntads_s002.do?dsId=30603",
+      "base_date": "2026-10",
+      "sha256": "2cd164efebd1e231357625c1672c70c9e297b7415cfddb9dd47684b165f4814c"
+    },
+    {
+      "name": "브이월드 법정 읍면동 경계 LSMD_ADM_SECT_UMD_44_202610(shp)",
+      "path": "$BARADUN_GIS_DIR/vworld_umd/LSMD_ADM_SECT_UMD_44_202610/LSMD_ADM_SECT_UMD_44_202610.shp",
+      "source_url": "https://www.vworld.kr/dtmk/dtmk_ntads_s002.do?dsId=30603",
+      "base_date": "2026-10",
+      "sha256": "5875a98cf33d24a9ea6ec4356cdb1eca698e94be9ee7abe2e35c2183c96302cd"
+    },
+    {
+      "name": "브이월드 법정 읍면동 경계 LSMD_ADM_SECT_UMD_44_202610(dbf)",
+      "path": "$BARADUN_GIS_DIR/vworld_umd/LSMD_ADM_SECT_UMD_44_202610/LSMD_ADM_SECT_UMD_44_202610.dbf",
+      "source_url": "https://www.vworld.kr/dtmk/dtmk_ntads_s002.do?dsId=30603",
+      "base_date": "2026-10",
+      "sha256": "7464a2d963f0953bbbf895675bb5632f80d3b1c64031b919706a94c4f93d3a87"
+    },
+    {
+      "name": "브이월드 법정 읍면동 경계 LSMD_ADM_SECT_UMD_47_202610(shp)",
+      "path": "$BARADUN_GIS_DIR/vworld_umd/LSMD_ADM_SECT_UMD_47_202610/LSMD_ADM_SECT_UMD_47_202610.shp",
+      "source_url": "https://www.vworld.kr/dtmk/dtmk_ntads_s002.do?dsId=30603",
+      "base_date": "2026-10",
+      "sha256": "15337a7816b507db21b28d577397e9f8c0e2475ff124b1979f956dc17dfbf308"
+    },
+    {
+      "name": "브이월드 법정 읍면동 경계 LSMD_ADM_SECT_UMD_47_202610(dbf)",
+      "path": "$BARADUN_GIS_DIR/vworld_umd/LSMD_ADM_SECT_UMD_47_202610/LSMD_ADM_SECT_UMD_47_202610.dbf",
+      "source_url": "https://www.vworld.kr/dtmk/dtmk_ntads_s002.do?dsId=30603",
+      "base_date": "2026-10",
+      "sha256": "0111b0433a1f3b83017e9f96dc50cd24e3016ffe1fc6b52d8acecc023552d176"
+    },
+    {
+      "name": "브이월드 법정 읍면동 경계 LSMD_ADM_SECT_UMD_48_202610(shp)",
+      "path": "$BARADUN_GIS_DIR/vworld_umd/LSMD_ADM_SECT_UMD_48_202610/LSMD_ADM_SECT_UMD_48_202610.shp",
+      "source_url": "https://www.vworld.kr/dtmk/dtmk_ntads_s002.do?dsId=30603",
+      "base_date": "2026-10",
+      "sha256": "931f9e6de20d724473e356aad25a1502312bb8defce5ac8487115929b31faba1"
+    },
+    {
+      "name": "브이월드 법정 읍면동 경계 LSMD_ADM_SECT_UMD_48_202610(dbf)",
+      "path": "$BARADUN_GIS_DIR/vworld_umd/LSMD_ADM_SECT_UMD_48_202610/LSMD_ADM_SECT_UMD_48_202610.dbf",
+      "source_url": "https://www.vworld.kr/dtmk/dtmk_ntads_s002.do?dsId=30603",
+      "base_date": "2026-10",
+      "sha256": "465a94939aba506657723bc085fc49fa23989f3838ddd2899c7c375960b38c71"
+    },
+    {
+      "name": "브이월드 법정 읍면동 경계 LSMD_ADM_SECT_UMD_50_202610(shp)",
+      "path": "$BARADUN_GIS_DIR/vworld_umd/LSMD_ADM_SECT_UMD_50_202610/LSMD_ADM_SECT_UMD_50_202610.shp",
+      "source_url": "https://www.vworld.kr/dtmk/dtmk_ntads_s002.do?dsId=30603",
+      "base_date": "2026-10",
+      "sha256": "2da71d220258d2b18a7b71f6c4f7e387c9e651b861f68024e1553f3cc74403e8"
+    },
+    {
+      "name": "브이월드 법정 읍면동 경계 LSMD_ADM_SECT_UMD_50_202610(dbf)",
+      "path": "$BARADUN_GIS_DIR/vworld_umd/LSMD_ADM_SECT_UMD_50_202610/LSMD_ADM_SECT_UMD_50_202610.dbf",
+      "source_url": "https://www.vworld.kr/dtmk/dtmk_ntads_s002.do?dsId=30603",
+      "base_date": "2026-10",
+      "sha256": "e7c48cd08542008a18279055e64906d1a146704b2108da170f6617f5f8d23284"
+    },
+    {
+      "name": "브이월드 법정 읍면동 경계 LSMD_ADM_SECT_UMD_51_202610(shp)",
+      "path": "$BARADUN_GIS_DIR/vworld_umd/LSMD_ADM_SECT_UMD_51_202610/LSMD_ADM_SECT_UMD_51_202610.shp",
+      "source_url": "https://www.vworld.kr/dtmk/dtmk_ntads_s002.do?dsId=30603",
+      "base_date": "2026-10",
+      "sha256": "6737fde99e86e4788099db1dc8d31a499722d64b0ff053a1c0c32546dd888b21"
+    },
+    {
+      "name": "브이월드 법정 읍면동 경계 LSMD_ADM_SECT_UMD_51_202610(dbf)",
+      "path": "$BARADUN_GIS_DIR/vworld_umd/LSMD_ADM_SECT_UMD_51_202610/LSMD_ADM_SECT_UMD_51_202610.dbf",
+      "source_url": "https://www.vworld.kr/dtmk/dtmk_ntads_s002.do?dsId=30603",
+      "base_date": "2026-10",
+      "sha256": "f7e2659b74f1f02775ab17baf3ed8c9dc99b968ab32f7c63264b0230c92ab6e5"
+    },
+    {
+      "name": "브이월드 법정 읍면동 경계 LSMD_ADM_SECT_UMD_52_202610(shp)",
+      "path": "$BARADUN_GIS_DIR/vworld_umd/LSMD_ADM_SECT_UMD_52_202610/LSMD_ADM_SECT_UMD_52_202610.shp",
+      "source_url": "https://www.vworld.kr/dtmk/dtmk_ntads_s002.do?dsId=30603",
+      "base_date": "2026-10",
+      "sha256": "be1a303d0b9e75887e8d5ed07ff7addc2eceaedb55c402fc3413c239c8dea7b5"
+    },
+    {
+      "name": "브이월드 법정 읍면동 경계 LSMD_ADM_SECT_UMD_52_202610(dbf)",
+      "path": "$BARADUN_GIS_DIR/vworld_umd/LSMD_ADM_SECT_UMD_52_202610/LSMD_ADM_SECT_UMD_52_202610.dbf",
+      "source_url": "https://www.vworld.kr/dtmk/dtmk_ntads_s002.do?dsId=30603",
+      "base_date": "2026-10",
+      "sha256": "aa6186387f644ff49f8806efb0c0540bfa6e3c189590dfcbbcb9d0a069ca39e6"
+    },
+    {
+      "name": "해양수산부 2026 해수욕장 지정 및 개장현황",
+      "path": "$BARADUN_DATA_DIR/2026_해수욕장_현황_해수부.xlsx",
+      "source_url": "https://www.mof.go.kr/doc/ko/selectDoc.do?menuSeq=427&bbsSeq=2&docSeq=67910",
+      "base_date": "2026-08-11",
+      "sha256": "2054f5f8d37a4dee1b3686921a93754cae34f64b39462540b8d9d4b8f5d903fc"
+    },
+    {
+      "name": "국토교통부 법정동코드",
+      "path": "$BARADUN_DATA_DIR/국토교통부_법정동코드_20260929.csv",
+      "source_url": "https://www.data.go.kr/data/15123287/fileData.do",
+      "base_date": "2026-09-29",
+      "sha256": "c9a5db5b21cab5cbf783e2f3e0ddd3f025750dba0c2a86f5f4840f2dac03ff18"
+    },
+    {
+      "name": "예보업무규정 별표 원문 [별표 5] 해양기상국지예보구역",
+      "path": "$BARADUN_DATA_DIR/[별표 5] 해양기상국지예보구역(제6조제2항제4호 관련)(예보업무규정).pdf",
+      "source_url": "https://www.law.go.kr/LSW/flDownload.do?flSeq=166843467&bylClsCd=200201",
+      "base_date": "제1185호 2026-06-01 시행",
+      "sha256": "12b6ad61539ea6a14f911948bd21b589d1606fbf4980e83c01a41b48e64e1e9d"
+    },
+    {
+      "name": "예보업무규정 별표 원문 육상에 대한 특보 및 예비특보의 세부 대상구역",
+      "path": "$BARADUN_DATA_DIR/육상에 대한 특보 및 예비특보의 세부 대상구역(제11조제1항 관련)(예보업무규정).pdf",
+      "source_url": "https://www.law.go.kr/LSW/flDownload.do?flSeq=166843509&bylClsCd=200201",
+      "base_date": "제1185호 2026-06-01 시행",
+      "sha256": "dd767ec22b56b0e47e33b68b086c68fd2bca83d8fd04f2c23445bf1ec2a0a7fa"
+    },
+    {
+      "name": "예보업무규정 별표 원문 육상에 대한 특보의 세부 대상구역",
+      "path": "$BARADUN_DATA_DIR/육상에 대한 특보의 세부 대상구역(제12조제3항 및 제20조제1항 관련)(예보업무규정).pdf",
+      "source_url": "https://www.law.go.kr/LSW/flDownload.do?flSeq=153069695",
+      "base_date": "제1153호(종전)",
+      "sha256": "0d7e6d95df06a31a5eb77ad166da48d18a4599218d512d2b08285d93f91c9ba8"
+    }
+  ]
+}
