@@ -18,12 +18,32 @@ export const DEVICE_CLOCK: Clock = { offsetMs: 0, trusted: false };
 
 // 계약 date-time(RFC 3339): 시간대(Z·±hh:mm)가 있어야 함. 없으면 Date.parse가 기기 현지 시각으로 읽어 KST·UTC가 섞임
 const DATE_TIME_PATTERN =
-  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/;
+  /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(\.\d+)?(Z|[+-](\d{2}):(\d{2}))$/;
 
+// 존재하는 날짜·시각인지도 확인. Date.parse는 2월 30일·24시를 다음 날로 넘겨 읽어서 형식 검사만으로는 통과함
 export function isTime(value: unknown): value is string {
+  if (typeof value !== "string") return false;
+  const match = DATE_TIME_PATTERN.exec(value);
+  if (!match) return false;
+  const [year, month, day, hour, minute, second] = match
+    .slice(1, 7)
+    .map(Number) as [number, number, number, number, number, number];
+  const offsetHour = match[9] === undefined ? 0 : Number(match[9]);
+  const offsetMinute = match[10] === undefined ? 0 : Number(match[10]);
+  // 그 달의 마지막 날(다음 달 0일). Date.UTC는 0~99년을 1900년대로 읽어 setUTCFullYear로 연도를 그대로 넣음
+  const lastDay = new Date(0);
+  lastDay.setUTCFullYear(year, month, 0);
+  const daysInMonth = lastDay.getUTCDate();
   return (
-    typeof value === "string" &&
-    DATE_TIME_PATTERN.test(value) &&
+    month >= 1 &&
+    month <= 12 &&
+    day >= 1 &&
+    day <= daysInMonth &&
+    hour <= 23 &&
+    minute <= 59 &&
+    second <= 59 &&
+    offsetHour <= 23 &&
+    offsetMinute <= 59 &&
     Number.isFinite(Date.parse(value))
   );
 }

@@ -328,18 +328,18 @@ describe("지원 범위 밖 schemaVersion", () => {
     expect(second.store.getState().phase).toBe("schema_unsupported");
   });
 
-  it("다시 지원 범위 안이 되면 기록을 지우고 정상", async () => {
+  it("다시 지원 범위 안이 되면 정상(새로고침 기록은 남겨 반복 방지)", async () => {
     const session = memoryStorage();
     const { store, server, reload } = setup({ session });
     server.manifest = { ...manifestExample, schemaVersion: 2 };
-    session.setItem("baradun:schema-reload", "1");
+    session.setItem("baradun:schema-reload", "2");
     store.start();
     await store.refresh();
     expect(store.getState().phase).toBe("schema_unsupported");
     server.manifest = manifestExample;
     await store.refresh();
     expect(store.getState().phase).toBe("ready");
-    expect(session.data.size).toBe(0);
+    expect(session.data.get("baradun:schema-reload")).toBe("2");
     expect(reload).not.toHaveBeenCalled();
   });
 
@@ -731,7 +731,7 @@ describe("전체 재검증", () => {
 
   it("지원 밖 형식 배너는 네트워크 실패 한 번으로 풀리지 않음", async () => {
     const session = memoryStorage();
-    session.setItem("baradun:schema-reload", "1");
+    session.setItem("baradun:schema-reload", "2");
     const { store, server } = setup({ session });
     server.manifest = { ...manifestExample, schemaVersion: 2 };
     store.start();
@@ -928,5 +928,70 @@ describe("점검 해제 후 status 실패", () => {
     expect(
       deriveBeachView({ id: "b0002", hidden: false }, store.getState()),
     ).toMatchObject({ category: "unavailable", stale: true });
+  });
+});
+
+describe("지원 밖 형식 이후 (Claude 리뷰)", () => {
+  it("버전 전환 중 v1·v2가 번갈아 와도 새로고침은 탭당 한 번", async () => {
+    const session = memoryStorage();
+    const first = setup({ session });
+    first.server.manifest = { ...manifestExample, schemaVersion: 2 };
+    first.store.start();
+    await first.store.refresh();
+    expect(first.reload).toHaveBeenCalledTimes(1);
+
+    const second = setup({ session, server: first.server });
+    second.server.manifest = manifestExample;
+    second.store.start();
+    await second.store.refresh();
+    expect(second.store.getState().phase).toBe("ready");
+    second.server.manifest = { ...manifestExample, schemaVersion: 2 };
+    await second.store.refresh();
+    expect(second.reload).not.toHaveBeenCalled();
+    expect(second.store.getState().phase).toBe("schema_unsupported");
+  });
+
+  it("지원 밖 형식 화면에서 지원 manifest를 받고 status만 실패 → 배너를 풀고 B5(발효 특보 유지)", async () => {
+    const session = memoryStorage();
+    session.setItem("baradun:schema-reload", "2");
+    const { store, server } = setup({ session });
+    store.start();
+    await store.refresh();
+    server.manifest = { ...manifestExample, schemaVersion: 2 };
+    await store.refresh();
+    expect(store.getState().phase).toBe("schema_unsupported");
+
+    server.manifest = {
+      ...manifestExample,
+      snapshotVersion: "20261017T060000Z",
+      generatedAt: "2026-10-17T05:30:30Z",
+      files: {
+        ...manifestExample.files,
+        status: "/data/20261017T060000Z/status.json",
+      },
+    };
+    server.statusDown = true;
+    await store.refresh();
+    expect(store.getState()).toMatchObject({ phase: "ready", live: false });
+    expect(
+      deriveBeachView({ id: "b0002", hidden: false }, store.getState()),
+    ).toMatchObject({
+      category: "unavailable",
+      badge: { kind: "warning", type: "wind_wave" },
+      stale: true,
+    });
+  });
+});
+
+describe("버전마다 새로고침 한 번", () => {
+  it("v2로 한 번 새로고침한 탭에 나중에 v3가 오면 다시 한 번 새로고침", async () => {
+    const session = memoryStorage();
+    session.setItem("baradun:schema-reload", "2");
+    const { store, server, reload } = setup({ session });
+    server.manifest = { ...manifestExample, schemaVersion: 3 };
+    store.start();
+    await store.refresh();
+    expect(reload).toHaveBeenCalledTimes(1);
+    expect(session.data.get("baradun:schema-reload")).toBe("3");
   });
 });

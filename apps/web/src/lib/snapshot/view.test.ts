@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import type { BeachStatus, StatusFile } from "@baradun/contracts";
 import { describe, expect, it } from "vitest";
 
-import { clockFromHeaders, DEVICE_CLOCK, type Clock } from "./clock";
+import { clockFromHeaders, DEVICE_CLOCK, isTime, type Clock } from "./clock";
 import { deriveBeachView, type ViewSource } from "./view";
 
 // 해변 화면 상태 검사 (BRD-41). 입력은 계약 예시 데이터(아키텍처 17.3)
@@ -939,5 +939,61 @@ describe("지표 expiresAt을 관측 시각 + 유효시간과 대조 (B4)", () =
       source("2026-10-17T05:30:00Z", {}, statuses),
     );
     expect(view).toMatchObject({ category: "undetermined" });
+  });
+});
+
+describe("B5 원래 판단불가였던 해변의 사유 (Claude 리뷰)", () => {
+  it("관측 지연이던 해변이 오프라인 → 배지는 특보 확인 못 함, 사유에 관측 지연 유지", () => {
+    const view = deriveBeachView(
+      beach("b0003"),
+      source("2026-10-17T05:30:00Z", { live: false }),
+    );
+    expect(view).toMatchObject({
+      category: "undetermined",
+      badge: { kind: "warning_unknown" },
+      reasons: [{ kind: "warning_unknown" }, { kind: "observation_delayed" }],
+    });
+  });
+
+  it("사유가 없거나 모르는 code면 일반 단어('확인 못 함')를 배지 뒤에 겹쳐 붙이지 않음", () => {
+    const statuses = withStatus("b0003", (s) => {
+      s.reasons = [{ code: "new_reason" } as unknown as (typeof s.reasons)[0]];
+    });
+    const view = deriveBeachView(
+      beach("b0003"),
+      source("2026-10-17T05:30:00Z", { live: false }, statuses),
+    );
+    expect(view).toMatchObject({ reasons: [{ kind: "warning_unknown" }] });
+    expect(view.kind === "ready" && view.reasons).toHaveLength(1);
+  });
+});
+
+describe("존재하지 않는 날짜·시각 (Claude 리뷰)", () => {
+  it.each([
+    "2026-02-30T00:00:00Z",
+    "2026-02-29T05:00:00Z",
+    "2026-13-01T00:00:00Z",
+    "2026-10-17T24:00:00Z",
+    "2026-10-17T05:60:00Z",
+    "2026-10-17T05:18:40+24:00",
+  ])("확인 시각 %s → isTime 거부, '특보 없음' 근거 아님", (at) => {
+    // 관계 검사(확인 + 45분)보다 먼저 시각 자체를 거부하는지 직접 확인
+    expect(isTime(at)).toBe(false);
+    const statuses = withStatus("b0001", (s) => {
+      s.warning.lastConfirmedAt = at;
+    });
+    const view = deriveBeachView(
+      beach("b0001"),
+      source("2026-10-17T05:30:00Z", {}, statuses),
+    );
+    expect(view).toMatchObject({ category: "undetermined" });
+  });
+
+  it.each([
+    "2028-02-29T05:00:00Z",
+    "2026-10-17T14:18:40+09:00",
+    "0000-02-29T00:00:00Z",
+  ])("isTime: 있는 시각 %s 는 통과", (at) => {
+    expect(isTime(at)).toBe(true);
   });
 });

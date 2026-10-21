@@ -351,12 +351,21 @@ export function deriveBeachView(
     };
   }
   // 그 외('특보 없음'이던 해변 포함)는 특보 확인 못 함. 마지막 확인 시각을 알면 함께 보여줌
-  // (알고 있는 시각을 '확인 시각 모름'으로 안내하지 않게)
+  // (알고 있는 시각을 '확인 시각 모름'으로 안내하지 않게).
+  // 원래 판단불가였으면 게시된 사유(예: 관측 지연)도 뒤에 남김.
+  // 사유가 없거나 모르는 code일 때의 일반 단어('확인 못 함')는 배지와 겹쳐 빼둠
+  const previous =
+    category === "undetermined"
+      ? reasonLabels(status.reasons, category).filter(
+          (label) =>
+            label.kind !== "warning_unknown" && label.kind !== "unconfirmed",
+        )
+      : [];
   return {
     kind: "ready",
     category: "undetermined",
     badge: { kind: "warning_unknown" },
-    reasons: [{ kind: "warning_unknown" }],
+    reasons: [{ kind: "warning_unknown" }, ...previous],
     stale: true,
     confirmedAt,
     metrics,
