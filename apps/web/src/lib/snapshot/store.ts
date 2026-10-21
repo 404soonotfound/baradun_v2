@@ -233,14 +233,15 @@ export function createSnapshotStore(deps: SnapshotDeps): SnapshotStore {
   }
 
   // fresh: 이번 조회에서 manifest를 받아 서버 시각을 알았으면 그 시계(status 실패여도 버리지 않음)
-  // maintenanceEnded: 이번 manifest가 점검 중이 아님을 확인함(status만 실패) → 점검 화면을 풀고 B5로
-  function fail(fresh?: Clock, maintenanceEnded = false) {
+  // manifestOk: 이번 manifest가 지원 형식이고 점검 중이 아님을 확인함(status만 실패)
+  // → 점검 화면·지원 밖 형식 배너를 풀고 B5로(마지막 발효 특보 배지가 사라지지 않게)
+  function fail(fresh?: Clock, manifestOk = false) {
     showStored();
     const { manifest, statuses } = state;
     const clock = fresh ?? state.clock;
     const keep =
-      state.phase === "schema_unsupported" ||
-      (state.phase === "maintenance" && !maintenanceEnded);
+      !manifestOk &&
+      (state.phase === "schema_unsupported" || state.phase === "maintenance");
     set({
       // 점검 화면·지원 밖 형식 배너는 그대로 둠. 처음부터 못 받았으면 데이터 없이 판단불가
       phase: keep ? state.phase : "ready",
@@ -252,13 +253,16 @@ export function createSnapshotStore(deps: SnapshotDeps): SnapshotStore {
     });
   }
 
-  function unsupported() {
+  // 지원 밖 schemaVersion마다 한 번만 새로고침(9.1 '자동 새로고침 1회'). 기록에 그 버전을 남겨서
+  // 버전 전환 중 v1·v2가 번갈아 와도 반복하지 않고, 나중에 새 버전(v3)이 나오면 다시 한 번 새로고침함
+  function unsupported(version: number) {
+    const mark = String(version);
     const reloaded = safe(() => deps.session?.getItem(SCHEMA_RELOAD_KEY));
-    if (reloaded !== "1") {
-      // 새 화면 파일이 나왔을 수 있어 한 번만 새로고침. 기록을 못 남기면 새로고침하지 않음
+    if (reloaded !== mark) {
+      // 새 화면 파일이 나왔을 수 있어 새로고침. 기록을 못 남기면 새로고침하지 않음(무한 새로고침 방지)
       const recorded = safe(() => {
-        deps.session?.setItem(SCHEMA_RELOAD_KEY, "1");
-        return deps.session?.getItem(SCHEMA_RELOAD_KEY) === "1";
+        deps.session?.setItem(SCHEMA_RELOAD_KEY, mark);
+        return deps.session?.getItem(SCHEMA_RELOAD_KEY) === mark;
       });
       if (recorded) {
         deps.reload();
@@ -301,11 +305,12 @@ export function createSnapshotStore(deps: SnapshotDeps): SnapshotStore {
     showStored();
     let manifest: ManifestFile | "unsupported" | null;
     let clock: Clock;
+    let body: unknown;
     try {
       // no-cache: 브라우저 캐시를 쓰더라도 매번 서버에 바뀌었는지 확인
-      const { response, body } = await fetchJson(MANIFEST_URL, {
-        cache: "no-cache",
-      });
+      const result = await fetchJson(MANIFEST_URL, { cache: "no-cache" });
+      const { response } = result;
+      body = result.body;
       clock = clockFromHeaders(
         response.headers.get("date"),
         response.headers.get("age"),
@@ -315,10 +320,14 @@ export function createSnapshotStore(deps: SnapshotDeps): SnapshotStore {
     } catch {
       return fail();
     }
-    if (manifest === "unsupported") return unsupported();
+    // "unsupported"는 정수 schemaVersion일 때만 나옴(readManifest)
+    if (manifest === "unsupported") {
+      return unsupported((body as { schemaVersion: number }).schemaVersion);
+    }
     // 읽을 수 없는 응답(캡티브 포털·프록시 오류 등)의 Date 헤더는 우리 서버 시각이 아닐 수 있어 쓰지 않음
     if (!manifest) return fail();
-    safe(() => deps.session?.removeItem(SCHEMA_RELOAD_KEY));
+    // 자동 새로고침 기록은 지우지 않음: 버전 전환 중 엣지가 v1·v2를 번갈아 주면 새로고침이 반복되므로
+    // 같은 버전으로는 이 브라우저 탭에서 한 번만(unsupported)
 
     // 서버 시각이 게시 시각보다 2분 넘게 이르면(캐시가 오래된 응답을 Age 없이 다시 내준 경우 등) 서버 시각을 믿지 않음
     const distrustBefore = (published: ManifestFile | null) => {
