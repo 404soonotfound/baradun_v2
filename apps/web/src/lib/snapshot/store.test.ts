@@ -49,10 +49,13 @@ function fakeServer() {
     sendDate: true,
     down: false,
     statusDown: false,
+    // 응답이 오지 않음(느린 네트워크)
+    hang: false,
     calls: [] as string[],
     fetch: vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
       server.calls.push(url);
+      if (server.hang) return new Promise<Response>(() => {});
       if (server.down) throw new TypeError("Failed to fetch");
       const headers = new Headers();
       if (server.sendDate) {
@@ -202,6 +205,23 @@ describe("갱신 시점", () => {
     setVisible(true);
     await store.refresh();
     expect(manifestCalls()).toBe(2);
+  });
+
+  it("안 보이는 동안 validUntil이 지났으면 복귀 즉시 판단불가(응답을 기다리지 않음)", async () => {
+    const { store, server, setVisible } = setup();
+    store.start();
+    await store.refresh();
+    setVisible(false);
+    // 예시 validUntil 06:03:40을 넘겨 06:10에 복귀, 응답은 오지 않음
+    vi.setSystemTime(Date.parse("2026-10-17T06:10:00Z"));
+    server.hang = true;
+    setVisible(true);
+    expect(
+      deriveBeachView({ id: "b0001", hidden: false }, store.getState()),
+    ).toMatchObject({
+      category: "undetermined",
+      badge: { kind: "warning_unknown" },
+    });
   });
 
   it("처음에 안 보이는 상태로 열리면 보일 때까지 받지 않음", async () => {

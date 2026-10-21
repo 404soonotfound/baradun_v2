@@ -301,6 +301,9 @@ export function createSnapshotStore(deps: SnapshotDeps): SnapshotStore {
   function resume() {
     if (pollTimer) clearInterval(pollTimer);
     pollTimer = setInterval(() => void refresh(), POLL_INTERVAL_MS);
+    // 안 보이는 동안 만료 타이머가 멈춰 있었음. 응답을 기다리지 않고 지금 시각으로 먼저 다시 계산
+    // (그사이 지난 validUntil은 바로 판단불가로 보임)
+    if (state.statuses) set({ nowMs: now() });
     void refresh();
   }
 
