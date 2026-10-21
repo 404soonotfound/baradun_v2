@@ -305,6 +305,89 @@ describe("오프라인·만료·장애 (B5)", () => {
   });
 });
 
+describe("근거가 빠지거나 모순된 '특보 없음'은 판단불가", () => {
+  it.each([
+    ["특보 상태 없음", (s: Record<string, unknown>) => delete s.warning],
+    [
+      "사유가 있음",
+      (s: Record<string, unknown>) => {
+        s.reasons = [
+          { code: "warning_unknown", scope: "x", source: "기상청", at: null },
+        ];
+      },
+    ],
+    ["사유 목록 없음", (s: Record<string, unknown>) => delete s.reasons],
+    [
+      "특보 state가 none이 아님",
+      (s: BeachStatus) => {
+        s.warning.state = "active";
+      },
+    ],
+    [
+      "특보 항목이 있음",
+      (s: BeachStatus) => {
+        s.warning.items = [
+          {
+            type: "wind_wave",
+            level: "advisory",
+            zoneCode: "S1",
+            zoneName: "x",
+            publishedAt: "2026-10-17T04:00:00Z",
+            effectiveFrom: "2026-10-17T04:00:00Z",
+          },
+        ];
+      },
+    ],
+    [
+      "출처 없음",
+      (s: BeachStatus) => {
+        s.warning.source = "";
+      },
+    ],
+    [
+      "확인 시각 없음",
+      (s: BeachStatus) => {
+        s.warning.lastConfirmedAt = null;
+      },
+    ],
+    [
+      "파고 delayed",
+      (s: BeachStatus) => {
+        s.observation.metrics.waveHeight.state = "delayed";
+      },
+    ],
+    [
+      "파고 항목 없음",
+      (s: Record<string, unknown>) => {
+        s.observation = { metrics: {} };
+      },
+    ],
+  ])("%s", (_, change) => {
+    const statuses = withStatus("b0001", (status) =>
+      (change as (s: BeachStatus) => void)(status),
+    );
+    const view = deriveBeachView(
+      beach("b0001"),
+      source("2026-10-17T05:30:00Z", {}, statuses),
+    );
+    expect(view).toMatchObject({
+      category: "undetermined",
+      badge: { kind: "unconfirmed" },
+    });
+  });
+
+  it("이용불가는 근거가 일부 빠져도 이용불가 유지(위험 정보는 사라지지 않음)", () => {
+    const statuses = withStatus("b0002", (status) => {
+      delete (status as Partial<BeachStatus>).warning;
+    });
+    const view = deriveBeachView(
+      beach("b0002"),
+      source("2026-10-17T05:30:00Z", {}, statuses),
+    );
+    expect(view).toMatchObject({ category: "unavailable" });
+  });
+});
+
 describe("모르는 데이터 (9.1)", () => {
   it("모르는 사유 code + 이용불가 → 분류 유지, 이름은 '이용 제한'", () => {
     const statuses = withStatus("b0002", (status) => {
