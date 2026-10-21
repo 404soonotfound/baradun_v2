@@ -15,12 +15,39 @@
     },
     "stale": {
       "title": "Observation delayed"
+    },
+    "warning": {
+      "title": "{type} {level}"
+    },
+    "restricted": {
+      "title": "Restricted"
+    },
+    "unconfirmed": {
+      "title": "Not confirmed"
+    },
+    "confirmedUntil": "Checked {time} · not confirmed since"
+  },
+  "warning": {
+    "type": {
+      "wind_wave": "Wind wave",
+      "strong_wind": "Strong wind",
+      "typhoon": "Typhoon",
+      "storm_surge": "Storm surge",
+      "tsunami": "Tsunami"
+    },
+    "level": {
+      "advisory": "advisory",
+      "warning": "warning",
+      "severe_warning": "severe warning"
     }
   },
   "observation": {
     "none": "No nearby observation",
     "measuredAgo": "Measured {minutes} min ago",
     "issuedAt": "Issued {time}"
+  },
+  "dataBanner": {
+    "schemaUnsupported": "We couldn’t read the new data format, so every beach is shown as not confirmed. Please reopen the app in a moment."
   },
   "safety": {
     "finalCall": "On-site control and lifeguard guidance come first."

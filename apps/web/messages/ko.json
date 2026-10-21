@@ -15,12 +15,39 @@
     },
     "stale": {
       "title": "관측 지연"
+    },
+    "warning": {
+      "title": "{type}{level}"
+    },
+    "restricted": {
+      "title": "이용 제한"
+    },
+    "unconfirmed": {
+      "title": "확인 못 함"
+    },
+    "confirmedUntil": "{time} 확인 · 이후 확인 못 함"
+  },
+  "warning": {
+    "type": {
+      "wind_wave": "풍랑",
+      "strong_wind": "강풍",
+      "typhoon": "태풍",
+      "storm_surge": "폭풍해일",
+      "tsunami": "지진해일"
+    },
+    "level": {
+      "advisory": "주의보",
+      "warning": "경보",
+      "severe_warning": "중대경보"
     }
   },
   "observation": {
     "none": "가까운 관측 없음",
     "measuredAgo": "{minutes}분 전 측정",
     "issuedAt": "{time} 발표"
+  },
+  "dataBanner": {
+    "schemaUnsupported": "새 데이터 형식을 읽지 못했어요. 모든 해변을 판단불가로 보여줘요. 잠시 뒤 앱을 다시 열어 주세요."
   },
   "safety": {
     "finalCall": "최종 판단은 현장 통제와 안전요원 안내가 우선이에요"
