@@ -72,6 +72,12 @@
   },
   "sheet": { "close": "닫기" },
   "detail": { "sample": "예시 데이터예요. 개발 중에만 보여요." },
+  "photo": {
+    "alt": "{name} 사진",
+    "credit": "사진 출처: {source} · {license}",
+    "creditWithTitle": "사진 출처: {source}, 「{title}」 · {license}",
+    "license": { "kogl-type1": "공공누리 제1유형" }
+  },
   "pages": {
     "explore": "탐색",
     "search": "검색",
