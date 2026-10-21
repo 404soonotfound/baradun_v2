@@ -40,6 +40,12 @@ add('beaches.beach-without-land', 'beaches', (d) => { delete d.beaches[0].warnin
 add('beaches.unknown-kind', 'beaches', (d) => { d.beaches[0].kind = 'harbor'; });
 // 해안 구분 누락
 add('beaches.missing-coast', 'beaches', (d) => { delete d.beaches[0].coast; });
+// 공공누리 1유형 외 사진 (1유형만 사용, 결정 기록 11장 10/21)
+add('beaches.photo-kogl-type3', 'beaches', (d) => { d.beaches[0].photo.license = 'kogl-type3'; });
+// 공공누리 유형을 코드값이 아닌 원문으로 씀
+add('beaches.photo-license-text', 'beaches', (d) => { d.beaches[0].photo.license = '공공누리 제1유형'; });
+// 사진 주소가 https가 아님
+add('beaches.photo-http-url', 'beaches', (d) => { d.beaches[0].photo.url = 'http://example.com/sample-beach.jpg'; });
 
 // 폴더 만들고 파일 저장 (2칸 들여쓰기)
 mkdirSync('examples/invalid', { recursive: true });
