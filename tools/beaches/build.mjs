@@ -1,7 +1,7 @@
 // BRD-59 해변 초안 생성: <지역>.json(레코드) + coverage-<지역>.csv(매트릭스). 강원은 gangwon, 전국은 national
 // 입력: $BARADUN_DATA_DIR/baradun-coverage의 out/·responses/ 수집본만 읽음. <지역>.json·coverage-<지역>.csv도 그곳에 씀. 생성 시 공공데이터 API 호출 없음, 서비스 키 읽지 않음
 // 실행: node tools/beaches/build.mjs [--region 강원|전국|<시·도>]
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { METRICS, assignMetric, loadAssignContext, readCsv, round1 } from "./station-assign.mjs";
@@ -258,7 +258,8 @@ for (const src of beachesSrc) {
 
   if (HELD.has(key)) {
     matrix.push({
-      id: "",
+      // 예전에 id를 받은 해변이 보류로 바뀌면 그 id를 남김(숨긴 해변 파일과 매트릭스 행 연결). 새 id는 만들지 않음
+      id: ids.ids[idKey(src)] ?? "",
       sigungu: src.gugun_nm,
       source_name: src.sta_nm,
       name_ko: "",
@@ -517,10 +518,25 @@ if (process.argv.includes("--publish")) {
   if (TARGET_REGIONS.length < 2) throw new Error("--publish는 --region 전국에서만");
   const DATA = join(HERE, "../../data");
   const strip = ({ _draft, ...beach }) => beach;
-  for (const r of records) {
+  // 전부 검사·생성한 뒤에 씀(중간 실패로 일부만 바뀌지 않게)
+  for (const r of records)
     if (typeof r.slug !== "string" || !r.warningZones?.sea || !r.warningZones?.land) throw new Error(`승격 불가 레코드: ${r.id}`);
-    writeFileSync(join(DATA, "beaches", `${r.id}.json`), `${JSON.stringify(strip(r), null, 2)}\n`);
-  }
+  const BEACH_DIR = join(DATA, "beaches");
+  // 지금 파일 한 번만 읽음(파일 이름 = id, beach-rules.mjs). check-beaches.mjs와 같이 .json 파일 전부 대상, README 등 다른 파일은 그대로
+  const existing = new Map(
+    readdirSync(BEACH_DIR)
+      .filter((f) => f.endsWith(".json"))
+      .map((f) => [f.slice(0, -".json".length), JSON.parse(readFileSync(join(BEACH_DIR, f), "utf8"))]),
+  );
+  // 이번 공개 대상에 없는 해변(보류·자동 제외로 바뀜)은 지우지 않고 hidden: true로 숨김(data/beaches/README, beach-rules.mjs 삭제 금지)
+  const keep = new Set(records.map((r) => r.id));
+  const hidden = [...existing].filter(([id]) => !keep.has(id)).map(([id, beach]) => [id, { ...beach, hidden: true }]);
+  // 매트릭스 행이 없는 파일(원자료에서 빠진 해변, 사람이 직접 추가한 해변)은 숨김 근거가 없어 check-coverage.mjs가 실패하므로 쓰기 전에 멈춤
+  const matrixIds = new Set(matrix.map((r) => r.id).filter(Boolean));
+  const orphans = hidden.filter(([id]) => !matrixIds.has(id)).map(([id]) => id);
+  if (orphans.length) throw new Error(`매트릭스 행 없는 해변 파일(원자료에서 빠졌거나 직접 추가함): ${orphans.join(", ")}`);
+  // 이미 hidden: true인 공개 대상은 숨김 유지(사람이 숨긴 해변이 다음 생성에서 다시 공개되지 않게). 다시 공개는 사람이 false로 바꿈
+  const stillHidden = new Set(records.filter((r) => existing.get(r.id)?.hidden === true).map((r) => r.id));
   const meta = {
     _meta: {
       note: "해변 부가 정보(공개 계약 밖, 결정 기록 11장 10/21 ⑤). 해변 id로 data/beaches와 연결. 검색 별칭·운영 기간",
@@ -532,9 +548,14 @@ if (process.argv.includes("--publish")) {
       season: { 2026: r._draft.season2026.status ? { status: r._draft.season2026.status === "개장" ? "open" : "closed", openDate: r._draft.season2026.openDate, closeDate: r._draft.season2026.closeDate, sourceRow: r._draft.season2026.xlsxRow, link: r._draft.season2026.linkMethod } : null },
     }])),
   };
-  writeFileSync(join(DATA, "beach-meta.json"), `${JSON.stringify(meta, null, 2)}\n`);
   // 공개본은 해변별 결과 칸만(slim-matrix.mjs). 전체 매트릭스는 위 coverage-<지역>.csv
   const csv2 = [SLIM_COLS.join(","), ...slimMatrix(matrix).map((r) => SLIM_COLS.map((c) => csvCell(r[c])).join(","))].join("\n");
+  for (const r of records)
+    writeFileSync(join(BEACH_DIR, `${r.id}.json`), `${JSON.stringify({ ...strip(r), ...(stillHidden.has(r.id) ? { hidden: true } : {}) }, null, 2)}\n`);
+  for (const [id, beach] of hidden) writeFileSync(join(BEACH_DIR, `${id}.json`), `${JSON.stringify(beach, null, 2)}\n`);
+  if (hidden.length) console.log(`공개 대상에서 빠진 해변 숨김(hidden: true) ${hidden.length}개: ${hidden.map(([id]) => id).join(", ")}`);
+  if (stillHidden.size) console.log(`이미 숨긴 해변 숨김 유지 ${stillHidden.size}개: ${[...stillHidden].join(", ")}`);
+  writeFileSync(join(DATA, "beach-meta.json"), `${JSON.stringify(meta, null, 2)}\n`);
   writeFileSync(join(DATA, "beach-coverage.csv"), `${csv2}\n`);
-  console.log(`공개 파일: data/beaches ${records.length}곳, beach-meta.json, beach-coverage.csv ${matrix.length}행`);
+  console.log(`공개 파일: data/beaches ${records.length - stillHidden.size}곳(숨김 ${hidden.length + stillHidden.size}곳 별도), beach-meta.json, beach-coverage.csv ${matrix.length}행`);
 }

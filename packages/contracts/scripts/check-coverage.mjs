@@ -57,7 +57,13 @@ const REQUIRED = ["sea_zone", "sea_basis", "sea_rule_url", "sea_checked_at_kst",
 // 육상 구역 근거: 스쿠버 포인트(dive_point)는 바다 위라 생략 가능(계약 SeaWarningZones), 그 밖은 필수
 const LAND_REQUIRED = ["land_zone", "land_basis", "land_rule_url", "land_checked_at_kst"];
 const METRICS = ["waveHeight", "wavePeriod", "waveDirection", "waterTemp", "wind"];
-for (const b of beaches) {
+// 숨긴 해변(hidden: true): 보류·자동 제외로 바뀌어 숨긴 해변은 2)의 보류·제외 사유 검사로.
+// 매트릭스 행이 아직 공개 단계(SOURCE_CANDIDATE)면 사람이 직접 숨긴 해변(data/beaches/README) → 공개 해변과 같은 근거 검사
+const shown = beaches.filter((b) => !b.hidden);
+const hiddenList = beaches.filter((b) => b.hidden);
+for (const b of hiddenList) if (!idCount.has(b.id)) fail(`${b.id}: 숨긴 해변의 매트릭스 행 없음`);
+const checked = beaches.filter((b) => !b.hidden || byId.get(b.id)?.stage === "SOURCE_CANDIDATE");
+for (const b of checked) {
   const r = byId.get(b.id);
   if (!r) {
     if (!idCount.has(b.id)) fail(`${b.id}: 매트릭스 행 없음`);
@@ -85,7 +91,7 @@ for (const b of beaches) {
   }
 }
 // 2) 공개되지 않은 행: 보류·자동 제외 사유가 있어야 함
-const ids = new Set(beaches.map((b) => b.id));
+const ids = new Set(checked.map((b) => b.id));
 for (const r of matrix) {
   if (r.id && ids.has(r.id)) continue;
   if (!["보류", "자동 제외"].includes(r.stage)) fail(`${r.id || r.source_name}: 공개 안 된 행의 단계가 보류·자동 제외 아님(${r.stage})`);
@@ -99,4 +105,4 @@ if (errors.length) {
   for (const e of errors.slice(0, 50)) console.error(`  - ${e}`);
   process.exit(1);
 }
-console.log(`매트릭스 검사 통과: 공개 ${beaches.length}곳, 매트릭스 ${matrix.length}행`);
+console.log(`매트릭스 검사 통과: 공개 ${shown.length}곳${hiddenList.length ? `(숨김 ${hiddenList.length}곳 별도)` : ""}, 매트릭스 ${matrix.length}행`);
