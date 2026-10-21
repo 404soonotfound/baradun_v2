@@ -518,3 +518,67 @@ describe("요청 시간 제한 (끝나지 않는 응답)", () => {
     });
   });
 });
+
+describe("status 경로를 현재 스냅샷에 묶음", () => {
+  it.each([
+    ["이전 버전 경로", "/data/20261017T050000Z/status.json"],
+    ["외부 주소", "https://example.com/data/20261017T060000Z/status.json"],
+    ["프로토콜 상대 주소", "//example.com/data/20261017T060000Z/status.json"],
+  ])(
+    "%s → 받지 않고 실패(마지막 값), 바른 manifest가 오면 받음",
+    async (_, path) => {
+      const { store, server, statusCalls } = setup();
+      store.start();
+      await store.refresh();
+
+      server.manifest = {
+        ...manifestExample,
+        snapshotVersion: "20261017T060000Z",
+        files: { ...manifestExample.files, status: path },
+      };
+      await store.refresh();
+      expect(server.calls).not.toContain(path);
+      expect(store.getState()).toMatchObject({ live: false });
+      expect(statusCalls()).toBe(1);
+
+      server.manifest = {
+        ...manifestExample,
+        snapshotVersion: "20261017T060000Z",
+        files: {
+          ...manifestExample.files,
+          status: "/data/20261017T060000Z/status.json",
+        },
+      };
+      await store.refresh();
+      expect(server.calls.at(-1)).toBe("/data/20261017T060000Z/status.json");
+      expect(store.getState()).toMatchObject({ live: true });
+    },
+  );
+});
+
+describe("status 실패에도 새로 확인한 서버 시계 유지", () => {
+  it("기기 시계 20분 느림 + 저장된 값 + status 시간 초과 → 서버 시각으로 만료 판정", async () => {
+    const storage = memoryStorage();
+    const online = setup({ storage });
+    online.store.start();
+    await online.store.refresh();
+    online.store.stop();
+
+    // 실제 06:35, 기기 06:15(20분 느림). 파고 expiresAt 06:30은 이미 지남
+    vi.setSystemTime(Date.parse("2026-10-17T06:15:00Z"));
+    const { store, server } = setup({ storage });
+    server.skewMs = 20 * 60_000;
+    server.hangStatus = true;
+    store.start();
+    await vi.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS);
+
+    const state = store.getState();
+    expect(state).toMatchObject({
+      live: false,
+      clock: { offsetMs: 20 * 60_000, trusted: true },
+    });
+    expect(
+      deriveBeachView({ id: "b0001", hidden: false }, state),
+    ).toMatchObject({ metrics: { waveHeight: { kind: "hidden" } } });
+  });
+});
