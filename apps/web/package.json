@@ -10,6 +10,7 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
+    "test": "vitest run",
     "prestorybook": "npm run tokens",
     "storybook": "storybook dev -p 6006",
     "prebuild-storybook": "npm run tokens",
@@ -46,6 +47,7 @@
     "storybook": "^10.2.9",
     "style-dictionary": "^5.6.1",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^5.0.5"
   }
 }
