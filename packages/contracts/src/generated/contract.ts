@@ -79,7 +79,7 @@ export type NullableDateTime2 = string | null;
  */
 export type Metric = Metric1;
 /**
- * 파고·수온·바람 observedAt + 90분, 파주기 + 60분(B4).
+ * 파고·수온·바람 observedAt + 90분, 파주기·파향 + 60분(B4, 파향은 파주기와 같은 kma_buoy, 10/21).
  */
 export type NullableDateTime3 = string | null;
 /**

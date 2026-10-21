@@ -48,7 +48,7 @@
     "issuedAt": "{time} 발표"
   },
   "dataBanner": {
-    "schemaUnsupported": "새 데이터 형식을 읽지 못했어요. 모든 해변을 판단불가로 보여줘요. 잠시 뒤 앱을 다시 열어 주세요."
+    "schemaUnsupported": "새 데이터 형식을 읽지 못했어요. 모든 해변을 '확인 못 함'으로 보여줘요. 잠시 뒤 앱을 다시 열어 주세요."
   },
   "safety": {
     "finalCall": "최종 판단은 현장 통제와 안전요원 안내가 우선이에요"
