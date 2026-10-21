@@ -94,9 +94,10 @@ export function BeachRow({
           "bg-brand-weak shadow-[inset_3px_0_0_var(--color-brand-default)]",
       )}
     >
+      {/* 포커스 바깥선을 안쪽으로 그림: 목록 카드(overflow-hidden)에 바깥쪽 선이 잘리지 않게 */}
       <Link
         href={href}
-        className="flex min-h-touch min-w-0 flex-1 items-center gap-3 py-[13px] pr-3 pl-3.5"
+        className="flex min-h-touch min-w-0 flex-1 items-center gap-3 py-[13px] pr-3 pl-3.5 focus-visible:-outline-offset-2"
       >
         {/* 값이 없을 때 읽어 줄 이유: 측정소 없음(none)과 잠깐 빠짐·늦음(hidden)을 구분 */}
         <WaveGlyph
@@ -151,7 +152,7 @@ export function BeachRow({
           type="button"
           aria-label={removeLabel}
           onClick={onRemove}
-          className="mr-1.5 flex size-touch shrink-0 items-center justify-center rounded-full text-text-muted"
+          className="mr-1.5 flex size-touch shrink-0 items-center justify-center rounded-full text-text-muted focus-visible:-outline-offset-2"
         >
           <X aria-hidden="true" size={16} />
         </button>
