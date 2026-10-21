@@ -17,6 +17,11 @@ export type NullableDateTime = string | null;
  */
 export type SnapshotPath = string;
 /**
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "Beach".
+ */
+export type Beach = Beach1;
+/**
  * 내부 id. 예: b0001
  *
  * This interface was referenced by `Contract`'s JSON-Schema
@@ -144,21 +149,25 @@ export interface Maintenance {
 export interface BeachesFile {
   beaches: Beach[];
 }
-/**
- * This interface was referenced by `Contract`'s JSON-Schema
- * via the `definition` "Beach".
- */
-export interface Beach {
+export interface Beach1 {
   id: BeachId;
   /**
    * 주소용. 한 번 정하면 바꾸지 않음(BRD-45).
    */
   slug: string;
+  /**
+   * 장소 종류. beach = 해수부 지정 해수욕장, undesignated_beach = 지정 해수욕장이 아닌 해변, dive_point = 스쿠버 포인트(결정 기록 11장 10/21, BRD-73).
+   */
+  kind: 'beach' | 'undesignated_beach' | 'dive_point';
   name: LocalizedText;
   region: {
     sido: LocalizedText;
     sigungu: LocalizedText;
   };
+  /**
+   * 해안 구분(동해안·서해안·남해안·제주). 지진해일 발표 지역 글과 장소를 잇는 데 씀(결정 기록 11장 10/20 ⑥·10/21 ④).
+   */
+  coast: 'east' | 'west' | 'south' | 'jeju';
   coords: {
     lat: number;
     lng: number;
@@ -179,9 +188,9 @@ export interface Beach {
      */
     sea: string;
     /**
-     * 시군 육상 특보구역(강풍).
+     * 시군 육상 특보구역(강풍). 바다 위 스쿠버 포인트(dive_point)만 생략 가능.
      */
-    land: string;
+    land?: string;
   };
   stations: {
     waveHeight: StationRef;

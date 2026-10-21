@@ -34,6 +34,12 @@ add('beaches.station-over-20km', 'beaches', (d) => { d.beaches[0].stations.waveH
 add('beaches.snorkeling', 'beaches', (d) => { d.beaches[0].activities = ['swimming', 'snorkeling']; });
 // slug 규칙 위반
 add('beaches.bad-slug', 'beaches', (d) => { d.beaches[0].slug = 'Gyeongpo_Beach'; });
+// 해수욕장인데 육상 구역 없음 (생략은 스쿠버 포인트만, 결정 기록 11장 10/21)
+add('beaches.beach-without-land', 'beaches', (d) => { delete d.beaches[0].warningZones.land; });
+// 모르는 장소 종류
+add('beaches.unknown-kind', 'beaches', (d) => { d.beaches[0].kind = 'harbor'; });
+// 해안 구분 누락
+add('beaches.missing-coast', 'beaches', (d) => { delete d.beaches[0].coast; });
 
 // 폴더 만들고 파일 저장 (2칸 들여쓰기)
 mkdirSync('examples/invalid', { recursive: true });
