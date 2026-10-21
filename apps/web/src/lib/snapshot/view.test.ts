@@ -608,6 +608,7 @@ describe("읽을 수 없는 값·모순 (전체 재검증)", () => {
   it.each([
     ["읽을 수 없는 확인 시각", "not-a-time"],
     ["확인 시각 없음", null],
+    ["미래 확인 시각", "2026-10-17T06:00:00Z"],
   ])("B5 %s → 이용불가 유지, 확인 시각만 비우고 stale 표시", (_, at) => {
     const statuses = withStatus("b0002", (status) => {
       status.warning.lastConfirmedAt = at;
@@ -761,5 +762,182 @@ describe("B5 '특보 없음'이던 해변의 확인 시각", () => {
       stale: true,
       confirmedAt: "2026-10-17T05:18:40Z",
     });
+  });
+});
+
+describe("측정기 없음(none)의 불변식 (계약 6.3)", () => {
+  const brokenNone: [string, (m: Record<string, unknown>) => void][] = [
+    ["값이 들어 있음", (m) => (m.value = 1.2)],
+    ["관측 시각이 들어 있음", (m) => (m.observedAt = "2026-10-17T05:00:00Z")],
+    ["만료 시각이 들어 있음", (m) => (m.expiresAt = "2026-10-17T06:30:00Z")],
+    ["단위 없음", (m) => delete m.unit],
+    ["관측 시각 필드 없음", (m) => delete m.observedAt],
+  ];
+  const noneWave = (s: BeachStatus) => {
+    s.observation.metrics.waveHeight = {
+      value: null,
+      unit: "m",
+      observedAt: null,
+      state: "none",
+      nextExpectedAt: null,
+      expiresAt: null,
+    };
+  };
+
+  it("파고 none이 불변식을 지키면 특보 없음 + '가까운 관측 없음'", () => {
+    const view = deriveBeachView(
+      beach("b0001"),
+      source("2026-10-17T05:30:00Z", {}, withStatus("b0001", noneWave)),
+    );
+    expect(view).toMatchObject({
+      category: "clear",
+      metrics: { waveHeight: { kind: "none" } },
+    });
+  });
+
+  it.each(brokenNone)("파고 none인데 %s → 판단불가", (_, change) => {
+    const statuses = withStatus("b0001", (s) => {
+      noneWave(s);
+      change(
+        s.observation.metrics.waveHeight as unknown as Record<string, unknown>,
+      );
+    });
+    const view = deriveBeachView(
+      beach("b0001"),
+      source("2026-10-17T05:30:00Z", {}, statuses),
+    );
+    expect(view).toMatchObject({ category: "undetermined" });
+  });
+
+  it.each(brokenNone)(
+    "파주기 none인데 %s → '가까운 관측 없음' 대신 숨김",
+    (_, change) => {
+      const statuses = withStatus("b0001", (s) =>
+        change(
+          s.observation.metrics.wavePeriod as unknown as Record<
+            string,
+            unknown
+          >,
+        ),
+      );
+      const view = deriveBeachView(
+        beach("b0001"),
+        source("2026-10-17T05:30:00Z", {}, statuses),
+      );
+      expect(view).toMatchObject({
+        category: "clear",
+        metrics: { wavePeriod: { kind: "hidden" } },
+      });
+    },
+  );
+});
+
+describe("미래 시각을 근거로 쓰지 않음 (14.1 판정 규칙)", () => {
+  it("특보 확인 시각이 지금보다 30분 미래 → 판단불가(Codex 지적 사례)", () => {
+    const statuses = withStatus("b0001", (s) => {
+      s.warning.lastConfirmedAt = "2026-10-17T06:00:00Z";
+      s.validUntil = "2026-10-17T06:30:00Z";
+    });
+    const view = deriveBeachView(
+      beach("b0001"),
+      source("2026-10-17T05:30:00Z", {}, statuses),
+    );
+    expect(view).toMatchObject({ category: "undetermined" });
+  });
+
+  it("2분 이내 미래(시계 오차 허용) → 특보 없음", () => {
+    const statuses = withStatus("b0001", (s) => {
+      s.warning.lastConfirmedAt = "2026-10-17T05:31:30Z";
+    });
+    const view = deriveBeachView(
+      beach("b0001"),
+      source("2026-10-17T05:30:00Z", {}, statuses),
+    );
+    expect(view).toMatchObject({ category: "clear" });
+  });
+
+  it("파고 관측 시각이 미래 → 판단불가", () => {
+    const statuses = withStatus("b0001", (s) => {
+      s.observation.metrics.waveHeight.observedAt = "2026-10-17T05:40:00Z";
+    });
+    const view = deriveBeachView(
+      beach("b0001"),
+      source("2026-10-17T05:30:00Z", {}, statuses),
+    );
+    expect(view).toMatchObject({ category: "undetermined" });
+  });
+
+  it("수온 관측 시각이 미래 → 그 값만 숨김", () => {
+    const statuses = withStatus("b0001", (s) => {
+      s.observation.metrics.waterTemp.observedAt = "2026-10-17T05:40:00Z";
+    });
+    const view = deriveBeachView(
+      beach("b0001"),
+      source("2026-10-17T05:30:00Z", {}, statuses),
+    );
+    expect(view).toMatchObject({
+      category: "clear",
+      metrics: { waterTemp: { kind: "hidden" }, wind: { kind: "value" } },
+    });
+  });
+});
+
+describe("지표 expiresAt을 관측 시각 + 유효시간과 대조 (B4)", () => {
+  it.each([
+    [
+      "파주기: 어제 관측인데 만료는 내일",
+      (s: BeachStatus) => {
+        s.observation.metrics.wavePeriod = {
+          value: 6,
+          unit: "s",
+          observedAt: "2026-10-16T05:20:00Z",
+          state: "fresh",
+          nextExpectedAt: null,
+          expiresAt: "2026-10-18T05:20:00Z",
+        };
+      },
+      "wavePeriod",
+    ],
+    [
+      "파주기: 관측 + 60분 1초",
+      (s: BeachStatus) => {
+        s.observation.metrics.wavePeriod = {
+          value: 6,
+          unit: "s",
+          observedAt: "2026-10-17T05:20:00Z",
+          state: "fresh",
+          nextExpectedAt: null,
+          expiresAt: "2026-10-17T06:20:01Z",
+        };
+      },
+      "wavePeriod",
+    ],
+    [
+      "수온: 관측 + 90분 1초",
+      (s: BeachStatus) => {
+        s.observation.metrics.waterTemp.expiresAt = "2026-10-17T06:30:01Z";
+      },
+      "waterTemp",
+    ],
+  ])("%s → 그 값만 숨김, 분류 그대로", (_, change, key) => {
+    const view = deriveBeachView(
+      beach("b0001"),
+      source("2026-10-17T05:30:00Z", {}, withStatus("b0001", change)),
+    );
+    expect(view).toMatchObject({
+      category: "clear",
+      metrics: { [key]: { kind: "hidden" }, wind: { kind: "value" } },
+    });
+  });
+
+  it("파고: 관측은 05:00인데 만료 06:31 → 판단불가('특보 없음' 근거 아님)", () => {
+    const statuses = withStatus("b0001", (s) => {
+      s.observation.metrics.waveHeight.expiresAt = "2026-10-17T06:31:00Z";
+    });
+    const view = deriveBeachView(
+      beach("b0001"),
+      source("2026-10-17T05:30:00Z", {}, statuses),
+    );
+    expect(view).toMatchObject({ category: "undetermined" });
   });
 });
