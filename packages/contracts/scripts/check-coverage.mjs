@@ -88,6 +88,10 @@ for (const b of checked) {
   else {
     if (!Array.isArray(mt.aliases)) fail(`${b.id}: 별칭 목록 없음`);
     if (!mt.season || !("2026" in mt.season)) fail(`${b.id}: 2026 운영 기간 칸 없음(없으면 null)`);
+    // 운영 상태는 open·closed만. 개장(open)은 개장일·폐장일이 있어야 함(build.mjs seasonStatus와 같은 규칙)
+    const s26 = mt.season?.["2026"];
+    if (s26 && !["open", "closed"].includes(s26.status)) fail(`${b.id}: 모르는 운영 상태(${s26.status})`);
+    if (s26?.status === "open" && (!s26.openDate || !s26.closeDate)) fail(`${b.id}: 개장인데 개장일·폐장일 없음`);
   }
 }
 // 2) 공개되지 않은 행: 보류·자동 제외 사유가 있어야 함

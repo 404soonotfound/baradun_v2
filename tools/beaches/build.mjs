@@ -554,6 +554,16 @@ if (process.argv.includes("--publish")) {
   const wasHidden = records.filter((r) => existing.get(r.id)?.hidden === true).map((r) => r.id);
   const stillHidden = new Set(wasHidden.filter((id) => !prevAuto.has(id)));
   const restored = wasHidden.filter((id) => prevAuto.has(id));
+  // 운영 상태: 개장 → open, 미개장 → closed. 모르는 값(연결됐는데 빈 칸 포함)은 숨기지 않고 생성 중단.
+  // 개장인데 개장일·폐장일을 못 읽으면(날짜 형식이 다름) 생성 중단. 미연결(status: null)만 null
+  const SEASON_STATUS = { 개장: "open", 미개장: "closed" };
+  const seasonStatus = (r) => {
+    const { status, openDate, closeDate } = r._draft.season2026;
+    const s = SEASON_STATUS[status];
+    if (!s) throw new Error(`모르는 운영 상태: ${r.id} '${status}'`);
+    if (s === "open" && (!openDate || !closeDate)) throw new Error(`개장인데 개장일·폐장일을 못 읽음: ${r.id}`);
+    return s;
+  };
   const meta = {
     _meta: {
       note: "해변 부가 정보(공개 계약 밖, 결정 기록 11장 10/21 ⑤). 해변 id로 data/beaches와 연결. 검색 별칭·운영 기간",
@@ -563,7 +573,7 @@ if (process.argv.includes("--publish")) {
     },
     beaches: Object.fromEntries(records.map((r) => [r.id, {
       aliases: r._draft.aliases,
-      season: { 2026: r._draft.season2026.status ? { status: r._draft.season2026.status === "개장" ? "open" : "closed", openDate: r._draft.season2026.openDate, closeDate: r._draft.season2026.closeDate, sourceRow: r._draft.season2026.xlsxRow, link: r._draft.season2026.linkMethod } : null },
+      season: { 2026: r._draft.season2026.status != null ? { status: seasonStatus(r), openDate: r._draft.season2026.openDate, closeDate: r._draft.season2026.closeDate, sourceRow: r._draft.season2026.xlsxRow, link: r._draft.season2026.linkMethod } : null },
     }])),
   };
   // 공개본은 해변별 결과 칸만(slim-matrix.mjs). 전체 매트릭스는 위 coverage-<지역>.csv

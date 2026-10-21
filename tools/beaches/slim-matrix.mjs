@@ -19,6 +19,7 @@ const RULE_CODES = {
 const LAND_KINDS = {
   "공식 주소 ① + 좌표 ② 일치": "주소+좌표 일치",
   "공식 주소 미연결 → 좌표 판정만": "좌표만(주소 미연결)",
+  "공식 주소 읍면 못 읽음 → 좌표 판정만": "좌표만(주소 읍면 못 읽음)",
   "공식 주소 ① + 좌표 후보 ② 일치(노션 2.2 L1 근거 순서, 7차)": "주소+좌표 후보 일치",
 };
 const METRIC_KO = { waveHeight: "파고", wavePeriod: "파주기", waveDirection: "파향", waterTemp: "수온", wind: "바람" };
