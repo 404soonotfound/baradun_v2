@@ -1,6 +1,7 @@
 // BRD-59 해변 초안 생성: <지역>.json(레코드) + coverage-<지역>.csv(매트릭스). 강원은 gangwon, 전국은 national
 // 입력: $BARADUN_DATA_DIR/baradun-coverage의 out/·responses/ 수집본만 읽음. <지역>.json·coverage-<지역>.csv도 그곳에 씀. 생성 시 공공데이터 API 호출 없음, 서비스 키 읽지 않음
 // 실행: node tools/beaches/build.mjs [--region 강원|전국|<시·도>]
+import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -18,6 +19,9 @@ const SRC = join(COVERAGE_DIR, "out");
 const LIVE_MATRIX_PATH = join(COVERAGE_DIR, "responses/metric-matrix.json");
 const liveMatrix = existsSync(LIVE_MATRIX_PATH) ? JSON.parse(readFileSync(LIVE_MATRIX_PATH, "utf8")) : null;
 const liveByStation = new Map((liveMatrix?.stations ?? []).map((s) => [s.stn_id, s]));
+// 실응답 확인 칸: 저장본(고정 해시 대조됨)의 sea_obs·kma_buoy가 모두 HTTP 200으로 받은 경우만 기록, 아니면 빈 칸(check-coverage가 공개 행에서 실패)
+const liveReceived = ["sea_obs", "kma_buoy"].every((k) => liveMatrix?.sources?.[k]?.status === "RECEIVED" && liveMatrix.sources[k].http_status === 200);
+const RESPONSE_CHECK = liveReceived ? "실응답 3차 저장본 재사용(2026-10-20T15:00:00Z, sea_obs·kma_buoy HTTP 200, 새 호출 없음)" : "";
 
 const csvCell = (v) => {
   const s = v === null || v === undefined ? "" : String(v);
@@ -391,7 +395,7 @@ for (const src of beachesSrc) {
     occlusion: "미검토(지도 확인 안 함)",
     activity_candidates: "",
     season_candidates: "",
-    response_check: "실응답 3차 저장본 재사용(2026-10-20T15:00:00Z, sea_obs·kma_buoy HTTP 200, 새 호출 없음)",
+    response_check: RESPONSE_CHECK,
   };
 
   // 출시 자동 제외(결정 4-A): 레코드 만들지 않고 매트릭스에 사유 기록
@@ -517,6 +521,11 @@ if (process.argv.includes("--publish")) {
   // 공개 파일(아키텍처 17.5): data/beaches/<id>.json(Beach 계약 그대로), data/beach-meta.json(별칭·운영 기간, 계약 밖),
   // data/beach-coverage.csv(BeachCoverageMatrix). check.mjs 통과본에서만 실행
   if (TARGET_REGIONS.length < 2) throw new Error("--publish는 --region 전국에서만");
+  // check.mjs 통과본에서만 공개(방금 쓴 national.json을 검사). 실패하면 data/를 쓰지 않음
+  const checked = spawnSync(process.execPath, [join(HERE, "check.mjs"), "--region", "전국"], { stdio: "inherit" });
+  if (checked.status !== 0) throw new Error(`check.mjs 실패(${checked.error?.message ?? `종료 코드 ${checked.status}`}) → 공개 파일을 쓰지 않음`);
+  // 실응답 확인 칸이 비면 check-coverage가 공개 행에서 실패하므로 data/를 쓰기 전에 멈춤(check.mjs는 매트릭스를 보지 않음)
+  if (!RESPONSE_CHECK) throw new Error("실응답 저장본이 sea_obs·kma_buoy HTTP 200 수신이 아님 → 공개 파일을 쓰지 않음");
   const DATA = join(HERE, "../../data");
   const strip = ({ _draft, ...beach }) => beach;
   // 전부 검사·생성한 뒤에 씀(중간 실패로 일부만 바뀌지 않게)
