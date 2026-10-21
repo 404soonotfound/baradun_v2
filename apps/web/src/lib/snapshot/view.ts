@@ -6,7 +6,7 @@ import type {
   WarningType,
 } from "@baradun/contracts";
 
-import { isExpired, type Clock } from "./clock";
+import { isExpired, isTime, type Clock } from "./clock";
 
 // 해변 하나의 화면 상태 (아키텍처 9.1, 결정 기록 11장 B4·B5, BRD-41)
 // 분류(category)는 publisher가 게시한 값을 그대로 씀(G1). 여기서 하는 일은 셋뿐:
@@ -63,7 +63,10 @@ export type BeachView =
       // 배지 맨 앞 글자(첫 사유). 나머지 사유는 reasons
       badge: BadgeLabel;
       reasons: BadgeLabel[];
-      // B5: 새 정보를 못 받는 동안 유지하는 발효 특보의 마지막 확인 시각 → "HH:MM 확인 · 이후 확인 못 함"
+      // B5: 새 정보를 못 받는 중(오프라인·만료·장애). 화면에 '이후 확인 못 함'을 붙임
+      stale: boolean;
+      // B5: 유지하는 발효 특보의 마지막 확인 시각 → "HH:MM 확인 · 이후 확인 못 함".
+      // 읽을 수 없는 시각이면 null(stale은 그대로 true라 '확인 시각 모름'으로 표시)
       confirmedAt: string | null;
       metrics: Record<MetricKey, MetricView>;
     };
@@ -75,7 +78,7 @@ export interface ViewSource {
   // 마지막 조회가 성공했는지. false = 오프라인·장애(B5)
   live: boolean;
   clock: Clock;
-  // 보정된 지금 시각(ms)
+  // 보정된 지금 시각(ms). NaN = 지금 시각을 알 수 없음(기기 시계가 틀린 게 확실) → 모두 만료
   nowMs: number;
 }
 
@@ -83,16 +86,26 @@ const HIDDEN_METRICS = Object.fromEntries(
   METRIC_KEYS.map((key) => [key, { kind: "hidden" }]),
 ) as Record<MetricKey, MetricView>;
 
-const UNDETERMINED: BeachView = {
+const UNDETERMINED = {
   kind: "ready",
   category: "undetermined",
   badge: { kind: "unconfirmed" },
   reasons: [{ kind: "unconfirmed" }],
+  stale: false,
   confirmedAt: null,
   metrics: HIDDEN_METRICS,
+} satisfies BeachView;
+
+// 지표별 단위(계약 6.3). 키와 단위가 어긋나면 값을 보여주지 않음
+const METRIC_UNITS: Record<MetricKey, Metric["unit"]> = {
+  waveHeight: "m",
+  wavePeriod: "s",
+  waveDirection: "deg",
+  waterTemp: "°C",
+  wind: "m/s",
 };
 
-function isRecord(value: unknown): value is Record<string, unknown> {
+export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
@@ -137,8 +150,23 @@ function reasonLabels(
   return first ? [first, ...rest] : [genericLabel(category)];
 }
 
+// 값·관측 시각·단위를 읽을 수 있는 fresh 지표인지(만료는 따로 봄)
+function isReadableFresh(
+  metric: Record<string, unknown> | null,
+  key: MetricKey,
+): metric is Record<string, unknown> & { value: number; observedAt: string } {
+  return (
+    metric?.state === "fresh" &&
+    typeof metric.value === "number" &&
+    Number.isFinite(metric.value) &&
+    isTime(metric.observedAt) &&
+    metric.unit === METRIC_UNITS[key]
+  );
+}
+
 // '특보 없음'의 근거(계약 불변식, 아키텍처 2.1·6.3): 사유 없음, 특보 state none + 출처·확인 시각,
-// 파고 fresh 또는 none. 배포 오류로 하나라도 빠지면 판단불가
+// 파고 fresh(값을 읽을 수 있음) 또는 none. 배포 오류로 하나라도 빠지면 판단불가.
+// 파고 자체 만료는 여기서 보지 않음(받는 중이면 관측 지연, 못 받는 중이면 B5로 deriveBeachView에서 처리)
 function isConfirmedClear(status: Record<string, unknown>): boolean {
   const warning = isRecord(status.warning) ? status.warning : null;
   const observation = isRecord(status.observation) ? status.observation : null;
@@ -152,30 +180,30 @@ function isConfirmedClear(status: Record<string, unknown>): boolean {
     warning.items.length === 0 &&
     typeof warning.source === "string" &&
     warning.source !== "" &&
-    typeof warning.lastConfirmedAt === "string" &&
-    Number.isFinite(Date.parse(warning.lastConfirmedAt)) &&
-    (waveHeight?.state === "fresh" || waveHeight?.state === "none")
+    isTime(warning.lastConfirmedAt) &&
+    (waveHeight?.state === "none" || isReadableFresh(waveHeight, "waveHeight"))
   );
 }
 
-function metricView(metric: unknown, source: ViewSource): MetricView {
+function metricView(
+  metric: unknown,
+  key: MetricKey,
+  source: ViewSource,
+): MetricView {
   if (!isRecord(metric)) return { kind: "hidden" };
   if (metric.state === "none") return { kind: "none" };
   if (
-    metric.state === "fresh" &&
-    typeof metric.value === "number" &&
-    typeof metric.observedAt === "string" &&
-    typeof metric.unit === "string" &&
+    isReadableFresh(metric, key) &&
     !isExpired(metric.expiresAt as string | null, source.nowMs, source.clock)
   ) {
     return {
       kind: "value",
       value: metric.value,
-      unit: metric.unit as Metric["unit"],
+      unit: METRIC_UNITS[key],
       observedAt: metric.observedAt,
     };
   }
-  // delayed, 지표별 expiresAt 지남, 모르는 state → 그 값만 숨김(분류에 영향 없음, B4)
+  // delayed, 지표별 expiresAt 지남, 읽을 수 없는 값·시각·단위, 모르는 state → 그 값만 숨김(분류에 영향 없음, B4)
   return { kind: "hidden" };
 }
 
@@ -186,25 +214,36 @@ export function deriveBeachView(
   if (beach.hidden) return { kind: "hidden" };
   if (source.phase === "loading") return { kind: "loading" };
   // 지원 범위 밖 schemaVersion → 모든 해변 판단불가(배너는 화면에서, 9.1)
-  if (source.phase === "schema_unsupported") return UNDETERMINED;
+  // 점검 중: 화면이 전체를 덮고 마지막 값도 숨김(9.1). 다른 소비자가 계산해도 지난 값이 나오지 않게
+  if (source.phase === "schema_unsupported" || source.phase === "maintenance") {
+    return UNDETERMINED;
+  }
+
+  // 데이터가 없거나 읽을 수 없어 판단불가. 오프라인이면 '이후 확인 못 함'도 붙도록 stale 표시
+  const noData: BeachView = { ...UNDETERMINED, stale: !source.live };
 
   // status에 없는 해변 → 판단불가(숨기지 않음, 9장)
   const status = source.statuses?.[beach.id];
   if (!isRecord(status) || !includes(CATEGORIES, status.category)) {
-    return UNDETERMINED;
+    return noData;
   }
   // 근거가 빠지거나 모순된 '특보 없음'은 내보내지 않음. 이용불가는 위험 정보라 그대로 둠
   if (status.category === "clear" && !isConfirmedClear(status)) {
-    return UNDETERMINED;
+    return noData;
   }
 
   const observation = isRecord(status.observation) ? status.observation : {};
   const rawMetrics = isRecord(observation.metrics) ? observation.metrics : {};
   const metrics = Object.fromEntries(
-    METRIC_KEYS.map((key) => [key, metricView(rawMetrics[key], source)]),
+    METRIC_KEYS.map((key) => [key, metricView(rawMetrics[key], key, source)]),
   ) as Record<MetricKey, MetricView>;
 
   const category = status.category;
+  const warning = isRecord(status.warning) ? status.warning : {};
+  // B5에서 붙일 마지막 확인 시각. 읽을 수 없으면 null('확인 시각 모름')
+  const confirmedAt = isTime(warning.lastConfirmedAt)
+    ? warning.lastConfirmedAt
+    : null;
   const expired = isExpired(
     status.validUntil as string | null,
     source.nowMs,
@@ -212,12 +251,18 @@ export function deriveBeachView(
   );
 
   if (source.live && !expired) {
+    // '특보 없음'인데 파고가 자체 만료(90분)를 넘김 = 계약 위반(validUntil ≤ 파고 expiresAt이어야 함).
+    // 화면이 사유를 지어내지 않고(G1) 일반 '확인 못 함'으로 판단불가. 읽을 수 있는 다른 값은 그대로 둠
+    if (category === "clear" && metrics.waveHeight.kind === "hidden") {
+      return { ...UNDETERMINED, metrics };
+    }
     const reasons = reasonLabels(status.reasons, category);
     return {
       kind: "ready",
       category,
       badge: reasons[0],
       reasons,
+      stale: false,
       confirmedAt: null,
       metrics,
     };
@@ -226,26 +271,25 @@ export function deriveBeachView(
   // 만료·오프라인·장애(B5). 마지막에 이용불가였으면 배지를 그대로 두고 마지막 확인 시각을 붙임
   if (category === "unavailable") {
     const reasons = reasonLabels(status.reasons, category);
-    const warning = isRecord(status.warning) ? status.warning : {};
     return {
       kind: "ready",
       category,
       badge: reasons[0],
       reasons,
-      confirmedAt:
-        typeof warning.lastConfirmedAt === "string"
-          ? warning.lastConfirmedAt
-          : null,
+      stale: true,
+      confirmedAt,
       metrics,
     };
   }
-  // 그 외('특보 없음'이던 해변 포함)는 특보 확인 못 함
+  // 그 외('특보 없음'이던 해변 포함)는 특보 확인 못 함. 마지막 확인 시각을 알면 함께 보여줌
+  // (알고 있는 시각을 '확인 시각 모름'으로 안내하지 않게)
   return {
     kind: "ready",
     category: "undetermined",
     badge: { kind: "warning_unknown" },
     reasons: [{ kind: "warning_unknown" }],
-    confirmedAt: null,
+    stale: true,
+    confirmedAt,
     metrics,
   };
 }

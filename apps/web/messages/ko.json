@@ -25,7 +25,8 @@
     "unconfirmed": {
       "title": "확인 못 함"
     },
-    "confirmedUntil": "{time} 확인 · 이후 확인 못 함"
+    "confirmedUntil": "{time} 확인 · 이후 확인 못 함",
+    "confirmedUnknown": "확인 시각 모름 · 이후 확인 못 함"
   },
   "warning": {
     "type": {

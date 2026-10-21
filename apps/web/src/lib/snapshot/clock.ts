@@ -16,6 +16,23 @@ export interface Clock {
 
 export const DEVICE_CLOCK: Clock = { offsetMs: 0, trusted: false };
 
+// 계약 date-time(RFC 3339): 시간대(Z·±hh:mm)가 있어야 함. 없으면 Date.parse가 기기 현지 시각으로 읽어 KST·UTC가 섞임
+const DATE_TIME_PATTERN =
+  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/;
+
+export function isTime(value: unknown): value is string {
+  return (
+    typeof value === "string" &&
+    DATE_TIME_PATTERN.test(value) &&
+    Number.isFinite(Date.parse(value))
+  );
+}
+
+// 계약 형식 시각 → ms. 형식이 다르면(시간대 없음 등) NaN
+function parseTime(value: string | null | undefined): number {
+  return isTime(value) ? Date.parse(value) : NaN;
+}
+
 export function clockFromHeaders(
   date: string | null,
   age: string | null,
@@ -46,8 +63,9 @@ export function isExpired(
   nowMs: number,
   clock: Clock,
 ): boolean {
-  const expiresMs = expiresAt ? Date.parse(expiresAt) : NaN;
-  if (!Number.isFinite(expiresMs)) return true;
+  const expiresMs = parseTime(expiresAt);
+  // 지금 시각을 모르면(NaN) 만료로 봄. NaN 비교는 항상 false라 따로 막지 않으면 유효로 보임
+  if (!Number.isFinite(expiresMs) || !Number.isFinite(nowMs)) return true;
   if (clock.trusted) return nowMs > expiresMs;
   return expiresMs - nowMs <= UNTRUSTED_MARGIN_MS;
 }
@@ -57,7 +75,7 @@ export function expiryDeadline(
   expiresAt: string | null | undefined,
   clock: Clock,
 ): number | null {
-  const expiresMs = expiresAt ? Date.parse(expiresAt) : NaN;
+  const expiresMs = parseTime(expiresAt);
   if (!Number.isFinite(expiresMs)) return null;
   // trusted: expiresMs를 1ms 넘긴 때, untrusted: 남은 시간이 정확히 5분이 되는 때
   return clock.trusted ? expiresMs + 1 : expiresMs - UNTRUSTED_MARGIN_MS;
