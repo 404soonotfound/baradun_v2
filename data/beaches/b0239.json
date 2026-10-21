@@ -71,6 +71,11 @@
       "distanceKm": 5.3
     }
   },
-  "photo": null,
+  "photo": {
+    "url": "https://tong.visitkorea.or.kr/cms/resource/03/3576603_image2_1.jpg",
+    "source": "한국관광공사",
+    "license": "kogl-type1",
+    "title": "후정해수욕장"
+  },
   "cctv": null
 }

@@ -36,6 +36,11 @@
     "waterTemp": null,
     "wind": null
   },
-  "photo": null,
+  "photo": {
+    "url": "https://tong.visitkorea.or.kr/cms/resource/58/3516558_image2_1.jpg",
+    "source": "한국관광공사",
+    "license": "kogl-type1",
+    "title": "홀통유원지·홀통해변"
+  },
   "cctv": null
 }

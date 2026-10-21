@@ -71,6 +71,11 @@
       "distanceKm": 13.4
     }
   },
-  "photo": null,
+  "photo": {
+    "url": "https://tong.visitkorea.or.kr/cms/resource/73/3517473_image2_1.jpg",
+    "source": "한국관광공사",
+    "license": "kogl-type1",
+    "title": "장경리해수욕장"
+  },
   "cctv": null
 }

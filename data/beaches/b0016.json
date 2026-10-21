@@ -71,6 +71,11 @@
       "distanceKm": 16.4
     }
   },
-  "photo": null,
+  "photo": {
+    "url": "https://tong.visitkorea.or.kr/cms/resource/80/4120380_image2_1.jpg",
+    "source": "한국관광공사",
+    "license": "kogl-type1",
+    "title": "사천해변(사천해수욕장)"
+  },
   "cctv": null
 }

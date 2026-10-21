@@ -36,6 +36,11 @@
     "waterTemp": null,
     "wind": null
   },
-  "photo": null,
+  "photo": {
+    "url": "https://tong.visitkorea.or.kr/cms/resource/86/3535786_image2_1.jpg",
+    "source": "한국관광공사",
+    "license": "kogl-type1",
+    "title": "톱머리 해수욕장"
+  },
   "cctv": null
 }

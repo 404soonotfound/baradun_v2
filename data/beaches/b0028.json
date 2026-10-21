@@ -36,6 +36,11 @@
     "waterTemp": null,
     "wind": null
   },
-  "photo": null,
+  "photo": {
+    "url": "https://tong.visitkorea.or.kr/cms/resource_photo/65/3590065_image2_1.jpg",
+    "source": "한국관광공사",
+    "license": "kogl-type1",
+    "title": "화진포해수욕장"
+  },
   "cctv": null
 }

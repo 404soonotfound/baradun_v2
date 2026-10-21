@@ -71,6 +71,11 @@
       "distanceKm": 13.2
     }
   },
-  "photo": null,
+  "photo": {
+    "url": "https://tong.visitkorea.or.kr/cms/resource/69/3517869_image2_1.jpg",
+    "source": "한국관광공사",
+    "license": "kogl-type1",
+    "title": "삼척해변"
+  },
   "cctv": null
 }

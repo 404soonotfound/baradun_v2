@@ -50,6 +50,11 @@
     },
     "wind": null
   },
-  "photo": null,
+  "photo": {
+    "url": "https://tong.visitkorea.or.kr/cms/resource/54/3548954_image2_1.JPG",
+    "source": "한국관광공사",
+    "license": "kogl-type1",
+    "title": "안도해수욕장"
+  },
   "cctv": null
 }

@@ -71,6 +71,11 @@
       "distanceKm": 14.4
     }
   },
-  "photo": null,
+  "photo": {
+    "url": "https://tong.visitkorea.or.kr/cms/resource/06/4095606_image2_1.jpg",
+    "source": "한국관광공사",
+    "license": "kogl-type1",
+    "title": "속초해수욕장"
+  },
   "cctv": null
 }

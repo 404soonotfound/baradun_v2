@@ -71,6 +71,11 @@
       "distanceKm": 17.6
     }
   },
-  "photo": null,
+  "photo": {
+    "url": "https://tong.visitkorea.or.kr/cms/resource/59/4120559_image2_1.jpg",
+    "source": "한국관광공사",
+    "license": "kogl-type1",
+    "title": "하평해변(강릉)"
+  },
   "cctv": null
 }
