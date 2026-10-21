@@ -104,9 +104,11 @@ describe("게시된 분류를 그대로 씀", () => {
 });
 
 describe("만료 경계 (아키텍처 14.1)", () => {
-  // 파고 기준 90분: validUntil을 파고 expiresAt(observedAt 05:00 + 90분)에 맞춤
+  // 파고 기준 90분: validUntil을 파고 expiresAt(observedAt 05:00 + 90분)에 맞춤.
+  // 계약상 validUntil ≤ 특보 확인 + 45분이라 확인 시각도 05:45로 맞춤
   const waveBound = withStatus("b0001", (status) => {
     status.validUntil = "2026-10-17T06:30:00Z";
+    status.warning.lastConfirmedAt = "2026-10-17T05:45:00Z";
   });
 
   it.each([
@@ -132,9 +134,19 @@ describe("만료 경계 (아키텍처 14.1)", () => {
     });
   });
 
-  it("validUntil·expiresAt에 시간대 없음(KST·UTC 모호) → 만료로 봄", () => {
+  it("validUntil에 시간대 없음(KST·UTC 모호) → '특보 없음' 근거로 인정 안 함", () => {
     const statuses = withStatus("b0001", (status) => {
       status.validUntil = "2026-10-17T23:00:00";
+    });
+    const view = deriveBeachView(
+      beach("b0001"),
+      source("2026-10-17T05:30:00Z", {}, statuses),
+    );
+    expect(view).toMatchObject({ category: "undetermined" });
+  });
+
+  it("지표 expiresAt에 시간대 없음 → 그 값만 만료로 봄", () => {
+    const statuses = withStatus("b0001", (status) => {
       status.observation.metrics.waterTemp.expiresAt = "2026-10-17T23:00:00";
     });
     const view = deriveBeachView(
@@ -142,15 +154,15 @@ describe("만료 경계 (아키텍처 14.1)", () => {
       source("2026-10-17T05:30:00Z", {}, statuses),
     );
     expect(view).toMatchObject({
-      category: "undetermined",
-      badge: { kind: "warning_unknown" },
-      metrics: { waterTemp: { kind: "hidden" } },
+      category: "clear",
+      metrics: { waterTemp: { kind: "hidden" }, wind: { kind: "value" } },
     });
   });
 
   // 파주기 기준 60분(B4): 값만 숨기고 분류는 그대로
   const periodBound = withStatus("b0001", (status) => {
-    status.validUntil = "2026-10-17T07:00:00Z";
+    status.validUntil = "2026-10-17T06:30:00Z";
+    status.warning.lastConfirmedAt = "2026-10-17T05:45:00Z";
     status.observation.metrics.wavePeriod = {
       value: 6,
       unit: "s",
@@ -267,7 +279,8 @@ describe("시계 보정 (9.1)", () => {
         "2026-10-17T06:25:00Z",
         { clock: DEVICE_CLOCK },
         withStatus("b0001", (status) => {
-          status.validUntil = "2026-10-17T07:00:00Z";
+          status.validUntil = "2026-10-17T06:30:00Z";
+          status.warning.lastConfirmedAt = "2026-10-17T05:45:00Z";
         }),
       ),
     );
@@ -646,24 +659,60 @@ describe("읽을 수 없는 값·모순 (전체 재검증)", () => {
   });
 });
 
-describe("'특보 없음' 해변의 파고 자체 만료", () => {
-  it("받는 중 + 파고 만료(계약 위반) → 판단불가, 사유를 지어내지 않음(확인 못 함), 다른 값은 그대로", () => {
-    const statuses = withStatus("b0001", (status) => {
-      status.validUntil = "2026-10-17T07:00:00Z";
-    });
+describe("'특보 없음'의 유효 시각과 근거의 관계 (계약 6.3, 14.3 N2)", () => {
+  // 확인 시각이 오래됐는데 validUntil만 늘린 응답(Codex 지적)
+  it.each([
+    [
+      "확인은 어제, 파고 측정소 없음, validUntil은 내일",
+      (s: BeachStatus) => {
+        s.warning.lastConfirmedAt = "2026-10-16T05:18:40Z";
+        s.validUntil = "2026-10-18T05:00:00Z";
+        s.observation.metrics.waveHeight = {
+          value: null,
+          unit: "m",
+          observedAt: null,
+          state: "none",
+          nextExpectedAt: null,
+          expiresAt: null,
+        };
+      },
+    ],
+    [
+      "validUntil이 특보 확인 + 45분을 1초 넘김",
+      (s: BeachStatus) => {
+        s.validUntil = "2026-10-17T06:03:41Z";
+      },
+    ],
+    [
+      "파고 관측은 어제인데 expiresAt만 늘림",
+      (s: BeachStatus) => {
+        s.observation.metrics.waveHeight.observedAt = "2026-10-16T05:00:00Z";
+      },
+    ],
+    [
+      "validUntil이 파고 expiresAt보다 늦음",
+      (s: BeachStatus) => {
+        s.warning.lastConfirmedAt = "2026-10-17T06:00:00Z";
+        s.validUntil = "2026-10-17T06:30:01Z";
+      },
+    ],
+  ])("%s → 판단불가(확인 못 함)", (_, change) => {
     const view = deriveBeachView(
       beach("b0001"),
-      source("2026-10-17T06:40:00Z", {}, statuses),
+      source("2026-10-17T05:30:00Z", {}, withStatus("b0001", change)),
     );
     expect(view).toMatchObject({
       category: "undetermined",
       badge: { kind: "unconfirmed" },
-      stale: false,
-      metrics: {
-        waveHeight: { kind: "hidden" },
-        waveDirection: { kind: "none" },
-      },
     });
+  });
+
+  it("validUntil = 특보 확인 + 45분 정확히 → 특보 없음", () => {
+    const view = deriveBeachView(
+      beach("b0001"),
+      source("2026-10-17T05:30:00Z"),
+    );
+    expect(view).toMatchObject({ category: "clear" });
   });
 
   it("오프라인이 길어져 파고도 만료 → B5 '특보 확인 못 함' + stale 유지", () => {
