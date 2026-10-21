@@ -281,6 +281,7 @@ describe("오프라인·만료·장애 (B5)", () => {
     );
     expect(view).toMatchObject({
       category: "unavailable",
+      badge: { kind: "warning", type: "wind_wave", level: "advisory" },
       confirmedAt: "2026-10-17T05:18:40Z",
     });
   });
