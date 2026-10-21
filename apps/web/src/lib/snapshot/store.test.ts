@@ -992,6 +992,24 @@ describe("버전마다 새로고침 한 번", () => {
     store.start();
     await store.refresh();
     expect(reload).toHaveBeenCalledTimes(1);
-    expect(session.data.get("baradun:schema-reload")).toBe("3");
+    expect(session.data.get("baradun:schema-reload")).toBe("2,3");
+  });
+});
+
+describe("지원 밖 버전 둘이 번갈아 옴 (Claude 리뷰)", () => {
+  it("v2·v3가 번갈아 와도 버전마다 한 번만 새로고침", async () => {
+    const session = memoryStorage();
+    const server = fakeServer();
+    let reloads = 0;
+    for (const version of [2, 3, 2, 3, 2]) {
+      const { store, reload } = setup({ session, server });
+      server.manifest = { ...manifestExample, schemaVersion: version };
+      store.start();
+      await store.refresh();
+      reloads += reload.mock.calls.length;
+      store.stop();
+    }
+    expect(reloads).toBe(2);
+    expect(session.data.get("baradun:schema-reload")).toBe("2,3");
   });
 });

@@ -15,7 +15,9 @@ import { isRecord, METRIC_KEYS, type ViewSource } from "./view";
 // 바다 정보 조회·갱신 (아키텍처 9.1·그림 2, BRD-41)
 // manifest를 먼저 받고 snapshotVersion이 바뀔 때만 status를 받음.
 // 다시 받는 때: 처음 열 때 · 앱 복귀 · 당겨서 새로고침/다시 시도 · validUntil 만료 · 열어 둔 동안 5분마다(안 보이면 멈춤).
-// 바다 정보는 항상 네트워크 먼저, 못 받을 때만 마지막 값(기기 저장)을 꺼냄.
+// 바다 정보는 항상 네트워크 결과로 정함. 메모리에 값이 없을 때(첫 실행 등)만 응답을 기다리는 동안 기기에 저장된
+// 마지막 값을 B5 규칙(live: false — 발효 특보 배지 유지, 나머지는 특보 확인 못 함)으로 먼저 보여주고, 응답이 오면 바꿈.
+// 못 받으면 지금 보여주는 값(없으면 저장된 마지막 값)을 B5로 둠.
 // React와 브라우저 API는 deps로 받아서 테스트에서 가짜로 바꿔 끼움.
 
 // 이 화면이 읽을 수 있는 계약 버전
@@ -237,7 +239,6 @@ export function createSnapshotStore(deps: SnapshotDeps): SnapshotStore {
   // → 점검 화면·지원 밖 형식 배너를 풀고 B5로(마지막 발효 특보 배지가 사라지지 않게)
   function fail(fresh?: Clock, manifestOk = false) {
     showStored();
-    const { manifest, statuses } = state;
     const clock = fresh ?? state.clock;
     const keep =
       !manifestOk &&
@@ -245,24 +246,24 @@ export function createSnapshotStore(deps: SnapshotDeps): SnapshotStore {
     set({
       // 점검 화면·지원 밖 형식 배너는 그대로 둠. 처음부터 못 받았으면 데이터 없이 판단불가
       phase: keep ? state.phase : "ready",
-      manifest,
-      statuses,
       clock,
       live: false,
       nowMs: now(clock),
     });
   }
 
-  // 지원 밖 schemaVersion마다 한 번만 새로고침(9.1 '자동 새로고침 1회'). 기록에 그 버전을 남겨서
-  // 버전 전환 중 v1·v2가 번갈아 와도 반복하지 않고, 나중에 새 버전(v3)이 나오면 다시 한 번 새로고침함
+  // 지원 밖 schemaVersion마다 한 번만 새로고침(9.1 '자동 새로고침 1회'). 기록은 새로고침한 버전 목록(쉼표 구분)이라
+  // 버전 전환 중 v1·v2 또는 v2·v3가 번갈아 와도 반복하지 않고, 처음 보는 새 버전이 나오면 다시 한 번 새로고침함
   function unsupported(version: number) {
     const mark = String(version);
-    const reloaded = safe(() => deps.session?.getItem(SCHEMA_RELOAD_KEY));
-    if (reloaded !== mark) {
+    const reloaded = safe(() => deps.session?.getItem(SCHEMA_RELOAD_KEY)) ?? "";
+    const versions = reloaded ? reloaded.split(",") : [];
+    if (!versions.includes(mark)) {
       // 새 화면 파일이 나왔을 수 있어 새로고침. 기록을 못 남기면 새로고침하지 않음(무한 새로고침 방지)
+      const next = [...versions, mark].join(",");
       const recorded = safe(() => {
-        deps.session?.setItem(SCHEMA_RELOAD_KEY, mark);
-        return deps.session?.getItem(SCHEMA_RELOAD_KEY) === mark;
+        deps.session?.setItem(SCHEMA_RELOAD_KEY, next);
+        return deps.session?.getItem(SCHEMA_RELOAD_KEY) === next;
       });
       if (recorded) {
         deps.reload();
