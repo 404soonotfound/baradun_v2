@@ -1,6 +1,6 @@
 {
   "_meta": {
-    "note": "BRD-59 판정 원자료 목록(원자료는 저장소에 넣지 않음, 아키텍처 2.2 10/21). 스크립트는 BARADUN_GIS_DIR(기본 ~/data/baradun-gis)·BARADUN_DATA_DIR(기본 ~/data)에서 읽음. 수집본(out/: beaches.csv·stations.csv·freshness·warnings)·구역 근거 json·responses/ 실응답 저장본·생성 중간 산출물은 $BARADUN_DATA_DIR/baradun-coverage. 근거에 남은 tools/coverage/… 표기는 수집 당시 위치(기록용)",
+    "note": "BRD-59 판정 원자료 목록(원자료는 저장소에 넣지 않음, 아키텍처 2.2 10/21). 스크립트는 BARADUN_GIS_DIR(기본 ~/data/baradun-gis)·BARADUN_DATA_DIR(기본 ~/data)에서 읽음. 수집본(out/: beaches.csv·stations.csv·freshness·warnings)·구역 근거 json·responses/ 실응답 저장본·생성 중간 산출물은 $BARADUN_DATA_DIR/baradun-coverage. 근거에 남은 tools/coverage/… 표기는 수집 당시 위치(기록용). 관측소 배정·부재 판정 입력(수집본·72시간 기록·실응답 저장본)도 고정 해시로 대조",
     "checked_at": "2026-10-21"
   },
   "files": [
@@ -206,6 +206,54 @@
       "source_url": "https://www.law.go.kr/LSW/flDownload.do?flSeq=153069695",
       "base_date": "제1153호(종전)",
       "sha256": "0d7e6d95df06a31a5eb77ad166da48d18a4599218d512d2b08285d93f91c9ba8"
+    },
+    {
+      "name": "해수부 해수욕장정보 수집본(2026-10-16)",
+      "path": "$BARADUN_DATA_DIR/baradun-coverage/out/beaches.csv",
+      "base_date": "2026-10-20 수집(BRD-59 3차)",
+      "sha256": "a4b964ed008ffefce6e9e9c03e07f31ae2b831dea7367b9e39f23750257a8ab4"
+    },
+    {
+      "name": "관측소 목록 수집본",
+      "path": "$BARADUN_DATA_DIR/baradun-coverage/out/stations.csv",
+      "base_date": "2026-10-20 수집(BRD-59 3차)",
+      "sha256": "db6097adff1a70e328df36d2073c5f11bdf385f341e5ccd9526a79427083014e"
+    },
+    {
+      "name": "sea_obs 72시간 수신 기록",
+      "path": "$BARADUN_DATA_DIR/baradun-coverage/out/freshness/sea_obs_72h.csv",
+      "base_date": "2026-10-20 수집(BRD-59 3차)",
+      "sha256": "1be4d74dd050e994077100881223cafff82d94f588017892b4fb6556f98c6a20"
+    },
+    {
+      "name": "kma_buoy2 7일 수신 기록",
+      "path": "$BARADUN_DATA_DIR/baradun-coverage/out/freshness/kma_buoy2_7d.csv",
+      "base_date": "2026-10-20 수집(BRD-59 3차)",
+      "sha256": "35da5b345c8f6a54de6896e53ae7de97e7a32920a366fbd28c861cc8e4211735"
+    },
+    {
+      "name": "특보 360일 이력(pwncd)",
+      "path": "$BARADUN_DATA_DIR/baradun-coverage/out/warnings/pwncd_360d.csv",
+      "base_date": "2026-10-20 수집(BRD-59 3차)",
+      "sha256": "59367b42a72801f208e01e7ce16feead55eb2c7277a435302e58fb2f0cc3308f"
+    },
+    {
+      "name": "실응답 3차 저장본 지표 매트릭스",
+      "path": "$BARADUN_DATA_DIR/baradun-coverage/responses/metric-matrix.json",
+      "base_date": "2026-10-20 수집(BRD-59 3차)",
+      "sha256": "6a955030c2cb195fb27b3addf80eff6ac02ae0933a0596d77142110af496a58c"
+    },
+    {
+      "name": "실응답 3차 sea_obs 응답(authKey 제거)",
+      "path": "$BARADUN_DATA_DIR/baradun-coverage/responses/sea_obs-attempt-1.txt",
+      "base_date": "2026-10-20 수집(BRD-59 3차)",
+      "sha256": "71a89f0811735185d36f3ccc20fb6f6ecb3f8b038fbabb1fb7beeb1c7c83306c"
+    },
+    {
+      "name": "실응답 3차 kma_buoy 응답(authKey 제거)",
+      "path": "$BARADUN_DATA_DIR/baradun-coverage/responses/kma_buoy-attempt-1.txt",
+      "base_date": "2026-10-20 수집(BRD-59 3차)",
+      "sha256": "ac50c3d55497e1ab91bda8d58a4e68af4527cb034ec7670c0e352a13010c1394"
     }
   ]
 }

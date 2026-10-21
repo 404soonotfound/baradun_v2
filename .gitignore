@@ -55,6 +55,9 @@ docs/
 
 # tools: 다시 실행 가능한 스크립트·규칙 표만 커밋한다. 원자료·수집본·중간 산출물은 저장소 밖
 # ($BARADUN_DATA_DIR, 기본 ~/data). 아래는 실수로 넣지 않도록 막는 줄
+# tools/coverage/는 옛 위치(실응답 원문·근거 json이 남은 checkout 보호)
+tools/coverage/
+tools/**/responses/
 tools/**/out/
 tools/**/*.csv
 tools/**/*.xlsx
