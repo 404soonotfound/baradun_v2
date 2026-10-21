@@ -6,7 +6,7 @@ import { Toast, useToast } from "./toast";
 // 토스트 확인용 (BRD-81 · 개발 전용 Storybook). Figma L16 '당겨서 새로고침 → 변경 알림'(188:484)
 // 버튼을 누르면 4초 동안 화면 아래(하단 탭 위 96px)에 나타남
 function Demo() {
-  const { message, show, hide } = useToast();
+  const { message, show, hold } = useToast();
   return (
     <div style={{ display: "grid", gap: 12, padding: 16, maxWidth: 390 }}>
       <Button onClick={() => show({ text: "링크를 복사했어요" })}>
@@ -25,13 +25,13 @@ function Demo() {
         onClick={() =>
           show({
             text: "최근 본 기록에서 지웠어요",
-            action: { label: "되돌리기", onClick: hide },
+            action: { label: "되돌리기", onClick: () => {} },
           })
         }
       >
         되돌리기 토스트
       </Button>
-      <Toast message={message} />
+      <Toast message={message} onHold={hold} />
     </div>
   );
 }

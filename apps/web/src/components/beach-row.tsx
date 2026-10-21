@@ -101,6 +101,7 @@ export function BeachRow({
         {/* 값이 없을 때 읽어 줄 이유: 측정소 없음(none)과 잠깐 빠짐·늦음(hidden)을 구분 */}
         <WaveGlyph
           wave={wave}
+          metric={t("observation.metric.waveHeight")}
           label={
             wave.kind === "none" ? t("observation.none") : t("row.noValue")
           }
@@ -160,7 +161,16 @@ export function BeachRow({
 }
 
 // 왼쪽 파고 글리프 54px. 값이 있으면 "0.6m", 없으면 "–" + 점선(0이나 정상으로 보이지 않게)
-function WaveGlyph({ wave, label }: { wave: MetricView; label: string }) {
+// metric: 값 앞에 숨겨 읽어 줄 지표 이름("파고"). 없으면 링크 이름이 "0.6m 인구해변"처럼 뜻 없이 읽힘
+function WaveGlyph({
+  wave,
+  metric,
+  label,
+}: {
+  wave: MetricView;
+  metric: string;
+  label: string;
+}) {
   if (wave.kind !== "value") {
     return (
       <span className="flex size-[54px] shrink-0 items-center justify-center rounded-[12px] border border-dashed border-border-strong text-text-muted">
@@ -173,6 +183,7 @@ function WaveGlyph({ wave, label }: { wave: MetricView; label: string }) {
   return (
     <span className="flex size-[54px] shrink-0 items-center justify-center rounded-[12px] bg-bg-subtle">
       <span className="text-[14.5px] font-bold text-text-default">
+        <span className="sr-only">{metric} </span>
         {wave.value}
         <span className="text-[10px] font-normal text-text-muted">
           {wave.unit}

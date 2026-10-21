@@ -27,6 +27,13 @@ const TONES = {
 // keyof typeof TONES = TONES의 키 이름들("amber" | "red" | "gray")을 타입으로 꺼냄
 export type BannerTone = keyof typeof TONES;
 
+// action과 href는 둘 중 하나만(링크 안에 버튼이 들어가지 않게). 둘 다 주면 타입 오류
+type BannerTarget =
+  // 2줄째 끝에 붙는 행동(예: '다시 시도' 버튼)
+  | { action?: ReactNode; href?: undefined }
+  // 배너 전체를 누르는 링크로 만들 때(관측 지연 → 상세). 오른쪽에 › 표시
+  | { href: string; action?: undefined };
+
 export function Banner({
   tone,
   icon,
@@ -39,9 +46,7 @@ export function Banner({
   icon: ReactNode;
   title: string; // 1줄째: 무슨 일
   children?: ReactNode; // 2줄째: 영향·다음 행동
-  action?: ReactNode; // 2줄째 끝에 붙는 행동(예: '다시 시도' 버튼). href와 같이 쓰지 않음(링크 안에 버튼 금지)
-  href?: string; // 배너 전체를 누르는 링크로 만들 때(관측 지연 → 상세). 오른쪽에 › 표시
-}) {
+} & BannerTarget) {
   const colors = TONES[tone];
   const body = (
     <>
