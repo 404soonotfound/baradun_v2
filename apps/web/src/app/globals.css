@@ -70,3 +70,74 @@
     opacity: 0;
   }
 }
+
+/* 첫 로딩 로더 (RisingSkeleton). 한 바퀴 4160ms = 4칸, 한 칸 25%
+   행: 맨 아래(0~25%) → 가운데(25~33% 이동) → 맨 위(50~58% 이동) → 사라짐(75~83%) → 숨어서 맨 아래로 돌아감 */
+@keyframes skeleton-rise {
+  0%,
+  25%,
+  100% {
+    transform: translateY(0) scale(1);
+    opacity: 0.5;
+  }
+  33%,
+  50% {
+    transform: translateY(-86px) scale(0.8);
+    opacity: 0.3;
+  }
+  58%,
+  75% {
+    transform: translateY(-148px) scale(0.58);
+    opacity: 0.12;
+  }
+  83% {
+    transform: translateY(-190px) scale(0.45);
+    opacity: 0;
+  }
+  83.1%,
+  99.9% {
+    transform: translateY(0) scale(1);
+    opacity: 0;
+  }
+}
+
+/* 상자: 작게 시작해 커짐(0~8%) */
+@keyframes skeleton-pop {
+  0% {
+    transform: scale(0.15);
+  }
+  8%,
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* 막대 첫째: 살짝 넘쳤다 제자리 */
+@keyframes skeleton-grow-a {
+  0%,
+  1% {
+    transform: scaleX(0);
+  }
+  10% {
+    transform: scaleX(1.08);
+  }
+  16%,
+  100% {
+    transform: scaleX(1);
+  }
+}
+
+/* 막대 둘째: 첫째보다 0.2초쯤 늦게 */
+@keyframes skeleton-grow-b {
+  0%,
+  6% {
+    transform: scaleX(0);
+  }
+  15% {
+    transform: scaleX(1.1);
+  }
+  21%,
+  100% {
+    transform: scaleX(1);
+  }
+}

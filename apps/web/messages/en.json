@@ -8,25 +8,32 @@
   },
   "verdict": {
     "clear": {
-      "title": "No warnings"
+      "title": "No warnings",
+      "sentence": "No warnings are in effect right now"
     },
     "unknownWarning": {
-      "title": "Couldn't check warnings"
+      "title": "Couldn't check warnings",
+      "sentence": "We couldn't check warnings"
     },
     "stale": {
-      "title": "Observation delayed"
+      "title": "Observation delayed",
+      "sentence": "Current sea conditions are unknown"
     },
     "warning": {
-      "title": "{type} {level}"
+      "title": "{type} {level}",
+      "sentence": "{name} is in effect"
     },
     "restricted": {
-      "title": "Restricted"
+      "title": "Restricted",
+      "sentence": "A restriction is in effect"
     },
     "unconfirmed": {
-      "title": "Not confirmed"
+      "title": "Not confirmed",
+      "sentence": "We couldn't confirm the current status"
     },
     "confirmedUntil": "Checked {time} · not confirmed since",
-    "confirmedUnknown": "Check time unknown · not confirmed since"
+    "confirmedUnknown": "Check time unknown · not confirmed since",
+    "avoid": "Avoid going into the water and follow on-site guidance"
   },
   "warning": {
     "type": {
@@ -54,6 +61,13 @@
       "wind": "Wind"
     },
     "station": "{name} {km}km"
+  },
+  "row": {
+    "noValue": "No wave height",
+    "changed": "Just changed · was {previous}"
+  },
+  "info": {
+    "offSeason": "Off season"
   },
   "dataBanner": {
     "schemaUnsupported": "We couldn’t read the new data format, so every beach is shown as not confirmed. Please reopen the app in a moment."
