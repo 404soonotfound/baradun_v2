@@ -45,7 +45,15 @@
   "observation": {
     "none": "가까운 관측 없음",
     "measuredAgo": "{minutes}분 전 측정",
-    "issuedAt": "{time} 발표"
+    "issuedAt": "{time} 발표",
+    "metric": {
+      "waveHeight": "파고",
+      "wavePeriod": "파주기",
+      "waveDirection": "파향",
+      "waterTemp": "수온",
+      "wind": "바람"
+    },
+    "station": "{name} {km}km"
   },
   "dataBanner": {
     "schemaUnsupported": "새 데이터 형식을 읽지 못했어요. 모든 해변을 '확인 못 함'으로 보여줘요. 잠시 뒤 앱을 다시 열어 주세요."

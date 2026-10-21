@@ -45,7 +45,15 @@
   "observation": {
     "none": "No nearby observation",
     "measuredAgo": "Measured {minutes} min ago",
-    "issuedAt": "Issued {time}"
+    "issuedAt": "Issued {time}",
+    "metric": {
+      "waveHeight": "Wave height",
+      "wavePeriod": "Wave period",
+      "waveDirection": "Wave direction",
+      "waterTemp": "Water temp",
+      "wind": "Wind"
+    },
+    "station": "{name} {km}km"
   },
   "dataBanner": {
     "schemaUnsupported": "We couldn’t read the new data format, so every beach is shown as not confirmed. Please reopen the app in a moment."
