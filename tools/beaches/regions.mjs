@@ -41,6 +41,23 @@ export const sha256 = (path) => {
   return hashCache.get(path);
 };
 
+// 원자료 고정 해시(data-sources.json, 검토한 원자료). 지금 파일 해시만 기록하면 오래되거나 잘못 둔 자료로도 VERIFIED가 되므로 판정·생성 전에 대조
+export const MOF_LABEL = "$BARADUN_DATA_DIR/2026_해수욕장_현황_해수부.xlsx";
+export const BJD_LABEL = "$BARADUN_DATA_DIR/국토교통부_법정동코드_20260929.csv";
+const PINNED = JSON.parse(readFileSync(new URL("./data-sources.json", import.meta.url), "utf8")).files;
+const pinnedPath = (label) =>
+  label === MOF_LABEL ? MOF_XLSX
+  : label === BJD_LABEL ? BJD_CSV
+  : label.replace("$BARADUN_GIS_DIR", () => GIS_DIR).replace("$BARADUN_DATA_DIR", () => DATA_DIR); // 함수로 넘김: 경로 안 '$&' 등을 치환 패턴으로 해석하지 않게
+export const pinnedSha = (label) => PINNED.find((f) => f.path === label)?.sha256 ?? null;
+// 하나라도 없거나 해시가 다르면 중단
+export function verifyPinnedSources() {
+  const bad = PINNED.map((f) => [f, sha256(pinnedPath(f.path))])
+    .filter(([f, now]) => now !== f.sha256)
+    .map(([f, now]) => `${f.path}(${now ? "해시 다름" : "파일 없음"})`);
+  if (bad.length) throw new Error(`원자료가 data-sources.json 고정 해시와 다름 → 생성 중단: ${bad.join(" / ")}`);
+}
+
 // --region 인자 (없으면 강원). '전국'이면 모든 시·도
 export function regionArg(argv = process.argv) {
   const i = argv.indexOf("--region");

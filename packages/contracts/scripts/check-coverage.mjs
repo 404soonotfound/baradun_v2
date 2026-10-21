@@ -99,6 +99,11 @@ for (const r of matrix) {
 }
 // 3) meta에 없는 해변 id
 for (const id of Object.keys(meta.beaches ?? {})) if (!ids.has(id)) fail(`beach-meta.json: 없는 해변 ${id}`);
+// 4) 생성기가 숨긴 해변(_meta.auto_hidden): 숨긴 파일이고 매트릭스가 보류·자동 제외여야 함. 아니면 다음 생성 때 사람이 숨긴 해변이 다시 공개될 수 있음
+for (const id of meta._meta?.auto_hidden ?? []) {
+  if (!hiddenList.some((b) => b.id === id)) fail(`beach-meta.json auto_hidden: 숨긴 해변 파일 아님 ${id}`);
+  else if (byId.get(id)?.stage === "SOURCE_CANDIDATE") fail(`beach-meta.json auto_hidden: 공개 단계 해변 ${id}`);
+}
 
 if (errors.length) {
   console.error(`매트릭스 검사 실패 ${errors.length}건`);
