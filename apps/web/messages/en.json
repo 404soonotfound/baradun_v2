@@ -25,7 +25,8 @@
     "unconfirmed": {
       "title": "Not confirmed"
     },
-    "confirmedUntil": "Checked {time} · not confirmed since"
+    "confirmedUntil": "Checked {time} · not confirmed since",
+    "confirmedUnknown": "Check time unknown · not confirmed since"
   },
   "warning": {
     "type": {

@@ -132,6 +132,22 @@ describe("만료 경계 (아키텍처 14.1)", () => {
     });
   });
 
+  it("validUntil·expiresAt에 시간대 없음(KST·UTC 모호) → 만료로 봄", () => {
+    const statuses = withStatus("b0001", (status) => {
+      status.validUntil = "2026-10-17T23:00:00";
+      status.observation.metrics.waterTemp.expiresAt = "2026-10-17T23:00:00";
+    });
+    const view = deriveBeachView(
+      beach("b0001"),
+      source("2026-10-17T05:30:00Z", {}, statuses),
+    );
+    expect(view).toMatchObject({
+      category: "undetermined",
+      badge: { kind: "warning_unknown" },
+      metrics: { waterTemp: { kind: "hidden" } },
+    });
+  });
+
   // 파주기 기준 60분(B4): 값만 숨기고 분류는 그대로
   const periodBound = withStatus("b0001", (status) => {
     status.validUntil = "2026-10-17T07:00:00Z";
@@ -352,6 +368,12 @@ describe("근거가 빠지거나 모순된 '특보 없음'은 판단불가", () 
       },
     ],
     [
+      "확인 시각에 시간대 없음(KST·UTC 모호)",
+      (s: BeachStatus) => {
+        s.warning.lastConfirmedAt = "2026-10-17T05:18:40";
+      },
+    ],
+    [
       "파고 delayed",
       (s: BeachStatus) => {
         s.observation.metrics.waveHeight.state = "delayed";
@@ -487,5 +509,208 @@ describe("모르는 데이터 (9.1)", () => {
         source("2026-10-17T05:30:00Z", { phase: "loading", statuses: null }),
       ),
     ).toEqual({ kind: "loading" });
+  });
+});
+
+describe("읽을 수 없는 값·모순 (전체 재검증)", () => {
+  it("점검 중이면 지난 값 대신 판단불가", () => {
+    const view = deriveBeachView(
+      beach("b0001"),
+      source("2026-10-17T05:30:00Z", { phase: "maintenance" }),
+    );
+    expect(view).toMatchObject({
+      category: "undetermined",
+      metrics: { waveHeight: { kind: "hidden" } },
+    });
+  });
+
+  it.each([
+    [
+      "파고가 자체 만료를 넘김(validUntil과 모순)",
+      "2026-10-17T06:40:00Z",
+      (s: BeachStatus) => {
+        s.validUntil = "2026-10-17T07:00:00Z";
+      },
+    ],
+    [
+      "파고 fresh인데 값 없음",
+      "2026-10-17T05:30:00Z",
+      (s: BeachStatus) => {
+        s.observation.metrics.waveHeight.value = null;
+      },
+    ],
+    [
+      "파고 fresh인데 관측 시각을 읽을 수 없음",
+      "2026-10-17T05:30:00Z",
+      (s: BeachStatus) => {
+        s.observation.metrics.waveHeight.observedAt = "yesterday";
+      },
+    ],
+  ])("'특보 없음' 근거 모순: %s → 판단불가", (_, now, change) => {
+    const view = deriveBeachView(
+      beach("b0001"),
+      source(now, {}, withStatus("b0001", change)),
+    );
+    expect(view).toMatchObject({ category: "undetermined" });
+  });
+
+  it.each([
+    [
+      "관측 시각을 읽을 수 없음",
+      (m: Record<string, unknown>) => {
+        m.observedAt = "yesterday";
+      },
+    ],
+    [
+      "모르는 단위",
+      (m: Record<string, unknown>) => {
+        m.unit = "knots";
+      },
+    ],
+    [
+      "지표와 단위가 어긋남",
+      (m: Record<string, unknown>) => {
+        m.unit = "s";
+      },
+    ],
+  ])("수온 %s → 그 값만 숨김, 분류 그대로", (_, change) => {
+    const statuses = withStatus("b0001", (status) =>
+      change(
+        status.observation.metrics.waterTemp as unknown as Record<
+          string,
+          unknown
+        >,
+      ),
+    );
+    const view = deriveBeachView(
+      beach("b0001"),
+      source("2026-10-17T05:30:00Z", {}, statuses),
+    );
+    expect(view).toMatchObject({
+      category: "clear",
+      metrics: { waterTemp: { kind: "hidden" }, wind: { kind: "value" } },
+    });
+  });
+
+  it.each([
+    ["읽을 수 없는 확인 시각", "not-a-time"],
+    ["확인 시각 없음", null],
+  ])("B5 %s → 이용불가 유지, 확인 시각만 비우고 stale 표시", (_, at) => {
+    const statuses = withStatus("b0002", (status) => {
+      status.warning.lastConfirmedAt = at;
+    });
+    const view = deriveBeachView(
+      beach("b0002"),
+      source("2026-10-17T05:30:00Z", { live: false }, statuses),
+    );
+    expect(view).toMatchObject({
+      category: "unavailable",
+      badge: { kind: "warning", type: "wind_wave" },
+      stale: true,
+      confirmedAt: null,
+    });
+  });
+
+  it("stale: 받는 중이면 false, 오프라인이면 true", () => {
+    expect(
+      deriveBeachView(beach("b0002"), source("2026-10-17T05:30:00Z")),
+    ).toMatchObject({ stale: false });
+    expect(
+      deriveBeachView(
+        beach("b0001"),
+        source("2026-10-17T05:30:00Z", { live: false }),
+      ),
+    ).toMatchObject({ stale: true });
+  });
+
+  it("지금 시각을 모르면(NaN) 모두 만료: '특보 없음' 안 됨, 발효 특보는 유지, 값은 숨김", () => {
+    const unknownNow = { nowMs: NaN, clock: DEVICE_CLOCK, live: false };
+    const clear = deriveBeachView(
+      beach("b0001"),
+      source("2026-10-17T05:30:00Z", unknownNow),
+    );
+    expect(clear).toMatchObject({ category: "undetermined" });
+    expect(clear).not.toMatchObject({
+      metrics: { waveHeight: { kind: "value" } },
+    });
+    expect(
+      deriveBeachView(
+        beach("b0002"),
+        source("2026-10-17T05:30:00Z", unknownNow),
+      ),
+    ).toMatchObject({
+      category: "unavailable",
+      stale: true,
+      metrics: { wavePeriod: { kind: "hidden" } },
+    });
+  });
+});
+
+describe("'특보 없음' 해변의 파고 자체 만료", () => {
+  it("받는 중 + 파고 만료(계약 위반) → 판단불가, 사유를 지어내지 않음(확인 못 함), 다른 값은 그대로", () => {
+    const statuses = withStatus("b0001", (status) => {
+      status.validUntil = "2026-10-17T07:00:00Z";
+    });
+    const view = deriveBeachView(
+      beach("b0001"),
+      source("2026-10-17T06:40:00Z", {}, statuses),
+    );
+    expect(view).toMatchObject({
+      category: "undetermined",
+      badge: { kind: "unconfirmed" },
+      stale: false,
+      metrics: {
+        waveHeight: { kind: "hidden" },
+        waveDirection: { kind: "none" },
+      },
+    });
+  });
+
+  it("오프라인이 길어져 파고도 만료 → B5 '특보 확인 못 함' + stale 유지", () => {
+    const view = deriveBeachView(
+      beach("b0001"),
+      source("2026-10-17T06:40:00Z", { live: false }),
+    );
+    expect(view).toMatchObject({
+      category: "undetermined",
+      badge: { kind: "warning_unknown" },
+      stale: true,
+    });
+  });
+});
+
+describe("데이터 없는 판단불가의 stale", () => {
+  it.each([
+    ["받는 중", true, false],
+    ["오프라인", false, true],
+  ])("status에 없는 해변, %s → stale %s", (_, live, stale) => {
+    const view = deriveBeachView(
+      beach("b9999"),
+      source("2026-10-17T05:30:00Z", { live }),
+    );
+    expect(view).toMatchObject({ category: "undetermined", stale });
+  });
+
+  it("저장된 값도 없이 오프라인 → stale", () => {
+    const view = deriveBeachView(
+      beach("b0001"),
+      source("2026-10-17T05:30:00Z", { live: false, statuses: null }),
+    );
+    expect(view).toMatchObject({ category: "undetermined", stale: true });
+  });
+});
+
+describe("B5 '특보 없음'이던 해변의 확인 시각", () => {
+  it("오프라인 → 특보 확인 못 함 + 알고 있는 마지막 확인 시각", () => {
+    const view = deriveBeachView(
+      beach("b0001"),
+      source("2026-10-17T05:30:00Z", { live: false }),
+    );
+    expect(view).toMatchObject({
+      category: "undetermined",
+      badge: { kind: "warning_unknown" },
+      stale: true,
+      confirmedAt: "2026-10-17T05:18:40Z",
+    });
   });
 });
