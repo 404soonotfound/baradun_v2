@@ -251,6 +251,20 @@ const IDS_PATH = join(HERE, "ids.json");
 const ids = existsSync(IDS_PATH) ? JSON.parse(readFileSync(IDS_PATH, "utf8")) : { note: "BRD-59 내부 id 대장. 한 번 정한 id는 바꾸거나 다시 쓰지 않음(결정 기록 9장)", ids: {} };
 const idKey = (src) => `${src.sido_nm}|${src.gugun_nm}|${src.sta_nm}`;
 let nextSeq = Math.max(0, ...Object.values(ids.ids).map((v) => Number(v.slice(1)))) + 1;
+// 공개한 slug 고정(결정 기록 9장: 한 번 정하면 바꾸거나 다시 쓰지 않음, BRD-80).
+// data/beaches 파일에 slug가 있으면 규칙 결과보다 먼저 씀. 숨긴 해변 파일의 slug도 고정(다른 해변이 다시 쓰지 않게)
+const PUBLISHED_DIR = join(HERE, "../../data/beaches");
+const pinnedSlug = new Map(
+  existsSync(PUBLISHED_DIR)
+    ? readdirSync(PUBLISHED_DIR)
+        .filter((f) => /^b\d{4}\.json$/.test(f))
+        .map((f) => {
+          const b = JSON.parse(readFileSync(join(PUBLISHED_DIR, f), "utf8"));
+          return [b.id, b.slug];
+        })
+    : [],
+);
+const slugOwner = new Map([...pinnedSlug].map(([id, s]) => [s, id]));
 const excludedLog = new Map(); // 대표 제외 지점 → 사유
 const excludedBeaches = []; // 출시 자동 제외 해변 (결정 4-A)
 
@@ -314,8 +328,13 @@ for (const src of beachesSrc) {
   // 겹치면 시군 로마자를 앞에 붙임(gangneung-songjeong), '리'는 로마자 그대로(munam-2-ri)
   const dups = sameNameElsewhere(src);
   const dupText = dups.length ? dups.map((b) => `${b.sido_nm} ${b.gugun_nm} ${b.sta_nm}`).join(", ") : null;
-  const slug = dups.length ? `${slugOf(SIGUNGU_EN[src.gugun_nm])}-${slugOf(n.rom)}` : (n.slugOverride ?? slugOf(n.rom));
-  const slugRule = dups.length ? `이름 겹침(${dupText}) → 시군 로마자 접두(결정 기록 11장 10/21 ②)` : "겹침 없음 → 로마자 그대로(결정 기록 11장 10/21 ②③)";
+  const ruleSlug = dups.length ? `${slugOf(SIGUNGU_EN[src.gugun_nm])}-${slugOf(n.rom)}` : (n.slugOverride ?? slugOf(n.rom));
+  // 이미 공개한 해변은 파일의 slug 그대로(규칙 결과가 달라져도 바꾸지 않음). 새 해변만 규칙 적용, 다른 해변의 slug는 쓰지 않음
+  const pinned = pinnedSlug.get(id);
+  const slug = pinned ?? ruleSlug;
+  if (!pinned && slugOwner.has(slug)) throw new Error(`slug 재사용 금지: ${slug}는 ${slugOwner.get(slug)}가 이미 씀(${id} ${key})`);
+  const ruleText = dups.length ? `이름 겹침(${dupText}) → 시군 로마자 접두(결정 기록 11장 10/21 ②)` : "겹침 없음 → 로마자 그대로(결정 기록 11장 10/21 ②③)";
+  const slugRule = pinned && pinned !== ruleSlug ? `공개 slug 고정(규칙 결과 ${ruleSlug}와 다르지만 바꾸지 않음, 결정 기록 9장) · ${ruleText}` : ruleText;
   const aliases = [...new Set([src.sta_nm, koBase, ...(n.alias ?? [])])].filter((a) => a !== nameKo);
 
   // 관측소: station-assign.mjs 규칙(결정 4-A). 20km 안 미검증 관측소가 배정·부재 확정을 막으면 UNDETERMINED
@@ -578,9 +597,14 @@ if (process.argv.includes("--publish")) {
   };
   // 공개본은 해변별 결과 칸만(slim-matrix.mjs). 전체 매트릭스는 위 coverage-<지역>.csv
   const csv2 = [SLIM_COLS.join(","), ...slimMatrix(matrix).map((r) => SLIM_COLS.map((c) => csvCell(r[c])).join(","))].join("\n");
-  // photo는 카탈로그 수집(BRD-58)이 채우는 칸이라 생성기가 덮어쓰지 않고 지금 파일 값을 유지
-  for (const r of records)
-    writeFileSync(join(BEACH_DIR, `${r.id}.json`), `${JSON.stringify({ ...strip(r), photo: existing.get(r.id)?.photo ?? null, ...(stillHidden.has(r.id) ? { hidden: true } : {}) }, null, 2)}\n`);
+  // 사람·다른 수집이 채우는 칸은 생성기가 덮어쓰지 않고 지금 파일 값을 유지(BRD-80):
+  //   photo(카탈로그 수집 BRD-58), cctv(BRD-66), activities(서핑 등 확인된 활동, BRD-60). 새 해변만 생성 값
+  // 같은 키를 다시 넣으므로 칸 순서는 그대로(파일 바이트가 바뀌지 않음)
+  for (const r of records) {
+    const prev = existing.get(r.id);
+    const out = { ...strip(r), activities: prev?.activities ?? r.activities, photo: prev?.photo ?? null, cctv: prev?.cctv ?? r.cctv, ...(stillHidden.has(r.id) ? { hidden: true } : {}) };
+    writeFileSync(join(BEACH_DIR, `${r.id}.json`), `${JSON.stringify(out, null, 2)}\n`);
+  }
   for (const [id, beach] of hidden) writeFileSync(join(BEACH_DIR, `${id}.json`), `${JSON.stringify(beach, null, 2)}\n`);
   if (hidden.length) console.log(`공개 대상에서 빠진 해변 숨김(hidden: true) ${hidden.length}개: ${hidden.map(([id]) => id).join(", ")}`);
   if (stillHidden.size) console.log(`이미 숨긴 해변 숨김 유지 ${stillHidden.size}개: ${[...stillHidden].join(", ")}`);
