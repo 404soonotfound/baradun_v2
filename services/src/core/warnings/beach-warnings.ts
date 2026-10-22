@@ -58,7 +58,7 @@ const LEVEL_RANK: Record<WarningLevel, number> = {
   advisory: 2,
 };
 type Ranked = { level: WarningLevel; publishedAt: string };
-function byLevelThenTime(a: Ranked, b: Ranked): number {
+export function byLevelThenTime(a: Ranked, b: Ranked): number {
   return (
     LEVEL_RANK[a.level] - LEVEL_RANK[b.level] ||
     Date.parse(a.publishedAt) - Date.parse(b.publishedAt)
