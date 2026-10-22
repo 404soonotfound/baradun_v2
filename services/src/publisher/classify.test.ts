@@ -272,6 +272,23 @@ describe("classifyBeach 규칙", () => {
     expect(result.warning.state).toBe("unknown");
   });
 
+  it.each([
+    ["지진해일 확인 없음", { pwn: CONFIRMED, tsunami: null }, NOW],
+    [
+      "확인 45분 지남",
+      { pwn: CONFIRMED, tsunami: CONFIRMED },
+      "2026-10-22T06:10:00Z",
+    ],
+  ] as const)(
+    "앞 단계 사유가 비어도 %s → 특보 확인 못 함(특보 없음으로 내보내지 않음)",
+    (_name, lastConfirmedAt, now) => {
+      const result = classify({ lastConfirmedAt, now });
+      expect(result.category).toBe("undetermined");
+      expect(result.warning.state).toBe("unknown");
+      expect(result.reasons.map((r) => r.code)).toEqual(["warning_unknown"]);
+    },
+  );
+
   it("발효 특보가 있으면 확인 못 함 사유가 있어도 이용불가(사유는 특보만)", () => {
     const result = classify({
       warnings: {
@@ -326,6 +343,30 @@ describe("classifyBeach validUntil", () => {
     expect(result.warning.lastConfirmedAt).toBe(CONFIRMED);
   });
 
+  it("확인이 45분을 지났거나 미래 시각이면 게시 시각(바로 만료)", () => {
+    // 05:18:40 + 45분 = 06:03:40 < 06:10 → 지남
+    const expired = classify({
+      warnings: unknownWarnings,
+      now: "2026-10-22T06:10:00Z",
+    });
+    expect(expired.validUntil).toBe("2026-10-22T06:10:00Z");
+    // 기준 시각보다 늦은 확인 → 믿지 않음
+    const future = classify({
+      warnings: unknownWarnings,
+      now: "2026-10-22T05:10:00Z",
+    });
+    expect(future.validUntil).toBe("2026-10-22T05:10:00Z");
+  });
+
+  it("깨진 확인 시각은 확인 못 한 것으로 보고 표시하지 않음", () => {
+    const result = classify({
+      warnings: unknownWarnings,
+      lastConfirmedAt: { pwn: "2026-10-22 05:18", tsunami: CONFIRMED },
+    });
+    expect(result.validUntil).toBe(NOW);
+    expect(result.warning.lastConfirmedAt).toBe(CONFIRMED);
+  });
+
   it("둘 다 확인된 적 없는데 발효 특보만 있으면 게시를 멈춤", () => {
     expect(() =>
       classifyBeach(
@@ -333,6 +374,14 @@ describe("classifyBeach validUntil", () => {
           warnings: active([windWave("advisory", "2026-10-22T04:00:00Z")]),
           lastConfirmedAt: { pwn: null, tsunami: null },
         }),
+      ),
+    ).toThrow(RangeError);
+  });
+
+  it("파고 관측 지연인데 측정소 이름이 없으면 게시를 멈춤(구역 이름으로 바꾸지 않음)", () => {
+    expect(() =>
+      classifyBeach(
+        input({ metrics: metrics("delayed"), waveStationName: null }),
       ),
     ).toThrow(RangeError);
   });
