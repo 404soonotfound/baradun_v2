@@ -1,5 +1,5 @@
 import { parseKstTime } from "../warnings/time";
-import { readFramedLines } from "./framed-lines";
+import { hasHeader, NO_USABLE_ROWS, readFramedLines } from "./framed-lines";
 import { readMetricValue } from "./values";
 
 // kma_buoy 응답 읽기 (데이터 출처 3장, 결정 기록 11장 B1·10/22 BRD-19)
@@ -14,7 +14,7 @@ export interface KmaBuoyRow {
   readonly waveDirection: number | null; // 도(0~360)
 }
 
-// skippedRows: 시각·측정기 번호를 읽지 못해 건너뛴 줄 수(운영 알림용, BRD-56)
+// skippedRows: 모양·시각·측정기 번호를 읽지 못해 건너뛴 줄 수(운영 알림용, BRD-56)
 export type KmaBuoyResult =
   | { status: "ok"; rows: KmaBuoyRow[]; skippedRows: number }
   | { status: "failed"; reason: string };
@@ -28,18 +28,66 @@ const COLUMN = {
   waveDirection: 16,
 } as const;
 const STATION_ID = /^\d+$/;
+// 칸 이름·단위 머리글(2026-10-21 실응답). 같은 이름(WS1·WH)이 여러 번 나와 단위 줄로 구분
+const HEADER_NAMES = [
+  "YYMMDDHHMI",
+  "STN",
+  "WD1",
+  "WS1",
+  "WS1",
+  "WD2",
+  "WS2",
+  "WS2",
+  "PA",
+  "HM",
+  "TA",
+  "TW",
+  "WH",
+  "WH",
+  "WH",
+  "WP",
+  "WO",
+];
+const HEADER_UNITS = [
+  "KST",
+  "ID",
+  "deg",
+  "m/s",
+  "GST",
+  "deg",
+  "m/s",
+  "GST",
+  "hPa",
+  "%",
+  "C",
+  "C",
+  "MAX",
+  "SIG",
+  "AVE",
+  "sec",
+  "deg",
+];
 
 export function parseKmaBuoy(text: string): KmaBuoyResult {
   const framed = readFramedLines(text);
   if (framed.status === "failed") return framed;
+  if (
+    !hasHeader(framed.headers, HEADER_NAMES) ||
+    !hasHeader(framed.headers, HEADER_UNITS)
+  ) {
+    return { status: "failed", reason: "칸 이름이 다름" };
+  }
 
   const rows: KmaBuoyRow[] = [];
   let skippedRows = 0;
   for (const line of framed.lines) {
     // \s+: 빈칸이 몇 개든 한 번의 구분으로 봄(칸 너비를 빈칸으로 맞춰 줌)
     const cells = line.split(/\s+/);
+    // 측정기 종류 칸이 없어 쓰는 측정기만 고를 수 없음 → 칸 수가 다른 줄은 이 줄만 버리고 셈
+    // 형식이 통째로 바뀌면 모든 줄이 빠져 아래 '쓸 수 있는 줄 없음'으로 실패
     if (cells.length !== CELLS_PER_LINE) {
-      return { status: "failed", reason: `줄 모양이 다름: ${line}` };
+      skippedRows += 1;
+      continue;
     }
     const cell = (index: number): string => cells[index] ?? "";
 
@@ -59,5 +107,6 @@ export function parseKmaBuoy(text: string): KmaBuoyResult {
       ),
     });
   }
+  if (rows.length === 0) return NO_USABLE_ROWS;
   return { status: "ok", rows, skippedRows };
 }

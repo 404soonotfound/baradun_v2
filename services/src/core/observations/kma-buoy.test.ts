@@ -71,8 +71,10 @@ describe("parseKmaBuoy", () => {
   it.each([
     ["칸 하나 빠짐", "  6.0 257", "  6.0"],
     ["칸 하나 더 있음", "  6.0 257", "  6.0 257 0"],
-  ])("줄 모양이 다르면 응답 전체 실패: %s", (_name, from, to) => {
-    expect(parseKmaBuoy(fixture.replace(from, to)).status).toBe("failed");
+  ])("줄 모양이 다르면 그 줄만 건너뛰고 셈: %s", (_name, from, to) => {
+    const result = parseKmaBuoy(fixture.replace(from, to));
+    expect(result.status === "ok" && result.skippedRows).toBe(1);
+    expect(result.status === "ok" && result.rows.length).toBe(4);
   });
 
   it("시각을 읽지 못한 줄은 건너뛰고 셈", () => {
@@ -92,6 +94,23 @@ describe("parseKmaBuoy", () => {
     expect(parseKmaBuoy(empty)).toEqual({
       status: "failed",
       reason: "자료 줄 없음",
+    });
+  });
+
+  it("칸 이름이 바뀌면 칸 수가 같아도 응답 전체 실패", () => {
+    // 칸 수는 그대로 두고 파주기(WP)와 파향(WO) 자리만 바뀐 경우
+    const swapped = fixture.replace("  WP  WO", "  WO  WP");
+    expect(parseKmaBuoy(swapped)).toEqual({
+      status: "failed",
+      reason: "칸 이름이 다름",
+    });
+  });
+
+  it("모든 줄이 빠지면 실패(빈 결과를 정상으로 남기지 않음)", () => {
+    const allBad = fixture.replace(/^(\d{12}) /gm, "$1 0 ");
+    expect(parseKmaBuoy(allBad)).toEqual({
+      status: "failed",
+      reason: "쓸 수 있는 줄 없음",
     });
   });
 });

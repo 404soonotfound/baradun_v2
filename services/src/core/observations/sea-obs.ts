@@ -1,6 +1,6 @@
 // import { 이름 } from "경로": 다른 파일이 export한 것을 가져옴(.ts 확장자는 쓰지 않음)
 import { parseKstTime } from "../warnings/time";
-import { readFramedLines } from "./framed-lines";
+import { hasHeader, NO_USABLE_ROWS, readFramedLines } from "./framed-lines";
 import { readMetricValue } from "./values";
 
 // sea_obs 응답 읽기 (데이터 출처 3장, 결정 기록 11장 B1·10/22 BRD-19)
@@ -19,7 +19,7 @@ export interface SeaObsRow {
 }
 
 // 결과는 두 모양 중 하나. status 값으로 어느 쪽인지 구별(부르는 쪽이 if로 나눠 씀)
-// skippedRows: 시각·측정기 번호를 읽지 못해 건너뛴 줄 수(운영 알림용, BRD-56)
+// skippedRows: 쓰는 측정기(B·C) 줄 중 모양·시각·번호를 읽지 못해 건너뛴 줄 수(운영 알림용, BRD-56)
 export type SeaObsResult =
   | { status: "ok"; rows: SeaObsRow[]; skippedRows: number }
   | { status: "failed"; reason: string };
@@ -39,11 +39,48 @@ const COLUMN = {
   waterTemp: 10,
 } as const;
 const STATION_ID = /^\d+$/; // 측정기 번호는 숫자만
+// 칸 이름·단위 머리글(2026-10-21 실응답). 첫 칸(종류)은 이름이 없어 한 칸씩 앞당겨 적힘
+const HEADER_NAMES = [
+  "TM",
+  "STN",
+  "STN",
+  "LON",
+  "LAT",
+  "WH",
+  "WD",
+  "WS",
+  "WS",
+  "TW",
+  "TA",
+  "PA",
+  "HM",
+];
+const HEADER_UNITS = [
+  "KST",
+  "ID",
+  "KO",
+  "deg",
+  "deg",
+  "m",
+  "deg",
+  "m/s",
+  "GST",
+  "C",
+  "C",
+  "hPa",
+  "%",
+];
 
 export function parseSeaObs(text: string): SeaObsResult {
   // 시작·끝 표시 확인(잘린 응답은 실패)과 머리글 빼기는 공통 틀 읽기가 함
   const framed = readFramedLines(text);
   if (framed.status === "failed") return framed;
+  if (
+    !hasHeader(framed.headers, HEADER_NAMES) ||
+    !hasHeader(framed.headers, HEADER_UNITS)
+  ) {
+    return { status: "failed", reason: "칸 이름이 다름" };
+  }
 
   const rows: SeaObsRow[] = []; // 빈 배열에서 시작해 한 줄씩 채움
   let skippedRows = 0; // let: 나중에 값을 바꿀 수 있는 변수(const는 못 바꿈)
@@ -52,12 +89,14 @@ export function parseSeaObs(text: string): SeaObsResult {
     // B·C가 아닌 측정기는 모양과 상관없이 건너뜀. 쓰지 않는 측정기 한 줄 때문에 전국 값이 멈추지 않게 함
     // 종류는 첫 칸이라 뒤쪽 칸이 밀려도 자리가 바뀌지 않음. continue: 이 줄은 건너뛰고 다음 줄로
     if (!STATION_TYPES.has(cells[COLUMN.type] ?? "")) continue;
-    // 칸 수·끝 표시가 다르면 형식이 바뀐 것 → 칸 자리를 믿을 수 없어 응답 전체를 실패로 봄
+    // 칸 수·끝 표시가 다르면 이 줄의 칸 자리를 믿을 수 없음 → 이 줄만 버리고 셈(그 측정기만 나중에 지연)
+    // 형식이 통째로 바뀌면 모든 줄이 빠져 아래 '쓸 수 있는 줄 없음'으로 실패
     if (
       cells.length !== CELLS_PER_LINE ||
       cells[cells.length - 1] !== LINE_END
     ) {
-      return { status: "failed", reason: `줄 모양이 다름: ${line}` };
+      skippedRows += 1;
+      continue;
     }
     // cells[i]는 칸이 없을 수도 있어 타입이 string | undefined(설정 noUncheckedIndexedAccess)
     // ?? "": 없으면(undefined) 빈 글자로 바꿈 → 이후 코드는 항상 string으로 다룸
@@ -78,5 +117,6 @@ export function parseSeaObs(text: string): SeaObsResult {
       waterTemp: readMetricValue("waterTemp", cell(COLUMN.waterTemp)),
     });
   }
+  if (rows.length === 0) return NO_USABLE_ROWS;
   return { status: "ok", rows, skippedRows };
 }

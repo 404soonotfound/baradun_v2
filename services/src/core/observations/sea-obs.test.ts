@@ -83,8 +83,10 @@ describe("parseSeaObs", () => {
       "B, 202610210000, 0,    22520,",
     ],
     ["끝 표시 없음", "76.0, ,=", "76.0, , "],
-  ])("줄 모양이 다르면 응답 전체 실패: %s", (_name, from, to) => {
-    expect(parseSeaObs(fixture.replace(from, to)).status).toBe("failed");
+  ])("줄 모양이 다르면 그 줄만 건너뛰고 셈: %s", (_name, from, to) => {
+    const result = parseSeaObs(fixture.replace(from, to));
+    expect(result.status === "ok" && result.skippedRows).toBe(1);
+    expect(result.status === "ok" && result.rows.length).toBe(4);
   });
 
   it("시각을 읽지 못한 줄은 건너뛰고 셈", () => {
@@ -113,6 +115,23 @@ describe("parseSeaObs", () => {
     expect(parseSeaObs(empty)).toEqual({
       status: "failed",
       reason: "자료 줄 없음",
+    });
+  });
+
+  it("칸 이름이 바뀌면 칸 수가 같아도 응답 전체 실패", () => {
+    // 칸 수는 그대로 두고 수온(TW)과 기온(TA) 자리만 바뀐 경우
+    const swapped = fixture.replace("    TW     TA", "    TA     TW");
+    expect(parseSeaObs(swapped)).toEqual({
+      status: "failed",
+      reason: "칸 이름이 다름",
+    });
+  });
+
+  it("쓰는 측정기 줄이 모두 빠지면 실패(빈 결과를 정상으로 남기지 않음)", () => {
+    const allBad = fixture.replace(/,=$/gm, ",");
+    expect(parseSeaObs(allBad)).toEqual({
+      status: "failed",
+      reason: "쓸 수 있는 줄 없음",
     });
   });
 });
