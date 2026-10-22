@@ -7,11 +7,7 @@ import { BJD_CSV, BJD_LABEL, COAST_DBF, COAST_SHP, COVERAGE_DIR, MOF_LABEL, MOF_
 
 // 근거에 남기는 출처 표기는 수집 당시 위치(tools/coverage/…) 그대로 둠. 실제 파일은 COVERAGE_DIR
 export const BEACH_SOURCE_FILE = "tools/coverage/out/beaches.csv";
-export const beachSourceHash = createHash("sha256")
-  .update(
-    readFileSync(join(COVERAGE_DIR, "out/beaches.csv")),
-  )
-  .digest("hex");
+const sourceHash = (coverageDir, path) => createHash("sha256").update(readFileSync(join(coverageDir, path))).digest("hex");
 // 강원 6시군(파일럿 기록 호환). 전국은 별표5 인용표(annex-tables.json)로 판정
 export const SEA_BY_SIGUNGU = {
   고성군: "S1151100",
@@ -24,13 +20,6 @@ export const SEA_BY_SIGUNGU = {
 
 export const WARNING_HISTORY_FILE =
   "tools/coverage/out/warnings/pwncd_360d.csv";
-export const warningHistoryHash = createHash("sha256")
-  .update(
-    readFileSync(
-      join(COVERAGE_DIR, "out/warnings/pwncd_360d.csv"),
-    ),
-  )
-  .digest("hex");
 
 // L1 좌표–경계 근거(결정 4-A): 브이월드 법정 읍면동 경계 원자료(저장소 밖 $BARADUN_GIS_DIR). 파일이 없으면 검증 불가
 const emdSourceOk = (src) => {
@@ -100,7 +89,7 @@ function landSpatialVerified(e, sigungu) {
   return Boolean(wideOk || (common && (coordOk || splitOk)));
 }
 
-export function zoneProofVerified(e, kind, sigungu) {
+export function zoneProofVerified(e, kind, sigungu, coverageDir = COVERAGE_DIR) {
   if (!(
     e?.[`${kind}_status`] === "VERIFIED" &&
     e[`${kind}_zone`] &&
@@ -114,7 +103,7 @@ export function zoneProofVerified(e, kind, sigungu) {
     const source = e.sea_source;
     return Boolean(
       source?.file === BEACH_SOURCE_FILE &&
-      source.sha256 === beachSourceHash &&
+      source.sha256 === sourceHash(coverageDir, "out/beaches.csv") &&
       source.field === "gugun_nm" &&
       source.value === sigungu &&
       source.collected_at_kst &&
@@ -128,7 +117,7 @@ export function zoneProofVerified(e, kind, sigungu) {
     cmp?.status === "MATCH" ||
     (cmp?.status === "EMPIRICAL_RESOLVED" &&
       cmp.empirical_source_file === WARNING_HISTORY_FILE &&
-      cmp.empirical_source_sha256 === warningHistoryHash &&
+      cmp.empirical_source_sha256 === sourceHash(coverageDir, "out/warnings/pwncd_360d.csv") &&
       typeof cmp.basis === "string" &&
       cmp.basis.includes("실데이터 추론, 기상청 문서 확인 아님"));
   // 4차부터 공식 주소 대신 좌표–법정 읍면동 경계로 읍면 결정(공식 주소는 비교 기록만)

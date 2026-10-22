@@ -9,10 +9,12 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { bboxDist, boundaryDist, buildPolygonIndex, clipMidpoint, insidePolygon, readDbf, readShp, segDist, toEpsg5186, toEpsg5186Snyder } from "./geo-kit.mjs";
 import { readFirstSheet } from "./xlsx-lite.mjs";
+import { addressLocality, legalLocalities, legalNameSet } from "./address.mjs";
+import { linkOfficials } from "./official-link.mjs";
 import { METRICS, assignMetric, haversineKm, loadAssignContext, readCsv, round1 } from "./station-assign.mjs";
 import { zoneProofVerified } from "./zone-proof.mjs";
 import { ANNEX, ANNEX4_BOUNDARIES, ANNEX5, ANNEX5_URL, ANNEX9_CHECKED, ANNEX9_ITEM, ANNEX9_URL, annex9Lookup, sigunguIsSplit, splitFull, zoneOf, zoneOfFull } from "./annex.mjs";
-import { BJD_CSV, BJD_LABEL, COAST_DBF, COAST_SHP, COVERAGE_DIR, MOF_XLSX, REGIONS, SIGUNGU_ALIAS, emdPaths, gisLabel, regionArg, sha256, sigunguMatches, verifyPinnedSources } from "./regions.mjs"; // sha256: 고정 해시 대조 때 계산한 값 재사용
+import { BJD_CSV, BJD_LABEL, COAST_DBF, COAST_SHP, COVERAGE_DIR, MOF_XLSX, REGIONS, emdPaths, gisLabel, regionArg, sha256, sigunguMatches, verifyPinnedSources } from "./regions.mjs"; // sha256: 고정 해시 대조 때 계산한 값 재사용
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 verifyPinnedSources(); // 원자료가 data-sources.json 고정 해시와 다르면 판정·생성하지 않음
@@ -64,6 +66,8 @@ const bjdName = new Map(
     .filter((r) => r[2] === "존재")
     .map((r) => [r[0], r[1]]),
 );
+const legalRows = legalLocalities(bjdName.values());
+const legalNames = legalNameSet(legalRows);
 const sigunguOfCol = (col) => {
   const full = bjdName.get(`${col}00000`);
   if (!full) return null;
@@ -105,7 +109,7 @@ function judgeL1(b) {
     .sort((p, q) => p.d - q.d);
   const containing = dist.filter((p) => p.inside);
   const emdInfo = (p) => {
-    const l1 = p.e.sigungu ? annex9Lookup(p.e.sigungu.sido, p.e.sigungu.name, p.e.EMD_NM) : [];
+    const l1 = p.e.sigungu ? annex9Lookup(p.e.sigungu.sido, p.e.sigungu.name, p.e.EMD_NM, legalNames) : [];
     return {
       emd_cd: p.e.EMD_CD,
       emd_nm: p.e.EMD_NM,
@@ -134,6 +138,7 @@ function judgeL1(b) {
   const wide = ANNEX.annex9.sigungu[`${b.sido}|${b.sigungu}`];
   if (wide && wide.rows.length === 1 && wide.rows[0].all) {
     const info = emdInfo(chosen);
+    if (info.l1_lookup !== "FOUND") return { ...base, decision: "SIGUNGU_WIDE", emd: info, neighbors_within_300m: [], result: "EXCLUDED_NOT_IN_ANNEX9", reason: "좌표 읍면동의 법정 소속 또는 별표9 행을 검증하지 못함" };
     const sameSigungu = sigunguMatches(info.sigungu_name, b.sido, b.sigungu);
     const out = { ...base, decision: "SIGUNGU_WIDE", emd: info, neighbors_within_300m: [] };
     if (!sameSigungu)
@@ -413,31 +418,9 @@ const mofRows = readFirstSheet(MOF_XLSX)
   }));
 // 시군 이름 바뀐 곳: 수집본 시군 → 2026 현황 관리청 후보 (인천 중구 → 영종구)
 const nameMap = JSON.parse(readFileSync(join(HERE, "name-map-2026.json"), "utf8"));
-const mapByKey = new Map(nameMap.entries.map((x) => [x.key, x]));
-// 규칙 ②: 괄호 안·'해수욕장'·'해변'·'리'·'진'만 다른 이름
-const normName = (s) => s.replace(/\([^)]*\)/g, "").replace(/해수욕장|해변|리|진/g, "").replace(/\s+/g, "");
-
-function linkOfficial(src) {
-  const sigungus = SIGUNGU_ALIAS[`${src.sido_nm}|${src.gugun_nm}`] ?? [src.gugun_nm];
-  const pool = mofRows.filter((r) => r.sido === src.sido_nm && sigungus.includes(r.sigungu));
-  const pick = (method, list, basis) =>
-    list.length === 1 ? { method, row: list[0], basis } : { method: "UNLINKED", candidates: list.map((r) => `${r.name}(${r.row}행)`), basis: `${basis}: 후보 ${list.length}개` };
-  const exact = pool.filter((r) => r.name === src.sta_nm);
-  if (exact.length) return pick("EXACT", exact, "이름 완전 일치");
-  const rule = pool.filter((r) => normName(r.name) === normName(src.sta_nm));
-  if (rule.length) return pick("RULE", rule, `괄호·'해변'·'리'·'진' 차이만(${src.sta_nm} ↔ ${rule.map((r) => r.name).join("·")})`);
-  const m = mapByKey.get(`${src.sido_nm}|${src.gugun_nm}|${src.sta_nm}`);
-  if (m) return pick("MAP", pool.filter((r) => r.name === m.xlsx_name), `대응표 name-map-2026.json: ${m.basis}`);
-  return { method: "UNLINKED", candidates: [], basis: "같은 시군에 이름 완전 일치·규칙 일치·대응표 항목 없음" };
-}
 const srcRows = readCsv("beaches.csv").filter((b) => TARGET_REGIONS.includes(b.sido_nm));
-const links = new Map(srcRows.map((b) => [`${b.gugun_nm}|${b.sta_nm}`, linkOfficial(b)]));
+const links = linkOfficials(srcRows, mofRows, nameMap.entries);
 const sidoByKey = new Map(srcRows.map((b) => [`${b.gugun_nm}|${b.sta_nm}`, b.sido_nm]));
-if (links.size !== srcRows.length) throw new Error("해변 키(시군|이름) 중복: 시·도를 넘어 같은 키가 있음");
-// 한 행이 두 해변에 연결되면 둘 다 연결하지 않음
-const rowUse = count([...links.values()].filter((l) => l.row), (l) => l.row.row);
-for (const [k, l] of links)
-  if (l.row && rowUse.get(l.row.row) > 1) links.set(k, { method: "UNLINKED", candidates: [`${l.row.name}(${l.row.row}행)`], basis: `${l.basis} → 같은 행이 다른 해변에도 연결되어 연결 안 함` });
 
 function addressCheck(key, coord) {
   const link = links.get(key);
@@ -445,15 +428,11 @@ function addressCheck(key, coord) {
   const base = { source: MOF_SOURCE, link_method: link.method, link_basis: link.basis };
   if (!link.row) return { ...base, result: "NO_ADDRESS", candidates: link.candidates, reason: `공식 주소 미연결(${link.basis}) → 좌표 판정만 적용` };
   const { row } = link;
-  // 주소 앞의 시·도 이름(경남·부산광역시 등)은 건너뛰고 시군 다음 낱말을 읍면·동으로 봄. 구가 있는 시(포항시 남구 …)는 구 다음 낱말,
-  // 도로명 주소는 괄호 안 동(…길 15-1 (만흥동), 건물명이 붙은 (만흥동, ○○아파트) 포함). 그래도 없으면 읍면 없음
-  const tokens = row.address.split(/[\s,]+/);
-  const si = tokens.indexOf(sigungu);
-  const next = /시$/.test(sigungu) && /^[가-힣]+구$/.test(tokens[si + 1] ?? "") ? tokens[si + 2] : tokens[si + 1];
-  const paren = row.address.match(/\(([가-힣0-9]+(?:읍|면|동|가))(?:,[^)]*)?\)/)?.[1];
-  const locality = si >= 0 && /(읍|면|동|가)$/.test(next ?? "") ? next : si >= 0 ? (paren ?? "") : "";
+  // 주소의 시도·시군·구·읍면동을 현행 법정 이름 집합과 대조한 뒤 별표9를 조회함.
   const sido = sidoByKey.get(key);
-  const l1 = locality ? annex9Lookup(sido, sigungu, locality) : [];
+  const localityCheck = addressLocality(row.address, sido, sigungu, legalRows);
+  const locality = localityCheck.locality;
+  const l1 = localityCheck.rows ?? [];
   const addr = {
     ...base,
     xlsx_row: row.row,
@@ -461,6 +440,7 @@ function addressCheck(key, coord) {
     xlsx_name: row.name,
     address: row.address,
     locality,
+    locality_status: localityCheck.status,
     l1_code: l1.length === 1 ? l1[0].code : "",
     l1_row: l1.length === 1 ? l1[0].row : "",
     season2026: { status: row.openStatus, openDate: row.openDate, closeDate: row.closeDate },
@@ -468,6 +448,8 @@ function addressCheck(key, coord) {
   const coordL1 = coord.result === "VERIFIED" ? coord.l1_code : "";
   const coordText = coord.result === "VERIFIED" ? `좌표 ${coord.emd.emd_nm} ${coord.emd.distance_m}m → ${coord.emd.l1_row}(${coordL1})` : `좌표 판정 ${coord.result}(${coord.reason})`;
   const addrText = `주소 '${row.address}'(${row.row}행) → ${locality || "읍면동 못 읽음"} → ${addr.l1_row || "별표9 행 없음"}${addr.l1_code ? `(${addr.l1_code})` : ""}`;
+  if (localityCheck.status === "INVALID_LOCALITY") return { ...addr, result: "MISMATCH", reason: `${addrText} — ${localityCheck.reason}` };
+  if (localityCheck.status === "VERIFIED_LOCALITY" && l1.length !== 1) return { ...addr, result: "MISMATCH", reason: `${addrText} — 검증된 읍면동이나 별표9 구역이 하나로 정해지지 않음, 추정하지 않음` };
   // 좌표 1km 안에 읍면동이 없으면(NO_EMD_WITHIN_1KM, emd: null) 좌표 판정 자체가 자동 제외
   if (!coord.emd) return { ...addr, same_emd_as_coord: false, result: "COORD_EXCLUDED", reason: `${coordText} — 좌표 판정이 자동 제외라 확정 불가. 참고 ${addrText}` };
   addr.same_emd_as_coord = locality === coord.emd.emd_nm;
@@ -608,7 +590,7 @@ function seaFor(src, r, addr) {
     return { ...out, sea_zone: zc, sea_status: "VERIFIED", sea_rule_item: `예보업무규정 제1185호 별표5(제6조제2항제4호) ${ANNEX5[zc].name}; 제6조제3항제1호`, sea_basis: `해수부 공식 수집본 gugun_nm=${src.gugun_nm} → 별표5 ${ANNEX5[zc].name}: ${ANNEX5[zc].quote}` };
   }
   const zCoord = r?.emd ? zoneOf(src.sido_nm, src.gugun_nm, r.emd.emd_nm) : null;
-  const zAddr = addr?.locality ? zoneOf(src.sido_nm, src.gugun_nm, addr.locality) : null;
+  const zAddr = addr?.locality_status === "VERIFIED_LOCALITY" ? zoneOf(src.sido_nm, src.gugun_nm, addr.locality) : null;
   const both = zCoord && zAddr && zCoord === zAddr;
   const addrPart = addr?.locality ? `공식 주소 읍면 ${addr.locality} → ${zAddr ? ANNEX5[zAddr].name : "하나로 안 정해짐"}` : "공식 주소 읍면 없음";
   const coordPart = r?.emd ? `좌표 읍면 ${r.emd.emd_nm} → ${zCoord ? ANNEX5[zCoord].name : "하나로 안 정해짐"}` : "좌표 읍면 없음";

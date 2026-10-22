@@ -9,8 +9,6 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { COVERAGE_DIR } from "./regions.mjs";
 
-const SRC = join(COVERAGE_DIR, "out");
-
 export function parseCsv(text) {
   const rows = [];
   let row = [];
@@ -31,7 +29,7 @@ export function parseCsv(text) {
   const [head, ...body] = rows;
   return body.map((r) => Object.fromEntries(head.map((k, i) => [k, r[i] ?? ""])));
 }
-export const readCsv = (name) => parseCsv(readFileSync(join(SRC, name), "utf8"));
+export const readCsv = (name, coverageDir = COVERAGE_DIR) => parseCsv(readFileSync(join(coverageDir, "out", name), "utf8"));
 
 // 대원거리(haversine), km
 export function haversineKm(lat1, lng1, lat2, lng2) {
@@ -62,7 +60,9 @@ const OWN_HISTORY = new Set(["waveHeight", "waterTemp", "wavePeriod", "waveDirec
 const valueExpected = (metric, station) => OWN_HISTORY.has(metric) || (metric === "wind" && station.tp === "B");
 
 // 수집본(stations.csv·72시간 실측)·관측소 독립 검증 입력 읽기
-export function loadAssignContext() {
+export function loadAssignContext(coverageDir = COVERAGE_DIR) {
+  const SRC = join(coverageDir, "out");
+  const readCsv = (name) => parseCsv(readFileSync(join(SRC, name), "utf8"));
   const stations = readCsv("stations.csv");
   const evidence = JSON.parse(readFileSync(join(SRC, "../station-zone-evidence.json"), "utf8")).stations;
   const evidenceById = new Map(evidence.map((s) => [s.stn_id, s]));
