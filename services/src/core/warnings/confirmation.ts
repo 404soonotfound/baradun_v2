@@ -27,9 +27,11 @@ export function checkConfirmation(
   // 기준 시각보다 늦은 확인 → 시계가 어긋남. 믿지 않음
   if (lastMs > nowMs) return { confirmed: false, reason: "future" };
 
-  // 45분을 넘었을 때만 만료. 딱 45:00은 넘지 않음 → 유효
-  if (nowMs - lastMs > ttlMs) return { confirmed: false, reason: "expired" };
-
   // 초 단위로 내림(parseKstTime과 같은 표기). 밀리초를 버려 만료가 늦어지지 않음
-  return { confirmed: true, validUntil: formatUtcIso(lastMs + ttlMs) };
+  // 만료 판정도 내린 시각으로 함 → confirmed인데 validUntil이 이미 지난 경우가 없음
+  const validUntilMs = Math.floor((lastMs + ttlMs) / 1000) * 1000;
+  // 45분을 넘었을 때만 만료. 딱 45:00은 넘지 않음 → 유효
+  if (nowMs > validUntilMs) return { confirmed: false, reason: "expired" };
+
+  return { confirmed: true, validUntil: formatUtcIso(validUntilMs) };
 }
