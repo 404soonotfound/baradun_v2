@@ -83,4 +83,15 @@ describe("parseKmaBuoy", () => {
       result.status === "ok" && result.rows.map((row) => row.stationId),
     ).toEqual(["22489", "22523", "22188", "22523"]);
   });
+
+  it("자료 줄이 없으면 실패(빈 결과를 정상으로 남기지 않음)", () => {
+    const empty = fixture
+      .split("\n")
+      .filter((line) => !/^\d/.test(line))
+      .join("\n");
+    expect(parseKmaBuoy(empty)).toEqual({
+      status: "failed",
+      reason: "자료 줄 없음",
+    });
+  });
 });

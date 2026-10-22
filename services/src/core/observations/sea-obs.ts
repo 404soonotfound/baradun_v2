@@ -49,6 +49,9 @@ export function parseSeaObs(text: string): SeaObsResult {
   let skippedRows = 0; // let: 나중에 값을 바꿀 수 있는 변수(const는 못 바꿈)
   for (const line of framed.lines) {
     const cells = line.split(",").map((cell) => cell.trim());
+    // B·C가 아닌 측정기는 모양과 상관없이 건너뜀. 쓰지 않는 측정기 한 줄 때문에 전국 값이 멈추지 않게 함
+    // 종류는 첫 칸이라 뒤쪽 칸이 밀려도 자리가 바뀌지 않음. continue: 이 줄은 건너뛰고 다음 줄로
+    if (!STATION_TYPES.has(cells[COLUMN.type] ?? "")) continue;
     // 칸 수·끝 표시가 다르면 형식이 바뀐 것 → 칸 자리를 믿을 수 없어 응답 전체를 실패로 봄
     if (
       cells.length !== CELLS_PER_LINE ||
@@ -59,7 +62,6 @@ export function parseSeaObs(text: string): SeaObsResult {
     // cells[i]는 칸이 없을 수도 있어 타입이 string | undefined(설정 noUncheckedIndexedAccess)
     // ?? "": 없으면(undefined) 빈 글자로 바꿈 → 이후 코드는 항상 string으로 다룸
     const cell = (index: number): string => cells[index] ?? "";
-    if (!STATION_TYPES.has(cell(COLUMN.type))) continue; // B·C가 아닌 측정기는 건너뜀
 
     const time = parseKstTime(cell(COLUMN.time)); // KST 글자 → UTC (특보와 같은 함수)
     const stationId = cell(COLUMN.station);

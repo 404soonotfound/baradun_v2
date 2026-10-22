@@ -98,4 +98,21 @@ describe("parseSeaObs", () => {
       result.status === "ok" && result.rows.map((row) => row.stationId),
     ).toEqual(["22103", "22188", "22489", "22451"]);
   });
+
+  it("쓰지 않는 측정기(N·D) 줄은 모양이 달라도 응답을 막지 않음", () => {
+    const oddName = fixture.replace("표류26022,", "표류26022, 예비,");
+    const result = parseSeaObs(oddName);
+    expect(result.status === "ok" && result.rows.length).toBe(5);
+  });
+
+  it("자료 줄이 없으면 실패(빈 결과를 정상으로 남기지 않음)", () => {
+    const empty = fixture
+      .split("\n")
+      .filter((line) => !/^[A-Z],/.test(line))
+      .join("\n");
+    expect(parseSeaObs(empty)).toEqual({
+      status: "failed",
+      reason: "자료 줄 없음",
+    });
+  });
 });
