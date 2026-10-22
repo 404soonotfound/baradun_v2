@@ -22,5 +22,7 @@ export function readFramedLines(text: string): FramedLines {
   }
   // slice(1, -1): 첫 줄(시작 표시)과 마지막 줄(끝 표시)을 뺀 나머지. 머리글(#)도 뺌
   const data = lines.slice(1, -1).filter((line) => !line.startsWith("#"));
+  // 자료 줄이 하나도 없으면 장애 응답으로 봄 → 빈 결과를 정상 수집으로 남기지 않음(운영 알림, BRD-56)
+  if (data.length === 0) return { status: "failed", reason: "자료 줄 없음" };
   return { status: "ok", lines: data };
 }
