@@ -60,8 +60,11 @@ export function mergeReadings(
       const value = row[key];
       // undefined: 이 출처에 없는 지표, null: 무효 값 → 둘 다 이전 값 유지
       if (value === undefined || value === null) continue;
+      // 이전 값이 같거나 더 늦으면 유지. 이전 값의 시각이 틀렸거나 서버 시각보다 미래면 믿지 않고 덮어씀(toMetric과 같은 기준)
+      // → 미래 시각으로 저장된 값 하나가 그 시각까지 새 정상값을 모두 막지 않음
       const last = station[key];
-      if (last && (parseUtcIso(last.observedAt) ?? 0) >= observedMs) continue;
+      const lastMs = last ? parseUtcIso(last.observedAt) : null;
+      if (lastMs !== null && lastMs <= nowMs && lastMs >= observedMs) continue;
       station[key] = { value, observedAt: row.observedAt };
     }
     next[row.stationId] = station;
@@ -89,7 +92,9 @@ export function toMetric(
       expiresAt: null,
     };
   }
-  const expiresMs = observedMs + OBSERVATION_POLICY.expiryMs[key];
+  // 초 단위로 내림 → 화면에 주는 expiresAt과 state 판정이 같은 시각을 씀(밀리초가 있어도 어긋나지 않음)
+  const expiresMs =
+    Math.floor((observedMs + OBSERVATION_POLICY.expiryMs[key]) / 1000) * 1000;
   return {
     ...base,
     value: reading.value,

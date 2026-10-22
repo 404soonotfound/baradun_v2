@@ -107,6 +107,20 @@ describe("mergeReadings", () => {
     );
     expect(merged).toEqual(previous);
   });
+
+  it("이전 값의 시각이 미래면 믿지 않고 새 정상값으로 바꿈", () => {
+    const previous = {
+      "22520": { wind: { value: 3.6, observedAt: "2026-10-21T00:30:00Z" } },
+    };
+    const merged = mergeReadings(
+      previous,
+      [{ stationId: "22520", observedAt: "2026-10-20T23:50:00Z", wind: 4.1 }],
+      NOW,
+    );
+    expect(merged).toEqual({
+      "22520": { wind: { value: 4.1, observedAt: "2026-10-20T23:50:00Z" } },
+    });
+  });
 });
 
 describe("toMetric", () => {
@@ -166,5 +180,12 @@ describe("toMetric", () => {
     expect(() => toMetric("wind", undefined, "2026-10-21 09:00")).toThrow(
       RangeError,
     );
+  });
+
+  it("관측 시각에 밀리초가 있어도 state와 expiresAt이 같은 시각을 씀", () => {
+    const reading = { value: 0.8, observedAt: "2026-10-20T22:30:00.500Z" };
+    expect(
+      toMetric("waveHeight", reading, "2026-10-21T00:00:00.300Z"),
+    ).toMatchObject({ state: "delayed", expiresAt: "2026-10-21T00:00:00Z" });
   });
 });
