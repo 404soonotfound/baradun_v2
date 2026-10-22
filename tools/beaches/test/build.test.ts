@@ -13,6 +13,7 @@ vi.mock("../zone-proof.mjs", () => ({
   zoneProofVerified: (e, kind) => e?.[`${kind}_status`] === "VERIFIED",
 }));
 import { buildBeaches, writeBuild } from "../build.mjs";
+import { checkDraft } from "../check.mjs";
 import { idKey, validateIdentity, preserveManual, reserveSlug } from "../identity.mjs";
 import { validateCoverage } from "../../../packages/contracts/scripts/coverage-rules.mjs";
 
@@ -57,6 +58,24 @@ const fingerprint = (root) => {
   const walk = (dir) => { for (const e of readdirSync(dir, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) { const p = join(dir, e.name); if (e.isDirectory()) walk(p); else hash.update(p).update(readFileSync(p)); } };
   walk(root); return hash.digest("hex");
 };
+
+describe("대표 측정기 공통 규칙을 적용하는 초안 검사", () => {
+  it.each([["99999", 20, false], ["99999", 20.1, true], ["99999", NaN, true], ["22460", 1, true], ["22501", 1, true]])("%s 거리 %s의 상한·대표 제외 판정", (id, distanceKm, rejected) => {
+    const f = fixture(); const { draft } = f.build();
+    draft.beaches[0].stations.waveHeight = { id, distanceKm };
+    const results = checkDraft({ draft, coverageDir: f.options.coverageDir, regions: f.options.regions, quiet: true });
+    const result = results.find((r) => r.name.includes("초과 관측소·대표 제외"));
+    expect(result.errors.length > 0).toBe(rejected);
+  });
+  it.each([[0.179, true], [0.181, false]])("위도 차이 %s도인 미검증 후보의 20km 경계를 대원거리로 검사", (delta, blocked) => {
+    const f = fixture(); const { draft } = f.build();
+    const b = draft.beaches[0];
+    f.put("input/station-zone-evidence.json", { stations: [{ stn_id: "99999", lat: b.coords.lat + delta, lon: b.coords.lng, status: "UNVERIFIED", metrics: { waveHeight: { live_state: "VALUE_PRESENT" } } }] });
+    const results = checkDraft({ draft, coverageDir: f.options.coverageDir, regions: f.options.regions, quiet: true });
+    const result = results.find((r) => r.name === "독립 검증 입력·구역 미검증 표시·자동 제외");
+    expect(result.errors.some((e) => e.includes("20km 안 미검증 관측소"))).toBe(blocked);
+  });
+});
 
 describe("쓰기 없는 생성·최종 객체 검증", () => {
   it("import·검증·두 번 생성은 저장소와 임시 입력을 바꾸지 않고 쓰기는 명시적으로 실행함", () => {

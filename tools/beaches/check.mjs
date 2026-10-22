@@ -8,7 +8,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { checkList } from "../../packages/contracts/scripts/beach-rules.mjs";
 import { stationSourceOk, zoneProofVerified as verifyZoneProof } from "./zone-proof.mjs";
 import { COVERAGE_DIR, regionArg, regionSlug, verifyPinnedSources } from "./regions.mjs";
-import { readCsv as readInputCsv } from "./station-assign.mjs";
+import { EXCLUDED_ALWAYS, LIMIT_KM, haversineKm, readCsv as readInputCsv } from "./station-assign.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, "../..");
@@ -29,11 +29,6 @@ export function checkDraft({ draft, coverageDir = COVERAGE_DIR, regions = region
   const REQUIRED = ["id", "slug", "name", "region", "coords", "activities", "hidden", "warningZones", "stations", "photo", "cctv"];
   const METRICS = ["waveHeight", "wavePeriod", "waveDirection", "waterTemp", "wind"];
   const strip = ({ _draft, ...beach }) => beach; // 계약 밖 검토용 칸 제거
-  const haversine = (lat1, lng1, lat2, lng2) => {
-    const rad = (d) => (d * Math.PI) / 180;
-    const h = Math.sin(rad(lat2 - lat1) / 2) ** 2 + Math.cos(rad(lat1)) * Math.cos(rad(lat2)) * Math.sin(rad(lng2 - lng1) / 2) ** 2;
-    return 2 * 6371 * Math.asin(Math.sqrt(h));
-  };
 
   const results = [];
   const report = (name, errors) => {
@@ -121,8 +116,8 @@ export function checkDraft({ draft, coverageDir = COVERAGE_DIR, regions = region
     for (const b of beaches)
       for (const m of METRICS) {
         const s = b.stations[m];
-        if (s && !(s.distanceKm <= 20)) errors.push(`${b.id} ${m}: ${s.id} ${s.distanceKm}km`);
-        if (s && ["22460", "22501"].includes(s.id)) errors.push(`${b.id} ${m}: 대표 제외 측정기 ${s.id}`);
+        if (s && !(s.distanceKm <= LIMIT_KM)) errors.push(`${b.id} ${m}: ${s.id} ${s.distanceKm}km`);
+        if (s && EXCLUDED_ALWAYS[s.id]) errors.push(`${b.id} ${m}: 대표 제외 측정기 ${s.id}`);
       }
     report("20km 초과 관측소·대표 제외 측정기", errors);
   }
@@ -201,8 +196,8 @@ export function checkDraft({ draft, coverageDir = COVERAGE_DIR, regions = region
           const live = r.metrics?.[metric]?.live_state;
           if (r.status === "VERIFIED" || (live && live !== "VALUE_PRESENT")) return false;
           if (r.status === "VERIFIED_NOT_IN_ZONE" && r.not_in_zones?.includes(b.warningZones?.sea) && r.basis) return false;
-          const km = haversine(b.coords.lat, b.coords.lng, Number(r.lat), Number(r.lon));
-          return km <= 20 && (!s || km < s.distanceKm);
+          const km = haversineKm(b.coords.lat, b.coords.lng, Number(r.lat), Number(r.lon));
+          return km <= LIMIT_KM && (!s || km < s.distanceKm);
         });
         if (b._draft.stationMappingStatus === "VERIFIED" && blockers.length)
           errors.push(`${b.id} ${metric}: 20km 안 미검증 관측소 ${blockers.map((r) => r.stn_id).join("·")}가 있는데 확정 처리`);
