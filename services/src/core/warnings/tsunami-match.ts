@@ -1,4 +1,5 @@
 import type { BeachId, WarningItem } from "@baradun/contracts";
+import { parseUtcIso } from "./time";
 import type { TsunamiEvent, TsunamiResult } from "./tsunami";
 
 // 지진해일 reg 글 → 해변 (결정 기록 11장 10/20 ⑥·10/22 ⑤, 아키텍처 4장)
@@ -93,8 +94,9 @@ export function judgeTsunamiBeaches(input: {
   beaches: readonly BeachRegion[];
 }): TsunamiBeachesResult {
   const { result, now, beaches } = input;
-  const nowMs = ms(now);
-  if (Number.isNaN(nowMs)) throw new RangeError(`기준 시각 형식 오류: ${now}`);
+  // 시간대 없는 값은 Date.parse가 실행 환경 시간대로 읽음 → UTC ISO만 받음
+  const nowMs = parseUtcIso(now);
+  if (nowMs === null) throw new RangeError(`기준 시각 형식 오류: ${now}`);
 
   const out: Record<BeachId, TsunamiBeach> = {};
   for (const beach of beaches) out[beach.id] = { items: [], reasons: [] };
