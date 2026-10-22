@@ -9,6 +9,7 @@ export type HttpResult =
 export interface HttpOptions {
   readonly timeoutMs: number; // 한 번 시도의 시간 제한
   readonly retries: number; // 첫 시도 뒤 다시 하는 횟수
+  readonly retryDelayMs?: number; // 다시 하기 전 기다리는 시간(429·5xx 직후 바로 보내면 같은 응답일 가능성이 큼)
   readonly fetchFn?: typeof fetch;
 }
 
@@ -24,11 +25,16 @@ export async function getText(
   let reason = "not_tried";
   const maxAttempts = options.retries + 1;
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    if (attempt > 1 && options.retryDelayMs) {
+      await new Promise((resolve) => setTimeout(resolve, options.retryDelayMs));
+    }
     // AbortSignal.timeout: 시간이 지나면 요청을 끊음. 본문 읽기까지 포함
     const signal = AbortSignal.timeout(options.timeoutMs);
     try {
       const response = await fetchFn(url, { signal });
       if (!response.ok) {
+        // 읽지 않을 본문은 닫아 연결을 바로 놓음(재시도 때 소켓이 쌓이지 않게)
+        await response.body?.cancel().catch(() => {});
         reason = `http:${response.status}`;
         if (RETRYABLE(response.status)) continue;
         return { status: "failed", reason, attempts: attempt };

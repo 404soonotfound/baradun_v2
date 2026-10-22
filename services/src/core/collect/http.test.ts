@@ -77,4 +77,20 @@ describe("getText", () => {
     });
     expect(JSON.stringify(result)).not.toContain("SECRET");
   });
+
+  it("다시 하기 전에 정한 시간만큼 기다림", async () => {
+    const { fetchFn } = fakeFetch([
+      new Response("", { status: 429 }),
+      new Response("ok", { status: 200 }),
+    ]);
+    const started = Date.now();
+    const result = await getText(URL, {
+      timeoutMs: 1000,
+      retries: 1,
+      retryDelayMs: 50,
+      fetchFn,
+    });
+    expect(result).toMatchObject({ status: "ok", attempts: 2 });
+    expect(Date.now() - started).toBeGreaterThanOrEqual(45);
+  });
 });

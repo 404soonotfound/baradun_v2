@@ -30,6 +30,17 @@ describe("decideStateWrite", () => {
     ).toBe("unchanged");
   });
 
+  it("부르는 쪽이 준 기대 버전이 지금 값과 다르면 conflict", () => {
+    expect(decideStateWrite(current, "p", "s", { a: 2 }, 100, 3).kind).toBe(
+      "conflict",
+    );
+    expect(decideStateWrite(null, "p", "s", 1, 100, 4).kind).toBe("conflict");
+    expect(decideStateWrite(current, "p", "s", { a: 2 }, 100, 4).kind).toBe(
+      "write",
+    );
+    expect(decideStateWrite(null, "p", "s", 1, 100, null).kind).toBe("write");
+  });
+
   it("쓸 때는 읽은 recordVersion을 기대 버전으로, 새 버전은 +1", () => {
     const decision = decideStateWrite(current, "p", "s", { a: 2 }, 100);
     expect(decision).toMatchObject({
