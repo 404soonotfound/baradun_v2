@@ -2,6 +2,7 @@ import type { WarningLevel } from "@baradun/contracts";
 import type { WarningKind } from "./codes";
 import type { PwnEvent, Zone } from "./normalize";
 import { orderPwnEvents } from "./order";
+import { parseUtcIso } from "./time";
 
 // 구역·종류별 특보 상태 (아키텍처 4장·결정 기록 11장)
 // '없음 확인'은 여기서 만들지 않음 → 정상 전체 조회 여부·lastConfirmedAt은 BRD-18·56
@@ -137,8 +138,9 @@ export function applyZoneStates(
   events: readonly PwnEvent[],
   now: string,
 ): ZoneWarningState[] {
-  const nowMs = ms(now);
-  if (Number.isNaN(nowMs)) throw new RangeError(`기준 시각 형식 오류: ${now}`);
+  // 시간대 없는 값은 Date.parse가 실행 환경 시간대로 읽음 → UTC ISO만 받음
+  const nowMs = parseUtcIso(now);
+  if (nowMs === null) throw new RangeError(`기준 시각 형식 오류: ${now}`);
 
   const groups = new Map<string, PwnEvent[]>();
   for (const event of orderPwnEvents(events)) {

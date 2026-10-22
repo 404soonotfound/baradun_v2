@@ -22,6 +22,18 @@ const COASTS: Record<string, BeachRegion["coast"]> = {
   제주도: "jeju",
 };
 
+// 둘 이상의 시도에 있는(있던) 시군구 이름. 예: 고성군 = 강원·경남, 중구 = 서울·부산·인천 등
+// 해변이 없는 시도의 같은 이름을 data/beaches만 보고 가릴 수 없어서 따로 둠(결정 기록 11장 10/22 ⑤ (c))
+const SHARED_SIGUNGU: ReadonlySet<string> = new Set([
+  "중구",
+  "동구",
+  "서구",
+  "남구",
+  "북구",
+  "강서구",
+  "고성군",
+]);
+
 export type RegionMatch = {
   beachIds: BeachId[]; // 읽힌 조각의 해변
   unreadable: string[]; // 못 읽은 조각 원문. 비어 있으면 전체를 읽음
@@ -51,6 +63,8 @@ function matchPart(
   if (coast) return ids((b) => b.coast === coast);
 
   // (c) 시군 이름만. 시도가 다른 같은 이름(중구·고성군 등)이 있으면 못 읽음
+  // data/beaches에 한쪽만 있어도 전국에서 겹치는 이름은 다른 시도일 수 있음 → 못 읽음
+  if (SHARED_SIGUNGU.has(part)) return null;
   const sidos = new Set(
     beaches
       .filter((b) => b.region.sigungu.ko === part)
@@ -101,6 +115,11 @@ export type TsunamiBeachesResult = {
 };
 
 const ms = (iso: string) => Date.parse(iso);
+const LEVEL_ORDER: readonly WarningItem["level"][] = [
+  "severe_warning",
+  "warning",
+  "advisory",
+];
 
 export function judgeTsunamiBeaches(input: {
   result: TsunamiResult;
@@ -162,30 +181,42 @@ export function judgeTsunamiBeaches(input: {
     }
 
     // 여기부터는 사유 없는 발표만 → normalize가 시각을 모두 채움. 그래서 !(null 아님)를 씀
-    // 발표 시각 순. 같은 시각에 내용이 다른 발표가 있으면 순서를 알 수 없음
-    const sorted = [...events].sort(
-      (a, b) => ms(a.publishedAt!) - ms(b.publishedAt!),
+    // 이미 발효된 마지막 발표 시각의 묶음이 지금 상태. 앞선 발표는 이 묶음이 대신함
+    const effective = events
+      .filter((e) => ms(e.effectiveFrom!) <= nowMs)
+      .sort((a, b) => ms(a.publishedAt!) - ms(b.publishedAt!));
+    const last = effective.at(-1);
+    if (!last) continue;
+    const group = events.filter((e) => e.publishedAt === last.publishedAt);
+
+    // 같은 발표 시각에 발표·해제가 섞였거나 발효 시각이 다르면 어느 쪽이 나중인지 모름
+    const mixed = group.some(
+      (e) => e.action !== last.action || e.effectiveFrom !== last.effectiveFrom,
     );
-    const tie = sorted.find(
-      (e, i) => i > 0 && e.publishedAt === sorted[i - 1]!.publishedAt,
-    );
-    if (tie) {
-      beach.reasons.push(`tsunami:order:${tie.publishedAt}`);
+    if (mixed) {
+      beach.reasons.push(`tsunami:order:${last.publishedAt}`);
       continue;
     }
 
-    // 이미 발효된 마지막 발표가 지금 상태. 해제면 없음, 발표면 발효 중
-    const current = sorted.filter((e) => ms(e.effectiveFrom!) <= nowMs).at(-1);
-    if (current?.action === "issue" && current.level !== null) {
+    // 모두 해제면 없음. 모두 발표면 단계·지역 글이 달라도 모두 발효 중 → 전부 남김
+    if (last.action !== "issue") continue;
+    for (const e of group) {
+      if (e.level === null) continue;
       beach.items.push({
         type: "tsunami",
-        level: current.level,
+        level: e.level,
         zoneCode: null,
-        zoneName: current.zone.raw,
-        publishedAt: current.publishedAt!,
-        effectiveFrom: current.effectiveFrom!,
+        zoneName: e.zone.raw,
+        publishedAt: e.publishedAt!,
+        effectiveFrom: e.effectiveFrom!,
       });
     }
+    // 받은 순서와 상관없게: 경보 먼저, 같은 단계는 지역 글 순
+    beach.items.sort(
+      (a, b) =>
+        LEVEL_ORDER.indexOf(a.level) - LEVEL_ORDER.indexOf(b.level) ||
+        a.zoneName.localeCompare(b.zoneName),
+    );
   }
 
   // 사유 중복 제거

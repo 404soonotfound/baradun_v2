@@ -93,9 +93,17 @@ export function normalizeTsunamiItem(item: TsunamiItem): TsunamiEvent {
   };
 }
 
-// 응답 전체(JSON.parse 결과) 정규화
+// 응답 전체(JSON.parse 결과) + 요청에 쓴 numOfRows 정규화
 // 모양: { response: { header: { resultCode }, body: { items: { item } } } }
-export function normalizeTsunamiResponse(json: unknown): TsunamiResult {
+export function normalizeTsunamiResponse(
+  json: unknown,
+  numOfRows: number,
+): TsunamiResult {
+  // 요청 값은 수집기가 정함 → 잘못되면 코드 오류라 멈춤(getPwnCd와 같음)
+  if (!Number.isSafeInteger(numOfRows) || numOfRows < 1) {
+    throw new RangeError(`numOfRows 오류: ${numOfRows}`);
+  }
+
   const response = isObject(json) ? json.response : undefined;
   const header = isObject(response) ? response.header : undefined;
   if (!isObject(response) || !isObject(header)) {
@@ -117,6 +125,10 @@ export function normalizeTsunamiResponse(json: unknown): TsunamiResult {
   const list = Array.isArray(item) ? item : isObject(item) ? [item] : null;
   if (!list || !list.every(isObject)) {
     return { status: "failed", reason: "format:items" };
+  }
+  // 요청한 만큼 꽉 찼으면 뒤 발표·해제가 잘렸을 수 있음 → 실패(getPwnCd와 같음)
+  if (list.length >= numOfRows) {
+    return { status: "failed", reason: `truncated:${list.length}` };
   }
   return { status: "ok", events: list.map(normalizeTsunamiItem) };
 }
