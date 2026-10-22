@@ -30,6 +30,13 @@ describe("checkConfirmation", () => {
     ).toEqual({ confirmed: true, validUntil: "2026-10-22T03:48:00Z" });
   });
 
+  it("내린 validUntil이 지나면 밀리초 경과가 45분 안이어도 만료", () => {
+    // 경과 44분 59.8초지만 validUntil 03:48:00Z가 이미 지남 → confirmed로 지난 시각을 내보내지 않음
+    expect(
+      checkConfirmation("2026-10-22T03:03:00.700Z", "2026-10-22T03:48:00.500Z"),
+    ).toEqual({ confirmed: false, reason: "expired" });
+  });
+
   it.each([
     ["2026-10-22T03:48:01Z", "45분 01초 경계"],
     ["2026-10-22T03:48:00.001Z", "45분 00.001초"],
