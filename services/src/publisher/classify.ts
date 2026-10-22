@@ -65,7 +65,16 @@ export function classifyBeach(input: ClassifyInput): ClassifiedBeach {
         ? pwnAt
         : tsunamiAt;
   // 45분 확인을 여기서도 봄. 앞 단계 사유가 비어도 확인이 없거나 지났으면 '특보 없음'을 내보내지 않음
-  const confirmation = checkConfirmation(confirmedAt, now);
+  // 출처마다 따로 검사 → 한쪽 확인 시각만 미래여도 이른 시각에 가려지지 않음. 둘 다 유효할 때만 이른 만료를 씀
+  const pwnCheck = checkConfirmation(pwnAt, now);
+  const tsunamiCheck = checkConfirmation(tsunamiAt, now);
+  const confirmation: Confirmation = !pwnCheck.confirmed
+    ? pwnCheck
+    : !tsunamiCheck.confirmed
+      ? tsunamiCheck
+      : pwnCheck.validUntil <= tsunamiCheck.validUntil // 같은 형식(초 단위 UTC)이라 글자 비교로 순서가 맞음
+        ? pwnCheck
+        : tsunamiCheck;
   // 화면 'HH:MM 확인' 표시용. 한쪽만 확인됐으면 그 시각(다른 쪽은 이미 확인 못 함 사유로 남음)
   const shownConfirmedAt = confirmedAt ?? pwnAt ?? tsunamiAt;
 
