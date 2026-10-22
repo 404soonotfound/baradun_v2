@@ -3,7 +3,8 @@ import { parseUtcIso } from "./time";
 import type { TsunamiEvent, TsunamiResult } from "./tsunami";
 
 // 지진해일 reg 글 → 해변 (결정 기록 11장 10/20 ⑥·10/22 ⑤, 아키텍처 4장)
-// 못 읽은 글은 unreadable로 돌려줌 → 전국 '특보 확인 못 함' + 원문은 BRD-21
+// 못 읽은 조각은 unreadable로 돌려줌 → 전국 '특보 확인 못 함' + 원문은 BRD-21
+// 읽힌 조각의 해변에는 발표를 그대로 적용. 확인된 위험은 숨기지 않음(아키텍처 3장 6항)
 
 // 해변 입력. 해안 구분·시도·시군은 data/beaches 값
 export type BeachRegion = {
@@ -21,9 +22,10 @@ const COASTS: Record<string, BeachRegion["coast"]> = {
   제주도: "jeju",
 };
 
-export type RegionMatch =
-  | { readable: true; beachIds: BeachId[] }
-  | { readable: false; parts: string[] }; // 못 읽은 조각 원문
+export type RegionMatch = {
+  beachIds: BeachId[]; // 읽힌 조각의 해변
+  unreadable: string[]; // 못 읽은 조각 원문. 비어 있으면 전체를 읽음
+};
 
 // 조각 하나 → 해변 id 목록. 못 읽으면 null
 function matchPart(
@@ -58,7 +60,7 @@ function matchPart(
   return ids((b) => b.region.sigungu.ko === part);
 }
 
-// reg 전체. 쉼표·가운뎃점으로 나눈 조각이 하나라도 못 읽히면 전체를 못 읽은 것으로 봄
+// reg 전체. 쉼표·가운뎃점으로 나눈 조각마다 읽음. 일부만 읽혀도 읽힌 해변은 돌려줌
 export function matchTsunamiRegion(
   reg: string,
   beaches: readonly BeachRegion[],
@@ -71,9 +73,20 @@ export function matchTsunamiRegion(
     if (found) found.forEach((id) => ids.add(id));
     else unreadable.push(part);
   }
-  if (unreadable.length > 0) return { readable: false, parts: unreadable };
-  return { readable: true, beachIds: [...ids].sort() };
+  return { beachIds: [...ids].sort(), unreadable };
 }
+
+// 같은 행인지 가르는 값: 동작·단계·발표 시각·발효 시각·지역 글·못 읽은 사유
+// 사유까지 넣어 서로 다른 못 읽은 값(fcTp 등)이 하나로 합쳐져 사유가 사라지지 않게 함
+const eventKey = (e: TsunamiEvent) =>
+  JSON.stringify([
+    e.action,
+    e.level,
+    e.publishedAt,
+    e.effectiveFrom,
+    e.zone.raw,
+    e.unknownReasons,
+  ]);
 
 export type TsunamiBeach = {
   items: WarningItem[]; // 발효 중인 지진해일(zoneCode null, zoneName = reg 원문)
@@ -82,7 +95,8 @@ export type TsunamiBeach = {
 
 export type TsunamiBeachesResult = {
   beaches: Record<BeachId, TsunamiBeach>;
-  // 못 읽은 발표. 하나라도 있으면 전국 확인 못 함(BRD-21)
+  // 못 읽은 조각이 있는 발표. 하나라도 있으면 전국 확인 못 함(BRD-21)
+  // 읽힌 조각의 해변에는 이미 적용됨 → 발효 중이면 이용불가가 이김
   unreadable: { reg: string; parts: string[]; announcement: string | null }[];
 };
 
@@ -118,13 +132,12 @@ export function judgeTsunamiBeaches(input: {
     if (event.publishedAt !== null && ms(event.publishedAt) > nowMs) continue;
 
     const match = matchTsunamiRegion(event.zone.raw, beaches);
-    if (!match.readable) {
+    if (match.unreadable.length > 0) {
       unreadable.push({
         reg: event.zone.raw,
-        parts: match.parts,
+        parts: match.unreadable,
         announcement: event.announcement,
       });
-      continue;
     }
     for (const id of match.beachIds) {
       const list = perBeach.get(id);
@@ -133,8 +146,12 @@ export function judgeTsunamiBeaches(input: {
     }
   }
 
-  for (const [id, events] of perBeach) {
+  for (const [id, all] of perBeach) {
     const beach = out[id]!;
+    // 완전히 같은 행(응답에 두 번 온 행)은 하나로. 순서를 따질 필요가 없음
+    const events = [
+      ...new Map(all.map((e) => [eventKey(e), e] as const)).values(),
+    ];
     // 시각·종류를 못 읽은 발표가 있으면 이 해변 상태를 정할 수 없음
     const broken = events.filter((e) => e.unknownReasons.length > 0);
     if (broken.length > 0) {
@@ -145,7 +162,7 @@ export function judgeTsunamiBeaches(input: {
     }
 
     // 여기부터는 사유 없는 발표만 → normalize가 시각을 모두 채움. 그래서 !(null 아님)를 씀
-    // 발표 시각 순. 같은 시각에 다른 발표가 있으면 순서를 알 수 없음
+    // 발표 시각 순. 같은 시각에 내용이 다른 발표가 있으면 순서를 알 수 없음
     const sorted = [...events].sort(
       (a, b) => ms(a.publishedAt!) - ms(b.publishedAt!),
     );

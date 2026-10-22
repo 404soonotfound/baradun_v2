@@ -39,24 +39,21 @@ describe("matchTsunamiRegion", () => {
     ["강원 강릉시·경북 울진군", ["e1", "e2"]],
   ])("읽음: %j", (reg, beachIds) => {
     expect(matchTsunamiRegion(reg, BEACHES)).toEqual({
-      readable: true,
       beachIds,
+      unreadable: [],
     });
   });
 
   it.each([
-    ["중구", ["중구"]], // 부산·인천 둘 다 있음
-    ["동해안, 울릉도", ["울릉도"]], // data/beaches에 없음
-    ["경상북도 울진군", ["경상북도 울진군"]], // 시도 표기가 다름
-    ["서해안 일부", ["서해안 일부"]],
-    ["동해 연안 전역", ["동해 연안 전역"]],
-    ["동해안,", [""]],
-    ["", [""]],
-  ])("못 읽음: %j", (reg, parts) => {
-    expect(matchTsunamiRegion(reg, BEACHES)).toEqual({
-      readable: false,
-      parts,
-    });
+    ["중구", [], ["중구"]], // 부산·인천 둘 다 있음
+    ["동해안, 울릉도", ["e1", "e2"], ["울릉도"]], // 울릉도는 data/beaches에 없음
+    ["경상북도 울진군", [], ["경상북도 울진군"]], // 시도 표기가 다름
+    ["서해안 일부", [], ["서해안 일부"]],
+    ["동해 연안 전역", [], ["동해 연안 전역"]],
+    ["동해안,", ["e1", "e2"], [""]],
+    ["", [], [""]],
+  ])("못 읽은 조각: %j", (reg, beachIds, unreadable) => {
+    expect(matchTsunamiRegion(reg, BEACHES)).toEqual({ beachIds, unreadable });
   });
 });
 
@@ -158,6 +155,49 @@ describe("judgeTsunamiBeaches", () => {
       },
     ]);
     expect(result.beaches.e1).toEqual(empty);
+  });
+
+  it("일부만 읽힌 경보 → 읽힌 해변은 발효, 못 읽은 조각은 unreadable", () => {
+    const result = judge([msg({ reg: "동해안, 울릉도" })]);
+    const item = { ...warning, zoneName: "동해안, 울릉도" };
+    expect(result.beaches.e1).toEqual({ items: [item], reasons: [] });
+    expect(result.beaches.e2).toEqual({ items: [item], reasons: [] });
+    expect(result.beaches.s1).toEqual(empty);
+    expect(result.unreadable).toEqual([
+      {
+        reg: "동해안, 울릉도",
+        parts: ["울릉도"],
+        announcement: "지진해일 경보 발표",
+      },
+    ]);
+  });
+
+  it("일부만 읽힌 해제 → 읽힌 해변만 해제, 못 읽은 조각은 unreadable", () => {
+    const result = judge([
+      msg({ reg: "동해안, 남해안" }),
+      msg({
+        tmFc: 202610221030,
+        tmEf: 202610221030,
+        fcTp: 3,
+        reg: "동해안, 울릉도",
+      }),
+    ]);
+    expect(result.beaches.e1).toEqual(empty);
+    expect(result.beaches.s1!.items).toHaveLength(1);
+    expect(result.unreadable.map((u) => u.parts)).toEqual([["울릉도"]]);
+  });
+
+  it("완전히 같은 행이 두 번 → 하나로 보고 발효", () => {
+    const result = judge([msg({}), msg({})]);
+    expect(result.beaches.e1).toEqual({ items: [warning], reasons: [] });
+  });
+
+  it("모르는 fcTp 두 가지가 같은 시각 → 사유 둘 다 남김", () => {
+    const result = judge([msg({ fcTp: 8 }), msg({ fcTp: 9 })]);
+    expect(result.beaches.e1!.reasons).toEqual([
+      "tsunami:fcTp:8",
+      "tsunami:fcTp:9",
+    ]);
   });
 
   it("모르는 fcTp → 그 해변들 사유", () => {
