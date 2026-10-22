@@ -7,6 +7,8 @@
     "@baradun/contracts": "0.1.0",
     "@types/aws-lambda": "^8.10.164",
     "@types/node": "^26.6.5",
+    "ajv": "^8.20.0",
+    "ajv-formats": "^3.0.1",
     "typescript": "^7.0.2",
     "vitest": "^5.0.5"
   },
