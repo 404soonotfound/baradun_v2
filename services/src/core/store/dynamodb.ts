@@ -112,6 +112,7 @@ export class DynamoStateStore implements StateStore {
     sk: string,
     value: StateValue,
     orderAt: number,
+    expectedVersion?: number | null,
   ): Promise<PutStateResult> {
     const decision = decideStateWrite(
       await this.getState(pk, sk),
@@ -119,6 +120,7 @@ export class DynamoStateStore implements StateStore {
       sk,
       value,
       orderAt,
+      expectedVersion,
     );
     if (decision.kind !== "write") return decision.kind;
 

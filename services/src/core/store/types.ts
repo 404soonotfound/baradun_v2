@@ -29,11 +29,13 @@ export type PutStateResult = "written" | "unchanged" | "stale" | "conflict";
 
 export interface StateStore {
   getState(pk: string, sk: string): Promise<StateRecord | null>;
+  // expectedVersion: 먼저 읽은 recordVersion(기록 없음 → null). 주면 그 뒤 다른 쓰기가 있었을 때 conflict
   putState(
     pk: string,
     sk: string,
     value: StateValue,
     orderAt: number,
+    expectedVersion?: number | null,
   ): Promise<PutStateResult>;
 }
 

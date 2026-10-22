@@ -63,9 +63,11 @@ interface ReadingsValue {
 async function fetchSource(
   deps: CollectDeps,
   source: Source,
-  key: string,
   tm: string,
 ): Promise<SourceOutcome> {
+  // 키를 읽지 못하면 호출하지 않고 이 출처의 실패로 기록(시도 기록에 남음)
+  const key = await deps.keys.get("kma-apihub").catch(() => null);
+  if (key === null) return { status: "failed", reason: "api_key", attempts: 0 };
   const params = new URLSearchParams({ tm, stn: "0", help: "0", authKey: key });
   const response = await deps.get(`${BASE}${source}.php?${params}`);
   if (response.status === "failed") return response;
@@ -81,6 +83,14 @@ async function fetchSource(
       attempts: response.attempts,
     };
   }
+  // 자료 줄은 있는데 쓸 수 있는 행이 하나도 없음 → 형식이 바뀐 응답일 수 있어 정상으로 치지 않음
+  if (parsed.rows.length === 0) {
+    return {
+      status: "failed",
+      reason: `no_rows:skipped=${parsed.skippedRows}`,
+      attempts: response.attempts,
+    };
+  }
   return {
     status: "ok",
     rows: parsed.rows,
@@ -90,7 +100,12 @@ async function fetchSource(
   };
 }
 
-// 이전 값을 읽어 합친 뒤 씀. 사이에 다른 실행이 쓰면(conflict) 다시 읽어 한 번 더 합침
+// 예외 사유. 원문 메시지는 주소(키)를 담을 수 있어 오류 이름만 남김
+export function exceptionReason(error: unknown): string {
+  return `exception:${error instanceof Error ? error.name : typeof error}`;
+}
+
+// 이전 값을 읽어 합친 뒤 씀. 읽은 recordVersion을 넘겨 사이에 다른 실행이 쓰면(conflict) 다시 읽어 한 번 더 합침
 async function saveReadings(
   deps: CollectDeps,
   outcomes: Record<Source, SourceOutcome>,
@@ -112,7 +127,7 @@ async function saveReadings(
       rows,
       formatUtcIso(deps.clock()),
     );
-    // 순서 기준 = 가장 늦은 관측 시각. 합친 값은 관측 시각이 뒤로 가지 않음 → 늦게 도착한 옛 실행은 stale로 거부됨
+    // 순서 기준 = 가장 늦은 관측 시각. 이전 orderAt에서 시작하므로 뒤로 가지 않음
     let orderAt = previous?.orderAt ?? 0;
     for (const station of Object.values(merged.readings)) {
       for (const reading of Object.values(station)) {
@@ -126,6 +141,7 @@ async function saveReadings(
       sk,
       value as unknown as StateValue,
       orderAt,
+      previous?.recordVersion ?? null,
     );
     if (result === "conflict") continue;
     if (result === "stale")
@@ -154,16 +170,17 @@ export async function collectOcean(
     return { status: "skipped", slotId, claim };
   }
 
-  const key = await deps.keys.get("kma-apihub");
   // 요청 시각 = 슬롯 시각(KST). 그 시각까지 공개된 최신 값을 받음
   // 각 출처의 예외는 그 출처의 실패로만 남김(한쪽이 다른 쪽을 막지 않음)
   const [seaObs, kmaBuoy] = await Promise.all(
     SOURCES.map((source) =>
-      fetchSource(deps, source, key, slotId).catch((): SourceOutcome => ({
-        status: "failed",
-        reason: "exception",
-        attempts: 0,
-      })),
+      fetchSource(deps, source, slotId).catch(
+        (error: unknown): SourceOutcome => ({
+          status: "failed",
+          reason: exceptionReason(error),
+          attempts: 0,
+        }),
+      ),
     ),
   );
   const outcomes = { sea_obs: seaObs!, kma_buoy: kmaBuoy! };

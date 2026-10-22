@@ -157,6 +157,47 @@ describe("collectOcean", () => {
     });
   });
 
+  it("자료 줄이 모두 건너뛰어져 쓸 행이 없으면 그 출처는 실패", async () => {
+    const lines = SEA_OBS.split("\n");
+    // 시작·끝 표시와 머리글은 두고 자료 줄만 깨뜨림
+    const broken = lines
+      .map((line) => (line.startsWith("#") || line.trim() === "" ? line : "x"))
+      .join("\n");
+    const { deps, state } = setup({ sea_obs: broken, kma_buoy: KMA_BUOY });
+    expect((await collectOcean(deps)).status).toBe("partial");
+    expect((await attempt(state)).sources).toMatchObject({
+      sea_obs: { status: "failed" },
+      kma_buoy: { status: "ok" },
+    });
+  });
+
+  it("읽은 뒤 다른 실행이 쓰면 다시 읽어 합쳐 그 값을 덮지 않음", async () => {
+    const { deps, state } = setup({ sea_obs: SEA_OBS, kma_buoy: KMA_BUOY });
+    const other = {
+      readings: {
+        "99999": {
+          waveHeight: { value: 0.7, observedAt: "2026-10-20T15:00:00Z" },
+        },
+      },
+      receivedAt: {},
+    };
+    // 첫 읽기 직후 다른 실행이 끼어들어 씀
+    const getState = state.getState.bind(state);
+    let injected = false;
+    state.getState = async (pk, sk) => {
+      const record = await getState(pk, sk);
+      if (!injected && sk === OCEAN_STATE.readings.sk) {
+        injected = true;
+        await state.putState(pk, sk, other, Date.parse("2026-10-20T15:00:00Z"));
+      }
+      return record;
+    };
+    await collectOcean(deps);
+    expect((await readings(state))?.readings["99999"]?.waveHeight).toEqual(
+      other.readings["99999"].waveHeight,
+    );
+  });
+
   it("오래된 응답이 더 늦은 정상값을 덮지 않음", async () => {
     const { deps, state } = setup({ sea_obs: SEA_OBS, kma_buoy: KMA_BUOY });
     await state.putState(
@@ -194,5 +235,22 @@ describe("collectOcean", () => {
       claim: "busy",
     });
     expect(urls).toEqual([]);
+  });
+
+  it("API 키를 읽지 못하면 호출하지 않고 출처마다 실패로 기록", async () => {
+    const { deps, state, urls } = setup({
+      sea_obs: SEA_OBS,
+      kma_buoy: KMA_BUOY,
+    });
+    const result = await collectOcean({
+      ...deps,
+      keys: { get: async () => Promise.reject(new Error("throttled")) },
+    });
+    expect(result.status).toBe("failed");
+    expect(urls).toEqual([]);
+    expect((await attempt(state)).sources).toEqual({
+      sea_obs: { status: "failed", reason: "api_key", attempts: 0 },
+      kma_buoy: { status: "failed", reason: "api_key", attempts: 0 },
+    });
   });
 });

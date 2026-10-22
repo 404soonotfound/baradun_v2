@@ -43,9 +43,17 @@ export class MemoryStateStore implements StateStore {
     sk: string,
     value: StateValue,
     orderAt: number,
+    expectedVersion?: number | null,
   ): Promise<PutStateResult> {
     const current = await this.getState(pk, sk);
-    const decision = decideStateWrite(current, pk, sk, value, orderAt);
+    const decision = decideStateWrite(
+      current,
+      pk,
+      sk,
+      value,
+      orderAt,
+      expectedVersion,
+    );
     if (decision.kind !== "write") return decision.kind;
 
     // 읽은 뒤 다른 실행이 끼어들 수 있는 자리 (DynamoDB의 GetItem → PutItem 사이)

@@ -38,6 +38,7 @@ export function sameStateValue(a: StateValue, b: StateValue): boolean {
 export type StateWriteDecision =
   | { readonly kind: "stale" }
   | { readonly kind: "unchanged" }
+  | { readonly kind: "conflict" }
   // expectedVersion: 읽은 recordVersion(기록 없음 → null). 쓸 때 이 값과 같아야 함
   | {
       readonly kind: "write";
@@ -48,13 +49,22 @@ export type StateWriteDecision =
 // 저장 규칙 (7장): 오래된 값 거부, 같은 orderAt·같은 값은 바뀐 것 없음, 그 밖은 recordVersion +1
 // 같은 orderAt인데 값이 다름 → 정정으로 보고 씀
 // 더 새 orderAt에 같은 값 → orderAt이 신선도에 쓰이므로 씀
+// expectedVersion: 부르는 쪽이 먼저 읽은 recordVersion(기록 없음 → null). 주면 지금 값과 다를 때 conflict
+// → 읽고 합친 뒤 쓰는 쪽이 그 사이의 다른 쓰기를 덮지 않음
 export function decideStateWrite(
   current: StateRecord | null,
   pk: string,
   sk: string,
   value: StateValue,
   orderAt: number,
+  expectedVersion?: number | null,
 ): StateWriteDecision {
+  if (
+    expectedVersion !== undefined &&
+    (current?.recordVersion ?? null) !== expectedVersion
+  ) {
+    return { kind: "conflict" };
+  }
   if (current) {
     if (orderAt < current.orderAt) return { kind: "stale" };
     if (orderAt === current.orderAt && sameStateValue(current.value, value)) {

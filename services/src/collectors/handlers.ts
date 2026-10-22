@@ -12,7 +12,9 @@ import { collectWarnings } from "./warnings";
 
 // Lambda 진입점 (아키텍처 5장). 실제 AWS 클라이언트를 묶어 수집 함수에 넘김
 // 테이블 이름은 환경 변수(STATE_TABLE_NAME·OPS_TABLE_NAME, PR ② infra가 넣음)
-// 다 저장하지 못하면 오류를 던져 Lambda 오류 지표에 남김(재시도는 슬롯 lease가 지난 뒤에만 맡음)
+// 다 저장하지 못하면 오류를 던져 Lambda 오류 지표에 남김
+// 같은 owner도 lease(2분) 안에는 슬롯을 다시 맡지 않음(10/22 사용자 결정) → lease 안에 온 재시도는 busy로 건너뜀
+// 실패한 슬롯은 다음 슬롯이 메움(아키텍처 5장: 재시도는 같은 슬롯 안에서 제한, 다음 슬롯을 막지 않음)
 
 function requiredEnv(name: string): string {
   const value = process.env[name];
@@ -44,6 +46,7 @@ function deps(owner: string): CollectDeps {
       getText(url, {
         timeoutMs: COLLECT_POLICY.httpTimeoutMs,
         retries: COLLECT_POLICY.httpRetries,
+        retryDelayMs: COLLECT_POLICY.httpRetryDelayMs,
       }),
     log,
     clock: () => Date.now(),

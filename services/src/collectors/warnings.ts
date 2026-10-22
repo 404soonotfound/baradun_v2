@@ -1,9 +1,14 @@
 import type { StateValue } from "../core/store/types";
 import { packItems } from "../core/warnings/archive";
+import { responseItems } from "../core/warnings/response-items";
 import { normalizePwnCdResponse } from "../core/warnings/pwncd-response";
 import { formatUtcIso } from "../core/warnings/time";
 import { normalizeTsunamiResponse } from "../core/warnings/tsunami";
-import type { CollectDeps, CollectRunResult } from "./ocean";
+import {
+  exceptionReason,
+  type CollectDeps,
+  type CollectRunResult,
+} from "./ocean";
 import { COLLECT_POLICY } from "./policy";
 import { formatKst, kstDaysBefore, slotStart } from "./schedule";
 
@@ -24,23 +29,11 @@ const PWNCD_URL = "https://apis.data.go.kr/1360000/WthrWrnInfoService/getPwnCd";
 const TSUNAMI_URL =
   "https://apis.data.go.kr/1360000/EqkInfoService/getTsunamiMsg";
 type Source = "pwncd" | "tsunami";
+const SOURCES: readonly Source[] = ["pwncd", "tsunami"];
 
 type SourceOutcome =
   | { status: "ok"; confirmedAt: string; rowCount: number; attempts: number }
   | { status: "failed"; reason: string; attempts: number };
-
-function isObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-// 정상 판정을 마친 응답의 원본 행. 한 개면 객체로 와서 배열로 맞춤(정규화 함수와 같은 규칙)
-function rawItems(json: unknown): unknown[] {
-  const response = isObject(json) ? json.response : undefined;
-  const body = isObject(response) ? response.body : undefined;
-  const items = isObject(body) ? body.items : undefined;
-  const item = isObject(items) ? items.item : undefined;
-  return Array.isArray(item) ? item : isObject(item) ? [item] : [];
-}
 
 function requestUrl(
   base: string,
@@ -63,9 +56,11 @@ function requestUrl(
 async function collectSource(
   deps: CollectDeps,
   source: Source,
-  key: string,
   nowMs: number,
 ): Promise<SourceOutcome> {
+  // 키를 읽지 못하면 호출하지 않고 이 출처의 실패로 기록(시도 기록에 남음)
+  const key = await deps.keys.get("data-go-kr").catch(() => null);
+  if (key === null) return { status: "failed", reason: "api_key", attempts: 0 };
   const today = formatKst(nowMs, "day");
   const numOfRows =
     source === "pwncd"
@@ -100,13 +95,13 @@ async function collectSource(
   if (source === "pwncd") {
     const result = normalizePwnCdResponse(json, numOfRows);
     if (result.status === "failed") return { ...result, attempts };
-    items = rawItems(json);
+    items = responseItems(json) ?? []; // 정상 판정을 통과해 목록이 있음
     rowCount = result.rowCount;
   } else {
     const result = normalizeTsunamiResponse(json, numOfRows);
     if (result.status === "failed") return { ...result, attempts };
     // 03 = 발표 없음 확인 → 빈 행 묶음으로 저장(확인된 '없음')
-    items = result.status === "none" ? [] : rawItems(json);
+    items = result.status === "none" ? [] : (responseItems(json) ?? []);
     rowCount = items.length;
   }
 
@@ -146,25 +141,23 @@ export async function collectWarnings(
     return { status: "skipped", slotId, claim };
   }
 
-  const key = await deps.keys.get("data-go-kr");
   // 각 출처의 예외는 그 출처의 실패로만 남김(한쪽이 다른 쪽을 막지 않음)
   const settle = (source: Source) =>
-    collectSource(deps, source, key, startedMs).catch((): SourceOutcome => ({
-      status: "failed",
-      reason: "exception",
-      attempts: 0,
-    }));
+    collectSource(deps, source, startedMs).catch(
+      (error: unknown): SourceOutcome => ({
+        status: "failed",
+        reason: exceptionReason(error),
+        attempts: 0,
+      }),
+    );
   const [pwncd, tsunami] = await Promise.all([
     settle("pwncd"),
     settle("tsunami"),
   ]);
-  const outcomes: Record<Source, SourceOutcome> = {
-    pwncd: pwncd!,
-    tsunami: tsunami!,
-  };
+  const outcomes: Record<Source, SourceOutcome> = { pwncd, tsunami };
 
   const sources: Record<string, StateValue> = {};
-  for (const source of ["pwncd", "tsunami"] as const) {
+  for (const source of SOURCES) {
     const outcome = outcomes[source];
     sources[source] = { ...outcome };
     if (outcome.status === "failed") {
@@ -194,7 +187,7 @@ export async function collectWarnings(
     startedMs,
   );
 
-  const okCount = [pwncd, tsunami].filter((o) => o?.status === "ok").length;
+  const okCount = SOURCES.filter((s) => outcomes[s].status === "ok").length;
   const status =
     okCount === 2 ? "complete" : okCount === 1 ? "partial" : "failed";
   if (status === "complete") {

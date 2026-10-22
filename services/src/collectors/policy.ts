@@ -13,6 +13,8 @@ export const COLLECT_POLICY = {
   // 한 번 시도의 시간 제한과 다시 하는 횟수. 두 번 다 실패해도 Lambda 시간 제한 안에서 끝나게 함
   httpTimeoutMs: 10 * SECOND_MS,
   httpRetries: 1,
+  httpRetryDelayMs: 1 * SECOND_MS, // 최악 10초 + 1초 + 10초 → Lambda 시간 제한(60초) 안
+
   // getPwnCd: 59일 범위를 한 번에(아키텍처 4장, 10/22 BRD-18). 받은 행이 70%를 넘으면 운영 알림
   pwncdLookbackDays: 59,
   pwncdNumOfRows: 10_000,
