@@ -6,7 +6,7 @@ const NOW = "2026-10-21T00:00:00Z";
 
 describe("mergeReadings", () => {
   it("측정기·지표마다 가장 늦은 정상값을 남김", () => {
-    const merged = mergeReadings(
+    const { readings: merged } = mergeReadings(
       {},
       [
         {
@@ -40,7 +40,7 @@ describe("mergeReadings", () => {
         waveHeight: { value: 0.7, observedAt: "2026-10-20T22:00:00Z" },
       },
     };
-    const merged = mergeReadings(
+    const { readings: merged } = mergeReadings(
       previous,
       [
         {
@@ -54,8 +54,8 @@ describe("mergeReadings", () => {
     expect(merged).toEqual(previous);
   });
 
-  it("서버 시각보다 늦은 관측은 버림(허용 오차 없음)", () => {
-    const merged = mergeReadings(
+  it("서버 시각보다 늦은 관측은 버리고 셈(허용 오차 없음)", () => {
+    const result = mergeReadings(
       {},
       [
         {
@@ -66,11 +66,11 @@ describe("mergeReadings", () => {
       ],
       NOW,
     );
-    expect(merged).toEqual({});
+    expect(result).toEqual({ readings: {}, futureRows: 1 });
   });
 
   it("출처마다 다른 지표를 같은 측정기에 합침", () => {
-    const merged = mergeReadings(
+    const { readings: merged } = mergeReadings(
       {},
       [
         {
@@ -100,7 +100,7 @@ describe("mergeReadings", () => {
     const previous = {
       "22520": { wind: { value: 3.6, observedAt: "2026-10-20T23:00:00Z" } },
     };
-    const merged = mergeReadings(
+    const { readings: merged } = mergeReadings(
       previous,
       [{ stationId: "22520", observedAt: "2026-10-20T22:00:00Z", wind: 9.9 }],
       NOW,
@@ -112,7 +112,7 @@ describe("mergeReadings", () => {
     const previous = {
       "22520": { wind: { value: 3.6, observedAt: "2026-10-21T00:30:00Z" } },
     };
-    const merged = mergeReadings(
+    const { readings: merged } = mergeReadings(
       previous,
       [{ stationId: "22520", observedAt: "2026-10-20T23:50:00Z", wind: 4.1 }],
       NOW,
