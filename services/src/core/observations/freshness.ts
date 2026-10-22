@@ -24,7 +24,7 @@ export type ObservationRow = {
   readonly observedAt: string;
 } & Readonly<Partial<Record<MetricKey, number | null>>>;
 
-const METRIC_KEYS: readonly MetricKey[] = [
+export const METRIC_KEYS: readonly MetricKey[] = [
   "waveHeight",
   "wavePeriod",
   "waveDirection",
@@ -32,7 +32,7 @@ const METRIC_KEYS: readonly MetricKey[] = [
   "wind",
 ];
 
-const UNIT: Record<MetricKey, Metric["unit"]> = {
+export const METRIC_UNIT: Record<MetricKey, Metric["unit"]> = {
   waveHeight: "m",
   wavePeriod: "s",
   waveDirection: "deg",
@@ -86,7 +86,7 @@ export function toMetric(
   now: string,
 ): Metric {
   const nowMs = parseNow(now);
-  const base = { unit: UNIT[key], nextExpectedAt: null }; // nextExpectedAt은 출시에서 항상 null(10/22 ①)
+  const base = { unit: METRIC_UNIT[key], nextExpectedAt: null }; // nextExpectedAt은 출시에서 항상 null(10/22 ①)
   const observedMs = reading ? parseUtcIso(reading.observedAt) : null;
   if (!reading || observedMs === null || observedMs > nowMs) {
     return {
