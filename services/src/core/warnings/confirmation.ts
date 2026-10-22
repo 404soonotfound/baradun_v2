@@ -1,5 +1,5 @@
 import { WARNING_POLICY } from "./policy";
-import { parseUtcIso } from "./time";
+import { formatUtcIso, parseUtcIso } from "./time";
 
 // 특보 '없음' 확인이 아직 유효한지 (아키텍처 14.3, 결정 기록 11장 10/22 ②)
 // lastConfirmedAt = 정상 전체 조회를 마친 서버 시각. 경계: 45분 00초 유효, 45분 01초부터 확인 못 함
@@ -31,8 +31,5 @@ export function checkConfirmation(
   if (nowMs - lastMs > ttlMs) return { confirmed: false, reason: "expired" };
 
   // 초 단위로 내림(parseKstTime과 같은 표기). 밀리초를 버려 만료가 늦어지지 않음
-  const validUntil = new Date(lastMs + ttlMs)
-    .toISOString()
-    .replace(/\.\d{3}Z$/, "Z");
-  return { confirmed: true, validUntil };
+  return { confirmed: true, validUntil: formatUtcIso(lastMs + ttlMs) };
 }

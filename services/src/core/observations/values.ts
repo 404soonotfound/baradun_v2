@@ -3,9 +3,16 @@
 // 근거 없는 상한은 두지 않음. 아래 규칙만 검사
 
 // 지표 이름. 공개 계약 Beach.stations·observation.metrics의 키와 같음
-// type A = "x" | "y": 이 다섯 글자 중 하나만 들어갈 수 있는 타입(오타를 타입 검사가 잡음)
-export type MetricKey =
-  "waveHeight" | "wavePeriod" | "waveDirection" | "waterTemp" | "wind";
+// 목록 하나에서 타입을 만듦 → 지표를 더할 때 목록과 타입이 어긋나 반복문이 지표를 빠뜨리는 일이 없음
+// as const: 글자를 고정값으로 둠. (typeof X)[number]: 목록 안 값 중 하나만 들어갈 수 있는 타입
+export const METRIC_KEYS = [
+  "waveHeight",
+  "wavePeriod",
+  "waveDirection",
+  "waterTemp",
+  "wind",
+] as const;
+export type MetricKey = (typeof METRIC_KEYS)[number];
 
 // 확인된 결측 표기. 실응답·수신 기록 44,783행에서 이 둘만 나옴
 // Set: 값 모음. has()로 들어 있는지 빠르게 확인

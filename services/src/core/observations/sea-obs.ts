@@ -1,5 +1,6 @@
 // import { 이름 } from "경로": 다른 파일이 export한 것을 가져옴(.ts 확장자는 쓰지 않음)
 import { parseKstTime } from "../warnings/time";
+import { readFramedLines } from "./framed-lines";
 import { readMetricValue } from "./values";
 
 // sea_obs 응답 읽기 (데이터 출처 3장, 결정 기록 11장 B1·10/22 BRD-19)
@@ -23,8 +24,6 @@ export type SeaObsResult =
   | { status: "ok"; rows: SeaObsRow[]; skippedRows: number }
   | { status: "failed"; reason: string };
 
-const START = "#START7777";
-const END = "#7777END";
 const STATION_TYPES = new Set(["B", "C"]); // B 부이, C 파고부이(결정 기록 11장 B1)
 // 자료 줄 = 공식 칸 14개 + 뜻 모르는 숫자 묶음 1칸(빈 칸일 때가 많음) + 끝 표시 "="
 // 실응답 188줄 모두 16칸·"="로 끝남 → 이 모양이 아니면 칸 자리를 믿을 수 없음
@@ -42,23 +41,13 @@ const COLUMN = {
 const STATION_ID = /^\d+$/; // 측정기 번호는 숫자만
 
 export function parseSeaObs(text: string): SeaObsResult {
-  // 줄로 나눔 → 줄마다 앞뒤 빈칸 지움 → 빈 줄 버림
-  // \r?\n: 윈도식(\r\n)·유닉스식(\n) 줄바꿈 모두 처리
-  const lines = text
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter((line) => line !== "");
-  // 끝 표시가 없으면 중간에 잘린 응답 → 일부만 받은 값을 정상으로 쓰지 않음
-  if (lines[0] !== START) return { status: "failed", reason: "시작 표시 없음" };
-  if (lines[lines.length - 1] !== END) {
-    return { status: "failed", reason: "끝 표시 없음(잘린 응답)" };
-  }
+  // 시작·끝 표시 확인(잘린 응답은 실패)과 머리글 빼기는 공통 틀 읽기가 함
+  const framed = readFramedLines(text);
+  if (framed.status === "failed") return framed;
 
   const rows: SeaObsRow[] = []; // 빈 배열에서 시작해 한 줄씩 채움
   let skippedRows = 0; // let: 나중에 값을 바꿀 수 있는 변수(const는 못 바꿈)
-  // slice(1, -1): 첫 줄(시작 표시)과 마지막 줄(끝 표시)을 뺀 나머지
-  for (const line of lines.slice(1, -1)) {
-    if (line.startsWith("#")) continue; // 머리글. continue: 이 줄은 건너뛰고 다음 줄로
+  for (const line of framed.lines) {
     const cells = line.split(",").map((cell) => cell.trim());
     // 칸 수·끝 표시가 다르면 형식이 바뀐 것 → 칸 자리를 믿을 수 없어 응답 전체를 실패로 봄
     if (

@@ -39,11 +39,12 @@ export function parseKstTime(raw: string): KstTime {
   }
 
   // KST 벽시계를 UTC로 읽은 값에서 9시간을 빼면 실제 UTC 시각
-  // toISOString은 밀리초(".000Z")까지 붙임 → 초 단위로 자름
-  const iso = new Date(asUtc.getTime() - KST_OFFSET_MS)
-    .toISOString()
-    .replace(/\.\d{3}Z$/, "Z");
-  return { kind: "time", iso };
+  return { kind: "time", iso: formatUtcIso(asUtc.getTime() - KST_OFFSET_MS) };
+}
+
+// 밀리초 → UTC ISO 문자열("…Z"). toISOString은 밀리초(".000Z")까지 붙임 → 초 단위로 내림
+export function formatUtcIso(ms: number): string {
+  return new Date(ms).toISOString().replace(/\.\d{3}Z$/, "Z");
 }
 
 // UTC ISO 문자열("…Z", 밀리초는 있어도 됨) → 밀리초. KST·시간대 없는 값·달력에 없는 날짜는 null

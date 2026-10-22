@@ -1,7 +1,7 @@
 import type { Metric } from "@baradun/contracts";
-import { parseUtcIso } from "../warnings/time";
+import { formatUtcIso, parseUtcIso } from "../warnings/time";
 import { OBSERVATION_POLICY } from "./policy";
-import type { MetricKey } from "./values";
+import { METRIC_KEYS, type MetricKey } from "./values";
 
 // 측정기별 마지막 정상값과 지표 신선도 (결정 기록 11장 B4·10/22 BRD-19)
 // 무효 값(null)·미래 관측은 마지막 정상값을 덮어쓰거나 observedAt을 갱신하지 않음
@@ -23,14 +23,6 @@ export type ObservationRow = {
   readonly stationId: string;
   readonly observedAt: string;
 } & Readonly<Partial<Record<MetricKey, number | null>>>;
-
-export const METRIC_KEYS: readonly MetricKey[] = [
-  "waveHeight",
-  "wavePeriod",
-  "waveDirection",
-  "waterTemp",
-  "wind",
-];
 
 export const METRIC_UNIT: Record<MetricKey, Metric["unit"]> = {
   waveHeight: "m",
@@ -103,6 +95,6 @@ export function toMetric(
     value: reading.value,
     observedAt: reading.observedAt,
     state: nowMs > expiresMs ? "delayed" : "fresh",
-    expiresAt: new Date(expiresMs).toISOString().replace(/\.\d{3}Z$/, "Z"),
+    expiresAt: formatUtcIso(expiresMs),
   };
 }
