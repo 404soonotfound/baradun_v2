@@ -67,6 +67,8 @@ function byLevelThenTime(a: Ranked, b: Ranked): number {
 
 // 구역표에 없는 S1 중 '먼바다'가 아니면 앞바다 개편일 수 있음 → 전국 확인 못 함(③)
 // 해제된 상태는 지금 발효가 아니라 제외
+// L1은 기록(unmappedZones)만 함. 육상 구역표는 별표9 해안 시군뿐이라 막으면 내륙 L1마다 전국 판단불가
+// 표 밖 L1 운영 알림('아는 L1 코드' 표)은 BRD-56, 분류는 그대로(결정 기록 11장 10/22 ③, 아키텍처 2.2)
 function blocksNationwide(state: ZoneWarningState, name: string): boolean {
   if (state.zone.kind !== "code" || state.zone.scope !== "sea") return false;
   if (name.includes("먼바다")) return false;
