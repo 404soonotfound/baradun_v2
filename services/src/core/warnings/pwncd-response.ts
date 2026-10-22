@@ -1,4 +1,5 @@
 import { normalizePwnCdRow, type PwnCdRow, type PwnEvent } from "./normalize";
+import { responseItems } from "./response-items";
 
 // getPwnCd 응답 전체 판정 (아키텍처 4장 10/22 실응답 확인, 결정 기록 11장 10/22 ⑥)
 // 정상 = 00 + 받은 행 수 < 요청 numOfRows. 03·99·잘림·형식 오류는 모두 실패
@@ -77,11 +78,7 @@ export function normalizePwnCdResponse(
     return { status: "failed", reason: `resultCode:${code ?? ""}` };
   }
 
-  const body = response.body;
-  const items = isObject(body) ? body.items : undefined;
-  const item = isObject(items) ? items.item : undefined;
-  // 행이 여러 개면 배열, 한 개면 객체로 옴 → 배열로 맞춤
-  const list = Array.isArray(item) ? item : isObject(item) ? [item] : null;
+  const list = responseItems(json);
   if (!list) return { status: "failed", reason: "format:items" };
   // 59일 범위에 0행은 없음(실응답 2,622~2,708행). 00인데 비었으면 이상 응답 → '없음'으로 읽지 않음
   if (list.length === 0) return { status: "failed", reason: "empty" };
