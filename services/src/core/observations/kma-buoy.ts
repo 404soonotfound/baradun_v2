@@ -1,4 +1,5 @@
 import { parseKstTime } from "../warnings/time";
+import { readFramedLines } from "./framed-lines";
 import { readMetricValue } from "./values";
 
 // kma_buoy 응답 읽기 (데이터 출처 3장, 결정 기록 11장 B1·10/22 BRD-19)
@@ -18,8 +19,6 @@ export type KmaBuoyResult =
   | { status: "ok"; rows: KmaBuoyRow[]; skippedRows: number }
   | { status: "failed"; reason: string };
 
-const START = "#START7777";
-const END = "#7777END";
 // 실응답 180줄 모두 17칸 → 이 모양이 아니면 칸 자리를 믿을 수 없음
 const CELLS_PER_LINE = 17;
 const COLUMN = {
@@ -31,19 +30,12 @@ const COLUMN = {
 const STATION_ID = /^\d+$/;
 
 export function parseKmaBuoy(text: string): KmaBuoyResult {
-  const lines = text
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter((line) => line !== "");
-  if (lines[0] !== START) return { status: "failed", reason: "시작 표시 없음" };
-  if (lines[lines.length - 1] !== END) {
-    return { status: "failed", reason: "끝 표시 없음(잘린 응답)" };
-  }
+  const framed = readFramedLines(text);
+  if (framed.status === "failed") return framed;
 
   const rows: KmaBuoyRow[] = [];
   let skippedRows = 0;
-  for (const line of lines.slice(1, -1)) {
-    if (line.startsWith("#")) continue;
+  for (const line of framed.lines) {
     // \s+: 빈칸이 몇 개든 한 번의 구분으로 봄(칸 너비를 빈칸으로 맞춰 줌)
     const cells = line.split(/\s+/);
     if (cells.length !== CELLS_PER_LINE) {
