@@ -38,6 +38,8 @@ export type BeachWarningsResult = {
   unknownZones: string[]; // S1·L1 형식이 아닌 코드(원문)
   // 형식은 맞지만 구역표에 없는 코드. name은 응답 areaName
   unmappedZones: { code: string; scope: "sea" | "land"; name: string }[];
+  // 표에 없는 특보 종류(warnVar 원문). 해변 구역이 아니어도 숨기지 않고 기록
+  unknownKinds: string[];
 };
 
 // 종류별로 잇는 구역(B3): 풍랑은 앞바다, 강풍은 육상, 태풍·폭풍해일은 둘 다
@@ -93,11 +95,15 @@ export function judgeBeachWarnings(input: {
   // 1단계: 해변과 이을 수 없는 구역 → 기록, 필요하면 전국 사유
   const nationwide: string[] = [];
   const unknownZones = new Set<string>();
+  const unknownKinds = new Set<string>();
+  // 구역 코드 → 그 구역의 상태들. 해변마다 전체 상태를 훑지 않게 함
+  const byCode = new Map<string, ZoneWarningState[]>();
   const unmapped = new Map<
     string,
     BeachWarningsResult["unmappedZones"][number]
   >();
   for (const state of states) {
+    if (state.kind.group === "unknown") unknownKinds.add(state.kind.raw);
     if (state.zone.kind === "unknown") {
       unknownZones.add(state.zone.raw);
       // 주변 특보 종류만 기록. 5종이거나 모르는 종류면 전국 확인 못 함(③)
@@ -107,7 +113,12 @@ export function judgeBeachWarnings(input: {
       continue;
     }
     const { code, scope } = state.zone;
-    if (zones[scope][code] !== undefined) continue;
+    if (zones[scope][code] !== undefined) {
+      const list = byCode.get(code);
+      if (list) list.push(state);
+      else byCode.set(code, [state]);
+      continue;
+    }
     const name = responseNames.get(code) ?? "";
     unmapped.set(code, { code, scope, name });
     if (blocksNationwide(state, name)) nationwide.push(`unmapped:${code}`);
@@ -133,12 +144,17 @@ export function judgeBeachWarnings(input: {
 
     const items: WarningItem[] = [];
     const nearby: NearbyWarningItem[] = [];
-    for (const state of states) {
+    // byCode에는 구역표에 있는 코드만 있음. 없는 코드는 위에서 zone_unverified로 남김
+    const linked = [
+      ...(byCode.get(sea) ?? []),
+      ...(land !== undefined ? (byCode.get(land) ?? []) : []),
+    ];
+    for (const state of linked) {
       if (state.zone.kind !== "code") continue;
       const { code, scope } = state.zone;
+      // 앞바다 칸에 L1, 육상 칸에 S1이 들어온 경우는 잇지 않음
       if (code !== (scope === "sea" ? sea : land)) continue;
-      const zoneName = zones[scope][code];
-      if (zoneName === undefined) continue; // 위에서 zone_unverified로 남김
+      const zoneName = zones[scope][code]!;
 
       const { kind, status } = state;
       if (kind.group === "unknown") {
@@ -187,5 +203,6 @@ export function judgeBeachWarnings(input: {
     unmappedZones: [...unmapped.values()].sort((a, b) =>
       a.code.localeCompare(b.code),
     ),
+    unknownKinds: [...unknownKinds].sort(),
   };
 }

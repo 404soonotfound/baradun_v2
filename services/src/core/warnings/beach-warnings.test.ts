@@ -72,6 +72,7 @@ describe("특보 없음 확인", () => {
       },
       unknownZones: [],
       unmappedZones: [],
+      unknownKinds: [],
     });
   });
 
@@ -204,6 +205,13 @@ describe("종류별 연결 (B3)", () => {
       state: "unknown",
       reasons: ["S1151200:warnVar:99"],
     });
+  });
+
+  it("모르는 종류(warnVar)가 해변 없는 구역에 와도 unknownKinds에 기록", () => {
+    const result = judge([
+      row({ areaCode: "L1022420", areaName: "평창군산지", warnVar: "99" }),
+    ]);
+    expect(result.unknownKinds).toEqual(["99"]);
   });
 });
 

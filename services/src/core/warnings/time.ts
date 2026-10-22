@@ -45,3 +45,17 @@ export function parseKstTime(raw: string): KstTime {
     .replace(/\.\d{3}Z$/, "Z");
   return { kind: "time", iso };
 }
+
+// UTC ISO 문자열("…Z", 밀리초는 있어도 됨) → 밀리초. KST·시간대 없는 값·달력에 없는 날짜는 null
+// Date.parse는 시간대 없는 값을 실행 환경 시간대로 읽음 → 형식을 먼저 확인
+const UTC_ISO = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{3})?Z$/;
+
+export function parseUtcIso(iso: string): number | null {
+  if (!UTC_ISO.test(iso)) return null;
+  const ms = Date.parse(iso);
+  if (Number.isNaN(ms)) return null;
+  // Date.parse는 넘치는 날짜를 다음 달로 넘김(2월 30일 → 3월 2일)
+  // → 다시 글자로 바꿔 초까지(앞 19자) 원문과 다르면 달력에 없는 날짜로 봄
+  const back = new Date(ms).toISOString();
+  return back.slice(0, 19) === iso.slice(0, 19) ? ms : null;
+}
