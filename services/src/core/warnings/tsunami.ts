@@ -1,6 +1,7 @@
 import type { WarningLevel } from "@baradun/contracts";
 import type { WarningKind } from "./codes";
 import { parseKstTime } from "./time";
+import { responseItems } from "./response-items";
 
 // getTsunamiMsg(기상청_지진정보 조회서비스) 정규화
 // 지진해일은 getPwnCd에 없어서 여기서 받음(결정 기록 11장 10/20)
@@ -118,11 +119,7 @@ export function normalizeTsunamiResponse(
     return { status: "failed", reason: `resultCode:${code ?? ""}` };
   }
 
-  const body = response.body;
-  const items = isObject(body) ? body.items : undefined;
-  const item = isObject(items) ? items.item : undefined;
-  // 행이 여러 개면 배열, 한 개면 객체로 옴 → 배열로 맞춤
-  const list = Array.isArray(item) ? item : isObject(item) ? [item] : null;
+  const list = responseItems(json);
   if (!list || !list.every(isObject)) {
     return { status: "failed", reason: "format:items" };
   }
