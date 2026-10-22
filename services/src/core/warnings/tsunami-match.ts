@@ -123,6 +123,9 @@ const LEVEL_ORDER: readonly WarningItem["level"][] = [
   "warning",
   "advisory",
 ];
+// 작을수록 높은 단계. 단계 없음(해제)은 맨 뒤
+const levelRank = (level: WarningItem["level"] | null) =>
+  level === null ? LEVEL_ORDER.length : LEVEL_ORDER.indexOf(level);
 
 export function judgeTsunamiBeaches(input: {
   result: TsunamiResult;
@@ -199,6 +202,7 @@ export function judgeTsunamiBeaches(input: {
     ].sort((a, b) => ms(a) - ms(b));
     const active = new Map<string, TsunamiEvent>(); // 지역 글 → 발효 중인 발표
     let pending: string[] = [];
+    let clearedAt = -Infinity; // 마지막으로 적용한 해제의 발표 시각
     for (const time of times) {
       const group = events.filter((e) => e.publishedAt === time);
       // 종류·시각을 못 읽은 행 → 그 뒤 해제가 올 때까지 사유
@@ -221,7 +225,14 @@ export function judgeTsunamiBeaches(input: {
         else if (first.action === "release") {
           active.clear();
           pending = [];
-        } else for (const e of clean) active.set(e.zone.raw, e);
+          clearedAt = ms(time);
+        } else {
+          // 같은 시각·지역 글에 단계만 다른 행 → 어느 쪽이 나중인지 모름. 높은 단계를 남겨 낮추지 않음
+          const lowFirst = [...clean].sort(
+            (a, b) => levelRank(b.level) - levelRank(a.level),
+          );
+          for (const e of lowFirst) active.set(e.zone.raw, e);
+        }
       }
       pending.push(...reasons);
     }
@@ -229,11 +240,13 @@ export function judgeTsunamiBeaches(input: {
 
     // 발효 전 해제가 있는데 발효 중인 발표가 안 보임 → 조회 범위(3일) 밖 발표가 해제 시각까지 발효 중일 수 있음
     // 단계·시각을 모르므로 확인 못 함(zone-state release_without_issue와 같음). 해제가 발효된 뒤에만 없음
+    // 이미 적용한 해제보다 앞서 발표된 예고 해제는 그 해제가 대신함 → 보지 않음
     const upcomingRelease = events.some(
       (e) =>
         e.unknownReasons.length === 0 &&
         e.action === "release" &&
-        ms(e.effectiveFrom!) > nowMs,
+        ms(e.effectiveFrom!) > nowMs &&
+        ms(e.publishedAt!) > clearedAt,
     );
     if (upcomingRelease && active.size === 0) {
       beach.reasons.push("tsunami:release_without_issue");

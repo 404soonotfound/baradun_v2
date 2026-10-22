@@ -271,6 +271,22 @@ describe("judgeTsunamiBeaches", () => {
     expect(result.beaches.e1).toEqual({ items: [warning], reasons: [] });
   });
 
+  it.each([
+    ["경보 → 주의보", [2, 1]],
+    ["주의보 → 경보", [1, 2]],
+  ])("같은 시각·지역 글에 단계만 다름(%s 순) → 높은 단계 유지", (_, fcTps) => {
+    const result = judge(fcTps.map((fcTp) => msg({ fcTp })));
+    expect(result.beaches.e1).toEqual({ items: [warning], reasons: [] });
+  });
+
+  it("예고 해제 뒤 발효된 해제 → 확인된 해제로 없음", () => {
+    const result = judge([
+      msg({ tmEf: 202610221200, fcTp: 3 }),
+      msg({ tmFc: 202610221030, tmEf: 202610221030, fcTp: 3 }),
+    ]);
+    expect(result.beaches.e1).toEqual(empty);
+  });
+
   it("모르는 fcTp → 그 해변들 사유", () => {
     const result = judge([msg({ fcTp: 9 })]);
     expect(result.beaches.e1).toEqual({
