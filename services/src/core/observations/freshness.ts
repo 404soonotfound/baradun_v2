@@ -39,22 +39,33 @@ function parseNow(now: string): number {
   return nowMs;
 }
 
+// futureRows: 서버 시각보다 늦어 버린 줄 수(시계 어긋남 운영 알림용, BRD-56)
+export interface MergeResult {
+  readonly readings: StationReadings;
+  readonly futureRows: number;
+}
+
 // 이전 마지막 정상값에 새 줄을 더함. 지표마다 관측 시각이 더 늦을 때만 바꿈
 // 같은 시각이면 이전 값 유지(같은 관측을 두 번 받은 경우)
 export function mergeReadings(
   previous: StationReadings,
   rows: readonly ObservationRow[],
   now: string,
-): StationReadings {
+): MergeResult {
   const nowMs = parseNow(now);
   // { ...previous }: 이전 객체를 복사(원본은 바꾸지 않음)
   const next: Record<string, Partial<Record<MetricKey, Reading>>> = {
     ...previous,
   };
+  let futureRows = 0;
   for (const row of rows) {
     const observedMs = parseUtcIso(row.observedAt);
-    // 서버 시각보다 늦은 관측은 무효(허용 오차 없음, 10/22 ②)
-    if (observedMs === null || observedMs > nowMs) continue;
+    if (observedMs === null) continue;
+    // 서버 시각보다 늦은 관측은 무효(허용 오차 없음, 10/22 ②). 버린 수를 남겨 원인을 알 수 있게 함
+    if (observedMs > nowMs) {
+      futureRows += 1;
+      continue;
+    }
     const station = { ...next[row.stationId] };
     for (const key of METRIC_KEYS) {
       const value = row[key];
@@ -69,7 +80,7 @@ export function mergeReadings(
     }
     next[row.stationId] = station;
   }
-  return next;
+  return { readings: next, futureRows };
 }
 
 // 배정된 측정기가 있는 지표의 공개 계약 모양
