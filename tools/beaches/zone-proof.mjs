@@ -2,21 +2,33 @@
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { ANNEX9_URL as ANNEX9_URL_TABLE, zoneOf } from "./annex.mjs";
+import { ANNEX5, ANNEX5_URL, ANNEX9_URL as ANNEX9_URL_TABLE, sigunguIsSplit, zoneOf } from "./annex.mjs";
 import { BJD_CSV, BJD_LABEL, COAST_DBF, COAST_SHP, COVERAGE_DIR, MOF_LABEL, MOF_XLSX, REGIONS, emdPaths, gisLabel, pinnedSha, sha256, sigunguMatches } from "./regions.mjs";
 
 // 근거에 남기는 출처 표기는 수집 당시 위치(tools/coverage/…) 그대로 둠. 실제 파일은 COVERAGE_DIR
 export const BEACH_SOURCE_FILE = "tools/coverage/out/beaches.csv";
 const sourceHash = (coverageDir, path) => createHash("sha256").update(readFileSync(join(coverageDir, path))).digest("hex");
-// 강원 6시군(파일럿 기록 호환). 전국은 별표5 인용표(annex-tables.json)로 판정
-export const SEA_BY_SIGUNGU = {
-  고성군: "S1151100",
-  속초시: "S1151100",
-  양양군: "S1151100",
-  강릉시: "S1151200",
-  동해시: "S1151300",
-  삼척시: "S1151300",
-};
+
+// 전국 공통 S1 근거 생성. 별표5 구역 조회는 annex.mjs의 zoneOf만 사용함.
+export function seaEvidenceFor(src, r, addr, { sourceSha, collectedAt, checkedAt }) {
+  const split = sigunguIsSplit(src.sido_nm, src.gugun_nm);
+  const source = { file: BEACH_SOURCE_FILE, sha256: sourceSha, publisher: "해양수산부", field: "gugun_nm", value: src.gugun_nm, source_name: src.sta_nm, collected_at_kst: collectedAt, checked_at_kst: checkedAt };
+  const coordOk = r && !["EXCLUDED_SIGUNGU_MISMATCH", "EXCLUDED_OVER_100M"].includes(r.result);
+  const out = { sea_source: source, sea_rule_url: ANNEX5_URL, sea_checked_at_kst: checkedAt, sea_coordinate_review: coordOk ? "NO_SUSPECTED_CONFLICT" : "COORDINATE_OUTSIDE_SIGUNGU" };
+  if (!coordOk) return { ...out, sea_zone: "", sea_status: "UNVERIFIED", sea_rule_item: "별표5", sea_basis: `자동 제외(결정 4-A): 좌표 판정 ${r?.result ?? "없음"} — 좌표가 해수부 시군(${src.gugun_nm}) 밖이거나 경계에서 멂(좌표 오류 의심)` };
+  if (!split) {
+    const zc = zoneOf(src.sido_nm, src.gugun_nm);
+    if (!zc) return { ...out, sea_zone: "", sea_status: "UNVERIFIED", sea_rule_item: "별표5", sea_basis: `별표5에서 ${src.sido_nm} ${src.gugun_nm}의 앞바다 구역을 찾지 못함` };
+    return { ...out, sea_zone: zc, sea_status: "VERIFIED", sea_rule_item: `예보업무규정 제1185호 별표5(제6조제2항제4호) ${ANNEX5[zc].name}; 제6조제3항제1호`, sea_basis: `해수부 공식 수집본 gugun_nm=${src.gugun_nm} → 별표5 ${ANNEX5[zc].name}: ${ANNEX5[zc].quote}` };
+  }
+  const zCoord = r?.emd ? zoneOf(src.sido_nm, src.gugun_nm, r.emd.emd_nm) : null;
+  const zAddr = addr?.locality_status === "VERIFIED_LOCALITY" ? zoneOf(src.sido_nm, src.gugun_nm, addr.locality) : null;
+  const both = zCoord && zAddr && zCoord === zAddr;
+  const addrPart = addr?.locality ? `공식 주소 읍면 ${addr.locality} → ${zAddr ? ANNEX5[zAddr].name : "하나로 안 정해짐"}` : "공식 주소 읍면 없음";
+  const coordPart = r?.emd ? `좌표 읍면 ${r.emd.emd_nm} → ${zCoord ? ANNEX5[zCoord].name : "하나로 안 정해짐"}` : "좌표 읍면 없음";
+  if (!both) return { ...out, sea_zone: "", sea_status: "UNVERIFIED", sea_emd: null, sea_rule_item: "별표5(읍면 단위로 나뉘는 시군)", sea_basis: `자동 제외(결정 4-A): ${src.gugun_nm}은 별표5에서 읍면 단위로 나뉨. ${addrPart}, ${coordPart}` };
+  return { ...out, sea_zone: zAddr, sea_status: "VERIFIED", sea_emd: addr.locality, sea_rule_item: `예보업무규정 제1185호 별표5(제6조제2항제4호) ${ANNEX5[zAddr].name}; 제6조제3항제1호`, sea_basis: `별표5 ${ANNEX5[zAddr].name}: ${ANNEX5[zAddr].quote}. ${addrPart}, ${coordPart}(일치)` };
+}
 
 export const WARNING_HISTORY_FILE =
   "tools/coverage/out/warnings/pwncd_360d.csv";
@@ -108,7 +120,7 @@ export function zoneProofVerified(e, kind, sigungu, coverageDir = COVERAGE_DIR) 
       source.value === sigungu &&
       source.collected_at_kst &&
       e.key === `${sigungu}|${source.source_name}` &&
-      e.sea_zone === (e.sido && e.sido !== "강원" ? zoneOf(e.sido, sigungu, e.sea_emd ?? null) : SEA_BY_SIGUNGU[sigungu]) &&
+      e.sea_zone === zoneOf(e.sido ?? "강원", sigungu, e.sea_emd ?? null) &&
       e.sea_coordinate_review === "NO_SUSPECTED_CONFLICT",
     );
   }

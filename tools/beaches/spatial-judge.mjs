@@ -12,8 +12,8 @@ import { readFirstSheet } from "./xlsx-lite.mjs";
 import { addressLocality, legalLocalities, legalNameSet } from "./address.mjs";
 import { linkOfficials } from "./official-link.mjs";
 import { METRICS, assignMetric, haversineKm, loadAssignContext, readCsv, round1 } from "./station-assign.mjs";
-import { zoneProofVerified } from "./zone-proof.mjs";
-import { ANNEX, ANNEX4_BOUNDARIES, ANNEX5, ANNEX5_URL, ANNEX9_CHECKED, ANNEX9_ITEM, ANNEX9_URL, annex9Lookup, sigunguIsSplit, splitFull, zoneOf, zoneOfFull } from "./annex.mjs";
+import { seaEvidenceFor, zoneProofVerified } from "./zone-proof.mjs";
+import { ANNEX, ANNEX4_BOUNDARIES, ANNEX5, ANNEX5_URL, ANNEX9_CHECKED, ANNEX9_ITEM, ANNEX9_URL, annex9Lookup, splitFull, zoneOfFull } from "./annex.mjs";
 import { BJD_CSV, BJD_LABEL, COAST_DBF, COAST_SHP, COVERAGE_DIR, MOF_XLSX, REGIONS, emdPaths, gisLabel, regionArg, sha256, sigunguMatches, verifyPinnedSources } from "./regions.mjs"; // sha256: 고정 해시 대조 때 계산한 값 재사용
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -577,26 +577,6 @@ function transitionFor(sido, sigungu, landZone) {
     basis: `pwncd_360d.csv에서 현행 별표9 세부 구역 코드 ${fresh.map((x) => `${x.code} ${x.count}건${x.first_tmFc ? `(첫 발표 ${x.first_tmFc})` : ""}`).join("·")}, 종전 구역 코드 ${stale.length ? stale.map((x) => `${x.code} ${x.count}건`).join("·") : "현행 코드표에 없음(폐지)"}; ${ownText} → ${ok ? "현행 별표9로 발표되는 것으로 봄" : "확인 안 됨"}(실데이터 추론, 기상청 문서 확인 아님)`,
   };
 }
-// 앞바다 S1: 시군이 읍면으로 나뉘지 않으면 gugun_nm, 나뉘면 공식 주소 읍면과 좌표 읍면이 같은 구역일 때만
-function seaFor(src, r, addr) {
-  const split = sigunguIsSplit(src.sido_nm, src.gugun_nm);
-  const source = { file: "tools/coverage/out/beaches.csv", sha256: BEACH_CSV_SHA, publisher: "해양수산부", field: "gugun_nm", value: src.gugun_nm, source_name: src.sta_nm, collected_at_kst: BEACH_COLLECTED_AT, checked_at_kst: CHECKED_AT };
-  const coordOk = r && !["EXCLUDED_SIGUNGU_MISMATCH", "EXCLUDED_OVER_100M"].includes(r.result);
-  const out = { sea_source: source, sea_rule_url: ANNEX5_URL, sea_checked_at_kst: CHECKED_AT, sea_coordinate_review: coordOk ? "NO_SUSPECTED_CONFLICT" : "COORDINATE_OUTSIDE_SIGUNGU" };
-  if (!coordOk) return { ...out, sea_zone: "", sea_status: "UNVERIFIED", sea_rule_item: "별표5", sea_basis: `자동 제외(결정 4-A): 좌표 판정 ${r?.result ?? "없음"} — 좌표가 해수부 시군(${src.gugun_nm}) 밖이거나 경계에서 멂(좌표 오류 의심)` };
-  if (!split) {
-    const zc = zoneOf(src.sido_nm, src.gugun_nm);
-    if (!zc) return { ...out, sea_zone: "", sea_status: "UNVERIFIED", sea_rule_item: "별표5", sea_basis: `별표5에서 ${src.sido_nm} ${src.gugun_nm}의 앞바다 구역을 찾지 못함` };
-    return { ...out, sea_zone: zc, sea_status: "VERIFIED", sea_rule_item: `예보업무규정 제1185호 별표5(제6조제2항제4호) ${ANNEX5[zc].name}; 제6조제3항제1호`, sea_basis: `해수부 공식 수집본 gugun_nm=${src.gugun_nm} → 별표5 ${ANNEX5[zc].name}: ${ANNEX5[zc].quote}` };
-  }
-  const zCoord = r?.emd ? zoneOf(src.sido_nm, src.gugun_nm, r.emd.emd_nm) : null;
-  const zAddr = addr?.locality_status === "VERIFIED_LOCALITY" ? zoneOf(src.sido_nm, src.gugun_nm, addr.locality) : null;
-  const both = zCoord && zAddr && zCoord === zAddr;
-  const addrPart = addr?.locality ? `공식 주소 읍면 ${addr.locality} → ${zAddr ? ANNEX5[zAddr].name : "하나로 안 정해짐"}` : "공식 주소 읍면 없음";
-  const coordPart = r?.emd ? `좌표 읍면 ${r.emd.emd_nm} → ${zCoord ? ANNEX5[zCoord].name : "하나로 안 정해짐"}` : "좌표 읍면 없음";
-  if (!both) return { ...out, sea_zone: "", sea_status: "UNVERIFIED", sea_emd: null, sea_rule_item: "별표5(읍면 단위로 나뉘는 시군)", sea_basis: `자동 제외(결정 4-A): ${src.gugun_nm}은 별표5에서 읍면 단위로 나뉨. ${addrPart}, ${coordPart}` };
-  return { ...out, sea_zone: zAddr, sea_status: "VERIFIED", sea_emd: addr.locality, sea_rule_item: `예보업무규정 제1185호 별표5(제6조제2항제4호) ${ANNEX5[zAddr].name}; 제6조제3항제1호`, sea_basis: `별표5 ${ANNEX5[zAddr].name}: ${ANNEX5[zAddr].quote}. ${addrPart}, ${coordPart}(일치)` };
-}
 for (const src of srcRows) {
   const key = `${src.gugun_nm}|${src.sta_nm}`;
   let e = beachDoc.beaches.find((x) => x.key === key);
@@ -606,10 +586,7 @@ for (const src of srcRows) {
     beachDoc.beaches.push(e);
   }
   e.sido = src.sido_nm;
-  if (src.sido_nm !== "강원") {
-    // 강원 행은 3차까지의 기존 S1·이행 기록 유지, 그 밖 시·도는 이번에 원문 인용표로 생성
-    Object.assign(e, seaFor(src, l1.get(key), addrChecks.get(key)));
-  }
+  Object.assign(e, seaEvidenceFor(src, l1.get(key), addrChecks.get(key), { sourceSha: BEACH_CSV_SHA, collectedAt: BEACH_COLLECTED_AT, checkedAt: CHECKED_AT }));
 }
 const targetKeys = new Set(srcRows.map((b) => `${b.gugun_nm}|${b.sta_nm}`));
 for (const e of beachDoc.beaches) {
