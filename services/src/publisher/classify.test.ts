@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import type { WarningItem } from "@baradun/contracts";
 import Ajv2020 from "ajv/dist/2020.js";
 import addFormats from "ajv-formats";
@@ -12,15 +12,8 @@ const NOW = "2026-10-22T05:20:00Z";
 const CONFIRMED = "2026-10-22T05:18:40Z";
 
 // 결과가 공개 계약 BeachStatus를 지키는지 함께 확인(info는 게시 단계에서 붙임)
-const schema = JSON.parse(
-  readFileSync(
-    new URL(
-      "../../../packages/contracts/schemas/contract.schema.json",
-      import.meta.url,
-    ),
-    "utf8",
-  ),
-);
+// 패키지 경계를 지켜 contracts가 내보낸 스키마를 읽음
+const schema = createRequire(import.meta.url)("@baradun/contracts/schema.json");
 const ajv = new Ajv2020({ allowUnionTypes: true, strictTypes: false });
 addFormats(ajv);
 ajv.addSchema(schema);
