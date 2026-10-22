@@ -385,4 +385,16 @@ describe("classifyBeach validUntil", () => {
       ),
     ).toThrow(RangeError);
   });
+
+  it.each([
+    ["지진해일", { pwn: CONFIRMED, tsunami: "2026-10-22T06:00:00Z" }],
+    ["getPwnCd", { pwn: "2026-10-22T06:00:00Z", tsunami: CONFIRMED }],
+  ] as const)(
+    "%s 확인 시각만 미래여도 게시 시각(이른 시각에 가려지지 않음)",
+    (_name, lastConfirmedAt) => {
+      const result = classify({ lastConfirmedAt });
+      expect(result.validUntil).toBe(NOW);
+      expect(result.category).toBe("undetermined");
+    },
+  );
 });
