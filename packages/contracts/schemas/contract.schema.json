@@ -272,8 +272,16 @@
       "additionalProperties": false,
       "required": ["sea", "land"],
       "properties": {
-        "sea": { "type": "string", "pattern": "^S1[0-9]{6}$", "description": "앞바다 특보구역(풍랑)." },
-        "land": { "type": "string", "pattern": "^L1[0-9]{6}$", "description": "시군 육상 특보구역(강풍)." }
+        "sea": {
+          "type": "string",
+          "pattern": "^S1[0-9]{6}$",
+          "description": "앞바다 특보구역(풍랑)."
+        },
+        "land": {
+          "type": "string",
+          "pattern": "^L1[0-9]{6}$",
+          "description": "시군 육상 특보구역(강풍)."
+        }
       }
     },
 
@@ -284,8 +292,16 @@
       "additionalProperties": false,
       "required": ["sea"],
       "properties": {
-        "sea": { "type": "string", "pattern": "^S1[0-9]{6}$", "description": "앞바다 특보구역(풍랑)." },
-        "land": { "type": "string", "pattern": "^L1[0-9]{6}$", "description": "시군 육상 특보구역(강풍). 생략 가능." }
+        "sea": {
+          "type": "string",
+          "pattern": "^S1[0-9]{6}$",
+          "description": "앞바다 특보구역(풍랑)."
+        },
+        "land": {
+          "type": "string",
+          "pattern": "^L1[0-9]{6}$",
+          "description": "시군 육상 특보구역(강풍). 생략 가능."
+        }
       }
     },
 
@@ -524,11 +540,25 @@
       "properties": {
         "type": { "$ref": "#/$defs/WarningType" },
         "level": { "$ref": "#/$defs/WarningLevel" },
-        "zoneCode": { "type": "string", "pattern": "^[SL][0-9]{7}$" },
-        "zoneName": { "type": "string", "minLength": 1 },
+        "zoneCode": {
+          "type": ["string", "null"],
+          "pattern": "^[SL][0-9]{7}$",
+          "description": "특보구역 코드. 지진해일만 null(구역 코드 없음, 10/22)."
+        },
+        "zoneName": {
+          "type": "string",
+          "minLength": 1,
+          "description": "공식 구역 이름. 지진해일은 getTsunamiMsg reg 원문."
+        },
         "publishedAt": { "$ref": "#/$defs/DateTime" },
         "effectiveFrom": { "$ref": "#/$defs/DateTime" }
-      }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "type": { "not": { "const": "tsunami" } } } },
+          "then": { "properties": { "zoneCode": { "type": "string" } } }
+        }
+      ]
     },
 
     "WarningType": {
