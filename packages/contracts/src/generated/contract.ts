@@ -70,6 +70,11 @@ export type NullableDateTime1 = string | null;
 export type WarningState = WarningState1;
 /**
  * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "WarningItem".
+ */
+export type WarningItem = WarningItem1;
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
  * via the `definition` "NullableDateTime".
  */
 export type NullableDateTime2 = string | null;
@@ -348,14 +353,16 @@ export interface WarningState1 {
   source: string;
   lastConfirmedAt: NullableDateTime2;
 }
-/**
- * This interface was referenced by `Contract`'s JSON-Schema
- * via the `definition` "WarningItem".
- */
-export interface WarningItem {
+export interface WarningItem1 {
   type: WarningType;
   level: WarningLevel;
-  zoneCode: string;
+  /**
+   * 특보구역 코드. 지진해일만 null(구역 코드 없음, 10/22).
+   */
+  zoneCode: string | null;
+  /**
+   * 공식 구역 이름. 지진해일은 getTsunamiMsg reg 원문.
+   */
   zoneName: string;
   publishedAt: DateTime;
   effectiveFrom: DateTime;

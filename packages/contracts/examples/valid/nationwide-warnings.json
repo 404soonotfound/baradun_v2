@@ -8,6 +8,14 @@
       "zoneName": "예시 남해앞바다",
       "publishedAt": "2026-10-17T04:00:00Z",
       "effectiveFrom": "2026-10-17T05:00:00Z"
+    },
+    {
+      "type": "tsunami",
+      "level": "warning",
+      "zoneCode": null,
+      "zoneName": "예시 동해안",
+      "publishedAt": "2026-10-17T05:10:00Z",
+      "effectiveFrom": "2026-10-17T05:10:00Z"
     }
   ]
 }
