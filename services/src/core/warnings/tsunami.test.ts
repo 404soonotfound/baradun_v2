@@ -118,6 +118,15 @@ describe("normalizeTsunamiResponse", () => {
       },
       "format:items",
     ],
+    [
+      {
+        response: {
+          header: { resultCode: "00" },
+          body: { items: { item: [] } },
+        },
+      },
+      "empty", // 발표 없음은 03으로 옴
+    ],
   ])("형식 오류 %j → 조회 실패", (json, reason) => {
     expect(normalizeTsunamiResponse(json, ROWS)).toEqual({
       status: "failed",

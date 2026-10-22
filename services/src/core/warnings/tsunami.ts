@@ -126,6 +126,8 @@ export function normalizeTsunamiResponse(
   if (!list || !list.every(isObject)) {
     return { status: "failed", reason: "format:items" };
   }
+  // 발표 없음은 빈 목록이 아니라 03으로 옴(아키텍처 4장 10/20 실호출) → 00인데 비었으면 이상 응답
+  if (list.length === 0) return { status: "failed", reason: "empty" };
   // 요청한 만큼 꽉 찼으면 뒤 발표·해제가 잘렸을 수 있음 → 실패(getPwnCd와 같음)
   if (list.length >= numOfRows) {
     return { status: "failed", reason: `truncated:${list.length}` };

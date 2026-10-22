@@ -76,6 +76,7 @@ const judge = (events: ReturnType<typeof msg>[]) =>
   judgeTsunamiBeaches({
     result: { status: "ok", events },
     now: NOW,
+    lastConfirmedAt: NOW,
     beaches: BEACHES,
   });
 
@@ -94,6 +95,7 @@ describe("judgeTsunamiBeaches", () => {
     const result = judgeTsunamiBeaches({
       result: { status: "none" },
       now: NOW,
+      lastConfirmedAt: NOW,
       beaches: BEACHES,
     });
     expect(result.beaches.e1).toEqual(empty);
@@ -104,6 +106,7 @@ describe("judgeTsunamiBeaches", () => {
     const result = judgeTsunamiBeaches({
       result: { status: "failed", reason: "resultCode:99" },
       now: NOW,
+      lastConfirmedAt: NOW,
       beaches: BEACHES,
     });
     expect(result.beaches.j1).toEqual({
@@ -198,6 +201,57 @@ describe("judgeTsunamiBeaches", () => {
     expect(result.beaches.e1!.reasons).toEqual([
       "tsunami:fcTp:8",
       "tsunami:fcTp:9",
+    ]);
+  });
+
+  it("앞선 경보 뒤 다른 지역 글의 주의보 → 경보를 낮추지 않고 둘 다 발효", () => {
+    const result = judge([
+      msg({ reg: "경북 울진군" }),
+      msg({ tmFc: 202610221030, tmEf: 202610221030, fcTp: 1 }),
+    ]);
+    expect(result.beaches.e2!.items.map((i) => [i.level, i.zoneName])).toEqual([
+      ["warning", "경북 울진군"],
+      ["advisory", "동해안"],
+    ]);
+  });
+
+  it("같은 지역 글의 뒤 주의보 → 앞선 경보를 대신함", () => {
+    const result = judge([
+      msg({}),
+      msg({ tmFc: 202610221030, tmEf: 202610221030, fcTp: 1 }),
+    ]);
+    expect(result.beaches.e1!.items.map((i) => i.level)).toEqual(["advisory"]);
+  });
+
+  it("못 읽은 행 뒤 해제 → 해제가 대신해 사유 없음", () => {
+    const result = judge([
+      msg({ fcTp: 9 }),
+      msg({ tmFc: 202610221030, tmEf: 202610221030, fcTp: 3 }),
+    ]);
+    expect(result.beaches.e1).toEqual(empty);
+  });
+
+  it("발표 시각을 못 읽은 행 → 해제가 와도 사유", () => {
+    const result = judge([
+      msg({ tmFc: "x" }),
+      msg({ tmFc: 202610221030, tmEf: 202610221030, fcTp: 3 }),
+    ]);
+    expect(result.beaches.e1!.reasons).toEqual(["tsunami:tmFc:x"]);
+  });
+
+  it("45분 넘게 확인 못 함 → 모든 해변 사유, 발효 중 경보는 유지", () => {
+    const result = judgeTsunamiBeaches({
+      result: { status: "ok", events: [msg({})] },
+      now: NOW,
+      lastConfirmedAt: "2026-10-22T01:14:59Z", // 45분 1초 전
+      beaches: BEACHES,
+    });
+    expect(result.beaches.e1).toEqual({
+      items: [warning],
+      reasons: ["tsunami:confirmation:expired"],
+    });
+    expect(result.beaches.s1!.reasons).toEqual([
+      "tsunami:confirmation:expired",
     ]);
   });
 

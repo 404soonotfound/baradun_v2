@@ -235,6 +235,17 @@ describe("해변과 이을 수 없는 구역 (③)", () => {
     expect(result.beaches.d0001!.reasons).toEqual(["unmapped:S1151900"]);
   });
 
+  it.each([
+    ["발효 예고", { startTime: "202610221200" }],
+    ["앞바다에 잇지 않는 강풍", { warnVar: "1" }],
+  ])("표에 없는 S1 · 먼바다 아님 · %s → 기록만", (_, fields) => {
+    const result = judge([
+      row({ areaCode: "S1151900", areaName: "강원새앞바다", ...fields }),
+    ]);
+    expect(result.beaches.b0001!.state).toBe("none");
+    expect(result.unmappedZones.map((z) => z.code)).toEqual(["S1151900"]);
+  });
+
   it("표에 없는 S1 · 먼바다 아님 · 이미 해제 → 기록만", () => {
     const result = judge([
       row({ areaCode: "S1151900", areaName: "강원새앞바다" }),
