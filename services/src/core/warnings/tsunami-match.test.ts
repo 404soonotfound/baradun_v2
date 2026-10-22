@@ -255,6 +255,22 @@ describe("judgeTsunamiBeaches", () => {
     ]);
   });
 
+  it("발효 전 해제만 보임 → 앞선 발표를 몰라 사유", () => {
+    const result = judge([msg({ tmEf: 202610221200, fcTp: 3 })]);
+    expect(result.beaches.e1).toEqual({
+      items: [],
+      reasons: ["tsunami:release_without_issue"],
+    });
+  });
+
+  it("발효 중 경보 + 발효 전 해제 → 해제 시각까지 경보 유지", () => {
+    const result = judge([
+      msg({}),
+      msg({ tmFc: 202610221030, tmEf: 202610221200, fcTp: 3 }),
+    ]);
+    expect(result.beaches.e1).toEqual({ items: [warning], reasons: [] });
+  });
+
   it("모르는 fcTp → 그 해변들 사유", () => {
     const result = judge([msg({ fcTp: 9 })]);
     expect(result.beaches.e1).toEqual({

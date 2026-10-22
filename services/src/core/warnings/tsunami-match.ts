@@ -227,6 +227,18 @@ export function judgeTsunamiBeaches(input: {
     }
     beach.reasons.push(...pending);
 
+    // 발효 전 해제가 있는데 발효 중인 발표가 안 보임 → 조회 범위(3일) 밖 발표가 해제 시각까지 발효 중일 수 있음
+    // 단계·시각을 모르므로 확인 못 함(zone-state release_without_issue와 같음). 해제가 발효된 뒤에만 없음
+    const upcomingRelease = events.some(
+      (e) =>
+        e.unknownReasons.length === 0 &&
+        e.action === "release" &&
+        ms(e.effectiveFrom!) > nowMs,
+    );
+    if (upcomingRelease && active.size === 0) {
+      beach.reasons.push("tsunami:release_without_issue");
+    }
+
     for (const e of active.values()) {
       if (e.level === null) continue;
       beach.items.push({
