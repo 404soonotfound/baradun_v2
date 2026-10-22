@@ -1,0 +1,117 @@
+{
+  "$comment": "BRD-18 getPwnCd 응답 전체 판정 입력. 실응답(2026-10-22 12:43 KST 호출)을 그대로 저장함. ok는 오늘 하루치(totalCount 120) 중 앞 3행만 받은 응답(요청 numOfRows 3, 숫자·글자 칸이 섞인 실제 모양 확인용). 요청 주소의 인증키는 저장하지 않고 request에는 키 외 매개변수만 적음. 판정 함수에는 요청 numOfRows를 따로 넘김.",
+  "responses": [
+    {
+      "id": "ok-3rows",
+      "description": "정상(00) · 실제 3행 · tmFc 등 숫자, command 등 글자",
+      "source": "getPwnCd 2026-10-22 12:43 KST",
+      "request": {
+        "fromTmFc": "20261022",
+        "toTmFc": "20261022",
+        "pageNo": 1,
+        "numOfRows": 3,
+        "dataType": "JSON"
+      },
+      "response": {
+        "response": {
+          "header": {
+            "resultCode": "00",
+            "resultMsg": "NORMAL_SERVICE"
+          },
+          "body": {
+            "dataType": "JSON",
+            "items": {
+              "item": [
+                {
+                  "allEndTime": 0,
+                  "areaCode": "S1323400",
+                  "areaName": "제주도서부앞바다",
+                  "cancel": "0",
+                  "command": "2",
+                  "endTime": 202610221200,
+                  "stnId": "108",
+                  "tmFc": 202610221100,
+                  "tmSeq": 134,
+                  "warnVar": 6,
+                  "warnStress": 0,
+                  "startTime": 0
+                },
+                {
+                  "allEndTime": 0,
+                  "areaCode": "L1010500",
+                  "areaName": "시흥시",
+                  "cancel": "0",
+                  "command": "2",
+                  "endTime": 202610221000,
+                  "stnId": "108",
+                  "tmFc": 202610221000,
+                  "tmSeq": 133,
+                  "warnVar": 3,
+                  "warnStress": 0,
+                  "startTime": 0
+                },
+                {
+                  "allEndTime": 0,
+                  "areaCode": "L1010700",
+                  "areaName": "김포시",
+                  "cancel": "0",
+                  "command": "2",
+                  "endTime": 202610221000,
+                  "stnId": "108",
+                  "tmFc": 202610221000,
+                  "tmSeq": 133,
+                  "warnVar": 3,
+                  "warnStress": 0,
+                  "startTime": 0
+                }
+              ]
+            },
+            "pageNo": 1,
+            "numOfRows": 3,
+            "totalCount": 120
+          }
+        }
+      }
+    },
+    {
+      "id": "no-data-reversed",
+      "description": "03 NO_DATA · 범위를 거꾸로 준 요청(body 없음)",
+      "source": "getPwnCd 2026-10-22 12:43 KST",
+      "request": {
+        "fromTmFc": "20261022",
+        "toTmFc": "20261017",
+        "pageNo": 1,
+        "numOfRows": 3,
+        "dataType": "JSON"
+      },
+      "response": {
+        "response": {
+          "header": {
+            "resultCode": "03",
+            "resultMsg": "NO_DATA"
+          }
+        }
+      }
+    },
+    {
+      "id": "too-old",
+      "description": "99 · 60일보다 오래된 범위(body 없음)",
+      "source": "getPwnCd 2026-10-22 12:43 KST",
+      "request": {
+        "fromTmFc": "20260813",
+        "toTmFc": "20260818",
+        "pageNo": 1,
+        "numOfRows": 3,
+        "dataType": "JSON"
+      },
+      "response": {
+        "response": {
+          "header": {
+            "resultCode": "99",
+            "resultMsg": "최대 조회 기간은 오늘 기준으로 60일 전까지입니다."
+          }
+        }
+      }
+    }
+  ]
+}
