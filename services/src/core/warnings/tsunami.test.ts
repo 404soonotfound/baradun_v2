@@ -11,6 +11,7 @@ const fixture = (id: string) => {
 };
 
 const tsunami = { group: "judged", type: "tsunami" };
+const ROWS = 100; // 요청 numOfRows. 픽스처 행 수보다 큼
 
 describe("픽스처", () => {
   it("실데이터가 없어 모두 synthetic", () => {
@@ -20,7 +21,7 @@ describe("픽스처", () => {
 
 describe("normalizeTsunamiResponse", () => {
   it("00 · 목록 네 행 정규화 (숫자·문자열 값 모두)", () => {
-    const result = normalizeTsunamiResponse(fixture("list-00"));
+    const result = normalizeTsunamiResponse(fixture("list-00"), ROWS);
     if (result.status !== "ok") throw new Error(result.status);
     const [warning, advisory, release, unknown] = result.events;
 
@@ -70,7 +71,10 @@ describe("normalizeTsunamiResponse", () => {
   });
 
   it('행이 한 개(객체)여도 목록으로 받음, resultCode "0"도 정상', () => {
-    const result = normalizeTsunamiResponse(fixture("single-item-object"));
+    const result = normalizeTsunamiResponse(
+      fixture("single-item-object"),
+      ROWS,
+    );
     expect(result.status).toBe("ok");
     if (result.status === "ok") {
       expect(result.events).toHaveLength(1);
@@ -82,13 +86,13 @@ describe("normalizeTsunamiResponse", () => {
   });
 
   it("03 NO_DATA → 지진해일 발표 없음 확인", () => {
-    expect(normalizeTsunamiResponse(fixture("no-data-03"))).toEqual({
+    expect(normalizeTsunamiResponse(fixture("no-data-03"), ROWS)).toEqual({
       status: "none",
     });
   });
 
   it("99 → 조회 실패 (없음으로 읽지 않음)", () => {
-    expect(normalizeTsunamiResponse(fixture("error-99"))).toEqual({
+    expect(normalizeTsunamiResponse(fixture("error-99"), ROWS)).toEqual({
       status: "failed",
       reason: "resultCode:99",
     });
@@ -115,10 +119,25 @@ describe("normalizeTsunamiResponse", () => {
       "format:items",
     ],
   ])("형식 오류 %j → 조회 실패", (json, reason) => {
-    expect(normalizeTsunamiResponse(json)).toEqual({
+    expect(normalizeTsunamiResponse(json, ROWS)).toEqual({
       status: "failed",
       reason,
     });
+  });
+});
+
+describe("normalizeTsunamiResponse 잘림", () => {
+  it("받은 행 수 = 요청 numOfRows → 잘렸을 수 있어 조회 실패", () => {
+    expect(normalizeTsunamiResponse(fixture("list-00"), 4)).toEqual({
+      status: "failed",
+      reason: "truncated:4",
+    });
+  });
+
+  it("요청 numOfRows가 잘못되면 멈춤", () => {
+    expect(() => normalizeTsunamiResponse(fixture("list-00"), 0)).toThrow(
+      RangeError,
+    );
   });
 });
 

@@ -48,7 +48,8 @@ function toRow(item: PwnCdRawItem): PwnCdRow | string {
     if (text === null) return field;
     row[field] = text;
   }
-  if (item.stnId === undefined) return row;
+  // 없음(undefined·null)은 칸이 없는 것과 같게 봄. 발표 관서는 판정에 쓰지 않음
+  if (item.stnId === undefined || item.stnId === null) return row;
   const stnId = asText(item.stnId);
   return stnId === null ? "stnId" : { ...row, stnId };
 }

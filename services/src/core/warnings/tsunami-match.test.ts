@@ -46,6 +46,7 @@ describe("matchTsunamiRegion", () => {
 
   it.each([
     ["중구", [], ["중구"]], // 부산·인천 둘 다 있음
+    ["제주시, 고성군", ["j1"], ["고성군"]], // 해변 데이터에 없어도 강원·경남 둘 다 있는 이름
     ["동해안, 울릉도", ["e1", "e2"], ["울릉도"]], // 울릉도는 data/beaches에 없음
     ["경상북도 울진군", [], ["경상북도 울진군"]], // 시도 표기가 다름
     ["서해안 일부", [], ["서해안 일부"]],
@@ -207,6 +208,35 @@ describe("judgeTsunamiBeaches", () => {
       reasons: ["tsunami:fcTp:9"],
     });
     expect(result.beaches.s1).toEqual(empty);
+  });
+
+  it("같은 발표 시각에 지역 글만 다른 경보 → 둘 다 발효", () => {
+    const result = judge([msg({ reg: "강원 강릉시" }), msg({})]);
+    expect(result.beaches.e1).toEqual({
+      items: [{ ...warning, zoneName: "강원 강릉시" }, warning], // 지역 글 순
+      reasons: [],
+    });
+  });
+
+  it("같은 발표 시각에 주의보·경보 → 둘 다 발효, 경보 먼저", () => {
+    const result = judge([
+      msg({ fcTp: 1, reg: "강원 강릉시" }),
+      msg({ reg: "동해안" }),
+    ]);
+    expect(result.beaches.e1!.reasons).toEqual([]);
+    expect(result.beaches.e1!.items.map((i) => i.level)).toEqual([
+      "warning",
+      "advisory",
+    ]);
+  });
+
+  it("옛 시각의 경보·해제 충돌을 뒤 해제가 대신함 → 없음", () => {
+    const result = judge([
+      msg({}),
+      msg({ fcTp: 3 }),
+      msg({ tmFc: 202610221030, tmEf: 202610221030, fcTp: 3 }),
+    ]);
+    expect(result.beaches.e1).toEqual(empty);
   });
 
   it("같은 발표 시각에 경보·해제 → 순서를 알 수 없음", () => {

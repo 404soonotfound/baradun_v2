@@ -68,6 +68,15 @@ describe("정상", () => {
     if (result.status !== "ok") throw new Error(result.reason);
     expect(result.events[0]!.stationId).toBeNull();
   });
+
+  it("stnId가 null이어도 없는 것으로 받음", () => {
+    const json = withFirstItem((item) => {
+      item.stnId = null;
+    });
+    const result = normalizePwnCdResponse(json, ROWS);
+    if (result.status !== "ok") throw new Error(result.reason);
+    expect(result.events[0]!.stationId).toBeNull();
+  });
 });
 
 describe("실패", () => {
