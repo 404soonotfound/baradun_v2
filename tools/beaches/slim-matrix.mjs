@@ -3,7 +3,7 @@
 // 남기는 칸은 packages/contracts/scripts/check-coverage.mjs의 검사 칸과 맞춤
 
 export const SLIM_COLS = [
-  "id", "source_name", "sigungu", "name_ko", "slug", "stage", "lat", "lng", "coast", "coords_source",
+  "id", "source_name", "sigungu", "name_ko", "slug", "hidden", "stage", "lat", "lng", "coast", "coords_source",
   "sea_zone", "sea_status", "sea_basis", "sea_rule_url", "sea_checked_at_kst",
   "land_zone", "land_status", "land_basis", "land_rule_url", "land_checked_at_kst",
   "st_waveHeight", "st_wavePeriod", "st_waveDirection", "st_waterTemp", "st_wind", "station_basis", "response_check",

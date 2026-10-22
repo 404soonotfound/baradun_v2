@@ -4,9 +4,8 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import Ajv2020 from "ajv/dist/2020.js";
-import addFormats from "ajv-formats";
-import { checkList, compareWithBase } from "./beach-rules.mjs";
+import { compareWithBase } from "./beach-rules.mjs";
+import { validateBeaches } from "./validate-beaches.mjs";
 
 const DIR = process.argv[2] ?? "../../data/beaches"; // 검사할 폴더 (packages/contracts 기준)
 const REPO_PATH = "data/beaches"; // git 안에서의 경로
@@ -23,32 +22,8 @@ const items = files.map((file) => ({
   beach: JSON.parse(readFileSync(join(DIR, file), "utf8")),
 }));
 
-// 2) 계약의 Beach 모양 검사 (BRD-49 스키마 재사용)
-const schema = JSON.parse(
-  readFileSync(
-    new URL("../schemas/contract.schema.json", import.meta.url),
-    "utf8",
-  ),
-);
-const ajv = new Ajv2020({
-  allErrors: true,
-  allowUnionTypes: true,
-  strictTypes: false,
-});
-addFormats(ajv);
-ajv.addSchema(schema);
-const validateBeach = ajv.getSchema(`${schema.$id}#/$defs/Beach`);
-
-const errors = [];
-for (const { file, beach } of items) {
-  if (!validateBeach(beach)) {
-    for (const e of validateBeach.errors ?? [])
-      errors.push(`${file}: ${e.instancePath || "(전체)"} ${e.message}`);
-  }
-}
-
-// 3) 한 시점 규칙: 파일 이름·중복·금지 단어
-errors.push(...checkList(items));
+// 2) 계약과 목록 규칙 검사 (생성기의 최종 객체 검사와 같음)
+const errors = validateBeaches(items);
 
 // 4) main과 비교: slug 변경·삭제·재사용 금지
 const base = readBase();
