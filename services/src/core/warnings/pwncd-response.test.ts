@@ -101,6 +101,15 @@ describe("실패", () => {
     [null, "format:header"],
     [{ response: {} }, "format:header"],
     [{ response: { header: { resultCode: "00" } } }, "format:items"],
+    [
+      {
+        response: {
+          header: { resultCode: "00" },
+          body: { items: { item: [] } },
+        },
+      },
+      "empty",
+    ],
     [{ response: { header: { resultCode: 0 } } }, "resultCode:0"],
   ])("응답 모양 오류: %j", (json, reason) => {
     expect(normalizePwnCdResponse(json, ROWS)).toEqual({

@@ -1,4 +1,5 @@
 import type { BeachId, WarningItem } from "@baradun/contracts";
+import { checkConfirmation } from "./confirmation";
 import { parseUtcIso } from "./time";
 import type { TsunamiEvent, TsunamiResult } from "./tsunami";
 
@@ -115,6 +116,8 @@ export type TsunamiBeachesResult = {
 };
 
 const ms = (iso: string) => Date.parse(iso);
+const reasonsOf = (e: TsunamiEvent) =>
+  e.unknownReasons.map((r) => `tsunami:${r}`);
 const LEVEL_ORDER: readonly WarningItem["level"][] = [
   "severe_warning",
   "warning",
@@ -124,15 +127,26 @@ const LEVEL_ORDER: readonly WarningItem["level"][] = [
 export function judgeTsunamiBeaches(input: {
   result: TsunamiResult;
   now: string;
+  // getTsunamiMsg 정상 조회(00·03)를 마친 서버 시각. 45분 확인 유효시간은 getPwnCd와 같음(B4)
+  lastConfirmedAt: string | null;
   beaches: readonly BeachRegion[];
 }): TsunamiBeachesResult {
-  const { result, now, beaches } = input;
+  const { result, now, lastConfirmedAt, beaches } = input;
   // 시간대 없는 값은 Date.parse가 실행 환경 시간대로 읽음 → UTC ISO만 받음
   const nowMs = parseUtcIso(now);
   if (nowMs === null) throw new RangeError(`기준 시각 형식 오류: ${now}`);
 
+  // '없음' 확인이 45분을 넘음 → 모든 해변 사유. 발효 중인 발표는 아래에서 그대로 남김(B5)
+  const confirmation = checkConfirmation(lastConfirmedAt, now);
   const out: Record<BeachId, TsunamiBeach> = {};
-  for (const beach of beaches) out[beach.id] = { items: [], reasons: [] };
+  for (const beach of beaches) {
+    out[beach.id] = {
+      items: [],
+      reasons: confirmation.confirmed
+        ? []
+        : [`tsunami:confirmation:${confirmation.reason}`],
+    };
+  }
   const unreadable: TsunamiBeachesResult["unreadable"] = [];
 
   // 조회 실패 → 모든 해변 확인 못 함. 03(발표 없음 확인)은 그대로 둠
@@ -171,36 +185,49 @@ export function judgeTsunamiBeaches(input: {
     const events = [
       ...new Map(all.map((e) => [eventKey(e), e] as const)).values(),
     ];
-    // 시각·종류를 못 읽은 발표가 있으면 이 해변 상태를 정할 수 없음
-    const broken = events.filter((e) => e.unknownReasons.length > 0);
-    if (broken.length > 0) {
-      beach.reasons.push(
-        ...broken.flatMap((e) => e.unknownReasons.map((r) => `tsunami:${r}`)),
-      );
-      continue;
-    }
-
-    // 여기부터는 사유 없는 발표만 → normalize가 시각을 모두 채움. 그래서 !(null 아님)를 씀
-    // 이미 발효된 마지막 발표 시각의 묶음이 지금 상태. 앞선 발표는 이 묶음이 대신함
-    const effective = events
-      .filter((e) => ms(e.effectiveFrom!) <= nowMs)
-      .sort((a, b) => ms(a.publishedAt!) - ms(b.publishedAt!));
-    const last = effective.at(-1);
-    if (!last) continue;
-    const group = events.filter((e) => e.publishedAt === last.publishedAt);
-
-    // 같은 발표 시각에 발표·해제가 섞였거나 발효 시각이 다르면 어느 쪽이 나중인지 모름
-    const mixed = group.some(
-      (e) => e.action !== last.action || e.effectiveFrom !== last.effectiveFrom,
+    // 발표 시각을 못 읽은 행은 순서에 넣을 수 없음 → 늘 사유
+    beach.reasons.push(
+      ...events.filter((e) => e.publishedAt === null).flatMap(reasonsOf),
     );
-    if (mixed) {
-      beach.reasons.push(`tsunami:order:${last.publishedAt}`);
-      continue;
-    }
 
-    // 모두 해제면 없음. 모두 발표면 단계·지역 글이 달라도 모두 발효 중 → 전부 남김
-    if (last.action !== "issue") continue;
-    for (const e of group) {
+    // 발표 시각 순으로 묶어 차례로 적용
+    // 해제: 이 해변의 앞선 발표·사유를 모두 대신함
+    // 발표: 같은 지역 글의 앞선 발표만 대신함. 지역 글이 다르면 대신하는지 알 수 없어 둘 다 남김
+    //   (예: 울진군 경보 뒤 동해안 주의보 → 경보를 낮추지 않음)
+    const times = [
+      ...new Set(events.flatMap((e) => (e.publishedAt ? [e.publishedAt] : []))),
+    ].sort((a, b) => ms(a) - ms(b));
+    const active = new Map<string, TsunamiEvent>(); // 지역 글 → 발효 중인 발표
+    let pending: string[] = [];
+    for (const time of times) {
+      const group = events.filter((e) => e.publishedAt === time);
+      // 종류·시각을 못 읽은 행 → 그 뒤 해제가 올 때까지 사유
+      const reasons = group
+        .filter((e) => e.unknownReasons.length > 0)
+        .flatMap(reasonsOf);
+      // 사유 없는 행은 normalize가 시각을 모두 채움 → !(null 아님)를 씀. 발효 전 행은 아직 적용 안 함
+      const clean = group.filter(
+        (e) => e.unknownReasons.length === 0 && ms(e.effectiveFrom!) <= nowMs,
+      );
+      const first = clean[0];
+      if (first) {
+        // 같은 발표 시각에 발표·해제가 섞였거나 발효 시각이 다르면 어느 쪽이 나중인지 모름
+        const mixed = clean.some(
+          (e) =>
+            e.action !== first.action ||
+            e.effectiveFrom !== first.effectiveFrom,
+        );
+        if (mixed) reasons.push(`tsunami:order:${time}`);
+        else if (first.action === "release") {
+          active.clear();
+          pending = [];
+        } else for (const e of clean) active.set(e.zone.raw, e);
+      }
+      pending.push(...reasons);
+    }
+    beach.reasons.push(...pending);
+
+    for (const e of active.values()) {
       if (e.level === null) continue;
       beach.items.push({
         type: "tsunami",
@@ -211,10 +238,12 @@ export function judgeTsunamiBeaches(input: {
         effectiveFrom: e.effectiveFrom!,
       });
     }
-    // 받은 순서와 상관없게: 경보 먼저, 같은 단계는 지역 글 순
+    // 단계 높은 순 → 같은 단계는 발표 이른 순(아키텍처 6.3, beach-warnings와 같음)
+    // 발표 시각까지 같으면 받은 순서와 상관없게 지역 글 순
     beach.items.sort(
       (a, b) =>
         LEVEL_ORDER.indexOf(a.level) - LEVEL_ORDER.indexOf(b.level) ||
+        ms(a.publishedAt) - ms(b.publishedAt) ||
         a.zoneName.localeCompare(b.zoneName),
     );
   }

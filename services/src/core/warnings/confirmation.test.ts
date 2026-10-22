@@ -24,6 +24,12 @@ describe("checkConfirmation", () => {
     });
   });
 
+  it("확인 시각에 밀리초가 있어도 validUntil은 초 단위로 내림", () => {
+    expect(
+      checkConfirmation("2026-10-22T03:03:00.500Z", "2026-10-22T03:10:00Z"),
+    ).toEqual({ confirmed: true, validUntil: "2026-10-22T03:48:00Z" });
+  });
+
   it.each([
     ["2026-10-22T03:48:01Z", "45분 01초 경계"],
     ["2026-10-22T03:48:00.001Z", "45분 00.001초"],

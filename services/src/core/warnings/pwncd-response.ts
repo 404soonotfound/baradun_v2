@@ -83,6 +83,8 @@ export function normalizePwnCdResponse(
   // 행이 여러 개면 배열, 한 개면 객체로 옴 → 배열로 맞춤
   const list = Array.isArray(item) ? item : isObject(item) ? [item] : null;
   if (!list) return { status: "failed", reason: "format:items" };
+  // 59일 범위에 0행은 없음(실응답 2,622~2,708행). 00인데 비었으면 이상 응답 → '없음'으로 읽지 않음
+  if (list.length === 0) return { status: "failed", reason: "empty" };
 
   // 요청한 만큼 꽉 찼으면 뒤가 잘렸을 수 있음(쪽 나누기는 불안정해서 쓰지 않음)
   if (list.length >= numOfRows) {

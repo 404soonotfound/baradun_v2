@@ -30,8 +30,9 @@ export function checkConfirmation(
   // 45분을 넘었을 때만 만료. 딱 45:00은 넘지 않음 → 유효
   if (nowMs - lastMs > ttlMs) return { confirmed: false, reason: "expired" };
 
+  // 초 단위로 내림(parseKstTime과 같은 표기). 밀리초를 버려 만료가 늦어지지 않음
   const validUntil = new Date(lastMs + ttlMs)
     .toISOString()
-    .replace(/\.000Z$/, "Z");
+    .replace(/\.\d{3}Z$/, "Z");
   return { confirmed: true, validUntil };
 }
