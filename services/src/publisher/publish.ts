@@ -86,6 +86,13 @@ function parseManifest(body: string | null): ManifestFile | null {
 }
 
 // 지금 manifest가 이 버전을 가리킬 수 있는지. 읽지 못하면 그럴 수 있다고 봄(지우지 않는 쪽)
+// 둘 중 늦은 버전. 자릿수가 고정된 형식이라 글자 비교 = 시각 순서. 둘 다 없으면 null
+function newestVersion(a: string | null, b: string | null): string | null {
+  if (a === null) return b;
+  if (b === null) return a;
+  return a >= b ? a : b;
+}
+
 async function manifestMayPointTo(
   snapshots: SnapshotStore,
   version: string,
@@ -169,8 +176,13 @@ export async function publishSnapshot(
 
   let uploaded = false;
   try {
-    // 같은 초에 두 번 돌았거나 시계가 뒤로 감 → 이미 쓴 버전 경로를 덮지 않음
-    const published = await ops.getPublishedVersion();
+    // 같은 초에 두 번 돌았거나 시계가 뒤로 감 → 이미 쓴 버전 경로를 덮지 않음(immutable 캐시라 같은 주소에 다른 내용이 생김)
+    // Ops 기록은 manifest 교체 뒤에 쓰므로 실제보다 뒤처질 수 있음 → 지금 manifest가 가리키는 버전도 함께 봄
+    const current = parseManifest(await snapshots.getFile(MANIFEST_PATH));
+    const published = newestVersion(
+      await ops.getPublishedVersion(),
+      current?.snapshotVersion ?? null,
+    );
     if (published !== null && version <= published) {
       return fail("version_not_newer", { published });
     }
@@ -208,7 +220,6 @@ export async function publishSnapshot(
     const bodies = Object.fromEntries(
       KEYS.map((key) => [key, JSON.stringify(snapshot[key])]),
     ) as Record<keyof Snapshot, string>;
-    const current = parseManifest(await snapshots.getFile(MANIFEST_PATH));
     if (await sameAsCurrent(snapshots, current, bodies)) {
       log("info", "publish_unchanged", { version: current!.snapshotVersion });
       return { status: "unchanged", version: current!.snapshotVersion };
@@ -217,23 +228,33 @@ export async function publishSnapshot(
     // 버전 경로 먼저. 다 올라간 뒤에만 manifest를 바꿈
     uploaded = true;
     const versioned = PUBLISH_POLICY.cacheControl.versioned;
-    await Promise.all(
-      KEYS.map((key) =>
+    const manifestBody = JSON.stringify(manifest);
+    // 하나가 실패해도 시작한 쓰기를 모두 기다린 뒤에 실패로 넘어감(allSettled)
+    // → finally의 버전 경로 삭제 뒤에 늦게 끝난 쓰기가 파일을 되살리지 않음
+    const settled = await Promise.allSettled([
+      ...KEYS.map((key) =>
         snapshots.putFile(
           versionPath(version, FILES[key].name),
           bodies[key],
           versioned,
         ),
       ),
+      snapshots.putFile(
+        versionPath(version, "manifest.json"),
+        manifestBody,
+        versioned,
+      ),
+    ]);
+    const rejected = settled.find(
+      (result): result is PromiseRejectedResult => result.status === "rejected",
     );
-    const manifestBody = JSON.stringify(manifest);
-    await snapshots.putFile(
-      versionPath(version, "manifest.json"),
-      manifestBody,
-      versioned,
-    );
+    if (rejected !== undefined) throw rejected.reason;
     // 잠금 시간을 넘겨 다른 실행이 더 새 버전을 이미 게시했으면 manifest를 옛 버전으로 되돌리지 않음
-    const latest = await ops.getPublishedVersion();
+    const latest = newestVersion(
+      await ops.getPublishedVersion(),
+      parseManifest(await snapshots.getFile(MANIFEST_PATH))?.snapshotVersion ??
+        null,
+    );
     if (latest !== null && version <= latest) {
       return fail("version_not_newer", { published: latest });
     }
