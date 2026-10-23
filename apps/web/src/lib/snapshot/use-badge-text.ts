@@ -27,7 +27,8 @@ export function useBadgeText() {
     }
   }
 
-  // B5(view.stale일 때): "HH:MM 확인 · 이후 확인 못 함". 시각은 한국 시각(Provider의 timeZone Asia/Seoul).
+  // B5(view.stale일 때): "14:05 확인 · 이후 확인 못 함", 한국 날짜가 다르면 "10/20 14:05 확인 · …"(BRD-76).
+  // 오프라인으로 며칠 전 스냅샷을 열어도 오늘 확인한 것처럼 읽히지 않게 함. 시각은 한국 시각(kstStamp).
   // 확인 시각을 모르면(null·읽을 수 없는 값) 시각 없이 '이후 확인 못 함'만 — 오래된 정보 표시가 사라지지 않게
   function confirmedUntilText(
     confirmedAt: string | null,

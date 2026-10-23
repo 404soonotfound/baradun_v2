@@ -120,7 +120,7 @@ export function minutesAgo(
 }
 
 // ms -> 한국 시각 조각. 9시간 더한 뒤 UTC로 읽으면 한국의 날짜 시각이 나옴
-// toISOString() = "2026-10-21T05:00.00.000Z" 꼴. slice(시작, 끝)으로 필요한 글자만 자름
+// toISOString() = "2026-10-21T05:00:00.000Z" 꼴. slice(시작, 끝)으로 필요한 글자만 자름
 function kstParts(ms: number) {
   const iso = new Date(ms + KST_OFFSET_MS).toISOString();
   return {
