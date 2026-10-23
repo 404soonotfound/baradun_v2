@@ -4,16 +4,23 @@ on:
   pull_request:
   push:
     branches: [main]
+  schedule:
+    - cron: "17 0 * * *" # 매일 09:17 KST 취약점 검사만 돌림, 정각 혼잡 회피 (BRD-91)
 permissions:
   contents: read
-  pull-requests: read
 concurrency:
-  group: ci-${{ github.ref }}
+  # 정기 실행은 main push CI와 그룹을 나눠 서로 취소하지 않게 함
+  group: ci-${{ github.event_name == 'schedule' && 'schedule' || github.ref }}
   cancel-in-progress: true
 jobs:
-  # 바뀐 영역 확인
+  # 바뀐 영역 확인 (정기 실행에서는 건너뜀: 경로 비교 대상이 없음)
   changes:
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read # paths-filter가 PR 변경 파일을 API로 읽음
+
     outputs:
       web: ${{ steps.filter.outputs.web }}
       services: ${{ steps.filter.outputs.services }}
@@ -152,9 +159,10 @@ jobs:
 
   # 의존성 취약점: 런타임(high 이상)은 실패, 개발 도구는 보고만 (BRD-90)
   # 고치지 못하는 지적은 Linear 이슈로 사유를 남김. lock 파일만 읽으므로 npm ci 불필요
+  # 정기 실행에서는 changes가 건너뛰므로 상태 함수(!cancelled()) 없이는 같이 건너뜀
   audit:
     needs: changes
-    if: needs.changes.outputs.deps == 'true'
+    if: ${{ !cancelled() && (github.event_name == 'schedule' || needs.changes.outputs.deps == 'true') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -168,9 +176,9 @@ jobs:
           npm audit 2>&1 | tee -a "$GITHUB_STEP_SUMMARY" || true
           echo '```' >> "$GITHUB_STEP_SUMMARY"
 
-  # 결과 모음: 건너뜀은 통과, 실패·취소는 실패
+  # 결과 모음: 건너뜀은 통과, 실패·취소는 실패 (정기 실행은 audit 결과만 보면 되므로 건너뜀)
   ci-ok:
-    if: always()
+    if: always() && github.event_name != 'schedule'
     needs: [changes, web, services, infra, contracts, beaches, audit] # 하나라도 실패하면 빨간불
     runs-on: ubuntu-latest
     steps:
