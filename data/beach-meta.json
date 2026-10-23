@@ -584,7 +584,13 @@
         "화진포"
       ],
       "season": {
-        "2026": null
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-10",
+          "closeDate": "2026-08-17",
+          "sourceRow": 50,
+          "link": "MAP"
+        }
       }
     },
     "b0029": {
@@ -597,7 +603,7 @@
           "openDate": "2026-07-10",
           "closeDate": "2026-08-17",
           "sourceRow": 23,
-          "link": "RULE"
+          "link": "MAP"
         }
       }
     },
@@ -639,7 +645,7 @@
           "openDate": "2026-07-10",
           "closeDate": "2026-08-17",
           "sourceRow": 26,
-          "link": "RULE"
+          "link": "MAP"
         }
       }
     },
@@ -653,7 +659,7 @@
           "openDate": "2026-07-10",
           "closeDate": "2026-08-17",
           "sourceRow": 27,
-          "link": "RULE"
+          "link": "MAP"
         }
       }
     },
@@ -667,7 +673,7 @@
           "openDate": "2026-07-10",
           "closeDate": "2026-08-17",
           "sourceRow": 28,
-          "link": "RULE"
+          "link": "MAP"
         }
       }
     },
@@ -737,7 +743,7 @@
           "openDate": "2026-07-10",
           "closeDate": "2026-08-17",
           "sourceRow": 37,
-          "link": "RULE"
+          "link": "MAP"
         }
       }
     },
@@ -821,7 +827,7 @@
           "openDate": "2026-07-10",
           "closeDate": "2026-08-17",
           "sourceRow": 48,
-          "link": "RULE"
+          "link": "MAP"
         }
       }
     },
@@ -1371,7 +1377,7 @@
           "openDate": "2026-07-10",
           "closeDate": "2026-08-23",
           "sourceRow": 88,
-          "link": "RULE"
+          "link": "MAP"
         }
       }
     },
@@ -2295,6 +2301,34 @@
           "openDate": "2026-07-16",
           "closeDate": "2026-08-17",
           "sourceRow": 234,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0215": {
+      "aliases": [
+        "관매도"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-16",
+          "closeDate": "2026-08-17",
+          "sourceRow": 235,
+          "link": "EXACT"
+        }
+      }
+    },
+    "b0216": {
+      "aliases": [
+        "신전"
+      ],
+      "season": {
+        "2026": {
+          "status": "open",
+          "openDate": "2026-07-16",
+          "closeDate": "2026-08-17",
+          "sourceRow": 237,
           "link": "EXACT"
         }
       }
