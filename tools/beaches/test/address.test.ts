@@ -74,4 +74,19 @@ describe("이름 중간의 리·진을 지우지 않는 공식 이름 연결", (
     const links = linkOfficials([src("공현1리"), src("공현진1리")], [row("공현진1리")], entries);
     expect([...links.values()].map((l) => l.method)).toEqual(["UNLINKED", "UNLINKED"]);
   });
+  it("RULE 후보가 2개일 때 대응표가 그 후보 중 하나를 고를 때만 연결하고 그 밖에는 UNLINKED를 유지함", () => {
+    const candidates = [row("화진포(거진)", 56), row("화진포(현내)", 57), row("초도", 58)];
+    expect(linkOfficial(src("화진포"), candidates, entries)).toMatchObject({
+      method: "MAP",
+      row: { name: "화진포(거진)", row: 56 },
+    });
+    expect(linkOfficial(src("화진포"), candidates, [])).toMatchObject({
+      method: "UNLINKED",
+      candidates: ["화진포(거진)(56행)", "화진포(현내)(57행)"],
+    });
+    expect(linkOfficial(src("화진포"), candidates, [{ key: "강원|고성군|화진포", xlsx_name: "초도", basis: "후보 밖 이름" }])).toMatchObject({
+      method: "UNLINKED",
+      candidates: ["화진포(거진)(56행)", "화진포(현내)(57행)"],
+    });
+  });
 });
