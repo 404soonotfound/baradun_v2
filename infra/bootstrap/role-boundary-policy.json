@@ -5,7 +5,10 @@
       "Sid": "StackLogs",
       "Effect": "Allow",
       "Action": ["logs:CreateLogStream", "logs:PutLogEvents"],
-      "Resource": "arn:aws:logs:ap-northeast-2:${aws:PrincipalAccount}:log-group:BaradunV2-*"
+      "Resource": [
+        "arn:aws:logs:ap-northeast-2:${aws:PrincipalAccount}:log-group:BaradunV2-*",
+        "arn:aws:logs:ap-northeast-2:${aws:PrincipalAccount}:log-group:BaradunV2-*:*"
+      ]
     },
     {
       "Sid": "StackTables",
@@ -24,7 +27,12 @@
       "Sid": "ApiKeys",
       "Effect": "Allow",
       "Action": "ssm:GetParameter",
-      "Resource": "arn:aws:ssm:ap-northeast-2:${aws:PrincipalAccount}:parameter/baradun/v2/api-keys/*"
+      "Resource": "arn:aws:ssm:ap-northeast-2:${aws:PrincipalAccount}:parameter/baradun/v2/api-keys/*",
+      "Condition": {
+        "ArnLike": {
+          "lambda:SourceFunctionArn": "arn:aws:lambda:ap-northeast-2:${aws:PrincipalAccount}:function:BaradunV2-*"
+        }
+      }
     },
     {
       "Sid": "DecryptApiKeysViaSsm",
