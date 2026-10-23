@@ -95,6 +95,31 @@ describe("checkPhoto · 대표 이미지(detailCommon2)", () => {
   });
 });
 
+describe("checkPhoto · 이미지 주소 칸이 없는 응답", () => {
+  it("주소 칸이 글자가 아니면 missing이 아니라 failed (사진을 지우는 근거로 쓰지 않음)", () => {
+    // 상세 목록의 행에 originimgurl이 없음(형식 변경)
+    expect(checkPhoto(ok([{}]), "detail", URL, "1")).toEqual({
+      status: "failed",
+      reason: "format:originimgurl",
+    });
+    // 대표 이미지 응답에 firstimage 칸이 없음
+    expect(
+      checkPhoto(ok([{ contentid: "585522" }]), "first", URL, "585522"),
+    ).toEqual({ status: "failed", reason: "format:firstimage" });
+  });
+
+  it("대표 이미지가 빈 글자면 관광지에 사진이 없는 것 → missing", () => {
+    expect(
+      checkPhoto(
+        ok([{ contentid: "585522", firstimage: "", cpyrhtDivCd: "Type1" }]),
+        "first",
+        URL,
+        "585522",
+      ),
+    ).toEqual({ status: "missing" });
+  });
+});
+
 describe("checkPhoto · 상세 이미지 목록(detailImage2)", () => {
   it("목록에서 같은 주소를 찾아 그 사진의 유형을 봄", () => {
     const json = ok([
