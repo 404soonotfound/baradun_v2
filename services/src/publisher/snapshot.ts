@@ -118,7 +118,7 @@ export function buildSnapshot(input: SnapshotInput): Snapshot {
   }
 
   return {
-    beaches: { beaches },
+    beaches: { beaches: beaches.map((beach) => publishedBeach(beach, inputs)) },
     status: { beaches: status },
     history: emptyHistory(beaches, nowMs),
     nationwideWarnings: nationwide(
@@ -128,6 +128,23 @@ export function buildSnapshot(input: SnapshotInput): Snapshot {
       tsunamiUnreadable,
     ),
   };
+}
+
+// 게시할 해변 한 곳. 마지막 사진 확인(collect-catalog)이 1유형이 아니거나 사진을 못 찾았으면
+// 사진을 빼고 게시함(공공누리 1유형만 사용, 결정 기록 11장 10/21 · BRD-58). 화면은 null이면 일러스트로 대체
+// 확인한 주소가 지금 사진과 다르면(확인 뒤 저장소에서 바뀜) 그 기록은 이 사진의 결과가 아님 → 사진 유지
+// 기록·확인이 없는 사진도 유지(저장소에 넣을 때 사람이 1유형을 검증함)
+function publishedBeach(beach: Beach, inputs: PublishInputs): Beach {
+  if (beach.photo === null) return beach;
+  const check = inputs.photoChecks[beach.id];
+  if (
+    check !== undefined &&
+    check.url === beach.photo.url &&
+    check.status !== "type1"
+  ) {
+    return { ...beach, photo: null };
+  }
+  return beach;
 }
 
 // 관측소별 최근 24시간 파고(1시간 간격). 이력 저장이 아직 없어 모든 점이 측정값 없음(v: null, 차트 빗금)
