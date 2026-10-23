@@ -190,6 +190,8 @@ function nationwide(
     !tsunamiCheck.confirmed ||
     inputs.tsunami.result.status === "failed" ||
     tsunamiUnreadable ||
+    // 지역은 읽었지만 종류·시각을 못 읽은 지진해일 행은 해변 사유로만 남음 → 전국도 확인 못 함
+    Object.values(tsunamiBeaches).some((beach) => beach.reasons.length > 0) ||
     Object.values(seaZones.beaches).some((zone) => zone.reasons.length > 0);
   const pwnAt = inputs.pwncd.lastConfirmedAt!;
   const tsunamiAt = inputs.tsunami.lastConfirmedAt!;
