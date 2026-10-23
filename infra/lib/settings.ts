@@ -91,3 +91,8 @@ export const COLLECTOR_SCHEDULE_MINUTES = {
   ocean: "10,40", // 바다 관측: 매시 10분·40분(30분마다)
   warnings: "3,18,33,48", // 특보: 매시 3분·18분·33분·48분(15분마다)
 } as const;
+
+// collect-catalog 실행 시각(하루 1회, 아키텍처 5장 D6, BRD-58). 한국 시각 04:20
+// 사진 확인은 급하지 않아 수집이 몰리지 않는 새벽으로 둠
+// services policy.ts의 catalogSchedule(UTC 분 단위)과 같은 시각이어야 함(collectors.test.ts가 확인)
+export const CATALOG_SCHEDULE_KST = { hour: "4", minute: "20" } as const;
