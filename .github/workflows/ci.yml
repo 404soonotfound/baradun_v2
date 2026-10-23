@@ -20,6 +20,7 @@ jobs:
       infra: ${{ steps.filter.outputs.infra }}
       contracts: ${{ steps.filter.outputs.contracts }} # contracts 변경 여부
       beaches: ${{ steps.filter.outputs.beaches }} # 해변 목록 변경 여부
+      deps: ${{ steps.filter.outputs.deps }} # 의존성 변경 여부
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - id: filter
@@ -48,6 +49,9 @@ jobs:
             contracts:                  # 공통 설정 + 계약 폴더가 바뀌면
               - *shared
               - 'packages/contracts/**'
+            deps: # 의존성이 바뀌면 취약점 검사 (shared 포함: audit 잡 변경도 재검사)
+              - *shared
+              - '**/package.json'
             beaches: # 해변 목록 또는 검사 규칙이 바뀌면
               - *shared
               - 'tools/beaches/**'
@@ -144,10 +148,28 @@ jobs:
       - run: npm run check:coverage -w packages/contracts # 매트릭스 근거·제외 사유·부가 정보(BRD-59)
       - run: npm run test:beaches # 외부 원자료 없이 생성기 회귀 검사
 
+  # 의존성 취약점: 런타임(high 이상)은 실패, 개발 도구는 보고만 (BRD-90)
+  # 고치지 못하는 지적은 Linear 이슈로 사유를 남김. lock 파일만 읽으므로 npm ci 불필요
+  audit:
+    needs: changes
+    if: needs.changes.outputs.deps == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .nvmrc
+      - run: npm audit --omit=dev --audit-level=high # 런타임 의존성 게이트
+      - if: always() # 게이트가 실패해도 전체 보고는 남김
+        run: | # 개발 도구 포함 전체 보고 (실패시키지 않음, 요약 탭에 표시)
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          npm audit 2>&1 | tee -a "$GITHUB_STEP_SUMMARY" || true
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
   # 결과 모음: 건너뜀은 통과, 실패·취소는 실패
   ci-ok:
     if: always()
-    needs: [changes, web, services, infra, contracts, beaches] # 하나라도 실패하면 빨간불
+    needs: [changes, web, services, infra, contracts, beaches, audit] # 하나라도 실패하면 빨간불
     runs-on: ubuntu-latest
     steps:
       - name: 결과 확인
