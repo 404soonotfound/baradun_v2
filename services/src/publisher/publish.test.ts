@@ -284,6 +284,47 @@ describe("publishSnapshot", () => {
     expect(snapshots.files.size).toBe(0);
   });
 
+  it("Ops 게시 버전 기록이 사라져도 manifest가 가리키는 버전 경로를 다시 쓰지 않음", async () => {
+    const { state, ops, snapshots, deps } = await setup();
+    await publishSnapshot(deps());
+    const before = snapshots.files.get(`data/${V1}/status.json`);
+    // manifest 교체 뒤 게시 버전 기록이 실패한 상황: Ops 기록만 비어 있음
+    ops.getPublishedVersion = async () => null;
+    // 같은 초에 입력이 바뀌어 다시 실행됨
+    await seedWarnings(state, [WIND_WAVE_ROW], {
+      confirmedAt: "2026-10-23T02:25:00Z",
+    });
+    expect(await publishSnapshot(deps())).toEqual({
+      status: "failed",
+      version: V1,
+      reason: "version_not_newer",
+    });
+    // immutable로 캐시되는 버전 경로 파일이 다른 내용으로 덮이지 않음
+    expect(snapshots.files.get(`data/${V1}/status.json`)).toBe(before);
+  });
+
+  it("업로드 하나가 실패해도 시작한 쓰기를 모두 기다린 뒤 정리함(늦은 쓰기가 남지 않음)", async () => {
+    const { snapshots, deps } = await setup();
+    let releaseSlow!: () => void;
+    const slow = new Promise<void>((resolve) => {
+      releaseSlow = resolve;
+    });
+    const put = snapshots.putFile.bind(snapshots);
+    snapshots.putFile = async (path, body, cacheControl) => {
+      if (path.endsWith("/status.json")) throw new Error("boom");
+      if (path.endsWith("/beaches.json")) await slow; // 다른 쓰기 하나는 늦게 끝남
+      await put(path, body, cacheControl);
+    };
+    const pending = publishSnapshot(deps());
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    releaseSlow();
+    expect((await pending).status).toBe("failed");
+    // 늦게 끝난 beaches.json도 버전 경로 삭제 뒤에 되살아나지 않음
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(await snapshots.listVersions()).toEqual([]);
+    expect(snapshots.files.size).toBe(0);
+  });
+
   it("State 읽기가 예외를 던져도 manifest 그대로, 잠금은 풂", async () => {
     const { state, ops, snapshots, deps } = await setup();
     state.getState = async () => {
