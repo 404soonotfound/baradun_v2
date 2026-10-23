@@ -6,8 +6,8 @@
       "Effect": "Allow",
       "Action": ["logs:CreateLogStream", "logs:PutLogEvents"],
       "Resource": [
-        "arn:aws:logs:ap-northeast-2:${aws:PrincipalAccount}:log-group:BaradunV2-*",
-        "arn:aws:logs:ap-northeast-2:${aws:PrincipalAccount}:log-group:BaradunV2-*:*"
+        "arn:aws:logs:ap-northeast-2:717304679248:log-group:BaradunV2-*",
+        "arn:aws:logs:ap-northeast-2:717304679248:log-group:BaradunV2-*:*"
       ]
     },
     {
@@ -21,16 +21,16 @@
         "dynamodb:Query",
         "dynamodb:UpdateItem"
       ],
-      "Resource": "arn:aws:dynamodb:ap-northeast-2:${aws:PrincipalAccount}:table/BaradunV2-*"
+      "Resource": "arn:aws:dynamodb:ap-northeast-2:717304679248:table/BaradunV2-*"
     },
     {
       "Sid": "ApiKeys",
       "Effect": "Allow",
       "Action": "ssm:GetParameter",
-      "Resource": "arn:aws:ssm:ap-northeast-2:${aws:PrincipalAccount}:parameter/baradun/v2/api-keys/*",
+      "Resource": "arn:aws:ssm:ap-northeast-2:717304679248:parameter/baradun/v2/api-keys/*",
       "Condition": {
         "ArnLike": {
-          "lambda:SourceFunctionArn": "arn:aws:lambda:ap-northeast-2:${aws:PrincipalAccount}:function:BaradunV2-*"
+          "lambda:SourceFunctionArn": "arn:aws:lambda:ap-northeast-2:717304679248:function:BaradunV2-*"
         }
       }
     },
@@ -38,7 +38,7 @@
       "Sid": "DecryptApiKeysViaSsm",
       "Effect": "Allow",
       "Action": "kms:Decrypt",
-      "Resource": "arn:aws:kms:ap-northeast-2:${aws:PrincipalAccount}:key/*",
+      "Resource": "arn:aws:kms:ap-northeast-2:717304679248:key/*",
       "Condition": {
         "StringEquals": { "kms:ViaService": "ssm.ap-northeast-2.amazonaws.com" }
       }
@@ -59,13 +59,13 @@
       "Sid": "SiteInvalidation",
       "Effect": "Allow",
       "Action": "cloudfront:CreateInvalidation",
-      "Resource": "arn:aws:cloudfront::${aws:PrincipalAccount}:distribution/*"
+      "Resource": "arn:aws:cloudfront::717304679248:distribution/*"
     },
     {
       "Sid": "InvokeStackFunctions",
       "Effect": "Allow",
       "Action": "lambda:InvokeFunction",
-      "Resource": "arn:aws:lambda:ap-northeast-2:${aws:PrincipalAccount}:function:BaradunV2-*"
+      "Resource": "arn:aws:lambda:ap-northeast-2:717304679248:function:BaradunV2-*"
     }
   ]
 }
