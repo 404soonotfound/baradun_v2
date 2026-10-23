@@ -34,6 +34,11 @@ export function apiKeyParameterName(name: ApiKeyName): string {
   return `${API_KEY_PARAMETER_PREFIX}${name}`;
 }
 
+// 이 스택이 만드는 모든 역할의 권한 상한(permissions boundary) 정책 이름 (BRD-89)
+// 정책은 스택 밖에서 bootstrap/role-boundary-policy.json으로 미리 만듦.
+// 실행 정책(cfn-execution-policy.json)은 이 boundary가 붙은 역할만 만들고 고치게 허락함
+export const ROLE_BOUNDARY_POLICY_NAME = "BaradunV2-RoleBoundary";
+
 // 월 예산 알림 기준 (1장: 월 $0 목표, $1 알림). 알림만 보내고 과금을 막지는 않음.
 export const MONTHLY_BUDGET_USD = 1;
 
