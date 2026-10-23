@@ -22,7 +22,12 @@ boundary 정책은 스택 밖에서 관리합니다. 정책 파일을 바꿨다�
 1. boundary 정책을 먼저 만들거나 고칩니다. 실행 정책이 boundary 정책 수정을 거부하므로 관리자 권한으로 합니다.
 
    ```bash
+   # 처음 만들 때
    aws iam create-policy --policy-name BaradunV2-RoleBoundary \
+     --policy-document file://bootstrap/role-boundary-policy.json
+   # 이미 있을 때 (버전은 최대 5개라 넘으면 오래된 버전을 지웁니다)
+   aws iam create-policy-version --set-as-default \
+     --policy-arn arn:aws:iam::<계정>:policy/BaradunV2-RoleBoundary \
      --policy-document file://bootstrap/role-boundary-policy.json
    ```
 
@@ -36,7 +41,11 @@ boundary 정책은 스택 밖에서 관리합니다. 정책 파일을 바꿨다�
 
 3. `npx cdk deploy`를 실행합니다. 기존 역할에는 boundary가 먼저 붙고, 그다음 정책이 바뀝니다.
 
-역할 정책에 새 동작을 추가하면 boundary에도 넣어야 합니다. 빠지면 실행할 때 거부됩니다. `test/guardrails.test.ts`가 빠진 동작을 잡습니다.
+   boundary를 처음 붙이는 배포가 중간에 실패하면 CloudFormation 롤백이 boundary를 떼려다 실행 정책의 거부(`NoBoundaryRemoval`)에 막혀 `UPDATE_ROLLBACK_FAILED`가 됩니다. 이때는 관리자 권한으로 `aws cloudformation continue-update-rollback --stack-name BaradunV2 --resources-to-skip <막힌 역할 논리 ID>`를 실행해 해당 역할을 건너뛰고(boundary는 붙은 채로 둠) 원인을 고친 뒤 다시 배포합니다.
+
+역할 정책에 새 동작을 추가하면 boundary에도 넣어야 합니다. 빠지면 실행할 때 거부됩니다. `test/guardrails.test.ts`는 빠진 동작 이름만 잡습니다. 리소스 범위(이름이 `BaradunV2-`·`baradunv2-`로 시작하는지, 리전)는 템플릿에서 실제 이름을 알 수 없어 테스트가 확인하지 않으므로, 새 리소스를 쓰면 boundary의 `Resource`를 직접 확인합니다.
+
+API 키 읽기(`ssm:GetParameter`)는 boundary에서 스택의 Lambda 함수가 보낸 요청(`lambda:SourceFunctionArn`)으로만 허락합니다. 실행 권한을 탈취해 외부 계정이 맡을 수 있는 역할을 만들어도 키를 읽지 못하게 하려는 것입니다. IAM 정책 시뮬레이터는 이 조건 키를 평가하지 못하므로, 수집기를 처음 배포할 때 키 읽기가 되는지 로그로 확인합니다. 막히면 수집기는 `api_key` 실패로 기록합니다.
 
 ## 비용 방어 범위
 
