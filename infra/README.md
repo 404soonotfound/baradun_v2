@@ -13,6 +13,31 @@ npx cdk diff                      # 배포된 스택과 비교
 
 코드 자산 읽기는 `cdk-hnb659fds-assets-${aws:PrincipalAccount}-ap-northeast-2` 버킷으로 제한합니다. `${aws:PrincipalAccount}`는 IAM이 요청 시 실행 역할의 계정 번호로 해석하는 정책 변수이며, 파일을 그대로 IAM 정책으로 사용합니다. 다른 계정·리전의 자산 버킷은 허용하지 않습니다.
 
+## 역할 권한 상한
+
+스택이 만드는 모든 역할에는 권한 상한(permissions boundary) `BaradunV2-RoleBoundary`가 붙습니다. 정책 문서는 `bootstrap/role-boundary-policy.json`입니다. 실행 정책은 이 boundary가 붙은 역할만 만들고, 인라인 정책을 바꾸게 허락합니다. 관리형 정책 부착, boundary 떼기, boundary 정책 고치기는 허락하지 않습니다. 그래서 배포 권한이 탈취되어도 역할의 권한은 boundary 안으로 제한됩니다.
+
+boundary 정책은 스택 밖에서 관리합니다. 정책 파일을 바꿨다면 순서대로 반영합니다.
+
+1. boundary 정책을 먼저 만들거나 고칩니다. 실행 정책이 boundary 정책 수정을 거부하므로 관리자 권한으로 합니다.
+
+   ```bash
+   aws iam create-policy --policy-name BaradunV2-RoleBoundary \
+     --policy-document file://bootstrap/role-boundary-policy.json
+   ```
+
+2. 실행 정책 `BaradunCdkExecution`의 새 버전을 기본으로 올립니다. 버전은 최대 5개라 넘으면 오래된 버전을 지웁니다.
+
+   ```bash
+   aws iam create-policy-version --set-as-default \
+     --policy-arn arn:aws:iam::<계정>:policy/BaradunCdkExecution \
+     --policy-document file://bootstrap/cfn-execution-policy.json
+   ```
+
+3. `npx cdk deploy`를 실행합니다. 기존 역할에는 boundary가 먼저 붙고, 그다음 정책이 바뀝니다.
+
+역할 정책에 새 동작을 추가하면 boundary에도 넣어야 합니다. 빠지면 실행할 때 거부됩니다. `test/guardrails.test.ts`가 빠진 동작을 잡습니다.
+
 ## 비용 방어 범위
 
 기준은 Notion 'V2 아키텍처 기준 문서' 0장 G3와 11장 '과금·보안 가드레일'입니다.
