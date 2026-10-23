@@ -5,7 +5,7 @@ import {
   type PhotoImage,
 } from "../core/catalog/photo-check";
 import type { StateValue } from "../core/store/types";
-import { formatUtcIso } from "../core/warnings/time";
+import { formatUtcIso, parseUtcIso } from "../core/warnings/time";
 import {
   exceptionReason,
   type CollectDeps,
@@ -91,6 +91,33 @@ function requestUrl(key: string, source: PhotoSource): string {
   return `${BASE}/${op}?${params}`;
 }
 
+// 저장된 beaches 기록. 객체가 아니면(오염된 기록) 섞지 않고 빈 값으로 봄
+function readRecords(value: unknown): Record<string, PhotoRecord> {
+  const beaches = (value as { beaches?: unknown } | null | undefined)?.beaches;
+  return typeof beaches === "object" &&
+    beaches !== null &&
+    !Array.isArray(beaches)
+    ? (beaches as Record<string, PhotoRecord>)
+    : {};
+}
+
+// 확인이 오래된 순. 기록이 없거나 그 뒤 사진이 바뀐 해변(기록 url 다름)이 맨 앞
+export function staleFirst(
+  photos: readonly PhotoSource[],
+  records: Record<string, PhotoRecord>,
+): PhotoSource[] {
+  const checkedMs = (source: PhotoSource): number => {
+    const record = Object.hasOwn(records, source.beachId)
+      ? records[source.beachId]
+      : undefined;
+    if (record === undefined || record.url !== source.url) return -1;
+    return parseUtcIso(record.checkedAt) ?? -1;
+  };
+  return [...photos].sort(
+    (a, b) => checkedMs(a) - checkedMs(b) || a.beachId.localeCompare(b.beachId),
+  );
+}
+
 async function checkOne(
   deps: CatalogDeps,
   key: string,
@@ -130,10 +157,14 @@ export async function collectCatalog(
   }
 
   const key = await deps.keys.get("data-go-kr").catch(() => null);
+  // 이전 기록을 먼저 읽어 오래된 확인부터 봄 → 시간 예산으로 끊겨도 다음 실행이 남은 사진부터 이어감
+  // (늘 같은 순서로 돌면 뒤쪽 사진은 계속 미확인으로 남음)
+  const { pk, sk } = CATALOG_STATE.photos;
+  const prevRecords = readRecords((await deps.state.getState(pk, sk))?.value);
   const results = new Map<BeachId, PhotoCheck>();
   if (key !== null) {
     // 몇 개씩 나눠 보냄. 시간 예산이 지나면 새 요청을 보내지 않음
-    const queue = [...deps.photos];
+    const queue = staleFirst(deps.photos, prevRecords);
     const worker = async () => {
       for (let source = queue.shift(); source; source = queue.shift()) {
         if (deps.clock() - startedMs > COLLECT_POLICY.catalogBudgetMs) return;
@@ -153,7 +184,6 @@ export async function collectCatalog(
 
   // 이전 결과에 이번 확인 결과만 덮음. 실패·미확인 해변은 이전 결과 유지
   // 확인 결과가 하나도 없으면 쓰지 않음(저장한 것으로 치지 않음)
-  const { pk, sk } = CATALOG_STATE.photos;
   const checkedAt = formatUtcIso(deps.clock());
   // 이번에 확인된 해변의 새 기록. 실패는 확인 결과가 아니라 넣지 않음(이전 결과 유지)
   const records = new Map<BeachId, PhotoRecord>();
@@ -170,12 +200,8 @@ export async function collectCatalog(
   let saved = false;
   for (let attempt = 0; attempt < 2 && records.size > 0; attempt += 1) {
     const previous = await deps.state.getState(pk, sk);
-    const prev = (previous?.value as { beaches?: unknown } | null)?.beaches;
     const beaches: Record<string, PhotoRecord> = {
-      // 저장된 beaches가 객체가 아니면(오염된 기록) 섞지 않고 이번 결과만 씀
-      ...(typeof prev === "object" && prev !== null && !Array.isArray(prev)
-        ? (prev as Record<string, PhotoRecord>)
-        : {}),
+      ...readRecords(previous?.value),
       ...Object.fromEntries(records),
     };
     // orderAt은 이전 값 이상 → stale 없음. conflict면 다시 읽어 한 번 더 합침

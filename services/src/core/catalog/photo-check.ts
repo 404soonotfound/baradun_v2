@@ -51,6 +51,13 @@ export function checkPhoto(
     return { status: "failed", reason: "format:items" };
   }
 
+  // 이미지 주소 칸이 글자가 아니면(칸 없음·형식 변경) missing으로 읽지 않음 → 사진을 지우는 근거로 쓰지 않음
+  // 대표 이미지가 없는 관광지는 firstimage가 빈 글자("")로 옴 → 글자라서 통과하고 missing이 맞음
+  const urlField = image === "first" ? "firstimage" : "originimgurl";
+  if (items.some((i) => typeof i[urlField] !== "string")) {
+    return { status: "failed", reason: `format:${urlField}` };
+  }
+
   if (image === "first") {
     const item = items.find((i) => String(i.contentid) === contentId);
     // contentId를 지정해 조회했으니 관광지가 없어지면 0건(빈 items)으로 옴

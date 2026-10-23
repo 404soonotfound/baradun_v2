@@ -6,6 +6,7 @@ import {
   CATALOG_STATE,
   collectCatalog,
   parsePhotoLedger,
+  staleFirst,
   type PhotoRecord,
   type PhotoSource,
 } from "./catalog";
@@ -206,6 +207,46 @@ describe("collectCatalog", () => {
     }));
     await collectCatalog(deps());
     expect(lines.join("\n")).not.toContain(KEY);
+  });
+});
+
+describe("staleFirst", () => {
+  const record = (url: string, checkedAt: string) =>
+    ({ status: "type1", url, checkedAt }) as const;
+
+  it("기록 없음·사진 바뀜이 맨 앞, 그다음 확인이 오래된 순", () => {
+    const photos = [
+      { ...A, beachId: "b1" }, // 어제 확인
+      { ...A, beachId: "b2" }, // 기록 없음
+      { ...A, beachId: "b3" }, // 그제 확인
+      { ...A, beachId: "b4" }, // 기록 url이 지금 사진과 다름(사진 바뀜)
+    ];
+    const ordered = staleFirst(photos, {
+      b1: record(A.url, "2026-10-22T19:21:00Z"),
+      b3: record(A.url, "2026-10-21T19:21:00Z"),
+      b4: record("https://x/old.jpg", "2026-10-22T19:21:00Z"),
+    });
+    expect(ordered.map((s) => s.beachId)).toEqual(["b2", "b4", "b3", "b1"]);
+  });
+
+  it("시간 예산으로 끊긴 다음 실행은 미확인 사진부터 요청함", async () => {
+    // 세 해변 중 b0001만 확인된 기록이 있음 → 다음 실행의 첫 요청은 미확인 해변
+    const { state, deps, urls } = setup((url) =>
+      url.includes("detailCommon2")
+        ? common("9", "https://x/n.jpg", "Type1")
+        : images(B.url, "Type1"),
+    );
+    await state.putState(
+      CATALOG_STATE.photos.pk,
+      CATALOG_STATE.photos.sk,
+      {
+        beaches: { b0001: record(A.url, "2026-10-21T19:21:00Z") },
+      } as never,
+      1,
+    );
+    await collectCatalog(deps([A, B]));
+    // B(b0002)는 기록이 없어 A(b0001)보다 먼저 요청됨
+    expect(urls[0]).toContain("contentId=2");
   });
 });
 
