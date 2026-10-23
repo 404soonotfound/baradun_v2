@@ -352,6 +352,7 @@ describe("역할 권한 상한 (BRD-89)", () => {
       Effect: string;
       Action: string | string[];
       Resource: string | string[];
+      Condition?: Record<string, Record<string, unknown>>;
     }>;
   };
   const boundaryActions = boundary.Statement.filter(
@@ -385,6 +386,27 @@ describe("역할 권한 상한 (BRD-89)", () => {
     }
     for (const s of boundary.Statement) {
       expect(toList(s.Resource)).not.toContain("*");
+    }
+  });
+
+  // 실행 역할을 탈취해 외부 계정이 맡는 BaradunV2-* 역할을 만들어도 API 키를 읽지 못하게 함
+  it("API 키 읽기는 스택의 Lambda 함수가 보낸 요청으로만 허락한다", () => {
+    const statements = boundary.Statement.filter((s) =>
+      toList(s.Action).includes("ssm:GetParameter"),
+    );
+    expect(statements).toHaveLength(1);
+    expect(statements[0].Condition?.ArnLike?.["lambda:SourceFunctionArn"]).toBe(
+      "arn:aws:lambda:ap-northeast-2:${aws:PrincipalAccount}:function:BaradunV2-*",
+    );
+  });
+
+  it("KMS 복호화는 SSM을 거칠 때만 허락한다", () => {
+    for (const s of boundary.Statement.filter((s) =>
+      toList(s.Action).includes("kms:Decrypt"),
+    )) {
+      expect(s.Condition?.StringEquals?.["kms:ViaService"]).toBe(
+        "ssm.ap-northeast-2.amazonaws.com",
+      );
     }
   });
 });
