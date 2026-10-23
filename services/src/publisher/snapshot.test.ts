@@ -8,6 +8,7 @@ import {
   NOW,
   WIND_WAVE_ROW,
   ZONES,
+  seedPhotoChecks,
   seedReadings,
   seedWarnings,
 } from "./fixtures";
@@ -176,6 +177,54 @@ describe("buildSnapshot", () => {
       value: null,
       state: "delayed",
     });
+  });
+
+  it("사진 확인이 1유형 아님·사진 없음이면 그 해변 사진을 빼고 게시함(BRD-58)", async () => {
+    const state = new MemoryStateStore();
+    await seedWarnings(state, [HEAVY_RAIN_ROW]);
+    await seedReadings(state);
+    await seedPhotoChecks(state, {
+      b0001: { status: "not_type1" },
+      b0002: { status: "missing" },
+    });
+    const snapshot = await snapshotFrom(state);
+    expectContract(snapshot);
+    const photo = (id: string) =>
+      snapshot.beaches.beaches.find((b) => b.id === id)!.photo;
+    expect(photo("b0001")).toBeNull();
+    expect(photo("b0002")).toBeNull();
+    expect(photo("b0003")).not.toBeNull(); // 기록 없는 해변은 유지(수집 때 사람이 검증)
+  });
+
+  it("1유형으로 확인됐거나, 확인한 주소가 지금 사진과 다르면 사진 유지", async () => {
+    const state = new MemoryStateStore();
+    await seedWarnings(state, [HEAVY_RAIN_ROW]);
+    await seedReadings(state);
+    await seedPhotoChecks(state, {
+      b0001: { status: "type1" },
+      // 확인 뒤 저장소 사진이 바뀜 → 옛 사진의 결과라 지금 사진에 적용하지 않음
+      b0002: {
+        status: "not_type1",
+        url: "https://tong.visitkorea.or.kr/old.jpg",
+      },
+    });
+    const snapshot = await snapshotFrom(state);
+    const photo = (id: string) =>
+      snapshot.beaches.beaches.find((b) => b.id === id)!.photo;
+    expect(photo("b0001")).not.toBeNull();
+    expect(photo("b0002")).not.toBeNull();
+  });
+
+  it("사진 확인 기록이 없거나 모양이 달라도 게시가 멈추지 않음(사진 유지)", async () => {
+    const state = new MemoryStateStore();
+    await seedWarnings(state, [HEAVY_RAIN_ROW]);
+    await seedReadings(state);
+    await state.putState("catalog", "photos", { beaches: { b0001: "x" } }, 1);
+    const snapshot = await snapshotFrom(state);
+    expectContract(snapshot);
+    expect(
+      snapshot.beaches.beaches.find((b) => b.id === "b0001")!.photo,
+    ).not.toBeNull();
   });
 
   it("숨긴 해변도 beaches·status에 넣음(숨기는 일은 화면)", async () => {
