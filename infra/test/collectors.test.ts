@@ -4,6 +4,7 @@ import { COLLECT_POLICY } from "../../services/src/collectors/policy";
 import { API_KEY_PARAMETER_PREFIX as SERVICES_KEY_PREFIX } from "../../services/src/core/secrets/api-keys";
 import {
   API_KEY_PARAMETER_PREFIX,
+  CATALOG_SCHEDULE_KST,
   COLLECTOR_SCHEDULE_MINUTES,
   COLLECTOR_TIMEOUT_SECONDS,
 } from "../lib/settings";
@@ -24,7 +25,7 @@ const resources = template.toJSON().Resources as Record<string, Resource>;
 
 // 수집 함수의 리소스 ID 찾기
 // CDK는 ID 뒤에 무작위처럼 보이는 글자를 붙임(예: CollectOceanFunction1AAA04CC) → 앞부분으로 찾음
-function functionId(name: "Ocean" | "Warnings"): string {
+function functionId(name: "Ocean" | "Warnings" | "Catalog"): string {
   const ids = Object.keys(
     template.findResources("AWS::Lambda::Function"),
   ).filter((id) => id.startsWith(`Collect${name}Function`));
@@ -57,7 +58,7 @@ function allowedActions(role: string): Map<string, string[]> {
 
 describe("수집 Lambda", () => {
   // it.each: 목록의 값마다 같은 테스트를 한 번씩 돌림. %s 자리에 값이 들어감
-  it.each(["Ocean", "Warnings"] as const)(
+  it.each(["Ocean", "Warnings", "Catalog"] as const)(
     "%s: Node 22·ARM 칩·시간 제한·테이블 이름 설정",
     (name) => {
       const p = resources[functionId(name)]!.Properties;
@@ -94,6 +95,17 @@ describe("실행 일정 (N3)", () => {
     return minutes.join(",");
   }
 
+  it("catalog 실행 시각(한국 시각)이 services의 하루 1회 설정(UTC 분)과 같다", () => {
+    // services policy는 UTC 자정부터 분 단위, infra는 한국 벽시계 → 9시간(540분)을 더해 비교
+    expect(COLLECT_POLICY.catalogSchedule.periodMinutes).toBe(24 * 60);
+    const kstMinutes =
+      (COLLECT_POLICY.catalogSchedule.offsetMinutes + 9 * 60) % (24 * 60);
+    expect(
+      Number(CATALOG_SCHEDULE_KST.hour) * 60 +
+        Number(CATALOG_SCHEDULE_KST.minute),
+    ).toBe(kstMinutes);
+  });
+
   it("infra 실행 분이 services의 주기 설정과 같다", () => {
     expect(COLLECTOR_SCHEDULE_MINUTES.ocean).toBe(
       minutesOf(COLLECT_POLICY.oceanSchedule),
@@ -106,6 +118,7 @@ describe("실행 일정 (N3)", () => {
   it.each([
     ["Ocean", "cron(10,40 * * * ? *)"],
     ["Warnings", "cron(3,18,33,48 * * * ? *)"],
+    ["Catalog", "cron(20 4 * * ? *)"],
   ] as const)("%s: %s 한국 시각으로 그 함수를 실행한다", (name, expression) => {
     // 일정 중에서 대상(Target)이 이 함수인 것만 고름
     const schedules = Object.values(
@@ -126,6 +139,7 @@ describe("수집 함수 권한 (필요한 것만)", () => {
   it.each([
     ["Ocean", "kma-apihub"],
     ["Warnings", "data-go-kr"],
+    ["Catalog", "data-go-kr"],
   ] as const)(
     "%s: 자기 로그·State·Ops·API 키(%s)에 필요한 동작만 허용한다",
     (name, key) => {

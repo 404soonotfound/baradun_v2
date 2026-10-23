@@ -186,7 +186,7 @@ function dynamoActionsByResource(roles?: string[]): Map<string, Set<string>> {
 
 describe("DynamoDB 권한 (BRD-55)", () => {
   // 데이터 문의(Inquiry) 역할은 BRD-63에서 생김. 생기면 이 목록에 더함
-  it("DynamoDB 권한이 있는 역할은 publisher와 수집기 2개뿐이다", () => {
+  it("DynamoDB 권한이 있는 역할은 publisher와 수집기 3개뿐이다", () => {
     const holders = new Set<string>();
     for (const policy of allIamPolicies()) {
       const hasDynamo = policy.statements.some(
@@ -201,6 +201,7 @@ describe("DynamoDB 권한 (BRD-55)", () => {
         roleId("PublisherRole"),
         roleId("CollectOceanRole"),
         roleId("CollectWarningsRole"),
+        roleId("CollectCatalogRole"),
       ].sort(),
     );
   });
