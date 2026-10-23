@@ -1,0 +1,63 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "StackLogs",
+      "Effect": "Allow",
+      "Action": ["logs:CreateLogStream", "logs:PutLogEvents"],
+      "Resource": "arn:aws:logs:ap-northeast-2:${aws:PrincipalAccount}:log-group:BaradunV2-*"
+    },
+    {
+      "Sid": "StackTables",
+      "Effect": "Allow",
+      "Action": [
+        "dynamodb:BatchGetItem",
+        "dynamodb:DeleteItem",
+        "dynamodb:GetItem",
+        "dynamodb:PutItem",
+        "dynamodb:Query",
+        "dynamodb:UpdateItem"
+      ],
+      "Resource": "arn:aws:dynamodb:ap-northeast-2:${aws:PrincipalAccount}:table/BaradunV2-*"
+    },
+    {
+      "Sid": "ApiKeys",
+      "Effect": "Allow",
+      "Action": "ssm:GetParameter",
+      "Resource": "arn:aws:ssm:ap-northeast-2:${aws:PrincipalAccount}:parameter/baradun/v2/api-keys/*"
+    },
+    {
+      "Sid": "DecryptApiKeysViaSsm",
+      "Effect": "Allow",
+      "Action": "kms:Decrypt",
+      "Resource": "arn:aws:kms:ap-northeast-2:${aws:PrincipalAccount}:key/*",
+      "Condition": {
+        "StringEquals": { "kms:ViaService": "ssm.ap-northeast-2.amazonaws.com" }
+      }
+    },
+    {
+      "Sid": "SiteBucketObjects",
+      "Effect": "Allow",
+      "Action": ["s3:DeleteObject", "s3:GetObject", "s3:PutObject"],
+      "Resource": "arn:aws:s3:::baradunv2-*/*"
+    },
+    {
+      "Sid": "SiteBucketList",
+      "Effect": "Allow",
+      "Action": "s3:ListBucket",
+      "Resource": "arn:aws:s3:::baradunv2-*"
+    },
+    {
+      "Sid": "SiteInvalidation",
+      "Effect": "Allow",
+      "Action": "cloudfront:CreateInvalidation",
+      "Resource": "arn:aws:cloudfront::${aws:PrincipalAccount}:distribution/*"
+    },
+    {
+      "Sid": "InvokeStackFunctions",
+      "Effect": "Allow",
+      "Action": "lambda:InvokeFunction",
+      "Resource": "arn:aws:lambda:ap-northeast-2:${aws:PrincipalAccount}:function:BaradunV2-*"
+    }
+  ]
+}

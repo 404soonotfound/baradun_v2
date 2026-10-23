@@ -7,11 +7,13 @@ import {
   Stack,
   type StackProps,
 } from "aws-cdk-lib";
+import * as iam from "aws-cdk-lib/aws-iam";
 import { Construct } from "constructs";
 import { Collectors } from "./collect/collectors";
 import { GitHubDeployRole } from "./deploy/github-deploy-role";
 import { CostBudget } from "./ops/cost-budget";
 import { PublisherRole } from "./publish/publisher-role";
+import { ROLE_BOUNDARY_POLICY_NAME } from "./settings";
 import { SiteDelivery } from "./site/site-delivery";
 import { StorageTables } from "./storage/tables";
 
@@ -19,6 +21,16 @@ import { StorageTables } from "./storage/tables";
 export class BaradunStack extends Stack {
   constructor(scope: Construct, id: string, props?: StackProps) {
     super(scope, id, props);
+
+    // 이 스택이 만드는 모든 역할(CDK가 자동으로 만드는 역할 포함)에 권한 상한을 붙임 (BRD-89).
+    // 실행 정책은 이 boundary가 없는 역할의 생성·정책 변경을 거부하므로 빠뜨리면 배포가 실패함
+    iam.PermissionsBoundary.of(this).apply(
+      iam.ManagedPolicy.fromManagedPolicyName(
+        this,
+        "RoleBoundary",
+        ROLE_BOUNDARY_POLICY_NAME,
+      ),
+    );
 
     // 배포할 때 넘기는 값 (저장소에 남기지 않음). 한 번 넘기면 다음 배포부터는
     // CloudFormation이 이전 값을 그대로 씀.
