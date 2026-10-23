@@ -6,6 +6,8 @@ import { createLogger } from "../core/collect/log";
 import { SsmApiKeys } from "../core/secrets/ssm";
 import { DynamoOpsStore, DynamoStateStore } from "../core/store/dynamodb";
 import type { ApiKeyName } from "../core/secrets/api-keys";
+import photoLedger from "../../../data/photo-sources.json";
+import { collectCatalog, parsePhotoLedger, type PhotoSource } from "./catalog";
 import { collectOcean, type CollectDeps, type CollectRunResult } from "./ocean";
 import { COLLECT_POLICY } from "./policy";
 import { collectWarnings } from "./warnings";
@@ -78,4 +80,23 @@ export async function warningsHandler(
   context: LambdaContext,
 ): Promise<CollectRunResult> {
   return finish(await collectWarnings(deps(context.awsRequestId)));
+}
+
+// 확인할 사진 목록은 빌드 때 번들에 들어감(data/photo-sources.json, esbuild가 JSON을 그대로 묶음)
+// 모양이 틀리면 catalog 첫 실행에서 던져 실패함(틀린 목록으로 돌지 않음)
+// 모듈 로드 때 검사하지 않음: 세 수집기가 이 파일 하나를 진입점으로 쓰므로,
+// 여기서 던지면 대장 문제가 ocean·warnings(특보·관측) Lambda까지 시작 실패로 끌고 감
+let catalogPhotos: readonly PhotoSource[] | null = null;
+
+export async function catalogHandler(
+  _event: unknown,
+  context: LambdaContext,
+): Promise<CollectRunResult> {
+  catalogPhotos ??= parsePhotoLedger(photoLedger);
+  return finish(
+    await collectCatalog({
+      ...deps(context.awsRequestId),
+      photos: catalogPhotos,
+    }),
+  );
 }

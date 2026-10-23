@@ -22,4 +22,12 @@ export const COLLECT_POLICY = {
   // getTsunamiMsg: 제공 범위가 오늘 기준 3일 전까지(아키텍처 4장 10/20 실호출)
   tsunamiLookbackDays: 3,
   tsunamiNumOfRows: 100,
+
+  // collect-catalog: 하루 1회(D6) KST 04:20 = UTC 19:20. 대표 사진 공공누리 유형 다시 확인(BRD-58)
+  catalogSchedule: { periodMinutes: 24 * 60, offsetMinutes: 19 * 60 + 20 },
+  // 한 번에 보내는 요청 수. 사진 86곳 × 1회
+  catalogConcurrency: 4,
+  // 이 시간이 지나면 새 요청을 보내지 않음(남은 해변은 이전 확인 결과 유지)
+  // 마지막 요청이 최악 21초 걸려도 51초 → Lambda 시간 제한(60초) 안에서 저장까지 끝냄
+  catalogBudgetMs: 30 * SECOND_MS,
 } as const;
