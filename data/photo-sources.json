@@ -1,0 +1,525 @@
+{
+  "_meta": {
+    "note": "대표 사진(data/beaches photo)의 TourAPI 관광지 ID·사진 주소 대장(공개 계약 밖, BRD-58). collect-catalog가 매일 이 관광지의 사진 공공누리 유형을 다시 확인함",
+    "source": "한국관광공사 국문 관광정보 서비스_GW(KorService2) searchKeyword2·detailImage2",
+    "image": "first = 관광지 대표 이미지(firstimage), detail = 상세 이미지 목록(detailImage2)"
+  },
+  "beaches": {
+    "b0001": {
+      "contentId": "585522",
+      "title": "강문해변",
+      "image": "first",
+      "url": "https://tong.visitkorea.or.kr/cms/resource/52/4120552_image2_1.jpg"
+    },
+    "b0002": {
+      "contentId": "128758",
+      "title": "경포해수욕장",
+      "image": "first",
+      "url": "https://tong.visitkorea.or.kr/cms/resource/25/4075925_image2_1.jpg"
+    },
+    "b0003": {
+      "contentId": "128727",
+      "title": "사근진해변(사근진해수욕장)",
+      "image": "first",
+      "url": "https://tong.visitkorea.or.kr/cms/resource/04/4095604_image2_1.jpg"
+    },
+    "b0005": {
+      "contentId": "125694",
+      "title": "송정해변",
+      "image": "first",
+      "url": "https://tong.visitkorea.or.kr/cms/resource/75/4120375_image2_1.jpg"
+    },
+    "b0006": {
+      "contentId": "127722",
+      "title": "안목해변",
+      "image": "first",
+      "url": "https://tong.visitkorea.or.kr/cms/resource/58/4075958_image2_1.jpg"
+    },
+    "b0009": {
+      "contentId": "128757",
+      "title": "정동진해변",
+      "image": "first",
+      "url": "https://tong.visitkorea.or.kr/cms/resource/82/3534482_image2_1.jpg"
+    },
+    "b0011": {
+      "contentId": "585542",
+      "title": "하평해변(강릉)",
+      "image": "first",
+      "url": "https://tong.visitkorea.or.kr/cms/resource/59/4120559_image2_1.jpg"
+    },
+    "b0016": {
+      "contentId": "125696",
+      "title": "사천해변(사천해수욕장)",
+      "image": "first",
+      "url": "https://tong.visitkorea.or.kr/cms/resource/80/4120380_image2_1.jpg"
+    },
+    "b0017": {
+      "contentId": "585585",
+      "title": "순긋해변",
+      "image": "first",
+      "url": "https://tong.visitkorea.or.kr/cms/resource/18/3516818_image2_1.jpg"
+    },
+    "b0018": {
+      "contentId": "125697",
+      "title": "안인해변",
+      "image": "first",
+      "url": "https://tong.visitkorea.or.kr/cms/resource/12/3516912_image2_1.jpg"
+    },
+    "b0020": {
+      "contentId": "128728",
+      "title": "영진해변",
+      "image": "first",
+      "url": "https://tong.visitkorea.or.kr/cms/resource/60/4120460_image2_1.jpg"
+    },
+    "b0021": {
+      "contentId": "126776",
+      "title": "명파해변",
+      "image": "first",
+      "url": "https://tong.visitkorea.or.kr/cms/resource/57/4120657_image2_1.jpg"
+    },
+    "b0023": {
+      "contentId": "126691",
+      "title": "봉수대해변",
+      "image": "first",
+      "url": "https://tong.visitkorea.or.kr/cms/resource/13/3517213_image2_1.jpg"
+    },
+    "b0024": {
+      "contentId": "127587",
+      "title": "삼포해변",
+      "image": "first",
+      "url": "https://tong.visitkorea.or.kr/cms/resource/86/3516786_image2_1.jpg"
+    },
+    "b0025": {
+      "contentId": "127874",
+      "title": "송지호 해수욕장",
+      "image": "first",
+      "url": "https://tong.visitkorea.or.kr/cms/resource/14/3516814_image2_1.jpg"
+    },
+    "b0027": {
+      "contentId": "125686",
+      "title": "천진해변",
+      "image": "first",
+      "url": "https://tong.visitkorea.or.kr/cms/resource/60/3517260_image2_1.jpg"
+    },
+    "b0028": {
+      "contentId": "2724982",
+      "title": "화진포해수욕장",
+      "image": "first",
+      "url": "https://tong.visitkorea.or.kr/cms/resource_photo/65/3590065_image2_1.jpg"
+    },
+    "b0030": {
+      "contentId": "126784",
+      "title": "거진11리해변",
+      "image": "first",
+      "url": "https://tong.visitkorea.or.kr/cms/resource/28/3515828_image2_1.jpg"
+    },
+    "b0040": {
+      "contentId": "125692",
+      "title": "봉포해변",
+      "image": "first",
+      "url": "https://tong.visitkorea.or.kr/cms/resource/36/3516836_image2_1.jpg"
+    },
+    "b0042": {
+      "contentId": "125684",
+      "title": "아야진해변",
+      "image": "first",
+      "url": "https://tong.visitkorea.or.kr/cms/resource/03/4109203_image2_1.jpg"
+    },
+    "b0043": {
+      "contentId": "128750",
+      "title": "자작도해변",
+      "image": "first",
+      "url": "https://tong.visitkorea.or.kr/cms/resource/56/3517256_image2_1.jpg"
+    },
+    "b0044": {
+      "contentId": "126789",
+      "title": "청간해변",
+      "image": "first",
+      "url": "https://tong.visitkorea.or.kr/cms/resource/96/3516896_image2_1.jpg"
+    },
+    "b0048": {
+      "contentId": "2774430",
+      "title": "대진 해수욕장",
+      "image": "first",
+      "url": "https://tong.visitkorea.or.kr/cms/resource/45/4127845_image2_1.jpg"
+    },
+    "b0049": {
+      "contentId": "125713",
+      "title": "망상해변",
+      "image": "first",
+      "url": "https://tong.visitkorea.or.kr/cms/resource_photo/20/3544320_image2_1.jpg"
+    },
+    "b0054": {
+      "contentId": "127872",
+      "title": "맹방해변",
+      "image": "first",
+      "url": "https://tong.visitkorea.or.kr/cms/resource/10/4123510_image2_1.jpg"
+    },
+    "b0057": {
+      "contentId": "125705",
+      "title": "삼척해변",
+      "image": "first",
+      "url": "https://tong.visitkorea.or.kr/cms/resource/69/3517869_image2_1.jpg"
+    },
+    "b0064": {
+      "contentId": "125711",
+      "title": "장호해변·장호항",
+      "image": "first",
+      "url": "https://tong.visitkorea.or.kr/cms/resource_photo/64/3478664_image2_1.jpg"
+    },
+    "b0065": {
+      "contentId": "127727",
+      "title": "증산해변",
+      "image": "first",
+      "url": "https://tong.visitkorea.or.kr/cms/resource/20/4060720_image2_1.jpg"
+    },
+    "b0070": {
+      "contentId": "125707",
+      "title": "속초해수욕장",
+      "image": "first",
+      "url": "https://tong.visitkorea.or.kr/cms/resource/06/4095606_image2_1.jpg"
+    },
+    "b0071": {
+      "contentId": "1932003",
+      "title": "외옹치해변",
+      "image": "first",
+      "url": "https://tong.visitkorea.or.kr/cms/resource/95/4120695_image2_1.jpg"
+    },
+    "b0072": {
+      "contentId": "125702",
+      "title": "낙산해수욕장",
+      "image": "first",
+      "url": "https://tong.visitkorea.or.kr/cms/resource/85/4120385_image2_1.jpg"
+    },
+    "b0074": {
+      "contentId": "125716",
+      "title": "동호해변(양양)",
+      "image": "first",
+      "url": "https://tong.visitkorea.or.kr/cms/resource/49/3518249_image2_1.jpg"
+    },
+    "b0075": {
+      "contentId": "2704383",
+      "title": "물치해수욕장",
+      "image": "first",
+      "url": "https://tong.visitkorea.or.kr/cms/resource/53/3518053_image2_1.jpg"
+    },
+    "b0077": {
+      "contentId": "125681",
+      "title": "지경리해변(양양)",
+      "image": "first",
+      "url": "https://tong.visitkorea.or.kr/cms/resource/74/4120374_image2_1.jpg"
+    },
+    "b0080": {
+      "contentId": "2713784",
+      "title": "광진해수욕장",
+      "image": "first",
+      "url": "https://tong.visitkorea.or.kr/cms/resource/60/3518260_image2_1.jpg"
+    },
+    "b0081": {
+      "contentId": "2916001",
+      "title": "남애1리해수욕장",
+      "image": "first",
+      "url": "https://tong.visitkorea.or.kr/cms/resource/35/4120435_image2_1.jpg"
+    },
+    "b0083": {
+      "contentId": "2710849",
+      "title": "동산포해수욕장",
+      "image": "first",
+      "url": "https://tong.visitkorea.or.kr/cms/resource/74/3518274_image2_1.jpg"
+    },
+    "b0086": {
+      "contentId": "2704932",
+      "title": "인구해수욕장",
+      "image": "first",
+      "url": "https://tong.visitkorea.or.kr/cms/resource/42/3518042_image2_1.jpg"
+    },
+    "b0087": {
+      "contentId": "2710829",
+      "title": "잔교리해수욕장",
+      "image": "first",
+      "url": "https://tong.visitkorea.or.kr/cms/resource/66/3518266_image2_1.jpg"
+    },
+    "b0095": {
+      "contentId": "126078",
+      "title": "광안리해수욕장",
+      "image": "first",
+      "url": "https://tong.visitkorea.or.kr/cms/resource/45/3311245_image2_1.jpg"
+    },
+    "b0096": {
+      "contentId": "126080",
+      "title": "송정해수욕장",
+      "image": "first",
+      "url": "https://tong.visitkorea.or.kr/cms/resource/22/3495922_image2_1.jpg"
+    },
+    "b0097": {
+      "contentId": "126081",
+      "title": "해운대해수욕장",
+      "image": "first",
+      "url": "https://tong.visitkorea.or.kr/cms/resource/47/4105447_image2_1.jpg"
+    },
+    "b0112": {
+      "contentId": "128997",
+      "title": "장경리해수욕장",
+      "image": "first",
+      "url": "https://tong.visitkorea.or.kr/cms/resource/73/3517473_image2_1.jpg"
+    },
+    "b0118": {
+      "contentId": "128767",
+      "title": "을왕리해수욕장",
+      "image": "first",
+      "url": "https://tong.visitkorea.or.kr/cms/resource/78/3518478_image2_1.jpg"
+    },
+    "b0119": {
+      "contentId": "129254",
+      "title": "하나개해수욕장",
+      "image": "first",
+      "url": "https://tong.visitkorea.or.kr/cms/resource/54/3498254_image2_1.jpg"
+    },
+    "b0120": {
+      "contentId": "126091",
+      "title": "일산해수욕장(울산)",
+      "image": "first",
+      "url": "https://tong.visitkorea.or.kr/cms/resource/44/3528444_image2_1.jpg"
+    },
+    "b0121": {
+      "contentId": "126096",
+      "title": "진하해수욕장",
+      "image": "first",
+      "url": "https://tong.visitkorea.or.kr/cms/resource/33/3060633_image2_1.jpg"
+    },
+    "b0122": {
+      "contentId": "125849",
+      "title": "난지섬해수욕장",
+      "image": "first",
+      "url": "https://tong.visitkorea.or.kr/cms/resource/76/4119676_image2_1.jpg"
+    },
+    "b0124": {
+      "contentId": "127866",
+      "title": "대천해수욕장",
+      "image": "first",
+      "url": "https://tong.visitkorea.or.kr/cms/resource/66/3513866_image2_1.jpg"
+    },
+    "b0125": {
+      "contentId": "125841",
+      "title": "무창포해수욕장",
+      "image": "first",
+      "url": "https://tong.visitkorea.or.kr/cms/resource/13/3513913_image2_1.jpg"
+    },
+    "b0132": {
+      "contentId": "126695",
+      "title": "꽃지해수욕장",
+      "image": "first",
+      "url": "https://tong.visitkorea.or.kr/cms/resource/64/4060364_image2_1.jpg"
+    },
+    "b0150": {
+      "contentId": "125840",
+      "title": "의항해수욕장",
+      "image": "first",
+      "url": "https://tong.visitkorea.or.kr/cms/resource/05/4119705_image2_1.jpg"
+    },
+    "b0152": {
+      "contentId": "125847",
+      "title": "천리포해수욕장",
+      "image": "first",
+      "url": "https://tong.visitkorea.or.kr/cms/resource/15/4119715_image2_1.jpg"
+    },
+    "b0155": {
+      "contentId": "127864",
+      "title": "파도리해수욕장",
+      "image": "detail",
+      "url": "https://tong.visitkorea.or.kr/cms/resource/15/3096215_image2_1.jpg"
+    },
+    "b0157": {
+      "contentId": "126290",
+      "title": "구시포해수욕장",
+      "image": "first",
+      "url": "https://tong.visitkorea.or.kr/cms/resource/11/3536211_image2_1.jpg"
+    },
+    "b0165": {
+      "contentId": "2723794",
+      "title": "금장해수욕장",
+      "image": "first",
+      "url": "https://tong.visitkorea.or.kr/cms/resource/40/3542840_image2_1.jpg"
+    },
+    "b0170": {
+      "contentId": "127545",
+      "title": "발포해수욕장",
+      "image": "first",
+      "url": "https://tong.visitkorea.or.kr/cms/resource/89/3519189_image2_1.jpg"
+    },
+    "b0171": {
+      "contentId": "2723813",
+      "title": "연소해수욕장",
+      "image": "first",
+      "url": "https://tong.visitkorea.or.kr/cms/resource/39/3522039_image2_1.jpg"
+    },
+    "b0174": {
+      "contentId": "127884",
+      "title": "익금해수욕장",
+      "image": "first",
+      "url": "https://tong.visitkorea.or.kr/cms/resource/74/3521974_image2_1.jpg"
+    },
+    "b0175": {
+      "contentId": "126279",
+      "title": "풍류해수욕장",
+      "image": "first",
+      "url": "https://tong.visitkorea.or.kr/cms/resource/63/3521963_image2_1.jpg"
+    },
+    "b0177": {
+      "contentId": "126275",
+      "title": "톱머리 해수욕장",
+      "image": "first",
+      "url": "https://tong.visitkorea.or.kr/cms/resource/86/3535786_image2_1.jpg"
+    },
+    "b0178": {
+      "contentId": "127706",
+      "title": "홀통유원지·홀통해변",
+      "image": "first",
+      "url": "https://tong.visitkorea.or.kr/cms/resource/58/3516558_image2_1.jpg"
+    },
+    "b0183": {
+      "contentId": "126696",
+      "title": "백길해변",
+      "image": "first",
+      "url": "https://tong.visitkorea.or.kr/cms/resource/63/3558963_image2_1.jpg"
+    },
+    "b0184": {
+      "contentId": "127757",
+      "title": "분계해변",
+      "image": "first",
+      "url": "https://tong.visitkorea.or.kr/cms/resource/69/3559169_image2_1.jpg"
+    },
+    "b0191": {
+      "contentId": "2723767",
+      "title": "하트해변(신안)",
+      "image": "first",
+      "url": "https://tong.visitkorea.or.kr/cms/resource/41/3572141_image2_1.jpg"
+    },
+    "b0197": {
+      "contentId": "126282",
+      "title": "방죽포해수욕장",
+      "image": "first",
+      "url": "https://tong.visitkorea.or.kr/cms/resource/02/3521502_image2_1.jpg"
+    },
+    "b0198": {
+      "contentId": "126280",
+      "title": "안도해수욕장",
+      "image": "first",
+      "url": "https://tong.visitkorea.or.kr/cms/resource/54/3548954_image2_1.JPG"
+    },
+    "b0199": {
+      "contentId": "126281",
+      "title": "장등해수욕장",
+      "image": "first",
+      "url": "https://tong.visitkorea.or.kr/cms/resource/08/3521508_image2_1.jpg"
+    },
+    "b0208": {
+      "contentId": "147317",
+      "title": "신지명사십리해수욕장",
+      "image": "first",
+      "url": "https://tong.visitkorea.or.kr/cms/resource_photo/59/4060859_image2_1.jpg"
+    },
+    "b0222": {
+      "contentId": "1621854",
+      "title": "관성솔밭해변",
+      "image": "first",
+      "url": "https://tong.visitkorea.or.kr/cms/resource/71/3518971_image2_1.jpg"
+    },
+    "b0223": {
+      "contentId": "128679",
+      "title": "나정고운모래해변",
+      "image": "first",
+      "url": "https://tong.visitkorea.or.kr/cms/resource/82/3538582_image2_1.jpg"
+    },
+    "b0224": {
+      "contentId": "126095",
+      "title": "봉길대왕암해변",
+      "image": "first",
+      "url": "https://tong.visitkorea.or.kr/cms/resource/12/3538412_image2_1.jpg"
+    },
+    "b0226": {
+      "contentId": "128680",
+      "title": "전촌솔밭해변",
+      "image": "first",
+      "url": "https://tong.visitkorea.or.kr/cms/resource/52/4039652_image2_1.jpg"
+    },
+    "b0229": {
+      "contentId": "127159",
+      "title": "남호해수욕장",
+      "image": "first",
+      "url": "https://tong.visitkorea.or.kr/cms/resource/36/3515936_image2_1.jpg"
+    },
+    "b0231": {
+      "contentId": "127161",
+      "title": "오보해수욕장",
+      "image": "first",
+      "url": "https://tong.visitkorea.or.kr/cms/resource/96/3590496_image2_1.jpg"
+    },
+    "b0232": {
+      "contentId": "126097",
+      "title": "장사해수욕장",
+      "image": "first",
+      "url": "https://tong.visitkorea.or.kr/cms/resource/40/3515940_image2_1.jpg"
+    },
+    "b0239": {
+      "contentId": "126694",
+      "title": "후정해수욕장",
+      "image": "first",
+      "url": "https://tong.visitkorea.or.kr/cms/resource/03/3576603_image2_1.jpg"
+    },
+    "b0247": {
+      "contentId": "126083",
+      "title": "구영해수욕장",
+      "image": "first",
+      "url": "https://tong.visitkorea.or.kr/cms/resource/57/3519157_image2_1.jpg"
+    },
+    "b0249": {
+      "contentId": "126580",
+      "title": "농소몽돌해변",
+      "image": "first",
+      "url": "https://tong.visitkorea.or.kr/cms/resource/96/3519196_image2_1.jpg"
+    },
+    "b0254": {
+      "contentId": "1622212",
+      "title": "물안해수욕장",
+      "image": "first",
+      "url": "https://tong.visitkorea.or.kr/cms/resource/34/3519234_image2_1.jpg"
+    },
+    "b0262": {
+      "contentId": "126589",
+      "title": "황포해수욕장",
+      "image": "first",
+      "url": "https://tong.visitkorea.or.kr/cms/resource/97/3519197_image2_1.jpg"
+    },
+    "b0264": {
+      "contentId": "126682",
+      "title": "두곡월포해수욕장",
+      "image": "first",
+      "url": "https://tong.visitkorea.or.kr/cms/resource/48/3554848_image2_1.jpg"
+    },
+    "b0266": {
+      "contentId": "126084",
+      "title": "상주은모래비치",
+      "image": "first",
+      "url": "https://tong.visitkorea.or.kr/cms/resource/01/3583201_image2_1.jpg"
+    },
+    "b0267": {
+      "contentId": "126085",
+      "title": "송정솔바람해변",
+      "image": "first",
+      "url": "https://tong.visitkorea.or.kr/cms/resource/42/3556542_image2_1.jpg"
+    },
+    "b0269": {
+      "contentId": "2723514",
+      "title": "대항해수욕장",
+      "image": "first",
+      "url": "https://tong.visitkorea.or.kr/cms/resource/07/3580407_image2_1.jpg"
+    },
+    "b0273": {
+      "contentId": "126449",
+      "title": "중문색달해수욕장",
+      "image": "first",
+      "url": "https://tong.visitkorea.or.kr/cms/resource/13/3552513_image2_1.jpg"
+    }
+  }
+}
