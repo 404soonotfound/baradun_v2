@@ -10,9 +10,10 @@ import {
   MAX_DYNAMODB_CAPACITY_UNITS,
   MONTHLY_BUDGET_USD,
   RETRY_LIMITS,
+  ROLE_BOUNDARY_POLICY_NAME,
   apiKeyParameterName,
 } from "../lib/settings";
-import { template, toList } from "./stack-template";
+import { allIamPolicies, template, toList } from "./stack-template";
 
 // 아키텍처 11장 '과금·보안 가드레일'을 템플릿으로 검사함.
 // 지금은 검사 대상이 0개인 항목도 있음. 다음 묶음에서 리소스가 생기면 바로 거름.
@@ -224,6 +225,7 @@ describe("CDK bootstrap 실행 정책 (11장)", () => {
       NotAction?: unknown;
       Resource?: string | string[];
       NotResource?: unknown;
+      Condition?: Record<string, Record<string, unknown>>;
     }>;
   };
 
@@ -271,6 +273,118 @@ describe("CDK bootstrap 실행 정책 (11장)", () => {
       if (toList(s.Action).some((a) => a.startsWith("iam:"))) {
         expect(toList(s.Resource)).not.toContain("*");
       }
+    }
+  });
+
+  // BRD-89: 실행 역할을 손에 넣어도 역할에 넓은 권한을 붙여 권한을 키우지 못하게 함
+  const boundaryArn = `arn:aws:iam::\${aws:PrincipalAccount}:policy/${ROLE_BOUNDARY_POLICY_NAME}`;
+  const iamActions = (effect: "Allow" | "Deny") =>
+    policy.Statement.filter((s) => s.Effect === effect).flatMap((s) =>
+      toList(s.Action).filter((a) => a.startsWith("iam:")),
+    );
+
+  it("iam 와일드카드를 주지 않고, 관리형 정책 부착은 허락하지 않는다", () => {
+    for (const a of iamActions("Allow")) expect(a).not.toContain("*");
+    expect(iamActions("Allow")).not.toContain("iam:AttachRolePolicy");
+    expect(iamActions("Allow")).not.toContain("iam:DetachRolePolicy");
+  });
+
+  it("역할 만들기·인라인 정책 바꾸기·boundary 붙이기는 지정 boundary일 때만 허락한다", () => {
+    const guarded = [
+      "iam:CreateRole",
+      "iam:PutRolePolicy",
+      "iam:DeleteRolePolicy",
+      "iam:PutRolePermissionsBoundary",
+    ];
+    for (const action of guarded) {
+      const statements = policy.Statement.filter(
+        (s) => s.Effect === "Allow" && toList(s.Action).includes(action),
+      );
+      expect(statements.length, action).toBeGreaterThan(0);
+      for (const s of statements) {
+        expect(s.Condition?.StringEquals?.["iam:PermissionsBoundary"]).toBe(
+          boundaryArn,
+        );
+      }
+    }
+  });
+
+  it("boundary 떼기와 boundary 정책 고치기는 명시적으로 거부한다", () => {
+    expect(iamActions("Deny")).toEqual(
+      expect.arrayContaining([
+        "iam:DeleteRolePermissionsBoundary",
+        "iam:CreatePolicyVersion",
+        "iam:DeletePolicy",
+        "iam:DeletePolicyVersion",
+        "iam:SetDefaultPolicyVersion",
+      ]),
+    );
+    const policyEdit = policy.Statement.find(
+      (s) => s.Sid === "NoBoundaryPolicyEdit",
+    );
+    expect(policyEdit?.Resource).toBe(
+      `arn:aws:iam::*:policy/${ROLE_BOUNDARY_POLICY_NAME}`,
+    );
+  });
+
+  it("역할 넘기기(PassRole)는 Lambda·Scheduler에만 허락한다", () => {
+    const statements = policy.Statement.filter(
+      (s) => s.Effect === "Allow" && toList(s.Action).includes("iam:PassRole"),
+    );
+    expect(statements).toHaveLength(1);
+    expect(
+      toList(
+        statements[0].Condition?.StringEquals?.["iam:PassedToService"] as
+          string | string[],
+      ).sort(),
+    ).toEqual(["lambda.amazonaws.com", "scheduler.amazonaws.com"]);
+  });
+});
+
+describe("역할 권한 상한 (BRD-89)", () => {
+  const boundary = JSON.parse(
+    readFileSync(
+      resolve(__dirname, "../bootstrap/role-boundary-policy.json"),
+      "utf8",
+    ),
+  ) as {
+    Statement: Array<{
+      Effect: string;
+      Action: string | string[];
+      Resource: string | string[];
+    }>;
+  };
+  const boundaryActions = boundary.Statement.filter(
+    (s) => s.Effect === "Allow",
+  ).flatMap((s) => toList(s.Action));
+
+  it("스택의 모든 역할에 지정 boundary가 붙는다", () => {
+    const roles = Object.values(template.findResources("AWS::IAM::Role"));
+    expect(roles.length).toBeGreaterThan(0);
+    for (const role of roles) {
+      expect(JSON.stringify(role.Properties.PermissionsBoundary)).toContain(
+        `:policy/${ROLE_BOUNDARY_POLICY_NAME}`,
+      );
+    }
+  });
+
+  it("boundary는 역할 정책이 쓰는 모든 동작을 담는다 (빠지면 실행 때 거부됨)", () => {
+    for (const p of allIamPolicies()) {
+      for (const s of p.statements.filter((s) => s.Effect === "Allow")) {
+        for (const a of toList(s.Action)) {
+          expect(boundaryActions, `${p.logicalId}: ${a}`).toContain(a);
+        }
+      }
+    }
+  });
+
+  it("boundary는 IAM 동작·와일드카드 동작·전체 리소스를 주지 않는다", () => {
+    for (const a of boundaryActions) {
+      expect(a.startsWith("iam:"), a).toBe(false);
+      expect(a, a).not.toContain("*");
+    }
+    for (const s of boundary.Statement) {
+      expect(toList(s.Resource)).not.toContain("*");
     }
   });
 });
