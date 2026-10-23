@@ -101,3 +101,20 @@ export async function seedReadings(
     Date.parse(observedAt),
   );
 }
+
+// collect-catalog 사진 확인 기록(BRD-58). url을 주지 않으면 그 해변의 지금 사진 주소로 넣음
+export async function seedPhotoChecks(
+  state: StateStore,
+  checks: Record<string, { status: string; url?: string }>,
+) {
+  const beaches: Record<string, unknown> = {};
+  for (const [beachId, check] of Object.entries(checks)) {
+    const beach = BEACHES.find((b) => b.id === beachId);
+    beaches[beachId] = {
+      status: check.status,
+      url: check.url ?? beach?.photo?.url ?? "",
+      checkedAt: CONFIRMED,
+    };
+  }
+  await state.putState("catalog", "photos", { beaches } as never, 1);
+}
