@@ -42,6 +42,7 @@ jobs:
               - *shared
               - 'services/**'
               - 'packages/contracts/**'
+              - 'data/photo-sources.json' # Lambda 번들에 들어가는 대장(catalog.test가 읽힘을 검사)
             infra:
               - *shared
               - 'infra/**'
@@ -58,6 +59,7 @@ jobs:
               - 'data/beaches/**'
               - 'data/beach-coverage.csv'
               - 'data/beach-meta.json'
+              - 'data/photo-sources.json' # 대표 사진 TourAPI 관광지 대장(BRD-58)
               - 'packages/contracts/schemas/**'
               - 'packages/contracts/scripts/**'
 
