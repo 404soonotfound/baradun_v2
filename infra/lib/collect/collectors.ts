@@ -12,6 +12,7 @@ import { Construct } from "constructs";
 import * as path from "node:path";
 import {
   apiKeyParameterName,
+  CATALOG_SCHEDULE_KST,
   COLLECTOR_MEMORY_MB,
   COLLECTOR_SCHEDULE_MINUTES,
   COLLECTOR_TIMEOUT_SECONDS,
@@ -20,11 +21,12 @@ import {
   type ApiKeyName,
 } from "../settings";
 
-// 이 파일이 만드는 것 (아키텍처 5장, BRD-56)
-// 공공 API에서 바다 정보를 받아 DynamoDB에 저장하는 프로그램(수집기) 2개를 AWS에 올리고,
+// 이 파일이 만드는 것 (아키텍처 5장, BRD-56·BRD-58)
+// 공공 API에서 바다 정보를 받아 DynamoDB에 저장하는 프로그램(수집기) 3개를 AWS에 올리고,
 // 정해진 시각마다 저절로 실행되게 함
 // - 바다 관측 수집기(Ocean): 파고·수온·바람·파주기·파향. 30분마다
 // - 특보 수집기(Warnings): 풍랑·강풍 등 특보와 지진해일. 15분마다
+// - 카탈로그 수집기(Catalog): 대표 사진의 공공누리 유형 재확인. 하루 1회(한국 시각 04:20)
 // 수집기는 DynamoDB에만 씀. 사이트 데이터 파일(S3 data/)은 publisher만 씀(BRD-52)
 
 // 이 묶음을 만들 때 밖에서 넘겨받는 값
@@ -45,27 +47,38 @@ const HANDLER_FILE = path.join(
   "services/src/collectors/handlers.ts",
 );
 
-// 두 수집기에서 서로 다른 값만 모은 표. 나머지 설정은 아래 for 문에서 똑같이 씀
+// 세 수집기에서 서로 다른 값만 모은 표. 나머지 설정은 아래 for 문에서 똑같이 씀
+// cron: 실행 시각. minute만 있으면 매시 그 분, hour가 있으면 하루 한 번 그 시각(모두 한국 시각)
 const COLLECTORS = [
   {
     id: "Ocean", // AWS 안에서 쓸 이름의 앞부분
     handler: "oceanHandler", // handlers.ts 안에서 부를 함수 이름
-    minutes: COLLECTOR_SCHEDULE_MINUTES.ocean, // 매시 몇 분에 실행할지
+    cron: { minute: COLLECTOR_SCHEDULE_MINUTES.ocean }, // 매시 10분·40분
     apiKey: "kma-apihub", // 쓸 API 키 이름(기상청 API허브: sea_obs·kma_buoy)
+    description: `baradun v2 collect-ocean (N3 :${COLLECTOR_SCHEDULE_MINUTES.ocean})`,
   },
   {
     id: "Warnings",
     handler: "warningsHandler",
-    minutes: COLLECTOR_SCHEDULE_MINUTES.warnings,
+    cron: { minute: COLLECTOR_SCHEDULE_MINUTES.warnings },
     apiKey: "data-go-kr", // 공공데이터포털: getPwnCd·getTsunamiMsg
+    description: `baradun v2 collect-warnings (N3 :${COLLECTOR_SCHEDULE_MINUTES.warnings})`,
+  },
+  {
+    id: "Catalog",
+    handler: "catalogHandler",
+    cron: CATALOG_SCHEDULE_KST, // 하루 1회 한국 시각 04:20
+    apiKey: "data-go-kr", // 공공데이터포털: TourAPI KorService2
+    description: `baradun v2 collect-catalog (D6 하루 1회 KST ${CATALOG_SCHEDULE_KST.hour}:${CATALOG_SCHEDULE_KST.minute})`,
   },
   // as const: 값을 고정(바꿀 수 없음)
-  // satisfies { … }[]: 각 줄에 이 네 칸이 다 있는지, apiKey가 정해진 키 이름인지 타입 검사
+  // satisfies { … }[]: 각 줄에 이 칸들이 다 있는지, apiKey가 정해진 키 이름인지 타입 검사
 ] as const satisfies readonly {
   id: string;
   handler: string;
-  minutes: string;
+  cron: { minute: string; hour?: string };
   apiKey: ApiKeyName;
+  description: string;
 }[];
 
 // 실행이 실패했을 때 AWS가 알아서 다시 실행하는 횟수: 0번
@@ -83,7 +96,7 @@ export class Collectors extends Construct {
   constructor(scope: Construct, id: string, props: CollectorsProps) {
     super(scope, id); // 부모(Construct) 쪽 준비. CDK 규칙상 맨 처음에 부름
 
-    // 표의 수집기 2개에 대해 같은 순서로 리소스를 만듦
+    // 표의 수집기마다 같은 순서로 리소스를 만듦
     for (const c of COLLECTORS) {
       // ① 로그 보관함. 실행 기록(console 출력)이 쌓이는 곳
       // 직접 만들지 않으면 Lambda가 "영원히 보관"으로 만들어 요금이 계속 늘 수 있음 → 1주 보관으로 만듦
@@ -173,8 +186,9 @@ export class Collectors extends Construct {
       // 예: 분 "10,40" → cron(10,40 * * * ? *) = 매일 매시 10분·40분
       new scheduler.Schedule(this, `${c.id}Schedule`, {
         schedule: scheduler.ScheduleExpression.cron({
-          minute: c.minutes,
           // 한국 시각 기준으로 등록. 분은 어느 시간대든 같지만, AWS 콘솔에서 한국 시각으로 보여 확인이 쉬움
+          // 하루 1회 수집기(Catalog)는 시(hour)까지 정함 → 한국 시각이어야 맞음
+          ...c.cron,
           timeZone: TimeZone.ASIA_SEOUL,
         }),
         // 실행할 대상: ②의 함수
@@ -187,7 +201,7 @@ export class Collectors extends Construct {
           ),
         }),
         // AWS 콘솔에 보이는 설명 글
-        description: `baradun v2 collect-${c.id.toLowerCase()} (N3 :${c.minutes})`,
+        description: c.description,
       });
 
       this.functions.set(c.id, fn); // 만든 함수를 보관("Ocean" → 함수)
