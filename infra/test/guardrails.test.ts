@@ -244,6 +244,21 @@ describe("CDK bootstrap 실행 정책 (11장)", () => {
     ]);
   });
 
+  // BRD-93: CloudFormation이 로그 그룹 GetAtt를 읽을 때 필요. 읽기 하나만, 다른 logs 동작은 섞지 않음
+  it("로그 그룹 목록 읽기는 DescribeLogGroups 하나만 따로 허락한다", () => {
+    const statements = policy.Statement.filter((s) =>
+      toList(s.Action).includes("logs:DescribeLogGroups"),
+    );
+    expect(statements).toEqual([
+      {
+        Sid: "LogsDescribeForGetAtt",
+        Effect: "Allow",
+        Action: "logs:DescribeLogGroups",
+        Resource: "*",
+      },
+    ]);
+  });
+
   it("스택이 쓰는 모든 AWS 서비스가 정책에 들어 있다", () => {
     // AWS::S3::Bucket → s3, AWS::CloudFront::Function → cloudfront …
     const services = new Set(
@@ -400,6 +415,21 @@ describe("역할 권한 상한 (BRD-89)", () => {
     expect(statements[0].Condition?.ArnLike?.["lambda:SourceFunctionArn"]).toBe(
       `arn:aws:lambda:ap-northeast-2:${ACCOUNT}:function:BaradunV2-*`,
     );
+  });
+
+  // BRD-93: Resource ARN의 계정 자리에는 정책 변수를 쓸 수 없어 계정 번호를 그대로 씀
+  it("boundary의 모든 리소스는 이 계정으로 제한한다", () => {
+    for (const s of boundary.Statement) {
+      for (const r of toList(s.Resource)) {
+        expect(r, r).not.toContain("${");
+        // S3 ARN에는 계정 자리가 없음. 버킷 이름으로만 제한함
+        if (r.startsWith("arn:aws:s3:::")) {
+          expect(r.startsWith("arn:aws:s3:::baradunv2-"), r).toBe(true);
+        } else {
+          expect(r.split(":")[4], r).toBe(ACCOUNT);
+        }
+      }
+    }
   });
 
   it("KMS 복호화는 SSM을 거칠 때만 허락한다", () => {
