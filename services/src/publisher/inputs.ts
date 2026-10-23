@@ -1,3 +1,4 @@
+import { CATALOG_STATE, type PhotoRecord } from "../collectors/catalog";
 import { OCEAN_STATE } from "../collectors/ocean";
 import { COLLECT_POLICY } from "../collectors/policy";
 import { WARNINGS_STATE } from "../collectors/warnings";
@@ -27,6 +28,8 @@ export interface PublishInputs {
   readonly pwncd: WarningInput<PwnCdResult>;
   readonly tsunami: WarningInput<TsunamiResult>;
   readonly readings: StationReadings;
+  // collect-catalog의 사진 확인 결과(해변 id → 기록). 기록·확인이 없는 해변은 칸이 없음
+  readonly photoChecks: Readonly<Record<string, PhotoRecord>>;
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -108,17 +111,40 @@ function readingsInput(value: StateValue | undefined): StationReadings {
   return value.readings as unknown as StationReadings;
 }
 
+// 사진 확인 기록(BRD-58). 수집 때 검증한 사진을 다시 보는 것이라, 기록이 없거나 모양이 다르면
+// 판정 없음으로 둠(사진 유지). 특보·관측과 달리 판단·안전 정보가 아니고 원본은 저장소에서 사람이 검증함
+function photoChecksInput(
+  value: StateValue | undefined,
+): Record<string, PhotoRecord> {
+  if (!isObject(value) || !isObject(value.beaches)) return {};
+  const checks: Record<string, PhotoRecord> = {};
+  for (const [beachId, record] of Object.entries(value.beaches)) {
+    if (!isObject(record)) continue;
+    const { status, url, checkedAt } = record;
+    if (
+      (status === "type1" || status === "not_type1" || status === "missing") &&
+      typeof url === "string" &&
+      typeof checkedAt === "string"
+    ) {
+      checks[beachId] = { status, url, checkedAt };
+    }
+  }
+  return checks;
+}
+
 export async function readPublishInputs(
   state: StateStore,
 ): Promise<PublishInputs> {
-  const [pwncd, tsunami, ocean] = await Promise.all([
+  const [pwncd, tsunami, ocean, catalog] = await Promise.all([
     state.getState(WARNINGS_STATE.pwncd.pk, WARNINGS_STATE.pwncd.sk),
     state.getState(WARNINGS_STATE.tsunami.pk, WARNINGS_STATE.tsunami.sk),
     state.getState(OCEAN_STATE.readings.pk, OCEAN_STATE.readings.sk),
+    state.getState(CATALOG_STATE.photos.pk, CATALOG_STATE.photos.sk),
   ]);
   return {
     pwncd: pwncdInput(pwncd?.value),
     tsunami: tsunamiInput(tsunami?.value),
     readings: readingsInput(ocean?.value),
+    photoChecks: photoChecksInput(catalog?.value),
   };
 }
