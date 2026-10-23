@@ -13,9 +13,13 @@ npx cdk diff                      # 배포된 스택과 비교
 
 코드 자산 읽기는 `cdk-hnb659fds-assets-${aws:PrincipalAccount}-ap-northeast-2` 버킷으로 제한합니다. `${aws:PrincipalAccount}`는 IAM이 요청 시 실행 역할의 계정 번호로 해석하는 정책 변수이며, 파일을 그대로 IAM 정책으로 사용합니다. 다른 계정·리전의 자산 버킷은 허용하지 않습니다.
 
+로그 그룹 목록 읽기(`logs:DescribeLogGroups`)는 CloudFormation이 로그 그룹 속성(GetAtt)을 읽을 때 필요해 따로 허락합니다. 공식 권한 표에 리소스 유형이 없어 `Resource`는 `*`입니다. 서울 리전으로 좁히는 `aws:RequestedRegion` 조건은 실제 배포로 확인한 뒤 넣습니다.
+
 ## 역할 권한 상한
 
 스택이 만드는 모든 역할에는 권한 상한(permissions boundary) `BaradunV2-RoleBoundary`가 붙습니다. 정책 문서는 `bootstrap/role-boundary-policy.json`입니다. 실행 정책은 이 boundary가 붙은 역할만 만들고, 인라인 정책을 바꾸게 허락합니다. 관리형 정책 부착, boundary 떼기, boundary 정책 고치기는 허락하지 않습니다. 그래서 배포 권한이 탈취되어도 역할의 권한은 boundary 안으로 제한됩니다.
+
+boundary 정책의 `Resource` ARN에는 계정 번호(`717304679248`)를 그대로 씁니다. AWS는 Resource ARN의 계정 자리에 정책 변수(`${aws:PrincipalAccount}`)를 허용하지 않기 때문입니다. 실행 정책의 Condition 값과 S3 버킷 이름에서는 정책 변수를 그대로 씁니다. 다른 계정에 만들 때는 계정 번호를 바꿉니다.
 
 boundary 정책은 스택 밖에서 관리합니다. 정책 파일을 바꿨다면 순서대로 반영합니다.
 
