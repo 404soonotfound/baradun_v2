@@ -342,6 +342,8 @@ describe("CDK bootstrap 실행 정책 (11장)", () => {
 });
 
 describe("역할 권한 상한 (BRD-89)", () => {
+  // 실환경 계정 번호(비밀값 아님). boundary 정책을 이 계정에만 만듦
+  const ACCOUNT = "717304679248";
   const boundary = JSON.parse(
     readFileSync(
       resolve(__dirname, "../bootstrap/role-boundary-policy.json"),
@@ -396,7 +398,7 @@ describe("역할 권한 상한 (BRD-89)", () => {
     );
     expect(statements).toHaveLength(1);
     expect(statements[0].Condition?.ArnLike?.["lambda:SourceFunctionArn"]).toBe(
-      "arn:aws:lambda:ap-northeast-2:${aws:PrincipalAccount}:function:BaradunV2-*",
+      `arn:aws:lambda:ap-northeast-2:${ACCOUNT}:function:BaradunV2-*`,
     );
   });
 
