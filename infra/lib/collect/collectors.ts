@@ -91,6 +91,13 @@ export class Collectors extends Construct {
         retention: LOG_RETENTION, // settings.ts의 1주
       });
 
+      // 기본 관리형 정책의 전체 로그 그룹(*) 쓰기 권한 대신 자기 로그 그룹만 허용함
+      const role = new iam.Role(this, `${c.id}Role`, {
+        assumedBy: new iam.ServicePrincipal("lambda.amazonaws.com"),
+      });
+      // 로그 그룹은 위에서 만들므로 함수에는 스트림 생성·기록 권한만 필요함
+      logGroup.grant(role, "logs:CreateLogStream", "logs:PutLogEvents");
+
       // ② Lambda 함수. NodejsFunction은 TypeScript 파일을 하나의 JS 파일로 묶어서(esbuild) 올려 줌
       const fn = new nodejs.NodejsFunction(this, `${c.id}Function`, {
         entry: HANDLER_FILE, // 묶기를 시작할 파일
@@ -100,6 +107,7 @@ export class Collectors extends Construct {
         memorySize: COLLECTOR_MEMORY_MB, // 256MB
         timeout: Duration.seconds(COLLECTOR_TIMEOUT_SECONDS), // 60초 넘으면 AWS가 강제로 멈춤
         logGroup, // ①에서 만든 로그 보관함 사용
+        role,
         // 묶을 때 기준이 되는 폴더와 설치 목록 파일
         // 이 저장소는 여러 패키지를 루트 하나에서 설치함(npm workspaces) → 루트 것을 지정
         projectRoot: REPO_ROOT,

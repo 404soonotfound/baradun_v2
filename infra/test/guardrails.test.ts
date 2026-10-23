@@ -219,12 +219,28 @@ describe("CDK bootstrap 실행 정책 (11장)", () => {
   ) as {
     Statement: Array<{
       Effect: string;
+      Sid?: string;
       Action?: string | string[];
       NotAction?: unknown;
       Resource?: string | string[];
       NotResource?: unknown;
     }>;
   };
+
+  it("Lambda 코드 자산은 실행 역할 계정의 서울 CDK 버킷 하나에서만 읽는다", () => {
+    const statements = policy.Statement.filter(
+      (s) => s.Sid === "ReadLambdaCodeAssets",
+    );
+    expect(statements).toEqual([
+      {
+        Sid: "ReadLambdaCodeAssets",
+        Effect: "Allow",
+        Action: "s3:GetObject",
+        Resource:
+          "arn:aws:s3:::cdk-hnb659fds-assets-${aws:PrincipalAccount}-ap-northeast-2/*",
+      },
+    ]);
+  });
 
   it("스택이 쓰는 모든 AWS 서비스가 정책에 들어 있다", () => {
     // AWS::S3::Bucket → s3, AWS::CloudFront::Function → cloudfront …
