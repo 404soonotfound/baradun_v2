@@ -15,6 +15,8 @@ vi.mock("../zone-proof.mjs", () => ({
 import { buildBeaches, writeBuild } from "../build.mjs";
 import { checkDraft } from "../check.mjs";
 import { idKey, validateIdentity, preserveManual, reserveSlug } from "../identity.mjs";
+import { assignMetric, loadAssignContext } from "../station-assign.mjs";
+import { slimMatrix } from "../slim-matrix.mjs";
 import { validateCoverage } from "../../../packages/contracts/scripts/coverage-rules.mjs";
 
 const roots: string[] = [];
@@ -74,6 +76,56 @@ describe("대표 측정기 공통 규칙을 적용하는 초안 검사", () => {
     const results = checkDraft({ draft, coverageDir: f.options.coverageDir, regions: f.options.regions, quiet: true });
     const result = results.find((r) => r.name === "독립 검증 입력·구역 미검증 표시·자동 제외");
     expect(result.errors.some((e) => e.includes("20km 안 미검증 관측소"))).toBe(blocked);
+  });
+  it("C 파고부이 72시간 미수신은 바람에서 지연 후보로 세지 않되 실응답 값 있음이면 지연 후보로 판정함", () => {
+    const f = fixture();
+    const hours = Array.from({ length: 30 }, (_, i) => `20261020${String(i).padStart(2, "0")}`);
+    f.put("input/out/stations.csv", "stn_id,name,tp,lat,lon,in_kma_buoy\n22500,조도,C,37.796618,128.917591,False\n22527,슬도,C,37.800000,128.920000,False\n");
+    f.put("input/out/freshness/sea_obs_72h.csv", "req_tm,stn,wh,tw\n" + hours.map((h) => `${h},22500,1,20`).join("\n") + "\n");
+    f.put("input/station-zone-evidence.json", {
+      stations: [
+        { stn_id: "22500", status: "VERIFIED", zone: "S1151200", metrics: { wind: { live_state: "MISSING", status: "UNVERIFIED" } } },
+        { stn_id: "22527", status: "VERIFIED", zone: "S1151200", metrics: { wind: { live_state: "MISSING", status: "UNVERIFIED" } } },
+      ],
+    });
+    const ctx = loadAssignContext(f.options.coverageDir);
+    const absent = assignMetric(ctx, { lat: 37.796618, lng: 128.917591, seaZone: "S1151200", seaVerified: true }, "wind");
+    expect(absent).toMatchObject({ state: "ABSENT", reason: "20km 안 후보가 모두 C 풍속계 없음·72h 미수신" });
+    expect(slimMatrix([{ sea_basis: "", land_basis: "", station_excluded: "", station_basis: `wind[sea_obs]: 22500 조도(C) 0km / 22527 슬도(C) 0.4km → null(가까운 관측 없음: ${absent.reason})` }])[0].station_basis)
+      .toContain("바람 null(C 풍속계 없음·72h 미수신)");
+
+    f.put("input/station-zone-evidence.json", {
+      stations: [
+        { stn_id: "22500", status: "VERIFIED", zone: "S1151200", metrics: { wind: { live_state: "MISSING", status: "UNVERIFIED" } } },
+        { stn_id: "22527", status: "VERIFIED", zone: "S1151200", metrics: { wind: { live_state: "VALUE_PRESENT", status: "VERIFIED" } } },
+      ],
+    });
+    const ctxPresent = loadAssignContext(f.options.coverageDir);
+    const undetermined = assignMetric(ctxPresent, { lat: 37.796618, lng: 128.917591, seaZone: "S1151200", seaVerified: true }, "wind");
+    expect(undetermined.state).toBe("UNDETERMINED");
+    expect(undetermined.reason).toContain("22527 슬도(C)");
+  });
+  it("response_check 문구를 저장본 sources 메타의 요청 시각·HTTP 상태에서 만들고 시각 불일치는 거부함", () => {
+    const f = fixture();
+    f.put("input/responses/metric-matrix.json", {
+      stations: [],
+      sources: {
+        sea_obs: { status: "RECEIVED", http_status: 200, request_url: "https://apihub.kma.go.kr/api/typ01/url/sea_obs.php?tm=202610210000&stn=0&help=0" },
+        kma_buoy: { status: "RECEIVED", http_status: 200, request_url: "https://apihub.kma.go.kr/api/typ01/url/kma_buoy.php?tm=202610210000&stn=0&help=0" },
+      },
+    });
+    const plan = f.build();
+    expect(plan.matrix[0].response_check).toBe("실응답 저장본 재사용(2026-10-20T15:00:00Z, sea_obs·kma_buoy HTTP 200, 새 호출 없음)");
+    expect(plan.files.get(join(f.root, "output/data/beach-coverage.csv"))).toContain("실응답 2026-10-20T15:00Z HTTP 200");
+
+    f.put("input/responses/metric-matrix.json", {
+      stations: [],
+      sources: {
+        sea_obs: { status: "RECEIVED", http_status: 200, request_url: "https://apihub.kma.go.kr/api/typ01/url/sea_obs.php?tm=202610210000&stn=0&help=0" },
+        kma_buoy: { status: "RECEIVED", http_status: 200, request_url: "https://apihub.kma.go.kr/api/typ01/url/kma_buoy.php?tm=202610210100&stn=0&help=0" },
+      },
+    });
+    expect(f.build).toThrow(/실응답 저장본/);
   });
 });
 
