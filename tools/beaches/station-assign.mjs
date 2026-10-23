@@ -50,7 +50,7 @@ export const EXCLUDED_ALWAYS = { "22460": "다대포: 대표 제외 측정기(�
 export const METRICS = {
   waveHeight: { source: "sea_obs", field: "wh" },
   waterTemp: { source: "sea_obs", field: "tw" },
-  wind: { source: "sea_obs", field: "wh" }, // 바람 72시간 실측 없음 → 파고 수신 기준, 값 유무는 실응답으로 판정
+  wind: { source: "sea_obs", field: "wh" }, // 바람 72시간 수신 기록이 없어 파고 수신으로 대신 판정함, 실행 중 바람 지연은 값만 숨기고 분류에 영향 없음(B4)
   wavePeriod: { source: "kma_buoy", field: "wp" },
   waveDirection: { source: "kma_buoy", field: "wo" },
 };
@@ -103,6 +103,7 @@ export function assignMetric(ctx, beach, metric) {
     .sort((a, b) => a.km - b.km);
   const skipped = [];
   const gaps = []; // 결측·지연으로 건너뛴 같은 구역(또는 구역 미확정) 후보
+  const absentReasons = new Set(); // 후보가 모두 제외되어 ABSENT가 될 때 남기는 실제 사유
   const label = (c) => `${c.s.stn_id} ${c.s.name}(${c.s.tp}) ${round1(c.km)}km`;
   if (!beach.seaVerified)
     return { state: "UNDETERMINED", chosen: null, list, skipped, blockers: [], reason: "해변 S1 미검증" };
@@ -110,29 +111,38 @@ export function assignMetric(ctx, beach, metric) {
     const id = c.s.stn_id;
     if (EXCLUDED_ALWAYS[id]) {
       skipped.push(`${label(c)}: ${EXCLUDED_ALWAYS[id]}`);
+      absentReasons.add("대표 제외");
       continue;
     }
     const ev = ctx.evidenceById.get(id);
     const live = ev?.metrics?.[metric]?.live_state;
+    const expected = valueExpected(metric, c.s) || live === "VALUE_PRESENT";
     const otherZone =
       (ev?.status === "VERIFIED_NOT_IN_ZONE" && ev.not_in_zones?.includes(beach.seaZone)) ||
       (ev?.status === "VERIFIED" && ev.zone !== beach.seaZone);
     const miss = ctx.missingHours(id, field);
     if (miss >= MISSING_LIMIT_H) {
       skipped.push(`${label(c)}: ${field} 72시간 중 ${miss}시간 미수신`);
-      if (!otherZone) gaps.push(`${label(c)}(${field} 72시간 중 ${miss}시간 미수신)`);
+      if (!otherZone && expected) gaps.push(`${label(c)}(${field} 72시간 중 ${miss}시간 미수신)`);
+      else {
+        if (otherZone) absentReasons.add("다른 구역");
+        if (!expected) absentReasons.add("C 풍속계 없음");
+        absentReasons.add("72h 미수신");
+      }
       continue;
     }
     // 별표4 광역 경계로 강원 앞바다 밖이 확정된 관측소는 같은 구역 후보로 세지 않음
     if (ev?.status === "VERIFIED_NOT_IN_ZONE" && ev.not_in_zones?.includes(beach.seaZone)) {
       skipped.push(`${label(c)}: VERIFIED_NOT_IN_ZONE(${beach.seaZone} 아님)`);
+      absentReasons.add("다른 구역");
       continue;
     }
     if (ev?.status !== "VERIFIED") {
       // 값이 없다고 확인된 지표만 건너뜀. 값 있음·미확인이면 배정·부재 모두 확정 불가
       if (live && live !== "VALUE_PRESENT") {
         skipped.push(`${label(c)}: S1 미검증이나 실응답 ${live}`);
-        if (valueExpected(metric, c.s)) gaps.push(`${label(c)}(S1 미검증, 실응답 ${live})`);
+        if (expected) gaps.push(`${label(c)}(S1 미검증, 실응답 ${live})`);
+        else absentReasons.add("C 풍속계 없음");
         continue;
       }
       return {
@@ -146,12 +156,13 @@ export function assignMetric(ctx, beach, metric) {
     }
     if (ev.zone !== beach.seaZone) {
       skipped.push(`${label(c)}: S1 VERIFIED ${ev.zone} ≠ 해변 ${beach.seaZone}`);
+      absentReasons.add("다른 구역");
       continue;
     }
     if (live !== "VALUE_PRESENT" || ev.metrics?.[metric]?.status !== "VERIFIED") {
-      const expected = valueExpected(metric, c.s);
       skipped.push(`${label(c)}: 같은 구역이나 실응답 ${live ?? "미확인"}${expected ? "" : " (C 파고부이 풍속계 없음)"}`);
       if (expected) gaps.push(`${label(c)}(같은 구역, 실응답 ${live ?? "미확인"})`);
+      else absentReasons.add("C 풍속계 없음");
       continue;
     }
     return { state: "ASSIGNED", chosen: c.s, km: c.km, list, skipped, blockers: [], reason: `${label(c)} 배정` };
@@ -171,6 +182,6 @@ export function assignMetric(ctx, beach, metric) {
     list,
     skipped,
     blockers: [],
-    reason: list.length ? "20km 안 후보가 모두 다른 구역(VERIFIED·VERIFIED_NOT_IN_ZONE)·값 없음·72시간 기준 제외" : "20km 안 B·C 관측소 없음",
+    reason: list.length ? `20km 안 후보가 모두 ${[...absentReasons].join("·")}` : "20km 안 B·C 관측소 없음",
   };
 }

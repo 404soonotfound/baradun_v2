@@ -25,11 +25,16 @@ const LAND_KINDS = {
 const METRIC_KO = { waveHeight: "파고", wavePeriod: "파주기", waveDirection: "파향", waterTemp: "수온", wind: "바람" };
 const SHORT_TEXT = [
   ["해수부 해수욕장정보 API(2026-10-16 수집)", "해수부 해수욕장정보 API 2026-10-16"],
-  ["실응답 3차 저장본 재사용(2026-10-20T15:00:00Z, sea_obs·kma_buoy HTTP 200, 새 호출 없음)", "실응답 3차 2026-10-20T15:00Z HTTP 200"],
 ];
 
 const str = (v) => (v == null ? "" : String(v));
-const shorten = (v) => SHORT_TEXT.reduce((s, [from, to]) => (s === from ? to : s), v);
+const shorten = (v) => SHORT_TEXT.reduce((s, [from, to]) => (s === from ? to : s), str(v));
+const responseCheck = (v) => {
+  const m = str(v).match(/^실응답 (?:(\d+차) )?저장본 재사용\((?:([^,]+), )?sea_obs·kma_buoy HTTP ([^,]+), 새 호출 없음\)$/);
+  if (!m) return shorten(v);
+  const [, ord, tm, http] = m;
+  return ["실응답", ord, tm ? tm.replace(":00Z", "Z") : "", `HTTP ${http}`].filter(Boolean).join(" ");
+};
 
 // 'gugun_nm=서구 → 별표5 부산앞바다'. 형식이 다르면(자동 제외 사유 등) 원문 유지
 const seaBasis = (r) => {
@@ -62,7 +67,7 @@ const stationBasis = (r) => {
     }
     const [, metric, source, cands, result] = m;
     const res = result
-      .replace(/^null\(가까운 관측 없음: 20km 안 후보가 모두 다른 구역.*\)$/, "null(다른 구역·값 없음·72h)")
+      .replace(/^null\(가까운 관측 없음: 20km 안 후보가 모두 (.*)\)$/, "null($1)")
       .replace("null(가까운 관측 없음: 20km 안 B·C 관측소 없음)", "null(20km 안 B·C 없음)")
       .replace(/^확정 불가\(20km 안 S1 미검증 관측소 (\d+) .*\)$/, "확정 불가($1 S1 미검증)")
       .replace(/^확정 불가\(20km 안 관측소 결측·지연으로 부재 확정 불가: (.*)\)$/, (_, g) => `확정 불가(결측·지연 ${[...g.matchAll(/(\d{5}) /g)].map((x) => x[1]).join("·")})`);
@@ -89,7 +94,7 @@ export function slimMatrix(rows) {
     const slim = {
       ...r,
       coords_source: shorten(r.coords_source),
-      response_check: shorten(r.response_check),
+      response_check: responseCheck(r.response_check),
       sea_basis: seaBasis(r),
       land_basis: landBasis(r),
       station_basis: stationBasis(r),
