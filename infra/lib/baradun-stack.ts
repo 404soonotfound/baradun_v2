@@ -8,6 +8,7 @@ import {
   type StackProps,
 } from "aws-cdk-lib";
 import { Construct } from "constructs";
+import { Collectors } from "./collect/collectors";
 import { GitHubDeployRole } from "./deploy/github-deploy-role";
 import { CostBudget } from "./ops/cost-budget";
 import { PublisherRole } from "./publish/publisher-role";
@@ -51,6 +52,13 @@ export class BaradunStack extends Stack {
     // State·Ops·Inquiry 테이블 (BRD-55)
     const tables = new StorageTables(this, "Storage");
 
+    // 수집 Lambda 2개와 실행 일정 (BRD-56)
+    // 테이블 두 개를 넘겨서 수집기가 그 표를 읽고 쓰게 함
+    const collectors = new Collectors(this, "Collect", {
+      stateTable: tables.state,
+      opsTable: tables.ops,
+    });
+
     // data/ 쓰기 전용 역할 (BRD-61의 publish-snapshot이 사용)
     new PublisherRole(this, "Publisher", {
       bucket: site.bucket,
@@ -83,5 +91,12 @@ export class BaradunStack extends Stack {
     new CfnOutput(this, "InquiryTableName", {
       value: tables.inquiry.tableName,
     });
+    // 수집 함수 이름을 배포 결과에 출력. 배포 뒤 손으로 한 번 실행해 볼 때 씀(aws lambda invoke)
+    // 출력 이름 예: OceanCollectorFunctionName
+    for (const [name, fn] of collectors.functions) {
+      new CfnOutput(this, `${name}CollectorFunctionName`, {
+        value: fn.functionName,
+      });
+    }
   }
 }

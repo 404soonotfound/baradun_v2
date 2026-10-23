@@ -61,3 +61,28 @@ export const TABLE_CAPACITY = {
 // TTL 속성 이름 (Ops 슬롯 기록·Inquiry 문의 글 정리용)
 // TTL은 오래된 항목을 지우는 용도만. 유효시간·신선도 판단에 쓰지 않음.
 export const TTL_ATTRIBUTE = "ttl";
+
+// 수집 Lambda 설정 (아키텍처 5장, BRD-56)
+
+// 수집기 한 번 실행에 허락하는 최대 시간(초). 넘으면 AWS가 강제로 멈춤
+// 왜 60초인지:
+//   API 한 번 부르기는 최악 21초 걸림 = 첫 시도 10초에서 끊김 + 1초 쉼 + 다시 시도 10초에서 끊김
+//   (services/src/collectors/policy.ts의 httpTimeoutMs 10초·httpRetryDelayMs 1초·httpRetries 1번)
+//   API 두 곳은 동시에 부르므로 둘이어도 21초. 여기에 DynamoDB 읽기·쓰기를 더해도 60초면 충분
+// 2분보다 짧아야 하는 이유:
+//   수집기는 시작할 때 "이 시간대는 내가 함" 표시를 2분 동안 걸어 둠(policy.ts의 slotLeaseMs)
+//   60초 안에 끝나면 표시가 풀리기 전에 일을 마침 → 같은 시간대를 두 실행이 동시에 하지 않음
+export const COLLECTOR_TIMEOUT_SECONDS = 60;
+
+// 수집기 메모리(MB). 특보 응답(가장 클 때 약 1MB 글자)을 읽기에 충분한 크기
+// Lambda는 메모리를 늘리면 CPU도 함께 늘어남. 요금 = 메모리 × 실행 시간
+export const COLLECTOR_MEMORY_MB = 256;
+
+// 매시 몇 분에 실행할지(결정 기록 10장 N3). 쉼표로 여러 개
+// 예: "10,40" → 매시 10분과 40분 = 30분마다
+// services/src/collectors/policy.ts의 oceanSchedule·warningsSchedule과 같아야 함(collectors.test.ts가 확인)
+// 한국 시각과 세계 표준시(UTC)는 정확히 9시간 차이 → "몇 분"은 어느 시간대로 봐도 같음
+export const COLLECTOR_SCHEDULE_MINUTES = {
+  ocean: "10,40", // 바다 관측: 매시 10분·40분(30분마다)
+  warnings: "3,18,33,48", // 특보: 매시 3분·18분·33분·48분(15분마다)
+} as const;
