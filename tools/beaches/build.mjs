@@ -32,9 +32,25 @@ export function buildBeaches({ coverageDir = COVERAGE_DIR, existingDataDir = joi
   const LIVE_MATRIX_PATH = join(COVERAGE_DIR, "responses/metric-matrix.json");
   const liveMatrix = existsSync(LIVE_MATRIX_PATH) ? JSON.parse(readFileSync(LIVE_MATRIX_PATH, "utf8")) : null;
   const liveByStation = new Map((liveMatrix?.stations ?? []).map((s) => [s.stn_id, s]));
-  // 실응답 확인 칸: 저장본(고정 해시 대조됨)의 sea_obs·kma_buoy가 모두 HTTP 200으로 받은 경우만 기록, 아니면 빈 칸(check-coverage가 공개 행에서 실패)
-  const liveReceived = ["sea_obs", "kma_buoy"].every((k) => liveMatrix?.sources?.[k]?.status === "RECEIVED" && liveMatrix.sources[k].http_status === 200);
-  const RESPONSE_CHECK = liveReceived ? "실응답 3차 저장본 재사용(2026-10-20T15:00:00Z, sea_obs·kma_buoy HTTP 200, 새 호출 없음)" : "";
+  const SOURCE_KEYS = ["sea_obs", "kma_buoy"];
+  // 깨진 시각은 null로 둠(아래 RESPONSE_CHECK가 빈 칸 → publish가 멈춤). Invalid Date의 toISOString은 던지므로 먼저 거름
+  const isoOrNull = (date) => (Number.isNaN(date.getTime()) ? null : date.toISOString().replace(/\.\d+Z$/, "Z"));
+  const kstTmToUtcIso = (url) => {
+    const m = String(url ?? "").match(/[?&]tm=(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})\b/);
+    if (!m) return null;
+    const [, y, mo, d, h, mi] = m;
+    return isoOrNull(new Date(`${y}-${mo}-${d}T${h}:${mi}:00+09:00`));
+  };
+  const sourceTmUtc = (s) => kstTmToUtcIso(s?.request_url) ?? (s?.fetched_at_utc ? isoOrNull(new Date(s.fetched_at_utc)) : null);
+  // 실응답 확인 칸: 저장본(고정 해시 대조됨)의 sea_obs·kma_buoy가 모두 HTTP 200으로 받은 경우만 메타(sources)에서 기록, 아니면 빈 칸(check-coverage가 공개 행에서 실패)
+  const liveReceived = SOURCE_KEYS.every((k) => liveMatrix?.sources?.[k]?.status === "RECEIVED" && liveMatrix.sources[k].http_status === 200);
+  const liveTms = SOURCE_KEYS.map((k) => sourceTmUtc(liveMatrix?.sources?.[k]));
+  const hasAnyTm = liveTms.some(Boolean);
+  const liveTmUtc = liveTms.every(Boolean) && new Set(liveTms).size === 1 ? liveTms[0] : null;
+  const liveHttp = liveReceived ? [...new Set(SOURCE_KEYS.map((k) => liveMatrix.sources[k].http_status))].join("/") : "";
+  const RESPONSE_CHECK = liveReceived && (!hasAnyTm || liveTmUtc)
+    ? `실응답 저장본 재사용(${liveTmUtc ? `${liveTmUtc}, ` : ""}${SOURCE_KEYS.join("·")} HTTP ${liveHttp}, 새 호출 없음)`
+    : "";
 
   const csvCell = (v) => {
     const s = v === null || v === undefined ? "" : String(v);
@@ -508,7 +524,7 @@ export function buildBeaches({ coverageDir = COVERAGE_DIR, existingDataDir = joi
         season2026: evidence.official_address_2026?.season2026
           ? { ...evidence.official_address_2026.season2026, source: evidence.official_address_2026.source.name, sourceUrl: evidence.official_address_2026.source.url, xlsxRow: evidence.official_address_2026.xlsx_row, linkMethod: evidence.official_address_2026.method }
           : { status: null, reason: `공식 현황 미연결: ${evidence.official_address_2026?.basis ?? "입력 없음"}` },
-        windNote: liveByStation.size ? "실응답 저장본(2026-10-20T15:00:00Z) 기준. 파고부이(C)는 바람 결측(-99)이 많음" : "실응답 확인 필요(바람 값 유무 미확인)",
+        windNote: liveByStation.size ? `실응답 저장본${liveTmUtc ? `(${liveTmUtc})` : ""} 기준. 파고부이(C)는 바람 결측(-99)이 많음` : "실응답 확인 필요(바람 값 유무 미확인)",
         activityCandidates: null,
         activityCandidatesNote: "국립해양조사원 서핑·스쿠버 포인트 목록 입력 없음 → 후보 비움",
         seasonNameCandidates: null,
@@ -563,7 +579,12 @@ export function buildBeaches({ coverageDir = COVERAGE_DIR, existingDataDir = joi
     if (TARGET_REGIONS.length < 2) throw new Error("--publish는 --region 전국에서만");
     // 위 checkDraft가 파일 쓰기 전에 메모리의 national 초안을 검사함.
     // 실응답 확인 칸이 비면 check-coverage가 공개 행에서 실패하므로 data/를 쓰기 전에 멈춤(check.mjs는 매트릭스를 보지 않음)
-    if (!RESPONSE_CHECK) throw new Error("실응답 저장본이 sea_obs·kma_buoy HTTP 200 수신이 아님 → 공개 파일을 쓰지 않음");
+    if (!RESPONSE_CHECK)
+      throw new Error(
+        liveReceived
+          ? `실응답 저장본의 sea_obs·kma_buoy 요청 시각이 서로 다르거나 읽지 못함(${liveTms.join(" / ")}) → 공개 파일을 쓰지 않음`
+          : "실응답 저장본이 sea_obs·kma_buoy HTTP 200 수신이 아님 → 공개 파일을 쓰지 않음",
+      );
     const DATA = dataOutputDir;
     // 전부 검사·생성한 뒤에 씀(중간 실패로 일부만 바뀌지 않게)
     for (const r of records)

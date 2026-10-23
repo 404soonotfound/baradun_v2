@@ -12,8 +12,14 @@ export function linkOfficial(src, mofRows, entries) {
   const exact = pool.filter((r) => r.name === src.sta_nm);
   if (exact.length) return pick("EXACT", exact, "이름 완전 일치");
   const rule = pool.filter((r) => normName(r.name) === normName(src.sta_nm));
-  if (rule.length) return pick("RULE", rule, `괄호·'해수욕장'·'해변' 차이만(${src.sta_nm} ↔ ${rule.map((r) => r.name).join("·")})`);
   const matches = entries.filter((x) => x.key === `${src.sido_nm}|${src.gugun_nm}|${src.sta_nm}`);
+  if (rule.length === 1) return pick("RULE", rule, `괄호·'해수욕장'·'해변' 차이만(${src.sta_nm} ↔ ${rule[0].name})`);
+  if (rule.length > 1) {
+    const m = matches.length === 1 ? matches[0] : null;
+    const mapped = m ? rule.filter((r) => r.name === m.xlsx_name) : [];
+    if (mapped.length === 1) return pick("MAP", mapped, `대응표 name-map-2026.json: ${m.basis}`);
+    return pick("RULE", rule, `괄호·'해수욕장'·'해변' 차이만(${src.sta_nm} ↔ ${rule.map((r) => r.name).join("·")})`);
+  }
   if (matches.length > 1) return { method: "UNLINKED", candidates: matches.map((m) => m.xlsx_name), basis: "대응표 키 중복 → 연결 안 함" };
   const m = matches[0];
   if (m) return pick("MAP", pool.filter((r) => r.name === m.xlsx_name), `대응표 name-map-2026.json: ${m.basis}`);
