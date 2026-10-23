@@ -44,6 +44,33 @@
       "Resource": "*"
     },
     {
+      "Sid": "CollectorFunctions",
+      "Effect": "Allow",
+      "Action": "lambda:*",
+      "Resource": "arn:aws:lambda:ap-northeast-2:*:function:BaradunV2-*"
+    },
+    {
+      "Sid": "CollectorLogs",
+      "Effect": "Allow",
+      "Action": "logs:*",
+      "Resource": [
+        "arn:aws:logs:ap-northeast-2:*:log-group:BaradunV2-*",
+        "arn:aws:logs:ap-northeast-2:*:log-group:BaradunV2-*:*"
+      ]
+    },
+    {
+      "Sid": "CollectorSchedules",
+      "Effect": "Allow",
+      "Action": "scheduler:*",
+      "Resource": "arn:aws:scheduler:ap-northeast-2:*:schedule/default/BaradunV2-*"
+    },
+    {
+      "Sid": "ReadLambdaCodeAssets",
+      "Effect": "Allow",
+      "Action": "s3:GetObject",
+      "Resource": "arn:aws:s3:::cdk-hnb659fds-assets-*/*"
+    },
+    {
       "Sid": "ReadCdkBootstrapVersion",
       "Effect": "Allow",
       "Action": ["ssm:GetParameter", "ssm:GetParameters"],
