@@ -3,8 +3,15 @@ import { Template } from "aws-cdk-lib/assertions";
 import { BaradunStack } from "../lib/baradun-stack";
 
 // 가드레일 테스트들이 같이 쓰는 템플릿. AWS 계정 없이 만듦.
+// "aws:cdk:bundling-stacks": [] → 테스트에서는 Lambda 코드 묶기(esbuild)를 하지 않음
+// 테스트는 템플릿(JSON) 내용만 보므로 묶은 코드가 필요 없고, 매번 묶으면 느려짐
+// 실제로 묶이는지는 CI의 `npx cdk synth`가 확인함
 export const template = Template.fromStack(
-  new BaradunStack(new App(), "Test", { env: { region: "ap-northeast-2" } }),
+  new BaradunStack(
+    new App({ context: { "aws:cdk:bundling-stacks": [] } }),
+    "Test",
+    { env: { region: "ap-northeast-2" } },
+  ),
 );
 
 export type Statement = {
