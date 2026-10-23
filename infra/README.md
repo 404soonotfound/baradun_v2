@@ -19,7 +19,7 @@ npx cdk diff                      # 배포된 스택과 비교
 
 스택이 만드는 모든 역할에는 권한 상한(permissions boundary) `BaradunV2-RoleBoundary`가 붙습니다. 정책 문서는 `bootstrap/role-boundary-policy.json`입니다. 실행 정책은 이 boundary가 붙은 역할만 만들고, 인라인 정책을 바꾸게 허락합니다. 관리형 정책 부착, boundary 떼기, boundary 정책 고치기는 허락하지 않습니다. 그래서 배포 권한이 탈취되어도 역할의 권한은 boundary 안으로 제한됩니다.
 
-boundary 정책의 `Resource` ARN에는 계정 번호(`717304679248`)를 그대로 씁니다. AWS는 Resource ARN의 계정 자리에 정책 변수(`${aws:PrincipalAccount}`)를 허용하지 않기 때문입니다. 실행 정책의 Condition 값과 S3 버킷 이름에서는 정책 변수를 그대로 씁니다. 다른 계정에 만들 때는 계정 번호를 바꿉니다.
+boundary 정책의 `Resource` ARN에는 계정 번호(`717304679248`)를 그대로 씁니다. AWS는 Resource ARN의 계정 자리에 정책 변수(`${aws:PrincipalAccount}`)를 허용하지 않기 때문입니다. boundary의 Condition 값(`lambda:SourceFunctionArn`)도 같은 계정 번호로 맞춥니다. 실행 정책의 Condition 값과 S3 버킷 이름에서는 정책 변수를 그대로 씁니다. 스택은 로그인한 계정에 배포되므로, 다른 계정에 만들 때는 boundary 정책 파일과 `test/guardrails.test.ts`의 계정 번호를 함께 바꿉니다. 바꾸지 않으면 역할 권한이 모두 막혀 수집기가 실행할 때 실패합니다.
 
 boundary 정책은 스택 밖에서 관리합니다. 정책 파일을 바꿨다면 순서대로 반영합니다.
 
