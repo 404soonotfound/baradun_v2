@@ -1,15 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { App } from "aws-cdk-lib";
-import { Match, Template } from "aws-cdk-lib/assertions";
-import { BaradunStack } from "../lib/baradun-stack";
+import { Match } from "aws-cdk-lib/assertions";
+import { template } from "./stack-template";
 
 // AWS가 만들어 둔 CachingOptimized 정책 ID (모든 계정 공통)
 const CACHING_OPTIMIZED_ID = "658327ea-f89d-4fab-a63d-7e88639e58f6";
 
 // 스택을 CloudFormation 템플릿(JSON)으로 만들어서 검사함. AWS 계정은 필요 없음.
-const template = Template.fromStack(
-  new BaradunStack(new App(), "Test", { env: { region: "ap-northeast-2" } }),
-);
+// 템플릿은 다른 테스트와 같은 것을 씀(stack-template.ts). 따로 만들면 이 파일에서만 Lambda 코드 묶기가 돎
 
 describe("버킷", () => {
   it("공개 접근을 모두 막는다", () => {
