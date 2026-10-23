@@ -127,17 +127,31 @@ describe("수집 함수 권한 (필요한 것만)", () => {
     ["Ocean", "kma-apihub"],
     ["Warnings", "data-go-kr"],
   ] as const)(
-    "%s: State 읽기·쓰기, Ops 기록, 자기 API 키(%s) 읽기만 할 수 있다",
+    "%s: 자기 로그·State·Ops·API 키(%s)에 필요한 동작만 허용한다",
     (name, key) => {
-      const actions = allowedActions(roleOf(functionId(name)));
-      // 허락된 동작은 정확히 이 4개
-      // 로그 쓰기 권한은 AWS가 미리 만들어 둔 정책(AWSLambdaBasicExecutionRole)을 붙이는 방식이라 이 목록에 안 나옴
+      const role = roleOf(functionId(name));
+      // 외부 관리형 정책으로 검사 밖의 권한이 추가되는 것도 막음
+      expect(resources[role]!.Properties.ManagedPolicyArns ?? []).toEqual([]);
+      const actions = allowedActions(role);
       expect([...actions.keys()].sort()).toEqual([
         "dynamodb:GetItem",
         "dynamodb:PutItem",
         "dynamodb:UpdateItem",
+        "logs:CreateLogStream",
+        "logs:PutLogEvents",
         "ssm:GetParameter",
       ]);
+      // 함수에 연결된 로그 그룹 하나에만 스트림을 만들고 기록할 수 있음
+      const logGroupIds = Object.keys(
+        template.findResources("AWS::Logs::LogGroup"),
+      ).filter((id) => id.startsWith(`Collect${name}Logs`));
+      expect(logGroupIds).toHaveLength(1);
+      expect(
+        resources[functionId(name)]!.Properties.LoggingConfig.LogGroup,
+      ).toEqual({ Ref: logGroupIds[0] });
+      for (const action of ["logs:CreateLogStream", "logs:PutLogEvents"]) {
+        expect(actions.get(action)).toEqual([`${logGroupIds[0]}.Arn`]);
+      }
       // 읽기(GetItem)는 State 테이블에만
       // expect.stringMatching(/…/): 정확한 글자 대신 "이 모양이면 통과"로 비교
       expect(actions.get("dynamodb:GetItem")).toEqual([

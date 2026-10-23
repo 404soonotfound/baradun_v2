@@ -199,8 +199,8 @@ describe("DynamoDB 권한 (BRD-55)", () => {
     expect([...holders].sort()).toEqual(
       [
         roleId("PublisherRole"),
-        roleId("CollectOceanFunctionServiceRole"),
-        roleId("CollectWarningsFunctionServiceRole"),
+        roleId("CollectOceanRole"),
+        roleId("CollectWarningsRole"),
       ].sort(),
     );
   });
