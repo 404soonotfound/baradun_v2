@@ -138,6 +138,32 @@ describe("buildSnapshot", () => {
     expect(snapshot.nationwideWarnings.lastConfirmedAt).toBeNull();
   });
 
+  it("지역은 읽었지만 종류를 못 읽은 지진해일 행 → 해변 판단불가, 전국 확인 시각 null", async () => {
+    const state = new MemoryStateStore();
+    await seedWarnings(state, [HEAVY_RAIN_ROW], {
+      tsunamiRows: [
+        {
+          stnId: "108",
+          tmFc: "202610231100",
+          cnt: "0",
+          tmEf: "202610231100",
+          fcTp: "99", // 모르는 발표 종류
+          reg: "동해안",
+          ann: "",
+          rem: "",
+        },
+      ],
+    });
+    await seedReadings(state);
+    const snapshot = await snapshotFrom(state);
+    expectContract(snapshot);
+    expect(snapshot.status.beaches.b0001!.category).toBe("undetermined");
+    expect(snapshot.nationwideWarnings).toEqual({
+      lastConfirmedAt: null,
+      items: [],
+    });
+  });
+
   it("관측 기록이 없으면 배정된 파고 측정소는 관측 지연(값을 지어내지 않음)", async () => {
     const state = new MemoryStateStore();
     await seedWarnings(state, [HEAVY_RAIN_ROW]);
