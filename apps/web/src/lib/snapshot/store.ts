@@ -10,7 +10,12 @@ import {
   isTime,
   type Clock,
 } from "./clock";
-import { isRecord, METRIC_KEYS, type ViewSource } from "./view";
+import {
+  hidesLastValues,
+  isRecord,
+  METRIC_KEYS,
+  type ViewSource,
+} from "./view";
 
 // 바다 정보 조회·갱신 (아키텍처 9.1·그림 2, BRD-41)
 // manifest를 먼저 받고 snapshotVersion이 바뀔 때만 status를 받음.
@@ -247,11 +252,7 @@ export function createSnapshotStore(deps: SnapshotDeps): SnapshotStore {
   function fail(fresh?: Clock, manifestOk = false) {
     showStored();
     const clock = fresh ?? state.clock;
-    const keep =
-      !manifestOk &&
-      (state.phase === "schema_unsupported" ||
-        state.phase === "maintenance" ||
-        state.phase === "update_required");
+    const keep = !manifestOk && hidesLastValues(state.phase);
     set({
       // 점검 화면·강제 업데이트·지원 밖 형식 배너는 그대로 둠. 처음부터 못 받았으면 데이터 없이 판단불가
       phase: keep ? state.phase : "ready",

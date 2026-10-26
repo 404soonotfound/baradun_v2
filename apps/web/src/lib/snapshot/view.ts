@@ -90,6 +90,16 @@ export interface ViewSource {
   nowMs: number;
 }
 
+// 지난 값을 보여주지 않는 화면 전체 상태: 지원 밖 형식 배너·점검 화면·강제 업데이트 화면(9.1)
+// 해변 계산(deriveBeachView)과 조회 실패 때 유지 여부(store.ts fail)가 같은 목록을 씀
+export function hidesLastValues(phase: ViewSource["phase"]): boolean {
+  return (
+    phase === "schema_unsupported" ||
+    phase === "maintenance" ||
+    phase === "update_required"
+  );
+}
+
 const HIDDEN_METRICS = Object.fromEntries(
   METRIC_KEYS.map((key) => [key, { kind: "hidden" }]),
 ) as Record<MetricKey, MetricView>;
@@ -292,13 +302,7 @@ export function deriveBeachView(
   if (source.phase === "loading") return { kind: "loading" };
   // 지원 범위 밖 schemaVersion → 모든 해변 판단불가(배너는 화면에서, 9.1)
   // 점검 중·강제 업데이트: 화면이 전체를 덮고 마지막 값도 숨김(9.1). 다른 소비자가 계산해도 지난 값이 나오지 않게
-  if (
-    source.phase === "schema_unsupported" ||
-    source.phase === "maintenance" ||
-    source.phase === "update_required"
-  ) {
-    return UNDETERMINED;
-  }
+  if (hidesLastValues(source.phase)) return UNDETERMINED;
 
   // 데이터가 없거나 읽을 수 없어 판단불가. 오프라인이면 '이후 확인 못 함'도 붙도록 stale 표시
   const noData: BeachView = { ...UNDETERMINED, stale: !source.live };
