@@ -156,6 +156,24 @@
       "Resource": "arn:aws:sns:ap-northeast-2:*:BaradunV2-*"
     },
     {
+      "Sid": "OpsAlarms",
+      "Effect": "Allow",
+      "Action": [
+        "cloudwatch:DeleteAlarms",
+        "cloudwatch:ListTagsForResource",
+        "cloudwatch:PutMetricAlarm",
+        "cloudwatch:TagResource",
+        "cloudwatch:UntagResource"
+      ],
+      "Resource": "arn:aws:cloudwatch:ap-northeast-2:*:alarm:BaradunV2-*"
+    },
+    {
+      "Sid": "OpsAlarmsDescribe",
+      "Effect": "Allow",
+      "Action": "cloudwatch:DescribeAlarms",
+      "Resource": "*"
+    },
+    {
       "Sid": "ReadLambdaCodeAssets",
       "Effect": "Allow",
       "Action": "s3:GetObject",
