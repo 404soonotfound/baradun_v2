@@ -119,8 +119,10 @@ export class OpsAlarms extends Construct {
       comparisonOperator:
         cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD, // 1 이상
       evaluationPeriods: 1, // 한 구간만 보고 판정(실패 1번도 알림)
-      // 실행이 없어 지표가 비면 정상으로 봄. 실행 없음은 심장박동 경보의 몫(이중 알림 방지)
-      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+      // 실행이 없어 지표가 비면 지금 상태를 유지함. 실행 없음은 심장박동 경보의 몫(이중 알림 방지)
+      // 정상으로 보면(notBreaching) 실패 뒤 빈 구간마다 OK로 돌아가 실패 실행마다 메일이 다시 감
+      // 성공한 실행은 오류 0을 남기므로 그때 OK로 돌아옴
+      treatMissingData: cloudwatch.TreatMissingData.IGNORE,
       alarmDescription: description,
     });
     alarm.addAlarmAction(new cloudwatchActions.SnsAction(this.topic)); // 울리면 운영 주제로 발송

@@ -42,9 +42,9 @@ describe("운영 경보 (BRD-62)", () => {
   it("모든 경보가 '데이터 없음' 처리를 명시하고 운영 주제로만 발송한다", () => {
     for (const [id, a] of alarms) {
       const p = a.Properties;
-      // 심장박동은 실행이 없으면(지표 없음) 위반, 오류는 실행 없음을 정상으로 봄
+      // 심장박동은 실행이 없으면(지표 없음) 위반, 오류는 실행 없음에 상태를 유지함(정상으로 보지 않음)
       expect(p.TreatMissingData, id).toBe(
-        p.MetricName === "Invocations" ? "breaching" : "notBreaching",
+        p.MetricName === "Invocations" ? "breaching" : "ignore",
       );
       expect(p.AlarmActions, id).toEqual([{ Ref: opsTopicId }]);
       expect(p.Statistic, id).toBe("Sum");
