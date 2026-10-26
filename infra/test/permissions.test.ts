@@ -21,6 +21,17 @@ function roleId(prefix: string): string {
 describe("data/ 쓰기 권한", () => {
   it("data/에 쓰거나 지울 수 있는 역할은 publisher 하나뿐이다", () => {
     const writers = new Set<string>();
+    const siteBucketId = Object.keys(
+      template.findResources("AWS::S3::Bucket"),
+    ).find((id) => id.startsWith("SiteBucket"));
+    expect(siteBucketId).toBeDefined();
+    const siteResources = (resources: unknown[]) =>
+      resources
+        .map(resourceText)
+        .filter(
+          (resource) =>
+            resource === "*" || resource.startsWith(`${siteBucketId}.Arn`),
+        );
 
     for (const policy of allIamPolicies()) {
       // 같은 정책 안에서 data/를 명시적으로 거부하면 제외 (거부가 허용보다 우선)
@@ -28,13 +39,13 @@ describe("data/ 쓰기 권한", () => {
         (s) =>
           s.Effect === "Deny" &&
           toList(s.Action).some(isObjectWrite) &&
-          toList(s.Resource).map(resourceText).some(coversDataPrefix),
+          siteResources(toList(s.Resource)).some(coversDataPrefix),
       );
       const allowsData = policy.statements.some(
         (s) =>
           s.Effect === "Allow" &&
           toList(s.Action).some(isObjectWrite) &&
-          toList(s.Resource).map(resourceText).some(coversDataPrefix),
+          siteResources(toList(s.Resource)).some(coversDataPrefix),
       );
       if (allowsData && !deniesData)
         policy.roles.forEach((r) => writers.add(r));
@@ -185,8 +196,7 @@ function dynamoActionsByResource(roles?: string[]): Map<string, Set<string>> {
 }
 
 describe("DynamoDB 권한 (BRD-55)", () => {
-  // 데이터 문의(Inquiry) 역할은 BRD-63에서 생김. 생기면 이 목록에 더함
-  it("DynamoDB 권한이 있는 역할은 publisher와 수집기 3개뿐이다", () => {
+  it("DynamoDB 권한이 있는 역할은 정해진 실행 역할뿐이다", () => {
     const holders = new Set<string>();
     for (const policy of allIamPolicies()) {
       const hasDynamo = policy.statements.some(
@@ -202,8 +212,22 @@ describe("DynamoDB 권한 (BRD-55)", () => {
         roleId("CollectOceanRole"),
         roleId("CollectWarningsRole"),
         roleId("CollectCatalogRole"),
+        roleId("InquiryInquiryRole"),
       ].sort(),
     );
+  });
+
+  it("문의 역할은 Inquiry 항목 쓰기·이메일 삭제만 할 수 있다", () => {
+    const byResource = dynamoActionsByResource([
+      roleId("InquiryInquiryRole"),
+    ]);
+    expect(Object.fromEntries(byResource)).toEqual({
+      [`${tableId("Inquiry")}.Arn`]: new Set([
+        "dynamodb:DeleteItem",
+        "dynamodb:TransactWriteItems",
+        "dynamodb:UpdateItem",
+      ]),
+    });
   });
 
   it("publisher는 State 읽기, Ops 읽기·쓰기만 갖고 Inquiry 권한은 없다", () => {

@@ -137,6 +137,25 @@
       "Resource": "arn:aws:scheduler:ap-northeast-2:*:schedule/default/BaradunV2-*"
     },
     {
+      "Sid": "InquiryNotifications",
+      "Effect": "Allow",
+      "Action": [
+        "sns:CreateTopic",
+        "sns:DeleteTopic",
+        "sns:GetSubscriptionAttributes",
+        "sns:GetTopicAttributes",
+        "sns:ListSubscriptionsByTopic",
+        "sns:ListTagsForResource",
+        "sns:SetSubscriptionAttributes",
+        "sns:SetTopicAttributes",
+        "sns:Subscribe",
+        "sns:TagResource",
+        "sns:Unsubscribe",
+        "sns:UntagResource"
+      ],
+      "Resource": "arn:aws:sns:ap-northeast-2:*:BaradunV2-*"
+    },
+    {
       "Sid": "ReadLambdaCodeAssets",
       "Effect": "Allow",
       "Action": "s3:GetObject",

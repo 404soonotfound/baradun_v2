@@ -11,6 +11,7 @@ import * as iam from "aws-cdk-lib/aws-iam";
 import { Construct } from "constructs";
 import { Collectors } from "./collect/collectors";
 import { GitHubDeployRole } from "./deploy/github-deploy-role";
+import { InquiryBackend } from "./inquiry/inquiry-backend";
 import { CostBudget } from "./ops/cost-budget";
 import { Publisher } from "./publish/publisher";
 import { PublisherRole } from "./publish/publisher-role";
@@ -64,6 +65,13 @@ export class BaradunStack extends Stack {
 
     // State·Ops·Inquiry 테이블 (BRD-55)
     const tables = new StorageTables(this, "Storage");
+
+    // 데이터 문의 접수와 기존 배포의 /api/inquiries* 동작 연결 (BRD-63)
+    new InquiryBackend(this, "Inquiry", {
+      table: tables.inquiry,
+      distribution: site.distribution,
+      notificationEmail: alertEmail.valueAsString,
+    });
 
     // data/ 쓰기 전용 역할 (BRD-52). 논리 ID(PublisherRole…)를 유지하려고 여기서 만듦
     const publisherRole = new PublisherRole(this, "Publisher", {
