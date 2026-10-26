@@ -76,7 +76,12 @@ export type BeachView =
 
 // 화면 전체 데이터 상태 중 해변 계산에 필요한 부분 (store.ts의 SnapshotState와 같은 모양)
 export interface ViewSource {
-  phase: "loading" | "ready" | "maintenance" | "schema_unsupported";
+  phase:
+    | "loading"
+    | "ready"
+    | "maintenance"
+    | "update_required"
+    | "schema_unsupported";
   statuses: Record<string, unknown> | null;
   // 마지막 조회가 성공했는지. false = 오프라인·장애(B5)
   live: boolean;
@@ -286,8 +291,12 @@ export function deriveBeachView(
   if (beach.hidden) return { kind: "hidden" };
   if (source.phase === "loading") return { kind: "loading" };
   // 지원 범위 밖 schemaVersion → 모든 해변 판단불가(배너는 화면에서, 9.1)
-  // 점검 중: 화면이 전체를 덮고 마지막 값도 숨김(9.1). 다른 소비자가 계산해도 지난 값이 나오지 않게
-  if (source.phase === "schema_unsupported" || source.phase === "maintenance") {
+  // 점검 중·강제 업데이트: 화면이 전체를 덮고 마지막 값도 숨김(9.1). 다른 소비자가 계산해도 지난 값이 나오지 않게
+  if (
+    source.phase === "schema_unsupported" ||
+    source.phase === "maintenance" ||
+    source.phase === "update_required"
+  ) {
     return UNDETERMINED;
   }
 

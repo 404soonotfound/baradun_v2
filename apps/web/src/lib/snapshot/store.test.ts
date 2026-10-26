@@ -103,6 +103,8 @@ function setup(
     storage,
     session,
     reload,
+    // 예시 manifest의 minWebBuild(1)와 같은 빌드
+    webBuild: 1,
     isVisible: () => visible,
     onVisibilityChange(listener) {
       visibilityListeners.add(listener);

@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from "react";
 
+import { WEB_BUILD } from "./build";
 import {
   createSnapshotStore,
   INITIAL_STATE,
@@ -31,6 +32,7 @@ function getStore(): SnapshotStore {
     storage: browserStorage("localStorage"),
     session: browserStorage("sessionStorage"),
     reload: () => window.location.reload(),
+    webBuild: WEB_BUILD,
     isVisible: () => document.visibilityState === "visible",
     onVisibilityChange(listener) {
       // 뒤로 가기 캐시(bfcache)에서 돌아온 경우도 앱 복귀로 봄
