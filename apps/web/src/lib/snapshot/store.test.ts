@@ -1058,6 +1058,44 @@ describe("스냅샷 버전 형식·저장된 값의 시계", () => {
 });
 
 describe("점검 해제 후 status 실패", () => {
+  // Codex 리뷰(PR #63 P2): 저장소를 못 쓰는 환경에서 점검으로 statuses를 비운 뒤 복구할 곳이 없었음
+  it("localStorage가 없어도: 발효 특보 표시 → 점검 → 점검 해제 + status 실패 → 메모리의 마지막 값으로 B5 배지 유지", async () => {
+    const { store, server } = setup({
+      storage: null as unknown as ReturnType<typeof memoryStorage>,
+    });
+    store.start();
+    await store.refresh();
+    expect(
+      deriveBeachView({ id: "b0002", hidden: false }, store.getState()),
+    ).toMatchObject({ category: "unavailable", stale: false });
+
+    server.manifest = {
+      ...manifestExample,
+      maintenance: { active: true, until: null },
+    };
+    await store.refresh();
+    expect(store.getState()).toMatchObject({
+      phase: "maintenance",
+      statuses: null,
+    });
+
+    server.manifest = {
+      ...manifestExample,
+      snapshotVersion: "20261017T060000Z",
+      generatedAt: "2026-10-17T05:30:30Z",
+      files: {
+        ...manifestExample.files,
+        status: "/data/20261017T060000Z/status.json",
+      },
+    };
+    server.statusDown = true;
+    await store.refresh();
+    expect(store.getState()).toMatchObject({ phase: "ready", live: false });
+    expect(
+      deriveBeachView({ id: "b0002", hidden: false }, store.getState()),
+    ).toMatchObject({ category: "unavailable", stale: true });
+  });
+
   it("점검이 끝난 manifest를 받고 status만 실패 → 점검 화면을 풀고 B5", async () => {
     const { store, server } = setup();
     store.start();

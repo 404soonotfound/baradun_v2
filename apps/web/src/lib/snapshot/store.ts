@@ -142,6 +142,12 @@ export function createSnapshotStore(deps: SnapshotDeps): SnapshotStore {
   let loadedVersion: string | null = null;
   // 이번 세션에 네트워크로 받은 manifest 중 가장 새 snapshotVersion(점검·status 실패 포함)
   let latestVersion: string | null = null;
+  // 이 탭이 마지막으로 정상 수신한 manifest·status(메모리). 점검·강제 업데이트로 상태에서 비운 뒤 그 화면이 풀렸는데
+  // status만 실패하면 여기서 B5로 복구함(localStorage를 못 쓰는 환경에서도 발효 특보 배지를 잃지 않게)
+  let lastLive: {
+    manifest: ManifestFile;
+    statuses: Record<string, unknown>;
+  } | null = null;
   let inFlight: Promise<void> | null = null;
   let pollTimer: ReturnType<typeof setInterval> | null = null;
   let deadlineTimer: ReturnType<typeof setTimeout> | null = null;
@@ -224,19 +230,27 @@ export function createSnapshotStore(deps: SnapshotDeps): SnapshotStore {
     } else void refresh();
   }
 
-  // 메모리에 값이 없으면 기기에 저장해 둔 마지막 값을 꺼냄. 서버 시각은 모르는 것으로 둠.
+  // 기기에 저장해 둔 마지막 값. 없거나 읽을 수 없으면 null
+  function readStoredSnapshot() {
+    const stored = safe(() =>
+      JSON.parse(deps.storage?.getItem(LAST_SNAPSHOT_KEY) ?? "null"),
+    );
+    const manifest = isRecord(stored) ? readManifest(stored.manifest) : null;
+    const statuses = isRecord(stored) ? readStatuses(stored.status) : null;
+    if (!manifest || manifest === "unsupported" || !statuses) return null;
+    return { manifest, statuses };
+  }
+
+  // 메모리에 값이 없으면 마지막 정상 수신값(이 탭 메모리 → 기기 저장)을 꺼냄. 서버 시각은 모르는 것으로 둠.
   // live: false라 B5 규칙(발효 특보 배지 유지, 나머지는 특보 확인 못 함)으로 보임
   // 점검·강제 업데이트 화면을 보이는 중에는 꺼내지 않음(상태에 지난 값을 들고 있지 않게).
   // evenIfHidden: 새 manifest가 그 화면을 풀었는데 status만 실패한 경우(fail)는 꺼냄
   function showStored(evenIfHidden = false) {
     if (state.statuses) return;
     if (!evenIfHidden && hidesLastValues(state.phase)) return;
-    const stored = safe(() =>
-      JSON.parse(deps.storage?.getItem(LAST_SNAPSHOT_KEY) ?? "null"),
-    );
-    const manifest = isRecord(stored) ? readManifest(stored.manifest) : null;
-    const statuses = isRecord(stored) ? readStatuses(stored.status) : null;
-    if (!manifest || manifest === "unsupported" || !statuses) return;
+    const last = lastLive ?? readStoredSnapshot();
+    if (!last) return;
+    const { manifest, statuses } = last;
     // 더 새 화면이 저장한 값(minWebBuild가 이 빌드보다 높음)은 이 화면이 잘못 읽을 수 있어 꺼내지 않음(9.1)
     if (manifest.minWebBuild > deps.webBuild) return;
     set({
@@ -395,6 +409,7 @@ export function createSnapshotStore(deps: SnapshotDeps): SnapshotStore {
       }
       if (!statuses) return fail(clock, true);
       loadedVersion = manifest.snapshotVersion;
+      lastLive = { manifest, statuses };
       const snapshot = { manifest, status: { beaches: statuses } };
       safe(() =>
         deps.storage?.setItem(LAST_SNAPSHOT_KEY, JSON.stringify(snapshot)),
