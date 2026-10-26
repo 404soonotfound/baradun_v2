@@ -7,6 +7,7 @@ import {
   BEACHES,
   HEAVY_RAIN_ROW,
   NOW,
+  SEASONS,
   WIND_WAVE_ROW,
   ZONES,
   seedReadings,
@@ -52,6 +53,7 @@ async function setup(
     snapshots,
     beaches: BEACHES,
     zones: ZONES,
+    seasons: SEASONS,
     log: createLogger(
       () => [],
       (line) => lines.push(line),

@@ -4,6 +4,7 @@ import { OCEAN_STATE } from "../collectors/ocean";
 import { WARNINGS_STATE } from "../collectors/warnings";
 import type { StateStore } from "../core/store/types";
 import { packItems } from "../core/warnings/archive";
+import { parseBeachMeta } from "./season";
 import { zoneTablesFromAnnex, type AnnexTables } from "./zones";
 
 // publisher 테스트 공용 입력. 실제 data/beaches 파일과 별표 구역표를 씀
@@ -20,6 +21,9 @@ export const OBSERVED = "2026-10-23T02:00:00Z";
 export const ZONES = zoneTablesFromAnnex(
   readJson<AnnexTables>("tools/beaches/annex-tables.json"),
 );
+
+// 운영 기간: 실제 data/beach-meta.json. b0001 강문 2026-07-10~08-23(NOW는 기간 밖)
+export const SEASONS = parseBeachMeta(readJson("data/beach-meta.json")).seasons;
 
 // b0001 강문(강원중부앞바다 S1151200·강릉평지 L1022510), b0002 경포, b0003은 숨긴 해변으로 바꿔 씀
 export const BEACHES: Beach[] = [

@@ -6,6 +6,7 @@ import {
   CONFIRMED,
   HEAVY_RAIN_ROW,
   NOW,
+  SEASONS,
   WIND_WAVE_ROW,
   ZONES,
   seedPhotoChecks,
@@ -23,6 +24,7 @@ async function snapshotFrom(state: MemoryStateStore): Promise<Snapshot> {
   return buildSnapshot({
     beaches: BEACHES,
     zones: ZONES,
+    seasons: SEASONS,
     inputs: await readPublishInputs(state),
     now: NOW,
   });
@@ -268,6 +270,7 @@ describe("buildSnapshot", () => {
       buildSnapshot({
         beaches: [...BEACHES, BEACHES[0]!],
         zones: ZONES,
+        seasons: SEASONS,
         inputs,
         now: NOW,
       }),
@@ -289,6 +292,7 @@ describe("buildSnapshot", () => {
       buildSnapshot({
         beaches: BEACHES,
         zones: ZONES,
+        seasons: SEASONS,
         inputs: broken,
         now: NOW,
       });
