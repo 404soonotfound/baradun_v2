@@ -141,6 +141,45 @@ describe("publishSnapshot", () => {
     expect(await snapshots.listVersions()).toEqual([V1]);
   });
 
+  // 파고 이력은 분류에 쓰지 않음 → 읽기 실패·깨진 기록이 게시를 막지 않고 warn만 남김(BRD-94)
+  it("이력 읽기가 예외를 던져도 게시하고 모든 점 null, warn 로그", async () => {
+    const { state, snapshots, deps, events } = await setup();
+    const getState = state.getState.bind(state);
+    state.getState = async (pk, sk) => {
+      if (sk === "history") throw new Error("throttled");
+      return getState(pk, sk);
+    };
+    expect((await publishSnapshot(deps())).status).toBe("published");
+    expect(events()).toContainEqual(
+      expect.objectContaining({
+        level: "warn",
+        event: "publish_history_unreadable",
+        error: "Error",
+      }),
+    );
+    const history = JSON.parse(
+      snapshots.files.get(`data/${V1}/history.json`)!.body,
+    );
+    for (const station of Object.values(history.stations) as {
+      points: { v: unknown }[];
+    }[]) {
+      expect(station.points.every((p) => p.v === null)).toBe(true);
+    }
+  });
+
+  it("깨진 이력 기록은 버린 수와 함께 warn 로그를 남기고 게시함", async () => {
+    const { state, deps, events } = await setup();
+    await state.putState("ocean", "history", { stations: { "22520": "x" } }, 1);
+    expect((await publishSnapshot(deps())).status).toBe("published");
+    expect(events()).toContainEqual(
+      expect.objectContaining({
+        level: "warn",
+        event: "publish_history_invalid",
+        dropped: 1,
+      }),
+    );
+  });
+
   it("내용이 바뀌면 새 버전으로 게시하고 이전 버전 경로는 남김", async () => {
     const { state, snapshots, deps, advance, manifest } = await setup();
     await publishSnapshot(deps());
