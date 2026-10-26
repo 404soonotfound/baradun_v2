@@ -183,7 +183,9 @@ await fetch("/api/inquiries", {
 3. 다음 게시에 반영됩니다. 수집기가 15분 안에 게시를 깨우고, 바로 반영하려면 게시 함수를 직접 부릅니다.
 
    ```bash
-   aws lambda invoke --function-name <PublisherFunctionName> --payload '{}' out.json
+   aws lambda invoke --function-name <PublisherFunctionName> \
+     --cli-binary-format raw-in-base64-out \
+     --payload '{}' out.json
    ```
 
 4. 반영을 확인합니다(manifest 캐시 60초): `curl -s https://<DistributionDomainName>/data/manifest.json | jq '{snapshotVersion, maintenance, minWebBuild}'`. 게시 로그에 `publish_unchanged`만 남았다면 배포가 아직 반영되지 않은 것입니다(Lambda 코드 확인).
