@@ -169,6 +169,13 @@ await fetch("/api/inquiries", {
 
 롤백 리허설 결과(일시·되돌린 버전·복구에 걸린 시간)는 Notion 'V2 AWS 운영 점검표'의 '데이터 게시 롤백 리허설 기록'에 남깁니다. 첫 실환경 리허설(2026-10-26) 기록이 그곳에 있습니다.
 
+## 운영 경보(BRD-62)
+
+`OpsAlarms`가 CloudWatch 경보 9개(수집기 4개·게시 함수의 오류, 특보·관측·이안류 수집과 게시의 실행 없음)를 만들고 운영 SNS 주제로 `AlertEmail`에 메일을 보냅니다.
+
+- 경보를 처음 넣는 배포 전에 실행 정책 `BaradunCdkExecution`을 새 버전으로 올립니다(위 '역할 권한 상한' 2단계 명령). 올리지 않으면 `cloudwatch:PutMetricAlarm`이 거부되어 배포가 롤백됩니다.
+- 운영 주제는 문의 알림 주제와 따로라서 첫 배포 뒤 구독 확인 메일이 한 통 더 옵니다. 확인하지 않으면 경보가 울려도 메일이 가지 않습니다.
+
 ## 점검·강제 업데이트
 
 점검 중 여부와 최소 화면 버전은 `manifest.json`의 `maintenance`·`minWebBuild`로 알립니다(아키텍처 9.1, BRD-43). 값은 `services/src/publisher/policy.ts`의 `MANIFEST_SETTINGS`(저장소 상수)에 있고, 바꾸려면 저장소를 고쳐 배포합니다(결정 기록 11장 10/23 ④). 게시 함수는 데이터가 그대로여도 지금 manifest와 설정이 다르면 새 버전으로 게시합니다.
