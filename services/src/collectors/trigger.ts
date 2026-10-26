@@ -28,3 +28,16 @@ export async function triggerPublish(
     throw error;
   }
 }
+
+// 수집 Lambda 마무리: 먼저 깨우고, 다 저장하지 못했으면(partial·failed) 그 뒤에 던짐(Lambda 오류 지표)
+// 순서를 바꾸면 이력 저장만 실패한 실행도 게시를 깨우지 못함 → 테스트로 고정(BRD-94)
+export async function finishRun(
+  result: CollectRunResult,
+  deps: TriggerDeps,
+): Promise<CollectRunResult> {
+  await triggerPublish(result, deps);
+  if (result.status === "partial" || result.status === "failed") {
+    throw new Error(`수집 ${result.status}: ${result.slotId}`);
+  }
+  return result;
+}
