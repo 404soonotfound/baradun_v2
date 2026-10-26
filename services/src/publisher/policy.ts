@@ -16,6 +16,9 @@ export const PUBLISH_POLICY = {
   lockTtlMs: 2 * MINUTE_MS,
   // 최근 48개 버전 보존(롤백용, 아키텍처 6.2)
   retainVersions: 48,
+  // manifest 조건부 쓰기 시도 횟수. 다른 실행이 끼어들어 거절되면 다시 읽고 판단함
+  // 끼어든 쪽이 더 새 버전이면 첫 재시도에서 version_not_newer로 끝나므로 3번이면 충분
+  manifestWriteAttempts: 3,
   // 11장 10/19: CloudFront 기본 정책은 헤더가 없으면 하루 캐시함 → 모든 파일에 붙임
   cacheControl: {
     manifest: "public, max-age=60",
