@@ -1,0 +1,43 @@
+{
+  "header": { "resultCode": "00", "resultMsg": "NORMAL_SERVICE" },
+  "body": {
+    "items": {
+      "item": [
+        {
+          "obsvtrId": "SONGJUNG",
+          "obsvtrNm": "송정 해수욕장",
+          "lot": 129.19978,
+          "lat": 35.1785,
+          "obsrvnDt": "2026-08-15 00:00",
+          "lastScr": 22,
+          "lastScrCn": "주의",
+          "wvhgt": 0.4,
+          "wvpd": 6.6,
+          "wtem": 27.21,
+          "artmp": 27.2,
+          "wndrct": "서남서",
+          "wspd": 3.1
+        },
+        {
+          "obsvtrId": "SONGJUNG",
+          "obsvtrNm": "송정 해수욕장",
+          "lot": 129.19978,
+          "lat": 35.1785,
+          "obsrvnDt": "2026-08-15 23:55",
+          "lastScr": 19,
+          "lastScrCn": "관심",
+          "wvhgt": 0.4,
+          "wvpd": 3.6,
+          "wtem": 27.06,
+          "artmp": 27.5,
+          "wndrct": "동남동",
+          "wspd": 3.3
+        }
+      ]
+    },
+    "pageNo": 1,
+    "numOfRows": 300,
+    "totalCount": 287,
+    "type": "json"
+  }
+}

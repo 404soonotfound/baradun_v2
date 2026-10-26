@@ -350,6 +350,75 @@ describe("buildSnapshot", () => {
     }
   });
 
+  // 이안류(BRD-57): 정보로만. 같은 입력에서 이안류 기록이 있든 없든 분류·사유·유효 시각이 같아야 함(G1)
+  describe("이안류 info.ripCurrent", () => {
+    const IN_SEASON = "2026-08-15T03:30:00Z"; // KST 08-15 12:30
+    const seedRip = (state: MemoryStateStore, label: string) =>
+      state.putState(
+        "rip",
+        "readings",
+        {
+          beaches: {
+            b0001: {
+              code: "GYEONGPO",
+              label,
+              observedAt: "2026-08-15T03:00:00Z",
+            },
+          },
+        },
+        1,
+      );
+    const build = async (state: MemoryStateStore, now: string) =>
+      buildSnapshot({
+        beaches: BEACHES,
+        zones: ZONES,
+        seasons: SEASONS,
+        inputs: await readPublishInputs(state),
+        now,
+      });
+
+    it("시즌 안 관측 → 문구 원문·관측 시각·기관, 계약 통과, 분류는 이안류가 없을 때와 같음", async () => {
+      const without = new MemoryStateStore();
+      await seedWarnings(without, [HEAVY_RAIN_ROW]);
+      await seedReadings(without);
+      const withRip = new MemoryStateStore();
+      await seedWarnings(withRip, [HEAVY_RAIN_ROW]);
+      await seedReadings(withRip);
+      await seedRip(withRip, "위험");
+
+      const base = await build(without, IN_SEASON);
+      const snapshot = await build(withRip, IN_SEASON);
+      expectContract(snapshot);
+      const status = snapshot.status.beaches.b0001!;
+      expect(status.info.ripCurrent).toEqual({
+        label: "위험",
+        publishedAt: "2026-08-15T03:00:00Z",
+        source: "국립해양조사원",
+      });
+      const { info: _a, ...rest } = status;
+      const { info: _b, ...baseRest } = base.status.beaches.b0001!;
+      expect(rest).toEqual(baseRest);
+      // 다른 해변은 이안류 기록이 없어 null
+      expect(snapshot.status.beaches.b0002!.info.ripCurrent).toBeNull();
+    });
+
+    it("모르는 문구는 null로 게시", async () => {
+      const state = new MemoryStateStore();
+      await seedWarnings(state, [HEAVY_RAIN_ROW]);
+      await seedRip(state, "점검중");
+      const snapshot = await build(state, IN_SEASON);
+      expect(snapshot.status.beaches.b0001!.info.ripCurrent).toBeNull();
+    });
+
+    it("시즌 밖 게시 시각(10/23)에는 지난 시즌 관측을 게시하지 않음", async () => {
+      const state = new MemoryStateStore();
+      await seedWarnings(state, [HEAVY_RAIN_ROW]);
+      await seedRip(state, "관심");
+      const snapshot = await snapshotFrom(state);
+      expect(snapshot.status.beaches.b0001!.info.ripCurrent).toBeNull();
+    });
+  });
+
   it("해변 id가 겹치면 덮어쓰지 않고 멈춤", async () => {
     const state = new MemoryStateStore();
     await seedWarnings(state, [HEAVY_RAIN_ROW]);
