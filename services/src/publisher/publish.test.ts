@@ -499,10 +499,24 @@ describe("publishSnapshot", () => {
 });
 
 describe("rollbackManifest (T06)", () => {
-  it("이전 버전으로 manifest를 되돌림 — 그 버전의 manifest 사본 그대로", async () => {
+  it("이전 버전으로 manifest를 되돌림 — 파일 경로는 사본 그대로, 점검·최소 화면 버전은 지금 설정", async () => {
     const { state, snapshots, deps, advance, manifest } = await setup();
     await publishSnapshot(deps());
-    const v1Manifest = snapshots.files.get(`data/${V1}/manifest.json`)!.body;
+    const copyPath = `data/${V1}/manifest.json`;
+    // 사본에 지금과 다른 운영 설정이 남아 있던 경우(그때 점검 중이었거나 minWebBuild가 달랐음)
+    const copy = snapshots.files.get(copyPath)!;
+    const v1Manifest = JSON.parse(copy.body) as ManifestFile;
+    snapshots.files.set(copyPath, {
+      ...copy,
+      body: JSON.stringify({
+        ...v1Manifest,
+        maintenance: {
+          ...MANIFEST_SETTINGS.maintenance,
+          active: !MANIFEST_SETTINGS.maintenance.active,
+        },
+        minWebBuild: MANIFEST_SETTINGS.minWebBuild + 1,
+      }),
+    });
     advance(60_000);
     await seedWarnings(state, [WIND_WAVE_ROW], {
       confirmedAt: "2026-10-23T02:25:00Z",
@@ -512,11 +526,14 @@ describe("rollbackManifest (T06)", () => {
     expect(await rollbackManifest(snapshots, V1)).toEqual({
       status: "rolled_back",
     });
-    expect(snapshots.files.get(MANIFEST_PATH)).toMatchObject({
-      body: v1Manifest,
-      cacheControl: "public, max-age=60",
+    expect(snapshots.files.get(MANIFEST_PATH)!.cacheControl).toBe(
+      "public, max-age=60",
+    );
+    expect(manifest()).toEqual({
+      ...v1Manifest,
+      maintenance: MANIFEST_SETTINGS.maintenance,
+      minWebBuild: MANIFEST_SETTINGS.minWebBuild,
     });
-    expect(manifest()!.snapshotVersion).toBe(V1);
   });
 
   it("없는 버전이나 파일이 빠진 버전으로는 되돌리지 않음(manifest 그대로)", async () => {
