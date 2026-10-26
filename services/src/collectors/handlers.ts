@@ -1,4 +1,5 @@
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
+import { InvokeCommand, LambdaClient } from "@aws-sdk/client-lambda";
 import { SSMClient } from "@aws-sdk/client-ssm";
 import { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
 import { getText } from "../core/collect/http";
@@ -10,6 +11,7 @@ import photoLedger from "../../../data/photo-sources.json";
 import { collectCatalog, parsePhotoLedger, type PhotoSource } from "./catalog";
 import { collectOcean, type CollectDeps, type CollectRunResult } from "./ocean";
 import { COLLECT_POLICY } from "./policy";
+import { triggerPublish } from "./trigger";
 import { collectWarnings } from "./warnings";
 
 // Lambda 진입점 (아키텍처 5장). 실제 AWS 클라이언트를 묶어 수집 함수에 넘김
@@ -17,6 +19,7 @@ import { collectWarnings } from "./warnings";
 // 다 저장하지 못하면 오류를 던져 Lambda 오류 지표에 남김
 // 같은 owner도 lease(2분) 안에는 슬롯을 다시 맡지 않음(10/22 사용자 결정) → lease 안에 온 재시도는 busy로 건너뜀
 // 실패한 슬롯은 다음 슬롯이 메움(아키텍처 5장: 재시도는 같은 슬롯 안에서 제한, 다음 슬롯을 막지 않음)
+// 수집을 마치면 publish-snapshot을 비동기로 깨움(아키텍처 6.2, BRD-61 PR ②) → triggerPublish 설명
 
 function requiredEnv(name: string): string {
   const value = process.env[name];
@@ -61,7 +64,20 @@ interface LambdaContext {
   readonly awsRequestId: string;
 }
 
-function finish(result: CollectRunResult): CollectRunResult {
+const lambda = new LambdaClient({});
+
+async function finish(result: CollectRunResult): Promise<CollectRunResult> {
+  await triggerPublish(result, {
+    invoke: async () => {
+      await lambda.send(
+        new InvokeCommand({
+          FunctionName: requiredEnv("PUBLISHER_FUNCTION_NAME"),
+          InvocationType: "Event", // 비동기. 게시 결과를 기다리지 않음
+        }),
+      );
+    },
+    log,
+  });
   if (result.status === "partial" || result.status === "failed") {
     throw new Error(`수집 ${result.status}: ${result.slotId}`);
   }
