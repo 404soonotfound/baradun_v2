@@ -11,7 +11,7 @@ import photoLedger from "../../../data/photo-sources.json";
 import { collectCatalog, parsePhotoLedger, type PhotoSource } from "./catalog";
 import { collectOcean, type CollectDeps, type CollectRunResult } from "./ocean";
 import { COLLECT_POLICY } from "./policy";
-import { triggerPublish } from "./trigger";
+import { finishRun } from "./trigger";
 import { collectWarnings } from "./warnings";
 
 // Lambda 진입점 (아키텍처 5장). 실제 AWS 클라이언트를 묶어 수집 함수에 넘김
@@ -67,7 +67,7 @@ interface LambdaContext {
 const lambda = new LambdaClient({});
 
 async function finish(result: CollectRunResult): Promise<CollectRunResult> {
-  await triggerPublish(result, {
+  return finishRun(result, {
     invoke: async () => {
       await lambda.send(
         new InvokeCommand({
@@ -78,10 +78,6 @@ async function finish(result: CollectRunResult): Promise<CollectRunResult> {
     },
     log,
   });
-  if (result.status === "partial" || result.status === "failed") {
-    throw new Error(`수집 ${result.status}: ${result.slotId}`);
-  }
-  return result;
 }
 
 export async function oceanHandler(

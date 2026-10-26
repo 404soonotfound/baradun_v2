@@ -9,6 +9,12 @@ import type {
   WarningItem,
 } from "@baradun/contracts";
 import { buildBeachMetrics } from "../core/observations/beach-metrics";
+import { parseNow } from "../core/observations/freshness";
+import {
+  historyFrame,
+  historyPoints,
+  type WaveHistory,
+} from "../core/observations/wave-history";
 import {
   byLevelThenTime,
   judgeBeachWarnings,
@@ -16,7 +22,7 @@ import {
 } from "../core/warnings/beach-warnings";
 import { checkConfirmation } from "../core/warnings/confirmation";
 import type { PwnEvent } from "../core/warnings/normalize";
-import { formatUtcIso, parseUtcIso } from "../core/warnings/time";
+import { parseUtcIso } from "../core/warnings/time";
 import { judgeTsunamiBeaches } from "../core/warnings/tsunami-match";
 import { classifyBeach } from "./classify";
 import type { PublishInputs } from "./inputs";
@@ -55,13 +61,9 @@ export class BeachSnapshotError extends Error {
   }
 }
 
-const HOUR_MS = 60 * 60 * 1000;
-const HISTORY_POINTS = 25; // 최근 24시간, 양 끝 포함(계약 maxItems 25)
-
 export function buildSnapshot(input: SnapshotInput): Snapshot {
   const { zones, inputs, now } = input;
-  const nowMs = parseUtcIso(now);
-  if (nowMs === null) throw new RangeError(`기준 시각 형식 오류: ${now}`);
+  parseNow(now); // 형식이 틀리면 멈춤(freshness.ts와 같은 기준)
   const beaches = [...input.beaches].sort((a, b) => a.id.localeCompare(b.id));
   // 같은 id가 둘이면 한 해변 상태가 다른 해변 값으로 덮임 → 게시를 멈춤
   for (let i = 1; i < beaches.length; i += 1) {
@@ -122,7 +124,7 @@ export function buildSnapshot(input: SnapshotInput): Snapshot {
   return {
     beaches: { beaches: beaches.map((beach) => publishedBeach(beach, inputs)) },
     status: { beaches: status },
-    history: emptyHistory(beaches, nowMs),
+    history: waveHistoryFile(beaches, inputs.waveHistory, now),
     nationwideWarnings: nationwide(
       input,
       pwnEvents,
@@ -149,21 +151,26 @@ function publishedBeach(beach: Beach, inputs: PublishInputs): Beach {
   return beach;
 }
 
-// 관측소별 최근 24시간 파고(1시간 간격). 이력 저장이 아직 없어 모든 점이 측정값 없음(v: null, 차트 빗금)
-// 값을 지어내지 않음. 채우는 일은 BRD-94(2026-10-23 사용자 결정)
-function emptyHistory(beaches: readonly Beach[], nowMs: number): HistoryFile {
-  const hourMs = Math.floor(nowMs / HOUR_MS) * HOUR_MS;
-  const points = Array.from({ length: HISTORY_POINTS }, (_, i) => ({
-    t: formatUtcIso(hourMs - (HISTORY_POINTS - 1 - i) * HOUR_MS),
-    v: null,
-  }));
+// 관측소별 최근 24시간 파고(1시간 간격, B2). 해변에 배정된 파고 측정소만 게시
+// 점 규칙·결측 처리는 core/observations/wave-history.ts(BRD-94). 이력이 없는 측정소는 모든 점 v: null(차트 빗금)
+function waveHistoryFile(
+  beaches: readonly Beach[],
+  history: WaveHistory,
+  now: string,
+): HistoryFile {
   const ids = new Set<string>();
   for (const beach of beaches) {
     const station = beach.stations.waveHeight;
     if (station) ids.add(station.id);
   }
+  const frame = historyFrame(now); // 점 시각 25개는 측정소마다 같음 → 한 번만 계산
   const stations: HistoryFile["stations"] = {};
-  for (const id of [...ids].sort()) stations[id] = { unit: "m", points };
+  for (const id of [...ids].sort()) {
+    stations[id] = {
+      unit: "m",
+      points: historyPoints(history[id] ?? [], frame),
+    };
+  }
   return { stations };
 }
 

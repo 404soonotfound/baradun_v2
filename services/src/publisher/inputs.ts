@@ -2,7 +2,12 @@ import { CATALOG_STATE, type PhotoRecord } from "../collectors/catalog";
 import { OCEAN_STATE } from "../collectors/ocean";
 import { COLLECT_POLICY } from "../collectors/policy";
 import { WARNINGS_STATE } from "../collectors/warnings";
+import type { Logger } from "../core/collect/log";
 import type { StationReadings } from "../core/observations/freshness";
+import {
+  readWaveHistory,
+  type WaveHistory,
+} from "../core/observations/wave-history";
 import type { StateStore, StateValue } from "../core/store/types";
 import { unpackItems } from "../core/warnings/archive";
 import {
@@ -28,6 +33,8 @@ export interface PublishInputs {
   readonly pwncd: WarningInput<PwnCdResult>;
   readonly tsunami: WarningInput<TsunamiResult>;
   readonly readings: StationReadings;
+  // 측정기별 최근 24시간 파고 원래 측정값(BRD-94). 없거나 깨진 기록은 빈 값 → 모든 점 v: null
+  readonly waveHistory: WaveHistory;
   // collect-catalog의 사진 확인 결과(해변 id → 기록). 기록·확인이 없는 해변은 칸이 없음
   readonly photoChecks: Readonly<Record<string, PhotoRecord>>;
 }
@@ -132,19 +139,45 @@ function photoChecksInput(
   return checks;
 }
 
+// 파고 이력은 분류에 쓰지 않음 → 읽기 예외·깨진 기록은 게시를 막지 않고 빈 값(모든 점 null) + warn
+// 특보·관측 읽기 예외는 그대로 던짐(판단 입력이라 없는 것을 정상으로 바꾸지 않음)
+async function waveHistoryInput(
+  state: StateStore,
+  log?: Logger,
+): Promise<WaveHistory> {
+  let record: Awaited<ReturnType<StateStore["getState"]>>;
+  try {
+    record = await state.getState(
+      OCEAN_STATE.history.pk,
+      OCEAN_STATE.history.sk,
+    );
+  } catch (error) {
+    log?.("warn", "publish_history_unreadable", {
+      error: error instanceof Error ? error.name : typeof error,
+    });
+    return {};
+  }
+  return readWaveHistory(record?.value ?? null, (dropped) =>
+    log?.("warn", "publish_history_invalid", { dropped }),
+  );
+}
+
 export async function readPublishInputs(
   state: StateStore,
+  log?: Logger,
 ): Promise<PublishInputs> {
-  const [pwncd, tsunami, ocean, catalog] = await Promise.all([
+  const [pwncd, tsunami, ocean, catalog, waveHistory] = await Promise.all([
     state.getState(WARNINGS_STATE.pwncd.pk, WARNINGS_STATE.pwncd.sk),
     state.getState(WARNINGS_STATE.tsunami.pk, WARNINGS_STATE.tsunami.sk),
     state.getState(OCEAN_STATE.readings.pk, OCEAN_STATE.readings.sk),
     state.getState(CATALOG_STATE.photos.pk, CATALOG_STATE.photos.sk),
+    waveHistoryInput(state, log),
   ]);
   return {
     pwncd: pwncdInput(pwncd?.value),
     tsunami: tsunamiInput(tsunami?.value),
     readings: readingsInput(ocean?.value),
+    waveHistory,
     photoChecks: photoChecksInput(catalog?.value),
   };
 }

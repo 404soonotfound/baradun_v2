@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createLogger } from "../core/collect/log";
-import { triggerPublish } from "./trigger";
+import { finishRun, triggerPublish } from "./trigger";
 
 // 수집 뒤 publish-snapshot 깨우기 (BRD-61 PR ②)
 
@@ -47,7 +47,9 @@ describe("triggerPublish", () => {
 
   it("깨우기 실패는 오류 로그를 남기고 던짐(조용히 넘어가지 않음)", async () => {
     const { deps: d, lines } = deps(async () => {
-      throw Object.assign(new Error("denied"), { name: "AccessDeniedException" });
+      throw Object.assign(new Error("denied"), {
+        name: "AccessDeniedException",
+      });
     });
     await expect(
       triggerPublish({ status: "complete", slotId: "s1" }, d),
@@ -58,5 +60,31 @@ describe("triggerPublish", () => {
       slotId: "s1",
       error: "AccessDeniedException",
     });
+  });
+});
+
+describe("finishRun", () => {
+  it.each(["partial", "failed"] as const)(
+    "다 저장하지 못한 실행(%s)도 먼저 깨우고 그 뒤에 던짐",
+    async (status) => {
+      let calls = 0;
+      const { deps: d } = deps(async () => {
+        calls += 1;
+      });
+      await expect(finishRun({ status, slotId: "s1" }, d)).rejects.toThrow(
+        `수집 ${status}: s1`,
+      );
+      expect(calls).toBe(1);
+    },
+  );
+
+  it("complete는 깨우고 결과를 돌려줌", async () => {
+    let calls = 0;
+    const { deps: d } = deps(async () => {
+      calls += 1;
+    });
+    const result = { status: "complete", slotId: "s1" } as const;
+    expect(await finishRun(result, d)).toEqual(result);
+    expect(calls).toBe(1);
   });
 });

@@ -33,7 +33,7 @@ export const METRIC_UNIT: Record<MetricKey, Metric["unit"]> = {
 };
 
 // 기준 시각은 서버가 정함 → 형식이 틀리면 데이터 문제가 아니라 코드 오류라 멈춤
-function parseNow(now: string): number {
+export function parseNow(now: string): number {
   const nowMs = parseUtcIso(now);
   if (nowMs === null) throw new RangeError(`기준 시각 형식 오류: ${now}`);
   return nowMs;
