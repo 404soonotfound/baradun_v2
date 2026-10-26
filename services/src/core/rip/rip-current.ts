@@ -110,13 +110,15 @@ export function parseRipResponse(
 const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-// UTC ms → KST 달력(년·월·일 수). 날짜 차이 계산용
-function kstDay(ms: number): { month: number; dayNumber: number } {
-  const kst = new Date(ms + KST_OFFSET_MS);
-  return {
-    month: kst.getUTCMonth() + 1,
-    dayNumber: Math.floor((ms + KST_OFFSET_MS) / DAY_MS),
-  };
+// UTC ms → KST 날짜 번호(1970-01-01부터 센 날 수). 날짜 차이 계산용
+function kstDayNumber(ms: number): number {
+  return Math.floor((ms + KST_OFFSET_MS) / DAY_MS);
+}
+
+// 한국 시각 기준 달이 제공 기간(6~9월)인지. collect-rip 호출 일정과 게시 규칙이 같이 씀
+export function inRipSeason(ms: number): boolean {
+  const month = new Date(ms + KST_OFFSET_MS).getUTCMonth() + 1;
+  return (RIP_SEASON_MONTHS as readonly number[]).includes(month);
 }
 
 // 게시하지 않는 이유. unknown_label·bad_time은 운영 알림(warn) 대상, 나머지는 정상적인 숨김
@@ -140,11 +142,10 @@ export function ripCurrentInfo(
   if (observedMs === null || observedMs > nowMs) {
     return { info: null, hidden: "bad_time" };
   }
-  const observed = kstDay(observedMs);
-  if (!(RIP_SEASON_MONTHS as readonly number[]).includes(observed.month)) {
+  if (!inRipSeason(observedMs)) {
     return { info: null, hidden: "off_season" };
   }
-  if (kstDay(nowMs).dayNumber - observed.dayNumber > 1) {
+  if (kstDayNumber(nowMs) - kstDayNumber(observedMs) > 1) {
     return { info: null, hidden: "old" };
   }
   return {

@@ -5,9 +5,9 @@ import type { HttpResult } from "../core/collect/http";
 import { createLogger } from "../core/collect/log";
 import { MemoryOpsStore, MemoryStateStore } from "../core/store/memory";
 import type { StateValue } from "../core/store/types";
+import { inRipSeason } from "../core/rip/rip-current";
 import {
   collectRip,
-  inRipSeason,
   parseRipLedger,
   RIP_JOB,
   RIP_STATE,

@@ -1,8 +1,8 @@
 import type { BeachId } from "@baradun/contracts";
 import {
+  inRipSeason,
   parseRipResponse,
   readRipReadings,
-  RIP_SEASON_MONTHS,
   type RipReading,
   type RipResponse,
 } from "../core/rip/rip-current";
@@ -33,7 +33,6 @@ const BASE =
   "https://apis.data.go.kr/1192136/ripCurrent/GetRipCurrentApiService";
 const MINUTE_MS = 60 * 1000;
 const DAY_MS = 24 * 60 * MINUTE_MS;
-const KST_OFFSET_MS = 9 * 60 * MINUTE_MS;
 
 // 대응표 항목 중 수집할 것(status mapped). 확인 대기·미등록은 부르지 않음
 export interface RipSource {
@@ -77,12 +76,6 @@ export function parseRipLedger(json: unknown): RipSource[] {
     throw new RangeError("rip-current-beaches.json: 코드·해변 중복");
   }
   return sources.sort((a, b) => a.beachId.localeCompare(b.beachId));
-}
-
-// 한국 시각 기준 달이 제공 기간(6~9월)인지
-export function inRipSeason(nowMs: number): boolean {
-  const month = new Date(nowMs + KST_OFFSET_MS).getUTCMonth() + 1;
-  return (RIP_SEASON_MONTHS as readonly number[]).includes(month);
 }
 
 // 비수기에 호출하는 하루 1회 슬롯인지(UTC 분 기준)
