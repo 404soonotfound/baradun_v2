@@ -27,11 +27,19 @@ const NOW_MS = Date.parse(NOW);
 const V1 = snapshotVersion(NOW_MS); // 20261023T023000Z
 
 async function setup(
-  options: { failOn?: (path: string) => boolean; seed?: boolean } = {},
+  options: {
+    failOn?: (path: string) => boolean;
+    beforeConditionalPut?: (path: string) => Promise<void> | void;
+    seed?: boolean;
+  } = {},
 ) {
   const state = new MemoryStateStore();
   const ops = new MemoryOpsStore();
-  const snapshots = new MemorySnapshotStore(options.failOn);
+  const snapshots = new MemorySnapshotStore({
+    failOn: options.failOn,
+    // 아래 deps·advance가 만들어진 뒤에 부르므로 hooks에서 꺼내 씀
+    beforeConditionalPut: (path) => options.beforeConditionalPut?.(path),
+  });
   const lines: string[] = [];
   if (options.seed !== false) {
     await seedWarnings(state, [HEAVY_RAIN_ROW]);
@@ -72,6 +80,11 @@ describe("publishSnapshot", () => {
     snapshots.putFile = async (path, body, cacheControl) => {
       order.push(path);
       await put(path, body, cacheControl);
+    };
+    const putIf = snapshots.putFileIf.bind(snapshots);
+    snapshots.putFileIf = async (path, body, cacheControl, etag) => {
+      order.push(path);
+      return putIf(path, body, cacheControl, etag);
     };
 
     expect(await publishSnapshot(deps())).toEqual({
@@ -186,9 +199,9 @@ describe("publishSnapshot", () => {
 
   it("manifest 쓰기가 실제로 된 뒤 응답만 실패하면 그 버전 경로를 지우지 않음", async () => {
     const { snapshots, deps, manifest } = await setup();
-    const put = snapshots.putFile.bind(snapshots);
-    snapshots.putFile = async (path, body, cacheControl) => {
-      await put(path, body, cacheControl);
+    const putIf = snapshots.putFileIf.bind(snapshots);
+    snapshots.putFileIf = async (path, body, cacheControl, etag) => {
+      await putIf(path, body, cacheControl, etag);
       if (path === MANIFEST_PATH) throw new Error("timeout");
     };
     expect((await publishSnapshot(deps())).status).toBe("failed");
@@ -325,6 +338,85 @@ describe("publishSnapshot", () => {
     expect(snapshots.files.size).toBe(0);
   });
 
+  it("동시 실행: 잠금이 풀린 사이 더 새 버전이 먼저 manifest를 바꾸면 옛 버전으로 덮지 않음", async () => {
+    // 실행 A가 잠금 시간을 넘겨 늦어진 사이, 실행 B가 잠금을 새로 맡아 더 새 버전을 게시함
+    // A는 manifest를 확인한 뒤 쓰기 직전에 B가 끼어듦 → 조건부 쓰기가 거절되고, 다시 읽어 더 새 버전을 보고 멈춤
+    let interleaved = false;
+    let newer = "";
+    const ctx: { run?: () => Promise<void> } = {};
+    const { state, snapshots, deps, advance, manifest } = await setup({
+      beforeConditionalPut: async () => {
+        if (interleaved) return;
+        interleaved = true;
+        await ctx.run!();
+      },
+    });
+    ctx.run = async () => {
+      newer = advance(PUBLISH_POLICY.lockTtlMs + 1_000);
+      await seedWarnings(state, [WIND_WAVE_ROW], {
+        confirmedAt: "2026-10-23T02:25:00Z",
+      });
+      expect(await publishSnapshot(deps("b"))).toMatchObject({
+        status: "published",
+        version: newer,
+      });
+    };
+
+    expect(await publishSnapshot(deps("a"))).toEqual({
+      status: "failed",
+      version: V1,
+      reason: "version_not_newer",
+    });
+    expect(manifest()!.snapshotVersion).toBe(newer);
+    // A가 올린 버전 경로는 manifest가 가리키지 않으므로 정리됨
+    expect(await snapshots.listVersions()).toEqual([newer]);
+  });
+
+  it("동시 실행: 확인과 쓰기 사이에 옛 버전 쓰기가 끼어들어도 다시 읽고 새 버전으로 바꿈", async () => {
+    let inject = false;
+    let staleManifest = "";
+    const { state, snapshots, deps, advance, manifest, events } = await setup({
+      beforeConditionalPut: async (path) => {
+        if (!inject || path !== MANIFEST_PATH) return;
+        inject = false;
+        // 늦게 끝난 다른 실행이 V1 manifest를 다시 씀(조건 없이 쓰는 옛 코드·수동 복구 등)
+        await snapshots.putFile(MANIFEST_PATH, staleManifest, "x");
+      },
+    });
+    await publishSnapshot(deps());
+    staleManifest = snapshots.files.get(MANIFEST_PATH)!.body;
+    const v2 = advance(60_000);
+    await seedWarnings(state, [WIND_WAVE_ROW], {
+      confirmedAt: "2026-10-23T02:25:00Z",
+    });
+    inject = true;
+
+    expect(await publishSnapshot(deps())).toMatchObject({
+      status: "published",
+      version: v2,
+    });
+    expect(manifest()!.snapshotVersion).toBe(v2);
+    expect(events()).toContainEqual(
+      expect.objectContaining({
+        event: "publish_manifest_conflict",
+        version: v2,
+        attempt: 1,
+      }),
+    );
+  });
+
+  it("조건부 쓰기가 계속 거절되면 manifest를 바꾸지 않고 실패로 남김", async () => {
+    const { snapshots, deps, manifest } = await setup();
+    snapshots.putFileIf = async () => false;
+    expect(await publishSnapshot(deps())).toEqual({
+      status: "failed",
+      version: V1,
+      reason: "manifest_conflict",
+    });
+    expect(manifest()).toBeNull();
+    expect(await snapshots.listVersions()).toEqual([]);
+  });
+
   it("State 읽기가 예외를 던져도 manifest 그대로, 잠금은 풂", async () => {
     const { state, ops, snapshots, deps } = await setup();
     state.getState = async () => {
@@ -370,7 +462,7 @@ describe("rollbackManifest (T06)", () => {
     expect(await rollbackManifest(snapshots, V1)).toEqual({
       status: "rolled_back",
     });
-    expect(snapshots.files.get(MANIFEST_PATH)).toEqual({
+    expect(snapshots.files.get(MANIFEST_PATH)).toMatchObject({
       body: v1Manifest,
       cacheControl: "public, max-age=60",
     });
