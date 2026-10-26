@@ -33,6 +33,15 @@ function functionId(name: "Ocean" | "Warnings" | "Catalog"): string {
   return ids[0]!; // !: "여기는 값이 꼭 있음"이라고 타입 검사에 알려 줌(바로 위에서 확인)
 }
 
+// publish-snapshot 함수의 리소스 ID (수집기가 깨우는 대상)
+function publisherFunctionId(): string {
+  const ids = Object.keys(
+    template.findResources("AWS::Lambda::Function"),
+  ).filter((id) => id.startsWith("PublishFunction"));
+  expect(ids).toHaveLength(1);
+  return ids[0]!;
+}
+
 // 함수가 쓰는 권한 묶음(역할, Role)의 리소스 ID
 // 템플릿에는 {"Fn::GetAtt": ["역할ID", "Arn"]} 모양으로 들어 있음 → 첫 칸이 역할 ID
 function roleOf(fnId: string): string {
@@ -65,11 +74,15 @@ describe("수집 Lambda", () => {
       expect(p.Runtime).toBe("nodejs22.x");
       expect(p.Architectures).toEqual(["arm64"]);
       expect(p.Timeout).toBe(COLLECTOR_TIMEOUT_SECONDS);
-      // 함수가 읽는 설정값은 테이블 이름 두 개뿐
+      // 함수가 읽는 설정값은 테이블 이름 두 개와 깨울 게시 함수 이름뿐
       expect(Object.keys(p.Environment.Variables).sort()).toEqual([
         "OPS_TABLE_NAME",
+        "PUBLISHER_FUNCTION_NAME",
         "STATE_TABLE_NAME",
       ]);
+      expect(p.Environment.Variables.PUBLISHER_FUNCTION_NAME).toEqual({
+        Ref: publisherFunctionId(),
+      });
     },
   );
 
@@ -151,9 +164,14 @@ describe("수집 함수 권한 (필요한 것만)", () => {
         "dynamodb:GetItem",
         "dynamodb:PutItem",
         "dynamodb:UpdateItem",
+        "lambda:InvokeFunction",
         "logs:CreateLogStream",
         "logs:PutLogEvents",
         "ssm:GetParameter",
+      ]);
+      // 깨우기는 publish-snapshot 함수 하나에만(버전·별칭 주소 :* 없음)
+      expect(actions.get("lambda:InvokeFunction")).toEqual([
+        `${publisherFunctionId()}.Arn`,
       ]);
       // 함수에 연결된 로그 그룹 하나에만 스트림을 만들고 기록할 수 있음
       const logGroupIds = Object.keys(
