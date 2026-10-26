@@ -16,8 +16,46 @@ function tiff(gps: boolean): Buffer {
   return value;
 }
 
+// GPS 포인터가 IFD0이 아니라 썸네일 IFD(IFD1)에 있는 TIFF
+function tiffGpsInSecondIfd(): Buffer {
+  const value = Buffer.alloc(40);
+  value.write("II", 0, "ascii");
+  value.writeUInt16LE(42, 2);
+  value.writeUInt32LE(8, 4); // IFD0 위치
+  value.writeUInt16LE(0, 8); // IFD0: 항목 0개
+  value.writeUInt32LE(14, 10); // 다음 IFD(IFD1) 위치
+  value.writeUInt16LE(1, 14); // IFD1: 항목 1개
+  value.writeUInt16LE(0x8825, 16); // GPS 포인터
+  value.writeUInt16LE(4, 18);
+  value.writeUInt32LE(1, 20);
+  value.writeUInt32LE(34, 24);
+  // IFD1 끝(28)의 다음 IFD 오프셋은 0(Buffer.alloc이 0으로 채움)
+  return value;
+}
+
+// 다음 IFD 오프셋이 뒤로 가는(순환 가능성) TIFF
+function tiffLoop(): Buffer {
+  const value = Buffer.alloc(18);
+  value.write("II", 0, "ascii");
+  value.writeUInt16LE(42, 2);
+  value.writeUInt32LE(8, 4);
+  value.writeUInt16LE(0, 8); // IFD0: 항목 0개
+  value.writeUInt32LE(8, 10); // 다음 IFD가 자기 자신을 가리킴
+  return value;
+}
+
+function jpegFromTiff(payload: Buffer): Buffer {
+  return jpegFromExif(
+    Buffer.concat([Buffer.from("Exif\0\0", "binary"), payload]),
+  );
+}
+
 function jpeg(gps: boolean): Buffer {
   const payload = Buffer.concat([Buffer.from("Exif\0\0", "binary"), tiff(gps)]);
+  return jpegFromExif(payload);
+}
+
+function jpegFromExif(payload: Buffer): Buffer {
   const length = Buffer.alloc(2);
   length.writeUInt16BE(payload.length + 2);
   return Buffer.concat([
@@ -72,6 +110,18 @@ describe("사진 EXIF 위치 정보 검사", () => {
 
   it("GPS가 없는 JPEG를 허용한다", () => {
     expect(inspectPhotoMetadata("image/jpeg", jpeg(false))).toBe("none");
+  });
+
+  it("GPS 포인터가 썸네일 IFD(IFD1)에 있어도 찾는다", () => {
+    expect(
+      inspectPhotoMetadata("image/jpeg", jpegFromTiff(tiffGpsInSecondIfd())),
+    ).toBe("gps");
+  });
+
+  it("IFD 사슬이 뒤로 가면(순환 가능) 깨진 파일로 거부한다", () => {
+    expect(inspectPhotoMetadata("image/jpeg", jpegFromTiff(tiffLoop()))).toBe(
+      "invalid",
+    );
   });
 
   it("깨진 사진을 거부한다", () => {
