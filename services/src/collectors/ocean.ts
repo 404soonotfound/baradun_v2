@@ -8,7 +8,12 @@ import {
 import { parseKmaBuoy } from "../core/observations/kma-buoy";
 import { parseSeaObs } from "../core/observations/sea-obs";
 import type { ApiKeys } from "../core/secrets/api-keys";
-import type { OpsStore, StateStore, StateValue } from "../core/store/types";
+import type {
+  OpsStore,
+  StateRecord,
+  StateStore,
+  StateValue,
+} from "../core/store/types";
 import { formatUtcIso, parseUtcIso } from "../core/warnings/time";
 import { COLLECT_POLICY } from "./policy";
 import { formatKst, slotStart } from "./schedule";
@@ -106,50 +111,77 @@ export function exceptionReason(error: unknown): string {
 }
 
 // 이전 값을 읽어 합친 뒤 씀. 읽은 recordVersion을 넘겨 사이에 다른 실행이 쓰면(conflict) 다시 읽어 한 번 더 합침
+// build: 이전 기록 → 쓸 값·순서 기준(이전 orderAt에서 시작해 뒤로 가지 않음)·부르는 쪽 결과
+// stale은 orderAt이 줄지 않아 정상 흐름에서는 나오지 않지만 저장소 계약상 가능한 결과라 저장 못 함으로 봄
+// 로그 이름: {event}_stale(warn)·{event}_conflict(error)
+async function mergeAndPut<T>(
+  deps: CollectDeps,
+  key: { readonly pk: string; readonly sk: string },
+  event: string,
+  build: (previous: StateRecord | null) => {
+    value: StateValue;
+    orderAt: number;
+    result: T;
+  },
+): Promise<{ saved: boolean; result: T | null }> {
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const previous = await deps.state.getState(key.pk, key.sk);
+    const { value, orderAt, result } = build(previous);
+    const written = await deps.state.putState(
+      key.pk,
+      key.sk,
+      value,
+      orderAt,
+      previous?.recordVersion ?? null,
+    );
+    if (written === "conflict") continue;
+    if (written === "stale") deps.log("warn", `${event}_stale`, { orderAt });
+    return { saved: written !== "stale", result };
+  }
+  deps.log("error", `${event}_conflict`);
+  return { saved: false, result: null };
+}
+
 async function saveReadings(
   deps: CollectDeps,
   outcomes: Record<Source, SourceOutcome>,
 ): Promise<{ saved: boolean; futureRows: number }> {
-  const { pk, sk } = OCEAN_STATE.readings;
-  for (let attempt = 0; attempt < 2; attempt += 1) {
-    const previous = await deps.state.getState(pk, sk);
-    const prevValue = (previous?.value ?? null) as ReadingsValue | null;
-    const rows: ObservationRow[] = [];
-    const receivedAt = { ...prevValue?.receivedAt };
-    for (const source of SOURCES) {
-      const outcome = outcomes[source];
-      if (outcome.status !== "ok") continue;
-      rows.push(...outcome.rows);
-      receivedAt[source] = outcome.receivedAt;
-    }
-    const merged = mergeReadings(
-      prevValue?.readings ?? {},
-      rows,
-      formatUtcIso(deps.clock()),
-    );
-    // 순서 기준 = 가장 늦은 관측 시각. 이전 orderAt에서 시작하므로 뒤로 가지 않음
-    let orderAt = previous?.orderAt ?? 0;
-    for (const station of Object.values(merged.readings)) {
-      for (const reading of Object.values(station)) {
-        const ms = reading ? parseUtcIso(reading.observedAt) : null;
-        if (ms !== null && ms > orderAt) orderAt = ms;
+  const { saved, result } = await mergeAndPut(
+    deps,
+    OCEAN_STATE.readings,
+    "ocean_readings",
+    (previous) => {
+      const prevValue = (previous?.value ?? null) as ReadingsValue | null;
+      const rows: ObservationRow[] = [];
+      const receivedAt = { ...prevValue?.receivedAt };
+      for (const source of SOURCES) {
+        const outcome = outcomes[source];
+        if (outcome.status !== "ok") continue;
+        rows.push(...outcome.rows);
+        receivedAt[source] = outcome.receivedAt;
       }
-    }
-    const value: ReadingsValue = { readings: merged.readings, receivedAt };
-    const result = await deps.state.putState(
-      pk,
-      sk,
-      value as unknown as StateValue,
-      orderAt,
-      previous?.recordVersion ?? null,
-    );
-    if (result === "conflict") continue;
-    if (result === "stale")
-      deps.log("warn", "ocean_readings_stale", { orderAt });
-    return { saved: result !== "stale", futureRows: merged.futureRows };
-  }
-  deps.log("error", "ocean_readings_conflict");
-  return { saved: false, futureRows: 0 };
+      const merged = mergeReadings(
+        prevValue?.readings ?? {},
+        rows,
+        formatUtcIso(deps.clock()),
+      );
+      // 순서 기준 = 가장 늦은 관측 시각
+      let orderAt = previous?.orderAt ?? 0;
+      for (const station of Object.values(merged.readings)) {
+        for (const reading of Object.values(station)) {
+          const ms = reading ? parseUtcIso(reading.observedAt) : null;
+          if (ms !== null && ms > orderAt) orderAt = ms;
+        }
+      }
+      const value: ReadingsValue = { readings: merged.readings, receivedAt };
+      return {
+        value: value as unknown as StateValue,
+        orderAt,
+        result: merged.futureRows,
+      };
+    },
+  );
+  return { saved, futureRows: result ?? 0 };
 }
 
 export async function collectOcean(
