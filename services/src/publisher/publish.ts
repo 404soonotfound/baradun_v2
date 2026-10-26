@@ -7,6 +7,7 @@ import { formatUtcIso } from "../core/warnings/time";
 import { readPublishInputs } from "./inputs";
 import { MANIFEST_SETTINGS, PUBLISH_POLICY } from "./policy";
 import { BeachSnapshotError, buildSnapshot, type Snapshot } from "./snapshot";
+import type { SeasonTable } from "./season";
 import { contractErrors, type ContractFile } from "./validate";
 
 // publish-snapshot (아키텍처 6.2, BRD-61)
@@ -21,6 +22,7 @@ export interface PublishDeps {
   readonly snapshots: SnapshotStore;
   readonly beaches: readonly Beach[]; // data/beaches
   readonly zones: ZoneTables;
+  readonly seasons: SeasonTable; // data/beach-meta.json 운영 기간
   readonly log: Logger;
   readonly clock: () => number; // 서버 시각(epoch ms)
   readonly owner: string; // 이 실행의 id(Lambda 요청 id)
@@ -192,6 +194,7 @@ export async function publishSnapshot(
       snapshot = buildSnapshot({
         beaches: deps.beaches,
         zones: deps.zones,
+        seasons: deps.seasons,
         inputs: await readPublishInputs(deps.state),
         now,
       });

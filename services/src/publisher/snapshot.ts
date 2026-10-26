@@ -20,6 +20,7 @@ import { formatUtcIso, parseUtcIso } from "../core/warnings/time";
 import { judgeTsunamiBeaches } from "../core/warnings/tsunami-match";
 import { classifyBeach } from "./classify";
 import type { PublishInputs } from "./inputs";
+import { seasonInfo, type SeasonTable } from "./season";
 
 // 게시 파일 네 개 조립 (아키텍처 6.2·6.3, 결정 기록 11장 B2·B3·B4, BRD-61)
 // 시각을 인자로 받는 순수 함수. 저장소·시계를 직접 읽지 않음
@@ -29,6 +30,7 @@ export interface SnapshotInput {
   readonly beaches: readonly Beach[];
   readonly zones: ZoneTables;
   readonly inputs: PublishInputs;
+  readonly seasons: SeasonTable; // data/beach-meta.json의 운영 기간
   readonly now: string; // 서버 시각(UTC ISO)
 }
 
@@ -107,7 +109,7 @@ export function buildSnapshot(input: SnapshotInput): Snapshot {
       status[beach.id] = {
         ...classified,
         info: {
-          season: null, // 운영 기간 연결은 PR ②(data/beach-meta.json)
+          season: seasonInfo(input.seasons, beach.id, now), // 정보 배지만(분류에 쓰지 않음)
           ripCurrent: null, // collect-rip 없음
           nearbyWarnings: warning.nearby, // 분류에 쓰지 않음(B3)
         },
