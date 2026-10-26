@@ -106,9 +106,10 @@ export class InquiryBackend extends Construct {
       {
         cookieBehavior: cloudfront.OriginRequestCookieBehavior.none(),
         queryStringBehavior: cloudfront.OriginRequestQueryStringBehavior.none(),
+        // Content-Length는 CloudFront가 본문과 함께 직접 다루는 금지 헤더라 정책에 넣을 수 없음
+        // (본문이 있는 요청에는 자동 전달됨 → 핸들러의 content-length 검사는 그대로 동작)
         headerBehavior: cloudfront.OriginRequestHeaderBehavior.allowList(
           "content-type",
-          "content-length",
           "x-amz-content-sha256",
         ),
       },

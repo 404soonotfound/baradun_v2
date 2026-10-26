@@ -70,6 +70,19 @@ describe("데이터 문의 접수 인프라", () => {
     expect(code).toContain("32768");
   });
 
+  it("오리진 요청 정책은 content-type·본문 해시 헤더만 넘긴다 (Content-Length는 금지 헤더)", () => {
+    const policies = Object.values(
+      template.findResources("AWS::CloudFront::OriginRequestPolicy"),
+    );
+    expect(policies).toHaveLength(1);
+    expect(
+      policies[0]?.Properties.OriginRequestPolicyConfig.HeadersConfig,
+    ).toEqual({
+      HeaderBehavior: "whitelist",
+      Headers: ["content-type", "x-amz-content-sha256"],
+    });
+  });
+
   it("사진 버킷은 비공개이고 30일 뒤 삭제한다", () => {
     const buckets = Object.values(template.findResources("AWS::S3::Bucket"));
     const photos = buckets.find(
