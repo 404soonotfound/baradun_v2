@@ -218,7 +218,10 @@ describe("manifest 먼저, 바뀔 때만 status", () => {
       maintenance: { active: true, until: null },
     };
     await store.refresh();
-    expect(store.getState().phase).toBe("maintenance");
+    expect(store.getState()).toMatchObject({
+      phase: "maintenance",
+      statuses: null,
+    });
     expect(
       deriveBeachView({ id: "b0001", hidden: false }, store.getState()),
     ).toMatchObject({
@@ -399,24 +402,29 @@ describe("지원 범위 밖 schemaVersion", () => {
 describe("최소 화면 버전 (minWebBuild, BRD-43)", () => {
   const newer = { ...manifestExample, minWebBuild: 2 };
 
-  it("화면 빌드가 낮으면 새로고침 1회 → 다시 열어도 낮으면 강제 업데이트, 값은 숨김(status 받지 않음)", async () => {
-    const session = memoryStorage();
-    const storage = memoryStorage();
-    const first = setup({ session, storage });
-    first.server.manifest = newer;
-    first.store.start();
-    await first.store.refresh();
-    expect(first.reload).toHaveBeenCalledTimes(1);
-
-    // 새로고침했는데도 이전 화면 파일(캐시 등)
-    const second = setup({ session, storage, server: first.server });
-    second.store.start();
-    await second.store.refresh();
-    expect(second.reload).not.toHaveBeenCalled();
-    expect(second.store.getState().phase).toBe("update_required");
-    expect(second.statusCalls()).toBe(0);
+  it("화면 빌드가 낮으면 자동 새로고침 없이 바로 강제 업데이트: 값 숨김, status 받지 않음, 지난 statuses 비움", async () => {
+    const { store, server, reload, statusCalls } = setup();
+    store.start();
+    await store.refresh();
+    expect(store.getState().statuses).not.toBeNull();
+    server.manifest = {
+      ...newer,
+      snapshotVersion: "20991231T000000Z",
+      files: {
+        ...manifestExample.files,
+        status: "/data/20991231T000000Z/status.json",
+      },
+    };
+    await store.refresh();
+    expect(reload).not.toHaveBeenCalled();
+    expect(store.getState()).toMatchObject({
+      phase: "update_required",
+      statuses: null,
+      live: true,
+    });
+    expect(statusCalls()).toBe(1); // 첫 조회만
     expect(
-      deriveBeachView({ id: "b0001", hidden: false }, second.store.getState()),
+      deriveBeachView({ id: "b0001", hidden: false }, store.getState()),
     ).toMatchObject({ category: "undetermined" });
   });
 
@@ -429,55 +437,43 @@ describe("최소 화면 버전 (minWebBuild, BRD-43)", () => {
     expect(store.getState().phase).toBe("ready");
   });
 
-  it("minWebBuild가 더 오르면 그 값으로 한 번 더 새로고침", async () => {
-    const session = memoryStorage();
-    session.setItem("baradun:build-reload", "2");
-    const { store, server, reload } = setup({ session });
-    server.manifest = { ...manifestExample, minWebBuild: 3 };
-    store.start();
-    await store.refresh();
-    expect(reload).toHaveBeenCalledTimes(1);
-    expect(session.data.get("baradun:build-reload")).toBe("2,3");
-  });
-
-  it("새로고침 기록을 못 남기면 새로고침하지 않고 강제 업데이트(무한 새로고침 방지)", async () => {
-    const broken: KeyValueStorage = {
-      getItem: () => null,
-      setItem: () => {
-        throw new Error("blocked");
-      },
-      removeItem: () => {},
-    };
-    const { store, server, reload } = setup({
-      session: broken as ReturnType<typeof memoryStorage>,
-    });
-    server.manifest = newer;
-    store.start();
-    await store.refresh();
-    expect(reload).not.toHaveBeenCalled();
-    expect(store.getState().phase).toBe("update_required");
-  });
-
   it("점검 중이어도 화면 빌드가 낮으면 강제 업데이트가 먼저", async () => {
-    const session = memoryStorage();
-    session.setItem("baradun:build-reload", "2");
-    const { store, server } = setup({ session });
+    const { store, server } = setup();
     server.manifest = { ...newer, maintenance: { active: true, until: null } };
     store.start();
     await store.refresh();
     expect(store.getState().phase).toBe("update_required");
   });
 
-  it("강제 업데이트 화면은 네트워크 실패 한 번으로 풀리지 않음", async () => {
-    const session = memoryStorage();
-    session.setItem("baradun:build-reload", "2");
-    const { store, server } = setup({ session });
+  it("강제 업데이트 화면은 네트워크 실패 한 번으로 풀리지 않고 저장값도 꺼내지 않음", async () => {
+    const storage = memoryStorage();
+    const before = setup({ storage });
+    before.store.start();
+    await before.store.refresh(); // 기기에 정상값 저장
+    const { store, server } = setup({ storage, server: before.server });
     server.manifest = newer;
     store.start();
     await store.refresh();
     server.down = true;
     await store.refresh();
+    expect(store.getState()).toMatchObject({
+      phase: "update_required",
+      statuses: null,
+    });
+  });
+
+  it("새 화면을 받아 빌드가 minWebBuild 이상이 되면 정상으로 돌아옴(사용자가 새로고침한 뒤)", async () => {
+    const { store, server } = setup();
+    server.manifest = newer;
+    store.start();
+    await store.refresh();
     expect(store.getState().phase).toBe("update_required");
+    // 새로고침 뒤 새 화면(webBuild 2)
+    const next = setup({ server, webBuild: 2 });
+    next.store.start();
+    await next.store.refresh();
+    expect(next.store.getState().phase).toBe("ready");
+    expect(next.store.getState().statuses).not.toBeNull();
   });
 
   it("더 새 화면이 저장한 값(minWebBuild가 높음)은 오프라인에서도 꺼내지 않음", async () => {

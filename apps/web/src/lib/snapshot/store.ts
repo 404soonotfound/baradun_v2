@@ -39,8 +39,6 @@ export const REQUEST_TIMEOUT_MS = 10_000;
 const LAST_SNAPSHOT_KEY = "baradun:last-snapshot";
 // 지원 밖 schemaVersion일 때 자동 새로고침을 이미 했는지(이 브라우저 탭 안에서만)
 const SCHEMA_RELOAD_KEY = "baradun:schema-reload";
-// 화면 빌드가 minWebBuild보다 낮을 때 자동 새로고침을 이미 했는지(같은 방식, BRD-43)
-const BUILD_RELOAD_KEY = "baradun:build-reload";
 
 export interface SnapshotState extends ViewSource {
   manifest: ManifestFile | null;
@@ -60,7 +58,7 @@ export interface SnapshotDeps {
   // sessionStorage. 못 쓰면 null → 자동 새로고침 안 함(무한 새로고침 방지)
   session: KeyValueStorage | null;
   reload: () => void;
-  // 이 화면 빌드의 버전 번호(build.ts WEB_BUILD). manifest.minWebBuild보다 낮으면 강제 업데이트
+  // 이 화면 빌드의 버전 번호(build.ts WEB_BUILD). manifest.minWebBuild보다 낮으면 강제 업데이트 상태(자동 새로고침 없음)
   webBuild: number;
   isVisible: () => boolean;
   // 화면이 보이게 되거나 숨겨질 때 부를 함수 등록. 해제 함수를 돌려줌
@@ -228,8 +226,11 @@ export function createSnapshotStore(deps: SnapshotDeps): SnapshotStore {
 
   // 메모리에 값이 없으면 기기에 저장해 둔 마지막 값을 꺼냄. 서버 시각은 모르는 것으로 둠.
   // live: false라 B5 규칙(발효 특보 배지 유지, 나머지는 특보 확인 못 함)으로 보임
-  function showStored() {
+  // 점검·강제 업데이트 화면을 보이는 중에는 꺼내지 않음(상태에 지난 값을 들고 있지 않게).
+  // evenIfHidden: 새 manifest가 그 화면을 풀었는데 status만 실패한 경우(fail)는 꺼냄
+  function showStored(evenIfHidden = false) {
     if (state.statuses) return;
+    if (!evenIfHidden && hidesLastValues(state.phase)) return;
     const stored = safe(() =>
       JSON.parse(deps.storage?.getItem(LAST_SNAPSHOT_KEY) ?? "null"),
     );
@@ -252,9 +253,10 @@ export function createSnapshotStore(deps: SnapshotDeps): SnapshotStore {
   // manifestOk: 이번 manifest가 지원 형식이고 점검 중이 아니며 이 화면 빌드가 읽어도 됨을 확인함(status만 실패)
   // → 점검 화면·강제 업데이트·지원 밖 형식 배너를 풀고 B5로(마지막 발효 특보 배지가 사라지지 않게)
   function fail(fresh?: Clock, manifestOk = false) {
-    showStored();
     const clock = fresh ?? state.clock;
     const keep = !manifestOk && hidesLastValues(state.phase);
+    // 점검·강제 업데이트 화면을 유지하는 동안은 저장된 값도 꺼내지 않음(상태에 지난 값을 들고 있지 않게)
+    if (!keep) showStored(true);
     set({
       // 점검 화면·강제 업데이트·지원 밖 형식 배너는 그대로 둠. 처음부터 못 받았으면 데이터 없이 판단불가
       phase: keep ? state.phase : "ready",
@@ -370,28 +372,16 @@ export function createSnapshotStore(deps: SnapshotDeps): SnapshotStore {
     latestVersion = manifest.snapshotVersion;
 
     // 화면 빌드가 최소 버전보다 낮음 → 이전 화면이 새 데이터를 잘못 읽을 수 있어 값을 숨김(9.1)
-    // minWebBuild 값마다 한 번 새로고침해 새 화면 파일을 받고, 그래도 낮으면 강제 업데이트 화면(L15, 새로고침 버튼)
-    // 점검보다 먼저 봄: 새로고침으로 받은 새 화면이 점검 여부를 다시 확인함
+    // 자동으로 새로고침하지 않음(2026-10-26 사용자 결정): 입력 중 화면이 사라지거나 새로고침이 반복될 수 있음
+    // 강제 업데이트 화면(L15, BRD-38)의 버튼이 window.location.reload()를 부름. 사이트 HTML은 max-age=0이라 새 화면을 받음
+    // 점검보다 먼저 봄: 새 화면이 점검 여부를 다시 확인함
     if (manifest.minWebBuild > deps.webBuild) {
-      if (reloadOnce(BUILD_RELOAD_KEY, String(manifest.minWebBuild))) return;
-      return set({
-        phase: "update_required",
-        manifest,
-        live: true,
-        clock,
-        nowMs: now(clock, manifest),
-      });
+      return hideAll("update_required", manifest, clock);
     }
 
     // 점검 중이면 마지막 값도 숨김(화면이 전체를 덮음, 9.1)
     if (manifest.maintenance.active) {
-      return set({
-        phase: "maintenance",
-        manifest,
-        live: true,
-        clock,
-        nowMs: now(clock, manifest),
-      });
+      return hideAll("maintenance", manifest, clock);
     }
 
     let statuses = state.statuses;
@@ -415,6 +405,23 @@ export function createSnapshotStore(deps: SnapshotDeps): SnapshotStore {
       phase: "ready",
       manifest,
       statuses,
+      live: true,
+      clock,
+      nowMs: now(clock, manifest),
+    });
+  }
+
+  // 화면 전체를 덮는 상태로 바꿈. 지난 statuses는 상태에서 비움(다른 소비자가 지난 값을 읽지 않고, 만료 타이머도 돌지 않게)
+  // loadedVersion은 두지만 statuses가 없으면 다음 조회가 status를 다시 받음
+  function hideAll(
+    phase: "update_required" | "maintenance",
+    manifest: ManifestFile,
+    clock: Clock,
+  ) {
+    set({
+      phase,
+      manifest,
+      statuses: null,
       live: true,
       clock,
       nowMs: now(clock, manifest),

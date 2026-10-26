@@ -1,5 +1,6 @@
 // 이 화면 빌드의 버전 번호 (아키텍처 9.1 '점검·강제 업데이트', BRD-43)
-// manifest.minWebBuild보다 낮으면 강제 업데이트(새로고침 1회 → 그래도 낮으면 강제 업데이트 화면)
+// manifest.minWebBuild보다 낮으면 강제 업데이트 상태(값 숨김). 자동 새로고침은 하지 않고 L15 화면 버튼으로 새로고침(2026-10-26)
+// MANIFEST_SETTINGS.minWebBuild(services)가 이 값보다 크면 infra/test/publisher.test.ts가 실패함(먼저 새 화면을 배포한 뒤 올림)
 // 환경 변수가 아니라 저장소 상수로 둠: 운영자가 올릴 minWebBuild 값을 리뷰에서 같이 보고 맞출 수 있게 하고,
 // 빌드 환경마다 값이 달라지지 않게 함(NEXT_PUBLIC_ 값도 빌드 때 고정되지만 CI 설정에 숨음)
 // 올리는 때: 이전 화면이 새 데이터를 잘못 읽을 수 있는 변경을 배포할 때만. 순서는 infra/README '점검·강제 업데이트'
