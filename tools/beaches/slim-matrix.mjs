@@ -30,10 +30,10 @@ const SHORT_TEXT = [
 const str = (v) => (v == null ? "" : String(v));
 const shorten = (v) => SHORT_TEXT.reduce((s, [from, to]) => (s === from ? to : s), str(v));
 const responseCheck = (v) => {
-  const m = str(v).match(/^실응답 (?:(\d+차) )?저장본 재사용\((?:([^,]+), )?sea_obs·kma_buoy HTTP ([^,]+), 새 호출 없음\)$/);
+  const m = str(v).match(/^실응답 (?:(\d+차) )?저장본 재사용\(([^,]+), sea_obs·kma_buoy HTTP ([^,]+), 새 호출 없음\)$/);
   if (!m) return shorten(v);
   const [, ord, tm, http] = m;
-  return ["실응답", ord, tm ? tm.replace(":00Z", "Z") : "", `HTTP ${http}`].filter(Boolean).join(" ");
+  return ["실응답", ord, tm.replace(":00Z", "Z"), `HTTP ${http}`].filter(Boolean).join(" ");
 };
 
 // 'gugun_nm=서구 → 별표5 부산앞바다'. 형식이 다르면(자동 제외 사유 등) 원문 유지
