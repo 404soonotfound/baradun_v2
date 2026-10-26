@@ -1,5 +1,3 @@
-import { listBeachSummaries } from "@/lib/beaches";
-
 import type { Metadata } from "next";
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
@@ -17,7 +15,6 @@ export const metadata: Metadata = {
 };
 
 export default async function Home() {
-  console.log(listBeachSummaries("ko").slice(0, 2));
   // 페이지와 레이아웃은 따로 그려질 수 있어서 페이지마다 언어를 알려 줌.
   const t = await getTranslations({ locale: "ko" });
 
