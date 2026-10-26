@@ -9,7 +9,14 @@ npx cdk synth                     # CloudFormation 템플릿 생성 (infra/에�
 npx cdk diff                      # 배포된 스택과 비교
 ```
 
-배포(`npx cdk deploy`)는 요청이 있을 때만 하고, `origin/main`을 꺼낸 작업 트리에서 합니다. 작업 중인 브랜치에서 배포하면 머지되지 않은 코드가 실환경에 올라갑니다. 첫 배포 전 부트스트랩 실행 정책은 `bootstrap/cfn-execution-policy.json`에 있습니다.
+배포(`npx cdk deploy`)는 요청이 있을 때만 하고, 최신 `origin/main`을 꺼낸 작업 트리에서 합니다. 작업 중인 브랜치에서 배포하면 머지되지 않은 코드가 실환경에 올라갑니다.
+
+```bash
+git fetch origin && git worktree add ../baradun_v2-deploy origin/main --detach
+cd ../baradun_v2-deploy && npm ci && cd infra && npx cdk diff && npx cdk deploy
+```
+
+첫 배포 전 부트스트랩 실행 정책은 `bootstrap/cfn-execution-policy.json`에 있습니다.
 
 코드 자산 읽기는 `cdk-hnb659fds-assets-${aws:PrincipalAccount}-ap-northeast-2` 버킷으로 제한합니다. `${aws:PrincipalAccount}`는 IAM이 요청 시 실행 역할의 계정 번호로 해석하는 정책 변수이며, 파일을 그대로 IAM 정책으로 사용합니다. 다른 계정·리전의 자산 버킷은 허용하지 않습니다.
 
@@ -74,17 +81,23 @@ API 키 읽기(`ssm:GetParameter`)는 boundary에서 스택의 Lambda 함수가 
 
 1. 게시 코드 문제로 되돌리는 경우 수집 일정을 먼저 멈춥니다. 멈추지 않으면 다음 수집(15분 안)이 새 버전으로 다시 게시합니다.
 
-   `update-schedule`은 일정 설정 전체를 바꿉니다. `--state`만 넘기면 나머지 설정이 비므로, 지금 설정을 읽어 상태만 바꿔 넘깁니다. 원본은 5단계에서 다시 켤 때 씁니다.
+   `update-schedule`은 넘기지 않은 선택 설정(시간대·재시도·유연 시간 등)을 기본값으로 되돌립니다. 예를 들어 시간대가 빠지면 UTC가 되어 collect-catalog가 KST 13:20에 돕니다. 그래서 그때그때 지금 설정을 읽어 상태만 바꿔 넘깁니다. 작업 파일은 저장소 밖 임시 폴더에 둡니다(계정 번호·ARN이 들어 있음).
 
    ```bash
-   for n in $(aws scheduler list-schedules --name-prefix BaradunV2- --query "Schedules[].Name" --output text); do
-     aws scheduler get-schedule --name "$n" | jq 'del(.Arn,.CreationDate,.LastModificationDate)' > "$n.json"
-     jq '.State="DISABLED"' "$n.json" > off.json
-     aws scheduler update-schedule --cli-input-json file://off.json
-   done
+   cd "$(mktemp -d)"
+   set_state() {  # $1: ENABLED | DISABLED
+     for n in $(aws scheduler list-schedules --name-prefix BaradunV2- --query "Schedules[].Name" --output text); do
+       aws scheduler get-schedule --name "$n" \
+         | jq --arg s "$1" 'del(.Arn,.CreationDate,.LastModificationDate) | .State=$s' > s.json \
+         && aws scheduler update-schedule --cli-input-json file://s.json > /dev/null \
+         || echo "실패: $n"
+     done
+     aws scheduler list-schedules --name-prefix BaradunV2- --query "Schedules[].[Name,State]" --output text
+   }
+   set_state DISABLED   # 세 일정 모두 DISABLED로 나와야 함. '실패'가 있으면 다시 실행
    ```
 
-   롤백은 게시 잠금을 잡지 않고 manifest를 바로 덮어씁니다. 일정을 끈 뒤 게시 로그 그룹(`BaradunV2-PublishLogs…`)의 마지막 줄이 `publish_finished`·`publish_unchanged`인지 보고, 진행 중인 게시가 없을 때 다음 단계로 갑니다.
+   일정을 꺼도 이미 시작된 수집이나 스케줄러 재시도(최대 10분 늦게 옴)가 게시를 한 번 더 깨울 수 있습니다. 롤백은 게시 잠금과 상관없이 manifest를 덮어쓰므로, 일정을 끄고 **11분 기다린 뒤** 롤백합니다. 급해서 바로 롤백했다면 4단계에서 11분 뒤 한 번 더 확인합니다.
 
 2. 되돌릴 버전을 고릅니다: `aws s3 ls s3://<SiteBucketName>/data/`
 3. 게시 함수를 롤백 이벤트로 직접 부릅니다(`PublisherFunctionName` 출력값).
@@ -97,11 +110,7 @@ API 키 읽기(`ssm:GetParameter`)는 boundary에서 스택의 Lambda 함수가 
 
    그 버전의 manifest 사본과 파일 네 개가 모두 있을 때만 되돌립니다. 하나라도 없으면 지금 manifest를 그대로 두고 오류로 끝납니다.
 
-4. 사이트에서 manifest가 바뀌었는지 확인합니다(manifest 캐시 60초): `curl -s https://<DistributionDomainName>/data/manifest.json`
-5. 원인을 고친 뒤 1단계에서 저장한 원본 설정으로 일정을 다시 켭니다. 다음 수집이 새 버전을 게시합니다. 지금 manifest와 내용이 같으면 `publish_unchanged`로 남고 새 버전은 만들지 않습니다.
-
-   ```bash
-   for f in BaradunV2-*.json; do aws scheduler update-schedule --cli-input-json "file://$f"; done
-   ```
+4. 사이트에서 manifest가 바뀌었는지 확인합니다(manifest 캐시 60초): `curl -s https://<DistributionDomainName>/data/manifest.json | jq -r .snapshotVersion`. 그 뒤 게시 로그 그룹(`BaradunV2-PublishLogs…`)에 롤백 뒤 `publish_finished`가 새로 생겼다면 늦게 온 게시가 덮은 것이니 3단계를 다시 합니다.
+5. 원인을 고친 뒤 일정을 다시 켭니다: `set_state ENABLED`(1단계와 같은 셸, 새 셸이면 함수를 다시 정의). 고친 코드를 `cdk deploy`했다면 배포가 일정을 이미 켰을 수 있으니 상태만 확인합니다. 다음 수집이 새 버전을 게시합니다. 지금 manifest와 내용이 같으면 `publish_unchanged`로 남고 새 버전은 만들지 않습니다.
 
 롤백 리허설 결과(일시·되돌린 버전·복구에 걸린 시간)는 Notion 'V2 AWS 운영 점검표'의 '데이터 게시 롤백 리허설 기록'에 남깁니다. 첫 실환경 리허설(2026-10-26) 기록이 그곳에 있습니다.
