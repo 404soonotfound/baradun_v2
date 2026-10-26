@@ -13,7 +13,7 @@ import {
   seedReadings,
   seedWarnings,
 } from "./fixtures";
-import { PUBLISH_POLICY } from "./policy";
+import { MANIFEST_SETTINGS, PUBLISH_POLICY } from "./policy";
 import {
   MANIFEST_PATH,
   publishSnapshot,
@@ -140,6 +140,34 @@ describe("publishSnapshot", () => {
     });
     expect(await snapshots.listVersions()).toEqual([V1]);
   });
+
+  // 운영 절차(infra/README '점검·강제 업데이트'): policy.ts의 MANIFEST_SETTINGS를 바꿔 배포하면 다음 게시에 반영
+  // 데이터가 그대로여도 manifest 설정이 다르면 새로 게시해야 함 → 지금 manifest에 이전 설정이 남은 경우로 확인(BRD-43)
+  it.each([
+    ["점검", { maintenance: { active: true, until: null } }],
+    ["최소 화면 버전", { minWebBuild: 99 }],
+  ] as const)(
+    "데이터가 같아도 지금 manifest의 %s 설정이 다르면 새 버전으로 게시해 설정을 반영함",
+    async (_, previous) => {
+      const { snapshots, deps, advance, manifest } = await setup();
+      await publishSnapshot(deps());
+      const file = snapshots.files.get(MANIFEST_PATH)!;
+      snapshots.files.set(MANIFEST_PATH, {
+        ...file,
+        body: JSON.stringify({ ...manifest()!, ...previous }),
+      });
+      const v2 = advance(60_000);
+      expect(await publishSnapshot(deps())).toMatchObject({
+        status: "published",
+        version: v2,
+      });
+      expect(manifest()).toMatchObject({
+        snapshotVersion: v2,
+        maintenance: MANIFEST_SETTINGS.maintenance,
+        minWebBuild: MANIFEST_SETTINGS.minWebBuild,
+      });
+    },
+  );
 
   it("내용이 바뀌면 새 버전으로 게시하고 이전 버전 경로는 남김", async () => {
     const { state, snapshots, deps, advance, manifest } = await setup();
