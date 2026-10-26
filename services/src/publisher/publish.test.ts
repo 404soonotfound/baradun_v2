@@ -203,8 +203,9 @@ describe("publishSnapshot", () => {
     const { snapshots, deps, manifest } = await setup();
     const putIf = snapshots.putFileIf.bind(snapshots);
     snapshots.putFileIf = async (path, body, cacheControl, etag) => {
-      await putIf(path, body, cacheControl, etag);
+      const written = await putIf(path, body, cacheControl, etag);
       if (path === MANIFEST_PATH) throw new Error("timeout");
+      return written;
     };
     expect((await publishSnapshot(deps())).status).toBe("failed");
     expect(manifest()!.snapshotVersion).toBe(V1);
