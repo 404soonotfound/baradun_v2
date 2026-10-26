@@ -10,12 +10,11 @@ import type {
   CreateInquiryRequest,
   CreateInquiryResponse,
   InquiryErrorResponse,
-  InquiryPhotoReference,
   InquiryUploadResponse,
 } from "@baradun/contracts";
 import { createHash, randomUUID } from "node:crypto";
 import { InquiryNotifier } from "./notification";
-import { InquiryPhotos, type InspectedPhoto } from "./photos";
+import { InquiryPhotos } from "./photos";
 import { INQUIRY_MAX_BODY_BYTES } from "./policy";
 import { InquiryStore } from "./store";
 import {
@@ -142,31 +141,15 @@ function isHttpEvent(event: unknown): event is APIGatewayProxyEventV2 {
   );
 }
 
-async function inspectPhoto(
-  photo: InquiryPhotoReference,
-  dependencies: InquiryDependencies,
-): Promise<InspectedPhoto> {
-  try {
-    return await dependencies.photos.inspect(photo);
-  } catch {
-    safeLog("warn", "inquiry_photo_inspection_failed");
-    return {
-      result: {
-        photoId: photo.photoId,
-        status: "rejected",
-        reason: "invalid_file",
-      },
-    };
-  }
-}
-
 async function createInquiry(
   request: CreateInquiryRequest,
   dependencies: InquiryDependencies,
 ): Promise<CreateInquiryResponse> {
   const receivedAt = dependencies.now();
+  // 파일 문제(없음·형식·GPS)는 inspect가 거절 결과로 돌려주고, 그 밖의 오류(S3 장애·권한)는
+  // 그대로 던져 503으로 끝냄 — 조회 실패를 '잘못된 파일' 거절로 바꾸지 않음(사용자가 재시도)
   const inspected = await Promise.all(
-    request.photos.map((photo) => inspectPhoto(photo, dependencies)),
+    request.photos.map((photo) => dependencies.photos.inspect(photo)),
   );
   const inquiryId = dependencies.id();
   const message = request.message.trim();
