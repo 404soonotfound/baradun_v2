@@ -54,7 +54,8 @@ export function ripObservedAt(raw: unknown): string | null {
 // 자료 없음은 resultCode 03(공공데이터포털 NODATA) 또는 00 + totalCount 0일 때만
 // 줄마다 코드가 요청한 해변과 같고 시각을 읽을 수 있어야 씀. 미래 관측은 버림(허용 오차 없음)
 // 요청한 날(reqDate, yyyymmdd)이 아닌 줄도 버림: 다른 날 자료를 오늘 자료로 보지 않음
-// totalCount가 numOfRows보다 크면 한 쪽에 다 받지 못해 마지막 관측이 빠졌을 수 있음 → 실패
+// 받은 줄 수가 totalCount보다 적으면 한 쪽에 다 받지 못해 마지막 관측이 빠졌을 수 있음 → 실패(응답의 numOfRows는 믿지 않음)
+// totalCount가 정수가 아니면 형식 오류
 export function parseRipResponse(
   text: string,
   code: string,
@@ -77,22 +78,24 @@ export function parseRipResponse(
   if (resultCode !== "00") {
     return { status: "failed", reason: `result:${String(resultCode)}` };
   }
-  const { items, totalCount, numOfRows } = json.body;
+  const { items, totalCount } = json.body;
+  if (!Number.isInteger(totalCount)) {
+    return { status: "failed", reason: "format:totalCount" };
+  }
   if (totalCount === 0 && (items === "" || items === undefined)) {
     return { status: "none" };
-  }
-  if (
-    typeof totalCount === "number" &&
-    typeof numOfRows === "number" &&
-    totalCount > numOfRows
-  ) {
-    return { status: "failed", reason: `truncated:${totalCount}` };
   }
   const day = `${reqDate.slice(0, 4)}-${reqDate.slice(4, 6)}-${reqDate.slice(6, 8)} `;
   const item = isObject(items) ? items.item : undefined;
   const rows = Array.isArray(item) ? item : isObject(item) ? [item] : null;
   if (rows === null || rows.length === 0) {
     return { status: "failed", reason: "format:items" };
+  }
+  if (rows.length < (totalCount as number)) {
+    return {
+      status: "failed",
+      reason: `truncated:${rows.length}/${String(totalCount)}`,
+    };
   }
 
   let latest: RipReading | null = null;

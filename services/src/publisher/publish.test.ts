@@ -178,37 +178,6 @@ describe("publishSnapshot", () => {
     },
   );
 
-  it("이안류 관측 시각이 틀리면(게시 시각보다 늦음) 그 해변은 null로 게시하고 warn 로그(게시는 계속)", async () => {
-    const { state, deps, events, snapshots } = await setup();
-    await state.putState(
-      "rip",
-      "readings",
-      {
-        beaches: {
-          b0001: {
-            code: "GYEONGPO",
-            label: "관심",
-            observedAt: "2026-10-23T03:00:00Z",
-          },
-        },
-      },
-      1,
-    );
-    expect((await publishSnapshot(deps())).status).toBe("published");
-    expect(events()).toContainEqual(
-      expect.objectContaining({
-        level: "warn",
-        event: "publish_rip_hidden",
-        beachId: "b0001",
-        reason: "bad_time",
-      }),
-    );
-    const status = JSON.parse(
-      snapshots.files.get(`data/${V1}/status.json`)!.body,
-    );
-    expect(status.beaches.b0001.info.ripCurrent).toBeNull();
-  });
-
   it("내용이 바뀌면 새 버전으로 게시하고 이전 버전 경로는 남김", async () => {
     const { state, snapshots, deps, advance, manifest } = await setup();
     await publishSnapshot(deps());

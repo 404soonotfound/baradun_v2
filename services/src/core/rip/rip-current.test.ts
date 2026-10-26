@@ -86,15 +86,29 @@ describe("parseRipResponse", () => {
     });
   });
 
-  it("totalCount가 numOfRows보다 크면 실패(마지막 관측이 빠졌을 수 있음)", () => {
+  it("받은 줄 수가 totalCount보다 적으면 실패(한 쪽에 다 못 받아 마지막 관측이 빠졌을 수 있음)", () => {
     expect(
       parseRipResponse(
-        response({ item: [row()] }, 301),
+        response({ item: [row()] }, 2),
         "SONGJUNG",
         AFTER,
-        DAY,
+        "20260815",
       ),
-    ).toEqual({ status: "failed", reason: "truncated:301" });
+    ).toEqual({ status: "failed", reason: "truncated:1/2" });
+  });
+
+  it.each([
+    ["문자열", "287"],
+    ["소수", 1.5],
+  ])("totalCount가 정수가 아니면 형식 오류: %s", (_, totalCount) => {
+    expect(
+      parseRipResponse(
+        response({ item: [row()] }, totalCount as never),
+        "SONGJUNG",
+        AFTER,
+        "20260815",
+      ),
+    ).toEqual({ status: "failed", reason: "format:totalCount" });
   });
 
   it("item이 하나면 객체로 와도 읽음", () => {

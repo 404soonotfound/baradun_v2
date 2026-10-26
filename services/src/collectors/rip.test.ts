@@ -86,6 +86,7 @@ describe("collectRip", () => {
   it("시즌 중: 해변마다 오늘(KST) 자료를 받아 가장 늦은 관측만 저장, 슬롯 끝냄", async () => {
     const { deps, state, ops, urls, lines } = setup(IN_SEASON, {
       SONGJUNG: realOn("2026-08-16"),
+      HAE: realOn("2026-08-16").replaceAll("SONGJUNG", "HAE"),
     });
     expect(await collectRip(deps)).toEqual({
       status: "complete",
@@ -103,11 +104,15 @@ describe("collectRip", () => {
         label: "관심",
         observedAt: "2026-08-15T15:05:00Z",
       },
+      b0097: {
+        code: "HAE",
+        label: "관심",
+        observedAt: "2026-08-15T15:05:00Z",
+      },
     });
-    // 자료 없음(HAE)은 저장값을 만들지 않고 실패로도 치지 않음
     expect((await attempt(state)).counts).toEqual({
-      ok: 1,
-      none: 1,
+      ok: 2,
+      none: 0,
       failed: 0,
     });
     expect(
@@ -154,6 +159,83 @@ describe("collectRip", () => {
     ).toBe("busy");
   });
 
+  it("시즌 중 '자료 없음'은 결측 → error 로그, 슬롯을 끝내지 않음(partial)", async () => {
+    const { deps, state, ops, lines } = setup(IN_SEASON, {
+      SONGJUNG: realOn("2026-08-16"),
+      // HAE는 NO_DATA(기본)
+    });
+    expect((await collectRip(deps)).status).toBe("partial");
+    expect((await attempt(state)).counts).toEqual({
+      ok: 1,
+      none: 1,
+      failed: 0,
+    });
+    expect(
+      lines.some(
+        (line) => line.includes("rip_source_no_data") && line.includes("b0097"),
+      ),
+    ).toBe(true);
+    expect(
+      await ops.claimSlot(
+        RIP_JOB,
+        "202608160012",
+        "run-2",
+        Date.parse(IN_SEASON),
+        1,
+      ),
+    ).toBe("busy");
+  });
+
+  it("같은 시각의 정정은 반영하고, 미래 시각 저장값은 믿지 않고 덮음", async () => {
+    const { deps, state } = setup(IN_SEASON, {
+      SONGJUNG: realOn("2026-08-16"), // 마지막 줄 00:05 '관심'
+      HAE: realOn("2026-08-16").replaceAll("SONGJUNG", "HAE"),
+    });
+    await seed(state, {
+      b0096: {
+        code: "SONGJUNG",
+        label: "위험",
+        observedAt: "2026-08-15T15:05:00Z",
+      }, // 같은 시각
+      b0097: { code: "HAE", label: "위험", observedAt: "2026-08-20T00:00:00Z" }, // 미래
+    });
+    await collectRip(deps);
+    const saved = (await readings(state))!.beaches;
+    expect(saved.b0096).toMatchObject({
+      label: "관심",
+      observedAt: "2026-08-15T15:05:00Z",
+    });
+    expect(saved.b0097).toMatchObject({
+      label: "관심",
+      observedAt: "2026-08-15T15:05:00Z",
+    });
+  });
+
+  it("호출이 모두 실패해도 대응표 밖·코드가 바뀐 이전 값은 버림", async () => {
+    const { deps, state, lines } = setup(IN_SEASON, {});
+    await seed(state, {
+      b0096: {
+        code: "SONGJUNG",
+        label: "관심",
+        observedAt: "2026-08-15T14:00:00Z",
+      },
+      b0124: {
+        code: "DAECHON",
+        label: "주의",
+        observedAt: "2026-08-15T14:00:00Z",
+      },
+    });
+    const result = await collectRip({
+      ...deps,
+      keys: { get: async () => Promise.reject(new Error("throttled")) },
+    });
+    expect(result.status).toBe("failed");
+    expect(Object.keys((await readings(state))!.beaches)).toEqual(["b0096"]);
+    expect(lines.some((line) => line.includes("rip_readings_dropped"))).toBe(
+      true,
+    );
+  });
+
   it("대응표에서 빠졌거나 코드가 바뀐 해변의 이전 값은 다음 저장 때 버림", async () => {
     const { deps, state } = setup(IN_SEASON, {
       SONGJUNG: realOn("2026-08-16"),
@@ -188,14 +270,17 @@ describe("collectRip", () => {
     expect((await readings(state))?.beaches.b0096).toEqual(later);
   });
 
-  it("문구가 4단계가 아니어도 원문 그대로 저장(게시 때 숨김)", async () => {
-    const { deps, state } = setup(IN_SEASON, {
+  it("문구가 4단계가 아니어도 원문 그대로 저장(게시 때 숨김)하고 수집 때 한 번 warn", async () => {
+    const { deps, state, lines } = setup(IN_SEASON, {
       SONGJUNG: realOn("2026-08-16").replaceAll('"관심"', '"점검중"'),
     });
     await collectRip(deps);
     expect((await readings(state))?.beaches.b0096).toMatchObject({
       label: "점검중",
     });
+    expect(
+      lines.filter((line) => line.includes("rip_unknown_label")),
+    ).toHaveLength(1);
   });
 
   it("비수기 다른 슬롯은 슬롯을 맡지도 호출하지도 않음", async () => {
@@ -257,6 +342,16 @@ describe("parseRipLedger", () => {
     expect(sources.some((s) => s.code === "GORAEBUL")).toBe(false);
   });
 
+  it("연결된 해변 id는 모두 data/beaches에 있음(오타·없는 해변에 값이 가지 않게)", () => {
+    const dir = new URL("../../../data/beaches/", import.meta.url);
+    for (const source of parseRipLedger(ledger)) {
+      const beach = JSON.parse(
+        readFileSync(new URL(`${source.beachId}.json`, dir), "utf8"),
+      ) as { id: string };
+      expect(beach.id).toBe(source.beachId);
+    }
+  });
+
   it.each([
     ["목록 없음", {}],
     [
@@ -270,6 +365,15 @@ describe("parseRipLedger", () => {
     [
       "모르는 상태",
       { beaches: [{ code: "HAE", status: "maybe", beachId: "b0001" }] },
+    ],
+    [
+      "같은 코드가 연결·확인 대기에 함께",
+      {
+        beaches: [
+          { code: "HAE", status: "mapped", beachId: "b0001" },
+          { code: "HAE", status: "pending", beachId: null },
+        ],
+      },
     ],
     [
       "같은 해변 두 번",

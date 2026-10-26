@@ -3,6 +3,7 @@ import {
   inRipSeason,
   parseRipResponse,
   readRipReadings,
+  RIP_LABELS,
   type RipReading,
   type RipResponse,
 } from "../core/rip/rip-current";
@@ -45,7 +46,8 @@ export interface RipDeps extends CollectDeps {
 }
 
 // 대응표 → 수집 목록. Lambda 번들에 들어가는 입력이라 모양이 틀리면 빌드 문제 → 멈춤
-// 같은 코드·해변이 두 번 나오면 한 해변에 다른 해수욕장 값이 섞이므로 멈춤
+// 코드는 상태와 상관없이 하나씩만(mapped·pending에 같은 코드가 있으면 멈춤), 연결된 해변 id도 하나씩만
+// beachId가 data/beaches에 있는지는 빌드 입력(해변 목록)을 여기서 모르므로 테스트(rip.test)가 확인함
 export function parseRipLedger(json: unknown): RipSource[] {
   const beaches =
     typeof json === "object" && json !== null && !Array.isArray(json)
@@ -55,11 +57,16 @@ export function parseRipLedger(json: unknown): RipSource[] {
     throw new RangeError("rip-current-beaches.json: beaches 목록이 없음");
   }
   const sources: RipSource[] = [];
+  const allCodes = new Set<string>();
   for (const entry of beaches) {
     const { code, status, beachId } = (entry ?? {}) as Record<string, unknown>;
     if (typeof code !== "string" || !/^[A-Z]+$/.test(code)) {
       throw new RangeError(`rip-current-beaches.json: 코드 형식 오류`);
     }
+    if (allCodes.has(code)) {
+      throw new RangeError(`rip-current-beaches.json: 코드 중복: ${code}`);
+    }
+    allCodes.add(code);
     if (status === "pending" || status === "unregistered") continue;
     if (
       status !== "mapped" ||
@@ -70,10 +77,9 @@ export function parseRipLedger(json: unknown): RipSource[] {
     }
     sources.push({ code, beachId });
   }
-  const codes = new Set(sources.map((s) => s.code));
   const ids = new Set(sources.map((s) => s.beachId));
-  if (codes.size !== sources.length || ids.size !== sources.length) {
-    throw new RangeError("rip-current-beaches.json: 코드·해변 중복");
+  if (ids.size !== sources.length) {
+    throw new RangeError("rip-current-beaches.json: 해변 중복");
   }
   return sources.sort((a, b) => a.beachId.localeCompare(b.beachId));
 }
@@ -110,10 +116,16 @@ async function fetchOne(
   );
 }
 
-// 저장값보다 늦은 관측만 반영. 저장값 시각이 틀렸으면 믿지 않고 덮어씀
-function isNewer(next: RipReading, previous: RipReading | undefined): boolean {
+// 저장값과 같거나 늦은 관측을 반영(같은 시각은 기관의 단계 정정으로 보고 덮음)
+// 저장값 시각이 틀렸거나 서버 시각보다 미래면 믿지 않고 덮어씀(미래 시각 하나가 이후 갱신을 모두 막지 않게)
+function shouldReplace(
+  next: RipReading,
+  previous: RipReading | undefined,
+  nowMs: number,
+): boolean {
   const prevMs = previous ? parseUtcIso(previous.observedAt) : null;
-  return prevMs === null || parseUtcIso(next.observedAt)! > prevMs;
+  if (prevMs === null || prevMs > nowMs) return true;
+  return parseUtcIso(next.observedAt)! >= prevMs;
 }
 
 export async function collectRip(deps: RipDeps): Promise<CollectRunResult> {
@@ -155,24 +167,37 @@ export async function collectRip(deps: RipDeps): Promise<CollectRunResult> {
     }),
   );
 
-  // 이전 값에 이번 정상 관측만 더함. 충돌이면 다시 읽어 한 번 더 합침
+  // 이전 값에 이번 정상 관측을 더하고, 지금 대응표에 없는 해변·바뀐 코드의 이전 값은 버림
+  // (연결을 풀거나 고친 해변에 이전 해수욕장 값이 남지 않게). 호출이 모두 실패해도 버리기는 함
+  // 바뀐 것이 없으면 쓰지 않음. 충돌이면 다시 읽어 한 번 더 합침
   const { pk, sk } = RIP_STATE.readings;
   const fresh = new Map<BeachId, RipReading>();
   for (const [beachId, result] of results) {
     if (result.status === "ok") fresh.set(beachId, result.latest);
   }
-  let saved = fresh.size === 0;
-  for (let attempt = 0; attempt < 2 && fresh.size > 0; attempt += 1) {
+  const mapped = new Map(deps.sources.map((src) => [src.beachId, src.code]));
+  let saved = false;
+  let dropped = 0;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
     const previous = await deps.state.getState(pk, sk);
-    // 지금 대응표에 없는 해변·바뀐 코드의 이전 값은 버림 → 연결을 풀거나 고친 해변에 이전 해수욕장 값이 남지 않음
-    const mapped = new Map(deps.sources.map((src) => [src.beachId, src.code]));
-    const beaches: Record<string, RipReading> = Object.fromEntries(
-      Object.entries(readRipReadings(previous?.value ?? null)).filter(
-        ([beachId, reading]) => mapped.get(beachId) === reading.code,
-      ),
-    );
+    const beaches: Record<string, RipReading> = {};
+    dropped = 0;
+    for (const [beachId, reading] of Object.entries(
+      readRipReadings(previous?.value ?? null),
+    )) {
+      if (mapped.get(beachId) === reading.code) beaches[beachId] = reading;
+      else dropped += 1;
+    }
+    let applied = 0;
     for (const [beachId, reading] of fresh) {
-      if (isNewer(reading, beaches[beachId])) beaches[beachId] = reading;
+      if (shouldReplace(reading, beaches[beachId], startedMs)) {
+        beaches[beachId] = reading;
+        applied += 1;
+      }
+    }
+    if (applied === 0 && dropped === 0) {
+      saved = true;
+      break;
     }
     const written = await deps.state.putState(
       pk,
@@ -186,7 +211,12 @@ export async function collectRip(deps: RipDeps): Promise<CollectRunResult> {
     break;
   }
   if (!saved) deps.log("error", "rip_readings_not_saved", { slotId });
+  if (saved && dropped > 0) {
+    deps.log("info", "rip_readings_dropped", { slotId, dropped });
+  }
 
+  // 시즌(6~9월) 중 '자료 없음'은 결측 → 실패처럼 다룸(알림 없이 '제공 안 함'으로 바뀌지 않게). 비수기에는 정상
+  const inSeason = inRipSeason(slotMs);
   const counts = { ok: 0, none: 0, failed: 0 };
   const sources: Record<string, StateValue> = {};
   for (const source of deps.sources) {
@@ -209,16 +239,32 @@ export async function collectRip(deps: RipDeps): Promise<CollectRunResult> {
         code: source.code,
         reason: result.reason,
       });
-    } else if (result.status === "ok" && result.skippedRows > 0) {
-      deps.log("warn", "rip_rows_skipped", {
+    } else if (result.status === "none" && inSeason) {
+      deps.log("error", "rip_source_no_data", {
         slotId,
         beachId: source.beachId,
-        skippedRows: result.skippedRows,
+        code: source.code,
       });
+    } else if (result.status === "ok") {
+      if (result.skippedRows > 0) {
+        deps.log("warn", "rip_rows_skipped", {
+          slotId,
+          beachId: source.beachId,
+          skippedRows: result.skippedRows,
+        });
+      }
+      // 모르는 문구는 저장하되 게시되지 않음(publisher가 null) → 수집 때 한 번만 알림(게시마다 반복하지 않음)
+      if (!(RIP_LABELS as readonly string[]).includes(result.latest.label)) {
+        deps.log("warn", "rip_unknown_label", {
+          slotId,
+          beachId: source.beachId,
+          label: result.latest.label,
+        });
+      }
     }
   }
   // 비수기에 자료가 나오면 시즌이 시작됐을 수 있음(게시는 6~9월 관측만) → 알림용
-  if (!inRipSeason(slotMs) && counts.ok > 0) {
+  if (!inSeason && counts.ok > 0) {
     deps.log("warn", "rip_off_season_data", { slotId, ok: counts.ok });
   }
   await deps.state.putState(
@@ -235,12 +281,13 @@ export async function collectRip(deps: RipDeps): Promise<CollectRunResult> {
     startedMs,
   );
 
-  // 실패한 해변이 없고 저장까지 했을 때만 슬롯을 끝냄
-  const allOk = counts.failed === 0 && saved;
+  // 실패(시즌 중 자료 없음 포함)한 해변이 없고 저장까지 했을 때만 슬롯을 끝냄
+  const broken = counts.failed + (inSeason ? counts.none : 0);
+  const allOk = broken === 0 && saved;
   if (allOk) await deps.ops.completeSlot(RIP_JOB, slotId, deps.owner);
   const status = allOk
     ? "complete"
-    : counts.failed < deps.sources.length && saved
+    : broken < deps.sources.length && saved
       ? "partial"
       : "failed";
   deps.log(status === "complete" ? "info" : "error", "rip_run_finished", {
