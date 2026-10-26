@@ -100,25 +100,14 @@ export class InquiryBackend extends Construct {
       code: cloudfront.FunctionCode.fromInline(inquiryRequestGuardCode),
       comment: "Reject malformed inquiry requests before origin",
     });
-    const originRequestPolicy = new cloudfront.OriginRequestPolicy(
-      this,
-      "OriginRequestPolicy",
-      {
-        cookieBehavior: cloudfront.OriginRequestCookieBehavior.none(),
-        queryStringBehavior: cloudfront.OriginRequestQueryStringBehavior.none(),
-        // Content-Length는 CloudFront가 본문과 함께 직접 다루는 금지 헤더라 정책에 넣을 수 없음
-        // (본문이 있는 요청에는 자동 전달됨 → 핸들러의 content-length 검사는 그대로 동작)
-        headerBehavior: cloudfront.OriginRequestHeaderBehavior.allowList(
-          "content-type",
-          "x-amz-content-sha256",
-        ),
-      },
-    );
-
     props.distribution.addBehavior("api/inquiries*", origin, {
       allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
       cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
-      originRequestPolicy,
+      // x-amz-* 헤더는 CloudFront가 정책 allowlist에 못 넣게 함(실배포 거부, 2026-10-26)
+      // → Host만 빼고 모든 뷰어 헤더(content-type·본문 해시 헤더 포함)를 전달하는 관리형 정책 사용
+      //   (Host는 OAC 서명이 함수 URL 주소로 해야 해서 전달하면 안 됨)
+      originRequestPolicy:
+        cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
       viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
       functionAssociations: [
         {

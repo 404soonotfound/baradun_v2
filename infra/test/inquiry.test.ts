@@ -70,17 +70,22 @@ describe("데이터 문의 접수 인프라", () => {
     expect(code).toContain("32768");
   });
 
-  it("오리진 요청 정책은 content-type·본문 해시 헤더만 넘긴다 (Content-Length는 금지 헤더)", () => {
-    const policies = Object.values(
-      template.findResources("AWS::CloudFront::OriginRequestPolicy"),
+  it("오리진 요청 정책은 관리형 AllViewerExceptHostHeader를 쓴다 (x-amz-*는 allowlist 금지)", () => {
+    // 직접 만든 정책이 없어야 함: content-length·x-amz-content-sha256은 CloudFront가
+    // allowlist에 못 넣게 하는 헤더라 정책 생성이 거부됨(2026-10-26 실배포 오류)
+    template.resourceCountIs("AWS::CloudFront::OriginRequestPolicy", 0);
+    const distributions = Object.values(
+      template.findResources("AWS::CloudFront::Distribution"),
     );
-    expect(policies).toHaveLength(1);
-    expect(
-      policies[0]?.Properties.OriginRequestPolicyConfig.HeadersConfig,
-    ).toEqual({
-      HeaderBehavior: "whitelist",
-      Headers: ["content-type", "x-amz-content-sha256"],
-    });
+    const behaviors = distributions[0]?.Properties.DistributionConfig
+      .CacheBehaviors as Array<Record<string, unknown>>;
+    const inquiry = behaviors.find(
+      (behavior) => behavior.PathPattern === "api/inquiries*",
+    );
+    // 관리형 Managed-AllViewerExceptHostHeader의 고정 id
+    expect(inquiry?.OriginRequestPolicyId).toBe(
+      "b689b0a8-53d0-40ab-baf2-68738e2966ac",
+    );
   });
 
   it("사진 버킷은 비공개이고 30일 뒤 삭제한다", () => {
