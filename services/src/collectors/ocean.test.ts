@@ -366,6 +366,39 @@ describe("collectOcean", () => {
     ]);
   });
 
+  it("정상값 저장이 예외를 던져도 이력은 저장하고, 시도 기록을 남긴 뒤 publisher를 깨움", async () => {
+    const { deps, state, lines } = setup({
+      sea_obs: SEA_OBS,
+      kma_buoy: KMA_BUOY,
+    });
+    const putState = state.putState.bind(state);
+    state.putState = async (pk, sk, ...rest) => {
+      if (sk === OCEAN_STATE.readings.sk) throw new Error("throttled");
+      return putState(pk, sk, ...rest);
+    };
+    const result = await collectOcean(deps);
+    expect(result).toEqual({ status: "failed", slotId: "202610210040" });
+    expect(await readings(state)).toBeNull();
+    expect((await history(state))?.stations["22520"]).toEqual([
+      [sec("2026-10-20T15:00:00Z"), 0.7],
+    ]);
+    expect(await attempt(state)).toMatchObject({
+      readingsSaved: false,
+      historySaved: true,
+    });
+    expect(lines.join("\n")).toContain("ocean_readings_failed");
+    let invoked = 0;
+    await expect(
+      finishRun(result, {
+        invoke: async () => {
+          invoked += 1;
+        },
+        log: deps.log,
+      }),
+    ).rejects.toThrow("수집 failed");
+    expect(invoked).toBe(1);
+  });
+
   it("이력 저장만 실패 → partial(정상값은 저장, 슬롯은 끝내지 않음)이고 publisher는 깨움", async () => {
     const { deps, state, ops, lines } = setup({
       sea_obs: SEA_OBS,

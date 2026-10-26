@@ -197,15 +197,17 @@ async function saveHistory(
   deps: CollectDeps,
   rows: readonly ObservationRow[],
 ): Promise<boolean> {
+  // 깨진 기록은 버리고 새 값으로 덮으므로 남김(조용히 이력이 사라지지 않게). 충돌 재시도로 build가 다시 돌아도 한 번만
+  let dropped = 0;
   const { saved, result } = await mergeAndPut(
     deps,
     OCEAN_STATE.history,
     "ocean_history",
     (previous) => {
-      // 깨진 기록은 버리고 새 값으로 덮으므로 남김(조용히 이력이 사라지지 않게)
-      const stored = readWaveHistory(previous?.value ?? null, (dropped) =>
-        deps.log("warn", "ocean_history_invalid", { dropped }),
-      );
+      dropped = 0;
+      const stored = readWaveHistory(previous?.value ?? null, (count) => {
+        dropped = count;
+      });
       const stations = mergeWaveHistory(
         stored,
         rows,
@@ -232,6 +234,7 @@ async function saveHistory(
       };
     },
   );
+  if (dropped > 0) deps.log("warn", "ocean_history_invalid", { dropped });
   if (saved && result) deps.log("info", "ocean_history_saved", result);
   return saved;
 }
@@ -271,10 +274,18 @@ export async function collectOcean(
 
   const anyOk = SOURCES.some((s) => outcomes[s].status === "ok");
   // 정상값과 이력은 다른 항목이라 함께 저장
+  // 저장 중 예외는 그 저장의 실패로만 남김 → 시도 기록·publisher 깨우기가 이어서 실행됨
+  // (trigger.ts: 실패한 수집도 깨움 — 시간이 지나면 분류가 바뀌므로 그 시각으로 다시 게시)
   // 이력은 파고가 있는 sea_obs만. 저장 실패는 이 실행을 partial로 남김(분류에는 쓰지 않음)
-  // 예외도 이력 실패로만 남김 → 시도 기록·publisher 깨우기가 이어서 실행됨
   const [{ saved, futureRows }, historySaved] = await Promise.all([
-    anyOk ? saveReadings(deps, outcomes) : { saved: false, futureRows: 0 },
+    anyOk
+      ? saveReadings(deps, outcomes).catch((error: unknown) => {
+          deps.log("error", "ocean_readings_failed", {
+            reason: exceptionReason(error),
+          });
+          return { saved: false, futureRows: 0 };
+        })
+      : { saved: false, futureRows: 0 },
     seaObs!.status === "ok"
       ? saveHistory(deps, seaObs!.rows).catch((error: unknown) => {
           deps.log("error", "ocean_history_failed", {

@@ -195,7 +195,7 @@ export async function publishSnapshot(
         beaches: deps.beaches,
         zones: deps.zones,
         seasons: deps.seasons,
-        inputs: await readPublishInputs(deps.state),
+        inputs: await readPublishInputs(deps.state, log),
         now,
       });
     } catch (error) {
