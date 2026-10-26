@@ -410,7 +410,7 @@ describe("buildSnapshot", () => {
       expect(snapshot.status.beaches.b0001!.info.ripCurrent).toBeNull();
     });
 
-    it("시즌 밖 게시 시각(10/23)에는 지난 시즌 관측을 게시하지 않음", async () => {
+    it("시즌 밖 게시 시각(10/23)에는 지난 시즌 관측을 게시하지 않음(오래된 관측으로 숨김)", async () => {
       const state = new MemoryStateStore();
       await seedWarnings(state, [HEAVY_RAIN_ROW]);
       await seedRip(state, "관심");
