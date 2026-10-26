@@ -65,3 +65,31 @@ API 키 읽기(`ssm:GetParameter`)는 boundary에서 스택의 Lambda 함수가 
 1. 콘솔에서 CloudFront 배포를 정액 Free에 먼저 구독합니다. 요금제가 web ACL을 붙입니다.
 2. 붙은 web ACL ARN을 `npx cdk deploy --parameters SiteWebAclArn=<ARN>`으로 넘깁니다.
 3. 요금제를 쓰는 배포는 web ACL을 뗄 수 없습니다. 구독한 뒤에는 `--no-previous-parameters`로 배포하지 않습니다. 이 옵션을 쓰면 파라미터가 빈 값으로 돌아가 web ACL이 빠집니다.
+
+## 데이터 게시(publish-snapshot)와 롤백
+
+수집기 3개가 수집을 마칠 때마다 `publish-snapshot`을 비동기로 깨웁니다(아키텍처 6.2). 게시 함수는 State를 읽어 해변 상태를 계산하고 `data/{버전}/`에 파일 네 개를 올린 뒤 `data/manifest.json`을 조건부 쓰기(If-Match)로 바꿉니다. 실패하면 manifest는 이전 버전 그대로이고, 함수는 오류로 끝나 Lambda 오류 지표에 남습니다.
+
+롤백(T06)은 manifest를 이전 버전으로 되돌립니다. 버전 경로는 최근 48개가 남아 있습니다.
+
+1. 게시 코드 문제로 되돌리는 경우 수집 일정을 먼저 멈춥니다. 멈추지 않으면 다음 수집(15분 안)이 새 버전으로 다시 게시합니다.
+
+   ```bash
+   aws scheduler update-schedule ... --state DISABLED   # 세 일정 모두
+   ```
+
+2. 되돌릴 버전을 고릅니다: `aws s3 ls s3://<SiteBucketName>/data/`
+3. 게시 함수를 롤백 이벤트로 직접 부릅니다(`PublisherFunctionName` 출력값).
+
+   ```bash
+   aws lambda invoke --function-name <PublisherFunctionName> \
+     --cli-binary-format raw-in-base64-out \
+     --payload '{"action":"rollback","version":"20261017T053000Z"}' out.json
+   ```
+
+   그 버전의 manifest 사본과 파일 네 개가 모두 있을 때만 되돌립니다. 하나라도 없으면 지금 manifest를 그대로 두고 오류로 끝납니다.
+
+4. 사이트에서 manifest가 바뀌었는지 확인합니다(manifest 캐시 60초): `curl -s https://<DistributionDomainName>/data/manifest.json`
+5. 원인을 고친 뒤 일정을 다시 켭니다(`--state ENABLED`). 다음 수집이 새 버전을 게시합니다.
+
+롤백 리허설 결과(일시·되돌린 버전·복구에 걸린 시간)는 출시 점검표에 기록합니다.
