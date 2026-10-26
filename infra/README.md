@@ -168,3 +168,32 @@ await fetch("/api/inquiries", {
 5. 원인을 고친 뒤 일정을 다시 켭니다: `set_state ENABLED`(1단계와 같은 셸, 새 셸이면 함수를 다시 정의). 고친 코드를 `cdk deploy`했다면 배포가 일정을 이미 켰을 수 있으니 상태만 확인합니다. 다음 수집이 새 버전을 게시합니다. 지금 manifest와 내용이 같으면 `publish_unchanged`로 남고 새 버전은 만들지 않습니다.
 
 롤백 리허설 결과(일시·되돌린 버전·복구에 걸린 시간)는 Notion 'V2 AWS 운영 점검표'의 '데이터 게시 롤백 리허설 기록'에 남깁니다. 첫 실환경 리허설(2026-10-26) 기록이 그곳에 있습니다.
+
+## 점검·강제 업데이트
+
+점검 중 여부와 최소 화면 버전은 `manifest.json`의 `maintenance`·`minWebBuild`로 알립니다(아키텍처 9.1, BRD-43). 값은 `services/src/publisher/policy.ts`의 `MANIFEST_SETTINGS`(저장소 상수)에 있고, 바꾸려면 저장소를 고쳐 배포합니다(결정 기록 11장 10/23 ④). 게시 함수는 데이터가 그대로여도 지금 manifest와 설정이 다르면 새 버전으로 게시합니다.
+
+- **점검 중**(`maintenance.active: true`): 화면이 점검 화면으로 전체를 덮고 마지막 값도 숨깁니다. `until`은 종료 예정 시각(UTC ISO), 모르면 `null`.
+- **강제 업데이트**: 화면 빌드 번호(`apps/web/src/lib/snapshot/build.ts`의 `WEB_BUILD`)가 `minWebBuild`보다 낮으면, 화면이 `minWebBuild` 값마다 한 번 새로고침하고 그래도 낮으면 강제 업데이트 화면을 보여 줍니다(값은 숨김). 사이트 HTML은 `max-age=0`이라 새로고침하면 새 화면 파일을 받습니다.
+
+### 점검 켜기·끄기
+
+1. `MANIFEST_SETTINGS.maintenance`를 `{ active: true, until: "2026-11-06T09:00:00Z" }`처럼 바꿔 PR로 머지합니다. 끌 때는 `{ active: false, until: null }`.
+2. 최신 `origin/main` 작업 트리에서 `npx cdk deploy`합니다(맨 위 배포 절차). services 코드는 Lambda 번들로 들어가서 사이트 배포(`deploy.yml`)로는 반영되지 않습니다.
+3. 다음 게시에 반영됩니다. 수집기가 15분 안에 게시를 깨우고, 바로 반영하려면 게시 함수를 직접 부릅니다.
+
+   ```bash
+   aws lambda invoke --function-name <PublisherFunctionName> --payload '{}' out.json
+   ```
+
+4. 반영을 확인합니다(manifest 캐시 60초): `curl -s https://<DistributionDomainName>/data/manifest.json | jq '{snapshotVersion, maintenance, minWebBuild}'`. 게시 로그에 `publish_unchanged`만 남았다면 배포가 아직 반영되지 않은 것입니다(Lambda 코드 확인).
+
+### 강제 업데이트
+
+순서가 중요합니다. **새 화면을 먼저 배포하고, 그 뒤에 `minWebBuild`를 올립니다.** 반대로 하면 사용자가 새로고침해도 이전 화면 파일만 받아 강제 업데이트 화면에서 벗어나지 못합니다.
+
+1. 이전 화면이 새 데이터를 잘못 읽을 수 있는 변경일 때만 합니다. `WEB_BUILD`를 1 올린 PR을 main에 머지하면 `deploy.yml`이 사이트를 배포합니다. 배포가 끝났는지 확인합니다.
+2. `MANIFEST_SETTINGS.minWebBuild`를 같은 값으로 올린 PR을 머지하고 `npx cdk deploy`합니다. `minWebBuild`는 배포된 `WEB_BUILD`보다 크게 두지 않습니다.
+3. 점검과 같은 방법(3·4단계)으로 반영을 확인합니다.
+
+서비스 워커(오프라인)가 생기면 새로고침이 이전 화면 파일을 내주지 않는지 그 작업에서 다시 확인합니다.
