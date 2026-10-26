@@ -28,7 +28,7 @@ describe("버킷", () => {
   });
 
   it("읽기 허용은 CloudFront뿐이고, 누구나(*) 허용은 없다", () => {
-    template.resourceCountIs("AWS::CloudFront::OriginAccessControl", 1);
+    template.resourceCountIs("AWS::CloudFront::OriginAccessControl", 2);
 
     const statements = Object.values(
       template.findResources("AWS::S3::BucketPolicy"),

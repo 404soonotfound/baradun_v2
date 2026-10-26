@@ -73,6 +73,60 @@ API 키 읽기(`ssm:GetParameter`)는 boundary에서 스택의 Lambda 함수가 
 2. 붙은 web ACL ARN을 `npx cdk deploy --parameters SiteWebAclArn=<ARN>`으로 넘깁니다.
 3. 요금제를 쓰는 배포는 web ACL을 뗄 수 없습니다. 구독한 뒤에는 `--no-previous-parameters`로 배포하지 않습니다. 이 옵션을 쓰면 파라미터가 빈 값으로 돌아가 web ACL이 빠집니다.
 
+## 데이터 문의 접수(BRD-63)
+
+문의 API는 기존 CloudFront 배포의 `/api/inquiries*` 동작에서 AWS_IAM 함수 URL로 전달합니다. 함수 URL은 공개 인증 `NONE`을 쓰지 않으며, CloudFront OAC가 오리진 요청을 SigV4로 서명합니다. CloudFront Function은 메서드·경로·JSON 형식·32KiB 크기·본문 해시 헤더를 먼저 검사하고 Lambda가 같은 항목과 실제 본문 SHA-256을 다시 검사합니다.
+
+현재 Free 플랜 계정에서는 정액 CloudFront 플랜의 포함 WAF를 쓸 수 없습니다. 따라서 WAF 없이 CloudFront Function 선행 거부, Lambda 재검증, IP를 저장하지 않는 전체 10건/분 제한, 메일 20건/일 제한을 적용합니다. Paid 전환 뒤 정액 플랜과 포함 WAF 사용을 다시 검토합니다.
+
+2026-10-26 서울 리전의 Service Quotas `Concurrent executions`(`L-B99A9384`)와 Lambda `GetAccountSettings`는 모두 10이었습니다. Lambda가 요구하는 미예약 100개를 남길 수 없어 문의 함수의 예약 동시 실행 2는 설정하지 않았습니다. 한도가 102 이상으로 올라간 뒤 다음 명령과 콘솔의 Lambda 동시 실행 화면을 함께 확인하고 설정합니다.
+
+```bash
+aws service-quotas get-service-quota \
+  --service-code lambda \
+  --quota-code L-B99A9384 \
+  --region ap-northeast-2
+aws lambda get-account-settings --region ap-northeast-2
+```
+
+웹은 JSON 문자열을 만든 뒤 그 **동일한 문자열**의 SHA-256을 소문자 16진수로 계산해 `x-amz-content-sha256`에 넣습니다. 해시를 계산한 뒤 JSON을 다시 직렬화하면 서명이 맞지 않습니다.
+
+```ts
+const body = JSON.stringify(request);
+const digest = await crypto.subtle.digest(
+  "SHA-256",
+  new TextEncoder().encode(body),
+);
+const hash = [...new Uint8Array(digest)]
+  .map((value) => value.toString(16).padStart(2, "0"))
+  .join("");
+
+await fetch("/api/inquiries", {
+  method: "POST",
+  headers: {
+    "content-type": "application/json",
+    "x-amz-content-sha256": hash,
+  },
+  body,
+});
+```
+
+사진은 다음 순서로 보냅니다.
+
+1. `POST /api/inquiries/uploads`에 `photos` 배열을 보내 presigned POST 양식을 받습니다. JPEG·PNG·WebP, 최대 3장, 파일당 5MiB입니다.
+2. 응답의 `url`과 `fields`를 그대로 `multipart/form-data` POST에 넣고 마지막에 사진 파일을 붙입니다. S3 정책의 `content-length-range`가 파일당 5MiB를 강제합니다.
+3. 업로드 응답의 `photoId`와 `key`를 `POST /api/inquiries`의 `photos`에 넣습니다.
+
+요청·응답 타입은 `@baradun/contracts`의 `InquiryUploadRequest`, `InquiryUploadResponse`, `CreateInquiryRequest`, `CreateInquiryResponse`, `InquiryErrorResponse`입니다. 문의 유형은 `data_error`·`data_question`·`other`입니다. 사진에 EXIF GPS IFD가 있거나 파일이 깨졌으면 그 사진만 `rejected`로 돌아오며 문의 자체는 접수됩니다. 사진은 공개 URL 없이 비공개 버킷에 두고 30일 수명 주기로 삭제합니다.
+
+문의 본문 항목은 접수 뒤 90일, 이메일은 별도 항목으로 88일 TTL을 둡니다. 처리가 끝난 이메일은 문의 Lambda를 함수 URL이 아닌 직접 호출로 아래 이벤트를 보내 즉시 삭제합니다. DynamoDB TTL 삭제는 비동기이므로 88일 값으로 90일 이내 삭제 여유를 둡니다.
+
+```json
+{ "action": "delete_email", "inquiryId": "문의 UUID" }
+```
+
+새 문의 알림은 배포 파라미터 `AlertEmail`로 만든 SNS 이메일 구독을 사용하므로 첫 배포 뒤 구독 확인이 필요합니다. 알림에는 문의 ID·유형·120자 이내 요약·이메일 제공 여부만 들어가며 실제 이메일 주소와 전체 본문은 넣지 않습니다.
+
 ## 데이터 게시(publish-snapshot)와 롤백
 
 수집기 3개가 수집을 마칠 때마다 `publish-snapshot`을 비동기로 깨웁니다(아키텍처 6.2). 게시 함수는 State를 읽어 해변 상태를 계산하고 `data/{버전}/`에 파일 네 개를 올린 뒤 `data/manifest.json`을 조건부 쓰기(If-Match)로 바꿉니다. 실패하면 manifest는 이전 버전 그대로이고, 함수는 오류로 끝나 Lambda 오류 지표에 남습니다.

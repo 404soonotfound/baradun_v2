@@ -19,6 +19,7 @@
         "dynamodb:GetItem",
         "dynamodb:PutItem",
         "dynamodb:Query",
+        "dynamodb:TransactWriteItems",
         "dynamodb:UpdateItem"
       ],
       "Resource": "arn:aws:dynamodb:ap-northeast-2:717304679248:table/BaradunV2-*"
@@ -66,6 +67,12 @@
       "Effect": "Allow",
       "Action": "lambda:InvokeFunction",
       "Resource": "arn:aws:lambda:ap-northeast-2:717304679248:function:BaradunV2-*"
+    },
+    {
+      "Sid": "InquiryNotifications",
+      "Effect": "Allow",
+      "Action": "sns:Publish",
+      "Resource": "arn:aws:sns:ap-northeast-2:717304679248:BaradunV2-*"
     }
   ]
 }

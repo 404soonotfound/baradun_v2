@@ -1,0 +1,110 @@
+import { Match } from "aws-cdk-lib/assertions";
+import { describe, expect, it } from "vitest";
+import { template } from "./stack-template";
+
+describe("데이터 문의 접수 인프라", () => {
+  it("함수 URL을 AWS_IAM과 CloudFront OAC로 잠근다", () => {
+    template.resourceCountIs("AWS::Lambda::Url", 1);
+    template.hasResourceProperties("AWS::Lambda::Url", {
+      AuthType: "AWS_IAM",
+    });
+    template.hasResourceProperties("AWS::CloudFront::OriginAccessControl", {
+      OriginAccessControlConfig: Match.objectLike({
+        OriginAccessControlOriginType: "lambda",
+        SigningBehavior: "always",
+        SigningProtocol: "sigv4",
+      }),
+    });
+
+    const permissions = Object.values(
+      template.findResources("AWS::Lambda::Permission"),
+    ).filter(
+      (permission) =>
+        permission.Properties.Principal === "cloudfront.amazonaws.com",
+    );
+    expect(permissions.map((permission) => permission.Properties.Action)).toEqual(
+      expect.arrayContaining([
+        "lambda:InvokeFunctionUrl",
+        "lambda:InvokeFunction",
+      ]),
+    );
+    expect(permissions).toHaveLength(2);
+    for (const permission of permissions) {
+      expect(permission.Properties.SourceArn).toBeDefined();
+      expect(permission.Properties.Principal).not.toBe("*");
+    }
+    expect(
+      permissions.find(
+        (permission) =>
+          permission.Properties.Action === "lambda:InvokeFunction",
+      )?.Properties.InvokedViaFunctionUrl,
+    ).toBe(true);
+  });
+
+  it("문의 경로에 캐시 없음과 CloudFront Function 선행 검사를 붙인다", () => {
+    const distributions = Object.values(
+      template.findResources("AWS::CloudFront::Distribution"),
+    );
+    expect(distributions).toHaveLength(1);
+    const behaviors = distributions[0]?.Properties.DistributionConfig
+      .CacheBehaviors as Array<Record<string, unknown>>;
+    const inquiry = behaviors.find(
+      (behavior) => behavior.PathPattern === "api/inquiries*",
+    );
+    expect(inquiry).toMatchObject({
+      PathPattern: "api/inquiries*",
+      ViewerProtocolPolicy: "redirect-to-https",
+      AllowedMethods: ["GET", "HEAD", "OPTIONS", "PUT", "PATCH", "POST", "DELETE"],
+    });
+    expect(inquiry?.FunctionAssociations).toEqual([
+      expect.objectContaining({ EventType: "viewer-request" }),
+    ]);
+
+    const functions = Object.values(
+      template.findResources("AWS::CloudFront::Function"),
+    );
+    const code = functions
+      .map((resource) => String(resource.Properties.FunctionCode))
+      .find((value) => value.includes("x-amz-content-sha256"));
+    expect(code).toContain("content-length");
+    expect(code).toContain("32768");
+  });
+
+  it("사진 버킷은 비공개이고 30일 뒤 삭제한다", () => {
+    const buckets = Object.values(template.findResources("AWS::S3::Bucket"));
+    const photos = buckets.find(
+      (bucket) => bucket.Properties.CorsConfiguration !== undefined,
+    );
+    expect(photos?.Properties).toMatchObject({
+      PublicAccessBlockConfiguration: {
+        BlockPublicAcls: true,
+        BlockPublicPolicy: true,
+        IgnorePublicAcls: true,
+        RestrictPublicBuckets: true,
+      },
+      LifecycleConfiguration: {
+        Rules: [{ ExpirationInDays: 30, Status: "Enabled" }],
+      },
+    });
+  });
+
+  it("메일 주제 하나와 이메일 구독 하나를 만든다", () => {
+    template.resourceCountIs("AWS::SNS::Topic", 1);
+    template.resourceCountIs("AWS::SNS::Subscription", 1);
+    template.hasResourceProperties("AWS::SNS::Subscription", {
+      Protocol: "email",
+      Endpoint: { Ref: "AlertEmail" },
+    });
+  });
+
+  it("새 계정 한도 때문에 예약 동시 실행을 설정하지 않는다", () => {
+    const functions = Object.values(
+      template.findResources("AWS::Lambda::Function"),
+    );
+    const inquiry = functions.find((resource) =>
+      String(resource.Properties.Description).includes("data inquiry"),
+    );
+    expect(inquiry).toBeDefined();
+    expect(inquiry?.Properties.ReservedConcurrentExecutions).toBeUndefined();
+  });
+});
