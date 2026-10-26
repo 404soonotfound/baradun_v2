@@ -3,6 +3,10 @@ import { OCEAN_STATE } from "../collectors/ocean";
 import { COLLECT_POLICY } from "../collectors/policy";
 import { WARNINGS_STATE } from "../collectors/warnings";
 import type { StationReadings } from "../core/observations/freshness";
+import {
+  readWaveHistory,
+  type WaveHistory,
+} from "../core/observations/wave-history";
 import type { StateStore, StateValue } from "../core/store/types";
 import { unpackItems } from "../core/warnings/archive";
 import {
@@ -28,6 +32,8 @@ export interface PublishInputs {
   readonly pwncd: WarningInput<PwnCdResult>;
   readonly tsunami: WarningInput<TsunamiResult>;
   readonly readings: StationReadings;
+  // 측정기별 최근 24시간 파고 원래 측정값(BRD-94). 없거나 깨진 기록은 빈 값 → 모든 점 v: null
+  readonly waveHistory: WaveHistory;
   // collect-catalog의 사진 확인 결과(해변 id → 기록). 기록·확인이 없는 해변은 칸이 없음
   readonly photoChecks: Readonly<Record<string, PhotoRecord>>;
 }
@@ -135,16 +141,18 @@ function photoChecksInput(
 export async function readPublishInputs(
   state: StateStore,
 ): Promise<PublishInputs> {
-  const [pwncd, tsunami, ocean, catalog] = await Promise.all([
+  const [pwncd, tsunami, ocean, history, catalog] = await Promise.all([
     state.getState(WARNINGS_STATE.pwncd.pk, WARNINGS_STATE.pwncd.sk),
     state.getState(WARNINGS_STATE.tsunami.pk, WARNINGS_STATE.tsunami.sk),
     state.getState(OCEAN_STATE.readings.pk, OCEAN_STATE.readings.sk),
+    state.getState(OCEAN_STATE.history.pk, OCEAN_STATE.history.sk),
     state.getState(CATALOG_STATE.photos.pk, CATALOG_STATE.photos.sk),
   ]);
   return {
     pwncd: pwncdInput(pwncd?.value),
     tsunami: tsunamiInput(tsunami?.value),
     readings: readingsInput(ocean?.value),
+    waveHistory: readWaveHistory(history?.value ?? null),
     photoChecks: photoChecksInput(catalog?.value),
   };
 }
