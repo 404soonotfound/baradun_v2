@@ -13,6 +13,7 @@ import { Collectors } from "./collect/collectors";
 import { GitHubDeployRole } from "./deploy/github-deploy-role";
 import { InquiryBackend } from "./inquiry/inquiry-backend";
 import { CostBudget } from "./ops/cost-budget";
+import { OpsAlarms } from "./ops/alarms";
 import { Publisher } from "./publish/publisher";
 import { PublisherRole } from "./publish/publisher-role";
 import { ROLE_BOUNDARY_POLICY_NAME } from "./settings";
@@ -100,6 +101,13 @@ export class BaradunStack extends Stack {
     const deploy = new GitHubDeployRole(this, "Deploy", {
       bucket: site.bucket,
       distribution: site.distribution,
+    });
+
+    // 운영 경보: 수집 실패·멈춤, 게시 실패·멈춤을 AlertEmail로 알림 (BRD-62)
+    new OpsAlarms(this, "Ops", {
+      email: alertEmail.valueAsString, // 예산·문의 알림과 같은 주소
+      collectors: collectors.functions,
+      publisher: publisher.function,
     });
 
     // 월 $1 예산 알림 (콘솔의 Zero-Spend 예산을 대신함)

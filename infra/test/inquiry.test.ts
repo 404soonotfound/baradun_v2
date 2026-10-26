@@ -22,7 +22,9 @@ describe("데이터 문의 접수 인프라", () => {
       (permission) =>
         permission.Properties.Principal === "cloudfront.amazonaws.com",
     );
-    expect(permissions.map((permission) => permission.Properties.Action)).toEqual(
+    expect(
+      permissions.map((permission) => permission.Properties.Action),
+    ).toEqual(
       expect.arrayContaining([
         "lambda:InvokeFunctionUrl",
         "lambda:InvokeFunction",
@@ -54,7 +56,15 @@ describe("데이터 문의 접수 인프라", () => {
     expect(inquiry).toMatchObject({
       PathPattern: "api/inquiries*",
       ViewerProtocolPolicy: "redirect-to-https",
-      AllowedMethods: ["GET", "HEAD", "OPTIONS", "PUT", "PATCH", "POST", "DELETE"],
+      AllowedMethods: [
+        "GET",
+        "HEAD",
+        "OPTIONS",
+        "PUT",
+        "PATCH",
+        "POST",
+        "DELETE",
+      ],
     });
     expect(inquiry?.FunctionAssociations).toEqual([
       expect.objectContaining({ EventType: "viewer-request" }),
@@ -107,9 +117,19 @@ describe("데이터 문의 접수 인프라", () => {
   });
 
   it("메일 주제 하나와 이메일 구독 하나를 만든다", () => {
-    template.resourceCountIs("AWS::SNS::Topic", 1);
-    template.resourceCountIs("AWS::SNS::Subscription", 1);
-    template.hasResourceProperties("AWS::SNS::Subscription", {
+    // 스택에는 운영 경보 주제(BRD-62)도 있으므로 문의 주제만 골라 셈
+    const topics = Object.entries(
+      template.findResources("AWS::SNS::Topic"),
+    ).filter(([id]) => id.startsWith("InquiryTopic")); // 논리 ID가 InquiryTopic…인 것만
+    expect(topics).toHaveLength(1);
+    const [topicId] = topics[0]!; // [논리 ID, 리소스] 중 논리 ID만 꺼냄
+
+    // 그 주제에 붙은 구독만 셈
+    const subs = Object.values(
+      template.findResources("AWS::SNS::Subscription"),
+    ).filter((s) => s.Properties.TopicArn?.Ref === topicId);
+    expect(subs).toHaveLength(1);
+    expect(subs[0]!.Properties).toMatchObject({
       Protocol: "email",
       Endpoint: { Ref: "AlertEmail" },
     });
