@@ -143,9 +143,18 @@ describe("publishSnapshot", () => {
 
   // 운영 절차(infra/README '점검·강제 업데이트'): policy.ts의 MANIFEST_SETTINGS를 바꿔 배포하면 다음 게시에 반영
   // 데이터가 그대로여도 manifest 설정이 다르면 새로 게시해야 함 → 지금 manifest에 이전 설정이 남은 경우로 확인(BRD-43)
+  // 이전 값은 지금 설정의 반대로 둠 → README 절차대로 설정을 바꿔도 이 테스트가 깨지지 않음
   it.each([
-    ["점검", { maintenance: { active: true, until: null } }],
-    ["최소 화면 버전", { minWebBuild: 99 }],
+    [
+      "점검",
+      {
+        maintenance: {
+          ...MANIFEST_SETTINGS.maintenance,
+          active: !MANIFEST_SETTINGS.maintenance.active,
+        },
+      },
+    ],
+    ["최소 화면 버전", { minWebBuild: MANIFEST_SETTINGS.minWebBuild + 1 }],
   ] as const)(
     "데이터가 같아도 지금 manifest의 %s 설정이 다르면 새 버전으로 게시해 설정을 반영함",
     async (_, previous) => {
