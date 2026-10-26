@@ -7,6 +7,10 @@ import {
 } from "../core/observations/freshness";
 import { parseKmaBuoy } from "../core/observations/kma-buoy";
 import { parseSeaObs } from "../core/observations/sea-obs";
+import {
+  mergeWaveHistory,
+  readWaveHistory,
+} from "../core/observations/wave-history";
 import type { ApiKeys } from "../core/secrets/api-keys";
 import type {
   OpsStore,
@@ -22,11 +26,14 @@ import { formatKst, slotStart } from "./schedule";
 // 파고·수온·풍속 = sea_obs(B·C 측정기), 파주기·파향 = kma_buoy. 실행 분 :10/:40
 // 두 출처는 따로 처리: 한쪽이 실패해도 다른 쪽 정상값은 저장
 // 마지막 정상값(readings)과 최근 시도(attempt)를 나눠 저장: 실패한 요청은 정상값·관측 시각·수신 시각을 바꾸지 않음
+// 파고 24시간 이력(history)은 sea_obs 정상 응답의 원래 측정값만 따로 저장(BRD-94)
 
 export const OCEAN_JOB = "collect-ocean";
 // State 키. readings: 측정기·지표별 마지막 정상값 + 출처별 마지막 정상 수신 시각, attempt: 최근 시도 결과
+// history: 측정기별 최근 24시간 파고 원래 측정값(core/observations/wave-history.ts)
 export const OCEAN_STATE = {
   readings: { pk: "ocean", sk: "readings" },
+  history: { pk: "ocean", sk: "history" },
   attempt: { pk: "ocean", sk: "attempt" },
 } as const;
 
@@ -184,6 +191,51 @@ async function saveReadings(
   return { saved, futureRows: result ?? 0 };
 }
 
+// 파고 이력 저장. 순서 기준 = 가장 늦은 관측 시각. 범위 밖 값만 버려져 값이 바뀌어도 같은 orderAt이면 정정으로 보고 씀
+// 크기를 로그로 남김(DynamoDB 항목 한도 400KB, 200KB를 넘으면 압축 재논의, 2026-10-26 사용자 결정)
+async function saveHistory(
+  deps: CollectDeps,
+  rows: readonly ObservationRow[],
+): Promise<boolean> {
+  const { saved, result } = await mergeAndPut(
+    deps,
+    OCEAN_STATE.history,
+    "ocean_history",
+    (previous) => {
+      // 깨진 기록은 버리고 새 값으로 덮으므로 남김(조용히 이력이 사라지지 않게)
+      const stored = readWaveHistory(previous?.value ?? null, (dropped) =>
+        deps.log("warn", "ocean_history_invalid", { dropped }),
+      );
+      const stations = mergeWaveHistory(
+        stored,
+        rows,
+        formatUtcIso(deps.clock()),
+      );
+      let orderAt = previous?.orderAt ?? 0;
+      let entries = 0;
+      for (const list of Object.values(stations)) {
+        entries += list.length;
+        const lastSec = list.at(-1)?.[0];
+        if (lastSec !== undefined && lastSec * 1000 > orderAt) {
+          orderAt = lastSec * 1000;
+        }
+      }
+      const value = { stations } as unknown as StateValue;
+      return {
+        value,
+        orderAt,
+        result: {
+          stations: Object.keys(stations).length,
+          entries,
+          bytes: Buffer.byteLength(JSON.stringify(value)),
+        },
+      };
+    },
+  );
+  if (saved && result) deps.log("info", "ocean_history_saved", result);
+  return saved;
+}
+
 export async function collectOcean(
   deps: CollectDeps,
 ): Promise<CollectRunResult> {
@@ -218,9 +270,20 @@ export async function collectOcean(
   const outcomes = { sea_obs: seaObs!, kma_buoy: kmaBuoy! };
 
   const anyOk = SOURCES.some((s) => outcomes[s].status === "ok");
-  const { saved, futureRows } = anyOk
-    ? await saveReadings(deps, outcomes)
-    : { saved: false, futureRows: 0 };
+  // 정상값과 이력은 다른 항목이라 함께 저장
+  // 이력은 파고가 있는 sea_obs만. 저장 실패는 이 실행을 partial로 남김(분류에는 쓰지 않음)
+  // 예외도 이력 실패로만 남김 → 시도 기록·publisher 깨우기가 이어서 실행됨
+  const [{ saved, futureRows }, historySaved] = await Promise.all([
+    anyOk ? saveReadings(deps, outcomes) : { saved: false, futureRows: 0 },
+    seaObs!.status === "ok"
+      ? saveHistory(deps, seaObs!.rows).catch((error: unknown) => {
+          deps.log("error", "ocean_history_failed", {
+            reason: exceptionReason(error),
+          });
+          return false;
+        })
+      : false,
+  ]);
 
   // 최근 시도 기록. 정상값과 따로 둬 실패가 정상값을 덮지 않게 함
   const attemptedAt = formatUtcIso(startedMs);
@@ -259,11 +322,19 @@ export async function collectOcean(
   await deps.state.putState(
     OCEAN_STATE.attempt.pk,
     OCEAN_STATE.attempt.sk,
-    { attemptedAt, slotId, sources, futureRows, readingsSaved: saved },
+    {
+      attemptedAt,
+      slotId,
+      sources,
+      futureRows,
+      readingsSaved: saved,
+      historySaved,
+    },
     startedMs,
   );
 
-  const allOk = SOURCES.every((s) => outcomes[s].status === "ok") && saved;
+  const allOk =
+    SOURCES.every((s) => outcomes[s].status === "ok") && saved && historySaved;
   // 모두 저장했을 때만 슬롯을 끝냄. 아니면 lease가 지난 뒤 재시도가 다시 맡을 수 있음
   if (allOk) await deps.ops.completeSlot(OCEAN_JOB, slotId, deps.owner);
   const status = allOk ? "complete" : saved ? "partial" : "failed";
