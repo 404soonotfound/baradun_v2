@@ -96,3 +96,10 @@ export const COLLECTOR_SCHEDULE_MINUTES = {
 // 사진 확인은 급하지 않아 수집이 몰리지 않는 새벽으로 둠
 // services policy.ts의 catalogSchedule(UTC 분 단위)과 같은 시각이어야 함(collectors.test.ts가 확인)
 export const CATALOG_SCHEDULE_KST = { hour: "4", minute: "20" } as const;
+
+// publish-snapshot Lambda 설정 (아키텍처 6.2, BRD-61 PR ②)
+// 시간 제한은 게시 잠금(2분, services/src/publisher/policy.ts lockTtlMs)보다 짧게
+// → 잠금이 풀리기 전에 실행이 끝나거나 강제로 멈춤. 잠금이 풀린 뒤 겹치는 경우는 manifest 조건부 쓰기가 막음
+export const PUBLISHER_TIMEOUT_SECONDS = 60;
+// 해변 약 200곳 분류·계약 검사·JSON 4개 쓰기. 수집기와 같은 크기
+export const PUBLISHER_MEMORY_MB = 256;

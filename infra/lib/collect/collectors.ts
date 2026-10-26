@@ -28,6 +28,7 @@ import {
 // - 특보 수집기(Warnings): 풍랑·강풍 등 특보와 지진해일. 15분마다
 // - 카탈로그 수집기(Catalog): 대표 사진의 공공누리 유형 재확인. 하루 1회(한국 시각 04:20)
 // 수집기는 DynamoDB에만 씀. 사이트 데이터 파일(S3 data/)은 publisher만 씀(BRD-52)
+// 수집을 마치면 publisher(publish-snapshot)를 비동기로 깨움(아키텍처 6.2, BRD-61)
 
 // 이 묶음을 만들 때 밖에서 넘겨받는 값
 export interface CollectorsProps {
@@ -36,6 +37,8 @@ export interface CollectorsProps {
   // "이 시간대 수집은 끝났음/누가 하는 중" 기록을 남기는 표(Ops 테이블)
   // 같은 시간대를 두 번 수집하지 않으려고 씀
   readonly opsTable: dynamodb.ITable;
+  // 수집을 마치면 비동기로 깨울 publish-snapshot 함수(아키텍처 6.2, BRD-61)
+  readonly publisher: lambda.IFunction;
 }
 
 // 저장소 맨 위 폴더 경로
@@ -136,6 +139,8 @@ export class Collectors extends Construct {
         environment: {
           STATE_TABLE_NAME: props.stateTable.tableName,
           OPS_TABLE_NAME: props.opsTable.tableName,
+          // 수집 뒤 깨울 게시 함수 이름(services/src/collectors/trigger.ts)
+          PUBLISHER_FUNCTION_NAME: props.publisher.functionName,
         },
       });
 
@@ -162,6 +167,14 @@ export class Collectors extends Construct {
         new iam.PolicyStatement({
           actions: ["dynamodb:PutItem", "dynamodb:UpdateItem"],
           resources: [props.opsTable.tableArn],
+        }),
+      );
+      // publish-snapshot 깨우기(비동기 호출). 그 함수 하나에만
+      // grantInvoke 대신 직접 적음: grantInvoke는 함수 버전·별칭 주소(:*)까지 열어 줌
+      fn.addToRolePolicy(
+        new iam.PolicyStatement({
+          actions: ["lambda:InvokeFunction"],
+          resources: [props.publisher.functionArn],
         }),
       );
       // API 키 읽기: SSM Parameter Store(AWS의 비밀값 보관함)에서 이 수집기가 쓰는 키 하나만
