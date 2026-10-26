@@ -60,7 +60,12 @@ describe("buildSnapshot", () => {
       expect.objectContaining({ type: "heavy_rain", zoneCode: "L1022510" }),
     ]);
     expect(gangmun.warning.lastConfirmedAt).toBe(CONFIRMED);
-    expect(gangmun.info.season).toBeNull();
+    // 올해 일정은 있지만 게시 시각(KST 10/23)은 기간 밖 → 정보 배지만, 분류는 그대로
+    expect(gangmun.info.season).toEqual({
+      openFrom: "2026-07-10",
+      openUntil: "2026-08-23",
+      inSeason: false,
+    });
     expect(gangmun.info.ripCurrent).toBeNull();
 
     expect(snapshot.nationwideWarnings).toEqual({
