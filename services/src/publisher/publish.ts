@@ -249,20 +249,37 @@ export async function publishSnapshot(
       (result): result is PromiseRejectedResult => result.status === "rejected",
     );
     if (rejected !== undefined) throw rejected.reason;
-    // 잠금 시간을 넘겨 다른 실행이 더 새 버전을 이미 게시했으면 manifest를 옛 버전으로 되돌리지 않음
-    const latest = newestVersion(
-      await ops.getPublishedVersion(),
-      parseManifest(await snapshots.getFile(MANIFEST_PATH))?.snapshotVersion ??
-        null,
-    );
-    if (latest !== null && version <= latest) {
-      return fail("version_not_newer", { published: latest });
+    // manifest 교체는 조건부 쓰기(읽은 manifest가 그대로일 때만). 잠금 시간을 넘긴 실행과 새 실행이
+    // 거의 같은 순간 써도, 확인과 쓰기 사이에 끼어든 쓰기가 있으면 이 쓰기는 거절됨 → 다시 읽고 판단
+    // 더 새 버전이 이미 게시됐으면 manifest를 옛 버전으로 되돌리지 않음
+    let replaced = false;
+    for (
+      let attempt = 1;
+      attempt <= PUBLISH_POLICY.manifestWriteAttempts;
+      attempt += 1
+    ) {
+      const currentFile = await snapshots.getTaggedFile(MANIFEST_PATH);
+      const latest = newestVersion(
+        await ops.getPublishedVersion(),
+        parseManifest(currentFile?.body ?? null)?.snapshotVersion ?? null,
+      );
+      if (latest !== null && version <= latest) {
+        return fail("version_not_newer", { published: latest });
+      }
+      if (
+        await snapshots.putFileIf(
+          MANIFEST_PATH,
+          manifestBody,
+          PUBLISH_POLICY.cacheControl.manifest,
+          currentFile?.etag ?? null,
+        )
+      ) {
+        replaced = true;
+        break;
+      }
+      log("warn", "publish_manifest_conflict", { version, attempt });
     }
-    await snapshots.putFile(
-      MANIFEST_PATH,
-      manifestBody,
-      PUBLISH_POLICY.cacheControl.manifest,
-    );
+    if (!replaced) return fail("manifest_conflict");
     uploaded = false; // manifest가 이 버전을 가리킴 → 지우면 안 됨
 
     if (!(await ops.setPublishedVersion(version))) {
