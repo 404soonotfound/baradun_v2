@@ -22,7 +22,9 @@ describe("데이터 문의 접수 인프라", () => {
       (permission) =>
         permission.Properties.Principal === "cloudfront.amazonaws.com",
     );
-    expect(permissions.map((permission) => permission.Properties.Action)).toEqual(
+    expect(
+      permissions.map((permission) => permission.Properties.Action),
+    ).toEqual(
       expect.arrayContaining([
         "lambda:InvokeFunctionUrl",
         "lambda:InvokeFunction",
@@ -54,7 +56,15 @@ describe("데이터 문의 접수 인프라", () => {
     expect(inquiry).toMatchObject({
       PathPattern: "api/inquiries*",
       ViewerProtocolPolicy: "redirect-to-https",
-      AllowedMethods: ["GET", "HEAD", "OPTIONS", "PUT", "PATCH", "POST", "DELETE"],
+      AllowedMethods: [
+        "GET",
+        "HEAD",
+        "OPTIONS",
+        "PUT",
+        "PATCH",
+        "POST",
+        "DELETE",
+      ],
     });
     expect(inquiry?.FunctionAssociations).toEqual([
       expect.objectContaining({ EventType: "viewer-request" }),
