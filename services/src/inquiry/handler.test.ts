@@ -120,4 +120,34 @@ describe("문의 함수 URL 처리", () => {
       },
     ]);
   });
+
+  it("사진 검사 중 S3 오류는 거절로 바꾸지 않고 그대로 던짐(문의도 저장 안 됨)", async () => {
+    // 던진 오류는 inquiryHandler의 바깥 catch가 503으로 바꿈
+    const save = vi.fn(async () => undefined);
+    const deps = dependencies({
+      store: { allowRequest: vi.fn(async () => true), save } as never,
+      photos: {
+        createUploads: vi.fn(async () => []),
+        inspect: vi.fn(async () => {
+          throw new Error("s3 장애(시험)");
+        }),
+      } as never,
+    });
+    await expect(
+      handleInquiryHttp(
+        event("/api/inquiries", {
+          type: "data_error",
+          message: "관측값 문의",
+          photos: [
+            {
+              photoId: "0123456789abcdef",
+              key: "pending/0123456789abcdef0123456789abcdef/0123456789abcdef",
+            },
+          ],
+        }),
+        deps,
+      ),
+    ).rejects.toThrow("s3 장애(시험)");
+    expect(save).not.toHaveBeenCalled();
+  });
 });
