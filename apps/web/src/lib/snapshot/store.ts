@@ -10,7 +10,12 @@ import {
   isTime,
   type Clock,
 } from "./clock";
-import { isRecord, METRIC_KEYS, type ViewSource } from "./view";
+import {
+  hidesLastValues,
+  isRecord,
+  METRIC_KEYS,
+  type ViewSource,
+} from "./view";
 
 // 바다 정보 조회·갱신 (아키텍처 9.1·그림 2, BRD-41)
 // manifest를 먼저 받고 snapshotVersion이 바뀔 때만 status를 받음.
@@ -53,6 +58,8 @@ export interface SnapshotDeps {
   // sessionStorage. 못 쓰면 null → 자동 새로고침 안 함(무한 새로고침 방지)
   session: KeyValueStorage | null;
   reload: () => void;
+  // 이 화면 빌드의 버전 번호(build.ts WEB_BUILD). manifest.minWebBuild보다 낮으면 강제 업데이트 상태(자동 새로고침 없음)
+  webBuild: number;
   isVisible: () => boolean;
   // 화면이 보이게 되거나 숨겨질 때 부를 함수 등록. 해제 함수를 돌려줌
   onVisibilityChange: (listener: () => void) => () => void;
@@ -110,7 +117,10 @@ function readManifest(value: unknown): ManifestFile | "unsupported" | null {
     !isRecord(files) ||
     files.status !== statusPath(value.snapshotVersion) ||
     !isRecord(maintenance) ||
-    typeof maintenance.active !== "boolean"
+    typeof maintenance.active !== "boolean" ||
+    // 최소 화면 버전을 못 읽으면 이 화면이 읽어도 되는 데이터인지 모름 → 못 읽은 것(B5)
+    !Number.isInteger(value.minWebBuild) ||
+    (value.minWebBuild as number) < 0
   ) {
     return null;
   }
@@ -132,6 +142,12 @@ export function createSnapshotStore(deps: SnapshotDeps): SnapshotStore {
   let loadedVersion: string | null = null;
   // 이번 세션에 네트워크로 받은 manifest 중 가장 새 snapshotVersion(점검·status 실패 포함)
   let latestVersion: string | null = null;
+  // 이 탭이 마지막으로 정상 수신한 manifest·status(메모리). 점검·강제 업데이트로 상태에서 비운 뒤 그 화면이 풀렸는데
+  // status만 실패하면 여기서 B5로 복구함(localStorage를 못 쓰는 환경에서도 발효 특보 배지를 잃지 않게)
+  let lastLive: {
+    manifest: ManifestFile;
+    statuses: Record<string, unknown>;
+  } | null = null;
   let inFlight: Promise<void> | null = null;
   let pollTimer: ReturnType<typeof setInterval> | null = null;
   let deadlineTimer: ReturnType<typeof setTimeout> | null = null;
@@ -214,16 +230,29 @@ export function createSnapshotStore(deps: SnapshotDeps): SnapshotStore {
     } else void refresh();
   }
 
-  // 메모리에 값이 없으면 기기에 저장해 둔 마지막 값을 꺼냄. 서버 시각은 모르는 것으로 둠.
-  // live: false라 B5 규칙(발효 특보 배지 유지, 나머지는 특보 확인 못 함)으로 보임
-  function showStored() {
-    if (state.statuses) return;
+  // 기기에 저장해 둔 마지막 값. 없거나 읽을 수 없으면 null
+  function readStoredSnapshot() {
     const stored = safe(() =>
       JSON.parse(deps.storage?.getItem(LAST_SNAPSHOT_KEY) ?? "null"),
     );
     const manifest = isRecord(stored) ? readManifest(stored.manifest) : null;
     const statuses = isRecord(stored) ? readStatuses(stored.status) : null;
-    if (!manifest || manifest === "unsupported" || !statuses) return;
+    if (!manifest || manifest === "unsupported" || !statuses) return null;
+    return { manifest, statuses };
+  }
+
+  // 메모리에 값이 없으면 마지막 정상 수신값(이 탭 메모리 → 기기 저장)을 꺼냄. 서버 시각은 모르는 것으로 둠.
+  // live: false라 B5 규칙(발효 특보 배지 유지, 나머지는 특보 확인 못 함)으로 보임
+  // 점검·강제 업데이트 화면을 보이는 중에는 꺼내지 않음(상태에 지난 값을 들고 있지 않게).
+  // evenIfHidden: 새 manifest가 그 화면을 풀었는데 status만 실패한 경우(fail)는 꺼냄
+  function showStored(evenIfHidden = false) {
+    if (state.statuses) return;
+    if (!evenIfHidden && hidesLastValues(state.phase)) return;
+    const last = lastLive ?? readStoredSnapshot();
+    if (!last) return;
+    const { manifest, statuses } = last;
+    // 더 새 화면이 저장한 값(minWebBuild가 이 빌드보다 높음)은 이 화면이 잘못 읽을 수 있어 꺼내지 않음(9.1)
+    if (manifest.minWebBuild > deps.webBuild) return;
     set({
       phase: state.phase === "loading" ? "ready" : state.phase,
       manifest,
@@ -235,16 +264,15 @@ export function createSnapshotStore(deps: SnapshotDeps): SnapshotStore {
   }
 
   // fresh: 이번 조회에서 manifest를 받아 서버 시각을 알았으면 그 시계(status 실패여도 버리지 않음)
-  // manifestOk: 이번 manifest가 지원 형식이고 점검 중이 아님을 확인함(status만 실패)
-  // → 점검 화면·지원 밖 형식 배너를 풀고 B5로(마지막 발효 특보 배지가 사라지지 않게)
+  // manifestOk: 이번 manifest가 지원 형식이고 점검 중이 아니며 이 화면 빌드가 읽어도 됨을 확인함(status만 실패)
+  // → 점검 화면·강제 업데이트·지원 밖 형식 배너를 풀고 B5로(마지막 발효 특보 배지가 사라지지 않게)
   function fail(fresh?: Clock, manifestOk = false) {
-    showStored();
     const clock = fresh ?? state.clock;
-    const keep =
-      !manifestOk &&
-      (state.phase === "schema_unsupported" || state.phase === "maintenance");
+    const keep = !manifestOk && hidesLastValues(state.phase);
+    // 점검·강제 업데이트 화면을 유지하는 동안은 저장된 값도 꺼내지 않음(상태에 지난 값을 들고 있지 않게)
+    if (!keep) showStored(true);
     set({
-      // 점검 화면·지원 밖 형식 배너는 그대로 둠. 처음부터 못 받았으면 데이터 없이 판단불가
+      // 점검 화면·강제 업데이트·지원 밖 형식 배너는 그대로 둠. 처음부터 못 받았으면 데이터 없이 판단불가
       phase: keep ? state.phase : "ready",
       clock,
       live: false,
@@ -252,24 +280,26 @@ export function createSnapshotStore(deps: SnapshotDeps): SnapshotStore {
     });
   }
 
-  // 지원 밖 schemaVersion마다 한 번만 새로고침(9.1 '자동 새로고침 1회'). 기록은 새로고침한 버전 목록(쉼표 구분)이라
-  // 버전 전환 중 v1·v2 또는 v2·v3가 번갈아 와도 반복하지 않고, 처음 보는 새 버전이 나오면 다시 한 번 새로고침함
+  // 같은 표시(mark)마다 이 브라우저 탭에서 한 번만 새로고침(9.1 '자동 새로고침 1회'). 기록은 새로고침한 표시 목록(쉼표 구분)이라
+  // 버전 전환 중 v1·v2 또는 v2·v3가 번갈아 와도 반복하지 않고, 처음 보는 표시가 나오면 다시 한 번 새로고침함
+  // 새로고침했으면 true. 기록을 못 남기면 새로고침하지 않고 false(무한 새로고침 방지)
+  function reloadOnce(key: string, mark: string): boolean {
+    const reloaded = safe(() => deps.session?.getItem(key)) ?? "";
+    const marks = reloaded ? reloaded.split(",") : [];
+    if (marks.includes(mark)) return false;
+    const next = [...marks, mark].join(",");
+    const recorded = safe(() => {
+      deps.session?.setItem(key, next);
+      return deps.session?.getItem(key) === next;
+    });
+    if (!recorded) return false;
+    deps.reload();
+    return true;
+  }
+
+  // 지원 밖 schemaVersion: 새 화면 파일이 나왔을 수 있어 버전마다 한 번 새로고침, 그래도 안 되면 판단불가 배너
   function unsupported(version: number) {
-    const mark = String(version);
-    const reloaded = safe(() => deps.session?.getItem(SCHEMA_RELOAD_KEY)) ?? "";
-    const versions = reloaded ? reloaded.split(",") : [];
-    if (!versions.includes(mark)) {
-      // 새 화면 파일이 나왔을 수 있어 새로고침. 기록을 못 남기면 새로고침하지 않음(무한 새로고침 방지)
-      const next = [...versions, mark].join(",");
-      const recorded = safe(() => {
-        deps.session?.setItem(SCHEMA_RELOAD_KEY, next);
-        return deps.session?.getItem(SCHEMA_RELOAD_KEY) === next;
-      });
-      if (recorded) {
-        deps.reload();
-        return;
-      }
-    }
+    if (reloadOnce(SCHEMA_RELOAD_KEY, String(version))) return;
     set({ phase: "schema_unsupported", live: false, nowMs: now() });
   }
 
@@ -355,15 +385,17 @@ export function createSnapshotStore(deps: SnapshotDeps): SnapshotStore {
     }
     latestVersion = manifest.snapshotVersion;
 
+    // 화면 빌드가 최소 버전보다 낮음 → 이전 화면이 새 데이터를 잘못 읽을 수 있어 값을 숨김(9.1)
+    // 자동으로 새로고침하지 않음(2026-10-26 사용자 결정): 입력 중 화면이 사라지거나 새로고침이 반복될 수 있음
+    // 강제 업데이트 화면(L15, BRD-38)의 버튼이 window.location.reload()를 부름. 사이트 HTML은 max-age=0이라 새 화면을 받음
+    // 점검보다 먼저 봄: 새 화면이 점검 여부를 다시 확인함
+    if (manifest.minWebBuild > deps.webBuild) {
+      return hideAll("update_required", manifest, clock);
+    }
+
     // 점검 중이면 마지막 값도 숨김(화면이 전체를 덮음, 9.1)
     if (manifest.maintenance.active) {
-      return set({
-        phase: "maintenance",
-        manifest,
-        live: true,
-        clock,
-        nowMs: now(clock, manifest),
-      });
+      return hideAll("maintenance", manifest, clock);
     }
 
     let statuses = state.statuses;
@@ -377,6 +409,7 @@ export function createSnapshotStore(deps: SnapshotDeps): SnapshotStore {
       }
       if (!statuses) return fail(clock, true);
       loadedVersion = manifest.snapshotVersion;
+      lastLive = { manifest, statuses };
       const snapshot = { manifest, status: { beaches: statuses } };
       safe(() =>
         deps.storage?.setItem(LAST_SNAPSHOT_KEY, JSON.stringify(snapshot)),
@@ -387,6 +420,23 @@ export function createSnapshotStore(deps: SnapshotDeps): SnapshotStore {
       phase: "ready",
       manifest,
       statuses,
+      live: true,
+      clock,
+      nowMs: now(clock, manifest),
+    });
+  }
+
+  // 화면 전체를 덮는 상태로 바꿈. 지난 statuses는 상태에서 비움(다른 소비자가 지난 값을 읽지 않고, 만료 타이머도 돌지 않게)
+  // loadedVersion은 두지만 statuses가 없으면 다음 조회가 status를 다시 받음
+  function hideAll(
+    phase: "update_required" | "maintenance",
+    manifest: ManifestFile,
+    clock: Clock,
+  ) {
+    set({
+      phase,
+      manifest,
+      statuses: null,
       live: true,
       clock,
       nowMs: now(clock, manifest),

@@ -76,13 +76,28 @@ export type BeachView =
 
 // 화면 전체 데이터 상태 중 해변 계산에 필요한 부분 (store.ts의 SnapshotState와 같은 모양)
 export interface ViewSource {
-  phase: "loading" | "ready" | "maintenance" | "schema_unsupported";
+  phase:
+    | "loading"
+    | "ready"
+    | "maintenance"
+    | "update_required"
+    | "schema_unsupported";
   statuses: Record<string, unknown> | null;
   // 마지막 조회가 성공했는지. false = 오프라인·장애(B5)
   live: boolean;
   clock: Clock;
   // 보정된 지금 시각(ms). NaN = 지금 시각을 알 수 없음(기기 시계가 틀린 게 확실) → 모두 만료
   nowMs: number;
+}
+
+// 지난 값을 보여주지 않는 화면 전체 상태: 지원 밖 형식 배너·점검 화면·강제 업데이트 화면(9.1)
+// 해변 계산(deriveBeachView)과 조회 실패 때 유지 여부(store.ts fail)가 같은 목록을 씀
+export function hidesLastValues(phase: ViewSource["phase"]): boolean {
+  return (
+    phase === "schema_unsupported" ||
+    phase === "maintenance" ||
+    phase === "update_required"
+  );
 }
 
 const HIDDEN_METRICS = Object.fromEntries(
@@ -286,10 +301,8 @@ export function deriveBeachView(
   if (beach.hidden) return { kind: "hidden" };
   if (source.phase === "loading") return { kind: "loading" };
   // 지원 범위 밖 schemaVersion → 모든 해변 판단불가(배너는 화면에서, 9.1)
-  // 점검 중: 화면이 전체를 덮고 마지막 값도 숨김(9.1). 다른 소비자가 계산해도 지난 값이 나오지 않게
-  if (source.phase === "schema_unsupported" || source.phase === "maintenance") {
-    return UNDETERMINED;
-  }
+  // 점검 중·강제 업데이트: 화면이 전체를 덮고 마지막 값도 숨김(9.1). 다른 소비자가 계산해도 지난 값이 나오지 않게
+  if (hidesLastValues(source.phase)) return UNDETERMINED;
 
   // 데이터가 없거나 읽을 수 없어 판단불가. 오프라인이면 '이후 확인 못 함'도 붙도록 stale 표시
   const noData: BeachView = { ...UNDETERMINED, stale: !source.live };

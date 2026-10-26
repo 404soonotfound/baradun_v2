@@ -316,6 +316,8 @@ export async function publishSnapshot(
 // 롤백 (아키텍처 1장: manifest를 이전 버전으로 되돌려 수 분 내 복구, T06)
 // 그 버전 경로의 manifest 사본과 파일 네 개가 모두 있어야 되돌림. 하나라도 없으면 지금 manifest 그대로
 // 다음 게시가 새 버전으로 다시 덮으므로, 게시 코드 문제로 되돌릴 때는 수집기 일정을 먼저 멈춤
+// 점검·최소 화면 버전은 데이터가 아니라 운영 설정 → 사본의 값이 아니라 지금 코드의 MANIFEST_SETTINGS를 씀
+// (점검 중 롤백해도 점검이 풀리지 않고, 올린 minWebBuild가 되돌아가지 않음. BRD-43 리뷰)
 export async function rollbackManifest(
   snapshots: SnapshotStore,
   version: string,
@@ -334,9 +336,14 @@ export async function rollbackManifest(
   if (files.some((body) => body === null)) {
     return { status: "failed", reason: "files_missing" };
   }
+  const restored: ManifestFile = {
+    ...manifest,
+    maintenance: { ...MANIFEST_SETTINGS.maintenance },
+    minWebBuild: MANIFEST_SETTINGS.minWebBuild,
+  };
   await snapshots.putFile(
     MANIFEST_PATH,
-    JSON.stringify(manifest),
+    JSON.stringify(restored),
     PUBLISH_POLICY.cacheControl.manifest,
   );
   return { status: "rolled_back" };

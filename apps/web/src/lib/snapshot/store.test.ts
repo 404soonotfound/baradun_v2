@@ -89,6 +89,7 @@ function setup(
     server?: ReturnType<typeof fakeServer>;
     storage?: ReturnType<typeof memoryStorage>;
     session?: ReturnType<typeof memoryStorage>;
+    webBuild?: number;
   } = {},
 ) {
   const server = options.server ?? fakeServer();
@@ -103,6 +104,8 @@ function setup(
     storage,
     session,
     reload,
+    // 예시 manifest의 minWebBuild(1)와 같은 빌드
+    webBuild: options.webBuild ?? 1,
     isVisible: () => visible,
     onVisibilityChange(listener) {
       visibilityListeners.add(listener);
@@ -194,6 +197,40 @@ describe("manifest 먼저, 바뀔 때만 status", () => {
     await store.refresh();
     expect(store.getState().phase).toBe("maintenance");
     expect(statusCalls()).toBe(0);
+  });
+
+  it("값을 보여주던 중 점검이 시작되면 마지막 값도 숨김(9.1)", async () => {
+    const { store, server } = setup();
+    store.start();
+    await store.refresh();
+    const before = deriveBeachView(
+      { id: "b0001", hidden: false },
+      store.getState(),
+    );
+    expect(before).toMatchObject({ kind: "ready" });
+    server.manifest = {
+      ...manifestExample,
+      snapshotVersion: "20991231T000000Z",
+      files: {
+        ...manifestExample.files,
+        status: "/data/20991231T000000Z/status.json",
+      },
+      maintenance: { active: true, until: null },
+    };
+    await store.refresh();
+    expect(store.getState()).toMatchObject({
+      phase: "maintenance",
+      statuses: null,
+    });
+    expect(
+      deriveBeachView({ id: "b0001", hidden: false }, store.getState()),
+    ).toMatchObject({
+      category: "undetermined",
+      metrics: {
+        waveHeight: { kind: "hidden" },
+        wavePeriod: { kind: "hidden" },
+      },
+    });
   });
 });
 
@@ -359,6 +396,125 @@ describe("지원 범위 밖 schemaVersion", () => {
     await store.refresh();
     expect(reload).not.toHaveBeenCalled();
     expect(store.getState().phase).toBe("schema_unsupported");
+  });
+});
+
+describe("최소 화면 버전 (minWebBuild, BRD-43)", () => {
+  const newer = { ...manifestExample, minWebBuild: 2 };
+
+  it("화면 빌드가 낮으면 자동 새로고침 없이 바로 강제 업데이트: 값 숨김, status 받지 않음, 지난 statuses 비움", async () => {
+    const { store, server, reload, statusCalls } = setup();
+    store.start();
+    await store.refresh();
+    expect(store.getState().statuses).not.toBeNull();
+    server.manifest = {
+      ...newer,
+      snapshotVersion: "20991231T000000Z",
+      files: {
+        ...manifestExample.files,
+        status: "/data/20991231T000000Z/status.json",
+      },
+    };
+    await store.refresh();
+    expect(reload).not.toHaveBeenCalled();
+    expect(store.getState()).toMatchObject({
+      phase: "update_required",
+      statuses: null,
+      live: true,
+    });
+    expect(statusCalls()).toBe(1); // 첫 조회만
+    expect(
+      deriveBeachView({ id: "b0001", hidden: false }, store.getState()),
+    ).toMatchObject({ category: "undetermined" });
+  });
+
+  it("같거나 높은 빌드는 정상", async () => {
+    const { store, server, reload } = setup({ webBuild: 2 });
+    server.manifest = newer;
+    store.start();
+    await store.refresh();
+    expect(reload).not.toHaveBeenCalled();
+    expect(store.getState().phase).toBe("ready");
+  });
+
+  it("점검 중이어도 화면 빌드가 낮으면 강제 업데이트가 먼저", async () => {
+    const { store, server } = setup();
+    server.manifest = { ...newer, maintenance: { active: true, until: null } };
+    store.start();
+    await store.refresh();
+    expect(store.getState().phase).toBe("update_required");
+  });
+
+  it("강제 업데이트 화면은 네트워크 실패 한 번으로 풀리지 않고 저장값도 꺼내지 않음", async () => {
+    const storage = memoryStorage();
+    const before = setup({ storage });
+    before.store.start();
+    await before.store.refresh(); // 기기에 정상값 저장
+    const { store, server } = setup({ storage, server: before.server });
+    server.manifest = newer;
+    store.start();
+    await store.refresh();
+    server.down = true;
+    await store.refresh();
+    expect(store.getState()).toMatchObject({
+      phase: "update_required",
+      statuses: null,
+    });
+  });
+
+  it("새 화면을 받아 빌드가 minWebBuild 이상이 되면 정상으로 돌아옴(사용자가 새로고침한 뒤)", async () => {
+    const { store, server } = setup();
+    server.manifest = newer;
+    store.start();
+    await store.refresh();
+    expect(store.getState().phase).toBe("update_required");
+    // 새로고침 뒤 새 화면(webBuild 2)
+    const next = setup({ server, webBuild: 2 });
+    next.store.start();
+    await next.store.refresh();
+    expect(next.store.getState().phase).toBe("ready");
+    expect(next.store.getState().statuses).not.toBeNull();
+  });
+
+  it("더 새 화면이 저장한 값(minWebBuild가 높음)은 오프라인에서도 꺼내지 않음", async () => {
+    const storage = memoryStorage();
+    const online = setup({ storage, webBuild: 2 });
+    online.server.manifest = newer;
+    online.store.start();
+    await online.store.refresh();
+    expect(online.store.getState().phase).toBe("ready");
+
+    const offline = setup({ storage });
+    offline.server.down = true;
+    offline.store.start();
+    await offline.store.refresh();
+    expect(offline.store.getState()).toMatchObject({
+      live: false,
+      statuses: null,
+    });
+    expect(
+      deriveBeachView({ id: "b0002", hidden: false }, offline.store.getState()),
+    ).toMatchObject({
+      category: "undetermined",
+      badge: { kind: "unconfirmed" },
+    });
+  });
+
+  it("minWebBuild를 읽지 못하는 manifest는 못 읽은 것(B5), 강제 업데이트로 보지 않음", async () => {
+    const { store, server, reload } = setup();
+    const missing: Partial<ManifestFile> = structuredClone(manifestExample);
+    delete missing.minWebBuild;
+    for (const manifest of [
+      missing,
+      { ...manifestExample, minWebBuild: "2" },
+      { ...manifestExample, minWebBuild: -1 },
+    ]) {
+      server.manifest = manifest;
+      await store.refresh();
+      expect(store.getState()).toMatchObject({ phase: "ready", live: false });
+      expect(store.getState().manifest).toBeNull();
+    }
+    expect(reload).not.toHaveBeenCalled();
   });
 });
 
@@ -902,6 +1058,44 @@ describe("스냅샷 버전 형식·저장된 값의 시계", () => {
 });
 
 describe("점검 해제 후 status 실패", () => {
+  // Codex 리뷰(PR #63 P2): 저장소를 못 쓰는 환경에서 점검으로 statuses를 비운 뒤 복구할 곳이 없었음
+  it("localStorage가 없어도: 발효 특보 표시 → 점검 → 점검 해제 + status 실패 → 메모리의 마지막 값으로 B5 배지 유지", async () => {
+    const { store, server } = setup({
+      storage: null as unknown as ReturnType<typeof memoryStorage>,
+    });
+    store.start();
+    await store.refresh();
+    expect(
+      deriveBeachView({ id: "b0002", hidden: false }, store.getState()),
+    ).toMatchObject({ category: "unavailable", stale: false });
+
+    server.manifest = {
+      ...manifestExample,
+      maintenance: { active: true, until: null },
+    };
+    await store.refresh();
+    expect(store.getState()).toMatchObject({
+      phase: "maintenance",
+      statuses: null,
+    });
+
+    server.manifest = {
+      ...manifestExample,
+      snapshotVersion: "20261017T060000Z",
+      generatedAt: "2026-10-17T05:30:30Z",
+      files: {
+        ...manifestExample.files,
+        status: "/data/20261017T060000Z/status.json",
+      },
+    };
+    server.statusDown = true;
+    await store.refresh();
+    expect(store.getState()).toMatchObject({ phase: "ready", live: false });
+    expect(
+      deriveBeachView({ id: "b0002", hidden: false }, store.getState()),
+    ).toMatchObject({ category: "unavailable", stale: true });
+  });
+
   it("점검이 끝난 manifest를 받고 status만 실패 → 점검 화면을 풀고 B5", async () => {
     const { store, server } = setup();
     store.start();
