@@ -16,6 +16,25 @@ import {
 import { readPublishInputs, type PublishInputs } from "./inputs";
 import { BeachSnapshotError, buildSnapshot, type Snapshot } from "./snapshot";
 import { contractErrors } from "./validate";
+import { OCEAN_STATE } from "../collectors/ocean";
+import type { StateStore } from "../core/store/types";
+
+const WAVE_STATIONS = [
+  ...new Set(
+    BEACHES.map((b) => b.stations.waveHeight?.id).filter(
+      (id): id is string => id !== undefined,
+    ),
+  ),
+].sort();
+const sec = (iso: string) => Date.parse(iso) / 1000;
+
+async function seedHistory(
+  state: StateStore,
+  stations: Record<string, [number, number][]>,
+) {
+  const { pk, sk } = OCEAN_STATE.history;
+  await state.putState(pk, sk, { stations }, 1);
+}
 
 // 게시 파일 조립 (BRD-61). 수집기가 남긴 State → 해변 분류·전국 특보·이력, 계약 통과
 // 실패 경로: 없거나 깨진 기록이 '특보 없음'·빈 목록으로 바뀌지 않는지
@@ -251,20 +270,84 @@ describe("buildSnapshot", () => {
     ]);
   });
 
-  it("이력은 파고 측정소마다 1시간 간격 25개 점, 모두 측정값 없음(v: null)", async () => {
+  it("이력 기록이 없으면 파고 측정소마다 1시간 간격 25개 점, 모두 측정값 없음(v: null)", async () => {
     const state = new MemoryStateStore();
     await seedWarnings(state, [HEAVY_RAIN_ROW]);
     await seedReadings(state);
     const { history } = await snapshotFrom(state);
-    const ids = [
-      ...new Set(BEACHES.map((b) => b.stations.waveHeight?.id).filter(Boolean)),
-    ].sort();
-    expect(Object.keys(history.stations)).toEqual(ids);
-    const points = history.stations[ids[0]!]!.points;
+    expect(Object.keys(history.stations)).toEqual(WAVE_STATIONS);
+    const points = history.stations[WAVE_STATIONS[0]!]!.points;
     expect(points).toHaveLength(25);
     expect(points[0]).toEqual({ t: "2026-10-22T02:00:00Z", v: null });
     expect(points.at(-1)).toEqual({ t: "2026-10-23T02:00:00Z", v: null });
     expect(points.every((p) => p.v === null)).toBe(true);
+  });
+
+  it("이력 기록으로 점을 채움: 없는 시각은 null, 24시간 밖 값·배정 안 된 측정기는 게시 안 함, 계약 통과", async () => {
+    const state = new MemoryStateStore();
+    await seedWarnings(state, [HEAVY_RAIN_ROW]);
+    await seedReadings(state);
+    const [first] = WAVE_STATIONS;
+    await seedHistory(state, {
+      [first!]: [
+        [sec("2026-10-22T00:30:00Z"), 2.0], // 첫 점(02:00) 구간 밖
+        [sec("2026-10-22T01:30:00Z"), 0.9], // 첫 점
+        [sec("2026-10-23T01:40:00Z"), 0.8], // 마지막 점(02:00)
+        [sec("2026-10-23T02:00:00Z"), 0.5], // 마지막 점(더 늦음)
+      ],
+      "99999": [[sec("2026-10-23T02:00:00Z"), 3.0]], // 해변에 배정 안 된 측정기
+    });
+    const snapshot = await snapshotFrom(state);
+    expectContract(snapshot);
+    const points = snapshot.history.stations[first!]!.points;
+    expect(points[0]).toEqual({ t: "2026-10-22T02:00:00Z", v: 0.9 });
+    expect(points.at(-1)).toEqual({ t: "2026-10-23T02:00:00Z", v: 0.5 });
+    expect(points.filter((p) => p.v !== null)).toHaveLength(2);
+    expect(snapshot.history.stations["99999"]).toBeUndefined();
+  });
+
+  it("해변의 파고 측정소가 바뀌면 새 측정소의 이력만 게시(이전 측정소 값을 옮기지 않음)", async () => {
+    const state = new MemoryStateStore();
+    await seedWarnings(state, [HEAVY_RAIN_ROW]);
+    await seedHistory(state, {
+      [WAVE_STATIONS[0]!]: [[sec("2026-10-23T02:00:00Z"), 0.5]],
+    });
+    const beaches = BEACHES.map((beach) =>
+      beach.stations.waveHeight?.id === WAVE_STATIONS[0]
+        ? {
+            ...beach,
+            stations: {
+              ...beach.stations,
+              waveHeight: { ...beach.stations.waveHeight!, id: "88888" },
+            },
+          }
+        : beach,
+    );
+    const { history } = buildSnapshot({
+      beaches,
+      zones: ZONES,
+      seasons: SEASONS,
+      inputs: await readPublishInputs(state),
+      now: NOW,
+    });
+    expect(history.stations[WAVE_STATIONS[0]!]).toBeUndefined();
+    // 새 측정소는 이력이 없으므로 모두 null(이전 측정소 값을 빌려 쓰지 않음)
+    expect(history.stations["88888"]!.points.every((p) => p.v === null)).toBe(
+      true,
+    );
+  });
+
+  it("이력 기록이 깨졌으면 모든 점 null로 게시하고 분류는 그대로", async () => {
+    const state = new MemoryStateStore();
+    await seedWarnings(state, [WIND_WAVE_ROW]);
+    await seedReadings(state);
+    await state.putState("ocean", "history", "broken", 1);
+    const snapshot = await snapshotFrom(state);
+    expectContract(snapshot);
+    expect(snapshot.status.beaches.b0001!.category).toBe("unavailable");
+    for (const station of Object.values(snapshot.history.stations)) {
+      expect(station.points.every((p) => p.v === null)).toBe(true);
+    }
   });
 
   it("해변 id가 겹치면 덮어쓰지 않고 멈춤", async () => {
