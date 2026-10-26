@@ -222,9 +222,10 @@ describe("DynamoDB 권한 (BRD-55)", () => {
       roleId("InquiryInquiryRole"),
     ]);
     expect(Object.fromEntries(byResource)).toEqual({
+      // 트랜잭션 Put은 dynamodb:PutItem으로 판정됨(품목별 동작). TransactWriteItems라는 동작은 없음
       [`${tableId("Inquiry")}.Arn`]: new Set([
         "dynamodb:DeleteItem",
-        "dynamodb:TransactWriteItems",
+        "dynamodb:PutItem",
         "dynamodb:UpdateItem",
       ]),
     });

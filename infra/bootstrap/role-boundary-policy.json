@@ -19,7 +19,6 @@
         "dynamodb:GetItem",
         "dynamodb:PutItem",
         "dynamodb:Query",
-        "dynamodb:TransactWriteItems",
         "dynamodb:UpdateItem"
       ],
       "Resource": "arn:aws:dynamodb:ap-northeast-2:717304679248:table/BaradunV2-*"
