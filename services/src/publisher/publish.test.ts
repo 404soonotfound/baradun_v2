@@ -420,6 +420,25 @@ describe("publishSnapshot", () => {
     expect(await snapshots.listVersions()).toEqual([]);
   });
 
+  it("manifest를 바꾼 뒤 게시 버전 기록이 예외를 던져도 게시 성공으로 보고하고 오류 로그만 남김", async () => {
+    const { ops, deps, manifest, events } = await setup();
+    ops.setPublishedVersion = async () => {
+      throw new Error("throttled");
+    };
+    expect(await publishSnapshot(deps())).toMatchObject({
+      status: "published",
+      version: V1,
+    });
+    expect(manifest()!.snapshotVersion).toBe(V1);
+    expect(events()).toContainEqual(
+      expect.objectContaining({
+        level: "error",
+        event: "publish_version_not_recorded",
+        version: V1,
+      }),
+    );
+  });
+
   it("State 읽기가 예외를 던져도 manifest 그대로, 잠금은 풂", async () => {
     const { state, ops, snapshots, deps } = await setup();
     state.getState = async () => {

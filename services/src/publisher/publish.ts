@@ -285,8 +285,9 @@ export async function publishSnapshot(
     if (!replaced) return fail("manifest_conflict");
     uploaded = false; // manifest가 이 버전을 가리킴 → 지우면 안 됨
 
-    if (!(await ops.setPublishedVersion(version))) {
-      // 잠금 안에서는 생기지 않아야 함. manifest는 이미 바뀌었으므로 알리기만 함
+    // 잠금 안에서는 생기지 않아야 함. manifest는 이미 바뀌었으므로 알리기만 함
+    // 예외도 같게 봄: 여기서 던지면 이미 끝난 게시가 failed로 잘못 보고됨
+    if (!(await ops.setPublishedVersion(version).catch(() => false))) {
       log("error", "publish_version_not_recorded", { version });
     }
     const removed = await removeOldVersions(snapshots, version, log);
