@@ -480,6 +480,30 @@ describe("최소 화면 버전 (minWebBuild, BRD-43)", () => {
     expect(store.getState().phase).toBe("update_required");
   });
 
+  it("더 새 화면이 저장한 값(minWebBuild가 높음)은 오프라인에서도 꺼내지 않음", async () => {
+    const storage = memoryStorage();
+    const online = setup({ storage, webBuild: 2 });
+    online.server.manifest = newer;
+    online.store.start();
+    await online.store.refresh();
+    expect(online.store.getState().phase).toBe("ready");
+
+    const offline = setup({ storage });
+    offline.server.down = true;
+    offline.store.start();
+    await offline.store.refresh();
+    expect(offline.store.getState()).toMatchObject({
+      live: false,
+      statuses: null,
+    });
+    expect(
+      deriveBeachView({ id: "b0002", hidden: false }, offline.store.getState()),
+    ).toMatchObject({
+      category: "undetermined",
+      badge: { kind: "unconfirmed" },
+    });
+  });
+
   it("minWebBuild를 읽지 못하는 manifest는 못 읽은 것(B5), 강제 업데이트로 보지 않음", async () => {
     const { store, server, reload } = setup();
     const missing: Partial<ManifestFile> = structuredClone(manifestExample);

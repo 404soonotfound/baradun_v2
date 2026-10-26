@@ -236,6 +236,8 @@ export function createSnapshotStore(deps: SnapshotDeps): SnapshotStore {
     const manifest = isRecord(stored) ? readManifest(stored.manifest) : null;
     const statuses = isRecord(stored) ? readStatuses(stored.status) : null;
     if (!manifest || manifest === "unsupported" || !statuses) return;
+    // 더 새 화면이 저장한 값(minWebBuild가 이 빌드보다 높음)은 이 화면이 잘못 읽을 수 있어 꺼내지 않음(9.1)
+    if (manifest.minWebBuild > deps.webBuild) return;
     set({
       phase: state.phase === "loading" ? "ready" : state.phase,
       manifest,
