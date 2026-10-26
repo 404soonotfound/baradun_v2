@@ -212,6 +212,7 @@ describe("DynamoDB 권한 (BRD-55)", () => {
         roleId("CollectOceanRole"),
         roleId("CollectWarningsRole"),
         roleId("CollectCatalogRole"),
+        roleId("CollectRipRole"),
         roleId("InquiryInquiryRole"),
       ].sort(),
     );
