@@ -63,6 +63,3 @@ export function setActivity(activity: Activity) {
 export function useActivity(): Activity {
   return useSyncExternalStore(subscribe, read, () => DEFAULT_ACTIVITY);
 }
-
-// 연습용: 채점 스크립트가 쓰는 줄. 커밋 전에 지움
-export const __test = { isActivity, read, subscribe };
