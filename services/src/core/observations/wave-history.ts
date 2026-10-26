@@ -105,13 +105,29 @@ export function readWaveHistory(
   return history;
 }
 
+// 게시 한 번에 쓰는 점 시각 틀. 측정소마다 같으므로 한 번만 만들어 넘김
+export interface HistoryFrame {
+  readonly firstMs: number;
+  readonly times: readonly string[]; // 25개 점의 t(UTC ISO)
+}
+
+export function historyFrame(now: string): HistoryFrame {
+  const firstMs = firstPointMs(parseNow(now));
+  return {
+    firstMs,
+    times: Array.from({ length: HISTORY_POINTS }, (_, i) =>
+      formatUtcIso(firstMs + i * HOUR_MS),
+    ),
+  };
+}
+
 // 측정기 하나의 25개 점. 점마다 구간 (t − 60분, t] 안의 마지막 측정
 // 측정마다 들어갈 점 = 관측 시각을 정시로 올린 시각(정시 측정은 그 정시 점) → 한 번 훑어 점마다 가장 늦은 측정만 남김
 export function historyPoints(
   entries: readonly HistoryEntry[],
-  now: string,
+  frame: HistoryFrame,
 ): { t: string; v: number | null }[] {
-  const firstMs = firstPointMs(parseNow(now));
+  const { firstMs } = frame;
   const latest: { sec: number; v: number }[] = [];
   for (const [sec, value] of entries) {
     const index =
@@ -122,8 +138,5 @@ export function historyPoints(
       latest[index] = { sec, v: value };
     }
   }
-  return Array.from({ length: HISTORY_POINTS }, (_, i) => ({
-    t: formatUtcIso(firstMs + i * HOUR_MS),
-    v: latest[i]?.v ?? null,
-  }));
+  return frame.times.map((t, i) => ({ t, v: latest[i]?.v ?? null }));
 }
