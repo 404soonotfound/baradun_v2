@@ -23,6 +23,14 @@ export const COLLECT_POLICY = {
   tsunamiLookbackDays: 3,
   tsunamiNumOfRows: 100,
 
+  // collect-rip: 시즌(6~9월) 중 :12/:42, 비수기 하루 1회 KST 04:12 = UTC 19:12(결정 기록 10장, BRD-57)
+  // 일정은 연중 :12/:42로 돌고, 비수기에는 하루 1회 슬롯만 호출함(나머지는 호출 없이 끝냄)
+  // 비수기 호출은 시즌 시작(자료가 다시 나오는지) 확인용
+  ripSchedule: { periodMinutes: 30, offsetMinutes: 12 },
+  ripOffSeasonSlotUtcMinutes: 19 * 60 + 12,
+  // 한 해변 하루치(5분 간격 287건, 2026-10-26 실측)를 한 번에 받는 행 수. API 최댓값 300
+  ripNumOfRows: 300,
+
   // collect-catalog: 하루 1회(D6) KST 04:20 = UTC 19:20. 대표 사진 공공누리 유형 다시 확인(BRD-58)
   catalogSchedule: { periodMinutes: 24 * 60, offsetMinutes: 19 * 60 + 20 },
   // 한 번에 보내는 요청 수. 사진 86곳 × 1회

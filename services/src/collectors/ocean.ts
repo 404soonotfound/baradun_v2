@@ -62,9 +62,9 @@ type SourceOutcome =
     }
   | { status: "failed"; reason: string; attempts: number };
 
-// skipped: 다른 실행이 슬롯을 맡았거나 이미 끝남. complete: 두 출처 모두 저장. partial·failed: 다음 슬롯·재시도가 메움
+// skipped: 다른 실행이 슬롯을 맡았거나 이미 끝남(off_season: collect-rip 비수기의 호출 없는 슬롯). complete: 두 출처 모두 저장. partial·failed: 다음 슬롯·재시도가 메움
 export type CollectRunResult =
-  | { status: "skipped"; slotId: string; claim: "done" | "busy" }
+  | { status: "skipped"; slotId: string; claim: "done" | "busy" | "off_season" }
   | { status: "complete" | "partial" | "failed"; slotId: string };
 
 interface ReadingsValue {

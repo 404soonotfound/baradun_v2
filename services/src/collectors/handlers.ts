@@ -8,9 +8,11 @@ import { SsmApiKeys } from "../core/secrets/ssm";
 import { DynamoOpsStore, DynamoStateStore } from "../core/store/dynamodb";
 import type { ApiKeyName } from "../core/secrets/api-keys";
 import photoLedger from "../../../data/photo-sources.json";
+import ripLedger from "../../../data/rip-current-beaches.json";
 import { collectCatalog, parsePhotoLedger, type PhotoSource } from "./catalog";
 import { collectOcean, type CollectDeps, type CollectRunResult } from "./ocean";
 import { COLLECT_POLICY } from "./policy";
+import { collectRip, parseRipLedger, type RipSource } from "./rip";
 import { finishRun } from "./trigger";
 import { collectWarnings } from "./warnings";
 
@@ -110,5 +112,18 @@ export async function catalogHandler(
       ...deps(context.awsRequestId),
       photos: catalogPhotos,
     }),
+  );
+}
+
+// 이안류 대응표도 번들에 들어감(data/rip-current-beaches.json). catalog와 같은 이유로 첫 실행에서 검사
+let ripSources: readonly RipSource[] | null = null;
+
+export async function ripHandler(
+  _event: unknown,
+  context: LambdaContext,
+): Promise<CollectRunResult> {
+  ripSources ??= parseRipLedger(ripLedger);
+  return finish(
+    await collectRip({ ...deps(context.awsRequestId), sources: ripSources }),
   );
 }
