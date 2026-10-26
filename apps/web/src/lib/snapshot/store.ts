@@ -252,24 +252,26 @@ export function createSnapshotStore(deps: SnapshotDeps): SnapshotStore {
     });
   }
 
-  // 지원 밖 schemaVersion마다 한 번만 새로고침(9.1 '자동 새로고침 1회'). 기록은 새로고침한 버전 목록(쉼표 구분)이라
-  // 버전 전환 중 v1·v2 또는 v2·v3가 번갈아 와도 반복하지 않고, 처음 보는 새 버전이 나오면 다시 한 번 새로고침함
+  // 같은 표시(mark)마다 이 브라우저 탭에서 한 번만 새로고침(9.1 '자동 새로고침 1회'). 기록은 새로고침한 표시 목록(쉼표 구분)이라
+  // 버전 전환 중 v1·v2 또는 v2·v3가 번갈아 와도 반복하지 않고, 처음 보는 표시가 나오면 다시 한 번 새로고침함
+  // 새로고침했으면 true. 기록을 못 남기면 새로고침하지 않고 false(무한 새로고침 방지)
+  function reloadOnce(key: string, mark: string): boolean {
+    const reloaded = safe(() => deps.session?.getItem(key)) ?? "";
+    const marks = reloaded ? reloaded.split(",") : [];
+    if (marks.includes(mark)) return false;
+    const next = [...marks, mark].join(",");
+    const recorded = safe(() => {
+      deps.session?.setItem(key, next);
+      return deps.session?.getItem(key) === next;
+    });
+    if (!recorded) return false;
+    deps.reload();
+    return true;
+  }
+
+  // 지원 밖 schemaVersion: 새 화면 파일이 나왔을 수 있어 버전마다 한 번 새로고침, 그래도 안 되면 판단불가 배너
   function unsupported(version: number) {
-    const mark = String(version);
-    const reloaded = safe(() => deps.session?.getItem(SCHEMA_RELOAD_KEY)) ?? "";
-    const versions = reloaded ? reloaded.split(",") : [];
-    if (!versions.includes(mark)) {
-      // 새 화면 파일이 나왔을 수 있어 새로고침. 기록을 못 남기면 새로고침하지 않음(무한 새로고침 방지)
-      const next = [...versions, mark].join(",");
-      const recorded = safe(() => {
-        deps.session?.setItem(SCHEMA_RELOAD_KEY, next);
-        return deps.session?.getItem(SCHEMA_RELOAD_KEY) === next;
-      });
-      if (recorded) {
-        deps.reload();
-        return;
-      }
-    }
+    if (reloadOnce(SCHEMA_RELOAD_KEY, String(version))) return;
     set({ phase: "schema_unsupported", live: false, nowMs: now() });
   }
 
