@@ -31,7 +31,13 @@ function fixture(sources = [source()]) {
   put("input/out/stations.csv", "stn_id,tp,lat,lon\n");
   put("input/out/freshness/sea_obs_72h.csv", "req_tm,stn,wh,tw\n2026102000,99999,1,20\n");
   put("input/out/freshness/kma_buoy2_7d.csv", "tm,stn,wp,wo\n");
-  put("input/responses/metric-matrix.json", { stations: [], sources: { sea_obs: { status: "RECEIVED", http_status: 200 }, kma_buoy: { status: "RECEIVED", http_status: 200 } } });
+  put("input/responses/metric-matrix.json", {
+    stations: [],
+    sources: {
+      sea_obs: { status: "RECEIVED", http_status: 200, request_url: "https://apihub.kma.go.kr/api/typ01/url/sea_obs.php?tm=202610210000&stn=0&help=0" },
+      kma_buoy: { status: "RECEIVED", http_status: 200, request_url: "https://apihub.kma.go.kr/api/typ01/url/kma_buoy.php?tm=202610210000&stn=0&help=0" },
+    },
+  });
   put("input/station-zone-evidence.json", { stations: [] });
   put("input/beach-zone-evidence.json", { beaches: sources.map((s) => ({
     key: `${s.gugun_nm}|${s.sta_nm}`, address_status: "UNVERIFIED", land_status: "VERIFIED", sea_status: "VERIFIED",
@@ -105,27 +111,29 @@ describe("대표 측정기 공통 규칙을 적용하는 초안 검사", () => {
     expect(undetermined.state).toBe("UNDETERMINED");
     expect(undetermined.reason).toContain("22527 슬도(C)");
   });
-  it("response_check 문구를 저장본 sources 메타의 요청 시각·HTTP 상태에서 만들고 시각 불일치는 거부함", () => {
+  it("response_check 문구를 저장본 sources 메타의 요청 시각·HTTP 상태에서 만들고 시각 불일치·깨진 시각·시각 누락은 거부함", () => {
     const f = fixture();
-    f.put("input/responses/metric-matrix.json", {
-      stations: [],
-      sources: {
-        sea_obs: { status: "RECEIVED", http_status: 200, request_url: "https://apihub.kma.go.kr/api/typ01/url/sea_obs.php?tm=202610210000&stn=0&help=0" },
-        kma_buoy: { status: "RECEIVED", http_status: 200, request_url: "https://apihub.kma.go.kr/api/typ01/url/kma_buoy.php?tm=202610210000&stn=0&help=0" },
-      },
-    });
     const plan = f.build();
     expect(plan.matrix[0].response_check).toBe("실응답 저장본 재사용(2026-10-20T15:00:00Z, sea_obs·kma_buoy HTTP 200, 새 호출 없음)");
     expect(plan.files.get(join(f.root, "output/data/beach-coverage.csv"))).toContain("실응답 2026-10-20T15:00Z HTTP 200");
 
-    f.put("input/responses/metric-matrix.json", {
-      stations: [],
-      sources: {
+    for (const sources of [
+      {
         sea_obs: { status: "RECEIVED", http_status: 200, request_url: "https://apihub.kma.go.kr/api/typ01/url/sea_obs.php?tm=202610210000&stn=0&help=0" },
         kma_buoy: { status: "RECEIVED", http_status: 200, request_url: "https://apihub.kma.go.kr/api/typ01/url/kma_buoy.php?tm=202610210100&stn=0&help=0" },
       },
-    });
-    expect(f.build).toThrow(/실응답 저장본/);
+      {
+        sea_obs: { status: "RECEIVED", http_status: 200, request_url: "https://apihub.kma.go.kr/api/typ01/url/sea_obs.php?tm=202613210000&stn=0&help=0" },
+        kma_buoy: { status: "RECEIVED", http_status: 200, request_url: "https://apihub.kma.go.kr/api/typ01/url/kma_buoy.php?tm=202613210000&stn=0&help=0" },
+      },
+      {
+        sea_obs: { status: "RECEIVED", http_status: 200 },
+        kma_buoy: { status: "RECEIVED", http_status: 200 },
+      },
+    ]) {
+      f.put("input/responses/metric-matrix.json", { stations: [], sources });
+      expect(f.build).toThrow(/요청 시각이 서로 다르거나 읽지 못함/);
+    }
   });
 });
 

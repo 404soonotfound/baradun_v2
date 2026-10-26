@@ -39,17 +39,19 @@ export function buildBeaches({ coverageDir = COVERAGE_DIR, existingDataDir = joi
     const m = String(url ?? "").match(/[?&]tm=(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})\b/);
     if (!m) return null;
     const [, y, mo, d, h, mi] = m;
-    return isoOrNull(new Date(`${y}-${mo}-${d}T${h}:${mi}:00+09:00`));
+    const date = new Date(`${y}-${mo}-${d}T${h}:${mi}:00+09:00`);
+    if (Number.isNaN(date.getTime())) return null;
+    const kstIso = new Date(date.getTime() + 9 * 3600_000).toISOString().slice(0, 16);
+    return kstIso === `${y}-${mo}-${d}T${h}:${mi}` ? isoOrNull(date) : null;
   };
   const sourceTmUtc = (s) => kstTmToUtcIso(s?.request_url) ?? (s?.fetched_at_utc ? isoOrNull(new Date(s.fetched_at_utc)) : null);
-  // 실응답 확인 칸: 저장본(고정 해시 대조됨)의 sea_obs·kma_buoy가 모두 HTTP 200으로 받은 경우만 메타(sources)에서 기록, 아니면 빈 칸(check-coverage가 공개 행에서 실패)
+  // 실응답 확인 칸: 저장본(고정 해시 대조됨)의 sea_obs·kma_buoy가 모두 HTTP 200이고 같은 유효 시각을 제공할 때만 기록, 아니면 빈 칸(publish 중단·check-coverage 실패)
   const liveReceived = SOURCE_KEYS.every((k) => liveMatrix?.sources?.[k]?.status === "RECEIVED" && liveMatrix.sources[k].http_status === 200);
   const liveTms = SOURCE_KEYS.map((k) => sourceTmUtc(liveMatrix?.sources?.[k]));
-  const hasAnyTm = liveTms.some(Boolean);
   const liveTmUtc = liveTms.every(Boolean) && new Set(liveTms).size === 1 ? liveTms[0] : null;
   const liveHttp = liveReceived ? [...new Set(SOURCE_KEYS.map((k) => liveMatrix.sources[k].http_status))].join("/") : "";
-  const RESPONSE_CHECK = liveReceived && (!hasAnyTm || liveTmUtc)
-    ? `실응답 저장본 재사용(${liveTmUtc ? `${liveTmUtc}, ` : ""}${SOURCE_KEYS.join("·")} HTTP ${liveHttp}, 새 호출 없음)`
+  const RESPONSE_CHECK = liveReceived && liveTmUtc
+    ? `실응답 저장본 재사용(${liveTmUtc}, ${SOURCE_KEYS.join("·")} HTTP ${liveHttp}, 새 호출 없음)`
     : "";
 
   const csvCell = (v) => {
