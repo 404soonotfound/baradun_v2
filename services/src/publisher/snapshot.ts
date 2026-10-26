@@ -15,6 +15,7 @@ import {
   historyPoints,
   type WaveHistory,
 } from "../core/observations/wave-history";
+import { ripCurrentInfo } from "../core/rip/rip-current";
 import {
   byLevelThenTime,
   judgeBeachWarnings,
@@ -112,7 +113,8 @@ export function buildSnapshot(input: SnapshotInput): Snapshot {
         ...classified,
         info: {
           season: seasonInfo(input.seasons, beach.id, now), // 정보 배지만(분류에 쓰지 않음)
-          ripCurrent: null, // collect-rip 없음
+          // 이안류는 정보로만(분류 입력에 넣지 않음, G1·D5). 모르는 값·시즌 밖·오래된 관측은 null(BRD-57)
+          ripCurrent: ripCurrentInfo(inputs.ripReadings[beach.id], now).info,
           nearbyWarnings: warning.nearby, // 분류에 쓰지 않음(B3)
         },
       };

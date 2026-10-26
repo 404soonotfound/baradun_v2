@@ -1,6 +1,7 @@
 import { CATALOG_STATE, type PhotoRecord } from "../collectors/catalog";
 import { OCEAN_STATE } from "../collectors/ocean";
 import { COLLECT_POLICY } from "../collectors/policy";
+import { RIP_STATE } from "../collectors/rip";
 import { WARNINGS_STATE } from "../collectors/warnings";
 import type { Logger } from "../core/collect/log";
 import type { StationReadings } from "../core/observations/freshness";
@@ -8,6 +9,7 @@ import {
   readWaveHistory,
   type WaveHistory,
 } from "../core/observations/wave-history";
+import { readRipReadings, type RipReading } from "../core/rip/rip-current";
 import type { StateStore, StateValue } from "../core/store/types";
 import { unpackItems } from "../core/warnings/archive";
 import {
@@ -35,6 +37,8 @@ export interface PublishInputs {
   readonly readings: StationReadings;
   // 측정기별 최근 24시간 파고 원래 측정값(BRD-94). 없거나 깨진 기록은 빈 값 → 모든 점 v: null
   readonly waveHistory: WaveHistory;
+  // collect-rip의 해변별 마지막 관측(BRD-57). 없거나 깨진 기록은 빈 값 → ripCurrent null
+  readonly ripReadings: Readonly<Record<string, RipReading>>;
   // collect-catalog의 사진 확인 결과(해변 id → 기록). 기록·확인이 없는 해변은 칸이 없음
   readonly photoChecks: Readonly<Record<string, PhotoRecord>>;
 }
@@ -166,12 +170,13 @@ export async function readPublishInputs(
   state: StateStore,
   log?: Logger,
 ): Promise<PublishInputs> {
-  const [pwncd, tsunami, ocean, catalog, waveHistory] = await Promise.all([
+  const [pwncd, tsunami, ocean, catalog, waveHistory, rip] = await Promise.all([
     state.getState(WARNINGS_STATE.pwncd.pk, WARNINGS_STATE.pwncd.sk),
     state.getState(WARNINGS_STATE.tsunami.pk, WARNINGS_STATE.tsunami.sk),
     state.getState(OCEAN_STATE.readings.pk, OCEAN_STATE.readings.sk),
     state.getState(CATALOG_STATE.photos.pk, CATALOG_STATE.photos.sk),
     waveHistoryInput(state, log),
+    state.getState(RIP_STATE.readings.pk, RIP_STATE.readings.sk),
   ]);
   return {
     pwncd: pwncdInput(pwncd?.value),
@@ -179,5 +184,6 @@ export async function readPublishInputs(
     readings: readingsInput(ocean?.value),
     waveHistory,
     photoChecks: photoChecksInput(catalog?.value),
+    ripReadings: readRipReadings(rip?.value ?? null),
   };
 }

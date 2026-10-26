@@ -6,6 +6,7 @@ import type { ZoneTables } from "../core/warnings/beach-warnings";
 import { formatUtcIso } from "../core/warnings/time";
 import { readPublishInputs } from "./inputs";
 import { MANIFEST_SETTINGS, PUBLISH_POLICY } from "./policy";
+import { ripCurrentInfo } from "../core/rip/rip-current";
 import { BeachSnapshotError, buildSnapshot, type Snapshot } from "./snapshot";
 import type { SeasonTable } from "./season";
 import { contractErrors, type ContractFile } from "./validate";
@@ -190,12 +191,13 @@ export async function publishSnapshot(
     }
 
     let snapshot: Snapshot;
+    const inputs = await readPublishInputs(deps.state, log);
     try {
       snapshot = buildSnapshot({
         beaches: deps.beaches,
         zones: deps.zones,
         seasons: deps.seasons,
-        inputs: await readPublishInputs(deps.state, log),
+        inputs,
         now,
       });
     } catch (error) {
@@ -207,6 +209,17 @@ export async function publishSnapshot(
         });
       }
       throw error;
+    }
+
+    // 이안류 값을 숨긴 해변 중 모르는 문구·틀린 시각은 운영 알림(정보는 null로 게시됨, BRD-57)
+    for (const beach of deps.beaches) {
+      const { hidden } = ripCurrentInfo(inputs.ripReadings[beach.id], now);
+      if (hidden === "unknown_label" || hidden === "bad_time") {
+        log("warn", "publish_rip_hidden", {
+          beachId: beach.id,
+          reason: hidden,
+        });
+      }
     }
 
     const manifest = manifestFor(version, now);
