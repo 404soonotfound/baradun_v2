@@ -99,6 +99,40 @@ export type NearbyWarningType =
  * UTC, 예: 2026-10-17T05:30:00Z
  */
 export type DateTime1 = string;
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "InquiryPhotoId".
+ */
+export type InquiryPhotoId = string;
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "InquiryPhotoKey".
+ */
+export type InquiryPhotoKey = string;
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "InquiryType".
+ */
+export type InquiryType = 'data_error' | 'data_question' | 'other';
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "InquiryId".
+ */
+export type InquiryId = string;
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "InquiryPhotoResult".
+ */
+export type InquiryPhotoResult =
+  | {
+      photoId: InquiryPhotoId;
+      status: 'accepted';
+    }
+  | {
+      photoId: InquiryPhotoId;
+      status: 'rejected';
+      reason: 'location_metadata' | 'invalid_file' | 'not_found';
+    };
 
 /**
  * 바라던 바다 V2 공개 데이터 계약 v1 (아키텍처 6.3, 결정 기록 11장 B2). 파일마다 $defs의 *File 정의를 따름.
@@ -429,4 +463,106 @@ export interface WaveHeightHistory {
 export interface NationwideWarningsFile {
   lastConfirmedAt: NullableDateTime2;
   items: WarningItem[];
+}
+/**
+ * 문의 사진 업로드 양식 발급 요청.
+ *
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "InquiryUploadRequest".
+ */
+export interface InquiryUploadRequest {
+  /**
+   * @minItems 1
+   * @maxItems 3
+   */
+  photos:
+    | [InquiryUploadPhoto]
+    | [InquiryUploadPhoto, InquiryUploadPhoto]
+    | [InquiryUploadPhoto, InquiryUploadPhoto, InquiryUploadPhoto];
+}
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "InquiryUploadPhoto".
+ */
+export interface InquiryUploadPhoto {
+  contentType: 'image/jpeg' | 'image/png' | 'image/webp';
+  size: number;
+}
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "InquiryUploadResponse".
+ */
+export interface InquiryUploadResponse {
+  /**
+   * @maxItems 3
+   */
+  uploads:
+    | []
+    | [InquiryUploadTarget]
+    | [InquiryUploadTarget, InquiryUploadTarget]
+    | [InquiryUploadTarget, InquiryUploadTarget, InquiryUploadTarget];
+}
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "InquiryUploadTarget".
+ */
+export interface InquiryUploadTarget {
+  photoId: InquiryPhotoId;
+  key: InquiryPhotoKey;
+  url: string;
+  fields: {
+    [k: string]: string;
+  };
+  expiresAt: DateTime;
+}
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "CreateInquiryRequest".
+ */
+export interface CreateInquiryRequest {
+  type: InquiryType;
+  message: string;
+  email?: string;
+  /**
+   * @maxItems 3
+   */
+  photos:
+    | []
+    | [InquiryPhotoReference]
+    | [InquiryPhotoReference, InquiryPhotoReference]
+    | [InquiryPhotoReference, InquiryPhotoReference, InquiryPhotoReference];
+}
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "InquiryPhotoReference".
+ */
+export interface InquiryPhotoReference {
+  photoId: InquiryPhotoId;
+  key: InquiryPhotoKey;
+}
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "CreateInquiryResponse".
+ */
+export interface CreateInquiryResponse {
+  inquiryId: InquiryId;
+  receivedAt: DateTime;
+  /**
+   * @maxItems 3
+   */
+  photos:
+    | []
+    | [InquiryPhotoResult]
+    | [InquiryPhotoResult, InquiryPhotoResult]
+    | [InquiryPhotoResult, InquiryPhotoResult, InquiryPhotoResult];
+}
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "InquiryErrorResponse".
+ */
+export interface InquiryErrorResponse {
+  error: {
+    code: 'invalid_request' | 'rate_limited' | 'service_unavailable';
+    message: string;
+  };
 }
