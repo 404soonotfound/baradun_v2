@@ -159,10 +159,10 @@ await fetch("/api/inquiries", {
    ```bash
    aws lambda invoke --function-name <PublisherFunctionName> \
      --cli-binary-format raw-in-base64-out \
-     --payload '{"action":"rollback","version":"20261017T053000Z"}' out.json
+     --payload '{"action":"rollback","version":"20261017T053000Z"}' /dev/stdout
    ```
 
-   그 버전의 manifest 사본과 파일 네 개가 모두 있을 때만 되돌립니다. 하나라도 없으면 지금 manifest를 그대로 두고 오류로 끝납니다.
+   그 버전의 manifest 사본과 파일 네 개가 모두 있을 때만 되돌립니다. 하나라도 없으면 지금 manifest를 그대로 두고 오류로 끝납니다. 점검(`maintenance`)·최소 화면 버전(`minWebBuild`)은 사본의 값이 아니라 배포된 코드의 `MANIFEST_SETTINGS`로 씁니다(점검 중 롤백해도 점검이 풀리지 않음). 응답은 파일 대신 화면(`/dev/stdout`)으로 받아 작업 트리에 파일이 남지 않게 합니다.
 
 4. 사이트에서 manifest가 바뀌었는지 확인합니다(manifest 캐시 60초): `curl -s https://<DistributionDomainName>/data/manifest.json | jq -r .snapshotVersion`. 그 뒤 게시 로그 그룹(`BaradunV2-PublishLogs…`)에 롤백 뒤 `publish_finished`가 새로 생겼다면 늦게 온 게시가 덮은 것이니 3단계를 다시 합니다.
 5. 원인을 고친 뒤 일정을 다시 켭니다: `set_state ENABLED`(1단계와 같은 셸, 새 셸이면 함수를 다시 정의). 고친 코드를 `cdk deploy`했다면 배포가 일정을 이미 켰을 수 있으니 상태만 확인합니다. 다음 수집이 새 버전을 게시합니다. 지금 manifest와 내용이 같으면 `publish_unchanged`로 남고 새 버전은 만들지 않습니다.
@@ -174,7 +174,8 @@ await fetch("/api/inquiries", {
 점검 중 여부와 최소 화면 버전은 `manifest.json`의 `maintenance`·`minWebBuild`로 알립니다(아키텍처 9.1, BRD-43). 값은 `services/src/publisher/policy.ts`의 `MANIFEST_SETTINGS`(저장소 상수)에 있고, 바꾸려면 저장소를 고쳐 배포합니다(결정 기록 11장 10/23 ④). 게시 함수는 데이터가 그대로여도 지금 manifest와 설정이 다르면 새 버전으로 게시합니다.
 
 - **점검 중**(`maintenance.active: true`): 화면이 점검 화면으로 전체를 덮고 마지막 값도 숨깁니다. `until`은 종료 예정 시각(UTC ISO), 모르면 `null`.
-- **강제 업데이트**: 화면 빌드 번호(`apps/web/src/lib/snapshot/build.ts`의 `WEB_BUILD`)가 `minWebBuild`보다 낮으면, 화면이 `minWebBuild` 값마다 한 번 새로고침하고 그래도 낮으면 강제 업데이트 화면을 보여 줍니다(값은 숨김). 사이트 HTML은 `max-age=0`이라 새로고침하면 새 화면 파일을 받습니다.
+- **강제 업데이트**: 화면 빌드 번호(`apps/web/src/lib/snapshot/build.ts`의 `WEB_BUILD`)가 `minWebBuild`보다 낮으면 화면이 바로 강제 업데이트 상태가 됩니다(값 숨김, status 받지 않음). **자동으로 새로고침하지 않습니다**(2026-10-26 결정: 입력 중 화면이 사라지거나 새로고침이 반복될 수 있음). 강제 업데이트 화면(L15, BRD-38)의 버튼이 `window.location.reload()`를 부르고, 사이트 HTML은 `max-age=0`이라 그때 새 화면 파일을 받습니다.
+- `MANIFEST_SETTINGS.minWebBuild`가 `WEB_BUILD`보다 크면 `npm test -w infra`(publisher.test)가 실패합니다. 순서를 어긴 PR이 CI를 통과하지 못하게 하는 장치입니다.
 
 ### 점검 켜기·끄기
 
@@ -185,7 +186,7 @@ await fetch("/api/inquiries", {
    ```bash
    aws lambda invoke --function-name <PublisherFunctionName> \
      --cli-binary-format raw-in-base64-out \
-     --payload '{}' out.json
+     --payload '{}' /dev/stdout
    ```
 
 4. 반영을 확인합니다(manifest 캐시 60초): `curl -s https://<DistributionDomainName>/data/manifest.json | jq '{snapshotVersion, maintenance, minWebBuild}'`. 게시 로그에 `publish_unchanged`만 남았다면 배포가 아직 반영되지 않은 것입니다(Lambda 코드 확인).
@@ -195,7 +196,7 @@ await fetch("/api/inquiries", {
 순서가 중요합니다. **새 화면을 먼저 배포하고, 그 뒤에 `minWebBuild`를 올립니다.** 반대로 하면 사용자가 새로고침해도 이전 화면 파일만 받아 강제 업데이트 화면에서 벗어나지 못합니다.
 
 1. 이전 화면이 새 데이터를 잘못 읽을 수 있는 변경일 때만 합니다. `WEB_BUILD`를 1 올린 PR을 main에 머지하면 `deploy.yml`이 사이트를 배포합니다. 배포가 끝났는지 확인합니다.
-2. `MANIFEST_SETTINGS.minWebBuild`를 같은 값으로 올린 PR을 머지하고 `npx cdk deploy`합니다. `minWebBuild`는 배포된 `WEB_BUILD`보다 크게 두지 않습니다.
+2. `MANIFEST_SETTINGS.minWebBuild`를 같은 값으로 올린 PR을 머지하고 `npx cdk deploy`합니다. `minWebBuild`는 배포된 `WEB_BUILD`보다 크게 두지 않습니다(infra 테스트가 막음).
 3. 점검과 같은 방법(3·4단계)으로 반영을 확인합니다.
 
 서비스 워커(오프라인)가 생기면 새로고침이 이전 화면 파일을 내주지 않는지 그 작업에서 다시 확인합니다.
