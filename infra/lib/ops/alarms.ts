@@ -136,16 +136,21 @@ export class OpsAlarms extends Construct {
     periods: number,
     description: string,
   ): void {
+    const period = Duration.minutes(periodMinutes);
     const alarm = new cloudwatch.Alarm(this, id, {
       // 실행 횟수. 실패한 실행도 세므로 '아예 안 돎'만 잡음
-      metric: fn.metricInvocations({
-        period: Duration.minutes(periodMinutes),
-        statistic: "Sum",
+      // 실행이 없으면 지표 자체가 안 생김. CloudWatch는 평가 구간보다 넓게 조회해 실제 값이 있으면
+      // treatMissingData를 쓰지 않으므로, 빈 구간을 0으로 채워 지난 실행이 최근 빈 구간을 대신하지 않게 함
+      metric: new cloudwatch.MathExpression({
+        expression: "FILL(m, 0)",
+        usingMetrics: { m: fn.metricInvocations({ period, statistic: "Sum" }) },
+        period,
+        label: "Invocations (빈 구간 0)",
       }),
       threshold: 1,
       comparisonOperator: cloudwatch.ComparisonOperator.LESS_THAN_THRESHOLD, // 1 미만
       evaluationPeriods: periods,
-      // 핵심: 실행이 없으면 지표 자체가 안 생김 → '데이터 없음'을 위반으로 봐야 울림
+      // 조회 범위 전체에 실행이 없어 수식 값도 없을 때를 위한 안전장치: 데이터 없음을 위반으로 봄
       // (기본값이면 '데이터 부족'에 머물러 조용함. 데이터 없음을 정상으로 보지 않기)
       treatMissingData: cloudwatch.TreatMissingData.BREACHING,
       alarmDescription: description,
