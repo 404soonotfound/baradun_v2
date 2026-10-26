@@ -1,5 +1,10 @@
 import type { BeachStatus } from "@baradun/contracts";
-import { formatUtcIso, parseKstTime, parseUtcIso } from "../warnings/time";
+import {
+  formatUtcIso,
+  KST_OFFSET_MS,
+  parseKstTime,
+  parseUtcIso,
+} from "../warnings/time";
 
 // 이안류 지수 (아키텍처 5장 collect-rip, 결정 기록 D5·10장, BRD-57 2026-10-26 사용자 결정)
 // 출처: 국립해양조사원_이안류 지수 조회(data.go.kr 15156028) GetRipCurrentApiService
@@ -119,7 +124,6 @@ export function parseRipResponse(
   return { status: "ok", latest, skippedRows };
 }
 
-const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 // UTC ms → KST 날짜 번호(1970-01-01부터 센 날 수). 날짜 차이 계산용
