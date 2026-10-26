@@ -90,6 +90,8 @@ export const COLLECTOR_MEMORY_MB = 256;
 export const COLLECTOR_SCHEDULE_MINUTES = {
   ocean: "10,40", // 바다 관측: 매시 10분·40분(30분마다)
   warnings: "3,18,33,48", // 특보: 매시 3분·18분·33분·48분(15분마다)
+  // 이안류: 매시 12분·42분. 비수기에는 수집기가 하루 1회 슬롯(KST 04:12)만 호출하고 나머지는 바로 끝냄(BRD-57)
+  rip: "12,42",
 } as const;
 
 // collect-catalog 실행 시각(하루 1회, 아키텍처 5장 D6, BRD-58). 한국 시각 04:20

@@ -25,7 +25,7 @@ const resources = template.toJSON().Resources as Record<string, Resource>;
 
 // 수집 함수의 리소스 ID 찾기
 // CDK는 ID 뒤에 무작위처럼 보이는 글자를 붙임(예: CollectOceanFunction1AAA04CC) → 앞부분으로 찾음
-function functionId(name: "Ocean" | "Warnings" | "Catalog"): string {
+function functionId(name: "Ocean" | "Warnings" | "Catalog" | "Rip"): string {
   const ids = Object.keys(
     template.findResources("AWS::Lambda::Function"),
   ).filter((id) => id.startsWith(`Collect${name}Function`));
@@ -67,7 +67,7 @@ function allowedActions(role: string): Map<string, string[]> {
 
 describe("수집 Lambda", () => {
   // it.each: 목록의 값마다 같은 테스트를 한 번씩 돌림. %s 자리에 값이 들어감
-  it.each(["Ocean", "Warnings", "Catalog"] as const)(
+  it.each(["Ocean", "Warnings", "Catalog", "Rip"] as const)(
     "%s: Node 22·ARM 칩·시간 제한·테이블 이름 설정",
     (name) => {
       const p = resources[functionId(name)]!.Properties;
@@ -126,12 +126,16 @@ describe("실행 일정 (N3)", () => {
     expect(COLLECTOR_SCHEDULE_MINUTES.warnings).toBe(
       minutesOf(COLLECT_POLICY.warningsSchedule),
     );
+    expect(COLLECTOR_SCHEDULE_MINUTES.rip).toBe(
+      minutesOf(COLLECT_POLICY.ripSchedule),
+    );
   });
 
   it.each([
     ["Ocean", "cron(10,40 * * * ? *)"],
     ["Warnings", "cron(3,18,33,48 * * * ? *)"],
     ["Catalog", "cron(20 4 * * ? *)"],
+    ["Rip", "cron(12,42 * * * ? *)"],
   ] as const)("%s: %s 한국 시각으로 그 함수를 실행한다", (name, expression) => {
     // 일정 중에서 대상(Target)이 이 함수인 것만 고름
     const schedules = Object.values(
@@ -153,6 +157,7 @@ describe("수집 함수 권한 (필요한 것만)", () => {
     ["Ocean", "kma-apihub"],
     ["Warnings", "data-go-kr"],
     ["Catalog", "data-go-kr"],
+    ["Rip", "data-go-kr"],
   ] as const)(
     "%s: 자기 로그·State·Ops·API 키(%s)에 필요한 동작만 허용한다",
     (name, key) => {

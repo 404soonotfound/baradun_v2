@@ -27,6 +27,7 @@ import {
 // - 바다 관측 수집기(Ocean): 파고·수온·바람·파주기·파향. 30분마다
 // - 특보 수집기(Warnings): 풍랑·강풍 등 특보와 지진해일. 15분마다
 // - 카탈로그 수집기(Catalog): 대표 사진의 공공누리 유형 재확인. 하루 1회(한국 시각 04:20)
+// - 이안류 수집기(Rip): 이안류 지수. 시즌(6~9월) 30분마다, 비수기 하루 1회(BRD-57)
 // 수집기는 DynamoDB에만 씀. 사이트 데이터 파일(S3 data/)은 publisher만 씀(BRD-52)
 // 수집을 마치면 publisher(publish-snapshot)를 비동기로 깨움(아키텍처 6.2, BRD-61)
 
@@ -73,6 +74,13 @@ const COLLECTORS = [
     cron: CATALOG_SCHEDULE_KST, // 하루 1회 한국 시각 04:20
     apiKey: "data-go-kr", // 공공데이터포털: TourAPI KorService2
     description: `baradun v2 collect-catalog (D6 하루 1회 KST ${CATALOG_SCHEDULE_KST.hour}:${CATALOG_SCHEDULE_KST.minute})`,
+  },
+  {
+    id: "Rip",
+    handler: "ripHandler",
+    cron: { minute: COLLECTOR_SCHEDULE_MINUTES.rip }, // 매시 12분·42분(비수기 판단은 수집기 안에서)
+    apiKey: "data-go-kr", // 공공데이터포털: 국립해양조사원 이안류 지수
+    description: `baradun v2 collect-rip (:${COLLECTOR_SCHEDULE_MINUTES.rip}, 비수기 하루 1회)`,
   },
   // as const: 값을 고정(바꿀 수 없음)
   // satisfies { … }[]: 각 줄에 이 칸들이 다 있는지, apiKey가 정해진 키 이름인지 타입 검사

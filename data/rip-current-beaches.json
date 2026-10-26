@@ -1,0 +1,108 @@
+{
+  "source": "국립해양조사원_이안류 지수 조회 (data.go.kr 15156028, GetRipCurrentApiService)",
+  "rule": "API 해수욕장 좌표(lat·lot)와 data/beaches 좌표의 직선거리로 대조. 수백 m 이상이면 이름 일치·최근접·다음 후보와 거리 차를 사람이 확인한 뒤에만 연결. status: mapped(연결) · pending(확인 대기, 수집하지 않음) · unregistered(data/beaches에 없음)",
+  "checkedOn": "2026-10-26",
+  "reqDate": "20260815",
+  "beaches": [
+    {
+      "code": "SONGJUNG",
+      "apiName": "송정 해수욕장",
+      "apiLat": 35.1785,
+      "apiLng": 129.19978,
+      "status": "mapped",
+      "beachId": "b0096",
+      "distanceM": 31,
+      "note": "부산 해운대구 송정. 강릉 송정(b0005) 290km·남해 송정솔바람(b0267) 119km 제외"
+    },
+    {
+      "code": "MANGSANG",
+      "apiName": "망상 해수욕장",
+      "apiLat": 37.593,
+      "apiLng": 129.09,
+      "status": "mapped",
+      "beachId": "b0049",
+      "distanceM": 85,
+      "note": "망상리조트(b0050) 1,276m와 구분"
+    },
+    {
+      "code": "HAE",
+      "apiName": "해운대 해수욕장",
+      "apiLat": 35.15867,
+      "apiLng": 129.16035,
+      "status": "mapped",
+      "beachId": "b0097",
+      "distanceM": 117,
+      "note": "다음 후보 광안리(b0095) 3.96km"
+    },
+    {
+      "code": "JUNGMUN",
+      "apiName": "중문 해수욕장",
+      "apiLat": 33.24501,
+      "apiLng": 126.40944,
+      "status": "mapped",
+      "beachId": "b0273",
+      "distanceM": 190,
+      "note": "중문색달해수욕장. 다음 후보 화순금모래(b0275) 7.07km"
+    },
+    {
+      "code": "SOKCHO",
+      "apiName": "속초 해수욕장",
+      "apiLat": 38.19058,
+      "apiLng": 128.60135,
+      "status": "mapped",
+      "beachId": "b0070",
+      "distanceM": 209,
+      "note": "다음 후보 외옹치(b0071) 1.0km"
+    },
+    {
+      "code": "GYEONGPO",
+      "apiName": "경포 해수욕장",
+      "apiLat": 37.80088,
+      "apiLng": 128.90947,
+      "status": "mapped",
+      "beachId": "b0002",
+      "distanceM": 296,
+      "note": "이름 일치 + 최근접 + 다음 후보와 거리 차로 연결(10/26 사용자 확인). 다음 후보 강문(b0001) 857m로 차이가 가장 작음"
+    },
+    {
+      "code": "NAKSAN",
+      "apiName": "낙산 해수욕장",
+      "apiLat": 38.118,
+      "apiLng": 128.63138,
+      "status": "mapped",
+      "beachId": "b0072",
+      "distanceM": 616,
+      "note": "이름 일치 + 최근접 + 다음 후보와 거리 차로 연결(10/26 사용자 확인). 다음 후보 설악(b0076) 1.5km. 긴 해변이라 대표 좌표 차이로 추정"
+    },
+    {
+      "code": "DAECHON",
+      "apiName": "대천 해수욕장",
+      "apiLat": 36.30559,
+      "apiLng": 126.50729,
+      "status": "mapped",
+      "beachId": "b0124",
+      "distanceM": 756,
+      "note": "이름 일치 + 최근접 + 다음 후보와 거리 차로 연결(10/26 사용자 확인). 다음 후보 무창포(b0125) 7.2km. 긴 해변(약 3.5km)이라 대표 좌표 차이로 추정"
+    },
+    {
+      "code": "GORAEBUL",
+      "apiName": "고래불 해수욕장",
+      "apiLat": null,
+      "apiLng": null,
+      "status": "unregistered",
+      "beachId": null,
+      "distanceM": null,
+      "note": "미등록 — data/beaches에 없음"
+    },
+    {
+      "code": "IMRANG",
+      "apiName": "임랑 해수욕장",
+      "apiLat": null,
+      "apiLng": null,
+      "status": "unregistered",
+      "beachId": null,
+      "distanceM": null,
+      "note": "미등록 — data/beaches에 없음"
+    }
+  ]
+}

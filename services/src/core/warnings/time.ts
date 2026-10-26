@@ -6,7 +6,8 @@ export type KstTime =
   | { kind: "invalid"; raw: string };
 
 // KST = UTC+9, 서머타임 없음 → 고정 9시간 차이
-const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
+// KST = UTC+9, 서머타임 없음. 시각 변환·KST 날짜 계산은 모두 이 값을 씀
+export const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
 
 // 정확히 숫자 12자리. 괄호 묶음 하나가 연·월·일·시·분
 const PATTERN = /^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})$/;

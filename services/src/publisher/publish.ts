@@ -190,12 +190,13 @@ export async function publishSnapshot(
     }
 
     let snapshot: Snapshot;
+    const inputs = await readPublishInputs(deps.state, log);
     try {
       snapshot = buildSnapshot({
         beaches: deps.beaches,
         zones: deps.zones,
         seasons: deps.seasons,
-        inputs: await readPublishInputs(deps.state, log),
+        inputs,
         now,
       });
     } catch (error) {
