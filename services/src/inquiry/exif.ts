@@ -26,18 +26,30 @@ function inspectTiff(value: Buffer): PhotoMetadataInspection {
   };
 
   if (read16(2) !== 42) return "invalid";
-  const ifdOffset = read32(4);
+  let ifdOffset = read32(4);
   if (ifdOffset === undefined) return "invalid";
-  const count = read16(ifdOffset);
-  if (count === undefined || count > 4096) return "invalid";
 
-  const end = ifdOffset + 2 + count * 12;
-  if (end > value.length) return "invalid";
-  for (let index = 0; index < count; index += 1) {
-    const entry = ifdOffset + 2 + index * 12;
-    if (read16(entry) === 0x8825) return "gps";
+  // GPS 포인터(0x8825)는 IFD0이 보통이지만 썸네일 IFD(IFD1)에도 올 수 있음 → 사슬 전체를 봄
+  // 사슬 횟수 제한과 "오프셋은 앞으로만" 규칙으로 비정상 파일의 순환을 막음
+  for (let chain = 0; chain < 8; chain += 1) {
+    if (ifdOffset === 0) return "none"; // 사슬 끝
+    const count = read16(ifdOffset);
+    if (count === undefined || count > 4096) return "invalid";
+
+    const end = ifdOffset + 2 + count * 12;
+    // IFD 끝에는 다음 IFD 오프셋 4바이트가 있어야 함(TIFF 구조). 없으면 깨진 파일로 봄
+    if (end + 4 > value.length) return "invalid";
+    for (let index = 0; index < count; index += 1) {
+      const entry = ifdOffset + 2 + index * 12;
+      if (read16(entry) === 0x8825) return "gps";
+    }
+    const next = read32(end);
+    if (next === undefined || (next !== 0 && next <= ifdOffset)) {
+      return "invalid";
+    }
+    ifdOffset = next;
   }
-  return "none";
+  return "invalid"; // 사슬이 비정상적으로 긺
 }
 
 function inspectJpeg(value: Buffer): PhotoMetadataInspection {
