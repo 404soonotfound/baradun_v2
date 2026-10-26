@@ -9,7 +9,9 @@ import type {
   WarningItem,
 } from "@baradun/contracts";
 import { buildBeachMetrics } from "../core/observations/beach-metrics";
+import { parseNow } from "../core/observations/freshness";
 import {
+  historyFrame,
   historyPoints,
   type WaveHistory,
 } from "../core/observations/wave-history";
@@ -61,9 +63,7 @@ export class BeachSnapshotError extends Error {
 
 export function buildSnapshot(input: SnapshotInput): Snapshot {
   const { zones, inputs, now } = input;
-  if (parseUtcIso(now) === null) {
-    throw new RangeError(`기준 시각 형식 오류: ${now}`);
-  }
+  parseNow(now); // 형식이 틀리면 멈춤(freshness.ts와 같은 기준)
   const beaches = [...input.beaches].sort((a, b) => a.id.localeCompare(b.id));
   // 같은 id가 둘이면 한 해변 상태가 다른 해변 값으로 덮임 → 게시를 멈춤
   for (let i = 1; i < beaches.length; i += 1) {
@@ -163,9 +163,13 @@ function waveHistoryFile(
     const station = beach.stations.waveHeight;
     if (station) ids.add(station.id);
   }
+  const frame = historyFrame(now); // 점 시각 25개는 측정소마다 같음 → 한 번만 계산
   const stations: HistoryFile["stations"] = {};
   for (const id of [...ids].sort()) {
-    stations[id] = { unit: "m", points: historyPoints(history[id] ?? [], now) };
+    stations[id] = {
+      unit: "m",
+      points: historyPoints(history[id] ?? [], frame),
+    };
   }
   return { stations };
 }

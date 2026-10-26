@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  historyFrame,
   historyPoints,
   mergeWaveHistory,
   readWaveHistory,
@@ -126,7 +127,7 @@ describe("historyPoints", () => {
         [sec("2026-10-23T01:00:00Z"), 0.6], // 01:00 점(더 늦음)
         [sec("2026-10-22T23:00:00Z"), 0.2], // 23:00 점(경계 포함)
       ],
-      NOW,
+      historyFrame(NOW),
     );
     expect(points).toHaveLength(25);
     expect(points[0]).toEqual({ t: "2026-10-22T02:00:00Z", v: null });
@@ -138,14 +139,20 @@ describe("historyPoints", () => {
   });
 
   it("90분 넘은 값도 그 관측 시각의 점에만 남음", () => {
-    const points = historyPoints([[sec("2026-10-22T22:00:00Z"), 1.1]], NOW);
+    const points = historyPoints(
+      [[sec("2026-10-22T22:00:00Z"), 1.1]],
+      historyFrame(NOW),
+    );
     expect(points.filter((p) => p.v !== null)).toEqual([
       { t: "2026-10-22T22:00:00Z", v: 1.1 },
     ]);
   });
 
   it("0.0은 정상값(결측 아님)", () => {
-    const points = historyPoints([[sec("2026-10-23T02:00:00Z"), 0]], NOW);
+    const points = historyPoints(
+      [[sec("2026-10-23T02:00:00Z"), 0]],
+      historyFrame(NOW),
+    );
     expect(points.at(-1)).toEqual({ t: "2026-10-23T02:00:00Z", v: 0 });
   });
 });
