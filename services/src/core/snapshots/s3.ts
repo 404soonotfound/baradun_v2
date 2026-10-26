@@ -100,8 +100,23 @@ export class S3SnapshotStore implements SnapshotStore {
       return { body, etag: result.ETag };
     } catch (error) {
       if (isMissing(error)) return null;
+      // 없는 파일에 S3가 404 대신 403을 줄 수 있음(목록 권한이 data/ 접두어 조건부라 GetObject 요청에는 적용되지 않을 수 있음)
+      // → 목록으로 실제로 없는지 확인한 뒤에만 null. 목록에 있으면 진짜 거부이므로 그대로 던짐
+      if (statusOf(error) === 403 && !(await this.exists(path))) return null;
       throw error;
     }
+  }
+
+  // 그 경로의 파일이 목록에 있는지(접두어 = 경로 자체, 1개만)
+  private async exists(path: string): Promise<boolean> {
+    const page = await this.client.send(
+      new ListObjectsV2Command({
+        Bucket: this.bucket,
+        Prefix: path,
+        MaxKeys: 1,
+      }),
+    );
+    return (page.Contents ?? []).some(({ Key }) => Key === path);
   }
 
   // data/ 바로 아래 폴더 이름 중 snapshotVersion 형식만. 1,000개가 넘으면 이어서 읽음

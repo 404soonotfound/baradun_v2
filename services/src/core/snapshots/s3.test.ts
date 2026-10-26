@@ -141,6 +141,38 @@ describe("S3SnapshotStore", () => {
     );
   });
 
+  it("없는 파일에 403이 오면 목록으로 확인해 정말 없을 때만 null", async () => {
+    // 목록 권한이 data/ 접두어 조건부라 S3가 없는 파일에 404 대신 403을 주는 경우(첫 게시의 manifest)
+    const sent: Command[] = [];
+    let listed: string[] = [];
+    const store = new S3SnapshotStore(
+      {
+        send: (async (command: Command) => {
+          sent.push(command);
+          if (command instanceof GetObjectCommand) {
+            throw s3Error("AccessDenied", 403);
+          }
+          return { Contents: listed.map((Key) => ({ Key })) };
+        }) as S3Sender["send"],
+      },
+      "site",
+    );
+    expect(await store.getTaggedFile("data/manifest.json")).toBeNull();
+    expect(sent.at(-1)!.input).toMatchObject({
+      Prefix: "data/manifest.json",
+      MaxKeys: 1,
+    });
+
+    // 목록에 있으면 진짜 거부 → null로 바꾸지 않고 던짐
+    listed = ["data/manifest.json"];
+    await expect(store.getTaggedFile("data/manifest.json")).rejects.toThrow(
+      "AccessDenied",
+    );
+    // 이름이 겹치는 다른 파일만 있으면 없음
+    listed = ["data/manifest.json.bak"];
+    expect(await store.getTaggedFile("data/manifest.json")).toBeNull();
+  });
+
   it("putFileIf: 없을 때만(If-None-Match: *) — 이미 있으면 false", async () => {
     const bucket = fakeBucket();
     const store = new S3SnapshotStore(bucket.sender, "site");
