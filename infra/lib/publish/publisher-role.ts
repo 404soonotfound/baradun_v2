@@ -14,7 +14,7 @@ export interface PublisherRoleProps {
 
 // publish-snapshot Lambda가 쓸 역할. data/ 쓰기는 이 역할만 가짐 (BRD-52, 6.2 단일 작성자).
 // State 읽기·Ops 잠금과 게시 버전 읽기·쓰기도 가짐 (BRD-55).
-// 함수는 BRD-61에서 만들고 이 역할을 붙임.
+// 함수는 publisher.ts(BRD-61)가 만들고 이 역할을 붙임. 로그 쓰기 권한은 그쪽에서 자기 로그 그룹에만 줌
 export class PublisherRole extends Construct {
   readonly role: iam.Role;
 

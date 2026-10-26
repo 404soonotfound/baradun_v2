@@ -12,6 +12,7 @@ import { Construct } from "constructs";
 import { Collectors } from "./collect/collectors";
 import { GitHubDeployRole } from "./deploy/github-deploy-role";
 import { CostBudget } from "./ops/cost-budget";
+import { Publisher } from "./publish/publisher";
 import { PublisherRole } from "./publish/publisher-role";
 import { ROLE_BOUNDARY_POLICY_NAME } from "./settings";
 import { SiteDelivery } from "./site/site-delivery";
@@ -64,18 +65,27 @@ export class BaradunStack extends Stack {
     // State·Ops·Inquiry 테이블 (BRD-55)
     const tables = new StorageTables(this, "Storage");
 
-    // 수집 Lambda 2개와 실행 일정 (BRD-56)
-    // 테이블 두 개를 넘겨서 수집기가 그 표를 읽고 쓰게 함
-    const collectors = new Collectors(this, "Collect", {
+    // data/ 쓰기 전용 역할 (BRD-52). 논리 ID(PublisherRole…)를 유지하려고 여기서 만듦
+    const publisherRole = new PublisherRole(this, "Publisher", {
+      bucket: site.bucket,
       stateTable: tables.state,
       opsTable: tables.ops,
     });
 
-    // data/ 쓰기 전용 역할 (BRD-61의 publish-snapshot이 사용)
-    new PublisherRole(this, "Publisher", {
+    // publish-snapshot Lambda (BRD-61). 위 역할을 씀
+    const publisher = new Publisher(this, "Publish", {
       bucket: site.bucket,
       stateTable: tables.state,
       opsTable: tables.ops,
+      role: publisherRole.role,
+    });
+
+    // 수집 Lambda 3개와 실행 일정 (BRD-56·BRD-58)
+    // 테이블 두 개를 넘겨서 수집기가 그 표를 읽고 쓰게 함. 수집 뒤 publisher를 깨움
+    const collectors = new Collectors(this, "Collect", {
+      stateTable: tables.state,
+      opsTable: tables.ops,
+      publisher: publisher.function,
     });
 
     // 사이트 경로 쓰기 전용 역할 (GitHub Actions OIDC)
@@ -105,6 +115,9 @@ export class BaradunStack extends Stack {
     });
     // 수집 함수 이름을 배포 결과에 출력. 배포 뒤 손으로 한 번 실행해 볼 때 씀(aws lambda invoke)
     // 출력 이름 예: OceanCollectorFunctionName
+    new CfnOutput(this, "PublisherFunctionName", {
+      value: publisher.function.functionName,
+    });
     for (const [name, fn] of collectors.functions) {
       new CfnOutput(this, `${name}CollectorFunctionName`, {
         value: fn.functionName,
