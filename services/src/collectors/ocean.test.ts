@@ -5,6 +5,7 @@ import { createLogger } from "../core/collect/log";
 import { MemoryOpsStore, MemoryStateStore } from "../core/store/memory";
 import type { StateValue } from "../core/store/types";
 import { collectOcean, OCEAN_JOB, OCEAN_STATE } from "./ocean";
+import { finishRun } from "./trigger";
 
 // collect-ocean (BRD-56). HTTP·키·저장소를 가짜로 바꿔 실패 경로를 확인
 // 응답 본문은 BRD-19 실응답 픽스처(관측 2026-10-20T14:10~15:00Z)
@@ -61,6 +62,10 @@ const readings = async (state: MemoryStateStore) =>
     >;
     receivedAt: Record<string, string>;
   } | null;
+const history = async (state: MemoryStateStore) =>
+  ((await state.getState(OCEAN_STATE.history.pk, OCEAN_STATE.history.sk))
+    ?.value ?? null) as { stations: Record<string, [number, number][]> } | null;
+const sec = (iso: string) => Date.parse(iso) / 1000;
 const attempt = async (state: MemoryStateStore) =>
   (await state.getState(OCEAN_STATE.attempt.pk, OCEAN_STATE.attempt.sk))
     ?.value as Record<string, StateValue>;
@@ -252,5 +257,155 @@ describe("collectOcean", () => {
       sea_obs: { status: "failed", reason: "api_key", attempts: 0 },
       kma_buoy: { status: "failed", reason: "api_key", attempts: 0 },
     });
+  });
+
+  it("sea_obs 정상 → 측정기별 파고 원래 측정값을 이력에 저장하고 크기를 로그로 남김", async () => {
+    const { deps, state, lines } = setup({
+      sea_obs: SEA_OBS,
+      kma_buoy: KMA_BUOY,
+    });
+    expect((await collectOcean(deps)).status).toBe("complete");
+    const saved = await history(state);
+    expect(saved?.stations["22520"]).toEqual([
+      [sec("2026-10-20T15:00:00Z"), 0.7],
+    ]);
+    // kma_buoy 줄(파고 없음)은 이력에 넣지 않음
+    expect(saved?.stations["22523"]).toBeUndefined();
+    expect((await attempt(state)).historySaved).toBe(true);
+    const log = lines.find((line) => line.includes("ocean_history_saved"));
+    expect(JSON.parse(log!)).toMatchObject({
+      stations: Object.keys(saved!.stations).length,
+      bytes: expect.any(Number),
+    });
+  });
+
+  it("이전 이력과 합치고 24시간 범위 밖 값은 버림", async () => {
+    const { deps, state } = setup({ sea_obs: SEA_OBS, kma_buoy: KMA_BUOY });
+    await state.putState(
+      OCEAN_STATE.history.pk,
+      OCEAN_STATE.history.sk,
+      {
+        stations: {
+          "22520": [
+            [sec("2026-10-19T13:00:00Z"), 0.2], // 범위 밖
+            [sec("2026-10-20T14:00:00Z"), 0.6],
+          ],
+        },
+      },
+      Date.parse("2026-10-20T14:00:00Z"),
+    );
+    await collectOcean(deps);
+    expect((await history(state))?.stations["22520"]).toEqual([
+      [sec("2026-10-20T14:00:00Z"), 0.6],
+      [sec("2026-10-20T15:00:00Z"), 0.7],
+    ]);
+  });
+
+  it("sea_obs 실패 → 이전 이력은 그대로, 값을 만들지 않음", async () => {
+    const { deps, state } = setup({
+      sea_obs: { status: "failed", reason: "timeout", attempts: 2 },
+      kma_buoy: KMA_BUOY,
+    });
+    const previous = {
+      stations: { "22520": [[sec("2026-10-20T14:00:00Z"), 0.6]] },
+    };
+    await state.putState(
+      OCEAN_STATE.history.pk,
+      OCEAN_STATE.history.sk,
+      previous,
+      Date.parse("2026-10-20T14:00:00Z"),
+    );
+    expect((await collectOcean(deps)).status).toBe("partial");
+    expect(await history(state)).toEqual(previous);
+    expect((await attempt(state)).historySaved).toBe(false);
+  });
+
+  it("깨진 이력 기록은 경고를 남기고 새 값으로 덮음", async () => {
+    const { deps, state, lines } = setup({
+      sea_obs: SEA_OBS,
+      kma_buoy: KMA_BUOY,
+    });
+    await state.putState(
+      OCEAN_STATE.history.pk,
+      OCEAN_STATE.history.sk,
+      "broken",
+      Date.parse("2026-10-20T14:00:00Z"),
+    );
+    expect((await collectOcean(deps)).status).toBe("complete");
+    expect((await history(state))?.stations["22520"]).toEqual([
+      [sec("2026-10-20T15:00:00Z"), 0.7],
+    ]);
+    const log = lines.find((line) => line.includes("ocean_history_invalid"));
+    expect(JSON.parse(log!)).toMatchObject({ dropped: 1 });
+  });
+
+  it("읽은 뒤 다른 실행이 이력을 쓰면 다시 읽어 합침", async () => {
+    const { deps, state } = setup({ sea_obs: SEA_OBS, kma_buoy: KMA_BUOY });
+    const getState = state.getState.bind(state);
+    let injected = false;
+    state.getState = async (pk, sk) => {
+      const record = await getState(pk, sk);
+      if (!injected && sk === OCEAN_STATE.history.sk) {
+        injected = true;
+        await state.putState(
+          pk,
+          sk,
+          { stations: { "99999": [[sec("2026-10-20T15:00:00Z"), 1.2]] } },
+          Date.parse("2026-10-20T15:00:00Z"),
+        );
+      }
+      return record;
+    };
+    expect((await collectOcean(deps)).status).toBe("complete");
+    const saved = await history(state);
+    expect(saved?.stations["99999"]).toEqual([
+      [sec("2026-10-20T15:00:00Z"), 1.2],
+    ]);
+    expect(saved?.stations["22520"]).toEqual([
+      [sec("2026-10-20T15:00:00Z"), 0.7],
+    ]);
+  });
+
+  it("이력 저장만 실패 → partial(정상값은 저장, 슬롯은 끝내지 않음)이고 publisher는 깨움", async () => {
+    const { deps, state, ops, lines } = setup({
+      sea_obs: SEA_OBS,
+      kma_buoy: KMA_BUOY,
+    });
+    const putState = state.putState.bind(state);
+    state.putState = async (pk, sk, ...rest) => {
+      if (sk === OCEAN_STATE.history.sk) throw new Error("throttled");
+      return putState(pk, sk, ...rest);
+    };
+    const result = await collectOcean(deps);
+    expect(result).toEqual({ status: "partial", slotId: "202610210040" });
+    expect((await readings(state))?.readings["22520"]?.waveHeight?.value).toBe(
+      0.7,
+    );
+    expect(await history(state)).toBeNull();
+    expect(await attempt(state)).toMatchObject({
+      readingsSaved: true,
+      historySaved: false,
+    });
+    expect(lines.join("\n")).toContain("ocean_history_failed");
+    expect(
+      await ops.claimSlot(
+        OCEAN_JOB,
+        "202610210040",
+        "run-2",
+        Date.parse(NOW),
+        1,
+      ),
+    ).toBe("busy");
+    // 수집 결과가 partial이어도 publish-snapshot을 먼저 깨우고 그 뒤에 던짐(Lambda 마무리와 같은 함수)
+    let invoked = 0;
+    await expect(
+      finishRun(result, {
+        invoke: async () => {
+          invoked += 1;
+        },
+        log: deps.log,
+      }),
+    ).rejects.toThrow("수집 partial");
+    expect(invoked).toBe(1);
   });
 });
