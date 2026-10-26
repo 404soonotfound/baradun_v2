@@ -1,8 +1,7 @@
+import { readFileSync } from "node:fs";
+import * as path from "node:path";
 import { describe, expect, it } from "vitest";
-import {
-  DATA_PREFIX,
-  PUBLISHER_TIMEOUT_SECONDS,
-} from "../lib/settings";
+import { DATA_PREFIX, PUBLISHER_TIMEOUT_SECONDS } from "../lib/settings";
 import {
   allIamPolicies,
   resourceText,
@@ -108,8 +107,34 @@ describe("publish-snapshot 함수", () => {
     ]);
     for (const s of s3Statements) {
       for (const r of toList(s.Resource).map(resourceText)) {
-        if (r.includes("/")) expect(r.endsWith(`/${DATA_PREFIX}*`), r).toBe(true);
+        if (r.includes("/"))
+          expect(r.endsWith(`/${DATA_PREFIX}*`), r).toBe(true);
       }
     }
+  });
+});
+
+// 점검·강제 업데이트 설정(BRD-43). 두 값은 서로 다른 패키지(services·apps/web)에 있고 서로 가져오지 않음(17.2 경계)
+// → 인프라 테스트가 두 파일을 글자로 읽어 비교함. 모양이 바뀌어 읽지 못하면 그것도 실패로 드러남
+describe("manifest 설정과 화면 빌드 번호 (BRD-43)", () => {
+  const REPO_ROOT = path.join(__dirname, "..", "..");
+  const read = (file: string, pattern: RegExp): number => {
+    const text = readFileSync(path.join(REPO_ROOT, file), "utf8");
+    const match = pattern.exec(text);
+    expect(match, `${file}에서 값을 찾지 못함: ${pattern}`).not.toBeNull();
+    return Number(match![1]);
+  };
+
+  it("MANIFEST_SETTINGS.minWebBuild는 배포된 WEB_BUILD보다 클 수 없다(새 화면을 먼저 배포한 뒤 올림)", () => {
+    const webBuild = read(
+      "apps/web/src/lib/snapshot/build.ts",
+      /export const WEB_BUILD = (\d+);/,
+    );
+    const minWebBuild = read(
+      "services/src/publisher/policy.ts",
+      /minWebBuild: (\d+),/,
+    );
+    // 어기면 모든 사용자가 강제 업데이트 화면에 갇힘(새로고침해도 이전 화면 파일만 받음). infra/README '강제 업데이트'
+    expect(minWebBuild).toBeLessThanOrEqual(webBuild);
   });
 });
