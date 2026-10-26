@@ -178,7 +178,7 @@ describe("publishSnapshot", () => {
     },
   );
 
-  it("이안류 문구를 모르면 그 해변은 null로 게시하고 warn 로그(게시는 계속)", async () => {
+  it("이안류 관측 시각이 틀리면(게시 시각보다 늦음) 그 해변은 null로 게시하고 warn 로그(게시는 계속)", async () => {
     const { state, deps, events, snapshots } = await setup();
     await state.putState(
       "rip",
@@ -187,8 +187,8 @@ describe("publishSnapshot", () => {
         beaches: {
           b0001: {
             code: "GYEONGPO",
-            label: "점검중",
-            observedAt: "2026-10-23T02:00:00Z",
+            label: "관심",
+            observedAt: "2026-10-23T03:00:00Z",
           },
         },
       },
@@ -200,7 +200,7 @@ describe("publishSnapshot", () => {
         level: "warn",
         event: "publish_rip_hidden",
         beachId: "b0001",
-        reason: "unknown_label",
+        reason: "bad_time",
       }),
     );
     const status = JSON.parse(

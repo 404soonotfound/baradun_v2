@@ -14,6 +14,7 @@ const REAL = readFileSync(
   "utf8",
 );
 const AFTER = "2026-08-15T15:00:00Z"; // KST 08-16 00:00
+const DAY = "20260815"; // 요청한 날(reqDate)
 const body = (value: unknown) => JSON.stringify(value);
 const row = (fields: Record<string, unknown> = {}) => ({
   obsvtrId: "SONGJUNG",
@@ -47,7 +48,7 @@ describe("ripObservedAt", () => {
 
 describe("parseRipResponse", () => {
   it("실응답: 가장 늦은 관측 하나(시각 UTC, 문구 원문)", () => {
-    expect(parseRipResponse(REAL, "SONGJUNG", AFTER)).toEqual({
+    expect(parseRipResponse(REAL, "SONGJUNG", AFTER, DAY)).toEqual({
       status: "ok",
       latest: {
         code: "SONGJUNG",
@@ -61,7 +62,7 @@ describe("parseRipResponse", () => {
   it("미래 관측은 버리고 그 앞 관측을 씀", () => {
     // 기준 KST 08-15 12:00 → 23:55 줄은 미래
     expect(
-      parseRipResponse(REAL, "SONGJUNG", "2026-08-15T03:00:00Z"),
+      parseRipResponse(REAL, "SONGJUNG", "2026-08-15T03:00:00Z", DAY),
     ).toMatchObject({
       status: "ok",
       latest: { label: "주의", observedAt: "2026-08-14T15:00:00Z" },
@@ -69,9 +70,36 @@ describe("parseRipResponse", () => {
     });
   });
 
+  it("요청한 날이 아닌 줄은 버림(다른 날 자료를 그날 자료로 보지 않음)", () => {
+    const text = response(
+      { item: [row(), row({ obsrvnDt: "2026-08-14 23:55" })] },
+      2,
+    );
+    expect(parseRipResponse(text, "SONGJUNG", AFTER, DAY)).toMatchObject({
+      status: "ok",
+      latest: { observedAt: "2026-08-15T03:00:00Z" },
+      skippedRows: 1,
+    });
+    expect(parseRipResponse(REAL, "SONGJUNG", AFTER, "20260816")).toEqual({
+      status: "failed",
+      reason: "no_rows:skipped=2",
+    });
+  });
+
+  it("totalCount가 numOfRows보다 크면 실패(마지막 관측이 빠졌을 수 있음)", () => {
+    expect(
+      parseRipResponse(
+        response({ item: [row()] }, 301),
+        "SONGJUNG",
+        AFTER,
+        DAY,
+      ),
+    ).toEqual({ status: "failed", reason: "truncated:301" });
+  });
+
   it("item이 하나면 객체로 와도 읽음", () => {
     expect(
-      parseRipResponse(response({ item: row() }), "SONGJUNG", AFTER),
+      parseRipResponse(response({ item: row() }), "SONGJUNG", AFTER, DAY),
     ).toMatchObject({ status: "ok", latest: { label: "주의" } });
   });
 
@@ -92,7 +120,7 @@ describe("parseRipResponse", () => {
     ],
     ["다른 오류 코드", response("", 0, "30"), "result:30"],
   ])("%s → 실패(자료 없음으로 보지 않음)", (_, text, reason) => {
-    expect(parseRipResponse(text, "SONGJUNG", AFTER)).toEqual({
+    expect(parseRipResponse(text, "SONGJUNG", AFTER, DAY)).toEqual({
       status: "failed",
       reason,
     });
@@ -102,7 +130,7 @@ describe("parseRipResponse", () => {
     const text = response({
       item: [row({ obsvtrId: "HAE" }), row({ obsrvnDt: "08/15 12:00" })],
     });
-    expect(parseRipResponse(text, "SONGJUNG", AFTER)).toEqual({
+    expect(parseRipResponse(text, "SONGJUNG", AFTER, DAY)).toEqual({
       status: "failed",
       reason: "no_rows:skipped=2",
     });
@@ -112,7 +140,7 @@ describe("parseRipResponse", () => {
     ["resultCode 03", response("", 0, "03")],
     ["00 + totalCount 0 + 빈 items", response("", 0)],
   ])("자료 없음: %s", (_, text) => {
-    expect(parseRipResponse(text, "SONGJUNG", AFTER)).toEqual({
+    expect(parseRipResponse(text, "SONGJUNG", AFTER, DAY)).toEqual({
       status: "none",
     });
   });
@@ -171,6 +199,13 @@ describe("ripCurrentInfo", () => {
       });
     },
   );
+
+  it("오래된 관측은 문구가 틀려도 old로 숨김(비수기 내내 운영 알림을 내지 않음)", () => {
+    expect(
+      ripCurrentInfo(reading({ label: "점검중" }), "2026-10-23T03:00:00Z")
+        .hidden,
+    ).toBe("old");
+  });
 
   it.each(["2026-08-15 14:55", "2026-08-16T00:00:00Z"])(
     "틀린 시각·미래 관측은 숨김: %s",

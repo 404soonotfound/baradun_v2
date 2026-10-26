@@ -21,6 +21,9 @@ const REAL = readFileSync(
   "utf8",
 );
 const IN_SEASON = "2026-08-15T15:13:00Z"; // KST 08-16 00:13 → 슬롯 202608160012
+// 픽스처 날짜를 요청한 날로 바꿈(수집기는 요청한 날의 줄만 씀). 23:55 줄은 00:05로 바꿔 미래 관측이 아니게 함
+const realOn = (day: string) =>
+  REAL.replaceAll("2026-08-15", day).replace("23:55", "00:05");
 const KEY = "RIP-KEY-SECRET";
 const SOURCES: RipSource[] = [
   { code: "SONGJUNG", beachId: "b0096" },
@@ -82,10 +85,7 @@ const seed = (state: MemoryStateStore, beaches: Record<string, unknown>) =>
 describe("collectRip", () => {
   it("시즌 중: 해변마다 오늘(KST) 자료를 받아 가장 늦은 관측만 저장, 슬롯 끝냄", async () => {
     const { deps, state, ops, urls, lines } = setup(IN_SEASON, {
-      SONGJUNG: REAL.replaceAll("2026-08-15", "2026-08-16").replace(
-        "23:55",
-        "00:05",
-      ),
+      SONGJUNG: realOn("2026-08-16"),
     });
     expect(await collectRip(deps)).toEqual({
       status: "complete",
@@ -154,13 +154,35 @@ describe("collectRip", () => {
     ).toBe("busy");
   });
 
+  it("대응표에서 빠졌거나 코드가 바뀐 해변의 이전 값은 다음 저장 때 버림", async () => {
+    const { deps, state } = setup(IN_SEASON, {
+      SONGJUNG: realOn("2026-08-16"),
+    });
+    await seed(state, {
+      b0124: {
+        code: "DAECHON",
+        label: "주의",
+        observedAt: "2026-08-15T14:00:00Z",
+      },
+      b0097: {
+        code: "OLDCODE",
+        label: "주의",
+        observedAt: "2026-08-15T14:00:00Z",
+      },
+    });
+    await collectRip(deps);
+    expect(Object.keys((await readings(state))!.beaches)).toEqual(["b0096"]);
+  });
+
   it("더 이른 관측은 저장된 더 늦은 관측을 덮지 않음", async () => {
     const later = {
       code: "SONGJUNG",
       label: "위험",
       observedAt: "2026-08-15T15:10:00Z",
     };
-    const { deps, state } = setup(IN_SEASON, { SONGJUNG: REAL });
+    const { deps, state } = setup(IN_SEASON, {
+      SONGJUNG: realOn("2026-08-16"),
+    });
     await seed(state, { b0096: later });
     await collectRip(deps);
     expect((await readings(state))?.beaches.b0096).toEqual(later);
@@ -168,7 +190,7 @@ describe("collectRip", () => {
 
   it("문구가 4단계가 아니어도 원문 그대로 저장(게시 때 숨김)", async () => {
     const { deps, state } = setup(IN_SEASON, {
-      SONGJUNG: REAL.replaceAll('"관심"', '"점검중"'),
+      SONGJUNG: realOn("2026-08-16").replaceAll('"관심"', '"점검중"'),
     });
     await collectRip(deps);
     expect((await readings(state))?.beaches.b0096).toMatchObject({
@@ -191,7 +213,7 @@ describe("collectRip", () => {
 
   it("비수기 하루 1회 슬롯(KST 04:12)은 호출하고, 자료가 나오면 알림", async () => {
     const { deps, urls, lines } = setup("2026-10-25T19:13:00Z", {
-      SONGJUNG: REAL,
+      SONGJUNG: realOn("2026-10-26"),
     });
     expect((await collectRip(deps)).status).toBe("complete");
     expect(urls).toHaveLength(2);

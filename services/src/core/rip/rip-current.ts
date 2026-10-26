@@ -48,10 +48,13 @@ export function ripObservedAt(raw: unknown): string | null {
 // 200인데 이 모양이 아니면 '자료 없음'이 아니라 실패(빈 응답을 정상으로 보지 않음)
 // 자료 없음은 resultCode 03(공공데이터포털 NODATA) 또는 00 + totalCount 0일 때만
 // 줄마다 코드가 요청한 해변과 같고 시각을 읽을 수 있어야 씀. 미래 관측은 버림(허용 오차 없음)
+// 요청한 날(reqDate, yyyymmdd)이 아닌 줄도 버림: 다른 날 자료를 오늘 자료로 보지 않음
+// totalCount가 numOfRows보다 크면 한 쪽에 다 받지 못해 마지막 관측이 빠졌을 수 있음 → 실패
 export function parseRipResponse(
   text: string,
   code: string,
   now: string,
+  reqDate: string,
 ): RipResponse {
   const nowMs = parseUtcIso(now);
   if (nowMs === null) throw new RangeError(`기준 시각 형식 오류: ${now}`);
@@ -69,10 +72,18 @@ export function parseRipResponse(
   if (resultCode !== "00") {
     return { status: "failed", reason: `result:${String(resultCode)}` };
   }
-  const { items, totalCount } = json.body;
+  const { items, totalCount, numOfRows } = json.body;
   if (totalCount === 0 && (items === "" || items === undefined)) {
     return { status: "none" };
   }
+  if (
+    typeof totalCount === "number" &&
+    typeof numOfRows === "number" &&
+    totalCount > numOfRows
+  ) {
+    return { status: "failed", reason: `truncated:${totalCount}` };
+  }
+  const day = `${reqDate.slice(0, 4)}-${reqDate.slice(4, 6)}-${reqDate.slice(6, 8)} `;
   const item = isObject(items) ? items.item : undefined;
   const rows = Array.isArray(item) ? item : isObject(item) ? [item] : null;
   if (rows === null || rows.length === 0) {
@@ -90,6 +101,7 @@ export function parseRipResponse(
       row.obsvtrId !== code ||
       typeof row.lastScrCn !== "string" ||
       observedMs === null ||
+      !(row.obsrvnDt as string).startsWith(day) ||
       observedMs > nowMs
     ) {
       skippedRows += 1;
@@ -128,6 +140,7 @@ export type RipHidden =
 // 게시할 이안류 정보. 만료 기준은 정하지 않음(갱신 간격이 문서에 없어 임계값을 지어내지 않음, BRD-57 후속 이슈에서 확정)
 // 대신 관측일 기준으로 거름: 관측일(KST)이 제공 기간(6~9월) 밖이거나, 게시일(KST)의 오늘·어제가 아니면 숨김
 // (API가 지난 날짜도 돌려주므로 오래된 값이 '지금 값'처럼 보이지 않게 함)
+// 문구 검사는 시각 검사 뒤: 지난 시즌에 남은 모르는 문구가 비수기 내내 게시마다 운영 알림을 내지 않게 함
 export function ripCurrentInfo(
   reading: RipReading | undefined,
   now: string,
@@ -135,9 +148,6 @@ export function ripCurrentInfo(
   const nowMs = parseUtcIso(now);
   if (nowMs === null) throw new RangeError(`기준 시각 형식 오류: ${now}`);
   if (reading === undefined) return { info: null, hidden: "no_reading" };
-  if (!(RIP_LABELS as readonly string[]).includes(reading.label)) {
-    return { info: null, hidden: "unknown_label" };
-  }
   const observedMs = parseUtcIso(reading.observedAt);
   if (observedMs === null || observedMs > nowMs) {
     return { info: null, hidden: "bad_time" };
@@ -147,6 +157,9 @@ export function ripCurrentInfo(
   }
   if (kstDayNumber(nowMs) - kstDayNumber(observedMs) > 1) {
     return { info: null, hidden: "old" };
+  }
+  if (!(RIP_LABELS as readonly string[]).includes(reading.label)) {
+    return { info: null, hidden: "unknown_label" };
   }
   return {
     info: {

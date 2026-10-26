@@ -106,6 +106,7 @@ async function fetchOne(
     response.body,
     source.code,
     formatUtcIso(deps.clock()),
+    reqDate,
   );
 }
 
@@ -163,8 +164,12 @@ export async function collectRip(deps: RipDeps): Promise<CollectRunResult> {
   let saved = fresh.size === 0;
   for (let attempt = 0; attempt < 2 && fresh.size > 0; attempt += 1) {
     const previous = await deps.state.getState(pk, sk);
-    const beaches: Record<string, RipReading> = readRipReadings(
-      previous?.value ?? null,
+    // 지금 대응표에 없는 해변·바뀐 코드의 이전 값은 버림 → 연결을 풀거나 고친 해변에 이전 해수욕장 값이 남지 않음
+    const mapped = new Map(deps.sources.map((src) => [src.beachId, src.code]));
+    const beaches: Record<string, RipReading> = Object.fromEntries(
+      Object.entries(readRipReadings(previous?.value ?? null)).filter(
+        ([beachId, reading]) => mapped.get(beachId) === reading.code,
+      ),
     );
     for (const [beachId, reading] of fresh) {
       if (isNewer(reading, beaches[beachId])) beaches[beachId] = reading;
