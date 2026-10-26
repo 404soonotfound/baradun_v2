@@ -91,7 +91,7 @@ export class OpsAlarms extends Construct {
       "RipStopped",
       collector("Rip"),
       30,
-      1, // [B안] A안이면 이 줄(호출 전체) 삭제
+      1,
       "이안류 수집이 돌지 않음(일정 확인). 장소 화면의 이안류 정보가 갱신되지 않음",
     );
     // 게시는 수집이 끝날 때마다 깨어남. 15분 창 2회 연속(30분) 없으면 울림 → 유효시간 45분 전에 감지

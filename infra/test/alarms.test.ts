@@ -24,7 +24,7 @@ const byMetric = (name: string) =>
 
 describe("운영 경보 (BRD-62)", () => {
   it("경보는 9개: 오류 5(수집기 4·게시) + 심장박동 4(특보·관측·이안류·게시)", () => {
-    expect(alarms).toHaveLength(9); // A안이면 8
+    expect(alarms).toHaveLength(9);
     expect(
       byMetric("Errors")
         .map(([, a]) => fnOf(a))
@@ -36,7 +36,7 @@ describe("운영 경보 (BRD-62)", () => {
       expect.stringMatching(/^CollectWarningsFunction/),
       expect.stringMatching(/^PublishFunction/),
     ]);
-    expect(byMetric("Invocations")).toHaveLength(4); // A안이면 3
+    expect(byMetric("Invocations")).toHaveLength(4);
   });
 
   it("모든 경보가 '데이터 없음' 처리를 명시하고 운영 주제로만 발송한다", () => {

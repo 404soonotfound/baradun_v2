@@ -137,7 +137,7 @@
       "Resource": "arn:aws:scheduler:ap-northeast-2:*:schedule/default/BaradunV2-*"
     },
     {
-      "Sid": "InquiryNotifications",
+      "Sid": "SnsNotifications",
       "Effect": "Allow",
       "Action": [
         "sns:CreateTopic",
