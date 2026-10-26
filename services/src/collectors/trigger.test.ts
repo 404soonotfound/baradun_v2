@@ -47,7 +47,9 @@ describe("triggerPublish", () => {
 
   it("깨우기 실패는 오류 로그를 남기고 던짐(조용히 넘어가지 않음)", async () => {
     const { deps: d, lines } = deps(async () => {
-      throw Object.assign(new Error("denied"), { name: "AccessDeniedException" });
+      throw Object.assign(new Error("denied"), {
+        name: "AccessDeniedException",
+      });
     });
     await expect(
       triggerPublish({ status: "complete", slotId: "s1" }, d),
