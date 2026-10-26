@@ -89,6 +89,7 @@ function setup(
     server?: ReturnType<typeof fakeServer>;
     storage?: ReturnType<typeof memoryStorage>;
     session?: ReturnType<typeof memoryStorage>;
+    webBuild?: number;
   } = {},
 ) {
   const server = options.server ?? fakeServer();
@@ -104,7 +105,7 @@ function setup(
     session,
     reload,
     // 예시 manifest의 minWebBuild(1)와 같은 빌드
-    webBuild: 1,
+    webBuild: options.webBuild ?? 1,
     isVisible: () => visible,
     onVisibilityChange(listener) {
       visibilityListeners.add(listener);
@@ -196,6 +197,37 @@ describe("manifest 먼저, 바뀔 때만 status", () => {
     await store.refresh();
     expect(store.getState().phase).toBe("maintenance");
     expect(statusCalls()).toBe(0);
+  });
+
+  it("값을 보여주던 중 점검이 시작되면 마지막 값도 숨김(9.1)", async () => {
+    const { store, server } = setup();
+    store.start();
+    await store.refresh();
+    const before = deriveBeachView(
+      { id: "b0001", hidden: false },
+      store.getState(),
+    );
+    expect(before).toMatchObject({ kind: "ready" });
+    server.manifest = {
+      ...manifestExample,
+      snapshotVersion: "20991231T000000Z",
+      files: {
+        ...manifestExample.files,
+        status: "/data/20991231T000000Z/status.json",
+      },
+      maintenance: { active: true, until: null },
+    };
+    await store.refresh();
+    expect(store.getState().phase).toBe("maintenance");
+    expect(
+      deriveBeachView({ id: "b0001", hidden: false }, store.getState()),
+    ).toMatchObject({
+      category: "undetermined",
+      metrics: {
+        waveHeight: { kind: "hidden" },
+        wavePeriod: { kind: "hidden" },
+      },
+    });
   });
 });
 
@@ -361,6 +393,108 @@ describe("지원 범위 밖 schemaVersion", () => {
     await store.refresh();
     expect(reload).not.toHaveBeenCalled();
     expect(store.getState().phase).toBe("schema_unsupported");
+  });
+});
+
+describe("최소 화면 버전 (minWebBuild, BRD-43)", () => {
+  const newer = { ...manifestExample, minWebBuild: 2 };
+
+  it("화면 빌드가 낮으면 새로고침 1회 → 다시 열어도 낮으면 강제 업데이트, 값은 숨김(status 받지 않음)", async () => {
+    const session = memoryStorage();
+    const storage = memoryStorage();
+    const first = setup({ session, storage });
+    first.server.manifest = newer;
+    first.store.start();
+    await first.store.refresh();
+    expect(first.reload).toHaveBeenCalledTimes(1);
+
+    // 새로고침했는데도 이전 화면 파일(캐시 등)
+    const second = setup({ session, storage, server: first.server });
+    second.store.start();
+    await second.store.refresh();
+    expect(second.reload).not.toHaveBeenCalled();
+    expect(second.store.getState().phase).toBe("update_required");
+    expect(second.statusCalls()).toBe(0);
+    expect(
+      deriveBeachView({ id: "b0001", hidden: false }, second.store.getState()),
+    ).toMatchObject({ category: "undetermined" });
+  });
+
+  it("같거나 높은 빌드는 정상", async () => {
+    const { store, server, reload } = setup({ webBuild: 2 });
+    server.manifest = newer;
+    store.start();
+    await store.refresh();
+    expect(reload).not.toHaveBeenCalled();
+    expect(store.getState().phase).toBe("ready");
+  });
+
+  it("minWebBuild가 더 오르면 그 값으로 한 번 더 새로고침", async () => {
+    const session = memoryStorage();
+    session.setItem("baradun:build-reload", "2");
+    const { store, server, reload } = setup({ session });
+    server.manifest = { ...manifestExample, minWebBuild: 3 };
+    store.start();
+    await store.refresh();
+    expect(reload).toHaveBeenCalledTimes(1);
+    expect(session.data.get("baradun:build-reload")).toBe("2,3");
+  });
+
+  it("새로고침 기록을 못 남기면 새로고침하지 않고 강제 업데이트(무한 새로고침 방지)", async () => {
+    const broken: KeyValueStorage = {
+      getItem: () => null,
+      setItem: () => {
+        throw new Error("blocked");
+      },
+      removeItem: () => {},
+    };
+    const { store, server, reload } = setup({
+      session: broken as ReturnType<typeof memoryStorage>,
+    });
+    server.manifest = newer;
+    store.start();
+    await store.refresh();
+    expect(reload).not.toHaveBeenCalled();
+    expect(store.getState().phase).toBe("update_required");
+  });
+
+  it("점검 중이어도 화면 빌드가 낮으면 강제 업데이트가 먼저", async () => {
+    const session = memoryStorage();
+    session.setItem("baradun:build-reload", "2");
+    const { store, server } = setup({ session });
+    server.manifest = { ...newer, maintenance: { active: true, until: null } };
+    store.start();
+    await store.refresh();
+    expect(store.getState().phase).toBe("update_required");
+  });
+
+  it("강제 업데이트 화면은 네트워크 실패 한 번으로 풀리지 않음", async () => {
+    const session = memoryStorage();
+    session.setItem("baradun:build-reload", "2");
+    const { store, server } = setup({ session });
+    server.manifest = newer;
+    store.start();
+    await store.refresh();
+    server.down = true;
+    await store.refresh();
+    expect(store.getState().phase).toBe("update_required");
+  });
+
+  it("minWebBuild를 읽지 못하는 manifest는 못 읽은 것(B5), 강제 업데이트로 보지 않음", async () => {
+    const { store, server, reload } = setup();
+    const missing: Partial<ManifestFile> = structuredClone(manifestExample);
+    delete missing.minWebBuild;
+    for (const manifest of [
+      missing,
+      { ...manifestExample, minWebBuild: "2" },
+      { ...manifestExample, minWebBuild: -1 },
+    ]) {
+      server.manifest = manifest;
+      await store.refresh();
+      expect(store.getState()).toMatchObject({ phase: "ready", live: false });
+      expect(store.getState().manifest).toBeNull();
+    }
+    expect(reload).not.toHaveBeenCalled();
   });
 });
 
