@@ -49,20 +49,22 @@ export function HomeScreen({
   const snapshot = useSnapshot();
   const recentIds = useRecent();
 
-  // [3] Vue: computed. 활동으로 거르기. 수영은 전체 해변(B7), 서핑·스쿠버는 그 활동이 확인된 해변만
-  const candidates = useMemo(
-    () =>
-      activity === "swimming"
-        ? beaches
-        : beaches.filter((beach) => beach.activities.includes(activity)),
-    [beaches, activity],
+  // [3] Vue: computed. 위치가 있을 때만 전체 해변을 가까운 순으로(위치·목록이 바뀔 때만 다시 계산)
+  // 위치는 이 계산에만 쓰고 저장·전송하지 않음
+  const coords = location.status === "ready" ? location.coords : null;
+  const sorted = useMemo(
+    () => (coords ? sortByDistance(beaches, coords) : []),
+    [beaches, coords],
   );
-
-  // [4] 위치가 있을 때만 가까운 순. 위치는 이 계산에만 쓰고 저장·전송하지 않음
-  const nearest =
-    location.status === "ready"
-      ? sortByDistance(candidates, location.coords).slice(0, NEAR_COUNT)
-      : [];
+  // [4] 활동으로 거르기. 수영은 전체 해변(B7), 서핑·스쿠버는 그 활동이 확인된 해변만
+  const nearest = useMemo(
+    () =>
+      (activity === "swimming"
+        ? sorted
+        : sorted.filter((beach) => beach.activities.includes(activity))
+      ).slice(0, NEAR_COUNT),
+    [sorted, activity],
+  );
 
   // [5] 최근 본: 저장된 id 순서 그대로. 목록에 없는 id(노출 끈 해변)는 건너뜀(기기 기록은 지우지 않음)
   const byId = useMemo(
@@ -80,7 +82,8 @@ export function HomeScreen({
     <div className="grid gap-5 lg:grid-cols-3 lg:gap-6">
       {/* 제목 + 활동 타일. PC는 3칸 전체 */}
       <div className="flex flex-col gap-4 lg:col-span-3">
-        <HomeTopBar locale={locale} place={nearest[0]?.region ?? null} />
+        {/* 지금 있는 곳: 활동과 상관없이 가장 가까운 해변의 지역(활동을 바꿔도 그대로) */}
+        <HomeTopBar locale={locale} place={sorted[0]?.region ?? null} />
         <h1 className="text-title-xl text-text-default">
           {t("titleLine1")}
           <br />
@@ -180,9 +183,10 @@ function NearContent({
     );
   }
 
-  if (status === "idle") {
-    // 권한을 아직 묻지 않은 기기. 버튼을 눌렀을 때만 권한 창(반복 요청 금지)
+  if (status === "idle" || status === "unavailable") {
+    // idle: 권한을 아직 묻지 않은 기기. 버튼을 눌렀을 때만 권한 창(반복 요청 금지)
     // 첫 실행 위치 안내(BRD-25)가 생기면 대부분 그쪽에서 먼저 정해짐
+    // unavailable: 시간 초과·기기 오류. 거부가 아니라서 다시 시도할 수 있게 같은 버튼을 둠(빈 묶음 방지)
     return (
       <div className="flex flex-col gap-3 rounded-card bg-bg-surface p-4 shadow-card">
         <p className="text-title-s text-text-default">{t("needLocation")}</p>
@@ -192,6 +196,6 @@ function NearContent({
     );
   }
 
-  // denied·unavailable: 지역 고르기 칩이 이 자리에 옴(BRD-27). 다시 묻지 않음
+  // denied: 지역 고르기 칩이 이 자리에 옴(BRD-27). 다시 묻지 않음
   return null;
 }
