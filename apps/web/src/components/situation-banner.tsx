@@ -30,7 +30,7 @@ export function SituationBanner({
 }: {
   locale: Locale;
   situation: DataSituation<Pick<BeachSummary, "name" | "slug">>;
-  snapshot: Pick<SnapshotState, "manifest" | "statuses" | "nowMs">;
+  snapshot: Pick<SnapshotState, "phase" | "manifest" | "statuses" | "nowMs">;
   // 다시 시도가 성공해 배너가 사라질 때 포커스를 옮길 곳(예: 화면 제목)
   onRetrySucceeded?: () => void;
 }) {
@@ -47,7 +47,8 @@ export function SituationBanner({
     setAnnouncement("");
   }
 
-  // [2] 누르면 다시 조회. 성공하면 배너가 사라지므로 포커스를 옮기고, 실패하면 알림
+  // [2] 누르면 다시 조회. 불러오기 실패 배너가 사라지면(성공·오프라인·형식 오류 등) 포커스를 옮기고,
+  // 그대로 실패면 알림. 판정은 pickSituation의 '불러오기 실패' 조건과 같게 둠
   async function retry() {
     if (retrying) return;
     const hadFocus = document.activeElement === retryRef.current;
@@ -60,17 +61,21 @@ export function SituationBanner({
     } finally {
       setRetrying(false);
     }
-    if (getSnapshotState().live) {
-      if (hadFocus) onRetrySucceeded?.();
-    } else {
+    const after = getSnapshotState();
+    if (after.failedOnline && !after.live) {
       setAnnouncement(t("retryFailed"));
+    } else if (hadFocus) {
+      onRetrySucceeded?.();
     }
   }
 
   // [3] 영향: 지금 보여주는 정보의 시각. 받은 정보가 없으면 '아직 받은 정보가 없어요'
+  // 형식을 못 읽은 뒤(오프라인이 먼저 보여도)는 해변이 모두 '확인 못 함'이라 지난 시각을 말하지 않음
   const time = shownDataTime(snapshot.manifest?.generatedAt, snapshot.nowMs);
   let dataText = t("noData");
-  if (snapshot.statuses !== null) {
+  if (snapshot.phase === "schema_unsupported") {
+    dataText = t("unsupportedBody");
+  } else if (snapshot.statuses !== null) {
     dataText = time ? t("dataTime", { time }) : t("dataTimeUnknown");
   }
 
