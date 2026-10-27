@@ -109,10 +109,15 @@ export function SearchScreen({
   }
 
   const nowMs = snapshot.nowMs;
-  const hasClear = hits.some((hit) => {
-    const view = deriveBeachView({ id: hit.beach.id, hidden: false }, snapshot);
-    return view.kind === "ready" && !view.stale && view.badge.kind === "clear";
-  });
+  // 행마다 상태를 한 번만 계산(안내 문구 여부와 행 표시에 같이 씀)
+  const rows = hits.map((hit) => ({
+    ...hit,
+    view: deriveBeachView({ id: hit.beach.id, hidden: false }, snapshot),
+  }));
+  const hasClear = rows.some(
+    ({ view }) =>
+      view.kind === "ready" && !view.stale && view.badge.kind === "clear",
+  );
 
   return (
     <div className="flex flex-col gap-4 lg:max-w-[448px]">
@@ -201,25 +206,19 @@ export function SearchScreen({
             {tSearch("count", { count: hits.length })}
           </p>
           <ul className="divide-y divide-border-default overflow-hidden rounded-card bg-bg-surface shadow-card">
-            {hits.map(({ beach, match }) => {
-              const view = deriveBeachView(
-                { id: beach.id, hidden: false },
-                snapshot,
-              );
-              return (
-                <SearchResultRow
-                  key={beach.id}
-                  href={localizedPath(locale, `/spots/${beach.slug}/`)}
-                  name={beach.name}
-                  region={beach.region}
-                  query={query}
-                  match={match}
-                  view={view}
-                  basis={rowBasis(view, nowMs)}
-                  onOpen={() => saveRecentSearch({ q: query, id: beach.id })}
-                />
-              );
-            })}
+            {rows.map(({ beach, match, view }) => (
+              <SearchResultRow
+                key={beach.id}
+                href={localizedPath(locale, `/spots/${beach.slug}/`)}
+                name={beach.name}
+                region={beach.region}
+                query={query}
+                match={match}
+                view={view}
+                basis={rowBasis(view, nowMs)}
+                onOpen={() => saveRecentSearch({ q: query, id: beach.id })}
+              />
+            ))}
           </ul>
           {hasClear && (
             <p className="text-caption text-text-muted">
