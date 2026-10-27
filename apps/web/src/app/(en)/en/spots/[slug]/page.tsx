@@ -3,8 +3,8 @@ import type { Metadata } from "next";
 // notFound(): 부르는 순간 그리기를 멈추고 404 화면(not-found)을 대신 보여 주는 Next 함수
 import { notFound } from "next/navigation";
 
-import { DetailPlaceholder } from "@/components/detail/detail-placeholder";
-import { beachSlugParams, findBeach } from "@/lib/beaches";
+import { DetailScreen } from "@/components/detail/detail-screen";
+import { beachSlugParams, findBeach, listBeachSummaries } from "@/lib/beaches";
 import { alternatesFor } from "@/lib/i18n";
 
 // /spots/[slug]/ 장소 상세 (아키텍처 9장). 경로는 data/beaches에서 생성(B6, BRD-45)
@@ -42,6 +42,11 @@ export default async function Page({ params }: Props) {
   const found = findBeach(slug); // { beach, sample } 또는 null
   if (!found) notFound(); // 해변이 없을 때의 자리 slug("_")도 여기서 404
   return (
-    <DetailPlaceholder locale="en" beach={found.beach} sample={found.sample} />
+    <DetailScreen
+      locale="en"
+      beach={found.beach}
+      beaches={listBeachSummaries("en")}
+      sample={found.sample}
+    />
   );
 }

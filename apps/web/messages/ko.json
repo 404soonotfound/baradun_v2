@@ -47,6 +47,16 @@
       "advisory": "주의보",
       "warning": "경보",
       "severe_warning": "중대경보"
+    },
+    "nearbyType": {
+      "heavy_rain": "호우",
+      "heat_wave": "폭염",
+      "cold_wave": "한파",
+      "heavy_snow": "대설",
+      "dry": "건조",
+      "yellow_dust": "황사",
+      "tropical_night": "열대야",
+      "unknown": "기타 특보"
     }
   },
   "observation": {
@@ -60,7 +70,13 @@
       "waterTemp": "수온",
       "wind": "바람"
     },
-    "station": "{name} {km}km"
+    "station": "{name} {km}km",
+    "delayed": "측정이 늦어지고 있어요",
+    "delayedShort": "늦어짐",
+    "observedAt": "{time} 측정",
+    "agency": {
+      "kma": "기상청"
+    }
   },
   "row": {
     "noValue": "파고 값 없음",
@@ -149,13 +165,104 @@
     "search": "해변 이름이나 지역 검색",
     "back": "뒤로"
   },
-  "sheet": { "close": "닫기" },
-  "detail": { "sample": "예시 데이터예요. 개발 중에만 보여요." },
+  "sheet": {
+    "close": "닫기"
+  },
+  "detail": {
+    "sample": "예시 데이터예요. 개발 중에만 보여요.",
+    "region": "{region} · {km}km",
+    "offSeason": "운영 기간 {from}~{to}",
+    "verdict": {
+      "clearBasis": "이 해변 특보구역 · {source} {time} 확인",
+      "basisIssued": "{time} 발표",
+      "basisObserved": "{time} 관측",
+      "basisChecked": "{time} 확인",
+      "zone": "적용 구역",
+      "effectiveFrom": "발효",
+      "affects": "영향 활동",
+      "allActivities": "모든 활동",
+      "recheck": "다시 확인하기",
+      "rechecking": "다시 확인하는 중",
+      "recheckFailed": "다시 확인했지만 특보를 확인하지 못했어요",
+      "autoRecheck": "측정값이 들어오면 자동으로 다시 확인해요",
+      "checked": "확인한 것",
+      "checkedWarning": "특보",
+      "checkedTime": "측정 시각",
+      "checkedWave": "파고",
+      "warningActive": "발효 중",
+      "warningNone": "없음",
+      "warningUnknown": "확인 못 함",
+      "waveValue": "파고 {value}m"
+    },
+    "alt": {
+      "title": "가까운 특보 없는 해변",
+      "none": "근처에 특보 없는 해변이 없어요",
+      "explore": "탐색에서 보기"
+    },
+    "sea": {
+      "title": "바다 상태",
+      "period": "파주기 {value}초",
+      "waveDelayed": "파고 측정이 늦어지고 있어요"
+    },
+    "figure": {
+      "label": "파고 {height}m, 파주기 {period}초",
+      "labelNoPeriod": "파고 {height}m",
+      "noValue": "측정값이 없어 파도를 그리지 않아요",
+      "pause": "파도 움직임 멈추기",
+      "over2m": "2m 넘음",
+      "knee": "무릎",
+      "waist": "허리",
+      "chest": "가슴",
+      "caption": "부표가 앞 물결을 타고 {period}초(파주기)마다 한 번 오르내려요 · 앞 물결 높이와 왼쪽 파란 띠 = 파고 {height}m · 뒤 물결과 물결 간격은 분위기용 · 기준선은 성인 평균 키",
+      "captionNoPeriod": "앞 물결 높이와 왼쪽 파란 띠 = 파고 {height}m · 파주기 측정값이 없어 움직이지 않아요 · 뒤 물결과 물결 간격은 분위기용 · 기준선은 성인 평균 키"
+    },
+    "chart": {
+      "title": "24시간 파고",
+      "label": "최근 24시간 파고. 지금 {value}m, 가장 높을 때 {max}m",
+      "labelNoNow": "최근 24시간 파고. 가장 높을 때 {max}m",
+      "dayAgo": "24시간 전",
+      "halfDayAgo": "12시간 전",
+      "now": "지금",
+      "gapSince": "{time} 이후 측정값 없음",
+      "gaps": "측정값이 없는 구간은 빗금으로 표시해요",
+      "empty": "측정값이 없어 그리지 않아요",
+      "loading": "24시간 파고를 불러오고 있어요",
+      "failed": "24시간 파고를 불러오지 못했어요 · 바다 상태 값은 위에서 확인하세요"
+    },
+    "stats": {
+      "ripCurrent": "이안류",
+      "ripNotProvided": "제공 기간 아님"
+    },
+    "nearby": {
+      "title": "주변 특보",
+      "note": "해변 판단에 쓰지 않는 참고 정보예요"
+    },
+    "call119": {
+      "title": "긴급신고 119",
+      "body": "물에 빠진 사람을 봤거나 위험할 때",
+      "call": "전화"
+    },
+    "sources": {
+      "title": "정보 출처",
+      "wave": "파도·바람",
+      "warning": "특보",
+      "waterTemp": "수온",
+      "inquiry": "정보가 실제와 달라요"
+    },
+    "cta": {
+      "favorite": "즐겨찾기",
+      "directions": "길찾기",
+      "directionsSecondary": "이 해변 길찾기",
+      "newWindow": "카카오맵 새 창"
+    }
+  },
   "photo": {
     "alt": "{name} 사진",
     "credit": "사진 출처: {source} · {license}",
     "creditWithTitle": "사진 출처: {source}, 「{title}」 · {license}",
-    "license": { "kogl-type1": "공공누리 제1유형" }
+    "license": {
+      "kogl-type1": "공공누리 제1유형"
+    }
   },
   "pages": {
     "explore": "탐색",
