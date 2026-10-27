@@ -4,7 +4,8 @@ import { useSyncExternalStore } from "react";
 // navigator.onLine이 true여도 실제로 못 받을 수 있음 → 그때는 store가 실패로 알려 줌(failedOnline)
 
 // [1] 연결이 끊기거나 돌아올 때 알림 받기 (Vue: mounted에서 addEventListener, beforeDestroy에서 remove)
-function subscribe(onChange: () => void) {
+// 바다 정보 store(use-snapshot.ts)도 같은 함수로 연결 변화를 받음
+export function subscribeOnline(onChange: () => void) {
   window.addEventListener("online", onChange);
   window.addEventListener("offline", onChange);
   return () => {
@@ -17,7 +18,7 @@ function subscribe(onChange: () => void) {
 // 서버 HTML에서는 연결된 것으로(true) 그림 → 오프라인 배너가 HTML에 굳지 않음
 export function useOnline(): boolean {
   return useSyncExternalStore(
-    subscribe,
+    subscribeOnline,
     () => navigator.onLine,
     () => true,
   );

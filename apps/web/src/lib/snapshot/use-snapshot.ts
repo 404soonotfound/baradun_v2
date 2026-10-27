@@ -1,5 +1,7 @@
 import { useSyncExternalStore } from "react";
 
+import { subscribeOnline } from "@/lib/use-online";
+
 import { WEB_BUILD } from "./build";
 import {
   createSnapshotStore,
@@ -35,14 +37,7 @@ function getStore(): SnapshotStore {
     webBuild: WEB_BUILD,
     isVisible: () => document.visibilityState === "visible",
     isOnline: () => navigator.onLine,
-    onConnectionChange(listener) {
-      window.addEventListener("online", listener);
-      window.addEventListener("offline", listener);
-      return () => {
-        window.removeEventListener("online", listener);
-        window.removeEventListener("offline", listener);
-      };
-    },
+    onConnectionChange: subscribeOnline,
     onVisibilityChange(listener) {
       // 뒤로 가기 캐시(bfcache)에서 돌아온 경우도 앱 복귀로 봄
       const onPageShow = (event: PageTransitionEvent) => {
