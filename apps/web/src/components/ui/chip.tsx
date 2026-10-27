@@ -71,8 +71,8 @@ export function RemovableChip({
         type="button"
         aria-label={removeLabel}
         onClick={onRemove}
-        // 보이는 원은 작아도 누르는 영역은 30px(명세 '✕ 30px 터치 영역')
-        className="ml-0.5 flex size-[30px] items-center justify-center rounded-full"
+        // 보이는 원은 작아도 누르는 영역은 30px(명세 '✕ 30px 터치 영역'). 눌림 영역만 위아래·옆으로 7px씩 넓혀 44px를 맞춤
+        className="relative ml-0.5 flex size-[30px] items-center justify-center rounded-full before:absolute before:-inset-[7px] before:content-['']"
       >
         <X aria-hidden="true" size={13} />
       </button>
