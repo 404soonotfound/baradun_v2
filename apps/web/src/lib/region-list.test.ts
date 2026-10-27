@@ -20,6 +20,9 @@ function beach(id: string, sido: string, sigungu: string): BeachSummary {
     region: `${sido} ${sigungu}`,
     coords: { lat: 0, lng: 0 },
     activities: ["swimming"],
+    names: [id, id],
+    aliases: [],
+    regionNames: [],
     stations: {
       waveHeight: null,
       wavePeriod: null,

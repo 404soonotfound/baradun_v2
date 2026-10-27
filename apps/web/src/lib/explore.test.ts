@@ -34,6 +34,9 @@ function beach(
     region: `${sido} 시`,
     coords: { lat, lng: 128.9 },
     activities,
+    names: [name, name],
+    aliases: [],
+    regionNames: [],
     stations: {
       waveHeight: null,
       wavePeriod: null,
