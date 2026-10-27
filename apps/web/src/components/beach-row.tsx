@@ -99,12 +99,16 @@ export function BeachRow({
         href={href}
         className="flex min-h-touch min-w-0 flex-1 items-center gap-3 py-[13px] pr-3 pl-3.5 focus-visible:-outline-offset-2"
       >
-        {/* 값이 없을 때 읽어 줄 이유: 측정소 없음(none)과 잠깐 빠짐·늦음(hidden)을 구분 */}
+        {/* 값이 없을 때 읽어 줄 이유: 측정소 없음(none) · 늦어짐(delayed) · 잠깐 빠짐(hidden)을 섞지 않음 */}
         <WaveGlyph
           wave={wave}
           metric={t("observation.metric.waveHeight")}
           label={
-            wave.kind === "none" ? t("observation.none") : t("row.noValue")
+            wave.kind === "none"
+              ? t("observation.none")
+              : wave.kind === "delayed"
+                ? t("observation.delayed")
+                : t("row.noValue")
           }
         />
         <span className="flex min-w-0 flex-1 flex-col gap-[3px]">
