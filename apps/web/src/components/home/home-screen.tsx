@@ -11,6 +11,7 @@ import { LocationOffBanner } from "@/components/home/location-off-banner";
 import { NationwideWarnings } from "@/components/home/nationwide-warnings";
 import { NearCard } from "@/components/home/near-card";
 import { RecentBeaches } from "@/components/home/recent-beaches";
+import { RegionButton } from "@/components/home/region-button";
 import { RegionCountCard } from "@/components/home/region-count-card";
 import { RegionPick } from "@/components/home/region-pick";
 import { SectionHead } from "@/components/home/section-head";
@@ -141,16 +142,26 @@ export function HomeScreen({
     return beach ? [beach] : [];
   });
 
+  // 상단 지역 버튼 글자: 고른 지역 → 그 이름, 안 골랐으면 활동과 상관없이 가장 가까운 해변의 지역
+  const regionLabel = name ?? sorted[0]?.region ?? null;
+  const regionNearby = name === null && sorted.length > 0;
+
   return (
     <div className="grid gap-5 lg:grid-cols-3 lg:gap-6">
       {/* 제목 + 상황 배너 + 활동 타일. PC는 3칸 전체 */}
       <div className="flex flex-col gap-4 lg:col-span-3">
         <HomeTopBar
           locale={locale}
-          // 고른 지역 → 그 이름, 안 골랐으면 활동과 상관없이 가장 가까운 해변의 지역(활동을 바꿔도 그대로)
-          label={name ?? sorted[0]?.region ?? null}
-          nearby={name === null && sorted.length > 0}
+          label={regionLabel}
+          nearby={regionNearby}
           onPickRegion={regionSheet.show}
+        />
+        {/* PC는 상단 줄이 없어 제목 위에 같은 지역 버튼(지역 보기·'내 주변' 전환) */}
+        <RegionButton
+          label={regionLabel}
+          nearby={regionNearby}
+          onClick={regionSheet.show}
+          className="-ml-1 hidden self-start lg:flex"
         />
         <h1 className="text-title-xl text-text-default">
           {t("titleLine1")}
