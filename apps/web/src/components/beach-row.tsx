@@ -128,7 +128,7 @@ export function BeachRow({
             </span>
           )}
           {detail && (
-            <span className="truncate text-body-s text-text-body">
+            <span className="line-clamp-2 text-body-s text-text-body">
               {detail}
             </span>
           )}
