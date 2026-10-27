@@ -142,6 +142,17 @@ function readBasis(value: unknown, nowMs: number): Basis | null {
   return { code, scope: text(value.scope), source: text(value.source), at };
 }
 
+// 해변 특보 확인 기관(status warning.source). 대안 해변 근거 줄처럼 기관만 필요할 때 상세 전체를 계산하지 않게
+export function warningSourceOf(
+  beachId: string,
+  source: Pick<ViewSource, "statuses">,
+): string | null {
+  const status = source.statuses?.[beachId];
+  return isRecord(status) && isRecord(status.warning)
+    ? text(status.warning.source)
+    : null;
+}
+
 export function deriveDetail(
   beachId: string,
   view: BeachView,
@@ -155,10 +166,13 @@ export function deriveDetail(
 
   // 이용불가로 보일 때만 특보 항목(B5로 유지된 배지 포함). 읽을 수 없는 항목은 이름을 지어내지 않고
   // 개수만 남김 → 사유 상자에 '내용을 읽지 못했어요'. 결론 문장은 배지(첫 사유)를 씀
+  // 목록 자체를 읽을 수 없으면 읽지 못한 항목 하나로 셈(사유 상자가 비어 특보가 사라지지 않게)
   const items =
-    view.category === "unavailable" && Array.isArray(warning.items)
-      ? warning.items.map(readWarningItem)
-      : [];
+    view.category !== "unavailable"
+      ? []
+      : Array.isArray(warning.items)
+        ? warning.items.map(readWarningItem)
+        : [null];
   const warnings = items.filter((item) => item !== null);
   const unreadableWarnings = items.length - warnings.length;
 

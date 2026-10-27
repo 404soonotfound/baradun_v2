@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 import { useId } from "react";
 
+import { shownMetric, shownStation } from "@/components/detail/sea-card";
 import { cn } from "@/lib/cn";
 import { toggleFavorite, useFavorites } from "@/lib/favorites";
 import { localizedPath, type Locale } from "@/lib/i18n";
@@ -144,12 +145,11 @@ export function SourceList({
   const { confirmedUntilText } = useBadgeText();
 
   // 지표 하나의 시각 자리: n분 전 측정 / 늦어짐 / 가까운 관측 없음 / –
+  // 바다 상태 카드와 같은 규칙(shownMetric): 측정소를 모르는 값·지연을 '가까운 관측 없음'으로 바꾸지 않음
   function timeOf(key: MetricKey): string | null {
     if (view.kind !== "ready") return null;
-    const metric = view.metrics[key];
-    if (stations[key] === null || metric.kind === "none") {
-      return t("observation.none");
-    }
+    const metric = shownMetric(view, stations, key);
+    if (metric.kind === "none") return t("observation.none");
     if (metric.kind === "value")
       return measuredAgoText(metric.observedAt, nowMs);
     if (metric.kind === "delayed") return t("observation.delayed");
@@ -160,8 +160,8 @@ export function SourceList({
     const names: string[] = [];
     for (const key of keys) {
       const station =
-        view.kind === "ready" && view.metrics[key].kind === "none"
-          ? null
+        view.kind === "ready"
+          ? shownStation(view.metrics[key], stations, key)
           : stations[key];
       if (station && !seen.has(station.id)) {
         seen.add(station.id);
