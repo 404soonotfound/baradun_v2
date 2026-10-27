@@ -126,6 +126,50 @@ describe("waveChart", () => {
     });
   });
 
+  it("마지막 버킷이 90분 안이어도 검증된 지금 파고가 없으면 현재값 없음(Codex P1)", () => {
+    // 지금 12:40, 실제 관측 11:01(99분 전)이 12:00 버킷 점으로 올라옴 → 파고 지표는 지연
+    const now = Date.parse("2026-10-17T12:40:00Z");
+    const chart = waveChart(
+      [
+        { t: "2026-10-17T11:00:00Z", v: 0.4 },
+        { t: "2026-10-17T12:00:00Z", v: 0.5 },
+      ],
+      now,
+      null,
+    );
+    if (chart.kind !== "ready") throw new Error("ready여야 함");
+    expect(chart.current).toBeNull();
+    expect(chart.runs).toHaveLength(1);
+  });
+
+  it("현재값은 버킷 시각이 아니라 실제 관측 시각에 둠", () => {
+    const observed = NOW - 20 * 60_000;
+    const chart = waveChart(
+      [
+        { t: hour(23), v: 0.5 },
+        { t: hour(24), v: 0.6 },
+      ],
+      NOW,
+      { t: observed, v: 0.6 },
+    );
+    expect(chart.kind === "ready" && chart.current).toEqual({
+      t: observed,
+      v: 0.6,
+    });
+  });
+
+  it("24시간 밖이거나 읽을 수 없는 지금 파고는 현재값으로 쓰지 않음", () => {
+    const points = [{ t: hour(23), v: 0.5 }];
+    for (const latest of [
+      { t: NOW - 25 * 60 * 60_000, v: 0.5 },
+      { t: NaN, v: 0.5 },
+      { t: NOW, v: -1 },
+    ]) {
+      const chart = waveChart(points, NOW, latest);
+      expect(chart.kind === "ready" && chart.current).toBeNull();
+    }
+  });
+
   it("명시된 null은 간격이 짧아도 선을 끊음", () => {
     const base = Date.parse(hour(22));
     const iso = (ms: number) => new Date(ms).toISOString();
