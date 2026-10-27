@@ -55,9 +55,11 @@ const readUrlQuery = () =>
 export function SearchScreen({
   locale,
   beaches,
+  sampleSnapshot,
 }: {
   locale: Locale;
   beaches: BeachSummary[];
+  sampleSnapshot: boolean; // 개발용 예시 특보·관측값을 보는 중. 배포 빌드는 늘 false
 }) {
   const t = useTranslations();
   const intlLocale = useLocale();
@@ -143,6 +145,16 @@ export function SearchScreen({
           onChange={(event) => update(event.target.value)}
         />
       </form>
+
+      {/* 예시 값이 실제 확인 결과처럼 보이지 않게(홈·탐색과 같은 안내) */}
+      {sampleSnapshot && (
+        <p
+          role="note"
+          className="rounded-card bg-bg-surface px-4 py-3 text-body-s text-text-body shadow-card"
+        >
+          {t("home.sampleSnapshot")}
+        </p>
+      )}
 
       {scoped && (
         <div className="flex">
