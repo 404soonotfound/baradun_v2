@@ -34,6 +34,15 @@ function getStore(): SnapshotStore {
     reload: () => window.location.reload(),
     webBuild: WEB_BUILD,
     isVisible: () => document.visibilityState === "visible",
+    isOnline: () => navigator.onLine,
+    onConnectionChange(listener) {
+      window.addEventListener("online", listener);
+      window.addEventListener("offline", listener);
+      return () => {
+        window.removeEventListener("online", listener);
+        window.removeEventListener("offline", listener);
+      };
+    },
     onVisibilityChange(listener) {
       // 뒤로 가기 캐시(bfcache)에서 돌아온 경우도 앱 복귀로 봄
       const onPageShow = (event: PageTransitionEvent) => {
