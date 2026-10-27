@@ -272,7 +272,9 @@ export function HomeScreen({
                   setRegion(null);
                   regionSheet.close();
                   // 아직 묻지 않았으면 이때 처음 물음(반복 요청 아님). 받을 수 없음(시간 초과 등)은 다시 시도
+                  // 권한 확인 중에 누른 것도 요청(결과가 '아직 안 물음'이면 버튼을 한 번 더 누르게 되지 않게)
                   if (
+                    location.status === "checking" ||
                     location.status === "idle" ||
                     location.status === "unavailable"
                   )
