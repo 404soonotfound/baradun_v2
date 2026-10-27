@@ -47,6 +47,16 @@
       "advisory": "advisory",
       "warning": "warning",
       "severe_warning": "severe warning"
+    },
+    "nearbyType": {
+      "heavy_rain": "Heavy rain",
+      "heat_wave": "Heat wave",
+      "cold_wave": "Cold wave",
+      "heavy_snow": "Heavy snow",
+      "dry": "Dry weather",
+      "yellow_dust": "Yellow dust",
+      "tropical_night": "Tropical night",
+      "unknown": "Other"
     }
   },
   "observation": {
@@ -60,7 +70,13 @@
       "waterTemp": "Water temp",
       "wind": "Wind"
     },
-    "station": "{name} {km}km"
+    "station": "{name} {km}km",
+    "delayed": "Measurement is delayed",
+    "delayedShort": "Delayed",
+    "observedAt": "Measured {time}",
+    "agency": {
+      "kma": "KMA"
+    }
   },
   "row": {
     "noValue": "No wave height",
@@ -149,13 +165,104 @@
     "search": "Search beaches or regions",
     "back": "Back"
   },
-  "sheet": { "close": "Close" },
-  "detail": { "sample": "Sample data. Shown only during development." },
+  "sheet": {
+    "close": "Close"
+  },
+  "detail": {
+    "sample": "Sample data. Shown only during development.",
+    "region": "{region} · {km}km",
+    "offSeason": "Season {from}–{to}",
+    "verdict": {
+      "clearBasis": "This beach's warning zones · {source} checked {time}",
+      "basisIssued": "Issued {time}",
+      "basisObserved": "Observed {time}",
+      "basisChecked": "Checked {time}",
+      "zone": "Zone",
+      "effectiveFrom": "In effect from",
+      "affects": "Affects",
+      "allActivities": "All activities",
+      "recheck": "Check again",
+      "rechecking": "Checking again",
+      "recheckFailed": "Checked again but couldn't confirm warnings",
+      "autoRecheck": "We'll check again automatically when new measurements arrive",
+      "checked": "What we checked",
+      "checkedWarning": "Warnings",
+      "checkedTime": "Last reading",
+      "checkedWave": "Wave height",
+      "warningActive": "In effect",
+      "warningNone": "None",
+      "warningUnknown": "Not confirmed",
+      "waveValue": "Wave {value}m"
+    },
+    "alt": {
+      "title": "Nearby beaches with no warnings",
+      "none": "No nearby beaches without warnings",
+      "explore": "See in Explore"
+    },
+    "sea": {
+      "title": "Sea conditions",
+      "period": "Period {value}s",
+      "waveDelayed": "Wave height measurement is delayed"
+    },
+    "figure": {
+      "label": "Wave height {height}m, period {period}s",
+      "labelNoPeriod": "Wave height {height}m",
+      "noValue": "No measurement, so we don't draw the wave",
+      "pause": "Pause wave motion",
+      "over2m": "Over 2m",
+      "knee": "Knee",
+      "waist": "Waist",
+      "chest": "Chest",
+      "caption": "The buoy rides the front wave up and down once every {period}s (wave period) · Front wave height and the blue band on the left = wave height {height}m · Back waves and wave spacing are for mood · Reference lines use average adult height",
+      "captionNoPeriod": "Front wave height and the blue band on the left = wave height {height}m · No wave period measurement, so it doesn't move · Back waves and wave spacing are for mood · Reference lines use average adult height"
+    },
+    "chart": {
+      "title": "Wave height, last 24 hours",
+      "label": "Wave height over the last 24 hours. Now {value}m, highest {max}m",
+      "labelNoNow": "Wave height over the last 24 hours. Highest {max}m",
+      "dayAgo": "24h ago",
+      "halfDayAgo": "12h ago",
+      "now": "Now",
+      "gapSince": "No measurements since {time}",
+      "gaps": "Hatched areas have no measurements",
+      "empty": "No measurements, so we don't draw the chart",
+      "loading": "Loading the last 24 hours of wave height",
+      "failed": "Couldn't load the last 24 hours of wave height · See the sea condition values above"
+    },
+    "stats": {
+      "ripCurrent": "Rip current",
+      "ripNotProvided": "Not provided now"
+    },
+    "nearby": {
+      "title": "Nearby warnings",
+      "note": "For reference only. Not used for the beach status"
+    },
+    "call119": {
+      "title": "Emergency 119",
+      "body": "Emergency at sea or on the beach: call 119. Your call is passed to the Korea Coast Guard.",
+      "call": "Call"
+    },
+    "sources": {
+      "title": "Data sources",
+      "wave": "Waves·wind",
+      "warning": "Warnings",
+      "waterTemp": "Water temp",
+      "inquiry": "Info doesn't match reality"
+    },
+    "cta": {
+      "favorite": "Favorite",
+      "directions": "Directions",
+      "directionsSecondary": "Directions to this beach",
+      "newWindow": "Kakao Map, new window"
+    }
+  },
   "photo": {
     "alt": "Photo of {name}",
     "credit": "Photo: {source} · {license}",
     "creditWithTitle": "Photo: {source}, “{title}” · {license}",
-    "license": { "kogl-type1": "KOGL Type 1" }
+    "license": {
+      "kogl-type1": "KOGL Type 1"
+    }
   },
   "pages": {
     "explore": "Explore",
