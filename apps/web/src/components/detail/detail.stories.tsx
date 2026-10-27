@@ -87,6 +87,7 @@ const BASE: DetailInfo = {
   offSeason: { openFrom: "2026-07-10", openUntil: "2026-08-20" },
   ripCurrent: null,
   nearbyWarnings: [],
+  unreadableNearby: 0,
 };
 const ITEM = {
   type: "wind_wave",

@@ -23,15 +23,17 @@ import type { BeachView, MetricKey } from "@/lib/snapshot/view";
 // 주변 특보 (B3): 판단에 쓰지 않는 특보(호우·폭염 등). 없으면 카드를 두지 않음
 export function NearbyWarnings({
   items,
+  unreadable,
   nowMs,
 }: {
   items: DetailInfo["nearbyWarnings"];
+  unreadable: DetailInfo["unreadableNearby"]; // 읽지 못한 항목 수. 있으면 카드를 숨기지 않고 알림
   nowMs: number;
 }) {
   const t = useTranslations();
   const { issuedAtText } = useTimeText();
   const titleId = useId();
-  if (items.length === 0) return null;
+  if (items.length === 0 && unreadable === 0) return null;
   return (
     <section
       aria-labelledby={titleId}
@@ -73,6 +75,14 @@ export function NearbyWarnings({
           </li>
         ))}
       </ul>
+      {/* 읽지 못한 주변 특보: 발효 특보와 같은 '내용을 읽지 못했어요' 계열 문구(임시안) */}
+      {unreadable !== 0 && (
+        <p className="rounded-input bg-info-bg px-3.5 py-3 text-body-s text-info-fg">
+          {unreadable === "all"
+            ? t("detail.nearby.unreadableAll")
+            : t("detail.nearby.unreadable", { count: unreadable })}
+        </p>
+      )}
     </section>
   );
 }
