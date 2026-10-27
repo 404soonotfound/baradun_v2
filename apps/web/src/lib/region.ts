@@ -1,58 +1,10 @@
 import { useSyncExternalStore } from "react";
 
-import type { BeachSummary, RegionPart } from "@/lib/beach-summary";
+import type { SavedRegion } from "@/lib/region-list";
 
 // 기본 지역 (BRD-11 결정: 위치 권한이 없을 때 홈에서 고르는 지역, 기기 저장) (BRD-26·27)
 // 칩은 출시된 해변이 있는 시·도만. 고른 뒤 지역 선택 창에서 시·군까지 고름
-
-// [2] 시·도 지리 순서. as const = 글자를 그 값 그대로(예: "강원") 타입으로 고정하고 읽기 전용으로 만듦
-export const SIDO_ORDER = [
-  "강원",
-  "경북",
-  "울산", // 동해안 위→아래
-  "부산",
-  "경남",
-  "전남", // 남해 동→서
-  "전북",
-  "충남",
-  "인천", // 서해 남→북(해안선을 이어서. 방향은 확인 필요)
-  "제주",
-] as const;
-
-// [3] 저장하는 값. sigungu는 시·군을 아직 안 골랐으면 null. 둘 다 한국어 원본 이름(key)
-export type SavedRegion = { sido: string; sigungu: string | null };
-
-// [4] 해변 목록에서 칩으로 보여줄 시·도 목록. 해변이 있는 시·도만, SIDO_ORDER 순
-// 순서표에 없는 시·도(새로 생긴 이름 등)는 숨기지 않고 맨 뒤에 붙임
-export function regionChips(beaches: readonly BeachSummary[]): RegionPart[] {
-  // Map = 키 → 값 모음. 같은 시·도는 하나만 남음
-  const found = new Map<string, RegionPart>();
-  for (const beach of beaches) found.set(beach.sido.key, beach.sido);
-  // indexOf가 못 찾으면 -1 → 맨 뒤 순번
-  const rank = (key: string) => {
-    const index = (SIDO_ORDER as readonly string[]).indexOf(key);
-    return index === -1 ? SIDO_ORDER.length : index;
-  };
-  // [...found.values()] = Map의 값들을 배열로. sort는 앨의 순번이 작은 쪽이 앞
-  return [...found.values()].sort((a, b) => rank(a.key) - rank(b.key));
-}
-
-// [5] 저장된 지역이 지금 해변 목록에 없으면(해변이 빠진 경우 등) 고르지 않은 것으로 봄
-// 시·군만 없어졌으면 시·도는 유지
-export function validRegion(
-  saved: SavedRegion | null,
-  beaches: readonly BeachSummary[],
-): SavedRegion | null {
-  if (saved === null) return null;
-  // some = 하나라도 조건에 맞으면 true
-  if (!beaches.some((beach) => beach.sido.key === saved.sido)) return null;
-  if (saved.sigungu === null) return saved;
-  const hasSigungu = beaches.some(
-    (beach) =>
-      beach.sido.key === saved.sido && beach.sigungu.key === saved.sigungu,
-  );
-  return hasSigungu ? saved : { sido: saved.sido, sigungu: null };
-}
+// 기기 저장만 여기. 순수 계산(지리 순서·칩·지역 묶음)은 lib/region-list.ts (BRD-27에서 나눔)
 
 // [6] ── 기기 저장 (lib/activity.ts와 같은 틀) ──
 const STORAGE_KEY = "baradun:region";
@@ -120,7 +72,7 @@ export function setRegion(next: SavedRegion | null) {
   listeners.forEach((listener) => listener());
 }
 
-// [11] 화면에서: const region = validRegion(useRegion(), beaches);
+// [11] 화면에서: const region = validRegion(useRegion(), beaches);  (validRegion은 region-list.ts)
 export function useRegion(): SavedRegion | null {
   return useSyncExternalStore(subscribe, read, () => null);
 }
