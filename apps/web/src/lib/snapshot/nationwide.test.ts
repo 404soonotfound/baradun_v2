@@ -1,7 +1,7 @@
 import type { NationwideWarningsFile, WarningItem } from "@baradun/contracts";
 import { describe, expect, it } from "vitest";
 
-import { nationwideView, readNationwide } from "./nationwide";
+import { currentLoaded, nationwideView, readNationwide } from "./nationwide";
 
 // 전국 해상 특보 (BRD-26)
 const confirmed = "2026-10-17T05:18:40Z";
@@ -99,5 +99,34 @@ describe("nationwideView", () => {
     expect(nationwideView(file, false, { ...live, nowMs })).toMatchObject({
       stale: false,
     });
+  });
+});
+
+describe("currentLoaded", () => {
+  const v1 = "/data/v1/nationwide-warnings.json";
+  const v2 = "/data/v2/nationwide-warnings.json";
+  const empty: NationwideWarningsFile = {
+    lastConfirmedAt: confirmed,
+    items: [],
+  };
+
+  it("지금 주소의 결과면 그대로", () => {
+    expect(currentLoaded({ url: v2, file, failed: true }, v2)).toEqual({
+      file,
+      failed: true,
+    });
+  });
+
+  it("이전 버전 파일은 쓰지 않음: 새 파일을 받는 동안 '특보 없음'이 아니라 loading", () => {
+    const pick = currentLoaded({ url: v1, file: empty, failed: false }, v2);
+    expect(pick).toEqual({ file: null, failed: false });
+    const clock = { offsetMs: 0, trusted: true };
+    expect(
+      nationwideView(pick.file, pick.failed, {
+        live: true,
+        nowMs: at("2026-10-17T05:30:00Z"),
+        clock,
+      }),
+    ).toEqual({ kind: "loading" });
   });
 });

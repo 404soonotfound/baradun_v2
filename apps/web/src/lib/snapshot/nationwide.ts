@@ -82,7 +82,7 @@ export function nationwideView(
 }
 
 // [6] 받은 결과 보관 (activity.ts와 같은 틀). React 바깥 변수라 화면을 옮겨도 남음
-type Loaded = {
+export type Loaded = {
   url: string | null;
   file: NationwideWarningsFile | null;
   failed: boolean;
@@ -104,6 +104,17 @@ function subscribe(onChange: () => void) {
   return () => {
     listeners.delete(onChange);
   };
+}
+
+// 지금 주소의 결과만 씀. 이전 버전 파일은 새 스냅샷의 확인 결과가 아님 → 새 파일을 받을 때까지 loading
+// (이전 빈 목록이 live와 함께 '특보 없음'으로 보이지 않게)
+export function currentLoaded(
+  state: Loaded,
+  url: string,
+): Pick<Loaded, "file" | "failed"> {
+  return state.url === url
+    ? { file: state.file, failed: state.failed }
+    : { file: null, failed: false };
 }
 
 // [7] 파일 받기. 같은 주소를 이미 받았거나 받는 중이면 건너뜀
@@ -149,10 +160,11 @@ export function useNationwideWarnings(): NationwideView {
       : null;
 
   // Vue: watch: { url: { handler: "load", immediate: true } } 자리.
-  // live가 바뀔 때(오프라인 → 다시 연결)도 실패한 파일을 다시 받음
+  // live가 바뀔 때(오프라인 → 다시 연결)와 manifest를 다시 받을 때(5분 조회·앱 복귀, 조회마다 새 객체)도
+  // 실패한 파일을 다시 받음. 이미 받은 파일은 load가 건너뜀
   useEffect(() => {
     if (url) void load(url);
-  }, [url, snapshot.live]);
+  }, [url, snapshot.live, manifest]);
 
   const state = useSyncExternalStore(
     subscribe,
@@ -169,5 +181,6 @@ export function useNationwideWarnings(): NationwideView {
   }
   // manifest는 있는데 주소가 이상함 → 받지 않고 실패로 보여줌
   if (url === null) return { kind: "failed" };
-  return nationwideView(state.file, state.failed, snapshot);
+  const { file, failed } = currentLoaded(state, url);
+  return nationwideView(file, failed, snapshot);
 }
