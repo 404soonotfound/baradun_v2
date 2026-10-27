@@ -92,6 +92,8 @@
       "seaTitle": "Seas in {region}",
       "countTitle": "{count, plural, one {# beach} other {# beaches}} in {region} right now",
       "countLoading": "Loading beach status",
+      "countScope": "No warnings: each beach's warning zone · KMA · checked {time}",
+      "countScopeNoTime": "No warnings: each beach's warning zone · KMA · check time unknown",
       "noBeach": "No beaches in this region are confirmed for this activity yet",
       "offTitle": "Viewing without location",
       "offBody": "Showing beaches in your chosen region. Turn on location to see distances too.",
