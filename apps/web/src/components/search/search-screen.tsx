@@ -175,7 +175,11 @@ export function SearchScreen({
                 <Chip
                   key={chip.key}
                   size="lg"
-                  onClick={() => update(chip.label)}
+                  onClick={() => {
+                    // 지역을 직접 골랐으니 탐색에서 고른 범위에 갇히지 않게 이 화면에서만 풂
+                    setWidened(true);
+                    update(chip.label);
+                  }}
                 >
                   {chip.label}
                 </Chip>
