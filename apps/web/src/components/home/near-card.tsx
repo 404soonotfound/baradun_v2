@@ -10,12 +10,19 @@ import { localizedPath, type Locale } from "@/lib/i18n";
 import { formatKm, joinMeta } from "@/lib/meta-join";
 import { kstStamp } from "@/lib/snapshot/clock";
 import { useBadgeText } from "@/lib/snapshot/use-badge-text";
-import { useTimeText } from "@/lib/snapshot/use-time-text";
-import type { BeachView, MetricView } from "@/lib/snapshot/view";
+import { useMetaText } from "@/lib/snapshot/use-meta-text";
+import type { BeachView, MetricKey, MetricView } from "@/lib/snapshot/view";
 
 // 가까운 바다 카드 (노션 2장 HOME 7 · 3장 NearCard, Figma S_M01_01 171:379)
-// 해변명·지역·거리 + 상태 배지 → 파고·수온·바람 3칸 → 근거 줄(범위 → 기관 → 시각) + 현장 우선 문구
+// 해변명·지역·거리 + 상태 배지 → 파고·수온·바람 3칸 → 근거 줄(특보 범위 → 기관 → 시각, 지표별 측정소 → 관측 시각) + 현장 우선 문구
 // 상태는 view를 그대로 씀(G1). 값이 없으면 0이 아니라 "–"(hidden) 또는 '가까운 관측 없음'(none)
+
+// 카드에 보이는 지표 3칸(순서 = 칸 순서)
+const CARD_METRICS = [
+  "waveHeight",
+  "waterTemp",
+  "wind",
+] as const satisfies readonly MetricKey[];
 
 // [1] Vue: props: { locale, beach, distanceKm, view, nowMs }
 export function NearCard({
@@ -33,11 +40,21 @@ export function NearCard({
 }) {
   const t = useTranslations();
   const { confirmedUntilText } = useBadgeText();
-  const { measuredAgoText } = useTimeText();
+  const { observationMeta } = useMetaText();
 
   // [2] 거리: 2.1 → "2.1km". joinMeta가 null·빈 칸을 빼고 " · "로 이어 줌
   const km = distanceKm === null ? null : formatKm(distanceKm);
   const place = joinMeta([beach.region, km && `${km}km`]);
+
+  // 칸에 보일 지표. null = 아직 불러오는 중.
+  // 측정소 정보가 없는 값은 출처를 붙일 수 없어 보이지 않음("–")
+  function shownMetric(key: (typeof CARD_METRICS)[number]): MetricView | null {
+    if (view.kind !== "ready") return null;
+    const metric = view.metrics[key];
+    return metric.kind === "value" && beach.stations[key] === null
+      ? { kind: "hidden" }
+      : metric;
+  }
 
   // [3] 근거 줄. 배지 '특보 없음'은 범위·기관·시각이 함께 있어야 함(공통 규칙)
   const notes: string[] = [];
@@ -49,14 +66,14 @@ export function NearCard({
     } else if (view.badge.kind === "clear" && time) {
       notes.push(t("home.near.clearScope", { time }));
     }
-    const wave = view.metrics.waveHeight;
-    if (wave.kind === "value") {
-      // "10분 전 측정 · 파고 0.6m"
-      const measured = joinMeta([
-        measuredAgoText(wave.observedAt, nowMs),
-        `${t("observation.metric.waveHeight")} ${wave.value}${wave.unit}`,
-      ]);
-      if (measured) notes.push(measured);
+    // 값을 보인 지표마다 출처·관측 시각: "수온 · 연곡 파고부이 8.3km · 10분 전 측정"
+    // 지표마다 측정소·관측 시각이 다를 수 있어 따로 적음. 특보 출처(기상청)와 섞지 않음
+    for (const key of CARD_METRICS) {
+      const metric = shownMetric(key);
+      const station = beach.stations[key];
+      if (metric?.kind === "value" && station !== null) {
+        notes.push(observationMeta(key, station, metric.observedAt, nowMs));
+      }
     }
   }
   notes.push(t("safety.finalCall"));
@@ -85,24 +102,15 @@ export function NearCard({
       </span>
 
       <span className="grid grid-cols-3 divide-x divide-border-default">
-        <MetricCell
-          label={t("observation.metric.waveHeight")}
-          metric={view.kind === "ready" ? view.metrics.waveHeight : null}
-          none={t("observation.none")}
-          empty={t("home.near.noValue")}
-        />
-        <MetricCell
-          label={t("observation.metric.waterTemp")}
-          metric={view.kind === "ready" ? view.metrics.waterTemp : null}
-          none={t("observation.none")}
-          empty={t("home.near.noValue")}
-        />
-        <MetricCell
-          label={t("observation.metric.wind")}
-          metric={view.kind === "ready" ? view.metrics.wind : null}
-          none={t("observation.none")}
-          empty={t("home.near.noValue")}
-        />
+        {CARD_METRICS.map((key) => (
+          <MetricCell
+            key={key}
+            label={t(`observation.metric.${key}`)}
+            metric={shownMetric(key)}
+            none={t("observation.none")}
+            empty={t("home.near.noValue")}
+          />
+        ))}
       </span>
 
       <span className="flex flex-col gap-0.5 border-t border-border-default pt-2.5 text-caption text-text-muted">

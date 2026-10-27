@@ -17,4 +17,5 @@ export type BeachSummary = {
   // Beach["coords"] = Beach 타입의 coords 칸 타입({ lat: number; lng: number })을 그대로 가져옴
   coords: Beach["coords"]; // 거리 계산은 기기 안에서만
   activities: Beach["activities"]; // 활동 타일로 거를 때 씀
+  stations: Beach["stations"]; // 관측값 출처(측정소 이름·거리) 표시용
 };

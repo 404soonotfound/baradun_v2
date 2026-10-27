@@ -81,5 +81,6 @@ export function listBeachSummaries(locale: Locale): BeachSummary[] {
       region: `${beach.region.sido[locale]} ${beach.region.sigungu[locale]}`,
       coords: beach.coords,
       activities: beach.activities,
+      stations: beach.stations,
     }));
 }
