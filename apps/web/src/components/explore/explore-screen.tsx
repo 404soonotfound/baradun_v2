@@ -289,12 +289,15 @@ export function ExploreScreen({
           {activity !== "swimming" && (
             <p>{t("explore.activityNote", { count: items.length })}</p>
           )}
-          <p>
-            {joinMeta([
-              countText,
-              dataTime && t("explore.updatedAt", { time: dataTime }),
-            ])}
-          </p>
+          {/* 결과가 없으면 '전체 0곳'을 되풀이하지 않고 아래 빈 화면이 말함 */}
+          {items.length > 0 && (
+            <p>
+              {joinMeta([
+                countText,
+                dataTime && t("explore.updatedAt", { time: dataTime }),
+              ])}
+            </p>
+          )}
         </div>
       )}
 
