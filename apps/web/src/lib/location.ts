@@ -55,11 +55,17 @@ function locate() {
 }
 
 // [6] 권한 상태 → 내 상태. 묻는 창은 띄우지 않음
+// 버튼으로 받는 중(locating)이거나 이미 받은 위치(ready)는 덮지 않음:
+// 묻는 창에서 허용하면 onchange("granted")도 같이 와서, 그대로 locate하면 ready → locating으로 되돌아감
 function applyPermission(permission: PermissionState) {
-  if (permission === "granted") locate();
-  else if (permission === "denied")
+  if (permission === "denied") {
     setState({ status: "denied", coords: null });
-  else setState(IDLE); // "prompt" = 아직 안 물어봄
+    return;
+  }
+  if (state.status === "locating") return;
+  if (permission === "granted") {
+    if (state.status !== "ready") locate();
+  } else setState(IDLE); // "prompt" = 아직 안 물어봄(권한을 초기화한 경우 포함)
 }
 
 // [7] 처음 구독할 때 한 번: 이미 허용·거부된 기기인지 확인
