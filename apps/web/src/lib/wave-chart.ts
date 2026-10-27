@@ -21,14 +21,17 @@ export type WaveChart =
       runs: ChartPoint[][];
       // 빗금 구간: 측정값 없음·간격 90분 초과
       gaps: ChartRange[];
-      // 현재값(점·라벨). 가장 최근 점이 결측이거나 마지막 값이 90분보다 오래되면 null(지난 값을 '지금'으로 보이지 않게)
+      // 현재값(점·라벨). 이력 점 시각은 다음 정시로 올린 버킷 시각이라 신선도 판단에 쓰지 않음.
+      // 실제 관측 시각으로 검증된 파고(latest)만 쓰고, 지연·결측이면 null(지난 값을 '지금'으로 보이지 않게)
       current: ChartPoint | null;
     };
 
 // 받은 점 → 차트. 읽을 수 없는 시각·미래 시각·24시간 밖 점은 버림
+// latest: 스냅숏의 파고 지표가 신선한 값일 때만 { 실제 관측 시각, 값 }, 아니면 null
 export function waveChart(
   points: readonly { t: unknown; v: unknown }[],
   nowMs: number,
+  latest: ChartPoint | null,
 ): WaveChart {
   if (!Number.isFinite(nowMs)) return { kind: "empty" };
   const from = nowMs - CHART_SPAN_MS;
@@ -77,18 +80,29 @@ export function waveChart(
   for (let i = 1; i < runs.length; i += 1) {
     gaps.push({ from: runs[i - 1]!.at(-1)!.t, to: runs[i]![0]!.t });
   }
-  // 끝쪽: 가장 최근 점이 결측이거나 마지막 값이 90분보다 오래됐으면 지금까지 빗금, 현재값 없음
+  // 끝쪽: 가장 최근 점이 결측이거나 마지막 값이 90분보다 오래됐으면 지금까지 빗금
   const latestMissing = placed.at(-1)!.v === null;
-  const trailing = latestMissing || nowMs - end.t > CHART_GAP_MS;
-  if (trailing) gaps.push({ from: end.t, to: nowMs });
+  if (latestMissing || nowMs - end.t > CHART_GAP_MS) {
+    gaps.push({ from: end.t, to: nowMs });
+  }
+  // 현재값은 가로축 안에 놓이는 검증된 값만
+  const current =
+    latest &&
+    Number.isFinite(latest.t) &&
+    Number.isFinite(latest.v) &&
+    latest.v >= 0 &&
+    latest.t >= from &&
+    latest.t <= nowMs + CLOCK_TOLERANCE_MS
+      ? { t: Math.min(latest.t, nowMs), v: latest.v }
+      : null;
 
   return {
     kind: "ready",
     from,
     to: nowMs,
-    maxV: Math.max(...valid.map((point) => point.v)),
+    maxV: Math.max(...valid.map((point) => point.v), current?.v ?? 0),
     runs,
     gaps,
-    current: trailing ? null : end,
+    current,
   };
 }

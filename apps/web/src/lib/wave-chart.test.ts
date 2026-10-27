@@ -13,11 +13,11 @@ describe("waveChart", () => {
       t: hour(h),
       v: null,
     }));
-    expect(waveChart(points, NOW)).toEqual({ kind: "empty" });
+    expect(waveChart(points, NOW, null)).toEqual({ kind: "empty" });
   });
 
   it("점이 없으면 그리지 않음", () => {
-    expect(waveChart([], NOW)).toEqual({ kind: "empty" });
+    expect(waveChart([], NOW, null)).toEqual({ kind: "empty" });
   });
 
   it("1시간 간격 점은 한 선으로 잇고 빗금 없음", () => {
@@ -25,7 +25,7 @@ describe("waveChart", () => {
       t: hour(h),
       v: 0.5,
     }));
-    const chart = waveChart(points, NOW);
+    const chart = waveChart(points, NOW, null);
     expect(chart).toMatchObject({ kind: "ready", gaps: [] });
     if (chart.kind === "ready") expect(chart.runs).toHaveLength(1);
   });
@@ -38,7 +38,7 @@ describe("waveChart", () => {
       { t: hour(23), v: 0.7 },
       { t: hour(24), v: 0.7 },
     ];
-    const chart = waveChart(points, NOW);
+    const chart = waveChart(points, NOW, null);
     if (chart.kind !== "ready") throw new Error("ready여야 함");
     expect(chart.runs.map((run) => run.length)).toEqual([1, 3]);
     expect(chart.gaps).toContainEqual({
@@ -56,6 +56,7 @@ describe("waveChart", () => {
         { t: iso(base + 90 * 60_000), v: 1 },
       ],
       NOW,
+      null,
     );
     const split = waveChart(
       [
@@ -63,13 +64,14 @@ describe("waveChart", () => {
         { t: iso(base + 90 * 60_000 + 1000), v: 1 },
       ],
       NOW,
+      null,
     );
     expect(joined.kind === "ready" && joined.runs.length).toBe(1);
     expect(split.kind === "ready" && split.runs.length).toBe(2);
   });
 
   it("마지막 값이 90분보다 오래됐으면 지금까지 빗금", () => {
-    const chart = waveChart([{ t: hour(20), v: 1 }], NOW);
+    const chart = waveChart([{ t: hour(20), v: 1 }], NOW, null);
     if (chart.kind !== "ready") throw new Error("ready여야 함");
     expect(chart.gaps.at(-1)).toEqual({ from: Date.parse(hour(20)), to: NOW });
   });
@@ -83,12 +85,13 @@ describe("waveChart", () => {
         { t: hour(23), v: -1 },
       ],
       NOW,
+      null,
     );
     expect(chart).toEqual({ kind: "empty" });
   });
 
   it("지금 시각을 모르면 그리지 않음", () => {
-    expect(waveChart([{ t: hour(23), v: 1 }], NaN)).toEqual({
+    expect(waveChart([{ t: hour(23), v: 1 }], NaN, null)).toEqual({
       kind: "empty",
     });
   });
@@ -101,19 +104,21 @@ describe("waveChart", () => {
         { t: hour(24), v: null },
       ],
       NOW,
+      null,
     );
     if (chart.kind !== "ready") throw new Error("ready여야 함");
     expect(chart.current).toBeNull();
     expect(chart.gaps.at(-1)).toEqual({ from: Date.parse(hour(23)), to: NOW });
   });
 
-  it("마지막 값이 최신이고 90분 안이면 현재값", () => {
+  it("검증된 지금 파고가 있으면 현재값", () => {
     const chart = waveChart(
       [
         { t: hour(23), v: 0.5 },
         { t: hour(24), v: 0.6 },
       ],
       NOW,
+      { t: NOW, v: 0.6 },
     );
     expect(chart.kind === "ready" && chart.current).toEqual({
       t: NOW,
@@ -131,6 +136,7 @@ describe("waveChart", () => {
         { t: iso(base + 40 * 60_000), v: 0.6 },
       ],
       NOW,
+      null,
     );
     if (chart.kind !== "ready") throw new Error("ready여야 함");
     expect(chart.runs).toHaveLength(2);
@@ -147,6 +153,7 @@ describe("waveChart", () => {
         { t: hour(1), v: 0.5 },
       ],
       NOW,
+      null,
     );
     if (chart.kind !== "ready") throw new Error("ready여야 함");
     expect(chart.gaps[0]).toEqual({

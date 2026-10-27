@@ -6,7 +6,7 @@ import { useId } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { kstStamp } from "@/lib/snapshot/clock";
 import { useStationHistory } from "@/lib/snapshot/history";
-import { waveChart } from "@/lib/wave-chart";
+import { type ChartPoint, waveChart } from "@/lib/wave-chart";
 
 // 24시간 파고 (BRD-32 · 노션 3장 WaveChart, 10/27 결정 ⑥)
 // 0부터 시작하는 축(0.5m 간격), 선 + 연한 면, 현재값 점과 값 라벨, x축 "24시간 전 · 12시간 전 · 지금".
@@ -21,9 +21,11 @@ const BOTTOM = 112;
 
 export function WaveChart({
   stationId,
+  latest,
   nowMs,
 }: {
   stationId: string | null; // 파고 측정소 id. 없으면(20km 밖) 기록도 없음
+  latest: ChartPoint | null; // 실제 관측 시각으로 검증된 지금 파고. 지연·결측이면 null → 현재값 숨김
   nowMs: number;
 }) {
   const t = useTranslations("detail.chart");
@@ -42,7 +44,7 @@ export function WaveChart({
     if (history.kind === "failed") {
       return <p className="text-body-s text-text-body">{t("failed")}</p>;
     }
-    const chart = waveChart(history.history?.points ?? [], nowMs);
+    const chart = waveChart(history.history?.points ?? [], nowMs, latest);
     if (chart.kind === "empty") {
       return (
         <p className="flex h-[88px] items-center justify-center rounded-input border border-dashed border-border-strong px-4 text-center text-body-s text-text-muted">
