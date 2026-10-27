@@ -17,10 +17,15 @@ export function LocationOffBanner({
   locale,
   status,
   onClose,
+  title,
+  body,
 }: {
   locale: Locale;
   status: LocationState["status"];
   onClose: () => void;
+  // 지역을 고르지 않는 화면(탐색)은 제목·설명을 직접 줌. 없으면 홈 문구
+  title?: string;
+  body?: string;
 }) {
   const t = useTranslations("home.region");
   const turnOn =
@@ -44,11 +49,11 @@ export function LocationOffBanner({
     <Banner
       tone="gray"
       icon={<MapPinOff size={16} />}
-      title={t("offTitle")}
+      title={title ?? t("offTitle")}
       action={turnOn}
       dismiss={{ label: t("close"), onClick: onClose }}
     >
-      {t("offBody")}
+      {body ?? t("offBody")}
     </Banner>
   );
 }

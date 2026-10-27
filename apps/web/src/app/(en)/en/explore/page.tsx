@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
-import { PlaceholderPage } from "@/components/placeholder-page";
+import { ExploreScreen } from "@/components/explore/explore-screen";
+import { listBeachSummaries } from "@/lib/beaches";
+import { hasDevSampleSnapshot } from "@/lib/dev-sample";
 import { alternatesFor } from "@/lib/i18n";
 
-// /explore/ (아키텍처 9장 확정 경로). 실제 화면은 화면 이슈에서 채워요 (BRD-24)
+// 탐색 /explore/ (BRD-29). 해변 목록은 빌드 때 만들어 넘기고, 상태는 브라우저가 따로 받음(G4)
 const PATH = "/explore/";
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -12,5 +14,11 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default function Page() {
-  return <PlaceholderPage locale="en" page="explore" />;
+  return (
+    <ExploreScreen
+      locale="en"
+      beaches={listBeachSummaries("en")}
+      sampleSnapshot={hasDevSampleSnapshot()}
+    />
+  );
 }

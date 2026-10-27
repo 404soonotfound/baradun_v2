@@ -368,5 +368,41 @@
     "more": "자세히",
     "waveTitle": "파고",
     "waveBody": "측정값과 측정 시각만 보여줘요. 나에게 맞는 파고인지는 직접 판단해 주세요."
+  },
+  "explore": {
+    "regionLabel": "지역",
+    "nationwide": "전국",
+    "sortLabel": "목록 보기 방식",
+    "sort": {
+      "status": "상태별",
+      "near": "가까운 순",
+      "name": "이름 순"
+    },
+    "count": "전체 {count}곳",
+    "updatedAt": "{time} 업데이트",
+    "activityNote": "활동 정보가 확인된 해변만 보여요 · {count}곳",
+    "loading": "해변 정보를 불러오고 있어요",
+    "group": {
+      "clear": "특보 없음 {count}곳",
+      "unavailable": "이용불가 {count}곳",
+      "undetermined": "판단불가 {count}곳",
+      "nearest": "가장 가까운 곳 {km}km"
+    },
+    "row": {
+      "clearScopeNoTime": "이 해변 특보구역 · 기상청 · 확인 시각 모름"
+    },
+    "noClear": {
+      "title": "지금 '특보 없음'으로 확인된 해변이 없어요",
+      "body": "특보가 있거나 확인하지 못한 해변이에요 · 현장 안내를 확인하세요"
+    },
+    "locationOff": {
+      "title": "위치를 쓰지 않고 있어요",
+      "body": "거리 대신 이름 순으로 보여드려요 · 위치를 켜면 거리도 함께 보여드려요"
+    },
+    "empty": {
+      "title": "이 조건에 맞는 해변이 없어요",
+      "body": "활동이나 지역을 바꿔 보세요",
+      "action": "전국 보기"
+    }
   }
 }
