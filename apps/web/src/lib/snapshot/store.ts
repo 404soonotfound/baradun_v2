@@ -511,6 +511,8 @@ export function createSnapshotStore(deps: SnapshotDeps): SnapshotStore {
     unwatchConnection =
       deps.onConnectionChange?.(() => {
         if (inFlight) connectionChanged = true;
+        // 이전 연결에서 난 실패는 지금 연결의 실패가 아님(숨겨진 동안 바뀌어 다시 조회하지 않은 경우 포함)
+        if (state.failedOnline) set({ failedOnline: false });
         if (deps.isVisible()) resume();
       }) ?? null;
     if (deps.isVisible()) resume(); // 처음 열 때

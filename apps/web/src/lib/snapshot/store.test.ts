@@ -682,6 +682,19 @@ describe("연결 상태와 불러오기 실패 (BRD-28)", () => {
       failedOnline: false,
     });
   });
+
+  it("숨겨진 동안 연결이 바뀌면 이전 연결의 실패를 지움(다시 보일 때 받는 동안 실패로 보이지 않음)", async () => {
+    const { store, server, setOnline, setVisible } = setup();
+    server.down = true;
+    store.start();
+    await store.refresh();
+    expect(store.getState().failedOnline).toBe(true);
+
+    setVisible(false);
+    setOnline(false);
+    setOnline(true);
+    expect(store.getState().failedOnline).toBe(false);
+  });
 });
 
 describe("요청 시간 제한 (끝나지 않는 응답)", () => {
