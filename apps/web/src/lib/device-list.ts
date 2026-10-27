@@ -18,7 +18,6 @@ export function addToFront(
 }
 
 // [3] 저장 글자(JSON) → id 목록. 깨졌거나 모양이 다르면 빈 목록(오류로 화면을 멈추지 않음)
-// string | null = 글자 또는 null (localStorage.getItem이 없을 때 null을 돌려줌)
 export function parseIds(raw: string | null): readonly string[] {
   if (raw === null) return EMPTY_IDS;
   try {
