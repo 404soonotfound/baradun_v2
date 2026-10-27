@@ -3,6 +3,7 @@
 import type { WarningItem } from "@baradun/contracts";
 import { ExternalLink } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
+import { useState } from "react";
 
 import { ReasonBadge } from "@/components/reason-badge";
 import { Sheet } from "@/components/ui/sheet";
@@ -11,6 +12,11 @@ import { useBadgeText } from "@/lib/snapshot/use-badge-text";
 import { useMetaText } from "@/lib/snapshot/use-meta-text";
 import type { Locale } from "@/lib/i18n";
 import { kmaOriginalUrl } from "@/lib/warning-link";
+import {
+  rememberSeen,
+  sameWarning,
+  type SeenWarning,
+} from "@/lib/warning-seen";
 import { zoneNameText } from "@/lib/zone-name";
 
 // 특보 상세 시트 WARN (BRD-33 · 노션 2장 WARN, 결정 기록 11장 10/27 ④)
@@ -46,15 +52,21 @@ export function WarningSheet({
     ? ({ kind: "warning", type: item.type, level: item.level } as const)
     : null;
   const agency = source ? agencyText(source) : null;
-  const time = kstStamp(confirmedAt, nowMs);
-  // 열 때 고른 특보가 지금 목록에 없으면(해제·조회 실패) 지금 확인 시각을 붙이지 않음
+  // 이 특보가 목록에 마지막으로 있던 확인 시각을 기억함(이전 렌더 값으로 갱신하는 React 파생 상태 방식)
+  const [seen, setSeen] = useState<SeenWarning | null>(null);
+  const nextSeen = rememberSeen(seen, item, items, confirmedAt);
+  if (nextSeen !== seen) setSeen(nextSeen);
+  // 열 때 고른 특보가 지금 목록에 없으면(해제·단계 변경·조회 실패) 지금 확인 시각을 붙이지 않고
+  // 마지막으로 목록에 있던 시각으로 'HH:MM 확인 · 이후 확인 못 함'
   const listed =
     item !== null && items.some((other) => sameWarning(other, item));
+  const seenAt = nextSeen?.confirmedAt ?? null;
+  const time = kstStamp(seenAt, nowMs);
   const zone = item ? zoneNameText(item, locale) : null;
   // 확인 줄: live면 "기상청 발표 · 14:30에 확인", B5·시각 모름이면 'HH:MM 확인 · 이후 확인 못 함'
   const checked =
     stale || !listed || !time
-      ? confirmedUntilText(confirmedAt, nowMs)
+      ? confirmedUntilText(seenAt, nowMs)
       : agency
         ? t("warningSheet.checked", { source: agency, time })
         : null;
@@ -118,16 +130,5 @@ export function WarningSheet({
         </div>
       )}
     </Sheet>
-  );
-}
-
-// 같은 특보인지: 구역·종류·단계·발표 시각(목록 key와 같은 기준). 조회마다 새 객체라 값으로 비교
-function sameWarning(a: WarningItem, b: WarningItem): boolean {
-  return (
-    a.zoneCode === b.zoneCode &&
-    a.zoneName === b.zoneName &&
-    a.type === b.type &&
-    a.level === b.level &&
-    a.publishedAt === b.publishedAt
   );
 }
