@@ -174,6 +174,25 @@ describe("deriveDetail", () => {
     expect(missing.ripCurrent).toBe("unknown");
   });
 
+  it("읽을 수 없는 주변 특보는 버리지 않고 개수로 남김(Codex P1)", () => {
+    const statuses = withStatus("b0001", (status) => {
+      (status.info.nearbyWarnings[0] as { level: string }).level = "new_level";
+    });
+    const { detail } = detailOf("b0001", source({}, statuses));
+    expect(detail.nearbyWarnings).toEqual([]);
+    expect(detail.unreadableNearby).toBe(1);
+  });
+
+  it("주변 특보 목록 자체를 읽을 수 없으면 'all'(빈 목록으로 보지 않음)", () => {
+    const statuses = withStatus("b0001", (status) => {
+      (status.info as { nearbyWarnings: unknown }).nearbyWarnings = null;
+    });
+    expect(
+      detailOf("b0001", source({}, statuses)).detail.unreadableNearby,
+    ).toBe("all");
+    expect(detailOf("b0001", source()).detail.unreadableNearby).toBe(0);
+  });
+
   it("점검 중이면 아무것도 꺼내지 않음", () => {
     const { detail } = detailOf("b0002", source({ phase: "maintenance" }));
     expect(detail.warnings).toEqual([]);

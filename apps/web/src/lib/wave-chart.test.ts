@@ -92,4 +92,66 @@ describe("waveChart", () => {
       kind: "empty",
     });
   });
+
+  it("가장 최근 점이 null이면 직전 값이 90분 안이어도 끝을 빗금으로, 현재값 없음(Codex P1)", () => {
+    // 지금 12:00, 11:00은 0.5m, 12:00은 null
+    const chart = waveChart(
+      [
+        { t: hour(23), v: 0.5 },
+        { t: hour(24), v: null },
+      ],
+      NOW,
+    );
+    if (chart.kind !== "ready") throw new Error("ready여야 함");
+    expect(chart.current).toBeNull();
+    expect(chart.gaps.at(-1)).toEqual({ from: Date.parse(hour(23)), to: NOW });
+  });
+
+  it("마지막 값이 최신이고 90분 안이면 현재값", () => {
+    const chart = waveChart(
+      [
+        { t: hour(23), v: 0.5 },
+        { t: hour(24), v: 0.6 },
+      ],
+      NOW,
+    );
+    expect(chart.kind === "ready" && chart.current).toEqual({
+      t: NOW,
+      v: 0.6,
+    });
+  });
+
+  it("명시된 null은 간격이 짧아도 선을 끊음", () => {
+    const base = Date.parse(hour(22));
+    const iso = (ms: number) => new Date(ms).toISOString();
+    const chart = waveChart(
+      [
+        { t: iso(base), v: 0.5 },
+        { t: iso(base + 20 * 60_000), v: null },
+        { t: iso(base + 40 * 60_000), v: 0.6 },
+      ],
+      NOW,
+    );
+    if (chart.kind !== "ready") throw new Error("ready여야 함");
+    expect(chart.runs).toHaveLength(2);
+    expect(chart.gaps).toContainEqual({
+      from: base,
+      to: base + 40 * 60_000,
+    });
+  });
+
+  it("첫 값 앞의 null은 24시간 시작부터 빗금", () => {
+    const chart = waveChart(
+      [
+        { t: hour(0), v: null },
+        { t: hour(1), v: 0.5 },
+      ],
+      NOW,
+    );
+    if (chart.kind !== "ready") throw new Error("ready여야 함");
+    expect(chart.gaps[0]).toEqual({
+      from: NOW - 24 * 60 * 60_000,
+      to: Date.parse(hour(1)),
+    });
+  });
 });
