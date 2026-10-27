@@ -140,7 +140,13 @@ export function VerdictCard({
       : wave.kind === "delayed"
         ? t("observation.delayedShort")
         : null;
-  const warningCell = blocked
+  // '발효 중'은 특보 사유·항목이 있을 때만. 모르는 사유('이용 제한')는 특보라고 지어내지 않고 '확인 못 함'
+  const warningActive =
+    blocked &&
+    (view.reasons.some((reason) => reason.kind === "warning") ||
+      detail.warnings.length > 0 ||
+      detail.unreadableWarnings > 0);
+  const warningCell = warningActive
     ? { icon: "blocked" as const, text: t("detail.verdict.warningActive") }
     : detail.warningConfirmedNone
       ? { icon: "clear" as const, text: t("detail.verdict.warningNone") }
@@ -309,7 +315,10 @@ function ReasonBox({
       { id: beachId, hidden: false },
       getSnapshotState(),
     );
-    if (after.kind === "ready" && after.badge.kind === "warning_unknown") {
+    if (
+      after.kind === "ready" &&
+      after.reasons.some((reason) => reason.kind === "warning_unknown")
+    ) {
       setAnnouncement(t("recheckFailed"));
     }
   }
@@ -353,7 +362,8 @@ function ReasonBox({
     );
   }
 
-  if (view.badge.kind === "warning_unknown") {
+  // 첫 사유가 아니어도(예: 관측 지연 · 특보 확인 못 함) 다시 확인할 수 있게 사유 전체를 봄
+  if (view.reasons.some((reason) => reason.kind === "warning_unknown")) {
     return (
       <div className="flex flex-col gap-1">
         {/* disabled 대신 aria-disabled: 확인하는 동안에도 포커스가 버튼에 남음 */}

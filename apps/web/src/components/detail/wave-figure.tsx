@@ -51,7 +51,7 @@ const reducedMotion = () =>
 
 export function WaveFigure({
   height,
-  period,
+  period: rawPeriod,
   delayed = false,
 }: {
   height: number | null; // 파고(m). null = 값 없음 → 그리지 않음
@@ -60,6 +60,8 @@ export function WaveFigure({
   delayed?: boolean;
 }) {
   const t = useTranslations("detail.figure");
+  // 0 이하 파주기는 움직일 수 없어 파주기 없음과 같게 둠('0초마다 오르내려요'·쓸모없는 일시정지 버튼이 보이지 않게)
+  const period = rawPeriod !== null && rawPeriod > 0 ? rawPeriod : null;
   const reduce = useSyncExternalStore(
     subscribeReducedMotion,
     reducedMotion,
@@ -74,8 +76,7 @@ export function WaveFigure({
   const shown = height === null ? 0 : Math.min(height, TOP_M);
   const amp = (shown * PX_PER_M) / 2;
   const mid = ZERO_Y - amp;
-  const moving =
-    height !== null && period !== null && period > 0 && !reduce && !paused;
+  const moving = height !== null && period !== null && !reduce && !paused;
 
   // 한 장면 그리기. t = 경과 초
   useEffect(() => {

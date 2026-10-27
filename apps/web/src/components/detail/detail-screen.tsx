@@ -25,7 +25,7 @@ import type { Locale } from "@/lib/i18n";
 import { useUserLocation } from "@/lib/location";
 import { formatKm } from "@/lib/meta-join";
 import { pickSituation } from "@/lib/situation";
-import { deriveDetail } from "@/lib/snapshot/detail";
+import { deriveDetail, warningSourceOf } from "@/lib/snapshot/detail";
 import { useSnapshot } from "@/lib/snapshot/use-snapshot";
 import { deriveBeachView } from "@/lib/snapshot/view";
 import { useOnline } from "@/lib/use-online";
@@ -77,7 +77,7 @@ export function DetailScreen({
             { id: item.id, hidden: false },
             snapshot,
           );
-          const { warningSource } = deriveDetail(item.id, itemView, snapshot);
+          const warningSource = warningSourceOf(item.id, snapshot);
           return warningSource
             ? [{ ...item, view: itemView, warningSource }]
             : [];
