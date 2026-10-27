@@ -100,9 +100,12 @@ export function HomeScreen({
 
   // [5] 지역을 골랐으면 위치와 관계없이 그 지역을 보여줌 (10/27 결정)
   const byRegion = region !== null;
-  // '위치 없이 보고 있어요'는 지역으로 보는데 위치도 없을 때만
+  // '위치 없이 보고 있어요'는 지역으로 보는데 위치도 없을 때만(권한 확인 중·받는 중은 아직 모름)
   const locationOff =
-    byRegion && location.status !== "ready" && location.status !== "locating";
+    byRegion &&
+    location.status !== "ready" &&
+    location.status !== "locating" &&
+    location.status !== "checking";
   // 고른 지역의 해변 전체(이름 순). 개수 카드는 전체, 카드는 앞에서 NEAR_COUNT곳
   const regionBeaches = useMemo(
     () =>
@@ -330,7 +333,8 @@ function NearContent({
     );
   }
 
-  if (status === "locating") {
+  // 권한 확인 중(앱을 연 직후)도 받는 중처럼 자리만 잡음(버튼·지역 칩이 잠깐 보였다 사라지지 않게)
+  if (status === "locating" || status === "checking") {
     return (
       <div
         role="status"
