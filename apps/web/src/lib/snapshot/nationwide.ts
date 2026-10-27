@@ -10,7 +10,11 @@ import {
   isTime,
 } from "./clock";
 import { REQUEST_TIMEOUT_MS } from "./store";
-import { refreshSnapshot, useSnapshot } from "./use-snapshot";
+import {
+  recomputeSnapshot,
+  refreshSnapshot,
+  useSnapshot,
+} from "./use-snapshot";
 import {
   hidesLastValues,
   includes,
@@ -196,7 +200,7 @@ export function useNationwideWarnings(): NationwideView {
   }
   const view = pick();
 
-  // 45분 만료 시각에 바다 정보를 다시 조회(조회가 끝나면 store가 nowMs를 바꿔 화면이 다시 계산됨).
+  // 45분 만료 시각에 바다 정보를 다시 조회 (만료 시각에 바로 다시 계산하고, 새 데이터도 조회함)
   // store의 만료 타이머는 해변 status만 보므로, 없으면 '특보 없음'이 다음 5분 조회까지 남을 수 있음
   const expiresAt =
     view.kind === "ready" && !view.stale && view.confirmedAt !== null
@@ -210,7 +214,9 @@ export function useNationwideWarnings(): NationwideView {
     if (deadline === null) return;
     const delay = Math.max(0, deadline - correctedNow(clock, Date.now()));
     const timer = setTimeout(() => {
-      // 안 보이는 동안은 조회하지 않음(앱 복귀 때 store가 다시 계산·조회함)
+      // 만료를 먼저 화면에 반영(조회가 늦거나 실패해도 '특보 없음'이 남지 않게)
+      recomputeSnapshot();
+      // 새 데이터 조회는 따로. 안 보이는 동안은 조회하지 않음(앱 복귀 때 store가 다시 조회함)
       if (document.visibilityState === "visible") void refreshSnapshot();
     }, delay);
     return () => clearTimeout(timer);

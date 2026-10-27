@@ -235,6 +235,19 @@ describe("manifest 먼저, 바뀔 때만 status", () => {
 });
 
 describe("갱신 시점", () => {
+  it("recompute는 응답을 기다리지 않고 지금 시각으로 바꿈", async () => {
+    const { store, server } = setup();
+    store.start();
+    await store.refresh();
+    const before = store.getState().nowMs;
+    // 10분 뒤, 서버 응답은 끝나지 않음
+    vi.setSystemTime(DEVICE_START + 10 * 60_000);
+    server.hang = true;
+    void store.refresh();
+    store.recompute();
+    expect(store.getState().nowMs).toBeGreaterThanOrEqual(before + 10 * 60_000);
+  });
+
   it("열어 둔 동안 5분마다 manifest 확인", async () => {
     const { store, manifestCalls } = setup();
     store.start();
