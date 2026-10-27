@@ -55,9 +55,9 @@
       "heavy_snow": "대설",
       "dry": "건조",
       "yellow_dust": "황사",
-      "tropical_night": "열대야",
-      "unknown": "기타 특보"
-    }
+      "tropical_night": "열대야"
+    },
+    "nearbyUnknown": "기타 {level}"
   },
   "observation": {
     "none": "가까운 관측 없음",
@@ -192,7 +192,8 @@
       "warningActive": "발효 중",
       "warningNone": "없음",
       "warningUnknown": "확인 못 함",
-      "waveValue": "파고 {value}m"
+      "waveValue": "파고 {value}m",
+      "unreadableWarning": "발효 중인 특보가 있지만 내용을 읽지 못했어요 · 기상청에서 확인하세요"
     },
     "alt": {
       "title": "가까운 특보 없는 해변",
@@ -214,7 +215,8 @@
       "waist": "허리",
       "chest": "가슴",
       "caption": "부표가 앞 물결을 타고 {period}초(파주기)마다 한 번 오르내려요 · 앞 물결 높이와 왼쪽 파란 띠 = 파고 {height}m · 뒤 물결과 물결 간격은 분위기용 · 기준선은 성인 평균 키",
-      "captionNoPeriod": "앞 물결 높이와 왼쪽 파란 띠 = 파고 {height}m · 파주기 측정값이 없어 움직이지 않아요 · 뒤 물결과 물결 간격은 분위기용 · 기준선은 성인 평균 키"
+      "captionNoPeriod": "앞 물결 높이와 왼쪽 파란 띠 = 파고 {height}m · 파주기 측정값이 없어 움직이지 않아요 · 뒤 물결과 물결 간격은 분위기용 · 기준선은 성인 평균 키",
+      "delayed": "측정이 늦어져 파도를 그리지 않아요"
     },
     "chart": {
       "title": "24시간 파고",

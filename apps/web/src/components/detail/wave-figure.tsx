@@ -52,9 +52,12 @@ const reducedMotion = () =>
 export function WaveFigure({
   height,
   period,
+  delayed = false,
 }: {
   height: number | null; // 파고(m). null = 값 없음 → 그리지 않음
   period: number | null; // 파주기(초). null이면 움직이지 않음
+  // 파고가 늦어져 숨긴 경우(관측 지연). 값이 없는 경우와 문구를 나눔(지연과 결측을 섞지 않음)
+  delayed?: boolean;
 }) {
   const t = useTranslations("detail.figure");
   const reduce = useSyncExternalStore(
@@ -123,7 +126,7 @@ export function WaveFigure({
   if (height === null) {
     return (
       <p className="flex h-[120px] items-center justify-center rounded-input border border-dashed border-border-strong px-4 text-center text-body-s text-text-muted">
-        {t("noValue")}
+        {delayed ? t("delayed") : t("noValue")}
       </p>
     );
   }

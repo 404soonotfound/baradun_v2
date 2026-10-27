@@ -40,6 +40,8 @@ export type Basis = {
 export type DetailInfo = {
   // 발효 중 특보(이용불가일 때만). 판단 카드 결론·사유 상자·특보 상세 시트에 씀
   warnings: WarningItem[];
+  // 읽을 수 없는(모르는 종류·형식) 발효 특보 수. 숨기지 않고 '내용을 읽지 못했어요'로 보임(9.1 모르는 데이터)
+  unreadableWarnings: number;
   // 지금 받은 정보의 사유 근거. B5(stale)면 비움 → 'HH:MM 확인 · 이후 확인 못 함'만
   basis: Basis[];
   // 특보 확인 기관(예: 기상청). '특보 없음' 근거 줄에 씀
@@ -49,21 +51,25 @@ export type DetailInfo = {
   warningConfirmedNone: boolean;
   // 운영 기간 아님 배지: true면 보임, 일정이 없거나 읽을 수 없으면 null(숨김, N4)
   offSeason: { openFrom: string; openUntil: string } | null;
-  // 이안류(정보만, D5). null = 제공 해변·기간 아님
-  ripCurrent: { label: string; publishedAt: string; source: string } | null;
+  // 이안류(정보만, D5). null = 제공 해변·기간 아님(게시된 null),
+  // "unknown" = 받지 못함·읽을 수 없음 → '제공 기간 아님'으로 보이지 않게 "–"
+  ripCurrent: RipCurrent | null | "unknown";
   // 주변 특보(정보만, B3). 모르는 종류도 숨기지 않음(type: null → 일반 단어)
   nearbyWarnings: (Omit<NearbyWarningItem, "type"> & {
     type: NearbyWarningType | null;
   })[];
 };
 
+export type RipCurrent = { label: string; publishedAt: string; source: string };
+
 const EMPTY: DetailInfo = {
   warnings: [],
+  unreadableWarnings: 0,
   basis: [],
   warningSource: null,
   warningConfirmedNone: false,
   offSeason: null,
-  ripCurrent: null,
+  ripCurrent: "unknown",
   nearbyWarnings: [],
 };
 
@@ -143,15 +149,14 @@ export function deriveDetail(
   const warning = isRecord(status.warning) ? status.warning : {};
   const info = isRecord(status.info) ? status.info : {};
 
-  // 이용불가로 보일 때만 특보 항목(B5로 유지된 배지 포함). 하나라도 읽을 수 없으면 읽은 것만 보여주되
-  // 결론 문장은 배지(첫 사유)를 씀 → 이름이 빠지지 않음
-  const warnings =
+  // 이용불가로 보일 때만 특보 항목(B5로 유지된 배지 포함). 읽을 수 없는 항목은 이름을 지어내지 않고
+  // 개수만 남김 → 사유 상자에 '내용을 읽지 못했어요'. 결론 문장은 배지(첫 사유)를 씀
+  const items =
     view.category === "unavailable" && Array.isArray(warning.items)
-      ? warning.items.flatMap((item) => {
-          const read = readWarningItem(item);
-          return read ? [read] : [];
-        })
+      ? warning.items.map(readWarningItem)
       : [];
+  const warnings = items.filter((item) => item !== null);
+  const unreadableWarnings = items.length - warnings.length;
 
   const basis =
     !view.stale && view.category !== "clear" && Array.isArray(status.reasons)
@@ -175,10 +180,12 @@ export function deriveDetail(
   const rip = isRecord(info.ripCurrent) ? info.ripCurrent : null;
   const ripLabel = text(rip?.label);
   const ripSource = text(rip?.source);
-  const ripCurrent =
-    rip && ripLabel && ripSource && isTime(rip.publishedAt)
-      ? { label: ripLabel, publishedAt: rip.publishedAt, source: ripSource }
-      : null;
+  const ripCurrent: DetailInfo["ripCurrent"] =
+    info.ripCurrent === null
+      ? null
+      : rip && ripLabel && ripSource && isTime(rip.publishedAt)
+        ? { label: ripLabel, publishedAt: rip.publishedAt, source: ripSource }
+        : "unknown";
 
   const nearbyWarnings = Array.isArray(info.nearbyWarnings)
     ? info.nearbyWarnings.flatMap((item) => {
@@ -193,7 +200,9 @@ export function deriveDetail(
   const warningConfirmedNone =
     !view.stale &&
     view.category !== "unavailable" &&
-    !view.reasons.some((reason) => reason.kind === "warning_unknown") &&
+    // 판단불가는 사유가 모두 관측 지연일 때만(모르는 사유는 특보 확인 실패일 수 있어 '없음'으로 보이지 않게)
+    (view.category === "clear" ||
+      view.reasons.every((reason) => reason.kind === "observation_delayed")) &&
     warning.state === "none" &&
     Array.isArray(warning.items) &&
     warning.items.length === 0 &&
@@ -207,6 +216,7 @@ export function deriveDetail(
 
   return {
     warnings,
+    unreadableWarnings,
     basis,
     warningSource: text(warning.source),
     warningConfirmedNone,
