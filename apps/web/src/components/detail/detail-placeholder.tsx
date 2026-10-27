@@ -3,7 +3,7 @@ import { getTranslations } from "next-intl/server";
 import type { Beach } from "@baradun/contracts";
 import type { Locale } from "@/lib/i18n";
 import { ActivityButton } from "@/components/detail/activity-button";
-import { BackButton } from "@/components/detail/back-butotn";
+import { BackButton } from "@/components/detail/back-button";
 
 // 장소 상세 자리 (BRD-24 묶음 3). 실제 화면(판단 카드·바다 상태 등)은 BRD-32에서 구현
 // 머리(노션 3장 DetailHeader 62px): 뒤로 · 해변명+지역 · 활동 버튼 (공유는 BRD-34)

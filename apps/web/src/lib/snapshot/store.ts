@@ -70,6 +70,8 @@ export interface SnapshotStore {
   subscribe: (listener: () => void) => () => void;
   // 당겨서 새로고침·다시 시도
   refresh: () => Promise<void>;
+  // 조회 없이 지금 시각으로 화면만 다시 계산(전국 특보 45분 만료 등 store 밖 만료 시각)
+  recompute: () => void;
   // 첫 구독 때 시작, 마지막 구독 해제 때 멈춤
   start: () => void;
   stop: () => void;
@@ -451,6 +453,10 @@ export function createSnapshotStore(deps: SnapshotDeps): SnapshotStore {
     return inFlight;
   }
 
+  function recompute() {
+    set({ nowMs: now() });
+  }
+
   function resume() {
     if (pollTimer) clearInterval(pollTimer);
     pollTimer = setInterval(() => void refresh(), POLL_INTERVAL_MS);
@@ -490,6 +496,7 @@ export function createSnapshotStore(deps: SnapshotDeps): SnapshotStore {
       return () => listeners.delete(listener);
     },
     refresh,
+    recompute,
     start,
     stop,
   };

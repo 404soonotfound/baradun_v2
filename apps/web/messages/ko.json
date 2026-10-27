@@ -76,7 +76,52 @@
     "finalCall": "최종 판단은 현장 통제와 안전요원 안내가 우선이에요"
   },
   "home": {
-    "preparing": "화면을 준비하고 있어요."
+    "preparing": "화면을 준비하고 있어요.",
+    "sampleSnapshot": "개발용 예시 특보·관측값이에요. 실제 확인 결과가 아니에요.",
+    "titleLine1": "오늘은 어떤 바다로",
+    "titleLine2": "갈까요?",
+    "top": {
+      "aroundMe": "내 주변",
+      "pickRegion": "지역 고르기",
+      "search": "해변·지역 검색"
+    },
+    "near": {
+      "title": "가까운 바다",
+      "all": "전체 보기",
+      "clearScope": "이 해변 특보구역 · 기상청 {time} 확인",
+      "noValue": "값 없음",
+      "needLocation": "위치를 켜면 가까운 바다를 보여드려요",
+      "needLocationBody": "위치는 기기에서 거리 계산에만 쓰고 서버로 보내지 않아요.",
+      "useLocation": "위치 사용하기",
+      "locating": "위치를 확인하고 있어요",
+      "noBeach": "이 활동이 확인된 해변이 아직 없어요"
+    },
+    "recent": {
+      "title": "최근 본 해변",
+      "all": "전체 보기",
+      "remove": "{name} 최근 본 목록에서 지우기",
+      "removed": "최근 본 목록에서 지웠어요",
+      "undo": "되돌리기"
+    },
+    "firstVisit": {
+      "title": "처음 오셨네요",
+      "body": "활동을 고르면 가까운 해변의 특보와 지금 바다 상태를 보여드려요. 판단에 쓰는 정보와 출처는 안전·데이터 안내에서 볼 수 있어요."
+    },
+    "warnings": {
+      "title": "해상 특보",
+      "scope": "전국 해상 · 기상청 {time} 확인",
+      "count": "전국 해상에 <b>특보 {count}건</b>이 발효 중이에요",
+      "none": "전국 해상에 발효 중인 특보가 없어요",
+      "unconfirmed": "전국 해상 특보를 확인하지 못했어요",
+      "loading": "해상 특보를 불러오고 있어요",
+      "failed": "해상 특보를 불러오지 못했어요",
+      "failedImpact": "지금 발효 중인 특보가 있는지 알 수 없어요",
+      "failedNext": "새 정보를 받으면 다시 확인해요"
+    },
+    "guide": {
+      "title": "무엇을 확인해서 보여주나요?",
+      "body": "안전·데이터 안내 · 특보·측정 시각과 출처"
+    }
   },
   "notFound": {
     "title": "페이지를 찾을 수 없어요",

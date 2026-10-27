@@ -6,6 +6,8 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 import type { Beach } from "@baradun/contracts";
+import type { BeachSummary } from "@/lib/beach-summary";
+import type { Locale } from "@/lib/i18n"; // "ko" | "en"
 
 // 해변 목록 읽기 (아키텍처 17.5·B6, BRD-45). 빌드·개발 서버에서만 실행(브라우저로 내려가지 않음)
 // 원본: 저장소의 data/beaches/b0001.json … (해변 하나 = 파일 하나)
@@ -63,5 +65,22 @@ export function findBeach(
   return beach ? { beach, sample } : null;
 }
 
-// 연습용: 채점 스크립트가 쓰는 줄. 커밋 전에 지움
-export const __test = { readDataDir, load };
+// 목록 화면용 해변 요약 목록 (BRD-26). 빌드·개발 서버에서만 실행
+export function listBeachSummaries(locale: Locale): BeachSummary[] {
+  return load()
+    .beaches.filter((beach) => !beach.hidden)
+    .map((beach) => ({
+      id: beach.id,
+      slug: beach.slug,
+      name: beach.name[locale],
+      sido: { key: beach.region.sido.ko, label: beach.region.sido[locale] },
+      sigungu: {
+        key: beach.region.sigungu.ko,
+        label: beach.region.sigungu[locale],
+      },
+      region: `${beach.region.sido[locale]} ${beach.region.sigungu[locale]}`,
+      coords: beach.coords,
+      activities: beach.activities,
+      stations: beach.stations,
+    }));
+}

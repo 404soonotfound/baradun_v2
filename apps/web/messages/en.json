@@ -76,7 +76,52 @@
     "finalCall": "On-site control and lifeguard guidance come first."
   },
   "home": {
-    "preparing": "This page is being prepared."
+    "preparing": "Getting the screen ready.",
+    "sampleSnapshot": "These warnings and measurements are development samples, not real checks.",
+    "titleLine1": "Which sea are you",
+    "titleLine2": "heading to today?",
+    "top": {
+      "aroundMe": "Near me",
+      "pickRegion": "Choose a region",
+      "search": "Search beaches or regions"
+    },
+    "near": {
+      "title": "Nearby beaches",
+      "all": "See all",
+      "clearScope": "This beach's warning zone · KMA · checked {time}",
+      "noValue": "No value",
+      "needLocation": "Turn on location to see nearby beaches",
+      "needLocationBody": "Your location is only used on this device to measure distance. It is never sent to a server.",
+      "useLocation": "Use my location",
+      "locating": "Finding your location",
+      "noBeach": "No beaches confirmed for this activity yet"
+    },
+    "recent": {
+      "title": "Recently viewed",
+      "all": "See all",
+      "remove": "Remove {name} from recently viewed",
+      "removed": "Removed from recently viewed",
+      "undo": "Undo"
+    },
+    "firstVisit": {
+      "title": "Welcome",
+      "body": "Pick an activity to see warnings and current sea conditions at nearby beaches. What we check and where it comes from is in Safety & data."
+    },
+    "warnings": {
+      "title": "Marine warnings",
+      "scope": "All sea areas · KMA · checked {time}",
+      "count": "<b>{count, plural, one {# warning} other {# warnings}}</b> in effect across all sea areas",
+      "none": "No warnings in effect across all sea areas",
+      "unconfirmed": "Couldn't confirm marine warnings",
+      "loading": "Loading marine warnings",
+      "failed": "Couldn't load marine warnings",
+      "failedImpact": "We can't tell whether any warnings are in effect",
+      "failedNext": "We'll check again when new data arrives"
+    },
+    "guide": {
+      "title": "What do we check?",
+      "body": "Safety & data · warning and measurement times, sources"
+    }
   },
   "notFound": {
     "title": "Page not found",

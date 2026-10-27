@@ -77,3 +77,8 @@ export function useBeachView(beach: {
 export function refreshSnapshot(): Promise<void> {
   return getStore().refresh();
 }
+
+// 조회 없이 지금 시각으로 다시 계산(만료를 바로 보여주고 조회는 따로)
+export function recomputeSnapshot(): void {
+  getStore().recompute();
+}

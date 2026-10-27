@@ -9,7 +9,7 @@ import type {
 import { CLOCK_TOLERANCE_MS, isExpired, isTime, type Clock } from "./clock";
 
 // 특보 확인 유효시간 45분(아키텍처 14.3 N2). '특보 없음' 근거 검증에만 씀(분류 계산 아님)
-const WARNING_CONFIRM_VALID_MS = 45 * 60_000;
+export const WARNING_CONFIRM_VALID_MS = 45 * 60_000;
 
 // 해변 하나의 화면 상태 (아키텍처 9.1, 결정 기록 11장 B4·B5, BRD-41)
 // 분류(category)는 publisher가 게시한 값을 그대로 씀(G1). 여기서 하는 일은 셋뿐:
@@ -29,14 +29,14 @@ export const METRIC_KEYS = [
 ] as const satisfies readonly MetricKey[];
 
 const CATEGORIES = ["clear", "unavailable", "undetermined"] as const;
-const WARNING_TYPES = [
+export const WARNING_TYPES = [
   "wind_wave",
   "strong_wind",
   "typhoon",
   "storm_surge",
   "tsunami",
 ] as const satisfies readonly WarningType[];
-const WARNING_LEVELS = [
+export const WARNING_LEVELS = [
   "advisory",
   "warning",
   "severe_warning",
@@ -68,8 +68,8 @@ export type BeachView =
       reasons: BadgeLabel[];
       // B5: 새 정보를 못 받는 중(오프라인·만료·장애). 화면에 '이후 확인 못 함'을 붙임
       stale: boolean;
-      // B5: 유지하는 발효 특보의 마지막 확인 시각 → "HH:MM 확인 · 이후 확인 못 함".
-      // 읽을 수 없는 시각이면 null(stale은 그대로 true라 '확인 시각 모름'으로 표시)
+      // 특보 마지막 확인 시각. live면 근거 줄("기상청 HH:MM 확인"), B5면 "HH:MM 확인 · 이후 확인 못 함".
+      // 읽을 수 없거나 미래 시각이면 null(stale이면 '확인 시각 모름'으로 표시)
       confirmedAt: string | null;
       metrics: Record<MetricKey, MetricView>;
     };
@@ -127,7 +127,7 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function includes<T>(list: readonly T[], value: unknown): value is T {
+export function includes<T>(list: readonly T[], value: unknown): value is T {
   return (list as readonly unknown[]).includes(value);
 }
 
@@ -345,7 +345,7 @@ export function deriveBeachView(
       badge: reasons[0],
       reasons,
       stale: false,
-      confirmedAt: null,
+      confirmedAt,
       metrics,
     };
   }

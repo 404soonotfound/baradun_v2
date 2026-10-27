@@ -61,7 +61,7 @@ describe("게시된 분류를 그대로 씀", () => {
       kind: "ready",
       category: "clear",
       badge: { kind: "clear" },
-      confirmedAt: null,
+      confirmedAt: "2026-10-17T05:18:40Z",
     });
   });
 

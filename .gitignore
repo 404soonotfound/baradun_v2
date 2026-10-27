@@ -18,6 +18,9 @@ node_modules/
 apps/*/coverage/
 packages/*/coverage/
 
+# 개발용 예시 바다 데이터 (npm run dev:data)
+apps/web/public/data/
+
 # next.js
 .next/
 out/
