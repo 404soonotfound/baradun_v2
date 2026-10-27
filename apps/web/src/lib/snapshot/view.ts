@@ -345,7 +345,7 @@ export function deriveBeachView(
       badge: reasons[0],
       reasons,
       stale: false,
-      confirmedAt: null,
+      confirmedAt,
       metrics,
     };
   }
