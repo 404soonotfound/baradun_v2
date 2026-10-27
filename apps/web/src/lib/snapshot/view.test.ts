@@ -84,7 +84,10 @@ describe("게시된 분류를 그대로 씀", () => {
     expect(view).toMatchObject({
       category: "undetermined",
       badge: { kind: "observation_delayed" },
-      metrics: { waveHeight: { kind: "hidden" }, wavePeriod: { kind: "none" } },
+      metrics: {
+        waveHeight: { kind: "delayed" },
+        wavePeriod: { kind: "none" },
+      },
     });
   });
 
@@ -114,7 +117,7 @@ describe("만료 경계 (아키텍처 14.1)", () => {
   it.each([
     ["89:59", "2026-10-17T06:29:59Z", "clear", "value"],
     ["90:00", "2026-10-17T06:30:00Z", "clear", "value"],
-    ["90:01", "2026-10-17T06:30:01Z", "undetermined", "hidden"],
+    ["90:01", "2026-10-17T06:30:01Z", "undetermined", "delayed"],
   ])("파고 %s (%s) → %s, 파고 값 %s", (_, now, category, waveHeight) => {
     const view = deriveBeachView(beach("b0001"), source(now, {}, waveBound));
     expect(view).toMatchObject({
@@ -184,7 +187,7 @@ describe("만료 경계 (아키텍처 14.1)", () => {
   it.each([
     ["59:59", "2026-10-17T06:19:59Z", "value"],
     ["60:00", "2026-10-17T06:20:00Z", "value"],
-    ["60:01", "2026-10-17T06:20:01Z", "hidden"],
+    ["60:01", "2026-10-17T06:20:01Z", "delayed"],
   ])("파주기·파향 %s (%s) → 값 %s, 분류는 특보 없음 그대로", (_, now, kind) => {
     const view = deriveBeachView(beach("b0001"), source(now, {}, periodBound));
     expect(view).toMatchObject({
@@ -207,8 +210,8 @@ describe("만료 경계 (아키텍처 14.1)", () => {
       category: "clear",
       metrics: {
         waveHeight: { kind: "value" },
-        waterTemp: { kind: "hidden" },
-        wind: { kind: "hidden" },
+        waterTemp: { kind: "delayed" },
+        wind: { kind: "delayed" },
       },
     });
   });
@@ -286,7 +289,9 @@ describe("시계 보정 (9.1)", () => {
         }),
       ),
     );
-    expect(view).toMatchObject({ metrics: { waveHeight: { kind: "hidden" } } });
+    expect(view).toMatchObject({
+      metrics: { waveHeight: { kind: "delayed" } },
+    });
   });
 });
 
@@ -657,7 +662,7 @@ describe("읽을 수 없는 값·모순 (전체 재검증)", () => {
     ).toMatchObject({
       category: "unavailable",
       stale: true,
-      metrics: { wavePeriod: { kind: "hidden" } },
+      metrics: { wavePeriod: { kind: "delayed" } },
     });
   });
 });
