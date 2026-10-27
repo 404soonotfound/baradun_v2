@@ -18,6 +18,8 @@ export type LocationState =
 
 const CHECKING: LocationState = { status: "checking", coords: null };
 const IDLE: LocationState = { status: "idle", coords: null };
+// 권한 확인을 기다리는 최대 시간. 분류와 무관한 화면 대기 시간
+const PERMISSION_CHECK_TIMEOUT_MS = 3_000;
 
 // [2] 권한 상태 → 할 일 (순수 함수). 묻는 창은 띄우지 않음
 // 받는 중(locating)이거나 이미 받은 위치(ready)는 덮지 않음:
@@ -92,14 +94,23 @@ export function createLocationStore() {
       settleUnknown();
       return;
     }
-    permissions
-      .query({ name: "geolocation" })
+    let query: Promise<PermissionStatus>;
+    try {
+      query = permissions.query({ name: "geolocation" });
+    } catch {
+      settleUnknown(); // 거절 대신 바로 오류를 던지는 브라우저 대비
+      return;
+    }
+    // 답이 오지 않으면 아직 묻지 않은 것으로 둠(홈 자리 표시·ON-2가 계속 기다리지 않게). 늦게 온 답은 그대로 반영
+    const timer = setTimeout(settleUnknown, PERMISSION_CHECK_TIMEOUT_MS);
+    query
       .then((status) => {
         applyPermission(status.state);
         // 설정에서 권한을 바꾸면 따라감(거부 후 다시 허용한 경우 등)
         status.onchange = () => applyPermission(status.state);
       })
-      .catch(settleUnknown);
+      .catch(settleUnknown)
+      .finally(() => clearTimeout(timer));
   }
 
   function subscribe(onChange: () => void) {
