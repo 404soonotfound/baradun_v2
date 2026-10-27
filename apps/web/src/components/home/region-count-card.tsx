@@ -4,6 +4,7 @@ import { useTranslations } from "next-intl";
 
 import { Skeleton } from "@/components/ui/skeleton";
 import { badgeTone, type VerdictTone } from "@/lib/badge-tone";
+import { kstStamp } from "@/lib/snapshot/clock";
 import { useBadgeText } from "@/lib/snapshot/use-badge-text";
 import type { StatusCount } from "@/lib/status-count";
 
@@ -19,18 +20,27 @@ const NUMBER_COLOR: Record<VerdictTone, string> = {
   stale: "text-status-stale-fg",
 };
 
-// Vue: props: { href, title, counts }
+// Vue: props: { href, title, counts, clearCheckedAt, nowMs }
 export function RegionCountCard({
   href,
   title,
   counts,
+  clearCheckedAt,
+  nowMs,
 }: {
   href: string;
   title: string; // "강원 해변 5곳 지금 상태"
   counts: StatusCount[] | null; // null = 아직 불러오는 중
+  clearCheckedAt: string | null; // '특보 없음' 해변들의 가장 이른 확인 시각(lib/status-count.ts)
+  nowMs: number;
 }) {
   const t = useTranslations("home.region");
+  const tRoot = useTranslations();
   const { badgeText } = useBadgeText();
+  // '특보 없음' 칸이 있으면 범위·기관·확인 시각과 현장 우선 문구를 함께(가까운 바다 카드와 같은 규칙)
+  const hasClear =
+    counts !== null && counts.some((item) => item.label.kind === "clear");
+  const time = kstStamp(clearCheckedAt, nowMs);
   return (
     <Link
       href={href}
@@ -66,6 +76,14 @@ export function RegionCountCard({
               </span>
             );
           })}
+        </span>
+      )}
+      {hasClear && (
+        <span className="flex flex-col gap-0.5 text-caption text-text-muted">
+          <span>
+            {time ? t("countScope", { time }) : t("countScopeNoTime")}
+          </span>
+          <span>{tRoot("safety.finalCall")}</span>
         </span>
       )}
     </Link>

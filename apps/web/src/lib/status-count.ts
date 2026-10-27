@@ -45,3 +45,22 @@ export function countByStatus(
       CATEGORY_ORDER.indexOf(a.category) - CATEGORY_ORDER.indexOf(b.category),
   );
 }
+
+// [5] '특보 없음'으로 센 해변들의 가장 이른 특보 확인 시각(집계 전체의 가장 오래된 근거)
+// '특보 없음'이 없거나, 확인 시각을 모르는 '특보 없음'이 섞이면 null(시각을 내세우지 않음)
+export function clearCheckedAt(views: readonly BeachView[]): string | null {
+  let oldest: string | null = null;
+  let oldestMs = Infinity;
+  for (const view of views) {
+    if (view.kind !== "ready" || view.stale || view.badge.kind !== "clear") {
+      continue;
+    }
+    const ms = view.confirmedAt === null ? NaN : Date.parse(view.confirmedAt);
+    if (!Number.isFinite(ms)) return null;
+    if (ms < oldestMs) {
+      oldestMs = ms;
+      oldest = view.confirmedAt;
+    }
+  }
+  return oldest;
+}

@@ -39,7 +39,7 @@ import {
 import type { SnapshotState } from "@/lib/snapshot/store";
 import { useSnapshot } from "@/lib/snapshot/use-snapshot";
 import { deriveBeachView } from "@/lib/snapshot/view";
-import { countByStatus } from "@/lib/status-count";
+import { clearCheckedAt, countByStatus } from "@/lib/status-count";
 import { useSheet } from "@/lib/use-sheet";
 
 // 홈 (BRD-26·27 · 노션 2장 HOME/D-HOME, Figma S_M01_01~04·S_D07_01)
@@ -119,6 +119,10 @@ export function HomeScreen({
     [beaches, region, activity],
   );
   const name = region === null ? null : regionName(groups, region);
+  // 지역 해변의 화면 상태(게시된 분류 그대로, G1). 개수 카드의 개수·확인 시각에 씀
+  const regionViews = regionBeaches.map((beach) =>
+    deriveBeachView({ id: beach.id, hidden: false }, snapshot),
+  );
 
   // [6] 홈에 보이는 해변 카드(지역 → 이름 순, 위치가 있으면 거리도 / 지역 없음 → 가까운 순)
   const shown: ShownBeach[] = byRegion
@@ -230,11 +234,9 @@ export function HomeScreen({
               region: name,
               count: regionBeaches.length,
             })}
-            counts={countByStatus(
-              regionBeaches.map((beach) =>
-                deriveBeachView({ id: beach.id, hidden: false }, snapshot),
-              ),
-            )}
+            counts={countByStatus(regionViews)}
+            clearCheckedAt={clearCheckedAt(regionViews)}
+            nowMs={snapshot.nowMs}
           />
         )}
       </section>
