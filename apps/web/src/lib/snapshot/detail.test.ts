@@ -136,6 +136,44 @@ describe("deriveDetail", () => {
     expect(detail.nearbyWarnings[0]?.type).toBeNull();
   });
 
+  it("모르는 사유 code의 판단불가는 특보 칸이 '없음'이 아님(관측 지연만일 때만 '없음')", () => {
+    expect(detailOf("b0003", source()).detail.warningConfirmedNone).toBe(true);
+    const statuses = withStatus("b0003", (status) => {
+      (status.reasons[0] as { code: string }).code = "new_reason";
+    });
+    const { detail } = detailOf("b0003", source({}, statuses));
+    expect(detail.warningConfirmedNone).toBe(false);
+  });
+
+  it("읽을 수 없는 발효 특보 항목은 버리지 않고 개수로 남김", () => {
+    const statuses = withStatus("b0002", (status) => {
+      (status.warning.items[0] as { type: string }).type = "new_kind";
+    });
+    const { view, detail } = detailOf("b0002", source({}, statuses));
+    // 분류·배지는 게시값 그대로(이용불가·풍랑주의보 사유). 읽지 못한 항목 때문에 낮추지 않음
+    expect(view).toMatchObject({
+      category: "unavailable",
+      badge: { kind: "warning", type: "wind_wave" },
+    });
+    expect(detail.warnings).toEqual([]);
+    expect(detail.unreadableWarnings).toBe(1);
+  });
+
+  it("이안류: 게시된 null은 제공 기간 아님, 읽을 수 없거나 상태가 없으면 unknown", () => {
+    const off = withStatus("b0001", (status) => {
+      status.info.ripCurrent = null;
+    });
+    expect(detailOf("b0001", source({}, off)).detail.ripCurrent).toBeNull();
+    const broken = withStatus("b0001", (status) => {
+      (status.info as { ripCurrent: unknown }).ripCurrent = { label: "" };
+    });
+    expect(detailOf("b0001", source({}, broken)).detail.ripCurrent).toBe(
+      "unknown",
+    );
+    const missing = detailOf("b9999", source()).detail;
+    expect(missing.ripCurrent).toBe("unknown");
+  });
+
   it("점검 중이면 아무것도 꺼내지 않음", () => {
     const { detail } = detailOf("b0002", source({ phase: "maintenance" }));
     expect(detail.warnings).toEqual([]);
