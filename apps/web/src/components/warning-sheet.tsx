@@ -50,6 +50,7 @@ export function WarningSheet({
   // 열 때 고른 특보가 지금 목록에 없으면(해제·조회 실패) 지금 확인 시각을 붙이지 않음
   const listed =
     item !== null && items.some((other) => sameWarning(other, item));
+  const zone = item ? zoneNameText(item, locale) : null;
   // 확인 줄: live면 "기상청 발표 · 14:30에 확인", B5·시각 모름이면 'HH:MM 확인 · 이후 확인 못 함'
   const checked =
     stale || !listed || !time
@@ -64,7 +65,7 @@ export function WarningSheet({
       onClose={onClose}
       title={label ? badgeText(label) : t("warningSheet.title")}
     >
-      {item && label && (
+      {item && label && zone && (
         <div className="flex flex-col gap-4 pb-2">
           <div className="flex flex-col gap-1.5">
             <ReasonBadge label={label} />
@@ -84,9 +85,9 @@ export function WarningSheet({
             </dd>
             <dt className="text-text-muted">{t("warningSheet.zone")}</dt>
             <dd className="text-text-default">
-              {zoneNameText(item, locale).text}
+              {zone.text}
               {/* 번역표에 없는 구역은 원문 그대로. 한국어가 아닌 화면은 원문이라고 알림(9.1) */}
-              {zoneNameText(item, locale).untranslated && (
+              {zone.untranslated && (
                 <span className="block text-caption text-text-muted">
                   {t("warningSheet.zoneOriginal")}
                 </span>

@@ -66,13 +66,16 @@ export function DetailSheet({
   }
 
   // 측정 시각(파고): 측정소 → 기관 → 측정 시각. 값이 없으면 세 가지 구분(가까운 관측 없음 / 늦어짐 / –)
+  // 파고 칸: 값만(비교 기준 없음, 3장 VerdictCard). 값이 없으면 측정 시각 칸과 같은 구분
   let waveState = "–";
+  let waveValue = "–";
   let waveMeta: string | null = null;
   if (ready) {
     const wave = shownMetric(ready, stations, "waveHeight");
     const station = shownStation(wave, stations, "waveHeight");
     if (wave.kind === "value") {
       waveState = measuredAgoText(wave.observedAt, nowMs) ?? "–";
+      waveValue = t("detail.verdict.waveValue", { value: wave.value });
       const stamp = kstStamp(wave.observedAt, nowMs);
       waveMeta = joinMeta([
         station && stationText(station),
@@ -80,22 +83,13 @@ export function DetailSheet({
         stamp && t("detail.verdict.basisObserved", { time: stamp }),
       ]);
     } else if (wave.kind === "none") {
-      waveState = t("observation.none");
+      waveState = waveValue = t("observation.none");
     } else if (wave.kind === "delayed") {
-      waveState = t("observation.delayed");
+      waveState = waveValue = t("observation.delayed");
       waveMeta = joinMeta([
         station && stationText(station),
         agencyText(OBSERVATION_AGENCY),
       ]);
-    }
-  }
-
-  // 파고: 값만(비교 기준 없음, 3장 VerdictCard). 값이 없으면 측정 시각 칸과 같은 구분
-  let waveValue = waveState;
-  if (ready) {
-    const wave = shownMetric(ready, stations, "waveHeight");
-    if (wave.kind === "value") {
-      waveValue = t("detail.verdict.waveValue", { value: wave.value });
     }
   }
 
