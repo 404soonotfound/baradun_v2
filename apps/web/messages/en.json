@@ -69,9 +69,6 @@
   "info": {
     "offSeason": "Off season"
   },
-  "dataBanner": {
-    "schemaUnsupported": "We couldn’t read the new data format, so every beach is shown as not confirmed. Please reopen the app in a moment."
-  },
   "safety": {
     "finalCall": "On-site control and lifeguard guidance come first."
   },
