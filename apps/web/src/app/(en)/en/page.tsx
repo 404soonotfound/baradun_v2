@@ -9,6 +9,7 @@ import {
 } from "@/lib/i18n";
 import { HomeScreen } from "@/components/home/home-screen";
 import { listBeachSummaries } from "@/lib/beaches";
+import { hasDevSampleSnapshot } from "@/lib/dev-sample";
 // Home (BRD-26)
 export const metadata: Metadata = {
   alternates: alternatesFor("en", "/"),
@@ -21,7 +22,11 @@ export default async function HomeEn() {
   return (
     <>
       {/* 해변 목록은 빌드 때 서버에서 만들어 props로 넘김. 상태는 브라우저가 따로 받음(G4) */}
-      <HomeScreen locale="en" beaches={listBeachSummaries("en")} />
+      <HomeScreen
+        locale="en"
+        beaches={listBeachSummaries("en")}
+        sampleSnapshot={hasDevSampleSnapshot()}
+      />
       {/* 지금 언어를 뺀 나머지 언어로 가는 링크. 언어가 늘어도 이 코드는 그대로임. */}
       <nav className="mt-6" aria-label={t("common.languages")}>
         {LOCALES.filter((locale) => locale !== "en").map((locale) => (

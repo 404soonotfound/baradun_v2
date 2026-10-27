@@ -77,6 +77,7 @@
   },
   "home": {
     "preparing": "화면을 준비하고 있어요.",
+    "sampleSnapshot": "개발용 예시 특보·관측값이에요. 실제 확인 결과가 아니에요.",
     "titleLine1": "오늘은 어떤 바다로",
     "titleLine2": "갈까요?",
     "top": {

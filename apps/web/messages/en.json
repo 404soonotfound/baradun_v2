@@ -77,6 +77,7 @@
   },
   "home": {
     "preparing": "Getting the screen ready.",
+    "sampleSnapshot": "These warnings and measurements are development samples, not real checks.",
     "titleLine1": "Which sea are you",
     "titleLine2": "heading to today?",
     "top": {

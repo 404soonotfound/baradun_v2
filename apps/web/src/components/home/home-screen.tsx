@@ -35,13 +35,15 @@ import { deriveBeachView } from "@/lib/snapshot/view";
 // [1] PC에서 보여줄 가까운 바다 카드 수(모바일은 1장)
 const NEAR_COUNT = 4;
 
-// [2] Vue: props: { locale, beaches }
+// [2] Vue: props: { locale, beaches, sampleSnapshot }
 export function HomeScreen({
   locale,
   beaches,
+  sampleSnapshot,
 }: {
   locale: Locale;
   beaches: BeachSummary[];
+  sampleSnapshot: boolean; // 개발용 예시 특보·관측값(dev:data)을 보는 중. 배포 빌드는 늘 false
 }) {
   const t = useTranslations("home");
   const activity = useActivity();
@@ -89,6 +91,15 @@ export function HomeScreen({
           <br />
           {t("titleLine2")}
         </h1>
+        {/* 상황 배너 자리(노션 HOME 3). 예시 값이 실제 확인 결과처럼 보이지 않게 카드들 위에 둠 */}
+        {sampleSnapshot && (
+          <p
+            role="note"
+            className="rounded-card bg-bg-surface px-4 py-3 text-body-s text-text-body shadow-card"
+          >
+            {t("sampleSnapshot")}
+          </p>
+        )}
         <div className="lg:w-[560px]">
           <ActivityTiles />
         </div>
