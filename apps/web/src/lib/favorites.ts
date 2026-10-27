@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from "react";
 
 import { createDeviceList, EMPTY_IDS } from "@/lib/device-list";
+import { clearRecentSearches } from "@/lib/recent-search";
 
 // 즐겨찾기·최근 본 해변 (화면 명세 HOME·FAV, 아키텍처 9장: 기기 저장) (BRD-26)
 // 저장 값은 해변 내부 id. slug는 주소용이라 데이터 연결에 쓰지 않음
@@ -59,4 +60,5 @@ export function removeRecent(id: string): () => void {
 export function clearFavoritesAndRecent() {
   favorites.clear();
   recent.clear();
+  clearRecentSearches(); // 최근 검색도 기기 데이터(BRD-31)
 }
