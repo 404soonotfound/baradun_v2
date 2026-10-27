@@ -158,6 +158,28 @@ describe("parseRipResponse", () => {
       status: "none",
     });
   });
+
+  // 2026-10-27 실호출: 자료가 없으면 body 없이 header만 옴
+  it("자료 없음: body 없이 header만 온 resultCode 03", () => {
+    const text = body({
+      header: { resultCode: "03", resultMsg: "NODATA_ERROR" },
+    });
+    expect(parseRipResponse(text, "SONGJUNG", AFTER, DAY)).toEqual({
+      status: "none",
+    });
+  });
+
+  it.each([
+    ["body 없이 header만 온 00", body({ header: { resultCode: "00" } })],
+    ["body 없이 header만 온 다른 코드", body({ header: { resultCode: "30" } })],
+    ["header가 없는 응답", body({ body: { totalCount: 0 } })],
+    ["resultCode가 문자열 03이 아닌 숫자", body({ header: { resultCode: 3 } })],
+  ])("형식 오류는 자료 없음으로 보지 않음: %s", (_, text) => {
+    expect(parseRipResponse(text, "SONGJUNG", AFTER, DAY)).toEqual({
+      status: "failed",
+      reason: "format:shape",
+    });
+  });
 });
 
 describe("ripCurrentInfo", () => {

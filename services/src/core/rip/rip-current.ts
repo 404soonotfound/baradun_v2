@@ -49,9 +49,10 @@ export function ripObservedAt(raw: unknown): string | null {
 }
 
 // 응답 본문 읽기. 실응답(2026-10-26 확인) 모양: 최상위 { header, body: { items: { item: [...] }, totalCount } }
-// 활용가이드 XML 예시의 <response> 감싸개는 JSON 응답에 없음 → 감싸개가 있거나 header·body가 없으면 형식 오류
+// 활용가이드 XML 예시의 <response> 감싸개는 JSON 응답에 없음 → 감싸개가 있거나 header가 없으면 형식 오류
+// body도 있어야 하지만 자료 없음(03)만 body 없이 오므로 아래에서 먼저 판정
 // 200인데 이 모양이 아니면 '자료 없음'이 아니라 실패(빈 응답을 정상으로 보지 않음)
-// 자료 없음은 resultCode 03(공공데이터포털 NODATA) 또는 00 + totalCount 0일 때만
+// 자료 없음은 header의 resultCode 03(공공데이터포털 NODATA, body 없어도 됨) 또는 00 + totalCount 0일 때만
 // 줄마다 코드가 요청한 해변과 같고 시각을 읽을 수 있어야 씀. 미래 관측은 버림(허용 오차 없음)
 // 요청한 날(reqDate, yyyymmdd)이 아닌 줄도 버림: 다른 날 자료를 오늘 자료로 보지 않음
 // 받은 줄 수가 totalCount보다 적으면 한 쪽에 다 받지 못해 마지막 관측이 빠졌을 수 있음 → 실패(응답의 numOfRows는 믿지 않음)
@@ -70,11 +71,15 @@ export function parseRipResponse(
   } catch {
     return { status: "failed", reason: "format:json" };
   }
-  if (!isObject(json) || !isObject(json.header) || !isObject(json.body)) {
+  if (!isObject(json) || !isObject(json.header)) {
     return { status: "failed", reason: "format:shape" };
   }
   const resultCode = json.header.resultCode;
+  // 자료 없음(03)은 body 없이 header만 옴(2026-10-27 실응답) → body 검사보다 먼저 판정
   if (resultCode === "03") return { status: "none" };
+  if (!isObject(json.body)) {
+    return { status: "failed", reason: "format:shape" };
+  }
   if (resultCode !== "00") {
     return { status: "failed", reason: `result:${String(resultCode)}` };
   }
