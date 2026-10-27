@@ -110,6 +110,25 @@ describe("buildItems", () => {
     expect(items.map((item) => item.id)).toEqual(["a", "c"]);
   });
 
+  it("측정소가 없는 지표 값은 출처를 붙일 수 없어 숨김", () => {
+    const withValue: BeachView = {
+      ...clear,
+      metrics: {
+        ...clear.metrics,
+        waveHeight: {
+          kind: "value",
+          value: 0.6,
+          unit: "m",
+          observedAt: "2026-10-27T05:00:00Z",
+        },
+      },
+    };
+    const [item] = buildItems([A], null, () => withValue);
+    expect(
+      item?.view.kind === "ready" && item.view.metrics.waveHeight.kind,
+    ).toBe("hidden");
+  });
+
   it("위치가 있을 때만 거리를 붙임", () => {
     const withLocation = buildItems(
       ALL,

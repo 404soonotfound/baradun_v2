@@ -2,7 +2,7 @@ import type { Activity } from "@/lib/activity";
 import type { BeachSummary } from "@/lib/beach-summary";
 import { distanceKm, type LatLng } from "@/lib/geo";
 import { inRegion, type SavedRegion } from "@/lib/region-list";
-import type { BeachView, Category } from "@/lib/snapshot/view";
+import type { BeachView, Category, MetricKey } from "@/lib/snapshot/view";
 import {
   CATEGORY_ORDER,
   clearCheckedAt,
@@ -45,6 +45,18 @@ export function filterBeaches(
   );
 }
 
+// 측정소 정보가 없는 값은 출처를 붙일 수 없어 보이지 않음("–"). 가까운 바다 카드와 같은 규칙
+function withSourcedMetrics(beach: BeachSummary, view: BeachView): BeachView {
+  if (view.kind !== "ready") return view;
+  const metrics = { ...view.metrics };
+  for (const key of Object.keys(metrics) as MetricKey[]) {
+    if (metrics[key].kind === "value" && beach.stations[key] === null) {
+      metrics[key] = { kind: "hidden" };
+    }
+  }
+  return { ...view, metrics };
+}
+
 // [4] 해변 → 목록 줄. 노출을 끈 해변(view.kind "hidden")은 뺌(개수·목록 모두)
 export function buildItems(
   beaches: readonly BeachSummary[],
@@ -52,7 +64,7 @@ export function buildItems(
   viewOf: (beach: BeachSummary) => BeachView,
 ): ExploreItem[] {
   return beaches.flatMap((beach) => {
-    const view = viewOf(beach);
+    const view = withSourcedMetrics(beach, viewOf(beach));
     if (view.kind === "hidden") return [];
     return [
       {
