@@ -213,5 +213,22 @@
       "use": "위치 사용하기",
       "pick": "지역 직접 고르기"
     }
+  },
+  "situationBanner": {
+    "offline": "인터넷에 연결되어 있지 않아요",
+    "offlineNext": "연결되면 다시 확인해요",
+    "unsupported": "새 데이터 형식을 읽지 못했어요",
+    "unsupportedBody": "모든 해변을 '확인 못 함'으로 보여줘요",
+    "reload": "새로고침",
+    "failed": "새 정보를 불러오지 못했어요",
+    "dataTime": "{time} 정보를 보여주고 있어요",
+    "dataTimeUnknown": "이전에 받은 정보를 보여주고 있어요",
+    "noData": "아직 받은 정보가 없어요",
+    "retry": "다시 시도",
+    "retrying": "다시 확인하는 중",
+    "retryFailed": "다시 시도했지만 새 정보를 불러오지 못했어요",
+    "delayed": "{name} 파고 측정이 늦어지고 있어요",
+    "delayedMore": "{name} 외 {count}곳 파고 측정이 늦어지고 있어요",
+    "delayedBody": "지금 상태를 판단하지 못했어요 · 측정값이 들어오면 다시 확인해요"
   }
 }
