@@ -46,7 +46,7 @@ export function DetailScreen({
 }: {
   locale: Locale;
   beach: Beach;
-  beaches: BeachSummary[]; // 대안 해변 후보(노출 끈 해변 제외)
+  beaches: BeachSummary[]; // 대안 해변 후보: 이 해변 제외 30km 안(노출 끈 해변 제외, listAltCandidates)
   sample: boolean; // 개발용 예시 해변 목록
 }) {
   const t = useTranslations();
@@ -72,18 +72,16 @@ export function DetailScreen({
   const alternatives = showAlt
     ? alternativeBeaches(
         beach,
-        beaches
-          .filter((item) => item.id !== beach.id)
-          .flatMap((item) => {
-            const itemView = deriveBeachView(
-              { id: item.id, hidden: false },
-              snapshot,
-            );
-            const { warningSource } = deriveDetail(item.id, itemView, snapshot);
-            return warningSource
-              ? [{ ...item, view: itemView, warningSource }]
-              : [];
-          }),
+        beaches.flatMap((item) => {
+          const itemView = deriveBeachView(
+            { id: item.id, hidden: false },
+            snapshot,
+          );
+          const { warningSource } = deriveDetail(item.id, itemView, snapshot);
+          return warningSource
+            ? [{ ...item, view: itemView, warningSource }]
+            : [];
+        }),
         activity,
         (item) => item.view,
       )

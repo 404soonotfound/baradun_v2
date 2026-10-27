@@ -6,7 +6,9 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 import type { Beach } from "@baradun/contracts";
+import { ALT_MAX_KM } from "@/lib/alternatives";
 import type { BeachSummary } from "@/lib/beach-summary";
+import { distanceKm } from "@/lib/geo";
 import type { Locale } from "@/lib/i18n"; // "ko" | "en"
 
 // 해변 목록 읽기 (아키텍처 17.5·B6, BRD-45). 빌드·개발 서버에서만 실행(브라우저로 내려가지 않음)
@@ -83,4 +85,17 @@ export function listBeachSummaries(locale: Locale): BeachSummary[] {
       activities: beach.activities,
       stations: beach.stations,
     }));
+}
+
+// 상세 대안 해변 후보: 이 해변을 뺀 30km 안 해변만(해변 좌표는 고정이라 빌드 때 거름).
+// 상세 페이지마다 전체 목록을 내려보내지 않게 함. 특보 없음·활동·최대 2곳은 브라우저에서(lib/alternatives.ts)
+export function listAltCandidates(
+  beach: Pick<Beach, "id" | "coords">,
+  locale: Locale,
+): BeachSummary[] {
+  return listBeachSummaries(locale).filter(
+    (item) =>
+      item.id !== beach.id &&
+      distanceKm(beach.coords, item.coords) <= ALT_MAX_KM,
+  );
 }
