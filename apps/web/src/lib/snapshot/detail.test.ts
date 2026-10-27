@@ -1,0 +1,154 @@
+import { readFileSync } from "node:fs";
+
+import type { BeachStatus, StatusFile } from "@baradun/contracts";
+import { describe, expect, it } from "vitest";
+
+import type { Clock } from "./clock";
+import { deriveDetail } from "./detail";
+import { deriveBeachView, type ViewSource } from "./view";
+
+// 장소 상세 값 꺼내기 (BRD-32). 입력은 계약 예시 데이터
+// 예시: b0001 특보 없음(운영 기간 아님) · b0002 풍랑주의보 · b0003 관측 지연
+const example = JSON.parse(
+  readFileSync(
+    new URL(
+      "../../../../../packages/contracts/examples/valid/status.json",
+      import.meta.url,
+    ),
+    "utf8",
+  ),
+) as StatusFile;
+
+const TRUSTED: Clock = { offsetMs: 0, trusted: true };
+const NOW = "2026-10-17T05:30:00Z";
+
+function source(
+  overrides: Partial<ViewSource> = {},
+  statuses: Record<string, unknown> = example.beaches,
+): ViewSource {
+  return {
+    phase: "ready",
+    statuses,
+    live: true,
+    clock: TRUSTED,
+    nowMs: Date.parse(NOW),
+    ...overrides,
+  };
+}
+
+function withStatus(id: string, change: (status: BeachStatus) => void) {
+  const status = structuredClone(example.beaches[id]!);
+  change(status);
+  return { ...example.beaches, [id]: status };
+}
+
+function detailOf(id: string, src: ViewSource) {
+  const view = deriveBeachView({ id, hidden: false }, src);
+  return { view, detail: deriveDetail(id, view, src) };
+}
+
+describe("deriveDetail", () => {
+  it("이용불가: 발효 특보 항목과 사유 근거", () => {
+    const { detail } = detailOf("b0002", source());
+    expect(detail.warnings).toHaveLength(1);
+    expect(detail.warnings[0]).toMatchObject({
+      type: "wind_wave",
+      level: "advisory",
+    });
+    expect(detail.basis).toEqual([
+      {
+        code: "warning",
+        scope: "예시 남해앞바다",
+        source: "기상청",
+        at: "2026-10-17T04:00:00Z",
+      },
+    ]);
+    expect(detail.warningConfirmedNone).toBe(false);
+  });
+
+  it("오프라인(B5): 발효 특보 항목은 유지, 근거는 비움('이후 확인 못 함'만)", () => {
+    const { view, detail } = detailOf("b0002", source({ live: false }));
+    expect(view).toMatchObject({ category: "unavailable", stale: true });
+    expect(detail.warnings).toHaveLength(1);
+    expect(detail.basis).toEqual([]);
+  });
+
+  it("특보 없음: 특보 칸은 '없음', 사유 근거는 없음", () => {
+    const { detail } = detailOf("b0001", source());
+    expect(detail.warnings).toEqual([]);
+    expect(detail.basis).toEqual([]);
+    expect(detail.warningConfirmedNone).toBe(true);
+    expect(detail.warningSource).toBe("기상청");
+  });
+
+  it("'특보 없음'이던 해변이 오프라인이면 특보 칸은 '확인 못 함'", () => {
+    const { detail } = detailOf("b0001", source({ live: false }));
+    expect(detail.warningConfirmedNone).toBe(false);
+  });
+
+  it("특보 확인 못 함 사유가 있으면 특보 칸은 '없음'이 아님", () => {
+    const statuses = withStatus("b0001", (status) => {
+      status.category = "undetermined";
+      status.reasons = [
+        {
+          code: "warning_unknown",
+          scope: "강원북부앞바다",
+          source: "기상청",
+          at: status.warning.lastConfirmedAt,
+        },
+      ];
+    });
+    const { detail } = detailOf("b0001", source({}, statuses));
+    expect(detail.warningConfirmedNone).toBe(false);
+    expect(detail.basis[0]).toMatchObject({ code: "warning_unknown" });
+  });
+
+  it("특보 확인이 45분 넘게 지났으면 특보 칸은 '없음'이 아님", () => {
+    const { detail } = detailOf(
+      "b0003",
+      source({ nowMs: Date.parse("2026-10-17T06:04:00Z") }),
+    );
+    expect(detail.warningConfirmedNone).toBe(false);
+  });
+
+  it("운영 기간 밖이면 정보 배지, 일정이 없으면(null) 숨김", () => {
+    expect(detailOf("b0001", source()).detail.offSeason).toEqual({
+      openFrom: "2026-07-10",
+      openUntil: "2026-08-20",
+    });
+    expect(detailOf("b0002", source()).detail.offSeason).toBeNull();
+    const inSeason = withStatus("b0001", (status) => {
+      status.info.season = {
+        openFrom: "2026-07-10",
+        openUntil: "2026-08-20",
+        inSeason: true,
+      };
+    });
+    expect(detailOf("b0001", source({}, inSeason)).detail.offSeason).toBeNull();
+  });
+
+  it("주변 특보: 모르는 종류도 숨기지 않고 일반 단어로", () => {
+    const statuses = withStatus("b0001", (status) => {
+      (status.info.nearbyWarnings[0] as { type: string }).type = "new_kind";
+    });
+    const { detail } = detailOf("b0001", source({}, statuses));
+    expect(detail.nearbyWarnings).toHaveLength(1);
+    expect(detail.nearbyWarnings[0]?.type).toBeNull();
+  });
+
+  it("점검 중이면 아무것도 꺼내지 않음", () => {
+    const { detail } = detailOf("b0002", source({ phase: "maintenance" }));
+    expect(detail.warnings).toEqual([]);
+    expect(detail.offSeason).toBeNull();
+  });
+});
+
+describe("지표 값 자리 구분 (B4)", () => {
+  it("모르는 state는 늦어짐이 아니라 '–'(hidden)", () => {
+    const statuses = withStatus("b0001", (status) => {
+      (status.observation.metrics.wind as { state: string }).state = "stale";
+    });
+    const { view } = detailOf("b0001", source({}, statuses));
+    expect(view).toMatchObject({ metrics: { wind: { kind: "hidden" } } });
+  });
+});
