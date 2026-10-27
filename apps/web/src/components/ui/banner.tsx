@@ -1,4 +1,4 @@
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, X } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 
@@ -27,12 +27,16 @@ const TONES = {
 // keyof typeof TONES = TONES의 키 이름들("amber" | "red" | "gray")을 타입으로 꺼냄
 export type BannerTone = keyof typeof TONES;
 
-// action과 href는 둘 중 하나만(링크 안에 버튼이 들어가지 않게). 둘 다 주면 타입 오류
+// action·dismiss와 href는 같이 둘 수 없음(링크 안에 버튼이 들어가지 않게). 같이 주면 타입 오류
 type BannerTarget =
-  // 2줄째 끝에 붙는 행동(예: '다시 시도' 버튼)
-  | { action?: ReactNode; href?: undefined }
+  // 2줄째 끝에 붙는 행동(예: '다시 시도' 버튼), 오른쪽 닫기(X) 버튼
+  | {
+      action?: ReactNode;
+      href?: undefined;
+      dismiss?: { label: string; onClick: () => void };
+    }
   // 배너 전체를 누르는 링크로 만들 때(관측 지연 → 상세). 오른쪽에 › 표시
-  | { href: string; action?: undefined };
+  | { href: string; action?: undefined; dismiss?: undefined };
 
 export function Banner({
   tone,
@@ -41,6 +45,7 @@ export function Banner({
   children,
   action,
   href,
+  dismiss,
 }: {
   tone: BannerTone;
   icon: ReactNode;
@@ -77,6 +82,16 @@ export function Banner({
           </span>
         )}
       </span>
+      {dismiss && (
+        <button
+          type="button"
+          onClick={dismiss.onClick}
+          aria-label={dismiss.label}
+          className="-my-2.5 -mr-2.5 flex size-touch shrink-0 items-center justify-center rounded-full text-text-muted hover:bg-bg-subtle"
+        >
+          <X aria-hidden="true" size={16} />
+        </button>
+      )}
       {href && (
         <ChevronRight
           aria-hidden="true"

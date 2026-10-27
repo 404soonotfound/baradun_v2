@@ -99,13 +99,7 @@
       "turnOn": "위치 정보 켜기",
       "close": "안내 닫기"
     },
-    "regionSheet": {
-      "title": "지역 고르기",
-      "sido": "시·도를 골라 주세요",
-      "sigungu": "{sido}에서 시·군을 골라 주세요",
-      "all": "{sido} 전체",
-      "back": "시·도 다시 고르기"
-    },
+
     "near": {
       "title": "가까운 바다",
       "all": "전체 보기",
@@ -184,5 +178,12 @@
     "surfing": "서핑",
     "scuba": "스쿠버",
     "scubaFull": "스쿠버다이빙"
+  },
+  "regionSheet": {
+    "title": "지역 고르기",
+    "sido": "시·도를 골라 주세요",
+    "sigungu": "{sido}에서 시·군을 골라 주세요",
+    "all": "{sido} 전체",
+    "back": "시·도 다시 고르기"
   }
 }
