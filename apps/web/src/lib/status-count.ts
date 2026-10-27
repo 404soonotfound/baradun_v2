@@ -46,43 +46,44 @@ export function countByStatus(
   );
 }
 
-// [5] '특보 없음'으로 센 해변들의 가장 이른 특보 확인 시각(집계 전체의 가장 오래된 근거)
-// '특보 없음'이 없거나, 확인 시각을 모르는 '특보 없음'이 섞이면 null(시각을 내세우지 않음)
-export function clearCheckedAt(views: readonly BeachView[]): string | null {
-  let oldest: string | null = null;
+// [5] 고른 해변들의 가장 이른 특보 확인 시각
+// undefined = 고른 해변 없음. null = 확인 시각을 모르는 해변이 섞임(가장 이른 시각을 알 수 없음)
+type ReadyView = Extract<BeachView, { kind: "ready" }>;
+function oldestConfirmedAt(
+  views: readonly BeachView[],
+  pick: (view: ReadyView) => boolean,
+): string | null | undefined {
+  let oldest: string | undefined;
   let oldestMs = Infinity;
   for (const view of views) {
-    if (view.kind !== "ready" || view.stale || view.badge.kind !== "clear") {
-      continue;
-    }
+    if (view.kind !== "ready" || !pick(view)) continue;
     const ms = view.confirmedAt === null ? NaN : Date.parse(view.confirmedAt);
     if (!Number.isFinite(ms)) return null;
     if (ms < oldestMs) {
       oldestMs = ms;
-      oldest = view.confirmedAt;
+      oldest = view.confirmedAt ?? undefined;
     }
   }
   return oldest;
 }
 
-// [6] 오래된(B5: 오프라인·만료) 해변들의 가장 이른 특보 확인 시각 (노션 결정 기록 11장 화면 잔여 결정 10/27 ②)
+// [6] '특보 없음'으로 센 해변들의 가장 이른 특보 확인 시각(집계 전체의 가장 오래된 근거)
+// '특보 없음'이 없거나, 확인 시각을 모르는 '특보 없음'이 섞이면 null(시각을 내세우지 않음)
+export function clearCheckedAt(views: readonly BeachView[]): string | null {
+  return (
+    oldestConfirmedAt(
+      views,
+      (view) => !view.stale && view.badge.kind === "clear",
+    ) ?? null
+  );
+}
+
+// [7] 오래된(B5: 오프라인·만료) 해변들의 가장 이른 특보 확인 시각 (노션 결정 기록 11장 화면 잔여 결정 10/27 ②)
 // null = 오래된 해변 없음(줄을 보이지 않음). { confirmedAt: null } = 오래됐지만 시각을 모름
 // 확인 시각을 모르는 오래된 해변이 섞이면 시각을 내세우지 않음(가장 이른 시각을 알 수 없음)
 export function staleCheckedAt(
   views: readonly BeachView[],
 ): { confirmedAt: string | null } | null {
-  let found = false;
-  let oldest: string | null = null;
-  let oldestMs = Infinity;
-  for (const view of views) {
-    if (view.kind !== "ready" || !view.stale) continue;
-    found = true;
-    const ms = view.confirmedAt === null ? NaN : Date.parse(view.confirmedAt);
-    if (!Number.isFinite(ms)) return { confirmedAt: null };
-    if (ms < oldestMs) {
-      oldestMs = ms;
-      oldest = view.confirmedAt;
-    }
-  }
-  return found ? { confirmedAt: oldest } : null;
+  const confirmedAt = oldestConfirmedAt(views, (view) => view.stale);
+  return confirmedAt === undefined ? null : { confirmedAt };
 }
