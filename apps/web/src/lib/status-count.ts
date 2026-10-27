@@ -12,7 +12,7 @@ export type StatusCount = {
 };
 
 // [2] 분류 순서표
-const CATEGORY_ORDER: readonly Category[] = [
+export const CATEGORY_ORDER: readonly Category[] = [
   "clear",
   "unavailable",
   "undetermined",

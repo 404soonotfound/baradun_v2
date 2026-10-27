@@ -368,5 +368,41 @@
     "more": "Details",
     "waveTitle": "Wave height",
     "waveBody": "We only show the measured value and when it was measured. Please decide for yourself whether the wave height suits you."
+  },
+  "explore": {
+    "regionLabel": "Region",
+    "nationwide": "All Korea",
+    "sortLabel": "List order",
+    "sort": {
+      "status": "By status",
+      "near": "Nearest",
+      "name": "By name"
+    },
+    "count": "{count, plural, one {# beach} other {# beaches}}",
+    "updatedAt": "Updated {time}",
+    "activityNote": "Only beaches with confirmed activity info · {count}",
+    "loading": "Loading beach info",
+    "group": {
+      "clear": "No warnings · {count}",
+      "unavailable": "Unavailable · {count}",
+      "undetermined": "Cannot determine · {count}",
+      "nearest": "Nearest {km}km"
+    },
+    "row": {
+      "clearScopeNoTime": "This beach's warning zone · KMA · check time unknown"
+    },
+    "noClear": {
+      "title": "No beach is confirmed as 'No warnings' right now",
+      "body": "These beaches have warnings or couldn't be checked · Check on-site guidance"
+    },
+    "locationOff": {
+      "title": "Not using your location",
+      "body": "Sorted by name instead of distance · Turn on location to see distances too"
+    },
+    "empty": {
+      "title": "No beaches match these filters",
+      "body": "Try a different activity or region",
+      "action": "Show all Korea"
+    }
   }
 }
