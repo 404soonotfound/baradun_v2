@@ -416,8 +416,8 @@
     "count": "{count, plural, one {# beach} other {# beaches}}",
     "aliasNote": "{alias} is another name for {name}",
     "empty": {
-      "scoped": "Couldn't find '{query}' in {scope}",
-      "all": "Couldn't find '{query}' anywhere in Korea",
+      "scoped": "Couldn't find ‘{query}’ in {scope}",
+      "all": "Couldn't find ‘{query}’ anywhere in Korea",
       "body": "Try another name or a region",
       "widen": "Search all Korea"
     }

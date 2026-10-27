@@ -416,8 +416,8 @@
     "count": "{count}곳",
     "aliasNote": "{alias} {name}의 다른 이름이에요",
     "empty": {
-      "scoped": "{scope}에서 '{query}'를 찾지 못했어요",
-      "all": "전국에서 '{query}'를 찾지 못했어요",
+      "scoped": "{scope}에서 ‘{query}’를 찾지 못했어요",
+      "all": "전국에서 ‘{query}’를 찾지 못했어요",
       "body": "다른 이름이나 지역으로 찾아보세요",
       "widen": "전국에서 찾기"
     }
