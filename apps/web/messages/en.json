@@ -99,14 +99,6 @@
       "turnOn": "Turn on location",
       "close": "Close notice"
     },
-
-    "regionSheet": {
-      "title": "Choose a region",
-      "sido": "Choose a province",
-      "sigungu": "Choose a city or county in {sido}",
-      "all": "All of {sido}",
-      "back": "Choose province again"
-    },
     "near": {
       "title": "Nearby beaches",
       "all": "See all",
@@ -185,5 +177,12 @@
     "surfing": "Surfing",
     "scuba": "Scuba",
     "scubaFull": "Scuba diving"
+  },
+  "regionSheet": {
+    "title": "Choose a region",
+    "sido": "Choose a province",
+    "sigungu": "Choose a city or county in {sido}",
+    "all": "All of {sido}",
+    "back": "Choose province again"
   }
 }
