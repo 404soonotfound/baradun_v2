@@ -118,6 +118,8 @@ function LocationGate({
       <LocationStep
         onUse={() => {
           finishLocationStep();
+          // 전에 고른 지역이 있으면 지움 → 홈이 가까운 바다로 돌아감(홈 '내 주변'과 같음)
+          setRegion(null);
           requestLocation(); // 여기서 처음으로 브라우저가 위치를 물음
         }}
         onPick={onPick}
