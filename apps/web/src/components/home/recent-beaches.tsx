@@ -14,6 +14,7 @@ import { localizedPath, type Locale } from "@/lib/i18n";
 import { useBadgeText } from "@/lib/snapshot/use-badge-text";
 import { useSnapshot } from "@/lib/snapshot/use-snapshot";
 import { deriveBeachView } from "@/lib/snapshot/view";
+import { kstStamp } from "@/lib/snapshot/clock";
 
 // 최근 본 해변 (노션 2장 HOME 5, Figma S_M01_01) — 재방문만. 첫 방문이면 FirstVisitCard
 // 대표 1곳 카드(상태 배지) + 나머지 칩(✕로 확인 없이 지우고 토스트 '되돌리기')
@@ -27,6 +28,7 @@ export function RecentBeaches({
   beaches: BeachSummary[];
 }) {
   const t = useTranslations("home.recent");
+  const tRoot = useTranslations(); // home.near.clearScope · safety.finalCall
   const snapshot = useSnapshot(); // Vue: mapState
   const { confirmedUntilText } = useBadgeText();
   const toast = useToast();
@@ -35,6 +37,19 @@ export function RecentBeaches({
   const [first, ...rest] = beaches;
   if (!first) return null;
   const view = deriveBeachView({ id: first.id, hidden: false }, snapshot);
+
+  // 보조 문구. '특보 없음'은 범위·기관·시각이 함께 있어야 함(가까운 바다 카드와 같은 규칙)
+  // 만료·오프라인(B5): "14:05 확인 · 이후 확인 못 함" / 특보 없음: 지역 + 범위·기관·시각 / 그 밖: 지역
+  const time =
+    view.kind === "ready" ? kstStamp(view.confirmedAt, snapshot.nowMs) : null;
+  const caption =
+    view.kind === "ready" && view.stale
+      ? confirmedUntilText(view.confirmedAt, snapshot.nowMs)
+      : first.region;
+  const isClear =
+    view.kind === "ready" && !view.stale && view.badge.kind === "clear";
+  const scope =
+    isClear && time ? tRoot("home.near.clearScope", { time }) : null;
 
   // [3] ✕ 누름 → 지우고 토스트
   function remove(beach: BeachSummary) {
@@ -62,11 +77,15 @@ export function RecentBeaches({
           <span className="truncate text-title-s text-text-default">
             {first.name}
           </span>
-          <span className="text-caption text-text-muted">
-            {view.kind === "ready" && view.stale
-              ? confirmedUntilText(view.confirmedAt, snapshot.nowMs)
-              : first.region}
-          </span>
+          <span className="text-caption text-text-muted">{caption}</span>
+          {scope && (
+            <>
+              <span className="text-caption text-text-muted">{scope}</span>
+              {/* <span className="text-caption text-text-muted">
+                {tRoot("safety.finalCall")}
+              </span> */}
+            </>
+          )}
         </span>
         {view.kind === "ready" ? (
           <ReasonBadge label={view.badge} />
