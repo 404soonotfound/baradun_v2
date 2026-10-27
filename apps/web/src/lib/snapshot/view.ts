@@ -55,7 +55,8 @@ export type BadgeLabel =
 export type MetricView =
   | { kind: "value"; value: number; unit: Metric["unit"]; observedAt: string }
   | { kind: "none" } // 20km 안 측정기 없음 → '가까운 관측 없음'
-  | { kind: "hidden" }; // 지연·만료·결측 → 값 자리 비움
+  | { kind: "delayed" } // 게시된 지연·지표별 만료 지남 → 값 숨김, 상세는 '측정이 늦어지고 있어요'(B4)
+  | { kind: "hidden" }; // 읽을 수 없는 값·시각·단위, 모르는 state(일시 결측) → "–"
 
 export type BeachView =
   | { kind: "hidden" } // 노출 끔(hidden: true)일 때만
@@ -278,10 +279,13 @@ function metricView(
   if (metric.state === "none") {
     return isNoneMetric(metric, key) ? { kind: "none" } : { kind: "hidden" };
   }
-  if (
-    isReadableFresh(metric, key, source) &&
-    !isExpired(metric.expiresAt, source.nowMs, source.clock)
-  ) {
+  // 게시된 지연 → 그 값만 숨김(분류에 영향 없음, B4)
+  if (metric.state === "delayed") return { kind: "delayed" };
+  if (isReadableFresh(metric, key, source)) {
+    // 지표별 expiresAt 지남(오프라인·B5 포함) → 늦어짐으로 숨김
+    if (isExpired(metric.expiresAt, source.nowMs, source.clock)) {
+      return { kind: "delayed" };
+    }
     return {
       kind: "value",
       value: metric.value,
@@ -289,8 +293,7 @@ function metricView(
       observedAt: metric.observedAt,
     };
   }
-  // delayed, 지표별 expiresAt 지남, 읽을 수 없는 값·시각·단위, 미래 관측, 만료 시각만 늘린 값, 모르는 state
-  // → 그 값만 숨김(분류에 영향 없음, B4)
+  // 읽을 수 없는 값·시각·단위, 미래 관측, 만료 시각만 늘린 값, 모르는 state → "–"(늦어짐·정상으로 보이지 않게)
   return { kind: "hidden" };
 }
 

@@ -855,7 +855,7 @@ describe("status 실패에도 새로 확인한 서버 시계 유지", () => {
     });
     expect(
       deriveBeachView({ id: "b0001", hidden: false }, state),
-    ).toMatchObject({ metrics: { waveHeight: { kind: "hidden" } } });
+    ).toMatchObject({ metrics: { waveHeight: { kind: "delayed" } } });
   });
 });
 
@@ -1050,7 +1050,7 @@ describe("전체 재검증", () => {
     expect(store.getState().nowMs).toBeNaN();
     expect(deriveBeachView(b0001, store.getState())).toMatchObject({
       category: "undetermined",
-      metrics: { waveHeight: { kind: "hidden" }, wind: { kind: "hidden" } },
+      metrics: { waveHeight: { kind: "delayed" }, wind: { kind: "delayed" } },
     });
     expect(deriveBeachView(b0002, store.getState())).toMatchObject({
       category: "unavailable",
