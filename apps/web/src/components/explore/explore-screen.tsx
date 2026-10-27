@@ -286,7 +286,7 @@ export function ExploreScreen({
 
       {!loading && (
         <div className="flex flex-col gap-0.5 text-caption text-text-muted">
-          {activity !== "swimming" && (
+          {activity !== "swimming" && items.length > 0 && (
             <p>{t("explore.activityNote", { count: items.length })}</p>
           )}
           {/* 결과가 없으면 '전체 0곳'을 되풀이하지 않고 아래 빈 화면이 말함 */}
