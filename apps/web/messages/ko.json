@@ -338,5 +338,18 @@
     "delayed": "{name} 파고 측정이 늦어지고 있어요",
     "delayedMore": "{name} 외 {count}곳 파고 측정이 늦어지고 있어요",
     "delayedBody": "지금 상태를 판단하지 못했어요 · 측정값이 들어오면 다시 확인해요"
+  },
+  "warningSheet": {
+    "title": "특보 상세",
+    "checked": "{source} 발표 · {time}에 확인",
+    "type": "종류",
+    "level": "단계",
+    "zone": "구역",
+    "published": "발표",
+    "effective": "발효",
+    "original": "기상청 원문 보기",
+    "newWindow": "새 창",
+    "open": "{name} 상세 보기",
+    "zoneOriginal": "기상청 발표 원문"
   }
 }
