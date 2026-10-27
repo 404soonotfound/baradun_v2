@@ -41,7 +41,11 @@ import { isDelayedView, pickSituation } from "@/lib/situation";
 import type { SnapshotState } from "@/lib/snapshot/store";
 import { useSnapshot } from "@/lib/snapshot/use-snapshot";
 import { deriveBeachView } from "@/lib/snapshot/view";
-import { clearCheckedAt, countByStatus } from "@/lib/status-count";
+import {
+  clearCheckedAt,
+  countByStatus,
+  staleCheckedAt,
+} from "@/lib/status-count";
 import { useOnline } from "@/lib/use-online";
 import { useSheet } from "@/lib/use-sheet";
 
@@ -270,6 +274,7 @@ export function HomeScreen({
             })}
             counts={countByStatus(regionViews)}
             clearCheckedAt={clearCheckedAt(regionViews)}
+            staleChecked={staleCheckedAt(regionViews)}
             nowMs={snapshot.nowMs}
           />
         )}
