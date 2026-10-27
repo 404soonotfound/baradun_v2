@@ -47,7 +47,10 @@ function subscribeUrl(onChange: () => void) {
   return () => window.removeEventListener("popstate", onChange);
 }
 const readUrlQuery = () =>
-  new URLSearchParams(window.location.search).get("q") ?? "";
+  (new URLSearchParams(window.location.search).get("q") ?? "").slice(
+    0,
+    QUERY_MAX_LENGTH,
+  );
 
 export function SearchScreen({
   locale,
