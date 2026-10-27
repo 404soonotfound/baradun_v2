@@ -378,7 +378,7 @@
       "near": "Nearest",
       "name": "By name"
     },
-    "count": "{count} beaches",
+    "count": "{count, plural, one {# beach} other {# beaches}}",
     "updatedAt": "Updated {time}",
     "activityNote": "Only beaches with confirmed activity info · {count}",
     "loading": "Loading beach info",
