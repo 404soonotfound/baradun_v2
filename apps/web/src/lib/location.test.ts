@@ -113,4 +113,35 @@ describe("createLocationStore", () => {
       vi.unstubAllGlobals();
     }
   });
+  it("권한 확인 답이 오지 않으면 확인 중으로 남지 않음(idle)", () => {
+    vi.useFakeTimers();
+    const fake = fakeNavigator({ query: () => new Promise(() => {}) });
+    vi.stubGlobal("navigator", fake.navigator);
+    try {
+      const store = createLocationStore();
+      store.subscribe(() => {});
+      expect(store.getState().status).toBe("checking");
+      vi.advanceTimersByTime(3_000);
+      expect(store.getState().status).toBe("idle");
+    } finally {
+      vi.unstubAllGlobals();
+      vi.useRealTimers();
+    }
+  });
+
+  it("권한 확인이 바로 오류를 던져도 idle", () => {
+    const fake = fakeNavigator({
+      query: () => {
+        throw new TypeError("unsupported");
+      },
+    });
+    vi.stubGlobal("navigator", fake.navigator);
+    try {
+      const store = createLocationStore();
+      store.subscribe(() => {});
+      expect(store.getState().status).toBe("idle");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
 });
