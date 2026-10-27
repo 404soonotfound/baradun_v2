@@ -338,5 +338,18 @@
     "delayed": "Wave height readings for {name} are delayed",
     "delayedMore": "Wave height readings for {name} and {count, plural, one {# other beach} other {# other beaches}} are delayed",
     "delayedBody": "We can't assess the current status · We'll check again when new readings come in"
+  },
+  "warningSheet": {
+    "title": "Warning details",
+    "checked": "Issued by {source} · checked {time}",
+    "type": "Type",
+    "level": "Level",
+    "zone": "Zone",
+    "published": "Issued",
+    "effective": "In effect from",
+    "original": "View KMA original (Korean page)",
+    "newWindow": "opens in a new window",
+    "open": "{name} details",
+    "zoneOriginal": "As issued by KMA (Korean)"
   }
 }
