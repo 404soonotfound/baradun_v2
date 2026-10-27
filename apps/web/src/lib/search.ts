@@ -41,9 +41,10 @@ export function searchBeaches<T extends Searchable>(
       rank = 1;
       match = { kind: "name" };
     } else {
-      const alias = beach.aliases.find((item) =>
-        normalize(item).includes(needle),
-      );
+      // 검색어를 담은 다른 이름 중 가장 짧은 것(예: "상맹방(승공)"보다 "승공")을 안내에 씀
+      const alias = beach.aliases
+        .filter((item) => normalize(item).includes(needle))
+        .sort((a, b) => a.length - b.length)[0];
       if (alias !== undefined) {
         rank = 2;
         match = { kind: "alias", alias };
@@ -96,7 +97,10 @@ export function matchRange(
 
 // 한국어 주제 조사: "경포대는" / "경포해변은". 마지막 글자가 한글이고 받침이 있으면 은, 아니면 는
 export function withTopicParticle(word: string): string {
-  const last = word.trim().at(-1);
+  // 끝의 괄호·기호는 건너뛰고 마지막 글자(한글·영문·숫자)로 정함: "상맹방(승공)" → 공
+  const last = [...word.trim()]
+    .reverse()
+    .find((ch) => /[\p{L}\p{N}]/u.test(ch));
   if (last === undefined) return word;
   const code = last.charCodeAt(0);
   const isHangul = code >= 0xac00 && code <= 0xd7a3;

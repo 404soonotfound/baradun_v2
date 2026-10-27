@@ -51,6 +51,21 @@ describe("searchBeaches", () => {
     expect(hit?.match).toEqual({ kind: "alias", alias: "경포대" });
   });
 
+  it("별칭이 여럿 맞으면 가장 짧은 것을 안내에 씀", () => {
+    const list = [
+      b(
+        "상맹방해수욕장",
+        "Sangmaengbang",
+        ["강원", "삼척시"],
+        ["상맹방(승공)", "승공"],
+      ),
+    ];
+    expect(searchBeaches(list, "승공", "ko")[0]?.match).toEqual({
+      kind: "alias",
+      alias: "승공",
+    });
+  });
+
   it("이름에도 맞으면 별칭 안내를 붙이지 않음", () => {
     const [hit] = searchBeaches(ALL, "해운대", "ko");
     expect(hit?.match).toEqual({ kind: "name" });
@@ -100,6 +115,8 @@ describe("matchRange · withTopicParticle · normalize", () => {
     expect(withTopicParticle("경포대")).toBe("경포대는");
     expect(withTopicParticle("송정해변")).toBe("송정해변은");
     expect(withTopicParticle("Gyeongpo")).toBe("Gyeongpo는");
+    // 끝의 괄호는 건너뛰고 마지막 글자로 정함
+    expect(withTopicParticle("상맹방(승공)")).toBe("상맹방(승공)은");
   });
 
   it("공백 제거·소문자·한글 조합 통일", () => {
