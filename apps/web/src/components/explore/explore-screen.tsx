@@ -78,6 +78,8 @@ export function ExploreScreen({
   const regionSheet = useSheet("region");
   // 위치 안내 배너를 닫았는지. 이번 방문 동안만 기억
   const [offBannerClosed, setOffBannerClosed] = useState(false);
+  // 시·군 시트로 열어 줄 시·도(칩에서 누른 것). 저장 값과 별개
+  const [pickSido, setPickSido] = useState<string | null>(null);
 
   // 지역은 홈 기본 지역과 같은 저장 값(10/27 결정). 목록에 없어진 지역이면 전국으로 봄
   const region = validRegion(useRegion(), beaches);
@@ -233,8 +235,9 @@ export function ExploreScreen({
         region={region}
         regionLabel={name}
         onNationwide={() => setRegion(null)}
+        // 시트에서 고르기 전에는 저장하지 않음(그냥 닫으면 지역이 그대로)
         onPickSido={(sido) => {
-          if (region?.sido !== sido) setRegion({ sido, sigungu: null });
+          setPickSido(sido);
           regionSheet.show();
         }}
       />
@@ -334,12 +337,13 @@ export function ExploreScreen({
         </div>
       )}
 
-      {/* 시·군 고르기 시트. 시·도 칩을 누르면 그 시·도가 이미 골라져 있어 시·군 단계로 열림 */}
+      {/* 시·군 고르기 시트. 시·도 칩을 누르면 그 시·도의 시·군 단계로 열림 */}
       <RegionSheet
         open={regionSheet.open}
         onClose={regionSheet.close}
         groups={groups}
         value={region}
+        startSido={pickSido}
         onSelect={(next) => {
           setRegion(next);
           regionSheet.close();
