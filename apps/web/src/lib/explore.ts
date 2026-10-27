@@ -4,6 +4,7 @@ import { distanceKm, type LatLng } from "@/lib/geo";
 import { inRegion, type SavedRegion } from "@/lib/region-list";
 import type { BeachView, Category } from "@/lib/snapshot/view";
 import {
+  CATEGORY_ORDER,
   clearCheckedAt,
   countByStatus,
   type StatusCount,
@@ -94,12 +95,6 @@ export type ExploreGroup = {
   // '특보 없음' 묶음의 가장 이른 확인 시각(집계 전체의 가장 오래된 근거). 그 외·모르면 null
   checkedAt: string | null;
 };
-
-const CATEGORY_ORDER: readonly Category[] = [
-  "clear",
-  "unavailable",
-  "undetermined",
-];
 
 export function groupItems(
   items: readonly ExploreItem[],
