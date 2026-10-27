@@ -81,7 +81,6 @@
     "titleLine1": "오늘은 어떤 바다로",
     "titleLine2": "갈까요?",
     "top": {
-      "aroundMe": "내 주변",
       "pickRegion": "지역 고르기",
       "search": "해변·지역 검색",
       "changeRegion": "지역 고르기, 지금 {region}"
@@ -95,11 +94,10 @@
       "countLoading": "해변 상태를 불러오고 있어요",
       "noBeach": "이 지역에 이 활동이 확인된 해변이 아직 없어요",
       "offTitle": "위치 없이 보고 있어요",
-      "offBody": "거리 대신 고른 지역 기준으로 보여드려요.",
+      "offBody": "고른 지역 해변을 보여드려요. 위치를 켜면 거리도 함께 보여드려요.",
       "turnOn": "위치 정보 켜기",
       "close": "안내 닫기"
     },
-
     "near": {
       "title": "가까운 바다",
       "all": "전체 보기",
@@ -182,6 +180,7 @@
   "regionSheet": {
     "title": "지역 고르기",
     "sido": "시·도를 골라 주세요",
+    "nearby": "내 주변",
     "sigungu": "{sido}에서 시·군을 골라 주세요",
     "all": "{sido} 전체",
     "back": "시·도 다시 고르기"
