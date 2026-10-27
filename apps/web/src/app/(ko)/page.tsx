@@ -10,7 +10,7 @@ import {
 import { HomeScreen } from "@/components/home/home-screen";
 import { listBeachSummaries } from "@/lib/beaches";
 
-// 홈 (임시): 실제 화면은 BRD-26
+// 홈 (BRD-26)
 export const metadata: Metadata = {
   alternates: alternatesFor("ko", "/"),
 };

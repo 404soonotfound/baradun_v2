@@ -9,7 +9,7 @@ import {
 } from "@/lib/i18n";
 import { HomeScreen } from "@/components/home/home-screen";
 import { listBeachSummaries } from "@/lib/beaches";
-// Home (temporary): real screen in BRD-26
+// Home (BRD-26)
 export const metadata: Metadata = {
   alternates: alternatesFor("en", "/"),
 };

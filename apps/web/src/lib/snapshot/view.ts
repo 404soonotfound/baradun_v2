@@ -68,8 +68,8 @@ export type BeachView =
       reasons: BadgeLabel[];
       // B5: 새 정보를 못 받는 중(오프라인·만료·장애). 화면에 '이후 확인 못 함'을 붙임
       stale: boolean;
-      // B5: 유지하는 발효 특보의 마지막 확인 시각 → "HH:MM 확인 · 이후 확인 못 함".
-      // 읽을 수 없는 시각이면 null(stale은 그대로 true라 '확인 시각 모름'으로 표시)
+      // 특보 마지막 확인 시각. live면 근거 줄("기상청 HH:MM 확인"), B5면 "HH:MM 확인 · 이후 확인 못 함".
+      // 읽을 수 없거나 미래 시각이면 null(stale이면 '확인 시각 모름'으로 표시)
       confirmedAt: string | null;
       metrics: Record<MetricKey, MetricView>;
     };
