@@ -20,27 +20,32 @@ const NUMBER_COLOR: Record<VerdictTone, string> = {
   stale: "text-status-stale-fg",
 };
 
-// Vue: props: { href, title, counts, clearCheckedAt, nowMs }
+// Vue: props: { href, title, counts, clearCheckedAt, staleChecked, nowMs }
 export function RegionCountCard({
   href,
   title,
   counts,
   clearCheckedAt,
+  staleChecked,
   nowMs,
 }: {
   href: string;
   title: string; // "강원 해변 5곳 지금 상태"
   counts: StatusCount[] | null; // null = 아직 불러오는 중
   clearCheckedAt: string | null; // '특보 없음' 해변들의 가장 이른 확인 시각(lib/status-count.ts)
+  // 오래된(오프라인·만료) 해변들의 가장 이른 확인 시각. null = 오래된 해변 없음(lib/status-count.ts)
+  staleChecked: { confirmedAt: string | null } | null;
   nowMs: number;
 }) {
   const t = useTranslations("home.region");
   const tRoot = useTranslations();
-  const { badgeText } = useBadgeText();
+  const { badgeText, confirmedUntilText } = useBadgeText();
   // '특보 없음' 칸이 있으면 범위·기관·확인 시각과 현장 우선 문구를 함께(가까운 바다 카드와 같은 규칙)
   const hasClear =
     counts !== null && counts.some((item) => item.label.kind === "clear");
   const time = kstStamp(clearCheckedAt, nowMs);
+  // 오래된 해변이 하나라도 있으면 'HH:MM 확인 · 이후 확인 못 함'(B5, 노션 결정 기록 11장 10/27 ②)
+  const hasStale = counts !== null && staleChecked !== null;
   return (
     <Link
       href={href}
@@ -78,11 +83,17 @@ export function RegionCountCard({
           })}
         </span>
       )}
-      {hasClear && (
+      {/* 순서: 특보 없음 범위 → 이후 확인 못 함 → 현장 우선 */}
+      {(hasClear || hasStale) && (
         <span className="flex flex-col gap-0.5 text-caption text-text-muted">
-          <span>
-            {time ? t("countScope", { time }) : t("countScopeNoTime")}
-          </span>
+          {hasClear && (
+            <span>
+              {time ? t("countScope", { time }) : t("countScopeNoTime")}
+            </span>
+          )}
+          {hasStale && (
+            <span>{confirmedUntilText(staleChecked.confirmedAt, nowMs)}</span>
+          )}
           <span>{tRoot("safety.finalCall")}</span>
         </span>
       )}
