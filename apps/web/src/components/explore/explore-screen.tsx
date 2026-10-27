@@ -322,6 +322,12 @@ export function ExploreScreen({
       ) : mode === "status" ? (
         <div className="flex flex-col gap-5">
           {statusGroups.map(renderGroup)}
+          {/* 특보 없음 묶음이 없으면(이용불가·판단불가만, 오프라인 포함) 묶음 안내가 없으니 목록 아래에 한 번 둠 */}
+          {!statusGroups.some((group) => group.category === "clear") && (
+            <p className="text-caption text-text-muted">
+              {t("safety.finalCall")}
+            </p>
+          )}
         </div>
       ) : (
         <div className="flex flex-col gap-2">
