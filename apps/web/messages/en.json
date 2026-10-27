@@ -193,7 +193,8 @@
       "warningNone": "None",
       "warningUnknown": "Not confirmed",
       "waveValue": "Wave {value}m",
-      "unreadableWarning": "A warning is in effect, but we couldn't read its details · Check with KMA"
+      "unreadableWarning": "A warning is in effect, but we couldn't read its details · Check with KMA",
+      "openWarning": "Warning details"
     },
     "alt": {
       "title": "Nearby beaches with no warnings",
@@ -351,5 +352,22 @@
     "newWindow": "opens in a new window",
     "open": "{name} details",
     "zoneOriginal": "As issued by KMA (Korean)"
+  },
+  "detailSheet": {
+    "title": "What we checked",
+    "intro": "We only judge two things we can confirm as facts. Please decide for yourself whether the wave height suits you.",
+    "warningTitle": "5 sea-related warnings",
+    "warningBody": "Wind wave, strong wind, typhoon, storm surge and tsunami. Heavy rain, heat waves and similar are shown only as nearby warnings.",
+    "warningScope": "This beach's warning zones",
+    "timeTitle": "Measurement time",
+    "timeBody": "When wave height was last measured. If measurements are late, we show 'Observation delayed'.",
+    "controlTitle": "Access control",
+    "controlState": "Not checked",
+    "controlBody": "Check on-site guidance.",
+    "periodTitle": "Reading the wave period",
+    "periodBody": "The longer the period, the farther the swell has traveled and the stronger it is.",
+    "more": "Details",
+    "waveTitle": "Wave height",
+    "waveBody": "We only show the measured value and when it was measured. Please decide for yourself whether the wave height suits you."
   }
 }

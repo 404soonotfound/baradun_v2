@@ -7,8 +7,10 @@ import en from "../../../messages/en.json";
 import ko from "../../../messages/ko.json";
 import type { DetailInfo } from "@/lib/snapshot/detail";
 import type { BeachView, MetricView } from "@/lib/snapshot/view";
+import { WarningSheet } from "@/components/warning-sheet";
 import { AltBeaches } from "./alt-beaches";
 import { Call119, DetailActions } from "./detail-sections";
+import { DetailSheet } from "./detail-sheet";
 import { StatGrid } from "./sea-card";
 import { VerdictCard } from "./verdict-card";
 import { WaveFigure } from "./wave-figure";
@@ -167,9 +169,12 @@ function Column({ title, children }: { title: string; children: ReactNode }) {
 function Gallery({
   locale,
   altEmpty = false,
+  sheet,
 }: {
   locale: "ko" | "en";
   altEmpty?: boolean;
+  // 열어 둔 시트(BRD-33). 시트는 한 번에 하나만 열림
+  sheet?: "detail" | "warning";
 }) {
   const alt = {
     ...BEACH,
@@ -191,6 +196,23 @@ function Gallery({
         style={{ padding: 16 }}
         className="flex flex-wrap items-start gap-6 bg-bg-page"
       >
+        <DetailSheet
+          open={sheet === "detail"}
+          onClose={() => {}}
+          view={DELAYED}
+          detail={{ ...BASE, offSeason: null }}
+          stations={STATIONS}
+          nowMs={NOW}
+        />
+        <WarningSheet
+          open={sheet === "warning"}
+          onClose={() => {}}
+          item={ITEM}
+          source="기상청"
+          confirmedAt={CLEAR.kind === "ready" ? CLEAR.confirmedAt : null}
+          stale={false}
+          nowMs={NOW}
+        />
         <Column title="clear + off-season">
           <VerdictCard
             beachId="b0001"
@@ -280,3 +302,9 @@ type Story = StoryObj<typeof meta>;
 export const Korean: Story = { args: { locale: "ko" } };
 export const English: Story = { args: { locale: "en" } };
 export const AltEmpty: Story = { args: { locale: "ko", altEmpty: true } };
+export const DetailSheetOpen: Story = {
+  args: { locale: "ko", sheet: "detail" },
+};
+export const WarningSheetEnglish: Story = {
+  args: { locale: "en", sheet: "warning" },
+};
