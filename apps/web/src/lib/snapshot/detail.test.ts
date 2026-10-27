@@ -4,7 +4,7 @@ import type { BeachStatus, StatusFile } from "@baradun/contracts";
 import { describe, expect, it } from "vitest";
 
 import type { Clock } from "./clock";
-import { deriveDetail } from "./detail";
+import { deriveDetail, warningSourceOf } from "./detail";
 import { deriveBeachView, type ViewSource } from "./view";
 
 // 장소 상세 값 꺼내기 (BRD-32). 입력은 계약 예시 데이터
@@ -157,6 +157,24 @@ describe("deriveDetail", () => {
     });
     expect(detail.warnings).toEqual([]);
     expect(detail.unreadableWarnings).toBe(1);
+  });
+
+  it("발효 특보 목록 자체를 읽을 수 없으면 읽지 못한 항목으로 남김(사유 상자가 비지 않게)", () => {
+    const statuses = withStatus("b0002", (status) => {
+      (status.warning as { items: unknown }).items = null;
+    });
+    const { detail } = detailOf("b0002", source({}, statuses));
+    expect(detail.warnings).toEqual([]);
+    expect(detail.unreadableWarnings).toBe(1);
+  });
+
+  it("warningSourceOf: 기관만 꺼냄, 읽을 수 없으면 null", () => {
+    expect(warningSourceOf("b0001", source())).toBe("기상청");
+    expect(warningSourceOf("missing", source())).toBeNull();
+    const statuses = withStatus("b0001", (status) => {
+      (status.warning as { source: unknown }).source = "";
+    });
+    expect(warningSourceOf("b0001", source({}, statuses))).toBeNull();
   });
 
   it("이안류: 게시된 null은 제공 기간 아님, 읽을 수 없거나 상태가 없으면 unknown", () => {
