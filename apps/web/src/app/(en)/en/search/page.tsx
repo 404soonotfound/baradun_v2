@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
-import { PlaceholderPage } from "@/components/placeholder-page";
+import { SearchScreen } from "@/components/search/search-screen";
+import { listBeachSummaries } from "@/lib/beaches";
 import { alternatesFor } from "@/lib/i18n";
 
-// /search/ (아키텍처 9장 확정 경로). 실제 화면은 화면 이슈에서 채워요 (BRD-24)
+// 검색 /search/ (BRD-31). 해변 이름·별칭은 빌드 때 만들어 넘기고, 검색은 브라우저에서 처리(검색어는 ?q=)
 const PATH = "/search/";
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -12,5 +13,5 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default function Page() {
-  return <PlaceholderPage locale="en" page="search" />;
+  return <SearchScreen locale="en" beaches={listBeachSummaries("en")} />;
 }

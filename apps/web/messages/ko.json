@@ -404,5 +404,22 @@
       "body": "활동이나 지역을 바꿔 보세요",
       "action": "전국 보기"
     }
+  },
+  "search": {
+    "scopeRemove": "{scope} 범위 빼기",
+    "recent": {
+      "title": "최근 검색",
+      "clear": "전체 지우기",
+      "remove": "{query} 최근 검색에서 지우기"
+    },
+    "byRegion": "지역으로 찾기",
+    "count": "{count}곳",
+    "aliasNote": "{alias} {name}의 다른 이름이에요",
+    "empty": {
+      "scoped": "{scope}에서 '{query}'를 찾지 못했어요",
+      "all": "전국에서 '{query}'를 찾지 못했어요",
+      "body": "다른 이름이나 지역으로 찾아보세요",
+      "widen": "전국에서 찾기"
+    }
   }
 }
