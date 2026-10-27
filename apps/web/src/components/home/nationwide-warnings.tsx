@@ -39,9 +39,9 @@ export function NationwideWarnings() {
           </p>
         )}
         {warnings.kind === "failed" && (
-          // 실패 문구: 무슨 일 → 다음 행동. '특보 없음'으로 보이지 않게 따로 둠
+          // 실패 문구: 무슨 일 → 영향 → 다음 행동. '특보 없음'으로 보이지 않게 따로 둠
           <p className="px-4 py-3 text-body-s text-text-body">
-            {t("failed")} · {t("failedNext")}
+            {t("failed")} · {t("failedImpact")} · {t("failedNext")}
           </p>
         )}
         {warnings.kind === "ready" && (
