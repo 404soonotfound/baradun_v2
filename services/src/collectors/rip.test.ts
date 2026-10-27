@@ -37,9 +37,9 @@ const ok = (body: string): HttpResult => ({
   httpStatus: 200,
   attempts: 1,
 });
+// 2026-10-27 실응답: 자료가 없으면 body 없이 header만 옴
 const NO_DATA = JSON.stringify({
   header: { resultCode: "03", resultMsg: "NODATA_ERROR" },
-  body: { items: "", totalCount: 0 },
 });
 
 function setup(now: string, replies: Record<string, Reply>) {
@@ -305,6 +305,19 @@ describe("collectRip", () => {
     expect(new URL(urls[0]!).searchParams.get("reqDate")).toBe("20261026");
     expect(lines.some((line) => line.includes("rip_off_season_data"))).toBe(
       true,
+    );
+  });
+
+  it("비수기 하루 1회 슬롯에서 모두 '자료 없음'이면 정상(complete), 실패 로그 없음", async () => {
+    const { deps, state, lines } = setup("2026-10-25T19:13:00Z", {});
+    expect((await collectRip(deps)).status).toBe("complete");
+    expect((await attempt(state)).counts).toEqual({
+      ok: 0,
+      none: 2,
+      failed: 0,
+    });
+    expect(lines.some((line) => line.includes("rip_source_failed"))).toBe(
+      false,
     );
   });
 
