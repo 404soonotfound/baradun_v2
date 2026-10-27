@@ -59,6 +59,8 @@ const STORAGE_KEY = "baradun:region";
 let memory: SavedRegion | null = null; // 저장소를 못 쓰는 환경 대비
 let lastRaw: string | null = null; // 같은 글자면 같은 객체를 돌려주기 위한 기억
 let lastValue: SavedRegion | null = null;
+// 쓰기가 실패한 적 있음(읽기는 되는데 쓰기만 막힌 환경). 이후로는 memory를 읽음
+let writeFailed = false;
 const listeners = new Set<() => void>();
 
 // [7] 저장 글자 → 지역. 모양이 다르면 null(고르지 않은 것으로 봄)
@@ -78,6 +80,7 @@ function parse(raw: string | null): SavedRegion | null {
 
 // [8] 저장값 읽기. 글자가 같으면 같은 객체
 function read(): SavedRegion | null {
+  if (writeFailed) return memory; // 저장소의 옛 값이 방금 고른 지역을 덮지 않게
   let raw: string | null;
   try {
     raw = localStorage.getItem(STORAGE_KEY);
@@ -112,6 +115,7 @@ export function setRegion(next: SavedRegion | null) {
     else localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
   } catch {
     // 저장 못 해도 memory로 이번 방문 동안은 유지
+    writeFailed = true;
   }
   listeners.forEach((listener) => listener());
 }

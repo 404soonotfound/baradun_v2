@@ -50,10 +50,13 @@ export function createDeviceList(storageKey: string, max: number): DeviceList {
   // 마지막으로 읽은 저장 글자와 그 결과. 글자가 같으면 같은 배열을 돌려줌(끝없는 다시 그리기 방지)
   let lastRaw: string | null = null;
   let lastValue: readonly string[] = EMPTY_IDS;
+  // 쓰기가 실패한 적 있음(읽기는 되는데 쓰기만 막힌 사생활 보호 모드·용량 초과). 이후로는 memory를 읽음
+  let writeFailed = false;
   // Set = 중복 없는 모음. 같은 함수를 두 번 등록해도 하나만 남음
   const listeners = new Set<() => void>();
 
   function read(): readonly string[] {
+    if (writeFailed) return memory; // 저장소의 옛 값이 방금 바꾼 값을 덮지 않게
     let raw: string | null;
     try {
       raw = localStorage.getItem(storageKey);
@@ -73,6 +76,7 @@ export function createDeviceList(storageKey: string, max: number): DeviceList {
       localStorage.setItem(storageKey, JSON.stringify(next));
     } catch {
       // 저장 못 해도 memory로 이번 방문 동안은 유지
+      writeFailed = true;
     }
     listeners.forEach((listener) => listener()); // 구독한 화면에 바뀜 알림
   }

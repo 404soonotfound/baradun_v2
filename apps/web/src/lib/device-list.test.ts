@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
-import { addToFront, parseIds } from "./device-list";
+import { addToFront, createDeviceList, parseIds } from "./device-list";
 
 // 기기 저장 id 목록 규칙 (BRD-26)
 
@@ -43,5 +43,26 @@ describe("parseIds", () => {
 
   it("글자가 아닌 항목은 버린다", () => {
     expect(parseIds('["b0001", 3, null]')).toEqual(["b0001"]);
+  });
+});
+
+describe("createDeviceList", () => {
+  it("읽기는 되고 쓰기만 막힌 저장소에서도 이번 방문 동안 바뀐 값을 유지한다", () => {
+    // 사생활 보호 모드처럼 getItem은 옛 값을 주고 setItem은 오류
+    vi.stubGlobal("localStorage", {
+      getItem: () => '["b0001"]',
+      setItem: () => {
+        throw new Error("QuotaExceededError");
+      },
+    });
+    try {
+      const list = createDeviceList("test:list", 10);
+      list.add("b0002");
+      expect(list.getSnapshot()).toEqual(["b0002", "b0001"]);
+      list.remove("b0001");
+      expect(list.getSnapshot()).toEqual(["b0002"]);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });
