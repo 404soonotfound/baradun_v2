@@ -114,6 +114,7 @@
       "unconfirmed": "Couldn't confirm marine warnings",
       "loading": "Loading marine warnings",
       "failed": "Couldn't load marine warnings",
+      "failedImpact": "We can't tell whether any warnings are in effect",
       "failedNext": "We'll check again when new data arrives"
     },
     "guide": {

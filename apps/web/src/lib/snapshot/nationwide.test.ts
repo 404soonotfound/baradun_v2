@@ -41,7 +41,9 @@ describe("readNationwide", () => {
 });
 
 describe("nationwideView", () => {
-  const live = { live: true, nowMs: at("2026-10-17T05:30:00Z") };
+  // 서버 시각을 아는 시계(만료를 앞당기지 않음)
+  const clock = { offsetMs: 0, trusted: true };
+  const live = { live: true, nowMs: at("2026-10-17T05:30:00Z"), clock };
 
   it("받기 전은 loading, 받지 못했으면 failed", () => {
     expect(nationwideView(null, false, live)).toEqual({ kind: "loading" });
@@ -58,7 +60,7 @@ describe("nationwideView", () => {
   it("45분이 지나거나 오프라인이거나 다시 받기 실패면 stale", () => {
     expect(
       nationwideView(file, false, {
-        live: true,
+        ...live,
         nowMs: at("2026-10-17T06:04:00Z"),
       }),
     ).toMatchObject({ stale: true });
@@ -73,7 +75,29 @@ describe("nationwideView", () => {
       nationwideView({ ...file, lastConfirmedAt: null }, false, live),
     ).toMatchObject({ stale: true });
     expect(
-      nationwideView(file, false, { live: true, nowMs: Number.NaN }),
+      nationwideView(file, false, { ...live, nowMs: Number.NaN }),
     ).toMatchObject({ stale: true });
+  });
+
+  it("확인 시각이 미래(2분 넘게)면 근거로 쓰지 않음: stale·확인 시각 모름", () => {
+    expect(
+      nationwideView(
+        { ...file, lastConfirmedAt: "2027-01-01T00:00:00Z" },
+        false,
+        live,
+      ),
+    ).toMatchObject({ stale: true, confirmedAt: null });
+  });
+
+  it("서버 시각을 모르면 해변 화면처럼 만료를 5분 앞당김", () => {
+    const untrusted = { offsetMs: 0, trusted: false };
+    // 확인 05:18:40 + 45분 = 06:03:40. 06:00이면 남은 시간이 5분 이하
+    const nowMs = at("2026-10-17T06:00:00Z");
+    expect(
+      nationwideView(file, false, { live: true, nowMs, clock: untrusted }),
+    ).toMatchObject({ stale: true });
+    expect(nationwideView(file, false, { ...live, nowMs })).toMatchObject({
+      stale: false,
+    });
   });
 });

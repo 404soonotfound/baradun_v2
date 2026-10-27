@@ -9,7 +9,7 @@ import type {
 import { CLOCK_TOLERANCE_MS, isExpired, isTime, type Clock } from "./clock";
 
 // 특보 확인 유효시간 45분(아키텍처 14.3 N2). '특보 없음' 근거 검증에만 씀(분류 계산 아님)
-const WARNING_CONFIRM_VALID_MS = 45 * 60_000;
+export const WARNING_CONFIRM_VALID_MS = 45 * 60_000;
 
 // 해변 하나의 화면 상태 (아키텍처 9.1, 결정 기록 11장 B4·B5, BRD-41)
 // 분류(category)는 publisher가 게시한 값을 그대로 씀(G1). 여기서 하는 일은 셋뿐:
@@ -29,14 +29,14 @@ export const METRIC_KEYS = [
 ] as const satisfies readonly MetricKey[];
 
 const CATEGORIES = ["clear", "unavailable", "undetermined"] as const;
-const WARNING_TYPES = [
+export const WARNING_TYPES = [
   "wind_wave",
   "strong_wind",
   "typhoon",
   "storm_surge",
   "tsunami",
 ] as const satisfies readonly WarningType[];
-const WARNING_LEVELS = [
+export const WARNING_LEVELS = [
   "advisory",
   "warning",
   "severe_warning",
@@ -127,7 +127,7 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function includes<T>(list: readonly T[], value: unknown): value is T {
+export function includes<T>(list: readonly T[], value: unknown): value is T {
   return (list as readonly unknown[]).includes(value);
 }
 
