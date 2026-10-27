@@ -159,6 +159,11 @@ export function SeaCard({
       {/* 값 자리가 '가까운 관측 없음'이면 그 측정소 기록도 그리지 않음(메타와 같은 규칙) */}
       <WaveChart
         stationId={shownStation(wave, stations, "waveHeight")?.id ?? null}
+        latest={
+          wave.kind === "value"
+            ? { t: Date.parse(wave.observedAt), v: wave.value }
+            : null
+        }
         nowMs={nowMs}
       />
     </section>
