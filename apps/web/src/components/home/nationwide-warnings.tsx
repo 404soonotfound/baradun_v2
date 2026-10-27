@@ -132,6 +132,7 @@ export function NationwideWarnings() {
         open={sheet.open}
         onClose={sheet.close}
         item={selected}
+        items={warnings.kind === "ready" ? warnings.items : []}
         source={NATIONWIDE_SOURCE}
         confirmedAt={warnings.kind === "ready" ? warnings.confirmedAt : null}
         stale={warnings.kind !== "ready" || warnings.stale}

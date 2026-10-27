@@ -208,6 +208,7 @@ function Gallery({
           open={sheet === "warning"}
           onClose={() => {}}
           item={ITEM}
+          items={[ITEM]}
           source="기상청"
           confirmedAt={CLEAR.kind === "ready" ? CLEAR.confirmedAt : null}
           stale={false}
