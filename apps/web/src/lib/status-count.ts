@@ -64,3 +64,25 @@ export function clearCheckedAt(views: readonly BeachView[]): string | null {
   }
   return oldest;
 }
+
+// [6] 오래된(B5: 오프라인·만료) 해변들의 가장 이른 특보 확인 시각 (노션 결정 기록 11장 화면 잔여 결정 10/27 ②)
+// null = 오래된 해변 없음(줄을 보이지 않음). { confirmedAt: null } = 오래됐지만 시각을 모름
+// 확인 시각을 모르는 오래된 해변이 섞이면 시각을 내세우지 않음(가장 이른 시각을 알 수 없음)
+export function staleCheckedAt(
+  views: readonly BeachView[],
+): { confirmedAt: string | null } | null {
+  let found = false;
+  let oldest: string | null = null;
+  let oldestMs = Infinity;
+  for (const view of views) {
+    if (view.kind !== "ready" || !view.stale) continue;
+    found = true;
+    const ms = view.confirmedAt === null ? NaN : Date.parse(view.confirmedAt);
+    if (!Number.isFinite(ms)) return { confirmedAt: null };
+    if (ms < oldestMs) {
+      oldestMs = ms;
+      oldest = view.confirmedAt;
+    }
+  }
+  return found ? { confirmedAt: oldest } : null;
+}

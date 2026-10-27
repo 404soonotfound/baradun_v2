@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { clearCheckedAt, countByStatus } from "@/lib/status-count";
+import {
+  clearCheckedAt,
+  countByStatus,
+  staleCheckedAt,
+} from "@/lib/status-count";
 import type { BadgeLabel, BeachView, Category } from "@/lib/snapshot/view";
 
 // 테스트용 화면 상태. 개수 세기에 쓰지 않는 칸은 빈 값
@@ -92,5 +96,46 @@ describe("clearCheckedAt", () => {
         at("2026-10-17T05:15:00Z"),
       ]),
     ).toBe("2026-10-17T05:15:00Z");
+  });
+});
+
+describe("staleCheckedAt", () => {
+  function stale(confirmedAt: string | null, isStale = true): BeachView {
+    const view = ready("undetermined", { kind: "unconfirmed" });
+    return view.kind === "ready"
+      ? { ...view, confirmedAt, stale: isStale }
+      : view;
+  }
+
+  it("오래된 해변이 없으면 null", () => {
+    expect(
+      staleCheckedAt([clear, strongWind, stale("2026-10-17T05:15:00Z", false)]),
+    ).toBeNull();
+  });
+
+  it("오래된 해변이 여러 곳이면 가장 이른 확인 시각", () => {
+    expect(
+      staleCheckedAt([
+        stale("2026-10-17T05:30:00Z"),
+        clear,
+        stale("2026-10-17T05:05:00Z"),
+        stale("2026-10-17T05:20:00Z"),
+      ]),
+    ).toEqual({ confirmedAt: "2026-10-17T05:05:00Z" });
+  });
+
+  it("확인 시각을 모르는 오래된 해변이 섞이면 시각 없이(줄은 남김)", () => {
+    expect(
+      staleCheckedAt([stale("2026-10-17T05:05:00Z"), stale(null)]),
+    ).toEqual({ confirmedAt: null });
+    expect(
+      staleCheckedAt([stale("읽을 수 없음"), stale("2026-10-17T05:05:00Z")]),
+    ).toEqual({ confirmedAt: null });
+  });
+
+  it("불러오는 중·노출 끈 해변은 세지 않음", () => {
+    expect(
+      staleCheckedAt([{ kind: "loading" }, { kind: "hidden" }]),
+    ).toBeNull();
   });
 });
