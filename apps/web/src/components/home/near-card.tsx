@@ -65,7 +65,7 @@ export function NearCard({
   return (
     <Link
       href={localizedPath(locale, `/spots/${beach.slug}/`)}
-      className="flex flex-col gap-3 rounded-card bg-bg-surface p-4 shadow-card"
+      className="h-full flex flex-col gap-3 rounded-card bg-bg-surface p-4 shadow-card"
     >
       <span className="flex items-start justify-between gap-3">
         <span className="flex min-w-0 flex-col gap-0.5">
