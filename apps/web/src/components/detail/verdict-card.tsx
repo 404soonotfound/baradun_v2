@@ -2,16 +2,17 @@
 
 import {
   CalendarX,
+  ChevronRight,
   CircleCheck,
   CircleQuestionMark,
   Clock,
   RotateCw,
   TriangleAlert,
 } from "lucide-react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { useId, useState, type ReactNode } from "react";
 
-import type { Beach } from "@baradun/contracts";
+import type { Beach, WarningItem } from "@baradun/contracts";
 import { shownMetric } from "@/components/detail/sea-card";
 import { ReasonBadge } from "@/components/reason-badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -21,8 +22,10 @@ import { kstStamp } from "@/lib/snapshot/clock";
 import type { Basis, DetailInfo } from "@/lib/snapshot/detail";
 import { useBadgeText } from "@/lib/snapshot/use-badge-text";
 import { getSnapshotState, refreshSnapshot } from "@/lib/snapshot/use-snapshot";
+import type { Locale } from "@/lib/i18n";
 import { useMetaText } from "@/lib/snapshot/use-meta-text";
 import { useTimeText } from "@/lib/snapshot/use-time-text";
+import { zoneNameText } from "@/lib/zone-name";
 import {
   deriveBeachView,
   type BadgeLabel,
@@ -46,6 +49,7 @@ export function VerdictCard({
   detail,
   stations,
   nowMs,
+  onOpenWarning,
   children,
 }: {
   beachId: string;
@@ -53,6 +57,8 @@ export function VerdictCard({
   detail: DetailInfo;
   stations: Beach["stations"];
   nowMs: number;
+  // 사유 상자의 특보 항목에서 특보 상세 시트(WARN, BRD-33) 열기
+  onOpenWarning?: (item: WarningItem) => void;
   // ⑥ 아래에 덧붙일 것(BRD-33의 '자세히' 등)
   children?: ReactNode;
 }) {
@@ -198,7 +204,13 @@ export function VerdictCard({
       )}
 
       {/* ④ 사유 상자 */}
-      <ReasonBox beachId={beachId} view={view} detail={detail} nowMs={nowMs} />
+      <ReasonBox
+        beachId={beachId}
+        view={view}
+        detail={detail}
+        nowMs={nowMs}
+        onOpenWarning={onOpenWarning}
+      />
 
       {/* ⑤ 확인한 것 */}
       <div>
@@ -289,12 +301,15 @@ function ReasonBox({
   view,
   detail,
   nowMs,
+  onOpenWarning,
 }: {
   beachId: string;
   view: Extract<BeachView, { kind: "ready" }>;
   detail: DetailInfo;
   nowMs: number;
+  onOpenWarning: ((item: WarningItem) => void) | undefined;
 }) {
+  const locale = useLocale() as Locale;
   const t = useTranslations("detail.verdict");
   const { badgeText } = useBadgeText();
   const [rechecking, setRechecking] = useState(false);
@@ -343,12 +358,23 @@ function ReasonBox({
             </p>
             <dl className="mt-1 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5">
               <dt className="text-text-muted">{t("zone")}</dt>
-              <dd>{item.zoneName}</dd>
+              <dd>{zoneNameText(item, locale).text}</dd>
               <dt className="text-text-muted">{t("effectiveFrom")}</dt>
               <dd>{kstStamp(item.effectiveFrom, nowMs) ?? "–"}</dd>
               <dt className="text-text-muted">{t("affects")}</dt>
               <dd>{t("allActivities")}</dd>
             </dl>
+            {onOpenWarning && (
+              <button
+                type="button"
+                aria-haspopup="dialog"
+                onClick={() => onOpenWarning(item)}
+                className="-mb-2 inline-flex min-h-touch items-center gap-1 font-bold text-status-blocked-fg underline"
+              >
+                {t("openWarning")}
+                <ChevronRight aria-hidden="true" size={16} />
+              </button>
+            )}
           </li>
         ))}
         {/* 읽을 수 없는 특보: 이름을 지어내지 않고 숨기지도 않음(9.1). 분류는 게시값 그대로(이용불가).
