@@ -58,6 +58,9 @@ export type DetailInfo = {
   nearbyWarnings: (Omit<NearbyWarningItem, "type"> & {
     type: NearbyWarningType | null;
   })[];
+  // 읽을 수 없는 주변 특보 수(모르는 단계·형식). "all" = 목록 자체를 읽을 수 없음.
+  // 버리면 '주변 특보 없음'과 같아 보여서 숨기지 않고 화면에 알림(9.1 모르는 데이터)
+  unreadableNearby: number | "all";
 };
 
 export type RipCurrent = { label: string; publishedAt: string; source: string };
@@ -71,6 +74,7 @@ const EMPTY: DetailInfo = {
   offSeason: null,
   ripCurrent: "unknown",
   nearbyWarnings: [],
+  unreadableNearby: 0,
 };
 
 const text = (value: unknown): string | null =>
@@ -187,12 +191,12 @@ export function deriveDetail(
         ? { label: ripLabel, publishedAt: rip.publishedAt, source: ripSource }
         : "unknown";
 
-  const nearbyWarnings = Array.isArray(info.nearbyWarnings)
-    ? info.nearbyWarnings.flatMap((item) => {
-        const read = readNearby(item);
-        return read ? [read] : [];
-      })
-    : [];
+  const nearbyRead = Array.isArray(info.nearbyWarnings)
+    ? info.nearbyWarnings.map(readNearby)
+    : null;
+  const nearbyWarnings = (nearbyRead ?? []).filter((item) => item !== null);
+  const unreadableNearby =
+    nearbyRead === null ? "all" : nearbyRead.length - nearbyWarnings.length;
 
   const confirmedAt = isTime(warning.lastConfirmedAt)
     ? Date.parse(warning.lastConfirmedAt)
@@ -223,5 +227,6 @@ export function deriveDetail(
     offSeason,
     ripCurrent,
     nearbyWarnings,
+    unreadableNearby,
   };
 }

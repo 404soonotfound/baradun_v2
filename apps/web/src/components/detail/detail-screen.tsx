@@ -175,6 +175,7 @@ export function DetailScreen({
           />
           <NearbyWarnings
             items={detail.nearbyWarnings}
+            unreadable={detail.unreadableNearby}
             nowMs={snapshot.nowMs}
           />
           <Call119 className="lg:hidden" />

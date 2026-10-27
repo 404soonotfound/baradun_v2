@@ -6,7 +6,7 @@ import { useId } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { kstStamp } from "@/lib/snapshot/clock";
 import { useStationHistory } from "@/lib/snapshot/history";
-import { CHART_GAP_MS, waveChart } from "@/lib/wave-chart";
+import { waveChart } from "@/lib/wave-chart";
 
 // 24시간 파고 (BRD-32 · 노션 3장 WaveChart, 10/27 결정 ⑥)
 // 0부터 시작하는 축(0.5m 간격), 선 + 연한 면, 현재값 점과 값 라벨, x축 "24시간 전 · 12시간 전 · 지금".
@@ -58,9 +58,7 @@ export function WaveChart({
       LEFT + ((ms - chart.from) / (chart.to - chart.from)) * (W - LEFT - RIGHT);
     const y = (m: number) => BOTTOM - (m / topM) * (BOTTOM - TOP);
 
-    const last = chart.runs.at(-1)?.at(-1);
-    // 현재값: 마지막 값이 90분 안일 때만(아니면 끝에 빗금이 이어짐)
-    const current = last && chart.to - last.t <= CHART_GAP_MS ? last : null;
+    const current = chart.current;
     const trailing = chart.gaps.at(-1);
     const since =
       trailing && trailing.to === chart.to

@@ -237,7 +237,9 @@
     },
     "nearby": {
       "title": "Nearby warnings",
-      "note": "For reference only. Not used for the beach status"
+      "note": "For reference only. Not used for the beach status",
+      "unreadable": "{count} nearby warning(s) are in effect, but we couldn't read their details · Check with KMA",
+      "unreadableAll": "We couldn't read the nearby warnings · Check with KMA"
     },
     "call119": {
       "title": "Emergency 119",
