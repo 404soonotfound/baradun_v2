@@ -80,6 +80,7 @@ const STALE: BeachView = {
 
 const BASE: DetailInfo = {
   warnings: [],
+  unreadableWarnings: 0,
   basis: [],
   warningSource: "기상청",
   warningConfirmedNone: true,
@@ -190,7 +191,13 @@ function Gallery({
         className="flex flex-wrap items-start gap-6 bg-bg-page"
       >
         <Column title="clear + off-season">
-          <VerdictCard beachId="b0001" view={CLEAR} detail={BASE} nowMs={NOW} />
+          <VerdictCard
+            beachId="b0001"
+            view={CLEAR}
+            detail={BASE}
+            stations={STATIONS}
+            nowMs={NOW}
+          />
           <DetailActions beach={BEACH} view={CLEAR} />
         </Column>
         <Column title="unavailable">
@@ -198,6 +205,7 @@ function Gallery({
             beachId="b0002"
             view={BLOCKED}
             detail={BLOCKED_DETAIL}
+            stations={STATIONS}
             nowMs={NOW}
           />
           <DetailActions beach={BEACH} view={BLOCKED} />
@@ -212,12 +220,14 @@ function Gallery({
             beachId="b0003"
             view={UNKNOWN}
             detail={{ ...BASE, warningConfirmedNone: false, offSeason: null }}
+            stations={STATIONS}
             nowMs={NOW}
           />
           <VerdictCard
             beachId="b0003"
             view={DELAYED}
             detail={{ ...BASE, offSeason: null }}
+            stations={STATIONS}
             nowMs={NOW}
           />
           <VerdictCard
@@ -228,12 +238,14 @@ function Gallery({
               basis: [],
               warnings: [{ ...ITEM, type: "strong_wind" }],
             }}
+            stations={STATIONS}
             nowMs={NOW}
           />
           <VerdictCard
             beachId="b0001"
             view={{ kind: "loading" }}
             detail={BASE}
+            stations={STATIONS}
             nowMs={NOW}
           />
         </Column>
@@ -247,6 +259,7 @@ function Gallery({
           <WaveFigure height={0.6} period={6} />
           <WaveFigure height={2.4} period={null} />
           <WaveFigure height={null} period={null} />
+          <WaveFigure height={null} period={null} delayed />
           <Call119 />
         </Column>
       </div>

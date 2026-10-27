@@ -109,10 +109,11 @@ export function useStationHistory(stationId: string | null): HistoryView {
       : { kind: "failed" };
   }
   if (url === null) return { kind: "failed" };
+  // 측정소 없음: 파일을 받지 않으므로(위 useEffect) 기다리지 않고 바로 기록 없음
+  if (stationId === null) return { kind: "ready", history: null };
   // 이전 버전 파일은 지금 스냅샷의 기록이 아님 → 새 파일을 받을 때까지 loading
   if (state.url !== url) return { kind: "loading" };
   if (state.failed || state.stations === null) return { kind: "failed" };
-  if (stationId === null) return { kind: "ready", history: null };
   const raw = state.stations[stationId];
   if (raw === undefined) return { kind: "ready", history: null };
   const history = readStationHistory(raw);

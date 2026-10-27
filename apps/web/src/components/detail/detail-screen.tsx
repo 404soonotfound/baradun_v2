@@ -2,7 +2,7 @@
 
 import type { Beach } from "@baradun/contracts";
 import { useTranslations } from "next-intl";
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useRef } from "react";
 
 import { ActivityButton } from "@/components/detail/activity-button";
 import { AltBeaches } from "@/components/detail/alt-beaches";
@@ -65,28 +65,28 @@ export function DetailScreen({
   const detail = deriveDetail(beach.id, view, snapshot);
 
   // 대안 해변: 지금 보는 해변이 '특보 없음'이 아닐 때만(가까운 순, 사용자 위치와 무관)
-  const candidates = useMemo(
-    () => beaches.filter((item) => item.id !== beach.id),
-    [beaches, beach.id],
-  );
   // B5(오프라인·만료)에는 다른 해변도 '특보 없음'을 확인할 수 없어 카드를 두지 않음
   // ('근처에 특보 없는 해변이 없어요'가 확인 못 한 상태를 '없음'으로 말하지 않게)
   const showAlt = view.kind === "ready" && !view.stale && !isClearView(view);
+  // 근거 줄에 쓸 기관을 읽을 수 없는 해변은 고르기 전에 뺌(그리는 단계에서 빠져 2곳보다 적어지지 않게)
   const alternatives = showAlt
-    ? alternativeBeaches(beach, candidates, activity, (item) =>
-        deriveBeachView({ id: item.id, hidden: false }, snapshot),
-      ).map((item) => {
-        const itemView = deriveBeachView(
-          { id: item.id, hidden: false },
-          snapshot,
-        );
-        return {
-          ...item,
-          view: itemView,
-          warningSource: deriveDetail(item.id, itemView, snapshot)
-            .warningSource,
-        };
-      })
+    ? alternativeBeaches(
+        beach,
+        beaches
+          .filter((item) => item.id !== beach.id)
+          .flatMap((item) => {
+            const itemView = deriveBeachView(
+              { id: item.id, hidden: false },
+              snapshot,
+            );
+            const { warningSource } = deriveDetail(item.id, itemView, snapshot);
+            return warningSource
+              ? [{ ...item, view: itemView, warningSource }]
+              : [];
+          }),
+        activity,
+        (item) => item.view,
+      )
     : [];
 
   const situation = pickSituation({
@@ -148,6 +148,7 @@ export function DetailScreen({
             beachId={beach.id}
             view={view}
             detail={detail}
+            stations={beach.stations}
             nowMs={snapshot.nowMs}
           />
           <DetailActions beach={beach} view={view} className="hidden lg:flex" />

@@ -11,6 +11,8 @@ import {
 import { useTranslations } from "next-intl";
 import { useId, useState, type ReactNode } from "react";
 
+import type { Beach } from "@baradun/contracts";
+import { shownMetric } from "@/components/detail/sea-card";
 import { ReasonBadge } from "@/components/reason-badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -42,12 +44,14 @@ export function VerdictCard({
   beachId,
   view,
   detail,
+  stations,
   nowMs,
   children,
 }: {
   beachId: string;
   view: BeachView;
   detail: DetailInfo;
+  stations: Beach["stations"];
   nowMs: number;
   // ⑥ 아래에 덧붙일 것(BRD-33의 '자세히' 등)
   children?: ReactNode;
@@ -121,12 +125,14 @@ export function VerdictCard({
   } else {
     for (const basis of detail.basis) {
       const line = basisText(basis);
-      if (line) lines.push(line);
+      // 같은 구역·기관·시각의 특보 여러 개는 근거 줄이 같음 → 한 번만(React key도 겹치지 않게)
+      if (line && !lines.includes(line)) lines.push(line);
     }
   }
 
   const blocked = view.category === "unavailable";
-  const wave = view.metrics.waveHeight;
+  // 측정소를 모르는 값은 바다 상태 카드처럼 "–"(출처 없는 값을 보이지 않음)
+  const wave = shownMetric(view, stations, "waveHeight");
   // ⑤ 측정 시각·파고 칸 글자. 값이 없으면 세 가지로 구분(가까운 관측 없음 / 늦어짐 / –)
   const missing =
     wave.kind === "none"
@@ -308,7 +314,10 @@ function ReasonBox({
     }
   }
 
-  if (view.category === "unavailable" && detail.warnings.length > 0) {
+  if (
+    view.category === "unavailable" &&
+    (detail.warnings.length > 0 || detail.unreadableWarnings > 0)
+  ) {
     return (
       <ul className="flex flex-col gap-2">
         {detail.warnings.map((item) => (
@@ -333,6 +342,13 @@ function ReasonBox({
             </dl>
           </li>
         ))}
+        {/* 읽을 수 없는 특보: 이름을 지어내지 않고 숨기지도 않음(9.1). 분류는 게시값 그대로(이용불가).
+            문구는 노션에 없는 임시안(BRD-32 PR 남은 결정) */}
+        {detail.unreadableWarnings > 0 && (
+          <li className="rounded-input bg-status-blocked-bg px-3.5 py-3 text-body-s font-bold text-status-blocked-fg">
+            {t("unreadableWarning")}
+          </li>
+        )}
       </ul>
     );
   }

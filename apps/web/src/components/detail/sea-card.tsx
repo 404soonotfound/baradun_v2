@@ -9,6 +9,7 @@ import { WaveFigure } from "@/components/detail/wave-figure";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/cn";
 import { joinMeta } from "@/lib/meta-join";
+import type { DetailInfo } from "@/lib/snapshot/detail";
 import { useMetaText } from "@/lib/snapshot/use-meta-text";
 import { useTimeText } from "@/lib/snapshot/use-time-text";
 import type { BeachView, MetricKey, MetricView } from "@/lib/snapshot/view";
@@ -153,8 +154,13 @@ export function SeaCard({
       <WaveFigure
         height={wave.kind === "value" ? wave.value : null}
         period={period.kind === "value" ? period.value : null}
+        delayed={wave.kind === "delayed"}
       />
-      <WaveChart stationId={stations.waveHeight?.id ?? null} nowMs={nowMs} />
+      {/* 값 자리가 '가까운 관측 없음'이면 그 측정소 기록도 그리지 않음(메타와 같은 규칙) */}
+      <WaveChart
+        stationId={shownStation(wave, stations, "waveHeight")?.id ?? null}
+        nowMs={nowMs}
+      />
     </section>
   );
 }
@@ -168,7 +174,7 @@ export function StatGrid({
 }: {
   view: BeachView;
   stations: Beach["stations"];
-  ripCurrent: { label: string; publishedAt: string; source: string } | null;
+  ripCurrent: DetailInfo["ripCurrent"];
   nowMs: number;
 }) {
   const t = useTranslations();
@@ -204,12 +210,14 @@ export function StatGrid({
           </li>
         );
       })}
-      {/* 이안류: 정보만(D5). 기관 발표 단계 원문 그대로, 없으면 '제공 기간 아님' */}
+      {/* 이안류: 정보만(D5). 기관 발표 단계 원문 그대로, 게시된 null이면 '제공 기간 아님', 읽을 수 없으면 "–" */}
       <li className="flex flex-col gap-1 rounded-card bg-bg-surface p-4 shadow-card">
         <span className="text-caption font-bold text-text-muted">
           {t("detail.stats.ripCurrent")}
         </span>
-        {ripCurrent ? (
+        {ripCurrent === "unknown" ? (
+          <MetricValue metric={{ kind: "hidden" }} />
+        ) : ripCurrent ? (
           <>
             <span className="text-body font-bold text-text-default">
               {ripCurrent.label}

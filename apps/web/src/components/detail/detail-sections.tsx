@@ -56,8 +56,15 @@ export function NearbyWarnings({
             <span className="flex min-w-0 flex-col">
               <span className="text-body-s font-bold text-text-default">
                 {item.zoneName}{" "}
-                {t(`warning.nearbyType.${item.type ?? "unknown"}`)}
-                {t(`warning.level.${item.level}`)}
+                {/* 종류·단계 잇기는 언어별 문구 키로(영어는 띄어 씀). 모르는 종류는 '기타 주의보' */}
+                {item.type
+                  ? t("verdict.warning.title", {
+                      type: t(`warning.nearbyType.${item.type}`),
+                      level: t(`warning.level.${item.level}`),
+                    })
+                  : t("warning.nearbyUnknown", {
+                      level: t(`warning.level.${item.level}`),
+                    })}
               </span>
               <span className="text-caption text-text-muted">
                 {issuedAtText(item.publishedAt, nowMs)}

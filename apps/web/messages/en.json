@@ -55,9 +55,9 @@
       "heavy_snow": "Heavy snow",
       "dry": "Dry weather",
       "yellow_dust": "Yellow dust",
-      "tropical_night": "Tropical night",
-      "unknown": "Other"
-    }
+      "tropical_night": "Tropical night"
+    },
+    "nearbyUnknown": "Other {level}"
   },
   "observation": {
     "none": "No nearby observation",
@@ -192,7 +192,8 @@
       "warningActive": "In effect",
       "warningNone": "None",
       "warningUnknown": "Not confirmed",
-      "waveValue": "Wave {value}m"
+      "waveValue": "Wave {value}m",
+      "unreadableWarning": "A warning is in effect, but we couldn't read its details · Check with KMA"
     },
     "alt": {
       "title": "Nearby beaches with no warnings",
@@ -214,7 +215,8 @@
       "waist": "Waist",
       "chest": "Chest",
       "caption": "The buoy rides the front wave up and down once every {period}s (wave period) · Front wave height and the blue band on the left = wave height {height}m · Back waves and wave spacing are for mood · Reference lines use average adult height",
-      "captionNoPeriod": "Front wave height and the blue band on the left = wave height {height}m · No wave period measurement, so it doesn't move · Back waves and wave spacing are for mood · Reference lines use average adult height"
+      "captionNoPeriod": "Front wave height and the blue band on the left = wave height {height}m · No wave period measurement, so it doesn't move · Back waves and wave spacing are for mood · Reference lines use average adult height",
+      "delayed": "Measurement is delayed, so we don't draw the wave"
     },
     "chart": {
       "title": "Wave height, last 24 hours",
