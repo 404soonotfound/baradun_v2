@@ -65,6 +65,22 @@ export type DetailInfo = {
 
 export type RipCurrent = { label: string; publishedAt: string; source: string };
 
+// '확인한 것'의 특보 칸 상태. 판단 카드 ⑤와 '자세히' 시트가 같은 규칙을 씀
+// '발효 중'은 특보 사유·항목이 있을 때만. 모르는 사유('이용 제한')는 특보라고 지어내지 않고 '확인 못 함'
+export function warningCheckState(
+  view: Extract<BeachView, { kind: "ready" }>,
+  detail: DetailInfo,
+): "active" | "none" | "unknown" {
+  if (
+    view.category === "unavailable" &&
+    (view.reasons.some((reason) => reason.kind === "warning") ||
+      detail.warnings.length > 0 ||
+      detail.unreadableWarnings > 0)
+  )
+    return "active";
+  return detail.warningConfirmedNone ? "none" : "unknown";
+}
+
 const EMPTY: DetailInfo = {
   warnings: [],
   unreadableWarnings: 0,

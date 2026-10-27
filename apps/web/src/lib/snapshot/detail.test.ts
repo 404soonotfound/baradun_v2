@@ -4,7 +4,7 @@ import type { BeachStatus, StatusFile } from "@baradun/contracts";
 import { describe, expect, it } from "vitest";
 
 import type { Clock } from "./clock";
-import { deriveDetail, warningSourceOf } from "./detail";
+import { deriveDetail, warningCheckState, warningSourceOf } from "./detail";
 import { deriveBeachView, type ViewSource } from "./view";
 
 // 장소 상세 값 꺼내기 (BRD-32). 입력은 계약 예시 데이터
@@ -225,5 +225,27 @@ describe("지표 값 자리 구분 (B4)", () => {
     });
     const { view } = detailOf("b0001", source({}, statuses));
     expect(view).toMatchObject({ metrics: { wind: { kind: "hidden" } } });
+  });
+});
+
+// '확인한 것' 특보 칸 (판단 카드 ⑤ · '자세히' 시트가 함께 씀, BRD-33)
+describe("warningCheckState", () => {
+  function stateOf(id: string, src: ViewSource) {
+    const { view, detail } = detailOf(id, src);
+    if (view.kind !== "ready") throw new Error("ready가 아님");
+    return warningCheckState(view, detail);
+  }
+
+  it("특보 발효 → 발효 중, 관측 지연만 → 없음", () => {
+    expect(stateOf("b0002", source())).toBe("active");
+    expect(stateOf("b0003", source())).toBe("none");
+  });
+
+  it("모르는 사유만 있는 이용불가('이용 제한')는 발효 중이라고 지어내지 않음", () => {
+    const statuses = withStatus("b0002", (status) => {
+      (status.reasons[0] as { code: string }).code = "new_reason";
+      status.warning.items = [];
+    });
+    expect(stateOf("b0002", source({}, statuses))).toBe("unknown");
   });
 });

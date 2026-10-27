@@ -7,7 +7,7 @@ import { shownMetric, shownStation } from "@/components/detail/sea-card";
 import { Sheet } from "@/components/ui/sheet";
 import { joinMeta } from "@/lib/meta-join";
 import { kstStamp } from "@/lib/snapshot/clock";
-import type { DetailInfo } from "@/lib/snapshot/detail";
+import { warningCheckState, type DetailInfo } from "@/lib/snapshot/detail";
 import { useBadgeText } from "@/lib/snapshot/use-badge-text";
 import { useMetaText } from "@/lib/snapshot/use-meta-text";
 import { useTimeText } from "@/lib/snapshot/use-time-text";
@@ -43,17 +43,18 @@ export function DetailSheet({
 
   const ready = view.kind === "ready" ? view : null;
 
-  // 특보 5종: 상태 단어 + 범위 → 기관 → 시각. 새 정보를 못 받거나 확인 못 함이면 'HH:MM 확인 · 이후 확인 못 함'(B5)
+  // 특보 5종: 상태 단어 + 범위 → 기관 → 시각. 판단 카드 ⑤와 같은 규칙(warningCheckState)
+  // 새 정보를 못 받거나 '확인 못 함'이면 'HH:MM 확인 · 이후 확인 못 함'(B5) — 확인한 것처럼 읽히지 않게
   let warningState = t("detail.verdict.warningUnknown");
   let warningMeta: string | null = null;
   if (ready) {
+    const state = warningCheckState(ready, detail);
+    if (state === "active") warningState = t("detail.verdict.warningActive");
+    else if (state === "none") warningState = t("detail.verdict.warningNone");
     const unconfirmed =
       ready.stale ||
+      state === "unknown" ||
       ready.reasons.some((reason) => reason.kind === "warning_unknown");
-    if (ready.category === "unavailable")
-      warningState = t("detail.verdict.warningActive");
-    else if (detail.warningConfirmedNone)
-      warningState = t("detail.verdict.warningNone");
     const time = kstStamp(ready.confirmedAt, nowMs);
     warningMeta = joinMeta([
       t("detailSheet.warningScope"),
@@ -141,7 +142,15 @@ export function DetailSheet({
                   {row.title}
                 </span>
                 <span className="text-body-s font-bold text-text-default">
-                  {row.state}
+                  {/* 값 없음 "–"은 화면 읽기에 '값 없음'으로(판단 카드 CheckedCell과 같음) */}
+                  {row.state === "–" ? (
+                    <>
+                      <span aria-hidden="true">–</span>
+                      <span className="sr-only">{t("home.near.noValue")}</span>
+                    </>
+                  ) : (
+                    row.state
+                  )}
                 </span>
               </span>
               <span className="text-caption text-text-body">{row.body}</span>

@@ -231,6 +231,7 @@ export function DetailScreen({
         open={warningSheet.open}
         onClose={warningSheet.close}
         item={warningItem}
+        items={detail.warnings}
         source={detail.warningSource}
         confirmedAt={view.kind === "ready" ? view.confirmedAt : null}
         stale={view.kind !== "ready" || view.stale}

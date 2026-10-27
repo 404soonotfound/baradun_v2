@@ -19,7 +19,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { joinMeta } from "@/lib/meta-join";
 import { kstStamp } from "@/lib/snapshot/clock";
-import type { Basis, DetailInfo } from "@/lib/snapshot/detail";
+import {
+  warningCheckState,
+  type Basis,
+  type DetailInfo,
+} from "@/lib/snapshot/detail";
 import { useBadgeText } from "@/lib/snapshot/use-badge-text";
 import { getSnapshotState, refreshSnapshot } from "@/lib/snapshot/use-snapshot";
 import type { Locale } from "@/lib/i18n";
@@ -146,17 +150,17 @@ export function VerdictCard({
       : wave.kind === "delayed"
         ? t("observation.delayedShort")
         : null;
-  // '발효 중'은 특보 사유·항목이 있을 때만. 모르는 사유('이용 제한')는 특보라고 지어내지 않고 '확인 못 함'
-  const warningActive =
-    blocked &&
-    (view.reasons.some((reason) => reason.kind === "warning") ||
-      detail.warnings.length > 0 ||
-      detail.unreadableWarnings > 0);
-  const warningCell = warningActive
-    ? { icon: "blocked" as const, text: t("detail.verdict.warningActive") }
-    : detail.warningConfirmedNone
-      ? { icon: "clear" as const, text: t("detail.verdict.warningNone") }
-      : { icon: "unknown" as const, text: t("detail.verdict.warningUnknown") };
+  const warningCell = {
+    active: {
+      icon: "blocked" as const,
+      text: t("detail.verdict.warningActive"),
+    },
+    none: { icon: "clear" as const, text: t("detail.verdict.warningNone") },
+    unknown: {
+      icon: "unknown" as const,
+      text: t("detail.verdict.warningUnknown"),
+    },
+  }[warningCheckState(view, detail)];
 
   return (
     <section
@@ -310,6 +314,7 @@ function ReasonBox({
   onOpenWarning: ((item: WarningItem) => void) | undefined;
 }) {
   const locale = useLocale() as Locale;
+  const nameId = useId();
   const t = useTranslations("detail.verdict");
   const { badgeText } = useBadgeText();
   const [rechecking, setRechecking] = useState(false);
@@ -344,12 +349,15 @@ function ReasonBox({
   ) {
     return (
       <ul className="flex flex-col gap-2">
-        {detail.warnings.map((item) => (
+        {detail.warnings.map((item, index) => (
           <li
             key={`${item.zoneName}-${item.type}-${item.level}-${item.publishedAt}`}
             className="rounded-input bg-status-blocked-bg px-3.5 py-3 text-body-s text-text-default"
           >
-            <p className="font-bold text-status-blocked-fg">
+            <p
+              id={`${nameId}-${index}`}
+              className="font-bold text-status-blocked-fg"
+            >
               {badgeText({
                 kind: "warning",
                 type: item.type,
@@ -368,6 +376,8 @@ function ReasonBox({
               <button
                 type="button"
                 aria-haspopup="dialog"
+                // 특보가 여럿이면 같은 버튼 이름이 반복되므로 특보 이름을 설명으로 붙임
+                aria-describedby={`${nameId}-${index}`}
                 onClick={() => onOpenWarning(item)}
                 className="-mb-2 inline-flex min-h-touch items-center gap-1 font-bold text-status-blocked-fg underline"
               >
