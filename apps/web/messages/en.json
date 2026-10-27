@@ -81,7 +81,6 @@
     "titleLine1": "Which sea are you",
     "titleLine2": "heading to today?",
     "top": {
-      "aroundMe": "Near me",
       "pickRegion": "Choose a region",
       "search": "Search beaches or regions",
       "changeRegion": "Choose region, now {region}"
@@ -95,7 +94,7 @@
       "countLoading": "Loading beach status",
       "noBeach": "No beaches in this region are confirmed for this activity yet",
       "offTitle": "Viewing without location",
-      "offBody": "Showing your chosen region instead of distance.",
+      "offBody": "Showing beaches in your chosen region. Turn on location to see distances too.",
       "turnOn": "Turn on location",
       "close": "Close notice"
     },
@@ -181,6 +180,7 @@
   "regionSheet": {
     "title": "Choose a region",
     "sido": "Choose a province",
+    "nearby": "Near me",
     "sigungu": "Choose a city or county in {sido}",
     "all": "All of {sido}",
     "back": "Choose province again"
