@@ -82,6 +82,11 @@ export function useBeachView(beach: {
   return deriveBeachView(beach, useSnapshot());
 }
 
+// 지금 상태를 바로 읽음(이벤트 처리 안에서 다시 시도 결과를 확인할 때)
+export function getSnapshotState(): SnapshotState {
+  return getStore().getState();
+}
+
 // 당겨서 새로고침·다시 시도 버튼
 export function refreshSnapshot(): Promise<void> {
   return getStore().refresh();

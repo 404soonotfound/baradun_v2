@@ -1,6 +1,6 @@
 "use client"; // 활동·위치·기기 저장·바다 정보를 쓰므로 브라우저 부품
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 
 import { ActivityTiles } from "@/components/activity-tiles";
@@ -16,6 +16,7 @@ import { RegionCountCard } from "@/components/home/region-count-card";
 import { RegionPick } from "@/components/home/region-pick";
 import { SectionHead } from "@/components/home/section-head";
 import { RegionSheet } from "@/components/region/region-sheet";
+import { SituationBanner } from "@/components/situation-banner";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useActivity } from "@/lib/activity";
@@ -36,13 +37,15 @@ import {
   regionName,
   validRegion,
 } from "@/lib/region-list";
+import { isDelayedView, pickSituation } from "@/lib/situation";
 import type { SnapshotState } from "@/lib/snapshot/store";
 import { useSnapshot } from "@/lib/snapshot/use-snapshot";
 import { deriveBeachView } from "@/lib/snapshot/view";
 import { clearCheckedAt, countByStatus } from "@/lib/status-count";
+import { useOnline } from "@/lib/use-online";
 import { useSheet } from "@/lib/use-sheet";
 
-// 홈 (BRD-26·27 · 노션 2장 HOME/D-HOME, Figma S_M01_01~04·S_D07_01)
+// 홈 (BRD-26·27·28 · 노션 2장 HOME/D-HOME, Figma S_M01_01~06·S_D07_01)
 // 페이지(서버)가 빌드 때 만든 해변 목록을 props로 받고, 나머지(활동·위치·지역·최근 본·바다 정보)는 브라우저에서 읽음
 // 모바일 순서: 상단 줄 → 제목 → 상황 배너 → 활동 타일 → 최근 본/처음 → 가까운 바다(또는 강원 바다 + 상태별 개수) → 해상 특보 → 안내
 // PC(lg): 제목+타일 → 가까운 바다 4장 → 해상 특보 · 최근 본 · 안내 3단 (같은 부품, 배치만 다름)
@@ -70,6 +73,9 @@ export function HomeScreen({
   const location = useUserLocation();
   const snapshot = useSnapshot();
   const recentIds = useRecent();
+  const online = useOnline();
+  // 다시 시도가 성공해 배너가 사라지면 포커스를 제목으로 (Vue: ref="title")
+  const titleRef = useRef<HTMLHeadingElement>(null);
   // [1] 기기에 저장한 기본 지역. 지금 해변 목록에 없는 지역이면 null(validRegion)
   const region = validRegion(useRegion(), beaches);
   // [2] 지역 고르기 시트. 열면 브라우저 기록 한 칸(뒤로 가기로 닫힘)
@@ -138,6 +144,19 @@ export function HomeScreen({
       }))
     : nearest;
 
+  // [7] 상황 배너는 하나만(BRD-28). 관측 지연은 홈 카드 해변 중 배지가 관측 지연인 곳
+  const delayed = shown.filter((beach) =>
+    isDelayedView(deriveBeachView({ id: beach.id, hidden: false }, snapshot)),
+  );
+  const situation = pickSituation({
+    phase: snapshot.phase,
+    live: snapshot.live,
+    failedOnline: snapshot.failedOnline,
+    online,
+    delayed,
+    locationOff: locationOff && !offBannerClosed,
+  });
+
   // 최근 본: 저장된 id 순서 그대로. 목록에 없는 id(노출 끈 해변)는 건너뜀(기기 기록은 지우지 않음)
   const byId = useMemo(
     () => new Map(beaches.map((beach) => [beach.id, beach])),
@@ -170,7 +189,11 @@ export function HomeScreen({
           onClick={regionSheet.show}
           className="-ml-1 hidden self-start lg:flex"
         />
-        <h1 className="text-title-xl text-text-default">
+        <h1
+          ref={titleRef}
+          tabIndex={-1}
+          className="text-title-xl text-text-default outline-none"
+        >
           {t("titleLine1")}
           <br />
           {t("titleLine2")}
@@ -184,11 +207,19 @@ export function HomeScreen({
             {t("sampleSnapshot")}
           </p>
         )}
-        {locationOff && !offBannerClosed && (
+        {/* 위치 없이 보는 중은 홈 배너, 나머지(오프라인·실패·지연 등)는 공용 상황 배너 */}
+        {situation?.kind === "noLocation" ? (
           <LocationOffBanner
             locale={locale}
             status={location.status}
             onClose={() => setOffBannerClosed(true)}
+          />
+        ) : (
+          <SituationBanner
+            locale={locale}
+            situation={situation}
+            snapshot={snapshot}
+            onRetrySucceeded={() => titleRef.current?.focus()}
           />
         )}
         <div className="lg:w-[560px]">
