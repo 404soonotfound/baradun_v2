@@ -186,5 +186,32 @@
     "sigungu": "Choose a city or county in {sido}",
     "all": "All of {sido}",
     "back": "Choose province again"
+  },
+  "onboarding": {
+    "step": "Step {current} of {total}",
+    "notice": {
+      "title1": "Before you head to the sea,",
+      "title2": "check official information first",
+      "intro": "Baradun Bada checks only two things for each beach.",
+      "warning": "Marine warnings",
+      "warningBody": "Whether a sea-related warning from the Korea Meteorological Administration (wind wave, strong wind, typhoon, storm surge, tsunami) is in effect",
+      "measured": "Measurement time",
+      "measuredBody": "When values such as wave height and water temperature were measured",
+      "control": "Access closures",
+      "controlBody": "We don't check access closures · Follow on-site guidance",
+      "disclaimer": "Baradun Bada doesn't guarantee that the sea is safe to use. 'No warning' doesn't mean it's safe either.",
+      "confirm": "I understand",
+      "more": "See what we check in detail"
+    },
+    "location": {
+      "title1": "Show nearby beaches",
+      "title2": "first?",
+      "body": "With your location, we show the beaches closest to you first.",
+      "promise1": "Used only to find nearby beaches",
+      "promise2": "Your location stays on this device and is never sent to a server",
+      "promise3": "You can turn it off anytime in Settings",
+      "use": "Use my location",
+      "pick": "Choose a region myself"
+    }
   }
 }
