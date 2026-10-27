@@ -39,6 +39,8 @@ export interface DeviceList {
   getSnapshot: () => readonly string[];
   add: (id: string) => void;
   remove: (id: string) => void;
+  // 목록 통째로 바꾸기(되돌리기에서 지우기 전 순서로 복구). max를 넘으면 뒤부터 버림
+  replace: (ids: readonly string[]) => void;
   clear: () => void;
 }
 
@@ -102,6 +104,9 @@ export function createDeviceList(storageKey: string, max: number): DeviceList {
     },
     remove(id) {
       write(read().filter((item) => item !== id));
+    },
+    replace(ids) {
+      write(ids.slice(0, max));
     },
     clear() {
       write(EMPTY_IDS);

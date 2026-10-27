@@ -9,7 +9,7 @@ import { RemovableChip } from "@/components/ui/chip";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Toast, useToast } from "@/components/ui/toast";
 import type { BeachSummary } from "@/lib/beach-summary";
-import { addRecent, removeRecent } from "@/lib/favorites";
+import { removeRecent } from "@/lib/favorites";
 import { localizedPath, type Locale } from "@/lib/i18n";
 import { useBadgeText } from "@/lib/snapshot/use-badge-text";
 import { useSnapshot } from "@/lib/snapshot/use-snapshot";
@@ -38,11 +38,11 @@ export function RecentBeaches({
 
   // [3] ✕ 누름 → 지우고 토스트
   function remove(beach: BeachSummary) {
-    removeRecent(beach.id);
+    const undo = removeRecent(beach.id);
     toast.show({
       text: t("removed"),
-      // 되돌리면 맨 앞으로 돌아옴(저장값이 id 목록뿐이라 원래 자리는 모름)
-      action: { label: t("undo"), onClick: () => addRecent(beach.id) },
+      // 되돌리면 지우기 전 순서 그대로(대표 카드가 바뀌지 않게)
+      action: { label: t("undo"), onClick: undo },
     });
   }
 

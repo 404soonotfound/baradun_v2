@@ -43,10 +43,16 @@ export function useRecent(): readonly string[] {
   );
 }
 
-// [8] 장소 상세에 들어갈 때 호출(BRD-32) · 최근 본 ✕ · 최근 본 전체 지우기
+// [8] 장소 상세에 들어갈 때 호출(BRD-32) · 최근 본 전체 지우기
 export const addRecent = recent.add;
-export const removeRecent = recent.remove;
 export const clearRecent = recent.clear;
+
+// 최근 본 ✕. 지우기 전 목록을 기억해 '되돌리기'에서 원래 순서·자리로 복구하는 함수를 돌려줌
+export function removeRecent(id: string): () => void {
+  const before = recent.getSnapshot();
+  recent.remove(id);
+  return () => recent.replace(before);
+}
 
 // [9] 설정 › 기기 데이터 초기화(BRD-36)에서 호출
 // localStorage.clear()는 같은 탭에 알림이 안 가서 화면이 그대로임 → 저장소마다 clear 호출

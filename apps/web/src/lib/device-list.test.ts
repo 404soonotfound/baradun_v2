@@ -47,6 +47,25 @@ describe("parseIds", () => {
 });
 
 describe("createDeviceList", () => {
+  it("replace로 지우기 전 순서를 그대로 되돌리고 max를 넘으면 뒤부터 버린다", () => {
+    let stored: string | null = '["b0001","b0002","b0003"]';
+    vi.stubGlobal("localStorage", {
+      getItem: () => stored,
+      setItem: (_key: string, value: string) => {
+        stored = value;
+      },
+    });
+    try {
+      const list = createDeviceList("test:replace", 2);
+      const before = list.getSnapshot();
+      list.remove("b0002");
+      list.replace(before);
+      expect(list.getSnapshot()).toEqual(["b0001", "b0002"]);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("읽기는 되고 쓰기만 막힌 저장소에서도 이번 방문 동안 바뀐 값을 유지한다", () => {
     // 사생활 보호 모드처럼 getItem은 옛 값을 주고 setItem은 오류
     vi.stubGlobal("localStorage", {
