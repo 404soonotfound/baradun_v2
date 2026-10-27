@@ -2,9 +2,15 @@ import { useEffect, useSyncExternalStore } from "react";
 
 import type { NationwideWarningsFile, WarningItem } from "@baradun/contracts";
 
-import { CLOCK_TOLERANCE_MS, isExpired, isTime } from "./clock";
+import {
+  CLOCK_TOLERANCE_MS,
+  correctedNow,
+  expiryDeadline,
+  isExpired,
+  isTime,
+} from "./clock";
 import { REQUEST_TIMEOUT_MS } from "./store";
-import { useSnapshot } from "./use-snapshot";
+import { refreshSnapshot, useSnapshot } from "./use-snapshot";
 import {
   hidesLastValues,
   includes,
@@ -44,7 +50,9 @@ export function readNationwide(value: unknown): NationwideWarningsFile | null {
       includes(WARNING_LEVELS, item.level) &&
       typeof item.zoneName === "string" &&
       item.zoneName !== "" &&
-      isTime(item.publishedAt),
+      (item.zoneCode === null || typeof item.zoneCode === "string") &&
+      isTime(item.publishedAt) &&
+      isTime(item.effectiveFrom),
   );
   // as unknown as = 위에서 직접 확인했으니 이 타입으로 보라고 알려줌
   return readable ? (value as unknown as NationwideWarningsFile) : null;
@@ -171,16 +179,42 @@ export function useNationwideWarnings(): NationwideView {
     () => loaded,
     () => EMPTY,
   );
-  // 지난 특보 목록·'특보 없음'이 남지 않게 실패로 보여줌
-  if (hidden) return { kind: "failed" };
-  // manifest를 아직 못 받음: 첫 조회 중이면 loading, 조회가 끝났는데 없으면 failed
-  if (!manifest) {
-    return snapshot.phase === "loading"
-      ? { kind: "loading" }
-      : { kind: "failed" };
+
+  function pick(): NationwideView {
+    // 지난 특보 목록·'특보 없음'이 남지 않게 실패로 보여줌
+    if (hidden) return { kind: "failed" };
+    // manifest를 아직 못 받음: 첫 조회 중이면 loading, 조회가 끝났는데 없으면 failed
+    if (!manifest) {
+      return snapshot.phase === "loading"
+        ? { kind: "loading" }
+        : { kind: "failed" };
+    }
+    // manifest는 있는데 주소가 이상함 → 받지 않고 실패로 보여줌
+    if (url === null) return { kind: "failed" };
+    const { file, failed } = currentLoaded(state, url);
+    return nationwideView(file, failed, snapshot);
   }
-  // manifest는 있는데 주소가 이상함 → 받지 않고 실패로 보여줌
-  if (url === null) return { kind: "failed" };
-  const { file, failed } = currentLoaded(state, url);
-  return nationwideView(file, failed, snapshot);
+  const view = pick();
+
+  // 45분 만료 시각에 바다 정보를 다시 조회(조회가 끝나면 store가 nowMs를 바꿔 화면이 다시 계산됨).
+  // store의 만료 타이머는 해변 status만 보므로, 없으면 '특보 없음'이 다음 5분 조회까지 남을 수 있음
+  const expiresAt =
+    view.kind === "ready" && !view.stale && view.confirmedAt !== null
+      ? new Date(
+          Date.parse(view.confirmedAt) + WARNING_CONFIRM_VALID_MS,
+        ).toISOString()
+      : null;
+  const { clock } = snapshot;
+  useEffect(() => {
+    const deadline = expiryDeadline(expiresAt, clock);
+    if (deadline === null) return;
+    const delay = Math.max(0, deadline - correctedNow(clock, Date.now()));
+    const timer = setTimeout(() => {
+      // 안 보이는 동안은 조회하지 않음(앱 복귀 때 store가 다시 계산·조회함)
+      if (document.visibilityState === "visible") void refreshSnapshot();
+    }, delay);
+    return () => clearTimeout(timer);
+  }, [expiresAt, clock]);
+
+  return view;
 }

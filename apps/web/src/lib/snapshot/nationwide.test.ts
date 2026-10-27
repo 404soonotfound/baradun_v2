@@ -32,6 +32,18 @@ describe("readNationwide", () => {
     expect(
       readNationwide({ ...file, items: [{ ...item, zoneName: "" }] }),
     ).toBeNull();
+    expect(
+      readNationwide({ ...file, items: [{ ...item, effectiveFrom: null }] }),
+    ).toBeNull();
+    expect(
+      readNationwide({ ...file, items: [{ ...item, zoneCode: 3 }] }),
+    ).toBeNull();
+  });
+
+  it("지진해일처럼 구역 코드가 없음(null)은 허용", () => {
+    expect(
+      readNationwide({ ...file, items: [{ ...item, zoneCode: null }] }),
+    ).not.toBeNull();
   });
 
   it("확인 시각이 깨졌으면 null, 없음(null)은 허용", () => {
