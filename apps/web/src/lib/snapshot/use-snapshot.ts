@@ -1,5 +1,7 @@
 import { useSyncExternalStore } from "react";
 
+import { subscribeOnline } from "@/lib/use-online";
+
 import { WEB_BUILD } from "./build";
 import {
   createSnapshotStore,
@@ -34,6 +36,8 @@ function getStore(): SnapshotStore {
     reload: () => window.location.reload(),
     webBuild: WEB_BUILD,
     isVisible: () => document.visibilityState === "visible",
+    isOnline: () => navigator.onLine,
+    onConnectionChange: subscribeOnline,
     onVisibilityChange(listener) {
       // 뒤로 가기 캐시(bfcache)에서 돌아온 경우도 앱 복귀로 봄
       const onPageShow = (event: PageTransitionEvent) => {
@@ -71,6 +75,11 @@ export function useBeachView(beach: {
   hidden: boolean;
 }): BeachView {
   return deriveBeachView(beach, useSnapshot());
+}
+
+// 지금 상태를 바로 읽음(이벤트 처리 안에서 다시 시도 결과를 확인할 때)
+export function getSnapshotState(): SnapshotState {
+  return getStore().getState();
 }
 
 // 당겨서 새로고침·다시 시도 버튼

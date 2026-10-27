@@ -97,6 +97,8 @@ function setup(
   const session = options.session ?? memoryStorage();
   let visible = true;
   const visibilityListeners = new Set<() => void>();
+  let online = true;
+  const connectionListeners = new Set<() => void>();
   const reload = vi.fn();
   const deps: SnapshotDeps = {
     fetch: server.fetch as unknown as typeof fetch,
@@ -111,11 +113,21 @@ function setup(
       visibilityListeners.add(listener);
       return () => visibilityListeners.delete(listener);
     },
+    isOnline: () => online,
+    onConnectionChange(listener) {
+      connectionListeners.add(listener);
+      return () => connectionListeners.delete(listener);
+    },
   };
   const store = createSnapshotStore(deps);
   const setVisible = (next: boolean) => {
     visible = next;
     visibilityListeners.forEach((listener) => listener());
+  };
+  // 브라우저 online·offline 이벤트
+  const setOnline = (next: boolean) => {
+    online = next;
+    connectionListeners.forEach((listener) => listener());
   };
   const manifestCalls = () =>
     server.calls.filter((url) => url === MANIFEST_URL).length;
@@ -128,6 +140,7 @@ function setup(
     store,
     reload,
     setVisible,
+    setOnline,
     manifestCalls,
     statusCalls,
   };
@@ -591,6 +604,96 @@ describe("오프라인 (B5)", () => {
     store.start();
     await store.refresh();
     expect(store.getState()).toMatchObject({ live: false, statuses: null });
+  });
+});
+
+describe("연결 상태와 불러오기 실패 (BRD-28)", () => {
+  it("저장된 값을 먼저 보여주는 동안은 실패가 아님, 연결된 채 조회가 실패하면 failedOnline", async () => {
+    const storage = memoryStorage();
+    const first = setup({ storage });
+    first.store.start();
+    await first.store.refresh();
+    expect(first.store.getState()).toMatchObject({
+      live: true,
+      failedOnline: false,
+    });
+
+    const second = setup({ storage });
+    second.server.down = true;
+    second.store.start();
+    // 첫 응답 전: 저장된 값(live: false)이지만 아직 실패한 것은 아님
+    expect(second.store.getState()).toMatchObject({
+      phase: "ready",
+      live: false,
+      failedOnline: false,
+    });
+    await second.store.refresh();
+    expect(second.store.getState()).toMatchObject({
+      live: false,
+      failedOnline: true,
+    });
+
+    // 다시 받으면 풀림
+    second.server.down = false;
+    await second.store.refresh();
+    expect(second.store.getState()).toMatchObject({
+      live: true,
+      failedOnline: false,
+    });
+  });
+
+  it("끊긴 동안 시작한 조회의 실패는 failedOnline이 아님", async () => {
+    const { store, server, setOnline } = setup();
+    server.down = true;
+    setOnline(false);
+    store.start();
+    await store.refresh();
+    expect(store.getState()).toMatchObject({
+      live: false,
+      failedOnline: false,
+    });
+  });
+
+  it("연결이 바뀌면 바로 다시 조회. 그 전에 시작한 조회에는 합치지 않고 끝난 뒤 한 번 더", async () => {
+    const { store, server, setOnline, manifestCalls } = setup();
+    server.hang = true;
+    store.start(); // 연결된 채로 시작한 조회가 멈춤
+    expect(manifestCalls()).toBe(1);
+
+    setOnline(false); // 연결이 끊김 → 끝난 뒤 다시 조회하도록 예약
+    server.hang = false;
+    server.down = true;
+    await vi.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS);
+    expect(manifestCalls()).toBe(2);
+    // 첫 조회는 연결이 바뀐 뒤 끝났고, 다음 조회는 끊긴 채 시작 → 불러오기 실패 아님
+    expect(store.getState()).toMatchObject({
+      live: false,
+      failedOnline: false,
+    });
+
+    // 연결이 돌아오면 5분을 기다리지 않고 바로 받음. 받는 동안에도 실패로 보이지 않음
+    server.down = false;
+    setOnline(true);
+    expect(store.getState().failedOnline).toBe(false);
+    await store.refresh();
+    expect(manifestCalls()).toBe(3);
+    expect(store.getState()).toMatchObject({
+      live: true,
+      failedOnline: false,
+    });
+  });
+
+  it("숨겨진 동안 연결이 바뀌면 이전 연결의 실패를 지움(다시 보일 때 받는 동안 실패로 보이지 않음)", async () => {
+    const { store, server, setOnline, setVisible } = setup();
+    server.down = true;
+    store.start();
+    await store.refresh();
+    expect(store.getState().failedOnline).toBe(true);
+
+    setVisible(false);
+    setOnline(false);
+    setOnline(true);
+    expect(store.getState().failedOnline).toBe(false);
   });
 });
 

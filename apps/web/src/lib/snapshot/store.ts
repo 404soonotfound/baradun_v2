@@ -19,7 +19,8 @@ import {
 
 // 바다 정보 조회·갱신 (아키텍처 9.1·그림 2, BRD-41)
 // manifest를 먼저 받고 snapshotVersion이 바뀔 때만 status를 받음.
-// 다시 받는 때: 처음 열 때 · 앱 복귀 · 당겨서 새로고침/다시 시도 · validUntil 만료 · 열어 둔 동안 5분마다(안 보이면 멈춤).
+// 다시 받는 때: 처음 열 때 · 앱 복귀 · 연결이 끊기거나 돌아올 때 · 당겨서 새로고침/다시 시도 · validUntil 만료 ·
+// 열어 둔 동안 5분마다(안 보이면 멈춤).
 // 바다 정보는 항상 네트워크 결과로 정함. 메모리에 값이 없을 때(첫 실행 등)만 응답을 기다리는 동안 기기에 저장된
 // 마지막 값을 B5 규칙(live: false — 발효 특보 배지 유지, 나머지는 특보 확인 못 함)으로 먼저 보여주고, 응답이 오면 바꿈.
 // 못 받으면 지금 보여주는 값(없으면 저장된 마지막 값)을 B5로 둠.
@@ -42,6 +43,9 @@ const SCHEMA_RELOAD_KEY = "baradun:schema-reload";
 
 export interface SnapshotState extends ViewSource {
   manifest: ManifestFile | null;
+  // 연결된 채로 시작한 마지막 조회가 실패함(조회 중 연결이 바뀌지 않음). 화면 '불러오기 실패' 배너의 근거.
+  // 첫 응답 전(저장된 값을 먼저 보여주는 중)·끊긴 동안의 실패·연결이 돌아온 뒤 다시 받는 중에는 false
+  failedOnline: boolean;
 }
 
 export type KeyValueStorage = Pick<
@@ -63,6 +67,10 @@ export interface SnapshotDeps {
   isVisible: () => boolean;
   // 화면이 보이게 되거나 숨겨질 때 부를 함수 등록. 해제 함수를 돌려줌
   onVisibilityChange: (listener: () => void) => () => void;
+  // 브라우저 연결 상태(navigator.onLine). 없으면 연결된 것으로 봄
+  isOnline?: () => boolean;
+  // 연결이 끊기거나 돌아올 때 부를 함수 등록. 해제 함수를 돌려줌
+  onConnectionChange?: (listener: () => void) => () => void;
 }
 
 export interface SnapshotStore {
@@ -84,6 +92,7 @@ export const INITIAL_STATE: SnapshotState = {
   live: false,
   clock: DEVICE_CLOCK,
   nowMs: 0,
+  failedOnline: false,
 };
 
 function safe<T>(run: () => T): T | null {
@@ -154,6 +163,9 @@ export function createSnapshotStore(deps: SnapshotDeps): SnapshotStore {
   let pollTimer: ReturnType<typeof setInterval> | null = null;
   let deadlineTimer: ReturnType<typeof setTimeout> | null = null;
   let unwatchVisibility: (() => void) | null = null;
+  let unwatchConnection: (() => void) | null = null;
+  // 진행 중인 조회가 시작된 뒤 연결이 바뀜. 그 조회 결과는 지금 연결로 받은 결과가 아님
+  let connectionChanged = false;
   const listeners = new Set<() => void>();
 
   function set(next: Partial<SnapshotState>) {
@@ -445,11 +457,26 @@ export function createSnapshotStore(deps: SnapshotDeps): SnapshotStore {
     });
   }
 
-  // 겹쳐 부르면 진행 중인 조회 하나로 합침
+  function isOnline() {
+    return deps.isOnline?.() ?? true;
+  }
+
+  // 겹쳐 부르면 진행 중인 조회 하나로 합침.
+  // 단 연결이 바뀌기 전에 시작한 조회에는 합치지 않고, 그 조회가 끝난 뒤 한 번 더 받음
   function refresh(): Promise<void> {
-    inFlight ??= run().finally(() => {
-      inFlight = null;
-    });
+    if (inFlight && connectionChanged) {
+      return inFlight.catch(() => {}).then(() => refresh());
+    }
+    if (!inFlight) {
+      const startedOnline = isOnline();
+      connectionChanged = false;
+      inFlight = run().finally(() => {
+        inFlight = null;
+        const failedOnline = startedOnline && !connectionChanged && !state.live;
+        connectionChanged = false;
+        if (state.failedOnline !== failedOnline) set({ failedOnline });
+      });
+    }
     return inFlight;
   }
 
@@ -480,12 +507,22 @@ export function createSnapshotStore(deps: SnapshotDeps): SnapshotStore {
         resume(); // 앱 복귀
       else pause();
     });
+    // 연결이 끊기거나 돌아오면 앱 복귀처럼 바로 다시 조회(진행 중 조회가 있으면 끝난 뒤 한 번 더)
+    unwatchConnection =
+      deps.onConnectionChange?.(() => {
+        if (inFlight) connectionChanged = true;
+        // 이전 연결에서 난 실패는 지금 연결의 실패가 아님(숨겨진 동안 바뀌어 다시 조회하지 않은 경우 포함)
+        if (state.failedOnline) set({ failedOnline: false });
+        if (deps.isVisible()) resume();
+      }) ?? null;
     if (deps.isVisible()) resume(); // 처음 열 때
   }
 
   function stop() {
     unwatchVisibility?.();
     unwatchVisibility = null;
+    unwatchConnection?.();
+    unwatchConnection = null;
     pause();
   }
 
