@@ -83,7 +83,29 @@
     "top": {
       "aroundMe": "Near me",
       "pickRegion": "Choose a region",
-      "search": "Search beaches or regions"
+      "search": "Search beaches or regions",
+      "changeRegion": "Choose region, now {region}"
+    },
+    "region": {
+      "pickTitle": "Which sea do you want to see?",
+      "pickBody": "You don't need to share your location. Pick a region to see how its beaches are right now.",
+      "pickNote": "The region you pick is saved on this device as your default region",
+      "seaTitle": "Seas in {region}",
+      "countTitle": "{count, plural, one {# beach} other {# beaches}} in {region} right now",
+      "countLoading": "Loading beach status",
+      "noBeach": "No beaches in this region are confirmed for this activity yet",
+      "offTitle": "Viewing without location",
+      "offBody": "Showing your chosen region instead of distance.",
+      "turnOn": "Turn on location",
+      "close": "Close notice"
+    },
+
+    "regionSheet": {
+      "title": "Choose a region",
+      "sido": "Choose a province",
+      "sigungu": "Choose a city or county in {sido}",
+      "all": "All of {sido}",
+      "back": "Choose province again"
     },
     "near": {
       "title": "Nearby beaches",
