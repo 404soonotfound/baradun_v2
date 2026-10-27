@@ -83,7 +83,28 @@
     "top": {
       "aroundMe": "내 주변",
       "pickRegion": "지역 고르기",
-      "search": "해변·지역 검색"
+      "search": "해변·지역 검색",
+      "changeRegion": "지역 고르기, 지금 {region}"
+    },
+    "region": {
+      "pickTitle": "어느 바다를 볼까요?",
+      "pickBody": "위치를 쓰지 않아도 괜찮아요. 지역을 고르면 그 지역 해변의 지금 상태를 보여드려요.",
+      "pickNote": "고른 지역은 이 기기에 기본 지역으로 저장돼요",
+      "seaTitle": "{region} 바다",
+      "countTitle": "{region} 해변 {count}곳 지금 상태",
+      "countLoading": "해변 상태를 불러오고 있어요",
+      "noBeach": "이 지역에 이 활동이 확인된 해변이 아직 없어요",
+      "offTitle": "위치 없이 보고 있어요",
+      "offBody": "거리 대신 고른 지역 기준으로 보여드려요.",
+      "turnOn": "위치 정보 켜기",
+      "close": "안내 닫기"
+    },
+    "regionSheet": {
+      "title": "지역 고르기",
+      "sido": "시·도를 골라 주세요",
+      "sigungu": "{sido}에서 시·군을 골라 주세요",
+      "all": "{sido} 전체",
+      "back": "시·도 다시 고르기"
     },
     "near": {
       "title": "가까운 바다",
