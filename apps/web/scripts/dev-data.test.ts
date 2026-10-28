@@ -51,9 +51,13 @@ function manifestAt(outDir: string): ManifestFile {
 
 afterEach(() => {
   vi.useRealTimers();
+  // dev.mts를 SIGKILL하면 stop()이 돌지 않아 가짜 next가 남음. 프로세스 그룹째 끝냄.
   for (const child of runningChildren.splice(0)) {
-    if (child.exitCode === null && child.signalCode === null) {
-      child.kill("SIGKILL");
+    if (child.pid === undefined) continue;
+    try {
+      process.kill(-child.pid, "SIGKILL");
+    } catch {
+      // 이미 모두 종료됨
     }
   }
   for (const root of temporaryRoots.splice(0)) {
@@ -121,6 +125,8 @@ function startDevCommand({
       cwd: path.join(import.meta.dirname, ".."),
       env,
       stdio: "ignore",
+      // 자식(가짜 next)까지 한 프로세스 그룹으로 묶어 afterEach에서 함께 끝냄
+      detached: true,
     },
   );
   runningChildren.push(child);
@@ -315,7 +321,8 @@ describe("개발용 예시 데이터 자동 갱신", () => {
   });
 });
 
-describe("개발 서버 실행", () => {
+// 프로세스를 띄우는 테스트는 waitForFile(5초)보다 넉넉한 제한 시간을 둠
+describe("개발 서버 실행", { timeout: 20_000 }, () => {
   it("sample을 명시하면 예시 데이터를 먼저 만들고 종료할 때 개발 서버 자식도 종료함", async () => {
     const { outDir } = fixture();
     const root = path.dirname(outDir);
