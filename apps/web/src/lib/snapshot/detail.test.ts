@@ -42,7 +42,7 @@ function withStatus(id: string, change: (status: BeachStatus) => void) {
   return { ...example.beaches, [id]: status };
 }
 
-// 계약 예시의 b0001에는 주변 특보가 없어 테스트에서 하나를 넣음.
+// 계약 예시 b0001의 주변 특보(호우주의보)를 바꿔 보는 테스트용 특보 하나로 갈아 끼움.
 const NEARBY = {
   type: "dry",
   level: "advisory",

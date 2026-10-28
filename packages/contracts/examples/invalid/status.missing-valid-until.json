@@ -63,7 +63,16 @@
           "inSeason": false
         },
         "ripCurrent": null,
-        "nearbyWarnings": []
+        "nearbyWarnings": [
+          {
+            "type": "heavy_rain",
+            "level": "advisory",
+            "zoneCode": "L1022510",
+            "zoneName": "강릉평지",
+            "publishedAt": "2026-10-17T03:00:00Z",
+            "effectiveFrom": "2026-10-17T03:00:00Z"
+          }
+        ]
       }
     },
     "b0002": {
@@ -125,7 +134,16 @@
       "info": {
         "season": null,
         "ripCurrent": null,
-        "nearbyWarnings": []
+        "nearbyWarnings": [
+          {
+            "type": "heavy_rain",
+            "level": "advisory",
+            "zoneCode": "L1022510",
+            "zoneName": "강릉평지",
+            "publishedAt": "2026-10-17T03:00:00Z",
+            "effectiveFrom": "2026-10-17T03:00:00Z"
+          }
+        ]
       },
       "validUntil": "2026-10-17T06:03:40Z"
     },
@@ -188,7 +206,16 @@
       "info": {
         "season": null,
         "ripCurrent": null,
-        "nearbyWarnings": []
+        "nearbyWarnings": [
+          {
+            "type": "heavy_rain",
+            "level": "advisory",
+            "zoneCode": "L1022510",
+            "zoneName": "강릉평지",
+            "publishedAt": "2026-10-17T03:00:00Z",
+            "effectiveFrom": "2026-10-17T03:00:00Z"
+          }
+        ]
       },
       "validUntil": "2026-10-17T06:03:40Z"
     },
