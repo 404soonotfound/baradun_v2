@@ -3,6 +3,7 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import * as maplibregl from "maplibre-gl";
 
 import type { Locale } from "@/lib/i18n";
+import type { ResolvedTheme } from "@/lib/theme";
 import { FIT_OPTIONS, MAX_BOUNDS, type LngLatBox } from "./bounds";
 import { buildMapStyle, TILE_SOURCE_ID, tileModeFor } from "./style";
 
@@ -17,12 +18,15 @@ export type MapHandle = {
   // 우리 HTML 요소를 좌표에 마커로 붙임. 돌려준 함수를 부르면 뗌
   // MapLibre 코드를 이 파일 밖에서 import하지 않게(첫 화면 용량) 여기서만 Marker를 만듦
   addMarker: (element: HTMLElement, lngLat: [number, number]) => () => void;
+  // 화면 테마가 바뀌면 지도 색만 바꿈(MapLibre가 바뀐 색만 고쳐 그림, 타일·마커는 그대로)
+  setTheme: (theme: ResolvedTheme) => void;
   destroy: () => void;
 };
 
 export type CreateMapOptions = {
   container: HTMLElement;
   locale: Locale;
+  theme: ResolvedTheme;
   bounds: LngLatBox;
   uiFont: string; // 한글 라벨을 그릴 글꼴(화면 글꼴과 같게). CSS font-family 값
   reducedMotion: boolean;
@@ -40,14 +44,13 @@ export function createMap(options: CreateMapOptions): MapHandle | null {
     ).href,
   );
 
+  const tiles = tileModeFor(process.env.NODE_ENV);
+  let theme = options.theme;
   let map: maplibregl.Map;
   try {
     map = new maplibregl.Map({
       container: options.container,
-      style: buildMapStyle({
-        locale: options.locale,
-        tiles: tileModeFor(process.env.NODE_ENV),
-      }),
+      style: buildMapStyle({ locale: options.locale, tiles, theme }),
       bounds: options.bounds,
       fitBoundsOptions: FIT_OPTIONS,
       maxBounds: MAX_BOUNDS,
@@ -113,6 +116,11 @@ export function createMap(options: CreateMapOptions): MapHandle | null {
       return () => {
         marker.remove();
       };
+    },
+    setTheme: (next) => {
+      if (next === theme) return;
+      theme = next;
+      map.setStyle(buildMapStyle({ locale: options.locale, tiles, theme }));
     },
     destroy: () => {
       window.clearTimeout(timer);

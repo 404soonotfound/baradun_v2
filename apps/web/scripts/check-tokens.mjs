@@ -78,6 +78,30 @@ const PAIRS = [
   ["color.status.stale.border", "color.status.stale.bg", 3, "관측 지연 점선"],
 ];
 
+// 다크 출시 점검(BRD-44): 화면에서 실제로 겹쳐 쓰는 조합을 추가로 검사
+PAIRS.push(
+  [
+    "color.text.muted",
+    "color.bg.subtle",
+    4.5,
+    "보조 면 위 메타 글(파도 그림 눈금)",
+  ],
+  ["color.text.muted", "color.brand.weak", 4.5, "고른 목록 행의 메타 글"],
+  ["color.bg.surface", "color.text.default", 4.5, "토스트·고른 마커 이름 글자"],
+  // 목록 행 상태 글자·왼쪽 색 줄(색 줄은 3이면 되지만 같은 색을 글자에도 씀)
+  ["color.status.clear.fg", "color.bg.surface", 4.5, "목록 행 특보 없음 글자"],
+  ["color.status.blocked.fg", "color.bg.surface", 4.5, "목록 행 이용불가 글자"],
+  ["color.status.unknown.fg", "color.bg.surface", 4.5, "목록 행 판단불가 글자"],
+  ["color.status.stale.fg", "color.bg.surface", 4.5, "목록 행 관측 지연 글자"],
+  // 지도 마커 채운 원 안 아이콘(채움 = 상태 fg, 아이콘 = bg.surface)
+  ["color.bg.surface", "color.status.clear.fg", 3, "특보 없음 마커 아이콘"],
+  ["color.bg.surface", "color.status.blocked.fg", 3, "이용불가 마커 아이콘"],
+  // 파고 선·미니 그래프(그래픽 3:1). chart는 두 테마 같은 값(노션 7절)
+  ["color.chart", "color.bg.surface", 3, "파고 선"],
+  ["color.chart", "color.bg.subtle", 3, "파도 그림 앞 물결 선"],
+  ["color.chart", "color.brand.weak", 3, "파도 그림 뒤 물결 위 앞 물결 선"],
+);
+
 // 참고로만 찍는 조합 (지금은 없음)
 const INFO_PAIRS = [];
 

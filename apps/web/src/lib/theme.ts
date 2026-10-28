@@ -66,3 +66,43 @@ export function setTheme(theme: Theme) {
 export function useTheme(): Theme {
   return useSyncExternalStore(subscribe, read, () => "system");
 }
+
+// ── 지금 그려지는 테마 (지도 스타일처럼 CSS 변수로 못 바꾸는 곳용, BRD-44) ──
+export type ResolvedTheme = "light" | "dark";
+const DARK_QUERY = "(prefers-color-scheme: dark)";
+
+// <html data-theme>이 light·dark면 그 값, 없거나 모르는 값이면 기기 설정(토큰 CSS와 같은 규칙)
+export function resolveTheme(
+  attribute: string | null,
+  systemDark: boolean,
+): ResolvedTheme {
+  if (attribute === "light" || attribute === "dark") return attribute;
+  return systemDark ? "dark" : "light";
+}
+
+function readResolved(): ResolvedTheme {
+  return resolveTheme(
+    document.documentElement.getAttribute("data-theme"),
+    window.matchMedia(DARK_QUERY).matches,
+  );
+}
+
+// 설정 변경(setTheme)·다른 탭(storage)·그리기 전 스크립트 모두 data-theme으로 오므로 속성과 기기 설정을 봄
+function subscribeResolved(onChange: () => void) {
+  const observer = new MutationObserver(onChange);
+  observer.observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ["data-theme"],
+  });
+  const media = window.matchMedia(DARK_QUERY);
+  media.addEventListener("change", onChange);
+  return () => {
+    observer.disconnect();
+    media.removeEventListener("change", onChange);
+  };
+}
+
+// 서버는 기기 설정을 몰라 라이트. 브라우저 부품(지도)에서만 의미 있음
+export function useResolvedTheme(): ResolvedTheme {
+  return useSyncExternalStore(subscribeResolved, readResolved, () => "light");
+}
