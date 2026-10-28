@@ -5,6 +5,7 @@ import {
   composeMessage,
   firstErrorField,
   KIND_TO_TYPE,
+  MESSAGE_INPUT_MAX,
   MESSAGE_MAX,
   validateForm,
 } from "./form";
@@ -72,6 +73,18 @@ describe("composeMessage·buildRequest", () => {
         message: "a".repeat(3000),
       }).length,
     ).toBe(MESSAGE_MAX);
+  });
+
+  it("머리 줄이 아무리 길어도 내용 입력 상한까지 쓴 글은 끝까지 보냄", () => {
+    const message = `${"가".repeat(MESSAGE_INPUT_MAX - 3)}끝말`;
+    const composed = composeMessage({
+      kindLabel: "유".repeat(200),
+      beachName: "해".repeat(200),
+      activityLabel: "활동",
+      message,
+    });
+    expect(composed.length).toBeLessThanOrEqual(MESSAGE_MAX);
+    expect(composed.endsWith(message)).toBe(true);
   });
 
   it("빈 이메일은 보내지 않고, 유형은 계약 값으로", () => {

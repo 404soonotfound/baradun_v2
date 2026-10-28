@@ -23,8 +23,9 @@ export const MESSAGE_MIN = 5; // 화면 설계서 INQ '내용(5자 이상)'
 export const MESSAGE_MAX = 2000; // 계약 CreateInquiryRequest.message maxLength(맨 앞 머리 줄 포함)
 export const EMAIL_MAX = 254; // 계약 email maxLength
 export const PHOTO_MAX_COUNT = 3; // 사진만 최대 3장
-// 본문 앞에 붙이는 머리 줄(유형·해변·활동)의 최대 길이. 내용 입력 상한은 이만큼 뺌
+// 본문 앞에 붙이는 머리 줄(유형·해변·활동, 감싸는 글자 포함)의 최대 길이. 내용 입력 상한은 이만큼 뺌
 export const HEADER_MAX = 120;
+const HEADER_WRAP = "[]\n\n".length;
 export const MESSAGE_INPUT_MAX = MESSAGE_MAX - HEADER_MAX;
 
 export type FieldError =
@@ -72,10 +73,11 @@ export function composeMessage(input: {
   activityLabel: string | null;
   message: string;
 }): string {
+  // 감싸는 글자("[", "]", 빈 줄 두 개)까지 머리 줄 상한 안에 넣음 → 내용 입력 상한까지 쓴 글이 잘리지 않음
   const header = [input.kindLabel, input.beachName, input.activityLabel]
     .filter((part): part is string => part !== null && part !== "")
     .join(" · ")
-    .slice(0, HEADER_MAX);
+    .slice(0, HEADER_MAX - HEADER_WRAP);
   return `[${header}]\n\n${input.message.trim()}`.slice(0, MESSAGE_MAX);
 }
 
