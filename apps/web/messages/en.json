@@ -273,6 +273,20 @@
     "reference": "Reference photo · not the sea right now",
     "none": "No photo, so we're showing an illustration"
   },
+  "share": {
+    "button": "Share",
+    "title": "Share",
+    "linkLabel": "Share link",
+    "note": "Whoever opens the link sees the latest information at that time",
+    "copy": "Copy link",
+    "message": "Message",
+    "more": "More",
+    "copied": "Link copied",
+    "copyFailed": "Couldn’t copy the link · Select the link above and copy it yourself",
+    "unavailable": "Can’t create a link on this screen · Copy the address from the address bar",
+    "messageBody": "{name} {url}",
+    "ogIllustration": "Sea illustration"
+  },
   "pages": {
     "explore": "Explore",
     "search": "Search",
