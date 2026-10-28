@@ -11,11 +11,6 @@ export const LOCALE_NAMES: Record<Locale, string> = {
   en: "English",
 };
 
-// 사이트 주소: hreflang 절대 주소용. 도메인 확정 전에는 로컬 주소 (BRD-40·53)
-export const SITE_URL = new URL(
-  process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000",
-);
-
 // 언어별 경로: localizedPath("en", "/spots/gyeongpo/") → "/en/spots/gyeongpo/"
 export function localizedPath(locale: Locale, path: string): string {
   const clean = path.startsWith("/") ? path : `/${path}`;
