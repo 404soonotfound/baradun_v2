@@ -20,6 +20,7 @@
     "test:e2e": "playwright test",
     "tokens": "node scripts/build-tokens.mjs",
     "map:worker": "node scripts/copy-map-worker.mjs",
+    "og:image": "node scripts/build-og-image.mjs",
     "check:tokens": "node scripts/check-tokens.mjs",
     "check:messages": "node scripts/check-messages.mjs"
   },
