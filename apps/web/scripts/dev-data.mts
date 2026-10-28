@@ -2,7 +2,7 @@
 // 계약 예시(packages/contracts/examples/valid)의 시각을 지금으로 옮겨 public/data에 씀.
 // 저장소에 넣지 않음(.gitignore) · 계약 예시의 상태별 해변만 게시하고 나머지는 채우지 않음
 //   npm run dev:data -w apps/web            예시 데이터 한 번 만들기 (같은 분에 다시 실행하면 원본 변경을 반영함)
-//                                           npm run dev(예시 끔)는 시작할 때 이 예시를 지움. 화면에서 보려면 dev:sample
+//                                           npm run dev는 기본으로 예시를 만들고 갱신함. off로 띄우면 이 예시를 지움
 //   npm run dev:data -w apps/web -- --clean 지우기
 //   --check                                 빌드 전 검사: public/data가 있으면 빌드를 멈춤
 // 실행: Node 22.18 이상은 .mts를 그대로 실행함(타입만 지우고 실행, 저장소 .nvmrc는 22.23)

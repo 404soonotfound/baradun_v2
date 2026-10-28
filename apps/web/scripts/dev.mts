@@ -1,5 +1,6 @@
 // Next 개발 서버와 개발용 바다 데이터 갱신기를 한 생명주기로 실행함.
-// 기본값과 off는 데이터를 만들지 않고 지난 예시를 지움. sample을 명시한 경우에만 예시를 갱신함.
+// 기본값(sample)은 계약 예시로 만든 더미 데이터를 먼저 게시하고 20분마다 갱신함.
+// off는 데이터를 만들지 않고 지난 예시를 지움(데이터 없음 상태 확인용).
 // 모드는 --data=off|sample 인자(운영체제 무관) 또는 BARADUN_DEV_DATA로 정함. 인자가 우선함.
 import { spawn, type ChildProcess } from "node:child_process";
 import { createRequire } from "node:module";
@@ -14,9 +15,9 @@ const DATA_FLAG = "--data=";
 const args = process.argv.slice(2);
 const flag = args.find((arg) => arg.startsWith(DATA_FLAG));
 const nextArgs = args.filter((arg) => !arg.startsWith(DATA_FLAG));
-// `BARADUN_DEV_DATA= npm run dev`처럼 빈 값으로 지운 환경 변수는 지정하지 않은 것으로 봄
+// `BARADUN_DEV_DATA= npm run dev`처럼 빈 값으로 지운 환경 변수는 지정하지 않은 것으로 봄(기본 sample)
 const dataMode =
-  flag?.slice(DATA_FLAG.length) ?? (process.env.BARADUN_DEV_DATA || "off");
+  flag?.slice(DATA_FLAG.length) ?? (process.env.BARADUN_DEV_DATA || "sample");
 if (dataMode !== "off" && dataMode !== "sample") {
   throw new Error(`BARADUN_DEV_DATA는 off 또는 sample이어야 해요: ${dataMode}`);
 }

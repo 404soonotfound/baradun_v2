@@ -405,40 +405,41 @@ describe("개발 서버 실행", { timeout: 20_000 }, () => {
     expect(existsSync(stopped)).toBe(true);
   });
 
-  it("기본값이면 예시 데이터 없이 개발 서버만 실행함", async () => {
+  it("기본값이면 예시 데이터를 먼저 만들고 개발 서버를 실행함", async () => {
     const { outDir } = fixture();
     const root = path.dirname(outDir);
     const { child, ready, stopped } = startDevCommand({ root, outDir });
 
     await waitForFile(ready);
-    expect(existsSync(outDir)).toBe(false);
+    expect(existsSync(path.join(outDir, "manifest.json"))).toBe(true);
 
     await stopChild(child);
     expect(existsSync(stopped)).toBe(true);
   });
 
-  it("--data=sample 인자로도 예시를 켜고, 이 인자는 next에 넘기지 않음", async () => {
+  it("--data=off 인자가 환경 변수보다 우선하고, 이 인자는 next에 넘기지 않음", async () => {
     const { outDir } = fixture();
     const root = path.dirname(outDir);
     const { child, ready, stopped } = startDevCommand({
       root,
       outDir,
-      args: ["--data=sample"],
+      mode: "sample",
+      args: ["--data=off"],
     });
 
     await waitForFile(ready);
-    expect(existsSync(path.join(outDir, "manifest.json"))).toBe(true);
+    expect(existsSync(outDir)).toBe(false);
     expect(readFileSync(ready, "utf8")).toBe("dev");
 
     await stopChild(child);
     expect(existsSync(stopped)).toBe(true);
   });
 
-  it("기본값이면 지난 sample 예시를 지우고 시작함", async () => {
+  it("off면 지난 sample 예시를 지우고 시작함", async () => {
     const { examplesDir, outDir } = fixture();
     writeDevData({ examplesDir, outDir });
     const root = path.dirname(outDir);
-    const { child, ready } = startDevCommand({ root, outDir });
+    const { child, ready } = startDevCommand({ root, outDir, mode: "off" });
 
     await waitForFile(ready);
     expect(existsSync(outDir)).toBe(false);
@@ -446,7 +447,7 @@ describe("개발 서버 실행", { timeout: 20_000 }, () => {
     await stopChild(child);
   });
 
-  it("BARADUN_DEV_DATA=off를 명시해도 예시 데이터를 만들지 않음", async () => {
+  it("BARADUN_DEV_DATA=off면 예시 데이터를 만들지 않음", async () => {
     const { outDir } = fixture();
     const root = path.dirname(outDir);
     const { child, ready, stopped } = startDevCommand({
@@ -464,13 +465,12 @@ describe("개발 서버 실행", { timeout: 20_000 }, () => {
 });
 
 describe("개발 실행 스크립트", () => {
-  it("dev:sample·dev:no-data도 npm run dev를 거쳐 predev(토큰·지도 워커)를 실행함", () => {
+  it("dev:no-data도 npm run dev를 거쳐 predev(토큰·지도 워커)를 실행함", () => {
     const { scripts } = readJson<{ scripts: Record<string, string> }>(
       path.join(import.meta.dirname, "../package.json"),
     );
 
     expect(scripts.predev).toContain("npm run tokens");
-    expect(scripts["dev:sample"]).toMatch(/^npm run dev -- /);
     // 셸에 BARADUN_DEV_DATA=sample이 남아 있어도 정리 직후 예시를 다시 만들지 않게 off를 명시함
     expect(scripts["dev:no-data"]).toMatch(/&& npm run dev -- --data=off$/);
   });
