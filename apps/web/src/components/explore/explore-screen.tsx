@@ -46,7 +46,7 @@ import { kstStamp } from "@/lib/snapshot/clock";
 import { useSnapshot } from "@/lib/snapshot/use-snapshot";
 import { useBadgeText } from "@/lib/snapshot/use-badge-text";
 import { useRowText } from "@/lib/snapshot/use-row-text";
-import { deriveBeachView } from "@/lib/snapshot/view";
+import { deriveBeachView, hidesLastValues } from "@/lib/snapshot/view";
 import { clearCheckedAt } from "@/lib/status-count";
 import { useOnline } from "@/lib/use-online";
 import { useSheet } from "@/lib/use-sheet";
@@ -130,7 +130,11 @@ export function ExploreScreen({
   });
   // 위치 배너는 아래에서 따로 그리므로(locationOff: false로 부름) 공용 배너에는 데이터 상황만 넘김
   const situation = picked?.kind === "noLocation" ? null : picked;
-  const noClear = situation === null && noClearAtAll(items, snapshot.live);
+  // 점검·강제 업데이트 중에는 해변이 모두 값을 숨긴 판단불가라 '특보 없는 곳 없음'으로 말하지 않음(덮는 화면이 알림)
+  const noClear =
+    situation === null &&
+    !hidesLastValues(snapshot.phase) &&
+    noClearAtAll(items, snapshot.live);
   const locationOff =
     situation === null &&
     !noClear &&
