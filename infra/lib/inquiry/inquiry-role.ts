@@ -25,11 +25,12 @@ export class InquiryRole extends Construct {
 
     // 트랜잭션(TransactWriteItems) 권한은 품목별 동작(PutItem 등)으로 판정됨
     // (dynamodb:TransactWriteItems라는 IAM 동작은 없음 — AWS 'Using IAM with DynamoDB transactions')
-    // Put: 문의·이메일 저장, Update: 속도·알림 카운터, Delete: 처리 후 이메일 삭제
+    // Put: 문의·이메일·멱등 기록 저장, Get: 멱등 기록 읽기(같은 키의 재시도), Update: 속도·알림 카운터, Delete: 처리 후 이메일 삭제
     this.role.addToPolicy(
       new iam.PolicyStatement({
         actions: [
           "dynamodb:DeleteItem",
+          "dynamodb:GetItem",
           "dynamodb:PutItem",
           "dynamodb:UpdateItem",
         ],

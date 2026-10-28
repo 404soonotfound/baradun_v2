@@ -68,7 +68,7 @@ export class BaradunStack extends Stack {
     const tables = new StorageTables(this, "Storage");
 
     // 데이터 문의 접수와 기존 배포의 /api/inquiries* 동작 연결 (BRD-63)
-    new InquiryBackend(this, "Inquiry", {
+    const inquiry = new InquiryBackend(this, "Inquiry", {
       table: tables.inquiry,
       distribution: site.distribution,
       notificationEmail: alertEmail.valueAsString,
@@ -123,6 +123,10 @@ export class BaradunStack extends Stack {
       value: site.distribution.distributionId,
     });
     new CfnOutput(this, "DeployRoleArn", { value: deploy.role.roleArn });
+    // 웹 빌드가 사진 업로드 주소를 이 버킷 하나로만 허용함(BRD-103). GitHub Variables INQUIRY_PHOTO_BUCKET에 넣음
+    new CfnOutput(this, "InquiryPhotoBucketName", {
+      value: inquiry.photoBucket.bucketName,
+    });
     // 테이블 이름은 CDK가 붙임. Lambda 환경 변수와 운영 확인(AWS CLI)에 씀
     new CfnOutput(this, "StateTableName", { value: tables.state.tableName });
     new CfnOutput(this, "OpsTableName", { value: tables.ops.tableName });
