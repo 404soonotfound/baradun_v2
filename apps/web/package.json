@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "predev": "npm run tokens && npm run map:worker",
-    "dev": "next dev",
+    "dev": "node scripts/dev.mts",
     "prebuild": "npm run tokens && npm run map:worker && node scripts/dev-data.mts --check",
     "dev:data": "node scripts/dev-data.mts",
     "build": "next build",
