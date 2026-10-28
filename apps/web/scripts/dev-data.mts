@@ -2,6 +2,7 @@
 // 계약 예시(packages/contracts/examples/valid)의 시각을 지금으로 옮겨 public/data에 씀.
 // 저장소에 넣지 않음(.gitignore) · 계약 예시의 상태별 해변만 게시하고 나머지는 채우지 않음
 //   npm run dev:data -w apps/web            예시 데이터 한 번 만들기 (같은 분에 다시 실행하면 원본 변경을 반영함)
+//                                           npm run dev(예시 끔)는 시작할 때 이 예시를 지움. 화면에서 보려면 dev:sample
 //   npm run dev:data -w apps/web -- --clean 지우기
 //   --check                                 빌드 전 검사: public/data가 있으면 빌드를 멈춤
 // 실행: Node 22.18 이상은 .mts를 그대로 실행함(타입만 지우고 실행, 저장소 .nvmrc는 22.23)
@@ -30,6 +31,8 @@ const VERSION_DIR = /^\d{8}T\d{6}Z$/;
 
 export const DEV_DATA_REFRESH_INTERVAL_MS = 20 * 60_000;
 export const DEV_DATA_MODE_FILE = ".dev-data-mode";
+// 갱신 시각을 확인하는 간격. 잠자기로 타이머가 밀려도 깨어난 뒤 1분 안에 따라잡음
+const REFRESH_CHECK_MS = 60_000;
 
 interface DevDataPaths {
   outDir?: string;
@@ -115,10 +118,32 @@ function publishVersion(
   }
 
   // 같은 분 안에 원본 예시를 고친 경우. 옛 폴더를 비켜 두고 새 내용으로 교체함.
+  // 교체에 실패하면 옛 폴더를 되돌려 manifest가 가리키는 버전이 사라지지 않게 함.
   const replaced = temporaryPath(path.dirname(published), "replaced");
   renameSync(published, replaced);
-  renameSync(staged, published);
+  try {
+    renameSync(staged, published);
+  } catch (error) {
+    renameSync(replaced, published);
+    throw error;
+  }
   rmSync(replaced, { recursive: true, force: true });
+}
+
+// 이 스크립트가 만드는 이름만 public/data에 있는지. 다른 파일이 섞인 폴더는 덮어쓰거나 지우지 않음.
+function isOwnEntry(name: string): boolean {
+  return (
+    name === "manifest.json" ||
+    name === DEV_DATA_MODE_FILE ||
+    VERSION_DIR.test(name) ||
+    (name.startsWith(".") && name.endsWith(".tmp"))
+  );
+}
+
+function foreignEntries(outDir: string): string[] {
+  return existsSync(outDir)
+    ? readdirSync(outDir).filter((name) => !isOwnEntry(name))
+    : [];
 }
 
 function currentVersion(outDir: string): string | null {
@@ -172,6 +197,13 @@ export function writeDevData({
     files,
   };
 
+  const foreign = foreignEntries(outDir);
+  if (foreign.length > 0) {
+    throw new Error(
+      `${outDir}에 예시 데이터가 아닌 파일이 있어 쓰지 않았어요(${foreign.join(", ")}). 확인 후 npm run dev:data -w apps/web -- --clean`,
+    );
+  }
+
   mkdirSync(outDir, { recursive: true });
   const stagedVersion = temporaryPath(outDir, version);
   const publishedVersion = path.join(outDir, version);
@@ -204,7 +236,8 @@ export function writeDevData({
 
 /**
  * 예시를 끈 개발 서버가 지난 예시를 계속 서빙하지 않도록 정리함.
- * 표지가 sample인 폴더만 지움. 표지 없는 폴더는 출처를 모르므로 남기고 알림(화면은 예시로 표시함).
+ * 표지가 sample이고 이 스크립트가 만든 이름만 있는 폴더만 지움.
+ * 그 밖의 폴더는 출처를 모르므로 남기고 알림(화면은 manifest가 있으면 예시로 표시함).
  */
 export function clearDevSampleData(
   outDir: string = DEFAULT_OUT,
@@ -216,14 +249,17 @@ export function clearDevSampleData(
   } catch {
     mode = null;
   }
-  if (mode === "sample") {
+  if (mode === "sample" && foreignEntries(outDir).length === 0) {
     rmSync(outDir, { recursive: true, force: true });
     return "removed";
   }
   return "unmarked";
 }
 
-/** 시작 즉시 한 번 만들고, 이후 고정 간격으로 갱신함. 반환 함수로 타이머를 멈춤. */
+/**
+ * 시작 즉시 한 번 만들고, 이후 벽시계 기준 intervalMs마다 갱신함. 반환 함수로 타이머를 멈춤.
+ * setInterval만 쓰면 노트북 잠자기 동안 타이머가 멈춰 깨어난 뒤 예시가 만료된 채 남음.
+ */
 export function startDevDataRefresh({
   outDir = DEFAULT_OUT,
   examplesDir = DEFAULT_EXAMPLES,
@@ -234,18 +270,33 @@ export function startDevDataRefresh({
     throw error;
   },
 }: RefreshOptions = {}): () => void {
+  let lastPublishedMs = now();
   const publish = () => {
     try {
-      const version = writeDevData({ outDir, examplesDir, nowMs: now() });
+      lastPublishedMs = now();
+      const version = writeDevData({
+        outDir,
+        examplesDir,
+        nowMs: lastPublishedMs,
+      });
       onPublished?.(version);
     } catch (error) {
       onError(error);
     }
   };
   // 첫 생성 실패는 개발 서버를 시작하기 전에 호출자에게 그대로 알림.
-  const firstVersion = writeDevData({ outDir, examplesDir, nowMs: now() });
+  const firstVersion = writeDevData({
+    outDir,
+    examplesDir,
+    nowMs: lastPublishedMs,
+  });
   onPublished?.(firstVersion);
-  const timer = setInterval(publish, intervalMs);
+  const timer = setInterval(
+    () => {
+      if (now() - lastPublishedMs >= intervalMs) publish();
+    },
+    Math.min(intervalMs, REFRESH_CHECK_MS),
+  );
   return () => clearInterval(timer);
 }
 

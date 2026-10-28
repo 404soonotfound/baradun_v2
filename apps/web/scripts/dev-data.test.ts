@@ -250,6 +250,25 @@ describe("예시를 끈 개발 서버의 지난 예시 정리", () => {
     expect(clearDevSampleData(outDir)).toBe("unmarked");
     expect(existsSync(path.join(outDir, "manifest.json"))).toBe(true);
   });
+
+  it("sample 표지가 있어도 다른 파일이 섞이면 지우지 않음", () => {
+    const { examplesDir, outDir } = fixture();
+    writeDevData({ examplesDir, outDir });
+    writeFileSync(path.join(outDir, "mirror.json"), "{}");
+
+    expect(clearDevSampleData(outDir)).toBe("unmarked");
+    expect(existsSync(path.join(outDir, "mirror.json"))).toBe(true);
+  });
+
+  it("예시가 아닌 파일이 있는 폴더에는 예시를 쓰지 않음", () => {
+    const { examplesDir, outDir } = fixture();
+    mkdirSync(outDir);
+    writeFileSync(path.join(outDir, "mirror.json"), "{}");
+
+    expect(() => writeDevData({ examplesDir, outDir })).toThrow(/mirror\.json/);
+    expect(existsSync(path.join(outDir, DEV_DATA_MODE_FILE))).toBe(false);
+    expect(existsSync(path.join(outDir, "manifest.json"))).toBe(false);
+  });
 });
 
 describe("개발용 예시 데이터 자동 갱신", () => {
@@ -279,6 +298,20 @@ describe("개발용 예시 데이터 자동 갱신", () => {
     stop();
     await vi.advanceTimersByTimeAsync(DEV_DATA_REFRESH_INTERVAL_MS);
     expect(manifestAt(outDir).snapshotVersion).toBe("20261028T062000Z");
+  });
+
+  it("잠자기로 타이머가 밀려도 벽시계가 지났으면 1분 안에 갱신함", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime("2026-10-28T06:00:12Z");
+    const { examplesDir, outDir } = fixture();
+    const stop = startDevDataRefresh({ examplesDir, outDir });
+
+    // 잠자는 동안 타이머는 돌지 않고 벽시계만 2시간 지남
+    vi.setSystemTime("2026-10-28T08:00:12Z");
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(manifestAt(outDir).snapshotVersion).toBe("20261028T080100Z");
+
+    stop();
   });
 });
 
