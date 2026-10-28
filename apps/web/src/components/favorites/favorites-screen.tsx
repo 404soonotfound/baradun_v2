@@ -16,6 +16,7 @@ import { ViewToggle } from "@/components/ui/view-toggle";
 import type { BeachSummary } from "@/lib/beach-summary";
 import { cn } from "@/lib/cn";
 import {
+  canRecordSeen,
   changeNote,
   recordSeen,
   toSeen,
@@ -124,13 +125,14 @@ export function FavoritesScreen({
       ),
     [favorites, snapshot],
   );
+  // 이번 조회가 성공해 값을 보여 줄 때만 기록('확인 못 함'으로 지난 방문을 덮지 않게)
+  const recordable = canRecordSeen(snapshot);
   useEffect(() => {
-    // 불러오는 중은 기록하지 않음('확인 못 함'으로 지난 방문을 덮지 않게)
-    if (loading || baseline === null) return;
+    if (!recordable || baseline === null) return;
     const seen = new Map<string, SeenRecord>();
     facts.forEach((fact, id) => seen.set(id, toSeen(fact)));
     recordSeen(favoriteIds, seen);
-  }, [loading, baseline, facts, favoriteIds]);
+  }, [recordable, baseline, facts, favoriteIds]);
 
   function changeText(note: ChangeNote) {
     if (note === null) return null;
@@ -151,6 +153,17 @@ export function FavoritesScreen({
     };
   }
 
+  // 판단 출처 전체 장애는 노출 중인 전체 해변으로 봄(탐색과 같은 규칙, BRD-38)
+  const outage = useMemo(
+    () =>
+      sourceOutage(
+        beaches.map((beach) =>
+          deriveBeachView({ id: beach.id, hidden: false }, snapshot),
+        ),
+      ),
+    [beaches, snapshot],
+  );
+
   // 상황 배너는 하나만(탐색과 같은 범위: 오프라인 → 지원 밖 형식 → 불러오기 실패 → 출처 전체 장애). 관측 지연은 행 배지가 보여 줌
   const situation = pickSituation<Pick<BeachSummary, "name" | "slug">>({
     phase: snapshot.phase,
@@ -159,12 +172,7 @@ export function FavoritesScreen({
     online,
     delayed: [],
     locationOff: false,
-    // 판단 출처 전체 장애는 노출 중인 전체 해변으로 봄(탐색과 같은 규칙, BRD-38)
-    outage: sourceOutage(
-      beaches.map((beach) =>
-        deriveBeachView({ id: beach.id, hidden: false }, snapshot),
-      ),
-    ),
+    outage,
   });
 
   function removeOne(beach: BeachSummary) {

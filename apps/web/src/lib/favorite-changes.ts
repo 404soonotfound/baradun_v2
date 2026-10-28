@@ -5,6 +5,7 @@ import { DEVICE_KEYS } from "@/lib/device-keys";
 import { CLOCK_TOLERANCE_MS, isExpired } from "@/lib/snapshot/clock";
 import { deriveDetail } from "@/lib/snapshot/detail";
 import {
+  hidesLastValues,
   includes,
   isRecord,
   WARNING_CONFIRM_VALID_MS,
@@ -97,6 +98,16 @@ function confirmedRecently(
       source.nowMs,
       source.clock,
     )
+  );
+}
+
+// 이번 방문을 기록해도 되는 때. 불러오는 중·오프라인·불러오기 실패(저장값 B5)·점검·강제 업데이트·지원 밖 형식이면
+// 모든 해변이 '확인 못 함'이라 확인된 지난 방문 기록을 덮게 됨 → 이번 조회가 성공했고 값을 보여 줄 때만
+export function canRecordSeen(
+  source: Pick<ViewSource, "phase" | "live">,
+): boolean {
+  return (
+    source.phase !== "loading" && source.live && !hidesLastValues(source.phase)
   );
 }
 
@@ -235,9 +246,12 @@ export function createSeenStore(
       const next = nextSeen(readStored(), favoriteIds, current);
       const raw = JSON.stringify(next);
       memory = next;
+      if (writeFailed) return;
       try {
         const target = storage();
         if (target === null) throw new Error("no storage");
+        // 시각만 바뀌어 다시 부를 때(같은 기록) 저장소에 또 쓰지 않음
+        if (target.getItem(storageKey) === raw) return;
         target.setItem(storageKey, raw);
       } catch {
         writeFailed = true; // 이번 방문 동안은 memory로 이어감
