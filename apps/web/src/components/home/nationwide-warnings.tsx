@@ -2,19 +2,18 @@
 
 import type { WarningItem } from "@baradun/contracts";
 import { ChevronRight, TriangleAlert } from "lucide-react";
-import { useLocale, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
 import { useState } from "react";
 
 import { SectionHead } from "@/components/home/section-head";
 import { WarningSheet } from "@/components/warning-sheet";
+import { ZoneName } from "@/components/zone-name";
 import { kstStamp } from "@/lib/snapshot/clock";
 import { useNationwideWarnings } from "@/lib/snapshot/nationwide";
 import { useBadgeText } from "@/lib/snapshot/use-badge-text";
 import { useSnapshot } from "@/lib/snapshot/use-snapshot";
 import { useTimeText } from "@/lib/snapshot/use-time-text";
-import type { Locale } from "@/lib/i18n";
 import { useSheet } from "@/lib/use-sheet";
-import { zoneNameText } from "@/lib/zone-name";
 
 // 전국 해상 특보 파일은 기상청 특보만 담음(계약 NationwideWarningsFile, 기관 칸 없음)
 const NATIONWIDE_SOURCE = "기상청";
@@ -24,11 +23,11 @@ const NATIONWIDE_SOURCE = "기상청";
 // 행을 누르면 특보 상세 시트(WARN, BRD-33). 시트는 열 때 고른 특보를 기억해 닫히는 동안에도 내용을 유지
 export function NationwideWarnings() {
   const t = useTranslations("home.warnings");
+  const tw = useTranslations("warning");
   const warnings = useNationwideWarnings();
   const { nowMs } = useSnapshot();
   const { badgeText, confirmedUntilText } = useBadgeText();
   const { issuedAtText } = useTimeText();
-  const locale = useLocale() as Locale;
   const sheet = useSheet("warning");
   const [selected, setSelected] = useState<WarningItem | null>(null);
 
@@ -102,13 +101,15 @@ export function NationwideWarnings() {
                         <TriangleAlert size={17} />
                       </span>
                       <span className="flex min-w-0 flex-1 flex-col">
-                        {/* "동해중부먼바다 풍랑주의보": 구역 원문 + 종류·단계 문구 키 */}
+                        {/* "동해중부먼바다 풍랑주의보" / "Wind wave advisory · Nearshore waters of …": 순서는 언어별 문구 키 */}
                         <span className="text-body-s font-bold text-text-default">
-                          {zoneNameText(item, locale).text}{" "}
-                          {badgeText({
-                            kind: "warning",
-                            type: item.type,
-                            level: item.level,
+                          {tw.rich("zoneLine", {
+                            name: badgeText({
+                              kind: "warning",
+                              type: item.type,
+                              level: item.level,
+                            }),
+                            zone: () => <ZoneName zone={item} />,
                           })}
                         </span>
                         <span className="text-caption text-text-muted">
