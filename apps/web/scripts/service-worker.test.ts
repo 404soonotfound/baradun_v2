@@ -254,14 +254,17 @@ describe("화면 이동(HTML)", () => {
     ["안내", "/guide/"],
     ["데이터 문의", "/settings/inquiry/"],
     ["끝 / 없는 탭 주소", "/explore"],
-  ])("탭이 아닌 화면(%s)은 네트워크 응답을 보여주되 저장하지 않음", async (_, url) => {
-    const sw = load({ fetch: async () => thisBuildHtml("other") });
-    await sw.caches.open(`baradun-screen-${BUILD}`);
-    const response = await sw.navigate(url);
-    expect(response!.status).toBe(200);
-    expect(await response!.text()).toContain("other");
-    expect(sw.cache()!.entries.size).toBe(0);
-  });
+  ])(
+    "탭이 아닌 화면(%s)은 네트워크 응답을 보여주되 저장하지 않음",
+    async (_, url) => {
+      const sw = load({ fetch: async () => thisBuildHtml("other") });
+      await sw.caches.open(`baradun-screen-${BUILD}`);
+      const response = await sw.navigate(url);
+      expect(response!.status).toBe(200);
+      expect(await response!.text()).toContain("other");
+      expect(sw.cache()!.entries.size).toBe(0);
+    },
+  );
 
   it("탭이 아닌 화면은 같은 캐시에 저장본이 있어도 쓰지 않고 같은 언어 홈으로 보냄", async () => {
     const sw = load({ fetch: offline });
