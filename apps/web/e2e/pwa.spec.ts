@@ -2,7 +2,7 @@ import type { Page } from "@playwright/test";
 
 import tokens from "../tokens/tokens.json";
 
-import { expect, test } from "./fixtures";
+import { expect, expectNoA11yViolations, test } from "./fixtures";
 
 // 앱 아이콘·theme-color (BRD-106 결정 28·35). 서비스 워커 저장 범위(결정 29)는 scripts/service-worker.test.ts
 const LIGHT = tokens.color.bg.page.$value;
@@ -20,6 +20,26 @@ function themeColor(page: Page) {
     }
     return null;
   });
+}
+
+// theme-color 줄 [media, content]. 그리기 전 스크립트는 media만 바꾸므로 React가 줄을 더 만들지 않아 늘 두 줄
+function themeMetas(page: Page) {
+  return page.evaluate(() =>
+    [
+      ...document.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]'),
+    ].map((meta) => [meta.media, meta.content]),
+  );
+}
+
+// 줄이 두 개(라이트 색·다크 색 하나씩)이고 지금 쓰이는 색이 expected인지
+async function expectThemeColor(page: Page, expected: string) {
+  // React가 문서를 이어받은 뒤에 봄(줄이 늘어나는 일은 hydration 때 생김)
+  await page.waitForFunction(() =>
+    Object.keys(document.body).some((key) => key.startsWith("__reactFiber")),
+  );
+  await expect.poll(() => themeColor(page)).toBe(expected);
+  const metas = await themeMetas(page);
+  expect(metas.map(([, content]) => content)).toEqual([LIGHT, DARK]);
 }
 
 function storeTheme(page: Page, theme: "light" | "dark") {
@@ -42,9 +62,7 @@ test.describe("theme-color", () => {
 
       test("고른 테마가 없으면 기기 설정을 따름", async ({ page }) => {
         await page.goto("/");
-        await expect
-          .poll(() => themeColor(page))
-          .toBe(scheme === "dark" ? DARK : LIGHT);
+        await expectThemeColor(page, scheme === "dark" ? DARK : LIGHT);
       });
 
       for (const theme of ["light", "dark"] as const) {
@@ -54,9 +72,7 @@ test.describe("theme-color", () => {
           await storeTheme(page, theme);
           for (const url of ["/", "/en/explore/", "/no-such-page/"]) {
             await page.goto(url);
-            await expect
-              .poll(() => themeColor(page))
-              .toBe(theme === "dark" ? DARK : LIGHT);
+            await expectThemeColor(page, theme === "dark" ? DARK : LIGHT);
           }
         });
       }
@@ -68,29 +84,33 @@ test.describe("theme-color", () => {
   }) => {
     await page.emulateMedia({ colorScheme: "light" });
     await page.goto("/settings/");
-    await expect.poll(() => themeColor(page)).toBe(LIGHT);
+    await expectThemeColor(page, LIGHT);
 
     await chooseTheme(page, "어둡게");
-    await expect.poll(() => themeColor(page)).toBe(DARK);
-    // 어둡게를 고른 동안 기기가 바뀌어도 그대로
+    await expectThemeColor(page, DARK);
+    // 어둡게를 고른 동안 기기가 바뀌어도(라이트 → 다크 → 라이트) 그대로
+    await page.emulateMedia({ colorScheme: "dark" });
+    await expectThemeColor(page, DARK);
     await page.emulateMedia({ colorScheme: "light" });
-    await expect.poll(() => themeColor(page)).toBe(DARK);
+    await expectThemeColor(page, DARK);
 
     // 화면 이동(새로 불러오지 않음) 뒤에도 고른 테마
     await page.getByRole("link", { name: "홈" }).first().click();
     await expect(page).toHaveURL(/\/$/);
-    await expect.poll(() => themeColor(page)).toBe(DARK);
+    await expectThemeColor(page, DARK);
     await page.getByRole("link", { name: "설정" }).first().click();
     await expect(page).toHaveURL(/\/settings\/$/);
 
     await chooseTheme(page, "밝게");
-    await expect.poll(() => themeColor(page)).toBe(LIGHT);
+    await expectThemeColor(page, LIGHT);
+    // 밝게를 고른 동안 기기가 다크로 바뀌어도 그대로
+    await page.emulateMedia({ colorScheme: "dark" });
+    await expectThemeColor(page, LIGHT);
 
     await chooseTheme(page, "기기 설정");
-    await page.emulateMedia({ colorScheme: "dark" });
-    await expect.poll(() => themeColor(page)).toBe(DARK);
+    await expectThemeColor(page, DARK);
     await page.emulateMedia({ colorScheme: "light" });
-    await expect.poll(() => themeColor(page)).toBe(LIGHT);
+    await expectThemeColor(page, LIGHT);
   });
 
   test("영어 화면에도 viewport-fit=cover와 theme-color가 있음", async ({
@@ -101,7 +121,43 @@ test.describe("theme-color", () => {
       "content",
       /viewport-fit=cover/,
     );
-    await expect.poll(() => themeColor(page)).toBe(LIGHT);
+    await expectThemeColor(page, LIGHT);
+  });
+});
+
+// 결정 29: 끊긴 동안 상세·검색 등을 열면 서비스 워커가 ?unavailable=1을 붙여 같은 언어 홈으로 보냄(워커 동작은 단위 테스트)
+test.describe("열지 못한 화면 안내", () => {
+  for (const [home, title] of [
+    ["/", "그 화면을 열지 못해 홈으로 왔어요"],
+    ["/en/", "Couldn't open that page, so you're on Home"],
+  ] as const) {
+    test(`표식이 있으면 무슨 일·영향·다음 행동을 알리고 주소에서 표식을 지움 ${home}`, async ({
+      page,
+    }) => {
+      await page.goto(`${home}?unavailable=1`);
+      const note = page.getByText(title, { exact: true }).filter({
+        visible: true,
+      });
+      await expect(note).toBeVisible();
+      await expect(
+        page.getByRole("status").filter({ hasText: title }),
+      ).toHaveCount(1);
+      await expect
+        .poll(() => {
+          const url = new URL(page.url());
+          return url.pathname + url.search;
+        })
+        .toBe(home);
+      await expectNoA11yViolations(page);
+    });
+  }
+
+  test("표식이 없으면 보이지 않음", async ({ page }) => {
+    await page.goto("/");
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+    await expect(
+      page.getByText("그 화면을 열지 못해 홈으로 왔어요"),
+    ).toHaveCount(0);
   });
 });
 
