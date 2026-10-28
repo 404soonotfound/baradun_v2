@@ -116,6 +116,11 @@ describe("ZONE_NAMES_EN", () => {
     }
   });
 
+  it("한국어 이름이 겹치지 않음(사유 범위는 이름으로만 찾음)", () => {
+    const names = Object.values(ZONE_NAMES_EN).map((zone) => zone.ko);
+    expect(new Set(names).size).toBe(names.length);
+  });
+
   it("영어 이름은 비어 있지 않고 한글을 담지 않음", () => {
     for (const [code, { en }] of Object.entries(ZONE_NAMES_EN)) {
       expect(en.trim(), code).not.toBe("");
