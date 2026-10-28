@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { basePath, deviceLocale, noticeTarget } from "./language-choice";
+import {
+  basePath,
+  deviceLocale,
+  languageSwitchHref,
+  noticeTarget,
+} from "./language-choice";
 
 // 첫 방문 언어 안내 (BRD-48 · 디자인 시스템 8절): 자동 이동 없이 한 번만 안내
 describe("deviceLocale", () => {
@@ -50,5 +55,38 @@ describe("basePath", () => {
   it("한국어 주소는 그대로, /en으로 시작하는 다른 단어는 건드리지 않음", () => {
     expect(basePath("/explore/")).toBe("/explore/");
     expect(basePath("/english/")).toBe("/english/");
+  });
+});
+
+describe("languageSwitchHref", () => {
+  it("언어 접두어만 바꾸고 검색어(?q=)를 그대로 둠", () => {
+    expect(languageSwitchHref("en", "/search/", "q=%EA%B2%BD%ED%8F%AC")).toBe(
+      "/en/search/?q=%EA%B2%BD%ED%8F%AC",
+    );
+    expect(languageSwitchHref("ko", "/en/search/", "q=gyeongpo")).toBe(
+      "/search/?q=gyeongpo",
+    );
+  });
+
+  it("문의 화면의 해변·활동 맥락 등 매개변수 여러 개를 순서대로 둠", () => {
+    expect(
+      languageSwitchHref(
+        "en",
+        "/settings/inquiry/",
+        "beach=gangmun&activity=swim",
+      ),
+    ).toBe("/en/settings/inquiry/?beach=gangmun&activity=swim");
+  });
+
+  it("매개변수가 없거나 '?'만 오면 '?'를 붙이지 않음", () => {
+    expect(languageSwitchHref("en", "/", "")).toBe("/en/");
+    expect(languageSwitchHref("ko", "/en", "")).toBe("/");
+    expect(languageSwitchHref("en", "/explore/", "?")).toBe("/en/explore/");
+  });
+
+  it("앞에 '?'가 붙은 값도 한 번만 붙임", () => {
+    expect(languageSwitchHref("en", "/favorites/", "?tab=recent")).toBe(
+      "/en/favorites/?tab=recent",
+    );
   });
 });
