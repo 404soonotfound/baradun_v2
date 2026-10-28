@@ -68,6 +68,8 @@ export function createLocationStore(
   let writeFailed = false;
   // 위치 요청·권한 확인 차례 번호. 스위치를 끄거나 새로 확인하면 올려서, 늦게 온 답이 새 상태를 덮지 않게 함
   let generation = 0;
+  // 권한 변경 처리기를 붙여 둔 마지막 PermissionStatus
+  let watched: PermissionStatus | null = null;
   const listeners = new Set<() => void>();
 
   function readEnabled(): boolean {
@@ -166,6 +168,9 @@ export function createLocationStore(
         // 그사이 스위치를 바꿨거나 버튼으로 요청했으면 첫 답은 버림(그쪽 결과가 최신)
         if (mine === generation) applyPermission(status.state);
         // 브라우저 설정에서 권한을 바꾸면 따라감(거부 후 다시 허용한 경우 등). 꺼 둔 동안은 applyPermission이 무시
+        // 스위치를 다시 켤 때마다 새 PermissionStatus가 올 수 있어 이전 것의 처리기는 뗌(겹쳐 붙지 않게)
+        if (watched && watched !== status) watched.onchange = null;
+        watched = status;
         status.onchange = () => applyPermission(status.state);
       })
       .catch(settle)

@@ -282,6 +282,32 @@ describe("위치 사용 스위치 (BRD-36)", () => {
     }
   });
 
+  it("스위치를 다시 켜 새 권한 객체가 오면 이전 객체의 변경 처리기는 뗌", async () => {
+    type Status = { state: PermissionState; onchange: null | (() => void) };
+    const statuses: Status[] = [];
+    const fake = fakeNavigator({
+      query: () => {
+        const status: Status = { state: "prompt", onchange: null };
+        statuses.push(status);
+        return Promise.resolve(status);
+      },
+    });
+    vi.stubGlobal("navigator", fake.navigator);
+    try {
+      const store = createLocationStore(() => fakeSwitch().storage);
+      store.subscribe(() => {});
+      await flush();
+      store.setEnabled(false);
+      store.setEnabled(true);
+      await flush();
+      expect(statuses).toHaveLength(2);
+      expect(statuses[0]!.onchange).toBeNull();
+      expect(statuses[1]!.onchange).toBeTypeOf("function");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("저장소를 못 써도 이번 방문 동안은 고른 값을 따름", async () => {
     const fake = fakeNavigator({});
     vi.stubGlobal("navigator", fake.navigator);
