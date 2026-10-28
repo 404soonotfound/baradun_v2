@@ -190,7 +190,6 @@ export function createSeenStore(
 ) {
   let memory: SeenMap = EMPTY;
   let writeFailed = false;
-  let lastWritten: string | null = null;
   let baseline: SeenMap | null = null;
   let resetTimer: ReturnType<typeof setTimeout> | null = null;
   const listeners = new Set<() => void>();
@@ -235,8 +234,6 @@ export function createSeenStore(
       if (baseline === null) return;
       const next = nextSeen(readStored(), favoriteIds, current);
       const raw = JSON.stringify(next);
-      if (raw === lastWritten) return;
-      lastWritten = raw;
       memory = next;
       try {
         const target = storage();
@@ -249,7 +246,6 @@ export function createSeenStore(
     // 기기 데이터 초기화(BRD-36). 보고 있는 화면의 지난 기록도 비움
     clear() {
       memory = EMPTY;
-      lastWritten = null;
       try {
         storage()?.removeItem(storageKey);
       } catch {
