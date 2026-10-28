@@ -8,6 +8,7 @@
     "prebuild": "npm run tokens && npm run map:worker && node scripts/dev-data.mts --check",
     "dev:data": "node scripts/dev-data.mts",
     "build": "next build",
+    "postbuild": "node scripts/build-sw.mts",
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",

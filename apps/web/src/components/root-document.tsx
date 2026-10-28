@@ -3,6 +3,7 @@ import type { Locale } from "@/lib/i18n";
 import { notoSansKr } from "@/lib/fonts";
 import { DISPLAY_INIT_SCRIPT } from "@/lib/display-init";
 import { getMessages } from "next-intl/server";
+import { ServiceWorkerSetup } from "@/components/service-worker";
 
 // 두 루트 레이아웃((ko)·(en))과 전역 404가 같이 쓰는 html 뼈대 (BRD-22)
 // suppressHydrationWarning: 테마 스크립트가 그리기 전에 data-theme을 붙여서 생기는 차이를 허용함.
@@ -29,6 +30,7 @@ export async function RootDocument({
             __html: DISPLAY_INIT_SCRIPT,
           }}
         />
+        <ServiceWorkerSetup />
         <NextIntlClientProvider
           locale={locale}
           messages={messages}
