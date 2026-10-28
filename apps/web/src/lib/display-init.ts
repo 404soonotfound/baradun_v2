@@ -11,10 +11,11 @@ export const MOTION_STORAGE_KEY = "baradun:motion";
 // <html data-theme="light|dark">를 붙이면 그 테마, 없으면 기기 설정을 따름
 // <html data-motion="reduce">면 globals.css가 기기의 '동작 줄이기'와 같은 규칙을 적용
 // 화면을 그리기 전에 돌아야 해서 문자열로 넣음. 저장소를 못 읽으면 시스템 테마·움직임 켜짐
-// theme-color(결정 35): 실제로 그리는 테마의 바탕색을 담은 <meta name="theme-color">를 viewport의 media 두 줄보다
-// 앞에 넣음(브라우저는 조건이 맞는 첫 줄을 씀). data-theme(설정 변경·다른 탭)과 기기 설정 변경을 따라 값을 바꿈.
+// theme-color(결정 35): viewport가 넣은 <meta name="theme-color"> 줄(기기 설정별 media 두 줄)의 값을 모두 실제로 그리는
+// 테마의 바탕색으로 맞춤 → media와 상관없이 고른 테마 색. data-theme(설정 변경·다른 탭)·기기 설정 변경을 따라 다시 맞추고,
+// 화면 이동 때 Next가 <head>의 줄을 다시 그려도(새 줄·값 되돌림) 다시 맞춤. 같은 값이면 쓰지 않음(관찰이 반복되지 않게)
 // 테마 규칙은 lib/theme.ts resolveTheme과 같음(light·dark면 그 값, 그 밖은 기기 설정). 실패하면 media 두 줄(기기 설정)이 남음
-const THEME_SCRIPT = `try{var c=${JSON.stringify(THEME_COLORS)},q=window.matchMedia?window.matchMedia("(prefers-color-scheme: dark)"):null,m=d.createElement("meta"),f=d.querySelector('meta[name="theme-color"]');m.setAttribute("name","theme-color");if(f){f.parentNode.insertBefore(m,f)}else{d.head.appendChild(m)}var u=function(){var t=h.getAttribute("data-theme");m.setAttribute("content",c[t==="light"||t==="dark"?t:q&&q.matches?"dark":"light"])};u();new MutationObserver(u).observe(h,{attributes:true,attributeFilter:["data-theme"]});if(q&&q.addEventListener){q.addEventListener("change",u)}else if(q&&q.addListener){q.addListener(u)}}catch(e){}`;
+const THEME_SCRIPT = `try{var c=${JSON.stringify(THEME_COLORS)},q=window.matchMedia?window.matchMedia("(prefers-color-scheme: dark)"):null,u=function(){var t=h.getAttribute("data-theme"),v=c[t==="light"||t==="dark"?t:q&&q.matches?"dark":"light"],l=d.querySelectorAll('meta[name="theme-color"]');for(var i=0;i<l.length;i++){if(l[i].getAttribute("content")!==v){l[i].setAttribute("content",v)}}};u();var o=new MutationObserver(u);o.observe(h,{attributes:true,attributeFilter:["data-theme"]});o.observe(d.head,{childList:true,subtree:true,attributes:true,attributeFilter:["name","content"]});if(q&&q.addEventListener){q.addEventListener("change",u)}else if(q&&q.addListener){q.addListener(u)}}catch(e){}`;
 
 export const DISPLAY_INIT_SCRIPT = `(function(){var d=document,h=d.documentElement;try{var s=localStorage,t=s.getItem(${JSON.stringify(
   THEME_STORAGE_KEY,
