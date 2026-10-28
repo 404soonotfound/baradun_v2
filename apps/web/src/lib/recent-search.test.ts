@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   addRecent,
+  clipQuery,
   parseRecent,
   RECENT_MAX,
   visibleRecent,
@@ -77,5 +78,15 @@ describe("visibleRecent", () => {
       "경포",
       "강릉",
     ]);
+  });
+});
+
+describe("clipQuery", () => {
+  it("50글자로 자르되 글자(이모지 포함)를 반으로 가르지 않음", () => {
+    expect([...clipQuery("가".repeat(80))]).toHaveLength(50);
+    const text = "가".repeat(49) + "🌊🌊";
+    const clipped = clipQuery(text);
+    expect(clipped).toBe("가".repeat(49) + "🌊");
+    expect(() => encodeURIComponent(clipped)).not.toThrow();
   });
 });

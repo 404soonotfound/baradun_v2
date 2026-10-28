@@ -1,6 +1,10 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { getTranslations } from "next-intl/server";
-import { SearchScreen } from "@/components/search/search-screen";
+import {
+  SearchFallback,
+  SearchScreen,
+} from "@/components/search/search-screen";
 import { listBeachSummaries } from "@/lib/beaches";
 import { hasDevSampleSnapshot } from "@/lib/dev-sample";
 import { alternatesFor } from "@/lib/i18n";
@@ -14,11 +18,14 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default function Page() {
+  // useSearchParams는 정적 HTML을 만들 때 주소를 몰라 Suspense로 감쌈(브라우저에서 이어 그림)
   return (
-    <SearchScreen
-      locale="en"
-      beaches={listBeachSummaries("en")}
-      sampleSnapshot={hasDevSampleSnapshot()}
-    />
+    <Suspense fallback={<SearchFallback />}>
+      <SearchScreen
+        locale="en"
+        beaches={listBeachSummaries("en")}
+        sampleSnapshot={hasDevSampleSnapshot()}
+      />
+    </Suspense>
   );
 }
