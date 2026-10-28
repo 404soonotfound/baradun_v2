@@ -111,8 +111,14 @@ export function Sheet({
           </button>
         </div>
         {/* 내용이 길어 스크롤될 때 안에 누를 것이 없어도 키보드(화살표)로 스크롤하게 Tab으로 닿게 함
-            (BRD-39, WCAG 2.1.1). 처음 포커스는 앞의 닫기 버튼 */}
-        <div tabIndex={0} className="overflow-y-auto px-gutter pt-2 lg:px-6">
+            (BRD-39, WCAG 2.1.1). 처음 포커스는 앞의 닫기 버튼.
+            Tab이 멈추는 자리라 시트 제목을 이름으로 둠(이름 없는 정지점이 되지 않게) */}
+        <div
+          tabIndex={0}
+          role="region"
+          aria-labelledby={titleId}
+          className="overflow-y-auto px-gutter pt-2 lg:px-6"
+        >
           {children}
         </div>
       </div>
