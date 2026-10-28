@@ -1,6 +1,6 @@
 import type { Metadata, MetadataRoute } from "next";
 
-// 앱 아이콘 (BRD-106 결정 28). 원본은 icons/*.svg, 파일은 scripts/build-icons.mts가 public/에 만듦
+// 앱 아이콘 (BRD-106 결정 28). 원본은 assets/icons/*.svg, 파일은 scripts/build-icons.mts가 public/에 만듦
 // 매니페스트(app/manifest.ts)와 두 루트 레이아웃·전역 404의 <head>가 같이 씀. 경로·크기는 scripts/icons.test.ts가 실제 파일과 맞춰 봄
 
 // 설치 아이콘: any(둥근 판) 192·512 + maskable(가장자리까지 채움) 512. 용도를 섞지 않고 따로 적음

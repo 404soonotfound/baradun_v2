@@ -1,5 +1,5 @@
-// 앱 아이콘 만들기 (BRD-106 결정 28). icons/*.svg(직접 그린 원본)를 PNG·ICO로 바꿔 public/에 씀
-// 실행: npm run icons -w apps/web. 설치된 Playwright chromium으로 SVG를 그림(새 의존성 없음)
+// 앱 아이콘 만들기 (BRD-106 결정 28). assets/icons/*.svg(직접 그린 원본)를 PNG·ICO로 바꿔 public/에 씀
+// 실행: npm run icons -w apps/web. 설치된 Playwright chromium으로 SVG를 그림(새 의존성 없음, 공유 이미지 scripts/build-og-image.mjs와 같은 방식)
 // 결과 파일은 커밋함(빌드에서 다시 만들지 않음). 원본을 고치면 다시 실행하고 결과를 함께 커밋
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -9,8 +9,8 @@ const WEB = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 // any: 모서리를 둥글린 판(바깥 투명). maskable·Apple touch: 가장자리까지 채운 판(불투명)
 export const ICON_SOURCES = {
-  any: "icons/icon.svg",
-  maskable: "icons/icon-maskable.svg",
+  any: "assets/icons/icon.svg",
+  maskable: "assets/icons/icon-maskable.svg",
 } as const;
 type Source = keyof typeof ICON_SOURCES;
 
