@@ -106,6 +106,14 @@ export function takeScrollRestore(url: string): number | null {
   return loadJson<Record<string, number>>(SCROLL_KEY, {})[url] ?? 0;
 }
 
+// 기기 데이터 초기화(BRD-36): 탭별 마지막 주소(검색어가 든 주소 포함)와 스크롤 위치를 지움
+export function clearTabMemory() {
+  save(KEY, null);
+  save(SCROLL_KEY, null);
+  save(RESTORE_KEY, null);
+  listeners.forEach((listener) => listener());
+}
+
 // 앱 안에서 한 번이라도 이동했는지 여부 (상세의 뒤로: 앱 안에서 왔으면 이전 화면, 공유 링크로 바로 왔으면 홈)
 export function markInAppNavigation() {
   save(IN_APP_KEY, "1");

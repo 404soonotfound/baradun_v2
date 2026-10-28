@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
-import { PlaceholderPage } from "@/components/placeholder-page";
+import { SettingsScreen } from "@/components/settings/settings-screen";
+import { listBeachSummaries } from "@/lib/beaches";
 import { alternatesFor } from "@/lib/i18n";
 
-// /settings/ (아키텍처 9장 확정 경로). 실제 화면은 화면 이슈에서 채워요 (BRD-24)
+// 설정 /settings/ (BRD-36). 해변 목록(기본 지역 고르기용)은 빌드 때 넘기고, 기기 저장값은 브라우저에서 읽음
 const PATH = "/settings/";
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -12,5 +13,5 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default function Page() {
-  return <PlaceholderPage locale="ko" page="settings" />;
+  return <SettingsScreen locale="ko" beaches={listBeachSummaries("ko")} />;
 }

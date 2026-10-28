@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from "react";
 
 import type { LocationState } from "@/lib/location";
+import { NOTICE_VERSION } from "@/lib/notice-version";
 import { isTime } from "@/lib/snapshot/clock";
 
 // 첫 실행 기록 (BRD-25 · 노션 1장 이동 규칙, 2장 ON-1·ON-2)
@@ -9,8 +10,8 @@ import { isTime } from "@/lib/snapshot/clock";
 // 위치 권한을 이미 정한 기기는 보여주지 않고 지난 것으로 저장(앱을 열 때마다 잠깐 뜨지 않게)
 // 기기에만 저장하고 서버로 보내지 않음(로그인 없음, D1). 저장 틀은 lib/device-list.ts·region.ts와 같음
 
-// [1] 고지 문구 버전. messages의 onboarding.notice 문구를 바꾸면 1 올림 → 모든 기기가 다시 봄
-export const NOTICE_VERSION = 1;
+// [1] 고지 문구 버전(lib/notice-version.ts, 약관 화면도 읽음). 문구를 바꾸면 그 파일에서 1 올림
+export { NOTICE_VERSION };
 
 // [2] 저장하는 값
 export type OnboardingRecord = {
@@ -91,10 +92,12 @@ export function createOnboardingStore(storageKey: string) {
     return lastValue;
   }
 
-  function write(next: OnboardingRecord) {
+  // null = 기록 지움(기기 데이터 초기화, BRD-36) → 다음 그리기에서 ON-1부터 다시
+  function write(next: OnboardingRecord | null) {
     memory = next;
     try {
-      localStorage.setItem(storageKey, JSON.stringify(next));
+      if (next === null) localStorage.removeItem(storageKey);
+      else localStorage.setItem(storageKey, JSON.stringify(next));
     } catch {
       writeFailed = true;
     }
@@ -129,7 +132,11 @@ export function createOnboardingStore(storageKey: string) {
     if (record) write({ ...record, locationStepDone: true });
   }
 
-  return { read, subscribe, acknowledge, finishLocationStep };
+  function clear() {
+    write(null);
+  }
+
+  return { read, subscribe, acknowledge, finishLocationStep, clear };
 }
 
 // [8] 앱 전체에서 하나
@@ -141,6 +148,10 @@ export function acknowledgeNotice() {
 
 export function finishLocationStep() {
   store.finishLocationStep();
+}
+
+export function clearOnboarding() {
+  store.clear();
 }
 
 // [9] 화면에서: const record = useOnboarding();

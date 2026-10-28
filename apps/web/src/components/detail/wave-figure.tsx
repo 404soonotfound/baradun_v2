@@ -2,13 +2,15 @@
 
 import { Pause, Play } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState } from "react";
+
+import { useReducedMotion } from "@/lib/motion";
 
 // 파도 그림 A+B (BRD-32 · 노션 3장 WaveFigure). 파고·파주기를 몸 기준으로 짐작하게 하는 참고 그림(판단에 안 씀)
 // 세로 축 0·1m·2m(1m = 50px) + 성인 기준선 무릎 0.5·허리 1.0·가슴 1.3m. 앞 물결 마루~골 = 실제 파고.
 // 물결 간격 114px·뒤 물결(8.5초·11초)은 분위기용 고정값(실제 파장 아님, B2-파장). 파주기마다 한 간격 이동.
 // 부표(x=150)는 앞 물결을 따라 오르내리고 기울기는 경사의 80%. 2m 넘는 파고는 축을 늘리지 않고 위를 자름
-// 동작 줄이기·일시정지·파주기 없음 → 정지 화면
+// 동작 줄이기(기기 설정·설정의 화면 움직임 끔)·일시정지·파주기 없음 → 정지 화면
 
 const W = 320;
 const H = 168;
@@ -41,14 +43,6 @@ function wavePath(mid: number, amp: number, wavelength: number, shift: number) {
 }
 const areaPath = (line: string) => `${line}L${W} ${H}L${AXIS_X} ${H}Z`;
 
-function subscribeReducedMotion(onChange: () => void) {
-  const query = window.matchMedia("(prefers-reduced-motion: reduce)");
-  query.addEventListener("change", onChange);
-  return () => query.removeEventListener("change", onChange);
-}
-const reducedMotion = () =>
-  window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-
 export function WaveFigure({
   height,
   period: rawPeriod,
@@ -62,11 +56,7 @@ export function WaveFigure({
   const t = useTranslations("detail.figure");
   // 0 이하 파주기는 움직일 수 없어 파주기 없음과 같게 둠('0초마다 오르내려요'·쓸모없는 일시정지 버튼이 보이지 않게)
   const period = rawPeriod !== null && rawPeriod > 0 ? rawPeriod : null;
-  const reduce = useSyncExternalStore(
-    subscribeReducedMotion,
-    reducedMotion,
-    () => true,
-  );
+  const reduce = useReducedMotion();
   const [paused, setPaused] = useState(false);
   const front = useRef<SVGPathElement>(null);
   const frontArea = useRef<SVGPathElement>(null);

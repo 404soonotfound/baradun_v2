@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
-import { PlaceholderPage } from "@/components/placeholder-page";
+import { TermsContent } from "@/components/info/terms-content";
 import { alternatesFor } from "@/lib/i18n";
 
-// /terms/ (아키텍처 9장 확정 경로). 실제 화면은 화면 이슈에서 채워요 (BRD-24)
+// /terms/ (BRD-36). 정적 안내라 빌드 때 그림
 const PATH = "/terms/";
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -12,5 +12,5 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default function Page() {
-  return <PlaceholderPage locale="en" page="terms" />;
+  return <TermsContent locale="en" />;
 }

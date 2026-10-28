@@ -10,6 +10,7 @@ import { cn } from "@/lib/cn";
 import type { Locale } from "@/lib/i18n";
 import { FIT_OPTIONS, type LngLatBox } from "@/lib/map/bounds";
 import type { MapHandle } from "@/lib/map/engine";
+import { prefersReducedMotion } from "@/lib/motion";
 import { initialMapLoad, mapLoadReducer } from "@/lib/map/map-load";
 import { MAP_ATTRIBUTIONS } from "@/lib/map/style";
 
@@ -236,11 +237,6 @@ export function MapView({
       </p>
     </section>
   );
-}
-
-// 동작 줄이기 설정이면 확대·축소·흐려짐 애니메이션을 끔
-function prefersReducedMotion(): boolean {
-  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
 // 한글 라벨 글꼴 = 화면 글꼴. 글꼴 파일이 아직 안 왔으면 받은 뒤 그림(다른 글꼴로 한 번 그려 굳지 않게)

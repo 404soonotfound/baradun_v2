@@ -42,7 +42,7 @@ import {
 } from "@/lib/explore-view";
 import { cn } from "@/lib/cn";
 import { localizedPath, type Locale } from "@/lib/i18n";
-import { useUserLocation } from "@/lib/location";
+import { locationBlocked, useUserLocation } from "@/lib/location";
 import { boundsOf } from "@/lib/map/bounds";
 import { formatKm, joinMeta } from "@/lib/meta-join";
 import { setRegion, useRegion } from "@/lib/region";
@@ -185,7 +185,7 @@ export function ExploreScreen({
     situation === null &&
     !noClear &&
     !offBannerClosed &&
-    (location.status === "denied" || location.status === "unavailable");
+    (locationBlocked(location.status) || location.status === "unavailable");
 
   const dataTime = shownDataTime(
     snapshot.manifest?.generatedAt,

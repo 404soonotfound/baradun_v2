@@ -1,7 +1,7 @@
 import { NextIntlClientProvider } from "next-intl";
 import type { Locale } from "@/lib/i18n";
 import { notoSansKr } from "@/lib/fonts";
-import { THEME_INIT_SCRIPT } from "@/lib/theme";
+import { DISPLAY_INIT_SCRIPT } from "@/lib/display-init";
 import { getMessages } from "next-intl/server";
 import { ServiceWorkerSetup } from "@/components/service-worker";
 
@@ -25,7 +25,11 @@ export async function RootDocument({
         {/* body 맨 앞의 인라인 스크립트는 뒤 내용을 그리기 전에 실행됨(파서가 멈추고 실행).
             <head>를 직접 쓰지 않는 이유: 이 파일이 app/ 밖에 있어서 Next 린트(no-head-element)가
             페이지 라우터용 경고를 냄. 메타데이터는 metadata API가 <head>에 넣어 줌. */}
-        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: DISPLAY_INIT_SCRIPT,
+          }}
+        />
         <ServiceWorkerSetup />
         <NextIntlClientProvider
           locale={locale}
