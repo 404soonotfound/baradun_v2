@@ -4,7 +4,7 @@ import { Clock, Star } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { useEffect, useMemo, useRef } from "react";
+import { useMemo, useRef } from "react";
 
 import { BeachRow } from "@/components/beach-row";
 import { SituationBanner } from "@/components/situation-banner";
@@ -16,16 +16,6 @@ import { ViewToggle } from "@/components/ui/view-toggle";
 import type { BeachSummary } from "@/lib/beach-summary";
 import { cn } from "@/lib/cn";
 import {
-  canRecordSeen,
-  changeNote,
-  recordSeen,
-  toSeen,
-  useSeenBaseline,
-  warningFact,
-  type ChangeNote,
-  type SeenRecord,
-} from "@/lib/favorite-changes";
-import {
   clearRecent,
   removeRecent,
   useFavorites,
@@ -34,7 +24,6 @@ import {
 import { localizedPath, type Locale } from "@/lib/i18n";
 import { pickSituation, sourceOutage } from "@/lib/situation";
 import { kstStamp } from "@/lib/snapshot/clock";
-import { useBadgeText } from "@/lib/snapshot/use-badge-text";
 import { useRowText } from "@/lib/snapshot/use-row-text";
 import { useSnapshot } from "@/lib/snapshot/use-snapshot";
 import {
@@ -48,7 +37,7 @@ import { useOnline } from "@/lib/use-online";
 // 즐겨찾기 (BRD-35 · 노션 2장 FAV·D-FAV, Figma S_M05_01~03)
 // [즐겨찾기 n | 최근 본] 전환 → 해변 행(상태 줄 포함, 묶지 않음). PC(lg)는 3열 카드
 // 즐겨찾기·최근 본은 기기에만 저장(로그인 없음, D1). 노출 끈 해변은 목록에서 빼고 기기 기록은 지우지 않음(9장)
-// 상태는 게시된 분류 그대로(G1). 변경 표시는 lib/favorite-changes.ts
+// 상태는 게시된 분류 그대로(G1). 지난 방문과 비교하는 변경 표시는 V2 출시에서 뺌(BRD-101)
 
 type Tab = "favorites" | "recent";
 
@@ -82,8 +71,6 @@ export function FavoritesScreen({
   const online = useOnline();
   const favoriteIds = useFavorites();
   const recentIds = useRecent();
-  const baseline = useSeenBaseline();
-  const { badgeText } = useBadgeText();
   const { rowMeta, rowDetail } = useRowText();
   const toast = useToast();
   const titleRef = useRef<HTMLHeadingElement>(null);
@@ -113,45 +100,6 @@ export function FavoritesScreen({
     [recentIds, byId, snapshot],
   );
   const loading = snapshot.phase === "loading";
-
-  // 지금 확인된 특보(즐겨찾기만). 지난 방문 기록과 비교하고, 다음 방문용으로 기록
-  const facts = useMemo(
-    () =>
-      new Map(
-        favorites.map(({ beach, view }) => [
-          beach.id,
-          warningFact(beach.id, view, snapshot),
-        ]),
-      ),
-    [favorites, snapshot],
-  );
-  // 이번 조회가 성공해 값을 보여 줄 때만 기록('확인 못 함'으로 지난 방문을 덮지 않게)
-  const recordable = canRecordSeen(snapshot);
-  useEffect(() => {
-    if (!recordable || baseline === null) return;
-    const seen = new Map<string, SeenRecord>();
-    facts.forEach((fact, id) => seen.set(id, toSeen(fact)));
-    recordSeen(favoriteIds, seen);
-  }, [recordable, baseline, facts, favoriteIds]);
-
-  function changeText(note: ChangeNote) {
-    if (note === null) return null;
-    if (note.kind === "unknown") {
-      return { kind: "unknown" as const, text: t("favorites.change.unknown") };
-    }
-    const warning = badgeText({
-      kind: "warning",
-      type: note.type,
-      level: note.level,
-    });
-    const time = kstStamp(note.publishedAt, snapshot.nowMs);
-    return {
-      kind: "issued" as const,
-      text: time
-        ? t("favorites.change.issued", { warning, time })
-        : t("favorites.change.issuedNoTime", { warning }),
-    };
-  }
 
   // 판단 출처 전체 장애는 노출 중인 전체 해변으로 봄(탐색과 같은 규칙, BRD-38)
   const outage = useMemo(
@@ -196,10 +144,6 @@ export function FavoritesScreen({
 
   function renderRow({ beach, view }: Item) {
     if (view.kind !== "ready") return null;
-    const note =
-      tab === "favorites" && baseline !== null
-        ? changeNote(baseline[beach.id], facts.get(beach.id) ?? null)
-        : null;
     const common = {
       href: localizedPath(locale, `/spots/${beach.slug}/`),
       name: beach.name,
@@ -220,7 +164,7 @@ export function FavoritesScreen({
             removeLabel={t("favorites.recent.remove", { name: beach.name })}
           />
         ) : (
-          <BeachRow {...common} change={changeText(note)} />
+          <BeachRow {...common} />
         )}
       </li>
     );
