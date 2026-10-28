@@ -19,7 +19,7 @@ import {
 const REPO = path.join(__dirname, "../../..");
 const BEACH_DIR = path.join(REPO, "data/beaches");
 
-export const BEACHES: Beach[] = readdirSync(BEACH_DIR)
+const BEACHES: Beach[] = readdirSync(BEACH_DIR)
   .filter((file) => file.endsWith(".json"))
   .sort()
   .map(
@@ -103,7 +103,7 @@ function metrics(beach: Beach, now: number, delayedWave = false) {
   );
 }
 
-export interface StatusOptions {
+interface StatusOptions {
   // 특보 마지막 확인 시각(지금 기준 분). 기본 10분 전
   confirmedAgoMin?: number;
   // 모든 해변을 '특보 확인 못 함'으로(전체 장애)
@@ -199,7 +199,7 @@ function beachStatus(beach: Beach, now: number, options: StatusOptions) {
   };
 }
 
-export function statusFile(now: number, options: StatusOptions = {}) {
+function statusFile(now: number, options: StatusOptions = {}) {
   return {
     beaches: Object.fromEntries(
       BEACHES.map((beach) => [beach.id, beachStatus(beach, now, options)]),
@@ -207,7 +207,7 @@ export function statusFile(now: number, options: StatusOptions = {}) {
   };
 }
 
-export function manifestFile(now: number, extra: Record<string, unknown> = {}) {
+function manifestFile(now: number, extra: Record<string, unknown> = {}) {
   const version = versionOf(now - 5 * MIN);
   return {
     schemaVersion: 1,
@@ -248,7 +248,7 @@ function historyFile(now: number) {
   };
 }
 
-export type Scenario =
+type Scenario =
   | "normal" // 정상(특보 없음·이용불가·관측 지연·특보 확인 못 함이 섞임)
   | "loading" // manifest 응답 없음
   | "noData" // 처음 열었는데 데이터를 못 받음(저장된 값 없음)
@@ -258,7 +258,7 @@ export type Scenario =
   | "futureConfirm" // 특보 확인 시각이 2분 넘게 미래(믿지 않음)
   | "missingWarning"; // 계약 필수 칸(warning) 빠짐
 
-export interface DataControl {
+interface DataControl {
   // 지금 쓰는 시나리오를 바꿈(다음 조회부터)
   set: (scenario: Scenario) => void;
   // 지금까지 받은 /data 요청 경로
@@ -274,7 +274,7 @@ function json(route: Route, body: unknown) {
   });
 }
 
-export async function mockData(
+async function mockData(
   context: BrowserContext,
   initial: Scenario,
 ): Promise<DataControl> {
@@ -341,7 +341,7 @@ async function blockExternal(context: BrowserContext, baseURL: string) {
 }
 
 // 첫 실행 안내·언어 안내를 이미 지난 기기. 기본 지역은 강원 강릉시(시험용 지역 선택, 사용자 위치 아님)
-export async function seedDevice(
+async function seedDevice(
   context: BrowserContext,
   options: { language?: "ko" | "en"; extra?: Record<string, string> } = {},
 ) {
