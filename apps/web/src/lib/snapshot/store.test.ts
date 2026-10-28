@@ -519,7 +519,7 @@ describe("최소 화면 버전 (minWebBuild, BRD-43)", () => {
       statuses: null,
     });
     expect(
-      deriveBeachView({ id: "b0002", hidden: false }, offline.store.getState()),
+      deriveBeachView({ id: "b0094", hidden: false }, offline.store.getState()),
     ).toMatchObject({
       category: "undetermined",
       badge: { kind: "unconfirmed" },
@@ -554,7 +554,7 @@ describe("오프라인 (B5)", () => {
     const state = store.getState();
     expect(state.live).toBe(false);
     expect(
-      deriveBeachView({ id: "b0002", hidden: false }, state),
+      deriveBeachView({ id: "b0094", hidden: false }, state),
     ).toMatchObject({
       category: "unavailable",
       confirmedAt: "2026-10-17T05:18:40Z",
@@ -699,7 +699,7 @@ describe("연결 상태와 불러오기 실패 (BRD-28)", () => {
 
 describe("요청 시간 제한 (끝나지 않는 응답)", () => {
   const b0001 = { id: "b0001", hidden: false };
-  const b0002 = { id: "b0002", hidden: false };
+  const b0094 = { id: "b0094", hidden: false };
 
   // 한 번 정상으로 받아 기기에 마지막 값을 저장해 둠
   async function storedSnapshot() {
@@ -729,7 +729,7 @@ describe("요청 시간 제한 (끝나지 않는 응답)", () => {
         category: "undetermined",
         badge: { kind: "warning_unknown" },
       });
-      expect(deriveBeachView(b0002, store.getState())).toMatchObject({
+      expect(deriveBeachView(b0094, store.getState())).toMatchObject({
         category: "unavailable",
         badge: { kind: "warning", type: "wind_wave" },
         confirmedAt: "2026-10-17T05:18:40Z",
@@ -861,7 +861,7 @@ describe("status 실패에도 새로 확인한 서버 시계 유지", () => {
 
 describe("전체 재검증", () => {
   const b0001 = { id: "b0001", hidden: false };
-  const b0002 = { id: "b0002", hidden: false };
+  const b0094 = { id: "b0094", hidden: false };
   const v2 = "20261017T060000Z";
   const manifestV2 = {
     ...manifestExample,
@@ -874,7 +874,7 @@ describe("전체 재검증", () => {
     const { store, server, storage, statusCalls } = setup();
     // 06:00 스냅샷: b0001에 풍랑주의보 발효
     const statusV2 = structuredClone(statusExample);
-    statusV2.beaches.b0001 = structuredClone(statusExample.beaches.b0002!);
+    statusV2.beaches.b0001 = structuredClone(statusExample.beaches.b0094!);
     server.manifest = manifestV2;
     server.status = statusV2;
     vi.setSystemTime(Date.parse("2026-10-17T06:01:00Z"));
@@ -985,7 +985,7 @@ describe("전체 재검증", () => {
       await store.refresh();
       expect(reload).not.toHaveBeenCalled();
       expect(store.getState()).toMatchObject({ phase: "ready", live: false });
-      expect(deriveBeachView(b0002, store.getState())).toMatchObject({
+      expect(deriveBeachView(b0094, store.getState())).toMatchObject({
         category: "unavailable",
         badge: { kind: "warning", type: "wind_wave" },
       });
@@ -1052,7 +1052,7 @@ describe("전체 재검증", () => {
       category: "undetermined",
       metrics: { waveHeight: { kind: "delayed" }, wind: { kind: "delayed" } },
     });
-    expect(deriveBeachView(b0002, store.getState())).toMatchObject({
+    expect(deriveBeachView(b0094, store.getState())).toMatchObject({
       category: "unavailable",
     });
     listener.mockClear();
@@ -1182,7 +1182,7 @@ describe("점검 해제 후 status 실패", () => {
     store.start();
     await store.refresh();
     expect(
-      deriveBeachView({ id: "b0002", hidden: false }, store.getState()),
+      deriveBeachView({ id: "b0094", hidden: false }, store.getState()),
     ).toMatchObject({ category: "unavailable", stale: false });
 
     server.manifest = {
@@ -1208,7 +1208,7 @@ describe("점검 해제 후 status 실패", () => {
     await store.refresh();
     expect(store.getState()).toMatchObject({ phase: "ready", live: false });
     expect(
-      deriveBeachView({ id: "b0002", hidden: false }, store.getState()),
+      deriveBeachView({ id: "b0094", hidden: false }, store.getState()),
     ).toMatchObject({ category: "unavailable", stale: true });
   });
 
@@ -1236,7 +1236,7 @@ describe("점검 해제 후 status 실패", () => {
     await store.refresh();
     expect(store.getState()).toMatchObject({ phase: "ready", live: false });
     expect(
-      deriveBeachView({ id: "b0002", hidden: false }, store.getState()),
+      deriveBeachView({ id: "b0094", hidden: false }, store.getState()),
     ).toMatchObject({ category: "unavailable", stale: true });
   });
 });
@@ -1284,7 +1284,7 @@ describe("지원 밖 형식 이후 (Claude 리뷰)", () => {
     await store.refresh();
     expect(store.getState()).toMatchObject({ phase: "ready", live: false });
     expect(
-      deriveBeachView({ id: "b0002", hidden: false }, store.getState()),
+      deriveBeachView({ id: "b0094", hidden: false }, store.getState()),
     ).toMatchObject({
       category: "unavailable",
       badge: { kind: "warning", type: "wind_wave" },
@@ -1368,7 +1368,7 @@ describe("지난 값을 숨기는 상태를 기기에 기억 (BRD-42)", () => {
     // 점검 화면의 끝나는 시각을 쓰도록 manifest는 둠
     expect(offline.store.getState().manifest?.maintenance.active).toBe(true);
     expect(
-      deriveBeachView({ id: "b0002", hidden: false }, offline.store.getState()),
+      deriveBeachView({ id: "b0094", hidden: false }, offline.store.getState()),
     ).toMatchObject({ category: "undetermined" });
   });
 
@@ -1420,7 +1420,7 @@ describe("지난 값을 숨기는 상태를 기기에 기억 (BRD-42)", () => {
       live: false,
     });
     expect(
-      deriveBeachView({ id: "b0002", hidden: false }, offline.store.getState()),
+      deriveBeachView({ id: "b0094", hidden: false }, offline.store.getState()),
     ).toMatchObject({ category: "unavailable" });
 
     const again = setup({ storage });
@@ -1520,7 +1520,7 @@ describe("지난 값을 숨기는 상태를 기기에 기억 (BRD-42)", () => {
     const state = await reopen(storage);
     expect(state.statuses).toBeNull();
     expect(
-      deriveBeachView({ id: "b0002", hidden: false }, state),
+      deriveBeachView({ id: "b0094", hidden: false }, state),
     ).toMatchObject({ category: "undetermined" });
   });
 

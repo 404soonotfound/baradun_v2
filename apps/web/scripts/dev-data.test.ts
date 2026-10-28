@@ -131,7 +131,7 @@ async function stopChild(child: ChildProcess): Promise<void> {
 }
 
 describe("개발용 예시 데이터 생성", () => {
-  it("계약 예시의 b0001~b0003만 새 버전 경로에 게시함", () => {
+  it("계약 예시에 명시한 상태별 해변만 새 버전 경로에 게시함", () => {
     const { examplesDir, outDir } = fixture();
 
     writeDevData({
@@ -148,7 +148,17 @@ describe("개발용 예시 데이터 생성", () => {
     const status = readJson<StatusFile>(
       path.join(outDir, manifest.snapshotVersion, "status.json"),
     );
-    expect(Object.keys(status.beaches)).toEqual(["b0001", "b0002", "b0003"]);
+    expect(Object.keys(status.beaches)).toEqual([
+      "b0001",
+      "b0002",
+      "b0003",
+      "b0094",
+      "b0107",
+      "b0120",
+      "b0157",
+      "b0165",
+      "b0272",
+    ]);
   });
 
   it("새 버전을 완성하지 못하면 기존 manifest와 버전을 그대로 둠", () => {

@@ -7,7 +7,7 @@ import { clockFromHeaders, DEVICE_CLOCK, isTime, type Clock } from "./clock";
 import { deriveBeachView, type ViewSource } from "./view";
 
 // 해변 화면 상태 검사 (BRD-41). 입력은 계약 예시 데이터(아키텍처 17.3)
-// 예시: b0001 특보 없음 · b0002 풍랑주의보(이용불가) · b0003 관측 지연(판단불가)
+// 예시: b0001 특보 없음 · b0094 풍랑주의보(이용불가) · b0272 관측 지연(판단불가)
 //   파고 observedAt 05:00 → expiresAt 06:30, validUntil 06:03:40(특보 확인 05:18:40 + 45분)
 
 const example = JSON.parse(
@@ -67,7 +67,7 @@ describe("게시된 분류를 그대로 씀", () => {
 
   it("이용불가: 배지는 특보 이름", () => {
     const view = deriveBeachView(
-      beach("b0002"),
+      beach("b0094"),
       source("2026-10-17T05:30:00Z"),
     );
     expect(view).toMatchObject({
@@ -78,7 +78,7 @@ describe("게시된 분류를 그대로 씀", () => {
 
   it("판단불가: 배지는 관측 지연, 파고 값은 숨김", () => {
     const view = deriveBeachView(
-      beach("b0003"),
+      beach("b0272"),
       source("2026-10-17T05:30:00Z"),
     );
     expect(view).toMatchObject({
@@ -92,14 +92,15 @@ describe("게시된 분류를 그대로 씀", () => {
   });
 
   it("측정소 없음은 '가까운 관측 없음' 자리만, 분류 영향 없음", () => {
+    // b0157: 파고 측정소도 없는 해변. 측정소 없음은 판단불가로 바꾸지 않음(B3·B4)
     const view = deriveBeachView(
-      beach("b0001"),
+      beach("b0157"),
       source("2026-10-17T05:30:00Z"),
     );
     expect(view).toMatchObject({
       category: "clear",
       metrics: {
-        waveHeight: { kind: "value", value: 0.6, unit: "m" },
+        waveHeight: { kind: "none" },
         wavePeriod: { kind: "none" },
       },
     });
@@ -267,7 +268,7 @@ describe("시계 보정 (9.1)", () => {
 
   it("서버 시각 없음이어도 발효 중 특보는 이름 배지 유지", () => {
     const view = deriveBeachView(
-      beach("b0002"),
+      beach("b0094"),
       source("2026-10-17T06:00:00Z", { clock: DEVICE_CLOCK }),
     );
     expect(view).toMatchObject({
@@ -300,7 +301,7 @@ describe("오프라인·만료·장애 (B5)", () => {
 
   it("발효 중 특보는 이름 배지 + 마지막 확인 시각 유지", () => {
     const view = deriveBeachView(
-      beach("b0002"),
+      beach("b0094"),
       source("2026-10-17T05:30:00Z", offline),
     );
     expect(view).toMatchObject({
@@ -312,7 +313,7 @@ describe("오프라인·만료·장애 (B5)", () => {
 
   it("validUntil이 지나도 발효 중 특보는 유지", () => {
     const view = deriveBeachView(
-      beach("b0002"),
+      beach("b0094"),
       source("2026-10-17T09:00:00Z"),
     );
     expect(view).toMatchObject({
@@ -420,11 +421,11 @@ describe("근거가 빠지거나 모순된 '특보 없음'은 판단불가", () 
   });
 
   it("이용불가는 근거가 일부 빠져도 이용불가 유지(위험 정보는 사라지지 않음)", () => {
-    const statuses = withStatus("b0002", (status) => {
+    const statuses = withStatus("b0094", (status) => {
       delete (status as Partial<BeachStatus>).warning;
     });
     const view = deriveBeachView(
-      beach("b0002"),
+      beach("b0094"),
       source("2026-10-17T05:30:00Z", {}, statuses),
     );
     expect(view).toMatchObject({ category: "unavailable" });
@@ -433,11 +434,11 @@ describe("근거가 빠지거나 모순된 '특보 없음'은 판단불가", () 
 
 describe("모르는 데이터 (9.1)", () => {
   it("모르는 사유 code + 이용불가 → 분류 유지, 이름은 '이용 제한'", () => {
-    const statuses = withStatus("b0002", (status) => {
+    const statuses = withStatus("b0094", (status) => {
       (status.reasons[0] as { code: string }).code = "control_closed";
     });
     const view = deriveBeachView(
-      beach("b0002"),
+      beach("b0094"),
       source("2026-10-17T05:30:00Z", {}, statuses),
     );
     expect(view).toMatchObject({
@@ -447,11 +448,11 @@ describe("모르는 데이터 (9.1)", () => {
   });
 
   it("모르는 사유 code + 판단불가 → 분류 유지, 이름은 '확인 못 함'", () => {
-    const statuses = withStatus("b0003", (status) => {
+    const statuses = withStatus("b0272", (status) => {
       (status.reasons[0] as { code: string }).code = "new_source_failed";
     });
     const view = deriveBeachView(
-      beach("b0003"),
+      beach("b0272"),
       source("2026-10-17T05:30:00Z", {}, statuses),
     );
     expect(view).toMatchObject({
@@ -461,11 +462,11 @@ describe("모르는 데이터 (9.1)", () => {
   });
 
   it("모르는 특보 종류는 이름을 지어내지 않음", () => {
-    const statuses = withStatus("b0002", (status) => {
+    const statuses = withStatus("b0094", (status) => {
       (status.reasons[0] as { type: string }).type = "volcano";
     });
     const view = deriveBeachView(
-      beach("b0002"),
+      beach("b0094"),
       source("2026-10-17T05:30:00Z", {}, statuses),
     );
     expect(view).toMatchObject({
@@ -510,7 +511,7 @@ describe("모르는 데이터 (9.1)", () => {
   });
 
   it("지원 범위 밖 schemaVersion → 모든 해변 판단불가", () => {
-    for (const id of ["b0001", "b0002", "b0003"]) {
+    for (const id of ["b0001", "b0094", "b0272"]) {
       const view = deriveBeachView(
         beach(id),
         source("2026-10-17T05:30:00Z", { phase: "schema_unsupported" }),
@@ -617,11 +618,11 @@ describe("읽을 수 없는 값·모순 (전체 재검증)", () => {
     ["확인 시각 없음", null],
     ["미래 확인 시각", "2026-10-17T06:00:00Z"],
   ])("B5 %s → 이용불가 유지, 확인 시각만 비우고 stale 표시", (_, at) => {
-    const statuses = withStatus("b0002", (status) => {
+    const statuses = withStatus("b0094", (status) => {
       status.warning.lastConfirmedAt = at;
     });
     const view = deriveBeachView(
-      beach("b0002"),
+      beach("b0094"),
       source("2026-10-17T05:30:00Z", { live: false }, statuses),
     );
     expect(view).toMatchObject({
@@ -634,7 +635,7 @@ describe("읽을 수 없는 값·모순 (전체 재검증)", () => {
 
   it("stale: 받는 중이면 false, 오프라인이면 true", () => {
     expect(
-      deriveBeachView(beach("b0002"), source("2026-10-17T05:30:00Z")),
+      deriveBeachView(beach("b0094"), source("2026-10-17T05:30:00Z")),
     ).toMatchObject({ stale: false });
     expect(
       deriveBeachView(
@@ -654,9 +655,10 @@ describe("읽을 수 없는 값·모순 (전체 재검증)", () => {
     expect(clear).not.toMatchObject({
       metrics: { waveHeight: { kind: "value" } },
     });
+    // b0120: 파주기 측정값이 있는 이용불가 해변
     expect(
       deriveBeachView(
-        beach("b0002"),
+        beach("b0120"),
         source("2026-10-17T05:30:00Z", unknownNow),
       ),
     ).toMatchObject({
@@ -819,7 +821,8 @@ describe("측정기 없음(none)의 불변식 (계약 6.3)", () => {
   it.each(brokenNone)(
     "파주기 none인데 %s → '가까운 관측 없음' 대신 숨김",
     (_, change) => {
-      const statuses = withStatus("b0001", (s) =>
+      // b0157: 파주기 측정소가 없는(none) 특보 없음 해변
+      const statuses = withStatus("b0157", (s) =>
         change(
           s.observation.metrics.wavePeriod as unknown as Record<
             string,
@@ -828,7 +831,7 @@ describe("측정기 없음(none)의 불변식 (계약 6.3)", () => {
         ),
       );
       const view = deriveBeachView(
-        beach("b0001"),
+        beach("b0157"),
         source("2026-10-17T05:30:00Z", {}, statuses),
       );
       expect(view).toMatchObject({
@@ -980,7 +983,7 @@ describe("지표 expiresAt을 관측 시각 + 유효시간과 대조 (B4)", () =
 describe("B5 원래 판단불가였던 해변의 사유 (Claude 리뷰)", () => {
   it("관측 지연이던 해변이 오프라인 → 배지는 특보 확인 못 함, 사유에 관측 지연 유지", () => {
     const view = deriveBeachView(
-      beach("b0003"),
+      beach("b0272"),
       source("2026-10-17T05:30:00Z", { live: false }),
     );
     expect(view).toMatchObject({
@@ -991,11 +994,11 @@ describe("B5 원래 판단불가였던 해변의 사유 (Claude 리뷰)", () => 
   });
 
   it("사유가 없거나 모르는 code면 일반 단어('확인 못 함')를 배지 뒤에 겹쳐 붙이지 않음", () => {
-    const statuses = withStatus("b0003", (s) => {
+    const statuses = withStatus("b0272", (s) => {
       s.reasons = [{ code: "new_reason" } as unknown as (typeof s.reasons)[0]];
     });
     const view = deriveBeachView(
-      beach("b0003"),
+      beach("b0272"),
       source("2026-10-17T05:30:00Z", { live: false }, statuses),
     );
     expect(view).toMatchObject({ reasons: [{ kind: "warning_unknown" }] });
