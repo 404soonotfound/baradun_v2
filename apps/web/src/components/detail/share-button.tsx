@@ -126,7 +126,6 @@ export function ShareButton({
                   readOnly
                   value={url}
                   onFocus={(event) => event.currentTarget.select()}
-                  aria-invalid={copyFailed || undefined}
                   aria-describedby={copyFailed ? errorId : undefined}
                   className="h-touch w-full rounded-input border border-border-strong bg-bg-subtle px-3 text-body-s text-text-default"
                 />
