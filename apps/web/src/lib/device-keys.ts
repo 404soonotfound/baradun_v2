@@ -5,5 +5,4 @@ export const DEVICE_KEYS = {
   favorites: "baradun:favorites", // 즐겨찾기 해변 id
   recent: "baradun:recent", // 최근 본 해변 id
   recentSearch: "baradun:recent-search", // 최근 검색어
-  favoriteSeen: "baradun:favorite-seen", // 즐겨찾기 지난 방문 때 본 특보(변경 표시 비교용, BRD-35)
 } as const;

@@ -519,11 +519,6 @@
       "remove": "Remove {name} from recently viewed",
       "removed": "Removed from recently viewed",
       "undo": "Undo"
-    },
-    "change": {
-      "issued": "Since your last visit: {warning} issued · {time}",
-      "issuedNoTime": "Since your last visit: {warning} issued",
-      "unknown": "Change not checked"
     }
   },
   "settings": {
@@ -581,7 +576,7 @@
     },
     "reset": {
       "title": "Clear device data?",
-      "body": "This clears favorites, recently viewed beaches, past visit records, recent searches, default region, chosen activity, explore view, first-run records and unsent feedback. This can't be undone.",
+      "body": "This clears favorites, recently viewed beaches, recent searches, default region, chosen activity, explore view, first-run records and unsent feedback. This can't be undone.",
       "keep": "Theme, motion, language and location settings, and the last sea information received, stay as they are.",
       "permission": "This site can't clear your browser's location permission. To change it, use your browser settings.",
       "confirm": "Clear",
@@ -659,7 +654,7 @@
       "locationTitle": "Location",
       "locationBody": "Used only to calculate distances on your device when finding nearby beaches. Never sent to a server or stored, and you can turn it off in Settings.",
       "deviceTitle": "What's saved on your device",
-      "deviceBody": "Favorites, recently viewed beaches, past visit warning records, recent searches, default region, chosen activity, explore view, first-run records, unsent feedback (type and text, up to 7 days), display settings (theme, motion, language), the location setting and the last sea information received are saved only in this device's browser. There's no login and nothing is sent to a server. Everything except display settings, the location setting and the last sea information can be cleared in Settings › Reset device data.",
+      "deviceBody": "Favorites, recently viewed beaches, recent searches, default region, chosen activity, explore view, first-run records, unsent feedback (type and text, up to 7 days), display settings (theme, motion, language), the location setting and the last sea information received are saved only in this device's browser. There's no login and nothing is sent to a server. Everything except display settings, the location setting and the last sea information can be cleared in Settings › Reset device data.",
       "inquiryTitle": "Data inquiry",
       "inquiryBody": "Feedback is kept for 90 days and photos for 30 days, then deleted automatically. Email is collected only if you leave it, and deleted as soon as handling is done (within 90 days at the latest). Photo location data is removed on your device before sending.",
       "inquiryNoDeadline": "We don't promise a reply deadline."

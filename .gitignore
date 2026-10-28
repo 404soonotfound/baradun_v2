@@ -46,6 +46,8 @@ yarn-error.log*
 .env
 .env.*
 !.env.example
+# 개발 서버용 공개 사이트 주소만 둠(비밀값 금지, BRD-102)
+!apps/web/.env.development
 
 .docs
 
