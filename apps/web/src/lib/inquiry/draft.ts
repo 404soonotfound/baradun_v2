@@ -99,7 +99,10 @@ export function createDraftStore(
     }
     let raw: string | null;
     try {
-      raw = getStorage()?.getItem(DRAFT_STORAGE_KEY) ?? null;
+      const target = getStorage();
+      // 저장소를 꺼낼 수 없음(사생활 보호 모드 등) → 이번 방문 동안 메모리
+      if (target === null) return memory;
+      raw = target.getItem(DRAFT_STORAGE_KEY);
     } catch {
       return memory;
     }
@@ -127,7 +130,9 @@ export function createDraftStore(
     };
     memory = next;
     try {
-      getStorage()?.setItem(DRAFT_STORAGE_KEY, JSON.stringify(next));
+      const target = getStorage();
+      if (target === null) throw new Error("no storage");
+      target.setItem(DRAFT_STORAGE_KEY, JSON.stringify(next));
       writeFailed = false;
     } catch {
       writeFailed = true;

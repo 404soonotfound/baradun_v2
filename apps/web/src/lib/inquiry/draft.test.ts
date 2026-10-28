@@ -127,6 +127,20 @@ describe("createDraftStore", () => {
     expect(store.read()).toBeNull();
   });
 
+  it("저장소를 꺼낼 수조차 없으면(null) 메모리 값으로 입력을 이어감", () => {
+    const store = createDraftStore(
+      () => null,
+      () => NOW,
+    );
+    expect(store.read()).toBeNull();
+    store.save("mismatch", "파");
+    expect(store.read()).toMatchObject({ kind: "mismatch", message: "파" });
+    store.save("mismatch", "파고");
+    expect(store.read()?.message).toBe("파고");
+    store.clear();
+    expect(store.read()).toBeNull();
+  });
+
   it("키 이름은 기기 데이터 초기화와 같은 저장소 키", () => {
     expect(DRAFT_STORAGE_KEY).toBe("baradun:inquiry-draft");
   });
