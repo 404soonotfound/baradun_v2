@@ -1323,3 +1323,173 @@ describe("지원 밖 버전 둘이 번갈아 옴 (Claude 리뷰)", () => {
     expect(session.data.get("baradun:schema-reload")).toBe("2,3");
   });
 });
+
+// 서비스 워커로 오프라인에서도 앱을 새로 열 수 있음(BRD-42). 마지막 manifest가 지난 값을 숨기는 상태였으면
+// 다음 정상 manifest를 받기 전에는 저장된 값을 꺼내지 않음(9.1, 점검표 4)
+describe("지난 값을 숨기는 상태를 기기에 기억 (BRD-42)", () => {
+  const nextVersion = {
+    snapshotVersion: "20991231T000000Z",
+    files: {
+      ...manifestExample.files,
+      status: "/data/20991231T000000Z/status.json",
+    },
+  };
+  const maintenance = {
+    ...manifestExample,
+    ...nextVersion,
+    maintenance: { active: true, until: null },
+  };
+
+  // 값을 받은 뒤 서버가 manifest를 바꾸고, 같은 기기에서 오프라인으로 새로 엶
+  async function reopenOffline(manifest: unknown, webBuild = 1) {
+    const storage = memoryStorage();
+    const online = setup({ storage });
+    online.store.start();
+    await online.store.refresh();
+    online.server.manifest = manifest;
+    await online.store.refresh();
+    await online.store.refresh(); // 지원 밖 형식: 자동 새로고침 1회 뒤
+    online.store.stop();
+
+    const offline = setup({ storage, webBuild });
+    offline.server.down = true;
+    offline.store.start();
+    await offline.store.refresh();
+    return { online, offline, storage };
+  }
+
+  it("점검 중이었으면 오프라인으로 새로 열어도 점검 상태, 저장된 값을 꺼내지 않음", async () => {
+    const { offline } = await reopenOffline(maintenance);
+    expect(offline.store.getState()).toMatchObject({
+      phase: "maintenance",
+      statuses: null,
+      live: false,
+    });
+    // 점검 화면의 끝나는 시각을 쓰도록 manifest는 둠
+    expect(offline.store.getState().manifest?.maintenance.active).toBe(true);
+    expect(
+      deriveBeachView({ id: "b0002", hidden: false }, offline.store.getState()),
+    ).toMatchObject({ category: "undetermined" });
+  });
+
+  it("강제 업데이트였으면 같은 빌드로 새로 열어도 강제 업데이트", async () => {
+    const { offline } = await reopenOffline({
+      ...manifestExample,
+      ...nextVersion,
+      minWebBuild: 2,
+    });
+    expect(offline.store.getState()).toMatchObject({
+      phase: "update_required",
+      statuses: null,
+    });
+  });
+
+  it("새 빌드(minWebBuild 이상)로 열면 강제 업데이트 기억은 무시하고 저장된 값을 B5로", async () => {
+    const { offline } = await reopenOffline(
+      { ...manifestExample, ...nextVersion, minWebBuild: 2 },
+      2,
+    );
+    expect(offline.store.getState()).toMatchObject({
+      phase: "ready",
+      live: false,
+    });
+    expect(offline.store.getState().statuses).not.toBeNull();
+  });
+
+  it("지원 밖 형식이었으면 새로 열어도 지원 밖 형식 상태", async () => {
+    const { offline } = await reopenOffline({
+      ...manifestExample,
+      schemaVersion: 2,
+    });
+    expect(offline.store.getState()).toMatchObject({
+      phase: "schema_unsupported",
+      statuses: null,
+    });
+  });
+
+  it("점검이 끝난 manifest를 받으면 기억을 지움(status를 못 받아도)", async () => {
+    const { offline, storage } = await reopenOffline(maintenance);
+    offline.server.down = false;
+    offline.server.manifest = { ...manifestExample, ...nextVersion };
+    offline.server.statusDown = true;
+    await offline.store.refresh();
+    expect(storage.data.has("baradun:hidden-phase")).toBe(false);
+    // 지난 값은 B5로 돌아옴(발효 특보 배지 유지)
+    expect(offline.store.getState()).toMatchObject({
+      phase: "ready",
+      live: false,
+    });
+    expect(
+      deriveBeachView({ id: "b0002", hidden: false }, offline.store.getState()),
+    ).toMatchObject({ category: "unavailable" });
+
+    const again = setup({ storage });
+    again.server.down = true;
+    again.store.start();
+    await again.store.refresh();
+    expect(again.store.getState().phase).toBe("ready");
+  });
+
+  it("정상 status를 받으면 기억을 지움", async () => {
+    const { offline, storage } = await reopenOffline(maintenance);
+    offline.server.down = false;
+    offline.server.manifest = manifestExample;
+    await offline.store.refresh();
+    expect(offline.store.getState()).toMatchObject({
+      phase: "ready",
+      live: true,
+    });
+    expect(storage.data.has("baradun:hidden-phase")).toBe(false);
+  });
+
+  it("읽을 수 없거나 지금 해당하지 않는 기억은 무시하고 저장된 값을 B5로", async () => {
+    for (const record of [
+      "{not json",
+      JSON.stringify({ phase: "maintenance", manifest: { schemaVersion: 1 } }),
+      JSON.stringify({ phase: "maintenance", manifest: manifestExample }), // 점검 중 아님
+      JSON.stringify({ phase: "schema_unsupported", schemaVersion: 1 }), // 지원함
+      JSON.stringify({ phase: "schema_unsupported", schemaVersion: "2" }),
+      JSON.stringify({ phase: "ready" }),
+    ]) {
+      const storage = memoryStorage();
+      const online = setup({ storage });
+      online.store.start();
+      await online.store.refresh();
+      online.store.stop();
+      storage.setItem("baradun:hidden-phase", record);
+
+      const offline = setup({ storage });
+      offline.server.down = true;
+      offline.store.start();
+      await offline.store.refresh();
+      expect(offline.store.getState(), record).toMatchObject({
+        phase: "ready",
+        live: false,
+      });
+    }
+  });
+
+  it("기기 저장을 못 써도 조회는 그대로(기억만 못 함)", async () => {
+    const throwing: KeyValueStorage = {
+      getItem: () => {
+        throw new Error("blocked");
+      },
+      setItem: () => {
+        throw new Error("blocked");
+      },
+      removeItem: () => {
+        throw new Error("blocked");
+      },
+    };
+    const { store, server } = setup({
+      storage: throwing as ReturnType<typeof memoryStorage>,
+    });
+    server.manifest = maintenance;
+    store.start();
+    await store.refresh();
+    expect(store.getState().phase).toBe("maintenance");
+    server.manifest = { ...manifestExample, ...nextVersion };
+    await store.refresh();
+    expect(store.getState()).toMatchObject({ phase: "ready", live: true });
+  });
+});

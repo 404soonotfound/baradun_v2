@@ -13,6 +13,8 @@ export async function generateMetadata(): Promise<Metadata> {
     metadataBase: SITE_URL, // hreflang 절대 주소의 기준
     title: { default: t("siteName"), template: `%s · ${t("siteName")}` },
     description: t("description"),
+    // 홈 화면에 추가한 iOS 앱을 standalone으로 염(BRD-42). 안전 영역은 app-shell의 standalone: 클래스가 비움
+    appleWebApp: { capable: true, title: t("siteName") },
   };
 }
 

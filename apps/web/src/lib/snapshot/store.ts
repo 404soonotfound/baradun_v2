@@ -40,6 +40,15 @@ export const REQUEST_TIMEOUT_MS = 10_000;
 const LAST_SNAPSHOT_KEY = "baradun:last-snapshot";
 // 지원 밖 schemaVersion일 때 자동 새로고침을 이미 했는지(이 브라우저 탭 안에서만)
 const SCHEMA_RELOAD_KEY = "baradun:schema-reload";
+// 마지막으로 받은 manifest가 지난 값을 숨기는 상태(점검·강제 업데이트·지원 밖 형식)였음.
+// 서비스 워커로 오프라인에서도 앱을 새로 열 수 있어(BRD-42), 다음 정상 manifest를 받기 전에는
+// 기기에 저장된 마지막 값을 꺼내지 않고 그 상태를 이어 보여줌(9.1, hidesLastValues)
+const HIDDEN_PHASE_KEY = "baradun:hidden-phase";
+
+type HiddenPhase = "schema_unsupported" | "maintenance" | "update_required";
+type HiddenRecord =
+  | { phase: "maintenance" | "update_required"; manifest: ManifestFile }
+  | { phase: "schema_unsupported"; schemaVersion: number };
 
 export interface SnapshotState extends ViewSource {
   manifest: ManifestFile | null;
@@ -244,6 +253,45 @@ export function createSnapshotStore(deps: SnapshotDeps): SnapshotStore {
     } else void refresh();
   }
 
+  function rememberHidden(record: HiddenRecord) {
+    safe(() => deps.storage?.setItem(HIDDEN_PHASE_KEY, JSON.stringify(record)));
+  }
+
+  function forgetHidden() {
+    safe(() => deps.storage?.removeItem(HIDDEN_PHASE_KEY));
+  }
+
+  // 기기에 남은 '지난 값을 숨기는 상태'. 이 화면 빌드에 아직 해당하는 것만(새 빌드가 받아들이는 버전이면 무시)
+  // 읽을 수 없는 기록은 숨김 상태로 보지 않음(저장된 값의 B5 규칙은 그대로 적용)
+  function readHidden(): {
+    phase: HiddenPhase;
+    manifest: ManifestFile | null;
+  } | null {
+    const stored = safe(() =>
+      JSON.parse(deps.storage?.getItem(HIDDEN_PHASE_KEY) ?? "null"),
+    );
+    if (!isRecord(stored)) return null;
+    if (stored.phase === "schema_unsupported") {
+      const version = stored.schemaVersion;
+      return Number.isInteger(version) &&
+        !SUPPORTED_SCHEMA_VERSIONS.includes(version as number)
+        ? { phase: "schema_unsupported", manifest: null }
+        : null;
+    }
+    const manifest = readManifest(stored.manifest);
+    if (!manifest || manifest === "unsupported") return null;
+    if (stored.phase === "maintenance" && manifest.maintenance.active) {
+      return { phase: "maintenance", manifest };
+    }
+    if (
+      stored.phase === "update_required" &&
+      manifest.minWebBuild > deps.webBuild
+    ) {
+      return { phase: "update_required", manifest };
+    }
+    return null;
+  }
+
   // 기기에 저장해 둔 마지막 값. 없거나 읽을 수 없으면 null
   function readStoredSnapshot() {
     const stored = safe(() =>
@@ -262,6 +310,17 @@ export function createSnapshotStore(deps: SnapshotDeps): SnapshotStore {
   function showStored(evenIfHidden = false) {
     if (state.statuses) return;
     if (!evenIfHidden && hidesLastValues(state.phase)) return;
+    // 처음 열 때: 마지막 manifest가 지난 값을 숨기는 상태였으면 그 상태로 시작(응답이 오면 run이 바꿈)
+    const hidden = !evenIfHidden && state.phase === "loading" && readHidden();
+    if (hidden) {
+      set({
+        phase: hidden.phase,
+        manifest: hidden.manifest,
+        live: false,
+        nowMs: now(DEVICE_CLOCK, hidden.manifest),
+      });
+      return;
+    }
     const last = lastLive ?? readStoredSnapshot();
     if (!last) return;
     const { manifest, statuses } = last;
@@ -282,6 +341,7 @@ export function createSnapshotStore(deps: SnapshotDeps): SnapshotStore {
   // → 점검 화면·강제 업데이트·지원 밖 형식 배너를 풀고 B5로(마지막 발효 특보 배지가 사라지지 않게)
   function fail(fresh?: Clock, manifestOk = false) {
     const clock = fresh ?? state.clock;
+    if (manifestOk) forgetHidden();
     const keep = !manifestOk && hidesLastValues(state.phase);
     // 점검·강제 업데이트 화면을 유지하는 동안은 저장된 값도 꺼내지 않음(상태에 지난 값을 들고 있지 않게)
     if (!keep) showStored(true);
@@ -314,6 +374,7 @@ export function createSnapshotStore(deps: SnapshotDeps): SnapshotStore {
   // 지원 밖 schemaVersion: 새 화면 파일이 나왔을 수 있어 버전마다 한 번 새로고침, 그래도 안 되면 판단불가 배너
   function unsupported(version: number) {
     if (reloadOnce(SCHEMA_RELOAD_KEY, String(version))) return;
+    rememberHidden({ phase: "schema_unsupported", schemaVersion: version });
     set({ phase: "schema_unsupported", live: false, nowMs: now() });
   }
 
@@ -430,6 +491,7 @@ export function createSnapshotStore(deps: SnapshotDeps): SnapshotStore {
       );
     }
 
+    forgetHidden();
     set({
       phase: "ready",
       manifest,
@@ -447,6 +509,7 @@ export function createSnapshotStore(deps: SnapshotDeps): SnapshotStore {
     manifest: ManifestFile,
     clock: Clock,
   ) {
+    rememberHidden({ phase, manifest });
     set({
       phase,
       manifest,
