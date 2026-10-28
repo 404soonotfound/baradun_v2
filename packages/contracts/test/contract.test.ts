@@ -64,7 +64,8 @@ describe("개발 상태 예시는 실제 해변 식별자와 맞음", () => {
     id: string;
     slug: string;
     name: unknown;
-    warningZones: unknown;
+    region: { sido: { ko: string } };
+    warningZones: { sea: string; land?: string };
     stations: Record<string, { id: string } | null> & {
       waveHeight: { id: string } | null;
     };
@@ -78,7 +79,7 @@ describe("개발 상태 예시는 실제 해변 식별자와 맞음", () => {
       {
         category: string;
         reasons: Array<{ code: string }>;
-        warning: { items: WarningItem[] };
+        warning: { state: string; items: WarningItem[] };
         observation: {
           metrics: {
             waveHeight: { value: number | null; observedAt: string | null };
@@ -138,6 +139,42 @@ describe("개발 상태 예시는 실제 해변 식별자와 맞음", () => {
     for (const [id, beach] of Object.entries(status.beaches)) {
       for (const item of beach.warning.items) {
         expect(listed.has(key(item)), `${id} ${key(item)}`).toBe(true);
+      }
+    }
+  });
+
+  it("해변 특보는 그 해변의 특보구역 것이고, 특보를 없음으로 확인한 해변의 구역에는 발효 특보가 없음", () => {
+    const nationwide = read("../examples/valid/nationwide-warnings.json") as {
+      items: WarningItem[];
+    };
+    // 구역 코드 없는 특보는 지진해일만(계약 6.3). 시·도 이름으로 해변과 맞춤
+    // 카탈로그는 줄인 이름(경북)이라 공식 이름(경상북도)으로 시작하는 구역도 같은 시·도로 봄
+    const SIDO_FULL: Record<string, string> = {
+      충남: "충청남도",
+      전북: "전라북도",
+      전남: "전라남도",
+      경북: "경상북도",
+      경남: "경상남도",
+    };
+    const covers = (beach: CatalogBeach, item: WarningItem) => {
+      const sido = beach.region.sido.ko;
+      return item.zoneCode === null
+        ? [sido, SIDO_FULL[sido]].some(
+            (name) => name !== undefined && item.zoneName.startsWith(name),
+          )
+        : item.zoneCode === beach.warningZones.sea ||
+            item.zoneCode === beach.warningZones.land;
+    };
+
+    for (const beach of beaches.beaches) {
+      const published = status.beaches[beach.id]!;
+      for (const item of published.warning.items) {
+        expect(covers(beach, item), `${beach.id} ${item.zoneName}`).toBe(true);
+      }
+      // 특보 없음 해변뿐 아니라 특보는 '없음'으로 확인한 판단불가(관측 지연) 해변도 같이 봄
+      if (published.warning.state === "none") {
+        const active = nationwide.items.filter((item) => covers(beach, item));
+        expect(active, beach.id).toEqual([]);
       }
     }
   });
