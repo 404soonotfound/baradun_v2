@@ -58,7 +58,10 @@
       "yellow_dust": "황사",
       "tropical_night": "열대야"
     },
-    "nearbyUnknown": "기타 {level}"
+    "nearbyUnknown": "기타 {level}",
+    "zoneOriginal": "기상청 발표 원문",
+    "zoneLine": "<zone></zone> {name}",
+    "zoneOriginalInline": "<zone></zone> <note>(기상청 발표 원문)</note>"
   },
   "observation": {
     "none": "가까운 관측 없음",
@@ -384,8 +387,7 @@
     "published": "발표",
     "effective": "발효",
     "original": "기상청 원문 보기",
-    "newWindow": "새 창",
-    "zoneOriginal": "기상청 발표 원문"
+    "newWindow": "새 창"
   },
   "detailSheet": {
     "title": "무엇을 확인했나요",

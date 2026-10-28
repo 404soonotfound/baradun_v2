@@ -58,7 +58,10 @@
       "yellow_dust": "Yellow dust",
       "tropical_night": "Tropical night"
     },
-    "nearbyUnknown": "Other {level}"
+    "nearbyUnknown": "Other {level}",
+    "zoneOriginal": "Original text from KMA (Korean)",
+    "zoneLine": "{name} · <zone></zone>",
+    "zoneOriginalInline": "<zone></zone> <note>(Original text from KMA (Korean))</note>"
   },
   "observation": {
     "none": "No nearby observation",
@@ -384,8 +387,7 @@
     "published": "Issued",
     "effective": "In effect from",
     "original": "View KMA original (Korean page)",
-    "newWindow": "opens in a new window",
-    "zoneOriginal": "As issued by KMA (Korean)"
+    "newWindow": "opens in a new window"
   },
   "detailSheet": {
     "title": "What we checked",

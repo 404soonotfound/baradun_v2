@@ -17,6 +17,7 @@ import { shownMetric } from "@/components/detail/sea-card";
 import { ReasonBadge } from "@/components/reason-badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { ZoneName } from "@/components/zone-name";
 import { joinMeta } from "@/lib/meta-join";
 import { kstStamp } from "@/lib/snapshot/clock";
 import {
@@ -26,10 +27,10 @@ import {
 } from "@/lib/snapshot/detail";
 import { useBadgeText } from "@/lib/snapshot/use-badge-text";
 import { getSnapshotState, refreshSnapshot } from "@/lib/snapshot/use-snapshot";
-import type { Locale } from "@/lib/i18n";
 import { useMetaText } from "@/lib/snapshot/use-meta-text";
+import type { Locale } from "@/lib/i18n";
+import { zoneScopeText } from "@/lib/zone-name";
 import { useTimeText } from "@/lib/snapshot/use-time-text";
-import { zoneNameText } from "@/lib/zone-name";
 import {
   deriveBeachView,
   type BadgeLabel,
@@ -70,6 +71,7 @@ export function VerdictCard({
   const { badgeText, confirmedUntilText } = useBadgeText();
   const { measuredAgoText, issuedAtText } = useTimeText();
   const { agencyText } = useMetaText();
+  const locale = useLocale() as Locale;
   const titleId = useId();
 
   if (view.kind !== "ready") {
@@ -104,6 +106,28 @@ export function VerdictCard({
     }
   }
 
+  // ③-1 근거 줄의 범위: 게시 값은 한국어 원문뿐(계약 reasons[].scope)
+  // 특보·특보 확인 못 함(해변 바다 구역 이름)은 구역 번역표(없으면 원문 + 원문 표시), 관측 지연은 이 해변 측정소의 같은 언어 이름(못 찾으면 원문)
+  function scopeText(basis: Basis): string | null {
+    if (basis.scope === null || locale === "ko") return basis.scope;
+    if (basis.code === "warning" || basis.code === "warning_unknown") {
+      const zone = zoneScopeText(basis.scope, locale);
+      return zone.untranslated
+        ? t.markup("warning.zoneOriginalInline", {
+            zone: () => zone.text,
+            note: (chunks) => chunks,
+          })
+        : zone.text;
+    }
+    if (basis.code === "observation_delayed") {
+      const station = Object.values(stations).find(
+        (item) => item?.name.ko === basis.scope,
+      );
+      return station ? station.name[locale] : basis.scope;
+    }
+    return basis.scope;
+  }
+
   // ③ 근거 줄. B5면 'HH:MM 확인 · 이후 확인 못 함'만, '특보 없음'은 범위·기관·확인 시각이 모두 있을 때만
   function basisText(basis: Basis): string | null {
     let time: string | null = null;
@@ -114,7 +138,7 @@ export function VerdictCard({
       time = confirmedUntilText(basis.at, nowMs);
     else if (stamp) time = t("detail.verdict.basisObserved", { time: stamp });
     return joinMeta([
-      basis.scope,
+      scopeText(basis),
       basis.source && agencyText(basis.source),
       time,
     ]);
@@ -313,7 +337,6 @@ function ReasonBox({
   nowMs: number;
   onOpenWarning: ((item: WarningItem) => void) | undefined;
 }) {
-  const locale = useLocale() as Locale;
   const nameId = useId();
   const t = useTranslations("detail.verdict");
   const { badgeText } = useBadgeText();
@@ -366,7 +389,9 @@ function ReasonBox({
             </p>
             <dl className="mt-1 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5">
               <dt className="text-text-muted">{t("zone")}</dt>
-              <dd>{zoneNameText(item, locale).text}</dd>
+              <dd>
+                <ZoneName zone={item} />
+              </dd>
               <dt className="text-text-muted">{t("effectiveFrom")}</dt>
               <dd>{kstStamp(item.effectiveFrom, nowMs) ?? "–"}</dd>
               <dt className="text-text-muted">{t("affects")}</dt>
