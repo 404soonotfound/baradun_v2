@@ -49,6 +49,18 @@ export function setSortChoice(choice: SortChoice) {
   listeners.forEach((listener) => listener());
 }
 
+// 기기 데이터 초기화(BRD-36): 저장값을 지우고 기본(상태별)으로
+export function clearSortChoice() {
+  memory = DEFAULT_SORT;
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+    writeFailed = false;
+  } catch {
+    writeFailed = true;
+  }
+  listeners.forEach((listener) => listener());
+}
+
 // 서버(정적 HTML)는 저장 값을 몰라 기본값, 브라우저에서는 저장된 값
 export function useSortChoice(): SortChoice {
   return useSyncExternalStore(subscribe, read, () => DEFAULT_SORT);
