@@ -23,6 +23,7 @@ function beach(id: string, sido: string, sigungu: string): BeachSummary {
     names: [id, id],
     aliases: [],
     regionNames: [],
+    photo: null,
     stations: {
       waveHeight: null,
       wavePeriod: null,

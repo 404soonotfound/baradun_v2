@@ -8,6 +8,9 @@ import { useMemo, useRef, useState } from "react";
 import { BeachRow } from "@/components/beach-row";
 import { ExploreFilters } from "@/components/explore/explore-filters";
 import { LocationOffBanner } from "@/components/home/location-off-banner";
+import { BeachMarkers, type MapMarker } from "@/components/map/beach-markers";
+import { MapCard } from "@/components/map/map-card";
+import { MapLegend } from "@/components/map/map-legend";
 import { MapView } from "@/components/map/map-view";
 import { RegionSheet } from "@/components/region/region-sheet";
 import { SituationBanner } from "@/components/situation-banner";
@@ -32,6 +35,12 @@ import {
   type SortChoice,
 } from "@/lib/explore";
 import { setSortChoice, useSortChoice } from "@/lib/explore-sort";
+import {
+  setExploreView,
+  useExploreView,
+  type ExploreView,
+} from "@/lib/explore-view";
+import { cn } from "@/lib/cn";
 import { localizedPath, type Locale } from "@/lib/i18n";
 import { useUserLocation } from "@/lib/location";
 import { boundsOf } from "@/lib/map/bounds";
@@ -57,6 +66,9 @@ import { useSheet } from "@/lib/use-sheet";
 // 위에서 아래: 제목 → 검색 입구 → 활동·지역 칩 → 상황 배너(하나) → 보기 전환 → "전체 n곳 · 시각" → 목록
 // 목록: 상태별(특보 없음 → 이용불가 → 판단불가 묶음) 또는 가까운 순/이름 순 한 목록. 순위·점수·추천 표시 없음
 // 분류는 스냅샷 게시값 그대로(G1). PC(lg)는 왼쪽 448px 목록 열 + 오른쪽 지도(BRD-65, 탐색에 들어오면 불러옴)
+// 지도(BRD-30 · EXP-M·D-EXP): 모바일은 [목록 | 지도]로 바꿔 봄(기기 저장), PC는 목록과 지도를 함께
+//   마커(상태 아이콘 + 짧은 이름) → 아래 카드가 그 해변으로 바뀜 → 카드를 누르면 상세. PC 목록 행을 가리키면 마커 강조
+//   지도 없이도 같은 해변·상태를 목록에서 키보드로 모두 볼 수 있음(마커는 Tab에서 뺌)
 
 export function ExploreScreen({
   locale,
@@ -74,6 +86,7 @@ export function ExploreScreen({
   const snapshot = useSnapshot();
   const online = useOnline();
   const sortChoice = useSortChoice();
+  const view = useExploreView();
   const { badgeText } = useBadgeText();
   const { rowMeta, rowDetail } = useRowText();
   const titleRef = useRef<HTMLHeadingElement>(null);
@@ -82,6 +95,9 @@ export function ExploreScreen({
   const [offBannerClosed, setOffBannerClosed] = useState(false);
   // 시·군 시트로 열어 줄 시·도(칩에서 누른 것). 저장 값과 별개
   const [pickSido, setPickSido] = useState<string | null>(null);
+  // 지도에서 고른 해변(카드)과 PC 목록에서 가리킨 해변(마커 강조)
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [highlightedId, setHighlightedId] = useState<string | null>(null);
 
   // 지역은 홈 기본 지역과 같은 저장 값(10/27 결정). 목록에 없어진 지역이면 전국으로 봄
   const region = validRegion(useRegion(), beaches);
@@ -111,6 +127,25 @@ export function ExploreScreen({
     [shown],
   );
   const loading = isLoading(items);
+  // 지도 마커: 상태를 받은 해변만(첫 응답 전에는 마커를 미리 그리지 않음)
+  const markers = useMemo<MapMarker[]>(
+    () =>
+      items.flatMap((item) =>
+        item.view.kind === "ready"
+          ? [
+              {
+                id: item.id,
+                name: item.name,
+                coords: item.coords,
+                badge: item.view.badge,
+              },
+            ]
+          : [],
+      ),
+    [items],
+  );
+  // 고른 해변이 거르기로 빠지면 카드도 닫힘
+  const selectedItem = items.find((item) => item.id === selectedId) ?? null;
   const statusGroups = useMemo(
     () => (mode === "status" && !loading ? groupItems(items, intlLocale) : []),
     [mode, loading, items, intlLocale],
@@ -184,6 +219,13 @@ export function ExploreScreen({
           wave={view.metrics.waveHeight}
           status={view.badge}
           detail={rowDetail(view, nowMs)}
+          // PC 지도에서 고른 해변은 행도 강조(파란 줄 + 연한 바탕)
+          highlight={item.id === selectedId}
+          onHighlight={(on) =>
+            setHighlightedId((current) =>
+              on ? item.id : current === item.id ? null : current,
+            )
+          }
         />
       </li>
     );
@@ -228,6 +270,16 @@ export function ExploreScreen({
   const flatHasClear = flatClearViews.some(
     (view) => !view.stale && view.badge.kind === "clear",
   );
+
+  // 지도에 특보 없음 마커가 있으면 범례 아래에 범위·기관·가장 이른 확인 시각(점검표 5)
+  const readyViews = items.flatMap((item) =>
+    item.view.kind === "ready" ? [item.view] : [],
+  );
+  const mapClearScope = readyViews.some(
+    (item) => !item.stale && item.badge.kind === "clear",
+  )
+    ? clearScope(clearCheckedAt(readyViews))
+    : null;
 
   const countText = t("explore.count", { count: items.length });
   const secondLabel = coords ? t("explore.sort.near") : t("explore.sort.name");
@@ -299,15 +351,30 @@ export function ExploreScreen({
           />
         )}
 
-        <ViewToggle<SortChoice>
-          label={t("explore.sortLabel")}
-          options={[
-            { value: "status", label: t("explore.sort.status") },
-            { value: "second", label: secondLabel },
-          ]}
-          value={sortChoice}
-          onChange={setSortChoice}
-        />
+        <div className="flex gap-2">
+          {/* 정렬은 목록에만. 모바일 지도 보기에서는 숨김(PC는 목록이 늘 보임) */}
+          <ViewToggle<SortChoice>
+            label={t("explore.sortLabel")}
+            className={cn("flex-1", view === "map" && "hidden lg:flex")}
+            options={[
+              { value: "status", label: t("explore.sort.status") },
+              { value: "second", label: secondLabel },
+            ]}
+            value={sortChoice}
+            onChange={setSortChoice}
+          />
+          {/* [목록 | 지도]는 모바일만(PC는 둘 다 보임). 지도 보기면 오른쪽으로 붙임 */}
+          <ViewToggle<ExploreView>
+            label={t("explore.view.label")}
+            className="ml-auto w-[120px] shrink-0 lg:hidden"
+            options={[
+              { value: "list", label: t("explore.view.list") },
+              { value: "map", label: t("explore.view.map") },
+            ]}
+            value={view}
+            onChange={setExploreView}
+          />
+        </div>
 
         {!loading && (
           <div className="flex flex-col gap-0.5 text-caption text-text-muted">
@@ -326,44 +393,47 @@ export function ExploreScreen({
           </div>
         )}
 
-        {loading ? (
-          <BeachRowSkeleton label={t("explore.loading")} />
-        ) : items.length === 0 ? (
-          <EmptyState
-            icon={<SearchX size={26} />}
-            title={t("explore.empty.title")}
-            description={t("explore.empty.body")}
-            action={
-              region !== null ? (
-                <Button variant="secondary" onClick={() => setRegion(null)}>
-                  {t("explore.empty.action")}
-                </Button>
-              ) : undefined
-            }
-          />
-        ) : mode === "status" ? (
-          <div className="flex flex-col gap-5">
-            {statusGroups.map(renderGroup)}
-            {/* 특보 없음 묶음이 없으면(이용불가·판단불가만, 오프라인 포함) 묶음 안내가 없으니 목록 아래에 한 번 둠 */}
-            {!statusGroups.some((group) => group.category === "clear") && (
-              <p className="text-caption text-text-muted">
-                {t("safety.finalCall")}
-              </p>
-            )}
-          </div>
-        ) : (
-          <div className="flex flex-col gap-2">
-            <ul className="divide-y divide-border-default overflow-hidden rounded-card bg-bg-surface shadow-card">
-              {flatItems.map(renderRow)}
-            </ul>
-            <div className="flex flex-col gap-0.5 text-caption text-text-muted">
-              {flatHasClear && (
-                <p>{clearScope(clearCheckedAt(flatClearViews))}</p>
+        {/* 모바일 지도 보기에서는 목록을 숨김(PC는 늘 보임) */}
+        <div className={cn(view === "map" && "hidden lg:block")}>
+          {loading ? (
+            <BeachRowSkeleton label={t("explore.loading")} />
+          ) : items.length === 0 ? (
+            <EmptyState
+              icon={<SearchX size={26} />}
+              title={t("explore.empty.title")}
+              description={t("explore.empty.body")}
+              action={
+                region !== null ? (
+                  <Button variant="secondary" onClick={() => setRegion(null)}>
+                    {t("explore.empty.action")}
+                  </Button>
+                ) : undefined
+              }
+            />
+          ) : mode === "status" ? (
+            <div className="flex flex-col gap-5">
+              {statusGroups.map(renderGroup)}
+              {/* 특보 없음 묶음이 없으면(이용불가·판단불가만, 오프라인 포함) 묶음 안내가 없으니 목록 아래에 한 번 둠 */}
+              {!statusGroups.some((group) => group.category === "clear") && (
+                <p className="text-caption text-text-muted">
+                  {t("safety.finalCall")}
+                </p>
               )}
-              <p>{t("safety.finalCall")}</p>
             </div>
-          </div>
-        )}
+          ) : (
+            <div className="flex flex-col gap-2">
+              <ul className="divide-y divide-border-default overflow-hidden rounded-card bg-bg-surface shadow-card">
+                {flatItems.map(renderRow)}
+              </ul>
+              <div className="flex flex-col gap-0.5 text-caption text-text-muted">
+                {flatHasClear && (
+                  <p>{clearScope(clearCheckedAt(flatClearViews))}</p>
+                )}
+                <p>{t("safety.finalCall")}</p>
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* 시·군 고르기 시트. 시·도 칩을 누르면 그 시·도의 시·군 단계로 열림 */}
         <RegionSheet
@@ -379,9 +449,47 @@ export function ExploreScreen({
         />
       </div>
 
-      {/* PC 지도 열(D-EXP). 모바일에서는 숨겨 두어 불러오지 않음. 지도가 실패해도 왼쪽 목록은 그대로 */}
-      <div className="hidden lg:sticky lg:top-[88px] lg:block lg:h-[calc(100dvh-112px)]">
-        <MapView locale={locale} bounds={mapBounds} className="h-full" />
+      {/* 지도(EXP-M·D-EXP). 모바일은 지도 보기에서만 보이고, 숨긴 동안은 불러오지 않음(MapView가 보일 때 시작)
+          PC는 오른쪽 열에 늘 보임. 지도가 실패해도 목록은 그대로 */}
+      <div
+        className={cn(
+          view === "map" ? "mt-4 flex flex-col gap-3" : "hidden",
+          "lg:sticky lg:top-[88px] lg:mt-0 lg:block",
+        )}
+      >
+        <p className="sr-only">{t("map.listNote")}</p>
+        <MapView
+          locale={locale}
+          bounds={mapBounds}
+          className="h-[62dvh] min-h-[380px] lg:h-[calc(100dvh-112px)]"
+          onShowList={() => setExploreView("list")}
+          overlay={(api) => (
+            <>
+              <BeachMarkers
+                api={api}
+                markers={markers}
+                selectedId={selectedId}
+                highlightedId={highlightedId}
+                onSelect={setSelectedId}
+              />
+              {/* PC는 범례를 지도 왼쪽 위에, 모바일은 지도를 덜 가리게 지도 아래에 */}
+              <MapLegend
+                clearScope={mapClearScope}
+                className="absolute top-3 left-3 hidden max-w-[360px] lg:flex"
+              />
+              {selectedItem && (
+                <MapCard
+                  locale={locale}
+                  item={selectedItem}
+                  nowMs={nowMs}
+                  onClose={() => setSelectedId(null)}
+                  className="absolute inset-x-3 bottom-3 lg:right-auto lg:w-[380px]"
+                />
+              )}
+            </>
+          )}
+        />
+        <MapLegend clearScope={mapClearScope} className="lg:hidden" />
       </div>
     </div>
   );
