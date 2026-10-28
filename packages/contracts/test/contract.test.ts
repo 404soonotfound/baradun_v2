@@ -60,11 +60,17 @@ describe("개발 상태 예시는 실제 해변 식별자와 맞음", () => {
     zoneCode: string | null;
     zoneName: string;
   }
+  interface CatalogBeach {
+    id: string;
+    slug: string;
+    name: unknown;
+    warningZones: unknown;
+    stations: Record<string, { id: string } | null> & {
+      waveHeight: { id: string } | null;
+    };
+  }
   const beaches = read("../examples/valid/beaches.json") as {
-    beaches: Array<{
-      id: string;
-      stations: { waveHeight: { id: string } | null };
-    }>;
+    beaches: CatalogBeach[];
   };
   const status = read("../examples/valid/status.json") as {
     beaches: Record<
@@ -82,14 +88,29 @@ describe("개발 상태 예시는 실제 해변 식별자와 맞음", () => {
     >;
   };
 
-  it("상태가 있는 해변만 카탈로그 원본과 같은 메타데이터를 씀", () => {
+  it("상태가 있는 해변만 카탈로그 원본과 같은 해변·특보구역·측정소를 씀", () => {
     expect(Object.keys(status.beaches)).toEqual(
       beaches.beaches.map((beach) => beach.id),
     );
 
+    // 사진·거리처럼 데이터 재생성 때 바뀌는 값은 비교하지 않음. 판단에 쓰는 연결만 맞춤
+    const identity = (beach: CatalogBeach) => ({
+      id: beach.id,
+      slug: beach.slug,
+      name: beach.name,
+      warningZones: beach.warningZones,
+      stations: Object.fromEntries(
+        Object.entries(beach.stations).map(([key, station]) => [
+          key,
+          station?.id ?? null,
+        ]),
+      ),
+    });
     for (const beach of beaches.beaches) {
-      const catalog = read(`../../../data/beaches/${beach.id}.json`);
-      expect(beach).toEqual(catalog);
+      const catalog = read(
+        `../../../data/beaches/${beach.id}.json`,
+      ) as CatalogBeach;
+      expect(identity(beach)).toEqual(identity(catalog));
     }
   });
 
