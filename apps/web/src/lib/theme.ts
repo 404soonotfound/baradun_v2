@@ -43,6 +43,7 @@ function subscribe(onChange: () => void) {
 }
 
 // <html data-theme> 갱신. 시스템이면 속성을 지움(토큰 CSS가 기기 설정을 따름)
+// 브라우저 theme-color도 이 속성을 보고 바뀜(lib/display-init.ts 그리기 전 스크립트)
 function applyTheme(theme: Theme) {
   const html = document.documentElement;
   if (theme === "system") html.removeAttribute("data-theme");
