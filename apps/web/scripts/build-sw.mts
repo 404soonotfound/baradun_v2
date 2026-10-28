@@ -1,7 +1,8 @@
 // 서비스 워커 만들기 (BRD-42). next build 뒤(postbuild) out/sw.js를 씀
 // scripts/service-worker.js 앞에 이 빌드의 ID와 미리 저장할 경로 목록을 붙임 → 빌드마다 sw.js 내용이 달라져
-// 브라우저가 새 워커를 받음. 미리 저장: 두 언어 탭 화면 HTML + 이 빌드의 코드(_next/static/chunks·빌드 ID 폴더)
-// + 그 HTML이 미리 받는 글꼴. 다른 화면(상세·검색 등)·글꼴은 열 때 저장됨(service-worker.js)
+// 브라우저가 새 워커를 받음. 미리 저장: 두 언어 탭 화면 HTML 8개 + 앱 셸(이 빌드의 코드 _next/static/chunks·빌드 ID 폴더
+// + 그 HTML이 미리 받는 글꼴). 다른 화면(상세·검색 등)의 HTML은 열어도 저장하지 않음(결정 29). 나중에 받는 글꼴·지도 작업자
+// 파일만 열 때 저장됨(service-worker.js). 앱 아이콘은 화면을 그리는 데 쓰지 않고 설치 때 OS가 받아 두므로 미리 저장하지 않음
 // 실행: node scripts/build-sw.mts (Node 22.18 이상은 .mts를 그대로 실행, dev-data.mts와 같음)
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -10,7 +11,7 @@ import { fileURLToPath } from "node:url";
 const WEB = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 // 오프라인으로 새로 열 수 있어야 하는 화면(trailingSlash 주소): 하단 탭·상단 메뉴 화면(lib/nav.ts TABS와 같음, 테스트로 확인)
-// 홈("/"·"/en/")은 열어 본 적 없는 화면의 대신 화면이라 반드시 있어야 함
+// 홈("/"·"/en/")은 저장하지 않는 화면의 대신 화면이라 반드시 있어야 함. 워커는 이 목록의 화면 HTML만 저장함
 const TAB_PATHS = ["/", "/explore/", "/favorites/", "/settings/"];
 export const OFFLINE_PAGES = [
   ...TAB_PATHS,

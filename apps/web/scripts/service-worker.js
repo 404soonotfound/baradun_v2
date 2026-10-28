@@ -3,11 +3,14 @@
 // - 화면 파일(HTML·_next/static·vendor)만 저장함. 바다 정보(/data/**)·다른 출처(지도 타일 등)는 손대지 않음
 //   → 브라우저가 늘 네트워크로 받고, 못 받으면 store.ts가 기기에 둔 마지막 값을 B5 규칙(live: false)으로 보여줌
 // - HTML은 네트워크 먼저, 못 받을 때만 저장본. 저장본도 없으면 같은 언어 홈으로 보냄(오프라인 홈)
+// - HTML 저장본은 탭 화면 8개(SW_PRECACHE의 "/"로 끝나는 경로)만 둠. 상세·검색 등 그 밖의 화면은 열어도 저장하지 않음(결정 29)
 // - 빌드마다 캐시 이름이 다름. 새 워커는 기다리지 않고 바로 교체하고 옛 빌드 캐시를 지움
 // 고전 스크립트(import 없음)로 둠: 모듈 서비스 워커를 못 쓰는 브라우저가 있음
 
 const CACHE_PREFIX = "baradun-screen-";
 const CACHE_NAME = CACHE_PREFIX + SW_BUILD;
+// HTML을 저장해 두는 화면(탭 화면). 미리 저장 목록에서 화면 경로만 고름(precache()의 isPage와 같은 규칙)
+const SAVED_PAGES = new Set(SW_PRECACHE.filter((path) => path.endsWith("/")));
 // 응답이 멈춘 망(캡티브 포털 등)에서 HTML을 끝없이 기다리지 않게 함(store.ts REQUEST_TIMEOUT_MS와 같은 값)
 const PAGE_TIMEOUT_MS = 10000;
 
@@ -137,9 +140,14 @@ function fetchPage(request) {
   return Promise.race([pending, timeout]).finally(() => clearTimeout(timer));
 }
 
-// 저장 주소에서 검색어(?q=)를 뺌. 검색 화면은 검색어를 브라우저에서 읽음
+// 저장 주소에서 검색어(?…)를 뺌. 화면은 검색어를 브라우저에서 읽음
 function pageKey(url) {
   return url.origin + url.pathname;
+}
+
+// 탭 화면만 저장·저장본 사용. 그 밖의 화면은 같은 캐시에 저장본이 있어도 쓰지 않음
+function isSavedPage(url) {
+  return SAVED_PAGES.has(url.pathname);
 }
 
 // 같은 언어 홈. 영어 주소(/en/…)면 영어 홈
@@ -162,7 +170,7 @@ async function page(event) {
   }
   // 서버 오류(5xx)도 못 받은 것으로 봄. 404 등은 그대로 보여줌
   if (response && response.status < 500) {
-    if (cacheable) {
+    if (cacheable && isSavedPage(url)) {
       const copy = response.clone();
       event.waitUntil(
         isThisBuild(copy.clone())
@@ -172,9 +180,11 @@ async function page(event) {
     }
     return response;
   }
-  const saved = await cache.match(pageKey(url), { ignoreSearch: true });
+  const saved = isSavedPage(url)
+    ? await cache.match(pageKey(url), { ignoreSearch: true })
+    : undefined;
   if (saved) return saved;
-  // 열어 본 적 없는 화면: 같은 언어 오프라인 홈으로 보냄(홈은 설치 때 저장함)
+  // 저장하지 않는 화면(상세·검색 등)·저장본이 없는 화면: 같은 언어 오프라인 홈으로 보냄(홈은 설치 때 저장함)
   const home = homeFor(url);
   if (url.pathname !== home && (await cache.match(home))) {
     return Response.redirect(new URL(home, url.origin).href, 302);
