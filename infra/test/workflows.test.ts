@@ -63,6 +63,19 @@ describe("배포 워크플로 가드레일 (11장)", () => {
     expect(syncs.length).toBeGreaterThan(0);
     for (const line of syncs) expect(line).toContain('--exclude "data/*"');
   });
+
+  it("사이트 빌드에 문의 사진 버킷 이름을 넘기고, 비어 있으면 빌드 전에 멈춘다(BRD-103)", () => {
+    const lines = codeLines(deploy?.text ?? "");
+    const text = lines.join("\n");
+    expect(text).toContain(
+      "NEXT_PUBLIC_INQUIRY_PHOTO_BUCKET: ${{ vars.INQUIRY_PHOTO_BUCKET }}",
+    );
+    const guard = lines.findIndex((l) => l.includes("문의 사진 버킷 이름 확인"));
+    const build = lines.findIndex((l) => l.includes("npm run build -w apps/web"));
+    expect(guard).toBeGreaterThan(-1);
+    expect(guard).toBeLessThan(build);
+    expect(text).toMatch(/exit 1/);
+  });
 });
 
 // 작업 하나(jobs 아래 두 칸 들여쓴 이름)의 코드 줄만 꺼냄

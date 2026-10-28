@@ -218,12 +218,14 @@ describe("DynamoDB 권한 (BRD-55)", () => {
     );
   });
 
-  it("문의 역할은 Inquiry 항목 쓰기·이메일 삭제만 할 수 있다", () => {
+  it("문의 역할은 Inquiry 항목 쓰기·멱등 기록 읽기·이메일 삭제만 할 수 있다", () => {
     const byResource = dynamoActionsByResource([roleId("InquiryInquiryRole")]);
     expect(Object.fromEntries(byResource)).toEqual({
       // 트랜잭션 Put은 dynamodb:PutItem으로 판정됨(품목별 동작). TransactWriteItems라는 동작은 없음
+      // GetItem은 같은 멱등 키의 첫 결과 읽기(BRD-103). Query·Scan은 없음
       [`${tableId("Inquiry")}.Arn`]: new Set([
         "dynamodb:DeleteItem",
+        "dynamodb:GetItem",
         "dynamodb:PutItem",
         "dynamodb:UpdateItem",
       ]),

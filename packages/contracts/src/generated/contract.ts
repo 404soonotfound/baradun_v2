@@ -101,6 +101,11 @@ export type NearbyWarningType =
 export type DateTime1 = string;
 /**
  * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "InquiryPhotoContentType".
+ */
+export type InquiryPhotoContentType = 'image/jpeg' | 'image/png' | 'image/webp';
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
  * via the `definition` "InquiryPhotoId".
  */
 export type InquiryPhotoId = string;
@@ -109,6 +114,13 @@ export type InquiryPhotoId = string;
  * via the `definition` "InquiryPhotoKey".
  */
 export type InquiryPhotoKey = string;
+/**
+ * 문의 한 건의 멱등 키(UUID v4). 같은 내용을 다시 보낼 때 같은 키를 씀. 서버는 같은 키의 두 번째 요청에 첫 결과를 그대로 돌려주고, 내용이 다르면 idempotency_conflict(409)로 거부함.
+ *
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "InquiryIdempotencyKey".
+ */
+export type InquiryIdempotencyKey = string;
 /**
  * This interface was referenced by `Contract`'s JSON-Schema
  * via the `definition` "InquiryType".
@@ -485,7 +497,7 @@ export interface InquiryUploadRequest {
  * via the `definition` "InquiryUploadPhoto".
  */
 export interface InquiryUploadPhoto {
-  contentType: 'image/jpeg' | 'image/png' | 'image/webp';
+  contentType: InquiryPhotoContentType;
   size: number;
 }
 /**
@@ -509,17 +521,40 @@ export interface InquiryUploadResponse {
 export interface InquiryUploadTarget {
   photoId: InquiryPhotoId;
   key: InquiryPhotoKey;
+  /**
+   * multipart/form-data 양식 업로드(S3 presigned POST)만 씀.
+   */
+  method: 'POST';
+  /**
+   * 서울 리전 S3 버킷의 가상 호스트 주소. 경로는 / 하나. 웹은 빌드 설정의 버킷 이름과 호스트가 정확히 같은지 다시 확인함.
+   */
   url: string;
-  fields: {
-    [k: string]: string;
-  };
+  fields: InquiryUploadFields;
   expiresAt: DateTime;
+}
+/**
+ * S3 presigned POST 양식 칸. 정해진 칸만 허용함.
+ *
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "InquiryUploadFields".
+ */
+export interface InquiryUploadFields {
+  key: InquiryPhotoKey;
+  bucket: string;
+  'Content-Type': InquiryPhotoContentType;
+  Policy: string;
+  'X-Amz-Algorithm': 'AWS4-HMAC-SHA256';
+  'X-Amz-Credential': string;
+  'X-Amz-Date': string;
+  'X-Amz-Security-Token'?: string;
+  'X-Amz-Signature': string;
 }
 /**
  * This interface was referenced by `Contract`'s JSON-Schema
  * via the `definition` "CreateInquiryRequest".
  */
 export interface CreateInquiryRequest {
+  idempotencyKey: InquiryIdempotencyKey;
   type: InquiryType;
   message: string;
   email?: string;
@@ -562,7 +597,7 @@ export interface CreateInquiryResponse {
  */
 export interface InquiryErrorResponse {
   error: {
-    code: 'invalid_request' | 'rate_limited' | 'service_unavailable';
+    code: 'invalid_request' | 'idempotency_conflict' | 'rate_limited' | 'service_unavailable';
     message: string;
   };
 }
