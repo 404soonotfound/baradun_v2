@@ -28,6 +28,9 @@ function deps(
     fetch: fetch as unknown as typeof globalThis.fetch,
     digest: (text) => sha256Hex(text),
     online: () => true,
+    now: () => Date.parse("2026-10-28T03:00:00Z"),
+    uuid: () => "3f2504e0-4f89-41d3-9a0c-0305e82c3301",
+    photoBucket: "baradunv2-photos-test",
   };
   return { deps: value, fetch };
 }
