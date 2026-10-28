@@ -1,6 +1,8 @@
 import { useSyncExternalStore } from "react";
 
+import { DEVICE_KEYS } from "@/lib/device-keys";
 import { createDeviceList, EMPTY_IDS } from "@/lib/device-list";
+import { clearSeen } from "@/lib/favorite-changes";
 import { clearRecentSearches } from "@/lib/recent-search";
 
 // 즐겨찾기·최근 본 해변 (화면 명세 HOME·FAV, 아키텍처 9장: 기기 저장) (BRD-26)
@@ -9,13 +11,13 @@ import { clearRecentSearches } from "@/lib/recent-search";
 
 // [2] 즐겨찾기는 개수 제한 없음(무한대 = slice가 아무것도 자르지 않음)
 const favorites = createDeviceList(
-  "baradun:favorites",
+  DEVICE_KEYS.favorites,
   Number.POSITIVE_INFINITY,
 );
 
 // [3] 최근 본 해변 상한. 화면 설계서에 값이 없어 임시로 둔 제안값(결정 후 노션 반영)
 const RECENT_MAX = 20;
-const recent = createDeviceList("baradun:recent", RECENT_MAX);
+const recent = createDeviceList(DEVICE_KEYS.recent, RECENT_MAX);
 
 // [4] 빌드 때(정적 HTML)는 기기 저장값을 모르니 빈 목록. 브라우저에서 바로 저장값으로 바뀜
 const serverSnapshot = () => EMPTY_IDS;
@@ -44,9 +46,15 @@ export function useRecent(): readonly string[] {
   );
 }
 
-// [8] 장소 상세에 들어갈 때 호출(BRD-32) · 최근 본 전체 지우기
+// [8] 장소 상세에 들어갈 때 호출(BRD-32)
 export const addRecent = recent.add;
-export const clearRecent = recent.clear;
+
+// 최근 본 전체 지우기(즐겨찾기 화면, BRD-35). 되돌리기는 지우기 전 순서 그대로
+export function clearRecent(): () => void {
+  const before = recent.getSnapshot();
+  recent.clear();
+  return () => recent.replace(before);
+}
 
 // 최근 본 ✕. 지우기 전 목록을 기억해 '되돌리기'에서 원래 순서·자리로 복구하는 함수를 돌려줌
 export function removeRecent(id: string): () => void {
@@ -61,4 +69,5 @@ export function clearFavoritesAndRecent() {
   favorites.clear();
   recent.clear();
   clearRecentSearches(); // 최근 검색도 기기 데이터(BRD-31)
+  clearSeen(); // 즐겨찾기 지난 방문 기록(변경 표시, BRD-35)
 }

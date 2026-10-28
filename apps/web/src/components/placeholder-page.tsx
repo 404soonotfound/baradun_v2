@@ -6,7 +6,6 @@ import { CurrentActivity } from "@/components/current-activity";
 export type PageKey =
   | "explore"
   | "search"
-  | "favorites"
   | "settings"
   | "inquiry"
   | "guide"
