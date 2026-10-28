@@ -33,6 +33,8 @@ describe("resetDeviceData", () => {
       "baradun:activity": "surfing",
       "baradun:explore-view": "map",
       "baradun:explore-sort": "second",
+      "baradun:inquiry-draft":
+        '{"kind":"mismatch","message":"파고가 달라요","savedAt":"2026-10-28T00:00:00.000Z"}',
       // 남길 것
       "baradun:theme": "dark",
       "baradun:motion": "off",

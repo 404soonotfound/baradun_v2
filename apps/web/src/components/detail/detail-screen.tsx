@@ -214,6 +214,7 @@ export function DetailScreen({
           <Call119 className="lg:hidden" />
           <SourceList
             locale={locale}
+            beachSlug={beach.slug}
             view={view}
             detail={detail}
             stations={beach.stations}
