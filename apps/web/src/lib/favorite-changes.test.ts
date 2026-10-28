@@ -4,6 +4,7 @@ import type { BeachStatus, StatusFile } from "@baradun/contracts";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
+  canRecordSeen,
   changeNote,
   createSeenStore,
   nextSeen,
@@ -232,6 +233,26 @@ describe("parseSeen", () => {
   });
 });
 
+describe("canRecordSeen", () => {
+  it("이번 조회가 성공해 값을 보여 줄 때만 기록함", () => {
+    expect(canRecordSeen({ phase: "ready", live: true })).toBe(true);
+  });
+
+  it("불러오는 중·오프라인·불러오기 실패·지난 값을 숨기는 상태는 기록하지 않음", () => {
+    expect(canRecordSeen({ phase: "loading", live: false })).toBe(false);
+    // 저장된 마지막 값(B5)을 보여 주는 중: 오프라인·불러오기 실패
+    expect(canRecordSeen({ phase: "ready", live: false })).toBe(false);
+    for (const phase of [
+      "maintenance",
+      "update_required",
+      "schema_unsupported",
+    ] as const) {
+      expect(canRecordSeen({ phase, live: true }), phase).toBe(false);
+      expect(canRecordSeen({ phase, live: false }), phase).toBe(false);
+    }
+  });
+});
+
 describe("createSeenStore (기기 저장)", () => {
   afterEach(() => {
     vi.useRealTimers();
@@ -299,6 +320,18 @@ describe("createSeenStore (기기 저장)", () => {
     vi.runAllTimers();
     store.subscribe(() => {});
     expect(store.getBaseline()).toEqual({ a: { state: "none" } });
+  });
+
+  it("같은 기록이면 저장소에 다시 쓰지 않음", () => {
+    const storage = memoryStorage();
+    const setItem = vi.spyOn(storage, "setItem");
+    const store = createSeenStore("k", () => storage);
+    store.subscribe(() => {});
+    store.record(["a"], NONE);
+    store.record(["a"], new Map(NONE));
+    expect(setItem).toHaveBeenCalledOnce();
+    store.record(["a"], new Map<string, SeenRecord>([["a", null]]));
+    expect(setItem).toHaveBeenCalledTimes(2);
   });
 
   it("저장소가 없거나 읽기가 오류를 내도 멈추지 않음", () => {
