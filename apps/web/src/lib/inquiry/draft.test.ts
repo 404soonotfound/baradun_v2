@@ -141,6 +141,37 @@ describe("createDraftStore", () => {
     expect(store.read()).toBeNull();
   });
 
+  it("접수 성공 때 보낸 초안만 지우고, 그 뒤 새로 쓴 초안은 남김", () => {
+    let now = NOW;
+    const mem = memory();
+    const store = createDraftStore(
+      () => mem.storage,
+      () => now,
+    );
+    store.save("mismatch", "보낸 내용");
+    const sent = store.read()?.savedAt ?? null;
+    now += 1_000;
+    store.save("criteria", "새로 쓴 내용");
+    store.clearIfUnchanged(sent);
+    expect(store.read()?.message).toBe("새로 쓴 내용");
+
+    const latest = store.read()?.savedAt ?? null;
+    store.clearIfUnchanged(latest);
+    expect(store.read()).toBeNull();
+    expect(mem.get()).toBeNull();
+  });
+
+  it("초안 없이 보낸 뒤 새로 쓴 초안은 접수 성공으로 지우지 않음", () => {
+    const mem = memory();
+    const store = createDraftStore(
+      () => mem.storage,
+      () => NOW,
+    );
+    store.save("addBeach", "나중에 쓴 내용");
+    store.clearIfUnchanged(null);
+    expect(store.read()?.message).toBe("나중에 쓴 내용");
+  });
+
   it("키 이름은 기기 데이터 초기화와 같은 저장소 키", () => {
     expect(DRAFT_STORAGE_KEY).toBe("baradun:inquiry-draft");
   });
