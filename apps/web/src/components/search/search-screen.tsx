@@ -1,8 +1,9 @@
 "use client"; // 검색어·활동·지역·기기 저장·바다 정보를 쓰므로 브라우저 부품
 
 import { SearchX } from "lucide-react";
+import { useSearchParams } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
-import { useMemo, useState, useSyncExternalStore, type FormEvent } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 
 import { BackButton } from "@/components/detail/back-button";
 import { RecentSearches } from "@/components/search/recent-searches";
@@ -41,17 +42,6 @@ import { deriveBeachView } from "@/lib/snapshot/view";
 // 검색어는 주소(?q=)에 둠(아키텍처 9.1). 검색은 브라우저에서 처리하고 서버로 보내지 않음
 // 범위: 탐색에서 고른 활동·지역을 따르고(칩으로 보임), 결과가 없으면 '전국에서 찾기'로 이 화면에서만 풀어 줌(저장 값은 안 바뀜)
 
-// 주소의 ?q= 읽기. 정적 HTML에는 없으므로 서버·첫 그리기는 빈 값, 브라우저에서 읽음
-function subscribeUrl(onChange: () => void) {
-  window.addEventListener("popstate", onChange);
-  return () => window.removeEventListener("popstate", onChange);
-}
-const readUrlQuery = () =>
-  (new URLSearchParams(window.location.search).get("q") ?? "").slice(
-    0,
-    QUERY_MAX_LENGTH,
-  );
-
 export function SearchScreen({
   locale,
   beaches,
@@ -69,9 +59,23 @@ export function SearchScreen({
   const { rowBasis } = useRowText();
   const tSearch = useTranslations("search");
 
-  // 입력한 검색어. 입력하기 전에는 주소의 ?q=
-  const urlQuery = useSyncExternalStore(subscribeUrl, readUrlQuery, () => "");
+  // 검색어는 주소(?q=)가 기준. 입력하는 동안은 입력 중인 값(typed)을 쓰고, 주소가 '내가 쓴 값'이 아닌 것으로
+  // 바뀌면(상단 검색 링크·뒤로/앞으로) 입력 상태를 버리고 주소를 따라감
+  const urlQuery = (useSearchParams().get("q") ?? "").slice(
+    0,
+    QUERY_MAX_LENGTH,
+  );
   const [typed, setTyped] = useState<string | null>(null);
+  const [written, setWritten] = useState<readonly string[]>([]); // 이 화면이 주소에 쓴 값들
+  const [seenUrl, setSeenUrl] = useState(urlQuery);
+  if (urlQuery !== seenUrl) {
+    // 그리는 중 상태 맞추기 패턴(SituationBanner와 같음)
+    setSeenUrl(urlQuery);
+    if (!written.includes(urlQuery)) {
+      setTyped(null);
+      setWritten([]);
+    }
+  }
   const query = typed ?? urlQuery;
   const [widened, setWidened] = useState(false); // '전국에서 찾기'(이 화면에서만)
 
@@ -91,6 +95,10 @@ export function SearchScreen({
   function update(next: string) {
     const value = next.slice(0, QUERY_MAX_LENGTH);
     setTyped(value);
+    setWritten((list) => [
+      ...list.slice(-19),
+      value.trim() === "" ? "" : value,
+    ]);
     // 주소만 바꿈(기록 칸을 늘리지 않음). Next.js 라우터가 이 변경을 알아차림
     const path = window.location.pathname;
     const url =
@@ -246,6 +254,15 @@ export function SearchScreen({
           )}
         </section>
       )}
+    </div>
+  );
+}
+
+// 주소를 읽기 전(정적 HTML)에 보이는 자리 표시: 검색창 모양만(입력 상자는 읽은 뒤 나타남)
+export function SearchFallback() {
+  return (
+    <div aria-hidden="true" className="flex flex-col gap-4 lg:max-w-[448px]">
+      <div className="h-search rounded-input border border-border-strong bg-bg-surface" />
     </div>
   );
 }
