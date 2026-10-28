@@ -193,4 +193,66 @@ describe("sendInquiry", () => {
       vi.useRealTimers();
     }
   });
+
+  it("보낸 사진마다 결과가 하나씩 오지 않으면(빠짐·겹침) 접수로 보지 않음", async () => {
+    const OTHER_ID = "fedcba9876543210";
+    const OTHER_KEY = `pending/${"b".repeat(32)}/${OTHER_ID}`;
+    const target = (photoId: string, key: string) => ({
+      photoId,
+      key,
+      url: "https://bucket.example/upload",
+      fields: { key },
+      expiresAt: "2026-10-28T03:10:00Z",
+    });
+    const blob = new Blob(["x"], { type: "image/jpeg" });
+    const photos = [
+      { blob, contentType: "image/jpeg" as const },
+      { blob, contentType: "image/jpeg" as const },
+    ];
+    for (const results of [
+      [{ photoId: PHOTO_ID, status: "accepted" }],
+      [
+        { photoId: PHOTO_ID, status: "accepted" },
+        { photoId: PHOTO_ID, status: "accepted" },
+      ],
+      [],
+    ]) {
+      const { deps: d } = deps((url) => {
+        if (url === "/api/inquiries/uploads")
+          return json(200, {
+            uploads: [target(PHOTO_ID, KEY), target(OTHER_ID, OTHER_KEY)],
+          });
+        if (url.startsWith("https://"))
+          return new Response(null, { status: 204 });
+        return created(results);
+      });
+      expect(
+        await sendInquiry(request, photos, undefined, d),
+        JSON.stringify(results),
+      ).toEqual({ ok: false, failure: "invalidResponse" });
+    }
+  });
+
+  it("응답 헤더 뒤 본문이 멈춰도 시간 제한 뒤 network('보내는 중'에 멈추지 않음)", async () => {
+    vi.useFakeTimers();
+    try {
+      const { deps: d } = deps(
+        () =>
+          new Response(
+            new ReadableStream({
+              start() {
+                // 본문을 보내지 않고 끝내지도 않음
+              },
+            }),
+            { status: 201 },
+          ),
+      );
+      d.digest = () => Promise.resolve("0".repeat(64));
+      const pending = sendInquiry(request, [], undefined, d);
+      await vi.advanceTimersByTimeAsync(20_000);
+      expect(await pending).toEqual({ ok: false, failure: "network" });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

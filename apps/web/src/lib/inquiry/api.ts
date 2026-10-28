@@ -103,13 +103,15 @@ export function isCreateResponse(
     return false;
   if (typeof value.receivedAt !== "string" || !DATE_TIME.test(value.receivedAt))
     return false;
-  if (!Array.isArray(value.photos) || value.photos.length > 3) return false;
-  const sentIds = new Set(sent.map((photo) => photo.photoId));
+  // 보낸 사진마다 결과가 하나씩 와야 함(빠지거나 겹치면 사진이 말없이 개수에서 빠짐)
+  if (!Array.isArray(value.photos) || value.photos.length !== sent.length)
+    return false;
+  const pending = new Set(sent.map((photo) => photo.photoId));
   return value.photos.every(
     (item: unknown) =>
       isObject(item) &&
       typeof item.photoId === "string" &&
-      sentIds.has(item.photoId) &&
+      pending.delete(item.photoId) &&
       (item.status === "accepted" ||
         (item.status === "rejected" &&
           (item.reason === "location_metadata" ||
@@ -128,26 +130,42 @@ function failureOf(status: number, body: unknown): SendFailure {
   return "unavailable";
 }
 
-// 시간 제한이 있는 요청. 응답이 없거나 끊기면 "network"
-async function timedFetch(
+// 시간 제한이 있는 요청. 응답 헤더만이 아니라 본문 읽기(readBody)까지 같은 제한 안에서 끝내야 함
+// (본문이 멈추면 'sending'에서 영원히 멈추지 않게). 응답이 없거나 끊기거나 시간이 넘으면 "network".
+// fetch가 abort를 무시해도 race로 반드시 끝남
+async function timedFetch<T>(
   deps: SendDeps,
   url: string,
   init: RequestInit,
-): Promise<Response | "network"> {
+  readBody: (response: Response) => Promise<T>,
+): Promise<{ response: Response; body: T } | "network"> {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<"network">((resolve) => {
+    timer = setTimeout(() => {
+      controller.abort();
+      resolve("network");
+    }, REQUEST_TIMEOUT_MS);
+  });
+  const request = (async () => {
+    const response = await deps.fetch(url, {
+      ...init,
+      signal: controller.signal,
+    });
+    return { response, body: await readBody(response) };
+  })().catch(() => "network" as const);
   try {
-    return await deps.fetch(url, { ...init, signal: controller.signal });
-  } catch {
-    return "network";
+    return await Promise.race([request, timeout]);
   } finally {
     clearTimeout(timer);
   }
 }
 
+// 본문이 JSON이 아니면 undefined(오류 응답은 상태 코드로 나눔). 끊기면 timedFetch가 "network"로 봄
 async function readJson(response: Response): Promise<unknown> {
+  const text = await response.text();
   try {
-    return await response.json();
+    return JSON.parse(text) as unknown;
   } catch {
     return undefined;
   }
@@ -160,17 +178,22 @@ async function postJson(
 ): Promise<{ ok: true; body: unknown } | { ok: false; failure: SendFailure }> {
   const body = JSON.stringify(payload);
   const hash = await deps.digest(body);
-  const response = await timedFetch(deps, url, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      "x-amz-content-sha256": hash,
+  const result = await timedFetch(
+    deps,
+    url,
+    {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-amz-content-sha256": hash,
+      },
+      body,
+      credentials: "omit",
     },
-    body,
-    credentials: "omit",
-  });
-  if (response === "network") return { ok: false, failure: "network" };
-  const json = await readJson(response);
+    readJson,
+  );
+  if (result === "network") return { ok: false, failure: "network" };
+  const { response, body: json } = result;
   if (!response.ok)
     return { ok: false, failure: failureOf(response.status, json) };
   return { ok: true, body: json };
@@ -202,14 +225,19 @@ async function uploadPhotos(
     for (const [name, value] of Object.entries(target.fields))
       data.append(name, value);
     data.append("file", photos[index]!.blob); // 파일은 맨 마지막(S3 POST 규칙)
-    const response = await timedFetch(deps, target.url, {
-      method: "POST",
-      body: data,
-      credentials: "omit",
-    });
-    if (response === "network") return { ok: false, failure: "network" };
-    if (!response.ok)
-      return { ok: false, failure: failureOf(response.status, undefined) };
+    // S3 응답 본문은 읽지 않음(상태 코드만 봄)
+    const result = await timedFetch(
+      deps,
+      target.url,
+      { method: "POST", body: data, credentials: "omit" },
+      async () => undefined,
+    );
+    if (result === "network") return { ok: false, failure: "network" };
+    if (!result.response.ok)
+      return {
+        ok: false,
+        failure: failureOf(result.response.status, undefined),
+      };
     refs.push({ photoId: target.photoId, key: target.key });
     onProgress({ phase: "photos", done: index + 1, total: photos.length });
   }
