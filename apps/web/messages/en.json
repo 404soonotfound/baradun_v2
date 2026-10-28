@@ -340,6 +340,20 @@
     "delayedMore": "Wave height readings for {name} and {count, plural, one {# other beach} other {# other beaches}} are delayed",
     "delayedBody": "We can't assess the current status · We'll check again when new readings come in"
   },
+  "systemScreen": {
+    "maintenanceTitle": "We're under maintenance",
+    "maintenanceBody": "Sea information isn't shown during maintenance",
+    "maintenanceUntil": "Maintenance is planned until {time}",
+    "untilUnknown": "We don't know yet when it will end",
+    "fieldNotice": "If you go to the sea, follow on-site controls and lifeguard guidance",
+    "recheck": "Check again",
+    "rechecking": "Checking",
+    "stillMaintenance": "Still under maintenance",
+    "updateTitle": "Please update to the new version",
+    "updateBody": "The way we read information has changed, so this version can't show sea information",
+    "updateNext": "Reload to get the new version",
+    "reload": "Reload"
+  },
   "warningSheet": {
     "title": "Warning details",
     "checked": "Issued by {source} · checked {time}",

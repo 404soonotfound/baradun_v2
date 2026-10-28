@@ -340,6 +340,20 @@
     "delayedMore": "{name} 외 {count}곳 파고 측정이 늦어지고 있어요",
     "delayedBody": "지금 상태를 판단하지 못했어요 · 측정값이 들어오면 다시 확인해요"
   },
+  "systemScreen": {
+    "maintenanceTitle": "지금은 점검 중이에요",
+    "maintenanceBody": "점검하는 동안에는 바다 정보를 보여주지 않아요",
+    "maintenanceUntil": "{time}까지 점검할 예정이에요",
+    "untilUnknown": "끝나는 시각은 아직 알 수 없어요",
+    "fieldNotice": "바다에 나가신다면 현장 통제와 안전요원 안내를 따르세요",
+    "recheck": "다시 확인",
+    "rechecking": "확인하는 중",
+    "stillMaintenance": "아직 점검 중이에요",
+    "updateTitle": "새 버전으로 업데이트해 주세요",
+    "updateBody": "정보를 읽는 방식이 바뀌어 지금 화면으로는 바다 정보를 보여줄 수 없어요",
+    "updateNext": "새로고침하면 새 버전을 받아요",
+    "reload": "새로고침"
+  },
   "warningSheet": {
     "title": "특보 상세",
     "checked": "{source} 발표 · {time}에 확인",
