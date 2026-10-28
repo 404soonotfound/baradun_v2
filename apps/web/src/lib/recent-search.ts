@@ -6,6 +6,11 @@ import { useSyncExternalStore } from "react";
 
 export const RECENT_MAX = 10;
 export const QUERY_MAX_LENGTH = 50;
+
+// 검색어를 50글자로 자름. UTF-16이 아니라 글자(코드 포인트) 단위로 잘라 이모지 등이 반으로 갈라지지 않게
+export function clipQuery(text: string): string {
+  return [...text].slice(0, QUERY_MAX_LENGTH).join("");
+}
 const STORAGE_KEY = "baradun:recent-search";
 
 export type RecentSearch = { q: string; id: string | null };
@@ -17,7 +22,7 @@ export function addRecent(
   entry: RecentSearch,
   max: number = RECENT_MAX,
 ): RecentSearch[] {
-  const q = entry.q.trim().slice(0, QUERY_MAX_LENGTH);
+  const q = clipQuery(entry.q.trim());
   if (q === "") return [...list];
   const key = q.replace(/\s+/g, "").toLowerCase();
   const rest = list.filter(

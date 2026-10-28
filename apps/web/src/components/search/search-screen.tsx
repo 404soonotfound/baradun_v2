@@ -19,6 +19,7 @@ import { localizedPath, type Locale } from "@/lib/i18n";
 import { joinMeta } from "@/lib/meta-join";
 import {
   clearRecentSearches,
+  clipQuery,
   QUERY_MAX_LENGTH,
   removeRecentSearch,
   saveRecentSearch,
@@ -61,19 +62,20 @@ export function SearchScreen({
 
   // 검색어는 주소(?q=)가 기준. 입력하는 동안은 입력 중인 값(typed)을 쓰고, 주소가 '내가 쓴 값'이 아닌 것으로
   // 바뀌면(상단 검색 링크·뒤로/앞으로) 입력 상태를 버리고 주소를 따라감
-  const urlQuery = (useSearchParams().get("q") ?? "").slice(
-    0,
-    QUERY_MAX_LENGTH,
-  );
+  const urlQuery = clipQuery(useSearchParams().get("q") ?? "");
   const [typed, setTyped] = useState<string | null>(null);
   const [written, setWritten] = useState<readonly string[]>([]); // 이 화면이 주소에 쓴 값들
   const [seenUrl, setSeenUrl] = useState(urlQuery);
   if (urlQuery !== seenUrl) {
     // 그리는 중 상태 맞추기 패턴(SituationBanner와 같음)
     setSeenUrl(urlQuery);
-    if (!written.includes(urlQuery)) {
+    const index = written.indexOf(urlQuery);
+    if (index === -1) {
       setTyped(null);
       setWritten([]);
+    } else {
+      // 알아본 값까지는 소비함: 오래 남은 값("" 등)이 뒤의 바깥 이동을 '내가 쓴 값'으로 오인하지 않게
+      setWritten(written.slice(index + 1));
     }
   }
   const query = typed ?? urlQuery;
@@ -93,7 +95,7 @@ export function SearchScreen({
   const scoped = scopeLabel !== null && !widened;
 
   function update(next: string) {
-    const value = next.slice(0, QUERY_MAX_LENGTH);
+    const value = clipQuery(next);
     setTyped(value);
     setWritten((list) => [
       ...list.slice(-19),
@@ -258,11 +260,16 @@ export function SearchScreen({
   );
 }
 
-// 주소를 읽기 전(정적 HTML)에 보이는 자리 표시: 검색창 모양만(입력 상자는 읽은 뒤 나타남)
+// 주소를 읽기 전(정적 HTML)에 보이는 자리 표시: 화면 읽기 프로그램에는 화면 이름을 알리고, 검색창 모양만 그림
 export function SearchFallback() {
+  const t = useTranslations("pages");
   return (
-    <div aria-hidden="true" className="flex flex-col gap-4 lg:max-w-[448px]">
-      <div className="h-search rounded-input border border-border-strong bg-bg-surface" />
+    <div className="flex flex-col gap-4 lg:max-w-[448px]">
+      <h1 className="sr-only">{t("search")}</h1>
+      <div
+        aria-hidden="true"
+        className="h-search rounded-input border border-border-strong bg-bg-surface"
+      />
     </div>
   );
 }
