@@ -25,6 +25,7 @@ import { useRecent } from "@/lib/favorites";
 import { distanceKm, sortByDistance } from "@/lib/geo";
 import { localizedPath, type Locale } from "@/lib/i18n";
 import {
+  locationBlocked,
   requestLocation,
   useUserLocation,
   type LocationState,
@@ -304,9 +305,9 @@ export function HomeScreen({
           setRegion(next);
           regionSheet.close();
         }}
-        // '내 주변': 고른 지역을 지우고 가까운 바다로. 위치를 거부했으면 숨김
+        // '내 주변': 고른 지역을 지우고 가까운 바다로. 위치를 거부했거나 설정에서 껐으면 숨김
         nearby={
-          location.status === "denied"
+          locationBlocked(location.status)
             ? null
             : {
                 selected: region === null,

@@ -3,6 +3,7 @@ import { useLocale } from "next-intl";
 import { useEffect, useRef, type MouseEvent } from "react";
 
 import { type Locale, localizedPath } from "@/lib/i18n";
+import { prefersReducedMotion } from "@/lib/motion";
 import { TABS, type TabKey, tabOf } from "@/lib/nav";
 import {
   lastUrlOf,
@@ -65,10 +66,10 @@ export function useTabNavigation() {
     if (tab === current) {
       // 같은 탭을 다시 누름 → 이동하지 않고 맨 위로 (동작 줄이기면 바로)
       event.preventDefault();
-      const reduce = window.matchMedia(
-        "(prefers-reduced-motion: reduce)",
-      ).matches;
-      window.scrollTo({ top: 0, behavior: reduce ? "auto" : "smooth" });
+      window.scrollTo({
+        top: 0,
+        behavior: prefersReducedMotion() ? "auto" : "smooth",
+      });
       return;
     }
     // 떠나는 탭의 마지막 상태(주소·스크롤) 저장, 가는 탭은 저장된 위치로 돌아가도록 예약
