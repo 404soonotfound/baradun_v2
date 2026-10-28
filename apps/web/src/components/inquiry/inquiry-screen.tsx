@@ -99,6 +99,9 @@ export function InquiryScreen({
   const [contextRemoved, setContextRemoved] = useState(false);
   const sendingRef = useRef(false); // 두 번 누름 막기(상태 반영 전 빠른 연타 포함)
   const nextShotId = useRef(1);
+  // 사진 준비 차례. 준비 중에 지우기·실패로 사진을 비우면 올려서 늦게 끝난 준비가 사진을 다시 붙이지 않게 함
+  const photoBatch = useRef(0);
+  const mounted = useRef(true);
 
   const ids = {
     kind: useId(),
@@ -135,11 +138,13 @@ export function InquiryScreen({
   useEffect(() => {
     shotsRef.current = shots;
   }, [shots]);
-  useEffect(
-    () => () =>
-      shotsRef.current.forEach((shot) => URL.revokeObjectURL(shot.url)),
-    [],
-  );
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false; // 준비 중에 떠나면 준비가 끝나도 미리보기 주소를 만들지 않음
+      shotsRef.current.forEach((shot) => URL.revokeObjectURL(shot.url));
+    };
+  }, []);
 
   // 실패·완료로 바뀌면 그 안내로 포커스(화면 읽기가 바로 읽음)
   useEffect(() => {
@@ -165,22 +170,35 @@ export function InquiryScreen({
     const picked = [...files].slice(0, Math.max(0, room));
     setPhotoError(files.length > room ? "tooMany" : null);
     setPreparing(true);
-    const added: Shot[] = [];
+    const batch = photoBatch.current;
+    // 그사이 사진을 비웠거나 화면을 떠났으면 이번 준비는 버림
+    const stale = () => !mounted.current || batch !== photoBatch.current;
+    const prepared: PhotoToSend[] = [];
     for (const file of picked) {
       const result = await preparePhoto(file);
+      if (stale()) return;
       if (!result.ok) {
         setPhotoError(result.error);
         continue;
       }
-      added.push({
-        id: nextShotId.current++,
-        photo: result.photo,
-        url: URL.createObjectURL(result.photo.blob),
-      });
+      prepared.push(result.photo);
     }
     setPreparing(false);
-    if (added.length > 0)
-      setShots((prev) => [...prev, ...added].slice(0, PHOTO_MAX_COUNT));
+    if (prepared.length === 0) return;
+    // 미리보기 주소는 붙일 때만 만듦(버린 준비에서 풀지 않은 주소가 남지 않게)
+    const added = prepared.map((photo) => ({
+      id: nextShotId.current++,
+      photo,
+      url: URL.createObjectURL(photo.blob),
+    }));
+    setShots((prev) => {
+      const next = [...prev, ...added];
+      // 최대 장수를 넘는 것은 붙이지 않고 주소도 풂
+      next
+        .slice(PHOTO_MAX_COUNT)
+        .forEach((shot) => URL.revokeObjectURL(shot.url));
+      return next.slice(0, PHOTO_MAX_COUNT);
+    });
   }
 
   function removeShot(id: number) {
@@ -199,6 +217,8 @@ export function InquiryScreen({
     shots.forEach((shot) => URL.revokeObjectURL(shot.url));
     setShots([]);
     setPhotoError(null);
+    photoBatch.current += 1; // 준비 중인 사진도 붙이지 않음
+    setPreparing(false);
   }
 
   function clearAll() {
