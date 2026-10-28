@@ -6,6 +6,13 @@ import { cn } from "@/lib/cn";
 // 칩 (BRD-81 · 컴포넌트 명세 Chip, Figma '칩 · 새' 170:2928)
 //   default: 흰 바탕 + 회색 테두리 · on: 파랑 채움(선택됨) · sel: 연한 파랑 + 파랑 테두리(드롭다운에서 고른 값, ⌄ 표시)
 // 높이 36(지역 선택 화면은 42 = size "lg")
+// 누르는 영역은 44px(점검표 12): 보이는 크기는 그대로 두고 위아래로만 넓힘(36 → +4px씩, 42 → +1px씩, BRD-39).
+// ::before는 테두리(1px) 안쪽 기준으로 놓여서 1px씩 더 뺌
+// 옆으로 스크롤하는 줄에 둘 때는 줄에 위아래 4px 여백을 둬 넓힌 영역이 잘리지 않게 함(explore-filters.tsx)
+const HIT_AREA = {
+  md: "before:-inset-y-[5px]",
+  lg: "before:-inset-y-[2px]",
+} as const;
 const VARIANTS = {
   default: "border-border-strong bg-bg-surface font-medium text-text-body",
   on: "border-brand-default bg-brand-default font-bold text-brand-on",
@@ -39,8 +46,9 @@ export function Chip({
     <button
       type={type}
       className={cn(
-        "inline-flex shrink-0 items-center justify-center gap-[5px] rounded-full border text-[13.5px] whitespace-nowrap",
+        "relative inline-flex shrink-0 items-center justify-center gap-[5px] rounded-full border text-[13.5px] whitespace-nowrap before:absolute before:inset-x-0 before:content-['']",
         size === "lg" ? "h-[42px] px-4" : "h-chip px-[13px]",
+        HIT_AREA[size],
         VARIANTS[variant],
         className,
       )}

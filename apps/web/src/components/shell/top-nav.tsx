@@ -25,7 +25,7 @@ export function TopNav() {
       <div className="mx-auto flex h-full max-w-[1280px] items-center gap-8 px-10">
         <Link
           href={localizedPath(locale, "/")}
-          className="text-title-m text-text-default"
+          className="flex min-h-touch items-center text-title-m text-text-default"
         >
           {tMeta("siteName")}
         </Link>
@@ -42,7 +42,8 @@ export function TopNav() {
                     onClick={(event) => onTabClick(event, key)}
                     aria-current={active ? "page" : undefined}
                     className={cn(
-                      "flex h-full items-center border-b-2 text-title-s",
+                      // 글자가 짧아도(예: '홈') 누르는 폭 44px: 밑줄은 글자 폭 그대로 두고 눌림 영역만 가운데 기준으로 넓힘(BRD-39)
+                      "relative flex h-full items-center border-b-2 text-title-s before:absolute before:inset-y-0 before:left-1/2 before:w-full before:min-w-touch before:-translate-x-1/2 before:content-['']",
                       active
                         ? "border-brand-default text-brand-default"
                         : "border-transparent text-text-body hover:text-text-default",
