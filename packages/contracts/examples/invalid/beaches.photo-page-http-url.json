@@ -2,6 +2,88 @@
   "beaches": [
     {
       "id": "b0001",
+      "slug": "gangmun",
+      "kind": "beach",
+      "name": {
+        "ko": "강문해수욕장",
+        "en": "Gangmun Beach"
+      },
+      "region": {
+        "sido": {
+          "ko": "강원",
+          "en": "Gangwon"
+        },
+        "sigungu": {
+          "ko": "강릉시",
+          "en": "Gangneung"
+        }
+      },
+      "coast": "east",
+      "coords": {
+        "lat": 37.796618,
+        "lng": 128.917591
+      },
+      "activities": [
+        "swimming"
+      ],
+      "hidden": false,
+      "warningZones": {
+        "sea": "S1151200",
+        "land": "L1022510"
+      },
+      "stations": {
+        "waveHeight": {
+          "id": "22451",
+          "name": {
+            "ko": "연곡 파고부이",
+            "en": "Yeongok wave buoy"
+          },
+          "distanceKm": 8.3
+        },
+        "wavePeriod": {
+          "id": "22520",
+          "name": {
+            "ko": "강릉 해양기상부이",
+            "en": "Gangneung marine buoy"
+          },
+          "distanceKm": 12.6
+        },
+        "waveDirection": {
+          "id": "22520",
+          "name": {
+            "ko": "강릉 해양기상부이",
+            "en": "Gangneung marine buoy"
+          },
+          "distanceKm": 12.6
+        },
+        "waterTemp": {
+          "id": "22451",
+          "name": {
+            "ko": "연곡 파고부이",
+            "en": "Yeongok wave buoy"
+          },
+          "distanceKm": 8.3
+        },
+        "wind": {
+          "id": "22520",
+          "name": {
+            "ko": "강릉 해양기상부이",
+            "en": "Gangneung marine buoy"
+          },
+          "distanceKm": 12.6
+        }
+      },
+      "photo": {
+        "url": "https://tong.visitkorea.or.kr/cms/resource/52/4120552_image2_1.jpg",
+        "source": "한국관광공사",
+        "license": "kogl-type1",
+        "title": "강문해변",
+        "pageUrl": "http://example.com/sample-beach"
+      },
+      "cctv": null
+    },
+    {
+      "id": "b0002",
       "slug": "gyeongpo",
       "kind": "beach",
       "name": {
@@ -20,8 +102,8 @@
       },
       "coast": "east",
       "coords": {
-        "lat": 37.8055,
-        "lng": 128.9083
+        "lat": 37.803514,
+        "lng": 128.909962
       },
       "activities": [
         "swimming",
@@ -29,115 +111,66 @@
       ],
       "hidden": false,
       "warningZones": {
-        "sea": "S1999901",
-        "land": "L1999901"
+        "sea": "S1151200",
+        "land": "L1022510"
       },
       "stations": {
         "waveHeight": {
-          "id": "99001",
+          "id": "22451",
           "name": {
-            "ko": "예시 파고부이",
-            "en": "Sample wave buoy"
+            "ko": "연곡 파고부이",
+            "en": "Yeongok wave buoy"
           },
-          "distanceKm": 6.2
+          "distanceKm": 7.4
         },
-        "wavePeriod": null,
-        "waveDirection": null,
-        "waterTemp": {
-          "id": "99001",
+        "wavePeriod": {
+          "id": "22520",
           "name": {
-            "ko": "예시 파고부이",
-            "en": "Sample wave buoy"
+            "ko": "강릉 해양기상부이",
+            "en": "Gangneung marine buoy"
           },
-          "distanceKm": 6.2
+          "distanceKm": 13.3
+        },
+        "waveDirection": {
+          "id": "22520",
+          "name": {
+            "ko": "강릉 해양기상부이",
+            "en": "Gangneung marine buoy"
+          },
+          "distanceKm": 13.3
+        },
+        "waterTemp": {
+          "id": "22451",
+          "name": {
+            "ko": "연곡 파고부이",
+            "en": "Yeongok wave buoy"
+          },
+          "distanceKm": 7.4
         },
         "wind": {
-          "id": "99001",
+          "id": "22520",
           "name": {
-            "ko": "예시 파고부이",
-            "en": "Sample wave buoy"
+            "ko": "강릉 해양기상부이",
+            "en": "Gangneung marine buoy"
           },
-          "distanceKm": 6.2
+          "distanceKm": 13.3
         }
       },
       "photo": {
-        "url": "https://example.com/sample-beach.jpg",
-        "source": "예시 출처",
+        "url": "https://tong.visitkorea.or.kr/cms/resource/25/4075925_image2_1.jpg",
+        "source": "한국관광공사",
         "license": "kogl-type1",
-        "title": "예시 해변 사진",
-        "pageUrl": "http://example.com/sample-beach"
+        "title": "경포해수욕장"
       },
-      "cctv": null
-    },
-    {
-      "id": "b0002",
-      "slug": "sangju",
-      "kind": "beach",
-      "name": {
-        "ko": "상주은모래비치",
-        "en": "Sangju Eunmorae Beach"
-      },
-      "region": {
-        "sido": {
-          "ko": "경남",
-          "en": "Gyeongnam"
-        },
-        "sigungu": {
-          "ko": "남해군",
-          "en": "Namhae"
-        }
-      },
-      "coast": "east",
-      "coords": {
-        "lat": 34.7187,
-        "lng": 127.9886
-      },
-      "activities": [
-        "swimming"
-      ],
-      "hidden": false,
-      "warningZones": {
-        "sea": "S1999902",
-        "land": "L1999902"
-      },
-      "stations": {
-        "waveHeight": {
-          "id": "99002",
-          "name": {
-            "ko": "예시 해양기상부이",
-            "en": "Sample marine buoy"
-          },
-          "distanceKm": 14.8
-        },
-        "wavePeriod": {
-          "id": "99002",
-          "name": {
-            "ko": "예시 해양기상부이",
-            "en": "Sample marine buoy"
-          },
-          "distanceKm": 14.8
-        },
-        "waveDirection": {
-          "id": "99002",
-          "name": {
-            "ko": "예시 해양기상부이",
-            "en": "Sample marine buoy"
-          },
-          "distanceKm": 14.8
-        },
-        "waterTemp": null,
-        "wind": null
-      },
-      "photo": null,
       "cctv": null
     },
     {
       "id": "b0003",
-      "slug": "mangsang",
+      "slug": "sageunjin",
       "kind": "beach",
       "name": {
-        "ko": "망상해수욕장",
-        "en": "Mangsang Beach"
+        "ko": "사근진해수욕장",
+        "en": "Sageunjin Beach"
       },
       "region": {
         "sido": {
@@ -145,36 +178,434 @@
           "en": "Gangwon"
         },
         "sigungu": {
-          "ko": "동해시",
-          "en": "Donghae"
+          "ko": "강릉시",
+          "en": "Gangneung"
         }
       },
       "coast": "east",
       "coords": {
-        "lat": 37.5926,
-        "lng": 129.0889
+        "lat": 37.813114,
+        "lng": 128.898479
       },
       "activities": [
-        "swimming",
-        "scuba"
+        "swimming"
       ],
       "hidden": false,
       "warningZones": {
-        "sea": "S1999903",
-        "land": "L1999903"
+        "sea": "S1151200",
+        "land": "L1022510"
       },
       "stations": {
         "waveHeight": {
-          "id": "99003",
+          "id": "22451",
           "name": {
-            "ko": "예시 파고부이",
-            "en": "Sample wave buoy"
+            "ko": "연곡 파고부이",
+            "en": "Yeongok wave buoy"
           },
-          "distanceKm": 9.4
+          "distanceKm": 6.1
+        },
+        "wavePeriod": {
+          "id": "22520",
+          "name": {
+            "ko": "강릉 해양기상부이",
+            "en": "Gangneung marine buoy"
+          },
+          "distanceKm": 14.4
+        },
+        "waveDirection": {
+          "id": "22520",
+          "name": {
+            "ko": "강릉 해양기상부이",
+            "en": "Gangneung marine buoy"
+          },
+          "distanceKm": 14.4
+        },
+        "waterTemp": {
+          "id": "22451",
+          "name": {
+            "ko": "연곡 파고부이",
+            "en": "Yeongok wave buoy"
+          },
+          "distanceKm": 6.1
+        },
+        "wind": {
+          "id": "22520",
+          "name": {
+            "ko": "강릉 해양기상부이",
+            "en": "Gangneung marine buoy"
+          },
+          "distanceKm": 14.4
+        }
+      },
+      "photo": {
+        "url": "https://tong.visitkorea.or.kr/cms/resource/04/4095604_image2_1.jpg",
+        "source": "한국관광공사",
+        "license": "kogl-type1",
+        "title": "사근진해변(사근진해수욕장)"
+      },
+      "cctv": null
+    },
+    {
+      "id": "b0094",
+      "slug": "songdo",
+      "kind": "beach",
+      "name": {
+        "ko": "송도해수욕장",
+        "en": "Songdo Beach"
+      },
+      "region": {
+        "sido": {
+          "ko": "부산",
+          "en": "Busan"
+        },
+        "sigungu": {
+          "ko": "서구",
+          "en": "Seo-gu"
+        }
+      },
+      "coast": "south",
+      "coords": {
+        "lat": 35.076209,
+        "lng": 129.017834
+      },
+      "activities": [
+        "swimming"
+      ],
+      "hidden": false,
+      "warningZones": {
+        "sea": "S1311100",
+        "land": "L1082700"
+      },
+      "stations": {
+        "waveHeight": {
+          "id": "22459",
+          "name": {
+            "ko": "오륙도 파고부이",
+            "en": "Oryukdo wave buoy"
+          },
+          "distanceKm": 10.3
         },
         "wavePeriod": null,
         "waveDirection": null,
+        "waterTemp": {
+          "id": "22459",
+          "name": {
+            "ko": "오륙도 파고부이",
+            "en": "Oryukdo wave buoy"
+          },
+          "distanceKm": 10.3
+        },
+        "wind": null
+      },
+      "photo": null,
+      "cctv": null
+    },
+    {
+      "id": "b0107",
+      "slug": "seopo-ri",
+      "kind": "beach",
+      "name": {
+        "ko": "서포리해수욕장",
+        "en": "Seopo-ri Beach"
+      },
+      "region": {
+        "sido": {
+          "ko": "인천",
+          "en": "Incheon"
+        },
+        "sigungu": {
+          "ko": "옹진군",
+          "en": "Ongjin"
+        }
+      },
+      "coast": "west",
+      "coords": {
+        "lat": 37.219677,
+        "lng": 126.11512
+      },
+      "activities": [
+        "swimming"
+      ],
+      "hidden": false,
+      "warningZones": {
+        "sea": "S1251200",
+        "land": "L1013600"
+      },
+      "stations": {
+        "waveHeight": {
+          "id": "22101",
+          "name": {
+            "ko": "덕적도 해양기상부이",
+            "en": "Deokjeokdo marine buoy"
+          },
+          "distanceKm": 8.7
+        },
+        "wavePeriod": {
+          "id": "22101",
+          "name": {
+            "ko": "덕적도 해양기상부이",
+            "en": "Deokjeokdo marine buoy"
+          },
+          "distanceKm": 8.7
+        },
+        "waveDirection": {
+          "id": "22101",
+          "name": {
+            "ko": "덕적도 해양기상부이",
+            "en": "Deokjeokdo marine buoy"
+          },
+          "distanceKm": 8.7
+        },
+        "waterTemp": {
+          "id": "22101",
+          "name": {
+            "ko": "덕적도 해양기상부이",
+            "en": "Deokjeokdo marine buoy"
+          },
+          "distanceKm": 8.7
+        },
+        "wind": {
+          "id": "22101",
+          "name": {
+            "ko": "덕적도 해양기상부이",
+            "en": "Deokjeokdo marine buoy"
+          },
+          "distanceKm": 8.7
+        }
+      },
+      "photo": null,
+      "cctv": null
+    },
+    {
+      "id": "b0120",
+      "slug": "ilsan",
+      "kind": "beach",
+      "name": {
+        "ko": "일산해수욕장",
+        "en": "Ilsan Beach"
+      },
+      "region": {
+        "sido": {
+          "ko": "울산",
+          "en": "Ulsan"
+        },
+        "sigungu": {
+          "ko": "동구",
+          "en": "Dong-gu"
+        }
+      },
+      "coast": "east",
+      "coords": {
+        "lat": 35.494196,
+        "lng": 129.431157
+      },
+      "activities": [
+        "swimming"
+      ],
+      "hidden": false,
+      "warningZones": {
+        "sea": "S1131100",
+        "land": "L1082800"
+      },
+      "stations": {
+        "waveHeight": {
+          "id": "22518",
+          "name": {
+            "ko": "당사 파고부이",
+            "en": "Dangsa wave buoy"
+          },
+          "distanceKm": 11.4
+        },
+        "wavePeriod": {
+          "id": "22518",
+          "name": {
+            "ko": "당사 파고부이",
+            "en": "Dangsa wave buoy"
+          },
+          "distanceKm": 11.4
+        },
+        "waveDirection": {
+          "id": "22518",
+          "name": {
+            "ko": "당사 파고부이",
+            "en": "Dangsa wave buoy"
+          },
+          "distanceKm": 11.4
+        },
+        "waterTemp": {
+          "id": "22518",
+          "name": {
+            "ko": "당사 파고부이",
+            "en": "Dangsa wave buoy"
+          },
+          "distanceKm": 11.4
+        },
+        "wind": null
+      },
+      "photo": {
+        "url": "https://tong.visitkorea.or.kr/cms/resource/44/3528444_image2_1.jpg",
+        "source": "한국관광공사",
+        "license": "kogl-type1",
+        "title": "일산해수욕장(울산)"
+      },
+      "cctv": null
+    },
+    {
+      "id": "b0157",
+      "slug": "gusipo",
+      "kind": "beach",
+      "name": {
+        "ko": "구시포해수욕장",
+        "en": "Gusipo Beach"
+      },
+      "region": {
+        "sido": {
+          "ko": "전북",
+          "en": "Jeonbuk"
+        },
+        "sigungu": {
+          "ko": "고창군",
+          "en": "Gochang"
+        }
+      },
+      "coast": "west",
+      "coords": {
+        "lat": 35.445761,
+        "lng": 126.435585
+      },
+      "activities": [
+        "swimming"
+      ],
+      "hidden": false,
+      "warningZones": {
+        "sea": "S1231200",
+        "land": "L1060100"
+      },
+      "stations": {
+        "waveHeight": null,
+        "wavePeriod": null,
+        "waveDirection": null,
         "waterTemp": null,
+        "wind": null
+      },
+      "photo": {
+        "url": "https://tong.visitkorea.or.kr/cms/resource/11/3536211_image2_1.jpg",
+        "source": "한국관광공사",
+        "license": "kogl-type1",
+        "title": "구시포해수욕장"
+      },
+      "cctv": null
+    },
+    {
+      "id": "b0165",
+      "slug": "geumjang",
+      "kind": "beach",
+      "name": {
+        "ko": "금장해수욕장",
+        "en": "Geumjang Beach"
+      },
+      "region": {
+        "sido": {
+          "ko": "전남",
+          "en": "Jeonnam"
+        },
+        "sigungu": {
+          "ko": "고흥군",
+          "en": "Goheung"
+        }
+      },
+      "coast": "south",
+      "coords": {
+        "lat": 34.434171,
+        "lng": 127.163005
+      },
+      "activities": [
+        "swimming"
+      ],
+      "hidden": false,
+      "warningZones": {
+        "sea": "S1321200",
+        "land": "L1053120"
+      },
+      "stations": {
+        "waveHeight": {
+          "id": "22478",
+          "name": {
+            "ko": "고흥 파고부이",
+            "en": "Goheung wave buoy"
+          },
+          "distanceKm": 6.7
+        },
+        "wavePeriod": null,
+        "waveDirection": null,
+        "waterTemp": {
+          "id": "22478",
+          "name": {
+            "ko": "고흥 파고부이",
+            "en": "Goheung wave buoy"
+          },
+          "distanceKm": 6.7
+        },
+        "wind": null
+      },
+      "photo": {
+        "url": "https://tong.visitkorea.or.kr/cms/resource/40/3542840_image2_1.jpg",
+        "source": "한국관광공사",
+        "license": "kogl-type1",
+        "title": "금장해수욕장"
+      },
+      "cctv": null
+    },
+    {
+      "id": "b0272",
+      "slug": "sinyang-seopjikoji",
+      "kind": "beach",
+      "name": {
+        "ko": "신양섭지코지해수욕장",
+        "en": "Sinyang Seopjikoji Beach"
+      },
+      "region": {
+        "sido": {
+          "ko": "제주",
+          "en": "Jeju"
+        },
+        "sigungu": {
+          "ko": "서귀포시",
+          "en": "Seogwipo"
+        }
+      },
+      "coast": "jeju",
+      "coords": {
+        "lat": 33.434809,
+        "lng": 126.923021
+      },
+      "activities": [
+        "swimming"
+      ],
+      "hidden": false,
+      "warningZones": {
+        "sea": "S1323200",
+        "land": "L1091430"
+      },
+      "stations": {
+        "waveHeight": {
+          "id": "22495",
+          "name": {
+            "ko": "신산 파고부이",
+            "en": "Sinsan wave buoy"
+          },
+          "distanceKm": 6.6
+        },
+        "wavePeriod": null,
+        "waveDirection": null,
+        "waterTemp": {
+          "id": "22495",
+          "name": {
+            "ko": "신산 파고부이",
+            "en": "Sinsan wave buoy"
+          },
+          "distanceKm": 6.6
+        },
         "wind": null
       },
       "photo": null,
