@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // 지도 작업자 파일: node_modules의 maplibre-gl 복사본(npm run map:worker)
+    "public/vendor/**",
   ]),
 ]);
 

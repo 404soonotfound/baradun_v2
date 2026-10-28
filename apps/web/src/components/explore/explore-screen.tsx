@@ -8,6 +8,7 @@ import { useMemo, useRef, useState } from "react";
 import { BeachRow } from "@/components/beach-row";
 import { ExploreFilters } from "@/components/explore/explore-filters";
 import { LocationOffBanner } from "@/components/home/location-off-banner";
+import { MapView } from "@/components/map/map-view";
 import { RegionSheet } from "@/components/region/region-sheet";
 import { SituationBanner } from "@/components/situation-banner";
 import { Banner } from "@/components/ui/banner";
@@ -33,6 +34,7 @@ import {
 import { setSortChoice, useSortChoice } from "@/lib/explore-sort";
 import { localizedPath, type Locale } from "@/lib/i18n";
 import { useUserLocation } from "@/lib/location";
+import { boundsOf } from "@/lib/map/bounds";
 import { formatKm, joinMeta } from "@/lib/meta-join";
 import { setRegion, useRegion } from "@/lib/region";
 import {
@@ -54,7 +56,7 @@ import { useSheet } from "@/lib/use-sheet";
 // 탐색 목록 (BRD-29 · 노션 2장 EXP-L·D-EXP, Figma S_M02_01~07)
 // 위에서 아래: 제목 → 검색 입구 → 활동·지역 칩 → 상황 배너(하나) → 보기 전환 → "전체 n곳 · 시각" → 목록
 // 목록: 상태별(특보 없음 → 이용불가 → 판단불가 묶음) 또는 가까운 순/이름 순 한 목록. 순위·점수·추천 표시 없음
-// 분류는 스냅샷 게시값 그대로(G1). PC(lg)는 왼쪽 448px 목록 열(오른쪽 지도는 지도 이슈에서 채움)
+// 분류는 스냅샷 게시값 그대로(G1). PC(lg)는 왼쪽 448px 목록 열 + 오른쪽 지도(BRD-65, 탐색에 들어오면 불러옴)
 
 export function ExploreScreen({
   locale,
@@ -92,12 +94,21 @@ export function ExploreScreen({
   const mode = exploreMode(sortChoice, coords !== null);
 
   // 해변 → 목록 줄. 화면 상태는 게시된 분류 그대로(deriveBeachView는 만료·오프라인 때 판단불가로 내리기만 함)
+  const shown = useMemo(
+    () => filterBeaches(beaches, activity, region),
+    [beaches, activity, region],
+  );
   const items = useMemo(
     () =>
-      buildItems(filterBeaches(beaches, activity, region), coords, (beach) =>
+      buildItems(shown, coords, (beach) =>
         deriveBeachView({ id: beach.id, hidden: false }, snapshot),
       ),
-    [beaches, activity, region, coords, snapshot],
+    [shown, coords, snapshot],
+  );
+  // 지도 범위 = 지금 목록에 보이는 해변(사용자 위치로 옮기지 않음)
+  const mapBounds = useMemo(
+    () => boundsOf(shown.map((beach) => beach.coords)),
+    [shown],
   );
   const loading = isLoading(items);
   const statusGroups = useMemo(
@@ -222,149 +233,156 @@ export function ExploreScreen({
   const secondLabel = coords ? t("explore.sort.near") : t("explore.sort.name");
 
   return (
-    <div className="flex flex-col gap-4 lg:max-w-[448px]">
-      <h1
-        ref={titleRef}
-        tabIndex={-1}
-        className="text-title-xl text-text-default outline-none"
-      >
-        {t("pages.explore")}
-      </h1>
-
-      {/* 검색 입구(누르면 검색 화면). PC는 상단 내비에 검색이 있어 숨김 */}
-      <Link
-        href={localizedPath(locale, "/search/")}
-        className="flex h-search items-center gap-2.5 rounded-input border border-border-strong bg-bg-surface px-[15px] text-[15px] text-text-muted lg:hidden"
-      >
-        <Search aria-hidden="true" size={17} className="shrink-0" />
-        {t("home.top.search")}
-      </Link>
-
-      <ExploreFilters
-        chips={chips}
-        region={region}
-        regionLabel={name}
-        onNationwide={() => setRegion(null)}
-        // 시트에서 고르기 전에는 저장하지 않음(그냥 닫으면 지역이 그대로)
-        onPickSido={(sido) => {
-          setPickSido(sido);
-          regionSheet.show();
-        }}
-      />
-
-      {sampleSnapshot && (
-        <p
-          role="note"
-          className="rounded-card bg-bg-surface px-4 py-3 text-body-s text-text-body shadow-card"
+    <div className="lg:grid lg:grid-cols-[448px_minmax(0,1fr)] lg:items-start lg:gap-6">
+      <div className="flex flex-col gap-4">
+        <h1
+          ref={titleRef}
+          tabIndex={-1}
+          className="text-title-xl text-text-default outline-none"
         >
-          {t("home.sampleSnapshot")}
-        </p>
-      )}
+          {t("pages.explore")}
+        </h1>
 
-      {/* 상황 배너 자리(하나만) */}
-      <SituationBanner
-        locale={locale}
-        situation={situation}
-        snapshot={snapshot}
-        onRetrySucceeded={() => titleRef.current?.focus()}
-      />
-      {noClear && (
-        <Banner
-          tone="gray"
-          icon={<SearchX size={16} />}
-          title={t("explore.noClear.title")}
+        {/* 검색 입구(누르면 검색 화면). PC는 상단 내비에 검색이 있어 숨김 */}
+        <Link
+          href={localizedPath(locale, "/search/")}
+          className="flex h-search items-center gap-2.5 rounded-input border border-border-strong bg-bg-surface px-[15px] text-[15px] text-text-muted lg:hidden"
         >
-          {t("explore.noClear.body")}
-        </Banner>
-      )}
-      {locationOff && (
-        <LocationOffBanner
+          <Search aria-hidden="true" size={17} className="shrink-0" />
+          {t("home.top.search")}
+        </Link>
+
+        <ExploreFilters
+          chips={chips}
+          region={region}
+          regionLabel={name}
+          onNationwide={() => setRegion(null)}
+          // 시트에서 고르기 전에는 저장하지 않음(그냥 닫으면 지역이 그대로)
+          onPickSido={(sido) => {
+            setPickSido(sido);
+            regionSheet.show();
+          }}
+        />
+
+        {sampleSnapshot && (
+          <p
+            role="note"
+            className="rounded-card bg-bg-surface px-4 py-3 text-body-s text-text-body shadow-card"
+          >
+            {t("home.sampleSnapshot")}
+          </p>
+        )}
+
+        {/* 상황 배너 자리(하나만) */}
+        <SituationBanner
           locale={locale}
-          status={location.status}
-          onClose={() => setOffBannerClosed(true)}
-          title={t("explore.locationOff.title")}
-          body={t("explore.locationOff.body")}
+          situation={situation}
+          snapshot={snapshot}
+          onRetrySucceeded={() => titleRef.current?.focus()}
         />
-      )}
+        {noClear && (
+          <Banner
+            tone="gray"
+            icon={<SearchX size={16} />}
+            title={t("explore.noClear.title")}
+          >
+            {t("explore.noClear.body")}
+          </Banner>
+        )}
+        {locationOff && (
+          <LocationOffBanner
+            locale={locale}
+            status={location.status}
+            onClose={() => setOffBannerClosed(true)}
+            title={t("explore.locationOff.title")}
+            body={t("explore.locationOff.body")}
+          />
+        )}
 
-      <ViewToggle<SortChoice>
-        label={t("explore.sortLabel")}
-        options={[
-          { value: "status", label: t("explore.sort.status") },
-          { value: "second", label: secondLabel },
-        ]}
-        value={sortChoice}
-        onChange={setSortChoice}
-      />
-
-      {!loading && (
-        <div className="flex flex-col gap-0.5 text-caption text-text-muted">
-          {activity !== "swimming" && items.length > 0 && (
-            <p>{t("explore.activityNote", { count: items.length })}</p>
-          )}
-          {/* 결과가 없으면 '전체 0곳'을 되풀이하지 않고 아래 빈 화면이 말함 */}
-          {items.length > 0 && (
-            <p>
-              {joinMeta([
-                countText,
-                dataTime && t("explore.updatedAt", { time: dataTime }),
-              ])}
-            </p>
-          )}
-        </div>
-      )}
-
-      {loading ? (
-        <BeachRowSkeleton label={t("explore.loading")} />
-      ) : items.length === 0 ? (
-        <EmptyState
-          icon={<SearchX size={26} />}
-          title={t("explore.empty.title")}
-          description={t("explore.empty.body")}
-          action={
-            region !== null ? (
-              <Button variant="secondary" onClick={() => setRegion(null)}>
-                {t("explore.empty.action")}
-              </Button>
-            ) : undefined
-          }
+        <ViewToggle<SortChoice>
+          label={t("explore.sortLabel")}
+          options={[
+            { value: "status", label: t("explore.sort.status") },
+            { value: "second", label: secondLabel },
+          ]}
+          value={sortChoice}
+          onChange={setSortChoice}
         />
-      ) : mode === "status" ? (
-        <div className="flex flex-col gap-5">
-          {statusGroups.map(renderGroup)}
-          {/* 특보 없음 묶음이 없으면(이용불가·판단불가만, 오프라인 포함) 묶음 안내가 없으니 목록 아래에 한 번 둠 */}
-          {!statusGroups.some((group) => group.category === "clear") && (
-            <p className="text-caption text-text-muted">
-              {t("safety.finalCall")}
-            </p>
-          )}
-        </div>
-      ) : (
-        <div className="flex flex-col gap-2">
-          <ul className="divide-y divide-border-default overflow-hidden rounded-card bg-bg-surface shadow-card">
-            {flatItems.map(renderRow)}
-          </ul>
+
+        {!loading && (
           <div className="flex flex-col gap-0.5 text-caption text-text-muted">
-            {flatHasClear && (
-              <p>{clearScope(clearCheckedAt(flatClearViews))}</p>
+            {activity !== "swimming" && items.length > 0 && (
+              <p>{t("explore.activityNote", { count: items.length })}</p>
             )}
-            <p>{t("safety.finalCall")}</p>
+            {/* 결과가 없으면 '전체 0곳'을 되풀이하지 않고 아래 빈 화면이 말함 */}
+            {items.length > 0 && (
+              <p>
+                {joinMeta([
+                  countText,
+                  dataTime && t("explore.updatedAt", { time: dataTime }),
+                ])}
+              </p>
+            )}
           </div>
-        </div>
-      )}
+        )}
 
-      {/* 시·군 고르기 시트. 시·도 칩을 누르면 그 시·도의 시·군 단계로 열림 */}
-      <RegionSheet
-        open={regionSheet.open}
-        onClose={regionSheet.close}
-        groups={groups}
-        value={region}
-        startSido={pickSido}
-        onSelect={(next) => {
-          setRegion(next);
-          regionSheet.close();
-        }}
-      />
+        {loading ? (
+          <BeachRowSkeleton label={t("explore.loading")} />
+        ) : items.length === 0 ? (
+          <EmptyState
+            icon={<SearchX size={26} />}
+            title={t("explore.empty.title")}
+            description={t("explore.empty.body")}
+            action={
+              region !== null ? (
+                <Button variant="secondary" onClick={() => setRegion(null)}>
+                  {t("explore.empty.action")}
+                </Button>
+              ) : undefined
+            }
+          />
+        ) : mode === "status" ? (
+          <div className="flex flex-col gap-5">
+            {statusGroups.map(renderGroup)}
+            {/* 특보 없음 묶음이 없으면(이용불가·판단불가만, 오프라인 포함) 묶음 안내가 없으니 목록 아래에 한 번 둠 */}
+            {!statusGroups.some((group) => group.category === "clear") && (
+              <p className="text-caption text-text-muted">
+                {t("safety.finalCall")}
+              </p>
+            )}
+          </div>
+        ) : (
+          <div className="flex flex-col gap-2">
+            <ul className="divide-y divide-border-default overflow-hidden rounded-card bg-bg-surface shadow-card">
+              {flatItems.map(renderRow)}
+            </ul>
+            <div className="flex flex-col gap-0.5 text-caption text-text-muted">
+              {flatHasClear && (
+                <p>{clearScope(clearCheckedAt(flatClearViews))}</p>
+              )}
+              <p>{t("safety.finalCall")}</p>
+            </div>
+          </div>
+        )}
+
+        {/* 시·군 고르기 시트. 시·도 칩을 누르면 그 시·도의 시·군 단계로 열림 */}
+        <RegionSheet
+          open={regionSheet.open}
+          onClose={regionSheet.close}
+          groups={groups}
+          value={region}
+          startSido={pickSido}
+          onSelect={(next) => {
+            setRegion(next);
+            regionSheet.close();
+          }}
+        />
+      </div>
+
+      {/* PC 지도 열(D-EXP). 모바일에서는 숨겨 두어 불러오지 않음. 지도가 실패해도 왼쪽 목록은 그대로 */}
+      <div className="hidden lg:sticky lg:top-[88px] lg:block lg:h-[calc(100dvh-112px)]">
+        <MapView locale={locale} bounds={mapBounds} className="h-full" />
+      </div>
     </div>
   );
 }
