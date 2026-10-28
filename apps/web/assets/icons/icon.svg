@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- 앱 아이콘 원본 (BRD-106 결정 28): 직접 그린 물결 세 겹. 공유 미리보기(public/og)의 물결과 같은 모양
+       모서리를 둥글린 판(purpose any: favicon·192·512). 바깥은 투명
+       색은 토큰 라이트 값만 씀(scripts/icons.test.ts가 확인): 바탕 brand/weak, 물결 brand/default(뒤는 35%)·chart
+       PNG·ICO는 npm run icons -w apps/web 로 다시 만듦 -->
+  <clipPath id="plate">
+    <rect width="512" height="512" rx="112"/>
+  </clipPath>
+  <rect width="512" height="512" rx="112" fill="#E8F1FD"/>
+  <g clip-path="url(#plate)">
+    <path d="M0 224 Q128 152 256 224 T512 224 V512 H0Z" fill="#1366D6" fill-opacity="0.35"/>
+    <path d="M0 300 Q128 372 256 300 T512 300 V512 H0Z" fill="#2F7FE6"/>
+    <path d="M0 376 Q128 304 256 376 T512 376 V512 H0Z" fill="#1366D6"/>
+  </g>
+</svg>

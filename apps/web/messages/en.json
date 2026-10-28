@@ -94,6 +94,11 @@
   },
   "home": {
     "sampleSnapshot": "These warnings and measurements are development samples, not real checks.",
+    "unavailable": {
+      "title": "Couldn't open that page, so you're on Home",
+      "impact": "Without a connection, only Home, Explore, Favorites and Settings open",
+      "next": "Check your connection and open it again"
+    },
     "titleLine1": "Which sea are you",
     "titleLine2": "heading to today?",
     "top": {

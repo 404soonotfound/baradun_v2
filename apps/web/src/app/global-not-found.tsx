@@ -4,13 +4,14 @@ import { getTranslations } from "next-intl/server";
 import { SearchX } from "lucide-react";
 import { RootDocument } from "@/components/root-document";
 import { Button } from "@/components/ui/button";
+import { HEAD_ICONS } from "@/lib/app-icons";
 import { localizedPath, type Locale } from "@/lib/i18n";
 import { sharedViewport } from "@/lib/viewport";
 import "./globals.css";
 
 // 전역 404 (SYS 404, BRD-38 · 노션 2장 SYS '404(해변 검색하기 / 홈으로)')
 // 루트 레이아웃이 언어별로 둘이라 전역 404 파일 하나로 두 언어를 함께 표시(정적 내보내기는 out/404.html 하나)
-// 레이아웃을 거치지 않으므로 globals.css·테마 스크립트(RootDocument)·viewport를 여기서 직접 넣음
+// 레이아웃을 거치지 않으므로 globals.css·테마 스크립트(RootDocument)·viewport·아이콘을 여기서 직접 넣음
 // 노출을 끈 해변의 상세 주소도 이 화면(노션 2장 운영자 화면)
 async function bothLocales() {
   return Promise.all([
@@ -21,7 +22,7 @@ async function bothLocales() {
 
 export async function generateMetadata(): Promise<Metadata> {
   const [ko, en] = await bothLocales();
-  return { title: `${ko("title")} · ${en("title")}` };
+  return { title: `${ko("title")} · ${en("title")}`, icons: HEAD_ICONS };
 }
 
 export const viewport = sharedViewport;
