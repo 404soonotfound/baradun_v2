@@ -19,6 +19,7 @@
     "build-storybook": "storybook build",
     "test:e2e": "playwright test",
     "tokens": "node scripts/build-tokens.mjs",
+    "icons": "node scripts/build-icons.mts",
     "map:worker": "node scripts/copy-map-worker.mjs",
     "check:tokens": "node scripts/check-tokens.mjs",
     "check:messages": "node scripts/check-messages.mjs"

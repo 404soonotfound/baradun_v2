@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 import { RootDocument } from "@/components/root-document";
+import { HEAD_ICONS } from "@/lib/app-icons";
 import { siteUrl } from "@/lib/site-url";
 import { AppShell } from "@/components/shell/app-shell";
 import { sharedViewport } from "@/lib/viewport";
@@ -16,6 +17,7 @@ export async function generateMetadata(): Promise<Metadata> {
     description: t("description"),
     // 홈 화면에 추가한 iOS 앱을 standalone으로 염(BRD-42). 안전 영역은 app-shell의 standalone: 클래스가 비움
     appleWebApp: { capable: true, title: t("siteName") },
+    icons: HEAD_ICONS, // favicon·Apple touch 아이콘(BRD-106)
   };
 }
 
