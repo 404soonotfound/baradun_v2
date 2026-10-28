@@ -153,6 +153,8 @@
   },
   "notFound": {
     "title": "Page not found",
+    "body": "The address may have changed, or this beach isn't shown right now",
+    "search": "Search beaches",
     "home": "Go to home"
   },
   "nav": {
@@ -336,9 +338,27 @@
     "retry": "Try again",
     "retrying": "Checking again",
     "retryFailed": "Tried again but couldn't load new information",
+    "outage": "We're not receiving the official information we check",
+    "outageTime": "Last received {time}",
+    "outageTimeUnknown": "Last received time unknown",
+    "outageNext": "We'll check again as soon as it arrives · Follow on-site guidance",
     "delayed": "Wave height readings for {name} are delayed",
     "delayedMore": "Wave height readings for {name} and {count, plural, one {# other beach} other {# other beaches}} are delayed",
     "delayedBody": "We can't assess the current status · We'll check again when new readings come in"
+  },
+  "systemScreen": {
+    "maintenanceTitle": "We're under maintenance",
+    "maintenanceBody": "Sea information isn't shown during maintenance",
+    "maintenanceUntil": "Maintenance is planned until {time}",
+    "untilUnknown": "We don't know yet when it will end",
+    "fieldNotice": "If you go to the sea, follow on-site controls and lifeguard guidance",
+    "recheck": "Check again",
+    "rechecking": "Checking",
+    "stillMaintenance": "Still under maintenance",
+    "updateTitle": "Please update to the new version",
+    "updateBody": "The way we read information has changed, so this version can't show sea information",
+    "updateNext": "Reload to get the new version",
+    "reload": "Reload"
   },
   "warningSheet": {
     "title": "Warning details",
