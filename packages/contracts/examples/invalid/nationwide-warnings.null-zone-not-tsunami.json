@@ -5,7 +5,15 @@
       "type": "wind_wave",
       "level": "advisory",
       "zoneCode": null,
-      "zoneName": "예시 남해앞바다",
+      "zoneName": "부산앞바다",
+      "publishedAt": "2026-10-17T04:00:00Z",
+      "effectiveFrom": "2026-10-17T05:00:00Z"
+    },
+    {
+      "type": "strong_wind",
+      "level": "advisory",
+      "zoneCode": "L1053120",
+      "zoneName": "고흥군",
       "publishedAt": "2026-10-17T04:00:00Z",
       "effectiveFrom": "2026-10-17T05:00:00Z"
     },
@@ -13,7 +21,7 @@
       "type": "tsunami",
       "level": "warning",
       "zoneCode": null,
-      "zoneName": "예시 동해안",
+      "zoneName": "울산광역시",
       "publishedAt": "2026-10-17T05:10:00Z",
       "effectiveFrom": "2026-10-17T05:10:00Z"
     }

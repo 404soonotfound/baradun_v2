@@ -23,13 +23,13 @@ add("manifest.unsupported-schema-version", "manifest", (d) => {
 add("status.missing-valid-until", "status", (d) => {
   delete d.beaches.b0001.validUntil;
 });
-// 모르는 사유 code (통제 code는 후속용 예약, 6.3)
+// 모르는 사유 code (통제 code는 후속용 예약, 6.3). b0272는 관측 지연 판단불가 예시
 add("status.unknown-reason-code", "status", (d) => {
-  d.beaches.b0003.reasons[0].code = "control_closed";
+  d.beaches.b0272.reasons[0].code = "control_closed";
 });
-// 분류와 사유가 안 맞음: 특보 없음인데 사유가 있음
+// 분류와 사유가 안 맞음: 특보 없음인데 사유가 있음. b0094는 풍랑주의보 이용불가 예시
 add("status.clear-with-reason", "status", (d) => {
-  d.beaches.b0001.reasons = d.beaches.b0003.reasons;
+  d.beaches.b0001.reasons = d.beaches.b0094.reasons;
 });
 // '특보 없음'인데 확인 시각이 없음 (확인된 때만 '없음')
 add("status.none-without-confirmed-time", "status", (d) => {
