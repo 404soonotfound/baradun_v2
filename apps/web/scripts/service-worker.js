@@ -12,6 +12,9 @@ const CACHE_PREFIX = "baradun-screen-";
 const CACHE_NAME = CACHE_PREFIX + SW_BUILD;
 // HTML을 저장해 두는 화면(탭 화면). 미리 저장·저장·저장본 사용 모두 이 목록으로만 가림
 const SAVED_PAGES = new Set(SW_PAGES);
+// 홈으로 보낼 때 붙이는 표식(?unavailable=1). 홈이 '그 화면을 열지 못했어요' 안내를 보여줌(lib/page-unavailable.ts와 같은 값)
+// 사유만 알리고 원래 주소·위치 등은 싣지 않음
+const UNAVAILABLE_PARAM = "unavailable";
 // 응답이 멈춘 망(캡티브 포털 등)에서 HTML을 끝없이 기다리지 않게 함(store.ts REQUEST_TIMEOUT_MS와 같은 값)
 const PAGE_TIMEOUT_MS = 10000;
 
@@ -186,9 +189,12 @@ async function page(event) {
     : undefined;
   if (saved) return saved;
   // 저장하지 않는 화면(상세·검색 등)·저장본이 없는 화면: 같은 언어 오프라인 홈으로 보냄(홈은 설치 때 저장함)
+  // 표식을 붙여 홈이 왜 홈으로 왔는지 알림. 표식이 붙은 홈 주소도 위 저장본(검색어 무시)으로 열림
   const home = homeFor(url);
   if (url.pathname !== home && (await cache.match(home))) {
-    return Response.redirect(new URL(home, url.origin).href, 302);
+    const target = new URL(home, url.origin);
+    target.searchParams.set(UNAVAILABLE_PARAM, "1");
+    return Response.redirect(target.href, 302);
   }
   return response ?? Response.error();
 }

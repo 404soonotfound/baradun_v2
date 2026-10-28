@@ -10,6 +10,7 @@ import { HomeTopBar } from "@/components/home/home-top-bar";
 import { LocationOffBanner } from "@/components/home/location-off-banner";
 import { NationwideWarnings } from "@/components/home/nationwide-warnings";
 import { NearCard } from "@/components/home/near-card";
+import { PageUnavailableNote } from "@/components/home/page-unavailable-note";
 import { RecentBeaches } from "@/components/home/recent-beaches";
 import { RegionButton } from "@/components/home/region-button";
 import { RegionCountCard } from "@/components/home/region-count-card";
@@ -233,6 +234,8 @@ export function HomeScreen({
             onRetrySucceeded={() => titleRef.current?.focus()}
           />
         )}
+        {/* 연결이 없어 다른 화면을 열지 못하고 홈으로 왔을 때만(서비스 워커 표식, BRD-106) */}
+        <PageUnavailableNote />
         <div className="lg:w-[560px]">
           <ActivityTiles />
         </div>
