@@ -55,15 +55,23 @@ export function precacheList(outDir: string, buildId: string): string[] {
   return [...OFFLINE_PAGES, ...code.sort(), ...[...media].sort()];
 }
 
+// SW_PAGES: HTML을 저장하는 화면(탭 화면). 워커는 이 목록으로만 화면을 가림(미리 저장 때 HTML 확인·저장·저장본 사용)
+// 화면은 미리 저장 목록에도 있어야 함(설치 때 받아 둬야 오프라인에서 열림)
 export function serviceWorkerSource(
   buildId: string,
   precache: string[],
   source: string,
+  pages: readonly string[] = OFFLINE_PAGES,
 ): string {
+  const missing = pages.filter((page) => !precache.includes(page));
+  if (missing.length > 0) {
+    throw new Error(`미리 저장 목록에 없는 화면: ${missing.join(", ")}`);
+  }
   return [
     `// 생성 파일(scripts/build-sw.mts). 직접 고치지 않음`,
     `const SW_BUILD = ${JSON.stringify(buildId)};`,
     `const SW_PRECACHE = ${JSON.stringify(precache)};`,
+    `const SW_PAGES = ${JSON.stringify(pages)};`,
     source,
   ].join("\n");
 }

@@ -1,16 +1,17 @@
 // 화면 파일 저장 서비스 워커 (아키텍처 9.1 '오프라인', BRD-42)
-// build-sw.mts가 빌드 뒤 SW_BUILD(Next 빌드 ID)·SW_PRECACHE(미리 저장할 경로)를 앞에 붙여 out/sw.js로 내보냄.
+// build-sw.mts가 빌드 뒤 SW_BUILD(Next 빌드 ID)·SW_PRECACHE(미리 저장할 경로)·SW_PAGES(HTML을 저장하는 탭 화면)를
+// 앞에 붙여 out/sw.js로 내보냄.
 // - 화면 파일(HTML·_next/static·vendor)만 저장함. 바다 정보(/data/**)·다른 출처(지도 타일 등)는 손대지 않음
 //   → 브라우저가 늘 네트워크로 받고, 못 받으면 store.ts가 기기에 둔 마지막 값을 B5 규칙(live: false)으로 보여줌
 // - HTML은 네트워크 먼저, 못 받을 때만 저장본. 저장본도 없으면 같은 언어 홈으로 보냄(오프라인 홈)
-// - HTML 저장본은 탭 화면 8개(SW_PRECACHE의 "/"로 끝나는 경로)만 둠. 상세·검색 등 그 밖의 화면은 열어도 저장하지 않음(결정 29)
+// - HTML 저장본은 탭 화면 8개(SW_PAGES)만 둠. 상세·검색 등 그 밖의 화면은 열어도 저장하지 않음(결정 29)
 // - 빌드마다 캐시 이름이 다름. 새 워커는 기다리지 않고 바로 교체하고 옛 빌드 캐시를 지움
 // 고전 스크립트(import 없음)로 둠: 모듈 서비스 워커를 못 쓰는 브라우저가 있음
 
 const CACHE_PREFIX = "baradun-screen-";
 const CACHE_NAME = CACHE_PREFIX + SW_BUILD;
-// HTML을 저장해 두는 화면(탭 화면). 미리 저장 목록에서 화면 경로만 고름(precache()의 isPage와 같은 규칙)
-const SAVED_PAGES = new Set(SW_PRECACHE.filter((path) => path.endsWith("/")));
+// HTML을 저장해 두는 화면(탭 화면). 미리 저장·저장·저장본 사용 모두 이 목록으로만 가림
+const SAVED_PAGES = new Set(SW_PAGES);
 // 응답이 멈춘 망(캡티브 포털 등)에서 HTML을 끝없이 기다리지 않게 함(store.ts REQUEST_TIMEOUT_MS와 같은 값)
 const PAGE_TIMEOUT_MS = 10000;
 
@@ -66,7 +67,7 @@ async function precache() {
   try {
     await Promise.all(
       SW_PRECACHE.map(async (path) => {
-        const isPage = path.endsWith("/");
+        const isPage = SAVED_PAGES.has(path);
         // HTML은 HTTP 캐시를 거치더라도 서버에 다시 확인. _next/static은 이름에 해시가 있어 그대로 씀
         const response = await fetch(path, {
           cache: isPage ? "no-cache" : "default",
