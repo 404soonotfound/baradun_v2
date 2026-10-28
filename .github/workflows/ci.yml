@@ -87,6 +87,25 @@ jobs:
       - run: npm run lint -w apps/web
       - run: npm run test -w apps/web # 데이터 계층(Vitest)
 
+  # 웹 E2E: 정적 빌드 결과로 전 화면 접근성(axe)·상태별 화면·키보드·반응형 검사 (BRD-39)
+  # /data/**는 테스트의 가짜 응답만 씀(운영 데이터·외부 타일 서버에 기대지 않음)
+  e2e:
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npx --no-install playwright install --with-deps chromium # lock 파일의 Playwright 판에 맞는 chromium
+        working-directory: apps/web
+      - run: npm run build -w apps/web
+      - run: npm run test:e2e -w apps/web
+
   # 백엔드: 린트·타입 검사·테스트(Vitest)
   services:
     needs: changes
@@ -179,7 +198,7 @@ jobs:
   # 결과 모음: 건너뜀은 통과, 실패·취소는 실패 (정기 실행은 audit 결과만 보면 되므로 건너뜀)
   ci-ok:
     if: always() && github.event_name != 'schedule'
-    needs: [changes, web, services, infra, contracts, beaches, audit] # 하나라도 실패하면 빨간불
+    needs: [changes, web, e2e, services, infra, contracts, beaches, audit] # 하나라도 실패하면 빨간불
     runs-on: ubuntu-latest
     steps:
       - name: 결과 확인

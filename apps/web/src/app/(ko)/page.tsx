@@ -36,6 +36,8 @@ export default async function Home() {
             href={localizedPath(locale, "/")}
             hrefLang={locale}
             lang={locale}
+            // 글자만 있는 링크라 누르는 영역을 44px로(BRD-39)
+            className="inline-flex min-h-touch min-w-touch items-center"
           >
             {LOCALE_NAMES[locale]}
           </Link>

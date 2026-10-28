@@ -35,8 +35,9 @@ export function ViewToggle<T extends string>({
             type="button"
             aria-pressed={selected}
             onClick={() => onChange(option.value)}
+            // 보이는 칸은 34px, 누르는 영역은 위아래 5px씩 넓혀 44px(BRD-39). 틀 여백 3px을 넘어 2px씩 나감
             className={cn(
-              "h-segment flex-1 rounded-[8px] px-2 text-body-s whitespace-nowrap text-text-default",
+              "relative h-segment flex-1 rounded-[8px] px-2 text-body-s whitespace-nowrap text-text-default before:absolute before:inset-x-0 before:-inset-y-[5px] before:content-['']",
               selected && "bg-bg-surface font-bold shadow-card",
             )}
           >

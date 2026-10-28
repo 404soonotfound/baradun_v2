@@ -8,6 +8,20 @@
 @layer base {
   html {
     background: var(--color-bg-page);
+    /* 키보드로 옮긴 포커스가 고정된 아래 탭 막대(안전 영역 포함, tab-bar.tsx)에 가려지지 않게
+       그만큼 띄워 스크롤함 (BRD-39, WCAG 2.4.11) */
+    scroll-padding-bottom: calc(
+      var(--spacing-tabbar) + max(14px, env(safe-area-inset-bottom)) +
+        var(--spacing) * 2
+    );
+  }
+
+  /* PC(lg): 아래 탭 막대가 없고 위에 붙는 메뉴(h-16, top-nav.tsx)가 있어 그 아래로 띄움 */
+  @media (width >= 64rem) {
+    html {
+      scroll-padding-top: calc(var(--spacing) * 18);
+      scroll-padding-bottom: 0;
+    }
   }
 
   body {

@@ -12,9 +12,7 @@ import type { SavedRegion } from "@/lib/region-list";
 //   지역: 맨 앞 '전국', 그다음 해변이 있는 시·도(지리 순서). 시·도를 누르면 시·군 시트(10/27 결정)
 // 칩 줄이 좁은 화면에서 옆으로 밀려 나가도 칩마다 Tab으로 닿음(스크롤 영역 안에 포커스 가능한 칩)
 
-// 칩은 36px라 위아래로 4px씩 눌리는 영역을 넓혀 44px를 맞춤(보이는 크기는 그대로). 줄에 위아래 4px 여백을 둬 잘리지 않게 함
-const HIT =
-  "relative before:absolute before:inset-x-0 before:-inset-y-1 before:content-['']";
+// 칩은 누르는 영역을 위아래 4px씩 넓혀 44px(ui/chip.tsx). 줄에 위아래 4px 여백(py-1)을 둬 잘리지 않게 함
 
 export function ExploreFilters({
   chips,
@@ -43,7 +41,6 @@ export function ExploreFilters({
         {ACTIVITIES.map((item) => (
           <Chip
             key={item}
-            className={HIT}
             variant={item === activity ? "on" : "default"}
             aria-pressed={item === activity}
             onClick={() => setActivity(item)}
@@ -58,7 +55,6 @@ export function ExploreFilters({
         className="-mx-gutter flex gap-2 overflow-x-auto px-gutter py-1 lg:mx-0 lg:px-0"
       >
         <Chip
-          className={HIT}
           variant={region === null ? "on" : "default"}
           aria-pressed={region === null}
           onClick={onNationwide}
@@ -70,7 +66,6 @@ export function ExploreFilters({
           return (
             <Chip
               key={chip.key}
-              className={HIT}
               // 고른 시·도만 ⌄ 표시(드롭다운에서 고른 값). 누르면 시·군 시트가 열림
               variant={selected ? "sel" : "default"}
               aria-haspopup="dialog"

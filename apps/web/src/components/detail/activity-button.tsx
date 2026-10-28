@@ -21,7 +21,8 @@ export function ActivityButton() {
         type="button"
         onClick={sheet.show}
         aria-haspopup="dialog"
-        className="flex h-chip shrink-0 items-center gap-1 rounded-full border border-border-strong px-3 text-body"
+        // 보이는 높이 36, 누르는 영역은 위아래 4px씩 넓혀 44px(BRD-39). ::before는 테두리 안쪽 기준이라 5px
+        className="relative flex h-chip shrink-0 items-center gap-1 rounded-full border border-border-strong px-3 text-body before:absolute before:inset-x-0 before:-inset-y-[5px] before:content-['']"
       >
         {t(activity)}
         <ChevronDown aria-hidden="true" size={16} />

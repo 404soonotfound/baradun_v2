@@ -116,7 +116,11 @@ export function Sheet({
             <X aria-hidden="true" size={22} />
           </button>
         </div>
-        <div className="overflow-y-auto px-gutter pt-2 lg:px-6">{children}</div>
+        {/* 내용이 길어 스크롤될 때 안에 누를 것이 없어도 키보드(화살표)로 스크롤하게 Tab으로 닿게 함
+            (BRD-39, WCAG 2.1.1). 처음 포커스는 앞의 닫기 버튼 */}
+        <div tabIndex={0} className="overflow-y-auto px-gutter pt-2 lg:px-6">
+          {children}
+        </div>
       </div>
     </dialog>
   );
