@@ -9,7 +9,6 @@ import { RegionSheet } from "@/components/region/region-sheet";
 import { Button } from "@/components/ui/button";
 import { Sheet } from "@/components/ui/sheet";
 import { Switch } from "@/components/ui/switch";
-import { Toast, useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/cn";
 import { resetDeviceData } from "@/lib/device-reset";
 import { LOCALE_NAMES, LOCALES, localizedPath, type Locale } from "@/lib/i18n";
@@ -43,13 +42,12 @@ export function SettingsScreen({
 }) {
   const t = useTranslations("settings");
   const tp = useTranslations("pages");
-  const toast = useToast();
   const resetSheet = useSheet("device-reset");
 
   function confirmReset() {
     resetDeviceData();
+    // 지운 결과는 바로 덮는 첫 실행 안내(ON-1) 맨 위에 보여 줌(lib/onboarding.ts showsResetNotice)
     resetSheet.close();
-    toast.show({ text: t("reset.done") });
   }
 
   return (
@@ -142,7 +140,6 @@ export function SettingsScreen({
           </div>
         </div>
       </Sheet>
-      <Toast message={toast.message} onHold={toast.hold} />
     </div>
   );
 }
