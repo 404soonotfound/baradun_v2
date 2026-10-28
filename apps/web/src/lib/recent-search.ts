@@ -1,5 +1,7 @@
 import { useSyncExternalStore } from "react";
 
+import { DEVICE_KEYS } from "@/lib/device-keys";
+
 // 최근 검색 (BRD-31 · 노션 2장 SRCH '최근 검색 최대 10개', 결정 기록 10장)
 // 기기 저장(localStorage), 서버로 보내지 않음. 개별 삭제·전체 지우기·기기 데이터 초기화로 지움
 // 항목: 검색어 + (결과를 눌렀다면) 그 해변 id. 보여 줄 때 노출을 끈 해변의 항목은 뺌(기기 기록은 지우지 않음)
@@ -11,7 +13,7 @@ export const QUERY_MAX_LENGTH = 50;
 export function clipQuery(text: string): string {
   return [...text].slice(0, QUERY_MAX_LENGTH).join("");
 }
-const STORAGE_KEY = "baradun:recent-search";
+const STORAGE_KEY = DEVICE_KEYS.recentSearch;
 
 export type RecentSearch = { q: string; id: string | null };
 const EMPTY: readonly RecentSearch[] = [];
