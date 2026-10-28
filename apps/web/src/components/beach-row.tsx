@@ -61,6 +61,7 @@ export function BeachRow({
   status,
   highlight = false,
   changedFrom = null,
+  onHighlight,
   onRemove,
   removeLabel,
 }: {
@@ -79,6 +80,8 @@ export function BeachRow({
   highlight?: boolean;
   // changed 변형: "방금 바뀜 · 이전: ○○"의 ○○
   changedFrom?: string | null;
+  // PC 탐색: 행에 마우스·키보드 포커스가 오면 true, 떠나면 false(지도 마커 강조, BRD-30)
+  onHighlight?: (on: boolean) => void;
 } & RemoveProps) {
   const t = useTranslations();
   const { badgeText } = useBadgeText();
@@ -87,6 +90,10 @@ export function BeachRow({
 
   return (
     <div
+      onMouseEnter={onHighlight && (() => onHighlight(true))}
+      onMouseLeave={onHighlight && (() => onHighlight(false))}
+      onFocus={onHighlight && (() => onHighlight(true))}
+      onBlur={onHighlight && (() => onHighlight(false))}
       className={cn(
         "flex items-center",
         tone?.bar,

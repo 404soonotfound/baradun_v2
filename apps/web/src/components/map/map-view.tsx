@@ -2,7 +2,7 @@
 
 import { MapPinOff, Minus, Plus } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { useEffect, useReducer, useRef } from "react";
+import { useEffect, useReducer, useRef, useState, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -18,13 +18,19 @@ import { MAP_ATTRIBUTIONS } from "@/lib/map/style";
 // - 실패(스타일·타일·WebGL 오류, 또는 15초 안에 바다가 그려지지 않음)하면 지도 자리에만 '목록으로 볼 수 있어요' + 다시 시도
 // - 출처 표기는 지도 아래 우리 줄(링크라 키보드·화면 읽기 가능, 토큰 색이라 다크에서도 읽힘)
 // - 사용자 위치는 받지도 쓰지도 않음. 처음 범위는 넘겨받은 해변 범위(bounds)
+// - 다 그린 뒤에만 overlay(마커·범례·카드, BRD-30)를 지도 위에 그림
 export function MapView({
   locale,
   bounds,
+  overlay,
+  onShowList,
   className,
 }: {
   locale: Locale;
   bounds: LngLatBox; // 처음 보이는 범위
+  overlay?: (api: MapHandle) => ReactNode;
+  // 실패 화면의 '목록으로 보기'(모바일 지도 보기). PC(lg)는 목록이 옆에 있어 버튼을 숨김
+  onShowList?: () => void;
   className?: string;
 }) {
   const t = useTranslations("map");
@@ -32,6 +38,8 @@ export function MapView({
   const canvasRef = useRef<HTMLDivElement>(null);
   const handleRef = useRef<MapHandle | null>(null);
   const [load, dispatch] = useReducer(mapLoadReducer, initialMapLoad);
+  // 다 그린 지도(overlay에 넘김). 시도마다 그 시도의 지도로 바뀜
+  const [api, setApi] = useState<MapHandle | null>(null);
   // 지도를 만들 때 쓸 최신 값. 바뀌어도 이미 만든 지도를 다시 만들지 않음
   const latest = useRef({ locale, bounds, canvasLabel: t("canvas") });
   useEffect(() => {
@@ -72,16 +80,20 @@ export function MapView({
       }
       if (cancelled) return;
       const { locale, bounds, canvasLabel } = latest.current;
-      handleRef.current = engine.createMap({
+      const handle = engine.createMap({
         container,
         locale,
         bounds,
         uiFont,
         reducedMotion: prefersReducedMotion(),
         canvasLabel,
-        onReady: () => dispatch({ type: "ready", attempt }),
+        onReady: () => {
+          if (!cancelled) setApi(handle);
+          dispatch({ type: "ready", attempt });
+        },
         onFailed: () => dispatch({ type: "failed", attempt }),
       });
+      handleRef.current = handle;
     })();
     return () => {
       cancelled = true;
@@ -160,15 +172,29 @@ export function MapView({
               {t("failed.title")}
             </p>
             <p className="text-caption text-text-body">{t("failed.body")}</p>
-            <Button
-              variant="secondary"
-              className="mt-1.5"
-              onClick={() => dispatch({ type: "retry" })}
-            >
-              {t("failed.retry")}
-            </Button>
+            <div className="mt-1.5 flex flex-wrap justify-center gap-2">
+              <Button
+                variant="secondary"
+                onClick={() => dispatch({ type: "retry" })}
+              >
+                {t("failed.retry")}
+              </Button>
+              {/* PC(lg)는 목록이 옆에 늘 보여 숨김 */}
+              {onShowList && (
+                <Button
+                  variant="secondary"
+                  className="lg:hidden"
+                  onClick={onShowList}
+                >
+                  {t("failed.showList")}
+                </Button>
+              )}
+            </div>
           </div>
         )}
+
+        {/* 마커·범례·카드(BRD-30). 확대·축소 버튼보다 앞에 둬서 버튼이 가려지지 않게 */}
+        {ready && api && overlay?.(api)}
 
         {ready && (
           // 확대·축소. 손가락·마우스 휠·키보드(+/−)로도 됨. 44px 버튼

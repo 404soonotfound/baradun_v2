@@ -141,3 +141,8 @@
     transform: scaleX(1);
   }
 }
+
+/* 지도 마커(BRD-30): 고른·가리킨 해변 마커를 다른 마커 위로. MapLibre가 만든 마커 틀에 z-index를 줌 */
+.maplibregl-marker:has(> [data-front]) {
+  z-index: 2;
+}
