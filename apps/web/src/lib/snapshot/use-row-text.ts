@@ -45,21 +45,22 @@ export function useRowText() {
     }
   }
 
+  // 근거 줄: 특보 없음이면 범위 · 기관 · 확인 시각, 오래된 정보면 "HH:MM 확인 · 이후 확인 못 함". 그 외는 null
+  function rowBasis(view: BeachView, nowMs: number): string | null {
+    if (view.kind !== "ready") return null;
+    if (view.stale) return confirmedUntilText(view.confirmedAt, nowMs);
+    if (view.badge.kind !== "clear") return null;
+    const time = kstStamp(view.confirmedAt, nowMs);
+    return time
+      ? t("home.near.clearScope", { time })
+      : t("explore.row.clearScopeNoTime");
+  }
+
   // 3줄째. 이용불가는 특보 이름만(S17)이라 값 줄을 두지 않음
   //   특보 없음: 범위 · 기관 · 확인 시각 + 값 / 판단불가: 값(+ 남은 사유) / 오래된 정보: "HH:MM 확인 · 이후 확인 못 함"
   function rowDetail(view: BeachView, nowMs: number): string | null {
     if (view.kind !== "ready") return null;
-    const lines: (string | null)[] = [];
-    if (view.stale) {
-      lines.push(confirmedUntilText(view.confirmedAt, nowMs));
-    } else if (view.badge.kind === "clear") {
-      const time = kstStamp(view.confirmedAt, nowMs);
-      lines.push(
-        time
-          ? t("home.near.clearScope", { time })
-          : t("explore.row.clearScopeNoTime"),
-      );
-    }
+    const lines: (string | null)[] = [rowBasis(view, nowMs)];
     // 배지로 쓴 첫 사유 뒤의 사유도 버리지 않음(모르는 사유는 일반 단어로 이미 바뀌어 있음)
     lines.push(...view.reasons.slice(1).map(badgeText));
     if (view.category !== "unavailable") {
@@ -73,5 +74,5 @@ export function useRowText() {
     return joinMeta(lines);
   }
 
-  return { rowMeta, rowDetail };
+  return { rowMeta, rowBasis, rowDetail };
 }

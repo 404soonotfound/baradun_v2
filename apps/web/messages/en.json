@@ -404,5 +404,22 @@
       "body": "Try a different activity or region",
       "action": "Show all Korea"
     }
+  },
+  "search": {
+    "scopeRemove": "Remove {scope} filter",
+    "recent": {
+      "title": "Recent searches",
+      "clear": "Clear all",
+      "remove": "Remove {query} from recent searches"
+    },
+    "byRegion": "Find by region",
+    "count": "{count, plural, one {# beach} other {# beaches}}",
+    "aliasNote": "{alias} is another name for {name}",
+    "empty": {
+      "scoped": "Couldn't find ‘{query}’ in {scope}",
+      "all": "Couldn't find ‘{query}’ anywhere in Korea",
+      "body": "Try another name or a region",
+      "widen": "Search all Korea"
+    }
   }
 }

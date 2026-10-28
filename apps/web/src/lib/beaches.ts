@@ -22,6 +22,9 @@ const SAMPLE_FILE = path.join(
   "packages/contracts/examples/valid/beaches.json",
 );
 
+// 별칭 파일(결정 기록 11장 10/21 ⑤·10/27 ⑧): 검색·비시즌 배지에만 쓰는 부가 정보. 해변 id로 연결, 계약 밖
+const META_FILE = path.join(REPO_ROOT, "data/beach-meta.json");
+
 // 해변이 하나도 없을 때 쓰는 자리 slug. 정적 내보내기는 경로가 0개면 빌드가 실패해서 하나를 만들고
 // 그 페이지는 404 표시. "_"는 slug 규칙(소문자·숫자·하이픈)에 없는 글자라 실제 해변과 겹치지 않음
 export const EMPTY_SLUG = "_";
@@ -36,6 +39,28 @@ function readDataDir(): Beach[] {
       (file) =>
         JSON.parse(readFileSync(path.join(DATA_DIR, file), "utf8")) as Beach,
     );
+}
+
+// 해변 id → 별칭. 파일이 없거나 읽을 수 없으면 별칭 없이(검색이 이름·지역으로는 계속 됨).
+// 별칭은 찾는 길을 넓힐 뿐 판단·표시에 쓰지 않으므로, 못 읽어도 해변을 숨기거나 상태를 바꾸지 않음
+function readAliases(): Map<string, string[]> {
+  const found = new Map<string, string[]>();
+  try {
+    const meta: unknown = JSON.parse(readFileSync(META_FILE, "utf8"));
+    const beaches = (meta as { beaches?: Record<string, unknown> }).beaches;
+    for (const [id, entry] of Object.entries(beaches ?? {})) {
+      const aliases = (entry as { aliases?: unknown } | null)?.aliases;
+      if (Array.isArray(aliases)) {
+        found.set(
+          id,
+          aliases.filter((item): item is string => typeof item === "string"),
+        );
+      }
+    }
+  } catch {
+    // 별칭 없이 진행
+  }
+  return found;
 }
 
 // 저장해 두지 않고 부를 때마다 읽기: 개발 중 파일을 고치면 바로 반영(파일이 작아서 빠름)
@@ -69,6 +94,7 @@ export function findBeach(
 
 // 목록 화면용 해변 요약 목록 (BRD-26). 빌드·개발 서버에서만 실행
 export function listBeachSummaries(locale: Locale): BeachSummary[] {
+  const aliases = readAliases();
   return load()
     .beaches.filter((beach) => !beach.hidden)
     .map((beach) => ({
@@ -84,6 +110,12 @@ export function listBeachSummaries(locale: Locale): BeachSummary[] {
       coords: beach.coords,
       activities: beach.activities,
       stations: beach.stations,
+      names: [beach.name.ko, beach.name.en],
+      aliases: aliases.get(beach.id) ?? [],
+      regionNames: [
+        `${beach.region.sido.ko} ${beach.region.sigungu.ko}`,
+        `${beach.region.sido.en} ${beach.region.sigungu.en}`,
+      ],
     }));
 }
 
