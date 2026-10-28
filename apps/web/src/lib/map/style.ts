@@ -25,7 +25,9 @@ const TILE_HOST = "https://tiles.openfreemap.org";
 
 export type TileMode = "latest" | "pinned";
 
-// next build(운영)는 고정 판, next dev·Storybook은 최신
+// NODE_ENV가 production인 빌드(next build·build-storybook)는 고정 판, 그 밖(next dev·storybook dev·테스트)은 최신
+// 고정 판이 OpenFreeMap에서 지워지면 서버가 최신 판으로 돌려보내 조용히 최신 타일이 보일 수 있음
+// → 판을 올릴 때마다 위 TileJSON에서 판이 아직 있는지 다시 확인함
 export function tileModeFor(nodeEnv: string | undefined): TileMode {
   return nodeEnv === "production" ? "pinned" : "latest";
 }
