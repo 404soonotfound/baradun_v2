@@ -30,7 +30,7 @@ const BUILD = "build-new";
 const abs = (url: string) => new URL(url, ORIGIN).href;
 
 // 브라우저 fetch 응답처럼 type을 basic으로 둠(Node Response는 default)
-function respond(body: string, init: ResponseInit = {}, type = "basic") {
+function respond(body: BodyInit, init: ResponseInit = {}, type = "basic") {
   const response = new Response(body, init);
   Object.defineProperty(response, "type", { value: type });
   return response;
@@ -98,6 +98,8 @@ function load({
     caches,
     fetch: fetchSpy,
     Response,
+    Headers,
+    Blob,
     URL,
     setTimeout: globalThis.setTimeout,
     clearTimeout: globalThis.clearTimeout,
@@ -321,6 +323,99 @@ describe("화면 이동(HTML)", () => {
     const pending = sw.navigate("/");
     await vi.advanceTimersByTimeAsync(10_000);
     expect(await (await pending)!.text()).toBe("saved home");
+  });
+
+  it("헤더만 오고 본문이 10초 넘게 멈추면 저장본으로, 받던 본문은 읽기를 취소함", async () => {
+    vi.useFakeTimers();
+    const cancel = vi.fn();
+    const sw = load({
+      fetch: async () =>
+        respond(
+          new ReadableStream({
+            start(controller) {
+              controller.enqueue(new TextEncoder().encode("<html>part"));
+            },
+            cancel,
+          }),
+          { headers: { "content-type": "text/html" } },
+        ),
+    });
+    const cache = await sw.caches.open(`baradun-screen-${BUILD}`);
+    await cache.put("/explore/", html("saved explore"));
+    const pending = sw.navigate("/explore/");
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(await (await pending)!.text()).toBe("saved explore");
+    expect(cancel).toHaveBeenCalled();
+    // 반쯤 받은 본문은 저장하지 않음
+    expect(await (await cache.match("/explore/"))!.text()).toBe(
+      "saved explore",
+    );
+  });
+
+  it("본문이 나눠 와도 10초 안에 다 오면 네트워크 응답을 보여주고 저장함", async () => {
+    vi.useFakeTimers();
+    const encoder = new TextEncoder();
+    const sw = load({
+      fetch: async () =>
+        respond(
+          new ReadableStream({
+            start(controller) {
+              controller.enqueue(encoder.encode("<html>fresh "));
+              setTimeout(() => {
+                controller.enqueue(encoder.encode(`"b":"${BUILD}"</html>`));
+                controller.close();
+              }, 5_000);
+            },
+          }),
+          {
+            status: 200,
+            headers: {
+              "content-type": "text/html",
+              "content-encoding": "gzip",
+              "content-length": "10",
+            },
+          },
+        ),
+    });
+    await sw.caches.open(`baradun-screen-${BUILD}`);
+    const pending = sw.navigate("/explore/");
+    await vi.advanceTimersByTimeAsync(5_000);
+    const response = (await pending)!;
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe("text/html");
+    // 다 받아 풀린 본문이라 압축·길이 헤더는 뺌
+    expect(response.headers.has("content-encoding")).toBe(false);
+    expect(response.headers.has("content-length")).toBe(false);
+    expect(await response.text()).toBe(`<html>fresh "b":"${BUILD}"</html>`);
+    expect(await sw.cache()!.entries.get(abs("/explore/"))!.text()).toContain(
+      "fresh",
+    );
+  });
+
+  it("10초 뒤에 온 응답은 본문을 받지 않고 버림", async () => {
+    vi.useFakeTimers();
+    const cancel = vi.fn();
+    const sw = load({
+      fetch: () =>
+        new Promise<Response>((resolve) =>
+          setTimeout(
+            () =>
+              resolve(
+                respond(new ReadableStream({ cancel }), {
+                  headers: { "content-type": "text/html" },
+                }),
+              ),
+            11_000,
+          ),
+        ),
+    });
+    const cache = await sw.caches.open(`baradun-screen-${BUILD}`);
+    await cache.put("/", html("saved home"));
+    const pending = sw.navigate("/");
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(await (await pending)!.text()).toBe("saved home");
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(cancel).toHaveBeenCalled();
   });
 });
 

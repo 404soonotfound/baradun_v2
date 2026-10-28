@@ -89,16 +89,50 @@ async function isThisBuild(response) {
   return (await response.text()).includes(SW_BUILD);
 }
 
-// 이동(navigate) 요청은 옵션을 붙여 다시 만들 수 없어 abort 대신 race로 끊음(늦게 온 응답은 버림)
-function fetchWithTimeout(request) {
+// 화면(HTML)은 헤더만이 아니라 본문까지 같은 시간 제한 안에서 다 받음(헤더만 오고 본문이 멈춘 망에서도 저장본으로 넘어가게)
+// 이동(navigate) 요청은 옵션을 붙여 다시 만들 수 없어 abort 대신 race로 끊고, 받던 본문은 읽기를 취소함(늦게 온 응답은 버림)
+// 결과: { response, cacheable }. 다 받은 본문으로 새 Response를 만들므로 저장 여부(cacheable)는 원래 응답으로 미리 정함
+function fetchPage(request) {
   let timer;
+  let reader = null;
+  let timedOut = false;
   const timeout = new Promise((_, reject) => {
-    timer = setTimeout(
-      () => reject(new Error("화면 파일 시간 초과")),
-      PAGE_TIMEOUT_MS,
-    );
+    timer = setTimeout(() => {
+      timedOut = true;
+      if (reader) reader.cancel().catch(() => {});
+      reject(new Error("화면 파일 시간 초과"));
+    }, PAGE_TIMEOUT_MS);
   });
-  const pending = fetch(request);
+  const pending = fetch(request).then(async (response) => {
+    // 시간 제한 뒤에 헤더가 오면 본문을 받지 않고 버림
+    if (timedOut) {
+      if (response.body) response.body.cancel().catch(() => {});
+      throw new Error("화면 파일 시간 초과");
+    }
+    // basic이 아닌 응답(opaqueredirect 등)·리디렉트를 거친 응답·본문 없는 응답은 다시 만들지 않고 그대로 넘김(저장하지 않음)
+    if (response.type !== "basic" || response.redirected || !response.body) {
+      return { response, cacheable: false };
+    }
+    reader = response.body.getReader();
+    const chunks = [];
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+    }
+    // 받은 본문은 이미 풀린 값이라 압축·길이 헤더는 뺌
+    const headers = new Headers(response.headers);
+    headers.delete("content-encoding");
+    headers.delete("content-length");
+    return {
+      response: new Response(new Blob(chunks), {
+        status: response.status,
+        statusText: response.statusText,
+        headers,
+      }),
+      cacheable: response.ok,
+    };
+  });
   pending.catch(() => {});
   return Promise.race([pending, timeout]).finally(() => clearTimeout(timer));
 }
@@ -120,14 +154,15 @@ async function page(event) {
   const url = new URL(request.url);
   const cache = await caches.open(CACHE_NAME);
   let response = null;
+  let cacheable = false;
   try {
-    response = await fetchWithTimeout(request);
+    ({ response, cacheable } = await fetchPage(request));
   } catch {
     response = null;
   }
   // 서버 오류(5xx)도 못 받은 것으로 봄. 404 등은 그대로 보여줌
   if (response && response.status < 500) {
-    if (response.ok && !response.redirected && response.type === "basic") {
+    if (cacheable) {
       const copy = response.clone();
       event.waitUntil(
         isThisBuild(copy.clone())
