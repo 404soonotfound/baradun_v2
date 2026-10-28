@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from "react";
 
+import { DEVICE_KEYS } from "@/lib/device-keys";
 import { createDeviceList, EMPTY_IDS } from "@/lib/device-list";
 import { clearRecentSearches } from "@/lib/recent-search";
 
@@ -9,13 +10,13 @@ import { clearRecentSearches } from "@/lib/recent-search";
 
 // [2] 즐겨찾기는 개수 제한 없음(무한대 = slice가 아무것도 자르지 않음)
 const favorites = createDeviceList(
-  "baradun:favorites",
+  DEVICE_KEYS.favorites,
   Number.POSITIVE_INFINITY,
 );
 
 // [3] 최근 본 해변 상한. 화면 설계서에 값이 없어 임시로 둔 제안값(결정 후 노션 반영)
 const RECENT_MAX = 20;
-const recent = createDeviceList("baradun:recent", RECENT_MAX);
+const recent = createDeviceList(DEVICE_KEYS.recent, RECENT_MAX);
 
 // [4] 빌드 때(정적 HTML)는 기기 저장값을 모르니 빈 목록. 브라우저에서 바로 저장값으로 바뀜
 const serverSnapshot = () => EMPTY_IDS;
