@@ -21,10 +21,11 @@ export function SectionHead({
         {title}
       </h2>
       {href && linkText && (
-        // 글자는 작아도 누르는 영역은 44px: 위아래 음수 여백으로 줄 높이는 그대로
+        // 글자는 작아도 누르는 영역은 44px: 위아래 음수 여백으로 줄 높이는 그대로, 짧은 글자(See all)는 폭도 44px(오른쪽 맞춤)
         <Link
           href={href}
-          className="-my-3 inline-flex min-h-touch items-center text-caption text-text-muted"
+          // relative: 아래로 넓힌 영역이 뒤따르는 카드에 덮이지 않게 위에 그림
+          className="relative -my-3 inline-flex min-h-touch min-w-touch items-center justify-end text-caption text-text-muted"
         >
           {linkText}
         </Link>

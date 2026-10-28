@@ -39,7 +39,8 @@ export function SearchField({
         id={id}
         type="search"
         // 바깥 상자가 포커스 테두리를 그리므로 input 자체 바깥선은 숨김. outline-hidden은 고대비 모드에서는 바깥선을 살려 둠(그림자가 안 그려져서)
-        className="min-w-0 flex-1 bg-transparent text-[15px] text-text-default outline-hidden placeholder:text-text-muted"
+        // self-stretch: 입력칸이 틀 높이만큼 차서 틀 어디를 눌러도 입력됨(누르는 영역 44px, BRD-39)
+        className="min-w-0 flex-1 self-stretch bg-transparent text-[15px] text-text-default outline-hidden placeholder:text-text-muted"
         {...props}
       />
     </div>
