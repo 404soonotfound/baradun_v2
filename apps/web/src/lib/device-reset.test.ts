@@ -26,7 +26,7 @@ describe("resetDeviceData", () => {
       "baradun:favorites": '["b0001"]',
       "baradun:recent": '["b0002"]',
       "baradun:recent-search": '[{"q":"경포","id":null}]',
-      "baradun:favorite-seen": "{}",
+      "baradun:favorite-seen": "{}", // 출시에서 뺀 변경 표시가 남긴 값(BRD-101)
       "baradun:region": '{"sido":"강원","sigungu":null}',
       "baradun:onboarding":
         '{"noticeVersion":1,"acknowledgedAt":"2026-10-28T00:00:00Z","locationStepDone":true}',
