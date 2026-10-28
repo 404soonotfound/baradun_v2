@@ -11,11 +11,14 @@ export const MOTION_STORAGE_KEY = "baradun:motion";
 // <html data-theme="light|dark">를 붙이면 그 테마, 없으면 기기 설정을 따름
 // <html data-motion="reduce">면 globals.css가 기기의 '동작 줄이기'와 같은 규칙을 적용
 // 화면을 그리기 전에 돌아야 해서 문자열로 넣음. 저장소를 못 읽으면 시스템 테마·움직임 켜짐
-// theme-color(결정 35): viewport가 넣은 <meta name="theme-color"> 줄(기기 설정별 media 두 줄)의 값을 모두 실제로 그리는
-// 테마의 바탕색으로 맞춤 → media와 상관없이 고른 테마 색. data-theme(설정 변경·다른 탭)·기기 설정 변경을 따라 다시 맞추고,
-// 화면 이동 때 Next가 <head>의 줄을 다시 그려도(새 줄·값 되돌림) 다시 맞춤. 같은 값이면 쓰지 않음(관찰이 반복되지 않게)
-// 테마 규칙은 lib/theme.ts resolveTheme과 같음(light·dark면 그 값, 그 밖은 기기 설정). 실패하면 media 두 줄(기기 설정)이 남음
-const THEME_SCRIPT = `try{var c=${JSON.stringify(THEME_COLORS)},q=window.matchMedia?window.matchMedia("(prefers-color-scheme: dark)"):null,u=function(){var t=h.getAttribute("data-theme"),v=c[t==="light"||t==="dark"?t:q&&q.matches?"dark":"light"],l=d.querySelectorAll('meta[name="theme-color"]');for(var i=0;i<l.length;i++){if(l[i].getAttribute("content")!==v){l[i].setAttribute("content",v)}}};u();var o=new MutationObserver(u);o.observe(h,{attributes:true,attributeFilter:["data-theme"]});o.observe(d.head,{childList:true,subtree:true,attributes:true,attributeFilter:["name","content"]});if(q&&q.addEventListener){q.addEventListener("change",u)}else if(q&&q.addListener){q.addListener(u)}}catch(e){}`;
+// theme-color(결정 35): viewport가 넣은 <meta name="theme-color"> 두 줄(라이트 색·다크 색)의 content는 그대로 두고 media만 바꿈
+// - 밝게·어둡게를 고르면 그 색 줄은 media="all", 다른 줄은 "not all" → 기기 설정과 상관없이 고른 테마 색
+// - 기기 설정(data-theme 없음·모르는 값)이면 원래 media(prefers-color-scheme)로 되돌림 → 기기 변경은 브라우저가 따라감
+// content를 바꾸면 React가 hydration 때 content로 줄을 찾지 못해 줄을 새로 만들거나 엇갈려 가져가므로 손대지 않음
+// 줄의 색(content)으로 어느 테마 줄인지 알아봄. 토큰 색이 아닌 줄은 건드리지 않음. 같은 값이면 쓰지 않음
+// 관찰: <html> data-theme(설정 변경·다른 탭)과, 화면 이동 때 Next가 <head>에 새로 넣는 theme-color 줄만
+// 테마 규칙은 lib/theme.ts resolveTheme과 같음(light·dark면 그 값, 그 밖은 기기 설정). 실패하면 원래 media 두 줄이 남음
+const THEME_SCRIPT = `try{var c=${JSON.stringify(THEME_COLORS)},a=function(m){var k=m.getAttribute("content");k=k===c.light?"light":k===c.dark?"dark":null;if(!k)return;var t=h.getAttribute("data-theme"),v=t==="light"||t==="dark"?(t===k?"all":"not all"):"(prefers-color-scheme: "+k+")";if(m.getAttribute("media")!==v){m.setAttribute("media",v)}},u=function(){var l=d.querySelectorAll('meta[name="theme-color"]');for(var i=0;i<l.length;i++){a(l[i])}};u();new MutationObserver(u).observe(h,{attributes:true,attributeFilter:["data-theme"]});new MutationObserver(function(r){for(var i=0;i<r.length;i++){for(var j=0,n=r[i].addedNodes;j<n.length;j++){if(n[j].nodeName==="META"&&n[j].getAttribute("name")==="theme-color"){a(n[j])}}}}).observe(d.head,{childList:true})}catch(e){}`;
 
 export const DISPLAY_INIT_SCRIPT = `(function(){var d=document,h=d.documentElement;try{var s=localStorage,t=s.getItem(${JSON.stringify(
   THEME_STORAGE_KEY,
