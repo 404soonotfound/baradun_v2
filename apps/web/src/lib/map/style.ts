@@ -4,13 +4,17 @@ import type {
 } from "maplibre-gl";
 
 import type { Locale } from "@/lib/i18n";
+import type { ResolvedTheme } from "@/lib/theme";
+import darkStyle from "./style-dark.json";
 import lightStyle from "./style-light.json";
 
 // 지도 스타일 (BRD-65 · 결정 D8, 아키텍처 16.4.3)
 // style-light.json = OpenFreeMap Positron 포크(우리 저장소가 원본). 원격 스타일 URL을 그대로 쓰지 않음
 // 포크에서 바꾼 것: 도로 번호 표지·작은 도로 이름·공항 아이콘 레이어 삭제, 바다를 옅은 파랑으로(육지와 대비),
 // 지명 글자를 짙은 회색으로(해변 마커가 묻히지 않게), 라벨은 name:ko → name 순서
-// 다크 스타일은 BRD-44에서 따로 만듦(지금은 다크 테마에서도 이 스타일)
+// style-dark.json = style-light.json과 같은 레이어·필터·글자 설정에 색만 다크 토큰 계열로 바꾼 것(BRD-44)
+//   육지 #1F2A37·바다 #0D1722(육지·바다 대비는 라이트와 비슷한 1.2), 지명 글자는 text/body 다크(#B7C4D3)
+//   마커(상태 색·점선)가 땅·바다 어디서나 3:1 이상 보이게 고름. 테마가 바뀌면 지도도 바뀜(map-view)
 
 // [1] OpenFreeMap 벡터 타일. 개발은 최신(TileJSON), 운영 빌드는 검증한 판으로 고정(16.4.3 버전 전략)
 // 판 이름은 https://tiles.openfreemap.org/planet 응답의 tiles 주소에서 가져옴. 바꿀 때는 표본 해변 화면을 보고 올림
@@ -37,11 +41,15 @@ const LABEL_FIELD = {
 export function buildMapStyle({
   locale,
   tiles,
+  theme,
 }: {
   locale: Locale;
   tiles: TileMode;
+  theme: ResolvedTheme;
 }): StyleSpecification {
-  const style = structuredClone(lightStyle) as unknown as StyleSpecification;
+  const style = structuredClone(
+    theme === "dark" ? darkStyle : lightStyle,
+  ) as unknown as StyleSpecification;
   style.sources[TILE_SOURCE_ID] =
     tiles === "pinned"
       ? {

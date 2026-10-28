@@ -23,7 +23,11 @@ function labelFields(style: ReturnType<typeof buildMapStyle>) {
 
 describe("buildMapStyle", () => {
   it("운영(pinned)은 검증한 타일 판 주소로 고정하고 TileJSON(최신)을 부르지 않는다", () => {
-    const style = buildMapStyle({ locale: "ko", tiles: "pinned" });
+    const style = buildMapStyle({
+      locale: "ko",
+      tiles: "pinned",
+      theme: "light",
+    });
     const source = style.sources[TILE_SOURCE_ID];
     expect(source).toEqual({
       type: "vector",
@@ -37,7 +41,11 @@ describe("buildMapStyle", () => {
   });
 
   it("개발(latest)은 최신 TileJSON을 쓴다", () => {
-    const style = buildMapStyle({ locale: "ko", tiles: "latest" });
+    const style = buildMapStyle({
+      locale: "ko",
+      tiles: "latest",
+      theme: "light",
+    });
     expect(style.sources[TILE_SOURCE_ID]).toEqual({
       type: "vector",
       url: OPENFREEMAP_TILEJSON,
@@ -45,7 +53,11 @@ describe("buildMapStyle", () => {
   });
 
   it("타일 출처는 OpenFreeMap 하나뿐이다(다른 지도 서버로 요청하지 않음)", () => {
-    const style = buildMapStyle({ locale: "ko", tiles: "pinned" });
+    const style = buildMapStyle({
+      locale: "ko",
+      tiles: "pinned",
+      theme: "light",
+    });
     expect(Object.keys(style.sources)).toEqual([TILE_SOURCE_ID]);
     expect(style.glyphs).toMatch(/^https:\/\/tiles\.openfreemap\.org\//);
     expect(String(style.sprite)).toMatch(
@@ -55,7 +67,7 @@ describe("buildMapStyle", () => {
 
   it("한국어 라벨은 name:ko → name 순서", () => {
     const fields = labelFields(
-      buildMapStyle({ locale: "ko", tiles: "pinned" }),
+      buildMapStyle({ locale: "ko", tiles: "pinned", theme: "light" }),
     );
     expect(fields.length).toBeGreaterThan(0);
     for (const field of fields) {
@@ -65,7 +77,7 @@ describe("buildMapStyle", () => {
 
   it("영어 라벨은 name:en → name:latin → name 순서", () => {
     const fields = labelFields(
-      buildMapStyle({ locale: "en", tiles: "pinned" }),
+      buildMapStyle({ locale: "en", tiles: "pinned", theme: "light" }),
     );
     for (const field of fields) {
       expect(field).toBe(
@@ -75,9 +87,11 @@ describe("buildMapStyle", () => {
   });
 
   it("도로 번호 표지·작은 도로 이름·공항 아이콘 레이어는 없다(해변 마커와 겹치지 않게)", () => {
-    const ids = buildMapStyle({ locale: "ko", tiles: "pinned" }).layers.map(
-      (layer) => layer.id,
-    );
+    const ids = buildMapStyle({
+      locale: "ko",
+      tiles: "pinned",
+      theme: "light",
+    }).layers.map((layer) => layer.id);
     for (const removed of [
       "highway-shield-non-us",
       "highway-name-minor",
@@ -90,7 +104,7 @@ describe("buildMapStyle", () => {
 
   it("원본 스타일 JSON을 고치지 않는다", () => {
     const before = JSON.stringify(lightStyle);
-    buildMapStyle({ locale: "en", tiles: "pinned" });
+    buildMapStyle({ locale: "en", tiles: "pinned", theme: "light" });
     expect(JSON.stringify(lightStyle)).toBe(before);
   });
 });
