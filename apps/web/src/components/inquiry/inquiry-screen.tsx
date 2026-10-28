@@ -14,6 +14,7 @@ import { cn } from "@/lib/cn";
 import { localizedPath, type Locale } from "@/lib/i18n";
 import {
   sendInquiry,
+  type InquiryAttempt,
   type PhotoToSend,
   type Progress,
   type SendFailure,
@@ -45,6 +46,7 @@ import { preparePhoto, type PhotoError } from "@/lib/inquiry/photo";
 // 상태: 입력 전 · 입력 오류 · 보내는 중 · 접수 완료 · 보내지 못함
 // 유형·내용만 기기에 최대 7일 임시 저장(lib/inquiry/draft.ts). 이메일·동의·사진은 화면 메모리에만, 실패하면 다시 넣음
 // 응답 기한은 약속하지 않음. 사용자 위치는 보내지 않음
+// 멱등 키(BRD-103): 같은 내용으로 다시 보내면 같은 키를 씀(응답을 못 받은 재시도가 두 번 접수되지 않게). 키는 화면 메모리에만
 
 type Shot = { id: number; photo: PhotoToSend; url: string };
 
@@ -100,6 +102,7 @@ export function InquiryScreen({
   const [phase, setPhase] = useState<Phase>({ kind: "editing" });
   const [contextRemoved, setContextRemoved] = useState(false);
   const sendingRef = useRef(false); // 두 번 누름 막기(상태 반영 전 빠른 연타 포함)
+  const attemptRef = useRef<InquiryAttempt | null>(null); // 지난 보내기 시도(멱등 키·사진 참조). 접수되면 sendInquiry가 비움
   const nextShotId = useRef(1);
   // 사진 준비 차례. 준비 중에 지우기·실패로 사진을 비우면 올려서 늦게 끝난 준비가 사진을 다시 붙이지 않게 함
   const photoBatch = useRef(0);
@@ -263,6 +266,8 @@ export function InquiryScreen({
       }),
       shots.map((shot) => shot.photo),
       (progress) => setPhase({ kind: "sending", progress }),
+      undefined,
+      attemptRef,
     );
     sendingRef.current = false;
     if (result.ok) {

@@ -128,7 +128,7 @@
       "additionalProperties": false,
       "required": ["contentType", "size"],
       "properties": {
-        "contentType": { "enum": ["image/jpeg", "image/png", "image/webp"] },
+        "contentType": { "$ref": "#/$defs/InquiryPhotoContentType" },
         "size": { "type": "integer", "minimum": 1, "maximum": 5242880 }
       }
     },
@@ -151,16 +151,53 @@
       "title": "InquiryUploadTarget",
       "type": "object",
       "additionalProperties": false,
-      "required": ["photoId", "key", "url", "fields", "expiresAt"],
+      "required": ["photoId", "key", "method", "url", "fields", "expiresAt"],
       "properties": {
         "photoId": { "$ref": "#/$defs/InquiryPhotoId" },
         "key": { "$ref": "#/$defs/InquiryPhotoKey" },
-        "url": { "type": "string", "format": "uri", "pattern": "^https://" },
-        "fields": {
-          "type": "object",
-          "additionalProperties": { "type": "string" }
+        "method": {
+          "description": "multipart/form-data 양식 업로드(S3 presigned POST)만 씀.",
+          "const": "POST"
         },
+        "url": {
+          "description": "서울 리전 S3 버킷의 가상 호스트 주소. 경로는 / 하나. 웹은 빌드 설정의 버킷 이름과 호스트가 정확히 같은지 다시 확인함.",
+          "type": "string",
+          "format": "uri",
+          "pattern": "^https://[a-z0-9][a-z0-9-]{1,61}[a-z0-9]\\.s3\\.ap-northeast-2\\.amazonaws\\.com/$"
+        },
+        "fields": { "$ref": "#/$defs/InquiryUploadFields" },
         "expiresAt": { "$ref": "#/$defs/DateTime" }
+      }
+    },
+
+    "InquiryUploadFields": {
+      "title": "InquiryUploadFields",
+      "description": "S3 presigned POST 양식 칸. 정해진 칸만 허용함.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "key",
+        "bucket",
+        "Content-Type",
+        "Policy",
+        "X-Amz-Algorithm",
+        "X-Amz-Credential",
+        "X-Amz-Date",
+        "X-Amz-Signature"
+      ],
+      "properties": {
+        "key": { "$ref": "#/$defs/InquiryPhotoKey" },
+        "bucket": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$"
+        },
+        "Content-Type": { "$ref": "#/$defs/InquiryPhotoContentType" },
+        "Policy": { "type": "string", "minLength": 1 },
+        "X-Amz-Algorithm": { "const": "AWS4-HMAC-SHA256" },
+        "X-Amz-Credential": { "type": "string", "minLength": 1 },
+        "X-Amz-Date": { "type": "string", "pattern": "^[0-9]{8}T[0-9]{6}Z$" },
+        "X-Amz-Security-Token": { "type": "string", "minLength": 1 },
+        "X-Amz-Signature": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
       }
     },
 
@@ -168,8 +205,9 @@
       "title": "CreateInquiryRequest",
       "type": "object",
       "additionalProperties": false,
-      "required": ["type", "message", "photos"],
+      "required": ["idempotencyKey", "type", "message", "photos"],
       "properties": {
+        "idempotencyKey": { "$ref": "#/$defs/InquiryIdempotencyKey" },
         "type": { "$ref": "#/$defs/InquiryType" },
         "message": { "type": "string", "minLength": 1, "maxLength": 2000 },
         "email": { "type": "string", "format": "email", "maxLength": 254 },
@@ -247,7 +285,12 @@
           "required": ["code", "message"],
           "properties": {
             "code": {
-              "enum": ["invalid_request", "rate_limited", "service_unavailable"]
+              "enum": [
+                "invalid_request",
+                "idempotency_conflict",
+                "rate_limited",
+                "service_unavailable"
+              ]
             },
             "message": { "type": "string", "minLength": 1 }
           }
@@ -263,6 +306,16 @@
       "title": "InquiryId",
       "type": "string",
       "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "InquiryIdempotencyKey": {
+      "title": "InquiryIdempotencyKey",
+      "description": "문의 한 건의 멱등 키(UUID v4). 같은 내용을 다시 보낼 때 같은 키를 씀. 서버는 같은 키의 두 번째 요청에 첫 결과를 그대로 돌려주고, 내용이 다르면 idempotency_conflict(409)로 거부함.",
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "InquiryPhotoContentType": {
+      "title": "InquiryPhotoContentType",
+      "enum": ["image/jpeg", "image/png", "image/webp"]
     },
     "InquiryPhotoId": {
       "title": "InquiryPhotoId",

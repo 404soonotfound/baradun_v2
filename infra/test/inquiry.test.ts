@@ -145,4 +145,15 @@ describe("데이터 문의 접수 인프라", () => {
     expect(inquiry).toBeDefined();
     expect(inquiry?.Properties.ReservedConcurrentExecutions).toBeUndefined();
   });
+
+  it("웹 빌드가 업로드 주소를 맞춰 볼 사진 버킷 이름을 출력한다(BRD-103)", () => {
+    const output = Object.values(template.findOutputs("InquiryPhotoBucketName"));
+    expect(output).toHaveLength(1);
+    const buckets = Object.keys(template.findResources("AWS::S3::Bucket")).filter(
+      (id) => id.startsWith("InquiryPhotos"),
+    );
+    expect(buckets).toHaveLength(1);
+    expect(output[0]?.Value).toEqual({ Ref: buckets[0] });
+  });
 });
+

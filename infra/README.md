@@ -114,8 +114,38 @@ await fetch("/api/inquiries", {
 사진은 다음 순서로 보냅니다.
 
 1. `POST /api/inquiries/uploads`에 `photos` 배열을 보내 presigned POST 양식을 받습니다. JPEG·PNG·WebP, 최대 3장, 파일당 5MiB입니다.
-2. 응답의 `url`과 `fields`를 그대로 `multipart/form-data` POST에 넣고 마지막에 사진 파일을 붙입니다. S3 정책의 `content-length-range`가 파일당 5MiB를 강제합니다.
+2. 응답의 `url`과 `fields`를 그대로 `multipart/form-data` POST(`method: "POST"`)에 넣고 마지막에 사진 파일을 붙입니다. S3 정책의 `content-length-range`가 파일당 5MiB를 강제합니다.
 3. 업로드 응답의 `photoId`와 `key`를 `POST /api/inquiries`의 `photos`에 넣습니다.
+
+### 멱등 키(BRD-103)
+
+`POST /api/inquiries` 본문에는 `idempotencyKey`(UUID v4, 소문자)가 꼭 있어야 합니다. 헤더가 아니라 본문에 두는 이유는 본문 SHA-256(`x-amz-content-sha256`) 검사에 키도 함께 묶이고, CloudFront 오리진 요청 정책·OAC 서명 헤더를 바꾸지 않아도 되기 때문입니다.
+
+- 웹은 문의 한 건에 키 하나를 만들고, 같은 내용(유형·본문·이메일·사진 내용)으로 다시 보내면 같은 키와 이미 올린 사진 참조를 그대로 씁니다. 내용이 바뀌거나 접수되면 새 키를 씁니다. 키는 화면 메모리에만 두고 기기에 저장하지 않습니다.
+- Lambda는 먼저 `IDEMPOTENCY#<키>` 항목을 강한 일관성으로 읽습니다. 있으면 내용 지문(멱등 키를 뺀 요청 값의 SHA-256)을 비교해, 같으면 첫 응답(같은 `inquiryId`·`receivedAt`·사진 결과)을 201로 다시 주고 다르면 `409 idempotency_conflict`로 거부합니다. 이때는 속도 제한을 세지 않고 문의·알림을 새로 만들지 않습니다.
+- 없으면 속도 제한을 한 번 센 뒤 사진을 검사하고, 멱등 항목(`attribute_not_exists(pk)` 조건)·문의·이메일을 한 트랜잭션으로 씁니다. 같은 키 요청이 동시에 와서 조건에 지면 이긴 쪽 기록을 읽어 같은 응답을 주고 알림은 보내지 않습니다. 동시 요청은 둘 다 속도 제한에 한 번씩 셉니다.
+- 멱등 항목에는 내용 지문·문의 ID·접수 시각·사진 결과만 두고 본문·이메일 원문은 넣지 않습니다. TTL은 1일입니다.
+- 앞선 요청이 사진 검사를 마쳐 `pending/` 객체가 `accepted/`로 옮겨졌으면, 다시 온 요청은 `accepted/` 사본을 통과한 사진으로 봅니다(`accepted/`에는 검사를 통과한 사진만 복사됨).
+- 저장 뒤 알림 오류는 접수 실패로 바꾸지 않습니다(503이면 재시도가 첫 결과만 받아 알림이 빠짐). 사진 양식 발급(`/uploads`)은 문의를 만들지 않으므로 키를 받지 않습니다. 업로드가 끝나지 않은 사진은 `pending/`에 남았다가 30일 수명 주기로 지워집니다.
+
+### 업로드 양식 검증(BRD-103)
+
+양식 `url`은 서울 리전 버킷의 가상 호스트 주소 `https://<버킷>.s3.ap-northeast-2.amazonaws.com/`만 허용하고, `fields`는 `key`·`bucket`·`Content-Type`·`Policy`·`X-Amz-Algorithm`·`X-Amz-Credential`·`X-Amz-Date`·`X-Amz-Signature`(·`X-Amz-Security-Token`)만 허용합니다(계약 `InquiryUploadTarget`·`InquiryUploadFields`). Lambda는 내보내기 전에 계약으로 다시 검사하고, 맞지 않으면 503으로 끝냅니다.
+
+웹은 사진을 올리기 전에 양식마다 다음을 모두 확인하고, 하나라도 틀리면 사진을 하나도 올리지 않고 문의도 보내지 않습니다(화면은 기존 '접수됐는지 확인하지 못했어요' 안내).
+
+- 주소가 빌드 설정의 버킷 주소와 글자까지 같음(https, 다른 호스트·포트·경로·질의 거부). 아무 `*.amazonaws.com`이나 받지 않습니다.
+- `method`가 `POST`.
+- 양식 `expiresAt`과 S3 정책의 `expiration`이 모두 지금보다 뒤이고 10분 + 시계 차이 5분 안. 앞 사진을 올리는 사이 만료되면 다음 사진을 올리지 않습니다.
+- `fields.key`가 양식 `key`(`pending/` 형식)와 같고, `fields.bucket`이 빌드 설정 버킷, `Content-Type`이 그 사진의 형식(JPEG·PNG·WebP)과 같음. 정책 조건에도 같은 버킷·키·콘텐츠 타입이 걸려 있음.
+
+웹 빌드는 버킷 이름을 `NEXT_PUBLIC_INQUIRY_PHOTO_BUCKET`으로 받습니다. 배포 워크플로는 GitHub Variables `INQUIRY_PHOTO_BUCKET`을 넘기고, 비어 있거나 형식이 틀리면 빌드 전에 멈춥니다. 값은 스택 출력 `InquiryPhotoBucketName`입니다. 로컬·CI 빌드처럼 값이 없으면 어떤 업로드 주소도 받지 않아 사진 문의만 실패로 안내됩니다.
+
+이 변경을 처음 배포할 때는 순서를 지킵니다. 새 Lambda는 멱등 키가 없는 요청을 400으로 거부하고, 이전 Lambda는 멱등 키가 있는 요청을 400으로 거부합니다.
+
+1. main 머지 뒤 사이트 배포(`deploy.yml`)는 production 승인 대기에 둡니다.
+2. 최신 `origin/main` 작업 트리에서 `npx cdk deploy`(맨 위 배포 절차) → 출력 `InquiryPhotoBucketName`을 GitHub Variables `INQUIRY_PHOTO_BUCKET`에 넣습니다.
+3. 사이트 배포를 승인합니다. 2와 3 사이에 열려 있던 이전 화면의 문의는 거부되므로 바로 이어서 합니다.
 
 요청·응답 타입은 `@baradun/contracts`의 `InquiryUploadRequest`, `InquiryUploadResponse`, `CreateInquiryRequest`, `CreateInquiryResponse`, `InquiryErrorResponse`입니다. 문의 유형은 `data_error`·`data_question`·`other`입니다. 사진에 EXIF GPS IFD가 있거나 파일이 깨졌으면 그 사진만 `rejected`로 돌아오며 문의 자체는 접수됩니다. 사진은 공개 URL 없이 비공개 버킷에 두고 30일 수명 주기로 삭제합니다.
 

@@ -2,7 +2,6 @@ import { useSyncExternalStore } from "react";
 
 import { DEVICE_KEYS } from "@/lib/device-keys";
 import { createDeviceList, EMPTY_IDS } from "@/lib/device-list";
-import { clearSeen } from "@/lib/favorite-changes";
 import { clearRecentSearches } from "@/lib/recent-search";
 
 // 즐겨찾기·최근 본 해변 (화면 명세 HOME·FAV, 아키텍처 9장: 기기 저장) (BRD-26)
@@ -69,5 +68,4 @@ export function clearFavoritesAndRecent() {
   favorites.clear();
   recent.clear();
   clearRecentSearches(); // 최근 검색도 기기 데이터(BRD-31)
-  clearSeen(); // 즐겨찾기 지난 방문 기록(변경 표시, BRD-35)
 }

@@ -42,10 +42,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return {
     title: name,
     alternates: alternatesFor("en", `/spots/${slug}/`),
-    // 공유 미리보기: 이름·지역·사진만, 상태 없음 (BRD-34)
+    // 공유 미리보기: 이름·지역·공통 일러스트만, 상태·해변 사진 없음 (BRD-34 · BRD-105)
     ...beachShareMetadata(found.beach, "en", {
       siteName: t("meta.siteName"),
-      photoAlt: t("photo.alt", { name }),
       illustrationAlt: t("share.ogIllustration"),
     }),
   };

@@ -85,7 +85,11 @@ jobs:
       - run: npm run check:tokens -w apps/web # 대비·금지 색
       - run: npm run check:messages -w apps/web # ko·en 문구 키
       - run: npm run lint -w apps/web
+      - run: npm run typecheck -w apps/web # 가져다 쓰는 contracts 원본까지 검사 (BRD-102)
       - run: npm run test -w apps/web # 데이터 계층(Vitest)
+      - run: npm run build -w apps/web # 배포와 같은 정적 빌드, 사이트 주소만 테스트 값 (BRD-102)
+        env:
+          NEXT_PUBLIC_SITE_URL: https://example.test # 예약 도메인(.test). 운영 값은 deploy.yml의 vars.SITE_URL
 
   # 웹 E2E: 정적 빌드 결과로 전 화면 접근성(axe)·상태별 화면·키보드·반응형 검사 (BRD-39)
   # /data/**는 테스트의 가짜 응답만 씀(운영 데이터·외부 타일 서버에 기대지 않음)
@@ -104,6 +108,8 @@ jobs:
       - run: npx --no-install playwright install --with-deps chromium # lock 파일의 Playwright 판에 맞는 chromium
         working-directory: apps/web
       - run: npm run build -w apps/web
+        env:
+          NEXT_PUBLIC_SITE_URL: https://example.test # web 작업과 같은 테스트 값 (빌드는 사이트 주소 필수, BRD-102)
       - run: npm run test:e2e -w apps/web
 
   # 백엔드: 린트·타입 검사·테스트(Vitest)

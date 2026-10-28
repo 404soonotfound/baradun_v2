@@ -86,7 +86,7 @@ export function buildRequest(input: {
   message: string; // composeMessage 결과
   email: string;
   photos: CreateInquiryRequest["photos"];
-}): CreateInquiryRequest {
+}): Omit<CreateInquiryRequest, "idempotencyKey"> {
   const email = input.email.trim();
   return {
     type: KIND_TO_TYPE[input.kind],

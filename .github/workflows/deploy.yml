@@ -40,9 +40,19 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
+      # 웹은 사진 업로드 주소를 이 버킷 하나로만 허용함(BRD-103). 비면 사진 문의가 모두 실패하므로 배포를 멈춤
+      - name: 문의 사진 버킷 이름 확인
+        env:
+          INQUIRY_PHOTO_BUCKET: ${{ vars.INQUIRY_PHOTO_BUCKET }}
+        run: |
+          if ! printf '%s' "$INQUIRY_PHOTO_BUCKET" | grep -Eq '^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$'; then
+            echo "::error::vars.INQUIRY_PHOTO_BUCKET에 스택 출력 InquiryPhotoBucketName 값을 넣어 주세요(infra/README '데이터 문의 접수')."
+            exit 1
+          fi
       - run: npm run build -w apps/web
         env:
           NEXT_PUBLIC_SITE_URL: ${{ vars.SITE_URL }}
+          NEXT_PUBLIC_INQUIRY_PHOTO_BUCKET: ${{ vars.INQUIRY_PHOTO_BUCKET }}
       - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
         with:
           role-to-assume: ${{ vars.DEPLOY_ROLE_ARN }}
