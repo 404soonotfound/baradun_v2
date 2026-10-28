@@ -14,6 +14,9 @@ const FIRST_TILE_TIMEOUT_MS = 15_000;
 
 export type MapHandle = {
   map: maplibregl.Map;
+  // 우리 HTML 요소를 좌표에 마커로 붙임. 돌려준 함수를 부르면 뗌
+  // MapLibre 코드를 이 파일 밖에서 import하지 않게(첫 화면 용량) 여기서만 Marker를 만듦
+  addMarker: (element: HTMLElement, lngLat: [number, number]) => () => void;
   destroy: () => void;
 };
 
@@ -103,6 +106,14 @@ export function createMap(options: CreateMapOptions): MapHandle | null {
 
   return {
     map,
+    addMarker: (element, lngLat) => {
+      const marker = new maplibregl.Marker({ element })
+        .setLngLat(lngLat)
+        .addTo(map);
+      return () => {
+        marker.remove();
+      };
+    },
     destroy: () => {
       window.clearTimeout(timer);
       settled = true;

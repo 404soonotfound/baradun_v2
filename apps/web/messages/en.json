@@ -269,7 +269,9 @@
     "creditWithTitle": "Photo: {source}, “{title}” · {license}",
     "license": {
       "kogl-type1": "KOGL Type 1"
-    }
+    },
+    "reference": "Reference photo · not the sea right now",
+    "none": "No photo, so we're showing an illustration"
   },
   "pages": {
     "explore": "Explore",
@@ -423,6 +425,11 @@
       "title": "No beaches match these filters",
       "body": "Try a different activity or region",
       "action": "Show all Korea"
+    },
+    "view": {
+      "label": "List or map view",
+      "list": "List",
+      "map": "Map"
     }
   },
   "search": {
@@ -449,7 +456,8 @@
     "failed": {
       "title": "Couldn't load the map",
       "body": "You can still see every beach in the list",
-      "retry": "Try again"
+      "retry": "Try again",
+      "showList": "Show list"
     },
     "zoomIn": "Zoom in",
     "zoomOut": "Zoom out",
@@ -458,7 +466,19 @@
       "openfreemap": "OpenFreeMap",
       "openmaptiles": "© OpenMapTiles",
       "osm": "© OpenStreetMap contributors"
-    }
+    },
+    "legend": {
+      "label": "Map legend",
+      "clear": "No warnings",
+      "blocked": "Unavailable · warning",
+      "unknown": "Cannot determine · not confirmed",
+      "stale": "Cannot determine · observation delayed"
+    },
+    "card": {
+      "close": "Close beach card",
+      "detail": "View details"
+    },
+    "listNote": "Every beach on the map is also in the list. Select a beach to see a summary card"
   },
   "favorites": {
     "tabsLabel": "Favorites view",

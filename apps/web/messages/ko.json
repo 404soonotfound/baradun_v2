@@ -269,7 +269,9 @@
     "creditWithTitle": "사진 출처: {source}, 「{title}」 · {license}",
     "license": {
       "kogl-type1": "공공누리 제1유형"
-    }
+    },
+    "reference": "참고 사진 · 지금 바다 모습 아님",
+    "none": "사진이 없어 일러스트로 보여드려요"
   },
   "pages": {
     "explore": "탐색",
@@ -423,6 +425,11 @@
       "title": "이 조건에 맞는 해변이 없어요",
       "body": "활동이나 지역을 바꿔 보세요",
       "action": "전국 보기"
+    },
+    "view": {
+      "label": "목록·지도 보기",
+      "list": "목록",
+      "map": "지도"
     }
   },
   "search": {
@@ -449,7 +456,8 @@
     "failed": {
       "title": "지도를 불러오지 못했어요",
       "body": "해변 정보는 목록으로 볼 수 있어요",
-      "retry": "다시 시도"
+      "retry": "다시 시도",
+      "showList": "목록으로 보기"
     },
     "zoomIn": "지도 확대",
     "zoomOut": "지도 축소",
@@ -458,7 +466,19 @@
       "openfreemap": "OpenFreeMap",
       "openmaptiles": "© OpenMapTiles",
       "osm": "© OpenStreetMap 기여자"
-    }
+    },
+    "legend": {
+      "label": "지도 범례",
+      "clear": "특보 없음",
+      "blocked": "이용불가 · 특보",
+      "unknown": "판단불가 · 확인 못 함",
+      "stale": "판단불가 · 관측 지연"
+    },
+    "card": {
+      "close": "해변 카드 닫기",
+      "detail": "상세 보기"
+    },
+    "listNote": "지도의 해변은 목록에서도 모두 볼 수 있어요. 해변을 누르면 아래에 요약 카드가 나와요"
   },
   "favorites": {
     "tabsLabel": "즐겨찾기 보기 방식",

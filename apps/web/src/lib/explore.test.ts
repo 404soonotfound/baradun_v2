@@ -37,6 +37,7 @@ function beach(
     names: [name, name],
     aliases: [],
     regionNames: [],
+    photo: null,
     stations: {
       waveHeight: null,
       wavePeriod: null,
