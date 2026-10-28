@@ -9,9 +9,11 @@ import {
   TILE_SOURCE_ID,
   tileModeFor,
 } from "./style";
+import tokens from "../../../tokens/tokens.json";
+import darkStyle from "./style-dark.json";
 import lightStyle from "./style-light.json";
 
-// 지도 스타일·범위·불러오기 상태 (BRD-65)
+// 지도 스타일·범위·불러오기 상태 (BRD-65 · 다크 BRD-44)
 
 function labelFields(style: ReturnType<typeof buildMapStyle>) {
   return style.layers.flatMap((layer) =>
@@ -21,13 +23,9 @@ function labelFields(style: ReturnType<typeof buildMapStyle>) {
   );
 }
 
-describe("buildMapStyle", () => {
+describe.each(["light", "dark"] as const)("buildMapStyle(%s)", (theme) => {
   it("운영(pinned)은 검증한 타일 판 주소로 고정하고 TileJSON(최신)을 부르지 않는다", () => {
-    const style = buildMapStyle({
-      locale: "ko",
-      tiles: "pinned",
-      theme: "light",
-    });
+    const style = buildMapStyle({ locale: "ko", tiles: "pinned", theme });
     const source = style.sources[TILE_SOURCE_ID];
     expect(source).toEqual({
       type: "vector",
@@ -41,11 +39,7 @@ describe("buildMapStyle", () => {
   });
 
   it("개발(latest)은 최신 TileJSON을 쓴다", () => {
-    const style = buildMapStyle({
-      locale: "ko",
-      tiles: "latest",
-      theme: "light",
-    });
+    const style = buildMapStyle({ locale: "ko", tiles: "latest", theme });
     expect(style.sources[TILE_SOURCE_ID]).toEqual({
       type: "vector",
       url: OPENFREEMAP_TILEJSON,
@@ -53,11 +47,7 @@ describe("buildMapStyle", () => {
   });
 
   it("타일 출처는 OpenFreeMap 하나뿐이다(다른 지도 서버로 요청하지 않음)", () => {
-    const style = buildMapStyle({
-      locale: "ko",
-      tiles: "pinned",
-      theme: "light",
-    });
+    const style = buildMapStyle({ locale: "ko", tiles: "pinned", theme });
     expect(Object.keys(style.sources)).toEqual([TILE_SOURCE_ID]);
     expect(style.glyphs).toMatch(/^https:\/\/tiles\.openfreemap\.org\//);
     expect(String(style.sprite)).toMatch(
@@ -67,7 +57,7 @@ describe("buildMapStyle", () => {
 
   it("한국어 라벨은 name:ko → name 순서", () => {
     const fields = labelFields(
-      buildMapStyle({ locale: "ko", tiles: "pinned", theme: "light" }),
+      buildMapStyle({ locale: "ko", tiles: "pinned", theme }),
     );
     expect(fields.length).toBeGreaterThan(0);
     for (const field of fields) {
@@ -77,7 +67,7 @@ describe("buildMapStyle", () => {
 
   it("영어 라벨은 name:en → name:latin → name 순서", () => {
     const fields = labelFields(
-      buildMapStyle({ locale: "en", tiles: "pinned", theme: "light" }),
+      buildMapStyle({ locale: "en", tiles: "pinned", theme }),
     );
     for (const field of fields) {
       expect(field).toBe(
@@ -90,7 +80,7 @@ describe("buildMapStyle", () => {
     const ids = buildMapStyle({
       locale: "ko",
       tiles: "pinned",
-      theme: "light",
+      theme,
     }).layers.map((layer) => layer.id);
     for (const removed of [
       "highway-shield-non-us",
@@ -103,9 +93,82 @@ describe("buildMapStyle", () => {
   });
 
   it("원본 스타일 JSON을 고치지 않는다", () => {
-    const before = JSON.stringify(lightStyle);
-    buildMapStyle({ locale: "en", tiles: "pinned", theme: "light" });
-    expect(JSON.stringify(lightStyle)).toBe(before);
+    const before = JSON.stringify([lightStyle, darkStyle]);
+    buildMapStyle({ locale: "en", tiles: "pinned", theme });
+    expect(JSON.stringify([lightStyle, darkStyle])).toBe(before);
+  });
+});
+
+// 다크 지도 (BRD-44): 라이트 포크와 같은 원칙(같은 레이어·라벨·출처), 색만 다름
+type Layer = (typeof lightStyle.layers)[number];
+function withoutColors(layer: Layer) {
+  const paint = Object.fromEntries(
+    Object.entries(layer.paint ?? {}).filter(([key]) => !key.includes("color")),
+  );
+  return { ...layer, paint };
+}
+
+function luminance(hex: string) {
+  const weights = [0.2126, 0.7152, 0.0722];
+  return weights.reduce((sum, weight, index) => {
+    const c = parseInt(hex.slice(1 + index * 2, 3 + index * 2), 16) / 255;
+    const linear = c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+    return sum + weight * linear;
+  }, 0);
+}
+function contrast(a: string, b: string) {
+  const [x, y] = [luminance(a), luminance(b)];
+  return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
+}
+function paintColor(style: typeof darkStyle, id: string, key: string) {
+  const layer = style.layers.find((item) => item.id === id);
+  return (layer?.paint as Record<string, unknown> | undefined)?.[key] as string;
+}
+
+describe("style-dark.json", () => {
+  it("라이트와 레이어 순서·필터·글자 설정·출처가 같고 색만 다르다", () => {
+    expect(darkStyle.sources).toEqual(lightStyle.sources);
+    expect(darkStyle.glyphs).toBe(lightStyle.glyphs);
+    expect(darkStyle.sprite).toBe(lightStyle.sprite);
+    expect(darkStyle.layers.map(withoutColors)).toEqual(
+      lightStyle.layers.map(withoutColors),
+    );
+  });
+
+  it("모든 색 칸을 다크 값으로 바꿨다(라이트 색이 남지 않음)", () => {
+    lightStyle.layers.forEach((layer, index) => {
+      const dark = darkStyle.layers[index]?.paint as Record<string, unknown>;
+      for (const [key, value] of Object.entries(layer.paint ?? {})) {
+        if (key.includes("color")) expect(dark[key]).not.toEqual(value);
+      }
+    });
+  });
+
+  it("다크 토큰 마커(상태 원·점선)가 다크 지도의 땅·바다 위에서 3:1 이상 보인다", () => {
+    const land = paintColor(darkStyle, "background", "background-color");
+    const water = paintColor(darkStyle, "water", "fill-color");
+    const status = tokens.color.status;
+    const dark = (token: { $extensions: { baradun: { dark: string } } }) =>
+      token.$extensions.baradun.dark;
+    // 채운 원(특보 없음·이용불가)은 채움 색, 판단불가 원은 점선 색이 지도와 떨어져 보여야 함
+    for (const marker of [
+      dark(status.clear.fg),
+      dark(status.blocked.fg),
+      dark(status.unknown.border),
+      dark(status.stale.border),
+    ]) {
+      expect(contrast(marker, land)).toBeGreaterThanOrEqual(3);
+      expect(contrast(marker, water)).toBeGreaterThanOrEqual(3);
+    }
+  });
+
+  it("지명 글자는 다크 땅 위에서 4.5:1 이상", () => {
+    const land = paintColor(darkStyle, "background", "background-color");
+    for (const id of ["label_city", "label_town", "label_village"]) {
+      expect(
+        contrast(paintColor(darkStyle, id, "text-color"), land),
+      ).toBeGreaterThanOrEqual(4.5);
+    }
   });
 });
 
