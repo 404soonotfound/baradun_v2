@@ -142,7 +142,16 @@ export function createOnboardingStore(storageKey: string) {
 // [8] 앱 전체에서 하나
 const store = createOnboardingStore("baradun:onboarding");
 
+// 기기 데이터 초기화 직후라 첫 실행 안내(ON-1) 안에서 결과를 알려야 함(이번 방문 메모리만).
+// ON-1이 바로 덮고 뒤 화면을 막아(inert) 설정 화면의 토스트가 보이지도 읽히지도 않으므로
+let resetNotice = false;
+
+export function showsResetNotice(): boolean {
+  return resetNotice;
+}
+
 export function acknowledgeNotice() {
+  resetNotice = false;
   store.acknowledge();
 }
 
@@ -150,7 +159,9 @@ export function finishLocationStep() {
   store.finishLocationStep();
 }
 
-export function clearOnboarding() {
+// afterReset: 기기 데이터 초기화로 지움 → 다시 덮는 ON-1에 '기기 데이터를 지웠어요'를 보여 줌
+export function clearOnboarding(options: { afterReset?: boolean } = {}) {
+  resetNotice = options.afterReset ?? false;
   store.clear();
 }
 

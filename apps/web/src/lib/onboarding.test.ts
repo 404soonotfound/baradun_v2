@@ -1,11 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  acknowledgeNotice,
+  clearOnboarding,
   createOnboardingStore,
   locationDecided,
   NOTICE_VERSION,
   onboardingStep,
   parseRecord,
+  showsResetNotice,
   type OnboardingRecord,
 } from "./onboarding";
 
@@ -193,5 +196,19 @@ describe("createOnboardingStore", () => {
     } finally {
       vi.unstubAllGlobals();
     }
+  });
+});
+
+describe("기기 데이터 초기화 결과 알림 (BRD-36)", () => {
+  it("초기화로 지우면 ON-1에 결과를 보이고, 확인하면 감춤. 다른 이유로 지우면 보이지 않음", () => {
+    // 저장소를 못 써도(테스트 환경) 메모리로 이어감
+    expect(showsResetNotice()).toBe(false);
+    clearOnboarding({ afterReset: true });
+    expect(showsResetNotice()).toBe(true);
+    acknowledgeNotice();
+    expect(showsResetNotice()).toBe(false);
+    clearOnboarding({ afterReset: true });
+    clearOnboarding();
+    expect(showsResetNotice()).toBe(false);
   });
 });

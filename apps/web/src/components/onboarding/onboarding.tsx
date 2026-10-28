@@ -24,6 +24,7 @@ import {
   finishLocationStep,
   locationDecided,
   onboardingStep,
+  showsResetNotice,
   useOnboarding,
   type OnboardingRecord,
 } from "@/lib/onboarding";
@@ -42,6 +43,8 @@ const TITLE_IDS = {
   notice: "onboarding-notice-title",
   location: "onboarding-location-title",
 } as const;
+// 기기 데이터 초기화 직후 ON-1 맨 위 결과 줄. 있으면 제목보다 먼저 포커스(화면 읽기가 결과부터 읽음)
+const RESET_NOTICE_ID = "onboarding-reset-notice";
 
 // Vue: props: { locale, groups }
 export function Onboarding({
@@ -148,7 +151,10 @@ function OnboardingDialog({
     const dialog = dialogRef.current;
     if (!dialog) return;
     if (!dialog.open) dialog.showModal();
-    document.getElementById(titleId)?.focus();
+    (
+      document.getElementById(RESET_NOTICE_ID) ??
+      document.getElementById(titleId)
+    )?.focus();
   }, [titleId]);
 
   // 덮는 동안 뒤 페이지 스크롤 막기(Sheet·SystemDialog와 잠금 수를 나눠 셈)
@@ -198,6 +204,20 @@ function NoticeStep({ locale }: { locale: Locale }) {
   const t = useTranslations();
   return (
     <div className="flex flex-1 flex-col gap-5">
+      {showsResetNotice() && (
+        <p
+          id={RESET_NOTICE_ID}
+          tabIndex={-1}
+          className="flex items-center gap-2 rounded-card bg-bg-surface p-3.5 text-body-s font-bold text-text-default shadow-card outline-none"
+        >
+          <Check
+            aria-hidden="true"
+            size={18}
+            className="shrink-0 text-brand-default"
+          />
+          {t("settings.reset.done")}
+        </p>
+      )}
       <span
         aria-hidden="true"
         className="flex size-12 items-center justify-center self-center rounded-icon bg-brand-default text-brand-on"

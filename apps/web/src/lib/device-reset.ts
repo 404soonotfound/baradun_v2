@@ -21,5 +21,6 @@ export function resetDeviceData() {
   clearExploreView();
   clearSortChoice();
   clearTabMemory();
-  clearOnboarding(); // 마지막: ON-1이 바로 덮이므로 다른 기록을 먼저 지움
+  // 마지막: ON-1이 바로 덮이므로 다른 기록을 먼저 지움. 지운 결과는 ON-1 안에서 알림(뒤 화면 토스트는 가려짐)
+  clearOnboarding({ afterReset: true });
 }
