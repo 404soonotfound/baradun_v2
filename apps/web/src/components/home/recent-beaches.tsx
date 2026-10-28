@@ -66,7 +66,7 @@ export function RecentBeaches({
       <SectionHead
         id="home-recent"
         title={t("title")}
-        href={localizedPath(locale, "/favorites/")}
+        href={localizedPath(locale, "/favorites/?tab=recent")}
         linkText={t("all")}
       />
       <Link

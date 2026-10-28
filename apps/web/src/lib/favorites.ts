@@ -46,9 +46,15 @@ export function useRecent(): readonly string[] {
   );
 }
 
-// [8] 장소 상세에 들어갈 때 호출(BRD-32) · 최근 본 전체 지우기
+// [8] 장소 상세에 들어갈 때 호출(BRD-32)
 export const addRecent = recent.add;
-export const clearRecent = recent.clear;
+
+// 최근 본 전체 지우기(즐겨찾기 화면, BRD-35). 되돌리기는 지우기 전 순서 그대로
+export function clearRecent(): () => void {
+  const before = recent.getSnapshot();
+  recent.clear();
+  return () => recent.replace(before);
+}
 
 // 최근 본 ✕. 지우기 전 목록을 기억해 '되돌리기'에서 원래 순서·자리로 복구하는 함수를 돌려줌
 export function removeRecent(id: string): () => void {
