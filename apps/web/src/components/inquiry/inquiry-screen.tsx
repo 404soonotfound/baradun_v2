@@ -20,6 +20,8 @@ import {
 } from "@/lib/inquiry/api";
 import {
   clearInquiryDraft,
+  clearSentInquiryDraft,
+  readInquiryDraft,
   saveInquiryDraft,
   useInquiryDraft,
 } from "@/lib/inquiry/draft";
@@ -245,6 +247,7 @@ export function InquiryScreen({
       return;
     }
     sendingRef.current = true;
+    const sentSavedAt = readInquiryDraft()?.savedAt ?? null;
     setPhase({ kind: "sending", progress: null });
     const result = await sendInquiry(
       buildRequest({
@@ -264,7 +267,7 @@ export function InquiryScreen({
     sendingRef.current = false;
     if (result.ok) {
       const photos = result.response.photos;
-      clearInquiryDraft(); // 접수 성공 → 임시 저장 즉시 삭제
+      clearSentInquiryDraft(sentSavedAt); // 접수 성공 → 보낸 초안만 즉시 삭제
       resetSensitive();
       setPhase({
         kind: "done",

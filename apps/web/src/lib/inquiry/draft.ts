@@ -145,6 +145,12 @@ export function createDraftStore(
     notify();
   }
 
+  // 보낸 뒤 새로 쓴 초안은 남김. 보낼 때의 savedAt(없었으면 null)과 지금 값이 같을 때만 지움
+  function clearIfUnchanged(sentSavedAt: string | null) {
+    if ((read()?.savedAt ?? null) !== sentSavedAt) return;
+    clear();
+  }
+
   function subscribe(onChange: () => void) {
     listeners.add(onChange);
     return () => {
@@ -152,7 +158,7 @@ export function createDraftStore(
     };
   }
 
-  return { read, save, clear, subscribe };
+  return { read, save, clear, clearIfUnchanged, subscribe };
 }
 
 // [4] 앱 전체에서 하나
@@ -163,6 +169,8 @@ export const readInquiryDraft = store.read;
 export const saveInquiryDraft = store.save;
 // 접수 성공·지우기·기기 데이터 초기화(lib/device-reset.ts)
 export const clearInquiryDraft = store.clear;
+// 접수 성공 때. 응답을 기다리는 사이 화면을 떠났다 돌아와 새로 쓴 초안을 지우지 않음
+export const clearSentInquiryDraft = store.clearIfUnchanged;
 
 // 화면에서 임시 저장이 있는지 볼 때. 서버 HTML은 없음
 export function useInquiryDraft(): InquiryDraft | null {
