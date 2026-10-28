@@ -13,6 +13,7 @@ import {
   readdirSync,
   renameSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from "node:fs";
 import path from "node:path";
@@ -33,6 +34,11 @@ export const DEV_DATA_REFRESH_INTERVAL_MS = 20 * 60_000;
 export const DEV_DATA_MODE_FILE = ".dev-data-mode";
 // 갱신 시각을 확인하는 간격. 잠자기로 타이머가 밀려도 깨어난 뒤 1분 안에 따라잡음
 const REFRESH_CHECK_MS = 60_000;
+// 탐색기·Finder가 폴더를 열면 저절로 만드는 파일. 사용자 데이터가 아니라 예시 폴더 판단에서 뺌
+const OS_METADATA = new Set([".DS_Store", "Thumbs.db", "desktop.ini"]);
+// 중간에 죽은 실행이 남긴 임시 폴더를 지우는 기준. 쓰는 중인 다른 갱신기의 임시 폴더는 몇 초 안에 끝나므로 넉넉히 둠
+const STALE_TEMP_MS = 10 * 60_000;
+const TEMP_ENTRY = /^\..*\.tmp$/;
 
 interface DevDataPaths {
   outDir?: string;
@@ -85,7 +91,12 @@ function temporaryPath(parent: string, label: string): string {
 
 function isAlreadyPublished(error: unknown): boolean {
   const code = (error as NodeJS.ErrnoException | null)?.code;
-  return code === "EEXIST" || code === "ENOTEMPTY" || code === "EPERM";
+  // Windows는 이미 있는 폴더 이름으로 옮기면 EPERM을 냄. 다른 운영체제의 EPERM은 실제 권한 오류라 그대로 던짐.
+  return (
+    code === "EEXIST" ||
+    code === "ENOTEMPTY" ||
+    (code === "EPERM" && process.platform === "win32")
+  );
 }
 
 /** 같은 버전 폴더가 이미 있으면 내용이 같을 때만 유지하고, 다르면 새 내용으로 바꿈. */
@@ -136,7 +147,8 @@ function isOwnEntry(name: string): boolean {
     name === "manifest.json" ||
     name === DEV_DATA_MODE_FILE ||
     VERSION_DIR.test(name) ||
-    (name.startsWith(".") && name.endsWith(".tmp"))
+    (name.startsWith(".") && name.endsWith(".tmp")) ||
+    OS_METADATA.has(name)
   );
 }
 
@@ -160,10 +172,24 @@ function currentVersion(outDir: string): string | null {
 }
 
 // 이전 manifest를 읽은 브라우저가 그 버전 파일을 받는 중일 수 있어 직전 버전까지만 남김.
-function pruneVersions(outDir: string, keep: Array<string | null>): void {
+// 10분 넘은 임시 폴더(중간에 죽은 실행의 흔적)도 함께 지움.
+function pruneVersions(
+  outDir: string,
+  keep: Array<string | null>,
+  nowMs: number,
+): void {
   for (const entry of readdirSync(outDir)) {
+    const target = path.join(outDir, entry);
     if (VERSION_DIR.test(entry) && !keep.includes(entry)) {
-      rmSync(path.join(outDir, entry), { recursive: true, force: true });
+      rmSync(target, { recursive: true, force: true });
+    } else if (TEMP_ENTRY.test(entry)) {
+      try {
+        if (nowMs - statSync(target).mtimeMs > STALE_TEMP_MS) {
+          rmSync(target, { recursive: true, force: true });
+        }
+      } catch {
+        // 다른 갱신기가 막 옮기거나 지운 경우
+      }
     }
   }
 }
@@ -200,7 +226,7 @@ export function writeDevData({
   const foreign = foreignEntries(outDir);
   if (foreign.length > 0) {
     throw new Error(
-      `${outDir}에 예시 데이터가 아닌 파일이 있어 쓰지 않았어요(${foreign.join(", ")}). 확인 후 npm run dev:data -w apps/web -- --clean`,
+      `${outDir}에 예시 데이터가 아닌 파일이 있어 쓰지 않았어요(${foreign.join(", ")}). 그 파일을 옮기거나 지운 뒤 다시 실행하세요`,
     );
   }
 
@@ -224,7 +250,7 @@ export function writeDevData({
     writeFileSync(path.join(outDir, DEV_DATA_MODE_FILE), "sample\n");
     writeFileSync(stagedManifest, JSON.stringify(manifest, null, 2));
     renameSync(stagedManifest, path.join(outDir, "manifest.json"));
-    pruneVersions(outDir, [version, previousVersion]);
+    pruneVersions(outDir, [version, previousVersion], Date.now());
   } catch (error) {
     rmSync(stagedVersion, { recursive: true, force: true });
     rmSync(stagedManifest, { force: true });
@@ -241,7 +267,7 @@ export function writeDevData({
  */
 export function clearDevSampleData(
   outDir: string = DEFAULT_OUT,
-): "removed" | "unmarked" | "none" {
+): "removed" | "unmarked" | "foreign" | "none" {
   if (!existsSync(outDir)) return "none";
   let mode: string | null = null;
   try {
@@ -249,7 +275,8 @@ export function clearDevSampleData(
   } catch {
     mode = null;
   }
-  if (mode === "sample" && foreignEntries(outDir).length === 0) {
+  if (foreignEntries(outDir).length > 0) return "foreign";
+  if (mode === "sample") {
     rmSync(outDir, { recursive: true, force: true });
     return "removed";
   }
@@ -273,12 +300,10 @@ export function startDevDataRefresh({
   let lastPublishedMs = now();
   const publish = () => {
     try {
-      lastPublishedMs = now();
-      const version = writeDevData({
-        outDir,
-        examplesDir,
-        nowMs: lastPublishedMs,
-      });
+      const nowMs = now();
+      const version = writeDevData({ outDir, examplesDir, nowMs });
+      // 실패하면 시각을 넘기지 않아 다음 확인(1분 뒤)에 다시 시도함
+      lastPublishedMs = nowMs;
       onPublished?.(version);
     } catch (error) {
       onError(error);
@@ -320,6 +345,14 @@ function main(): void {
   }
 
   if (mode === "--clean") {
+    const foreign = foreignEntries(outDir);
+    if (foreign.length > 0) {
+      console.error(
+        `public/data에 예시 데이터가 아닌 파일이 있어 지우지 않았어요(${foreign.join(", ")}). 확인 후 직접 정리하세요.`,
+      );
+      process.exitCode = 1;
+      return;
+    }
     rmSync(outDir, { recursive: true, force: true });
     console.log("public/data를 지웠어요");
     return;
