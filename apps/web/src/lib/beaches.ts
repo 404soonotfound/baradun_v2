@@ -120,8 +120,6 @@ export function listBeachSummaries(locale: Locale): BeachSummary[] {
     }));
 }
 
-// 상세 대안 해변 후보: 이 해변을 뺀 30km 안 해변만(해변 좌표는 고정이라 빌드 때 거름).
-// 상세 페이지마다 전체 목록을 내려보내지 않게 함. 특보 없음·활동·최대 2곳은 브라우저에서(lib/alternatives.ts)
 // 노출 중인 전체 해변 id (BRD-38 판단 출처 전체 장애). 상세는 대안 후보(30km 안)만 받으므로 따로 넘김
 export function listVisibleBeachIds(): string[] {
   return load()
@@ -129,6 +127,8 @@ export function listVisibleBeachIds(): string[] {
     .map((beach) => beach.id);
 }
 
+// 상세 대안 해변 후보: 이 해변을 뺀 30km 안 해변만(해변 좌표는 고정이라 빌드 때 거름).
+// 상세 페이지마다 전체 목록을 내려보내지 않게 함. 특보 없음·활동·최대 2곳은 브라우저에서(lib/alternatives.ts)
 export function listAltCandidates(
   beach: Pick<Beach, "id" | "coords">,
   locale: Locale,
