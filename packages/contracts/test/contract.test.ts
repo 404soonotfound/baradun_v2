@@ -53,6 +53,94 @@ describe("정상 예시는 통과", () => {
   });
 });
 
+describe("개발 상태 예시는 실제 해변 식별자와 맞음", () => {
+  interface WarningItem {
+    type: string;
+    level: string;
+    zoneCode: string | null;
+    zoneName: string;
+  }
+  const beaches = read("../examples/valid/beaches.json") as {
+    beaches: Array<{
+      id: string;
+      stations: { waveHeight: { id: string } | null };
+    }>;
+  };
+  const status = read("../examples/valid/status.json") as {
+    beaches: Record<
+      string,
+      {
+        category: string;
+        reasons: Array<{ code: string }>;
+        warning: { items: WarningItem[] };
+        observation: {
+          metrics: {
+            waveHeight: { value: number | null; observedAt: string | null };
+          };
+        };
+      }
+    >;
+  };
+
+  it("상태가 있는 해변만 카탈로그 원본과 같은 메타데이터를 씀", () => {
+    expect(Object.keys(status.beaches)).toEqual(
+      beaches.beaches.map((beach) => beach.id),
+    );
+
+    for (const beach of beaches.beaches) {
+      const catalog = read(`../../../data/beaches/${beach.id}.json`);
+      expect(beach).toEqual(catalog);
+    }
+  });
+
+  it("분류·특보 확인 실패·관측 지연·가까운 관측 없음 사례를 구분함", () => {
+    expect(status.beaches.b0001?.category).toBe("clear");
+    expect(status.beaches.b0094?.category).toBe("unavailable");
+    expect(status.beaches.b0107?.reasons[0]?.code).toBe("warning_unknown");
+    expect(status.beaches.b0157).toMatchObject({
+      category: "clear",
+      observation: {
+        metrics: { waveHeight: { value: null, state: "none" } },
+      },
+    });
+    expect(status.beaches.b0272?.reasons[0]?.code).toBe("observation_delayed");
+  });
+
+  it("해변에 걸린 특보는 전국 특보 목록에도 있음", () => {
+    const nationwide = read("../examples/valid/nationwide-warnings.json") as {
+      items: WarningItem[];
+    };
+    const key = (item: WarningItem) =>
+      [item.type, item.level, item.zoneCode, item.zoneName].join("|");
+    const listed = new Set(nationwide.items.map(key));
+
+    for (const [id, beach] of Object.entries(status.beaches)) {
+      for (const item of beach.warning.items) {
+        expect(listed.has(key(item)), `${id} ${key(item)}`).toBe(true);
+      }
+    }
+  });
+
+  it("파고 측정값은 같은 측정소 이력의 같은 시각 값과 맞음", () => {
+    const history = read("../examples/valid/history.json") as {
+      stations: Record<
+        string,
+        { points: Array<{ t: string; v: number | null }> }
+      >;
+    };
+
+    for (const beach of beaches.beaches) {
+      const wave = status.beaches[beach.id]?.observation.metrics.waveHeight;
+      const stationId = beach.stations.waveHeight?.id;
+      if (!stationId || !wave?.observedAt) continue;
+      const point = history.stations[stationId]?.points.find(
+        (p) => p.t === wave.observedAt,
+      );
+      expect(point?.v, `${beach.id} ${wave.observedAt}`).toBe(wave.value);
+    }
+  });
+});
+
 // 거부 예시: 반드시 실패
 describe("거부 예시는 실패", () => {
   it.each(list("invalid"))("%s", (file) => {

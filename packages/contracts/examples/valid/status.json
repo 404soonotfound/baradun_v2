@@ -9,7 +9,9 @@
         "source": "기상청",
         "lastConfirmedAt": "2026-10-17T05:18:40Z"
       },
-      "control": { "state": "not_provided" },
+      "control": {
+        "state": "not_provided"
+      },
       "observation": {
         "metrics": {
           "waveHeight": {
@@ -21,20 +23,20 @@
             "expiresAt": "2026-10-17T06:30:00Z"
           },
           "wavePeriod": {
-            "value": null,
+            "value": 7.4,
             "unit": "s",
-            "observedAt": null,
-            "state": "none",
-            "nextExpectedAt": null,
-            "expiresAt": null
+            "observedAt": "2026-10-17T05:20:00Z",
+            "state": "fresh",
+            "nextExpectedAt": "2026-10-17T05:30:00Z",
+            "expiresAt": "2026-10-17T06:20:00Z"
           },
           "waveDirection": {
-            "value": null,
+            "value": 110,
             "unit": "deg",
-            "observedAt": null,
-            "state": "none",
-            "nextExpectedAt": null,
-            "expiresAt": null
+            "observedAt": "2026-10-17T05:20:00Z",
+            "state": "fresh",
+            "nextExpectedAt": "2026-10-17T05:30:00Z",
+            "expiresAt": "2026-10-17T06:20:00Z"
           },
           "waterTemp": {
             "value": 21.4,
@@ -61,27 +63,144 @@
           "inSeason": false
         },
         "ripCurrent": null,
-        "nearbyWarnings": [
-          {
-            "type": "dry",
-            "level": "advisory",
-            "zoneCode": "L1999901",
-            "zoneName": "예시 강릉시평지",
-            "publishedAt": "2026-10-17T01:00:00Z",
-            "effectiveFrom": "2026-10-17T01:00:00Z"
-          }
-        ]
+        "nearbyWarnings": []
       },
       "validUntil": "2026-10-17T06:03:40Z"
     },
     "b0002": {
+      "category": "clear",
+      "reasons": [],
+      "warning": {
+        "state": "none",
+        "items": [],
+        "source": "기상청",
+        "lastConfirmedAt": "2026-10-17T05:18:40Z"
+      },
+      "control": {
+        "state": "not_provided"
+      },
+      "observation": {
+        "metrics": {
+          "waveHeight": {
+            "value": 0.6,
+            "unit": "m",
+            "observedAt": "2026-10-17T05:00:00Z",
+            "state": "fresh",
+            "nextExpectedAt": "2026-10-17T06:00:00Z",
+            "expiresAt": "2026-10-17T06:30:00Z"
+          },
+          "wavePeriod": {
+            "value": 7.4,
+            "unit": "s",
+            "observedAt": "2026-10-17T05:20:00Z",
+            "state": "fresh",
+            "nextExpectedAt": "2026-10-17T05:30:00Z",
+            "expiresAt": "2026-10-17T06:20:00Z"
+          },
+          "waveDirection": {
+            "value": 110,
+            "unit": "deg",
+            "observedAt": "2026-10-17T05:20:00Z",
+            "state": "fresh",
+            "nextExpectedAt": "2026-10-17T05:30:00Z",
+            "expiresAt": "2026-10-17T06:20:00Z"
+          },
+          "waterTemp": {
+            "value": 21.4,
+            "unit": "°C",
+            "observedAt": "2026-10-17T05:00:00Z",
+            "state": "fresh",
+            "nextExpectedAt": "2026-10-17T06:00:00Z",
+            "expiresAt": "2026-10-17T06:30:00Z"
+          },
+          "wind": {
+            "value": 3.1,
+            "unit": "m/s",
+            "observedAt": "2026-10-17T05:00:00Z",
+            "state": "fresh",
+            "nextExpectedAt": "2026-10-17T06:00:00Z",
+            "expiresAt": "2026-10-17T06:30:00Z"
+          }
+        }
+      },
+      "info": {
+        "season": null,
+        "ripCurrent": null,
+        "nearbyWarnings": []
+      },
+      "validUntil": "2026-10-17T06:03:40Z"
+    },
+    "b0003": {
+      "category": "clear",
+      "reasons": [],
+      "warning": {
+        "state": "none",
+        "items": [],
+        "source": "기상청",
+        "lastConfirmedAt": "2026-10-17T05:18:40Z"
+      },
+      "control": {
+        "state": "not_provided"
+      },
+      "observation": {
+        "metrics": {
+          "waveHeight": {
+            "value": 0.6,
+            "unit": "m",
+            "observedAt": "2026-10-17T05:00:00Z",
+            "state": "fresh",
+            "nextExpectedAt": "2026-10-17T06:00:00Z",
+            "expiresAt": "2026-10-17T06:30:00Z"
+          },
+          "wavePeriod": {
+            "value": 7.4,
+            "unit": "s",
+            "observedAt": "2026-10-17T05:20:00Z",
+            "state": "fresh",
+            "nextExpectedAt": "2026-10-17T05:30:00Z",
+            "expiresAt": "2026-10-17T06:20:00Z"
+          },
+          "waveDirection": {
+            "value": 110,
+            "unit": "deg",
+            "observedAt": "2026-10-17T05:20:00Z",
+            "state": "fresh",
+            "nextExpectedAt": "2026-10-17T05:30:00Z",
+            "expiresAt": "2026-10-17T06:20:00Z"
+          },
+          "waterTemp": {
+            "value": 21.4,
+            "unit": "°C",
+            "observedAt": "2026-10-17T05:00:00Z",
+            "state": "fresh",
+            "nextExpectedAt": "2026-10-17T06:00:00Z",
+            "expiresAt": "2026-10-17T06:30:00Z"
+          },
+          "wind": {
+            "value": 3.1,
+            "unit": "m/s",
+            "observedAt": "2026-10-17T05:00:00Z",
+            "state": "fresh",
+            "nextExpectedAt": "2026-10-17T06:00:00Z",
+            "expiresAt": "2026-10-17T06:30:00Z"
+          }
+        }
+      },
+      "info": {
+        "season": null,
+        "ripCurrent": null,
+        "nearbyWarnings": []
+      },
+      "validUntil": "2026-10-17T06:03:40Z"
+    },
+    "b0094": {
       "category": "unavailable",
       "reasons": [
         {
           "code": "warning",
           "type": "wind_wave",
           "level": "advisory",
-          "scope": "예시 남해앞바다",
+          "scope": "부산앞바다",
           "source": "기상청",
           "at": "2026-10-17T04:00:00Z"
         }
@@ -92,8 +211,8 @@
           {
             "type": "wind_wave",
             "level": "advisory",
-            "zoneCode": "S1999902",
-            "zoneName": "예시 남해앞바다",
+            "zoneCode": "S1311100",
+            "zoneName": "부산앞바다",
             "publishedAt": "2026-10-17T04:00:00Z",
             "effectiveFrom": "2026-10-17T05:00:00Z"
           }
@@ -101,11 +220,13 @@
         "source": "기상청",
         "lastConfirmedAt": "2026-10-17T05:18:40Z"
       },
-      "control": { "state": "not_provided" },
+      "control": {
+        "state": "not_provided"
+      },
       "observation": {
         "metrics": {
           "waveHeight": {
-            "value": 2.4,
+            "value": 1.2,
             "unit": "m",
             "observedAt": "2026-10-17T05:00:00Z",
             "state": "fresh",
@@ -113,7 +234,77 @@
             "expiresAt": "2026-10-17T06:30:00Z"
           },
           "wavePeriod": {
-            "value": 8.2,
+            "value": null,
+            "unit": "s",
+            "observedAt": null,
+            "state": "none",
+            "nextExpectedAt": null,
+            "expiresAt": null
+          },
+          "waveDirection": {
+            "value": null,
+            "unit": "deg",
+            "observedAt": null,
+            "state": "none",
+            "nextExpectedAt": null,
+            "expiresAt": null
+          },
+          "waterTemp": {
+            "value": 20.8,
+            "unit": "°C",
+            "observedAt": "2026-10-17T05:00:00Z",
+            "state": "fresh",
+            "nextExpectedAt": "2026-10-17T06:00:00Z",
+            "expiresAt": "2026-10-17T06:30:00Z"
+          },
+          "wind": {
+            "value": null,
+            "unit": "m/s",
+            "observedAt": null,
+            "state": "none",
+            "nextExpectedAt": null,
+            "expiresAt": null
+          }
+        }
+      },
+      "info": {
+        "season": null,
+        "ripCurrent": null,
+        "nearbyWarnings": []
+      },
+      "validUntil": "2026-10-17T06:03:40Z"
+    },
+    "b0107": {
+      "category": "undetermined",
+      "reasons": [
+        {
+          "code": "warning_unknown",
+          "scope": "인천·경기남부앞바다",
+          "source": "기상청",
+          "at": null
+        }
+      ],
+      "warning": {
+        "state": "unknown",
+        "items": [],
+        "source": "기상청",
+        "lastConfirmedAt": null
+      },
+      "control": {
+        "state": "not_provided"
+      },
+      "observation": {
+        "metrics": {
+          "waveHeight": {
+            "value": 0.7,
+            "unit": "m",
+            "observedAt": "2026-10-17T05:00:00Z",
+            "state": "fresh",
+            "nextExpectedAt": "2026-10-17T06:00:00Z",
+            "expiresAt": "2026-10-17T06:30:00Z"
+          },
+          "wavePeriod": {
+            "value": 6.8,
             "unit": "s",
             "observedAt": "2026-10-17T05:20:00Z",
             "state": "fresh",
@@ -121,12 +312,156 @@
             "expiresAt": "2026-10-17T06:20:00Z"
           },
           "waveDirection": {
-            "value": 135,
+            "value": 245,
             "unit": "deg",
             "observedAt": "2026-10-17T05:20:00Z",
             "state": "fresh",
             "nextExpectedAt": "2026-10-17T05:30:00Z",
             "expiresAt": "2026-10-17T06:20:00Z"
+          },
+          "waterTemp": {
+            "value": 19.6,
+            "unit": "°C",
+            "observedAt": "2026-10-17T05:00:00Z",
+            "state": "fresh",
+            "nextExpectedAt": "2026-10-17T06:00:00Z",
+            "expiresAt": "2026-10-17T06:30:00Z"
+          },
+          "wind": {
+            "value": 4.2,
+            "unit": "m/s",
+            "observedAt": "2026-10-17T05:00:00Z",
+            "state": "fresh",
+            "nextExpectedAt": "2026-10-17T06:00:00Z",
+            "expiresAt": "2026-10-17T06:30:00Z"
+          }
+        }
+      },
+      "info": {
+        "season": null,
+        "ripCurrent": null,
+        "nearbyWarnings": []
+      },
+      "validUntil": "2026-10-17T06:03:40Z"
+    },
+    "b0120": {
+      "category": "unavailable",
+      "reasons": [
+        {
+          "code": "warning",
+          "type": "tsunami",
+          "level": "warning",
+          "scope": "울산광역시",
+          "source": "기상청",
+          "at": "2026-10-17T05:10:00Z"
+        }
+      ],
+      "warning": {
+        "state": "active",
+        "items": [
+          {
+            "type": "tsunami",
+            "level": "warning",
+            "zoneCode": null,
+            "zoneName": "울산광역시",
+            "publishedAt": "2026-10-17T05:10:00Z",
+            "effectiveFrom": "2026-10-17T05:10:00Z"
+          }
+        ],
+        "source": "기상청",
+        "lastConfirmedAt": "2026-10-17T05:18:40Z"
+      },
+      "control": {
+        "state": "not_provided"
+      },
+      "observation": {
+        "metrics": {
+          "waveHeight": {
+            "value": 1,
+            "unit": "m",
+            "observedAt": "2026-10-17T05:00:00Z",
+            "state": "fresh",
+            "nextExpectedAt": "2026-10-17T06:00:00Z",
+            "expiresAt": "2026-10-17T06:30:00Z"
+          },
+          "wavePeriod": {
+            "value": 7.9,
+            "unit": "s",
+            "observedAt": "2026-10-17T05:20:00Z",
+            "state": "fresh",
+            "nextExpectedAt": "2026-10-17T05:30:00Z",
+            "expiresAt": "2026-10-17T06:20:00Z"
+          },
+          "waveDirection": {
+            "value": 80,
+            "unit": "deg",
+            "observedAt": "2026-10-17T05:20:00Z",
+            "state": "fresh",
+            "nextExpectedAt": "2026-10-17T05:30:00Z",
+            "expiresAt": "2026-10-17T06:20:00Z"
+          },
+          "waterTemp": {
+            "value": 21.1,
+            "unit": "°C",
+            "observedAt": "2026-10-17T05:00:00Z",
+            "state": "fresh",
+            "nextExpectedAt": "2026-10-17T06:00:00Z",
+            "expiresAt": "2026-10-17T06:30:00Z"
+          },
+          "wind": {
+            "value": null,
+            "unit": "m/s",
+            "observedAt": null,
+            "state": "none",
+            "nextExpectedAt": null,
+            "expiresAt": null
+          }
+        }
+      },
+      "info": {
+        "season": null,
+        "ripCurrent": null,
+        "nearbyWarnings": []
+      },
+      "validUntil": "2026-10-17T06:03:40Z"
+    },
+    "b0157": {
+      "category": "clear",
+      "reasons": [],
+      "warning": {
+        "state": "none",
+        "items": [],
+        "source": "기상청",
+        "lastConfirmedAt": "2026-10-17T05:18:40Z"
+      },
+      "control": {
+        "state": "not_provided"
+      },
+      "observation": {
+        "metrics": {
+          "waveHeight": {
+            "value": null,
+            "unit": "m",
+            "observedAt": null,
+            "state": "none",
+            "nextExpectedAt": null,
+            "expiresAt": null
+          },
+          "wavePeriod": {
+            "value": null,
+            "unit": "s",
+            "observedAt": null,
+            "state": "none",
+            "nextExpectedAt": null,
+            "expiresAt": null
+          },
+          "waveDirection": {
+            "value": null,
+            "unit": "deg",
+            "observedAt": null,
+            "state": "none",
+            "nextExpectedAt": null,
+            "expiresAt": null
           },
           "waterTemp": {
             "value": null,
@@ -146,17 +481,102 @@
           }
         }
       },
-      "info": { "season": null, "ripCurrent": null, "nearbyWarnings": [] },
+      "info": {
+        "season": null,
+        "ripCurrent": null,
+        "nearbyWarnings": []
+      },
       "validUntil": "2026-10-17T06:03:40Z"
     },
-    "b0003": {
+    "b0165": {
+      "category": "unavailable",
+      "reasons": [
+        {
+          "code": "warning",
+          "type": "strong_wind",
+          "level": "advisory",
+          "scope": "고흥군",
+          "source": "기상청",
+          "at": "2026-10-17T04:00:00Z"
+        }
+      ],
+      "warning": {
+        "state": "active",
+        "items": [
+          {
+            "type": "strong_wind",
+            "level": "advisory",
+            "zoneCode": "L1053120",
+            "zoneName": "고흥군",
+            "publishedAt": "2026-10-17T04:00:00Z",
+            "effectiveFrom": "2026-10-17T05:00:00Z"
+          }
+        ],
+        "source": "기상청",
+        "lastConfirmedAt": "2026-10-17T05:18:40Z"
+      },
+      "control": {
+        "state": "not_provided"
+      },
+      "observation": {
+        "metrics": {
+          "waveHeight": {
+            "value": 0.8,
+            "unit": "m",
+            "observedAt": "2026-10-17T05:00:00Z",
+            "state": "fresh",
+            "nextExpectedAt": "2026-10-17T06:00:00Z",
+            "expiresAt": "2026-10-17T06:30:00Z"
+          },
+          "wavePeriod": {
+            "value": null,
+            "unit": "s",
+            "observedAt": null,
+            "state": "none",
+            "nextExpectedAt": null,
+            "expiresAt": null
+          },
+          "waveDirection": {
+            "value": null,
+            "unit": "deg",
+            "observedAt": null,
+            "state": "none",
+            "nextExpectedAt": null,
+            "expiresAt": null
+          },
+          "waterTemp": {
+            "value": 22,
+            "unit": "°C",
+            "observedAt": "2026-10-17T05:00:00Z",
+            "state": "fresh",
+            "nextExpectedAt": "2026-10-17T06:00:00Z",
+            "expiresAt": "2026-10-17T06:30:00Z"
+          },
+          "wind": {
+            "value": null,
+            "unit": "m/s",
+            "observedAt": null,
+            "state": "none",
+            "nextExpectedAt": null,
+            "expiresAt": null
+          }
+        }
+      },
+      "info": {
+        "season": null,
+        "ripCurrent": null,
+        "nearbyWarnings": []
+      },
+      "validUntil": "2026-10-17T06:03:40Z"
+    },
+    "b0272": {
       "category": "undetermined",
       "reasons": [
         {
           "code": "observation_delayed",
-          "scope": "예시 파고부이",
+          "scope": "신산 파고부이",
           "source": "기상청",
-          "at": "2026-10-17T03:50:00Z"
+          "at": "2026-10-17T03:00:00Z"
         }
       ],
       "warning": {
@@ -165,16 +585,18 @@
         "source": "기상청",
         "lastConfirmedAt": "2026-10-17T05:18:40Z"
       },
-      "control": { "state": "not_provided" },
+      "control": {
+        "state": "not_provided"
+      },
       "observation": {
         "metrics": {
           "waveHeight": {
-            "value": 0.9,
+            "value": 0.8,
             "unit": "m",
-            "observedAt": "2026-10-17T03:50:00Z",
+            "observedAt": "2026-10-17T03:00:00Z",
             "state": "delayed",
             "nextExpectedAt": "2026-10-17T06:00:00Z",
-            "expiresAt": "2026-10-17T05:20:00Z"
+            "expiresAt": "2026-10-17T04:30:00Z"
           },
           "wavePeriod": {
             "value": null,
@@ -193,12 +615,12 @@
             "expiresAt": null
           },
           "waterTemp": {
-            "value": null,
+            "value": 22.5,
             "unit": "°C",
-            "observedAt": null,
-            "state": "none",
-            "nextExpectedAt": null,
-            "expiresAt": null
+            "observedAt": "2026-10-17T05:00:00Z",
+            "state": "fresh",
+            "nextExpectedAt": "2026-10-17T06:00:00Z",
+            "expiresAt": "2026-10-17T06:30:00Z"
           },
           "wind": {
             "value": null,
@@ -210,7 +632,11 @@
           }
         }
       },
-      "info": { "season": null, "ripCurrent": null, "nearbyWarnings": [] },
+      "info": {
+        "season": null,
+        "ripCurrent": null,
+        "nearbyWarnings": []
+      },
       "validUntil": "2026-10-17T06:03:40Z"
     }
   }
