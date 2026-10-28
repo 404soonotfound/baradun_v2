@@ -63,6 +63,9 @@ export async function preparePhoto(
     canvas.height = size.height;
     const context = canvas.getContext("2d");
     if (!context) return { ok: false, error: "unreadable" };
+    // JPEG는 투명을 못 담아 투명한 곳이 검게 됨 → 그리기 전에 흰 바탕을 깖(화면 색이 아니라 사진 내용이라 토큰 아님)
+    context.fillStyle = "#ffffff";
+    context.fillRect(0, 0, size.width, size.height);
     context.drawImage(bitmap, 0, 0, size.width, size.height);
     for (const quality of QUALITIES) {
       const blob = await toBlob(canvas, quality);
