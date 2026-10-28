@@ -246,7 +246,7 @@ async function uploadPhotos(
 
 // 문의 보내기. message는 머리 줄을 붙인 본문(form.ts composeMessage)
 export async function sendInquiry(
-  request: Omit<CreateInquiryRequest, "photos">,
+  request: Omit<CreateInquiryRequest, "photos" | "idempotencyKey">,
   photos: readonly PhotoToSend[],
   onProgress: (progress: Progress) => void = () => {},
   deps: SendDeps = DEFAULT_DEPS(),

@@ -9,6 +9,7 @@ import { createPresignedPost } from "@aws-sdk/s3-presigned-post";
 import type {
   InquiryPhotoReference,
   InquiryPhotoResult,
+  InquiryUploadFields,
   InquiryUploadPhoto,
   InquiryUploadTarget,
 } from "@baradun/contracts";
@@ -66,11 +67,13 @@ export class InquiryPhotos {
             ["content-length-range", 1, INQUIRY_MAX_PHOTO_BYTES],
           ],
         });
+        // fields는 SDK가 만든 문자열 칸. 계약 모양(InquiryUploadFields)은 handler가 응답 전에 검사함
         return {
           photoId,
           key,
+          method: "POST" as const,
           url: target.url,
-          fields: target.fields,
+          fields: target.fields as unknown as InquiryUploadFields,
           expiresAt,
         };
       }),
