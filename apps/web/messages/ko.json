@@ -459,5 +459,33 @@
       "openmaptiles": "© OpenMapTiles",
       "osm": "© OpenStreetMap 기여자"
     }
+  },
+  "favorites": {
+    "tabsLabel": "즐겨찾기 보기 방식",
+    "tabFavorites": "즐겨찾기 {count}",
+    "tabRecent": "최근 본",
+    "loading": "해변 정보를 불러오고 있어요",
+    "deviceNote": "즐겨찾기와 최근 본 해변은 이 기기에만 저장돼요",
+    "empty": {
+      "title": "아직 즐겨찾기한 바다가 없어요",
+      "body": "해변 상세에서 즐겨찾기를 누르면 여기에 모아 보여드려요",
+      "action": "바다 둘러보기"
+    },
+    "recentEmpty": {
+      "title": "아직 본 바다가 없어요",
+      "body": "해변 상세를 열어 보면 여기에 차례로 남아요"
+    },
+    "recent": {
+      "clear": "전체 지우기",
+      "cleared": "최근 본 목록을 지웠어요",
+      "remove": "{name} 최근 본 목록에서 지우기",
+      "removed": "최근 본 목록에서 지웠어요",
+      "undo": "되돌리기"
+    },
+    "change": {
+      "issued": "지난 방문 뒤 {warning} 발표 · {time}",
+      "issuedNoTime": "지난 방문 뒤 {warning} 발표",
+      "unknown": "변경 판단 안 함"
+    }
   }
 }

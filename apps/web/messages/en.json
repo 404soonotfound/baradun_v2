@@ -459,5 +459,33 @@
       "openmaptiles": "© OpenMapTiles",
       "osm": "© OpenStreetMap contributors"
     }
+  },
+  "favorites": {
+    "tabsLabel": "Favorites view",
+    "tabFavorites": "Favorites {count}",
+    "tabRecent": "Recently viewed",
+    "loading": "Loading beach information",
+    "deviceNote": "Favorites and recently viewed beaches are saved only on this device",
+    "empty": {
+      "title": "No favorite beaches yet",
+      "body": "Tap Favorite on a beach page to collect it here",
+      "action": "Browse beaches"
+    },
+    "recentEmpty": {
+      "title": "No recently viewed beaches yet",
+      "body": "Beaches you open will appear here in order"
+    },
+    "recent": {
+      "clear": "Clear all",
+      "cleared": "Cleared recently viewed",
+      "remove": "Remove {name} from recently viewed",
+      "removed": "Removed from recently viewed",
+      "undo": "Undo"
+    },
+    "change": {
+      "issued": "Since your last visit: {warning} issued · {time}",
+      "issuedNoTime": "Since your last visit: {warning} issued",
+      "unknown": "Change not checked"
+    }
   }
 }

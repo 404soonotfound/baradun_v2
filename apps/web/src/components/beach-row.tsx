@@ -61,6 +61,7 @@ export function BeachRow({
   status,
   highlight = false,
   changedFrom = null,
+  change = null,
   onRemove,
   removeLabel,
 }: {
@@ -79,6 +80,8 @@ export function BeachRow({
   highlight?: boolean;
   // changed 변형: "방금 바뀜 · 이전: ○○"의 ○○
   changedFrom?: string | null;
+  // 즐겨찾기 변경 표시(BRD-35): "● 지난 방문 뒤 풍랑주의보 발표 · 14:05"(issued) 또는 "변경 판단 안 함"(unknown)
+  change?: { kind: "issued" | "unknown"; text: string } | null;
 } & RemoveProps) {
   const t = useTranslations();
   const { badgeText } = useBadgeText();
@@ -134,6 +137,19 @@ export function BeachRow({
           {detail && (
             <span className="line-clamp-2 text-body-s text-text-body">
               {detail}
+            </span>
+          )}
+          {change && (
+            <span
+              className={cn(
+                "flex items-center gap-1 text-caption",
+                change.kind === "issued"
+                  ? "font-bold text-brand-default"
+                  : "text-text-muted",
+              )}
+            >
+              {change.kind === "issued" && <span aria-hidden="true">●</span>}
+              {change.text}
             </span>
           )}
           {changedFrom && (
