@@ -274,6 +274,20 @@
     "reference": "참고 사진 · 지금 바다 모습 아님",
     "none": "사진이 없어 일러스트로 보여드려요"
   },
+  "share": {
+    "button": "공유",
+    "title": "공유하기",
+    "linkLabel": "공유 링크",
+    "note": "링크를 연 사람에게는 그때의 최신 정보가 보여요",
+    "copy": "링크 복사",
+    "message": "메시지",
+    "more": "더보기",
+    "copied": "링크를 복사했어요",
+    "copyFailed": "링크를 복사하지 못했어요 · 위 링크를 선택해 직접 복사하세요",
+    "unavailable": "이 화면에서는 링크를 만들 수 없어요 · 주소창의 주소를 복사하세요",
+    "messageBody": "{name} {url}",
+    "ogIllustration": "바다 일러스트"
+  },
   "pages": {
     "explore": "탐색",
     "search": "검색",

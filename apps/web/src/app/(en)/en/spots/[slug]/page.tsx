@@ -2,6 +2,7 @@
 import type { Metadata } from "next";
 // notFound(): 부르는 순간 그리기를 멈추고 404 화면(not-found)을 대신 보여 주는 Next 함수
 import { notFound } from "next/navigation";
+import { getTranslations } from "next-intl/server";
 
 import { DetailScreen } from "@/components/detail/detail-screen";
 import {
@@ -11,6 +12,7 @@ import {
   listVisibleBeachIds,
 } from "@/lib/beaches";
 import { alternatesFor } from "@/lib/i18n";
+import { beachShareMetadata } from "@/lib/share-meta";
 
 // /spots/[slug]/ 장소 상세 (아키텍처 9장). 경로는 data/beaches에서 생성(B6, BRD-45)
 // 정적 내보내기라 빌드 때 만든 slug만 존재. 없는 slug·숨긴 해변은 404
@@ -35,9 +37,17 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params; // Promise에서 slug 꺼내기
   const found = findBeach(slug);
   if (!found) return {}; // 없는 해변: 정보 없음(페이지 쪽에서 404)
+  const t = await getTranslations({ locale: "en" });
+  const name = found.beach.name.en;
   return {
-    title: found.beach.name.en,
+    title: name,
     alternates: alternatesFor("en", `/spots/${slug}/`),
+    // 공유 미리보기: 이름·지역·사진만, 상태 없음 (BRD-34)
+    ...beachShareMetadata(found.beach, "en", {
+      siteName: t("meta.siteName"),
+      photoAlt: t("photo.alt", { name }),
+      illustrationAlt: t("share.ogIllustration"),
+    }),
   };
 }
 

@@ -15,6 +15,7 @@ import {
   SourceList,
 } from "@/components/detail/detail-sections";
 import { SeaCard, StatGrid } from "@/components/detail/sea-card";
+import { ShareButton } from "@/components/detail/share-button";
 import { DetailSheet } from "@/components/detail/detail-sheet";
 import { VerdictCard } from "@/components/detail/verdict-card";
 import { SituationBanner } from "@/components/situation-banner";
@@ -40,7 +41,7 @@ import { useSheet } from "@/lib/use-sheet";
 // PC(lg): 본문(바다 상태·지표·주변 특보·출처) + 오른쪽 384px 열(판단 카드 + 길찾기 → 대안 → 119)
 // 119·길찾기는 자리마다 하나씩 두고 화면 크기에 맞는 쪽만 보임(display:none이라 화면 읽기에도 하나만)
 // 상황 배너(10/27 임시안): 오프라인·형식 미지원·불러오기 실패·판단 출처 전체 장애(BRD-38)만. 관측 지연은 판단 카드가, 위치는 상세에 해당 없음
-// '자세히' 시트(DET-SH)·특보 상세 시트(WARN)는 BRD-33. 공유 버튼은 BRD-34
+// '자세히' 시트(DET-SH)·특보 상세 시트(WARN)는 BRD-33. 공유 버튼·시트는 BRD-34(share-button)
 
 export function DetailScreen({
   locale,
@@ -134,6 +135,7 @@ export function DetailScreen({
           </p>
         </div>
         <ActivityButton />
+        <ShareButton locale={locale} beach={beach} />
       </header>
 
       <div className="mt-3 flex flex-col gap-3">
