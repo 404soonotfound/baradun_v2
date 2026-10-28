@@ -16,10 +16,11 @@ import { createHash, randomUUID } from "node:crypto";
 import { InquiryNotifier } from "./notification";
 import { InquiryPhotos } from "./photos";
 import { INQUIRY_MAX_BODY_BYTES } from "./policy";
-import { InquiryStore } from "./store";
+import { InquiryStore, type InquiryReceipt } from "./store";
 import {
   isCreateInquiryRequest,
   isInquiryUploadRequest,
+  isInquiryUploadResponse,
 } from "./validation";
 
 const INQUIRY_ID =
@@ -141,10 +142,52 @@ function isHttpEvent(event: unknown): event is APIGatewayProxyEventV2 {
   );
 }
 
+const rateLimited = () =>
+  errorResponse(429, "rate_limited", "요청이 많습니다. 잠시 뒤 다시 시도해 주세요.");
+
+// 멱등 키를 뺀 보낸 값 그대로(다듬기 전)의 SHA-256. 같은 키로 온 두 요청이 같은 내용인지 가림
+export function requestFingerprint(request: CreateInquiryRequest): string {
+  return createHash("sha256")
+    .update(
+      JSON.stringify([
+        request.type,
+        request.message,
+        request.email ?? null,
+        request.photos.map((photo) => [photo.photoId, photo.key]),
+      ]),
+    )
+    .digest("hex");
+}
+
+// 같은 키의 두 번째 요청: 내용이 같으면 첫 결과를 그대로, 다르면 409
+function replay(
+  receipt: InquiryReceipt,
+  fingerprint: string,
+): APIGatewayProxyStructuredResultV2 {
+  if (receipt.fingerprint !== fingerprint) {
+    safeLog("warn", "inquiry_idempotency_conflict");
+    return errorResponse(
+      409,
+      "idempotency_conflict",
+      "같은 요청 키로 다른 내용을 보낼 수 없습니다.",
+    );
+  }
+  safeLog("info", "inquiry_replayed");
+  return jsonResponse(201, receipt.response);
+}
+
 async function createInquiry(
   request: CreateInquiryRequest,
   dependencies: InquiryDependencies,
-): Promise<CreateInquiryResponse> {
+): Promise<APIGatewayProxyStructuredResultV2> {
+  const fingerprint = requestFingerprint(request);
+  // 이미 접수한 키는 속도 제한을 다시 세지 않고 첫 결과를 돌려줌(응답을 못 받은 재시도가 429로 막히지 않게)
+  const earlier = await dependencies.store.findReceipt(request.idempotencyKey);
+  if (earlier) return replay(earlier, fingerprint);
+  if (!(await dependencies.store.allowRequest(dependencies.now()))) {
+    return rateLimited();
+  }
+
   const receivedAt = dependencies.now();
   // 파일 문제(없음·형식·GPS)는 inspect가 거절 결과로 돌려주고, 그 밖의 오류(S3 장애·권한)는
   // 그대로 던져 503으로 끝냄 — 조회 실패를 '잘못된 파일' 거절로 바꾸지 않음(사용자가 재시도)
@@ -154,8 +197,13 @@ async function createInquiry(
   const inquiryId = dependencies.id();
   const message = request.message.trim();
   const email = request.email?.trim();
+  const response: CreateInquiryResponse = {
+    inquiryId,
+    receivedAt: receivedAt.toISOString(),
+    photos: inspected.map((photo) => photo.result) as CreateInquiryResponse["photos"],
+  };
 
-  await dependencies.store.save({
+  const saved = await dependencies.store.save({
     inquiryId,
     type: request.type,
     message,
@@ -164,15 +212,27 @@ async function createInquiry(
       photo.acceptedKey ? [photo.acceptedKey] : [],
     ),
     receivedAt,
+    idempotencyKey: request.idempotencyKey,
+    fingerprint,
+    response,
   });
+  if (saved === "duplicate") {
+    // 같은 키의 다른 요청이 먼저 저장함 → 그 결과를 돌려주고 알림은 보내지 않음
+    const winner = await dependencies.store.findReceipt(request.idempotencyKey);
+    if (!winner) throw new Error("멱등 기록을 읽지 못함"); // 503 → 다시 보내면 첫 결과를 받음
+    return replay(winner, fingerprint);
+  }
 
-  const notification = await dependencies.notifier.notify({
-    inquiryId,
-    type: request.type,
-    message,
-    hasEmail: Boolean(email),
-    receivedAt,
-  });
+  // 저장된 뒤의 알림 오류는 접수 실패(503)로 바꾸지 않음. 503이면 재시도가 첫 결과만 받아 알림이 영영 빠짐
+  const notification = await dependencies.notifier
+    .notify({
+      inquiryId,
+      type: request.type,
+      message,
+      hasEmail: Boolean(email),
+      receivedAt,
+    })
+    .catch(() => "failed" as const);
   if (notification !== "sent") {
     safeLog("warn", "inquiry_notification_skipped", { reason: notification });
   }
@@ -184,11 +244,7 @@ async function createInquiry(
       (photo) => photo.result.status === "rejected",
     ).length,
   });
-  return {
-    inquiryId,
-    receivedAt: receivedAt.toISOString(),
-    photos: inspected.map((photo) => photo.result) as CreateInquiryResponse["photos"],
-  };
+  return jsonResponse(201, response);
 }
 
 export async function handleInquiryHttp(
@@ -207,32 +263,32 @@ export async function handleInquiryHttp(
       "요청 본문과 필수 헤더를 확인해 주세요.",
     );
   }
-  if (!(await dependencies.store.allowRequest(dependencies.now()))) {
-    return errorResponse(
-      429,
-      "rate_limited",
-      "요청이 많습니다. 잠시 뒤 다시 시도해 주세요.",
-    );
-  }
 
+  // 속도 제한은 모양 검사를 통과한 요청만 셈(문의는 멱등 기록을 먼저 봄)
   if (event.rawPath === "/api/inquiries/uploads") {
     if (!isInquiryUploadRequest(parsed.value)) {
       return errorResponse(400, "invalid_request", "사진 정보를 확인해 주세요.");
     }
-    const uploads = await dependencies.photos.createUploads(
-      parsed.value.photos,
-      dependencies.now(),
-    );
-    return jsonResponse(200, {
-      uploads: uploads as InquiryUploadResponse["uploads"],
-    });
+    if (!(await dependencies.store.allowRequest(dependencies.now()))) {
+      return rateLimited();
+    }
+    const body = {
+      uploads: await dependencies.photos.createUploads(
+        parsed.value.photos,
+        dependencies.now(),
+      ),
+    };
+    if (!isInquiryUploadResponse(body)) {
+      throw new Error("업로드 양식이 계약과 다름"); // 503. 계약 밖 주소·칸을 내보내지 않음
+    }
+    return jsonResponse(200, body);
   }
 
   if (event.rawPath === "/api/inquiries") {
     if (!isCreateInquiryRequest(parsed.value)) {
       return errorResponse(400, "invalid_request", "문의 내용을 확인해 주세요.");
     }
-    return jsonResponse(201, await createInquiry(parsed.value, dependencies));
+    return createInquiry(parsed.value, dependencies);
   }
 
   return errorResponse(400, "invalid_request", "지원하지 않는 요청입니다.");

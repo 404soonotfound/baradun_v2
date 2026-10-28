@@ -21,6 +21,13 @@ describe("문의 저장", () => {
       email: "reader@example.com",
       photoKeys: [],
       receivedAt,
+      idempotencyKey: "3f2504e0-4f89-41d3-9a0c-0305e82c3301",
+      fingerprint: "f".repeat(64),
+      response: {
+        inquiryId: "123e4567-e89b-42d3-a456-426614174000",
+        receivedAt: receivedAt.toISOString(),
+        photos: [],
+      },
     });
 
     const items = commands[0]?.input.TransactItems as Array<{

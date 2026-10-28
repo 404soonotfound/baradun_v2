@@ -81,6 +81,7 @@ export class InquiryPhotos {
   }
 
   async inspect(photo: InquiryPhotoReference): Promise<InspectedPhoto> {
+    const acceptedKey = photo.key.replace(/^pending\//, "accepted/");
     try {
       const head = await this.s3.send(
         new HeadObjectCommand({ Bucket: this.bucketName, Key: photo.key }),
@@ -129,7 +130,6 @@ export class InquiryPhotos {
           },
         };
       }
-      const acceptedKey = photo.key.replace(/^pending\//, "accepted/");
       await this.s3.send(
         new CopyObjectCommand({
           Bucket: this.bucketName,
@@ -145,6 +145,14 @@ export class InquiryPhotos {
       };
     } catch (error) {
       if (!isMissing(error)) throw error;
+      // 같은 멱등 키의 앞선 요청(재시도·동시 요청)이 이미 검사를 마치고 accepted/로 옮겼으면 그 결과를 씀.
+      // accepted/에는 검사를 통과한 사진만 복사됨
+      if (await this.exists(acceptedKey)) {
+        return {
+          result: { photoId: photo.photoId, status: "accepted" },
+          acceptedKey,
+        };
+      }
       return {
         result: {
           photoId: photo.photoId,
@@ -152,6 +160,18 @@ export class InquiryPhotos {
           reason: "not_found",
         },
       };
+    }
+  }
+
+  private async exists(key: string): Promise<boolean> {
+    try {
+      await this.s3.send(
+        new HeadObjectCommand({ Bucket: this.bucketName, Key: key }),
+      );
+      return true;
+    } catch (error) {
+      if (isMissing(error)) return false;
+      throw error;
     }
   }
 

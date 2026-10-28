@@ -2,6 +2,7 @@ import schema from "@baradun/contracts/schema.json";
 import type {
   CreateInquiryRequest,
   InquiryUploadRequest,
+  InquiryUploadResponse,
 } from "@baradun/contracts";
 import Ajv2020 from "ajv/dist/2020.js";
 import addFormats from "ajv-formats";
@@ -17,12 +18,20 @@ function validator(definition: string) {
 }
 
 const uploadRequest = validator("InquiryUploadRequest");
+const uploadResponse = validator("InquiryUploadResponse");
 const createRequest = validator("CreateInquiryRequest");
 
 export function isInquiryUploadRequest(
   value: unknown,
 ): value is InquiryUploadRequest {
   return uploadRequest(value) as boolean;
+}
+
+// 내보내기 전 자기 검사: SDK가 만든 양식이 계약(호스트·경로·칸)과 다르면 내보내지 않음
+export function isInquiryUploadResponse(
+  value: unknown,
+): value is InquiryUploadResponse {
+  return uploadResponse(value) as boolean;
 }
 
 export function isCreateInquiryRequest(
