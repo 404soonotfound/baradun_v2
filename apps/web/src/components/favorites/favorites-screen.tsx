@@ -31,7 +31,7 @@ import {
   useRecent,
 } from "@/lib/favorites";
 import { localizedPath, type Locale } from "@/lib/i18n";
-import { pickSituation } from "@/lib/situation";
+import { pickSituation, sourceOutage } from "@/lib/situation";
 import { kstStamp } from "@/lib/snapshot/clock";
 import { useBadgeText } from "@/lib/snapshot/use-badge-text";
 import { useRowText } from "@/lib/snapshot/use-row-text";
@@ -151,7 +151,7 @@ export function FavoritesScreen({
     };
   }
 
-  // 상황 배너는 하나만(탐색과 같은 범위: 오프라인 → 지원 밖 형식 → 불러오기 실패). 관측 지연은 행 배지가 보여 줌
+  // 상황 배너는 하나만(탐색과 같은 범위: 오프라인 → 지원 밖 형식 → 불러오기 실패 → 출처 전체 장애). 관측 지연은 행 배지가 보여 줌
   const situation = pickSituation<Pick<BeachSummary, "name" | "slug">>({
     phase: snapshot.phase,
     live: snapshot.live,
@@ -159,6 +159,12 @@ export function FavoritesScreen({
     online,
     delayed: [],
     locationOff: false,
+    // 판단 출처 전체 장애는 노출 중인 전체 해변으로 봄(탐색과 같은 규칙, BRD-38)
+    outage: sourceOutage(
+      beaches.map((beach) =>
+        deriveBeachView({ id: beach.id, hidden: false }, snapshot),
+      ),
+    ),
   });
 
   function removeOne(beach: BeachSummary) {
