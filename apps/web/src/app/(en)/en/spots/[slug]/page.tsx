@@ -4,7 +4,12 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
 import { DetailScreen } from "@/components/detail/detail-screen";
-import { beachSlugParams, findBeach, listAltCandidates } from "@/lib/beaches";
+import {
+  beachSlugParams,
+  findBeach,
+  listAltCandidates,
+  listVisibleBeachIds,
+} from "@/lib/beaches";
 import { alternatesFor } from "@/lib/i18n";
 
 // /spots/[slug]/ 장소 상세 (아키텍처 9장). 경로는 data/beaches에서 생성(B6, BRD-45)
@@ -46,6 +51,7 @@ export default async function Page({ params }: Props) {
       locale="en"
       beach={found.beach}
       beaches={listAltCandidates(found.beach, "en")}
+      allBeachIds={listVisibleBeachIds()}
       sample={found.sample}
     />
   );
