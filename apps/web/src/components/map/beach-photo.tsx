@@ -44,6 +44,9 @@ export function BeachPhoto({
   }
 
   const license = t(`license.${shown.license}`);
+  // 출처 기관: 데이터 값(한국어 원문) 중 아는 기관만 문구 키로. 모르는 기관은 원문 그대로(use-meta-text agencyText와 같은 방식)
+  const source =
+    shown.source === "한국관광공사" ? t("sourceName.kto") : shown.source;
   return (
     <figure className="flex flex-col gap-1">
       {/* 바깥 사진 주소를 그대로 씀(정적 내보내기라 이미지 최적화 서버가 없음) */}
@@ -59,11 +62,11 @@ export function BeachPhoto({
         {t("reference")} ·{" "}
         {shown.title
           ? t("creditWithTitle", {
-              source: shown.source,
+              source,
               title: shown.title,
               license,
             })
-          : t("credit", { source: shown.source, license })}
+          : t("credit", { source, license })}
       </figcaption>
     </figure>
   );

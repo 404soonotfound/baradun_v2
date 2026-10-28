@@ -58,7 +58,10 @@
       "yellow_dust": "황사",
       "tropical_night": "열대야"
     },
-    "nearbyUnknown": "기타 {level}"
+    "nearbyUnknown": "기타 {level}",
+    "zoneOriginal": "기상청 발표 원문",
+    "zoneLine": "<zone></zone> {name}",
+    "zoneOriginalInline": "<zone></zone> <note>(기상청 발표 원문)</note>"
   },
   "observation": {
     "none": "가까운 관측 없음",
@@ -270,6 +273,9 @@
     "license": {
       "kogl-type1": "공공누리 제1유형"
     },
+    "sourceName": {
+      "kto": "한국관광공사"
+    },
     "reference": "참고 사진 · 지금 바다 모습 아님",
     "none": "사진이 없어 일러스트로 보여드려요"
   },
@@ -384,8 +390,7 @@
     "published": "발표",
     "effective": "발효",
     "original": "기상청 원문 보기",
-    "newWindow": "새 창",
-    "zoneOriginal": "기상청 발표 원문"
+    "newWindow": "새 창"
   },
   "detailSheet": {
     "title": "무엇을 확인했나요",
@@ -792,5 +797,11 @@
       "invalidResponse": "접수됐는지 확인하지 못했어요. 잠시 뒤 다시 보내 주세요.",
       "kept": "유형·내용은 이 기기에 남겨 뒀어요(최대 7일). 이메일과 사진은 다시 넣어 주세요."
     }
+  },
+  "languageNotice": {
+    "label": "언어 안내",
+    "offer": "이 사이트는 한국어로도 볼 수 있어요",
+    "switch": "한국어로 보기",
+    "stay": "지금 언어로 계속 보기"
   }
 }

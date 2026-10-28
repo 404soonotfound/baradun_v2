@@ -7,6 +7,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { useId } from "react";
 
 import { shownMetric, shownStation } from "@/components/detail/sea-card";
+import { ZoneName } from "@/components/zone-name";
 import { cn } from "@/lib/cn";
 import { toggleFavorite, useFavorites } from "@/lib/favorites";
 import { localizedPath, type Locale } from "@/lib/i18n";
@@ -58,16 +59,18 @@ export function NearbyWarnings({
             </span>
             <span className="flex min-w-0 flex-col">
               <span className="text-body-s font-bold text-text-default">
-                {item.zoneName}{" "}
-                {/* 종류·단계 잇기는 언어별 문구 키로(영어는 띄어 씀). 모르는 종류는 '기타 주의보' */}
-                {item.type
-                  ? t("verdict.warning.title", {
-                      type: t(`warning.nearbyType.${item.type}`),
-                      level: t(`warning.level.${item.level}`),
-                    })
-                  : t("warning.nearbyUnknown", {
-                      level: t(`warning.level.${item.level}`),
-                    })}
+                {/* 구역·특보 이름 순서와 종류·단계 잇기는 언어별 문구 키로(영어는 띄어 씀). 모르는 종류는 '기타 주의보' */}
+                {t.rich("warning.zoneLine", {
+                  name: item.type
+                    ? t("verdict.warning.title", {
+                        type: t(`warning.nearbyType.${item.type}`),
+                        level: t(`warning.level.${item.level}`),
+                      })
+                    : t("warning.nearbyUnknown", {
+                        level: t(`warning.level.${item.level}`),
+                      }),
+                  zone: () => <ZoneName zone={item} />,
+                })}
               </span>
               <span className="text-caption text-text-muted">
                 {issuedAtText(item.publishedAt, nowMs)}

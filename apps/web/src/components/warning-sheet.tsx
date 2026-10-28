@@ -2,26 +2,25 @@
 
 import type { WarningItem } from "@baradun/contracts";
 import { ExternalLink } from "lucide-react";
-import { useLocale, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
 import { useState } from "react";
 
 import { ReasonBadge } from "@/components/reason-badge";
 import { Sheet } from "@/components/ui/sheet";
+import { ZoneName } from "@/components/zone-name";
 import { kstStamp } from "@/lib/snapshot/clock";
 import { useBadgeText } from "@/lib/snapshot/use-badge-text";
 import { useMetaText } from "@/lib/snapshot/use-meta-text";
-import type { Locale } from "@/lib/i18n";
 import { kmaOriginalUrl } from "@/lib/warning-link";
 import {
   rememberSeen,
   sameWarning,
   type SeenWarning,
 } from "@/lib/warning-seen";
-import { zoneNameText } from "@/lib/zone-name";
 
 // 특보 상세 시트 WARN (BRD-33 · 노션 2장 WARN, 결정 기록 11장 10/27 ④)
 // 배지 + 특보 이름 + "기상청 발표 · 14:30에 확인" → 계약 칸(종류·단계·구역·발표·발효 시각) → '기상청 원문 보기' → 현장 우선 문구
-// 발표문 원문 본문·구역 약도는 후속(계약 변경 없음). 종류·단계·시각은 문구 키, 구역은 공식 이름 원문.
+// 발표문 원문 본문·구역 약도는 후속(계약 변경 없음). 종류·단계·시각은 문구 키, 구역은 기상청 영어 이름 표 또는 원문(BRD-48).
 // 홈 '해상 특보' 행과 상세 사유 상자의 특보 항목이 함께 씀. 모바일 하단 시트 / PC 가운데 대화상자(Sheet)
 
 export function WarningSheet({
@@ -44,7 +43,6 @@ export function WarningSheet({
   nowMs: number;
 }) {
   const t = useTranslations();
-  const locale = useLocale() as Locale;
   const { badgeText, confirmedUntilText } = useBadgeText();
   const { agencyText } = useMetaText();
 
@@ -62,7 +60,6 @@ export function WarningSheet({
     item !== null && items.some((other) => sameWarning(other, item));
   const seenAt = nextSeen?.confirmedAt ?? null;
   const time = kstStamp(seenAt, nowMs);
-  const zone = item ? zoneNameText(item, locale) : null;
   // 확인 줄: live면 "기상청 발표 · 14:30에 확인", B5·시각 모름이면 'HH:MM 확인 · 이후 확인 못 함'
   const checked =
     stale || !listed || !time
@@ -77,7 +74,7 @@ export function WarningSheet({
       onClose={onClose}
       title={label ? badgeText(label) : t("warningSheet.title")}
     >
-      {item && label && zone && (
+      {item && label && (
         <div className="flex flex-col gap-4 pb-2">
           <div className="flex flex-col gap-1.5">
             <ReasonBadge label={label} />
@@ -97,13 +94,8 @@ export function WarningSheet({
             </dd>
             <dt className="text-text-muted">{t("warningSheet.zone")}</dt>
             <dd className="text-text-default">
-              {zone.text}
               {/* 번역표에 없는 구역은 원문 그대로. 한국어가 아닌 화면은 원문이라고 알림(9.1) */}
-              {zone.untranslated && (
-                <span className="block text-caption text-text-muted">
-                  {t("warningSheet.zoneOriginal")}
-                </span>
-              )}
+              <ZoneName zone={item} block />
             </dd>
             <dt className="text-text-muted">{t("warningSheet.published")}</dt>
             <dd className="text-text-default">

@@ -13,6 +13,7 @@ import { Toast, useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/cn";
 import { resetDeviceData } from "@/lib/device-reset";
 import { LOCALE_NAMES, LOCALES, localizedPath, type Locale } from "@/lib/i18n";
+import { setLanguageChoice } from "@/lib/language-choice";
 import {
   requestLocation,
   setLocationEnabled,
@@ -308,6 +309,8 @@ function DisplayGroup({ locale }: { locale: Locale }) {
                 href={localizedPath(value, "/settings/")}
                 hrefLang={value}
                 lang={value}
+                // 고른 언어를 기기에 저장해 첫 방문 언어 안내를 다시 띄우지 않음(BRD-48)
+                onClick={() => setLanguageChoice(value)}
                 aria-current={value === locale ? "true" : undefined}
                 className={cn(
                   "flex min-h-touch items-center justify-center rounded-button border px-2 text-body-s",
