@@ -25,8 +25,8 @@ const TYPES = {
 
 async function resolveFile(pathname) {
   const file = path.join(OUT, pathname);
-  // out 밖으로 나가는 주소(../)는 막음
-  if (!file.startsWith(OUT)) return null;
+  // out 밖으로 나가는 주소(../, 이름이 out으로 시작하는 형제 폴더 out2/ 등)는 막음
+  if (file !== OUT && !file.startsWith(OUT + path.sep)) return null;
   try {
     const info = await stat(file);
     if (info.isDirectory()) {
@@ -40,13 +40,21 @@ async function resolveFile(pathname) {
   }
 }
 
+// 잘못된 % 인코딩(%E0%A4%A 등)은 예외로 서버가 죽지 않게 없는 주소(404)로 봄
+function decodePath(url) {
+  try {
+    return decodeURIComponent(new URL(url ?? "/", "http://x").pathname);
+  } catch {
+    return null;
+  }
+}
+
 createServer(async (req, res) => {
-  const pathname = decodeURIComponent(
-    new URL(req.url ?? "/", "http://x").pathname,
-  );
-  const file = pathname.startsWith("/data/")
-    ? null
-    : await resolveFile(pathname);
+  const pathname = decodePath(req.url);
+  const file =
+    pathname === null || pathname.startsWith("/data/")
+      ? null
+      : await resolveFile(pathname);
   const status = file ? 200 : 404;
   const target = file ?? path.join(OUT, "404.html");
   try {
