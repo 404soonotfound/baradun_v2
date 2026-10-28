@@ -6,7 +6,7 @@ import { SITE_URL } from "@/lib/i18n";
 import "../globals.css";
 
 // 영어 루트 레이아웃: /en 아래 모든 주소
-// 영어 이름·문구는 번역 작업에서 확정함 (BRD-48). 지금 en.json은 초안임.
+// 영어 문구는 messages/en.json(BRD-48 검토), 해변·지역 영어 이름은 data/beaches의 en 값을 그대로 씀
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations({ locale: "en", namespace: "meta" });
   return {

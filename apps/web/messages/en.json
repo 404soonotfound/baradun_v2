@@ -10,7 +10,7 @@
   "verdict": {
     "clear": {
       "title": "No warnings",
-      "sentence": "No warnings are in effect right now"
+      "sentence": "No warnings found right now"
     },
     "unknownWarning": {
       "title": "Couldn't check warnings",
@@ -51,11 +51,11 @@
     },
     "nearbyType": {
       "heavy_rain": "Heavy rain",
-      "heat_wave": "Heat wave",
+      "heat_wave": "Heatwave",
       "cold_wave": "Cold wave",
-      "heavy_snow": "Heavy snow",
-      "dry": "Dry weather",
-      "yellow_dust": "Yellow dust",
+      "heavy_snow": "Heavy snowfall",
+      "dry": "Dryness",
+      "yellow_dust": "Asian dust",
       "tropical_night": "Tropical night"
     },
     "nearbyUnknown": "Other {level}",
@@ -90,7 +90,7 @@
     "offSeason": "Off season"
   },
   "safety": {
-    "finalCall": "On-site control and lifeguard guidance come first."
+    "finalCall": "For your final decision, on-site controls and lifeguard instructions come first."
   },
   "home": {
     "sampleSnapshot": "These warnings and measurements are development samples, not real checks.",
@@ -244,17 +244,17 @@
     "nearby": {
       "title": "Nearby warnings",
       "note": "For reference only. Not used for the beach status",
-      "unreadable": "{count} nearby warning(s) are in effect, but we couldn't read their details · Check with KMA",
+      "unreadable": "{count, plural, one {# nearby warning is} other {# nearby warnings are}} in effect, but we couldn't read the details · Check with KMA",
       "unreadableAll": "We couldn't read the nearby warnings · Check with KMA"
     },
     "call119": {
       "title": "Emergency 119",
-      "body": "Emergency at sea or on the beach: call 119. Your call is passed to the Korea Coast Guard.",
+      "body": "If someone is in trouble in the water, or you're in danger",
       "call": "Call"
     },
     "sources": {
       "title": "Data sources",
-      "wave": "Waves·wind",
+      "wave": "Waves and wind",
       "warning": "Warnings",
       "waterTemp": "Water temp",
       "inquiry": "Info doesn't match reality"
@@ -272,6 +272,9 @@
     "creditWithTitle": "Photo: {source}, “{title}” · {license}",
     "license": {
       "kogl-type1": "KOGL Type 1"
+    },
+    "sourceName": {
+      "kto": "Korea Tourism Organization"
     },
     "reference": "Reference photo · not the sea right now",
     "none": "No photo, so we're showing an illustration"
@@ -328,7 +331,7 @@
       "measuredBody": "When values such as wave height and water temperature were measured",
       "control": "Access closures",
       "controlBody": "We don't check access closures · Follow on-site guidance",
-      "disclaimer": "Baradun Bada doesn't guarantee that the sea is safe to use. 'No warning' doesn't mean it's safe either.",
+      "disclaimer": "Baradun Bada doesn't guarantee that the sea is safe to use. 'No warnings' doesn't mean it's safe either.",
       "confirm": "I understand",
       "more": "See what we check in detail"
     },
@@ -392,14 +395,14 @@
   "detailSheet": {
     "title": "What we checked",
     "intro": "We only judge two things we can confirm as facts. Please decide for yourself whether the wave height suits you.",
-    "warningTitle": "5 sea-related warnings",
-    "warningBody": "Wind wave, strong wind, typhoon, storm surge and tsunami. Heavy rain, heat waves and similar are shown only as nearby warnings.",
+    "warningTitle": "5 sea-related warning types",
+    "warningBody": "Wind wave, strong wind, typhoon, storm surge and tsunami. Heavy rain, heatwaves and others appear only under Nearby warnings.",
     "warningScope": "This beach's warning zones",
     "timeTitle": "Measurement time",
     "timeBody": "When wave height was last measured. If measurements are late, we show 'Observation delayed'.",
-    "controlTitle": "Access control",
+    "controlTitle": "Access closures",
     "controlState": "Not checked",
-    "controlBody": "Check on-site guidance.",
+    "controlBody": "Follow on-site guidance.",
     "periodTitle": "Reading the wave period",
     "periodBody": "The longer the period, the farther the swell has traveled and the stronger it is.",
     "more": "Details",
@@ -587,25 +590,25 @@
     }
   },
   "guide": {
-    "intro": "What Baradun checks and shows, and what to know before you head to the sea.",
+    "intro": "What Baradun Bada checks and shows, and what to know before you head to the sea.",
     "check": {
       "title": "What we check",
-      "warningTitle": "5 sea-related warnings",
-      "warningBody": "We check whether KMA wind-wave, strong wind, typhoon, storm surge or tsunami warnings (advisory, warning or severe warning) are in effect for each beach's warning zone.",
-      "nearby": "Other warnings such as heavy rain, heat wave or cold wave don't change a beach's status; we show them only as nearby warnings.",
+      "warningTitle": "5 sea-related warning types",
+      "warningBody": "We check whether a KMA wind wave, strong wind, typhoon, storm surge or tsunami warning (advisory, warning or severe warning) is in effect for each beach's warning zone.",
+      "nearby": "Other warnings such as heavy rain, heatwave or cold wave don't change a beach's status; we show them only under Nearby warnings.",
       "timeTitle": "Measurement time",
-      "timeBody": "We check when wave height was measured. If wave height is more than 90 minutes late, we show Observation delayed.",
-      "noStation": "If there's no sensor within 20km in the same warning zone, we show only No nearby observation in place of the value.",
-      "controlTitle": "Access restrictions",
-      "controlBody": "Not checked · Check on-site notices."
+      "timeBody": "We check when wave height was measured. If the wave height reading is more than 90 minutes late, we show 'Observation delayed'.",
+      "noStation": "If there's no sensor within 20km in the same warning zone, we show only 'No nearby observation' in place of the value.",
+      "controlTitle": "Access closures",
+      "controlBody": "Not checked · Follow on-site guidance."
     },
     "badges": {
       "title": "What the badges mean",
-      "clear": "No warning",
+      "clear": "No warnings",
       "clearBody": "No sea-related warning was found. It doesn't mean it's safe.",
-      "warning": "Wind-wave advisory",
+      "warning": "Wind wave advisory",
       "warningBody": "We show the warning name as is. Avoid going into the sea and follow on-site guidance.",
-      "unknown": "Warnings not checked",
+      "unknown": "Couldn't check warnings",
       "unknownBody": "We couldn't check warnings, so we can't tell right now. It doesn't mean there are no warnings.",
       "stale": "Observation delayed",
       "staleBody": "Wave height measurements are late, so we can't tell right now. We'll check again when new values come in."
@@ -643,13 +646,13 @@
   "terms": {
     "about": {
       "title": "About the service",
-      "body1": "Baradun gathers KMA sea-related warnings and wave height measurement times for each beach.",
+      "body1": "Baradun Bada gathers KMA sea-related warnings and wave height measurement times for each beach.",
       "body2": "We show only facts that can be checked. We don't judge activity suitability or recommend beaches."
     },
     "disclaimer": {
       "title": "Disclaimer",
-      "body1": "Baradun doesn't guarantee that using the sea is safe. No warning doesn't mean it's safe either.",
-      "body2": "Information from official sources can be late or differ. Access restrictions aren't checked, so check on-site notices."
+      "body1": "Baradun Bada doesn't guarantee that using the sea is safe. 'No warnings' doesn't mean it's safe either.",
+      "body2": "Information from official sources can be late or differ. We don't check access closures, so follow on-site guidance."
     },
     "privacy": {
       "title": "Privacy",
@@ -657,7 +660,7 @@
       "locationBody": "Used only to calculate distances on your device when finding nearby beaches. Never sent to a server or stored, and you can turn it off in Settings.",
       "deviceTitle": "What's saved on your device",
       "deviceBody": "Favorites, recently viewed beaches, recent searches, default region and display settings are saved only in this device's browser. There's no login and nothing is sent to a server. You can clear them in Settings › Reset device data.",
-      "inquiryTitle": "Data feedback",
+      "inquiryTitle": "Data inquiry",
       "inquiryBody": "Feedback is kept for 90 days and photos for 30 days, then deleted automatically. Email is collected only if you leave it, and deleted as soon as handling is done (within 90 days at the latest). Photo location data is removed on your device before sending.",
       "inquiryNoDeadline": "We don't promise a reply deadline."
     },
@@ -677,7 +680,7 @@
     "terms": "Terms of use",
     "kma": {
       "name": "Korea Meteorological Administration (KMA)",
-      "provides": "Sea-related warnings (wind-wave, strong wind, typhoon, storm surge), tsunami warnings, ocean buoy and wave buoy observations (wave height, water temperature, wind, wave period, wave direction)",
+      "provides": "Sea-related warnings (wind wave, strong wind, typhoon, storm surge), tsunami warnings, ocean buoy and wave buoy observations (wave height, water temperature, wind, wave period, wave direction)",
       "terms": "Public Data Portal license: Weather Warning Service is KOGL Type 1 (attribution); Earthquake Information Service has no restrictions. Buoy observations follow the KMA API Hub terms.",
       "linkWarning": "Weather Warning Service",
       "linkTsunami": "Earthquake Information Service",
@@ -753,7 +756,7 @@
       "label": "I agree to share my email so you can contact me about this feedback"
     },
     "errors": {
-      "summary": "Please check {count} field(s)",
+      "summary": "Please check your entries · {count, plural, one {# field} other {# fields}}",
       "kindMissing": "Choose what it's about.",
       "messageShort": "Write at least 5 characters.",
       "emailFormat": "This email doesn't look right. Example: name@example.com",
@@ -777,9 +780,9 @@
     "done": {
       "title": "Received",
       "body": "We'll check it and update the information. If you left your email, we'll contact you if needed.",
-      "photos": "{count} photo(s) received with it.",
-      "rejectedLocation": "{count} photo(s) weren't accepted because location data remained.",
-      "rejectedOther": "{count} photo(s) couldn't be checked and weren't accepted.",
+      "photos": "{count, plural, one {# photo was} other {# photos were}} received with it.",
+      "rejectedLocation": "{count, plural, one {# photo wasn't} other {# photos weren't}} accepted because location data remained.",
+      "rejectedOther": "{count, plural, one {# photo couldn't be checked and wasn't} other {# photos couldn't be checked and weren't}} accepted.",
       "draftCleared": "The type and message kept on this device have been deleted.",
       "another": "Write another",
       "back": "Back to Settings"
