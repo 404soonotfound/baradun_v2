@@ -41,35 +41,33 @@ function icoEntries(file: Buffer) {
   });
 }
 
-// 토큰의 라이트 색 값 전부
-function lightTokenColors() {
-  const colors = new Set<string>();
-  const walk = (node: unknown) => {
-    if (!node || typeof node !== "object") return;
-    const record = node as Record<string, unknown>;
-    if (record.$type === "color" && typeof record.$value === "string") {
-      colors.add(record.$value.toUpperCase());
-      return;
-    }
-    Object.entries(record).forEach(([key, child]) => {
-      if (!key.startsWith("$")) walk(child);
-    });
-  };
-  walk(tokens);
-  return colors;
-}
+// 아이콘에 쓰기로 한 토큰(라이트 값): 바탕 brand/weak, 물결 brand/default·chart (원본 SVG 주석과 같음)
+const ICON_COLORS = {
+  plate: tokens.color.brand.weak.$value,
+  wave: tokens.color.brand.default.$value,
+  waveMid: tokens.color.chart.$value,
+};
 
 describe("원본 SVG", () => {
   it.each(Object.values(ICON_SOURCES))(
-    "%s: 토큰 색만 쓰고 외부 자산·글꼴이 없음",
+    "%s: 정한 토큰 색만 쓰고 외부 자산·글꼴이 없음",
     (file) => {
       const svg = read(file).toString("utf8");
-      const allowed = lightTokenColors();
-      const used = [...svg.matchAll(/#[0-9A-Fa-f]{3,8}\b/g)].map(([hex]) =>
-        hex.toUpperCase(),
+      const used = new Set(
+        [...svg.matchAll(/#[0-9A-Fa-f]{3,8}\b/g)].map(([hex]) =>
+          hex.toUpperCase(),
+        ),
       );
-      expect(used.length).toBeGreaterThan(0);
-      for (const hex of used) expect(allowed).toContain(hex);
+      // 다른 토큰 색(상태색 등)이나 토큰 밖 색이 섞이면 실패
+      expect([...used].sort()).toEqual(
+        Object.values(ICON_COLORS)
+          .map((hex) => hex.toUpperCase())
+          .sort(),
+      );
+      // 판(첫 rect) 바탕은 brand/weak
+      expect(svg).toMatch(
+        new RegExp(`<rect [^>]*fill="${ICON_COLORS.plate}"`, "i"),
+      );
       // 다른 파일·주소를 불러오지 않음(xmlns 선언만 허용), 글자(글꼴)를 쓰지 않음
       expect(svg.replace('xmlns="http://www.w3.org/2000/svg"', "")).not.toMatch(
         /https?:|href=|<image|<text|font-family|@import/,
