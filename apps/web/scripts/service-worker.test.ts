@@ -76,7 +76,7 @@ type Listener = (event: unknown) => void;
 
 function load({
   fetch,
-  precache = ["/", "/en/", "/_next/static/chunks/a.js"],
+  precache = [...OFFLINE_PAGES, "/_next/static/chunks/a.js"],
   caches = new FakeCaches(),
 }: {
   fetch: (request: unknown, init?: unknown) => Promise<Response>;
@@ -147,11 +147,9 @@ describe("설치", () => {
         String(url).endsWith("/") ? thisBuildHtml(String(url)) : respond("js"),
     });
     await sw.lifecycle("install");
-    expect([...sw.cache()!.entries.keys()].sort()).toEqual([
-      abs("/"),
-      abs("/_next/static/chunks/a.js"),
-      abs("/en/"),
-    ]);
+    expect([...sw.cache()!.entries.keys()].sort()).toEqual(
+      [...OFFLINE_PAGES, "/_next/static/chunks/a.js"].map(abs).sort(),
+    );
     expect(sw.self.skipWaiting).toHaveBeenCalled();
     // HTML은 HTTP 캐시가 있어도 서버에 다시 확인
     expect(sw.fetch).toHaveBeenCalledWith("/", { cache: "no-cache" });
@@ -239,13 +237,53 @@ describe("손대지 않는 요청", () => {
 });
 
 describe("화면 이동(HTML)", () => {
-  it("네트워크 먼저. 이 빌드의 HTML이면 검색어 없는 주소로 저장", async () => {
-    const sw = load({ fetch: async () => thisBuildHtml("search") });
+  it("네트워크 먼저. 탭 화면이 이 빌드의 HTML이면 검색어 없는 주소로 저장", async () => {
+    const sw = load({ fetch: async () => thisBuildHtml("explore") });
     await sw.lifecycle("activate");
     await sw.caches.open(`baradun-screen-${BUILD}`);
-    const response = await sw.navigate("/search/?q=경포");
-    expect(await response!.text()).toContain("search");
-    expect([...sw.cache()!.entries.keys()]).toEqual([abs("/search/")]);
+    const response = await sw.navigate("/en/explore/?view=list");
+    expect(await response!.text()).toContain("explore");
+    expect([...sw.cache()!.entries.keys()]).toEqual([abs("/en/explore/")]);
+  });
+
+  // 결정 29: 탭 화면 8개와 앱 셸만 저장. 상세·검색 등은 열어 봐도 저장하지 않음(개수 제한 없이 쌓이지 않게)
+  it.each([
+    ["해변 상세", "/spots/gyeongpo/"],
+    ["영어 해변 상세", "/en/spots/gyeongpo/"],
+    ["검색", "/search/?q=경포"],
+    ["안내", "/guide/"],
+    ["데이터 문의", "/settings/inquiry/"],
+    ["끝 / 없는 탭 주소", "/explore"],
+  ])("탭이 아닌 화면(%s)은 네트워크 응답을 보여주되 저장하지 않음", async (_, url) => {
+    const sw = load({ fetch: async () => thisBuildHtml("other") });
+    await sw.caches.open(`baradun-screen-${BUILD}`);
+    const response = await sw.navigate(url);
+    expect(response!.status).toBe(200);
+    expect(await response!.text()).toContain("other");
+    expect(sw.cache()!.entries.size).toBe(0);
+  });
+
+  it("탭이 아닌 화면은 같은 캐시에 저장본이 있어도 쓰지 않고 같은 언어 홈으로 보냄", async () => {
+    const sw = load({ fetch: offline });
+    const cache = await sw.caches.open(`baradun-screen-${BUILD}`);
+    await cache.put("/", html("home ko"));
+    await cache.put("/spots/gyeongpo/", html("old detail"));
+    await cache.put("/search/", html("old search"));
+    for (const url of ["/spots/gyeongpo/", "/search/?q=경포"]) {
+      const response = await sw.navigate(url);
+      expect(response!.status).toBe(302);
+      expect(response!.headers.get("location")).toBe(abs("/"));
+    }
+  });
+
+  it("탭이 아닌 화면이 서버 오류(5xx)면 저장본 없이 같은 언어 홈으로 보냄", async () => {
+    const sw = load({ fetch: async () => html("down", 503) });
+    const cache = await sw.caches.open(`baradun-screen-${BUILD}`);
+    await cache.put("/en/", html("home en"));
+    await cache.put("/en/spots/a/", html("old detail"));
+    const response = await sw.navigate("/en/spots/a/");
+    expect(response!.status).toBe(302);
+    expect(response!.headers.get("location")).toBe(abs("/en/"));
   });
 
   it("다른 빌드·리디렉트된 응답은 보여주되 저장하지 않음", async () => {
@@ -268,12 +306,12 @@ describe("화면 이동(HTML)", () => {
     expect(redirected.cache()!.entries.size).toBe(0);
   });
 
-  it("연결이 끊기면 저장본(검색어 무시)", async () => {
+  it("연결이 끊기면 탭 화면 저장본(검색어 무시)", async () => {
     const sw = load({ fetch: offline });
     const cache = await sw.caches.open(`baradun-screen-${BUILD}`);
-    await cache.put("/search/", html("saved search"));
-    const response = await sw.navigate("/search/?q=경포");
-    expect(await response!.text()).toBe("saved search");
+    await cache.put("/explore/", html("saved explore"));
+    const response = await sw.navigate("/explore/?view=list");
+    expect(await response!.text()).toBe("saved explore");
   });
 
   it("서버 오류(5xx)면 저장본, 404는 그대로", async () => {
