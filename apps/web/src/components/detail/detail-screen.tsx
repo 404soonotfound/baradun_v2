@@ -27,7 +27,7 @@ import { distanceKm } from "@/lib/geo";
 import type { Locale } from "@/lib/i18n";
 import { useUserLocation } from "@/lib/location";
 import { formatKm } from "@/lib/meta-join";
-import { pickSituation } from "@/lib/situation";
+import { pickSituation, sourceOutage } from "@/lib/situation";
 import { deriveDetail, warningSourceOf } from "@/lib/snapshot/detail";
 import { useSnapshot } from "@/lib/snapshot/use-snapshot";
 import { deriveBeachView } from "@/lib/snapshot/view";
@@ -39,18 +39,20 @@ import { useSheet } from "@/lib/use-sheet";
 //   주변 특보 → 119 → 정보 출처 → 하단 고정 즐겨찾기·길찾기
 // PC(lg): 본문(바다 상태·지표·주변 특보·출처) + 오른쪽 384px 열(판단 카드 + 길찾기 → 대안 → 119)
 // 119·길찾기는 자리마다 하나씩 두고 화면 크기에 맞는 쪽만 보임(display:none이라 화면 읽기에도 하나만)
-// 상황 배너(10/27 임시안): 오프라인·형식 미지원·불러오기 실패만. 관측 지연은 판단 카드가, 위치는 상세에 해당 없음
+// 상황 배너(10/27 임시안): 오프라인·형식 미지원·불러오기 실패·판단 출처 전체 장애(BRD-38)만. 관측 지연은 판단 카드가, 위치는 상세에 해당 없음
 // '자세히' 시트(DET-SH)·특보 상세 시트(WARN)는 BRD-33. 공유 버튼은 BRD-34
 
 export function DetailScreen({
   locale,
   beach,
   beaches,
+  allBeachIds,
   sample,
 }: {
   locale: Locale;
   beach: Beach;
   beaches: BeachSummary[]; // 대안 해변 후보: 이 해변 제외 30km 안(노출 끈 해변 제외, listAltCandidates)
+  allBeachIds: string[]; // 노출 중인 전체 해변 id(판단 출처 전체 장애 배너, listVisibleBeachIds)
   sample: boolean; // 개발용 예시 해변 목록
 }) {
   const t = useTranslations();
@@ -102,6 +104,10 @@ export function DetailScreen({
     online,
     delayed: [],
     locationOff: false,
+    // 판단 출처 전체 장애는 노출 중인 전체 해변으로 봄(대안 후보 30km 안만이 아님, BRD-38)
+    outage: sourceOutage(
+      allBeachIds.map((id) => deriveBeachView({ id, hidden: false }, snapshot)),
+    ),
   });
 
   // 헤더 2줄째: 지역 · 거리(위치가 있을 때만, 기기 안에서만 계산)
