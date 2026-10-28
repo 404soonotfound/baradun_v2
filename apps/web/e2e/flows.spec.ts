@@ -134,4 +134,95 @@ test.describe("데이터 문의", () => {
       await page.evaluate(() => localStorage.getItem("baradun:inquiry-draft")),
     ).toBeNull();
   });
+
+  test("응답을 못 받고 다시 보내면 같은 멱등 키로 보내 한 번만 접수됨(BRD-103)", async ({
+    page,
+  }) => {
+    const keys: string[] = [];
+    await page.route("**/api/inquiries", (route) => {
+      keys.push(
+        (route.request().postDataJSON() as { idempotencyKey: string })
+          .idempotencyKey,
+      );
+      if (keys.length === 1) return route.abort("connectionreset");
+      return route.fulfill({
+        status: 201,
+        contentType: "application/json",
+        body: JSON.stringify({
+          inquiryId: "123e4567-e89b-42d3-a456-426614174000",
+          receivedAt: "2026-10-28T03:00:00Z",
+          photos: [],
+        }),
+      });
+    });
+    await page.goto(INQUIRY);
+    await pickKind(page, "정보가 실제와 달라요");
+    await page.getByRole("textbox", { name: /내용/ }).fill("파고가 달라요");
+    await page.getByRole("button", { name: "보내기" }).click();
+    await expect(
+      page.getByText("응답이 없어 보내지 못했어요. 잠시 뒤 다시 보내 주세요."),
+    ).toBeVisible();
+    await page.getByRole("button", { name: "보내기" }).click();
+    await expect(
+      page.getByRole("heading", { name: "접수됐어요" }),
+    ).toBeVisible();
+    expect(keys).toHaveLength(2);
+    expect(keys[0]).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+    );
+    expect(keys[1]).toBe(keys[0]);
+  });
+
+  test("업로드 양식 주소가 허용 버킷이 아니면 사진을 올리지 않고 문의도 보내지 않음(BRD-103)", async ({
+    page,
+  }) => {
+    const KEY = `pending/${"a".repeat(32)}/0123456789abcdef`;
+    let created = 0;
+    const external: string[] = [];
+    page.on("request", (request) => {
+      if (request.url().startsWith("https://")) external.push(request.url());
+    });
+    await page.route("**/api/inquiries/uploads", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          uploads: [
+            {
+              photoId: "0123456789abcdef",
+              key: KEY,
+              method: "POST",
+              url: "https://evil.example/",
+              fields: { key: KEY, "Content-Type": "image/jpeg" },
+              expiresAt: new Date(Date.now() + 5 * 60_000).toISOString(),
+            },
+          ],
+        }),
+      }),
+    );
+    await page.route("**/api/inquiries", (route) => {
+      created += 1;
+      return route.fulfill({ status: 500, body: "" });
+    });
+    await page.goto(INQUIRY);
+    await pickKind(page, "정보가 실제와 달라요");
+    await page.getByRole("textbox", { name: /내용/ }).fill("파고가 달라요");
+    // 1×1 PNG. 기기에서 JPEG로 다시 그려 보냄
+    await page.locator('input[type="file"]').setInputFiles({
+      name: "shot.png",
+      mimeType: "image/png",
+      buffer: Buffer.from(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==",
+        "base64",
+      ),
+    });
+    await expect(page.getByRole("img", { name: /사진 1/ })).toBeVisible();
+    await page.getByRole("button", { name: "보내기" }).click();
+    await expect(
+      page.getByText("접수됐는지 확인하지 못했어요. 잠시 뒤 다시 보내 주세요."),
+    ).toBeVisible();
+    expect(external).toEqual([]);
+    expect(created).toBe(0);
+  });
 });
+
