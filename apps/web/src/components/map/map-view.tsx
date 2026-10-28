@@ -12,12 +12,14 @@ import { FIT_OPTIONS, type LngLatBox } from "@/lib/map/bounds";
 import type { MapHandle } from "@/lib/map/engine";
 import { prefersReducedMotion } from "@/lib/motion";
 import { initialMapLoad, mapLoadReducer } from "@/lib/map/map-load";
-import { MAP_ATTRIBUTIONS } from "@/lib/map/style";
+import { MAP_ATTRIBUTIONS } from "@/lib/map/attribution";
+import { useResolvedTheme } from "@/lib/theme";
 
 // 지도 틀 (BRD-65 · 결정 D8, 아키텍처 9장 '지도 불러오기'·16.4.3·16.4.5)
 // - 지도 자리가 화면에 보일 때만 MapLibre를 불러옴(첫 화면에 넣지 않음. display:none이면 시작하지 않음)
 // - 실패(스타일·타일·WebGL 오류, 또는 15초 안에 바다가 그려지지 않음)하면 지도 자리에만 '목록으로 볼 수 있어요' + 다시 시도
 // - 출처 표기는 지도 아래 우리 줄(링크라 키보드·화면 읽기 가능, 토큰 색이라 다크에서도 읽힘)
+// - 지도 색은 지금 테마(설정·기기 설정)를 따름. 바뀌면 만든 지도의 색만 바꿈(BRD-44)
 // - 사용자 위치는 받지도 쓰지도 않음. 처음 범위는 넘겨받은 해변 범위(bounds)
 // - 다 그린 뒤에만 overlay(마커·범례·카드, BRD-30)를 지도 위에 그림
 export function MapView({
@@ -35,6 +37,7 @@ export function MapView({
   className?: string;
 }) {
   const t = useTranslations("map");
+  const theme = useResolvedTheme();
   const frameRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
   const handleRef = useRef<MapHandle | null>(null);
@@ -42,9 +45,9 @@ export function MapView({
   // 다 그린 지도(overlay에 넘김). 시도마다 그 시도의 지도로 바뀜
   const [api, setApi] = useState<MapHandle | null>(null);
   // 지도를 만들 때 쓸 최신 값. 바뀌어도 이미 만든 지도를 다시 만들지 않음
-  const latest = useRef({ locale, bounds, canvasLabel: t("canvas") });
+  const latest = useRef({ locale, theme, bounds, canvasLabel: t("canvas") });
   useEffect(() => {
-    latest.current = { locale, bounds, canvasLabel: t("canvas") };
+    latest.current = { locale, theme, bounds, canvasLabel: t("canvas") };
   });
 
   // [1] 처음 화면에 보이면 시작. 보이지 않는 동안(숨긴 열·스크롤 밖)은 아무것도 받지 않음
@@ -80,10 +83,11 @@ export function MapView({
         return;
       }
       if (cancelled) return;
-      const { locale, bounds, canvasLabel } = latest.current;
+      const { locale, theme, bounds, canvasLabel } = latest.current;
       const handle = engine.createMap({
         container,
         locale,
+        theme,
         bounds,
         uiFont,
         reducedMotion: prefersReducedMotion(),
@@ -110,7 +114,12 @@ export function MapView({
     handleRef.current = null;
   }, [load.phase]);
 
-  // [4] 다 그린 뒤 범위가 바뀌면(활동·지역 변경) 그 범위로 옮김. 같은 범위면 그대로
+  // [4] 테마가 바뀌면 지도 색을 바꿈. 만드는 중에 바뀐 것도 여기서 따라감(만들 때 값과 같으면 엔진이 무시)
+  useEffect(() => {
+    handleRef.current?.setTheme(theme);
+  }, [theme, load.phase]);
+
+  // [5] 다 그린 뒤 범위가 바뀌면(활동·지역 변경) 그 범위로 옮김. 같은 범위면 그대로
   const boundsKey = bounds.flat().join(",");
   const ready = load.phase === "ready";
   useEffect(() => {
