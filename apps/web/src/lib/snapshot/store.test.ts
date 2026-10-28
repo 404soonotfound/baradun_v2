@@ -1492,4 +1492,80 @@ describe("지난 값을 숨기는 상태를 기기에 기억 (BRD-42)", () => {
     await store.refresh();
     expect(store.getState()).toMatchObject({ phase: "ready", live: true });
   });
+
+  // 오프라인으로 새로 엶
+  async function reopen(storage: ReturnType<typeof memoryStorage>) {
+    const offline = setup({ storage });
+    offline.server.down = true;
+    offline.store.start();
+    await offline.store.refresh();
+    return offline.store.getState();
+  }
+
+  it("기억만 못 쓰면(용량 부족) 저장된 마지막 값을 지워 새로 열 때 점검 전 값을 보이지 않음", async () => {
+    const storage = memoryStorage();
+    const write = storage.setItem;
+    storage.setItem = (key, value) => {
+      if (key === "baradun:hidden-phase") throw new Error("QuotaExceeded");
+      write(key, value);
+    };
+    const online = setup({ storage });
+    online.store.start();
+    await online.store.refresh();
+    online.server.manifest = maintenance;
+    await online.store.refresh();
+    online.store.stop();
+    expect(storage.data.has("baradun:last-snapshot")).toBe(false);
+
+    const state = await reopen(storage);
+    expect(state.statuses).toBeNull();
+    expect(
+      deriveBeachView({ id: "b0002", hidden: false }, state),
+    ).toMatchObject({ category: "undetermined" });
+  });
+
+  it("마지막 값을 지워 자리가 나면 기억을 다시 써서 새로 열어도 점검 상태", async () => {
+    const storage = memoryStorage();
+    const write = storage.setItem;
+    storage.setItem = (key, value) => {
+      if (
+        key === "baradun:hidden-phase" &&
+        storage.data.has("baradun:last-snapshot")
+      ) {
+        throw new Error("QuotaExceeded");
+      }
+      write(key, value);
+    };
+    const online = setup({ storage });
+    online.store.start();
+    await online.store.refresh();
+    online.server.manifest = maintenance;
+    await online.store.refresh();
+    online.store.stop();
+
+    expect(await reopen(storage)).toMatchObject({
+      phase: "maintenance",
+      statuses: null,
+    });
+  });
+
+  it("기억 지우기만 실패해도 끝난 점검 화면이 새로 연 앱을 덮지 않음", async () => {
+    const { offline, storage } = await reopenOffline(maintenance);
+    storage.removeItem = (key) => {
+      if (key === "baradun:hidden-phase") throw new Error("blocked");
+      storage.data.delete(key);
+    };
+    offline.server.down = false;
+    offline.server.manifest = { ...manifestExample, ...nextVersion };
+    await offline.store.refresh();
+    offline.store.stop();
+    expect(offline.store.getState()).toMatchObject({
+      phase: "ready",
+      live: true,
+    });
+
+    const state = await reopen(storage);
+    expect(state).toMatchObject({ phase: "ready", live: false });
+    expect(state.statuses).not.toBeNull();
+  });
 });

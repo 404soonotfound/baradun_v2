@@ -253,12 +253,28 @@ export function createSnapshotStore(deps: SnapshotDeps): SnapshotStore {
     } else void refresh();
   }
 
+  // 기억을 쓰고 다시 읽어 확인함. 쓰기 실패(용량 부족 등)를 그대로 두면 오프라인으로 새로 열 때
+  // 기억이 없어 점검 전 저장값이 B5로 보임(hidesLastValues 깨짐) → 저장된 마지막 값을 지운 뒤 한 번 더 씀.
+  // 그래도 못 쓰면 마지막 값만 지운 채 둠(새로 열면 값 없이 판단불가). 같은 탭은 메모리(lastLive)로 복구함
   function rememberHidden(record: HiddenRecord) {
-    safe(() => deps.storage?.setItem(HIDDEN_PHASE_KEY, JSON.stringify(record)));
+    const value = JSON.stringify(record);
+    const write = () =>
+      safe(() => {
+        deps.storage?.setItem(HIDDEN_PHASE_KEY, value);
+        return deps.storage?.getItem(HIDDEN_PHASE_KEY) === value;
+      });
+    if (!deps.storage || write()) return;
+    safe(() => deps.storage?.removeItem(LAST_SNAPSHOT_KEY));
+    write();
   }
 
+  // 지우기만 실패하면 끝난 점검 화면이 오프라인 재실행 때 앱을 덮음 → 읽을 수 없는 값(null)으로 덮어씀
   function forgetHidden() {
-    safe(() => deps.storage?.removeItem(HIDDEN_PHASE_KEY));
+    const removed = safe(() => {
+      deps.storage?.removeItem(HIDDEN_PHASE_KEY);
+      return true;
+    });
+    if (!removed) safe(() => deps.storage?.setItem(HIDDEN_PHASE_KEY, "null"));
   }
 
   // 기기에 남은 '지난 값을 숨기는 상태'. 이 화면 빌드에 아직 해당하는 것만(새 빌드가 받아들이는 버전이면 무시)
