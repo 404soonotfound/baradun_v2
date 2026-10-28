@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
 
 import { boundsOf, KOREA_BOUNDS } from "./bounds";
-import { initialMapLoad, mapLoadReducer, type MapLoad } from "./map-load";
+import {
+  createTileErrorCounter,
+  initialMapLoad,
+  mapLoadReducer,
+  TILE_ERROR_LIMIT,
+  type MapLoad,
+} from "./map-load";
 import {
   buildMapStyle,
   OPENFREEMAP_TILEJSON,
@@ -280,5 +286,25 @@ describe("mapLoadReducer", () => {
     expect(mapLoadReducer(loading1, { type: "retry" })).toBe(loading1);
     const ready = mapLoadReducer(loading1, { type: "ready", attempt: 1 });
     expect(mapLoadReducer(ready, { type: "retry" })).toBe(ready);
+  });
+});
+
+describe("createTileErrorCounter (그린 뒤 타일 오류)", () => {
+  it("한두 번 끊긴 것은 실패로 보지 않고, 연달아 정한 횟수가 되면 한 번 실패로 알림", () => {
+    const counter = createTileErrorCounter();
+    const results = Array.from({ length: TILE_ERROR_LIMIT + 1 }, () =>
+      counter.error(),
+    );
+    expect(results).toEqual([false, false, true, false]);
+  });
+
+  it("그사이 타일을 받으면 처음부터 다시 셈", () => {
+    const counter = createTileErrorCounter(3);
+    counter.error();
+    counter.error();
+    counter.loaded();
+    expect(counter.error()).toBe(false);
+    expect(counter.error()).toBe(false);
+    expect(counter.error()).toBe(true);
   });
 });
