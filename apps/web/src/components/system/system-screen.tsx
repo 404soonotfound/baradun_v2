@@ -10,6 +10,7 @@ import {
   systemScreen,
   type SystemScreenKind,
 } from "@/lib/system-screen";
+import { useScrollLock } from "@/lib/scroll-lock";
 import {
   getSnapshotState,
   refreshSnapshot,
@@ -61,15 +62,8 @@ function SystemDialog({
     document.getElementById(TITLE_ID)?.focus();
   }, [kind]);
 
-  // 덮는 동안 뒤 페이지 스크롤 막기(Sheet·Onboarding과 같음)
-  useEffect(() => {
-    const html = document.documentElement;
-    const before = html.style.overflow;
-    html.style.overflow = "hidden";
-    return () => {
-      html.style.overflow = before;
-    };
-  }, []);
+  // 덮는 동안 뒤 페이지 스크롤 막기(Sheet·Onboarding과 잠금 수를 나눠 셈)
+  useScrollLock();
 
   return (
     <dialog

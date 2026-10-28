@@ -29,6 +29,7 @@ import {
 } from "@/lib/onboarding";
 import { setRegion, useRegion } from "@/lib/region";
 import type { RegionGroup } from "@/lib/region-list";
+import { useScrollLock } from "@/lib/scroll-lock";
 import { useSheet } from "@/lib/use-sheet";
 
 // 첫 실행 안내 (BRD-25 · 노션 2장 ON-1/ON-2, Figma L01 · L02)
@@ -150,15 +151,8 @@ function OnboardingDialog({
     document.getElementById(titleId)?.focus();
   }, [titleId]);
 
-  // 덮는 동안 뒤 페이지 스크롤 막기(Sheet와 같음)
-  useEffect(() => {
-    const html = document.documentElement;
-    const before = html.style.overflow;
-    html.style.overflow = "hidden";
-    return () => {
-      html.style.overflow = before;
-    };
-  }, []);
+  // 덮는 동안 뒤 페이지 스크롤 막기(Sheet·SystemDialog와 잠금 수를 나눠 셈)
+  useScrollLock();
 
   return (
     <dialog

@@ -10,6 +10,8 @@ import {
   type ReactNode,
 } from "react";
 
+import { useScrollLock } from "@/lib/scroll-lock";
+
 // 시트 (노션 3장 Sheet): 모바일은 아래에서 올라오는 시트, PC(lg 이상)는 가운데 대화상자
 //   위 모서리 22, 손잡이 40×4, 뒤 화면 어둡게, 아래로 끌거나 닫기로 닫힘, 포커스는 시트 안에 가둠
 // 브라우저 기본 <dialog>의 showModal() 사용 → 포커스 가두기·Esc·뒤 화면 막기(inert)는 브라우저가 처리
@@ -41,16 +43,8 @@ export function Sheet({
     if (!open && dialog.open) dialog.close();
   }, [open]);
 
-  // 열려 있는 동안 뒤 페이지 스크롤 막기
-  useEffect(() => {
-    if (!open) return;
-    const html = document.documentElement;
-    const before = html.style.overflow;
-    html.style.overflow = "hidden";
-    return () => {
-      html.style.overflow = before;
-    };
-  }, [open]);
+  // 열려 있는 동안 뒤 페이지 스크롤 막기(겹친 대화상자와 잠금 수를 나눠 셈)
+  useScrollLock(open);
 
   // 손잡이 끌기 (모바일만)
   function onPointerDown(event: PointerEvent<HTMLDivElement>) {
