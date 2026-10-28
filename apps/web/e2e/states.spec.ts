@@ -204,7 +204,7 @@ test.describe("오프라인", () => {
 // 점검·강제 업데이트: 화면 전체를 덮고 지난 값을 숨김(점검표 4)
 for (const [scenario, title] of [
   ["maintenance", "지금은 점검 중이에요"],
-  ["update", "새 버전으로 업데이트해 주세요"],
+  ["update", "새 버전이 나왔어요"],
 ] as const) {
   test.describe(scenario, () => {
     test(`${title} · 지난 값 숨김 · Esc로 닫히지 않음`, async ({
