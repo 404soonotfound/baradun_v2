@@ -1,7 +1,7 @@
 // 개발용 예시 바다 데이터 (BRD-26)
 // 계약 예시(packages/contracts/examples/valid)의 시각을 지금으로 옮겨 public/data에 씀.
-// 저장소에 넣지 않음(.gitignore) · 상태가 있는 해변은 b0001~b0003뿐
-//   npm run dev:data -w apps/web            예시 데이터 한 번 만들기
+// 저장소에 넣지 않음(.gitignore) · 계약 예시의 상태별 해변만 게시하고 나머지는 채우지 않음
+//   npm run dev:data -w apps/web            예시 데이터 한 번 만들기 (같은 분에 다시 실행하면 원본 변경을 반영함)
 //   npm run dev:data -w apps/web -- --clean 지우기
 //   --check                                 빌드 전 검사: public/data가 있으면 빌드를 멈춤
 // 실행: Node 22.18 이상은 .mts를 그대로 실행함(타입만 지우고 실행, 저장소 .nvmrc는 22.23)
@@ -9,6 +9,7 @@ import {
   existsSync,
   mkdirSync,
   readFileSync,
+  readdirSync,
   renameSync,
   rmSync,
   writeFileSync,
@@ -25,8 +26,10 @@ const DEFAULT_EXAMPLES = path.join(
   "../../packages/contracts/examples/valid",
 );
 const ISO = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/;
+const VERSION_DIR = /^\d{8}T\d{6}Z$/;
 
 export const DEV_DATA_REFRESH_INTERVAL_MS = 20 * 60_000;
+export const DEV_DATA_MODE_FILE = ".dev-data-mode";
 
 interface DevDataPaths {
   outDir?: string;
@@ -59,10 +62,7 @@ function shifted(value: unknown, shiftMs: number): unknown {
   if (Array.isArray(value)) return value.map((item) => shifted(item, shiftMs));
   if (typeof value === "object" && value !== null) {
     return Object.fromEntries(
-      Object.entries(value).map(([key, item]) => [
-        key,
-        shifted(item, shiftMs),
-      ]),
+      Object.entries(value).map(([key, item]) => [key, shifted(item, shiftMs)]),
     );
   }
   return value;
@@ -80,6 +80,69 @@ function temporaryPath(parent: string, label: string): string {
   );
 }
 
+function isAlreadyPublished(error: unknown): boolean {
+  const code = (error as NodeJS.ErrnoException | null)?.code;
+  return code === "EEXIST" || code === "ENOTEMPTY" || code === "EPERM";
+}
+
+/** 같은 버전 폴더가 이미 있으면 내용이 같을 때만 유지하고, 다르면 새 내용으로 바꿈. */
+function publishVersion(
+  staged: string,
+  published: string,
+  bodies: Array<{ name: string }>,
+): void {
+  try {
+    renameSync(staged, published);
+    return;
+  } catch (error) {
+    // 다른 갱신기가 같은 분에 먼저 게시한 경우도 여기로 옴. 서버를 멈출 오류가 아님.
+    if (!isAlreadyPublished(error)) throw error;
+  }
+
+  const same = bodies.every(({ name }) => {
+    try {
+      return (
+        readFileSync(path.join(staged, name), "utf8") ===
+        readFileSync(path.join(published, name), "utf8")
+      );
+    } catch {
+      return false;
+    }
+  });
+  if (same) {
+    rmSync(staged, { recursive: true });
+    return;
+  }
+
+  // 같은 분 안에 원본 예시를 고친 경우. 옛 폴더를 비켜 두고 새 내용으로 교체함.
+  const replaced = temporaryPath(path.dirname(published), "replaced");
+  renameSync(published, replaced);
+  renameSync(staged, published);
+  rmSync(replaced, { recursive: true, force: true });
+}
+
+function currentVersion(outDir: string): string | null {
+  try {
+    const manifest = JSON.parse(
+      readFileSync(path.join(outDir, "manifest.json"), "utf8"),
+    ) as Partial<ManifestFile>;
+    return typeof manifest.snapshotVersion === "string"
+      ? manifest.snapshotVersion
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+// 이전 manifest를 읽은 브라우저가 그 버전 파일을 받는 중일 수 있어 직전 버전까지만 남김.
+function pruneVersions(outDir: string, keep: Array<string | null>): void {
+  for (const entry of readdirSync(outDir)) {
+    if (VERSION_DIR.test(entry) && !keep.includes(entry)) {
+      rmSync(path.join(outDir, entry), { recursive: true, force: true });
+    }
+  }
+}
+
 /** 완성된 버전 디렉터리를 먼저 게시한 뒤 manifest를 원자적으로 교체함. */
 export function writeDevData({
   outDir = DEFAULT_OUT,
@@ -90,10 +153,7 @@ export function writeDevData({
   const shiftMs =
     Math.floor((nowMs - Date.parse(sourceManifest.generatedAt)) / 60_000) *
     60_000;
-  const version = snapshotVersionAt(
-    sourceManifest.snapshotVersion,
-    shiftMs,
-  );
+  const version = snapshotVersionAt(sourceManifest.snapshotVersion, shiftMs);
   const files: Record<string, string> = Object.fromEntries(
     Object.entries(sourceManifest.files).map(([key, file]) => [
       key,
@@ -126,16 +186,13 @@ export function writeDevData({
       );
     }
 
-    if (existsSync(publishedVersion)) {
-      // 같은 분 안에서 다시 실행하면 내용과 버전이 같음. 완성본을 유지함.
-      rmSync(stagedVersion, { recursive: true });
-    } else {
-      renameSync(stagedVersion, publishedVersion);
-    }
+    publishVersion(stagedVersion, publishedVersion, bodies);
 
-    // 이전 manifest를 읽은 브라우저가 그 버전 파일을 받는 중일 수 있어 옛 버전은 지우지 않음.
+    const previousVersion = currentVersion(outDir);
+    writeFileSync(path.join(outDir, DEV_DATA_MODE_FILE), "sample\n");
     writeFileSync(stagedManifest, JSON.stringify(manifest, null, 2));
     renameSync(stagedManifest, path.join(outDir, "manifest.json"));
+    pruneVersions(outDir, [version, previousVersion]);
   } catch (error) {
     rmSync(stagedVersion, { recursive: true, force: true });
     rmSync(stagedManifest, { force: true });
@@ -143,6 +200,27 @@ export function writeDevData({
   }
 
   return version;
+}
+
+/**
+ * 예시를 끈 개발 서버가 지난 예시를 계속 서빙하지 않도록 정리함.
+ * 표지가 sample인 폴더만 지움. 표지 없는 폴더는 출처를 모르므로 남기고 알림(화면은 예시로 표시함).
+ */
+export function clearDevSampleData(
+  outDir: string = DEFAULT_OUT,
+): "removed" | "unmarked" | "none" {
+  if (!existsSync(outDir)) return "none";
+  let mode: string | null = null;
+  try {
+    mode = readFileSync(path.join(outDir, DEV_DATA_MODE_FILE), "utf8").trim();
+  } catch {
+    mode = null;
+  }
+  if (mode === "sample") {
+    rmSync(outDir, { recursive: true, force: true });
+    return "removed";
+  }
+  return "unmarked";
 }
 
 /** 시작 즉시 한 번 만들고, 이후 고정 간격으로 갱신함. 반환 함수로 타이머를 멈춤. */
@@ -171,14 +249,14 @@ export function startDevDataRefresh({
   return () => clearInterval(timer);
 }
 
-function cliOutDir(): string {
+export function devDataOutDir(): string {
   // 테스트는 실제 public/data와 격리함. 일반 개발에서는 지정하지 않아 기본 경로를 씀.
   return process.env.BARADUN_DEV_DATA_DIR ?? DEFAULT_OUT;
 }
 
 function main(): void {
   const mode = process.argv[2];
-  const outDir = cliOutDir();
+  const outDir = devDataOutDir();
 
   if (mode === "--check") {
     if (existsSync(outDir)) {
