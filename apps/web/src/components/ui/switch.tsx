@@ -10,13 +10,11 @@ export function Switch({
   onChange,
   labelledBy,
   describedBy,
-  disabled = false,
 }: {
   checked: boolean;
   onChange: (next: boolean) => void;
   labelledBy: string;
   describedBy?: string;
-  disabled?: boolean;
 }) {
   return (
     <button
@@ -25,9 +23,8 @@ export function Switch({
       aria-checked={checked}
       aria-labelledby={labelledBy}
       aria-describedby={describedBy}
-      disabled={disabled}
       onClick={() => onChange(!checked)}
-      className="flex min-h-touch min-w-touch shrink-0 items-center justify-center rounded-full disabled:opacity-45"
+      className="flex min-h-touch min-w-touch shrink-0 items-center justify-center rounded-full"
     >
       <span
         aria-hidden="true"
