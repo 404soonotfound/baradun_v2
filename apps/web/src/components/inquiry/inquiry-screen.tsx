@@ -1,0 +1,703 @@
+"use client"; // 입력·임시 저장(기기)·사진 준비(canvas)·보내기(fetch)를 하므로 브라우저 부품
+
+import { CircleAlert, CircleCheck, ImagePlus, X } from "lucide-react";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+import { useTranslations } from "next-intl";
+import { useEffect, useId, useRef, useState } from "react";
+
+import { BackButton } from "@/components/detail/back-button";
+import { Button } from "@/components/ui/button";
+import { Toast, useToast } from "@/components/ui/toast";
+import { useActivity } from "@/lib/activity";
+import { cn } from "@/lib/cn";
+import { localizedPath, type Locale } from "@/lib/i18n";
+import {
+  sendInquiry,
+  type PhotoToSend,
+  type Progress,
+  type SendFailure,
+} from "@/lib/inquiry/api";
+import {
+  clearInquiryDraft,
+  saveInquiryDraft,
+  useInquiryDraft,
+} from "@/lib/inquiry/draft";
+import {
+  buildRequest,
+  composeMessage,
+  EMAIL_MAX,
+  firstErrorField,
+  INQUIRY_KINDS,
+  MESSAGE_INPUT_MAX,
+  MESSAGE_MIN,
+  PHOTO_MAX_COUNT,
+  validateForm,
+  type FormErrors,
+  type InquiryKind,
+} from "@/lib/inquiry/form";
+import { preparePhoto, type PhotoError } from "@/lib/inquiry/photo";
+
+// 데이터 문의 (BRD-37 · 노션 2장 INQ, 결정 기록 9장·11장 '문의(BRD-37)'·10/26 BRD-63, infra/README)
+// 유형 칩 4개 → (상세에서 왔으면) 해변·활동 자동 입력 → 내용(5자 이상) → 사진(선택, 최대 3장) → 이메일(선택, 입력하면 동의 필수) → 보내기
+// 상태: 입력 전 · 입력 오류 · 보내는 중 · 접수 완료 · 보내지 못함
+// 유형·내용만 기기에 최대 7일 임시 저장(lib/inquiry/draft.ts). 이메일·동의·사진은 화면 메모리에만, 실패하면 다시 넣음
+// 응답 기한은 약속하지 않음. 사용자 위치는 보내지 않음
+
+type Shot = { id: number; photo: PhotoToSend; url: string };
+
+// aria-describedby용 id 잇기(빈 값 빼고)
+const idList = (...list: (string | false | null | undefined)[]) =>
+  list.filter(Boolean).join(" ") || undefined;
+
+// 오류 칸 몇 개를 지운 새 객체
+function without(errors: FormErrors, ...keys: (keyof FormErrors)[]) {
+  const next = { ...errors };
+  for (const key of keys) delete next[key];
+  return next;
+}
+
+type Phase =
+  | { kind: "editing" }
+  | { kind: "sending"; progress: Progress | null }
+  | {
+      kind: "done";
+      accepted: number;
+      rejectedLocation: number;
+      rejectedOther: number;
+    }
+  | { kind: "failed"; failure: SendFailure };
+
+export function InquiryScreen({
+  locale,
+  beaches,
+}: {
+  locale: Locale;
+  beaches: { slug: string; name: string }[]; // ?beach=slug → 이름(빌드 때 넘김)
+}) {
+  const t = useTranslations("inquiry");
+  const tp = useTranslations("pages");
+  const ta = useTranslations("activity");
+  const params = useSearchParams();
+  const activity = useActivity();
+  const toast = useToast();
+
+  // 유형·내용은 임시 저장이 원본(입력할 때마다 저장). 서버 HTML은 빈 칸
+  const draft = useInquiryDraft();
+  const kind = draft?.kind ?? null;
+  const message = draft?.message ?? "";
+
+  const [email, setEmail] = useState("");
+  const [consent, setConsent] = useState(false);
+  const [shots, setShots] = useState<Shot[]>([]);
+  const [photoError, setPhotoError] = useState<PhotoError | "tooMany" | null>(
+    null,
+  );
+  const [preparing, setPreparing] = useState(false);
+  const [errors, setErrors] = useState<FormErrors>({});
+  const [phase, setPhase] = useState<Phase>({ kind: "editing" });
+  const [contextRemoved, setContextRemoved] = useState(false);
+  const sendingRef = useRef(false); // 두 번 누름 막기(상태 반영 전 빠른 연타 포함)
+  const nextShotId = useRef(1);
+
+  const ids = {
+    kind: useId(),
+    kindError: useId(),
+    message: useId(),
+    messageHint: useId(),
+    messageError: useId(),
+    photoInput: useId(),
+    photoHint: useId(),
+    photoError: useId(),
+    email: useId(),
+    emailHint: useId(),
+    emailError: useId(),
+    consent: useId(),
+    consentError: useId(),
+  };
+  const fileRef = useRef<HTMLInputElement>(null);
+  const kindRef = useRef<HTMLFieldSetElement>(null);
+  const messageRef = useRef<HTMLTextAreaElement>(null);
+  const emailRef = useRef<HTMLInputElement>(null);
+  const consentRef = useRef<HTMLInputElement>(null);
+  const alertRef = useRef<HTMLDivElement>(null);
+  const doneRef = useRef<HTMLHeadingElement>(null);
+
+  // 상세에서 들어왔으면(?beach=slug) 그 해변과 지금 고른 활동을 함께 보냄
+  const beachSlug = params.get("beach");
+  const beach =
+    contextRemoved || beachSlug === null
+      ? null
+      : (beaches.find((item) => item.slug === beachSlug) ?? null);
+
+  // 미리보기 주소 정리: 화면을 떠나면 모두 풀어 줌
+  const shotsRef = useRef(shots);
+  useEffect(() => {
+    shotsRef.current = shots;
+  }, [shots]);
+  useEffect(
+    () => () =>
+      shotsRef.current.forEach((shot) => URL.revokeObjectURL(shot.url)),
+    [],
+  );
+
+  // 실패·완료로 바뀌면 그 안내로 포커스(화면 읽기가 바로 읽음)
+  useEffect(() => {
+    if (phase.kind === "failed") alertRef.current?.focus();
+    if (phase.kind === "done") doneRef.current?.focus();
+  }, [phase.kind]);
+
+  const sending = phase.kind === "sending";
+
+  function setKind(next: InquiryKind) {
+    saveInquiryDraft(next, message);
+    if (errors.kind) setErrors((prev) => without(prev, "kind"));
+  }
+  function setMessage(next: string) {
+    saveInquiryDraft(kind, next);
+    if (errors.message && next.trim().length >= MESSAGE_MIN)
+      setErrors((prev) => without(prev, "message"));
+  }
+
+  async function addPhotos(files: FileList | null) {
+    if (!files || files.length === 0) return;
+    const room = PHOTO_MAX_COUNT - shots.length;
+    const picked = [...files].slice(0, Math.max(0, room));
+    setPhotoError(files.length > room ? "tooMany" : null);
+    setPreparing(true);
+    const added: Shot[] = [];
+    for (const file of picked) {
+      const result = await preparePhoto(file);
+      if (!result.ok) {
+        setPhotoError(result.error);
+        continue;
+      }
+      added.push({
+        id: nextShotId.current++,
+        photo: result.photo,
+        url: URL.createObjectURL(result.photo.blob),
+      });
+    }
+    setPreparing(false);
+    if (added.length > 0)
+      setShots((prev) => [...prev, ...added].slice(0, PHOTO_MAX_COUNT));
+  }
+
+  function removeShot(id: number) {
+    setShots((prev) => {
+      const gone = prev.find((shot) => shot.id === id);
+      if (gone) URL.revokeObjectURL(gone.url);
+      return prev.filter((shot) => shot.id !== id);
+    });
+    setPhotoError(null);
+  }
+
+  function resetSensitive() {
+    // 이메일·동의·사진은 기기에 남기지 않음. 보내지 못하면 다시 넣게 비움
+    setEmail("");
+    setConsent(false);
+    shots.forEach((shot) => URL.revokeObjectURL(shot.url));
+    setShots([]);
+    setPhotoError(null);
+  }
+
+  function clearAll() {
+    clearInquiryDraft();
+    resetSensitive();
+    setErrors({});
+    setPhase({ kind: "editing" });
+    toast.show({ text: t("actions.cleared") });
+  }
+
+  async function submit() {
+    if (sendingRef.current || preparing) return;
+    const found = validateForm({ kind, message, email, consent });
+    setErrors(found);
+    const first = firstErrorField(found);
+    if (first !== null || kind === null) {
+      const target = {
+        kind: kindRef.current?.querySelector("input"),
+        message: messageRef.current,
+        email: emailRef.current,
+        consent: consentRef.current,
+      }[first ?? "kind"];
+      target?.focus();
+      return;
+    }
+    sendingRef.current = true;
+    setPhase({ kind: "sending", progress: null });
+    const result = await sendInquiry(
+      buildRequest({
+        kind,
+        message: composeMessage({
+          kindLabel: t(`kind.${kind}`),
+          beachName: beach?.name ?? null,
+          activityLabel: beach ? ta(activity) : null,
+          message,
+        }),
+        email,
+        photos: [],
+      }),
+      shots.map((shot) => shot.photo),
+      (progress) => setPhase({ kind: "sending", progress }),
+    );
+    sendingRef.current = false;
+    if (result.ok) {
+      const photos = result.response.photos;
+      clearInquiryDraft(); // 접수 성공 → 임시 저장 즉시 삭제
+      resetSensitive();
+      setPhase({
+        kind: "done",
+        accepted: photos.filter((p) => p.status === "accepted").length,
+        rejectedLocation: photos.filter(
+          (p) => p.status === "rejected" && p.reason === "location_metadata",
+        ).length,
+        rejectedOther: photos.filter(
+          (p) => p.status === "rejected" && p.reason !== "location_metadata",
+        ).length,
+      });
+    } else {
+      resetSensitive();
+      setPhase({ kind: "failed", failure: result.failure });
+    }
+  }
+
+  const header = (
+    <header className="-mx-2 flex h-detail-header items-center gap-1">
+      <BackButton locale={locale} fallback="/settings/" />
+      <h1
+        ref={doneRef}
+        tabIndex={-1}
+        className="text-title-l text-text-default outline-none"
+      >
+        {phase.kind === "done" ? t("done.title") : tp("inquiry")}
+      </h1>
+    </header>
+  );
+
+  if (phase.kind === "done") {
+    return (
+      <div className="mx-auto flex w-full max-w-[640px] flex-col gap-4">
+        {header}
+        <section className="flex flex-col items-start gap-3 rounded-card bg-bg-surface p-5 shadow-card">
+          <span
+            aria-hidden="true"
+            className="flex size-10 items-center justify-center rounded-full bg-status-clear-bg text-status-clear-fg"
+          >
+            <CircleCheck size={22} />
+          </span>
+          <p className="text-body text-text-default">{t("done.body")}</p>
+          {phase.accepted > 0 && (
+            <p className="text-body-s text-text-body">
+              {t("done.photos", { count: phase.accepted })}
+            </p>
+          )}
+          {phase.rejectedLocation > 0 && (
+            <p className="text-body-s text-text-body">
+              {t("done.rejectedLocation", { count: phase.rejectedLocation })}
+            </p>
+          )}
+          {phase.rejectedOther > 0 && (
+            <p className="text-body-s text-text-body">
+              {t("done.rejectedOther", { count: phase.rejectedOther })}
+            </p>
+          )}
+          <p className="text-body-s text-text-body">{t("done.draftCleared")}</p>
+          <div className="mt-2 flex w-full flex-col gap-2 sm:flex-row">
+            <Button asChild>
+              <Link href={localizedPath(locale, "/settings/")}>
+                {t("done.back")}
+              </Link>
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => setPhase({ kind: "editing" })}
+            >
+              {t("done.another")}
+            </Button>
+          </div>
+        </section>
+      </div>
+    );
+  }
+
+  const errorCount = Object.keys(errors).length;
+  const progressText =
+    phase.kind === "sending" && phase.progress
+      ? phase.progress.phase === "photos"
+        ? t("progress.photos", {
+            done: phase.progress.done,
+            total: phase.progress.total,
+          })
+        : t("progress.message")
+      : null;
+
+  return (
+    <div className="mx-auto flex w-full max-w-[640px] flex-col gap-4 pb-6">
+      {header}
+      <p className="text-body-s text-text-body">{t("intro")}</p>
+
+      {phase.kind === "failed" && (
+        <div
+          ref={alertRef}
+          tabIndex={-1}
+          role="alert"
+          className="flex gap-3 rounded-card border-[1.5px] border-banner-red-border bg-bg-surface p-4 outline-none"
+        >
+          <span
+            aria-hidden="true"
+            className="flex size-8 shrink-0 items-center justify-center rounded-full bg-banner-red-icon-bg text-banner-red-icon-fg"
+          >
+            <CircleAlert size={16} />
+          </span>
+          <div className="flex min-w-0 flex-col gap-1">
+            <p className="text-body-s font-bold text-text-default">
+              {t("failed.title")}
+            </p>
+            <p className="text-caption text-text-body">
+              {t(`failed.${phase.failure}`)}
+            </p>
+            <p className="text-caption text-text-body">{t("failed.kept")}</p>
+          </div>
+        </div>
+      )}
+
+      {errorCount > 0 && (
+        <p role="alert" className="text-body-s font-bold text-danger-text">
+          {t("errors.summary", { count: errorCount })}
+        </p>
+      )}
+
+      <form
+        noValidate
+        onSubmit={(event) => {
+          event.preventDefault();
+          void submit();
+        }}
+        className="flex flex-col gap-4"
+      >
+        <fieldset disabled={sending} className="flex flex-col gap-4">
+          {/* 유형 */}
+          <fieldset
+            ref={kindRef}
+            aria-describedby={errors.kind ? ids.kindError : undefined}
+            className="flex flex-col gap-2 rounded-card bg-bg-surface p-4 shadow-card"
+          >
+            <legend className="float-left mb-2 text-title-s text-text-default">
+              {t("kind.legend")}
+            </legend>
+            <div className="clear-left grid grid-cols-1 gap-2 sm:grid-cols-2">
+              {INQUIRY_KINDS.map((value) => (
+                <label
+                  key={value}
+                  className={cn(
+                    "flex min-h-touch cursor-pointer items-center rounded-button border px-3 text-body-s has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-brand-default",
+                    kind === value
+                      ? "border-brand-default bg-brand-weak font-bold text-text-default"
+                      : errors.kind
+                        ? "border-danger-text text-text-body"
+                        : "border-border-default text-text-body",
+                  )}
+                >
+                  <input
+                    type="radio"
+                    name="inquiry-kind"
+                    value={value}
+                    checked={kind === value}
+                    onChange={() => setKind(value)}
+                    className="sr-only"
+                  />
+                  {t(`kind.${value}`)}
+                </label>
+              ))}
+            </div>
+            {errors.kind && (
+              <p id={ids.kindError} className="text-caption text-danger-text">
+                {t(`errors.${errors.kind}`)}
+              </p>
+            )}
+          </fieldset>
+
+          {/* 자동으로 넣은 해변·활동 */}
+          {beach && (
+            <section
+              aria-labelledby={`${ids.kind}-context`}
+              className="flex flex-col gap-1 rounded-card bg-bg-surface p-4 shadow-card"
+            >
+              <h2
+                id={`${ids.kind}-context`}
+                className="text-title-s text-text-default"
+              >
+                {t("context.legend")}
+              </h2>
+              <p className="text-body-s text-text-default">
+                {t("context.beach", { name: beach.name })} ·{" "}
+                {t("context.activity", { activity: ta(activity) })}
+              </p>
+              <p className="text-caption text-text-muted">
+                {t("context.note")}
+              </p>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => setContextRemoved(true)}
+                className="-ml-3 self-start"
+              >
+                {t("context.remove")}
+              </Button>
+            </section>
+          )}
+
+          {/* 내용 */}
+          <div className="flex flex-col gap-1.5 rounded-card bg-bg-surface p-4 shadow-card">
+            <label
+              htmlFor={ids.message}
+              className="text-title-s text-text-default"
+            >
+              {t("message.label")}
+            </label>
+            <p id={ids.messageHint} className="text-caption text-text-muted">
+              {t("message.hint")}
+            </p>
+            <textarea
+              ref={messageRef}
+              id={ids.message}
+              value={message}
+              onChange={(event) => setMessage(event.target.value)}
+              maxLength={MESSAGE_INPUT_MAX}
+              rows={6}
+              aria-invalid={errors.message ? true : undefined}
+              aria-describedby={idList(
+                ids.messageHint,
+                errors.message && ids.messageError,
+              )}
+              className={cn(
+                "w-full resize-y rounded-input border bg-bg-surface px-3 py-2.5 text-body text-text-default",
+                errors.message
+                  ? "border-[1.5px] border-danger-text"
+                  : "border-border-strong",
+              )}
+            />
+            <div className="flex items-start justify-between gap-2">
+              {errors.message ? (
+                <p
+                  id={ids.messageError}
+                  className="text-caption text-danger-text"
+                >
+                  {t(`errors.${errors.message}`)}
+                </p>
+              ) : (
+                <span />
+              )}
+              <span className="shrink-0 text-caption text-text-muted">
+                {t("message.count", {
+                  count: message.length,
+                  max: MESSAGE_INPUT_MAX,
+                })}
+              </span>
+            </div>
+          </div>
+
+          {/* 사진 */}
+          <div className="flex flex-col gap-1.5 rounded-card bg-bg-surface p-4 shadow-card">
+            <p
+              className="text-title-s text-text-default"
+              id={`${ids.photoInput}-label`}
+            >
+              {t("photos.label")}
+            </p>
+            <p id={ids.photoHint} className="text-caption text-text-muted">
+              {t("photos.hint")}
+            </p>
+            {shots.length > 0 && (
+              <ul className="mt-1 flex flex-wrap gap-2">
+                {shots.map((shot, index) => (
+                  <li key={shot.id} className="relative">
+                    {/* eslint-disable-next-line @next/next/no-img-element -- 기기 안 미리보기(blob 주소)라 next/image를 쓰지 않음 */}
+                    <img
+                      src={shot.url}
+                      alt={t("photos.alt", { index: index + 1 })}
+                      className="size-20 rounded-icon object-cover"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeShot(shot.id)}
+                      aria-label={t("photos.remove", { index: index + 1 })}
+                      className="absolute -top-3 -right-3 flex size-touch items-center justify-center"
+                    >
+                      <span className="flex size-7 items-center justify-center rounded-full bg-bg-surface text-text-default shadow-card">
+                        <X aria-hidden="true" size={16} />
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <input
+              ref={fileRef}
+              id={ids.photoInput}
+              type="file"
+              accept="image/*"
+              multiple
+              tabIndex={-1}
+              aria-hidden="true"
+              className="sr-only"
+              onChange={(event) => {
+                void addPhotos(event.target.files);
+                event.target.value = ""; // 같은 사진을 다시 골라도 동작하게
+              }}
+            />
+            <div className="mt-1 flex items-center gap-3">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => fileRef.current?.click()}
+                disabled={preparing || shots.length >= PHOTO_MAX_COUNT}
+                aria-describedby={idList(
+                  ids.photoHint,
+                  photoError && ids.photoError,
+                )}
+              >
+                <ImagePlus aria-hidden="true" size={18} />
+                {t("photos.add")}
+              </Button>
+              <span className="text-caption text-text-muted">
+                {t("photos.count", { count: shots.length })}
+              </span>
+            </div>
+            {preparing && (
+              <p role="status" className="text-caption text-text-body">
+                {t("photos.preparing")}
+              </p>
+            )}
+            {photoError && (
+              <p
+                id={ids.photoError}
+                role="alert"
+                className="text-caption text-danger-text"
+              >
+                {t(`photos.${photoError}`)}
+              </p>
+            )}
+          </div>
+
+          {/* 이메일 + 동의 */}
+          <div className="flex flex-col gap-1.5 rounded-card bg-bg-surface p-4 shadow-card">
+            <label
+              htmlFor={ids.email}
+              className="text-title-s text-text-default"
+            >
+              {t("email.label")}
+            </label>
+            <p id={ids.emailHint} className="text-caption text-text-muted">
+              {t("email.hint")}
+            </p>
+            <input
+              ref={emailRef}
+              id={ids.email}
+              type="email"
+              inputMode="email"
+              autoComplete="email"
+              value={email}
+              maxLength={EMAIL_MAX}
+              onChange={(event) => {
+                setEmail(event.target.value);
+                if (event.target.value.trim() === "")
+                  setErrors((prev) => without(prev, "email", "consent"));
+              }}
+              aria-invalid={errors.email ? true : undefined}
+              aria-describedby={idList(
+                ids.emailHint,
+                errors.email && ids.emailError,
+              )}
+              className={cn(
+                "h-input w-full rounded-input border bg-bg-surface px-3 text-body text-text-default",
+                errors.email
+                  ? "border-[1.5px] border-danger-text"
+                  : "border-border-strong",
+              )}
+            />
+            {errors.email && (
+              <p id={ids.emailError} className="text-caption text-danger-text">
+                {t(`errors.${errors.email}`)}
+              </p>
+            )}
+            {email.trim() !== "" && (
+              <div className="mt-1 flex flex-col gap-1">
+                <label
+                  htmlFor={ids.consent}
+                  className="flex min-h-touch cursor-pointer items-center gap-3 text-body-s text-text-default"
+                >
+                  <input
+                    ref={consentRef}
+                    id={ids.consent}
+                    type="checkbox"
+                    checked={consent}
+                    onChange={(event) => {
+                      setConsent(event.target.checked);
+                      if (event.target.checked)
+                        setErrors((prev) => without(prev, "consent"));
+                    }}
+                    aria-invalid={errors.consent ? true : undefined}
+                    aria-describedby={
+                      errors.consent ? ids.consentError : undefined
+                    }
+                    className="size-5 shrink-0 accent-brand-default"
+                  />
+                  {t("consent.label")}
+                </label>
+                {errors.consent && (
+                  <p
+                    id={ids.consentError}
+                    className="text-caption text-danger-text"
+                  >
+                    {t(`errors.${errors.consent}`)}
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* 보관 안내 */}
+          <section
+            aria-labelledby={`${ids.kind}-retention`}
+            className="flex flex-col gap-1 rounded-card bg-brand-weak p-4"
+          >
+            <h2
+              id={`${ids.kind}-retention`}
+              className="text-body-s font-bold text-text-default"
+            >
+              {t("retention.title")}
+            </h2>
+            <p className="text-caption text-text-body">{t("retention.body")}</p>
+            <p className="text-caption text-text-body">
+              {t("retention.draft")}
+            </p>
+          </section>
+        </fieldset>
+
+        <div className="flex flex-col gap-2 sm:flex-row-reverse">
+          <Button
+            type="submit"
+            disabled={sending || preparing}
+            className="sm:min-w-40"
+          >
+            {sending ? t("actions.sending") : t("actions.submit")}
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={clearAll}
+            disabled={sending}
+          >
+            {t("actions.clear")}
+          </Button>
+        </div>
+        <p role="status" className="min-h-5 text-caption text-text-body">
+          {progressText}
+        </p>
+      </form>
+      <Toast message={toast.message} onHold={toast.hold} />
+    </div>
+  );
+}

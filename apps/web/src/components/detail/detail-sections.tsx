@@ -127,12 +127,14 @@ export function Call119({ className }: { className?: string }) {
 // 정보 출처 3행: 파도·바람 / 특보 / 수온(통제 행은 후속, G2). 측정소 이름·거리 + 시각
 export function SourceList({
   locale,
+  beachSlug,
   view,
   detail,
   stations,
   nowMs,
 }: {
   locale: Locale;
+  beachSlug: string;
   view: BeachView;
   detail: DetailInfo;
   stations: Beach["stations"];
@@ -219,7 +221,8 @@ export function SourceList({
           {t("detail.sources.title")}
         </h2>
         <Link
-          href={localizedPath(locale, "/settings/inquiry/")}
+          // 어느 해변 문의인지 함께 넘김(문의 화면이 해변·활동을 자동 입력, BRD-37). 위치는 넘기지 않음
+          href={`${localizedPath(locale, "/settings/inquiry/")}?beach=${encodeURIComponent(beachSlug)}`}
           className="inline-flex min-h-touch items-center text-body-s font-bold text-brand-default underline"
         >
           {t("detail.sources.inquiry")}

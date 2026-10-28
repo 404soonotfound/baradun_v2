@@ -90,7 +90,6 @@
     "finalCall": "On-site control and lifeguard guidance come first."
   },
   "home": {
-    "preparing": "Getting the screen ready.",
     "sampleSnapshot": "These warnings and measurements are development samples, not real checks.",
     "titleLine1": "Which sea are you",
     "titleLine2": "heading to today?",
@@ -301,7 +300,6 @@
   "activity": {
     "label": "Activity",
     "choose": "Choose activity",
-    "current": "Selected activity: {name}",
     "swimming": "Swimming",
     "surfing": "Surfing",
     "scuba": "Scuba",
@@ -578,7 +576,7 @@
     },
     "reset": {
       "title": "Clear device data?",
-      "body": "This clears favorites, recently viewed beaches, past visit records, recent searches, default region, chosen activity, explore view and first-run records. This can't be undone.",
+      "body": "This clears favorites, recently viewed beaches, past visit records, recent searches, default region, chosen activity, explore view, first-run records and unsent feedback. This can't be undone.",
       "keep": "Theme, motion and location settings, and the last sea information received, stay as they are.",
       "permission": "This site can't clear your browser's location permission. To change it, use your browser settings.",
       "confirm": "Clear",
@@ -709,6 +707,90 @@
       "linkOsm": "OpenStreetMap copyright",
       "linkOmt": "OpenMapTiles",
       "linkOfm": "OpenFreeMap"
+    }
+  },
+  "inquiry": {
+    "intro": "Let us know if official information differs from reality, or if you'd like to suggest a beach or data.",
+    "kind": {
+      "legend": "What is it about?",
+      "mismatch": "The info doesn't match reality",
+      "addBeach": "Please add a beach",
+      "criteria": "Question about how we decide",
+      "newData": "Suggest new data"
+    },
+    "context": {
+      "legend": "Sent along",
+      "beach": "Beach: {name}",
+      "activity": "Activity: {activity}",
+      "note": "Added automatically because you came from a beach page. Your location isn't sent.",
+      "remove": "Remove beach and activity"
+    },
+    "message": {
+      "label": "Message",
+      "hint": "At least 5 characters. Telling us what differs and when you saw it helps us check.",
+      "count": "{count}/{max}"
+    },
+    "photos": {
+      "label": "Photos (optional)",
+      "hint": "Photos only, up to 3. We shrink them and remove location data on your device before uploading. No videos.",
+      "add": "Choose photos",
+      "count": "{count}/3",
+      "preparing": "Preparing photos",
+      "alt": "Attached photo {index}",
+      "remove": "Remove photo {index}",
+      "notImage": "Only photo files can be uploaded. Please choose another file.",
+      "tooLarge": "This photo is too large to upload. Please choose another photo.",
+      "unreadable": "This photo can't be opened. Please choose another photo.",
+      "tooMany": "You can add up to 3 photos. We added the first 3."
+    },
+    "email": {
+      "label": "Email (optional)",
+      "hint": "We'll contact you only if needed, and delete it as soon as handling is done (within 90 days at the latest)."
+    },
+    "consent": {
+      "label": "I agree to share my email so you can contact me about this feedback"
+    },
+    "errors": {
+      "summary": "Please check {count} field(s)",
+      "kindMissing": "Choose what it's about.",
+      "messageShort": "Write at least 5 characters.",
+      "emailFormat": "This email doesn't look right. Example: name@example.com",
+      "consentMissing": "To leave your email, please agree, or clear the email."
+    },
+    "retention": {
+      "title": "How long we keep it",
+      "body": "Feedback is kept for 90 days and photos for 30 days, then deleted automatically. Email is deleted as soon as handling is done (within 90 days at the latest). We don't promise a reply deadline.",
+      "draft": "While you write, the type and message are kept only on this device for up to 7 days. Email and photos aren't kept."
+    },
+    "actions": {
+      "submit": "Send",
+      "sending": "Sending…",
+      "clear": "Clear",
+      "cleared": "Cleared what you were writing"
+    },
+    "progress": {
+      "photos": "Uploading photo {done}/{total}",
+      "message": "Sending your feedback"
+    },
+    "done": {
+      "title": "Received",
+      "body": "We'll check it and update the information. If you left your email, we'll contact you if needed.",
+      "photos": "{count} photo(s) received with it.",
+      "rejectedLocation": "{count} photo(s) weren't accepted because location data remained.",
+      "rejectedOther": "{count} photo(s) couldn't be checked and weren't accepted.",
+      "draftCleared": "The type and message kept on this device have been deleted.",
+      "another": "Write another",
+      "back": "Back to Settings"
+    },
+    "failed": {
+      "title": "Couldn't send your feedback",
+      "offline": "You're not connected to the internet, so it wasn't sent. Check your connection and send again.",
+      "network": "There was no response, so it wasn't sent. Please try again in a moment.",
+      "rateLimited": "We're receiving a lot of feedback right now, so it wasn't accepted. Please try again in a few minutes.",
+      "unavailable": "We can't receive feedback right now. Please try again in a moment.",
+      "rejected": "What was sent couldn't be accepted. Check your message and send again.",
+      "invalidResponse": "We couldn't confirm it was received. Please try again in a moment.",
+      "kept": "The type and message are kept on this device (up to 7 days). Please add your email and photos again."
     }
   }
 }
