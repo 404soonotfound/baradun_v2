@@ -421,5 +421,23 @@
       "body": "Try another name or a region",
       "widen": "Search all Korea"
     }
+  },
+  "map": {
+    "label": "Beach map",
+    "canvas": "Map",
+    "loading": "Loading the map",
+    "failed": {
+      "title": "Couldn't load the map",
+      "body": "You can still see every beach in the list",
+      "retry": "Try again"
+    },
+    "zoomIn": "Zoom in",
+    "zoomOut": "Zoom out",
+    "attribution": {
+      "label": "Map data sources",
+      "openfreemap": "OpenFreeMap",
+      "openmaptiles": "© OpenMapTiles",
+      "osm": "© OpenStreetMap contributors"
+    }
   }
 }

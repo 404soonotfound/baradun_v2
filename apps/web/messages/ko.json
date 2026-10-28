@@ -421,5 +421,23 @@
       "body": "다른 이름이나 지역으로 찾아보세요",
       "widen": "전국에서 찾기"
     }
+  },
+  "map": {
+    "label": "해변 지도",
+    "canvas": "지도",
+    "loading": "지도를 불러오고 있어요",
+    "failed": {
+      "title": "지도를 불러오지 못했어요",
+      "body": "해변 정보는 목록으로 볼 수 있어요",
+      "retry": "다시 시도"
+    },
+    "zoomIn": "지도 확대",
+    "zoomOut": "지도 축소",
+    "attribution": {
+      "label": "지도 출처",
+      "openfreemap": "OpenFreeMap",
+      "openmaptiles": "© OpenMapTiles",
+      "osm": "© OpenStreetMap 기여자"
+    }
   }
 }
