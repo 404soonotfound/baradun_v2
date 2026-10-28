@@ -153,6 +153,8 @@
   },
   "notFound": {
     "title": "Page not found",
+    "body": "The address may have changed, or this beach isn't shown right now",
+    "search": "Search beaches",
     "home": "Go to home"
   },
   "nav": {
