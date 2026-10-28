@@ -64,3 +64,58 @@ describe("배포 워크플로 가드레일 (11장)", () => {
     for (const line of syncs) expect(line).toContain('--exclude "data/*"');
   });
 });
+
+// 작업 하나(jobs 아래 두 칸 들여쓴 이름)의 코드 줄만 꺼냄
+const jobLines = (text: string, job: string) => {
+  const lines = codeLines(text);
+  const start = lines.indexOf(`  ${job}:`);
+  if (start < 0) return [];
+  const end = lines.findIndex((l, i) => i > start && /^ {2}\S/.test(l));
+  return lines.slice(start, end < 0 ? undefined : end);
+};
+
+// 웹 빌드 단계의 env에 적힌 NEXT_PUBLIC_SITE_URL 값. 단계가 없거나 값이 없으면 undefined
+const webBuildSiteUrl = (lines: string[]) => {
+  const at = lines.findIndex((l) =>
+    /^\s*-\s*run:\s*npm run build -w apps\/web\s*$/.test(l),
+  );
+  if (at < 0) return undefined;
+  const next = lines.findIndex((l, i) => i > at && /^\s*-\s/.test(l));
+  return lines
+    .slice(at + 1, next < 0 ? undefined : next)
+    .map((l) => l.match(/^\s*NEXT_PUBLIC_SITE_URL:\s*(.+?)\s*$/)?.[1])
+    .find((v) => v !== undefined);
+};
+
+describe("PR 필수 웹 검사 (BRD-102 결정 41·42)", () => {
+  const ci = workflows.find((w) => w.name === "ci.yml");
+
+  it("web 작업은 타입 검사와, 사이트 주소를 명시한 정적 빌드를 돌린다", () => {
+    const web = jobLines(ci?.text ?? "", "web");
+    expect(web).toContainEqual(
+      expect.stringMatching(/^\s*-\s*run:\s*npm run typecheck -w apps\/web$/),
+    );
+    expect(webBuildSiteUrl(web)).toMatch(/^https?:\/\/\S+$/);
+  });
+
+  it("e2e 작업의 빌드도 사이트 주소를 명시한다", () => {
+    expect(webBuildSiteUrl(jobLines(ci?.text ?? "", "e2e"))).toMatch(
+      /^https?:\/\/\S+$/,
+    );
+  });
+
+  it("web·e2e 결과는 ci-ok에 모인다", () => {
+    const needs = jobLines(ci?.text ?? "", "ci-ok")
+      .join("\n")
+      .match(/needs:\s*\[([^\]]*)\]/)?.[1]
+      .split(",")
+      .map((n) => n.trim());
+    expect(needs).toEqual(expect.arrayContaining(["web", "e2e"]));
+  });
+
+  it("배포 빌드는 저장소 변수 SITE_URL을 사이트 주소로 넣는다", () => {
+    expect(webBuildSiteUrl(codeLines(deploy?.text ?? ""))).toBe(
+      "${{ vars.SITE_URL }}",
+    );
+  });
+});
