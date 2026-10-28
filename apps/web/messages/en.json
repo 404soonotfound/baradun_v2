@@ -797,5 +797,11 @@
       "invalidResponse": "We couldn't confirm it was received. Please try again in a moment.",
       "kept": "The type and message are kept on this device (up to 7 days). Please add your email and photos again."
     }
+  },
+  "languageNotice": {
+    "label": "Language",
+    "offer": "This site is also available in English",
+    "switch": "View in English",
+    "stay": "Keep this language"
   }
 }
