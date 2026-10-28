@@ -21,6 +21,9 @@ packages/*/coverage/
 # 개발용 예시 바다 데이터 (npm run dev:data)
 apps/web/public/data/
 
+# 지도 작업자 파일: node_modules의 maplibre-gl에서 npm run map:worker로 복사
+apps/web/public/vendor/
+
 # next.js
 .next/
 out/
