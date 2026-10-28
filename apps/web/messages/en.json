@@ -376,7 +376,7 @@
     "recheck": "Check again",
     "rechecking": "Checking",
     "stillMaintenance": "Still under maintenance",
-    "updateTitle": "Please update to the new version",
+    "updateTitle": "A new version is available",
     "updateBody": "The way we read information has changed, so this version can't show sea information",
     "updateNext": "Reload to get the new version",
     "reload": "Reload"
