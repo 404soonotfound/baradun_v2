@@ -2,12 +2,13 @@
 
 import { Languages } from "lucide-react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
+import { Suspense } from "react";
 
 import { Banner } from "@/components/ui/banner";
-import { localizedPath, type Locale } from "@/lib/i18n";
+import { type Locale } from "@/lib/i18n";
 import {
-  basePath,
+  languageSwitchHref,
   setLanguageChoice,
   useLanguageNotice,
 } from "@/lib/language-choice";
@@ -22,15 +23,25 @@ export type LanguageNoticeText = {
   stay: string;
 };
 
-export function LanguageNotice({
-  locale,
-  texts,
-}: {
+type Props = {
   locale: Locale; // 이 화면(주소) 언어
   texts: Partial<Record<Locale, LanguageNoticeText>>; // 안내할 수 있는 다른 언어의 문구
-}) {
+};
+
+// useSearchParams는 정적 HTML을 만들 때 주소를 몰라 Suspense로 감쌈. 안내는 서버 렌더·첫 그리기에서 원래 비어 있어 fallback도 비움
+export function LanguageNotice(props: Props) {
+  return (
+    <Suspense fallback={null}>
+      <Notice {...props} />
+    </Suspense>
+  );
+}
+
+function Notice({ locale, texts }: Props) {
   const target = useLanguageNotice(locale);
   const pathname = usePathname();
+  // 언어를 바꿔도 검색어(?q=)·문의 맥락(?beach=) 같은 지금 주소의 매개변수는 그대로 넘김
+  const search = useSearchParams().toString();
   const text = target ? texts[target] : undefined;
   if (!target || !text) return null;
   return (
@@ -41,7 +52,7 @@ export function LanguageNotice({
         title={text.offer}
         action={
           <Link
-            href={localizedPath(target, basePath(pathname))}
+            href={languageSwitchHref(target, pathname, search)}
             hrefLang={target}
             onClick={() => setLanguageChoice(target)}
             className="font-bold text-brand-default"
