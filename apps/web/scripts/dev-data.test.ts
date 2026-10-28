@@ -18,6 +18,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   DEV_DATA_REFRESH_INTERVAL_MS,
+  DEV_DATA_MODE_FILE,
+  clearDevSampleData,
   startDevDataRefresh,
   writeDevData,
 } from "./dev-data.mts";
@@ -77,7 +79,7 @@ function fakeNext(root: string) {
     executable,
     `#!/usr/bin/env node
 const fs = require("node:fs");
-fs.writeFileSync(process.env.FAKE_NEXT_READY, "ready");
+fs.writeFileSync(process.env.FAKE_NEXT_READY, process.argv.slice(2).join(" "));
 const stop = () => {
   fs.writeFileSync(process.env.FAKE_NEXT_STOPPED, "stopped");
   process.exit(0);
@@ -94,26 +96,30 @@ setInterval(() => {}, 1_000);
 function startDevCommand({
   root,
   outDir,
-  disabled = false,
+  mode,
+  args = [],
 }: {
   root: string;
   outDir: string;
-  disabled?: boolean;
+  mode?: "off" | "sample";
+  args?: string[];
 }): { child: ChildProcess; ready: string; stopped: string } {
   const fake = fakeNext(root);
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    PATH: `${fake.bin}${path.delimiter}${process.env.PATH ?? ""}`,
+    BARADUN_DEV_DATA_DIR: outDir,
+    FAKE_NEXT_READY: fake.ready,
+    FAKE_NEXT_STOPPED: fake.stopped,
+  };
+  if (mode) env.BARADUN_DEV_DATA = mode;
+  else delete env.BARADUN_DEV_DATA;
   const child = spawn(
     process.execPath,
-    [path.join(import.meta.dirname, "dev.mts")],
+    [path.join(import.meta.dirname, "dev.mts"), ...args],
     {
       cwd: path.join(import.meta.dirname, ".."),
-      env: {
-        ...process.env,
-        PATH: `${fake.bin}${path.delimiter}${process.env.PATH ?? ""}`,
-        BARADUN_DEV_DATA: disabled ? "off" : undefined,
-        BARADUN_DEV_DATA_DIR: outDir,
-        FAKE_NEXT_READY: fake.ready,
-        FAKE_NEXT_STOPPED: fake.stopped,
-      },
+      env,
       stdio: "ignore",
     },
   );
@@ -141,10 +147,11 @@ describe("개발용 예시 데이터 생성", () => {
     });
 
     const manifest = manifestAt(outDir);
-    expect(manifest.snapshotVersion).toBe("20261028T060000Z");
-    expect(manifest.files.status).toBe(
-      "/data/20261028T060000Z/status.json",
+    expect(readFileSync(path.join(outDir, DEV_DATA_MODE_FILE), "utf8")).toBe(
+      "sample\n",
     );
+    expect(manifest.snapshotVersion).toBe("20261028T060000Z");
+    expect(manifest.files.status).toBe("/data/20261028T060000Z/status.json");
     const status = readJson<StatusFile>(
       path.join(outDir, manifest.snapshotVersion, "status.json"),
     );
@@ -187,6 +194,62 @@ describe("개발용 예시 데이터 생성", () => {
       false,
     );
   });
+
+  it("같은 분에 다시 실행하면 같은 내용은 유지하고 고친 원본은 반영함", () => {
+    const { examplesDir, outDir } = fixture();
+    const nowMs = Date.parse("2026-10-28T06:00:12Z");
+    const statusFile = path.join(outDir, "20261028T060000Z", "status.json");
+
+    writeDevData({ examplesDir, outDir, nowMs });
+    const first = readFileSync(statusFile, "utf8");
+    expect(() => writeDevData({ examplesDir, outDir, nowMs })).not.toThrow();
+    expect(readFileSync(statusFile, "utf8")).toBe(first);
+
+    const sourceFile = path.join(examplesDir, "status.json");
+    const source = readJson<StatusFile>(sourceFile);
+    source.beaches.b0001!.validUntil = "2026-10-17T06:10:00Z";
+    writeFileSync(sourceFile, JSON.stringify(source));
+    writeDevData({ examplesDir, outDir, nowMs: nowMs + 30_000 });
+
+    expect(readFileSync(statusFile, "utf8")).not.toBe(first);
+    expect(readdirSync(outDir).some((name) => name.includes(".tmp"))).toBe(
+      false,
+    );
+  });
+
+  it("현재와 직전 버전만 남기고 더 오래된 버전 폴더는 지움", () => {
+    const { examplesDir, outDir } = fixture();
+    const start = Date.parse("2026-10-28T06:00:12Z");
+    for (const minutes of [0, 20, 40]) {
+      writeDevData({ examplesDir, outDir, nowMs: start + minutes * 60_000 });
+    }
+
+    expect(
+      readdirSync(outDir)
+        .filter((name) => /^\d{8}T\d{6}Z$/.test(name))
+        .sort(),
+    ).toEqual(["20261028T062000Z", "20261028T064000Z"]);
+  });
+});
+
+describe("예시를 끈 개발 서버의 지난 예시 정리", () => {
+  it("sample 표지가 있는 폴더만 지움", () => {
+    const { examplesDir, outDir } = fixture();
+    writeDevData({ examplesDir, outDir });
+
+    expect(clearDevSampleData(outDir)).toBe("removed");
+    expect(existsSync(outDir)).toBe(false);
+    expect(clearDevSampleData(outDir)).toBe("none");
+  });
+
+  it("표지 없는 폴더는 출처를 모르므로 지우지 않음", () => {
+    const { outDir } = fixture();
+    mkdirSync(outDir);
+    writeFileSync(path.join(outDir, "manifest.json"), "{}");
+
+    expect(clearDevSampleData(outDir)).toBe("unmarked");
+    expect(existsSync(path.join(outDir, "manifest.json"))).toBe(true);
+  });
 });
 
 describe("개발용 예시 데이터 자동 갱신", () => {
@@ -220,10 +283,14 @@ describe("개발용 예시 데이터 자동 갱신", () => {
 });
 
 describe("개발 서버 실행", () => {
-  it("예시 데이터를 먼저 만들고 종료할 때 개발 서버 자식도 종료함", async () => {
+  it("sample을 명시하면 예시 데이터를 먼저 만들고 종료할 때 개발 서버 자식도 종료함", async () => {
     const { outDir } = fixture();
     const root = path.dirname(outDir);
-    const { child, ready, stopped } = startDevCommand({ root, outDir });
+    const { child, ready, stopped } = startDevCommand({
+      root,
+      outDir,
+      mode: "sample",
+    });
 
     await waitForFile(ready);
     expect(existsSync(path.join(outDir, "manifest.json"))).toBe(true);
@@ -232,13 +299,54 @@ describe("개발 서버 실행", () => {
     expect(existsSync(stopped)).toBe(true);
   });
 
-  it("BARADUN_DEV_DATA=off이면 예시 데이터 없이 개발 서버만 실행함", async () => {
+  it("기본값이면 예시 데이터 없이 개발 서버만 실행함", async () => {
+    const { outDir } = fixture();
+    const root = path.dirname(outDir);
+    const { child, ready, stopped } = startDevCommand({ root, outDir });
+
+    await waitForFile(ready);
+    expect(existsSync(outDir)).toBe(false);
+
+    await stopChild(child);
+    expect(existsSync(stopped)).toBe(true);
+  });
+
+  it("--data=sample 인자로도 예시를 켜고, 이 인자는 next에 넘기지 않음", async () => {
     const { outDir } = fixture();
     const root = path.dirname(outDir);
     const { child, ready, stopped } = startDevCommand({
       root,
       outDir,
-      disabled: true,
+      args: ["--data=sample"],
+    });
+
+    await waitForFile(ready);
+    expect(existsSync(path.join(outDir, "manifest.json"))).toBe(true);
+    expect(readFileSync(ready, "utf8")).toBe("dev");
+
+    await stopChild(child);
+    expect(existsSync(stopped)).toBe(true);
+  });
+
+  it("기본값이면 지난 sample 예시를 지우고 시작함", async () => {
+    const { examplesDir, outDir } = fixture();
+    writeDevData({ examplesDir, outDir });
+    const root = path.dirname(outDir);
+    const { child, ready } = startDevCommand({ root, outDir });
+
+    await waitForFile(ready);
+    expect(existsSync(outDir)).toBe(false);
+
+    await stopChild(child);
+  });
+
+  it("BARADUN_DEV_DATA=off를 명시해도 예시 데이터를 만들지 않음", async () => {
+    const { outDir } = fixture();
+    const root = path.dirname(outDir);
+    const { child, ready, stopped } = startDevCommand({
+      root,
+      outDir,
+      mode: "off",
     });
 
     await waitForFile(ready);
@@ -246,5 +354,17 @@ describe("개발 서버 실행", () => {
 
     await stopChild(child);
     expect(existsSync(stopped)).toBe(true);
+  });
+});
+
+describe("개발 실행 스크립트", () => {
+  it("dev:sample·dev:no-data도 npm run dev를 거쳐 predev(토큰·지도 워커)를 실행함", () => {
+    const { scripts } = readJson<{ scripts: Record<string, string> }>(
+      path.join(import.meta.dirname, "../package.json"),
+    );
+
+    expect(scripts.predev).toContain("npm run tokens");
+    expect(scripts["dev:sample"]).toMatch(/^npm run dev -- /);
+    expect(scripts["dev:no-data"]).toMatch(/&& npm run dev$/);
   });
 });
