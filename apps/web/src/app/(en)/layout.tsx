@@ -3,6 +3,7 @@ import { getTranslations } from "next-intl/server";
 import { RootDocument } from "@/components/root-document";
 import { AppShell } from "@/components/shell/app-shell";
 import { siteUrl } from "@/lib/site-url";
+import { sharedViewport } from "@/lib/viewport";
 import "../globals.css";
 
 // 영어 루트 레이아웃: /en 아래 모든 주소
@@ -17,6 +18,9 @@ export async function generateMetadata(): Promise<Metadata> {
     appleWebApp: { capable: true, title: t("siteName") },
   };
 }
+
+// 한국어 레이아웃과 같은 viewport(viewport-fit=cover·theme-color)
+export const viewport = sharedViewport;
 
 export default function EnRootLayout({
   children,
