@@ -1,5 +1,4 @@
 import {
-  chmodSync,
   cpSync,
   existsSync,
   mkdtempSync,
@@ -7,9 +6,10 @@ import {
   readFileSync,
   readdirSync,
   rmSync,
+  utimesSync,
   writeFileSync,
 } from "node:fs";
-import { spawn, type ChildProcess } from "node:child_process";
+import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -81,8 +81,7 @@ function fakeNext(root: string) {
   const executable = path.join(bin, "next");
   writeFileSync(
     executable,
-    `#!/usr/bin/env node
-const fs = require("node:fs");
+    `const fs = require("node:fs");
 fs.writeFileSync(process.env.FAKE_NEXT_READY, process.argv.slice(2).join(" "));
 const stop = () => {
   fs.writeFileSync(process.env.FAKE_NEXT_STOPPED, "stopped");
@@ -93,7 +92,6 @@ process.on("SIGTERM", stop);
 setInterval(() => {}, 1_000);
 `,
   );
-  chmodSync(executable, 0o755);
   return { bin, ready, stopped };
 }
 
@@ -111,7 +109,7 @@ function startDevCommand({
   const fake = fakeNext(root);
   const env: NodeJS.ProcessEnv = {
     ...process.env,
-    PATH: `${fake.bin}${path.delimiter}${process.env.PATH ?? ""}`,
+    BARADUN_NEXT_BIN: path.join(fake.bin, "next"),
     BARADUN_DEV_DATA_DIR: outDir,
     FAKE_NEXT_READY: fake.ready,
     FAKE_NEXT_STOPPED: fake.stopped,
@@ -238,6 +236,24 @@ describe("개발용 예시 데이터 생성", () => {
   });
 });
 
+describe("중간에 죽은 실행의 임시 폴더", () => {
+  it("10분 넘은 임시 폴더는 다음 게시 때 지우고, 쓰는 중일 수 있는 새 임시 폴더는 남김", () => {
+    const { examplesDir, outDir } = fixture();
+    writeDevData({ examplesDir, outDir });
+    const stale = path.join(outDir, ".20261028T060000Z.1.abc.tmp");
+    const fresh = path.join(outDir, ".20261028T060000Z.2.def.tmp");
+    mkdirSync(stale);
+    mkdirSync(fresh);
+    const old = new Date(Date.now() - 11 * 60_000);
+    utimesSync(stale, old, old);
+
+    writeDevData({ examplesDir, outDir });
+
+    expect(existsSync(stale)).toBe(false);
+    expect(existsSync(fresh)).toBe(true);
+  });
+});
+
 describe("예시를 끈 개발 서버의 지난 예시 정리", () => {
   it("sample 표지가 있는 폴더만 지움", () => {
     const { examplesDir, outDir } = fixture();
@@ -262,8 +278,36 @@ describe("예시를 끈 개발 서버의 지난 예시 정리", () => {
     writeDevData({ examplesDir, outDir });
     writeFileSync(path.join(outDir, "mirror.json"), "{}");
 
-    expect(clearDevSampleData(outDir)).toBe("unmarked");
+    expect(clearDevSampleData(outDir)).toBe("foreign");
     expect(existsSync(path.join(outDir, "mirror.json"))).toBe(true);
+  });
+
+  it("Finder가 만든 .DS_Store는 예시가 아닌 파일로 보지 않음", () => {
+    const { examplesDir, outDir } = fixture();
+    writeDevData({ examplesDir, outDir });
+    writeFileSync(path.join(outDir, ".DS_Store"), "");
+
+    expect(() => writeDevData({ examplesDir, outDir })).not.toThrow();
+    expect(clearDevSampleData(outDir)).toBe("removed");
+  });
+
+  it("--clean도 예시가 아닌 파일이 있으면 지우지 않고 실패함", () => {
+    const { examplesDir, outDir } = fixture();
+    writeDevData({ examplesDir, outDir });
+    writeFileSync(path.join(outDir, "mirror.json"), "{}");
+    const clean = () =>
+      spawnSync(
+        process.execPath,
+        [path.join(import.meta.dirname, "dev-data.mts"), "--clean"],
+        { env: { ...process.env, BARADUN_DEV_DATA_DIR: outDir } },
+      );
+
+    expect(clean().status).toBe(1);
+    expect(existsSync(path.join(outDir, "mirror.json"))).toBe(true);
+
+    rmSync(path.join(outDir, "mirror.json"));
+    expect(clean().status).toBe(0);
+    expect(existsSync(outDir)).toBe(false);
   });
 
   it("예시가 아닌 파일이 있는 폴더에는 예시를 쓰지 않음", () => {
@@ -304,6 +348,28 @@ describe("개발용 예시 데이터 자동 갱신", () => {
     stop();
     await vi.advanceTimersByTimeAsync(DEV_DATA_REFRESH_INTERVAL_MS);
     expect(manifestAt(outDir).snapshotVersion).toBe("20261028T062000Z");
+  });
+
+  it("주기 갱신이 실패해도 멈추지 않고 1분 뒤 다시 시도함", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime("2026-10-28T06:00:12Z");
+    const { examplesDir, outDir } = fixture();
+    const onError = vi.fn();
+    const stop = startDevDataRefresh({ examplesDir, outDir, onError });
+
+    // 편집기가 저장하는 중이라 예시 JSON을 읽지 못하는 순간
+    const statusFile = path.join(examplesDir, "status.json");
+    const original = readFileSync(statusFile, "utf8");
+    writeFileSync(statusFile, "{");
+    await vi.advanceTimersByTimeAsync(DEV_DATA_REFRESH_INTERVAL_MS);
+    expect(onError).toHaveBeenCalledTimes(1);
+    expect(manifestAt(outDir).snapshotVersion).toBe("20261028T060000Z");
+
+    writeFileSync(statusFile, original);
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(manifestAt(outDir).snapshotVersion).toBe("20261028T062100Z");
+
+    stop();
   });
 
   it("잠자기로 타이머가 밀려도 벽시계가 지났으면 1분 안에 갱신함", async () => {
@@ -405,6 +471,7 @@ describe("개발 실행 스크립트", () => {
 
     expect(scripts.predev).toContain("npm run tokens");
     expect(scripts["dev:sample"]).toMatch(/^npm run dev -- /);
-    expect(scripts["dev:no-data"]).toMatch(/&& npm run dev$/);
+    // 셸에 BARADUN_DEV_DATA=sample이 남아 있어도 정리 직후 예시를 다시 만들지 않게 off를 명시함
+    expect(scripts["dev:no-data"]).toMatch(/&& npm run dev -- --data=off$/);
   });
 });

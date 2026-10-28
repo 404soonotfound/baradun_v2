@@ -6,7 +6,7 @@
     "predev": "npm run tokens && npm run map:worker",
     "dev": "node scripts/dev.mts",
     "dev:sample": "npm run dev -- --data=sample",
-    "dev:no-data": "npm run dev:data -- --clean && npm run dev",
+    "dev:no-data": "npm run dev:data -- --clean && npm run dev -- --data=off",
     "prebuild": "npm run tokens && npm run map:worker && node scripts/dev-data.mts --check",
     "dev:data": "node scripts/dev-data.mts",
     "build": "next build",
