@@ -12,6 +12,7 @@ import vm from "node:vm";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { TABS } from "../src/lib/nav";
+import { UNAVAILABLE_PARAM } from "../src/lib/page-unavailable";
 
 import {
   OFFLINE_PAGES,
@@ -76,10 +77,12 @@ type Listener = (event: unknown) => void;
 
 function load({
   fetch,
-  precache = [...OFFLINE_PAGES, "/_next/static/chunks/a.js"],
+  pages = OFFLINE_PAGES,
+  precache = [...pages, "/_next/static/chunks/a.js"],
   caches = new FakeCaches(),
 }: {
   fetch: (request: unknown, init?: unknown) => Promise<Response>;
+  pages?: readonly string[];
   precache?: string[];
   caches?: FakeCaches;
 }) {
@@ -104,7 +107,7 @@ function load({
     setTimeout: globalThis.setTimeout,
     clearTimeout: globalThis.clearTimeout,
   });
-  vm.runInContext(serviceWorkerSource(BUILD, precache, SOURCE), context);
+  vm.runInContext(serviceWorkerSource(BUILD, precache, SOURCE, pages), context);
   const cache = () => caches.stores.get(`baradun-screen-${BUILD}`);
 
   async function lifecycle(type: "install" | "activate") {
@@ -184,10 +187,33 @@ describe("설치", () => {
 
   it("HTML이 아닌 응답(content-type)은 이 빌드 화면으로 보지 않음", async () => {
     const sw = load({
-      precache: ["/"],
+      pages: ["/"],
       fetch: async () => respond(`"b":"${BUILD}"`),
     });
     await expect(sw.lifecycle("install")).rejects.toThrow("다른 빌드");
+  });
+});
+
+describe("화면 목록(SW_PAGES)", () => {
+  it("'/'로 끝나도 화면 목록에 없는 미리 저장 경로는 HTML로 확인하지 않음", async () => {
+    const sw = load({
+      pages: ["/"],
+      precache: ["/", "/vendor/dir/"],
+      fetch: async (url) =>
+        String(url) === "/" ? thisBuildHtml() : respond("not html"),
+    });
+    await sw.lifecycle("install");
+    expect(sw.fetch).toHaveBeenCalledWith("/vendor/dir/", { cache: "default" });
+    expect(sw.cache()!.entries.has(abs("/vendor/dir/"))).toBe(true);
+  });
+
+  it("화면이 미리 저장 목록에 없으면 워커를 만들지 않음", () => {
+    expect(() =>
+      serviceWorkerSource(BUILD, ["/", "/a.js"], SOURCE, ["/", "/explore/"]),
+    ).toThrow("미리 저장 목록에 없는 화면: /explore/");
+    expect(serviceWorkerSource(BUILD, ["/"], SOURCE, ["/"])).toContain(
+      'const SW_PAGES = ["/"];',
+    );
   });
 });
 
@@ -275,7 +301,9 @@ describe("화면 이동(HTML)", () => {
     for (const url of ["/spots/gyeongpo/", "/search/?q=경포"]) {
       const response = await sw.navigate(url);
       expect(response!.status).toBe(302);
-      expect(response!.headers.get("location")).toBe(abs("/"));
+      expect(response!.headers.get("location")).toBe(
+        abs(`/?${UNAVAILABLE_PARAM}=1`),
+      );
     }
   });
 
@@ -286,7 +314,9 @@ describe("화면 이동(HTML)", () => {
     await cache.put("/en/spots/a/", html("old detail"));
     const response = await sw.navigate("/en/spots/a/");
     expect(response!.status).toBe(302);
-    expect(response!.headers.get("location")).toBe(abs("/en/"));
+    expect(response!.headers.get("location")).toBe(
+      abs(`/en/?${UNAVAILABLE_PARAM}=1`),
+    );
   });
 
   it("다른 빌드·리디렉트된 응답은 보여주되 저장하지 않음", async () => {
@@ -342,11 +372,24 @@ describe("화면 이동(HTML)", () => {
     await cache.put("/en/", html("home en"));
     const ko = await sw.navigate("/spots/gyeongpo/");
     expect(ko!.status).toBe(302);
-    expect(ko!.headers.get("location")).toBe(abs("/"));
+    expect(ko!.headers.get("location")).toBe(abs(`/?${UNAVAILABLE_PARAM}=1`));
     const en = await sw.navigate("/en/spots/gyeongpo/");
-    expect(en!.headers.get("location")).toBe(abs("/en/"));
+    expect(en!.headers.get("location")).toBe(
+      abs(`/en/?${UNAVAILABLE_PARAM}=1`),
+    );
     // 홈 자체는 저장본으로
     expect(await (await sw.navigate("/en/"))!.text()).toBe("home en");
+  });
+
+  it("표식(?unavailable=1)이 붙은 홈 주소도 끊긴 동안 홈 저장본으로 열림(되돌림 반복 없음)", async () => {
+    const sw = load({ fetch: offline });
+    const cache = await sw.caches.open(`baradun-screen-${BUILD}`);
+    await cache.put("/", html("home ko"));
+    await cache.put("/en/", html("home en"));
+    const ko = await sw.navigate(`/?${UNAVAILABLE_PARAM}=1`);
+    expect(await ko!.text()).toBe("home ko");
+    const en = await sw.navigate(`/en/?${UNAVAILABLE_PARAM}=1`);
+    expect(await en!.text()).toBe("home en");
   });
 
   it("홈 저장본도 없으면 네트워크 오류 그대로(되돌림 반복 없음)", async () => {
