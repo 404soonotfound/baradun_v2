@@ -5,6 +5,7 @@ import * as maplibregl from "maplibre-gl";
 import type { Locale } from "@/lib/i18n";
 import type { ResolvedTheme } from "@/lib/theme";
 import { FIT_OPTIONS, MAX_BOUNDS, type LngLatBox } from "./bounds";
+import { createTileErrorCounter } from "./map-load";
 import { buildMapStyle, TILE_SOURCE_ID, tileModeFor } from "./style";
 
 // 지도 엔진 (BRD-65). 이 파일은 지도가 화면에 보일 때만 import()로 불러옴(첫 화면 용량에 넣지 않음)
@@ -99,11 +100,18 @@ export function createMap(options: CreateMapOptions): MapHandle | null {
     window.clearTimeout(timer);
     options.onReady();
   });
+  // 그린 뒤 타일 오류는 연달아 여러 번일 때만 실패(map-load.ts createTileErrorCounter)
+  const tileErrors = createTileErrorCounter();
+  map.on("sourcedata", (event) => {
+    if (event.sourceId === TILE_SOURCE_ID && event.tile) tileErrors.loaded();
+  });
   map.on("error", (event) => {
     const sourceId = (event as { sourceId?: string }).sourceId;
     // 다 그리기 전에는 어떤 오류든 실패. 그린 뒤에는 타일 출처 오류만(이동 중 타일이 끊긴 경우)
     if (!settled) fail();
-    else if (sourceId === TILE_SOURCE_ID) options.onFailed();
+    else if (sourceId === TILE_SOURCE_ID && tileErrors.error()) {
+      options.onFailed();
+    }
   });
   map.on("webglcontextlost", () => options.onFailed());
 

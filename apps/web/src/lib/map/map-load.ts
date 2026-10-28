@@ -37,3 +37,22 @@ export function mapLoadReducer(state: MapLoad, event: MapLoadEvent): MapLoad {
         : state;
   }
 }
+
+// 다 그린 뒤 타일 오류. 이동 중 타일 하나가 끊긴 것만으로 지도 전체를 실패로 바꾸지 않고,
+// 그사이 받은 타일 없이 연달아 이만큼 실패하면 실패로 봄(목록으로 보기·다시 시도 안내)
+export const TILE_ERROR_LIMIT = 3;
+
+export function createTileErrorCounter(limit = TILE_ERROR_LIMIT) {
+  let failures = 0;
+  return {
+    // 타일 오류. 연달아 limit번이 되면 true(실패로 알릴 때)
+    error(): boolean {
+      failures += 1;
+      return failures === limit;
+    },
+    // 타일을 받음 → 처음부터 다시 셈
+    loaded() {
+      failures = 0;
+    },
+  };
+}
