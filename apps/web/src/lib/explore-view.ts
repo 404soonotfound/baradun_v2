@@ -50,6 +50,18 @@ export function setExploreView(view: ExploreView) {
   listeners.forEach((listener) => listener());
 }
 
+// 기기 데이터 초기화(BRD-36): 저장값을 지우고 기본(목록)으로
+export function clearExploreView() {
+  memory = DEFAULT_VIEW;
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+    writeFailed = false;
+  } catch {
+    writeFailed = true;
+  }
+  listeners.forEach((listener) => listener());
+}
+
 // 서버(정적 HTML)는 저장 값을 몰라 목록, 브라우저에서는 저장된 값
 export function useExploreView(): ExploreView {
   return useSyncExternalStore(subscribe, read, () => DEFAULT_VIEW);

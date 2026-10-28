@@ -4,7 +4,8 @@
     "description": "Official marine warnings and sea observations by beach."
   },
   "common": {
-    "languages": "Languages"
+    "languages": "Languages",
+    "newWindow": "Opens in a new window"
   },
   "verdict": {
     "clear": {
@@ -520,6 +521,194 @@
       "issued": "Since your last visit: {warning} issued · {time}",
       "issuedNoTime": "Since your last visit: {warning} issued",
       "unknown": "Change not checked"
+    }
+  },
+  "settings": {
+    "groupsLabel": "Settings sections",
+    "location": {
+      "title": "Location",
+      "switch": "Use location for nearby beaches",
+      "onBody": "Used only to find nearby beaches, and only on this device. Never sent to a server.",
+      "offBody": "When off, we don't ask for or use your location, and show the region you pick.",
+      "permission": "Browser location permission",
+      "state": {
+        "checking": "Checking",
+        "idle": "Not asked yet",
+        "locating": "Getting your location",
+        "ready": "Allowed · Using your location now",
+        "denied": "Not allowed",
+        "unavailable": "Couldn't get your location",
+        "off": "Not checked because location is off"
+      },
+      "idleHint": "Tap the button and your browser will ask once.",
+      "use": "Use location",
+      "deniedHint": "We won't ask again here. To use location, change this site's location permission in your browser settings.",
+      "unavailableHint": "Your device couldn't share its location, so distances aren't shown. Please try again in a moment.",
+      "retry": "Try again",
+      "region": "Default region",
+      "regionNone": "Not chosen",
+      "regionHint": "The region Home shows first. Saved only on this device.",
+      "regionChange": "Change default region",
+      "regionClear": "Clear default region"
+    },
+    "display": {
+      "title": "Display",
+      "theme": "Theme",
+      "themeOption": {
+        "system": "Device setting",
+        "light": "Light",
+        "dark": "Dark"
+      },
+      "language": "Language",
+      "motion": "Motion",
+      "motionBody": "When off, wave drawings and screen transitions stop moving. If Reduce Motion is on in your device settings, motion stops regardless of this switch."
+    },
+    "help": {
+      "title": "Help & feedback",
+      "guideBody": "What we check · Reading wave period · Safety rules · 119",
+      "inquiryBody": "Wrong info · Add a beach · Suggest data"
+    },
+    "info": {
+      "title": "About",
+      "termsBody": "About the service · Disclaimer · Privacy",
+      "dataSourcesBody": "KMA · KHOA · Korea Tourism Organization · Map",
+      "device": "Device data",
+      "deviceBody": "There's no login; everything is saved only in this device's browser. You can clear favorites, recently viewed beaches, recent searches, default region, first-run records and more at once.",
+      "reset": "Reset device data"
+    },
+    "reset": {
+      "title": "Clear device data?",
+      "body": "This clears favorites, recently viewed beaches, past visit records, recent searches, default region, chosen activity, explore view and first-run records. This can't be undone.",
+      "keep": "Theme, motion and location settings, and the last sea information received, stay as they are.",
+      "permission": "This site can't clear your browser's location permission. To change it, use your browser settings.",
+      "confirm": "Clear",
+      "cancel": "Cancel",
+      "done": "Device data cleared"
+    }
+  },
+  "guide": {
+    "intro": "What Baradun checks and shows, and what to know before you head to the sea.",
+    "check": {
+      "title": "What we check",
+      "warningTitle": "5 sea-related warnings",
+      "warningBody": "We check whether KMA wind-wave, strong wind, typhoon, storm surge or tsunami warnings (advisory, warning or severe warning) are in effect for each beach's warning zone.",
+      "nearby": "Other warnings such as heavy rain, heat wave or cold wave don't change a beach's status; we show them only as nearby warnings.",
+      "timeTitle": "Measurement time",
+      "timeBody": "We check when wave height was measured. If wave height is more than 90 minutes late, we show Observation delayed.",
+      "noStation": "If there's no sensor within 20km in the same warning zone, we show only No nearby observation in place of the value.",
+      "controlTitle": "Access restrictions",
+      "controlBody": "Not checked · Check on-site notices."
+    },
+    "badges": {
+      "title": "What the badges mean",
+      "clear": "No warning",
+      "clearBody": "No sea-related warning was found. It doesn't mean it's safe.",
+      "warning": "Wind-wave advisory",
+      "warningBody": "We show the warning name as is. Avoid going into the sea and follow on-site guidance.",
+      "unknown": "Warnings not checked",
+      "unknownBody": "We couldn't check warnings, so we can't tell right now. It doesn't mean there are no warnings.",
+      "stale": "Observation delayed",
+      "staleBody": "Wave height measurements are late, so we can't tell right now. We'll check again when new values come in."
+    },
+    "period": {
+      "title": "Reading wave period",
+      "body": "Wave period is the time between one wave and the next. The longer the period, the more likely it's a big swell from far away, with more power.",
+      "note": "We don't set number-based thresholds. Please judge for yourself whether the waves suit you."
+    },
+    "safety": {
+      "title": "Safety rules by activity",
+      "intro": "Please follow these before going into the sea.",
+      "swimming": {
+        "title": "Swimming",
+        "rule1": "Swim only while lifeguards are on duty, inside the marked swimming area.",
+        "rule2": "Don't go in alone, and don't go in after drinking alcohol.",
+        "rule3": "Warm up first and wear a life jacket."
+      },
+      "surfing": {
+        "title": "Surfing",
+        "rule1": "Wear a leash and surf where it matches your skill.",
+        "rule2": "Don't surf alone, and keep your distance from others.",
+        "rule3": "If a current pulls you out, move parallel to the shore to get out of it."
+      },
+      "scuba": {
+        "title": "Scuba diving",
+        "rule1": "Dive within your certification and experience, with a buddy.",
+        "rule2": "Use a dive flag or buoy to show divers are below.",
+        "rule3": "Check your gear before diving and keep to your planned depth and time."
+      },
+      "official": "See official safety rules on the National Disaster Safety Portal",
+      "officialLink": "View water safety rules (Korean)"
+    }
+  },
+  "terms": {
+    "about": {
+      "title": "About the service",
+      "body1": "Baradun gathers KMA sea-related warnings and wave height measurement times for each beach.",
+      "body2": "We show only facts that can be checked. We don't judge activity suitability or recommend beaches."
+    },
+    "disclaimer": {
+      "title": "Disclaimer",
+      "body1": "Baradun doesn't guarantee that using the sea is safe. No warning doesn't mean it's safe either.",
+      "body2": "Information from official sources can be late or differ. Access restrictions aren't checked, so check on-site notices."
+    },
+    "privacy": {
+      "title": "Privacy",
+      "locationTitle": "Location",
+      "locationBody": "Used only to calculate distances on your device when finding nearby beaches. Never sent to a server or stored, and you can turn it off in Settings.",
+      "deviceTitle": "What's saved on your device",
+      "deviceBody": "Favorites, recently viewed beaches, recent searches, default region and display settings are saved only in this device's browser. There's no login and nothing is sent to a server. You can clear them in Settings › Reset device data.",
+      "inquiryTitle": "Data feedback",
+      "inquiryBody": "Feedback is kept for 90 days and photos for 30 days, then deleted automatically. Email is collected only if you leave it, and deleted as soon as handling is done (within 90 days at the latest). Photo location data is removed on your device before sending.",
+      "inquiryNoDeadline": "We don't promise a reply deadline."
+    },
+    "notice": "First-run notice version {version}",
+    "links": "More"
+  },
+  "dataSources": {
+    "intro": "The information on screen is built from the public data and map data below.",
+    "principles": {
+      "title": "How we show data",
+      "item1": "Measured values come with the station name, distance and measurement time; warnings come with scope, KMA and check time.",
+      "item2": "Units are m, °C and m/s in every language.",
+      "item3": "We don't change official values or make new ones. If a value is missing or late, we say so.",
+      "item4": "When development sample data is shown, it's marked as a sample on screen."
+    },
+    "provides": "Provides",
+    "terms": "Terms of use",
+    "kma": {
+      "name": "Korea Meteorological Administration (KMA)",
+      "provides": "Sea-related warnings (wind-wave, strong wind, typhoon, storm surge), tsunami warnings, ocean buoy and wave buoy observations (wave height, water temperature, wind, wave period, wave direction)",
+      "terms": "Public Data Portal license: Weather Warning Service is KOGL Type 1 (attribution); Earthquake Information Service has no restrictions. Buoy observations follow the KMA API Hub terms.",
+      "linkWarning": "Weather Warning Service",
+      "linkTsunami": "Earthquake Information Service",
+      "linkApiHub": "KMA API Hub"
+    },
+    "khoa": {
+      "name": "Korea Hydrographic and Oceanographic Agency (KHOA)",
+      "provides": "Surfing and skin-scuba point lists (names and coordinates only; index values aren't used), rip current index (only for beaches where provided)",
+      "terms": "Public Data Portal license: Rip Current Index is KOGL Type 1 (attribution).",
+      "linkRip": "Rip Current Index"
+    },
+    "tour": {
+      "name": "Korea Tourism Organization",
+      "provides": "Reference beach photos (TourAPI). Not the current sea.",
+      "terms": "We use only KOGL Type 1 (attribution) photos and show the source next to each photo. Beaches without a Type 1 photo show an illustration.",
+      "linkTour": "Korean Tourism Information Service",
+      "linkKogl": "About KOGL Type 1"
+    },
+    "mof": {
+      "name": "Ministry of Oceans and Fisheries",
+      "provides": "Designated beach list and operating periods (2026 beach designation and opening status)",
+      "terms": "We use materials published on the Ministry of Oceans and Fisheries website.",
+      "link": "2026 beach overview"
+    },
+    "map": {
+      "name": "Map",
+      "provides": "Map data © OpenStreetMap contributors, vector tiles © OpenMapTiles, tiles served by OpenFreeMap",
+      "terms": "OpenStreetMap data is under the ODbL, and attribution is shown on the map.",
+      "linkOsm": "OpenStreetMap copyright",
+      "linkOmt": "OpenMapTiles",
+      "linkOfm": "OpenFreeMap"
     }
   }
 }

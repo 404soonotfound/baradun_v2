@@ -3,14 +3,7 @@ import type { Locale } from "@/lib/i18n";
 import { CurrentActivity } from "@/components/current-activity";
 
 // 아직 화면이 없는 경로 (BRD-24)
-export type PageKey =
-  | "explore"
-  | "search"
-  | "settings"
-  | "inquiry"
-  | "guide"
-  | "dataSources"
-  | "terms";
+export type PageKey = "inquiry";
 
 export async function PlaceholderPage({
   locale,

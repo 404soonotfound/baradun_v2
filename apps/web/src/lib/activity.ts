@@ -16,6 +16,8 @@ const STORAGE_KEY = "baradun:activity";
 
 // 저장소를 못 쓰는 환경(사생활 보호 모드 등)에서도 이번 방문 동안은 유지되게 메모리에도 둠.
 let memory: Activity = DEFAULT_ACTIVITY;
+// 쓰기가 실패한 적 있음. 이후로는 저장소의 옛 값이 방금 고른 값을 덮지 않게 memory를 읽음
+let writeFailed = false;
 // 값이 바뀌면 부를 함수 모음. () => void = 인자 없이 부르고 돌려주는 값 없는 함수. Set이라 같은 함수 중복 등록 없음
 const listeners = new Set<() => void>();
 
@@ -24,6 +26,7 @@ function isActivity(value: unknown): value is Activity {
 }
 
 function read(): Activity {
+  if (writeFailed) return memory;
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
     return isActivity(stored) ? stored : memory;
@@ -49,8 +52,22 @@ export function setActivity(activity: Activity) {
   memory = activity;
   try {
     localStorage.setItem(STORAGE_KEY, activity);
+    writeFailed = false;
   } catch {
     // 저장 못 해도 memory로 이번 방문 동안은 유지
+    writeFailed = true;
+  }
+  listeners.forEach((listener) => listener());
+}
+
+// 기기 데이터 초기화(BRD-36): 저장값을 지우고 기본 활동(수영)으로
+export function clearActivity() {
+  memory = DEFAULT_ACTIVITY;
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+    writeFailed = false;
+  } catch {
+    writeFailed = true;
   }
   listeners.forEach((listener) => listener());
 }
