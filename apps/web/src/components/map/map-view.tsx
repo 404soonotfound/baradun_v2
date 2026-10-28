@@ -12,7 +12,7 @@ import { FIT_OPTIONS, type LngLatBox } from "@/lib/map/bounds";
 import type { MapHandle } from "@/lib/map/engine";
 import { prefersReducedMotion } from "@/lib/motion";
 import { initialMapLoad, mapLoadReducer } from "@/lib/map/map-load";
-import { MAP_ATTRIBUTIONS } from "@/lib/map/style";
+import { MAP_ATTRIBUTIONS } from "@/lib/map/attribution";
 import { useResolvedTheme } from "@/lib/theme";
 
 // 지도 틀 (BRD-65 · 결정 D8, 아키텍처 9장 '지도 불러오기'·16.4.3·16.4.5)
