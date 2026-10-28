@@ -183,7 +183,10 @@ test.describe("PC·모바일 같은 기능", () => {
     test(`${name}`, async ({ page }) => {
       await page.goto(name === "홈" ? "/explore/" : "/");
       await page.getByRole("link", { name, exact: true }).first().click();
-      await expect(page).toHaveURL(new RegExp(`${path}$`));
+      // 주소 끝만 맞추면 홈("/")은 어느 주소에서나 통과함 → 경로 전체를 비교
+      await expect
+        .poll(() => new URL(page.url()).pathname)
+        .toBe(path);
     });
   }
 
