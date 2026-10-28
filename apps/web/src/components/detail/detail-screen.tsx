@@ -49,12 +49,14 @@ export function DetailScreen({
   beaches,
   allBeachIds,
   sample,
+  sampleSnapshot,
 }: {
   locale: Locale;
   beach: Beach;
   beaches: BeachSummary[]; // 대안 해변 후보: 이 해변 제외 30km 안(노출 끈 해변 제외, listAltCandidates)
   allBeachIds: string[]; // 노출 중인 전체 해변 id(판단 출처 전체 장애 배너, listVisibleBeachIds)
   sample: boolean; // 개발용 예시 해변 목록
+  sampleSnapshot: boolean; // 개발용 예시 특보·관측값을 보는 중. 배포 빌드는 늘 false
 }) {
   const t = useTranslations();
   const snapshot = useSnapshot();
@@ -145,6 +147,15 @@ export function DetailScreen({
             className="rounded-card bg-bg-surface px-4 py-3 text-body-s text-text-body shadow-card"
           >
             {t("detail.sample")}
+          </p>
+        )}
+        {/* 예시 특보·관측값이 실제 확인 결과처럼 보이지 않게 판단 카드보다 먼저 둠 */}
+        {sampleSnapshot && (
+          <p
+            role="note"
+            className="rounded-card bg-bg-surface px-4 py-3 text-body-s text-text-body shadow-card"
+          >
+            {t("home.sampleSnapshot")}
           </p>
         )}
         <SituationBanner

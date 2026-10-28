@@ -11,6 +11,7 @@ import {
   listAltCandidates,
   listVisibleBeachIds,
 } from "@/lib/beaches";
+import { hasDevSampleSnapshot } from "@/lib/dev-sample";
 import { alternatesFor } from "@/lib/i18n";
 import { beachShareMetadata } from "@/lib/share-meta";
 
@@ -62,6 +63,7 @@ export default async function Page({ params }: Props) {
       beaches={listAltCandidates(found.beach, "en")}
       allBeachIds={listVisibleBeachIds()}
       sample={found.sample}
+      sampleSnapshot={hasDevSampleSnapshot()}
     />
   );
 }
