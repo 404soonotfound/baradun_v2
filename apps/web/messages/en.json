@@ -336,6 +336,10 @@
     "retry": "Try again",
     "retrying": "Checking again",
     "retryFailed": "Tried again but couldn't load new information",
+    "outage": "We're not receiving the official information we check",
+    "outageTime": "Last received {time}",
+    "outageTimeUnknown": "Last received time unknown",
+    "outageNext": "We'll check again as soon as it arrives · Follow on-site guidance",
     "delayed": "Wave height readings for {name} are delayed",
     "delayedMore": "Wave height readings for {name} and {count, plural, one {# other beach} other {# other beaches}} are delayed",
     "delayedBody": "We can't assess the current status · We'll check again when new readings come in"

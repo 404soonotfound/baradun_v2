@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { isDelayedView, pickSituation, shownDataTime } from "./situation";
+import {
+  isDelayedView,
+  pickSituation,
+  shownDataTime,
+  sourceOutage,
+} from "./situation";
 import type { BeachView } from "./snapshot/view";
 
 // 상황 배너 (BRD-28)
@@ -13,7 +18,9 @@ const base = {
   online: true,
   delayed: [] as string[],
   locationOff: false,
+  outage: null,
 };
+const OUTAGE = { lastConfirmedAt: "2026-10-27T05:05:00Z" };
 
 describe("pickSituation", () => {
   it("문제가 없으면 배너 없음", () => {
@@ -86,6 +93,39 @@ describe("pickSituation", () => {
     });
   });
 
+  it("판단 출처 전체 장애는 새로 받은 정보일 때만, 관측 지연·위치 배너보다 먼저", () => {
+    expect(
+      pickSituation({
+        ...base,
+        outage: OUTAGE,
+        delayed: ["사근진"],
+        locationOff: true,
+      }),
+    ).toEqual({ kind: "outage", lastConfirmedAt: OUTAGE.lastConfirmedAt });
+    expect(
+      pickSituation({ ...base, outage: { lastConfirmedAt: null } }),
+    ).toEqual({ kind: "outage", lastConfirmedAt: null });
+  });
+
+  it("전체 장애보다 오프라인·지원 밖 형식·불러오기 실패가 먼저, live가 아니면 장애 배너 없음", () => {
+    expect(pickSituation({ ...base, outage: OUTAGE, online: false })).toEqual({
+      kind: "offline",
+    });
+    expect(
+      pickSituation({ ...base, outage: OUTAGE, phase: "schema_unsupported" }),
+    ).toEqual({ kind: "unsupported" });
+    expect(
+      pickSituation({
+        ...base,
+        outage: OUTAGE,
+        live: false,
+        failedOnline: true,
+      }),
+    ).toEqual({ kind: "failed" });
+    // 첫 응답 전(저장된 값을 B5로 보는 중)
+    expect(pickSituation({ ...base, outage: OUTAGE, live: false })).toBeNull();
+  });
+
   it("점검·강제 업데이트 중에는 배너 없음(전체를 덮는 화면이 알림)", () => {
     for (const phase of ["maintenance", "update_required"] as const) {
       expect(
@@ -95,9 +135,106 @@ describe("pickSituation", () => {
           online: false,
           live: false,
           failedOnline: true,
+          outage: OUTAGE,
         }),
       ).toBeNull();
     }
+  });
+});
+
+describe("sourceOutage", () => {
+  type Ready = Extract<BeachView, { kind: "ready" }>;
+  const metrics: Ready["metrics"] = {
+    waveHeight: { kind: "hidden" },
+    wavePeriod: { kind: "hidden" },
+    waveDirection: { kind: "hidden" },
+    waterTemp: { kind: "hidden" },
+    wind: { kind: "hidden" },
+  };
+  const view = (
+    category: Ready["category"],
+    reasons: [Ready["badge"], ...Ready["badge"][]],
+    stale: boolean,
+    confirmedAt: string | null = null,
+  ): BeachView => ({
+    kind: "ready",
+    category,
+    badge: reasons[0],
+    reasons,
+    stale,
+    confirmedAt,
+    metrics,
+  });
+  const clear = view(
+    "clear",
+    [{ kind: "clear" }],
+    false,
+    "2026-10-27T05:20:00Z",
+  );
+  const active = view(
+    "unavailable",
+    [{ kind: "warning", type: "wind_wave", level: "advisory" }],
+    false,
+  );
+  const delayedOnly = view(
+    "undetermined",
+    [{ kind: "observation_delayed" }],
+    false,
+  );
+  const unknown = view(
+    "undetermined",
+    [{ kind: "warning_unknown" }],
+    false,
+    "2026-10-27T04:10:00Z",
+  );
+  const noData = view("undetermined", [{ kind: "unconfirmed" }], false);
+  const staleActive = view(
+    "unavailable",
+    [{ kind: "warning", type: "typhoon", level: "warning" }],
+    true,
+    "2026-10-27T04:40:00Z",
+  );
+  const staleUnknown = view(
+    "undetermined",
+    [{ kind: "warning_unknown" }],
+    true,
+  );
+
+  it("확인된 판단('특보 없음'·이용불가·관측 지연뿐인 판단불가)이 하나라도 있으면 장애 아님", () => {
+    expect(sourceOutage([unknown, clear])).toBeNull();
+    expect(sourceOutage([staleUnknown, active])).toBeNull();
+    expect(sourceOutage([noData, delayedOnly])).toBeNull();
+  });
+
+  it("모두 특보 확인 못 함·데이터 없음·만료(B5)면 장애. 마지막 정상 수신은 가장 늦은 확인 시각", () => {
+    expect(sourceOutage([unknown, staleActive, staleUnknown, noData])).toEqual({
+      lastConfirmedAt: "2026-10-27T04:40:00Z",
+    });
+  });
+
+  it("관측 지연과 특보 확인 못 함이 같이 있는 판단불가는 확인된 판단이 아님", () => {
+    expect(
+      sourceOutage([
+        view(
+          "undetermined",
+          [{ kind: "observation_delayed" }, { kind: "warning_unknown" }],
+          false,
+        ),
+      ]),
+    ).toEqual({ lastConfirmedAt: null });
+  });
+
+  it("만료(stale)된 '관측 지연뿐' 판단도 확인된 판단이 아님", () => {
+    expect(
+      sourceOutage([
+        view("undetermined", [{ kind: "observation_delayed" }], true),
+      ]),
+    ).toEqual({ lastConfirmedAt: null });
+  });
+
+  it("받은 해변이 없으면(로딩·노출 끔·빈 목록) 판단하지 않음", () => {
+    expect(sourceOutage([])).toBeNull();
+    expect(sourceOutage([{ kind: "loading" }, { kind: "hidden" }])).toBeNull();
   });
 });
 

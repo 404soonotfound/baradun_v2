@@ -37,7 +37,7 @@ import {
   regionName,
   validRegion,
 } from "@/lib/region-list";
-import { isDelayedView, pickSituation } from "@/lib/situation";
+import { isDelayedView, pickSituation, sourceOutage } from "@/lib/situation";
 import type { SnapshotState } from "@/lib/snapshot/store";
 import { useSnapshot } from "@/lib/snapshot/use-snapshot";
 import { deriveBeachView } from "@/lib/snapshot/view";
@@ -159,6 +159,12 @@ export function HomeScreen({
     online,
     delayed,
     locationOff: locationOff && !offBannerClosed,
+    // 판단 출처 전체 장애는 노출 중인 전체 해변으로 봄(지역·활동과 무관, BRD-38)
+    outage: sourceOutage(
+      beaches.map((beach) =>
+        deriveBeachView({ id: beach.id, hidden: false }, snapshot),
+      ),
+    ),
   });
 
   // 최근 본: 저장된 id 순서 그대로. 목록에 없는 id(노출 끈 해변)는 건너뜀(기기 기록은 지우지 않음)

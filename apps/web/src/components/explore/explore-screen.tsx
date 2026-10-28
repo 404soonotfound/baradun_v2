@@ -41,7 +41,7 @@ import {
   regionName,
   validRegion,
 } from "@/lib/region-list";
-import { pickSituation, shownDataTime } from "@/lib/situation";
+import { pickSituation, shownDataTime, sourceOutage } from "@/lib/situation";
 import { kstStamp } from "@/lib/snapshot/clock";
 import { useSnapshot } from "@/lib/snapshot/use-snapshot";
 import { useBadgeText } from "@/lib/snapshot/use-badge-text";
@@ -121,6 +121,12 @@ export function ExploreScreen({
     online,
     delayed: [],
     locationOff: false,
+    // 판단 출처 전체 장애는 노출 중인 전체 해변으로 봄(고른 지역·활동과 무관, BRD-38)
+    outage: sourceOutage(
+      beaches.map((beach) =>
+        deriveBeachView({ id: beach.id, hidden: false }, snapshot),
+      ),
+    ),
   });
   // 위치 배너는 아래에서 따로 그리므로(locationOff: false로 부름) 공용 배너에는 데이터 상황만 넘김
   const situation = picked?.kind === "noLocation" ? null : picked;
