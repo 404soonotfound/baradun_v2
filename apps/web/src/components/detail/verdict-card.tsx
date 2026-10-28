@@ -18,7 +18,7 @@ import { ReasonBadge } from "@/components/reason-badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { ZoneName } from "@/components/zone-name";
-import { joinMeta } from "@/lib/meta-join";
+import { joinMeta, META_SEPARATOR } from "@/lib/meta-join";
 import { kstStamp } from "@/lib/snapshot/clock";
 import {
   warningCheckState,
@@ -41,6 +41,9 @@ import {
 // ① 사유 배지(+ 운영 기간 아님 정보 배지) ② 결론 문장 ③ 근거(범위 → 기관 → 시각) ④ 사유 상자
 // ⑤ 확인한 것 3칸(특보 · 측정 시각 · 파고) ⑥ 현장 우선 문구. 분류는 view 그대로(G1)
 // '다음 측정 예정 시각'은 10/22 결정(nextExpectedAt 출시에서 항상 null)으로 두지 않음
+
+// 근거 줄 하나. text는 겹침 확인·React key, node는 화면에 그리는 것
+type BasisLine = { text: string; node: ReactNode };
 
 // 'YYYY-MM-DD' → '7/10'. 운영 기간 표시용(날짜만, 시간대 없음)
 function monthDay(date: string): string {
@@ -108,28 +111,39 @@ export function VerdictCard({
 
   // ③-1 근거 줄의 범위: 게시 값은 한국어 원문뿐(계약 reasons[].scope)
   // 특보·특보 확인 못 함(해변 바다 구역 이름)은 구역 번역표(없으면 원문 + 원문 표시), 관측 지연은 이 해변 측정소의 같은 언어 이름(못 찾으면 원문)
-  function scopeText(basis: Basis): string | null {
-    if (basis.scope === null || locale === "ko") return basis.scope;
+  // text: 같은 근거 줄을 한 번만 두기 위한 글자. node: 화면에 그릴 것(영어 화면에 남는 한국어 원문은 lang="ko")
+  function scopeText(basis: Basis): { text: string; node: ReactNode } | null {
+    if (basis.scope === null) return null;
+    const scope = basis.scope;
+    if (locale === "ko") return { text: scope, node: scope };
+    const korean = { text: scope, node: <span lang="ko">{scope}</span> };
     if (basis.code === "warning" || basis.code === "warning_unknown") {
-      const zone = zoneScopeText(basis.scope, locale);
-      return zone.untranslated
-        ? t.markup("warning.zoneOriginalInline", {
-            zone: () => zone.text,
-            note: (chunks) => chunks,
-          })
-        : zone.text;
+      const zone = zoneScopeText(scope, locale);
+      if (!zone.untranslated) return { text: zone.text, node: zone.text };
+      return {
+        text: t.markup("warning.zoneOriginalInline", {
+          zone: () => zone.text,
+          note: (chunks) => chunks,
+        }),
+        node: t.rich("warning.zoneOriginalInline", {
+          zone: () => <span lang="ko">{zone.text}</span>,
+          note: (chunks) => chunks,
+        }),
+      };
     }
     if (basis.code === "observation_delayed") {
       const station = Object.values(stations).find(
-        (item) => item?.name.ko === basis.scope,
+        (item) => item?.name.ko === scope,
       );
-      return station ? station.name[locale] : basis.scope;
+      return station
+        ? { text: station.name[locale], node: station.name[locale] }
+        : korean;
     }
-    return basis.scope;
+    return korean;
   }
 
   // ③ 근거 줄. B5면 'HH:MM 확인 · 이후 확인 못 함'만, '특보 없음'은 범위·기관·확인 시각이 모두 있을 때만
-  function basisText(basis: Basis): string | null {
+  function basisText(basis: Basis): BasisLine | null {
     let time: string | null = null;
     const stamp = kstStamp(basis.at, nowMs);
     if (basis.code === "warning") time = issuedAtText(basis.at, nowMs);
@@ -137,30 +151,43 @@ export function VerdictCard({
     else if (basis.code === "warning_unknown")
       time = confirmedUntilText(basis.at, nowMs);
     else if (stamp) time = t("detail.verdict.basisObserved", { time: stamp });
-    return joinMeta([
-      scopeText(basis),
-      basis.source && agencyText(basis.source),
-      time,
-    ]);
+    const scope = scopeText(basis);
+    const rest = joinMeta([basis.source && agencyText(basis.source), time]);
+    const text = joinMeta([scope?.text, rest]);
+    if (text === null) return null;
+    if (!scope || scope.text.trim() === "") return { text, node: text };
+    return {
+      text,
+      node: (
+        <>
+          {scope.node}
+          {rest !== null && `${META_SEPARATOR}${rest}`}
+        </>
+      ),
+    };
   }
-  const lines: string[] = [];
+  const lines: BasisLine[] = [];
+  const plain = (text: string): BasisLine => ({ text, node: text });
   if (view.stale) {
-    lines.push(confirmedUntilText(view.confirmedAt, nowMs));
+    lines.push(plain(confirmedUntilText(view.confirmedAt, nowMs)));
   } else if (view.category === "clear") {
     const time = kstStamp(view.confirmedAt, nowMs);
     if (time && detail.warningSource) {
       lines.push(
-        t("detail.verdict.clearBasis", {
-          source: agencyText(detail.warningSource),
-          time,
-        }),
+        plain(
+          t("detail.verdict.clearBasis", {
+            source: agencyText(detail.warningSource),
+            time,
+          }),
+        ),
       );
     }
   } else {
     for (const basis of detail.basis) {
       const line = basisText(basis);
       // 같은 구역·기관·시각의 특보 여러 개는 근거 줄이 같음 → 한 번만(React key도 겹치지 않게)
-      if (line && !lines.includes(line)) lines.push(line);
+      if (line && !lines.some((item) => item.text === line.text))
+        lines.push(line);
     }
   }
 
@@ -226,7 +253,7 @@ export function VerdictCard({
       {lines.length > 0 && (
         <ul className="flex flex-col gap-0.5 text-caption text-text-muted">
           {lines.map((line) => (
-            <li key={line}>{line}</li>
+            <li key={line.text}>{line.node}</li>
           ))}
         </ul>
       )}
