@@ -8,7 +8,7 @@ import type { Locale } from "@/lib/i18n";
 // 해변 상태나 측정값은 넣지 않음(정적 HTML, G4)
 
 type Source = {
-  key: "kma" | "khoa" | "tour" | "mof" | "map";
+  key: "kma" | "khoa" | "tour" | "mof" | "boundary" | "map";
   links: { label: string; href: string }[];
 };
 
@@ -55,6 +55,20 @@ const SOURCES: Source[] = [
       {
         label: "link",
         href: "https://www.mof.go.kr/doc/ko/selectDoc.do?menuSeq=427&bbsSeq=2&docSeq=67910",
+      },
+    ],
+  },
+  // 법정 읍면동 경계: 해변 → 특보 육상 구역 판정에만 씀. CC BY 2.0 KR 표시(저작자·제목·출처 링크·라이선스 링크·변경 여부) (BRD-126)
+  {
+    key: "boundary",
+    links: [
+      {
+        label: "link",
+        href: "https://www.vworld.kr/dtmk/dtmk_ntads_s002.do?svcCde=NA&dsId=21",
+      },
+      {
+        label: "linkLicense",
+        href: "https://creativecommons.org/licenses/by/2.0/kr/",
       },
     ],
   },
