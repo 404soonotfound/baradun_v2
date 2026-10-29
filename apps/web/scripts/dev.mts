@@ -4,9 +4,10 @@
 // off는 데이터를 만들지 않고 지난 개발 데이터를 지움(데이터 없음 상태 확인용).
 // 모드는 --data=off|sample|live 인자(운영체제 무관) 또는 BARADUN_DEV_DATA로 정함. 인자가 우선함.
 import { spawn, type ChildProcess } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
+import { parseEnv } from "node:util";
 
 import {
   clearDevData,
@@ -20,10 +21,6 @@ import {
   startLiveMirror,
 } from "./dev-live.mts";
 
-// apps/web/.env.local(git 제외)에 적은 BARADUN_DEV_DATA_ORIGIN 등을 읽음. 셸 환경변수가 우선함
-const localEnv = path.join(import.meta.dirname, "..", ".env.local");
-if (existsSync(localEnv)) process.loadEnvFile(localEnv);
-
 const DATA_FLAG = "--data=";
 const args = process.argv.slice(2);
 const flag = args.find((arg) => arg.startsWith(DATA_FLAG));
@@ -36,9 +33,21 @@ if (dataMode !== "off" && dataMode !== "sample" && dataMode !== "live") {
     `BARADUN_DEV_DATA는 off·sample·live 중 하나여야 해요: ${dataMode}`,
   );
 }
+// live 주소는 셸 환경변수, 없으면 apps/web/.env.local(git 제외)에서 찾음. 빈 값은 지정하지 않은 것으로 봄.
+// 파일에서는 이 값만 꺼내고 process.env에 넣지 않음(Next가 .env.* 파일을 자기 순서대로 읽게 둠).
+// BARADUN_DEV_ENV_FILE은 테스트가 개발자의 .env.local을 피할 때만 씀.
+function readLocalLiveOrigin(): string | undefined {
+  const file =
+    process.env.BARADUN_DEV_ENV_FILE ??
+    path.join(import.meta.dirname, "..", ".env.local");
+  if (!existsSync(file)) return undefined;
+  return parseEnv(readFileSync(file, "utf8"))[LIVE_ORIGIN_ENV];
+}
 // live 주소가 없거나 틀리면 개발 서버를 띄우기 전에 멈춤
 const liveOrigin =
-  dataMode === "live" ? parseLiveOrigin(process.env[LIVE_ORIGIN_ENV]) : null;
+  dataMode === "live"
+    ? parseLiveOrigin(process.env[LIVE_ORIGIN_ENV] || readLocalLiveOrigin())
+    : null;
 let server: ChildProcess | null = null;
 let stopRefresh = () => {};
 let stopping = false;
