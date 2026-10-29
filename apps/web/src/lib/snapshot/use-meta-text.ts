@@ -1,6 +1,7 @@
 import type { StationRef } from "@baradun/contracts";
 import { useLocale, useTranslations } from "next-intl";
 
+import { agencyKeyOf } from "@/lib/agencies";
 import { formatKm, joinMeta } from "@/lib/meta-join";
 
 import { useTimeText } from "@/lib/snapshot/use-time-text";
@@ -44,10 +45,11 @@ export function useMetaText() {
     return joinMeta([scope, source, issuedAtText(publishedAt, nowMs)]);
   }
 
-  // 기관 이름: 데이터 값(한국어 원문) 중 아는 기관만 문구 키로("기상청" → 영어 "KMA").
+  // 기관 이름: 데이터 값(한국어 원문) 중 아는 기관(lib/agencies 표)만 문구 키로("기상청" → 영어 "KMA").
   // 모르는 기관은 지어내지 않고 원문 그대로
   function agencyText(source: string): string {
-    return source === "기상청" ? t("observation.agency.kma") : source;
+    const key = agencyKeyOf(source);
+    return key ? t(`observation.agency.${key}`) : source;
   }
 
   return { observationMeta, warningMeta, stationText, agencyText };

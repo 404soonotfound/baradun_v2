@@ -36,6 +36,8 @@ export const WARNING_TYPES = [
   "storm_surge",
   "tsunami",
 ] as const satisfies readonly WarningType[];
+// 영어 이름표는 기상청 영문 특보 전문(CAP)을 따름: advisory · warning · severe_warning(중대경보) = 'emergency warning'
+// 계약 키 이름(severe)과 달리 영어 문구는 'severe'로 쓰지 않음(결정 37, BRD-125)
 export const WARNING_LEVELS = [
   "advisory",
   "warning",

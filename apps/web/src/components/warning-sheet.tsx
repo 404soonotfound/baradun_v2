@@ -32,6 +32,7 @@ export function WarningSheet({
   confirmedAt,
   stale,
   nowMs,
+  sourceShown,
 }: {
   open: boolean;
   onClose: () => void;
@@ -41,6 +42,7 @@ export function WarningSheet({
   confirmedAt: string | null; // 특보 마지막 확인 시각
   stale: boolean; // 새 정보를 못 받는 중(B5) → 'HH:MM 확인 · 이후 확인 못 함'
   nowMs: number;
+  sourceShown: boolean; // 출처 줄을 둘 실제 자료인지(개발용 예시면 false, showsKmaSource)
 }) {
   const t = useTranslations();
   const { badgeText, confirmedUntilText } = useBadgeText();
@@ -116,9 +118,12 @@ export function WarningSheet({
             <ExternalLink aria-hidden="true" size={14} />
             <span className="sr-only"> ({t("warningSheet.newWindow")})</span>
           </a>
-          <p className="border-t border-border-default pt-3 text-caption text-text-muted">
-            {t("safety.finalCall")}
-          </p>
+          <div className="flex flex-col gap-0.5 border-t border-border-default pt-3 text-caption text-text-muted">
+            <p>{t("safety.finalCall")}</p>
+            {/* 시트가 화면을 덮으므로 시트 안에도 출처(BRD-113 · 기상법). 확인 줄과 같은 실제 기관(agencyText:
+                기상청 → '출처: 기상청', 모르는 기관은 원문 그대로). 기관을 모르면(null) 지어내지 않고 두지 않음 */}
+            {sourceShown && agency && <p>{t("source.agency", { agency })}</p>}
+          </div>
         </div>
       )}
     </Sheet>

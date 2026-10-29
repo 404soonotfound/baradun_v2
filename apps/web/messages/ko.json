@@ -79,8 +79,15 @@
     "delayedShort": "늦어짐",
     "observedAt": "{time} 측정",
     "agency": {
-      "kma": "기상청"
+      "kma": "기상청",
+      "khoa": "국립해양조사원",
+      "kto": "한국관광공사"
     }
+  },
+  "source": {
+    "agency": "출처: {agency}",
+    "kmaStatus": "출처: 기상청 (특보·해양 관측 자료를 가공)",
+    "kmaBuoy": "출처: 기상청 (해양기상부이·파고부이 관측)"
   },
   "row": {
     "noValue": "파고 값 없음",
@@ -263,6 +270,8 @@
       "wave": "파도·바람",
       "warning": "특보",
       "waterTemp": "수온",
+      "ripCurrent": "이안류",
+      "ripCredit": "<link>국립해양조사원 「이안류 지수 조회」</link> · 공공누리 제1유형",
       "inquiry": "정보가 실제와 달라요"
     },
     "cta": {
@@ -274,13 +283,10 @@
   },
   "photo": {
     "alt": "{name} 사진",
-    "credit": "사진 출처: {source} · {license}",
-    "creditWithTitle": "사진 출처: {source}, 「{title}」 · {license}",
+    "credit": "사진 출처: <link>{source}</link> · {license}",
+    "creditWithTitle": "사진 출처: <link>{source}</link>, 「{title}」 · {license}",
     "license": {
       "kogl-type1": "공공누리 제1유형"
-    },
-    "sourceName": {
-      "kto": "한국관광공사"
     },
     "reference": "참고 사진 · 지금 바다 모습 아님",
     "none": "사진이 없어 일러스트로 보여드려요"
@@ -595,7 +601,7 @@
     "check": {
       "title": "무엇을 확인하나요",
       "warningTitle": "바다 관련 특보 5종",
-      "warningBody": "기상청이 발표한 풍랑·강풍·태풍·폭풍해일·지진해일 특보(주의보·경보·중대경보)가 해변 특보구역에 발효 중인지 확인해요.",
+      "warningBody": "기상청이 발표한 풍랑·강풍·태풍·폭풍해일·지진해일 특보(주의보·경보)가 해변 특보구역에 발효 중인지 확인해요.",
       "nearby": "호우·폭염·한파 같은 다른 특보는 해변 상태를 바꾸지 않고 '주변 특보'로만 보여줘요.",
       "timeTitle": "측정 시각",
       "timeBody": "파고를 언제 측정했는지 확인해요. 파고 측정이 90분 넘게 늦어지면 '관측 지연'으로 보여줘요.",
@@ -683,15 +689,17 @@
     "kma": {
       "name": "기상청",
       "provides": "바다 관련 특보(풍랑·강풍·태풍·폭풍해일), 지진해일 특보, 해양기상부이·파고부이 관측(파고·수온·바람·파주기·파향)",
-      "terms": "공공데이터포털 이용허락범위: 기상특보 조회서비스 공공누리 제1유형(출처 표시), 지진정보 조회서비스 제한 없음. 부이 관측은 기상청 API허브 이용 약관을 따라요.",
+      "terms": "기상법(2026-09-18 시행)에 따라 기상청 자료와 이를 활용한 정보(해변 상태 배지·측정값·그래프)를 보여주는 화면마다 '출처: 기상청'을 표시해요. 공공데이터포털 이용허락범위: 기상특보 조회서비스 공공누리 제1유형(출처 표시), 지진정보 조회서비스 제한 없음. 부이 관측은 기상청 API허브에서 받아요.",
       "linkWarning": "기상특보 조회서비스",
       "linkTsunami": "지진정보 조회서비스",
-      "linkApiHub": "기상청 API허브"
+      "linkApiHub": "기상청 API허브",
+      "linkGuide": "기상기후데이터 출처표시 안내"
     },
     "khoa": {
       "name": "국립해양조사원",
-      "provides": "서핑·스킨스쿠버 포인트 목록(이름·좌표만, 지수 값은 쓰지 않음), 이안류 지수(제공하는 해수욕장만)",
-      "terms": "공공데이터포털 이용허락범위: 이안류 지수 조회 공공누리 제1유형(출처 표시).",
+      "provides": "서핑 포인트 목록(이름·좌표만, 지수 값은 쓰지 않음), 이안류 지수(제공하는 해수욕장만)",
+      "terms": "공공데이터포털 이용허락범위: 서핑지수 조회·이안류 지수 조회 모두 공공누리 제1유형(출처 표시). 서핑 활동은 국립해양조사원 「서핑지수 조회」(공공누리 제1유형)의 포인트 이름·좌표만 근거로 보여줘요.",
+      "linkSurf": "서핑지수 조회",
       "linkRip": "이안류 지수 조회"
     },
     "tour": {
@@ -703,9 +711,10 @@
     },
     "mof": {
       "name": "해양수산부",
-      "provides": "해수욕장 지정 목록과 운영 기간(2026 해수욕장 지정 및 개장현황)",
-      "terms": "해양수산부 누리집에 공개된 자료를 써요.",
-      "link": "2026 해수욕장 주요 현황"
+      "provides": "해수욕장 지정 목록과 운영 기간(해수욕장 개폐장일정 정보), 해변 이름·위치(해수욕장정보 서비스)",
+      "terms": "공공데이터포털 이용허락범위: 해수욕장 개폐장일정 정보·해수욕장정보 서비스 모두 제한 없음.",
+      "linkSchedule": "해수욕장 개폐장일정 정보",
+      "linkBeachInfo": "해수욕장정보 서비스"
     },
     "boundary": {
       "name": "국토교통부",
@@ -716,11 +725,13 @@
     },
     "map": {
       "name": "지도",
-      "provides": "지도 데이터 © OpenStreetMap 기여자, 벡터 타일 © OpenMapTiles, 타일 제공 OpenFreeMap",
-      "terms": "OpenStreetMap 데이터는 ODbL을 따르고, 지도 위에 출처를 표시해요.",
+      "provides": "지도 데이터 © OpenStreetMap 기여자, 벡터 타일 © OpenMapTiles, 타일 제공 OpenFreeMap, 지도 스타일 Positron(OpenFreeMap 판을 고쳐 씀)",
+      "terms": "OpenStreetMap 데이터는 ODbL을 따르고, 지도 위에 출처를 표시해요. 지도 스타일 Positron은 Copyright (c) 2024, MapTiler.com & OpenMapTiles contributors · Copyright (c) 2015, CartoDB Inc.이며 코드는 BSD 3-Clause, 디자인은 CC-BY 4.0을 따라요. Positron은 Stamen과 Paul Norman이 CartoDB Inc.를 위해 디자인한 CartoDB Basemaps(CC-BY 3.0)에서 왔어요.",
       "linkOsm": "OpenStreetMap 저작권",
       "linkOmt": "OpenMapTiles",
-      "linkOfm": "OpenFreeMap"
+      "linkOfm": "OpenFreeMap",
+      "linkPositron": "Positron 스타일 라이선스",
+      "linkCarto": "CartoDB Basemaps"
     }
   },
   "inquiry": {

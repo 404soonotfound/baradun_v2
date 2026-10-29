@@ -4,14 +4,15 @@ import type { Beach } from "@baradun/contracts";
 import { CloudRain, Navigation, Phone, Star } from "lucide-react";
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
-import { useId } from "react";
+import { useId, type ReactNode } from "react";
 
 import { shownMetric, shownStation } from "@/components/detail/sea-card";
 import { ZoneName } from "@/components/zone-name";
+import { AGENCY, agencyKeyOf, SOURCE_URL } from "@/lib/agencies";
 import { cn } from "@/lib/cn";
 import { toggleFavorite, useFavorites } from "@/lib/favorites";
 import { localizedPath, type Locale } from "@/lib/i18n";
-import { joinMeta } from "@/lib/meta-join";
+import { joinMeta, META_SEPARATOR } from "@/lib/meta-join";
 import { kstStamp } from "@/lib/snapshot/clock";
 import type { DetailInfo } from "@/lib/snapshot/detail";
 import { useBadgeText } from "@/lib/snapshot/use-badge-text";
@@ -127,7 +128,10 @@ export function Call119({ className }: { className?: string }) {
   );
 }
 
-// 정보 출처 3행: 파도·바람 / 특보 / 수온(통제 행은 후속, G2). 측정소 이름·거리 + 시각
+// 정보 출처 3행: 파도·바람 / 특보 / 수온(통제 행은 후속, G2). 기관 + 측정소 이름·거리 + 시각
+// 기관(기상청)은 기상법 출처 표시(BRD-113): 받은 실제 상태가 있고(kmaSource) 측정소를 보일 때만.
+// 불러오는 중·처음부터 못 받음·개발용 예시에서는 측정소 이름(정적 목록)만 남고 기관을 붙이지 않음
+// 이안류를 받았으면 4행째: 국립해양조사원 원문 링크 + 공공누리 제1유형 + 발표 시각
 export function SourceList({
   locale,
   beachSlug,
@@ -135,6 +139,7 @@ export function SourceList({
   detail,
   stations,
   nowMs,
+  kmaSource,
 }: {
   locale: Locale;
   beachSlug: string;
@@ -142,11 +147,12 @@ export function SourceList({
   detail: DetailInfo;
   stations: Beach["stations"];
   nowMs: number;
+  kmaSource: boolean; // 받은 실제 상태가 있음(showsKmaSource)
 }) {
   const t = useTranslations();
   const { stationText, agencyText } = useMetaText();
   const titleId = useId();
-  const { measuredAgoText } = useTimeText();
+  const { measuredAgoText, issuedAtText } = useTimeText();
   const { confirmedUntilText } = useBadgeText();
 
   // 지표 하나의 시각 자리: n분 전 측정 / 늦어짐 / 가까운 관측 없음 / –
@@ -190,14 +196,23 @@ export function SourceList({
         : t("verdict.unknownWarning.title");
   }
 
-  const rows = [
+  // 받은 실제 상태가 있고 측정소가 있으면 앞에 관측 기관(sea_obs·kma_buoy 모두 기상청 API허브, 결정 기록 B1)
+  const sourced = kmaSource && view.kind === "ready";
+  function observed(keys: MetricKey[], timeKey: MetricKey): string | null {
+    const names = stationsOf(keys);
+    return joinMeta([
+      sourced && names ? agencyText(AGENCY.kma) : null,
+      names,
+      timeOf(timeKey),
+    ]);
+  }
+
+  const rip = detail.ripCurrent;
+  const rows: { key: string; label: string; text: ReactNode }[] = [
     {
       key: "wave",
       label: t("detail.sources.wave"),
-      text: joinMeta([
-        stationsOf(["waveHeight", "wavePeriod", "wind"]),
-        timeOf("waveHeight"),
-      ]),
+      text: observed(["waveHeight", "wavePeriod", "wind"], "waveHeight"),
     },
     {
       key: "warning",
@@ -210,9 +225,40 @@ export function SourceList({
     {
       key: "waterTemp",
       label: t("detail.sources.waterTemp"),
-      text: joinMeta([stationsOf(["waterTemp"]), timeOf("waterTemp")]),
+      text: observed(["waterTemp"], "waterTemp"),
     },
   ];
+  // 이안류(정보만, D5)를 받았을 때만. 제공 기간 아님·읽을 수 없음은 자료가 없어 행을 두지 않음
+  // 개발용 예시 값은 국립해양조사원 자료가 아니라 출처 행을 두지 않음(기상청 줄과 같은 조건)
+  if (sourced && rip !== null && rip !== "unknown") {
+    const time = issuedAtText(rip.publishedAt, nowMs);
+    rows.push({
+      key: "ripCurrent",
+      label: t("detail.sources.ripCurrent"),
+      // 아는 기관(국립해양조사원)만 원문 링크·공공누리 표시. 모르는 기관은 이름 원문 그대로(지어내지 않음)
+      text:
+        agencyKeyOf(rip.source) === "khoa" ? (
+          <>
+            {t.rich("detail.sources.ripCredit", {
+              link: (chunks) => (
+                <a
+                  href={SOURCE_URL.ripCurrent}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline underline-offset-2"
+                >
+                  {chunks}
+                  <span className="sr-only"> ({t("common.newWindow")})</span>
+                </a>
+              ),
+            })}
+            {time && `${META_SEPARATOR}${time}`}
+          </>
+        ) : (
+          joinMeta([agencyText(rip.source), time])
+        ),
+    });
+  }
 
   return (
     <section

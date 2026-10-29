@@ -8,6 +8,7 @@ import { useMemo, useRef } from "react";
 
 import { BeachRow } from "@/components/beach-row";
 import { SituationBanner } from "@/components/situation-banner";
+import { KmaSourceNote } from "@/components/source-note";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { BeachRowSkeleton } from "@/components/ui/skeleton";
@@ -22,6 +23,7 @@ import {
   useRecent,
 } from "@/lib/favorites";
 import { localizedPath, type Locale } from "@/lib/i18n";
+import { showsKmaSource } from "@/lib/kma-source";
 import { pickSituation, noConfirmedVerdict } from "@/lib/situation";
 import { kstStamp } from "@/lib/snapshot/clock";
 import { useRowText } from "@/lib/snapshot/use-row-text";
@@ -280,6 +282,10 @@ export function FavoritesScreen({
               </p>
             )}
             <p>{t("safety.finalCall")}</p>
+            {/* 기상청 출처(BRD-113 · 기상법). 받은 실제 상태가 있을 때만(개발용 예시 제외) */}
+            {showsKmaSource(snapshot, sampleSnapshot) && (
+              <KmaSourceNote variant="status" />
+            )}
           </div>
         </div>
       )}

@@ -1,10 +1,12 @@
 import { getTranslations } from "next-intl/server";
 
 import { ExternalLink, InfoSection } from "@/components/info/info-blocks";
+import { SOURCE_URL } from "@/lib/agencies";
 import type { Locale } from "@/lib/i18n";
 
 // 데이터 출처·이용 조건 /about/data/ (BRD-36 · 노션 2장 SRC, 결정 기록 11장 B1·B7·10/21 사진·10/23 운영 기간)
-// 출처마다 제공 항목·이용 조건·원문 링크. 이용 조건은 각 원문(공공데이터포털 '이용허락범위' 등)을 2026-10-28에 확인한 값(법정구역 경계 boundary는 2026-10-29)
+// 출처마다 제공 항목·이용 조건·원문 링크. 이용 조건은 각 원문(공공데이터포털 '이용허락범위' 등)을 2026-10-29에 확인한 값
+// (노션 '데이터 출처 · 공공 API 승인 현황' 이용 조건 원문 확인 절, 결정 19 · BRD-113·BRD-126)
 // 해변 상태나 측정값은 넣지 않음(정적 HTML, G4)
 
 type Source = {
@@ -25,24 +27,26 @@ const SOURCES: Source[] = [
         href: "https://www.data.go.kr/data/15000420/openapi.do",
       },
       { label: "linkApiHub", href: "https://apihub.kma.go.kr/" },
+      // 기상법 출처 표시 의무 안내(첨부 '기상기후데이터 출처표시 가이드')
+      {
+        label: "linkGuide",
+        href: "https://apihub.kma.go.kr/notice.do?seqNotice=57",
+      },
     ],
   },
   {
     key: "khoa",
     links: [
-      {
-        label: "linkRip",
-        href: "https://www.data.go.kr/data/15156028/openapi.do",
-      },
+      // 서핑 활동 근거(포인트 이름·좌표만, 지수 값은 쓰지 않음) 원문 링크. 결정 20(공공누리 제1유형 출처 표시)
+      { label: "linkSurf", href: SOURCE_URL.surfing },
+      // 상세 '정보 출처' 이안류 줄과 같은 원문 주소(lib/agencies)
+      { label: "linkRip", href: SOURCE_URL.ripCurrent },
     ],
   },
   {
     key: "tour",
     links: [
-      {
-        label: "linkTour",
-        href: "https://www.data.go.kr/data/15101578/openapi.do",
-      },
+      { label: "linkTour", href: SOURCE_URL.tourApi },
       {
         label: "linkKogl",
         href: "https://www.kogl.or.kr/info/licenseType1.do",
@@ -51,10 +55,16 @@ const SOURCES: Source[] = [
   },
   {
     key: "mof",
+    // 누리집 글은 공공누리 표시가 없어(저작권정책상 사전 협의 대상) 같은 자료를 '제한 없음'으로 개방한 공공데이터포털을 근거로 씀
     links: [
       {
-        label: "link",
-        href: "https://www.mof.go.kr/doc/ko/selectDoc.do?menuSeq=427&bbsSeq=2&docSeq=67910",
+        label: "linkSchedule",
+        href: "https://www.data.go.kr/data/15056091/fileData.do",
+      },
+      // 해변 이름·좌표 원본(OceansBeachInfoService1)
+      {
+        label: "linkBeachInfo",
+        href: "https://www.data.go.kr/data/15058519/openapi.do",
       },
     ],
   },
@@ -78,6 +88,16 @@ const SOURCES: Source[] = [
       { label: "linkOsm", href: "https://www.openstreetmap.org/copyright" },
       { label: "linkOmt", href: "https://openmaptiles.org/" },
       { label: "linkOfm", href: "https://openfreemap.org/" },
+      // 지도 스타일 고지(BSD 3-Clause 저작권 고지·조건, CC-BY 4.0 디자인). 저장소 사본: src/lib/map/LICENSE-positron.md
+      {
+        label: "linkPositron",
+        href: "https://github.com/openmaptiles/positron-gl-style/blob/master/LICENSE.md",
+      },
+      // Positron 디자인의 원본(Stamen·Paul Norman, CC-BY 3.0)
+      {
+        label: "linkCarto",
+        href: "https://github.com/CartoDB/CartoDB-basemaps",
+      },
     ],
   },
 ];

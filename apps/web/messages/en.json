@@ -47,11 +47,11 @@
     "level": {
       "advisory": "advisory",
       "warning": "warning",
-      "severe_warning": "severe warning"
+      "severe_warning": "emergency warning"
     },
     "nearbyType": {
       "heavy_rain": "Heavy rain",
-      "heat_wave": "Heatwave",
+      "heat_wave": "Heat",
       "cold_wave": "Cold wave",
       "heavy_snow": "Heavy snowfall",
       "dry": "Dryness",
@@ -79,8 +79,15 @@
     "delayedShort": "Delayed",
     "observedAt": "Measured {time}",
     "agency": {
-      "kma": "KMA"
+      "kma": "KMA",
+      "khoa": "KHOA",
+      "kto": "Korea Tourism Organization"
     }
+  },
+  "source": {
+    "agency": "Source: {agency}",
+    "kmaStatus": "Source: KMA (warnings and ocean observations, processed)",
+    "kmaBuoy": "Source: KMA (ocean and wave buoy observations)"
   },
   "row": {
     "noValue": "No wave height",
@@ -263,6 +270,8 @@
       "wave": "Waves and wind",
       "warning": "Warnings",
       "waterTemp": "Water temp",
+      "ripCurrent": "Rip current",
+      "ripCredit": "<link>KHOA “Rip Current Index”</link> · KOGL Type 1",
       "inquiry": "Info doesn't match reality"
     },
     "cta": {
@@ -274,13 +283,10 @@
   },
   "photo": {
     "alt": "Photo of {name}",
-    "credit": "Photo: {source} · {license}",
-    "creditWithTitle": "Photo: {source}, “{title}” · {license}",
+    "credit": "Photo: <link>{source}</link> · {license}",
+    "creditWithTitle": "Photo: <link>{source}</link>, “{title}” · {license}",
     "license": {
       "kogl-type1": "KOGL Type 1"
-    },
-    "sourceName": {
-      "kto": "Korea Tourism Organization"
     },
     "reference": "Reference photo · not the sea right now",
     "none": "No photo, so we're showing an illustration"
@@ -595,7 +601,7 @@
     "check": {
       "title": "What we check",
       "warningTitle": "5 sea-related warning types",
-      "warningBody": "We check whether a KMA wind wave, strong wind, typhoon, storm surge or tsunami warning (advisory, warning or severe warning) is in effect for each beach's warning zone.",
+      "warningBody": "We check whether a KMA wind wave, strong wind, typhoon, storm surge or tsunami warning (advisory or warning) is in effect for each beach's warning zone.",
       "nearby": "Other warnings such as heavy rain, heatwave or cold wave don't change a beach's status; we show them only under Nearby warnings.",
       "timeTitle": "Measurement time",
       "timeBody": "We check when wave height was measured. If the wave height reading is more than 90 minutes late, we show 'Observation delayed'.",
@@ -683,15 +689,17 @@
     "kma": {
       "name": "Korea Meteorological Administration (KMA)",
       "provides": "Sea-related warnings (wind wave, strong wind, typhoon, storm surge), tsunami warnings, ocean buoy and wave buoy observations (wave height, water temperature, wind, wave period, wave direction)",
-      "terms": "Public Data Portal license: Weather Warning Service is KOGL Type 1 (attribution); Earthquake Information Service has no restrictions. Buoy observations follow the KMA API Hub terms.",
+      "terms": "Under the Weather Act (in force from 2026-09-18), every screen that shows KMA data or information made from it (beach status badges, measured values, charts) shows “Source: KMA”. Public Data Portal license: Weather Warning Service is KOGL Type 1 (attribution); Earthquake Information Service has no restrictions. Buoy observations come from the KMA API Hub.",
       "linkWarning": "Weather Warning Service",
       "linkTsunami": "Earthquake Information Service",
-      "linkApiHub": "KMA API Hub"
+      "linkApiHub": "KMA API Hub",
+      "linkGuide": "KMA data attribution guide (in Korean)"
     },
     "khoa": {
       "name": "Korea Hydrographic and Oceanographic Agency (KHOA)",
-      "provides": "Surfing and skin-scuba point lists (names and coordinates only; index values aren't used), rip current index (only for beaches where provided)",
-      "terms": "Public Data Portal license: Rip Current Index is KOGL Type 1 (attribution).",
+      "provides": "Surfing point list (names and coordinates only; index values aren't used), rip current index (only for beaches where provided)",
+      "terms": "Public Data Portal license: Surfing Index and Rip Current Index are both KOGL Type 1 (attribution). Surfing is shown based only on point names and coordinates from KHOA “Surfing Index” (KOGL Type 1).",
+      "linkSurf": "Surfing Index",
       "linkRip": "Rip Current Index"
     },
     "tour": {
@@ -703,9 +711,10 @@
     },
     "mof": {
       "name": "Ministry of Oceans and Fisheries",
-      "provides": "Designated beach list and operating periods (2026 beach designation and opening status)",
-      "terms": "We use materials published on the Ministry of Oceans and Fisheries website.",
-      "link": "2026 beach overview"
+      "provides": "Designated beach list and operating periods (Beach Opening and Closing Schedule), beach names and locations (Beach Information Service)",
+      "terms": "Public Data Portal license: Beach Opening and Closing Schedule and Beach Information Service both have no restrictions.",
+      "linkSchedule": "Beach Opening and Closing Schedule",
+      "linkBeachInfo": "Beach Information Service"
     },
     "boundary": {
       "name": "Ministry of Land, Infrastructure and Transport (MOLIT)",
@@ -716,11 +725,13 @@
     },
     "map": {
       "name": "Map",
-      "provides": "Map data © OpenStreetMap contributors, vector tiles © OpenMapTiles, tiles served by OpenFreeMap",
-      "terms": "OpenStreetMap data is under the ODbL, and attribution is shown on the map.",
+      "provides": "Map data © OpenStreetMap contributors, vector tiles © OpenMapTiles, tiles served by OpenFreeMap, map style Positron (modified from the OpenFreeMap version)",
+      "terms": "OpenStreetMap data is under the ODbL, and attribution is shown on the map. The Positron map style is Copyright (c) 2024, MapTiler.com & OpenMapTiles contributors · Copyright (c) 2015, CartoDB Inc.; its code is under the BSD 3-Clause License and its design under CC-BY 4.0. Positron is derived from CartoDB Basemaps, designed by Stamen and Paul Norman for CartoDB Inc. (CC-BY 3.0).",
       "linkOsm": "OpenStreetMap copyright",
       "linkOmt": "OpenMapTiles",
-      "linkOfm": "OpenFreeMap"
+      "linkOfm": "OpenFreeMap",
+      "linkPositron": "Positron style license",
+      "linkCarto": "CartoDB Basemaps"
     }
   },
   "inquiry": {

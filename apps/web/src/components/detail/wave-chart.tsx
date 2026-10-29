@@ -3,6 +3,7 @@
 import { useTranslations } from "next-intl";
 import { useId } from "react";
 
+import { KmaSourceNote } from "@/components/source-note";
 import { Skeleton } from "@/components/ui/skeleton";
 import { kstStamp } from "@/lib/snapshot/clock";
 import { useStationHistory } from "@/lib/snapshot/history";
@@ -23,10 +24,12 @@ export function WaveChart({
   stationId,
   latest,
   nowMs,
+  sourceShown,
 }: {
   stationId: string | null; // 파고 측정소 id. 없으면(20km 밖) 기록도 없음
   latest: ChartPoint | null; // 실제 관측 시각으로 검증된 지금 파고. 지연·결측이면 null → 현재값 숨김
   nowMs: number;
+  sourceShown: boolean; // 그린 그래프에 기상청 출처 캡션을 둘지(개발용 예시면 false)
 }) {
   const t = useTranslations("detail.chart");
   const history = useStationHistory(stationId);
@@ -203,6 +206,8 @@ export function WaveChart({
             {since ? t("gapSince", { time: since }) : t("gaps")}
           </p>
         )}
+        {/* 그래프 아래 캡션 줄에 출처(BRD-113 · 기상청 출처표시 가이드 '표·그래프는 하단 캡션'). 그린 때만 */}
+        {sourceShown && <KmaSourceNote variant="buoy" />}
       </>
     );
   }

@@ -4,7 +4,9 @@ import type { Beach } from "@baradun/contracts";
 import { useTranslations } from "next-intl";
 
 import { shownMetric, shownStation } from "@/components/detail/sea-card";
+import { KmaSourceNote } from "@/components/source-note";
 import { Sheet } from "@/components/ui/sheet";
+import { AGENCY } from "@/lib/agencies";
 import { joinMeta } from "@/lib/meta-join";
 import { kstStamp } from "@/lib/snapshot/clock";
 import { warningCheckState, type DetailInfo } from "@/lib/snapshot/detail";
@@ -19,7 +21,7 @@ import type { BeachView } from "@/lib/snapshot/view";
 // 4항목(시안 S_M04_06): 특보 · 측정 시각 · 출입 통제 · 파고. 파고는 값과 측정 시각만, 맞는지는 사용자가 판단
 
 // 관측값 기관: 파고·수온·바람(sea_obs)·파주기·파향(kma_buoy) 모두 기상청 API허브(결정 기록 B1). 계약에 지표별 기관 칸은 없음
-const OBSERVATION_AGENCY = "기상청";
+const OBSERVATION_AGENCY = AGENCY.kma;
 
 export function DetailSheet({
   open,
@@ -28,6 +30,7 @@ export function DetailSheet({
   detail,
   stations,
   nowMs,
+  kmaData,
 }: {
   open: boolean;
   onClose: () => void;
@@ -35,6 +38,7 @@ export function DetailSheet({
   detail: DetailInfo;
   stations: Beach["stations"];
   nowMs: number;
+  kmaData: boolean; // 받은(또는 기기에 저장된) 상태가 있음 → 기상청 출처 줄
 }) {
   const t = useTranslations();
   const { confirmedUntilText } = useBadgeText();
@@ -162,9 +166,11 @@ export function DetailSheet({
             {t("detailSheet.periodBody")}
           </p>
         </section>
-        <p className="border-t border-border-default pt-3 text-caption text-text-muted">
-          {t("safety.finalCall")}
-        </p>
+        <div className="flex flex-col gap-0.5 border-t border-border-default pt-3 text-caption text-text-muted">
+          <p>{t("safety.finalCall")}</p>
+          {/* 시트가 화면을 덮으므로 시트 안에도 기상청 출처(BRD-113 · 기상법). 받은 자료가 없으면 두지 않음 */}
+          {kmaData && <KmaSourceNote variant="status" />}
+        </div>
       </div>
     </Sheet>
   );

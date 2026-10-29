@@ -206,6 +206,7 @@ function Gallery({
           detail={{ ...BASE, offSeason: null }}
           stations={STATIONS}
           nowMs={NOW}
+          kmaData
         />
         <WarningSheet
           open={sheet === "warning"}
@@ -216,6 +217,7 @@ function Gallery({
           confirmedAt={CLEAR.kind === "ready" ? CLEAR.confirmedAt : null}
           stale={false}
           nowMs={NOW}
+          sourceShown
         />
         <Column title="clear + off-season">
           <VerdictCard
@@ -224,6 +226,7 @@ function Gallery({
             detail={BASE}
             stations={STATIONS}
             nowMs={NOW}
+            kmaSource
           />
           <DetailActions beach={BEACH} view={CLEAR} />
         </Column>
@@ -234,6 +237,7 @@ function Gallery({
             detail={BLOCKED_DETAIL}
             stations={STATIONS}
             nowMs={NOW}
+            kmaSource
           />
           <DetailActions beach={BEACH} view={BLOCKED} />
           <AltBeaches
@@ -249,6 +253,7 @@ function Gallery({
             detail={{ ...BASE, warningConfirmedNone: false, offSeason: null }}
             stations={STATIONS}
             nowMs={NOW}
+            kmaSource
           />
           <VerdictCard
             beachId="b0003"
@@ -256,6 +261,7 @@ function Gallery({
             detail={{ ...BASE, offSeason: null }}
             stations={STATIONS}
             nowMs={NOW}
+            kmaSource
           />
           <VerdictCard
             beachId="b0002"
@@ -267,6 +273,7 @@ function Gallery({
             }}
             stations={STATIONS}
             nowMs={NOW}
+            kmaSource
           />
           <VerdictCard
             beachId="b0001"
@@ -274,6 +281,7 @@ function Gallery({
             detail={BASE}
             stations={STATIONS}
             nowMs={NOW}
+            kmaSource
           />
         </Column>
         <Column title="stats · figure · 119">

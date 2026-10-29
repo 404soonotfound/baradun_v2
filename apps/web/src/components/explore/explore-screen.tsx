@@ -14,6 +14,7 @@ import { MapLegend } from "@/components/map/map-legend";
 import { MapView } from "@/components/map/map-view";
 import { RegionSheet } from "@/components/region/region-sheet";
 import { SituationBanner } from "@/components/situation-banner";
+import { KmaSourceNote } from "@/components/source-note";
 import { Banner } from "@/components/ui/banner";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -42,6 +43,7 @@ import {
 } from "@/lib/explore-view";
 import { cn } from "@/lib/cn";
 import { localizedPath, type Locale } from "@/lib/i18n";
+import { showsKmaSource } from "@/lib/kma-source";
 import { locationBlocked, useUserLocation } from "@/lib/location";
 import { boundsOf } from "@/lib/map/bounds";
 import { formatKm, joinMeta } from "@/lib/meta-join";
@@ -285,6 +287,10 @@ export function ExploreScreen({
     ? clearScope(clearCheckedAt(readyViews))
     : null;
 
+  // 기상청 출처(BRD-113 · 기상법): 받은 실제 상태가 있을 때 목록 아래·지도 아래에 한 줄.
+  // 불러오는 중·처음부터 못 받음·개발용 예시는 숨김(showsKmaSource). 결과 없음은 목록 자리째 빈 화면이라 붙지 않음
+  const hasKmaData = showsKmaSource(snapshot, sampleSnapshot);
+
   const countText = t("explore.count", { count: items.length });
   const secondLabel = coords ? t("explore.sort.near") : t("explore.sort.name");
 
@@ -423,6 +429,7 @@ export function ExploreScreen({
                   {t("safety.finalCall")}
                 </p>
               )}
+              {hasKmaData && <KmaSourceNote variant="status" />}
             </div>
           ) : (
             <div className="flex flex-col gap-2">
@@ -434,6 +441,7 @@ export function ExploreScreen({
                   <p>{clearScope(clearCheckedAt(flatClearViews))}</p>
                 )}
                 <p>{t("safety.finalCall")}</p>
+                {hasKmaData && <KmaSourceNote variant="status" />}
               </div>
             </div>
           )}
@@ -465,6 +473,10 @@ export function ExploreScreen({
         <MapView
           locale={locale}
           bounds={mapBounds}
+          // 마커(해변 상태)를 그릴 때만 지도 아래 출처 줄에 기상청 출처
+          dataSource={
+            hasKmaData && markers.length > 0 ? t("source.kmaStatus") : null
+          }
           className="h-[62dvh] min-h-[380px] lg:h-[calc(100dvh-112px)]"
           onShowList={() => setExploreView("list")}
           overlay={(api) => (
