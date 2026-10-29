@@ -18,7 +18,10 @@ export function RegionPick({
   const t = useTranslations("home.region");
   return (
     <div className="flex flex-col gap-3 rounded-card bg-bg-surface p-[18px] shadow-card">
-      <p className="text-title-m text-text-default">{t("pickTitle")}</p>
+      {/* 홈에서 '가까운 바다' 제목 대신 이 묶음의 제목(home-screen의 aria-labelledby) */}
+      <h2 id="home-pick" className="text-title-m text-text-default">
+        {t("pickTitle")}
+      </h2>
       <p className="text-body-s text-text-body">{t("pickBody")}</p>
       {/* 칩 42px(size "lg"). 줄이 넘치면 다음 줄로 */}
       <div className="flex flex-wrap gap-2">

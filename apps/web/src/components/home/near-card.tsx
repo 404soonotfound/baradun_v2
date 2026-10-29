@@ -1,5 +1,6 @@
 "use client";
 
+import { ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 
@@ -16,6 +17,9 @@ import type { BeachView, MetricKey, MetricView } from "@/lib/snapshot/view";
 // 가까운 바다 카드 (노션 2장 HOME 7 · 3장 NearCard, Figma S_M01_01 171:379)
 // 해변명·지역·거리 + 상태 배지 → 파고·수온·바람 3칸 → 근거 줄(특보 범위 → 기관 → 시각, 지표별 측정소 → 관측 시각) + 현장 우선 문구
 // 상태는 view를 그대로 씀(G1). 값이 없으면 0이 아니라 "–"(hidden) 또는 '가까운 관측 없음'(none)
+// 모양 두 가지(Figma, BRD-129):
+//   compact(모바일 171:478): 이름·배지 한 줄 → 3칸 → 근거 줄 + 현장 우선 문구
+//   wide(PC 181:851): 이름 + › → 배지 → 큰 파고 + 나머지 지표 한 줄 → 근거 줄. 현장 우선 문구는 묶음 제목 줄(home-screen)
 
 // 카드에 보이는 지표 3칸(순서 = 칸 순서)
 const CARD_METRICS = [
@@ -24,19 +28,21 @@ const CARD_METRICS = [
   "wind",
 ] as const satisfies readonly MetricKey[];
 
-// [1] Vue: props: { locale, beach, distanceKm, view, nowMs }
+// [1] Vue: props: { locale, beach, distanceKm, view, nowMs, variant }
 export function NearCard({
   locale,
   beach,
   distanceKm,
   view,
   nowMs,
+  variant = "compact",
 }: {
   locale: Locale;
   beach: BeachSummary;
   distanceKm: number | null; // 위치가 없으면 null(거리 대신 지역만)
   view: BeachView;
   nowMs: number;
+  variant?: "compact" | "wide";
 }) {
   const t = useTranslations();
   const { confirmedUntilText } = useBadgeText();
@@ -76,13 +82,98 @@ export function NearCard({
       }
     }
   }
-  notes.push(t("safety.finalCall"));
+  // 현장 우선 문구: 모바일은 카드마다, PC는 카드 4장 위 묶음 제목 줄에 한 번(Figma 181:849)
+  if (variant === "compact") notes.push(t("safety.finalCall"));
 
-  // [4] 카드 전체가 상세로 가는 링크
+  const badge =
+    // 첫 응답 전에는 배지 자리만 회색으로(빈 배지나 '특보 없음'을 미리 보이지 않게)
+    view.kind === "ready" ? (
+      <ReasonBadge label={view.badge} />
+    ) : (
+      <Skeleton className="h-badge w-20 rounded-badge" />
+    );
+  const noteList = (
+    <span className="flex flex-col gap-0.5 border-t border-border-default pt-[11px] text-caption text-text-muted">
+      {notes.map((note) => (
+        <span key={note}>{note}</span>
+      ))}
+    </span>
+  );
+  const href = localizedPath(locale, `/spots/${beach.slug}/`);
+
+  // [4] PC: 큰 파고 + 나머지 지표 한 줄("파고 · 수온 21°C · 바람 3m/s")
+  if (variant === "wide") {
+    const wave = shownMetric("waveHeight");
+    // 파고가 '가까운 관측 없음'이면 그 문구에 지표 이름을 붙이고 이 줄에서는 뺌
+    const others = joinMeta([
+      wave?.kind === "none" ? null : t("observation.metric.waveHeight"),
+      ...CARD_METRICS.filter((key) => key !== "waveHeight").map((key) => {
+        const metric = shownMetric(key);
+        return metric?.kind === "value"
+          ? `${t(`observation.metric.${key}`)} ${metric.value}${metric.unit}`
+          : null;
+      }),
+    ]);
+    return (
+      <Link
+        href={href}
+        className="flex h-full flex-col gap-2.5 rounded-card bg-bg-surface px-4 pt-4 pb-3.5 shadow-card"
+      >
+        <span className="flex items-start justify-between gap-2">
+          <span className="flex min-w-0 flex-col gap-0.5">
+            <span className="truncate text-title-card text-text-default">
+              {beach.name}
+            </span>
+            {place && (
+              <span className="text-caption text-text-muted">{place}</span>
+            )}
+          </span>
+          <ChevronRight
+            aria-hidden="true"
+            size={16}
+            className="shrink-0 text-text-default"
+          />
+        </span>
+        <span className="flex">{badge}</span>
+        <span className="flex flex-wrap items-baseline gap-x-1.5">
+          {wave === null ? (
+            <Skeleton className="h-[30px] w-20" />
+          ) : wave.kind === "value" ? (
+            <>
+              <span className="text-num-card text-text-default">
+                {wave.value}
+              </span>
+              <span className="text-body font-bold text-text-default">
+                {wave.unit}
+              </span>
+            </>
+          ) : wave.kind === "none" ? (
+            <span className="text-body-s text-text-muted">
+              {joinMeta([
+                t("observation.metric.waveHeight"),
+                t("observation.none"),
+              ])}
+            </span>
+          ) : (
+            <span className="text-num-card text-text-muted">
+              <span aria-hidden="true">–</span>
+              <span className="sr-only">{t("home.near.noValue")}</span>
+            </span>
+          )}
+          {others && (
+            <span className="pl-1 text-caption text-text-muted">{others}</span>
+          )}
+        </span>
+        {noteList}
+      </Link>
+    );
+  }
+
+  // [5] 모바일: 카드 전체가 상세로 가는 링크
   return (
     <Link
-      href={localizedPath(locale, `/spots/${beach.slug}/`)}
-      className="h-full flex flex-col gap-3 rounded-card bg-bg-surface p-4 shadow-card"
+      href={href}
+      className="flex h-full flex-col gap-3 rounded-card bg-bg-surface p-4 shadow-raised"
     >
       <span className="flex items-start justify-between gap-3">
         <span className="flex min-w-0 flex-col gap-0.5">
@@ -93,12 +184,7 @@ export function NearCard({
             <span className="text-caption text-text-muted">{place}</span>
           )}
         </span>
-        {/* 첫 응답 전에는 배지 자리만 회색으로(빈 배지나 '특보 없음'을 미리 보이지 않게) */}
-        {view.kind === "ready" ? (
-          <ReasonBadge label={view.badge} />
-        ) : (
-          <Skeleton className="h-badge w-20 rounded-badge" />
-        )}
+        {badge}
       </span>
 
       <span className="grid grid-cols-3 divide-x divide-border-default">
@@ -113,16 +199,12 @@ export function NearCard({
         ))}
       </span>
 
-      <span className="flex flex-col gap-0.5 border-t border-border-default pt-2.5 text-caption text-text-muted">
-        {notes.map((note) => (
-          <span key={note}>{note}</span>
-        ))}
-      </span>
+      {noteList}
     </Link>
   );
 }
 
-// [5] 지표 한 칸. metric이 null이면 아직 불러오는 중(회색 상자)
+// [6] 지표 한 칸. metric이 null이면 아직 불러오는 중(회색 상자)
 function MetricCell({
   label,
   metric,
@@ -135,14 +217,14 @@ function MetricCell({
   empty: string; // "–"를 화면 읽기에서 읽어 줄 말
 }) {
   return (
-    <span className="flex flex-col gap-0.5 pl-3 first:pl-0">
+    <span className="flex flex-col pl-[13px] first:pl-0">
       <span className="text-caption text-text-muted">{label}</span>
       {metric === null ? (
         <Skeleton className="h-6 w-12" />
       ) : metric.kind === "value" ? (
         <span className="text-num-m font-bold text-text-default">
           {metric.value}
-          <span className="text-caption font-normal text-text-muted">
+          <span className="text-caption font-medium text-text-muted">
             {metric.unit}
           </span>
         </span>

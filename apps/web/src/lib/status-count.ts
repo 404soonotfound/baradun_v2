@@ -87,3 +87,25 @@ export function staleCheckedAt(
   const confirmedAt = oldestConfirmedAt(views, (view) => view.stale);
   return confirmedAt === undefined ? null : { confirmedAt };
 }
+
+// [8] 분류별 묶음 (PC 홈 히어로 상태 요약 카드 3장, Figma 181:819, BRD-129)
+// 칸 목록(countByStatus)을 분류 순서대로 다시 묶음. 해변이 없는 분류도 0곳으로 남김(보일지는 부르는 쪽이 정함)
+// 개수는 칸의 합이라 게시된 분류를 다시 계산하지 않음(G1)
+export type CategorySummary = {
+  category: Category;
+  count: number;
+  reasons: StatusCount[]; // 이 분류 안의 사유별 칸(먼저 나온 순)
+};
+
+export function summarizeByCategory(
+  counts: readonly StatusCount[],
+): CategorySummary[] {
+  return CATEGORY_ORDER.map((category) => {
+    const reasons = counts.filter((item) => item.category === category);
+    return {
+      category,
+      count: reasons.reduce((sum, item) => sum + item.count, 0),
+      reasons,
+    };
+  });
+}

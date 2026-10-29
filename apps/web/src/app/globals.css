@@ -37,6 +37,9 @@
     /* 한국어는 낱말 중간에서 줄을 바꾸지 않음. 아주 긴 주소 등은 넘치지 않게 끊음. */
     word-break: keep-all;
     overflow-wrap: anywhere;
+    /* PC 홈 히어로 띠를 화면 끝까지 넓힐 때(100vw) 세로 스크롤 막대 폭만큼 가로 스크롤이 생기지 않게 자름.
+       clip은 스크롤 영역을 만들지 않아 상단 내비 sticky에 영향 없음 (BRD-129) */
+    overflow-x: clip;
   }
 
   button,
@@ -49,6 +52,38 @@
     outline: 2px solid var(--color-brand-default);
     outline-offset: 2px;
   }
+}
+
+/* 홈 바다 배경 (노션 4장 1절 '바다 배경 (홈)', BRD-129). 색은 토큰(color.home.*)이라 다크에서 밤바다로 바뀜
+   모바일: 화면 맨 위부터 0·170·330·470·620px, PC 히어로: 0·40·75·100% */
+@utility bg-home-sky {
+  background-image: linear-gradient(
+    180deg,
+    var(--color-home-sky-1) 0,
+    var(--color-home-sky-2) 170px,
+    var(--color-home-sky-3) 330px,
+    var(--color-home-sky-4) 470px,
+    var(--color-bg-page) 620px
+  );
+}
+@utility bg-home-hero {
+  background-image: linear-gradient(
+    180deg,
+    var(--color-home-hero-1) 0%,
+    var(--color-home-hero-2) 40%,
+    var(--color-home-hero-3) 75%,
+    var(--color-home-hero-4) 100%
+  );
+}
+
+/* 다크 홈 물결: 아래로 흐려지는 마스크(노션 4장 7절). 물결 그림 아래 끝에 밝은 띠 경계가 생기지 않게 */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .home-wave-fade {
+    mask-image: linear-gradient(to bottom, #000 40%, transparent);
+  }
+}
+:root[data-theme="dark"] .home-wave-fade {
+  mask-image: linear-gradient(to bottom, #000 40%, transparent);
 }
 
 /* 스켈레톤 흐름 (토큰 animate.skeleton = skeleton 1.1s linear infinite) */
