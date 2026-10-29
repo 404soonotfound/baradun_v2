@@ -36,13 +36,13 @@ function dbfBuffer(fields: Field[], rows: (string | Buffer)[][]) {
   buf[buf.length - 1] = 0x1a;
   return buf;
 }
-// 정사각형 PolygonZ(유형 15) 레코드: x·y 뒤에 Z 범위·Z 값·M 범위·M 값이 붙음
-function shpBuffer(squares: [number, number][]) {
+// 정사각형 PolygonZ(유형 15) 레코드: x·y 뒤에 Z 범위·Z 값·M 범위·M 값이 붙음. PolyLineZ(13)도 배치가 같음
+function shpBuffer(squares: [number, number][], shapeType = 15) {
   const recs = squares.map(([x, y], i) => {
     const pts = [[x, y], [x, y + 10], [x + 10, y + 10], [x + 10, y], [x, y]];
     const xyLen = 44 + 4 + pts.length * 16;
     const content = Buffer.alloc(xyLen + 2 * (16 + pts.length * 8));
-    content.writeInt32LE(15, 0);
+    content.writeInt32LE(shapeType, 0);
     [x, y, x + 10, y + 10].forEach((v, k) => content.writeDoubleLE(v, 4 + k * 8));
     content.writeInt32LE(1, 36);
     content.writeInt32LE(pts.length, 40);
@@ -58,7 +58,7 @@ function shpBuffer(squares: [number, number][]) {
   });
   const header = Buffer.alloc(100);
   header.writeInt32BE(9994, 0);
-  header.writeInt32LE(15, 32);
+  header.writeInt32LE(shapeType, 32);
   return Buffer.concat([header, ...recs]);
 }
 
@@ -76,12 +76,12 @@ const KO = {
   송지면: Buffer.from("BCDBC1F6B8E9", "hex"),
 };
 const row = (cd: string, nm: string | Buffer, sgg: string) => ["1", cd, nm, "20261009", sgg];
-function fixture(rows: (string | Buffer)[][], { fields = FIELDS, squares = rows.map((_, i) => [i * 20, 0] as [number, number]) } = {}) {
+function fixture(rows: (string | Buffer)[][], { fields = FIELDS, squares = rows.map((_, i) => [i * 20, 0] as [number, number]), shapeType = 15 } = {}) {
   const root = mkdtempSync(join(tmpdir(), "brd126-emd-"));
   roots.push(root);
   const shp = join(root, "emd.shp");
   const dbf = join(root, "emd.dbf");
-  writeFileSync(shp, shpBuffer(squares));
+  writeFileSync(shp, shpBuffer(squares, shapeType));
   writeFileSync(dbf, dbfBuffer(fields, rows));
   return { shp, dbf, encoding: "euc-kr" };
 }
@@ -121,14 +121,31 @@ describe("법정구역정보 읍면동 층 읽기", () => {
     expect(() => readEmdBoundary(src, ["51"])).toThrow(/개수 불일치/);
   });
 
+  // 이름은 EUC-KR 바이트로 써서, 각 행이 의도한 검사 하나 때문에만 실패하게 함
   it.each([
-    ["읍면동 코드가 8자리가 아님", row("5115010", "교동", "51150")],
-    ["시군구 코드가 비어 있음", row("51150101", "교동", "")],
-    ["읍면동 이름이 비어 있음", row("51150101", "", "51150")],
-    ["읍면동 이름이 NUL로 채워짐(변동데이터 삭제 행 모양)", row("51150101", Buffer.alloc(20), "51150")],
-    ["읍면동 이름이 깨짐(인코딩 다름)", row("51150101", Buffer.from([0xff, 0xff, 0xff, 0xff]), "51150")],
-  ])("%s → 정상으로 넘기지 않고 중단", (_, r) => {
-    expect(() => readEmdBoundary(fixture([r]), ["51"])).toThrow(/형식 오류/);
+    ["읍면동 코드가 8자리가 아님", row("5115010", KO.교동, "51150"), /읍면동 코드 형식 오류/],
+    ["시군구 코드가 비어 있음", row("51150101", KO.교동, ""), /시군구 코드 형식 오류/],
+    ["읍면동 이름이 비어 있음", row("51150101", "", "51150"), /읍면동 이름 없음/],
+    ["읍면동 이름이 NUL로 채워짐(변동데이터 삭제 행 모양)", row("51150101", Buffer.alloc(20), "51150"), /읍면동 이름 없음/],
+    ["읍면동 이름이 깨짐(인코딩 다름)", row("51150101", Buffer.from([0xff, 0xff, 0xff, 0xff]), "51150"), /읍면동 이름 깨짐/],
+    ["읍면동 코드 앞 5자리와 시군구 코드가 다름", row("51150101", KO.교동, "51170"), /읍면동 코드와 시군구 코드가 다름/],
+    ["구 코드와 다른 시 코드", row("48125101", KO.교동, "48130"), /읍면동 코드와 시군구 코드가 다름/],
+  ] as [string, (string | Buffer)[], RegExp][])("%s → 정상으로 넘기지 않고 중단", (_, r, reason) => {
+    expect(() => readEmdBoundary(fixture([r]), ["51", "48"])).toThrow(reason);
+  });
+
+  it("구가 있는 시는 읍면동 코드의 구 코드와 A4의 시 코드를 같은 시로 봄", () => {
+    const out = readEmdBoundary(fixture([row("48125101", KO.교동, "48120")]), ["48"]);
+    expect(out.map((e) => [e.EMD_CD, e.COL_ADM_SE])).toEqual([["48125101", "48120"]]);
+  });
+
+  it("폴리곤이 아닌 도형(PolyLineZ 등)이면 중단", () => {
+    expect(() => readEmdBoundary(fixture([row("51150101", KO.교동, "51150")], { shapeType: 13 }), ["51"])).toThrow(/도형 유형 다름/);
+  });
+
+  it("해안 시·도 중 읍면동이 하나도 없는 시·도가 있으면(시·도 코드 체계 변경 등) 중단", () => {
+    const src = fixture([row("51150101", KO.교동, "51150"), row("46820250", KO.송지면, "46820")]);
+    expect(() => readEmdBoundary(src, ["51", "12"])).toThrow(/시·도 경계 없음: 12/);
   });
 
   it("레코드가 하나도 없으면 중단", () => {

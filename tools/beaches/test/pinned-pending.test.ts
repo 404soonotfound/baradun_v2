@@ -27,9 +27,9 @@ vi.mock("node:fs", async (importOriginal) => {
 it("고정 해시가 비어 있으면 '고정 해시 없음'으로 생성 중단", async () => {
   vi.resetModules();
   state.pinned = null;
-  const { verifyPinnedSources, EMD_SOURCE } = await import("../regions.mjs");
-  expect(EMD_SOURCE.label).toBe("$BARADUN_GIS_DIR/legal_area/EMD.shp");
-  expect(EMD_SOURCE.dbfLabel).toBe("$BARADUN_GIS_DIR/legal_area/EMD.dbf");
+  const { verifyPinnedSources, emdSource } = await import("../regions.mjs");
+  expect(emdSource().label).toBe("$BARADUN_GIS_DIR/legal_area/EMD.shp");
+  expect(emdSource().dbfLabel).toBe("$BARADUN_GIS_DIR/legal_area/EMD.dbf");
   expect(() => verifyPinnedSources("/fixture/input")).toThrow(/EMD\.shp\(고정 해시 없음\).*EMD\.dbf\(고정 해시 없음\)/);
 });
 
