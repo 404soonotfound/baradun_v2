@@ -10,6 +10,8 @@ import {
   writeFileSync,
 } from "node:fs";
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -100,11 +102,13 @@ function startDevCommand({
   outDir,
   mode,
   args = [],
+  extraEnv = {},
 }: {
   root: string;
   outDir: string;
-  mode?: "off" | "sample";
+  mode?: "off" | "sample" | "live";
   args?: string[];
+  extraEnv?: Record<string, string>;
 }): { child: ChildProcess; ready: string; stopped: string } {
   const fake = fakeNext(root);
   const env: NodeJS.ProcessEnv = {
@@ -114,6 +118,9 @@ function startDevCommand({
     FAKE_NEXT_READY: fake.ready,
     FAKE_NEXT_STOPPED: fake.stopped,
   };
+  // 개발자 셸에 export한 운영 주소가 시험에 섞이지 않게 함(필요한 시험만 extraEnv로 넣음)
+  delete env.BARADUN_DEV_DATA_ORIGIN;
+  Object.assign(env, extraEnv);
   if (mode) env.BARADUN_DEV_DATA = mode;
   else delete env.BARADUN_DEV_DATA;
   const child = spawn(
@@ -464,6 +471,73 @@ describe("개발 서버 실행", { timeout: 20_000 }, () => {
   });
 });
 
+describe("운영 snapshot 미러로 개발 서버 실행", { timeout: 20_000 }, () => {
+  it("운영 주소가 없으면 개발 서버를 띄우지 않고 실패함", async () => {
+    const { outDir } = fixture();
+    const root = path.dirname(outDir);
+    const { child, ready } = startDevCommand({ root, outDir, mode: "live" });
+
+    const code = await new Promise<number | null>((resolve) =>
+      child.once("exit", (exitCode) => resolve(exitCode)),
+    );
+    expect(code).not.toBe(0);
+    expect(existsSync(ready)).toBe(false);
+  });
+
+  it("live면 지난 예시를 지우고 운영 manifest를 미러한 뒤 개발 서버를 실행함", async () => {
+    const { examplesDir, outDir } = fixture();
+    const sampleVersion = writeDevData({ examplesDir, outDir });
+    const root = path.dirname(outDir);
+    // 운영 CloudFront 대신: 계약 예시를 /data/… 경로로 내보내는 로컬 서버
+    const source = readJson<ManifestFile>(
+      path.join(examplesDir, "manifest.json"),
+    );
+    const server = createServer((req, res) => {
+      const url = req.url ?? "";
+      const name =
+        url === "/data/manifest.json"
+          ? "manifest.json"
+          : url.startsWith(`/data/${source.snapshotVersion}/`)
+            ? path.basename(url)
+            : null;
+      const file = name && path.join(examplesDir, name);
+      if (!file || !existsSync(file)) {
+        res.writeHead(404).end();
+        return;
+      }
+      res.writeHead(200).end(readFileSync(file));
+    });
+    await new Promise<void>((resolve) =>
+      server.listen(0, "127.0.0.1", resolve),
+    );
+    const { port } = server.address() as AddressInfo;
+
+    try {
+      const { child, ready } = startDevCommand({
+        root,
+        outDir,
+        mode: "live",
+        extraEnv: { BARADUN_DEV_DATA_ORIGIN: `http://127.0.0.1:${port}` },
+      });
+      await waitForFile(ready);
+      // 표지는 manifest 교체 뒤에 쓰므로 표지가 보이면 게시가 끝난 것임
+      const modeFile = path.join(outDir, DEV_DATA_MODE_FILE);
+      await expect
+        .poll(() => existsSync(modeFile) && readFileSync(modeFile, "utf8"), {
+          timeout: 5_000,
+        })
+        .toBe("live\n");
+      expect(manifestAt(outDir).snapshotVersion).toBe(source.snapshotVersion);
+      expect(existsSync(path.join(outDir, source.snapshotVersion))).toBe(true);
+      expect(existsSync(path.join(outDir, sampleVersion))).toBe(false);
+      await stopChild(child);
+    } finally {
+      server.closeAllConnections();
+      await new Promise((resolve) => server.close(resolve));
+    }
+  });
+});
+
 describe("개발 실행 스크립트", () => {
   it("dev:no-data도 npm run dev를 거쳐 predev(토큰·지도 워커)를 실행함", () => {
     const { scripts } = readJson<{ scripts: Record<string, string> }>(
@@ -473,5 +547,6 @@ describe("개발 실행 스크립트", () => {
     expect(scripts.predev).toContain("npm run tokens");
     // 셸에 BARADUN_DEV_DATA=sample이 남아 있어도 정리 직후 예시를 다시 만들지 않게 off를 명시함
     expect(scripts["dev:no-data"]).toMatch(/&& npm run dev -- --data=off$/);
+    expect(scripts.live).toBe("npm run dev -- --data=live");
   });
 });
