@@ -51,7 +51,7 @@
     },
     "nearbyType": {
       "heavy_rain": "Heavy rain",
-      "heat_wave": "Heatwave",
+      "heat_wave": "Heat",
       "cold_wave": "Cold wave",
       "heavy_snow": "Heavy snowfall",
       "dry": "Dryness",
