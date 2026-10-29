@@ -277,10 +277,8 @@ export function HomeScreen({
 
       {/* [10] 머리: 모바일은 상단 줄 → 제목 → 배너 → 활동 타일, PC는 바다 띠(Figma 181:775)
           PC 띠는 화면 끝까지 넓히고(100vw) 안쪽 여백으로 본문 64px 선에 맞춤(본문 여백 40 + 24) */}
-      <section
-        aria-labelledby="home-title"
-        className="relative flex flex-col lg:mx-[calc(50%-50vw)] lg:bg-home-hero lg:px-[calc(50vw-50%+24px)] lg:pt-11 lg:pb-32"
-      >
+      {/* 묶음(section)이 아니라 머리 영역: 상태 요약의 근거·현장 우선 문구는 아래 가까운 바다 묶음과 함께 읽힘 */}
+      <div className="relative flex flex-col lg:mx-[calc(50%-50vw)] lg:bg-home-hero lg:px-[calc(50vw-50%+24px)] lg:pt-11 lg:pb-32">
         <HeroWaves />
         <HomeTopBar
           locale={locale}
@@ -343,7 +341,7 @@ export function HomeScreen({
             />
           </div>
         )}
-      </section>
+      </div>
 
       {/* [11] 아래 묶음. 모바일은 한 줄씩(최근 본 → 가까운 바다 → 해상 특보 → 안내)
           PC는 가까운 바다 3칸 전체 → 해상 특보 · 최근 본 · 안내 3단(Figma 424.6 : 339.7 : 339.7) */}

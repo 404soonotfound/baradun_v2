@@ -38,9 +38,8 @@ export function RegionCountCard({
   nowMs: number;
 }) {
   const t = useTranslations("home.region");
-  const tRoot = useTranslations();
   const { badgeText, confirmedUntilText } = useBadgeText();
-  // '특보 없음' 칸이 있으면 범위·기관·확인 시각. 현장 우선 문구는 개수가 나오면 늘(가까운 바다 카드와 같은 규칙)
+  // '특보 없음' 칸이 있으면 범위·기관·확인 시각(가까운 바다 카드와 같은 규칙)
   const hasClear =
     counts !== null && counts.some((item) => item.label.kind === "clear");
   const time = kstStamp(clearCheckedAt, nowMs);
@@ -83,7 +82,7 @@ export function RegionCountCard({
           })}
         </span>
       )}
-      {/* 순서: 특보 없음 범위 → 이후 확인 못 함 → 현장 우선 */}
+      {/* 순서: 특보 없음 범위 → 이후 확인 못 함. 현장 우선 문구는 같은 묶음의 가까운 바다 카드에 하나만(#105 결정 5) */}
       {counts !== null && (
         <span className="flex flex-col gap-0.5 text-caption text-text-muted">
           {hasClear && (
@@ -94,7 +93,6 @@ export function RegionCountCard({
           {hasStale && (
             <span>{confirmedUntilText(staleChecked.confirmedAt, nowMs)}</span>
           )}
-          <span>{tRoot("safety.finalCall")}</span>
         </span>
       )}
     </Link>

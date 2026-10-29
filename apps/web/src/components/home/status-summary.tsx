@@ -18,7 +18,7 @@ import {
 // 개수는 게시된 분류·사유 그대로(lib/status-count.ts, G1). 판단불가 카드는 점선 테두리(노션 4장 판단 상태 규칙, 색은 Figma border-note)
 // 카드 전체가 탐색으로 가는 링크. 해변이 없는 분류 카드는 그리지 않음
 // ('특보 없음 0곳'처럼 확인된 해변이 없는데 '특보 없음' 글자가 크게 보이지 않게, 오프라인·확인 실패 때 특히)
-// 판단 요약이라 카드 아래에 현장 우선 문구를 둠(노션 공통 규칙)
+// 현장 우선 문구는 바로 아래 가까운 바다 제목 줄에 하나만 둠(#105 결정 5, Figma 181:849)
 
 // 분류마다 아이콘·색. Tailwind가 클래스 이름을 글자 그대로 찾도록 이어 붙이지 않고 다 적음
 const LOOK: Record<
@@ -57,7 +57,7 @@ export function StatusSummary({
   nowMs: number;
 }) {
   const t = useTranslations("home.hero");
-  const tRoot = useTranslations(); // home.region.countLoading · safety.finalCall
+  const tRoot = useTranslations(); // home.region.countLoading
   const { badgeText, confirmedUntilText } = useBadgeText();
 
   // [1] 불러오는 중: 카드 자리만(개수를 미리 보이지 않음)
@@ -135,12 +135,11 @@ export function StatusSummary({
           })}
       </ul>
       {/* 오프라인·만료로 오래된 해변이 있으면 'HH:MM 확인 · 이후 확인 못 함'(B5, 지역 개수 카드와 같은 규칙) */}
-      <p className="flex flex-col text-caption text-text-muted">
-        {staleChecked !== null && (
-          <span>{confirmedUntilText(staleChecked.confirmedAt, nowMs)}</span>
-        )}
-        <span>{tRoot("safety.finalCall")}</span>
-      </p>
+      {staleChecked !== null && (
+        <p className="text-caption text-text-muted">
+          {confirmedUntilText(staleChecked.confirmedAt, nowMs)}
+        </p>
+      )}
     </div>
   );
 }
