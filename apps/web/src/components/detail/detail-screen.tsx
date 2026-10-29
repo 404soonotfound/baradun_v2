@@ -54,7 +54,7 @@ export function DetailScreen({
   locale: Locale;
   beach: Beach;
   beaches: BeachSummary[]; // 대안 해변 후보: 이 해변 제외 30km 안(노출 끈 해변 제외, listAltCandidates)
-  allBeachIds: string[]; // 노출 중인 전체 해변 id(판단 출처 전체 장애 배너, listVisibleBeachIds)
+  allBeachIds: string[]; // 노출 중인 전체 해변 id(확인된 판단 없음 배너, listVisibleBeachIds)
   sample: boolean; // 개발용 예시 해변 목록
   sampleSnapshot: boolean; // 개발용 예시 특보·관측값을 보는 중. 배포 빌드는 늘 false
 }) {
@@ -107,7 +107,7 @@ export function DetailScreen({
     online,
     delayed: [],
     locationOff: false,
-    // 판단 출처 전체 장애는 노출 중인 전체 해변으로 봄(대안 후보 30km 안만이 아님, BRD-38)
+    // 확인된 판단 없음은 노출 중인 전체 해변으로 봄(대안 후보 30km 안만이 아님, BRD-38)
     outage: sourceOutage(
       allBeachIds.map((id) => deriveBeachView({ id, hidden: false }, snapshot)),
     ),

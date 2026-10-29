@@ -4,7 +4,7 @@ import type { BeachView } from "@/lib/snapshot/view";
 
 // 상황 배너 고르기 (BRD-28 · 노션 2장 HOME 3 '상황 배너(있을 때만 하나)', 3장 Banner '화면당 하나만')
 // 홈·탐색·상세가 함께 씀. 화면마다 다른 것은 입력(delayed·locationOff)뿐
-// 순서: 오프라인 → 지원 밖 형식 → 새 정보 불러오기 실패 → 판단 출처 전체 장애 → 관측 지연 → 위치 없이 보는 중
+// 순서: 오프라인 → 지원 밖 형식 → 새 정보 불러오기 실패 → 확인된 판단 없음 → 관측 지연 → 위치 없이 보는 중
 // 받은 정보가 오래됐거나 읽을 수 없다는 사실을 가장 먼저(오래된 값을 최신처럼 보이지 않게)
 // 전체 장애(BRD-38, 노션 2장 SYS·1장 L13)는 노션 우선순위 목록에 없어 임시안: 받기는 했지만(live) 확인된 판단이 없음 →
 // 우리 쪽 조회 실패(failed)보다 뒤, 해변 하나의 관측 지연보다 앞
@@ -31,7 +31,7 @@ export function pickSituation<B>(input: {
   online: boolean; // 브라우저 연결 상태(useOnline)
   delayed: readonly B[]; // 화면 해변 중 배지가 '관측 지연'인 해변
   locationOff: boolean; // 위치 없이 지역으로 보는 중이고 배너를 닫지 않음
-  outage: Outage | null; // 판단 출처 전체 장애(sourceOutage). 전체 해변으로 계산함
+  outage: Outage | null; // 확인된 판단 없음(sourceOutage). 전체 해변으로 계산함
 }): Situation<B> {
   // 점검·강제 업데이트는 화면 전체를 덮는 쪽(BRD-38)이 알림
   if (input.phase === "maintenance" || input.phase === "update_required") {
