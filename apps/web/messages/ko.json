@@ -79,8 +79,14 @@
     "delayedShort": "늦어짐",
     "observedAt": "{time} 측정",
     "agency": {
-      "kma": "기상청"
+      "kma": "기상청",
+      "khoa": "국립해양조사원"
     }
+  },
+  "source": {
+    "kma": "출처: 기상청",
+    "kmaStatus": "출처: 기상청 (특보·해양 관측 자료를 가공)",
+    "kmaBuoy": "출처: 기상청 (해양기상부이·파고부이 관측)"
   },
   "row": {
     "noValue": "파고 값 없음",
@@ -263,6 +269,8 @@
       "wave": "파도·바람",
       "warning": "특보",
       "waterTemp": "수온",
+      "ripCurrent": "이안류",
+      "ripCredit": "<link>국립해양조사원 「이안류 지수 조회」</link> · 공공누리 제1유형",
       "inquiry": "정보가 실제와 달라요"
     },
     "cta": {

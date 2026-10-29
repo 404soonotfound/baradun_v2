@@ -79,8 +79,14 @@
     "delayedShort": "Delayed",
     "observedAt": "Measured {time}",
     "agency": {
-      "kma": "KMA"
+      "kma": "KMA",
+      "khoa": "KHOA"
     }
+  },
+  "source": {
+    "kma": "Source: KMA",
+    "kmaStatus": "Source: KMA (warnings and ocean observations, processed)",
+    "kmaBuoy": "Source: KMA (ocean and wave buoy observations)"
   },
   "row": {
     "noValue": "No wave height",
@@ -263,6 +269,8 @@
       "wave": "Waves and wind",
       "warning": "Warnings",
       "waterTemp": "Water temp",
+      "ripCurrent": "Rip current",
+      "ripCredit": "<link>KHOA “Rip Current Index”</link> · KOGL Type 1",
       "inquiry": "Info doesn't match reality"
     },
     "cta": {

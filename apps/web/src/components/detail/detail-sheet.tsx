@@ -4,6 +4,7 @@ import type { Beach } from "@baradun/contracts";
 import { useTranslations } from "next-intl";
 
 import { shownMetric, shownStation } from "@/components/detail/sea-card";
+import { KmaSourceNote } from "@/components/source-note";
 import { Sheet } from "@/components/ui/sheet";
 import { joinMeta } from "@/lib/meta-join";
 import { kstStamp } from "@/lib/snapshot/clock";
@@ -162,9 +163,11 @@ export function DetailSheet({
             {t("detailSheet.periodBody")}
           </p>
         </section>
-        <p className="border-t border-border-default pt-3 text-caption text-text-muted">
-          {t("safety.finalCall")}
-        </p>
+        <div className="flex flex-col gap-0.5 border-t border-border-default pt-3 text-caption text-text-muted">
+          <p>{t("safety.finalCall")}</p>
+          {/* 시트가 화면을 덮으므로 시트 안에도 기상청 출처(BRD-113 · 기상법) */}
+          <KmaSourceNote variant="status" />
+        </div>
       </div>
     </Sheet>
   );

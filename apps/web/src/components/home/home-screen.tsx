@@ -18,6 +18,7 @@ import { RegionPick } from "@/components/home/region-pick";
 import { SectionHead } from "@/components/home/section-head";
 import { RegionSheet } from "@/components/region/region-sheet";
 import { SituationBanner } from "@/components/situation-banner";
+import { KmaSourceNote } from "@/components/source-note";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useActivity } from "@/lib/activity";
@@ -301,6 +302,12 @@ export function HomeScreen({
       <div className="lg:order-4">
         <GuideLink locale={locale} />
       </div>
+
+      {/* 기상청 출처(BRD-113 · 기상법). 카드·개수·해상 특보가 기상청 자료로 만든 것이라 홈 맨 아래 한 줄
+          받은(또는 기기에 저장된) 상태가 있을 때만. 불러오는 중·처음부터 못 받음은 기상청 자료가 화면에 없어 숨김 */}
+      {snapshot.statuses !== null && (
+        <KmaSourceNote variant="status" className="lg:order-5 lg:col-span-3" />
+      )}
 
       {/* 지역 고르기 시트. 고르면 기기에 저장하고 닫음 */}
       <RegionSheet
