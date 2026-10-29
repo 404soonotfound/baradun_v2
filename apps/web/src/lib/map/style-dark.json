@@ -1117,6 +1117,7 @@
       },
       "paint": {
         "text-color": "#8FA0B3",
+        "text-halo-color": "rgba(12, 20, 29, 0.8)",
         "text-halo-blur": 0.5,
         "text-halo-width": 1
       }

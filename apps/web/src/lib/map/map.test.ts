@@ -106,8 +106,8 @@ describe.each(["light", "dark"] as const)("buildMapStyle(%s)", (theme) => {
 });
 
 // 다크 지도 (BRD-44): 라이트 포크와 같은 원칙(같은 레이어·라벨·출처), 색만 다름
-type Layer = (typeof lightStyle.layers)[number];
-function withoutColors(layer: Layer) {
+// 라이트·다크 레이어 타입이 다를 수 있어(다크에만 있는 색 칸, 예: 도로 이름 halo) 공통 모양으로 받음
+function withoutColors(layer: { paint?: object }) {
   const paint = Object.fromEntries(
     Object.entries(layer.paint ?? {}).filter(([key]) => !key.includes("color")),
   );
@@ -126,7 +126,11 @@ function contrast(a: string, b: string) {
   const [x, y] = [luminance(a), luminance(b)];
   return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
 }
-function paintColor(style: typeof darkStyle, id: string, key: string) {
+function paintColor(
+  style: { layers: readonly { id: string; paint?: unknown }[] },
+  id: string,
+  key: string,
+) {
   const layer = style.layers.find((item) => item.id === id);
   return (layer?.paint as Record<string, unknown> | undefined)?.[key] as string;
 }
@@ -173,6 +177,37 @@ describe("style-dark.json", () => {
     for (const id of ["label_city", "label_town", "label_village"]) {
       expect(
         contrast(paintColor(darkStyle, id, "text-color"), land),
+      ).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  it("도로 이름은 가장 밝은 다크 도로 위에서도 글자 뒤 바탕(halo)과 4.5:1 이상", () => {
+    // 도로 이름은 도로 선 위에 그려짐(symbol-placement: line) → 바탕은 땅이 아니라 도로 면.
+    // halo(반투명 어두운 바탕)를 가장 밝은 도로(고속도로 안쪽 선) 위에 겹친 색과 비교함
+    const halo = paintColor(darkStyle, "highway-name-major", "text-halo-color");
+    const [r, g, b, alpha] = (halo.match(/[\d.]+/g) ?? []).map(Number);
+    const motorway = darkStyle.layers.find(
+      (layer) => layer.id === "highway_motorway_inner",
+    )?.paint as Record<string, unknown[]>;
+    const roads = [
+      motorway["line-color"]!.at(-1) as string, // 확대했을 때 값
+      paintColor(darkStyle, "highway_major_inner", "line-color"),
+    ];
+    for (const road of roads) {
+      const mixed = `#${[r, g, b]
+        .map((channel, index) => {
+          const under = parseInt(road.slice(1 + index * 2, 3 + index * 2), 16);
+          return Math.round(channel! * alpha! + under * (1 - alpha!))
+            .toString(16)
+            .padStart(2, "0");
+        })
+        .join("")}`;
+      expect(
+        contrast(
+          paintColor(darkStyle, "highway-name-major", "text-color"),
+          mixed,
+        ),
+        road,
       ).toBeGreaterThanOrEqual(4.5);
     }
   });
