@@ -47,7 +47,7 @@
     "level": {
       "advisory": "advisory",
       "warning": "warning",
-      "severe_warning": "severe warning"
+      "severe_warning": "emergency warning"
     },
     "nearbyType": {
       "heavy_rain": "Heavy rain",
@@ -595,7 +595,7 @@
     "check": {
       "title": "What we check",
       "warningTitle": "5 sea-related warning types",
-      "warningBody": "We check whether a KMA wind wave, strong wind, typhoon, storm surge or tsunami warning (advisory, warning or severe warning) is in effect for each beach's warning zone.",
+      "warningBody": "We check whether a KMA wind wave, strong wind, typhoon, storm surge or tsunami warning (advisory, warning or emergency warning) is in effect for each beach's warning zone.",
       "nearby": "Other warnings such as heavy rain, heatwave or cold wave don't change a beach's status; we show them only under Nearby warnings.",
       "timeTitle": "Measurement time",
       "timeBody": "We check when wave height was measured. If the wave height reading is more than 90 minutes late, we show 'Observation delayed'.",
