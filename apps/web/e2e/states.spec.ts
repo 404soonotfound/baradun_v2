@@ -252,10 +252,10 @@ test.describe("404", () => {
       await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
       // 무슨 일 → 이유 → 다음 행동, 행동 버튼은 이름으로 찾음(결정 3)
       await expect(
-        page.getByText("해변 이름으로 검색하거나 홈에서 다시 찾아보세요"),
+        page.getByText("해변 이름으로 검색하거나 홈에서 둘러보세요"),
       ).toBeVisible();
       await expect(
-        page.getByText("Search by beach name or find it again from home"),
+        page.getByText("Search by beach name or browse from home"),
       ).toBeVisible();
       await expect(
         page.getByRole("link", { name: "해변 검색하기" }),
