@@ -40,6 +40,8 @@ const TEXT = {
     defaultRegion: "기본 지역",
     clearRegion: "기본 지역 지우기",
     gangneung: "강원 강릉시",
+    sortNear: "가까운 순",
+    showAll: "전국 보기",
   },
   en: {
     home: "/en/",
@@ -68,6 +70,8 @@ const TEXT = {
     defaultRegion: "Default region",
     clearRegion: "Clear default region",
     gangneung: "Gangwon Gangneung",
+    sortNear: "Nearest",
+    showAll: "Show all Korea",
   },
 } as const;
 
@@ -316,6 +320,79 @@ for (const locale of ["ko", "en"] as const) {
           page.getByRole("button", { name: text.clearRegion }),
         ).toBeVisible();
       });
+    });
+  });
+
+  // 탐색 '전국' = 전국을 고름(10/29 결정 B). 홈도 위치와 관계없이 전국, '내 주변'으로 가까운 바다
+  test.describe(`${locale} · 탐색 전국 · 위치 허용`, () => {
+    const coords = coordsOf(CLEAR_ID);
+    test.use({
+      deviceLanguage: locale,
+      permissions: ["geolocation"],
+      ...(coords && {
+        geolocation: { latitude: coords.lat, longitude: coords.lng },
+      }),
+    });
+
+    test("탐색에서 전국 → 가까운 순 그대로 → 홈 전국(새로고침 뒤 유지) → '내 주변'으로 가까운 바다", async ({
+      page,
+    }) => {
+      await page.goto(text.explore);
+      const nationwide = page.getByRole("button", {
+        name: text.nationwide,
+        exact: true,
+      });
+      await expect(nationwide).toHaveAttribute("aria-pressed", "false");
+      await nationwide.click();
+      await expect(nationwide).toHaveAttribute("aria-pressed", "true");
+      expect(await savedRegion(page)).toBe('"nationwide"');
+      // 위치가 있으면 둘째 정렬은 가까운 순이고 행마다 거리가 나옴
+      await page.getByRole("button", { name: text.sortNear }).click();
+      await expect(page.locator("main li").first()).toContainText("km");
+
+      await page.goto(text.home);
+      await expect(seaHeading(page)).toHaveText(text.nationwideSea);
+      await page.reload();
+      await expect(seaHeading(page)).toHaveText(text.nationwideSea);
+
+      const dialog = await openSheet(page, text, text.nationwide);
+      await dialog.getByRole("button", { name: text.nearby }).click();
+      await expect(seaHeading(page)).toHaveText(text.nearSea);
+      expect(await savedRegion(page)).toBeNull();
+      await page.reload();
+      await expect(seaHeading(page)).toHaveText(text.nearSea);
+    });
+  });
+
+  test.describe(`${locale} · 탐색 전국 · 위치 거부`, () => {
+    test.use({ deviceLanguage: locale });
+
+    test("탐색에서 전국 → 홈 전국(고른 전국 문구), 새로고침 뒤 유지", async ({
+      page,
+    }) => {
+      await denyLocation(page);
+      await page.goto(text.explore);
+      await page
+        .getByRole("button", { name: text.nationwide, exact: true })
+        .click();
+      expect(await savedRegion(page)).toBe('"nationwide"');
+
+      await page.goto(text.home);
+      await expect(seaHeading(page)).toHaveText(text.nationwideSea);
+      await expect(page.getByText(text.offChosen)).toBeVisible();
+      await page.reload();
+      await expect(seaHeading(page)).toHaveText(text.nationwideSea);
+    });
+
+    test("결과가 없을 때 '전국 보기'도 전국을 고름", async ({ page }) => {
+      await page.goto(text.explore);
+      // 스쿠버가 확인된 해변이 없는 지역(시험 데이터)으로 빈 화면을 만듦
+      await page.evaluate(() =>
+        localStorage.setItem("baradun:activity", "scuba"),
+      );
+      await page.reload();
+      await page.getByRole("button", { name: text.showAll }).click();
+      expect(await savedRegion(page)).toBe('"nationwide"');
     });
   });
 }
