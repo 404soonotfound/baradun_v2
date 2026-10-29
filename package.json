@@ -9,6 +9,7 @@
   ],
   "scripts": {
     "dev": "npm run dev -w @baradun/web",
+    "live": "npm run live -w @baradun/web",
     "lint": "npm run lint --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "npm run test:beaches && npm run test --workspaces --if-present",
