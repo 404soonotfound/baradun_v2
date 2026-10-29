@@ -62,18 +62,28 @@ export function Chip({
 }
 
 // 지울 수 있는 칩(예: 검색 필터 '수영 · 강원 ✕'). 글자와 ✕ 버튼을 나눠 버튼 안에 버튼이 생기지 않게 함
+// tone: selected = 고른 필터(브랜드 색), plain = 목록 칩(홈 최근 본, Figma 171:463: 높이 34·흰 바탕·12.5 보통 굵기, BRD-129)
 export function RemovableChip({
   children,
   removeLabel,
   onRemove,
+  tone = "selected",
 }: {
   children: ReactNode;
   // ✕의 접근 가능한 이름(예: "강원 빼기"). 화면에는 ✕만 보임
   removeLabel: string;
   onRemove: () => void;
+  tone?: "selected" | "plain";
 }) {
   return (
-    <span className="inline-flex h-chip shrink-0 items-center rounded-full border border-brand-default bg-brand-weak pl-[13px] text-[12.5px] font-bold text-brand-default">
+    <span
+      className={cn(
+        "inline-flex shrink-0 items-center rounded-full border pl-[13px]",
+        tone === "plain"
+          ? "h-[34px] border-border-default bg-bg-surface pr-[3px] text-label-s text-text-default"
+          : "h-chip border-brand-default bg-brand-weak text-[12.5px] font-bold text-brand-default",
+      )}
+    >
       {children}
       <button
         type="button"
@@ -82,7 +92,7 @@ export function RemovableChip({
         // 보이는 원은 작아도 누르는 영역은 30px(명세 '✕ 30px 터치 영역'). 눌림 영역만 위아래·옆으로 7px씩 넓혀 44px를 맞춤
         className="relative ml-0.5 flex size-[30px] items-center justify-center rounded-full before:absolute before:-inset-[7px] before:content-['']"
       >
-        <X aria-hidden="true" size={13} />
+        <X aria-hidden="true" size={tone === "plain" ? 11 : 13} />
       </button>
     </span>
   );

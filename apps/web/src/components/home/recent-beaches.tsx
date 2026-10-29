@@ -71,7 +71,7 @@ export function RecentBeaches({
       />
       <Link
         href={localizedPath(locale, `/spots/${first.slug}/`)}
-        className="flex items-center justify-between gap-3 rounded-card bg-bg-surface px-4 py-3.5 shadow-card"
+        className="flex items-center justify-between gap-3 rounded-card bg-bg-surface px-3.5 py-[13px] shadow-card"
       >
         <span className="flex min-w-0 flex-col gap-0.5">
           <span className="truncate text-title-s text-text-default">
@@ -101,6 +101,7 @@ export function RecentBeaches({
               <RemovableChip
                 removeLabel={t("remove", { name: beach.name })}
                 onRemove={() => remove(beach)}
+                tone="plain"
               >
                 <Link href={localizedPath(locale, `/spots/${beach.slug}/`)}>
                   {beach.name}

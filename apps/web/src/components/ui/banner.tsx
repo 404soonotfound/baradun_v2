@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 
 import { cn } from "@/lib/cn";
 
-// 알림 배너 (BRD-81 · 컴포넌트 명세 Banner, Figma '알림 배너 · 새' 170:2924)
+// 알림 배너 (BRD-81 · 컴포넌트 명세 Banner, Figma '알림 배너 · 새' 170:2924·170:107: 모서리 14·제목 13.5, BRD-129)
 // 문구는 무슨 일(제목) → 영향·다음 행동(설명) 2줄. 화면당 하나만 둠(어디에 둘지는 화면이 정함)
 //   amber: 관측 지연(누르면 상세로) · red: 새 정보 불러오기 실패, 문의 보내지 못함 · gray: 오프라인·위치 권한 꺼짐 등
 
@@ -48,26 +48,26 @@ export function Banner({
   dismiss,
 }: {
   tone: BannerTone;
-  icon: ReactNode;
+  icon?: ReactNode; // 없으면 아이콘 원 없이 글자만(홈 '위치 없이 보고 있어요', Figma 171:818)
   title: string; // 1줄째: 무슨 일
   children?: ReactNode; // 2줄째: 영향·다음 행동
 } & BannerTarget) {
   const colors = TONES[tone];
   const body = (
     <>
-      <span
-        aria-hidden="true"
-        className={cn(
-          "flex size-8 shrink-0 items-center justify-center rounded-full",
-          colors.iconBox,
-        )}
-      >
-        {icon}
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="block text-body-s font-bold text-text-default">
-          {title}
+      {icon && (
+        <span
+          aria-hidden="true"
+          className={cn(
+            "flex size-8 shrink-0 items-center justify-center rounded-full",
+            colors.iconBox,
+          )}
+        >
+          {icon}
         </span>
+      )}
+      <span className="min-w-0 flex-1">
+        <span className="block text-label text-text-default">{title}</span>
         {(children || action) && (
           <span className="block text-caption text-text-muted">
             {children}
@@ -102,7 +102,7 @@ export function Banner({
     </>
   );
   const box = cn(
-    "flex w-full items-center gap-3 rounded-input border bg-bg-surface px-[15px] py-[13px]",
+    "flex w-full items-center gap-3 rounded-button border bg-bg-surface px-[15px] py-[13px]",
     colors.border,
   );
   // red(실패)는 바로 읽어 줌(role="alert"), 나머지는 하던 말을 끊지 않음(role="status")
