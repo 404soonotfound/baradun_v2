@@ -349,16 +349,20 @@ export function HomeScreen({
           PC는 가까운 바다 3칸 전체 → 해상 특보 · 최근 본 · 안내 3단(Figma 424.6 : 339.7 : 339.7) */}
       <div className="flex flex-col gap-5 lg:grid lg:grid-cols-[1.25fr_1fr_1fr] lg:gap-x-6 lg:gap-y-0 lg:px-6">
         {/* 최근 본(재방문) 또는 처음 오셨네요(첫 방문). PC는 아래 3단의 가운데 */}
-        <div className="lg:order-3 lg:pt-8">
-          {/* 최근 본이 없으면 모바일은 '처음 오셨네요', PC는 Figma 3단을 지키려고 최근 본 해변 빈 상태 */}
-          {recent.length > 0 ? (
-            <RecentBeaches locale={locale} beaches={recent} />
-          ) : desktop ? (
-            <RecentEmpty />
-          ) : (
-            <FirstVisitCard />
-          )}
-        </div>
+        {/* 최근 본이 없을 때: PC는 Figma 3단을 지키려고 최근 본 해변 빈 상태,
+            모바일은 가까운 바다(위치)로 볼 때만 '처음 오셨네요'(Figma 171:563). 지역·전국으로 볼 때는 없음(171:818)
+            빈 칸도 간격을 차지해 그릴 것이 없으면 칸째 뺌 */}
+        {(recent.length > 0 || desktop || !byList) && (
+          <div className="lg:order-3 lg:pt-8">
+            {recent.length > 0 ? (
+              <RecentBeaches locale={locale} beaches={recent} />
+            ) : desktop ? (
+              <RecentEmpty />
+            ) : (
+              <FirstVisitCard />
+            )}
+          </div>
+        )}
 
         {/* 가까운 바다(지역을 고르면 '강원 바다', 전국이면 '전국 바다'). PC는 3칸 전체에 카드 4장 */}
         <section
