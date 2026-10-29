@@ -5,7 +5,11 @@ import Link from "next/link";
 import { useTranslations } from "next-intl";
 
 import { ReasonBadge } from "@/components/reason-badge";
-import { BeachPhoto } from "@/components/map/beach-photo";
+import {
+  PhotoCredit,
+  PhotoFigure,
+  useShownPhoto,
+} from "@/components/map/beach-photo";
 import { cn } from "@/lib/cn";
 import type { ExploreItem } from "@/lib/explore";
 import { toggleFavorite, useFavorites } from "@/lib/favorites";
@@ -16,7 +20,7 @@ import { useRowText } from "@/lib/snapshot/use-row-text";
 import type { MetricKey } from "@/lib/snapshot/view";
 
 // 지도 카드 (BRD-30 · 노션 2장 EXP-M 하단 MapCard, D-EXP 지도 카드 380px: 사진 + 요약 + 상세 보기 + 즐겨찾기)
-// 마커를 누르면 이 카드가 그 해변으로 바뀜. 이름·배지·근거를 누르면 상세(DET). 사진은 출처 링크가 있어 링크 밖
+// 마커를 누르면 이 카드가 그 해변으로 바뀜. 위쪽(사진·이름·배지·근거)을 누르면 상세(DET). 사진 출처 링크만 상세 링크 밖
 // 상태는 게시값 그대로(G1). 배지는 실제 사유 먼저, '특보 없음'이면 범위·기관·확인 시각 + 현장 우선 문구
 // 값을 보인 지표마다 측정소·관측 시각을 붙임(측정소 없는 값은 이미 '–'로 숨겨져 옴, explore.ts)
 const SOURCED_METRICS = [
@@ -41,6 +45,8 @@ export function MapCard({
   const { rowDetail } = useRowText();
   const { observationMeta } = useMetaText();
   const favorite = useFavorites().includes(item.id);
+  // 사진과 링크 밖 출처 줄이 같은 '받지 못한 사진' 상태를 봄(사진을 못 받으면 출처 줄도 없음)
+  const photo = useShownPhoto(item.photo);
   const view = item.view;
   const href = localizedPath(locale, `/spots/${item.slug}/`);
 
@@ -67,13 +73,15 @@ export function MapCard({
         className,
       )}
     >
-      {/* 사진 출처가 링크(공공누리 제1유형, BRD-113)라 사진은 상세 링크 밖에 둠(링크 안 링크 금지) */}
-      <BeachPhoto
-        photo={item.photo}
-        name={item.name}
-        className="h-[104px] lg:h-[150px]"
-      />
       <Link href={href} className="flex flex-col gap-2.5 rounded-[12px]">
+        {/* 사진은 상세 링크 안(눌러도 상세). 출처 링크는 링크 안 링크가 되지 않게 아래 PhotoCredit으로 뺌 */}
+        <PhotoFigure
+          shown={photo.shown}
+          name={item.name}
+          onError={photo.onError}
+          credit={false}
+          className="h-[104px] lg:h-[150px]"
+        />
         <span className="flex items-start justify-between gap-3 pr-1">
           <span className="flex min-w-0 flex-col gap-0.5">
             <span className="truncate text-title-m text-text-default">
@@ -91,6 +99,8 @@ export function MapCard({
           ))}
         </span>
       </Link>
+      {/* 사진 출처(공공누리 제1유형 링크, BRD-113). 탭 순서: 상세 링크(사진·이름) → 사진 출처 → 즐겨찾기·상세 보기 */}
+      {photo.shown && <PhotoCredit photo={photo.shown} className="-mt-1" />}
 
       <div className="flex gap-2">
         <button
