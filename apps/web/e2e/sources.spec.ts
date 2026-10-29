@@ -6,6 +6,7 @@ import {
   expectNoA11yViolations,
   slugOf,
   test,
+  WARNING_ID,
 } from "./fixtures";
 
 // 화면 출처 표시 (BRD-113 · 기상법 2026-09-18 시행 출처 표시 의무, 결정 19·20)
@@ -15,6 +16,7 @@ const KMA_STATUS_EN =
   "Source: KMA (warnings and ocean observations, processed)";
 const KMA_BUOY_KO = "출처: 기상청 (해양기상부이·파고부이 관측)";
 const KMA_BUOY_EN = "Source: KMA (ocean and wave buoy observations)";
+const FINAL_CALL = "최종 판단은 현장 통제와 안전요원 안내가 우선이에요";
 const TOUR_API = "https://www.data.go.kr/data/15101578/openapi.do";
 const SURF_API = "https://www.data.go.kr/data/15142490/openapi.do";
 const RIP_API = "https://www.data.go.kr/data/15156028/openapi.do";
@@ -89,24 +91,86 @@ test.describe("기상청 출처 한 줄", () => {
     await expectNoA11yViolations(page);
   });
 
+  // 상세 판단 카드: 현장 우선 문구 다음 줄에 가공 표기 출처(배지가 기상청 자료로 만든 분류)
+  test("상세: 판단 카드의 현장 우선 문구 아래 출처", async ({ page }) => {
+    await page.goto(`/spots/${slugOf(CLEAR_ID)}/`);
+    const finalCall = page
+      .getByText(FINAL_CALL, { exact: true })
+      .filter({ visible: true })
+      .first();
+    await expect(finalCall).toBeVisible();
+    // 같은 묶음 안에서 바로 다음 줄
+    await expect(finalCall.locator("xpath=following-sibling::p[1]")).toHaveText(
+      KMA_STATUS_KO,
+    );
+  });
+
+  test("특보 시트: 확인 기관 그대로 출처 줄 (한·영)", async ({ page }) => {
+    for (const [prefix, opener, text] of [
+      ["", "특보 상세 보기", "출처: 기상청"],
+      ["/en", "Warning details", "Source: KMA"],
+    ] as const) {
+      await page.goto(`${prefix}/spots/${slugOf(WARNING_ID)}/`);
+      await page.getByRole("button", { name: opener }).first().click();
+      await expect(
+        page.getByRole("dialog").getByText(text, { exact: true }),
+      ).toBeVisible();
+    }
+  });
+
+  // 받은 자료가 없는 화면: 앱이 실제로 데이터를 요청한(하이드레이션된) 뒤 로딩 표시가 보이는 것까지 기다린 다음 확인
   test.describe("로딩", () => {
     test.use({ scenario: "loading" });
-    test("받은 자료가 없으면 출처 줄을 두지 않음", async ({ page }) => {
-      await page.goto("/");
-      await expect(page.getByText("특보 없음", { exact: true })).toHaveCount(0);
-      await expect(page.getByText(KMA_STATUS_KO)).toHaveCount(0);
-    });
+    for (const [url, loading] of [
+      ["/", loadingText("해상 특보를 불러오고 있어요")],
+      ["/explore/", loadingText("해변 정보를 불러오고 있어요")],
+      [`/spots/${slugOf(CLEAR_ID)}/`, busy()],
+    ] as const) {
+      test(`받은 자료가 없으면 출처를 두지 않음 ${url}`, async ({
+        page,
+        data,
+      }) => {
+        await page.goto(url);
+        await expect
+          .poll(() =>
+            data.requests.some((path) => path === "/data/manifest.json"),
+          )
+          .toBe(true);
+        await expect(loading(page)).toBeVisible();
+        await expectNoKmaSource(page);
+      });
+    }
   });
 
   test.describe("데이터 없음", () => {
     test.use({ scenario: "noData" });
-    test("처음부터 못 받으면 기상청 출처를 붙이지 않음", async ({ page }) => {
-      await page.goto("/explore/");
-      await expect(page.getByText("다시 시도").first()).toBeVisible();
-      await expect(page.getByText(KMA_STATUS_KO)).toHaveCount(0);
-    });
+    for (const url of ["/", "/explore/", `/spots/${slugOf(CLEAR_ID)}/`]) {
+      test(`처음부터 못 받으면 출처를 두지 않음 ${url}`, async ({ page }) => {
+        await page.goto(url);
+        await expect(
+          page.getByText("새 정보를 불러오지 못했어요").first(),
+        ).toBeVisible();
+        await expectNoKmaSource(page);
+      });
+    }
   });
 });
+
+// 로딩 표시 찾기(글자 또는 aria-busy 자리)
+function loadingText(text: string) {
+  return (page: Page) => page.getByText(text).filter({ visible: true }).first();
+}
+function busy() {
+  return (page: Page) =>
+    page.locator("[aria-busy='true']").filter({ visible: true }).first();
+}
+
+// 화면 어디에도 기상청·국립해양조사원 출처가 없음(정보 출처 줄의 '기상청 · 측정소' 포함)
+async function expectNoKmaSource(page: Page) {
+  await expect(page.getByText(/출처: 기상청/)).toHaveCount(0);
+  await expect(page.getByText(/^기상청 · /)).toHaveCount(0);
+  await expect(page.getByText(/국립해양조사원 「/)).toHaveCount(0);
+}
 
 test.describe("사진 출처 링크", () => {
   for (const [locale, name] of [
