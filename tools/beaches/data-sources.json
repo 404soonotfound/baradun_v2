@@ -1,7 +1,7 @@
 {
   "_meta": {
     "note": "BRD-59 판정 원자료 목록(원자료는 저장소에 넣지 않음, 아키텍처 2.2 10/21). 스크립트는 BARADUN_GIS_DIR(기본 ~/data/baradun-gis)·BARADUN_DATA_DIR(기본 ~/data)에서 읽음. 수집본(out/: beaches.csv·stations.csv·freshness·warnings)·구역 근거 json·responses/ 실응답 저장본·생성 중간 산출물은 $BARADUN_DATA_DIR/baradun-coverage. 근거에 남은 tools/coverage/… 표기는 수집 당시 위치(기록용). 관측소 배정·부재 판정 입력(수집본·72시간 기록·실응답 저장본)도 고정 해시로 대조. 법정 읍면동 경계는 국토교통부 법정구역정보(브이월드 dsId=21, CC BY 2.0 KR) 전국 SHP의 읍면동 층(2026-10-29 BRD-126)",
-    "checked_at": "2026-10-21"
+    "checked_at": "2026-10-29"
   },
   "files": [
     {
