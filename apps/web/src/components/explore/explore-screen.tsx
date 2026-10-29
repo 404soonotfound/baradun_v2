@@ -158,7 +158,7 @@ export function ExploreScreen({
     [mode, loading, items, intlLocale],
   );
 
-  // 상황 배너는 하나만(BRD-28 · 상세와 같은 범위: 오프라인 → 지원 밖 형식 → 불러오기 실패, 10/27 임시안)
+  // 상황 배너는 하나만(BRD-28 · 상세와 같은 범위: 오프라인 → 지원 밖 형식 → 불러오기 실패, 결정 2로 확정)
   // 그 밖에 '특보 없음이 하나도 없음' → '위치 꺼짐' 순. 관측 지연은 행의 사유 배지가 이미 보여 줌
   const picked = pickSituation<Pick<BeachSummary, "name" | "slug">>({
     phase: snapshot.phase,

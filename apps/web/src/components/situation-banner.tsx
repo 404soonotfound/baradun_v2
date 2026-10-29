@@ -18,7 +18,8 @@ import { getSnapshotState, refreshSnapshot } from "@/lib/snapshot/use-snapshot";
 //   오프라인(회색): 인터넷에 연결되어 있지 않아요 / 14:30 정보를 보여주고 있어요 · 연결되면 다시 확인해요
 //   지원 밖 형식(회색): 새 데이터 형식을 읽지 못했어요 / 모든 해변을 '확인 못 함'으로 보여줘요 · 새로고침
 //   불러오기 실패(빨강): 새 정보를 불러오지 못했어요 / 14:30 정보를 보여주고 있어요 · 다시 시도
-//   판단 출처 전체 장애(회색, BRD-38): 판단에 쓰는 공식 정보를 받지 못하고 있어요 / 마지막 정상 수신 14:05 · 받는 대로 다시 확인해요
+//   확인된 판단 없음(회색, BRD-38·결정 1): 현재 확인 가능한 판단 정보가 없어요 / 마지막 확인 14:05 · 새 정보가 들어오면 다시 확인해요
+//     원인(출처 장애)은 단정하지 않고 확인된 영향만 알림. publisher가 명시적 장애 신호를 주면 그 신호로 바꿈
 //   관측 지연(앰버): ○○ 파고 측정이 늦어지고 있어요 / 지금 상태를 판단하지 못했어요 · … → 누르면 그 해변 상세
 // '위치 없이 보는 중'은 화면마다 달라서 부르는 쪽이 그림
 
@@ -132,7 +133,7 @@ export function SituationBanner({
           </Banner>
         );
       case "outage": {
-        // 마지막 정상 수신 시각 = 해변별 특보 마지막 확인 시각 중 가장 늦은 것(sourceOutage)
+        // 마지막 확인 시각 = 해변별 특보 마지막 확인 시각 중 가장 늦은 것(sourceOutage)
         const last = shownDataTime(situation.lastConfirmedAt, snapshot.nowMs);
         return (
           <Banner tone="gray" icon={<CloudOff size={16} />} title={t("outage")}>
