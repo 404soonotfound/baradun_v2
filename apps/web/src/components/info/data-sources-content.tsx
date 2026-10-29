@@ -2,6 +2,7 @@ import { getTranslations } from "next-intl/server";
 
 import { ExternalLink, InfoSection } from "@/components/info/info-blocks";
 import type { Locale } from "@/lib/i18n";
+import { TOUR_API_URL } from "@/lib/photo-credit";
 
 // 데이터 출처·이용 조건 /about/data/ (BRD-36 · 노션 2장 SRC, 결정 기록 11장 B1·B7·10/21 사진·10/23 운영 기간)
 // 출처마다 제공 항목·이용 조건·원문 링크. 이용 조건은 각 원문(공공데이터포털 '이용허락범위' 등)을 2026-10-29에 확인한 값
@@ -36,6 +37,11 @@ const SOURCES: Source[] = [
   {
     key: "khoa",
     links: [
+      // 서핑 활동 근거(포인트 이름·좌표만, 지수 값은 쓰지 않음) 원문 링크. 결정 20(공공누리 제1유형 출처 표시)
+      {
+        label: "linkSurf",
+        href: "https://www.data.go.kr/data/15142490/openapi.do",
+      },
       {
         label: "linkRip",
         href: "https://www.data.go.kr/data/15156028/openapi.do",
@@ -45,10 +51,7 @@ const SOURCES: Source[] = [
   {
     key: "tour",
     links: [
-      {
-        label: "linkTour",
-        href: "https://www.data.go.kr/data/15101578/openapi.do",
-      },
+      { label: "linkTour", href: TOUR_API_URL },
       {
         label: "linkKogl",
         href: "https://www.kogl.or.kr/info/licenseType1.do",
@@ -76,6 +79,16 @@ const SOURCES: Source[] = [
       { label: "linkOsm", href: "https://www.openstreetmap.org/copyright" },
       { label: "linkOmt", href: "https://openmaptiles.org/" },
       { label: "linkOfm", href: "https://openfreemap.org/" },
+      // 지도 스타일 고지(BSD 3-Clause 저작권 고지·조건, CC-BY 4.0 디자인). 저장소 사본: src/lib/map/LICENSE-positron.md
+      {
+        label: "linkPositron",
+        href: "https://github.com/openmaptiles/positron-gl-style/blob/master/LICENSE.md",
+      },
+      // Positron 디자인의 원본(Stamen·Paul Norman, CC-BY 3.0)
+      {
+        label: "linkCarto",
+        href: "https://github.com/CartoDB/CartoDB-basemaps",
+      },
     ],
   },
 ];

@@ -282,8 +282,8 @@
   },
   "photo": {
     "alt": "{name} 사진",
-    "credit": "사진 출처: {source} · {license}",
-    "creditWithTitle": "사진 출처: {source}, 「{title}」 · {license}",
+    "credit": "사진 출처: <link>{source}</link> · {license}",
+    "creditWithTitle": "사진 출처: <link>{source}</link>, 「{title}」 · {license}",
     "license": {
       "kogl-type1": "공공누리 제1유형"
     },
@@ -700,7 +700,8 @@
     "khoa": {
       "name": "국립해양조사원",
       "provides": "서핑 포인트 목록(이름·좌표만, 지수 값은 쓰지 않음), 이안류 지수(제공하는 해수욕장만)",
-      "terms": "공공데이터포털 이용허락범위: 이안류 지수 조회 공공누리 제1유형(출처 표시).",
+      "terms": "공공데이터포털 이용허락범위: 서핑지수 조회·이안류 지수 조회 모두 공공누리 제1유형(출처 표시). 서핑 활동은 국립해양조사원 「서핑지수 조회」(공공누리 제1유형)의 포인트 이름·좌표만 근거로 보여줘요.",
+      "linkSurf": "서핑지수 조회",
       "linkRip": "이안류 지수 조회"
     },
     "tour": {
@@ -719,11 +720,13 @@
     },
     "map": {
       "name": "지도",
-      "provides": "지도 데이터 © OpenStreetMap 기여자, 벡터 타일 © OpenMapTiles, 타일 제공 OpenFreeMap",
-      "terms": "OpenStreetMap 데이터는 ODbL을 따르고, 지도 위에 출처를 표시해요.",
+      "provides": "지도 데이터 © OpenStreetMap 기여자, 벡터 타일 © OpenMapTiles, 타일 제공 OpenFreeMap, 지도 스타일 Positron(OpenFreeMap 판을 고쳐 씀)",
+      "terms": "OpenStreetMap 데이터는 ODbL을 따르고, 지도 위에 출처를 표시해요. 지도 스타일 Positron은 Copyright (c) 2024, MapTiler.com & OpenMapTiles contributors · Copyright (c) 2015, CartoDB Inc.이며 코드는 BSD 3-Clause, 디자인은 CC-BY 4.0을 따라요. Positron은 Stamen과 Paul Norman이 CartoDB Inc.를 위해 디자인한 CartoDB Basemaps(CC-BY 3.0)에서 왔어요.",
       "linkOsm": "OpenStreetMap 저작권",
       "linkOmt": "OpenMapTiles",
-      "linkOfm": "OpenFreeMap"
+      "linkOfm": "OpenFreeMap",
+      "linkPositron": "Positron 스타일 라이선스",
+      "linkCarto": "CartoDB Basemaps"
     }
   },
   "inquiry": {

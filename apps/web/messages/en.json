@@ -282,8 +282,8 @@
   },
   "photo": {
     "alt": "Photo of {name}",
-    "credit": "Photo: {source} · {license}",
-    "creditWithTitle": "Photo: {source}, “{title}” · {license}",
+    "credit": "Photo: <link>{source}</link> · {license}",
+    "creditWithTitle": "Photo: <link>{source}</link>, “{title}” · {license}",
     "license": {
       "kogl-type1": "KOGL Type 1"
     },
@@ -700,7 +700,8 @@
     "khoa": {
       "name": "Korea Hydrographic and Oceanographic Agency (KHOA)",
       "provides": "Surfing point list (names and coordinates only; index values aren't used), rip current index (only for beaches where provided)",
-      "terms": "Public Data Portal license: Rip Current Index is KOGL Type 1 (attribution).",
+      "terms": "Public Data Portal license: Surfing Index and Rip Current Index are both KOGL Type 1 (attribution). Surfing is shown based only on point names and coordinates from KHOA “Surfing Index” (KOGL Type 1).",
+      "linkSurf": "Surfing Index",
       "linkRip": "Rip Current Index"
     },
     "tour": {
@@ -719,11 +720,13 @@
     },
     "map": {
       "name": "Map",
-      "provides": "Map data © OpenStreetMap contributors, vector tiles © OpenMapTiles, tiles served by OpenFreeMap",
-      "terms": "OpenStreetMap data is under the ODbL, and attribution is shown on the map.",
+      "provides": "Map data © OpenStreetMap contributors, vector tiles © OpenMapTiles, tiles served by OpenFreeMap, map style Positron (modified from the OpenFreeMap version)",
+      "terms": "OpenStreetMap data is under the ODbL, and attribution is shown on the map. The Positron map style is Copyright (c) 2024, MapTiler.com & OpenMapTiles contributors · Copyright (c) 2015, CartoDB Inc.; its code is under the BSD 3-Clause License and its design under CC-BY 4.0. Positron is derived from CartoDB Basemaps, designed by Stamen and Paul Norman for CartoDB Inc. (CC-BY 3.0).",
       "linkOsm": "OpenStreetMap copyright",
       "linkOmt": "OpenMapTiles",
-      "linkOfm": "OpenFreeMap"
+      "linkOfm": "OpenFreeMap",
+      "linkPositron": "Positron style license",
+      "linkCarto": "CartoDB Basemaps"
     }
   },
   "inquiry": {
