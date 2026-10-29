@@ -9,7 +9,7 @@ import { Sheet } from "@/components/ui/sheet";
 import type { RegionGroup, SavedRegion } from "@/lib/region-list";
 
 // 지역 고르기 시트 (BRD-27 · 10/27 결정: 위치를 허용해도 지역을 고를 수 있음)
-// 1단계 시·도(맨 앞 '내 주변') → 2단계 시·군(맨 앞 'OO 전체')
+// 1단계 시·도(맨 앞 '전국'(BRD-127) · '내 주변') → 2단계 시·군(맨 앞 'OO 전체')
 // 고른 값을 저장하거나 시트를 닫는 일은 부르는 쪽이 함
 export interface RegionSheetProps {
   open: boolean;
@@ -17,6 +17,8 @@ export interface RegionSheetProps {
   groups: readonly RegionGroup[];
   value: SavedRegion | null;
   onSelect: (region: SavedRegion) => void;
+  // '전국' 칩(시·도 단계 맨 앞). 없으면 null(칩 숨김: 지역 칩 줄에 전국이 따로 있는 탐색)
+  nationwide?: { selected: boolean; onSelect: () => void } | null;
   // '내 주변' 칩. 위치를 거부했으면 null(칩 숨김)
   nearby?: { selected: boolean; onSelect: () => void } | null;
   // 열 때 바로 보여 줄 시·도(탐색 칩에서 누른 시·도). 저장 값은 고를 때까지 바뀌지 않음. 없으면 저장 값의 시·도
@@ -29,6 +31,7 @@ export function RegionSheet({
   groups,
   value,
   onSelect,
+  nationwide = null,
   nearby = null,
   startSido = null,
 }: RegionSheetProps) {
@@ -40,8 +43,9 @@ export function RegionSheet({
     if (open) setSido(startSido ?? value?.sido ?? null);
   }
 
-  // 시·도가 하나뿐이고 '내 주변'도 없으면 시·도 단계를 건너뜀
-  const only = groups.length === 1 && !nearby ? groups[0] : undefined;
+  // 시·도가 하나뿐이고 '전국'·'내 주변'도 없으면 시·도 단계를 건너뜀
+  const only =
+    groups.length === 1 && !nationwide && !nearby ? groups[0] : undefined;
   const group = only ?? groups.find((item) => item.sido.key === sido);
 
   const headingRef = useRef<HTMLHeadingElement>(null);
@@ -114,6 +118,16 @@ export function RegionSheet({
             {t("sido")}
           </h3>
           <div className="flex flex-wrap gap-2">
+            {nationwide && (
+              <Chip
+                size="lg"
+                variant={nationwide.selected ? "on" : "default"}
+                aria-pressed={nationwide.selected}
+                onClick={nationwide.onSelect}
+              >
+                {t("nationwide")}
+              </Chip>
+            )}
             {nearby && (
               <Chip
                 size="lg"

@@ -19,9 +19,14 @@ import {
   useUserLocation,
 } from "@/lib/location";
 import { setMotionEnabled, useMotionSwitch } from "@/lib/motion";
-import { setRegion, useRegion } from "@/lib/region";
+import { setRegion, useRegionChoice } from "@/lib/region";
 import type { BeachSummary } from "@/lib/beach-summary";
-import { regionGroups, regionName, validRegion } from "@/lib/region-list";
+import {
+  NATIONWIDE,
+  regionGroups,
+  regionName,
+  validRegion,
+} from "@/lib/region-list";
 import { setTheme, THEMES, useTheme } from "@/lib/theme";
 import { useSheet } from "@/lib/use-sheet";
 
@@ -148,7 +153,7 @@ export function SettingsScreen({
 function LocationGroup({ beaches }: { beaches: BeachSummary[] }) {
   const t = useTranslations("settings.location");
   const location = useUserLocation();
-  const region = useRegion();
+  const choice = useRegionChoice();
   const regionSheet = useSheet("settings-region");
   const switchId = useId();
   const switchBodyId = useId();
@@ -156,9 +161,14 @@ function LocationGroup({ beaches }: { beaches: BeachSummary[] }) {
   const status = location.status;
   // 꺼짐(off)만 스위치 꺼짐. 서버 HTML·권한 확인 중에는 켜짐으로 그렸다가 저장값을 읽으면 바뀜
   const enabled = status !== "off";
-  // 지금 해변 목록에 없는 지역이면 고르지 않은 것으로 봄(홈과 같은 규칙)
-  const shown = validRegion(region, beaches);
-  const name = shown === null ? null : regionName(groups, shown);
+  // 지금 해변 목록에 없는 지역이면 고르지 않은 것으로 봄(홈과 같은 규칙). 시트에서 고른 전국은 '전국'(BRD-127)
+  const nationwide = choice === NATIONWIDE;
+  const shown = nationwide ? null : validRegion(choice, beaches);
+  const name = nationwide
+    ? t("regionNationwide")
+    : shown === null
+      ? null
+      : regionName(groups, shown);
 
   return (
     <Group id="location">
@@ -231,7 +241,7 @@ function LocationGroup({ beaches }: { beaches: BeachSummary[] }) {
           <Button variant="secondary" onClick={regionSheet.show}>
             {t("regionChange")}
           </Button>
-          {shown !== null && (
+          {name !== null && (
             <Button variant="ghost" onClick={() => setRegion(null)}>
               {t("regionClear")}
             </Button>
@@ -244,6 +254,13 @@ function LocationGroup({ beaches }: { beaches: BeachSummary[] }) {
         onClose={regionSheet.close}
         groups={groups}
         value={shown}
+        nationwide={{
+          selected: nationwide,
+          onSelect: () => {
+            setRegion(NATIONWIDE);
+            regionSheet.close();
+          },
+        }}
         onSelect={(next) => {
           setRegion(next);
           regionSheet.close();

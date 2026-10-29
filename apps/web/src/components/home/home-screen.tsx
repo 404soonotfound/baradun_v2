@@ -14,15 +14,13 @@ import { PageUnavailableNote } from "@/components/home/page-unavailable-note";
 import { RecentBeaches } from "@/components/home/recent-beaches";
 import { RegionButton } from "@/components/home/region-button";
 import { RegionCountCard } from "@/components/home/region-count-card";
-import { RegionPick } from "@/components/home/region-pick";
 import { SectionHead } from "@/components/home/section-head";
 import { RegionSheet } from "@/components/region/region-sheet";
 import { SituationBanner } from "@/components/situation-banner";
 import { KmaSourceNote } from "@/components/source-note";
-import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useActivity } from "@/lib/activity";
-import type { BeachSummary, RegionPart } from "@/lib/beach-summary";
+import type { BeachSummary } from "@/lib/beach-summary";
 import { useRecent } from "@/lib/favorites";
 import { distanceKm, sortByDistance } from "@/lib/geo";
 import { showsKmaSource } from "@/lib/kma-source";
@@ -33,13 +31,13 @@ import {
   useUserLocation,
   type LocationState,
 } from "@/lib/location";
-import { setRegion, useRegion } from "@/lib/region";
+import { setRegion, useRegionChoice } from "@/lib/region";
 import {
-  inRegion,
-  regionChips,
+  homeScope,
+  NATIONWIDE,
   regionGroups,
   regionName,
-  validRegion,
+  scopeBeaches,
 } from "@/lib/region-list";
 import {
   isDelayedView,
@@ -59,10 +57,11 @@ import { useSheet } from "@/lib/use-sheet";
 
 // 홈 (BRD-26·27·28 · 노션 2장 HOME/D-HOME, Figma S_M01_01~06·S_D07_01)
 // 페이지(서버)가 빌드 때 만든 해변 목록을 props로 받고, 나머지(활동·위치·지역·최근 본·바다 정보)는 브라우저에서 읽음
-// 모바일 순서: 상단 줄 → 제목 → 상황 배너 → 활동 타일 → 최근 본/처음 → 가까운 바다(또는 강원 바다 + 상태별 개수) → 해상 특보 → 안내
+// 모바일 순서: 상단 줄 → 제목 → 상황 배너 → 활동 타일 → 최근 본/처음 → 가까운 바다(또는 강원·전국 바다 + 상태별 개수) → 해상 특보 → 안내
 // PC(lg): 제목+타일 → 가까운 바다 4장 → 해상 특보 · 최근 본 · 안내 3단 (같은 부품, 배치만 다름)
 // 지역(BRD-27 · 10/27 결정): 고른 지역이 있으면 위치와 관계없이 그 지역 해변(이름 순, 위치가 있으면 거리도)
-// 지역을 안 골랐으면 위치 → 가까운 바다, 위치도 없으면 지역 칩. 위치를 다시 묻지 않음
+// 전국(BRD-127 · 10/29 사용자 요청): 시트에서 고르면 위치와 관계없이 공개 해변 전체(지역과 같은 규칙)
+// 지역을 안 골랐으면 위치 → 가까운 바다, 위치도 없으면 전국(기본값). 위치를 다시 묻지 않음(lib/region-list.ts homeScope)
 
 // PC에서 보여줄 가까운 바다 카드 수(모바일은 1장)
 const NEAR_COUNT = 4;
@@ -88,15 +87,20 @@ export function HomeScreen({
   const online = useOnline();
   // 다시 시도가 성공해 배너가 사라지면 포커스를 제목으로 (Vue: ref="title")
   const titleRef = useRef<HTMLHeadingElement>(null);
-  // [1] 기기에 저장한 기본 지역. 지금 해변 목록에 없는 지역이면 null(validRegion)
-  const region = validRegion(useRegion(), beaches);
+  // [1] 기기에 저장한 기본 지역(전국 포함)과 위치 상태 → 홈이 보여줄 범위
+  // 저장값이 없거나 지금 해변 목록에 없는 지역이면 위치가 있으면 가까운 바다, 없으면 전국(homeScope)
+  const choice = useRegionChoice();
+  const scope = useMemo(
+    () => homeScope(choice, beaches, location.status),
+    [choice, beaches, location.status],
+  );
+  const region = scope.kind === "region" ? scope.region : null;
   // [2] 지역 고르기 시트. 열면 브라우저 기록 한 칸(뒤로 가기로 닫힘)
   const regionSheet = useSheet("region");
   // [3] '위치 없이 보고 있어요' 배너를 닫았는지. 이번 방문 동안만 기억 (Vue: data)
   const [offBannerClosed, setOffBannerClosed] = useState(false);
 
-  // Vue: computed. 칩·시트에 쓸 지역 목록은 해변 목록이 바뀔 때만 다시 만듦
-  const chips = useMemo(() => regionChips(beaches), [beaches]);
+  // Vue: computed. 시트에 쓸 지역 목록은 해변 목록이 바뀔 때만 다시 만듦
   const groups = useMemo(() => regionGroups(beaches), [beaches]);
 
   // [4] Vue: computed. 위치가 있을 때만 전체 해변을 가까운 순으로(위치·목록이 바뀔 때만 다시 계산)
@@ -116,37 +120,33 @@ export function HomeScreen({
     [sorted, activity],
   );
 
-  // [5] 지역을 골랐으면 위치와 관계없이 그 지역을 보여줌 (10/27 결정)
-  const byRegion = region !== null;
-  // '위치 없이 보고 있어요'는 지역으로 보는데 위치도 없을 때만(권한 확인 중·받는 중은 아직 모름)
+  // [5] 지역·전국이면 위치와 관계없이 그 범위를 이름 순으로 보여줌 (10/27 결정 · BRD-127)
+  const byList = scope.kind !== "nearby";
+  // '위치 없이 보고 있어요'는 지역·전국으로 보는데 위치도 없을 때만(권한 확인 중·받는 중은 아직 모름)
   const locationOff =
-    byRegion &&
+    byList &&
     location.status !== "ready" &&
     location.status !== "locating" &&
     location.status !== "checking";
-  // 고른 지역의 해변 전체(이름 순). 개수 카드는 전체, 카드는 앞에서 NEAR_COUNT곳
+  // 범위 안 해변 전체(이름 순, 전국은 공개 해변 전체). 개수 카드는 전체, 카드는 앞에서 NEAR_COUNT곳
   const regionBeaches = useMemo(
-    () =>
-      region === null
-        ? []
-        : beaches
-            .filter(
-              (beach) =>
-                inRegion(beach, region) &&
-                (activity === "swimming" ||
-                  beach.activities.includes(activity)),
-            )
-            .sort((a, b) => a.name.localeCompare(b.name)),
-    [beaches, region, activity],
+    () => scopeBeaches(beaches, scope, activity),
+    [beaches, scope, activity],
   );
-  const name = region === null ? null : regionName(groups, region);
-  // 지역 해변의 화면 상태(게시된 분류 그대로, G1). 개수 카드의 개수·확인 시각에 씀
+  // 화면 이름: 고른 지역 "강원 양양군" · 전국 "전국" · 가까운 바다는 null
+  const name =
+    scope.kind === "nationwide"
+      ? t("nationwide.label")
+      : region === null
+        ? null
+        : regionName(groups, region);
+  // 범위 해변의 화면 상태(게시된 분류 그대로, G1). 개수 카드의 개수·확인 시각에 씀
   const regionViews = regionBeaches.map((beach) =>
     deriveBeachView({ id: beach.id, hidden: false }, snapshot),
   );
 
-  // [6] 홈에 보이는 해변 카드(지역 → 이름 순, 위치가 있으면 거리도 / 지역 없음 → 가까운 순)
-  const shown: ShownBeach[] = byRegion
+  // [6] 홈에 보이는 해변 카드(지역·전국 → 이름 순, 위치가 있으면 거리도 / 가까운 바다 → 가까운 순)
+  const shown: ShownBeach[] = byList
     ? regionBeaches.slice(0, NEAR_COUNT).map((beach) => ({
         ...beach,
         distanceKm:
@@ -186,10 +186,17 @@ export function HomeScreen({
     return beach ? [beach] : [];
   });
 
-  // 상단 지역 버튼 글자: 고른 지역 → 그 이름, 안 골랐으면 활동과 상관없이 가장 가까운 해변의 지역
+  // 상단 지역 버튼 글자: 고른 지역·전국 → 그 이름, 가까운 바다면 활동과 상관없이 가장 가까운 해변의 지역
   const regionLabel = name ?? sorted[0]?.region ?? null;
   const kmaSource = showsKmaSource(snapshot, sampleSnapshot);
   const regionNearby = name === null && sorted.length > 0;
+  // 위치 배너 설명: 전국은 기본값이면 위치를 켜면 가까운 바다로, 고른 전국이면 거리를 더함. 지역은 고른 지역 문구
+  const offBody =
+    scope.kind === "nationwide"
+      ? scope.chosen
+        ? t("nationwide.offBodyChosen")
+        : t("nationwide.offBodyDefault")
+      : t("region.offBody");
 
   return (
     <div className="grid gap-5 lg:grid-cols-3 lg:gap-6">
@@ -232,6 +239,7 @@ export function HomeScreen({
             locale={locale}
             status={location.status}
             onClose={() => setOffBannerClosed(true)}
+            body={offBody}
           />
         ) : (
           <SituationBanner
@@ -257,7 +265,7 @@ export function HomeScreen({
         )}
       </div>
 
-      {/* 가까운 바다(지역을 고르면 '강원 바다'). PC는 3칸 전체에 카드 4장 */}
+      {/* 가까운 바다(지역을 고르면 '강원 바다', 전국이면 '전국 바다'). PC는 3칸 전체에 카드 4장 */}
       <section
         aria-labelledby="home-near"
         className="flex flex-col gap-2.5 lg:order-1 lg:col-span-3"
@@ -265,9 +273,11 @@ export function HomeScreen({
         <SectionHead
           id="home-near"
           title={
-            byRegion && name
-              ? t("region.seaTitle", { region: name })
-              : t("near.title")
+            scope.kind === "nationwide"
+              ? t("nationwide.seaTitle")
+              : byList && name
+                ? t("region.seaTitle", { region: name })
+                : t("near.title")
           }
           href={localizedPath(locale, "/explore/")}
           linkText={t("near.all")}
@@ -276,19 +286,22 @@ export function HomeScreen({
           locale={locale}
           status={location.status}
           shown={shown}
-          byRegion={byRegion}
+          byList={byList}
+          byRegion={region !== null}
           snapshot={snapshot}
-          chips={chips}
-          onPickSido={(sido) => setRegion({ sido, sigungu: null })}
         />
-        {/* 지역 해변 상태별 개수(지역 고른 뒤만). 게시된 분류 그대로 셈(G1) */}
-        {byRegion && name && regionBeaches.length > 0 && (
+        {/* 지역·전국 해변 상태별 개수(가까운 바다에서는 없음). 게시된 분류 그대로 셈(G1) */}
+        {byList && name && regionBeaches.length > 0 && (
           <RegionCountCard
             href={localizedPath(locale, "/explore/")}
-            title={t("region.countTitle", {
-              region: name,
-              count: regionBeaches.length,
-            })}
+            title={
+              scope.kind === "nationwide"
+                ? t("nationwide.countTitle", { count: regionBeaches.length })
+                : t("region.countTitle", {
+                    region: name,
+                    count: regionBeaches.length,
+                  })
+            }
             counts={countByStatus(regionViews)}
             clearCheckedAt={clearCheckedAt(regionViews)}
             staleChecked={staleCheckedAt(regionViews)}
@@ -321,12 +334,20 @@ export function HomeScreen({
           setRegion(next);
           regionSheet.close();
         }}
+        // '전국'(맨 앞): 전국으로 저장. 위치를 켜도 전국 유지. 저장값 없는 기본 전국일 때도 선택으로 보임
+        nationwide={{
+          selected: scope.kind === "nationwide",
+          onSelect: () => {
+            setRegion(NATIONWIDE);
+            regionSheet.close();
+          },
+        }}
         // '내 주변': 고른 지역을 지우고 가까운 바다로. 위치를 거부했거나 설정에서 껐으면 숨김
         nearby={
           locationBlocked(location.status)
             ? null
             : {
-                selected: region === null,
+                selected: scope.kind === "nearby",
                 onSelect: () => {
                   setRegion(null);
                   regionSheet.close();
@@ -352,50 +373,22 @@ function NearContent({
   locale,
   status,
   shown,
+  byList,
   byRegion,
   snapshot,
-  chips,
-  onPickSido,
 }: {
   locale: Locale;
   status: LocationState["status"];
   shown: ShownBeach[];
-  byRegion: boolean;
+  byList: boolean; // 지역·전국(이름 순 목록)
+  byRegion: boolean; // 시·도·시·군을 고름(빈 목록 문구가 다름)
   snapshot: SnapshotState;
-  chips: readonly RegionPart[];
-  onPickSido: (sido: string) => void;
 }) {
   const t = useTranslations("home");
 
-  // [8] 위치가 있거나 지역을 골랐으면 카드 목록
-  if (status === "ready" || byRegion) {
-    if (shown.length === 0) {
-      return (
-        <p className="text-body-s text-text-muted">
-          {byRegion ? t("region.noBeach") : t("near.noBeach")}
-        </p>
-      );
-    }
-    return (
-      <ul className="grid gap-3 lg:grid-cols-4">
-        {shown.map((beach, index) => (
-          // 모바일은 첫 카드만, PC는 4장
-          <li key={beach.id} className={index > 0 ? "hidden lg:block" : ""}>
-            <NearCard
-              locale={locale}
-              beach={beach}
-              distanceKm={beach.distanceKm}
-              view={deriveBeachView({ id: beach.id, hidden: false }, snapshot)}
-              nowMs={snapshot.nowMs}
-            />
-          </li>
-        ))}
-      </ul>
-    );
-  }
-
-  // 권한 확인 중(앱을 연 직후)도 받는 중처럼 자리만 잡음(버튼·지역 칩이 잠깐 보였다 사라지지 않게)
-  if (status === "locating" || status === "checking") {
+  // [8] 가까운 바다인데 위치가 아직 없음 = 권한 확인 중(앱을 연 직후)·받는 중(homeScope)
+  // 자리만 잡음(카드·전국 목록이 잠깐 보였다 사라지지 않게)
+  if (!byList && status !== "ready") {
     return (
       <div
         role="status"
@@ -410,23 +403,28 @@ function NearContent({
     );
   }
 
-  if (status === "idle") {
-    // 권한을 아직 묻지 않은 기기. 버튼을 눌렀을 때만 권한 창(반복 요청 금지)
-    // 첫 실행 위치 안내(BRD-25)가 생기면 대부분 그쪽에서 먼저 정해짐
+  // [9] 위치가 있거나 지역·전국이면 카드 목록
+  if (shown.length === 0) {
     return (
-      <div className="flex flex-col gap-3 rounded-card bg-bg-surface p-4 shadow-card">
-        <p className="text-title-s text-text-default">
-          {t("near.needLocation")}
-        </p>
-        <p className="text-body-s text-text-body">
-          {t("near.needLocationBody")}
-        </p>
-        <Button onClick={requestLocation}>{t("near.useLocation")}</Button>
-      </div>
+      <p className="text-body-s text-text-muted">
+        {byRegion ? t("region.noBeach") : t("near.noBeach")}
+      </p>
     );
   }
-
-  // [9] 거부·받을 수 없음 + 지역을 아직 안 고름 → 지역 칩(빈 묶음 방지). 거부면 다시 묻지 않음
-  // 받을 수 없음(시간 초과·기기 오류)은 지역 시트의 '내 주변'·배너의 '위치 정보 켜기'로 다시 시도
-  return <RegionPick chips={chips} onPick={onPickSido} />;
+  return (
+    <ul className="grid gap-3 lg:grid-cols-4">
+      {shown.map((beach, index) => (
+        // 모바일은 첫 카드만, PC는 4장
+        <li key={beach.id} className={index > 0 ? "hidden lg:block" : ""}>
+          <NearCard
+            locale={locale}
+            beach={beach}
+            distanceKm={beach.distanceKm}
+            view={deriveBeachView({ id: beach.id, hidden: false }, snapshot)}
+            nowMs={snapshot.nowMs}
+          />
+        </li>
+      ))}
+    </ul>
+  );
 }

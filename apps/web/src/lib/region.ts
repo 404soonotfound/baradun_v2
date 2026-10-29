@@ -1,37 +1,28 @@
 import { useSyncExternalStore } from "react";
 
-import type { SavedRegion } from "@/lib/region-list";
+import {
+  NATIONWIDE,
+  parseRegionChoice,
+  type RegionChoice,
+  type SavedRegion,
+} from "@/lib/region-list";
 
 // 기본 지역 (BRD-11 결정: 위치 권한이 없을 때 홈에서 고르는 지역, 기기 저장) (BRD-26·27)
 // 칩은 출시된 해변이 있는 시·도만. 고른 뒤 지역 선택 창에서 시·군까지 고름
-// 기기 저장만 여기. 순수 계산(지리 순서·칩·지역 묶음)은 lib/region-list.ts (BRD-27에서 나눔)
+// 시트에서 '전국'을 고르면 같은 칸에 전국으로 저장(BRD-127). 저장값이 없으면 홈은 기본값(homeScope)
+// 기기 저장만 여기. 순수 계산(지리 순서·칩·지역 묶음·저장 글자 읽기)은 lib/region-list.ts (BRD-27에서 나눔)
 
 // [6] ── 기기 저장 (lib/activity.ts와 같은 틀) ──
 const STORAGE_KEY = "baradun:region";
-let memory: SavedRegion | null = null; // 저장소를 못 쓰는 환경 대비
+let memory: RegionChoice | null = null; // 저장소를 못 쓰는 환경 대비
 let lastRaw: string | null = null; // 같은 글자면 같은 객체를 돌려주기 위한 기억
-let lastValue: SavedRegion | null = null;
+let lastValue: RegionChoice | null = null;
 // 쓰기가 실패한 적 있음(읽기는 되는데 쓰기만 막힌 환경). 이후로는 memory를 읽음
 let writeFailed = false;
 const listeners = new Set<() => void>();
 
-// [7] 저장 글자 → 지역. 모양이 다르면 null(고르지 않은 것으로 봄)
-function parse(raw: string | null): SavedRegion | null {
-  if (raw === null) return null;
-  try {
-    const value: unknown = JSON.parse(raw);
-    if (typeof value !== "object" || value === null) return null;
-    // as Record<string, unknown> = "어떤 칸이든 있을 수 있는 객체"로 보고 칸을 꺼냄
-    const { sido, sigungu } = value as Record<string, unknown>;
-    if (typeof sido !== "string") return null;
-    return { sido, sigungu: typeof sigungu === "string" ? sigungu : null };
-  } catch {
-    return null;
-  }
-}
-
-// [8] 저장값 읽기. 글자가 같으면 같은 객체
-function read(): SavedRegion | null {
+// [7] 저장값 읽기. 글자가 같으면 같은 객체
+function read(): RegionChoice | null {
   if (writeFailed) return memory; // 저장소의 옛 값이 방금 고른 지역을 덮지 않게
   let raw: string | null;
   try {
@@ -41,12 +32,12 @@ function read(): SavedRegion | null {
   }
   if (raw !== lastRaw) {
     lastRaw = raw;
-    lastValue = parse(raw);
+    lastValue = parseRegionChoice(raw);
   }
   return lastValue;
 }
 
-// [9] 바뀔 때 알림 받기(다른 탭 포함)
+// [8] 바뀔 때 알림 받기(다른 탭 포함)
 function subscribe(onChange: () => void) {
   listeners.add(onChange);
   const onStorage = (event: StorageEvent) => {
@@ -59,8 +50,8 @@ function subscribe(onChange: () => void) {
   };
 }
 
-// [10] 지역 고르기·바꾸기. null이면 저장한 지역 지움(기기 데이터 초기화)
-export function setRegion(next: SavedRegion | null) {
+// [9] 지역 고르기·바꾸기. NATIONWIDE = 시트에서 고른 전국. null이면 저장한 값 지움(홈 기본값으로)
+export function setRegion(next: RegionChoice | null) {
   memory = next;
   try {
     if (next === null) localStorage.removeItem(STORAGE_KEY);
@@ -72,7 +63,14 @@ export function setRegion(next: SavedRegion | null) {
   listeners.forEach((listener) => listener());
 }
 
-// [11] 화면에서: const region = validRegion(useRegion(), beaches);  (validRegion은 region-list.ts)
-export function useRegion(): SavedRegion | null {
+// [10] 저장값 그대로(전국 포함). 홈은 homeScope(useRegionChoice(), beaches, 위치 상태)로 범위를 정함
+export function useRegionChoice(): RegionChoice | null {
   return useSyncExternalStore(subscribe, read, () => null);
+}
+
+// [11] 시·도 지역만. 전국은 null(탐색·검색은 null을 전국으로 봄)
+// 화면에서: const region = validRegion(useRegion(), beaches);  (validRegion은 region-list.ts)
+export function useRegion(): SavedRegion | null {
+  const choice = useRegionChoice();
+  return choice === NATIONWIDE ? null : choice;
 }

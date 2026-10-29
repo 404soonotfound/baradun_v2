@@ -105,7 +105,7 @@ export function ExploreScreen({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
 
-  // 지역은 홈 기본 지역과 같은 저장 값(10/27 결정). 목록에 없어진 지역이면 전국으로 봄
+  // 지역은 홈 기본 지역과 같은 저장 값(10/27 결정). 목록에 없어진 지역·홈에서 고른 전국은 전국으로 봄
   const region = validRegion(useRegion(), beaches);
   const chips = useMemo(() => regionChips(beaches), [beaches]);
   const groups = useMemo(() => regionGroups(beaches), [beaches]);
@@ -318,7 +318,10 @@ export function ExploreScreen({
           chips={chips}
           region={region}
           regionLabel={name}
-          onNationwide={() => setRegion(null)}
+          // 이미 전국이면 저장값을 건드리지 않음(홈 시트에서 고른 전국이 기본값으로 풀리지 않게, BRD-127)
+          onNationwide={() => {
+            if (region !== null) setRegion(null);
+          }}
           // 시트에서 고르기 전에는 저장하지 않음(그냥 닫으면 지역이 그대로)
           onPickSido={(sido) => {
             setPickSido(sido);
