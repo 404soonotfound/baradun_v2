@@ -160,6 +160,82 @@ function walk(node, path = []) {
 }
 walk(tokens);
 
+// 결정 기록 12장 결정 33: 색 토큰은 다크 값이 라이트와 같아도 명시(빠뜨린 것과 같은 값을 구분)
+// 결정 34: 그림자 값에는 색을 직접 쓰지 않고 color.shadow.* 변수만(다크에서 바뀌게)
+// 그림자 한 겹마다 길이·inset과 color.shadow.* 변수 하나만 허용(이름 색 black·transparent도 막음).
+// 가리키는 변수가 실제 color.shadow 토큰인지도 확인(오타면 그림자 전체가 무효가 됨)
+function shadowUsesOnlyVars(value) {
+  if (typeof value !== "string") return false;
+  return value.split(",").every((layer) => {
+    const refs = [...layer.matchAll(/var\(--color-shadow-([a-z-]+)\)/g)];
+    const rest = layer
+      .replace(/var\(--color-shadow-[a-z-]+\)/g, "")
+      .replace(/\binset\b|-?\d*\.?\d+(px|rem|em)?/g, "")
+      .trim();
+    return (
+      refs.length === 1 &&
+      rest === "" &&
+      tokens.color.shadow?.[refs[0][1]]?.$type === "color"
+    );
+  });
+}
+function walkDark(node, path = []) {
+  if (node && typeof node === "object" && "$value" in node) {
+    if (
+      node.$type === "color" &&
+      node.$extensions?.baradun?.dark === undefined
+    ) {
+      failed += 1;
+      console.log(`실패  다크 값 없음: ${path.join(".")}`);
+    }
+    if (node.$type === "shadow" && !shadowUsesOnlyVars(node.$value)) {
+      failed += 1;
+      console.log(`실패  그림자에 직접 쓴 색: ${path.join(".")}`);
+    }
+    return;
+  }
+  for (const [key, child] of Object.entries(node ?? {})) {
+    if (!key.startsWith("$")) walkDark(child, [...path, key]);
+  }
+}
+walkDark(tokens);
+
+// 결정 32: 10/16 다크 초안(노션 4장 7절 표)에 다크 값이 없던 토큰 14개(처음에 13개로 셌던 목록).
+// 노션 4장 7절 '다크 값 확인 토큰 14개'·아키텍처 9.1과 같은 목록. 색은 다크 값, 그림자는 다크에서 바뀌는 색 변수를 씀
+const DARK_REVIEWED = [
+  "color.banner.amber.border",
+  "color.banner.amber.icon-bg",
+  "color.banner.amber.icon-fg",
+  "color.banner.red.border",
+  "color.banner.red.icon-bg",
+  "color.banner.red.icon-fg",
+  "color.banner.gray.border",
+  "color.banner.gray.icon-bg",
+  "color.banner.gray.icon-fg",
+  "color.chart", // 다크도 같은 값
+  "color.danger-call", // 다크도 같은 값
+  "shadow.card",
+  "shadow.raised",
+  "shadow.floating",
+];
+for (const path of DARK_REVIEWED) {
+  const token = path.split(".").reduce((node, key) => node?.[key], tokens);
+  // 그림자 값은 위 walkDark가 color.shadow.* 변수만 쓰는지 검사함. 여기서는 빠진 토큰만 확인
+  const ok =
+    token?.$type === "shadow" ||
+    token?.$extensions?.baradun?.dark !== undefined;
+  if (!ok) {
+    failed += 1;
+    console.log(`실패  다크 확인 토큰 14개 중 다크 값 없음: ${path}`);
+  }
+}
+
+// 결정 34: 다크 카드 경계선은 border/default 다크 값을 재사용(한쪽만 바뀌지 않게)
+if (get("color.shadow.edge", "dark") !== get("color.border.default", "dark")) {
+  failed += 1;
+  console.log("실패  color.shadow.edge 다크 값이 color.border.default와 다름");
+}
+
 if (failed > 0) {
   console.error(`\n토큰 검사 실패 ${failed}건`);
   process.exit(1);
