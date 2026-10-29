@@ -30,6 +30,13 @@ export type Beach1 = BeachSite | DivePoint;
  */
 export type BeachId = string;
 /**
+ * 출시 활동 3종(B7). 해변 activities와 문의 activity(장소 상세에서 들어온 문의의 해변 beachId와 함께만 보냄, 결정 기록 12장 결정 22)가 같이 씀.
+ *
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "Activity".
+ */
+export type Activity = 'swimming' | 'surfing' | 'scuba';
+/**
  * 대표 관측소. 같은 해상 특보구역 20km 안에 없으면 null → '가까운 관측 없음'.
  *
  * This interface was referenced by `Contract`'s JSON-Schema
@@ -122,10 +129,12 @@ export type InquiryPhotoKey = string;
  */
 export type InquiryIdempotencyKey = string;
 /**
+ * 화면 유형 칩과 1:1(결정 기록 12장 결정 21). 정보가 실제와 달라요 · 판단 기준이 궁금해요 · 해변을 추가해 주세요 · 새 데이터를 제안해요.
+ *
  * This interface was referenced by `Contract`'s JSON-Schema
  * via the `definition` "InquiryType".
  */
-export type InquiryType = 'data_error' | 'data_question' | 'other';
+export type InquiryType = 'data_error' | 'data_question' | 'beach_request' | 'data_suggestion';
 /**
  * This interface was referenced by `Contract`'s JSON-Schema
  * via the `definition` "InquiryId".
@@ -271,7 +280,7 @@ export interface Beach2 {
    *
    * @minItems 1
    */
-  activities: ['swimming' | 'surfing' | 'scuba', ...('swimming' | 'surfing' | 'scuba')[]];
+  activities: [Activity, ...Activity[]];
   /**
    * 노출 끔. true면 목록에서 숨기고 상세는 404(BRD-45).
    */
@@ -558,6 +567,8 @@ export interface CreateInquiryRequest {
   type: InquiryType;
   message: string;
   email?: string;
+  beachId?: BeachId;
+  activity?: Activity;
   /**
    * @maxItems 3
    */

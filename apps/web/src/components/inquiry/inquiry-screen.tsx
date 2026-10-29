@@ -12,6 +12,7 @@ import { Toast, useToast } from "@/components/ui/toast";
 import { useActivity } from "@/lib/activity";
 import { cn } from "@/lib/cn";
 import { localizedPath, type Locale } from "@/lib/i18n";
+import type { BeachId } from "@baradun/contracts";
 import {
   sendInquiry,
   type InquiryAttempt,
@@ -28,7 +29,6 @@ import {
 } from "@/lib/inquiry/draft";
 import {
   buildRequest,
-  composeMessage,
   EMAIL_MAX,
   firstErrorField,
   INQUIRY_KINDS,
@@ -42,7 +42,8 @@ import {
 import { preparePhoto, type PhotoError } from "@/lib/inquiry/photo";
 
 // 데이터 문의 (BRD-37 · 노션 2장 INQ, 결정 기록 9장·11장 '문의(BRD-37)'·10/26 BRD-63, infra/README)
-// 유형 칩 4개 → (상세에서 왔으면) 해변·활동 자동 입력 → 내용(5자 이상) → 사진(선택, 최대 3장) → 이메일(선택, 입력하면 동의 필수) → 보내기
+// 유형 칩 4개(계약 유형과 1:1) → (상세에서 왔으면) 해변·활동 자동 입력(계약 칸 beachId·activity) → 내용(5자 이상)
+// → 사진(선택, 최대 3장) → 이메일(선택, 입력하면 동의 필수) → 보내기 (결정 기록 12장 결정 21·22)
 // 상태: 입력 전 · 입력 오류 · 보내는 중 · 접수 완료 · 보내지 못함
 // 유형·내용만 기기에 최대 7일 임시 저장(lib/inquiry/draft.ts). 이메일·동의·사진은 화면 메모리에만, 실패하면 다시 넣음
 // 응답 기한은 약속하지 않음. 사용자 위치는 보내지 않음
@@ -77,7 +78,7 @@ export function InquiryScreen({
   beaches,
 }: {
   locale: Locale;
-  beaches: { slug: string; name: string }[]; // ?beach=slug → 이름(빌드 때 넘김)
+  beaches: { id: BeachId; slug: string; name: string }[]; // ?beach=slug → id·이름(빌드 때 넘김)
 }) {
   const t = useTranslations("inquiry");
   const tp = useTranslations("pages");
@@ -255,14 +256,9 @@ export function InquiryScreen({
     const result = await sendInquiry(
       buildRequest({
         kind,
-        message: composeMessage({
-          kindLabel: t(`kind.${kind}`),
-          beachName: beach?.name ?? null,
-          activityLabel: beach ? ta(activity) : null,
-          message,
-        }),
+        message,
         email,
-        photos: [],
+        context: beach ? { beachId: beach.id, activity } : null,
       }),
       shots.map((shot) => shot.photo),
       (progress) => setPhase({ kind: "sending", progress }),

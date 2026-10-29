@@ -211,12 +211,15 @@
         "type": { "$ref": "#/$defs/InquiryType" },
         "message": { "type": "string", "minLength": 1, "maxLength": 2000 },
         "email": { "type": "string", "format": "email", "maxLength": 254 },
+        "beachId": { "$ref": "#/$defs/BeachId" },
+        "activity": { "$ref": "#/$defs/Activity" },
         "photos": {
           "type": "array",
           "maxItems": 3,
           "items": { "$ref": "#/$defs/InquiryPhotoReference" }
         }
-      }
+      },
+      "dependentRequired": { "activity": ["beachId"] }
     },
 
     "InquiryPhotoReference": {
@@ -300,7 +303,18 @@
 
     "InquiryType": {
       "title": "InquiryType",
-      "enum": ["data_error", "data_question", "other"]
+      "description": "화면 유형 칩과 1:1(결정 기록 12장 결정 21). 정보가 실제와 달라요 · 판단 기준이 궁금해요 · 해변을 추가해 주세요 · 새 데이터를 제안해요.",
+      "enum": [
+        "data_error",
+        "data_question",
+        "beach_request",
+        "data_suggestion"
+      ]
+    },
+    "Activity": {
+      "title": "Activity",
+      "description": "출시 활동 3종(B7). 해변 activities와 문의 activity(장소 상세에서 들어온 문의의 해변 beachId와 함께만 보냄, 결정 기록 12장 결정 22)가 같이 씀.",
+      "enum": ["swimming", "surfing", "scuba"]
     },
     "InquiryId": {
       "title": "InquiryId",
@@ -381,7 +395,7 @@
           "type": "array",
           "minItems": 1,
           "uniqueItems": true,
-          "items": { "enum": ["swimming", "surfing", "scuba"] },
+          "items": { "$ref": "#/$defs/Activity" },
           "description": "스노클링은 출시 제외(B7)."
         },
         "hidden": {

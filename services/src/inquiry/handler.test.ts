@@ -86,7 +86,7 @@ describe("문의 함수 URL 처리", () => {
     const response = await handleInquiryHttp(
       event(
         "/api/inquiries",
-        { idempotencyKey: KEY, type: "other", message: "문의", photos: [] },
+        { idempotencyKey: KEY, type: "data_suggestion", message: "문의", photos: [] },
         "0".repeat(64),
       ),
       deps,
@@ -107,7 +107,7 @@ describe("문의 함수 URL 처리", () => {
     const response = await handleInquiryHttp(
       event("/api/inquiries", {
         idempotencyKey: KEY,
-        type: "other",
+        type: "data_suggestion",
         message: "문의",
         photos: [],
       }),
@@ -178,7 +178,7 @@ describe("문의 함수 URL 처리", () => {
       const response = await handleInquiryHttp(
         event("/api/inquiries", {
           ...(idempotencyKey === undefined ? {} : { idempotencyKey }),
-          type: "other",
+          type: "data_suggestion",
           message: "문의",
           photos: [],
         }),
@@ -274,7 +274,7 @@ describe("문의 멱등 키 (BRD-103)", () => {
 
     for (const changed of [
       { message: "다른 문의" },
-      { type: "other" },
+      { type: "data_suggestion" },
       { email: "other@example.com" },
       { photos: [] },
     ]) {
@@ -378,7 +378,7 @@ describe("문의 멱등 키 (BRD-103)", () => {
     expect(same).toBe(requestFingerprint(base));
     expect(same).toMatch(/^[0-9a-f]{64}$/);
     const variants: CreateInquiryRequest[] = [
-      { ...base, type: "other" },
+      { ...base, type: "data_suggestion" },
       { ...base, message: `${base.message} ` },
       { type: base.type, message: base.message, photos: base.photos, idempotencyKey: KEY }, // 이메일 없음
       { ...base, photos: [] },

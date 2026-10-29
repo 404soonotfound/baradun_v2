@@ -49,7 +49,7 @@ describe("문의 메일 알림", () => {
     expect(
       await notifier.notify({
         inquiryId: "123e4567-e89b-42d3-a456-426614174000",
-        type: "other",
+        type: "data_suggestion",
         message: "문의",
         hasEmail: false,
         receivedAt: new Date(),

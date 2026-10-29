@@ -7,6 +7,8 @@ import {
   type TransactWriteCommandInput,
 } from "@aws-sdk/lib-dynamodb";
 import type {
+  Activity,
+  BeachId,
   CreateInquiryResponse,
   InquiryPhotoResult,
   InquiryType,
@@ -25,6 +27,8 @@ export interface StoredInquiry {
   readonly inquiryId: string;
   readonly type: InquiryType;
   readonly message: string;
+  readonly beachId?: BeachId;
+  readonly activity?: Activity;
   readonly email?: string;
   readonly photoKeys: string[];
   readonly receivedAt: Date;
@@ -184,6 +188,8 @@ export class InquiryStore {
             inquiryId: inquiry.inquiryId,
             inquiryType: inquiry.type,
             message: inquiry.message,
+            ...(inquiry.beachId ? { beachId: inquiry.beachId } : {}),
+            ...(inquiry.activity ? { activity: inquiry.activity } : {}),
             photoKeys: inquiry.photoKeys,
             receivedAt,
             ttl: ttlAfterDays(

@@ -1,18 +1,27 @@
 import { PublishCommand, SNSClient } from "@aws-sdk/client-sns";
-import type { InquiryType } from "@baradun/contracts";
+import type { Activity, BeachId, InquiryType } from "@baradun/contracts";
 import { INQUIRY_SUMMARY_MAX_LENGTH } from "./policy";
 import { InquiryStore } from "./store";
 
 const TYPE_LABEL: Record<InquiryType, string> = {
-  data_error: "데이터 오류",
-  data_question: "데이터 질문",
-  other: "기타",
+  data_error: "정보가 실제와 다름",
+  data_question: "판단 기준 질문",
+  beach_request: "해변 추가 요청",
+  data_suggestion: "새 데이터 제안",
+};
+
+const ACTIVITY_LABEL: Record<Activity, string> = {
+  swimming: "수영",
+  surfing: "서핑",
+  scuba: "스쿠버다이빙",
 };
 
 export interface InquiryNotification {
   readonly inquiryId: string;
   readonly type: InquiryType;
   readonly message: string;
+  readonly beachId?: BeachId;
+  readonly activity?: Activity;
   readonly hasEmail: boolean;
   readonly receivedAt: Date;
 }
@@ -47,6 +56,8 @@ export class InquiryNotifier {
           Message: [
             `문의 ID: ${value.inquiryId}`,
             `유형: ${TYPE_LABEL[value.type]}`,
+            ...(value.beachId ? [`해변: ${value.beachId}`] : []),
+            ...(value.activity ? [`활동: ${ACTIVITY_LABEL[value.activity]}`] : []),
             `짧은 요약: ${summary}`,
             `이메일 제공 여부: ${value.hasEmail ? "예" : "아니오"}`,
           ].join("\n"),
