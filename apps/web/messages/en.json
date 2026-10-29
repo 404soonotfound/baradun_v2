@@ -82,7 +82,9 @@
       "kma": "KMA",
       "khoa": "KHOA",
       "kto": "Korea Tourism Organization"
-    }
+    },
+    "agoShort": "{minutes} min ago",
+    "timeUnknown": "measurement time unknown"
   },
   "source": {
     "agency": "Source: {agency}",
@@ -138,14 +140,29 @@
       "clearScope": "This beach's warning zone · KMA · checked {time}",
       "noValue": "No value",
       "locating": "Finding your location",
-      "noBeach": "No beaches confirmed for this activity yet"
+      "noBeach": "No beaches confirmed for this activity yet",
+      "last24h": "Last 24 hours",
+      "badgeScope": "Warning zone · KMA · checked {time}",
+      "timeWithOthers": "{main} ({others})",
+      "noValueNext": "We'll show new measurements when they come in",
+      "groupNone": "No nearby observation ({metrics})",
+      "groupDelayed": "Measurements delayed ({metrics})",
+      "groupMissing": "No value ({metrics})",
+      "noStationNext": "Check the badge above for warning info"
     },
     "recent": {
       "title": "Recently viewed",
       "all": "See all",
       "remove": "Remove {name} from recently viewed",
       "removed": "Removed from recently viewed",
-      "undo": "Undo"
+      "undo": "Undo",
+      "viewedToday": "Viewed today at {time}",
+      "viewedYesterday": "Viewed yesterday at {time}",
+      "viewedOn": "Viewed {month}/{date} at {time}",
+      "checkedNow": "Checked again just now",
+      "titleWithActivity": "{name} · {activity}",
+      "emptyTitle": "No beaches viewed yet",
+      "emptyBody": "Beaches you open will show up here"
     },
     "firstVisit": {
       "title": "Welcome",
@@ -165,6 +182,22 @@
     "guide": {
       "title": "What do we check?",
       "body": "Safety & data · warning and measurement times, sources"
+    },
+    "hero": {
+      "summary": "Warnings and measurements for {count, plural, one {# beach} other {# beaches}} in {region}",
+      "updated": "Updated {time}",
+      "category": {
+        "clear": "No warnings",
+        "unavailable": "Unavailable",
+        "undetermined": "Cannot determine"
+      },
+      "count": "{count, plural, one {# beach} other {# beaches}}",
+      "reason": "{reason} · {count}",
+      "clearScope": "Each beach's warning zone · KMA · checked {time}",
+      "clearScopeNoTime": "Each beach's warning zone · KMA · check time unknown"
+    },
+    "info": {
+      "title": "Guide"
     }
   },
   "notFound": {
@@ -182,7 +215,12 @@
     "favorites": "Favorites",
     "settings": "Settings",
     "search": "Search beaches or regions",
-    "back": "Back"
+    "back": "Back",
+    "searchPlaceholder": "Beach or region name",
+    "favoritesSaved": "{count} saved",
+    "updated": "Updated {time}",
+    "delayedCount": "Observation delayed · {count}",
+    "notLive": "Info from {time} · Can't check for updates"
   },
   "sheet": {
     "close": "Close"
@@ -668,7 +706,7 @@
       "locationTitle": "Location",
       "locationBody": "Used only to calculate distances on your device when finding nearby beaches. Never sent to a server or stored, and you can turn it off in Settings.",
       "deviceTitle": "What's saved on your device",
-      "deviceBody": "Favorites, recently viewed beaches, recent searches, default region, chosen activity, explore view, first-run records, unsent feedback (type and text, up to 7 days), display settings (theme, motion, language), the location setting and the last sea information received are saved only in this device's browser. There's no login and nothing is sent to a server. Everything except display settings, the location setting and the last sea information can be cleared in Settings › Reset device data.",
+      "deviceBody": "Favorites, recently viewed beaches (with when you viewed them and the activity you chose then), recent searches, default region, chosen activity, explore view, first-run records, unsent feedback (type and text, up to 7 days), display settings (theme, motion, language), the location setting and the last sea information received are saved only in this device's browser. There's no login and nothing is sent to a server. Everything except display settings, the location setting and the last sea information can be cleared in Settings › Reset device data.",
       "inquiryTitle": "Data inquiry",
       "inquiryBody": "Feedback is kept for 90 days and photos for 30 days, then deleted automatically. Email is collected only if you leave it, and deleted as soon as handling is done (within 90 days at the latest). Photo location data is removed on your device before sending.",
       "inquiryNoDeadline": "We don't promise a reply deadline."

@@ -20,10 +20,11 @@ import { DetailSheet } from "@/components/detail/detail-sheet";
 import { VerdictCard } from "@/components/detail/verdict-card";
 import { SituationBanner } from "@/components/situation-banner";
 import { WarningSheet } from "@/components/warning-sheet";
-import { useActivity } from "@/lib/activity";
+import { currentActivity, useActivity } from "@/lib/activity";
 import { alternativeBeaches, isClearView } from "@/lib/alternatives";
 import type { BeachSummary } from "@/lib/beach-summary";
 import { addRecent } from "@/lib/favorites";
+import { recordVisit } from "@/lib/recent-visits";
 import { showsKmaSource } from "@/lib/kma-source";
 import { distanceKm } from "@/lib/geo";
 import type { Locale } from "@/lib/i18n";
@@ -70,9 +71,14 @@ export function DetailScreen({
   const warningSheet = useSheet("warning");
   const [warningItem, setWarningItem] = useState<WarningItem | null>(null);
 
-  // 최근 본 해변에 넣음(기기 저장)
+  // 최근 본 해변에 넣음(기기 저장). 본 시각과 그때 고른 활동도 이 기기에만(홈 최근 본 카드, BRD-129)
+  // 활동은 훅 값 대신 저장값을 바로 읽음(첫 그림의 기본값 '수영'이 남지 않게)
   useEffect(() => {
     addRecent(beach.id);
+    recordVisit(beach.id, {
+      at: new Date().toISOString(),
+      activity: currentActivity(),
+    });
   }, [beach.id]);
 
   const view = deriveBeachView(beach, snapshot);

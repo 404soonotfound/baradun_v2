@@ -82,7 +82,9 @@
       "kma": "기상청",
       "khoa": "국립해양조사원",
       "kto": "한국관광공사"
-    }
+    },
+    "agoShort": "{minutes}분 전",
+    "timeUnknown": "측정 시각 모름"
   },
   "source": {
     "agency": "출처: {agency}",
@@ -138,14 +140,29 @@
       "clearScope": "이 해변 특보구역 · 기상청 {time} 확인",
       "noValue": "값 없음",
       "locating": "위치를 확인하고 있어요",
-      "noBeach": "이 활동이 확인된 해변이 아직 없어요"
+      "noBeach": "이 활동이 확인된 해변이 아직 없어요",
+      "last24h": "지난 24시간",
+      "badgeScope": "특보구역 · 기상청 {time} 확인",
+      "timeWithOthers": "{main}({others})",
+      "noValueNext": "새 측정값이 들어오면 다시 보여드려요",
+      "groupNone": "가까운 관측 없음({metrics})",
+      "groupDelayed": "측정이 늦어지고 있어요({metrics})",
+      "groupMissing": "값 없음({metrics})",
+      "noStationNext": "특보 정보는 위 배지를 확인하세요"
     },
     "recent": {
       "title": "최근 본 해변",
       "all": "전체 보기",
       "remove": "{name} 최근 본 목록에서 지우기",
       "removed": "최근 본 목록에서 지웠어요",
-      "undo": "되돌리기"
+      "undo": "되돌리기",
+      "viewedToday": "오늘 {time}에 봤어요",
+      "viewedYesterday": "어제 {time}에 봤어요",
+      "viewedOn": "{month}월 {date}일 {time}에 봤어요",
+      "checkedNow": "지금 다시 확인했어요",
+      "titleWithActivity": "{name} · {activity}",
+      "emptyTitle": "아직 본 해변이 없어요",
+      "emptyBody": "해변을 열어 보면 여기에서 다시 볼 수 있어요"
     },
     "firstVisit": {
       "title": "처음 오셨네요",
@@ -165,6 +182,22 @@
     "guide": {
       "title": "무엇을 확인해서 보여주나요?",
       "body": "안전·데이터 안내 · 특보·측정 시각과 출처"
+    },
+    "hero": {
+      "summary": "{region} 바다 {count}곳의 특보·측정 상태예요",
+      "updated": "{time} 업데이트",
+      "category": {
+        "clear": "특보 없음",
+        "unavailable": "이용불가",
+        "undetermined": "판단불가"
+      },
+      "count": "{count}곳",
+      "reason": "{reason} {count}곳",
+      "clearScope": "각 해변 특보구역 · 기상청 {time} 확인",
+      "clearScopeNoTime": "각 해변 특보구역 · 기상청 · 확인 시각 모름"
+    },
+    "info": {
+      "title": "안내"
     }
   },
   "notFound": {
@@ -182,7 +215,12 @@
     "favorites": "즐겨찾기",
     "settings": "설정",
     "search": "해변 이름이나 지역 검색",
-    "back": "뒤로"
+    "back": "뒤로",
+    "searchPlaceholder": "해변이나 지역 이름",
+    "favoritesSaved": "저장한 해변 {count}곳",
+    "updated": "{time} 업데이트",
+    "delayedCount": "관측 지연 {count}곳",
+    "notLive": "{time} 정보 · 새로 확인 못 함"
   },
   "sheet": {
     "close": "닫기"
@@ -668,7 +706,7 @@
       "locationTitle": "위치",
       "locationBody": "가까운 해변을 찾을 때만 기기 안에서 거리를 계산하는 데 써요. 서버로 보내거나 저장하지 않고, 설정에서 끌 수 있어요.",
       "deviceTitle": "기기에 저장하는 것",
-      "deviceBody": "즐겨찾기·최근 본 해변·최근 검색·기본 지역·고른 활동·탐색 보기·첫 실행 기록·작성 중인 문의(유형·내용, 최대 7일)와 화면 설정(테마·화면 움직임·언어)·위치 사용 설정·마지막으로 받은 바다 정보는 이 기기의 브라우저에만 저장해요. 로그인이 없고 서버로 보내지 않아요. 화면 설정·위치 사용 설정·마지막 바다 정보를 뺀 나머지는 설정 › 기기 데이터 초기화로 지울 수 있어요.",
+      "deviceBody": "즐겨찾기·최근 본 해변(본 시각·그때 고른 활동 포함)·최근 검색·기본 지역·고른 활동·탐색 보기·첫 실행 기록·작성 중인 문의(유형·내용, 최대 7일)와 화면 설정(테마·화면 움직임·언어)·위치 사용 설정·마지막으로 받은 바다 정보는 이 기기의 브라우저에만 저장해요. 로그인이 없고 서버로 보내지 않아요. 화면 설정·위치 사용 설정·마지막 바다 정보를 뺀 나머지는 설정 › 기기 데이터 초기화로 지울 수 있어요.",
       "inquiryTitle": "데이터 문의",
       "inquiryBody": "보낸 문의 글은 90일, 사진은 30일 보관한 뒤 자동으로 지워요. 이메일은 남긴 경우에만 받고, 처리가 끝나면 바로(늦어도 90일 안에) 지워요. 사진의 위치 정보는 보내기 전에 기기에서 지워요.",
       "inquiryNoDeadline": "문의에 답하는 기한은 약속하지 않아요."

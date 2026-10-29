@@ -48,6 +48,11 @@ function subscribe(onChange: () => void) {
   };
 }
 
+// 지금 고른 활동(훅 밖에서 읽을 때). 상세에 들어간 순간의 활동을 최근 본 기록에 남길 때 씀(BRD-129)
+export function currentActivity(): Activity {
+  return read();
+}
+
 export function setActivity(activity: Activity) {
   memory = activity;
   try {

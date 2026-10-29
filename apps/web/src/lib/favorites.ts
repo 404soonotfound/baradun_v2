@@ -3,6 +3,7 @@ import { useSyncExternalStore } from "react";
 import { DEVICE_KEYS } from "@/lib/device-keys";
 import { createDeviceList, EMPTY_IDS } from "@/lib/device-list";
 import { clearRecentSearches } from "@/lib/recent-search";
+import { clearVisits, removeVisit } from "@/lib/recent-visits";
 
 // 즐겨찾기·최근 본 해변 (화면 명세 HOME·FAV, 아키텍처 9장: 기기 저장) (BRD-26)
 // 저장 값은 해변 내부 id. slug는 주소용이라 데이터 연결에 쓰지 않음
@@ -49,17 +50,26 @@ export function useRecent(): readonly string[] {
 export const addRecent = recent.add;
 
 // 최근 본 전체 지우기(즐겨찾기 화면, BRD-35). 되돌리기는 지우기 전 순서 그대로
+// 본 시각 기록(recent-visits.ts)도 같이 지우고 같이 되돌림
 export function clearRecent(): () => void {
   const before = recent.getSnapshot();
   recent.clear();
-  return () => recent.replace(before);
+  const undoVisits = clearVisits();
+  return () => {
+    recent.replace(before);
+    undoVisits();
+  };
 }
 
 // 최근 본 ✕. 지우기 전 목록을 기억해 '되돌리기'에서 원래 순서·자리로 복구하는 함수를 돌려줌
 export function removeRecent(id: string): () => void {
   const before = recent.getSnapshot();
   recent.remove(id);
-  return () => recent.replace(before);
+  const undoVisit = removeVisit(id);
+  return () => {
+    recent.replace(before);
+    undoVisit();
+  };
 }
 
 // [9] 설정 › 기기 데이터 초기화(BRD-36)에서 호출
@@ -67,5 +77,6 @@ export function removeRecent(id: string): () => void {
 export function clearFavoritesAndRecent() {
   favorites.clear();
   recent.clear();
+  clearVisits(); // 최근 본 해변을 본 시각·활동(BRD-129)
   clearRecentSearches(); // 최근 검색도 기기 데이터(BRD-31)
 }

@@ -3,10 +3,12 @@
 import { useId } from "react";
 import { useTranslations } from "next-intl";
 
+import { ActivityIcon } from "@/components/activity-icon";
 import { ACTIVITIES, setActivity, useActivity } from "@/lib/activity";
 import { cn } from "@/lib/cn";
 
-// 활동 타일 (노션 3장 ActivityTiles): 3칸, 타일 72px, 선택 = 브랜드 파랑 채움, 하나만 고름
+// 활동 타일 (노션 3장 ActivityTiles, Figma '활동 타일 · 새' 170:114·170:119): 3칸, 타일 72px, 선택 = 브랜드 파랑 채움, 하나만 고름
+// 아이콘(21) 위 · 글자(12.5 굵게) 아래, 사이 5px (BRD-129)
 // 진짜 라디오 버튼을 숨기고 라벨을 타일로 꾸밈 → 화살표 키·화면 읽기 기본 지원
 export function ActivityTiles() {
   const activity = useActivity();
@@ -23,11 +25,11 @@ export function ActivityTiles() {
             <label
               key={item}
               className={cn(
-                "flex h-tile cursor-pointer items-center justify-center rounded-tile border text-title-s",
+                "flex h-tile cursor-pointer flex-col items-center justify-center gap-[5px] rounded-tile border px-[7px] py-0.5 text-label-s font-bold",
                 "has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-brand-default",
                 selected
                   ? "border-brand-default bg-brand-default text-brand-on"
-                  : "border-border-strong bg-bg-surface text-text-default hover:bg-bg-subtle",
+                  : "border-border-default bg-bg-surface text-text-default hover:bg-bg-subtle",
               )}
             >
               <input
@@ -38,6 +40,7 @@ export function ActivityTiles() {
                 onChange={() => setActivity(item)}
                 className="sr-only"
               />
+              <ActivityIcon activity={item} />
               {item === "scuba" ? (
                 <>
                   {/* 모바일은 "스쿠버", PC는 "스쿠버다이빙" 전체 표기 (노션 3장) */}

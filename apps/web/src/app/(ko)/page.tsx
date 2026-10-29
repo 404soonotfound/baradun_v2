@@ -29,7 +29,8 @@ export default async function Home() {
         sampleSnapshot={hasDevSampleSnapshot()}
       />
       {/* 지금 언어를 뺀 나머지 언어로 가는 링크. 언어가 늘어도 이 코드는 그대로임. */}
-      <nav className="mt-6" aria-label={t("common.languages")}>
+      {/* PC는 홈 본문 선(64px)에 맞춤(본문 여백 40 + 24, home-screen과 같음) */}
+      <nav className="mt-6 lg:px-6" aria-label={t("common.languages")}>
         {LOCALES.filter((locale) => locale !== "ko").map((locale) => (
           <Link
             key={locale}

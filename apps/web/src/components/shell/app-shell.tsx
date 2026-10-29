@@ -25,6 +25,8 @@ export async function AppShell({
   children: React.ReactNode;
 }) {
   const t = await getTranslations({ locale, namespace: "nav" });
+  // 노출 중인 해변 목록(빌드 때). 첫 실행 안내의 지역 묶음과 상단 내비 관측 지연 수에 씀
+  const beaches = listBeachSummaries(locale);
   const noticeTexts: Partial<Record<Locale, LanguageNoticeText>> = {};
   for (const other of LOCALES) {
     if (other === locale) continue;
@@ -48,7 +50,7 @@ export async function AppShell({
       >
         {t("skipToContent")}
       </a>
-      <TopNav />
+      <TopNav beachIds={beaches.map((beach) => beach.id)} />
 
       <main
         id="main"
@@ -58,10 +60,7 @@ export async function AppShell({
         {children}
       </main>
       <TabBar />
-      <Onboarding
-        locale={locale}
-        groups={regionGroups(listBeachSummaries(locale))}
-      />
+      <Onboarding locale={locale} groups={regionGroups(beaches)} />
       <SystemScreen />
     </>
   );

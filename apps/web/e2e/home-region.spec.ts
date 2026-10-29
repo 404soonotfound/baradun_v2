@@ -21,6 +21,8 @@ const TEXT = {
     nationwide: "전국",
     nationwideSea: "전국 바다",
     nationwideCount: `전국 해변 ${PUBLIC_BEACH_COUNT}곳 지금 상태`,
+    // PC는 개수 카드 대신 히어로 요약 줄(BRD-129, Figma 181:789)
+    nationwideSummary: `전국 바다 ${PUBLIC_BEACH_COUNT}곳의 특보·측정 상태예요`,
     offTitle: "위치 없이 보고 있어요",
     offDefault:
       "전국 해변을 이름 순으로 보여드려요. 위치를 켜면 가까운 바다를 보여드려요.",
@@ -51,6 +53,7 @@ const TEXT = {
     nationwide: "All Korea",
     nationwideSea: "Seas across Korea",
     nationwideCount: `${PUBLIC_BEACH_COUNT} beaches across Korea right now`,
+    nationwideSummary: `Warnings and measurements for ${PUBLIC_BEACH_COUNT} beaches in All Korea`,
     offTitle: "Viewing without location",
     offDefault:
       "Showing beaches across Korea by name. Turn on location to see nearby beaches.",
@@ -112,6 +115,22 @@ async function denyLocation(page: Page) {
   });
 }
 
+// 전국 해변 수: 모바일은 상태별 개수 카드(링크), PC는 히어로 요약 줄(BRD-129 · 개수 카드는 모바일만)
+async function expectNationwideCount(
+  page: Page,
+  text: (typeof TEXT)[keyof typeof TEXT],
+) {
+  if (test.info().project.name === "desktop") {
+    await expect(
+      page.getByText(new RegExp(text.nationwideSummary)),
+    ).toBeVisible();
+  } else {
+    await expect(
+      page.getByRole("link", { name: new RegExp(text.nationwideCount) }),
+    ).toBeVisible();
+  }
+}
+
 for (const locale of ["ko", "en"] as const) {
   const text = TEXT[locale];
 
@@ -125,9 +144,7 @@ for (const locale of ["ko", "en"] as const) {
       await expect(
         page.getByRole("heading", { level: 2, name: text.nationwideSea }),
       ).toBeVisible();
-      await expect(
-        page.getByRole("link", { name: new RegExp(text.nationwideCount) }),
-      ).toBeVisible();
+      await expectNationwideCount(page, text);
       await expect(
         page.getByRole("button", { name: text.opener(text.nationwide) }),
       ).toBeVisible();
@@ -262,9 +279,7 @@ for (const locale of ["ko", "en"] as const) {
       ).toHaveAttribute("aria-pressed", "true");
       await dialog.getByRole("button", { name: text.nationwide }).click();
       await expect(seaHeading(page)).toHaveText(text.nationwideSea);
-      await expect(
-        page.getByRole("link", { name: new RegExp(text.nationwideCount) }),
-      ).toBeVisible();
+      await expectNationwideCount(page, text);
 
       dialog = await openSheet(page, text, text.nationwide);
       await dialog.getByRole("button", { name: text.nearby }).click();

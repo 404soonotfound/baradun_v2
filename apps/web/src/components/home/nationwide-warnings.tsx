@@ -63,7 +63,7 @@ export function NationwideWarnings({
         {warnings.kind === "ready" && (
           <>
             {/* [3] 요약 줄 */}
-            <p className="border-b border-border-default px-4 py-3 text-body-s text-text-body">
+            <p className="border-b border-border-default px-4 pt-[11px] pb-3 text-body-s text-text-body">
               {warnings.items.length > 0
                 ? // t.rich = 문구 안 <b>…</b>를 부품으로 바꿈(Vue i18n의 <i18n-t> 자리)
                   t.rich("count", {
@@ -88,7 +88,7 @@ export function NationwideWarnings({
                   <li
                     // 같은 구역·종류가 두 번 올 수 있어 발표 시각까지 붙임
                     key={`${item.zoneName}-${item.type}-${item.level}-${item.publishedAt}`}
-                    className="border-t border-border-default first:border-t-0"
+                    className="border-t border-border-subtle first:border-t-0"
                   >
                     <button
                       type="button"
@@ -97,7 +97,7 @@ export function NationwideWarnings({
                         setSelected(item);
                         sheet.show();
                       }}
-                      className="flex min-h-touch w-full items-center gap-3 px-4 py-[11px] text-left hover:bg-bg-subtle focus-visible:-outline-offset-2"
+                      className="flex min-h-touch w-full items-center gap-3 px-4 pt-3 pb-[11px] text-left hover:bg-bg-subtle focus-visible:-outline-offset-2"
                     >
                       <span
                         aria-hidden="true"
@@ -107,7 +107,7 @@ export function NationwideWarnings({
                       </span>
                       <span className="flex min-w-0 flex-1 flex-col">
                         {/* "동해중부먼바다 풍랑주의보" / "Wind wave advisory · Nearshore waters of …": 순서는 언어별 문구 키 */}
-                        <span className="text-body-s font-bold text-text-default">
+                        <span className="text-label text-text-default">
                           {tw.rich("zoneLine", {
                             name: badgeText({
                               kind: "warning",
