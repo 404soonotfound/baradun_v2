@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { ANNEX5, ANNEX5_URL, ANNEX9_URL as ANNEX9_URL_TABLE, sigunguIsSplit, zoneOf } from "./annex.mjs";
-import { BJD_CSV, BJD_LABEL, COAST_DBF, COAST_SHP, COVERAGE_DIR, MOF_LABEL, MOF_XLSX, REGIONS, emdPaths, gisLabel, pinnedSha, sha256, sigunguMatches } from "./regions.mjs";
+import { BJD_CSV, BJD_LABEL, COAST_DBF, COAST_SHP, COVERAGE_DIR, EMD_SOURCE, MOF_LABEL, MOF_XLSX, gisLabel, pinnedSha, sha256, sigunguMatches } from "./regions.mjs";
 
 // 근거에 남기는 출처 표기는 수집 당시 위치(tools/coverage/…) 그대로 둠. 실제 파일은 COVERAGE_DIR
 export const BEACH_SOURCE_FILE = "tools/coverage/out/beaches.csv";
@@ -33,14 +33,11 @@ export function seaEvidenceFor(src, r, addr, { sourceSha, collectedAt, checkedAt
 export const WARNING_HISTORY_FILE =
   "tools/coverage/out/warnings/pwncd_360d.csv";
 
-// L1 좌표–경계 근거(결정 4-A): 브이월드 법정 읍면동 경계 원자료(저장소 밖 $BARADUN_GIS_DIR). 파일이 없으면 검증 불가
-const emdSourceOk = (src) => {
-  const r = REGIONS[src?.sido];
-  if (!r) return false;
-  const pth = emdPaths(r.code);
-  // 근거에 기록된 해시 = 지금 파일 = data-sources.json 고정 해시(검토한 원자료). 읍면동 코드·이름은 dbf에 있어 dbf도 대조
-  return src.file === pth.label && pinnedOk(src.sha256, pth.shp, pth.label) && pinnedOk(src.dbf_sha256, pth.dbf, pth.label.replace(/\.shp$/, ".dbf"));
-};
+// L1 좌표–경계 근거(결정 4-A): 국토교통부 법정구역정보 읍면동 층(저장소 밖 $BARADUN_GIS_DIR). 파일이 없거나 고정 해시가 비면 검증 불가
+// 근거에 기록된 해시 = 지금 파일 = data-sources.json 고정 해시(검토한 원자료). 읍면동 코드·이름은 dbf에 있어 dbf도 대조
+// 다른 경계 자료(종전 시·도별 경계 포함)로 만든 근거는 파일 표기가 달라 통과하지 않음
+const emdSourceOk = (src) =>
+  src?.file === EMD_SOURCE.label && pinnedOk(src.sha256, EMD_SOURCE.shp, EMD_SOURCE.label) && pinnedOk(src.dbf_sha256, EMD_SOURCE.dbf, EMD_SOURCE.dbfLabel);
 // 고정 해시가 있고 근거 해시·지금 파일 해시와 모두 같음
 const pinnedOk = (recorded, path, label) => Boolean(pinnedSha(label)) && recorded === pinnedSha(label) && recorded === sha256(path);
 // 공식 주소 대조 근거(address_check)가 고정 해시 해수부 xlsx에서 나왔는지
@@ -49,16 +46,14 @@ const mofSourceOk = (a) => pinnedOk(a?.source?.sha256, MOF_XLSX, MOF_LABEL);
 const bjdSourceOk = (src) => pinnedOk(src?.sha256, BJD_CSV, BJD_LABEL);
 // L1 좌표 판정 근거 원자료 전부: 읍면동 경계 + 해수부 주소 xlsx + 법정동코드
 const landSourcesOk = (p) => emdSourceOk(p?.boundary_source) && mofSourceOk(p?.address_check) && bjdSourceOk(p?.sigungu_link?.source);
-// 관측소 S1 근거(station-zone-evidence boundary_source): 해안선 + 시·도별 읍면동 경계 + 법정동코드가 모두 고정 해시와 같음
+// 관측소 S1 근거(station-zone-evidence boundary_source): 해안선 + 읍면동 경계 + 법정동코드가 모두 고정 해시와 같음
 export const stationSourceOk = (src) => {
   const coastLabel = gisLabel("coastline_2026/2026 해안선.shp");
   const [emd, bjd] = src?.sigungu_by ?? [];
-  const emdFiles = Object.entries(emd?.files ?? {});
   return (
     pinnedOk(src?.sha256, COAST_SHP, coastLabel) &&
     pinnedOk(src?.dbf_sha256, COAST_DBF, coastLabel.replace(/\.shp$/, ".dbf")) &&
-    emdFiles.length === Object.keys(REGIONS).length &&
-    emdFiles.every(([sido, f]) => emdSourceOk({ sido, ...f })) &&
+    emdSourceOk(emd) &&
     bjdSourceOk(bjd)
   );
 };

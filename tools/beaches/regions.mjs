@@ -18,7 +18,7 @@ export const COAST_DBF = join(COAST_DIR, "2026 해안선.dbf");
 // 증거에 남기는 경로 표기(사람마다 홈 경로가 달라 상대 표기)
 export const gisLabel = (rel) => `$BARADUN_GIS_DIR/${rel}`;
 
-// 해수부 수집본 sido_nm → 브이월드 시·도 코드·표시 이름 (전남은 전남광주통합특별시 12, 화면 표시는 '전남')
+// 해수부 수집본 sido_nm → 법정동코드 시·도 앞 두 자리·표시 이름 (전남은 전남광주통합특별시 12, 화면 표시는 '전남')
 export const REGIONS = {
   부산: { code: "26", ko: "부산", en: "Busan" },
   인천: { code: "28", ko: "인천", en: "Incheon" },
@@ -32,9 +32,6 @@ export const REGIONS = {
   전북: { code: "52", ko: "전북", en: "Jeonbuk" },
   전남: { code: "12", ko: "전남", en: "Jeonnam" },
 };
-export const emdRel = (code) => `vworld_umd/LSMD_ADM_SECT_UMD_${code}_202610/LSMD_ADM_SECT_UMD_${code}_202610`;
-export const emdPaths = (code) => ({ shp: join(GIS_DIR, `${emdRel(code)}.shp`), dbf: join(GIS_DIR, `${emdRel(code)}.dbf`), label: gisLabel(`${emdRel(code)}.shp`) });
-
 const hashCache = new Map();
 export const sha256 = (path) => {
   if (!hashCache.has(path)) hashCache.set(path, existsSync(path) ? createHash("sha256").update(readFileSync(path)).digest("hex") : null);
@@ -51,12 +48,36 @@ const pinnedPath = (label, coverageDir = COVERAGE_DIR) =>
   : label.startsWith("$BARADUN_DATA_DIR/baradun-coverage/") ? join(coverageDir, label.slice("$BARADUN_DATA_DIR/baradun-coverage/".length))
   : label.replace("$BARADUN_GIS_DIR", () => GIS_DIR).replace("$BARADUN_DATA_DIR", () => DATA_DIR); // 함수로 넘김: 경로 안 '$&' 등을 치환 패턴으로 해석하지 않게
 export const pinnedSha = (label) => PINNED.find((f) => f.path === label)?.sha256 ?? null;
-// 하나라도 없거나 해시가 다르면 중단
+
+// 법정 읍면동 경계: 국토교통부 법정구역정보(브이월드 dsId=21) 전국 전체데이터 SHP의 읍면동(EMD) 층
+// 경로·해시·dbf 인코딩은 data-sources.json의 role 항목에서 읽음. 받은 파일로 고정하기 전(sha256·encoding null)에는 판정·생성 중단
+const pinnedRole = (role) => {
+  const hits = PINNED.filter((f) => f.role === role);
+  if (hits.length !== 1) throw new Error(`data-sources.json에 ${role} 항목이 하나가 아님`);
+  return hits[0];
+};
+const emdShp = pinnedRole("emd_boundary_shp");
+const emdDbf = pinnedRole("emd_boundary_dbf");
+export const EMD_SOURCE = {
+  name: emdShp.name,
+  source_url: emdShp.source_url,
+  base_date: emdShp.base_date,
+  license: emdShp.license,
+  license_url: emdShp.license_url,
+  attribution: emdShp.attribution,
+  label: emdShp.path,
+  dbfLabel: emdDbf.path,
+  shp: pinnedPath(emdShp.path),
+  dbf: pinnedPath(emdDbf.path),
+  encoding: emdDbf.encoding ?? null,
+};
+
+// 하나라도 없거나, 고정 해시가 비었거나, 해시가 다르면 중단
 export function verifyPinnedSources(coverageDir = COVERAGE_DIR) {
   hashCache.clear(); // 같은 프로세스에서 재실행해도 바뀐 원자료를 다시 확인함
   const bad = PINNED.map((f) => [f, sha256(pinnedPath(f.path, coverageDir))])
-    .filter(([f, now]) => now !== f.sha256)
-    .map(([f, now]) => `${f.path}(${now ? "해시 다름" : "파일 없음"})`);
+    .filter(([f, now]) => !f.sha256 || now !== f.sha256)
+    .map(([f, now]) => `${f.path}(${!f.sha256 ? "고정 해시 없음" : now ? "해시 다름" : "파일 없음"})`);
   if (bad.length) throw new Error(`원자료가 data-sources.json 고정 해시와 다름 → 생성 중단: ${bad.join(" / ")}`);
 }
 
