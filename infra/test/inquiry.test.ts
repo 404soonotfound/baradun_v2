@@ -1,4 +1,6 @@
 import { Match } from "aws-cdk-lib/assertions";
+import { readFileSync } from "node:fs";
+import * as path from "node:path";
 import { describe, expect, it } from "vitest";
 import { template } from "./stack-template";
 
@@ -147,13 +149,37 @@ describe("데이터 문의 접수 인프라", () => {
   });
 
   it("웹 빌드가 업로드 주소를 맞춰 볼 사진 버킷 이름을 출력한다(BRD-103)", () => {
-    const output = Object.values(template.findOutputs("InquiryPhotoBucketName"));
-    expect(output).toHaveLength(1);
-    const buckets = Object.keys(template.findResources("AWS::S3::Bucket")).filter(
-      (id) => id.startsWith("InquiryPhotos"),
+    const output = Object.values(
+      template.findOutputs("InquiryPhotoBucketName"),
     );
+    expect(output).toHaveLength(1);
+    const buckets = Object.keys(
+      template.findResources("AWS::S3::Bucket"),
+    ).filter((id) => id.startsWith("InquiryPhotos"));
     expect(buckets).toHaveLength(1);
     expect(output[0]?.Value).toEqual({ Ref: buckets[0] });
   });
 });
 
+// 이메일·사진 받기 설정(결정 기록 13장 D13-2, BRD-130). 두 값은 서로 다른 패키지(services·apps/web)에 있고 서로 가져오지 않음(17.2 경계)
+// → 인프라 테스트가 두 파일을 글자로 읽어 비교함. 화면은 칸을 숨겼는데 서버가 받거나, 그 반대가 되지 않게 함
+describe("문의 이메일·사진 받기 설정 (BRD-130)", () => {
+  const REPO_ROOT = path.join(__dirname, "..", "..");
+  const read = (file: string): string => {
+    const text = readFileSync(path.join(REPO_ROOT, file), "utf8");
+    const match = /export const INQUIRY_CONTACT_ENABLED = (true|false);/.exec(
+      text,
+    );
+    expect(
+      match,
+      `${file}에서 INQUIRY_CONTACT_ENABLED를 찾지 못함`,
+    ).not.toBeNull();
+    return match![1]!;
+  };
+
+  it("화면과 서버의 값이 같다", () => {
+    expect(read("apps/web/src/lib/inquiry/form.ts")).toBe(
+      read("services/src/inquiry/policy.ts"),
+    );
+  });
+});
