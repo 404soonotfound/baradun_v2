@@ -14,7 +14,7 @@ import { linkOfficials } from "./official-link.mjs";
 import { METRICS, assignMetric, haversineKm, loadAssignContext, readCsv, round1 } from "./station-assign.mjs";
 import { seaEvidenceFor, zoneProofVerified } from "./zone-proof.mjs";
 import { ANNEX, ANNEX4_BOUNDARIES, ANNEX5, ANNEX5_URL, ANNEX9_CHECKED, ANNEX9_ITEM, ANNEX9_URL, annex9Lookup, splitFull, zoneOfFull } from "./annex.mjs";
-import { BJD_CSV, BJD_LABEL, COAST_DBF, COAST_SHP, COVERAGE_DIR, EMD_SOURCE, MOF_XLSX, REGIONS, gisLabel, regionArg, sha256, sigunguMatches, verifyPinnedSources } from "./regions.mjs"; // sha256: 고정 해시 대조 때 계산한 값 재사용
+import { BJD_CSV, BJD_LABEL, COAST_DBF, COAST_SHP, COVERAGE_DIR, MOF_XLSX, REGIONS, gisLabel, regionArg, sha256, emdSource, sigunguMatches, verifyPinnedSources } from "./regions.mjs"; // sha256: 고정 해시 대조 때 계산한 값 재사용
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 verifyPinnedSources(); // 원자료가 data-sources.json 고정 해시와 다르면 판정·생성하지 않음
@@ -34,6 +34,7 @@ const zoneOfSigungu = (full, emd = null) => zoneOfFull(full, emd);
 const COAST_SNAP_M = 500; // 해안선 대표점이 읍면동 경계에서 500m 넘게 떨어지면 먼 선분 규칙(D·2D) 적용 (노션 2.2 10/21)
 
 // ── 원자료 읽기 (저장소 밖 $BARADUN_GIS_DIR, 아키텍처 2.2 10/21) ──
+const EMD_SOURCE = emdSource();
 const SOURCES = {
   emd: {
     name: EMD_SOURCE.name,

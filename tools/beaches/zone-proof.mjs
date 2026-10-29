@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { ANNEX5, ANNEX5_URL, ANNEX9_URL as ANNEX9_URL_TABLE, sigunguIsSplit, zoneOf } from "./annex.mjs";
-import { BJD_CSV, BJD_LABEL, COAST_DBF, COAST_SHP, COVERAGE_DIR, EMD_SOURCE, MOF_LABEL, MOF_XLSX, gisLabel, pinnedSha, sha256, sigunguMatches } from "./regions.mjs";
+import { BJD_CSV, BJD_LABEL, COAST_DBF, COAST_SHP, COVERAGE_DIR, MOF_LABEL, MOF_XLSX, emdSource, gisLabel, pinnedSha, sha256, sigunguMatches } from "./regions.mjs";
 
 // 근거에 남기는 출처 표기는 수집 당시 위치(tools/coverage/…) 그대로 둠. 실제 파일은 COVERAGE_DIR
 export const BEACH_SOURCE_FILE = "tools/coverage/out/beaches.csv";
@@ -36,8 +36,10 @@ export const WARNING_HISTORY_FILE =
 // L1 좌표–경계 근거(결정 4-A): 국토교통부 법정구역정보 읍면동 층(저장소 밖 $BARADUN_GIS_DIR). 파일이 없거나 고정 해시가 비면 검증 불가
 // 근거에 기록된 해시 = 지금 파일 = data-sources.json 고정 해시(검토한 원자료). 읍면동 코드·이름은 dbf에 있어 dbf도 대조
 // 다른 경계 자료(종전 시·도별 경계 포함)로 만든 근거는 파일 표기가 달라 통과하지 않음
-const emdSourceOk = (src) =>
-  src?.file === EMD_SOURCE.label && pinnedOk(src.sha256, EMD_SOURCE.shp, EMD_SOURCE.label) && pinnedOk(src.dbf_sha256, EMD_SOURCE.dbf, EMD_SOURCE.dbfLabel);
+const emdSourceOk = (src) => {
+  const emd = emdSource();
+  return src?.file === emd.label && pinnedOk(src.sha256, emd.shp, emd.label) && pinnedOk(src.dbf_sha256, emd.dbf, emd.dbfLabel);
+};
 // 고정 해시가 있고 근거 해시·지금 파일 해시와 모두 같음
 const pinnedOk = (recorded, path, label) => Boolean(pinnedSha(label)) && recorded === pinnedSha(label) && recorded === sha256(path);
 // 공식 주소 대조 근거(address_check)가 고정 해시 해수부 xlsx에서 나왔는지

@@ -51,26 +51,32 @@ export const pinnedSha = (label) => PINNED.find((f) => f.path === label)?.sha256
 
 // 법정 읍면동 경계: 국토교통부 법정구역정보(브이월드 dsId=21) 전국 전체데이터 SHP의 읍면동(EMD) 층
 // 경로·해시·dbf 인코딩은 data-sources.json의 role 항목에서 읽음. 받은 파일로 고정하기 전(sha256·encoding null)에는 판정·생성 중단
+// 경계를 쓰는 곳에서 처음 부를 때 읽음(이 모듈만 가져오는 다른 도구는 경계 항목과 무관하게 동작)
 const pinnedRole = (role) => {
   const hits = PINNED.filter((f) => f.role === role);
   if (hits.length !== 1) throw new Error(`data-sources.json에 ${role} 항목이 하나가 아님`);
   return hits[0];
 };
-const emdShp = pinnedRole("emd_boundary_shp");
-const emdDbf = pinnedRole("emd_boundary_dbf");
-export const EMD_SOURCE = {
-  name: emdShp.name,
-  source_url: emdShp.source_url,
-  base_date: emdShp.base_date,
-  license: emdShp.license,
-  license_url: emdShp.license_url,
-  attribution: emdShp.attribution,
-  label: emdShp.path,
-  dbfLabel: emdDbf.path,
-  shp: pinnedPath(emdShp.path),
-  dbf: pinnedPath(emdDbf.path),
-  encoding: emdDbf.encoding ?? null,
-};
+let emdSourceCache = null;
+export function emdSource() {
+  if (emdSourceCache) return emdSourceCache;
+  const shp = pinnedRole("emd_boundary_shp");
+  const dbf = pinnedRole("emd_boundary_dbf");
+  emdSourceCache = {
+    name: shp.name,
+    source_url: shp.source_url,
+    base_date: shp.base_date,
+    license: shp.license,
+    license_url: shp.license_url,
+    attribution: shp.attribution,
+    label: shp.path,
+    dbfLabel: dbf.path,
+    shp: pinnedPath(shp.path),
+    dbf: pinnedPath(dbf.path),
+    encoding: dbf.encoding ?? null,
+  };
+  return emdSourceCache;
+}
 
 // 하나라도 없거나, 고정 해시가 비었거나, 해시가 다르면 중단
 export function verifyPinnedSources(coverageDir = COVERAGE_DIR) {
