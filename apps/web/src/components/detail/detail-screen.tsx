@@ -178,6 +178,7 @@ export function DetailScreen({
             detail={detail}
             stations={beach.stations}
             nowMs={snapshot.nowMs}
+            kmaSource={kmaSource}
             onOpenWarning={(item) => {
               setWarningItem(item);
               warningSheet.show();
