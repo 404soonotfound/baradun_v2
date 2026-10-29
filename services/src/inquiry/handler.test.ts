@@ -56,7 +56,9 @@ function event(
   };
 }
 
-function dependencies(overrides: Partial<InquiryDependencies> = {}): InquiryDependencies {
+function dependencies(
+  overrides: Partial<InquiryDependencies> = {},
+): InquiryDependencies {
   return {
     store: {
       allowRequest: vi.fn(async () => true),
@@ -76,6 +78,8 @@ function dependencies(overrides: Partial<InquiryDependencies> = {}): InquiryDepe
     notifier: { notify: vi.fn(async () => "sent" as const) },
     now: () => new Date("2026-10-26T00:00:00.000Z"),
     id: () => "123e4567-e89b-42d3-a456-426614174000",
+    // 기존 테스트는 이메일·사진을 받는 상태(켜짐)를 기준으로 함. 꺼짐은 아래 BRD-130 묶음에서 확인
+    contactEnabled: true,
     ...overrides,
   } as unknown as InquiryDependencies;
 }
@@ -86,7 +90,12 @@ describe("문의 함수 URL 처리", () => {
     const response = await handleInquiryHttp(
       event(
         "/api/inquiries",
-        { idempotencyKey: KEY, type: "data_suggestion", message: "문의", photos: [] },
+        {
+          idempotencyKey: KEY,
+          type: "data_suggestion",
+          message: "문의",
+          photos: [],
+        },
         "0".repeat(64),
       ),
       deps,
@@ -272,8 +281,14 @@ describe("문의 멱등 키 (BRD-103)", () => {
   it("같은 키·같은 내용의 두 번째 요청은 새 문의·알림 없이 첫 응답을 그대로 돌려줌", async () => {
     const store = memoryStore();
     const deps = dependencies({ store: store as never, id: sequentialIds() });
-    const first = await handleInquiryHttp(event("/api/inquiries", body()), deps);
-    const second = await handleInquiryHttp(event("/api/inquiries", body()), deps);
+    const first = await handleInquiryHttp(
+      event("/api/inquiries", body()),
+      deps,
+    );
+    const second = await handleInquiryHttp(
+      event("/api/inquiries", body()),
+      deps,
+    );
 
     expect(first.statusCode).toBe(201);
     expect(second.statusCode).toBe(201);
@@ -286,8 +301,14 @@ describe("문의 멱등 키 (BRD-103)", () => {
   it("이미 접수한 키의 재시도는 속도 제한을 다시 세지 않음(상한에 걸려도 첫 응답)", async () => {
     const store = memoryStore({ rateLimit: 1 });
     const deps = dependencies({ store: store as never, id: sequentialIds() });
-    const first = await handleInquiryHttp(event("/api/inquiries", body()), deps);
-    const retry = await handleInquiryHttp(event("/api/inquiries", body()), deps);
+    const first = await handleInquiryHttp(
+      event("/api/inquiries", body()),
+      deps,
+    );
+    const retry = await handleInquiryHttp(
+      event("/api/inquiries", body()),
+      deps,
+    );
     const other = await handleInquiryHttp(
       event(
         "/api/inquiries",
@@ -340,7 +361,9 @@ describe("문의 멱등 키 (BRD-103)", () => {
         // 두 요청이 모두 멱등 기록 확인을 지난 뒤에 저장하게 붙잡아 둠
         inspect: vi.fn(async (photo: { photoId: string }) => {
           await gate;
-          return { result: { photoId: photo.photoId, status: "accepted" as const } };
+          return {
+            result: { photoId: photo.photoId, status: "accepted" as const },
+          };
         }),
       } as never,
     });
@@ -348,7 +371,9 @@ describe("문의 멱등 키 (BRD-103)", () => {
       handleInquiryHttp(event("/api/inquiries", body()), deps),
       handleInquiryHttp(event("/api/inquiries", body()), deps),
     ]);
-    await vi.waitFor(() => expect(deps.photos.inspect).toHaveBeenCalledTimes(2));
+    await vi.waitFor(() =>
+      expect(deps.photos.inspect).toHaveBeenCalledTimes(2),
+    );
     release();
     const [a, b] = await both;
 
@@ -401,7 +426,10 @@ describe("문의 멱등 키 (BRD-103)", () => {
         }),
       } as never,
     });
-    const response = await handleInquiryHttp(event("/api/inquiries", body()), deps);
+    const response = await handleInquiryHttp(
+      event("/api/inquiries", body()),
+      deps,
+    );
     expect(response.statusCode).toBe(201);
     expect(store.inquiries).toHaveLength(1);
   });
@@ -417,7 +445,12 @@ describe("문의 멱등 키 (BRD-103)", () => {
     const variants: CreateInquiryRequest[] = [
       { ...base, type: "data_suggestion" },
       { ...base, message: `${base.message} ` },
-      { type: base.type, message: base.message, photos: base.photos, idempotencyKey: KEY }, // 이메일 없음
+      {
+        type: base.type,
+        message: base.message,
+        photos: base.photos,
+        idempotencyKey: KEY,
+      }, // 이메일 없음
       { ...base, photos: [] },
       { ...base, photos: [{ ...PHOTO, photoId: "fedcba9876543210" }] },
       { ...base, beachId: "b0001" },
@@ -481,7 +514,10 @@ describe("사진 업로드 양식 발급 (BRD-103)", () => {
   it("계약 밖 주소·칸이 나오면 내보내지 않고 던짐(503)", async () => {
     for (const bad of [
       { ...target, url: "https://evil.example/" },
-      { ...target, url: "http://baradunv2-photos-test.s3.ap-northeast-2.amazonaws.com/" },
+      {
+        ...target,
+        url: "http://baradunv2-photos-test.s3.ap-northeast-2.amazonaws.com/",
+      },
       { ...target, method: "PUT" },
       { ...target, fields: { ...target.fields, acl: "public-read" } },
     ]) {
@@ -503,5 +539,60 @@ describe("사진 업로드 양식 발급 (BRD-103)", () => {
     );
     expect(response.statusCode).toBe(400);
     expect(deps.store.allowRequest).not.toHaveBeenCalled();
+  });
+});
+
+describe("이메일·사진 받기 꺼짐 (결정 기록 13장 D13-2, BRD-130)", () => {
+  const base = {
+    idempotencyKey: KEY,
+    type: "data_suggestion",
+    message: "문의",
+    photos: [],
+  };
+
+  it("사진 업로드 양식을 만들지 않고 400(속도 제한도 세지 않음)", async () => {
+    const deps = dependencies({ contactEnabled: false });
+    const response = await handleInquiryHttp(
+      event("/api/inquiries/uploads", {
+        photos: [{ contentType: "image/jpeg", size: 10 }],
+      }),
+      deps,
+    );
+    expect(response.statusCode).toBe(400);
+    expect(deps.photos.createUploads).not.toHaveBeenCalled();
+    expect(deps.store.allowRequest).not.toHaveBeenCalled();
+  });
+
+  it("이메일이나 사진이 담긴 문의는 저장·알림 없이 400", async () => {
+    for (const extra of [
+      { email: "reader@example.com" },
+      { email: "" },
+      { photos: [PHOTO] },
+    ]) {
+      const deps = dependencies({ contactEnabled: false });
+      const response = await handleInquiryHttp(
+        event("/api/inquiries", { ...base, ...extra }),
+        deps,
+      );
+      expect(response.statusCode, JSON.stringify(extra)).toBe(400);
+      expect(deps.photos.inspect).not.toHaveBeenCalled();
+      expect(deps.store.save).not.toHaveBeenCalled();
+      expect(deps.notifier.notify).not.toHaveBeenCalled();
+    }
+  });
+
+  it("유형·내용만 담긴 문의는 그대로 접수(201)", async () => {
+    const deps = dependencies({ contactEnabled: false });
+    const response = await handleInquiryHttp(
+      event("/api/inquiries", base),
+      deps,
+    );
+    expect(response.statusCode).toBe(201);
+    expect(deps.store.save).toHaveBeenCalledWith(
+      expect.objectContaining({ message: "문의", photoKeys: [] }),
+    );
+    expect(deps.store.save).toHaveBeenCalledWith(
+      expect.not.objectContaining({ email: expect.anything() }),
+    );
   });
 });
