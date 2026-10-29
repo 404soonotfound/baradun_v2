@@ -26,12 +26,15 @@ export function MapView({
   locale,
   bounds,
   overlay,
+  dataSource,
   onShowList,
   className,
 }: {
   locale: Locale;
   bounds: LngLatBox; // 처음 보이는 범위
   overlay?: (api: MapHandle) => ReactNode;
+  // 지도 위에 그린 정보(마커)의 출처 글자(예: '출처: 기상청 …', BRD-113). 지도를 다 그린 뒤에만 출처 줄 위에 보임
+  dataSource?: string | null;
   // 실패 화면의 '목록으로 보기'(모바일 지도 보기). PC(lg)는 목록이 옆에 있어 버튼을 숨김
   onShowList?: () => void;
   className?: string;
@@ -229,21 +232,25 @@ export function MapView({
         )}
       </div>
 
-      {/* 출처 표기(OSM·OpenMapTiles·OpenFreeMap). 지도가 보이든 실패하든 같은 자리 */}
-      <p className="flex flex-wrap items-center gap-x-2 gap-y-0.5 border-t border-border-default px-3 py-2 text-caption text-text-muted">
-        <span className="sr-only">{t("attribution.label")}</span>
-        {MAP_ATTRIBUTIONS.map((item) => (
-          <a
-            key={item.key}
-            href={item.href}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="underline-offset-2 hover:underline"
-          >
-            {t(`attribution.${item.key}`)}
-          </a>
-        ))}
-      </p>
+      <div className="flex flex-col gap-0.5 border-t border-border-default px-3 py-2 text-caption text-text-muted">
+        {/* 마커의 출처(기상청). 마커는 다 그린 뒤에만 보이므로 같은 조건 */}
+        {ready && api && dataSource && <p>{dataSource}</p>}
+        {/* 출처 표기(OSM·OpenMapTiles·OpenFreeMap). 지도가 보이든 실패하든 같은 자리 */}
+        <p className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+          <span className="sr-only">{t("attribution.label")}</span>
+          {MAP_ATTRIBUTIONS.map((item) => (
+            <a
+              key={item.key}
+              href={item.href}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline-offset-2 hover:underline"
+            >
+              {t(`attribution.${item.key}`)}
+            </a>
+          ))}
+        </p>
+      </div>
     </section>
   );
 }

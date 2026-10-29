@@ -4,7 +4,7 @@ import type { Beach } from "@baradun/contracts";
 import { CloudRain, Navigation, Phone, Star } from "lucide-react";
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
-import { useId } from "react";
+import { useId, type ReactNode } from "react";
 
 import { shownMetric, shownStation } from "@/components/detail/sea-card";
 import { ZoneName } from "@/components/zone-name";
@@ -127,7 +127,12 @@ export function Call119({ className }: { className?: string }) {
   );
 }
 
-// 정보 출처 3행: 파도·바람 / 특보 / 수온(통제 행은 후속, G2). 측정소 이름·거리 + 시각
+// 이안류 지수 원문(공공데이터포털 15156028, 공공누리 제1유형: 링크가 가능하면 출처 링크를 둠)
+const RIP_SOURCE_URL = "https://www.data.go.kr/data/15156028/openapi.do";
+
+// 정보 출처 3행: 파도·바람 / 특보 / 수온(통제 행은 후속, G2). 기관 + 측정소 이름·거리 + 시각
+// 기관(기상청)은 기상법 출처 표시(BRD-113): 측정소를 보일 때만(값이 없으면 출처를 붙일 자료도 없음)
+// 이안류를 받았으면 4행째: 국립해양조사원 원문 링크 + 공공누리 제1유형 + 발표 시각
 export function SourceList({
   locale,
   beachSlug,
@@ -146,7 +151,7 @@ export function SourceList({
   const t = useTranslations();
   const { stationText, agencyText } = useMetaText();
   const titleId = useId();
-  const { measuredAgoText } = useTimeText();
+  const { measuredAgoText, issuedAtText } = useTimeText();
   const { confirmedUntilText } = useBadgeText();
 
   // 지표 하나의 시각 자리: n분 전 측정 / 늦어짐 / 가까운 관측 없음 / –
@@ -190,14 +195,22 @@ export function SourceList({
         : t("verdict.unknownWarning.title");
   }
 
-  const rows = [
+  // 측정소가 있으면 앞에 관측 기관(sea_obs·kma_buoy 모두 기상청 API허브, 결정 기록 B1)
+  function observed(keys: MetricKey[], timeKey: MetricKey): string | null {
+    const names = stationsOf(keys);
+    return joinMeta([
+      names && t("observation.agency.kma"),
+      names,
+      timeOf(timeKey),
+    ]);
+  }
+
+  const rip = detail.ripCurrent;
+  const rows: { key: string; label: string; text: ReactNode }[] = [
     {
       key: "wave",
       label: t("detail.sources.wave"),
-      text: joinMeta([
-        stationsOf(["waveHeight", "wavePeriod", "wind"]),
-        timeOf("waveHeight"),
-      ]),
+      text: observed(["waveHeight", "wavePeriod", "wind"], "waveHeight"),
     },
     {
       key: "warning",
@@ -210,9 +223,39 @@ export function SourceList({
     {
       key: "waterTemp",
       label: t("detail.sources.waterTemp"),
-      text: joinMeta([stationsOf(["waterTemp"]), timeOf("waterTemp")]),
+      text: observed(["waterTemp"], "waterTemp"),
     },
   ];
+  // 이안류(정보만, D5)를 받았을 때만. 제공 기간 아님·읽을 수 없음은 자료가 없어 행을 두지 않음
+  if (rip !== null && rip !== "unknown") {
+    const time = issuedAtText(rip.publishedAt, nowMs);
+    rows.push({
+      key: "ripCurrent",
+      label: t("detail.sources.ripCurrent"),
+      // 아는 기관(국립해양조사원)만 원문 링크·공공누리 표시. 모르는 기관은 이름 원문 그대로(지어내지 않음)
+      text:
+        rip.source === "국립해양조사원" ? (
+          <>
+            {t.rich("detail.sources.ripCredit", {
+              link: (chunks) => (
+                <a
+                  href={RIP_SOURCE_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline underline-offset-2"
+                >
+                  {chunks}
+                  <span className="sr-only"> ({t("common.newWindow")})</span>
+                </a>
+              ),
+            })}
+            {time && ` · ${time}`}
+          </>
+        ) : (
+          joinMeta([agencyText(rip.source), time])
+        ),
+    });
+  }
 
   return (
     <section

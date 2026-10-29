@@ -8,6 +8,7 @@ import { useMemo, useRef } from "react";
 
 import { BeachRow } from "@/components/beach-row";
 import { SituationBanner } from "@/components/situation-banner";
+import { KmaSourceNote } from "@/components/source-note";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { BeachRowSkeleton } from "@/components/ui/skeleton";
@@ -280,6 +281,8 @@ export function FavoritesScreen({
               </p>
             )}
             <p>{t("safety.finalCall")}</p>
+            {/* 기상청 출처(BRD-113 · 기상법). 받은(또는 기기에 저장된) 상태가 있을 때만 */}
+            {snapshot.statuses !== null && <KmaSourceNote variant="status" />}
           </div>
         </div>
       )}

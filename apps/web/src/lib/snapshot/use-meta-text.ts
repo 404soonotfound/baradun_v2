@@ -44,10 +44,12 @@ export function useMetaText() {
     return joinMeta([scope, source, issuedAtText(publishedAt, nowMs)]);
   }
 
-  // 기관 이름: 데이터 값(한국어 원문) 중 아는 기관만 문구 키로("기상청" → 영어 "KMA").
+  // 기관 이름: 데이터 값(한국어 원문) 중 아는 기관만 문구 키로("기상청" → 영어 "KMA", "국립해양조사원" → "KHOA").
   // 모르는 기관은 지어내지 않고 원문 그대로
   function agencyText(source: string): string {
-    return source === "기상청" ? t("observation.agency.kma") : source;
+    if (source === "기상청") return t("observation.agency.kma");
+    if (source === "국립해양조사원") return t("observation.agency.khoa");
+    return source;
   }
 
   return { observationMeta, warningMeta, stationText, agencyText };

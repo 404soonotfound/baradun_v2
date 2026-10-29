@@ -3,6 +3,7 @@
 import { useTranslations } from "next-intl";
 import { useId } from "react";
 
+import { KmaSourceNote } from "@/components/source-note";
 import { Skeleton } from "@/components/ui/skeleton";
 import { kstStamp } from "@/lib/snapshot/clock";
 import { useStationHistory } from "@/lib/snapshot/history";
@@ -203,6 +204,8 @@ export function WaveChart({
             {since ? t("gapSince", { time: since }) : t("gaps")}
           </p>
         )}
+        {/* 그래프 아래 캡션 줄에 출처(BRD-113 · 기상청 출처표시 가이드 '표·그래프는 하단 캡션'). 그린 때만 */}
+        <KmaSourceNote variant="buoy" />
       </>
     );
   }

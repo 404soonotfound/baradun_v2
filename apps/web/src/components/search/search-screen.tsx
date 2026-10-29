@@ -8,6 +8,7 @@ import { useMemo, useState, type FormEvent } from "react";
 import { BackButton } from "@/components/detail/back-button";
 import { RecentSearches } from "@/components/search/recent-searches";
 import { SearchResultRow } from "@/components/search/search-result-row";
+import { KmaSourceNote } from "@/components/source-note";
 import { Button } from "@/components/ui/button";
 import { Chip, RemovableChip } from "@/components/ui/chip";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -254,6 +255,8 @@ export function SearchScreen({
               {t("safety.finalCall")}
             </p>
           )}
+          {/* 결과 줄의 배지·파고가 기상청 자료(BRD-113 · 기상법). 받은(또는 기기에 저장된) 상태가 있을 때만 */}
+          {snapshot.statuses !== null && <KmaSourceNote variant="status" />}
         </section>
       )}
     </div>

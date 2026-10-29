@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl";
 import { useState } from "react";
 
 import { ReasonBadge } from "@/components/reason-badge";
+import { KmaSourceNote } from "@/components/source-note";
 import { Sheet } from "@/components/ui/sheet";
 import { ZoneName } from "@/components/zone-name";
 import { kstStamp } from "@/lib/snapshot/clock";
@@ -116,9 +117,11 @@ export function WarningSheet({
             <ExternalLink aria-hidden="true" size={14} />
             <span className="sr-only"> ({t("warningSheet.newWindow")})</span>
           </a>
-          <p className="border-t border-border-default pt-3 text-caption text-text-muted">
-            {t("safety.finalCall")}
-          </p>
+          <div className="flex flex-col gap-0.5 border-t border-border-default pt-3 text-caption text-text-muted">
+            <p>{t("safety.finalCall")}</p>
+            {/* 시트가 화면을 덮으므로 시트 안에도 기상청 출처(BRD-113 · 기상법) */}
+            <KmaSourceNote variant="plain" />
+          </div>
         </div>
       )}
     </Sheet>
