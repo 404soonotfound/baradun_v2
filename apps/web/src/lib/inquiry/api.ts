@@ -39,9 +39,36 @@ export type SendFailure =
   | "rejected" // 요청 형식 거부(400·invalid_request)
   | "invalidResponse"; // 응답 모양이 계약과 다름
 
+// 어디서 멈췄는지(결정 기록 12장 결정 27: 사진 업로드와 문의 접수를 나눠 실제 상태를 알림)
+// photos: 사진을 다 올리기 전에 멈춤(문의는 보내지 않음). uploaded = 올라간 장수
+// message: 사진은 모두 올렸고(없으면 0장) 문의 접수 요청에서 멈춤
+// uncertain: 같은 내용의 앞 시도가 문의 요청 뒤 답을 못 받았음(이번에 연결이 없어도 앞 시도가 접수됐을 수 있음)
+export type SendStop =
+  | { stage: "photos"; uploaded: number; total: number }
+  | { stage: "message"; photos: number; uncertain?: true };
+
 export type SendResult =
   | { ok: true; response: CreateInquiryResponse }
-  | { ok: false; failure: SendFailure };
+  | { ok: false; failure: SendFailure; stop: SendStop };
+
+// 문의가 서버에 남았을 수 있는지. 문의 요청을 보낸 뒤 응답을 못 받았거나(network·5xx) 모양이 틀리면 모름.
+// 앞 시도가 그랬는데 이번엔 연결이 없어 못 보냈어도 모름. 접수 전에 멈췄거나 서버가 거절(429·400·409)했으면 접수 안 됨
+// (서버는 이미 접수한 키면 속도 제한·검사 전에 첫 결과를 돌려주므로 429·400은 접수 안 됨을 뜻함)
+const UNCERTAIN_FAILURES: readonly SendFailure[] = [
+  "network",
+  "unavailable",
+  "invalidResponse",
+];
+export function receiptUnknown(result: {
+  failure: SendFailure;
+  stop: SendStop;
+}): boolean {
+  return (
+    result.stop.stage === "message" &&
+    (UNCERTAIN_FAILURES.includes(result.failure) ||
+      result.stop.uncertain === true)
+  );
+}
 
 export type Progress =
   { phase: "photos"; done: number; total: number } | { phase: "message" };
@@ -60,6 +87,7 @@ export type InquiryAttempt = {
   readonly idempotencyKey: string;
   readonly fingerprint: string; // 유형·본문·이메일·사진 내용의 SHA-256
   readonly refs: readonly InquiryPhotoReference[] | null; // 사진을 모두 올린 뒤의 참조. 다시 보낼 때 다시 올리지 않음
+  readonly uncertain?: true; // 문의 요청을 보냈지만 접수 여부를 모름(receiptUnknown)
 };
 export type AttemptSlot = { current: InquiryAttempt | null }; // React useRef를 그대로 넘김
 
@@ -329,13 +357,14 @@ async function postJson(
 }
 
 // 사진 올리기: 양식 받기 → 사진마다 multipart POST. 하나라도 실패하면 문의 전체를 보내지 않음(사진이 조용히 빠지지 않게)
+// 실패하면 그때까지 올라간 장수를 함께 돌려줌(화면이 '3장 중 1장만 올라감'을 알림)
 async function uploadPhotos(
   deps: SendDeps,
   photos: readonly PhotoToSend[],
   onProgress: (progress: Progress) => void,
 ): Promise<
   | { ok: true; refs: InquiryPhotoReference[] }
-  | { ok: false; failure: SendFailure }
+  | { ok: false; failure: SendFailure; uploaded: number }
 > {
   if (photos.length === 0) return { ok: true, refs: [] };
   const form = await postJson(deps, UPLOAD_URL, {
@@ -344,15 +373,15 @@ async function uploadPhotos(
       size: photo.blob.size,
     })),
   });
-  if (!form.ok) return form;
+  if (!form.ok) return { ok: false, failure: form.failure, uploaded: 0 };
   if (!isUploadResponse(form.body, photos, deps.now(), deps.photoBucket))
-    return { ok: false, failure: "invalidResponse" };
+    return { ok: false, failure: "invalidResponse", uploaded: 0 };
   const refs: InquiryPhotoReference[] = [];
   onProgress({ phase: "photos", done: 0, total: photos.length });
   for (const [index, target] of form.body.uploads.entries()) {
     // 앞 사진을 올리는 사이(화면 전환 등) 만료됐으면 올리지 않음
     if (Date.parse(target.expiresAt) <= deps.now())
-      return { ok: false, failure: "invalidResponse" };
+      return { ok: false, failure: "invalidResponse", uploaded: refs.length };
     const data = new FormData();
     for (const [name, value] of Object.entries(target.fields))
       data.append(name, value);
@@ -364,11 +393,13 @@ async function uploadPhotos(
       { method: "POST", body: data, credentials: "omit" },
       async () => undefined,
     );
-    if (result === "network") return { ok: false, failure: "network" };
+    if (result === "network")
+      return { ok: false, failure: "network", uploaded: refs.length };
     if (!result.response.ok)
       return {
         ok: false,
         failure: failureOf(result.response.status, undefined),
+        uploaded: refs.length,
       };
     refs.push({ photoId: target.photoId, key: target.key });
     onProgress({ phase: "photos", done: index + 1, total: photos.length });
@@ -411,8 +442,25 @@ export async function sendInquiry(
   deps: SendDeps = DEFAULT_DEPS(),
   attempt: AttemptSlot = { current: null },
 ): Promise<SendResult> {
-  if (!deps.online()) return { ok: false, failure: "offline" };
   const fingerprint = await contentFingerprint(deps, request, photos);
+  if (!deps.online()) {
+    // 같은 내용의 앞 시도가 접수 여부를 모른 채 끝났으면 그 사실을 남김('접수되지 않았어요'로 단정하지 않게)
+    const earlier =
+      attempt.current?.fingerprint === fingerprint ? attempt.current : null;
+    return {
+      ok: false,
+      failure: "offline",
+      stop: earlier?.uncertain
+        ? {
+            stage: "message",
+            photos: earlier.refs?.length ?? 0,
+            uncertain: true,
+          }
+        : photos.length > 0
+          ? { stage: "photos", uploaded: 0, total: photos.length }
+          : { stage: "message", photos: 0 },
+    };
+  }
   const current: InquiryAttempt =
     attempt.current?.fingerprint === fingerprint
       ? attempt.current
@@ -421,7 +469,16 @@ export async function sendInquiry(
   let refs = current.refs;
   if (refs === null) {
     const uploaded = await uploadPhotos(deps, photos, onProgress);
-    if (!uploaded.ok) return uploaded;
+    if (!uploaded.ok)
+      return {
+        ok: false,
+        failure: uploaded.failure,
+        stop: {
+          stage: "photos",
+          uploaded: uploaded.uploaded,
+          total: photos.length,
+        },
+      };
     refs = uploaded.refs;
     attempt.current = { ...current, refs };
   }
@@ -431,13 +488,18 @@ export async function sendInquiry(
     idempotencyKey: current.idempotencyKey,
     photos: refs,
   });
+  const stop: SendStop = { stage: "message", photos: refs.length };
   if (!sent.ok) {
     // 거부(400·409)는 서버가 아무것도 만들지 않은 것 → 다음 시도는 새 키
     if (sent.failure === "rejected") attempt.current = null;
-    return sent;
+    else if (UNCERTAIN_FAILURES.includes(sent.failure))
+      attempt.current = { ...current, refs, uncertain: true };
+    return { ok: false, failure: sent.failure, stop };
   }
-  if (!isCreateResponse(sent.body, refs))
-    return { ok: false, failure: "invalidResponse" };
+  if (!isCreateResponse(sent.body, refs)) {
+    attempt.current = { ...current, refs, uncertain: true };
+    return { ok: false, failure: "invalidResponse", stop };
+  }
   attempt.current = null; // 접수됨 → 다음 문의는 새 키
   return { ok: true, response: sent.body };
 }

@@ -14,11 +14,13 @@ import { cn } from "@/lib/cn";
 import { localizedPath, type Locale } from "@/lib/i18n";
 import type { BeachId } from "@baradun/contracts";
 import {
+  receiptUnknown,
   sendInquiry,
   type InquiryAttempt,
   type PhotoToSend,
   type Progress,
   type SendFailure,
+  type SendStop,
 } from "@/lib/inquiry/api";
 import {
   clearInquiryDraft,
@@ -44,8 +46,9 @@ import { preparePhoto, type PhotoError } from "@/lib/inquiry/photo";
 // 데이터 문의 (BRD-37 · 노션 2장 INQ, 결정 기록 9장·11장 '문의(BRD-37)'·10/26 BRD-63, infra/README)
 // 유형 칩 4개(계약 유형과 1:1) → (상세에서 왔으면) 해변·활동 자동 입력(계약 칸 beachId·activity) → 내용(5자 이상)
 // → 사진(선택, 최대 3장) → 이메일(선택, 입력하면 동의 필수) → 보내기 (결정 기록 12장 결정 21·22)
-// 상태: 입력 전 · 입력 오류 · 보내는 중 · 접수 완료 · 보내지 못함
-// 유형·내용만 기기에 최대 7일 임시 저장(lib/inquiry/draft.ts). 이메일·동의·사진은 화면 메모리에만, 실패하면 다시 넣음
+// 상태: 입력 전 · 입력 오류 · 보내는 중 · 접수 완료 · 보내지 못함(사진 단계 / 문의 단계를 나눠 알림, 결정 27)
+// 유형·내용만 기기에 최대 7일 임시 저장(lib/inquiry/draft.ts). 이메일·동의·사진은 화면 메모리에만 두고
+// 실패해도 그대로 둬 다시 보낼 수 있게 함. 접수되거나 '지우기'를 누르면 비움(결정 25)
 // 응답 기한은 약속하지 않음. 사용자 위치는 보내지 않음
 // 멱등 키(BRD-103): 같은 내용으로 다시 보내면 같은 키를 씀(응답을 못 받은 재시도가 두 번 접수되지 않게). 키는 화면 메모리에만
 
@@ -71,7 +74,7 @@ type Phase =
       rejectedLocation: number;
       rejectedOther: number;
     }
-  | { kind: "failed"; failure: SendFailure };
+  | { kind: "failed"; failure: SendFailure; stop: SendStop };
 
 export function InquiryScreen({
   locale,
@@ -217,7 +220,7 @@ export function InquiryScreen({
   }
 
   function resetSensitive() {
-    // 이메일·동의·사진은 기기에 남기지 않음. 보내지 못하면 다시 넣게 비움
+    // 이메일·동의·사진은 기기에 남기지 않고 화면 메모리에만 둠. 접수·지우기 때만 비움(실패 때는 다시 보내게 남김)
     setEmail("");
     setConsent(false);
     shots.forEach((shot) => URL.revokeObjectURL(shot.url));
@@ -281,8 +284,8 @@ export function InquiryScreen({
         ).length,
       });
     } else {
-      resetSensitive();
-      setPhase({ kind: "failed", failure: result.failure });
+      // 이메일·동의·사진을 남겨 둠 → 같은 내용으로 다시 보내면 같은 멱등 키를 써서 두 번 접수되지 않음
+      setPhase({ kind: "failed", failure: result.failure, stop: result.stop });
     }
   }
 
@@ -326,6 +329,11 @@ export function InquiryScreen({
               {t("done.rejectedOther", { count: phase.rejectedOther })}
             </p>
           )}
+          {phase.rejectedLocation + phase.rejectedOther > 0 && (
+            <p className="text-body-s text-text-body">
+              {t("done.rejectedNext")}
+            </p>
+          )}
           <p className="text-body-s text-text-body">{t("done.draftCleared")}</p>
           <div className="mt-2 flex w-full flex-col gap-2 sm:flex-row">
             <Button asChild>
@@ -346,6 +354,8 @@ export function InquiryScreen({
   }
 
   const errorCount = Object.keys(errors).length;
+  // 문의가 접수됐는지 모르는 실패(api.ts receiptUnknown). 제목·영향·다음 행동 문구가 달라짐
+  const unknown = phase.kind === "failed" && receiptUnknown(phase);
   const progressText =
     phase.kind === "sending" && phase.progress
       ? phase.progress.phase === "photos"
@@ -374,14 +384,42 @@ export function InquiryScreen({
           >
             <CircleAlert size={16} />
           </span>
+          {/* 무슨 일(제목·원인) → 영향(멈춘 단계·접수 여부) → 다음 행동 */}
           <div className="flex min-w-0 flex-col gap-1">
             <p className="text-body-s font-bold text-text-default">
-              {t("failed.title")}
+              {unknown ? t("failed.titleUnknown") : t("failed.title")}
             </p>
             <p className="text-caption text-text-body">
               {t(`failed.${phase.failure}`)}
             </p>
+            <p className="text-caption text-text-body">
+              {phase.stop.stage === "photos" && phase.stop.uploaded > 0
+                ? t("failed.stopPhotos", {
+                    uploaded: phase.stop.uploaded,
+                    total: phase.stop.total,
+                  })
+                : unknown
+                  ? t("failed.stopUnknown")
+                  : phase.stop.stage === "message" && phase.stop.photos > 0
+                    ? t("failed.stopMessageAfterPhotos", {
+                        count: phase.stop.photos,
+                      })
+                    : t("failed.stopMessage")}
+            </p>
             <p className="text-caption text-text-body">{t("failed.kept")}</p>
+            <p className="text-caption text-text-body">
+              {t(
+                `failed.next.${
+                  unknown
+                    ? "unknown"
+                    : phase.failure === "offline" ||
+                        phase.failure === "rateLimited" ||
+                        phase.failure === "rejected"
+                      ? phase.failure
+                      : "later"
+                }`,
+              )}
+            </p>
           </div>
         </div>
       )}
@@ -706,7 +744,11 @@ export function InquiryScreen({
             disabled={sending || preparing}
             className="sm:min-w-40"
           >
-            {sending ? t("actions.sending") : t("actions.submit")}
+            {sending
+              ? t("actions.sending")
+              : phase.kind === "failed"
+                ? t("actions.retry")
+                : t("actions.submit")}
           </Button>
           <Button
             type="button"
