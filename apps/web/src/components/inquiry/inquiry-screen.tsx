@@ -32,6 +32,7 @@ import {
   buildRequest,
   EMAIL_MAX,
   firstErrorField,
+  INQUIRY_CONTACT_ENABLED,
   INQUIRY_KINDS,
   MESSAGE_INPUT_MAX,
   MESSAGE_MIN,
@@ -50,6 +51,8 @@ import { preparePhoto, type PhotoError } from "@/lib/inquiry/photo";
 // 유형·내용만 기기에 최대 7일 임시 저장(lib/inquiry/draft.ts). 이메일·동의·사진은 화면 메모리에만 두고
 // 실패해도 그대로 둬 다시 보낼 수 있게 함. 접수되거나 '지우기'를 누르면 비움(결정 25)
 // 응답 기한은 약속하지 않음. 사용자 위치는 보내지 않음
+// 이메일·사진 받기가 꺼져 있으면(결정 기록 13장 D13-1·D13-2, BRD-130) 사진·이메일·동의 칸을 그리지 않음
+// → 그 상태 값은 빈 채로 남아 요청에 이메일·사진이 실리지 않음. 보관 안내·완료 문구도 꺼짐용 문구를 씀
 // 멱등 키(BRD-103): 같은 내용으로 다시 보내면 같은 키를 씀(응답을 못 받은 재시도가 두 번 접수되지 않게). 키는 화면 메모리에만
 
 type Shot = { id: number; photo: PhotoToSend; url: string };
@@ -79,6 +82,7 @@ type Phase =
 export function InquiryScreen({
   locale,
   beaches,
+  contactEnabled = INQUIRY_CONTACT_ENABLED,
 }: {
   locale: Locale;
   // ?beach=slug → id·이름·지원 활동(빌드 때 넘김)
@@ -88,6 +92,8 @@ export function InquiryScreen({
     name: string;
     activities: readonly Activity[];
   }[];
+  // 이메일·사진 받기. 페이지는 넘기지 않아 기본값(저장소 상수)을 씀. 스토리·테스트가 켜짐 상태를 그릴 때만 넘김
+  contactEnabled?: boolean;
 }) {
   const t = useTranslations("inquiry");
   const tp = useTranslations("pages");
@@ -334,7 +340,9 @@ export function InquiryScreen({
           >
             <CircleCheck size={22} />
           </span>
-          <p className="text-body text-text-default">{t("done.body")}</p>
+          <p className="text-body text-text-default">
+            {t(contactEnabled ? "done.body" : "done.bodyTextOnly")}
+          </p>
           {phase.accepted > 0 && (
             <p className="text-body-s text-text-body">
               {t("done.photos", { count: phase.accepted })}
@@ -568,164 +576,171 @@ export function InquiryScreen({
           </div>
 
           {/* 사진 */}
-          <div className="flex flex-col gap-1.5 rounded-card bg-bg-surface p-4 shadow-card">
-            <p
-              className="text-title-s text-text-default"
-              id={`${ids.photoInput}-label`}
-            >
-              {t("photos.label")}
-            </p>
-            <p id={ids.photoHint} className="text-caption text-text-muted">
-              {t("photos.hint")}
-            </p>
-            {shots.length > 0 && (
-              <ul className="mt-1 flex flex-wrap gap-2">
-                {shots.map((shot, index) => (
-                  <li key={shot.id} className="relative">
-                    {/* eslint-disable-next-line @next/next/no-img-element -- 기기 안 미리보기(blob 주소)라 next/image를 쓰지 않음 */}
-                    <img
-                      src={shot.url}
-                      alt={t("photos.alt", { index: index + 1 })}
-                      className="size-20 rounded-icon object-cover"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => removeShot(shot.id)}
-                      aria-label={t("photos.remove", { index: index + 1 })}
-                      className="absolute -top-3 -right-3 flex size-touch items-center justify-center"
-                    >
-                      <span className="flex size-7 items-center justify-center rounded-full bg-bg-surface text-text-default shadow-card">
-                        <X aria-hidden="true" size={16} />
-                      </span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-            <input
-              ref={fileRef}
-              id={ids.photoInput}
-              type="file"
-              accept="image/*"
-              multiple
-              tabIndex={-1}
-              aria-hidden="true"
-              className="sr-only"
-              onChange={(event) => {
-                void addPhotos(event.target.files);
-                event.target.value = ""; // 같은 사진을 다시 골라도 동작하게
-              }}
-            />
-            <div className="mt-1 flex items-center gap-3">
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => fileRef.current?.click()}
-                disabled={preparing || shots.length >= PHOTO_MAX_COUNT}
-                aria-describedby={idList(
-                  ids.photoHint,
-                  photoError && ids.photoError,
-                )}
-              >
-                <ImagePlus aria-hidden="true" size={18} />
-                {t("photos.add")}
-              </Button>
-              <span className="text-caption text-text-muted">
-                {t("photos.count", { count: shots.length })}
-              </span>
-            </div>
-            {preparing && (
-              <p role="status" className="text-caption text-text-body">
-                {t("photos.preparing")}
-              </p>
-            )}
-            {photoError && (
+          {contactEnabled && (
+            <div className="flex flex-col gap-1.5 rounded-card bg-bg-surface p-4 shadow-card">
               <p
-                id={ids.photoError}
-                role="alert"
-                className="text-caption text-danger-text"
+                className="text-title-s text-text-default"
+                id={`${ids.photoInput}-label`}
               >
-                {t(`photos.${photoError}`)}
+                {t("photos.label")}
               </p>
-            )}
-          </div>
+              <p id={ids.photoHint} className="text-caption text-text-muted">
+                {t("photos.hint")}
+              </p>
+              {shots.length > 0 && (
+                <ul className="mt-1 flex flex-wrap gap-2">
+                  {shots.map((shot, index) => (
+                    <li key={shot.id} className="relative">
+                      {/* eslint-disable-next-line @next/next/no-img-element -- 기기 안 미리보기(blob 주소)라 next/image를 쓰지 않음 */}
+                      <img
+                        src={shot.url}
+                        alt={t("photos.alt", { index: index + 1 })}
+                        className="size-20 rounded-icon object-cover"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeShot(shot.id)}
+                        aria-label={t("photos.remove", { index: index + 1 })}
+                        className="absolute -top-3 -right-3 flex size-touch items-center justify-center"
+                      >
+                        <span className="flex size-7 items-center justify-center rounded-full bg-bg-surface text-text-default shadow-card">
+                          <X aria-hidden="true" size={16} />
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <input
+                ref={fileRef}
+                id={ids.photoInput}
+                type="file"
+                accept="image/*"
+                multiple
+                tabIndex={-1}
+                aria-hidden="true"
+                className="sr-only"
+                onChange={(event) => {
+                  void addPhotos(event.target.files);
+                  event.target.value = ""; // 같은 사진을 다시 골라도 동작하게
+                }}
+              />
+              <div className="mt-1 flex items-center gap-3">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => fileRef.current?.click()}
+                  disabled={preparing || shots.length >= PHOTO_MAX_COUNT}
+                  aria-describedby={idList(
+                    ids.photoHint,
+                    photoError && ids.photoError,
+                  )}
+                >
+                  <ImagePlus aria-hidden="true" size={18} />
+                  {t("photos.add")}
+                </Button>
+                <span className="text-caption text-text-muted">
+                  {t("photos.count", { count: shots.length })}
+                </span>
+              </div>
+              {preparing && (
+                <p role="status" className="text-caption text-text-body">
+                  {t("photos.preparing")}
+                </p>
+              )}
+              {photoError && (
+                <p
+                  id={ids.photoError}
+                  role="alert"
+                  className="text-caption text-danger-text"
+                >
+                  {t(`photos.${photoError}`)}
+                </p>
+              )}
+            </div>
+          )}
 
           {/* 이메일 + 동의 */}
-          <div className="flex flex-col gap-1.5 rounded-card bg-bg-surface p-4 shadow-card">
-            <label
-              htmlFor={ids.email}
-              className="text-title-s text-text-default"
-            >
-              {t("email.label")}
-            </label>
-            <p id={ids.emailHint} className="text-caption text-text-muted">
-              {t("email.hint")}
-            </p>
-            <input
-              ref={emailRef}
-              id={ids.email}
-              type="email"
-              inputMode="email"
-              autoComplete="email"
-              value={email}
-              maxLength={EMAIL_MAX}
-              onChange={(event) => {
-                setEmail(event.target.value);
-                if (event.target.value.trim() === "")
-                  setErrors((prev) => without(prev, "email", "consent"));
-              }}
-              aria-invalid={errors.email ? true : undefined}
-              aria-describedby={idList(
-                ids.emailHint,
-                errors.email && ids.emailError,
-              )}
-              className={cn(
-                "h-input w-full rounded-input border bg-bg-surface px-3 text-body text-text-default",
-                errors.email
-                  ? "border-[1.5px] border-danger-text"
-                  : "border-border-strong",
-              )}
-            />
-            {errors.email && (
-              <p id={ids.emailError} className="text-caption text-danger-text">
-                {t(`errors.${errors.email}`)}
+          {contactEnabled && (
+            <div className="flex flex-col gap-1.5 rounded-card bg-bg-surface p-4 shadow-card">
+              <label
+                htmlFor={ids.email}
+                className="text-title-s text-text-default"
+              >
+                {t("email.label")}
+              </label>
+              <p id={ids.emailHint} className="text-caption text-text-muted">
+                {t("email.hint")}
               </p>
-            )}
-            {email.trim() !== "" && (
-              <div className="mt-1 flex flex-col gap-1">
-                <label
-                  htmlFor={ids.consent}
-                  className="flex min-h-touch cursor-pointer items-center gap-3 text-body-s text-text-default"
-                >
-                  <input
-                    ref={consentRef}
-                    id={ids.consent}
-                    type="checkbox"
-                    checked={consent}
-                    onChange={(event) => {
-                      setConsent(event.target.checked);
-                      if (event.target.checked)
-                        setErrors((prev) => without(prev, "consent"));
-                    }}
-                    aria-invalid={errors.consent ? true : undefined}
-                    aria-describedby={
-                      errors.consent ? ids.consentError : undefined
-                    }
-                    className="size-5 shrink-0 accent-brand-default"
-                  />
-                  {t("consent.label")}
-                </label>
-                {errors.consent && (
-                  <p
-                    id={ids.consentError}
-                    className="text-caption text-danger-text"
-                  >
-                    {t(`errors.${errors.consent}`)}
-                  </p>
+              <input
+                ref={emailRef}
+                id={ids.email}
+                type="email"
+                inputMode="email"
+                autoComplete="email"
+                value={email}
+                maxLength={EMAIL_MAX}
+                onChange={(event) => {
+                  setEmail(event.target.value);
+                  if (event.target.value.trim() === "")
+                    setErrors((prev) => without(prev, "email", "consent"));
+                }}
+                aria-invalid={errors.email ? true : undefined}
+                aria-describedby={idList(
+                  ids.emailHint,
+                  errors.email && ids.emailError,
                 )}
-              </div>
-            )}
-          </div>
+                className={cn(
+                  "h-input w-full rounded-input border bg-bg-surface px-3 text-body text-text-default",
+                  errors.email
+                    ? "border-[1.5px] border-danger-text"
+                    : "border-border-strong",
+                )}
+              />
+              {errors.email && (
+                <p
+                  id={ids.emailError}
+                  className="text-caption text-danger-text"
+                >
+                  {t(`errors.${errors.email}`)}
+                </p>
+              )}
+              {email.trim() !== "" && (
+                <div className="mt-1 flex flex-col gap-1">
+                  <label
+                    htmlFor={ids.consent}
+                    className="flex min-h-touch cursor-pointer items-center gap-3 text-body-s text-text-default"
+                  >
+                    <input
+                      ref={consentRef}
+                      id={ids.consent}
+                      type="checkbox"
+                      checked={consent}
+                      onChange={(event) => {
+                        setConsent(event.target.checked);
+                        if (event.target.checked)
+                          setErrors((prev) => without(prev, "consent"));
+                      }}
+                      aria-invalid={errors.consent ? true : undefined}
+                      aria-describedby={
+                        errors.consent ? ids.consentError : undefined
+                      }
+                      className="size-5 shrink-0 accent-brand-default"
+                    />
+                    {t("consent.label")}
+                  </label>
+                  {errors.consent && (
+                    <p
+                      id={ids.consentError}
+                      className="text-caption text-danger-text"
+                    >
+                      {t(`errors.${errors.consent}`)}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* 보관 안내 */}
           <section
@@ -738,9 +753,13 @@ export function InquiryScreen({
             >
               {t("retention.title")}
             </h2>
-            <p className="text-caption text-text-body">{t("retention.body")}</p>
             <p className="text-caption text-text-body">
-              {t("retention.draft")}
+              {t(contactEnabled ? "retention.body" : "retention.bodyTextOnly")}
+            </p>
+            <p className="text-caption text-text-body">
+              {t(
+                contactEnabled ? "retention.draft" : "retention.draftTextOnly",
+              )}
             </p>
           </section>
         </fieldset>

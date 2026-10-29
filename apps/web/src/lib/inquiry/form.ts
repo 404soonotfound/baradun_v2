@@ -10,6 +10,12 @@ import type {
 // 해변·활동은 본문 머리 줄이 아니라 계약 칸(beachId·activity)으로 보냄(결정 22)
 // 순수 함수만 둠(브라우저 API 없음)
 
+// 문의에서 이메일·사진을 받을지(결정 기록 13장 D13-1·D13-2, BRD-130). 출시 기본값은 받지 않음
+// 끄면 화면에서 이메일·동의·사진 칸을 숨김. 서버도 같은 값으로 이메일·사진을 거절함
+// services/src/inquiry/policy.ts의 같은 이름 값과 같아야 함(infra/test/inquiry.test.ts가 확인)
+// 환경 변수가 아니라 저장소 상수로 둠: 켜고 끄는 일을 리뷰에서 보이게 하고 빌드 환경마다 달라지지 않게 함
+export const INQUIRY_CONTACT_ENABLED = false;
+
 export const INQUIRY_KINDS = [
   "mismatch", // 정보가 실제와 달라요
   "addBeach", // 해변을 추가해 주세요
