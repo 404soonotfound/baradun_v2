@@ -129,7 +129,12 @@
       "required": ["contentType", "size"],
       "properties": {
         "contentType": { "$ref": "#/$defs/InquiryPhotoContentType" },
-        "size": { "type": "integer", "minimum": 1, "maximum": 5242880 }
+        "size": {
+          "description": "기기에서 줄인 최종 파일 크기. 파일당 4MiB까지(결정 기록 12장 결정 23).",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4194304
+        }
       }
     },
 

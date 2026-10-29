@@ -507,6 +507,9 @@ export interface InquiryUploadRequest {
  */
 export interface InquiryUploadPhoto {
   contentType: InquiryPhotoContentType;
+  /**
+   * 기기에서 줄인 최종 파일 크기. 파일당 4MiB까지(결정 기록 12장 결정 23).
+   */
   size: number;
 }
 /**

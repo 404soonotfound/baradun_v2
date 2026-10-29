@@ -2,7 +2,8 @@ export const INQUIRY_BODY_RETENTION_DAYS = 90;
 export const INQUIRY_EMAIL_RETENTION_DAYS = 88;
 export const INQUIRY_PHOTO_RETENTION_DAYS = 30;
 export const INQUIRY_MAX_PHOTOS = 3;
-export const INQUIRY_MAX_PHOTO_BYTES = 5 * 1024 * 1024;
+// 기기에서 줄인 최종 파일 상한(결정 기록 12장 결정 23: 최종 3~4MiB, 클라이언트·서버 양쪽 검사)
+export const INQUIRY_MAX_PHOTO_BYTES = 4 * 1024 * 1024;
 export const INQUIRY_MAX_BODY_BYTES = 32 * 1024;
 export const INQUIRY_RATE_LIMIT_PER_MINUTE = 10;
 export const INQUIRY_NOTIFICATION_LIMIT_PER_DAY = 20;

@@ -16,7 +16,7 @@ export const INQUIRY_URL = "/api/inquiries";
 export const UPLOAD_URL = "/api/inquiries/uploads";
 export const REQUEST_TIMEOUT_MS = 20_000; // 요청 하나의 최대 대기
 export const PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;
-export const PHOTO_MAX_BYTES = 5 * 1024 * 1024; // 파일당 5MiB(계약 InquiryUploadPhoto.size)
+export const PHOTO_MAX_BYTES = 4 * 1024 * 1024; // 파일당 4MiB(계약 InquiryUploadPhoto.size, 결정 기록 12장 결정 23)
 
 // 사진 업로드 대상: 서울 리전 문의 사진 버킷 하나만 허용(결정 26). 버킷 이름은 빌드 때 넣음
 // (deploy.yml vars.INQUIRY_PHOTO_BUCKET ← 스택 출력 InquiryPhotoBucketName). 비어 있으면 어떤 업로드 주소도 받지 않음
