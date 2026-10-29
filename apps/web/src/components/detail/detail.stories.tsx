@@ -206,6 +206,7 @@ function Gallery({
           detail={{ ...BASE, offSeason: null }}
           stations={STATIONS}
           nowMs={NOW}
+          kmaData
         />
         <WarningSheet
           open={sheet === "warning"}
