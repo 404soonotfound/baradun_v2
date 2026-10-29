@@ -4,6 +4,7 @@ import { ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 
+import { MiniWaveChart } from "@/components/home/mini-wave-chart";
 import { ReasonBadge } from "@/components/reason-badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { BeachSummary } from "@/lib/beach-summary";
@@ -22,8 +23,10 @@ import type { BeachView, MetricKey, MetricView } from "@/lib/snapshot/view";
 //   compact(모바일 171:478): 이름·배지 한 줄 → 3칸 → 근거 줄 + 현장 우선 문구
 //   wide(PC 181:851): 이름 + › → 배지 → 큰 파고 + 나머지 지표 한 줄 → 근거 줄. 현장 우선 문구는 묶음 제목 줄(home-screen)
 
-// PC 카드 큰 파고 옆 한 줄에 둘 나머지 지표(Figma 181:870)
+// PC 카드 큰 파고 옆 한 줄에 둘 나머지 지표(Figma 181:870 '파고 · 주기 6초 · 수온 21°C', #105 결정 2)
+// 파주기는 신선도 60분이 지나면 view가 delayed로 줌 → '늦어짐'
 const WIDE_OTHERS = [
+  "wavePeriod",
   "waterTemp",
   "wind",
 ] as const satisfies readonly MetricKey[];
@@ -171,17 +174,38 @@ export function NearCard({
             {others.map(({ key, metric }, index) => (
               <span key={key}>
                 {(index > 0 || wave?.kind !== "none") && " · "}
-                {t(`observation.metric.${key}`)}{" "}
-                <InlineMetric
-                  metric={metric}
-                  none={t("observation.none")}
-                  delayed={t("observation.delayedShort")}
-                  empty={t("home.near.noValue")}
-                />
+                {/* 파주기 값은 상세와 같은 '파주기 6초' */}
+                {key === "wavePeriod" && metric.kind === "value" ? (
+                  t("detail.sea.period", { value: metric.value })
+                ) : (
+                  <>
+                    {t(`observation.metric.${key}`)}{" "}
+                    <InlineMetric
+                      metric={metric}
+                      none={t("observation.none")}
+                      delayed={t("observation.delayedShort")}
+                      empty={t("home.near.noValue")}
+                    />
+                  </>
+                )}
               </span>
             ))}
           </span>
         </span>
+        {/* 24시간 파고(상세와 같은 기록·규칙). 가까운 관측 없음이면 측정소 기록도 그리지 않음 */}
+        <MiniWaveChart
+          stationId={
+            wave?.kind === "none"
+              ? null
+              : (beach.stations.waveHeight?.id ?? null)
+          }
+          latest={
+            wave?.kind === "value"
+              ? { t: Date.parse(wave.observedAt), v: wave.value }
+              : null
+          }
+          nowMs={nowMs}
+        />
         {noteList}
       </Link>
     );
