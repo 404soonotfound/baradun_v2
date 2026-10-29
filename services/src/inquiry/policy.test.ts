@@ -17,7 +17,7 @@ describe("문의 보존·비용 제한", () => {
     expect(INQUIRY_EMAIL_RETENTION_DAYS).toBe(88);
     expect(INQUIRY_PHOTO_RETENTION_DAYS).toBe(30);
     expect(INQUIRY_MAX_PHOTOS).toBe(3);
-    expect(INQUIRY_MAX_PHOTO_BYTES).toBe(5 * 1024 * 1024);
+    expect(INQUIRY_MAX_PHOTO_BYTES).toBe(4 * 1024 * 1024);
     expect(INQUIRY_RATE_LIMIT_PER_MINUTE).toBe(10);
     expect(INQUIRY_NOTIFICATION_LIMIT_PER_DAY).toBe(20);
   });
