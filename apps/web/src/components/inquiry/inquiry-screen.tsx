@@ -390,7 +390,10 @@ export function InquiryScreen({
               {unknown ? t("failed.titleUnknown") : t("failed.title")}
             </p>
             <p className="text-caption text-text-body">
-              {t(`failed.${phase.failure}`)}
+              {/* 앞 시도의 접수 여부를 모르는 채 재시도가 429면 '이번 재시도'를 받지 못했다고 씀 */}
+              {unknown && phase.failure === "rateLimited"
+                ? t("failed.rateLimitedRetry")
+                : t(`failed.${phase.failure}`)}
             </p>
             <p className="text-caption text-text-body">
               {phase.stop.stage === "photos" && phase.stop.uploaded > 0
@@ -411,7 +414,9 @@ export function InquiryScreen({
               {t(
                 `failed.next.${
                   unknown
-                    ? "unknown"
+                    ? phase.failure === "rateLimited"
+                      ? "unknownLater"
+                      : "unknown"
                     : phase.failure === "offline" ||
                         phase.failure === "rateLimited" ||
                         phase.failure === "rejected"

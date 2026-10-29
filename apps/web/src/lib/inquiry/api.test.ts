@@ -677,6 +677,51 @@ describe("멈춘 단계와 접수 여부 (결정 27)", () => {
     expect(fetch.mock.calls.some(([url]) => url === "/api/inquiries")).toBe(false);
   });
 
+  it("접수 여부를 모르는 시도 뒤 재시도가 429면 앞 시도의 접수 여부를 모르는 채로 둠(Codex P2)", async () => {
+    let answer: "drop" | "limited" = "drop";
+    const { deps: d } = deps(() => {
+      if (answer === "drop") throw new TypeError("Failed to fetch");
+      return json(429, { error: { code: "rate_limited", message: "m" } });
+    });
+    const attempt: AttemptSlot = { current: null };
+    await sendInquiry(request, [], undefined, d, attempt);
+    answer = "limited";
+    const retry = await sendInquiry(request, [], undefined, d, attempt);
+    expect(retry).toEqual({
+      ok: false,
+      failure: "rateLimited",
+      stop: { stage: "message", photos: 0, uncertain: true },
+    });
+    expect(retry.ok === false && receiptUnknown(retry)).toBe(true);
+    expect(attempt.current?.uncertain).toBe(true); // 다음 재시도도 같은 키·같은 상태
+  });
+
+  it("접수 여부를 모르는 시도 뒤 재시도가 400이면 접수 안 됨으로 알리고 새 키를 씀", async () => {
+    let answer: "drop" | "invalid" = "drop";
+    const { deps: d } = deps(() => {
+      if (answer === "drop") throw new TypeError("Failed to fetch");
+      return json(400, { error: { code: "invalid_request", message: "m" } });
+    });
+    const attempt: AttemptSlot = { current: null };
+    await sendInquiry(request, [], undefined, d, attempt);
+    answer = "invalid";
+    const retry = await sendInquiry(request, [], undefined, d, attempt);
+    expect(retry).toEqual({
+      ok: false,
+      failure: "rejected",
+      stop: { stage: "message", photos: 0 },
+    });
+    expect(attempt.current).toBeNull();
+  });
+
+  it("처음부터 429면 접수되지 않았다고 알림", async () => {
+    const { deps: d } = deps(() =>
+      json(429, { error: { code: "rate_limited", message: "m" } }),
+    );
+    const result = await sendInquiry(request, [], undefined, d);
+    expect(result.ok === false && receiptUnknown(result)).toBe(false);
+  });
+
   it("접수 여부를 모르는 시도 뒤 연결 없이 다시 보내면 여전히 접수 여부를 모른다고 알림", async () => {
     const { deps: d } = deps(() => {
       throw new TypeError("Failed to fetch");

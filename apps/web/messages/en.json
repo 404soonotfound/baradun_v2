@@ -808,8 +808,10 @@
         "rateLimited": "Select 'Send again' in a few minutes.",
         "rejected": "Check your message, then select 'Send again'.",
         "later": "Select 'Send again' in a moment.",
-        "unknown": "If you select 'Send again' without changes, it won't be received twice."
-      }
+        "unknown": "If you select 'Send again' without changes, it won't be received twice.",
+        "unknownLater": "Wait a few minutes, then select 'Send again' without changes. It won't be received twice."
+      },
+      "rateLimitedRetry": "Your retry wasn't accepted because we're receiving a lot of feedback right now."
     }
   },
   "languageNotice": {
