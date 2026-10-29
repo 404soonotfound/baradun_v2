@@ -49,6 +49,7 @@ import { boundsOf } from "@/lib/map/bounds";
 import { formatKm, joinMeta } from "@/lib/meta-join";
 import { setRegion, useRegion } from "@/lib/region";
 import {
+  NATIONWIDE,
   regionChips,
   regionGroups,
   regionName,
@@ -105,7 +106,7 @@ export function ExploreScreen({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
 
-  // 지역은 홈 기본 지역과 같은 저장 값(10/27 결정). 목록에 없어진 지역·홈에서 고른 전국은 전국으로 봄
+  // 지역은 홈 기본 지역과 같은 저장 값(10/27 결정). 저장값 없음·목록에 없어진 지역·고른 전국은 전국으로 봄
   const region = validRegion(useRegion(), beaches);
   const chips = useMemo(() => regionChips(beaches), [beaches]);
   const groups = useMemo(() => regionGroups(beaches), [beaches]);
@@ -318,10 +319,8 @@ export function ExploreScreen({
           chips={chips}
           region={region}
           regionLabel={name}
-          // 이미 전국이면 저장값을 건드리지 않음(홈 시트에서 고른 전국이 기본값으로 풀리지 않게, BRD-127)
-          onNationwide={() => {
-            if (region !== null) setRegion(null);
-          }}
+          // 전국을 고른 것으로 저장(BRD-127 · 10/29 결정 B). 홈도 위치와 관계없이 전국, 가까운 바다는 홈 시트 '내 주변'
+          onNationwide={() => setRegion(NATIONWIDE)}
           // 시트에서 고르기 전에는 저장하지 않음(그냥 닫으면 지역이 그대로)
           onPickSido={(sido) => {
             setPickSido(sido);
@@ -417,7 +416,10 @@ export function ExploreScreen({
               description={t("explore.empty.body")}
               action={
                 region !== null ? (
-                  <Button variant="secondary" onClick={() => setRegion(null)}>
+                  <Button
+                    variant="secondary"
+                    onClick={() => setRegion(NATIONWIDE)}
+                  >
                     {t("explore.empty.action")}
                   </Button>
                 ) : undefined
