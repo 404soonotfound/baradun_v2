@@ -270,7 +270,8 @@ export function HomeScreen({
     );
 
   return (
-    <div className="relative isolate flex flex-col gap-6 lg:gap-2">
+    // PC 바다 띠를 상단 내비 바로 아래에 붙임(본문 위 여백 상쇄). 언어 안내가 위에 있으면(첫 칸이 아님) 덮지 않게 그대로 둠
+    <div className="relative isolate flex flex-col gap-6 lg:gap-2 lg:first:-mt-8">
       {/* 모바일 바다 배경(꾸밈) */}
       <HomeSky />
 
@@ -278,7 +279,7 @@ export function HomeScreen({
           PC 띠는 화면 끝까지 넓히고(100vw) 안쪽 여백으로 본문 64px 선에 맞춤(본문 여백 40 + 24) */}
       <section
         aria-labelledby="home-title"
-        className="relative flex flex-col lg:mx-[calc(50%-50vw)] lg:-mt-8 lg:bg-home-hero lg:px-[calc(50vw-50%+24px)] lg:pt-11 lg:pb-32"
+        className="relative flex flex-col lg:mx-[calc(50%-50vw)] lg:bg-home-hero lg:px-[calc(50vw-50%+24px)] lg:pt-11 lg:pb-32"
       >
         <HeroWaves />
         <HomeTopBar

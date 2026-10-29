@@ -44,7 +44,9 @@ export function TopNav() {
         event.metaKey ||
         event.ctrlKey ||
         event.altKey ||
-        typingTarget(event.target)
+        typingTarget(event.target) ||
+        // 시트·대화상자가 열려 있으면 그 안의 일을 끊지 않음
+        document.querySelector("dialog[open]") !== null
       )
         return;
       event.preventDefault();
