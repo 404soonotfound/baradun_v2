@@ -4,7 +4,7 @@ import { useTranslations } from "next-intl";
 import { cn } from "@/lib/cn";
 
 // 지역 고르기 시트를 여는 버튼. 모바일 상단 줄과 PC 홈 제목 위에서 같이 씀 (10/27 결정)
-// 모양(Figma, BRD-129): bar = 모바일 상단 줄(아이콘 17·글자 15 굵게), hero = PC 제목 위(아이콘 16·글자 14 굵게 보조색)
+// 모양(Figma, BRD-129): bar = 모바일 상단 줄(아이콘 17·글자 15.5 굵게), hero = PC 제목 위(아이콘 16·글자 14 굵게 보조색)
 export function RegionButton({
   label,
   nearby,
@@ -32,7 +32,7 @@ export function RegionButton({
         "flex min-h-touch min-w-0 items-center gap-1.5 rounded-button px-1",
         variant === "hero"
           ? "text-body font-bold text-text-body"
-          : "text-title-s text-text-default",
+          : "text-title-region text-text-default",
         className,
       )}
     >

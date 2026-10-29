@@ -302,7 +302,7 @@ export function HomeScreen({
               id="home-title"
               ref={titleRef}
               tabIndex={-1}
-              className="text-title-xl text-text-default outline-none lg:text-display"
+              className="text-title-home text-text-default outline-none lg:text-display"
             >
               {t("titleLine1")}
               {/* PC는 한 줄. 줄 머리 공백은 모바일 줄바꿈 뒤에서 사라짐 */}

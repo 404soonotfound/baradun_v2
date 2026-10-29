@@ -15,7 +15,7 @@ import {
 
 // PC 홈 히어로 상태 요약 카드 3장 (Figma S_D07_01 181:819, BRD-129)
 // 특보 없음 · 이용불가 · 판단불가 개수 + 아래 줄(특보 없음은 범위·기관·확인 시각, 나머지는 실제 사유별 개수)
-// 개수는 게시된 분류·사유 그대로(lib/status-count.ts, G1). 판단불가 카드는 점선 테두리(노션 4장 판단 상태 규칙)
+// 개수는 게시된 분류·사유 그대로(lib/status-count.ts, G1). 판단불가 카드는 점선 테두리(노션 4장 판단 상태 규칙, 색은 Figma border-note)
 // 카드 전체가 탐색으로 가는 링크. 해변이 없는 분류 카드는 그리지 않음
 // ('특보 없음 0곳'처럼 확인된 해변이 없는데 '특보 없음' 글자가 크게 보이지 않게, 오프라인·확인 실패 때 특히)
 // 판단 요약이라 카드 아래에 현장 우선 문구를 둠(노션 공통 규칙)
@@ -28,17 +28,17 @@ const LOOK: Record<
   clear: {
     icon: Check,
     box: "bg-status-clear-bg text-status-clear-fg",
-    border: "border-solid border-border-default",
+    border: "border-solid border-border-faint",
   },
   unavailable: {
     icon: TriangleAlert,
     box: "bg-status-blocked-bg text-status-blocked-fg",
-    border: "border-solid border-border-default",
+    border: "border-solid border-border-faint",
   },
   undetermined: {
     icon: Clock,
     box: "bg-status-stale-bg text-status-stale-fg",
-    border: "border-dashed border-status-unknown-border",
+    border: "border-dashed border-border-note",
   },
 };
 
