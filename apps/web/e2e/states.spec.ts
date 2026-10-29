@@ -136,17 +136,26 @@ test.describe("데이터 없음", () => {
   });
 });
 
-test.describe("전체 장애", () => {
+test.describe("확인된 판단 없음", () => {
   test.use({ scenario: "outage" });
-  test("모든 해변이 특보 확인 못 함이면 장애 안내", async ({ page }) => {
+  test("모든 해변이 특보 확인 못 함이면 원인을 단정하지 않고 영향만 안내", async ({
+    page,
+  }) => {
     for (const url of ["/", "/explore/", `/spots/${slugOf(CLEAR_ID)}/`]) {
       await page.goto(url);
       await expect(
-        page.getByText("판단에 쓰는 공식 정보를 받지 못하고 있어요").first(),
+        page.getByText("현재 확인 가능한 판단 정보가 없어요").first(),
       ).toBeVisible();
       await expect(clearBadges(page)).toHaveCount(0);
     }
     await expectNoA11yViolations(page);
+    // 영어도 받기 실패·장애를 단정하지 않음
+    await page.goto("/en/");
+    await expect(
+      page
+        .getByText("No confirmed status information is available right now")
+        .first(),
+    ).toBeVisible();
   });
 });
 

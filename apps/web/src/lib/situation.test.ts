@@ -206,7 +206,7 @@ describe("sourceOutage", () => {
     expect(sourceOutage([noData, delayedOnly])).toBeNull();
   });
 
-  it("모두 특보 확인 못 함·데이터 없음·만료(B5)면 장애. 마지막 정상 수신은 가장 늦은 확인 시각", () => {
+  it("모두 특보 확인 못 함·데이터 없음·만료(B5)면 확인된 판단 없음. 마지막 확인은 가장 늦은 확인 시각", () => {
     expect(sourceOutage([unknown, staleActive, staleUnknown, noData])).toEqual({
       lastConfirmedAt: "2026-10-27T04:40:00Z",
     });
