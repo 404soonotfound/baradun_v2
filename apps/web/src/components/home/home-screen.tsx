@@ -12,7 +12,7 @@ import { LocationOffBanner } from "@/components/home/location-off-banner";
 import { NationwideWarnings } from "@/components/home/nationwide-warnings";
 import { NearCard } from "@/components/home/near-card";
 import { PageUnavailableNote } from "@/components/home/page-unavailable-note";
-import { RecentBeaches } from "@/components/home/recent-beaches";
+import { RecentBeaches, RecentEmpty } from "@/components/home/recent-beaches";
 import { RegionButton } from "@/components/home/region-button";
 import { RegionCountCard } from "@/components/home/region-count-card";
 import { SectionHead } from "@/components/home/section-head";
@@ -350,8 +350,11 @@ export function HomeScreen({
       <div className="flex flex-col gap-5 lg:grid lg:grid-cols-[1.25fr_1fr_1fr] lg:gap-x-6 lg:gap-y-0 lg:px-6">
         {/* 최근 본(재방문) 또는 처음 오셨네요(첫 방문). PC는 아래 3단의 가운데 */}
         <div className="lg:order-3 lg:pt-8">
+          {/* 최근 본이 없으면 모바일은 '처음 오셨네요', PC는 Figma 3단을 지키려고 최근 본 해변 빈 상태 */}
           {recent.length > 0 ? (
             <RecentBeaches locale={locale} beaches={recent} />
+          ) : desktop ? (
+            <RecentEmpty />
           ) : (
             <FirstVisitCard />
           )}

@@ -142,3 +142,18 @@ export function RecentBeaches({
     </section>
   );
 }
+
+// PC 가운데 열의 최근 본 해변 빈 상태 (BRD-129). Figma PC 배치(해상 특보 / 최근 본 해변 / 안내)를 지키려고
+// 첫 방문에도 같은 제목 + 최근 본 카드와 같은 모양의 안내 카드. 모바일 첫 방문은 '처음 오셨네요'(Figma 171:563)
+export function RecentEmpty() {
+  const t = useTranslations("home.recent");
+  return (
+    <section aria-labelledby="home-recent" className="flex flex-col gap-2.5">
+      <SectionHead id="home-recent" title={t("title")} />
+      <div className="flex flex-col gap-0.5 rounded-card bg-bg-surface px-3.5 py-[13px] shadow-card">
+        <p className="text-title-s text-text-default">{t("emptyTitle")}</p>
+        <p className="text-caption text-text-muted">{t("emptyBody")}</p>
+      </div>
+    </section>
+  );
+}
