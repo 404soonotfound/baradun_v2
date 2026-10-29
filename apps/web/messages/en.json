@@ -691,14 +691,15 @@
     "kma": {
       "name": "Korea Meteorological Administration (KMA)",
       "provides": "Sea-related warnings (wind wave, strong wind, typhoon, storm surge), tsunami warnings, ocean buoy and wave buoy observations (wave height, water temperature, wind, wave period, wave direction)",
-      "terms": "Public Data Portal license: Weather Warning Service is KOGL Type 1 (attribution); Earthquake Information Service has no restrictions. Buoy observations follow the KMA API Hub terms.",
+      "terms": "Under the Weather Act (in force from 2026-09-18), every screen that shows KMA data or information made from it (beach status badges, measured values, charts) shows “Source: KMA”. Public Data Portal license: Weather Warning Service is KOGL Type 1 (attribution); Earthquake Information Service has no restrictions. Buoy observations come from the KMA API Hub.",
       "linkWarning": "Weather Warning Service",
       "linkTsunami": "Earthquake Information Service",
-      "linkApiHub": "KMA API Hub"
+      "linkApiHub": "KMA API Hub",
+      "linkGuide": "KMA data attribution guide (in Korean)"
     },
     "khoa": {
       "name": "Korea Hydrographic and Oceanographic Agency (KHOA)",
-      "provides": "Surfing and skin-scuba point lists (names and coordinates only; index values aren't used), rip current index (only for beaches where provided)",
+      "provides": "Surfing point list (names and coordinates only; index values aren't used), rip current index (only for beaches where provided)",
       "terms": "Public Data Portal license: Rip Current Index is KOGL Type 1 (attribution).",
       "linkRip": "Rip Current Index"
     },
@@ -711,9 +712,10 @@
     },
     "mof": {
       "name": "Ministry of Oceans and Fisheries",
-      "provides": "Designated beach list and operating periods (2026 beach designation and opening status)",
-      "terms": "We use materials published on the Ministry of Oceans and Fisheries website.",
-      "link": "2026 beach overview"
+      "provides": "Designated beach list and operating periods (Beach Opening and Closing Schedule), beach names and locations (Beach Information Service)",
+      "terms": "Public Data Portal license: Beach Opening and Closing Schedule and Beach Information Service both have no restrictions.",
+      "linkSchedule": "Beach Opening and Closing Schedule",
+      "linkBeachInfo": "Beach Information Service"
     },
     "map": {
       "name": "Map",
