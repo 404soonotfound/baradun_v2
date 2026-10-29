@@ -15,7 +15,7 @@ import type {
 import { createHash, randomUUID } from "node:crypto";
 import { InquiryNotifier } from "./notification";
 import { InquiryPhotos } from "./photos";
-import { INQUIRY_MAX_BODY_BYTES } from "./policy";
+import { INQUIRY_CONTACT_ENABLED, INQUIRY_MAX_BODY_BYTES } from "./policy";
 import { InquiryStore, type InquiryReceipt } from "./store";
 import {
   isCreateInquiryRequest,
@@ -37,6 +37,8 @@ export interface InquiryDependencies {
   readonly notifier: InquiryNotifier;
   readonly now: () => Date;
   readonly id: () => string;
+  // 이메일·사진 받기(policy.ts INQUIRY_CONTACT_ENABLED). 테스트가 켜짐·꺼짐 두 상태를 넣어 볼 수 있게 의존성으로 받음
+  readonly contactEnabled: boolean;
 }
 
 function requiredEnv(name: string): string {
@@ -53,7 +55,10 @@ function safeLog(
   console.log(JSON.stringify({ level, event, ...fields }));
 }
 
-function header(event: APIGatewayProxyEventV2, name: string): string | undefined {
+function header(
+  event: APIGatewayProxyEventV2,
+  name: string,
+): string | undefined {
   const wanted = name.toLowerCase();
   const entry = Object.entries(event.headers).find(
     ([key]) => key.toLowerCase() === wanted,
@@ -143,7 +148,11 @@ function isHttpEvent(event: unknown): event is APIGatewayProxyEventV2 {
 }
 
 const rateLimited = () =>
-  errorResponse(429, "rate_limited", "요청이 많습니다. 잠시 뒤 다시 시도해 주세요.");
+  errorResponse(
+    429,
+    "rate_limited",
+    "요청이 많습니다. 잠시 뒤 다시 시도해 주세요.",
+  );
 
 // 멱등 키를 뺀 보낸 값 그대로(다듬기 전)의 SHA-256. 같은 키로 온 두 요청이 같은 내용인지 가림
 // 해변·활동(결정 22)은 있을 때만 뒤에 붙임 → 둘 다 없는 요청의 지문은 칸을 넣기 전과 같음
@@ -207,7 +216,9 @@ async function createInquiry(
   const response: CreateInquiryResponse = {
     inquiryId,
     receivedAt: receivedAt.toISOString(),
-    photos: inspected.map((photo) => photo.result) as CreateInquiryResponse["photos"],
+    photos: inspected.map(
+      (photo) => photo.result,
+    ) as CreateInquiryResponse["photos"],
   };
 
   const saved = await dependencies.store.save({
@@ -263,7 +274,11 @@ export async function handleInquiryHttp(
   dependencies: InquiryDependencies,
 ): Promise<APIGatewayProxyStructuredResultV2> {
   if (event.requestContext.http.method !== "POST") {
-    return errorResponse(400, "invalid_request", "POST 요청만 받을 수 있습니다.");
+    return errorResponse(
+      400,
+      "invalid_request",
+      "POST 요청만 받을 수 있습니다.",
+    );
   }
 
   const parsed = validRequestBody(event);
@@ -277,8 +292,16 @@ export async function handleInquiryHttp(
 
   // 속도 제한은 모양 검사를 통과한 요청만 셈(문의는 멱등 기록을 먼저 봄)
   if (event.rawPath === "/api/inquiries/uploads") {
+    // 사진을 받지 않을 때는 업로드 양식을 만들지 않음(결정 기록 13장 D13-2). 속도 제한도 세지 않음
+    if (!dependencies.contactEnabled) {
+      return errorResponse(400, "invalid_request", "사진은 받지 않습니다.");
+    }
     if (!isInquiryUploadRequest(parsed.value)) {
-      return errorResponse(400, "invalid_request", "사진 정보를 확인해 주세요.");
+      return errorResponse(
+        400,
+        "invalid_request",
+        "사진 정보를 확인해 주세요.",
+      );
     }
     if (!(await dependencies.store.allowRequest(dependencies.now()))) {
       return rateLimited();
@@ -297,7 +320,22 @@ export async function handleInquiryHttp(
 
   if (event.rawPath === "/api/inquiries") {
     if (!isCreateInquiryRequest(parsed.value)) {
-      return errorResponse(400, "invalid_request", "문의 내용을 확인해 주세요.");
+      return errorResponse(
+        400,
+        "invalid_request",
+        "문의 내용을 확인해 주세요.",
+      );
+    }
+    // 이메일·사진을 받지 않을 때 담겨 온 요청은 저장하지 않고 거절(빈 문자열 이메일도 거절)
+    if (
+      !dependencies.contactEnabled &&
+      (parsed.value.email !== undefined || parsed.value.photos.length > 0)
+    ) {
+      return errorResponse(
+        400,
+        "invalid_request",
+        "이메일·사진은 받지 않습니다.",
+      );
     }
     return createInquiry(parsed.value, dependencies);
   }
@@ -315,7 +353,10 @@ function setup(): InquiryDependencies {
   );
   cached = {
     store,
-    photos: new InquiryPhotos(new S3Client({}), requiredEnv("PHOTO_BUCKET_NAME")),
+    photos: new InquiryPhotos(
+      new S3Client({}),
+      requiredEnv("PHOTO_BUCKET_NAME"),
+    ),
     notifier: new InquiryNotifier(
       new SNSClient({}),
       requiredEnv("INQUIRY_TOPIC_ARN"),
@@ -323,6 +364,7 @@ function setup(): InquiryDependencies {
     ),
     now: () => new Date(),
     id: randomUUID,
+    contactEnabled: INQUIRY_CONTACT_ENABLED,
   };
   return cached;
 }
