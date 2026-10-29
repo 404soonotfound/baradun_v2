@@ -124,7 +124,8 @@ export function StatusSummary({
                     <span className="text-num-s text-text-default">
                       {t("count", { count: item.count })}
                     </span>
-                    <span className="truncate text-caption text-text-muted">
+                    {/* 범위·기관·확인 시각은 잘리지 않게 줄을 바꿈(긴 영어·좁은 PC에서도 기관·시각이 보이게) */}
+                    <span className="text-caption text-text-muted">
                       {caption}
                     </span>
                   </span>
