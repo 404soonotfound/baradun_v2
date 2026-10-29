@@ -167,7 +167,7 @@ export function ExploreScreen({
     online,
     delayed: [],
     locationOff: false,
-    // 판단 출처 전체 장애는 노출 중인 전체 해변으로 봄(고른 지역·활동과 무관, BRD-38)
+    // 확인된 판단 없음은 노출 중인 전체 해변으로 봄(고른 지역·활동과 무관, BRD-38)
     outage: sourceOutage(
       beaches.map((beach) =>
         deriveBeachView({ id: beach.id, hidden: false }, snapshot),

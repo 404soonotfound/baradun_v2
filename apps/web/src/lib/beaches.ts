@@ -120,7 +120,7 @@ export function listBeachSummaries(locale: Locale): BeachSummary[] {
     }));
 }
 
-// 노출 중인 전체 해변 id (BRD-38 판단 출처 전체 장애). 상세는 대안 후보(30km 안)만 받으므로 따로 넘김
+// 노출 중인 전체 해변 id (BRD-38 확인된 판단 없음). 상세는 대안 후보(30km 안)만 받으므로 따로 넘김
 export function listVisibleBeachIds(): string[] {
   return load()
     .beaches.filter((beach) => !beach.hidden)

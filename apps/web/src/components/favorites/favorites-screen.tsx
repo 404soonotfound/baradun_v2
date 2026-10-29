@@ -101,7 +101,7 @@ export function FavoritesScreen({
   );
   const loading = snapshot.phase === "loading";
 
-  // 판단 출처 전체 장애는 노출 중인 전체 해변으로 봄(탐색과 같은 규칙, BRD-38)
+  // 확인된 판단 없음은 노출 중인 전체 해변으로 봄(탐색과 같은 규칙, BRD-38)
   const outage = useMemo(
     () =>
       sourceOutage(
