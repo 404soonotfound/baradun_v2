@@ -28,7 +28,7 @@ export function readDbf(path, encoding) {
 
 // ── shp 읽기 (폴리라인 3·폴리곤 5, Z·M 변형 13·15·23·25). 각 레코드: bbox + parts(점 배열의 배열) ──
 // Z·M 변형은 x·y 부분 배치가 같고 뒤에 Z·M 값이 붙음(ESRI Shapefile 기술 문서). x·y만 읽음
-// 법정구역정보(브이월드 dsId=21) 읍면동 층은 PolygonZ(15)
+// 법정구역정보(브이월드 dsId=21) 변동데이터 읍면동 층은 PolygonZ(15), 전체데이터(2026-10-09)는 Polygon(5)
 const XY_TYPES = new Set([3, 5, 13, 15, 23, 25]);
 export function readShp(path, { keep } = {}) {
   const buf = readFileSync(path);
