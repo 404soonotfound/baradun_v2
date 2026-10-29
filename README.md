@@ -24,7 +24,7 @@ Node.js 버전은 [.nvmrc](.nvmrc)를 따릅니다(npm 포함). 루트에서 실
 ```bash
 npm install
 npm run dev        # 개발 서버 (apps/web), 계약 예시 더미 데이터를 만들고 20분마다 갱신
-npm run live       # 개발 서버 + 운영 snapshot 읽기 전용 미러 (BARADUN_DEV_DATA_ORIGIN 필요)
+npm run live       # 개발 서버 + 운영 snapshot 읽기 전용 미러 (apps/web/.env.local에 운영 주소 필요)
 npm run build      # 전체 빌드
 npm run lint
 npm run typecheck
@@ -36,8 +36,14 @@ npm run test       # 워크스페이스 전체 + 해변 생성기 테스트
 | 명령 | 데이터 |
 |---|---|
 | `npm run dev` | 계약 예시 더미(화면에 '개발용 예시' 안내) |
-| `BARADUN_DEV_DATA_ORIGIN=https://<운영 CloudFront> npm run live` | 운영 snapshot을 1분마다 확인해 새 버전만 받음. 공개 정적 파일만 읽고 인증·비밀값을 보내지 않음. 받아오기 실패는 게시하지 않음 |
+| `npm run live` | 운영 snapshot을 1분마다 확인해 새 버전만 받음. 공개 정적 파일만 읽고 인증·비밀값을 보내지 않음. 받아오기 실패는 게시하지 않음 |
 | `npm run dev:no-data -w @baradun/web` | 데이터 없음 |
+
+`npm run live`는 운영 CloudFront 주소(저장소 변수 `SITE_URL`)를 `apps/web/.env.local`(저장소에 넣지 않음)에서 읽습니다. 셸 환경변수로 넣으면 그 값이 우선합니다.
+
+```bash
+echo 'BARADUN_DEV_DATA_ORIGIN=https://<운영 CloudFront>' > apps/web/.env.local
+```
 
 모드를 바꾸면 이전 모드의 데이터는 지우고 시작합니다. 배포 빌드는 `public/data`가 있으면 멈춥니다(`--check`).
 
