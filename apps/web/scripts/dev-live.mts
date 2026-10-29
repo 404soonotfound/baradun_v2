@@ -2,7 +2,7 @@
 // BARADUN_DEV_DATA_ORIGIN(운영 CloudFront)의 /data/manifest.json과 버전 파일을 받아 public/data에 씀.
 // 공개 정적 파일만 읽음: 인증 헤더·쿠키·비밀값을 보내지 않고, 사용자 위치도 보내지 않음.
 // 받아오기 실패·시간 초과·형식 불일치는 게시하지 않고 기존 파일을 그대로 둠(화면은 만료·실패 경로로 보임).
-//   BARADUN_DEV_DATA_ORIGIN=https://… npm run live -w apps/web
+//   npm run live (주소는 apps/web/.env.local 또는 셸 환경변수 BARADUN_DEV_DATA_ORIGIN)
 import { existsSync } from "node:fs";
 import path from "node:path";
 

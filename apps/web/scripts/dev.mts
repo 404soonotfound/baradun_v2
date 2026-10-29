@@ -4,7 +4,9 @@
 // off는 데이터를 만들지 않고 지난 개발 데이터를 지움(데이터 없음 상태 확인용).
 // 모드는 --data=off|sample|live 인자(운영체제 무관) 또는 BARADUN_DEV_DATA로 정함. 인자가 우선함.
 import { spawn, type ChildProcess } from "node:child_process";
+import { existsSync } from "node:fs";
 import { createRequire } from "node:module";
+import path from "node:path";
 
 import {
   clearDevData,
@@ -17,6 +19,10 @@ import {
   parseLiveOrigin,
   startLiveMirror,
 } from "./dev-live.mts";
+
+// apps/web/.env.local(git 제외)에 적은 BARADUN_DEV_DATA_ORIGIN 등을 읽음. 셸 환경변수가 우선함
+const localEnv = path.join(import.meta.dirname, "..", ".env.local");
+if (existsSync(localEnv)) process.loadEnvFile(localEnv);
 
 const DATA_FLAG = "--data=";
 const args = process.argv.slice(2);
