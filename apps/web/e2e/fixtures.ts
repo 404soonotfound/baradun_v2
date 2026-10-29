@@ -106,7 +106,7 @@ function metrics(beach: Beach, now: number, delayedWave = false) {
 interface StatusOptions {
   // 특보 마지막 확인 시각(지금 기준 분). 기본 10분 전
   confirmedAgoMin?: number;
-  // 모든 해변을 '특보 확인 못 함'으로(전체 장애)
+  // 모든 해변을 '특보 확인 못 함'으로(확인된 판단 없음)
   allUnknown?: boolean;
 }
 
@@ -252,7 +252,7 @@ type Scenario =
   | "normal" // 정상(특보 없음·이용불가·관측 지연·특보 확인 못 함이 섞임)
   | "loading" // manifest 응답 없음
   | "noData" // 처음 열었는데 데이터를 못 받음(저장된 값 없음)
-  | "outage" // 전체 장애: 모든 해변 특보 확인 못 함
+  | "noConfirmed" // 확인된 판단 없음: 모든 해변 특보 확인 못 함
   | "maintenance" // 점검
   | "update" // 강제 업데이트(minWebBuild가 화면 빌드보다 높음)
   | "futureConfirm" // 특보 확인 시각이 2분 넘게 미래(믿지 않음)
@@ -304,7 +304,7 @@ async function mockData(
         return json(route, manifestFile(now));
       }
       if (pathname.endsWith("/status.json")) {
-        if (scenario === "outage") {
+        if (scenario === "noConfirmed") {
           return json(route, statusFile(now, { allUnknown: true }));
         }
         if (scenario === "futureConfirm") {

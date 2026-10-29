@@ -28,7 +28,7 @@ import { distanceKm } from "@/lib/geo";
 import type { Locale } from "@/lib/i18n";
 import { useUserLocation } from "@/lib/location";
 import { formatKm } from "@/lib/meta-join";
-import { pickSituation, sourceOutage } from "@/lib/situation";
+import { pickSituation, noConfirmedVerdict } from "@/lib/situation";
 import { deriveDetail, warningSourceOf } from "@/lib/snapshot/detail";
 import { useSnapshot } from "@/lib/snapshot/use-snapshot";
 import { deriveBeachView } from "@/lib/snapshot/view";
@@ -108,7 +108,7 @@ export function DetailScreen({
     delayed: [],
     locationOff: false,
     // 확인된 판단 없음은 노출 중인 전체 해변으로 봄(대안 후보 30km 안만이 아님, BRD-38)
-    outage: sourceOutage(
+    noConfirmed: noConfirmedVerdict(
       allBeachIds.map((id) => deriveBeachView({ id, hidden: false }, snapshot)),
     ),
   });

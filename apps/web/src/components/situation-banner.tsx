@@ -138,19 +138,21 @@ export function SituationBanner({
             {dataText}
           </Banner>
         );
-      case "outage": {
-        // 마지막 확인 시각 = 해변별 특보 마지막 확인 시각 중 가장 늦은 것(sourceOutage)
+      case "noConfirmed": {
+        // 마지막 확인 시각 = 해변별 특보 마지막 확인 시각 중 가장 늦은 것(noConfirmedVerdict)
         const last = shownDataTime(situation.lastConfirmedAt, snapshot.nowMs);
         // 아이콘도 원인(끊김·장애)을 암시하지 않게 판단불가 배지와 같은 물음표(결정 1)
         return (
           <Banner
             tone="gray"
             icon={<CircleQuestionMark size={16} />}
-            title={t("outage")}
+            title={t("noConfirmed")}
           >
             {joinMeta([
-              last ? t("outageTime", { time: last }) : t("outageTimeUnknown"),
-              t("outageNext"),
+              last
+                ? t("noConfirmedTime", { time: last })
+                : t("noConfirmedTimeUnknown"),
+              t("noConfirmedNext"),
             ])}
           </Banner>
         );

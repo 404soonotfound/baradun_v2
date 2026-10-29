@@ -6,7 +6,7 @@ import type { BeachView } from "@/lib/snapshot/view";
 // 홈·탐색·상세가 함께 씀. 화면마다 다른 것은 입력(delayed·locationOff)뿐
 // 순서: 오프라인 → 지원 밖 형식 → 새 정보 불러오기 실패 → 확인된 판단 없음 → 관측 지연 → 위치 없이 보는 중
 // 받은 정보가 오래됐거나 읽을 수 없다는 사실을 가장 먼저(오래된 값을 최신처럼 보이지 않게)
-// 전체 장애(BRD-38, 노션 2장 SYS·1장 L13)는 노션 우선순위 목록에 없어 임시안: 받기는 했지만(live) 확인된 판단이 없음 →
+// 확인된 판단 없음(BRD-38, 노션 2장 SYS·1장 L13)의 자리는 결정 2로 확정: 받기는 했지만(live) 확인된 판단이 없음 →
 // 우리 쪽 조회 실패(failed)보다 뒤, 해변 하나의 관측 지연보다 앞
 
 // [1] 고른 결과. 관측 지연은 영향받는 해변을 먼저 말하려고 첫 해변과 나머지 수를 담음
@@ -15,7 +15,7 @@ export type Situation<B> =
   | { kind: "offline" }
   | { kind: "unsupported" }
   | { kind: "failed" }
-  | { kind: "outage"; lastConfirmedAt: string | null }
+  | { kind: "noConfirmed"; lastConfirmedAt: string | null }
   | { kind: "delayed"; first: B; more: number }
   | { kind: "noLocation" }
   | null;
@@ -31,7 +31,7 @@ export function pickSituation<B>(input: {
   online: boolean; // 브라우저 연결 상태(useOnline)
   delayed: readonly B[]; // 화면 해변 중 배지가 '관측 지연'인 해변
   locationOff: boolean; // 위치 없이 지역으로 보는 중이고 배너를 닫지 않음
-  outage: Outage | null; // 확인된 판단 없음(sourceOutage). 전체 해변으로 계산함
+  noConfirmed: NoConfirmedVerdict | null; // 확인된 판단 없음(noConfirmedVerdict). 전체 해변으로 계산함
 }): Situation<B> {
   // 점검·강제 업데이트는 화면 전체를 덮는 쪽(BRD-38)이 알림
   if (input.phase === "maintenance" || input.phase === "update_required") {
@@ -43,8 +43,11 @@ export function pickSituation<B>(input: {
   // 첫 응답 전·끊긴 동안·연결이 돌아온 뒤 다시 받는 중에는 실패로 보지 않음(store failedOnline)
   if (input.failedOnline && !input.live) return { kind: "failed" };
   // 새로 받은 정보로 확인된 판단이 하나도 없음. live가 아니면(첫 응답 전·끊김) 위 배너나 B5 배지가 이미 알림
-  if (input.outage && input.live) {
-    return { kind: "outage", lastConfirmedAt: input.outage.lastConfirmedAt };
+  if (input.noConfirmed && input.live) {
+    return {
+      kind: "noConfirmed",
+      lastConfirmedAt: input.noConfirmed.lastConfirmedAt,
+    };
   }
   const [first, ...rest] = input.delayed;
   // first !== undefined: 빈 목록이면 첫 항목이 없음(noUncheckedIndexedAccess가 확인하게 함)
@@ -55,16 +58,18 @@ export function pickSituation<B>(input: {
   return null;
 }
 
-// [3] 확인된 판단 없음 (노션 2장 SYS · 1장 L13 · 5장 B5 · 결정 1). 이름은 outage지만 원인(출처 장애)은 단정하지 않음
+// [3] 확인된 판단 없음 (노션 2장 SYS · 1장 L13 · 5장 B5 · 결정 1). 원인(출처 장애)은 단정하지 않음
 // 분류는 다시 계산하지 않고(G1) 해변별 화면 상태(BeachView: 게시된 분류·사유 + 만료 여부)만 봄.
 // 노출 중인 전체 해변 중 지금 확인된 판단(만료 전 '특보 없음'·이용불가, 사유가 관측 지연뿐인 판단불가)이
 // 하나도 없으면 해당 = 모든 해변이 만료(B5)이거나 특보 확인 못 함·데이터 없음. 배너만 바꾸고 분류는 그대로 둠
 // 마지막 확인 시각은 해변별 특보 마지막 확인 시각 중 가장 늦은 것(없으면 null → '시각 모름')
-export interface Outage {
+export interface NoConfirmedVerdict {
   lastConfirmedAt: string | null;
 }
 
-export function sourceOutage(views: readonly BeachView[]): Outage | null {
+export function noConfirmedVerdict(
+  views: readonly BeachView[],
+): NoConfirmedVerdict | null {
   const ready = views.filter(
     (view): view is Extract<BeachView, { kind: "ready" }> =>
       view.kind === "ready",

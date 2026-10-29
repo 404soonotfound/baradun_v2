@@ -39,7 +39,11 @@ import {
   regionName,
   validRegion,
 } from "@/lib/region-list";
-import { isDelayedView, pickSituation, sourceOutage } from "@/lib/situation";
+import {
+  isDelayedView,
+  pickSituation,
+  noConfirmedVerdict,
+} from "@/lib/situation";
 import type { SnapshotState } from "@/lib/snapshot/store";
 import { useSnapshot } from "@/lib/snapshot/use-snapshot";
 import { deriveBeachView } from "@/lib/snapshot/view";
@@ -162,7 +166,7 @@ export function HomeScreen({
     delayed,
     locationOff: locationOff && !offBannerClosed,
     // 확인된 판단 없음은 노출 중인 전체 해변으로 봄(지역·활동과 무관, BRD-38)
-    outage: sourceOutage(
+    noConfirmed: noConfirmedVerdict(
       beaches.map((beach) =>
         deriveBeachView({ id: beach.id, hidden: false }, snapshot),
       ),
