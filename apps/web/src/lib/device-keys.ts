@@ -4,5 +4,6 @@
 export const DEVICE_KEYS = {
   favorites: "baradun:favorites", // 즐겨찾기 해변 id
   recent: "baradun:recent", // 최근 본 해변 id
+  recentVisits: "baradun:recent-visits", // 최근 본 해변을 본 시각·그때 고른 활동(BRD-129)
   recentSearch: "baradun:recent-search", // 최근 검색어
 } as const;
