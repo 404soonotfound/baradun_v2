@@ -1,6 +1,12 @@
 "use client"; // 다시 시도(비동기 클릭)·포커스 이동을 쓰므로 브라우저 부품
 
-import { Clock, CloudOff, FileWarning, RotateCw, WifiOff } from "lucide-react";
+import {
+  CircleQuestionMark,
+  Clock,
+  FileWarning,
+  RotateCw,
+  WifiOff,
+} from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useRef, useState } from "react";
 
@@ -135,8 +141,13 @@ export function SituationBanner({
       case "outage": {
         // 마지막 확인 시각 = 해변별 특보 마지막 확인 시각 중 가장 늦은 것(sourceOutage)
         const last = shownDataTime(situation.lastConfirmedAt, snapshot.nowMs);
+        // 아이콘도 원인(끊김·장애)을 암시하지 않게 판단불가 배지와 같은 물음표(결정 1)
         return (
-          <Banner tone="gray" icon={<CloudOff size={16} />} title={t("outage")}>
+          <Banner
+            tone="gray"
+            icon={<CircleQuestionMark size={16} />}
+            title={t("outage")}
+          >
             {joinMeta([
               last ? t("outageTime", { time: last }) : t("outageTimeUnknown"),
               t("outageNext"),
