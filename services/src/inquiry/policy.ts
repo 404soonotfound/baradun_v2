@@ -1,3 +1,8 @@
+// 문의에서 이메일·사진을 받을지(결정 기록 13장 D13-1·D13-2, BRD-130). 출시 기본값은 받지 않음
+// 끄면 사진 업로드 발급을 막고 이메일·사진이 담긴 문의를 거절함(화면에서만 숨기지 않음)
+// apps/web/src/lib/inquiry/form.ts의 같은 이름 값과 같아야 함(infra/test/inquiry.test.ts가 확인)
+// 다시 켜기 전 필수: BRD-116·117·119, 처리방침 항목 추가, 고지 버전 올림(D13-3)
+export const INQUIRY_CONTACT_ENABLED = false;
 export const INQUIRY_BODY_RETENTION_DAYS = 90;
 export const INQUIRY_EMAIL_RETENTION_DAYS = 88;
 export const INQUIRY_PHOTO_RETENTION_DAYS = 30;
