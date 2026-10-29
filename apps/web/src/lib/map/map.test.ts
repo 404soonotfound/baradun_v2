@@ -181,6 +181,7 @@ describe("style-dark.json", () => {
     }
   });
 
+  // 결정 기록 12장 결정 9: 지금 다크 지도 색을 대비 검사 뒤 정식 값으로 확정. 값이 바뀌면 이 시험이 다시 확인함
   it("도로 이름은 가장 밝은 다크 도로 위에서도 글자 뒤 바탕(halo)과 4.5:1 이상", () => {
     // 도로 이름은 도로 선 위에 그려짐(symbol-placement: line) → 바탕은 땅이 아니라 도로 면.
     // halo(반투명 어두운 바탕)를 가장 밝은 도로(고속도로 안쪽 선) 위에 겹친 색과 비교함
@@ -210,6 +211,34 @@ describe("style-dark.json", () => {
         road,
       ).toBeGreaterThanOrEqual(4.5);
     }
+  });
+
+  it("바다 이름은 다크 바다 위에서 4.5:1 이상", () => {
+    const water = paintColor(darkStyle, "water", "fill-color");
+    expect(
+      contrast(
+        paintColor(darkStyle, "water_name_point_label", "text-color"),
+        water,
+      ),
+    ).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it("다크 땅·바다는 라이트 지도만큼 구분된다(밝기 차이가 라이트보다 작지 않음)", () => {
+    // 라이트 원본(Positron)은 rgb() 표기라 16진수로 바꿔 비교
+    const hex = (rgb: string) =>
+      `#${(rgb.match(/\d+/g) ?? [])
+        .slice(0, 3)
+        .map((part) => Number(part).toString(16).padStart(2, "0"))
+        .join("")}`;
+    const light = contrast(
+      hex(paintColor(lightStyle, "background", "background-color")),
+      hex(paintColor(lightStyle, "water", "fill-color")),
+    );
+    const dark = contrast(
+      paintColor(darkStyle, "background", "background-color"),
+      paintColor(darkStyle, "water", "fill-color"),
+    );
+    expect(dark).toBeGreaterThanOrEqual(light - 0.01);
   });
 });
 
