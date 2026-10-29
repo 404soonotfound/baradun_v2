@@ -8,6 +8,7 @@ import { useState } from "react";
 import { SectionHead } from "@/components/home/section-head";
 import { WarningSheet } from "@/components/warning-sheet";
 import { ZoneName } from "@/components/zone-name";
+import { AGENCY } from "@/lib/agencies";
 import { kstStamp } from "@/lib/snapshot/clock";
 import { useNationwideWarnings } from "@/lib/snapshot/nationwide";
 import { useBadgeText } from "@/lib/snapshot/use-badge-text";
@@ -16,7 +17,7 @@ import { useTimeText } from "@/lib/snapshot/use-time-text";
 import { useSheet } from "@/lib/use-sheet";
 
 // 전국 해상 특보 파일은 기상청 특보만 담음(계약 NationwideWarningsFile, 기관 칸 없음)
-const NATIONWIDE_SOURCE = "기상청";
+const NATIONWIDE_SOURCE = AGENCY.kma;
 
 // 해상 특보 (노션 2장 HOME 9 · 3장 NoticeList, Figma S_M01_01 '해상 특보')
 // '특보 없음'은 범위(전국 해상)·기관(기상청)·확인 시각이 모두 있고 45분 안일 때만(stale 아님)

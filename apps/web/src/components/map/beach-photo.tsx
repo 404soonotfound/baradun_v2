@@ -7,6 +7,7 @@ import { useState, type ReactNode } from "react";
 import type { BeachSummary } from "@/lib/beach-summary";
 import { cn } from "@/lib/cn";
 import { photoSourceUrl } from "@/lib/photo-credit";
+import { useMetaText } from "@/lib/snapshot/use-meta-text";
 
 // 해변 참고 사진 (BRD-30 · 노션 3장 BeachPhoto, 결정 기록 11장 10/21 공공누리 1유형만)
 // 사진 아래에 "참고 사진 · 지금 바다 모습 아님" + 출처(링크)·공공누리 유형. 사진을 자르거나 거르지 않음(object-cover만)
@@ -23,6 +24,7 @@ export function BeachPhoto({
 }) {
   const t = useTranslations("photo");
   const tc = useTranslations("common");
+  const { agencyText } = useMetaText();
   // 받지 못한 사진 주소. 다른 해변으로 바뀌면 다시 시도함
   const [brokenUrl, setBrokenUrl] = useState<string | null>(null);
   const shown = photo !== null && photo.url !== brokenUrl ? photo : null;
@@ -47,9 +49,8 @@ export function BeachPhoto({
   }
 
   const license = t(`license.${shown.license}`);
-  // 출처 기관: 데이터 값(한국어 원문) 중 아는 기관만 문구 키로. 모르는 기관은 원문 그대로(use-meta-text agencyText와 같은 방식)
-  const source =
-    shown.source === "한국관광공사" ? t("sourceName.kto") : shown.source;
+  // 출처 기관: 아는 기관만 문구 키로, 모르는 기관은 원문 그대로(lib/agencies 표)
+  const source = agencyText(shown.source);
   // 출처 이름에 출처 웹사이트 링크(공공누리 제1유형, BRD-113). 새 창이라고 화면 읽기에 알림. 주소를 모르면 글자만
   const href = photoSourceUrl(shown);
   const link = (chunks: ReactNode) =>

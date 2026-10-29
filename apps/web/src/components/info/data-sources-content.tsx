@@ -1,8 +1,8 @@
 import { getTranslations } from "next-intl/server";
 
 import { ExternalLink, InfoSection } from "@/components/info/info-blocks";
+import { SOURCE_URL } from "@/lib/agencies";
 import type { Locale } from "@/lib/i18n";
-import { TOUR_API_URL } from "@/lib/photo-credit";
 
 // 데이터 출처·이용 조건 /about/data/ (BRD-36 · 노션 2장 SRC, 결정 기록 11장 B1·B7·10/21 사진·10/23 운영 기간)
 // 출처마다 제공 항목·이용 조건·원문 링크. 이용 조건은 각 원문(공공데이터포털 '이용허락범위' 등)을 2026-10-29에 확인한 값
@@ -38,20 +38,15 @@ const SOURCES: Source[] = [
     key: "khoa",
     links: [
       // 서핑 활동 근거(포인트 이름·좌표만, 지수 값은 쓰지 않음) 원문 링크. 결정 20(공공누리 제1유형 출처 표시)
-      {
-        label: "linkSurf",
-        href: "https://www.data.go.kr/data/15142490/openapi.do",
-      },
-      {
-        label: "linkRip",
-        href: "https://www.data.go.kr/data/15156028/openapi.do",
-      },
+      { label: "linkSurf", href: SOURCE_URL.surfing },
+      // 상세 '정보 출처' 이안류 줄과 같은 원문 주소(lib/agencies)
+      { label: "linkRip", href: SOURCE_URL.ripCurrent },
     ],
   },
   {
     key: "tour",
     links: [
-      { label: "linkTour", href: TOUR_API_URL },
+      { label: "linkTour", href: SOURCE_URL.tourApi },
       {
         label: "linkKogl",
         href: "https://www.kogl.or.kr/info/licenseType1.do",
