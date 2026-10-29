@@ -146,7 +146,13 @@ const rateLimited = () =>
   errorResponse(429, "rate_limited", "요청이 많습니다. 잠시 뒤 다시 시도해 주세요.");
 
 // 멱등 키를 뺀 보낸 값 그대로(다듬기 전)의 SHA-256. 같은 키로 온 두 요청이 같은 내용인지 가림
+// 해변·활동(결정 22)은 있을 때만 뒤에 붙임 → 둘 다 없는 요청의 지문은 칸을 넣기 전과 같음
+// (배포 직전 접수된 문의의 재시도가 지문 불일치 409로 버려져 두 번 접수되지 않게)
 export function requestFingerprint(request: CreateInquiryRequest): string {
+  const context =
+    request.beachId === undefined && request.activity === undefined
+      ? []
+      : [request.beachId ?? null, request.activity ?? null];
   return createHash("sha256")
     .update(
       JSON.stringify([
@@ -154,6 +160,7 @@ export function requestFingerprint(request: CreateInquiryRequest): string {
         request.message,
         request.email ?? null,
         request.photos.map((photo) => [photo.photoId, photo.key]),
+        ...context,
       ]),
     )
     .digest("hex");
@@ -207,6 +214,8 @@ async function createInquiry(
     inquiryId,
     type: request.type,
     message,
+    ...(request.beachId ? { beachId: request.beachId } : {}),
+    ...(request.activity ? { activity: request.activity } : {}),
     ...(email ? { email } : {}),
     photoKeys: inspected.flatMap((photo) =>
       photo.acceptedKey ? [photo.acceptedKey] : [],
@@ -229,6 +238,8 @@ async function createInquiry(
       inquiryId,
       type: request.type,
       message,
+      ...(request.beachId ? { beachId: request.beachId } : {}),
+      ...(request.activity ? { activity: request.activity } : {}),
       hasEmail: Boolean(email),
       receivedAt,
     })

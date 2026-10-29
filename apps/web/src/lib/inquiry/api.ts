@@ -376,7 +376,7 @@ async function uploadPhotos(
   return { ok: true, refs };
 }
 
-// 보낼 내용의 지문: 유형·본문·이메일·사진(형식·내용 SHA-256). 같으면 같은 시도로 봄
+// 보낼 내용의 지문: 유형·본문·이메일·해변·활동·사진(형식·내용 SHA-256). 같으면 같은 시도로 봄
 async function contentFingerprint(
   deps: SendDeps,
   request: InquiryContent,
@@ -393,6 +393,8 @@ async function contentFingerprint(
       request.type,
       request.message,
       request.email ?? null,
+      request.beachId ?? null,
+      request.activity ?? null,
       photoDigests,
     ]),
   );
@@ -400,7 +402,7 @@ async function contentFingerprint(
 
 export type InquiryContent = Omit<CreateInquiryRequest, "photos" | "idempotencyKey">;
 
-// 문의 보내기. message는 머리 줄을 붙인 본문(form.ts composeMessage)
+// 문의 보내기. request는 form.ts buildRequest 결과
 // attempt: 지난 시도와 내용이 같으면 그 멱등 키·사진 참조를 다시 씀. 내용이 바뀌면 새 키. 접수되면 비움
 export async function sendInquiry(
   request: InquiryContent,

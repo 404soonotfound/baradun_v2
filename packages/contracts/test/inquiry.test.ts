@@ -90,7 +90,7 @@ describe("데이터 문의 계약", () => {
   it("문의 요청은 UUID v4 멱등 키가 꼭 있어야 한다", () => {
     const request = {
       idempotencyKey: "3f2504e0-4f89-41d3-9a0c-0305e82c3301",
-      type: "other",
+      type: "data_suggestion",
       message: "문의",
       photos: [],
     };

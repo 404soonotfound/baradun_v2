@@ -2,11 +2,9 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildRequest,
-  composeMessage,
   firstErrorField,
+  INQUIRY_KINDS,
   KIND_TO_TYPE,
-  MESSAGE_INPUT_MAX,
-  MESSAGE_MAX,
   validateForm,
 } from "./form";
 import { checkPickedFile, fitSize } from "./photo";
@@ -55,55 +53,52 @@ describe("validateForm", () => {
   });
 });
 
-describe("composeMessage·buildRequest", () => {
-  it("머리 줄에 유형·해변·활동, 빈 해변은 빼고 2000자를 넘지 않음", () => {
+describe("buildRequest", () => {
+  it("화면 유형 칩 4개는 계약 유형 4개와 1:1(결정 21)", () => {
+    const types = INQUIRY_KINDS.map((kind) => KIND_TO_TYPE[kind]);
+    expect(new Set(types).size).toBe(INQUIRY_KINDS.length);
+    expect(KIND_TO_TYPE).toEqual({
+      mismatch: "data_error",
+      addBeach: "beach_request",
+      criteria: "data_question",
+      newData: "data_suggestion",
+    });
+  });
+
+  it("해변·활동은 본문에 섞지 않고 계약 칸으로, 없으면 칸을 만들지 않음(결정 22)", () => {
     expect(
-      composeMessage({
-        kindLabel: "정보가 실제와 달라요",
-        beachName: "경포해변",
-        activityLabel: "수영",
+      buildRequest({
+        kind: "mismatch",
         message: "  파고가 달라요 ",
+        email: "",
+        context: { beachId: "b0001", activity: "surfing" },
       }),
-    ).toBe("[정보가 실제와 달라요 · 경포해변 · 수영]\n\n파고가 달라요");
-    expect(
-      composeMessage({
-        kindLabel: "x",
-        beachName: null,
-        activityLabel: null,
-        message: "a".repeat(3000),
-      }).length,
-    ).toBe(MESSAGE_MAX);
-  });
-
-  it("머리 줄이 아무리 길어도 내용 입력 상한까지 쓴 글은 끝까지 보냄", () => {
-    const message = `${"가".repeat(MESSAGE_INPUT_MAX - 3)}끝말`;
-    const composed = composeMessage({
-      kindLabel: "유".repeat(200),
-      beachName: "해".repeat(200),
-      activityLabel: "활동",
-      message,
-    });
-    expect(composed.length).toBeLessThanOrEqual(MESSAGE_MAX);
-    expect(composed.endsWith(message)).toBe(true);
-  });
-
-  it("빈 이메일은 보내지 않고, 유형은 계약 값으로", () => {
-    expect(
-      buildRequest({ kind: "addBeach", message: "m", email: "  ", photos: [] }),
     ).toEqual({
-      type: "other",
-      message: "m",
-      photos: [],
+      type: "data_error",
+      message: "파고가 달라요",
+      beachId: "b0001",
+      activity: "surfing",
     });
+    const plain = buildRequest({
+      kind: "addBeach",
+      message: "m",
+      email: "  ",
+      context: null,
+    });
+    expect(plain).toEqual({ type: "beach_request", message: "m" });
+    expect(plain).not.toHaveProperty("beachId");
+    expect(plain).not.toHaveProperty("activity");
+  });
+
+  it("이메일은 앞뒤 공백을 빼고 보냄", () => {
     expect(
       buildRequest({
         kind: "criteria",
         message: "m",
         email: " a@b.co ",
-        photos: [],
+        context: null,
       }).email,
     ).toBe("a@b.co");
-    expect(KIND_TO_TYPE.mismatch).toBe("data_error");
   });
 });
 
