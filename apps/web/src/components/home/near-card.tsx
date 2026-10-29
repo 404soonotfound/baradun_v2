@@ -9,6 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import type { BeachSummary } from "@/lib/beach-summary";
 import { localizedPath, type Locale } from "@/lib/i18n";
 import { formatKm, joinMeta } from "@/lib/meta-join";
+import { cardMetric, type CardMetric } from "@/lib/near-metric";
 import { kstStamp } from "@/lib/snapshot/clock";
 import { useBadgeText } from "@/lib/snapshot/use-badge-text";
 import { useMetaText } from "@/lib/snapshot/use-meta-text";
@@ -20,6 +21,12 @@ import type { BeachView, MetricKey, MetricView } from "@/lib/snapshot/view";
 // 모양 두 가지(Figma, BRD-129):
 //   compact(모바일 171:478): 이름·배지 한 줄 → 3칸 → 근거 줄 + 현장 우선 문구
 //   wide(PC 181:851): 이름 + › → 배지 → 큰 파고 + 나머지 지표 한 줄 → 근거 줄. 현장 우선 문구는 묶음 제목 줄(home-screen)
+
+// PC 카드 큰 파고 옆 한 줄에 둘 나머지 지표(Figma 181:870)
+const WIDE_OTHERS = [
+  "waterTemp",
+  "wind",
+] as const satisfies readonly MetricKey[];
 
 // 카드에 보이는 지표 3칸(순서 = 칸 순서)
 const CARD_METRICS = [
@@ -104,16 +111,14 @@ export function NearCard({
   // [4] PC: 큰 파고 + 나머지 지표 한 줄("파고 · 수온 21°C · 바람 3m/s")
   if (variant === "wide") {
     const wave = shownMetric("waveHeight");
-    // 파고가 '가까운 관측 없음'이면 그 문구에 지표 이름을 붙이고 이 줄에서는 뺌
-    const others = joinMeta([
-      wave?.kind === "none" ? null : t("observation.metric.waveHeight"),
-      ...CARD_METRICS.filter((key) => key !== "waveHeight").map((key) => {
-        const metric = shownMetric(key);
-        return metric?.kind === "value"
-          ? `${t(`observation.metric.${key}`)} ${metric.value}${metric.unit}`
-          : null;
-      }),
-    ]);
+    // 나머지 지표 한 줄. 값이 없어도 지표를 빼지 않고 이름 + 이유('가까운 관측 없음'·'늦어짐'·"–")를 남김(Codex P2)
+    const others = WIDE_OTHERS.map((key) => ({
+      key,
+      metric: cardMetric(
+        view.kind === "ready" ? view.metrics[key] : null,
+        beach.stations[key] !== null,
+      ),
+    })).filter((item) => item.metric.kind !== "loading");
     return (
       <Link
         href={href}
@@ -160,9 +165,22 @@ export function NearCard({
               <span className="sr-only">{t("home.near.noValue")}</span>
             </span>
           )}
-          {others && (
-            <span className="pl-1 text-caption text-text-muted">{others}</span>
-          )}
+          {/* 파고가 '가까운 관측 없음'이면 위 문구에 지표 이름이 있어 이 줄 앞의 '파고'는 뺌 */}
+          <span className="pl-1 text-caption text-text-muted">
+            {wave?.kind !== "none" && t("observation.metric.waveHeight")}
+            {others.map(({ key, metric }, index) => (
+              <span key={key}>
+                {(index > 0 || wave?.kind !== "none") && " · "}
+                {t(`observation.metric.${key}`)}{" "}
+                <InlineMetric
+                  metric={metric}
+                  none={t("observation.none")}
+                  delayed={t("observation.delayedShort")}
+                  empty={t("home.near.noValue")}
+                />
+              </span>
+            ))}
+          </span>
         </span>
         {noteList}
       </Link>
@@ -204,7 +222,30 @@ export function NearCard({
   );
 }
 
-// [6] 지표 한 칸. metric이 null이면 아직 불러오는 중(회색 상자)
+// [6] PC 나머지 지표 한 줄의 값 자리. 결측은 "–"를 보이고 화면 읽기에는 '값 없음'
+function InlineMetric({
+  metric,
+  none,
+  delayed,
+  empty,
+}: {
+  metric: CardMetric;
+  none: string;
+  delayed: string;
+  empty: string;
+}) {
+  if (metric.kind === "value") return <>{`${metric.value}${metric.unit}`}</>;
+  if (metric.kind === "none") return <>{none}</>;
+  if (metric.kind === "delayed") return <>{delayed}</>;
+  return (
+    <>
+      <span aria-hidden="true">–</span>
+      <span className="sr-only">{empty}</span>
+    </>
+  );
+}
+
+// [7] 지표 한 칸. metric이 null이면 아직 불러오는 중(회색 상자)
 function MetricCell({
   label,
   metric,
