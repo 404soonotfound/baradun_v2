@@ -4,6 +4,7 @@ import {
   CLOCK_SKEW_MS,
   isUploadResponse,
   isUploadTarget,
+  receiptUnknown,
   sendInquiry,
   sha256Hex,
   uploadUrlFor,
@@ -18,7 +19,7 @@ const KEY = `pending/${"a".repeat(32)}/${PHOTO_ID}`;
 const INQUIRY_ID = "123e4567-e89b-42d3-a456-426614174000";
 const request = {
   type: "data_error" as const,
-  message: "[유형]\n\n파고가 달라요",
+  message: "파고가 달라요",
 };
 const BUCKET = "baradunv2-photos-test";
 const UPLOAD_URL = `https://${BUCKET}.s3.ap-northeast-2.amazonaws.com/`;
@@ -38,7 +39,7 @@ const policyFor = (
       expiration: EXPIRES,
       conditions: [
         ["eq", "$Content-Type", contentType],
-        ["content-length-range", 1, 5 * 1024 * 1024],
+        ["content-length-range", 1, 4 * 1024 * 1024],
         { "Content-Type": contentType },
         { bucket: BUCKET },
         { "X-Amz-Algorithm": "AWS4-HMAC-SHA256" },
@@ -166,7 +167,11 @@ describe("sendInquiry", () => {
         undefined,
         short.deps,
       ),
-    ).toEqual({ ok: false, failure: "invalidResponse" });
+    ).toEqual({
+      ok: false,
+      failure: "invalidResponse",
+      stop: { stage: "photos", uploaded: 0, total: 1 },
+    });
     expect(short.fetch).toHaveBeenCalledTimes(1);
   });
 
@@ -195,6 +200,7 @@ describe("sendInquiry", () => {
       expect(await sendInquiry(request, [], undefined, d)).toEqual({
         ok: false,
         failure,
+        stop: { stage: "message", photos: 0 },
       });
     }
     const offline = deps(() => created());
@@ -202,6 +208,7 @@ describe("sendInquiry", () => {
     expect(await sendInquiry(request, [], undefined, offline.deps)).toEqual({
       ok: false,
       failure: "offline",
+      stop: { stage: "message", photos: 0 },
     });
     expect(offline.fetch).not.toHaveBeenCalled();
   });
@@ -224,6 +231,7 @@ describe("sendInquiry", () => {
       expect(await sendInquiry(request, [], undefined, d)).toEqual({
         ok: false,
         failure: "invalidResponse",
+        stop: { stage: "message", photos: 0 },
       });
     }
     const notJson = deps(() => new Response("ok", { status: 200 }));
@@ -246,7 +254,11 @@ describe("sendInquiry", () => {
       d.digest = () => Promise.resolve("0".repeat(64)); // 타이머 시험이라 해시는 바로
       const pending = sendInquiry(request, [], undefined, d);
       await vi.advanceTimersByTimeAsync(20_000);
-      expect(await pending).toEqual({ ok: false, failure: "network" });
+      expect(await pending).toEqual({
+        ok: false,
+        failure: "network",
+        stop: { stage: "message", photos: 0 },
+      });
     } finally {
       vi.useRealTimers();
     }
@@ -279,7 +291,11 @@ describe("sendInquiry", () => {
       expect(
         await sendInquiry(request, photos, undefined, d),
         JSON.stringify(results),
-      ).toEqual({ ok: false, failure: "invalidResponse" });
+      ).toEqual({
+        ok: false,
+        failure: "invalidResponse",
+        stop: { stage: "message", photos: 2 },
+      });
     }
   });
 
@@ -300,7 +316,11 @@ describe("sendInquiry", () => {
       d.digest = () => Promise.resolve("0".repeat(64));
       const pending = sendInquiry(request, [], undefined, d);
       await vi.advanceTimersByTimeAsync(20_000);
-      expect(await pending).toEqual({ ok: false, failure: "network" });
+      expect(await pending).toEqual({
+        ok: false,
+        failure: "network",
+        stop: { stage: "message", photos: 0 },
+      });
     } finally {
       vi.useRealTimers();
     }
@@ -486,6 +506,7 @@ describe("업로드 양식 검사 (결정 26)", () => {
       expect(await sendInquiry(request, [jpeg()], undefined, d)).toEqual({
         ok: false,
         failure: "invalidResponse",
+        stop: { stage: "photos", uploaded: 0, total: 1 },
       });
       expect(fetch).toHaveBeenCalledTimes(1); // 양식 요청만
     }
@@ -508,6 +529,7 @@ describe("업로드 양식 검사 (결정 26)", () => {
     expect(await sendInquiry(request, [jpeg("a"), jpeg("b")], undefined, d)).toEqual({
       ok: false,
       failure: "invalidResponse",
+      stop: { stage: "photos", uploaded: 1, total: 2 }, // 첫 장은 올라감(결정 27)
     });
     expect(fetch.mock.calls.map(([url]) => url)).toEqual([
       "/api/inquiries/uploads",
@@ -534,6 +556,7 @@ describe("멱등 키 (결정 24)", () => {
     expect(await sendInquiry(request, [jpeg()], undefined, d, attempt)).toEqual({
       ok: false,
       failure: "network",
+      stop: { stage: "message", photos: 1 },
     });
     expect(attempt.current?.idempotencyKey).toBe(UUID_A);
     expect(attempt.current?.refs).toEqual([{ photoId: PHOTO_ID, key: KEY }]);
@@ -597,6 +620,7 @@ describe("멱등 키 (결정 24)", () => {
       expect(await sendInquiry(request, [], undefined, d, attempt)).toEqual({
         ok: false,
         failure: "rejected",
+        stop: { stage: "message", photos: 0 },
       });
       expect(attempt.current).toBeNull();
     }
@@ -628,5 +652,95 @@ describe("멱등 키 (결정 24)", () => {
     await sendInquiry({ ...request, email: "reader@example.com" }, [], undefined, d, attempt);
     expect(JSON.stringify(attempt.current)).not.toContain("reader@example.com");
     expect(attempt.current?.fingerprint).toMatch(/^[0-9a-f]{64}$/);
+  });
+});
+
+describe("멈춘 단계와 접수 여부 (결정 27)", () => {
+  it("사진 업로드가 중간에 실패하면 올라간 장수와 함께 사진 단계로 알림", async () => {
+    const OTHER_ID = "fedcba9876543210";
+    const OTHER_KEY = `pending/${"b".repeat(32)}/${OTHER_ID}`;
+    let uploads = 0;
+    const { deps: d, fetch } = deps((url) => {
+      if (url === "/api/inquiries/uploads")
+        return json(200, { uploads: [target(), target(OTHER_ID, OTHER_KEY)] });
+      if (url === UPLOAD_URL)
+        return new Response(null, { status: ++uploads === 1 ? 204 : 503 });
+      return created();
+    });
+    const result = await sendInquiry(request, [jpeg("a"), jpeg("b")], undefined, d);
+    expect(result).toEqual({
+      ok: false,
+      failure: "unavailable",
+      stop: { stage: "photos", uploaded: 1, total: 2 },
+    });
+    expect(receiptUnknown(result as never)).toBe(false); // 문의는 보내지 않음
+    expect(fetch.mock.calls.some(([url]) => url === "/api/inquiries")).toBe(false);
+  });
+
+  it("접수 여부를 모르는 시도 뒤 연결 없이 다시 보내면 여전히 접수 여부를 모른다고 알림", async () => {
+    const { deps: d } = deps(() => {
+      throw new TypeError("Failed to fetch");
+    });
+    const attempt: AttemptSlot = { current: null };
+    const first = await sendInquiry(request, [], undefined, d, attempt);
+    expect(first.ok === false && receiptUnknown(first)).toBe(true);
+    d.online = () => false;
+    const offline = await sendInquiry(request, [], undefined, d, attempt);
+    expect(offline).toEqual({
+      ok: false,
+      failure: "offline",
+      stop: { stage: "message", photos: 0, uncertain: true },
+    });
+    expect(offline.ok === false && receiptUnknown(offline)).toBe(true);
+    // 내용이 바뀌면 다른 문의라 앞 시도와 묶지 않음
+    const changed = await sendInquiry(
+      { ...request, message: "다른 내용이에요" },
+      [],
+      undefined,
+      d,
+      attempt,
+    );
+    expect(changed.ok === false && receiptUnknown(changed)).toBe(false);
+  });
+
+  it("연결 없이 사진과 보내면 사진 0장 단계로 멈춤", async () => {
+    const offline = deps(() => created());
+    offline.deps.online = () => false;
+    expect(
+      await sendInquiry(request, [jpeg()], undefined, offline.deps),
+    ).toEqual({
+      ok: false,
+      failure: "offline",
+      stop: { stage: "photos", uploaded: 0, total: 1 },
+    });
+  });
+
+  it("문의 요청 뒤 응답을 못 받았거나 5xx·모양 틀림이면 접수 여부를 모름, 거절이면 접수 안 됨", () => {
+    const message = { stage: "message", photos: 0 } as const;
+    for (const failure of ["network", "unavailable", "invalidResponse"] as const)
+      expect(receiptUnknown({ failure, stop: message }), failure).toBe(true);
+    for (const failure of ["offline", "rateLimited", "rejected"] as const)
+      expect(receiptUnknown({ failure, stop: message }), failure).toBe(false);
+    expect(
+      receiptUnknown({
+        failure: "network",
+        stop: { stage: "photos", uploaded: 1, total: 2 },
+      }),
+    ).toBe(false);
+  });
+
+  it("해변·활동은 요청 본문에 칸으로 들어가고, 바뀌면 새 멱등 키", async () => {
+    const { deps: d, fetch } = deps(() => {
+      throw new TypeError("Failed to fetch");
+    });
+    d.uuid = vi.fn().mockReturnValueOnce(UUID_A).mockReturnValueOnce(UUID_B);
+    const attempt: AttemptSlot = { current: null };
+    const withBeach = { ...request, beachId: "b0001", activity: "surfing" as const };
+    await sendInquiry(withBeach, [], undefined, d, attempt);
+    const first = JSON.parse(fetch.mock.calls[0]![1].body as string);
+    expect(first).toMatchObject({ beachId: "b0001", activity: "surfing" });
+    expect(attempt.current?.idempotencyKey).toBe(UUID_A);
+    await sendInquiry({ ...withBeach, activity: "scuba" }, [], undefined, d, attempt);
+    expect(attempt.current?.idempotencyKey).toBe(UUID_B);
   });
 });
