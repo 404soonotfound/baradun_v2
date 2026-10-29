@@ -4,7 +4,7 @@ import {
   isDelayedView,
   pickSituation,
   shownDataTime,
-  sourceOutage,
+  noConfirmedVerdict,
 } from "./situation";
 import type { BeachView } from "./snapshot/view";
 
@@ -18,9 +18,9 @@ const base = {
   online: true,
   delayed: [] as string[],
   locationOff: false,
-  outage: null,
+  noConfirmed: null,
 };
-const OUTAGE = { lastConfirmedAt: "2026-10-27T05:05:00Z" };
+const NO_CONFIRMED = { lastConfirmedAt: "2026-10-27T05:05:00Z" };
 
 describe("pickSituation", () => {
   it("문제가 없으면 배너 없음", () => {
@@ -97,33 +97,44 @@ describe("pickSituation", () => {
     expect(
       pickSituation({
         ...base,
-        outage: OUTAGE,
+        noConfirmed: NO_CONFIRMED,
         delayed: ["사근진"],
         locationOff: true,
       }),
-    ).toEqual({ kind: "outage", lastConfirmedAt: OUTAGE.lastConfirmedAt });
+    ).toEqual({
+      kind: "noConfirmed",
+      lastConfirmedAt: NO_CONFIRMED.lastConfirmedAt,
+    });
     expect(
-      pickSituation({ ...base, outage: { lastConfirmedAt: null } }),
-    ).toEqual({ kind: "outage", lastConfirmedAt: null });
+      pickSituation({ ...base, noConfirmed: { lastConfirmedAt: null } }),
+    ).toEqual({ kind: "noConfirmed", lastConfirmedAt: null });
   });
 
-  it("전체 장애보다 오프라인·지원 밖 형식·불러오기 실패가 먼저, live가 아니면 장애 배너 없음", () => {
-    expect(pickSituation({ ...base, outage: OUTAGE, online: false })).toEqual({
+  it("확인된 판단 없음보다 오프라인·지원 밖 형식·불러오기 실패가 먼저, live가 아니면 이 배너 없음", () => {
+    expect(
+      pickSituation({ ...base, noConfirmed: NO_CONFIRMED, online: false }),
+    ).toEqual({
       kind: "offline",
     });
     expect(
-      pickSituation({ ...base, outage: OUTAGE, phase: "schema_unsupported" }),
+      pickSituation({
+        ...base,
+        noConfirmed: NO_CONFIRMED,
+        phase: "schema_unsupported",
+      }),
     ).toEqual({ kind: "unsupported" });
     expect(
       pickSituation({
         ...base,
-        outage: OUTAGE,
+        noConfirmed: NO_CONFIRMED,
         live: false,
         failedOnline: true,
       }),
     ).toEqual({ kind: "failed" });
     // 첫 응답 전(저장된 값을 B5로 보는 중)
-    expect(pickSituation({ ...base, outage: OUTAGE, live: false })).toBeNull();
+    expect(
+      pickSituation({ ...base, noConfirmed: NO_CONFIRMED, live: false }),
+    ).toBeNull();
   });
 
   it("점검·강제 업데이트 중에는 배너 없음(전체를 덮는 화면이 알림)", () => {
@@ -135,14 +146,14 @@ describe("pickSituation", () => {
           online: false,
           live: false,
           failedOnline: true,
-          outage: OUTAGE,
+          noConfirmed: NO_CONFIRMED,
         }),
       ).toBeNull();
     }
   });
 });
 
-describe("sourceOutage", () => {
+describe("noConfirmedVerdict", () => {
   type Ready = Extract<BeachView, { kind: "ready" }>;
   const metrics: Ready["metrics"] = {
     waveHeight: { kind: "hidden" },
@@ -200,21 +211,23 @@ describe("sourceOutage", () => {
     true,
   );
 
-  it("확인된 판단('특보 없음'·이용불가·관측 지연뿐인 판단불가)이 하나라도 있으면 장애 아님", () => {
-    expect(sourceOutage([unknown, clear])).toBeNull();
-    expect(sourceOutage([staleUnknown, active])).toBeNull();
-    expect(sourceOutage([noData, delayedOnly])).toBeNull();
+  it("확인된 판단('특보 없음'·이용불가·관측 지연뿐인 판단불가)이 하나라도 있으면 해당 없음", () => {
+    expect(noConfirmedVerdict([unknown, clear])).toBeNull();
+    expect(noConfirmedVerdict([staleUnknown, active])).toBeNull();
+    expect(noConfirmedVerdict([noData, delayedOnly])).toBeNull();
   });
 
   it("모두 특보 확인 못 함·데이터 없음·만료(B5)면 확인된 판단 없음. 마지막 확인은 가장 늦은 확인 시각", () => {
-    expect(sourceOutage([unknown, staleActive, staleUnknown, noData])).toEqual({
+    expect(
+      noConfirmedVerdict([unknown, staleActive, staleUnknown, noData]),
+    ).toEqual({
       lastConfirmedAt: "2026-10-27T04:40:00Z",
     });
   });
 
   it("관측 지연과 특보 확인 못 함이 같이 있는 판단불가는 확인된 판단이 아님", () => {
     expect(
-      sourceOutage([
+      noConfirmedVerdict([
         view(
           "undetermined",
           [{ kind: "observation_delayed" }, { kind: "warning_unknown" }],
@@ -226,15 +239,17 @@ describe("sourceOutage", () => {
 
   it("만료(stale)된 '관측 지연뿐' 판단도 확인된 판단이 아님", () => {
     expect(
-      sourceOutage([
+      noConfirmedVerdict([
         view("undetermined", [{ kind: "observation_delayed" }], true),
       ]),
     ).toEqual({ lastConfirmedAt: null });
   });
 
   it("받은 해변이 없으면(로딩·노출 끔·빈 목록) 판단하지 않음", () => {
-    expect(sourceOutage([])).toBeNull();
-    expect(sourceOutage([{ kind: "loading" }, { kind: "hidden" }])).toBeNull();
+    expect(noConfirmedVerdict([])).toBeNull();
+    expect(
+      noConfirmedVerdict([{ kind: "loading" }, { kind: "hidden" }]),
+    ).toBeNull();
   });
 });
 

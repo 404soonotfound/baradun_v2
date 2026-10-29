@@ -137,7 +137,7 @@ test.describe("데이터 없음", () => {
 });
 
 test.describe("확인된 판단 없음", () => {
-  test.use({ scenario: "outage" });
+  test.use({ scenario: "noConfirmed" });
   test("모든 해변이 특보 확인 못 함이면 원인을 단정하지 않고 영향만 안내", async ({
     page,
   }) => {

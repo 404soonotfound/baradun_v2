@@ -52,7 +52,11 @@ import {
   regionName,
   validRegion,
 } from "@/lib/region-list";
-import { pickSituation, shownDataTime, sourceOutage } from "@/lib/situation";
+import {
+  pickSituation,
+  shownDataTime,
+  noConfirmedVerdict,
+} from "@/lib/situation";
 import { kstStamp } from "@/lib/snapshot/clock";
 import { useSnapshot } from "@/lib/snapshot/use-snapshot";
 import { useBadgeText } from "@/lib/snapshot/use-badge-text";
@@ -158,7 +162,7 @@ export function ExploreScreen({
     [mode, loading, items, intlLocale],
   );
 
-  // 상황 배너는 하나만(BRD-28 · 상세와 같은 범위: 오프라인 → 지원 밖 형식 → 불러오기 실패, 결정 2로 확정)
+  // 상황 배너는 하나만(BRD-28 · 상세와 같은 범위: 오프라인 → 지원 밖 형식 → 불러오기 실패 → 확인된 판단 없음, 결정 2로 확정)
   // 그 밖에 '특보 없음이 하나도 없음' → '위치 꺼짐' 순. 관측 지연은 행의 사유 배지가 이미 보여 줌
   const picked = pickSituation<Pick<BeachSummary, "name" | "slug">>({
     phase: snapshot.phase,
@@ -168,7 +172,7 @@ export function ExploreScreen({
     delayed: [],
     locationOff: false,
     // 확인된 판단 없음은 노출 중인 전체 해변으로 봄(고른 지역·활동과 무관, BRD-38)
-    outage: sourceOutage(
+    noConfirmed: noConfirmedVerdict(
       beaches.map((beach) =>
         deriveBeachView({ id: beach.id, hidden: false }, snapshot),
       ),

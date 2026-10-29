@@ -22,7 +22,7 @@ import {
   useRecent,
 } from "@/lib/favorites";
 import { localizedPath, type Locale } from "@/lib/i18n";
-import { pickSituation, sourceOutage } from "@/lib/situation";
+import { pickSituation, noConfirmedVerdict } from "@/lib/situation";
 import { kstStamp } from "@/lib/snapshot/clock";
 import { useRowText } from "@/lib/snapshot/use-row-text";
 import { useSnapshot } from "@/lib/snapshot/use-snapshot";
@@ -102,9 +102,9 @@ export function FavoritesScreen({
   const loading = snapshot.phase === "loading";
 
   // 확인된 판단 없음은 노출 중인 전체 해변으로 봄(탐색과 같은 규칙, BRD-38)
-  const outage = useMemo(
+  const noConfirmed = useMemo(
     () =>
-      sourceOutage(
+      noConfirmedVerdict(
         beaches.map((beach) =>
           deriveBeachView({ id: beach.id, hidden: false }, snapshot),
         ),
@@ -112,7 +112,7 @@ export function FavoritesScreen({
     [beaches, snapshot],
   );
 
-  // 상황 배너는 하나만(탐색과 같은 범위: 오프라인 → 지원 밖 형식 → 불러오기 실패 → 출처 전체 장애). 관측 지연은 행 배지가 보여 줌
+  // 상황 배너는 하나만(탐색과 같은 범위: 오프라인 → 지원 밖 형식 → 불러오기 실패 → 확인된 판단 없음). 관측 지연은 행 배지가 보여 줌
   const situation = pickSituation<Pick<BeachSummary, "name" | "slug">>({
     phase: snapshot.phase,
     live: snapshot.live,
@@ -120,7 +120,7 @@ export function FavoritesScreen({
     online,
     delayed: [],
     locationOff: false,
-    outage,
+    noConfirmed,
   });
 
   function removeOne(beach: BeachSummary) {
