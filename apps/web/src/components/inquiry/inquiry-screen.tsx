@@ -9,7 +9,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { BackButton } from "@/components/detail/back-button";
 import { Button } from "@/components/ui/button";
 import { Toast, useToast } from "@/components/ui/toast";
-import { useActivity } from "@/lib/activity";
+import { useActivity, type Activity } from "@/lib/activity";
 import { cn } from "@/lib/cn";
 import { localizedPath, type Locale } from "@/lib/i18n";
 import type { BeachId } from "@baradun/contracts";
@@ -81,7 +81,13 @@ export function InquiryScreen({
   beaches,
 }: {
   locale: Locale;
-  beaches: { id: BeachId; slug: string; name: string }[]; // ?beach=slug → id·이름(빌드 때 넘김)
+  // ?beach=slug → id·이름·지원 활동(빌드 때 넘김)
+  beaches: {
+    id: BeachId;
+    slug: string;
+    name: string;
+    activities: readonly Activity[];
+  }[];
 }) {
   const t = useTranslations("inquiry");
   const tp = useTranslations("pages");
@@ -141,6 +147,14 @@ export function InquiryScreen({
     contextRemoved || beachSlug === null
       ? null
       : (beaches.find((item) => item.slug === beachSlug) ?? null);
+  // 보내지 못한 뒤에는 처음 보낸 활동을 그대로 씀(다른 탭에서 활동을 바꿔도 다시 보내기가 같은 내용·같은 키로 가게)
+  const [sentActivity, setSentActivity] = useState<Activity | null>(null);
+  const contextActivity = sentActivity ?? activity;
+  // 그 해변이 지원하는 활동만 보냄(지원하지 않는 활동을 해변 맥락으로 남기지 않음)
+  const sendActivity =
+    beach?.activities.includes(contextActivity) === true
+      ? contextActivity
+      : null;
 
   // 미리보기 주소 정리: 화면을 떠나면 모두 풀어 줌
   const shotsRef = useRef(shots);
@@ -228,6 +242,7 @@ export function InquiryScreen({
     setPhotoError(null);
     photoBatch.current += 1; // 준비 중인 사진도 붙이지 않음
     setPreparing(false);
+    setSentActivity(null); // 다음 문의는 지금 고른 활동으로
   }
 
   function clearAll() {
@@ -261,7 +276,12 @@ export function InquiryScreen({
         kind,
         message,
         email,
-        context: beach ? { beachId: beach.id, activity } : null,
+        context: beach
+          ? {
+              beachId: beach.id,
+              ...(sendActivity === null ? {} : { activity: sendActivity }),
+            }
+          : null,
       }),
       shots.map((shot) => shot.photo),
       (progress) => setPhase({ kind: "sending", progress }),
@@ -285,6 +305,7 @@ export function InquiryScreen({
       });
     } else {
       // 이메일·동의·사진을 남겨 둠 → 같은 내용으로 다시 보내면 같은 멱등 키를 써서 두 번 접수되지 않음
+      setSentActivity(contextActivity);
       setPhase({ kind: "failed", failure: result.failure, stop: result.stop });
     }
   }
@@ -474,8 +495,13 @@ export function InquiryScreen({
                 {t("context.legend")}
               </h2>
               <p className="text-body-s text-text-default">
-                {t("context.beach", { name: beach.name })} ·{" "}
-                {t("context.activity", { activity: ta(activity) })}
+                {t("context.beach", { name: beach.name })}
+                {sendActivity !== null && (
+                  <>
+                    {" · "}
+                    {t("context.activity", { activity: ta(sendActivity) })}
+                  </>
+                )}
               </p>
               <p className="text-caption text-text-muted">
                 {t("context.note")}
