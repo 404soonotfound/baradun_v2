@@ -34,6 +34,18 @@ export const DELAYED_ID = "b0003";
 export const UNKNOWN_ID = "b0004";
 export const slugOf = (id: string) =>
   BEACHES.find((beach) => beach.id === id)?.slug ?? id;
+export const coordsOf = (id: string) =>
+  BEACHES.find((beach) => beach.id === id)?.coords ?? null;
+// 노출 중인 해변 수(홈 '전국' 개수 카드 확인용, BRD-127)
+export const PUBLIC_BEACH_COUNT = BEACHES.filter(
+  (beach) => !beach.hidden,
+).length;
+
+// 기본 지역 저장값(시험용 지역 선택, 사용자 위치 아님). 처음 방문을 볼 때는 deviceRegion: null
+export const GANGNEUNG_REGION = JSON.stringify({
+  sido: "강원",
+  sigungu: "강릉시",
+});
 
 const MIN = 60_000;
 const iso = (ms: number) => new Date(ms).toISOString().replace(/\.\d+Z$/, "Z");
@@ -350,12 +362,17 @@ async function blockExternal(context: BrowserContext, baseURL: string) {
 }
 
 // 첫 실행 안내·언어 안내를 이미 지난 기기. 기본 지역은 강원 강릉시(시험용 지역 선택, 사용자 위치 아님)
+// region: null이면 기본 지역을 넣지 않음(저장값 없음 → 홈 기본값, BRD-127)
 async function seedDevice(
   context: BrowserContext,
-  options: { language?: "ko" | "en"; extra?: Record<string, string> } = {},
+  options: {
+    language?: "ko" | "en";
+    region?: string | null;
+    extra?: Record<string, string>;
+  } = {},
 ) {
   await context.addInitScript(
-    ({ language, extra }) => {
+    ({ language, region, extra }) => {
       // 테스트마다 새 context라 처음 한 번만 넣음(새로고침 뒤 앱이 바꾼 값은 그대로 둠)
       if (sessionStorage.getItem("e2e:seeded")) return;
       sessionStorage.setItem("e2e:seeded", "1");
@@ -367,16 +384,17 @@ async function seedDevice(
           locationStepDone: true,
         }),
       );
-      localStorage.setItem(
-        "baradun:region",
-        JSON.stringify({ sido: "강원", sigungu: "강릉시" }),
-      );
+      if (region !== null) localStorage.setItem("baradun:region", region);
       localStorage.setItem("baradun:language", language);
       for (const [key, value] of Object.entries(extra)) {
         localStorage.setItem(key, value);
       }
     },
-    { language: options.language ?? "ko", extra: options.extra ?? {} },
+    {
+      language: options.language ?? "ko",
+      region: options.region === undefined ? GANGNEUNG_REGION : options.region,
+      extra: options.extra ?? {},
+    },
   );
 }
 
@@ -385,6 +403,8 @@ type Fixtures = {
   // 첫 실행 안내를 지난 기기로 시작할지. 첫 실행 흐름을 볼 때만 false
   seeded: boolean;
   deviceLanguage: "ko" | "en";
+  // 기기에 저장된 기본 지역(저장 글자 그대로). null = 저장값 없음
+  deviceRegion: string | null;
   data: DataControl;
 };
 
@@ -392,12 +412,17 @@ export const test = base.extend<Fixtures>({
   scenario: ["normal", { option: true }],
   seeded: [true, { option: true }],
   deviceLanguage: ["ko", { option: true }],
+  deviceRegion: [GANGNEUNG_REGION, { option: true }],
   data: async (
-    { context, scenario, seeded, deviceLanguage, baseURL },
+    { context, scenario, seeded, deviceLanguage, deviceRegion, baseURL },
     provide,
   ) => {
     await blockExternal(context, baseURL ?? "http://127.0.0.1:3109");
-    if (seeded) await seedDevice(context, { language: deviceLanguage });
+    if (seeded)
+      await seedDevice(context, {
+        language: deviceLanguage,
+        region: deviceRegion,
+      });
     await provide(await mockData(context, scenario));
   },
   // 모든 테스트가 가짜 데이터를 쓰게 page보다 먼저 data를 준비함
