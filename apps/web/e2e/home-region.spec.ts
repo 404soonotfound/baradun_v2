@@ -36,6 +36,10 @@ const TEXT = {
     nearby: "내 주변",
     nearSea: "가까운 바다",
     all: "전체 보기",
+    settings: "/settings/",
+    defaultRegion: "기본 지역",
+    clearRegion: "기본 지역 지우기",
+    gangneung: "강원 강릉시",
   },
   en: {
     home: "/en/",
@@ -60,6 +64,10 @@ const TEXT = {
     nearby: "Near me",
     nearSea: "Nearby beaches",
     all: "See all",
+    settings: "/en/settings/",
+    defaultRegion: "Default region",
+    clearRegion: "Clear default region",
+    gangneung: "Gangwon Gangneung",
   },
 } as const;
 
@@ -258,6 +266,56 @@ for (const locale of ["ko", "en"] as const) {
       await dialog.getByRole("button", { name: text.nearby }).click();
       await expect(seaHeading(page)).toHaveText(text.nearSea);
       expect(await savedRegion(page)).toBeNull();
+    });
+  });
+
+  // 설정 '기본 지역'(10/29 사용자 결정: 저장값이 없으면 '고르지 않음' 대신 '전국')
+  test.describe(`${locale} · 설정 기본 지역`, () => {
+    // '기본 지역' 줄 바로 아래 값
+    const regionValue = (page: Page) =>
+      page
+        .getByText(text.defaultRegion, { exact: true })
+        .locator("xpath=following-sibling::p[1]");
+
+    test.describe("저장값 없음", () => {
+      test.use({ deviceLanguage: locale, deviceRegion: null });
+      test("전국으로 보이고 지울 값이 없어 지우기 버튼이 없음", async ({
+        page,
+      }) => {
+        await page.goto(text.settings);
+        await expect(regionValue(page)).toHaveText(text.nationwide);
+        await expect(
+          page.getByRole("button", { name: text.clearRegion }),
+        ).toHaveCount(0);
+        expect(await savedRegion(page)).toBeNull();
+      });
+    });
+
+    test.describe("고른 전국", () => {
+      test.use({ deviceLanguage: locale, deviceRegion: '"nationwide"' });
+      test("전국으로 보이고, 지우면 저장값 없이 그대로 전국", async ({
+        page,
+      }) => {
+        await page.goto(text.settings);
+        await expect(regionValue(page)).toHaveText(text.nationwide);
+        await page.getByRole("button", { name: text.clearRegion }).click();
+        await expect(regionValue(page)).toHaveText(text.nationwide);
+        await expect(
+          page.getByRole("button", { name: text.clearRegion }),
+        ).toHaveCount(0);
+        expect(await savedRegion(page)).toBeNull();
+      });
+    });
+
+    test.describe("고른 지역", () => {
+      test.use({ deviceLanguage: locale });
+      test("고른 지역 이름 그대로", async ({ page }) => {
+        await page.goto(text.settings);
+        await expect(regionValue(page)).toHaveText(text.gangneung);
+        await expect(
+          page.getByRole("button", { name: text.clearRegion }),
+        ).toBeVisible();
+      });
     });
   });
 }

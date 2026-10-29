@@ -9,6 +9,7 @@ import {
   regionChips,
   regionGroups,
   regionName,
+  savedScope,
   scopeBeaches,
   validRegion,
 } from "@/lib/region-list";
@@ -250,5 +251,37 @@ describe("scopeBeaches · 전국 집계", () => {
     ]);
     // 하나라도 불러오는 중이면 개수를 미리 보이지 않음
     expect(countByStatus([...views, { kind: "loading" }])).toBeNull();
+  });
+});
+
+describe("savedScope (설정 기본 지역, 10/29 결정)", () => {
+  it("저장값이 없거나 잘못되면 전국(기본값)", () => {
+    for (const saved of [
+      null,
+      { sido: "경북", sigungu: null },
+      parseRegionChoice('{"sido":3}'),
+    ])
+      expect(savedScope(saved, beaches)).toEqual({
+        kind: "nationwide",
+        chosen: false,
+      });
+  });
+
+  it("고른 전국은 chosen, 고른 지역은 그대로", () => {
+    expect(savedScope(NATIONWIDE, beaches)).toEqual({
+      kind: "nationwide",
+      chosen: true,
+    });
+    expect(savedScope({ sido: "강원", sigungu: "양양군" }, beaches)).toEqual({
+      kind: "region",
+      region: { sido: "강원", sigungu: "양양군" },
+    });
+  });
+
+  it("위치를 보지 않음(위치가 있어도 저장값 없음은 전국)", () => {
+    expect(savedScope(null, beaches)).toEqual(
+      homeScope(null, beaches, "denied"),
+    );
+    expect(homeScope(null, beaches, "ready")).toEqual({ kind: "nearby" });
   });
 });
