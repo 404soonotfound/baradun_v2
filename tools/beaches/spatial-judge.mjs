@@ -1,6 +1,5 @@
 // BRD-59 강원 4차: L1·관측소 S1 자동 판정 (아키텍처 2.2 'L1·관측소 자동 판정 (10/21, 결정 4-A)')
-// 입력: 브이월드 법정 읍면동 경계(강원)·국립해양조사원 2026 해안선·법정동코드,
-//       $BARADUN_GIS_DIR/vworld_umd 경북 읍면동 경계(해안선 시군 판정용),
+// 입력: 국토교통부 법정구역정보 읍면동 층(브이월드 dsId=21, CC BY 2.0 KR, 경로·해시는 data-sources.json)·국립해양조사원 2026 해안선·법정동코드,
 //       $BARADUN_DATA_DIR/baradun-coverage의 out/ 수집본·responses/metric-matrix.json(3차 실응답 저장본). API 호출 없음, 서비스 키 읽지 않음
 // 출력: $BARADUN_DATA_DIR/baradun-coverage/beach-zone-evidence.json·station-zone-evidence.json 갱신 (--dry면 요약만 출력)
 // 실행: node tools/beaches/spatial-judge.mjs [--dry] (저장소 맨 위에서)
@@ -9,12 +8,13 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { bboxDist, boundaryDist, buildPolygonIndex, clipMidpoint, insidePolygon, readDbf, readShp, segDist, toEpsg5186, toEpsg5186Snyder } from "./geo-kit.mjs";
 import { readFirstSheet } from "./xlsx-lite.mjs";
+import { readEmdBoundary } from "./emd-boundary.mjs";
 import { addressLocality, legalLocalities, legalNameSet } from "./address.mjs";
 import { linkOfficials } from "./official-link.mjs";
 import { METRICS, assignMetric, haversineKm, loadAssignContext, readCsv, round1 } from "./station-assign.mjs";
 import { seaEvidenceFor, zoneProofVerified } from "./zone-proof.mjs";
 import { ANNEX, ANNEX4_BOUNDARIES, ANNEX5, ANNEX5_URL, ANNEX9_CHECKED, ANNEX9_ITEM, ANNEX9_URL, annex9Lookup, splitFull, zoneOfFull } from "./annex.mjs";
-import { BJD_CSV, BJD_LABEL, COAST_DBF, COAST_SHP, COVERAGE_DIR, MOF_XLSX, REGIONS, emdPaths, gisLabel, regionArg, sha256, sigunguMatches, verifyPinnedSources } from "./regions.mjs"; // sha256: 고정 해시 대조 때 계산한 값 재사용
+import { BJD_CSV, BJD_LABEL, COAST_DBF, COAST_SHP, COVERAGE_DIR, MOF_XLSX, REGIONS, gisLabel, regionArg, sha256, emdSource, sigunguMatches, verifyPinnedSources } from "./regions.mjs"; // sha256: 고정 해시 대조 때 계산한 값 재사용
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 verifyPinnedSources(); // 원자료가 data-sources.json 고정 해시와 다르면 판정·생성하지 않음
@@ -34,14 +34,20 @@ const zoneOfSigungu = (full, emd = null) => zoneOfFull(full, emd);
 const COAST_SNAP_M = 500; // 해안선 대표점이 읍면동 경계에서 500m 넘게 떨어지면 먼 선분 규칙(D·2D) 적용 (노션 2.2 10/21)
 
 // ── 원자료 읽기 (저장소 밖 $BARADUN_GIS_DIR, 아키텍처 2.2 10/21) ──
-const EMD_SETS = Object.entries(REGIONS).map(([sido, r]) => ({ sido, code: r.code, ...emdPaths(r.code) }));
+const EMD_SOURCE = emdSource();
 const SOURCES = {
   emd: {
-    name: "브이월드 법정 읍면동 경계 LSMD_ADM_SECT_UMD (해안 시·도 11곳)",
-    base_date: "2026-10",
+    name: EMD_SOURCE.name,
+    url: EMD_SOURCE.source_url,
+    base_date: EMD_SOURCE.base_date,
+    license: EMD_SOURCE.license,
+    license_url: EMD_SOURCE.license_url,
+    attribution: EMD_SOURCE.attribution,
     crs: "EPSG:5186",
-    encoding: "cp949",
-    files: Object.fromEntries(EMD_SETS.map((e) => [e.sido, { file: e.label, sha256: sha256(e.shp), dbf_sha256: sha256(e.dbf) }])),
+    encoding: EMD_SOURCE.encoding,
+    file: EMD_SOURCE.label,
+    sha256: sha256(EMD_SOURCE.shp),
+    dbf_sha256: sha256(EMD_SOURCE.dbf),
   },
   coast: {
     name: "국립해양조사원 2026 해안선",
@@ -54,9 +60,8 @@ const SOURCES = {
   },
   bjd: { name: "국토교통부 법정동코드 2026-09-29", file: BJD_LABEL, sha256: sha256(BJD_CSV) },
 };
-const emdSourceOf = (sido) => ({ name: SOURCES.emd.name, base_date: "2026-10", crs: "EPSG:5186", sido, ...SOURCES.emd.files[sido] });
 
-// 시군 이름 연결: 브이월드 COL_ADM_SE → 법정동코드 10자리(xxxxx00000)의 이름. 코드끼리 비교하지 않음
+// 시군 이름 연결: 법정구역정보 A4(원천시도시군구코드, 판정 코드에서는 COL_ADM_SE) → 법정동코드 10자리(xxxxx00000)의 이름. 코드끼리 비교하지 않음
 const bjdName = new Map(
   new TextDecoder("euc-kr")
     .decode(readFileSync(BJD_CSV))
@@ -78,14 +83,9 @@ const sigunguOfCol = (col) => {
   return { full: cityFull, name: sigungu, sido };
 };
 
-const emds = EMD_SETS.flatMap((set) => {
-  const attr = readDbf(set.dbf, "euc-kr");
-  const shapes = readShp(set.shp);
-  if (attr.length !== shapes.length) throw new Error(`읍면동 shp·dbf 개수 불일치: ${set.sido}`);
-  return shapes.map((sh, i) => ({ ...sh, ...attr[i], set: set.sido, sigungu: sigunguOfCol(attr[i].COL_ADM_SE) }));
-});
+// 해안 시·도 11곳만 씀(종전 시·도별 파일과 같은 범위)
+const emds = readEmdBoundary(EMD_SOURCE, Object.values(REGIONS).map((r) => r.code)).map((e) => ({ ...e, sigungu: sigunguOfCol(e.COL_ADM_SE) }));
 for (const e of emds) if (!e.sigungu) throw new Error(`시군 이름 조회 실패: ${e.COL_ADM_SE}`);
-const emdsBySido = new Map(EMD_SETS.map((s) => [s.sido, emds.filter((e) => e.set === s.sido)]));
 
 // ── 해변 좌표 (해수부 수집본, WGS84) ──
 const beachesSrc = readCsv("beaches.csv").filter((b) => TARGET_REGIONS.includes(b.sido_nm) && b.lat && b.lon);
@@ -124,8 +124,8 @@ function judgeL1(b) {
   };
   const base = {
     method: "COORDINATE_BOUNDARY",
-    boundary_source: emdSourceOf(b.sido),
-    sigungu_link: { source: SOURCES.bjd, rule: "COL_ADM_SE + '00000' 법정동코드의 이름과 해수부 gugun_nm 이름 대조(코드끼리 비교 안 함)" },
+    boundary_source: SOURCES.emd,
+    sigungu_link: { source: SOURCES.bjd, rule: "법정구역정보 A4(원천시도시군구코드) + '00000' 법정동코드의 이름과 해수부 gugun_nm 이름 대조(코드끼리 비교 안 함)" },
     coords: { lat: b.lat, lon: b.lon, source: "tools/coverage/out/beaches.csv (해수부 해수욕장정보, 2026-10-16 수집)", epsg5186: [m1(b.x), m1(b.y)], transform: "WGS84 → EPSG:5186 Krüger 급수, Snyder 급수 교차 확인 1cm 이내" },
     rule: "아키텍처 2.2 결정 4-A: ① 경계 안 → 그 읍면 ② 밖 100m 이하 → 최근접 ③ 300m 안 다른 읍면은 별표9 L1이 같으면 확정 ④ 다르면 자동 제외",
     annex9: { url: ANNEX9_URL, item: ANNEX9_ITEM, checked_at_kst: ANNEX9_CHECKED },
@@ -187,7 +187,7 @@ const targetPts = targets.flatMap((s) => {
 const coastAttr = readDbf(COAST_DBF, "euc-kr");
 const coast = readShp(COAST_SHP, { keep: (bb) => targetPts.some(([x, y]) => bboxDist(x, y, bb) < 2 * FRONT_SEA_M + 5000) });
 
-// 해안선 선분의 시군: SGG_NAM 대신 법정 읍면동 경계(강원 51·경북 47)로 정함 (5차 사용자 해석)
+// 해안선 선분의 시군: SGG_NAM 대신 법정 읍면동 경계로 정함 (5차 사용자 해석)
 // 반경 안 부분의 중점이 놓인 읍면동, 경계 밖이면 500m 안 최근접 읍면동의 시군. 그보다 멀면 시군 미정
 const coastEmds = emds;
 const coastIndex = buildPolygonIndex(coastEmds, { cell: COAST_SNAP_M });
@@ -512,7 +512,7 @@ for (const s of st) {
   row.s1_evaluation = {
     ...row.s1_evaluation,
     method: "COASTLINE_D_2D (아키텍처 2.2: d ≤ 22.2km 앞바다 안, 반경 2d 해안선 시군이 모두 같은 별표5 구역이면 VERIFIED; 별표4 37°08′47″ 남쪽은 VERIFIED_NOT_IN_ZONE)",
-    coast_sigungu_rule: "5차 사용자 해석: 선분 시군은 SGG_NAM이 아니라 반경 안 부분 중점이 놓인 법정 읍면동(강원 51·경북 47)의 시군, 경계 밖이면 500m 안 최근접 읍면동, 500m 초과·경계 중첩으로 시군이 갈리면 시군 미정 → 하나라도 있으면 미검증",
+    coast_sigungu_rule: "5차 사용자 해석: 선분 시군은 SGG_NAM이 아니라 반경 안 부분 중점이 놓인 법정 읍면동(국토교통부 법정구역정보)의 시군, 경계 밖이면 500m 안 최근접 읍면동, 500m 초과·경계 중첩으로 시군이 갈리면 시군 미정 → 하나라도 있으면 미검증",
     coastline_distance_d_km: m1(s.runs[0].d_m / 100) / 10,
     within_22_2km_front_sea: s.runs[0].within_22_2km_front_sea,
     sigungu_within_2d_radius: s.runs[0].sigungu,
@@ -675,7 +675,7 @@ for (const e of beachDoc.beaches) {
   else delete e.release_exclusion;
 }
 beachDoc.note =
-  "2026-10-21 4~7차(결정 4-A, 노션 2.2 L1 근거 순서, 7차: 좌표 후보 중 공식 주소와 같은 L1이면 확정·지정 목록 밖 제외): L1은 ① 해수부 '2026 해수욕장 주요 현황' 공식 주소의 읍면·법정동 → 현행 별표9, ② 해수부 좌표와 브이월드 법정 읍면동 경계(2026-10, EPSG:5186) 판정과 비교해 같으면 확정·다르면 자동 제외, 주소 미연결이면 ②만. official_locality(관광 사이트 주소)는 3차 비교 기록. S1은 해수부 gugun_nm 인정(3차 유지). 판정 불가 해변은 release_exclusion에 사유 기록";
+  "2026-10-21 4~7차(결정 4-A, 노션 2.2 L1 근거 순서, 7차: 좌표 후보 중 공식 주소와 같은 L1이면 확정·지정 목록 밖 제외): L1은 ① 해수부 '2026 해수욕장 주요 현황' 공식 주소의 읍면·법정동 → 현행 별표9, ② 해수부 좌표와 국토교통부 법정구역정보 읍면동 경계(브이월드 dsId=21, CC BY 2.0 KR, EPSG:5186) 판정과 비교해 같으면 확정·다르면 자동 제외, 주소 미연결이면 ②만. official_locality(관광 사이트 주소)는 3차 비교 기록. S1은 해수부 gugun_nm 인정(3차 유지). 판정 불가 해변은 release_exclusion에 사유 기록";
 beachDoc.land_spatial_sources = SOURCES;
 writeFileSync(BEACH_PATH, `${JSON.stringify(beachDoc, null, 2)}\n`);
 console.log("증거 파일 갱신 완료");

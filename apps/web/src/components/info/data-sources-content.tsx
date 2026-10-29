@@ -6,11 +6,11 @@ import type { Locale } from "@/lib/i18n";
 
 // 데이터 출처·이용 조건 /about/data/ (BRD-36 · 노션 2장 SRC, 결정 기록 11장 B1·B7·10/21 사진·10/23 운영 기간)
 // 출처마다 제공 항목·이용 조건·원문 링크. 이용 조건은 각 원문(공공데이터포털 '이용허락범위' 등)을 2026-10-29에 확인한 값
-// (노션 '데이터 출처 · 공공 API 승인 현황' 이용 조건 원문 확인 절, 결정 19 · BRD-113)
+// (노션 '데이터 출처 · 공공 API 승인 현황' 이용 조건 원문 확인 절, 결정 19 · BRD-113·BRD-126)
 // 해변 상태나 측정값은 넣지 않음(정적 HTML, G4)
 
 type Source = {
-  key: "kma" | "khoa" | "tour" | "mof" | "map";
+  key: "kma" | "khoa" | "tour" | "mof" | "boundary" | "map";
   links: { label: string; href: string }[];
 };
 
@@ -65,6 +65,20 @@ const SOURCES: Source[] = [
       {
         label: "linkBeachInfo",
         href: "https://www.data.go.kr/data/15058519/openapi.do",
+      },
+    ],
+  },
+  // 법정 읍면동 경계: 해변 → 특보 육상 구역 판정에만 씀. CC BY 2.0 KR 표시(저작자·제목·출처 링크·라이선스 링크·변경 여부), 이용 조건 2026-10-29 확인 (BRD-126)
+  {
+    key: "boundary",
+    links: [
+      {
+        label: "link",
+        href: "https://www.vworld.kr/dtmk/dtmk_ntads_s002.do?svcCde=NA&dsId=21",
+      },
+      {
+        label: "linkLicense",
+        href: "https://creativecommons.org/licenses/by/2.0/kr/",
       },
     ],
   },

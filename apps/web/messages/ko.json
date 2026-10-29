@@ -716,6 +716,13 @@
       "linkSchedule": "해수욕장 개폐장일정 정보",
       "linkBeachInfo": "해수욕장정보 서비스"
     },
+    "boundary": {
+      "name": "국토교통부",
+      "provides": "법정 읍면동 경계(법정구역정보). 해변 좌표가 속한 읍면동을 정해 기상특보 육상 구역에 연결하는 데만 쓰고, 경계 자체는 화면에 보여주거나 배포하지 않아요.",
+      "terms": "국토교통부(국가공간정보센터)의 '법정구역정보'를 크리에이티브 커먼즈 저작자표시 2.0 대한민국(CC BY 2.0 KR) 라이선스에 따라 써요. 경계는 바꾸지 않았고, 해변별 읍면동과 특보 육상 구역 연결은 이 경계로 판정한 결과예요.",
+      "link": "법정구역정보(브이월드)",
+      "linkLicense": "CC BY 2.0 KR 라이선스"
+    },
     "map": {
       "name": "지도",
       "provides": "지도 데이터 © OpenStreetMap 기여자, 벡터 타일 © OpenMapTiles, 타일 제공 OpenFreeMap, 지도 스타일 Positron(OpenFreeMap 판을 고쳐 씀)",

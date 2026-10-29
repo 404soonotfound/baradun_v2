@@ -79,3 +79,18 @@ CI는 PR마다 main과 비교해서 slug 변경, 해변 삭제, slug 재사용�
   - `훈령1185-별표5`: 예보업무규정(기상청훈령 제1185호) 별표5, <https://www.law.go.kr/LSW/flDownload.do?flSeq=166843467&bylClsCd=200201>
   - `훈령1185-별표9`: 같은 훈령 별표9, <https://www.law.go.kr/LSW/flDownload.do?flSeq=166843509&bylClsCd=200201>
 - 검사: `npm run check:coverage -w packages/contracts` (근거 없는 매핑·필수 칸 누락·제외 사유 없는 행이면 실패)
+
+## 법정 읍면동 경계 (BRD-126)
+
+`land_zone`·`land_basis`(특보 육상 구역 L1)와 관측소 앞바다 구역 판정의 읍면동은 이 경계로 정해요.
+
+- 자료: 국토교통부(국가공간정보센터) '법정구역정보', 브이월드 <https://www.vworld.kr/dtmk/dtmk_ntads_s002.do?svcCde=NA&dsId=21> (공공데이터포털 15045881 '국토교통부\_일별법정구역정보'가 이 페이지로 연결)
+- 이용 조건: 크리에이티브 커먼즈 저작자표시 2.0 대한민국(CC BY 2.0 KR) <https://creativecommons.org/licenses/by/2.0/kr/>. 저작자를 표시하면 상업 이용·변경 가능
+- 이 저장소의 쓰임: 해변 좌표가 속한 읍면동을 판정하는 데만 써요. 경계(shp 등)는 저장소에 넣지 않고 바꾸지도 않아요. `beach-coverage.csv`·`beaches/*.json`의 읍면동 이름·코드와 L1 연결은 이 경계로 판정한 결과예요
+- 출처 표시: 데이터 출처 화면(`/about/data/`, 문구 키 `dataSources.boundary.*`)
+- 받는 방법(브이월드 **로그인 필요**):
+  1. 위 브이월드 페이지에서 구분 '전체데이터', 형식 SHP, 전국을 골라 받아요(지금 판정에 쓴 자료: `AL_D001_00_20261009`, 기준일 2026-10-09, 전국 120MB. 층마다 `(EMD)`·`(SIG)`·`(LIO)` zip이 따로 오고 읍면동 층 `(EMD)`만 씀). 구분 '변동데이터'(`CH_D001_…`)는 하루치 바뀐 부분만 있어 판정에 쓸 수 없어요
+  2. 압축을 `$BARADUN_GIS_DIR/legal_area_<기준일 yyyymmdd>/`(기본 `~/data/baradun-gis/legal_area_20261009/`)에 그대로 풀어요
+  3. `tools/beaches/data-sources.json`의 `emd_boundary_shp`·`emd_boundary_dbf` 항목에 읍면동(EMD) 층 파일 경로·`sha256`·기준일을, dbf 항목에는 `encoding`을 적어요. `.cst`가 있으면 그 값, 없으면 dbf의 읍면동 이름을 풀어 깨지지 않는 인코딩(2026-10-09 자료는 `.cst`가 없고 EUC-KR, `euc-kr`)
+- 컬럼(브이월드 '국가중점데이터 컬럼정의서' 전체데이터 AL_D001 읍면동): A1 읍면동 코드 · A2 읍면동 명 · A4 원천시도시군구코드. 변동데이터(CH_D001)는 A4가 변동순번이라 읽기 단계에서 거부해요. 도형은 Polygon(변동데이터는 PolygonZ), 좌표계 EPSG:5186
+- 경로·해시·인코딩을 고정하기 전이거나 파일이 다르면 `spatial-judge.mjs`·`build.mjs`가 '고정 해시 없음'·'해시 다름'으로 멈추고, 저장소 밖 근거가 이 경계로 만든 것이 아니면 L1·관측소 구역을 검증으로 보지 않아요

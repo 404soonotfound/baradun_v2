@@ -716,6 +716,13 @@
       "linkSchedule": "Beach Opening and Closing Schedule",
       "linkBeachInfo": "Beach Information Service"
     },
+    "boundary": {
+      "name": "Ministry of Land, Infrastructure and Transport (MOLIT)",
+      "provides": "Legal eup/myeon/dong boundaries (Legal District Information). Used only to find which eup/myeon/dong a beach's coordinates fall in and link the beach to KMA land warning areas. The boundaries themselves aren't shown or redistributed.",
+      "terms": "Legal District Information (법정구역정보) by MOLIT (국가공간정보센터), used under the Creative Commons Attribution 2.0 Korea license (CC BY 2.0 KR). We didn't modify the boundaries; each beach's eup/myeon/dong and land warning area link are results we derived from them.",
+      "link": "Legal District Information (V-World)",
+      "linkLicense": "CC BY 2.0 KR license"
+    },
     "map": {
       "name": "Map",
       "provides": "Map data © OpenStreetMap contributors, vector tiles © OpenMapTiles, tiles served by OpenFreeMap, map style Positron (modified from the OpenFreeMap version)",
