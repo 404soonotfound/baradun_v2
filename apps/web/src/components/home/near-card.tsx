@@ -28,10 +28,10 @@ import type { BeachView, MetricKey, MetricView } from "@/lib/snapshot/view";
 
 // PC 카드 큰 파고 옆 한 줄에 둘 나머지 지표(Figma 181:870 '파고 · 주기 6초 · 수온 21°C', #105 결정 2)
 // 파주기는 신선도 60분이 지나면 view가 delayed로 줌 → '늦어짐'
+// 바람은 Figma처럼 빼서 한 줄에 맞춤(바람 값은 상세에서)
 const WIDE_OTHERS = [
   "wavePeriod",
   "waterTemp",
-  "wind",
 ] as const satisfies readonly MetricKey[];
 
 // 카드에 보이는 지표 3칸(순서 = 칸 순서)
