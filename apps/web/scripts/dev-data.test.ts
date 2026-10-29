@@ -19,7 +19,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   DEV_DATA_REFRESH_INTERVAL_MS,
   DEV_DATA_MODE_FILE,
-  clearDevSampleData,
+  clearDevData,
   startDevDataRefresh,
   writeDevData,
 } from "./dev-data.mts";
@@ -259,9 +259,9 @@ describe("예시를 끈 개발 서버의 지난 예시 정리", () => {
     const { examplesDir, outDir } = fixture();
     writeDevData({ examplesDir, outDir });
 
-    expect(clearDevSampleData(outDir)).toBe("removed");
+    expect(clearDevData(outDir)).toBe("removed");
     expect(existsSync(outDir)).toBe(false);
-    expect(clearDevSampleData(outDir)).toBe("none");
+    expect(clearDevData(outDir)).toBe("none");
   });
 
   it("표지 없는 폴더는 출처를 모르므로 지우지 않음", () => {
@@ -269,7 +269,7 @@ describe("예시를 끈 개발 서버의 지난 예시 정리", () => {
     mkdirSync(outDir);
     writeFileSync(path.join(outDir, "manifest.json"), "{}");
 
-    expect(clearDevSampleData(outDir)).toBe("unmarked");
+    expect(clearDevData(outDir)).toBe("unmarked");
     expect(existsSync(path.join(outDir, "manifest.json"))).toBe(true);
   });
 
@@ -278,7 +278,7 @@ describe("예시를 끈 개발 서버의 지난 예시 정리", () => {
     writeDevData({ examplesDir, outDir });
     writeFileSync(path.join(outDir, "mirror.json"), "{}");
 
-    expect(clearDevSampleData(outDir)).toBe("foreign");
+    expect(clearDevData(outDir)).toBe("foreign");
     expect(existsSync(path.join(outDir, "mirror.json"))).toBe(true);
   });
 
@@ -288,7 +288,7 @@ describe("예시를 끈 개발 서버의 지난 예시 정리", () => {
     writeFileSync(path.join(outDir, ".DS_Store"), "");
 
     expect(() => writeDevData({ examplesDir, outDir })).not.toThrow();
-    expect(clearDevSampleData(outDir)).toBe("removed");
+    expect(clearDevData(outDir)).toBe("removed");
   });
 
   it("--clean도 예시가 아닌 파일이 있으면 지우지 않고 실패함", () => {

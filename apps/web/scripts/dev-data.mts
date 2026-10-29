@@ -28,10 +28,12 @@ const DEFAULT_EXAMPLES = path.join(
   "../../packages/contracts/examples/valid",
 );
 const ISO = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/;
-const VERSION_DIR = /^\d{8}T\d{6}Z$/;
+export const VERSION_DIR = /^\d{8}T\d{6}Z$/;
 
 export const DEV_DATA_REFRESH_INTERVAL_MS = 20 * 60_000;
 export const DEV_DATA_MODE_FILE = ".dev-data-mode";
+// public/data를 만든 출처. sample=계약 예시 더미, live=운영 snapshot 미러(dev-live.mts)
+export type DevDataMode = "sample" | "live";
 // 갱신 시각을 확인하는 간격. 잠자기로 타이머가 밀려도 깨어난 뒤 1분 안에 따라잡음
 const REFRESH_CHECK_MS = 60_000;
 // 탐색기·Finder가 폴더를 열면 저절로 만드는 파일. 사용자 데이터가 아니라 예시 폴더 판단에서 뺌
@@ -152,13 +154,13 @@ function isOwnEntry(name: string): boolean {
   );
 }
 
-function foreignEntries(outDir: string): string[] {
+export function foreignEntries(outDir: string): string[] {
   return existsSync(outDir)
     ? readdirSync(outDir).filter((name) => !isOwnEntry(name))
     : [];
 }
 
-function currentVersion(outDir: string): string | null {
+export function currentVersion(outDir: string): string | null {
   try {
     const manifest = JSON.parse(
       readFileSync(path.join(outDir, "manifest.json"), "utf8"),
@@ -194,7 +196,70 @@ function pruneVersions(
   }
 }
 
-/** 완성된 버전 디렉터리를 먼저 게시한 뒤 manifest를 원자적으로 교체함. */
+/**
+ * 완성된 버전 디렉터리를 먼저 게시한 뒤 manifest를 원자적으로 교체함. 예시·운영 미러가 함께 씀.
+ * 다른 출처(mode)가 남긴 버전은 직전 버전으로 남기지 않음(예시와 운영 데이터가 섞이지 않게).
+ */
+export function publishSnapshot({
+  outDir,
+  mode,
+  version,
+  files,
+  manifest,
+}: {
+  outDir: string;
+  mode: DevDataMode;
+  version: string;
+  files: Array<{ name: string; content: string }>;
+  manifest: string;
+}): void {
+  const foreign = foreignEntries(outDir);
+  if (foreign.length > 0) {
+    throw new Error(
+      `${outDir}에 개발 데이터가 아닌 파일이 있어 쓰지 않았어요(${foreign.join(", ")}). 그 파일을 옮기거나 지운 뒤 다시 실행하세요`,
+    );
+  }
+
+  mkdirSync(outDir, { recursive: true });
+  const stagedVersion = temporaryPath(outDir, version);
+  const publishedVersion = path.join(outDir, version);
+  const stagedManifest = temporaryPath(outDir, "manifest.json");
+
+  try {
+    mkdirSync(stagedVersion);
+    for (const { name, content } of files) {
+      writeFileSync(path.join(stagedVersion, name), content);
+    }
+
+    const modeFile = path.join(outDir, DEV_DATA_MODE_FILE);
+    const sameMode = readDevDataMode(outDir) === mode;
+    publishVersion(stagedVersion, publishedVersion, files);
+
+    const previousVersion = sameMode ? currentVersion(outDir) : null;
+    // 출처가 바뀔 때는 manifest 교체 전에 표지를 지우고 교체 뒤에 새 표지를 씀.
+    // 중간에 실패해도 표지 없는 manifest는 화면이 예시로 보므로 예시가 운영 데이터처럼 보이지 않음
+    if (!sameMode) rmSync(modeFile, { force: true });
+    writeFileSync(stagedManifest, manifest);
+    renameSync(stagedManifest, path.join(outDir, "manifest.json"));
+    if (!sameMode) writeFileSync(modeFile, `${mode}\n`);
+    pruneVersions(outDir, [version, previousVersion], Date.now());
+  } catch (error) {
+    rmSync(stagedVersion, { recursive: true, force: true });
+    rmSync(stagedManifest, { force: true });
+    throw error;
+  }
+}
+
+/** public/data를 만든 출처. 표지가 없거나 읽을 수 없으면 null. */
+export function readDevDataMode(outDir: string = DEFAULT_OUT): string | null {
+  try {
+    return readFileSync(path.join(outDir, DEV_DATA_MODE_FILE), "utf8").trim();
+  } catch {
+    return null;
+  }
+}
+
+/** 계약 예시의 시각을 지금으로 옮겨 sample로 게시함. */
 export function writeDevData({
   outDir = DEFAULT_OUT,
   examplesDir = DEFAULT_EXAMPLES,
@@ -223,60 +288,31 @@ export function writeDevData({
     files,
   };
 
-  const foreign = foreignEntries(outDir);
-  if (foreign.length > 0) {
-    throw new Error(
-      `${outDir}에 예시 데이터가 아닌 파일이 있어 쓰지 않았어요(${foreign.join(", ")}). 그 파일을 옮기거나 지운 뒤 다시 실행하세요`,
-    );
-  }
-
-  mkdirSync(outDir, { recursive: true });
-  const stagedVersion = temporaryPath(outDir, version);
-  const publishedVersion = path.join(outDir, version);
-  const stagedManifest = temporaryPath(outDir, "manifest.json");
-
-  try {
-    mkdirSync(stagedVersion);
-    for (const { name, body } of bodies) {
-      writeFileSync(
-        path.join(stagedVersion, name),
-        JSON.stringify(body, null, 2),
-      );
-    }
-
-    publishVersion(stagedVersion, publishedVersion, bodies);
-
-    const previousVersion = currentVersion(outDir);
-    writeFileSync(path.join(outDir, DEV_DATA_MODE_FILE), "sample\n");
-    writeFileSync(stagedManifest, JSON.stringify(manifest, null, 2));
-    renameSync(stagedManifest, path.join(outDir, "manifest.json"));
-    pruneVersions(outDir, [version, previousVersion], Date.now());
-  } catch (error) {
-    rmSync(stagedVersion, { recursive: true, force: true });
-    rmSync(stagedManifest, { force: true });
-    throw error;
-  }
-
+  publishSnapshot({
+    outDir,
+    mode: "sample",
+    version,
+    files: bodies.map(({ name, body }) => ({
+      name,
+      content: JSON.stringify(body, null, 2),
+    })),
+    manifest: JSON.stringify(manifest, null, 2),
+  });
   return version;
 }
 
 /**
- * 예시를 끈 개발 서버가 지난 예시를 계속 서빙하지 않도록 정리함.
- * 표지가 sample이고 이 스크립트가 만든 이름만 있는 폴더만 지움.
+ * 지난 개발 데이터를 지움. off로 띄우거나 다른 모드로 바꿀 때 씀.
+ * 표지가 sample·live이고 이 스크립트가 만든 이름만 있는 폴더만 지움.
  * 그 밖의 폴더는 출처를 모르므로 남기고 알림(화면은 manifest가 있으면 예시로 표시함).
  */
-export function clearDevSampleData(
+export function clearDevData(
   outDir: string = DEFAULT_OUT,
 ): "removed" | "unmarked" | "foreign" | "none" {
   if (!existsSync(outDir)) return "none";
-  let mode: string | null = null;
-  try {
-    mode = readFileSync(path.join(outDir, DEV_DATA_MODE_FILE), "utf8").trim();
-  } catch {
-    mode = null;
-  }
+  const mode = readDevDataMode(outDir);
   if (foreignEntries(outDir).length > 0) return "foreign";
-  if (mode === "sample") {
+  if (mode === "sample" || mode === "live") {
     rmSync(outDir, { recursive: true, force: true });
     return "removed";
   }
@@ -337,7 +373,7 @@ function main(): void {
   if (mode === "--check") {
     if (existsSync(outDir)) {
       console.error(
-        "public/data에 개발용 예시 데이터가 있어요. npm run dev:data -w apps/web -- --clean 후 다시 빌드하세요.",
+        "public/data에 개발 데이터(예시·운영 미러)가 있어요. npm run dev:data -w apps/web -- --clean 후 다시 빌드하세요.",
       );
       process.exitCode = 1;
     }
@@ -348,7 +384,7 @@ function main(): void {
     const foreign = foreignEntries(outDir);
     if (foreign.length > 0) {
       console.error(
-        `public/data에 예시 데이터가 아닌 파일이 있어 지우지 않았어요(${foreign.join(", ")}). 확인 후 직접 정리하세요.`,
+        `public/data에 개발 데이터가 아닌 파일이 있어 지우지 않았어요(${foreign.join(", ")}). 확인 후 직접 정리하세요.`,
       );
       process.exitCode = 1;
       return;
