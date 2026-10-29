@@ -558,7 +558,6 @@
       "unavailableHint": "Your device couldn't share its location, so distances aren't shown. Please try again in a moment.",
       "retry": "Try again",
       "region": "Default region",
-      "regionNone": "Not chosen",
       "regionNationwide": "All Korea",
       "regionHint": "The region Home shows first. Saved only on this device.",
       "regionChange": "Change default region",
