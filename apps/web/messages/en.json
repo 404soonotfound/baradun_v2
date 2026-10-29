@@ -85,7 +85,7 @@
     }
   },
   "source": {
-    "kma": "Source: KMA",
+    "agency": "Source: {agency}",
     "kmaStatus": "Source: KMA (warnings and ocean observations, processed)",
     "kmaBuoy": "Source: KMA (ocean and wave buoy observations)"
   },
