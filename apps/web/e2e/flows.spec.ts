@@ -110,7 +110,7 @@ test.describe("데이터 문의", () => {
     ).toBeVisible();
     await expect(
       page.getByText(
-        "내용을 바꾸지 않고 '다시 보내기'를 누르면 같은 문의가 두 번 접수되지 않아요.",
+        "이 화면에서 내용을 바꾸지 않고 '다시 보내기'를 누르면 같은 문의가 두 번 접수되지 않아요.",
       ),
     ).toBeVisible();
     await expect(page.getByRole("textbox", { name: /내용/ })).toHaveValue(

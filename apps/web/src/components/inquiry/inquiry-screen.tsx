@@ -14,7 +14,6 @@ import { cn } from "@/lib/cn";
 import { localizedPath, type Locale } from "@/lib/i18n";
 import type { BeachId } from "@baradun/contracts";
 import {
-  receiptUnknown,
   sendInquiry,
   type InquiryAttempt,
   type PhotoToSend,
@@ -41,6 +40,7 @@ import {
   type FormErrors,
   type InquiryKind,
 } from "@/lib/inquiry/form";
+import { failureCopy } from "@/lib/inquiry/failure-copy";
 import { preparePhoto, type PhotoError } from "@/lib/inquiry/photo";
 
 // 데이터 문의 (BRD-37 · 노션 2장 INQ, 결정 기록 9장·11장 '문의(BRD-37)'·10/26 BRD-63, infra/README)
@@ -354,8 +354,8 @@ export function InquiryScreen({
   }
 
   const errorCount = Object.keys(errors).length;
-  // 문의가 접수됐는지 모르는 실패(api.ts receiptUnknown). 제목·영향·다음 행동 문구가 달라짐
-  const unknown = phase.kind === "failed" && receiptUnknown(phase);
+  // 실패 안내 문구 키(접수 여부를 모르면 제목·영향·다음 행동이 달라짐)
+  const copy = phase.kind === "failed" ? failureCopy(phase) : null;
   const progressText =
     phase.kind === "sending" && phase.progress
       ? phase.progress.phase === "photos"
@@ -371,7 +371,7 @@ export function InquiryScreen({
       {header}
       <p className="text-body-s text-text-body">{t("intro")}</p>
 
-      {phase.kind === "failed" && (
+      {copy && (
         <div
           ref={alertRef}
           tabIndex={-1}
@@ -384,46 +384,22 @@ export function InquiryScreen({
           >
             <CircleAlert size={16} />
           </span>
-          {/* 무슨 일(제목·원인) → 영향(멈춘 단계·접수 여부) → 다음 행동 */}
+          {/* 무슨 일(제목·원인) → 영향(멈춘 단계·접수 여부) → 다음 행동 (lib/inquiry/failure-copy.ts) */}
           <div className="flex min-w-0 flex-col gap-1">
             <p className="text-body-s font-bold text-text-default">
-              {unknown ? t("failed.titleUnknown") : t("failed.title")}
+              {t(`failed.${copy.title}`)}
             </p>
             <p className="text-caption text-text-body">
-              {/* 앞 시도의 접수 여부를 모르는 채 재시도가 429면 '이번 재시도'를 받지 못했다고 씀 */}
-              {unknown && phase.failure === "rateLimited"
-                ? t("failed.rateLimitedRetry")
-                : t(`failed.${phase.failure}`)}
+              {t(`failed.${copy.cause}`)}
             </p>
             <p className="text-caption text-text-body">
-              {phase.stop.stage === "photos" && phase.stop.uploaded > 0
-                ? t("failed.stopPhotos", {
-                    uploaded: phase.stop.uploaded,
-                    total: phase.stop.total,
-                  })
-                : unknown
-                  ? t("failed.stopUnknown")
-                  : phase.stop.stage === "message" && phase.stop.photos > 0
-                    ? t("failed.stopMessageAfterPhotos", {
-                        count: phase.stop.photos,
-                      })
-                    : t("failed.stopMessage")}
+              {"values" in copy.impact
+                ? t(`failed.${copy.impact.key}`, copy.impact.values)
+                : t(`failed.${copy.impact.key}`)}
             </p>
             <p className="text-caption text-text-body">{t("failed.kept")}</p>
             <p className="text-caption text-text-body">
-              {t(
-                `failed.next.${
-                  unknown
-                    ? phase.failure === "rateLimited"
-                      ? "unknownLater"
-                      : "unknown"
-                    : phase.failure === "offline" ||
-                        phase.failure === "rateLimited" ||
-                        phase.failure === "rejected"
-                      ? phase.failure
-                      : "later"
-                }`,
-              )}
+              {t(`failed.${copy.next}`)}
             </p>
           </div>
         </div>

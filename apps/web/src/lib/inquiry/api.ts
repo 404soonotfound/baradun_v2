@@ -37,12 +37,13 @@ export type SendFailure =
   | "rateLimited" // 잠시 많은 문의(429·rate_limited)
   | "unavailable" // 서버가 받을 수 없음(5xx·service_unavailable)
   | "rejected" // 요청 형식 거부(400·invalid_request)
-  | "invalidResponse"; // 응답 모양이 계약과 다름
+  | "invalidResponse" // 응답 모양이 계약과 다름
+  | "refused"; // 그 밖의 4xx(403·404·413 등). 문의 함수에 닿기 전 거절이라 접수 안 됨
 
 // 어디서 멈췄는지(결정 기록 12장 결정 27: 사진 업로드와 문의 접수를 나눠 실제 상태를 알림)
 // photos: 사진을 다 올리기 전에 멈춤(문의는 보내지 않음). uploaded = 올라간 장수
 // message: 사진은 모두 올렸고(없으면 0장) 문의 접수 요청에서 멈춤
-// uncertain: 같은 내용의 앞 시도가 문의 요청 뒤 답을 못 받았음(이번에 연결이 없어도 앞 시도가 접수됐을 수 있음)
+// uncertain: 앞 시도가 문의 요청 뒤 답을 못 받았음(이번에 연결이 없거나 거절돼도 앞 시도가 접수됐을 수 있음)
 export type SendStop =
   | { stage: "photos"; uploaded: number; total: number }
   | { stage: "message"; photos: number; uncertain?: true };
@@ -52,8 +53,8 @@ export type SendResult =
   | { ok: false; failure: SendFailure; stop: SendStop };
 
 // 문의가 서버에 남았을 수 있는지. 문의 요청을 보낸 뒤 응답을 못 받았거나(network·5xx) 모양이 틀리면 모름.
-// 앞 시도가 그랬는데 이번엔 연결이 없거나 429로 막혀도 모름(앞 요청이 아직 저장 전일 수 있음).
-// 접수 전에 멈췄거나 첫 시도가 거절(429·400·409)됐으면 접수 안 됨
+// 앞 시도가 그랬으면 이번엔 연결이 없거나 429로 막히거나 내용을 바꿔 거절돼도 모름(앞 요청이 아직 저장 전이거나 이미 저장됨).
+// 접수 전에 멈췄거나 첫 시도가 거절(429·400·409·그 밖의 4xx)됐으면 접수 안 됨
 // (서버는 이미 접수한 키면 속도 제한 전에 첫 결과를 돌려주므로 첫 시도의 429는 접수 안 됨을 뜻함)
 const UNCERTAIN_FAILURES: readonly SendFailure[] = [
   "network",
@@ -89,6 +90,8 @@ export type InquiryAttempt = {
   readonly fingerprint: string; // 유형·본문·이메일·사진 내용의 SHA-256
   readonly refs: readonly InquiryPhotoReference[] | null; // 사진을 모두 올린 뒤의 참조. 다시 보낼 때 다시 올리지 않음
   readonly uncertain?: true; // 문의 요청을 보냈지만 접수 여부를 모름(receiptUnknown)
+  // uncertain이 내용이 다른 앞 시도에서 넘어옴(그 앞 문의는 이 키와 상관없이 접수됐을 수 있음)
+  readonly carried?: true;
 };
 export type AttemptSlot = { current: InquiryAttempt | null }; // React useRef를 그대로 넘김
 
@@ -285,6 +288,8 @@ function failureOf(status: number, body: unknown): SendFailure {
     code === "idempotency_conflict"
   )
     return "rejected";
+  // 403(WAF)·404·413 등: 문의 함수에 닿기 전에 거절됨 → 접수 안 됨(접수 여부를 모른다고 하지 않음)
+  if (status >= 400 && status < 500) return "refused";
   return "unavailable";
 }
 
@@ -443,11 +448,10 @@ export async function sendInquiry(
   deps: SendDeps = DEFAULT_DEPS(),
   attempt: AttemptSlot = { current: null },
 ): Promise<SendResult> {
-  const fingerprint = await contentFingerprint(deps, request, photos);
   if (!deps.online()) {
-    // 같은 내용의 앞 시도가 접수 여부를 모른 채 끝났으면 그 사실을 남김('접수되지 않았어요'로 단정하지 않게)
-    const earlier =
-      attempt.current?.fingerprint === fingerprint ? attempt.current : null;
+    // 앞 시도가 접수 여부를 모른 채 끝났으면 그 사실을 남김('접수되지 않았어요'로 단정하지 않게).
+    // 내용이 같든 다르든 앞 문의는 접수됐을 수 있으므로 지문(사진 해시)은 계산하지 않음
+    const earlier = attempt.current;
     return {
       ok: false,
       failure: "offline",
@@ -462,10 +466,18 @@ export async function sendInquiry(
           : { stage: "message", photos: 0 },
     };
   }
+  const fingerprint = await contentFingerprint(deps, request, photos);
+  const earlier = attempt.current;
+  // 내용이 바뀌면 새 키. 앞 시도가 불확실했으면 그 사실은 넘겨 줌(앞 문의가 이미 접수됐을 수 있음)
   const current: InquiryAttempt =
-    attempt.current?.fingerprint === fingerprint
-      ? attempt.current
-      : { idempotencyKey: deps.uuid(), fingerprint, refs: null };
+    earlier?.fingerprint === fingerprint
+      ? earlier
+      : {
+          idempotencyKey: deps.uuid(),
+          fingerprint,
+          refs: null,
+          ...(earlier?.uncertain ? { uncertain: true, carried: true } : {}),
+        };
   attempt.current = current;
   let refs = current.refs;
   if (refs === null) {
@@ -494,9 +506,21 @@ export async function sendInquiry(
     // 거부(400·409) → 다음 시도는 새 키(같은 키로 다시 보내도 같은 거부).
     // 400은 서버가 멱등 기록을 보기 전에 본문 검사로 정함 → 같은 본문의 앞 시도도 거부됐으므로 접수 안 됨으로 봄.
     // 409는 이 키의 접수 기록이 있다는 뜻이지만 같은 내용이면 지문이 같아 생기지 않음(서버 지문 규칙이 배포로 바뀔 때만)
-    if (sent.failure === "rejected") {
-      attempt.current = null;
-      return { ok: false, failure: sent.failure, stop };
+    if (sent.failure === "rejected" || sent.failure === "refused") {
+      if (!current.carried) {
+        attempt.current = null;
+        return { ok: false, failure: sent.failure, stop };
+      }
+      // 내용이 다른 앞 시도가 불확실했으면 이 거절과 상관없이 앞 문의가 접수됐을 수 있음.
+      // 이 키는 버리고(다음 시도는 새 키) 불확실한 사실만 남김
+      attempt.current = {
+        idempotencyKey: deps.uuid(),
+        fingerprint: "",
+        refs: null,
+        uncertain: true,
+        carried: true,
+      };
+      return { ok: false, failure: sent.failure, stop: { ...stop, uncertain: true } };
     }
     if (UNCERTAIN_FAILURES.includes(sent.failure))
       attempt.current = { ...current, refs, uncertain: true };
