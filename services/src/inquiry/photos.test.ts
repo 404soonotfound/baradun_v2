@@ -33,14 +33,14 @@ function gpsJpeg(): Buffer {
 }
 
 describe("문의 사진 처리", () => {
-  it("presigned POST에 파일당 5MiB 제한을 넣는다", async () => {
+  it("presigned POST에 파일당 4MiB 제한을 넣는다", async () => {
     const presign = vi.fn(async () => ({
       url: "https://upload.example.invalid",
       fields: { key: "generated" },
     })) as unknown as typeof createPresignedPost;
     const photos = new InquiryPhotos({} as S3Client, "Photos", presign);
     const result = await photos.createUploads(
-      [{ contentType: "image/jpeg", size: 5 * 1024 * 1024 }],
+      [{ contentType: "image/jpeg", size: 4 * 1024 * 1024 }],
       new Date("2026-10-26T00:00:00.000Z"),
     );
 
@@ -49,7 +49,7 @@ describe("문의 사진 처리", () => {
       expect.anything(),
       expect.objectContaining({
         Conditions: expect.arrayContaining([
-          ["content-length-range", 1, 5 * 1024 * 1024],
+          ["content-length-range", 1, 4 * 1024 * 1024],
         ]),
       }),
     );
@@ -176,7 +176,7 @@ describe("문의 사진 처리", () => {
     expect(policy.conditions).toEqual(
       expect.arrayContaining([
         ["eq", "$Content-Type", "image/png"],
-        ["content-length-range", 1, 5 * 1024 * 1024],
+        ["content-length-range", 1, 4 * 1024 * 1024],
         { key: uploads[0]!.key },
         { bucket: "baradunv2-photos-test" },
       ]),

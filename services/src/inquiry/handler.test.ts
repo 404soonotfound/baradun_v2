@@ -233,6 +233,41 @@ const body = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 
+describe("문의 해변·활동 구조화 칸 (결정 기록 12장 결정 22)", () => {
+  it("해변·활동을 문의와 알림에 따로 넘기고 본문에 섞지 않음", async () => {
+    const store = memoryStore();
+    const deps = dependencies({ store: store as never, id: sequentialIds() });
+    const response = await handleInquiryHttp(
+      event(
+        "/api/inquiries",
+        body({ beachId: "b0001", activity: "surfing", email: undefined }),
+      ),
+      deps,
+    );
+    expect(response.statusCode).toBe(201);
+    expect(store.inquiries[0]).toMatchObject({
+      beachId: "b0001",
+      activity: "surfing",
+      message: "관측값 문의",
+    });
+    expect(deps.notifier.notify).toHaveBeenCalledWith(
+      expect.objectContaining({ beachId: "b0001", activity: "surfing" }),
+    );
+  });
+
+  it("해변 없이 활동만 오거나 모르는 유형이면 400으로 거부함", async () => {
+    for (const changed of [{ activity: "surfing" }, { type: "other" }]) {
+      const deps = dependencies();
+      const response = await handleInquiryHttp(
+        event("/api/inquiries", body(changed)),
+        deps,
+      );
+      expect(response.statusCode, JSON.stringify(changed)).toBe(400);
+      expect(deps.store.save).not.toHaveBeenCalled();
+    }
+  });
+});
+
 describe("문의 멱등 키 (BRD-103)", () => {
   it("같은 키·같은 내용의 두 번째 요청은 새 문의·알림 없이 첫 응답을 그대로 돌려줌", async () => {
     const store = memoryStore();
@@ -277,6 +312,8 @@ describe("문의 멱등 키 (BRD-103)", () => {
       { type: "data_suggestion" },
       { email: "other@example.com" },
       { photos: [] },
+      { beachId: "b0002" },
+      { beachId: "b0001", activity: "surfing" },
     ]) {
       const response = await handleInquiryHttp(
         event("/api/inquiries", body(changed)),
@@ -369,7 +406,7 @@ describe("문의 멱등 키 (BRD-103)", () => {
     expect(store.inquiries).toHaveLength(1);
   });
 
-  it("내용 지문은 멱등 키를 빼고 유형·본문·이메일·사진마다 달라짐", () => {
+  it("내용 지문은 멱등 키를 빼고 유형·본문·이메일·사진·해변·활동마다 달라짐", () => {
     const base = body() as CreateInquiryRequest;
     const same = requestFingerprint({
       ...base,
@@ -383,12 +420,29 @@ describe("문의 멱등 키 (BRD-103)", () => {
       { type: base.type, message: base.message, photos: base.photos, idempotencyKey: KEY }, // 이메일 없음
       { ...base, photos: [] },
       { ...base, photos: [{ ...PHOTO, photoId: "fedcba9876543210" }] },
+      { ...base, beachId: "b0001" },
+      { ...base, beachId: "b0001", activity: "surfing" },
     ];
     const prints = new Set(
       variants.map((variant) => requestFingerprint(variant)),
     );
     expect(prints.size).toBe(variants.length);
     expect(prints.has(same)).toBe(false);
+  });
+
+  it("해변·활동이 없는 요청의 지문은 칸을 넣기 전 형식과 같음(배포 전 멱등 기록과 호환)", () => {
+    const base = body() as CreateInquiryRequest;
+    const before = createHash("sha256")
+      .update(
+        JSON.stringify([
+          base.type,
+          base.message,
+          base.email ?? null,
+          base.photos.map((photo) => [photo.photoId, photo.key]),
+        ]),
+      )
+      .digest("hex");
+    expect(requestFingerprint(base)).toBe(before);
   });
 });
 
