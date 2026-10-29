@@ -29,7 +29,7 @@ export const viewport = sharedViewport;
 
 type Messages = Awaited<ReturnType<typeof bothLocales>>[number];
 
-// 한 언어 묶음: 제목 → 이유 → 해변 검색하기(주요) · 홈으로
+// 한 언어 묶음: 제목 → 이유 → 다음 행동 → 해변 검색하기(주요) · 홈으로
 function Block({
   locale,
   t,
@@ -44,7 +44,10 @@ function Block({
       <Heading className="text-title-xl text-text-default">
         {t("title")}
       </Heading>
-      <p className="text-body-m text-text-body">{t("body")}</p>
+      <div className="flex flex-col gap-1">
+        <p className="text-body-m text-text-body">{t("body")}</p>
+        <p className="text-body-m text-text-body">{t("next")}</p>
+      </div>
       <div className="flex w-full flex-col gap-2 pt-2">
         <Button asChild>
           <Link href={localizedPath(locale, "/search/")}>{t("search")}</Link>
