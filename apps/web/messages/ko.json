@@ -164,6 +164,22 @@
     "guide": {
       "title": "무엇을 확인해서 보여주나요?",
       "body": "안전·데이터 안내 · 특보·측정 시각과 출처"
+    },
+    "hero": {
+      "summary": "{region} 바다 {count}곳의 특보·측정 상태예요",
+      "updated": "{time} 업데이트",
+      "category": {
+        "clear": "특보 없음",
+        "unavailable": "이용불가",
+        "undetermined": "판단불가"
+      },
+      "count": "{count}곳",
+      "reason": "{reason} {count}곳",
+      "clearScope": "각 해변 특보구역 · 기상청 {time} 확인",
+      "clearScopeNoTime": "각 해변 특보구역 · 기상청 · 확인 시각 모름"
+    },
+    "info": {
+      "title": "안내"
     }
   },
   "notFound": {
@@ -181,7 +197,9 @@
     "favorites": "즐겨찾기",
     "settings": "설정",
     "search": "해변 이름이나 지역 검색",
-    "back": "뒤로"
+    "back": "뒤로",
+    "searchPlaceholder": "해변이나 지역 이름",
+    "favoritesSaved": "저장한 해변 {count}곳"
   },
   "sheet": {
     "close": "닫기"

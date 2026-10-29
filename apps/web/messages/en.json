@@ -164,6 +164,22 @@
     "guide": {
       "title": "What do we check?",
       "body": "Safety & data · warning and measurement times, sources"
+    },
+    "hero": {
+      "summary": "Warnings and measurements for {count, plural, one {# beach} other {# beaches}} in {region}",
+      "updated": "Updated {time}",
+      "category": {
+        "clear": "No warnings",
+        "unavailable": "Unavailable",
+        "undetermined": "Cannot determine"
+      },
+      "count": "{count, plural, one {# beach} other {# beaches}}",
+      "reason": "{reason} · {count}",
+      "clearScope": "Each beach's warning zone · KMA · checked {time}",
+      "clearScopeNoTime": "Each beach's warning zone · KMA · check time unknown"
+    },
+    "info": {
+      "title": "Guide"
     }
   },
   "notFound": {
@@ -181,7 +197,9 @@
     "favorites": "Favorites",
     "settings": "Settings",
     "search": "Search beaches or regions",
-    "back": "Back"
+    "back": "Back",
+    "searchPlaceholder": "Beach or region name",
+    "favoritesSaved": "{count} saved"
   },
   "sheet": {
     "close": "Close"
