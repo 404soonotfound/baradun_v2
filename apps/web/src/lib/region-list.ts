@@ -126,19 +126,35 @@ export type HomeScope =
   | { kind: "nationwide"; chosen: boolean }
   | { kind: "nearby" };
 
+// 저장값만 본 기본 지역: 고른 지역 · 고른 전국 · 저장값 없음(기본값 전국)
+// 설정 '기본 지역'이 그대로 씀(10/29 사용자 결정: 저장값이 없으면 '전국'). 홈은 여기에 위치를 더함(homeScope)
+export type SavedScope = Exclude<HomeScope, { kind: "nearby" }>;
+
+export function savedScope(
+  saved: RegionChoice | null,
+  beaches: readonly BeachSummary[],
+): SavedScope {
+  if (saved === NATIONWIDE) return { kind: "nationwide", chosen: true };
+  // 목록에 없어진 지역·모양이 다른 저장값은 고르지 않은 것으로 봄(validRegion·parseRegionChoice)
+  const region = validRegion(saved, beaches);
+  if (region !== null) return { kind: "region", region };
+  return { kind: "nationwide", chosen: false };
+}
+
 export function homeScope(
   saved: RegionChoice | null,
   beaches: readonly BeachSummary[],
   status: LocationState["status"],
 ): HomeScope {
-  if (saved === NATIONWIDE) return { kind: "nationwide", chosen: true };
-  // 목록에 없어진 지역·모양이 다른 저장값은 고르지 않은 것으로 봄(validRegion·parseRegionChoice)
-  const region = validRegion(saved, beaches);
-  if (region !== null) return { kind: "region", region };
-  // 권한 확인 중·받는 중은 아직 모름 → 가까운 바다 자리를 잡아 둠(전국이 잠깐 보였다 바뀌지 않게)
-  if (status === "ready" || status === "locating" || status === "checking")
+  const scope = savedScope(saved, beaches);
+  // 저장값이 없을 때만 위치를 봄. 권한 확인 중·받는 중은 아직 모름 → 가까운 바다 자리를 잡아 둠(전국이 잠깐 보였다 바뀌지 않게)
+  if (
+    scope.kind === "nationwide" &&
+    !scope.chosen &&
+    (status === "ready" || status === "locating" || status === "checking")
+  )
     return { kind: "nearby" };
-  return { kind: "nationwide", chosen: false };
+  return scope;
 }
 
 // [11] 범위 안 해변(이름 순). 지역은 그 지역 해변, 전국은 공개 해변 전체, 가까운 바다는 빈 목록(거리 순은 부르는 쪽)

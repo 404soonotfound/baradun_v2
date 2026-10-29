@@ -558,7 +558,6 @@
       "unavailableHint": "기기에서 위치를 받지 못해 거리를 보여드릴 수 없어요. 잠시 뒤 다시 시도해 주세요.",
       "retry": "다시 시도",
       "region": "기본 지역",
-      "regionNone": "고르지 않음",
       "regionNationwide": "전국",
       "regionHint": "홈에서 먼저 보여드리는 지역이에요. 이 기기에만 저장해요.",
       "regionChange": "기본 지역 바꾸기",

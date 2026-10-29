@@ -25,7 +25,7 @@ import {
   NATIONWIDE,
   regionGroups,
   regionName,
-  validRegion,
+  savedScope,
 } from "@/lib/region-list";
 import { setTheme, THEMES, useTheme } from "@/lib/theme";
 import { useSheet } from "@/lib/use-sheet";
@@ -161,14 +161,15 @@ function LocationGroup({ beaches }: { beaches: BeachSummary[] }) {
   const status = location.status;
   // 꺼짐(off)만 스위치 꺼짐. 서버 HTML·권한 확인 중에는 켜짐으로 그렸다가 저장값을 읽으면 바뀜
   const enabled = status !== "off";
-  // 지금 해변 목록에 없는 지역이면 고르지 않은 것으로 봄(홈과 같은 규칙). 시트에서 고른 전국은 '전국'(BRD-127)
-  const nationwide = choice === NATIONWIDE;
-  const shown = nationwide ? null : validRegion(choice, beaches);
-  const name = nationwide
-    ? t("regionNationwide")
-    : shown === null
-      ? null
-      : regionName(groups, shown);
+  // 저장값 → 기본 지역(savedScope). 지금 해변 목록에 없는 지역이면 고르지 않은 것으로 봄(홈과 같은 규칙)
+  // 고른 전국·저장값 없음은 '전국'(BRD-127 · 10/29 사용자 결정)
+  const scope = savedScope(choice, beaches);
+  const shown = scope.kind === "region" ? scope.region : null;
+  const name =
+    (shown === null ? null : regionName(groups, shown)) ??
+    t("regionNationwide");
+  // 지울 저장값이 있을 때만 '기본 지역 지우기'(고른 지역·고른 전국)
+  const saved = scope.kind === "region" || scope.chosen;
 
   return (
     <Group id="location">
@@ -235,13 +236,13 @@ function LocationGroup({ beaches }: { beaches: BeachSummary[] }) {
 
       <Row>
         <p className="text-body-s font-bold text-text-default">{t("region")}</p>
-        <p className="text-body-s text-text-body">{name ?? t("regionNone")}</p>
+        <p className="text-body-s text-text-body">{name}</p>
         <p className="text-caption text-text-muted">{t("regionHint")}</p>
         <div className="mt-2 flex flex-wrap gap-2">
           <Button variant="secondary" onClick={regionSheet.show}>
             {t("regionChange")}
           </Button>
-          {name !== null && (
+          {saved && (
             <Button variant="ghost" onClick={() => setRegion(null)}>
               {t("regionClear")}
             </Button>
@@ -255,7 +256,7 @@ function LocationGroup({ beaches }: { beaches: BeachSummary[] }) {
         groups={groups}
         value={shown}
         nationwide={{
-          selected: nationwide,
+          selected: scope.kind === "nationwide",
           onSelect: () => {
             setRegion(NATIONWIDE);
             regionSheet.close();
