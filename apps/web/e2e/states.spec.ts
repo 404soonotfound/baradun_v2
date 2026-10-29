@@ -267,3 +267,15 @@ test.describe("404", () => {
     }
   });
 });
+
+// 영어 지원 범위: 공식 영어 이름이 없는 고유명은 한국어로 남을 수 있다는 안내(결정 39)
+test("데이터 출처 화면에 한국어로 남는 고유명 안내", async ({ page }) => {
+  await page.goto("/en/about/data/");
+  await expect(
+    page.getByText(/may stay in the original Korean on English screens/),
+  ).toBeVisible();
+  await page.goto("/about/data/");
+  await expect(
+    page.getByText(/한국어 원문으로 보여줄 수 있어요/),
+  ).toBeVisible();
+});
