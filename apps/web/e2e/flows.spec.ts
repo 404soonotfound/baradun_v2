@@ -1,5 +1,6 @@
 import type { Page } from "@playwright/test";
 
+import { INQUIRY_CONTACT_ENABLED } from "../src/lib/inquiry/form";
 import { expect, test } from "./fixtures";
 
 // 지도 실패 안내·데이터 문의 흐름 (BRD-39 · 리뷰 지적: 실패 경로 E2E 공백)
@@ -68,8 +69,17 @@ test.describe("데이터 문의", () => {
     await expect(
       page.getByRole("radio", { name: "정보가 실제와 달라요" }),
     ).toBeFocused();
+    expect(posted).toBe(0);
+  });
 
-    // 이메일을 쓰면 동의가 필요함
+  test("이메일을 쓰면 형식과 동의를 확인하고 보내지 않음", async ({ page }) => {
+    test.skip(!INQUIRY_CONTACT_ENABLED, "이메일·사진 받기 꺼짐(BRD-130)");
+    let posted = 0;
+    await page.route("**/api/inquiries**", (route) => {
+      posted += 1;
+      return route.fulfill({ status: 500, body: "" });
+    });
+    await page.goto(INQUIRY);
     await pickKind(page, "정보가 실제와 달라요");
     await page.getByRole("textbox", { name: /내용/ }).fill("파고가 달라요");
     await page.getByRole("textbox", { name: /이메일/ }).fill("name@example");
@@ -96,10 +106,12 @@ test.describe("데이터 문의", () => {
     await page
       .getByRole("textbox", { name: /내용/ })
       .fill("파주기 기준이 궁금해요");
-    await page
-      .getByRole("textbox", { name: /이메일/ })
-      .fill("reader@example.com");
-    await page.getByRole("checkbox").check();
+    if (INQUIRY_CONTACT_ENABLED) {
+      await page
+        .getByRole("textbox", { name: /이메일/ })
+        .fill("reader@example.com");
+      await page.getByRole("checkbox").check();
+    }
     await page.getByRole("button", { name: "보내기" }).click();
     await expect(page.getByText("접수됐는지 확인하지 못했어요")).toBeVisible();
     await expect(
@@ -116,17 +128,66 @@ test.describe("데이터 문의", () => {
     await expect(page.getByRole("textbox", { name: /내용/ })).toHaveValue(
       "파주기 기준이 궁금해요",
     );
-    await expect(page.getByRole("textbox", { name: /이메일/ })).toHaveValue(
-      "reader@example.com",
-    );
-    await expect(page.getByRole("checkbox")).toBeChecked();
     await expect(
       page.getByRole("button", { name: "다시 보내기" }),
     ).toBeVisible();
-    // 이메일·동의는 기기에 저장하지 않음
-    expect(
-      await page.evaluate(() => JSON.stringify({ ...localStorage })),
-    ).not.toContain("reader@example.com");
+    if (INQUIRY_CONTACT_ENABLED) {
+      await expect(page.getByRole("textbox", { name: /이메일/ })).toHaveValue(
+        "reader@example.com",
+      );
+      await expect(page.getByRole("checkbox")).toBeChecked();
+      // 이메일·동의는 기기에 저장하지 않음
+      expect(
+        await page.evaluate(() => JSON.stringify({ ...localStorage })),
+      ).not.toContain("reader@example.com");
+    }
+  });
+
+  test("이메일·사진 받기가 꺼져 있으면 칸이 없고 유형·내용만 보냄(결정 기록 13장, BRD-130)", async ({
+    page,
+  }) => {
+    test.skip(INQUIRY_CONTACT_ENABLED, "이메일·사진 받기 켜짐");
+    let uploads = 0;
+    const bodies: Record<string, unknown>[] = [];
+    await page.route("**/api/inquiries/uploads", (route) => {
+      uploads += 1;
+      return route.fulfill({ status: 500, body: "" });
+    });
+    await page.route("**/api/inquiries", (route) => {
+      bodies.push(route.request().postDataJSON() as Record<string, unknown>);
+      return route.fulfill({
+        status: 201,
+        contentType: "application/json",
+        body: JSON.stringify({
+          inquiryId: "123e4567-e89b-42d3-a456-426614174000",
+          receivedAt: "2026-10-29T03:00:00Z",
+          photos: [],
+        }),
+      });
+    });
+    await page.goto(INQUIRY);
+    await expect(page.getByRole("textbox", { name: /이메일/ })).toHaveCount(0);
+    await expect(page.getByRole("checkbox")).toHaveCount(0);
+    await expect(page.locator('input[type="file"]')).toHaveCount(0);
+    await expect(
+      page.getByText(
+        "문의 글은 90일 보관한 뒤 자동으로 지워요. 이메일·사진은 받지 않아요.",
+      ),
+    ).toBeVisible();
+
+    await pickKind(page, "정보가 실제와 달라요");
+    await page.getByRole("textbox", { name: /내용/ }).fill("파고가 달라요");
+    await page.getByRole("button", { name: "보내기" }).click();
+    await expect(
+      page.getByRole("heading", { name: "접수됐어요" }),
+    ).toBeVisible();
+    await expect(
+      page.getByText("확인 후 정보에 반영해요. 따로 답변은 드리지 않아요."),
+    ).toBeVisible();
+    expect(uploads).toBe(0);
+    expect(bodies).toHaveLength(1);
+    expect(bodies[0]).not.toHaveProperty("email");
+    expect(bodies[0]?.photos).toEqual([]);
   });
 
   test("장소 상세에서 들어오면 해변·활동을 본문이 아닌 계약 칸으로 보냄(결정 22)", async ({
@@ -148,7 +209,9 @@ test.describe("데이터 문의", () => {
     await page.goto(`${INQUIRY}?beach=gangmun`);
     await expect(page.getByText(/^해변: /)).toBeVisible();
     await pickKind(page, "해변을 추가해 주세요");
-    await page.getByRole("textbox", { name: /내용/ }).fill("근처 해변도 넣어 주세요");
+    await page
+      .getByRole("textbox", { name: /내용/ })
+      .fill("근처 해변도 넣어 주세요");
     await page.getByRole("button", { name: "보내기" }).click();
     await expect(
       page.getByRole("heading", { name: "접수됐어요" }),
@@ -285,9 +348,7 @@ test.describe("데이터 문의", () => {
     await pickKind(page, "정보가 실제와 달라요");
     await page.getByRole("textbox", { name: /내용/ }).fill("파고가 달라요");
     await page.getByRole("button", { name: "보내기" }).click();
-    await expect(
-      page.getByText("서버 응답이 오지 않았어요."),
-    ).toBeVisible();
+    await expect(page.getByText("서버 응답이 오지 않았어요.")).toBeVisible();
     await page.getByRole("button", { name: "다시 보내기" }).click();
     await expect(
       page.getByRole("heading", { name: "접수됐어요" }),
@@ -302,6 +363,7 @@ test.describe("데이터 문의", () => {
   test("업로드 양식 주소가 허용 버킷이 아니면 사진을 올리지 않고 문의도 보내지 않음(BRD-103)", async ({
     page,
   }) => {
+    test.skip(!INQUIRY_CONTACT_ENABLED, "이메일·사진 받기 꺼짐(BRD-130)");
     const KEY = `pending/${"a".repeat(32)}/0123456789abcdef`;
     let created = 0;
     const external: string[] = [];
@@ -354,4 +416,3 @@ test.describe("데이터 문의", () => {
     expect(created).toBe(0);
   });
 });
-
