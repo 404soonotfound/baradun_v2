@@ -28,8 +28,8 @@ import {
   useOnboarding,
   type OnboardingRecord,
 } from "@/lib/onboarding";
-import { setRegion, useRegion } from "@/lib/region";
-import type { RegionGroup } from "@/lib/region-list";
+import { setRegion, useRegionChoice } from "@/lib/region";
+import { NATIONWIDE, type RegionGroup } from "@/lib/region-list";
 import { useScrollLock } from "@/lib/scroll-lock";
 import { useSheet } from "@/lib/use-sheet";
 
@@ -55,7 +55,8 @@ export function Onboarding({
   groups: readonly RegionGroup[]; // 지역 고르기 시트용(AppShell이 빌드 때 만듦)
 }) {
   const record = useOnboarding();
-  const region = useRegion();
+  const choice = useRegionChoice();
+  const region = choice === NATIONWIDE ? null : choice;
   const pathname = usePathname();
   const regionSheet = useSheet("onboarding-region");
 
@@ -90,6 +91,14 @@ export function Onboarding({
         onClose={regionSheet.close}
         groups={groups}
         value={region}
+        // '전국'도 기본 지역처럼 저장(BRD-127). 위치를 켜도 홈은 전국
+        nationwide={{
+          selected: choice === NATIONWIDE,
+          onSelect: () => {
+            setRegion(NATIONWIDE);
+            regionSheet.close();
+          },
+        }}
         onSelect={(next) => {
           setRegion(next); // 기기에 기본 지역으로 저장
           regionSheet.close();

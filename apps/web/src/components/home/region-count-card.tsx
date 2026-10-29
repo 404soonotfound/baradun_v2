@@ -8,8 +8,8 @@ import { kstStamp } from "@/lib/snapshot/clock";
 import { useBadgeText } from "@/lib/snapshot/use-badge-text";
 import type { StatusCount } from "@/lib/status-count";
 
-// 지역 해변 상태별 개수 카드 (노션 2장 HOME 8, Figma S_M01_04 171:818) — 위치 없이 지역을 고른 뒤만
-// "강원 해변 5곳 지금 상태" + 칸마다 큰 숫자(상태 글자색) + 실제 사유. 카드 전체가 탐색으로 가는 링크
+// 지역 해변 상태별 개수 카드 (노션 2장 HOME 8, Figma S_M01_04 171:818) — 지역·전국을 볼 때(위치와 관계없이, BRD-127)
+// "강원 해변 5곳 지금 상태"·"전국 해변 206곳 지금 상태" + 칸마다 큰 숫자(상태 글자색) + 실제 사유. 카드 전체가 탐색으로 가는 링크
 // 개수는 lib/status-count.ts가 게시된 분류·사유 그대로 셈(G1)
 
 // [1] 숫자 색. Tailwind는 클래스 이름을 글자 그대로 찾아서 `text-status-${tone}-fg`처럼 이어 붙이면 안 됨
@@ -30,7 +30,7 @@ export function RegionCountCard({
   nowMs,
 }: {
   href: string;
-  title: string; // "강원 해변 5곳 지금 상태"
+  title: string; // "강원 해변 5곳 지금 상태" · "전국 해변 206곳 지금 상태"
   counts: StatusCount[] | null; // null = 아직 불러오는 중
   clearCheckedAt: string | null; // '특보 없음' 해변들의 가장 이른 확인 시각(lib/status-count.ts)
   // 오래된(오프라인·만료) 해변들의 가장 이른 확인 시각. null = 오래된 해변 없음(lib/status-count.ts)
