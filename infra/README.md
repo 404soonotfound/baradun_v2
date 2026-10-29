@@ -113,15 +113,15 @@ await fetch("/api/inquiries", {
 
 사진은 다음 순서로 보냅니다.
 
-1. `POST /api/inquiries/uploads`에 `photos` 배열을 보내 presigned POST 양식을 받습니다. JPEG·PNG·WebP, 최대 3장, 파일당 5MiB입니다.
-2. 응답의 `url`과 `fields`를 그대로 `multipart/form-data` POST(`method: "POST"`)에 넣고 마지막에 사진 파일을 붙입니다. S3 정책의 `content-length-range`가 파일당 5MiB를 강제합니다.
+1. `POST /api/inquiries/uploads`에 `photos` 배열을 보내 presigned POST 양식을 받습니다. JPEG·PNG·WebP, 최대 3장, 파일당 4MiB입니다(결정 기록 12장 결정 23. 웹은 기기에서 긴 변 2048px·JPEG 품질 약 0.82로 줄여 4MiB 안에 맞춤).
+2. 응답의 `url`과 `fields`를 그대로 `multipart/form-data` POST(`method: "POST"`)에 넣고 마지막에 사진 파일을 붙입니다. S3 정책의 `content-length-range`가 파일당 4MiB를 강제하고, 문의 접수 때 Lambda가 객체 크기를 다시 확인합니다.
 3. 업로드 응답의 `photoId`와 `key`를 `POST /api/inquiries`의 `photos`에 넣습니다.
 
 ### 멱등 키(BRD-103)
 
 `POST /api/inquiries` 본문에는 `idempotencyKey`(UUID v4, 소문자)가 꼭 있어야 합니다. 헤더가 아니라 본문에 두는 이유는 본문 SHA-256(`x-amz-content-sha256`) 검사에 키도 함께 묶이고, CloudFront 오리진 요청 정책·OAC 서명 헤더를 바꾸지 않아도 되기 때문입니다.
 
-- 웹은 문의 한 건에 키 하나를 만들고, 같은 내용(유형·본문·이메일·사진 내용)으로 다시 보내면 같은 키와 이미 올린 사진 참조를 그대로 씁니다. 내용이 바뀌거나 접수되면 새 키를 씁니다. 키는 화면 메모리에만 두고 기기에 저장하지 않습니다.
+- 웹은 문의 한 건에 키 하나를 만들고, 같은 내용(유형·본문·이메일·해변·활동·사진 내용)으로 다시 보내면 같은 키와 이미 올린 사진 참조를 그대로 씁니다. 내용이 바뀌거나 접수되면 새 키를 씁니다. 키는 화면 메모리에만 두고 기기에 저장하지 않습니다.
 - Lambda는 먼저 `IDEMPOTENCY#<키>` 항목을 강한 일관성으로 읽습니다. 있으면 내용 지문(멱등 키를 뺀 요청 값의 SHA-256)을 비교해, 같으면 첫 응답(같은 `inquiryId`·`receivedAt`·사진 결과)을 201로 다시 주고 다르면 `409 idempotency_conflict`로 거부합니다. 이때는 속도 제한을 세지 않고 문의·알림을 새로 만들지 않습니다.
 - 없으면 속도 제한을 한 번 센 뒤 사진을 검사하고, 멱등 항목(`attribute_not_exists(pk)` 조건)·문의·이메일을 한 트랜잭션으로 씁니다. 같은 키 요청이 동시에 와서 조건에 지면 이긴 쪽 기록을 읽어 같은 응답을 주고 알림은 보내지 않습니다. 동시 요청은 둘 다 속도 제한에 한 번씩 셉니다.
 - 멱등 항목에는 내용 지문·문의 ID·접수 시각·사진 결과만 두고 본문·이메일 원문은 넣지 않습니다. TTL은 1일입니다.
@@ -132,7 +132,7 @@ await fetch("/api/inquiries", {
 
 양식 `url`은 서울 리전 버킷의 가상 호스트 주소 `https://<버킷>.s3.ap-northeast-2.amazonaws.com/`만 허용하고, `fields`는 `key`·`bucket`·`Content-Type`·`Policy`·`X-Amz-Algorithm`·`X-Amz-Credential`·`X-Amz-Date`·`X-Amz-Signature`(·`X-Amz-Security-Token`)만 허용합니다(계약 `InquiryUploadTarget`·`InquiryUploadFields`). Lambda는 내보내기 전에 계약으로 다시 검사하고, 맞지 않으면 503으로 끝냅니다.
 
-웹은 사진을 올리기 전에 양식마다 다음을 모두 확인하고, 하나라도 틀리면 사진을 하나도 올리지 않고 문의도 보내지 않습니다(화면은 기존 '접수됐는지 확인하지 못했어요' 안내).
+웹은 사진을 올리기 전에 양식마다 다음을 모두 확인하고, 하나라도 틀리면 사진을 하나도 올리지 않고 문의도 보내지 않습니다(화면은 '서버 응답을 확인하지 못했어요'와 '문의는 접수되지 않았어요'를 함께 안내).
 
 - 주소가 빌드 설정의 버킷 주소와 글자까지 같음(https, 다른 호스트·포트·경로·질의 거부). 아무 `*.amazonaws.com`이나 받지 않습니다.
 - `method`가 `POST`.
@@ -147,7 +147,9 @@ await fetch("/api/inquiries", {
 2. 최신 `origin/main` 작업 트리에서 `npx cdk deploy`(맨 위 배포 절차) → 출력 `InquiryPhotoBucketName`을 GitHub Variables `INQUIRY_PHOTO_BUCKET`에 넣습니다.
 3. 사이트 배포를 승인합니다. 2와 3 사이에 열려 있던 이전 화면의 문의는 거부되므로 바로 이어서 합니다.
 
-요청·응답 타입은 `@baradun/contracts`의 `InquiryUploadRequest`, `InquiryUploadResponse`, `CreateInquiryRequest`, `CreateInquiryResponse`, `InquiryErrorResponse`입니다. 문의 유형은 `data_error`·`data_question`·`other`입니다. 사진에 EXIF GPS IFD가 있거나 파일이 깨졌으면 그 사진만 `rejected`로 돌아오며 문의 자체는 접수됩니다. 사진은 공개 URL 없이 비공개 버킷에 두고 30일 수명 주기로 삭제합니다.
+문의 유형 4개·`beachId`·`activity` 칸·사진 4MiB(결정 기록 12장 결정 21~23)를 처음 배포할 때도 같은 순서를 지킵니다. 새 Lambda는 이전 화면의 `other` 유형과 4MiB를 넘는 사진 양식 요청을 400으로 거부하고, 이전 Lambda는 새 유형과 `beachId`·`activity` 칸을 400으로 거부합니다.
+
+요청·응답 타입은 `@baradun/contracts`의 `InquiryUploadRequest`, `InquiryUploadResponse`, `CreateInquiryRequest`, `CreateInquiryResponse`, `InquiryErrorResponse`입니다. 문의 유형은 화면 칩과 1:1로 `data_error`(정보가 실제와 달라요)·`data_question`(판단 기준이 궁금해요)·`beach_request`(해변을 추가해 주세요)·`data_suggestion`(새 데이터를 제안해요)입니다(결정 기록 12장 결정 21). 장소 상세에서 들어온 문의는 본문에 섞지 않고 `beachId`(예: `b0001`)와 `activity`(`swimming`·`surfing`·`scuba`) 칸으로 보내며, `activity`는 `beachId` 없이 오지 않습니다(결정 22). 둘 다 문의 항목과 메일 알림에 따로 들어갑니다. 사진에 EXIF GPS IFD가 있거나 파일이 깨졌으면 그 사진만 `rejected`로 돌아오며 문의 자체는 접수됩니다. 사진은 공개 URL 없이 비공개 버킷에 두고 30일 수명 주기로 삭제합니다.
 
 문의 본문 항목은 접수 뒤 90일, 이메일은 별도 항목으로 88일 TTL을 둡니다. 처리가 끝난 이메일은 문의 Lambda를 함수 URL이 아닌 직접 호출로 아래 이벤트를 보내 즉시 삭제합니다. DynamoDB TTL 삭제는 비동기이므로 88일 값으로 90일 이내 삭제 여유를 둡니다.
 
