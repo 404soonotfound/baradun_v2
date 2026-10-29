@@ -14,6 +14,7 @@ import { isDelayedView, shownDataTime } from "@/lib/situation";
 import { useSnapshot } from "@/lib/snapshot/use-snapshot";
 import { deriveBeachView } from "@/lib/snapshot/view";
 import { updateStatus } from "@/lib/update-status";
+import { useDesktop } from "@/lib/use-desktop";
 import { useOnline } from "@/lib/use-online";
 import { localizedPath } from "@/lib/i18n";
 import { TABS, isTabActive } from "@/lib/nav";
@@ -44,6 +45,7 @@ export function TopNav({ beachIds }: { beachIds: readonly string[] }) {
   const searchHref = localizedPath(locale, "/search/");
   const snapshot = useSnapshot();
   const online = useOnline();
+  const desktop = useDesktop();
   // 업데이트 상태 알약(lib/update-status.ts). 관측 지연은 게시된 사유 그대로 셈(분류 재계산 없음)
   const status = updateStatus({
     time: shownDataTime(snapshot.manifest?.generatedAt, snapshot.nowMs),
@@ -148,7 +150,8 @@ export function TopNav({ beachIds }: { beachIds: readonly string[] }) {
             </kbd>
           </Link>
         </div>
-        {status.kind !== "hidden" && (
+        {/* 상단 내비는 모바일에서 CSS로만 숨겨져 있어, 숨은 글자가 화면 읽기·검색에 잡히지 않게 PC일 때만 그림 */}
+        {desktop && status.kind !== "hidden" && (
           <p className="flex h-10 shrink-0 items-center gap-1.5 rounded-full border border-border-default px-[15px] text-body-s font-bold text-text-default">
             {/* 점은 관측 지연이 있을 때만(색만으로 알리지 않고 글자도 함께) */}
             {status.kind === "live" && status.delayed > 0 && (
