@@ -15,6 +15,7 @@ import { useId, useState, type ReactNode } from "react";
 import type { Beach, WarningItem } from "@baradun/contracts";
 import { shownMetric } from "@/components/detail/sea-card";
 import { ReasonBadge } from "@/components/reason-badge";
+import { KmaSourceNote } from "@/components/source-note";
 import { Skeleton } from "@/components/ui/skeleton";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { ZoneName } from "@/components/zone-name";
@@ -57,6 +58,7 @@ export function VerdictCard({
   detail,
   stations,
   nowMs,
+  kmaSource,
   onOpenWarning,
   children,
 }: {
@@ -65,6 +67,8 @@ export function VerdictCard({
   detail: DetailInfo;
   stations: Beach["stations"];
   nowMs: number;
+  // 배지(특보·관측을 가공한 분류) 아래 기상청 출처 줄을 둘지(BRD-113, showsKmaSource)
+  kmaSource: boolean;
   // 사유 상자의 특보 항목에서 특보 상세 시트(WARN, BRD-33) 열기
   onOpenWarning?: (item: WarningItem) => void;
   // ⑥ 아래에 덧붙일 것(BRD-33의 '자세히' 등)
@@ -301,10 +305,11 @@ export function VerdictCard({
 
       {children}
 
-      {/* ⑥ 현장 우선 문구 */}
-      <p className="border-t border-border-default pt-3 text-caption text-text-muted">
-        {t("safety.finalCall")}
-      </p>
+      {/* ⑥ 현장 우선 문구. 그 아래에 기상청 출처(다른 화면과 같은 자리 규칙, BRD-113 · 기상법) */}
+      <div className="flex flex-col gap-0.5 border-t border-border-default pt-3 text-caption text-text-muted">
+        <p>{t("safety.finalCall")}</p>
+        {kmaSource && <KmaSourceNote variant="status" />}
+      </div>
     </section>
   );
 }
