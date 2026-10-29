@@ -6,7 +6,6 @@ import { useTranslations } from "next-intl";
 import { useState } from "react";
 
 import { ReasonBadge } from "@/components/reason-badge";
-import { KmaSourceNote } from "@/components/source-note";
 import { Sheet } from "@/components/ui/sheet";
 import { ZoneName } from "@/components/zone-name";
 import { kstStamp } from "@/lib/snapshot/clock";
@@ -121,8 +120,9 @@ export function WarningSheet({
           </a>
           <div className="flex flex-col gap-0.5 border-t border-border-default pt-3 text-caption text-text-muted">
             <p>{t("safety.finalCall")}</p>
-            {/* 시트가 화면을 덮으므로 시트 안에도 기상청 출처(BRD-113 · 기상법) */}
-            {sourceShown && <KmaSourceNote variant="plain" />}
+            {/* 시트가 화면을 덮으므로 시트 안에도 출처(BRD-113 · 기상법). 확인 줄과 같은 실제 기관(agencyText:
+                기상청 → '출처: 기상청', 모르는 기관은 원문 그대로). 기관을 모르면(null) 지어내지 않고 두지 않음 */}
+            {sourceShown && agency && <p>{t("source.agency", { agency })}</p>}
           </div>
         </div>
       )}
