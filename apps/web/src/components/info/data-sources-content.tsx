@@ -68,7 +68,8 @@ const SOURCES: Source[] = [
   },
 ];
 
-const PRINCIPLES = ["item1", "item2", "item3", "item4"] as const;
+// item5: 영어 지원 범위와 한국어로 남는 고유명 안내(결정 39)
+const PRINCIPLES = ["item1", "item2", "item3", "item4", "item5"] as const;
 
 export async function DataSourcesContent({ locale }: { locale: Locale }) {
   const t = await getTranslations({ locale, namespace: "dataSources" });

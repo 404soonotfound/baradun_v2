@@ -675,7 +675,8 @@
       "item1": "Measured values come with the station name, distance and measurement time; warnings come with scope, KMA and check time.",
       "item2": "Units are m, °C and m/s in every language.",
       "item3": "We don't change official values or make new ones. If a value is missing or late, we say so.",
-      "item4": "When development sample data is shown, it's marked as a sample on screen."
+      "item4": "When development sample data is shown, it's marked as a sample on screen.",
+      "item5": "Screens and guidance are available in Korean and English. Names without an official English name (for example, warning areas with no KMA English name) may stay in the original Korean on English screens."
     },
     "provides": "Provides",
     "terms": "Terms of use",
