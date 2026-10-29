@@ -23,12 +23,23 @@ Node.js 버전은 [.nvmrc](.nvmrc)를 따릅니다(npm 포함). 루트에서 실
 
 ```bash
 npm install
-npm run dev        # 개발 서버 (apps/web)
+npm run dev        # 개발 서버 (apps/web), 계약 예시 더미 데이터를 만들고 20분마다 갱신
+npm run live       # 개발 서버 + 운영 snapshot 읽기 전용 미러 (BARADUN_DEV_DATA_ORIGIN 필요)
 npm run build      # 전체 빌드
 npm run lint
 npm run typecheck
 npm run test       # 워크스페이스 전체 + 해변 생성기 테스트
 ```
+
+개발 데이터 모드(`apps/web/public/data`, 저장소에 넣지 않음):
+
+| 명령 | 데이터 |
+|---|---|
+| `npm run dev` | 계약 예시 더미(화면에 '개발용 예시' 안내) |
+| `BARADUN_DEV_DATA_ORIGIN=https://<운영 CloudFront> npm run live` | 운영 snapshot을 1분마다 확인해 새 버전만 받음. 공개 정적 파일만 읽고 인증·비밀값을 보내지 않음. 받아오기 실패는 게시하지 않음 |
+| `npm run dev:no-data -w @baradun/web` | 데이터 없음 |
+
+모드를 바꾸면 이전 모드의 데이터는 지우고 시작합니다. 배포 빌드는 `public/data`가 있으면 멈춥니다(`--check`).
 
 워크스페이스별 명령은 `-w`로 실행합니다. 예:
 
