@@ -6,6 +6,7 @@ import {
   inRegion,
   NATIONWIDE,
   parseRegionChoice,
+  pickedRegion,
   regionChips,
   regionGroups,
   regionName,
@@ -13,6 +14,7 @@ import {
   scopeBeaches,
   validRegion,
 } from "@/lib/region-list";
+import { filterBeaches } from "@/lib/explore";
 import type { BeachView } from "@/lib/snapshot/view";
 import { countByStatus } from "@/lib/status-count";
 
@@ -282,6 +284,32 @@ describe("savedScope (설정 기본 지역, 10/29 결정)", () => {
     expect(savedScope(null, beaches)).toEqual(
       homeScope(null, beaches, "denied"),
     );
+    expect(homeScope(null, beaches, "ready")).toEqual({ kind: "nearby" });
+  });
+});
+
+describe("탐색 '전국' = 전국을 고름 (10/29 결정 B)", () => {
+  it("탐색은 고른 전국을 지역 거르기 없음(전국)으로 읽음", () => {
+    expect(pickedRegion(NATIONWIDE)).toBeNull();
+    expect(pickedRegion(null)).toBeNull();
+    expect(pickedRegion({ sido: "강원", sigungu: null })).toEqual({
+      sido: "강원",
+      sigungu: null,
+    });
+    expect(
+      filterBeaches(beaches, "swimming", pickedRegion(NATIONWIDE)),
+    ).toHaveLength(beaches.length);
+  });
+
+  it("탐색에서 전국을 고르면 위치 허용·거부와 관계없이 홈도 전국", () => {
+    for (const status of ["ready", "denied"] as const)
+      expect(homeScope(NATIONWIDE, beaches, status)).toEqual({
+        kind: "nationwide",
+        chosen: true,
+      });
+  });
+
+  it("시트 '내 주변'은 저장값을 지워(null) 위치가 있으면 가까운 바다", () => {
     expect(homeScope(null, beaches, "ready")).toEqual({ kind: "nearby" });
   });
 });
