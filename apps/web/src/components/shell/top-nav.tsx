@@ -150,9 +150,10 @@ export function TopNav({ beachIds }: { beachIds: readonly string[] }) {
             </kbd>
           </Link>
         </div>
-        {/* 상단 내비는 모바일에서 CSS로만 숨겨져 있어, 숨은 글자가 화면 읽기·검색에 잡히지 않게 PC일 때만 그림 */}
+        {/* 상단 내비는 모바일에서 CSS로만 숨겨져 있어, 숨은 글자가 화면 읽기·검색에 잡히지 않게 PC일 때만 그림.
+            좁은 PC(1280 미만)는 검색칸 자리가 모자라 숨김(업데이트 시각은 홈 히어로 요약 줄에도 있음) */}
         {desktop && status.kind !== "hidden" && (
-          <p className="flex h-10 shrink-0 items-center gap-1.5 rounded-full border border-border-default px-[15px] text-body-s font-bold text-text-default">
+          <p className="hidden h-10 shrink-0 items-center gap-1.5 rounded-full border border-border-default px-[15px] text-body-s font-bold text-text-default xl:flex">
             {/* 점은 관측 지연이 있을 때만(색만으로 알리지 않고 글자도 함께) */}
             {status.kind === "live" && status.delayed > 0 && (
               <span
