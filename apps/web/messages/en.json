@@ -771,7 +771,8 @@
       "submit": "Send",
       "sending": "Sending…",
       "clear": "Clear",
-      "cleared": "Cleared what you were writing"
+      "cleared": "Cleared what you were writing",
+      "retry": "Send again"
     },
     "progress": {
       "photos": "Uploading photo {done}/{total}",
@@ -785,17 +786,30 @@
       "rejectedOther": "{count, plural, one {# photo couldn't be checked and wasn't} other {# photos couldn't be checked and weren't}} accepted.",
       "draftCleared": "The type and message kept on this device have been deleted.",
       "another": "Write another",
-      "back": "Back to Settings"
+      "back": "Back to Settings",
+      "rejectedNext": "If you need a photo that wasn't accepted, choose a different photo and send it as new feedback."
     },
     "failed": {
       "title": "Couldn't send your feedback",
-      "offline": "You're not connected to the internet, so it wasn't sent. Check your connection and send again.",
-      "network": "There was no response, so it wasn't sent. Please try again in a moment.",
-      "rateLimited": "We're receiving a lot of feedback right now, so it wasn't accepted. Please try again in a few minutes.",
-      "unavailable": "We can't receive feedback right now. Please try again in a moment.",
-      "rejected": "What was sent couldn't be accepted. Check your message and send again.",
-      "invalidResponse": "We couldn't confirm it was received. Please try again in a moment.",
-      "kept": "The type and message are kept on this device (up to 7 days). Please add your email and photos again."
+      "offline": "You're not connected to the internet.",
+      "network": "There was no response from the server.",
+      "rateLimited": "We're receiving a lot of feedback right now, so it wasn't accepted.",
+      "unavailable": "The server couldn't process the request.",
+      "rejected": "What was sent couldn't be accepted.",
+      "invalidResponse": "We couldn't read the server's response.",
+      "kept": "Your message, email and photos are still on this screen.",
+      "titleUnknown": "We couldn't confirm it was received",
+      "stopPhotos": "Stopped after uploading {uploaded} of {total} photos. Your feedback wasn't received.",
+      "stopMessage": "Your feedback wasn't received.",
+      "stopMessageAfterPhotos": "{count, plural, one {# photo was} other {# photos were}} uploaded, but your feedback wasn't received.",
+      "stopUnknown": "Your feedback may already have been received.",
+      "next": {
+        "offline": "Check your connection, then select 'Send again'.",
+        "rateLimited": "Select 'Send again' in a few minutes.",
+        "rejected": "Check your message, then select 'Send again'.",
+        "later": "Select 'Send again' in a moment.",
+        "unknown": "If you select 'Send again' without changes, it won't be received twice."
+      }
     }
   },
   "languageNotice": {
