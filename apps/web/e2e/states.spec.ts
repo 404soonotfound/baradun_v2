@@ -149,13 +149,25 @@ test.describe("확인된 판단 없음", () => {
       await expect(clearBadges(page)).toHaveCount(0);
     }
     await expectNoA11yViolations(page);
-    // 영어도 받기 실패·장애를 단정하지 않음
-    await page.goto("/en/");
-    await expect(
-      page
-        .getByText("No confirmed status information is available right now")
-        .first(),
-    ).toBeVisible();
+    // 영어도 받기 실패·장애를 단정하지 않고, 'No warnings' 배지가 섞이지 않음
+    for (const url of [
+      "/en/",
+      "/en/explore/",
+      `/en/spots/${slugOf(CLEAR_ID)}/`,
+    ]) {
+      await page.goto(url);
+      await expect(
+        page
+          .getByText("No confirmed status information is available right now")
+          .first(),
+      ).toBeVisible();
+      await expect(
+        page
+          .getByText("No warnings", { exact: true })
+          .filter({ visible: true }),
+      ).toHaveCount(0);
+    }
+    await expectNoA11yViolations(page);
   });
 });
 
