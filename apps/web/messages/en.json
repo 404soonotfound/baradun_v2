@@ -82,7 +82,9 @@
       "kma": "KMA",
       "khoa": "KHOA",
       "kto": "Korea Tourism Organization"
-    }
+    },
+    "agoShort": "{minutes} min ago",
+    "timeUnknown": "measurement time unknown"
   },
   "source": {
     "agency": "Source: {agency}",

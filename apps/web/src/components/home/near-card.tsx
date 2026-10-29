@@ -11,10 +11,14 @@ import type { BeachSummary } from "@/lib/beach-summary";
 import { localizedPath, type Locale } from "@/lib/i18n";
 import { cn } from "@/lib/cn";
 import { formatKm, joinMeta } from "@/lib/meta-join";
-import { cardMetric, type CardMetric } from "@/lib/near-metric";
+import {
+  cardMetric,
+  timeGroups,
+  type CardMetric,
+  type TimeGroup,
+} from "@/lib/near-metric";
 import { kstStamp } from "@/lib/snapshot/clock";
 import { useBadgeText } from "@/lib/snapshot/use-badge-text";
-import { useTimeText } from "@/lib/snapshot/use-time-text";
 import type { BeachView, MetricKey, MetricView } from "@/lib/snapshot/view";
 
 // 가까운 바다 카드 (노션 2장 HOME 7 · 3장 NearCard, Figma S_M01_01 171:379)
@@ -59,7 +63,6 @@ export function NearCard({
 }) {
   const t = useTranslations();
   const { confirmedUntilText } = useBadgeText();
-  const { measuredAgoText } = useTimeText();
 
   // [2] 거리: 2.1 → "2.1km". joinMeta가 null·빈 칸을 빼고 " · "로 이어 줌
   const km = distanceKm === null ? null : formatKm(distanceKm);
@@ -88,32 +91,74 @@ export function NearCard({
     // 파고 한 줄(#105 결정 1, Figma 171:499·181:874). 측정소 이름·거리는 상세에만
     // 모바일 "10분 전 측정 · 파고 0.6m", PC "지난 24시간 · 10분 전 측정"(그래프 아래)
     // 값이 없으면 지표 이름 + 이유(가까운 관측 없음 · 측정이 늦어지고 있어요 · 파고 값 없음, Codex P2와 같은 규칙)
+    // 카드에 보이는 다른 지표(모바일 수온·바람, PC 파주기·수온)의 관측 시각이 다르면 '수온 12분 전'처럼 덧붙임(Codex P1)
     const wave = cardMetric(
       view.metrics.waveHeight,
       beach.stations.waveHeight !== null,
     );
     const waveLabel = t("observation.metric.waveHeight");
-    const waveLine =
-      wave.kind === "value"
-        ? variant === "wide"
-          ? joinMeta([
-              t("home.near.last24h"),
-              measuredAgoText(wave.observedAt, nowMs),
-            ])
-          : joinMeta([
-              measuredAgoText(wave.observedAt, nowMs),
-              `${waveLabel} ${wave.value}${wave.unit}`,
-            ])
-        : wave.kind === "none"
+    const shownKeys: readonly MetricKey[] =
+      variant === "wide" ? ["waveHeight", ...WIDE_OTHERS] : CARD_METRICS;
+    const groups = timeGroups(
+      shownKeys.flatMap((key) => {
+        const metric = cardMetric(
+          view.metrics[key],
+          beach.stations[key] !== null,
+        );
+        return metric.kind === "value"
+          ? [{ key, observedAt: metric.observedAt }]
+          : [];
+      }),
+      nowMs,
+    );
+    const labels = (group: TimeGroup) =>
+      group.keys.map((key) => t(`observation.metric.${key}`)).join("·");
+    const fullAgo = (group: TimeGroup) =>
+      group.minutes === null
+        ? t("observation.timeUnknown")
+        : t("observation.measuredAgo", { minutes: group.minutes });
+    const shortAgo = (group: TimeGroup) =>
+      `${labels(group)} ${
+        group.minutes === null
+          ? t("observation.timeUnknown")
+          : t("observation.agoShort", { minutes: group.minutes })
+      }`;
+    const [lead, ...rest] = groups;
+    if (wave.kind === "value" && lead) {
+      // 첫 묶음에 파고가 있음(파고가 맨 앞). 다른 시각의 지표만 짧게 덧붙임
+      notes.push(
+        joinMeta(
+          variant === "wide"
+            ? [t("home.near.last24h"), fullAgo(lead), ...rest.map(shortAgo)]
+            : [
+                fullAgo(lead),
+                `${waveLabel} ${wave.value}${wave.unit}`,
+                ...rest.map(shortAgo),
+              ],
+        ) ?? "",
+      );
+    } else {
+      const waveLine =
+        wave.kind === "none"
           ? joinMeta([waveLabel, t("observation.none")])
           : wave.kind === "delayed"
             ? joinMeta([waveLabel, t("observation.delayed")])
             : wave.kind === "missing"
               ? t("row.noValue")
               : null;
-    // PC는 큰 파고 자리에 이미 '파고 · 가까운 관측 없음'이 있어 같은 말을 되풀이하지 않음
-    if (waveLine && !(variant === "wide" && wave.kind === "none"))
-      notes.push(waveLine);
+      // PC는 큰 파고 자리에 이미 '파고 · 가까운 관측 없음'이 있어 같은 말을 되풀이하지 않음
+      if (waveLine && !(variant === "wide" && wave.kind === "none"))
+        notes.push(waveLine);
+      // 파고 값이 없어도 보이는 다른 지표의 관측 시각: "수온·바람 20분 전 측정"
+      if (lead) {
+        notes.push(
+          joinMeta([
+            `${labels(lead)} ${fullAgo(lead)}`,
+            ...rest.map(shortAgo),
+          ]) ?? "",
+        );
+      }
+    }
   }
   // 현장 우선 문구: 모바일은 카드마다, PC는 카드 4장 위 묶음 제목 줄에 한 번(Figma 181:849)
   if (variant === "compact") notes.push(t("safety.finalCall"));

@@ -82,7 +82,9 @@
       "kma": "기상청",
       "khoa": "국립해양조사원",
       "kto": "한국관광공사"
-    }
+    },
+    "agoShort": "{minutes}분 전",
+    "timeUnknown": "측정 시각 모름"
   },
   "source": {
     "agency": "출처: {agency}",
