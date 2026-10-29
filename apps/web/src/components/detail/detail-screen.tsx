@@ -246,6 +246,7 @@ export function DetailScreen({
         detail={detail}
         stations={beach.stations}
         nowMs={snapshot.nowMs}
+        kmaData={snapshot.statuses !== null}
       />
       <WarningSheet
         open={warningSheet.open}

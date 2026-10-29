@@ -29,6 +29,7 @@ export function DetailSheet({
   detail,
   stations,
   nowMs,
+  kmaData,
 }: {
   open: boolean;
   onClose: () => void;
@@ -36,6 +37,7 @@ export function DetailSheet({
   detail: DetailInfo;
   stations: Beach["stations"];
   nowMs: number;
+  kmaData: boolean; // 받은(또는 기기에 저장된) 상태가 있음 → 기상청 출처 줄
 }) {
   const t = useTranslations();
   const { confirmedUntilText } = useBadgeText();
@@ -165,8 +167,8 @@ export function DetailSheet({
         </section>
         <div className="flex flex-col gap-0.5 border-t border-border-default pt-3 text-caption text-text-muted">
           <p>{t("safety.finalCall")}</p>
-          {/* 시트가 화면을 덮으므로 시트 안에도 기상청 출처(BRD-113 · 기상법) */}
-          <KmaSourceNote variant="status" />
+          {/* 시트가 화면을 덮으므로 시트 안에도 기상청 출처(BRD-113 · 기상법). 받은 자료가 없으면 두지 않음 */}
+          {kmaData && <KmaSourceNote variant="status" />}
         </div>
       </div>
     </Sheet>
