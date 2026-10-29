@@ -80,7 +80,8 @@
     "observedAt": "Measured {time}",
     "agency": {
       "kma": "KMA",
-      "khoa": "KHOA"
+      "khoa": "KHOA",
+      "kto": "Korea Tourism Organization"
     }
   },
   "source": {
@@ -286,9 +287,6 @@
     "creditWithTitle": "Photo: <link>{source}</link>, “{title}” · {license}",
     "license": {
       "kogl-type1": "KOGL Type 1"
-    },
-    "sourceName": {
-      "kto": "Korea Tourism Organization"
     },
     "reference": "Reference photo · not the sea right now",
     "none": "No photo, so we're showing an illustration"

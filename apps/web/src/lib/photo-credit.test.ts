@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { photoSourceUrl, TOUR_API_URL } from "./photo-credit";
+import { SOURCE_URL } from "./agencies";
+import { photoSourceUrl } from "./photo-credit";
 
 // 해변 사진 출처 링크 (BRD-113 · 공공누리 제1유형: 링크가 가능하면 출처 링크)
 describe("photoSourceUrl", () => {
@@ -14,8 +15,8 @@ describe("photoSourceUrl", () => {
   });
 
   it("원본 페이지가 없는 한국관광공사 사진은 TourAPI 안내 주소", () => {
-    expect(photoSourceUrl({ source: "한국관광공사" })).toBe(TOUR_API_URL);
-    expect(TOUR_API_URL).toBe(
+    expect(photoSourceUrl({ source: "한국관광공사" })).toBe(SOURCE_URL.tourApi);
+    expect(SOURCE_URL.tourApi).toBe(
       "https://www.data.go.kr/data/15101578/openapi.do",
     );
   });
