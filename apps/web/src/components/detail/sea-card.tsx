@@ -92,10 +92,12 @@ export function SeaCard({
   view,
   stations,
   nowMs,
+  kmaSource,
 }: {
   view: BeachView;
   stations: Beach["stations"];
   nowMs: number;
+  kmaSource: boolean; // 24시간 파고 캡션에 기상청 출처를 붙일 실제 자료인지(showsKmaSource)
 }) {
   const t = useTranslations("detail.sea");
   const titleId = useId();
@@ -165,6 +167,7 @@ export function SeaCard({
             : null
         }
         nowMs={nowMs}
+        sourceShown={kmaSource}
       />
     </section>
   );

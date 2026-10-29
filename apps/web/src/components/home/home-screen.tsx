@@ -25,6 +25,7 @@ import { useActivity } from "@/lib/activity";
 import type { BeachSummary, RegionPart } from "@/lib/beach-summary";
 import { useRecent } from "@/lib/favorites";
 import { distanceKm, sortByDistance } from "@/lib/geo";
+import { showsKmaSource } from "@/lib/kma-source";
 import { localizedPath, type Locale } from "@/lib/i18n";
 import {
   locationBlocked,
@@ -187,6 +188,7 @@ export function HomeScreen({
 
   // 상단 지역 버튼 글자: 고른 지역 → 그 이름, 안 골랐으면 활동과 상관없이 가장 가까운 해변의 지역
   const regionLabel = name ?? sorted[0]?.region ?? null;
+  const kmaSource = showsKmaSource(snapshot, sampleSnapshot);
   const regionNearby = name === null && sorted.length > 0;
 
   return (
@@ -297,15 +299,15 @@ export function HomeScreen({
 
       {/* 해상 특보 · 안내. PC는 3단의 왼쪽·오른쪽 */}
       <div className="lg:order-2">
-        <NationwideWarnings />
+        <NationwideWarnings kmaSource={kmaSource} />
       </div>
       <div className="lg:order-4">
         <GuideLink locale={locale} />
       </div>
 
       {/* 기상청 출처(BRD-113 · 기상법). 카드·개수·해상 특보가 기상청 자료로 만든 것이라 홈 맨 아래 한 줄
-          받은(또는 기기에 저장된) 상태가 있을 때만. 불러오는 중·처음부터 못 받음은 기상청 자료가 화면에 없어 숨김 */}
-      {snapshot.statuses !== null && (
+          받은 실제 상태가 있을 때만(불러오는 중·처음부터 못 받음·개발용 예시는 숨김, showsKmaSource) */}
+      {kmaSource && (
         <KmaSourceNote variant="status" className="lg:order-5 lg:col-span-3" />
       )}
 

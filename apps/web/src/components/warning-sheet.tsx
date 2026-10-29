@@ -33,6 +33,7 @@ export function WarningSheet({
   confirmedAt,
   stale,
   nowMs,
+  sourceShown,
 }: {
   open: boolean;
   onClose: () => void;
@@ -42,6 +43,7 @@ export function WarningSheet({
   confirmedAt: string | null; // 특보 마지막 확인 시각
   stale: boolean; // 새 정보를 못 받는 중(B5) → 'HH:MM 확인 · 이후 확인 못 함'
   nowMs: number;
+  sourceShown: boolean; // 출처 줄을 둘 실제 자료인지(개발용 예시면 false, showsKmaSource)
 }) {
   const t = useTranslations();
   const { badgeText, confirmedUntilText } = useBadgeText();
@@ -120,7 +122,7 @@ export function WarningSheet({
           <div className="flex flex-col gap-0.5 border-t border-border-default pt-3 text-caption text-text-muted">
             <p>{t("safety.finalCall")}</p>
             {/* 시트가 화면을 덮으므로 시트 안에도 기상청 출처(BRD-113 · 기상법) */}
-            <KmaSourceNote variant="plain" />
+            {sourceShown && <KmaSourceNote variant="plain" />}
           </div>
         </div>
       )}

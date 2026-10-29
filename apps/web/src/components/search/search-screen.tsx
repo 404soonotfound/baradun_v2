@@ -17,6 +17,7 @@ import { useActivity } from "@/lib/activity";
 import type { BeachSummary } from "@/lib/beach-summary";
 import { filterBeaches } from "@/lib/explore";
 import { localizedPath, type Locale } from "@/lib/i18n";
+import { showsKmaSource } from "@/lib/kma-source";
 import { joinMeta } from "@/lib/meta-join";
 import {
   clearRecentSearches,
@@ -255,8 +256,10 @@ export function SearchScreen({
               {t("safety.finalCall")}
             </p>
           )}
-          {/* 결과 줄의 배지·파고가 기상청 자료(BRD-113 · 기상법). 받은(또는 기기에 저장된) 상태가 있을 때만 */}
-          {snapshot.statuses !== null && <KmaSourceNote variant="status" />}
+          {/* 결과 줄의 배지·파고가 기상청 자료(BRD-113 · 기상법). 받은 실제 상태가 있을 때만(개발용 예시 제외) */}
+          {showsKmaSource(snapshot, sampleSnapshot) && (
+            <KmaSourceNote variant="status" />
+          )}
         </section>
       )}
     </div>
