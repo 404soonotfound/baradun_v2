@@ -10,6 +10,11 @@ import { LogoMark } from "@/components/logo-mark";
 import { SettingsIcon } from "@/components/settings-icon";
 import { cn } from "@/lib/cn";
 import { useFavorites } from "@/lib/favorites";
+import { isDelayedView, shownDataTime } from "@/lib/situation";
+import { useSnapshot } from "@/lib/snapshot/use-snapshot";
+import { deriveBeachView } from "@/lib/snapshot/view";
+import { updateStatus } from "@/lib/update-status";
+import { useOnline } from "@/lib/use-online";
 import { localizedPath } from "@/lib/i18n";
 import { TABS, isTabActive } from "@/lib/nav";
 import { useTabNavigation } from "@/lib/use-tab-navigation";
@@ -27,7 +32,8 @@ function typingTarget(target: EventTarget | null): boolean {
       ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))
   );
 }
-export function TopNav() {
+// Vue: props: { beachIds } — 노출 중인 해변 id(관측 지연 수를 셀 범위)
+export function TopNav({ beachIds }: { beachIds: readonly string[] }) {
   const t = useTranslations("nav");
   const tMeta = useTranslations("meta");
   const { pathname, locale, current, hrefFor, onTabClick } = useTabNavigation();
@@ -36,6 +42,17 @@ export function TopNav() {
   const favorites = useFavorites().length;
   const router = useRouter();
   const searchHref = localizedPath(locale, "/search/");
+  const snapshot = useSnapshot();
+  const online = useOnline();
+  // 업데이트 상태 알약(lib/update-status.ts). 관측 지연은 게시된 사유 그대로 셈(분류 재계산 없음)
+  const status = updateStatus({
+    time: shownDataTime(snapshot.manifest?.generatedAt, snapshot.nowMs),
+    online,
+    live: snapshot.live,
+    delayed: beachIds.filter((id) =>
+      isDelayedView(deriveBeachView({ id, hidden: false }, snapshot)),
+    ).length,
+  });
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
@@ -110,14 +127,14 @@ export function TopNav() {
           </ul>
         </nav>
 
-        <div className="flex flex-1 justify-center">
+        <div className="flex min-w-0 flex-1 justify-center">
           <Link
             href={searchHref}
             aria-current={searchActive ? "page" : undefined}
             aria-keyshortcuts="/"
             aria-label={t("search")}
             className={cn(
-              "flex h-[42px] w-[340px] items-center gap-2 rounded-input border bg-bg-subtle px-3 text-body text-text-muted",
+              "flex h-[42px] w-full max-w-[340px] min-w-0 items-center gap-2 rounded-input border bg-bg-subtle px-3 text-body text-text-muted",
               searchActive ? "border-brand-default" : "border-transparent",
             )}
           >
@@ -131,6 +148,32 @@ export function TopNav() {
             </kbd>
           </Link>
         </div>
+        {status.kind !== "hidden" && (
+          <p className="flex h-10 shrink-0 items-center gap-1.5 rounded-full border border-border-default px-[15px] text-body-s font-bold text-text-default">
+            {/* 점은 관측 지연이 있을 때만(색만으로 알리지 않고 글자도 함께) */}
+            {status.kind === "live" && status.delayed > 0 && (
+              <span
+                aria-hidden="true"
+                className="size-2 rounded-full bg-status-stale-border"
+              />
+            )}
+            {status.kind === "live" ? (
+              <>
+                {t("updated", { time: status.time })}
+                {status.delayed > 0 && (
+                  <span className="text-status-stale-fg">
+                    {" · "}
+                    {t("delayedCount", { count: status.delayed })}
+                  </span>
+                )}
+              </>
+            ) : (
+              <span className="font-normal text-text-muted">
+                {t("notLive", { time: status.time })}
+              </span>
+            )}
+          </p>
+        )}
         <div className="flex items-center">
           <Link
             href={hrefFor("settings")}

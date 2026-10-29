@@ -200,7 +200,10 @@
     "search": "Search beaches or regions",
     "back": "Back",
     "searchPlaceholder": "Beach or region name",
-    "favoritesSaved": "{count} saved"
+    "favoritesSaved": "{count} saved",
+    "updated": "Updated {time}",
+    "delayedCount": "Observation delayed · {count}",
+    "notLive": "Info from {time} · Can't check for updates"
   },
   "sheet": {
     "close": "Close"

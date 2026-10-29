@@ -200,7 +200,10 @@
     "search": "해변 이름이나 지역 검색",
     "back": "뒤로",
     "searchPlaceholder": "해변이나 지역 이름",
-    "favoritesSaved": "저장한 해변 {count}곳"
+    "favoritesSaved": "저장한 해변 {count}곳",
+    "updated": "{time} 업데이트",
+    "delayedCount": "관측 지연 {count}곳",
+    "notLive": "{time} 정보 · 새로 확인 못 함"
   },
   "sheet": {
     "close": "닫기"
