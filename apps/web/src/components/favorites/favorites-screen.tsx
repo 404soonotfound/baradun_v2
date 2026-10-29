@@ -23,6 +23,7 @@ import {
   useRecent,
 } from "@/lib/favorites";
 import { localizedPath, type Locale } from "@/lib/i18n";
+import { showsKmaSource } from "@/lib/kma-source";
 import { pickSituation, noConfirmedVerdict } from "@/lib/situation";
 import { kstStamp } from "@/lib/snapshot/clock";
 import { useRowText } from "@/lib/snapshot/use-row-text";
@@ -281,8 +282,10 @@ export function FavoritesScreen({
               </p>
             )}
             <p>{t("safety.finalCall")}</p>
-            {/* 기상청 출처(BRD-113 · 기상법). 받은(또는 기기에 저장된) 상태가 있을 때만 */}
-            {snapshot.statuses !== null && <KmaSourceNote variant="status" />}
+            {/* 기상청 출처(BRD-113 · 기상법). 받은 실제 상태가 있을 때만(개발용 예시 제외) */}
+            {showsKmaSource(snapshot, sampleSnapshot) && (
+              <KmaSourceNote variant="status" />
+            )}
           </div>
         </div>
       )}

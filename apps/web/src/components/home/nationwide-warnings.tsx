@@ -22,7 +22,11 @@ const NATIONWIDE_SOURCE = AGENCY.kma;
 // 해상 특보 (노션 2장 HOME 9 · 3장 NoticeList, Figma S_M01_01 '해상 특보')
 // '특보 없음'은 범위(전국 해상)·기관(기상청)·확인 시각이 모두 있고 45분 안일 때만(stale 아님)
 // 행을 누르면 특보 상세 시트(WARN, BRD-33). 시트는 열 때 고른 특보를 기억해 닫히는 동안에도 내용을 유지
-export function NationwideWarnings() {
+export function NationwideWarnings({
+  kmaSource,
+}: {
+  kmaSource: boolean; // 기상청 출처를 붙일 실제 자료인지(개발용 예시면 false, showsKmaSource)
+}) {
   const t = useTranslations("home.warnings");
   const tw = useTranslations("warning");
   const warnings = useNationwideWarnings();
@@ -139,6 +143,7 @@ export function NationwideWarnings() {
         confirmedAt={warnings.kind === "ready" ? warnings.confirmedAt : null}
         stale={warnings.kind !== "ready" || warnings.stale}
         nowMs={nowMs}
+        sourceShown={kmaSource}
       />
     </section>
   );

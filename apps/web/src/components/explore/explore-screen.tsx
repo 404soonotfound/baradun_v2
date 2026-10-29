@@ -43,6 +43,7 @@ import {
 } from "@/lib/explore-view";
 import { cn } from "@/lib/cn";
 import { localizedPath, type Locale } from "@/lib/i18n";
+import { showsKmaSource } from "@/lib/kma-source";
 import { locationBlocked, useUserLocation } from "@/lib/location";
 import { boundsOf } from "@/lib/map/bounds";
 import { formatKm, joinMeta } from "@/lib/meta-join";
@@ -286,9 +287,9 @@ export function ExploreScreen({
     ? clearScope(clearCheckedAt(readyViews))
     : null;
 
-  // 기상청 출처(BRD-113 · 기상법): 받은(또는 기기에 저장된) 상태가 있을 때 목록 아래·지도 아래에 한 줄.
-  // 불러오는 중·처음부터 못 받음은 기상청 자료가 화면에 없어 숨김. 결과 없음은 목록 자리째 빈 화면이라 붙지 않음
-  const hasKmaData = snapshot.statuses !== null;
+  // 기상청 출처(BRD-113 · 기상법): 받은 실제 상태가 있을 때 목록 아래·지도 아래에 한 줄.
+  // 불러오는 중·처음부터 못 받음·개발용 예시는 숨김(showsKmaSource). 결과 없음은 목록 자리째 빈 화면이라 붙지 않음
+  const hasKmaData = showsKmaSource(snapshot, sampleSnapshot);
 
   const countText = t("explore.count", { count: items.length });
   const secondLabel = coords ? t("explore.sort.near") : t("explore.sort.name");

@@ -217,6 +217,7 @@ function Gallery({
           confirmedAt={CLEAR.kind === "ready" ? CLEAR.confirmedAt : null}
           stale={false}
           nowMs={NOW}
+          sourceShown
         />
         <Column title="clear + off-season">
           <VerdictCard

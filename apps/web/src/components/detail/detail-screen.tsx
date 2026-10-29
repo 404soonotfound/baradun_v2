@@ -24,6 +24,7 @@ import { useActivity } from "@/lib/activity";
 import { alternativeBeaches, isClearView } from "@/lib/alternatives";
 import type { BeachSummary } from "@/lib/beach-summary";
 import { addRecent } from "@/lib/favorites";
+import { showsKmaSource } from "@/lib/kma-source";
 import { distanceKm } from "@/lib/geo";
 import type { Locale } from "@/lib/i18n";
 import { useUserLocation } from "@/lib/location";
@@ -76,6 +77,8 @@ export function DetailScreen({
 
   const view = deriveBeachView(beach, snapshot);
   const detail = deriveDetail(beach.id, view, snapshot);
+  // 기상청 출처(줄·기관 이름)는 받은 실제 상태가 있을 때만(BRD-113, 개발용 예시 제외)
+  const kmaSource = showsKmaSource(snapshot, sampleSnapshot);
 
   // 대안 해변: 지금 보는 해변이 '특보 없음'이 아닐 때만(가까운 순, 사용자 위치와 무관)
   // B5(오프라인·만료)에는 다른 해변도 '특보 없음'을 확인할 수 없어 카드를 두지 않음
@@ -210,6 +213,7 @@ export function DetailScreen({
             view={view}
             stations={beach.stations}
             nowMs={snapshot.nowMs}
+            kmaSource={kmaSource}
           />
           <StatGrid
             view={view}
@@ -230,6 +234,7 @@ export function DetailScreen({
             detail={detail}
             stations={beach.stations}
             nowMs={snapshot.nowMs}
+            kmaSource={kmaSource}
           />
         </div>
       </div>
@@ -246,7 +251,7 @@ export function DetailScreen({
         detail={detail}
         stations={beach.stations}
         nowMs={snapshot.nowMs}
-        kmaData={snapshot.statuses !== null}
+        kmaData={kmaSource}
       />
       <WarningSheet
         open={warningSheet.open}
@@ -257,6 +262,7 @@ export function DetailScreen({
         confirmedAt={view.kind === "ready" ? view.confirmedAt : null}
         stale={view.kind !== "ready" || view.stale}
         nowMs={snapshot.nowMs}
+        sourceShown={kmaSource}
       />
     </div>
   );
