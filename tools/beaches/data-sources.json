@@ -21,29 +21,29 @@
     {
       "name": "국토교통부 법정구역정보 읍면동(EMD) 층(shp)",
       "role": "emd_boundary_shp",
-      "path": "$BARADUN_GIS_DIR/legal_area_20261009/PENDING_EMD.shp",
+      "path": "$BARADUN_GIS_DIR/legal_area_20261009/AL_D001_00_20261009(EMD).shp",
       "source_url": "https://www.vworld.kr/dtmk/dtmk_ntads_s002.do?svcCde=NA&dsId=21",
       "portal_url": "https://www.data.go.kr/data/15045881/fileData.do",
       "base_date": "2026-10-09",
       "license": "CC BY 2.0 KR",
       "license_url": "https://creativecommons.org/licenses/by/2.0/kr/",
       "attribution": "국토교통부(국가공간정보센터) '법정구역정보'",
-      "pending": "브이월드 로그인 후 '전체데이터' 전국 SHP(기준일 2026-10-09)를 $BARADUN_GIS_DIR/legal_area_20261009/에 풀고, 읍면동(EMD) 층 파일 이름·sha256·dbf 인코딩으로 고정. 고정 전에는 판정·생성 중단",
-      "sha256": null
+      "sha256": "685669ab8e298bf17c1d55117c584b88a9c1b21a93c0c41bf1f1fda97338c0d9",
+      "note": "브이월드 '전체데이터' 전국 SHP AL_D001_00_20261009 중 읍면동(EMD) 층(zip 그대로 풀어 둠, 2026-10-29 확인). .cst 없음: dbf 이름 5,067건을 EUC-KR로 풀어 깨짐 0건 확인(UTF-8로는 전부 깨짐). .prj Korea_2000_Korea_Central_Belt_2010(EPSG:5186)"
     },
     {
       "name": "국토교통부 법정구역정보 읍면동(EMD) 층(dbf)",
       "role": "emd_boundary_dbf",
-      "path": "$BARADUN_GIS_DIR/legal_area_20261009/PENDING_EMD.dbf",
+      "path": "$BARADUN_GIS_DIR/legal_area_20261009/AL_D001_00_20261009(EMD).dbf",
       "source_url": "https://www.vworld.kr/dtmk/dtmk_ntads_s002.do?svcCde=NA&dsId=21",
       "portal_url": "https://www.data.go.kr/data/15045881/fileData.do",
       "base_date": "2026-10-09",
       "license": "CC BY 2.0 KR",
       "license_url": "https://creativecommons.org/licenses/by/2.0/kr/",
       "attribution": "국토교통부(국가공간정보센터) '법정구역정보'",
-      "pending": "브이월드 로그인 후 '전체데이터' 전국 SHP(기준일 2026-10-09)를 $BARADUN_GIS_DIR/legal_area_20261009/에 풀고, 읍면동(EMD) 층 파일 이름·sha256·dbf 인코딩으로 고정. 고정 전에는 판정·생성 중단",
-      "encoding": null,
-      "sha256": null
+      "encoding": "euc-kr",
+      "sha256": "60c2648e97cb95c8ae8d711df2fc96524aa942ba7db7fa3879e95bcbfb608c01",
+      "note": "브이월드 '전체데이터' 전국 SHP AL_D001_00_20261009 중 읍면동(EMD) 층(zip 그대로 풀어 둠, 2026-10-29 확인). .cst 없음: dbf 이름 5,067건을 EUC-KR로 풀어 깨짐 0건 확인(UTF-8로는 전부 깨짐). .prj Korea_2000_Korea_Central_Belt_2010(EPSG:5186)"
     },
     {
       "name": "해양수산부 2026 해수욕장 지정 및 개장현황",
