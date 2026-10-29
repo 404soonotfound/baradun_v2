@@ -137,7 +137,8 @@
       "needLocationBody": "Your location is only used on this device to measure distance. It is never sent to a server.",
       "useLocation": "Use my location",
       "locating": "Finding your location",
-      "noBeach": "No beaches confirmed for this activity yet"
+      "noBeach": "No beaches confirmed for this activity yet",
+      "last24h": "Last 24 hours"
     },
     "recent": {
       "title": "Recently viewed",

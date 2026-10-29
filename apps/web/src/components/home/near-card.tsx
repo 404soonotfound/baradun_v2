@@ -9,19 +9,22 @@ import { ReasonBadge } from "@/components/reason-badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { BeachSummary } from "@/lib/beach-summary";
 import { localizedPath, type Locale } from "@/lib/i18n";
+import { cn } from "@/lib/cn";
 import { formatKm, joinMeta } from "@/lib/meta-join";
 import { cardMetric, type CardMetric } from "@/lib/near-metric";
 import { kstStamp } from "@/lib/snapshot/clock";
 import { useBadgeText } from "@/lib/snapshot/use-badge-text";
-import { useMetaText } from "@/lib/snapshot/use-meta-text";
+import { useTimeText } from "@/lib/snapshot/use-time-text";
 import type { BeachView, MetricKey, MetricView } from "@/lib/snapshot/view";
 
 // 가까운 바다 카드 (노션 2장 HOME 7 · 3장 NearCard, Figma S_M01_01 171:379)
-// 해변명·지역·거리 + 상태 배지 → 파고·수온·바람 3칸 → 근거 줄(특보 범위 → 기관 → 시각, 지표별 측정소 → 관측 시각) + 현장 우선 문구
+// 해변명·지역·거리 + 상태 배지 → 파고·수온·바람 3칸 → 근거 줄(특보 범위 → 기관 → 시각, 파고 측정 시각) + 현장 우선 문구
 // 상태는 view를 그대로 씀(G1). 값이 없으면 0이 아니라 "–"(hidden) 또는 '가까운 관측 없음'(none)
 // 모양 두 가지(Figma, BRD-129):
-//   compact(모바일 171:478): 이름·배지 한 줄 → 3칸 → 근거 줄 + 현장 우선 문구
-//   wide(PC 181:851): 이름 + › → 배지 → 큰 파고 + 나머지 지표 한 줄 → 근거 줄. 현장 우선 문구는 묶음 제목 줄(home-screen)
+//   compact(모바일 171:478): 이름·배지 한 줄 → 3칸 → 근거 줄(특보 범위 · 파고 측정 시각) + 현장 우선 문구
+//   wide(PC 181:851): 이름 + › → 배지 → 큰 파고 + 나머지 지표 한 줄 → 24시간 그래프 → 근거 줄.
+//     현장 우선 문구는 묶음 제목 줄(home-screen)
+// 근거 줄은 Figma 형식으로 줄임(#105 결정 1): 측정소 이름·거리는 상세에만. 출처는 홈 맨 아래 기상청 줄(BRD-113)
 
 // PC 카드 큰 파고 옆 한 줄에 둘 나머지 지표(Figma 181:870 '파고 · 주기 6초 · 수온 21°C', #105 결정 2)
 // 파주기는 신선도 60분이 지나면 view가 delayed로 줌 → '늦어짐'
@@ -56,7 +59,7 @@ export function NearCard({
 }) {
   const t = useTranslations();
   const { confirmedUntilText } = useBadgeText();
-  const { observationMeta } = useMetaText();
+  const { measuredAgoText } = useTimeText();
 
   // [2] 거리: 2.1 → "2.1km". joinMeta가 null·빈 칸을 빼고 " · "로 이어 줌
   const km = distanceKm === null ? null : formatKm(distanceKm);
@@ -82,15 +85,33 @@ export function NearCard({
     } else if (view.badge.kind === "clear" && time) {
       notes.push(t("home.near.clearScope", { time }));
     }
-    // 값을 보인 지표마다 출처·관측 시각: "수온 · 연곡 파고부이 8.3km · 10분 전 측정"
-    // 지표마다 측정소·관측 시각이 다를 수 있어 따로 적음. 특보 출처(기상청)와 섞지 않음
-    for (const key of CARD_METRICS) {
-      const metric = shownMetric(key);
-      const station = beach.stations[key];
-      if (metric?.kind === "value" && station !== null) {
-        notes.push(observationMeta(key, station, metric.observedAt, nowMs));
-      }
-    }
+    // 파고 한 줄(#105 결정 1, Figma 171:499·181:874). 측정소 이름·거리는 상세에만
+    // 모바일 "10분 전 측정 · 파고 0.6m", PC "지난 24시간 · 10분 전 측정"(그래프 아래)
+    // 값이 없으면 지표 이름 + 이유(가까운 관측 없음 · 측정이 늦어지고 있어요 · 파고 값 없음, Codex P2와 같은 규칙)
+    const wave = cardMetric(
+      view.metrics.waveHeight,
+      beach.stations.waveHeight !== null,
+    );
+    const waveLabel = t("observation.metric.waveHeight");
+    const waveLine =
+      wave.kind === "value"
+        ? variant === "wide"
+          ? joinMeta([
+              t("home.near.last24h"),
+              measuredAgoText(wave.observedAt, nowMs),
+            ])
+          : joinMeta([
+              measuredAgoText(wave.observedAt, nowMs),
+              `${waveLabel} ${wave.value}${wave.unit}`,
+            ])
+        : wave.kind === "none"
+          ? joinMeta([waveLabel, t("observation.none")])
+          : wave.kind === "delayed"
+            ? joinMeta([waveLabel, t("observation.delayed")])
+            : wave.kind === "missing"
+              ? t("row.noValue")
+              : null;
+    if (waveLine) notes.push(waveLine);
   }
   // 현장 우선 문구: 모바일은 카드마다, PC는 카드 4장 위 묶음 제목 줄에 한 번(Figma 181:849)
   if (variant === "compact") notes.push(t("safety.finalCall"));
@@ -103,7 +124,13 @@ export function NearCard({
       <Skeleton className="h-badge w-20 rounded-badge" />
     );
   const noteList = (
-    <span className="flex flex-col gap-0.5 border-t border-border-default pt-[11px] text-caption text-text-muted">
+    // 모바일은 위 칸과 선으로 나누고, PC는 그래프 바로 아래 캡션(Figma 181:874)
+    <span
+      className={cn(
+        "flex flex-col gap-0.5 text-caption text-text-muted",
+        variant === "compact" && "border-t border-border-default pt-[11px]",
+      )}
+    >
       {notes.map((note) => (
         <span key={note}>{note}</span>
       ))}
