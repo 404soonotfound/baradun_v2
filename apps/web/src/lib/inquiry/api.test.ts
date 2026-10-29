@@ -714,6 +714,59 @@ describe("멈춘 단계와 접수 여부 (결정 27)", () => {
     expect(attempt.current).toBeNull();
   });
 
+  it("접수 여부를 모르는 시도 뒤 내용을 바꿔 보내도 앞 문의의 불확실함을 넘겨 줌(새 키, 리뷰 지적)", async () => {
+    let answer: "drop" | "limited" | "invalid" = "drop";
+    const { deps: d } = deps(() => {
+      if (answer === "drop") throw new TypeError("Failed to fetch");
+      if (answer === "limited")
+        return json(429, { error: { code: "rate_limited", message: "m" } });
+      return json(400, { error: { code: "invalid_request", message: "m" } });
+    });
+    d.uuid = vi
+      .fn()
+      .mockReturnValueOnce(UUID_A)
+      .mockReturnValueOnce(UUID_B)
+      .mockReturnValue("5c3e8f1a-7b2d-4c6e-9a8f-1d2e3f4a5b6c");
+    const attempt: AttemptSlot = { current: null };
+    await sendInquiry(request, [], undefined, d, attempt);
+    answer = "limited";
+    const changed = { ...request, message: "오타를 고쳤어요" };
+    const retry = await sendInquiry(changed, [], undefined, d, attempt);
+    expect(attempt.current?.idempotencyKey).toBe(UUID_B); // 내용이 다르니 새 키
+    expect(retry.ok === false && receiptUnknown(retry)).toBe(true);
+    // 바꾼 내용이 400으로 거절돼도 앞 문의는 접수됐을 수 있음 → 불확실 유지, 다음 시도는 또 새 키
+    answer = "invalid";
+    const rejected = await sendInquiry(changed, [], undefined, d, attempt);
+    expect(rejected).toMatchObject({
+      ok: false,
+      failure: "rejected",
+      stop: { stage: "message", uncertain: true },
+    });
+    expect(attempt.current).toMatchObject({ uncertain: true, carried: true });
+    expect(attempt.current?.idempotencyKey).not.toBe(UUID_B);
+  });
+
+  it("연결이 없으면 사진 지문(SHA-256)을 계산하지 않음", async () => {
+    const offline = deps(() => created());
+    offline.deps.online = () => false;
+    const digest = vi.fn(offline.deps.digest);
+    offline.deps.digest = digest;
+    await sendInquiry(request, [jpeg("a"), jpeg("b")], undefined, offline.deps);
+    expect(digest).not.toHaveBeenCalled();
+  });
+
+  it("그 밖의 4xx(403·404·413)는 접수 안 됨(refused)으로 보고 접수 여부를 모른다고 하지 않음", async () => {
+    for (const status of [403, 404, 413]) {
+      const { deps: d } = deps(() => new Response("<html>", { status }));
+      const result = await sendInquiry(request, [], undefined, d);
+      expect(result, String(status)).toMatchObject({
+        ok: false,
+        failure: "refused",
+      });
+      expect(result.ok === false && receiptUnknown(result)).toBe(false);
+    }
+  });
+
   it("처음부터 429면 접수되지 않았다고 알림", async () => {
     const { deps: d } = deps(() =>
       json(429, { error: { code: "rate_limited", message: "m" } }),
@@ -737,7 +790,7 @@ describe("멈춘 단계와 접수 여부 (결정 27)", () => {
       stop: { stage: "message", photos: 0, uncertain: true },
     });
     expect(offline.ok === false && receiptUnknown(offline)).toBe(true);
-    // 내용이 바뀌면 다른 문의라 앞 시도와 묶지 않음
+    // 내용을 바꿔도 앞 문의는 이미 접수됐을 수 있으므로 여전히 모름(연결이 없으면 지문도 계산하지 않음)
     const changed = await sendInquiry(
       { ...request, message: "다른 내용이에요" },
       [],
@@ -745,7 +798,7 @@ describe("멈춘 단계와 접수 여부 (결정 27)", () => {
       d,
       attempt,
     );
-    expect(changed.ok === false && receiptUnknown(changed)).toBe(false);
+    expect(changed.ok === false && receiptUnknown(changed)).toBe(true);
   });
 
   it("연결 없이 사진과 보내면 사진 0장 단계로 멈춤", async () => {
