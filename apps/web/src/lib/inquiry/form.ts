@@ -67,13 +67,13 @@ export function firstErrorField(errors: FormErrors): keyof FormErrors | null {
   return null;
 }
 
-// 접수 요청(멱등 키·사진 참조는 api.ts가 붙임). 해변은 상세에서 들어온 경우만, 활동은 해변과 함께만 보냄
+// 접수 요청(멱등 키·사진 참조는 api.ts가 붙임). 해변은 상세에서 들어온 경우만, 활동은 해변과 함께이고 그 해변이 지원할 때만 보냄
 // 사용자 위치는 넣지 않음
 export function buildRequest(input: {
   kind: InquiryKind;
   message: string;
   email: string;
-  context: { beachId: BeachId; activity: Activity } | null;
+  context: { beachId: BeachId; activity?: Activity } | null;
 }): Omit<CreateInquiryRequest, "idempotencyKey" | "photos"> {
   const email = input.email.trim();
   return {

@@ -162,6 +162,50 @@ test.describe("데이터 문의", () => {
     });
   });
 
+  test("그 해변이 지원하지 않는 활동은 보내지 않고, 지원하면 보냄", async ({
+    page,
+  }) => {
+    const bodies: Record<string, unknown>[] = [];
+    await page.addInitScript(() =>
+      localStorage.setItem("baradun:activity", "surfing"),
+    );
+    await page.route("**/api/inquiries", (route) => {
+      bodies.push(route.request().postDataJSON() as Record<string, unknown>);
+      return route.fulfill({
+        status: 201,
+        contentType: "application/json",
+        body: JSON.stringify({
+          inquiryId: "123e4567-e89b-42d3-a456-426614174000",
+          receivedAt: "2026-10-28T03:00:00Z",
+          photos: [],
+        }),
+      });
+    });
+    // 강문해변은 수영만 → 서핑을 골라 둬도 활동은 보내지 않고 화면에도 쓰지 않음
+    await page.goto(`${INQUIRY}?beach=gangmun`);
+    await expect(page.getByText(/^해변: /)).toBeVisible();
+    await expect(page.getByText(/활동: /)).toHaveCount(0);
+    await pickKind(page, "정보가 실제와 달라요");
+    await page.getByRole("textbox", { name: /내용/ }).fill("파고가 달라요");
+    await page.getByRole("button", { name: "보내기" }).click();
+    await expect(
+      page.getByRole("heading", { name: "접수됐어요" }),
+    ).toBeVisible();
+    expect(bodies[0]).toMatchObject({ beachId: "b0001" });
+    expect(bodies[0]).not.toHaveProperty("activity");
+
+    // 경포해변은 서핑 지원 → 서핑을 함께 보냄
+    await page.goto(`${INQUIRY}?beach=gyeongpo`);
+    await expect(page.getByText(/활동: 서핑/)).toBeVisible();
+    await pickKind(page, "정보가 실제와 달라요");
+    await page.getByRole("textbox", { name: /내용/ }).fill("파고가 달라요");
+    await page.getByRole("button", { name: "보내기" }).click();
+    await expect(
+      page.getByRole("heading", { name: "접수됐어요" }),
+    ).toBeVisible();
+    expect(bodies[1]).toMatchObject({ activity: "surfing" });
+  });
+
   test("해변·활동을 빼면 두 칸 모두 보내지 않음", async ({ page }) => {
     const bodies: Record<string, unknown>[] = [];
     await page.route("**/api/inquiries", (route) => {
