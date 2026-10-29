@@ -144,7 +144,11 @@
       "last24h": "지난 24시간",
       "badgeScope": "특보구역 · 기상청 {time} 확인",
       "timeWithOthers": "{main}({others})",
-      "noValueNext": "새 측정값이 들어오면 다시 보여드려요"
+      "noValueNext": "새 측정값이 들어오면 다시 보여드려요",
+      "groupNone": "가까운 관측 없음({metrics})",
+      "groupDelayed": "측정이 늦어지고 있어요({metrics})",
+      "groupMissing": "값 없음({metrics})",
+      "noStationNext": "특보 정보는 위 배지를 확인하세요"
     },
     "recent": {
       "title": "최근 본 해변",

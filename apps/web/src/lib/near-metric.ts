@@ -56,3 +56,32 @@ export function timeGroups(
   }
   return groups;
 }
+
+// [3] 값이 하나도 없는 카드의 이유 묶음 (BRD-129 · 사용자 확인 10/29)
+// 같은 이유는 한 줄로: '가까운 관측 없음(파고·파주기·수온)'. 이유가 섞이면 이유별로 나눔(처음 나온 순)
+// 다음 행동은 이유에 맞게: 지연·결측이 하나라도 있으면 새 값을 기다림, 모두 '가까운 관측 없음'이면
+// 기다려도 값이 오지 않으므로(20km 안 측정소 없음) 특보 배지를 보라는 사실 문구
+export type StatusGroup = {
+  kind: "none" | "delayed" | "missing";
+  keys: MetricKey[];
+};
+
+export function statusGroups(
+  items: readonly { key: MetricKey; metric: CardMetric }[],
+): StatusGroup[] {
+  const groups: StatusGroup[] = [];
+  for (const { key, metric } of items) {
+    if (metric.kind === "value" || metric.kind === "loading") continue;
+    const found = groups.find((group) => group.kind === metric.kind);
+    if (found) found.keys.push(key);
+    else groups.push({ kind: metric.kind, keys: [key] });
+  }
+  return groups;
+}
+
+export function noValueNext(
+  groups: readonly StatusGroup[],
+): "waitNew" | "seeBadge" | null {
+  if (groups.some((group) => group.kind !== "none")) return "waitNew";
+  return groups.length > 0 ? "seeBadge" : null;
+}

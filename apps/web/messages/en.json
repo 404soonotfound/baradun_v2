@@ -144,7 +144,11 @@
       "last24h": "Last 24 hours",
       "badgeScope": "Warning zone · KMA · checked {time}",
       "timeWithOthers": "{main} ({others})",
-      "noValueNext": "We'll show new measurements when they come in"
+      "noValueNext": "We'll show new measurements when they come in",
+      "groupNone": "No nearby observation ({metrics})",
+      "groupDelayed": "Measurements delayed ({metrics})",
+      "groupMissing": "No value ({metrics})",
+      "noStationNext": "Check the badge above for warning info"
     },
     "recent": {
       "title": "Recently viewed",

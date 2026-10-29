@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { cardMetric, timeGroups } from "@/lib/near-metric";
+import {
+  cardMetric,
+  noValueNext,
+  statusGroups,
+  timeGroups,
+} from "@/lib/near-metric";
 
 describe("cardMetric", () => {
   const value = {
@@ -82,5 +87,51 @@ describe("timeGroups (지표별 관측 시각, Codex P1)", () => {
       { keys: ["wind"], minutes: null },
     ]);
     expect(timeGroups([], now)).toEqual([]);
+  });
+});
+
+describe("statusGroups · noValueNext (값이 없는 카드)", () => {
+  const none = { kind: "none" } as const;
+  const delayed = { kind: "delayed" } as const;
+  const missing = { kind: "missing" } as const;
+
+  it("모두 가까운 관측 없음이면 한 묶음, 다음 행동은 배지 확인(기다려도 값이 오지 않음)", () => {
+    const groups = statusGroups([
+      { key: "waveHeight", metric: none },
+      { key: "wavePeriod", metric: none },
+      { key: "waterTemp", metric: none },
+    ]);
+    expect(groups).toEqual([
+      { kind: "none", keys: ["waveHeight", "wavePeriod", "waterTemp"] },
+    ]);
+    expect(noValueNext(groups)).toBe("seeBadge");
+  });
+
+  it("모두 지연이면 한 묶음, 다음 행동은 새 값 기다림", () => {
+    const groups = statusGroups([
+      { key: "waveHeight", metric: delayed },
+      { key: "waterTemp", metric: delayed },
+    ]);
+    expect(groups).toEqual([
+      { kind: "delayed", keys: ["waveHeight", "waterTemp"] },
+    ]);
+    expect(noValueNext(groups)).toBe("waitNew");
+  });
+
+  it("섞이면 이유별로 나누고(처음 나온 순), 지연·결측이 있으면 새 값 기다림. 값·불러오는 중은 빼고 셈", () => {
+    const groups = statusGroups([
+      { key: "waveHeight", metric: none },
+      { key: "wavePeriod", metric: delayed },
+      { key: "waterTemp", metric: none },
+      { key: "wind", metric: missing },
+      { key: "waveDirection", metric: { kind: "loading" } },
+    ]);
+    expect(groups).toEqual([
+      { kind: "none", keys: ["waveHeight", "waterTemp"] },
+      { kind: "delayed", keys: ["wavePeriod"] },
+      { kind: "missing", keys: ["wind"] },
+    ]);
+    expect(noValueNext(groups)).toBe("waitNew");
+    expect(noValueNext([])).toBeNull();
   });
 });

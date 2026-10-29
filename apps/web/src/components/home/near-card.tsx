@@ -12,6 +12,8 @@ import { localizedPath, type Locale } from "@/lib/i18n";
 import { formatKm, joinMeta } from "@/lib/meta-join";
 import {
   cardMetric,
+  noValueNext,
+  statusGroups,
   timeGroups,
   type CardMetric,
   type TimeGroup,
@@ -156,6 +158,38 @@ export function NearCard({
             : null;
   }
 
+  // 값이 하나도 없을 때의 이유 줄(같은 이유는 한 줄로 묶음)과 이유에 맞는 다음 행동(lib/near-metric.ts)
+  const noValueKeys: readonly MetricKey[] =
+    variant === "wide" ? ["waveHeight", ...WIDE_OTHERS] : CARD_METRICS;
+  const reasonGroups = statusGroups(
+    noValueKeys.map((key) => ({
+      key,
+      metric: cardMetric(
+        view.kind === "ready" ? view.metrics[key] : null,
+        beach.stations[key] !== null,
+      ),
+    })),
+  );
+  const GROUP_KEY = {
+    none: "home.near.groupNone",
+    delayed: "home.near.groupDelayed",
+    missing: "home.near.groupMissing",
+  } as const;
+  const reasonLines = reasonGroups.map((group) =>
+    t(GROUP_KEY[group.kind], {
+      metrics: group.keys
+        .map((key) => t(`observation.metric.${key}`))
+        .join("·"),
+    }),
+  );
+  const next = noValueNext(reasonGroups);
+  const nextText =
+    next === "waitNew"
+      ? t("home.near.noValueNext")
+      : next === "seeBadge"
+        ? t("home.near.noStationNext")
+        : null;
+
   const badge =
     // 첫 응답 전에는 배지 자리만 회색으로(빈 배지나 '특보 없음'을 미리 보이지 않게)
     view.kind === "ready" ? (
@@ -224,13 +258,14 @@ export function NearCard({
         {view.kind !== "ready" ? (
           <Skeleton className="h-[30px] w-24" />
         ) : !hasValue ? (
-          // 값 없음: 이유 → 영향 없이 다음 행동 한 줄
-          <span className="flex flex-col gap-0.5 text-body-s text-text-muted">
-            {waveStatus && <span>{waveStatus}</span>}
-            {others.length > 0 && (
-              <span className="text-caption">{otherLine}</span>
-            )}
-            <span className="text-caption">{t("home.near.noValueNext")}</span>
+          // 값 없음: 이유(같은 이유는 한 줄) → 이유에 맞는 다음 행동
+          <span className="flex flex-col gap-0.5 text-caption text-text-muted">
+            {reasonLines.map((line) => (
+              <span key={line} className="text-body-s">
+                {line}
+              </span>
+            ))}
+            {nextText && <span>{nextText}</span>}
           </span>
         ) : (
           <>
@@ -286,11 +321,13 @@ export function NearCard({
   if (wave.kind === "value") {
     const line = joinMeta([timeText, `${waveLabel} ${wave.value}${wave.unit}`]);
     if (line) notes.push(line);
+  } else if (view.kind === "ready" && !hasValue) {
+    // 값이 하나도 없으면 칸 대신 이유 묶음 + 다음 행동(PC와 같은 규칙)
+    notes.push(...reasonLines);
+    if (nextText) notes.push(nextText);
   } else {
     if (waveStatus) notes.push(waveStatus);
     if (timeText) notes.push(timeText);
-    if (view.kind === "ready" && !hasValue)
-      notes.push(t("home.near.noValueNext"));
   }
   notes.push(t("safety.finalCall"));
   const noteList = (
