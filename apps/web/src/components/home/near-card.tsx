@@ -111,7 +111,9 @@ export function NearCard({
             : wave.kind === "missing"
               ? t("row.noValue")
               : null;
-    if (waveLine) notes.push(waveLine);
+    // PC는 큰 파고 자리에 이미 '파고 · 가까운 관측 없음'이 있어 같은 말을 되풀이하지 않음
+    if (waveLine && !(variant === "wide" && wave.kind === "none"))
+      notes.push(waveLine);
   }
   // 현장 우선 문구: 모바일은 카드마다, PC는 카드 4장 위 묶음 제목 줄에 한 번(Figma 181:849)
   if (variant === "compact") notes.push(t("safety.finalCall"));
