@@ -112,9 +112,18 @@ interface StatusOptions {
 
 function beachStatus(beach: Beach, now: number, options: StatusOptions) {
   const confirmedAt = iso(now - (options.confirmedAgoMin ?? 10) * MIN);
+  // 이안류(정보만)는 '특보 없음' 해변 하나에만 가짜 값(정보 출처의 국립해양조사원 출처 줄 확인용, BRD-113)
+  const ripCurrent =
+    beach.id === CLEAR_ID
+      ? {
+          label: "시험 관심",
+          publishedAt: iso(now - 30 * MIN),
+          source: "국립해양조사원",
+        }
+      : null;
   const common = {
     control: { state: "not_provided" },
-    info: { season: null, ripCurrent: null, nearbyWarnings: [] },
+    info: { season: null, ripCurrent, nearbyWarnings: [] },
     validUntil: iso(now + 30 * MIN),
   };
   const unknown = {
