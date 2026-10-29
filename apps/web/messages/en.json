@@ -825,7 +825,9 @@
     "retention": {
       "title": "How long we keep it",
       "body": "Feedback is kept for 90 days and photos for 30 days, then deleted automatically. Email is deleted as soon as handling is done (within 90 days at the latest). We don't promise a reply deadline.",
-      "draft": "While you write, the type and message are kept only on this device for up to 7 days. Email and photos aren't kept."
+      "bodyTextOnly": "Feedback is kept for 90 days, then deleted automatically. We don't collect email or photos.",
+      "draft": "While you write, the type and message are kept only on this device for up to 7 days. Email and photos aren't kept.",
+      "draftTextOnly": "While you write, the type and message are kept only on this device for up to 7 days."
     },
     "actions": {
       "submit": "Send",
@@ -841,6 +843,7 @@
     "done": {
       "title": "Received",
       "body": "We'll check it and update the information. If you left your email, we'll contact you if needed.",
+      "bodyTextOnly": "We'll check it and update the information. We don't send individual replies.",
       "photos": "{count, plural, one {# photo was} other {# photos were}} received with it.",
       "rejectedLocation": "{count, plural, one {# photo wasn't} other {# photos weren't}} accepted because location data remained.",
       "rejectedOther": "{count, plural, one {# photo couldn't be checked and wasn't} other {# photos couldn't be checked and weren't}} accepted.",
