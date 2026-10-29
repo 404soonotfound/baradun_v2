@@ -4,6 +4,7 @@ import {
   clearCheckedAt,
   countByStatus,
   staleCheckedAt,
+  summarizeByCategory,
 } from "@/lib/status-count";
 import type { BadgeLabel, BeachView, Category } from "@/lib/snapshot/view";
 
@@ -137,5 +138,37 @@ describe("staleCheckedAt", () => {
     expect(
       staleCheckedAt([{ kind: "loading" }, { kind: "hidden" }]),
     ).toBeNull();
+  });
+});
+
+describe("summarizeByCategory", () => {
+  it("분류 순서대로 3묶음, 개수는 사유별 칸의 합", () => {
+    const counts = countByStatus([delayed, clear, unknown, strongWind, clear]);
+    expect(
+      summarizeByCategory(counts ?? []).map((item) => [
+        item.category,
+        item.count,
+        item.reasons.map((reason) => reason.label.kind),
+      ]),
+    ).toEqual([
+      ["clear", 2, ["clear"]],
+      ["unavailable", 1, ["warning"]],
+      ["undetermined", 2, ["observation_delayed", "warning_unknown"]],
+    ]);
+  });
+
+  it("해변이 없는 분류도 0곳으로 남김(빈 목록이면 모두 0)", () => {
+    expect(
+      summarizeByCategory([]).map((item) => [item.category, item.count]),
+    ).toEqual([
+      ["clear", 0],
+      ["unavailable", 0],
+      ["undetermined", 0],
+    ]);
+    expect(
+      summarizeByCategory(countByStatus([strongWind]) ?? []).map(
+        (item) => item.count,
+      ),
+    ).toEqual([0, 1, 0]);
   });
 });
