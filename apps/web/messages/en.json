@@ -141,7 +141,10 @@
       "noValue": "No value",
       "locating": "Finding your location",
       "noBeach": "No beaches confirmed for this activity yet",
-      "last24h": "Last 24 hours"
+      "last24h": "Last 24 hours",
+      "badgeScope": "Warning zone · KMA · checked {time}",
+      "timeWithOthers": "{main} ({others})",
+      "noValueNext": "We'll show new measurements when they come in"
     },
     "recent": {
       "title": "Recently viewed",
@@ -153,7 +156,9 @@
       "viewedYesterday": "Viewed yesterday at {time}",
       "viewedOn": "Viewed {month}/{date} at {time}",
       "checkedNow": "Checked again just now",
-      "titleWithActivity": "{name} · {activity}"
+      "titleWithActivity": "{name} · {activity}",
+      "emptyTitle": "No beaches viewed yet",
+      "emptyBody": "Beaches you open will show up here"
     },
     "firstVisit": {
       "title": "Welcome",

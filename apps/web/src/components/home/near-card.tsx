@@ -9,7 +9,6 @@ import { ReasonBadge } from "@/components/reason-badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { BeachSummary } from "@/lib/beach-summary";
 import { localizedPath, type Locale } from "@/lib/i18n";
-import { cn } from "@/lib/cn";
 import { formatKm, joinMeta } from "@/lib/meta-join";
 import {
   cardMetric,
@@ -78,25 +77,33 @@ export function NearCard({
       : metric;
   }
 
-  // [3] 근거 줄. 배지 '특보 없음'은 범위·기관·시각이 함께 있어야 함(공통 규칙)
-  const notes: string[] = [];
+  // [3] 근거. Figma 카드처럼 줄 수를 줄임(#105 결정 1 · 사용자 확인 10/29)
+  // 특보 범위: '특보 없음'은 범위·기관·확인 시각이 늘 함께(공통 규칙). 오래된 정보(B5)면 'HH:MM 확인 · 이후 확인 못 함'
+  // 관측 시각: 대표 시각 한 번 + 다른 시각의 지표만 괄호로 "20분 전 측정(수온 50분 전)"(Codex P1). 측정소 이름·거리는 상세에만
+  // 파고 값이 없으면 이유(가까운 관측 없음 · 측정이 늦어지고 있어요 · 파고 값 없음, Codex P2)
+  let scopeText: string | null = null;
+  let timeText: string | null = null;
+  let waveStatus: string | null = null;
+  let hasValue = false; // 카드에 보이는 지표 중 값이 하나라도 있는지(없으면 빈칸 없는 짧은 카드)
+  const wave = cardMetric(
+    view.kind === "ready" ? view.metrics.waveHeight : null,
+    beach.stations.waveHeight !== null,
+  );
+  const waveLabel = t("observation.metric.waveHeight");
   if (view.kind === "ready") {
     const time = kstStamp(view.confirmedAt, nowMs);
-    if (view.stale) {
-      // 오프라인·만료(B5): "14:05 확인 · 이후 확인 못 함"
-      notes.push(confirmedUntilText(view.confirmedAt, nowMs));
-    } else if (view.badge.kind === "clear" && time) {
-      notes.push(t("home.near.clearScope", { time }));
-    }
-    // 파고 한 줄(#105 결정 1, Figma 171:499·181:874). 측정소 이름·거리는 상세에만
-    // 모바일 "10분 전 측정 · 파고 0.6m", PC "지난 24시간 · 10분 전 측정"(그래프 아래)
-    // 값이 없으면 지표 이름 + 이유(가까운 관측 없음 · 측정이 늦어지고 있어요 · 파고 값 없음, Codex P2와 같은 규칙)
-    // 카드에 보이는 다른 지표(모바일 수온·바람, PC 파주기·수온)의 관측 시각이 다르면 '수온 12분 전'처럼 덧붙임(Codex P1)
-    const wave = cardMetric(
-      view.metrics.waveHeight,
-      beach.stations.waveHeight !== null,
-    );
-    const waveLabel = t("observation.metric.waveHeight");
+    scopeText = view.stale
+      ? confirmedUntilText(view.confirmedAt, nowMs)
+      : view.badge.kind === "clear" && time
+        ? t(
+            variant === "wide"
+              ? "home.near.badgeScope"
+              : "home.near.clearScope",
+            {
+              time,
+            },
+          )
+        : null;
     const shownKeys: readonly MetricKey[] =
       variant === "wide" ? ["waveHeight", ...WIDE_OTHERS] : CARD_METRICS;
     const groups = timeGroups(
@@ -111,6 +118,7 @@ export function NearCard({
       }),
       nowMs,
     );
+    hasValue = groups.length > 0;
     const labels = (group: TimeGroup) =>
       group.keys.map((key) => t(`observation.metric.${key}`)).join("·");
     const fullAgo = (group: TimeGroup) =>
@@ -124,44 +132,29 @@ export function NearCard({
           : t("observation.agoShort", { minutes: group.minutes })
       }`;
     const [lead, ...rest] = groups;
-    if (wave.kind === "value" && lead) {
-      // 첫 묶음에 파고가 있음(파고가 맨 앞). 다른 시각의 지표만 짧게 덧붙임
-      notes.push(
-        joinMeta(
-          variant === "wide"
-            ? [t("home.near.last24h"), fullAgo(lead), ...rest.map(shortAgo)]
-            : [
-                fullAgo(lead),
-                `${waveLabel} ${wave.value}${wave.unit}`,
-                ...rest.map(shortAgo),
-              ],
-        ) ?? "",
-      );
-    } else {
-      const waveLine =
-        wave.kind === "none"
-          ? joinMeta([waveLabel, t("observation.none")])
-          : wave.kind === "delayed"
-            ? joinMeta([waveLabel, t("observation.delayed")])
-            : wave.kind === "missing"
-              ? t("row.noValue")
-              : null;
-      // PC는 큰 파고 자리에 이미 '파고 · 가까운 관측 없음'이 있어 같은 말을 되풀이하지 않음
-      if (waveLine && !(variant === "wide" && wave.kind === "none"))
-        notes.push(waveLine);
-      // 파고 값이 없어도 보이는 다른 지표의 관측 시각: "수온·바람 20분 전 측정"
-      if (lead) {
-        notes.push(
-          joinMeta([
-            `${labels(lead)} ${fullAgo(lead)}`,
-            ...rest.map(shortAgo),
-          ]) ?? "",
-        );
-      }
+    if (lead) {
+      // 파고 값이 있으면 대표 시각은 파고(맨 앞 묶음). 없으면 대표 묶음의 지표 이름을 붙임
+      const main =
+        wave.kind === "value"
+          ? fullAgo(lead)
+          : `${labels(lead)} ${fullAgo(lead)}`;
+      timeText =
+        rest.length > 0
+          ? t("home.near.timeWithOthers", {
+              main,
+              others: rest.map(shortAgo).join(", "),
+            })
+          : main;
     }
+    waveStatus =
+      wave.kind === "none"
+        ? joinMeta([waveLabel, t("observation.none")])
+        : wave.kind === "delayed"
+          ? joinMeta([waveLabel, t("observation.delayed")])
+          : wave.kind === "missing"
+            ? t("row.noValue")
+            : null;
   }
-  // 현장 우선 문구: 모바일은 카드마다, PC는 카드 4장 위 묶음 제목 줄에 한 번(Figma 181:849)
-  if (variant === "compact") notes.push(t("safety.finalCall"));
 
   const badge =
     // 첫 응답 전에는 배지 자리만 회색으로(빈 배지나 '특보 없음'을 미리 보이지 않게)
@@ -170,25 +163,11 @@ export function NearCard({
     ) : (
       <Skeleton className="h-badge w-20 rounded-badge" />
     );
-  const noteList = (
-    // 모바일은 위 칸과 선으로 나누고, PC는 그래프 바로 아래 캡션(Figma 181:874)
-    <span
-      className={cn(
-        "flex flex-col gap-0.5 text-caption text-text-muted",
-        variant === "compact" && "border-t border-border-default pt-[11px]",
-      )}
-    >
-      {notes.map((note) => (
-        <span key={note}>{note}</span>
-      ))}
-    </span>
-  );
   const href = localizedPath(locale, `/spots/${beach.slug}/`);
 
-  // [4] PC: 큰 파고 + 나머지 지표 한 줄("파고 · 수온 21°C · 바람 3m/s")
+  // [4] PC(Figma 181:851): 이름 + › → 배지(옆에 특보 범위) → 큰 파고 + 나머지 지표 → 24시간 그래프 → 캡션 한 줄
+  // 값이 하나도 없으면 큰 숫자·그래프 자리를 빼고 이유와 다음 행동만(빈칸 없는 짧은 카드)
   if (variant === "wide") {
-    const wave = shownMetric("waveHeight");
-    // 나머지 지표 한 줄. 값이 없어도 지표를 빼지 않고 이름 + 이유('가까운 관측 없음'·'늦어짐'·"–")를 남김(Codex P2)
     const others = WIDE_OTHERS.map((key) => ({
       key,
       metric: cardMetric(
@@ -196,6 +175,25 @@ export function NearCard({
         beach.stations[key] !== null,
       ),
     })).filter((item) => item.metric.kind !== "loading");
+    const otherLine = others.map(({ key, metric }, index) => (
+      <span key={key}>
+        {(index > 0 || wave.kind === "value") && " · "}
+        {/* 파주기 값은 상세와 같은 '파주기 6초' */}
+        {key === "wavePeriod" && metric.kind === "value" ? (
+          t("detail.sea.period", { value: metric.value })
+        ) : (
+          <>
+            {t(`observation.metric.${key}`)}{" "}
+            <InlineMetric
+              metric={metric}
+              none={t("observation.none")}
+              delayed={t("observation.delayedShort")}
+              empty={t("home.near.noValue")}
+            />
+          </>
+        )}
+      </span>
+    ));
     return (
       <Link
         href={href}
@@ -216,74 +214,92 @@ export function NearCard({
             className="shrink-0 text-text-default"
           />
         </span>
-        <span className="flex">{badge}</span>
-        <span className="flex flex-wrap items-baseline gap-x-1.5">
-          {wave === null ? (
-            <Skeleton className="h-[30px] w-20" />
-          ) : wave.kind === "value" ? (
-            <>
-              <span className="text-num-card text-text-default">
-                {wave.value}
-              </span>
-              <span className="text-body font-bold text-text-default">
-                {wave.unit}
-              </span>
-            </>
-          ) : wave.kind === "none" ? (
-            <span className="text-body-s text-text-muted">
-              {joinMeta([
-                t("observation.metric.waveHeight"),
-                t("observation.none"),
-              ])}
-            </span>
-          ) : (
-            <span className="text-num-card text-text-muted">
-              <span aria-hidden="true">–</span>
-              <span className="sr-only">{t("home.near.noValue")}</span>
-            </span>
+        {/* 배지 옆(좁으면 아래)에 특보 범위·기관·확인 시각 */}
+        <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          {badge}
+          {scopeText && (
+            <span className="text-caption text-text-muted">{scopeText}</span>
           )}
-          {/* 파고가 '가까운 관측 없음'이면 위 문구에 지표 이름이 있어 이 줄 앞의 '파고'는 뺌 */}
-          <span className="pl-1 text-caption text-text-muted">
-            {wave?.kind !== "none" && t("observation.metric.waveHeight")}
-            {others.map(({ key, metric }, index) => (
-              <span key={key}>
-                {(index > 0 || wave?.kind !== "none") && " · "}
-                {/* 파주기 값은 상세와 같은 '파주기 6초' */}
-                {key === "wavePeriod" && metric.kind === "value" ? (
-                  t("detail.sea.period", { value: metric.value })
-                ) : (
-                  <>
-                    {t(`observation.metric.${key}`)}{" "}
-                    <InlineMetric
-                      metric={metric}
-                      none={t("observation.none")}
-                      delayed={t("observation.delayedShort")}
-                      empty={t("home.near.noValue")}
-                    />
-                  </>
-                )}
-              </span>
-            ))}
-          </span>
         </span>
-        {/* 24시간 파고(상세와 같은 기록·규칙). 가까운 관측 없음이면 측정소 기록도 그리지 않음 */}
-        <MiniWaveChart
-          stationId={
-            wave?.kind === "none"
-              ? null
-              : (beach.stations.waveHeight?.id ?? null)
-          }
-          latest={
-            wave?.kind === "value"
-              ? { t: Date.parse(wave.observedAt), v: wave.value }
-              : null
-          }
-          nowMs={nowMs}
-        />
-        {noteList}
+        {view.kind !== "ready" ? (
+          <Skeleton className="h-[30px] w-24" />
+        ) : !hasValue ? (
+          // 값 없음: 이유 → 영향 없이 다음 행동 한 줄
+          <span className="flex flex-col gap-0.5 text-body-s text-text-muted">
+            {waveStatus && <span>{waveStatus}</span>}
+            {others.length > 0 && (
+              <span className="text-caption">{otherLine}</span>
+            )}
+            <span className="text-caption">{t("home.near.noValueNext")}</span>
+          </span>
+        ) : (
+          <>
+            <span className="flex flex-wrap items-baseline gap-x-1.5">
+              {wave.kind === "value" ? (
+                <>
+                  <span className="text-num-card text-text-default">
+                    {wave.value}
+                  </span>
+                  <span className="text-body font-bold text-text-default">
+                    {wave.unit}
+                  </span>
+                  <span className="pl-1 text-caption text-text-muted">
+                    {waveLabel}
+                    {otherLine}
+                  </span>
+                </>
+              ) : (
+                <span className="flex flex-col text-caption text-text-muted">
+                  <span className="text-body-s">{waveStatus}</span>
+                  <span>{otherLine}</span>
+                </span>
+              )}
+            </span>
+            {/* 24시간 파고(상세와 같은 기록·규칙). 가까운 관측 없음이면 그리지 않음. 실패·빈 기록이면 자리도 비우지 않음 */}
+            {wave.kind !== "none" && beach.stations.waveHeight && (
+              <MiniWaveChart
+                stationId={beach.stations.waveHeight.id}
+                latest={
+                  wave.kind === "value"
+                    ? { t: Date.parse(wave.observedAt), v: wave.value }
+                    : null
+                }
+                nowMs={nowMs}
+              />
+            )}
+            {timeText && (
+              <span className="text-caption text-text-muted">
+                {wave.kind === "value"
+                  ? joinMeta([t("home.near.last24h"), timeText])
+                  : timeText}
+              </span>
+            )}
+          </>
+        )}
       </Link>
     );
   }
+
+  // 모바일 근거 줄(Figma 171:499): 특보 범위 / 관측 시각 · 파고 / 현장 우선 문구
+  const notes: string[] = [];
+  if (scopeText) notes.push(scopeText);
+  if (wave.kind === "value") {
+    const line = joinMeta([timeText, `${waveLabel} ${wave.value}${wave.unit}`]);
+    if (line) notes.push(line);
+  } else {
+    if (waveStatus) notes.push(waveStatus);
+    if (timeText) notes.push(timeText);
+    if (view.kind === "ready" && !hasValue)
+      notes.push(t("home.near.noValueNext"));
+  }
+  notes.push(t("safety.finalCall"));
+  const noteList = (
+    <span className="flex flex-col gap-0.5 border-t border-border-default pt-[11px] text-caption text-text-muted">
+      {notes.map((note) => (
+        <span key={note}>{note}</span>
+      ))}
+    </span>
+  );
 
   // [5] 모바일: 카드 전체가 상세로 가는 링크
   return (
@@ -303,17 +319,20 @@ export function NearCard({
         {badge}
       </span>
 
-      <span className="grid grid-cols-3 divide-x divide-border-default">
-        {CARD_METRICS.map((key) => (
-          <MetricCell
-            key={key}
-            label={t(`observation.metric.${key}`)}
-            metric={shownMetric(key)}
-            none={t("observation.none")}
-            empty={t("home.near.noValue")}
-          />
-        ))}
-      </span>
+      {/* 값이 하나도 없으면 "–" 3칸 대신 근거 줄의 이유만(빈칸 없는 짧은 카드) */}
+      {(view.kind !== "ready" || hasValue) && (
+        <span className="grid grid-cols-3 divide-x divide-border-default">
+          {CARD_METRICS.map((key) => (
+            <MetricCell
+              key={key}
+              label={t(`observation.metric.${key}`)}
+              metric={shownMetric(key)}
+              none={t("observation.none")}
+              empty={t("home.near.noValue")}
+            />
+          ))}
+        </span>
+      )}
 
       {noteList}
     </Link>

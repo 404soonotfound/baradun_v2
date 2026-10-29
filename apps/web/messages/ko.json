@@ -141,7 +141,10 @@
       "noValue": "값 없음",
       "locating": "위치를 확인하고 있어요",
       "noBeach": "이 활동이 확인된 해변이 아직 없어요",
-      "last24h": "지난 24시간"
+      "last24h": "지난 24시간",
+      "badgeScope": "특보구역 · 기상청 {time} 확인",
+      "timeWithOthers": "{main}({others})",
+      "noValueNext": "새 측정값이 들어오면 다시 보여드려요"
     },
     "recent": {
       "title": "최근 본 해변",
@@ -153,7 +156,9 @@
       "viewedYesterday": "어제 {time}에 봤어요",
       "viewedOn": "{month}월 {date}일 {time}에 봤어요",
       "checkedNow": "지금 다시 확인했어요",
-      "titleWithActivity": "{name} · {activity}"
+      "titleWithActivity": "{name} · {activity}",
+      "emptyTitle": "아직 본 해변이 없어요",
+      "emptyBody": "해변을 열어 보면 여기에서 다시 볼 수 있어요"
     },
     "firstVisit": {
       "title": "처음 오셨네요",

@@ -8,7 +8,7 @@ import { type ChartPoint, waveChart } from "@/lib/wave-chart";
 
 // PC 가까운 바다 카드의 24시간 파고 미니 그래프 (Figma 181:871 244×40, BRD-129 · #105 결정 2)
 // 데이터·규칙은 상세 WaveChart와 같음: 같은 history.json(한 번만 받아 상세·홈이 같이 씀), 90분 넘는 간격·결측은 끊고 빗금
-// 축·라벨 없이 선과 연한 면만. 불러오는 중·실패·그릴 값 없음이면 자리만 비워 둠(지난 값을 지금처럼 보이지 않게)
+// 축·라벨 없이 선과 연한 면만. 실패·그릴 값 없음이면 그리지 않음(지난 값을 지금처럼 보이지 않게)
 const W = 244;
 const H = 40;
 const TOP = 4;
@@ -26,11 +26,12 @@ export function MiniWaveChart({
   const t = useTranslations("detail.chart");
   const history = useStationHistory(stationId);
   const hatchId = useId();
-  const empty = <span aria-hidden="true" className="block h-10" />;
-
-  if (history.kind !== "ready" || history.history === null) return empty;
+  // 불러오는 중에만 자리를 잡고, 실패·기록 없음·그릴 값 없음이면 자리째 뺌(카드에 빈칸이 남지 않게)
+  if (history.kind === "loading")
+    return <span aria-hidden="true" className="block h-10" />;
+  if (history.kind !== "ready" || history.history === null) return null;
   const chart = waveChart(history.history.points, nowMs, latest);
-  if (chart.kind === "empty") return empty;
+  if (chart.kind === "empty") return null;
 
   // 0부터 시작하는 세로축(상세와 같음). 높이가 작아 0.5m 단위로 올림
   const topM = Math.max(1, Math.ceil(chart.maxV * 2) / 2);
