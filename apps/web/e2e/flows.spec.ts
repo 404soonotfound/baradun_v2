@@ -79,7 +79,7 @@ test.describe("데이터 문의", () => {
     expect(posted).toBe(0);
   });
 
-  test("서버가 받지 못하면 무슨 일·다음 행동을 알리고 유형·내용은 남김", async ({
+  test("서버가 처리하지 못하면 접수 여부·다음 행동을 알리고 내용·이메일·동의는 화면에 남김(결정 25·27)", async ({
     page,
   }) => {
     await page.route("**/api/inquiries**", (route) =>
@@ -96,14 +96,96 @@ test.describe("데이터 문의", () => {
     await page
       .getByRole("textbox", { name: /내용/ })
       .fill("파주기 기준이 궁금해요");
+    await page
+      .getByRole("textbox", { name: /이메일/ })
+      .fill("reader@example.com");
+    await page.getByRole("checkbox").check();
     await page.getByRole("button", { name: "보내기" }).click();
-    await expect(page.getByText("문의를 보내지 못했어요")).toBeVisible();
+    await expect(page.getByText("접수됐는지 확인하지 못했어요")).toBeVisible();
     await expect(
-      page.getByText("지금은 문의를 받을 수 없어요. 잠시 뒤 다시 보내 주세요."),
+      page.getByText("서버가 요청을 처리하지 못했어요."),
+    ).toBeVisible();
+    await expect(
+      page.getByText("보낸 문의가 접수됐을 수도 있어요."),
+    ).toBeVisible();
+    await expect(
+      page.getByText(
+        "내용을 바꾸지 않고 '다시 보내기'를 누르면 같은 문의가 두 번 접수되지 않아요.",
+      ),
     ).toBeVisible();
     await expect(page.getByRole("textbox", { name: /내용/ })).toHaveValue(
       "파주기 기준이 궁금해요",
     );
+    await expect(page.getByRole("textbox", { name: /이메일/ })).toHaveValue(
+      "reader@example.com",
+    );
+    await expect(page.getByRole("checkbox")).toBeChecked();
+    await expect(
+      page.getByRole("button", { name: "다시 보내기" }),
+    ).toBeVisible();
+    // 이메일·동의는 기기에 저장하지 않음
+    expect(
+      await page.evaluate(() => JSON.stringify({ ...localStorage })),
+    ).not.toContain("reader@example.com");
+  });
+
+  test("장소 상세에서 들어오면 해변·활동을 본문이 아닌 계약 칸으로 보냄(결정 22)", async ({
+    page,
+  }) => {
+    const bodies: Record<string, unknown>[] = [];
+    await page.route("**/api/inquiries", (route) => {
+      bodies.push(route.request().postDataJSON() as Record<string, unknown>);
+      return route.fulfill({
+        status: 201,
+        contentType: "application/json",
+        body: JSON.stringify({
+          inquiryId: "123e4567-e89b-42d3-a456-426614174000",
+          receivedAt: "2026-10-28T03:00:00Z",
+          photos: [],
+        }),
+      });
+    });
+    await page.goto(`${INQUIRY}?beach=gangmun`);
+    await expect(page.getByText(/^해변: /)).toBeVisible();
+    await pickKind(page, "해변을 추가해 주세요");
+    await page.getByRole("textbox", { name: /내용/ }).fill("근처 해변도 넣어 주세요");
+    await page.getByRole("button", { name: "보내기" }).click();
+    await expect(
+      page.getByRole("heading", { name: "접수됐어요" }),
+    ).toBeVisible();
+    expect(bodies).toHaveLength(1);
+    expect(bodies[0]).toMatchObject({
+      type: "beach_request",
+      message: "근처 해변도 넣어 주세요",
+      beachId: "b0001",
+      activity: "swimming",
+    });
+  });
+
+  test("해변·활동을 빼면 두 칸 모두 보내지 않음", async ({ page }) => {
+    const bodies: Record<string, unknown>[] = [];
+    await page.route("**/api/inquiries", (route) => {
+      bodies.push(route.request().postDataJSON() as Record<string, unknown>);
+      return route.fulfill({
+        status: 201,
+        contentType: "application/json",
+        body: JSON.stringify({
+          inquiryId: "123e4567-e89b-42d3-a456-426614174000",
+          receivedAt: "2026-10-28T03:00:00Z",
+          photos: [],
+        }),
+      });
+    });
+    await page.goto(`${INQUIRY}?beach=gangmun`);
+    await page.getByRole("button", { name: "해변·활동 빼기" }).click();
+    await pickKind(page, "정보가 실제와 달라요");
+    await page.getByRole("textbox", { name: /내용/ }).fill("파고가 달라요");
+    await page.getByRole("button", { name: "보내기" }).click();
+    await expect(
+      page.getByRole("heading", { name: "접수됐어요" }),
+    ).toBeVisible();
+    expect(bodies[0]).not.toHaveProperty("beachId");
+    expect(bodies[0]).not.toHaveProperty("activity");
   });
 
   test("접수되면 완료를 알리고 임시 저장을 지움", async ({ page }) => {
@@ -160,9 +242,9 @@ test.describe("데이터 문의", () => {
     await page.getByRole("textbox", { name: /내용/ }).fill("파고가 달라요");
     await page.getByRole("button", { name: "보내기" }).click();
     await expect(
-      page.getByText("응답이 없어 보내지 못했어요. 잠시 뒤 다시 보내 주세요."),
+      page.getByText("서버 응답이 오지 않았어요."),
     ).toBeVisible();
-    await page.getByRole("button", { name: "보내기" }).click();
+    await page.getByRole("button", { name: "다시 보내기" }).click();
     await expect(
       page.getByRole("heading", { name: "접수됐어요" }),
     ).toBeVisible();
@@ -219,8 +301,11 @@ test.describe("데이터 문의", () => {
     await expect(page.getByRole("img", { name: /사진 1/ })).toBeVisible();
     await page.getByRole("button", { name: "보내기" }).click();
     await expect(
-      page.getByText("접수됐는지 확인하지 못했어요. 잠시 뒤 다시 보내 주세요."),
+      page.getByText("서버 응답을 확인하지 못했어요."),
     ).toBeVisible();
+    await expect(page.getByText("문의는 접수되지 않았어요.")).toBeVisible();
+    // 사진은 다시 고르지 않아도 되게 화면에 남음(결정 25)
+    await expect(page.getByRole("img", { name: /사진 1/ })).toBeVisible();
     expect(external).toEqual([]);
     expect(created).toBe(0);
   });
