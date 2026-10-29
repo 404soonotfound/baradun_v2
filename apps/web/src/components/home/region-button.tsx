@@ -12,7 +12,7 @@ export function RegionButton({
   variant = "bar",
   className,
 }: {
-  // 고른 지역("강원 양양군") 또는 가까운 해변 지역. 없으면 null → "지역 고르기"
+  // 고른 지역("강원 양양군")·전국 또는 가까운 해변 지역. 없으면 null → "지역 고르기"
   label: string | null;
   // label이 내 위치에서 온 것이면 true(화살표 아이콘)
   nearby: boolean;

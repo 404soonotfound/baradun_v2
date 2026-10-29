@@ -114,9 +114,6 @@
       "changeRegion": "Choose region, now {region}"
     },
     "region": {
-      "pickTitle": "Which sea do you want to see?",
-      "pickBody": "You don't need to share your location. Pick a region to see how its beaches are right now.",
-      "pickNote": "The region you pick is saved on this device as your default region",
       "seaTitle": "Seas in {region}",
       "countTitle": "{count, plural, one {# beach} other {# beaches}} in {region} right now",
       "countLoading": "Loading beach status",
@@ -128,14 +125,18 @@
       "turnOn": "Turn on location",
       "close": "Close notice"
     },
+    "nationwide": {
+      "label": "All Korea",
+      "seaTitle": "Seas across Korea",
+      "countTitle": "{count, plural, one {# beach} other {# beaches}} across Korea right now",
+      "offBodyDefault": "Showing beaches across Korea by name. Turn on location to see nearby beaches.",
+      "offBodyChosen": "Showing beaches across Korea by name. Turn on location to see distances too."
+    },
     "near": {
       "title": "Nearby beaches",
       "all": "See all",
       "clearScope": "This beach's warning zone · KMA · checked {time}",
       "noValue": "No value",
-      "needLocation": "Turn on location to see nearby beaches",
-      "needLocationBody": "Your location is only used on this device to measure distance. It is never sent to a server.",
-      "useLocation": "Use my location",
       "locating": "Finding your location",
       "noBeach": "No beaches confirmed for this activity yet",
       "last24h": "Last 24 hours"
@@ -353,6 +354,7 @@
   "regionSheet": {
     "title": "Choose a region",
     "sido": "Choose a province",
+    "nationwide": "All Korea",
     "nearby": "Near me",
     "sigungu": "Choose a city or county in {sido}",
     "all": "All of {sido}",
@@ -583,7 +585,7 @@
       "unavailableHint": "Your device couldn't share its location, so distances aren't shown. Please try again in a moment.",
       "retry": "Try again",
       "region": "Default region",
-      "regionNone": "Not chosen",
+      "regionNationwide": "All Korea",
       "regionHint": "The region Home shows first. Saved only on this device.",
       "regionChange": "Change default region",
       "regionClear": "Clear default region"

@@ -114,9 +114,6 @@
       "changeRegion": "지역 고르기, 지금 {region}"
     },
     "region": {
-      "pickTitle": "어느 바다를 볼까요?",
-      "pickBody": "위치를 쓰지 않아도 괜찮아요. 지역을 고르면 그 지역 해변의 지금 상태를 보여드려요.",
-      "pickNote": "고른 지역은 이 기기에 기본 지역으로 저장돼요",
       "seaTitle": "{region} 바다",
       "countTitle": "{region} 해변 {count}곳 지금 상태",
       "countLoading": "해변 상태를 불러오고 있어요",
@@ -128,14 +125,18 @@
       "turnOn": "위치 정보 켜기",
       "close": "안내 닫기"
     },
+    "nationwide": {
+      "label": "전국",
+      "seaTitle": "전국 바다",
+      "countTitle": "전국 해변 {count}곳 지금 상태",
+      "offBodyDefault": "전국 해변을 이름 순으로 보여드려요. 위치를 켜면 가까운 바다를 보여드려요.",
+      "offBodyChosen": "전국 해변을 이름 순으로 보여드려요. 위치를 켜면 거리도 함께 보여드려요."
+    },
     "near": {
       "title": "가까운 바다",
       "all": "전체 보기",
       "clearScope": "이 해변 특보구역 · 기상청 {time} 확인",
       "noValue": "값 없음",
-      "needLocation": "위치를 켜면 가까운 바다를 보여드려요",
-      "needLocationBody": "위치는 기기에서 거리 계산에만 쓰고 서버로 보내지 않아요.",
-      "useLocation": "위치 사용하기",
       "locating": "위치를 확인하고 있어요",
       "noBeach": "이 활동이 확인된 해변이 아직 없어요",
       "last24h": "지난 24시간"
@@ -353,6 +354,7 @@
   "regionSheet": {
     "title": "지역 고르기",
     "sido": "시·도를 골라 주세요",
+    "nationwide": "전국",
     "nearby": "내 주변",
     "sigungu": "{sido}에서 시·군을 골라 주세요",
     "all": "{sido} 전체",
@@ -583,7 +585,7 @@
       "unavailableHint": "기기에서 위치를 받지 못해 거리를 보여드릴 수 없어요. 잠시 뒤 다시 시도해 주세요.",
       "retry": "다시 시도",
       "region": "기본 지역",
-      "regionNone": "고르지 않음",
+      "regionNationwide": "전국",
       "regionHint": "홈에서 먼저 보여드리는 지역이에요. 이 기기에만 저장해요.",
       "regionChange": "기본 지역 바꾸기",
       "regionClear": "기본 지역 지우기"
