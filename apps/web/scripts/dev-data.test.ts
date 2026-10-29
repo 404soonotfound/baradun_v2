@@ -117,6 +117,8 @@ function startDevCommand({
     BARADUN_DEV_DATA_DIR: outDir,
     FAKE_NEXT_READY: fake.ready,
     FAKE_NEXT_STOPPED: fake.stopped,
+    // 개발자의 apps/web/.env.local 대신 없는 파일을 가리킴(필요한 시험만 extraEnv로 바꿈)
+    BARADUN_DEV_ENV_FILE: path.join(root, "missing.env.local"),
   };
   // 개발자 셸에 export한 운영 주소가 시험에 섞이지 않게 함(필요한 시험만 extraEnv로 넣음)
   delete env.BARADUN_DEV_DATA_ORIGIN;
@@ -484,58 +486,71 @@ describe("운영 snapshot 미러로 개발 서버 실행", { timeout: 20_000 }, 
     expect(existsSync(ready)).toBe(false);
   });
 
-  it("live면 지난 예시를 지우고 운영 manifest를 미러한 뒤 개발 서버를 실행함", async () => {
-    const { examplesDir, outDir } = fixture();
-    const sampleVersion = writeDevData({ examplesDir, outDir });
-    const root = path.dirname(outDir);
-    // 운영 CloudFront 대신: 계약 예시를 /data/… 경로로 내보내는 로컬 서버
-    const source = readJson<ManifestFile>(
-      path.join(examplesDir, "manifest.json"),
-    );
-    const server = createServer((req, res) => {
-      const url = req.url ?? "";
-      const name =
-        url === "/data/manifest.json"
-          ? "manifest.json"
-          : url.startsWith(`/data/${source.snapshotVersion}/`)
-            ? path.basename(url)
-            : null;
-      const file = name && path.join(examplesDir, name);
-      if (!file || !existsSync(file)) {
-        res.writeHead(404).end();
-        return;
-      }
-      res.writeHead(200).end(readFileSync(file));
-    });
-    await new Promise<void>((resolve) =>
-      server.listen(0, "127.0.0.1", resolve),
-    );
-    const { port } = server.address() as AddressInfo;
-
-    try {
-      const { child, ready } = startDevCommand({
-        root,
-        outDir,
-        mode: "live",
-        extraEnv: { BARADUN_DEV_DATA_ORIGIN: `http://127.0.0.1:${port}` },
+  it.each(["셸 환경변수", ".env.local"] as const)(
+    "live면 지난 예시를 지우고 운영 manifest를 미러한 뒤 개발 서버를 실행함(주소: %s)",
+    async (originFrom) => {
+      const { examplesDir, outDir } = fixture();
+      const sampleVersion = writeDevData({ examplesDir, outDir });
+      const root = path.dirname(outDir);
+      // 운영 CloudFront 대신: 계약 예시를 /data/… 경로로 내보내는 로컬 서버
+      const source = readJson<ManifestFile>(
+        path.join(examplesDir, "manifest.json"),
+      );
+      const server = createServer((req, res) => {
+        const url = req.url ?? "";
+        const name =
+          url === "/data/manifest.json"
+            ? "manifest.json"
+            : url.startsWith(`/data/${source.snapshotVersion}/`)
+              ? path.basename(url)
+              : null;
+        const file = name && path.join(examplesDir, name);
+        if (!file || !existsSync(file)) {
+          res.writeHead(404).end();
+          return;
+        }
+        res.writeHead(200).end(readFileSync(file));
       });
-      await waitForFile(ready);
-      // 표지는 manifest 교체 뒤에 쓰므로 표지가 보이면 게시가 끝난 것임
-      const modeFile = path.join(outDir, DEV_DATA_MODE_FILE);
-      await expect
-        .poll(() => existsSync(modeFile) && readFileSync(modeFile, "utf8"), {
-          timeout: 5_000,
-        })
-        .toBe("live\n");
-      expect(manifestAt(outDir).snapshotVersion).toBe(source.snapshotVersion);
-      expect(existsSync(path.join(outDir, source.snapshotVersion))).toBe(true);
-      expect(existsSync(path.join(outDir, sampleVersion))).toBe(false);
-      await stopChild(child);
-    } finally {
-      server.closeAllConnections();
-      await new Promise((resolve) => server.close(resolve));
-    }
-  });
+      await new Promise<void>((resolve) =>
+        server.listen(0, "127.0.0.1", resolve),
+      );
+      const { port } = server.address() as AddressInfo;
+
+      try {
+        const origin = `http://127.0.0.1:${port}`;
+        const envFile = path.join(root, ".env.local");
+        if (originFrom === ".env.local") {
+          writeFileSync(envFile, `BARADUN_DEV_DATA_ORIGIN=${origin}\n`);
+        }
+        const { child, ready } = startDevCommand({
+          root,
+          outDir,
+          mode: "live",
+          extraEnv:
+            originFrom === ".env.local"
+              ? { BARADUN_DEV_ENV_FILE: envFile }
+              : { BARADUN_DEV_DATA_ORIGIN: origin },
+        });
+        await waitForFile(ready);
+        // 표지는 manifest 교체 뒤에 쓰므로 표지가 보이면 게시가 끝난 것임
+        const modeFile = path.join(outDir, DEV_DATA_MODE_FILE);
+        await expect
+          .poll(() => existsSync(modeFile) && readFileSync(modeFile, "utf8"), {
+            timeout: 5_000,
+          })
+          .toBe("live\n");
+        expect(manifestAt(outDir).snapshotVersion).toBe(source.snapshotVersion);
+        expect(existsSync(path.join(outDir, source.snapshotVersion))).toBe(
+          true,
+        );
+        expect(existsSync(path.join(outDir, sampleVersion))).toBe(false);
+        await stopChild(child);
+      } finally {
+        server.closeAllConnections();
+        await new Promise((resolve) => server.close(resolve));
+      }
+    },
+  );
 });
 
 describe("개발 실행 스크립트", () => {
