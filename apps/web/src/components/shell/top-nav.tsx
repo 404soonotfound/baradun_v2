@@ -1,12 +1,13 @@
 "use client";
 
-import { Search, Settings } from "lucide-react";
+import { Search } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useEffect } from "react";
 
 import { LogoMark } from "@/components/logo-mark";
+import { SettingsIcon } from "@/components/settings-icon";
 import { cn } from "@/lib/cn";
 import { useFavorites } from "@/lib/favorites";
 import { localizedPath } from "@/lib/i18n";
@@ -142,7 +143,7 @@ export function TopNav() {
               current === "settings" ? "text-brand-default" : "text-text-body",
             )}
           >
-            <Settings aria-hidden="true" size={20} />
+            <SettingsIcon aria-hidden="true" size={20} strokeWidth={1.8} />
           </Link>
         </div>
       </div>
