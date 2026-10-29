@@ -19,6 +19,9 @@ const KMA_BUOY_EN = "Source: KMA (ocean and wave buoy observations)";
 const FINAL_CALL = "최종 판단은 현장 통제와 안전요원 안내가 우선이에요";
 const TOUR_API = "https://www.data.go.kr/data/15101578/openapi.do";
 const SURF_API = "https://www.data.go.kr/data/15142490/openapi.do";
+const BOUNDARY_SOURCE =
+  "https://www.vworld.kr/dtmk/dtmk_ntads_s002.do?svcCde=NA&dsId=21";
+const CC_BY_2_KR = "https://creativecommons.org/licenses/by/2.0/kr/";
 const RIP_API = "https://www.data.go.kr/data/15156028/openapi.do";
 
 // 화면에 보이는 그 글자(같은 화면의 숨은 자리·다른 보기는 세지 않음)
@@ -239,6 +242,18 @@ test.describe("데이터 출처 화면", () => {
     await expect(
       map.getByRole("link", { name: /^Positron 스타일 라이선스/ }),
     ).toBeVisible();
+    // 법정 읍면동 경계: CC BY 2.0 KR 저작자·제목·출처·라이선스·변경 여부 표시(BRD-126)
+    const boundary = page.getByRole("region", { name: "국토교통부" });
+    await expect(boundary).toContainText(
+      "국토교통부(국가공간정보센터)의 '법정구역정보'",
+    );
+    await expect(boundary).toContainText("경계는 바꾸지 않았고");
+    await expect(
+      boundary.getByRole("link", { name: /^법정구역정보\(브이월드\)/ }),
+    ).toHaveAttribute("href", BOUNDARY_SOURCE);
+    await expect(
+      boundary.getByRole("link", { name: /^CC BY 2\.0 KR 라이선스/ }),
+    ).toHaveAttribute("href", CC_BY_2_KR);
   });
 
   test("영어: 같은 출처와 링크", async ({ page }) => {
@@ -251,5 +266,15 @@ test.describe("데이터 출처 화면", () => {
     await expect(page.locator("main")).toContainText(
       "designed by Stamen and Paul Norman",
     );
+    const boundary = page.getByRole("region", {
+      name: "Ministry of Land, Infrastructure and Transport (MOLIT)",
+    });
+    await expect(boundary).toContainText("CC BY 2.0 KR");
+    await expect(
+      boundary.getByRole("link", { name: /^Legal District Information/ }),
+    ).toHaveAttribute("href", BOUNDARY_SOURCE);
+    await expect(
+      boundary.getByRole("link", { name: /^CC BY 2\.0 KR license/ }),
+    ).toHaveAttribute("href", CC_BY_2_KR);
   });
 });
