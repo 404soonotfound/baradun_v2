@@ -1,15 +1,15 @@
 import { useSyncExternalStore } from "react";
 
 import {
-  NATIONWIDE,
   parseRegionChoice,
+  pickedRegion,
   type RegionChoice,
   type SavedRegion,
 } from "@/lib/region-list";
 
 // 기본 지역 (BRD-11 결정: 위치 권한이 없을 때 홈에서 고르는 지역, 기기 저장) (BRD-26·27)
 // 칩은 출시된 해변이 있는 시·도만. 고른 뒤 지역 선택 창에서 시·군까지 고름
-// 시트에서 '전국'을 고르면 같은 칸에 전국으로 저장(BRD-127). 저장값이 없으면 홈은 기본값(homeScope)
+// 시트·탐색에서 '전국'을 고르면 같은 칸에 전국으로 저장(BRD-127). 저장값이 없으면 홈은 기본값(homeScope)
 // 기기 저장만 여기. 순수 계산(지리 순서·칩·지역 묶음·저장 글자 읽기)은 lib/region-list.ts (BRD-27에서 나눔)
 
 // [6] ── 기기 저장 (lib/activity.ts와 같은 틀) ──
@@ -50,7 +50,7 @@ function subscribe(onChange: () => void) {
   };
 }
 
-// [9] 지역 고르기·바꾸기. NATIONWIDE = 시트에서 고른 전국. null이면 저장한 값 지움(홈 기본값으로)
+// [9] 지역 고르기·바꾸기. NATIONWIDE = 시트·탐색에서 고른 전국. null이면 저장한 값 지움(홈 기본값으로: '내 주변'·지우기·초기화)
 export function setRegion(next: RegionChoice | null) {
   memory = next;
   try {
@@ -71,6 +71,5 @@ export function useRegionChoice(): RegionChoice | null {
 // [11] 시·도 지역만. 전국은 null(탐색·검색은 null을 전국으로 봄)
 // 화면에서: const region = validRegion(useRegion(), beaches);  (validRegion은 region-list.ts)
 export function useRegion(): SavedRegion | null {
-  const choice = useRegionChoice();
-  return choice === NATIONWIDE ? null : choice;
+  return pickedRegion(useRegionChoice());
 }
