@@ -20,18 +20,18 @@ function validate(definition: string, value: unknown): boolean {
 }
 
 describe("데이터 문의 계약", () => {
-  it("사진 3장과 5MiB 경계를 허용한다", () => {
+  it("사진 3장과 4MiB 경계를 허용한다", () => {
     expect(
       validate("InquiryUploadRequest", {
         photos: Array.from({ length: 3 }, () => ({
           contentType: "image/jpeg",
-          size: 5 * 1024 * 1024,
+          size: 4 * 1024 * 1024,
         })),
       }),
     ).toBe(true);
   });
 
-  it("사진 4장이나 5MiB 초과를 거부한다", () => {
+  it("사진 4장이나 4MiB 초과를 거부한다", () => {
     expect(
       validate("InquiryUploadRequest", {
         photos: Array.from({ length: 4 }, () => ({
@@ -42,7 +42,7 @@ describe("데이터 문의 계약", () => {
     ).toBe(false);
     expect(
       validate("InquiryUploadRequest", {
-        photos: [{ contentType: "image/jpeg", size: 5 * 1024 * 1024 + 1 }],
+        photos: [{ contentType: "image/jpeg", size: 4 * 1024 * 1024 + 1 }],
       }),
     ).toBe(false);
   });
@@ -68,6 +68,60 @@ describe("데이터 문의 계약", () => {
         message: "문의",
         email: "not-an-email",
         photos: [],
+      }),
+    ).toBe(false);
+  });
+
+  it("문의 유형은 화면 칩 4개와 1:1이다", () => {
+    const base = {
+      idempotencyKey: "3f2504e0-4f89-41d3-9a0c-0305e82c3301",
+      message: "문의",
+      photos: [],
+    };
+    for (const type of [
+      "data_error",
+      "data_question",
+      "beach_request",
+      "data_suggestion",
+    ]) {
+      expect(validate("CreateInquiryRequest", { ...base, type }), type).toBe(
+        true,
+      );
+    }
+    // 예전 묶음 유형(other)은 받지 않음
+    expect(validate("CreateInquiryRequest", { ...base, type: "other" })).toBe(
+      false,
+    );
+  });
+
+  it("해변·활동은 구조화 칸으로 받고, 활동만 따로 오면 거부한다", () => {
+    const base = {
+      idempotencyKey: "3f2504e0-4f89-41d3-9a0c-0305e82c3301",
+      type: "data_error",
+      message: "문의",
+      photos: [],
+    };
+    expect(
+      validate("CreateInquiryRequest", {
+        ...base,
+        beachId: "b0001",
+        activity: "surfing",
+      }),
+    ).toBe(true);
+    expect(
+      validate("CreateInquiryRequest", { ...base, beachId: "b0001" }),
+    ).toBe(true);
+    expect(
+      validate("CreateInquiryRequest", { ...base, activity: "surfing" }),
+    ).toBe(false);
+    expect(
+      validate("CreateInquiryRequest", { ...base, beachId: "haeundae" }),
+    ).toBe(false);
+    expect(
+      validate("CreateInquiryRequest", {
+        ...base,
+        beachId: "b0001",
+        activity: "snorkeling",
       }),
     ).toBe(false);
   });
