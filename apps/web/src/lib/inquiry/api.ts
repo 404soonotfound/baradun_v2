@@ -52,8 +52,9 @@ export type SendResult =
   | { ok: false; failure: SendFailure; stop: SendStop };
 
 // 문의가 서버에 남았을 수 있는지. 문의 요청을 보낸 뒤 응답을 못 받았거나(network·5xx) 모양이 틀리면 모름.
-// 앞 시도가 그랬는데 이번엔 연결이 없어 못 보냈어도 모름. 접수 전에 멈췄거나 서버가 거절(429·400·409)했으면 접수 안 됨
-// (서버는 이미 접수한 키면 속도 제한·검사 전에 첫 결과를 돌려주므로 429·400은 접수 안 됨을 뜻함)
+// 앞 시도가 그랬는데 이번엔 연결이 없거나 429로 막혀도 모름(앞 요청이 아직 저장 전일 수 있음).
+// 접수 전에 멈췄거나 첫 시도가 거절(429·400·409)됐으면 접수 안 됨
+// (서버는 이미 접수한 키면 속도 제한 전에 첫 결과를 돌려주므로 첫 시도의 429는 접수 안 됨을 뜻함)
 const UNCERTAIN_FAILURES: readonly SendFailure[] = [
   "network",
   "unavailable",
@@ -490,11 +491,22 @@ export async function sendInquiry(
   });
   const stop: SendStop = { stage: "message", photos: refs.length };
   if (!sent.ok) {
-    // 거부(400·409)는 서버가 아무것도 만들지 않은 것 → 다음 시도는 새 키
-    if (sent.failure === "rejected") attempt.current = null;
-    else if (UNCERTAIN_FAILURES.includes(sent.failure))
+    // 거부(400·409) → 다음 시도는 새 키(같은 키로 다시 보내도 같은 거부).
+    // 400은 서버가 멱등 기록을 보기 전에 본문 검사로 정함 → 같은 본문의 앞 시도도 거부됐으므로 접수 안 됨으로 봄.
+    // 409는 이 키의 접수 기록이 있다는 뜻이지만 같은 내용이면 지문이 같아 생기지 않음(서버 지문 규칙이 배포로 바뀔 때만)
+    if (sent.failure === "rejected") {
+      attempt.current = null;
+      return { ok: false, failure: sent.failure, stop };
+    }
+    if (UNCERTAIN_FAILURES.includes(sent.failure))
       attempt.current = { ...current, refs, uncertain: true };
-    return { ok: false, failure: sent.failure, stop };
+    // 앞 시도가 답을 못 받았으면 이번 429는 앞 요청이 아직 처리 중일 때도 올 수 있음
+    // (서버는 저장 전에 속도 제한을 셈) → 앞 시도의 접수 여부를 모르는 채로 남김
+    return {
+      ok: false,
+      failure: sent.failure,
+      stop: current.uncertain ? { ...stop, uncertain: true } : stop,
+    };
   }
   if (!isCreateResponse(sent.body, refs)) {
     attempt.current = { ...current, refs, uncertain: true };
