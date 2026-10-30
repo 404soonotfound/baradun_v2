@@ -9,6 +9,8 @@ export interface SiteDeliveryProps {
   // CloudFront 정액 요금제가 붙인 WAF web ACL의 ARN (us-east-1). 없으면 비워 둠.
   // 요금제를 쓰는 배포에서 web ACL을 떼면 안 돼서, 구독 뒤에는 꼭 넘겨야 함.
   readonly webAclId?: string;
+  // CloudFront 보안 응답 헤더 정책 (CSP·HSTS·nosniff 등, BRD-118)
+  readonly responseHeadersPolicy?: cloudfront.IResponseHeadersPolicy;
 }
 
 // 사이트 전달: S3 버킷 하나(사이트 파일 + data/ 스냅샷, BRD-52) + CloudFront 하나(G3)
@@ -46,6 +48,7 @@ export class SiteDelivery extends Construct {
         // OAC: CloudFront만 버킷을 읽을 수 있게 하는 서명 방식 (OAI는 정액 요금제 미지원)
         origin: origins.S3BucketOrigin.withOriginAccessControl(this.bucket),
         viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+        responseHeadersPolicy: props.responseHeadersPolicy,
         // AWS 기본 정책: 파일의 Cache-Control 헤더를 따름.
         // 정액 Free는 직접 만든 캐시 정책을 못 써서, manifest 60초·버전 경로 불변은
         // publisher가 올릴 때 붙이는 Cache-Control로 정함 (6.2, 11장 제안)
