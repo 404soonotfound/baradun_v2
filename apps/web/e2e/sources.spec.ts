@@ -62,12 +62,12 @@ test.describe("기상청 출처 한 줄", () => {
     await page.goto(`/spots/${slugOf(CLEAR_ID)}/`);
     await expect(visibleText(page, KMA_BUOY_KO)).toBeVisible();
     const sources = page.getByRole("region", { name: "정보 출처" });
-    // 파도·바람·수온 줄: '기상청 · 측정소 n km · n분 전 측정'
-    await expect(sources.getByText(/^기상청 · /)).not.toHaveCount(0);
+    // 파도·바람·수온 줄: '기상청 측정소 n km'(시각은 같은 줄 오른쪽·다음 줄, BRD-129)
+    await expect(sources.getByText(/^기상청 /)).not.toHaveCount(0);
     await page.goto(`/en/spots/${slugOf(CLEAR_ID)}/`);
     await expect(visibleText(page, KMA_BUOY_EN)).toBeVisible();
     await expect(
-      page.getByRole("region", { name: "Data sources" }).getByText(/^KMA · /),
+      page.getByRole("region", { name: "Data sources" }).getByText(/^KMA /),
     ).not.toHaveCount(0);
   });
 
@@ -174,7 +174,7 @@ function busy() {
 // 화면 어디에도 기상청·국립해양조사원 출처가 없음(정보 출처 줄의 '기상청 · 측정소' 포함)
 async function expectNoKmaSource(page: Page) {
   await expect(page.getByText(/출처: 기상청/)).toHaveCount(0);
-  await expect(page.getByText(/^기상청 · /)).toHaveCount(0);
+  await expect(page.getByText(/^기상청 /)).toHaveCount(0);
   await expect(page.getByText(/국립해양조사원 「/)).toHaveCount(0);
 }
 
