@@ -391,7 +391,7 @@ export function ExploreScreen({
         {locationOff && (
           <LocationOffBanner
             locale={locale}
-            status={location.status}
+            location={location}
             onClose={() => setOffBannerClosed(true)}
             title={noticeTitle}
             body={t("explore.locationOff.body")}

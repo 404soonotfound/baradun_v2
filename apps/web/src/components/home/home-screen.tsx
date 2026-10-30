@@ -257,7 +257,7 @@ export function HomeScreen({
     situation?.kind === "noLocation" ? (
       <LocationOffBanner
         locale={locale}
-        status={location.status}
+        location={location}
         onClose={() => setOffBannerClosed(true)}
         body={offBody}
         withIcon={false}

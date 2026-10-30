@@ -605,7 +605,7 @@
         "off": "Off"
       },
       "idleHint": "Tap the permission row and your browser will ask once.",
-      "deniedHint": "We won't ask again here. To use location, change this site's location permission in your browser settings.",
+      "deniedHint": "Location permission isn’t allowed, so we can’t show nearby beaches or distances. Tap Try again to ask your browser once more.",
       "unavailableHint": "Your device couldn't share its location, so distances aren't shown. Tap the permission row to try again in a moment.",
       "region": "Default region",
       "regionNationwide": "All Korea",
@@ -902,5 +902,13 @@
     "offer": "This site is also available in English",
     "switch": "View in English",
     "stay": "Keep this language"
+  },
+  "location": {
+    "retry": "Try again",
+    "retrying": "Checking location…",
+    "retryDenied": {
+      "ios": "We tried again, but location permission wasn’t allowed, so we can’t show nearby beaches or distances. Go to Settings → Privacy & Security → Location Services → Safari Websites, choose “While Using the App”, then try again.",
+      "browser": "We tried again, but location permission wasn’t allowed, so we can’t show nearby beaches or distances. Allow location for this site in your browser settings, then try again."
+    }
   }
 }
