@@ -16,7 +16,7 @@ import { useTimeText } from "@/lib/snapshot/use-time-text";
 import type { BeachView } from "@/lib/snapshot/view";
 
 // '자세히' 시트 DET-SH (BRD-33 · 노션 2장 DET-SH, 5장 규칙 4)
-// "무엇을 확인했나요" + 안내 → 바다 관련 특보 5종 · 측정 시각 · 출입 통제(확인하지 않아요, G2) · 파고 → 파주기 읽는 법 → 현장 우선 문구
+// "무엇을 확인했나요" + 안내 → 바다 관련 특보 5종 · 측정 시각 · 출입 통제(확인하지 않아요, G2) · 파고 → 파주기 읽는 법 → 기상청 출처
 // 확인한 항목마다 범위 → 기관 → 시각. 파장은 표시하지 않음(B2-파장).
 // 4항목(시안 S_M04_06): 특보 · 측정 시각 · 출입 통제 · 파고. 파고는 값과 측정 시각만, 맞는지는 사용자가 판단
 
@@ -166,11 +166,14 @@ export function DetailSheet({
             {t("detailSheet.periodBody")}
           </p>
         </section>
-        <div className="flex flex-col gap-0.5 border-t border-border-default pt-3 text-caption text-text-muted">
-          <p>{t("safety.finalCall")}</p>
-          {/* 시트가 화면을 덮으므로 시트 안에도 기상청 출처(BRD-113 · 기상법). 받은 자료가 없으면 두지 않음 */}
-          {kmaData && <KmaSourceNote variant="status" />}
-        </div>
+        {/* 현장 우선 문구는 화면 전체에서 판단 카드에 한 번만(10/30 사용자 결정, 시트 뒤 카드에 보임)
+            시트가 화면을 덮으므로 시트 안에도 기상청 출처(BRD-113 · 기상법). 받은 자료가 없으면 두지 않음 */}
+        {kmaData && (
+          <KmaSourceNote
+            variant="status"
+            className="border-t border-border-default pt-3"
+          />
+        )}
       </div>
     </Sheet>
   );

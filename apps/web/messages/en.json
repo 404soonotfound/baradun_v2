@@ -243,15 +243,15 @@
       "recheckFailed": "Checked again but couldn't confirm warnings",
       "autoRecheck": "We'll check again automatically when new measurements arrive",
       "checked": "What we checked",
-      "checkedWarning": "Warnings",
-      "checkedTime": "Last reading",
-      "checkedWave": "Wave height",
       "warningActive": "In effect",
       "warningNone": "None",
       "warningUnknown": "Not confirmed",
       "waveValue": "Wave {value}m",
       "unreadableWarning": "A warning is in effect, but we couldn't read its details · Check with KMA",
-      "openWarning": "Warning details"
+      "openWarning": "Warning details",
+      "waveNoValue": "No wave height value",
+      "waveNone": "Wave height · No nearby observation",
+      "checkedWarningActive": "Warning in effect"
     },
     "alt": {
       "title": "Nearby beaches with no warnings",
