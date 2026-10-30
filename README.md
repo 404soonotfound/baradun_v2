@@ -122,6 +122,16 @@ echo 'BARADUN_DEV_DATA_ORIGIN=https://<운영 CloudFront>' >> apps/web/.env.loca
 - **`tools/beaches`**:
   - `npm run test:beaches`: 해변 데이터 생성 도구 단위 테스트
 
+## 운영 배포
+
+사이트 배포(`deploy.yml`)는 main에 머지한 커밋의 CI(`ci.yml`)가 성공하면 자동으로 실행됩니다. CI가 실패한 커밋은 배포하지 않고, CI가 검사한 커밋을 그대로 올립니다. 로컬에는 AWS 키를 두지 않으며, 배포는 GitHub Actions가 OIDC 임시 키로 합니다.
+
+```bash
+npm run deploy:prod   # main 최신 커밋을 다시 배포 (gh 로그인 필요, 진행을 터미널에 보여 줌)
+```
+
+수동 배포도 그 커밋의 `ci-ok`가 성공일 때만 올립니다. 인프라 변경과 순서를 맞춰야 할 때는 저장소 변수 `DEPLOY_PAUSED`를 `true`로 두면 자동 배포가 멈춥니다(절차는 [infra/README.md](infra/README.md)). 개발용 배포 사이트는 따로 두지 않고, 운영 데이터로 미리 보려면 `npm run live`를 씁니다.
+
 ## 운영 방법
 
 > **주의**: 인프라 배포(`cdk deploy`)나 스케줄 변경, 롤백 등 실제 운영 환경 명령은 배포 권한과 승인이 있을 때만 수행하며, 로컬 작업 브랜치가 아닌 최신 `origin/main` 작업 트리에서 실행해야 합니다.
