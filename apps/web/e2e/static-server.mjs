@@ -23,6 +23,35 @@ const TYPES = {
   ".ico": "image/x-icon",
 };
 
+// CloudFront 보안 응답 헤더 (BRD-118 · SiteDelivery/InquiryBackend와 동일)
+function buildCspHeader(photoBucket) {
+  const connectSources = ["'self'", "https://tiles.openfreemap.org"];
+  if (photoBucket) {
+    connectSources.push(`https://${photoBucket}.s3.ap-northeast-2.amazonaws.com`);
+  }
+  return [
+    "default-src 'self'",
+    "script-src 'self' 'unsafe-inline'",
+    "style-src 'self'",
+    "img-src 'self' blob: https://tiles.openfreemap.org https://tong.visitkorea.or.kr",
+    "font-src 'self'",
+    `connect-src ${connectSources.join(" ")}`,
+    "worker-src 'self'",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "frame-ancestors 'none'",
+  ].join("; ");
+}
+
+const SECURITY_HEADERS = {
+  "strict-transport-security": "max-age=31536000",
+  "x-content-type-options": "nosniff",
+  "x-frame-options": "DENY",
+  "referrer-policy": "strict-origin-when-cross-origin",
+  "permissions-policy": "camera=(), microphone=(), geolocation=(self)",
+};
+
 async function resolveFile(pathname) {
   const file = path.join(OUT, pathname);
   // out 밖으로 나가는 주소(../, 이름이 out으로 시작하는 형제 폴더 out2/ 등)는 막음
@@ -59,7 +88,10 @@ createServer(async (req, res) => {
   const target = file ?? path.join(OUT, "404.html");
   try {
     const body = await readFile(target);
+    const photoBucket = process.env.NEXT_PUBLIC_INQUIRY_PHOTO_BUCKET || process.env.CSP_PHOTO_BUCKET;
     res.writeHead(status, {
+      ...SECURITY_HEADERS,
+      "content-security-policy": buildCspHeader(photoBucket),
       "content-type": TYPES[path.extname(target)] ?? "application/octet-stream",
       "cache-control": "no-store",
     });
