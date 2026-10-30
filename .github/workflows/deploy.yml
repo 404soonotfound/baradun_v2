@@ -13,9 +13,6 @@ on:
   workflow_dispatch: # npm run deploy:prod 또는 Actions 탭에서 수동 실행 (그 커밋의 ci-ok가 성공일 때만)
 permissions:
   contents: read
-concurrency:
-  group: deploy-production
-  cancel-in-progress: false # 배포 도중 끊지 않음
 jobs:
   site:
     # 첫 인프라 배포 전(변수가 비어 있음)에는 건너뜀
@@ -32,6 +29,10 @@ jobs:
       )
     runs-on: ubuntu-latest
     environment: production
+    # 그룹은 작업 수준에 둠: 조건에서 건너뛰는 실행(실패·취소·정기 CI)이 그룹에 들어와 대기 중인 배포를 취소하지 않게 함
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false # 배포 도중 끊지 않음
     permissions:
       contents: read
       checks: read # 수동 실행 때 ci-ok 결과를 읽음

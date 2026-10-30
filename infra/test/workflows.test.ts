@@ -72,6 +72,11 @@ describe("배포 워크플로 가드레일 (11장)", () => {
       /SHA:\s*\$\{\{\s*github\.event\.workflow_run\.head_sha \|\| github\.sha\s*\}\}/,
     );
     expect(text).toMatch(/ref:\s*\$\{\{\s*env\.SHA\s*\}\}/);
+    // 배포 그룹은 작업 수준: 조건에서 건너뛰는 실행이 대기 중인 배포를 취소하지 않게 함
+    expect(text).not.toMatch(/^concurrency:/m);
+    expect(jobLines(deploy?.text ?? "", "site").join("\n")).toMatch(
+      /^\s{4}concurrency:\s*\n\s{6}group:\s*deploy-production/m,
+    );
   });
 
   it("수동 실행은 체크아웃 전에 그 커밋의 ci-ok 성공을 확인하고, 아니면 멈춘다 (BRD-133)", () => {
