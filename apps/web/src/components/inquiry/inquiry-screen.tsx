@@ -1,6 +1,6 @@
 "use client"; // 입력·임시 저장(기기)·사진 준비(canvas)·보내기(fetch)를 하므로 브라우저 부품
 
-import { CircleAlert, CircleCheck, ImagePlus, X } from "lucide-react";
+import { Camera, Check, CircleAlert, WifiOff, X } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -316,66 +316,74 @@ export function InquiryScreen({
     }
   }
 
+  // 머리: ✕ 닫기 · 가운데 '데이터 문의'(Figma hbar 179:350, 56px). 완료 화면도 같은 머리
   const header = (
-    <header className="-mx-2 flex h-detail-header items-center gap-1">
-      <BackButton locale={locale} fallback="/settings/" />
-      <h1
-        ref={doneRef}
-        tabIndex={-1}
-        className="text-title-l text-text-default outline-none"
-      >
-        {phase.kind === "done" ? t("done.title") : tp("inquiry")}
+    <header className="-mx-2.5 grid h-14 grid-cols-[44px_minmax(0,1fr)_44px] items-center">
+      <BackButton locale={locale} fallback="/settings/" close />
+      <h1 className="truncate text-center text-body font-bold text-text-default">
+        {tp("inquiry")}
       </h1>
     </header>
   );
 
   if (phase.kind === "done") {
+    // 접수 완료(Figma S_M06_06 180:234): 가운데 정렬 체크 원 64 → 제목 19 → 안내 13 → 사진·임시 보관 12 → 버튼
     return (
-      <div className="mx-auto flex w-full max-w-[640px] flex-col gap-4">
+      <div className="mx-auto flex w-full max-w-[640px] flex-col">
         {header}
-        <section className="flex flex-col items-start gap-3 rounded-card bg-bg-surface p-5 shadow-card">
+        <section className="flex flex-col items-center gap-2.5 px-1.5 pt-[60px] text-center">
           <span
             aria-hidden="true"
-            className="flex size-10 items-center justify-center rounded-full bg-status-clear-bg text-status-clear-fg"
+            className="flex size-16 items-center justify-center rounded-full bg-brand-weak text-brand-default"
           >
-            <CircleCheck size={22} />
+            <Check size={30} />
           </span>
-          <p className="text-body text-text-default">
+          <h2
+            ref={doneRef}
+            tabIndex={-1}
+            className="text-[19px] leading-[27.6px] font-bold text-text-default outline-none"
+          >
+            {t("done.title")}
+          </h2>
+          <p className="text-body-s text-text-muted">
             {t(contactEnabled ? "done.body" : "done.bodyTextOnly")}
           </p>
           {phase.accepted > 0 && (
-            <p className="text-body-s text-text-body">
+            <p className="text-caption text-text-muted">
               {t("done.photos", { count: phase.accepted })}
             </p>
           )}
           {phase.rejectedLocation > 0 && (
-            <p className="text-body-s text-text-body">
+            <p className="text-caption text-text-muted">
               {t("done.rejectedLocation", { count: phase.rejectedLocation })}
             </p>
           )}
           {phase.rejectedOther > 0 && (
-            <p className="text-body-s text-text-body">
+            <p className="text-caption text-text-muted">
               {t("done.rejectedOther", { count: phase.rejectedOther })}
             </p>
           )}
           {phase.rejectedLocation + phase.rejectedOther > 0 && (
-            <p className="text-body-s text-text-body">
+            <p className="text-caption text-text-muted">
               {t("done.rejectedNext")}
             </p>
           )}
-          <p className="text-body-s text-text-body">{t("done.draftCleared")}</p>
-          <div className="mt-2 flex w-full flex-col gap-2 sm:flex-row">
-            <Button asChild>
+          <p className="text-caption text-text-muted">
+            {t("done.draftCleared")}
+          </p>
+          <div className="mt-3.5 flex w-full flex-col items-center gap-1">
+            <Button asChild className="w-full">
               <Link href={localizedPath(locale, "/settings/")}>
                 {t("done.back")}
               </Link>
             </Button>
-            <Button
-              variant="secondary"
+            <button
+              type="button"
               onClick={() => setPhase({ kind: "editing" })}
+              className="flex min-h-touch items-center px-2 text-caption text-text-muted underline"
             >
               {t("done.another")}
-            </Button>
+            </button>
           </div>
         </section>
       </div>
@@ -395,40 +403,49 @@ export function InquiryScreen({
         : t("progress.message")
       : null;
 
+  // 칸 이름(Figma label 13 굵게)·입력 상자(Figma 입력칸 170:347: 테두리 strong, 모서리 12, 좌우 15)
+  const fieldLabel = "text-body-s font-bold text-text-default";
+  const fieldNote = "font-normal text-caption text-text-muted";
+  const inputBox = (invalid: boolean) =>
+    cn(
+      "w-full rounded-input border bg-bg-surface px-[15px] text-body text-text-default placeholder:text-text-muted",
+      invalid ? "border-[1.5px] border-danger-text" : "border-border-strong",
+    );
+
   return (
     <div className="mx-auto flex w-full max-w-[640px] flex-col gap-4 pb-6">
-      {header}
-      <p className="text-body-s text-text-body">{t("intro")}</p>
+      {/* Figma는 머리 바로 아래부터 칸이 시작(사이 0) */}
+      <div className="-mb-4">{header}</div>
 
       {copy && (
+        // 보내지 못함 배너(Figma 알림 배너 · 위험 170:374). 무슨 일(제목·원인) → 영향(멈춘 단계·접수 여부) → 다음 행동
         <div
           ref={alertRef}
           tabIndex={-1}
           role="alert"
-          className="flex gap-3 rounded-card border-[1.5px] border-banner-red-border bg-bg-surface p-4 outline-none"
+          className="flex items-center gap-3 rounded-button border border-banner-red-border bg-bg-surface px-[15px] py-[13px] outline-none"
         >
           <span
             aria-hidden="true"
             className="flex size-8 shrink-0 items-center justify-center rounded-full bg-banner-red-icon-bg text-banner-red-icon-fg"
           >
-            <CircleAlert size={16} />
+            {phase.kind === "failed" && phase.failure === "offline" ? (
+              <WifiOff size={18} />
+            ) : (
+              <CircleAlert size={18} />
+            )}
           </span>
-          {/* 무슨 일(제목·원인) → 영향(멈춘 단계·접수 여부) → 다음 행동 (lib/inquiry/failure-copy.ts) */}
-          <div className="flex min-w-0 flex-col gap-1">
-            <p className="text-body-s font-bold text-text-default">
+          {/* lib/inquiry/failure-copy.ts */}
+          <div className="flex min-w-0 flex-col">
+            <p className="text-label text-text-default">
               {t(`failed.${copy.title}`)}
             </p>
-            <p className="text-caption text-text-body">
-              {t(`failed.${copy.cause}`)}
-            </p>
-            <p className="text-caption text-text-body">
+            <p className="text-caption text-text-muted">
+              {t(`failed.${copy.cause}`)}{" "}
               {"values" in copy.impact
                 ? t(`failed.${copy.impact.key}`, copy.impact.values)
-                : t(`failed.${copy.impact.key}`)}
-            </p>
-            <p className="text-caption text-text-body">{t("failed.kept")}</p>
-            <p className="text-caption text-text-body">
-              {t(`failed.${copy.next}`)}
+                : t(`failed.${copy.impact.key}`)}{" "}
+              {t("failed.kept")} {t(`failed.${copy.next}`)}
             </p>
           </div>
         </div>
@@ -449,26 +466,26 @@ export function InquiryScreen({
         className="flex flex-col gap-4"
       >
         <fieldset disabled={sending} className="flex flex-col gap-4">
-          {/* 유형 */}
+          {/* 유형(Figma field 179:358): 칩 4개 2열, 고르면 파랑 채움 */}
           <fieldset
             ref={kindRef}
             aria-describedby={errors.kind ? ids.kindError : undefined}
-            className="flex flex-col gap-2 rounded-card bg-bg-surface p-4 shadow-card"
+            className="flex flex-col gap-1.5"
           >
-            <legend className="float-left mb-2 text-title-s text-text-default">
+            <legend className={cn("float-left", fieldLabel)}>
               {t("kind.legend")}
             </legend>
-            <div className="clear-left grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <div className="clear-left grid grid-cols-2 gap-2">
               {INQUIRY_KINDS.map((value) => (
                 <label
                   key={value}
                   className={cn(
-                    "flex min-h-touch cursor-pointer items-center rounded-button border px-3 text-body-s has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-brand-default",
+                    "flex min-h-chip cursor-pointer items-center rounded-full border px-[13px] py-1 text-[13.5px] leading-[19.6px] has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-brand-default",
                     kind === value
-                      ? "border-brand-default bg-brand-weak font-bold text-text-default"
+                      ? "border-brand-default bg-brand-default font-bold text-brand-on"
                       : errors.kind
-                        ? "border-danger-text text-text-body"
-                        : "border-border-default text-text-body",
+                        ? "border-danger-text font-medium text-text-body"
+                        : "border-border-strong bg-bg-surface font-medium text-text-body",
                   )}
                 >
                   <input
@@ -490,82 +507,79 @@ export function InquiryScreen({
             )}
           </fieldset>
 
-          {/* 자동으로 넣은 해변·활동 */}
+          {/* 해변 · 활동(Figma field 179:371): 상세에서 들어왔을 때 자동으로 넣은 값. ✕로 뺌 */}
           {beach && (
             <section
               aria-labelledby={`${ids.kind}-context`}
-              className="flex flex-col gap-1 rounded-card bg-bg-surface p-4 shadow-card"
+              className="flex flex-col gap-1.5"
             >
-              <h2
-                id={`${ids.kind}-context`}
-                className="text-title-s text-text-default"
-              >
+              <h2 id={`${ids.kind}-context`} className={fieldLabel}>
                 {t("context.legend")}
               </h2>
-              <p className="text-body-s text-text-default">
-                {t("context.beach", { name: beach.name })}
-                {sendActivity !== null && (
-                  <>
-                    {" · "}
-                    {t("context.activity", { activity: ta(sendActivity) })}
-                  </>
-                )}
-              </p>
+              <div className="flex h-input items-center justify-between gap-2 rounded-input border border-border-strong bg-bg-surface pl-[15px]">
+                <p className="truncate text-body text-text-default">
+                  {sendActivity === null
+                    ? beach.name
+                    : t("context.value", {
+                        name: beach.name,
+                        activity: ta(sendActivity),
+                      })}
+                </p>
+                <button
+                  type="button"
+                  aria-label={t("context.remove")}
+                  onClick={() => setContextRemoved(true)}
+                  className="flex size-touch shrink-0 items-center justify-center rounded-full text-text-muted hover:bg-bg-subtle"
+                >
+                  <X aria-hidden="true" size={16} />
+                </button>
+              </div>
               <p className="text-caption text-text-muted">
                 {t("context.note")}
               </p>
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={() => setContextRemoved(true)}
-                className="-ml-3 self-start"
-              >
-                {t("context.remove")}
-              </Button>
             </section>
           )}
 
-          {/* 내용 */}
-          <div className="flex flex-col gap-1.5 rounded-card bg-bg-surface p-4 shadow-card">
-            <label
-              htmlFor={ids.message}
-              className="text-title-s text-text-default"
-            >
+          {/* 내용(Figma field 179:378): 96px 입력 → 안내·글자 수 */}
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor={ids.message} className={fieldLabel}>
               {t("message.label")}
             </label>
-            <p id={ids.messageHint} className="text-caption text-text-muted">
-              {t("message.hint")}
-            </p>
             <textarea
               ref={messageRef}
               id={ids.message}
               value={message}
               onChange={(event) => setMessage(event.target.value)}
               maxLength={MESSAGE_INPUT_MAX}
-              rows={6}
+              rows={3}
+              placeholder={t("message.placeholder")}
               aria-invalid={errors.message ? true : undefined}
               aria-describedby={idList(
                 ids.messageHint,
                 errors.message && ids.messageError,
               )}
               className={cn(
-                "w-full resize-y rounded-input border bg-bg-surface px-3 py-2.5 text-body text-text-default",
-                errors.message
-                  ? "border-[1.5px] border-danger-text"
-                  : "border-border-strong",
+                inputBox(Boolean(errors.message)),
+                "min-h-24 resize-y py-[13px]",
               )}
             />
+            {errors.message && (
+              <p
+                id={ids.messageError}
+                className="text-caption text-danger-text"
+              >
+                {t(`errors.${errors.message}`)}
+              </p>
+            )}
             <div className="flex items-start justify-between gap-2">
-              {errors.message ? (
-                <p
-                  id={ids.messageError}
-                  className="text-caption text-danger-text"
-                >
-                  {t(`errors.${errors.message}`)}
-                </p>
-              ) : (
-                <span />
-              )}
+              <p id={ids.messageHint} className="text-caption text-text-muted">
+                {t("message.hint")}{" "}
+                {t(
+                  contactEnabled
+                    ? "retention.draft"
+                    : "retention.draftTextOnly",
+                )}
+              </p>
               <span className="shrink-0 text-caption text-text-muted">
                 {t("message.count", {
                   count: message.length,
@@ -575,42 +589,13 @@ export function InquiryScreen({
             </div>
           </div>
 
-          {/* 사진 */}
+          {/* 사진(Figma field 179:383): 76px 점선 칸(카메라·개수) + 미리보기 */}
           {contactEnabled && (
-            <div className="flex flex-col gap-1.5 rounded-card bg-bg-surface p-4 shadow-card">
-              <p
-                className="text-title-s text-text-default"
-                id={`${ids.photoInput}-label`}
-              >
-                {t("photos.label")}
+            <div className="flex flex-col gap-1.5">
+              <p className={fieldLabel} id={`${ids.photoInput}-label`}>
+                {t("photos.label")}{" "}
+                <span className={fieldNote}>{t("photos.labelNote")}</span>
               </p>
-              <p id={ids.photoHint} className="text-caption text-text-muted">
-                {t("photos.hint")}
-              </p>
-              {shots.length > 0 && (
-                <ul className="mt-1 flex flex-wrap gap-2">
-                  {shots.map((shot, index) => (
-                    <li key={shot.id} className="relative">
-                      {/* eslint-disable-next-line @next/next/no-img-element -- 기기 안 미리보기(blob 주소)라 next/image를 쓰지 않음 */}
-                      <img
-                        src={shot.url}
-                        alt={t("photos.alt", { index: index + 1 })}
-                        className="size-20 rounded-icon object-cover"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => removeShot(shot.id)}
-                        aria-label={t("photos.remove", { index: index + 1 })}
-                        className="absolute -top-3 -right-3 flex size-touch items-center justify-center"
-                      >
-                        <span className="flex size-7 items-center justify-center rounded-full bg-bg-surface text-text-default shadow-card">
-                          <X aria-hidden="true" size={16} />
-                        </span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
               <input
                 ref={fileRef}
                 id={ids.photoInput}
@@ -625,23 +610,48 @@ export function InquiryScreen({
                   event.target.value = ""; // 같은 사진을 다시 골라도 동작하게
                 }}
               />
-              <div className="mt-1 flex items-center gap-3">
-                <Button
+              <div className="flex flex-wrap items-center gap-2.5">
+                {shots.map((shot, index) => (
+                  <div key={shot.id} className="relative">
+                    {/* eslint-disable-next-line @next/next/no-img-element -- 기기 안 미리보기(blob 주소)라 next/image를 쓰지 않음 */}
+                    <img
+                      src={shot.url}
+                      alt={t("photos.alt", { index: index + 1 })}
+                      className="size-[76px] rounded-input object-cover"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeShot(shot.id)}
+                      aria-label={t("photos.remove", { index: index + 1 })}
+                      className="absolute -top-2.5 -right-2.5 flex size-touch items-center justify-center"
+                    >
+                      <span className="flex size-6 items-center justify-center rounded-full bg-text-default text-bg-surface">
+                        <X aria-hidden="true" size={12} />
+                      </span>
+                    </button>
+                  </div>
+                ))}
+                <button
                   type="button"
-                  variant="secondary"
                   onClick={() => fileRef.current?.click()}
                   disabled={preparing || shots.length >= PHOTO_MAX_COUNT}
+                  aria-label={t("photos.add")}
                   aria-describedby={idList(
                     ids.photoHint,
                     photoError && ids.photoError,
                   )}
+                  className="flex size-[76px] flex-col items-center justify-center gap-0.5 rounded-input border border-dashed border-border-strong bg-bg-surface text-text-body disabled:opacity-45"
                 >
-                  <ImagePlus aria-hidden="true" size={18} />
-                  {t("photos.add")}
-                </Button>
-                <span className="text-caption text-text-muted">
-                  {t("photos.count", { count: shots.length })}
-                </span>
+                  <Camera aria-hidden="true" size={20} />
+                  <span aria-hidden="true" className="text-label-xs">
+                    {t("photos.count", { count: shots.length })}
+                  </span>
+                </button>
+                {shots.length === 0 && (
+                  <span className="text-caption text-text-muted">
+                    {t("photos.prompt")}
+                  </span>
+                )}
               </div>
               {preparing && (
                 <p role="status" className="text-caption text-text-body">
@@ -657,21 +667,19 @@ export function InquiryScreen({
                   {t(`photos.${photoError}`)}
                 </p>
               )}
+              <p id={ids.photoHint} className="text-caption text-text-muted">
+                {t("photos.hint")}
+              </p>
             </div>
           )}
 
-          {/* 이메일 + 동의 */}
+          {/* 이메일(Figma field 179:393) + 동의 */}
           {contactEnabled && (
-            <div className="flex flex-col gap-1.5 rounded-card bg-bg-surface p-4 shadow-card">
-              <label
-                htmlFor={ids.email}
-                className="text-title-s text-text-default"
-              >
-                {t("email.label")}
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor={ids.email} className={fieldLabel}>
+                {t("email.label")}{" "}
+                <span className={fieldNote}>{t("email.labelNote")}</span>
               </label>
-              <p id={ids.emailHint} className="text-caption text-text-muted">
-                {t("email.hint")}
-              </p>
               <input
                 ref={emailRef}
                 id={ids.email}
@@ -680,6 +688,7 @@ export function InquiryScreen({
                 autoComplete="email"
                 value={email}
                 maxLength={EMAIL_MAX}
+                placeholder={t("email.placeholder")}
                 onChange={(event) => {
                   setEmail(event.target.value);
                   if (event.target.value.trim() === "")
@@ -690,12 +699,7 @@ export function InquiryScreen({
                   ids.emailHint,
                   errors.email && ids.emailError,
                 )}
-                className={cn(
-                  "h-input w-full rounded-input border bg-bg-surface px-3 text-body text-text-default",
-                  errors.email
-                    ? "border-[1.5px] border-danger-text"
-                    : "border-border-strong",
-                )}
+                className={cn(inputBox(Boolean(errors.email)), "h-input")}
               />
               {errors.email && (
                 <p
@@ -705,11 +709,14 @@ export function InquiryScreen({
                   {t(`errors.${errors.email}`)}
                 </p>
               )}
+              <p id={ids.emailHint} className="text-caption text-text-muted">
+                {t("email.hint")}
+              </p>
               {email.trim() !== "" && (
                 <div className="mt-1 flex flex-col gap-1">
                   <label
                     htmlFor={ids.consent}
-                    className="flex min-h-touch cursor-pointer items-center gap-3 text-body-s text-text-default"
+                    className="flex min-h-touch cursor-pointer items-center gap-2.5 text-body-s text-text-default"
                   >
                     <input
                       ref={consentRef}
@@ -742,33 +749,17 @@ export function InquiryScreen({
             </div>
           )}
 
-          {/* 보관 안내 */}
-          <section
-            aria-labelledby={`${ids.kind}-retention`}
-            className="flex flex-col gap-1 rounded-card bg-brand-weak p-4"
-          >
-            <h2
-              id={`${ids.kind}-retention`}
-              className="text-body-s font-bold text-text-default"
-            >
-              {t("retention.title")}
-            </h2>
-            <p className="text-caption text-text-body">
-              {t(contactEnabled ? "retention.body" : "retention.bodyTextOnly")}
-            </p>
-            <p className="text-caption text-text-body">
-              {t(
-                contactEnabled ? "retention.draft" : "retention.draftTextOnly",
-              )}
-            </p>
-          </section>
+          {/* 보관 안내: 서버 보관 기간(작성 중 기기 보관은 내용 칸 아래) */}
+          <p className="text-caption text-text-muted">
+            {t(contactEnabled ? "retention.body" : "retention.bodyTextOnly")}
+          </p>
         </fieldset>
 
-        <div className="flex flex-col gap-2 sm:flex-row-reverse">
+        <div className="flex flex-col items-center gap-1">
           <Button
             type="submit"
             disabled={sending || preparing}
-            className="sm:min-w-40"
+            className="w-full"
           >
             {sending
               ? t("actions.sending")
@@ -776,16 +767,19 @@ export function InquiryScreen({
                 ? t("actions.retry")
                 : t("actions.submit")}
           </Button>
-          <Button
+          <button
             type="button"
-            variant="secondary"
             onClick={clearAll}
             disabled={sending}
+            className="flex min-h-touch items-center px-2 text-caption text-text-muted underline disabled:opacity-45"
           >
             {t("actions.clear")}
-          </Button>
+          </button>
         </div>
-        <p role="status" className="min-h-5 text-caption text-text-body">
+        <p
+          role="status"
+          className="min-h-5 text-center text-caption text-text-body"
+        >
           {progressText}
         </p>
       </form>

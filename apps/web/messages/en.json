@@ -216,6 +216,7 @@
     "settings": "Settings",
     "search": "Search beaches or regions",
     "back": "Back",
+    "close": "Close",
     "searchPlaceholder": "Beach or region name",
     "favoritesSaved": "{count} saved",
     "updated": "Updated {time}",
@@ -781,29 +782,30 @@
     }
   },
   "inquiry": {
-    "intro": "Let us know if official information differs from reality, or if you'd like to suggest a beach or data.",
     "kind": {
-      "legend": "What is it about?",
+      "legend": "What would you like to tell us?",
       "mismatch": "The info doesn't match reality",
       "addBeach": "Please add a beach",
       "criteria": "Question about how we decide",
       "newData": "Suggest new data"
     },
     "context": {
-      "legend": "Sent along",
-      "beach": "Beach: {name}",
-      "activity": "Activity: {activity}",
+      "legend": "Beach · activity",
+      "value": "{name} · {activity}",
       "note": "Added automatically because you came from a beach page. Your location isn't sent.",
       "remove": "Remove beach and activity"
     },
     "message": {
       "label": "Message",
-      "hint": "At least 5 characters. Telling us what differs and when you saw it helps us check.",
+      "placeholder": "Describe what you saw on site and when…",
+      "hint": "At least 5 characters. Please don't include personal information.",
       "count": "{count}/{max}"
     },
     "photos": {
-      "label": "Photos (optional)",
+      "label": "Photos",
+      "labelNote": "(optional · up to 3)",
       "hint": "Photos only, up to 3. We shrink them and remove location data on your device before uploading. No videos.",
+      "prompt": "Add photos from the site",
       "add": "Choose photos",
       "count": "{count}/3",
       "preparing": "Preparing photos",
@@ -815,7 +817,9 @@
       "tooMany": "You can add up to 3 photos. We added the first 3."
     },
     "email": {
-      "label": "Email (optional)",
+      "label": "Email",
+      "labelNote": "(optional)",
+      "placeholder": "Email to contact you…",
       "hint": "We'll contact you only if needed, and delete it as soon as handling is done (within 90 days at the latest)."
     },
     "consent": {
@@ -829,7 +833,6 @@
       "consentMissing": "To leave your email, please agree, or clear the email."
     },
     "retention": {
-      "title": "How long we keep it",
       "body": "Feedback is kept for 90 days and photos for 30 days, then deleted automatically. Email is deleted as soon as handling is done (within 90 days at the latest). We don't promise a reply deadline.",
       "bodyTextOnly": "Feedback is kept for 90 days, then deleted automatically. We don't collect email or photos.",
       "draft": "While you write, the type and message are kept only on this device for up to 7 days. Email and photos aren't kept.",
@@ -838,7 +841,7 @@
     "actions": {
       "submit": "Send",
       "sending": "Sending…",
-      "clear": "Clear",
+      "clear": "Clear what you wrote",
       "cleared": "Cleared what you were writing",
       "retry": "Send again"
     },
