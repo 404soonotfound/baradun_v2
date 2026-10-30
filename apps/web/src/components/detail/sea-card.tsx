@@ -166,7 +166,7 @@ export function SeaCard({
   return (
     <section
       aria-labelledby={titleId}
-      className="flex flex-col gap-3 rounded-card bg-bg-surface p-4 shadow-card lg:gap-0 lg:p-0"
+      className="@container flex flex-col gap-3 rounded-card bg-bg-surface p-4 shadow-card lg:gap-0 lg:p-0"
     >
       <div className="flex items-baseline justify-between gap-3 lg:px-5 lg:pt-4">
         <h2
@@ -201,7 +201,9 @@ export function SeaCard({
       {/* PC: 4칸(Figma 183:820). 칸마다 측정소 · 측정 시각 */}
       <WideStats view={view} stations={stations} nowMs={nowMs} />
 
-      <div className="flex flex-col gap-3 lg:grid lg:grid-cols-[300px_minmax(0,1fr)] lg:gap-7 lg:px-5 lg:pt-4 lg:pb-[18px]">
+      {/* 그림 | 그래프 두 열은 카드가 넓을 때만(카드 너비 42rem 이상, 1280 화면 740px). 좁은 PC(1024 → 484px)에서
+          두 열이면 그래프가 116px로 줄어 글자를 읽기 어려워 모바일처럼 세로로 둠(Codex P2) */}
+      <div className="flex flex-col gap-3 lg:px-5 lg:pt-4 lg:pb-[18px] @2xl:grid @2xl:grid-cols-[300px_minmax(0,1fr)] @2xl:gap-7">
         <div className="flex flex-col gap-1.5">
           <h3 className="hidden text-label text-text-default lg:block">
             {t("detail.figure.title")}
@@ -212,7 +214,7 @@ export function SeaCard({
             delayed={wave.kind === "delayed"}
           />
         </div>
-        <div className="flex flex-col gap-1 border-t border-border-default pt-[13px] lg:border-0 lg:pt-0">
+        <div className="flex flex-col gap-1 border-t border-border-default pt-[13px] @2xl:border-0 @2xl:pt-0">
           {/* 값 자리가 '가까운 관측 없음'이면 그 측정소 기록도 그리지 않음(메타와 같은 규칙) */}
           <WaveChart
             stationId={waveStation?.id ?? null}
