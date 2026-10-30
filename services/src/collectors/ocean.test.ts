@@ -162,6 +162,45 @@ describe("collectOcean", () => {
     });
   });
 
+  it.each([
+    ["HTTP 403 인증·한도 거부", { status: "failed", reason: "http:403", attempts: 1 }, "http:403"],
+    ["HTTP 429 요청 과다", { status: "failed", reason: "http:429", attempts: 2 }, "http:429"],
+    ["200 + 오류 본문(시작 표시 없음)", "<html>error</html>", "시작 표시 없음"],
+  ] as const)(
+    "KMA 한도·오류 응답(%s) → 이전 정상값·수신 시각은 그대로, 정상으로 기록하지 않음",
+    async (_name, seaReply, expectedReason) => {
+      const { deps, state, lines } = setup({
+        sea_obs: seaReply,
+        kma_buoy: KMA_BUOY,
+      });
+      await state.putState(
+        OCEAN_STATE.readings.pk,
+        OCEAN_STATE.readings.sk,
+        {
+          readings: {
+            "22520": {
+              waveHeight: { value: 1.1, observedAt: "2026-10-20T13:00:00Z" },
+            },
+          },
+          receivedAt: { sea_obs: "2026-10-20T13:05:00Z" },
+        },
+        Date.parse("2026-10-20T13:00:00Z"),
+      );
+      expect((await collectOcean(deps)).status).toBe("partial");
+      const saved = await readings(state);
+      expect(saved?.readings["22520"]?.waveHeight).toEqual({
+        value: 1.1,
+        observedAt: "2026-10-20T13:00:00Z",
+      });
+      expect(saved?.receivedAt.sea_obs).toBe("2026-10-20T13:05:00Z");
+      expect((await attempt(state)).sources).toMatchObject({
+        sea_obs: { status: "failed", reason: expectedReason },
+        kma_buoy: { status: "ok" },
+      });
+      expect(lines.join("\n")).not.toContain(KEY);
+    },
+  );
+
   it("자료 줄이 모두 건너뛰어져 쓸 행이 없으면 그 출처는 실패", async () => {
     const lines = SEA_OBS.split("\n");
     // 시작·끝 표시와 머리글은 두고 자료 줄만 깨뜨림

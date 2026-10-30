@@ -299,6 +299,21 @@ describe("classifyBeach 규칙", () => {
     });
     expect(result.reasons.map((r) => r.code)).toEqual(["warning"]);
   });
+
+  it("발효 특보 + 특보 확인 45분 경과 → 이용불가 유지(B5), validUntil은 게시 시각, 확인 시각은 마지막 확인", () => {
+    const result = classify({
+      warnings: {
+        ...active([windWave("advisory", "2026-10-22T04:00:00Z")]),
+        reasons: ["confirmation:expired"],
+      },
+      now: "2026-10-22T06:10:00Z", // CONFIRMED(05:18:40) + 51분 20초
+    });
+    expect(result.category).toBe("unavailable");
+    expect(result.warning.state).toBe("active");
+    expect(result.warning.lastConfirmedAt).toBe(CONFIRMED);
+    expect(result.reasons.map((r) => r.code)).toEqual(["warning"]);
+    expect(result.validUntil).toBe("2026-10-22T06:10:00Z");
+  });
 });
 
 describe("classifyBeach validUntil", () => {
