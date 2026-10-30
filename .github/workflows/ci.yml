@@ -90,6 +90,7 @@ jobs:
       - run: npm run build -w apps/web # 배포와 같은 정적 빌드, 사이트 주소만 테스트 값 (BRD-102)
         env:
           NEXT_PUBLIC_SITE_URL: https://example.test # 예약 도메인(.test). 운영 값은 deploy.yml의 vars.SITE_URL
+      - run: npm run check:csp -w apps/web # CSP meta 해시 일치 검사 (BRD-118)
 
   # 웹 E2E: 정적 빌드 결과로 전 화면 접근성(axe)·상태별 화면·키보드·반응형 검사 (BRD-39)
   # /data/**는 테스트의 가짜 응답만 씀(운영 데이터·외부 타일 서버에 기대지 않음)
