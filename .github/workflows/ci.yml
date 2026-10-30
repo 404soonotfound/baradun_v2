@@ -242,10 +242,14 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0 # 커밋 비교 및 정기 실행 전체 이력 스캔용
-      - name: Gitleaks 설치
+      - name: Gitleaks 다운로드 및 체크섬 검증
         run: |
           GITLEAKS_VERSION="8.30.1"
-          curl -sSL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" | sudo tar -xz -C /usr/local/bin gitleaks
+          GITLEAKS_SHA256="551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb"
+          curl -sSLO "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          echo "${GITLEAKS_SHA256}  gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" | sha256sum -c -
+          sudo tar -xz -C /usr/local/bin gitleaks -f "gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          rm -f "gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
           gitleaks version
       - name: 비밀값 스캔 실행
         run: |
@@ -259,15 +263,23 @@ jobs:
             echo "main push 검사: 직전 커밋 대비 변경분 스캔"
             BEFORE="${{ github.event.before }}"
             if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
-              BEFORE="HEAD~1"
+              if git rev-parse --verify HEAD~1 >/dev/null 2>&1; then
+                BEFORE="HEAD~1"
+              else
+                BEFORE="HEAD"
+              fi
             fi
-            gitleaks detect --log-opts="${BEFORE}..HEAD" --config=.gitleaks.toml --redact --verbose
+            if [ "$BEFORE" = "HEAD" ]; then
+              gitleaks detect --log-opts="-1" --config=.gitleaks.toml --redact --verbose
+            else
+              gitleaks detect --log-opts="${BEFORE}..HEAD" --config=.gitleaks.toml --redact --verbose
+            fi
           fi
 
-  # 결과 모음: 건너뜀은 통과, 실패·취소는 실패 (정기 실행은 audit 결과만 보면 되므로 건너뜀)
+  # 결과 모음: 건너뜀은 통과, 실패·취소는 실패 (정기 실행은 audit·gitleaks 결과만 보면 되므로 건너뜀)
   ci-ok:
     if: always() && github.event_name != 'schedule'
-    needs: [changes, web, e2e-build, e2e, services, infra, contracts, beaches, audit] # 하나라도 실패하면 빨간불
+    needs: [changes, web, e2e-build, e2e, services, infra, contracts, beaches, audit, gitleaks] # 하나라도 실패하면 빨간불
     runs-on: ubuntu-latest
     steps:
       - name: 결과 확인
