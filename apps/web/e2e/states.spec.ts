@@ -94,8 +94,13 @@ test.describe("정상", () => {
   }) => {
     await page.goto(`/spots/${slugOf(DELAYED_ID)}/`);
     await expect(page.getByText("관측 지연").first()).toBeVisible();
+    // 모바일은 큰 숫자 자리 '파고 측정이 늦어지고 있어요', PC는 '파고' 칸의 '측정이 늦어지고 있어요'(BRD-129)
     await expect(
-      page.getByText("파고 측정이 늦어지고 있어요").first(),
+      page
+        .getByRole("region", { name: /바다 상태|지금 바다/ })
+        .getByText(/측정이 늦어지고 있어요/)
+        .filter({ visible: true })
+        .first(),
     ).toBeVisible();
     // 게시된 지연 값(0.9m)은 보이지 않아야 함('가까운 특보 없는 해변' 대안의 '특보 없음'은 다른 해변이라 따로 봄)
     await expect(page.getByText(/0\.9\s*m/)).toHaveCount(0);

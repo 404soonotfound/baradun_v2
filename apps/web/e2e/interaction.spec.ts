@@ -74,12 +74,21 @@ test.describe("대화상자", () => {
     await checkSheet(page, "지역 고르기, 지금 강원 강릉시", "지역 고르기");
   });
 
-  test("공유·활동·특보 상세", async ({ page }) => {
+  test("공유·활동·특보 상세", async ({ page }, testInfo) => {
     await page.goto(`/spots/${slugOf(WARNING_ID)}/`);
     await expect(page.getByText("풍랑주의보").first()).toBeVisible();
     await checkSheet(page, "공유", "공유하기");
     await checkSheet(page, "특보 상세 보기", "풍랑주의보");
-    await checkSheet(page, "수영", "활동 고르기");
+    if (testInfo.project.name === "desktop") {
+      // PC는 시트 대신 머리 줄 활동 세그먼트(Figma 183:807, BRD-129)
+      const segment = page.getByRole("group", { name: "활동" });
+      await segment.getByRole("button", { name: "서핑" }).click();
+      await expect(
+        segment.getByRole("button", { name: "서핑" }),
+      ).toHaveAttribute("aria-pressed", "true");
+    } else {
+      await checkSheet(page, "수영", "활동 고르기");
+    }
     await checkSheet(page, "자세히", "무엇을 확인했나요");
   });
 
@@ -184,9 +193,7 @@ test.describe("PC·모바일 같은 기능", () => {
       await page.goto(name === "홈" ? "/explore/" : "/");
       await page.getByRole("link", { name, exact: true }).first().click();
       // 주소 끝만 맞추면 홈("/")은 어느 주소에서나 통과함 → 경로 전체를 비교
-      await expect
-        .poll(() => new URL(page.url()).pathname)
-        .toBe(path);
+      await expect.poll(() => new URL(page.url()).pathname).toBe(path);
     });
   }
 
