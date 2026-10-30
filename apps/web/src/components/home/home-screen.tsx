@@ -395,22 +395,27 @@ export function HomeScreen({
           />
           {/* 지역·전국 해변 상태별 개수(모바일, 가까운 바다에서는 없음). PC는 히어로 상태 요약이 같은 일을 함
               게시된 분류 그대로 셈(G1) */}
+          {/* Figma 171:818: 가까운 바다 카드와 개수 카드 사이 20(묶음 간격 10 + 10) */}
           {!desktop && byList && name && regionBeaches.length > 0 && (
-            <RegionCountCard
-              href={localizedPath(locale, "/explore/")}
-              title={
-                scope.kind === "nationwide"
-                  ? t("nationwide.countTitle", { count: regionBeaches.length })
-                  : t("region.countTitle", {
-                      region: name,
-                      count: regionBeaches.length,
-                    })
-              }
-              counts={countByStatus(regionViews)}
-              clearCheckedAt={clearCheckedAt(regionViews)}
-              staleChecked={staleCheckedAt(regionViews)}
-              nowMs={snapshot.nowMs}
-            />
+            <div className="mt-2.5">
+              <RegionCountCard
+                href={localizedPath(locale, "/explore/")}
+                title={
+                  scope.kind === "nationwide"
+                    ? t("nationwide.countTitle", {
+                        count: regionBeaches.length,
+                      })
+                    : t("region.countTitle", {
+                        region: name,
+                        count: regionBeaches.length,
+                      })
+                }
+                counts={countByStatus(regionViews)}
+                clearCheckedAt={clearCheckedAt(regionViews)}
+                staleChecked={staleCheckedAt(regionViews)}
+                nowMs={snapshot.nowMs}
+              />
+            </div>
           )}
         </section>
 

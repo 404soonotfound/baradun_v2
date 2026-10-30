@@ -16,8 +16,8 @@ import {
 // PC 홈 히어로 상태 요약 카드 3장 (Figma S_D07_01 181:819, BRD-129)
 // 특보 없음 · 이용불가 · 판단불가 개수 + 아래 줄(특보 없음은 범위·기관·확인 시각, 나머지는 실제 사유별 개수)
 // 개수는 게시된 분류·사유 그대로(lib/status-count.ts, G1). 판단불가 카드는 점선 테두리(노션 4장 판단 상태 규칙, 색은 Figma border-note)
-// 카드 전체가 탐색으로 가는 링크. 해변이 없는 분류 카드는 그리지 않음
-// ('특보 없음 0곳'처럼 확인된 해변이 없는데 '특보 없음' 글자가 크게 보이지 않게, 오프라인·확인 실패 때 특히)
+// 카드 전체가 탐색으로 가는 링크. 0곳인 분류도 Figma처럼 3장을 늘 같은 자리에 둠(#105 사용자 결정 10/30)
+// 0곳 카드는 근거(확인 시각·사유)가 없으니 아래 줄을 비우지 않고 빼서 분류 이름·개수만 보임
 // 현장 우선 문구는 바로 아래 가까운 바다 제목 줄에 하나만 둠(#105 결정 5, Figma 181:849)
 
 // 분류마다 아이콘·색. Tailwind가 클래스 이름을 글자 그대로 찾도록 이어 붙이지 않고 다 적음
@@ -80,14 +80,14 @@ export function StatusSummary({
   return (
     <div className="flex flex-col gap-2">
       <ul className="grid grid-cols-3 gap-4">
-        {summarizeByCategory(counts)
-          .filter((item) => item.count > 0)
-          .map((item) => {
-            const look = LOOK[item.category];
-            const Icon = look.icon;
-            // [2] 아래 줄. 특보 없음은 범위·기관·확인 시각, 나머지는 실제 사유별 개수
-            const caption =
-              item.category === "clear"
+        {summarizeByCategory(counts).map((item) => {
+          const look = LOOK[item.category];
+          const Icon = look.icon;
+          // [2] 아래 줄. 특보 없음은 범위·기관·확인 시각, 나머지는 실제 사유별 개수
+          const caption =
+            item.count === 0
+              ? null
+              : item.category === "clear"
                 ? time
                   ? t("clearScope", { time })
                   : t("clearScopeNoTime")
@@ -99,40 +99,46 @@ export function StatusSummary({
                       }),
                     )
                     .join(" · ");
-            return (
-              <li key={item.category}>
-                <Link
-                  href={href}
+          return (
+            <li key={item.category}>
+              <Link
+                href={href}
+                className={cn(
+                  "flex h-full items-center gap-3 rounded-tile border bg-bg-surface px-[17px] py-[15px]",
+                  look.border,
+                )}
+              >
+                <span
+                  aria-hidden="true"
                   className={cn(
-                    "flex h-full items-center gap-3 rounded-tile border bg-bg-surface px-[17px] py-[15px]",
-                    look.border,
+                    "flex size-[38px] shrink-0 items-center justify-center rounded-input",
+                    look.box,
                   )}
                 >
+                  <Icon size={19} />
+                </span>
+                <span className="flex min-w-0 flex-1 flex-col">
+                  {/* data-summary-category: 판단 배지가 아니라 분류 이름(E2E가 '특보 없음' 배지와 구분) */}
                   <span
-                    aria-hidden="true"
-                    className={cn(
-                      "flex size-[38px] shrink-0 items-center justify-center rounded-input",
-                      look.box,
-                    )}
+                    data-summary-category={item.category}
+                    className="text-body-s text-text-body"
                   >
-                    <Icon size={19} />
+                    {t(`category.${item.category}`)}
                   </span>
-                  <span className="flex min-w-0 flex-1 flex-col">
-                    <span className="text-body-s text-text-body">
-                      {t(`category.${item.category}`)}
-                    </span>
-                    <span className="text-num-s text-text-default">
-                      {t("count", { count: item.count })}
-                    </span>
-                    {/* 범위·기관·확인 시각은 잘리지 않게 줄을 바꿈(긴 영어·좁은 PC에서도 기관·시각이 보이게) */}
+                  <span className="text-num-s text-text-default">
+                    {t("count", { count: item.count })}
+                  </span>
+                  {/* 범위·기관·확인 시각은 잘리지 않게 줄을 바꿈(긴 영어·좁은 PC에서도 기관·시각이 보이게) */}
+                  {caption && (
                     <span className="text-caption text-text-muted">
                       {caption}
                     </span>
-                  </span>
-                </Link>
-              </li>
-            );
-          })}
+                  )}
+                </span>
+              </Link>
+            </li>
+          );
+        })}
       </ul>
       {/* 오프라인·만료로 오래된 해변이 있으면 'HH:MM 확인 · 이후 확인 못 함'(B5, 지역 개수 카드와 같은 규칙) */}
       {staleChecked !== null && (

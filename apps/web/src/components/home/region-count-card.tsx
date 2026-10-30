@@ -48,11 +48,12 @@ export function RegionCountCard({
   return (
     <Link
       href={href}
-      className="flex flex-col gap-3 rounded-card bg-bg-surface p-4 shadow-card"
+      // Figma 171:901: 안쪽 16·14, 사이 10, 제목 14.5 굵게 + › 16, 칸 사이 4, 숫자 18 굵게, 칸 이름 11.5, 근거 줄 12/18.6 (BRD-129)
+      className="flex flex-col gap-2.5 rounded-card bg-bg-surface px-4 py-3.5 shadow-card"
     >
-      <span className="flex items-center justify-between gap-3 text-title-s text-text-default">
+      <span className="flex items-start justify-between gap-3 text-title-count text-text-default">
         {title}
-        <ChevronRight aria-hidden="true" size={18} className="shrink-0" />
+        <ChevronRight aria-hidden="true" size={16} className="shrink-0" />
       </span>
       {counts === null ? (
         <span role="status" className="flex flex-col gap-2">
@@ -63,20 +64,20 @@ export function RegionCountCard({
         </span>
       ) : (
         // [2] 칸 수가 지역마다 달라 grid 대신 flex로 나눔
-        <span className="flex">
+        <span className="flex gap-1">
           {counts.map((item) => {
             const text = badgeText(item.label);
             return (
               <span
                 key={`${item.category}|${text}`}
-                className="flex flex-1 flex-col items-center gap-0.5 text-center"
+                className="flex flex-1 flex-col items-center text-center"
               >
                 <span
-                  className={`text-num-m font-bold ${NUMBER_COLOR[badgeTone(item.label)]}`}
+                  className={`text-num-count ${NUMBER_COLOR[badgeTone(item.label)]}`}
                 >
                   {item.count}
                 </span>
-                <span className="text-caption text-text-body">{text}</span>
+                <span className="text-label-xs text-text-body">{text}</span>
               </span>
             );
           })}
@@ -84,7 +85,7 @@ export function RegionCountCard({
       )}
       {/* 순서: 특보 없음 범위 → 이후 확인 못 함. 현장 우선 문구는 같은 묶음의 가까운 바다 카드에 하나만(#105 결정 5) */}
       {counts !== null && (
-        <span className="flex flex-col gap-0.5 text-caption text-text-muted">
+        <span className="flex flex-col text-note text-text-muted">
           {hasClear && (
             <span>
               {time ? t("countScope", { time }) : t("countScopeNoTime")}
