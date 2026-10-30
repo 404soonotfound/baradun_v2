@@ -294,11 +294,11 @@ for (const locale of ["ko", "en"] as const) {
 
   // 설정 '기본 지역'(10/29 사용자 결정: 저장값이 없으면 '고르지 않음' 대신 '전국')
   test.describe(`${locale} · 설정 기본 지역`, () => {
-    // '기본 지역' 줄 바로 아래 값
+    // '기본 지역' 줄(누르면 지역 시트)의 오른쪽 값. 줄 이름 다음 글자
     const regionValue = (page: Page) =>
       page
         .getByText(text.defaultRegion, { exact: true })
-        .locator("xpath=following-sibling::p[1]");
+        .locator("xpath=following-sibling::span[1]");
 
     test.describe("저장값 없음", () => {
       test.use({ deviceLanguage: locale, deviceRegion: null });

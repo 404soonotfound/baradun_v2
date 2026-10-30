@@ -20,19 +20,26 @@ export function LogoMark({
         className,
       )}
     >
-      <svg
-        aria-hidden="true"
-        width={17}
-        height={17}
-        viewBox="0 0 17 17"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth={1.55833}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        <path d="M2.125 9.91667C3.54167 9.91667 3.54167 8.5 5.3125 8.5C7.08333 8.5 6.72917 9.91667 8.5 9.91667C10.2708 9.91667 9.91667 8.5 11.6875 8.5C13.4583 8.5 13.4583 9.91667 14.875 9.91667" />
-      </svg>
+      <WaveIcon size={17} />
     </span>
+  );
+}
+
+// Figma 아이콘/wave 물결 선 하나(로고·설정 '화면 움직임' 줄 170:203). 장식이라 늘 숨김
+export function WaveIcon({ size }: { size: number }) {
+  return (
+    <svg
+      aria-hidden="true"
+      width={size}
+      height={size}
+      viewBox="0 0 17 17"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.55833}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M2.125 9.91667C3.54167 9.91667 3.54167 8.5 5.3125 8.5C7.08333 8.5 6.72917 9.91667 8.5 9.91667C10.2708 9.91667 9.91667 8.5 11.6875 8.5C13.4583 8.5 13.4583 9.91667 14.875 9.91667" />
+    </svg>
   );
 }

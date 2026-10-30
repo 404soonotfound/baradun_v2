@@ -174,7 +174,8 @@ export function BeachRow({
 
 // 왼쪽 파고 글리프 54px. 값이 있으면 "0.6m", 없으면 "–" + 점선(0이나 정상으로 보이지 않게)
 // metric: 값 앞에 숨겨 읽어 줄 지표 이름("파고"). 없으면 링크 이름이 "0.6m 인구해변"처럼 뜻 없이 읽힘
-function WaveGlyph({
+// 즐겨찾기 PC 카드(Figma 184:1014)도 같은 글리프를 씀
+export function WaveGlyph({
   wave,
   metric,
   label,

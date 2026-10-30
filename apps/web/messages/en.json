@@ -216,6 +216,7 @@
     "settings": "Settings",
     "search": "Search beaches or regions",
     "back": "Back",
+    "close": "Close",
     "searchPlaceholder": "Beach or region name",
     "favoritesSaved": "{count} saved",
     "updated": "Updated {time}",
@@ -570,7 +571,7 @@
       "body": "Beaches you open will appear here in order"
     },
     "recent": {
-      "clear": "Clear all",
+      "clear": "Clear all recently viewed",
       "cleared": "Cleared recently viewed",
       "remove": "Remove {name} from recently viewed",
       "removed": "Removed from recently viewed",
@@ -594,15 +595,21 @@
         "unavailable": "Couldn't get your location",
         "off": "Not checked because location is off"
       },
-      "idleHint": "Tap the button and your browser will ask once.",
-      "use": "Use location",
+      "value": {
+        "checking": "Checking",
+        "idle": "Not asked",
+        "locating": "Getting",
+        "ready": "Allowed",
+        "denied": "Not allowed",
+        "unavailable": "Unavailable",
+        "off": "Off"
+      },
+      "idleHint": "Tap the permission row and your browser will ask once.",
       "deniedHint": "We won't ask again here. To use location, change this site's location permission in your browser settings.",
-      "unavailableHint": "Your device couldn't share its location, so distances aren't shown. Please try again in a moment.",
-      "retry": "Try again",
+      "unavailableHint": "Your device couldn't share its location, so distances aren't shown. Tap the permission row to try again in a moment.",
       "region": "Default region",
       "regionNationwide": "All Korea",
       "regionHint": "The region Home shows first. Saved only on this device.",
-      "regionChange": "Change default region",
       "regionClear": "Clear default region"
     },
     "display": {
@@ -618,14 +625,10 @@
       "motionBody": "When off, wave drawings and screen transitions stop moving. If Reduce Motion is on in your device settings, motion stops regardless of this switch."
     },
     "help": {
-      "title": "Help & feedback",
-      "guideBody": "What we check · Reading wave period · Safety rules · 119",
-      "inquiryBody": "Wrong info · Add a beach · Suggest data"
+      "title": "Help & feedback"
     },
     "info": {
       "title": "About",
-      "termsBody": "About the service · Disclaimer · Privacy",
-      "dataSourcesBody": "KMA · KHOA · Korea Tourism Organization · Map",
       "device": "Device data",
       "deviceBody": "There's no login; everything is saved only in this device's browser. You can clear favorites, recently viewed beaches, recent searches, default region, first-run records and more at once.",
       "reset": "Reset device data"
@@ -641,9 +644,11 @@
     }
   },
   "guide": {
-    "intro": "What Baradun Bada checks and shows, and what to know before you head to the sea.",
+    "does": {
+      "title": "What this service does",
+      "body": "We only judge facts that can be checked, like official warnings and measurement times. Please judge for yourself whether the waves and wind suit you. We don't make recommendations."
+    },
     "check": {
-      "title": "What we check",
       "warningTitle": "5 sea-related warning types",
       "warningBody": "We check whether a KMA wind wave, strong wind, typhoon, storm surge or tsunami warning (advisory or warning) is in effect for each beach's warning zone.",
       "nearby": "Other warnings such as heavy rain, heatwave or cold wave don't change a beach's status; we show them only under Nearby warnings.",
@@ -656,13 +661,13 @@
     "badges": {
       "title": "What the badges mean",
       "clear": "No warnings",
-      "clearBody": "No sea-related warning was found. It doesn't mean it's safe.",
+      "clearBody": "Shown only when the area, agency and check time are all confirmed. It doesn't mean it's safe.",
       "warning": "Wind wave advisory",
-      "warningBody": "We show the warning name as is. Avoid going into the sea and follow on-site guidance.",
+      "warningBody": "A warning is in effect for the area. We don't check access restrictions, so follow on-site guidance.",
       "unknown": "Couldn't check warnings",
-      "unknownBody": "We couldn't check warnings, so we can't tell right now. It doesn't mean there are no warnings.",
+      "unknownBody": "We couldn't get warning information or confirm which warning area the beach belongs to. This is different from 'No warnings'.",
       "stale": "Observation delayed",
-      "staleBody": "Wave height measurements are late, so we can't tell right now. We'll check again when new values come in."
+      "staleBody": "Wave height hasn't been measured for over 90 minutes, so we can't tell the current state."
     },
     "period": {
       "title": "Reading wave period",
@@ -692,6 +697,11 @@
       },
       "official": "See official safety rules on the National Disaster Safety Portal",
       "officialLink": "View water safety rules (Korean)"
+    },
+    "sources": {
+      "title": "Sources and updates",
+      "body": "Warnings · KMA / Wave height, period, water temperature, wind · KMA ocean and wave buoys / Rip current index · KHOA (participating beaches only). Update intervals differ by source.",
+      "link": "See data sources and terms"
     }
   },
   "terms": {
@@ -779,29 +789,30 @@
     }
   },
   "inquiry": {
-    "intro": "Let us know if official information differs from reality, or if you'd like to suggest a beach or data.",
     "kind": {
-      "legend": "What is it about?",
+      "legend": "What would you like to tell us?",
       "mismatch": "The info doesn't match reality",
       "addBeach": "Please add a beach",
       "criteria": "Question about how we decide",
       "newData": "Suggest new data"
     },
     "context": {
-      "legend": "Sent along",
-      "beach": "Beach: {name}",
-      "activity": "Activity: {activity}",
+      "legend": "Beach · activity",
+      "value": "{name} · {activity}",
       "note": "Added automatically because you came from a beach page. Your location isn't sent.",
       "remove": "Remove beach and activity"
     },
     "message": {
       "label": "Message",
-      "hint": "At least 5 characters. Telling us what differs and when you saw it helps us check.",
+      "placeholder": "Describe what you saw on site and when…",
+      "hint": "At least 5 characters. Please don't include personal information.",
       "count": "{count}/{max}"
     },
     "photos": {
-      "label": "Photos (optional)",
+      "label": "Photos",
+      "labelNote": "(optional · up to 3)",
       "hint": "Photos only, up to 3. We shrink them and remove location data on your device before uploading. No videos.",
+      "prompt": "Add photos from the site",
       "add": "Choose photos",
       "count": "{count}/3",
       "preparing": "Preparing photos",
@@ -813,7 +824,9 @@
       "tooMany": "You can add up to 3 photos. We added the first 3."
     },
     "email": {
-      "label": "Email (optional)",
+      "label": "Email",
+      "labelNote": "(optional)",
+      "placeholder": "Email to contact you…",
       "hint": "We'll contact you only if needed, and delete it as soon as handling is done (within 90 days at the latest)."
     },
     "consent": {
@@ -827,7 +840,6 @@
       "consentMissing": "To leave your email, please agree, or clear the email."
     },
     "retention": {
-      "title": "How long we keep it",
       "body": "Feedback is kept for 90 days and photos for 30 days, then deleted automatically. Email is deleted as soon as handling is done (within 90 days at the latest). We don't promise a reply deadline.",
       "bodyTextOnly": "Feedback is kept for 90 days, then deleted automatically. We don't collect email or photos.",
       "draft": "While you write, the type and message are kept only on this device for up to 7 days. Email and photos aren't kept.",
@@ -836,7 +848,7 @@
     "actions": {
       "submit": "Send",
       "sending": "Sending…",
-      "clear": "Clear",
+      "clear": "Clear what you wrote",
       "cleared": "Cleared what you were writing",
       "retry": "Send again"
     },
@@ -854,6 +866,7 @@
       "draftCleared": "The type and message kept on this device have been deleted.",
       "another": "Write another",
       "back": "Back to Settings",
+      "backToBeach": "Back to the beach",
       "rejectedNext": "If you need a photo that wasn't accepted, choose a different photo and send it as new feedback."
     },
     "failed": {
@@ -865,6 +878,7 @@
       "rejected": "What was sent couldn't be accepted.",
       "invalidResponse": "We couldn't read the server's response.",
       "kept": "Your message, email and photos are still on this screen.",
+      "keptTextOnly": "What you wrote stays on this screen.",
       "titleUnknown": "We couldn't confirm it was received",
       "stopPhotos": "Stopped after uploading {uploaded} of {total} photos. Your feedback wasn't received.",
       "stopMessage": "Your feedback wasn't received.",

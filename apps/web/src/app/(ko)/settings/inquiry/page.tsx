@@ -27,7 +27,9 @@ export default async function Page() {
   return (
     <Suspense
       fallback={
-        <h1 className="text-title-l text-text-default">{t("inquiry")}</h1>
+        <h1 className="mx-auto flex h-14 max-w-[640px] items-center justify-center text-body font-bold text-text-default">
+          {t("inquiry")}
+        </h1>
       }
     >
       <InquiryScreen locale="ko" beaches={beaches} />
