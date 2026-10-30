@@ -5,7 +5,7 @@ on:
   push:
     branches: [main]
   schedule:
-    - cron: "17 0 * * *" # 매일 09:17 KST 취약점 검사만 돌림, 정각 혼잡 회피 (BRD-91)
+    - cron: "17 0 * * *" # 매일 09:17 KST 취약점·비밀값 검사만 돌림, 정각 혼잡 회피 (BRD-91, BRD-132)
 permissions:
   contents: read
 concurrency:
@@ -232,10 +232,54 @@ jobs:
           npm audit 2>&1 | tee -a "$GITHUB_STEP_SUMMARY" || true
           echo '```' >> "$GITHUB_STEP_SUMMARY"
 
-  # 결과 모음: 건너뜀은 통과, 실패·취소는 실패 (정기 실행은 audit 결과만 보면 되므로 건너뜀)
+  # 비밀값 스캔: PR·main push는 변경분, 정기 실행은 전체 이력 스캔 (BRD-132)
+  # 오탐은 .gitleaks.toml 허용 목록으로 관리하고 실제 유출만 실패 처리
+  gitleaks:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0 # 커밋 비교 및 정기 실행 전체 이력 스캔용
+      - name: Gitleaks 다운로드 및 체크섬 검증
+        run: |
+          GITLEAKS_VERSION="8.30.1"
+          GITLEAKS_SHA256="551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb"
+          curl -sSLO "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          echo "${GITLEAKS_SHA256}  gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" | sha256sum -c -
+          sudo tar -xz -C /usr/local/bin gitleaks -f "gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          rm -f "gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          gitleaks version
+      - name: 비밀값 스캔 실행
+        run: |
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            echo "정기 실행: 전체 이력 스캔"
+            gitleaks detect --config=.gitleaks.toml --redact --verbose
+          elif [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "PR 검사: origin/${{ github.base_ref }} 대비 변경분 스캔"
+            gitleaks detect --log-opts="origin/${{ github.base_ref }}...HEAD" --config=.gitleaks.toml --redact --verbose
+          else
+            echo "main push 검사: 직전 커밋 대비 변경분 스캔"
+            BEFORE="${{ github.event.before }}"
+            if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
+              if git rev-parse --verify HEAD~1 >/dev/null 2>&1; then
+                BEFORE="HEAD~1"
+              else
+                BEFORE="HEAD"
+              fi
+            fi
+            if [ "$BEFORE" = "HEAD" ]; then
+              gitleaks detect --log-opts="-1" --config=.gitleaks.toml --redact --verbose
+            else
+              gitleaks detect --log-opts="${BEFORE}..HEAD" --config=.gitleaks.toml --redact --verbose
+            fi
+          fi
+
+  # 결과 모음: 건너뜀은 통과, 실패·취소는 실패 (정기 실행은 audit·gitleaks 결과만 보면 되므로 건너뜀)
   ci-ok:
     if: always() && github.event_name != 'schedule'
-    needs: [changes, web, e2e-build, e2e, services, infra, contracts, beaches, audit] # 하나라도 실패하면 빨간불
+    needs: [changes, web, e2e-build, e2e, services, infra, contracts, beaches, audit, gitleaks] # 하나라도 실패하면 빨간불
     runs-on: ubuntu-latest
     steps:
       - name: 결과 확인

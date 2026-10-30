@@ -1,0 +1,44 @@
+title = "baradun_v2 gitleaks config"
+
+# gitleaks 8.30.1 기본 규칙을 확장
+[extend]
+useDefault = true
+
+[allowlist]
+description = "전역 허용 목록: 문의 테스트 고정값 및 CDK 에셋 경로"
+paths = [
+  # CDK 에셋 출력 디렉터리 (테스트 폴더 전체나 확장자 전체가 아닌 cdk.out 경로만 좁게 허용)
+  '''(^|/)cdk\.out/''',
+]
+regexes = [
+  # 문의 테스트의 고정 UUID 상수 (inquiry.test.ts, handler.test.ts, store.test.ts)
+  '''3f2504e0-4f89-41d3-9a0c-0305e82c3301''',
+  '''9b2d7a3e-1c4f-4e8a-b6d5-2f0e9c8a7b61''',
+  '''123e4567-e89b-42d3-a456-426614174000''',
+  # 문의 사진 테스트의 고정 16진수 S3 키 상수 (inquiry.test.ts, handler.test.ts, photos.test.ts)
+  '''(pending|accepted)/0123456789abcdef0123456789abcdef/0123456789abcdef''',
+]
+
+[[rules]]
+id = "kma-apihub-auth-key"
+description = "기상청 API허브 authKey"
+regex = '''(?i)(?:kma[_-]?apihub(?:[_-]auth)?[_-]?key|authKey)[^\S\r\n]*(?:=|:|:=)[^\S\r\n]*["']?([a-zA-Z0-9_\-+=/]{16,64})["']?'''
+secretGroup = 1
+keywords = [
+  "apihub",
+  "authkey",
+  "authKey",
+]
+
+[[rules]]
+id = "data-go-kr-service-key"
+description = "공공데이터포털 서비스키"
+regex = '''(?i)(?:data[_-]?go[_-]?kr(?:[_-]service)?[_-]?key|serviceKey)[^\S\r\n]*(?:=|:|:=)[^\S\r\n]*["']?([a-zA-Z0-9_\-+=/%]{20,150})["']?'''
+secretGroup = 1
+keywords = [
+  "data-go-kr",
+  "data_go_kr",
+  "servicekey",
+  "serviceKey",
+  "ServiceKey",
+]
