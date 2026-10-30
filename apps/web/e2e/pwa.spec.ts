@@ -50,7 +50,7 @@ function storeTheme(page: Page, theme: "light" | "dark") {
 }
 
 // 테마 고르기: '테마' 줄을 눌러 시트를 열고(PC는 왼쪽 목록에서 '화면'을 먼저 고름),
-// 라디오는 화면에 숨기고(sr-only) 감싼 label을 누름. 고르면 시트가 닫히고 줄 값이 바뀜
+// 시트의 선택지 버튼을 누름. 고르면 시트가 닫히고 줄 값이 바뀜
 async function chooseTheme(page: Page, name: string) {
   const panel = page
     .getByRole("navigation", { name: "설정 묶음" })
@@ -58,7 +58,7 @@ async function chooseTheme(page: Page, name: string) {
   if (await panel.isVisible()) await panel.click();
   await page.getByRole("button", { name: /^테마/ }).click();
   const sheet = page.getByRole("dialog", { name: "테마" });
-  await sheet.locator("label", { hasText: name }).click();
+  await sheet.getByRole("button", { name, exact: true }).click();
   await expect(sheet).toBeHidden();
   await expect(page.getByRole("button", { name: /^테마/ })).toContainText(name);
 }

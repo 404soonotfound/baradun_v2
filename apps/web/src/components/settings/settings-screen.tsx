@@ -412,28 +412,25 @@ function DisplayGroup({
         onClose={themeSheet.close}
         title={t("theme")}
       >
-        <fieldset className="pb-2">
-          <legend className="sr-only">{t("theme")}</legend>
-          <div className="flex flex-col gap-2">
-            {THEMES.map((value) => (
-              <label key={value} className={choiceClass(theme === value)}>
-                <input
-                  type="radio"
-                  name="theme"
-                  value={value}
-                  checked={theme === value}
-                  onChange={() => {
-                    setTheme(value);
-                    themeSheet.close();
-                  }}
-                  className="sr-only"
-                />
+        {/* 고르면 바로 바꾸고 닫음. 라디오는 화살표 키만으로도 바뀌어 시트가 닫히므로 버튼 목록으로 둠(언어와 같은 모양) */}
+        <ul className="flex flex-col gap-2 pb-2">
+          {THEMES.map((value) => (
+            <li key={value}>
+              <button
+                type="button"
+                aria-current={theme === value ? "true" : undefined}
+                onClick={() => {
+                  setTheme(value);
+                  themeSheet.close();
+                }}
+                className={choiceClass(theme === value)}
+              >
                 {t(`themeOption.${value}`)}
                 <ChoiceMark on={theme === value} />
-              </label>
-            ))}
-          </div>
-        </fieldset>
+              </button>
+            </li>
+          ))}
+        </ul>
       </Sheet>
 
       <Sheet
@@ -465,10 +462,10 @@ function DisplayGroup({
   );
 }
 
-// 시트 안 선택지(테마·언어). 고른 것은 테두리·바탕 + ✓(색만으로 구분하지 않음)
+// 시트 안 선택지(테마·언어). 고른 것은 테두리·바탕 + ✓(색만으로 구분하지 않음), aria-current로 알림
 function choiceClass(on: boolean) {
   return cn(
-    "flex min-h-touch cursor-pointer items-center justify-between gap-2 rounded-button border px-4 text-body has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-brand-default",
+    "flex min-h-touch w-full cursor-pointer items-center justify-between gap-2 rounded-button border px-4 text-left text-body",
     on
       ? "border-brand-default bg-brand-weak font-bold text-text-default"
       : "border-border-strong text-text-body",
