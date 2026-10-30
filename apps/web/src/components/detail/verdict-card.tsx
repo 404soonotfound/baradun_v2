@@ -174,22 +174,28 @@ export function VerdictCard({
       ),
     };
   }
+  // '특보 없음' 근거(이 해변 특보구역 · 기관 · 확인 시각). 셋 중 하나라도 없으면 null → '특보 없음'을 보이지 않음
+  const confirmedTime = kstStamp(view.confirmedAt, nowMs);
+  const clearBasis =
+    confirmedTime && detail.warningSource
+      ? t("detail.verdict.clearBasis", {
+          source: agencyText(detail.warningSource),
+          time: confirmedTime,
+        })
+      : null;
+  // 새 정보를 못 받는 중(B5)이거나 근거가 모자라면 지난 '없음'을 지금 '특보 없음'처럼 보이지 않게 '확인 못 함'으로
+  const checkState = warningCheckState(view, detail);
+  const warningState =
+    view.stale || (checkState === "none" && clearBasis === null)
+      ? "unknown"
+      : checkState;
+
   const lines: BasisLine[] = [];
   const plain = (text: string): BasisLine => ({ text, node: text });
   if (view.stale) {
     lines.push(plain(confirmedUntilText(view.confirmedAt, nowMs)));
   } else if (view.category === "clear") {
-    const time = kstStamp(view.confirmedAt, nowMs);
-    if (time && detail.warningSource) {
-      lines.push(
-        plain(
-          t("detail.verdict.clearBasis", {
-            source: agencyText(detail.warningSource),
-            time,
-          }),
-        ),
-      );
-    }
+    if (clearBasis) lines.push(plain(clearBasis));
   } else {
     for (const basis of detail.basis) {
       const line = basisText(basis);
@@ -197,6 +203,8 @@ export function VerdictCard({
       if (line && !lines.some((item) => item.text === line.text))
         lines.push(line);
     }
+    // 관측 지연처럼 특보는 '없음'으로 확인된 판단불가: 확인한 것 칸의 '특보 없음' 근거를 함께 둠
+    if (warningState === "none" && clearBasis) lines.push(plain(clearBasis));
   }
 
   const blocked = view.category === "unavailable";
@@ -204,7 +212,6 @@ export function VerdictCard({
   const wave = shownMetric(view, stations, "waveHeight");
   // ⑤ 확인한 것 3칸(Figma chk): 칸마다 글자만으로 뜻이 서게 씀('특보 없음' · '10분 전 측정' · '파고 0.6m')
   // 값이 없으면 세 가지로 구분(가까운 관측 없음 / 늦어짐 / 값 없음) — 결측을 정상처럼 보이지 않게
-  const warningState = warningCheckState(view, detail);
   const warningItem: CheckedItemProps =
     warningState === "active"
       ? {
