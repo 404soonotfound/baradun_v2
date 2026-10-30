@@ -14,11 +14,14 @@ import {
 
 // 거부일 때만 버튼. 답을 기다리는 동안은 aria-disabled로 막고 글자를 '위치 확인 중…'으로 바꿈
 // disabled 대신 aria-disabled: 누른 버튼의 포커스가 사라지지 않게(키보드·화면 읽기가 결과 문구를 이어서 들음)
+// onSucceeded: 이 버튼으로 다시 시도해 위치를 받았을 때만 부름. 버튼·배너가 사라지므로 화면이 포커스를 옮길 자리를 정함
 export function LocationRetryButton({
   state,
+  onSucceeded,
   className,
 }: {
   state: LocationState;
+  onSucceeded?: (() => void) | undefined;
   className?: string | undefined;
 }) {
   const t = useTranslations("location");
@@ -28,7 +31,7 @@ export function LocationRetryButton({
     <button
       type="button"
       aria-disabled={pending ? "true" : undefined}
-      onClick={pending ? undefined : retryLocation}
+      onClick={pending ? undefined : () => retryLocation(onSucceeded)}
       className={cn(
         "font-bold text-brand-default aria-disabled:cursor-default aria-disabled:font-normal aria-disabled:text-text-muted",
         className,

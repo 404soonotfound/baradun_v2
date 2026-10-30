@@ -132,7 +132,8 @@ export function createLocationStore(
   // 위치 한 번 받기. 권한을 모르는 기기면 여기서 브라우저가 묻는 창을 띄움
   // 답이 오기 전에 스위치를 끄면(차례 번호가 바뀜) 그 답은 버림
   // retry: 거부 상태의 다시 시도. 받는 중 대신 '거부 · 다시 시도 중'으로 두고, 또 거부면 '다시 시도했는데도 거부'
-  function locate(retry = false) {
+  // onRetrySucceeded: 다시 시도로 위치를 받았을 때만 부름(화면이 포커스를 옮김). 앱을 열 때 자동으로 받은 위치는 부르지 않음
+  function locate(retry = false, onRetrySucceeded?: () => void) {
     if (!enabled) return;
     if (!("geolocation" in navigator)) {
       setState({ status: "unavailable", coords: null });
@@ -154,6 +155,7 @@ export function createLocationStore(
             lng: position.coords.longitude,
           },
         });
+        if (retry) onRetrySucceeded?.();
       },
       (error) => {
         if (mine !== generation) return;
@@ -263,9 +265,10 @@ export function createLocationStore(
   // 거부 상태에서 사용자가 직접 누른 '다시 시도'에서만 호출(BRD-139). 브라우저에 한 번 더 요청하고, 묻는 창을 띄울지는 브라우저가 정함
   // 자동으로 부르지 않음: 앱을 열 때·권한 확인·권한 변경 알림·정렬 탭은 거부면 묻지 않음(반복 요청 금지 유지)
   // 거부가 아니면(꺼짐 포함)·이미 다시 시도 중이면 아무것도 안 함
-  function retry() {
+  // onSucceeded: 위치를 받으면 한 번 부름. 그사이 스위치를 끄는 등 차례가 바뀌어 버린 답이면 부르지 않음
+  function retry(onSucceeded?: () => void) {
     if (state.status !== "denied" || locationRetrying(state)) return;
-    locate(true);
+    locate(true, onSucceeded);
   }
 
   return { getState: () => state, subscribe, request, retry, setEnabled };
@@ -278,8 +281,8 @@ export function requestLocation() {
   store.request();
 }
 
-export function retryLocation() {
-  store.retry();
+export function retryLocation(onSucceeded?: () => void) {
+  store.retry(onSucceeded);
 }
 
 export function setLocationEnabled(next: boolean) {

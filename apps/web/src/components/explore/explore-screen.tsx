@@ -395,6 +395,10 @@ export function ExploreScreen({
             onClose={() => setOffBannerClosed(true)}
             title={noticeTitle}
             body={t("explore.locationOff.body")}
+            // 안내가 사라지므로 포커스를 화면 제목으로(상황 배너 다시 시도 성공과 같은 자리). 모바일 지도 보기에서는 정렬 줄이 숨어 있어 제목을 씀
+            onRetrySucceeded={() =>
+              requestAnimationFrame(() => titleRef.current?.focus())
+            }
           />
         )}
 

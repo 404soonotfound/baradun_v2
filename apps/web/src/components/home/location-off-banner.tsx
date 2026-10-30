@@ -25,6 +25,7 @@ export function LocationOffBanner({
   title,
   body,
   withIcon = true,
+  onRetrySucceeded,
 }: {
   locale: Locale;
   location: LocationState;
@@ -34,12 +35,14 @@ export function LocationOffBanner({
   body?: string;
   // 홈은 아이콘 없이 글자만(Figma 171:818, BRD-129). 탐색은 그대로
   withIcon?: boolean;
+  // '다시 시도'로 위치를 받으면 부름. 배너가 사라지므로 화면이 포커스를 옮길 자리를 정함(BRD-139)
+  onRetrySucceeded?: () => void;
 }) {
   const t = useTranslations("home.region");
   const retryMessage = useLocationRetryMessage(location);
   const action =
     location.status === "denied" ? (
-      <LocationRetryButton state={location} />
+      <LocationRetryButton state={location} onSucceeded={onRetrySucceeded} />
     ) : location.status === "off" ? (
       <Link
         href={localizedPath(locale, "/settings/")}
