@@ -38,7 +38,7 @@ export class InquiryNotifier {
           Message: [
             `문의 ID: ${value.inquiryId}`,
             `유형: ${TYPE_LABEL[value.type]}`,
-            `접수 시각: ${value.receivedAt.toISOString()}`,
+            `접수 시각(UTC): ${value.receivedAt.toISOString()}`,
             `이메일 제공 여부: ${value.hasEmail ? "있음" : "없음"}`,
           ].join("\n"),
         }),
