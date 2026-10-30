@@ -93,13 +93,41 @@ jobs:
           NEXT_PUBLIC_SITE_URL: https://example.test # 예약 도메인(.test). 운영 값은 deploy.yml의 vars.SITE_URL
       - run: npm run check:csp -w apps/web # CSP meta 해시 일치 검사 (BRD-118)
 
-  # 웹 E2E: 정적 빌드 결과로 전 화면 접근성(axe)·상태별 화면·키보드·반응형 검사 (BRD-39)
-  # /data/**는 테스트의 가짜 응답만 씀(운영 데이터·외부 타일 서버에 기대지 않음)
-  e2e:
+  # 웹 E2E 빌드: 한 번만 빌드해 결과(out/)를 E2E 샤드들이 나눠 씀 (BRD-134)
+  e2e-build:
     needs: changes
     if: needs.changes.outputs.web == 'true' || github.event_name == 'push' # main push는 늘 (web과 같은 이유)
     runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run build -w apps/web
+        env:
+          NEXT_PUBLIC_SITE_URL: https://example.test # web 작업과 같은 테스트 값 (빌드는 사이트 주소 필수, BRD-102)
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: e2e-site
+          path: apps/web/out
+          include-hidden-files: true # 빌드 결과의 점 파일도 그대로
+          retention-days: 1
+          if-no-files-found: error
+
+  # 웹 E2E: 정적 빌드 결과로 전 화면 접근성(axe)·상태별 화면·키보드·반응형 검사 (BRD-39)
+  # /data/**는 테스트의 가짜 응답만 씀(운영 데이터·외부 타일 서버에 기대지 않음)
+  # 테스트를 4개로 나눠 동시에 돌림(BRD-134). 하나라도 실패하면 e2e 결과가 실패라 ci-ok도 실패
+  e2e:
+    needs: [changes, e2e-build]
+    if: needs.changes.outputs.web == 'true' || github.event_name == 'push' # main push는 늘 (web과 같은 이유)
+    runs-on: ubuntu-latest
     timeout-minutes: 20
+    strategy:
+      fail-fast: false # 한 조각이 실패해도 나머지 결과까지 봄
+      matrix:
+        shard: [1, 2, 3, 4]
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
@@ -109,10 +137,11 @@ jobs:
       - run: npm ci
       - run: npx --no-install playwright install --with-deps chromium # lock 파일의 Playwright 판에 맞는 chromium
         working-directory: apps/web
-      - run: npm run build -w apps/web
-        env:
-          NEXT_PUBLIC_SITE_URL: https://example.test # web 작업과 같은 테스트 값 (빌드는 사이트 주소 필수, BRD-102)
-      - run: npm run test:e2e -w apps/web
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: e2e-site
+          path: apps/web/out
+      - run: npm run test:e2e -w apps/web -- --shard=${{ matrix.shard }}/4
 
   # 백엔드: 린트·타입 검사·테스트(Vitest)
   services:
@@ -206,7 +235,7 @@ jobs:
   # 결과 모음: 건너뜀은 통과, 실패·취소는 실패 (정기 실행은 audit 결과만 보면 되므로 건너뜀)
   ci-ok:
     if: always() && github.event_name != 'schedule'
-    needs: [changes, web, e2e, services, infra, contracts, beaches, audit] # 하나라도 실패하면 빨간불
+    needs: [changes, web, e2e-build, e2e, services, infra, contracts, beaches, audit] # 하나라도 실패하면 빨간불
     runs-on: ubuntu-latest
     steps:
       - name: 결과 확인
