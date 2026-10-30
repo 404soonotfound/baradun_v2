@@ -143,9 +143,9 @@ await fetch("/api/inquiries", {
 
 이 변경을 처음 배포할 때는 순서를 지킵니다. 새 Lambda는 멱등 키가 없는 요청을 400으로 거부하고, 이전 Lambda는 멱등 키가 있는 요청을 400으로 거부합니다.
 
-1. main 머지 뒤 사이트 배포(`deploy.yml`)는 production 승인 대기에 둡니다.
+1. 머지 전에 GitHub Variables `DEPLOY_PAUSED`를 `true`로 둡니다. main CI가 끝나도 사이트가 자동 배포되지 않습니다(BRD-133).
 2. 최신 `origin/main` 작업 트리에서 `npx cdk deploy`(맨 위 배포 절차) → 출력 `InquiryPhotoBucketName`을 GitHub Variables `INQUIRY_PHOTO_BUCKET`에 넣습니다.
-3. 사이트 배포를 승인합니다. 2와 3 사이에 열려 있던 이전 화면의 문의는 거부되므로 바로 이어서 합니다.
+3. `DEPLOY_PAUSED`를 지우고 루트에서 `npm run deploy:prod`로 사이트를 배포합니다. 2와 3 사이에 열려 있던 이전 화면의 문의는 거부되므로 바로 이어서 합니다.
 
 문의 유형 4개·`beachId`·`activity` 칸·사진 4MiB(결정 기록 12장 결정 21~23)를 처음 배포할 때도 같은 순서를 지킵니다. 새 Lambda는 이전 화면의 `other` 유형과 4MiB를 넘는 사진 양식 요청을 400으로 거부하고, 이전 Lambda는 새 유형과 `beachId`·`activity` 칸을 400으로 거부합니다.
 
