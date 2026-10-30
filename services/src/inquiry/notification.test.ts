@@ -4,7 +4,7 @@ import { InquiryNotifier } from "./notification";
 import type { InquiryStore } from "./store";
 
 describe("문의 메일 알림", () => {
-  it("짧은 요약과 이메일 제공 여부만 보낸다", async () => {
+  it("문의 ID·유형·접수 시각·이메일 제공 여부만 보내고 본문·이메일·사진은 제외함 (BRD-120)", async () => {
     const commands: Array<{ input: Record<string, unknown> }> = [];
     const sns = {
       send: async (command: { input: Record<string, unknown> }) => {
@@ -16,29 +16,46 @@ describe("문의 메일 알림", () => {
       allowNotification: async () => true,
     } as unknown as InquiryStore;
     const notifier = new InquiryNotifier(sns, "topic", store);
-    const longMessage = `앞부분 secret@example.com ${"가".repeat(200)} 뒷부분`;
 
+    // 이메일 제공 시 (hasEmail: true)
     expect(
       await notifier.notify({
         inquiryId: "123e4567-e89b-42d3-a456-426614174000",
         type: "data_question",
-        message: longMessage,
-        beachId: "b0001",
-        activity: "surfing",
         hasEmail: true,
         receivedAt: new Date("2026-10-26T00:00:00.000Z"),
       }),
     ).toBe("sent");
 
     const message = String(commands[0]?.input.Message);
-    expect(message).toContain("유형: 판단 기준 질문");
-    expect(message).toContain("해변: b0001");
-    expect(message).toContain("활동: 서핑");
-    expect(message).toContain("이메일 제공 여부: 예");
-    expect(message).toContain("문의 ID: 123e4567-e89b-42d3-a456-426614174000");
-    expect(message).not.toContain("뒷부분");
-    expect(message).not.toContain("@");
-    expect(message).toContain("[이메일 생략]");
+    expect(message).toBe(
+      [
+        "문의 ID: 123e4567-e89b-42d3-a456-426614174000",
+        "유형: 판단 기준 질문",
+        "접수 시각: 2026-10-26T00:00:00.000Z",
+        "이메일 제공 여부: 있음",
+      ].join("\n"),
+    );
+
+    // 이메일 미제공 시 (hasEmail: false)
+    expect(
+      await notifier.notify({
+        inquiryId: "987e6543-e21b-42d3-a456-426614174999",
+        type: "data_error",
+        hasEmail: false,
+        receivedAt: new Date("2026-10-26T12:34:56.000Z"),
+      }),
+    ).toBe("sent");
+
+    const secondMessage = String(commands[1]?.input.Message);
+    expect(secondMessage).toBe(
+      [
+        "문의 ID: 987e6543-e21b-42d3-a456-426614174999",
+        "유형: 정보가 실제와 다름",
+        "접수 시각: 2026-10-26T12:34:56.000Z",
+        "이메일 제공 여부: 없음",
+      ].join("\n"),
+    );
   });
 
   it("하루 상한이면 SNS를 호출하지 않는다", async () => {
@@ -55,7 +72,6 @@ describe("문의 메일 알림", () => {
       await notifier.notify({
         inquiryId: "123e4567-e89b-42d3-a456-426614174000",
         type: "data_suggestion",
-        message: "문의",
         hasEmail: false,
         receivedAt: new Date(),
       }),

@@ -1,6 +1,5 @@
 import { PublishCommand, SNSClient } from "@aws-sdk/client-sns";
-import type { Activity, BeachId, InquiryType } from "@baradun/contracts";
-import { INQUIRY_SUMMARY_MAX_LENGTH } from "./policy";
+import type { InquiryType } from "@baradun/contracts";
 import { InquiryStore } from "./store";
 
 const TYPE_LABEL: Record<InquiryType, string> = {
@@ -10,20 +9,11 @@ const TYPE_LABEL: Record<InquiryType, string> = {
   data_suggestion: "새 데이터 제안",
 };
 
-const ACTIVITY_LABEL: Record<Activity, string> = {
-  swimming: "수영",
-  surfing: "서핑",
-  scuba: "스쿠버다이빙",
-};
-
 export interface InquiryNotification {
   readonly inquiryId: string;
   readonly type: InquiryType;
-  readonly message: string;
-  readonly beachId?: BeachId;
-  readonly activity?: Activity;
-  readonly hasEmail: boolean;
   readonly receivedAt: Date;
+  readonly hasEmail: boolean;
 }
 
 export type NotificationResult = "sent" | "daily_limit" | "failed";
@@ -40,14 +30,6 @@ export class InquiryNotifier {
       return "daily_limit";
     }
 
-    const summary = value.message
-      .replace(/\s+/g, " ")
-      .trim()
-      .replace(
-        /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi,
-        "[이메일 생략]",
-      )
-      .slice(0, INQUIRY_SUMMARY_MAX_LENGTH);
     try {
       await this.sns.send(
         new PublishCommand({
@@ -56,10 +38,8 @@ export class InquiryNotifier {
           Message: [
             `문의 ID: ${value.inquiryId}`,
             `유형: ${TYPE_LABEL[value.type]}`,
-            ...(value.beachId ? [`해변: ${value.beachId}`] : []),
-            ...(value.activity ? [`활동: ${ACTIVITY_LABEL[value.activity]}`] : []),
-            `짧은 요약: ${summary}`,
-            `이메일 제공 여부: ${value.hasEmail ? "예" : "아니오"}`,
+            `접수 시각: ${value.receivedAt.toISOString()}`,
+            `이메일 제공 여부: ${value.hasEmail ? "있음" : "없음"}`,
           ].join("\n"),
         }),
       );
