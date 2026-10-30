@@ -8,6 +8,8 @@ const baseURL = `http://127.0.0.1:${PORT}`;
 export default defineConfig({
   testDir: "./e2e",
   fullyParallel: true,
+  // CI 실행기(CPU 4개)를 다 씀. 기본값 50%면 브라우저를 2개만 띄움. 로컬은 기본값 그대로 (BRD-134)
+  workers: process.env.CI ? "100%" : "50%",
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? [["list"], ["github"]] : "list",

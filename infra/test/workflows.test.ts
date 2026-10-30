@@ -147,15 +147,28 @@ describe("PR 필수 웹 검사 (BRD-102 결정 41·42)", () => {
     expect(webBuildSiteUrl(web)).toMatch(/^https?:\/\/\S+$/);
   });
 
-  it("e2e 작업의 빌드도 사이트 주소를 명시한다", () => {
-    expect(webBuildSiteUrl(jobLines(ci?.text ?? "", "e2e"))).toMatch(
+  it("e2e 빌드도 사이트 주소를 명시한다", () => {
+    expect(webBuildSiteUrl(jobLines(ci?.text ?? "", "e2e-build"))).toMatch(
       /^https?:\/\/\S+$/,
+    );
+  });
+
+  // 빌드 한 번 + 4개 샤드(BRD-134): 샤드가 빠지거나 빌드 결과 없이 돌면 검사가 줄어듦
+  it("e2e는 e2e-build 결과를 받아 1/4~4/4 샤드로 모두 돌린다", () => {
+    const e2e = jobLines(ci?.text ?? "", "e2e").join("\n");
+    expect(e2e).toMatch(/needs:\s*\[changes, e2e-build\]/);
+    expect(e2e).toMatch(/shard:\s*\[1, 2, 3, 4\]/);
+    expect(e2e).toMatch(/fail-fast:\s*false/);
+    expect(e2e).toContain("--shard=${{ matrix.shard }}/4");
+    expect(e2e).toMatch(/name:\s*e2e-site\s*\n\s*path:\s*apps\/web\/out/);
+    expect(jobLines(ci?.text ?? "", "e2e-build").join("\n")).toMatch(
+      /name:\s*e2e-site\s*\n\s*path:\s*apps\/web\/out/,
     );
   });
 
   // main CI 성공이 배포 조건이라, main push에서는 바뀐 영역과 상관없이 웹 전체를 검사해야 함 (BRD-133)
   it("main push에서는 web·e2e를 늘 돌린다", () => {
-    for (const job of ["web", "e2e"]) {
+    for (const job of ["web", "e2e-build", "e2e"]) {
       const cond = jobLines(ci?.text ?? "", job)
         .map((l) => l.match(/^\s{4}if:\s*(.+)$/)?.[1])
         .find((v) => v !== undefined);
@@ -169,7 +182,7 @@ describe("PR 필수 웹 검사 (BRD-102 결정 41·42)", () => {
       .match(/needs:\s*\[([^\]]*)\]/)?.[1]
       .split(",")
       .map((n) => n.trim());
-    expect(needs).toEqual(expect.arrayContaining(["web", "e2e"]));
+    expect(needs).toEqual(expect.arrayContaining(["web", "e2e-build", "e2e"]));
   });
 
   it("배포 빌드는 저장소 변수 SITE_URL을 사이트 주소로 넣는다", () => {
