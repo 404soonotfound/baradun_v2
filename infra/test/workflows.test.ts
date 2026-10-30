@@ -209,4 +209,11 @@ describe("PR 필수 웹 검사 (BRD-102 결정 41·42)", () => {
       }
     }
   });
+
+  it("비밀값 검사(gitleaks) 잡은 contents: read 권한으로 --redact 출력을 쓴다 (BRD-132)", () => {
+    const gitleaks = jobLines(ci?.text ?? "", "gitleaks").join("\n");
+    expect(gitleaks).toContain("contents: read");
+    expect(gitleaks).toContain("--redact");
+    expect(gitleaks).not.toMatch(/\bsecrets\./);
+  });
 });
