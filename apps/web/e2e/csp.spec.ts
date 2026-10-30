@@ -314,18 +314,18 @@ test.describe("보안 응답 헤더 및 CSP 검증 (BRD-118)", () => {
       }
     });
 
-    // 1. 온라인 상태에서 홈 접속 및 서비스 워커 등록 대기
+    // 1. 온라인 상태에서 홈 접속 후 서비스 워커가 미리 저장을 마치고(install → activate) 이 페이지를 맡을 때까지 기다림
+    //    등록만 보고 고정 시간 쉬면, 실행기가 바쁠 때 저장 전에 오프라인이 되어 가끔 실패했음(BRD-138)
     await page.goto("/");
     await page.waitForFunction(
       async () => {
         if (!("serviceWorker" in navigator)) return false;
-        const reg = await navigator.serviceWorker.getRegistration();
-        return reg !== undefined;
+        await navigator.serviceWorker.ready; // 활성화 = 설치 때 미리 저장(precache)이 끝남
+        return navigator.serviceWorker.controller !== null; // activate의 clients.claim으로 이 페이지를 맡음
       },
       undefined,
-      { timeout: 10_000 },
+      { timeout: 15_000 },
     );
-    await page.waitForTimeout(500);
 
     // 2. 온라인 상태에서 장소 상세 미리 열기
     await page.goto("/spots/gyeongpo/");
