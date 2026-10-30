@@ -2,7 +2,14 @@
 
 import { MapPinOff, Minus, Plus } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { useEffect, useReducer, useRef, useState, type ReactNode } from "react";
+import {
+  Fragment,
+  useEffect,
+  useReducer,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -235,19 +242,22 @@ export function MapView({
       <div className="flex flex-col gap-0.5 border-t border-border-default px-3 py-2 text-caption text-text-muted">
         {/* 마커의 출처(기상청). 마커는 다 그린 뒤에만 보이므로 같은 조건 */}
         {ready && api && dataSource && <p>{dataSource}</p>}
-        {/* 출처 표기(OSM·OpenMapTiles·OpenFreeMap). 지도가 보이든 실패하든 같은 자리 */}
-        <p className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+        {/* 출처 표기(OSM·OpenMapTiles·OpenFreeMap). 지도가 보이든 실패하든 같은 자리
+            글줄 안 링크(inline)로 두고 가운뎃점으로 띄움: 좁은 화면에서 줄바꿈돼도 17px 링크가 위아래로 붙지 않게(BRD-128, 모바일 첫 보기가 지도) */}
+        <p>
           <span className="sr-only">{t("attribution.label")}</span>
-          {MAP_ATTRIBUTIONS.map((item) => (
-            <a
-              key={item.key}
-              href={item.href}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="underline-offset-2 hover:underline"
-            >
-              {t(`attribution.${item.key}`)}
-            </a>
+          {MAP_ATTRIBUTIONS.map((item, index) => (
+            <Fragment key={item.key}>
+              {index > 0 && <span aria-hidden="true"> · </span>}
+              <a
+                href={item.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline-offset-2 hover:underline"
+              >
+                {t(`attribution.${item.key}`)}
+              </a>
+            </Fragment>
           ))}
         </p>
       </div>
