@@ -123,6 +123,7 @@
       "countScopeNoTime": "No warnings: each beach's warning zone · KMA · check time unknown",
       "noBeach": "No beaches in this region are confirmed for this activity yet",
       "offTitle": "Viewing without location",
+      "failedTitle": "Couldn't get your location",
       "offBody": "Showing beaches in your chosen region. Turn on location to see distances too.",
       "turnOn": "Turn on location",
       "close": "Close notice"

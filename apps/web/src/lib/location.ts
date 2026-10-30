@@ -45,6 +45,10 @@ export function locationBlocked(status: LocationState["status"]): boolean {
   return status === "denied" || status === "off";
 }
 
+// 다시 시도의 결과. 받음(ready) · 또 거부(denied, 버튼이 남음) · 시간 초과·위치를 알 수 없음(unavailable)
+// ready·unavailable이면 거부 상태가 끝나 '다시 시도' 버튼이 사라짐(화면이 포커스를 옮길 자리를 정함)
+export type RetryResult = "ready" | "denied" | "unavailable";
+
 // 다시 시도의 답을 기다리는 중인지. 버튼을 막아 두 번 요청하지 않게 함
 export function locationRetrying(state: LocationState): boolean {
   return state.status === "denied" && state.retry === "pending";
@@ -132,11 +136,15 @@ export function createLocationStore(
   // 위치 한 번 받기. 권한을 모르는 기기면 여기서 브라우저가 묻는 창을 띄움
   // 답이 오기 전에 스위치를 끄면(차례 번호가 바뀜) 그 답은 버림
   // retry: 거부 상태의 다시 시도. 받는 중 대신 '거부 · 다시 시도 중'으로 두고, 또 거부면 '다시 시도했는데도 거부'
-  // onRetrySucceeded: 다시 시도로 위치를 받았을 때만 부름(화면이 포커스를 옮김). 앱을 열 때 자동으로 받은 위치는 부르지 않음
-  function locate(retry = false, onRetrySucceeded?: () => void) {
+  // onRetrySettled: 다시 시도의 결과가 정해지면 한 번 부름(화면이 포커스를 옮김). 앱을 열 때 자동으로 받은 위치는 부르지 않음
+  function locate(
+    retry = false,
+    onRetrySettled?: (result: RetryResult) => void,
+  ) {
     if (!enabled) return;
     if (!("geolocation" in navigator)) {
       setState({ status: "unavailable", coords: null });
+      if (retry) onRetrySettled?.("unavailable");
       return;
     }
     const mine = ++generation;
@@ -155,18 +163,20 @@ export function createLocationStore(
             lng: position.coords.longitude,
           },
         });
-        if (retry) onRetrySucceeded?.();
+        if (retry) onRetrySettled?.("ready");
       },
       (error) => {
         if (mine !== generation) return;
         // 시간 초과·위치를 알 수 없음은 다시 시도였어도 기존과 같은 '받을 수 없음'
+        const denied = error.code === error.PERMISSION_DENIED;
         setState(
-          error.code === error.PERMISSION_DENIED
+          denied
             ? retry
               ? { status: "denied", coords: null, retry: "denied" }
               : { status: "denied", coords: null }
             : { status: "unavailable", coords: null },
         );
+        if (retry) onRetrySettled?.(denied ? "denied" : "unavailable");
       },
       // 정밀 GPS 불필요(해변 거리용) · 10초 넘으면 포기 · 5분 안에 받은 위치는 다시 씀
       { enableHighAccuracy: false, timeout: 10_000, maximumAge: 5 * 60_000 },
@@ -265,10 +275,10 @@ export function createLocationStore(
   // 거부 상태에서 사용자가 직접 누른 '다시 시도'에서만 호출(BRD-139). 브라우저에 한 번 더 요청하고, 묻는 창을 띄울지는 브라우저가 정함
   // 자동으로 부르지 않음: 앱을 열 때·권한 확인·권한 변경 알림·정렬 탭은 거부면 묻지 않음(반복 요청 금지 유지)
   // 거부가 아니면(꺼짐 포함)·이미 다시 시도 중이면 아무것도 안 함
-  // onSucceeded: 위치를 받으면 한 번 부름. 그사이 스위치를 끄는 등 차례가 바뀌어 버린 답이면 부르지 않음
-  function retry(onSucceeded?: () => void) {
+  // onSettled: 결과(받음·또 거부·받을 수 없음)가 정해지면 한 번 부름. 그사이 스위치를 끄는 등 차례가 바뀌어 버린 답이면 부르지 않음
+  function retry(onSettled?: (result: RetryResult) => void) {
     if (state.status !== "denied" || locationRetrying(state)) return;
-    locate(true, onSucceeded);
+    locate(true, onSettled);
   }
 
   return { getState: () => state, subscribe, request, retry, setEnabled };
@@ -281,8 +291,8 @@ export function requestLocation() {
   store.request();
 }
 
-export function retryLocation(onSucceeded?: () => void) {
-  store.retry(onSucceeded);
+export function retryLocation(onSettled?: (result: RetryResult) => void) {
+  store.retry(onSettled);
 }
 
 export function setLocationEnabled(next: boolean) {

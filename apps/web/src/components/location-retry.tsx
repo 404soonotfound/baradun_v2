@@ -1,4 +1,5 @@
 import { useTranslations } from "next-intl";
+import { useRef } from "react";
 
 import { cn } from "@/lib/cn";
 import {
@@ -6,6 +7,7 @@ import {
   locationRetrying,
   retryLocation,
   type LocationState,
+  type RetryResult,
 } from "@/lib/location";
 
 // 위치 거부 상태의 '다시 시도' (BRD-139 · 10/30 사용자 결정 A안)
@@ -14,24 +16,38 @@ import {
 
 // 거부일 때만 버튼. 답을 기다리는 동안은 aria-disabled로 막고 글자를 '위치 확인 중…'으로 바꿈
 // disabled 대신 aria-disabled: 누른 버튼의 포커스가 사라지지 않게(키보드·화면 읽기가 결과 문구를 이어서 들음)
-// onSucceeded: 이 버튼으로 다시 시도해 위치를 받았을 때만 부름. 버튼·배너가 사라지므로 화면이 포커스를 옮길 자리를 정함
+// onGone: 다시 시도의 결과로 이 버튼이 사라질 때(받음·받을 수 없음) 포커스를 옮길 자리. 다음 그리기 뒤에 부름
+//   포커스가 이 버튼에 남아 있었을 때만(사라져 본문으로 떨어진 경우 포함). 그사이 다른 곳으로 옮겼으면 건드리지 않음
+//   또 거부면 버튼이 남으므로 부르지 않음(포커스는 버튼 그대로, 결과 문구는 배너·안내의 role="status"가 읽음)
 export function LocationRetryButton({
   state,
-  onSucceeded,
+  onGone,
   className,
 }: {
   state: LocationState;
-  onSucceeded?: (() => void) | undefined;
+  onGone?: ((result: Exclude<RetryResult, "denied">) => void) | undefined;
   className?: string | undefined;
 }) {
   const t = useTranslations("location");
+  const ref = useRef<HTMLButtonElement>(null);
   if (state.status !== "denied") return null;
   const pending = locationRetrying(state);
+
+  function settled(result: RetryResult) {
+    if (result === "denied" || onGone === undefined) return;
+    // 결과를 저장소에 넣은 직후라 아직 다시 그리기 전(버튼이 남아 있음)
+    const active = document.activeElement;
+    const kept =
+      active === null || active === document.body || active === ref.current;
+    if (kept) requestAnimationFrame(() => onGone?.(result));
+  }
+
   return (
     <button
+      ref={ref}
       type="button"
       aria-disabled={pending ? "true" : undefined}
-      onClick={pending ? undefined : () => retryLocation(onSucceeded)}
+      onClick={pending ? undefined : () => retryLocation(settled)}
       className={cn(
         "font-bold text-brand-default aria-disabled:cursor-default aria-disabled:font-normal aria-disabled:text-text-muted",
         className,

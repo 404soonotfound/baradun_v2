@@ -482,45 +482,60 @@ describe("거부 상태의 다시 시도 (BRD-139)", () => {
     }
   });
 
-  it("다시 시도로 위치를 받았을 때만 성공 처리를 한 번 부름(또 거부·받을 수 없음은 부르지 않음)", async () => {
-    const allowed = deniedNavigator([
-      { kind: "allow", latitude: 1, longitude: 2 },
-    ]);
-    try {
-      const store = await deniedStore(allowed);
-      const onSucceeded = vi.fn();
-      store.retry(onSucceeded);
-      expect(store.getState().status).toBe("ready");
-      expect(onSucceeded).toHaveBeenCalledTimes(1);
-    } finally {
-      vi.unstubAllGlobals();
-    }
-    for (const code of [1, 2, 3] as const) {
-      const failed = deniedNavigator([{ kind: "fail", code }]);
+  it("다시 시도의 결과를 한 번 알림: 받음·또 거부·받을 수 없음(시간 초과·위치를 알 수 없음)", async () => {
+    const cases = [
+      [{ kind: "allow", latitude: 1, longitude: 2 }, "ready"],
+      [{ kind: "fail", code: 1 }, "denied"],
+      [{ kind: "fail", code: 2 }, "unavailable"],
+      [{ kind: "fail", code: 3 }, "unavailable"],
+    ] as const;
+    for (const [answer, result] of cases) {
+      const fake = deniedNavigator([answer]);
       try {
-        const store = await deniedStore(failed);
-        const onSucceeded = vi.fn();
-        store.retry(onSucceeded);
-        expect(onSucceeded).not.toHaveBeenCalled();
+        const store = await deniedStore(fake);
+        const onSettled = vi.fn();
+        store.retry(onSettled);
+        expect(store.getState().status).toBe(result);
+        expect(onSettled).toHaveBeenCalledTimes(1);
+        expect(onSettled).toHaveBeenCalledWith(result);
       } finally {
         vi.unstubAllGlobals();
       }
     }
   });
 
-  it("다시 시도 중에 위치 사용을 끄면 늦게 온 위치는 버리고 성공 처리도 부르지 않음", async () => {
+  it("위치 기능이 없는 브라우저에서 다시 시도하면 받을 수 없음을 알림", async () => {
+    const status = { state: "denied" as PermissionState, onchange: null };
+    vi.stubGlobal("navigator", {
+      permissions: { query: () => Promise.resolve(status) },
+    });
+    try {
+      const store = createLocationStore(() => fakeSwitch().storage);
+      store.subscribe(() => {});
+      await flush();
+      expect(store.getState().status).toBe("denied");
+      const onSettled = vi.fn();
+      store.retry(onSettled);
+      expect(store.getState().status).toBe("unavailable");
+      expect(onSettled).toHaveBeenCalledWith("unavailable");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("다시 시도 중에 위치 사용을 끄면 버린 늦은 답은 결과로 알리지 않음", async () => {
     const fake = deniedNavigator(
       [{ kind: "allow", latitude: 1, longitude: 2 }],
       true,
     );
     try {
       const store = await deniedStore(fake);
-      const onSucceeded = vi.fn();
-      store.retry(onSucceeded);
+      const onSettled = vi.fn();
+      store.retry(onSettled);
       store.setEnabled(false);
       fake.pending.forEach((answer) => answer());
       expect(store.getState().status).toBe("off");
-      expect(onSucceeded).not.toHaveBeenCalled();
+      expect(onSettled).not.toHaveBeenCalled();
     } finally {
       vi.unstubAllGlobals();
     }

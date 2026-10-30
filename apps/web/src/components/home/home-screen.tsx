@@ -261,12 +261,8 @@ export function HomeScreen({
         onClose={() => setOffBannerClosed(true)}
         body={offBody}
         withIcon={false}
-        // 배너가 사라지므로 포커스를 바다 목록 제목으로(그 자리에서 바뀐 목록을 이어서 읽음). 다음 그리기 뒤에 옮김
-        onRetrySucceeded={() =>
-          requestAnimationFrame(() =>
-            document.getElementById("home-near")?.focus(),
-          )
-        }
+        // 다시 시도로 배너가 사라지면 포커스를 바다 목록 제목으로(그 자리에서 바뀐 목록을 이어서 읽음)
+        focusAfterRetry={() => document.getElementById("home-near")?.focus()}
       />
     ) : (
       <SituationBanner

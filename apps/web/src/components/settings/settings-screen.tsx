@@ -303,11 +303,10 @@ function LocationGroup({
                 {" "}
                 <LocationRetryButton
                   state={location}
-                  // 버튼이 사라지므로 포커스를 권한 줄로(값이 '허용됨'으로 바뀐 것을 읽음). 다음 그리기 뒤에 옮김
-                  onSucceeded={() =>
-                    requestAnimationFrame(() =>
-                      document.getElementById(permissionRowId)?.focus(),
-                    )
+                  // 받음·받을 수 없음으로 버튼이 사라지면 포커스를 권한 줄로(바뀐 값 '허용됨'·'받지 못함'을 읽음)
+                  // 받을 수 없음이면 줄이 다시 묻는 버튼이 되고, 결과 안내는 위 role="status"가 읽음
+                  onGone={() =>
+                    document.getElementById(permissionRowId)?.focus()
                   }
                   className="-my-3.5 inline-flex min-h-touch items-center align-middle"
                 />
