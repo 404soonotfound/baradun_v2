@@ -43,6 +43,7 @@ import {
 } from "@/lib/inquiry/form";
 import { failureCopy } from "@/lib/inquiry/failure-copy";
 import { preparePhoto, type PhotoError } from "@/lib/inquiry/photo";
+import { inquiryReturn } from "@/lib/inquiry/return-path";
 
 // 데이터 문의 (BRD-37 · 노션 2장 INQ, 결정 기록 9장·11장 '문의(BRD-37)'·10/26 BRD-63, infra/README)
 // 유형 칩 4개(계약 유형과 1:1) → (상세에서 왔으면) 해변·활동 자동 입력(계약 칸 beachId·activity) → 내용(5자 이상)
@@ -153,6 +154,8 @@ export function InquiryScreen({
     contextRemoved || beachSlug === null
       ? null
       : (beaches.find((item) => item.slug === beachSlug) ?? null);
+  // 접수 뒤 돌아갈 곳: 들어온 해변(공개 목록에 있을 때만) 또는 설정. '해변·활동 빼기'와 관계없이 들어온 곳 기준
+  const returnTo = inquiryReturn(beachSlug, beaches);
   // 보내지 못한 뒤에는 처음 보낸 활동을 그대로 씀(다른 탭에서 활동을 바꿔도 다시 보내기가 같은 내용·같은 키로 가게)
   const [sentActivity, setSentActivity] = useState<Activity | null>(null);
   const contextActivity = sentActivity ?? activity;
@@ -373,8 +376,10 @@ export function InquiryScreen({
           </p>
           <div className="mt-3.5 flex w-full flex-col items-center gap-1">
             <Button asChild className="w-full">
-              <Link href={localizedPath(locale, "/settings/")}>
-                {t("done.back")}
+              <Link href={localizedPath(locale, returnTo.path)}>
+                {t(
+                  returnTo.kind === "beach" ? "done.backToBeach" : "done.back",
+                )}
               </Link>
             </Button>
             <button

@@ -859,6 +859,7 @@
       "draftCleared": "The type and message kept on this device have been deleted.",
       "another": "Write another",
       "back": "Back to Settings",
+      "backToBeach": "Back to the beach",
       "rejectedNext": "If you need a photo that wasn't accepted, choose a different photo and send it as new feedback."
     },
     "failed": {
