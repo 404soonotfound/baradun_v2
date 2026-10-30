@@ -263,7 +263,8 @@
     "sea": {
       "title": "Sea conditions",
       "period": "Period {value}s",
-      "waveDelayed": "Wave height measurement is delayed"
+      "waveDelayed": "Wave height measurement is delayed",
+      "titleWide": "Sea now"
     },
     "figure": {
       "label": "Wave height {height}m, period {period}s",
@@ -277,6 +278,7 @@
       "caption": "The buoy rides the front wave up and down once every {period}s (wave period) · Front wave height and the blue band on the left = wave height {height}m · Back waves and wave spacing are for mood · Reference lines use average adult height",
       "captionNoPeriod": "Front wave height and the blue band on the left = wave height {height}m · No wave period measurement, so it doesn't move · Back waves and wave spacing are for mood · Reference lines use average adult height",
       "delayed": "Measurement is delayed, so we don't draw the wave",
+      "title": "Wave size comparison",
       "guideLabel": "{name} {value}m"
     },
     "chart": {
@@ -322,7 +324,8 @@
       "directions": "Directions",
       "directionsSecondary": "Directions to this beach",
       "newWindow": "Kakao Map, new window"
-    }
+    },
+    "regionFromMe": "{region} · {km}km from you"
   },
   "photo": {
     "alt": "Photo of {name}",

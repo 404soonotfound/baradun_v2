@@ -1,7 +1,7 @@
 "use client";
 
 import type { Beach } from "@baradun/contracts";
-import { CloudRain, Navigation, Phone, Star } from "lucide-react";
+import { Navigation, Phone, Star, TriangleAlert } from "lucide-react";
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 import { useId, type ReactNode } from "react";
@@ -12,7 +12,7 @@ import { AGENCY, agencyKeyOf, SOURCE_URL } from "@/lib/agencies";
 import { cn } from "@/lib/cn";
 import { toggleFavorite, useFavorites } from "@/lib/favorites";
 import { localizedPath, type Locale } from "@/lib/i18n";
-import { joinMeta, META_SEPARATOR } from "@/lib/meta-join";
+import { joinMeta } from "@/lib/meta-join";
 import { kstStamp } from "@/lib/snapshot/clock";
 import type { DetailInfo } from "@/lib/snapshot/detail";
 import { useBadgeText } from "@/lib/snapshot/use-badge-text";
@@ -37,29 +37,35 @@ export function NearbyWarnings({
   const { issuedAtText } = useTimeText();
   const titleId = useId();
   if (items.length === 0 && unreadable === 0) return null;
+  // Figma 220:3732: 머리 줄(제목 + 오른쪽 옅은 글) · 행마다 위 구분선 · 주의 면 34px 아이콘
+  // 행은 누르는 곳이 아님(주변 특보 상세 화면 없음) → Figma의 › 는 두지 않음
   return (
     <section
       aria-labelledby={titleId}
-      className="flex flex-col gap-2 rounded-card bg-bg-surface p-4 shadow-card"
+      className="flex flex-col overflow-hidden rounded-card bg-bg-surface shadow-card"
     >
-      <h2 id={titleId} className="text-title-s text-text-default">
-        {t("detail.nearby.title")}
-      </h2>
-      <p className="text-caption text-text-muted">{t("detail.nearby.note")}</p>
-      <ul className="flex flex-col gap-2">
+      <div className="flex items-start justify-between gap-3 px-4 pt-3.5 pb-2.5">
+        <h2 id={titleId} className="shrink-0 text-title-s text-text-default">
+          {t("detail.nearby.title")}
+        </h2>
+        <p className="min-w-0 text-right text-caption text-text-muted">
+          {t("detail.nearby.note")}
+        </p>
+      </div>
+      <ul className="flex flex-col">
         {items.map((item) => (
           <li
             key={`${item.zoneCode}-${item.type}-${item.level}-${item.publishedAt}`}
-            className="flex items-center gap-3"
+            className="flex items-center gap-3 border-t border-border-default px-4 pt-[13px] pb-3"
           >
             <span
               aria-hidden="true"
-              className="flex size-8 shrink-0 items-center justify-center rounded-icon bg-info-bg text-info-fg"
+              className="flex size-[34px] shrink-0 items-center justify-center rounded-icon bg-status-stale-bg text-status-stale-fg"
             >
-              <CloudRain size={16} />
+              <TriangleAlert size={17} />
             </span>
             <span className="flex min-w-0 flex-col">
-              <span className="text-body-s font-bold text-text-default">
+              <span className="text-label text-text-default">
                 {/* 구역·특보 이름 순서와 종류·단계 잇기는 언어별 문구 키로(영어는 띄어 씀). 모르는 종류는 '기타 주의보' */}
                 {t.rich("warning.zoneLine", {
                   name: item.type
@@ -82,7 +88,7 @@ export function NearbyWarnings({
       </ul>
       {/* 읽지 못한 주변 특보: 발효 특보와 같은 '내용을 읽지 못했어요' 계열 문구(임시안) */}
       {unreadable !== 0 && (
-        <p className="rounded-input bg-info-bg px-3.5 py-3 text-body-s text-info-fg">
+        <p className="mx-4 mb-4 rounded-input bg-info-bg px-3.5 py-3 text-body-s text-info-fg">
           {unreadable === "all"
             ? t("detail.nearby.unreadableAll")
             : t("detail.nearby.unreadable", { count: unreadable })}
@@ -97,19 +103,21 @@ export function Call119({ className }: { className?: string }) {
   const t = useTranslations("detail.call119");
   // 모바일·PC 자리에 하나씩 그려지므로 id가 겹치지 않게 useId
   const titleId = useId();
+  // Figma 220:3743: 옅은 빨간 테두리 1px · 안쪽 옆 15 · 아이콘 면 38(반경 11) · 버튼 높이 42(반경 10) '전화'
+  // 버튼 이름은 '전화 119'(보이는 '전화' + 번호를 숨긴 글자로, 화면 읽기에서 어디로 거는지 알 수 있게)
   return (
     <section
       aria-labelledby={titleId}
       className={cn(
-        "flex items-center gap-3 rounded-card border-[1.5px] border-danger-text bg-bg-surface p-4",
+        "flex items-center gap-3 rounded-card border border-danger-border bg-bg-surface px-[15px] py-3.5",
         className,
       )}
     >
       <span
         aria-hidden="true"
-        className="flex size-10 shrink-0 items-center justify-center rounded-full bg-status-blocked-bg text-status-blocked-fg"
+        className="flex size-[38px] shrink-0 items-center justify-center rounded-[11px] bg-status-blocked-bg text-status-blocked-fg"
       >
-        <Phone size={20} />
+        <Phone size={19} />
       </span>
       <span className="flex min-w-0 flex-1 flex-col">
         <h2 id={titleId} className="text-title-s text-text-default">
@@ -119,10 +127,11 @@ export function Call119({ className }: { className?: string }) {
       </span>
       <a
         href="tel:119"
-        className="flex h-touch shrink-0 items-center gap-1.5 rounded-button bg-danger-call px-4 text-body-s font-bold text-danger-call-on"
+        // 보이는 높이 42, 누르는 영역은 위아래 1px씩 넓혀 44px(BRD-39)
+        className="relative flex h-[42px] shrink-0 items-center rounded-icon bg-danger-call px-[15px] text-body font-bold text-danger-call-on before:absolute before:inset-x-0 before:-inset-y-px before:content-['']"
       >
-        <Phone aria-hidden="true" size={16} />
-        {t("call")} 119
+        {t("call")}
+        <span className="sr-only"> 119</span>
       </a>
     </section>
   );
@@ -152,17 +161,21 @@ export function SourceList({
   const t = useTranslations();
   const { stationText, agencyText } = useMetaText();
   const titleId = useId();
-  const { measuredAgoText, issuedAtText } = useTimeText();
+  const { issuedAtText } = useTimeText();
   const { confirmedUntilText } = useBadgeText();
 
-  // 지표 하나의 시각 자리: n분 전 측정 / 늦어짐 / 가까운 관측 없음 / –
+  // 지표 하나의 시각 자리: HH:MM 측정(Figma '14:20 측정') / 늦어짐 / 가까운 관측 없음 / –
   // 바다 상태 카드와 같은 규칙(shownMetric): 측정소를 모르는 값·지연을 '가까운 관측 없음'으로 바꾸지 않음
   function timeOf(key: MetricKey): string | null {
     if (view.kind !== "ready") return null;
     const metric = shownMetric(view, stations, key);
     if (metric.kind === "none") return t("observation.none");
-    if (metric.kind === "value")
-      return measuredAgoText(metric.observedAt, nowMs);
+    if (metric.kind === "value") {
+      const stamp = kstStamp(metric.observedAt, nowMs);
+      return stamp
+        ? t("observation.observedAt", { time: stamp })
+        : t("observation.timeUnknown");
+    }
     if (metric.kind === "delayed") return t("observation.delayed");
     return "–";
   }
@@ -197,49 +210,54 @@ export function SourceList({
   }
 
   // 받은 실제 상태가 있고 측정소가 있으면 앞에 관측 기관(sea_obs·kma_buoy 모두 기상청 API허브, 결정 기록 B1)
+  // Figma '기상청 강릉 해양기상부이'처럼 기관과 측정소 사이는 띄어 씀
   const sourced = kmaSource && view.kind === "ready";
-  function observed(keys: MetricKey[], timeKey: MetricKey): string | null {
+  function observedBy(keys: MetricKey[]): string | null {
     const names = stationsOf(keys);
-    return joinMeta([
-      sourced && names ? agencyText(AGENCY.kma) : null,
-      names,
-      timeOf(timeKey),
-    ]);
+    if (!names) return null;
+    return sourced ? `${agencyText(AGENCY.kma)} ${names}` : names;
   }
 
+  // 행마다 출처(무엇이 · 누가) + 시각. 모바일은 시각을 다음 줄, PC는 오른쪽 끝(Figma 220:3754·183:1017)
   const rip = detail.ripCurrent;
-  const rows: { key: string; label: string; text: ReactNode }[] = [
+  const rows: {
+    key: string;
+    label: string;
+    main: ReactNode;
+    time: string | null;
+  }[] = [
     {
       key: "wave",
       label: t("detail.sources.wave"),
-      text: observed(["waveHeight", "wavePeriod", "wind"], "waveHeight"),
+      main: observedBy(["waveHeight", "wavePeriod", "wind"]),
+      time: timeOf("waveHeight"),
     },
     {
       key: "warning",
       label: t("detail.sources.warning"),
-      text: joinMeta([
+      main: joinMeta([
+        t("detailSheet.warningScope"),
         detail.warningSource && agencyText(detail.warningSource),
-        warningTime,
       ]),
+      time: warningTime,
     },
     {
       key: "waterTemp",
       label: t("detail.sources.waterTemp"),
-      text: observed(["waterTemp"], "waterTemp"),
+      main: observedBy(["waterTemp"]),
+      time: timeOf("waterTemp"),
     },
   ];
   // 이안류(정보만, D5)를 받았을 때만. 제공 기간 아님·읽을 수 없음은 자료가 없어 행을 두지 않음
   // 개발용 예시 값은 국립해양조사원 자료가 아니라 출처 행을 두지 않음(기상청 줄과 같은 조건)
   if (sourced && rip !== null && rip !== "unknown") {
-    const time = issuedAtText(rip.publishedAt, nowMs);
     rows.push({
       key: "ripCurrent",
       label: t("detail.sources.ripCurrent"),
       // 아는 기관(국립해양조사원)만 원문 링크·공공누리 표시. 모르는 기관은 이름 원문 그대로(지어내지 않음)
-      text:
-        agencyKeyOf(rip.source) === "khoa" ? (
-          <>
-            {t.rich("detail.sources.ripCredit", {
+      main:
+        agencyKeyOf(rip.source) === "khoa"
+          ? t.rich("detail.sources.ripCredit", {
               link: (chunks) => (
                 <a
                   href={SOURCE_URL.ripCurrent}
@@ -251,37 +269,46 @@ export function SourceList({
                   <span className="sr-only"> ({t("common.newWindow")})</span>
                 </a>
               ),
-            })}
-            {time && `${META_SEPARATOR}${time}`}
-          </>
-        ) : (
-          joinMeta([agencyText(rip.source), time])
-        ),
+            })
+          : agencyText(rip.source),
+      time: issuedAtText(rip.publishedAt, nowMs),
     });
   }
 
+  // 제목 줄은 카드 밖(Figma 정보 출처 · 정보가 실제와 달라요), 행 사이 구분선
   return (
-    <section
-      aria-labelledby={titleId}
-      className="flex flex-col gap-2 rounded-card bg-bg-surface p-4 shadow-card"
-    >
-      <div className="flex items-center justify-between gap-2">
+    <section aria-labelledby={titleId} className="flex flex-col gap-3.5">
+      <div className="flex items-baseline justify-between gap-2">
         <h2 id={titleId} className="text-title-s text-text-default">
           {t("detail.sources.title")}
         </h2>
         <Link
           // 어느 해변 문의인지 함께 넘김(문의 화면이 해변·활동을 자동 입력, BRD-37). 위치는 넘기지 않음
           href={`${localizedPath(locale, "/settings/inquiry/")}?beach=${encodeURIComponent(beachSlug)}`}
-          className="inline-flex min-h-touch items-center text-body-s font-bold text-brand-default underline"
+          // 보이는 줄은 18px, 누르는 영역은 위아래로 넓혀 44px(BRD-39)
+          className="relative text-label-s font-bold text-brand-default before:absolute before:inset-x-0 before:-inset-y-[13px] before:content-['']"
         >
           {t("detail.sources.inquiry")}
         </Link>
       </div>
-      <dl className="grid grid-cols-[70px_1fr] gap-x-3 gap-y-1.5 text-body-s lg:grid-cols-[70px_1fr_70px_1fr_70px_1fr]">
-        {rows.map((row) => (
-          <div key={row.key} className="contents">
-            <dt className="text-text-muted">{row.label}</dt>
-            <dd className="text-text-default">{row.text ?? "–"}</dd>
+      <dl className="flex flex-col overflow-hidden rounded-card bg-bg-surface text-label-s leading-[1.5] shadow-card lg:text-label lg:leading-[1.45] lg:font-normal">
+        {rows.map((row, index) => (
+          <div
+            key={row.key}
+            className={cn(
+              "flex gap-2 px-4 pt-3 pb-[11px] lg:gap-4 lg:px-[18px] lg:pt-[13px] lg:pb-3",
+              index === 0
+                ? "pt-[11px] lg:border-t lg:border-border-subtle"
+                : "border-t border-border-default lg:border-border-subtle",
+            )}
+          >
+            <dt className="w-[70px] shrink-0 text-text-muted lg:w-[110px]">
+              {row.label}
+            </dt>
+            <dd className="flex min-w-0 flex-1 flex-col text-text-default lg:flex-row lg:justify-between lg:gap-4">
+              <span>{row.main ?? "–"}</span>
+              {row.time && <span className="lg:shrink-0">{row.time}</span>}
+            </dd>
           </div>
         ))}
       </dl>
@@ -298,8 +325,64 @@ export function directionsUrl(
   return `https://map.kakao.com/link/to/${encodeURIComponent(name)},${beach.coords.lat},${beach.coords.lng}`;
 }
 
-// 즐겨찾기 + 길찾기. 이용불가·판단불가면 길찾기를 보조 스타일 '이 해변 길찾기'로 낮춤
-export function DetailActions({
+// 즐겨찾기 버튼. square: 모바일 하단 52px 정사각(Figma 별만), pill: PC 머리 줄 칩(별 + '즐겨찾기')
+// 이름은 그대로 두고 눌림 상태(aria-pressed)로 즐겨찾기 여부를 알림. 별 색은 Figma decor/favorite
+export function FavoriteButton({
+  beachId,
+  variant,
+  className,
+}: {
+  beachId: string;
+  variant: "square" | "pill";
+  className?: string;
+}) {
+  const t = useTranslations("detail.cta");
+  const favorites = useFavorites();
+  const favorite = favorites.includes(beachId);
+  const star = (
+    <Star
+      aria-hidden="true"
+      size={variant === "square" ? 21 : 15}
+      className={cn(
+        favorite ? "fill-favorite text-favorite" : "",
+        variant === "square" && "text-favorite",
+      )}
+    />
+  );
+  if (variant === "square") {
+    return (
+      <button
+        type="button"
+        aria-label={t("favorite")}
+        aria-pressed={favorite}
+        onClick={() => toggleFavorite(beachId)}
+        className={cn(
+          "flex size-button shrink-0 items-center justify-center rounded-button border border-border-strong bg-bg-surface hover:bg-bg-subtle",
+          className,
+        )}
+      >
+        {star}
+      </button>
+    );
+  }
+  return (
+    <button
+      type="button"
+      aria-pressed={favorite}
+      onClick={() => toggleFavorite(beachId)}
+      className={cn(
+        "flex h-9 shrink-0 items-center gap-[5px] rounded-full border border-border-strong bg-bg-surface px-[13px] text-[13.5px] font-medium text-text-body hover:bg-bg-subtle",
+        className,
+      )}
+    >
+      {star}
+      {t("favorite")}
+    </button>
+  );
+}
+
+// 길찾기(Figma '버튼 · 새' 높이 52 · 글자 15.5 굵게). 이용불가·판단불가면 보조 스타일 '이 해변 길찾기'로 낮춤
+export function DirectionsLink({
   beach,
   view,
   className,
@@ -310,43 +393,41 @@ export function DetailActions({
 }) {
   const t = useTranslations("detail.cta");
   const locale = useLocale() as Locale;
-  const favorites = useFavorites();
-  const favorite = favorites.includes(beach.id);
   // 판단 전(불러오는 중)도 '특보 없음'이 아니므로 낮춘 스타일
   const primary =
     view.kind === "ready" && view.category === "clear" && !view.stale;
-
   return (
-    <div className={cn("flex gap-2", className)}>
-      <button
-        type="button"
-        // 이름은 그대로 두고 눌림 상태(aria-pressed)로 즐겨찾기 여부를 알림
-        aria-pressed={favorite}
-        onClick={() => toggleFavorite(beach.id)}
-        className="flex h-button shrink-0 items-center justify-center gap-1.5 rounded-button border border-border-strong bg-bg-surface px-4 text-title-s text-text-default hover:bg-bg-subtle"
-      >
-        <Star
-          aria-hidden="true"
-          size={18}
-          className={favorite ? "fill-brand-default text-brand-default" : ""}
-        />
-        {t("favorite")}
-      </button>
-      <a
-        href={directionsUrl(beach, beach.name[locale])}
-        target="_blank"
-        rel="noopener noreferrer"
-        className={cn(
-          "flex h-button min-w-0 flex-1 items-center justify-center gap-1.5 rounded-button px-4 text-title-s",
-          primary
-            ? "bg-brand-default text-brand-on shadow-card hover:opacity-90"
-            : "border border-border-strong bg-bg-surface text-text-default hover:bg-bg-subtle",
-        )}
-      >
-        <Navigation aria-hidden="true" size={18} />
-        {primary ? t("directions") : t("directionsSecondary")}
-        <span className="sr-only"> ({t("newWindow")})</span>
-      </a>
+    <a
+      href={directionsUrl(beach, beach.name[locale])}
+      target="_blank"
+      rel="noopener noreferrer"
+      className={cn(
+        "flex h-button min-w-0 items-center justify-center gap-1.5 rounded-button px-1.5 text-title-region",
+        primary
+          ? "bg-brand-default text-brand-on hover:opacity-90"
+          : "border border-border-strong bg-bg-surface text-text-default hover:bg-bg-subtle",
+        className,
+      )}
+    >
+      <Navigation aria-hidden="true" size={16} />
+      {primary ? t("directions") : t("directionsSecondary")}
+      <span className="sr-only"> ({t("newWindow")})</span>
+    </a>
+  );
+}
+
+// 모바일 하단 고정 줄: 즐겨찾기(별) + 길찾기(Figma cta: 사이 10)
+export function DetailActions({
+  beach,
+  view,
+}: {
+  beach: Beach;
+  view: BeachView;
+}) {
+  return (
+    <div className="flex gap-2.5">
+      <FavoriteButton beachId={beach.id} variant="square" />
+      <DirectionsLink beach={beach} view={view} className="flex-1" />
     </div>
   );
 }
