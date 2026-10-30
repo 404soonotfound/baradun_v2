@@ -2,11 +2,12 @@ import { useSyncExternalStore } from "react";
 
 // 탐색의 마지막 보기 [목록 | 지도] (BRD-30 · 노션 2장 EXP-M, 아키텍처 9장 '화면 상태 유지')
 // 모바일에서만 고름(PC는 목록과 지도를 함께 보여 줌). 기기 저장(localStorage)
+// 처음(저장값 없음)은 지도(BRD-128 · 10/30 결정). 지도를 못 쓰면 지도 실패 안내의 '목록으로 보기'
 // 못 쓰는 환경이면 이번 방문 동안은 메모리 값(explore-sort.ts와 같은 틀)
 export type ExploreView = "list" | "map";
 
 const STORAGE_KEY = "baradun:explore-view";
-const DEFAULT_VIEW: ExploreView = "list";
+const DEFAULT_VIEW: ExploreView = "map";
 
 let memory: ExploreView = DEFAULT_VIEW;
 // 쓰기가 실패한 적 있음. 이후로는 저장소의 옛 값이 방금 고른 값을 덮지 않게 memory를 읽음
@@ -50,7 +51,7 @@ export function setExploreView(view: ExploreView) {
   listeners.forEach((listener) => listener());
 }
 
-// 기기 데이터 초기화(BRD-36): 저장값을 지우고 기본(목록)으로
+// 기기 데이터 초기화(BRD-36): 저장값을 지우고 기본(지도)으로
 export function clearExploreView() {
   memory = DEFAULT_VIEW;
   try {
@@ -62,7 +63,7 @@ export function clearExploreView() {
   listeners.forEach((listener) => listener());
 }
 
-// 서버(정적 HTML)는 저장 값을 몰라 목록, 브라우저에서는 저장된 값
+// 서버(정적 HTML)는 저장 값을 몰라 기본(지도), 브라우저에서는 저장된 값
 export function useExploreView(): ExploreView {
   return useSyncExternalStore(subscribe, read, () => DEFAULT_VIEW);
 }

@@ -8,7 +8,7 @@ import { cn } from "@/lib/cn";
 // 높이 36(지역 선택 화면은 42 = size "lg")
 // 누르는 영역은 44px(점검표 12): 보이는 크기는 그대로 두고 위아래로만 넓힘(36 → +4px씩, 42 → +1px씩, BRD-39).
 // ::before는 테두리(1px) 안쪽 기준으로 놓여서 1px씩 더 뺌
-// 옆으로 스크롤하는 줄에 둘 때는 줄에 위아래 4px 여백을 둬 넓힌 영역이 잘리지 않게 함(explore-filters.tsx)
+// 옆으로 스크롤하는 줄에 둘 때는 줄에 위아래 4px 여백을 둬 넓힌 영역이 잘리지 않게 함
 const HIT_AREA = {
   md: "before:-inset-y-[5px]",
   lg: "before:-inset-y-[2px]",

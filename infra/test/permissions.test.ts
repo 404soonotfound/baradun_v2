@@ -266,3 +266,134 @@ describe("DynamoDB 권한 (BRD-55)", () => {
     }
   });
 });
+
+// 역할 하나가 허락받은 동작을 "동작 → 리소스 주소 목록"으로 모음
+function allowedActionsOfRole(role: string): Map<string, string[]> {
+  const result = new Map<string, string[]>();
+  for (const policy of allIamPolicies().filter((p) => p.roles.includes(role))) {
+    for (const s of policy.statements.filter((x) => x.Effect === "Allow")) {
+      for (const action of toList(s.Action)) {
+        result.set(action, [
+          ...(result.get(action) ?? []),
+          ...toList(s.Resource).map(resourceText),
+        ]);
+      }
+    }
+  }
+  return result;
+}
+
+describe("함수·역할별 최소 권한 범위 (BRD-67)", () => {
+  const roles = template.findResources("AWS::IAM::Role");
+
+  it("스택의 IAM 역할은 수집 4·publisher·문의·배포·Scheduler 대상 역할뿐이다", () => {
+    const schedulerRoles = Object.keys(roles).filter((id) =>
+      id.startsWith("SchedulerRoleForTarget"),
+    );
+    expect(schedulerRoles.length).toBeGreaterThan(0);
+    expect(Object.keys(roles).sort()).toEqual(
+      [
+        roleId("CollectOceanRole"),
+        roleId("CollectWarningsRole"),
+        roleId("CollectCatalogRole"),
+        roleId("CollectRipRole"),
+        roleId("PublisherRole"),
+        roleId("InquiryInquiryRole"),
+        roleId("DeployRole"),
+        ...schedulerRoles,
+      ].sort(),
+    );
+  });
+
+  it("Scheduler 역할은 수집 Lambda 함수를 깨우는(lambda:InvokeFunction) 권한만 갖는다", () => {
+    const collectorFunctionIds = Object.keys(
+      template.findResources("AWS::Lambda::Function"),
+    ).filter((id) => /^Collect(Ocean|Warnings|Catalog|Rip)Function/.test(id));
+    expect(collectorFunctionIds).toHaveLength(4);
+    const allowedTargets = new Set(
+      collectorFunctionIds.flatMap((id) => [`${id}.Arn`, `${id}.Arn:*`]),
+    );
+
+    const schedulerRoles = Object.keys(roles).filter((id) =>
+      id.startsWith("SchedulerRoleForTarget"),
+    );
+    for (const role of schedulerRoles) {
+      expect(roles[role]!.Properties.ManagedPolicyArns ?? []).toEqual([]);
+      const actions = allowedActionsOfRole(role);
+      expect([...actions.keys()]).toEqual(["lambda:InvokeFunction"]);
+      for (const r of actions.get("lambda:InvokeFunction") ?? []) {
+        expect(allowedTargets.has(r), r).toBe(true);
+      }
+    }
+  });
+
+  it("publisher 허용 동작은 S3(data/)·DynamoDB(State 읽기·Ops)·자기 로그뿐이고 관리형 정책이 없다", () => {
+    const publisher = roleId("PublisherRole");
+    expect(roles[publisher]!.Properties.ManagedPolicyArns ?? []).toEqual([]);
+    const actions = allowedActionsOfRole(publisher);
+    expect([...actions.keys()].sort()).toEqual([
+      "dynamodb:BatchGetItem",
+      "dynamodb:DeleteItem",
+      "dynamodb:GetItem",
+      "dynamodb:PutItem",
+      "dynamodb:Query",
+      "dynamodb:UpdateItem",
+      "logs:CreateLogStream",
+      "logs:PutLogEvents",
+      "s3:DeleteObject",
+      "s3:GetObject",
+      "s3:ListBucket",
+      "s3:PutObject",
+    ]);
+  });
+
+  it("수집기 PutItem은 State·Ops 테이블에만 허용된다", () => {
+    const expected = [
+      `${tableId("Ops")}.Arn`,
+      `${tableId("State")}.Arn`,
+    ].sort();
+    for (const name of ["Ocean", "Warnings", "Catalog", "Rip"] as const) {
+      const actions = allowedActionsOfRole(roleId(`Collect${name}Role`));
+      expect((actions.get("dynamodb:PutItem") ?? []).sort()).toEqual(expected);
+    }
+  });
+
+  it("문의 역할은 자기 로그·Inquiry 테이블·사진 버킷 객체·문의 알림 주제에만 권한을 갖는다", () => {
+    const inquiry = roleId("InquiryInquiryRole");
+    expect(roles[inquiry]!.Properties.ManagedPolicyArns ?? []).toEqual([]);
+
+    const photoBuckets = Object.keys(
+      template.findResources("AWS::S3::Bucket"),
+    ).filter((id) => id.startsWith("InquiryPhotos"));
+    expect(photoBuckets).toHaveLength(1);
+    const topics = Object.keys(
+      template.findResources("AWS::SNS::Topic"),
+    ).filter((id) => id.startsWith("InquiryTopic"));
+    expect(topics).toHaveLength(1);
+    const logGroups = Object.keys(
+      template.findResources("AWS::Logs::LogGroup"),
+    ).filter((id) => id.startsWith("InquiryLogs"));
+    expect(logGroups).toHaveLength(1);
+
+    const actions = allowedActionsOfRole(inquiry);
+    expect([...actions.keys()].sort()).toEqual([
+      "dynamodb:DeleteItem",
+      "dynamodb:GetItem",
+      "dynamodb:PutItem",
+      "dynamodb:UpdateItem",
+      "logs:CreateLogStream",
+      "logs:PutLogEvents",
+      "s3:DeleteObject",
+      "s3:GetObject",
+      "s3:PutObject",
+      "sns:Publish",
+    ]);
+    for (const action of ["s3:DeleteObject", "s3:GetObject", "s3:PutObject"]) {
+      expect(actions.get(action)).toEqual([`${photoBuckets[0]}.Arn/*`]);
+    }
+    expect(actions.get("sns:Publish")).toEqual([`${topics[0]}`]);
+    for (const action of ["logs:CreateLogStream", "logs:PutLogEvents"]) {
+      expect(actions.get(action)).toEqual([`${logGroups[0]}.Arn`]);
+    }
+  });
+});

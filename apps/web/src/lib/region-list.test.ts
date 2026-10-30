@@ -296,9 +296,9 @@ describe("탐색 '전국' = 전국을 고름 (10/29 결정 B)", () => {
       sido: "강원",
       sigungu: null,
     });
-    expect(
-      filterBeaches(beaches, "swimming", pickedRegion(NATIONWIDE)),
-    ).toHaveLength(beaches.length);
+    expect(filterBeaches(beaches, pickedRegion(NATIONWIDE))).toHaveLength(
+      beaches.length,
+    );
   });
 
   it("탐색에서 전국을 고르면 위치 허용·거부와 관계없이 홈도 전국", () => {

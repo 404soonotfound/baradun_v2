@@ -23,7 +23,7 @@ export const SIDO_ORDER = [
 // [3] 저장하는 값. sigungu는 시·군을 아직 안 골랐으면 null. 둘 다 한국어 원본 이름(key)
 export type SavedRegion = { sido: string; sigungu: string | null };
 
-// [3-1] 지역 고르기 시트·탐색 지역 칩에서 '전국'을 고른 것(BRD-127, 탐색은 10/29 결정 B). 시·도 지역과 같은 저장 칸에 이 글자로 저장
+// [3-1] 지역 고르기 시트(홈·탐색)에서 '전국'을 고른 것(BRD-127, 탐색은 10/29 결정 B). 시·도 지역과 같은 저장 칸에 이 글자로 저장
 // 저장값이 없을 때의 전국(기본값)과 달리, 위치가 있어도 전국을 보여줌
 export const NATIONWIDE = "nationwide";
 export type RegionChoice = SavedRegion | typeof NATIONWIDE;

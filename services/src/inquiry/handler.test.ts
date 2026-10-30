@@ -243,7 +243,7 @@ const body = (overrides: Record<string, unknown> = {}) => ({
 });
 
 describe("문의 해변·활동 구조화 칸 (결정 기록 12장 결정 22)", () => {
-  it("해변·활동을 문의와 알림에 따로 넘기고 본문에 섞지 않음", async () => {
+  it("해변·활동을 문의 항목에 구조화 칸으로 저장하고 알림·본문에는 섞지 않음 (BRD-120)", async () => {
     const store = memoryStore();
     const deps = dependencies({ store: store as never, id: sequentialIds() });
     const response = await handleInquiryHttp(
@@ -259,9 +259,12 @@ describe("문의 해변·활동 구조화 칸 (결정 기록 12장 결정 22)", 
       activity: "surfing",
       message: "관측값 문의",
     });
-    expect(deps.notifier.notify).toHaveBeenCalledWith(
-      expect.objectContaining({ beachId: "b0001", activity: "surfing" }),
-    );
+    expect(deps.notifier.notify).toHaveBeenCalledWith({
+      inquiryId: expect.any(String),
+      type: "data_error",
+      receivedAt: expect.any(Date),
+      hasEmail: false,
+    });
   });
 
   it("해변 없이 활동만 오거나 모르는 유형이면 400으로 거부함", async () => {
@@ -594,5 +597,106 @@ describe("이메일·사진 받기 꺼짐 (결정 기록 13장 D13-2, BRD-130)",
     expect(deps.store.save).toHaveBeenCalledWith(
       expect.not.objectContaining({ email: expect.anything() }),
     );
+  });
+});
+
+describe("문의 알림 개인정보 미포함 (BRD-120)", () => {
+  const sensitiveMessage =
+    "작성자: 홍길동, 연락처: 010-1234-5678, 이메일: leak@example.com, 주소: 서울시 강남구. 문의 내용입니다.";
+
+  it("이메일 받기 꺼짐 설정: 본문에 전화번호·이메일·이름이 있어도 알림에는 본문이 빠지고 hasEmail은 false", async () => {
+    const store = memoryStore();
+    const deps = dependencies({
+      store: store as never,
+      id: sequentialIds(),
+      contactEnabled: false,
+    });
+
+    const response = await handleInquiryHttp(
+      event(
+        "/api/inquiries",
+        body({
+          message: sensitiveMessage,
+          beachId: "b0001",
+          activity: "swimming",
+          email: undefined,
+          photos: [],
+        }),
+      ),
+      deps,
+    );
+
+    expect(response.statusCode).toBe(201);
+    // 저장소에는 본문이 정상 저장됨
+    expect(store.inquiries[0]?.message).toBe(sensitiveMessage);
+    // 알림에는 본문·전화번호·이메일·이름·해변·활동이 전혀 넘어가지 않고 ID·유형·시각·hasEmail만 전달됨
+    expect(deps.notifier.notify).toHaveBeenCalledTimes(1);
+    expect(deps.notifier.notify).toHaveBeenCalledWith({
+      inquiryId: expect.any(String),
+      type: "data_error",
+      receivedAt: expect.any(Date),
+      hasEmail: false,
+    });
+  });
+
+  it("이메일 받기 켜짐 설정: 회신 이메일과 본문 개인정보가 있어도 알림에는 본문·이메일 주소가 제외되고 hasEmail은 true", async () => {
+    const store = memoryStore();
+    const deps = dependencies({
+      store: store as never,
+      id: sequentialIds(),
+      contactEnabled: true,
+    });
+
+    const response = await handleInquiryHttp(
+      event(
+        "/api/inquiries",
+        body({
+          message: sensitiveMessage,
+          email: "reply@example.com",
+        }),
+      ),
+      deps,
+    );
+
+    expect(response.statusCode).toBe(201);
+    // 저장소에는 회신 이메일과 본문이 정상 저장됨
+    expect(store.inquiries[0]?.message).toBe(sensitiveMessage);
+    expect(store.inquiries[0]?.email).toBe("reply@example.com");
+    // 알림에는 회신 이메일 주소·본문이 일절 넘어가지 않고 hasEmail만 true로 전달됨
+    expect(deps.notifier.notify).toHaveBeenCalledTimes(1);
+    expect(deps.notifier.notify).toHaveBeenCalledWith({
+      inquiryId: expect.any(String),
+      type: "data_error",
+      receivedAt: expect.any(Date),
+      hasEmail: true,
+    });
+  });
+
+  it("이메일 받기 켜짐 설정: 회신 이메일을 넣지 않은 문의는 hasEmail이 false", async () => {
+    const store = memoryStore();
+    const deps = dependencies({
+      store: store as never,
+      id: sequentialIds(),
+      contactEnabled: true,
+    });
+
+    const response = await handleInquiryHttp(
+      event(
+        "/api/inquiries",
+        body({
+          message: sensitiveMessage,
+          email: undefined,
+        }),
+      ),
+      deps,
+    );
+
+    expect(response.statusCode).toBe(201);
+    expect(deps.notifier.notify).toHaveBeenCalledWith({
+      inquiryId: expect.any(String),
+      type: "data_error",
+      receivedAt: expect.any(Date),
+      hasEmail: false,
+    });
   });
 });

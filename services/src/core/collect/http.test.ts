@@ -93,4 +93,19 @@ describe("getText", () => {
     expect(result).toMatchObject({ status: "ok", attempts: 2 });
     expect(Date.now() - started).toBeGreaterThanOrEqual(45);
   });
+
+  it("429가 이어지면 재시도를 다 쓰고 실패(http:429)", async () => {
+    const { fetchFn, calls } = fakeFetch([new Response("", { status: 429 })]);
+    const result = await getText(URL, {
+      timeoutMs: 1000,
+      retries: 2,
+      fetchFn,
+    });
+    expect(result).toEqual({
+      status: "failed",
+      reason: "http:429",
+      attempts: 3,
+    });
+    expect(calls()).toBe(3);
+  });
 });

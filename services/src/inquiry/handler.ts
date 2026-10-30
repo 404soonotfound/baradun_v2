@@ -248,11 +248,8 @@ async function createInquiry(
     .notify({
       inquiryId,
       type: request.type,
-      message,
-      ...(request.beachId ? { beachId: request.beachId } : {}),
-      ...(request.activity ? { activity: request.activity } : {}),
-      hasEmail: Boolean(email),
       receivedAt,
+      hasEmail: Boolean(email),
     })
     .catch(() => "failed" as const);
   if (notification !== "sent") {

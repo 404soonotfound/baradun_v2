@@ -124,14 +124,40 @@ describe("collectWarnings", () => {
     ["99 오래된 범위", response("too-old")],
     ["03 NO_DATA는 '특보 없음'이 아님", response("no-data-reversed")],
     ["JSON이 아님", "<html>error</html>"],
-  ])(
+    ["공공데이터포털 XML 오류(<OpenAPI_ServiceResponse>)", "<OpenAPI_ServiceResponse>"],
+    [
+      "쿼터 초과 resultCode 22(합성)",
+      { response: { header: { resultCode: "22" } } },
+    ],
+    ["HTTP 429 연속 실패", { status: "failed", reason: "http:429", attempts: 2 }],
+  ] as const)(
     "getPwnCd 실패(%s) → getPwnCd 확인 시각은 그대로, 지진해일은 갱신",
     async (_name, reply) => {
-      const { deps, state } = setup({ pwncd: reply, tsunami: TSUNAMI_NONE });
+      const { deps, state, lines } = setup({ pwncd: reply, tsunami: TSUNAMI_NONE });
       await seed(state, "pwncd");
       expect((await collectWarnings(deps)).status).toBe("partial");
       expect((await saved(state, "pwncd"))?.lastConfirmedAt).toBe(OLD);
       expect((await saved(state, "tsunami"))?.lastConfirmedAt).toBe(NOW);
+      expect(lines.join("\n")).not.toContain(KEY);
+    },
+  );
+
+  it.each([
+    ["공공데이터포털 XML 오류(<OpenAPI_ServiceResponse>)", "<OpenAPI_ServiceResponse>"],
+    [
+      "쿼터 초과 resultCode 22(합성)",
+      { response: { header: { resultCode: "22" } } },
+    ],
+    ["HTTP 429 연속 실패", { status: "failed", reason: "http:429", attempts: 2 }],
+  ] as const)(
+    "지진해일 쿼터·오류 응답(%s) → 지진해일 확인 시각은 그대로, 정상으로 기록하지 않음",
+    async (_name, reply) => {
+      const { deps, state, lines } = setup({ pwncd: PWNCD_OK, tsunami: reply });
+      await seed(state, "tsunami");
+      expect((await collectWarnings(deps)).status).toBe("partial");
+      expect((await saved(state, "pwncd"))?.lastConfirmedAt).toBe(NOW);
+      expect((await saved(state, "tsunami"))?.lastConfirmedAt).toBe(OLD);
+      expect(lines.join("\n")).not.toContain(KEY);
     },
   );
 

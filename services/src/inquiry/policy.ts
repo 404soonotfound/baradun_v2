@@ -15,7 +15,6 @@ export const INQUIRY_NOTIFICATION_LIMIT_PER_DAY = 20;
 export const INQUIRY_UPLOAD_EXPIRES_SECONDS = 10 * 60;
 // 멱등 기록 보관. 웹은 키를 화면 메모리에만 두고 같은 화면에서 다시 보낼 때만 씀
 export const INQUIRY_IDEMPOTENCY_RETENTION_DAYS = 1;
-export const INQUIRY_SUMMARY_MAX_LENGTH = 120;
 
 export function ttlAfterDays(now: Date, days: number): number {
   return Math.floor(now.getTime() / 1000) + days * 24 * 60 * 60;

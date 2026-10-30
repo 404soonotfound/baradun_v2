@@ -41,6 +41,9 @@ async function servePhotos(page: Page) {
 }
 
 test.describe("기상청 출처 한 줄", () => {
+  // 탐색은 목록 아래 출처 줄을 봄(모바일 처음 보기는 지도라 목록을 골라 둔 기기로 시작, BRD-128)
+  test.use({ exploreView: "list" });
+
   test("홈·탐색 목록 (한국어)", async ({ page }) => {
     await page.goto("/");
     await expect(visibleText(page, KMA_STATUS_KO)).toHaveCount(1);

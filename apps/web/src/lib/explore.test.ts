@@ -1,10 +1,12 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { BeachSummary } from "@/lib/beach-summary";
 import {
+  asksLocationOnNear,
   buildItems,
   exploreMode,
   filterBeaches,
+  locationNotice,
   groupItems,
   isLoading,
   noClearAtAll,
@@ -16,6 +18,7 @@ import {
   resetSortChoiceForTest,
   setSortChoice,
 } from "@/lib/explore-sort";
+import { createLocationStore } from "@/lib/location";
 import type { BadgeLabel, BeachView, Category } from "@/lib/snapshot/view";
 
 function beach(
@@ -88,21 +91,18 @@ const C = beach("c", "다해변", "부산", 35.1, ["swimming", "scuba"]);
 const ALL = [A, B, C];
 
 describe("filterBeaches", () => {
-  it("수영은 전체, 서핑·스쿠버는 그 활동이 확인된 해변만", () => {
-    expect(filterBeaches(ALL, "swimming", null)).toHaveLength(3);
-    expect(filterBeaches(ALL, "surfing", null).map((b) => b.id)).toEqual(["a"]);
-    expect(filterBeaches(ALL, "scuba", null).map((b) => b.id)).toEqual(["c"]);
+  it("활동으로 거르지 않음: 전국(null)은 활동 정보와 관계없이 전체(BRD-128)", () => {
+    expect(filterBeaches(ALL, null).map((b) => b.id)).toEqual(["a", "b", "c"]);
   });
 
-  it("지역은 시·도(와 시·군)로 거름, 전국(null)은 전체", () => {
+  it("지역은 시·도(와 시·군)로 거름. 그 지역의 모든 해변", () => {
     expect(
-      filterBeaches(ALL, "swimming", { sido: "강원", sigungu: null }).map(
-        (b) => b.id,
-      ),
+      filterBeaches(ALL, { sido: "강원", sigungu: null }).map((b) => b.id),
     ).toEqual(["a", "b"]);
     expect(
-      filterBeaches(ALL, "swimming", { sido: "강원", sigungu: "없는군" }),
-    ).toEqual([]);
+      filterBeaches(ALL, { sido: "부산", sigungu: null }).map((b) => b.id),
+    ).toEqual(["c"]);
+    expect(filterBeaches(ALL, { sido: "강원", sigungu: "없는군" })).toEqual([]);
   });
 });
 
@@ -239,10 +239,139 @@ describe("sortItems", () => {
 });
 
 describe("exploreMode", () => {
-  it("위치가 없으면 가까운 순 선택도 이름 순", () => {
-    expect(exploreMode("second", false)).toBe("name");
-    expect(exploreMode("second", true)).toBe("near");
-    expect(exploreMode("status", false)).toBe("status");
+  it("가까운 순은 위치를 받았을 때만, 그 밖(거부·끔·실패·안 물음·확인 중·받는 중)은 이름 순", () => {
+    expect(exploreMode("second", "ready")).toBe("near");
+    for (const status of [
+      "denied",
+      "off",
+      "unavailable",
+      "idle",
+      "checking",
+      "locating",
+    ] as const)
+      expect(exploreMode("second", status)).toBe("name");
+  });
+
+  it("상태별은 위치와 관계없이 상태별", () => {
+    expect(exploreMode("status", "ready")).toBe("status");
+    expect(exploreMode("status", "denied")).toBe("status");
+    expect(exploreMode("status", "idle")).toBe("status");
+  });
+});
+
+describe("asksLocationOnNear", () => {
+  it("아직 안 물음·확인 중·받을 수 없음이면 가까운 순을 누를 때 물음", () => {
+    expect(asksLocationOnNear("idle")).toBe(true);
+    expect(asksLocationOnNear("checking")).toBe(true);
+    expect(asksLocationOnNear("unavailable")).toBe(true);
+  });
+
+  it("거부·끔은 다시 묻지 않고, 받는 중·받은 위치는 그대로", () => {
+    for (const status of ["denied", "off", "locating", "ready"] as const)
+      expect(asksLocationOnNear(status)).toBe(false);
+  });
+});
+
+describe("locationNotice", () => {
+  it("거부·끔은 정렬과 관계없이 '위치 권한이 꺼져 있어요'", () => {
+    for (const choice of ["status", "second"] as const) {
+      expect(locationNotice(choice, "denied")).toBe("denied");
+      expect(locationNotice(choice, "off")).toBe("denied");
+    }
+  });
+
+  it("받을 수 없음(실패·시간 초과)은 실패 안내", () => {
+    expect(locationNotice("second", "unavailable")).toBe("failed");
+    expect(locationNotice("status", "unavailable")).toBe("failed");
+  });
+
+  it("아직 안 물었으면 가까운 순일 때만 안내, 상태별은 안내 없음", () => {
+    expect(locationNotice("second", "idle")).toBe("notAsked");
+    expect(locationNotice("status", "idle")).toBeNull();
+  });
+
+  it("위치가 있거나 확인·받는 중이면 안내 없음", () => {
+    for (const status of ["ready", "checking", "locating"] as const) {
+      expect(locationNotice("second", status)).toBeNull();
+      expect(locationNotice("status", status)).toBeNull();
+    }
+  });
+});
+
+// '가까운 순'을 눌러 위치를 물었는데 받지 못한 경우(BRD-128): 거부·실패·시간 초과 각각 이름 순 + 안내
+describe("가까운 순 → 위치 요청 결과", () => {
+  // getCurrentPosition이 주어진 오류 코드로 끝나는 가짜 navigator(권한은 아직 안 물음)
+  function failingNavigator(code: number) {
+    return {
+      permissions: {
+        query: () => Promise.resolve({ state: "prompt", onchange: null }),
+      },
+      geolocation: {
+        getCurrentPosition: (
+          _success: unknown,
+          error: (error: {
+            code: number;
+            PERMISSION_DENIED: number;
+            POSITION_UNAVAILABLE: number;
+            TIMEOUT: number;
+          }) => void,
+        ) =>
+          error({
+            code,
+            PERMISSION_DENIED: 1,
+            POSITION_UNAVAILABLE: 2,
+            TIMEOUT: 3,
+          }),
+      },
+    };
+  }
+  const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+  it.each([
+    ["거부", 1, "denied"],
+    ["실패(위치를 알 수 없음)", 2, "failed"],
+    ["시간 초과", 3, "failed"],
+  ] as const)("%s → 이름 순 + 안내", async (_name, code, notice) => {
+    vi.stubGlobal("navigator", failingNavigator(code));
+    try {
+      const store = createLocationStore(() => null);
+      store.subscribe(() => {});
+      await flush();
+      const before = store.getState().status;
+      expect(before).toBe("idle");
+      // 가까운 순을 누름 → 물음
+      expect(asksLocationOnNear(before)).toBe(true);
+      store.request();
+      const after = store.getState().status;
+      expect(exploreMode("second", after)).toBe("name");
+      expect(locationNotice("second", after)).toBe(notice);
+      // 이름 순으로 줄 세움(거리 없음)
+      const items = buildItems([C, B, A], null, () => clear);
+      expect(
+        sortItems(items, "name", "ko").map((item) => item.distanceKm),
+      ).toEqual([null, null, null]);
+      expect(sortItems(items, "name", "ko").map((item) => item.id)).toEqual([
+        "a",
+        "b",
+        "c",
+      ]);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("거부 뒤에는 다시 눌러도 묻지 않음", async () => {
+    vi.stubGlobal("navigator", failingNavigator(1));
+    try {
+      const store = createLocationStore(() => null);
+      store.subscribe(() => {});
+      await flush();
+      store.request();
+      expect(store.getState().status).toBe("denied");
+      expect(asksLocationOnNear(store.getState().status)).toBe(false);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });
 

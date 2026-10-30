@@ -159,6 +159,32 @@ describe("collectRip", () => {
     ).toBe("busy");
   });
 
+  it("시즌 중 쿼터 초과·오류 응답(코드 22·XML 오류·429, 합성) → 저장값을 덮지 않고 정상으로 기록하지 않음", async () => {
+    const previous = {
+      b0096: {
+        code: "SONGJUNG",
+        label: "경계",
+        observedAt: "2026-08-15T14:00:00Z",
+      },
+      b0097: { code: "HAE", label: "주의", observedAt: "2026-08-15T14:00:00Z" },
+    };
+    const { deps, state, lines } = setup(IN_SEASON, {
+      SONGJUNG: JSON.stringify({
+        header: { resultCode: "22" },
+        body: {},
+      }),
+      HAE: "<OpenAPI_ServiceResponse>",
+    });
+    await seed(state, previous);
+    expect((await collectRip(deps)).status).toBe("failed");
+    expect((await readings(state))?.beaches).toEqual(previous);
+    expect((await attempt(state)).sources).toEqual({
+      b0096: { status: "failed", reason: "result:22" },
+      b0097: { status: "failed", reason: "format:json" },
+    });
+    expect(lines.join("\n")).not.toContain(KEY);
+  });
+
   it("시즌 중 '자료 없음'은 결측 → error 로그, 슬롯을 끝내지 않음(partial)", async () => {
     const { deps, state, ops, lines } = setup(IN_SEASON, {
       SONGJUNG: realOn("2026-08-16"),

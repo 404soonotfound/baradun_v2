@@ -1,6 +1,7 @@
-import type { Activity } from "@/lib/activity";
 import type { BeachSummary } from "@/lib/beach-summary";
 import { distanceKm, type LatLng } from "@/lib/geo";
+// 타입만 가져옴(훅 파일이지만 빌드 때 지워짐)
+import type { LocationState } from "@/lib/location";
 import { inRegion, type SavedRegion } from "@/lib/region-list";
 import type { BeachView, Category, MetricKey } from "@/lib/snapshot/view";
 import {
@@ -19,30 +20,50 @@ export type ExploreItem = BeachSummary & {
   view: BeachView;
 };
 
-// [2] 정렬 선택(기기 저장 값). "second"는 위치가 있으면 가까운 순, 없으면 이름 순
+// [2] 정렬 선택(기기 저장 값). 버튼 이름은 늘 '상태별 | 가까운 순'(BRD-128 · 10/30 결정)
+// "second" = 가까운 순. 위치가 없으면(거부·실패·시간 초과·아직 안 물음) 이름 순으로 보여 줌
 export type SortChoice = "status" | "second";
-// 실제로 쓰는 보기. 위치가 없으면 가까운 순을 쓸 수 없어 이름 순
+// 실제로 쓰는 보기. 위치가 있을 때만 가까운 순
 export type ExploreMode = "status" | "near" | "name";
 
 export function exploreMode(
   choice: SortChoice,
-  hasLocation: boolean,
+  location: LocationState["status"],
 ): ExploreMode {
   if (choice === "status") return "status";
-  return hasLocation ? "near" : "name";
+  return location === "ready" ? "near" : "name";
 }
 
-// [3] 활동·지역으로 거르기. 수영은 전체 해변(B7), 서핑·스쿠버는 그 활동이 확인된 해변만
+// [2-1] '가까운 순'을 눌렀을 때 위치를 물을지. 사용자가 누른 것이라 반복 요청이 아님(홈 '내 주변'과 같은 규칙)
+// 아직 안 물음·권한 확인 중 → 그때 처음 물음, 받을 수 없음(시간 초과·기기 오류) → 다시 시도
+// 거부·설정에서 끔은 다시 묻지 않음, 받는 중·받은 위치는 그대로
+export function asksLocationOnNear(status: LocationState["status"]): boolean {
+  return status === "idle" || status === "checking" || status === "unavailable";
+}
+
+// [2-2] 위치 안내 배너 종류(Figma S_M02_06 174:635). 위치 없이 이름 순으로 보이는 이유를 알림
+//   denied   = 거부·설정에서 끔(상태별·가까운 순 모두. 묶음 안도 이름 순)
+//   failed   = 받을 수 없음(시간 초과·기기 오류)
+//   notAsked = 가까운 순을 골라 뒀는데 이번 방문에 아직 묻지 않음(묻는 창은 버튼으로만)
+// 아직 안 물었고 상태별이면 안내 없음(지금처럼 정렬)
+export type LocationNotice = "denied" | "failed" | "notAsked";
+
+export function locationNotice(
+  choice: SortChoice,
+  status: LocationState["status"],
+): LocationNotice | null {
+  if (status === "denied" || status === "off") return "denied";
+  if (status === "unavailable") return "failed";
+  if (status === "idle" && choice === "second") return "notAsked";
+  return null;
+}
+
+// [3] 지역으로 거르기(전국 = null). 탐색·검색은 활동으로 거르지 않음(BRD-128 · 10/30 결정: 판단은 활동과 무관, G1)
 export function filterBeaches(
   beaches: readonly BeachSummary[],
-  activity: Activity,
   region: SavedRegion | null,
 ): BeachSummary[] {
-  return beaches.filter(
-    (beach) =>
-      (activity === "swimming" || beach.activities.includes(activity)) &&
-      (region === null || inRegion(beach, region)),
-  );
+  return beaches.filter((beach) => region === null || inRegion(beach, region));
 }
 
 // 측정소 정보가 없는 값은 출처를 붙일 수 없어 보이지 않음("–"). 가까운 바다 카드와 같은 규칙
