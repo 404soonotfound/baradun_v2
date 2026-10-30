@@ -287,4 +287,89 @@ test.describe("보안 응답 헤더 및 CSP 검증 (BRD-118)", () => {
     expect(cspViolations).toEqual([]);
     await context.close();
   });
+
+  test("서비스 워커 등록 후 오프라인 상태에서 홈 및 장소 상세 재방문 시 CSP 위반 및 하이드레이션 오류가 없다", async ({
+    browser,
+  }) => {
+    const context = await browser.newContext({
+      serviceWorkers: "allow",
+    });
+    const page = await context.newPage();
+    const cspViolations: string[] = [];
+    const hydrationErrors: string[] = [];
+
+    page.on("console", (msg) => {
+      const text = msg.text();
+      if (
+        msg.type() === "error" &&
+        text.toLowerCase().includes("content security policy")
+      ) {
+        cspViolations.push(text);
+      }
+      if (
+        msg.type() === "error" &&
+        (text.includes("Hydration failed") ||
+          text.includes("did not match") ||
+          text.includes("Minified React error"))
+      ) {
+        hydrationErrors.push(text);
+      }
+    });
+
+    // 1. 온라인 상태에서 홈 접속 및 서비스 워커 등록 대기
+    await page.goto("/");
+    await page.waitForFunction(
+      async () => {
+        if (!("serviceWorker" in navigator)) return false;
+        const reg = await navigator.serviceWorker.getRegistration();
+        return reg !== undefined;
+      },
+      undefined,
+      { timeout: 10_000 },
+    );
+    await page.waitForTimeout(500);
+
+    // 2. 온라인 상태에서 장소 상세 미리 열기
+    await page.goto("/spots/gyeongpo/");
+    await page.waitForLoadState("domcontentloaded");
+    await page
+      .locator("main")
+      .first()
+      .waitFor({ state: "visible", timeout: 10_000 })
+      .catch(() => {});
+
+    // 3. 오프라인으로 전환
+    await context.setOffline(true);
+
+    // 4. 홈 다시 열기 (서비스 워커 캐시 서빙)
+    await page.goto("/");
+    await page.waitForLoadState("domcontentloaded");
+    await page
+      .locator("main")
+      .first()
+      .waitFor({ state: "visible", timeout: 10_000 })
+      .catch(() => {});
+    await page.waitForTimeout(300);
+
+    // 5. 이미 열어 본 장소 상세 다시 열기
+    await page.goto("/spots/gyeongpo/");
+    await page.waitForLoadState("domcontentloaded");
+    await page
+      .locator("main")
+      .first()
+      .waitFor({ state: "visible", timeout: 10_000 })
+      .catch(() => {});
+    await page.waitForTimeout(300);
+
+    expect(
+      cspViolations,
+      `오프라인 재방문 중 CSP 위반 발생: ${cspViolations.join("\n")}`,
+    ).toEqual([]);
+    expect(
+      hydrationErrors,
+      `오프라인 재방문 중 하이드레이션 오류 발생: ${hydrationErrors.join("\n")}`,
+    ).toEqual([]);
+
+    await context.close();
+  });
 });
