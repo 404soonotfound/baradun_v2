@@ -7,7 +7,6 @@ import {
   Info,
   MapPin,
   TriangleAlert,
-  Waves,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -182,37 +181,92 @@ function OnboardingDialog({
       }}
       className="m-0 h-dvh max-h-none w-full max-w-none bg-bg-page p-0 text-text-default backdrop:bg-bg-page"
     >
-      <div className="mx-auto flex min-h-full w-full max-w-[480px] flex-col px-gutter pt-[calc(56px+env(safe-area-inset-top))] pb-[max(24px,env(safe-area-inset-bottom))]">
+      {/* 좌우 16 (Figma pad.stack 185:265). ON-1은 맨 위 그림이 화면 끝까지, ON-2는 위 76(머리 줄 자리) + 24 띄움 */}
+      <div
+        className={cn(
+          "mx-auto flex min-h-full w-full max-w-[480px] flex-col px-4",
+          // ON-2 아래 32 = 사이 18 + 빈 자리 14 (Figma 185:368)
+          step === "location"
+            ? "pt-[calc(100px+env(safe-area-inset-top))] pb-[max(32px,env(safe-area-inset-bottom))]"
+            : "pb-[max(14px,env(safe-area-inset-bottom))]",
+        )}
+      >
         {children}
-        {/* 단계 점 2개. 화면 읽기에는 글자로 */}
+        {/* 단계. 점은 각 단계의 버튼 바로 위(StepDots), 화면 읽기에는 글자로 */}
         <p className="sr-only">
           {t("step", { current: step === "notice" ? 1 : 2, total: 2 })}
         </p>
-        <span aria-hidden="true" className="mt-6 flex justify-center gap-1.5">
-          <StepDot active={step === "notice"} />
-          <StepDot active={step === "location"} />
-        </span>
       </div>
     </dialog>
   );
 }
 
-function StepDot({ active }: { active: boolean }) {
+// 단계 점 2개: 지금 단계 18×6 브랜드, 다른 단계 6×6 (Figma 185:300, 모서리 3·사이 6)
+function StepDots({ current }: { current: 1 | 2 }) {
   return (
-    <span
-      className={cn(
-        "h-1.5 rounded-full",
-        active ? "w-5 bg-brand-default" : "w-1.5 bg-border-strong",
-      )}
-    />
+    <span aria-hidden="true" className="flex justify-center gap-1.5">
+      {[1, 2].map((index) => (
+        <span
+          key={index}
+          className={cn(
+            "h-1.5 rounded-[3px]",
+            index === current
+              ? "w-[18px] bg-brand-default"
+              : "w-1.5 bg-onboarding-dot",
+          )}
+        />
+      ))}
+    </span>
+  );
+}
+
+// ON-1 맨 위 그림 (Figma 그림 185:257, 390×190): 하늘 그라데이션 + 물결 3겹(맨 앞은 화면 바탕과 이음) + 가운데 로고 48
+// 물결 경로는 Figma 원본 그대로. 색은 토큰(color.onboarding.*)이라 다크에서 밤바다로 바뀜. 꾸밈이라 화면 읽기에서 숨김
+function NoticeSky() {
+  return (
+    <div
+      aria-hidden="true"
+      className="relative -mx-4 h-[190px] shrink-0 bg-linear-to-b from-onboarding-sky-1 to-onboarding-sky-2"
+    >
+      <svg
+        className="absolute inset-0 size-full"
+        viewBox="0 0 390 190"
+        preserveAspectRatio="none"
+      >
+        <path
+          d="M0 120C60 104 110 104 170 118C230 132 300 134 390 112V190H0V120Z"
+          className="fill-onboarding-wave-1"
+        />
+        <path
+          d="M0 142C80 126 150 128 230 142C310 156 340 152 390 138V190H0V142Z"
+          className="fill-onboarding-wave-2"
+        />
+        <path
+          d="M0 164C90 152 190 156 280 166C370 176 370 170 390 162V190H0V164Z"
+          className="fill-bg-page"
+        />
+      </svg>
+      <span className="absolute top-[52px] left-1/2 flex size-12 -translate-x-1/2 items-center justify-center rounded-[14px] bg-brand-default text-brand-on">
+        <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+          <path
+            d="M10 26C14 21 17 21 21 26C25 31 28 31 32 26C36 21 38 22 39 24"
+            stroke="currentColor"
+            strokeWidth="3"
+            strokeLinecap="round"
+          />
+        </svg>
+      </span>
+    </div>
   );
 }
 
 // [4] ON-1 서비스 안내·면책 고지. 확인하는 두 가지(특보·측정 시각) → 확인하지 않는 것(출입 통제) → 면책
 function NoticeStep({ locale }: { locale: Locale }) {
   const t = useTranslations();
+  // 블록 사이 18, 제목·소개 사이 8 (Figma 185:265·185:266)
   return (
-    <div className="flex flex-1 flex-col gap-5">
+    <div className="flex flex-1 flex-col gap-[18px]">
+      <NoticeSky />
       {showsResetNotice() && (
         <p
           id={RESET_NOTICE_ID}
@@ -227,27 +281,21 @@ function NoticeStep({ locale }: { locale: Locale }) {
           {t("settings.reset.done")}
         </p>
       )}
-      <span
-        aria-hidden="true"
-        className="flex size-12 items-center justify-center self-center rounded-icon bg-brand-default text-brand-on"
-      >
-        <Waves size={26} />
-      </span>
       <div className="flex flex-col gap-2">
         <h2
           id={TITLE_IDS.notice}
           tabIndex={-1}
-          className="text-title-xl text-text-default outline-none"
+          className="text-title-home text-text-default outline-none"
         >
           {t("onboarding.notice.title1")}
           <br />
           {t("onboarding.notice.title2")}
         </h2>
-        <p className="text-body-s text-text-body">
+        <p className="text-[14.5px]/[21px] text-text-body">
           {t("onboarding.notice.intro")}
         </p>
       </div>
-      <ul className="flex flex-col divide-y divide-border-default rounded-card bg-bg-surface shadow-card">
+      <ul className={CARD_CLASS}>
         <InfoRow
           icon={<TriangleAlert size={18} />}
           title={t("onboarding.notice.warning")}
@@ -264,31 +312,40 @@ function NoticeStep({ locale }: { locale: Locale }) {
           body={t("onboarding.notice.controlBody")}
         />
       </ul>
-      {/* 면책 고지(앰버). 색만으로 구분하지 않게 아이콘 + 글자 */}
-      <p className="flex gap-2.5 rounded-input border border-banner-amber-border bg-bg-surface p-3.5 text-body-s text-text-default">
+      {/* 면책 고지(앰버 면·테두리, 모서리 14, 13/18.9, Figma 185:294). 색만으로 구분하지 않게 아이콘 + 글자 */}
+      <p className="flex gap-2.5 rounded-button border border-banner-amber-border bg-banner-amber-icon-bg px-[15px] py-[13px] text-body-s text-banner-amber-text">
         <CircleAlert
           aria-hidden="true"
           size={18}
-          className="mt-0.5 shrink-0 text-banner-amber-icon-fg"
+          className="shrink-0 text-banner-amber-icon-fg"
         />
         <span>
           {t("onboarding.notice.disclaimer")} {t("safety.finalCall")}
         </span>
       </p>
-      <div className="mt-auto flex flex-col items-center gap-2 pt-4">
-        <Button className="w-full" onClick={acknowledgeNotice}>
-          {t("onboarding.notice.confirm")}
-        </Button>
-        <Link
-          href={localizedPath(locale, "/guide/")}
-          className="inline-flex min-h-touch items-center text-body-s font-bold text-brand-default"
-        >
-          {t("onboarding.notice.more")}
-        </Link>
+      {/* 남는 높이는 버튼 위로 몰아 점·버튼·링크가 화면 아래에 붙음 */}
+      <div className="mt-auto flex flex-col gap-[18px]">
+        <StepDots current={1} />
+        <div className="flex flex-col items-center">
+          <Button className="w-full" onClick={acknowledgeNotice}>
+            {t("onboarding.notice.confirm")}
+          </Button>
+          {/* 링크 글자 14/20.3 굵게, 누르는 영역 44 (Figma 185:305) */}
+          <Link
+            href={localizedPath(locale, "/guide/")}
+            className="mt-[9px] inline-flex min-h-touch items-center text-body font-bold text-brand-default"
+          >
+            {t("onboarding.notice.more")}
+          </Link>
+        </div>
       </div>
     </div>
   );
 }
+
+// 안내 묶음 카드: 흰 면·기본 테두리·모서리 16, 행 사이 옅은 구분선 (Figma card.stack 185:269)
+const CARD_CLASS =
+  "flex flex-col divide-y divide-border-subtle rounded-tile border border-border-default bg-bg-surface";
 
 // 안내 한 줄: 아이콘 상자 + 제목 + 설명
 function InfoRow({
@@ -301,16 +358,19 @@ function InfoRow({
   body: string;
 }) {
   return (
-    <li className="flex items-start gap-3 p-4">
+    // 행: 좌우 16·위아래 14, 아이콘 상자 36·모서리 11(보조 면 + 브랜드 아이콘 18), 제목 14.5/21 · 설명 12.5/18.1 (Figma 185:270)
+    <li className="flex items-center gap-3 px-4 py-3.5">
       <span
         aria-hidden="true"
-        className="flex size-9 shrink-0 items-center justify-center rounded-icon bg-brand-weak text-brand-default"
+        className="flex size-9 shrink-0 items-center justify-center rounded-[11px] bg-bg-subtle text-brand-default"
       >
         {icon}
       </span>
-      <span className="flex flex-col gap-0.5">
-        <span className="text-body-s font-bold text-text-default">{title}</span>
-        <span className="text-caption text-text-body">{body}</span>
+      <span className="flex flex-col gap-px">
+        <span className="text-[14.5px]/[21px] font-bold text-text-default">
+          {title}
+        </span>
+        <span className="text-label-s text-text-muted">{body}</span>
       </span>
     </li>
   );
@@ -325,34 +385,37 @@ function LocationStep({
   onPick: () => void;
 }) {
   const t = useTranslations("onboarding.location");
+  // 아이콘 상자 72·모서리 22(브랜드 약한 면 + 위치 아이콘 34), 블록 사이 18 (Figma 185:333)
   return (
-    <div className="flex flex-1 flex-col gap-5">
+    <div className="flex flex-1 flex-col gap-[18px]">
       <span
         aria-hidden="true"
-        className="flex size-[72px] items-center justify-center rounded-card bg-brand-weak text-brand-default"
+        className="flex size-[72px] items-center justify-center rounded-sheet bg-brand-weak text-brand-default"
       >
-        <MapPin size={30} />
+        <MapPin size={34} strokeWidth={2.55} absoluteStrokeWidth />
       </span>
       <div className="flex flex-col gap-2">
         <h2
           id={TITLE_IDS.location}
           tabIndex={-1}
-          className="text-title-xl text-text-default outline-none"
+          className="text-title-home text-text-default outline-none"
         >
           {t("title1")}
           <br />
           {t("title2")}
         </h2>
-        <p className="text-body-s text-text-body">{t("body")}</p>
+        <p className="text-[14.5px]/[21px] text-text-body">{t("body")}</p>
       </div>
-      <ul className="flex flex-col divide-y divide-border-default rounded-card bg-bg-surface shadow-card">
+      <ul className={CARD_CLASS}>
         <PromiseRow text={t("promise1")} />
         <PromiseRow text={t("promise2")} />
         <PromiseRow text={t("promise3")} />
       </ul>
-      <div className="mt-auto flex flex-col gap-3 pt-4">
-        <Button className="w-full" onClick={onUse}>
-          <MapPin aria-hidden="true" size={18} />
+      {/* 점 → 위치 사용하기(주요) → 지역 직접 고르기, 사이 18 (Figma 185:356~185:366) */}
+      <div className="mt-auto flex flex-col gap-[18px]">
+        <StepDots current={2} />
+        <Button className="w-full gap-1.5" onClick={onUse}>
+          <MapPin aria-hidden="true" size={16} />
           {t("use")}
         </Button>
         <Button variant="secondary" className="w-full" onClick={onPick}>
@@ -363,12 +426,14 @@ function LocationStep({
   );
 }
 
+// 약속 한 줄: 체크 18(브랜드) + 14/20.3, 좌우 16·위아래 12 (Figma 185:343)
 function PromiseRow({ text }: { text: string }) {
   return (
-    <li className="flex items-center gap-3 px-4 py-3 text-body-s text-text-default">
+    <li className="flex items-center gap-3 px-4 py-3 text-body text-text-default">
       <Check
         aria-hidden="true"
         size={18}
+        strokeWidth={2.5}
         className="shrink-0 text-brand-default"
       />
       {text}

@@ -7,6 +7,8 @@ import type { RecentSearch } from "@/lib/recent-search";
 
 // 최근 검색 (BRD-31 · 노션 2장 SRCH '입력 전: 최근 검색(개별·전체 지우기)')
 // 항목을 누르면 그 검색어로 다시 찾음. ✕는 항목 옆(누르는 영역 44px)
+// Figma L08 186:508: 제목 17·굵게 + '전체 지우기' 12.5 메타 → 흰 카드(기본 테두리·모서리 16) 안 행,
+// 행은 좌우 14·높이 44, 시계 16 + 14.5/21 검색어 + ✕ 14, 행 사이 옅은 구분선 (BRD-129)
 export function RecentSearches({
   items,
   onPick,
@@ -21,26 +23,27 @@ export function RecentSearches({
   const t = useTranslations("search.recent");
   if (items.length === 0) return null;
   return (
-    <section aria-labelledby="search-recent" className="flex flex-col gap-1">
+    <section aria-labelledby="search-recent" className="flex flex-col gap-2.5">
       <div className="flex items-center justify-between">
-        <h2 id="search-recent" className="text-title-s text-text-default">
+        <h2 id="search-recent" className="text-title-m text-text-default">
           {t("title")}
         </h2>
+        {/* 누르는 영역 44는 위아래 음수 여백으로 줄 높이를 늘리지 않고 둠 */}
         <button
           type="button"
           onClick={onClear}
-          className="-mr-2 flex min-h-touch items-center px-2 text-body-s text-text-muted underline"
+          className="-my-2.5 -mr-2 flex min-h-touch items-center px-2 text-label-s text-text-muted hover:text-text-default"
         >
           {t("clear")}
         </button>
       </div>
-      <ul>
+      <ul className="flex flex-col divide-y divide-border-subtle rounded-tile border border-border-default bg-bg-surface">
         {items.map((item) => (
           <li key={item.q} className="flex items-center">
             <button
               type="button"
               onClick={() => onPick(item.q)}
-              className="flex min-h-touch min-w-0 flex-1 items-center gap-2.5 text-left text-body text-text-body"
+              className="flex min-h-touch min-w-0 flex-1 items-center gap-3 pl-3.5 text-left text-[14.5px]/[21px] text-text-default"
             >
               <Clock
                 aria-hidden="true"
@@ -55,7 +58,7 @@ export function RecentSearches({
               onClick={() => onRemove(item.q)}
               className="flex size-touch shrink-0 items-center justify-center rounded-full text-text-muted hover:bg-bg-subtle"
             >
-              <X aria-hidden="true" size={16} />
+              <X aria-hidden="true" size={14} />
             </button>
           </li>
         ))}

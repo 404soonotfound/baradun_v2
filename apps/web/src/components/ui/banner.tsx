@@ -46,30 +46,49 @@ export function Banner({
   action,
   href,
   dismiss,
+  size = "m",
 }: {
   tone: BannerTone;
   icon?: ReactNode; // 없으면 아이콘 원 없이 글자만(홈 '위치 없이 보고 있어요', Figma 171:818)
   title: string; // 1줄째: 무슨 일
   children?: ReactNode; // 2줄째: 영향·다음 행동
+  // l: 화면 전체에 영향을 주는 안내(확인된 판단 없음, Figma L13 188:270). 아이콘 원 34·제목 14.5/21·설명 12.5/18.1, 위 정렬
+  size?: "m" | "l";
 } & BannerTarget) {
   const colors = TONES[tone];
+  const large = size === "l";
   const body = (
     <>
       {icon && (
         <span
           aria-hidden="true"
           className={cn(
-            "flex size-8 shrink-0 items-center justify-center rounded-full",
+            "flex shrink-0 items-center justify-center rounded-full",
+            large ? "size-[34px]" : "size-8",
             colors.iconBox,
           )}
         >
           {icon}
         </span>
       )}
-      <span className="min-w-0 flex-1">
-        <span className="block text-label text-text-default">{title}</span>
+      <span
+        className={cn("min-w-0 flex-1", large && "flex flex-col gap-[3px]")}
+      >
+        <span
+          className={cn(
+            "block text-text-default",
+            large ? "text-[14.5px]/[21px] font-bold" : "text-label",
+          )}
+        >
+          {title}
+        </span>
         {(children || action) && (
-          <span className="block text-caption text-text-muted">
+          <span
+            className={cn(
+              "block text-text-muted",
+              large ? "text-label-s" : "text-caption",
+            )}
+          >
             {children}
             {/* 설명과 행동 사이 가운뎃점. 둘 다 있을 때만 */}
             {children && action ? " · " : null}
@@ -102,7 +121,8 @@ export function Banner({
     </>
   );
   const box = cn(
-    "flex w-full items-center gap-3 rounded-button border bg-bg-surface px-[15px] py-[13px]",
+    "flex w-full gap-3 rounded-button border bg-bg-surface px-[15px]",
+    large ? "items-start py-[15px]" : "items-center py-[13px]",
     colors.border,
   );
   // red(실패)는 바로 읽어 줌(role="alert"), 나머지는 하던 말을 끊지 않음(role="status")

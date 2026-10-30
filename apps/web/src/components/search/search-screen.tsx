@@ -180,11 +180,12 @@ export function SearchScreen({
             onRemove={removeRecentSearch}
             onClear={clearRecentSearches}
           />
+          {/* 최근 검색과 같은 제목 17·굵게, 제목·칩 사이 10 (Figma 186:534) */}
           <section
             aria-labelledby="search-regions"
-            className="flex flex-col gap-2"
+            className="flex flex-col gap-2.5"
           >
-            <h2 id="search-regions" className="text-title-s text-text-default">
+            <h2 id="search-regions" className="text-title-m text-text-default">
               {tSearch("byRegion")}
             </h2>
             <div className="flex flex-wrap gap-2">

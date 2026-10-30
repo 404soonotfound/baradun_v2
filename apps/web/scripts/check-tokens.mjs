@@ -100,6 +100,19 @@ PAIRS.push(
   ["color.chart", "color.bg.surface", 3, "파고 선"],
   ["color.chart", "color.bg.subtle", 3, "파도 그림 앞 물결 선"],
   ["color.chart", "color.brand.weak", 3, "파도 그림 뒤 물결 위 앞 물결 선"],
+  // 첫 실행 면책 고지(앰버 면 위 글자·아이콘, BRD-129)
+  [
+    "color.banner.amber.text",
+    "color.banner.amber.icon-bg",
+    4.5,
+    "앰버 면 위 고지 글자",
+  ],
+  [
+    "color.banner.amber.icon-fg",
+    "color.banner.amber.icon-bg",
+    3,
+    "앰버 면 위 고지 아이콘",
+  ],
 );
 
 // 참고로만 찍는 조합 (지금은 없음)

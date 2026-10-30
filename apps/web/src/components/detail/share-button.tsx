@@ -1,7 +1,7 @@
 "use client";
 
 import type { Beach } from "@baradun/contracts";
-import { Copy, MessageCircle, Share, Share2 } from "lucide-react";
+import { Ellipsis, Link2, MessageSquare, Share2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import {
   type ReactNode,
@@ -104,12 +104,12 @@ export function ShareButton({
       </button>
       <Sheet open={sheet.open} onClose={sheet.close} title={t("title")}>
         <div className="flex flex-col gap-4 pb-2">
-          {/* 링크 미리보기: 이름·지역·사진만 */}
-          <div className="flex flex-col gap-2 rounded-card border border-border-default p-3">
+          {/* 링크 미리보기: 이름·지역·사진만. 기본 테두리·모서리 12 카드, 아래 줄 13 굵게 + 11.5 메타 (Figma 187:338) */}
+          <div className="flex flex-col gap-2 rounded-input border border-border-default p-3">
             <BeachPhoto photo={beach.photo} name={name} className="h-[150px]" />
             <div>
-              <p className="text-body font-bold text-text-default">{name}</p>
-              <p className="text-caption text-text-muted">{region}</p>
+              <p className="text-body-s font-bold text-text-default">{name}</p>
+              <p className="text-label-xs text-text-muted">{region}</p>
             </div>
           </div>
 
@@ -143,9 +143,10 @@ export function ShareButton({
                 )}
               </div>
 
-              <div className="grid auto-cols-fr grid-flow-col gap-2">
+              {/* 행동 3칸(사이 10): 보조 면 상자 52·모서리 16 + 아이콘 22, 아래 12.5 이름 (Figma 187:348) */}
+              <div className="grid auto-cols-fr grid-flow-col gap-2.5">
                 <ShareAction
-                  icon={<Copy aria-hidden="true" size={22} />}
+                  icon={<Link2 size={22} />}
                   label={t("copy")}
                   onClick={() => void copy(url)}
                 />
@@ -153,12 +154,12 @@ export function ShareButton({
                   href={smsHref(t("messageBody", { name, url }))}
                   className={ACTION_CLASS}
                 >
-                  <MessageCircle aria-hidden="true" size={22} />
+                  <ActionIcon icon={<MessageSquare size={22} />} />
                   {t("message")}
                 </a>
                 {canShare && (
                   <ShareAction
-                    icon={<Share aria-hidden="true" size={22} />}
+                    icon={<Ellipsis size={22} />}
                     label={t("more")}
                     onClick={() => void shareMore(url)}
                   />
@@ -175,8 +176,20 @@ export function ShareButton({
   );
 }
 
+// 누르는 영역은 칸 전체(상자 + 이름). 눌림·포커스 표시는 칸 모서리를 따름
 const ACTION_CLASS =
-  "flex min-h-[72px] flex-col items-center justify-center gap-1 rounded-tile border border-border-default bg-bg-surface px-2 text-body-s text-text-default hover:bg-bg-subtle";
+  "group flex flex-col items-center gap-1.5 rounded-tile text-label-s text-text-default";
+
+function ActionIcon({ icon }: { icon: ReactNode }) {
+  return (
+    <span
+      aria-hidden="true"
+      className="flex size-[52px] items-center justify-center rounded-tile bg-bg-subtle text-brand-default group-hover:bg-brand-weak"
+    >
+      {icon}
+    </span>
+  );
+}
 
 function ShareAction({
   icon,
@@ -189,7 +202,7 @@ function ShareAction({
 }) {
   return (
     <button type="button" onClick={onClick} className={ACTION_CLASS}>
-      {icon}
+      <ActionIcon icon={icon} />
       {label}
     </button>
   );
