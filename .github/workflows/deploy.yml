@@ -1,19 +1,16 @@
 # 사이트 배포: main에 합친 웹 변경을 S3·CloudFront에 올림 (아키텍처 11장 가드레일)
 # - 장기 키 없음: OIDC로 1시간짜리 임시 키만 받음
-# - production environment 승인 뒤에만 실행 (main 브랜치만 이 environment를 쓸 수 있음)
+# - main push로 돈 CI(ci 워크플로)가 성공한 커밋만, 그 커밋 그대로 올림 (BRD-133)
+#   CI와 배포가 동시에 돌면 합친 main이 CI에서 실패해도 배포가 먼저 끝날 수 있어서 CI 뒤로 둠
+# - production environment는 main 브랜치만 쓸 수 있음
 # - data/는 publisher 구역이라 동기화에서 빼고, IAM에서도 거부됨
 name: deploy
 on:
-  push:
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
     branches: [main]
-    paths:
-      - "apps/web/**"
-      - "packages/contracts/**"
-      - "data/beaches/**" # 해변이 바뀌면 상세 페이지를 다시 빌드
-      - "package-lock.json"
-      - ".nvmrc"
-      - ".github/workflows/deploy.yml"
-  workflow_dispatch: # Actions 탭에서 수동 실행
+  workflow_dispatch: # npm run deploy:prod 또는 Actions 탭에서 수동 실행 (그 커밋의 ci-ok가 성공일 때만)
 permissions:
   contents: read
 concurrency:
@@ -22,18 +19,43 @@ concurrency:
 jobs:
   site:
     # 첫 인프라 배포 전(변수가 비어 있음)에는 건너뜀
-    if: vars.DEPLOY_ROLE_ARN != ''
+    # 자동 배포는 main push CI가 성공했을 때만. 정기 실행·PR CI는 배포하지 않음
+    # 저장소 변수 DEPLOY_PAUSED=true면 자동 배포를 멈춤(인프라와 순서를 맞출 때, infra/README)
+    if: >-
+      vars.DEPLOY_ROLE_ARN != '' && (
+        github.event_name == 'workflow_dispatch' || (
+          github.event.workflow_run.event == 'push' &&
+          github.event.workflow_run.head_repository.full_name == github.repository &&
+          github.event.workflow_run.conclusion == 'success' &&
+          vars.DEPLOY_PAUSED != 'true'
+        )
+      )
     runs-on: ubuntu-latest
     environment: production
     permissions:
       contents: read
+      checks: read # 수동 실행 때 ci-ok 결과를 읽음
       id-token: write # OIDC 토큰은 이 작업만 받음
     env:
       BUCKET: ${{ vars.SITE_BUCKET }}
       DISTRIBUTION_ID: ${{ vars.DISTRIBUTION_ID }}
+      # CI가 검사한 커밋. 수동 실행은 실행한 브랜치(main)의 커밋
+      SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
     steps:
+      - name: 수동 실행은 이 커밋의 ci-ok가 성공일 때만
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          conclusion=$(gh api "repos/$GITHUB_REPOSITORY/commits/$SHA/check-runs?check_name=ci-ok" \
+            --jq '[.check_runs[] | select(.app.slug == "github-actions")] | sort_by(.completed_at) | last | .conclusion // ""')
+          if [ "$conclusion" != "success" ]; then
+            echo "::error::$SHA 의 ci-ok가 성공이 아니에요(${conclusion:-결과 없음}). main CI가 통과한 뒤 다시 실행해 주세요."
+            exit 1
+          fi
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
+          ref: ${{ env.SHA }}
           persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:

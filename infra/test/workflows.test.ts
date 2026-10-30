@@ -48,12 +48,43 @@ describe("배포 워크플로 가드레일 (11장)", () => {
     }
   });
 
-  it("배포는 main push(와 수동 실행)에서만, production environment에서 한다", () => {
+  it("배포는 main push CI가 끝난 뒤(와 수동 실행)에서만, production environment에서 한다 (BRD-133)", () => {
     expect(deploy).toBeDefined();
     const text = codeLines(deploy?.text ?? "").join("\n");
-    expect(text).toMatch(/push:\s*\n\s*branches:\s*\[main\]/);
+    expect(text).toMatch(
+      /workflow_run:\s*\n\s*workflows:\s*\[ci\]\s*\n\s*types:\s*\[completed\]\s*\n\s*branches:\s*\[main\]/,
+    );
+    // push로 바로 배포하면 CI와 동시에 돌아 CI 실패 커밋이 나갈 수 있음
+    expect(text).not.toMatch(/^\s{2}push:/m);
     expect(text).not.toMatch(/pull_request/);
     expect(text).toMatch(/environment:\s*production/);
+  });
+
+  it("자동 배포는 이 저장소 main push CI가 성공했을 때만, CI가 검사한 커밋을 올린다 (BRD-133)", () => {
+    const lines = codeLines(deploy?.text ?? "");
+    const text = lines.join("\n");
+    expect(text).toContain("github.event.workflow_run.event == 'push'");
+    expect(text).toContain("github.event.workflow_run.conclusion == 'success'");
+    expect(text).toContain(
+      "github.event.workflow_run.head_repository.full_name == github.repository",
+    );
+    expect(text).toMatch(
+      /SHA:\s*\$\{\{\s*github\.event\.workflow_run\.head_sha \|\| github\.sha\s*\}\}/,
+    );
+    expect(text).toMatch(/ref:\s*\$\{\{\s*env\.SHA\s*\}\}/);
+  });
+
+  it("수동 실행은 체크아웃 전에 그 커밋의 ci-ok 성공을 확인하고, 아니면 멈춘다 (BRD-133)", () => {
+    const lines = codeLines(deploy?.text ?? "");
+    const guard = lines.findIndex((l) => l.includes("check_name=ci-ok"));
+    const checkout = lines.findIndex((l) =>
+      /uses:\s*actions\/checkout@/.test(l),
+    );
+    expect(guard).toBeGreaterThan(-1);
+    expect(guard).toBeLessThan(checkout);
+    expect(lines.slice(guard, checkout).join("\n")).toMatch(
+      /"\$conclusion" != "success"[\s\S]*exit 1/,
+    );
   });
 
   it("사이트 동기화(s3 sync)는 모두 data/를 제외한다", () => {
