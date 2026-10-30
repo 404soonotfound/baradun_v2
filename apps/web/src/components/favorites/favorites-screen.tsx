@@ -1,12 +1,13 @@
 "use client"; // 기기 저장(즐겨찾기·최근 본)·바다 정보를 쓰므로 브라우저 부품
 
-import { Clock, Star } from "lucide-react";
+import { Clock, Star, Trash2, X } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useMemo, useRef } from "react";
 
-import { BeachRow } from "@/components/beach-row";
+import { BeachRow, WaveGlyph } from "@/components/beach-row";
+import { ReasonBadge } from "@/components/reason-badge";
 import { SituationBanner } from "@/components/situation-banner";
 import { KmaSourceNote } from "@/components/source-note";
 import { Button } from "@/components/ui/button";
@@ -30,7 +31,9 @@ import { useRowText } from "@/lib/snapshot/use-row-text";
 import { useSnapshot } from "@/lib/snapshot/use-snapshot";
 import {
   deriveBeachView,
+  type BadgeLabel,
   type BeachView,
+  type MetricView,
   type ViewSource,
 } from "@/lib/snapshot/view";
 import { clearCheckedAt } from "@/lib/status-count";
@@ -154,20 +157,20 @@ export function FavoritesScreen({
       status: view.badge,
       detail: rowDetail(view, nowMs),
     };
+    const remove =
+      tab === "recent"
+        ? {
+            onRemove: () => removeOne(beach),
+            removeLabel: t("favorites.recent.remove", { name: beach.name }),
+          }
+        : {};
+    // 모바일은 한 카드 안 행(Figma 178:111), PC는 3열 카드(Figma 184:1012). 보이지 않는 쪽은 display:none이라 한 번만 읽힘
     return (
-      <li
-        key={beach.id}
-        className="lg:grid lg:overflow-hidden lg:rounded-card lg:bg-bg-surface lg:shadow-card"
-      >
-        {tab === "recent" ? (
-          <BeachRow
-            {...common}
-            onRemove={() => removeOne(beach)}
-            removeLabel={t("favorites.recent.remove", { name: beach.name })}
-          />
-        ) : (
-          <BeachRow {...common} />
-        )}
+      <li key={beach.id} className="lg:flex">
+        <div className="lg:hidden">
+          <BeachRow {...common} {...remove} />
+        </div>
+        <FavoriteCard {...common} {...remove} />
       </li>
     );
   }
@@ -183,7 +186,7 @@ export function FavoritesScreen({
   const clearTime = kstStamp(checkedAt, nowMs);
 
   const explore = (
-    <Button asChild>
+    <Button asChild className="h-[46px]">
       <Link href={localizedPath(locale, "/explore/")}>
         {t("favorites.empty.action")}
       </Link>
@@ -191,14 +194,30 @@ export function FavoritesScreen({
   );
 
   return (
-    <div className="flex flex-col gap-4">
-      <h1
-        ref={titleRef}
-        tabIndex={-1}
-        className="text-title-xl text-text-default outline-none"
-      >
-        {t("pages.favorites")}
-      </h1>
+    <div className="flex flex-col gap-3.5 pt-4 lg:mx-auto lg:w-full lg:max-w-[1036px] lg:pt-0">
+      {/* PC는 제목 줄 오른쪽에 [즐겨찾기 | 최근 본](260px, Figma 184:1005) */}
+      <div className="flex flex-col gap-3.5 lg:flex-row lg:items-center lg:justify-between">
+        <h1
+          ref={titleRef}
+          tabIndex={-1}
+          className="text-title-xl text-text-default outline-none lg:text-[30px] lg:leading-[43.5px] lg:font-bold lg:tracking-[-0.6px]"
+        >
+          {t("pages.favorites")}
+        </h1>
+        <ViewToggle<Tab>
+          label={t("favorites.tabsLabel")}
+          options={[
+            {
+              value: "favorites",
+              label: t("favorites.tabFavorites", { count: favorites.length }),
+            },
+            { value: "recent", label: t("favorites.tabRecent") },
+          ]}
+          value={tab}
+          onChange={setTab}
+          className="lg:w-[260px]"
+        />
+      </div>
 
       {sampleSnapshot && (
         <p
@@ -215,32 +234,6 @@ export function FavoritesScreen({
         snapshot={snapshot}
         onRetrySucceeded={() => titleRef.current?.focus()}
       />
-
-      <ViewToggle<Tab>
-        label={t("favorites.tabsLabel")}
-        options={[
-          {
-            value: "favorites",
-            label: t("favorites.tabFavorites", { count: favorites.length }),
-          },
-          { value: "recent", label: t("favorites.tabRecent") },
-        ]}
-        value={tab}
-        onChange={setTab}
-        className="lg:max-w-[360px]"
-      />
-
-      {tab === "recent" && recent.length > 0 && (
-        <div className="-my-2 flex justify-end">
-          <button
-            type="button"
-            onClick={removeAll}
-            className="-mr-2 flex min-h-touch items-center px-2 text-body-s text-text-muted underline"
-          >
-            {t("favorites.recent.clear")}
-          </button>
-        </div>
-      )}
 
       {items.length === 0 ? (
         tab === "favorites" ? (
@@ -264,15 +257,26 @@ export function FavoritesScreen({
           label={t("favorites.loading")}
         />
       ) : (
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-3.5">
           <ul
             className={cn(
               "divide-y divide-border-default overflow-hidden rounded-card bg-bg-surface shadow-card",
-              "lg:grid lg:grid-cols-3 lg:gap-4 lg:divide-y-0 lg:overflow-visible lg:rounded-none lg:bg-transparent lg:shadow-none",
+              "lg:grid lg:grid-cols-3 lg:gap-[18px] lg:divide-y-0 lg:overflow-visible lg:rounded-none lg:bg-transparent lg:shadow-none",
             )}
           >
             {items.map(renderRow)}
           </ul>
+          {/* 최근 본 전체 지우기(Figma 178:252). 확인 없이 지우고 토스트로 되돌리기 */}
+          {tab === "recent" && (
+            <Button
+              variant="secondary"
+              onClick={removeAll}
+              className="h-11 w-full lg:w-auto lg:self-start"
+            >
+              <Trash2 aria-hidden="true" size={16} />
+              {t("favorites.recent.clear")}
+            </Button>
+          )}
           <div className="flex flex-col gap-0.5 text-caption text-text-muted">
             {hasClear && (
               <p>
@@ -299,12 +303,78 @@ export function FavoritesScreen({
   );
 }
 
+// PC 카드(Figma card 184:1012): 파고 글리프 + 이름·지역 줄 → 사유 배지 → 값 줄. 카드 전체가 링크
+// 최근 본이면 오른쪽 위 ✕(링크 밖, 행과 같은 이유)
+function FavoriteCard({
+  href,
+  name,
+  meta,
+  wave,
+  status,
+  detail,
+  onRemove,
+  removeLabel,
+}: {
+  href: string;
+  name: string;
+  meta: string | null;
+  wave: MetricView;
+  status: BadgeLabel;
+  detail: string | null;
+  onRemove?: (() => void) | undefined;
+  removeLabel?: string | undefined;
+}) {
+  const t = useTranslations();
+  return (
+    <div className="relative hidden w-full rounded-card bg-bg-surface shadow-card lg:flex">
+      <Link
+        href={href}
+        className="flex w-full flex-col items-start gap-2.5 rounded-card p-4"
+      >
+        <span className={cn("flex items-center gap-3", onRemove && "pr-8")}>
+          <WaveGlyph
+            wave={wave}
+            metric={t("observation.metric.waveHeight")}
+            label={
+              wave.kind === "none"
+                ? t("observation.none")
+                : wave.kind === "delayed"
+                  ? t("observation.delayed")
+                  : t("row.noValue")
+            }
+          />
+          <span className="flex min-w-0 flex-col">
+            <span className="text-title-card text-text-default">{name}</span>
+            {meta && (
+              <span className="text-caption text-text-muted">{meta}</span>
+            )}
+          </span>
+        </span>
+        <ReasonBadge label={status} />
+        {detail && (
+          <span className="text-label-s text-text-body">{detail}</span>
+        )}
+      </Link>
+      {onRemove && (
+        <button
+          type="button"
+          aria-label={removeLabel}
+          onClick={onRemove}
+          className="absolute top-1.5 right-1.5 flex size-touch items-center justify-center rounded-full text-text-muted hover:bg-bg-subtle"
+        >
+          <X aria-hidden="true" size={16} />
+        </button>
+      )}
+    </div>
+  );
+}
+
 // 정적 HTML·주소 읽기 전 자리. 제목은 그대로 두고 목록 자리는 불러오는 모양
 export function FavoritesFallback() {
   const t = useTranslations();
   return (
-    <div className="flex flex-col gap-4">
-      <h1 className="text-title-xl text-text-default">
+    <div className="flex flex-col gap-3.5 pt-4 lg:mx-auto lg:w-full lg:max-w-[1036px] lg:pt-0">
+      <h1 className="text-title-xl text-text-default lg:text-[30px] lg:leading-[43.5px] lg:font-bold lg:tracking-[-0.6px]">
         {t("pages.favorites")}
       </h1>
       <BeachRowSkeleton label={t("favorites.loading")} />

@@ -570,7 +570,7 @@
       "body": "Beaches you open will appear here in order"
     },
     "recent": {
-      "clear": "Clear all",
+      "clear": "Clear all recently viewed",
       "cleared": "Cleared recently viewed",
       "remove": "Remove {name} from recently viewed",
       "removed": "Removed from recently viewed",
