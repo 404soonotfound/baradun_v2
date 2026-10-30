@@ -207,7 +207,10 @@ test.describe("데이터 문의", () => {
       });
     });
     await page.goto(`${INQUIRY}?beach=gangmun`);
-    await expect(page.getByText(/^해변: /)).toBeVisible();
+    // '해변 · 활동' 칸: "해변 이름 · 활동"(Figma 179:371)
+    await expect(
+      page.getByText("강문해수욕장 · 수영", { exact: true }),
+    ).toBeVisible();
     await pickKind(page, "해변을 추가해 주세요");
     await page
       .getByRole("textbox", { name: /내용/ })
@@ -246,8 +249,8 @@ test.describe("데이터 문의", () => {
     });
     // 강문해변은 수영만 → 서핑을 골라 둬도 활동은 보내지 않고 화면에도 쓰지 않음
     await page.goto(`${INQUIRY}?beach=gangmun`);
-    await expect(page.getByText(/^해변: /)).toBeVisible();
-    await expect(page.getByText(/활동: /)).toHaveCount(0);
+    await expect(page.getByText("강문해수욕장", { exact: true })).toBeVisible();
+    await expect(page.getByText(/^강문해수욕장 · /)).toHaveCount(0);
     await pickKind(page, "정보가 실제와 달라요");
     await page.getByRole("textbox", { name: /내용/ }).fill("파고가 달라요");
     await page.getByRole("button", { name: "보내기" }).click();
@@ -259,7 +262,9 @@ test.describe("데이터 문의", () => {
 
     // 경포해변은 서핑 지원 → 서핑을 함께 보냄
     await page.goto(`${INQUIRY}?beach=gyeongpo`);
-    await expect(page.getByText(/활동: 서핑/)).toBeVisible();
+    await expect(
+      page.getByText("경포해수욕장 · 서핑", { exact: true }),
+    ).toBeVisible();
     await pickKind(page, "정보가 실제와 달라요");
     await page.getByRole("textbox", { name: /내용/ }).fill("파고가 달라요");
     await page.getByRole("button", { name: "보내기" }).click();
