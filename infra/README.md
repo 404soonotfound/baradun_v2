@@ -149,7 +149,7 @@ await fetch("/api/inquiries", {
 
 문의 유형 4개·`beachId`·`activity` 칸·사진 4MiB(결정 기록 12장 결정 21~23)를 처음 배포할 때도 같은 순서를 지킵니다. 새 Lambda는 이전 화면의 `other` 유형과 4MiB를 넘는 사진 양식 요청을 400으로 거부하고, 이전 Lambda는 새 유형과 `beachId`·`activity` 칸을 400으로 거부합니다.
 
-요청·응답 타입은 `@baradun/contracts`의 `InquiryUploadRequest`, `InquiryUploadResponse`, `CreateInquiryRequest`, `CreateInquiryResponse`, `InquiryErrorResponse`입니다. 문의 유형은 화면 칩과 1:1로 `data_error`(정보가 실제와 달라요)·`data_question`(판단 기준이 궁금해요)·`beach_request`(해변을 추가해 주세요)·`data_suggestion`(새 데이터를 제안해요)입니다(결정 기록 12장 결정 21). 장소 상세에서 들어온 문의는 본문에 섞지 않고 `beachId`(예: `b0001`)와 `activity`(`swimming`·`surfing`·`scuba`) 칸으로 보내며, `activity`는 `beachId` 없이 오지 않습니다(결정 22). 둘 다 문의 항목과 메일 알림에 따로 들어갑니다. 사진에 EXIF GPS IFD가 있거나 파일이 깨졌으면 그 사진만 `rejected`로 돌아오며 문의 자체는 접수됩니다. 사진은 공개 URL 없이 비공개 버킷에 두고 30일 수명 주기로 삭제합니다.
+요청·응답 타입은 `@baradun/contracts`의 `InquiryUploadRequest`, `InquiryUploadResponse`, `CreateInquiryRequest`, `CreateInquiryResponse`, `InquiryErrorResponse`입니다. 문의 유형은 화면 칩과 1:1로 `data_error`(정보가 실제와 달라요)·`data_question`(판단 기준이 궁금해요)·`beach_request`(해변을 추가해 주세요)·`data_suggestion`(새 데이터를 제안해요)입니다(결정 기록 12장 결정 21). 장소 상세에서 들어온 문의는 본문에 섞지 않고 `beachId`(예: `b0001`)와 `activity`(`swimming`·`surfing`·`scuba`) 칸으로 보내며, `activity`는 `beachId` 없이 오지 않습니다(결정 22). 둘 다 문의 항목에 들어갑니다(알림에는 들어가지 않음). 사진에 EXIF GPS IFD가 있거나 파일이 깨졌으면 그 사진만 `rejected`로 돌아오며 문의 자체는 접수됩니다. 사진은 공개 URL 없이 비공개 버킷에 두고 30일 수명 주기로 삭제합니다.
 
 문의 본문 항목은 접수 뒤 90일, 이메일은 별도 항목으로 88일 TTL을 둡니다. 처리가 끝난 이메일은 문의 Lambda를 함수 URL이 아닌 직접 호출로 아래 이벤트를 보내 즉시 삭제합니다. DynamoDB TTL 삭제는 비동기이므로 88일 값으로 90일 이내 삭제 여유를 둡니다.
 
@@ -157,7 +157,18 @@ await fetch("/api/inquiries", {
 { "action": "delete_email", "inquiryId": "문의 UUID" }
 ```
 
-새 문의 알림은 배포 파라미터 `AlertEmail`로 만든 SNS 이메일 구독을 사용하므로 첫 배포 뒤 구독 확인이 필요합니다. 알림에는 문의 ID·유형·120자 이내 요약·이메일 제공 여부만 들어가며 실제 이메일 주소와 전체 본문은 넣지 않습니다.
+새 문의 알림은 배포 파라미터 `AlertEmail`로 만든 SNS 이메일 구독을 사용하므로 첫 배포 뒤 구독 확인이 필요합니다. 알림에는 문의 ID·유형·접수 시각(UTC)·이메일 제공 여부만 들어가며, 메일함에 개인정보가 남지 않도록 본문(요약 포함)·실제 이메일 주소·사진 정보는 넣지 않습니다(BRD-120).
+
+### 문의 내용 확인(운영자 콘솔 BRD-97 도입 전)
+
+알림 이메일에는 개인정보 보호를 위해 본문 요약이 들어가지 않으므로, 운영자 콘솔(BRD-97) 도입 전까지는 AWS 관리 콘솔에서 해당 항목만 조회해 확인합니다.
+
+1. AWS 콘솔 → DynamoDB → 테이블 → `InquiryTable`(스택 출력 `InquiryTableName`, 예: `BaradunV2-InquiryTable...`) 선택
+2. '항목 탐색' 화면에서 항목 조회(Get item) 또는 쿼리(Query) 실행
+3. 파티션 키 `pk`에 `INQUIRY#<알림의 문의 ID>` 입력해 조회
+   - 본문(`message`), 유형(`inquiryType`), 접수 시각(`receivedAt`), 해변(`beachId`), 활동(`activity`), 첨부 사진 키(`photoKeys`)를 확인합니다.
+4. 알림에 '이메일 제공 여부'가 '있음'으로 표시된 경우(이메일 받기 설정이 켜져 회신 이메일이 함께 접수된 문의):
+   - 파티션 키 `pk`에 `INQUIRY_EMAIL#<알림의 문의 ID>`를 입력해 조회하면 회신용 `email`을 확인할 수 있습니다(이메일은 88일 TTL이 걸려 있으며, 처리 완료 후 delete_email 호출로 즉시 삭제 가능).
 
 ## 데이터 게시(publish-snapshot)와 롤백
 
