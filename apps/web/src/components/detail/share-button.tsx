@@ -96,9 +96,11 @@ export function ShareButton({
         onClick={open}
         aria-haspopup="dialog"
         aria-label={t("button")}
-        className="flex size-touch shrink-0 items-center justify-center rounded-full hover:bg-bg-subtle"
+        // 모바일: 44px 아이콘(Figma 아이콘 버튼), PC(lg): 테두리 칩 '공유'(Figma 183:795)
+        className="flex size-touch shrink-0 items-center justify-center rounded-full hover:bg-bg-subtle lg:h-9 lg:w-auto lg:gap-[5px] lg:border lg:border-border-strong lg:bg-bg-surface lg:px-[13px] lg:text-[13.5px] lg:font-medium lg:text-text-body"
       >
-        <Share2 aria-hidden="true" size={22} />
+        <Share2 aria-hidden="true" size={15} />
+        <span className="hidden lg:inline">{t("button")}</span>
       </button>
       <Sheet open={sheet.open} onClose={sheet.close} title={t("title")}>
         <div className="flex flex-col gap-4 pb-2">
