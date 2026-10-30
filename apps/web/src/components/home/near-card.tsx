@@ -331,7 +331,8 @@ export function NearCard({
   }
   notes.push(t("safety.finalCall"));
   const noteList = (
-    <span className="flex flex-col gap-0.5 border-t border-border-default pt-[11px] text-caption text-text-muted">
+    // 근거 줄 12/18.6(Figma 171:499)
+    <span className="flex flex-col border-t border-border-default pt-[11px] text-note text-text-muted">
       {notes.map((note) => (
         <span key={note}>{note}</span>
       ))}
