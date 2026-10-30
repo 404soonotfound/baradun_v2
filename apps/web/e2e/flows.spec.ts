@@ -420,4 +420,76 @@ test.describe("데이터 문의", () => {
     expect(external).toEqual([]);
     expect(created).toBe(0);
   });
+
+  // 접수 뒤 돌아갈 곳(10/30 사용자 결정 A): 들어온 해변이 공개 목록에 있으면 그 해변, 아니면 설정
+  const RETURNS = [
+    {
+      title: "해변에서 들어오면 '해변으로 돌아가기' → 그 해변",
+      path: `${INQUIRY}?beach=gangmun`,
+      kind: "정보가 실제와 달라요",
+      message: /내용/,
+      send: "보내기",
+      done: "접수됐어요",
+      back: "해변으로 돌아가기",
+      href: "/spots/gangmun/",
+    },
+    {
+      title: "모르는 해변 id면 '설정으로'",
+      path: `${INQUIRY}?beach=no-such-beach`,
+      kind: "정보가 실제와 달라요",
+      message: /내용/,
+      send: "보내기",
+      done: "접수됐어요",
+      back: "설정으로",
+      href: "/settings/",
+    },
+    {
+      title: "빈 값이면 '설정으로'",
+      path: `${INQUIRY}?beach=`,
+      kind: "정보가 실제와 달라요",
+      message: /내용/,
+      send: "보내기",
+      done: "접수됐어요",
+      back: "설정으로",
+      href: "/settings/",
+    },
+    {
+      title: "영어 화면은 영어 해변 주소로",
+      path: "/en/settings/inquiry/?beach=gangmun",
+      kind: "The info doesn't match reality",
+      message: /Message/,
+      send: "Send",
+      done: "Received",
+      back: "Back to the beach",
+      href: "/en/spots/gangmun/",
+    },
+  ] as const;
+  for (const item of RETURNS) {
+    test(`접수 뒤 돌아갈 곳: ${item.title}`, async ({ page }) => {
+      await page.route("**/api/inquiries", (route) =>
+        route.fulfill({
+          status: 201,
+          contentType: "application/json",
+          body: JSON.stringify({
+            inquiryId: "123e4567-e89b-42d3-a456-426614174000",
+            receivedAt: "2026-10-28T03:00:00Z",
+            photos: [],
+          }),
+        }),
+      );
+      await page.goto(item.path);
+      await pickKind(page, item.kind);
+      await page
+        .getByRole("textbox", { name: item.message })
+        .fill("파고가 달라요");
+      await page.getByRole("button", { name: item.send }).click();
+      await expect(
+        page.getByRole("heading", { name: item.done }),
+      ).toBeVisible();
+      const back = page.getByRole("link", { name: item.back, exact: true });
+      await expect(back).toHaveAttribute("href", item.href);
+      await back.click();
+      await expect(page).toHaveURL(new RegExp(`${item.href}$`));
+    });
+  }
 });
