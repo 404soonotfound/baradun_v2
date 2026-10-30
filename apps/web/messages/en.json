@@ -276,7 +276,8 @@
       "chest": "Chest",
       "caption": "The buoy rides the front wave up and down once every {period}s (wave period) · Front wave height and the blue band on the left = wave height {height}m · Back waves and wave spacing are for mood · Reference lines use average adult height",
       "captionNoPeriod": "Front wave height and the blue band on the left = wave height {height}m · No wave period measurement, so it doesn't move · Back waves and wave spacing are for mood · Reference lines use average adult height",
-      "delayed": "Measurement is delayed, so we don't draw the wave"
+      "delayed": "Measurement is delayed, so we don't draw the wave",
+      "guideLabel": "{name} {value}m"
     },
     "chart": {
       "title": "Wave height, last 24 hours",
@@ -289,7 +290,8 @@
       "gaps": "Hatched areas have no measurements",
       "empty": "No measurements, so we don't draw the chart",
       "loading": "Loading the last 24 hours of wave height",
-      "failed": "Couldn't load the last 24 hours of wave height · See the sea condition values above"
+      "failed": "Couldn't load the last 24 hours of wave height · See the sea condition values above",
+      "measured": "Measured"
     },
     "stats": {
       "ripCurrent": "Rip current",
