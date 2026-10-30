@@ -148,6 +148,16 @@ describe("PR 필수 웹 검사 (BRD-102 결정 41·42)", () => {
     );
   });
 
+  // main CI 성공이 배포 조건이라, main push에서는 바뀐 영역과 상관없이 웹 전체를 검사해야 함 (BRD-133)
+  it("main push에서는 web·e2e를 늘 돌린다", () => {
+    for (const job of ["web", "e2e"]) {
+      const cond = jobLines(ci?.text ?? "", job)
+        .map((l) => l.match(/^\s{4}if:\s*(.+)$/)?.[1])
+        .find((v) => v !== undefined);
+      expect(cond, job).toContain("github.event_name == 'push'");
+    }
+  });
+
   it("web·e2e 결과는 ci-ok에 모인다", () => {
     const needs = jobLines(ci?.text ?? "", "ci-ok")
       .join("\n")

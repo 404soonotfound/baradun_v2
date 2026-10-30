@@ -71,9 +71,10 @@ jobs:
               - 'packages/contracts/scripts/**'
 
   # 웹: 린트·타입 검사·정적 빌드
+  # main push는 바뀐 영역과 상관없이 늘 돌림: main CI 성공이 곧 배포 조건이라, 그 커밋 전체를 검사해야 함 (BRD-133)
   web:
     needs: changes
-    if: needs.changes.outputs.web == 'true'
+    if: needs.changes.outputs.web == 'true' || github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -96,7 +97,7 @@ jobs:
   # /data/**는 테스트의 가짜 응답만 씀(운영 데이터·외부 타일 서버에 기대지 않음)
   e2e:
     needs: changes
-    if: needs.changes.outputs.web == 'true'
+    if: needs.changes.outputs.web == 'true' || github.event_name == 'push' # main push는 늘 (web과 같은 이유)
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
