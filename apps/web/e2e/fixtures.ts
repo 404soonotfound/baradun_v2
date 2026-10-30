@@ -472,3 +472,18 @@ export async function expectNoHorizontalScroll(page: Page) {
   );
   expect(overflow).toBeLessThanOrEqual(0);
 }
+
+// 테마 고르기: '테마' 줄을 눌러 시트를 열고(PC는 왼쪽 목록에서 '화면'을 먼저 고름),
+// 시트의 선택지 버튼을 누름. 고르면 시트가 닫히고 줄 값이 바뀜
+export async function chooseTheme(page: Page, name: string) {
+  const panel = page
+    .getByRole("navigation", { name: "설정 묶음" })
+    .getByRole("button", { name: "화면" });
+  if (await panel.isVisible()) await panel.click();
+  await page.getByRole("button", { name: /^테마/ }).click();
+  const sheet = page.getByRole("dialog", { name: "테마" });
+  await sheet.getByRole("button", { name, exact: true }).click();
+  await expect(sheet).toBeHidden();
+  await expect(page.getByRole("button", { name: /^테마/ })).toContainText(name);
+}
+
