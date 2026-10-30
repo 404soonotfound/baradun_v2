@@ -49,18 +49,18 @@ describe("explore-view 저장", () => {
     expect(isExploreView(null)).toBe(false);
   });
 
-  it("저장한 값을 읽고, 저장값이 없거나 모르는 값이면 목록", () => {
+  it("저장한 값을 읽고, 저장값이 없거나 모르는 값이면 지도(처음 보기, BRD-128)", () => {
     vi.stubGlobal("localStorage", memoryStorage());
-    expect(readExploreViewForTest()).toBe("list");
-    setExploreView("map");
     expect(readExploreViewForTest()).toBe("map");
+    setExploreView("list");
+    expect(readExploreViewForTest()).toBe("list");
 
     resetExploreViewForTest();
     vi.stubGlobal(
       "localStorage",
       memoryStorage({ "baradun:explore-view": "grid" }),
     );
-    expect(readExploreViewForTest()).toBe("list");
+    expect(readExploreViewForTest()).toBe("map");
   });
 
   it("읽기가 막힌 환경이면 메모리 값", () => {
@@ -72,19 +72,19 @@ describe("explore-view 저장", () => {
         throw new Error("blocked");
       },
     });
-    expect(readExploreViewForTest()).toBe("list");
-    setExploreView("map");
     expect(readExploreViewForTest()).toBe("map");
+    setExploreView("list");
+    expect(readExploreViewForTest()).toBe("list");
   });
 
   it("쓰기가 실패하면 저장소의 옛 값이 방금 고른 값을 덮지 않는다", () => {
     vi.stubGlobal("localStorage", {
-      getItem: () => "list",
+      getItem: () => "map",
       setItem: () => {
         throw new Error("quota");
       },
     });
-    setExploreView("map");
-    expect(readExploreViewForTest()).toBe("map");
+    setExploreView("list");
+    expect(readExploreViewForTest()).toBe("list");
   });
 });
