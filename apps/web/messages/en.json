@@ -256,7 +256,9 @@
     "alt": {
       "title": "Nearby beaches with no warnings",
       "none": "No nearby beaches without warnings",
-      "explore": "See in Explore"
+      "explore": "See in Explore",
+      "more": "See more beaches in Explore",
+      "distance": "{km}km from here"
     },
     "sea": {
       "title": "Sea conditions",

@@ -3,6 +3,7 @@
 import { useId } from "react";
 import { useTranslations } from "next-intl";
 
+import { cn } from "@/lib/cn";
 import { useStationHistory } from "@/lib/snapshot/history";
 import { type ChartPoint, waveChart } from "@/lib/wave-chart";
 
@@ -18,17 +19,19 @@ export function MiniWaveChart({
   stationId,
   latest,
   nowMs,
+  className,
 }: {
   stationId: string | null; // 파고 측정소 id. 없으면(가까운 관측 없음) 그리지 않음
   latest: ChartPoint | null; // 신선한 지금 파고(지연·결측이면 null)
   nowMs: number;
+  className?: string; // 그리는 크기(기본 높이 40). 상세 대안 해변 글리프는 38×12
 }) {
   const t = useTranslations("detail.chart");
   const history = useStationHistory(stationId);
   const hatchId = useId();
   // 불러오는 중에만 자리를 잡고, 실패·기록 없음·그릴 값 없음이면 자리째 뺌(카드에 빈칸이 남지 않게)
   if (history.kind === "loading")
-    return <span aria-hidden="true" className="block h-10" />;
+    return <span aria-hidden="true" className={cn("block h-10", className)} />;
   if (history.kind !== "ready" || history.history === null) return null;
   const chart = waveChart(history.history.points, nowMs, latest);
   if (chart.kind === "empty") return null;
@@ -47,7 +50,7 @@ export function MiniWaveChart({
       aria-label={label}
       viewBox={`0 0 ${W} ${H}`}
       preserveAspectRatio="none"
-      className="block h-10 w-full"
+      className={cn("block h-10 w-full", className)}
     >
       <defs>
         <pattern
