@@ -429,10 +429,10 @@
   },
   "systemScreen": {
     "maintenanceTitle": "We're under maintenance",
-    "maintenanceBody": "Sea information isn't shown during maintenance",
+    "maintenanceBody": "Beach information isn't shown during maintenance.",
     "maintenanceUntil": "Maintenance is planned until {time}",
     "untilUnknown": "We don't know yet when it will end",
-    "fieldNotice": "If you go to the sea, follow on-site controls and lifeguard guidance",
+    "fieldNotice": "If you're at the sea, follow on-site controls and lifeguard guidance. You can check KMA warnings directly on the KMA website.",
     "recheck": "Check again",
     "rechecking": "Checking",
     "stillMaintenance": "Still under maintenance",

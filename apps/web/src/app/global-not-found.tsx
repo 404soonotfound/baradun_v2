@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
-import { SearchX } from "lucide-react";
+import { Search } from "lucide-react";
 import { RootDocument } from "@/components/root-document";
 import { Button } from "@/components/ui/button";
 import { HEAD_ICONS } from "@/lib/app-icons";
@@ -30,6 +30,7 @@ export const viewport = sharedViewport;
 type Messages = Awaited<ReturnType<typeof bothLocales>>[number];
 
 // 한 언어 묶음: 제목 → 이유 → 다음 행동 → 해변 검색하기(주요) · 홈으로
+// Figma L14 188:371: 제목 20·굵기 700 → 본문 14.5/21 → 버튼 52 둘(사이 8), 묶음 안 간격 14 (BRD-129)
 function Block({
   locale,
   t,
@@ -40,17 +41,20 @@ function Block({
   heading: "h1" | "h2";
 }) {
   return (
-    <section lang={locale} className="flex flex-col items-center gap-3">
-      <Heading className="text-title-xl text-text-default">
+    <section lang={locale} className="flex flex-col items-center gap-3.5">
+      <Heading className="text-title-l font-bold text-text-default">
         {t("title")}
       </Heading>
-      <div className="flex flex-col gap-1">
-        <p className="text-body-m text-text-body">{t("body")}</p>
-        <p className="text-body-m text-text-body">{t("next")}</p>
+      <div className="text-[14.5px]/[21px] text-text-body">
+        <p>{t("body")}</p>
+        <p>{t("next")}</p>
       </div>
-      <div className="flex w-full flex-col gap-2 pt-2">
-        <Button asChild>
-          <Link href={localizedPath(locale, "/search/")}>{t("search")}</Link>
+      <div className="flex w-full flex-col gap-2">
+        <Button asChild className="gap-1.5">
+          <Link href={localizedPath(locale, "/search/")}>
+            <Search aria-hidden="true" size={16} />
+            {t("search")}
+          </Link>
         </Button>
         <Button asChild variant="secondary">
           <Link href={localizedPath(locale, "/")}>{t("home")}</Link>
@@ -65,12 +69,14 @@ export default async function GlobalNotFound() {
 
   return (
     <RootDocument locale="ko">
-      <main className="mx-auto flex min-h-dvh w-full max-w-[480px] flex-col justify-center gap-8 px-gutter py-10 text-center">
+      {/* 아이콘 상자 76·모서리 24(브랜드 약한 면 + 브랜드 돋보기 34), 좌우 여백 28 (Figma 188:372).
+          아이콘과 첫 묶음 사이는 14(gap-8에서 18을 뺌), 두 언어 묶음 사이는 구분선 */}
+      <main className="mx-auto flex min-h-dvh w-full max-w-[480px] flex-col justify-center gap-8 px-7 py-10 text-center">
         <span
           aria-hidden="true"
-          className="flex size-[60px] items-center justify-center self-center rounded-full bg-bg-subtle text-text-muted"
+          className="-mb-[18px] flex size-[76px] items-center justify-center self-center rounded-[24px] bg-brand-weak text-brand-default"
         >
-          <SearchX size={26} />
+          <Search size={34} strokeWidth={2.55} absoluteStrokeWidth />
         </span>
         <Block locale="ko" t={ko} heading="h1" />
         <hr className="border-border-default" />

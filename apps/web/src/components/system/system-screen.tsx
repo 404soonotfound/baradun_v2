@@ -1,10 +1,12 @@
 "use client"; // 바다 정보 상태 구독·대화상자(showModal)·포커스 이동을 쓰므로 브라우저 부품
 
-import { RefreshCw, Wrench } from "lucide-react";
+import { Download, RotateCw, Wrench } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
+import { FinalCallNote } from "@/components/final-call-note";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/cn";
 import {
   maintenanceUntil,
   systemScreen,
@@ -65,6 +67,9 @@ function SystemDialog({
   // 덮는 동안 뒤 페이지 스크롤 막기(Sheet·Onboarding과 잠금 수를 나눠 셈)
   useScrollLock();
 
+  // 점검(Figma L12 187:445): 화면 바탕 위 가운데 정렬, 좌우 여백 28, 간격 14
+  // 강제 업데이트(Figma L15 188:399): 불투명 dim 위 카드(좌우 24, 모서리 22, 안쪽 위 24·옆 20·아래 18, 간격 12)
+  const update = kind === "update_required";
   return (
     <dialog
       ref={dialogRef}
@@ -74,28 +79,56 @@ function SystemDialog({
         const dialog = event.currentTarget;
         if (dialog.isConnected && !dialog.open) dialog.showModal();
       }}
-      className="m-0 h-dvh max-h-none w-full max-w-none bg-bg-page p-0 text-text-default backdrop:bg-bg-page"
+      className={cn(
+        "m-0 h-dvh max-h-none w-full max-w-none p-0 text-text-default",
+        update ? "bg-dim backdrop:bg-dim" : "bg-bg-page backdrop:bg-bg-page",
+      )}
     >
-      <div className="mx-auto flex min-h-full w-full max-w-[480px] flex-col justify-center gap-5 px-gutter pt-[calc(40px+env(safe-area-inset-top))] pb-[max(24px,env(safe-area-inset-bottom))]">
-        {children}
+      <div
+        className={cn(
+          "mx-auto flex min-h-full w-full flex-col justify-center pt-[calc(40px+env(safe-area-inset-top))] pb-[max(24px,env(safe-area-inset-bottom))]",
+          update ? "max-w-[390px] px-6" : "max-w-[480px] gap-3.5 px-7",
+        )}
+      >
+        {update ? (
+          <div className="flex flex-col items-center gap-3 rounded-sheet bg-bg-surface px-5 pt-6 pb-[18px]">
+            {children}
+          </div>
+        ) : (
+          children
+        )}
       </div>
     </dialog>
   );
 }
 
-function Heading({ icon, title }: { icon: ReactNode; title: string }) {
+// 아이콘 상자 + 제목(20·굵기 700). 점검: 76·모서리 24 회색 면, 업데이트: 56·모서리 18 브랜드 약한 면
+function Heading({
+  icon,
+  title,
+  size,
+}: {
+  icon: ReactNode;
+  title: string;
+  size: "l" | "m";
+}) {
   return (
     <>
       <span
         aria-hidden="true"
-        className="flex size-[60px] items-center justify-center self-center rounded-full bg-bg-subtle text-text-muted"
+        className={cn(
+          "flex items-center justify-center self-center",
+          size === "l"
+            ? "size-[76px] rounded-[24px] bg-banner-gray-icon-bg text-text-body"
+            : "size-14 rounded-card bg-brand-weak text-brand-default",
+        )}
       >
         {icon}
       </span>
       <h1
         id={TITLE_ID}
         tabIndex={-1}
-        className="text-center text-title-xl text-text-default outline-none"
+        className="text-center text-title-l font-bold text-text-default outline-none"
       >
         {title}
       </h1>
@@ -103,15 +136,7 @@ function Heading({ icon, title }: { icon: ReactNode; title: string }) {
   );
 }
 
-// 현장 우선 문구(주요 행동 가까이, 저장소 AGENTS.md 제품 규칙)
-function FinalCall() {
-  const t = useTranslations("safety");
-  return (
-    <p className="text-center text-caption text-text-muted">{t("finalCall")}</p>
-  );
-}
-
-// [2] 점검(L12): 예정 시간 · 현장 안내를 따르라는 문구 · 다시 확인
+// [2] 점검(L12): 예정 시간 · 영향 · 현장 안내 카드 · 다시 확인(보조 버튼)
 function MaintenanceBody({ until }: { until: string | null }) {
   const t = useTranslations("systemScreen");
   const [checking, setChecking] = useState(false);
@@ -136,26 +161,35 @@ function MaintenanceBody({ until }: { until: string | null }) {
 
   return (
     <>
-      <Heading icon={<Wrench size={26} />} title={t("maintenanceTitle")} />
-      <div className="flex flex-col gap-1.5 text-center">
-        <p className="text-body-m text-text-body">{t("maintenanceBody")}</p>
-        <p className="text-body-m text-text-body">
+      <Heading
+        size="l"
+        icon={<Wrench size={34} strokeWidth={2.55} absoluteStrokeWidth />}
+        title={t("maintenanceTitle")}
+      />
+      {/* 끝 예정 시각 → 영향 (14.5/21). 시작 시각은 받지 않아 지어내지 않음 */}
+      <div className="text-center text-[14.5px]/[21px] text-text-body">
+        <p>
           {until ? t("maintenanceUntil", { time: until }) : t("untilUnknown")}
         </p>
+        <p>{t("maintenanceBody")}</p>
       </div>
-      <p className="rounded-card bg-bg-surface px-4 py-3 text-center text-body-s text-text-default shadow-card">
+      {/* 현장 안내 카드: 흰 면·기본 테두리·모서리 14, 13/18.9 (Figma 187:456) */}
+      <p className="w-full rounded-button border border-border-default bg-bg-surface px-[15px] py-[13px] text-body-s text-text-body">
         {t("fieldNotice")}
       </p>
-      {/* disabled 대신 aria-disabled: 확인하는 동안에도 포커스가 버튼에 남음 */}
+      {/* 다시 확인은 보조 버튼 + 새로고침 아이콘 16 (Figma 187:459).
+          disabled 대신 aria-disabled: 확인하는 동안에도 포커스가 버튼에 남음 */}
       <Button
         type="button"
+        variant="secondary"
         onClick={() => void recheck()}
         aria-disabled={checking}
-        className="aria-disabled:opacity-60"
+        className="w-full gap-1.5 aria-disabled:opacity-60"
       >
+        <RotateCw aria-hidden="true" size={16} />
         {checking ? t("rechecking") : t("recheck")}
       </Button>
-      <FinalCall />
+      <FinalCallNote className="justify-center text-center" />
       <p role="status" className="sr-only">
         {announcement}
       </p>
@@ -169,15 +203,24 @@ function UpdateBody() {
   const t = useTranslations("systemScreen");
   return (
     <>
-      <Heading icon={<RefreshCw size={26} />} title={t("updateTitle")} />
-      <div className="flex flex-col gap-1.5 text-center">
-        <p className="text-body-m text-text-body">{t("updateBody")}</p>
-        <p className="text-body-m text-text-body">{t("updateNext")}</p>
+      <Heading
+        size="m"
+        icon={<Download size={26} strokeWidth={2.2} absoluteStrokeWidth />}
+        title={t("updateTitle")}
+      />
+      {/* 무슨 일·영향 → 다음 행동 (14/20.3, Figma 188:408) */}
+      <div className="text-center text-body text-text-body">
+        <p>{t("updateBody")}</p>
+        <p>{t("updateNext")}</p>
       </div>
-      <Button type="button" onClick={() => window.location.reload()}>
+      <Button
+        type="button"
+        className="w-full"
+        onClick={() => window.location.reload()}
+      >
         {t("reload")}
       </Button>
-      <FinalCall />
+      <FinalCallNote className="justify-center text-center" />
     </>
   );
 }
