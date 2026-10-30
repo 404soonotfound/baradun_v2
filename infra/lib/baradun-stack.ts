@@ -17,6 +17,7 @@ import { OpsAlarms } from "./ops/alarms";
 import { Publisher } from "./publish/publisher";
 import { PublisherRole } from "./publish/publisher-role";
 import { ROLE_BOUNDARY_POLICY_NAME } from "./settings";
+import { createSecurityHeadersPolicy } from "./site/security-headers";
 import { SiteDelivery } from "./site/site-delivery";
 import { StorageTables } from "./storage/tables";
 
@@ -55,6 +56,25 @@ export class BaradunStack extends Stack {
       ),
     });
 
+    // State·Ops·Inquiry 테이블 (BRD-55)
+    const tables = new StorageTables(this, "Storage");
+
+    // 데이터 문의 접수 백엔드와 사진 버킷 (BRD-63)
+    const inquiry = new InquiryBackend(this, "Inquiry", {
+      table: tables.inquiry,
+      notificationEmail: alertEmail.valueAsString,
+    });
+
+    // CloudFront 보안 응답 헤더 정책 (CSP·HSTS·nosniff·frame-ancestors 등, BRD-118)
+    // 사이트 전달과 문의 API 동작 둘 다 같은 보안 헤더 정책을 적용함
+    const securityHeaders = createSecurityHeadersPolicy(
+      this,
+      "SecurityHeaders",
+      {
+        photoBucketName: inquiry.photoBucket.bucketName,
+      },
+    );
+
     const site = new SiteDelivery(this, "Site", {
       // 값이 있으면 그 web ACL을 붙이고, 비어 있으면 속성 자체를 뺌.
       webAclId: Fn.conditionIf(
@@ -62,17 +82,11 @@ export class BaradunStack extends Stack {
         siteWebAclArn.valueAsString,
         Aws.NO_VALUE,
       ).toString(),
+      responseHeadersPolicy: securityHeaders,
     });
 
-    // State·Ops·Inquiry 테이블 (BRD-55)
-    const tables = new StorageTables(this, "Storage");
-
-    // 데이터 문의 접수와 기존 배포의 /api/inquiries* 동작 연결 (BRD-63)
-    const inquiry = new InquiryBackend(this, "Inquiry", {
-      table: tables.inquiry,
-      distribution: site.distribution,
-      notificationEmail: alertEmail.valueAsString,
-    });
+    // 기존 배포의 /api/inquiries* 동작 연결 (보안 헤더 정책 포함)
+    inquiry.attachToDistribution(site.distribution, securityHeaders);
 
     // data/ 쓰기 전용 역할 (BRD-52). 논리 ID(PublisherRole…)를 유지하려고 여기서 만듦
     const publisherRole = new PublisherRole(this, "Publisher", {

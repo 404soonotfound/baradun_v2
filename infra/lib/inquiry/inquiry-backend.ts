@@ -16,8 +16,9 @@ import { inquiryRequestGuardCode } from "./request-guard";
 
 export interface InquiryBackendProps {
   readonly table: dynamodb.ITable;
-  readonly distribution: cloudfront.Distribution;
+  readonly distribution?: cloudfront.Distribution;
   readonly notificationEmail: string;
+  readonly responseHeadersPolicy?: cloudfront.IResponseHeadersPolicy;
 }
 
 const REPO_ROOT = path.join(__dirname, "..", "..", "..");
@@ -27,6 +28,8 @@ export class InquiryBackend extends Construct {
   readonly function: nodejs.NodejsFunction;
   readonly photoBucket: s3.Bucket;
   readonly topic: sns.Topic;
+  readonly functionUrl: lambda.FunctionUrl;
+  readonly requestGuard: cloudfront.Function;
 
   constructor(scope: Construct, id: string, props: InquiryBackendProps) {
     super(scope, id);
@@ -91,18 +94,35 @@ export class InquiryBackend extends Construct {
       maxEventAge: Duration.seconds(RETRY_LIMITS.asyncMaxEventAgeSeconds),
     });
 
-    const functionUrl = this.function.addFunctionUrl({
+    this.functionUrl = this.function.addFunctionUrl({
       authType: lambda.FunctionUrlAuthType.AWS_IAM,
     });
-    const origin = origins.FunctionUrlOrigin.withOriginAccessControl(functionUrl);
-    const requestGuard = new cloudfront.Function(this, "RequestGuard", {
+    this.requestGuard = new cloudfront.Function(this, "RequestGuard", {
       runtime: cloudfront.FunctionRuntime.JS_2_0,
       code: cloudfront.FunctionCode.fromInline(inquiryRequestGuardCode),
       comment: "Reject malformed inquiry requests before origin",
     });
-    props.distribution.addBehavior("api/inquiries*", origin, {
+
+    if (props.distribution) {
+      this.attachToDistribution(
+        props.distribution,
+        props.responseHeadersPolicy,
+      );
+    }
+  }
+
+  // CloudFront 배포에 /api/inquiries* 동작 연결 (BRD-63 · BRD-118 보안 헤더 적용)
+  attachToDistribution(
+    distribution: cloudfront.Distribution,
+    responseHeadersPolicy?: cloudfront.IResponseHeadersPolicy,
+  ): void {
+    const origin = origins.FunctionUrlOrigin.withOriginAccessControl(
+      this.functionUrl,
+    );
+    distribution.addBehavior("api/inquiries*", origin, {
       allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
       cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
+      responseHeadersPolicy,
       // x-amz-* 헤더는 CloudFront가 정책 allowlist에 못 넣게 함(실배포 거부, 2026-10-26)
       // → Host만 빼고 모든 뷰어 헤더(content-type·본문 해시 헤더 포함)를 전달하는 관리형 정책 사용
       //   (Host는 OAC 서명이 함수 URL 주소로 해야 해서 전달하면 안 됨)
@@ -111,7 +131,7 @@ export class InquiryBackend extends Construct {
       viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
       functionAssociations: [
         {
-          function: requestGuard,
+          function: this.requestGuard,
           eventType: cloudfront.FunctionEventType.VIEWER_REQUEST,
         },
       ],
