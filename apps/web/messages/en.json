@@ -644,9 +644,11 @@
     }
   },
   "guide": {
-    "intro": "What Baradun Bada checks and shows, and what to know before you head to the sea.",
+    "does": {
+      "title": "What this service does",
+      "body": "We only judge facts that can be checked, like official warnings and measurement times. Please judge for yourself whether the waves and wind suit you. We don't make recommendations."
+    },
     "check": {
-      "title": "What we check",
       "warningTitle": "5 sea-related warning types",
       "warningBody": "We check whether a KMA wind wave, strong wind, typhoon, storm surge or tsunami warning (advisory or warning) is in effect for each beach's warning zone.",
       "nearby": "Other warnings such as heavy rain, heatwave or cold wave don't change a beach's status; we show them only under Nearby warnings.",
@@ -659,13 +661,13 @@
     "badges": {
       "title": "What the badges mean",
       "clear": "No warnings",
-      "clearBody": "No sea-related warning was found. It doesn't mean it's safe.",
+      "clearBody": "Shown only when the area, agency and check time are all confirmed. It doesn't mean it's safe.",
       "warning": "Wind wave advisory",
-      "warningBody": "We show the warning name as is. Avoid going into the sea and follow on-site guidance.",
+      "warningBody": "A warning is in effect for the area. We don't check access restrictions, so follow on-site guidance.",
       "unknown": "Couldn't check warnings",
-      "unknownBody": "We couldn't check warnings, so we can't tell right now. It doesn't mean there are no warnings.",
+      "unknownBody": "We couldn't get warning information or confirm which warning area the beach belongs to. This is different from 'No warnings'.",
       "stale": "Observation delayed",
-      "staleBody": "Wave height measurements are late, so we can't tell right now. We'll check again when new values come in."
+      "staleBody": "Wave height hasn't been measured for over 90 minutes, so we can't tell the current state."
     },
     "period": {
       "title": "Reading wave period",
@@ -695,6 +697,11 @@
       },
       "official": "See official safety rules on the National Disaster Safety Portal",
       "officialLink": "View water safety rules (Korean)"
+    },
+    "sources": {
+      "title": "Sources and updates",
+      "body": "Warnings · KMA / Wave height, period, water temperature, wind · KMA ocean and wave buoys / Rip current index · KHOA (participating beaches only). Update intervals differ by source.",
+      "link": "See data sources and terms"
     }
   },
   "terms": {
