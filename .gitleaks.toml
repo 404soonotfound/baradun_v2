@@ -5,10 +5,12 @@ title = "baradun_v2 gitleaks config"
 useDefault = true
 
 [allowlist]
-description = "전역 허용 목록: 문의 테스트 고정값 및 CDK 에셋 해시"
+description = "전역 허용 목록: 문의 테스트 고정값, CDK 에셋 해시 및 예시 파일 자리표시"
 paths = [
   # CDK 에셋 출력 디렉터리 (테스트 폴더 전체나 확장자 전체가 아닌 cdk.out 경로만 좁게 허용)
   '''(^|/)cdk\.out/''',
+  # .env.example 파일: 실제 키가 없는 빈 자리표시(KMA_APIHUB_AUTH_KEY=, DATA_GO_KR_SERVICE_KEY=)만 있는 파일
+  '''^\.env\.example$''',
 ]
 regexes = [
   # 문의 테스트의 고정 UUID 상수 (inquiry.test.ts, handler.test.ts, store.test.ts)
