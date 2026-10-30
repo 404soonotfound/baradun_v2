@@ -131,4 +131,23 @@ describe("PR 필수 웹 검사 (BRD-102 결정 41·42)", () => {
       "${{ vars.SITE_URL }}",
     );
   });
+
+  it("워크플로는 secrets.*나 API 키 환경 변수를 쓰지 않고, 웹 빌드에는 공개 변수만 넘긴다 (BRD-67)", () => {
+    for (const w of workflows) {
+      const text = codeLines(w.text).join("\n");
+      expect(text, w.name).not.toMatch(/\bsecrets\./);
+      expect(text, w.name).not.toMatch(
+        /\b(KMA_APIHUB_AUTH_KEY|DATA_GO_KR_SERVICE_KEY)\b/,
+      );
+      const nextPublicKeys = [
+        ...text.matchAll(/\b(NEXT_PUBLIC_[A-Z0-9_]+)\s*:/g),
+      ].map((m) => m[1]);
+      for (const key of nextPublicKeys) {
+        expect(
+          ["NEXT_PUBLIC_SITE_URL", "NEXT_PUBLIC_INQUIRY_PHOTO_BUCKET"],
+          `${w.name}: ${key}`,
+        ).toContain(key);
+      }
+    }
+  });
 });
