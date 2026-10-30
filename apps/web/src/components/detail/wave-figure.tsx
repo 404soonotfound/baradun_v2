@@ -191,7 +191,7 @@ export function WaveFigure({
               fill="none"
               strokeWidth={1.4}
               strokeOpacity={0.6}
-              className="stroke-white"
+              className="stroke-wave-foam"
             />
             {/* 바닥 물방울 3개(장식) */}
             {[0.24, 0.5, 0.76].map((at) => (
@@ -200,7 +200,7 @@ export function WaveFigure({
                 cx={AXIS_X + (WATER_R - AXIS_X) * at}
                 cy={H - 5}
                 r={1.5}
-                className="fill-white"
+                className="fill-wave-foam"
               />
             ))}
             <g ref={buoy}>
