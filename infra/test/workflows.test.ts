@@ -48,12 +48,48 @@ describe("배포 워크플로 가드레일 (11장)", () => {
     }
   });
 
-  it("배포는 main push(와 수동 실행)에서만, production environment에서 한다", () => {
+  it("배포는 main push CI가 끝난 뒤(와 수동 실행)에서만, production environment에서 한다 (BRD-133)", () => {
     expect(deploy).toBeDefined();
     const text = codeLines(deploy?.text ?? "").join("\n");
-    expect(text).toMatch(/push:\s*\n\s*branches:\s*\[main\]/);
+    expect(text).toMatch(
+      /workflow_run:\s*\n\s*workflows:\s*\[ci\]\s*\n\s*types:\s*\[completed\]\s*\n\s*branches:\s*\[main\]/,
+    );
+    // push로 바로 배포하면 CI와 동시에 돌아 CI 실패 커밋이 나갈 수 있음
+    expect(text).not.toMatch(/^\s{2}push:/m);
     expect(text).not.toMatch(/pull_request/);
     expect(text).toMatch(/environment:\s*production/);
+  });
+
+  it("자동 배포는 이 저장소 main push CI가 성공했을 때만, CI가 검사한 커밋을 올린다 (BRD-133)", () => {
+    const lines = codeLines(deploy?.text ?? "");
+    const text = lines.join("\n");
+    expect(text).toContain("github.event.workflow_run.event == 'push'");
+    expect(text).toContain("github.event.workflow_run.conclusion == 'success'");
+    expect(text).toContain(
+      "github.event.workflow_run.head_repository.full_name == github.repository",
+    );
+    expect(text).toMatch(
+      /SHA:\s*\$\{\{\s*github\.event\.workflow_run\.head_sha \|\| github\.sha\s*\}\}/,
+    );
+    expect(text).toMatch(/ref:\s*\$\{\{\s*env\.SHA\s*\}\}/);
+    // 배포 그룹은 작업 수준: 조건에서 건너뛰는 실행이 대기 중인 배포를 취소하지 않게 함
+    expect(text).not.toMatch(/^concurrency:/m);
+    expect(jobLines(deploy?.text ?? "", "site").join("\n")).toMatch(
+      /^\s{4}concurrency:\s*\n\s{6}group:\s*deploy-production/m,
+    );
+  });
+
+  it("수동 실행은 체크아웃 전에 그 커밋의 ci-ok 성공을 확인하고, 아니면 멈춘다 (BRD-133)", () => {
+    const lines = codeLines(deploy?.text ?? "");
+    const guard = lines.findIndex((l) => l.includes("check_name=ci-ok"));
+    const checkout = lines.findIndex((l) =>
+      /uses:\s*actions\/checkout@/.test(l),
+    );
+    expect(guard).toBeGreaterThan(-1);
+    expect(guard).toBeLessThan(checkout);
+    expect(lines.slice(guard, checkout).join("\n")).toMatch(
+      /"\$conclusion" != "success"[\s\S]*exit 1/,
+    );
   });
 
   it("사이트 동기화(s3 sync)는 모두 data/를 제외한다", () => {
@@ -115,6 +151,16 @@ describe("PR 필수 웹 검사 (BRD-102 결정 41·42)", () => {
     expect(webBuildSiteUrl(jobLines(ci?.text ?? "", "e2e"))).toMatch(
       /^https?:\/\/\S+$/,
     );
+  });
+
+  // main CI 성공이 배포 조건이라, main push에서는 바뀐 영역과 상관없이 웹 전체를 검사해야 함 (BRD-133)
+  it("main push에서는 web·e2e를 늘 돌린다", () => {
+    for (const job of ["web", "e2e"]) {
+      const cond = jobLines(ci?.text ?? "", job)
+        .map((l) => l.match(/^\s{4}if:\s*(.+)$/)?.[1])
+        .find((v) => v !== undefined);
+      expect(cond, job).toContain("github.event_name == 'push'");
+    }
   });
 
   it("web·e2e 결과는 ci-ok에 모인다", () => {
