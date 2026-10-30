@@ -405,6 +405,8 @@ type Fixtures = {
   deviceLanguage: "ko" | "en";
   // 기기에 저장된 기본 지역(저장 글자 그대로). null = 저장값 없음
   deviceRegion: string | null;
+  // 탐색 [목록 | 지도] 저장값. null = 저장값 없음(모바일 처음 보기 = 지도, BRD-128). 목록을 보는 시험만 "list"
+  exploreView: "list" | "map" | null;
   data: DataControl;
 };
 
@@ -413,8 +415,17 @@ export const test = base.extend<Fixtures>({
   seeded: [true, { option: true }],
   deviceLanguage: ["ko", { option: true }],
   deviceRegion: [GANGNEUNG_REGION, { option: true }],
+  exploreView: [null, { option: true }],
   data: async (
-    { context, scenario, seeded, deviceLanguage, deviceRegion, baseURL },
+    {
+      context,
+      scenario,
+      seeded,
+      deviceLanguage,
+      deviceRegion,
+      exploreView,
+      baseURL,
+    },
     provide,
   ) => {
     await blockExternal(context, baseURL ?? "http://127.0.0.1:3109");
@@ -422,6 +433,8 @@ export const test = base.extend<Fixtures>({
       await seedDevice(context, {
         language: deviceLanguage,
         region: deviceRegion,
+        extra:
+          exploreView === null ? {} : { "baradun:explore-view": exploreView },
       });
     await provide(await mockData(context, scenario));
   },
