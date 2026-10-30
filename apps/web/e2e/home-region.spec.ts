@@ -43,7 +43,6 @@ const TEXT = {
     clearRegion: "기본 지역 지우기",
     gangneung: "강원 강릉시",
     sortNear: "가까운 순",
-    showAll: "전국 보기",
   },
   en: {
     home: "/en/",
@@ -74,7 +73,6 @@ const TEXT = {
     clearRegion: "Clear default region",
     gangneung: "Gangwon Gangneung",
     sortNear: "Nearest",
-    showAll: "Show all Korea",
   },
 } as const;
 
@@ -209,9 +207,15 @@ for (const locale of ["ko", "en"] as const) {
         .getByRole("link", { name: text.all })
         .click();
       await expect(page).toHaveURL(new RegExp(`${text.explore}$`));
+      // 탐색 지역 버튼(BRD-128)도 전국이고, 시트의 '전국'이 고른 것으로 보임
+      const dialog = await openSheet(page, text, text.nationwide);
       await expect(
-        page.getByRole("button", { name: text.nationwide, exact: true }),
+        dialog.getByRole("button", { name: text.nationwide, exact: true }),
       ).toHaveAttribute("aria-pressed", "true");
+      // 탐색 시트에는 '내 주변'이 없음(가까운 해변은 정렬 '가까운 순')
+      await expect(
+        dialog.getByRole("button", { name: text.nearby }),
+      ).toHaveCount(0);
     });
   });
 
@@ -339,10 +343,29 @@ for (const locale of ["ko", "en"] as const) {
   });
 
   // 탐색 '전국' = 전국을 고름(10/29 결정 B). 홈도 위치와 관계없이 전국, '내 주변'으로 가까운 바다
+  // 탐색 지역은 버튼 하나 → 홈과 같은 지역 시트(BRD-128). 저장된 강릉시면 시·군 단계로 열려 시·도로 돌아가 '전국'
+  async function pickNationwideInExplore(page: Page) {
+    const dialog = await openSheet(page, text, text.gangneung);
+    await dialog.getByRole("button", { name: text.back }).click();
+    const nationwide = dialog.getByRole("button", {
+      name: text.nationwide,
+      exact: true,
+    });
+    await expect(nationwide).toHaveAttribute("aria-pressed", "false");
+    await nationwide.click();
+    await expect(dialog).toBeHidden();
+    await expect(
+      page.getByRole("button", { name: text.opener(text.nationwide) }),
+    ).toBeVisible();
+    expect(await savedRegion(page)).toBe('"nationwide"');
+  }
+
   test.describe(`${locale} · 탐색 전국 · 위치 허용`, () => {
     const coords = coordsOf(CLEAR_ID);
     test.use({
       deviceLanguage: locale,
+      // 정렬은 목록 보기에 있음(모바일 처음 보기는 지도)
+      exploreView: "list",
       permissions: ["geolocation"],
       ...(coords && {
         geolocation: { latitude: coords.lat, longitude: coords.lng },
@@ -353,15 +376,8 @@ for (const locale of ["ko", "en"] as const) {
       page,
     }) => {
       await page.goto(text.explore);
-      const nationwide = page.getByRole("button", {
-        name: text.nationwide,
-        exact: true,
-      });
-      await expect(nationwide).toHaveAttribute("aria-pressed", "false");
-      await nationwide.click();
-      await expect(nationwide).toHaveAttribute("aria-pressed", "true");
-      expect(await savedRegion(page)).toBe('"nationwide"');
-      // 위치가 있으면 둘째 정렬은 가까운 순이고 행마다 거리가 나옴
+      await pickNationwideInExplore(page);
+      // 위치가 있으면 가까운 순이고 행마다 거리가 나옴
       await page.getByRole("button", { name: text.sortNear }).click();
       await expect(page.locator("main li").first()).toContainText("km");
 
@@ -387,27 +403,13 @@ for (const locale of ["ko", "en"] as const) {
     }) => {
       await denyLocation(page);
       await page.goto(text.explore);
-      await page
-        .getByRole("button", { name: text.nationwide, exact: true })
-        .click();
-      expect(await savedRegion(page)).toBe('"nationwide"');
+      await pickNationwideInExplore(page);
 
       await page.goto(text.home);
       await expect(seaHeading(page)).toHaveText(text.nationwideSea);
       await expect(page.getByText(text.offChosen)).toBeVisible();
       await page.reload();
       await expect(seaHeading(page)).toHaveText(text.nationwideSea);
-    });
-
-    test("결과가 없을 때 '전국 보기'도 전국을 고름", async ({ page }) => {
-      await page.goto(text.explore);
-      // 스쿠버가 확인된 해변이 없는 지역(시험 데이터)으로 빈 화면을 만듦
-      await page.evaluate(() =>
-        localStorage.setItem("baradun:activity", "scuba"),
-      );
-      await page.reload();
-      await page.getByRole("button", { name: text.showAll }).click();
-      expect(await savedRegion(page)).toBe('"nationwide"');
     });
   });
 }

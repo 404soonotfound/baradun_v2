@@ -75,6 +75,11 @@ test.describe("정상", () => {
     }) => {
       await page.goto(url);
       await expect(clearBadges(page).first()).toBeVisible();
+      // 받은 상태로 그린 뒤에 봄: 모바일 탐색 처음 보기(지도, BRD-128)의 범례는 상태를 받기 전에도 '특보 없음' 칸이 있고
+      // 범위·확인 시각 줄은 받은 뒤에 붙음
+      await expect(
+        page.getByText(CONFIRMED).filter({ visible: true }).first(),
+      ).toBeVisible();
       const result = await clearPlacesWithoutBasis(page);
       expect(result.count).toBeGreaterThan(0);
       expect(result.missing).toEqual([]);
@@ -115,7 +120,8 @@ test.describe("로딩", () => {
 });
 
 test.describe("데이터 없음", () => {
-  test.use({ scenario: "noData" });
+  // 탐색은 목록의 배지를 봄(모바일 처음 보기는 지도, BRD-128)
+  test.use({ scenario: "noData", exploreView: "list" });
   test("처음 열 때 못 받으면 확인 못 함·다시 시도, 다시 받으면 정상으로", async ({
     page,
     data,
@@ -145,7 +151,8 @@ test.describe("데이터 없음", () => {
 });
 
 test.describe("확인된 판단 없음", () => {
-  test.use({ scenario: "noConfirmed" });
+  // 탐색은 목록의 배지를 봄(모바일 처음 보기는 지도, BRD-128)
+  test.use({ scenario: "noConfirmed", exploreView: "list" });
   test("모든 해변이 특보 확인 못 함이면 원인을 단정하지 않고 영향만 안내", async ({
     page,
   }) => {
