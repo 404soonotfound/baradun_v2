@@ -594,15 +594,21 @@
         "unavailable": "Couldn't get your location",
         "off": "Not checked because location is off"
       },
-      "idleHint": "Tap the button and your browser will ask once.",
-      "use": "Use location",
+      "value": {
+        "checking": "Checking",
+        "idle": "Not asked",
+        "locating": "Getting",
+        "ready": "Allowed",
+        "denied": "Not allowed",
+        "unavailable": "Unavailable",
+        "off": "Off"
+      },
+      "idleHint": "Tap the permission row and your browser will ask once.",
       "deniedHint": "We won't ask again here. To use location, change this site's location permission in your browser settings.",
-      "unavailableHint": "Your device couldn't share its location, so distances aren't shown. Please try again in a moment.",
-      "retry": "Try again",
+      "unavailableHint": "Your device couldn't share its location, so distances aren't shown. Tap the permission row to try again in a moment.",
       "region": "Default region",
       "regionNationwide": "All Korea",
       "regionHint": "The region Home shows first. Saved only on this device.",
-      "regionChange": "Change default region",
       "regionClear": "Clear default region"
     },
     "display": {
@@ -618,14 +624,10 @@
       "motionBody": "When off, wave drawings and screen transitions stop moving. If Reduce Motion is on in your device settings, motion stops regardless of this switch."
     },
     "help": {
-      "title": "Help & feedback",
-      "guideBody": "What we check · Reading wave period · Safety rules · 119",
-      "inquiryBody": "Wrong info · Add a beach · Suggest data"
+      "title": "Help & feedback"
     },
     "info": {
       "title": "About",
-      "termsBody": "About the service · Disclaimer · Privacy",
-      "dataSourcesBody": "KMA · KHOA · Korea Tourism Organization · Map",
       "device": "Device data",
       "deviceBody": "There's no login; everything is saved only in this device's browser. You can clear favorites, recently viewed beaches, recent searches, default region, first-run records and more at once.",
       "reset": "Reset device data"
