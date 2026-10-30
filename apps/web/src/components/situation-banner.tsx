@@ -142,10 +142,12 @@ export function SituationBanner({
         // 마지막 확인 시각 = 해변별 특보 마지막 확인 시각 중 가장 늦은 것(noConfirmedVerdict)
         const last = shownDataTime(situation.lastConfirmedAt, snapshot.nowMs);
         // 아이콘도 원인(끊김·장애)을 암시하지 않게 판단불가 배지와 같은 물음표(결정 1)
+        // 모든 해변에 영향을 주는 안내라 큰 배너(Figma L13 188:270, BRD-129)
         return (
           <Banner
             tone="gray"
-            icon={<CircleQuestionMark size={16} />}
+            size="l"
+            icon={<CircleQuestionMark size={18} />}
             title={t("noConfirmed")}
           >
             {joinMeta([
