@@ -182,7 +182,9 @@ describe("PR 필수 웹 검사 (BRD-102 결정 41·42)", () => {
       .match(/needs:\s*\[([^\]]*)\]/)?.[1]
       .split(",")
       .map((n) => n.trim());
-    expect(needs).toEqual(expect.arrayContaining(["web", "e2e-build", "e2e"]));
+    expect(needs).toEqual(
+      expect.arrayContaining(["web", "e2e-build", "e2e", "gitleaks"]),
+    );
   });
 
   it("배포 빌드는 저장소 변수 SITE_URL을 사이트 주소로 넣는다", () => {
@@ -210,10 +212,15 @@ describe("PR 필수 웹 검사 (BRD-102 결정 41·42)", () => {
     }
   });
 
-  it("비밀값 검사(gitleaks) 잡은 contents: read 권한으로 --redact 출력을 쓴다 (BRD-132)", () => {
+  it("비밀값 검사(gitleaks) 잡은 contents: read 권한, 고정 해시 체크섬 검증, --redact 출력을 쓴다 (BRD-132)", () => {
     const gitleaks = jobLines(ci?.text ?? "", "gitleaks").join("\n");
     expect(gitleaks).toContain("contents: read");
     expect(gitleaks).toContain("--redact");
     expect(gitleaks).not.toMatch(/\bsecrets\./);
+    // 다운로드 바이너리 체크섬 검증 단계와 기대 해시 고정 확인
+    expect(gitleaks).toContain("sha256sum -c -");
+    expect(gitleaks).toContain(
+      "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb",
+    );
   });
 });
