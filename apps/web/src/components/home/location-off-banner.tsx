@@ -1,6 +1,7 @@
 import { MapPinOff } from "lucide-react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
+import { useRef } from "react";
 
 import {
   LocationRetryButton,
@@ -13,7 +14,7 @@ import { requestLocation, type LocationState } from "@/lib/location";
 // '위치 없이 보고 있어요' 배너 (노션 2장 HOME '위치 거부 · 지역 고른 뒤', Figma S_M01_04 171:818)
 // 회색 · 닫기 가능. 행동:
 //   아직 묻지 않은 기기(idle) → '위치 정보 켜기'로 그때 권한 창(사용자가 누른 것이라 반복 요청 아님)
-//   받을 수 없음(시간 초과·기기 오류) → 거부가 아니라서 '위치 정보 켜기'로 다시 요청
+//   받을 수 없음(시간 초과·기기 오류) → 제목 '위치를 확인하지 못했어요'(화면이 주지 않으면). 거부가 아니라서 '위치 정보 켜기'로 다시 요청
 //   거부 → '다시 시도'로 브라우저에 한 번 더 요청(BRD-139). 또 거부면 설명 자리에 기기별 설정 경로
 //   설정에서 끔 → 묻지 않고 설정 화면으로(위치 사용 스위치, BRD-36)
 
@@ -25,7 +26,7 @@ export function LocationOffBanner({
   title,
   body,
   withIcon = true,
-  onRetrySucceeded,
+  focusAfterRetry,
 }: {
   locale: Locale;
   location: LocationState;
@@ -35,14 +36,25 @@ export function LocationOffBanner({
   body?: string;
   // 홈은 아이콘 없이 글자만(Figma 171:818, BRD-129). 탐색은 그대로
   withIcon?: boolean;
-  // '다시 시도'로 위치를 받으면 부름. 배너가 사라지므로 화면이 포커스를 옮길 자리를 정함(BRD-139)
-  onRetrySucceeded?: () => void;
+  // '다시 시도' 버튼이 사라졌을 때 포커스를 옮길 화면 자리(BRD-139). 위치를 받아 배너가 사라지면 이 자리로
+  // 받을 수 없음이면 남은 배너의 '위치 정보 켜기'로 옮기고, 배너도 없으면(다른 상황 배너가 차지) 이 자리로
+  focusAfterRetry?: () => void;
 }) {
   const t = useTranslations("home.region");
   const retryMessage = useLocationRetryMessage(location);
+  const turnOnRef = useRef<HTMLButtonElement>(null);
   const action =
     location.status === "denied" ? (
-      <LocationRetryButton state={location} onSucceeded={onRetrySucceeded} />
+      <LocationRetryButton
+        state={location}
+        onGone={(result) => {
+          if (result === "unavailable" && turnOnRef.current) {
+            turnOnRef.current.focus();
+          } else {
+            focusAfterRetry?.();
+          }
+        }}
+      />
     ) : location.status === "off" ? (
       <Link
         href={localizedPath(locale, "/settings/")}
@@ -52,6 +64,7 @@ export function LocationOffBanner({
       </Link>
     ) : (
       <button
+        ref={turnOnRef}
         type="button"
         onClick={requestLocation}
         className="font-bold text-brand-default"
@@ -63,7 +76,10 @@ export function LocationOffBanner({
     <Banner
       tone="gray"
       icon={withIcon ? <MapPinOff size={16} /> : undefined}
-      title={title ?? t("offTitle")}
+      title={
+        title ??
+        (location.status === "unavailable" ? t("failedTitle") : t("offTitle"))
+      }
       action={action}
       dismiss={{ label: t("close"), onClick: onClose }}
     >

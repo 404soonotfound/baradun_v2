@@ -12,8 +12,8 @@ import {
 // 거부여도 사용자가 누른 '다시 시도'만 한 번 더 요청. 앱을 열 때·정렬 탭은 묻지 않음, 꺼짐이면 버튼 없음
 // 또 거부면 기기별 설정 경로(아이폰 Safari · 그 밖). 홈 배너·설정·탐색 '가까운 순' 안내가 같은 버튼
 
-// 다시 시도의 답. allow = 시험용 좌표(강릉 시험 해변 위치, 사용자 위치 아님) · deny = 또 거부
-type Answer = "allow" | "deny";
+// 다시 시도의 답. allow = 시험용 좌표(강릉 시험 해변 위치, 사용자 위치 아님) · deny = 또 거부 · timeout = 시간 초과
+type Answer = "allow" | "deny" | "timeout";
 const coords = coordsOf(CLEAR_ID);
 
 // 권한 확인은 늘 거부(아이폰 Safari처럼 사이트 설정이 '묻기'여도 거부를 주는 기기)
@@ -48,7 +48,13 @@ async function deniedDevice(
           const reply = () =>
             answer === "allow"
               ? ok({ coords: { latitude: coords.lat, longitude: coords.lng } })
-              : fail({ code: 1, PERMISSION_DENIED: 1, message: "denied" });
+              : fail({
+                  code: answer === "deny" ? 1 : 3,
+                  PERMISSION_DENIED: 1,
+                  POSITION_UNAVAILABLE: 2,
+                  TIMEOUT: 3,
+                  message: answer,
+                });
           if (hold) w.e2eRelease = reply;
           else reply();
         },
@@ -60,6 +66,12 @@ async function deniedDevice(
 
 const asked = (page: Page) =>
   page.evaluate(() => (window as unknown as { e2eAsked: number }).e2eAsked);
+
+// 붙잡아 둔 답을 보냄(hold)
+const release = (page: Page) =>
+  page.evaluate(() =>
+    (window as unknown as { e2eRelease: () => void }).e2eRelease(),
+  );
 
 const IPHONE_SAFARI =
   "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1";
@@ -127,12 +139,37 @@ test.describe("홈 위치 배너", () => {
     // 답을 기다리는 동안 화면은 그대로(전국 · 배너)
     await expect(page.locator("#home-near")).toHaveText("전국 바다");
 
-    await page.evaluate(() =>
-      (window as unknown as { e2eRelease: () => void }).e2eRelease(),
-    );
+    await release(page);
     await expect(page.locator("#home-near")).toHaveText("가까운 바다");
     await expect(page.locator("#home-near")).toBeFocused();
     expect(await asked(page)).toBe(1);
+  });
+});
+
+test.describe("홈 위치 배너 · 시간 초과", () => {
+  test.use({ deviceRegion: null });
+
+  test("다시 시도가 시간 초과로 끝나면 '위치를 확인하지 못했어요' + 포커스는 남은 배너의 '위치 정보 켜기'", async ({
+    page,
+  }) => {
+    await deniedDevice(page, "timeout", { hold: true });
+    await page.goto("/");
+    await retryButton(homeBanner(page)).click();
+    await expect(
+      homeBanner(page).getByRole("button", { name: "위치 확인 중…" }),
+    ).toBeFocused();
+    await release(page);
+    // 결과 안내는 배너(role="status") 제목으로 읽힘
+    const failed = page
+      .getByRole("status")
+      .filter({ hasText: "위치를 확인하지 못했어요" });
+    await expect(failed).toBeVisible();
+    await expect(
+      failed.getByRole("button", { name: "위치 정보 켜기" }),
+    ).toBeFocused();
+    await expect(page.locator("#home-near")).toHaveText("전국 바다");
+    expect(await asked(page)).toBe(1);
+    await expectNoA11yViolations(page);
   });
 });
 
@@ -218,6 +255,33 @@ test.describe("설정 브라우저 위치 권한", () => {
     await retryButton(page).click();
     await expect(page.getByText(BROWSER_GUIDE)).toBeVisible();
     await expect(permissionValue(page).first()).toHaveText("허용 안 함");
+    // 버튼이 남으므로 포커스도 그대로
+    await expect(retryButton(page)).toBeFocused();
+    expect(await asked(page)).toBe(1);
+    await expectNoA11yViolations(page);
+  });
+
+  test("다시 시도가 시간 초과로 끝나면 받지 못함 안내 + 포커스는 권한 줄", async ({
+    page,
+  }) => {
+    await deniedDevice(page, "timeout", { hold: true });
+    await page.goto("/settings/");
+    await retryButton(page).click();
+    await expect(
+      page.getByRole("button", { name: "위치 확인 중…" }),
+    ).toBeFocused();
+    await release(page);
+    // 줄은 다시 묻는 버튼이 되고, 결과 안내는 줄 아래 role="status"가 읽음
+    await expect(
+      page.getByRole("button", { name: "브라우저 위치 권한 받지 못함" }),
+    ).toBeFocused();
+    await expect(
+      page
+        .getByRole("status")
+        .filter({
+          hasText: "기기에서 위치를 받지 못해 거리를 보여드릴 수 없어요",
+        }),
+    ).toBeVisible();
     expect(await asked(page)).toBe(1);
     await expectNoA11yViolations(page);
   });
@@ -264,6 +328,28 @@ test.describe("탐색 가까운 순", () => {
     expect(await asked(page)).toBe(1);
   });
 
+  test("다시 시도가 시간 초과로 끝나면 '위치를 확인하지 못했어요' + 포커스는 남은 안내의 '위치 정보 켜기'", async ({
+    page,
+  }) => {
+    await deniedDevice(page, "timeout", { hold: true });
+    await page.goto("/explore/");
+    await sortNear(page).click();
+    await retryButton(notice(page)).click();
+    await expect(
+      notice(page).getByRole("button", { name: "위치 확인 중…" }),
+    ).toBeFocused();
+    await release(page);
+    const failed = page
+      .getByRole("status")
+      .filter({ hasText: "위치를 확인하지 못했어요" });
+    await expect(failed).toBeVisible();
+    await expect(
+      failed.getByRole("button", { name: "위치 정보 켜기" }),
+    ).toBeFocused();
+    expect(await asked(page)).toBe(1);
+    await expectNoA11yViolations(page);
+  });
+
   test("다시 시도 → 또 거부면 이름 순 그대로 + 브라우저 설정 안내", async ({
     page,
   }) => {
@@ -272,6 +358,7 @@ test.describe("탐색 가까운 순", () => {
     await sortNear(page).click();
     await retryButton(notice(page)).click();
     await expect(notice(page).getByText(BROWSER_GUIDE)).toBeVisible();
+    await expect(retryButton(notice(page))).toBeFocused();
     await expect(page.locator("main li").filter({ hasText: /km/ })).toHaveCount(
       0,
     );
