@@ -243,15 +243,15 @@
       "recheckFailed": "다시 확인했지만 특보를 확인하지 못했어요",
       "autoRecheck": "측정값이 들어오면 자동으로 다시 확인해요",
       "checked": "확인한 것",
-      "checkedWarning": "특보",
-      "checkedTime": "측정 시각",
-      "checkedWave": "파고",
       "warningActive": "발효 중",
       "warningNone": "없음",
       "warningUnknown": "확인 못 함",
       "waveValue": "파고 {value}m",
       "unreadableWarning": "발효 중인 특보가 있지만 내용을 읽지 못했어요 · 기상청에서 확인하세요",
-      "openWarning": "특보 상세 보기"
+      "openWarning": "특보 상세 보기",
+      "waveNoValue": "파고 값 없음",
+      "waveNone": "파고 · 가까운 관측 없음",
+      "checkedWarningActive": "특보 발효 중"
     },
     "alt": {
       "title": "가까운 특보 없는 해변",

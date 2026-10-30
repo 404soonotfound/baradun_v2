@@ -2,8 +2,8 @@
 
 import {
   CalendarX,
+  Check,
   ChevronRight,
-  CircleCheck,
   CircleQuestionMark,
   Clock,
   RotateCw,
@@ -19,6 +19,7 @@ import { KmaSourceNote } from "@/components/source-note";
 import { Skeleton } from "@/components/ui/skeleton";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { ZoneName } from "@/components/zone-name";
+import { cn } from "@/lib/cn";
 import { joinMeta, META_SEPARATOR } from "@/lib/meta-join";
 import { kstStamp } from "@/lib/snapshot/clock";
 import {
@@ -38,7 +39,7 @@ import {
   type BeachView,
 } from "@/lib/snapshot/view";
 
-// 판단 카드 (BRD-32 · 노션 2장 DET 2, 3장 VerdictCard, 5장 우선순위)
+// 판단 카드 (BRD-32 · 노션 2장 DET 2, 3장 VerdictCard, 5장 우선순위 · Figma 176:204·183:1032, BRD-129)
 // ① 사유 배지(+ 운영 기간 아님 정보 배지) ② 결론 문장 ③ 근거(범위 → 기관 → 시각) ④ 사유 상자
 // ⑤ 확인한 것 3칸(특보 · 측정 시각 · 파고) ⑥ 현장 우선 문구. 분류는 view 그대로(G1)
 // '다음 측정 예정 시각'은 10/22 결정(nextExpectedAt 출시에서 항상 null)으로 두지 않음
@@ -60,6 +61,7 @@ export function VerdictCard({
   nowMs,
   kmaSource,
   onOpenWarning,
+  more,
   children,
 }: {
   beachId: string;
@@ -71,7 +73,9 @@ export function VerdictCard({
   kmaSource: boolean;
   // 사유 상자의 특보 항목에서 특보 상세 시트(WARN, BRD-33) 열기
   onOpenWarning?: (item: WarningItem) => void;
-  // ⑥ 아래에 덧붙일 것(BRD-33의 '자세히' 등)
+  // ⑤ '확인한 것' 제목 줄 오른쪽(BRD-33의 '자세히')
+  more?: ReactNode;
+  // ⑥ 아래에 덧붙일 것(PC 길찾기)
   children?: ReactNode;
 }) {
   const t = useTranslations();
@@ -85,12 +89,12 @@ export function VerdictCard({
     return (
       <section
         aria-busy="true"
-        className="flex flex-col gap-3 rounded-card bg-bg-surface p-5 shadow-card"
+        className="flex flex-col gap-3 rounded-card bg-bg-surface p-4 shadow-raised"
       >
         <Skeleton className="h-badge w-24 rounded-badge" />
         <Skeleton className="h-7 w-3/4" />
         <Skeleton className="h-4 w-1/2" />
-        <p className="text-caption text-text-muted">{t("safety.finalCall")}</p>
+        <p className="text-note text-text-muted">{t("safety.finalCall")}</p>
       </section>
     );
   }
@@ -196,33 +200,55 @@ export function VerdictCard({
   }
 
   const blocked = view.category === "unavailable";
-  // 측정소를 모르는 값은 바다 상태 카드처럼 "–"(출처 없는 값을 보이지 않음)
+  // 측정소를 모르는 값은 바다 상태 카드처럼 값으로 보이지 않음(출처 없는 값을 보이지 않음)
   const wave = shownMetric(view, stations, "waveHeight");
-  // ⑤ 측정 시각·파고 칸 글자. 값이 없으면 세 가지로 구분(가까운 관측 없음 / 늦어짐 / –)
-  const missing =
-    wave.kind === "none"
-      ? t("observation.none")
+  // ⑤ 확인한 것 3칸(Figma chk): 칸마다 글자만으로 뜻이 서게 씀('특보 없음' · '10분 전 측정' · '파고 0.6m')
+  // 값이 없으면 세 가지로 구분(가까운 관측 없음 / 늦어짐 / 값 없음) — 결측을 정상처럼 보이지 않게
+  const warningState = warningCheckState(view, detail);
+  const warningItem: CheckedItemProps =
+    warningState === "active"
+      ? {
+          icon: "blocked",
+          // 특보 이름을 아는 경우만 이름 그대로(예: 풍랑주의보). 모르면 지어내지 않고 '특보 발효 중'
+          text:
+            view.badge.kind === "warning"
+              ? badgeText(view.badge)
+              : t("detail.verdict.checkedWarningActive"),
+        }
+      : warningState === "none"
+        ? { icon: "clear", text: t("verdict.clear.title") }
+        : { icon: "unknown", text: t("verdict.unknownWarning.title") };
+  const timeItem: CheckedItemProps =
+    wave.kind === "value"
+      ? {
+          icon: "clear",
+          text:
+            measuredAgoText(wave.observedAt, nowMs) ??
+            t("observation.timeUnknown"),
+        }
       : wave.kind === "delayed"
-        ? t("observation.delayedShort")
-        : null;
-  const warningCell = {
-    active: {
-      icon: "blocked" as const,
-      text: t("detail.verdict.warningActive"),
-    },
-    none: { icon: "clear" as const, text: t("detail.verdict.warningNone") },
-    unknown: {
-      icon: "unknown" as const,
-      text: t("detail.verdict.warningUnknown"),
-    },
-  }[warningCheckState(view, detail)];
+        ? { icon: "stale", text: t("observation.delayed") }
+        : wave.kind === "none"
+          ? { icon: "missing", text: t("observation.none") }
+          : { icon: "missing", text: t("observation.timeUnknown") };
+  const waveItem: CheckedItemProps =
+    wave.kind === "value"
+      ? {
+          icon: "wave",
+          text: t("detail.verdict.waveValue", { value: wave.value }),
+        }
+      : wave.kind === "none"
+        ? { icon: "missing", text: t("detail.verdict.waveNone") }
+        : { icon: "missing", text: t("detail.verdict.waveNoValue") };
 
   return (
+    // Figma card 176:204·183:1032: 안쪽 16, 사이 12, 그림자 y8 blur24
     <section
       aria-labelledby={titleId}
-      className="flex flex-col gap-3 rounded-card bg-bg-surface p-5 shadow-card"
+      className="flex flex-col gap-3 rounded-card bg-bg-surface p-4 shadow-raised"
     >
-      {/* ① 배지. 정보 배지는 판단 배지 오른쪽(분류 영향 없음, N4) */}
+      {/* ① 배지. 정보 배지는 판단 배지 오른쪽(분류 영향 없음, N4)
+          Figma 오른쪽 '새 측정값 HH:MM 예정'은 10/22 결정(nextExpectedAt 출시에서 항상 null)으로 두지 않음 */}
       <div className="flex flex-wrap items-center gap-2">
         <ReasonBadge label={view.badge} />
         {detail.offSeason && (
@@ -240,27 +266,29 @@ export function VerdictCard({
         )}
       </div>
 
-      {/* ② 결론. 상태가 바뀌면 결론만 읽어 줌(3장 접근성) */}
-      <div aria-live="polite">
-        <h2
-          id={titleId}
-          className="text-[20px] leading-snug font-bold text-text-default lg:text-[23px]"
-        >
-          {sentence(view.badge)}
-        </h2>
-        {blocked && (
-          <p className="mt-1 text-body text-text-body">{t("verdict.avoid")}</p>
+      {/* ② 결론 + ③ 근거(Figma 사이 4). 상태가 바뀌면 결론만 읽어 줌(3장 접근성) */}
+      <div className="flex flex-col gap-1">
+        <div aria-live="polite">
+          <h2
+            id={titleId}
+            className="text-[20px] leading-[1.3] font-bold tracking-[-0.4px] text-text-default lg:text-[23px] lg:tracking-[-0.5px]"
+          >
+            {sentence(view.badge)}
+          </h2>
+          {blocked && (
+            <p className="mt-1 text-body text-text-default">
+              {t("verdict.avoid")}
+            </p>
+          )}
+        </div>
+        {lines.length > 0 && (
+          <ul className="flex flex-col text-body-s leading-[1.5] text-text-body">
+            {lines.map((line) => (
+              <li key={line.text}>{line.node}</li>
+            ))}
+          </ul>
         )}
       </div>
-
-      {/* ③ 근거 */}
-      {lines.length > 0 && (
-        <ul className="flex flex-col gap-0.5 text-caption text-text-muted">
-          {lines.map((line) => (
-            <li key={line.text}>{line.node}</li>
-          ))}
-        </ul>
-      )}
 
       {/* ④ 사유 상자 */}
       <ReasonBox
@@ -271,86 +299,89 @@ export function VerdictCard({
         onOpenWarning={onOpenWarning}
       />
 
-      {/* ⑤ 확인한 것 */}
-      <div>
-        <h3 className="text-caption font-bold text-text-muted">
-          {t("detail.verdict.checked")}
-        </h3>
-        <dl className="mt-1.5 grid grid-cols-3 gap-2">
-          <CheckedCell
-            label={t("detail.verdict.checkedWarning")}
-            icon={warningCell.icon}
-            text={warningCell.text}
-          />
-          <CheckedCell
-            label={t("detail.verdict.checkedTime")}
-            icon={wave.kind === "value" ? "clear" : "stale"}
-            text={
-              wave.kind === "value"
-                ? (measuredAgoText(wave.observedAt, nowMs) ?? "–")
-                : (missing ?? "–")
-            }
-          />
-          <CheckedCell
-            label={t("detail.verdict.checkedWave")}
-            icon={wave.kind === "value" ? "clear" : "stale"}
-            text={
-              wave.kind === "value"
-                ? t("detail.verdict.waveValue", { value: wave.value })
-                : (missing ?? "–")
-            }
-          />
-        </dl>
+      {/* ⑤ 확인한 것(Figma 위 구분선 · 위 9 · 제목 줄 오른쪽에 '자세히') */}
+      <div className="border-t border-border-default pt-[9px]">
+        <div className="flex items-start justify-between gap-2">
+          <h3 className="text-label-s font-bold text-text-default">
+            {t("detail.verdict.checked")}
+          </h3>
+          {more}
+        </div>
+        <ul className="mt-0.5 grid grid-cols-2 gap-x-2.5 gap-y-0.5">
+          <CheckedItem {...warningItem} />
+          <CheckedItem {...timeItem} />
+          <CheckedItem {...waveItem} />
+        </ul>
       </div>
 
-      {children}
-
-      {/* ⑥ 현장 우선 문구. 그 아래에 기상청 출처(다른 화면과 같은 자리 규칙, BRD-113 · 기상법) */}
-      <div className="flex flex-col gap-0.5 border-t border-border-default pt-3 text-caption text-text-muted">
+      {/* ⑥ 현장 우선 문구(화면 전체에서 여기 한 번만, 10/30 사용자 결정). 그 아래에 기상청 출처(BRD-113 · 기상법) */}
+      <div className="flex flex-col gap-0.5 text-note text-text-muted">
         <p>{t("safety.finalCall")}</p>
         {kmaSource && <KmaSourceNote variant="status" />}
       </div>
+
+      {children}
     </section>
   );
 }
 
-const CELL_ICON = {
-  clear: <CircleCheck size={16} className="text-status-clear-fg" />,
-  blocked: <TriangleAlert size={16} className="text-status-blocked-fg" />,
-  unknown: <CircleQuestionMark size={16} className="text-status-unknown-fg" />,
-  stale: <Clock size={16} className="text-status-stale-fg" />,
+// 확인한 것 칸 아이콘(Figma i 22px · 반경 7 · 아이콘 12). 분류 색과 같은 이름을 쓰고 글자로도 뜻을 씀(색만으로 구분하지 않음)
+// clear: Figma good/*는 초록이라 금지 색(노션 4장)이어서 다크 시안과 같은 '특보 없음' 파랑을 씀
+const ITEM_ICON = {
+  clear: {
+    box: "bg-status-clear-bg text-status-clear-fg",
+    icon: <Check size={12} strokeWidth={2.6} />,
+  },
+  blocked: {
+    box: "bg-status-blocked-bg text-status-blocked-fg",
+    icon: <TriangleAlert size={12} strokeWidth={2.4} />,
+  },
+  unknown: {
+    box: "border border-dashed border-status-unknown-border bg-status-unknown-bg text-status-unknown-fg",
+    icon: <CircleQuestionMark size={12} strokeWidth={2.4} />,
+  },
+  stale: {
+    box: "border border-dashed border-status-stale-border bg-status-stale-bg text-status-stale-fg",
+    icon: <Clock size={12} strokeWidth={2.4} />,
+  },
+  missing: {
+    box: "bg-bg-subtle text-text-muted",
+    icon: <Clock size={12} strokeWidth={2.4} />,
+  },
+  wave: {
+    box: "bg-bg-subtle text-brand-default",
+    // Figma 아이콘/wave(물결 한 줄). lucide Waves는 세 줄이라 같은 모양을 직접 그림
+    icon: (
+      <svg width={12} height={12} viewBox="0 0 12 12" fill="none">
+        <path
+          d="M1.5 7C2.5 7 2.5 6 3.75 6C5 6 4.75 7 6 7C7.25 7 7 6 8.25 6C9.5 6 9.5 7 10.5 7"
+          stroke="currentColor"
+          strokeWidth={1.4}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    ),
+  },
 };
 
-// 확인한 것 한 칸: 작은 상태 아이콘 + 단어(색만으로 구분하지 않음)
-function CheckedCell({
-  label,
-  icon,
-  text,
-}: {
-  label: string;
-  icon: keyof typeof CELL_ICON;
-  text: string;
-}) {
-  const t = useTranslations("home.near");
+type CheckedItemProps = { icon: keyof typeof ITEM_ICON; text: string };
+
+// 확인한 것 한 칸: 높이 36 · 아이콘과 글자 사이 7 · 글자 12.5
+function CheckedItem({ icon, text }: CheckedItemProps) {
   return (
-    <div className="flex flex-col gap-1 rounded-input bg-bg-subtle px-2.5 py-2">
-      <dt className="flex items-center gap-1 text-caption text-text-muted">
-        <span aria-hidden="true" className="inline-flex">
-          {CELL_ICON[icon]}
-        </span>
-        {label}
-      </dt>
-      <dd className="text-body-s font-bold text-text-default">
-        {text === "–" ? (
-          <>
-            <span aria-hidden="true">–</span>
-            <span className="sr-only">{t("noValue")}</span>
-          </>
-        ) : (
-          text
+    <li className="flex min-h-9 items-center gap-[7px] py-[7px]">
+      <span
+        aria-hidden="true"
+        className={cn(
+          "flex size-[22px] shrink-0 items-center justify-center rounded-[7px]",
+          ITEM_ICON[icon].box,
         )}
-      </dd>
-    </div>
+      >
+        {ITEM_ICON[icon].icon}
+      </span>
+      <span className="text-label-s text-text-default">{text}</span>
+    </li>
   );
 }
 
@@ -403,15 +434,22 @@ function ReasonBox({
     (detail.warnings.length > 0 || detail.unreadableWarnings > 0)
   ) {
     return (
+      // Figma 사유 상자(176:814): 옅은 빨강 면 · 반경 12 · 왼쪽 이름(빨강) · 오른쪽 값(굵게, 오른쪽 맞춤)
       <ul className="flex flex-col gap-2">
         {detail.warnings.map((item, index) => (
           <li
             key={`${item.zoneName}-${item.type}-${item.level}-${item.publishedAt}`}
-            className="rounded-input bg-status-blocked-bg px-3.5 py-3 text-body-s text-text-default"
+            className="rounded-input bg-status-blocked-bg px-[13px] py-2.5 text-label-s"
           >
+            {/* 특보 하나면 이름이 배지·결론에 이미 있어 숨기고(Figma) '특보 상세 보기' 설명으로만 씀.
+                여럿이면 상자끼리 구분되게 보임 */}
             <p
               id={`${nameId}-${index}`}
-              className="font-bold text-status-blocked-fg"
+              className={
+                detail.warnings.length > 1
+                  ? "mb-1 font-bold text-status-blocked-fg"
+                  : "sr-only"
+              }
             >
               {badgeText({
                 kind: "warning",
@@ -419,15 +457,19 @@ function ReasonBox({
                 level: item.level,
               })}
             </p>
-            <dl className="mt-1 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5">
-              <dt className="text-text-muted">{t("zone")}</dt>
-              <dd>
+            <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-[5px]">
+              <dt className="text-status-blocked-fg">{t("zone")}</dt>
+              <dd className="text-right font-bold text-text-default">
                 <ZoneName zone={item} />
               </dd>
-              <dt className="text-text-muted">{t("effectiveFrom")}</dt>
-              <dd>{kstStamp(item.effectiveFrom, nowMs) ?? "–"}</dd>
-              <dt className="text-text-muted">{t("affects")}</dt>
-              <dd>{t("allActivities")}</dd>
+              <dt className="text-status-blocked-fg">{t("effectiveFrom")}</dt>
+              <dd className="text-right font-bold text-text-default">
+                {kstStamp(item.effectiveFrom, nowMs) ?? "–"}
+              </dd>
+              <dt className="text-status-blocked-fg">{t("affects")}</dt>
+              <dd className="text-right font-bold text-text-default">
+                {t("allActivities")}
+              </dd>
             </dl>
             {onOpenWarning && (
               <button
@@ -436,10 +478,11 @@ function ReasonBox({
                 // 특보가 여럿이면 같은 버튼 이름이 반복되므로 특보 이름을 설명으로 붙임
                 aria-describedby={`${nameId}-${index}`}
                 onClick={() => onOpenWarning(item)}
-                className="-mb-2 inline-flex min-h-touch items-center gap-1 font-bold text-status-blocked-fg underline"
+                // 보이는 줄은 18px, 누르는 영역은 위아래로 넓혀 44px(BRD-39)
+                className="relative mt-1.5 inline-flex items-center gap-0.5 text-caption font-bold text-status-blocked-fg before:absolute before:inset-x-0 before:-inset-y-[13px] before:content-['']"
               >
                 {t("openWarning")}
-                <ChevronRight aria-hidden="true" size={16} />
+                <ChevronRight aria-hidden="true" size={12} strokeWidth={2.6} />
               </button>
             )}
           </li>
@@ -447,7 +490,7 @@ function ReasonBox({
         {/* 읽을 수 없는 특보: 이름을 지어내지 않고 숨기지도 않음(9.1). 분류는 게시값 그대로(이용불가).
             문구는 노션에 없는 임시안(BRD-32 PR 남은 결정) */}
         {detail.unreadableWarnings > 0 && (
-          <li className="rounded-input bg-status-blocked-bg px-3.5 py-3 text-body-s font-bold text-status-blocked-fg">
+          <li className="rounded-input bg-status-blocked-bg px-[13px] py-2.5 text-label-s font-bold text-status-blocked-fg">
             {t("unreadableWarning")}
           </li>
         )}
@@ -464,9 +507,10 @@ function ReasonBox({
           type="button"
           onClick={() => void recheck()}
           aria-disabled={rechecking}
-          className="flex h-touch items-center justify-center gap-2 rounded-button border border-border-strong text-body-s font-bold text-text-default hover:bg-bg-subtle aria-disabled:opacity-60"
+          // Figma '버튼 · 새' 보조 · 높이 46
+          className="flex h-[46px] items-center justify-center gap-1.5 rounded-button border border-border-strong bg-bg-surface text-title-s text-text-default hover:bg-bg-subtle aria-disabled:opacity-60"
         >
-          <RotateCw aria-hidden="true" size={16} />
+          <RotateCw aria-hidden="true" size={16} strokeWidth={2.4} />
           {rechecking ? t("rechecking") : t("recheck")}
         </button>
         <p role="status" className="text-caption text-text-muted empty:hidden">
@@ -478,9 +522,8 @@ function ReasonBox({
 
   if (view.badge.kind === "observation_delayed") {
     return (
-      <p className="rounded-input bg-status-stale-bg px-3.5 py-3 text-body-s text-status-stale-fg">
-        {t("autoRecheck")}
-      </p>
+      // Figma 177:543: 상자 없이 옅은 안내 글(지연 색은 배지·확인한 것 칸이 보여줌)
+      <p className="text-note text-text-muted">{t("autoRecheck")}</p>
     );
   }
 
