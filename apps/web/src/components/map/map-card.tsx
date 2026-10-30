@@ -119,7 +119,7 @@ export function MapCard({
         </button>
         <Link
           href={href}
-          className="flex h-touch min-w-0 flex-1 items-center justify-center gap-1 rounded-button bg-brand-default px-3.5 text-body-s font-bold text-brand-on hover:opacity-90"
+          className="flex h-touch min-w-0 flex-1 items-center justify-center gap-1 rounded-button bg-brand-default px-3.5 text-body-s font-bold text-brand-on hover:bg-brand-hover"
         >
           {t("map.card.detail")}
           <ChevronRight aria-hidden="true" size={16} />

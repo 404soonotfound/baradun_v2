@@ -404,7 +404,7 @@ export function DirectionsLink({
       className={cn(
         "flex h-button min-w-0 items-center justify-center gap-1.5 rounded-button px-1.5 text-title-region",
         primary
-          ? "bg-brand-default text-brand-on hover:opacity-90"
+          ? "bg-brand-default text-brand-on hover:bg-brand-hover"
           : "border border-border-strong bg-bg-surface text-text-default hover:bg-bg-subtle",
         className,
       )}
