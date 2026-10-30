@@ -68,6 +68,27 @@ async function clearPlacesWithoutBasis(page: Page) {
   );
 }
 
+// 판단과 상관없는 상세 동작(길찾기·즐겨찾기·공유·119)은 상태를 못 받는 동안에도 보여야 함
+// PC 길찾기는 판단 카드 안(Figma 183:1032)이라 카드가 불러오는 중·실패 모양일 때 빠지지 않는지 봄(Codex P2, BRD-129)
+async function expectDataFreeActions(page: Page) {
+  await expect(
+    page
+      .getByRole("link", { name: /길찾기/ })
+      .filter({ visible: true })
+      .first(),
+  ).toBeVisible();
+  await expect(
+    page
+      .getByRole("button", { name: "즐겨찾기" })
+      .filter({ visible: true })
+      .first(),
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "공유" })).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: /119/ }).filter({ visible: true }).first(),
+  ).toBeVisible();
+}
+
 test.describe("정상", () => {
   for (const url of ["/", "/explore/", `/spots/${slugOf(CLEAR_ID)}/`]) {
     test(`'특보 없음' 자리마다 근거와 현장 우선 문구 ${url}`, async ({
@@ -117,6 +138,17 @@ test.describe("로딩", () => {
     await expect(clearBadges(page)).toHaveCount(0);
     await expectNoA11yViolations(page);
   });
+
+  test("상세: 불러오는 동안에도 길찾기·즐겨찾기·공유·119가 보임", async ({
+    page,
+  }) => {
+    await page.goto(`/spots/${slugOf(CLEAR_ID)}/`);
+    await expect(
+      page.locator('section[aria-busy="true"]').first(),
+    ).toBeVisible();
+    await expectDataFreeActions(page);
+    await expectNoA11yViolations(page);
+  });
 });
 
 test.describe("데이터 없음", () => {
@@ -146,6 +178,8 @@ test.describe("데이터 없음", () => {
       ).toBeVisible();
       await expect(clearBadges(page)).toHaveCount(0);
     }
+    // 상세(마지막 주소)는 판단과 상관없는 동작이 그대로 남음
+    await expectDataFreeActions(page);
   });
 });
 

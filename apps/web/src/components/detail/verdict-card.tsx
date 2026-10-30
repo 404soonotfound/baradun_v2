@@ -75,7 +75,7 @@ export function VerdictCard({
   onOpenWarning?: (item: WarningItem) => void;
   // ⑤ '확인한 것' 제목 줄 오른쪽(BRD-33의 '자세히')
   more?: ReactNode;
-  // ⑥ 아래에 덧붙일 것(PC 길찾기)
+  // ⑥ 아래에 덧붙일 것(PC 길찾기). 판단과 상관없어 불러오는 중 모양에서도 그림
   children?: ReactNode;
 }) {
   const t = useTranslations();
@@ -95,6 +95,8 @@ export function VerdictCard({
         <Skeleton className="h-7 w-3/4" />
         <Skeleton className="h-4 w-1/2" />
         <p className="text-note text-text-muted">{t("safety.finalCall")}</p>
+        {/* 판단과 상관없는 동작(PC 길찾기: 이미 가진 해변 이름·좌표만 씀)은 불러오는 동안에도 둠 */}
+        {children}
       </section>
     );
   }
