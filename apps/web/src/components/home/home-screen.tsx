@@ -257,10 +257,16 @@ export function HomeScreen({
     situation?.kind === "noLocation" ? (
       <LocationOffBanner
         locale={locale}
-        status={location.status}
+        location={location}
         onClose={() => setOffBannerClosed(true)}
         body={offBody}
         withIcon={false}
+        // 배너가 사라지므로 포커스를 바다 목록 제목으로(그 자리에서 바뀐 목록을 이어서 읽음). 다음 그리기 뒤에 옮김
+        onRetrySucceeded={() =>
+          requestAnimationFrame(() =>
+            document.getElementById("home-near")?.focus(),
+          )
+        }
       />
     ) : (
       <SituationBanner
@@ -383,6 +389,7 @@ export function HomeScreen({
             // PC는 카드마다 넣던 현장 우선 문구를 카드 4장 바로 위에 한 번(Figma 181:849)
             note={desktop ? tRoot("safety.finalCall") : null}
             large
+            focusable
           />
           <NearContent
             locale={locale}

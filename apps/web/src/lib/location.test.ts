@@ -2,7 +2,10 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   createLocationStore,
+  deviceLocationGuide,
   locationBlocked,
+  locationGuide,
+  locationRetrying,
   permissionAction,
   type SwitchStorage,
 } from "./location";
@@ -308,6 +311,23 @@ describe("위치 사용 스위치 (BRD-36)", () => {
     }
   });
 
+  it("꺼짐이면 다시 시도도 요청하지 않음", async () => {
+    const fake = fakeNavigator({
+      query: () => Promise.resolve({ state: "denied", onchange: null }),
+    });
+    vi.stubGlobal("navigator", fake.navigator);
+    try {
+      const store = createLocationStore(() => fakeSwitch("off").storage);
+      store.subscribe(() => {});
+      await flush();
+      store.retry();
+      expect(store.getState().status).toBe("off");
+      expect(fake.getCurrentPosition).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("저장소를 못 써도 이번 방문 동안은 고른 값을 따름", async () => {
     const fake = fakeNavigator({});
     vi.stubGlobal("navigator", fake.navigator);
@@ -319,6 +339,279 @@ describe("위치 사용 스위치 (BRD-36)", () => {
       expect(store.getState().status).toBe("off");
       store.request();
       expect(fake.getCurrentPosition).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});
+
+describe("거부 상태의 다시 시도 (BRD-139)", () => {
+  type Answer =
+    | { kind: "allow"; latitude: number; longitude: number }
+    | { kind: "fail"; code: 1 | 2 | 3 };
+  // 권한 확인은 거부, 위치 요청의 답은 answers 순서대로. hold면 pending에 쌓아 두고 나중에 답함
+  function deniedNavigator(answers: Answer[], hold = false) {
+    const status: { state: PermissionState; onchange: null | (() => void) } = {
+      state: "denied",
+      onchange: null,
+    };
+    const pending: (() => void)[] = [];
+    const getCurrentPosition = vi.fn(
+      (
+        success: (position: {
+          coords: { latitude: number; longitude: number };
+        }) => void,
+        failure: (error: { code: number; PERMISSION_DENIED: 1 }) => void,
+      ) => {
+        const next = answers.shift();
+        const answer = () => {
+          if (next?.kind === "allow") success({ coords: next });
+          else if (next?.kind === "fail")
+            failure({ code: next.code, PERMISSION_DENIED: 1 });
+        };
+        if (hold) pending.push(answer);
+        else answer();
+      },
+    );
+    return {
+      navigator: {
+        permissions: { query: () => Promise.resolve(status) },
+        geolocation: { getCurrentPosition },
+      },
+      status,
+      getCurrentPosition,
+      pending,
+    };
+  }
+
+  async function deniedStore(fake: ReturnType<typeof deniedNavigator>) {
+    vi.stubGlobal("navigator", fake.navigator);
+    const store = createLocationStore(() => fakeSwitch().storage);
+    store.subscribe(() => {});
+    await flush();
+    expect(store.getState().status).toBe("denied");
+    return store;
+  }
+
+  it("앱을 열고 권한을 확인할 때는 거부면 요청하지 않음(다시 시도를 눌러야 요청)", async () => {
+    const fake = deniedNavigator([]);
+    try {
+      const store = await deniedStore(fake);
+      store.request(); // 위치 버튼·정렬 탭·'내 주변'이 부르는 요청
+      fake.status.onchange?.(); // 권한 변경 알림(여전히 거부)
+      await flush();
+      expect(fake.getCurrentPosition).not.toHaveBeenCalled();
+      expect(store.getState()).toEqual({ status: "denied", coords: null });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("거부 → 다시 시도 → 허용이면 위치를 받음", async () => {
+    const fake = deniedNavigator([
+      { kind: "allow", latitude: 37.79, longitude: 128.91 },
+    ]);
+    try {
+      const store = await deniedStore(fake);
+      store.retry();
+      expect(fake.getCurrentPosition).toHaveBeenCalledTimes(1);
+      expect(store.getState()).toEqual({
+        status: "ready",
+        coords: { lat: 37.79, lng: 128.91 },
+      });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("거부 → 다시 시도 → 또 거부면 거부로 두고 '다시 시도했는데도 거부'를 알림", async () => {
+    const fake = deniedNavigator([{ kind: "fail", code: 1 }]);
+    try {
+      const store = await deniedStore(fake);
+      store.retry();
+      expect(store.getState()).toEqual({
+        status: "denied",
+        coords: null,
+        retry: "denied",
+      });
+      expect(locationBlocked(store.getState().status)).toBe(true);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("다시 시도가 위치를 알 수 없음·시간 초과로 끝나면 받을 수 없음(unavailable)", async () => {
+    for (const code of [2, 3] as const) {
+      const fake = deniedNavigator([{ kind: "fail", code }]);
+      try {
+        const store = await deniedStore(fake);
+        store.retry();
+        expect(store.getState()).toEqual({
+          status: "unavailable",
+          coords: null,
+        });
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    }
+  });
+
+  it("답을 기다리는 동안은 두 번 요청하지 않고, 권한 변경 알림도 덮지 않음", async () => {
+    const fake = deniedNavigator(
+      [{ kind: "allow", latitude: 1, longitude: 2 }],
+      true,
+    );
+    try {
+      const store = await deniedStore(fake);
+      store.retry();
+      expect(locationRetrying(store.getState())).toBe(true);
+      expect(store.getState().status).toBe("denied"); // 화면은 답이 오기 전까지 거부 그대로
+      store.retry();
+      store.request();
+      // 묻는 창에서 허용하면 오는 알림. 여기서 또 요청하지 않음
+      fake.status.state = "granted";
+      fake.status.onchange?.();
+      expect(fake.getCurrentPosition).toHaveBeenCalledTimes(1);
+      fake.pending.forEach((answer) => answer());
+      expect(store.getState()).toEqual({
+        status: "ready",
+        coords: { lat: 1, lng: 2 },
+      });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("다시 시도로 위치를 받았을 때만 성공 처리를 한 번 부름(또 거부·받을 수 없음은 부르지 않음)", async () => {
+    const allowed = deniedNavigator([
+      { kind: "allow", latitude: 1, longitude: 2 },
+    ]);
+    try {
+      const store = await deniedStore(allowed);
+      const onSucceeded = vi.fn();
+      store.retry(onSucceeded);
+      expect(store.getState().status).toBe("ready");
+      expect(onSucceeded).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+    for (const code of [1, 2, 3] as const) {
+      const failed = deniedNavigator([{ kind: "fail", code }]);
+      try {
+        const store = await deniedStore(failed);
+        const onSucceeded = vi.fn();
+        store.retry(onSucceeded);
+        expect(onSucceeded).not.toHaveBeenCalled();
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    }
+  });
+
+  it("다시 시도 중에 위치 사용을 끄면 늦게 온 위치는 버리고 성공 처리도 부르지 않음", async () => {
+    const fake = deniedNavigator(
+      [{ kind: "allow", latitude: 1, longitude: 2 }],
+      true,
+    );
+    try {
+      const store = await deniedStore(fake);
+      const onSucceeded = vi.fn();
+      store.retry(onSucceeded);
+      store.setEnabled(false);
+      fake.pending.forEach((answer) => answer());
+      expect(store.getState().status).toBe("off");
+      expect(onSucceeded).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("다시 시도 중에 위치 사용을 끄면 늦게 온 위치가 꺼짐을 덮지 않음", async () => {
+    const fake = deniedNavigator(
+      [{ kind: "allow", latitude: 1, longitude: 2 }],
+      true,
+    );
+    try {
+      const store = await deniedStore(fake);
+      store.retry();
+      store.setEnabled(false);
+      fake.pending.forEach((answer) => answer());
+      expect(store.getState()).toEqual({ status: "off", coords: null });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("거부가 아니면 다시 시도는 아무것도 안 함", async () => {
+    const fake = fakeNavigator({
+      query: () => Promise.resolve({ state: "prompt", onchange: null }),
+    });
+    vi.stubGlobal("navigator", fake.navigator);
+    try {
+      const store = createLocationStore(() => fakeSwitch().storage);
+      store.subscribe(() => {});
+      await flush();
+      expect(store.getState().status).toBe("idle");
+      store.retry();
+      expect(fake.getCurrentPosition).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});
+
+describe("locationGuide (BRD-139 · 사용자 결정 10/30)", () => {
+  const IOS =
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko)";
+  const MAC =
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko)";
+  const IPAD =
+    "Mozilla/5.0 (iPad; CPU OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko)";
+
+  it("아이폰·아이패드는 브라우저 종류와 상관없이 기기 설정 안내", () => {
+    for (const ua of [
+      `${IOS} Version/18.0 Mobile/15E148 Safari/604.1`, // Safari
+      `${IOS} CriOS/130.0.6723.90 Mobile/15E148 Safari/604.1`, // Chrome
+      `${IOS} FxiOS/132.0 Mobile/15E148 Safari/605.1.15`, // Firefox
+      `${IOS} EdgiOS/130.0.2849.80 Version/18.0 Mobile/15E148 Safari/604.1`, // Edge
+      `${IOS} Version/18.0 Mobile/15E148 Safari/604.1 OPT/5.1.0`, // Opera
+      `${IOS} Mobile/15E148 KAKAOTALK 25.0.0`, // 카카오톡 앱 안 브라우저
+      `${IOS} Mobile/15E148 Safari/605.1 NAVER(inapp; search; 2000; 12.10.0)`, // 네이버 앱 안 브라우저
+      `${IOS} Mobile/15E148`, // 홈 화면에 추가한 앱
+      `${IPAD} Version/18.0 Mobile/15E148 Safari/604.1`, // 아이패드 모바일 보기
+    ]) {
+      expect(locationGuide(ua, 5), ua).toBe("ios");
+    }
+    // 아이패드 데스크톱 보기(Mac처럼 보이지만 터치가 됨): Safari·Chrome
+    expect(locationGuide(`${MAC} Version/18.0 Safari/605.1.15`, 5)).toBe("ios");
+    expect(
+      locationGuide(`${MAC} CriOS/130.0 Version/18.0 Safari/604.1`, 5),
+    ).toBe("ios");
+  });
+
+  it("Mac·안드로이드·Windows·빈 값은 브라우저 사이트 설정 안내", () => {
+    expect(locationGuide(`${MAC} Version/18.0 Safari/605.1.15`, 0)).toBe(
+      "browser",
+    );
+    expect(
+      locationGuide(
+        "Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Mobile Safari/537.36",
+        5,
+      ),
+    ).toBe("browser");
+    expect(
+      locationGuide(
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36",
+        10,
+      ),
+    ).toBe("browser");
+    expect(locationGuide("", 0)).toBe("browser");
+  });
+
+  it("navigator를 못 읽으면 일반 안내", () => {
+    vi.stubGlobal("navigator", undefined);
+    try {
+      expect(deviceLocationGuide()).toBe("browser");
     } finally {
       vi.unstubAllGlobals();
     }

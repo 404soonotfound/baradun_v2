@@ -18,6 +18,10 @@ import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useId, useMemo, useState, type ReactNode } from "react";
 
+import {
+  LocationRetryButton,
+  useLocationRetryMessage,
+} from "@/components/location-retry";
 import { WaveIcon } from "@/components/logo-mark";
 import { RegionSheet } from "@/components/region/region-sheet";
 import { Button } from "@/components/ui/button";
@@ -252,6 +256,7 @@ function LocationGroup({
   const regionSheet = useSheet("settings-region");
   const switchId = useId();
   const switchBodyId = useId();
+  const permissionRowId = useId();
   const groups = useMemo(() => regionGroups(beaches), [beaches]);
   const status = location.status;
   // 꺼짐(off)만 스위치 꺼짐. 서버 HTML·권한 확인 중에는 켜짐으로 그렸다가 저장값을 읽으면 바뀜
@@ -266,12 +271,14 @@ function LocationGroup({
   // 지울 저장값이 있을 때만 '기본 지역 지우기'(고른 지역·고른 전국)
   const saved = scope.kind === "region" || scope.chosen;
   // 권한 줄은 물어볼 수 있을 때(아직 안 물음·받지 못함)만 눌러서 묻기. 그 밖에는 값만 보여 줌
+  // 거부는 줄 아래 안내의 '다시 시도'로만 한 번 더 요청(BRD-139). 또 거부면 안내 자리에 기기별 설정 경로
   const canAsk = status === "idle" || status === "unavailable";
+  const retryMessage = useLocationRetryMessage(location);
   const hint =
     status === "idle"
       ? t("idleHint")
       : status === "denied"
-        ? t("deniedHint")
+        ? (retryMessage ?? t("deniedHint"))
         : status === "unavailable"
           ? t("unavailableHint")
           : null;
@@ -291,6 +298,21 @@ function LocationGroup({
               {t("permission")} {t(`state.${status}`)}
             </span>
             {hint}
+            {status === "denied" && (
+              <>
+                {" "}
+                <LocationRetryButton
+                  state={location}
+                  // 버튼이 사라지므로 포커스를 권한 줄로(값이 '허용됨'으로 바뀐 것을 읽음). 다음 그리기 뒤에 옮김
+                  onSucceeded={() =>
+                    requestAnimationFrame(() =>
+                      document.getElementById(permissionRowId)?.focus(),
+                    )
+                  }
+                  className="-my-3.5 inline-flex min-h-touch items-center align-middle"
+                />
+              </>
+            )}
           </span>
           <span className="block">
             {t("regionHint")}
@@ -329,6 +351,7 @@ function LocationGroup({
         label={t("permission")}
         value={t(`value.${status}`)}
         onClick={canAsk ? requestLocation : undefined}
+        focusId={permissionRowId}
       />
       <SettingRow
         icon={<MapIcon size={16} />}
@@ -528,6 +551,7 @@ function Group({
 
 // 설정 줄(Figma set 179:166): 32px 아이콘 칸 + 이름(14) + 값(모바일 12 보조색 · PC 14 본문색)·› 또는 스위치
 // href면 링크, onClick이면 버튼, 둘 다 없으면 값만 보이는 줄(›도 없음)
+// focusId: 프로그램으로 포커스를 옮길 줄. 값만 보이는 줄이면 tabIndex -1(탭 순서에는 넣지 않음)
 function SettingRow({
   icon,
   label,
@@ -536,6 +560,7 @@ function SettingRow({
   control,
   href,
   onClick,
+  focusId,
 }: {
   icon: ReactNode;
   label: string;
@@ -544,6 +569,7 @@ function SettingRow({
   control?: ReactNode;
   href?: string;
   onClick?: (() => void) | undefined;
+  focusId?: string;
 }) {
   const actionable = href !== undefined || onClick !== undefined;
   const body = (
@@ -576,6 +602,7 @@ function SettingRow({
   if (href !== undefined) {
     return (
       <Link
+        id={focusId}
         href={href}
         className={cn(
           row,
@@ -589,6 +616,7 @@ function SettingRow({
   if (onClick !== undefined) {
     return (
       <button
+        id={focusId}
         type="button"
         onClick={onClick}
         className={cn(
@@ -600,5 +628,13 @@ function SettingRow({
       </button>
     );
   }
-  return <div className={row}>{body}</div>;
+  return (
+    <div
+      id={focusId}
+      tabIndex={focusId === undefined ? undefined : -1}
+      className={cn(row, "focus-visible:-outline-offset-2")}
+    >
+      {body}
+    </div>
+  );
 }

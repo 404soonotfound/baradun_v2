@@ -12,6 +12,7 @@ export function SectionHead({
   meta,
   note,
   large = false,
+  focusable = false,
 }: {
   id: string;
   title: string;
@@ -22,13 +23,17 @@ export function SectionHead({
   note?: string | null;
   // PC에서 제목을 한 단계 크게(가까운 바다, Figma 181:848 20px)
   large?: boolean;
+  // 프로그램으로 포커스를 옮길 제목(탭 순서에는 넣지 않음). 가까운 바다: 위치 '다시 시도' 성공 뒤(BRD-139)
+  focusable?: boolean;
 }) {
   return (
     <div className="flex items-baseline justify-between gap-3">
       <h2
         id={id}
+        tabIndex={focusable ? -1 : undefined}
         className={cn(
           "text-title-m text-text-default",
+          focusable && "outline-none",
           large && "lg:text-title-l",
         )}
       >

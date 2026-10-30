@@ -3,7 +3,8 @@ import { useSyncExternalStore } from "react";
 import type { LatLng } from "@/lib/geo";
 
 // 지금 위치 (BRD-25·26·27). 기기 메모리에만 두고 저장·전송하지 않음
-// 권한은 사용자가 버튼을 눌렀을 때만 요청. 거부한 사용자에게 다시 묻지 않음(반복 요청 금지)
+// 권한은 사용자가 버튼을 눌렀을 때만 요청. 거부한 사용자에게 자동으로 다시 묻지 않음(반복 요청 금지)
+// 거부 상태에서 사용자가 직접 누른 '다시 시도'만 브라우저에 한 번 더 요청(retry, BRD-139 · 10/30 사용자 결정 A안)
 // 이미 허용된 기기는 앱을 열 때 바로 위치를 받음
 // 설정의 '위치 사용' 스위치(BRD-36, ON-2 '설정에서 끌 수 있어요')를 끄면 권한을 확인하지도, 위치를 받지도 않음(off)
 
@@ -14,7 +15,9 @@ export type LocationState =
   | { status: "idle"; coords: null } // 아직 묻지 않음(권한 확인 기능이 없는 브라우저 포함)
   | { status: "locating"; coords: null } // 위치 받는 중
   | { status: "ready"; coords: LatLng }
-  | { status: "denied"; coords: null } // 사용자가 거부
+  // 사용자가 거부. retry: 다시 시도의 답을 기다리는 중(pending) · 다시 시도했는데도 거부(denied)
+  // 다시 시도 중에도 거부로 둠: 답이 오기 전까지는 여전히 위치가 없어서 화면(지역 보기·안내 배너)이 바뀌지 않게
+  | { status: "denied"; coords: null; retry?: "pending" | "denied" }
   | { status: "unavailable"; coords: null } // 기기·브라우저가 못 줌(시간 초과 포함)
   | { status: "off"; coords: null }; // 설정에서 위치 사용을 끔. 묻지도 쓰지도 않음
 
@@ -36,9 +39,44 @@ function browserStorage(): SwitchStorage | null {
   }
 }
 
-// 거부·꺼짐은 위치를 다시 묻지 않는 상태(지역으로 봄). 화면의 '내 주변'·배너 버튼이 같은 규칙을 씀
+// 거부·꺼짐은 위치를 자동으로 다시 묻지 않는 상태(지역으로 봄). 화면의 '내 주변'·배너 버튼이 같은 규칙을 씀
+// 거부는 사용자가 누른 '다시 시도'(retry)로만 한 번 더 요청
 export function locationBlocked(status: LocationState["status"]): boolean {
   return status === "denied" || status === "off";
+}
+
+// 다시 시도의 답을 기다리는 중인지. 버튼을 막아 두 번 요청하지 않게 함
+export function locationRetrying(state: LocationState): boolean {
+  return state.status === "denied" && state.retry === "pending";
+}
+
+// [1-1] 다시 시도해도 거부일 때 권한을 바꾸는 곳 안내 (BRD-139 · 사용자 결정 10/30)
+//   ios     = 아이폰·아이패드. 브라우저 종류와 상관없이 기기 설정의 위치 서비스 → 쓰고 있는 브라우저
+//             (Safari는 'Safari 웹사이트', Chrome·Firefox·Edge·Opera 같은 브라우저 앱·카카오톡 같은 앱 안 브라우저는 그 앱 이름)
+//             홈 화면에 추가한 앱도 포함. 앱마다 항목 이름이 달라 문구는 일반화해 둠(Apple 지원 102647: 설정 → 개인정보 보호 및 보안 → 위치 서비스 → 앱)
+//   browser = 그 밖의 기기·브라우저, 판별하지 못함(기본값). 브라우저의 사이트 설정
+// iOS·iPadOS는 모든 브라우저가 WebKit이고 기기 위치 서비스를 따름. 사이트 설정이 '묻기'여도 기기 설정('안 함')·이전 거부 기억 때문에 거부를 줌
+// 판별은 user agent·터치 지점 수만 쓰고, 안내 문구 고르기에만 씀(저장·전송하지 않음). 틀려도 문구만 다름
+export type LocationGuide = "ios" | "browser";
+
+export function locationGuide(
+  userAgent: string,
+  maxTouchPoints: number,
+): LocationGuide {
+  // 아이패드의 데스크톱 보기(Safari·Chrome 등)는 Mac처럼 보이지만 터치가 됨(Mac은 0)
+  const apple =
+    /iPhone|iPad|iPod/.test(userAgent) ||
+    (/Macintosh/.test(userAgent) && maxTouchPoints > 1);
+  return apple ? "ios" : "browser";
+}
+
+// 이 기기의 안내 종류. navigator를 못 읽으면 일반 안내
+export function deviceLocationGuide(): LocationGuide {
+  try {
+    return locationGuide(navigator.userAgent, navigator.maxTouchPoints ?? 0);
+  } catch {
+    return "browser";
+  }
 }
 
 // 권한 확인을 기다리는 최대 시간. 분류와 무관한 화면 대기 시간
@@ -93,14 +131,20 @@ export function createLocationStore(
 
   // 위치 한 번 받기. 권한을 모르는 기기면 여기서 브라우저가 묻는 창을 띄움
   // 답이 오기 전에 스위치를 끄면(차례 번호가 바뀜) 그 답은 버림
-  function locate() {
+  // retry: 거부 상태의 다시 시도. 받는 중 대신 '거부 · 다시 시도 중'으로 두고, 또 거부면 '다시 시도했는데도 거부'
+  // onRetrySucceeded: 다시 시도로 위치를 받았을 때만 부름(화면이 포커스를 옮김). 앱을 열 때 자동으로 받은 위치는 부르지 않음
+  function locate(retry = false, onRetrySucceeded?: () => void) {
     if (!enabled) return;
     if (!("geolocation" in navigator)) {
       setState({ status: "unavailable", coords: null });
       return;
     }
     const mine = ++generation;
-    setState({ status: "locating", coords: null });
+    setState(
+      retry
+        ? { status: "denied", coords: null, retry: "pending" }
+        : { status: "locating", coords: null },
+    );
     navigator.geolocation.getCurrentPosition(
       (position) => {
         if (mine !== generation) return;
@@ -111,12 +155,16 @@ export function createLocationStore(
             lng: position.coords.longitude,
           },
         });
+        if (retry) onRetrySucceeded?.();
       },
       (error) => {
         if (mine !== generation) return;
+        // 시간 초과·위치를 알 수 없음은 다시 시도였어도 기존과 같은 '받을 수 없음'
         setState(
           error.code === error.PERMISSION_DENIED
-            ? { status: "denied", coords: null }
+            ? retry
+              ? { status: "denied", coords: null, retry: "denied" }
+              : { status: "denied", coords: null }
             : { status: "unavailable", coords: null },
         );
       },
@@ -127,6 +175,8 @@ export function createLocationStore(
 
   function applyPermission(permission: PermissionState) {
     if (!enabled) return; // 꺼 둔 동안 권한이 바뀌어도 위치를 받지 않음
+    // 다시 시도 중이면 그 답(getCurrentPosition)이 결과를 정함. 묻는 창에서 허용하면 오는 알림으로 한 번 더 요청하지 않게
+    if (locationRetrying(state)) return;
     const action = permissionAction(state.status, permission);
     if (action === "locate") locate();
     else if (action === "denied") setState({ status: "denied", coords: null });
@@ -212,7 +262,16 @@ export function createLocationStore(
     locate();
   }
 
-  return { getState: () => state, subscribe, request, setEnabled };
+  // 거부 상태에서 사용자가 직접 누른 '다시 시도'에서만 호출(BRD-139). 브라우저에 한 번 더 요청하고, 묻는 창을 띄울지는 브라우저가 정함
+  // 자동으로 부르지 않음: 앱을 열 때·권한 확인·권한 변경 알림·정렬 탭은 거부면 묻지 않음(반복 요청 금지 유지)
+  // 거부가 아니면(꺼짐 포함)·이미 다시 시도 중이면 아무것도 안 함
+  // onSucceeded: 위치를 받으면 한 번 부름. 그사이 스위치를 끄는 등 차례가 바뀌어 버린 답이면 부르지 않음
+  function retry(onSucceeded?: () => void) {
+    if (state.status !== "denied" || locationRetrying(state)) return;
+    locate(true, onSucceeded);
+  }
+
+  return { getState: () => state, subscribe, request, retry, setEnabled };
 }
 
 // [4] 앱 전체에서 하나
@@ -220,6 +279,10 @@ const store = createLocationStore();
 
 export function requestLocation() {
   store.request();
+}
+
+export function retryLocation(onSucceeded?: () => void) {
+  store.retry(onSucceeded);
 }
 
 export function setLocationEnabled(next: boolean) {
