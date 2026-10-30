@@ -130,4 +130,42 @@ describe("CloudFront 보안 응답 헤더 정책 (BRD-118)", () => {
       expect(cspOn.length).toBeLessThan(500); // 1,783자 한도보다 훨씬 여유 있음(약 390자)
     });
   });
+
+  describe("E2E 정적 서버 헤더 정책 일치 검증 (BRD-118)", () => {
+    it("E2E static-server의 CSP 생성 결과가 infra buildContentSecurityPolicy와 완전히 일치한다", async () => {
+      const { buildCspHeader, SECURITY_HEADERS } = await (
+        // @ts-expect-error - static-server.mjs는 E2E용 JS 모듈이므로 타입 선언 파일이 없음
+        import("../../apps/web/e2e/static-server.mjs")
+      );
+
+      // 1. 사진 업로드 꺼짐(기본값) 비교
+      const infraDefaultCsp = buildContentSecurityPolicy({
+        photoUploadEnabled: false,
+      });
+      const e2eDefaultCsp = buildCspHeader();
+      expect(e2eDefaultCsp).toBe(infraDefaultCsp);
+
+      // 2. 사진 업로드 켜짐 비교
+      const testBucket = "test-photo-bucket";
+      const infraPhotoCsp = buildContentSecurityPolicy({
+        photoUploadEnabled: true,
+        photoBucketName: testBucket,
+      });
+      const e2ePhotoCsp = buildCspHeader(testBucket);
+      expect(e2ePhotoCsp).toBe(infraPhotoCsp);
+
+      // 3. 공통 보안 헤더 값 비교
+      expect(SECURITY_HEADERS["strict-transport-security"]).toBe(
+        "max-age=31536000",
+      );
+      expect(SECURITY_HEADERS["x-content-type-options"]).toBe("nosniff");
+      expect(SECURITY_HEADERS["x-frame-options"]).toBe("DENY");
+      expect(SECURITY_HEADERS["referrer-policy"]).toBe(
+        "strict-origin-when-cross-origin",
+      );
+      expect(SECURITY_HEADERS["permissions-policy"]).toBe(
+        "camera=(), microphone=(), geolocation=(self)",
+      );
+    });
+  });
 });

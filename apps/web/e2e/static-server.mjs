@@ -78,28 +78,44 @@ function decodePath(url) {
   }
 }
 
-createServer(async (req, res) => {
-  const pathname = decodePath(req.url);
-  const file =
-    pathname === null || pathname.startsWith("/data/")
-      ? null
-      : await resolveFile(pathname);
-  const status = file ? 200 : 404;
-  const target = file ?? path.join(OUT, "404.html");
-  try {
-    const body = await readFile(target);
-    const photoBucket = process.env.NEXT_PUBLIC_INQUIRY_PHOTO_BUCKET || process.env.CSP_PHOTO_BUCKET;
-    res.writeHead(status, {
-      ...SECURITY_HEADERS,
-      "content-security-policy": buildCspHeader(photoBucket),
-      "content-type": TYPES[path.extname(target)] ?? "application/octet-stream",
-      "cache-control": "no-store",
-    });
-    res.end(body);
-  } catch {
-    res.writeHead(500);
-    res.end();
-  }
-}).listen(PORT, "127.0.0.1", () => {
-  console.log(`e2e static server: http://127.0.0.1:${PORT}`);
-});
+function startServer() {
+  return createServer(async (req, res) => {
+    const pathname = decodePath(req.url);
+    const file =
+      pathname === null || pathname.startsWith("/data/")
+        ? null
+        : await resolveFile(pathname);
+    const status = file ? 200 : 404;
+    const target = file ?? path.join(OUT, "404.html");
+    try {
+      const body = await readFile(target);
+      const photoBucket =
+        process.env.NEXT_PUBLIC_INQUIRY_PHOTO_BUCKET ||
+        process.env.CSP_PHOTO_BUCKET;
+      res.writeHead(status, {
+        ...SECURITY_HEADERS,
+        "content-security-policy": buildCspHeader(photoBucket),
+        "content-type":
+          TYPES[path.extname(target)] ?? "application/octet-stream",
+        "cache-control": "no-store",
+      });
+      res.end(body);
+    } catch {
+      res.writeHead(500);
+      res.end();
+    }
+  }).listen(PORT, "127.0.0.1", () => {
+    console.log(`e2e static server: http://127.0.0.1:${PORT}`);
+  });
+}
+
+const isMain =
+  process.argv[1] &&
+  (process.argv[1] === fileURLToPath(import.meta.url) ||
+    process.argv[1].endsWith("/static-server.mjs"));
+
+if (isMain) {
+  startServer();
+}
+
+export { buildCspHeader, SECURITY_HEADERS, startServer };
