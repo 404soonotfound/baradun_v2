@@ -3,11 +3,14 @@
 import type { WarningItem } from "@baradun/contracts";
 import { ExternalLink } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 
+import { FinalCallNote } from "@/components/final-call-note";
 import { ReasonBadge } from "@/components/reason-badge";
+import { Button } from "@/components/ui/button";
 import { Sheet } from "@/components/ui/sheet";
 import { ZoneName } from "@/components/zone-name";
+import { cn } from "@/lib/cn";
 import { kstStamp } from "@/lib/snapshot/clock";
 import { useBadgeText } from "@/lib/snapshot/use-badge-text";
 import { useMetaText } from "@/lib/snapshot/use-meta-text";
@@ -76,56 +79,83 @@ export function WarningSheet({
       onClose={onClose}
       title={label ? badgeText(label) : t("warningSheet.title")}
     >
+      {/* Figma L05 186:276: 블록 사이 14, 배지·확인 줄 사이 6 (BRD-129) */}
       {item && label && (
-        <div className="flex flex-col gap-4 pb-2">
+        <div className="flex flex-col gap-3.5 pb-2">
           <div className="flex flex-col gap-1.5">
             <ReasonBadge label={label} />
             {checked && (
-              <p className="text-caption text-text-muted">{checked}</p>
+              <p className="text-label-s text-text-muted">{checked}</p>
             )}
           </div>
-          <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 rounded-input bg-bg-subtle px-4 py-3 text-body-s">
-            <dt className="text-text-muted">{t("warningSheet.type")}</dt>
-            <dd className="text-text-default">
+          {/* 계약 칸 표: 흰 면·기본 테두리·모서리 16, 행 좌우 14·위아래 10, 이름 칸 78(12.5 메타) + 값 14 (Figma 186:296) */}
+          <dl className="flex flex-col divide-y divide-border-subtle rounded-tile border border-border-default bg-bg-surface">
+            <SheetRow name={t("warningSheet.type")}>
               {t(`warning.type.${item.type}`)}
-            </dd>
-            <dt className="text-text-muted">{t("warningSheet.level")}</dt>
+            </SheetRow>
             {/* 영어 단계 문구는 이름 뒤에 붙는 소문자("advisory")라 칸에서는 첫 글자만 대문자 */}
-            <dd className="text-text-default first-letter:uppercase">
+            <SheetRow name={t("warningSheet.level")} capitalize>
               {t(`warning.level.${item.level}`)}
-            </dd>
-            <dt className="text-text-muted">{t("warningSheet.zone")}</dt>
-            <dd className="text-text-default">
+            </SheetRow>
+            <SheetRow name={t("warningSheet.zone")}>
               {/* 번역표에 없는 구역은 원문 그대로. 한국어가 아닌 화면은 원문이라고 알림(9.1) */}
               <ZoneName zone={item} block />
-            </dd>
-            <dt className="text-text-muted">{t("warningSheet.published")}</dt>
-            <dd className="text-text-default">
+            </SheetRow>
+            <SheetRow name={t("warningSheet.published")}>
               {kstStamp(item.publishedAt, nowMs) ?? "–"}
-            </dd>
-            <dt className="text-text-muted">{t("warningSheet.effective")}</dt>
-            <dd className="text-text-default">
+            </SheetRow>
+            <SheetRow name={t("warningSheet.effective")}>
               {kstStamp(item.effectiveFrom, nowMs) ?? "–"}
-            </dd>
+            </SheetRow>
           </dl>
-          <a
-            href={kmaOriginalUrl(item.type)}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex min-h-touch items-center gap-1.5 self-start text-body-s font-bold text-brand-default underline"
-          >
-            {t("warningSheet.original")}
-            <ExternalLink aria-hidden="true" size={14} />
-            <span className="sr-only"> ({t("warningSheet.newWindow")})</span>
-          </a>
-          <div className="flex flex-col gap-0.5 border-t border-border-default pt-3 text-caption text-text-muted">
-            <p>{t("safety.finalCall")}</p>
+          {/* 원문 보기: 보조 버튼 모양 링크 52 + 바깥 링크 아이콘 16 (Figma 170:546) */}
+          <Button asChild variant="secondary" className="gap-1.5">
+            <a
+              href={kmaOriginalUrl(item.type)}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <ExternalLink aria-hidden="true" size={16} />
+              {t("warningSheet.original")}
+              <span className="sr-only"> ({t("warningSheet.newWindow")})</span>
+            </a>
+          </Button>
+          <div className="flex flex-col gap-0.5">
+            <FinalCallNote />
             {/* 시트가 화면을 덮으므로 시트 안에도 출처(BRD-113 · 기상법). 확인 줄과 같은 실제 기관(agencyText:
                 기상청 → '출처: 기상청', 모르는 기관은 원문 그대로). 기관을 모르면(null) 지어내지 않고 두지 않음 */}
-            {sourceShown && agency && <p>{t("source.agency", { agency })}</p>}
+            {sourceShown && agency && (
+              <p className="pl-5 text-caption text-text-muted">
+                {t("source.agency", { agency })}
+              </p>
+            )}
           </div>
         </div>
       )}
     </Sheet>
+  );
+}
+
+function SheetRow({
+  name,
+  capitalize,
+  children,
+}: {
+  name: string;
+  capitalize?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <div className="flex items-center gap-3 px-3.5 py-2.5">
+      <dt className="w-[78px] shrink-0 text-label-s text-text-muted">{name}</dt>
+      <dd
+        className={cn(
+          "min-w-0 text-body text-text-default",
+          capitalize && "first-letter:uppercase",
+        )}
+      >
+        {children}
+      </dd>
+    </div>
   );
 }
