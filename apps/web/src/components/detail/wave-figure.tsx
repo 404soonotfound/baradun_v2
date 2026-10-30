@@ -1,8 +1,8 @@
 "use client";
 
-import { Pause, Play } from "lucide-react";
+import { Clock, Pause, Play } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 import { useReducedMotion } from "@/lib/motion";
 
@@ -11,10 +11,12 @@ import { useReducedMotion } from "@/lib/motion";
 // 물결 간격 114px·뒤 물결(8.5초·11초)은 분위기용 고정값(실제 파장 아님, B2-파장). 파주기마다 한 간격 이동.
 // 부표(x=150)는 앞 물결을 따라 오르내리고 기울기는 경사의 80%. 2m 넘는 파고는 축을 늘리지 않고 위를 자름
 // 동작 줄이기(기기 설정·설정의 화면 움직임 끔)·일시정지·파주기 없음 → 정지 화면
+// 색·자리는 Figma 220:3659(BRD-129): 물은 축~기준선 끝(WATER_R) 안에만, 기준선 이름은 그 오른쪽 바깥
 
 const W = 320;
 const H = 168;
 const AXIS_X = 34;
+const WATER_R = 246; // 물·기준선 오른쪽 끝(Figma 77%)
 const ZERO_Y = 146; // 0m
 const PX_PER_M = 50;
 const TOP_M = 2; // 축 위 끝
@@ -62,6 +64,8 @@ export function WaveFigure({
   const frontArea = useRef<SVGPathElement>(null);
   const backs = useRef<(SVGPathElement | null)[]>([]);
   const buoy = useRef<SVGGElement>(null);
+  const clipId = useId();
+  const fillId = useId();
 
   const shown = height === null ? 0 : Math.min(height, TOP_M);
   const amp = (shown * PX_PER_M) / 2;
@@ -115,8 +119,10 @@ export function WaveFigure({
   }, [height, period, mid, amp, moving]);
 
   if (height === null) {
+    // Figma 177:588: 그림 자리와 같은 면 · 높이 150 · 시계 아이콘 + 이유 한 줄
     return (
-      <p className="flex h-[120px] items-center justify-center rounded-input border border-dashed border-border-strong px-4 text-center text-body-s text-text-muted">
+      <p className="flex h-[150px] flex-col items-center justify-center gap-2 rounded-[14px] bg-bg-subtle px-4 text-center text-body-s text-text-muted">
+        <Clock aria-hidden="true" size={22} />
         {delayed ? t("delayed") : t("noValue")}
       </p>
     );
@@ -128,98 +134,146 @@ export function WaveFigure({
       : t("label", { height, period });
 
   return (
-    <figure className="flex flex-col gap-2">
-      <div className="relative w-full max-w-[400px]">
+    // 모바일은 그림과 설명 사이 12(카드 간격), PC는 6(Figma 183:838)
+    <figure className="flex flex-col gap-3 lg:gap-1.5">
+      {/* Figma wf: 옅은 면 · 반경 14 · 안쪽 위 8 · 옆 6 · 아래 4 */}
+      <div className="relative w-full rounded-[14px] bg-bg-subtle px-1.5 pt-2 pb-1">
         <svg
           role="img"
           aria-label={label}
           viewBox={`0 0 ${W} ${H}`}
-          className="block h-auto w-full overflow-hidden rounded-input bg-bg-subtle"
+          className="block h-auto w-full overflow-hidden"
         >
-          {/* 뒤 물결 2겹(분위기용) */}
-          {BACK.map((back, index) => (
-            <path
-              key={back.seconds}
-              ref={(node) => {
-                backs.current[index] = node;
-              }}
-              className="fill-brand-weak"
+          <defs>
+            <clipPath id={clipId}>
+              <rect x={AXIS_X} y={0} width={WATER_R - AXIS_X} height={H} />
+            </clipPath>
+            <linearGradient id={fillId} x1="0" y1="0" x2="0" y2="1">
+              <stop
+                offset="0"
+                className="[stop-color:var(--color-wave-front-top)]"
+              />
+              <stop
+                offset="1"
+                className="[stop-color:var(--color-wave-front-bottom)]"
+              />
+            </linearGradient>
+          </defs>
+          {/* 기준선(성인 평균 키). 물결 뒤에 그림 */}
+          {GUIDES.map((guide) => (
+            <line
+              key={guide.key}
+              x1={AXIS_X}
+              x2={WATER_R}
+              y1={yOf(guide.m)}
+              y2={yOf(guide.m)}
+              strokeDasharray="3 3"
+              className="stroke-wave-guide"
             />
           ))}
-          {/* 기준선(성인 평균 키) */}
-          {GUIDES.map((guide) => (
-            <g key={guide.key}>
-              <line
-                x1={AXIS_X}
-                x2={W - 34}
-                y1={yOf(guide.m)}
-                y2={yOf(guide.m)}
-                strokeDasharray="4 4"
-                className="stroke-border-strong"
+          <g clipPath={`url(#${clipId})`}>
+            {/* 뒤 물결 2겹(분위기용) */}
+            {BACK.map((back, index) => (
+              <path
+                key={back.seconds}
+                ref={(node) => {
+                  backs.current[index] = node;
+                }}
+                className={
+                  index === 0 ? "fill-wave-back-far" : "fill-wave-back-near"
+                }
+              />
+            ))}
+            {/* 앞 물결(채움 + 옅은 흰 마루선) + 부표 */}
+            <path ref={frontArea} fill={`url(#${fillId})`} />
+            <path
+              ref={front}
+              fill="none"
+              strokeWidth={1.4}
+              strokeOpacity={0.6}
+              className="stroke-white"
+            />
+            {/* 바닥 물방울 3개(장식) */}
+            {[0.24, 0.5, 0.76].map((at) => (
+              <circle
+                key={at}
+                cx={AXIS_X + (WATER_R - AXIS_X) * at}
+                cy={H - 5}
+                r={1.5}
+                className="fill-white"
+              />
+            ))}
+            <g ref={buoy}>
+              {/* 원점 = 물 표면. Figma 부표 21×31(돛대 · 몸통 · 흰 띠 · 아래 몸통) */}
+              <rect
+                x={-1.5}
+                y={-22}
+                width={3}
+                height={8.5}
+                className="fill-text-body"
+              />
+              <path
+                d="M-7.6 -13.5H7.6L4.8 -3H-4.8Z"
+                className="fill-wave-buoy"
+              />
+              <path
+                d="M-10.5 -3H10.5L8.6 2.7H-8.6Z"
+                className="fill-bg-surface"
+              />
+              <path
+                d="M-8.6 2.7H8.6L5.2 9.4H-5.2Z"
+                className="fill-wave-buoy"
               />
             </g>
-          ))}
-          {/* 앞 물결 + 부표 */}
-          <path ref={frontArea} className="fill-chart opacity-20" />
-          <path
-            ref={front}
-            fill="none"
-            strokeWidth={2.5}
-            className="stroke-chart"
-          />
-          <g ref={buoy}>
-            <line
-              y1={-16}
-              y2={-7}
-              strokeWidth={2}
-              className="stroke-text-default"
-            />
-            <circle
-              r={7}
-              className="fill-banner-amber-icon-fg stroke-text-default"
-              strokeWidth={1.5}
-            />
           </g>
-          {/* 기준선 이름: 물결 위에 그리고 바탕색 테두리를 둘러 가려지지 않게 */}
+          {/* 기준선 이름(물결 오른쪽 바깥, Figma '가슴 1.3m') */}
           {GUIDES.map((guide) => (
             <text
               key={guide.key}
-              x={W - 4}
-              y={yOf(guide.m) + 4}
-              textAnchor="end"
-              paintOrder="stroke"
-              strokeWidth={3}
-              className="fill-text-muted stroke-bg-subtle text-[10px]"
+              x={WATER_R + 4}
+              y={yOf(guide.m) + 3.5}
+              className="fill-text-body text-[10px]"
             >
-              {t(guide.key)}
+              {t("guideLabel", {
+                name: t(guide.key),
+                value: guide.m.toFixed(1),
+              })}
             </text>
           ))}
-          {/* 세로 축 + 파고 띠 */}
+          {/* 세로 축 + 눈금 + 파고 띠 */}
           <line
             x1={AXIS_X}
             x2={AXIS_X}
             y1={yOf(TOP_M)}
             y2={ZERO_Y}
-            className="stroke-border-strong"
+            className="stroke-wave-guide"
           />
           {[0, 1, 2].map((m) => (
-            <text
-              key={m}
-              x={AXIS_X - 6}
-              y={yOf(m) + 4}
-              textAnchor="end"
-              className="fill-text-muted text-[10px]"
-            >
-              {m === 0 ? "0" : `${m}m`}
-            </text>
+            <g key={m}>
+              <line
+                x1={AXIS_X - 4}
+                x2={AXIS_X}
+                y1={yOf(m)}
+                y2={yOf(m)}
+                className="stroke-wave-guide"
+              />
+              <text
+                x={AXIS_X - 8}
+                y={yOf(m) + 3.5}
+                textAnchor="end"
+                className="fill-text-muted text-[9.5px]"
+              >
+                {m === 0 ? "0" : `${m}m`}
+              </text>
+            </g>
           ))}
           <rect
             x={AXIS_X + 2}
             y={ZERO_Y - shown * PX_PER_M}
-            width={5}
+            width={5.7}
             height={shown * PX_PER_M}
-            rx={2}
-            className="fill-chart"
+            rx={1.9}
+            className="fill-brand-default opacity-35"
           />
           {height > TOP_M && (
             <text
@@ -233,19 +287,19 @@ export function WaveFigure({
             </text>
           )}
         </svg>
-        {/* 일시정지(44px). 움직일 수 없는 경우(동작 줄이기·파주기 없음)에는 두지 않음 */}
+        {/* 일시정지(44px, Figma 흰 원 · 아이콘 19). 움직일 수 없는 경우(동작 줄이기·파주기 없음)에는 두지 않음 */}
         {period !== null && !reduce && (
           <button
             type="button"
             aria-pressed={paused}
             aria-label={t("pause")}
             onClick={() => setPaused((value) => !value)}
-            className="absolute top-1 right-1 flex size-touch items-center justify-center rounded-full bg-bg-surface text-text-default shadow-card"
+            className="absolute top-1.5 right-1.5 flex size-touch items-center justify-center rounded-full bg-bg-surface text-brand-default"
           >
             {paused ? (
-              <Play aria-hidden="true" size={18} />
+              <Play aria-hidden="true" size={19} className="fill-current" />
             ) : (
-              <Pause aria-hidden="true" size={18} />
+              <Pause aria-hidden="true" size={19} className="fill-current" />
             )}
           </button>
         )}

@@ -9,16 +9,16 @@ import { kstStamp } from "@/lib/snapshot/clock";
 import { useStationHistory } from "@/lib/snapshot/history";
 import { type ChartPoint, waveChart } from "@/lib/wave-chart";
 
-// 24시간 파고 (BRD-32 · 노션 3장 WaveChart, 10/27 결정 ⑥)
-// 0부터 시작하는 축(0.5m 간격), 선 + 연한 면, 현재값 점과 값 라벨, x축 "24시간 전 · 12시간 전 · 지금".
+// 24시간 파고 (BRD-32 · 노션 3장 WaveChart, 10/27 결정 ⑥ · Figma 220:3696, BRD-129)
+// 0부터 시작하는 축(0.5m 간격, 눈금 글자 "0.0 0.5 1.0"), 선 + 연한 면, 현재값 속 빈 점과 값 라벨, x축 "24시간 전 · 12시간 전 · 지금".
 // 참고 기준선 없음. 결측·간격 90분 초과 구간은 빗금. 값이 없으면 그리지 않음(값을 지어내지 않음)
 
 const W = 322;
-const H = 132;
+const H = 156;
 const LEFT = 30;
-const RIGHT = 12;
-const TOP = 16;
-const BOTTOM = 112;
+const RIGHT = 6;
+const TOP = 10;
+const BOTTOM = 130;
 
 export function WaveChart({
   stationId,
@@ -79,7 +79,7 @@ export function WaveChart({
           role="img"
           aria-label={label}
           viewBox={`0 0 ${W} ${H}`}
-          className="block h-auto w-full max-w-[380px]"
+          className="block h-auto w-full"
         >
           <defs>
             <pattern
@@ -108,16 +108,13 @@ export function WaveChart({
                 y2={y(m)}
                 className="stroke-border-default"
               />
-              {Number.isInteger(m) && (
-                <text
-                  x={LEFT - 6}
-                  y={y(m) + 4}
-                  textAnchor="end"
-                  className="fill-text-muted text-[10px]"
-                >
-                  {m === 0 ? "0" : `${m}m`}
-                </text>
-              )}
+              <text
+                x={0}
+                y={y(m) + 3.5}
+                className="fill-text-muted text-[10px]"
+              >
+                {m.toFixed(1)}
+              </text>
             </g>
           ))}
           {chart.gaps.map((gap) => (
@@ -155,12 +152,12 @@ export function WaveChart({
               <g key={first.t}>
                 <path
                   d={`${line}L${x(end.t).toFixed(1)} ${BOTTOM}L${x(first.t).toFixed(1)} ${BOTTOM}Z`}
-                  className="fill-chart opacity-15"
+                  className="fill-chart opacity-12"
                 />
                 <path
                   d={line}
                   fill="none"
-                  strokeWidth={2}
+                  strokeWidth={2.2}
                   className="stroke-chart"
                 />
               </g>
@@ -171,15 +168,18 @@ export function WaveChart({
               <circle
                 cx={x(current.t)}
                 cy={y(current.v)}
-                r={4}
-                className="fill-chart stroke-bg-surface"
-                strokeWidth={2}
+                r={4.5}
+                className="fill-bg-surface stroke-chart"
+                strokeWidth={2.4}
               />
               <text
-                x={x(current.t) - 6}
-                y={y(current.v) - 8}
+                x={x(current.t) - 4}
+                // 점이 위쪽 끝 가까이면 글자를 점 아래로(Figma 1.9m), 아니면 위로(0.6m)
+                y={
+                  y(current.v) < TOP + 24 ? y(current.v) + 16 : y(current.v) - 7
+                }
                 textAnchor="end"
-                className="fill-text-default text-[11px] font-bold"
+                className="fill-text-default text-[10.5px] font-bold"
               >
                 {`${current.v}m`}
               </text>
@@ -193,7 +193,7 @@ export function WaveChart({
             <text
               key={String(text)}
               x={x(ms as number)}
-              y={H - 4}
+              y={H - 3}
               textAnchor={anchor as "start" | "middle" | "end"}
               className="fill-text-muted text-[10px]"
             >
@@ -213,8 +213,14 @@ export function WaveChart({
   }
 
   return (
-    <div className="flex flex-col gap-1.5">
-      <h3 className="text-caption font-bold text-text-muted">{t("title")}</h3>
+    <div className="flex flex-col gap-1">
+      {/* 모바일: 제목(14) 오른쪽에 '측정값', PC: 제목(13.5) 아래에 '측정값'(Figma 220:3693·183:966) */}
+      <div className="flex items-baseline justify-between gap-2 lg:flex-col lg:items-start lg:gap-1">
+        <h3 className="text-body font-bold text-text-default lg:text-label">
+          {t("title")}
+        </h3>
+        <p className="text-caption text-text-muted">{t("measured")}</p>
+      </div>
       {body()}
     </div>
   );
