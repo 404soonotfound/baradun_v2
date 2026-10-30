@@ -132,6 +132,58 @@ describe("buildSnapshot", () => {
     });
   });
 
+  it("특보 수집이 멈춰 확인이 45분을 넘음(관측 수집은 계속) → 발효 특보 해변은 이용불가 유지(B5), 다른 해변은 판단불가, 전국 확인 시각 null·발효 항목 유지", async () => {
+    // CONFIRMED 02:20 + 45분 = 03:05 < now 03:10(만료). 파고는 02:00 관측이라 03:30까지 fresh
+    const expiredNow = "2026-10-23T03:10:00Z";
+    const otherZoneBeaches: typeof BEACHES = BEACHES.map((b, i) =>
+      i === 1
+        ? ({ ...b, warningZones: { ...b.warningZones, sea: "S1311100" } } as (typeof BEACHES)[number])
+        : b,
+    );
+    const state = new MemoryStateStore();
+    await seedWarnings(state, [WIND_WAVE_ROW]);
+    await seedReadings(state);
+    const snapshot = buildSnapshot({
+      beaches: otherZoneBeaches,
+      zones: ZONES,
+      seasons: SEASONS,
+      inputs: await readPublishInputs(state),
+      now: expiredNow,
+    });
+    expectContract(snapshot);
+
+    // 풍랑주의보 앞바다(S1151200) 해변: 이용불가·특보 사유 유지, validUntil은 게시 시각
+    const gangmun = snapshot.status.beaches.b0001!;
+    expect(gangmun.category).toBe("unavailable");
+    expect(gangmun.warning.state).toBe("active");
+    expect(gangmun.warning.lastConfirmedAt).toBe(CONFIRMED);
+    expect(gangmun.reasons.map((r) => r.code)).toEqual(["warning"]);
+    expect(gangmun.validUntil).toBe(expiredNow);
+
+    // 발효 특보가 없는 해변: 특보 확인 만료로 판단불가(warning_unknown), validUntil은 게시 시각
+    const clearBefore = snapshot.status.beaches.b0002!;
+    expect(clearBefore.category).toBe("undetermined");
+    expect(clearBefore.warning.state).toBe("unknown");
+    expect(clearBefore.warning.lastConfirmedAt).toBe(CONFIRMED);
+    expect(clearBefore.reasons[0]).toMatchObject({
+      code: "warning_unknown",
+      at: CONFIRMED,
+    });
+    expect(clearBefore.validUntil).toBe(expiredNow);
+
+    // 전국 해상 특보: 확인 시각은 null('특보 없음'으로 오해 방지), 마지막 발효 항목은 유지
+    expect(snapshot.nationwideWarnings).toEqual({
+      lastConfirmedAt: null,
+      items: [
+        expect.objectContaining({
+          type: "wind_wave",
+          zoneCode: "S1151200",
+          zoneName: "강원중부앞바다",
+        }),
+      ],
+    });
+  });
+
   it("압축 원본이 깨지면 확인 시각을 믿지 않음 → 판단불가, 전국 확인 시각 null", async () => {
     const state = new MemoryStateStore();
     await seedWarnings(state, [HEAVY_RAIN_ROW]);
