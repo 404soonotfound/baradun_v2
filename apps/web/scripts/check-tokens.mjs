@@ -100,6 +100,9 @@ PAIRS.push(
   ["color.chart", "color.bg.surface", 3, "파고 선"],
   ["color.chart", "color.bg.subtle", 3, "파도 그림 앞 물결 선"],
   ["color.chart", "color.brand.weak", 3, "파도 그림 뒤 물결 위 앞 물결 선"],
+  // 버튼 hover 글자(BRD-129): 주요 = brand.hover 채움, 보조·고스트 = bg.subtle 면
+  ["color.brand.on", "color.brand.hover", 4.5, "주요 버튼 hover 글자"],
+  ["color.text.default", "color.bg.subtle", 4.5, "보조·고스트 버튼 hover 글자"],
   // 첫 실행 면책 고지(앰버 면 위 글자·아이콘, BRD-129)
   [
     "color.banner.amber.text",
