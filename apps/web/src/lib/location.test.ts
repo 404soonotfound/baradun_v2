@@ -482,6 +482,50 @@ describe("거부 상태의 다시 시도 (BRD-139)", () => {
     }
   });
 
+  it("다시 시도로 위치를 받았을 때만 성공 처리를 한 번 부름(또 거부·받을 수 없음은 부르지 않음)", async () => {
+    const allowed = deniedNavigator([
+      { kind: "allow", latitude: 1, longitude: 2 },
+    ]);
+    try {
+      const store = await deniedStore(allowed);
+      const onSucceeded = vi.fn();
+      store.retry(onSucceeded);
+      expect(store.getState().status).toBe("ready");
+      expect(onSucceeded).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+    for (const code of [1, 2, 3] as const) {
+      const failed = deniedNavigator([{ kind: "fail", code }]);
+      try {
+        const store = await deniedStore(failed);
+        const onSucceeded = vi.fn();
+        store.retry(onSucceeded);
+        expect(onSucceeded).not.toHaveBeenCalled();
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    }
+  });
+
+  it("다시 시도 중에 위치 사용을 끄면 늦게 온 위치는 버리고 성공 처리도 부르지 않음", async () => {
+    const fake = deniedNavigator(
+      [{ kind: "allow", latitude: 1, longitude: 2 }],
+      true,
+    );
+    try {
+      const store = await deniedStore(fake);
+      const onSucceeded = vi.fn();
+      store.retry(onSucceeded);
+      store.setEnabled(false);
+      fake.pending.forEach((answer) => answer());
+      expect(store.getState().status).toBe("off");
+      expect(onSucceeded).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("다시 시도 중에 위치 사용을 끄면 늦게 온 위치가 꺼짐을 덮지 않음", async () => {
     const fake = deniedNavigator(
       [{ kind: "allow", latitude: 1, longitude: 2 }],
@@ -516,41 +560,49 @@ describe("거부 상태의 다시 시도 (BRD-139)", () => {
   });
 });
 
-describe("locationGuide (BRD-139)", () => {
-  const IPHONE_SAFARI =
-    "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1";
-  const IPAD_DESKTOP =
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15";
+describe("locationGuide (BRD-139 · 사용자 결정 10/30)", () => {
+  const IOS =
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko)";
+  const MAC =
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko)";
+  const IPAD =
+    "Mozilla/5.0 (iPad; CPU OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko)";
 
-  it("아이폰·아이패드 Safari는 기기 설정 안내", () => {
-    expect(locationGuide(IPHONE_SAFARI, 5)).toBe("ios");
-    expect(locationGuide(IPAD_DESKTOP, 5)).toBe("ios"); // 데스크톱 보기 아이패드
+  it("아이폰·아이패드는 브라우저 종류와 상관없이 기기 설정 안내", () => {
+    for (const ua of [
+      `${IOS} Version/18.0 Mobile/15E148 Safari/604.1`, // Safari
+      `${IOS} CriOS/130.0.6723.90 Mobile/15E148 Safari/604.1`, // Chrome
+      `${IOS} FxiOS/132.0 Mobile/15E148 Safari/605.1.15`, // Firefox
+      `${IOS} EdgiOS/130.0.2849.80 Version/18.0 Mobile/15E148 Safari/604.1`, // Edge
+      `${IOS} Version/18.0 Mobile/15E148 Safari/604.1 OPT/5.1.0`, // Opera
+      `${IOS} Mobile/15E148 KAKAOTALK 25.0.0`, // 카카오톡 앱 안 브라우저
+      `${IOS} Mobile/15E148 Safari/605.1 NAVER(inapp; search; 2000; 12.10.0)`, // 네이버 앱 안 브라우저
+      `${IOS} Mobile/15E148`, // 홈 화면에 추가한 앱
+      `${IPAD} Version/18.0 Mobile/15E148 Safari/604.1`, // 아이패드 모바일 보기
+    ]) {
+      expect(locationGuide(ua, 5), ua).toBe("ios");
+    }
+    // 아이패드 데스크톱 보기(Mac처럼 보이지만 터치가 됨): Safari·Chrome
+    expect(locationGuide(`${MAC} Version/18.0 Safari/605.1.15`, 5)).toBe("ios");
+    expect(
+      locationGuide(`${MAC} CriOS/130.0 Version/18.0 Safari/604.1`, 5),
+    ).toBe("ios");
   });
 
-  it("Mac Safari·아이폰의 다른 브라우저 앱·앱 안 브라우저·안드로이드·빈 값은 브라우저 사이트 설정 안내", () => {
-    expect(locationGuide(IPAD_DESKTOP, 0)).toBe("browser"); // Mac
-    expect(
-      locationGuide(
-        "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/130.0 Mobile/15E148 Safari/604.1",
-        5,
-      ),
-    ).toBe("browser");
-    expect(
-      locationGuide(
-        "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) EdgiOS/130.0 Version/18.0 Mobile/15E148 Safari/604.1",
-        5,
-      ),
-    ).toBe("browser");
-    expect(
-      locationGuide(
-        "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 KAKAOTALK 25.0.0",
-        5,
-      ),
-    ).toBe("browser");
+  it("Mac·안드로이드·Windows·빈 값은 브라우저 사이트 설정 안내", () => {
+    expect(locationGuide(`${MAC} Version/18.0 Safari/605.1.15`, 0)).toBe(
+      "browser",
+    );
     expect(
       locationGuide(
         "Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Mobile Safari/537.36",
         5,
+      ),
+    ).toBe("browser");
+    expect(
+      locationGuide(
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36",
+        10,
       ),
     ).toBe("browser");
     expect(locationGuide("", 0)).toBe("browser");

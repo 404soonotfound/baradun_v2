@@ -65,8 +65,10 @@ const IPHONE_SAFARI =
   "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1";
 const BROWSER_GUIDE =
   "다시 시도했지만 위치 권한이 허용되지 않아 가까운 바다와 거리를 보여드릴 수 없어요. 브라우저 설정에서 이 사이트의 위치 권한을 허용한 뒤 다시 시도해 주세요.";
+const IPHONE_CHROME =
+  "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/130.0.6723.90 Mobile/15E148 Safari/604.1";
 const IOS_GUIDE =
-  "다시 시도했지만 위치 권한이 허용되지 않아 가까운 바다와 거리를 보여드릴 수 없어요. 설정 → 개인정보 보호 및 보안 → 위치 서비스 → Safari 웹사이트에서 '앱을 사용하는 동안'으로 바꾼 뒤 다시 시도해 주세요.";
+  "다시 시도했지만 위치 권한이 허용되지 않아 가까운 바다와 거리를 보여드릴 수 없어요. 설정 → 개인정보 보호 및 보안 → 위치 서비스에서 쓰고 있는 브라우저(Safari는 'Safari 웹사이트', 그 밖은 해당 앱)를 '앱을 사용하는 동안'으로 바꾼 뒤 다시 시도해 주세요.";
 
 const homeBanner = (page: Page) =>
   page.getByRole("status").filter({ hasText: "위치 없이 보고 있어요" });
@@ -76,7 +78,7 @@ const retryButton = (scope: Page | Locator) =>
 test.describe("홈 위치 배너", () => {
   test.use({ deviceRegion: null });
 
-  test("앱을 열 때는 묻지 않고, 다시 시도 → 허용이면 가까운 바다", async ({
+  test("앱을 열 때는 묻지 않고, 다시 시도 → 허용이면 가까운 바다 + 포커스는 그 제목", async ({
     page,
   }) => {
     await deniedDevice(page, "allow");
@@ -88,6 +90,9 @@ test.describe("홈 위치 배너", () => {
     await retryButton(homeBanner(page)).click();
     await expect(page.locator("#home-near")).toHaveText("가까운 바다");
     await expect(homeBanner(page)).toHaveCount(0);
+    // 사라진 버튼 대신 바다 목록 제목으로(탭 순서에는 없음)
+    await expect(page.locator("#home-near")).toBeFocused();
+    await expect(page.locator("#home-near")).toHaveAttribute("tabindex", "-1");
     expect(await asked(page)).toBe(1);
   });
 
@@ -126,23 +131,55 @@ test.describe("홈 위치 배너", () => {
       (window as unknown as { e2eRelease: () => void }).e2eRelease(),
     );
     await expect(page.locator("#home-near")).toHaveText("가까운 바다");
+    await expect(page.locator("#home-near")).toBeFocused();
     expect(await asked(page)).toBe(1);
   });
 });
 
-test.describe("아이폰 Safari", () => {
-  test.use({ deviceRegion: null, userAgent: IPHONE_SAFARI });
+test.describe("이미 허용한 기기", () => {
+  // 시험용 좌표(강릉 시험 해변 위치, 사용자 위치 아님)
+  test.use({
+    deviceRegion: null,
+    permissions: ["geolocation"],
+    geolocation: { latitude: coords!.lat, longitude: coords!.lng },
+  });
 
-  test("또 거부면 기기 설정 경로(위치 서비스 → Safari 웹사이트)", async ({
+  test("앱을 열 때 자동으로 받은 위치는 포커스를 옮기지 않음", async ({
     page,
   }) => {
-    await deniedDevice(page, "deny");
     await page.goto("/");
-    await retryButton(homeBanner(page)).click();
-    await expect(homeBanner(page).getByText(IOS_GUIDE)).toBeVisible();
-    await expect(page.getByText(BROWSER_GUIDE)).toHaveCount(0);
+    await expect(page.locator("#home-near")).toHaveText("가까운 바다");
+    // 거리가 붙은 카드가 그려질 때까지(위치를 받아 화면이 다시 그려짐)
+    await expect(
+      page
+        .locator("main")
+        .getByRole("link", { name: /\dkm/ })
+        .filter({ visible: true })
+        .first(),
+    ).toBeVisible();
+    await expect(page.locator("#home-near")).not.toBeFocused();
   });
 });
+
+// 아이폰·아이패드는 브라우저 종류와 상관없이 기기 설정 경로(사용자 결정 10/30)
+for (const [name, userAgent] of [
+  ["Safari", IPHONE_SAFARI],
+  ["Chrome", IPHONE_CHROME],
+] as const) {
+  test.describe(`아이폰 ${name}`, () => {
+    test.use({ deviceRegion: null, userAgent });
+
+    test("또 거부면 기기 설정 경로(위치 서비스 → 쓰고 있는 브라우저)", async ({
+      page,
+    }) => {
+      await deniedDevice(page, "deny");
+      await page.goto("/");
+      await retryButton(homeBanner(page)).click();
+      await expect(homeBanner(page).getByText(IOS_GUIDE)).toBeVisible();
+      await expect(page.getByText(BROWSER_GUIDE)).toHaveCount(0);
+    });
+  });
+}
 
 test.describe("설정 브라우저 위치 권한", () => {
   const permissionValue = (page: Page) =>
@@ -150,7 +187,9 @@ test.describe("설정 브라우저 위치 권한", () => {
       .getByText("브라우저 위치 권한", { exact: true })
       .locator("xpath=following-sibling::span[1]");
 
-  test("거부 안내의 다시 시도 → 허용이면 허용됨", async ({ page }) => {
+  test("거부 안내의 다시 시도 → 허용이면 허용됨 + 포커스는 권한 줄", async ({
+    page,
+  }) => {
     await deniedDevice(page, "allow");
     await page.goto("/settings/");
     await expect(permissionValue(page).first()).toHaveText("허용 안 함");
@@ -164,6 +203,10 @@ test.describe("설정 브라우저 위치 권한", () => {
     await retryButton(page).click();
     await expect(permissionValue(page).first()).toHaveText("허용됨");
     await expect(retryButton(page)).toHaveCount(0);
+    // 사라진 버튼 대신 값이 바뀐 '브라우저 위치 권한' 줄로
+    await expect(
+      page.locator("[tabindex='-1']").filter({ hasText: "브라우저 위치 권한" }),
+    ).toBeFocused();
     expect(await asked(page)).toBe(1);
   });
 
@@ -201,7 +244,7 @@ test.describe("탐색 가까운 순", () => {
   const notice = (page: Page) =>
     page.getByRole("status").filter({ hasText: "위치 권한이 꺼져 있어요" });
 
-  test("가까운 순을 눌러도 묻지 않고, 안내의 다시 시도 → 허용이면 거리 순", async ({
+  test("가까운 순을 눌러도 묻지 않고, 안내의 다시 시도 → 허용이면 거리 순 + 포커스는 화면 제목", async ({
     page,
   }) => {
     await deniedDevice(page, "allow");
@@ -215,6 +258,9 @@ test.describe("탐색 가까운 순", () => {
     await expect(
       page.locator("main li").filter({ hasText: /km/ }).first(),
     ).toBeVisible();
+    await expect(
+      page.getByRole("heading", { level: 1, name: "탐색" }),
+    ).toBeFocused();
     expect(await asked(page)).toBe(1);
   });
 
