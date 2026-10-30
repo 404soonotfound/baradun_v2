@@ -1,4 +1,4 @@
-"use client"; // 검색어·활동·지역·기기 저장·바다 정보를 쓰므로 브라우저 부품
+"use client"; // 검색어·지역·기기 저장·바다 정보를 쓰므로 브라우저 부품
 
 import { SearchX } from "lucide-react";
 import { useSearchParams } from "next/navigation";
@@ -13,12 +13,10 @@ import { Button } from "@/components/ui/button";
 import { Chip, RemovableChip } from "@/components/ui/chip";
 import { EmptyState } from "@/components/ui/empty-state";
 import { SearchField } from "@/components/ui/search-field";
-import { useActivity } from "@/lib/activity";
 import type { BeachSummary } from "@/lib/beach-summary";
 import { filterBeaches } from "@/lib/explore";
 import { localizedPath, type Locale } from "@/lib/i18n";
 import { showsKmaSource } from "@/lib/kma-source";
-import { joinMeta } from "@/lib/meta-join";
 import {
   clearRecentSearches,
   clipQuery,
@@ -43,7 +41,8 @@ import { deriveBeachView } from "@/lib/snapshot/view";
 // 검색 (BRD-31 · 노션 2장 SRCH, Figma L08·L09·S_M02_04)
 // 뒤로 + 검색창(들어오면 바로 입력) → 입력 전: 최근 검색 + 지역으로 찾기 / 입력 중: 결과 / 결과 없음
 // 검색어는 주소(?q=)에 둠(아키텍처 9.1). 검색은 브라우저에서 처리하고 서버로 보내지 않음
-// 범위: 탐색에서 고른 활동·지역을 따르고(칩으로 보임), 결과가 없으면 '전국에서 찾기'로 이 화면에서만 풀어 줌(저장 값은 안 바뀜)
+// 범위: 탐색에서 고른 지역을 따르고(칩으로 보임), 결과가 없으면 '전국에서 찾기'로 이 화면에서만 풀어 줌(저장 값은 안 바뀜)
+// 활동으로는 거르지 않음(BRD-128 · 10/30 결정: 탐색과 같은 범위, 판단은 활동과 무관)
 
 export function SearchScreen({
   locale,
@@ -56,7 +55,6 @@ export function SearchScreen({
 }) {
   const t = useTranslations();
   const intlLocale = useLocale();
-  const activity = useActivity();
   const snapshot = useSnapshot();
   const recent = useRecentSearches();
   const { rowBasis } = useRowText();
@@ -87,13 +85,8 @@ export function SearchScreen({
   const groups = useMemo(() => regionGroups(beaches), [beaches]);
   const chips = useMemo(() => regionChips(beaches), [beaches]);
 
-  // 검색 범위 칩: "수영 · 강원". 수영은 전체 해변이라 지역이 없으면 범위로 보지 않음
-  const scopeLabel = joinMeta([
-    activity === "swimming" && region === null
-      ? null
-      : t(`activity.${activity}`),
-    region === null ? null : regionName(groups, region),
-  ]);
+  // 검색 범위 칩: "강원 양양군". 전국이면 범위 칩 없음
+  const scopeLabel = region === null ? null : regionName(groups, region);
   const scoped = scopeLabel !== null && !widened;
 
   function update(next: string) {
@@ -110,7 +103,7 @@ export function SearchScreen({
     window.history.replaceState(null, "", url);
   }
 
-  const pool = scoped ? filterBeaches(beaches, activity, region) : beaches;
+  const pool = scoped ? filterBeaches(beaches, region) : beaches;
   const hits = searchBeaches(pool, query, intlLocale);
   const searching = query.trim() !== "";
 

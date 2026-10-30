@@ -88,21 +88,18 @@ const C = beach("c", "다해변", "부산", 35.1, ["swimming", "scuba"]);
 const ALL = [A, B, C];
 
 describe("filterBeaches", () => {
-  it("수영은 전체, 서핑·스쿠버는 그 활동이 확인된 해변만", () => {
-    expect(filterBeaches(ALL, "swimming", null)).toHaveLength(3);
-    expect(filterBeaches(ALL, "surfing", null).map((b) => b.id)).toEqual(["a"]);
-    expect(filterBeaches(ALL, "scuba", null).map((b) => b.id)).toEqual(["c"]);
+  it("활동으로 거르지 않음: 전국(null)은 활동 정보와 관계없이 전체(BRD-128)", () => {
+    expect(filterBeaches(ALL, null).map((b) => b.id)).toEqual(["a", "b", "c"]);
   });
 
-  it("지역은 시·도(와 시·군)로 거름, 전국(null)은 전체", () => {
+  it("지역은 시·도(와 시·군)로 거름. 그 지역의 모든 해변", () => {
     expect(
-      filterBeaches(ALL, "swimming", { sido: "강원", sigungu: null }).map(
-        (b) => b.id,
-      ),
+      filterBeaches(ALL, { sido: "강원", sigungu: null }).map((b) => b.id),
     ).toEqual(["a", "b"]);
     expect(
-      filterBeaches(ALL, "swimming", { sido: "강원", sigungu: "없는군" }),
-    ).toEqual([]);
+      filterBeaches(ALL, { sido: "부산", sigungu: null }).map((b) => b.id),
+    ).toEqual(["c"]);
+    expect(filterBeaches(ALL, { sido: "강원", sigungu: "없는군" })).toEqual([]);
   });
 });
 
@@ -239,10 +236,23 @@ describe("sortItems", () => {
 });
 
 describe("exploreMode", () => {
-  it("위치가 없으면 가까운 순 선택도 이름 순", () => {
-    expect(exploreMode("second", false)).toBe("name");
-    expect(exploreMode("second", true)).toBe("near");
-    expect(exploreMode("status", false)).toBe("status");
+  it("가까운 순은 위치를 받았을 때만, 그 밖(거부·끔·실패·안 물음·확인 중·받는 중)은 이름 순", () => {
+    expect(exploreMode("second", "ready")).toBe("near");
+    for (const status of [
+      "denied",
+      "off",
+      "unavailable",
+      "idle",
+      "checking",
+      "locating",
+    ] as const)
+      expect(exploreMode("second", status)).toBe("name");
+  });
+
+  it("상태별은 위치와 관계없이 상태별", () => {
+    expect(exploreMode("status", "ready")).toBe("status");
+    expect(exploreMode("status", "denied")).toBe("status");
+    expect(exploreMode("status", "idle")).toBe("status");
   });
 });
 

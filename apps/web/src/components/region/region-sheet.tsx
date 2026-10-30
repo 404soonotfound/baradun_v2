@@ -17,12 +17,10 @@ export interface RegionSheetProps {
   groups: readonly RegionGroup[];
   value: SavedRegion | null;
   onSelect: (region: SavedRegion) => void;
-  // '전국' 칩(시·도 단계 맨 앞). 없으면 null(칩 숨김: 지역 칩 줄에 전국이 따로 있는 탐색)
+  // '전국' 칩(시·도 단계 맨 앞). 없으면 null(칩 숨김)
   nationwide?: { selected: boolean; onSelect: () => void } | null;
-  // '내 주변' 칩. 위치를 거부했으면 null(칩 숨김)
+  // '내 주변' 칩. 위치를 거부했거나 쓰지 않는 화면(탐색)이면 null(칩 숨김)
   nearby?: { selected: boolean; onSelect: () => void } | null;
-  // 열 때 바로 보여 줄 시·도(탐색 칩에서 누른 시·도). 저장 값은 고를 때까지 바뀌지 않음. 없으면 저장 값의 시·도
-  startSido?: string | null;
 }
 
 export function RegionSheet({
@@ -33,14 +31,14 @@ export function RegionSheet({
   onSelect,
   nationwide = null,
   nearby = null,
-  startSido = null,
 }: RegionSheetProps) {
   const t = useTranslations("regionSheet");
   const [sido, setSido] = useState<string | null>(null);
   const [wasOpen, setWasOpen] = useState(open);
   if (open !== wasOpen) {
     setWasOpen(open);
-    if (open) setSido(startSido ?? value?.sido ?? null);
+    // 열 때 저장 값의 시·도부터(고른 지역이 있으면 시·군 단계)
+    if (open) setSido(value?.sido ?? null);
   }
 
   // 시·도가 하나뿐이고 '전국'·'내 주변'도 없으면 시·도 단계를 건너뜀

@@ -122,7 +122,7 @@ export function MapView({
     handleRef.current?.setTheme(theme);
   }, [theme, load.phase]);
 
-  // [5] 다 그린 뒤 범위가 바뀌면(활동·지역 변경) 그 범위로 옮김. 같은 범위면 그대로
+  // [5] 다 그린 뒤 범위가 바뀌면(지역 변경) 그 범위로 옮김. 같은 범위면 그대로
   const boundsKey = bounds.flat().join(",");
   const ready = load.phase === "ready";
   useEffect(() => {
