@@ -50,26 +50,24 @@ export function locationRetrying(state: LocationState): boolean {
   return state.status === "denied" && state.retry === "pending";
 }
 
-// [1-1] 다시 시도해도 거부일 때 권한을 바꾸는 곳 안내 (BRD-139)
-//   ios     = 아이폰·아이패드 Safari. 기기 설정의 위치 서비스 → Safari 웹사이트
+// [1-1] 다시 시도해도 거부일 때 권한을 바꾸는 곳 안내 (BRD-139 · 사용자 결정 10/30)
+//   ios     = 아이폰·아이패드. 브라우저 종류와 상관없이 기기 설정의 위치 서비스 → 쓰고 있는 브라우저
+//             (Safari는 'Safari 웹사이트', Chrome·Firefox·Edge·Opera 같은 브라우저 앱·카카오톡 같은 앱 안 브라우저는 그 앱 이름)
+//             홈 화면에 추가한 앱도 포함. 앱마다 항목 이름이 달라 문구는 일반화해 둠(Apple 지원 102647: 설정 → 개인정보 보호 및 보안 → 위치 서비스 → 앱)
 //   browser = 그 밖의 기기·브라우저, 판별하지 못함(기본값). 브라우저의 사이트 설정
-// 아이폰 Safari는 기기 설정('Safari 웹사이트: 안 함')·이전 거부 기억 때문에 사이트 설정이 '묻기'여도 거부를 줌
-// 판별은 안내 문구 고르기에만 쓰고 저장·전송하지 않음. 틀려도 문구만 다름
+// iOS·iPadOS는 모든 브라우저가 WebKit이고 기기 위치 서비스를 따름. 사이트 설정이 '묻기'여도 기기 설정('안 함')·이전 거부 기억 때문에 거부를 줌
+// 판별은 user agent·터치 지점 수만 쓰고, 안내 문구 고르기에만 씀(저장·전송하지 않음). 틀려도 문구만 다름
 export type LocationGuide = "ios" | "browser";
 
 export function locationGuide(
   userAgent: string,
   maxTouchPoints: number,
 ): LocationGuide {
-  // 아이패드의 데스크톱 보기는 Mac처럼 보이지만 터치가 됨(Mac은 0)
+  // 아이패드의 데스크톱 보기(Safari·Chrome 등)는 Mac처럼 보이지만 터치가 됨(Mac은 0)
   const apple =
     /iPhone|iPad|iPod/.test(userAgent) ||
     (/Macintosh/.test(userAgent) && maxTouchPoints > 1);
-  // Safari만 'Version/… Safari/'. 아이폰의 다른 브라우저 앱(Chrome·Firefox·Edge·Opera)·앱 안 브라우저는 그 앱의 위치 설정을 따름
-  const safari =
-    /Version\/[\d.]+.*Safari\//.test(userAgent) &&
-    !/CriOS|FxiOS|EdgiOS|OPiOS/.test(userAgent);
-  return apple && safari ? "ios" : "browser";
+  return apple ? "ios" : "browser";
 }
 
 // 이 기기의 안내 종류. navigator를 못 읽으면 일반 안내

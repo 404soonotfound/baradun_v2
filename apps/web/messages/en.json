@@ -907,7 +907,7 @@
     "retry": "Try again",
     "retrying": "Checking location…",
     "retryDenied": {
-      "ios": "We tried again, but location permission wasn’t allowed, so we can’t show nearby beaches or distances. Go to Settings → Privacy & Security → Location Services → Safari Websites, choose “While Using the App”, then try again.",
+      "ios": "We tried again, but location permission wasn’t allowed, so we can’t show nearby beaches or distances. Go to Settings → Privacy & Security → Location Services, set the browser you’re using (Safari Websites for Safari, or that app for other browsers) to “While Using the App”, then try again.",
       "browser": "We tried again, but location permission wasn’t allowed, so we can’t show nearby beaches or distances. Allow location for this site in your browser settings, then try again."
     }
   }

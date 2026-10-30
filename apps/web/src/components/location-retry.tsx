@@ -40,7 +40,7 @@ export function LocationRetryButton({
 }
 
 // 다시 시도했는데도 거부면 기기별 설정 경로(무슨 일 → 영향 → 다음 행동). 그 밖에는 null(화면의 원래 문구)
-// 아이폰·아이패드 Safari는 기기 설정 경로, 그 밖·판별 못 함은 브라우저 사이트 설정(lib/location.ts locationGuide)
+// 아이폰·아이패드는 브라우저와 상관없이 기기 설정 경로, 그 밖·판별 못 함은 브라우저 사이트 설정(lib/location.ts locationGuide)
 export function useLocationRetryMessage(state: LocationState): string | null {
   const t = useTranslations("location.retryDenied");
   if (state.status !== "denied" || state.retry !== "denied") return null;
