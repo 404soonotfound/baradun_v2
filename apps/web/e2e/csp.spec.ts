@@ -1,4 +1,4 @@
-import { test, expect } from "./fixtures";
+import { chooseTheme, expect, test } from "./fixtures";
 
 // CSP 및 보안 응답 헤더 검증 (BRD-118)
 // - CloudFront 보안 헤더(HSTS·nosniff·X-Frame-Options·Referrer-Policy·Permissions-Policy·CSP) 검증
@@ -227,16 +227,7 @@ test.describe("보안 응답 헤더 및 CSP 검증 (BRD-118)", () => {
 
   test("다크 모드 적용 시 CSP 위반이 없다", async ({ page }) => {
     await assertZeroCspViolations(page, "/settings/", async () => {
-      // 테마는 '테마' 줄을 눌러 여는 시트의 버튼으로 고름(BRD-129, PC는 '화면' 묶음을 먼저 고름)
-      const panel = page
-        .getByRole("navigation", { name: "설정 묶음" })
-        .getByRole("button", { name: "화면" });
-      if (await panel.isVisible()) await panel.click();
-      await page.getByRole("button", { name: /^테마/ }).click();
-      await page
-        .getByRole("dialog", { name: "테마" })
-        .getByRole("button", { name: "어둡게", exact: true })
-        .click();
+      await chooseTheme(page, "어둡게");
       await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
     });
   });
