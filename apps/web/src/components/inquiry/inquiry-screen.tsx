@@ -445,7 +445,8 @@ export function InquiryScreen({
               {"values" in copy.impact
                 ? t(`failed.${copy.impact.key}`, copy.impact.values)
                 : t(`failed.${copy.impact.key}`)}{" "}
-              {t("failed.kept")} {t(`failed.${copy.next}`)}
+              {t(contactEnabled ? "failed.kept" : "failed.keptTextOnly")}{" "}
+              {t(`failed.${copy.next}`)}
             </p>
           </div>
         </div>

@@ -870,6 +870,7 @@
       "rejected": "What was sent couldn't be accepted.",
       "invalidResponse": "We couldn't read the server's response.",
       "kept": "Your message, email and photos are still on this screen.",
+      "keptTextOnly": "What you wrote stays on this screen.",
       "titleUnknown": "We couldn't confirm it was received",
       "stopPhotos": "Stopped after uploading {uploaded} of {total} photos. Your feedback wasn't received.",
       "stopMessage": "Your feedback wasn't received.",

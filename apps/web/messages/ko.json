@@ -870,6 +870,7 @@
       "rejected": "보낸 내용을 받을 수 없는 형식이었어요.",
       "invalidResponse": "서버 응답을 확인하지 못했어요.",
       "kept": "쓴 내용·이메일·사진은 이 화면에 그대로 있어요.",
+      "keptTextOnly": "쓴 내용은 이 화면에 그대로 있어요.",
       "titleUnknown": "접수됐는지 확인하지 못했어요",
       "stopPhotos": "사진 {total}장 중 {uploaded}장을 올린 뒤 멈췄어요. 문의는 접수되지 않았어요.",
       "stopMessage": "문의는 접수되지 않았어요.",
