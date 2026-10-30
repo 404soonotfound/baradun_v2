@@ -263,7 +263,8 @@
     "sea": {
       "title": "바다 상태",
       "period": "파주기 {value}초",
-      "waveDelayed": "파고 측정이 늦어지고 있어요"
+      "waveDelayed": "파고 측정이 늦어지고 있어요",
+      "titleWide": "지금 바다"
     },
     "figure": {
       "label": "파고 {height}m, 파주기 {period}초",
@@ -277,6 +278,7 @@
       "caption": "부표가 앞 물결을 타고 {period}초(파주기)마다 한 번 오르내려요 · 앞 물결 높이와 왼쪽 파란 띠 = 파고 {height}m · 뒤 물결과 물결 간격은 분위기용 · 기준선은 성인 평균 키",
       "captionNoPeriod": "앞 물결 높이와 왼쪽 파란 띠 = 파고 {height}m · 파주기 측정값이 없어 움직이지 않아요 · 뒤 물결과 물결 간격은 분위기용 · 기준선은 성인 평균 키",
       "delayed": "측정이 늦어져 파도를 그리지 않아요",
+      "title": "파도 크기 비교",
       "guideLabel": "{name} {value}m"
     },
     "chart": {
@@ -322,7 +324,8 @@
       "directions": "길찾기",
       "directionsSecondary": "이 해변 길찾기",
       "newWindow": "카카오맵 새 창"
-    }
+    },
+    "regionFromMe": "{region} · 내 위치에서 {km}km"
   },
   "photo": {
     "alt": "{name} 사진",

@@ -11,6 +11,8 @@ import { BackButton } from "@/components/detail/back-button";
 import {
   Call119,
   DetailActions,
+  DirectionsLink,
+  FavoriteButton,
   NearbyWarnings,
   SourceList,
 } from "@/components/detail/detail-sections";
@@ -19,8 +21,14 @@ import { ShareButton } from "@/components/detail/share-button";
 import { DetailSheet } from "@/components/detail/detail-sheet";
 import { VerdictCard } from "@/components/detail/verdict-card";
 import { SituationBanner } from "@/components/situation-banner";
+import { ViewToggle } from "@/components/ui/view-toggle";
 import { WarningSheet } from "@/components/warning-sheet";
-import { currentActivity, useActivity } from "@/lib/activity";
+import {
+  ACTIVITIES,
+  currentActivity,
+  setActivity,
+  useActivity,
+} from "@/lib/activity";
 import { alternativeBeaches, isClearView } from "@/lib/alternatives";
 import type { BeachSummary } from "@/lib/beach-summary";
 import { addRecent } from "@/lib/favorites";
@@ -37,10 +45,11 @@ import { deriveBeachView } from "@/lib/snapshot/view";
 import { useOnline } from "@/lib/use-online";
 import { useSheet } from "@/lib/use-sheet";
 
-// 장소 상세 (BRD-32 · 노션 2장 DET/D-DET, Figma S_M04_01~05·L06)
+// 장소 상세 (BRD-32 · 노션 2장 DET/D-DET, Figma S_M04_01~05·183:748·183:1438·184:748, BRD-129)
 // 모바일 순서: 헤더 → 상황 배너 → 판단 카드 → 대안 해변(특보 없음이 아닐 때) → 바다 상태 → 2×2 지표 →
 //   주변 특보 → 119 → 정보 출처 → 하단 고정 즐겨찾기·길찾기
-// PC(lg): 본문(바다 상태·지표·주변 특보·출처) + 오른쪽 384px 열(판단 카드 + 길찾기 → 대안 → 119)
+// PC(lg): 머리 두 줄 → 본문(지금 바다·주변 특보·출처) + 오른쪽 384px 열(판단 카드 안 길찾기 → 대안 → 119)
+// Figma '현장 화면'(CCTV) 카드는 출시에서 뺌(10/30 사용자 결정)
 // 119·길찾기는 자리마다 하나씩 두고 화면 크기에 맞는 쪽만 보임(display:none이라 화면 읽기에도 하나만)
 // 상황 배너(결정 2로 확정): 오프라인·형식 미지원·불러오기 실패·확인된 판단 없음(BRD-38·결정 1)만. 관측 지연은 판단 카드가, 위치는 상세에 해당 없음
 // '자세히' 시트(DET-SH)·특보 상세 시트(WARN)는 BRD-33. 공유 버튼·시트는 BRD-34(share-button)
@@ -122,7 +131,7 @@ export function DetailScreen({
     ),
   });
 
-  // 헤더 2줄째: 지역 · 거리(위치가 있을 때만, 기기 안에서만 계산)
+  // 헤더 2줄째: 지역 · 거리(위치가 있을 때만, 기기 안에서만 계산). PC는 '내 위치에서 2.1km'(Figma 183:806)
   const region = `${beach.region.sido[locale]} ${beach.region.sigungu[locale]}`;
   const km =
     location.status === "ready"
@@ -130,26 +139,63 @@ export function DetailScreen({
       : null;
 
   return (
-    <div className="pb-[calc(var(--spacing-button)+32px)] lg:pb-0">
-      <header className="-mx-2 flex h-detail-header items-center gap-1">
-        <BackButton locale={locale} />
-        <div className="min-w-0 flex-1">
+    <div className="pb-[calc(var(--spacing-button)+32px)] lg:-mt-4 lg:px-6 lg:pb-0">
+      {/* 머리. 모바일 한 줄(Figma hbar 62: 뒤로 · 이름 · 활동 칩 · 공유),
+          PC 두 줄(Figma 183:784·183:803: '‹ 뒤로' | 즐겨찾기·공유 칩 / 큰 이름 | 활동 세그먼트) */}
+      <header className="-mr-3 -ml-4 flex h-detail-header items-center gap-1 lg:mx-0 lg:grid lg:h-auto lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end lg:gap-x-6 lg:gap-y-3.5">
+        <BackButton
+          locale={locale}
+          labelWide
+          className="lg:col-start-1 lg:row-start-1 lg:self-center lg:justify-self-start"
+        />
+        <div className="min-w-0 flex-1 lg:col-start-1 lg:row-start-2">
           <h1
             ref={titleRef}
             tabIndex={-1}
-            className="truncate text-[19px] leading-tight font-bold text-text-default outline-none"
+            className="truncate text-[19px] leading-[1.45] font-bold tracking-[-0.4px] text-text-default outline-none lg:text-[34px] lg:leading-[1.2] lg:tracking-[-1px]"
           >
             {beach.name[locale]}
           </h1>
-          <p className="truncate text-caption text-text-muted">
-            {km ? t("detail.region", { region, km }) : region}
+          <p className="truncate text-caption text-text-muted lg:text-[13.5px]">
+            {km ? (
+              <>
+                <span className="lg:hidden">
+                  {t("detail.region", { region, km })}
+                </span>
+                <span className="hidden lg:inline">
+                  {t("detail.regionFromMe", { region, km })}
+                </span>
+              </>
+            ) : (
+              region
+            )}
           </p>
         </div>
-        <ActivityButton />
-        <ShareButton locale={locale} beach={beach} />
+        <ActivityButton className="lg:hidden" />
+        <ViewToggle
+          label={t("activity.label")}
+          options={ACTIVITIES.map((item) => ({
+            value: item,
+            label: t(
+              item === "scuba" ? "activity.scubaFull" : `activity.${item}`,
+            ),
+          }))}
+          value={activity}
+          onChange={setActivity}
+          className="hidden w-[420px] lg:col-start-2 lg:row-start-2 lg:flex"
+        />
+        <div className="flex gap-2 lg:col-start-2 lg:row-start-1 lg:self-center lg:justify-self-end">
+          <FavoriteButton
+            beachId={beach.id}
+            variant="pill"
+            className="hidden lg:flex"
+          />
+          <ShareButton locale={locale} beach={beach} />
+        </div>
       </header>
 
-      <div className="mt-3 flex flex-col gap-3">
+      {/* 배너가 없으면 띄움 없이 판단 카드가 머리 바로 아래(Figma). 배너의 숨은 알림 글(sr-only)은 세지 않음 */}
+      <div className="flex flex-col gap-3.5 has-[>:not(.sr-only)]:mb-3.5 lg:has-[>:not(.sr-only)]:mt-3.5 lg:has-[>:not(.sr-only)]:mb-0">
         {sample && (
           <p
             role="note"
@@ -175,9 +221,10 @@ export function DetailScreen({
         />
       </div>
 
-      <div className="mt-4 flex flex-col gap-4 lg:grid lg:grid-cols-[minmax(0,1fr)_384px] lg:items-start lg:gap-6">
+      {/* 본문. 모바일 사이 14(Figma pad.stack), PC 두 열 740 | 384 · 사이 28(Figma 183:814) */}
+      <div className="flex flex-col gap-3.5 lg:mt-[18px] lg:grid lg:grid-cols-[minmax(0,1fr)_384px] lg:items-start lg:gap-7">
         {/* 오른쪽 열(PC) · 위쪽(모바일) */}
-        <div className="flex flex-col gap-4 lg:sticky lg:top-6 lg:col-start-2 lg:row-start-1">
+        <div className="flex flex-col gap-3.5 lg:sticky lg:top-20 lg:col-start-2 lg:row-start-1">
           <VerdictCard
             beachId={beach.id}
             view={view}
@@ -189,21 +236,33 @@ export function DetailScreen({
               setWarningItem(item);
               warningSheet.show();
             }}
+            more={
+              // 불러온 뒤에만 '자세히'(확인한 것이 있어야 보여줄 수 있음)
+              view.kind === "ready" && (
+                <button
+                  type="button"
+                  aria-haspopup="dialog"
+                  onClick={detailSheet.show}
+                  // 보이는 줄은 17px, 누르는 영역은 위아래로 넓혀 44px(BRD-39)
+                  className="relative inline-flex items-center gap-0.5 text-caption font-bold text-brand-default before:absolute before:inset-x-0 before:-inset-y-[13px] before:content-['']"
+                >
+                  {t("detailSheet.more")}
+                  <ChevronRight
+                    aria-hidden="true"
+                    size={12}
+                    strokeWidth={2.6}
+                  />
+                </button>
+              )
+            }
           >
-            {/* 불러온 뒤에만 '자세히'(확인한 것이 있어야 보여줄 수 있음) */}
-            {view.kind === "ready" && (
-              <button
-                type="button"
-                aria-haspopup="dialog"
-                onClick={detailSheet.show}
-                className="-my-2 inline-flex min-h-touch items-center gap-0.5 self-end text-body-s font-bold text-brand-default"
-              >
-                {t("detailSheet.more")}
-                <ChevronRight aria-hidden="true" size={16} />
-              </button>
-            )}
+            {/* PC: 길찾기는 판단 카드 안 맨 아래(Figma 183:1032). 모바일은 하단 고정 줄 */}
+            <DirectionsLink
+              beach={beach}
+              view={view}
+              className="hidden lg:flex"
+            />
           </VerdictCard>
-          <DetailActions beach={beach} view={view} className="hidden lg:flex" />
           {showAlt && (
             <AltBeaches
               locale={locale}
@@ -214,11 +273,12 @@ export function DetailScreen({
           <Call119 className="hidden lg:flex" />
         </div>
 
-        {/* 본문(PC 왼쪽) */}
-        <div className="flex flex-col gap-4 lg:col-start-1 lg:row-start-1">
+        {/* 본문(PC 왼쪽) · 사이 18(Figma 183:815) */}
+        <div className="flex flex-col gap-3.5 lg:col-start-1 lg:row-start-1 lg:gap-[18px]">
           <SeaCard
             view={view}
             stations={beach.stations}
+            ripCurrent={detail.ripCurrent}
             nowMs={snapshot.nowMs}
             kmaSource={kmaSource}
           />
@@ -246,8 +306,8 @@ export function DetailScreen({
         </div>
       </div>
 
-      {/* 하단 고정 버튼(모바일). 위쪽 페이드 + 하단 안전 영역 */}
-      <div className="fixed inset-x-0 bottom-0 z-20 bg-gradient-to-t from-bg-page from-70% to-transparent px-gutter pt-6 pb-[max(14px,env(safe-area-inset-bottom))] lg:hidden">
+      {/* 하단 고정 버튼(모바일, Figma cta: 위 12 · 옆 16 · 위쪽 투명 → 바탕 30%) + 하단 안전 영역 */}
+      <div className="fixed inset-x-0 bottom-0 z-20 bg-gradient-to-b from-transparent to-bg-page to-30% px-4 pt-3 pb-[max(14px,env(safe-area-inset-bottom))] lg:hidden">
         <DetailActions beach={beach} view={view} />
       </div>
 
