@@ -83,14 +83,16 @@ function fakeNext(root: string) {
   const executable = path.join(bin, "next");
   writeFileSync(
     executable,
+    // 신호 처리기를 먼저 걸고 나서 준비 파일을 씀. 반대 순서면 준비 파일을 본 시험이 곧바로 보낸 SIGTERM이
+    // 처리기 등록 전에 닿아 기본 동작으로 죽고 종료 파일을 못 남겨 가끔 실패했음(BRD-138)
     `const fs = require("node:fs");
-fs.writeFileSync(process.env.FAKE_NEXT_READY, process.argv.slice(2).join(" "));
 const stop = () => {
   fs.writeFileSync(process.env.FAKE_NEXT_STOPPED, "stopped");
   process.exit(0);
 };
 process.on("SIGINT", stop);
 process.on("SIGTERM", stop);
+fs.writeFileSync(process.env.FAKE_NEXT_READY, process.argv.slice(2).join(" "));
 setInterval(() => {}, 1_000);
 `,
   );
