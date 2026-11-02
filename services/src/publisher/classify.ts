@@ -3,14 +3,12 @@ import {
   isWaveHeightDelayed,
   type BeachMetrics,
 } from "../core/observations/beach-metrics";
-import {
-  byLevelThenTime,
-  type BeachWarning,
-} from "../core/warnings/beach-warnings";
+import type { BeachWarning } from "../core/warnings/beach-warnings";
 import {
   checkConfirmation,
   type Confirmation,
 } from "../core/warnings/confirmation";
+import { byLevelThenTime } from "../core/warnings/level-order";
 import { formatUtcIso, parseUtcIso } from "../core/warnings/time";
 import type { TsunamiBeach } from "../core/warnings/tsunami-match";
 

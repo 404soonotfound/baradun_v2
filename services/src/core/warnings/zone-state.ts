@@ -2,7 +2,7 @@ import type { WarningLevel } from "@baradun/contracts";
 import type { WarningKind } from "./codes";
 import type { PwnEvent, Zone } from "./normalize";
 import { orderPwnEvents } from "./order";
-import { parseUtcIso } from "./time";
+import { parseUtcIso, toMs } from "./time";
 
 // 구역·종류별 특보 상태 (아키텍처 4장·결정 기록 11장)
 // '없음 확인'은 여기서 만들지 않음 → 정상 전체 조회 여부·lastConfirmedAt은 BRD-18·56
@@ -79,9 +79,6 @@ function effectiveStatus(event: CleanEvent): ZoneStatus {
   };
 }
 
-// ISO 문자열 → 밀리초. 글자 비교는 ".000Z"처럼 표기가 다르면 틀림 → 숫자로 비교
-const ms = (iso: string) => Date.parse(iso);
-
 // 한 구역·종류의 정렬된 이벤트 → 기준 시각(밀리초)의 상태
 function statusOf(events: PwnEvent[], now: number): ZoneStatus {
   const reasons = events.flatMap(blockingReasons);
@@ -102,7 +99,7 @@ function statusOf(events: PwnEvent[], now: number): ZoneStatus {
   // (findLastIndex는 ES2023이라 대상 ES2022에선 못 씀 → 뒤에서부터 반복)
   let lastEffective = -1;
   for (let i = clean.length - 1; i >= 0; i--) {
-    if (ms(clean[i]!.effectiveFrom) <= now) {
+    if (toMs(clean[i]!.effectiveFrom) <= now) {
       lastEffective = i;
       break;
     }
@@ -145,7 +142,7 @@ export function applyZoneStates(
   const groups = new Map<string, PwnEvent[]>();
   for (const event of orderPwnEvents(events)) {
     // 발표 시각을 못 읽은 이벤트는 걸러낼 수 없어 남김 → 그 구역·종류는 unknown
-    if (event.publishedAt !== null && ms(event.publishedAt) > nowMs) continue;
+    if (event.publishedAt !== null && toMs(event.publishedAt) > nowMs) continue;
     const key = `${zoneKey(event.zone)}|${kindKey(event.kind)}`;
     const group = groups.get(key);
     if (group) group.push(event);
