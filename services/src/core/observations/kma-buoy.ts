@@ -1,5 +1,12 @@
 import { parseKstTime } from "../warnings/time";
-import { hasHeader, NO_USABLE_ROWS, readFramedLines } from "./framed-lines";
+import {
+  cellAt,
+  hasHeader,
+  NO_USABLE_ROWS,
+  readFramedLines,
+  type RowsResult,
+  STATION_ID,
+} from "./framed-lines";
 import { readMetricValue } from "./values";
 
 // kma_buoy 응답 읽기 (데이터 출처 3장, 결정 기록 11장 B1·10/22 BRD-19)
@@ -14,10 +21,7 @@ export interface KmaBuoyRow {
   readonly waveDirection: number | null; // 도(0~360)
 }
 
-// skippedRows: 모양·시각·측정기 번호를 읽지 못해 건너뛴 줄 수(운영 알림용, BRD-56)
-export type KmaBuoyResult =
-  | { status: "ok"; rows: KmaBuoyRow[]; skippedRows: number }
-  | { status: "failed"; reason: string };
+export type KmaBuoyResult = RowsResult<KmaBuoyRow>;
 
 // 실응답 180줄 모두 17칸 → 이 모양이 아니면 칸 자리를 믿을 수 없음
 const CELLS_PER_LINE = 17;
@@ -27,7 +31,6 @@ const COLUMN = {
   wavePeriod: 15,
   waveDirection: 16,
 } as const;
-const STATION_ID = /^\d+$/;
 // 칸 이름·단위 머리글(2026-10-21 실응답). 같은 이름(WS1·WH)이 여러 번 나와 단위 줄로 구분
 const HEADER_NAMES = [
   "YYMMDDHHMI",
@@ -89,10 +92,8 @@ export function parseKmaBuoy(text: string): KmaBuoyResult {
       skippedRows += 1;
       continue;
     }
-    const cell = (index: number): string => cells[index] ?? "";
-
-    const time = parseKstTime(cell(COLUMN.time));
-    const stationId = cell(COLUMN.station);
+    const time = parseKstTime(cellAt(cells, COLUMN.time));
+    const stationId = cellAt(cells, COLUMN.station);
     if (time.kind !== "time" || !STATION_ID.test(stationId)) {
       skippedRows += 1;
       continue;
@@ -100,10 +101,13 @@ export function parseKmaBuoy(text: string): KmaBuoyResult {
     rows.push({
       stationId,
       observedAt: time.iso,
-      wavePeriod: readMetricValue("wavePeriod", cell(COLUMN.wavePeriod)),
+      wavePeriod: readMetricValue(
+        "wavePeriod",
+        cellAt(cells, COLUMN.wavePeriod),
+      ),
       waveDirection: readMetricValue(
         "waveDirection",
-        cell(COLUMN.waveDirection),
+        cellAt(cells, COLUMN.waveDirection),
       ),
     });
   }
