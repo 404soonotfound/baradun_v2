@@ -1,6 +1,6 @@
 import { NextIntlClientProvider } from "next-intl";
 import type { Locale } from "@/lib/i18n";
-import { notoSansKr } from "@/lib/fonts";
+import "@fontsource-variable/noto-sans-kr";
 import { DISPLAY_INIT_SCRIPT } from "@/lib/display-init";
 import { getMessages } from "next-intl/server";
 import { ServiceWorkerSetup } from "@/components/service-worker";
@@ -17,11 +17,7 @@ export async function RootDocument({
 }) {
   const messages = await getMessages({ locale });
   return (
-    <html
-      lang={locale}
-      className={notoSansKr.variable}
-      suppressHydrationWarning
-    >
+    <html lang={locale} suppressHydrationWarning>
       <body>
         {/* body 맨 앞의 인라인 스크립트는 뒤 내용을 그리기 전에 실행됨(파서가 멈추고 실행).
             <head>를 직접 쓰지 않는 이유: 이 파일이 app/ 밖에 있어서 Next 린트(no-head-element)가
