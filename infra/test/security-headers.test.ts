@@ -91,13 +91,17 @@ describe("CloudFront 보안 응답 헤더 정책 (BRD-118)", () => {
         photoBucketName: "test-photo-bucket",
       });
       expect(csp).toContain("default-src 'self'");
-      expect(csp).toContain("script-src 'self' 'unsafe-inline'");
+      expect(csp).toContain(
+        "script-src 'self' 'unsafe-inline' https://www.googletagmanager.com; ",
+      );
       expect(csp).toContain("style-src 'self'");
       expect(csp).toContain(
-        "img-src 'self' blob: https://tiles.openfreemap.org https://tong.visitkorea.or.kr",
+        "img-src 'self' blob: https://tiles.openfreemap.org https://tong.visitkorea.or.kr https://www.googletagmanager.com https://*.google-analytics.com; ",
       );
       expect(csp).toContain("font-src 'self'");
-      expect(csp).toContain("connect-src 'self' https://tiles.openfreemap.org");
+      expect(csp).toContain(
+        "connect-src 'self' https://tiles.openfreemap.org https://www.googletagmanager.com https://*.google-analytics.com https://*.google.com; ",
+      );
       expect(csp).not.toContain("test-photo-bucket");
       expect(csp).not.toContain("amazonaws.com");
       expect(csp).toContain("worker-src 'self'");
@@ -113,8 +117,9 @@ describe("CloudFront 보안 응답 헤더 정책 (BRD-118)", () => {
         photoUploadEnabled: true,
         photoBucketName: "baradun-inquiry-photos-prod",
       });
+      // 사진 버킷은 GA 출처 뒤(BRD-143)
       expect(csp).toContain(
-        "connect-src 'self' https://tiles.openfreemap.org https://baradun-inquiry-photos-prod.s3.ap-northeast-2.amazonaws.com",
+        "connect-src 'self' https://tiles.openfreemap.org https://www.googletagmanager.com https://*.google-analytics.com https://*.google.com https://baradun-inquiry-photos-prod.s3.ap-northeast-2.amazonaws.com; ",
       );
       expect(csp.length).toBeLessThanOrEqual(CSP_MAX_LENGTH);
     });
@@ -127,7 +132,7 @@ describe("CloudFront 보안 응답 헤더 정책 (BRD-118)", () => {
       });
       expect(cspOff.length).toBeLessThanOrEqual(CSP_MAX_LENGTH);
       expect(cspOn.length).toBeLessThanOrEqual(CSP_MAX_LENGTH);
-      expect(cspOn.length).toBeLessThan(500); // 1,783자 한도보다 훨씬 여유 있음(약 390자)
+      expect(cspOn.length).toBeLessThan(800); // 1,783자 한도보다 훨씬 여유 있음(GA 출처 포함 약 670자, BRD-143)
     });
   });
 

@@ -24,16 +24,24 @@ const TYPES = {
 };
 
 // CloudFront 보안 응답 헤더 (BRD-118 · SiteDelivery/InquiryBackend와 동일)
+// infra/lib/site/security-headers.ts buildContentSecurityPolicy와 글자까지 같아야 함(infra/test/security-headers.test.ts가 비교)
+// GA 출처(BRD-143)는 지시어 맨 끝, connect-src는 사진 버킷보다 앞
 function buildCspHeader(photoBucket) {
-  const connectSources = ["'self'", "https://tiles.openfreemap.org"];
+  const connectSources = [
+    "'self'",
+    "https://tiles.openfreemap.org",
+    "https://www.googletagmanager.com",
+    "https://*.google-analytics.com",
+    "https://*.google.com",
+  ];
   if (photoBucket) {
     connectSources.push(`https://${photoBucket}.s3.ap-northeast-2.amazonaws.com`);
   }
   return [
     "default-src 'self'",
-    "script-src 'self' 'unsafe-inline'",
+    "script-src 'self' 'unsafe-inline' https://www.googletagmanager.com",
     "style-src 'self'",
-    "img-src 'self' blob: https://tiles.openfreemap.org https://tong.visitkorea.or.kr",
+    "img-src 'self' blob: https://tiles.openfreemap.org https://tong.visitkorea.or.kr https://www.googletagmanager.com https://*.google-analytics.com",
     "font-src 'self'",
     `connect-src ${connectSources.join(" ")}`,
     "worker-src 'self'",
