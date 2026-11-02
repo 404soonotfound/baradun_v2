@@ -724,7 +724,9 @@
       "deviceBody": "Favorites, recently viewed beaches (with when you viewed them and the activity you chose then), recent searches, default region, chosen activity, explore view, first-run records, unsent feedback (type and text, up to 7 days), display settings (theme, motion, language), the location setting and the last sea information received are saved only in this device's browser. There's no login and nothing is sent to a server. Everything except display settings, the location setting and the last sea information can be cleared in Settings › Reset device data.",
       "inquiryTitle": "Data inquiry",
       "inquiryBody": "Feedback is kept for 90 days and photos for 30 days, then deleted automatically. Email is collected only if you leave it, and deleted as soon as handling is done (within 90 days at the latest). Photo location data is removed on your device before sending.",
-      "inquiryNoDeadline": "We don't promise a reply deadline."
+      "inquiryNoDeadline": "We don't promise a reply deadline.",
+      "analyticsTitle": "Usage statistics and cookies",
+      "analyticsBody": "To improve the service, we use Google Analytics by Google LLC to collect usage records with cookies, such as screens visited, device and browser type and approximate region. Names, contact details, device location and search terms are not sent. Records are processed on Google's servers and kept for 2 months. You can block collection by blocking cookies in your browser or using the Google Analytics Opt-out Browser Add-on (tools.google.com/dlpage/gaoptout)."
     },
     "notice": "First-run notice version {version}",
     "links": "More"

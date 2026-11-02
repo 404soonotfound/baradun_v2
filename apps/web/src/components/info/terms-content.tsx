@@ -6,7 +6,7 @@ import { localizedPath, type Locale } from "@/lib/i18n";
 import { NOTICE_VERSION } from "@/lib/notice-version";
 
 // 서비스 정보·약관 /terms/ (BRD-36 · 노션 2장 POL)
-// 서비스 소개 · 면책(안전·활동 적합성을 보장하지 않음, 현장 안내 우선) · 개인정보(위치는 기기 안에서만, 문의 보관 기간) · ON-1 고지 버전
+// 서비스 소개 · 면책(안전·활동 적합성을 보장하지 않음, 현장 안내 우선) · 개인정보(위치는 기기 안에서만, 문의 보관 기간, 이용 통계) · ON-1 고지 버전
 // 문구는 법률 검토(BRD-64) 전 노션 초안. 보관 기간은 결정 기록 9장·11장(10/26 BRD-63)
 
 export async function TermsContent({ locale }: { locale: Locale }) {
@@ -42,6 +42,11 @@ export async function TermsContent({ locale }: { locale: Locale }) {
           title={t("privacy.inquiryTitle")}
           body={t("privacy.inquiryBody")}
           note={t("privacy.inquiryNoDeadline")}
+        />
+        {/* 이용 통계(Google Analytics, BRD-143): 운영 빌드만 수집. 수집 항목·목적·보관 기간·거부 방법·Google 서버 처리 */}
+        <Item
+          title={t("privacy.analyticsTitle")}
+          body={t("privacy.analyticsBody")}
         />
       </InfoSection>
 
