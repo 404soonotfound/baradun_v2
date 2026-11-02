@@ -25,10 +25,10 @@ describe("CSP meta 주입 (BRD-118)", () => {
     }
   });
 
-  it("인라인 스크립트가 없으면 script-src 'self'만 포함한다", () => {
+  it("인라인 스크립트가 없으면 script-src 'self'와 GA 출처만 포함한다", () => {
     const meta = buildMetaCspTag([]);
     expect(meta).toBe(
-      '<meta http-equiv="Content-Security-Policy" content="script-src \'self\'">',
+      '<meta http-equiv="Content-Security-Policy" content="script-src \'self\' https://www.googletagmanager.com">',
     );
   });
 
@@ -37,7 +37,7 @@ describe("CSP meta 주입 (BRD-118)", () => {
     const { html: result, hashes } = injectMetaCsp(html);
     expect(hashes).toHaveLength(1);
     expect(result).toContain(
-      `<head><meta http-equiv="Content-Security-Policy" content="script-src 'self' ${hashes[0]}"><meta charset="utf-8">`,
+      `<head><meta http-equiv="Content-Security-Policy" content="script-src 'self' https://www.googletagmanager.com ${hashes[0]}"><meta charset="utf-8">`,
     );
   });
 
