@@ -5,7 +5,8 @@
     "build": "tsc",
     "watch": "tsc -w",
     "test": "vitest run",
-    "cdk": "cdk"
+    "cdk": "cdk",
+    "check:iam-actions": "node --import tsx scripts/check-iam-actions.mjs"
   },
   "devDependencies": {
     "@types/node": "^24.10.1",

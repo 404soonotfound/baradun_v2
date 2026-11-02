@@ -1,0 +1,378 @@
+{
+  "AWS::CloudFront::Distribution": [
+    {
+      "permissions": [
+        "cloudfront:CreateConnectionGroup",
+        "cloudfront:GetConnectionGroup"
+      ],
+      "absentProperties": [
+        "DistributionConfig/ConnectionMode",
+        "DistributionConfig/TenantConfig",
+        "DistributionConfig/ConnectionGroupId"
+      ],
+      "reason": "멀티테넌트 배포·연결 그룹 미사용. CreateDistributionWithTags의 선택 의존 권한도 이 조건으로 제외"
+    },
+    {
+      "permissions": ["cloudfront:GetVpcOrigin"],
+      "absentProperties": ["DistributionConfig/Origins/VpcOriginConfig"],
+      "reason": "VPC 오리진 미사용"
+    },
+    {
+      "permissions": ["cloudfront:UpdateDistributionWithStagingConfig"],
+      "absentProperties": [
+        "DistributionConfig/ContinuousDeploymentPolicyId",
+        "DistributionConfig/Staging"
+      ],
+      "reason": "스테이징 배포·연속 배포 정책 미사용"
+    }
+  ],
+  "AWS::DynamoDB::Table": [
+    {
+      "permissions": [
+        "dynamodb:AssociateTableReplica",
+        "dynamodb:CreateTableReplica",
+        "iam:CreateServiceLinkedRole"
+      ],
+      "absentProperties": ["Replicas", "GlobalTableSettingsReplicationMode"],
+      "reason": "단일 리전 Table이며 GlobalTable·복제본 미사용"
+    },
+    {
+      "permissions": [
+        "dynamodb:BatchWriteItem",
+        "dynamodb:DeleteItem",
+        "dynamodb:DescribeImport",
+        "dynamodb:GetItem",
+        "dynamodb:ImportTable",
+        "dynamodb:PutItem",
+        "dynamodb:Query",
+        "dynamodb:Scan",
+        "dynamodb:UpdateItem",
+        "logs:CreateLogStream",
+        "logs:DescribeLogStreams",
+        "logs:DescribeLogGroups",
+        "logs:PutLogEvents",
+        "s3:GetObjectMetadata"
+      ],
+      "absentProperties": ["ImportSourceSpecification"],
+      "reason": "S3 가져오기·초기 항목 적재 미사용. GetObjectMetadata는 SAR에 없는 스키마 문자열이며 임의 IAM Action으로 허용하지 않음"
+    },
+    {
+      "permissions": [
+        "dynamodb:DeleteResourcePolicy",
+        "dynamodb:PutResourcePolicy"
+      ],
+      "absentProperties": ["ResourcePolicy"],
+      "reason": "테이블 리소스 정책 미사용"
+    },
+    {
+      "permissions": [
+        "dynamodb:DisableKinesisStreamingDestination",
+        "dynamodb:EnableKinesisStreamingDestination",
+        "dynamodb:UpdateKinesisStreamingDestination",
+        "kinesis:DescribeStream",
+        "kinesis:PutRecords"
+      ],
+      "absentProperties": ["KinesisStreamSpecification"],
+      "reason": "Kinesis 스트리밍 미사용"
+    },
+    {
+      "permissions": ["dynamodb:UpdateContributorInsights"],
+      "absentProperties": [
+        "ContributorInsightsSpecification",
+        "GlobalSecondaryIndexes/ContributorInsightsSpecification"
+      ],
+      "reason": "Contributor Insights 미사용"
+    },
+    {
+      "permissions": [
+        "kms:CreateGrant",
+        "kms:Decrypt",
+        "kms:DescribeKey",
+        "kms:Encrypt",
+        "kms:ListAliases",
+        "kms:RevokeGrant"
+      ],
+      "absentProperties": [
+        "SSESpecification/KMSMasterKeyId",
+        "SSESpecification/SSEType",
+        "ImportSourceSpecification"
+      ],
+      "reason": "고객 관리 KMS 키와 암호화된 가져오기 미사용; SSEEnabled는 별도 테스트에서 false로 고정"
+    }
+  ],
+  "AWS::IAM::Policy": [
+    {
+      "permissions": [
+        "iam:DeleteGroupPolicy",
+        "iam:DeleteUserPolicy",
+        "iam:GetGroupPolicy",
+        "iam:GetUserPolicy",
+        "iam:PutGroupPolicy",
+        "iam:PutUserPolicy"
+      ],
+      "absentProperties": ["Users", "Groups"],
+      "reason": "스택 인라인 정책은 역할에만 부착하며 사용자·그룹 미사용"
+    }
+  ],
+  "AWS::IAM::Role": [
+    {
+      "permissions": ["iam:AttachRolePolicy", "iam:DetachRolePolicy"],
+      "absentProperties": ["ManagedPolicyArns"],
+      "reason": "스택 역할에 관리형 정책 부착 금지; 인라인 정책만 사용"
+    },
+    {
+      "permissions": ["iam:DeleteRolePermissionsBoundary"],
+      "denied": true,
+      "reason": "NoBoundaryRemoval로 명시적 거부. boundary 첫 부착 롤백은 README의 예외 복구 절차 필요"
+    }
+  ],
+  "AWS::Lambda::Function": [
+    {
+      "permissions": [
+        "ec2:DescribeNetworkInterfaces",
+        "ec2:DescribeSecurityGroups",
+        "ec2:DescribeSubnets",
+        "ec2:DescribeVpcs"
+      ],
+      "absentProperties": ["VpcConfig"],
+      "reason": "VPC Lambda 미사용"
+    },
+    {
+      "permissions": [
+        "elasticfilesystem:DescribeMountTargets",
+        "s3files:ListMountTargets"
+      ],
+      "absentProperties": ["FileSystemConfigs"],
+      "reason": "EFS·S3 Files 마운트 미사용"
+    },
+    {
+      "permissions": [
+        "kms:CreateGrant",
+        "kms:Decrypt",
+        "kms:DescribeKey",
+        "kms:Encrypt",
+        "kms:GenerateDataKey"
+      ],
+      "absentProperties": ["KmsKeyArn", "Code/SourceKMSKeyArn"],
+      "reason": "Lambda 고객 관리 KMS 키 미사용"
+    },
+    {
+      "permissions": [
+        "lambda:AssociateRuntimeAlias",
+        "lambda:PutRuntimeManagementConfig"
+      ],
+      "absentProperties": ["RuntimeManagementConfig"],
+      "reason": "런타임 버전 직접 관리 미사용; AssociateRuntimeAlias는 SAR에 없는 스키마 문자열"
+    },
+    {
+      "permissions": [
+        "lambda:DeleteFunctionCodeSigningConfig",
+        "lambda:GetCodeSigningConfig",
+        "lambda:PutFunctionCodeSigningConfig"
+      ],
+      "absentProperties": ["CodeSigningConfigArn"],
+      "reason": "Code Signing 미사용"
+    },
+    {
+      "permissions": ["lambda:GetLayerVersion"],
+      "absentProperties": ["Layers"],
+      "reason": "Lambda Layer 미사용"
+    },
+    {
+      "permissions": ["lambda:PassCapacityProvider"],
+      "absentProperties": ["CapacityProviderConfig"],
+      "reason": "관리형 실행 용량 공급자 미사용"
+    },
+    {
+      "permissions": ["lambda:PublishVersion"],
+      "absentProperties": ["PublishToLatestPublished", "SnapStart"],
+      "reason": "버전 게시·SnapStart 미사용"
+    },
+    {
+      "permissions": ["lambda:PutFunctionRecursionConfig"],
+      "absentProperties": ["RecursiveLoop"],
+      "reason": "재귀 호출 설정 직접 변경 미사용"
+    },
+    {
+      "permissions": ["lambda:PutFunctionScalingConfig"],
+      "absentProperties": ["FunctionScalingConfig"],
+      "reason": "함수 확장 설정 미사용"
+    },
+    {
+      "permissions": ["s3:GetObjectVersion"],
+      "absentProperties": ["Code/S3ObjectVersion"],
+      "reason": "CDK 자산은 해시 키를 쓰며 S3 버전 ID를 지정하지 않음"
+    }
+  ],
+  "AWS::Logs::LogGroup": [
+    {
+      "permissions": [
+        "firehose:TagDeliveryStream",
+        "logs:CreateLogDelivery",
+        "s3:REST.PUT.OBJECT"
+      ],
+      "absentProperties": ["LogGroupClass"],
+      "reason": "CloudFormation 스키마의 선택 로그 전달 의존 권한. DELIVERY 로그 그룹 클래스 미사용이며 로그 전달 리소스도 종류 가드레일로 차단. REST.PUT.OBJECT는 IAM Action이 아님"
+    },
+    {
+      "permissions": ["logs:AssociateKmsKey", "logs:DisassociateKmsKey"],
+      "absentProperties": ["KmsKeyId"],
+      "reason": "로그 고객 관리 KMS 키 미사용"
+    },
+    {
+      "permissions": [
+        "logs:DeleteDataProtectionPolicy",
+        "logs:PutDataProtectionPolicy"
+      ],
+      "absentProperties": ["DataProtectionPolicy"],
+      "reason": "로그 데이터 보호 정책 미사용"
+    },
+    {
+      "permissions": [
+        "logs:DeleteIndexPolicy",
+        "logs:DescribeIndexPolicies",
+        "logs:PutIndexPolicy"
+      ],
+      "absentProperties": ["FieldIndexPolicies"],
+      "reason": "필드 인덱스 정책 미사용. 스키마 Read 목록은 가능한 전체 권한이며 이 선택 속성은 배포 검증 범위에서 제외"
+    },
+    {
+      "permissions": [
+        "logs:DeleteResourcePolicy",
+        "logs:DescribeResourcePolicies",
+        "logs:PutResourcePolicy"
+      ],
+      "absentProperties": ["ResourcePolicyDocument"],
+      "reason": "로그 리소스 정책 미사용. Read의 선택 정책 조회는 canary 검증 전까지 미확인으로 기록"
+    },
+    {
+      "permissions": ["logs:PutBearerTokenAuthentication"],
+      "absentProperties": ["BearerTokenAuthenticationEnabled"],
+      "reason": "Bearer 토큰 인증 설정 미사용"
+    },
+    {
+      "permissions": ["logs:PutLogGroupDeletionProtection"],
+      "absentProperties": ["DeletionProtectionEnabled"],
+      "reason": "로그 삭제 보호 설정 직접 변경 미사용"
+    }
+  ],
+  "AWS::S3::Bucket": [
+    {
+      "permissions": [
+        "s3:CreateBucketMetadataTableConfiguration",
+        "s3:DeleteBucketMetadataTableConfiguration",
+        "s3:UpdateBucketMetadataAnnotationTableConfiguration",
+        "s3:UpdateBucketMetadataInventoryTableConfiguration",
+        "s3:UpdateBucketMetadataJournalTableConfiguration",
+        "s3tables:CreateNamespace",
+        "s3tables:CreateTable",
+        "s3tables:CreateTableBucket",
+        "s3tables:GetTable",
+        "s3tables:GetTableMetadataLocation",
+        "s3tables:PutTableBucketPolicy",
+        "s3tables:PutTableEncryption",
+        "s3tables:PutTablePolicy",
+        "s3tables:UpdateTableMetadataLocation"
+      ],
+      "absentProperties": [
+        "MetadataConfiguration",
+        "MetadataTableConfiguration"
+      ],
+      "reason": "S3 Metadata·S3 Tables 미사용"
+    },
+    {
+      "permissions": ["s3:DeleteObject", "s3:PutObjectAcl", "s3:PutBucketAcl"],
+      "absentProperties": ["AccessControl"],
+      "reason": "ACL·객체 관리 미사용. 버킷 자동 삭제 custom resource도 템플릿 리소스 종류 검사로 차단"
+    },
+    {
+      "permissions": [
+        "s3:GetBucketDefaultStorageClass",
+        "s3:PutBucketDefaultStorageClass"
+      ],
+      "notInReference": true,
+      "reason": "현재 공개 SAR의 Action·Operation 양쪽에 없는 스키마 문자열. 추측한 IAM Action을 만들지 않음"
+    },
+    {
+      "permissions": ["s3:PutAccelerateConfiguration"],
+      "absentProperties": ["AccelerateConfiguration"],
+      "reason": "전송 가속 미사용"
+    },
+    {
+      "permissions": ["s3:PutAnalyticsConfiguration"],
+      "absentProperties": ["AnalyticsConfigurations"],
+      "reason": "버킷 분석 설정 미사용; DeleteBucketAnalyticsConfiguration도 이 Action으로 인가됨"
+    },
+    {
+      "permissions": ["s3:PutBucketAbac"],
+      "absentProperties": ["AbacStatus"],
+      "reason": "버킷 ABAC 변경 미사용"
+    },
+    {
+      "permissions": ["s3:PutBucketLogging"],
+      "absentProperties": ["LoggingConfiguration"],
+      "reason": "버킷 액세스 로깅 미사용"
+    },
+    {
+      "permissions": ["s3:PutBucketNotification"],
+      "absentProperties": ["NotificationConfiguration"],
+      "reason": "버킷 이벤트 알림 미사용"
+    },
+    {
+      "permissions": ["s3:PutBucketObjectLockConfiguration"],
+      "absentProperties": ["ObjectLockConfiguration", "ObjectLockEnabled"],
+      "reason": "Object Lock 미사용; PutObjectLockConfiguration API도 같은 IAM Action으로 인가됨"
+    },
+    {
+      "permissions": [
+        "s3:PutBucketReplication",
+        "s3:PutReplicationConfiguration",
+        "iam:PassRole"
+      ],
+      "absentProperties": ["ReplicationConfiguration"],
+      "reason": "버킷 복제 미사용"
+    },
+    {
+      "permissions": ["s3:PutBucketVersioning"],
+      "absentProperties": ["VersioningConfiguration"],
+      "reason": "버킷 버전 관리 미사용"
+    },
+    {
+      "permissions": ["s3:DeleteBucketWebsite", "s3:PutBucketWebsite"],
+      "absentProperties": ["WebsiteConfiguration"],
+      "reason": "S3 웹사이트 호스팅 미사용"
+    },
+    {
+      "permissions": [
+        "s3:PutIntelligentTieringConfiguration",
+        "s3:PutInventoryConfiguration",
+        "s3:PutMetricsConfiguration"
+      ],
+      "absentProperties": [
+        "IntelligentTieringConfigurations",
+        "InventoryConfigurations",
+        "MetricsConfigurations"
+      ],
+      "reason": "계층화·인벤토리·버킷 지표 설정 미사용"
+    }
+  ],
+  "AWS::SNS::Topic": [
+    {
+      "permissions": ["iam:PassRole"],
+      "absentProperties": ["DeliveryStatusLogging"],
+      "reason": "전달 상태 로깅 역할 미사용. Lambda·Scheduler PassRole로 SNS 역할 전달을 대신 인가하지 않음"
+    },
+    {
+      "permissions": ["sns:PutDataProtectionPolicy"],
+      "absentProperties": ["DataProtectionPolicy"],
+      "reason": "SNS 데이터 보호 정책 미사용"
+    }
+  ],
+  "AWS::SNS::Subscription": [
+    {
+      "permissions": ["iam:PassRole"],
+      "absentProperties": ["SubscriptionRoleArn"],
+      "reason": "Firehose 구독 역할 미사용. 이메일 구독은 역할을 전달하지 않음"
+    }
+  ]
+}
