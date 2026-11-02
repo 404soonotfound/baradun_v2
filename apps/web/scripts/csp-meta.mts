@@ -47,9 +47,13 @@ export function extractInlineScriptHashes(html: string): string[] {
   return [...hashes].sort();
 }
 
+// meta CSP가 허용하는 외부 스크립트 출처: Google Analytics gtag.js(BRD-143). 운영 빌드만 불러오지만 meta는 빌드마다 같음
+// 헤더 CSP(infra/lib/site/security-headers.ts·e2e/static-server.mjs)의 script-src에도 같은 출처가 있어야 함(csp-meta.test.ts가 확인)
+export const META_SCRIPT_SOURCES = ["https://www.googletagmanager.com"];
+
 // 메타 CSP 태그 생성
 export function buildMetaCspTag(hashes: readonly string[]): string {
-  const directives = ["script-src 'self'", ...hashes];
+  const directives = ["script-src 'self'", ...META_SCRIPT_SOURCES, ...hashes];
   return `<meta http-equiv="Content-Security-Policy" content="${directives.join(" ")}">`;
 }
 
