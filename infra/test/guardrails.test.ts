@@ -1,7 +1,16 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { Match } from "aws-cdk-lib/assertions";
+import { App } from "aws-cdk-lib";
+import { Match, Template } from "aws-cdk-lib/assertions";
 import { describe, expect, it } from "vitest";
+import { BaradunStack } from "../lib/baradun-stack";
+import {
+  MAX_MANAGED_POLICY_CHARS,
+  arnMatches,
+  excludedPropertyErrors,
+  managedPolicyChars,
+  type SchemaExclusions,
+} from "../scripts/iam-policy-checks";
 import {
   API_KEY_NAMES,
   API_KEY_PARAMETER_PREFIX,
@@ -211,29 +220,697 @@ describe("재시도·경보·용량 (11장 기본값 함정)", () => {
   });
 });
 
-describe("CDK bootstrap 실행 정책 (11장)", () => {
-  const policy = JSON.parse(
+type BootstrapStatement = {
+  Effect: string;
+  Sid?: string;
+  Action?: string | string[];
+  NotAction?: unknown;
+  Resource?: string | string[];
+  NotResource?: unknown;
+  Condition?: Record<string, Record<string, unknown>>;
+};
+
+type BootstrapPolicy = {
+  Statement: BootstrapStatement[];
+};
+
+// 실환경 계정 번호(비밀값 아님). Resource ARN 다섯 번째 콜론 이전에는 정책 변수를 쓸 수 없어 고정함 (BRD-93, BRD-121)
+const ACCOUNT = "717304679248";
+
+const EXECUTION_POLICY_FILES = [
+  "cfn-execution-policy.json",
+  "cfn-execution-workload-policy.json",
+] as const;
+
+function loadBootstrapPolicy(fileName: string): {
+  fileName: string;
+  raw: string;
+  policy: BootstrapPolicy;
+} {
+  const raw = readFileSync(
+    resolve(__dirname, "../bootstrap", fileName),
+    "utf8",
+  );
+  return {
+    fileName,
+    raw,
+    policy: JSON.parse(raw) as BootstrapPolicy,
+  };
+}
+
+// 템플릿 리소스 종류별 CloudFormation create·read·update·delete 핸들러 필수 IAM 작업 표 (BRD-121)
+// 현재 사용 속성의 검토된 부분집합임. 공식 스키마 전체 대조는 CI의 check:iam-actions에서 수행함.
+// 스키마의 선택 권한·명시적 Deny는 scripts/cfn-permission-exclusions.json으로 따로 설명·검사함.
+const REQUIRED_CFN_ACTIONS_BY_RESOURCE_TYPE: Record<
+  string,
+  {
+    create: readonly string[];
+    read: readonly string[];
+    update: readonly string[];
+    delete: readonly string[];
+  }
+> = {
+  "AWS::Budgets::Budget": {
+    create: [
+      "budgets:ModifyBudget",
+      "budgets:ViewBudget",
+      "budgets:TagResource",
+    ],
+    read: ["budgets:ViewBudget", "budgets:ListTagsForResource"],
+    update: [
+      "budgets:ModifyBudget",
+      "budgets:ViewBudget",
+      "budgets:TagResource",
+      "budgets:UntagResource",
+    ],
+    delete: ["budgets:ModifyBudget", "budgets:ViewBudget"],
+  },
+  "AWS::CloudFront::Distribution": {
+    create: [
+      "cloudfront:CreateDistribution",
+      "cloudfront:GetDistribution",
+      "cloudfront:GetDistributionConfig",
+      "cloudfront:TagResource",
+      "wafv2:GetWebACL",
+    ],
+    read: [
+      "cloudfront:GetDistribution",
+      "cloudfront:GetDistributionConfig",
+      "cloudfront:ListTagsForResource",
+    ],
+    update: [
+      "cloudfront:GetDistribution",
+      "cloudfront:GetDistributionConfig",
+      "cloudfront:UpdateDistribution",
+      "cloudfront:ListTagsForResource",
+      "cloudfront:TagResource",
+      "cloudfront:UntagResource",
+      "wafv2:GetWebACL",
+    ],
+    delete: [
+      "cloudfront:DeleteDistribution",
+      "cloudfront:GetDistribution",
+      "cloudfront:GetDistributionConfig",
+    ],
+  },
+  "AWS::CloudFront::Function": {
+    create: [
+      "cloudfront:CreateFunction",
+      "cloudfront:PublishFunction",
+      "cloudfront:DescribeFunction",
+      "cloudfront:TagResource",
+    ],
+    read: [
+      "cloudfront:DescribeFunction",
+      "cloudfront:GetFunction",
+      "cloudfront:ListTagsForResource",
+    ],
+    update: [
+      "cloudfront:UpdateFunction",
+      "cloudfront:PublishFunction",
+      "cloudfront:DescribeFunction",
+      "cloudfront:TagResource",
+      "cloudfront:UntagResource",
+    ],
+    delete: ["cloudfront:DeleteFunction", "cloudfront:DescribeFunction"],
+  },
+  "AWS::CloudFront::OriginAccessControl": {
+    create: ["cloudfront:CreateOriginAccessControl"],
+    read: ["cloudfront:GetOriginAccessControl"],
+    update: [
+      "cloudfront:UpdateOriginAccessControl",
+      "cloudfront:GetOriginAccessControl",
+    ],
+    delete: [
+      "cloudfront:DeleteOriginAccessControl",
+      "cloudfront:GetOriginAccessControl",
+    ],
+  },
+  "AWS::CloudFront::ResponseHeadersPolicy": {
+    create: ["cloudfront:CreateResponseHeadersPolicy"],
+    read: ["cloudfront:GetResponseHeadersPolicy"],
+    update: [
+      "cloudfront:UpdateResponseHeadersPolicy",
+      "cloudfront:GetResponseHeadersPolicy",
+    ],
+    delete: [
+      "cloudfront:DeleteResponseHeadersPolicy",
+      "cloudfront:GetResponseHeadersPolicy",
+    ],
+  },
+  "AWS::CloudWatch::Alarm": {
+    create: [
+      "cloudwatch:PutMetricAlarm",
+      "cloudwatch:DescribeAlarms",
+      "cloudwatch:TagResource",
+      "cloudwatch:ListTagsForResource",
+    ],
+    read: ["cloudwatch:DescribeAlarms", "cloudwatch:ListTagsForResource"],
+    update: [
+      "cloudwatch:PutMetricAlarm",
+      "cloudwatch:DescribeAlarms",
+      "cloudwatch:TagResource",
+      "cloudwatch:UntagResource",
+      "cloudwatch:ListTagsForResource",
+    ],
+    delete: ["cloudwatch:DeleteAlarms", "cloudwatch:DescribeAlarms"],
+  },
+  "AWS::DynamoDB::Table": {
+    create: [
+      "dynamodb:CreateTable",
+      "dynamodb:DescribeTable",
+      "dynamodb:DescribeTimeToLive",
+      "dynamodb:UpdateTimeToLive",
+      "dynamodb:DescribeContinuousBackups",
+      "dynamodb:UpdateContinuousBackups",
+      "dynamodb:DescribeContributorInsights",
+      "dynamodb:DescribeKinesisStreamingDestination",
+      "dynamodb:GetResourcePolicy",
+      "dynamodb:ListTagsOfResource",
+      "dynamodb:TagResource",
+      "dynamodb:UpdateTable",
+    ],
+    read: [
+      "dynamodb:DescribeTable",
+      "dynamodb:DescribeContinuousBackups",
+      "dynamodb:DescribeContributorInsights",
+      "dynamodb:DescribeKinesisStreamingDestination",
+      "dynamodb:ListTagsOfResource",
+      "dynamodb:GetResourcePolicy",
+      "dynamodb:DescribeTimeToLive",
+    ],
+    update: [
+      "dynamodb:UpdateTable",
+      "dynamodb:DescribeTable",
+      "dynamodb:DescribeTimeToLive",
+      "dynamodb:UpdateTimeToLive",
+      "dynamodb:DescribeContinuousBackups",
+      "dynamodb:UpdateContinuousBackups",
+      "dynamodb:DescribeContributorInsights",
+      "dynamodb:DescribeKinesisStreamingDestination",
+      "dynamodb:GetResourcePolicy",
+      "dynamodb:ListTagsOfResource",
+      "dynamodb:TagResource",
+      "dynamodb:UntagResource",
+    ],
+    delete: ["dynamodb:DeleteTable", "dynamodb:DescribeTable"],
+  },
+  "AWS::IAM::OIDCProvider": {
+    create: [
+      "iam:CreateOpenIDConnectProvider",
+      "iam:GetOpenIDConnectProvider",
+      "iam:TagOpenIDConnectProvider",
+    ],
+    read: ["iam:GetOpenIDConnectProvider"],
+    update: [
+      "iam:AddClientIDToOpenIDConnectProvider",
+      "iam:GetOpenIDConnectProvider",
+      "iam:ListOpenIDConnectProviderTags",
+      "iam:RemoveClientIDFromOpenIDConnectProvider",
+      "iam:TagOpenIDConnectProvider",
+      "iam:UntagOpenIDConnectProvider",
+      "iam:UpdateOpenIDConnectProviderThumbprint",
+    ],
+    delete: ["iam:DeleteOpenIDConnectProvider"],
+  },
+  "AWS::IAM::Policy": {
+    create: ["iam:GetRolePolicy", "iam:PutRolePolicy"],
+    read: ["iam:GetRolePolicy"],
+    update: ["iam:PutRolePolicy", "iam:DeleteRolePolicy"],
+    delete: ["iam:DeleteRolePolicy"],
+  },
+  "AWS::IAM::Role": {
+    create: [
+      "iam:CreateRole",
+      "iam:GetRole",
+      "iam:GetRolePolicy",
+      "iam:PutRolePolicy",
+      "iam:TagRole",
+      "iam:UntagRole",
+    ],
+    read: [
+      "iam:GetRole",
+      "iam:GetRolePolicy",
+      "iam:ListAttachedRolePolicies",
+      "iam:ListRolePolicies",
+      "iam:ListRoleTags",
+    ],
+    update: [
+      "iam:DeleteRolePolicy",
+      "iam:PutRolePermissionsBoundary",
+      "iam:PutRolePolicy",
+      "iam:TagRole",
+      "iam:UntagRole",
+      "iam:UpdateAssumeRolePolicy",
+      "iam:UpdateRole",
+      "iam:UpdateRoleDescription",
+    ],
+    delete: [
+      "iam:DeleteRole",
+      "iam:DeleteRolePolicy",
+      "iam:GetRole",
+      "iam:ListAttachedRolePolicies",
+      "iam:ListRolePolicies",
+      "iam:TagRole",
+      "iam:UntagRole",
+    ],
+  },
+  "AWS::Lambda::EventInvokeConfig": {
+    create: ["lambda:PutFunctionEventInvokeConfig"],
+    read: ["lambda:GetFunctionEventInvokeConfig"],
+    update: ["lambda:UpdateFunctionEventInvokeConfig"],
+    delete: ["lambda:DeleteFunctionEventInvokeConfig"],
+  },
+  "AWS::Lambda::Function": {
+    create: [
+      "lambda:CreateFunction",
+      "lambda:GetFunction",
+      "lambda:GetFunctionCodeSigningConfig",
+      "lambda:GetFunctionRecursionConfig",
+      "lambda:GetRuntimeManagementConfig",
+      "lambda:TagResource",
+      "iam:PassRole",
+      "s3:GetObject",
+    ],
+    read: [
+      "lambda:GetFunction",
+      "lambda:GetFunctionCodeSigningConfig",
+      "lambda:GetFunctionRecursionConfig",
+      "lambda:GetRuntimeManagementConfig",
+      "lambda:GetFunctionScalingConfig",
+    ],
+    update: [
+      "lambda:GetFunction",
+      "lambda:UpdateFunctionConfiguration",
+      "lambda:UpdateFunctionCode",
+      "lambda:GetFunctionCodeSigningConfig",
+      "lambda:GetFunctionRecursionConfig",
+      "lambda:GetRuntimeManagementConfig",
+      "lambda:TagResource",
+      "lambda:UntagResource",
+      "lambda:ListTags",
+      "lambda:PutFunctionConcurrency",
+      "lambda:DeleteFunctionConcurrency",
+      "iam:PassRole",
+      "s3:GetObject",
+    ],
+    delete: ["lambda:DeleteFunction", "lambda:GetFunction"],
+  },
+  "AWS::Lambda::Permission": {
+    create: ["lambda:AddPermission"],
+    read: ["lambda:GetPolicy"],
+    update: ["lambda:AddPermission", "lambda:RemovePermission"],
+    delete: ["lambda:RemovePermission"],
+  },
+  "AWS::Lambda::Url": {
+    create: ["lambda:CreateFunctionUrlConfig"],
+    read: ["lambda:GetFunctionUrlConfig"],
+    update: ["lambda:UpdateFunctionUrlConfig"],
+    delete: ["lambda:DeleteFunctionUrlConfig"],
+  },
+  "AWS::Logs::LogGroup": {
+    create: [
+      "logs:CreateLogGroup",
+      "logs:DescribeLogGroups",
+      "logs:PutRetentionPolicy",
+      "logs:TagResource",
+      "logs:GetDataProtectionPolicy",
+    ],
+    read: [
+      "logs:DescribeLogGroups",
+      "logs:ListTagsForResource",
+      "logs:GetDataProtectionPolicy",
+    ],
+    update: [
+      "logs:DescribeLogGroups",
+      "logs:PutRetentionPolicy",
+      "logs:DeleteRetentionPolicy",
+      "logs:TagResource",
+      "logs:UntagResource",
+      "logs:ListTagsForResource",
+      "logs:GetDataProtectionPolicy",
+    ],
+    delete: ["logs:DescribeLogGroups", "logs:DeleteLogGroup"],
+  },
+  "AWS::S3::Bucket": {
+    create: [
+      "s3:CreateBucket",
+      "s3:PutBucketTagging",
+      "s3:PutEncryptionConfiguration",
+      "s3:PutBucketCORS",
+      "s3:PutLifecycleConfiguration",
+      "s3:PutBucketPublicAccessBlock",
+      "s3:PutBucketOwnershipControls",
+      "s3:GetBucketAcl",
+      "s3:ListBucket",
+      "s3:TagResource",
+    ],
+    read: [
+      "s3:GetAccelerateConfiguration",
+      "s3:GetAnalyticsConfiguration",
+      "s3:GetBucketAbac",
+      "s3:GetBucketCORS",
+      "s3:GetBucketLogging",
+      "s3:GetBucketMetadataTableConfiguration",
+      "s3:GetBucketNotification",
+      "s3:GetBucketObjectLockConfiguration",
+      "s3:GetBucketOwnershipControls",
+      "s3:GetBucketPublicAccessBlock",
+      "s3:GetBucketTagging",
+      "s3:GetBucketVersioning",
+      "s3:GetBucketWebsite",
+      "s3:GetEncryptionConfiguration",
+      "s3:GetIntelligentTieringConfiguration",
+      "s3:GetInventoryConfiguration",
+      "s3:GetLifecycleConfiguration",
+      "s3:GetMetricsConfiguration",
+      "s3:GetReplicationConfiguration",
+      "s3:ListBucket",
+      "s3:ListTagsForResource",
+    ],
+    update: [
+      "s3:PutBucketCORS",
+      "s3:PutBucketOwnershipControls",
+      "s3:PutBucketPublicAccessBlock",
+      "s3:PutBucketTagging",
+      "s3:PutEncryptionConfiguration",
+      "s3:PutLifecycleConfiguration",
+      "s3:TagResource",
+      "s3:UntagResource",
+      "s3:ListBucket",
+    ],
+    delete: ["s3:DeleteBucket", "s3:ListBucket"],
+  },
+  "AWS::S3::BucketPolicy": {
+    create: ["s3:GetBucketPolicy", "s3:PutBucketPolicy"],
+    read: ["s3:GetBucketPolicy"],
+    update: ["s3:GetBucketPolicy", "s3:PutBucketPolicy"],
+    delete: ["s3:GetBucketPolicy", "s3:DeleteBucketPolicy"],
+  },
+  "AWS::SNS::Subscription": {
+    create: ["sns:Subscribe"],
+    read: ["sns:GetSubscriptionAttributes"],
+    update: ["sns:SetSubscriptionAttributes"],
+    delete: ["sns:Unsubscribe", "sns:GetSubscriptionAttributes"],
+  },
+  "AWS::SNS::Topic": {
+    create: ["sns:CreateTopic", "sns:GetTopicAttributes", "sns:TagResource"],
+    read: [
+      "sns:GetTopicAttributes",
+      "sns:ListTagsForResource",
+      "sns:ListSubscriptionsByTopic",
+      "sns:GetDataProtectionPolicy",
+    ],
+    update: [
+      "sns:SetTopicAttributes",
+      "sns:GetTopicAttributes",
+      "sns:ListTagsForResource",
+      "sns:ListSubscriptionsByTopic",
+      "sns:GetDataProtectionPolicy",
+      "sns:TagResource",
+      "sns:UntagResource",
+    ],
+    delete: ["sns:DeleteTopic", "sns:GetTopicAttributes"],
+  },
+  "AWS::Scheduler::Schedule": {
+    create: [
+      "scheduler:CreateSchedule",
+      "scheduler:GetSchedule",
+      "iam:PassRole",
+    ],
+    read: ["scheduler:GetSchedule"],
+    update: [
+      "scheduler:UpdateSchedule",
+      "scheduler:GetSchedule",
+      "iam:PassRole",
+    ],
+    delete: ["scheduler:DeleteSchedule", "scheduler:GetSchedule"],
+  },
+};
+
+describe("CDK bootstrap 실행 정책 (11장, BRD-121)", () => {
+  const executionPolicies = EXECUTION_POLICY_FILES.map(loadBootstrapPolicy);
+  const allStatements = executionPolicies.flatMap((p) => p.policy.Statement);
+  const allowStatements = allStatements.filter((s) => s.Effect === "Allow");
+  const allowedActionSet = new Set(
+    allowStatements.flatMap((s) => toList(s.Action)),
+  );
+  const exclusions = JSON.parse(
     readFileSync(
-      resolve(__dirname, "../bootstrap/cfn-execution-policy.json"),
+      resolve(__dirname, "../scripts/cfn-permission-exclusions.json"),
       "utf8",
     ),
-  ) as {
-    Statement: Array<{
-      Effect: string;
-      Sid?: string;
-      Action?: string | string[];
-      NotAction?: unknown;
-      Resource?: string | string[];
-      NotResource?: unknown;
-      Condition?: Record<string, Record<string, unknown>>;
-    }>;
-  };
+  ) as SchemaExclusions;
+  it("스키마 권한을 제외한 선택 속성을 템플릿에서 사용하지 않는다", () => {
+    expect(
+      excludedPropertyErrors(template.toJSON().Resources, exclusions),
+    ).toEqual([]);
+  });
 
-  it("Lambda 코드 자산은 실행 역할 계정의 서울 CDK 버킷 하나에서만 읽는다", () => {
-    const statements = policy.Statement.filter(
-      (s) => s.Sid === "ReadLambdaCodeAssets",
+  it("DynamoDB의 고객 관리 KMS 키를 제외하므로 SSEEnabled는 false다", () => {
+    for (const table of Object.values(
+      template.findResources("AWS::DynamoDB::Table"),
+    )) {
+      expect(table.Properties.SSESpecification?.SSEEnabled).toBe(false);
+    }
+  });
+
+  it("실제 운영 스택의 CloudFront 함수 이름과 예산 이름이 실행 정책 ARN에 맞는다", () => {
+    // 기존 Test 스택 이름이 아니라 실제 배포 식별자로 합성해야 CDK의 생성 이름을 검사할 수 있음.
+    const productionTemplate = Template.fromStack(
+      new BaradunStack(
+        new App({ context: { "aws:cdk:bundling-stacks": [] } }),
+        "BaradunV2",
+        { env: { account: ACCOUNT, region: "ap-northeast-2" } },
+      ),
     );
-    expect(statements).toEqual([
+    const functions = Object.values(
+      productionTemplate.findResources("AWS::CloudFront::Function"),
+    );
+    const budgets = Object.values(
+      productionTemplate.findResources("AWS::Budgets::Budget"),
+    );
+    expect(functions.length).toBeGreaterThan(0);
+    expect(budgets.length).toBeGreaterThan(0);
+    const cases = [
+      ...functions.map((r) => ({
+        arn: `arn:aws:cloudfront::${ACCOUNT}:function/${r.Properties.Name}`,
+        actions: [
+          "cloudfront:PublishFunction",
+          "cloudfront:DescribeFunction",
+          "cloudfront:TagResource",
+        ],
+      })),
+      ...budgets.map((r) => ({
+        arn: `arn:aws:budgets::${ACCOUNT}:budget/${r.Properties.Budget.BudgetName}`,
+        actions: ["budgets:ModifyBudget", "budgets:ViewBudget"],
+      })),
+    ];
+    for (const { arn, actions } of cases) {
+      for (const action of actions) {
+        expect(
+          allowStatements.some(
+            (s) =>
+              toList(s.Action).includes(action) &&
+              toList(s.Resource).some((r) => r !== "*" && arnMatches(r, arn)),
+          ),
+          `${action}: ${arn}`,
+        ).toBe(true);
+      }
+    }
+  });
+
+  it("CloudFront 함수는 이름 ARN, 배포는 명시적 사용자 태그로 제한한다", () => {
+    const statements = allowStatements.filter((s) =>
+      toList(s.Action).some((a) => a.startsWith("cloudfront:")),
+    );
+    for (const statement of statements) {
+      if (statement.Sid === "CloudFrontCreate") continue;
+      const resources = toList(statement.Resource);
+      if (statement.Sid === "CloudFrontTagOnCreate") {
+        expect(statement.Action).toBe("cloudfront:TagResource");
+        expect(resources).toEqual([
+          `arn:aws:cloudfront::${ACCOUNT}:distribution/*`,
+        ]);
+        expect(
+          statement.Condition?.StringEquals?.["aws:RequestTag/baradun:stack"],
+        ).toBe("BaradunV2");
+        continue;
+      }
+      expect(resources).toHaveLength(1);
+      if (resources[0].includes(":function/")) {
+        expect(resources[0]).toBe(
+          `arn:aws:cloudfront::${ACCOUNT}:function/ap-northeast-2BaradunV2*`,
+        );
+        expect(statement.Condition).toBeUndefined();
+      } else if (resources[0].includes(":distribution/")) {
+        expect(
+          statement.Condition?.StringEquals?.["aws:ResourceTag/baradun:stack"],
+        ).toBe("BaradunV2");
+      } else {
+        expect(
+          toList(statement.Action).some((a) =>
+            [
+              "cloudfront:TagResource",
+              "cloudfront:UntagResource",
+              "cloudfront:ListTagsForResource",
+            ].includes(a),
+          ),
+        ).toBe(false);
+      }
+    }
+    for (const resource of Object.values(
+      template.findResources("AWS::CloudFront::Distribution"),
+    )) {
+      expect(resource.Properties.Tags).toContainEqual({
+        Key: "baradun:stack",
+        Value: "Test",
+      });
+    }
+    expect(JSON.stringify(statements)).not.toContain("aws:cloudformation:");
+  });
+  // 핸들러 작업 외 예외: CFN의 bootstrap SSM 파라미터 해석과 Logs 구 태그 API 호환.
+  // s3:GetObject는 Lambda 핸들러 표에 포함하되, 아래에서 자산 버킷 하나로 제한함.
+  const approvedActionSet = new Set([
+    ...Object.values(REQUIRED_CFN_ACTIONS_BY_RESOURCE_TYPE).flatMap(
+      (handlers) => Object.values(handlers).flat(),
+    ),
+    "ssm:GetParameter",
+    "ssm:GetParameters",
+    "logs:ListTagsLogGroup",
+    "logs:TagLogGroup",
+    "logs:UntagLogGroup",
+  ]);
+  const unapprovedActions = (statements: readonly BootstrapStatement[]) =>
+    statements
+      .filter((s) => s.Effect === "Allow")
+      .flatMap((s) => toList(s.Action))
+      .filter((action) => !approvedActionSet.has(action));
+
+  it("필수 핸들러 작업과 명시한 호환·bootstrap 예외만 허락한다", () => {
+    expect(unapprovedActions(allStatements)).toEqual([]);
+  });
+
+  it.each([
+    "dynamodb:TransactWriteItems",
+    "dynamodb:ExecuteStatement",
+    "dynamodb:BatchExecuteStatement",
+    "dynamodb:BatchGetItem",
+    "dynamodb:BatchWriteItem",
+    "logs:GetQueryResults",
+    "logs:GetLogRecord",
+    "sns:PublishBatch",
+    "s3:GetObjectVersion",
+    "s3:GetObjectAttributes",
+  ])("추가 데이터 평면 작업 %s는 허용 목록에서 거른다", (action) => {
+    expect(
+      unapprovedActions([
+        ...allStatements,
+        { Effect: "Allow", Action: action, Resource: "*" },
+      ]),
+    ).toEqual([action]);
+  });
+
+  it("모든 bootstrap Action과 핸들러 표는 공식 IAM Action 스냅샷에 존재한다", () => {
+    // 공개 Service Authorization Reference에서 확인한 작업만 저장함.
+    // CI는 네트워크 없이 검사하며, 최신 공식 문서 재확인은 check:iam-actions로 수행함.
+    const snapshot = JSON.parse(
+      readFileSync(resolve(__dirname, "fixtures/iam-actions.json"), "utf8"),
+    ) as { actions: string[] };
+    const officialActions = new Set(snapshot.actions);
+    for (const { fileName, policy } of [
+      ...executionPolicies,
+      loadBootstrapPolicy("role-boundary-policy.json"),
+    ]) {
+      for (const statement of policy.Statement) {
+        for (const action of toList(statement.Action)) {
+          expect(officialActions.has(action), `${fileName}: ${action}`).toBe(
+            true,
+          );
+        }
+      }
+    }
+    for (const action of approvedActionSet) {
+      expect(officialActions.has(action), `핸들러 표·예외: ${action}`).toBe(
+        true,
+      );
+    }
+    for (const apiName of [
+      "cloudfront:CreateDistributionWithTags",
+      "s3:DeleteBucketCors",
+    ]) {
+      expect(officialActions.has(apiName), apiName).toBe(false);
+    }
+  });
+
+  it("정책 파일마다 공백 제외 6,144자(IAM 고객 관리형 정책 한도) 이하다", () => {
+    const actualFiles = readdirSync(resolve(__dirname, "../bootstrap"))
+      .filter((name) => name.endsWith(".json"))
+      .sort();
+    expect(actualFiles).toEqual(
+      [...EXECUTION_POLICY_FILES, "role-boundary-policy.json"].sort(),
+    );
+
+    for (const { fileName, raw } of [
+      ...executionPolicies,
+      loadBootstrapPolicy("role-boundary-policy.json"),
+    ]) {
+      const nonWhitespaceLength = managedPolicyChars(raw);
+      expect(
+        nonWhitespaceLength,
+        `${fileName}: ${nonWhitespaceLength}자`,
+      ).toBeLessThanOrEqual(MAX_MANAGED_POLICY_CHARS);
+    }
+  });
+
+  it("두 실행 정책 파일은 서비스 묶음이 겹치지 않게 나뉜다", () => {
+    const servicesPerFile = executionPolicies.map(
+      ({ fileName, policy }) =>
+        [
+          fileName,
+          new Set(
+            policy.Statement.flatMap((s) => toList(s.Action)).map(
+              (a) => a.split(":")[0],
+            ),
+          ),
+        ] as const,
+    );
+    const [first, second] = servicesPerFile;
+    const overlap = [...first[1]].filter((svc) => second[1].has(svc));
+    expect(overlap).toEqual([]);
+  });
+
+  it("모든 정책 파일에 서비스 단위 와일드카드(*)·NotAction·NotResource가 없다", () => {
+    for (const { fileName, policy } of executionPolicies) {
+      for (const s of policy.Statement) {
+        expect(s.NotAction, fileName).toBeUndefined();
+        expect(s.NotResource, fileName).toBeUndefined();
+        const actions = toList(s.Action);
+        expect(actions.length, `${fileName} ${s.Sid}`).toBeGreaterThan(0);
+        for (const a of actions) {
+          expect(a, `${fileName} ${s.Sid}: ${a}`).not.toContain("*");
+          expect(a, `${fileName} ${s.Sid}: ${a}`).toMatch(
+            /^[a-z0-9-]+:[A-Za-z0-9]+$/,
+          );
+        }
+      }
+    }
+  });
+
+  it("데이터 평면 작업을 주지 않고, S3 객체 읽기는 CDK 자산 버킷 하나만 예외로 허락한다", () => {
+    for (const s of allowStatements) {
+      for (const r of toList(s.Resource)) {
+        expect(r, `${s.Sid}: ${r}`).not.toBe("arn:aws:s3:::baradunv2-*/*");
+        expect(r, `${s.Sid}: ${r}`).not.toContain(":table/BaradunV2-*/*");
+      }
+    }
+
+    const assetStatements = allStatements.filter(
+      (s) =>
+        s.Sid === "ReadLambdaCodeAssets" ||
+        toList(s.Action).includes("s3:GetObject"),
+    );
+    expect(assetStatements).toEqual([
       {
         Sid: "ReadLambdaCodeAssets",
         Effect: "Allow",
@@ -244,9 +921,91 @@ describe("CDK bootstrap 실행 정책 (11장)", () => {
     ]);
   });
 
+  it("Resource ARN 다섯 번째 콜론 이전에 정책 변수나 *가 없고 계정 번호를 고정한다", () => {
+    for (const { fileName, policy } of executionPolicies) {
+      for (const s of policy.Statement) {
+        for (const r of toList(s.Resource)) {
+          if (r === "*") continue;
+          const parts = r.split(":");
+          expect(
+            parts.length,
+            `${fileName} ${s.Sid}: ${r}`,
+          ).toBeGreaterThanOrEqual(6);
+          const beforeFifthColon = parts.slice(0, 5).join(":");
+          expect(beforeFifthColon, `${fileName} ${s.Sid}: ${r}`).not.toContain(
+            "${",
+          );
+          expect(beforeFifthColon, `${fileName} ${s.Sid}: ${r}`).not.toContain(
+            "*",
+          );
+
+          const service = parts[2];
+          const region = parts[3];
+          const account = parts[4];
+          if (service === "s3") {
+            expect(region, r).toBe("");
+            expect(account, r).toBe("");
+          } else {
+            expect(account, `${fileName} ${s.Sid}: ${r}`).toBe(ACCOUNT);
+            if (["iam", "cloudfront", "budgets"].includes(service)) {
+              expect(region, r).toBe("");
+            } else if (service === "wafv2") {
+              expect(region, r).toBe("us-east-1");
+            } else {
+              expect(region, r).toBe("ap-northeast-2");
+            }
+          }
+        }
+      }
+    }
+  });
+
+  // 리소스 수준 권한을 지원하지 않는 작업만 Resource "*"를 허용함.
+  // 리전 서비스(logs, cloudwatch)는 서울 리전 조건을 걸고, 전역 서비스(cloudfront)에는 걸지 않음.
+  it("Resource * 문장은 리소스 수준 권한이 없는 승인된 작업만 담는다", () => {
+    const wildcardResourceStatements = allStatements.filter((s) =>
+      toList(s.Resource).includes("*"),
+    );
+    expect(wildcardResourceStatements).toEqual([
+      {
+        Sid: "CloudFrontCreate",
+        Effect: "Allow",
+        Action: [
+          "cloudfront:CreateDistribution",
+          "cloudfront:CreateFunction",
+          "cloudfront:CreateOriginAccessControl",
+          "cloudfront:CreateResponseHeadersPolicy",
+        ],
+        Resource: "*",
+      },
+      {
+        Sid: "LogsDescribeForGetAtt",
+        Effect: "Allow",
+        Action: "logs:DescribeLogGroups",
+        Resource: "*",
+        Condition: {
+          StringEquals: {
+            "aws:RequestedRegion": "ap-northeast-2",
+          },
+        },
+      },
+      {
+        Sid: "OpsAlarmsDescribe",
+        Effect: "Allow",
+        Action: "cloudwatch:DescribeAlarms",
+        Resource: "*",
+        Condition: {
+          StringEquals: {
+            "aws:RequestedRegion": "ap-northeast-2",
+          },
+        },
+      },
+    ]);
+  });
+
   // BRD-93: CloudFormation이 로그 그룹 GetAtt를 읽을 때 필요. 읽기 하나만, 다른 logs 동작은 섞지 않음
-  it("로그 그룹 목록 읽기는 DescribeLogGroups 하나만 따로 허락한다", () => {
-    const statements = policy.Statement.filter((s) =>
+  it("로그 그룹 목록 읽기는 DescribeLogGroups 하나만 서울 리전 조건으로 따로 허락한다", () => {
+    const statements = allStatements.filter((s) =>
       toList(s.Action).includes("logs:DescribeLogGroups"),
     );
     expect(statements).toEqual([
@@ -255,38 +1014,75 @@ describe("CDK bootstrap 실행 정책 (11장)", () => {
         Effect: "Allow",
         Action: "logs:DescribeLogGroups",
         Resource: "*",
+        Condition: {
+          StringEquals: {
+            "aws:RequestedRegion": "ap-northeast-2",
+          },
+        },
       },
     ]);
   });
 
-  it("스택이 쓰는 모든 AWS 서비스가 정책에 들어 있다", () => {
-    // AWS::S3::Bucket → s3, AWS::CloudFront::Function → cloudfront …
-    const services = new Set(
+  it("Lambda ARN은 unqualified와 qualified($LATEST·버전·별칭) 둘 다 덮는다", () => {
+    const lambdaStatements = allowStatements.filter((s) =>
+      toList(s.Action).some((a) => a.startsWith("lambda:")),
+    );
+    expect(lambdaStatements).toHaveLength(1);
+    expect(toList(lambdaStatements[0].Resource)).toEqual([
+      `arn:aws:lambda:ap-northeast-2:${ACCOUNT}:function:BaradunV2-*`,
+      `arn:aws:lambda:ap-northeast-2:${ACCOUNT}:function:BaradunV2-*:*`,
+    ]);
+  });
+
+  it("Budget은 고정 ARN 하나와 ModifyBudget·ViewBudget·ListTagsForResource·TagResource·UntagResource 5개만 허락한다", () => {
+    const budgetStatements = allStatements.filter((s) =>
+      toList(s.Action).some((a) => a.startsWith("budgets:")),
+    );
+    expect(budgetStatements).toEqual([
+      {
+        Sid: "Budget",
+        Effect: "Allow",
+        Action: [
+          "budgets:ListTagsForResource",
+          "budgets:ModifyBudget",
+          "budgets:TagResource",
+          "budgets:UntagResource",
+          "budgets:ViewBudget",
+        ],
+        Resource: `arn:aws:budgets::${ACCOUNT}:budget/baradun-v2-monthly`,
+      },
+    ]);
+  });
+
+  it("템플릿 리소스 종류별 Create·Read·Update·Delete 필수 작업이 모두 정책에 들어 있다", () => {
+    const templateResourceTypes = new Set(
       Object.values(
         template.toJSON().Resources as Record<string, { Type: string }>,
       )
         .map((r) => r.Type)
-        .filter((t) => t.startsWith("AWS::") && t !== "AWS::CDK::Metadata")
-        .map((t) => t.split("::")[1].toLowerCase()),
-    );
-    const allowed = new Set(
-      policy.Statement.filter((s) => s.Effect === "Allow")
-        .flatMap((s) => toList(s.Action))
-        .map((a) => a.split(":")[0]),
+        .filter((t) => t.startsWith("AWS::") && t !== "AWS::CDK::Metadata"),
     );
 
-    for (const service of services) {
-      expect([...allowed], `정책에 ${service}가 없어요`).toContain(service);
-    }
-  });
+    // 템플릿에 새 리소스 종류가 생기면 필수 작업 표에도 반드시 등록해야 함
+    expect([...templateResourceTypes].sort()).toEqual(
+      Object.keys(REQUIRED_CFN_ACTIONS_BY_RESOURCE_TYPE).sort(),
+    );
 
-  it("모든 동작(*)·NotAction을 주지 않고, IAM은 이 스택의 역할로만 제한한다", () => {
-    for (const s of policy.Statement) {
-      expect(s.NotAction).toBeUndefined();
-      expect(s.NotResource).toBeUndefined();
-      for (const a of toList(s.Action)) expect(a).not.toBe("*");
-      if (toList(s.Action).some((a) => a.startsWith("iam:"))) {
-        expect(toList(s.Resource)).not.toContain("*");
+    for (const [resourceType, handlers] of Object.entries(
+      REQUIRED_CFN_ACTIONS_BY_RESOURCE_TYPE,
+    )) {
+      for (const lifecycle of ["create", "read", "update", "delete"] as const) {
+        const requiredActions = handlers[lifecycle];
+        expect(
+          requiredActions.length,
+          `${resourceType}.${lifecycle} 필수 작업이 비어 있어요`,
+        ).toBeGreaterThan(0);
+        for (const action of requiredActions) {
+          expect(
+            allowedActionSet.has(action),
+            `${resourceType}.${lifecycle}에 필요한 ${action}이 실행 정책에 없어요`,
+          ).toBe(true);
+        }
       }
     }
   });
@@ -294,9 +1090,9 @@ describe("CDK bootstrap 실행 정책 (11장)", () => {
   // BRD-89: 실행 역할을 손에 넣어도 역할에 넓은 권한을 붙여 권한을 키우지 못하게 함
   const boundaryArn = `arn:aws:iam::\${aws:PrincipalAccount}:policy/${ROLE_BOUNDARY_POLICY_NAME}`;
   const iamActions = (effect: "Allow" | "Deny") =>
-    policy.Statement.filter((s) => s.Effect === effect).flatMap((s) =>
-      toList(s.Action).filter((a) => a.startsWith("iam:")),
-    );
+    allStatements
+      .filter((s) => s.Effect === effect)
+      .flatMap((s) => toList(s.Action).filter((a) => a.startsWith("iam:")));
 
   it("iam 와일드카드를 주지 않고, 관리형 정책 부착은 허락하지 않는다", () => {
     for (const a of iamActions("Allow")) expect(a).not.toContain("*");
@@ -312,7 +1108,7 @@ describe("CDK bootstrap 실행 정책 (11장)", () => {
       "iam:PutRolePermissionsBoundary",
     ];
     for (const action of guarded) {
-      const statements = policy.Statement.filter(
+      const statements = allStatements.filter(
         (s) => s.Effect === "Allow" && toList(s.Action).includes(action),
       );
       expect(statements.length, action).toBeGreaterThan(0);
@@ -334,19 +1130,22 @@ describe("CDK bootstrap 실행 정책 (11장)", () => {
         "iam:SetDefaultPolicyVersion",
       ]),
     );
-    const policyEdit = policy.Statement.find(
+    const policyEdit = allStatements.find(
       (s) => s.Sid === "NoBoundaryPolicyEdit",
     );
     expect(policyEdit?.Resource).toBe(
-      `arn:aws:iam::*:policy/${ROLE_BOUNDARY_POLICY_NAME}`,
+      `arn:aws:iam::${ACCOUNT}:policy/${ROLE_BOUNDARY_POLICY_NAME}`,
     );
   });
 
-  it("역할 넘기기(PassRole)는 Lambda·Scheduler에만 허락한다", () => {
-    const statements = policy.Statement.filter(
+  it("역할 넘기기(PassRole)는 대상 ARN과 Lambda·Scheduler 서비스 조건이 함께 있다", () => {
+    const statements = allStatements.filter(
       (s) => s.Effect === "Allow" && toList(s.Action).includes("iam:PassRole"),
     );
     expect(statements).toHaveLength(1);
+    expect(statements[0].Resource).toBe(
+      `arn:aws:iam::${ACCOUNT}:role/BaradunV2-*`,
+    );
     expect(
       toList(
         statements[0].Condition?.StringEquals?.["iam:PassedToService"] as
@@ -354,24 +1153,29 @@ describe("CDK bootstrap 실행 정책 (11장)", () => {
       ).sort(),
     ).toEqual(["lambda.amazonaws.com", "scheduler.amazonaws.com"]);
   });
+
+  it("문서의 관리자 역할은 실행 정책의 IAM 관리·PassRole 범위 밖이다", () => {
+    const readme = readFileSync(resolve(__dirname, "../README.md"), "utf8");
+    const adminRoleName = readme.match(
+      /aws iam create-role --role-name ([A-Za-z0-9+=,.@_-]+)/,
+    )?.[1];
+    expect(adminRoleName).toBeDefined();
+    const adminArn = `arn:aws:iam::${ACCOUNT}:role/${adminRoleName}`;
+    for (const statement of allowStatements.filter((s) =>
+      toList(s.Action).some((action) => action.startsWith("iam:")),
+    )) {
+      for (const resource of toList(statement.Resource)) {
+        expect(
+          arnMatches(resource, adminArn),
+          `${statement.Sid}: ${resource}`,
+        ).toBe(false);
+      }
+    }
+  });
 });
 
 describe("역할 권한 상한 (BRD-89)", () => {
-  // 실환경 계정 번호(비밀값 아님). boundary 정책을 이 계정에만 만듦
-  const ACCOUNT = "717304679248";
-  const boundary = JSON.parse(
-    readFileSync(
-      resolve(__dirname, "../bootstrap/role-boundary-policy.json"),
-      "utf8",
-    ),
-  ) as {
-    Statement: Array<{
-      Effect: string;
-      Action: string | string[];
-      Resource: string | string[];
-      Condition?: Record<string, Record<string, unknown>>;
-    }>;
-  };
+  const boundary = loadBootstrapPolicy("role-boundary-policy.json").policy;
   const boundaryActions = boundary.Statement.filter(
     (s) => s.Effect === "Allow",
   ).flatMap((s) => toList(s.Action));

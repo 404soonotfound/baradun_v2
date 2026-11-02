@@ -143,6 +143,26 @@ const webBuildSiteUrl = (lines: string[]) => {
 describe("PR 필수 웹 검사 (BRD-102 결정 41·42)", () => {
   const ci = workflows.find((w) => w.name === "ci.yml");
 
+  it("infra CI는 고정 IAM·CFN 자료를 검사하고 최신 감사는 별도 읽기 전용 실행이다", () => {
+    const infra = jobLines(ci?.text ?? "", "infra").join("\n");
+    expect(infra).toContain("npm run check:iam-actions -w @baradun/infra");
+    expect(infra.indexOf("npx cdk synth")).toBeGreaterThanOrEqual(0);
+    expect(infra.indexOf("npm run check:iam-actions")).toBeGreaterThan(
+      infra.indexOf("npx cdk synth"),
+    );
+    expect(infra).not.toMatch(/--check-latest|--update-reference/);
+    const audit = codeLines(
+      workflows.find((w) => w.name === "iam-reference-audit.yml")?.text ?? "",
+    ).join("\n");
+    expect(audit).toContain("-- --check-latest");
+    expect(audit).toContain('cron: "0 0 * * 1"');
+    expect(audit).toContain("workflow_dispatch:");
+    expect(audit).toContain("contents: read");
+    expect(audit).not.toMatch(
+      /pull_request:|push:|id-token:|contents:\s*write|--update-reference|aws\s/,
+    );
+  });
+
   it("web 작업은 타입 검사와, 사이트 주소를 명시한 정적 빌드를 돌린다", () => {
     const web = jobLines(ci?.text ?? "", "web");
     expect(web).toContainEqual(
