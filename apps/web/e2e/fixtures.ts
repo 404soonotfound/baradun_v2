@@ -10,6 +10,7 @@ import {
   type Page,
   type Route,
 } from "@playwright/test";
+import { NOTICE_VERSION } from "../src/lib/notice-version";
 
 // E2E 가짜 바다 데이터 (BRD-39). /data/** 요청을 page.route로 받아 상태별 화면을 재현함
 // 실제 운영 데이터·외부 타일 서버에 기대지 않음: 해변 목록은 빌드에 들어간 data/beaches의 id·측정소 id만 읽고,
@@ -372,14 +373,14 @@ async function seedDevice(
   } = {},
 ) {
   await context.addInitScript(
-    ({ language, region, extra }) => {
+    ({ language, region, extra, noticeVersion }) => {
       // 테스트마다 새 context라 처음 한 번만 넣음(새로고침 뒤 앱이 바꾼 값은 그대로 둠)
       if (sessionStorage.getItem("e2e:seeded")) return;
       sessionStorage.setItem("e2e:seeded", "1");
       localStorage.setItem(
         "baradun:onboarding",
         JSON.stringify({
-          noticeVersion: 1,
+          noticeVersion,
           acknowledgedAt: "2026-10-27T00:00:00Z",
           locationStepDone: true,
         }),
@@ -394,6 +395,7 @@ async function seedDevice(
       language: options.language ?? "ko",
       region: options.region === undefined ? GANGNEUNG_REGION : options.region,
       extra: options.extra ?? {},
+      noticeVersion: NOTICE_VERSION,
     },
   );
 }

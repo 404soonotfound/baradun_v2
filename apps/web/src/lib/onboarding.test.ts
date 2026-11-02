@@ -22,10 +22,11 @@ const done: OnboardingRecord = {
 
 describe("onboardingStep", () => {
   it("기록이 없거나 고지 버전이 다르면 고지(ON-1)부터", () => {
+    expect(NOTICE_VERSION).toBe(2);
     expect(onboardingStep(null, "idle")).toBe("notice");
-    expect(
-      onboardingStep({ ...done, noticeVersion: NOTICE_VERSION - 1 }, "ready"),
-    ).toBe("notice");
+    expect(onboardingStep({ ...done, noticeVersion: 1 }, "ready")).toBe(
+      "notice",
+    );
     expect(
       onboardingStep({ ...done, noticeVersion: NOTICE_VERSION + 1 }, "denied"),
     ).toBe("notice");
