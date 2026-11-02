@@ -741,7 +741,7 @@
     },
     "privacy": {
       "title": "개인정보 처리방침",
-      "effectiveDate": "시행일: [YYYY-MM-DD]",
+      "effectiveDate": "시행일: 2026-11-02",
       "intro": "바라던 바다는 로그인이 없고, 서비스를 쓰는 데 이름·연락처 같은 개인정보를 받지 않아요. 우리 서버에서 처리하는 것은 데이터 문의로 보낸 내용뿐이에요. 이용 통계는 Google Analytics가 쿠키로 따로 모아요(7번).",
       "processingTitle": "1. 처리하는 정보와 목적",
       "processingInquiry": "데이터 문의: 문의 유형, 문의 내용, (해변 화면에서 보낸 경우) 해변과 고른 활동",
@@ -767,7 +767,7 @@
       "cookiesBody": "서비스 개선을 위해 Google LLC의 Google Analytics로 방문한 화면, 기기·브라우저 종류, 대략적인 접속 지역 같은 이용 기록을 쿠키로 수집해요. 이름·연락처·기기의 위치·검색어는 보내지 않아요. 수집한 기록은 Google 서버에서 처리되고 2개월 보관돼요. 브라우저 설정에서 쿠키를 차단하거나 Google 애널리틱스 차단 부가 기능(tools.google.com/dlpage/gaoptout)을 쓰면 수집되지 않아요.",
       "rightsTitle": "8. 이용자의 권리와 행사 방법",
       "rightsBody": "보낸 문의의 확인·삭제를 요청할 수 있어요. 문의에는 이름·연락처가 없어 보낸 사람을 확인할 수 없으니, 보낸 날짜·시각과 내용 일부를 함께 알려 주세요. 찾을 수 있으면 바로 지워요.",
-      "rightsContact": "요청: [운영자 이메일]",
+      "rightsContact": "요청: 404soonotfound@gmail.com",
       "rightsHelp": "개인정보 침해 상담은 개인정보침해 신고센터(국번 없이 118, privacy.kisa.or.kr)에서도 받을 수 있어요.",
       "securityTitle": "9. 안전하게 지키는 방법",
       "securityHttps": "모든 통신은 HTTPS로 암호화해요.",
@@ -776,7 +776,7 @@
       "securityLogs": "알림 메일과 서버 기록에는 문의 내용을 넣지 않아요.",
       "securityStorage": "문의 저장소와 파일 저장소에 보관하는 정보는 저장할 때 암호화해요.",
       "officerTitle": "10. 개인정보 보호책임자",
-      "officerBody": "운영자 · [운영자 이메일]",
+      "officerBody": "운영자 · 404soonotfound@gmail.com",
       "changesTitle": "11. 처리방침 변경",
       "changesBody": "처리하는 정보나 목적이 바뀌면 바뀌기 전에 첫 실행 안내로 다시 알려 드려요.",
       "locationTitle": "위치",
@@ -787,7 +787,7 @@
       "inquiryBody": "보낸 문의 글은 90일, 사진은 30일 보관한 뒤 자동으로 지워요. 이메일은 남긴 경우에만 받고, 처리가 끝나면 바로(늦어도 90일 안에) 지워요. 사진의 위치 정보는 보내기 전에 기기에서 지워요.",
       "inquiryNoDeadline": "문의에 답하는 기한은 약속하지 않아요."
     },
-    "notice": "고지 버전 {version} · 시행일 [YYYY-MM-DD]",
+    "notice": "고지 버전 {version} · 시행일 2026-11-02",
     "links": "더 보기"
   },
   "dataSources": {

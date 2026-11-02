@@ -741,7 +741,7 @@
     },
     "privacy": {
       "title": "Privacy Policy",
-      "effectiveDate": "Effective date: [YYYY-MM-DD]",
+      "effectiveDate": "Effective date: 2026-11-02",
       "intro": "Baradun has no sign-in and does not ask for personal information such as your name or contact details. The only thing our own servers process is what you send through a data inquiry. Usage statistics are collected separately by Google Analytics with cookies (section 7).",
       "processingTitle": "1. What we process and why",
       "processingInquiry": "Data inquiries: inquiry type, message, and — if sent from a beach page — the beach and the activity you selected.",
@@ -767,7 +767,7 @@
       "cookiesBody": "To improve the service, we use Google Analytics by Google LLC to collect usage records with cookies, such as screens visited, device and browser type and approximate region. Names, contact details, device location and search terms are not sent. Records are processed on Google's servers and kept for 2 months. You can block collection by blocking cookies in your browser or using the Google Analytics Opt-out Browser Add-on (tools.google.com/dlpage/gaoptout).",
       "rightsTitle": "8. Your rights",
       "rightsBody": "You can ask us to check or delete an inquiry you sent. Inquiries contain no name or contact details, so please tell us the date and time you sent it and part of the message. If we can find it, we delete it right away.",
-      "rightsContact": "Contact: [operator email]",
+      "rightsContact": "Contact: 404soonotfound@gmail.com",
       "rightsHelp": "You can also contact the Korea Internet & Security Agency's Personal Information Infringement Report Center (118, privacy.kisa.or.kr).",
       "securityTitle": "9. How we protect information",
       "securityHttps": "All communication is encrypted with HTTPS.",
@@ -776,7 +776,7 @@
       "securityLogs": "Notification emails and server logs do not include inquiry messages.",
       "securityStorage": "Information kept in inquiry and file storage is encrypted at rest.",
       "officerTitle": "10. Privacy officer",
-      "officerBody": "Operator · [operator email]",
+      "officerBody": "Operator · 404soonotfound@gmail.com",
       "changesTitle": "11. Changes",
       "changesBody": "If the information we process or its purpose changes, we will tell you again on the first-run screen before the change.",
       "locationTitle": "Location",
@@ -787,7 +787,7 @@
       "inquiryBody": "Feedback is kept for 90 days and photos for 30 days, then deleted automatically. Email is collected only if you leave it, and deleted as soon as handling is done (within 90 days at the latest). Photo location data is removed on your device before sending.",
       "inquiryNoDeadline": "We don't promise a reply deadline."
     },
-    "notice": "Notice version {version} · Effective [YYYY-MM-DD]",
+    "notice": "Notice version {version} · Effective 2026-11-02",
     "links": "More"
   },
   "dataSources": {
