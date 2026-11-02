@@ -1087,6 +1087,17 @@ describe("전체 재검증", () => {
     expect(store.getState().live).toBe(true);
   });
 
+  it("statuses·시계가 그대로면 다시 계산할 때 만료 시각을 다시 읽지 않음", async () => {
+    const { store } = setup();
+    store.start();
+    await store.refresh();
+    const parse = vi.spyOn(Date, "parse");
+    store.recompute();
+    store.recompute();
+    expect(parse).not.toHaveBeenCalled();
+    parse.mockRestore();
+  });
+
   it.each([
     [
       "손상된 JSON",
