@@ -20,6 +20,20 @@ export function readInquiryContactEnabled(): boolean {
 
 export const CSP_MAX_LENGTH = 1783; // CloudFront ResponseHeadersPolicy CSP 길이 한도
 
+// Google Analytics(gtag.js) 출처 — Google 태그 CSP 가이드의 GA4 항목(Ads 기능 없음). 운영 빌드만 GA를 불러옴(BRD-143)
+// 지시어마다 맨 끝에 붙임. connect-src는 사진 버킷(켜졌을 때만)보다 앞. apps/web/e2e/static-server.mjs도 같은 순서
+// 페이지 meta CSP의 script-src에도 같은 출처가 있어야 함(apps/web/scripts/csp-meta.mts, 없으면 헤더가 허용해도 막힘)
+export const GA_SCRIPT_SOURCES = ["https://www.googletagmanager.com"];
+export const GA_IMG_SOURCES = [
+  "https://www.googletagmanager.com",
+  "https://*.google-analytics.com",
+];
+export const GA_CONNECT_SOURCES = [
+  "https://www.googletagmanager.com",
+  "https://*.google-analytics.com",
+  "https://*.google.com",
+];
+
 export interface CspOptions {
   // 문의 사진 업로드 버킷 이름. 사진 기능이 켜져 있을 때만 connect-src에 포함
   readonly photoBucketName?: string;
@@ -27,12 +41,17 @@ export interface CspOptions {
   readonly photoUploadEnabled?: boolean;
 }
 
-// CSP 지시어 문자열 생성 (BRD-118)
+// CSP 지시어 문자열 생성 (BRD-118, GA 출처 BRD-143)
+// apps/web/e2e/static-server.mjs의 buildCspHeader와 글자까지 같아야 함(security-headers.test.ts가 비교)
 export function buildContentSecurityPolicy(options: CspOptions = {}): string {
   const photoEnabled = options.photoUploadEnabled ?? readInquiryContactEnabled();
-  const connectSources = ["'self'", "https://tiles.openfreemap.org"];
+  const connectSources = [
+    "'self'",
+    "https://tiles.openfreemap.org",
+    ...GA_CONNECT_SOURCES,
+  ];
 
-  // 결정 2: 사진 받기 설정이 켜져 있고 버킷 이름이 있을 때만 버킷 origin 추가
+  // 결정 2: 사진 받기 설정이 켜져 있고 버킷 이름이 있을 때만 버킷 origin 추가(GA 출처 뒤)
   if (photoEnabled && options.photoBucketName) {
     connectSources.push(
       `https://${options.photoBucketName}.s3.ap-northeast-2.amazonaws.com`,
@@ -41,9 +60,9 @@ export function buildContentSecurityPolicy(options: CspOptions = {}): string {
 
   const directives: string[] = [
     "default-src 'self'",
-    "script-src 'self' 'unsafe-inline'",
+    `script-src 'self' 'unsafe-inline' ${GA_SCRIPT_SOURCES.join(" ")}`,
     "style-src 'self'",
-    "img-src 'self' blob: https://tiles.openfreemap.org https://tong.visitkorea.or.kr",
+    `img-src 'self' blob: https://tiles.openfreemap.org https://tong.visitkorea.or.kr ${GA_IMG_SOURCES.join(" ")}`,
     "font-src 'self'",
     `connect-src ${connectSources.join(" ")}`,
     "worker-src 'self'",
