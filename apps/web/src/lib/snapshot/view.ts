@@ -20,13 +20,22 @@ export const WARNING_CONFIRM_VALID_MS = 45 * 60_000;
 export type Category = BeachStatus["category"];
 export type MetricKey = keyof BeachStatus["observation"]["metrics"];
 
-export const METRIC_KEYS = [
-  "waveHeight",
-  "wavePeriod",
-  "waveDirection",
-  "waterTemp",
-  "wind",
-] as const satisfies readonly MetricKey[];
+// 지표 표. 키 순서 = 화면에 보이는 순서
+// unit: 계약 6.3 단위. 키와 단위가 어긋나면 값을 보여주지 않음
+// validMs: 유효시간(아키텍처 14.1 N1·결정 기록 B4, 계약 6.3 expiresAt): 파고·수온·바람 90분,
+//   파주기·파향 60분(파향은 파주기와 같은 kma_buoy 출처, 10/21 노션 반영)
+const METRIC_SPEC = {
+  waveHeight: { unit: "m", validMs: 90 * 60_000 },
+  wavePeriod: { unit: "s", validMs: 60 * 60_000 },
+  waveDirection: { unit: "deg", validMs: 60 * 60_000 },
+  waterTemp: { unit: "°C", validMs: 90 * 60_000 },
+  wind: { unit: "m/s", validMs: 90 * 60_000 },
+} as const satisfies Record<
+  MetricKey,
+  { unit: Metric["unit"]; validMs: number }
+>;
+
+export const METRIC_KEYS = Object.keys(METRIC_SPEC) as readonly MetricKey[];
 
 const CATEGORIES = ["clear", "unavailable", "undetermined"] as const;
 export const WARNING_TYPES = [
@@ -117,15 +126,6 @@ const UNDETERMINED = {
   metrics: HIDDEN_METRICS,
 } satisfies BeachView;
 
-// 지표별 단위(계약 6.3). 키와 단위가 어긋나면 값을 보여주지 않음
-const METRIC_UNITS: Record<MetricKey, Metric["unit"]> = {
-  waveHeight: "m",
-  wavePeriod: "s",
-  waveDirection: "deg",
-  waterTemp: "°C",
-  wind: "m/s",
-};
-
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -171,16 +171,6 @@ function reasonLabels(
   return first ? [first, ...rest] : [genericLabel(category)];
 }
 
-// 지표별 유효시간(아키텍처 14.1 N1·결정 기록 B4, 계약 6.3 expiresAt): 파고·수온·바람 90분,
-// 파주기·파향 60분(파향은 파주기와 같은 kma_buoy 출처, 10/21 노션 반영)
-const METRIC_VALID_MS: Record<MetricKey, number> = {
-  waveHeight: 90 * 60_000,
-  wavePeriod: 60 * 60_000,
-  waveDirection: 60 * 60_000,
-  waterTemp: 90 * 60_000,
-  wind: 90 * 60_000,
-};
-
 // 지금(보정 시각)보다 미래인 시각. 시계 보정과 같은 2분 여유(9.1). 미래 관측·확인은 근거로 인정하지 않음(14.1 판정 규칙)
 function isFuture(iso: string, source: ViewSource): boolean {
   return Date.parse(iso) > source.nowMs + CLOCK_TOLERANCE_MS;
@@ -201,7 +191,7 @@ function isReadableFresh(
     metric?.state !== "fresh" ||
     typeof metric.value !== "number" ||
     !Number.isFinite(metric.value) ||
-    metric.unit !== METRIC_UNITS[key] ||
+    metric.unit !== METRIC_SPEC[key].unit ||
     !isTime(metric.observedAt) ||
     !isTime(metric.expiresAt) ||
     isFuture(metric.observedAt, source)
@@ -210,7 +200,7 @@ function isReadableFresh(
   }
   return (
     Date.parse(metric.expiresAt) <=
-    Date.parse(metric.observedAt) + METRIC_VALID_MS[key]
+    Date.parse(metric.observedAt) + METRIC_SPEC[key].validMs
   );
 }
 
@@ -225,7 +215,7 @@ function isNoneMetric(
     metric.value === null &&
     metric.observedAt === null &&
     metric.expiresAt === null &&
-    metric.unit === METRIC_UNITS[key]
+    metric.unit === METRIC_SPEC[key].unit
   );
 }
 
@@ -291,7 +281,7 @@ function metricView(
     return {
       kind: "value",
       value: metric.value,
-      unit: METRIC_UNITS[key],
+      unit: METRIC_SPEC[key].unit,
       observedAt: metric.observedAt,
     };
   }

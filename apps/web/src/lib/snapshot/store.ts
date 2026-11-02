@@ -156,6 +156,33 @@ function readStatuses(value: unknown): Record<string, unknown> | null {
   return isRecord(value) && isRecord(value.beaches) ? value.beaches : null;
 }
 
+// 화면 계산이 바뀌는 시각(보정된 시각, ms) 목록. 이른 순, 중복 없음
+// - validUntil·지표별 expiresAt 만료(expiryDeadline)
+function deadlinesOf(
+  statuses: Record<string, unknown>,
+  clock: Clock,
+): number[] {
+  const times = new Set<number>();
+  const expiry = (expiresAt: unknown) => {
+    const at = expiryDeadline(expiresAt as string | null, clock);
+    if (at !== null) times.add(at);
+  };
+  for (const status of Object.values(statuses)) {
+    if (!isRecord(status)) continue;
+    expiry(status.validUntil);
+    const metrics = isRecord(status.observation)
+      ? status.observation.metrics
+      : null;
+    if (!isRecord(metrics)) continue;
+    for (const key of METRIC_KEYS) {
+      const metric = metrics[key];
+      if (!isRecord(metric)) continue;
+      expiry(metric.expiresAt);
+    }
+  }
+  return [...times].sort((a, b) => a - b);
+}
+
 export function createSnapshotStore(deps: SnapshotDeps): SnapshotStore {
   let state: SnapshotState = INITIAL_STATE;
   // status를 받아 둔 snapshotVersion. status 받기에 실패하면 그대로라 다음 조회 때 다시 받음
@@ -176,6 +203,12 @@ export function createSnapshotStore(deps: SnapshotDeps): SnapshotStore {
   // 진행 중인 조회가 시작된 뒤 연결이 바뀜. 그 조회 결과는 지금 연결로 받은 결과가 아님
   let connectionChanged = false;
   const listeners = new Set<() => void>();
+  // 다시 계산할 시각 목록. statuses·시계가 바뀔 때만 새로 만듦(set마다 모든 해변 시각을 다시 읽지 않게)
+  let deadlines: {
+    statuses: Record<string, unknown>;
+    clock: Clock;
+    times: number[];
+  } | null = null;
 
   function set(next: Partial<SnapshotState>) {
     state = { ...state, ...next };
@@ -196,32 +229,28 @@ export function createSnapshotStore(deps: SnapshotDeps): SnapshotStore {
     return nowMs;
   }
 
-  // 다음 만료 시각(validUntil·지표별 expiresAt 중 가장 이른 미래)에 화면을 다시 계산.
+  // 다음에 화면 계산이 바뀌는 시각(deadlinesOf 중 가장 이른 미래)에 다시 계산.
   // validUntil이 지났으면 바로 판단불가로 바뀌고(view.ts) 새 스냅샷을 조회함
   function scheduleDeadline() {
     if (deadlineTimer) clearTimeout(deadlineTimer);
     deadlineTimer = null;
+    // 화면을 덮는 상태로 statuses를 비웠으면 목록도 버림(지난 값을 들고 있지 않게)
+    if (!state.statuses) deadlines = null;
     if (!unwatchVisibility || !deps.isVisible() || !state.statuses) return;
 
-    let next = Infinity;
-    const consider = (expiresAt: unknown) => {
-      const at = expiryDeadline(expiresAt as string | null, state.clock);
-      if (at !== null && at > state.nowMs && at < next) next = at;
-    };
-    for (const status of Object.values(state.statuses)) {
-      if (!isRecord(status)) continue;
-      consider(status.validUntil);
-      const metrics = isRecord(status.observation)
-        ? status.observation.metrics
-        : null;
-      if (isRecord(metrics)) {
-        for (const key of METRIC_KEYS) {
-          const metric = metrics[key];
-          if (isRecord(metric)) consider(metric.expiresAt);
-        }
-      }
+    if (
+      deadlines?.statuses !== state.statuses ||
+      deadlines.clock !== state.clock
+    ) {
+      deadlines = {
+        statuses: state.statuses,
+        clock: state.clock,
+        times: deadlinesOf(state.statuses, state.clock),
+      };
     }
-    if (next === Infinity) return;
+    // 지금 시각을 모르면(NaN) 비교가 모두 false → 다시 계산할 시각 없음(모두 만료로 보임)
+    const next = deadlines.times.find((at) => at > state.nowMs);
+    if (next === undefined) return;
 
     // 최대 5분 뒤에 깨어나 다시 계산. 먼 미래 값(잘못된 데이터·틀린 기기 시계)으로 setTimeout 한도(약 24.8일)를
     // 넘기면 즉시 실행돼 끝없이 반복되는 문제를 막음
@@ -323,33 +352,38 @@ export function createSnapshotStore(deps: SnapshotDeps): SnapshotStore {
   // live: false라 B5 규칙(발효 특보 배지 유지, 나머지는 특보 확인 못 함)으로 보임
   // 점검·강제 업데이트 화면을 보이는 중에는 꺼내지 않음(상태에 지난 값을 들고 있지 않게).
   // evenIfHidden: 새 manifest가 그 화면을 풀었는데 status만 실패한 경우(fail)는 꺼냄
-  function showStored(evenIfHidden = false) {
-    if (state.statuses) return;
-    if (!evenIfHidden && hidesLastValues(state.phase)) return;
+  // 바꿀 값만 돌려줌(꺼낼 값이 없으면 null). 부르는 쪽이 자기 변경과 합쳐 set을 한 번만 부름
+  function storedState(evenIfHidden = false): Partial<SnapshotState> | null {
+    if (state.statuses) return null;
+    if (!evenIfHidden && hidesLastValues(state.phase)) return null;
     // 처음 열 때: 마지막 manifest가 지난 값을 숨기는 상태였으면 그 상태로 시작(응답이 오면 run이 바꿈)
     const hidden = !evenIfHidden && state.phase === "loading" && readHidden();
     if (hidden) {
-      set({
+      return {
         phase: hidden.phase,
         manifest: hidden.manifest,
         live: false,
         nowMs: now(DEVICE_CLOCK, hidden.manifest),
-      });
-      return;
+      };
     }
     const last = lastLive ?? readStoredSnapshot();
-    if (!last) return;
+    if (!last) return null;
     const { manifest, statuses } = last;
     // 더 새 화면이 저장한 값(minWebBuild가 이 빌드보다 높음)은 이 화면이 잘못 읽을 수 있어 꺼내지 않음(9.1)
-    if (manifest.minWebBuild > deps.webBuild) return;
-    set({
+    if (manifest.minWebBuild > deps.webBuild) return null;
+    return {
       phase: state.phase === "loading" ? "ready" : state.phase,
       manifest,
       statuses,
       clock: DEVICE_CLOCK,
       live: false,
       nowMs: now(DEVICE_CLOCK, manifest),
-    });
+    };
+  }
+
+  function showStored() {
+    const stored = storedState();
+    if (stored) set(stored);
   }
 
   // fresh: 이번 조회에서 manifest를 받아 서버 시각을 알았으면 그 시계(status 실패여도 버리지 않음)
@@ -360,13 +394,15 @@ export function createSnapshotStore(deps: SnapshotDeps): SnapshotStore {
     if (manifestOk) forgetHidden();
     const keep = !manifestOk && hidesLastValues(state.phase);
     // 점검·강제 업데이트 화면을 유지하는 동안은 저장된 값도 꺼내지 않음(상태에 지난 값을 들고 있지 않게)
-    if (!keep) showStored(true);
+    // 꺼낸 값과 아래 변경을 한 번에 반영(알림·다시 그리기·만료 계산이 두 번 일어나지 않게)
+    const stored = keep ? null : storedState(true);
     set({
+      ...stored,
       // 점검 화면·강제 업데이트·지원 밖 형식 배너는 그대로 둠. 처음부터 못 받았으면 데이터 없이 판단불가
       phase: keep ? state.phase : "ready",
       clock,
       live: false,
-      nowMs: now(clock),
+      nowMs: now(clock, stored?.manifest ?? state.manifest),
     });
   }
 
