@@ -84,15 +84,20 @@ AWS_PROFILE=baradun-admin npx cdk deploy
 
 ### 되돌리기
 
-- 가비아 `www` CNAME을 원래 Vercel 주소(`2e9e02c1d516eeff.vercel-dns-017.com.`)로 되돌립니다.
-- 두 매개변수를 비워 다시 배포합니다.
+순서대로 합니다. 5단계(V1 Vercel 정리)까지 한 뒤라면 Vercel부터 되돌려야 www가 V1을 다시 보여 줄 수 있습니다.
 
-```bash
-AWS_PROFILE=baradun-admin npx cdk deploy \
-  --parameters SiteDomainName= --parameters SiteCertificateArn=
-```
+1. **Vercel 복구 (5단계를 했을 때만)**
+   - V1 프로젝트 도메인 목록에 `www.baradun.app`을 다시 추가합니다.
+   - `vercel.json`에서 `https://www.baradun.app/`으로 보내는 리디렉션을 빼고(전환 전 설정) 다시 배포합니다. 남겨 두면 www가 자기 자신으로 계속 이동합니다.
+2. **가비아 www CNAME 복구**: `www` CNAME을 Vercel이 도메인 화면에서 안내하는 주소로 되돌립니다(전환 전 값은 `2e9e02c1d516eeff.vercel-dns-017.com.`, 다시 추가하면 바뀔 수 있음).
+3. **CloudFront 복구**: 두 매개변수를 비워 다시 배포합니다.
 
-- `SITE_URL`을 CloudFront 기본 주소로 되돌리고 `npm run deploy:prod` 합니다.
+   ```bash
+   AWS_PROFILE=baradun-admin npx cdk deploy \
+     --parameters SiteDomainName= --parameters SiteCertificateArn=
+   ```
+
+4. **사이트 재배포**: `SITE_URL`을 CloudFront 기본 주소로 되돌리고 `npm run deploy:prod` 합니다.
 
 ## CDK 실행 정책과 역할 권한 상한
 
