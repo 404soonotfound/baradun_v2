@@ -113,6 +113,27 @@ test.describe("대화상자", () => {
       await expect(confirm).toBeVisible();
       await expectNoA11yViolations(page);
     });
+
+    test("처리방침 링크로 해당 절을 읽고, 다른 화면에서는 고지를 다시 봄", async ({
+      page,
+    }) => {
+      await page.goto("/");
+      await page
+        .getByRole("link", {
+          name: "개인정보 처리방침과 이용 안내는 서비스 정보·약관에서 볼 수 있어요",
+        })
+        .click();
+      await expect(page).toHaveURL(/\/terms\/#terms-privacy$/);
+      await expect(
+        page.getByRole("heading", { name: "개인정보 처리방침" }),
+      ).toBeVisible();
+      await expect(page.locator("dialog[open]")).toHaveCount(0);
+
+      await page.goto("/settings/");
+      await expect(
+        page.getByRole("button", { name: "확인했어요" }),
+      ).toBeVisible();
+    });
   });
 });
 
