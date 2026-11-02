@@ -1,4 +1,4 @@
-// 운영 사이트 판별 (BRD-143 · BRD-144). GA·noindex·robots·sitemap이 모두 이 함수 하나를 따름
+// 운영 사이트 판별 (BRD-143 · BRD-144). 지금은 GA만 따름. noindex·robots·sitemap(BRD-144)도 이 함수 하나를 따르게 둠
 // 기준: 빌드 때 받은 NEXT_PUBLIC_SITE_URL(lib/site-url.ts)의 origin이 운영 주소 상수와 같을 때만 운영
 // 로컬(dev·live)·CI·E2E(example.test)·값 없음·틀린 값은 모두 비운영 → GA 없음, 전체 noindex, robots Disallow, sitemap 비움
 // 새 NEXT_PUBLIC_* 변수를 만들지 않음(워크플로가 웹 빌드에 넘기는 공개 변수는 두 개로 고정, infra/test/workflows.test.ts)
