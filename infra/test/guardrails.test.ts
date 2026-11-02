@@ -135,6 +135,72 @@ describe("정액 요금제 web ACL (BRD-51)", () => {
   });
 });
 
+describe("대표 주소 (BRD-162)", () => {
+  const distributions = () =>
+    Object.values(template.findResources("AWS::CloudFront::Distribution"));
+
+  it("도메인·인증서 매개변수는 기본이 비어 있다(출시일 전까지 지금과 같은 배포)", () => {
+    const params = template.findParameters("*");
+    expect(params.SiteDomainName.Default).toBe("");
+    expect(params.SiteCertificateArn.Default).toBe("");
+    // CloudFront 인증서는 us-east-1 ACM만 받음
+    expect(params.SiteCertificateArn.AllowedPattern).toContain(
+      "arn:aws:acm:us-east-1:",
+    );
+  });
+
+  it("대체 도메인·인증서는 도메인 값이 있을 때만 붙는다(SNI·TLS 1.2 이상)", () => {
+    for (const dist of distributions()) {
+      const config = dist.Properties.DistributionConfig;
+      expect(config.Aliases).toEqual({
+        "Fn::If": [
+          "HasSiteDomain",
+          [{ Ref: "SiteDomainName" }],
+          { Ref: "AWS::NoValue" },
+        ],
+      });
+      expect(config.ViewerCertificate).toEqual({
+        "Fn::If": [
+          "HasSiteDomain",
+          {
+            AcmCertificateArn: { Ref: "SiteCertificateArn" },
+            SslSupportMethod: "sni-only",
+            MinimumProtocolVersion: "TLSv1.2_2021",
+          },
+          { Ref: "AWS::NoValue" },
+        ],
+      });
+    }
+  });
+
+  it("도메인과 인증서는 함께 넣거나 함께 비워야 배포된다", () => {
+    const rules = template.toJSON().Rules as Record<
+      string,
+      { Assertions: { Assert: unknown }[] }
+    >;
+    const assertion = JSON.stringify(
+      rules.SiteDomainNeedsCertificate?.Assertions,
+    );
+    expect(assertion).toContain('"Ref":"SiteDomainName"');
+    expect(assertion).toContain('"Ref":"SiteCertificateArn"');
+    expect(assertion).toContain("Fn::Or");
+  });
+
+  it("주소 변환 함수 코드에 도메인 매개변수가 들어간다(다른 호스트는 대표 주소로 이동)", () => {
+    const rewrite = Object.values(
+      template.findResources("AWS::CloudFront::Function"),
+    ).filter(
+      (fn) =>
+        fn.Properties.FunctionConfig.Comment ===
+        "Rewrite folder paths to index.html",
+    );
+    expect(rewrite).toHaveLength(1);
+    expect(JSON.stringify(rewrite[0]?.Properties.FunctionCode)).toContain(
+      '{"Ref":"SiteDomainName"}',
+    );
+  });
+});
+
 type Capacity = { ReadCapacityUnits: number; WriteCapacityUnits: number };
 
 // DynamoDB는 BRD-55 테이블 3개가 대상. 나머지는 BRD-56~58(수집)·61(게시)에서 리소스가 생기면 바로 거름.
