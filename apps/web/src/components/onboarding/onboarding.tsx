@@ -265,7 +265,7 @@ function NoticeStep({ locale }: { locale: Locale }) {
   const t = useTranslations();
   // 블록 사이 18, 제목·소개 사이 8 (Figma 185:265·185:266)
   return (
-    <div className="flex flex-1 flex-col gap-[18px]">
+    <div className="flex flex-1 flex-col gap-3 sm:gap-[18px]">
       <NoticeSky />
       {showsResetNotice() && (
         <p
@@ -324,7 +324,7 @@ function NoticeStep({ locale }: { locale: Locale }) {
         </span>
       </p>
       {/* 남는 높이는 버튼 위로 몰아 점·버튼·링크가 화면 아래에 붙음 */}
-      <div className="mt-auto flex flex-col gap-[18px]">
+      <div className="mt-auto flex flex-col gap-2 sm:gap-[18px]">
         <StepDots current={1} />
         <div className="flex flex-col items-center">
           <Link
