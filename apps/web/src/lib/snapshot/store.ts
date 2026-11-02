@@ -158,6 +158,7 @@ function readStatuses(value: unknown): Record<string, unknown> | null {
 
 // 화면 계산이 바뀌는 시각(보정된 시각, ms) 목록. 이른 순, 중복 없음
 // - validUntil·지표별 expiresAt 만료(expiryDeadline)
+// - 미래 관측·확인 시각(지금 + 2분 초과)이 더는 미래가 아니게 되는 때(view.ts isFuture) → 값·확인 시각이 보이기 시작함
 function deadlinesOf(
   statuses: Record<string, unknown>,
   clock: Clock,
@@ -167,9 +168,13 @@ function deadlinesOf(
     const at = expiryDeadline(expiresAt as string | null, clock);
     if (at !== null) times.add(at);
   };
+  const future = (at: unknown) => {
+    if (isTime(at)) times.add(Date.parse(at) - CLOCK_TOLERANCE_MS);
+  };
   for (const status of Object.values(statuses)) {
     if (!isRecord(status)) continue;
     expiry(status.validUntil);
+    if (isRecord(status.warning)) future(status.warning.lastConfirmedAt);
     const metrics = isRecord(status.observation)
       ? status.observation.metrics
       : null;
@@ -178,6 +183,7 @@ function deadlinesOf(
       const metric = metrics[key];
       if (!isRecord(metric)) continue;
       expiry(metric.expiresAt);
+      future(metric.observedAt);
     }
   }
   return [...times].sort((a, b) => a - b);
