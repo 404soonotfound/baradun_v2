@@ -5,6 +5,8 @@ import { DISPLAY_INIT_SCRIPT } from "@/lib/display-init";
 import { getMessages } from "next-intl/server";
 import { ServiceWorkerSetup } from "@/components/service-worker";
 import { LegacyStorageCleanup } from "@/components/legacy-storage-cleanup";
+import { GoogleAnalytics } from "@/components/analytics/google-analytics";
+import { GA_MEASUREMENT_ID, isProductionSite } from "@/lib/site-env";
 
 // 두 루트 레이아웃((ko)·(en))과 전역 404가 같이 쓰는 html 뼈대 (BRD-22)
 // suppressHydrationWarning: 테마 스크립트가 그리기 전에 data-theme을 붙여서 생기는 차이를 허용함.
@@ -36,6 +38,10 @@ export async function RootDocument({
         >
           {children}
         </NextIntlClientProvider>{" "}
+        {/* 운영 빌드(사이트 주소가 운영 주소)에서만 GA를 넣음(BRD-143). 로컬·CI·E2E 빌드의 HTML에는 흔적이 없음 */}
+        {isProductionSite() && (
+          <GoogleAnalytics measurementId={GA_MEASUREMENT_ID} />
+        )}
       </body>
     </html>
   );
