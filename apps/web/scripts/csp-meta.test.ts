@@ -3,6 +3,7 @@ import {
   buildMetaCspTag,
   extractInlineScriptHashes,
   injectMetaCsp,
+  META_SCRIPT_SOURCES,
 } from "./csp-meta.mts";
 
 describe("CSP meta 주입 (BRD-118)", () => {
@@ -30,6 +31,19 @@ describe("CSP meta 주입 (BRD-118)", () => {
     expect(meta).toBe(
       '<meta http-equiv="Content-Security-Policy" content="script-src \'self\' https://www.googletagmanager.com">',
     );
+  });
+
+  // meta에 넣은 외부 출처가 헤더에 없으면 둘 다 통과해야 하는 브라우저가 막음(BRD-143)
+  it("meta CSP의 외부 스크립트 출처는 헤더 CSP(static-server)의 script-src에도 있다", async () => {
+    const { buildCspHeader } = await import("../e2e/static-server.mjs");
+    const header: string = buildCspHeader();
+    const scriptSrc = header
+      .split("; ")
+      .find((directive) => directive.startsWith("script-src "));
+    expect(scriptSrc).toBeDefined();
+    for (const source of META_SCRIPT_SOURCES) {
+      expect(scriptSrc!.split(" ")).toContain(source);
+    }
   });
 
   it("<head> 태그 직후에 meta CSP 태그를 삽입한다", () => {
