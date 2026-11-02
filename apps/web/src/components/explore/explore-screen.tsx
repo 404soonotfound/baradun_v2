@@ -12,6 +12,7 @@ import { MapCard } from "@/components/map/map-card";
 import { MapLegend } from "@/components/map/map-legend";
 import { MapView } from "@/components/map/map-view";
 import { RegionSheet } from "@/components/region/region-sheet";
+import { SampleNote } from "@/components/sample-note";
 import { SituationBanner } from "@/components/situation-banner";
 import { KmaSourceNote } from "@/components/source-note";
 import { Banner } from "@/components/ui/banner";
@@ -363,14 +364,7 @@ export function ExploreScreen({
           </Chip>
         </div>
 
-        {sampleSnapshot && (
-          <p
-            role="note"
-            className="rounded-card bg-bg-surface px-4 py-3 text-body-s text-text-body shadow-card"
-          >
-            {t("home.sampleSnapshot")}
-          </p>
-        )}
+        {sampleSnapshot && <SampleNote />}
 
         {/* 상황 배너 자리(하나만) */}
         <SituationBanner

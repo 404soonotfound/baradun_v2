@@ -6,6 +6,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { useMemo, useState, type FormEvent } from "react";
 
 import { BackButton } from "@/components/detail/back-button";
+import { SampleNote } from "@/components/sample-note";
 import { RecentSearches } from "@/components/search/recent-searches";
 import { SearchResultRow } from "@/components/search/search-result-row";
 import { KmaSourceNote } from "@/components/source-note";
@@ -152,14 +153,7 @@ export function SearchScreen({
       </form>
 
       {/* 예시 값이 실제 확인 결과처럼 보이지 않게(홈·탐색과 같은 안내) */}
-      {sampleSnapshot && (
-        <p
-          role="note"
-          className="rounded-card bg-bg-surface px-4 py-3 text-body-s text-text-body shadow-card"
-        >
-          {t("home.sampleSnapshot")}
-        </p>
-      )}
+      {sampleSnapshot && <SampleNote />}
 
       {scoped && (
         <div className="flex">
