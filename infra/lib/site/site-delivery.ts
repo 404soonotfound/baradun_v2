@@ -1,4 +1,4 @@
-import { Duration, RemovalPolicy } from "aws-cdk-lib";
+import { Duration, RemovalPolicy, Stack, Tags } from "aws-cdk-lib";
 import * as cloudfront from "aws-cdk-lib/aws-cloudfront";
 import * as origins from "aws-cdk-lib/aws-cloudfront-origins";
 import * as s3 from "aws-cdk-lib/aws-s3";
@@ -70,5 +70,8 @@ export class SiteDelivery extends Construct {
         },
       ],
     });
+    // CloudFront는 CFN 시스템 태그를 지원하지 않으므로 사용자 태그를 명시함.
+    // 기존 배포는 README의 태그 선반영 절차 후 실행 정책을 전환함.
+    Tags.of(this.distribution).add("baradun:stack", Stack.of(this).stackName);
   }
 }
