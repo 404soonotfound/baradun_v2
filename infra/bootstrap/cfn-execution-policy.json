@@ -4,20 +4,126 @@
     {
       "Sid": "SiteBucket",
       "Effect": "Allow",
-      "Action": "s3:*",
-      "Resource": ["arn:aws:s3:::baradunv2-*", "arn:aws:s3:::baradunv2-*/*"]
+      "Action": [
+        "s3:CreateBucket",
+        "s3:DeleteBucket",
+        "s3:DeleteBucketPolicy",
+        "s3:GetAccelerateConfiguration",
+        "s3:GetAnalyticsConfiguration",
+        "s3:GetBucketAbac",
+        "s3:GetBucketAcl",
+        "s3:GetBucketCORS",
+        "s3:GetBucketLogging",
+        "s3:GetBucketMetadataTableConfiguration",
+        "s3:GetBucketNotification",
+        "s3:GetBucketObjectLockConfiguration",
+        "s3:GetBucketOwnershipControls",
+        "s3:GetBucketPolicy",
+        "s3:GetBucketPublicAccessBlock",
+        "s3:GetBucketTagging",
+        "s3:GetBucketVersioning",
+        "s3:GetBucketWebsite",
+        "s3:GetEncryptionConfiguration",
+        "s3:GetIntelligentTieringConfiguration",
+        "s3:GetInventoryConfiguration",
+        "s3:GetLifecycleConfiguration",
+        "s3:GetMetricsConfiguration",
+        "s3:GetReplicationConfiguration",
+        "s3:ListBucket",
+        "s3:ListTagsForResource",
+        "s3:PutBucketCORS",
+        "s3:PutBucketOwnershipControls",
+        "s3:PutBucketPolicy",
+        "s3:PutBucketPublicAccessBlock",
+        "s3:PutBucketTagging",
+        "s3:PutEncryptionConfiguration",
+        "s3:PutLifecycleConfiguration",
+        "s3:TagResource",
+        "s3:UntagResource"
+      ],
+      "Resource": "arn:aws:s3:::baradunv2-*"
     },
     {
-      "Sid": "CloudFront",
+      "Sid": "CloudFrontCreate",
       "Effect": "Allow",
-      "Action": "cloudfront:*",
+      "Action": [
+        "cloudfront:CreateDistribution",
+        "cloudfront:CreateFunction",
+        "cloudfront:CreateOriginAccessControl",
+        "cloudfront:CreateResponseHeadersPolicy"
+      ],
       "Resource": "*"
+    },
+    {
+      "Sid": "CloudFrontTagOnCreate",
+      "Effect": "Allow",
+      "Action": "cloudfront:TagResource",
+      "Resource": "arn:aws:cloudfront::717304679248:distribution/*",
+      "Condition": {
+        "StringEquals": {
+          "aws:RequestTag/baradun:stack": "BaradunV2"
+        }
+      }
+    },
+    {
+      "Sid": "CloudFrontFunctions",
+      "Effect": "Allow",
+      "Action": [
+        "cloudfront:DeleteFunction",
+        "cloudfront:DescribeFunction",
+        "cloudfront:GetFunction",
+        "cloudfront:ListTagsForResource",
+        "cloudfront:PublishFunction",
+        "cloudfront:TagResource",
+        "cloudfront:UntagResource",
+        "cloudfront:UpdateFunction"
+      ],
+      "Resource": "arn:aws:cloudfront::717304679248:function/ap-northeast-2BaradunV2*"
+    },
+    {
+      "Sid": "CloudFrontDistribution",
+      "Effect": "Allow",
+      "Action": [
+        "cloudfront:DeleteDistribution",
+        "cloudfront:GetDistribution",
+        "cloudfront:GetDistributionConfig",
+        "cloudfront:ListTagsForResource",
+        "cloudfront:TagResource",
+        "cloudfront:UntagResource",
+        "cloudfront:UpdateDistribution"
+      ],
+      "Resource": "arn:aws:cloudfront::717304679248:distribution/*",
+      "Condition": {
+        "StringEquals": {
+          "aws:ResourceTag/baradun:stack": "BaradunV2"
+        }
+      }
+    },
+    {
+      "Sid": "CloudFrontOac",
+      "Effect": "Allow",
+      "Action": [
+        "cloudfront:DeleteOriginAccessControl",
+        "cloudfront:GetOriginAccessControl",
+        "cloudfront:UpdateOriginAccessControl"
+      ],
+      "Resource": "arn:aws:cloudfront::717304679248:origin-access-control/*"
+    },
+    {
+      "Sid": "CloudFrontResponseHeaders",
+      "Effect": "Allow",
+      "Action": [
+        "cloudfront:DeleteResponseHeadersPolicy",
+        "cloudfront:GetResponseHeadersPolicy",
+        "cloudfront:UpdateResponseHeadersPolicy"
+      ],
+      "Resource": "arn:aws:cloudfront::717304679248:response-headers-policy/*"
     },
     {
       "Sid": "ReadFlatRateWebAcl",
       "Effect": "Allow",
       "Action": "wafv2:GetWebACL",
-      "Resource": "arn:aws:wafv2:us-east-1:*:global/webacl/*"
+      "Resource": "arn:aws:wafv2:us-east-1:717304679248:global/webacl/*"
     },
     {
       "Sid": "StackRolesOnlyWithBoundary",
@@ -28,7 +134,7 @@
         "iam:PutRolePermissionsBoundary",
         "iam:PutRolePolicy"
       ],
-      "Resource": "arn:aws:iam::*:role/BaradunV2-*",
+      "Resource": "arn:aws:iam::717304679248:role/BaradunV2-*",
       "Condition": {
         "StringEquals": {
           "iam:PermissionsBoundary": "arn:aws:iam::${aws:PrincipalAccount}:policy/BaradunV2-RoleBoundary"
@@ -51,13 +157,13 @@
         "iam:UpdateRole",
         "iam:UpdateRoleDescription"
       ],
-      "Resource": "arn:aws:iam::*:role/BaradunV2-*"
+      "Resource": "arn:aws:iam::717304679248:role/BaradunV2-*"
     },
     {
       "Sid": "PassStackRolesToCollectors",
       "Effect": "Allow",
       "Action": "iam:PassRole",
-      "Resource": "arn:aws:iam::*:role/BaradunV2-*",
+      "Resource": "arn:aws:iam::717304679248:role/BaradunV2-*",
       "Condition": {
         "StringEquals": {
           "iam:PassedToService": [
@@ -81,13 +187,13 @@
         "iam:UntagOpenIDConnectProvider",
         "iam:UpdateOpenIDConnectProviderThumbprint"
       ],
-      "Resource": "arn:aws:iam::*:oidc-provider/token.actions.githubusercontent.com"
+      "Resource": "arn:aws:iam::717304679248:oidc-provider/token.actions.githubusercontent.com"
     },
     {
       "Sid": "NoBoundaryRemoval",
       "Effect": "Deny",
       "Action": "iam:DeleteRolePermissionsBoundary",
-      "Resource": "arn:aws:iam::*:role/BaradunV2-*"
+      "Resource": "arn:aws:iam::717304679248:role/BaradunV2-*"
     },
     {
       "Sid": "NoBoundaryPolicyEdit",
@@ -98,80 +204,7 @@
         "iam:DeletePolicyVersion",
         "iam:SetDefaultPolicyVersion"
       ],
-      "Resource": "arn:aws:iam::*:policy/BaradunV2-RoleBoundary"
-    },
-    {
-      "Sid": "StackTables",
-      "Effect": "Allow",
-      "Action": "dynamodb:*",
-      "Resource": [
-        "arn:aws:dynamodb:ap-northeast-2:*:table/BaradunV2-*",
-        "arn:aws:dynamodb:ap-northeast-2:*:table/BaradunV2-*/*"
-      ]
-    },
-    {
-      "Sid": "Budget",
-      "Effect": "Allow",
-      "Action": "budgets:*",
-      "Resource": "*"
-    },
-    {
-      "Sid": "CollectorFunctions",
-      "Effect": "Allow",
-      "Action": "lambda:*",
-      "Resource": "arn:aws:lambda:ap-northeast-2:*:function:BaradunV2-*"
-    },
-    {
-      "Sid": "CollectorLogs",
-      "Effect": "Allow",
-      "Action": "logs:*",
-      "Resource": [
-        "arn:aws:logs:ap-northeast-2:*:log-group:BaradunV2-*",
-        "arn:aws:logs:ap-northeast-2:*:log-group:BaradunV2-*:*"
-      ]
-    },
-    {
-      "Sid": "CollectorSchedules",
-      "Effect": "Allow",
-      "Action": "scheduler:*",
-      "Resource": "arn:aws:scheduler:ap-northeast-2:*:schedule/default/BaradunV2-*"
-    },
-    {
-      "Sid": "SnsNotifications",
-      "Effect": "Allow",
-      "Action": [
-        "sns:CreateTopic",
-        "sns:DeleteTopic",
-        "sns:GetSubscriptionAttributes",
-        "sns:GetTopicAttributes",
-        "sns:ListSubscriptionsByTopic",
-        "sns:ListTagsForResource",
-        "sns:SetSubscriptionAttributes",
-        "sns:SetTopicAttributes",
-        "sns:Subscribe",
-        "sns:TagResource",
-        "sns:Unsubscribe",
-        "sns:UntagResource"
-      ],
-      "Resource": "arn:aws:sns:ap-northeast-2:*:BaradunV2-*"
-    },
-    {
-      "Sid": "OpsAlarms",
-      "Effect": "Allow",
-      "Action": [
-        "cloudwatch:DeleteAlarms",
-        "cloudwatch:ListTagsForResource",
-        "cloudwatch:PutMetricAlarm",
-        "cloudwatch:TagResource",
-        "cloudwatch:UntagResource"
-      ],
-      "Resource": "arn:aws:cloudwatch:ap-northeast-2:*:alarm:BaradunV2-*"
-    },
-    {
-      "Sid": "OpsAlarmsDescribe",
-      "Effect": "Allow",
-      "Action": "cloudwatch:DescribeAlarms",
-      "Resource": "*"
+      "Resource": "arn:aws:iam::717304679248:policy/BaradunV2-RoleBoundary"
     },
     {
       "Sid": "ReadLambdaCodeAssets",
@@ -183,13 +216,7 @@
       "Sid": "ReadCdkBootstrapVersion",
       "Effect": "Allow",
       "Action": ["ssm:GetParameter", "ssm:GetParameters"],
-      "Resource": "arn:aws:ssm:*:*:parameter/cdk-bootstrap/*"
-    },
-    {
-      "Sid": "LogsDescribeForGetAtt",
-      "Effect": "Allow",
-      "Action": "logs:DescribeLogGroups",
-      "Resource": "*"
+      "Resource": "arn:aws:ssm:ap-northeast-2:717304679248:parameter/cdk-bootstrap/*"
     }
   ]
 }
