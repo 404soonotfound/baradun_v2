@@ -348,8 +348,8 @@
     "message": "Message",
     "more": "More",
     "copied": "Link copied",
-    "copyFailed": "Couldn’t copy the link · Select the link above and copy it yourself",
-    "unavailable": "Can’t create a link on this screen · Copy the address from the address bar",
+    "copyFailed": "Couldn't copy the link · Select the link above and copy it yourself",
+    "unavailable": "Can't create a link on this screen · Copy the address from the address bar",
     "messageBody": "{name} {url}",
     "ogIllustration": "Sea illustration"
   },
@@ -599,14 +599,14 @@
       "value": {
         "checking": "Checking",
         "idle": "Not asked",
-        "locating": "Getting",
+        "locating": "Locating",
         "ready": "Allowed",
         "denied": "Not allowed",
-        "unavailable": "Unavailable",
+        "unavailable": "Couldn't locate",
         "off": "Off"
       },
       "idleHint": "Tap the permission row and your browser will ask once.",
-      "deniedHint": "Location permission isn’t allowed, so we can’t show nearby beaches or distances. Tap Try again to ask your browser once more.",
+      "deniedHint": "Location permission isn't allowed, so we can't show nearby beaches or distances. Tap Try again to ask your browser once more.",
       "unavailableHint": "Your device couldn't share its location, so distances aren't shown. Tap the permission row to try again in a moment.",
       "region": "Default region",
       "regionNationwide": "All Korea",
@@ -908,8 +908,8 @@
     "retry": "Try again",
     "retrying": "Checking location…",
     "retryDenied": {
-      "ios": "We tried again, but location permission wasn’t allowed, so we can’t show nearby beaches or distances. Go to Settings → Privacy & Security → Location Services, set the browser you’re using (Safari Websites for Safari, or that app for other browsers) to “While Using the App”, then try again.",
-      "browser": "We tried again, but location permission wasn’t allowed, so we can’t show nearby beaches or distances. Allow location for this site in your browser settings, then try again."
+      "ios": "We tried again, but location permission wasn't allowed, so we can't show nearby beaches or distances. Go to Settings → Privacy & Security → Location Services, set the browser you're using (Safari Websites for Safari, or that app for other browsers) to “While Using the App”, then try again.",
+      "browser": "We tried again, but location permission wasn't allowed, so we can't show nearby beaches or distances. Allow location for this site in your browser settings, then try again."
     }
   }
 }
