@@ -21,6 +21,79 @@ AWS_PROFILE=baradun-admin npx cdk diff --method=change-set
 AWS_PROFILE=baradun-admin npx cdk deploy
 ```
 
+## 운영 도메인 연결 (BRD-162)
+
+대표 주소는 `https://www.baradun.app`입니다(2026-11-02 사용자 결정).
+
+- 가비아 DNS는 루트 주소에 CNAME을 걸 수 없어서 www만 CloudFront로 보냅니다.
+- 루트 주소(`baradun.app`)는 지금처럼 Vercel(V1 프로젝트)이 www로 넘깁니다. 비용은 0원입니다.
+- 전환은 **출시일**에 합니다. 그 전까지 스택 매개변수 `SiteDomainName`·`SiteCertificateArn`은 비워 둡니다. 비어 있으면 대체 도메인·인증서를 붙이지 않고, 주소 변환 함수도 이동하지 않습니다(지금과 같은 동작).
+
+값을 넣으면 다음처럼 동작합니다.
+
+- CloudFront에 대체 도메인과 인증서를 붙입니다(SNI, `TLSv1.2_2021`).
+- 다른 호스트(`*.cloudfront.net` 등)로 온 페이지 주소 요청은 대표 주소의 같은 경로·쿼리로 301 이동합니다(`lib/site/rewrite-index.ts`). 파일 주소(`/data/`·`/_next/`·`sw.js`)는 이동하지 않습니다. 예전 주소에 남은 저장본 화면이 바다 정보를 받다가 다른 출처로 넘어가 막히지 않게 하려는 것입니다.
+- 두 값은 함께 넣거나 함께 비워야 합니다. 하나만 넣으면 CloudFormation 규칙(`SiteDomainNeedsCertificate`)이 배포 시작 전에 거부합니다.
+- 실행 정책은 바꾸지 않아도 됩니다. ACM 인증서를 API로 붙이는 데 CloudFront 권한만 필요합니다([CloudFront 권한 예시](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/security_iam_id-based-policy-examples.html)). 공식 스키마의 배포 Update 핸들러 권한에도 ACM은 없습니다.
+
+### 미리 할 일 (출시 하루 전까지)
+
+1. **웹 운영 주소 상수**: `apps/web/src/lib/site-env.ts`의 `PRODUCTION_SITE_ORIGIN`을 `https://www.baradun.app`으로 바꾼 PR이 main에 있어야 합니다(BRD-144). 이 값과 저장소 변수 `SITE_URL`이 같아야 운영 빌드(GA·색인·robots·sitemap)가 됩니다.
+2. **인증서 요청**: ACM 인증서를 **us-east-1**에 요청합니다. CloudFront는 이 리전 인증서만 받습니다.
+
+   ```bash
+   AWS_PROFILE=baradun-admin aws acm request-certificate --region us-east-1 \
+     --domain-name www.baradun.app --validation-method DNS
+   AWS_PROFILE=baradun-admin aws acm describe-certificate --region us-east-1 \
+     --certificate-arn <위 결과의 CertificateArn> \
+     --query 'Certificate.DomainValidationOptions[0].ResourceRecord'
+   ```
+
+3. **검증 CNAME 추가**: 가비아 DNS 관리에 위 결과의 검증 CNAME(`_xxxx.www` → `_yyyy.acm-validations.aws.`)을 추가합니다. 상태가 `ISSUED`가 될 때까지 기다립니다. 이 레코드는 지우지 않습니다(자동 갱신에 씀).
+4. **TTL 낮추기**: 가비아에서 `www` CNAME의 TTL을 300초로 낮춰 둡니다(지금 600초). 전환과 되돌리기가 빨리 퍼집니다.
+
+### 출시일 전환 순서
+
+1. **자동 배포 멈춤**: 저장소 변수 `DEPLOY_PAUSED=true`.
+2. **스택 배포**: 최신 `origin/main` 작업 트리에서 도메인·인증서 값을 넣어 배포합니다(맨 위 배포 절차).
+
+   ```bash
+   AWS_PROFILE=baradun-admin npx cdk diff --method=change-set \
+     --parameters SiteDomainName=www.baradun.app \
+     --parameters SiteCertificateArn=<인증서 ARN>
+   AWS_PROFILE=baradun-admin npx cdk deploy \
+     --parameters SiteDomainName=www.baradun.app \
+     --parameters SiteCertificateArn=<인증서 ARN>
+   ```
+
+   다음 배포부터는 CloudFormation이 이 값을 그대로 씁니다. 이때부터 CloudFront 기본 주소의 페이지는 www로 이동합니다. www는 아직 Vercel을 가리키므로, 기본 주소로 온 사람은 3단계 전까지 V1 점검 화면을 봅니다.
+
+3. **가비아 www CNAME 변경**: `www` CNAME을 Vercel 주소에서 CloudFront 배포 도메인(`d1gam1q4z69v8c.cloudfront.net`, 출력값 `DistributionDomainName`)으로 바꿉니다.
+4. **저장소 변수 변경**: `gh variable set SITE_URL --body https://www.baradun.app` 하고 `DEPLOY_PAUSED`를 지운 뒤 `npm run deploy:prod`로 사이트를 다시 배포합니다. 이 빌드부터 GA·색인·robots·sitemap이 켜집니다.
+5. **V1 Vercel 프로젝트 정리**
+   - 도메인 목록에서 `www.baradun.app`을 빼고 `baradun.app`만 남깁니다.
+   - `vercel.json`에 `{"redirects":[{"source":"/(.*)","destination":"https://www.baradun.app/","permanent":false}]}`를 넣어 다시 배포합니다. V1 경로는 V2에 없어서 모두 첫 화면으로 보냅니다. 안정되면 `permanent: true`로 바꿉니다(BRD-98).
+6. **확인**
+   - `curl -sI https://www.baradun.app/`: 200, 보안 헤더 6종
+   - `curl -sI https://d1gam1q4z69v8c.cloudfront.net/spots/gangmun/`: 301, `location: https://www.baradun.app/spots/gangmun/`
+   - `curl -sI https://baradun.app/`: www로 이동
+   - `curl -s https://www.baradun.app/robots.txt`: 운영용 내용
+   - 운영 페이지에 noindex가 없음
+   - GA 실시간 보고서에 방문이 보임
+   - 브라우저 콘솔에 CSP 위반이 없음
+
+### 되돌리기
+
+- 가비아 `www` CNAME을 원래 Vercel 주소(`2e9e02c1d516eeff.vercel-dns-017.com.`)로 되돌립니다.
+- 두 매개변수를 비워 다시 배포합니다.
+
+```bash
+AWS_PROFILE=baradun-admin npx cdk deploy \
+  --parameters SiteDomainName= --parameters SiteCertificateArn=
+```
+
+- `SITE_URL`을 CloudFront 기본 주소로 되돌리고 `npm run deploy:prod` 합니다.
+
 ## CDK 실행 정책과 역할 권한 상한
 
 CloudFormation 실행 역할(`cdk-hnb659fds-cfn-exec-role-<계정>-ap-northeast-2`)에는 `AdministratorAccess` 대신 최소 권한 고객 관리형 정책 두 개를 상시 부착합니다(BRD-121). IAM 고객 관리형 정책 한도(공백 제외 6,144자, 증액 불가) 안에 들도록 서비스 묶음별로 파일을 나누어 둘 다 붙여 둡니다.
