@@ -175,6 +175,8 @@ jobs:
       - run: npm run test -w infra
       - run: npx cdk synth
         working-directory: infra
+      # 고정된 공식 참조로 결정적으로 검사. 최신 공개 자료는 iam-reference-audit.yml에서 대조함
+      - run: npm run check:iam-actions -w @baradun/infra
 
   # 계약: 생성 타입 일치·타입 검사·예시 검사
   contracts:

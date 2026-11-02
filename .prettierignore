@@ -1,0 +1,2 @@
+# 공식 자료 생성기가 JSON.stringify(..., null, 2)로 기록하는 고정본
+infra/test/fixtures/aws-permission-reference.json

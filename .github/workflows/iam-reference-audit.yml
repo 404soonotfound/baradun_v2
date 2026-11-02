@@ -1,0 +1,29 @@
+name: IAM official reference audit
+
+on:
+  schedule:
+    - cron: "0 0 * * 1" # 매주 월요일 09:00 KST
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npx cdk synth --quiet --no-lookups
+        working-directory: infra
+        env:
+          AWS_EC2_METADATA_DISABLED: "true"
+      # PR 필수 CI는 고정본만 검사. 최신 공개 자료 변경·조회 실패는 이 별도 실행에서 보고함.
+      - run: npm run check:iam-actions -w @baradun/infra -- --check-latest
