@@ -327,6 +327,12 @@ function NoticeStep({ locale }: { locale: Locale }) {
       <div className="mt-auto flex flex-col gap-[18px]">
         <StepDots current={1} />
         <div className="flex flex-col items-center">
+          <Link
+            href={`${localizedPath(locale, "/terms/")}#terms-privacy`}
+            className="mb-2 inline-flex min-h-touch items-center text-center text-caption font-bold text-brand-default"
+          >
+            {t("onboarding.notice.privacy")}
+          </Link>
           <Button className="w-full" onClick={acknowledgeNotice}>
             {t("onboarding.notice.confirm")}
           </Button>
