@@ -1,5 +1,12 @@
 import { normalizePwnCdRow, type PwnCdRow, type PwnEvent } from "./normalize";
-import { responseItems } from "./response-items";
+import {
+  checkNumOfRows,
+  isObject,
+  listSizeFailure,
+  responseHeader,
+  type ResponseFailure,
+  responseItems,
+} from "./response-items";
 
 // getPwnCd 응답 전체 판정 (아키텍처 4장 10/22 실응답 확인, 결정 기록 11장 10/22 ⑥)
 // 정상 = 00 + 받은 행 수 < 요청 numOfRows. 03·99·잘림·형식 오류는 모두 실패
@@ -11,7 +18,7 @@ export type PwnCdRawItem = Record<string, unknown>;
 
 export type PwnCdResult =
   | { status: "ok"; rowCount: number; events: PwnEvent[] } // rowCount: 잘림 대비 알림용(BRD-56)
-  | { status: "failed"; reason: string };
+  | ResponseFailure;
 
 // 꼭 있어야 하는 칸. stnId(발표 관서)는 응답에 없을 수 있어 따로 처리
 const FIELDS = [
@@ -27,10 +34,6 @@ const FIELDS = [
   "endTime",
   "allEndTime",
 ] as const satisfies readonly (keyof PwnCdRow)[];
-
-function isObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 // 값 하나 → 글자. 글자는 그대로, 0 이상 정수는 글자로. 그 밖(소수·객체·없음 등)은 null
 function asText(value: unknown): string | null {
@@ -61,16 +64,10 @@ export function normalizePwnCdResponse(
   json: unknown,
   numOfRows: number,
 ): PwnCdResult {
-  // 요청 값은 수집기가 정함 → 잘못되면 코드 오류라 멈춤
-  if (!Number.isSafeInteger(numOfRows) || numOfRows < 1) {
-    throw new RangeError(`numOfRows 오류: ${numOfRows}`);
-  }
+  checkNumOfRows(numOfRows);
 
-  const response = isObject(json) ? json.response : undefined;
-  const header = isObject(response) ? response.header : undefined;
-  if (!isObject(response) || !isObject(header)) {
-    return { status: "failed", reason: "format:header" };
-  }
+  const header = responseHeader(json);
+  if (!header) return { status: "failed", reason: "format:header" };
 
   // 정상은 정확히 "00"만. 03(NO_DATA)·99 등은 모두 실패
   const code = asText(header.resultCode);
@@ -80,13 +77,9 @@ export function normalizePwnCdResponse(
 
   const list = responseItems(json);
   if (!list) return { status: "failed", reason: "format:items" };
-  // 59일 범위에 0행은 없음(실응답 2,622~2,708행). 00인데 비었으면 이상 응답 → '없음'으로 읽지 않음
-  if (list.length === 0) return { status: "failed", reason: "empty" };
-
-  // 요청한 만큼 꽉 찼으면 뒤가 잘렸을 수 있음(쪽 나누기는 불안정해서 쓰지 않음)
-  if (list.length >= numOfRows) {
-    return { status: "failed", reason: `truncated:${list.length}` };
-  }
+  // 59일 범위에 0행은 없음(실응답 2,622~2,708행) → 빈 목록·꽉 찬 목록은 실패
+  const sizeFailure = listSizeFailure(list, numOfRows);
+  if (sizeFailure) return sizeFailure;
 
   // 한 행이라도 형식이 틀리면 응답 전체를 믿지 않음
   const rows: PwnCdRow[] = [];

@@ -1,7 +1,14 @@
 import type { WarningLevel } from "@baradun/contracts";
 import type { WarningKind } from "./codes";
 import { parseKstTime } from "./time";
-import { responseItems } from "./response-items";
+import {
+  checkNumOfRows,
+  isObject,
+  listSizeFailure,
+  responseHeader,
+  type ResponseFailure,
+  responseItems,
+} from "./response-items";
 
 // getTsunamiMsg(기상청_지진정보 조회서비스) 정규화
 // 지진해일은 getPwnCd에 없어서 여기서 받음(결정 기록 11장 10/20)
@@ -30,7 +37,7 @@ export type TsunamiEvent = {
 export type TsunamiResult =
   | { status: "none" } // 03 NO_DATA: 지진해일 발표 없음 확인
   | { status: "ok"; events: TsunamiEvent[] } // 00: 목록
-  | { status: "failed"; reason: string }; // 그 밖의 코드·형식 오류: 조회 실패
+  | ResponseFailure; // 그 밖의 코드·형식 오류: 조회 실패
 
 // fcTp(통보문 종류) → 동작·단계
 const FC_TYPES = {
@@ -45,10 +52,6 @@ function text(value: unknown): string | null {
   if (typeof value === "string") return value;
   if (typeof value === "number") return String(value);
   return JSON.stringify(value);
-}
-
-function isObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 export function normalizeTsunamiItem(item: TsunamiItem): TsunamiEvent {
@@ -100,16 +103,10 @@ export function normalizeTsunamiResponse(
   json: unknown,
   numOfRows: number,
 ): TsunamiResult {
-  // 요청 값은 수집기가 정함 → 잘못되면 코드 오류라 멈춤(getPwnCd와 같음)
-  if (!Number.isSafeInteger(numOfRows) || numOfRows < 1) {
-    throw new RangeError(`numOfRows 오류: ${numOfRows}`);
-  }
+  checkNumOfRows(numOfRows);
 
-  const response = isObject(json) ? json.response : undefined;
-  const header = isObject(response) ? response.header : undefined;
-  if (!isObject(response) || !isObject(header)) {
-    return { status: "failed", reason: "format:header" };
-  }
+  const header = responseHeader(json);
+  if (!header) return { status: "failed", reason: "format:header" };
 
   const code = text(header.resultCode);
   // '없음 확인'은 정확히 "03"일 때만. 다른 표기는 실패 쪽으로 둬 없음으로 잘못 읽지 않게 함
@@ -123,11 +120,8 @@ export function normalizeTsunamiResponse(
   if (!list || !list.every(isObject)) {
     return { status: "failed", reason: "format:items" };
   }
-  // 발표 없음은 빈 목록이 아니라 03으로 옴(아키텍처 4장 10/20 실호출) → 00인데 비었으면 이상 응답
-  if (list.length === 0) return { status: "failed", reason: "empty" };
-  // 요청한 만큼 꽉 찼으면 뒤 발표·해제가 잘렸을 수 있음 → 실패(getPwnCd와 같음)
-  if (list.length >= numOfRows) {
-    return { status: "failed", reason: `truncated:${list.length}` };
-  }
+  // 발표 없음은 빈 목록이 아니라 03으로 옴(아키텍처 4장 10/20 실호출) → 빈 목록·꽉 찬 목록은 실패
+  const sizeFailure = listSizeFailure(list, numOfRows);
+  if (sizeFailure) return sizeFailure;
   return { status: "ok", events: list.map(normalizeTsunamiItem) };
 }
