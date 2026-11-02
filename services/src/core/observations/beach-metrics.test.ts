@@ -80,6 +80,12 @@ describe("buildBeachMetrics", () => {
     expect(isWaveHeightDelayed(metrics)).toBe(false);
   });
 
+  it("기준 시각 형식이 틀리면 멈춤", () => {
+    expect(() =>
+      buildBeachMetrics(beach.stations, freshReadings, "2026-10-21 09:00"),
+    ).toThrow(RangeError);
+  });
+
   it("파고가 90분을 넘으면 분류용 관측 지연", () => {
     const metrics = buildBeachMetrics(
       beach.stations,

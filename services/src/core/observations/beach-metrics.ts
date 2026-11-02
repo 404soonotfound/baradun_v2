@@ -1,5 +1,10 @@
 import type { Beach, BeachStatus } from "@baradun/contracts";
-import { METRIC_UNIT, toMetric, type StationReadings } from "./freshness";
+import {
+  emptyMetric,
+  parseNow,
+  toMetric,
+  type StationReadings,
+} from "./freshness";
 import { METRIC_KEYS, type MetricKey } from "./values";
 
 // 해변별 관측 조립 (결정 기록 11장 B2·B4, 9장 분류 규칙)
@@ -16,20 +21,14 @@ export function buildBeachMetrics(
   readings: StationReadings,
   now: string,
 ): BeachMetrics {
+  const nowMs = parseNow(now); // 형식이 틀리면 멈춤. 지표마다 다시 파싱하지 않음
   // 아래 반복문이 다섯 지표를 모두 채움
   const metrics = {} as Record<MetricKey, BeachMetrics[MetricKey]>;
   for (const key of METRIC_KEYS) {
     const station = stations[key];
     metrics[key] = station
-      ? toMetric(key, readings[station.id]?.[key], now)
-      : {
-          value: null,
-          unit: METRIC_UNIT[key],
-          observedAt: null,
-          state: "none",
-          nextExpectedAt: null,
-          expiresAt: null,
-        };
+      ? toMetric(key, readings[station.id]?.[key], nowMs)
+      : emptyMetric(key, "none");
   }
   return metrics;
 }

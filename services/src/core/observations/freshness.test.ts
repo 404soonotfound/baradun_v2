@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mergeReadings, toMetric } from "./freshness";
+import { mergeReadings, parseNow, toMetric } from "./freshness";
 
 // 마지막 정상값·신선도 (BRD-19 부품 3, 결정 기록 11장 B4·10/22)
 const NOW = "2026-10-21T00:00:00Z";
@@ -126,7 +126,7 @@ describe("mergeReadings", () => {
 describe("toMetric", () => {
   it("파고는 90분 00초까지 fresh, 넘으면 delayed(값은 남김)", () => {
     const reading = { value: 0.8, observedAt: "2026-10-20T22:30:00Z" };
-    expect(toMetric("waveHeight", reading, NOW)).toEqual({
+    expect(toMetric("waveHeight", reading, parseNow(NOW))).toEqual({
       value: 0.8,
       unit: "m",
       observedAt: "2026-10-20T22:30:00Z",
@@ -135,7 +135,7 @@ describe("toMetric", () => {
       expiresAt: "2026-10-21T00:00:00Z",
     });
     expect(
-      toMetric("waveHeight", reading, "2026-10-21T00:00:01Z"),
+      toMetric("waveHeight", reading, parseNow("2026-10-21T00:00:01Z")),
     ).toMatchObject({
       value: 0.8,
       state: "delayed",
@@ -144,13 +144,13 @@ describe("toMetric", () => {
 
   it("파주기·파향은 60분 기준", () => {
     const reading = { value: 6, observedAt: "2026-10-20T23:00:00Z" };
-    expect(toMetric("wavePeriod", reading, NOW)).toMatchObject({
+    expect(toMetric("wavePeriod", reading, parseNow(NOW))).toMatchObject({
       unit: "s",
       state: "fresh",
       expiresAt: "2026-10-21T00:00:00Z",
     });
     expect(
-      toMetric("waveDirection", reading, "2026-10-21T00:00:01Z"),
+      toMetric("waveDirection", reading, parseNow("2026-10-21T00:00:01Z")),
     ).toMatchObject({
       unit: "deg",
       state: "delayed",
@@ -158,7 +158,7 @@ describe("toMetric", () => {
   });
 
   it("측정기는 있는데 정상값이 없으면 none이 아니라 delayed", () => {
-    expect(toMetric("waterTemp", undefined, NOW)).toEqual({
+    expect(toMetric("waterTemp", undefined, parseNow(NOW))).toEqual({
       value: null,
       unit: "°C",
       observedAt: null,
@@ -170,22 +170,16 @@ describe("toMetric", () => {
 
   it("저장된 값의 관측 시각이 미래면 믿지 않음", () => {
     const reading = { value: 3.1, observedAt: "2026-10-21T00:10:00Z" };
-    expect(toMetric("wind", reading, NOW)).toMatchObject({
+    expect(toMetric("wind", reading, parseNow(NOW))).toMatchObject({
       value: null,
       state: "delayed",
     });
   });
 
-  it("기준 시각 형식이 틀리면 멈춤", () => {
-    expect(() => toMetric("wind", undefined, "2026-10-21 09:00")).toThrow(
-      RangeError,
-    );
-  });
-
   it("관측 시각에 밀리초가 있어도 state와 expiresAt이 같은 시각을 씀", () => {
     const reading = { value: 0.8, observedAt: "2026-10-20T22:30:00.500Z" };
     expect(
-      toMetric("waveHeight", reading, "2026-10-21T00:00:00.300Z"),
+      toMetric("waveHeight", reading, parseNow("2026-10-21T00:00:00.300Z")),
     ).toMatchObject({ state: "delayed", expiresAt: "2026-10-21T00:00:00Z" });
   });
 });

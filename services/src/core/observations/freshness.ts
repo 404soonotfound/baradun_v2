@@ -24,7 +24,7 @@ export type ObservationRow = {
   readonly observedAt: string;
 } & Readonly<Partial<Record<MetricKey, number | null>>>;
 
-export const METRIC_UNIT: Record<MetricKey, Metric["unit"]> = {
+const METRIC_UNIT: Record<MetricKey, Metric["unit"]> = {
   waveHeight: "m",
   wavePeriod: "s",
   waveDirection: "deg",
@@ -83,34 +83,41 @@ export function mergeReadings(
   return { readings: next, futureRows };
 }
 
+// 값·시각이 없는 지표. none = 배정된 측정기 없음, delayed = 측정기는 있는데 쓸 수 있는 정상값 없음
+// nextExpectedAt은 출시에서 항상 null(10/22 ①)
+export function emptyMetric(key: MetricKey, state: "none" | "delayed"): Metric {
+  return {
+    value: null,
+    unit: METRIC_UNIT[key],
+    observedAt: null,
+    state,
+    nextExpectedAt: null,
+    expiresAt: null,
+  };
+}
+
 // 배정된 측정기가 있는 지표의 공개 계약 모양
 // reading 없음 = 측정기는 있는데 정상값을 아직 못 받음 → none이 아니라 delayed(수집 실패를 '측정기 없음'으로 바꾸지 않음)
 // 경계: 90분 00초까지 fresh, 넘으면 delayed. delayed여도 값·시각은 남김(화면이 expiresAt으로 숨김)
+// nowMs: parseNow로 검사한 기준 시각. 해변·지표마다 다시 파싱하지 않게 부르는 쪽이 한 번만 계산해 넘김
 export function toMetric(
   key: MetricKey,
   reading: Reading | undefined,
-  now: string,
+  nowMs: number,
 ): Metric {
-  const nowMs = parseNow(now);
-  const base = { unit: METRIC_UNIT[key], nextExpectedAt: null }; // nextExpectedAt은 출시에서 항상 null(10/22 ①)
   const observedMs = reading ? parseUtcIso(reading.observedAt) : null;
   if (!reading || observedMs === null || observedMs > nowMs) {
-    return {
-      ...base,
-      value: null,
-      observedAt: null,
-      state: "delayed",
-      expiresAt: null,
-    };
+    return emptyMetric(key, "delayed");
   }
   // 초 단위로 내림 → 화면에 주는 expiresAt과 state 판정이 같은 시각을 씀(밀리초가 있어도 어긋나지 않음)
   const expiresMs =
     Math.floor((observedMs + OBSERVATION_POLICY.expiryMs[key]) / 1000) * 1000;
   return {
-    ...base,
     value: reading.value,
+    unit: METRIC_UNIT[key],
     observedAt: reading.observedAt,
     state: nowMs > expiresMs ? "delayed" : "fresh",
+    nextExpectedAt: null,
     expiresAt: formatUtcIso(expiresMs),
   };
 }
