@@ -3,6 +3,7 @@ import path from "node:path";
 
 import AxeBuilder from "@axe-core/playwright";
 import type { Beach } from "@baradun/contracts";
+import { NOTICE_VERSION } from "../src/lib/notice-version";
 import {
   test as base,
   expect,
@@ -372,14 +373,14 @@ async function seedDevice(
   } = {},
 ) {
   await context.addInitScript(
-    ({ language, region, extra }) => {
+    ({ language, region, extra, noticeVersion }) => {
       // 테스트마다 새 context라 처음 한 번만 넣음(새로고침 뒤 앱이 바꾼 값은 그대로 둠)
       if (sessionStorage.getItem("e2e:seeded")) return;
       sessionStorage.setItem("e2e:seeded", "1");
       localStorage.setItem(
         "baradun:onboarding",
         JSON.stringify({
-          noticeVersion: 1,
+          noticeVersion, // 지금 고지 버전(lib/notice-version.ts). 낮으면 ON-1이 다시 덮어 모든 시험이 막힘
           acknowledgedAt: "2026-10-27T00:00:00Z",
           locationStepDone: true,
         }),
@@ -394,6 +395,7 @@ async function seedDevice(
       language: options.language ?? "ko",
       region: options.region === undefined ? GANGNEUNG_REGION : options.region,
       extra: options.extra ?? {},
+      noticeVersion: NOTICE_VERSION,
     },
   );
 }
