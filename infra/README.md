@@ -3,60 +3,302 @@
 AWS CDK(TypeScript) 스택입니다. 구성(S3 사이트·데이터 버킷, CloudFront, DynamoDB, Scheduler, GitHub OIDC, Budgets)의 기준은 Notion 'V2 아키텍처 기준 문서' 11장입니다.
 
 ```bash
-npm run build -w @baradun/infra   # 타입 검사(tsc)
-npm run test -w @baradun/infra    # Vitest (스택 템플릿·권한·가드레일)
-npx cdk synth                     # CloudFormation 템플릿 생성 (infra/에서)
-npx cdk diff                      # 배포된 스택과 비교
+npm run build -w @baradun/infra             # 타입 검사(tsc)
+npm run test -w @baradun/infra              # Vitest (스택 템플릿·권한·가드레일)
+npm run check:iam-actions -w @baradun/infra # synth 뒤 고정 IAM·서울 CFN 스키마 대조 (오프라인)
+npx cdk synth                               # CloudFormation 템플릿 생성 (infra/에서)
+npx cdk diff --method=change-set            # 배포된 스택과 변경 세트 비교
 ```
 
-배포(`npx cdk deploy`)는 요청이 있을 때만 하고, 최신 `origin/main`을 꺼낸 작업 트리에서 합니다. 작업 중인 브랜치에서 배포하면 머지되지 않은 코드가 실환경에 올라갑니다.
+사이트 자동 배포(`.github/workflows/deploy.yml`, `npm run deploy:prod`)는 GitHub OIDC로 사이트 전용 역할(`DeployRole`)을 맡아 S3 파일 동기화와 CloudFront 캐시 무효화만 수행하며, CloudFormation이나 CDK 실행 정책을 거치지 않습니다.
+
+인프라 스택 배포(`npx cdk deploy`)는 요청이 있을 때만 수동으로 하고, 최신 `origin/main`을 꺼낸 작업 트리에서 관리자 역할 프로필(`baradun-admin`)로 실행합니다. 작업 중인 브랜치에서 배포하면 머지되지 않은 코드가 실환경에 올라갑니다.
 
 ```bash
 git fetch origin && git worktree add ../baradun_v2-deploy origin/main --detach
-cd ../baradun_v2-deploy && npm ci && cd infra && npx cdk diff && npx cdk deploy
+cd ../baradun_v2-deploy && npm ci && cd infra
+AWS_PROFILE=baradun-admin npx cdk diff --method=change-set
+AWS_PROFILE=baradun-admin npx cdk deploy
 ```
 
-첫 배포 전 부트스트랩 실행 정책은 `bootstrap/cfn-execution-policy.json`에 있습니다.
+## CDK 실행 정책과 역할 권한 상한
 
-코드 자산 읽기는 `cdk-hnb659fds-assets-${aws:PrincipalAccount}-ap-northeast-2` 버킷으로 제한합니다. `${aws:PrincipalAccount}`는 IAM이 요청 시 실행 역할의 계정 번호로 해석하는 정책 변수이며, 파일을 그대로 IAM 정책으로 사용합니다. 다른 계정·리전의 자산 버킷은 허용하지 않습니다.
+CloudFormation 실행 역할(`cdk-hnb659fds-cfn-exec-role-<계정>-ap-northeast-2`)에는 `AdministratorAccess` 대신 최소 권한 고객 관리형 정책 두 개를 상시 부착합니다(BRD-121). IAM 고객 관리형 정책 한도(공백 제외 6,144자, 증액 불가) 안에 들도록 서비스 묶음별로 파일을 나누어 둘 다 붙여 둡니다.
 
-로그 그룹 목록 읽기(`logs:DescribeLogGroups`)는 CloudFormation이 로그 그룹 속성(GetAtt)을 읽을 때 필요해 따로 허락합니다. 공식 권한 표에 리소스 유형이 없어 `Resource`는 `*`입니다. 서울 리전으로 좁히는 `aws:RequestedRegion` 조건은 실제 배포로 확인한 뒤 넣습니다.
+- `bootstrap/cfn-execution-policy.json` (`BaradunCdkExecution`): 사이트 전달·보안(`s3`, `cloudfront`, `wafv2`), IAM 역할·권한 상한·GitHub OIDC(`iam`), CDK 부트스트랩 자산·버전 파라미터 읽기(`s3:GetObject`, `ssm:GetParameter`·`GetParameters`)
+- `bootstrap/cfn-execution-workload-policy.json` (`BaradunCdkExecutionWorkload`): 백엔드 테이블(`dynamodb`), 수집·게시·문의 함수(`lambda`), 로그 그룹(`logs`), 일정(`scheduler`), 알림(`sns`), 운영 경보(`cloudwatch`), 월 예산(`budgets`)
 
-## 역할 권한 상한
+실행 정책 작성 규칙은 `test/guardrails.test.ts`와 `scripts/check-iam-actions.mjs`로 검사합니다.
 
-스택이 만드는 모든 역할에는 권한 상한(permissions boundary) `BaradunV2-RoleBoundary`가 붙습니다. 정책 문서는 `bootstrap/role-boundary-policy.json`입니다. 실행 정책은 이 boundary가 붙은 역할만 만들고, 인라인 정책을 바꾸게 허락합니다. 관리형 정책 부착, boundary 떼기, boundary 정책 고치기는 허락하지 않습니다. 그래서 배포 권한이 탈취되어도 역할의 권한은 boundary 안으로 제한됩니다.
+Vitest는 `test/fixtures/iam-actions.json`과 정책·검토된 핸들러 표를 대조합니다. CI는 synth 뒤 `check:iam-actions`로 `test/fixtures/aws-permission-reference.json`에 고정한 공식 자료에도 대조합니다. 이 고정본은 [공개 IAM 권한 참조](https://docs.aws.amazon.com/service-authorization/latest/reference/service-reference.html)의 전체 Action 이름·리소스/조건 정보·사용 중인 스키마 API의 매핑과 [서울 CloudFormation 공개 스키마 ZIP](https://docs.aws.amazon.com/AWSCloudFormation/latest/TemplateReference/resource-type-schemas.html)의 실제 리소스별 `handlers`·`tagging`을 추출한 것입니다. 원본 URL·SHA-256·검증일을 함께 기록합니다. 정책과 Action 스냅샷 자체를 모두 대조하므로, 서로 같은 오타를 넣어도 실패합니다. PR 필수 검사는 네트워크 없이 실행돼 외부 자료 변경·일시 장애가 PR을 막지 않습니다.
 
-boundary 정책의 `Resource` ARN에는 계정 번호(`717304679248`)를 그대로 씁니다. AWS는 Resource ARN의 계정 자리에 정책 변수(`${aws:PrincipalAccount}`)를 허용하지 않기 때문입니다. boundary의 Condition 값(`lambda:SourceFunctionArn`)도 같은 계정 번호로 맞춥니다. 실행 정책의 Condition 값과 S3 버킷 이름에서는 정책 변수를 그대로 씁니다. 스택은 로그인한 계정에 배포되므로, 다른 계정에 만들 때는 boundary 정책 파일과 `test/guardrails.test.ts`의 계정 번호를 함께 바꿉니다. 바꾸지 않으면 역할 권한이 모두 막혀 수집기가 실행할 때 실패합니다.
+최신 자료는 별도 `IAM official reference audit` 워크플로가 매주 월요일 09:00 KST와 수동 실행 때 검사합니다. `--check-latest`는 검증 입력의 변경이나 다운로드 실패를 해당 실행의 실패로 보고하며 PR의 `ci-ok`에는 연결하지 않습니다. GitHub Actions 알림 설정에서 이 감사 워크플로의 실패 알림을 활성화해야 변경을 알 수 있습니다. 자동 이슈 생성·자동 갱신은 하지 않습니다. 새 리소스 종류를 추가하거나 감사에서 차이가 나면 `npm run check:iam-actions -w @baradun/infra -- --update-reference`로 검토한 고정본을 갱신하고 변경 PR을 만듭니다. 온라인 모드만 공개 문서 네트워크와 `unzip`을 사용합니다. 서비스별 IAM 참조는 병렬 요청·15초 제한, ZIP 다운로드는 45초, 선택 파일 일괄 해제는 15초로 제한하고 실패 시 원인을 표시합니다. AWS 계정 API·자격증명은 사용하지 않습니다.
 
-boundary 정책은 스택 밖에서 관리합니다. 정책 파일을 바꿨다면 순서대로 반영합니다.
+스키마의 API 이름은 공식 API→IAM 매핑으로 변환하며, 빈 매핑은 허용으로 처리하지 않습니다. 선택 기능 때문에 제외한 권한과 이유는 `scripts/cfn-permission-exclusions.json`에 기록하고, 해당 속성이 템플릿에서 사용되면 실패합니다. 참조에 없는 문자열은 `notInReference`로 표시하며 공식 Action 또는 Operation에 등장하면 제외가 만료돼 검사가 실패합니다. 근거만 적은 무조건 제외는 허용하지 않습니다. API 원문에 대한 미사용 속성 제외를 먼저 검사하므로 S3 복제의 PassRole을 Lambda 허용으로 오인하지 않습니다. 허용 작업도 SAR의 리소스 종류와 조건별 근거를 검사합니다. 리전 조건은 Logs·CloudWatch, PassRole은 Lambda·Scheduler, boundary는 실제 역할의 상한, 태그 조건은 스키마 지원과 모든 대상의 명시적 태그에 대조합니다. 미검토 조건과 지원하지 않는 예약 태그 조건은 실패합니다. 이 검사는 IAM 시뮬레이터가 아니며 모든 물리 ARN·인가 문맥·실제 핸들러 동작을 증명하지 않습니다. 함수·예산의 실제 이름은 별도 합성 테스트로 ARN 패턴에 대조합니다. `list` 핸들러는 스택 CRUD 범위 밖이며 공개 `handlers`가 없는 Budgets는 SAR 기반 Vitest 표로 별도 검사합니다. `--write-snapshot`은 검증 성공 후 Action 스냅샷을 갱신합니다.
 
-1. boundary 정책을 먼저 만들거나 고칩니다. 실행 정책이 boundary 정책 수정을 거부하므로 관리자 권한으로 합니다.
+CloudFront 함수·배포의 스키마는 `cloudFormationSystemTags: false`이므로 `aws:cloudformation:*` 태그에 의존하지 않습니다([스키마 정의](https://docs.aws.amazon.com/cloudformation-cli/latest/userguide/resource-type-schema.html)). 함수는 이름 기반 ARN으로 제한합니다. 배포에는 CDK에서 사용자 태그 `baradun:stack = BaradunV2`를 명시하고 기존 작업은 이 `ResourceTag`, 생성·태그 선반영은 `CloudFrontTagOnCreate`의 같은 `RequestTag`로 제한합니다. 기존 배포에는 아래 순서로 태그를 먼저 반영해야 합니다. **사용자 태그는 강한 격리 경계가 아닙니다**. 계정 내 다른 배포에도 실행 역할이 `TagResource`로 이 태그를 붙인 뒤 관리할 수 있는 위험이 남습니다. OAC·응답 헤더 정책도 ResourceTag를 지원하지 않아 계정 안의 해당 종류 전체를 관리할 수 있습니다. 네 Create 작업은 ARN 제한을 지원하지 않아 `Resource: "*"`가 남습니다. 더 강한 격리에는 확인한 물리 ID의 ARN을 고정하거나 foundation 스택을 분리해야 합니다. 실제 생성 시 태그 전달과 기존 배포의 태그 존재는 실환경에서 미검증입니다.
+
+- 서비스 단위 와일드카드(`s3:*`, `cloudfront:*` 등)와 데이터 평면 작업(S3 객체 읽기·쓰기·삭제, DynamoDB 항목 조회·쓰기·스캔, `lambda:Invoke*`, 로그 이벤트 조회·쓰기)은 주지 않습니다. 유일한 예외는 Lambda 코드 배포 때 읽는 서울 리전 CDK 자산 버킷(`cdk-hnb659fds-assets-${aws:PrincipalAccount}-ap-northeast-2/*`)의 `s3:GetObject`(`ReadLambdaCodeAssets`)입니다.
+- `Resource` ARN의 다섯 번째 콜론 이전(리전·계정 자리)에는 IAM이 정책 변수(`${aws:PrincipalAccount}`)를 허용하지 않으므로 계정 번호(`717304679248`)와 리전(`ap-northeast-2`, CloudFront용 WAF는 `us-east-1`)을 고정합니다(BRD-93, BRD-121). 다섯 번째 콜론 뒤(리소스 이름 자리)인 CDK 자산 버킷 이름과 `Condition` 값에는 정책 변수를 그대로 씁니다. 다른 계정에 배포할 때는 `bootstrap/*.json`과 `test/guardrails.test.ts`의 계정 번호를 함께 바꿉니다.
+- 리소스 수준 권한을 지원하지 않는 작업만 `Resource: "*"`로 둡니다. 리전 서비스인 로그 그룹 목록 읽기(`logs:DescribeLogGroups`, CloudFormation이 로그 그룹 `GetAtt`를 읽을 때 필요)와 경보 조회(`cloudwatch:DescribeAlarms`)에는 `aws:RequestedRegion: ap-northeast-2` 조건을 걸고, 전역 서비스인 CloudFront 생성 작업(`cloudfront:CreateDistribution`·`CreateFunction`·`CreateOriginAccessControl`·`CreateResponseHeadersPolicy`)에는 리전 조건을 걸지 않습니다.
+
+### 역할 권한 상한 (Permissions Boundary)
+
+스택이 만드는 모든 역할에는 권한 상한(permissions boundary) `BaradunV2-RoleBoundary`(`bootstrap/role-boundary-policy.json`)가 붙습니다(BRD-89). 실행 정책은 이 boundary가 붙은 역할만 만들고 인라인 정책을 바꾸게 허락하며, 관리형 정책 부착·boundary 떼기(`NoBoundaryRemoval`)·boundary 정책 고치기(`NoBoundaryPolicyEdit`)는 거부합니다.
+
+역할 정책에 새 동작을 추가하면 boundary에도 넣어야 합니다. 빠지면 실행할 때 거부됩니다. `test/guardrails.test.ts`는 빠진 동작 이름만 잡으므로, 새 리소스를 쓰면 boundary의 `Resource` ARN 범위를 직접 확인합니다.
+
+API 키 읽기(`ssm:GetParameter`)는 boundary에서 스택의 Lambda 함수가 보낸 요청(`lambda:SourceFunctionArn`)으로만 허락합니다. IAM 정책 시뮬레이터는 이 조건 키를 평가하지 못하므로, 수집기를 처음 배포할 때 키 읽기가 되는지 로그로 확인합니다(막히면 `api_key` 실패로 기록됨).
+
+### 정책 적용과 되돌리기 절차
+
+boundary 정책과 실행 정책은 스택 밖에서 관리자 권한으로 관리합니다. 아래 절차는 저장소 루트에서 시작하고 같은 셸을 유지합니다. 먼저 기존 정상 관리자 프로필이나 아래에서 검증한 `baradun-admin` 프로필을 선택합니다. 새 관리자 역할 전환과 실행 정책 변경은 각각 검증한 뒤 진행합니다.
+
+```bash
+export AWS_PROFILE=baradun-admin
+BRD121_ACCOUNT_ID="<계정>"
+```
+
+1. **현재 기본 버전(DefaultVersionId)과 직전 정상 버전 기록**:
+   IAM 관리형 정책은 버전을 최대 5개까지 저장합니다. 실패했을 때 즉시 되돌릴 수 있도록 **현재 기본 버전(직전 정상 버전)은 절대 지우지 않고**, 5개가 모두 찼다면 기본 버전이 아닌 가장 오래된 버전만 지웁니다.
 
    ```bash
-   # 처음 만들 때
-   aws iam create-policy --policy-name BaradunV2-RoleBoundary \
-     --policy-document file://bootstrap/role-boundary-policy.json
-   # 이미 있을 때 (버전은 최대 5개라 넘으면 오래된 버전을 지웁니다)
+   BRD121_PREVIOUS_EXECUTION_VERSION=$(aws iam get-policy \
+     --policy-arn "arn:aws:iam::$BRD121_ACCOUNT_ID:policy/BaradunCdkExecution" \
+     --query 'Policy.DefaultVersionId' --output text)
+   BRD121_PREVIOUS_BOUNDARY_VERSION=$(aws iam get-policy \
+     --policy-arn "arn:aws:iam::$BRD121_ACCOUNT_ID:policy/BaradunV2-RoleBoundary" \
+     --query 'Policy.DefaultVersionId' --output text)
+
+   # 이미 workload 정책이 연결된 계정에서만 기록. 최초 분할에는 이전 버전이 없음.
+   BRD121_PREVIOUS_WORKLOAD_VERSION=$(aws iam get-policy \
+     --policy-arn "arn:aws:iam::$BRD121_ACCOUNT_ID:policy/BaradunCdkExecutionWorkload" \
+     --query 'Policy.DefaultVersionId' --output text)
+
+   # 버전이 5개일 때만: IsDefaultVersion=false인 가장 오래된 버전을 골라 삭제 (현재 DefaultVersionId는 삭제 금지)
+   aws iam delete-policy-version \
+     --policy-arn "arn:aws:iam::$BRD121_ACCOUNT_ID:policy/<정책_이름>" \
+     --version-id <가장_오래된_비기본_버전_ID>
+   ```
+
+   세 값은 정책 이름과 함께 별도로 기록합니다. 서로 같은 버전 ID라고 가정하지 않습니다. 조회가 실패하면 `NoSuchEntity`인 최초 workload 생성 경우를 제외하고 작업을 중단합니다. 인증·권한·네트워크 오류를 '정책 없음'으로 처리하지 않습니다. 현재 실행 역할의 정책 연결과 CDKToolkit의 기존 bootstrap 설정·신뢰 계정도 기록하고, 아래 bootstrap 갱신에서 유지합니다.
+
+   **태그 전환 사전 조건**: 기존 정상 실행 정책을 유지합니다. 운영 CloudFront에는 예약 `aws:cloudformation:*` 태그가 생길 것을 기대하지 않습니다. 새 정책을 먼저 기본 버전으로 바꾸면 태그가 없는 기존 배포의 Read·Update·rollback이 거부됩니다. 3단계에서 사용자 태그를 선반영하고 실제 태그와 스택 정상 상태를 확인하기 전에는 4단계로 넘어가지 않습니다.
+
+2. **사전 검증 (`check:iam-actions`·테스트 통과)**:
+   AWS Service Authorization Reference 공식 JSON과 대조해 존재하지 않는 IAM Action이나 6,144자 초과가 없는지 먼저 확인합니다.
+
+   ```bash
+   npm run build -w @baradun/infra
+   npm run test -w @baradun/infra
+   (cd infra && npx cdk synth --quiet)
+   npm run check:iam-actions -w @baradun/infra
+   ```
+
+3. **기존 정책 상태에서 변경 세트 비교 (`--method=change-set`)**:
+   `cdk diff` 기본값(`--method=auto`)은 권한이 부족할 때 템플릿 비교로 조용히 폴백합니다. 반드시 `--method=change-set`을 붙여 CloudFormation 변경 세트가 정상으로 만들어지는지 먼저 확인합니다.
+
+   ```bash
+   cd infra && npx cdk diff --method=change-set
+   ```
+
+   **기존 CloudFront 배포에 태그 선반영**: 현재 정상 실행 정책으로 `SiteDelivery`의 사용자 태그 추가만 배포합니다. 실제 변경 세트에 다른 변경이 섞이면 중단하고 태그만 있는 변경을 따로 준비합니다. 배포가 완료되고 운영 배포에 `baradun:stack = BaradunV2`가 있음을 콘솔 또는 `list-tags-for-resource`로 확인한 뒤 4단계로 진행합니다. 함수에는 태그 전환이 필요 없습니다. 이 선행 배포를 수행·확인하지 않은 상태에서는 축소 정책을 적용하지 않습니다. 축소 정책 적용 이후 태그가 없는 이전 템플릿으로 롤백하려면 **실행 정책부터 직전 정상 버전으로 복구**해야 합니다. 태그를 지운 뒤 제한 정책으로 Read·rollback하려 해서는 안 됩니다. 이 저장소 작업에서는 선행 배포나 AWS 조회를 실행하지 않았습니다.
+
+4. **최초 분할 또는 기존 두 정책 갱신**:
+   3단계 이후 작업 디렉터리는 `infra/`입니다. boundary가 바뀌었다면 기록한 기존 버전을 보존하고 먼저 반영합니다. 이후 아래 두 경우 중 해당하는 절차 하나를 끝까지 수행합니다. 각 명령이 실패하면 다음 명령으로 넘어가지 않습니다.
+
+   ```bash
+   # (boundary 파일이 바뀌었을 때만)
    aws iam create-policy-version --set-as-default \
-     --policy-arn arn:aws:iam::<계정>:policy/BaradunV2-RoleBoundary \
+     --policy-arn "arn:aws:iam::$BRD121_ACCOUNT_ID:policy/BaradunV2-RoleBoundary" \
      --policy-document file://bootstrap/role-boundary-policy.json
    ```
 
-2. 실행 정책 `BaradunCdkExecution`의 새 버전을 기본으로 올립니다. 버전은 최대 5개라 넘으면 오래된 버전을 지웁니다.
+   **최초 분할**: 기존 통합 실행 정책의 권한을 유지한 채 workload 정책을 생성하고 두 정책을 연결합니다. bootstrap 완료와 실행 역할의 연결을 확인한 뒤, 반드시 기존 `BaradunCdkExecution`도 축소 버전으로 바꿉니다. 연결만 하면 기존 서비스 와일드카드가 그대로 남습니다.
 
    ```bash
+   aws iam create-policy --policy-name BaradunCdkExecutionWorkload \
+     --policy-document file://bootstrap/cfn-execution-workload-policy.json
+   npx cdk bootstrap "aws://$BRD121_ACCOUNT_ID/ap-northeast-2" \
+     --cloudformation-execution-policies "arn:aws:iam::$BRD121_ACCOUNT_ID:policy/BaradunCdkExecution,arn:aws:iam::$BRD121_ACCOUNT_ID:policy/BaradunCdkExecutionWorkload"
+   aws iam list-attached-role-policies \
+     --role-name "cdk-hnb659fds-cfn-exec-role-$BRD121_ACCOUNT_ID-ap-northeast-2"
    aws iam create-policy-version --set-as-default \
-     --policy-arn arn:aws:iam::<계정>:policy/BaradunCdkExecution \
+     --policy-arn "arn:aws:iam::$BRD121_ACCOUNT_ID:policy/BaradunCdkExecution" \
      --policy-document file://bootstrap/cfn-execution-policy.json
    ```
 
-3. `npx cdk deploy`를 실행합니다. 기존 역할에는 boundary가 먼저 붙고, 그다음 정책이 바뀝니다.
+   **이미 두 정책이 연결된 경우**: 두 정책 각각의 기존 기본 버전이 기록돼 있는지 확인하고 workload부터 갱신합니다. 두 명령이 모두 끝나야 새 정책 적용이 완료됩니다.
 
-   boundary를 처음 붙이는 배포가 중간에 실패하면 CloudFormation 롤백이 boundary를 떼려다 실행 정책의 거부(`NoBoundaryRemoval`)에 막혀 `UPDATE_ROLLBACK_FAILED`가 됩니다. 이때는 관리자 권한으로 `aws cloudformation continue-update-rollback --stack-name BaradunV2 --resources-to-skip <막힌 역할 논리 ID>`를 실행해 해당 역할을 건너뛰고(boundary는 붙은 채로 둠) 원인을 고친 뒤 다시 배포합니다.
+   ```bash
+   aws iam create-policy-version --set-as-default \
+     --policy-arn "arn:aws:iam::$BRD121_ACCOUNT_ID:policy/BaradunCdkExecutionWorkload" \
+     --policy-document file://bootstrap/cfn-execution-workload-policy.json
+   aws iam create-policy-version --set-as-default \
+     --policy-arn "arn:aws:iam::$BRD121_ACCOUNT_ID:policy/BaradunCdkExecution" \
+     --policy-document file://bootstrap/cfn-execution-policy.json
+   ```
 
-역할 정책에 새 동작을 추가하면 boundary에도 넣어야 합니다. 빠지면 실행할 때 거부됩니다. `test/guardrails.test.ts`는 빠진 동작 이름만 잡습니다. 리소스 범위(이름이 `BaradunV2-`·`baradunv2-`로 시작하는지, 리전)는 템플릿에서 실제 이름을 알 수 없어 테스트가 확인하지 않으므로, 새 리소스를 쓰면 boundary의 `Resource`를 직접 확인합니다.
+   공통으로 두 정책의 `DefaultVersionId`와 문서, 실행 역할의 연결 목록을 확인합니다. 두 새 문서가 기본이며 기존 `AdministratorAccess`나 다른 광범위 정책이 추가로 붙어 있지 않아야 축소가 완료된 것입니다. IAM 변경 전파가 끝난 뒤 5단계로 진행합니다.
 
-API 키 읽기(`ssm:GetParameter`)는 boundary에서 스택의 Lambda 함수가 보낸 요청(`lambda:SourceFunctionArn`)으로만 허락합니다. 실행 권한을 탈취해 외부 계정이 맡을 수 있는 역할을 만들어도 키를 읽지 못하게 하려는 것입니다. IAM 정책 시뮬레이터는 이 조건 키를 평가하지 못하므로, 수집기를 처음 배포할 때 키 읽기가 되는지 로그로 확인합니다. 막히면 수집기는 `api_key` 실패로 기록합니다.
+5. **실제 Update 핸들러를 타는 작은 canary 변경으로 배포 검증**:
+   변경 없는(no-op) 배포나 드리프트 감지는 CloudFormation이 리소스 Update 핸들러를 호출하지 않아 실행 정책 권한을 증명하지 못합니다. 실제 Update 핸들러를 타는 무해한 작은 변경(예: 경보 `alarmDescription` 한 줄 수정)으로 `npx cdk diff --method=change-set`과 `npx cdk deploy`가 끝까지 통과하는지 확인한 뒤 설명을 원래대로 되돌려 다시 배포합니다. 경보 canary는 경보 핸들러만 검증합니다. S3·Lambda 등 다른 핸들러와 Create/Delete·롤백까지 검증했다고 기록하지 않으며, 아직 실행하지 않은 경로는 미확인으로 남깁니다.
+
+6. **실패 시 되돌리기 (정책 버전 먼저 복구 → 스택 롤백)**:
+   배포 중 권한 부족(`AccessDenied`)이 발생하면 CloudFormation 롤백도 같은 실행 정책을 사용합니다. 따라서 **먼저 실행 정책을 1단계에서 기록한 직전 정상 버전으로 되돌린 뒤** 롤백이 진행되게 합니다.
+
+   ```bash
+   aws iam set-default-policy-version \
+     --policy-arn "arn:aws:iam::$BRD121_ACCOUNT_ID:policy/BaradunCdkExecution" \
+     --version-id "$BRD121_PREVIOUS_EXECUTION_VERSION"
+
+   # 기존 두 정책 갱신에서만 실행. 최초 분할의 새 workload 정책에는 이전 버전이 없음.
+   aws iam set-default-policy-version \
+     --policy-arn "arn:aws:iam::$BRD121_ACCOUNT_ID:policy/BaradunCdkExecutionWorkload" \
+     --version-id "$BRD121_PREVIOUS_WORKLOAD_VERSION"
+
+   # 이번 작업에서 boundary도 바꿨을 때만 복구
+   aws iam set-default-policy-version \
+     --policy-arn "arn:aws:iam::$BRD121_ACCOUNT_ID:policy/BaradunV2-RoleBoundary" \
+     --version-id "$BRD121_PREVIOUS_BOUNDARY_VERSION"
+   ```
+
+   **최초 분할 실패**라면 첫 번째 명령으로 기존 통합 정책부터 복구합니다. 새 workload 정책은 이전 버전으로 되돌리지 않고 우선 연결한 채 둡니다. 기존 통합 정책으로 복구했는지 확인한 뒤 스택 롤백이 완료될 때까지 기다립니다. 추가 workload 정책 때문에 기존 통합 정책의 Allow가 제한되지는 않습니다(이 파일에는 Deny 없음). 두 정책 연결 자체를 취소하려면 롤백 완료 뒤 기록한 기존 bootstrap 설정으로 재갱신하고, 실행 역할에서 분리된 것을 확인하기 전에는 새 정책을 삭제하지 않습니다.
+
+7. **`UPDATE_ROLLBACK_FAILED` 복구**:
+   롤백 도중 권한이 막혀 `UPDATE_ROLLBACK_FAILED`로 멈췄다면, 6단계처럼 정책 권한을 먼저 복구한 뒤 롤백을 이어서 실행합니다.
+
+   ```bash
+   aws cloudformation continue-update-rollback --stack-name BaradunV2
+   ```
+
+   `--resources-to-skip <막힌_논리_ID>`(리소스 건너뛰기)는 스택 기록과 실제 리소스 상태가 어긋나므로, boundary 첫 부착 중 롤백이 `NoBoundaryRemoval`에 막힌 경우처럼 원인을 바로 풀 수 없을 때만 최후 수단으로 쓰고 직후 재배포해 상태를 맞춥니다.
+
+## 관리자 권한 운영 (상시 AdministratorAccess 제거, BRD-121)
+
+일상 사용하는 IAM 사용자에 `AdministratorAccess`를 상시 붙여 두지 않습니다. 평소 IAM 사용자는 권한 없이 `sts:AssumeRole`만 허용하고, 인프라 배포나 콘솔 운영 조회가 필요할 때만 **MFA 조건이 걸린 임시 관리자 역할(`BaradunOperatorAdmin`, 최대 세션 1시간)**을 맡아 작업합니다.
+
+관리자 역할 이름에는 `BaradunV2-` 접두어를 쓰지 않습니다. 이 접두어는 CDK 실행 정책의 역할 관리·신뢰 정책 수정·PassRole 대상이며, 스택 밖에서 만든 관리자 역할에는 스택의 boundary가 붙지 않습니다. 관리자 역할을 이 범위에 넣으면 실행 역할이 관리자 역할을 Lambda에 넘기는 권한 상승 경로가 생깁니다. 이미 이전 이름으로 역할을 만들었다면 새 이름의 역할을 생성·검증한 뒤 기존 관리자 역할을 분리·정리합니다. 기존 관리자 경로는 새 경로의 검증이 끝날 때까지 유지합니다.
+
+> **IAM Identity Center(구 AWS SSO) 전환 시점**:
+> IAM Identity Center 자체는 추가 요금이 없지만, AWS 계정 접근(Permission Set)을 쓰려면 AWS Organizations 기반의 조직 인스턴스가 필요합니다(단독 계정의 계정 인스턴스는 Permission Set과 AWS 계정 접근을 지원하지 않음 — [AWS 공식 문서](https://docs.aws.amazon.com/singlesignon/latest/userguide/account-instances-identity-center.html)). 그런데 지금 계정은 **AWS Free 플랜**이라 AWS Organizations를 켜면 즉시 Paid 플랜(종량제)으로 자동 전환됩니다([AWS Free Tier 공식 문서](https://docs.aws.amazon.com/awsaccountbilling/latest/aboutv2/free-tier-plans.html)). 따라서 Free 플랜 기간에는 아래 임시 관리자 역할을 쓰고, Paid 플랜으로 전환할 때 IAM Identity Center 도입을 검토합니다.
+
+### MFA 조건 임시 관리자 역할 전환 절차
+
+1. **루트 사용자 보호 및 기존 IAM 사용자의 모든 권한 조사·목록화**:
+   작업을 시작하기 전에 계정 루트(Root) 사용자에 MFA가 켜져 있고 복구 이메일·전화번호가 유효한지 먼저 확인합니다. 이어서 대상 IAM 사용자(`<운영자_IAM_사용자>`)에 직접 붙은 관리형 정책뿐 아니라 **소속 그룹 정책, 사용자 인라인 정책, 권한 경계, 액세스 키 목록**을 모두 조회해 기록합니다.
+
+   ```bash
+   USER_NAME="<운영자_IAM_사용자>"
+   aws iam list-attached-user-policies --user-name "$USER_NAME"
+   aws iam list-user-policies --user-name "$USER_NAME"
+   aws iam get-user --user-name "$USER_NAME"
+   aws iam list-access-keys --user-name "$USER_NAME"
+   aws iam list-mfa-devices --user-name "$USER_NAME"
+
+   # 소속 그룹과 각 그룹에 붙은 관리형·인라인 정책까지 모두 확인
+   for g in $(aws iam list-groups-for-user --user-name "$USER_NAME" --query 'Groups[].GroupName' --output text); do
+     echo "=== Group: $g ==="
+     aws iam list-attached-group-policies --group-name "$g"
+     aws iam list-group-policies --group-name "$g"
+   done
+   ```
+
+2. **임시 관리자 역할(`BaradunOperatorAdmin`) 생성**:
+   신뢰 정책에 운영자 IAM 사용자 ARN과 MFA 조건(`aws:MultiFactorAuthPresent: "true"`, `aws:MultiFactorAuthAge: "3600"` 이하)을 걸고, 역할의 최대 세션 시간(`--max-session-duration`)을 3600초(1시간)로 설정합니다.
+   - `aws:MultiFactorAuthAge`는 역할을 맡는(`sts:AssumeRole`) 시점에 MFA 인증 후 경과 시간만 검사하며, 발급된 세션이 살아 있는 시간을 줄이지 않습니다. 세션의 실질 유효 시간은 역할의 `MaxSessionDuration`(1시간)이 제한합니다.
+
+   ```bash
+   cd "$(mktemp -d)"
+   cat > trust-policy.json <<'EOF'
+   {
+     "Version": "2012-10-17",
+     "Statement": [
+       {
+         "Effect": "Allow",
+         "Principal": { "AWS": "arn:aws:iam::<계정>:user/<운영자_IAM_사용자>" },
+         "Action": "sts:AssumeRole",
+         "Condition": {
+           "Bool": { "aws:MultiFactorAuthPresent": "true" },
+           "NumericLessThanEquals": { "aws:MultiFactorAuthAge": "3600" }
+         }
+       }
+     ]
+   }
+   EOF
+
+   aws iam create-role --role-name BaradunOperatorAdmin \
+     --max-session-duration 3600 \
+     --assume-role-policy-document file://trust-policy.json
+
+   aws iam attach-role-policy --role-name BaradunOperatorAdmin \
+     --policy-arn arn:aws:iam::aws:policy/AdministratorAccess
+   ```
+
+3. **사용자 인라인 정책으로 역할 전환 허용 추가**:
+   기존 관리자 권한을 떼기 전에, 사용자가 MFA를 거쳤을 때 `BaradunOperatorAdmin`을 맡을 수 있는 최소 정책을 먼저 넣습니다.
+
+   ```bash
+   cat > assume-admin-policy.json <<'EOF'
+   {
+     "Version": "2012-10-17",
+     "Statement": [
+       {
+         "Sid": "AllowAssumeAdminRoleWithMfa",
+         "Effect": "Allow",
+         "Action": "sts:AssumeRole",
+         "Resource": "arn:aws:iam::<계정>:role/BaradunOperatorAdmin",
+         "Condition": { "Bool": { "aws:MultiFactorAuthPresent": "true" } }
+       }
+     ]
+   }
+   EOF
+
+   aws iam put-user-policy --user-name "<운영자_IAM_사용자>" \
+     --policy-name AllowAssumeBaradunAdmin \
+     --policy-document file://assume-admin-policy.json
+   ```
+
+4. **기존 관리자 세션을 유지한 채 콘솔·CLI 양쪽에서 새 역할 검증**:
+   잠김(Lockout)을 막기 위해 **기존 관리자 터미널·콘솔 세션을 닫지 않은 채**, 별도 창에서 새 역할로 전환이 되는지 양쪽 모두 확인합니다.
+   - **콘솔**: MFA로 로그인한 뒤 우측 상단 계정 메뉴 → **역할 전환(Switch Role)** → 계정 `<계정>`, 역할 `BaradunOperatorAdmin` 입력 후 전환되는지 확인합니다.
+   - **CLI**: `~/.aws/config`에 `baradun-admin` 프로필을 추가하고 `sts get-caller-identity`가 `assumed-role/BaradunOperatorAdmin/...`을 돌려주는지 확인합니다.
+
+   ```ini
+   [profile baradun-admin]
+   role_arn = arn:aws:iam::<계정>:role/BaradunOperatorAdmin
+   source_profile = default
+   mfa_serial = arn:aws:iam::<계정>:mfa/<MFA_장치_이름>
+   region = ap-northeast-2
+   duration_seconds = 3600
+   ```
+
+   ```bash
+   aws sts get-caller-identity --profile baradun-admin
+   ```
+
+5. **상시 관리자 정책 분리 (직접 부착·그룹·인라인 모두)**:
+   4단계에서 콘솔·CLI 역할 전환이 모두 확인된 뒤에 1단계에서 목록화한 상시 `AdministratorAccess`(및 다른 넓게 열린 정책·그룹)를 분리합니다.
+
+   ```bash
+   aws iam detach-user-policy --user-name "<운영자_IAM_사용자>" \
+     --policy-arn arn:aws:iam::aws:policy/AdministratorAccess
+   # 1단계에서 확인된 관리자 그룹·추가 인라인 정책이 있으면 함께 제거
+   ```
+
+   분리 직후 기본 프로필(`default`)로는 `aws iam list-users`가 거부(`AccessDenied`)되고, `--profile baradun-admin`으로는 정상 동작하는지 확인합니다. 이후 로컬에서 실행하는 `npx cdk diff`·`npx cdk deploy`·운영 CLI 명령은 모두 `AWS_PROFILE=baradun-admin`(또는 `--profile baradun-admin`)으로 실행합니다. 사이트 배포(`npm run deploy:prod`)는 GitHub CLI(`gh`)로 Actions OIDC 워크플로를 호출하므로 로컬 AWS 프로필을 쓰지 않습니다.
+
+6. **장기 액세스 키 정리 (마지막 별도 단계)**:
+   콘솔 역할 전환만으로 운영하거나 새 키로 교체할 때는, 기존 액세스 키를 바로 삭제하지 않고 먼저 **비활성화(`Inactive`)**해 둔 뒤 다른 곳에서 쓰이지 않는 것을 확인하고 삭제합니다.
+
+   ```bash
+   aws iam update-access-key --user-name "<운영자_IAM_사용자>" \
+     --access-key-id <액세스_키_ID> --status Inactive --profile baradun-admin
+
+   # 영향이 없음을 확인한 뒤 삭제
+   aws iam delete-access-key --user-name "<운영자_IAM_사용자>" \
+     --access-key-id <액세스_키_ID> --profile baradun-admin
+   ```
 
 ## 비용 방어 범위
 
@@ -216,7 +458,7 @@ await fetch("/api/inquiries", {
 
 `OpsAlarms`가 CloudWatch 경보 9개(수집기 4개·게시 함수의 오류, 특보·관측·이안류 수집과 게시의 실행 없음)를 만들고 운영 SNS 주제로 `AlertEmail`에 메일을 보냅니다.
 
-- 경보를 처음 넣는 배포 전에 실행 정책 `BaradunCdkExecution`을 새 버전으로 올립니다(위 '역할 권한 상한' 2단계 명령). 올리지 않으면 `cloudwatch:PutMetricAlarm`이 거부되어 배포가 롤백됩니다.
+- 경보를 처음 넣는 배포 전에 실행 정책(`BaradunCdkExecution`·`BaradunCdkExecutionWorkload`)을 최신 버전으로 올립니다(위 '정책 적용과 되돌리기 절차' 4단계 명령). 올리지 않으면 `cloudwatch:PutMetricAlarm`이 거부되어 배포가 롤백됩니다.
 - 운영 주제는 문의 알림 주제와 따로라서 첫 배포 뒤 구독 확인 메일이 한 통 더 옵니다. 확인하지 않으면 경보가 울려도 메일이 가지 않습니다.
 
 ## 점검·강제 업데이트
