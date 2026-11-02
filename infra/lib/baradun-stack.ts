@@ -3,6 +3,7 @@ import {
   CfnCondition,
   CfnOutput,
   CfnParameter,
+  CfnRule,
   Fn,
   Stack,
   type StackProps,
@@ -56,6 +57,49 @@ export class BaradunStack extends Stack {
       ),
     });
 
+    // 대표 주소 (BRD-162). 출시일 전까지 비워 둠 → 지금과 같은 배포(CloudFront 기본 주소만)
+    // 값을 넣으면 그 도메인을 대체 도메인으로 붙이고, 다른 호스트로 온 요청은 그 도메인으로 301 이동
+    // 인증서는 CloudFront 규칙상 us-east-1 ACM에 미리 만들어 둔 것(DNS 검증 완료)
+    const siteDomainName = new CfnParameter(this, "SiteDomainName", {
+      type: "String",
+      default: "",
+      allowedPattern: "^$|^([a-z0-9]([a-z0-9-]*[a-z0-9])?\\.)+[a-z]{2,}$",
+      description:
+        "Canonical site domain such as www.baradun.app (empty keeps the CloudFront default domain only)",
+    });
+    const siteCertificateArn = new CfnParameter(this, "SiteCertificateArn", {
+      type: "String",
+      default: "",
+      allowedPattern:
+        "^$|^arn:aws:acm:us-east-1:[0-9]{12}:certificate/[0-9a-f-]+$",
+      description:
+        "ACM certificate ARN in us-east-1 covering SiteDomainName (empty when SiteDomainName is empty)",
+    });
+    const domainEmpty = Fn.conditionEquals(siteDomainName.valueAsString, "");
+    const certificateEmpty = Fn.conditionEquals(
+      siteCertificateArn.valueAsString,
+      "",
+    );
+    const hasSiteDomain = new CfnCondition(this, "HasSiteDomain", {
+      expression: Fn.conditionNot(domainEmpty),
+    });
+    // 도메인과 인증서는 함께 넣거나 함께 비움. 하나만 있으면 배포를 시작하기 전에 거부함
+    new CfnRule(this, "SiteDomainNeedsCertificate", {
+      assertions: [
+        {
+          assert: Fn.conditionOr(
+            Fn.conditionAnd(domainEmpty, certificateEmpty),
+            Fn.conditionAnd(
+              Fn.conditionNot(domainEmpty),
+              Fn.conditionNot(certificateEmpty),
+            ),
+          ),
+          assertDescription:
+            "SiteDomainName and SiteCertificateArn must be set together or both left empty",
+        },
+      ],
+    });
+
     // State·Ops·Inquiry 테이블 (BRD-55)
     const tables = new StorageTables(this, "Storage");
 
@@ -83,6 +127,11 @@ export class BaradunStack extends Stack {
         Aws.NO_VALUE,
       ).toString(),
       responseHeadersPolicy: securityHeaders,
+      siteDomain: {
+        name: siteDomainName.valueAsString,
+        certificateArn: siteCertificateArn.valueAsString,
+        condition: hasSiteDomain,
+      },
     });
 
     // 기존 배포의 /api/inquiries* 동작 연결 (보안 헤더 정책 포함)

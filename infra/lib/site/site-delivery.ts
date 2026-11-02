@@ -1,9 +1,17 @@
-import { Duration, RemovalPolicy, Stack, Tags } from "aws-cdk-lib";
+import {
+  Aws,
+  type CfnCondition,
+  Duration,
+  Fn,
+  RemovalPolicy,
+  Stack,
+  Tags,
+} from "aws-cdk-lib";
 import * as cloudfront from "aws-cdk-lib/aws-cloudfront";
 import * as origins from "aws-cdk-lib/aws-cloudfront-origins";
 import * as s3 from "aws-cdk-lib/aws-s3";
 import { Construct } from "constructs";
-import { rewriteIndexCode } from "./rewrite-index";
+import { CANONICAL_HOST_PLACEHOLDER, rewriteIndexCode } from "./rewrite-index";
 
 export interface SiteDeliveryProps {
   // CloudFront 정액 요금제가 붙인 WAF web ACL의 ARN (us-east-1). 없으면 비워 둠.
@@ -11,6 +19,13 @@ export interface SiteDeliveryProps {
   readonly webAclId?: string;
   // CloudFront 보안 응답 헤더 정책 (CSP·HSTS·nosniff 등, BRD-118)
   readonly responseHeadersPolicy?: cloudfront.IResponseHeadersPolicy;
+  // 대표 주소(BRD-162). 배포 때 넘기는 매개변수라 값이 비어 있을 수 있음 → condition이 참일 때만 붙임
+  // name: 대체 도메인(예: www.baradun.app), certificateArn: us-east-1 ACM 인증서
+  readonly siteDomain?: {
+    readonly name: string;
+    readonly certificateArn: string;
+    readonly condition: CfnCondition;
+  };
 }
 
 // 사이트 전달: S3 버킷 하나(사이트 파일 + data/ 스냅샷, BRD-52) + CloudFront 하나(G3)
@@ -32,9 +47,20 @@ export class SiteDelivery extends Construct {
       removalPolicy: RemovalPolicy.RETAIN,
     });
 
+    const [functionCodeBefore = "", functionCodeAfter = ""] =
+      rewriteIndexCode.split(CANONICAL_HOST_PLACEHOLDER);
+
     // 폴더 주소를 index.html로 바꾸는 함수 (정액 Free 요금제에 포함된 기능)
     const rewriteIndex = new cloudfront.Function(this, "RewriteIndex", {
-      code: cloudfront.FunctionCode.fromInline(rewriteIndexCode),
+      // 대표 주소 자리에 도메인 값을 끼움(비어 있으면 이동 없음)
+      code: cloudfront.FunctionCode.fromInline(
+        // Fn::Join 구분자에는 매개변수를 쓸 수 없어 앞뒤 조각 사이에 끼움
+        Fn.join("", [
+          functionCodeBefore,
+          props.siteDomain?.name ?? "",
+          functionCodeAfter,
+        ]),
+      ),
       runtime: cloudfront.FunctionRuntime.JS_2_0,
       comment: "Rewrite folder paths to index.html",
     });
@@ -70,6 +96,30 @@ export class SiteDelivery extends Construct {
         },
       ],
     });
+    // 대표 주소: 도메인 값이 있을 때만 대체 도메인·인증서를 붙이고, 없으면 두 속성을 빼서 지금과 같게 둠
+    // SNI(전용 IP 요금 없음) · TLS 1.2 이상(TLSv1.2_2021, CloudFront 권장 정책)
+    if (props.siteDomain) {
+      const { name, certificateArn, condition } = props.siteDomain;
+      const cfn = this.distribution.node
+        .defaultChild as cloudfront.CfnDistribution;
+      cfn.addPropertyOverride(
+        "DistributionConfig.Aliases",
+        Fn.conditionIf(condition.logicalId, [name], Aws.NO_VALUE),
+      );
+      cfn.addPropertyOverride(
+        "DistributionConfig.ViewerCertificate",
+        Fn.conditionIf(
+          condition.logicalId,
+          {
+            AcmCertificateArn: certificateArn,
+            SslSupportMethod: "sni-only",
+            MinimumProtocolVersion: "TLSv1.2_2021",
+          },
+          Aws.NO_VALUE,
+        ),
+      );
+    }
+
     // CloudFront는 CFN 시스템 태그를 지원하지 않으므로 사용자 태그를 명시함.
     // 기존 배포는 README의 태그 선반영 절차 후 실행 정책을 전환함.
     Tags.of(this.distribution).add("baradun:stack", Stack.of(this).stackName);
