@@ -59,15 +59,20 @@ export function Onboarding({
   const pathname = usePathname();
   const regionSheet = useSheet("onboarding-region");
 
-  // [1] '자세히 보기'로 간 안전·데이터 안내 위에는 덮지 않음. 다른 화면으로 가면 다시 덮음
+  // [1] 안전 안내와 처리방침 링크로 간 화면은 덮지 않음. 다른 화면으로 가면 다시 덮음
   // trailingSlash 설정이라 끝의 /를 떼고 비교
-  const onGuide =
-    pathname.replace(/\/+$/, "") === localizedPath(locale, "/guide");
+  const currentPath = pathname.replace(/\/+$/, "");
+  const onOnboardingReference = [
+    localizedPath(locale, "/guide"),
+    localizedPath(locale, "/terms"),
+  ].includes(currentPath);
   // [2] 기기 기록을 읽기 전(undefined, 서버 HTML·첫 그리기)에는 덮지 않음
   // 위치 권한 상태는 ON-2가 남은 기기만 LocationGate에서 확인(다른 기기는 화면마다 위치를 받지 않게).
   // 여기서는 권한을 아직 묻지 않은 것으로 보고 단계만 정함
   const step =
-    record === undefined || onGuide ? null : onboardingStep(record, "idle");
+    record === undefined || onOnboardingReference
+      ? null
+      : onboardingStep(record, "idle");
 
   return (
     <>
@@ -265,7 +270,7 @@ function NoticeStep({ locale }: { locale: Locale }) {
   const t = useTranslations();
   // 블록 사이 18, 제목·소개 사이 8 (Figma 185:265·185:266)
   return (
-    <div className="flex flex-1 flex-col gap-[18px]">
+    <div className="flex flex-1 flex-col gap-3 sm:gap-[18px]">
       <NoticeSky />
       {showsResetNotice() && (
         <p
@@ -324,9 +329,15 @@ function NoticeStep({ locale }: { locale: Locale }) {
         </span>
       </p>
       {/* 남는 높이는 버튼 위로 몰아 점·버튼·링크가 화면 아래에 붙음 */}
-      <div className="mt-auto flex flex-col gap-[18px]">
+      <div className="mt-auto flex flex-col gap-2 sm:gap-[18px]">
         <StepDots current={1} />
         <div className="flex flex-col items-center">
+          <Link
+            href={`${localizedPath(locale, "/terms/")}#terms-privacy`}
+            className="mb-2 inline-flex min-h-touch items-center text-center text-caption font-bold text-brand-default"
+          >
+            {t("onboarding.notice.privacy")}
+          </Link>
           <Button className="w-full" onClick={acknowledgeNotice}>
             {t("onboarding.notice.confirm")}
           </Button>
