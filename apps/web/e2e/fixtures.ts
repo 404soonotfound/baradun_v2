@@ -3,6 +3,7 @@ import path from "node:path";
 
 import AxeBuilder from "@axe-core/playwright";
 import type { Beach } from "@baradun/contracts";
+import { NOTICE_VERSION } from "../src/lib/notice-version";
 import {
   test as base,
   expect,
@@ -10,7 +11,6 @@ import {
   type Page,
   type Route,
 } from "@playwright/test";
-import { NOTICE_VERSION } from "../src/lib/notice-version";
 
 // E2E 가짜 바다 데이터 (BRD-39). /data/** 요청을 page.route로 받아 상태별 화면을 재현함
 // 실제 운영 데이터·외부 타일 서버에 기대지 않음: 해변 목록은 빌드에 들어간 data/beaches의 id·측정소 id만 읽고,
@@ -380,7 +380,7 @@ async function seedDevice(
       localStorage.setItem(
         "baradun:onboarding",
         JSON.stringify({
-          noticeVersion,
+          noticeVersion, // 지금 고지 버전(lib/notice-version.ts). 낮으면 ON-1이 다시 덮어 모든 시험이 막힘
           acknowledgedAt: "2026-10-27T00:00:00Z",
           locationStepDone: true,
         }),

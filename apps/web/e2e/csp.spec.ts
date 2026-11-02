@@ -24,13 +24,20 @@ test.describe("보안 응답 헤더 및 CSP 검증 (BRD-118)", () => {
     const csp = headers["content-security-policy"];
     expect(csp).toBeDefined();
     expect(csp).toContain("default-src 'self'");
-    expect(csp).toContain("script-src 'self' 'unsafe-inline'");
+    // GA(gtag.js) 출처는 script·img·connect에만(BRD-143). 운영 빌드만 불러오지만 헤더는 빌드와 상관없이 같음
+    expect(csp).toContain(
+      "script-src 'self' 'unsafe-inline' https://www.googletagmanager.com; ",
+    );
     expect(csp).toContain("style-src 'self'");
     expect(csp).toContain(
-      "img-src 'self' blob: https://tiles.openfreemap.org https://tong.visitkorea.or.kr",
+      "img-src 'self' blob: https://tiles.openfreemap.org https://tong.visitkorea.or.kr https://www.googletagmanager.com https://*.google-analytics.com; ",
     );
     expect(csp).toContain("font-src 'self'");
-    expect(csp).toContain("connect-src 'self' https://tiles.openfreemap.org");
+    expect(csp).toContain(
+      "connect-src 'self' https://tiles.openfreemap.org https://www.googletagmanager.com https://*.google-analytics.com https://*.google.com",
+    );
+    expect(csp).not.toContain("default-src 'self' https://");
+    expect(csp).not.toContain("style-src 'self' https://");
     expect(csp).toContain("worker-src 'self'");
     expect(csp).toContain("object-src 'none'");
     expect(csp).toContain("base-uri 'self'");

@@ -1087,6 +1087,47 @@ describe("전체 재검증", () => {
     expect(store.getState().live).toBe(true);
   });
 
+  it("미래 관측 시각이 2분 여유 안으로 들어오는 때 5분 확인을 기다리지 않고 다시 계산", async () => {
+    const statuses = structuredClone(statusExample);
+    // 지금 05:30:00 → 05:31:30부터 미래가 아님(시계 보정과 같은 2분 여유)
+    statuses.beaches.b0001!.observation.metrics.wind = {
+      ...statuses.beaches.b0001!.observation.metrics.wind,
+      state: "fresh",
+      value: 3.2,
+      observedAt: "2026-10-17T05:33:30Z",
+      expiresAt: "2026-10-17T07:03:30Z",
+    };
+    const { store, server, manifestCalls } = setup();
+    server.status = statuses;
+    store.start();
+    await store.refresh();
+    const b0001 = { id: "b0001", hidden: false };
+    expect(deriveBeachView(b0001, store.getState())).toMatchObject({
+      metrics: { wind: { kind: "hidden" } },
+    });
+    await vi.advanceTimersByTimeAsync(89_999);
+    expect(deriveBeachView(b0001, store.getState())).toMatchObject({
+      metrics: { wind: { kind: "hidden" } },
+    });
+    await vi.advanceTimersByTimeAsync(1);
+    expect(deriveBeachView(b0001, store.getState())).toMatchObject({
+      metrics: { wind: { kind: "value", value: 3.2 } },
+    });
+    // 다시 계산만 함(새 조회 없음)
+    expect(manifestCalls()).toBe(1);
+  });
+
+  it("statuses·시계가 그대로면 다시 계산할 때 만료 시각을 다시 읽지 않음", async () => {
+    const { store } = setup();
+    store.start();
+    await store.refresh();
+    const parse = vi.spyOn(Date, "parse");
+    store.recompute();
+    store.recompute();
+    expect(parse).not.toHaveBeenCalled();
+    parse.mockRestore();
+  });
+
   it.each([
     [
       "손상된 JSON",

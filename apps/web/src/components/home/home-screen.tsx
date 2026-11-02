@@ -18,6 +18,7 @@ import { RegionCountCard } from "@/components/home/region-count-card";
 import { SectionHead } from "@/components/home/section-head";
 import { StatusSummary } from "@/components/home/status-summary";
 import { RegionSheet } from "@/components/region/region-sheet";
+import { SampleNote } from "@/components/sample-note";
 import { SituationBanner } from "@/components/situation-banner";
 import { KmaSourceNote } from "@/components/source-note";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -316,14 +317,7 @@ export function HomeScreen({
               </p>
             )}
             {/* 상황 배너 자리(노션 HOME 3). 예시 값이 실제 확인 결과처럼 보이지 않게 카드들 위에 둠 */}
-            {sampleSnapshot && (
-              <p
-                role="note"
-                className="rounded-card bg-bg-surface px-4 py-3 text-body-s text-text-body shadow-card"
-              >
-                {t("sampleSnapshot")}
-              </p>
-            )}
+            {sampleSnapshot && <SampleNote />}
             {!bannerInInfo && banner}
             {/* 연결이 없어 다른 화면을 열지 못하고 홈으로 왔을 때만(서비스 워커 표식, BRD-106) */}
             <PageUnavailableNote />

@@ -2,10 +2,10 @@ import type {
   BeachId,
   NearbyWarningItem,
   WarningItem,
-  WarningLevel,
   WarningType,
 } from "@baradun/contracts";
 import { checkConfirmation } from "./confirmation";
+import { byLevelThenTime } from "./level-order";
 import type { PwnEvent } from "./normalize";
 import { applyZoneStates, type ZoneWarningState } from "./zone-state";
 
@@ -50,20 +50,6 @@ const LINKS: Record<WarningType, readonly ("sea" | "land")[]> = {
   storm_surge: ["sea", "land"],
   tsunami: [], // getPwnCd에 없음
 };
-
-// 단계 높은 순 → 같은 단계는 발표 이른 순(아키텍처 6.3 10/21)
-const LEVEL_RANK: Record<WarningLevel, number> = {
-  severe_warning: 0,
-  warning: 1,
-  advisory: 2,
-};
-type Ranked = { level: WarningLevel; publishedAt: string };
-export function byLevelThenTime(a: Ranked, b: Ranked): number {
-  return (
-    LEVEL_RANK[a.level] - LEVEL_RANK[b.level] ||
-    Date.parse(a.publishedAt) - Date.parse(b.publishedAt)
-  );
-}
 
 // 구역표에 없는 S1 중 '먼바다'가 아니면 앞바다 개편일 수 있음 → 전국 확인 못 함(③)
 // 발효 중이거나 상태를 모를 때만. 해제·발효 예고는 지금 발효가 아니라 제외

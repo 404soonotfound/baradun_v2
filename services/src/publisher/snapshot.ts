@@ -17,11 +17,11 @@ import {
 } from "../core/observations/wave-history";
 import { ripCurrentInfo } from "../core/rip/rip-current";
 import {
-  byLevelThenTime,
   judgeBeachWarnings,
   type ZoneTables,
 } from "../core/warnings/beach-warnings";
 import { checkConfirmation } from "../core/warnings/confirmation";
+import { byLevelThenTime } from "../core/warnings/level-order";
 import type { PwnEvent } from "../core/warnings/normalize";
 import { parseUtcIso } from "../core/warnings/time";
 import { judgeTsunamiBeaches } from "../core/warnings/tsunami-match";

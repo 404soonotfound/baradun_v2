@@ -8,6 +8,7 @@ import { useMemo, useRef } from "react";
 
 import { BeachRow, WaveGlyph } from "@/components/beach-row";
 import { ReasonBadge } from "@/components/reason-badge";
+import { SampleNote } from "@/components/sample-note";
 import { SituationBanner } from "@/components/situation-banner";
 import { KmaSourceNote } from "@/components/source-note";
 import { Button } from "@/components/ui/button";
@@ -219,14 +220,7 @@ export function FavoritesScreen({
         />
       </div>
 
-      {sampleSnapshot && (
-        <p
-          role="note"
-          className="rounded-card bg-bg-surface px-4 py-3 text-body-s text-text-body shadow-card"
-        >
-          {t("home.sampleSnapshot")}
-        </p>
-      )}
+      {sampleSnapshot && <SampleNote />}
 
       <SituationBanner
         locale={locale}

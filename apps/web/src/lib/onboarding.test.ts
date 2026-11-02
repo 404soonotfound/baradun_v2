@@ -32,6 +32,15 @@ describe("onboardingStep", () => {
     ).toBe("notice");
   });
 
+  // 처리방침에 '이용 통계와 쿠키' 절을 더하며 2로 올림(BRD-143). 1로 확인한 기기는 ON-1을 다시 봄
+  it("고지 버전 1로 확인한 기기는 버전 2 고지를 다시 봄 (BRD-143)", () => {
+    expect(NOTICE_VERSION).toBe(2);
+    const acknowledgedV1: OnboardingRecord = { ...done, noticeVersion: 1 };
+    expect(onboardingStep(acknowledgedV1, "ready")).toBe("notice");
+    expect(onboardingStep(acknowledgedV1, "idle")).toBe("notice");
+    expect(onboardingStep({ ...done, noticeVersion: 2 }, "ready")).toBeNull();
+  });
+
   it("고지를 확인했고 위치를 아직 묻지 않았으면 위치 안내(ON-2)", () => {
     expect(onboardingStep({ ...done, locationStepDone: false }, "idle")).toBe(
       "location",

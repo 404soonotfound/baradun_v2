@@ -20,6 +20,7 @@ import { SeaCard, StatGrid } from "@/components/detail/sea-card";
 import { ShareButton } from "@/components/detail/share-button";
 import { DetailSheet } from "@/components/detail/detail-sheet";
 import { VerdictCard } from "@/components/detail/verdict-card";
+import { SampleNote } from "@/components/sample-note";
 import { SituationBanner } from "@/components/situation-banner";
 import { ViewToggle } from "@/components/ui/view-toggle";
 import { WarningSheet } from "@/components/warning-sheet";
@@ -196,23 +197,9 @@ export function DetailScreen({
 
       {/* 배너가 없으면 띄움 없이 판단 카드가 머리 바로 아래(Figma). 배너의 숨은 알림 글(sr-only)은 세지 않음 */}
       <div className="flex flex-col gap-3.5 has-[>:not(.sr-only)]:mb-3.5 lg:has-[>:not(.sr-only)]:mt-3.5 lg:has-[>:not(.sr-only)]:mb-0">
-        {sample && (
-          <p
-            role="note"
-            className="rounded-card bg-bg-surface px-4 py-3 text-body-s text-text-body shadow-card"
-          >
-            {t("detail.sample")}
-          </p>
-        )}
+        {sample && <SampleNote>{t("detail.sample")}</SampleNote>}
         {/* 예시 특보·관측값이 실제 확인 결과처럼 보이지 않게 판단 카드보다 먼저 둠 */}
-        {sampleSnapshot && (
-          <p
-            role="note"
-            className="rounded-card bg-bg-surface px-4 py-3 text-body-s text-text-body shadow-card"
-          >
-            {t("home.sampleSnapshot")}
-          </p>
-        )}
+        {sampleSnapshot && <SampleNote />}
         <SituationBanner
           locale={locale}
           situation={situation?.kind === "noLocation" ? null : situation}

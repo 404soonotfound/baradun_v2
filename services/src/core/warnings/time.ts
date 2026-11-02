@@ -48,6 +48,10 @@ export function formatUtcIso(ms: number): string {
   return new Date(ms).toISOString().replace(/\.\d{3}Z$/, "Z");
 }
 
+// 이미 검사한 ISO 문자열 → 밀리초(비교용). 글자 비교는 ".000Z"처럼 표기가 다르면 틀림 → 숫자로 비교
+// 검사 전 값에는 parseUtcIso를 씀
+export const toMs = (iso: string): number => Date.parse(iso);
+
 // UTC ISO 문자열("…Z", 밀리초는 있어도 됨) → 밀리초. KST·시간대 없는 값·달력에 없는 날짜는 null
 // Date.parse는 시간대 없는 값을 실행 환경 시간대로 읽음 → 형식을 먼저 확인
 const UTC_ISO = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{3})?Z$/;

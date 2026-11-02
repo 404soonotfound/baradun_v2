@@ -1,6 +1,7 @@
 import type { BeachId, WarningItem } from "@baradun/contracts";
 import { checkConfirmation } from "./confirmation";
-import { parseUtcIso } from "./time";
+import { byLevelThenTime, levelRank } from "./level-order";
+import { parseUtcIso, toMs } from "./time";
 import type { TsunamiEvent, TsunamiResult } from "./tsunami";
 
 // 지진해일 reg 글 → 해변 (결정 기록 11장 10/20 ⑥·10/22 ⑤, 아키텍처 4장)
@@ -115,17 +116,8 @@ export type TsunamiBeachesResult = {
   unreadable: { reg: string; parts: string[]; announcement: string | null }[];
 };
 
-const ms = (iso: string) => Date.parse(iso);
 const reasonsOf = (e: TsunamiEvent) =>
   e.unknownReasons.map((r) => `tsunami:${r}`);
-const LEVEL_ORDER: readonly WarningItem["level"][] = [
-  "severe_warning",
-  "warning",
-  "advisory",
-];
-// 작을수록 높은 단계. 단계 없음(해제)은 맨 뒤
-const levelRank = (level: WarningItem["level"] | null) =>
-  level === null ? LEVEL_ORDER.length : LEVEL_ORDER.indexOf(level);
 
 export function judgeTsunamiBeaches(input: {
   result: TsunamiResult;
@@ -165,7 +157,7 @@ export function judgeTsunamiBeaches(input: {
   const perBeach = new Map<BeachId, TsunamiEvent[]>();
   for (const event of result.events) {
     // 기준 시각보다 늦게 발표된 것은 아직 모르는 것으로 봄(zone-state와 같음)
-    if (event.publishedAt !== null && ms(event.publishedAt) > nowMs) continue;
+    if (event.publishedAt !== null && toMs(event.publishedAt) > nowMs) continue;
 
     const match = matchTsunamiRegion(event.zone.raw, beaches);
     if (match.unreadable.length > 0) {
@@ -199,7 +191,7 @@ export function judgeTsunamiBeaches(input: {
     //   (예: 울진군 경보 뒤 동해안 주의보 → 경보를 낮추지 않음)
     const times = [
       ...new Set(events.flatMap((e) => (e.publishedAt ? [e.publishedAt] : []))),
-    ].sort((a, b) => ms(a) - ms(b));
+    ].sort((a, b) => toMs(a) - toMs(b));
     const active = new Map<string, TsunamiEvent>(); // 지역 글 → 발효 중인 발표
     let pending: string[] = [];
     let clearedAt = -Infinity; // 마지막으로 적용한 해제의 발표 시각
@@ -211,7 +203,7 @@ export function judgeTsunamiBeaches(input: {
         .flatMap(reasonsOf);
       // 사유 없는 행은 normalize가 시각을 모두 채움 → !(null 아님)를 씀. 발효 전 행은 아직 적용 안 함
       const clean = group.filter(
-        (e) => e.unknownReasons.length === 0 && ms(e.effectiveFrom!) <= nowMs,
+        (e) => e.unknownReasons.length === 0 && toMs(e.effectiveFrom!) <= nowMs,
       );
       const first = clean[0];
       if (first) {
@@ -225,7 +217,7 @@ export function judgeTsunamiBeaches(input: {
         else if (first.action === "release") {
           active.clear();
           pending = [];
-          clearedAt = ms(time);
+          clearedAt = toMs(time);
         } else {
           // 같은 시각·지역 글에 단계만 다른 행 → 어느 쪽이 나중인지 모름. 높은 단계를 남겨 낮추지 않음
           const lowFirst = [...clean].sort(
@@ -245,8 +237,8 @@ export function judgeTsunamiBeaches(input: {
       (e) =>
         e.unknownReasons.length === 0 &&
         e.action === "release" &&
-        ms(e.effectiveFrom!) > nowMs &&
-        ms(e.publishedAt!) > clearedAt,
+        toMs(e.effectiveFrom!) > nowMs &&
+        toMs(e.publishedAt!) > clearedAt,
     );
     if (upcomingRelease && active.size === 0) {
       beach.reasons.push("tsunami:release_without_issue");
@@ -263,13 +255,10 @@ export function judgeTsunamiBeaches(input: {
         effectiveFrom: e.effectiveFrom!,
       });
     }
-    // 단계 높은 순 → 같은 단계는 발표 이른 순(아키텍처 6.3, beach-warnings와 같음)
+    // 단계 높은 순 → 같은 단계는 발표 이른 순(아키텍처 6.3, level-order 공용 규칙)
     // 발표 시각까지 같으면 받은 순서와 상관없게 지역 글 순
     beach.items.sort(
-      (a, b) =>
-        LEVEL_ORDER.indexOf(a.level) - LEVEL_ORDER.indexOf(b.level) ||
-        ms(a.publishedAt) - ms(b.publishedAt) ||
-        a.zoneName.localeCompare(b.zoneName),
+      (a, b) => byLevelThenTime(a, b) || a.zoneName.localeCompare(b.zoneName),
     );
   }
 
