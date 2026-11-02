@@ -44,8 +44,22 @@ export function hasHeader(
   );
 }
 
+// 줄 읽기 결과(sea_obs·kma_buoy 공통). status 값으로 어느 쪽인지 구별
+// skippedRows: 모양·시각·번호를 읽지 못해 건너뛴 줄 수(운영 알림용, BRD-56)
+export type RowsResult<Row> =
+  | { status: "ok"; rows: Row[]; skippedRows: number }
+  | { status: "failed"; reason: string };
+
+export const STATION_ID = /^\d+$/; // 측정기 번호는 숫자만
+
+// cells[i]는 칸이 없을 수도 있어 타입이 string | undefined(설정 noUncheckedIndexedAccess)
+// 없으면 빈 글자로 바꿈 → 이후 코드는 항상 string으로 다룸
+export function cellAt(cells: readonly string[], index: number): string {
+  return cells[index] ?? "";
+}
+
 // 쓸 수 있는 줄이 하나도 없으면 실패. 모든 줄이 모양·시각·번호 문제로 빠진 응답을 정상 수집으로 남기지 않음
 export const NO_USABLE_ROWS = {
   status: "failed",
   reason: "쓸 수 있는 줄 없음",
-} as const;
+} as const satisfies RowsResult<never>;
