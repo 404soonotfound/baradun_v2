@@ -64,11 +64,11 @@ function Menu({ locale, variant, search }: Props & { search: string }) {
   return (
     <div
       ref={rootRef}
-      // 포커스가 목록 밖으로 나가면(Tab) 닫음
+      // 포커스가 목록 밖 요소로 옮겨가면(Tab) 닫음. 옮겨간 곳이 없으면(relatedTarget null) 두고 바깥 누르기 처리에 맡김
+      // Safari는 링크를 눌러도 포커스를 주지 않아, null에서 닫으면 누르는 도중 목록이 사라져 고른 링크가 열리지 않음
       onBlur={(event) => {
-        if (!rootRef.current?.contains(event.relatedTarget as Node | null)) {
-          setOpen(false);
-        }
+        const next = event.relatedTarget as Node | null;
+        if (next && !rootRef.current?.contains(next)) setOpen(false);
       }}
       className={cn(
         "relative",
