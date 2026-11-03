@@ -96,6 +96,13 @@ interface ResolvedTarget {
   readonly values: Record<string, unknown>;
 }
 
+// 멱등 기록에 남기는 대상 이름(같은 키를 다른 항목에 쓰면 충돌)
+function targetLabel(target: WriteTarget): string {
+  return target.kind === "ops"
+    ? `ops|${target.key.pk}|${target.key.sk}`
+    : `inquiry|${target.inquiryId}`;
+}
+
 function resolveTarget(
   target: WriteTarget,
   tables: WriteTables,
@@ -119,7 +126,7 @@ function resolveTarget(
     return {
       tableName: tables.ops,
       key: { pk: target.key.pk, sk: target.key.sk },
-      label: `ops|${target.key.pk}|${target.key.sk}`,
+      label: targetLabel(target),
       condition:
         target.mode === "create"
           ? "attribute_not_exists(pk)"
@@ -136,7 +143,7 @@ function resolveTarget(
   return {
     tableName: tables.inquiry,
     key: { pk: `INQUIRY#${target.inquiryId}` },
-    label: `inquiry|${target.inquiryId}`,
+    label: targetLabel(target),
     condition: `attribute_exists(pk) AND #kind = :inquiryKind AND #ttl > :nowSec AND ${versionCondition}`,
     values: {
       ...versionValues,
@@ -267,10 +274,34 @@ export async function versionedWrite(
   }
 }
 
+type ReplayKey = Pick<
+  VersionedWrite,
+  "idempotencyKey" | "payloadHash" | "actorSub"
+>;
+
+// 같은 멱등 키의 앞 결과. 기록이 없으면 null
+// 업무 검사(version·상태·삭제 여부)가 앞 쓰기로 이미 바뀐 값을 보고 재전송을 409·404로 돌려주지 않게
+// 검사보다 먼저 부름(D16-B6 '같은 키·같은 내용은 앞 결과')
+export async function previousWrite(
+  client: Sender,
+  tables: WriteTables,
+  write: ReplayKey & { readonly target: WriteTarget },
+): Promise<WriteResult | null> {
+  const result = await client.send(
+    new GetCommand({
+      TableName: tables.ops,
+      Key: idempotencyKey(write.idempotencyKey),
+      ConsistentRead: true,
+    }),
+  );
+  if (!result.Item) return null;
+  return replayOf(result.Item, write, targetLabel(write.target));
+}
+
 async function replay(
   client: Sender,
   opsTable: string,
-  write: VersionedWrite,
+  write: ReplayKey,
   label: string,
 ): Promise<WriteResult> {
   const result = await client.send(
@@ -280,7 +311,15 @@ async function replay(
       ConsistentRead: true,
     }),
   );
-  const item = result.Item as
+  return replayOf(result.Item, write, label);
+}
+
+function replayOf(
+  stored: Record<string, unknown> | undefined,
+  write: ReplayKey,
+  label: string,
+): WriteResult {
+  const item = stored as
     | {
         payloadHash?: unknown;
         resultVersion?: unknown;

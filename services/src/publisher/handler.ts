@@ -122,7 +122,12 @@ export async function publishHandler(
     state: new DynamoStateStore(documents, requiredEnv("STATE_TABLE_NAME")),
     ops: new DynamoOpsStore(documents, opsTable),
     // 운영 DB의 공지 노출본(BRD-151). 권한은 admin#notice 파티션 Query만(infra publisher-role)
-    notices: async () => liveNotices(await queryNotices(documents, opsTable)),
+    notices: async () =>
+      liveNotices(
+        await queryNotices(documents, opsTable, (noticeId) =>
+          log("error", "publish_notice_invalid", { noticeId }),
+        ),
+      ),
     snapshots,
     beaches,
     zones,

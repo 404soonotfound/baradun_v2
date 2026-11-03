@@ -308,6 +308,109 @@ describe("노출·끝내기 (노출 변경)", () => {
   });
 });
 
+describe("재전송 (D16-B6)", () => {
+  it("노출·끝내기·지우기를 같은 키·같은 본문으로 다시 보내면 앞 결과를 받는다", async () => {
+    const table = new FakeTable();
+    const { noticeId } = await create(table);
+    const send = (method: string, path: string, version: number, key: string) =>
+      handleOps(
+        event(method, path, { version }, key),
+        deps("publisher", table),
+      );
+
+    const exposeKey = newKey();
+    const exposed = await send(
+      "POST",
+      `/ops/notices/${noticeId}/expose`,
+      1,
+      exposeKey,
+    );
+    const exposedAgain = await send(
+      "POST",
+      `/ops/notices/${noticeId}/expose`,
+      1,
+      exposeKey,
+    );
+    expect(exposedAgain.statusCode).toBe(200);
+    expect(parse(exposedAgain)).toEqual(parse(exposed));
+
+    const endKey = newKey();
+    const ended = await send("POST", `/ops/notices/${noticeId}/end`, 2, endKey);
+    const endedAgain = await send(
+      "POST",
+      `/ops/notices/${noticeId}/end`,
+      2,
+      endKey,
+    );
+    expect(endedAgain.statusCode).toBe(200);
+    expect(parse(endedAgain)).toEqual(parse(ended));
+
+    const deleteKey = newKey();
+    const deleted = await send(
+      "DELETE",
+      `/ops/notices/${noticeId}`,
+      3,
+      deleteKey,
+    );
+    const deletedAgain = await send(
+      "DELETE",
+      `/ops/notices/${noticeId}`,
+      3,
+      deleteKey,
+    );
+    expect(deletedAgain.statusCode).toBe(200);
+    expect(parse(deletedAgain)).toEqual(parse(deleted));
+    // 다시 보낸 요청은 바꾼 것이 없으므로 이력도 하나씩만
+    expect(audits(table).map((a) => a.action)).toEqual([
+      "notice.create",
+      "notice.expose",
+      "notice.end",
+      "notice.delete",
+    ]);
+  });
+
+  it("같은 키에 다른 본문이면 409", async () => {
+    const table = new FakeTable();
+    const { noticeId } = await create(table);
+    const key = newKey();
+    await handleOps(
+      event("POST", `/ops/notices/${noticeId}/expose`, { version: 1 }, key),
+      deps("publisher", table),
+    );
+    const other = await handleOps(
+      event("POST", `/ops/notices/${noticeId}/end`, { version: 2 }, key),
+      deps("publisher", table),
+    );
+    expect(other.statusCode).toBe(409);
+    expect(parse(other).error.reason).toBe("idempotency_mismatch");
+  });
+});
+
+describe("끝내기와 대기본", () => {
+  it("대기본의 시작이 아직이면 대기본 끝 시각을 바꾸지 않는다", async () => {
+    const table = new FakeTable();
+    const { noticeId } = await create(table);
+    await expose(table, noticeId, 1);
+    const later = {
+      ...CONTENT,
+      startsAt: "2026-11-05T00:00:00Z",
+      endsAt: null,
+    };
+    await handleOps(
+      event("PUT", `/ops/notices/${noticeId}`, { ...later, version: 2 }),
+      deps("editor", table),
+    );
+    await handleOps(
+      event("POST", `/ops/notices/${noticeId}/end`, { version: 3 }),
+      deps("publisher", table),
+    );
+    expect(stored(table, noticeId)).toMatchObject({
+      live: { endsAt: NOW.toISOString() },
+      draft: later,
+    });
+  });
+});
+
 describe("지우기 (D16-D3)", () => {
   it("노출 중이면 지우지 않고, 먼저 노출을 끝내야 한다", async () => {
     const table = new FakeTable();
@@ -365,26 +468,42 @@ describe("지우기 (D16-D3)", () => {
 });
 
 describe("목록", () => {
-  it("보기 권한·샘플이 상태와 함께 받고, 운영자 sub는 들어 있지 않다", async () => {
+  it("보기 권한이 상태와 함께 받고, 운영자 sub는 들어 있지 않다", async () => {
     const table = new FakeTable();
     const { noticeId } = await create(table);
     await expose(table, noticeId, 1);
-    for (const group of ["viewer", "sample"]) {
-      const result = await handleOps(
-        event("GET", "/ops/notices", undefined, null),
-        deps(group, table),
-      );
-      expect(result.statusCode).toBe(200);
-      const [item] = parse(result).items;
-      expect(item).toMatchObject({
-        id: noticeId,
-        state: "live",
-        pendingEdit: false,
-        hidden: false,
-        version: 2,
-      });
-      expect(result.body).not.toContain("-sub");
-    }
+    const result = await handleOps(
+      event("GET", "/ops/notices", undefined, null),
+      deps("viewer", table),
+    );
+    expect(result.statusCode).toBe(200);
+    const [item] = parse(result).items;
+    expect(item).toMatchObject({
+      id: noticeId,
+      state: "live",
+      pendingEdit: false,
+      hidden: false,
+      version: 2,
+    });
+    expect(result.body).not.toContain("-sub");
+  });
+
+  it("샘플은 실제 공지(공개 전 대기본 포함) 대신 예시 공지를 받는다", async () => {
+    const table = new FakeTable();
+    await create(table);
+    const result = await handleOps(
+      event("GET", "/ops/notices", undefined, null),
+      deps("sample", table),
+    );
+    expect(result.statusCode).toBe(200);
+    expect(result.body).not.toContain("11월 4일 새벽 갱신이 늦어요");
+    const items = parse(result).items as { id: string; state: string }[];
+    expect(items.map((i) => i.state).sort()).toEqual([
+      "draft",
+      "live",
+      "scheduled",
+    ]);
+    expect(items.every((i) => i.id.startsWith("sample-"))).toBe(true);
   });
 
   it("잘못된 공지 ID는 404", async () => {

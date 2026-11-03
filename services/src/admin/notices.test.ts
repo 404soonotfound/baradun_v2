@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { NOTICE_PK } from "./keys";
 import {
   exposeProblem,
   graphemeLength,
@@ -7,6 +8,7 @@ import {
   noticeViews,
   parseNoticeInput,
   parseVersionBody,
+  queryNotices,
   type NoticeContent,
   type NoticeRecord,
 } from "./notices";
@@ -214,5 +216,41 @@ describe("liveNotices", () => {
         record("c", { deletedAt: "2026-11-03T05:00:00Z" }),
       ]),
     ).toEqual([{ id: "a", ...CONTENT }]);
+  });
+});
+
+describe("queryNotices", () => {
+  const client = (items: Record<string, unknown>[]) => ({
+    send: async () => ({ Items: items }),
+  });
+  const good = {
+    pk: NOTICE_PK,
+    sk: "n-good",
+    id: "n-good",
+    version: 1,
+    draft: CONTENT,
+    live: CONTENT,
+    exposedAt: null,
+    updatedAt: "2026-11-03T04:00:00Z",
+    deletedAt: null,
+  };
+  const broken = {
+    ...good,
+    sk: "n-broken",
+    id: "n-broken",
+    live: { kind: "x" },
+  };
+
+  it("모양이 틀린 항목이 있으면 던진다(목록에서 숨기지 않음)", async () => {
+    await expect(queryNotices(client([good, broken]), "Ops")).rejects.toThrow();
+  });
+
+  it("onInvalid를 주면 그 항목만 빼고 알린다(publisher)", async () => {
+    const invalid: string[] = [];
+    const records = await queryNotices(client([good, broken]), "Ops", (sk) =>
+      invalid.push(sk),
+    );
+    expect(records.map((r) => r.id)).toEqual(["n-good"]);
+    expect(invalid).toEqual(["n-broken"]);
   });
 });

@@ -260,9 +260,12 @@ export async function getNotice(
 }
 
 // 지운 공지도 함께 돌려줌(publisher가 거름). 강한 일관성으로 읽음(저장 직후 목록에 바로 보이게)
+// 모양이 틀린 항목: onInvalid가 없으면 던짐(운영 화면 목록은 500으로 숨기지 않음)
+// publisher는 onInvalid로 그 항목만 빼고 알림 → 깨진 항목 하나 때문에 나머지 공지 변경(끝내기 등)이 막히지 않음
 export async function queryNotices(
   client: Sender,
   opsTable: string,
+  onInvalid?: (sk: string) => void,
 ): Promise<NoticeRecord[]> {
   const records: NoticeRecord[] = [];
   let startKey: Record<string, unknown> | undefined;
@@ -276,7 +279,14 @@ export async function queryNotices(
         ...(startKey ? { ExclusiveStartKey: startKey } : {}),
       }),
     );
-    for (const item of page.Items ?? []) records.push(toRecord(item));
+    for (const item of page.Items ?? []) {
+      try {
+        records.push(toRecord(item));
+      } catch (error) {
+        if (!onInvalid) throw error;
+        onInvalid(String(item.sk));
+      }
+    }
     startKey = page.LastEvaluatedKey;
   } while (startKey);
   return records;
