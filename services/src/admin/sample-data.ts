@@ -79,7 +79,13 @@ export function sampleInquiryPage(
           INQUIRY_STATUSES.indexOf(b.status) || a.hoursAgo - b.hoursAgo,
     )
     .map((e) => summaryOf(e, now));
-  return { items, nextCursor: null };
+  const counts = Object.fromEntries(
+    INQUIRY_STATUSES.map((s) => [
+      s,
+      EXAMPLES.filter((e) => e.status === s).length,
+    ]),
+  ) as Record<InquiryStatus, number>;
+  return { items, nextCursor: null, counts };
 }
 
 export function sampleInquiry(id: string, now: Date): InquiryDetail | null {
