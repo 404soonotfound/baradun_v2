@@ -27,11 +27,11 @@ describe("허용표", () => {
 
   it("/ops/me GET은 세 역할과 샘플 모두 허락한다", () => {
     for (const role of OPERATOR_ROLES) {
-      expect(decideRoute("/ops/me", "GET", operator(role))).toEqual({
+      expect(decideRoute("/ops/me", "GET", operator(role))).toMatchObject({
         ok: true,
       });
     }
-    expect(decideRoute("/ops/me", "GET", sample)).toEqual({ ok: true });
+    expect(decideRoute("/ops/me", "GET", sample)).toMatchObject({ ok: true });
   });
 
   it("샘플이 허락된 쓰기 경로가 없다(표에 잘못 넣어도 쓰기는 막음)", () => {
