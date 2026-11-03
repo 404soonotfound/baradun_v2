@@ -44,13 +44,13 @@ function HomeBody() {
   const role = roleLabel(snapshot.pool, snapshot.groups);
 
   return (
-    <main className="mx-auto flex w-full max-w-[960px] flex-col gap-4 px-4 py-6">
+    <main className="flex w-full flex-col gap-4 px-4 py-5 md:px-10 md:pt-6 md:pb-10">
       <div>
-        <h1 className="text-[20px] font-semibold text-text-default">
+        <h1 className="text-title-l font-semibold text-text-default">
           {t.home.title}
         </h1>
         {snapshot.email && (
-          <p className="mt-1 text-[13px] text-text-muted">
+          <p className="mt-1 text-body-s text-text-muted">
             {fill(t.home.signedInAs, { email: snapshot.email })}
             {role && ` · ${role}`}
           </p>
@@ -79,10 +79,8 @@ function HomeBody() {
             </Button>
           </Notice>
         )}
-      {me?.ok && (
-        <p className="text-[14px] text-text-body">{t.home.preparing}</p>
-      )}
-      <p className="text-[12.5px] text-text-muted">{t.session.refreshNote}</p>
+      {me?.ok && <p className="text-body text-text-body">{t.home.preparing}</p>}
+      <p className="text-label-s text-text-muted">{t.session.refreshNote}</p>
     </main>
   );
 }

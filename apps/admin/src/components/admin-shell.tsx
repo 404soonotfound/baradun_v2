@@ -126,7 +126,7 @@ function RailTip({ tip }: { tip: Tip | null }) {
       aria-hidden="true"
       data-rail-tip=""
       style={{ top: tip.top, left: tip.left }}
-      className="pointer-events-none fixed z-30 -translate-y-1/2 rounded-[6px] bg-text-default px-2 py-1 text-[12.5px] whitespace-nowrap text-bg-surface"
+      className="pointer-events-none fixed z-30 -translate-y-1/2 rounded-admin-control bg-text-default px-2 py-1 text-label-s whitespace-nowrap text-bg-surface"
     >
       {tip.label}
     </span>
@@ -155,7 +155,7 @@ function NavList({
         <div key={group.label ?? i} className="flex flex-col gap-0.5">
           {group.label && (
             <p
-              className={`px-2 pb-1 text-[12px] font-medium text-text-muted ${compact ? "sr-only" : ""}`}
+              className={`px-2 pb-1 text-caption font-medium text-text-muted ${compact ? "sr-only" : ""}`}
             >
               {group.label}
             </p>
@@ -170,9 +170,14 @@ function NavList({
                 aria-current={current ? "page" : undefined}
                 aria-label={compact ? label : undefined}
                 {...(tip ? tip(label) : {})}
-                className={`flex min-h-11 items-center gap-2.5 rounded-[6px] px-2 text-[14px] font-medium whitespace-nowrap hover:bg-bg-page lg:min-h-9 ${
+                className={`flex min-h-touch items-center gap-2.5 rounded-admin-control px-2 text-body whitespace-nowrap hover:bg-bg-page lg:min-h-admin-control ${
                   compact ? "justify-center" : ""
-                } ${current ? "bg-brand-weak text-brand-default" : "text-text-body"}`}
+                } ${
+                  // 지금 화면: 시안처럼 배경 없이 파란 글자·아이콘. 색만으로 구분하지 않게 굵기도 바꿈(aria-current도 둠)
+                  current
+                    ? "font-semibold text-brand-default"
+                    : "font-medium text-text-body"
+                }`}
               >
                 <Icon
                   aria-hidden="true"
@@ -202,11 +207,13 @@ function AccountBlock({
   const snapshot = useSessionSnapshot();
   if (snapshot.status === "signed_out") return null;
   const role = roleLabel(snapshot.pool, snapshot.groups);
-  const linkClass = `flex min-h-11 items-center gap-2.5 rounded-[6px] px-2 text-[14px] font-medium whitespace-nowrap text-text-body hover:bg-bg-page lg:min-h-9 ${compact ? "justify-center" : ""}`;
+  const linkClass = `flex min-h-touch items-center gap-2.5 rounded-admin-control px-2 text-body whitespace-nowrap hover:bg-bg-page lg:min-h-admin-control ${compact ? "justify-center" : ""}`;
+  // 내 계정 화면이면 메뉴 항목과 같게 파란 글자·굵게(aria-current와 함께)
+  const accountCurrent = isCurrent(pathname, "/account/");
   return (
     <div className="flex flex-col gap-0.5 border-t border-border-default pt-3">
       {!compact && (
-        <div className="mb-1 px-2 text-[12.5px] leading-snug">
+        <div className="mb-1 px-2 text-label-s leading-snug">
           <p className="truncate font-medium text-text-default">
             {snapshot.email}
           </p>
@@ -218,12 +225,12 @@ function AccountBlock({
         {...(onNavigate ? { onClick: onNavigate } : {})}
         aria-label={compact ? t.account : undefined}
         {...(tip ? tip(t.account) : {})}
-        aria-current={isCurrent(pathname, "/account/") ? "page" : undefined}
-        className={linkClass}
+        aria-current={accountCurrent ? "page" : undefined}
+        className={`${linkClass} ${accountCurrent ? "font-semibold text-brand-default" : "font-medium text-text-body"}`}
       >
         <UserRound
           aria-hidden="true"
-          className="size-4 shrink-0 text-text-muted"
+          className={`size-4 shrink-0 ${accountCurrent ? "text-brand-default" : "text-text-muted"}`}
         />
         {!compact && t.account}
       </Link>
@@ -231,7 +238,7 @@ function AccountBlock({
         type="button"
         aria-label={compact ? t.logout : undefined}
         {...(tip ? tip(t.logout) : {})}
-        className={linkClass}
+        className={`${linkClass} font-medium text-text-body`}
         onClick={() => {
           void session.logout();
           router.replace(snapshot.pool === "demo" ? "/login/demo/" : "/login/");
@@ -251,23 +258,23 @@ function BrandLink({ compact }: { compact: boolean }) {
   return (
     <Link
       href="/"
-      className={`flex items-center gap-2.5 rounded-[6px] p-1 ${compact ? "justify-center" : ""}`}
+      className={`flex items-center gap-2.5 rounded-admin-control p-1 ${compact ? "justify-center" : ""}`}
       aria-label={
         compact ? `${messages.brand.name} ${messages.brand.sub}` : undefined
       }
     >
       <span
         aria-hidden="true"
-        className="flex size-8 shrink-0 items-center justify-center rounded-badge bg-brand-default text-[12px] font-medium text-brand-on"
+        className="flex size-8 shrink-0 items-center justify-center rounded-admin-badge bg-brand-default text-caption font-medium text-brand-on"
       >
         {messages.brand.mark}
       </span>
       {!compact && (
         <span className="flex flex-col leading-tight whitespace-nowrap">
-          <span className="text-[14px] font-medium text-text-default">
+          <span className="text-body font-medium text-text-default">
             {messages.brand.name}
           </span>
-          <span className="text-[12px] text-text-muted">
+          <span className="text-caption text-text-muted">
             {messages.brand.sub}
           </span>
         </span>
@@ -300,7 +307,7 @@ function Drawer({ open, onClose }: { open: boolean; onClose: () => void }) {
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
-      className="m-0 h-dvh max-h-dvh w-[280px] max-w-[85vw] bg-bg-surface p-0 text-text-default backdrop:bg-[rgb(11_26_44/0.4)]"
+      className="m-0 h-dvh max-h-dvh w-admin-drawer max-w-[85vw] bg-bg-surface p-0 text-text-default backdrop:bg-[rgb(11_26_44/0.4)]"
     >
       <div className="flex h-full flex-col gap-4 px-3 py-3">
         <div className="flex items-center justify-between">
@@ -309,7 +316,7 @@ function Drawer({ open, onClose }: { open: boolean; onClose: () => void }) {
             type="button"
             onClick={onClose}
             aria-label={t.closeMenu}
-            className="flex size-11 items-center justify-center rounded-[6px] hover:bg-bg-page"
+            className="flex size-touch items-center justify-center rounded-admin-control hover:bg-bg-page"
           >
             <X aria-hidden="true" className="size-5" />
           </button>
@@ -342,15 +349,15 @@ export function AdminShell({
     <SessionGuard>
       <a
         href="#main"
-        className="sr-only z-50 rounded-[6px] bg-bg-surface px-3 py-2 focus:not-sr-only focus:fixed focus:top-2 focus:left-2"
+        className="sr-only z-50 rounded-admin-control bg-bg-surface px-3 py-2 focus:not-sr-only focus:fixed focus:top-2 focus:left-2"
       >
         {t.skip}
       </a>
       <div className="flex min-h-dvh">
         {/* PC 메뉴 · 태블릿 레일 */}
         <aside
-          className={`sticky top-0 hidden h-dvh shrink-0 flex-col gap-4 border-r border-border-default bg-bg-surface px-3 py-3.5 md:flex lg:w-[232px] ${
-            railOpen ? "md:w-[232px]" : "md:w-[72px]"
+          className={`sticky top-0 hidden h-dvh shrink-0 flex-col gap-4 border-r border-border-default bg-bg-surface px-3 py-3.5 md:flex lg:w-admin-sidebar ${
+            railOpen ? "md:w-admin-sidebar" : "md:w-admin-rail"
           }`}
         >
           <div className="hidden lg:block">
@@ -380,7 +387,7 @@ export function AdminShell({
               }}
               aria-label={railOpen ? t.collapse : t.expand}
               aria-expanded={railOpen}
-              className="mt-1 flex min-h-11 w-full items-center justify-center rounded-[6px] text-text-muted hover:bg-bg-page"
+              className="mt-1 flex min-h-touch w-full items-center justify-center rounded-admin-control text-text-muted hover:bg-bg-page"
             >
               {railOpen ? (
                 <ChevronsLeft aria-hidden="true" className="size-4" />
@@ -394,17 +401,17 @@ export function AdminShell({
 
         <div className="flex min-w-0 flex-1 flex-col">
           {/* 모바일 앱 바 */}
-          <header className="sticky top-0 z-10 flex h-14 items-center gap-1 border-b border-border-default bg-bg-surface px-2 md:hidden">
+          <header className="sticky top-0 z-10 flex h-topbar items-center gap-1 border-b border-border-default bg-bg-surface px-2 md:hidden">
             <button
               type="button"
               onClick={() => setDrawerOpen(true)}
               aria-label={t.openMenu}
               aria-expanded={drawerOpen}
-              className="flex size-11 items-center justify-center rounded-[6px] hover:bg-bg-page"
+              className="flex size-touch items-center justify-center rounded-admin-control hover:bg-bg-page"
             >
               <Menu aria-hidden="true" className="size-5" />
             </button>
-            <p className="min-w-0 flex-1 truncate text-[16px] font-semibold">
+            <p className="min-w-0 flex-1 truncate text-title-card font-semibold">
               {title}
             </p>
             <Link
@@ -413,7 +420,7 @@ export function AdminShell({
               aria-current={
                 isCurrent(pathname, "/account/") ? "page" : undefined
               }
-              className="flex size-11 items-center justify-center rounded-[6px] hover:bg-bg-page"
+              className="flex size-touch items-center justify-center rounded-admin-control hover:bg-bg-page"
             >
               <UserRound aria-hidden="true" className="size-5" />
             </Link>

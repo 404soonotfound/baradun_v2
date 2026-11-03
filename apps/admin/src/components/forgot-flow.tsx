@@ -72,7 +72,7 @@ export function ForgotFlow() {
       >
         <Link
           href="/login/"
-          className="inline-flex h-11 items-center justify-center rounded-[6px] bg-brand-default text-[15px] font-medium text-brand-on hover:bg-brand-hover sm:h-10 sm:text-[14px]"
+          className="inline-flex h-touch items-center justify-center rounded-admin-control bg-brand-default text-title-s font-medium text-brand-on hover:bg-brand-hover sm:h-admin-action sm:text-body"
         >
           {t.forgot.login}
         </Link>
@@ -177,7 +177,7 @@ export function ForgotFlow() {
             </Button>
           )}
         </form>
-        <p className="text-[12.5px] text-text-muted">{t.forgot.lost}</p>
+        <p className="text-label-s text-text-muted">{t.forgot.lost}</p>
       </AuthShell>
     );
   }

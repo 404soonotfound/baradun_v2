@@ -21,10 +21,7 @@ export function Field({
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex items-baseline justify-between gap-2">
-        <label
-          htmlFor={id}
-          className="text-[14px] font-medium text-text-default"
-        >
+        <label htmlFor={id} className="text-body font-medium text-text-default">
           {label}
         </label>
         {aside}
@@ -34,14 +31,14 @@ export function Field({
         {...input}
         aria-invalid={error ? true : undefined}
         aria-describedby={error ? errorId : undefined}
-        className={`h-11 rounded-[6px] border bg-bg-surface px-2.5 text-[15px] text-text-default outline-none placeholder:text-text-muted read-only:bg-bg-page read-only:text-text-muted focus:border-brand-default focus:ring-[3px] focus:ring-brand-border sm:h-9 sm:text-[14px] ${
+        className={`h-touch rounded-admin-control border bg-bg-surface px-2.5 text-title-s font-normal text-text-default outline-none placeholder:text-text-muted read-only:bg-bg-page read-only:text-text-muted focus:border-brand-default focus:ring-[3px] focus:ring-brand-border sm:h-admin-control sm:text-body ${
           error
             ? "border-danger-text ring-[3px] ring-danger-border"
             : "border-border-strong"
         }`}
       />
       {error && (
-        <p id={errorId} className="text-[12.5px] text-danger-text">
+        <p id={errorId} className="text-label-s text-danger-text">
           {error}
         </p>
       )}
@@ -75,7 +72,7 @@ export function CodeInput({
           {digits.map((d, i) => (
             <span
               key={i}
-              className={`flex h-11 items-center justify-center rounded-[6px] border text-[18px] font-medium tabular-nums ${
+              className={`flex h-touch items-center justify-center rounded-admin-control border text-num-count font-medium tabular-nums ${
                 error
                   ? "border-danger-text"
                   : i === Math.min(value.length, 5)
@@ -100,11 +97,11 @@ export function CodeInput({
           autoFocus={autoFocus}
           aria-invalid={error ? true : undefined}
           aria-describedby={error ? `${id}-error` : undefined}
-          className="absolute inset-0 h-full w-full cursor-text rounded-[6px] bg-transparent text-transparent caret-transparent outline-none focus:ring-[3px] focus:ring-brand-border"
+          className="absolute inset-0 h-full w-full cursor-text rounded-admin-control bg-transparent text-transparent caret-transparent outline-none focus:ring-[3px] focus:ring-brand-border"
         />
       </div>
       {error && (
-        <p id={`${id}-error`} className="text-[12.5px] text-danger-text">
+        <p id={`${id}-error`} className="text-label-s text-danger-text">
           {error}
         </p>
       )}
@@ -135,7 +132,7 @@ export function PasswordRules({
     [checks.match, messages.rules.match],
   ] as const;
   return (
-    <ul className="flex flex-col gap-1 text-[13px] text-text-body">
+    <ul className="flex flex-col gap-1 text-body-s text-text-body">
       {rows.map(([ok, label]) => (
         <li key={label} className="flex items-center gap-1.5">
           <span

@@ -160,14 +160,14 @@ function ReauthDialog({ pool, email }: { pool: PoolKind; email: string }) {
       aria-labelledby="reauth-title"
       // Esc로 닫으면 토큰 없는 화면이 남으므로 닫지 않음(로그아웃은 화면의 버튼으로)
       onCancel={(e) => e.preventDefault()}
-      className="m-auto w-[calc(100%-32px)] max-w-[360px] rounded-[8px] border border-border-default bg-bg-surface p-6 text-text-default shadow-floating backdrop:bg-[rgb(11_26_44/0.4)]"
+      className="m-auto w-[calc(100%-32px)] max-w-[360px] rounded-admin-box border border-border-default bg-bg-surface p-6 text-text-default shadow-floating backdrop:bg-[rgb(11_26_44/0.4)]"
     >
       <form className="flex flex-col gap-[18px]" onSubmit={submit} noValidate>
         <div>
-          <h2 id="reauth-title" className="text-[17px] font-semibold">
+          <h2 id="reauth-title" className="text-title-m font-semibold">
             {t.session.reauthTitle}
           </h2>
-          <p className="mt-1 text-[12.5px] text-text-muted">
+          <p className="mt-1 text-label-s text-text-muted">
             {t.session.reauthDescription}
           </p>
         </div>
@@ -211,11 +211,11 @@ export function SessionNotices() {
   return (
     <>
       {snapshot.pool === "demo" && (
-        <div className="bg-status-stale-bg px-4 py-2 text-center text-[13px] font-medium text-status-stale-fg">
+        <div className="bg-status-stale-bg px-4 py-2 text-center text-body-s font-medium text-status-stale-fg">
           {t.home.demoBadge}
         </div>
       )}
-      <div className="mx-auto w-full max-w-[960px] px-4 pt-4 empty:hidden">
+      <div className="w-full px-4 pt-4 empty:hidden md:px-10">
         <SessionWarning />
       </div>
     </>

@@ -11,16 +11,18 @@ export function PreparingScreen({ title }: { title: string }) {
   const t = messages.preparing;
   return (
     <AdminShell title={title}>
-      <div className="mx-auto flex w-full max-w-[960px] flex-col gap-3 px-4 py-6">
-        <h1 className="text-[20px] font-semibold text-text-default">{title}</h1>
-        <div className="rounded-[8px] border border-border-default bg-bg-surface px-4 py-5">
-          <p className="text-[15px] font-semibold text-text-default">
+      <div className="flex w-full flex-col gap-3 px-4 py-5 md:px-10 md:pt-6 md:pb-10">
+        <h1 className="text-title-l font-semibold text-text-default">
+          {title}
+        </h1>
+        <div className="rounded-admin-box border border-border-default bg-bg-surface px-4 py-5">
+          <p className="text-title-s font-semibold text-text-default">
             {t.title}
           </p>
-          <p className="mt-1 text-[13px] text-text-body">{t.body}</p>
+          <p className="mt-1 text-body-s text-text-body">{t.body}</p>
           <Link
             href="/"
-            className="mt-3 inline-flex h-9 items-center rounded-[6px] border border-border-strong px-3 text-[13px] font-medium text-text-default hover:bg-bg-page"
+            className="mt-3 inline-flex h-touch items-center rounded-admin-control border border-border-strong px-3 text-body-s font-medium text-text-default hover:bg-bg-page lg:h-admin-control"
           >
             {t.home}
           </Link>

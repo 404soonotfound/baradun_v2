@@ -15,15 +15,15 @@ export function LocalDevLogin({ pool }: { pool: PoolKind }) {
   return (
     <section
       aria-labelledby="local-dev-title"
-      className="flex flex-col gap-2 rounded-[8px] border border-dashed border-border-strong p-3"
+      className="flex flex-col gap-2 rounded-admin-box border border-dashed border-border-strong p-3"
     >
       <h2
         id="local-dev-title"
-        className="text-[13px] font-semibold text-text-default"
+        className="text-body-s font-semibold text-text-default"
       >
         {t.title}
       </h2>
-      <p className="text-[12.5px] text-text-body">{t.description}</p>
+      <p className="text-label-s text-text-body">{t.description}</p>
       <Button
         variant="secondary"
         size="small"
