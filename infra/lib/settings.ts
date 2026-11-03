@@ -146,7 +146,7 @@ export const OPERATOR_POOL_NAME = "BaradunV2-Operators";
 // 읽기 전용 샘플 계정만 두는 풀(D16-A7 실증 뒤 분리, 2026-11-03). MFA 없음
 export const SAMPLE_POOL_NAME = "BaradunV2-Sample";
 
-// 토큰 유효 시간(A3). 유휴 30분은 관리자 앱, 최초 인증 8시간은 운영 API가 따로 강제함
+// 토큰 유효 시간(A3). 유휴 60분은 관리자 앱, 최초 인증 8시간은 운영 API가 따로 강제함
 // refresh rotation을 켜면 새 refresh token이 다시 8시간을 받으므로 Cognito만으로는 8시간 상한이 안 됨
 // 재전송 유예는 0초: 토큰을 메모리에만 두고 한 탭에서만 갱신함(A2). 갱신 응답을 놓치면 다시 로그인
 export const OPERATOR_SESSION = {
