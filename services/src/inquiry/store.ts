@@ -20,6 +20,7 @@ import {
   INQUIRY_NOTIFICATION_LIMIT_PER_DAY,
   INQUIRY_RATE_LIMIT_PER_MINUTE,
   kstDate,
+  type InquiryStatus,
   ttlAfterDays,
 } from "./policy";
 
@@ -192,6 +193,10 @@ export class InquiryStore {
             ...(inquiry.activity ? { activity: inquiry.activity } : {}),
             photoKeys: inquiry.photoKeys,
             receivedAt,
+            // 운영 화면 처리 상태(D16-D5). 새 문의는 접수·version 1로 시작(운영 API가 version 조건부로 바꿈)
+            // receivedAt과 함께 상태 GSI 키가 됨(D16-B4)
+            inquiryStatus: "received" satisfies InquiryStatus,
+            version: 1,
             ttl: ttlAfterDays(
               inquiry.receivedAt,
               INQUIRY_BODY_RETENTION_DAYS,
