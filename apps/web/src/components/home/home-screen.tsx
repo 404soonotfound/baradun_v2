@@ -276,7 +276,8 @@ export function HomeScreen({
 
   return (
     // PC 바다 띠를 상단 내비 바로 아래에 붙임(본문 위 여백 상쇄). 언어 안내가 위에 있으면(첫 칸이 아님) 덮지 않게 그대로 둠
-    <div className="relative isolate flex flex-col gap-6 lg:gap-2 lg:first:-mt-8">
+    // 모바일 바다 배경은 이 묶음이 아니라 본문(main) 기준이라 relative를 두지 않음(언어 안내 아래에서 잘려 시작하지 않게)
+    <div className="isolate flex flex-col gap-6 lg:gap-2 lg:first:-mt-8">
       {/* 모바일 바다 배경(꾸밈) */}
       <HomeSky />
 
