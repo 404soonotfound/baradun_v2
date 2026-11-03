@@ -659,6 +659,17 @@ OPERATOR_USER_POOL_ID=<SampleUserPoolId> OPERATOR_CLIENT_ID=<SampleAdminWebClien
 
   배포 역할(`DeployRole`)은 이 버킷에 올리고 이 배포의 캐시를 비우는 권한만 더 갖습니다.
 
+- **로그인 풀 값(BRD-148):** 운영자 사이트 빌드는 로그인할 사용자 풀을 빌드 때 받습니다. 값은 스택 출력이라 비밀값이 아닙니다. 네 값이 모두 있어야 `admin` 배포 작업이 돌고, 하나라도 비면 배포를 멈춥니다(로그인 화면이 '설정 오류'가 되지 않게).
+
+  ```bash
+  gh variable set OPERATOR_USER_POOL_ID --body "<OperatorUserPoolId 출력 값>"
+  gh variable set OPERATOR_CLIENT_ID --body "<OperatorAdminWebClientId 출력 값>"
+  gh variable set DEMO_USER_POOL_ID --body "<SampleUserPoolId 출력 값>"
+  gh variable set DEMO_CLIENT_ID --body "<SampleAdminWebClientId 출력 값>"
+  ```
+
+- **로그인 화면:** 운영자는 `/login/`, 데모(샘플 풀) 계정은 초대한 사람에게만 알려 주는 `/login/demo/`에서 로그인합니다(결정 기록 D17-2). 토큰은 브라우저 메모리에만 있어 새로고침·새 탭은 다시 로그인합니다(D16-A2). 화면 안 이동은 페이지를 새로 불러오지 않는 링크로만 합니다.
+
 ## 운영 API(BRD-146)
 
 `OpsApi`가 운영자 사이트의 API 함수 하나(`/ops/*`, 코드 `services/src/admin`)와 전용 역할·로그·함수 URL을 만듭니다. 기준은 결정 기록 D16-A3·A7·A8·B1·B2·B6·B7, 아키텍처 18.3입니다.

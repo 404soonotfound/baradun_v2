@@ -15,3 +15,6 @@ This version has breaking changes — APIs, conventions, and file structure may 
 - 모든 페이지는 검색 노출을 막는다(noindex meta·robots.txt·응답 헤더). `npm run build -w apps/admin`의 postbuild 검사가 확인한다.
 - 화면 문구는 `messages/ko.json` 문구 키로 쓴다.
 - 판단 상태(특보 없음·이용불가·판단불가)는 어떤 화면에서도 바꾸지 않는다(G1).
+- 화면 안 이동은 `next/link`·`router`로만 한다. `<a href>`로 페이지를 새로 불러오면 메모리의 로그인이 사라진다.
+- 로그인은 `src/lib/auth`가 맡는다(결정 기록 D17-1: SRP는 `amazon-cognito-identity-js`, 나머지 Cognito 호출은 공개 API 직접). 운영 API는 `opsFetch`로만 부른다(전용 토큰 헤더·본문 해시).
+- E2E: 테스트용 풀 값으로 빌드한 뒤 `npm run test:e2e -w apps/admin`(값은 `e2e/fixtures.ts` `TEST_POOL_ENV`). Cognito·`/ops/*`는 가짜 응답이다.
