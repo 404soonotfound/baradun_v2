@@ -136,7 +136,26 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
+      # 로그인 풀 값(비밀값 아님, 스택 출력). 비면 로그인 화면이 '설정 오류'라 배포를 멈춤 (BRD-148, infra/README)
+      - name: 운영자 로그인 풀 값 확인
+        env:
+          OPERATOR_POOL: ${{ vars.OPERATOR_USER_POOL_ID }}
+          OPERATOR_CLIENT: ${{ vars.OPERATOR_CLIENT_ID }}
+          DEMO_POOL: ${{ vars.DEMO_USER_POOL_ID }}
+          DEMO_CLIENT: ${{ vars.DEMO_CLIENT_ID }}
+        run: |
+          for value in "$OPERATOR_POOL" "$DEMO_POOL"; do
+            printf '%s' "$value" | grep -Eq '^ap-northeast-2_[A-Za-z0-9]+$' || { echo "::error::vars.OPERATOR_USER_POOL_ID·DEMO_USER_POOL_ID에 스택 출력 값을 넣어 주세요(infra/README '운영자 사이트')."; exit 1; }
+          done
+          for value in "$OPERATOR_CLIENT" "$DEMO_CLIENT"; do
+            printf '%s' "$value" | grep -Eq '^[a-z0-9]+$' || { echo "::error::vars.OPERATOR_CLIENT_ID·DEMO_CLIENT_ID에 스택 출력 값을 넣어 주세요(infra/README '운영자 사이트')."; exit 1; }
+          done
       - run: npm run build -w apps/admin # postbuild가 검색 차단·CSP meta·비밀값 0건을 검사함
+        env:
+          NEXT_PUBLIC_OPERATOR_USER_POOL_ID: ${{ vars.OPERATOR_USER_POOL_ID }}
+          NEXT_PUBLIC_OPERATOR_CLIENT_ID: ${{ vars.OPERATOR_CLIENT_ID }}
+          NEXT_PUBLIC_DEMO_USER_POOL_ID: ${{ vars.DEMO_USER_POOL_ID }}
+          NEXT_PUBLIC_DEMO_CLIENT_ID: ${{ vars.DEMO_CLIENT_ID }}
       - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
         with:
           role-to-assume: ${{ vars.DEPLOY_ROLE_ARN }}
