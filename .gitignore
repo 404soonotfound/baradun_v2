@@ -2,6 +2,7 @@
 
 # 디자인 토큰 결과: packages/design-tokens/tokens.json에서 npm run tokens로 생성
 apps/web/src/styles/tokens.css
+apps/admin/src/styles/tokens.css
 
 # dependencies
 node_modules/
