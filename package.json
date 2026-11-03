@@ -15,6 +15,7 @@
     "test": "npm run test:beaches && npm run test --workspaces --if-present",
     "test:beaches": "vitest run --root tools/beaches",
     "build": "npm run build --workspaces --if-present",
-    "deploy:prod": "node scripts/deploy-prod.mjs"
+    "deploy:prod": "node scripts/deploy-prod.mjs",
+    "deploy:infra": "npm run deploy -w infra --"
   }
 }

@@ -6,7 +6,8 @@
     "watch": "tsc -w",
     "test": "vitest run",
     "cdk": "cdk",
-    "check:iam-actions": "node --import tsx scripts/check-iam-actions.mjs"
+    "check:iam-actions": "node --import tsx scripts/check-iam-actions.mjs",
+    "deploy": "node --import tsx scripts/deploy.mjs"
   },
   "devDependencies": {
     "@aws-sdk/client-cognito-identity-provider": "^3.1156.0",
