@@ -13,12 +13,13 @@ import * as sqs from "aws-cdk-lib/aws-sqs"; // 알림 발송 실패 대기열
 import * as subscriptions from "aws-cdk-lib/aws-sns-subscriptions"; // 이메일 구독
 import { Construct } from "constructs";
 import * as path from "node:path";
-import { LOG_RETENTION, RETRY_LIMITS } from "../settings";
+import { LOG_RETENTION, LOGIN_ABUSE_ALARM, RETRY_LIMITS } from "../settings";
 
 // ② 운영 경보 (아키텍처 10장, BRD-62)
 // 수집 중단·게시 실패·validUntil 초과(게시 멈춤)를 한국어 SNS 이메일로 알림
-// 경보 10개 = 오류 5(수집기 4 + 게시) + 심장박동 4(특보·관측·이안류·게시) + 알림 발송 실패 1
-// settings.ts MAX_ALARMS(10)를 다 씀. 경보를 더 넣으려면 기존 경보를 합치거나 상한을 다시 정해야 함
+// 경보 11개 = 오류 5(수집기 4 + 게시) + 심장박동 4(특보·관측·이안류·게시) + 알림 발송 실패 1
+//            + 로그인 반복 요청 1(결정 기록 D17-4)
+// settings.ts MAX_ALARMS(11)를 다 씀. 경보를 더 넣으려면 기존 경보를 합치거나 상한을 다시 정해야 함
 // catalog는 하루 1회라 심장박동 없이 오류 경보만. 데이터 문의 함수 경보는 두지 않음(BRD-63 결정)
 
 const REPO_ROOT = path.join(__dirname, "..", "..", "..");
@@ -46,6 +47,11 @@ export interface OpsAlarmsProps {
   // 수집기 이름("Ocean"·"Warnings"·"Catalog"·"Rip") → 함수. Collectors가 만든 Map 그대로
   readonly collectors: ReadonlyMap<string, lambda.IFunction>;
   readonly publisher: lambda.IFunction; // publish-snapshot 함수
+  // 로그인 반복 요청 감시 대상(운영자·데모 풀의 관리자 앱 클라이언트, D17-4)
+  readonly signInClients: readonly {
+    readonly userPoolId: string;
+    readonly clientId: string;
+  }[];
 }
 
 // ④ 클래스. 스택에서 new OpsAlarms(...) 한 줄로 아래가 전부 만들어짐
@@ -132,7 +138,72 @@ export class OpsAlarms extends Construct {
       "데이터 게시가 멈춤. 45분 뒤 validUntil 초과로 전 해변 판단불가가 됨",
     );
 
+    this.loginAbuseAlarm(props.signInClients);
+
     this.addKoreanNotifications();
+  }
+
+  // ⑤-3 로그인 반복 요청 경보(D17-4): 5분 동안 로그인 실패 합계 ≥ 10 또는 계정 복구 API ≥ 5이면 울림
+  // 두 값을 각 기준으로 나눈 것 중 큰 값이 1 이상인지로 한 경보에 묶음(경보 자리 1개)
+  // 차단은 하지 않음(Cognito 기본 잠금·요청 제한이 막고, 이 경보는 알기만 함)
+  private loginAbuseAlarm(
+    clients: readonly { userPoolId: string; clientId: string }[],
+  ): void {
+    const period = Duration.minutes(LOGIN_ABUSE_ALARM.periodMinutes);
+    const usingMetrics: Record<string, cloudwatch.IMetric> = {};
+    const failures: string[] = [];
+    clients.forEach((client, i) => {
+      const dimensionsMap = {
+        UserPool: client.userPoolId,
+        UserPoolClient: client.clientId,
+      };
+      // 시도 수(표본 수)와 성공 수(합계). 실패 = 시도 − 성공
+      usingMetrics[`tries${i}`] = new cloudwatch.Metric({
+        namespace: "AWS/Cognito",
+        metricName: "SignInSuccesses",
+        dimensionsMap,
+        statistic: "SampleCount",
+        period,
+      });
+      usingMetrics[`oks${i}`] = new cloudwatch.Metric({
+        namespace: "AWS/Cognito",
+        metricName: "SignInSuccesses",
+        dimensionsMap,
+        statistic: "Sum",
+        period,
+      });
+      failures.push(`(FILL(tries${i}, 0) - FILL(oks${i}, 0))`);
+    });
+    // 계정 단위 사용량 지표(두 풀 합계). 차원 값은 Cognito 문서 '사용량 지표' 기준
+    usingMetrics.recovery = new cloudwatch.Metric({
+      namespace: "AWS/Usage",
+      metricName: "CallCount",
+      dimensionsMap: {
+        Service: "Cognito user pool",
+        Type: "API",
+        Resource: "UserAccountRecovery",
+        Class: "None",
+      },
+      statistic: "Sum",
+      period,
+    });
+    const alarm = new cloudwatch.Alarm(this, "LoginAbuse", {
+      alarmName: this.alarmName("LoginAbuse"),
+      metric: new cloudwatch.MathExpression({
+        expression: `MAX([(${failures.join(" + ")}) / ${LOGIN_ABUSE_ALARM.signInFailures}, FILL(recovery, 0) / ${LOGIN_ABUSE_ALARM.accountRecoveryCalls}])`,
+        usingMetrics,
+        period,
+        label: "로그인 실패·계정 복구 요청 / 기준",
+      }),
+      threshold: 1,
+      comparisonOperator:
+        cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+      evaluationPeriods: 1,
+      // 로그인이 없는 구간은 정상(요청이 없으면 반복도 없음)
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+      alarmDescription: `로그인 반복 요청. 5분에 로그인 실패 ${LOGIN_ABUSE_ALARM.signInFailures}회 또는 비밀번호 찾기·변경 ${LOGIN_ABUSE_ALARM.accountRecoveryCalls}회 이상. Cognito 잠금·요청 제한이 막고 있음`,
+    });
+    this.alarms.push(alarm);
   }
 
   // ⑤-1 오류 경보 도우미: 5분 합계 오류 ≥ 1이면 울림. private = 이 클래스 안에서만 씀

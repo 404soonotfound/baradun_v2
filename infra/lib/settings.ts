@@ -53,7 +53,17 @@ export const RETRY_LIMITS = {
 } as const;
 
 // 무료 범위 상한 (11장 기본값 함정)
-export const MAX_ALARMS = 10;
+// 경보만 10 → 11(결정 기록 D17-4): 로그인 반복 요청 감시 1개. 무료 10개를 넘는 1개는 월 약 $0.10
+export const MAX_ALARMS = 11;
+
+// 로그인 반복 요청 감시 기준(D17-4, 운영자 1명 기준). 5분 동안 둘 중 하나라도 넘으면 알림
+// - 로그인 실패: 운영자·데모 풀 합계(SignInSuccesses 표본 수 − 합계, 차단 요청 포함)
+// - 계정 복구 API: 비밀번호 찾기·확인·변경·첫 로그인 새 비밀번호(계정 전체, AWS/Usage UserAccountRecovery)
+export const LOGIN_ABUSE_ALARM = {
+  periodMinutes: 5,
+  signInFailures: 10,
+  accountRecoveryCalls: 5,
+} as const;
 export const MAX_DYNAMODB_CAPACITY_UNITS = 25; // 읽기·쓰기 각각, 모든 테이블·GSI 합계
 
 // DynamoDB 테이블 용량 (7장 저장소 3개, 11장 Provisioned 고정·Auto Scaling 없음)
