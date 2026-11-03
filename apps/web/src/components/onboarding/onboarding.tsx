@@ -184,7 +184,8 @@ function OnboardingDialog({
         const dialog = event.currentTarget;
         if (dialog.isConnected && !dialog.open) dialog.showModal();
       }}
-      className="m-0 h-dvh max-h-none w-full max-w-none bg-bg-page p-0 text-text-default backdrop:bg-bg-page"
+      // 맨 위 그림이 100vw라 세로 스크롤 막대만큼 가로로 넘칠 수 있어 가로 넘침은 자름
+      className="m-0 h-dvh max-h-none w-full max-w-none overflow-x-hidden bg-bg-page p-0 text-text-default backdrop:bg-bg-page"
     >
       {/* 좌우 16 (Figma pad.stack 185:265). ON-1은 맨 위 그림이 화면 끝까지, ON-2는 위 76(머리 줄 자리) + 24 띄움 */}
       <div
@@ -226,12 +227,13 @@ function StepDots({ current }: { current: 1 | 2 }) {
 }
 
 // ON-1 맨 위 그림 (Figma 그림 185:257, 390×190): 하늘 그라데이션 + 물결 3겹(맨 앞은 화면 바탕과 이음) + 가운데 로고 48
+// 본문 칸(최대 480)과 상관없이 화면 끝까지 넓힘(홈 바다 띠와 같은 방식). 물결은 너비에 맞춰 늘어남
 // 물결 경로는 Figma 원본 그대로. 색은 토큰(color.onboarding.*)이라 다크에서 밤바다로 바뀜. 꾸밈이라 화면 읽기에서 숨김
 function NoticeSky() {
   return (
     <div
       aria-hidden="true"
-      className="relative -mx-4 h-[190px] shrink-0 bg-linear-to-b from-onboarding-sky-1 to-onboarding-sky-2"
+      className="relative mx-[calc(50%-50vw)] h-[190px] shrink-0 bg-linear-to-b from-onboarding-sky-1 to-onboarding-sky-2"
     >
       <svg
         className="absolute inset-0 size-full"
