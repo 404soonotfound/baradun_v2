@@ -11,6 +11,7 @@ import {
 import * as iam from "aws-cdk-lib/aws-iam";
 import { Construct } from "constructs";
 import { OperatorAuth } from "./admin/operator-auth";
+import { OpsApi } from "./admin/ops-api";
 import { Collectors } from "./collect/collectors";
 import { GitHubDeployRole } from "./deploy/github-deploy-role";
 import { InquiryBackend } from "./inquiry/inquiry-backend";
@@ -179,6 +180,9 @@ export class BaradunStack extends Stack {
 
     // 운영자 풀(MFA 필수)·샘플 풀과 각 앱 클라이언트·권한 그룹 (BRD-145). 계정은 배포 뒤 콘솔·CLI로 초대
     const operatorAuth = new OperatorAuth(this, "OperatorAuth");
+
+    // 운영 API 함수 /ops/* (BRD-146). 함수 URL은 관리자 배포(BRD-147)에서 CloudFront + OAC로 연결
+    new OpsApi(this, "OpsApi", { opsTable: tables.ops, auth: operatorAuth });
 
     // 배포 후 콘솔·터미널에서 바로 확인할 값
     new CfnOutput(this, "SiteBucketName", { value: site.bucket.bucketName });

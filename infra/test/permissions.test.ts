@@ -214,8 +214,21 @@ describe("DynamoDB 권한 (BRD-55)", () => {
         roleId("CollectCatalogRole"),
         roleId("CollectRipRole"),
         roleId("InquiryInquiryRole"),
+        roleId("OpsApiRole"),
       ].sort(),
     );
+  });
+
+  it("운영 API 역할은 Ops 항목 읽기·쓰기만 하고 State·Inquiry 권한은 없다(G1: 판단 상태를 쓰지 않음)", () => {
+    const byResource = dynamoActionsByResource([roleId("OpsApiRole")]);
+    // 트랜잭션 Put·Update는 품목별 동작으로 판정됨. Query·Scan·Delete는 없음
+    expect(Object.fromEntries(byResource)).toEqual({
+      [`${tableId("Ops")}.Arn`]: new Set([
+        "dynamodb:GetItem",
+        "dynamodb:PutItem",
+        "dynamodb:UpdateItem",
+      ]),
+    });
   });
 
   it("문의 역할은 Inquiry 항목 쓰기·멱등 기록 읽기·이메일 삭제만 할 수 있다", () => {
@@ -286,7 +299,7 @@ function allowedActionsOfRole(role: string): Map<string, string[]> {
 describe("함수·역할별 최소 권한 범위 (BRD-67)", () => {
   const roles = template.findResources("AWS::IAM::Role");
 
-  it("스택의 IAM 역할은 수집 4·publisher·문의·운영 알림·배포·Scheduler 대상 역할뿐이다", () => {
+  it("스택의 IAM 역할은 수집 4·publisher·문의·운영 알림·운영 API·배포·Scheduler 대상 역할뿐이다", () => {
     const schedulerRoles = Object.keys(roles).filter((id) =>
       id.startsWith("SchedulerRoleForTarget"),
     );
@@ -300,10 +313,30 @@ describe("함수·역할별 최소 권한 범위 (BRD-67)", () => {
         roleId("PublisherRole"),
         roleId("InquiryInquiryRole"),
         roleId("OpsNotificationRole"),
+        roleId("OpsApiRole"),
         roleId("DeployRole"),
         ...schedulerRoles,
       ].sort(),
     );
+  });
+
+  it("운영 API 역할은 Ops 테이블과 자기 로그에만 쓰고 관리형 정책이 없다", () => {
+    const api = roleId("OpsApiRole");
+    expect(roles[api]!.Properties.ManagedPolicyArns ?? []).toEqual([]);
+    const actions = allowedActionsOfRole(api);
+    expect([...actions.keys()].sort()).toEqual([
+      "dynamodb:GetItem",
+      "dynamodb:PutItem",
+      "dynamodb:UpdateItem",
+      "logs:CreateLogStream",
+      "logs:PutLogEvents",
+    ]);
+    const logGroup = Object.keys(
+      template.findResources("AWS::Logs::LogGroup"),
+    ).find((id) => id.startsWith("OpsApiLogs"));
+    for (const action of ["logs:CreateLogStream", "logs:PutLogEvents"]) {
+      expect(actions.get(action)).toEqual([`${logGroup}.Arn`]);
+    }
   });
 
   it("운영 알림 역할은 기존 운영 SNS 주제·실패 대기열·자기 로그에만 쓴다", () => {

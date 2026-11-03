@@ -6,10 +6,13 @@ import { template } from "./stack-template";
 
 describe("데이터 문의 접수 인프라", () => {
   it("함수 URL을 AWS_IAM과 CloudFront OAC로 잠근다", () => {
-    template.resourceCountIs("AWS::Lambda::Url", 1);
-    template.hasResourceProperties("AWS::Lambda::Url", {
-      AuthType: "AWS_IAM",
-    });
+    // 문의 + 운영 API(BRD-146). 둘 다 IAM 인증(서명 없는 요청은 Lambda 앞에서 막힘)
+    template.resourceCountIs("AWS::Lambda::Url", 2);
+    for (const url of Object.values(
+      template.findResources("AWS::Lambda::Url"),
+    )) {
+      expect(url.Properties.AuthType).toBe("AWS_IAM");
+    }
     template.hasResourceProperties("AWS::CloudFront::OriginAccessControl", {
       OriginAccessControlConfig: Match.objectLike({
         OriginAccessControlOriginType: "lambda",
