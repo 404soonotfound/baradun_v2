@@ -14,6 +14,15 @@ export const template = Template.fromStack(
   ),
 );
 
+// 사용자 사이트 배포(SiteDistribution…). 운영자 사이트 배포(AdminSiteDistribution…, BRD-147)와 구분함
+export function siteDistribution() {
+  const found = Object.entries(
+    template.findResources("AWS::CloudFront::Distribution"),
+  ).filter(([id]) => id.startsWith("SiteDistribution"));
+  if (found.length !== 1) throw new Error("사용자 사이트 배포가 하나가 아님");
+  return found[0]![1];
+}
+
 export type Statement = {
   Effect: "Allow" | "Deny";
   Action: string | string[];

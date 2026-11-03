@@ -22,7 +22,12 @@ import {
   ROLE_BOUNDARY_POLICY_NAME,
   apiKeyParameterName,
 } from "../lib/settings";
-import { allIamPolicies, template, toList } from "./stack-template";
+import {
+  allIamPolicies,
+  siteDistribution,
+  template,
+  toList,
+} from "./stack-template";
 
 // 아키텍처 11장 '과금·보안 가드레일'을 템플릿으로 검사함.
 // 지금은 검사 대상이 0개인 항목도 있음. 다음 묶음에서 리소스가 생기면 바로 거름.
@@ -121,23 +126,27 @@ describe("정액 요금제 web ACL (BRD-51)", () => {
     const params = template.findParameters("SiteWebAclArn");
     expect(params.SiteWebAclArn.Default).toBe("");
 
-    for (const dist of Object.values(
+    expect(siteDistribution().Properties.DistributionConfig.WebACLId).toEqual({
+      "Fn::If": [
+        "HasSiteWebAcl",
+        { Ref: "SiteWebAclArn" },
+        { Ref: "AWS::NoValue" },
+      ],
+    });
+    // 운영자 사이트는 WAF를 쓰지 않음(아키텍처 18.7 Free 플랜, BRD-147)
+    for (const [id, dist] of Object.entries(
       template.findResources("AWS::CloudFront::Distribution"),
     )) {
-      expect(dist.Properties.DistributionConfig.WebACLId).toEqual({
-        "Fn::If": [
-          "HasSiteWebAcl",
-          { Ref: "SiteWebAclArn" },
-          { Ref: "AWS::NoValue" },
-        ],
-      });
+      if (id.startsWith("AdminSite")) {
+        expect(dist.Properties.DistributionConfig.WebACLId).toBeUndefined();
+      }
     }
   });
 });
 
 describe("대표 주소 (BRD-162)", () => {
-  const distributions = () =>
-    Object.values(template.findResources("AWS::CloudFront::Distribution"));
+  // 대표 주소는 사용자 사이트 배포에만 붙음. 운영자 사이트 도메인은 미정(D16-E3)
+  const distributions = () => [siteDistribution()];
 
   it("도메인·인증서 매개변수는 기본이 비어 있다(출시일 전까지 지금과 같은 배포)", () => {
     const params = template.findParameters("*");
