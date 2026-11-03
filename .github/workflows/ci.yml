@@ -45,11 +45,13 @@ jobs:
               - *shared
               - 'apps/web/**'
               - 'packages/contracts/**'
+              - 'packages/design-tokens/**' # 디자인 토큰(결정 기록 D17-3)
               - 'data/beaches/**' # 해변이 바뀌면 상세 페이지 빌드 확인
             admin:
               - *shared
               - 'apps/admin/**'
               - 'packages/contracts/**'
+              - 'packages/design-tokens/**'
             services:
               - *shared
               - 'services/**'
