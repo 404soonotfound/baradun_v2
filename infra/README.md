@@ -663,6 +663,35 @@ aws dynamodb delete-item --region ap-northeast-2 --table-name <OpsTableName> \
 
 시각은 시간대를 붙여 씁니다(시간대 없는 값은 설정 전체를 무효로 봅니다).
 
+### 문의 처리(BRD-153)
+
+운영자 화면 문의 목록·상세·처리 상태 API입니다. 기준은 결정 기록 D16-B4·D5·D6, 화면 설계서 6장 ADM-INQ, 구현 제안 I07·I08입니다.
+
+- **경로:** `GET /ops/inquiries?status=&cursor=&limit=`(목록), `GET /ops/inquiries/{id}`(상세), `PATCH /ops/inquiries/{id}`(처리 상태·반려 이유·내부 메모, 편집·노출 변경 권한). 쓰기에는 `x-idempotency-key`(UUID v4) 헤더와 읽을 때 받은 `version`을 함께 보냅니다.
+- **상태:** 접수(received)·확인 중(in_progress)·완료(resolved)·반려(rejected). 반려는 이유가 필수이고 공백만은 거부합니다. 반려가 아닌 상태로 바꾸면 반려 이유를 지웁니다.
+- **목록:** `inquiryStatus-receivedAt` GSI(요약만, 본문·이메일·사진 키 없음)를 최근 접수 순으로 읽습니다. 상태를 고르지 않으면 접수 → 확인 중 → 완료 → 반려 순으로 이어 붙이고, `cursor`로 다음 쪽을 이어 갑니다. GSI는 최종적 일관성이라 저장 직후 목록이 잠시 이전 값일 수 있습니다.
+- **보관:** 받은 날부터 90일(TTL) 그대로입니다. TTL로 지워지기 전이라도 기한이 지난 문의는 목록·상세·수정에서 뺍니다. 처리 상태·메모는 같은 항목에 붙어 함께 만료됩니다.
+- **권한:** 보기 권한은 본문·메모·반려 이유를 받지 않습니다. 샘플 계정은 실제 테이블을 읽지 않고 예시 문의만 받습니다. 개인정보 가리기·문의 지우기·같은 해변 묶음(D16-D7)은 이 범위가 아닙니다.
+- **용량:** GSI 읽기·쓰기 1/1을 더해 테이블·GSI 합계 12/12(상한 25)입니다.
+
+#### 배포와 기존 문의 이전(구현 제안 I07 순서)
+
+1. **dry-run:** 이전할 문의 수를 셉니다(쓰지 않음). 배포 전에 해도 됩니다.
+2. **배포:** 변경 세트 기대 내용은 Inquiry 테이블 `Modify`(GSI 추가, 교체 없음), 문의 접수 함수 코드 `Modify`(새 문의를 접수·version 1로 저장), 운영 API 함수·역할 정책 `Modify`입니다. GSI는 만들어지는 동안 `CREATING`이고, 테이블은 그동안에도 쓸 수 있습니다.
+3. **apply:** 상태가 없는 기존 문의만 접수·version 1·`legacy`(이전 문의·처리 이력 없음)로 채웁니다. 접수 시각·보관 기한은 바꾸지 않습니다. 쓰기 1/초 용량이라 쪽마다 1초씩 쉬어 갑니다. 다시 돌려도 결과가 같습니다.
+4. **verify:** GSI가 `ACTIVE`가 된 뒤 원본 테이블의 보관 기한 안 문의 수와 GSI 상태별 합계를 대조합니다. `matches: true`면 끝입니다.
+
+```bash
+export AWS_PROFILE=<관리자 프로필>
+npx --no-install tsx services/scripts/inquiry-status-backfill.ts --table <InquiryTableName> --dry-run
+npx --no-install tsx services/scripts/inquiry-status-backfill.ts --table <InquiryTableName> --apply
+aws dynamodb describe-table --region ap-northeast-2 --table-name <InquiryTableName> \
+  --query 'Table.GlobalSecondaryIndexes[].IndexStatus' --output text   # ACTIVE 확인
+npx --no-install tsx services/scripts/inquiry-status-backfill.ts --table <InquiryTableName> --verify
+```
+
+이전 도구는 문의 본문·이메일을 읽거나 출력하지 않고 개수만 보여 줍니다. 이전 전에 운영 API가 상태 없는 문의를 바꾸면(version 0) 같은 방식으로 접수·이전 문의 표시를 함께 채웁니다.
+
 ## 점검·강제 업데이트
 
 점검 중 여부와 최소 화면 버전은 `manifest.json`의 `maintenance`·`minWebBuild`로 알립니다(아키텍처 9.1, BRD-43). 값은 `services/src/publisher/policy.ts`의 `MANIFEST_SETTINGS`(저장소 상수)에 있고, 바꾸려면 저장소를 고쳐 배포합니다(결정 기록 11장 10/23 ④). 게시 함수는 데이터가 그대로여도 지금 manifest와 설정이 다르면 새 버전으로 게시합니다.
