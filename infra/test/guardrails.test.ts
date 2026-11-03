@@ -441,6 +441,41 @@ const REQUIRED_CFN_ACTIONS_BY_RESOURCE_TYPE: Record<
     ],
     delete: ["cloudwatch:DeleteAlarms", "cloudwatch:DescribeAlarms"],
   },
+  // 사용자 지정 속성·KMS·SMS·Lambda 트리거·그룹 역할·분석 연결은 쓰지 않음(cfn-permission-exclusions.json)
+  "AWS::Cognito::UserPool": {
+    create: [
+      "cognito-idp:CreateUserPool",
+      "cognito-idp:SetUserPoolMfaConfig",
+      "cognito-idp:DescribeUserPool",
+      "cognito-idp:TagResource",
+    ],
+    read: ["cognito-idp:DescribeUserPool", "cognito-idp:GetUserPoolMfaConfig"],
+    update: [
+      "cognito-idp:UpdateUserPool",
+      "cognito-idp:ListTagsForResource",
+      "cognito-idp:TagResource",
+      "cognito-idp:UntagResource",
+      "cognito-idp:SetUserPoolMfaConfig",
+      "cognito-idp:DescribeUserPool",
+      "cognito-idp:GetUserPoolMfaConfig",
+    ],
+    delete: ["cognito-idp:DeleteUserPool"],
+  },
+  "AWS::Cognito::UserPoolClient": {
+    create: ["cognito-idp:CreateUserPoolClient"],
+    read: [
+      "cognito-idp:DescribeUserPoolClient",
+      "cognito-idp:ListUserPoolClientSecrets",
+    ],
+    update: ["cognito-idp:UpdateUserPoolClient"],
+    delete: ["cognito-idp:DeleteUserPoolClient"],
+  },
+  "AWS::Cognito::UserPoolGroup": {
+    create: ["cognito-idp:CreateGroup", "cognito-idp:GetGroup"],
+    read: ["cognito-idp:GetGroup"],
+    update: ["cognito-idp:UpdateGroup"],
+    delete: ["cognito-idp:DeleteGroup", "cognito-idp:GetGroup"],
+  },
   "AWS::DynamoDB::Table": {
     create: [
       "dynamodb:CreateTable",
@@ -1027,7 +1062,7 @@ describe("CDK bootstrap 실행 정책 (11장, BRD-121)", () => {
   });
 
   // 리소스 수준 권한을 지원하지 않는 작업만 Resource "*"를 허용함.
-  // 리전 서비스(logs, cloudwatch)는 서울 리전 조건을 걸고, 전역 서비스(cloudfront)에는 걸지 않음.
+  // 리전 서비스(logs, cloudwatch, cognito-idp)는 서울 리전 조건을 걸고, 전역 서비스(cloudfront)에는 걸지 않음.
   it("Resource * 문장은 리소스 수준 권한이 없는 승인된 작업만 담는다", () => {
     const wildcardResourceStatements = allStatements.filter((s) =>
       toList(s.Resource).includes("*"),
@@ -1059,6 +1094,17 @@ describe("CDK bootstrap 실행 정책 (11장, BRD-121)", () => {
         Sid: "OpsAlarmsDescribe",
         Effect: "Allow",
         Action: "cloudwatch:DescribeAlarms",
+        Resource: "*",
+        Condition: {
+          StringEquals: {
+            "aws:RequestedRegion": "ap-northeast-2",
+          },
+        },
+      },
+      {
+        Sid: "OperatorUserPoolCreate",
+        Effect: "Allow",
+        Action: "cognito-idp:CreateUserPool",
         Resource: "*",
         Condition: {
           StringEquals: {

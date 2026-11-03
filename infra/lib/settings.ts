@@ -1,3 +1,4 @@
+import { Duration } from "aws-cdk-lib";
 import * as logs from "aws-cdk-lib/aws-logs";
 
 // 여러 파일이 함께 쓰는 고정값. 값을 바꿀 때는 이 파일 한 곳만 고침.
@@ -105,3 +106,31 @@ export const CATALOG_SCHEDULE_KST = { hour: "4", minute: "20" } as const;
 export const PUBLISHER_TIMEOUT_SECONDS = 60;
 // 해변 약 200곳 분류·계약 검사·JSON 4개 쓰기. 수집기와 같은 크기
 export const PUBLISHER_MEMORY_MB = 256;
+
+// 운영자 로그인 (BRD-145, 결정 기록 D16-A3, 아키텍처 18.2)
+// 이름 앞부분 BaradunV2-는 실행 정책의 사용자 풀 Resource 범위가 아니라 콘솔에서 찾기 쉽게 붙임
+// (사용자 풀 ARN은 생성 때 붙는 ID라 이름으로 범위를 좁힐 수 없음)
+export const OPERATOR_POOL_NAME = "BaradunV2-Operators";
+
+// 토큰 유효 시간(A3). 유휴 30분은 관리자 앱, 최초 인증 8시간은 운영 API가 따로 강제함
+// refresh rotation을 켜면 새 refresh token이 다시 8시간을 받으므로 Cognito만으로는 8시간 상한이 안 됨
+// 재전송 유예는 0초: 토큰을 메모리에만 두고 한 탭에서만 갱신함(A2). 갱신 응답을 놓치면 다시 로그인
+export const OPERATOR_SESSION = {
+  accessToken: Duration.minutes(15),
+  idToken: Duration.minutes(15),
+  refreshToken: Duration.hours(8),
+  refreshRotationGrace: Duration.seconds(0),
+} as const;
+
+// 권한 그룹(아키텍처 18.2: 보기 < 편집 < 노출 변경 + 샘플). 이름은 토큰 cognito:groups 값이 됨
+// 그룹 사이 포함 관계(편집이 보기를 포함하는지 등)는 운영 API의 허용표가 정함(BRD-146). 여기서는 이름만 둠
+export const OPERATOR_GROUPS = [
+  { id: "Viewer", name: "viewer", description: "보기" },
+  { id: "Editor", name: "editor", description: "편집" },
+  {
+    id: "Publisher",
+    name: "publisher",
+    description: "노출 변경(공지 노출·지금 게시·되돌리기)",
+  },
+  { id: "Sample", name: "sample", description: "읽기 전용 시연 샘플" },
+] as const;

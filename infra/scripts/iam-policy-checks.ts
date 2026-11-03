@@ -207,7 +207,12 @@ export function statementScopeErrors(
       const values = toList(value);
       if (key === "aws:RequestedRegion") {
         if (
-          !["AWS::Logs::LogGroup", "AWS::CloudWatch::Alarm"].includes(type) ||
+          // 리소스 수준 권한이 없는 생성·조회 작업만 서울 리전 조건으로 Resource *를 씀
+          ![
+            "AWS::Logs::LogGroup",
+            "AWS::CloudWatch::Alarm",
+            "AWS::Cognito::UserPool",
+          ].includes(type) ||
           values.length !== 1 ||
           value !== "ap-northeast-2"
         )
