@@ -163,13 +163,15 @@ function readStatuses(value: unknown): Record<string, unknown> | null {
 // 화면 계산이 바뀌는 시각(보정된 시각, ms) 목록. 이른 순, 중복 없음
 // - validUntil·지표별 expiresAt 만료(expiryDeadline)
 // - 미래 관측·확인 시각(지금 + 2분 초과)이 더는 미래가 아니게 되는 때(view.ts isFuture) → 값·확인 시각이 보이기 시작함
-// - 공지가 보이기 시작하거나 끝나는 때(notice.ts)
+// - 공지가 보이기 시작하거나 끝나는 때(notice.ts). 서버 시각을 모르면 공지가 보이지 않아 넣지 않음
 function deadlinesOf(
   statuses: Record<string, unknown>,
   clock: Clock,
   manifest: ManifestFile | null,
 ): number[] {
-  const times = new Set<number>(noticeDeadlines(manifest?.notices));
+  const times = new Set<number>(
+    clock.trusted ? noticeDeadlines(manifest?.notices) : [],
+  );
   const expiry = (expiresAt: unknown) => {
     const at = expiryDeadline(expiresAt as string | null, clock);
     if (at !== null) times.add(at);
