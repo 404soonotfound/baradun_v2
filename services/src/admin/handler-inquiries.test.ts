@@ -161,6 +161,18 @@ describe("문의 목록·상세", () => {
     expect(body(res).error).toMatchObject({ code: "invalid_request", field });
   });
 
+  it("상태를 고른 목록에 전체 목록의 '다음 상태부터' cursor(키 없음)를 넣으면 400", async () => {
+    const cursor = Buffer.from(JSON.stringify({ s: "received" })).toString(
+      "base64url",
+    );
+    const res = await handleOps(
+      event("GET", "/ops/inquiries", { query: { status: "received", cursor } }),
+      deps("editor", seeded()),
+    );
+    expect(res.statusCode).toBe(400);
+    expect(body(res).error).toMatchObject({ field: "cursor" });
+  });
+
   it("문의 ID 모양이 아니거나 보관 기한이 지나면 404", async () => {
     const bad = await handleOps(
       event("GET", "/ops/inquiries/not-a-uuid"),
