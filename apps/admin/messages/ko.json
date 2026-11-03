@@ -94,7 +94,7 @@
   },
   "session": {
     "expiredTitle": "로그인이 만료됐어요",
-    "idleDescription": "30분 동안 활동이 없어 로그아웃했어요.",
+    "idleDescription": "60분 동안 활동이 없어 로그아웃했어요.",
     "maxDescription": "로그인한 지 8시간이 지나 로그아웃했어요. 보안을 위해 연장하지 않아요.",
     "otherTabTitle": "다른 탭에서 로그아웃했어요.",
     "otherTabDescription": "이 탭도 로그인 화면으로 바뀌었어요.",
