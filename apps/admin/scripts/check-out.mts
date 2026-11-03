@@ -2,6 +2,7 @@
 // - 모든 HTML: 검색 노출 차단 meta(noindex·nofollow), 인라인 스크립트 해시 CSP meta
 // - robots.txt: 전체 차단
 // - 모든 파일: 비밀값 모양(접근 키·개인 키·비밀값 대입) 0건. 저장소가 공개라 화면 코드도 공개라는 전제
+// - 모든 파일: 로컬 개발 서버 전용 테스트 로그인 코드 0건(BRD-172). 배포 빌드에 들어가면 비밀번호 없이 들어갈 길이 생김
 // 실행:
 //   node scripts/check-out.mts --write  CSP meta를 넣은 뒤 검사(postbuild)
 //   node scripts/check-out.mts          고치지 않고 검사만(CI)
@@ -73,6 +74,9 @@ export function secretFindings(text: string): string[] {
   );
 }
 
+// 로컬 테스트 로그인 표시. src/lib/auth/local-dev.ts LOCAL_MARKER와 같음(local-dev.test.ts가 확인)
+export const LOCAL_DEV_MARKER = "baradun-local-dev";
+
 const TEXT_FILE = /\.(?:html|js|mjs|css|txt|json|map|svg|xml)$/i;
 
 // 문제 목록(없으면 빈 배열). 파일 경로는 out 기준 상대 경로
@@ -115,6 +119,11 @@ export function checkOut(outDir: string): string[] {
     for (const name of secretFindings(readFileSync(file, "utf8"))) {
       problems.push(`${rel(file)}: ${name} 모양이 있음`);
     }
+    if (readFileSync(file, "utf8").includes(LOCAL_DEV_MARKER)) {
+      problems.push(
+        `${rel(file)}: 로컬 개발 서버 전용 테스트 로그인 코드가 있음`,
+      );
+    }
   }
   return problems;
 }
@@ -132,6 +141,6 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
     process.exit(1);
   }
   console.log(
-    "운영자 사이트 빌드 결과 검사 통과(검색 차단·CSP meta·비밀값 0건)",
+    "운영자 사이트 빌드 결과 검사 통과(검색 차단·CSP meta·비밀값·로컬 로그인 0건)",
   );
 }
