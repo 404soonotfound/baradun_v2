@@ -20,6 +20,8 @@ regexes = [
   '''1f8fad5b-d9cb-469f-a165-70867728950e''',
   # 문의 사진 테스트의 고정 16진수 S3 키 상수 (inquiry.test.ts, handler.test.ts, photos.test.ts)
   '''(pending|accepted)/0123456789abcdef0123456789abcdef/0123456789abcdef''',
+  # 운영자 사이트 비밀값 검사 테스트의 가짜 비밀값 (apps/admin/scripts/check-out.test.ts, BRD-147)
+  '''abcdefgh1234''',
 ]
 
 [[rules]]
