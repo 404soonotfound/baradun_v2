@@ -249,7 +249,8 @@ test.describe("공지", () => {
     ]) {
       await expect(page.getByText(hidden)).toHaveCount(0);
     }
-    // 공지가 있어도 판단 상태(특보 없음·관측 지연)는 그대로(D15-6). 배너 순서는 단위 테스트(situation.test.ts)
+    // 공지가 있어도 판단 상태는 그대로(D15-6): 홈은 특보 없음 배지·개수 카드의 관측 지연, 해변 배지는 아래 상세에서 봄
+    // 배너 순서(공지 > 관측 지연)는 단위 테스트(situation.test.ts)
     await expect(
       page.getByText("관측 지연").filter({ visible: true }).first(),
     ).toBeVisible();
@@ -260,6 +261,10 @@ test.describe("공지", () => {
       await page.goto(url);
       await expect(page.getByText("데이터 점검 예고")).toHaveCount(0);
     }
+    // 마지막으로 연 관측 지연 해변 상세의 배지
+    await expect(
+      page.getByText("관측 지연").filter({ visible: true }).first(),
+    ).toBeVisible();
 
     // 영어는 manifest의 영어 문구 그대로
     await page.goto("/en/");
