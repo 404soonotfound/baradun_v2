@@ -633,6 +633,36 @@ OPERATOR_USER_POOL_ID=<SampleUserPoolId> OPERATOR_CLIENT_ID=<SampleAdminWebClien
 
 이 실증 도구는 `amazon-cognito-identity-js`(Amplify v5 계열, 유지 보수 모드)를 씁니다. 실증 전용이며 관리자 앱의 로그인 라이브러리 선택은 BRD-148에서 따로 정합니다.
 
+## 운영 API(BRD-146)
+
+`OpsApi`가 운영자 사이트의 API 함수 하나(`/ops/*`, 코드 `services/src/admin`)와 전용 역할·로그·함수 URL을 만듭니다. 기준은 결정 기록 D16-A3·A7·A8·B1·B2·B6·B7, 아키텍처 18.3입니다.
+
+- **입구:** 함수 URL은 IAM 인증(`AWS_IAM`)이라 서명 없는 요청은 Lambda 앞에서 막힙니다. 관리자 사이트 CloudFront + OAC에 `/ops/*` 동작으로 연결하는 일은 관리자 배포(BRD-147)에서 합니다. 그 전까지는 이 함수를 부를 수 있는 곳이 없습니다.
+- **토큰:** 관리자 앱은 access token을 `x-baradun-access-token` 헤더로 보냅니다. `Authorization`은 OAC가 함수 URL로 보낼 때 SigV4 서명에 쓰므로 쓰지 않습니다.
+- **검증:** 서명·`iss`·`client_id`·`token_use=access`·`exp`는 `aws-jwt-verify`가 검사합니다(운영자 풀·샘플 풀만 믿음). 그 위에 최초 인증(`auth_time`)부터 8시간 상한, 그룹 역할(운영자 그룹이 정확히 하나가 아니면 거부)을 검사합니다. 운영자 풀은 MFA 필수라 그 풀의 토큰은 인증 앱을 거친 것입니다.
+- **샘플:** 샘플 풀 토큰은 Ops 테이블 `admin#config` / `sample` 항목의 sub 허용 목록·허용 기간(시작 포함·끝 제외)으로 다시 검사합니다. 항목이 없거나 기간 밖이면 거부하고, 모든 쓰기를 거부합니다.
+- **허용표:** `services/src/admin/routes.ts`가 경로·method별 허용 역할의 원본입니다. 지금 경로는 `GET /ops/me`(역할·세션 끝 시각) 하나이고, 업무 경로는 각 이슈에서 더합니다. 판단 상태를 쓰는 경로는 두지 않습니다.
+- **쓰기:** `versionedWrite`가 version 조건부 쓰기 + 멱등 키 + 본문 해시를 한 트랜잭션으로 씁니다. 같은 키·같은 내용은 앞 결과, 같은 키·다른 내용이나 version 불일치는 409입니다. 운영 API 키는 모두 `admin#`으로 시작해 게시 잠금·슬롯·게시 버전 키와 겹치지 않습니다.
+- **응답:** 모두 `cache-control: no-store`. 오류 본문은 `{ error: { code, requestId: "req-xxxxxxxx", traceId } }`이고 문구는 관리자 앱이 정합니다.
+- **권한:** 역할은 Ops 테이블 `GetItem`·`PutItem`·`UpdateItem`과 자기 로그만 씁니다. State·Inquiry 테이블 권한은 없습니다. 실행 정책·boundary는 바뀌지 않습니다(기존 `BaradunV2-*` 범위 안).
+
+### 샘플 시연 허용 설정
+
+시연 때만 넣고, 끝나면 지우거나 `allowedUntil`을 지난 시각으로 둡니다. sub는 샘플 풀 사용자의 sub입니다(`aws cognito-idp list-users --user-pool-id <SampleUserPoolId>`).
+
+```bash
+aws dynamodb put-item --region ap-northeast-2 --table-name <OpsTableName> --item '{
+  "pk": {"S": "admin#config"}, "sk": {"S": "sample"},
+  "subs": {"L": [{"S": "<샘플 sub>"}]},
+  "allowedFrom": {"S": "2026-11-10T00:00:00+09:00"},
+  "allowedUntil": {"S": "2026-11-11T00:00:00+09:00"}
+}'
+aws dynamodb delete-item --region ap-northeast-2 --table-name <OpsTableName> \
+  --key '{"pk": {"S": "admin#config"}, "sk": {"S": "sample"}}'
+```
+
+시각은 시간대를 붙여 씁니다(시간대 없는 값은 설정 전체를 무효로 봅니다).
+
 ## 점검·강제 업데이트
 
 점검 중 여부와 최소 화면 버전은 `manifest.json`의 `maintenance`·`minWebBuild`로 알립니다(아키텍처 9.1, BRD-43). 값은 `services/src/publisher/policy.ts`의 `MANIFEST_SETTINGS`(저장소 상수)에 있고, 바꾸려면 저장소를 고쳐 배포합니다(결정 기록 11장 10/23 ④). 게시 함수는 데이터가 그대로여도 지금 manifest와 설정이 다르면 새 버전으로 게시합니다.
