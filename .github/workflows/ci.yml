@@ -167,7 +167,15 @@ jobs:
       - run: npm run typecheck -w apps/admin
       - run: npm run test -w apps/admin
       - run: npm run build -w apps/admin # postbuild가 CSP meta를 넣고 검사함
+        env: # 테스트용 풀 값(비밀값 아님, apps/admin/e2e/fixtures.ts TEST_POOL_ENV). 운영 값은 deploy.yml의 vars
+          NEXT_PUBLIC_OPERATOR_USER_POOL_ID: ap-northeast-2_TestOperator
+          NEXT_PUBLIC_OPERATOR_CLIENT_ID: testoperatorclient0000000001
+          NEXT_PUBLIC_DEMO_USER_POOL_ID: ap-northeast-2_TestDemo
+          NEXT_PUBLIC_DEMO_CLIENT_ID: testdemoclient00000000000001
       - run: npm run check:out -w apps/admin # 고치지 않고 다시 검사(빌드 결과가 그대로인지)
+      - run: npx --no-install playwright install --with-deps chromium # lock 파일의 Playwright 판에 맞는 chromium
+        working-directory: apps/admin
+      - run: npm run test:e2e -w apps/admin # 로그인 흐름·세션 시간·axe (Cognito·/ops/*는 가짜 응답, BRD-148)
 
   # 백엔드: 린트·타입 검사·테스트(Vitest)
   services:
