@@ -710,10 +710,22 @@ npx --no-install tsx services/scripts/inquiry-status-backfill.ts --table <Inquir
 - **함께 쓰기:** 운영 API 쓰기(`versionedWrite`)는 감사 기록 없이 받지 않고, 멱등 기록·업무 변경·감사 기록을 한 트랜잭션으로 씁니다. 재전송·version 충돌은 바뀐 것이 없으므로 기록하지 않습니다. 감사 기록은 새 키에만 씁니다(`attribute_not_exists`).
 - **샘플 계정:** 로그인 확인(`/ops/me`)·조회·거절된 요청을 모두 남깁니다(대상은 `GET /ops/inquiries/{id}`처럼 경로 모양만). 기록에 실패하면 응답하지 않습니다(500). 운영자 조회는 남기지 않습니다(쓰기만). 샘플 요청마다 Ops 쓰기 1을 쓰므로(게시 잠금·수집 슬롯과 같은 쓰기 5) 요청 빈도 제한은 입구 연결(BRD-147)에서 함께 정합니다. 그 전까지는 함수 URL을 부를 곳이 없습니다.
 - **목록:** `GET /ops/audit?from=&to=&action=&actor=&cursor=&limit=`(보기 이상, 샘플은 403). `from`·`to`는 `Z`로 끝나는 UTC 시각만 받고, 기본은 최근 30일·최대 366일입니다. 최근 기록부터 월 파티션을 내려가며 읽고, 한 요청에 20쪽까지 읽은 뒤 `cursor`로 이어 갑니다. 보관 기한(ttl)이 지난 기록은 TTL로 지워지기 전이라도 뺍니다. `cursor`에는 필터가 담기므로 다른 필터와 섞으면 400입니다.
-- **권한:** 운영 API 역할의 Ops `Query`는 `dynamodb:LeadingKeys`가 `admin#audit#*`일 때만 됩니다. 감사 키의 `UpdateItem`·`DeleteItem`은 명시적으로 거부합니다(`DeleteItem`은 원래 허용도 없음). Put 권한만으로는 추가 전용이 되지 않으므로 위 조건부 쓰기·트랜잭션이 함께 막습니다.
+- **권한:** 운영 API 역할의 Ops `Query`는 `dynamodb:LeadingKeys`가 `admin#audit#*`이거나 공지 파티션 `admin#notice`일 때만 됩니다. 감사 키의 `UpdateItem`·`DeleteItem`은 명시적으로 거부합니다(`DeleteItem`은 원래 허용도 없음). Put 권한만으로는 추가 전용이 되지 않으므로 위 조건부 쓰기·트랜잭션이 함께 막습니다.
 - **배포:** 운영 API 함수 코드와 역할 정책 `Modify`만 바뀝니다(테이블·실행 정책 변경 없음).
 - **복구:** Ops 테이블 PITR은 꺼져 있고 로그는 1주 보관이라, 이 기록은 논리적 1년 보관이지 재해 복구를 보장하지 않습니다(구현 제안 I10, 미확정).
 - **화면:** 관리자 앱(BRD-147)이 생긴 뒤 기간·종류·운영자 필터와 대상 이동을 붙입니다. 해변 파일 변경은 저장소 커밋이 이력이므로 여기 남기지 않습니다.
+
+### 공지(BRD-151)
+
+운영자가 쓰는 점검 예고·일반 공지입니다. 기준은 결정 기록 D16-B3·D1~D4, 아키텍처 18.4, 화면 설계서 6장 ADM-NTC입니다. 코드는 `services/src/admin/notices.ts`·`notice-routes.ts`입니다.
+
+- **저장:** Ops 테이블 `admin#notice` / `{공지 ID}`. 공지마다 저장한 문구(`draft`, 화면 말 '대기')와 노출본(`live`)을 따로 둡니다. 둘이 다르면 '수정 대기'입니다. 지우면 `deletedAt`만 남기고 항목은 지우지 않습니다.
+- **경로:** `GET /ops/notices`(보기 이상·샘플, 운영자 sub는 주지 않음) · `POST /ops/notices`·`PUT /ops/notices/{id}`(편집: 문구 저장) · `POST /ops/notices/{id}/expose`·`/end`(노출 변경: 노출·노출 끝내기) · `DELETE /ops/notices/{id}`(노출 중이면 409, 예약된 노출본이 있으면 노출 변경만). 쓰기는 모두 version·멱등 키·감사 기록을 함께 씁니다.
+- **노출 검사:** 한·영 제목·본문이 모두 있어야 하고, 글자 수는 grapheme으로 제목 한 40/영 60·본문 한 120/영 200(D16-D2 초기값) 안이어야 합니다. 넘으면 잘라 내지 않고 거부합니다. 끝 시각은 시작 뒤이고 아직 지나지 않아야 합니다. 표현 검사(D16-D1)의 차단·경고 목록은 미결(D15-9, BRD-158)이라 아직 막지 않습니다.
+- **게시:** publisher가 게시할 때 노출본 중 시작 시각이 지났고 끝나지 않은 공지만 manifest `notices`에 ID 순으로 싣습니다(예약 전 문구는 공개 게시본에 없음). 계약에 맞지 않는 공지는 그것만 빼고 `publish_notice_invalid`를 남깁니다. 운영 DB를 읽지 못하면 지금 manifest의 공지를 이어서 싣고 `publish_notices_unread`를 남깁니다(특보·관측 게시는 멈추지 않음). 공지만 바뀌어도 새 버전으로 게시합니다.
+- **권한:** publisher 역할의 Ops `Query`는 `dynamodb:LeadingKeys`가 `admin#notice`일 때만 됩니다.
+- **되돌리기:** `rollbackManifest`는 사본에 실린 공지를 그대로 되돌립니다. 되돌린 공지 변경을 다음 자동 게시에 다시 싣지 않는 방식(D16-C3)은 미결이라 BRD-152에서 정합니다.
+- **배포:** publisher·운영 API 함수 코드와 두 역할 정책 `Modify`만 바뀝니다(테이블 변경 없음).
 
 ## 점검·강제 업데이트
 
