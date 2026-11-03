@@ -45,6 +45,7 @@ describe("운영 경보 한국어 알림", () => {
     ["RipStopped", "이안류 수집 중단"],
     ["PublishStopped", "데이터 게시 중단"],
     ["NotificationFailed", "운영 알림 발송 실패"],
+    ["LoginAbuse", "운영자 로그인 반복 요청"],
   ])("%s 경보를 %s 제목으로 보낸다", (alarmId, label) => {
     const result = formatAlarmNotification(
       alarmEvent(alarmId, `${label}. 운영 설명`),
@@ -93,6 +94,16 @@ describe("운영 경보 한국어 알림", () => {
     );
     expect(result.message).toContain(
       "판정: 재시도 뒤에도 알림을 보내지 못해 실패 대기열에 기록되었습니다.",
+    );
+  });
+
+  // 결정 기록 D17-4: 차단하지 않고 알기만 함. 막는 것은 Cognito 잠금·요청 제한
+  it("로그인 반복 요청 경보는 기준을 넘었고 Cognito가 막고 있다고 알린다", () => {
+    const result = formatAlarmNotification(
+      alarmEvent("LoginAbuse", "로그인 반복 요청"),
+    );
+    expect(result.message).toContain(
+      "판정: 5분 동안 로그인 실패 또는 비밀번호 찾기·변경 요청이 기준을 넘었습니다.",
     );
   });
 
