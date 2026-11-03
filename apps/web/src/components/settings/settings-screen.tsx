@@ -25,7 +25,9 @@ import {
 import { WaveIcon } from "@/components/logo-mark";
 import { RegionSheet } from "@/components/region/region-sheet";
 import {
+  SETTINGS_COLUMNS,
   SETTINGS_PANELS,
+  SETTINGS_WIDTH,
   SettingsNav,
   type SettingsPanel,
 } from "@/components/settings/settings-nav";
@@ -122,12 +124,14 @@ export function SettingsScreen({
   const pcOnly = (key: Panel) => panel !== key && "lg:hidden";
 
   return (
-    <div className="flex flex-col gap-[18px] pt-4 lg:mx-auto lg:w-full lg:max-w-[1036px] lg:pt-0">
+    <div
+      className={cn("flex flex-col gap-[18px] pt-4 lg:pt-0", SETTINGS_WIDTH)}
+    >
       <h1 className="text-title-xl text-text-default lg:sr-only">
         {tp("settings")}
       </h1>
 
-      <div className="flex flex-col gap-[18px] lg:grid lg:grid-cols-[260px_minmax(0,1fr)] lg:items-start lg:gap-8">
+      <div className={cn("flex flex-col gap-[18px]", SETTINGS_COLUMNS)}>
         <SettingsNav locale={locale} panel={panel} onPanel={show} />
 
         <div className="flex flex-col gap-[18px]">

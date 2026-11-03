@@ -26,6 +26,11 @@ const PAGES = [
   { href: "/about/data/", key: "dataSources" },
 ] as const;
 
+// 설정 화면과 하위 화면이 같이 쓰는 PC 좌우 배치(가운데 최대 1036 · 왼쪽 목록 260 + 오른쪽 내용)
+export const SETTINGS_WIDTH = "lg:mx-auto lg:w-full lg:max-w-[1036px]";
+export const SETTINGS_COLUMNS =
+  "lg:grid lg:grid-cols-[260px_minmax(0,1fr)] lg:items-start lg:gap-8";
+
 const ITEM =
   "flex min-h-touch w-full items-center rounded-[10px] px-3 text-left text-body text-text-default hover:bg-bg-subtle";
 const CURRENT =
@@ -108,7 +113,7 @@ export function SettingsLayout({
   children: ReactNode;
 }) {
   return (
-    <div className="lg:mx-auto lg:grid lg:w-full lg:max-w-[1036px] lg:grid-cols-[260px_minmax(0,1fr)] lg:items-start lg:gap-8">
+    <div className={cn(SETTINGS_WIDTH, SETTINGS_COLUMNS)}>
       <SettingsNav locale={locale} />
       <div className="min-w-0 lg:*:mx-0 lg:*:max-w-none">{children}</div>
     </div>
