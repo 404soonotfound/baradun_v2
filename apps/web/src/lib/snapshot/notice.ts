@@ -74,6 +74,7 @@ function compare(a: Notice, b: Notice): number {
 
 // 지금 보일 공지 하나. 서버 시각을 모르면(기기 시계만) 새로 보이지도 계속 보이지도 않음(I09):
 // 틀린 기기 시계로 끝난 공지가 남거나 예약 전 공지가 먼저 보이지 않게
+// 새로 받은 manifest인지(live)는 보지 않음: 화면은 pickSituation을 거쳐야 함(저장된 지난 manifest의 공지를 숨김)
 export function activeNotice(
   notices: readonly Notice[] | undefined,
   nowMs: number,
