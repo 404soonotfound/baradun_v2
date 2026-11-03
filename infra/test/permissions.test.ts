@@ -7,7 +7,7 @@ import {
   template,
   toList,
 } from "./stack-template";
-import { GITHUB_OIDC_SUBJECT } from "../lib/settings";
+import { GITHUB_OIDC_SUBJECT, INQUIRY_STATUS_INDEX } from "../lib/settings";
 
 // 역할의 논리 ID를 찾음 (CDK가 이름 뒤에 해시를 붙이므로 앞부분으로 찾기)
 function roleId(prefix: string): string {
@@ -219,15 +219,23 @@ describe("DynamoDB 권한 (BRD-55)", () => {
     );
   });
 
-  it("운영 API 역할은 Ops 항목 읽기·쓰기만 하고 State·Inquiry 권한은 없다(G1: 판단 상태를 쓰지 않음)", () => {
+  it("운영 API 역할은 Ops 읽기·쓰기, 문의 읽기·상태 바꾸기·목록 GSI 조회만 하고 State 권한은 없다(G1)", () => {
     const byResource = dynamoActionsByResource([roleId("OpsApiRole")]);
-    // 트랜잭션 Put·Update는 품목별 동작으로 판정됨. Query·Scan·Delete는 없음
+    // 트랜잭션 Put·Update는 품목별 동작으로 판정됨. Scan·Delete·문의 만들기(Put)는 없음
     expect(Object.fromEntries(byResource)).toEqual({
       [`${tableId("Ops")}.Arn`]: new Set([
         "dynamodb:GetItem",
         "dynamodb:PutItem",
         "dynamodb:UpdateItem",
       ]),
+      [`${tableId("Inquiry")}.Arn`]: new Set([
+        "dynamodb:GetItem",
+        "dynamodb:UpdateItem",
+      ]),
+      // 목록은 상태 GSI 하나에만 Query(테이블 전체 Query·Scan 없음)
+      [`${tableId("Inquiry")}.Arn/index/${INQUIRY_STATUS_INDEX.name}`]: new Set(
+        ["dynamodb:Query"],
+      ),
     });
   });
 
@@ -320,13 +328,14 @@ describe("함수·역할별 최소 권한 범위 (BRD-67)", () => {
     );
   });
 
-  it("운영 API 역할은 Ops 테이블과 자기 로그에만 쓰고 관리형 정책이 없다", () => {
+  it("운영 API 역할은 Ops·문의 테이블과 자기 로그에만 쓰고 관리형 정책이 없다", () => {
     const api = roleId("OpsApiRole");
     expect(roles[api]!.Properties.ManagedPolicyArns ?? []).toEqual([]);
     const actions = allowedActionsOfRole(api);
     expect([...actions.keys()].sort()).toEqual([
       "dynamodb:GetItem",
       "dynamodb:PutItem",
+      "dynamodb:Query",
       "dynamodb:UpdateItem",
       "logs:CreateLogStream",
       "logs:PutLogEvents",

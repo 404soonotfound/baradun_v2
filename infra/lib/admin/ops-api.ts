@@ -6,7 +6,7 @@ import * as nodejs from "aws-cdk-lib/aws-lambda-nodejs";
 import * as logs from "aws-cdk-lib/aws-logs";
 import { Construct } from "constructs";
 import * as path from "node:path";
-import { LOG_RETENTION, RETRY_LIMITS } from "../settings";
+import { INQUIRY_STATUS_INDEX, LOG_RETENTION, RETRY_LIMITS } from "../settings";
 import type { OperatorAuth } from "./operator-auth";
 
 // 운영 API 단일 함수 /ops/* (BRD-146, 결정 기록 D16-B1·B2·E4, 아키텍처 18.3)
@@ -14,12 +14,15 @@ import type { OperatorAuth } from "./operator-auth";
 // - 함수 URL은 IAM 인증(AWS_IAM)이라 서명 없는 요청은 Lambda 앞에서 막힘
 //   관리자 사이트 CloudFront + OAC에 /ops/* 동작으로 연결하는 일은 관리자 배포(BRD-147)에서 함
 //   → 그 전까지 이 함수 URL을 부를 수 있는 곳이 없음
-// - 역할 권한은 Ops 테이블 항목 읽기·쓰기만. State·Inquiry 테이블과 판단 상태(status)는 건드리지 않음(G1)
+// - 역할 권한은 Ops 테이블 항목 읽기·쓰기와 문의 항목 읽기·처리 상태 바꾸기·목록 GSI 조회만
+//   State 테이블과 판단 상태(status)는 건드리지 않음(G1). 문의를 만들거나 지우지 않음
 //   트랜잭션(TransactWriteItems)은 품목별 동작(PutItem·UpdateItem)으로 판정됨
 // - 토큰 검증 공개 키(JWKS)는 Cognito 공개 주소에서 받음(키·비밀값 없음)
 
 export interface OpsApiProps {
   readonly opsTable: dynamodb.ITable;
+  // 문의 처리 상태·메모(BRD-153). 문의 항목 읽기·바꾸기와 상태 GSI 조회만
+  readonly inquiryTable: dynamodb.ITable;
   readonly auth: OperatorAuth;
 }
 
@@ -49,6 +52,21 @@ export class OpsApi extends Construct {
         resources: [props.opsTable.tableArn],
       }),
     );
+    // 문의: 상세 읽기·처리 상태 바꾸기(트랜잭션 Update)·목록 GSI 조회. 만들기·지우기·Scan은 없음
+    this.role.addToPolicy(
+      new iam.PolicyStatement({
+        actions: ["dynamodb:GetItem", "dynamodb:UpdateItem"],
+        resources: [props.inquiryTable.tableArn],
+      }),
+    );
+    this.role.addToPolicy(
+      new iam.PolicyStatement({
+        actions: ["dynamodb:Query"],
+        resources: [
+          `${props.inquiryTable.tableArn}/index/${INQUIRY_STATUS_INDEX.name}`,
+        ],
+      }),
+    );
 
     const logGroup = new logs.LogGroup(this, "Logs", {
       retention: LOG_RETENTION,
@@ -70,6 +88,7 @@ export class OpsApi extends Construct {
       bundling: { externalModules: [], target: "node22" },
       environment: {
         OPS_TABLE_NAME: props.opsTable.tableName,
+        INQUIRY_TABLE_NAME: props.inquiryTable.tableName,
         OPERATOR_USER_POOL_ID: props.auth.userPool.userPoolId,
         OPERATOR_CLIENT_ID: props.auth.client.userPoolClientId,
         SAMPLE_USER_POOL_ID: props.auth.samplePool.userPoolId,

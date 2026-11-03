@@ -12,10 +12,11 @@ function only(prefix: string, type: string) {
 }
 
 describe("운영 API", () => {
-  it("services/src/admin의 opsHandler를 쓰고 두 풀·Ops 테이블을 환경 변수로 받는다", () => {
+  it("services/src/admin의 opsHandler를 쓰고 두 풀·Ops·문의 테이블을 환경 변수로 받는다", () => {
     const fn = only("OpsApiFunction", "AWS::Lambda::Function").resource;
     expect(fn.Properties.Handler).toBe("index.opsHandler");
     expect(Object.keys(fn.Properties.Environment.Variables).sort()).toEqual([
+      "INQUIRY_TABLE_NAME",
       "OPERATOR_CLIENT_ID",
       "OPERATOR_USER_POOL_ID",
       "OPS_TABLE_NAME",

@@ -1,6 +1,10 @@
 import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
 import { Construct } from "constructs";
-import { TABLE_CAPACITY, TTL_ATTRIBUTE } from "../settings";
+import {
+  INQUIRY_STATUS_INDEX,
+  TABLE_CAPACITY,
+  TTL_ATTRIBUTE,
+} from "../settings";
 
 // 7장 저장소 테이블 3개 (BRD-55)
 // - State: 출처별 최신 사실, 지표별 마지막 정상값, 특보 정상 확인 스냅샷, 최근 시도 상태
@@ -53,6 +57,21 @@ export class StorageTables extends Construct {
       readCapacity: TABLE_CAPACITY.inquiry.read,
       writeCapacity: TABLE_CAPACITY.inquiry.write,
       timeToLiveAttribute: TTL_ATTRIBUTE,
+    });
+    // 운영자 화면 문의 목록: 상태 + 접수 시각 GSI(D16-B4, BRD-153)
+    // 문의 항목에만 inquiryStatus가 있어 다른 항목(멱등·속도 제한·이메일)은 들어가지 않음
+    // 요약 칸만 projection. 본문(message)·이메일·사진 키는 넣지 않음
+    this.inquiry.addGlobalSecondaryIndex({
+      indexName: INQUIRY_STATUS_INDEX.name,
+      partitionKey: {
+        name: "inquiryStatus",
+        type: dynamodb.AttributeType.STRING,
+      },
+      sortKey: { name: "receivedAt", type: dynamodb.AttributeType.STRING },
+      projectionType: dynamodb.ProjectionType.INCLUDE,
+      nonKeyAttributes: [...INQUIRY_STATUS_INDEX.projected],
+      readCapacity: INQUIRY_STATUS_INDEX.read,
+      writeCapacity: INQUIRY_STATUS_INDEX.write,
     });
   }
 }
