@@ -5,7 +5,7 @@ title = "baradun_v2 gitleaks config"
 useDefault = true
 
 [allowlist]
-description = "전역 허용 목록: 문의 테스트 고정값 및 CDK 에셋 경로"
+description = "전역 허용 목록: 문의·운영 API 테스트 고정값 및 CDK 에셋 경로"
 paths = [
   # CDK 에셋 출력 디렉터리 (테스트 폴더 전체나 확장자 전체가 아닌 cdk.out 경로만 좁게 허용)
   '''(^|/)cdk\.out/''',
@@ -15,6 +15,9 @@ regexes = [
   '''3f2504e0-4f89-41d3-9a0c-0305e82c3301''',
   '''9b2d7a3e-1c4f-4e8a-b6d5-2f0e9c8a7b61''',
   '''123e4567-e89b-42d3-a456-426614174000''',
+  # 운영 API 멱등 쓰기 테스트의 고정 UUID 멱등 키 (services/src/admin/writes.test.ts, BRD-146)
+  '''0f8fad5b-d9cb-469f-a165-70867728950e''',
+  '''1f8fad5b-d9cb-469f-a165-70867728950e''',
   # 문의 사진 테스트의 고정 16진수 S3 키 상수 (inquiry.test.ts, handler.test.ts, photos.test.ts)
   '''(pending|accepted)/0123456789abcdef0123456789abcdef/0123456789abcdef''',
 ]
