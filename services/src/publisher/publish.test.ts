@@ -545,6 +545,39 @@ describe("rollbackManifest (T06)", () => {
     });
   });
 
+  // 공지 칸(BRD-151, 구현 제안 I06): 공지가 실린 사본도 계약을 통과해야 되돌릴 수 있음
+  it("공지 칸이 있는 사본으로도 되돌림", async () => {
+    const { state, snapshots, deps, advance } = await setup();
+    await publishSnapshot(deps());
+    const copyPath = `data/${V1}/manifest.json`;
+    const copy = snapshots.files.get(copyPath)!;
+    snapshots.files.set(copyPath, {
+      ...copy,
+      body: JSON.stringify({
+        ...(JSON.parse(copy.body) as ManifestFile),
+        notices: [
+          {
+            id: "n-1",
+            kind: "general",
+            title: { ko: "공지", en: "Notice" },
+            body: { ko: "본문", en: "Body" },
+            startsAt: "2026-10-23T00:00:00Z",
+            endsAt: null,
+          },
+        ],
+      }),
+    });
+    advance(60_000);
+    await seedWarnings(state, [WIND_WAVE_ROW], {
+      confirmedAt: "2026-10-23T02:25:00Z",
+    });
+    await publishSnapshot(deps());
+
+    expect(await rollbackManifest(snapshots, V1)).toEqual({
+      status: "rolled_back",
+    });
+  });
+
   it("없는 버전이나 파일이 빠진 버전으로는 되돌리지 않음(manifest 그대로)", async () => {
     const { snapshots, deps } = await setup();
     await publishSnapshot(deps());
