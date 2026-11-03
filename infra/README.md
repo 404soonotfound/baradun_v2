@@ -12,14 +12,23 @@ npx cdk diff --method=change-set            # 배포된 스택과 변경 세트 
 
 사이트 자동 배포(`.github/workflows/deploy.yml`, `npm run deploy:prod`)는 GitHub OIDC로 사이트 전용 역할(`DeployRole`)을 맡아 S3 파일 동기화와 CloudFront 캐시 무효화만 수행하며, CloudFormation이나 CDK 실행 정책을 거치지 않습니다.
 
-인프라 스택 배포(`npx cdk deploy`)는 요청이 있을 때만 수동으로 하고, 최신 `origin/main`을 꺼낸 작업 트리에서 관리자 역할 프로필(`baradun-admin`)로 실행합니다. 작업 중인 브랜치에서 배포하면 머지되지 않은 코드가 실환경에 올라갑니다.
+인프라 스택 배포는 요청이 있을 때만 사람이 실행하고, 최신 `origin/main`을 꺼낸 배포용 작업 트리에서 합니다. 작업 중인 브랜치에서 배포하면 머지되지 않은 코드가 실환경에 올라갑니다. 아래 명령 하나가 그 순서를 모두 합니다(BRD-169, `infra/scripts/deploy.mjs`).
 
 ```bash
-git fetch origin && git worktree add ../baradun_v2-deploy origin/main --detach
-cd ../baradun_v2-deploy && npm ci && cd infra
-AWS_PROFILE=baradun-admin npx cdk diff --method=change-set
-AWS_PROFILE=baradun-admin npx cdk deploy
+cd ../baradun_v2-deploy && npm run deploy:infra   # 프로필 기본값: AWS_PROFILE, 없으면 soo-login
+npm run deploy:infra -- --profile baradun-admin   # 다른 프로필
 ```
+
+배포용 폴더에서 실행합니다. 처음 한 번은 폴더를 만들거나 이 명령이 있는 커밋으로 맞춥니다: `git fetch origin && git worktree add --detach ../baradun_v2-deploy origin/main && cd ../baradun_v2-deploy && npm ci`(이미 있으면 `git checkout --detach origin/main && npm ci`). 실행 중인 명령이 배포할 커밋의 명령과 다르면 멈추고, 배포용 폴더라면 한 번 더 실행하라고 안내합니다(예전 절차로 배포하지 않게).
+
+1. 배포용 작업 트리(저장소 옆 `{저장소}-deploy`, `BARADUN_DEPLOY_DIR`로 바꿀 수 있음)를 `origin/main`으로 맞춥니다. 없으면 만들고, 고친 파일이 있으면 멈춥니다.
+2. 그 커밋의 `ci-ok`가 성공인지 확인합니다(GitHub CLI 로그인 필요). 도는 중·실패·결과 없음이면 멈춥니다.
+3. `npm ci`
+4. 프로필의 임시 자격 증명을 하위 명령에만 넘깁니다(`aws configure export-credentials`). 만료됐으면 `aws login --profile <프로필>` 안내를 띄우고 멈춥니다. 스택이 진행 중·실패 상태여도 멈춥니다.
+5. `cdk deploy --no-execute`로 변경 세트 `deploy-{커밋 7자}-{UTC 시각}`만 만들고, 바뀌는 리소스를 표로 보여 줍니다. 삭제·교체(가능성 포함)되는 줄은 `!!`와 빨간 경고로 표시합니다. 바뀐 것이 없으면 그렇게 알리고 끝냅니다.
+6. `yes`를 입력할 때만 변경 세트를 실행하고 끝날 때까지 기다립니다. 다른 입력이면 변경 세트를 남기고, 지우는 명령을 보여 줍니다. 실패·롤백이면 실패 이벤트 5개를 보여 줍니다.
+
+스택 파라미터(`AlertEmail` 등)는 넘기지 않아 이전 값을 그대로 씁니다(아래 '배포'). 파라미터를 바꾸거나 `cdk bootstrap`처럼 다른 명령이 필요한 배포는 이 명령 대신 각 절의 절차를 따릅니다.
 
 ## 운영 도메인 연결 (BRD-162)
 
@@ -565,7 +574,7 @@ Cognito 권한은 `BaradunCdkExecutionWorkload`에 있습니다(문장 2개). 20
 
 ### 배포
 
-이 스택은 `cdk diff --method=change-set`이 `AlertEmail` 값 없음(`MissingParameters`)으로 실패합니다. `--parameters AlertEmail=…`을 넘기면 예산 리소스가 교체되며 실패하므로 넘기지 않습니다. 대신 이전 값을 그대로 쓰는 변경 세트를 만들어 내용을 확인한 뒤 실행합니다.
+이 스택은 `cdk diff --method=change-set`이 `AlertEmail` 값 없음(`MissingParameters`)으로 실패합니다. `--parameters AlertEmail=…`을 넘기면 예산 리소스가 교체되며 실패하므로 넘기지 않습니다. 대신 이전 값을 그대로 쓰는 변경 세트를 만들어 내용을 확인한 뒤 실행합니다. `npm run deploy:infra`(맨 위)가 이 순서를 그대로 하고, 아래는 손으로 할 때의 명령입니다.
 
 ```bash
 npx cdk deploy --no-execute --change-set-name <이름>
