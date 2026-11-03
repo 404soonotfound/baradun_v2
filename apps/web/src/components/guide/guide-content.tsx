@@ -49,13 +49,9 @@ export async function GuideContent({ locale }: { locale: Locale }) {
   return (
     <div className="mx-auto flex w-full max-w-[640px] flex-col gap-3.5 pb-6">
       {/* 머리(Figma hbar 179:291): 뒤로 · 가운데 제목 14 굵게 · 오른쪽 빈자리. Figma는 머리 바로 아래부터 카드(사이 0) */}
-      {/* PC는 왼쪽 설정 목록이 있어 뒤로를 숨기고 제목을 약관·출처처럼 왼쪽 큰 제목으로 */}
-      <header className="-mx-2.5 -mb-3.5 grid h-14 grid-cols-[44px_minmax(0,1fr)_44px] items-center lg:mx-0 lg:mb-0 lg:flex lg:h-auto">
-        <BackButton
-          locale={locale}
-          fallback="/settings/"
-          className="lg:hidden"
-        />
+      {/* PC는 제목을 약관·출처처럼 왼쪽 큰 제목으로. 뒤로는 그대로 둠(홈·온보딩 등 설정 밖에서 들어온 경우 돌아갈 길) */}
+      <header className="-mx-2.5 -mb-3.5 grid h-14 grid-cols-[44px_minmax(0,1fr)_44px] items-center lg:mb-0 lg:flex lg:h-auto lg:gap-1">
+        <BackButton locale={locale} fallback="/settings/" />
         <h1 className="truncate text-center text-body font-bold text-text-default lg:text-left lg:text-title-xl">
           {tc("pages.guide")}
         </h1>
