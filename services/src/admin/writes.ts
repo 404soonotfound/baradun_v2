@@ -4,14 +4,17 @@ import {
   type DynamoDBDocumentClient,
 } from "@aws-sdk/lib-dynamodb";
 import { createHash } from "node:crypto";
+import { auditItem, type AuditEntry } from "./audit";
 import { idempotencyKey, isAdminKey, type OpsKey } from "./keys";
 import { INQUIRY_ID } from "../inquiry/policy";
 import { IDEMPOTENCY_KEY, IDEMPOTENCY_TTL_SECONDS } from "./policy";
 
 // 운영 API 쓰기: version 조건부 쓰기 + idempotency key + payload hash (D16-B6)
-// 한 트랜잭션에 두 가지를 같이 씀 → 둘 다 되거나 둘 다 안 됨(두 테이블에 걸쳐도 같음)
+// 한 트랜잭션에 세 가지를 같이 씀 → 모두 되거나 모두 안 됨(두 테이블에 걸쳐도 같음)
 //   ① 멱등 기록 Ops admin#idem#{key}: 아직 없을 때만 만듦. 이 쓰기의 내용 해시·대상·운영자·결과(새 version)를 남김
 //   ② 업무 항목: 읽을 때 받은 version과 지금 version이 같을 때만 바꾸고 version + 1
+//   ③ 감사 기록 Ops admin#audit#…: 새 키에만 씀(D16-B5 추가 전용). 감사 없는 쓰기는 받지 않음
+//      재전송(①에서 멈춤)·충돌(②에서 멈춤)은 바뀐 것이 없으므로 기록도 남지 않음
 // 실패 사유는 트랜잭션 취소 사유(품목 순서대로)로 가름
 //   ① 실패 → 같은 키가 이미 쓰임: 해시·대상·운영자가 같으면 앞 결과를 그대로 돌려줌(재전송), 다르면 409
 //   ② 실패 → 다른 사람이 먼저 바꿈(또는 항목이 없거나 보관 기한 지남): 409(덮어쓰지 않음)
@@ -47,6 +50,8 @@ export interface VersionedWrite {
   // 요청 본문 해시(payloadHash). 같은 키에 다른 내용이 오면 거부하는 기준
   readonly payloadHash: string;
   readonly actorSub: string;
+  // 변경 이력. 운영자는 actorSub와 같아야 함
+  readonly audit: AuditEntry;
 }
 
 export type WriteResult =
@@ -167,6 +172,12 @@ export async function versionedWrite(
   if (missing.length > 0) {
     throw new Error(`값이 없는 속성: ${missing.join(", ")}`);
   }
+  if (
+    write.audit.actor.kind !== "operator" ||
+    write.audit.actor.sub !== write.actorSub
+  ) {
+    throw new Error("감사 기록의 운영자가 쓰기 운영자와 다름");
+  }
   const target = resolveTarget(
     write.target,
     tables,
@@ -230,6 +241,13 @@ export async function versionedWrite(
               ExpressionAttributeValues: values,
             },
           },
+          {
+            Put: {
+              TableName: tables.ops,
+              Item: auditItem(write.audit, now),
+              ConditionExpression: "attribute_not_exists(pk)",
+            },
+          },
         ],
       }),
     );
@@ -243,6 +261,7 @@ export async function versionedWrite(
     if (codes[1] === "ConditionalCheckFailed") {
       return { status: "conflict", reason: "version" };
     }
+    // ③ 실패(같은 감사 키가 이미 있음)는 일어나면 안 되는 일이라 그대로 던짐(500)
     // TransactionConflict 등(동시 트랜잭션과 겹침)은 결과를 모르므로 그대로 던짐 → 화면이 같은 키로 다시 확인
     throw error;
   }

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { FakeTable, type Item } from "./test-dynamo";
+import type { AuditEntry } from "./audit";
 import { idempotencyKey, SAMPLE_CONFIG_KEY, type OpsKey } from "./keys";
 import { IDEMPOTENCY_TTL_SECONDS } from "./policy";
 import {
@@ -22,14 +23,26 @@ const opsCreate = (key: OpsKey = KEY): WriteTarget => ({
   mode: "create",
 });
 
+function audit(actorSub: string): AuditEntry {
+  return {
+    actor: { sub: actorSub, kind: "operator", role: "editor" },
+    action: "inquiry.update",
+    target: { kind: "inquiry", id: "x" },
+    changes: ["status"],
+    ids: { traceId: "trace-1", requestId: "req-1" },
+  };
+}
+
 function write(overrides: Partial<VersionedWrite> = {}): VersionedWrite {
+  const actorSub = overrides.actorSub ?? "operator-sub";
   return {
     target: opsCreate(),
     expectedVersion: 0,
     set: { title: "점검 예고" },
     idempotencyKey: "0f8fad5b-d9cb-469f-a165-70867728950e",
     payloadHash: payloadHashOf('{"title":"점검 예고"}'),
-    actorSub: "operator-sub",
+    actorSub,
+    audit: audit(actorSub),
     ...overrides,
   };
 }

@@ -24,3 +24,7 @@ export const IDEMPOTENCY_TTL_SECONDS = 24 * 60 * 60;
 // 멱등 키 형식: 화면이 쓰기마다 새로 만드는 UUID v4
 export const IDEMPOTENCY_KEY =
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+
+// 감사 기록 보관 기간(D16-B5 1년). 366일로 둬서 윤년에도 1년보다 짧아지지 않게 함
+// TTL 삭제는 늦을 수 있으므로 목록은 기간 필터(최대 366일)로 다시 자름
+export const AUDIT_TTL_SECONDS = 366 * 24 * 60 * 60;

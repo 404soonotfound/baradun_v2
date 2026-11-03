@@ -5,6 +5,13 @@ import type {
   APIGatewayProxyStructuredResultV2,
 } from "aws-lambda";
 import {
+  actorOf,
+  listAudit,
+  parseAuditQuery,
+  recordAudit,
+  type AuditEntry,
+} from "./audit";
+import {
   authenticate,
   createTokenVerifier,
   type AuthDependencies,
@@ -26,6 +33,7 @@ import {
   getInquiry,
   INQUIRY_PAGE_DEFAULT,
   INQUIRY_PAGE_MAX,
+  inquiryAuditChanges,
   inquiryPatchFields,
   listInquiries,
   parseInquiryPatch,
@@ -36,7 +44,7 @@ import {
   IDEMPOTENCY_KEY_HEADER,
   OPS_SESSION_MAX_MS,
 } from "./policy";
-import { decideRoute } from "./routes";
+import { decideRoute, matchRoute } from "./routes";
 import { readSamplePolicy } from "./sample";
 import { sampleInquiry, sampleInquiryPage } from "./sample-data";
 import { payloadHashOf, versionedWrite, type Sender } from "./writes";
@@ -169,6 +177,17 @@ async function patchRoute(
       idempotencyKey: key,
       payloadHash: payloadHashOf(body.raw),
       actorSub: principal.sub,
+      // 본문·메모·반려 이유 글은 넣지 않고 바뀐 항목 이름과 상태 앞·뒤만(D16-B5·D6)
+      audit: {
+        actor: actorOf(principal),
+        action: "inquiry.update",
+        target: { kind: "inquiry", id },
+        changes: inquiryAuditChanges(check.patch, current),
+        ...(check.patch.status
+          ? { statusFrom: current.status, statusTo: check.patch.status }
+          : {}),
+        ids,
+      },
     },
     now,
   );
@@ -182,6 +201,34 @@ async function patchRoute(
     traceId: ids.traceId,
   });
   return json(200, { inquiryId: id, version: result.version }, ids);
+}
+
+// GET /ops/audit: 변경 이력(읽기 전용). 샘플은 허용표에서 막힘(D15-3 변경 이력 응답 안 함)
+async function auditRoute(
+  event: APIGatewayProxyEventV2,
+  data: DataDependencies,
+  ids: RequestIds,
+): Promise<Result> {
+  const check = parseAuditQuery(event.queryStringParameters ?? {}, data.now());
+  if (!check.ok) {
+    return errorJson(400, "invalid_request", ids, { field: check.field });
+  }
+  return json(
+    200,
+    await listAudit(data.client, data.opsTable, check.query),
+    ids,
+  );
+}
+
+// 샘플 요청 기록의 대상: 경로 모양만(문의 ID 등 실제 값은 넣지 않음)
+function routeTarget(path: string, method: string): AuditEntry["target"] {
+  let pattern = "unknown";
+  try {
+    pattern = matchRoute(path)?.pattern ?? "unknown";
+  } catch {
+    // 잘못된 % 인코딩은 unknown
+  }
+  return { kind: "route", id: `${method} ${pattern}` };
 }
 
 const AUTH_STATUS: Record<AuthFailure, 401 | 403> = {
@@ -234,6 +281,21 @@ export async function handleOps(
     }
 
     const decision = decideRoute(path, method, auth.principal);
+    // 샘플 계정은 로그인(/ops/me)·조회·거절을 모두 기록함(BRD-155). 기록하지 못하면 응답하지 않음(500)
+    if (auth.principal.kind === "sample") {
+      await recordAudit(
+        deps.data.client,
+        deps.data.opsTable,
+        {
+          actor: actorOf(auth.principal),
+          action: decision.ok ? "sample.read" : "sample.denied",
+          target: routeTarget(path, method),
+          changes: [],
+          ids,
+        },
+        deps.data.now(),
+      );
+    }
     if (!decision.ok) {
       safeLog("warn", "ops_route_rejected", {
         status: decision.status,
@@ -251,6 +313,9 @@ export async function handleOps(
     }
     if (decision.pattern === "/ops/inquiries" && method === "GET") {
       return await listRoute(event, principal, deps.data, ids);
+    }
+    if (decision.pattern === "/ops/audit" && method === "GET") {
+      return await auditRoute(event, deps.data, ids);
     }
     if (decision.pattern === "/ops/inquiries/{id}") {
       const id = decision.params.id ?? "";

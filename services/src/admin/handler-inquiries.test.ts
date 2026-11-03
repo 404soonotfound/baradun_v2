@@ -32,6 +32,14 @@ function claims(group: string) {
       };
 }
 
+// 요청마다 새 traceId(실제는 randomUUID). 감사 키가 시각+traceId라 같은 값이면 겹침
+let seq = 0;
+function nextIds() {
+  seq++;
+  const n = String(seq).padStart(6, "0");
+  return { traceId: `trace-${n}`, requestId: `req-${n}` };
+}
+
 function deps(group: string, table: FakeTable): OpsDependencies {
   const auth: AuthDependencies = {
     config: TEST_CONFIG,
@@ -51,7 +59,7 @@ function deps(group: string, table: FakeTable): OpsDependencies {
       inquiryTable: "Inquiry",
       now: () => NOW,
     },
-    ids: () => ({ traceId: "trace", requestId: "req-00000000" }),
+    ids: nextIds,
   };
 }
 
