@@ -15,16 +15,17 @@ import type {
 import { createHash, randomUUID } from "node:crypto";
 import { InquiryNotifier } from "./notification";
 import { InquiryPhotos } from "./photos";
-import { INQUIRY_CONTACT_ENABLED, INQUIRY_MAX_BODY_BYTES } from "./policy";
+import {
+  INQUIRY_CONTACT_ENABLED,
+  INQUIRY_ID,
+  INQUIRY_MAX_BODY_BYTES,
+} from "./policy";
 import { InquiryStore, type InquiryReceipt } from "./store";
 import {
   isCreateInquiryRequest,
   isInquiryUploadRequest,
   isInquiryUploadResponse,
 } from "./validation";
-
-const INQUIRY_ID =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
 interface DeleteEmailEvent {
   readonly action: "delete_email";

@@ -2,6 +2,7 @@ import { GetCommand, QueryCommand } from "@aws-sdk/lib-dynamodb";
 import {
   INQUIRY_STATUSES,
   INQUIRY_STATUS_INDEX_NAME,
+  isInquiryStatus,
   type InquiryStatus,
 } from "../inquiry/policy";
 import type { OperatorRole } from "./policy";
@@ -21,6 +22,8 @@ export const INQUIRY_PAGE_MAX = 50;
 export const REJECT_REASON_MAX = 500;
 export const MEMO_MAX = 2000;
 
+// 목록 항목의 version은 GSI(최종적 일관성) 값이라 저장 직후 이전 값일 수 있음
+// 처리(PATCH)에는 상세(강한 일관성)에서 받은 version을 씀
 export interface InquirySummary {
   readonly inquiryId: string;
   readonly type: string;
@@ -52,13 +55,6 @@ export interface InquiryPage {
 
 type Raw = Record<string, unknown>;
 
-function isStatus(value: unknown): value is InquiryStatus {
-  return (
-    typeof value === "string" &&
-    (INQUIRY_STATUSES as readonly string[]).includes(value)
-  );
-}
-
 function alive(item: Raw, nowSec: number): boolean {
   return typeof item.ttl === "number" && item.ttl > nowSec;
 }
@@ -69,7 +65,7 @@ function toSummary(item: Raw): InquirySummary {
     typeof item.inquiryId !== "string" ||
     typeof item.inquiryType !== "string" ||
     typeof item.receivedAt !== "string" ||
-    !isStatus(item.inquiryStatus) ||
+    !isInquiryStatus(item.inquiryStatus) ||
     typeof item.version !== "number"
   ) {
     throw new Error("문의 항목 모양이 틀림");
@@ -103,7 +99,7 @@ export function decodeCursor(cursor: string): CursorState | null {
     ) as unknown;
     if (typeof value !== "object" || value === null) return null;
     const { s, k } = value as { s?: unknown; k?: unknown };
-    if (!isStatus(s)) return null;
+    if (!isInquiryStatus(s)) return null;
     if (k === undefined) return { s };
     if (
       typeof k !== "object" ||
@@ -251,7 +247,7 @@ export function parseInquiryPatch(body: unknown): PatchCheck {
   if (!Number.isSafeInteger(version) || (version as number) < 0) {
     return { ok: false, field: "version" };
   }
-  if (status !== undefined && !isStatus(status)) {
+  if (status !== undefined && !isInquiryStatus(status)) {
     return { ok: false, field: "status" };
   }
   if (

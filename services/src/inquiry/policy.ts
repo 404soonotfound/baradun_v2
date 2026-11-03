@@ -39,3 +39,14 @@ export type InquiryStatus = (typeof INQUIRY_STATUSES)[number];
 // 문의 목록 GSI 이름(D16-B4: 상태 + 접수 시각). infra settings.ts의 INQUIRY_STATUS_INDEX와 같아야 함
 // (infra/test/tables.test.ts가 이 줄을 읽어 확인)
 export const INQUIRY_STATUS_INDEX_NAME = "inquiryStatus-receivedAt";
+
+// 문의 ID 모양(UUID v4). 접수 함수가 만들고 운영 API가 같은 모양만 받음
+export const INQUIRY_ID =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+
+export function isInquiryStatus(value: unknown): value is InquiryStatus {
+  return (
+    typeof value === "string" &&
+    (INQUIRY_STATUSES as readonly string[]).includes(value)
+  );
+}

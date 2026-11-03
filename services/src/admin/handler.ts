@@ -40,7 +40,7 @@ import { decideRoute } from "./routes";
 import { readSamplePolicy } from "./sample";
 import { sampleInquiry, sampleInquiryPage } from "./sample-data";
 import { payloadHashOf, versionedWrite, type Sender } from "./writes";
-import { INQUIRY_STATUSES, type InquiryStatus } from "../inquiry/policy";
+import { INQUIRY_ID, isInquiryStatus } from "../inquiry/policy";
 
 // 운영 API 단일 함수 /ops/* (D16-B1·E4). 입구는 관리자 사이트 CloudFront + OAC + 함수 URL(BRD-147에서 연결)
 // 순서: 요청 ID → 토큰 검증(역할·샘플 허용) → 허용표 → 업무 처리
@@ -59,17 +59,7 @@ export interface OpsDependencies {
   readonly ids?: () => RequestIds;
 }
 
-const INQUIRY_ID =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
-
 type Result = APIGatewayProxyStructuredResultV2;
-
-function isStatus(value: unknown): value is InquiryStatus {
-  return (
-    typeof value === "string" &&
-    (INQUIRY_STATUSES as readonly string[]).includes(value)
-  );
-}
 
 // GET /ops/inquiries?status=&cursor=&limit=
 async function listRoute(
@@ -80,7 +70,7 @@ async function listRoute(
 ): Promise<Result> {
   const params = event.queryStringParameters ?? {};
   const status = params.status;
-  if (status !== undefined && !isStatus(status)) {
+  if (status !== undefined && !isInquiryStatus(status)) {
     return errorJson(400, "invalid_request", ids, { field: "status" });
   }
   const limit =
@@ -91,7 +81,11 @@ async function listRoute(
   const cursor =
     params.cursor === undefined ? undefined : decodeCursor(params.cursor);
   // 다른 상태 목록의 cursor를 섞어 쓰지 않게 함
-  if (cursor === null || (cursor && status && cursor.s !== status)) {
+  // 상태를 고른 목록은 키가 있는 cursor만 받음(전체 목록의 '다음 상태부터' cursor는 처음부터 다시 읽게 되어 중복)
+  if (
+    cursor === null ||
+    (cursor && status && (cursor.s !== status || !cursor.k))
+  ) {
     return errorJson(400, "invalid_request", ids, { field: "cursor" });
   }
   if (principal.kind === "sample") {
