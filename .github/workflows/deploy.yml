@@ -1,4 +1,4 @@
-# 사이트 배포: main에 합친 웹 변경을 S3·CloudFront에 올림 (아키텍처 11장 가드레일)
+# 사이트 배포: main에 합친 웹·운영자 사이트 변경을 S3·CloudFront에 올림 (아키텍처 11장 가드레일)
 # - 장기 키 없음: OIDC로 1시간짜리 임시 키만 받음
 # - main push로 돈 CI(ci 워크플로)가 성공한 커밋만, 그 커밋 그대로 올림 (BRD-133)
 #   CI와 배포가 동시에 돌면 합친 main이 CI에서 실패해도 배포가 먼저 끝날 수 있어서 CI 뒤로 둠
@@ -86,6 +86,67 @@ jobs:
           # 1) 이름에 해시가 붙은 파일: 1년 캐시. 지우지 않음(열려 있던 탭이 예전 파일을 찾을 수 있게)
           aws s3 sync . "s3://$BUCKET" --exclude "*" --include "_next/static/*" --exclude "data/*" --cache-control "public, max-age=31536000, immutable"
           # 2) 나머지(HTML 등): 매번 새로 확인. 빌드에서 사라진 파일은 지움
+          aws s3 sync . "s3://$BUCKET" --delete --exclude "_next/static/*" --exclude "data/*" --cache-control "public, max-age=0, must-revalidate"
+      - name: CloudFront 캐시 비우기
+        run: aws cloudfront create-invalidation --distribution-id "$DISTRIBUTION_ID" --paths "/*"
+
+  # 운영자 사이트(BRD-147): 사용자 사이트와 따로 버킷·CloudFront에 올림. 화면 파일만 있음(데이터는 /ops/*)
+  # 인프라 배포 전(변수가 비어 있음)에는 건너뜀. 조건·권한·CI 확인은 site 작업과 같음
+  admin:
+    if: >-
+      vars.DEPLOY_ROLE_ARN != '' && vars.ADMIN_SITE_BUCKET != '' && (
+        github.event_name == 'workflow_dispatch' || (
+          github.event.workflow_run.event == 'push' &&
+          github.event.workflow_run.head_repository.full_name == github.repository &&
+          github.event.workflow_run.conclusion == 'success' &&
+          vars.DEPLOY_PAUSED != 'true'
+        )
+      )
+    runs-on: ubuntu-latest
+    environment: production
+    concurrency:
+      group: deploy-production-admin
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      checks: read
+      id-token: write
+    env:
+      BUCKET: ${{ vars.ADMIN_SITE_BUCKET }}
+      DISTRIBUTION_ID: ${{ vars.ADMIN_DISTRIBUTION_ID }}
+      SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+    steps:
+      - name: 수동 실행은 이 커밋의 ci-ok가 성공일 때만
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          conclusion=$(gh api "repos/$GITHUB_REPOSITORY/commits/$SHA/check-runs?check_name=ci-ok" \
+            --jq '[.check_runs[] | select(.app.slug == "github-actions")] | sort_by(.completed_at) | last | .conclusion // ""')
+          if [ "$conclusion" != "success" ]; then
+            echo "::error::$SHA 의 ci-ok가 성공이 아니에요(${conclusion:-결과 없음}). main CI가 통과한 뒤 다시 실행해 주세요."
+            exit 1
+          fi
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ env.SHA }}
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run build -w apps/admin # postbuild가 검색 차단·CSP meta·비밀값 0건을 검사함
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ vars.DEPLOY_ROLE_ARN }}
+          aws-region: ap-northeast-2
+      - name: 운영자 사이트 파일 올리기
+        working-directory: apps/admin/out
+        run: |
+          # 이름에 해시가 붙은 파일: 1년 캐시, 지우지 않음. 나머지(HTML 등): 매번 확인, 빌드에서 사라진 파일은 지움
+          # data/는 이 버킷에 없지만 사이트 동기화 규칙(모든 sync는 data/ 제외)을 같게 지킴
+          aws s3 sync . "s3://$BUCKET" --exclude "*" --include "_next/static/*" --exclude "data/*" --cache-control "public, max-age=31536000, immutable"
           aws s3 sync . "s3://$BUCKET" --delete --exclude "_next/static/*" --exclude "data/*" --cache-control "public, max-age=0, must-revalidate"
       - name: CloudFront 캐시 비우기
         run: aws cloudfront create-invalidation --distribution-id "$DISTRIBUTION_ID" --paths "/*"
