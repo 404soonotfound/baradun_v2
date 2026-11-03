@@ -1,13 +1,16 @@
+import type { Notice } from "@baradun/contracts";
+
 import { CLOCK_TOLERANCE_MS, isTime, kstStamp } from "@/lib/snapshot/clock";
 import type { SnapshotState } from "@/lib/snapshot/store";
 import type { BeachView } from "@/lib/snapshot/view";
 
 // 상황 배너 고르기 (BRD-28 · 노션 2장 HOME 3 '상황 배너(있을 때만 하나)', 3장 Banner '화면당 하나만')
 // 홈·탐색·상세가 함께 씀. 화면마다 다른 것은 입력(delayed·locationOff)뿐
-// 순서: 오프라인 → 지원 밖 형식 → 새 정보 불러오기 실패 → 확인된 판단 없음 → 관측 지연 → 위치 없이 보는 중
+// 순서: 오프라인 → 지원 밖 형식 → 새 정보 불러오기 실패 → 확인된 판단 없음 → 공지 → 관측 지연 → 위치 없이 보는 중
 // 받은 정보가 오래됐거나 읽을 수 없다는 사실을 가장 먼저(오래된 값을 최신처럼 보이지 않게)
 // 확인된 판단 없음(BRD-38, 노션 2장 SYS·1장 L13)의 자리는 결정 2로 확정: 받기는 했지만(live) 확인된 판단이 없음 →
 // 우리 쪽 조회 실패(failed)보다 뒤, 해변 하나의 관측 지연보다 앞
+// 공지(BRD-151)의 자리는 D15-6: 확인된 판단 없음 뒤, 관측 지연 앞
 
 // [1] 고른 결과. 관측 지연은 영향받는 해변을 먼저 말하려고 첫 해변과 나머지 수를 담음
 // <B> = 해변 모양을 부르는 쪽이 정함(제네릭)
@@ -16,6 +19,7 @@ export type Situation<B> =
   | { kind: "unsupported" }
   | { kind: "failed" }
   | { kind: "noConfirmed"; lastConfirmedAt: string | null }
+  | { kind: "notice"; notice: Notice }
   | { kind: "delayed"; first: B; more: number }
   | { kind: "noLocation" }
   | null;
@@ -32,6 +36,7 @@ export function pickSituation<B>(input: {
   delayed: readonly B[]; // 화면 해변 중 배지가 '관측 지연'인 해변
   locationOff: boolean; // 위치 없이 지역으로 보는 중이고 배너를 닫지 않음
   noConfirmed: NoConfirmedVerdict | null; // 확인된 판단 없음(noConfirmedVerdict). 전체 해변으로 계산함
+  notice: Notice | null; // 지금 보일 공지(notice.ts activeNotice). 서버 시각을 모르면 null
 }): Situation<B> {
   // 점검·강제 업데이트는 화면 전체를 덮는 쪽(BRD-38)이 알림
   if (input.phase === "maintenance" || input.phase === "update_required") {
@@ -48,6 +53,10 @@ export function pickSituation<B>(input: {
       kind: "noConfirmed",
       lastConfirmedAt: input.noConfirmed.lastConfirmedAt,
     };
+  }
+  // 공지는 새로 받은 manifest의 것만(live). 저장해 둔 지난 manifest의 공지는 운영자가 이미 내렸을 수 있음
+  if (input.notice && input.live) {
+    return { kind: "notice", notice: input.notice };
   }
   const [first, ...rest] = input.delayed;
   // first !== undefined: 빈 목록이면 첫 항목이 없음(noUncheckedIndexedAccess가 확인하게 함)

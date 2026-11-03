@@ -49,6 +49,7 @@ import {
   noConfirmedVerdict,
   shownDataTime,
 } from "@/lib/situation";
+import { activeNotice } from "@/lib/snapshot/notice";
 import type { SnapshotState } from "@/lib/snapshot/store";
 import { useSnapshot } from "@/lib/snapshot/use-snapshot";
 import { deriveBeachView } from "@/lib/snapshot/view";
@@ -203,6 +204,12 @@ export function HomeScreen({
         deriveBeachView({ id: beach.id, hidden: false }, snapshot),
       ),
     ),
+    // 운영자 공지(BRD-151): 시작 포함·끝 제외, 서버 시각을 알 때만. 끝 시각에 store가 다시 계산해 숨김
+    notice: activeNotice(
+      snapshot.manifest?.notices,
+      snapshot.nowMs,
+      snapshot.clock,
+    ),
   });
 
   // 최근 본: 저장된 id 순서 그대로. 목록에 없는 id(노출 끈 해변)는 건너뜀(기기 기록은 지우지 않음)
@@ -249,7 +256,7 @@ export function HomeScreen({
 
   // 상황 배너 하나(BRD-28). 모바일은 제목 아래, PC는 안내 칸(Figma 181:1004). 한 번만 그림
   // PC에서도 오프라인·불러오기 실패·형식 오류·확인된 판단 없음은 화면 전체에 영향이 있어 제목 아래에 둠
-  // (안내 칸은 첫 화면 밖이라 놓칠 수 있음). 관측 지연·위치 없이 보는 중만 Figma처럼 안내 칸
+  // (안내 칸은 첫 화면 밖이라 놓칠 수 있음). 공지도 '홈 상단 배너'라 제목 아래(ADM-NTC). 관측 지연·위치 없이 보는 중만 Figma처럼 안내 칸
   const bannerInInfo =
     desktop &&
     (situation?.kind === "delayed" || situation?.kind === "noLocation");

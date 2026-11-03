@@ -127,6 +127,8 @@ export function FavoritesScreen({
     delayed: [],
     locationOff: false,
     noConfirmed,
+    // 공지는 홈 상단에만(화면 설계서 6장 ADM-NTC, BRD-151)
+    notice: null,
   });
 
   function removeOne(beach: BeachSummary) {

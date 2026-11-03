@@ -425,6 +425,8 @@
     "noConfirmedTime": "Last confirmed {time}",
     "noConfirmedTimeUnknown": "Last confirmed time unknown",
     "noConfirmedNext": "We'll check again when new information arrives · Follow on-site guidance",
+    "noticeMaintenance": "Planned maintenance",
+    "noticeGeneral": "Notice",
     "delayed": "Wave height readings for {name} are delayed",
     "delayedMore": "Wave height readings for {name} and {count, plural, one {# other beach} other {# other beaches}} are delayed",
     "delayedBody": "We can't assess the current status · We'll check again when new readings come in"

@@ -130,6 +130,8 @@ export function DetailScreen({
     noConfirmed: noConfirmedVerdict(
       allBeachIds.map((id) => deriveBeachView({ id, hidden: false }, snapshot)),
     ),
+    // 공지는 홈 상단에만(화면 설계서 6장 ADM-NTC, BRD-151)
+    notice: null,
   });
 
   // 헤더 2줄째: 지역 · 거리(위치가 있을 때만, 기기 안에서만 계산). PC는 '내 위치에서 2.1km'(Figma 183:806)
