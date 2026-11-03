@@ -1,5 +1,6 @@
 "use client";
 
+import { Clock } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useId } from "react";
 
@@ -50,8 +51,10 @@ export function WaveChart({
     }
     const chart = waveChart(history.history?.points ?? [], nowMs, latest);
     if (chart.kind === "empty") {
+      // 옆 파도 그림의 빈 칸(Figma 177:588)과 같은 면·시계 아이콘. 두 열(바다 상태 카드 @2xl)에서는 높이(150)도 맞춤
       return (
-        <p className="flex h-[88px] items-center justify-center rounded-input border border-dashed border-border-strong px-4 text-center text-body-s text-text-muted">
+        <p className="flex h-[88px] flex-col items-center justify-center gap-2 rounded-[14px] bg-bg-subtle px-4 text-center text-body-s text-text-muted @2xl:h-[150px]">
+          <Clock aria-hidden="true" size={22} />
           {t("empty")}
         </p>
       );
