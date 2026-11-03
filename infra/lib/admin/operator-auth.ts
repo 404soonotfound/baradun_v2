@@ -55,7 +55,8 @@ export class OperatorAuth extends Construct {
     // - access·ID 15분, refresh 8시간 + rotation(A3). 유휴 30분·최초 인증 8시간은 앱·API가 강제
     //   rotation을 켜면 ALLOW_REFRESH_TOKEN_AUTH 대신 GetTokensFromRefreshToken으로 갱신함
     // - 없는 계정·틀린 비밀번호 응답을 같게 함(ADM-RESET '등록 안 된 이메일도 같은 문구')
-    // - 사용자가 자기 속성을 바꾸지 못하게 쓰기 속성 없음
+    // - 쓰기 속성은 locale 하나만. 빈 목록은 Cognito가 '기본(표준 속성 모두 쓰기)'으로 처리하므로
+    //   이메일 등 계정 식별 속성을 사용자가 access token으로 바꾸지 못하게 명시적으로 좁힘
     this.client = this.userPool.addClient("AdminWebClient", {
       generateSecret: false,
       authFlows: { userSrp: true },
@@ -66,7 +67,9 @@ export class OperatorAuth extends Construct {
       refreshTokenRotationGracePeriod: OPERATOR_SESSION.refreshRotationGrace,
       preventUserExistenceErrors: true,
       enableTokenRevocation: true,
-      writeAttributes: new cognito.ClientAttributes(),
+      writeAttributes: new cognito.ClientAttributes().withStandardAttributes({
+        locale: true,
+      }),
     });
 
     // 권한 그룹. 그룹 이름은 토큰의 cognito:groups에 그대로 들어가고 운영 API가 이 값으로 판단함
