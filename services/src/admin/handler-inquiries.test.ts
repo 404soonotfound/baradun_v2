@@ -3,7 +3,8 @@ import { describe, expect, it } from "vitest";
 import type { AuthDependencies } from "./auth";
 import { handleOps, type OpsDependencies } from "./handler";
 import { ACCESS_TOKEN_HEADER, IDEMPOTENCY_KEY_HEADER } from "./policy";
-import { FakeTable } from "./test-dynamo";
+import { AUDIT_PREFIX } from "./keys";
+import { FakeTable, type Item } from "./test-dynamo";
 import { TEST_CONFIG } from "./test-tokens";
 
 // 운영 API 문의 경로 (BRD-153). 토큰 검증은 가짜(claims를 바로 돌려줌), DB는 test-dynamo 가짜
@@ -38,6 +39,12 @@ function nextIds() {
   seq++;
   const n = String(seq).padStart(6, "0");
   return { traceId: `trace-${n}`, requestId: `req-${n}` };
+}
+
+function audits(table: FakeTable): Item[] {
+  return [...table.items.values()]
+    .filter((i) => String(i.pk).startsWith(AUDIT_PREFIX))
+    .sort((a, b) => String(a.sk).localeCompare(String(b.sk)));
 }
 
 function deps(group: string, table: FakeTable): OpsDependencies {
@@ -334,5 +341,203 @@ describe("문의 처리(PATCH)", () => {
     expect(
       table.items.get(table.id("Inquiry", { pk: `INQUIRY#${ID}` })),
     ).toMatchObject({ inquiryStatus: "received", legacy: true, version: 1 });
+  });
+});
+
+describe("변경 이력 기록 (BRD-155)", () => {
+  it("문의 처리는 바뀐 항목 이름·상태 앞뒤만 남기고 본문·메모·반려 이유 글은 남기지 않는다", async () => {
+    const table = seeded();
+    await handleOps(
+      event("PATCH", `/ops/inquiries/${ID}`, {
+        body: {
+          version: 1,
+          status: "rejected",
+          rejectReason: "중복 문의",
+          memo: "내부 메모 글",
+        },
+        idempotencyKey: KEY_A,
+      }),
+      deps("editor", table),
+    );
+    const [entry] = audits(table);
+    expect(entry).toMatchObject({
+      action: "inquiry.update",
+      actorSub: "editor-sub",
+      actorKind: "operator",
+      role: "editor",
+      targetKind: "inquiry",
+      targetId: ID,
+      changes: ["status", "rejectReason", "memo"],
+      statusFrom: "received",
+      statusTo: "rejected",
+    });
+    const text = JSON.stringify(entry);
+    for (const secret of ["본문", "중복 문의", "내부 메모 글", "@"]) {
+      expect(text).not.toContain(secret);
+    }
+  });
+
+  it("반려를 다른 상태로 바꾸면 반려 이유도 바뀐 항목으로 남는다", async () => {
+    const table = seeded({ inquiryStatus: "rejected", rejectReason: "중복" });
+    await handleOps(
+      event("PATCH", `/ops/inquiries/${ID}`, {
+        body: { version: 1, status: "received" },
+        idempotencyKey: KEY_A,
+      }),
+      deps("editor", table),
+    );
+    expect(audits(table)[0]).toMatchObject({
+      changes: ["status", "rejectReason"],
+      statusFrom: "rejected",
+      statusTo: "received",
+    });
+  });
+
+  it("재전송·충돌·검사 실패는 기록하지 않는다", async () => {
+    const table = seeded();
+    const patch = (body: unknown, key = KEY_A) =>
+      handleOps(
+        event("PATCH", `/ops/inquiries/${ID}`, { body, idempotencyKey: key }),
+        deps("editor", table),
+      );
+    await patch({ version: 1, memo: "a" });
+    await patch({ version: 1, memo: "a" });
+    await patch({ version: 1, memo: "b" }, KEY_B);
+    await patch({ version: 2, status: "rejected" }, KEY_B);
+    expect(audits(table)).toHaveLength(1);
+  });
+
+  it("샘플 계정은 로그인 확인·조회·거절된 요청을 모두 남긴다(경로 모양만)", async () => {
+    const table = seeded();
+    for (const [method, path] of [
+      ["GET", "/ops/me"],
+      ["GET", `/ops/inquiries/${ID}`],
+      ["PATCH", `/ops/inquiries/${ID}`],
+      ["GET", "/ops/audit"],
+    ] as const) {
+      await handleOps(event(method, path), deps("sample", table));
+    }
+    expect(
+      audits(table).map((a) => [a.action, a.targetId, a.actorKind]),
+    ).toEqual([
+      ["sample.read", "GET /ops/me", "sample"],
+      ["sample.read", "GET /ops/inquiries/{id}", "sample"],
+      ["sample.denied", "PATCH /ops/inquiries/{id}", "sample"],
+      ["sample.denied", "GET /ops/audit", "sample"],
+    ]);
+    expect(JSON.stringify(audits(table))).not.toContain(ID.slice(0, 8));
+  });
+
+  it("샘플 기록을 남기지 못하면 응답하지 않는다(500)", async () => {
+    const table = seeded();
+    const failing = {
+      send: async (command: { constructor: { name: string } }) => {
+        if (command.constructor.name === "PutCommand") {
+          throw new Error("ProvisionedThroughputExceededException");
+        }
+        return table.send(command as never);
+      },
+    };
+    const d = deps("sample", table);
+    const res = await handleOps(event("GET", "/ops/inquiries"), {
+      ...d,
+      data: { ...d.data, client: failing as never },
+    });
+    expect(res.statusCode).toBe(500);
+    expect(res.body).not.toContain("items");
+  });
+
+  it("운영자 조회는 기록하지 않는다(쓰기만 기록)", async () => {
+    const table = seeded();
+    await handleOps(
+      event("GET", `/ops/inquiries/${ID}`),
+      deps("viewer", table),
+    );
+    expect(audits(table)).toHaveLength(0);
+  });
+});
+
+describe("변경 이력 목록 GET /ops/audit", () => {
+  async function withHistory(): Promise<FakeTable> {
+    const table = seeded();
+    await handleOps(
+      event("PATCH", `/ops/inquiries/${ID}`, {
+        body: { version: 1, status: "in_progress" },
+        idempotencyKey: KEY_A,
+      }),
+      deps("editor", table),
+    );
+    await handleOps(event("GET", "/ops/me"), deps("sample", table));
+    return table;
+  }
+
+  it("보기 권한도 최근 기록부터 받고, 종류·운영자로 거를 수 있다", async () => {
+    const table = await withHistory();
+    const all = await handleOps(
+      event("GET", "/ops/audit"),
+      deps("viewer", table),
+    );
+    expect(all.statusCode).toBe(200);
+    expect(body(all).items).toHaveLength(2);
+    expect(body(all).items[0]).toMatchObject({
+      action: "sample.read",
+      target: { kind: "route", id: "GET /ops/me" },
+    });
+    expect(body(all).filter.to).toBe(NOW.toISOString());
+
+    const onlyInquiry = await handleOps(
+      event("GET", "/ops/audit", { query: { action: "inquiry.update" } }),
+      deps("viewer", table),
+    );
+    expect(body(onlyInquiry).items).toEqual([
+      expect.objectContaining({
+        actorSub: "editor-sub",
+        target: { kind: "inquiry", id: ID },
+        statusFrom: "received",
+        statusTo: "in_progress",
+      }),
+    ]);
+
+    const byActor = await handleOps(
+      event("GET", "/ops/audit", { query: { actor: "sample-sub" } }),
+      deps("viewer", table),
+    );
+    expect(
+      body(byActor).items.map((i: { action: string }) => i.action),
+    ).toEqual(["sample.read"]);
+  });
+
+  it("샘플은 변경 이력을 받지 않는다(403)", async () => {
+    const res = await handleOps(
+      event("GET", "/ops/audit"),
+      deps("sample", await withHistory()),
+    );
+    expect(res.statusCode).toBe(403);
+  });
+
+  it.each([
+    ["시간대 없는 시각", { from: "2026-11-01T00:00:00" }, "from"],
+    ["KST 표기", { to: "2026-11-03T15:00:00+09:00" }, "to"],
+    [
+      "시작이 끝보다 늦음",
+      { from: "2026-11-03T07:00:00Z", to: "2026-11-03T06:00:00Z" },
+      "from",
+    ],
+    [
+      "367일 기간",
+      { from: "2025-11-01T00:00:00Z", to: "2026-11-03T00:00:00Z" },
+      "from",
+    ],
+    ["모르는 종류", { action: "inquiry.delete" }, "action"],
+    ["운영자 모양이 아님", { actor: "a b" }, "actor"],
+    ["limit 범위 밖", { limit: "101" }, "limit"],
+    ["깨진 cursor", { cursor: "!!" }, "cursor"],
+  ])("요청이 %s이면 400", async (_, query, field) => {
+    const res = await handleOps(
+      event("GET", "/ops/audit", { query }),
+      deps("viewer", seeded()),
+    );
+    expect(res.statusCode).toBe(400);
+    expect(body(res).error).toMatchObject({ code: "invalid_request", field });
   });
 });
