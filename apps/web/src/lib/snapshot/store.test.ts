@@ -374,6 +374,18 @@ describe("시계 보정", () => {
   });
 });
 
+// 공지 칸(BRD-151, 구현 제안 I06): schemaVersion 1에 더한 선택 칸이라 지금 화면은 무시하고 정상으로 읽어야 함
+// (배포된 화면이 '형식 미지원'·점검으로 바뀌면 안 됨)
+describe("manifest의 공지 칸", () => {
+  it("notices가 있어도 정상으로 읽고 점검·판단 상태는 그대로", async () => {
+    const { store, server } = setup();
+    server.manifest = read<ManifestFile>("manifest.with-notices.json");
+    store.start();
+    await store.refresh();
+    expect(store.getState()).toMatchObject({ phase: "ready", live: true });
+  });
+});
+
 describe("지원 범위 밖 schemaVersion", () => {
   it("자동 새로고침 1회 → 다시 열어도 안 되면 판단불가 상태", async () => {
     const session = memoryStorage();
