@@ -720,9 +720,9 @@ npx --no-install tsx services/scripts/inquiry-status-backfill.ts --table <Inquir
 운영자가 쓰는 점검 예고·일반 공지입니다. 기준은 결정 기록 D16-B3·D1~D4, 아키텍처 18.4, 화면 설계서 6장 ADM-NTC입니다. 코드는 `services/src/admin/notices.ts`·`notice-routes.ts`입니다.
 
 - **저장:** Ops 테이블 `admin#notice` / `{공지 ID}`. 공지마다 저장한 문구(`draft`, 화면 말 '대기')와 노출본(`live`)을 따로 둡니다. 둘이 다르면 '수정 대기'입니다. 지우면 `deletedAt`만 남기고 항목은 지우지 않습니다.
-- **경로:** `GET /ops/notices`(보기 이상·샘플, 운영자 sub는 주지 않음) · `POST /ops/notices`·`PUT /ops/notices/{id}`(편집: 문구 저장) · `POST /ops/notices/{id}/expose`·`/end`(노출 변경: 노출·노출 끝내기) · `DELETE /ops/notices/{id}`(노출 중이면 409, 예약된 노출본이 있으면 노출 변경만). 쓰기는 모두 version·멱등 키·감사 기록을 함께 씁니다.
+- **경로:** `GET /ops/notices`(보기 이상, 운영자 sub는 주지 않음. 샘플은 예시 공지) · `POST /ops/notices`·`PUT /ops/notices/{id}`(편집: 문구 저장) · `POST /ops/notices/{id}/expose`·`/end`(노출 변경: 노출·노출 끝내기) · `DELETE /ops/notices/{id}`(노출 중이면 409, 예약된 노출본이 있으면 노출 변경만). 쓰기는 모두 version·멱등 키·감사 기록을 함께 씁니다. 같은 키·같은 본문의 재전송은 version·상태를 보기 전에 앞 결과를 돌려줍니다.
 - **노출 검사:** 한·영 제목·본문이 모두 있어야 하고, 글자 수는 grapheme으로 제목 한 40/영 60·본문 한 120/영 200(D16-D2 초기값) 안이어야 합니다. 넘으면 잘라 내지 않고 거부합니다. 끝 시각은 시작 뒤이고 아직 지나지 않아야 합니다. 표현 검사(D16-D1)의 차단·경고 목록은 미결(D15-9, BRD-158)이라 아직 막지 않습니다.
-- **게시:** publisher가 게시할 때 노출본 중 시작 시각이 지났고 끝나지 않은 공지만 manifest `notices`에 ID 순으로 싣습니다(예약 전 문구는 공개 게시본에 없음). 계약에 맞지 않는 공지는 그것만 빼고 `publish_notice_invalid`를 남깁니다. 운영 DB를 읽지 못하면 지금 manifest의 공지를 이어서 싣고 `publish_notices_unread`를 남깁니다(특보·관측 게시는 멈추지 않음). 공지만 바뀌어도 새 버전으로 게시합니다.
+- **게시:** publisher가 게시할 때 노출본 중 시작 시각이 지났고 끝나지 않은 공지만 manifest `notices`에 ID 순으로 싣습니다(예약 전 문구는 공개 게시본에 없음). 저장 모양이 틀리거나 계약에 맞지 않는 공지는 그것만 빼고 `publish_notice_invalid`를 남깁니다. 운영 DB를 읽지 못하면 지금 manifest의 공지를 이어서 싣고 `publish_notices_unread`를 남깁니다(특보·관측 게시는 멈추지 않음). 공지만 바뀌어도 새 버전으로 게시합니다.
 - **권한:** publisher 역할의 Ops `Query`는 `dynamodb:LeadingKeys`가 `admin#notice`일 때만 됩니다.
 - **되돌리기:** `rollbackManifest`는 사본에 실린 공지를 그대로 되돌립니다. 되돌린 공지 변경을 다음 자동 게시에 다시 싣지 않는 방식(D16-C3)은 미결이라 BRD-152에서 정합니다.
 - **배포:** publisher·운영 API 함수 코드와 두 역할 정책 `Modify`만 바뀝니다(테이블 변경 없음).
