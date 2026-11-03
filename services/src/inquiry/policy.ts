@@ -25,3 +25,17 @@ export function kstDate(now: Date): string {
     .toISOString()
     .slice(0, 10);
 }
+
+// 문의 처리 상태(결정 기록 D16-D5). 배열 순서가 운영 화면 목록 순서(접수 먼저)
+// 화면 말: 접수·확인 중·완료·반려
+export const INQUIRY_STATUSES = [
+  "received",
+  "in_progress",
+  "resolved",
+  "rejected",
+] as const;
+export type InquiryStatus = (typeof INQUIRY_STATUSES)[number];
+
+// 문의 목록 GSI 이름(D16-B4: 상태 + 접수 시각). infra settings.ts의 INQUIRY_STATUS_INDEX와 같아야 함
+// (infra/test/tables.test.ts가 이 줄을 읽어 확인)
+export const INQUIRY_STATUS_INDEX_NAME = "inquiryStatus-receivedAt";
