@@ -2,7 +2,7 @@ import { PutCommand, QueryCommand } from "@aws-sdk/lib-dynamodb";
 import type { Principal } from "./auth";
 import type { RequestIds } from "./http";
 import { AUDIT_PREFIX, auditKey } from "./keys";
-import { AUDIT_TTL_SECONDS, type OperatorRole } from "./policy";
+import { AUDIT_TTL_SECONDS, OPERATOR_ROLES, type OperatorRole } from "./policy";
 import type { Sender } from "./writes";
 import { isInquiryStatus, type InquiryStatus } from "../inquiry/policy";
 
@@ -213,6 +213,12 @@ function decodeCursor(text: string): AuditCursor | null {
   }
 }
 
+// 기간 검사: 시작 ≤ 끝, 최대 366일. 처음 요청과 cursor에 담긴 기간에 똑같이 씀
+function validPeriod(from: string, to: string): boolean {
+  const span = Date.parse(to) - Date.parse(from);
+  return span >= 0 && span <= AUDIT_MAX_DAYS * DAY_MS;
+}
+
 export type AuditQueryCheck =
   | { readonly ok: true; readonly query: AuditQuery }
   | { readonly ok: false; readonly field: string };
@@ -252,6 +258,7 @@ export function parseAuditQuery(
       v === undefined ? undefined : new Date(v).toISOString();
     if (
       !state ||
+      !validPeriod(state.from, state.to) ||
       (from !== undefined && iso(from) !== state.from) ||
       (to !== undefined && iso(to) !== state.to) ||
       (action !== undefined && action !== state.action) ||
@@ -268,10 +275,7 @@ export function parseAuditQuery(
     from === undefined
       ? new Date(toDate.getTime() - AUDIT_DEFAULT_DAYS * DAY_MS)
       : new Date(from);
-  if (
-    fromDate > toDate ||
-    toDate.getTime() - fromDate.getTime() > AUDIT_MAX_DAYS * DAY_MS
-  ) {
+  if (!validPeriod(fromDate.toISOString(), toDate.toISOString())) {
     return { ok: false, field: "from" };
   }
   return {
@@ -311,7 +315,9 @@ function toView(item: Record<string, unknown>): AuditView {
     typeof at !== "string" ||
     typeof actorSub !== "string" ||
     (actorKind !== "operator" && actorKind !== "sample") ||
-    typeof role !== "string" ||
+    !(
+      role === "sample" || (OPERATOR_ROLES as readonly unknown[]).includes(role)
+    ) ||
     !isAuditAction(action) ||
     (targetKind !== "inquiry" && targetKind !== "route") ||
     typeof targetId !== "string" ||
@@ -339,24 +345,27 @@ function toView(item: Record<string, unknown>): AuditView {
 }
 
 // 최근 기록부터. 월 파티션을 to 월 → from 월로 내려가며 읽음
-// 필터(종류·운영자)는 읽은 뒤 거름 → Limit을 남은 개수로 두어 한 쪽에서 넘치지 않게 하고 LastEvaluatedKey를 cursor로 씀
+// 보관 기한(ttl)이 지난 기록은 TTL 삭제 전이라도 뺌(보관 1년 밖을 보여 주지 않음)
+// 필터(보관 기한·종류·운영자)는 읽은 뒤 거름 → Limit을 남은 개수로 두어 한 쪽에서 넘치지 않게 하고 LastEvaluatedKey를 cursor로 씀
 export async function listAudit(
   client: Sender,
   opsTable: string,
   query: AuditQuery,
+  now: Date,
 ): Promise<AuditPage> {
   const { filter } = query;
   const fromMonth = filter.from.slice(0, 7);
   let month = query.cursor?.m ?? filter.to.slice(0, 7);
   let startKey: AuditCursor["k"] = query.cursor?.k;
   const items: AuditView[] = [];
-  const names: Record<string, string> = { "#sk": "sk" };
+  const names: Record<string, string> = { "#sk": "sk", "#ttl": "ttl" };
   const values: Record<string, unknown> = {
+    ":nowSec": Math.floor(now.getTime() / 1000),
     ":from": filter.from,
     // sk = {시각}#{traceId}. "~"는 traceId 글자(16진수·-)보다 뒤라 to 시각의 기록까지 포함
     ":to": `${filter.to}#~`,
   };
-  const filters: string[] = [];
+  const filters = ["#ttl > :nowSec"];
   if (filter.action) {
     names["#action"] = "action";
     values[":action"] = filter.action;
@@ -372,9 +381,7 @@ export async function listAudit(
       new QueryCommand({
         TableName: opsTable,
         KeyConditionExpression: "pk = :pk AND #sk BETWEEN :from AND :to",
-        ...(filters.length > 0
-          ? { FilterExpression: filters.join(" AND ") }
-          : {}),
+        FilterExpression: filters.join(" AND "),
         ExpressionAttributeNames: names,
         ExpressionAttributeValues: { ...values, ":pk": AUDIT_PREFIX + month },
         ScanIndexForward: false,

@@ -215,7 +215,7 @@ async function auditRoute(
   }
   return json(
     200,
-    await listAudit(data.client, data.opsTable, check.query),
+    await listAudit(data.client, data.opsTable, check.query, data.now()),
     ids,
   );
 }
