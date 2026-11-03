@@ -30,6 +30,7 @@ import {
 } from "./http";
 import {
   decodeCursor,
+  countInquiries,
   getInquiry,
   INQUIRY_PAGE_DEFAULT,
   INQUIRY_PAGE_MAX,
@@ -107,13 +108,18 @@ async function listRoute(
   if (principal.kind === "sample") {
     return json(200, sampleInquiryPage(status, data.now()), ids);
   }
+  const now = data.now();
   const page = await listInquiries(
     data.client,
     data.inquiryTable,
     { ...(status ? { status } : {}), ...(cursor ? { cursor } : {}), limit },
-    data.now(),
+    now,
   );
-  return json(200, page, ids);
+  // 상태 탭의 문의 수는 첫 쪽에만 실음(다음 쪽마다 다시 세지 않음). 상태 GSI 읽기 용량이 작아 목록 뒤에 차례로 읽음
+  const counts = cursor
+    ? undefined
+    : await countInquiries(data.client, data.inquiryTable, now);
+  return json(200, counts ? { ...page, counts } : page, ids);
 }
 
 // GET /ops/inquiries/{id}

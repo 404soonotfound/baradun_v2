@@ -48,9 +48,13 @@ export interface InquiryDetail extends InquirySummary {
   readonly photosCollected: false;
 }
 
+export type InquiryCounts = Readonly<Record<InquiryStatus, number>>;
+
 export interface InquiryPage {
   readonly items: readonly InquirySummary[];
   readonly nextCursor: string | null;
+  // 첫 쪽(cursor 없음)에만 실음: 상태 탭의 문의 수(보관 기한이 지난 문의 제외)
+  readonly counts?: InquiryCounts;
 }
 
 type Raw = Record<string, unknown>;
@@ -178,6 +182,44 @@ export async function listInquiries(
     } while (lastKey);
   }
   return { items, nextCursor: null };
+}
+
+// 상태별 문의 수 (화면 6장 ADM-INQ '상단 탭에 접수 수'). 상태 GSI를 COUNT로 읽음
+// 보관 기한(ttl)이 지난 문의는 목록과 같게 뺌. COUNT도 읽은 항목만큼 읽기 용량을 씀
+// 상태 GSI는 읽기 용량 1(infra settings INQUIRY_STATUS_INDEX)이라 한꺼번에 몰리지 않게 상태를 하나씩 셈
+// 문의는 90일 보관이고 요약만 projection이라 한 번에 읽는 양이 작음
+export async function countInquiries(
+  client: Sender,
+  tableName: string,
+  now: Date,
+): Promise<InquiryCounts> {
+  const nowSec = Math.floor(now.getTime() / 1000);
+  const counts = {} as Record<InquiryStatus, number>;
+  for (const status of INQUIRY_STATUSES) {
+    let count = 0;
+    let lastKey: Record<string, unknown> | undefined;
+    do {
+      const result = await client.send(
+        new QueryCommand({
+          TableName: tableName,
+          IndexName: INQUIRY_STATUS_INDEX_NAME,
+          KeyConditionExpression: "#s = :s",
+          FilterExpression: "#t > :now",
+          ExpressionAttributeNames: { "#s": "inquiryStatus", "#t": "ttl" },
+          ExpressionAttributeValues: { ":s": status, ":now": nowSec },
+          Select: "COUNT",
+          ...(lastKey ? { ExclusiveStartKey: lastKey } : {}),
+        }),
+      );
+      if (typeof result.Count !== "number") {
+        throw new Error("문의 수 응답 모양이 틀림");
+      }
+      count += result.Count;
+      lastKey = result.LastEvaluatedKey;
+    } while (lastKey);
+    counts[status] = count;
+  }
+  return counts;
 }
 
 export async function getInquiry(
