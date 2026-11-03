@@ -509,6 +509,151 @@ describe("publishSnapshot", () => {
   });
 });
 
+describe("공지 싣기 (BRD-151, D16-B3·D4, 아키텍처 18.4)", () => {
+  const notice = (id: string, overrides: Record<string, unknown> = {}) => ({
+    id,
+    kind: "general",
+    title: { ko: "공지", en: "Notice" },
+    body: { ko: "본문", en: "Body" },
+    startsAt: "2026-10-23T02:00:00Z",
+    endsAt: null,
+    ...overrides,
+  });
+
+  it("시작한 공지만 ID 순으로 싣고, 예약 전·끝난 공지는 넣지 않는다", async () => {
+    const { deps, manifest } = await setup({
+      notices: async () => [
+        notice("n-b"),
+        notice("n-a", {
+          kind: "maintenance_notice",
+          endsAt: "2026-10-23T03:00:00Z",
+        }),
+        notice("n-later", { startsAt: "2026-10-23T03:00:00Z" }),
+        notice("n-ended", { endsAt: "2026-10-23T02:30:00Z" }),
+      ],
+    });
+    expect(await publishSnapshot(deps())).toMatchObject({
+      status: "published",
+    });
+    expect(manifest()!.notices!.map((n) => n.id)).toEqual(["n-a", "n-b"]);
+    expect(JSON.stringify(manifest())).not.toContain("n-later");
+  });
+
+  it("공지가 없으면 notices 칸을 두지 않는다", async () => {
+    const { deps, manifest } = await setup();
+    await publishSnapshot(deps());
+    expect(manifest()).not.toHaveProperty("notices");
+  });
+
+  it("계약에 맞지 않거나 끝이 시작보다 이른 공지는 그것만 빼고 게시를 이어 간다", async () => {
+    const { deps, manifest, events } = await setup({
+      notices: async () => [
+        notice("n-ok"),
+        notice("n-no-en", { title: { ko: "공지" } }),
+        notice("n-kst", { startsAt: "2026-10-23T11:00:00+09:00" }),
+        notice("n-order", { endsAt: "2026-10-23T01:00:00Z" }),
+      ],
+    });
+    expect(await publishSnapshot(deps())).toMatchObject({
+      status: "published",
+    });
+    expect(manifest()!.notices!.map((n) => n.id)).toEqual(["n-ok"]);
+    expect(
+      events()
+        .filter((e) => e.event === "publish_notice_invalid")
+        .map((e) => e.noticeId),
+    ).toEqual(["n-no-en", "n-kst", "n-order"]);
+  });
+
+  it("데이터가 같아도 공지가 바뀌면 새 버전으로 게시하고, 같으면 생략한다", async () => {
+    let candidates: unknown[] = [];
+    const { deps, advance, manifest } = await setup({
+      notices: async () => candidates,
+    });
+    await publishSnapshot(deps());
+    candidates = [notice("n-1")];
+    const v2 = advance(60_000);
+    expect(await publishSnapshot(deps())).toMatchObject({
+      status: "published",
+      version: v2,
+    });
+    expect(manifest()!.notices).toEqual([notice("n-1")]);
+    advance(60_000);
+    expect(await publishSnapshot(deps())).toEqual({
+      status: "unchanged",
+      version: v2,
+    });
+    // 노출을 끝내면(다음 게시에서 빠짐) 다시 게시
+    candidates = [];
+    const v4 = advance(60_000);
+    expect(await publishSnapshot(deps())).toMatchObject({
+      status: "published",
+      version: v4,
+    });
+    expect(manifest()).not.toHaveProperty("notices");
+  });
+
+  it("운영 DB를 읽지 못하면 지금 manifest의 공지를 이어서 싣고 특보·관측 게시는 멈추지 않는다", async () => {
+    let failing = false;
+    const { state, deps, advance, manifest, events } = await setup({
+      notices: async () => {
+        if (failing) throw new Error("AccessDenied");
+        return [
+          notice("n-keep"),
+          notice("n-ending", { endsAt: "2026-10-23T02:31:00Z" }),
+        ];
+      },
+    });
+    await publishSnapshot(deps());
+    failing = true;
+    const v2 = advance(60_000);
+    await seedWarnings(state, [WIND_WAVE_ROW], {
+      confirmedAt: "2026-10-23T02:25:00Z",
+    });
+    expect(await publishSnapshot(deps())).toMatchObject({
+      status: "published",
+      version: v2,
+    });
+    // 끝난 공지는 이어 싣지 않음
+    expect(manifest()!.notices!.map((n) => n.id)).toEqual(["n-keep"]);
+    expect(events().some((e) => e.event === "publish_notices_unread")).toBe(
+      true,
+    );
+  });
+
+  it("운영 DB가 칸 순서를 다르게 돌려줘도 같은 공지면 게시를 생략한다", async () => {
+    let candidates: unknown[] = [notice("n-1")];
+    const { deps, advance } = await setup({
+      notices: async () => candidates,
+    });
+    await publishSnapshot(deps());
+    const { endsAt, startsAt, body, title, kind, id } = notice("n-1");
+    candidates = [
+      {
+        endsAt,
+        startsAt,
+        body: { en: body.en, ko: body.ko },
+        title: { en: title.en, ko: title.ko },
+        kind,
+        id,
+      },
+    ];
+    advance(60_000);
+    expect(await publishSnapshot(deps())).toEqual({
+      status: "unchanged",
+      version: V1,
+    });
+  });
+
+  it("공지는 maintenance를 바꾸지 않는다(D16-B3)", async () => {
+    const { deps, manifest } = await setup({
+      notices: async () => [notice("n-m", { kind: "maintenance_notice" })],
+    });
+    await publishSnapshot(deps());
+    expect(manifest()!.maintenance).toEqual(MANIFEST_SETTINGS.maintenance);
+  });
+});
+
 describe("rollbackManifest (T06)", () => {
   it("이전 버전으로 manifest를 되돌림 — 파일 경로는 사본 그대로, 점검·최소 화면 버전은 지금 설정", async () => {
     const { state, snapshots, deps, advance, manifest } = await setup();
