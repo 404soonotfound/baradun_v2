@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
-import { useId, useMemo, useState, type ReactNode } from "react";
+import { useId, useMemo, useSyncExternalStore, type ReactNode } from "react";
 
 import {
   LocationRetryButton,
@@ -24,6 +24,11 @@ import {
 } from "@/components/location-retry";
 import { WaveIcon } from "@/components/logo-mark";
 import { RegionSheet } from "@/components/region/region-sheet";
+import {
+  SETTINGS_PANELS,
+  SettingsNav,
+  type SettingsPanel,
+} from "@/components/settings/settings-nav";
 import { Button } from "@/components/ui/button";
 import { Sheet } from "@/components/ui/sheet";
 import { Switch } from "@/components/ui/switch";
@@ -55,7 +60,33 @@ import { useSheet } from "@/lib/use-sheet";
 // PC(lg)는 왼쪽 목록 260px + 오른쪽에 고른 묶음 하나(위치·화면·기기 데이터). 안내·문의·약관·출처는 왼쪽 목록에서 바로 이동
 // 위치 스위치를 끄면 위치를 묻지도 쓰지도 않음(ON-2 '설정에서 끌 수 있어요' 약속, lib/location.ts)
 
-type Panel = "location" | "display" | "device";
+type Panel = SettingsPanel;
+const DEFAULT_PANEL: Panel = "location";
+
+// PC에서 고른 묶음은 주소 #(예: /settings/#display)에 둠. 다른 화면의 왼쪽 목록 링크로 와도 그 묶음을 보여 줌
+// 고를 때는 기록을 늘리지 않게 replaceState(뒤로 가기가 묶음마다 멈추지 않음)
+const panelListeners = new Set<() => void>();
+
+function readPanel(): Panel {
+  const key = window.location.hash.slice(1);
+  return (SETTINGS_PANELS as readonly string[]).includes(key)
+    ? (key as Panel)
+    : DEFAULT_PANEL;
+}
+
+function subscribePanel(onChange: () => void) {
+  panelListeners.add(onChange);
+  window.addEventListener("hashchange", onChange);
+  return () => {
+    panelListeners.delete(onChange);
+    window.removeEventListener("hashchange", onChange);
+  };
+}
+
+function setPanelHash(next: Panel) {
+  window.history.replaceState(window.history.state, "", `#${next}`);
+  panelListeners.forEach((listener) => listener());
+}
 
 export function SettingsScreen({
   locale,
@@ -67,7 +98,11 @@ export function SettingsScreen({
   const t = useTranslations("settings");
   const tp = useTranslations("pages");
   const resetSheet = useSheet("device-reset");
-  const [panel, setPanel] = useState<Panel>("location");
+  const panel = useSyncExternalStore(
+    subscribePanel,
+    readPanel,
+    () => DEFAULT_PANEL,
+  );
 
   function confirmReset() {
     resetDeviceData();
@@ -77,7 +112,7 @@ export function SettingsScreen({
 
   // PC 왼쪽 목록: 묶음을 바꾸면 그 제목으로 포커스(화면 읽기가 바뀐 내용을 읽음)
   function show(next: Panel) {
-    setPanel(next);
+    setPanelHash(next);
     // 숨김(display:none)이 풀린 다음 프레임에 포커스
     requestAnimationFrame(() =>
       document.getElementById(`settings-${next}`)?.focus(),
@@ -86,15 +121,6 @@ export function SettingsScreen({
   // 모바일은 묶음을 모두 잇고, PC는 고른 묶음만
   const pcOnly = (key: Panel) => panel !== key && "lg:hidden";
 
-  const navItem =
-    "flex min-h-touch w-full items-center rounded-[10px] px-3 text-left text-body text-text-default hover:bg-bg-subtle";
-  const navLinks = [
-    { href: "/guide/", label: tp("guide") },
-    { href: "/settings/inquiry/", label: tp("inquiry") },
-    { href: "/terms/", label: tp("terms") },
-    { href: "/about/data/", label: tp("dataSources") },
-  ];
-
   return (
     <div className="flex flex-col gap-[18px] pt-4 lg:mx-auto lg:w-full lg:max-w-[1036px] lg:pt-0">
       <h1 className="text-title-xl text-text-default lg:sr-only">
@@ -102,44 +128,7 @@ export function SettingsScreen({
       </h1>
 
       <div className="flex flex-col gap-[18px] lg:grid lg:grid-cols-[260px_minmax(0,1fr)] lg:items-start lg:gap-8">
-        {/* PC 왼쪽 목록(Figma 184:1102). 모바일은 묶음이 한 줄로 이어져 있어 숨김(같은 내용에 스크롤로 도달) */}
-        <nav
-          aria-label={t("groupsLabel")}
-          className="hidden lg:sticky lg:top-24 lg:block"
-        >
-          <ul className="flex flex-col rounded-card bg-bg-surface p-2 shadow-card">
-            {(["location", "display"] as const).map((key) => (
-              <li key={key}>
-                <PanelButton
-                  current={panel === key}
-                  onClick={() => show(key)}
-                  className={navItem}
-                >
-                  {t(`${key}.title`)}
-                </PanelButton>
-              </li>
-            ))}
-            {navLinks.map((item) => (
-              <li key={item.href}>
-                <Link
-                  href={localizedPath(locale, item.href)}
-                  className={navItem}
-                >
-                  {item.label}
-                </Link>
-              </li>
-            ))}
-            <li>
-              <PanelButton
-                current={panel === "device"}
-                onClick={() => show("device")}
-                className={navItem}
-              >
-                {t("info.device")}
-              </PanelButton>
-            </li>
-          </ul>
-        </nav>
+        <SettingsNav locale={locale} panel={panel} onPanel={show} />
 
         <div className="flex flex-col gap-[18px]">
           <LocationGroup beaches={beaches} className={cn(pcOnly("location"))} />
@@ -211,34 +200,6 @@ export function SettingsScreen({
         </div>
       </Sheet>
     </div>
-  );
-}
-
-// PC 왼쪽 목록에서 오른쪽 묶음을 바꾸는 버튼. 고른 묶음은 aria-current로 알림
-function PanelButton({
-  current,
-  onClick,
-  className,
-  children,
-}: {
-  current: boolean;
-  onClick: () => void;
-  className: string;
-  children: ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-current={current ? "true" : undefined}
-      className={cn(
-        className,
-        current &&
-          "bg-brand-weak font-bold text-brand-default hover:bg-brand-weak",
-      )}
-    >
-      {children}
-    </button>
   );
 }
 
