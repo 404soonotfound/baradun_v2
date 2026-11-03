@@ -1,6 +1,9 @@
+import "@fontsource-variable/noto-sans-kr";
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
+import { AuthProvider } from "@/lib/auth/provider";
 import { messages } from "@/lib/messages";
+import "./globals.css";
 
 // 모든 페이지 검색 노출 차단(아키텍처 18.7). robots.txt·응답 헤더(X-Robots-Tag)와 함께 막음
 export const metadata: Metadata = {
@@ -16,7 +19,9 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="ko">
-      <body>{children}</body>
+      <body>
+        <AuthProvider>{children}</AuthProvider>
+      </body>
     </html>
   );
 }

@@ -1,13 +1,6 @@
-import { messages } from "@/lib/messages";
+import { HomeScreen } from "@/components/home-screen";
 
-// 운영자 사이트 첫 화면 자리(BRD-147). 로그인·운영 홈은 BRD-148·149에서 붙임
+// 운영 홈 자리 (ADM-HOME). 로그인 뒤 첫 화면. 내용은 BRD-149에서 채움
 export default function Home() {
-  const t = messages.home;
-  return (
-    <main>
-      <h1>{t.heading}</h1>
-      <p>{t.preparing}</p>
-      <p>{t.noData}</p>
-    </main>
-  );
+  return <HomeScreen />;
 }
