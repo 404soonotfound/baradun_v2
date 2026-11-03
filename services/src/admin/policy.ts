@@ -15,6 +15,9 @@ export const SAMPLE_GROUP = "sample";
 // → 뷰어의 토큰을 같은 헤더에 실으면 서명과 부딪혀서 따로 둠
 export const ACCESS_TOKEN_HEADER = "x-baradun-access-token";
 
+// 쓰기 요청의 멱등 키 헤더(값은 UUID v4, 쓰기마다 새로 만듦)
+export const IDEMPOTENCY_KEY_HEADER = "x-idempotency-key";
+
 // 같은 키·같은 내용의 재전송을 앞 결과로 돌려줄 기간. 지나면 TTL로 정리되고 새 요청으로 봄
 export const IDEMPOTENCY_TTL_SECONDS = 24 * 60 * 60;
 
