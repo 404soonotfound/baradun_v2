@@ -144,6 +144,39 @@
       }
     },
     {
+      "Sid": "OpsAlarmEvents",
+      "Effect": "Allow",
+      "Action": [
+        "events:DeleteRule",
+        "events:DescribeRule",
+        "events:DisableRule",
+        "events:EnableRule",
+        "events:ListTagsForResource",
+        "events:ListTargetsByRule",
+        "events:PutRule",
+        "events:PutTargets",
+        "events:RemoveTargets",
+        "events:TagResource",
+        "events:UntagResource"
+      ],
+      "Resource": "arn:aws:events:ap-northeast-2:717304679248:rule/BaradunV2-*"
+    },
+    {
+      "Sid": "OpsNotificationFailureQueue",
+      "Effect": "Allow",
+      "Action": [
+        "sqs:CreateQueue",
+        "sqs:DeleteQueue",
+        "sqs:GetQueueAttributes",
+        "sqs:GetQueueUrl",
+        "sqs:ListQueueTags",
+        "sqs:SetQueueAttributes",
+        "sqs:TagQueue",
+        "sqs:UntagQueue"
+      ],
+      "Resource": "arn:aws:sqs:ap-northeast-2:717304679248:BaradunV2-*"
+    },
+    {
       "Sid": "Budget",
       "Effect": "Allow",
       "Action": [

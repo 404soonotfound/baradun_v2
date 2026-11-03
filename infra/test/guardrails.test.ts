@@ -476,6 +476,62 @@ const REQUIRED_CFN_ACTIONS_BY_RESOURCE_TYPE: Record<
     update: ["cognito-idp:UpdateGroup"],
     delete: ["cognito-idp:DeleteGroup", "cognito-idp:GetGroup"],
   },
+  "AWS::Events::Rule": {
+    create: [
+      "events:PutRule",
+      "events:PutTargets",
+      "events:DescribeRule",
+      "events:ListTagsForResource",
+    ],
+    read: [
+      "events:DescribeRule",
+      "events:ListTargetsByRule",
+      "events:ListTagsForResource",
+    ],
+    update: [
+      "events:PutRule",
+      "events:PutTargets",
+      "events:RemoveTargets",
+      "events:EnableRule",
+      "events:DisableRule",
+      "events:DescribeRule",
+      "events:ListTargetsByRule",
+      "events:ListTagsForResource",
+      "events:TagResource",
+      "events:UntagResource",
+    ],
+    delete: [
+      "events:RemoveTargets",
+      "events:DeleteRule",
+      "events:DescribeRule",
+      "events:ListTargetsByRule",
+    ],
+  },
+  "AWS::SQS::Queue": {
+    create: [
+      "sqs:CreateQueue",
+      "sqs:GetQueueUrl",
+      "sqs:GetQueueAttributes",
+      "sqs:ListQueueTags",
+      "sqs:TagQueue",
+    ],
+    read: ["sqs:GetQueueAttributes", "sqs:ListQueueTags"],
+    update: [
+      "sqs:SetQueueAttributes",
+      "sqs:GetQueueAttributes",
+      "sqs:ListQueueTags",
+      "sqs:TagQueue",
+      "sqs:UntagQueue",
+    ],
+    delete: ["sqs:DeleteQueue", "sqs:GetQueueAttributes"],
+  },
+  // 공식 스키마에 read 핸들러가 없음. 정책은 대기열 속성(Policy)이라 GetQueueAttributes로 읽힘
+  "AWS::SQS::QueuePolicy": {
+    create: ["sqs:SetQueueAttributes"],
+    read: ["sqs:GetQueueAttributes"],
+    update: ["sqs:SetQueueAttributes"],
+    delete: ["sqs:SetQueueAttributes"],
+  },
   "AWS::DynamoDB::Table": {
     create: [
       "dynamodb:CreateTable",
@@ -1348,13 +1404,25 @@ describe("역할 권한 상한 (BRD-89)", () => {
     }
   });
 
-  it("KMS 복호화는 SSM을 거칠 때만 허락한다", () => {
-    for (const s of boundary.Statement.filter((s) =>
-      toList(s.Action).includes("kms:Decrypt"),
-    )) {
-      expect(s.Condition?.StringEquals?.["kms:ViaService"]).toBe(
-        "ssm.ap-northeast-2.amazonaws.com",
-      );
-    }
+  it("KMS는 SSM API 키 복호화와 SNS 알림 암호화에만 허락한다", () => {
+    const statements = boundary.Statement.filter((s) =>
+      toList(s.Action).some((action) => action.startsWith("kms:")),
+    );
+    expect(statements).toHaveLength(2);
+    expect(
+      statements.map((s) => ({
+        actions: toList(s.Action),
+        via: s.Condition?.StringEquals?.["kms:ViaService"],
+      })),
+    ).toEqual([
+      {
+        actions: ["kms:Decrypt"],
+        via: "ssm.ap-northeast-2.amazonaws.com",
+      },
+      {
+        actions: ["kms:Decrypt", "kms:GenerateDataKey"],
+        via: "sns.ap-northeast-2.amazonaws.com",
+      },
+    ]);
   });
 });

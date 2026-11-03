@@ -44,6 +44,21 @@
       }
     },
     {
+      "Sid": "EncryptNotificationsViaSns",
+      "Effect": "Allow",
+      "Action": ["kms:Decrypt", "kms:GenerateDataKey"],
+      "Resource": "arn:aws:kms:ap-northeast-2:717304679248:key/*",
+      "Condition": {
+        "StringEquals": { "kms:ViaService": "sns.ap-northeast-2.amazonaws.com" }
+      }
+    },
+    {
+      "Sid": "NotificationFailureQueue",
+      "Effect": "Allow",
+      "Action": "sqs:SendMessage",
+      "Resource": "arn:aws:sqs:ap-northeast-2:717304679248:BaradunV2-*"
+    },
+    {
       "Sid": "SiteBucketObjects",
       "Effect": "Allow",
       "Action": ["s3:DeleteObject", "s3:GetObject", "s3:PutObject"],

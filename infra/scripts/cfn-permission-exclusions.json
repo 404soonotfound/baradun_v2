@@ -100,6 +100,13 @@
       "reason": "고객 관리 KMS 키와 암호화된 가져오기 미사용; SSEEnabled는 별도 테스트에서 false로 고정"
     }
   ],
+  "AWS::Events::Rule": [
+    {
+      "permissions": ["iam:PassRole"],
+      "absentProperties": ["Targets/RoleArn"],
+      "reason": "EventBridge 대상은 리소스 정책으로 호출하는 Lambda이며 전달할 실행 역할을 지정하지 않음"
+    }
+  ],
   "AWS::IAM::Policy": [
     {
       "permissions": [
