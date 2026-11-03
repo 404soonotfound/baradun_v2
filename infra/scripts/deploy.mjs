@@ -185,6 +185,8 @@ const aws = (args, options = {}) =>
   });
 const identity = aws(["sts", "get-caller-identity"], { allowFail: true });
 if (identity.status !== 0) {
+  // 실제 이유(프로필 이름 오타·네트워크 등)를 함께 보여 줌. 키 값은 이 출력에 없음
+  process.stderr.write(identity.stderr ?? "");
   fail(
     `자격 증명을 쓰지 못했어요. 먼저 로그인해 주세요: aws login --profile ${profile}`,
   );
