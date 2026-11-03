@@ -31,6 +31,10 @@ export const ROUTES: Readonly<
     // 처리 상태·반려 이유·내부 메모(편집 이상)
     PATCH: { roles: ["editor", "publisher"], sample: false },
   },
+  // 변경 이력(BRD-155). 읽기 전용, 샘플은 받지 않음(D15-3)
+  "/ops/audit": {
+    GET: { roles: ["viewer", "editor", "publisher"], sample: false },
+  },
 };
 
 export type RouteDecision =

@@ -299,3 +299,22 @@ export function inquiryPatchFields(
     ...(patch.memo !== undefined ? { memo: patch.memo } : {}),
   };
 }
+
+// 감사 기록의 바뀐 항목 이름(값은 넣지 않음, D16-B5·D6)
+// 반려가 아닌 상태로 바꿔 반려 이유가 지워지는 경우도 바뀐 항목으로 셈
+export function inquiryAuditChanges(
+  patch: InquiryPatch,
+  current: Pick<InquiryDetail, "rejectReason">,
+): string[] {
+  const clearsReason =
+    patch.status !== undefined &&
+    patch.status !== "rejected" &&
+    typeof current.rejectReason === "string";
+  return [
+    ...(patch.status !== undefined ? ["status"] : []),
+    ...(patch.rejectReason !== undefined || clearsReason
+      ? ["rejectReason"]
+      : []),
+    ...(patch.memo !== undefined ? ["memo"] : []),
+  ];
+}
