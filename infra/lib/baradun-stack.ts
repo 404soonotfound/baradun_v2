@@ -10,6 +10,7 @@ import {
 } from "aws-cdk-lib";
 import * as iam from "aws-cdk-lib/aws-iam";
 import { Construct } from "constructs";
+import { OperatorAuth } from "./admin/operator-auth";
 import { Collectors } from "./collect/collectors";
 import { GitHubDeployRole } from "./deploy/github-deploy-role";
 import { InquiryBackend } from "./inquiry/inquiry-backend";
@@ -176,6 +177,9 @@ export class BaradunStack extends Stack {
     // 월 $1 예산 알림 (콘솔의 Zero-Spend 예산을 대신함)
     new CostBudget(this, "Budget", { email: alertEmail.valueAsString });
 
+    // 운영자 풀(MFA 필수)·샘플 풀과 각 앱 클라이언트·권한 그룹 (BRD-145). 계정은 배포 뒤 콘솔·CLI로 초대
+    const operatorAuth = new OperatorAuth(this, "OperatorAuth");
+
     // 배포 후 콘솔·터미널에서 바로 확인할 값
     new CfnOutput(this, "SiteBucketName", { value: site.bucket.bucketName });
     new CfnOutput(this, "DistributionDomainName", {
@@ -195,6 +199,19 @@ export class BaradunStack extends Stack {
     new CfnOutput(this, "OpsTableName", { value: tables.ops.tableName });
     new CfnOutput(this, "InquiryTableName", {
       value: tables.inquiry.tableName,
+    });
+    // 관리자 앱 로그인 설정에 넣는 값(비밀값 아님). 실증 절차(infra/README.md)에서도 씀
+    new CfnOutput(this, "OperatorUserPoolId", {
+      value: operatorAuth.userPool.userPoolId,
+    });
+    new CfnOutput(this, "OperatorAdminWebClientId", {
+      value: operatorAuth.client.userPoolClientId,
+    });
+    new CfnOutput(this, "SampleUserPoolId", {
+      value: operatorAuth.samplePool.userPoolId,
+    });
+    new CfnOutput(this, "SampleAdminWebClientId", {
+      value: operatorAuth.sampleClient.userPoolClientId,
     });
     // 수집 함수 이름을 배포 결과에 출력. 배포 뒤 손으로 한 번 실행해 볼 때 씀(aws lambda invoke)
     // 출력 이름 예: OceanCollectorFunctionName

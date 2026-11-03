@@ -248,6 +248,196 @@
         "cloudFormationSystemTags": true
       }
     },
+    "AWS::Cognito::UserPool": {
+      "typeName": "AWS::Cognito::UserPool",
+      "handlers": {
+        "read": {
+          "permissions": [
+            "cognito-idp:DescribeUserPool",
+            "cognito-idp:GetUserPoolMfaConfig",
+            "kms:Decrypt",
+            "kms:DescribeKey"
+          ]
+        },
+        "create": {
+          "permissions": [
+            "cognito-idp:CreateUserPool",
+            "iam:PassRole",
+            "cognito-idp:SetUserPoolMfaConfig",
+            "cognito-idp:DescribeUserPool",
+            "kms:CreateGrant",
+            "kms:DescribeKey",
+            "kms:Encrypt",
+            "kms:Decrypt",
+            "kms:GenerateDataKey",
+            "kms:GenerateDataKeyWithoutPlaintext",
+            "kms:ReEncryptFrom",
+            "kms:ReEncryptTo",
+            "iam:CreateServiceLinkedRole",
+            "cognito-idp:TagResource"
+          ],
+          "timeoutInMinutes": 2
+        },
+        "update": {
+          "permissions": [
+            "cognito-idp:UpdateUserPool",
+            "cognito-idp:ListTagsForResource",
+            "cognito-idp:UntagResource",
+            "cognito-idp:TagResource",
+            "cognito-idp:SetUserPoolMfaConfig",
+            "cognito-idp:AddCustomAttributes",
+            "cognito-idp:DescribeUserPool",
+            "cognito-idp:GetUserPoolMfaConfig",
+            "iam:PassRole",
+            "kms:CreateGrant",
+            "kms:DescribeKey",
+            "kms:Encrypt",
+            "kms:Decrypt",
+            "kms:GenerateDataKey",
+            "kms:GenerateDataKeyWithoutPlaintext",
+            "kms:ReEncryptFrom",
+            "kms:ReEncryptTo"
+          ],
+          "timeoutInMinutes": 2
+        },
+        "list": {
+          "permissions": [
+            "cognito-idp:ListUserPools"
+          ]
+        },
+        "delete": {
+          "permissions": [
+            "cognito-idp:DeleteUserPool"
+          ],
+          "timeoutInMinutes": 2
+        }
+      },
+      "tagging": {
+        "permissions": [
+          "cognito-idp:ListTagsForResource",
+          "cognito-idp:UntagResource",
+          "cognito-idp:TagResource"
+        ],
+        "taggable": true,
+        "tagOnCreate": true,
+        "tagUpdatable": true,
+        "tagProperty": "/properties/UserPoolTags",
+        "cloudFormationSystemTags": true
+      }
+    },
+    "AWS::Cognito::UserPoolClient": {
+      "typeName": "AWS::Cognito::UserPoolClient",
+      "handlers": {
+        "create": {
+          "permissions": [
+            "cognito-idp:CreateUserPoolClient",
+            "iam:PassRole",
+            "iam:PutRolePolicy",
+            "iam:CreateServiceLinkedRole"
+          ],
+          "timeoutInMinutes": 2
+        },
+        "read": {
+          "permissions": [
+            "cognito-idp:DescribeUserPoolClient",
+            "cognito-idp:ListUserPoolClientSecrets"
+          ]
+        },
+        "update": {
+          "permissions": [
+            "cognito-idp:UpdateUserPoolClient",
+            "iam:PassRole",
+            "iam:PutRolePolicy"
+          ],
+          "timeoutInMinutes": 2
+        },
+        "delete": {
+          "permissions": [
+            "cognito-idp:DeleteUserPoolClient",
+            "iam:PutRolePolicy",
+            "iam:DeleteRolePolicy"
+          ],
+          "timeoutInMinutes": 2
+        },
+        "list": {
+          "handlerSchema": {
+            "properties": {
+              "UserPoolId": {
+                "$ref": "resource-schema.json#/properties/UserPoolId"
+              }
+            },
+            "required": [
+              "UserPoolId"
+            ]
+          },
+          "permissions": [
+            "cognito-idp:ListUserPoolClients"
+          ]
+        }
+      },
+      "tagging": {
+        "taggable": false,
+        "tagOnCreate": false,
+        "tagUpdatable": false,
+        "cloudFormationSystemTags": false
+      }
+    },
+    "AWS::Cognito::UserPoolGroup": {
+      "typeName": "AWS::Cognito::UserPoolGroup",
+      "handlers": {
+        "create": {
+          "permissions": [
+            "cognito-idp:CreateGroup",
+            "iam:PassRole",
+            "iam:PutRolePolicy",
+            "cognito-idp:GetGroup"
+          ],
+          "timeoutInMinutes": 5
+        },
+        "read": {
+          "permissions": [
+            "cognito-idp:GetGroup"
+          ]
+        },
+        "update": {
+          "permissions": [
+            "cognito-idp:UpdateGroup",
+            "iam:PassRole",
+            "iam:PutRolePolicy"
+          ],
+          "timeoutInMinutes": 5
+        },
+        "delete": {
+          "permissions": [
+            "cognito-idp:DeleteGroup",
+            "cognito-idp:GetGroup",
+            "iam:PutRolePolicy"
+          ],
+          "timeoutInMinutes": 5
+        },
+        "list": {
+          "handlerSchema": {
+            "properties": {
+              "UserPoolId": {
+                "$ref": "resource-schema.json#/properties/UserPoolId"
+              }
+            },
+            "required": [
+              "UserPoolId"
+            ]
+          },
+          "permissions": [
+            "cognito-idp:ListGroups"
+          ]
+        }
+      },
+      "tagging": {
+        "taggable": false,
+        "tagOnCreate": false,
+        "tagUpdatable": false,
+        "cloudFormationSystemTags": false
+      }
+    },
     "AWS::DynamoDB::Table": {
       "typeName": "AWS::DynamoDB::Table",
       "handlers": {
@@ -4270,6 +4460,1131 @@
           ],
           "ConditionKeys": [
             "aws:ResourceTag/${TagKey}"
+          ]
+        }
+      ]
+    },
+    "cognito-idp": {
+      "Actions": [
+        {
+          "Name": "AddCustomAttributes",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "AddUserPoolClientSecret",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "AdminAddUserToGroup",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "AdminConfirmSignUp",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "AdminCreateUser",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "AdminDeleteSoftwareToken",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "AdminDeleteUser",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "AdminDeleteUserAttributes",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "AdminDisableProviderForUser",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "AdminDisableUser",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "AdminEnableUser",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "AdminForgetDevice",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "AdminGetDevice",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "AdminGetUser",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "AdminGetUserAuthFactors",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "AdminInitiateAuth",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "AdminLinkProviderForUser",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "AdminListDevices",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "AdminListGroupsForUser",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "AdminListUserAuthEvents",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "AdminRemoveUserFromGroup",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "AdminResetUserPassword",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "AdminRespondToAuthChallenge",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "AdminSetUserMFAPreference",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "AdminSetUserPassword",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "AdminSetUserSettings",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "AdminUpdateAuthEventFeedback",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "AdminUpdateDeviceStatus",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "AdminUpdateUserAttributes",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "AdminUserGlobalSignOut",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "AssociateSoftwareToken"
+        },
+        {
+          "Name": "AssociateWebACL",
+          "Resources": [
+            {
+              "Name": "userpool"
+            },
+            {
+              "Name": "webacl"
+            }
+          ]
+        },
+        {
+          "Name": "ChangePassword"
+        },
+        {
+          "Name": "ConfirmDevice"
+        },
+        {
+          "Name": "ConfirmForgotPassword"
+        },
+        {
+          "Name": "ConfirmSignUp"
+        },
+        {
+          "Name": "CreateGroup",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "CreateIdentityProvider",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "CreateManagedLoginBranding",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "CreateResourceServer",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "CreateTerms",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "CreateUserImportJob",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "CreateUserPool"
+        },
+        {
+          "Name": "CreateUserPoolClient",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "CreateUserPoolDomain",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "CreateUserPoolReplica",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "DeleteGroup",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "DeleteIdentityProvider",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "DeleteManagedLoginBranding",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "DeleteResourceServer",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "DeleteTerms",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "DeleteUser"
+        },
+        {
+          "Name": "DeleteUserAttributes"
+        },
+        {
+          "Name": "DeleteUserPool",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "DeleteUserPoolClient",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "DeleteUserPoolClientSecret",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "DeleteUserPoolDomain",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "DeleteUserPoolReplica",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "DescribeIdentityProvider",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "DescribeManagedLoginBranding",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "DescribeManagedLoginBrandingByClient",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "DescribeResourceServer",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "DescribeRiskConfiguration",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "DescribeTerms",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "DescribeTermsByClient",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "DescribeUserImportJob",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "DescribeUserPool",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "DescribeUserPoolClient",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "DescribeUserPoolDomain"
+        },
+        {
+          "Name": "DisassociateWebACL",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "ForgetDevice"
+        },
+        {
+          "Name": "ForgotPassword"
+        },
+        {
+          "Name": "GetCSVHeader",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "GetClientToken"
+        },
+        {
+          "Name": "GetDevice"
+        },
+        {
+          "Name": "GetGroup",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "GetIdentityProviderByIdentifier",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "GetLogDeliveryConfiguration",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "GetProvisionedLimit"
+        },
+        {
+          "Name": "GetSigningCertificate",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "GetTokensFromRefreshToken"
+        },
+        {
+          "Name": "GetUICustomization",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "GetUser"
+        },
+        {
+          "Name": "GetUserAttributeVerificationCode"
+        },
+        {
+          "Name": "GetUserPoolMfaConfig",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "GetWebACLForResource",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "GlobalSignOut"
+        },
+        {
+          "Name": "InitiateAuth"
+        },
+        {
+          "Name": "ListDevices"
+        },
+        {
+          "Name": "ListGroups",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "ListIdentityProviders",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "ListResourceServers",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "ListResourcesForWebACL",
+          "Resources": [
+            {
+              "Name": "webacl"
+            }
+          ]
+        },
+        {
+          "Name": "ListTagsForResource",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "ListTerms",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "ListUserImportJobs",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "ListUserPoolClientSecrets",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "ListUserPoolClients",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "ListUserPoolReplicas",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "ListUserPools"
+        },
+        {
+          "Name": "ListUsers",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "ListUsersInGroup",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "ResendConfirmationCode"
+        },
+        {
+          "Name": "RespondToAuthChallenge"
+        },
+        {
+          "Name": "RevokeToken"
+        },
+        {
+          "Name": "SetLogDeliveryConfiguration",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "SetRiskConfiguration",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "SetUICustomization",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "SetUserMFAPreference"
+        },
+        {
+          "Name": "SetUserPoolMfaConfig",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "SetUserSettings"
+        },
+        {
+          "Name": "SignUp"
+        },
+        {
+          "Name": "StartUserImportJob",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "StopUserImportJob",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "TagResource",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "UntagResource",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "UpdateAuthEventFeedback",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "UpdateDeviceStatus"
+        },
+        {
+          "Name": "UpdateGroup",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "UpdateIdentityProvider",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "UpdateManagedLoginBranding",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "UpdateProvisionedLimit"
+        },
+        {
+          "Name": "UpdateResourceServer",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "UpdateTerms",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "UpdateUserAttributes"
+        },
+        {
+          "Name": "UpdateUserPool",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "UpdateUserPoolClient",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "UpdateUserPoolDomain",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "UpdateUserPoolReplica",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "VerifySoftwareToken"
+        },
+        {
+          "Name": "VerifyUserAttribute"
+        }
+      ],
+      "Operations": [
+        {
+          "Name": "AddCustomAttributes",
+          "AuthorizedActions": [
+            {
+              "Name": "AddCustomAttributes",
+              "Service": "cognito-idp"
+            }
+          ]
+        },
+        {
+          "Name": "CreateGroup",
+          "AuthorizedActions": [
+            {
+              "Name": "CreateGroup",
+              "Service": "cognito-idp"
+            },
+            {
+              "Name": "PassRole",
+              "Service": "iam"
+            }
+          ]
+        },
+        {
+          "Name": "CreateUserPool",
+          "AuthorizedActions": [
+            {
+              "Name": "CreateUserPool",
+              "Service": "cognito-idp"
+            },
+            {
+              "Name": "PassRole",
+              "Service": "iam"
+            },
+            {
+              "Name": "TagResource",
+              "Service": "cognito-idp"
+            }
+          ]
+        },
+        {
+          "Name": "CreateUserPoolClient",
+          "AuthorizedActions": [
+            {
+              "Name": "CreateUserPoolClient",
+              "Service": "cognito-idp"
+            },
+            {
+              "Name": "PassRole",
+              "Service": "iam"
+            }
+          ]
+        },
+        {
+          "Name": "DeleteGroup",
+          "AuthorizedActions": [
+            {
+              "Name": "DeleteGroup",
+              "Service": "cognito-idp"
+            }
+          ]
+        },
+        {
+          "Name": "DeleteUserPool",
+          "AuthorizedActions": [
+            {
+              "Name": "DeleteUserPool",
+              "Service": "cognito-idp"
+            }
+          ]
+        },
+        {
+          "Name": "DeleteUserPoolClient",
+          "AuthorizedActions": [
+            {
+              "Name": "DeleteUserPoolClient",
+              "Service": "cognito-idp"
+            }
+          ]
+        },
+        {
+          "Name": "DescribeUserPool",
+          "AuthorizedActions": [
+            {
+              "Name": "DescribeUserPool",
+              "Service": "cognito-idp"
+            }
+          ]
+        },
+        {
+          "Name": "DescribeUserPoolClient",
+          "AuthorizedActions": [
+            {
+              "Name": "DescribeUserPoolClient",
+              "Service": "cognito-idp"
+            }
+          ]
+        },
+        {
+          "Name": "GetGroup",
+          "AuthorizedActions": [
+            {
+              "Name": "GetGroup",
+              "Service": "cognito-idp"
+            }
+          ]
+        },
+        {
+          "Name": "GetUserPoolMfaConfig",
+          "AuthorizedActions": [
+            {
+              "Name": "GetUserPoolMfaConfig",
+              "Service": "cognito-idp"
+            }
+          ]
+        },
+        {
+          "Name": "ListTagsForResource",
+          "AuthorizedActions": [
+            {
+              "Name": "ListTagsForResource",
+              "Service": "cognito-idp"
+            }
+          ]
+        },
+        {
+          "Name": "ListUserPoolClientSecrets",
+          "AuthorizedActions": [
+            {
+              "Name": "ListUserPoolClientSecrets",
+              "Service": "cognito-idp"
+            }
+          ]
+        },
+        {
+          "Name": "SetUserPoolMfaConfig",
+          "AuthorizedActions": [
+            {
+              "Name": "PassRole",
+              "Service": "iam"
+            },
+            {
+              "Name": "SetUserPoolMfaConfig",
+              "Service": "cognito-idp"
+            }
+          ]
+        },
+        {
+          "Name": "TagResource",
+          "AuthorizedActions": [
+            {
+              "Name": "TagResource",
+              "Service": "cognito-idp"
+            }
+          ]
+        },
+        {
+          "Name": "UntagResource",
+          "AuthorizedActions": [
+            {
+              "Name": "UntagResource",
+              "Service": "cognito-idp"
+            }
+          ]
+        },
+        {
+          "Name": "UpdateGroup",
+          "AuthorizedActions": [
+            {
+              "Name": "PassRole",
+              "Service": "iam"
+            },
+            {
+              "Name": "UpdateGroup",
+              "Service": "cognito-idp"
+            }
+          ]
+        },
+        {
+          "Name": "UpdateUserPool",
+          "AuthorizedActions": [
+            {
+              "Name": "PassRole",
+              "Service": "iam"
+            },
+            {
+              "Name": "TagResource",
+              "Service": "cognito-idp"
+            },
+            {
+              "Name": "UntagResource",
+              "Service": "cognito-idp"
+            },
+            {
+              "Name": "UpdateUserPool",
+              "Service": "cognito-idp"
+            }
+          ]
+        },
+        {
+          "Name": "UpdateUserPoolClient",
+          "AuthorizedActions": [
+            {
+              "Name": "PassRole",
+              "Service": "iam"
+            },
+            {
+              "Name": "UpdateUserPoolClient",
+              "Service": "cognito-idp"
+            }
+          ]
+        }
+      ],
+      "Resources": [
+        {
+          "Name": "userpool",
+          "ARNFormats": [
+            "arn:${Partition}:cognito-idp:${Region}:${Account}:userpool/${UserPoolId}"
+          ],
+          "ConditionKeys": [
+            "aws:ResourceTag/${TagKey}"
+          ]
+        },
+        {
+          "Name": "webacl",
+          "ARNFormats": [
+            "arn:${Partition}:wafv2:${Region}:${Account}:${Scope}/webacl/${Name}/${Id}"
           ]
         }
       ]
@@ -25659,6 +26974,15 @@
           ]
         },
         {
+          "Name": "GenerateDataKeyWithoutPlaintext",
+          "AuthorizedActions": [
+            {
+              "Name": "GenerateDataKeyWithoutPlaintext",
+              "Service": "kms"
+            }
+          ]
+        },
+        {
           "Name": "ListAliases",
           "AuthorizedActions": [
             {
@@ -34246,6 +35570,7 @@
     "https://servicereference.us-east-1.amazonaws.com/v1/budgets/budgets.json": "65ef8491b0963cc51e5d76dde1a7d527cc2134b2b4b28f55847f1715728fd435",
     "https://servicereference.us-east-1.amazonaws.com/v1/cloudfront/cloudfront.json": "efc26446a6395ce5fce715f1b2e387a6b1d425914489cd80982ae34468f5ca7e",
     "https://servicereference.us-east-1.amazonaws.com/v1/cloudwatch/cloudwatch.json": "b9d5a1437ba06c70429a21a202a515521b67d61c7a2358892bfb407675e6d2ce",
+    "https://servicereference.us-east-1.amazonaws.com/v1/cognito-idp/cognito-idp.json": "1bcae538aa0dc22c4377b7eb542f2dff1e8ff4ac3155ededd18bdbad9a1138a2",
     "https://servicereference.us-east-1.amazonaws.com/v1/dynamodb/dynamodb.json": "402e6333e42297fdbaa5bc54f64d242a012591a604b4cfa285a40938a467cd2d",
     "https://servicereference.us-east-1.amazonaws.com/v1/ec2/ec2.json": "ec4c773407db5ac2c87f87e0c3aa5fa90066e53bbbad65ebced7eeed31949ade",
     "https://servicereference.us-east-1.amazonaws.com/v1/elasticfilesystem/elasticfilesystem.json": "d9b274d8b9856c2df28d41086e27985cb29e73ff46883dfecb9d5dcedd8fbed4",
