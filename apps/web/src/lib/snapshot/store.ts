@@ -10,6 +10,7 @@ import {
   isTime,
   type Clock,
 } from "./clock";
+import { noticeDeadlines, readNotices } from "./notice";
 import {
   hidesLastValues,
   isRecord,
@@ -144,7 +145,10 @@ function readManifest(value: unknown): ManifestFile | "unsupported" | null {
   ) {
     return null;
   }
-  return value as unknown as ManifestFile;
+  // 공지(선택 칸)는 공지마다 따로 검사해 깨진 공지만 뺌. 공지 때문에 manifest 전체를 못 읽은 것으로 보지 않음(BRD-151)
+  const { notices, ...rest } = value;
+  if (notices === undefined) return rest as unknown as ManifestFile;
+  return { ...rest, notices: readNotices(notices) } as unknown as ManifestFile;
 }
 
 // 보정된 시각이 게시 시각(generatedAt)보다 2분 넘게 이른지 = 그 시계가 틀린 게 확실함
@@ -159,11 +163,13 @@ function readStatuses(value: unknown): Record<string, unknown> | null {
 // 화면 계산이 바뀌는 시각(보정된 시각, ms) 목록. 이른 순, 중복 없음
 // - validUntil·지표별 expiresAt 만료(expiryDeadline)
 // - 미래 관측·확인 시각(지금 + 2분 초과)이 더는 미래가 아니게 되는 때(view.ts isFuture) → 값·확인 시각이 보이기 시작함
+// - 공지가 보이기 시작하거나 끝나는 때(notice.ts)
 function deadlinesOf(
   statuses: Record<string, unknown>,
   clock: Clock,
+  manifest: ManifestFile | null,
 ): number[] {
-  const times = new Set<number>();
+  const times = new Set<number>(noticeDeadlines(manifest?.notices));
   const expiry = (expiresAt: unknown) => {
     const at = expiryDeadline(expiresAt as string | null, clock);
     if (at !== null) times.add(at);
@@ -209,10 +215,11 @@ export function createSnapshotStore(deps: SnapshotDeps): SnapshotStore {
   // 진행 중인 조회가 시작된 뒤 연결이 바뀜. 그 조회 결과는 지금 연결로 받은 결과가 아님
   let connectionChanged = false;
   const listeners = new Set<() => void>();
-  // 다시 계산할 시각 목록. statuses·시계가 바뀔 때만 새로 만듦(set마다 모든 해변 시각을 다시 읽지 않게)
+  // 다시 계산할 시각 목록. statuses·시계·manifest가 바뀔 때만 새로 만듦(set마다 모든 해변 시각을 다시 읽지 않게)
   let deadlines: {
     statuses: Record<string, unknown>;
     clock: Clock;
+    manifest: ManifestFile | null;
     times: number[];
   } | null = null;
 
@@ -246,12 +253,14 @@ export function createSnapshotStore(deps: SnapshotDeps): SnapshotStore {
 
     if (
       deadlines?.statuses !== state.statuses ||
-      deadlines.clock !== state.clock
+      deadlines.clock !== state.clock ||
+      deadlines.manifest !== state.manifest
     ) {
       deadlines = {
         statuses: state.statuses,
         clock: state.clock,
-        times: deadlinesOf(state.statuses, state.clock),
+        manifest: state.manifest,
+        times: deadlinesOf(state.statuses, state.clock, state.manifest),
       };
     }
     // 지금 시각을 모르면(NaN) 비교가 모두 false → 다시 계산할 시각 없음(모두 만료로 보임)
