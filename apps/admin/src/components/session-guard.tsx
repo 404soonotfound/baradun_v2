@@ -204,13 +204,25 @@ function ReauthDialog({ pool, email }: { pool: PoolKind; email: string }) {
   );
 }
 
-export function SessionGuard({
-  header,
-  children,
-}: {
-  header?: ReactNode;
-  children: ReactNode;
-}) {
+// 데모 표시와 세션 경고. 공통 틀이 본문 맨 위에 둠(메뉴 위가 아니라 지금 보는 화면 위)
+export function SessionNotices() {
+  const snapshot = useSessionSnapshot();
+  if (snapshot.status === "signed_out") return null;
+  return (
+    <>
+      {snapshot.pool === "demo" && (
+        <div className="bg-status-stale-bg px-4 py-2 text-center text-[13px] font-medium text-status-stale-fg">
+          {t.home.demoBadge}
+        </div>
+      )}
+      <div className="mx-auto w-full max-w-[960px] px-4 pt-4 empty:hidden">
+        <SessionWarning />
+      </div>
+    </>
+  );
+}
+
+export function SessionGuard({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const snapshot = useSessionSnapshot();
@@ -228,15 +240,6 @@ export function SessionGuard({
 
   return (
     <>
-      {header}
-      {snapshot.pool === "demo" && (
-        <div className="bg-status-stale-bg px-4 py-2 text-center text-[13px] font-medium text-status-stale-fg">
-          {t.home.demoBadge}
-        </div>
-      )}
-      <div className="mx-auto w-full max-w-[960px] px-4 pt-4 empty:hidden">
-        <SessionWarning />
-      </div>
       {children}
       {snapshot.status === "reauth_required" && snapshot.email && (
         <ReauthDialog pool={snapshot.pool} email={snapshot.email} />

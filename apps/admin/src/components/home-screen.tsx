@@ -4,8 +4,8 @@ import { useEffect, useState } from "react";
 import { opsFetch, type OpsResult } from "@/lib/auth/ops-fetch";
 import { useAuthSession, useSessionSnapshot } from "@/lib/auth/provider";
 import { fill, messages } from "@/lib/messages";
-import { AdminHeader, roleLabel } from "./admin-header";
-import { SessionGuard } from "./session-guard";
+import { roleLabel } from "@/lib/roles";
+import { AdminShell } from "./admin-shell";
 import { Button, Notice } from "./ui";
 
 // 운영 홈 자리 (BRD-148). 로그인 뒤 /ops/me로 서버가 이 세션을 받아 주는지 먼저 확인함
@@ -89,8 +89,8 @@ function HomeBody() {
 
 export function HomeScreen() {
   return (
-    <SessionGuard header={<AdminHeader />}>
+    <AdminShell title={messages.home.title}>
       <HomeBody />
-    </SessionGuard>
+    </AdminShell>
   );
 }
