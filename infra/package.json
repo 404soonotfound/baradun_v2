@@ -9,7 +9,9 @@
     "check:iam-actions": "node --import tsx scripts/check-iam-actions.mjs"
   },
   "devDependencies": {
+    "@aws-sdk/client-cognito-identity-provider": "^3.1156.0",
     "@types/node": "^24.10.1",
+    "amazon-cognito-identity-js": "^6.3.22",
     "aws-cdk": "2.1145.0",
     "esbuild": "^0.28.2",
     "tsx": "^4.23.0",
