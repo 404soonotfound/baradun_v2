@@ -1,3 +1,4 @@
+import type { Notice } from "@baradun/contracts";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -22,6 +23,14 @@ const base = {
   notice: null,
 };
 const NO_CONFIRMED = { lastConfirmedAt: "2026-10-27T05:05:00Z" };
+const NOTICE: Notice = {
+  id: "n-maint",
+  kind: "maintenance_notice",
+  title: { ko: "데이터 점검 예고", en: "Planned data maintenance" },
+  body: { ko: "정보가 늦게 바뀔 수 있어요.", en: "Updates may be late." },
+  startsAt: "2026-10-27T00:00:00Z",
+  endsAt: null,
+};
 
 describe("pickSituation", () => {
   it("문제가 없으면 배너 없음", () => {
@@ -135,6 +144,51 @@ describe("pickSituation", () => {
     // 첫 응답 전(저장된 값을 B5로 보는 중)
     expect(
       pickSituation({ ...base, noConfirmed: NO_CONFIRMED, live: false }),
+    ).toBeNull();
+  });
+
+  // 공지 자리(BRD-151 · D15-6): 확인된 판단 없음 뒤, 관측 지연 앞
+  it("공지는 관측 지연·위치 배너보다 먼저", () => {
+    expect(
+      pickSituation({
+        ...base,
+        notice: NOTICE,
+        delayed: ["사근진"],
+        locationOff: true,
+      }),
+    ).toEqual({ kind: "notice", notice: NOTICE });
+  });
+
+  it("공지보다 오프라인·지원 밖 형식·불러오기 실패·확인된 판단 없음이 먼저", () => {
+    const withNotice = { ...base, notice: NOTICE };
+    expect(pickSituation({ ...withNotice, online: false })).toEqual({
+      kind: "offline",
+    });
+    expect(
+      pickSituation({ ...withNotice, phase: "schema_unsupported" }),
+    ).toEqual({ kind: "unsupported" });
+    expect(
+      pickSituation({ ...withNotice, live: false, failedOnline: true }),
+    ).toEqual({ kind: "failed" });
+    expect(pickSituation({ ...withNotice, noConfirmed: NO_CONFIRMED })).toEqual(
+      {
+        kind: "noConfirmed",
+        lastConfirmedAt: NO_CONFIRMED.lastConfirmedAt,
+      },
+    );
+  });
+
+  it("새로 받은 정보가 아니면(저장된 지난 manifest) 공지 없음, 점검 중에도 없음", () => {
+    expect(
+      pickSituation({
+        ...base,
+        notice: NOTICE,
+        live: false,
+        delayed: ["경포"],
+      }),
+    ).toEqual({ kind: "delayed", first: "경포", more: 0 });
+    expect(
+      pickSituation({ ...base, notice: NOTICE, phase: "maintenance" }),
     ).toBeNull();
   });
 

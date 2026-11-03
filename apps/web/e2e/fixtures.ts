@@ -248,6 +248,65 @@ function manifestFile(now: number, extra: Record<string, unknown> = {}) {
   };
 }
 
+// 공지 칸(BRD-151). 지금 보일 공지는 점검 예고(시작이 이른 것)와 일반 공지 → 점검 예고 하나만 보여야 함
+function noticesOf(now: number) {
+  const text = (ko: string, en: string) => ({ ko, en });
+  const notice = (
+    id: string,
+    kind: string,
+    title: [string, string],
+    startsAt: number,
+    endsAt: number | null,
+  ) => ({
+    id,
+    kind,
+    title: text(...title),
+    body: text(
+      "새벽 2시부터 3시까지 정보가 늦게 바뀔 수 있어요.",
+      "Information may update late from 2 to 3 a.m.",
+    ),
+    startsAt: iso(startsAt),
+    endsAt: endsAt === null ? null : iso(endsAt),
+  });
+  return [
+    notice(
+      "n-general",
+      "general",
+      ["새 해변을 더했어요", "New beaches added"],
+      now - 10 * MIN,
+      null,
+    ),
+    notice(
+      "n-maint",
+      "maintenance_notice",
+      ["데이터 점검 예고", "Planned data maintenance"],
+      now - 60 * MIN,
+      now + 120 * MIN,
+    ),
+    notice(
+      "n-ended",
+      "maintenance_notice",
+      ["끝난 점검 예고", "Ended maintenance"],
+      now - 120 * MIN,
+      now - MIN,
+    ),
+    notice(
+      "n-later",
+      "maintenance_notice",
+      ["시작 전 점검 예고", "Upcoming maintenance"],
+      now + 60 * MIN,
+      null,
+    ),
+    notice(
+      "n-broken",
+      "urgent",
+      ["모르는 종류 공지", "Unknown notice"],
+      now - 5 * MIN,
+      null,
+    ),
+  ];
+}
+
 function historyFile(now: number) {
   const ids = new Set(
     BEACHES.flatMap((beach) =>
@@ -278,7 +337,8 @@ type Scenario =
   | "maintenance" // 점검
   | "update" // 강제 업데이트(minWebBuild가 화면 빌드보다 높음)
   | "futureConfirm" // 특보 확인 시각이 2분 넘게 미래(믿지 않음)
-  | "missingWarning"; // 계약 필수 칸(warning) 빠짐
+  | "missingWarning" // 계약 필수 칸(warning) 빠짐
+  | "notice"; // 운영자 공지(BRD-151): 보일 공지 둘·끝난 공지·시작 전 공지·깨진 공지가 섞임
 
 interface DataControl {
   // 지금 쓰는 시나리오를 바꿈(다음 조회부터)
@@ -322,6 +382,9 @@ async function mockData(
         }
         if (scenario === "update") {
           return json(route, manifestFile(now, { minWebBuild: 9999 }));
+        }
+        if (scenario === "notice") {
+          return json(route, manifestFile(now, { notices: noticesOf(now) }));
         }
         return json(route, manifestFile(now));
       }
@@ -488,4 +551,3 @@ export async function chooseTheme(page: Page, name: string) {
   await expect(sheet).toBeHidden();
   await expect(page.getByRole("button", { name: /^테마/ })).toContainText(name);
 }
-
