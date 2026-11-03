@@ -229,7 +229,15 @@ describe("PR 필수 웹 검사 (BRD-102 결정 41·42)", () => {
       ].map((m) => m[1]);
       for (const key of nextPublicKeys) {
         expect(
-          ["NEXT_PUBLIC_SITE_URL", "NEXT_PUBLIC_INQUIRY_PHOTO_BUCKET"],
+          [
+            "NEXT_PUBLIC_SITE_URL",
+            "NEXT_PUBLIC_INQUIRY_PHOTO_BUCKET",
+            // 운영자 사이트 로그인 풀 값(스택 출력, 비밀값 아님, BRD-148)
+            "NEXT_PUBLIC_OPERATOR_USER_POOL_ID",
+            "NEXT_PUBLIC_OPERATOR_CLIENT_ID",
+            "NEXT_PUBLIC_DEMO_USER_POOL_ID",
+            "NEXT_PUBLIC_DEMO_CLIENT_ID",
+          ],
           `${w.name}: ${key}`,
         ).toContain(key);
       }
