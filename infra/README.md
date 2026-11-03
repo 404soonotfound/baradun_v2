@@ -25,7 +25,7 @@ npm run deploy:infra -- --profile baradun-admin   # 다른 프로필
 2. 배포용 작업 트리(저장소 옆 `{저장소}-deploy`, `BARADUN_DEPLOY_DIR`로 바꿀 수 있음)를 그 커밋으로 맞춥니다. 없으면 만들고, 고친 파일이 있으면 멈춥니다.
 3. `npm ci`
 4. aws 명령(조회·실행·대기)은 프로필을 그대로 써서 `aws login` 키가 스스로 갱신됩니다(셸에 남은 예전 키 환경 변수는 지움). cdk에만 변경 세트를 만들기 직전에 내보낸 임시 키를 넘기고, 5분 안에 만료되면 멈춥니다. 로그인이 안 돼 있으면 `aws login --profile <프로필>` 안내를 띄우고 멈춥니다. 스택이 진행 중·실패 상태여도 멈춥니다.
-5. `cdk deploy --no-execute`로 변경 세트 `deploy-{커밋 7자}-{UTC 시각}`만 만들고, 바뀌는 리소스를 표로 보여 줍니다. 줄 앞 표시는 `!!` 삭제·교체(테이블·버킷·사용자 풀·로그 그룹·대기열·KMS 키처럼 데이터를 담는 리소스는 '교체될 수도 있음'도 포함, 빨간 경고), `**` 권한 리소스, `~` 그 밖의 '교체될 수도 있음'(속성 값이 배포 때 정해져 미리 모른다는 뜻, 대개 교체되지 않음), `*~` 교체될 수도 있는 권한 리소스입니다. 함수 URL(`AWS::Lambda::Url`)은 함수가 바뀔 때마다 '교체될 수도 있음'으로 나와 `~`로 두지만, 관리자 사이트가 그 주소에 연결된 뒤(BRD-147)에는 배포 뒤 주소가 그대로인지 확인합니다. 배포마다 바뀌는 `AWS::CDK::Metadata`는 표시하지 않습니다. 바뀐 것이 없으면 그렇게 알리고 끝냅니다.
+5. `cdk deploy --no-execute`로 변경 세트 `deploy-{커밋 7자}-{UTC 시각}`만 만들고, 바뀌는 리소스를 표로 보여 줍니다. 줄 앞 표시는 `!!` 삭제·교체(테이블·버킷·사용자 풀·로그 그룹·대기열·KMS 키처럼 데이터를 담는 리소스는 '교체될 수도 있음'도 포함, 빨간 경고), `**` 권한 리소스, `~` 그 밖의 '교체될 수도 있음'(속성 값이 배포 때 정해져 미리 모른다는 뜻, 대개 교체되지 않음), `*~` 교체될 수도 있는 권한 리소스입니다. 함수 URL(`AWS::Lambda::Url`)은 함수가 바뀔 때마다 '교체될 수도 있음'으로 나와 `~`로 두지만, 운영 API 함수 URL은 운영자 사이트 `/ops/*`의 원본이라(BRD-147) 배포 뒤 주소가 그대로인지 확인합니다. 바뀌었더라도 CloudFront 원본은 같은 배포에서 함께 갱신됩니다. 배포마다 바뀌는 `AWS::CDK::Metadata`는 표시하지 않습니다. 바뀐 것이 없으면 그렇게 알리고 끝냅니다.
 6. `yes`를 입력할 때만 변경 세트를 실행하고 끝날 때까지 기다립니다. 다른 입력이면 변경 세트를 남기고, 지우는 명령을 보여 줍니다. 확인하지 못하면(실패·롤백·1시간 넘게 진행 중) 이번 실행의 실패 이벤트를 보여 줍니다. 진행 중이면 다시 배포하지 않습니다.
 
 스택 파라미터(`AlertEmail` 등)는 넘기지 않아 이전 값을 그대로 씁니다(아래 '배포'). 파라미터를 바꾸거나 `cdk bootstrap`처럼 다른 명령이 필요한 배포는 이 명령 대신 각 절의 절차를 따릅니다.
@@ -642,11 +642,28 @@ OPERATOR_USER_POOL_ID=<SampleUserPoolId> OPERATOR_CLIENT_ID=<SampleAdminWebClien
 
 이 실증 도구는 `amazon-cognito-identity-js`(Amplify v5 계열, 유지 보수 모드)를 씁니다. 실증 전용이며 관리자 앱의 로그인 라이브러리 선택은 BRD-148에서 따로 정합니다.
 
+## 운영자 사이트(BRD-147)
+
+`AdminSite`가 운영자 사이트 전용 S3 버킷과 CloudFront 배포를 만듭니다. 사용자 사이트와 주소·캐시·헤더를 나눕니다. 기준은 아키텍처 18.7, 결정 기록 D16-A2·E3, 10/20 결정 2안(별도 사이트)입니다.
+
+- **경로:** 기본 동작은 S3(OAC)의 화면 파일(`apps/admin/out`)이고, 폴더 주소를 `index.html`로 바꾸는 CloudFront Function을 붙입니다. `/ops/*`는 운영 API 함수 URL(OAC)로 보내고 캐시하지 않습니다(모든 method, Host만 빼고 뷰어 헤더 전달). 쓰기 요청은 화면이 본문 해시(`x-amz-content-sha256`)를 함께 보내야 OAC 서명이 통과합니다(문의 API와 같음).
+- **오류 응답:** 사용자 사이트처럼 403을 404 페이지로 바꾸지 않습니다. 이 설정은 배포 전체에 걸려 운영 API의 401·403·404 JSON까지 HTML로 바꾸기 때문입니다. 없는 화면 주소는 S3의 403이 그대로 보입니다.
+- **헤더:** CSP(외부 스크립트·분석 도구 없음, 연결은 자기 주소와 Cognito `cognito-idp.ap-northeast-2`만, `frame-ancestors 'none'`), HSTS 1년, nosniff, X-Frame-Options DENY, `Referrer-Policy: no-referrer`, `X-Robots-Tag: noindex, nofollow, noarchive`, 카메라·마이크·위치를 막는 Permissions-Policy입니다. 인라인 스크립트는 페이지 meta CSP의 해시만 실행됩니다(`apps/admin/scripts/check-out.mts`).
+- **주소:** 대체 도메인은 아직 없습니다(D16-E3, BRD-144와 대조해 정함). 스택 출력 `AdminDistributionDomainName`(CloudFront 기본 주소)으로 엽니다. WAF·IP 제한은 쓰지 않습니다(18.7).
+- **배포:** GitHub Actions `deploy.yml`의 `admin` 작업이 main CI 성공 뒤 `apps/admin`을 빌드해 올립니다. 인프라 배포 뒤 스택 출력 두 개를 GitHub 저장소 변수로 넣어야 이 작업이 돕니다. 비어 있으면 작업을 건너뜁니다.
+
+  ```bash
+  gh variable set ADMIN_SITE_BUCKET --body "<AdminSiteBucketName 출력 값>"
+  gh variable set ADMIN_DISTRIBUTION_ID --body "<AdminDistributionId 출력 값>"
+  ```
+
+  배포 역할(`DeployRole`)은 이 버킷에 올리고 이 배포의 캐시를 비우는 권한만 더 갖습니다.
+
 ## 운영 API(BRD-146)
 
 `OpsApi`가 운영자 사이트의 API 함수 하나(`/ops/*`, 코드 `services/src/admin`)와 전용 역할·로그·함수 URL을 만듭니다. 기준은 결정 기록 D16-A3·A7·A8·B1·B2·B6·B7, 아키텍처 18.3입니다.
 
-- **입구:** 함수 URL은 IAM 인증(`AWS_IAM`)이라 서명 없는 요청은 Lambda 앞에서 막힙니다. 관리자 사이트 CloudFront + OAC에 `/ops/*` 동작으로 연결하는 일은 관리자 배포(BRD-147)에서 합니다. 그 전까지는 이 함수를 부를 수 있는 곳이 없습니다.
+- **입구:** 함수 URL은 IAM 인증(`AWS_IAM`)이라 서명 없는 요청은 Lambda 앞에서 막힙니다. 운영자 사이트 CloudFront의 `/ops/*` 동작이 OAC로 서명해 부릅니다(아래 '운영자 사이트(BRD-147)').
 - **토큰:** 관리자 앱은 access token을 `x-baradun-access-token` 헤더로 보냅니다. `Authorization`은 OAC가 함수 URL로 보낼 때 SigV4 서명에 쓰므로 쓰지 않습니다.
 - **검증:** 서명·`iss`·`client_id`·`token_use=access`·`exp`는 `aws-jwt-verify`가 검사합니다(운영자 풀·샘플 풀만 믿음). 그 위에 최초 인증(`auth_time`)부터 8시간 상한, 그룹 역할(운영자 그룹이 정확히 하나가 아니면 거부)을 검사합니다. 운영자 풀은 MFA 필수라 그 풀의 토큰은 인증 앱을 거친 것입니다.
 - **샘플:** 샘플 풀 토큰은 Ops 테이블 `admin#config` / `sample` 항목의 sub 허용 목록·허용 기간(시작 포함·끝 제외)으로 다시 검사합니다. 항목이 없거나 기간 밖이면 거부하고, 모든 쓰기를 거부합니다.
@@ -708,7 +725,7 @@ npx --no-install tsx services/scripts/inquiry-status-backfill.ts --table <Inquir
 - **저장:** Ops 테이블 `admin#audit#{YYYY-MM}`(UTC 월) / `{시각}#{traceId}`. 시각은 UTC ISO이고 화면이 Asia/Seoul로 바꿔 보여 줍니다. 보관은 366일(TTL)입니다.
 - **내용:** 시각·운영자(Cognito sub)·역할·종류(`inquiry.update`·`sample.read`·`sample.denied`)·대상·바뀐 항목 이름. 문의 처리 상태는 앞·뒤 값도 남깁니다. 문의 본문·내부 메모·반려 이유 글·이메일은 남기지 않습니다(테스트로 확인).
 - **함께 쓰기:** 운영 API 쓰기(`versionedWrite`)는 감사 기록 없이 받지 않고, 멱등 기록·업무 변경·감사 기록을 한 트랜잭션으로 씁니다. 재전송·version 충돌은 바뀐 것이 없으므로 기록하지 않습니다. 감사 기록은 새 키에만 씁니다(`attribute_not_exists`).
-- **샘플 계정:** 로그인 확인(`/ops/me`)·조회·거절된 요청을 모두 남깁니다(대상은 `GET /ops/inquiries/{id}`처럼 경로 모양만). 기록에 실패하면 응답하지 않습니다(500). 운영자 조회는 남기지 않습니다(쓰기만). 샘플 요청마다 Ops 쓰기 1을 쓰므로(게시 잠금·수집 슬롯과 같은 쓰기 5) 요청 빈도 제한은 입구 연결(BRD-147)에서 함께 정합니다. 그 전까지는 함수 URL을 부를 곳이 없습니다.
+- **샘플 계정:** 로그인 확인(`/ops/me`)·조회·거절된 요청을 모두 남깁니다(대상은 `GET /ops/inquiries/{id}`처럼 경로 모양만). 기록에 실패하면 응답하지 않습니다(500). 운영자 조회는 남기지 않습니다(쓰기만). 샘플 요청마다 Ops 쓰기 1을 써요(게시 잠금·수집 슬롯과 같은 쓰기 용량 5). 기록은 토큰 검증을 통과한 샘플 요청만 남고, 샘플 계정은 평소 사용 중지·허용 기간 안에서만 통하므로 빈도 제한은 따로 두지 않았습니다(WAF 없음, 18.7). 시연 중 쓰기 용량을 넘기면 게시 잠금 쓰기가 늦어질 수 있어, 시연은 짧게 켜고 끕니다.
 - **목록:** `GET /ops/audit?from=&to=&action=&actor=&cursor=&limit=`(보기 이상, 샘플은 403). `from`·`to`는 `Z`로 끝나는 UTC 시각만 받고, 기본은 최근 30일·최대 366일입니다. 최근 기록부터 월 파티션을 내려가며 읽고, 한 요청에 20쪽까지 읽은 뒤 `cursor`로 이어 갑니다. 보관 기한(ttl)이 지난 기록은 TTL로 지워지기 전이라도 뺍니다. `cursor`에는 필터가 담기므로 다른 필터와 섞으면 400입니다.
 - **권한:** 운영 API 역할의 Ops `Query`는 `dynamodb:LeadingKeys`가 `admin#audit#*`이거나 공지 파티션 `admin#notice`일 때만 됩니다. 감사 키의 `UpdateItem`·`DeleteItem`은 명시적으로 거부합니다(`DeleteItem`은 원래 허용도 없음). Put 권한만으로는 추가 전용이 되지 않으므로 위 조건부 쓰기·트랜잭션이 함께 막습니다.
 - **배포:** 운영 API 함수 코드와 역할 정책 `Modify`만 바뀝니다(테이블·실행 정책 변경 없음).
