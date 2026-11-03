@@ -539,6 +539,81 @@ await fetch("/api/inquiries", {
 - 경보를 처음 넣는 배포 전에 실행 정책(`BaradunCdkExecution`·`BaradunCdkExecutionWorkload`)을 최신 버전으로 올립니다(위 '정책 적용과 되돌리기 절차' 4단계 명령). 올리지 않으면 `cloudwatch:PutMetricAlarm`이 거부되어 배포가 롤백됩니다.
 - 운영 주제는 문의 알림 주제와 따로라서 첫 배포 뒤 구독 확인 메일이 한 통 더 옵니다. 확인하지 않으면 경보가 울려도 메일이 가지 않습니다.
 
+## 운영자 로그인 사용자 풀(BRD-145)
+
+`OperatorAuth`가 운영자 사이트용 Cognito 사용자 풀 하나, 관리자 앱 클라이언트 하나, 권한 그룹 4개(`viewer`·`editor`·`publisher`·`sample`)를 만듭니다. 기준은 결정 기록 D15-3·D16-A1~A9, 아키텍처 18.2입니다.
+
+- Essentials 플랜, 초대(AdminCreateUser)로만 계정 생성, 이메일로 로그인. 문자 인증·Lambda 트리거·SES·호스팅 UI는 없습니다.
+- 비밀번호 12자 이상·숫자 포함·최근 5개 재사용 금지, 임시 비밀번호 7일. 잠금은 Cognito 기본 동작입니다.
+- 풀 MFA는 선택(인증 앱만)입니다. 운영자 계정의 인증 앱 등록 강제와 현재 세션 확인은 첫 로그인 화면(BRD-148)과 운영 API(BRD-146)가 맡습니다. 같은 풀 방식이 실증에서 안 되면 풀을 나눕니다(구현 제안 I01).
+- 클라이언트: 비밀값 없음, SRP 로그인만, access·ID 15분, refresh 8시간 + rotation(재전송 유예 0초). rotation을 켜면 Cognito는 refresh마다 새 8시간을 주므로, 최초 인증 8시간 상한은 운영 API가 `auth_time`으로 강제합니다.
+- 사용자 풀은 삭제 보호 + RETAIN입니다. 스택에서 빠지거나 교체돼도 계정이 남습니다.
+- 계정·비밀번호는 코드·저장소·로그에 넣지 않습니다. 계정은 배포 뒤 아래 명령으로 만듭니다.
+
+### 배포 전: 실행 정책 갱신
+
+실행 정책 중 `BaradunCdkExecutionWorkload`만 바뀝니다(Cognito 문장 2개 추가). boundary는 바뀌지 않습니다(운영 API 역할이 생기는 BRD-146에서 필요한 권한을 더함). 위 '정책 적용과 되돌리기 절차'대로 기존 기본 버전을 먼저 기록하고 workload 정책 새 버전을 기본으로 만듭니다.
+
+- `cognito-idp:CreateUserPool`은 리소스 단위 권한이 없어 서울 리전 조건으로 `Resource: "*"`입니다.
+- 나머지 Cognito 작업은 사용자 풀 ARN(`userpool/*`)까지만 좁혀집니다. 풀 ID는 생성 때 정해져 이름으로 더 좁힐 수 없고, 이 계정에 다른 사용자 풀이 생기면 실행 역할이 그 풀도 고칠 수 있다는 뜻입니다.
+- 정책을 올리지 않고 배포하면 `CreateUserPool`이 거부되어 롤백됩니다.
+
+### 배포와 계정 만들기
+
+`AlertEmail`은 다시 넘기지 않습니다(이전 값을 그대로 씀). 변경 세트에 사용자 풀·클라이언트·그룹 4개 추가만 있는지 확인한 뒤 배포합니다.
+
+```bash
+AWS_PROFILE=<관리자 프로필> npx cdk diff --method=change-set
+AWS_PROFILE=<관리자 프로필> npx cdk deploy
+```
+
+배포 출력의 `OperatorUserPoolId`·`OperatorAdminWebClientId`를 기록합니다(비밀값 아님). 계정은 초대 메일로 임시 비밀번호를 받습니다.
+
+```bash
+POOL=<OperatorUserPoolId>
+aws cognito-idp admin-create-user --user-pool-id "$POOL" --username <이메일> \
+  --user-attributes Name=email,Value=<이메일> Name=email_verified,Value=true \
+  --desired-delivery-mediums EMAIL
+aws cognito-idp admin-add-user-to-group --user-pool-id "$POOL" --username <이메일> --group-name publisher
+```
+
+샘플 계정도 같은 방법으로 만들고 `sample` 그룹에만 넣은 뒤, 실증이 끝나면 꺼 둡니다(D16-A8: 시연 기간에만 켬).
+
+```bash
+aws cognito-idp admin-disable-user --user-pool-id "$POOL" --username <샘플 이메일>
+```
+
+인증 앱 분실 때 초기화(D16-A9)는 본인 확인 뒤 `admin-set-user-mfa-preference`·`AdminDeleteSoftwareToken` 기반 절차로 하고 감사 기록을 남깁니다. 자세한 절차는 운영 문서에 둡니다(이 PR 범위 아님).
+
+### 실증(미검증 항목)
+
+관리자 앱과 같은 SRP 로그인으로 실제 풀을 확인합니다. `scripts/operator-auth-probe.mjs`는 AWS 자격 증명 없이 앱 클라이언트로만 로그인합니다. 토큰·비밀번호는 출력하지 않고 정해 둔 클레임만 보여 줍니다. 등록용 인증 앱 키는 `first-login`에서 한 번만 화면에 나옵니다.
+
+```bash
+export OPERATOR_USER_POOL_ID=<OperatorUserPoolId> OPERATOR_CLIENT_ID=<OperatorAdminWebClientId>
+node scripts/operator-auth-probe.mjs first-login   # 임시 비밀번호 → 새 비밀번호 → 인증 앱 등록
+node scripts/operator-auth-probe.mjs login         # 2단계 로그인 → 클레임 → refresh 회전 → 옛 refresh 거부
+```
+
+아래 결과를 BRD-145에 기록합니다. 모두 확인하기 전에는 '확인 완료'로 두지 않습니다.
+
+| 확인할 것               | 방법                                                     | 기대                                                                               |
+| ----------------------- | -------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| 비밀번호 규칙           | `first-login`에서 11자·숫자 없는 비밀번호를 먼저 넣어 봄 | 둘 다 거부                                                                         |
+| 첫 로그인 뒤 2단계 요청 | `first-login`의 '새 비밀번호 뒤 응답'                    | 풀이 선택 MFA라 2단계 요청 없이 토큰 발급(앱이 등록을 강제해야 함)                 |
+| 등록 뒤 2단계 로그인    | `login`의 '첫 응답'                                      | `SOFTWARE_TOKEN_MFA`                                                               |
+| 운영자 토큰 amr/acr     | `login` 클레임 표                                        | 값을 그대로 기록. 서울 리전에서 인증 앱 사용을 구분할 수 있는지가 D16-A7 판단 근거 |
+| 샘플 토큰 amr/acr·그룹  | 샘플 계정으로 `login`                                    | 2단계 없이 발급, `cognito:groups`가 `sample`, amr 값 기록                          |
+| refresh 회전            | `login`의 '[갱신]'                                       | 새 refresh token 발급(회전)                                                        |
+| 옛 refresh 재사용       | `login`의 '[재사용]'                                     | 거부                                                                               |
+| 갱신 뒤 auth_time       | 로그인·갱신 클레임 비교                                  | 값이 그대로여야 운영 API가 최초 인증 8시간을 셀 수 있음                            |
+| 잠금                    | 틀린 비밀번호를 연속 입력                                | Cognito 기본 잠금 동작, 오류 이름 기록                                             |
+| 계정 플랜·MAU           | 콘솔 사용자 풀 › 기능 플랜                               | Essentials, 무료 범위 확인                                                         |
+
+위조 토큰 거부는 운영 API의 검증 코드(BRD-146)에서 확인합니다. 같은 풀 방식이 안 되는 결과(예: 운영자와 샘플 토큰을 amr로 구분할 수 없음)가 나오면 결정 기록 16장에 다시 적고 풀 분리(I01)로 진행합니다.
+
+이 실증 도구는 `amazon-cognito-identity-js`(Amplify v5 계열, 유지 보수 모드)를 씁니다. 실증 전용이며 관리자 앱의 로그인 라이브러리 선택은 BRD-148에서 따로 정합니다.
+
 ## 점검·강제 업데이트
 
 점검 중 여부와 최소 화면 버전은 `manifest.json`의 `maintenance`·`minWebBuild`로 알립니다(아키텍처 9.1, BRD-43). 값은 `services/src/publisher/policy.ts`의 `MANIFEST_SETTINGS`(저장소 상수)에 있고, 바꾸려면 저장소를 고쳐 배포합니다(결정 기록 11장 10/23 ④). 게시 함수는 데이터가 그대로여도 지금 manifest와 설정이 다르면 새 버전으로 게시합니다.
