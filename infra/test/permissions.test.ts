@@ -9,7 +9,7 @@ import {
 } from "./stack-template";
 import { GITHUB_OIDC_SUBJECT, INQUIRY_STATUS_INDEX } from "../lib/settings";
 // services 감사 키 접두어와 IAM 조건이 맞는지 비교함(한쪽만 바뀌면 테스트가 깨짐)
-import { AUDIT_PREFIX } from "../../services/src/admin/keys";
+import { AUDIT_PREFIX, NOTICE_PK } from "../../services/src/admin/keys";
 
 // 역할의 논리 ID를 찾음 (CDK가 이름 뒤에 해시를 붙이므로 앞부분으로 찾기)
 function roleId(prefix: string): string {
@@ -243,7 +243,7 @@ describe("DynamoDB 권한 (BRD-55)", () => {
   });
 
   // 감사 기록(BRD-155, D16-B5): 쓰기만 주고 수정·삭제 권한 없음
-  it("운영 API 역할의 Ops Query는 감사 키에만 되고, 감사 키 수정·삭제는 명시적으로 거부된다", () => {
+  it("운영 API 역할의 Ops Query는 감사 키·공지 파티션에만 되고, 감사 키 수정·삭제는 명시적으로 거부된다", () => {
     const statements = allIamPolicies()
       .filter((p) => p.roles.includes(roleId("OpsApiRole")))
       .flatMap((p) => p.statements)
@@ -258,9 +258,10 @@ describe("DynamoDB 권한 (BRD-55)", () => {
     );
     expect(query).toHaveLength(1);
     expect(toList(query[0]!.Action)).toEqual(["dynamodb:Query"]);
+    // 감사 기록 월 파티션과 공지 파티션만(BRD-151)
     expect(query[0]!.Condition).toEqual({
       "ForAllValues:StringLike": {
-        "dynamodb:LeadingKeys": [`${AUDIT_PREFIX}*`],
+        "dynamodb:LeadingKeys": [`${AUDIT_PREFIX}*`, NOTICE_PK],
       },
       Null: { "dynamodb:LeadingKeys": "false" },
     });
@@ -310,11 +311,33 @@ describe("DynamoDB 권한 (BRD-55)", () => {
         "dynamodb:PutItem",
         "dynamodb:UpdateItem",
         "dynamodb:DeleteItem",
+        "dynamodb:Query",
       ]),
     });
     expect(
       [...byResource.keys()].some((r) => r.startsWith(tableId("Inquiry"))),
     ).toBe(false);
+  });
+
+  it("publisher의 Ops Query는 공지 파티션에만 허용된다(BRD-151)", () => {
+    const publisher = roleId("PublisherRole");
+    const query = allIamPolicies()
+      .filter((p) => p.roles.includes(publisher))
+      .flatMap((p) => p.statements)
+      .filter(
+        (s) =>
+          s.Effect === "Allow" &&
+          toList(s.Action).includes("dynamodb:Query") &&
+          toList(s.Resource).some((r) =>
+            resourceText(r).includes(tableId("Ops")),
+          ),
+      );
+    expect(query).toHaveLength(1);
+    expect(toList(query[0]!.Action)).toEqual(["dynamodb:Query"]);
+    expect(query[0]!.Condition).toEqual({
+      "ForAllValues:StringEquals": { "dynamodb:LeadingKeys": [NOTICE_PK] },
+      Null: { "dynamodb:LeadingKeys": "false" },
+    });
   });
 
   it("어떤 역할도 Scan·테이블 관리·와일드카드 DynamoDB 동작을 갖지 않는다", () => {
