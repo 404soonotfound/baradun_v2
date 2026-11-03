@@ -27,7 +27,13 @@ import {
   type NoticeRecord,
 } from "./notices";
 import { IDEMPOTENCY_KEY, IDEMPOTENCY_KEY_HEADER } from "./policy";
-import { payloadHashOf, versionedWrite } from "./writes";
+import { sampleNotices } from "./sample-data";
+import {
+  payloadHashOf,
+  previousWrite,
+  versionedWrite,
+  type WriteResult,
+} from "./writes";
 
 // 공지 경로 (BRD-151, ADM-NTC). 허용표(routes.ts)를 통과한 요청만 옴
 // 응답은 "저장했어요"까지만. 앱 반영은 다음 게시 때라 공개 반영으로 표시하지 않음(D16-D4)
@@ -36,11 +42,15 @@ type Result = APIGatewayProxyStructuredResultV2;
 type Operator = Principal & { kind: "operator" };
 
 // GET /ops/notices: 지운 공지는 빼고 상태(대기·예약·노출 중·종료)·수정 대기·가려짐을 함께 줌
-// 운영자 sub(updatedBy)는 넣지 않음(샘플에도 같은 응답)
+// 운영자 sub(updatedBy)는 넣지 않음. 샘플은 예시 공지(공개 전 문구를 보이지 않게)
 export async function listNoticesRoute(
+  principal: Principal,
   data: DataDependencies,
   ids: RequestIds,
 ): Promise<Result> {
+  if (principal.kind === "sample") {
+    return json(200, sampleNotices(data.now()), ids);
+  }
   const records = await queryNotices(data.client, data.opsTable);
   return json(200, { items: noticeViews(records, data.now()) }, ids);
 }
@@ -106,19 +116,27 @@ async function write(
     },
     now,
   );
+  return answer(result, options.id, options.mode, ids);
+}
+
+function answer(
+  result: WriteResult,
+  id: string,
+  mode: "create" | "update",
+  ids: RequestIds,
+): Result {
   if (result.status === "conflict") {
     return errorJson(409, "conflict", ids, { reason: result.reason });
   }
   safeLog("info", "ops_notice_written", {
-    noticeId: options.id,
-    action: options.action,
+    noticeId: id,
     version: result.version,
     replayed: result.status === "replayed" ? 1 : 0,
     traceId: ids.traceId,
   });
   return json(
-    options.mode === "create" && result.status === "applied" ? 201 : 200,
-    { noticeId: options.id, version: result.version },
+    mode === "create" && result.status === "applied" ? 201 : 200,
+    { noticeId: id, version: result.version },
     ids,
   );
 }
@@ -165,11 +183,35 @@ export async function createNoticeRoute(
   );
 }
 
-async function current(
+// 있는 공지를 바꾸는 쓰기의 앞부분: ID → 멱등 키·본문 → 같은 키의 앞 결과 → 지금 공지
+// 앞 결과를 먼저 봐서, 재전송이 앞 쓰기로 바뀐 version·상태·삭제를 보고 409·404가 되지 않게 함(D16-B6)
+async function begin(
+  event: APIGatewayProxyEventV2,
   id: string,
+  principal: Operator,
   data: DataDependencies,
-): Promise<NoticeRecord | null> {
-  return isNoticeId(id) ? getNotice(data.client, data.opsTable, id) : null;
+  ids: RequestIds,
+): Promise<
+  { request: WriteRequest; record: NoticeRecord } | { result: Result }
+> {
+  if (!isNoticeId(id)) return { result: errorJson(404, "not_found", ids) };
+  const read = readWrite(event, ids);
+  if ("error" in read) return { result: read.error };
+  const { request } = read;
+  const previous = await previousWrite(
+    data.client,
+    { ops: data.opsTable },
+    {
+      target: { kind: "ops", key: noticeKey(id), mode: "update" },
+      idempotencyKey: request.key,
+      payloadHash: payloadHashOf(request.raw),
+      actorSub: principal.sub,
+    },
+  );
+  if (previous) return { result: answer(previous, id, "update", ids) };
+  const record = await getNotice(data.client, data.opsTable, id);
+  if (!record) return { result: errorJson(404, "not_found", ids) };
+  return { request, record };
 }
 
 // PUT /ops/notices/{id}: 문구 저장(대기본만 바꿈. 노출본은 '노출' 전까지 그대로)
@@ -180,11 +222,9 @@ export async function updateNoticeRoute(
   data: DataDependencies,
   ids: RequestIds,
 ): Promise<Result> {
-  const record = await current(id, data);
-  if (!record) return errorJson(404, "not_found", ids);
-  const read = readWrite(event, ids);
-  if ("error" in read) return read.error;
-  const { request } = read;
+  const started = await begin(event, id, principal, data, ids);
+  if ("result" in started) return started.result;
+  const { request, record } = started;
   const check = parseNoticeInput(request.value, "update");
   if (!check.ok) {
     return errorJson(400, "invalid_request", ids, { field: check.field });
@@ -215,11 +255,9 @@ export async function exposeNoticeRoute(
   data: DataDependencies,
   ids: RequestIds,
 ): Promise<Result> {
-  const record = await current(id, data);
-  if (!record) return errorJson(404, "not_found", ids);
-  const read = readWrite(event, ids);
-  if ("error" in read) return read.error;
-  const { request } = read;
+  const started = await begin(event, id, principal, data, ids);
+  if ("result" in started) return started.result;
+  const { request, record } = started;
   const check = parseVersionBody(request.value);
   if (!check.ok) {
     return errorJson(400, "invalid_request", ids, { field: check.field });
@@ -262,11 +300,9 @@ export async function endNoticeRoute(
   data: DataDependencies,
   ids: RequestIds,
 ): Promise<Result> {
-  const record = await current(id, data);
-  if (!record) return errorJson(404, "not_found", ids);
-  const read = readWrite(event, ids);
-  if ("error" in read) return read.error;
-  const { request } = read;
+  const started = await begin(event, id, principal, data, ids);
+  if ("result" in started) return started.result;
+  const { request, record } = started;
   const check = parseVersionBody(request.value);
   if (!check.ok) {
     return errorJson(400, "invalid_request", ids, { field: check.field });
@@ -286,7 +322,10 @@ export async function endNoticeRoute(
       : {
           live: { ...record.live!, endsAt },
           // 저장한 문구도 같은 끝 시각으로 맞춤(끝낸 뒤 '수정 대기'로 보이지 않게)
-          draft: { ...record.draft, endsAt },
+          // 저장한 문구의 시작이 아직이면 그대로 둠(끝이 시작보다 앞서는 대기본을 만들지 않음)
+          ...(Date.parse(record.draft.startsAt) < now.getTime()
+            ? { draft: { ...record.draft, endsAt } }
+            : {}),
         };
   return write(
     data,
@@ -315,11 +354,9 @@ export async function deleteNoticeRoute(
   data: DataDependencies,
   ids: RequestIds,
 ): Promise<Result> {
-  const record = await current(id, data);
-  if (!record) return errorJson(404, "not_found", ids);
-  const read = readWrite(event, ids);
-  if ("error" in read) return read.error;
-  const { request } = read;
+  const started = await begin(event, id, principal, data, ids);
+  if ("result" in started) return started.result;
+  const { request, record } = started;
   const check = parseVersionBody(request.value);
   if (!check.ok) {
     return errorJson(400, "invalid_request", ids, { field: check.field });

@@ -32,7 +32,7 @@ export const ROUTES: Readonly<
     PATCH: { roles: ["editor", "publisher"], sample: false },
   },
   // 공지(BRD-151, ADM-NTC). 문구 저장은 편집, 노출·노출 끝내기는 노출 변경(D16-D4)
-  // 샘플은 목록만(운영자 sub는 응답에 넣지 않음)
+  // 샘플은 목록만, 예시 공지로 받음(공개 전 문구를 보이지 않게)
   "/ops/notices": {
     GET: { roles: ["viewer", "editor", "publisher"], sample: true },
     POST: { roles: ["editor", "publisher"], sample: false },

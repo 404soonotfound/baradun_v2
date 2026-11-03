@@ -326,7 +326,9 @@ export async function handleOps(
       return await auditRoute(event, deps.data, ids);
     }
     if (decision.pattern === "/ops/notices") {
-      if (method === "GET") return await listNoticesRoute(deps.data, ids);
+      if (method === "GET") {
+        return await listNoticesRoute(principal, deps.data, ids);
+      }
       if (method === "POST" && principal.kind === "operator") {
         return await createNoticeRoute(event, principal, deps.data, ids);
       }
