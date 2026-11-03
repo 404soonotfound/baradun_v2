@@ -254,6 +254,34 @@ describe("공식 IAM·CFN 검증기", () => {
     );
   });
 
+  it("서울 리전 조건의 Resource *는 승인된 리소스 종류(Cognito 사용자 풀 등)에만 허락한다", () => {
+    const statement = {
+      Effect: "Allow",
+      Action: "cognito-idp:CreateUserPool",
+      Resource: "*",
+      Condition: { StringEquals: { "aws:RequestedRegion": "ap-northeast-2" } },
+    };
+    const check = (type: string, value: string) =>
+      statementScopeErrors(
+        {
+          ...statement,
+          Condition: { StringEquals: { "aws:RequestedRegion": value } },
+        },
+        statement.Action,
+        type,
+        { typeName: type },
+        {},
+        {},
+      );
+    expect(check("AWS::Cognito::UserPool", "ap-northeast-2")).toEqual([]);
+    expect(check("AWS::Cognito::UserPool", "us-east-1")).toContain(
+      "리전 조건의 리소스별 근거 없음: aws:RequestedRegion",
+    );
+    expect(check("AWS::Cognito::UserPoolClient", "ap-northeast-2")).toContain(
+      "리전 조건의 리소스별 근거 없음: aws:RequestedRegion",
+    );
+  });
+
   it("Lambda PassRole 허용을 S3 복제·SNS 역할 전달 허용으로 오인하지 않는다", () => {
     const statement = {
       Effect: "Allow",
