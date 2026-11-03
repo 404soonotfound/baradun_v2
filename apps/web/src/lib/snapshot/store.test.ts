@@ -384,6 +384,63 @@ describe("manifest의 공지 칸", () => {
     await store.refresh();
     expect(store.getState()).toMatchObject({ phase: "ready", live: true });
   });
+
+  it("깨진 공지만 빼고 manifest는 정상으로 읽음(판단 상태·maintenance는 그대로)", async () => {
+    const withNotices = read<ManifestFile>("manifest.with-notices.json");
+    const [maintenance, general] = withNotices.notices ?? [];
+    const plain = setup();
+    plain.store.start();
+    await plain.store.refresh();
+
+    const { store, server } = setup();
+    server.manifest = {
+      ...withNotices,
+      notices: [
+        { ...maintenance, category: "unavailable" },
+        { ...general, kind: "urgent" },
+        general,
+      ],
+    };
+    store.start();
+    await store.refresh();
+    const state = store.getState();
+    expect(state).toMatchObject({ phase: "ready", live: true });
+    expect(state.manifest?.maintenance.active).toBe(false);
+    expect(state.manifest?.notices).toEqual([general]);
+    // 공지가 있어도 해변 화면 상태(분류·사유·배지)는 공지 없는 manifest와 같음
+    for (const id of ["b0001", "b0002", "b0003"]) {
+      expect(deriveBeachView({ id, hidden: false }, state)).toEqual(
+        deriveBeachView({ id, hidden: false }, plain.store.getState()),
+      );
+    }
+  });
+
+  it("notices가 배열이 아니면 공지 없이 정상으로 읽음", async () => {
+    const { store, server } = setup();
+    server.manifest = { ...manifestExample, notices: "공지" };
+    store.start();
+    await store.refresh();
+    expect(store.getState()).toMatchObject({ phase: "ready", live: true });
+    expect(store.getState().manifest?.notices).toEqual([]);
+  });
+
+  it("공지가 끝나는 시각에 조회 없이 화면을 다시 계산함", async () => {
+    const withNotices = read<ManifestFile>("manifest.with-notices.json");
+    const [maintenance] = withNotices.notices ?? [];
+    const endsAt = "2026-10-17T05:31:00Z";
+    const { store, server, manifestCalls } = setup();
+    server.manifest = {
+      ...withNotices,
+      notices: [{ ...maintenance, endsAt }],
+    };
+    store.start();
+    await store.refresh();
+    expect(store.getState().nowMs).toBeLessThan(Date.parse(endsAt));
+    const calls = manifestCalls();
+    await vi.advanceTimersByTimeAsync(61_000);
+    expect(store.getState().nowMs).toBeGreaterThanOrEqual(Date.parse(endsAt));
+    expect(manifestCalls()).toBe(calls);
+  });
 });
 
 describe("지원 범위 밖 schemaVersion", () => {
