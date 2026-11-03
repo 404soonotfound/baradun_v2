@@ -174,12 +174,13 @@ export class OpsAlarms extends Construct {
       });
       failures.push(`(FILL(tries${i}, 0) - FILL(oks${i}, 0))`);
     });
-    // 계정 단위 사용량 지표(두 풀 합계). 차원 값은 Cognito 문서 '사용량 지표' 기준
+    // 계정 단위 사용량 지표(두 풀 합계). 차원 값은 2026-11-04 실제 지표(list-metrics)로 확인함
+    // 문서 표기('Cognito user pool')와 대소문자가 달라 실제 값(Cognito User Pool)을 씀
     usingMetrics.recovery = new cloudwatch.Metric({
       namespace: "AWS/Usage",
       metricName: "CallCount",
       dimensionsMap: {
-        Service: "Cognito user pool",
+        Service: "Cognito User Pool",
         Type: "API",
         Resource: "UserAccountRecovery",
         Class: "None",
