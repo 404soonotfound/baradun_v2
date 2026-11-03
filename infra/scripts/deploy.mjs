@@ -9,6 +9,7 @@
 import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { createInterface } from "node:readline/promises";
 import {
   changeSetName,
@@ -55,6 +56,9 @@ function run(cmd, args, { cwd, env, capture = false, allowFail = false } = {}) {
   return result;
 }
 
+// 배포 대기(최대 1시간)를 버틸 만큼 자격 증명이 남아 있어야 함
+const MIN_CREDENTIAL_MINUTES = 30;
+
 const step = (n, text) => console.log(`\n[${n}/6] ${text}`);
 
 const profile = arg("--profile") ?? process.env.AWS_PROFILE ?? "soo-login";
@@ -66,58 +70,13 @@ const commonDir = path.resolve(
 const repoRoot = path.dirname(commonDir);
 const deployDir = process.env.BARADUN_DEPLOY_DIR ?? `${repoRoot}-deploy`;
 
-// 1. 배포용 작업 트리를 origin/main으로
-step(1, `배포용 작업 트리를 origin/main으로 맞춰요 (${deployDir})`);
+// 1. origin/main 최신 커밋과 그 커밋의 ci-ok
+// 배포용 폴더를 옮기기 전에 확인함(CI가 실패한 커밋에 폴더를 남기지 않음)
+step(1, "main 최신 커밋의 CI(ci-ok)가 통과했는지 확인해요");
 run("git", ["-C", repoRoot, "fetch", "-q", "origin", "main"]);
 const sha = run("git", ["-C", repoRoot, "rev-parse", "origin/main"], {
   capture: true,
 }).stdout.trim();
-if (!existsSync(deployDir)) {
-  run("git", [
-    "-C",
-    repoRoot,
-    "worktree",
-    "add",
-    "-q",
-    "--detach",
-    deployDir,
-    sha,
-  ]);
-} else {
-  const dirty = run("git", ["-C", deployDir, "status", "--porcelain"], {
-    capture: true,
-  }).stdout.trim();
-  if (dirty)
-    fail(
-      `배포용 작업 트리에 고친 파일이 있어요. 확인 후 지워 주세요:\n${dirty}`,
-    );
-  run("git", ["-C", deployDir, "checkout", "-q", "--detach", sha]);
-}
-// 실행 중인 이 스크립트가 배포할 커밋의 것과 다르면 멈춤(오래된 체크아웃의 예전 절차로 배포하지 않게)
-// 배포용 폴더에서 실행했다면 방금 새 커밋으로 바뀐 것이라 한 번 더 실행하면 됨
-const here = path.dirname(new URL(import.meta.url).pathname);
-const deployScripts = path.join(deployDir, "infra", "scripts");
-for (const file of ["deploy.mjs", "deploy-plan.ts"]) {
-  const target = path.join(deployScripts, file);
-  if (
-    !existsSync(target) ||
-    readFileSync(path.join(here, file), "utf8") !== readFileSync(target, "utf8")
-  ) {
-    fail(
-      path.resolve(here) === path.resolve(deployScripts)
-        ? "배포 명령이 main의 새 버전으로 바뀌었어요. 같은 명령을 한 번 더 실행해 주세요: npm run deploy:infra"
-        : `실행한 배포 명령(${here})이 main과 달라요. 배포용 폴더에서 실행해 주세요:\n` +
-            `cd ${deployDir} && npm run deploy:infra`,
-    );
-  }
-}
-const subject = run("git", ["-C", deployDir, "log", "--oneline", "-1"], {
-  capture: true,
-}).stdout.trim();
-console.log(`   ${subject}`);
-
-// 2. 그 커밋의 ci-ok
-step(2, "이 커밋의 CI(ci-ok)가 통과했는지 확인해요");
 const repo = run(
   "gh",
   ["repo", "view", "--json", "nameWithOwner", "-q", ".nameWithOwner"],
@@ -146,7 +105,54 @@ if (ci !== "success") {
     }[ci],
   );
 }
-console.log("   ci-ok 성공");
+console.log(`   ${sha.slice(0, 7)} ci-ok 성공`);
+
+// 2. 배포용 작업 트리를 그 커밋으로
+step(2, `배포용 작업 트리를 맞춰요 (${deployDir})`);
+
+if (!existsSync(deployDir)) {
+  run("git", [
+    "-C",
+    repoRoot,
+    "worktree",
+    "add",
+    "-q",
+    "--detach",
+    deployDir,
+    sha,
+  ]);
+} else {
+  const dirty = run("git", ["-C", deployDir, "status", "--porcelain"], {
+    capture: true,
+  }).stdout.trim();
+  if (dirty)
+    fail(
+      `배포용 작업 트리에 고친 파일이 있어요. 확인 후 지워 주세요:\n${dirty}`,
+    );
+  run("git", ["-C", deployDir, "checkout", "-q", "--detach", sha]);
+}
+// 실행 중인 이 스크립트가 배포할 커밋의 것과 다르면 멈춤(오래된 체크아웃의 예전 절차로 배포하지 않게)
+// 배포용 폴더에서 실행했다면 방금 새 커밋으로 바뀐 것이라 한 번 더 실행하면 됨
+const here = path.dirname(fileURLToPath(import.meta.url));
+const deployScripts = path.join(deployDir, "infra", "scripts");
+for (const file of ["deploy.mjs", "deploy-plan.ts"]) {
+  const target = path.join(deployScripts, file);
+  if (
+    !existsSync(target) ||
+    readFileSync(path.join(here, file), "utf8") !== readFileSync(target, "utf8")
+  ) {
+    fail(
+      path.resolve(here) === path.resolve(deployScripts)
+        ? "배포 명령이 main의 새 버전으로 바뀌었어요. 같은 명령을 한 번 더 실행해 주세요: npm run deploy:infra"
+        : `실행한 배포 명령(${here})이 main과 달라요. 배포용 폴더에서 실행해 주세요:\n` +
+            `cd ${deployDir} && npm run deploy:infra`,
+    );
+  }
+}
+const subject = run("git", ["-C", deployDir, "log", "--oneline", "-1"], {
+  capture: true,
+}).stdout.trim();
+console.log(`   ${subject}`);
 
 // 3. 의존성
 step(3, "의존성을 설치해요 (npm ci)");
@@ -174,6 +180,15 @@ if (exported.status !== 0) {
   );
 }
 const creds = JSON.parse(exported.stdout);
+// 배포 대기 중 키가 만료되면 진행 중인 배포를 실패로 잘못 알리게 되므로 넉넉히 남았을 때만 시작함
+const remainingMin = creds.Expiration
+  ? (Date.parse(creds.Expiration) - Date.now()) / 60_000
+  : Infinity;
+if (remainingMin < MIN_CREDENTIAL_MINUTES) {
+  fail(
+    `자격 증명이 ${Math.max(0, Math.floor(remainingMin))}분 뒤 만료돼요. 다시 로그인한 뒤 실행해 주세요: aws login --profile ${profile}`,
+  );
+}
 const env = { ...process.env };
 for (const key of ["AWS_PROFILE", "AWS_DEFAULT_PROFILE"]) delete env[key];
 Object.assign(env, {
@@ -349,7 +364,7 @@ if (waited.status !== 0) {
     );
   }
   fail(
-    "배포가 끝나지 않았어요(실패·롤백, 또는 기다리는 시간 1시간을 넘김). 위 이유와 콘솔의 스택 상태를 확인해 주세요.",
+    "배포가 끝났는지 확인하지 못했어요(실패·롤백, 1시간 넘게 진행 중, 또는 자격 증명 만료). 위 이유와 콘솔의 스택 상태를 확인하고, 진행 중이면 다시 배포하지 마세요.",
   );
 }
 console.log(`\n배포 완료: ${subject}`);
