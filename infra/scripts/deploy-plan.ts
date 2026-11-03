@@ -39,6 +39,15 @@ export function ciConclusion(
   return last.conclusion === "success" ? "success" : "failure";
 }
 
+// ci-ok 확인은 다른 검사가 모두 끝나야 생김 → 결과가 없어도 그 커밋의 ci 워크플로가 도는 중이면 '도는 중'으로 봄
+export function ciStateWithRuns(
+  state: CiState,
+  workflowRunStatuses: readonly string[],
+): CiState {
+  if (state !== "missing") return state;
+  return workflowRunStatuses.some((s) => s !== "completed") ? "pending" : state;
+}
+
 // 새 변경을 받을 수 있는 스택 상태(진행 중·실패 상태에서는 배포하지 않음)
 // UPDATE_ROLLBACK_COMPLETE는 앞 배포가 되돌려진 뒤 안정된 상태라 다시 배포할 수 있음
 const READY = new Set([
@@ -81,8 +90,10 @@ export interface ChangeRow {
   readonly logicalId: string;
   readonly type: string;
   readonly replacement: string;
-  // 삭제·교체(가능성 포함): 데이터가 사라질 수 있음
+  // 삭제·교체: 데이터가 사라질 수 있음. 데이터를 담는 리소스는 교체 가능성(Conditional)도 여기에 넣음
   readonly danger: boolean;
+  // 교체될 수도 있음(Conditional): 속성 값이 배포 때 정해져 CloudFormation이 미리 모름. 대개 교체되지 않음
+  readonly maybe: boolean;
   // 권한을 정하는 리소스(역할·정책·리소스 정책). 넓어졌는지 사람이 따로 봐야 함
   readonly permission: boolean;
 }
@@ -95,6 +106,19 @@ const PERMISSION_TYPES = new Set([
   "AWS::SQS::QueuePolicy",
   "AWS::KMS::Key",
 ]);
+
+// 교체되면 담긴 데이터가 사라지는 리소스. 이 종류는 교체 가능성만 있어도 위험으로 봄
+const STATEFUL_TYPES = new Set([
+  "AWS::DynamoDB::Table",
+  "AWS::S3::Bucket",
+  "AWS::Cognito::UserPool",
+  "AWS::Logs::LogGroup",
+  "AWS::SQS::Queue",
+  "AWS::KMS::Key",
+]);
+
+// 배포마다 바뀌는 cdk 정보 리소스. 표에는 두지만 경고하지 않음
+const CDK_METADATA = "AWS::CDK::Metadata";
 
 function isPermissionType(type: string): boolean {
   return type.startsWith("AWS::IAM::") || PERMISSION_TYPES.has(type);
@@ -114,7 +138,11 @@ export function summarizeChanges(
       danger:
         r.Action === "Remove" ||
         replacement === "True" ||
-        replacement === "Conditional",
+        (replacement === "Conditional" && STATEFUL_TYPES.has(type)),
+      maybe:
+        replacement === "Conditional" &&
+        !STATEFUL_TYPES.has(type) &&
+        type !== CDK_METADATA,
       permission: isPermissionType(type),
     };
   });
@@ -127,17 +155,26 @@ const HEADER = {
   type: "종류",
   replacement: "교체",
   danger: false,
+  maybe: false,
   permission: false,
 };
 
-// 위험한 줄은 맨 앞에 !!, 권한 줄은 ** 를 붙임(색이 안 보이는 터미널에서도 구분되게)
+// 맨 앞 표시(색이 안 보이는 터미널에서도 구분되게): !! 삭제·교체, ** 권한, ~ 교체될 수도 있음, *~ 둘 다
+function mark(
+  r: Omit<ChangeRow, "action" | "logicalId" | "type" | "replacement">,
+): string {
+  if (r.danger) return "!!";
+  if (r.permission) return r.maybe ? "*~" : "**";
+  return r.maybe ? "~ " : "  ";
+}
+
 export function formatTable(rows: readonly ChangeRow[]): string {
   const all = [HEADER, ...rows];
   const width = (k: (typeof COLUMNS)[number]) =>
     Math.max(...all.map((r) => r[k].length));
   return all
     .map((r) =>
-      `${r.danger ? "!!" : r.permission ? "**" : "  "} ${COLUMNS.map((k) => r[k].padEnd(width(k))).join("  ")}`.trimEnd(),
+      `${mark(r)} ${COLUMNS.map((k) => r[k].padEnd(width(k))).join("  ")}`.trimEnd(),
     )
     .join("\n");
 }
