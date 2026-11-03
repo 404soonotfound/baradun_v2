@@ -34,6 +34,7 @@ export const ALARM_LABELS = [
   ["RipStopped", "이안류 수집 중단"],
   ["PublishStopped", "데이터 게시 중단"],
   ["NotificationFailed", "운영 알림 발송 실패"],
+  ["LoginAbuse", "운영자 로그인 반복 요청"],
 ] as const;
 
 export interface AlarmNotification {
@@ -84,6 +85,9 @@ function reasonLabel(alarmName: string): string {
   }
   if (id.endsWith("Stopped")) {
     return "정해진 평가 구간 동안 실행 기록이 확인되지 않았습니다.";
+  }
+  if (id === "LoginAbuse") {
+    return "5분 동안 로그인 실패 또는 비밀번호 찾기·변경 요청이 기준을 넘었습니다. 차단은 Cognito 잠금·요청 제한이 하고 있습니다.";
   }
   return "재시도 뒤에도 알림을 보내지 못해 실패 대기열에 기록되었습니다.";
 }
