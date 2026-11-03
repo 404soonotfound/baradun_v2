@@ -226,6 +226,50 @@ test.describe("확인된 판단 없음", () => {
   });
 });
 
+// 운영자 공지(BRD-151 · D15-6·D16-D4, 화면 설계서 6장 ADM-NTC '홈 상단 배너')
+test.describe("공지", () => {
+  test.use({ scenario: "notice", exploreView: "list" });
+  test("홈 상단에 공지 하나만(점검 예고 먼저), 판단 배지는 그대로, 탐색·상세에는 없음", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    const banner = page.getByRole("status").filter({
+      hasText: "데이터 점검 예고",
+    });
+    // 종류 이름은 화면 읽기에도 들림(아이콘만으로 구분하지 않음)
+    await expect(banner).toContainText("점검 예고, 데이터 점검 예고");
+    await expect(banner).toContainText(
+      "새벽 2시부터 3시까지 정보가 늦게 바뀔 수 있어요.",
+    );
+    for (const hidden of [
+      "새 해변을 더했어요",
+      "끝난 점검 예고",
+      "시작 전 점검 예고",
+      "모르는 종류 공지",
+    ]) {
+      await expect(page.getByText(hidden)).toHaveCount(0);
+    }
+    // 공지가 있어도 판단 상태(특보 없음·관측 지연)는 그대로(D15-6). 배너 순서는 단위 테스트(situation.test.ts)
+    await expect(
+      page.getByText("관측 지연").filter({ visible: true }).first(),
+    ).toBeVisible();
+    await expect(clearBadges(page).first()).toBeVisible();
+    await expectNoA11yViolations(page);
+
+    for (const url of ["/explore/", `/spots/${slugOf(DELAYED_ID)}/`]) {
+      await page.goto(url);
+      await expect(page.getByText("데이터 점검 예고")).toHaveCount(0);
+    }
+
+    // 영어는 manifest의 영어 문구 그대로
+    await page.goto("/en/");
+    await expect(
+      page.getByRole("status").filter({ hasText: "Planned data maintenance" }),
+    ).toContainText("Planned maintenance, Planned data maintenance");
+    await expectNoA11yViolations(page);
+  });
+});
+
 // PC 홈 상태 요약은 0곳인 분류도 3장(Figma 181:736, #105 사용자 결정 10/30). 0곳 카드는 근거 줄 없이 이름·개수만
 test.describe("PC 상태 요약", () => {
   test.use({ scenario: "noConfirmed" });
