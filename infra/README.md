@@ -644,7 +644,7 @@ OPERATOR_USER_POOL_ID=<SampleUserPoolId> OPERATOR_CLIENT_ID=<SampleAdminWebClien
 - **허용표:** `services/src/admin/routes.ts`가 경로·method별 허용 역할의 원본입니다. 지금 경로는 `GET /ops/me`(역할·세션 끝 시각) 하나이고, 업무 경로는 각 이슈에서 더합니다. 판단 상태를 쓰는 경로는 두지 않습니다.
 - **쓰기:** `versionedWrite`가 version 조건부 쓰기 + 멱등 키 + 본문 해시를 한 트랜잭션으로 씁니다. 같은 키·같은 내용은 앞 결과, 같은 키·다른 내용이나 version 불일치는 409입니다. 운영 API 키는 모두 `admin#`으로 시작해 게시 잠금·슬롯·게시 버전 키와 겹치지 않습니다.
 - **응답:** 모두 `cache-control: no-store`. 오류 본문은 `{ error: { code, requestId: "req-xxxxxxxx", traceId } }`이고 문구는 관리자 앱이 정합니다.
-- **권한:** 역할은 Ops 테이블 `GetItem`·`PutItem`·`UpdateItem`과 자기 로그만 씁니다. State·Inquiry 테이블 권한은 없습니다. 실행 정책·boundary는 바뀌지 않습니다(기존 `BaradunV2-*` 범위 안).
+- **권한:** 역할은 Ops 테이블 `GetItem`·`PutItem`·`UpdateItem`, 감사 키 `Query`(아래 변경 이력), 문의 처리(아래), 자기 로그만 씁니다. State 테이블 권한은 없습니다. 실행 정책·boundary는 바뀌지 않습니다(기존 `BaradunV2-*` 범위 안).
 
 ### 샘플 시연 허용 설정
 
@@ -691,6 +691,20 @@ npx --no-install tsx services/scripts/inquiry-status-backfill.ts --table <Inquir
 ```
 
 이전 도구는 문의 본문·이메일을 읽거나 출력하지 않고 개수만 보여 줍니다. 이전 전에 운영 API가 상태 없는 문의를 바꾸면(version 0) 같은 방식으로 접수·이전 문의 표시를 함께 채웁니다.
+
+### 변경 이력(BRD-155)
+
+운영 API 쓰기와 샘플 계정 사용을 남기는 감사 기록입니다. 기준은 결정 기록 D16-B5, 아키텍처 18.3, 화면 설계서 6장 ADM-AUD입니다. 코드는 `services/src/admin/audit.ts`입니다.
+
+- **저장:** Ops 테이블 `admin#audit#{YYYY-MM}`(UTC 월) / `{시각}#{traceId}`. 시각은 UTC ISO이고 화면이 Asia/Seoul로 바꿔 보여 줍니다. 보관은 366일(TTL)입니다.
+- **내용:** 시각·운영자(Cognito sub)·역할·종류(`inquiry.update`·`sample.read`·`sample.denied`)·대상·바뀐 항목 이름. 문의 처리 상태는 앞·뒤 값도 남깁니다. 문의 본문·내부 메모·반려 이유 글·이메일은 남기지 않습니다(테스트로 확인).
+- **함께 쓰기:** 운영 API 쓰기(`versionedWrite`)는 감사 기록 없이 받지 않고, 멱등 기록·업무 변경·감사 기록을 한 트랜잭션으로 씁니다. 재전송·version 충돌은 바뀐 것이 없으므로 기록하지 않습니다. 감사 기록은 새 키에만 씁니다(`attribute_not_exists`).
+- **샘플 계정:** 로그인 확인(`/ops/me`)·조회·거절된 요청을 모두 남깁니다(대상은 `GET /ops/inquiries/{id}`처럼 경로 모양만). 기록에 실패하면 응답하지 않습니다(500). 운영자 조회는 남기지 않습니다(쓰기만).
+- **목록:** `GET /ops/audit?from=&to=&action=&actor=&cursor=&limit=`(보기 이상, 샘플은 403). `from`·`to`는 `Z`로 끝나는 UTC 시각만 받고, 기본은 최근 30일·최대 366일입니다. 최근 기록부터 월 파티션을 내려가며 읽고, 한 요청에 20쪽까지 읽은 뒤 `cursor`로 이어 갑니다. `cursor`에는 필터가 담기므로 다른 필터와 섞으면 400입니다.
+- **권한:** 운영 API 역할의 Ops `Query`는 `dynamodb:LeadingKeys`가 `admin#audit#*`일 때만 됩니다. 감사 키의 `UpdateItem`·`DeleteItem`은 명시적으로 거부합니다(`DeleteItem`은 원래 허용도 없음). Put 권한만으로는 추가 전용이 되지 않으므로 위 조건부 쓰기·트랜잭션이 함께 막습니다.
+- **배포:** 운영 API 함수 코드와 역할 정책 `Modify`만 바뀝니다(테이블·실행 정책 변경 없음).
+- **복구:** Ops 테이블 PITR은 꺼져 있고 로그는 1주 보관이라, 이 기록은 논리적 1년 보관이지 재해 복구를 보장하지 않습니다(구현 제안 I10, 미확정).
+- **화면:** 관리자 앱(BRD-147)이 생긴 뒤 기간·종류·운영자 필터와 대상 이동을 붙입니다. 해변 파일 변경은 저장소 커밋이 이력이므로 여기 남기지 않습니다.
 
 ## 점검·강제 업데이트
 
