@@ -2,12 +2,12 @@
 // 색은 모두 토큰(color.home.*)이라 다크에서 밤바다로 바뀜. 물결 경로는 Figma 원본 그대로
 
 // 모바일(Figma s.homebg 171:380): 화면 맨 위부터 620px 그라데이션 + 150px 아래 흰 물결 3겹(390×360)
-// 본문 위 여백(pt-5, 홈 화면 추가는 노치만큼 더)과 좌우 여백만큼 밖으로 넓혀 화면 끝까지 칠함
+// 본문(main, relative) 맨 위·양 끝 기준이라 위 여백과 좌우 여백까지 화면 끝까지 칠함. 언어 안내가 있어도 그 뒤부터 깔림
 export function HomeSky() {
   return (
     <div
       aria-hidden="true"
-      className="pointer-events-none absolute -top-5 -right-gutter -left-gutter -z-10 h-[620px] bg-home-sky standalone:-top-[calc(20px+env(safe-area-inset-top))] lg:hidden"
+      className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[620px] bg-home-sky lg:hidden"
     >
       <svg
         className="home-wave-fade absolute inset-x-0 top-[150px] h-[360px] w-full"

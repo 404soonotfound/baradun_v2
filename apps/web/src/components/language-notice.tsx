@@ -45,7 +45,12 @@ function Notice({ locale, texts }: Props) {
   const text = target ? texts[target] : undefined;
   if (!target || !text) return null;
   return (
-    <section lang={target} aria-label={text.label} className="mb-4">
+    // 홈 바다 배경(본문 맨 위부터 깔림) 위에 보이게 앞으로 올림
+    <section
+      lang={target}
+      aria-label={text.label}
+      className="relative z-10 mb-4"
+    >
       <Banner
         tone="gray"
         icon={<Languages size={16} />}
