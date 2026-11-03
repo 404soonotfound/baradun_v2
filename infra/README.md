@@ -534,7 +534,9 @@ await fetch("/api/inquiries", {
 
 ## 운영 경보(BRD-62)
 
-`OpsAlarms`가 CloudWatch 경보 9개(수집기 4개·게시 함수의 오류, 특보·관측·이안류 수집과 게시의 실행 없음)를 만들고 운영 SNS 주제로 `AlertEmail`에 메일을 보냅니다.
+`OpsAlarms`가 CloudWatch 경보 10개(수집기 4개·게시 함수의 오류, 특보·관측·이안류 수집과 게시의 실행 없음, 운영 알림 발송 실패)를 만듭니다. 오류 경보는 한 번의 실패에도 울립니다. 실행 없음 경보는 최근 창(특보·게시 25분, 관측·이안류 60분) 동안 실행이 없으면 울려서, 특보 확인 유효시간 45분·파고 90분보다 각각 20분·30분 먼저 알리고 정상 실행의 지표가 10분 이상 늦게 들어와도 울리지 않습니다. ALARM 상태 변경은 EventBridge가 공통 변환 Lambda로 보내며, Lambda가 한국어 제목·설명·KST 시각·콘솔 링크를 만들어 기존 운영 SNS 주제의 `AlertEmail` 구독에 발송합니다. 복구(OK) 메일은 보내지 않습니다.
+
+- 변환 Lambda는 실패하면 1번 더 시도합니다. 그래도 실패하거나 EventBridge가 전달하지 못하면 이벤트를 실패 대기열(SQS, `OpsNotificationFailures`, 14일 보관)에 남기고 `NotificationFailed` 경보가 울립니다. 이 경보도 같은 Lambda로 알리므로 고장이 계속되면 메일이 오지 않습니다. 운영 주제는 AWS 관리형 키(`alias/aws/sns`)로 암호화해서 CloudWatch가 직접 게시할 수 없고, 고객 관리형 키는 월 요금이 들어서 쓰지 않습니다. 실패 대기열에 메시지가 남아 있으면 CloudWatch 경보 화면에서 원래 경보를 확인하고, 원인을 고친 뒤 메시지를 지워 경보를 OK로 돌립니다.
 
 - 경보를 처음 넣는 배포 전에 실행 정책(`BaradunCdkExecution`·`BaradunCdkExecutionWorkload`)을 최신 버전으로 올립니다(위 '정책 적용과 되돌리기 절차' 4단계 명령). 올리지 않으면 `cloudwatch:PutMetricAlarm`이 거부되어 배포가 롤백됩니다.
 - 운영 주제는 문의 알림 주제와 따로라서 첫 배포 뒤 구독 확인 메일이 한 통 더 옵니다. 확인하지 않으면 경보가 울려도 메일이 가지 않습니다.
