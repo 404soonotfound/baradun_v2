@@ -2,7 +2,7 @@ import { Match } from "aws-cdk-lib/assertions";
 import { readFileSync } from "node:fs";
 import * as path from "node:path";
 import { describe, expect, it } from "vitest";
-import { template } from "./stack-template";
+import { siteDistribution, template } from "./stack-template";
 
 describe("데이터 문의 접수 인프라", () => {
   it("함수 URL을 AWS_IAM과 CloudFront OAC로 잠근다", () => {
@@ -35,7 +35,8 @@ describe("데이터 문의 접수 인프라", () => {
         "lambda:InvokeFunction",
       ]),
     );
-    expect(permissions).toHaveLength(2);
+    // 문의 함수 2개 + 운영 API 함수 2개(운영자 사이트 /ops/*, BRD-147)
+    expect(permissions).toHaveLength(4);
     for (const permission of permissions) {
       expect(permission.Properties.SourceArn).toBeDefined();
       expect(permission.Properties.Principal).not.toBe("*");
@@ -49,11 +50,7 @@ describe("데이터 문의 접수 인프라", () => {
   });
 
   it("문의 경로에 캐시 없음과 CloudFront Function 선행 검사를 붙인다", () => {
-    const distributions = Object.values(
-      template.findResources("AWS::CloudFront::Distribution"),
-    );
-    expect(distributions).toHaveLength(1);
-    const behaviors = distributions[0]?.Properties.DistributionConfig
+    const behaviors = siteDistribution().Properties.DistributionConfig
       .CacheBehaviors as Array<Record<string, unknown>>;
     const inquiry = behaviors.find(
       (behavior) => behavior.PathPattern === "api/inquiries*",
@@ -89,10 +86,7 @@ describe("데이터 문의 접수 인프라", () => {
     // 직접 만든 정책이 없어야 함: content-length·x-amz-content-sha256은 CloudFront가
     // allowlist에 못 넣게 하는 헤더라 정책 생성이 거부됨(2026-10-26 실배포 오류)
     template.resourceCountIs("AWS::CloudFront::OriginRequestPolicy", 0);
-    const distributions = Object.values(
-      template.findResources("AWS::CloudFront::Distribution"),
-    );
-    const behaviors = distributions[0]?.Properties.DistributionConfig
+    const behaviors = siteDistribution().Properties.DistributionConfig
       .CacheBehaviors as Array<Record<string, unknown>>;
     const inquiry = behaviors.find(
       (behavior) => behavior.PathPattern === "api/inquiries*",

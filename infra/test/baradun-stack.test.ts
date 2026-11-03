@@ -28,7 +28,8 @@ describe("버킷", () => {
   });
 
   it("읽기 허용은 CloudFront뿐이고, 누구나(*) 허용은 없다", () => {
-    template.resourceCountIs("AWS::CloudFront::OriginAccessControl", 2);
+    // 사이트 S3·문의 함수 URL·운영자 사이트 S3·운영 API 함수 URL (BRD-147)
+    template.resourceCountIs("AWS::CloudFront::OriginAccessControl", 4);
 
     const statements = Object.values(
       template.findResources("AWS::S3::BucketPolicy"),

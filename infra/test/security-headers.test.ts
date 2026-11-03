@@ -8,7 +8,8 @@ import { template } from "./stack-template";
 
 describe("CloudFront 보안 응답 헤더 정책 (BRD-118)", () => {
   it("ResponseHeadersPolicy 리소스가 생성되고 보안 헤더가 설정된다", () => {
-    template.resourceCountIs("AWS::CloudFront::ResponseHeadersPolicy", 1);
+    // 사용자 사이트 정책 하나 + 운영자 사이트 정책 하나(admin-site.test.ts, BRD-147)
+    template.resourceCountIs("AWS::CloudFront::ResponseHeadersPolicy", 2);
     template.hasResourceProperties(
       "AWS::CloudFront::ResponseHeadersPolicy",
       Match.objectLike({
@@ -52,7 +53,7 @@ describe("CloudFront 보안 응답 헤더 정책 (BRD-118)", () => {
   it("사이트 기본 동작(defaultBehavior)에 보안 헤더 정책이 붙는다", () => {
     const policies = Object.keys(
       template.findResources("AWS::CloudFront::ResponseHeadersPolicy"),
-    );
+    ).filter((id) => id.startsWith("SecurityHeaders"));
     expect(policies).toHaveLength(1);
     const policyLogicalId = policies[0]!;
 
@@ -68,7 +69,7 @@ describe("CloudFront 보안 응답 헤더 정책 (BRD-118)", () => {
   it("문의 API 동작(api/inquiries*)에도 보안 헤더 정책이 붙는다", () => {
     const policies = Object.keys(
       template.findResources("AWS::CloudFront::ResponseHeadersPolicy"),
-    );
+    ).filter((id) => id.startsWith("SecurityHeaders"));
     expect(policies).toHaveLength(1);
     const policyLogicalId = policies[0]!;
 
@@ -138,10 +139,9 @@ describe("CloudFront 보안 응답 헤더 정책 (BRD-118)", () => {
 
   describe("E2E 정적 서버 헤더 정책 일치 검증 (BRD-118)", () => {
     it("E2E static-server의 CSP 생성 결과가 infra buildContentSecurityPolicy와 완전히 일치한다", async () => {
-      const { buildCspHeader, SECURITY_HEADERS } = await (
-        // @ts-expect-error - static-server.mjs는 E2E용 JS 모듈이므로 타입 선언 파일이 없음
-        import("../../apps/web/e2e/static-server.mjs")
-      );
+      const { buildCspHeader, SECURITY_HEADERS } =
+        await // @ts-expect-error - static-server.mjs는 E2E용 JS 모듈이므로 타입 선언 파일이 없음
+        import("../../apps/web/e2e/static-server.mjs");
 
       // 1. 사진 업로드 꺼짐(기본값) 비교
       const infraDefaultCsp = buildContentSecurityPolicy({
