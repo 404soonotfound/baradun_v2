@@ -2,7 +2,14 @@
 
 import { useRouter } from "next/navigation";
 import QRCode from "qrcode";
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import {
+  lazy,
+  Suspense,
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+} from "react";
 import { POOLS, type PoolKind } from "@/lib/auth/config";
 import { authFailureOf, type AuthFailure } from "@/lib/auth/errors";
 import { useAuthSession, useSessionSnapshot } from "@/lib/auth/provider";
@@ -25,6 +32,14 @@ import { AuthShell, Button, Notice, TextLink } from "./ui";
 // 틀린 이메일·비밀번호는 계정이 있는지와 상관없이 같은 문구. 잠금은 남은 시간·횟수를 보여 주지 않음(D16-A5)
 
 const t = messages;
+
+// 로컬 개발 서버 전용 테스트 로그인(BRD-172). 배포 빌드에서 빠지도록 개발 분기 안에서만 불러옴
+const LocalDevLogin =
+  process.env.NODE_ENV === "development"
+    ? lazy(() =>
+        import("./local-dev-login").then((m) => ({ default: m.LocalDevLogin })),
+      )
+    : null;
 
 type View =
   | { kind: "form"; error: string | null }
@@ -181,10 +196,18 @@ export function LoginFlow({ pool }: { pool: PoolKind }) {
     }
   };
 
+  // 로컬 개발 서버에서만(BRD-172). 풀 설정이 없어도 씀
+  const localDev = LocalDevLogin ? (
+    <Suspense fallback={null}>
+      <LocalDevLogin pool={pool} />
+    </Suspense>
+  ) : null;
+
   if (!config) {
     return (
       <AuthShell title={pool === "demo" ? t.login.demoTitle : t.login.title}>
         <Notice tone="fail" title={t.common.configError} role="alert" />
+        {localDev}
       </AuthShell>
     );
   }
@@ -261,6 +284,7 @@ export function LoginFlow({ pool }: { pool: PoolKind }) {
               {busy ? t.common.working : t.login.submit}
             </Button>
           </form>
+          {localDev}
         </AuthShell>
       );
     case "locked":

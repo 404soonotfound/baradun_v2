@@ -21,6 +21,15 @@ export async function callCognito<T>(
   body: Record<string, unknown>,
   fetcher: Fetcher = fetch,
 ): Promise<T> {
+  // 로컬 테스트 계정의 가짜 토큰은 실제 Cognito로 보내지 않음(BRD-172). 개발 분기 안에서만 불러와 배포 빌드에서 빠짐
+  if (process.env.NODE_ENV === "development") {
+    const { isLocalToken } = await import("./local-dev");
+    if (
+      Object.values(body).some((v) => typeof v === "string" && isLocalToken(v))
+    ) {
+      throw new CognitoError("LocalDevAccount", "local test account");
+    }
+  }
   let response: Response;
   try {
     response = await fetcher(COGNITO_ENDPOINT, {

@@ -44,6 +44,12 @@ export async function opsFetch<T>(
 ): Promise<OpsResult<T>> {
   const token = await accessToken();
   if (!token) return { ok: false, status: 0, code: "reauth" };
+  // 로컬 테스트 로그인은 운영 API 대신 로컬 샘플 응답(BRD-172). 개발 분기 안에서만 불러와 배포 빌드에서 빠짐
+  if (process.env.NODE_ENV === "development") {
+    const local = await import("./local-dev");
+    if (local.isLocalToken(token))
+      return local.localOps<T>(path, local.localPoolOf(token), request);
+  }
   const headers: Record<string, string> = { [ACCESS_TOKEN_HEADER]: token };
   let body: string | undefined;
   if (request.body !== undefined) {
