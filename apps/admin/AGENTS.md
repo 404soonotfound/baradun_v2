@@ -17,4 +17,5 @@ This version has breaking changes — APIs, conventions, and file structure may 
 - 판단 상태(특보 없음·이용불가·판단불가)는 어떤 화면에서도 바꾸지 않는다(G1).
 - 화면 안 이동은 `next/link`·`router`로만 한다. `<a href>`로 페이지를 새로 불러오면 메모리의 로그인이 사라진다.
 - 로그인은 `src/lib/auth`가 맡는다(결정 기록 D17-1: SRP는 `amazon-cognito-identity-js`, 나머지 Cognito 호출은 공개 API 직접). 운영 API는 `opsFetch`로만 부른다(전용 토큰 헤더·본문 해시).
+- 로컬 개발 서버(`npm run dev -w apps/admin`)에서는 로그인 화면의 '로컬 테스트 계정으로 들어가기'로 비밀번호 없이 들어간다(결정 기록 D17-5). 가짜 토큰과 `src/lib/auth/local-dev.ts`의 샘플 응답만 쓰고 실제 Cognito·운영 API는 부르지 않는다. 화면을 만들 때 필요한 `/ops/*` 샘플 응답은 `localOps`에 더한다. 이 코드는 `process.env.NODE_ENV === "development"` 분기 안에서 `import()`로만 불러온다(정적으로 가져오면 배포 묶음에 남아 빌드 결과 검사가 실패한다).
 - E2E: 테스트용 풀 값으로 빌드한 뒤 `npm run test:e2e -w apps/admin`(값은 `e2e/fixtures.ts` `TEST_POOL_ENV`). Cognito·`/ops/*`는 가짜 응답이다.
