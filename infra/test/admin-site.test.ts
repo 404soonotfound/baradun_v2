@@ -137,6 +137,16 @@ describe("운영자 사이트 응답 헤더", () => {
   });
 });
 
+describe("운영자 사이트 E2E 정적 서버", () => {
+  it("CSP·검색 차단 헤더가 CloudFront 헤더 정책과 같다(로컬 E2E가 실제 헤더로 검사되게)", async () => {
+    const { ADMIN_CSP, ADMIN_HEADERS } =
+      await // @ts-expect-error - static-server.mjs는 E2E용 JS 모듈이라 타입 선언 파일이 없음
+      import("../../apps/admin/e2e/static-server.mjs");
+    expect(ADMIN_CSP).toBe(buildAdminContentSecurityPolicy());
+    expect(ADMIN_HEADERS["x-robots-tag"]).toBe(ADMIN_ROBOTS_TAG);
+  });
+});
+
 describe("배포 역할 (GitHub Actions)", () => {
   const statements = allIamPolicies()
     .filter((p) => p.roles.some((r) => r.startsWith("DeployRole")))
