@@ -17,14 +17,16 @@ const LINKS = [
   { href: "/settings/inquiry/", key: "inquiry" },
 ] as const;
 
-// 저작권 연도는 빌드한 해(정적 내보내기)
-const YEAR = new Date().getFullYear();
+// 저작권 연도는 빌드한 해(정적 내보내기). 빌드 기기 시간대(CI는 UTC)와 상관없이 한국 시각(KST, UTC+9) 기준
+const KST_OFFSET_MS = 9 * 60 * 60_000;
+const YEAR = new Date(Date.now() + KST_OFFSET_MS).getUTCFullYear();
 
 export async function SiteFooter({ locale }: { locale: Locale }) {
   const t = await getTranslations({ locale });
 
   return (
-    <footer className="border-t border-border-default bg-bg-surface pb-[calc(var(--spacing-tabbar)+max(14px,env(safe-area-inset-bottom)))] lg:pb-0">
+    // mt-auto: 본문이 짧은 화면에서도 푸터를 화면 맨 아래에 둠(body가 세로 flex, globals.css)
+    <footer className="mt-auto border-t border-border-default bg-bg-surface pb-[calc(var(--spacing-tabbar)+max(14px,env(safe-area-inset-bottom)))] lg:pb-0">
       <div className="mx-auto flex w-full max-w-[1280px] flex-col gap-5 px-gutter py-6 lg:flex-row lg:items-center lg:gap-8 lg:px-10 lg:py-5">
         <Link
           href={localizedPath(locale, "/")}

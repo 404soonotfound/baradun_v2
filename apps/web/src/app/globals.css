@@ -26,6 +26,9 @@
 
   body {
     min-height: 100dvh;
+    /* 세로 flex: 본문이 짧아도 사이트 푸터(mt-auto, site-footer.tsx)가 화면 맨 아래에 붙음 */
+    display: flex;
+    flex-direction: column;
     margin: 0;
     background: var(--color-bg-page);
     color: var(--color-text-default);
