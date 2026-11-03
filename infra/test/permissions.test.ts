@@ -8,6 +8,8 @@ import {
   toList,
 } from "./stack-template";
 import { GITHUB_OIDC_SUBJECT, INQUIRY_STATUS_INDEX } from "../lib/settings";
+// services 감사 키 접두어와 IAM 조건이 맞는지 비교함(한쪽만 바뀌면 테스트가 깨짐)
+import { AUDIT_PREFIX } from "../../services/src/admin/keys";
 
 // 역할의 논리 ID를 찾음 (CDK가 이름 뒤에 해시를 붙이므로 앞부분으로 찾기)
 function roleId(prefix: string): string {
@@ -257,7 +259,9 @@ describe("DynamoDB 권한 (BRD-55)", () => {
     expect(query).toHaveLength(1);
     expect(toList(query[0]!.Action)).toEqual(["dynamodb:Query"]);
     expect(query[0]!.Condition).toEqual({
-      "ForAllValues:StringLike": { "dynamodb:LeadingKeys": ["admin#audit#*"] },
+      "ForAllValues:StringLike": {
+        "dynamodb:LeadingKeys": [`${AUDIT_PREFIX}*`],
+      },
       Null: { "dynamodb:LeadingKeys": "false" },
     });
 
@@ -268,7 +272,9 @@ describe("DynamoDB 권한 (BRD-55)", () => {
       "dynamodb:UpdateItem",
     ]);
     expect(denies[0]!.Condition).toEqual({
-      "ForAnyValue:StringLike": { "dynamodb:LeadingKeys": ["admin#audit#*"] },
+      "ForAnyValue:StringLike": {
+        "dynamodb:LeadingKeys": [`${AUDIT_PREFIX}*`],
+      },
     });
     // 지우기는 허용 문장에도 없음(Deny는 이중 안전장치)
     for (const s of statements.filter((x) => x.Effect === "Allow")) {
