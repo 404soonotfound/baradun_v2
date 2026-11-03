@@ -4,7 +4,6 @@
     "description": "공식 특보와 해양 관측 정보를 해변별로 보여줘요."
   },
   "common": {
-    "languages": "언어",
     "newWindow": "새 창에서 열림"
   },
   "verdict": {

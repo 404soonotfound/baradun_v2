@@ -4,7 +4,6 @@
     "description": "Official marine warnings and sea observations by beach."
   },
   "common": {
-    "languages": "Languages",
     "newWindow": "Opens in a new window"
   },
   "verdict": {
