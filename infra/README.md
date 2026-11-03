@@ -550,7 +550,7 @@ await fetch("/api/inquiries", {
 - 경보를 처음 넣는 배포 전에 실행 정책(`BaradunCdkExecution`·`BaradunCdkExecutionWorkload`)을 최신 버전으로 올립니다(위 '정책 적용과 되돌리기 절차' 4단계 명령). 올리지 않으면 `cloudwatch:PutMetricAlarm`이 거부되어 배포가 롤백됩니다.
 - 운영 주제는 문의 알림 주제와 따로라서 첫 배포 뒤 구독 확인 메일이 한 통 더 옵니다. 확인하지 않으면 경보가 울려도 메일이 가지 않습니다.
 - **로그인 반복 요청(`LoginAbuse`, 결정 기록 D17-4):** 5분 동안 운영자·데모 풀의 로그인 실패 합계가 10회 이상이거나, 계정 복구 API(비밀번호 찾기·확인·변경, 첫 로그인 새 비밀번호) 호출이 5회 이상이면 울립니다. 사용자 풀 값이 화면 파일·공개 저장소에 드러나 누구나 요청을 보낼 수 있어서 둔 감시 경보입니다. 차단은 하지 않고(Cognito 잠금·요청 제한이 막음) 알기만 합니다. 로그인이 없는 구간은 정상으로 봐서, 반복이 끝나면 OK로 돌아가고 다음 반복에 다시 알립니다. 이 경보로 경보 수가 무료 10개를 넘어 월 약 $0.10이 듭니다. 실제 공격이 보이면 사용자 풀에 WAF를 붙일지 다시 정합니다.
-  - 계정 복구 호출 수는 계정 단위 사용량 지표(`AWS/Usage` `CallCount`, `Service=Cognito user pool`·`Type=API`·`Resource=UserAccountRecovery`·`Class=None`)입니다. 배포 뒤 비밀번호 찾기를 한 번 하고 `aws cloudwatch list-metrics --namespace AWS/Usage`로 차원 값이 같은지 확인합니다. 다르면 경보가 그 값을 보지 못하므로 코드의 차원을 실제 값으로 고칩니다.
+  - 계정 복구 호출 수는 계정 단위 사용량 지표(`AWS/Usage` `CallCount`, `Service=Cognito User Pool`·`Type=API`·`Resource=UserAccountRecovery`·`Class=None`)입니다. 2026-11-04 실제 지표(`aws cloudwatch list-metrics --namespace AWS/Usage`)로 확인한 값입니다. 문서 표기(`Cognito user pool`)와 대소문자가 달라서, 문서대로 쓰면 경보가 이 값을 보지 못합니다.
 
 ## 운영자 로그인 사용자 풀(BRD-145)
 
