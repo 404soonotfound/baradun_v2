@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import QRCode from "qrcode";
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { POOLS, type PoolKind } from "@/lib/auth/config";
 import { authFailureOf, type AuthFailure } from "@/lib/auth/errors";
 import { useAuthSession, useSessionSnapshot } from "@/lib/auth/provider";
@@ -126,9 +126,13 @@ export function LoginFlow({ pool }: { pool: PoolKind }) {
   const [busy, setBusy] = useState(false);
   const [showKey, setShowKey] = useState(false);
 
-  // 이미 로그인한 탭이면 운영 홈으로
+  // 이미 로그인한 탭이면 보던 화면(없으면 운영 홈)으로. 돌아갈 화면은 한 번만 꺼냄
+  // (개발 서버의 StrictMode가 효과를 두 번 부르면 두 번째가 홈으로 덮어씀)
+  const leaving = useRef(false);
   useEffect(() => {
-    if (snapshot.status === "signed_in") router.replace(takeReturnTo());
+    if (snapshot.status !== "signed_in" || leaving.current) return;
+    leaving.current = true;
+    router.replace(takeReturnTo());
   }, [snapshot.status, router]);
 
   // 이동은 위 효과 하나만 함(돌아갈 화면을 두 번 꺼내 쓰면 두 번째가 홈이 됨)
