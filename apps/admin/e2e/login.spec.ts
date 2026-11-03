@@ -3,6 +3,7 @@ import {
   ME_OK,
   expect,
   expectNoA11yViolations,
+  logout,
   mockCognito,
   mockOps,
   signInWithPassword,
@@ -166,7 +167,7 @@ test.describe("운영자 로그인", () => {
     );
     await mockOps(page, ME_OK);
     await signInWithPassword(page, "/login/", OPS);
-    await page.getByRole("button", { name: "로그아웃" }).click();
+    await logout(page);
     await expect(page).toHaveURL(/\/login\/$/);
     await expect(page.getByText("로그아웃했어요")).toBeVisible();
     await expect
@@ -241,7 +242,7 @@ test.describe("데모 계정 (D17-2)", () => {
       page.getByText("데모 계정을 쓸 수 있는 기간이 아니에요"),
     ).toBeVisible();
     await expectNoA11yViolations(page);
-    await page.getByRole("button", { name: "로그아웃" }).click();
+    await logout(page);
     await expect(page).toHaveURL(/\/login\/demo\/$/);
   });
 });
