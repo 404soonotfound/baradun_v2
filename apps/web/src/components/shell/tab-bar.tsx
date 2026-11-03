@@ -1,8 +1,7 @@
 "use client";
 
-import { Compass, House, Settings, Star, type LucideProps } from "lucide-react";
+import { Compass, House, Settings, Star, type LucideIcon } from "lucide-react";
 import Link from "next/link";
-import type { ComponentType } from "react";
 import { useTranslations } from "next-intl";
 
 import { cn } from "@/lib/cn";
@@ -12,7 +11,7 @@ import { useTabNavigation } from "@/lib/use-tab-navigation";
 // 하단 탭 (노션 3장 TabBar): 전체 74 = 탭 60 + 아래 여백 최소 14, 아이콘 21 + 글자 11, 선택 = 파랑 굵게
 // 화면 바닥에 고정. PC(lg 이상)에서는 숨기고 상단 내비가 대신함
 // 이동 규칙(마지막 상태·맨 위로)은 useTabNavigation 담당
-const ICONS: Record<TabKey, ComponentType<LucideProps>> = {
+const ICONS: Record<TabKey, LucideIcon> = {
   home: House,
   explore: Compass,
   favorites: Star,
