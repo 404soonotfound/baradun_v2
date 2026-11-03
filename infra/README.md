@@ -699,7 +699,7 @@ npx --no-install tsx services/scripts/inquiry-status-backfill.ts --table <Inquir
 - **저장:** Ops 테이블 `admin#audit#{YYYY-MM}`(UTC 월) / `{시각}#{traceId}`. 시각은 UTC ISO이고 화면이 Asia/Seoul로 바꿔 보여 줍니다. 보관은 366일(TTL)입니다.
 - **내용:** 시각·운영자(Cognito sub)·역할·종류(`inquiry.update`·`sample.read`·`sample.denied`)·대상·바뀐 항목 이름. 문의 처리 상태는 앞·뒤 값도 남깁니다. 문의 본문·내부 메모·반려 이유 글·이메일은 남기지 않습니다(테스트로 확인).
 - **함께 쓰기:** 운영 API 쓰기(`versionedWrite`)는 감사 기록 없이 받지 않고, 멱등 기록·업무 변경·감사 기록을 한 트랜잭션으로 씁니다. 재전송·version 충돌은 바뀐 것이 없으므로 기록하지 않습니다. 감사 기록은 새 키에만 씁니다(`attribute_not_exists`).
-- **샘플 계정:** 로그인 확인(`/ops/me`)·조회·거절된 요청을 모두 남깁니다(대상은 `GET /ops/inquiries/{id}`처럼 경로 모양만). 기록에 실패하면 응답하지 않습니다(500). 운영자 조회는 남기지 않습니다(쓰기만).
+- **샘플 계정:** 로그인 확인(`/ops/me`)·조회·거절된 요청을 모두 남깁니다(대상은 `GET /ops/inquiries/{id}`처럼 경로 모양만). 기록에 실패하면 응답하지 않습니다(500). 운영자 조회는 남기지 않습니다(쓰기만). 샘플 요청마다 Ops 쓰기 1을 쓰므로(게시 잠금·수집 슬롯과 같은 쓰기 5) 요청 빈도 제한은 입구 연결(BRD-147)에서 함께 정합니다. 그 전까지는 함수 URL을 부를 곳이 없습니다.
 - **목록:** `GET /ops/audit?from=&to=&action=&actor=&cursor=&limit=`(보기 이상, 샘플은 403). `from`·`to`는 `Z`로 끝나는 UTC 시각만 받고, 기본은 최근 30일·최대 366일입니다. 최근 기록부터 월 파티션을 내려가며 읽고, 한 요청에 20쪽까지 읽은 뒤 `cursor`로 이어 갑니다. 보관 기한(ttl)이 지난 기록은 TTL로 지워지기 전이라도 뺍니다. `cursor`에는 필터가 담기므로 다른 필터와 섞으면 400입니다.
 - **권한:** 운영 API 역할의 Ops `Query`는 `dynamodb:LeadingKeys`가 `admin#audit#*`일 때만 됩니다. 감사 키의 `UpdateItem`·`DeleteItem`은 명시적으로 거부합니다(`DeleteItem`은 원래 허용도 없음). Put 권한만으로는 추가 전용이 되지 않으므로 위 조건부 쓰기·트랜잭션이 함께 막습니다.
 - **배포:** 운영 API 함수 코드와 역할 정책 `Modify`만 바뀝니다(테이블·실행 정책 변경 없음).
