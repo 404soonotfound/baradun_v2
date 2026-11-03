@@ -34,6 +34,11 @@ function createSession(): AuthSession {
     clearTimer: (handle) =>
       clearTimeout(handle as ReturnType<typeof setTimeout>),
     refresh: async (pool, refreshToken) => {
+      if (process.env.NODE_ENV === "development") {
+        const { localRefresh } = await import("./local-dev");
+        const local = localRefresh(refreshToken, Date.now());
+        if (local) return local;
+      }
       const result = await refreshTokens(clientOf(pool), refreshToken);
       return {
         accessToken: result.AccessToken,
@@ -41,8 +46,13 @@ function createSession(): AuthSession {
         refreshToken: result.RefreshToken ?? "",
       };
     },
-    revoke: (pool, refreshToken) =>
-      revokeRefreshToken(clientOf(pool), refreshToken),
+    revoke: async (pool, refreshToken) => {
+      if (process.env.NODE_ENV === "development") {
+        const { isLocalToken } = await import("./local-dev");
+        if (isLocalToken(refreshToken)) return;
+      }
+      await revokeRefreshToken(clientOf(pool), refreshToken);
+    },
     ...(channel
       ? {
           channel: {
@@ -69,6 +79,21 @@ const ACTIVITY_EVENTS = [
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session] = useState(createSession);
+
+  // 로컬 개발 서버의 테스트 로그인은 새로고침해도 이어 감(BRD-172)
+  // 배포 빌드에서 빠지도록 개발 분기 안에서만 불러옴(위에서 가져오면 쓰지 않아도 묶음에 남음)
+  useEffect(() => {
+    if (process.env.NODE_ENV !== "development") return;
+    let stop: (() => void) | null = null;
+    let live = true;
+    void import("./local-dev").then(({ attachLocalSession }) => {
+      if (live) stop = attachLocalSession(session);
+    });
+    return () => {
+      live = false;
+      stop?.();
+    };
+  }, [session]);
 
   useEffect(() => {
     // 활동이 잦아도 1분에 한 번만 셈(타이머 다시 걸기를 줄임)
