@@ -329,7 +329,8 @@ function NoticeStep({ locale }: { locale: Locale }) {
         </span>
       </p>
       {/* 남는 높이는 버튼 위로 몰아 점·버튼·링크가 화면 아래에 붙음 */}
-      <div className="mt-auto flex flex-col gap-2 sm:gap-[18px]">
+      {/* 모바일은 버튼을 화면 아래에 붙이고, PC는 내용 바로 아래에 둠(넓은 화면에서 버튼만 멀리 떨어지지 않게) */}
+      <div className="mt-auto flex flex-col gap-2 sm:gap-[18px] lg:mt-0">
         <StepDots current={1} />
         <div className="flex flex-col items-center">
           <Link
@@ -423,7 +424,8 @@ function LocationStep({
         <PromiseRow text={t("promise3")} />
       </ul>
       {/* 점 → 위치 사용하기(주요) → 지역 직접 고르기, 사이 18 (Figma 185:356~185:366) */}
-      <div className="mt-auto flex flex-col gap-[18px]">
+      {/* 모바일은 화면 아래, PC는 내용 바로 아래(ON-1과 같음) */}
+      <div className="mt-auto flex flex-col gap-[18px] lg:mt-0">
         <StepDots current={2} />
         <Button className="w-full gap-1.5" onClick={onUse}>
           <MapPin aria-hidden="true" size={16} />
