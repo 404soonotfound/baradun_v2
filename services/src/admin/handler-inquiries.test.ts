@@ -4,6 +4,7 @@ import type { AuthDependencies } from "./auth";
 import { handleOps, type OpsDependencies } from "./handler";
 import { ACCESS_TOKEN_HEADER, IDEMPOTENCY_KEY_HEADER } from "./policy";
 import { AUDIT_PREFIX } from "./keys";
+import { encodeCursor } from "./inquiries";
 import { FakeTable, type Item } from "./test-dynamo";
 import { TEST_CONFIG } from "./test-tokens";
 
@@ -135,6 +136,28 @@ describe("문의 목록·상세", () => {
     expect(body(detail)).toMatchObject({ message: "본문", restricted: false });
   });
 
+  it("첫 쪽에는 상태별 문의 수를 싣고, 다음 쪽(cursor)에는 싣지 않는다", async () => {
+    const table = seeded();
+    const first = await handleOps(
+      event("GET", "/ops/inquiries", { query: { limit: "1" } }),
+      deps("viewer", table),
+    );
+    expect(body(first).counts).toEqual({
+      received: 1,
+      in_progress: 0,
+      resolved: 0,
+      rejected: 0,
+    });
+    const next = await handleOps(
+      event("GET", "/ops/inquiries", {
+        query: { cursor: encodeCursor({ s: "in_progress" }) },
+      }),
+      deps("viewer", table),
+    );
+    expect(next.statusCode).toBe(200);
+    expect(body(next)).not.toHaveProperty("counts");
+  });
+
   it("보기 권한 상세에는 본문이 없다", async () => {
     const res = await handleOps(
       event("GET", `/ops/inquiries/${ID}`),
@@ -154,6 +177,9 @@ describe("문의 목록·상세", () => {
     const ids = body(list).items.map((i: { inquiryId: string }) => i.inquiryId);
     expect(ids).not.toContain(ID);
     expect(ids.length).toBeGreaterThan(0);
+    // 예시 문의 수도 예시 목록에서 셈(실제 테이블을 세지 않음)
+    const counts = body(list).counts as Record<string, number>;
+    expect(Object.values(counts).reduce((x, y) => x + y, 0)).toBe(ids.length);
     const real = await handleOps(
       event("GET", `/ops/inquiries/${ID}`),
       deps("sample", table),

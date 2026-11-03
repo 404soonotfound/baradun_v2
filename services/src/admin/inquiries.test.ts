@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  countInquiries,
   decodeCursor,
   encodeCursor,
   getInquiry,
@@ -37,7 +38,10 @@ function inquiry(n: number, status: string, overrides: Item = {}): Item {
 // GSI Query를 흉내 냄: 상태가 같은 항목을 접수 시각 내림차순으로, Limit·ExclusiveStartKey 적용
 class FakeIndex {
   readonly queries: Item[] = [];
-  constructor(private readonly items: Item[]) {}
+  constructor(
+    private readonly items: Item[],
+    private readonly pageSize = 100,
+  ) {}
 
   async send(command: { constructor: { name: string }; input: any }) {
     const input = command.input;
@@ -46,6 +50,20 @@ class FakeIndex {
     }
     this.queries.push(input);
     const status = input.ExpressionAttributeValues[":s"];
+    // COUNT: 상태가 같고 ttl이 지금보다 뒤인 항목 수. pageSize로 여러 쪽에 나눠 돌려줌
+    if (input.Select === "COUNT") {
+      const matched = this.items.filter(
+        (i) =>
+          i.inquiryStatus === status &&
+          (i.ttl as number) > input.ExpressionAttributeValues[":now"],
+      );
+      const start = input.ExclusiveStartKey?.n ?? 0;
+      const end = Math.min(start + this.pageSize, matched.length);
+      return {
+        Count: end - start,
+        ...(end < matched.length ? { LastEvaluatedKey: { n: end } } : {}),
+      };
+    }
     const sorted = this.items
       .filter((i) => i.inquiryStatus === status)
       .sort((a, b) => String(b.receivedAt).localeCompare(String(a.receivedAt)));
@@ -137,6 +155,38 @@ describe("문의 목록", () => {
     const index = new FakeIndex([inquiry(1, "received", { version: "1" })]);
     await expect(
       listInquiries(index as never, "Inquiry", { limit: 20 }, NOW),
+    ).rejects.toThrow("모양");
+  });
+});
+
+describe("상태별 문의 수", () => {
+  it("상태마다 세고 보관 기한이 지난 문의는 빼며, 여러 쪽이면 이어서 센다", async () => {
+    const index = new FakeIndex(
+      [
+        inquiry(1, "received"),
+        inquiry(2, "received"),
+        inquiry(3, "received"),
+        inquiry(4, "received", { ttl: NOW_SEC }),
+        inquiry(5, "rejected"),
+      ],
+      2,
+    );
+    expect(await countInquiries(index as never, "Inquiry", NOW)).toEqual({
+      received: 3,
+      in_progress: 0,
+      resolved: 0,
+      rejected: 1,
+    });
+    expect(index.queries[0]).toMatchObject({
+      IndexName: INQUIRY_STATUS_INDEX_NAME,
+      Select: "COUNT",
+    });
+  });
+
+  it("응답에 Count가 없으면 0으로 세지 않고 던진다", async () => {
+    const broken = { send: async () => ({}) };
+    await expect(
+      countInquiries(broken as never, "Inquiry", NOW),
     ).rejects.toThrow("모양");
   });
 });

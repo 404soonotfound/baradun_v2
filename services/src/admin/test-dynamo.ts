@@ -78,6 +78,17 @@ export class FakeTable {
       if (input.IndexName === undefined) return this.queryAudit(input);
       // 상태 GSI만 흉내 냄: 같은 상태를 접수 시각 내림차순, Limit 적용(이 테스트들은 한 쪽으로 충분)
       const status = input.ExpressionAttributeValues[":s"];
+      // 상태별 문의 수(COUNT): 상태가 같고 ttl이 지금보다 뒤인 항목
+      if (input.Select === "COUNT") {
+        return {
+          Count: [...this.items.entries()].filter(
+            ([id, item]) =>
+              id.startsWith(`${input.TableName}|`) &&
+              item.inquiryStatus === status &&
+              (item.ttl as number) > input.ExpressionAttributeValues[":now"],
+          ).length,
+        };
+      }
       const items = [...this.items.entries()]
         .filter(
           ([id, item]) =>
