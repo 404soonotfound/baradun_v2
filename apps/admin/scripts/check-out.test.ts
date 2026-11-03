@@ -6,6 +6,7 @@ import {
   checkOut,
   injectMetaCsp,
   inlineScriptHashes,
+  LOCAL_DEV_MARKER,
   secretFindings,
 } from "./check-out.mts";
 
@@ -89,6 +90,17 @@ describe("checkOut", () => {
     });
     expect(checkOut(dir)).toEqual([
       "_next/static/b.js: 비밀값 대입 모양이 있음",
+    ]);
+  });
+
+  it("로컬 개발 서버 전용 테스트 로그인 코드가 남아 있으면 알린다(BRD-172)", () => {
+    const dir = out({
+      "index.html": injectMetaCsp(page()),
+      "robots.txt": ROBOTS,
+      "_next/static/c.js": `const m="${LOCAL_DEV_MARKER}"`,
+    });
+    expect(checkOut(dir)).toEqual([
+      "_next/static/c.js: 로컬 개발 서버 전용 테스트 로그인 코드가 있음",
     ]);
   });
 
