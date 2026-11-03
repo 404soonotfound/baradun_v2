@@ -39,6 +39,14 @@ import {
   parseInquiryPatch,
 } from "./inquiries";
 import {
+  createNoticeRoute,
+  deleteNoticeRoute,
+  endNoticeRoute,
+  exposeNoticeRoute,
+  listNoticesRoute,
+  updateNoticeRoute,
+} from "./notice-routes";
+import {
   ACCESS_TOKEN_HEADER,
   IDEMPOTENCY_KEY,
   IDEMPOTENCY_KEY_HEADER,
@@ -316,6 +324,32 @@ export async function handleOps(
     }
     if (decision.pattern === "/ops/audit" && method === "GET") {
       return await auditRoute(event, deps.data, ids);
+    }
+    if (decision.pattern === "/ops/notices") {
+      if (method === "GET") return await listNoticesRoute(deps.data, ids);
+      if (method === "POST" && principal.kind === "operator") {
+        return await createNoticeRoute(event, principal, deps.data, ids);
+      }
+    }
+    if (
+      decision.pattern.startsWith("/ops/notices/{id}") &&
+      principal.kind === "operator"
+    ) {
+      const id = decision.params.id ?? "";
+      if (decision.pattern === "/ops/notices/{id}") {
+        if (method === "PUT") {
+          return await updateNoticeRoute(event, id, principal, deps.data, ids);
+        }
+        if (method === "DELETE") {
+          return await deleteNoticeRoute(event, id, principal, deps.data, ids);
+        }
+      }
+      if (decision.pattern === "/ops/notices/{id}/expose") {
+        return await exposeNoticeRoute(event, id, principal, deps.data, ids);
+      }
+      if (decision.pattern === "/ops/notices/{id}/end") {
+        return await endNoticeRoute(event, id, principal, deps.data, ids);
+      }
     }
     if (decision.pattern === "/ops/inquiries/{id}") {
       const id = decision.params.id ?? "";

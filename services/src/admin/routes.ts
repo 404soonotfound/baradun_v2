@@ -31,6 +31,23 @@ export const ROUTES: Readonly<
     // 처리 상태·반려 이유·내부 메모(편집 이상)
     PATCH: { roles: ["editor", "publisher"], sample: false },
   },
+  // 공지(BRD-151, ADM-NTC). 문구 저장은 편집, 노출·노출 끝내기는 노출 변경(D16-D4)
+  // 샘플은 목록만(운영자 sub는 응답에 넣지 않음)
+  "/ops/notices": {
+    GET: { roles: ["viewer", "editor", "publisher"], sample: true },
+    POST: { roles: ["editor", "publisher"], sample: false },
+  },
+  "/ops/notices/{id}": {
+    PUT: { roles: ["editor", "publisher"], sample: false },
+    // 예약된 노출본이 있는 공지는 노출 변경만 지울 수 있음(처리에서 다시 확인)
+    DELETE: { roles: ["editor", "publisher"], sample: false },
+  },
+  "/ops/notices/{id}/expose": {
+    POST: { roles: ["publisher"], sample: false },
+  },
+  "/ops/notices/{id}/end": {
+    POST: { roles: ["publisher"], sample: false },
+  },
   // 변경 이력(BRD-155). 읽기 전용, 샘플은 받지 않음(D15-3)
   "/ops/audit": {
     GET: { roles: ["viewer", "editor", "publisher"], sample: false },

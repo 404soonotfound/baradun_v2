@@ -17,6 +17,12 @@ import { isInquiryStatus, type InquiryStatus } from "../inquiry/policy";
 export const AUDIT_ACTIONS = [
   // 문의 처리 상태·반려 이유·내부 메모 변경(BRD-153)
   "inquiry.update",
+  // 공지 만들기·문구 저장·노출·노출 끝내기·지우기(BRD-151)
+  "notice.create",
+  "notice.update",
+  "notice.expose",
+  "notice.end",
+  "notice.delete",
   // 샘플 계정이 허용된 조회를 함(로그인 뒤 /ops/me 포함)
   "sample.read",
   // 샘플 계정 요청을 거절함(쓰기·허용 밖 경로)
@@ -42,9 +48,9 @@ export function actorOf(principal: Principal): AuditActor {
   };
 }
 
-// 대상: 문의는 문의 ID, 샘플 요청은 "METHOD 경로 모양"(실제 경로 값은 넣지 않음)
+// 대상: 문의는 문의 ID, 공지는 공지 ID, 샘플 요청은 "METHOD 경로 모양"(실제 경로 값은 넣지 않음)
 export interface AuditTarget {
-  readonly kind: "inquiry" | "route";
+  readonly kind: "inquiry" | "notice" | "route";
   readonly id: string;
 }
 
@@ -319,7 +325,9 @@ function toView(item: Record<string, unknown>): AuditView {
       role === "sample" || (OPERATOR_ROLES as readonly unknown[]).includes(role)
     ) ||
     !isAuditAction(action) ||
-    (targetKind !== "inquiry" && targetKind !== "route") ||
+    (targetKind !== "inquiry" &&
+      targetKind !== "notice" &&
+      targetKind !== "route") ||
     typeof targetId !== "string" ||
     !Array.isArray(changes) ||
     !changes.every((c) => typeof c === "string") ||
