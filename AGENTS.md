@@ -3,8 +3,9 @@
 모노레포다. 구조와 경계는 Notion 아키텍처 기준 문서 E7·17장(ADR 0001), 언어·테스트 도구는 ADR 0002(TypeScript·Vitest 통일)가 기준이다.
 
 - `apps/web`: Next.js 정적 사이트. 작업 전 `apps/web/AGENTS.md`를 읽는다.
+- `apps/admin`: 운영자 사이트(정적 Next.js, 아키텍처 18장). 작업 전 `apps/admin/AGENTS.md`를 읽는다.
 - `services`·`packages/contracts`·`infra`·`data`·`tools`: 해당 코드가 생길 때 만든다.
-- `apps/web`과 `services`는 서로를 가져오지 않는다. 공유는 `packages/contracts`로만 한다.
+- `apps/web`·`apps/admin`·`services`는 서로를 가져오지 않는다. 공유는 `packages/contracts`로만 한다.
 
 # 제품 규칙 (판단 모델 Rev.2.2)
 
