@@ -1,9 +1,10 @@
+#!/usr/bin/env node
 // 토큰 검사 (BRD-22): 대비 기준 + 금지 색. 패키지 없이 node만으로 실행됨.
 // 실패하면 종료 코드 1 → CI가 막음.
 import { readFileSync } from "node:fs";
 
 const tokens = JSON.parse(
-  readFileSync(new URL("../tokens/tokens.json", import.meta.url), "utf8"),
+  readFileSync(new URL("../tokens.json", import.meta.url), "utf8"),
 );
 
 function get(path, mode) {

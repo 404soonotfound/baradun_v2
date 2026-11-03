@@ -1,4 +1,4 @@
-/* 전역 스타일 (BRD-22). 값은 모두 토큰에서 옴: tokens/tokens.json → npm run tokens */
+/* 전역 스타일 (BRD-22). 값은 모두 토큰에서 옴: packages/design-tokens/tokens.json → npm run tokens */
 @import "tailwindcss";
 @import "../styles/tokens.css";
 

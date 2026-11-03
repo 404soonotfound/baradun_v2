@@ -1,6 +1,6 @@
 import type { Page } from "@playwright/test";
 
-import tokens from "../tokens/tokens.json";
+import tokens from "@baradun/design-tokens/tokens.json";
 
 import {
   chooseTheme,

@@ -1,6 +1,6 @@
 import type { Viewport } from "next";
 
-import tokens from "../../tokens/tokens.json";
+import tokens from "@baradun/design-tokens/tokens.json";
 
 // 두 루트 레이아웃과 전역 404가 같이 쓰는 viewport (BRD-24)
 // - viewport-fit=cover: 노치까지 화면을 쓰고, 안전 영역은 CSS env()로 비움 (노션 4장 '화면 틀')

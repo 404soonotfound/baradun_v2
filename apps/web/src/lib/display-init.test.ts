@@ -2,7 +2,7 @@ import vm from "node:vm";
 
 import { describe, expect, it } from "vitest";
 
-import tokens from "../../tokens/tokens.json";
+import tokens from "@baradun/design-tokens/tokens.json";
 import {
   DISPLAY_INIT_SCRIPT,
   MOTION_STORAGE_KEY,

@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 
 import manifest from "../src/app/manifest";
 import { HEAD_ICONS, MANIFEST_ICONS } from "../src/lib/app-icons";
-import tokens from "../tokens/tokens.json";
+import tokens from "@baradun/design-tokens/tokens.json";
 
 import { FAVICON, ICON_PNGS, ICON_SOURCES, ico } from "./build-icons.mjs";
 
