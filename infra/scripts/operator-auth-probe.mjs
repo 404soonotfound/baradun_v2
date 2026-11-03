@@ -257,6 +257,7 @@ async function loginAndRefresh(pool, clientId) {
   }
 
   // 유예 0초라 옛 refresh token은 바로 거부돼야 함
+  // 토큰 무효(NotAuthorizedException)만 거부로 인정. 네트워크·요청 제한·내부 오류는 실증 실패로 끝냄
   try {
     await client.send(
       new GetTokensFromRefreshTokenCommand({
@@ -268,6 +269,11 @@ async function loginAndRefresh(pool, clientId) {
       "[재사용] 옛 refresh token이 받아들여짐 → 기대와 다름, 기록하세요",
     );
   } catch (error) {
+    if (error?.name !== "NotAuthorizedException") {
+      throw new Error(
+        `옛 refresh token 재사용 확인 실패(${error?.name ?? "Error"}). 거부 여부를 알 수 없어 다시 실증하세요`,
+      );
+    }
     console.log(`[재사용] 옛 refresh token 거부: ${error.name}`);
   }
 }
