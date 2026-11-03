@@ -64,6 +64,10 @@ export const TABLE_CAPACITY = {
   inquiry: { read: 1, write: 1 },
 } as const;
 
+// 공지 파티션 키 (BRD-151). services/src/admin/keys.ts NOTICE_PK와 같아야 함(permissions.test.ts가 확인)
+// 운영 API는 목록, publisher는 노출본 읽기에 이 파티션만 Query함
+export const NOTICE_KEY = "admin#notice";
+
 // 문의 목록 GSI (결정 기록 D16-B4: 상태 + 접수 시각, 요약만 projection, BRD-153)
 // 이름은 services/src/inquiry/policy.ts INQUIRY_STATUS_INDEX_NAME과 같아야 함(tables.test.ts가 확인)
 // 용량 1/1 → 테이블 11/11 + GSI 1/1 = 12/12, 상한(25) 안. 목록 요약만이라 본문·이메일·사진 키는 넣지 않음

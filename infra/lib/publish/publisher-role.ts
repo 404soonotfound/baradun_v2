@@ -2,7 +2,7 @@ import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
 import * as iam from "aws-cdk-lib/aws-iam";
 import * as s3 from "aws-cdk-lib/aws-s3";
 import { Construct } from "constructs";
-import { DATA_PREFIX } from "../settings";
+import { DATA_PREFIX, NOTICE_KEY } from "../settings";
 
 export interface PublisherRoleProps {
   readonly bucket: s3.IBucket;
@@ -72,6 +72,18 @@ export class PublisherRole extends Construct {
           "dynamodb:DeleteItem",
         ],
         resources: [props.opsTable.tableArn],
+      }),
+    );
+    // 공지 노출본 읽기(BRD-151). 공지 파티션만 Query할 수 있음(감사 기록·다른 운영 항목은 못 읽음)
+    this.role.addToPolicy(
+      new iam.PolicyStatement({
+        actions: ["dynamodb:Query"],
+        resources: [props.opsTable.tableArn],
+        conditions: {
+          // 키가 없는 요청에 ForAllValues가 참이 되지 않게 Null 검사를 함께 둠
+          "ForAllValues:StringEquals": { "dynamodb:LeadingKeys": [NOTICE_KEY] },
+          Null: { "dynamodb:LeadingKeys": "false" },
+        },
       }),
     );
   }
