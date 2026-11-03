@@ -24,6 +24,17 @@ import {
   summarizeChanges,
 } from "./deploy-plan.ts";
 
+// 실행을 시작할 때의 스크립트 내용. 배포용 폴더에서 실행하면 2단계 체크아웃 뒤 디스크 파일이 새 버전으로 바뀜
+// → 디스크끼리 비교하면 늘 같아서 예전 절차(메모리에 올라온 것)로 그대로 배포됨. 그래서 이 내용과 비교함
+const here = path.dirname(fileURLToPath(import.meta.url));
+const SCRIPT_FILES = ["deploy.mjs", "deploy-plan.ts"];
+const startedScripts = Object.fromEntries(
+  SCRIPT_FILES.map((file) => [
+    file,
+    readFileSync(path.join(here, file), "utf8"),
+  ]),
+);
+
 function arg(name) {
   const i = process.argv.indexOf(name);
   if (i < 0) return undefined;
@@ -161,13 +172,12 @@ if (!existsSync(deployDir)) {
 }
 // 실행 중인 이 스크립트가 배포할 커밋의 것과 다르면 멈춤(오래된 체크아웃의 예전 절차로 배포하지 않게)
 // 배포용 폴더에서 실행했다면 방금 새 커밋으로 바뀐 것이라 한 번 더 실행하면 됨
-const here = path.dirname(fileURLToPath(import.meta.url));
 const deployScripts = path.join(deployDir, "infra", "scripts");
-for (const file of ["deploy.mjs", "deploy-plan.ts"]) {
+for (const file of SCRIPT_FILES) {
   const target = path.join(deployScripts, file);
   if (
     !existsSync(target) ||
-    readFileSync(path.join(here, file), "utf8") !== readFileSync(target, "utf8")
+    startedScripts[file] !== readFileSync(target, "utf8")
   ) {
     fail(
       path.resolve(here) === path.resolve(deployScripts)
