@@ -13,12 +13,13 @@ import { type ChartPoint, waveChart } from "@/lib/wave-chart";
 // 0부터 시작하는 축(0.5m 간격, 눈금 글자 "0.0 0.5 1.0"), 선 + 연한 면, 현재값 속 빈 점과 값 라벨, x축 "24시간 전 · 12시간 전 · 지금".
 // 참고 기준선 없음. 결측·간격 90분 초과 구간은 빗금. 값이 없으면 그리지 않음(값을 지어내지 않음)
 
+// 높이는 두 열에서 옆 파도 그림 칸(320×168 + 위아래 여백 12)과 같은 너비일 때 높이가 맞도록 둠(약 2px 안)
 const W = 322;
-const H = 156;
+const H = 174;
 const LEFT = 30;
 const RIGHT = 6;
 const TOP = 10;
-const BOTTOM = 130;
+const BOTTOM = 148;
 
 export function WaveChart({
   stationId,
@@ -213,10 +214,10 @@ export function WaveChart({
   }
 
   return (
-    <div className="flex flex-col gap-1">
-      {/* 모바일: 제목(14) 오른쪽에 '측정값', PC: 제목(13.5) 아래에 '측정값'(Figma 220:3693·183:966) */}
-      <div className="flex items-baseline justify-between gap-2 lg:flex-col lg:items-start lg:gap-1">
-        <h3 className="text-body font-bold text-text-default lg:text-label">
+    <div className="flex flex-col gap-1 @2xl:gap-1.5">
+      {/* 제목 오른쪽에 '측정값'(Figma 220:3693). 두 열(바다 상태 카드 @2xl)은 옆 그림 제목과 같은 글자·간격으로 둬 그래프 위 끝을 맞춤 */}
+      <div className="flex items-baseline justify-between gap-2">
+        <h3 className="text-body font-bold text-text-default @2xl:text-label">
           {t("title")}
         </h3>
         <p className="text-caption text-text-muted">{t("measured")}</p>
