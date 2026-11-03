@@ -86,6 +86,12 @@ export async function versionedWrite(
   if (fields.length === 0 || fields.some((f) => RESERVED.has(f))) {
     throw new Error("바꿀 속성이 없거나 예약된 속성이 있음");
   }
+  // undefined는 DocumentClient가 마샬링에서 던짐 → 장애(500)로 보이지 않게 여기서 이유를 밝혀 막음
+  // 값을 지우려면 업무 경로가 null 등 명시적인 값을 정함
+  const missing = fields.filter((f) => write.set[f] === undefined);
+  if (missing.length > 0) {
+    throw new Error(`값이 없는 속성: ${missing.join(", ")}`);
+  }
 
   const nextVersion = write.expectedVersion + 1;
   const names: Record<string, string> = { "#version": "version" };
@@ -128,6 +134,7 @@ export async function versionedWrite(
                 payloadHash: write.payloadHash,
                 resultVersion: nextVersion,
                 target: `${write.key.pk}|${write.key.sk}`,
+                actorSub: write.actorSub,
                 createdAt: now.toISOString(),
                 ttl: Math.floor(now.getTime() / 1000) + IDEMPOTENCY_TTL_SECONDS,
               },
@@ -175,12 +182,20 @@ async function replay(
     }),
   );
   const item = result.Item as
-    | { payloadHash?: unknown; resultVersion?: unknown; target?: unknown }
+    | {
+        payloadHash?: unknown;
+        resultVersion?: unknown;
+        target?: unknown;
+        actorSub?: unknown;
+      }
     | undefined;
+  // 같은 키·같은 내용·같은 대상·같은 운영자일 때만 앞 결과를 돌려줌
+  // (다른 운영자가 같은 키를 쓰면 저장하지 않았는데 자기 쓰기처럼 보이므로 충돌로 봄)
   if (
     item &&
     item.payloadHash === write.payloadHash &&
     item.target === `${write.key.pk}|${write.key.sk}` &&
+    item.actorSub === write.actorSub &&
     typeof item.resultVersion === "number"
   ) {
     return { status: "replayed", version: item.resultVersion };

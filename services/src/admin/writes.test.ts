@@ -152,6 +152,34 @@ describe("versionedWrite", () => {
     });
   });
 
+  it("같은 키·같은 내용이어도 다른 운영자면 409", async () => {
+    const table = new FakeTable();
+    await versionedWrite(table as never, "Ops", write(), NOW);
+    const other = await versionedWrite(
+      table as never,
+      "Ops",
+      write({ actorSub: "another-operator" }),
+      NOW,
+    );
+    expect(other).toEqual({
+      status: "conflict",
+      reason: "idempotency_mismatch",
+    });
+  });
+
+  it("값이 undefined인 속성은 이유를 밝혀 거부한다(500이 되지 않게)", async () => {
+    const table = new FakeTable();
+    await expect(
+      versionedWrite(
+        table as never,
+        "Ops",
+        write({ set: { title: "제목", memo: undefined } }),
+        NOW,
+      ),
+    ).rejects.toThrow("값이 없는 속성: memo");
+    expect(table.transactions).toBe(0);
+  });
+
   it("동시에 같은 키로 두 번 보내도 한 번만 적용된다", async () => {
     const table = new FakeTable();
     const results = await Promise.all([
