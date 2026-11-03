@@ -565,7 +565,7 @@ Cognito 권한은 `BaradunCdkExecutionWorkload`에 있습니다(문장 2개). 20
 
 ### 배포
 
-이 스택은 `cdk diff --method=change-set`이 `AlertEmail` 값 없음(`MissingParameters`)으로 실패합니다. `--parameters AlertEmail=…`을 넘기면 예산 리소스가 교체되며 실패하므로 넘기지 않습니다. 대신 이전 값을 그대로 쓰는 변경 세트를 만들어 내용을 확인한 뒤 실행합니다.
+이 스택은 `cdk diff --method=change-set`이 `AlertEmail` 값 없음(`MissingParameters`)으로 실패합니다. 대신 이전 값을 그대로 쓰는 변경 세트를 만들어 내용을 확인한 뒤 실행합니다. 주소를 바꿀 때만 `--parameters AlertEmail=…`을 넘기고, 같은 배포에서 예산 이름도 바꿉니다(아래 '알림 주소 바꾸기').
 
 ```bash
 npx cdk deploy --no-execute --change-set-name <이름>
@@ -576,6 +576,18 @@ aws cloudformation wait stack-update-complete --region ap-northeast-2 --stack-na
 ```
 
 풀 분리 배포(두 번째 배포)의 기대 변경: 운영자 풀 `Modify`(MFA 선택 → 필수, 교체 없음), 운영자 풀의 `sample` 그룹 `Remove`, 샘플 풀·클라이언트·`sample` 그룹 `Add`. 운영자 풀은 첫 배포 때의 논리 ID를 그대로 써서 교체되지 않습니다.
+
+#### 알림 주소 바꾸기(BRD-168)
+
+예산·운영 SNS·문의 SNS 구독의 주소는 매개변수 `AlertEmail` 하나입니다. 주소를 바꾸면 세 리소스 모두 교체됩니다. 예산은 이름이 고정이면 새 예산을 만들 수 없어 교체가 실패하므로(2026-11-03 실패 사례), 주소를 바꾸는 배포에서는 `MONTHLY_BUDGET_NAME`(`lib/settings.ts`)도 새 이름으로 바꿉니다. 그러면 CloudFormation이 새 이름의 예산을 만든 뒤 옛 예산을 지웁니다. 실행 정책 `Budget` 문장은 옛 이름과 새 이름을 모두 허락해야 하고, 교체가 끝난 뒤 옛 이름을 뺄 수 있습니다. 예산은 2개까지 무료라 교체 중 잠시 2개여도 요금은 없습니다.
+
+```bash
+npx cdk deploy --no-execute --change-set-name <이름> --parameters AlertEmail=<새 주소>
+```
+
+- 기대 변경: 예산 교체(`Replacement: True`), 운영·문의 SNS 구독 교체. 그 밖의 교체가 있으면 실행하지 않습니다.
+- 같은 주제에 같은 주소로 이미 확인된 구독(콘솔에서 만든 것 등)이 있으면 SNS가 그 구독을 돌려줘 확인 메일 없이 스택 관리 구독이 될 것으로 예상합니다(공식 문서에 명시 없음, 미검증). 배포 뒤 `aws sns list-subscriptions`와 스택 리소스의 구독 ARN이 같은지, 주소마다 구독이 하나인지 확인합니다. 새 주소라면 확인 메일을 눌러야 알림이 갑니다.
+- 콘솔에서 스택 관리 구독을 지우면 스택 기록과 실제가 어긋납니다. 주소 변경은 이 절차로만 합니다.
 
 배포 출력의 `OperatorUserPoolId`·`OperatorAdminWebClientId`·`SampleUserPoolId`·`SampleAdminWebClientId`를 기록합니다(비밀값 아님).
 
