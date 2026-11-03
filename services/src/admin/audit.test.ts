@@ -146,6 +146,7 @@ describe("목록", () => {
         table as never,
         "Ops",
         query({ ...base, ...(cursor ? { cursor } : {}) }),
+        NOW,
       );
       expect(page.items.length).toBeLessThanOrEqual(2);
       seen.push(...page.items.map((i) => i.at));
@@ -164,6 +165,7 @@ describe("목록", () => {
       table as never,
       "Ops",
       query({ from: "2026-11-01T00:00:00Z", to: "2026-11-01T23:59:59Z" }),
+      NOW,
     );
     expect(page.items.map((i) => i.at)).toEqual(["2026-11-01T00:00:00.000Z"]);
     expect(page.nextCursor).toBeNull();
@@ -188,6 +190,7 @@ describe("목록", () => {
           limit: "2",
           ...(cursor ? { cursor } : {}),
         }),
+        NOW,
       );
       expect(page.items.every((i) => i.action === "inquiry.update")).toBe(true);
       seen.push(...page.items.map((i) => i.at.slice(11, 13)));
@@ -202,6 +205,7 @@ describe("목록", () => {
       table as never,
       "Ops",
       query({ from: "2025-12-01T00:00:00Z", to: "2026-01-31T00:00:00Z" }),
+      NOW,
     );
     expect(page.items.map((i) => i.at.slice(0, 10))).toEqual([
       "2026-01-01",
@@ -209,14 +213,28 @@ describe("목록", () => {
     ]);
   });
 
-  it("저장된 모양이 틀린 기록은 조용히 빼지 않고 던진다", async () => {
-    const table = await seed(["2026-11-01T00:00:00Z"]);
+  it("보관 기한(ttl)이 지난 기록은 TTL 삭제 전이라도 넣지 않는다", async () => {
+    const table = await seed(["2026-11-01T00:00:00Z", "2026-11-02T00:00:00Z"]);
     const [id, item] = [...table.items.entries()][0]!;
-    table.items.set(id, { ...item, action: "unknown" });
-    await expect(listAudit(table as never, "Ops", query({}))).rejects.toThrow(
-      "모양",
-    );
+    table.items.set(id, { ...item, ttl: NOW.getTime() / 1000 });
+    const page = await listAudit(table as never, "Ops", query({}), NOW);
+    expect(page.items.map((i) => i.at)).toEqual(["2026-11-02T00:00:00.000Z"]);
   });
+
+  it.each([
+    ["모르는 종류", { action: "unknown" }],
+    ["모르는 역할", { role: "admin" }],
+  ])(
+    "저장된 모양이 틀린 기록(%s)은 조용히 빼지 않고 던진다",
+    async (_, broken) => {
+      const table = await seed(["2026-11-01T00:00:00Z"]);
+      const [id, item] = [...table.items.entries()][0]!;
+      table.items.set(id, { ...item, ...broken });
+      await expect(
+        listAudit(table as never, "Ops", query({}), NOW),
+      ).rejects.toThrow("모양");
+    },
+  );
 });
 
 describe("cursor", () => {
@@ -230,6 +248,7 @@ describe("cursor", () => {
       table as never,
       "Ops",
       query({ ...params, limit: "1" }),
+      NOW,
     );
     return page.nextCursor!;
   }
@@ -268,6 +287,11 @@ describe("cursor", () => {
       { m: "2026-11", k: { pk: `${AUDIT_PREFIX}2026-11`, sk: "s", x: "1" } },
     ],
     ["시간대 없는 기간", { from: "2026-10-04T06:00:00", m: "2026-11" }],
+    ["366일을 넘는 기간", { from: "2020-01-01T00:00:00.000Z", m: "2026-11" }],
+    [
+      "시작이 끝보다 늦은 기간",
+      { from: "2026-11-04T00:00:00.000Z", m: "2026-11" },
+    ],
   ])("%s이면 거부", (_, overrides) => {
     const cursor = Buffer.from(
       JSON.stringify({
