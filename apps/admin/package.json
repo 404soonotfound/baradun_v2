@@ -3,25 +3,39 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "predev": "npm run tokens",
     "dev": "next dev -p 3100",
+    "prebuild": "npm run tokens",
     "build": "next build",
     "postbuild": "node scripts/check-out.mts --write",
     "check:out": "node scripts/check-out.mts",
+    "tokens": "baradun-tokens src/styles/tokens.css",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "pretest": "npm run tokens",
+    "test": "vitest run",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
+    "@fontsource-variable/noto-sans-kr": "^5.3.1",
+    "amazon-cognito-identity-js": "^6.3.22",
     "next": "16.4.2",
+    "qrcode": "^1.5.4",
     "react": "19.2.4",
     "react-dom": "19.2.4"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
+    "@baradun/design-tokens": "0.1.0",
+    "@playwright/test": "^1.64.0",
+    "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
+    "@types/qrcode": "^1.5.6",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.4.2",
+    "tailwindcss": "^4",
     "typescript": "^5",
     "vitest": "^5.0.5"
   }

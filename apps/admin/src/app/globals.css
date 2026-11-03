@@ -1,0 +1,38 @@
+/* 운영자 사이트 전역 스타일 (BRD-148). 값은 공유 토큰에서 옴: packages/design-tokens/tokens.json → npm run tokens (D17-3) */
+@import "tailwindcss";
+@import "../styles/tokens.css";
+
+@layer base {
+  html {
+    background: var(--color-bg-page);
+  }
+
+  body {
+    min-height: 100dvh;
+    margin: 0;
+    background: var(--color-bg-page);
+    color: var(--color-text-default);
+    font-family: var(--font-sans);
+    font-size: var(--text-body);
+    line-height: var(--text-body--line-height);
+    font-synthesis: none;
+    /* 한국어는 낱말 중간에서 줄을 바꾸지 않음. 긴 이메일 등은 넘치지 않게 끊음 */
+    word-break: keep-all;
+    overflow-wrap: anywhere;
+  }
+
+  /* 키보드 포커스는 늘 보이게(대비 3:1 이상, 브랜드 색) */
+  :focus-visible {
+    outline: 2px solid var(--color-brand-default);
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
