@@ -12,6 +12,7 @@ import {
   type SnapshotDeps,
 } from "./store";
 import { DEVICE_CLOCK } from "./clock";
+import { activeNotice } from "./notice";
 import { deriveBeachView } from "./view";
 
 // 조회·갱신 검사 (BRD-41, 아키텍처 9.1·그림 2). 가짜 서버·가짜 타이머로 돌림
@@ -413,6 +414,26 @@ describe("manifest의 공지 칸", () => {
         deriveBeachView({ id, hidden: false }, plain.store.getState()),
       );
     }
+  });
+
+  // 홈은 store 상태(manifest.notices·nowMs·clock)를 그대로 activeNotice에 넘김(home-screen.tsx)
+  it("서버 시각을 받으면 공지가 보이고, Date 헤더가 없으면(서버 시각 모름) 보이지 않음", async () => {
+    const withNotices = read<ManifestFile>("manifest.with-notices.json");
+    const shown = (state: ReturnType<typeof store.getState>) =>
+      activeNotice(state.manifest?.notices, state.nowMs, state.clock);
+    const { store, server } = setup();
+    server.manifest = withNotices;
+    store.start();
+    await store.refresh();
+    expect(shown(store.getState())?.id).toBe("n-20261017-maint");
+
+    const untrusted = setup();
+    untrusted.server.manifest = withNotices;
+    untrusted.server.sendDate = false;
+    untrusted.store.start();
+    await untrusted.store.refresh();
+    expect(untrusted.store.getState().clock.trusted).toBe(false);
+    expect(shown(untrusted.store.getState())).toBeNull();
   });
 
   it("notices가 배열이 아니면 공지 없이 정상으로 읽음", async () => {
