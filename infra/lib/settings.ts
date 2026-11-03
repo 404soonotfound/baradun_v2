@@ -64,6 +64,24 @@ export const TABLE_CAPACITY = {
   inquiry: { read: 1, write: 1 },
 } as const;
 
+// 문의 목록 GSI (결정 기록 D16-B4: 상태 + 접수 시각, 요약만 projection, BRD-153)
+// 이름은 services/src/inquiry/policy.ts INQUIRY_STATUS_INDEX_NAME과 같아야 함(tables.test.ts가 확인)
+// 용량 1/1 → 테이블 11/11 + GSI 1/1 = 12/12, 상한(25) 안. 목록 요약만이라 본문·이메일·사진 키는 넣지 않음
+export const INQUIRY_STATUS_INDEX = {
+  name: "inquiryStatus-receivedAt",
+  read: 1,
+  write: 1,
+  projected: [
+    "inquiryId",
+    "inquiryType",
+    "beachId",
+    "activity",
+    "version",
+    "legacy",
+    "ttl",
+  ],
+} as const;
+
 // TTL 속성 이름 (Ops 슬롯 기록·Inquiry 문의 글 정리용)
 // TTL은 오래된 항목을 지우는 용도만. 유효시간·신선도 판단에 쓰지 않음.
 export const TTL_ATTRIBUTE = "ttl";

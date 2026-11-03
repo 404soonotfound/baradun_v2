@@ -182,7 +182,11 @@ export class BaradunStack extends Stack {
     const operatorAuth = new OperatorAuth(this, "OperatorAuth");
 
     // 운영 API 함수 /ops/* (BRD-146). 함수 URL은 관리자 배포(BRD-147)에서 CloudFront + OAC로 연결
-    new OpsApi(this, "OpsApi", { opsTable: tables.ops, auth: operatorAuth });
+    new OpsApi(this, "OpsApi", {
+      opsTable: tables.ops,
+      inquiryTable: tables.inquiry,
+      auth: operatorAuth,
+    });
 
     // 배포 후 콘솔·터미널에서 바로 확인할 값
     new CfnOutput(this, "SiteBucketName", { value: site.bucket.bucketName });
