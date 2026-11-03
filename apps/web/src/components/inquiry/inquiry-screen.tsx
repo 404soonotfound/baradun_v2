@@ -321,14 +321,9 @@ export function InquiryScreen({
 
   // 머리: ✕ 닫기 · 가운데 '데이터 문의'(Figma hbar 179:350, 56px). 완료 화면도 같은 머리
   const header = (
-    // PC는 왼쪽 설정 목록이 있어 닫기를 숨기고 제목을 약관·출처처럼 왼쪽 큰 제목으로
-    <header className="-mx-2.5 grid h-14 grid-cols-[44px_minmax(0,1fr)_44px] items-center lg:mx-0 lg:mb-4 lg:flex lg:h-auto">
-      <BackButton
-        locale={locale}
-        fallback="/settings/"
-        close
-        className="lg:hidden"
-      />
+    // PC는 제목을 약관·출처처럼 왼쪽 큰 제목으로. 닫기는 그대로 둠(상세에서 ?beach=로 들어온 경우 해변으로 돌아갈 길)
+    <header className="-mx-2.5 grid h-14 grid-cols-[44px_minmax(0,1fr)_44px] items-center lg:mb-4 lg:flex lg:h-auto lg:gap-1">
+      <BackButton locale={locale} fallback="/settings/" close />
       <h1 className="truncate text-center text-body font-bold text-text-default lg:text-left lg:text-title-xl">
         {tp("inquiry")}
       </h1>
