@@ -125,8 +125,6 @@
     "rolePublisher": "노출 변경 권한",
     "roleDemo": "데모(읽기만)",
     "preparing": "운영 화면을 준비하고 있어요.",
-    "account": "내 계정",
-    "logout": "로그아웃",
     "demoPeriod": "데모 계정을 쓸 수 있는 기간이 아니에요",
     "demoPeriodHint": "시연 기간에만 열려요. 운영 책임자에게 문의해 주세요.",
     "serverError": "운영 서버가 응답하지 않아요. 앱 사용자 화면에는 영향이 없어요.",
@@ -156,5 +154,33 @@
     "sessionsHint": "모든 기기에서 로그아웃하면 다른 기기의 다음 갱신부터 로그인이 끊겨요. 이미 받은 출입 정보는 최대 15분 동안 남을 수 있어요.",
     "logoutAll": "모든 기기에서 로그아웃",
     "logout": "이 기기에서 로그아웃"
+  },
+  "nav": {
+    "label": "운영 메뉴",
+    "home": "운영 홈",
+    "groupStatus": "현황",
+    "stats": "이용 통계",
+    "collection": "데이터 수집 현황",
+    "groupData": "데이터",
+    "sources": "데이터 출처",
+    "beaches": "해변 관리",
+    "publish": "데이터 게시",
+    "groupOps": "운영",
+    "notices": "공지",
+    "inquiries": "문의",
+    "policies": "운영 정책",
+    "audit": "변경 이력",
+    "account": "내 계정",
+    "logout": "로그아웃",
+    "openMenu": "메뉴 열기",
+    "closeMenu": "메뉴 닫기",
+    "expand": "메뉴 펼치기",
+    "collapse": "메뉴 접기",
+    "skip": "본문으로 건너뛰기"
+  },
+  "preparing": {
+    "title": "이 화면은 준비하고 있어요",
+    "body": "메뉴와 자리만 먼저 만들었어요. 화면이 생기면 여기서 바로 볼 수 있어요.",
+    "home": "운영 홈으로"
   }
 }

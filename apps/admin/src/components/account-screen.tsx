@@ -13,9 +13,9 @@ import { authFailureOf } from "@/lib/auth/errors";
 import { useAuthSession, useSessionSnapshot } from "@/lib/auth/provider";
 import { otpauthUri } from "@/lib/auth/srp";
 import { messages } from "@/lib/messages";
-import { AdminHeader, roleLabel } from "./admin-header";
+import { roleLabel } from "@/lib/roles";
+import { AdminShell } from "./admin-shell";
 import { CodeInput, Field, PasswordRules, passwordChecks } from "./fields";
-import { SessionGuard } from "./session-guard";
 import { Button, Notice } from "./ui";
 
 // 내 계정 (BRD-148, 캔버스 V24·VM18, D16-A4·A9·A10)
@@ -323,8 +323,8 @@ function AccountBody() {
 
 export function AccountScreen() {
   return (
-    <SessionGuard header={<AdminHeader />}>
+    <AdminShell title={messages.account.title}>
       <AccountBody />
-    </SessionGuard>
+    </AdminShell>
   );
 }
