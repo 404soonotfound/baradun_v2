@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   changeSetName,
   ciConclusion,
+  ciStateWithRuns,
   failedEventsSince,
   formatTable,
   isEmptyChangeSet,
@@ -68,6 +69,23 @@ describe("ci-ok 확인", () => {
   });
 });
 
+describe("ci-ok가 아직 없을 때", () => {
+  it("그 커밋의 CI가 도는 중이면 '도는 중'으로 본다", () => {
+    expect(ciStateWithRuns("missing", ["in_progress"])).toBe("pending");
+    expect(ciStateWithRuns("missing", ["queued"])).toBe("pending");
+  });
+
+  it("CI 기록이 없거나 다 끝났는데 ci-ok가 없으면 '없음'", () => {
+    expect(ciStateWithRuns("missing", [])).toBe("missing");
+    expect(ciStateWithRuns("missing", ["completed"])).toBe("missing");
+  });
+
+  it("ci-ok 결과가 있으면 그대로 쓴다", () => {
+    expect(ciStateWithRuns("failure", ["in_progress"])).toBe("failure");
+    expect(ciStateWithRuns("success", [])).toBe("success");
+  });
+});
+
 describe("스택 상태", () => {
   it.each([
     ["UPDATE_COMPLETE", true],
@@ -128,25 +146,60 @@ describe("변경 표", () => {
         ResourceType: "AWS::IAM::Role",
       },
     },
+    // 2026-11-03 BRD-155 배포에서 실제로 나온 '교체될 수도 있음' 두 줄(교체되지 않았음)
+    {
+      ResourceChange: {
+        Action: "Modify",
+        LogicalResourceId: "OpsApiFunctionFunctionUrl79ADB6FB",
+        ResourceType: "AWS::Lambda::Url",
+        Replacement: "Conditional",
+      },
+    },
+    {
+      ResourceChange: {
+        Action: "Modify",
+        LogicalResourceId: "CDKMetadata",
+        ResourceType: "AWS::CDK::Metadata",
+        Replacement: "Conditional",
+      },
+    },
   ];
 
-  it("삭제와 교체(가능성 포함)만 위험으로 표시한다", () => {
+  it("삭제·교체와 데이터 리소스의 교체 가능성만 위험, 나머지 교체 가능성은 약하게, cdk 정보는 표시 안 함", () => {
     expect(
-      summarizeChanges(changes).map((r) => [r.logicalId, r.danger]),
+      summarizeChanges(changes).map((r) => [r.logicalId, r.danger, r.maybe]),
     ).toEqual([
-      ["OpsApiFunction484C2E8D", false],
-      ["StorageOpsTable", true],
-      ["OldGroup", true],
-      ["NewRole", false],
+      ["OpsApiFunction484C2E8D", false, false],
+      ["StorageOpsTable", true, false],
+      ["OldGroup", true, false],
+      ["NewRole", false, false],
+      ["OpsApiFunctionFunctionUrl79ADB6FB", false, true],
+      ["CDKMetadata", false, false],
     ]);
   });
 
-  it("위험한 줄 앞에 !!를 붙이고 칸을 맞춘다", () => {
+  it("교체(True)는 종류와 상관없이 위험이다", () => {
+    expect(
+      summarizeChanges([
+        {
+          ResourceChange: {
+            Action: "Modify",
+            ResourceType: "AWS::Lambda::Url",
+            Replacement: "True",
+          },
+        },
+      ])[0]!.danger,
+    ).toBe(true);
+  });
+
+  it("줄 앞에 !!·**·~ 표시를 붙이고 칸을 맞춘다", () => {
     const lines = formatTable(summarizeChanges(changes)).split("\n");
-    expect(lines).toHaveLength(5);
+    expect(lines).toHaveLength(7);
     expect(lines[0]).toMatch(/^ {3}동작/);
     expect(lines.filter((l) => l.startsWith("!!"))).toHaveLength(2);
     expect(lines.filter((l) => l.startsWith("**"))).toHaveLength(1);
+    expect(lines.filter((l) => l.startsWith("~ "))).toHaveLength(1);
+    expect(lines[6]).toMatch(/^ {3}Modify +CDKMetadata/);
     expect(lines[3]).toMatch(
       /^!! Remove +OldGroup +AWS::Cognito::UserPoolGroup +-$/,
     );
@@ -154,6 +207,25 @@ describe("변경 표", () => {
 });
 
 describe("권한 변경", () => {
+  it("교체될 수도 있는 권한 리소스는 *~로 둘 다 보여 준다", () => {
+    const rows = summarizeChanges([
+      {
+        ResourceChange: {
+          Action: "Modify",
+          LogicalResourceId: "SomeRole",
+          ResourceType: "AWS::IAM::Role",
+          Replacement: "Conditional",
+        },
+      },
+    ]);
+    expect(rows[0]).toMatchObject({
+      permission: true,
+      maybe: true,
+      danger: false,
+    });
+    expect(formatTable(rows).split("\n")[1]).toMatch(/^\*~ Modify +SomeRole/);
+  });
+
   it("IAM·리소스 정책 리소스를 권한 변경으로 표시한다", () => {
     expect(
       summarizeChanges(

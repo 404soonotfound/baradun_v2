@@ -14,6 +14,7 @@ import { createInterface } from "node:readline/promises";
 import {
   changeSetName,
   ciConclusion,
+  ciStateWithRuns,
   failedEventsSince,
   formatTable,
   isEmptyChangeSet,
@@ -95,13 +96,39 @@ const checks = JSON.parse(
     },
   ).stdout,
 );
-const ci = ciConclusion(checks.check_runs);
+// ci-ok가 없을 때만 그 커밋의 ci 워크플로 상태를 봄(있으면 그 결과만으로 정함)
+const found = ciConclusion(checks.check_runs);
+const ci =
+  found === "missing"
+    ? ciStateWithRuns(
+        found,
+        JSON.parse(
+          run(
+            "gh",
+            [
+              "run",
+              "list",
+              "--repo",
+              repo,
+              "--commit",
+              sha,
+              "--workflow",
+              "ci.yml",
+              "--json",
+              "status",
+            ],
+            { capture: true },
+          ).stdout,
+        ).map((r) => r.status),
+      )
+    : found;
 if (ci !== "success") {
   fail(
     {
       missing:
-        "ci-ok 결과가 없어요. main CI가 돌았는지 Actions 탭에서 확인해 주세요.",
-      pending: "ci-ok가 아직 도는 중이에요. 끝난 뒤 다시 실행해 주세요.",
+        "이 커밋의 CI 기록이 없어요. main CI가 돌았는지 Actions 탭에서 확인해 주세요.",
+      pending:
+        "CI가 아직 도는 중이에요(보통 10분 안팎). 끝난 뒤 같은 명령을 다시 실행해 주세요.",
       failure: "ci-ok가 실패했어요. 고친 뒤 다시 실행해 주세요.",
     }[ci],
   );
@@ -310,6 +337,12 @@ while (changeSet.NextToken) {
 }
 const rows = summarizeChanges(changes);
 console.log(`\n바뀌는 리소스 ${rows.length}개:\n${formatTable(rows)}`);
+const maybes = rows.filter((r) => r.maybe && !r.danger);
+if (maybes.length > 0) {
+  console.log(
+    `\n~ 교체될 수도 있음 ${maybes.length}개(위 ~·*~ 줄): 속성 값이 배포 때 정해져 미리 알 수 없다는 뜻이고 대개 교체되지 않아요. 데이터를 담는 리소스(테이블·버킷·사용자 풀 등)는 따로 !!로 표시해요.`,
+  );
+}
 const permissions = rows.filter((r) => r.permission && !r.danger);
 if (permissions.length > 0) {
   console.log(
@@ -319,7 +352,7 @@ if (permissions.length > 0) {
 const dangers = rows.filter((r) => r.danger);
 if (dangers.length > 0) {
   console.log(
-    `\n\x1b[31m!! 경고: 삭제·교체되는 리소스가 ${dangers.length}개 있어요(위 !! 줄). 데이터가 사라질 수 있으니 꼭 확인하세요.\x1b[0m`,
+    `\n\x1b[31m!! 경고: 삭제·교체(데이터 리소스는 교체 가능성 포함)되는 리소스가 ${dangers.length}개 있어요(위 !! 줄). 데이터가 사라질 수 있으니 꼭 확인하세요.\x1b[0m`,
   );
 }
 
