@@ -19,6 +19,7 @@ const base = {
   delayed: [] as string[],
   locationOff: false,
   noConfirmed: null,
+  notice: null,
 };
 const NO_CONFIRMED = { lastConfirmedAt: "2026-10-27T05:05:00Z" };
 

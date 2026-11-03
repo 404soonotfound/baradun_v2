@@ -4,8 +4,10 @@ import {
   CircleQuestionMark,
   Clock,
   FileWarning,
+  Megaphone,
   RotateCw,
   WifiOff,
+  Wrench,
 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useRef, useState } from "react";
@@ -26,6 +28,7 @@ import { getSnapshotState, refreshSnapshot } from "@/lib/snapshot/use-snapshot";
 //   불러오기 실패(빨강): 새 정보를 불러오지 못했어요 / 14:30 정보를 보여주고 있어요 · 다시 시도
 //   확인된 판단 없음(회색, BRD-38·결정 1): 현재 확인 가능한 판단 정보가 없어요 / 마지막 확인 14:05 · 새 정보가 들어오면 다시 확인해요
 //     원인(출처 장애)은 단정하지 않고 확인된 영향만 알림. publisher가 명시적 장애 신호를 주면 그 신호로 바꿈
+//   공지(회색, BRD-151·D15-6): 운영자가 쓴 제목 / 본문을 언어에 맞게 그대로. 종류(점검 예고·공지)는 아이콘과 화면 읽기 이름으로 구분
 //   관측 지연(앰버): ○○ 파고 측정이 늦어지고 있어요 / 지금 상태를 판단하지 못했어요 · … → 누르면 그 해변 상세
 // '위치 없이 보는 중'은 화면마다 달라서 부르는 쪽이 그림
 
@@ -156,6 +159,21 @@ export function SituationBanner({
                 : t("noConfirmedTimeUnknown"),
               t("noConfirmedNext"),
             ])}
+          </Banner>
+        );
+      }
+      case "notice": {
+        // 문구는 manifest의 한·영 문구를 그대로(D15-6: 둘 다 있어야 게시). 배너 틀의 종류 이름만 문구 키
+        const { notice } = situation;
+        const maintenance = notice.kind === "maintenance_notice";
+        return (
+          <Banner
+            tone="gray"
+            icon={maintenance ? <Wrench size={16} /> : <Megaphone size={16} />}
+            label={maintenance ? t("noticeMaintenance") : t("noticeGeneral")}
+            title={notice.title[locale]}
+          >
+            {notice.body[locale]}
           </Banner>
         );
       }

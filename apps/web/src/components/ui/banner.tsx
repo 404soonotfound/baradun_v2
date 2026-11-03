@@ -42,6 +42,7 @@ export function Banner({
   tone,
   icon,
   title,
+  label,
   children,
   action,
   href,
@@ -51,6 +52,8 @@ export function Banner({
   tone: BannerTone;
   icon?: ReactNode; // 없으면 아이콘 원 없이 글자만(홈 '위치 없이 보고 있어요', Figma 171:818)
   title: string; // 1줄째: 무슨 일
+  // 제목 앞에 화면 읽기에만 읽히는 종류 이름(예: 공지 배너의 '점검 예고'). 아이콘·색만으로 종류를 구분하지 않게
+  label?: string;
   children?: ReactNode; // 2줄째: 영향·다음 행동
   // l: 화면 전체에 영향을 주는 안내(확인된 판단 없음, Figma L13 188:270). 아이콘 원 34·제목 14.5/21·설명 12.5/18.1, 위 정렬
   size?: "m" | "l";
@@ -80,6 +83,7 @@ export function Banner({
             large ? "text-[14.5px]/[21px] font-bold" : "text-label",
           )}
         >
+          {label && <span className="sr-only">{`${label}, `}</span>}
           {title}
         </span>
         {(children || action) && (

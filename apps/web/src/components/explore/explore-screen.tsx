@@ -180,6 +180,8 @@ export function ExploreScreen({
         deriveBeachView({ id: beach.id, hidden: false }, snapshot),
       ),
     ),
+    // 공지는 홈 상단에만(화면 설계서 6장 ADM-NTC, BRD-151)
+    notice: null,
   });
   // 위치 배너는 아래에서 따로 그리므로(locationOff: false로 부름) 공용 배너에는 데이터 상황만 넘김
   const situation = picked?.kind === "noLocation" ? null : picked;

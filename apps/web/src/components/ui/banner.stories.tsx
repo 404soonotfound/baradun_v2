@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/nextjs-vite";
-import { Clock, MapPin, RefreshCw, WifiOff } from "lucide-react";
+import { Clock, MapPin, RefreshCw, WifiOff, Wrench } from "lucide-react";
 
 import { Banner } from "./banner";
 
@@ -61,6 +61,15 @@ export const AllTones: Story = {
       <Banner tone="red" icon={<WifiOff size={18} />} title="보내지 못했어요">
         인터넷 연결을 확인하고 다시 보내 주세요. 유형과 내용은 남겨 두었어요.
         이메일은 다시 입력해 주세요.
+      </Banner>
+      {/* 공지(BRD-151): 종류 이름 label은 화면 읽기에만 읽힘 */}
+      <Banner
+        tone="gray"
+        icon={<Wrench size={16} />}
+        label="점검 예고"
+        title="데이터 점검 예고"
+      >
+        새벽 2시부터 3시까지 정보가 늦게 바뀔 수 있어요.
       </Banner>
     </div>
   ),
