@@ -300,7 +300,7 @@ describe("운영 경보 (BRD-62)", () => {
     ).toEqual(
       expect.arrayContaining([
         { Name: "Resource", Value: "UserAccountRecovery" },
-        { Name: "Service", Value: "Cognito user pool" },
+        { Name: "Service", Value: "Cognito User Pool" },
       ]),
     );
     expect(LOGIN_ABUSE_ALARM).toEqual({
