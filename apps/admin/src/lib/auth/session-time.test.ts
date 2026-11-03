@@ -17,11 +17,11 @@ const clock = (lastActivityMs = AUTH, accessExpMs = AUTH + 15 * MIN) => ({
 });
 
 describe("sessionTimes", () => {
-  it("갱신은 access 만료 1분 전, 유휴는 활동 + 30분(28분 경고), 상한은 최초 인증 + 8시간(2분 전 경고)", () => {
+  it("갱신은 access 만료 1분 전, 유휴는 활동 + 60분(58분 경고), 상한은 최초 인증 + 8시간(2분 전 경고)", () => {
     expect(sessionTimes(clock())).toEqual({
       refreshAt: AUTH + 14 * MIN,
-      idleWarnAt: AUTH + 28 * MIN,
-      idleEndAt: AUTH + 30 * MIN,
+      idleWarnAt: AUTH + 58 * MIN,
+      idleEndAt: AUTH + 60 * MIN,
       maxWarnAt: AUTH + 478 * MIN,
       maxEndAt: AUTH + 480 * MIN,
     });
@@ -37,8 +37,8 @@ describe("sessionPhase", () => {
   const times = sessionTimes(clock());
   it.each([
     [27 * MIN, "active"],
-    [28 * MIN, "idle_warning"],
-    [30 * MIN, "idle_expired"],
+    [58 * MIN, "idle_warning"],
+    [60 * MIN, "idle_expired"],
   ])("유휴: 인증 뒤 %ims → %s", (offset, phase) => {
     expect(sessionPhase(times, AUTH + offset)).toBe(phase);
   });

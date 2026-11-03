@@ -113,10 +113,10 @@ describe("AuthSession", () => {
     expect(session.getSnapshot().status).toBe("reauth_required");
   });
 
-  it("활동 없이 28분이면 경고, 30분이면 로그아웃하고 다른 탭에 알린다", async () => {
+  it("활동 없이 58분이면 경고, 60분이면 로그아웃하고 다른 탭에 알린다", async () => {
     const { session, advance, posted, deps } = setup();
-    session.signIn("demo", tokens(60));
-    await advance(28 * MIN);
+    session.signIn("demo", tokens(120));
+    await advance(58 * MIN);
     expect(session.getSnapshot()).toMatchObject({ phase: "idle_warning" });
     await advance(2 * MIN);
     expect(session.getSnapshot()).toEqual({

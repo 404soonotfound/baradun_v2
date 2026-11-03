@@ -291,7 +291,7 @@ test.describe("비밀번호 찾기 (V29)", () => {
 });
 
 test.describe("세션 시간 (D16-A3·E1, 캔버스 V31·E11)", () => {
-  test("활동 없이 28분이면 경고, '계속 쓰기'로 연장, 다시 30분이면 만료 안내와 보던 화면", async ({
+  test("활동 없이 58분이면 경고, '계속 쓰기'로 연장, 다시 60분이면 만료 안내와 보던 화면", async ({
     page,
   }) => {
     await page.clock.install();
@@ -305,7 +305,7 @@ test.describe("세션 시간 (D16-A3·E1, 캔버스 V31·E11)", () => {
     await page.getByRole("link", { name: "내 계정" }).click();
     await expect(page.getByRole("heading", { name: "내 계정" })).toBeVisible();
 
-    await page.clock.runFor("28:01");
+    await page.clock.runFor("58:01");
     const warning = page
       .getByRole("alert")
       .filter({ hasText: "로그인이 만료돼요" });
@@ -317,11 +317,11 @@ test.describe("세션 시간 (D16-A3·E1, 캔버스 V31·E11)", () => {
       .dispatchEvent("click");
     await expect(warning).toHaveCount(0);
 
-    await page.clock.runFor("30:01");
+    await page.clock.runFor("01:00:01");
     await expect(page).toHaveURL(/\/login\/$/);
     await expect(page.getByText("로그인이 만료됐어요")).toBeVisible();
     await expect(
-      page.getByText("30분 동안 활동이 없어 로그아웃했어요."),
+      page.getByText("60분 동안 활동이 없어 로그아웃했어요."),
     ).toBeVisible();
     await expect(page.getByText(/보던 화면: \/account/)).toBeVisible();
   });
