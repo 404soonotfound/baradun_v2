@@ -32,6 +32,7 @@ async function setup(
     failOn?: (path: string) => boolean;
     beforeConditionalPut?: (path: string) => Promise<void> | void;
     seed?: boolean;
+    notices?: () => Promise<readonly unknown[]>;
   } = {},
 ) {
   const state = new MemoryStateStore();
@@ -54,6 +55,7 @@ async function setup(
     beaches: BEACHES,
     zones: ZONES,
     seasons: SEASONS,
+    notices: options.notices ?? (async () => []),
     log: createLogger(
       () => [],
       (line) => lines.push(line),
