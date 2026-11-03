@@ -243,6 +243,22 @@ export async function signInWithPassword(
   await page.getByRole("button", { name: "다음" }).click();
 }
 
+// 767px 이하는 메뉴가 서랍 안에 있음(BRD-171)
+export function isMobile(page: Page): boolean {
+  return (page.viewportSize()?.width ?? 1280) < 768;
+}
+
+// 모바일은 먼저 앱 바의 메뉴 버튼으로 서랍을 엶
+export async function openMenu(page: Page) {
+  if (isMobile(page))
+    await page.getByRole("button", { name: "메뉴 열기" }).click();
+}
+
+export async function logout(page: Page) {
+  await openMenu(page);
+  await page.getByRole("button", { name: "로그아웃" }).click();
+}
+
 export async function expectNoA11yViolations(page: Page) {
   const result = await new AxeBuilder({ page })
     .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
