@@ -111,6 +111,8 @@ export const PUBLISHER_MEMORY_MB = 256;
 // 이름 앞부분 BaradunV2-는 실행 정책의 사용자 풀 Resource 범위가 아니라 콘솔에서 찾기 쉽게 붙임
 // (사용자 풀 ARN은 생성 때 붙는 ID라 이름으로 범위를 좁힐 수 없음)
 export const OPERATOR_POOL_NAME = "BaradunV2-Operators";
+// 읽기 전용 샘플 계정만 두는 풀(D16-A7 실증 뒤 분리, 2026-11-03). MFA 없음
+export const SAMPLE_POOL_NAME = "BaradunV2-Sample";
 
 // 토큰 유효 시간(A3). 유휴 30분은 관리자 앱, 최초 인증 8시간은 운영 API가 따로 강제함
 // refresh rotation을 켜면 새 refresh token이 다시 8시간을 받으므로 Cognito만으로는 8시간 상한이 안 됨
@@ -124,6 +126,7 @@ export const OPERATOR_SESSION = {
 
 // 권한 그룹(아키텍처 18.2: 보기 < 편집 < 노출 변경 + 샘플). 이름은 토큰 cognito:groups 값이 됨
 // 그룹 사이 포함 관계(편집이 보기를 포함하는지 등)는 운영 API의 허용표가 정함(BRD-146). 여기서는 이름만 둠
+// 샘플 그룹은 샘플 풀에만 둠. 운영 API는 그룹 이름과 함께 발급 풀(iss)도 확인함
 export const OPERATOR_GROUPS = [
   { id: "Viewer", name: "viewer", description: "보기" },
   { id: "Editor", name: "editor", description: "편집" },
@@ -132,5 +135,9 @@ export const OPERATOR_GROUPS = [
     name: "publisher",
     description: "노출 변경(공지 노출·지금 게시·되돌리기)",
   },
-  { id: "Sample", name: "sample", description: "읽기 전용 시연 샘플" },
 ] as const;
+export const SAMPLE_GROUP = {
+  id: "Sample",
+  name: "sample",
+  description: "읽기 전용 시연 샘플",
+} as const;
