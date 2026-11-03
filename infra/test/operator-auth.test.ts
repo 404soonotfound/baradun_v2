@@ -101,10 +101,10 @@ describe("관리자 앱 클라이언트", () => {
     });
   });
 
-  it("없는 계정 응답을 숨기고, 토큰 폐기를 켜고, 사용자가 자기 속성을 바꾸지 못한다", () => {
+  it("없는 계정 응답을 숨기고, 토큰 폐기를 켜고, 사용자가 쓸 수 있는 속성은 locale뿐이다", () => {
     expect(c().PreventUserExistenceErrors).toBe("ENABLED");
     expect(c().EnableTokenRevocation).toBe(true);
-    expect(c().WriteAttributes).toEqual([]);
+    expect(c().WriteAttributes).toEqual(["locale"]);
   });
 });
 
