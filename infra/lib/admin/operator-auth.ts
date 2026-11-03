@@ -88,7 +88,7 @@ function createPool(
 
 // 관리자 앱(브라우저)용 클라이언트. 비밀값 없음, SRP 로그인만
 // - 호스팅 UI·OAuth 안 씀 → 콜백 URL 없음(관리자 도메인은 BRD-144에서 정함)
-// - access·ID 15분, refresh 8시간 + rotation(A3). 유휴 30분·최초 인증 8시간은 앱·API가 강제
+// - access·ID 15분, refresh 8시간 + rotation(A3). 유휴 60분·최초 인증 8시간은 앱·API가 강제
 //   rotation을 켜면 ALLOW_REFRESH_TOKEN_AUTH 대신 GetTokensFromRefreshToken으로 갱신함
 // - 없는 계정·틀린 비밀번호 응답을 같게 함(ADM-RESET '등록 안 된 이메일도 같은 문구')
 // - 쓰기 속성은 locale 하나만. 빈 목록은 Cognito가 '기본(표준 속성 모두 쓰기)'으로 처리하므로
