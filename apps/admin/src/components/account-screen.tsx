@@ -37,8 +37,10 @@ function Section({
   return (
     <section className="grid gap-3 border-t border-border-default py-6 md:grid-cols-[260px_1fr] md:gap-7">
       <div>
-        <h2 className="text-[15px] font-semibold text-text-default">{title}</h2>
-        {hint && <p className="mt-1 text-[12.5px] text-text-muted">{hint}</p>}
+        <h2 className="text-title-s font-semibold text-text-default">
+          {title}
+        </h2>
+        {hint && <p className="mt-1 text-label-s text-text-muted">{hint}</p>}
       </div>
       <div className="flex max-w-[440px] flex-col gap-3">{children}</div>
     </section>
@@ -202,8 +204,8 @@ function TotpSection({
           />
         )}
         {error && <Notice tone="fail" title={error} role="alert" />}
-        <div className="flex items-center justify-between gap-3 rounded-[8px] border border-border-default bg-bg-surface px-3.5 py-3">
-          <p className="text-[13px] text-text-body">
+        <div className="flex items-center justify-between gap-3 rounded-admin-box border border-border-default bg-bg-surface px-3.5 py-3">
+          <p className="text-body-s text-text-body">
             {t.account.mfaRegistered}
           </p>
           <Button
@@ -224,11 +226,11 @@ function TotpSection({
       <div
         role="img"
         aria-label={t.welcome.qrLabel}
-        className="size-[160px] rounded-[6px] border border-border-default bg-white p-2 [&_svg]:size-full"
+        className="size-[160px] rounded-admin-control border border-border-default bg-white p-2 [&_svg]:size-full"
         // QR 라이브러리가 만든 SVG(키만 담음). 외부 주소·스크립트 없음
         dangerouslySetInnerHTML={{ __html: setup.qr }}
       />
-      <p className="text-[12.5px] text-text-muted">
+      <p className="text-label-s text-text-muted">
         {t.welcome.keyLabel}:{" "}
         <span className="font-mono text-text-default select-all">
           {setup.secret.match(/.{1,4}/g)?.join(" ")}
@@ -261,11 +263,11 @@ function AccountBody() {
   const loginPath = snapshot.pool === "demo" ? "/login/demo/" : "/login/";
 
   return (
-    <main className="mx-auto w-full max-w-[960px] px-4 py-6">
-      <h1 className="text-[20px] font-semibold text-text-default">
+    <main className="w-full px-4 py-5 md:px-10 md:pt-6 md:pb-10">
+      <h1 className="text-title-l font-semibold text-text-default">
         {t.account.title}
       </h1>
-      <p className="mt-1 mb-4 text-[13px] text-text-muted">
+      <p className="mt-1 mb-4 text-body-s text-text-muted">
         {snapshot.email}
         {` · ${roleLabel(snapshot.pool, snapshot.groups) ?? ""}`}
       </p>

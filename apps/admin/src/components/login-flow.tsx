@@ -350,7 +350,7 @@ export function LoginFlow({ pool }: { pool: PoolKind }) {
             <Button type="submit" disabled={busy || code.length !== 6}>
               {view.error ? t.totp.retry : t.totp.submit}
             </Button>
-            <p className="text-[12.5px] text-text-muted">{t.totp.paste}</p>
+            <p className="text-label-s text-text-muted">{t.totp.paste}</p>
           </form>
           <Button variant="quiet" size="small" onClick={backToForm}>
             {t.totp.otherAccount}
@@ -421,7 +421,7 @@ export function LoginFlow({ pool }: { pool: PoolKind }) {
             <div
               role="img"
               aria-label={t.welcome.qrLabel}
-              className="size-[160px] rounded-[6px] border border-border-default bg-white p-2 [&_svg]:size-full"
+              className="size-[160px] rounded-admin-control border border-border-default bg-white p-2 [&_svg]:size-full"
               // QR 라이브러리가 만든 SVG(키만 담음). 외부 주소·스크립트 없음
               dangerouslySetInnerHTML={{ __html: view.qr }}
             />
@@ -434,11 +434,11 @@ export function LoginFlow({ pool }: { pool: PoolKind }) {
               {t.welcome.keyToggle}
             </Button>
             {showKey && (
-              <div className="w-full rounded-[6px] border border-border-default bg-bg-page p-2.5 text-[12.5px] text-text-body">
+              <div className="w-full rounded-admin-control border border-border-default bg-bg-page p-2.5 text-label-s text-text-body">
                 <p className="font-medium text-text-default">
                   {t.welcome.keyLabel}
                 </p>
-                <p className="mt-1 font-mono text-[14px] break-all text-text-default select-all">
+                <p className="mt-1 font-mono text-body break-all text-text-default select-all">
                   {view.step.secret.match(/.{1,4}/g)?.join(" ")}
                 </p>
                 <p className="mt-1">{t.welcome.keyHint}</p>
@@ -474,7 +474,7 @@ export function LoginFlow({ pool }: { pool: PoolKind }) {
             <Button type="submit" disabled={busy || code.length !== 6}>
               {t.welcome.connect}
             </Button>
-            <p className="text-[12.5px] text-text-muted">{t.welcome.smsNote}</p>
+            <p className="text-label-s text-text-muted">{t.welcome.smsNote}</p>
           </form>
         </AuthShell>
       );
