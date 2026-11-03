@@ -1,0 +1,74 @@
+import { ChevronRight } from "lucide-react";
+import Link from "next/link";
+import { getTranslations } from "next-intl/server";
+
+import { LogoMark } from "@/components/logo-mark";
+import { LanguageMenu } from "@/components/shell/language-menu";
+import { localizedPath, type Locale } from "@/lib/i18n";
+
+// 사이트 푸터. 모든 화면 맨 아래(본문 main 밖, contentinfo)
+// - 모바일: 로고 → 안내 링크 2열 → 언어 → 안전 문구·저작권. 아래는 하단 탭 높이만큼 비워 가려지지 않게
+// - PC(lg 이상): 한 줄(로고·링크 왼쪽, 저작권·언어 오른쪽), 가운데 최대 1280
+// 링크는 설정의 안내 화면들과 같은 순서·이름(pages.*)
+const LINKS = [
+  { href: "/guide/", key: "guide" },
+  { href: "/about/data/", key: "dataSources" },
+  { href: "/terms/", key: "terms" },
+  { href: "/settings/inquiry/", key: "inquiry" },
+] as const;
+
+// 저작권 연도는 빌드한 해(정적 내보내기)
+const YEAR = new Date().getFullYear();
+
+export async function SiteFooter({ locale }: { locale: Locale }) {
+  const t = await getTranslations({ locale });
+
+  return (
+    <footer className="border-t border-border-default bg-bg-surface pb-[calc(var(--spacing-tabbar)+max(14px,env(safe-area-inset-bottom)))] lg:pb-0">
+      <div className="mx-auto flex w-full max-w-[1280px] flex-col gap-5 px-gutter py-6 lg:flex-row lg:items-center lg:gap-8 lg:px-10 lg:py-5">
+        <Link
+          href={localizedPath(locale, "/")}
+          className="flex w-fit items-center gap-2 border-b border-border-default pb-5 text-body font-bold text-text-default max-lg:w-full lg:border-0 lg:pb-0"
+        >
+          <LogoMark className="size-6 rounded-[7px]" />
+          {t("meta.siteName")}
+        </Link>
+        <nav
+          aria-label={t("footer.links")}
+          className="border-b border-border-default pb-5 lg:flex-1 lg:border-0 lg:pb-0"
+        >
+          <ul className="grid grid-cols-2 gap-x-6 gap-y-1 lg:flex lg:flex-wrap lg:gap-x-6">
+            {LINKS.map((link) => (
+              <li key={link.key}>
+                <Link
+                  href={localizedPath(locale, link.href)}
+                  className="flex min-h-touch items-center justify-between gap-2 text-body-s font-bold text-text-body hover:text-text-default lg:font-normal"
+                >
+                  {t(`pages.${link.key}`)}
+                  <ChevronRight
+                    aria-hidden="true"
+                    size={16}
+                    className="shrink-0 text-text-muted lg:hidden"
+                  />
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </nav>
+        {/* 모바일은 언어가 안전 문구 위, PC는 저작권 오른쪽 */}
+        <div className="lg:order-last">
+          <div className="lg:hidden">
+            <LanguageMenu locale={locale} variant="row" />
+          </div>
+          <div className="hidden lg:block">
+            <LanguageMenu locale={locale} variant="inline" />
+          </div>
+        </div>
+        <div className="flex flex-col gap-2 text-body-s text-text-muted">
+          <p className="lg:hidden">{t("footer.disclaimer")}</p>
+          <p>{t("footer.copyright", { year: YEAR })}</p>
+        </div>
+      </div>
+    </footer>
+  );
+}
