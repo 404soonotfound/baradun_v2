@@ -5,6 +5,7 @@ import {
 } from "@aws-sdk/lib-dynamodb";
 import { createHash } from "node:crypto";
 import { idempotencyKey, isAdminKey, type OpsKey } from "./keys";
+import { INQUIRY_ID } from "../inquiry/policy";
 import { IDEMPOTENCY_KEY, IDEMPOTENCY_TTL_SECONDS } from "./policy";
 
 // 운영 API 쓰기: version 조건부 쓰기 + idempotency key + payload hash (D16-B6)
@@ -65,10 +66,6 @@ const RESERVED = new Set([
   "updatedAt",
   "updatedBy",
 ]);
-
-// 문의 ID(UUID v4). 문의 접수 함수가 만드는 모양과 같음
-const INQUIRY_ID =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
 export function payloadHashOf(body: string): string {
   return createHash("sha256").update(body, "utf8").digest("hex");
