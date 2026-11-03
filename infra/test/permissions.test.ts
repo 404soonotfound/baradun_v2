@@ -240,6 +240,42 @@ describe("DynamoDB 권한 (BRD-55)", () => {
     });
   });
 
+  // 감사 기록(BRD-155, D16-B5): 쓰기만 주고 수정·삭제 권한 없음
+  it("운영 API 역할의 Ops Query는 감사 키에만 되고, 감사 키 수정·삭제는 명시적으로 거부된다", () => {
+    const statements = allIamPolicies()
+      .filter((p) => p.roles.includes(roleId("OpsApiRole")))
+      .flatMap((p) => p.statements)
+      .filter((s) =>
+        toList(s.Resource)
+          .map(resourceText)
+          .includes(`${tableId("Ops")}.Arn`),
+      );
+    const query = statements.filter(
+      (s) =>
+        s.Effect === "Allow" && toList(s.Action).includes("dynamodb:Query"),
+    );
+    expect(query).toHaveLength(1);
+    expect(toList(query[0]!.Action)).toEqual(["dynamodb:Query"]);
+    expect(query[0]!.Condition).toEqual({
+      "ForAllValues:StringLike": { "dynamodb:LeadingKeys": ["admin#audit#*"] },
+      Null: { "dynamodb:LeadingKeys": "false" },
+    });
+
+    const denies = statements.filter((s) => s.Effect === "Deny");
+    expect(denies).toHaveLength(1);
+    expect(toList(denies[0]!.Action).sort()).toEqual([
+      "dynamodb:DeleteItem",
+      "dynamodb:UpdateItem",
+    ]);
+    expect(denies[0]!.Condition).toEqual({
+      "ForAnyValue:StringLike": { "dynamodb:LeadingKeys": ["admin#audit#*"] },
+    });
+    // 지우기는 허용 문장에도 없음(Deny는 이중 안전장치)
+    for (const s of statements.filter((x) => x.Effect === "Allow")) {
+      expect(toList(s.Action)).not.toContain("dynamodb:DeleteItem");
+    }
+  });
+
   it("문의 역할은 Inquiry 항목 쓰기·멱등 기록 읽기·이메일 삭제만 할 수 있다", () => {
     const byResource = dynamoActionsByResource([roleId("InquiryInquiryRole")]);
     expect(Object.fromEntries(byResource)).toEqual({
