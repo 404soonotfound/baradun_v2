@@ -10,6 +10,18 @@ import { TEST_CONFIG } from "./test-tokens";
 
 const IDS = { traceId: "trace-full-id", requestId: "req-abcd1234" };
 
+// 업무 데이터를 쓰지 않는 경로용. 건드리면 테스트가 실패함
+const NO_DATA = {
+  client: {
+    send: async () => {
+      throw new Error("이 경로는 DB를 쓰면 안 됨");
+    },
+  },
+  opsTable: "Ops",
+  inquiryTable: "Inquiry",
+  now: () => new Date("2026-11-03T06:00:00Z"),
+};
+
 function event(
   path: string,
   method: string,
@@ -50,6 +62,7 @@ describe("handleOps", () => {
     const res = await handleOps(event("/ops/me", "GET", "t"), {
       auth: authDeps(operatorClaims),
       ids: () => IDS,
+      data: NO_DATA,
     });
     expect(res.statusCode).toBe(200);
     expect(res.headers).toMatchObject({
@@ -68,6 +81,7 @@ describe("handleOps", () => {
     const res = await handleOps(event("/ops/me", "GET"), {
       auth: authDeps(operatorClaims),
       ids: () => IDS,
+      data: NO_DATA,
     });
     expect(res.statusCode).toBe(401);
     expect(JSON.parse(res.body!)).toEqual({
@@ -82,7 +96,7 @@ describe("handleOps", () => {
   it("Authorization 헤더의 토큰은 받지 않는다(OAC 서명 자리)", async () => {
     const res = await handleOps(
       event("/ops/me", "GET", undefined, { authorization: "Bearer t" }),
-      { auth: authDeps(operatorClaims), ids: () => IDS },
+      { auth: authDeps(operatorClaims), ids: () => IDS, data: NO_DATA },
     );
     expect(res.statusCode).toBe(401);
   });
@@ -91,18 +105,24 @@ describe("handleOps", () => {
     const invalid = await handleOps(event("/ops/me", "GET", "t"), {
       auth: authDeps(new Error("bad")),
       ids: () => IDS,
+      data: NO_DATA,
     });
     expect(invalid.statusCode).toBe(401);
     const unclear = await handleOps(event("/ops/me", "GET", "t"), {
       auth: authDeps({ ...operatorClaims, "cognito:groups": [] }),
       ids: () => IDS,
+      data: NO_DATA,
     });
     expect(unclear.statusCode).toBe(403);
     expect(JSON.parse(unclear.body!).error.code).toBe("role_unclear");
   });
 
   it("인증 뒤 없는 경로는 404, 없는 method는 405", async () => {
-    const deps = { auth: authDeps(operatorClaims), ids: () => IDS };
+    const deps = {
+      auth: authDeps(operatorClaims),
+      ids: () => IDS,
+      data: NO_DATA,
+    };
     expect(
       (await handleOps(event("/ops/nope", "GET", "t"), deps)).statusCode,
     ).toBe(404);
@@ -115,6 +135,7 @@ describe("handleOps", () => {
     const res = await handleOps(event("/ops/nope", "GET"), {
       auth: authDeps(operatorClaims),
       ids: () => IDS,
+      data: NO_DATA,
     });
     expect(res.statusCode).toBe(401);
   });
@@ -137,6 +158,7 @@ describe("handleOps", () => {
         },
       },
       ids: () => IDS,
+      data: NO_DATA,
     };
     const res = await handleOps(event("/ops/me", "GET", "t"), deps);
     expect(res.statusCode).toBe(500);
