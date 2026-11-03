@@ -6,8 +6,9 @@
 //
 // 사용법(infra/에서):
 //   OPERATOR_USER_POOL_ID=… OPERATOR_CLIENT_ID=… node scripts/operator-auth-probe.mjs <first-login|login>
-//   first-login: 임시 비밀번호 → 새 비밀번호 → 인증 앱 등록 → 등록 확인
+//   first-login: 임시 비밀번호 → 새 비밀번호 → 인증 앱 등록 → 등록 확인(운영자 풀, MFA 필수)
 //   login: 비밀번호(+인증 앱 코드) 로그인 → 클레임 출력 → refresh 갱신 → 옛 refresh 재사용 거부 확인
+//   샘플 풀(MFA 없음)은 첫 로그인도 login으로 함. 풀 ID·클라이언트 ID를 샘플 풀 값으로 넘김
 import { createInterface } from "node:readline";
 import {
   CognitoIdentityProviderClient,
@@ -19,6 +20,12 @@ const { AuthenticationDetails, CognitoUser, CognitoUserPool } = cognito;
 
 // 서울 리전 고정(E5). 풀 ID 앞부분과 같아야 함
 const REGION = "ap-northeast-2";
+
+// 옛 refresh token 재사용을 Cognito가 거부했다고 볼 오류 이름(2026-11-03 실증: RefreshTokenReuseException)
+const REFRESH_REJECTIONS = [
+  "RefreshTokenReuseException",
+  "NotAuthorizedException",
+];
 
 // 화면에 보여 줄 클레임. 이메일·전화번호·이름 같은 개인 정보 클레임은 넣지 않음
 const SHOWN_CLAIMS = [
@@ -63,10 +70,14 @@ function ask(question, { hidden = false } = {}) {
 }
 
 // 서명은 검증하지 않고 내용만 읽음. 서명·발급자 검증은 운영 API(BRD-146)가 맡음
-function claimsOf(jwt) {
-  const payload = JSON.parse(
+function payloadOf(jwt) {
+  return JSON.parse(
     Buffer.from(jwt.split(".")[1], "base64url").toString("utf8"),
   );
+}
+
+function claimsOf(jwt) {
+  const payload = payloadOf(jwt);
   const shown = {};
   for (const name of SHOWN_CLAIMS) {
     shown[name] = name in payload ? payload[name] : "(없음)";
@@ -187,9 +198,15 @@ async function login(pool) {
       ),
     };
   }
-  if (result.challenge)
+  // MFA 필수 풀에서 아직 인증 앱을 등록하지 않았으면 MFA_SETUP이 옴. 등록은 first-login이 이어서 함
+  if (result.challenge && result.challenge !== "MFA_SETUP")
     throw new Error(`처리하지 않는 응답: ${result.challenge}`);
-  return { user, session: result.session, usedTotp };
+  return {
+    user,
+    session: result.session,
+    usedTotp,
+    needsSetup: result.challenge === "MFA_SETUP",
+  };
 }
 
 // 비밀번호 규칙 실증: 규칙에 안 맞는 비밀번호는 거부 이름을 보여 주고 같은 세션에서 다시 받음
@@ -213,17 +230,28 @@ async function chooseNewPassword(user) {
 }
 
 async function firstLogin(pool) {
-  const { user, session, usedTotp } = await login(pool);
+  const { user, session, usedTotp, needsSetup } = await login(pool);
   // 이미 등록한 계정에서 다시 등록하면 기존 인증 앱 키가 무효가 되므로 멈춤(초기화는 D16-A9 절차)
   if (usedTotp)
     throw new Error("이미 인증 앱을 등록한 계정. 확인은 login으로 하세요");
-  printClaims("등록 전", session);
+  // MFA 필수 풀이면 등록 전에는 토큰이 없음(MFA_SETUP 응답의 세션으로 등록). 토큰이 바로 나왔다면 풀이 필수가 아님
+  // 기대와 다르면 등록하지 않고 멈춤(샘플 풀 값을 잘못 넘긴 경우 포함)
+  if (!needsSetup) {
+    printClaims("등록 전", session);
+    throw new Error(
+      "인증 앱 등록 없이 토큰이 발급됨 → 이 풀은 MFA 필수가 아님. 풀 ID를 확인하고 결과를 기록하세요",
+    );
+  }
   const secret = await associateTotp(user);
   console.log(
     "\n인증 앱에 아래 키를 직접 입력해 등록하세요(이 화면 밖에 저장하지 않음).",
   );
   console.log(`  계정 이름: baradun-admin  키: ${secret}`);
-  await verifyTotp(user, await ask("인증 앱에 뜬 코드: ", { hidden: true }));
+  const verified = await verifyTotp(
+    user,
+    await ask("인증 앱에 뜬 코드: ", { hidden: true }),
+  );
+  printClaims("등록 직후", verified);
   await preferTotp(user);
   console.log(
     "[완료] 인증 앱 등록·기본 2단계 설정. 이제 login으로 2단계 로그인을 확인하세요.",
@@ -231,8 +259,15 @@ async function firstLogin(pool) {
 }
 
 async function loginAndRefresh(pool, clientId) {
-  const { session } = await login(pool);
+  const { session, needsSetup } = await login(pool);
+  if (needsSetup)
+    throw new Error(
+      "인증 앱 등록이 필요한 계정. first-login으로 먼저 등록하세요",
+    );
   printClaims("로그인", session);
+
+  // 로그인과 갱신을 다른 초에 해서 갱신 뒤 auth_time이 처음 인증 시각으로 남는지 구분함
+  await new Promise((resolve) => setTimeout(resolve, 3000));
 
   // rotation을 켜면 REFRESH_TOKEN_AUTH 대신 GetTokensFromRefreshToken으로 갱신함
   const client = new CognitoIdentityProviderClient({ region: REGION });
@@ -250,6 +285,11 @@ async function loginAndRefresh(pool, clientId) {
   if (r.AccessToken) {
     console.log("[갱신] access token 클레임");
     console.table(claimsOf(r.AccessToken));
+    const before = payloadOf(session.getAccessToken().getJwtToken());
+    const after = payloadOf(r.AccessToken);
+    console.log(
+      `[갱신] auth_time 유지: ${after.auth_time === before.auth_time ? "예" : "아니오"} · iat 바뀜: ${after.iat !== before.iat ? "예" : "아니오(같은 초)"}`,
+    );
   }
   if (r.IdToken) {
     console.log("[갱신] ID token 클레임");
@@ -257,7 +297,8 @@ async function loginAndRefresh(pool, clientId) {
   }
 
   // 유예 0초라 옛 refresh token은 바로 거부돼야 함
-  // 토큰 무효(NotAuthorizedException)만 거부로 인정. 네트워크·요청 제한·내부 오류는 실증 실패로 끝냄
+  // 회전 재사용 거부(RefreshTokenReuseException)·토큰 무효(NotAuthorizedException)만 거부로 인정
+  // 네트워크·요청 제한·내부 오류는 실증 실패로 끝냄
   try {
     await client.send(
       new GetTokensFromRefreshTokenCommand({
@@ -269,7 +310,7 @@ async function loginAndRefresh(pool, clientId) {
       "[재사용] 옛 refresh token이 받아들여짐 → 기대와 다름, 기록하세요",
     );
   } catch (error) {
-    if (error?.name !== "NotAuthorizedException") {
+    if (!REFRESH_REJECTIONS.includes(error?.name)) {
       throw new Error(
         `옛 refresh token 재사용 확인 실패(${error?.name ?? "Error"}). 거부 여부를 알 수 없어 다시 실증하세요`,
       );
