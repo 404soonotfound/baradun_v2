@@ -23,6 +23,7 @@ jobs:
 
     outputs:
       web: ${{ steps.filter.outputs.web }}
+      admin: ${{ steps.filter.outputs.admin }} # 운영자 사이트(BRD-147)
       services: ${{ steps.filter.outputs.services }}
       infra: ${{ steps.filter.outputs.infra }}
       contracts: ${{ steps.filter.outputs.contracts }} # contracts 변경 여부
@@ -45,6 +46,10 @@ jobs:
               - 'apps/web/**'
               - 'packages/contracts/**'
               - 'data/beaches/**' # 해변이 바뀌면 상세 페이지 빌드 확인
+            admin:
+              - *shared
+              - 'apps/admin/**'
+              - 'packages/contracts/**'
             services:
               - *shared
               - 'services/**'
@@ -142,6 +147,25 @@ jobs:
           name: e2e-site
           path: apps/web/out
       - run: npm run test:e2e -w apps/web -- --shard=${{ matrix.shard }}/4
+
+  # 운영자 사이트: 린트·타입 검사·테스트·정적 빌드·빌드 결과 검사(검색 차단·CSP meta·비밀값 0건) (BRD-147)
+  # main push는 늘 돌림(web과 같은 이유: main CI 성공이 배포 조건)
+  admin:
+    needs: changes
+    if: needs.changes.outputs.admin == 'true' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run lint -w apps/admin
+      - run: npm run typecheck -w apps/admin
+      - run: npm run test -w apps/admin
+      - run: npm run build -w apps/admin # postbuild가 CSP meta를 넣고 검사함
+      - run: npm run check:out -w apps/admin # 고치지 않고 다시 검사(빌드 결과가 그대로인지)
 
   # 백엔드: 린트·타입 검사·테스트(Vitest)
   services:
@@ -281,7 +305,7 @@ jobs:
   # 결과 모음: 건너뜀은 통과, 실패·취소는 실패 (정기 실행은 audit·gitleaks 결과만 보면 되므로 건너뜀)
   ci-ok:
     if: always() && github.event_name != 'schedule'
-    needs: [changes, web, e2e-build, e2e, services, infra, contracts, beaches, audit, gitleaks] # 하나라도 실패하면 빨간불
+    needs: [changes, web, e2e-build, e2e, admin, services, infra, contracts, beaches, audit, gitleaks] # 하나라도 실패하면 빨간불
     runs-on: ubuntu-latest
     steps:
       - name: 결과 확인
