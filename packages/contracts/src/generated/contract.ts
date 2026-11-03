@@ -12,6 +12,18 @@ export type DateTime = string;
  */
 export type NullableDateTime = string | null;
 /**
+ * UTC(Z)만. 시간대가 붙은 값(+09:00)은 거부(KST·UTC 섞임 방지). 예: 2026-10-17T05:30:00Z
+ *
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "UtcDateTime".
+ */
+export type UtcDateTime = string;
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "NullableUtcDateTime".
+ */
+export type NullableUtcDateTime = string | null;
+/**
  * This interface was referenced by `Contract`'s JSON-Schema
  * via the `definition` "SnapshotPath".
  */
@@ -186,6 +198,10 @@ export interface ManifestFile {
    * 이보다 낮은 화면 버전은 강제 업데이트(BRD-43).
    */
   minWebBuild: number;
+  /**
+   * 공지(BRD-151, D15-6·D16-B3·D4). 선택 칸: 없으면 공지 없음. schemaVersion 1에 더한 칸이라 이 칸을 모르는 화면은 무시함(구현 제안 I06). 예약 시각 전 공지는 넣지 않음. 판단 상태·maintenance를 바꾸지 않음.
+   */
+  notices?: Notice[];
   files: {
     beaches: SnapshotPath;
     status: SnapshotPath;
@@ -200,6 +216,34 @@ export interface ManifestFile {
 export interface Maintenance {
   active: boolean;
   until: NullableDateTime;
+}
+/**
+ * 공지 하나. 한·영 제목·본문이 모두 있어야 함. 글자 수 상한(제목 한 40/영 60, 본문 한 120/영 200, grapheme)은 게시 전 서버 검사(D16-D2, 미확정). 노출은 startsAt 포함·endsAt 제외(UTC), 화면이 끝 시각부터 숨김. endsAt이 null이면 끝을 정하지 않은 공지(운영자가 노출을 끝내면 다음 게시에서 빠짐)(D16-D4, 구현 제안 I09).
+ *
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "Notice".
+ */
+export interface Notice {
+  /**
+   * 공지 ID. 같은 종류·같은 시작 시각이면 이 값 오름차순으로 고름.
+   */
+  id: string;
+  /**
+   * maintenance_notice: 점검 예고(실제 점검 전환은 maintenance), general: 일반 공지. 한 자리에는 점검 예고가 먼저.
+   */
+  kind: 'maintenance_notice' | 'general';
+  title: LocalizedText;
+  body: LocalizedText;
+  startsAt: UtcDateTime;
+  endsAt: NullableUtcDateTime;
+}
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "LocalizedText".
+ */
+export interface LocalizedText {
+  ko: string;
+  en: string;
 }
 /**
  * /data/{v}/beaches.json. 저장소 data/beaches에서 만듦(17.5).
@@ -315,14 +359,6 @@ export interface Beach2 {
     url: string;
     source: string;
   };
-}
-/**
- * This interface was referenced by `Contract`'s JSON-Schema
- * via the `definition` "LocalizedText".
- */
-export interface LocalizedText {
-  ko: string;
-  en: string;
 }
 /**
  * /data/{v}/status.json. 키는 해변 내부 id.
