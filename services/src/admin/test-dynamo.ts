@@ -62,6 +62,19 @@ export class FakeTable {
     }
     if (name === "QueryCommand") {
       const input = command.input;
+      // 공지 목록: pk만 같으면 모두(sk 오름차순, 한 쪽)
+      if (input.KeyConditionExpression === "pk = :pk") {
+        return {
+          Items: [...this.items.entries()]
+            .filter(
+              ([id, item]) =>
+                id.startsWith(`${input.TableName}|`) &&
+                item.pk === input.ExpressionAttributeValues[":pk"],
+            )
+            .map(([, item]) => item)
+            .sort((a, b) => String(a.sk).localeCompare(String(b.sk))),
+        };
+      }
       if (input.IndexName === undefined) return this.queryAudit(input);
       // 상태 GSI만 흉내 냄: 같은 상태를 접수 시각 내림차순, Limit 적용(이 테스트들은 한 쪽으로 충분)
       const status = input.ExpressionAttributeValues[":s"];
