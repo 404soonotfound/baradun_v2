@@ -19,6 +19,22 @@ const add = (file, base, change) => {
 add("manifest.unsupported-schema-version", "manifest", (d) => {
   d.schemaVersion = 2;
 });
+// 공지(BRD-151): 영어 문구가 없으면 노출하지 않음(한·영 필수)
+add("manifest.notice-missing-en", "manifest.with-notices", (d) => {
+  delete d.notices[0].body.en;
+});
+// 모르는 공지 종류(서비스 점검 전환은 공지가 아니라 maintenance)
+add("manifest.notice-unknown-kind", "manifest.with-notices", (d) => {
+  d.notices[0].kind = "service_maintenance";
+});
+// 공지 시각은 UTC(Z)만(KST·UTC 섞임 방지)
+add("manifest.notice-kst-time", "manifest.with-notices", (d) => {
+  d.notices[0].startsAt = "2026-10-17T09:00:00+09:00";
+});
+// 공지가 판단 상태를 담을 칸은 없음
+add("manifest.notice-with-status", "manifest.with-notices", (d) => {
+  d.notices[0].category = "unavailable";
+});
 // 필수 필드 누락
 add("status.missing-valid-until", "status", (d) => {
   delete d.beaches.b0001.validUntil;
