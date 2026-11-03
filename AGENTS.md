@@ -5,7 +5,7 @@
 - `apps/web`: Next.js 정적 사이트. 작업 전 `apps/web/AGENTS.md`를 읽는다.
 - `apps/admin`: 운영자 사이트(정적 Next.js, 아키텍처 18장). 작업 전 `apps/admin/AGENTS.md`를 읽는다.
 - `services`·`packages/contracts`·`infra`·`data`·`tools`: 해당 코드가 생길 때 만든다.
-- `apps/web`·`apps/admin`·`services`는 서로를 가져오지 않는다. 공유는 `packages/contracts`로만 한다.
+- `apps/web`·`apps/admin`·`services`는 서로를 가져오지 않는다. 공유는 `packages/contracts`로만 한다. 예외로 두 앱은 디자인 토큰 패키지 `packages/design-tokens`(토큰 값과 생성·검사 도구만)를 함께 쓴다(결정 기록 D17-3).
 
 # 제품 규칙 (판단 모델 Rev.2.2)
 
