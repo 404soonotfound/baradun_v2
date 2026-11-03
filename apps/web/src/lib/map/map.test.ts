@@ -15,7 +15,7 @@ import {
   TILE_SOURCE_ID,
   tileModeFor,
 } from "./style";
-import tokens from "../../../tokens/tokens.json";
+import tokens from "@baradun/design-tokens/tokens.json";
 import darkStyle from "./style-dark.json";
 import lightStyle from "./style-light.json";
 

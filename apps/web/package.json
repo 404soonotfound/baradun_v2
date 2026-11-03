@@ -21,11 +21,11 @@
     "prebuild-storybook": "npm run tokens && npm run map:worker",
     "build-storybook": "storybook build",
     "test:e2e": "playwright test",
-    "tokens": "node scripts/build-tokens.mjs",
+    "tokens": "baradun-tokens src/styles/tokens.css",
     "icons": "node scripts/build-icons.mts",
     "map:worker": "node scripts/copy-map-worker.mjs",
     "og:image": "node scripts/build-og-image.mjs",
-    "check:tokens": "node scripts/check-tokens.mjs",
+    "check:tokens": "baradun-tokens-check",
     "check:messages": "node scripts/check-messages.mjs"
   },
   "dependencies": {
@@ -44,6 +44,7 @@
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",
+    "@baradun/design-tokens": "0.1.0",
     "@playwright/test": "^1.64.0",
     "@storybook/addon-a11y": "^10.2.9",
     "@storybook/addon-docs": "^10.2.9",
@@ -55,7 +56,6 @@
     "eslint": "^9",
     "eslint-config-next": "16.4.2",
     "storybook": "^10.2.9",
-    "style-dictionary": "^5.6.1",
     "tailwindcss": "^4",
     "typescript": "^5",
     "vitest": "^5.0.5"

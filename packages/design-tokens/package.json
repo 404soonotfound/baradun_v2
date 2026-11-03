@@ -1,0 +1,19 @@
+{
+  "name": "@baradun/design-tokens",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./tokens.json": "./tokens.json"
+  },
+  "bin": {
+    "baradun-tokens": "scripts/build-tokens.mjs",
+    "baradun-tokens-check": "scripts/check-tokens.mjs"
+  },
+  "scripts": {
+    "check": "node scripts/check-tokens.mjs"
+  },
+  "devDependencies": {
+    "style-dictionary": "^5.6.1"
+  }
+}
