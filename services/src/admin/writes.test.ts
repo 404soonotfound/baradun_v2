@@ -1,8 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { FakeTable, type Item } from "./test-dynamo";
 import type { AuditEntry } from "./audit";
-import { idempotencyKey, SAMPLE_CONFIG_KEY, type OpsKey } from "./keys";
-import { IDEMPOTENCY_TTL_SECONDS } from "./policy";
+import {
+  AUDIT_PREFIX,
+  idempotencyKey,
+  SAMPLE_CONFIG_KEY,
+  type OpsKey,
+} from "./keys";
+import { AUDIT_TTL_SECONDS, IDEMPOTENCY_TTL_SECONDS } from "./policy";
 import {
   payloadHashOf,
   versionedWrite,
@@ -31,6 +36,13 @@ function audit(actorSub: string): AuditEntry {
     changes: ["status"],
     ids: { traceId: "trace-1", requestId: "req-1" },
   };
+}
+
+// 감사 기록 항목만 모음
+function audits(table: FakeTable): Item[] {
+  return [...table.items.values()].filter((i) =>
+    String(i.pk).startsWith(AUDIT_PREFIX),
+  );
 }
 
 function write(overrides: Partial<VersionedWrite> = {}): VersionedWrite {
@@ -167,22 +179,28 @@ describe("versionedWrite", () => {
     expect(table.items.get(table.id("Ops", KEY))?.version).toBe(1);
   });
 
-  it("운영 API 범위 밖 키(게시 잠금·샘플 설정·멱등 기록)는 쓰지 않는다", async () => {
+  it("운영 API 범위 밖 키(게시 잠금·샘플 설정·멱등 기록·감사 기록)는 쓰지 않는다", async () => {
     const table = new FakeTable();
     for (const key of [
       { pk: "lock#publish", sk: "lock" },
       { pk: "publish", sk: "version" },
       SAMPLE_CONFIG_KEY,
       idempotencyKey("x"),
+      { pk: `${AUDIT_PREFIX}2026-11`, sk: "2026-11-03T06:00:00.000Z#t" },
     ]) {
-      await expect(
-        versionedWrite(
-          table as never,
-          TABLES,
-          write({ target: opsCreate(key) }),
-          NOW,
-        ),
-      ).rejects.toThrow("범위 밖");
+      for (const mode of ["create", "update"] as const) {
+        await expect(
+          versionedWrite(
+            table as never,
+            TABLES,
+            write({
+              target: { kind: "ops", key, mode },
+              expectedVersion: mode === "create" ? 0 : 1,
+            }),
+            NOW,
+          ),
+        ).rejects.toThrow("범위 밖");
+      }
     }
     expect(table.transactions).toBe(0);
   });
@@ -224,6 +242,91 @@ describe("versionedWrite", () => {
     await expect(
       versionedWrite(client as never, TABLES, write(), NOW),
     ).rejects.toBe(error);
+  });
+  it("감사 기록을 같은 트랜잭션에 1년 TTL로 남긴다(D16-B5)", async () => {
+    const table = new FakeTable();
+    await versionedWrite(table as never, TABLES, write(), NOW);
+    expect(audits(table)).toEqual([
+      expect.objectContaining({
+        pk: `${AUDIT_PREFIX}2026-11`,
+        sk: `${NOW.toISOString()}#trace-1`,
+        actorSub: "operator-sub",
+        action: "inquiry.update",
+        changes: ["status"],
+        ttl: NOW.getTime() / 1000 + AUDIT_TTL_SECONDS,
+      }),
+    ]);
+  });
+
+  it("재전송·version 충돌은 바뀐 것이 없으므로 감사 기록도 더하지 않는다", async () => {
+    const table = new FakeTable();
+    await versionedWrite(table as never, TABLES, write(), NOW);
+    const later = new Date(NOW.getTime() + 1000);
+    const again = {
+      ...audit("operator-sub"),
+      ids: { traceId: "t2", requestId: "r2" },
+    };
+    await versionedWrite(
+      table as never,
+      TABLES,
+      write({ audit: again }),
+      later,
+    );
+    await versionedWrite(
+      table as never,
+      TABLES,
+      write({
+        idempotencyKey: "1f8fad5b-d9cb-469f-a165-70867728950e",
+        audit: { ...again, ids: { traceId: "t3", requestId: "r3" } },
+      }),
+      later,
+    );
+    expect(audits(table)).toHaveLength(1);
+  });
+
+  it("같은 감사 키가 이미 있으면 덮어쓰지 않고 던진다(추가 전용)", async () => {
+    const table = new FakeTable();
+    await versionedWrite(table as never, TABLES, write(), NOW);
+    await expect(
+      versionedWrite(
+        table as never,
+        TABLES,
+        write({
+          target: opsCreate({ pk: "admin#notice#2", sk: "draft" }),
+          idempotencyKey: "1f8fad5b-d9cb-469f-a165-70867728950e",
+        }),
+        NOW,
+      ),
+    ).rejects.toThrow("canceled");
+    expect(
+      table.items.has(table.id("Ops", { pk: "admin#notice#2", sk: "draft" })),
+    ).toBe(false);
+  });
+
+  it("감사 기록의 운영자가 다르거나 샘플이면 쓰지 않는다", async () => {
+    const table = new FakeTable();
+    await expect(
+      versionedWrite(
+        table as never,
+        TABLES,
+        write({ audit: audit("someone-else") }),
+        NOW,
+      ),
+    ).rejects.toThrow("감사");
+    await expect(
+      versionedWrite(
+        table as never,
+        TABLES,
+        write({
+          audit: {
+            ...audit("operator-sub"),
+            actor: { sub: "operator-sub", kind: "sample", role: "sample" },
+          },
+        }),
+        NOW,
+      ),
+    ).rejects.toThrow("감사");
+    expect(table.transactions).toBe(0);
   });
 });
 
