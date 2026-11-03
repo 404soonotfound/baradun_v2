@@ -73,7 +73,9 @@ export function Sheet({
       onClose={() => {
         if (open) onClose();
       }}
-      className="m-0 h-dvh max-h-none w-full max-w-none bg-transparent p-0 text-text-default backdrop:bg-transparent"
+      // overflow-clip: dialog 기본값(auto)이면 열 때 닫기 버튼 포커스로 아래에 있던 시트 쪽으로 dialog가 스크롤됐다가
+      // 올라오며 되돌아가 시트가 위에서 내려오듯 보임. hidden은 포커스 스크롤을 막지 못해 clip. 스크롤은 안쪽 내용 칸이 맡음
+      className="m-0 h-dvh max-h-none w-full max-w-none overflow-clip bg-transparent p-0 text-text-default backdrop:bg-transparent"
     >
       {/* 뒤 화면 어둡게 + 누르면 닫힘. 키보드는 Esc·닫기 버튼으로 닫기 */}
       <div
