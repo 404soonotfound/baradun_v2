@@ -56,8 +56,9 @@ function run(cmd, args, { cwd, env, capture = false, allowFail = false } = {}) {
   return result;
 }
 
-// 배포 대기(최대 1시간)를 버틸 만큼 자격 증명이 남아 있어야 함
-const MIN_CREDENTIAL_MINUTES = 30;
+// cdk에 넘기는 임시 키의 최소 남은 시간. 변경 세트 만들기(몇 분)만 쓰고, 실행·대기는 프로필로 함
+// aws login 프로필은 15분짜리 키를 받아 aws CLI가 스스로 갱신하므로 긴 시간을 요구하면 늘 멈춤
+const MIN_CREDENTIAL_MINUTES = 5;
 
 const step = (n, text) => console.log(`\n[${n}/6] ${text}`);
 
@@ -160,51 +161,35 @@ run("npm", ["ci", "--no-audit", "--no-fund", "--loglevel=error"], {
   cwd: deployDir,
 });
 
-// 4. 자격 증명: 프로필의 임시 키를 하위 명령 환경에만 넣음(cdk가 aws login 프로필을 직접 못 읽는 경우 대비)
-step(4, `AWS 자격 증명을 가져와요 (프로필 ${profile})`);
-const exported = run(
-  "aws",
-  [
-    "configure",
-    "export-credentials",
-    "--profile",
-    profile,
-    "--format",
-    "process",
-  ],
-  { capture: true, allowFail: true },
-);
-if (exported.status !== 0) {
-  fail(
-    `자격 증명을 가져오지 못했어요. 먼저 로그인해 주세요: aws login --profile ${profile}`,
-  );
-}
-const creds = JSON.parse(exported.stdout);
-// 배포 대기 중 키가 만료되면 진행 중인 배포를 실패로 잘못 알리게 되므로 넉넉히 남았을 때만 시작함
-const remainingMin = creds.Expiration
-  ? (Date.parse(creds.Expiration) - Date.now()) / 60_000
-  : Infinity;
-if (remainingMin < MIN_CREDENTIAL_MINUTES) {
-  fail(
-    `자격 증명이 ${Math.max(0, Math.floor(remainingMin))}분 뒤 만료돼요. 다시 로그인한 뒤 실행해 주세요: aws login --profile ${profile}`,
-  );
-}
-const env = { ...process.env };
-for (const key of ["AWS_PROFILE", "AWS_DEFAULT_PROFILE"]) delete env[key];
-Object.assign(env, {
-  AWS_ACCESS_KEY_ID: creds.AccessKeyId,
-  AWS_SECRET_ACCESS_KEY: creds.SecretAccessKey,
-  ...(creds.SessionToken ? { AWS_SESSION_TOKEN: creds.SessionToken } : {}),
+// 4. 자격 증명: aws 명령은 프로필을 그대로 씀(aws CLI가 aws login 키를 스스로 갱신 → 1시간 대기도 끊기지 않음)
+// 셸에 남은 예전 키(AWS_ACCESS_KEY_ID 등)는 프로필보다 앞서므로 지움
+step(4, `AWS 자격 증명을 확인해요 (프로필 ${profile})`);
+const STATIC_KEYS = [
+  "AWS_ACCESS_KEY_ID",
+  "AWS_SECRET_ACCESS_KEY",
+  "AWS_SESSION_TOKEN",
+  "AWS_DEFAULT_PROFILE",
+];
+const awsEnv = { ...process.env };
+for (const key of STATIC_KEYS) delete awsEnv[key];
+Object.assign(awsEnv, {
+  AWS_PROFILE: profile,
   AWS_REGION: REGION,
   AWS_DEFAULT_REGION: REGION,
 });
 const aws = (args, options = {}) =>
   run("aws", [...args, "--region", REGION, "--output", "json"], {
-    env,
+    env: awsEnv,
     capture: true,
     ...options,
   });
-const account = JSON.parse(aws(["sts", "get-caller-identity"]).stdout).Account;
+const identity = aws(["sts", "get-caller-identity"], { allowFail: true });
+if (identity.status !== 0) {
+  fail(
+    `자격 증명을 쓰지 못했어요. 먼저 로그인해 주세요: aws login --profile ${profile}`,
+  );
+}
+const account = JSON.parse(identity.stdout).Account;
 const stack = JSON.parse(
   aws(["cloudformation", "describe-stacks", "--stack-name", STACK_NAME]).stdout,
 ).Stacks[0];
@@ -215,7 +200,39 @@ if (!isStackReady(stack.StackStatus)) {
   );
 }
 
-// 5. 변경 세트
+// 5. 변경 세트. cdk는 aws login 프로필을 직접 못 읽는 경우가 있어 지금 키를 내보내 cdk에만 넘김
+const exported = aws(
+  [
+    "configure",
+    "export-credentials",
+    "--profile",
+    profile,
+    "--format",
+    "process",
+  ],
+  { allowFail: true },
+);
+if (exported.status !== 0) {
+  fail(
+    `자격 증명을 가져오지 못했어요. 먼저 로그인해 주세요: aws login --profile ${profile}`,
+  );
+}
+const creds = JSON.parse(exported.stdout);
+const remainingMin = creds.Expiration
+  ? (Date.parse(creds.Expiration) - Date.now()) / 60_000
+  : Infinity;
+if (remainingMin < MIN_CREDENTIAL_MINUTES) {
+  fail(
+    `자격 증명이 ${Math.max(0, Math.floor(remainingMin))}분 뒤 만료돼요. 다시 로그인한 뒤 실행해 주세요: aws login --profile ${profile}`,
+  );
+}
+const cdkEnv = { ...awsEnv };
+delete cdkEnv.AWS_PROFILE;
+Object.assign(cdkEnv, {
+  AWS_ACCESS_KEY_ID: creds.AccessKeyId,
+  AWS_SECRET_ACCESS_KEY: creds.SecretAccessKey,
+  ...(creds.SessionToken ? { AWS_SESSION_TOKEN: creds.SessionToken } : {}),
+});
 const name = changeSetName(sha, new Date());
 step(5, `변경 세트를 만들어요 (${name}, 아직 실행하지 않음)`);
 run(
@@ -231,7 +248,7 @@ run(
     "--require-approval",
     "never",
   ],
-  { cwd: path.join(deployDir, "infra"), env },
+  { cwd: path.join(deployDir, "infra"), env: cdkEnv },
 );
 
 const described = aws(
@@ -340,7 +357,7 @@ const waited = run(
     "--region",
     REGION,
   ],
-  { env, allowFail: true },
+  { env: awsEnv, allowFail: true },
 );
 if (waited.status !== 0) {
   const events = JSON.parse(
