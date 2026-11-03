@@ -106,5 +106,7 @@ describe("secretFindings", () => {
       "개인 키",
     ]);
     expect(secretFindings('clientId:"75o5rja49uff60ccjh1bch89a9"')).toEqual([]);
+    // 문구 키의 한국어 값(띄어쓰기 없음)은 비밀값으로 보지 않음
+    expect(secretFindings('"password":"비밀번호를입력하세요"')).toEqual([]);
   });
 });

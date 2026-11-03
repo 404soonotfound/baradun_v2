@@ -63,7 +63,7 @@ const SECRET_PATTERNS: readonly (readonly [string, RegExp])[] = [
   ["개인 키", /-----BEGIN [A-Z ]*PRIVATE KEY-----/],
   [
     "비밀값 대입",
-    /\b(?:client_?secret|secret_?access_?key|api_?key|password)["']?\s*[:=]\s*["'][^"'\s]{8,}["']/i,
+    /\b(?:client_?secret|secret_?access_?key|api_?key|password)["']?\s*[:=]\s*["'][A-Za-z0-9+/=_-]{8,}["']/i,
   ],
 ];
 
