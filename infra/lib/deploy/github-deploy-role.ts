@@ -10,10 +10,15 @@ const GITHUB_OIDC_HOST = "token.actions.githubusercontent.com";
 export interface GitHubDeployRoleProps {
   readonly bucket: s3.IBucket;
   readonly distribution: cloudfront.IDistribution;
+  // 운영자 사이트(BRD-147). 화면 파일만 있는 버킷이라 버킷 전체를 씀
+  readonly admin: {
+    readonly bucket: s3.IBucket;
+    readonly distribution: cloudfront.IDistribution;
+  };
 }
 
 // GitHub Actions가 장기 키 없이 사이트 파일을 올리는 역할 (OIDC, 11장)
-// 사이트 경로만 쓰고 data/는 건드리지 못함. 인프라 배포(cdk deploy) 권한은 없음.
+// 사이트 경로만 쓰고 data/는 건드리지 못함. 운영자 사이트 버킷도 올림(BRD-147). 인프라 배포(cdk deploy) 권한은 없음.
 export class GitHubDeployRole extends Construct {
   readonly role: iam.Role;
 
@@ -39,11 +44,14 @@ export class GitHubDeployRole extends Construct {
       maxSessionDuration: Duration.hours(1),
     });
 
-    // 사이트 파일 올리기·지우기 (aws s3 sync --delete)
+    // 사이트 파일 올리기·지우기 (aws s3 sync --delete). 운영자 사이트 버킷도 같음
     this.role.addToPolicy(
       new iam.PolicyStatement({
         actions: ["s3:PutObject", "s3:DeleteObject"],
-        resources: [props.bucket.arnForObjects("*")],
+        resources: [
+          props.bucket.arnForObjects("*"),
+          props.admin.bucket.arnForObjects("*"),
+        ],
       }),
     );
 
@@ -60,15 +68,18 @@ export class GitHubDeployRole extends Construct {
     this.role.addToPolicy(
       new iam.PolicyStatement({
         actions: ["s3:ListBucket"],
-        resources: [props.bucket.bucketArn],
+        resources: [props.bucket.bucketArn, props.admin.bucket.bucketArn],
       }),
     );
 
-    // 새 사이트 파일이 바로 보이게 캐시 비우기 (이 배포 하나만)
+    // 새 사이트 파일이 바로 보이게 캐시 비우기 (이 두 배포만)
     this.role.addToPolicy(
       new iam.PolicyStatement({
         actions: ["cloudfront:CreateInvalidation"],
-        resources: [props.distribution.distributionArn],
+        resources: [
+          props.distribution.distributionArn,
+          props.admin.distribution.distributionArn,
+        ],
       }),
     );
   }

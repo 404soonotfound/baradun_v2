@@ -21,6 +21,7 @@ import { Publisher } from "./publish/publisher";
 import { PublisherRole } from "./publish/publisher-role";
 import { ROLE_BOUNDARY_POLICY_NAME } from "./settings";
 import { createSecurityHeadersPolicy } from "./site/security-headers";
+import { AdminSite } from "./admin/admin-site";
 import { SiteDelivery } from "./site/site-delivery";
 import { StorageTables } from "./storage/tables";
 
@@ -162,10 +163,26 @@ export class BaradunStack extends Stack {
       publisher: publisher.function,
     });
 
+    // 운영자 풀(MFA 필수)·샘플 풀과 각 앱 클라이언트·권한 그룹 (BRD-145). 계정은 배포 뒤 콘솔·CLI로 초대
+    const operatorAuth = new OperatorAuth(this, "OperatorAuth");
+
+    // 운영 API 함수 /ops/* (BRD-146). 함수 URL은 운영자 사이트 배포의 /ops/*로만 부름(OAC)
+    const opsApi = new OpsApi(this, "OpsApi", {
+      opsTable: tables.ops,
+      inquiryTable: tables.inquiry,
+      auth: operatorAuth,
+    });
+
+    // 운영자 사이트: 사용자 사이트와 따로 버킷·CloudFront, /ops/*는 운영 API (BRD-147)
+    const adminSite = new AdminSite(this, "AdminSite", {
+      opsFunctionUrl: opsApi.functionUrl,
+    });
+
     // 사이트 경로 쓰기 전용 역할 (GitHub Actions OIDC)
     const deploy = new GitHubDeployRole(this, "Deploy", {
       bucket: site.bucket,
       distribution: site.distribution,
+      admin: { bucket: adminSite.bucket, distribution: adminSite.distribution },
     });
 
     // 운영 경보: 수집 실패·멈춤, 게시 실패·멈춤을 AlertEmail로 알림 (BRD-62)
@@ -178,16 +195,6 @@ export class BaradunStack extends Stack {
     // 월 $1 예산 알림 (콘솔의 Zero-Spend 예산을 대신함)
     new CostBudget(this, "Budget", { email: alertEmail.valueAsString });
 
-    // 운영자 풀(MFA 필수)·샘플 풀과 각 앱 클라이언트·권한 그룹 (BRD-145). 계정은 배포 뒤 콘솔·CLI로 초대
-    const operatorAuth = new OperatorAuth(this, "OperatorAuth");
-
-    // 운영 API 함수 /ops/* (BRD-146). 함수 URL은 관리자 배포(BRD-147)에서 CloudFront + OAC로 연결
-    new OpsApi(this, "OpsApi", {
-      opsTable: tables.ops,
-      inquiryTable: tables.inquiry,
-      auth: operatorAuth,
-    });
-
     // 배포 후 콘솔·터미널에서 바로 확인할 값
     new CfnOutput(this, "SiteBucketName", { value: site.bucket.bucketName });
     new CfnOutput(this, "DistributionDomainName", {
@@ -198,6 +205,16 @@ export class BaradunStack extends Stack {
       value: site.distribution.distributionId,
     });
     new CfnOutput(this, "DeployRoleArn", { value: deploy.role.roleArn });
+    // 운영자 사이트 배포 값(BRD-147). GitHub Variables ADMIN_SITE_BUCKET·ADMIN_DISTRIBUTION_ID에 넣음
+    new CfnOutput(this, "AdminSiteBucketName", {
+      value: adminSite.bucket.bucketName,
+    });
+    new CfnOutput(this, "AdminDistributionId", {
+      value: adminSite.distribution.distributionId,
+    });
+    new CfnOutput(this, "AdminDistributionDomainName", {
+      value: adminSite.distribution.distributionDomainName,
+    });
     // 웹 빌드가 사진 업로드 주소를 이 버킷 하나로만 허용함(BRD-103). GitHub Variables INQUIRY_PHOTO_BUCKET에 넣음
     new CfnOutput(this, "InquiryPhotoBucketName", {
       value: inquiry.photoBucket.bucketName,
