@@ -1,5 +1,5 @@
 {
-  "verifiedOn": "2026-11-02",
+  "verifiedOn": "2026-11-03",
   "schemas": {
     "AWS::Budgets::Budget": {
       "typeName": "AWS::Budgets::Budget"
@@ -376,6 +376,65 @@
         "tagUpdatable": true,
         "tagProperty": "/properties/Tags",
         "cloudFormationSystemTags": false
+      }
+    },
+    "AWS::Events::Rule": {
+      "typeName": "AWS::Events::Rule",
+      "handlers": {
+        "read": {
+          "permissions": [
+            "iam:PassRole",
+            "events:DescribeRule",
+            "events:ListTargetsByRule",
+            "events:ListTagsForResource"
+          ]
+        },
+        "create": {
+          "permissions": [
+            "iam:PassRole",
+            "events:DescribeRule",
+            "events:PutRule",
+            "events:PutTargets",
+            "events:TagResource"
+          ]
+        },
+        "update": {
+          "permissions": [
+            "iam:PassRole",
+            "events:DescribeRule",
+            "events:PutRule",
+            "events:RemoveTargets",
+            "events:PutTargets",
+            "events:UntagResource",
+            "events:TagResource"
+          ]
+        },
+        "list": {
+          "permissions": [
+            "events:ListRules"
+          ]
+        },
+        "delete": {
+          "permissions": [
+            "iam:PassRole",
+            "events:DescribeRule",
+            "events:DeleteRule",
+            "events:RemoveTargets",
+            "events:ListTargetsByRule"
+          ]
+        }
+      },
+      "tagging": {
+        "permissions": [
+          "events:UntagResource",
+          "events:TagResource",
+          "events:ListTagsForResource"
+        ],
+        "taggable": true,
+        "tagOnCreate": true,
+        "tagUpdatable": true,
+        "tagProperty": "/properties/Tags",
+        "cloudFormationSystemTags": true
       }
     },
     "AWS::IAM::OIDCProvider": {
@@ -1157,6 +1216,84 @@
           "sns:UntagResource",
           "sns:ListTagsForResource"
         ]
+      }
+    },
+    "AWS::SQS::Queue": {
+      "typeName": "AWS::SQS::Queue",
+      "handlers": {
+        "create": {
+          "permissions": [
+            "sqs:CreateQueue",
+            "sqs:GetQueueUrl",
+            "sqs:GetQueueAttributes",
+            "sqs:ListQueueTags",
+            "sqs:TagQueue"
+          ]
+        },
+        "read": {
+          "permissions": [
+            "sqs:GetQueueAttributes",
+            "sqs:ListQueueTags"
+          ]
+        },
+        "update": {
+          "permissions": [
+            "sqs:SetQueueAttributes",
+            "sqs:GetQueueAttributes",
+            "sqs:ListQueueTags",
+            "sqs:TagQueue",
+            "sqs:UntagQueue"
+          ]
+        },
+        "delete": {
+          "permissions": [
+            "sqs:DeleteQueue",
+            "sqs:GetQueueAttributes"
+          ]
+        },
+        "list": {
+          "permissions": [
+            "sqs:ListQueues"
+          ]
+        }
+      },
+      "tagging": {
+        "taggable": true,
+        "tagOnCreate": true,
+        "tagUpdatable": true,
+        "cloudFormationSystemTags": false,
+        "tagProperty": "/properties/Tags",
+        "permissions": [
+          "sqs:TagQueue",
+          "sqs:UntagQueue",
+          "sqs:ListQueueTags"
+        ]
+      }
+    },
+    "AWS::SQS::QueuePolicy": {
+      "typeName": "AWS::SQS::QueuePolicy",
+      "handlers": {
+        "create": {
+          "permissions": [
+            "sqs:SetQueueAttributes"
+          ]
+        },
+        "update": {
+          "permissions": [
+            "sqs:SetQueueAttributes"
+          ]
+        },
+        "delete": {
+          "permissions": [
+            "sqs:SetQueueAttributes"
+          ]
+        }
+      },
+      "tagging": {
+        "taggable": false,
+        "tagOnCreate": false,
+        "tagUpdatable": false,
+        "cloudFormationSystemTags": false
       }
     },
     "AWS::Scheduler::Schedule": {
@@ -21720,6 +21857,889 @@
         }
       ]
     },
+    "events": {
+      "Actions": [
+        {
+          "Name": "ActivateEventSource",
+          "Resources": [
+            {
+              "Name": "event-source"
+            }
+          ]
+        },
+        {
+          "Name": "AllowVendedLogDeliveryForResource",
+          "Resources": [
+            {
+              "Name": "event-bus"
+            },
+            {
+              "Name": "subscriber"
+            }
+          ]
+        },
+        {
+          "Name": "CancelReplay",
+          "Resources": [
+            {
+              "Name": "replay"
+            }
+          ]
+        },
+        {
+          "Name": "CreateApiDestination",
+          "Resources": [
+            {
+              "Name": "api-destination"
+            },
+            {
+              "Name": "connection"
+            }
+          ]
+        },
+        {
+          "Name": "CreateArchive",
+          "Resources": [
+            {
+              "Name": "alias"
+            },
+            {
+              "Name": "archive"
+            },
+            {
+              "Name": "event-bus"
+            },
+            {
+              "Name": "key"
+            }
+          ]
+        },
+        {
+          "Name": "CreateConnection",
+          "Resources": [
+            {
+              "Name": "connection"
+            }
+          ]
+        },
+        {
+          "Name": "CreateEndpoint",
+          "Resources": [
+            {
+              "Name": "endpoint"
+            }
+          ]
+        },
+        {
+          "Name": "CreateEventBus",
+          "Resources": [
+            {
+              "Name": "event-bus"
+            },
+            {
+              "Name": "event-busv2"
+            }
+          ]
+        },
+        {
+          "Name": "CreateEventSource",
+          "Resources": [
+            {
+              "Name": "event-busv2"
+            },
+            {
+              "Name": "event-sourcev2"
+            }
+          ]
+        },
+        {
+          "Name": "CreatePartnerEventSource",
+          "Resources": [
+            {
+              "Name": "event-source"
+            }
+          ]
+        },
+        {
+          "Name": "CreateSubscriber",
+          "Resources": [
+            {
+              "Name": "event-busv2"
+            },
+            {
+              "Name": "subscriber"
+            }
+          ]
+        },
+        {
+          "Name": "DeactivateEventSource",
+          "Resources": [
+            {
+              "Name": "event-source"
+            }
+          ]
+        },
+        {
+          "Name": "DeauthorizeConnection",
+          "Resources": [
+            {
+              "Name": "connection"
+            }
+          ]
+        },
+        {
+          "Name": "DeleteApiDestination",
+          "Resources": [
+            {
+              "Name": "api-destination"
+            }
+          ]
+        },
+        {
+          "Name": "DeleteArchive",
+          "Resources": [
+            {
+              "Name": "archive"
+            }
+          ]
+        },
+        {
+          "Name": "DeleteConnection",
+          "Resources": [
+            {
+              "Name": "connection"
+            }
+          ]
+        },
+        {
+          "Name": "DeleteEndpoint",
+          "Resources": [
+            {
+              "Name": "endpoint"
+            }
+          ]
+        },
+        {
+          "Name": "DeleteEventBus",
+          "Resources": [
+            {
+              "Name": "event-bus"
+            },
+            {
+              "Name": "event-busv2"
+            }
+          ]
+        },
+        {
+          "Name": "DeleteEventSource",
+          "Resources": [
+            {
+              "Name": "event-sourcev2"
+            }
+          ]
+        },
+        {
+          "Name": "DeletePartnerEventSource",
+          "Resources": [
+            {
+              "Name": "event-source"
+            }
+          ]
+        },
+        {
+          "Name": "DeleteResourcePolicy",
+          "Resources": [
+            {
+              "Name": "event-busv2"
+            }
+          ]
+        },
+        {
+          "Name": "DeleteRule",
+          "Resources": [
+            {
+              "Name": "rule-on-custom-event-bus"
+            },
+            {
+              "Name": "rule-on-default-event-bus"
+            }
+          ]
+        },
+        {
+          "Name": "DeleteSubscriber",
+          "Resources": [
+            {
+              "Name": "subscriber"
+            }
+          ]
+        },
+        {
+          "Name": "DescribeApiDestination",
+          "Resources": [
+            {
+              "Name": "api-destination"
+            },
+            {
+              "Name": "connection"
+            }
+          ]
+        },
+        {
+          "Name": "DescribeArchive",
+          "Resources": [
+            {
+              "Name": "archive"
+            }
+          ]
+        },
+        {
+          "Name": "DescribeConnection",
+          "Resources": [
+            {
+              "Name": "connection"
+            }
+          ]
+        },
+        {
+          "Name": "DescribeEndpoint",
+          "Resources": [
+            {
+              "Name": "endpoint"
+            }
+          ]
+        },
+        {
+          "Name": "DescribeEventBus",
+          "Resources": [
+            {
+              "Name": "event-bus"
+            },
+            {
+              "Name": "event-busv2"
+            }
+          ]
+        },
+        {
+          "Name": "DescribeEventSource",
+          "Resources": [
+            {
+              "Name": "event-source"
+            },
+            {
+              "Name": "event-sourcev2"
+            }
+          ]
+        },
+        {
+          "Name": "DescribePartnerEventSource",
+          "Resources": [
+            {
+              "Name": "event-source"
+            }
+          ]
+        },
+        {
+          "Name": "DescribeReplay",
+          "Resources": [
+            {
+              "Name": "replay"
+            }
+          ]
+        },
+        {
+          "Name": "DescribeRule",
+          "Resources": [
+            {
+              "Name": "rule-on-custom-event-bus"
+            },
+            {
+              "Name": "rule-on-default-event-bus"
+            }
+          ]
+        },
+        {
+          "Name": "DescribeSubscriber",
+          "Resources": [
+            {
+              "Name": "subscriber"
+            }
+          ]
+        },
+        {
+          "Name": "DisableRule",
+          "Resources": [
+            {
+              "Name": "rule-on-custom-event-bus"
+            },
+            {
+              "Name": "rule-on-default-event-bus"
+            }
+          ]
+        },
+        {
+          "Name": "EnableRule",
+          "Resources": [
+            {
+              "Name": "rule-on-custom-event-bus"
+            },
+            {
+              "Name": "rule-on-default-event-bus"
+            }
+          ]
+        },
+        {
+          "Name": "GetResourcePolicy",
+          "Resources": [
+            {
+              "Name": "event-busv2"
+            }
+          ]
+        },
+        {
+          "Name": "InvokeApiDestination",
+          "Resources": [
+            {
+              "Name": "api-destination"
+            }
+          ]
+        },
+        {
+          "Name": "ListApiDestinations"
+        },
+        {
+          "Name": "ListArchives"
+        },
+        {
+          "Name": "ListConnections"
+        },
+        {
+          "Name": "ListEndpoints"
+        },
+        {
+          "Name": "ListEventBuses"
+        },
+        {
+          "Name": "ListEventSources"
+        },
+        {
+          "Name": "ListPartnerEventSourceAccounts",
+          "Resources": [
+            {
+              "Name": "event-source"
+            }
+          ]
+        },
+        {
+          "Name": "ListPartnerEventSources"
+        },
+        {
+          "Name": "ListReplays"
+        },
+        {
+          "Name": "ListResourcePolicies",
+          "Resources": [
+            {
+              "Name": "event-busv2"
+            }
+          ]
+        },
+        {
+          "Name": "ListRuleNamesByTarget"
+        },
+        {
+          "Name": "ListRules"
+        },
+        {
+          "Name": "ListSubscribers"
+        },
+        {
+          "Name": "ListTagsForResource",
+          "Resources": [
+            {
+              "Name": "event-bus"
+            },
+            {
+              "Name": "event-busv2"
+            },
+            {
+              "Name": "event-sourcev2"
+            },
+            {
+              "Name": "rule-on-custom-event-bus"
+            },
+            {
+              "Name": "rule-on-default-event-bus"
+            },
+            {
+              "Name": "subscriber"
+            }
+          ]
+        },
+        {
+          "Name": "ListTargetsByRule",
+          "Resources": [
+            {
+              "Name": "rule-on-custom-event-bus"
+            },
+            {
+              "Name": "rule-on-default-event-bus"
+            }
+          ]
+        },
+        {
+          "Name": "PutEvents",
+          "Resources": [
+            {
+              "Name": "event-bus"
+            },
+            {
+              "Name": "event-busv2"
+            }
+          ]
+        },
+        {
+          "Name": "PutPartnerEvents"
+        },
+        {
+          "Name": "PutPermission"
+        },
+        {
+          "Name": "PutRawEvents",
+          "Resources": [
+            {
+              "Name": "event-busv2"
+            }
+          ]
+        },
+        {
+          "Name": "PutResourcePolicy",
+          "Resources": [
+            {
+              "Name": "event-busv2"
+            }
+          ]
+        },
+        {
+          "Name": "PutRule",
+          "Resources": [
+            {
+              "Name": "rule-on-custom-event-bus"
+            },
+            {
+              "Name": "rule-on-default-event-bus"
+            }
+          ]
+        },
+        {
+          "Name": "PutTargets",
+          "Resources": [
+            {
+              "Name": "rule-on-custom-event-bus"
+            },
+            {
+              "Name": "rule-on-default-event-bus"
+            }
+          ]
+        },
+        {
+          "Name": "RemovePermission"
+        },
+        {
+          "Name": "RemoveTargets",
+          "Resources": [
+            {
+              "Name": "rule-on-custom-event-bus"
+            },
+            {
+              "Name": "rule-on-default-event-bus"
+            }
+          ]
+        },
+        {
+          "Name": "RetrieveConnectionCredentials",
+          "Resources": [
+            {
+              "Name": "connection"
+            }
+          ]
+        },
+        {
+          "Name": "RevokeResource",
+          "Resources": [
+            {
+              "Name": "event-busv2"
+            }
+          ]
+        },
+        {
+          "Name": "StartReplay",
+          "Resources": [
+            {
+              "Name": "archive"
+            },
+            {
+              "Name": "event-bus"
+            },
+            {
+              "Name": "replay"
+            }
+          ]
+        },
+        {
+          "Name": "TagResource",
+          "Resources": [
+            {
+              "Name": "event-bus"
+            },
+            {
+              "Name": "event-busv2"
+            },
+            {
+              "Name": "event-sourcev2"
+            },
+            {
+              "Name": "rule-on-custom-event-bus"
+            },
+            {
+              "Name": "rule-on-default-event-bus"
+            },
+            {
+              "Name": "subscriber"
+            }
+          ]
+        },
+        {
+          "Name": "TestEventPattern"
+        },
+        {
+          "Name": "UntagResource",
+          "Resources": [
+            {
+              "Name": "event-bus"
+            },
+            {
+              "Name": "event-busv2"
+            },
+            {
+              "Name": "event-sourcev2"
+            },
+            {
+              "Name": "rule-on-custom-event-bus"
+            },
+            {
+              "Name": "rule-on-default-event-bus"
+            },
+            {
+              "Name": "subscriber"
+            }
+          ]
+        },
+        {
+          "Name": "UpdateApiDestination",
+          "Resources": [
+            {
+              "Name": "api-destination"
+            }
+          ]
+        },
+        {
+          "Name": "UpdateArchive",
+          "Resources": [
+            {
+              "Name": "alias"
+            },
+            {
+              "Name": "archive"
+            },
+            {
+              "Name": "key"
+            }
+          ]
+        },
+        {
+          "Name": "UpdateConnection",
+          "Resources": [
+            {
+              "Name": "connection"
+            }
+          ]
+        },
+        {
+          "Name": "UpdateEndpoint",
+          "Resources": [
+            {
+              "Name": "endpoint"
+            }
+          ]
+        },
+        {
+          "Name": "UpdateEventBus",
+          "Resources": [
+            {
+              "Name": "event-bus"
+            },
+            {
+              "Name": "event-busv2"
+            }
+          ]
+        },
+        {
+          "Name": "UpdateEventSource",
+          "Resources": [
+            {
+              "Name": "event-busv2"
+            },
+            {
+              "Name": "event-sourcev2"
+            }
+          ]
+        },
+        {
+          "Name": "UpdateSubscriber",
+          "Resources": [
+            {
+              "Name": "event-busv2"
+            },
+            {
+              "Name": "subscriber"
+            }
+          ]
+        }
+      ],
+      "Operations": [
+        {
+          "Name": "DeleteRule",
+          "AuthorizedActions": [
+            {
+              "Name": "DeleteRule",
+              "Service": "events"
+            }
+          ]
+        },
+        {
+          "Name": "DescribeRule",
+          "AuthorizedActions": [
+            {
+              "Name": "DescribeRule",
+              "Service": "events"
+            }
+          ]
+        },
+        {
+          "Name": "ListTagsForResource",
+          "AuthorizedActions": [
+            {
+              "Name": "ListTagsForResource",
+              "Service": "events"
+            }
+          ]
+        },
+        {
+          "Name": "ListTargetsByRule",
+          "AuthorizedActions": [
+            {
+              "Name": "ListTargetsByRule",
+              "Service": "events"
+            }
+          ]
+        },
+        {
+          "Name": "PutRule",
+          "AuthorizedActions": [
+            {
+              "Name": "PassRole",
+              "Context": {
+                "iam:PassedToService": [
+                  "events.amazonaws.com"
+                ]
+              },
+              "Service": "iam"
+            },
+            {
+              "Name": "PutRule",
+              "Service": "events"
+            },
+            {
+              "Name": "TagResource",
+              "Service": "events"
+            }
+          ]
+        },
+        {
+          "Name": "PutTargets",
+          "AuthorizedActions": [
+            {
+              "Name": "PassRole",
+              "Context": {
+                "iam:PassedToService": [
+                  "events.amazonaws.com"
+                ]
+              },
+              "Service": "iam"
+            },
+            {
+              "Name": "PutTargets",
+              "Service": "events"
+            }
+          ]
+        },
+        {
+          "Name": "RemoveTargets",
+          "AuthorizedActions": [
+            {
+              "Name": "RemoveTargets",
+              "Service": "events"
+            }
+          ]
+        },
+        {
+          "Name": "TagResource",
+          "AuthorizedActions": [
+            {
+              "Name": "TagResource",
+              "Service": "events"
+            }
+          ]
+        },
+        {
+          "Name": "UntagResource",
+          "AuthorizedActions": [
+            {
+              "Name": "UntagResource",
+              "Service": "events"
+            }
+          ]
+        }
+      ],
+      "Resources": [
+        {
+          "Name": "alias",
+          "ARNFormats": [
+            "arn:${Partition}:kms:${Region}:${Account}:alias/${Alias}"
+          ]
+        },
+        {
+          "Name": "api-destination",
+          "ARNFormats": [
+            "arn:${Partition}:events:${Region}:${Account}:api-destination/${ApiDestinationName}"
+          ]
+        },
+        {
+          "Name": "archive",
+          "ARNFormats": [
+            "arn:${Partition}:events:${Region}:${Account}:archive/${ArchiveName}"
+          ]
+        },
+        {
+          "Name": "connection",
+          "ARNFormats": [
+            "arn:${Partition}:events:${Region}:${Account}:connection/${ConnectionName}"
+          ]
+        },
+        {
+          "Name": "create-snapshot",
+          "ARNFormats": [
+            "arn:${Partition}:events:${Region}:${Account}:target/create-snapshot"
+          ]
+        },
+        {
+          "Name": "endpoint",
+          "ARNFormats": [
+            "arn:${Partition}:events:${Region}:${Account}:endpoint/${EndpointName}"
+          ]
+        },
+        {
+          "Name": "event-bus",
+          "ARNFormats": [
+            "arn:${Partition}:events:${Region}:${Account}:event-bus/${EventBusName}"
+          ],
+          "ConditionKeys": [
+            "aws:ResourceTag/${TagKey}"
+          ]
+        },
+        {
+          "Name": "event-busv2",
+          "ARNFormats": [
+            "arn:${Partition}:events:${Region}:${Account}:event-busv2/${EventBusName}/${OpaqueId}"
+          ],
+          "ConditionKeys": [
+            "aws:ResourceTag/${TagKey}"
+          ]
+        },
+        {
+          "Name": "event-source",
+          "ARNFormats": [
+            "arn:${Partition}:events:${Region}::event-source/${EventSourceName}"
+          ]
+        },
+        {
+          "Name": "event-sourcev2",
+          "ARNFormats": [
+            "arn:${Partition}:events:${Region}:${Account}:event-sourcev2/${SourceType}/${EventSourceName}/${OpaqueId}"
+          ],
+          "ConditionKeys": [
+            "aws:ResourceTag/${TagKey}"
+          ]
+        },
+        {
+          "Name": "key",
+          "ARNFormats": [
+            "arn:${Partition}:kms:${Region}:${Account}:key/${KeyId}"
+          ]
+        },
+        {
+          "Name": "reboot-instance",
+          "ARNFormats": [
+            "arn:${Partition}:events:${Region}:${Account}:target/reboot-instance"
+          ]
+        },
+        {
+          "Name": "replay",
+          "ARNFormats": [
+            "arn:${Partition}:events:${Region}:${Account}:replay/${ReplayName}"
+          ]
+        },
+        {
+          "Name": "rule-on-custom-event-bus",
+          "ARNFormats": [
+            "arn:${Partition}:events:${Region}:${Account}:rule/${EventBusName}/${RuleName}"
+          ],
+          "ConditionKeys": [
+            "aws:ResourceTag/${TagKey}"
+          ]
+        },
+        {
+          "Name": "rule-on-default-event-bus",
+          "ARNFormats": [
+            "arn:${Partition}:events:${Region}:${Account}:rule/${RuleName}"
+          ],
+          "ConditionKeys": [
+            "aws:ResourceTag/${TagKey}"
+          ]
+        },
+        {
+          "Name": "stop-instance",
+          "ARNFormats": [
+            "arn:${Partition}:events:${Region}:${Account}:target/stop-instance"
+          ]
+        },
+        {
+          "Name": "subscriber",
+          "ARNFormats": [
+            "arn:${Partition}:events:${Region}:${Account}:subscriber/${SubscriberName}/${OpaqueId}"
+          ],
+          "ConditionKeys": [
+            "aws:ResourceTag/${TagKey}"
+          ]
+        },
+        {
+          "Name": "terminate-instance",
+          "ARNFormats": [
+            "arn:${Partition}:events:${Region}:${Account}:target/terminate-instance"
+          ]
+        }
+      ]
+    },
     "firehose": {
       "Actions": [
         {
@@ -30878,6 +31898,254 @@
         }
       ]
     },
+    "sqs": {
+      "Actions": [
+        {
+          "Name": "AddPermission",
+          "Resources": [
+            {
+              "Name": "queue"
+            }
+          ]
+        },
+        {
+          "Name": "CancelMessageMoveTask",
+          "Resources": [
+            {
+              "Name": "queue"
+            }
+          ]
+        },
+        {
+          "Name": "ChangeMessageVisibility",
+          "Resources": [
+            {
+              "Name": "queue"
+            }
+          ]
+        },
+        {
+          "Name": "CreateQueue",
+          "Resources": [
+            {
+              "Name": "queue"
+            }
+          ]
+        },
+        {
+          "Name": "DeleteMessage",
+          "Resources": [
+            {
+              "Name": "queue"
+            }
+          ]
+        },
+        {
+          "Name": "DeleteQueue",
+          "Resources": [
+            {
+              "Name": "queue"
+            }
+          ]
+        },
+        {
+          "Name": "GetQueueAttributes",
+          "Resources": [
+            {
+              "Name": "queue"
+            }
+          ]
+        },
+        {
+          "Name": "GetQueueUrl",
+          "Resources": [
+            {
+              "Name": "queue"
+            }
+          ]
+        },
+        {
+          "Name": "ListDeadLetterSourceQueues",
+          "Resources": [
+            {
+              "Name": "queue"
+            }
+          ]
+        },
+        {
+          "Name": "ListMessageMoveTasks",
+          "Resources": [
+            {
+              "Name": "queue"
+            }
+          ]
+        },
+        {
+          "Name": "ListQueueTags",
+          "Resources": [
+            {
+              "Name": "queue"
+            }
+          ]
+        },
+        {
+          "Name": "ListQueues"
+        },
+        {
+          "Name": "PurgeQueue",
+          "Resources": [
+            {
+              "Name": "queue"
+            }
+          ]
+        },
+        {
+          "Name": "ReceiveMessage",
+          "Resources": [
+            {
+              "Name": "queue"
+            }
+          ]
+        },
+        {
+          "Name": "RemovePermission",
+          "Resources": [
+            {
+              "Name": "queue"
+            }
+          ]
+        },
+        {
+          "Name": "SendMessage",
+          "Resources": [
+            {
+              "Name": "queue"
+            }
+          ]
+        },
+        {
+          "Name": "SetQueueAttributes",
+          "Resources": [
+            {
+              "Name": "queue"
+            }
+          ]
+        },
+        {
+          "Name": "StartMessageMoveTask",
+          "Resources": [
+            {
+              "Name": "queue"
+            }
+          ]
+        },
+        {
+          "Name": "TagQueue",
+          "Resources": [
+            {
+              "Name": "queue"
+            }
+          ]
+        },
+        {
+          "Name": "UntagQueue",
+          "Resources": [
+            {
+              "Name": "queue"
+            }
+          ]
+        }
+      ],
+      "Operations": [
+        {
+          "Name": "CreateQueue",
+          "AuthorizedActions": [
+            {
+              "Name": "CreateQueue",
+              "Service": "sqs"
+            },
+            {
+              "Name": "TagQueue",
+              "Service": "sqs"
+            }
+          ]
+        },
+        {
+          "Name": "DeleteQueue",
+          "AuthorizedActions": [
+            {
+              "Name": "DeleteQueue",
+              "Service": "sqs"
+            }
+          ]
+        },
+        {
+          "Name": "GetQueueAttributes",
+          "AuthorizedActions": [
+            {
+              "Name": "GetQueueAttributes",
+              "Service": "sqs"
+            }
+          ]
+        },
+        {
+          "Name": "GetQueueUrl",
+          "AuthorizedActions": [
+            {
+              "Name": "GetQueueUrl",
+              "Service": "sqs"
+            }
+          ]
+        },
+        {
+          "Name": "ListQueueTags",
+          "AuthorizedActions": [
+            {
+              "Name": "ListQueueTags",
+              "Service": "sqs"
+            }
+          ]
+        },
+        {
+          "Name": "SetQueueAttributes",
+          "AuthorizedActions": [
+            {
+              "Name": "SetQueueAttributes",
+              "Service": "sqs"
+            }
+          ]
+        },
+        {
+          "Name": "TagQueue",
+          "AuthorizedActions": [
+            {
+              "Name": "TagQueue",
+              "Service": "sqs"
+            }
+          ]
+        },
+        {
+          "Name": "UntagQueue",
+          "AuthorizedActions": [
+            {
+              "Name": "UntagQueue",
+              "Service": "sqs"
+            }
+          ]
+        }
+      ],
+      "Resources": [
+        {
+          "Name": "queue",
+          "ARNFormats": [
+            "arn:${Partition}:sqs:${Region}:${Account}:${QueueName}"
+          ],
+          "ConditionKeys": [
+            "aws:ResourceTag/${TagKey}"
+          ]
+        }
+      ]
+    },
     "ssm": {
       "Actions": [
         {
@@ -32974,13 +34242,14 @@
     }
   },
   "sources": {
-    "https://schema.cloudformation.ap-northeast-2.amazonaws.com/CloudformationSchema.zip": "f848ff46b865b6f67a49fb4cb1126cdf0bed8c10ce4c46a38290773803ceab70",
+    "https://schema.cloudformation.ap-northeast-2.amazonaws.com/CloudformationSchema.zip": "ebd9cafaca5a722b641f19353efe7494e10e859418c653a34a13e06a3753e7d7",
     "https://servicereference.us-east-1.amazonaws.com/v1/budgets/budgets.json": "65ef8491b0963cc51e5d76dde1a7d527cc2134b2b4b28f55847f1715728fd435",
     "https://servicereference.us-east-1.amazonaws.com/v1/cloudfront/cloudfront.json": "efc26446a6395ce5fce715f1b2e387a6b1d425914489cd80982ae34468f5ca7e",
     "https://servicereference.us-east-1.amazonaws.com/v1/cloudwatch/cloudwatch.json": "b9d5a1437ba06c70429a21a202a515521b67d61c7a2358892bfb407675e6d2ce",
     "https://servicereference.us-east-1.amazonaws.com/v1/dynamodb/dynamodb.json": "402e6333e42297fdbaa5bc54f64d242a012591a604b4cfa285a40938a467cd2d",
     "https://servicereference.us-east-1.amazonaws.com/v1/ec2/ec2.json": "ec4c773407db5ac2c87f87e0c3aa5fa90066e53bbbad65ebced7eeed31949ade",
     "https://servicereference.us-east-1.amazonaws.com/v1/elasticfilesystem/elasticfilesystem.json": "d9b274d8b9856c2df28d41086e27985cb29e73ff46883dfecb9d5dcedd8fbed4",
+    "https://servicereference.us-east-1.amazonaws.com/v1/events/events.json": "a902e40df5c8f7162c19508c25463d852c8b27a0922fee0acee59cfc84c1dbe5",
     "https://servicereference.us-east-1.amazonaws.com/v1/firehose/firehose.json": "51442837b434b49384d263663b17cbb7b618fefb2dfc0c9062aeeeac66bd060c",
     "https://servicereference.us-east-1.amazonaws.com/v1/iam/iam.json": "64bbb6ee09c1ef7757b3cc32106cd26d4067b54142f8b873b5cab8a20a372191",
     "https://servicereference.us-east-1.amazonaws.com/v1/kinesis/kinesis.json": "af98822c350c23646b77e509fb3f025708fa7426d8778ded46d5bc366349cf93",
@@ -32992,6 +34261,7 @@
     "https://servicereference.us-east-1.amazonaws.com/v1/s3tables/s3tables.json": "09957d0178087e3fcbada4f6259831e04b01cebe09248bad6c3835a75a246413",
     "https://servicereference.us-east-1.amazonaws.com/v1/scheduler/scheduler.json": "e76994420811a151e6fed96513a050bab62a6a35545395950c58ba79096f22cd",
     "https://servicereference.us-east-1.amazonaws.com/v1/sns/sns.json": "36396847c543959df076d04811fa0fc7895a19ab31d946b3aacd0464c4433ed3",
+    "https://servicereference.us-east-1.amazonaws.com/v1/sqs/sqs.json": "ab3025f946395ff6dface0582385527a45435b149fdd3e99e3ee9e3d2eafd541",
     "https://servicereference.us-east-1.amazonaws.com/v1/ssm/ssm.json": "c7de3c0eb97c48594a268629e5bcea9f3f05e1605d138bfa5e9ea5c4292e1ee7",
     "https://servicereference.us-east-1.amazonaws.com/v1/wafv2/wafv2.json": "25ebc5ff92480a3805ab8f2f2c1d6e4ae2a3022572e97d0bb1163f5da7e628de"
   }
