@@ -2,7 +2,11 @@ import { describe, expect, it } from "vitest";
 import { OBSERVATION_POLICY } from "../../services/src/core/observations/policy";
 import { WARNING_POLICY } from "../../services/src/core/warnings/policy";
 import { ALARM_LABELS } from "../../services/src/ops/alarm-notification";
-import { COLLECTOR_SCHEDULE_MINUTES, RETRY_LIMITS } from "../lib/settings";
+import {
+  COLLECTOR_SCHEDULE_MINUTES,
+  LOGIN_ABUSE_ALARM,
+  RETRY_LIMITS,
+} from "../lib/settings";
 import { template } from "./stack-template";
 
 // 운영 경보 (BRD-62). 템플릿(JSON)만 검사 — AWS 계정 불필요
@@ -67,8 +71,11 @@ const failureQueueId = Object.keys(
 ).find((id) => id.startsWith("OpsNotificationFailures"))!;
 
 describe("운영 경보 (BRD-62)", () => {
-  it("경보는 10개: 오류 5(수집기 4·게시) + 심장박동 4(특보·관측·이안류·게시) + 알림 발송 실패 1", () => {
-    expect(alarms).toHaveLength(10);
+  it("경보는 11개: 오류 5(수집기 4·게시) + 심장박동 4(특보·관측·이안류·게시) + 알림 발송 실패 1 + 로그인 반복 요청 1", () => {
+    expect(alarms).toHaveLength(11);
+    expect(
+      alarms.filter(([id]) => id.startsWith("OpsLoginAbuse")),
+    ).toHaveLength(1);
     expect(
       byMetric("Errors")
         .map(([, a]) => fnOf(a))
@@ -90,10 +97,16 @@ describe("운영 경보 (BRD-62)", () => {
       const metric = statOf(a).MetricName;
       const beat = metric === "Invocations";
       // 심장박동은 실행이 없으면(지표 없음) 위반, 오류·대기열은 지표 없음에 상태를 유지함(정상으로 보지 않음)
-      expect(p.TreatMissingData, id).toBe(beat ? "breaching" : "ignore");
+      // 로그인 반복 요청은 로그인이 없으면 반복도 없으므로 정상(반복이 끝나면 OK로 돌아가 다음 반복에 다시 알림)
+      const login = id.startsWith("OpsLoginAbuse");
+      expect(p.TreatMissingData, id).toBe(
+        login ? "notBreaching" : beat ? "breaching" : "ignore",
+      );
       expect(p.AlarmActions, id).toBeUndefined();
       expect(p.OKActions, id).toBeUndefined();
       expect(p.InsufficientDataActions, id).toBeUndefined();
+      // 로그인 반복 요청은 여러 지표의 수식이라 아래 전용 테스트에서 통계를 봄
+      if (login) continue;
       expect(statOf(a).Statistic, id).toBe(
         metric === "ApproximateNumberOfMessagesVisible" ? "Maximum" : "Sum",
       );
@@ -210,7 +223,7 @@ describe("운영 경보 (BRD-62)", () => {
       "detail-type": ["CloudWatch Alarm State Change"],
       detail: { state: { value: ["ALARM"] } },
     });
-    expect(rule!.Properties.EventPattern.resources).toHaveLength(10);
+    expect(rule!.Properties.EventPattern.resources).toHaveLength(11);
     expect(rule!.Properties.Targets).toHaveLength(1);
     // 전달 실패도 버리지 않고 같은 실패 대기열로 보냄
     expect(rule!.Properties.Targets[0].DeadLetterConfig).toEqual({
@@ -254,5 +267,46 @@ describe("운영 경보 (BRD-62)", () => {
         Resource: { Ref: opsTopicId },
       }),
     );
+  });
+
+  // 로그인 반복 요청(결정 기록 D17-4): 두 풀의 로그인 실패 합계와 계정 복구 API 호출을 기준으로 나눠 큰 값 ≥ 1
+  it("로그인 반복 요청 경보는 두 풀의 로그인 실패와 계정 복구 호출을 5분 기준으로 본다", () => {
+    const [, alarm] = alarms.find(([id]) => id.startsWith("OpsLoginAbuse"))!;
+    const p = alarm.Properties;
+    expect(p.Threshold).toBe(1);
+    expect(p.ComparisonOperator).toBe("GreaterThanOrEqualToThreshold");
+    expect(p.EvaluationPeriods).toBe(1);
+    const metrics = p.Metrics as any[];
+    const expression = metrics.find((m) => m.Expression)?.Expression as string;
+    expect(expression).toBe(
+      `MAX([((FILL(tries0, 0) - FILL(oks0, 0)) + (FILL(tries1, 0) - FILL(oks1, 0))) / ${LOGIN_ABUSE_ALARM.signInFailures}, FILL(recovery, 0) / ${LOGIN_ABUSE_ALARM.accountRecoveryCalls}])`,
+    );
+    const stats = metrics.filter((m) => m.MetricStat).map((m) => m.MetricStat);
+    expect(
+      stats.every((s) => s.Period === LOGIN_ABUSE_ALARM.periodMinutes * 60),
+    ).toBe(true);
+    const pools = stats
+      .filter((s) => s.Metric.MetricName === "SignInSuccesses")
+      .map((s) =>
+        JSON.stringify(
+          s.Metric.Dimensions.find((d: any) => d.Name === "UserPool").Value,
+        ),
+      );
+    // 운영자 풀·데모(샘플) 풀을 모두 봄
+    expect(pools.some((v) => v.includes("OperatorAuthUserPool"))).toBe(true);
+    expect(pools.some((v) => v.includes("OperatorAuthSamplePool"))).toBe(true);
+    expect(
+      stats.find((s) => s.Metric.Namespace === "AWS/Usage")?.Metric.Dimensions,
+    ).toEqual(
+      expect.arrayContaining([
+        { Name: "Resource", Value: "UserAccountRecovery" },
+        { Name: "Service", Value: "Cognito user pool" },
+      ]),
+    );
+    expect(LOGIN_ABUSE_ALARM).toEqual({
+      periodMinutes: 5,
+      signInFailures: 10,
+      accountRecoveryCalls: 5,
+    });
   });
 });
