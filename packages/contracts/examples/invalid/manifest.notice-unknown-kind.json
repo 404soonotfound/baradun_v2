@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "snapshotVersion": "20261017T053000Z",
+  "policyVersion": "2026-10-16",
+  "generatedAt": "2026-10-17T05:30:12Z",
+  "maintenance": {
+    "active": false,
+    "until": null
+  },
+  "minWebBuild": 1,
+  "notices": [
+    {
+      "id": "n-20261017-maint",
+      "kind": "service_maintenance",
+      "title": {
+        "ko": "데이터 점검 예고",
+        "en": "Planned data maintenance"
+      },
+      "body": {
+        "ko": "10월 18일 02:00~03:00(한국 시간)에는 정보가 늦게 바뀔 수 있어요.",
+        "en": "Information may update late on Oct 18, 02:00–03:00 KST."
+      },
+      "startsAt": "2026-10-17T00:00:00Z",
+      "endsAt": "2026-10-17T18:00:00Z"
+    },
+    {
+      "id": "n-20261016-general",
+      "kind": "general",
+      "title": {
+        "ko": "새 해변을 더했어요",
+        "en": "New beaches added"
+      },
+      "body": {
+        "ko": "동해안 해변 3곳을 더했어요.",
+        "en": "We added 3 beaches on the east coast."
+      },
+      "startsAt": "2026-10-16T00:00:00Z",
+      "endsAt": null
+    }
+  ],
+  "files": {
+    "beaches": "/data/20261017T053000Z/beaches.json",
+    "status": "/data/20261017T053000Z/status.json",
+    "history": "/data/20261017T053000Z/history.json",
+    "nationwideWarnings": "/data/20261017T053000Z/nationwide-warnings.json"
+  }
+}
