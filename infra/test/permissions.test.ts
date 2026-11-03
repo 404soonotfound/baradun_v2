@@ -286,7 +286,7 @@ function allowedActionsOfRole(role: string): Map<string, string[]> {
 describe("함수·역할별 최소 권한 범위 (BRD-67)", () => {
   const roles = template.findResources("AWS::IAM::Role");
 
-  it("스택의 IAM 역할은 수집 4·publisher·문의·배포·Scheduler 대상 역할뿐이다", () => {
+  it("스택의 IAM 역할은 수집 4·publisher·문의·운영 알림·배포·Scheduler 대상 역할뿐이다", () => {
     const schedulerRoles = Object.keys(roles).filter((id) =>
       id.startsWith("SchedulerRoleForTarget"),
     );
@@ -299,10 +299,55 @@ describe("함수·역할별 최소 권한 범위 (BRD-67)", () => {
         roleId("CollectRipRole"),
         roleId("PublisherRole"),
         roleId("InquiryInquiryRole"),
+        roleId("OpsNotificationRole"),
         roleId("DeployRole"),
         ...schedulerRoles,
       ].sort(),
     );
+  });
+
+  it("운영 알림 역할은 기존 운영 SNS 주제·실패 대기열·자기 로그에만 쓴다", () => {
+    const notification = roleId("OpsNotificationRole");
+    expect(roles[notification]!.Properties.ManagedPolicyArns ?? []).toEqual([]);
+    const actions = allowedActionsOfRole(notification);
+    expect([...actions.keys()].sort()).toEqual([
+      "kms:Decrypt",
+      "kms:GenerateDataKey",
+      "logs:CreateLogStream",
+      "logs:PutLogEvents",
+      "sns:Publish",
+      "sqs:SendMessage",
+    ]);
+    const topic = Object.keys(template.findResources("AWS::SNS::Topic")).find(
+      (id) => id.startsWith("OpsTopic"),
+    );
+    const logGroup = Object.keys(
+      template.findResources("AWS::Logs::LogGroup"),
+    ).find((id) => id.startsWith("OpsNotificationLogs"));
+    const queue = Object.keys(template.findResources("AWS::SQS::Queue")).find(
+      (id) => id.startsWith("OpsNotificationFailures"),
+    );
+    expect(actions.get("sns:Publish")).toEqual([String(topic)]);
+    expect(actions.get("sqs:SendMessage")).toEqual([`${queue}.Arn`]);
+    for (const action of ["kms:Decrypt", "kms:GenerateDataKey"]) {
+      expect(actions.get(action)).toHaveLength(1);
+      expect(actions.get(action)?.[0]).toContain(":kms:ap-northeast-2:");
+      expect(actions.get(action)?.[0]).toMatch(/:key\/\*$/);
+    }
+    for (const action of ["logs:CreateLogStream", "logs:PutLogEvents"]) {
+      expect(actions.get(action)).toEqual([`${logGroup}.Arn`]);
+    }
+
+    const kmsStatement = allIamPolicies()
+      .filter((policy) => policy.roles.includes(notification))
+      .flatMap((policy) => policy.statements)
+      .find((statement) =>
+        toList(statement.Action).includes("kms:GenerateDataKey"),
+      );
+    expect(kmsStatement?.Condition).toEqual({
+      "ForAnyValue:StringEquals": { "kms:ResourceAliases": "alias/aws/sns" },
+      StringEquals: { "kms:ViaService": "sns.ap-northeast-2.amazonaws.com" },
+    });
   });
 
   it("Scheduler 역할은 수집 Lambda 함수를 깨우는(lambda:InvokeFunction) 권한만 갖는다", () => {
