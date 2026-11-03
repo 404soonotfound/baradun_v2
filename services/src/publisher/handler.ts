@@ -6,10 +6,15 @@ import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import beachMeta from "../../../data/beach-meta.json";
 import annexTables from "../../../tools/beaches/annex-tables.json";
+import { liveNotices, queryNotices } from "../admin/notices";
 import { createLogger } from "../core/collect/log";
 import { S3SnapshotStore } from "../core/snapshots/s3";
 import { DynamoOpsStore, DynamoStateStore } from "../core/store/dynamodb";
-import { publishSnapshot, rollbackManifest, type PublishResult } from "./publish";
+import {
+  publishSnapshot,
+  rollbackManifest,
+  type PublishResult,
+} from "./publish";
 import { parseBeachMeta, type SeasonTable } from "./season";
 import { zoneTablesFromAnnex, type AnnexTables } from "./zones";
 
@@ -112,9 +117,12 @@ export async function publishHandler(
     return { status: "rolled_back", version };
   }
 
+  const opsTable = requiredEnv("OPS_TABLE_NAME");
   const result = await publishSnapshot({
     state: new DynamoStateStore(documents, requiredEnv("STATE_TABLE_NAME")),
-    ops: new DynamoOpsStore(documents, requiredEnv("OPS_TABLE_NAME")),
+    ops: new DynamoOpsStore(documents, opsTable),
+    // 운영 DB의 공지 노출본(BRD-151). 권한은 admin#notice 파티션 Query만(infra publisher-role)
+    notices: async () => liveNotices(await queryNotices(documents, opsTable)),
     snapshots,
     beaches,
     zones,

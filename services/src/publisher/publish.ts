@@ -1,4 +1,4 @@
-import type { Beach, ManifestFile } from "@baradun/contracts";
+import type { Beach, ManifestFile, Notice } from "@baradun/contracts";
 import type { Logger } from "../core/collect/log";
 import type { SnapshotStore } from "../core/snapshots/types";
 import type { OpsStore, StateStore } from "../core/store/types";
@@ -24,6 +24,8 @@ export interface PublishDeps {
   readonly zones: ZoneTables;
   readonly seasons: SeasonTable; // data/beach-meta.json 운영 기간
   readonly log: Logger;
+  // 운영 DB의 노출본 공지(지운 것 제외). 시각·계약 검사는 여기서 함(BRD-151, 아키텍처 18.4)
+  readonly notices: () => Promise<readonly unknown[]>;
   readonly clock: () => number; // 서버 시각(epoch ms)
   readonly owner: string; // 이 실행의 id(Lambda 요청 id)
 }
@@ -58,7 +60,48 @@ export function snapshotVersion(ms: number): string {
   return formatUtcIso(ms).replace(/[-:]/g, "");
 }
 
-function manifestFor(version: string, generatedAt: string): ManifestFile {
+// 게시본에 실을 공지(D16-B3·D4, 구현 제안 I09)
+// - 시작 시각이 지난 것만(예약 전 문구는 공개 게시본에 넣지 않음), 끝 시각이 지난 것은 뺌
+// - 계약에 맞지 않거나 끝이 시작보다 이르면 그 공지만 빼고 알림(공지 하나 때문에 특보·관측 게시를 멈추지 않음)
+// - ID 순으로 정렬해 같은 공지면 같은 manifest가 되게 함(바뀐 게 없으면 게시 생략)
+export function publishableNotices(
+  candidates: readonly unknown[],
+  nowMs: number,
+  log: Logger,
+): Notice[] {
+  const valid: Notice[] = [];
+  for (const candidate of candidates) {
+    const notice = candidate as Notice;
+    if (
+      contractErrors("Notice", candidate).length > 0 ||
+      (notice.endsAt !== null &&
+        Date.parse(notice.endsAt) <= Date.parse(notice.startsAt))
+    ) {
+      log("error", "publish_notice_invalid", {
+        noticeId: typeof notice?.id === "string" ? notice.id : "?",
+      });
+      continue;
+    }
+    if (Date.parse(notice.startsAt) > nowMs) continue;
+    if (notice.endsAt !== null && Date.parse(notice.endsAt) <= nowMs) continue;
+    // 칸 순서를 고정함. 운영 DB의 맵은 칸 순서를 지키지 않아 같은 공지가 다른 manifest로 보이면 매번 새로 게시됨
+    valid.push({
+      id: notice.id,
+      kind: notice.kind,
+      title: { ko: notice.title.ko, en: notice.title.en },
+      body: { ko: notice.body.ko, en: notice.body.en },
+      startsAt: notice.startsAt,
+      endsAt: notice.endsAt,
+    });
+  }
+  return valid.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+}
+
+function manifestFor(
+  version: string,
+  generatedAt: string,
+  notices: readonly Notice[],
+): ManifestFile {
   return {
     schemaVersion: MANIFEST_SETTINGS.schemaVersion,
     snapshotVersion: version,
@@ -72,6 +115,8 @@ function manifestFor(version: string, generatedAt: string): ManifestFile {
       history: `/${versionPath(version, FILES.history.name)}`,
       nationwideWarnings: `/${versionPath(version, FILES.nationwideWarnings.name)}`,
     },
+    // 공지가 없으면 칸을 두지 않음(공지 기능 전 manifest와 같은 모양)
+    ...(notices.length > 0 ? { notices: [...notices] } : {}),
   };
 }
 
@@ -109,15 +154,17 @@ async function manifestMayPointTo(
   }
 }
 
-// 지금 manifest가 가리키는 파일과 설정이 모두 같으면 게시하지 않음
+// 지금 manifest가 가리키는 파일과 설정·공지가 모두 같으면 게시하지 않음
 // 지금 manifest를 못 읽으면 다르다고 봄(게시함)
 async function sameAsCurrent(
   snapshots: SnapshotStore,
   current: ManifestFile | null,
   bodies: Record<keyof Snapshot, string>,
+  notices: readonly Notice[],
 ): Promise<boolean> {
   if (current === null) return false;
   if (
+    JSON.stringify(current.notices ?? []) !== JSON.stringify(notices) ||
     current.policyVersion !== PUBLISH_POLICY.policyVersion ||
     current.minWebBuild !== MANIFEST_SETTINGS.minWebBuild ||
     JSON.stringify(current.maintenance) !==
@@ -210,7 +257,20 @@ export async function publishSnapshot(
       throw error;
     }
 
-    const manifest = manifestFor(version, now);
+    // 운영 DB를 읽지 못하면 지금 manifest의 공지를 이어서 씀(끝난 것은 뺌)
+    // 공지를 읽지 못했다고 특보·관측 게시를 멈추지 않고, 노출 중인 점검 예고가 조용히 사라지지도 않게 함
+    let notices: Notice[];
+    try {
+      notices = publishableNotices(await deps.notices(), startedMs, log);
+    } catch (error) {
+      log("warn", "publish_notices_unread", {
+        version,
+        error: error instanceof Error ? error.name : typeof error,
+      });
+      notices = publishableNotices(current?.notices ?? [], startedMs, log);
+    }
+
+    const manifest = manifestFor(version, now, notices);
     const errors = [
       ...KEYS.flatMap((key) =>
         contractErrors(FILES[key].contract, snapshot[key]),
@@ -224,7 +284,7 @@ export async function publishSnapshot(
     const bodies = Object.fromEntries(
       KEYS.map((key) => [key, JSON.stringify(snapshot[key])]),
     ) as Record<keyof Snapshot, string>;
-    if (await sameAsCurrent(snapshots, current, bodies)) {
+    if (await sameAsCurrent(snapshots, current, bodies, notices)) {
       log("info", "publish_unchanged", { version: current!.snapshotVersion });
       return { status: "unchanged", version: current!.snapshotVersion };
     }
@@ -319,6 +379,8 @@ export async function publishSnapshot(
 // 다음 게시가 새 버전으로 다시 덮으므로, 게시 코드 문제로 되돌릴 때는 수집기 일정을 먼저 멈춤
 // 점검·최소 화면 버전은 데이터가 아니라 운영 설정 → 사본의 값이 아니라 지금 코드의 MANIFEST_SETTINGS를 씀
 // (점검 중 롤백해도 점검이 풀리지 않고, 올린 minWebBuild가 되돌아가지 않음. BRD-43 리뷰)
+// 공지는 사본에 실린 그대로 되돌아감. 되돌린 공지 변경을 다음 자동 게시에서 다시 싣지 않는 방식(D16-C3)은
+// 미결이라 되돌리기 화면(BRD-152)에서 정함
 export async function rollbackManifest(
   snapshots: SnapshotStore,
   version: string,

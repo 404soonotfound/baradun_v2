@@ -18,7 +18,9 @@ export type ContractFile =
   | "BeachesFile"
   | "StatusFile"
   | "HistoryFile"
-  | "NationwideWarningsFile";
+  | "NationwideWarningsFile"
+  // 공지 하나(manifest 안). 게시 전에 하나씩 걸러 냄(BRD-151)
+  | "Notice";
 
 // 통과하면 빈 배열. 아니면 "파일: 경로 메시지" 목록(로그용, 값 원문은 넣지 않음)
 export function contractErrors(file: ContractFile, value: unknown): string[] {
