@@ -90,6 +90,42 @@ describe("문의 저장", () => {
     expect(itemOf(1)).not.toHaveProperty("beachId");
     expect(itemOf(1)).not.toHaveProperty("activity");
   });
+
+  it("새 문의는 처리 상태 접수(received)·version 1로 저장한다(D16-D5)", async () => {
+    const commands: Array<{ input: Record<string, unknown> }> = [];
+    const documents = {
+      send: async (command: { input: Record<string, unknown> }) => {
+        commands.push(command);
+        return {};
+      },
+    } as unknown as DynamoDBDocumentClient;
+    const receivedAt = new Date("2026-10-26T00:00:00.000Z");
+    await new InquiryStore(documents, "InquiryTable").save({
+      inquiryId: "123e4567-e89b-42d3-a456-426614174000",
+      type: "data_error",
+      message: "문의 본문",
+      photoKeys: [],
+      receivedAt,
+      idempotencyKey: "3f2504e0-4f89-41d3-9a0c-0305e82c3301",
+      fingerprint: "f".repeat(64),
+      response: {
+        inquiryId: "123e4567-e89b-42d3-a456-426614174000",
+        receivedAt: receivedAt.toISOString(),
+        photos: [],
+      },
+    });
+    const item = (
+      commands[0]?.input.TransactItems as Array<{
+        Put: { Item: Record<string, unknown> };
+      }>
+    )[1]?.Put.Item;
+    expect(item).toMatchObject({
+      inquiryStatus: "received",
+      version: 1,
+      receivedAt: "2026-10-26T00:00:00.000Z",
+    });
+    expect(item).not.toHaveProperty("legacy");
+  });
 });
 
 describe("문의 멱등 기록 (BRD-103)", () => {
