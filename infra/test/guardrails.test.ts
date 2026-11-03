@@ -17,6 +17,7 @@ import {
   LOG_RETENTION,
   MAX_ALARMS,
   MAX_DYNAMODB_CAPACITY_UNITS,
+  MONTHLY_BUDGET_NAME,
   MONTHLY_BUDGET_USD,
   RETRY_LIMITS,
   ROLE_BOUNDARY_POLICY_NAME,
@@ -93,6 +94,7 @@ describe("예산 (1장)", () => {
     template.resourceCountIs("AWS::Budgets::Budget", 1);
     template.hasResourceProperties("AWS::Budgets::Budget", {
       Budget: Match.objectLike({
+        BudgetName: MONTHLY_BUDGET_NAME,
         BudgetType: "COST",
         TimeUnit: "MONTHLY",
         BudgetLimit: { Amount: MONTHLY_BUDGET_USD, Unit: "USD" },
@@ -1202,7 +1204,7 @@ describe("CDK bootstrap 실행 정책 (11장, BRD-121)", () => {
     ]);
   });
 
-  it("Budget은 고정 ARN 하나와 ModifyBudget·ViewBudget·ListTagsForResource·TagResource·UntagResource 5개만 허락한다", () => {
+  it("Budget은 고정 ARN 두 개(현재·교체 전 이름)와 ModifyBudget·ViewBudget·ListTagsForResource·TagResource·UntagResource 5개만 허락한다", () => {
     const budgetStatements = allStatements.filter((s) =>
       toList(s.Action).some((a) => a.startsWith("budgets:")),
     );
@@ -1217,7 +1219,11 @@ describe("CDK bootstrap 실행 정책 (11장, BRD-121)", () => {
           "budgets:UntagResource",
           "budgets:ViewBudget",
         ],
-        Resource: `arn:aws:budgets::${ACCOUNT}:budget/baradun-v2-monthly`,
+        // 옛 이름은 BRD-168 교체 배포에서 옛 예산을 지울 때만 씀
+        Resource: [
+          `arn:aws:budgets::${ACCOUNT}:budget/baradun-v2-monthly`,
+          `arn:aws:budgets::${ACCOUNT}:budget/${MONTHLY_BUDGET_NAME}`,
+        ],
       },
     ]);
   });

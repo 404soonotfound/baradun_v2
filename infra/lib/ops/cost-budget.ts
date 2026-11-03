@@ -1,6 +1,6 @@
 import * as budgets from "aws-cdk-lib/aws-budgets";
 import { Construct } from "constructs";
-import { MONTHLY_BUDGET_USD } from "../settings";
+import { MONTHLY_BUDGET_NAME, MONTHLY_BUDGET_USD } from "../settings";
 
 export interface CostBudgetProps {
   // 알림 받을 이메일. 저장소에 남기지 않으려고 배포할 때 값으로 받음.
@@ -17,7 +17,7 @@ export class CostBudget extends Construct {
 
     new budgets.CfnBudget(this, "Monthly", {
       budget: {
-        budgetName: "baradun-v2-monthly",
+        budgetName: MONTHLY_BUDGET_NAME,
         budgetType: "COST",
         timeUnit: "MONTHLY",
         budgetLimit: { amount: MONTHLY_BUDGET_USD, unit: "USD" },

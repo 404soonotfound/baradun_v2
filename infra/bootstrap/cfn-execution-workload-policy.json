@@ -186,7 +186,10 @@
         "budgets:UntagResource",
         "budgets:ViewBudget"
       ],
-      "Resource": "arn:aws:budgets::717304679248:budget/baradun-v2-monthly"
+      "Resource": [
+        "arn:aws:budgets::717304679248:budget/baradun-v2-monthly",
+        "arn:aws:budgets::717304679248:budget/baradun-v2-monthly-budget"
+      ]
     },
     {
       "Sid": "OperatorUserPoolCreate",

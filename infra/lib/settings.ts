@@ -42,6 +42,10 @@ export const ROLE_BOUNDARY_POLICY_NAME = "BaradunV2-RoleBoundary";
 
 // 월 예산 알림 기준 (1장: 월 $0 목표, $1 알림). 알림만 보내고 과금을 막지는 않음.
 export const MONTHLY_BUDGET_USD = 1;
+// 예산 이름. 알림 주소(AlertEmail)를 바꾸면 예산이 교체되는데 같은 이름으로는 새 예산을 만들 수 없음
+// → 주소를 바꾸는 배포와 함께 이름을 바꿔 새 예산 생성 → 옛 예산 삭제 순서로 교체되게 함 (BRD-168)
+// 실행 정책 Budget 문장은 교체 중 옛 이름(baradun-v2-monthly) 삭제도 허락해야 함
+export const MONTHLY_BUDGET_NAME = "baradun-v2-monthly-budget";
 
 // 재시도 상한 (11장: Scheduler·Lambda 재시도를 명시적으로 줄임)
 // 5장 "재시도는 같은 슬롯 안에서": 가장 짧은 슬롯(특보 15분)보다 짧게 10분으로 끊음.
