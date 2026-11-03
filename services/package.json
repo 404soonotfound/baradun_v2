@@ -26,6 +26,7 @@
     "@aws-sdk/lib-dynamodb": "^3.1153.0",
     "@aws-sdk/s3-presigned-post": "^3.1156.0",
     "ajv": "^8.20.0",
-    "ajv-formats": "^3.0.1"
+    "ajv-formats": "^3.0.1",
+    "aws-jwt-verify": "^5.2.1"
   }
 }
