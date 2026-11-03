@@ -374,5 +374,55 @@
       "absentProperties": ["SubscriptionRoleArn"],
       "reason": "Firehose 구독 역할 미사용. 이메일 구독은 역할을 전달하지 않음"
     }
+  ],
+  "AWS::Cognito::UserPool": [
+    {
+      "permissions": ["iam:PassRole", "iam:CreateServiceLinkedRole"],
+      "absentProperties": [
+        "SmsConfiguration",
+        "LambdaConfig",
+        "EmailConfiguration",
+        "UserPoolAddOns"
+      ],
+      "reason": "문자 인증(SNS 역할)·Lambda 트리거·SES 발송·위협 보호 미사용. 기본 Cognito 이메일만 씀. Lambda·Scheduler PassRole로 Cognito 역할 전달을 대신 인가하지 않음"
+    },
+    {
+      "permissions": [
+        "kms:CreateGrant",
+        "kms:Decrypt",
+        "kms:DescribeKey",
+        "kms:Encrypt",
+        "kms:GenerateDataKey",
+        "kms:GenerateDataKeyWithoutPlaintext",
+        "kms:ReEncryptFrom",
+        "kms:ReEncryptTo"
+      ],
+      "absentProperties": ["LambdaConfig", "KeyConfiguration"],
+      "reason": "사용자 지정 발송 트리거의 KMS 키·고객 관리형 키 미사용(11장: 고객 관리형 KMS 키 없음)"
+    },
+    {
+      "permissions": ["cognito-idp:AddCustomAttributes"],
+      "absentProperties": ["Schema"],
+      "reason": "사용자 지정 속성 미사용. 표준 email 속성만 씀"
+    }
+  ],
+  "AWS::Cognito::UserPoolClient": [
+    {
+      "permissions": [
+        "iam:PassRole",
+        "iam:PutRolePolicy",
+        "iam:DeleteRolePolicy",
+        "iam:CreateServiceLinkedRole"
+      ],
+      "absentProperties": ["AnalyticsConfiguration"],
+      "reason": "Pinpoint 분석 연결 미사용. 앱 클라이언트는 역할을 쓰지 않음"
+    }
+  ],
+  "AWS::Cognito::UserPoolGroup": [
+    {
+      "permissions": ["iam:PassRole", "iam:PutRolePolicy"],
+      "absentProperties": ["RoleArn"],
+      "reason": "그룹에 IAM 역할을 연결하지 않음. 권한은 운영 API가 그룹 이름으로 판단함"
+    }
   ]
 }
