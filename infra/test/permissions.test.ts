@@ -219,13 +219,14 @@ describe("DynamoDB 권한 (BRD-55)", () => {
     );
   });
 
-  it("운영 API 역할은 Ops 읽기·쓰기, 문의 읽기·상태 바꾸기·목록 GSI 조회만 하고 State 권한은 없다(G1)", () => {
+  it("운영 API 역할은 Ops 읽기·쓰기·감사 조회, 문의 읽기·상태 바꾸기·목록 GSI 조회만 하고 State 권한은 없다(G1)", () => {
     const byResource = dynamoActionsByResource([roleId("OpsApiRole")]);
     // 트랜잭션 Put·Update는 품목별 동작으로 판정됨. Scan·Delete·문의 만들기(Put)는 없음
     expect(Object.fromEntries(byResource)).toEqual({
       [`${tableId("Ops")}.Arn`]: new Set([
         "dynamodb:GetItem",
         "dynamodb:PutItem",
+        "dynamodb:Query",
         "dynamodb:UpdateItem",
       ]),
       [`${tableId("Inquiry")}.Arn`]: new Set([

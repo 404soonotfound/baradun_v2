@@ -17,6 +17,9 @@ import type { OperatorAuth } from "./operator-auth";
 // - 역할 권한은 Ops 테이블 항목 읽기·쓰기와 문의 항목 읽기·처리 상태 바꾸기·목록 GSI 조회만
 //   State 테이블과 판단 상태(status)는 건드리지 않음(G1). 문의를 만들거나 지우지 않음
 //   트랜잭션(TransactWriteItems)은 품목별 동작(PutItem·UpdateItem)으로 판정됨
+// - 변경 이력(감사, BRD-155·D16-B5): Ops admin#audit#… 키에 Put만. 바꾸기·지우기는 명시적으로 거부
+//   추가 전용은 Put 권한만으로는 성립하지 않음 → 코드가 새 키에만 씀(attribute_not_exists)·업무 변경과 같은 트랜잭션
+//   Ops Query는 감사 키(월 파티션)에만 허용
 // - 토큰 검증 공개 키(JWKS)는 Cognito 공개 주소에서 받음(키·비밀값 없음)
 
 export interface OpsApiProps {
@@ -25,6 +28,9 @@ export interface OpsApiProps {
   readonly inquiryTable: dynamodb.ITable;
   readonly auth: OperatorAuth;
 }
+
+// 감사 기록 파티션 키 모양(services/src/admin/keys.ts AUDIT_PREFIX와 같음)
+const AUDIT_KEYS = "admin#audit#*";
 
 const REPO_ROOT = path.join(__dirname, "..", "..", "..");
 const HANDLER_FILE = path.join(REPO_ROOT, "services/src/admin/handler.ts");
@@ -50,6 +56,27 @@ export class OpsApi extends Construct {
           "dynamodb:UpdateItem",
         ],
         resources: [props.opsTable.tableArn],
+      }),
+    );
+    this.role.addToPolicy(
+      new iam.PolicyStatement({
+        actions: ["dynamodb:Query"],
+        resources: [props.opsTable.tableArn],
+        conditions: {
+          // 키가 없는 요청에 ForAllValues가 참이 되지 않게 Null 검사를 함께 둠
+          "ForAllValues:StringLike": { "dynamodb:LeadingKeys": [AUDIT_KEYS] },
+          Null: { "dynamodb:LeadingKeys": "false" },
+        },
+      }),
+    );
+    this.role.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.DENY,
+        actions: ["dynamodb:UpdateItem", "dynamodb:DeleteItem"],
+        resources: [props.opsTable.tableArn],
+        conditions: {
+          "ForAnyValue:StringLike": { "dynamodb:LeadingKeys": [AUDIT_KEYS] },
+        },
       }),
     );
     // 문의: 상세 읽기·처리 상태 바꾸기(트랜잭션 Update)·목록 GSI 조회. 만들기·지우기·Scan은 없음
