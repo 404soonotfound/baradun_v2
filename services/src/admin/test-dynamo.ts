@@ -20,8 +20,25 @@ export class FakeTable {
     names: Record<string, string>,
     values: Record<string, unknown>,
   ): boolean {
+    const attr = (n: string) => item?.[names[n] ?? n];
+    // begins_with(a, :v)·contains(a, :v)와 괄호로 묶은 OR(찾기 거르기)
+    const fn = (part: string): boolean | null => {
+      const call = /^(begins_with|contains)\(([#\w]+), (:\w+)\)$/.exec(part);
+      if (!call) return null;
+      const a = attr(call[2]!);
+      const b = values[call[3]!];
+      if (typeof a !== "string" || typeof b !== "string") return false;
+      return call[1] === "begins_with" ? a.startsWith(b) : a.includes(b);
+    };
     return condition.split(" AND ").every((part) => {
-      const attr = (n: string) => item?.[names[n] ?? n];
+      if (part.startsWith("(") && part.endsWith(")")) {
+        return part
+          .slice(1, -1)
+          .split(" OR ")
+          .some((one) => fn(one) === true);
+      }
+      const called = fn(part);
+      if (called !== null) return called;
       if (part === "attribute_not_exists(pk)") return !item;
       if (part === "attribute_exists(pk)") return !!item;
       const notExists = /^attribute_not_exists\((#\w+)\)$/.exec(part);
@@ -166,14 +183,16 @@ export class FakeTable {
     const start = input.ExclusiveStartKey
       ? sorted.findIndex((i) => i.sk === input.ExclusiveStartKey.sk) + 1
       : 0;
-    const evaluated = sorted.slice(start, start + input.Limit);
+    // Limit이 없으면 끝까지(탭 수 세기)
+    const limit = input.Limit ?? sorted.length;
+    const evaluated = sorted.slice(start, start + limit);
     const matches = (item: Item) =>
       input.FilterExpression === undefined ||
       this.holds(input.FilterExpression, item, names, values);
     const last = evaluated.at(-1);
     return {
       Items: evaluated.filter(matches),
-      ...(start + input.Limit < sorted.length && last
+      ...(start + limit < sorted.length && last
         ? { LastEvaluatedKey: { pk: last.pk, sk: last.sk } }
         : {}),
     };

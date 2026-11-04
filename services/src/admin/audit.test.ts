@@ -306,3 +306,60 @@ describe("cursor", () => {
     });
   });
 });
+
+describe("공지 문구 앞·뒤와 분류 (시안 V23)", () => {
+  const before = {
+    kind: "maintenance_notice" as const,
+    title: { ko: "11/5 점검 예고", en: "" },
+    body: { ko: "점검해요", en: "" },
+    startsAt: "2026-11-04T00:00:00Z",
+    endsAt: "2026-11-04T17:00:00Z",
+  };
+  const after = {
+    ...before,
+    title: { ko: "11/5 점검 예고", en: "Maintenance" },
+  };
+
+  it("공지 기록은 대상 이름·문구 앞뒤를 목록에 돌려주고, 분류(notice)로 거른다", async () => {
+    const table = await seed(["2026-11-02T00:00:00Z"]);
+    await recordAudit(
+      table as never,
+      "Ops",
+      entry(9, {
+        action: "notice.update",
+        target: { kind: "notice", id: "n-1105" },
+        targetLabel: "11/5 점검 예고",
+        notice: { before, after },
+        changes: ["title"],
+        statusFrom: undefined as never,
+        statusTo: undefined as never,
+      }),
+      new Date("2026-11-02T01:00:00Z"),
+    );
+    const page = await listAudit(
+      table as never,
+      "Ops",
+      query({ category: "notice" }),
+      NOW,
+    );
+    expect(page.items).toEqual([
+      expect.objectContaining({
+        action: "notice.update",
+        targetLabel: "11/5 점검 예고",
+        notice: { before, after },
+      }),
+    ]);
+  });
+
+  it("공지 앞뒤 모양이 틀린 기록은 조용히 빼지 않고 던진다", async () => {
+    const table = new FakeTable();
+    const item = auditItem(entry(1), new Date("2026-11-02T00:00:00Z"));
+    table.items.set(table.id("Ops", item as never), {
+      ...item,
+      noticeBefore: { kind: "general" },
+    });
+    await expect(
+      listAudit(table as never, "Ops", query({}), NOW),
+    ).rejects.toThrow("감사 기록 모양이 틀림");
+  });
+});

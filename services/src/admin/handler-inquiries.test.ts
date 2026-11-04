@@ -581,6 +581,61 @@ describe("변경 이력 목록 GET /ops/audit", () => {
     ).toEqual(["sample.read"]);
   });
 
+  it("첫 쪽에 분류별 수를 싣고(데모 기록은 전체에만), 분류·찾기로 거른다. 다음 쪽에는 수가 없다", async () => {
+    const table = await withHistory();
+    const all = await handleOps(
+      event("GET", "/ops/audit", { query: { limit: "1" } }),
+      deps("viewer", table),
+    );
+    expect(body(all).counts).toEqual({
+      all: 2,
+      notice: 0,
+      beach: 0,
+      publish: 0,
+      inquiry: 1,
+      permission: 0,
+      login: 0,
+    });
+    const next = await handleOps(
+      event("GET", "/ops/audit", {
+        query: { cursor: body(all).nextCursor, limit: "1" },
+      }),
+      deps("viewer", table),
+    );
+    expect(body(next)).not.toHaveProperty("counts");
+
+    const inquiries = await handleOps(
+      event("GET", "/ops/audit", { query: { category: "inquiry" } }),
+      deps("viewer", table),
+    );
+    expect(
+      body(inquiries).items.map((i: { action: string }) => i.action),
+    ).toEqual(["inquiry.update"]);
+    // 분류를 골라도 탭 수는 분류 거르기를 빼고 셈
+    expect(body(inquiries).counts.all).toBe(2);
+
+    const found = await handleOps(
+      event("GET", "/ops/audit", { query: { q: ID.slice(0, 8) } }),
+      deps("viewer", table),
+    );
+    expect(body(found).items).toHaveLength(1);
+    expect(body(found).counts.all).toBe(1);
+  });
+
+  it.each([
+    ["모르는 분류", { category: "beaches" }, "category"],
+    ["빈 찾기", { q: "" }, "q"],
+    ["앞뒤 공백 찾기", { q: " 공지" }, "q"],
+    ["너무 긴 찾기", { q: "가".repeat(51) }, "q"],
+  ])("%s이면 400(%s)", async (_, query, field) => {
+    const res = await handleOps(
+      event("GET", "/ops/audit", { query }),
+      deps("viewer", await withHistory()),
+    );
+    expect(res.statusCode).toBe(400);
+    expect(body(res).error).toMatchObject({ field });
+  });
+
   it("샘플은 변경 이력을 받지 않는다(403)", async () => {
     const res = await handleOps(
       event("GET", "/ops/audit"),

@@ -124,7 +124,7 @@ async function expose(table: FakeTable, id: string, version: number) {
 }
 
 describe("공지 만들기·저장 (편집)", () => {
-  it("대기로 만들고 노출본은 없다. 변경 이력에는 문구 없이 항목 이름만 남긴다", async () => {
+  it("대기로 만들고 노출본은 없다. 변경 이력에는 대상 이름과 공지 문구 앞·뒤를 남긴다(시안 V23)", async () => {
     const table = new FakeTable();
     const { noticeId, version } = await create(table);
     expect(noticeId).toMatch(/^n-[0-9a-f]{12}$/);
@@ -143,7 +143,12 @@ describe("공지 만들기·저장 (편집)", () => {
       targetId: noticeId,
       actorSub: "editor-sub",
     });
-    expect(JSON.stringify(audit)).not.toContain("데이터 점검");
+    // 공지 문구는 공개 문구라 변경 이력 펼치기에 남김(문의 본문·이메일만 복사 안 함, D16-B5)
+    expect(audit).toMatchObject({
+      targetLabel: CONTENT.title.ko,
+      noticeBefore: null,
+      noticeAfter: CONTENT,
+    });
   });
 
   it("같은 멱등 키로 다시 보내면 같은 공지를 돌려주고 하나만 생긴다", async () => {
