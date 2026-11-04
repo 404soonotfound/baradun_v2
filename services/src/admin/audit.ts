@@ -9,6 +9,7 @@ import type { NoticeContent } from "./notices";
 
 // 변경 이력(감사 기록) (BRD-155, D16-B5, 아키텍처 18.3, 화면 ADM-AUD)
 // - 남기는 것: 시각·운영자(Cognito sub)·종류·대상·바뀐 항목 이름. 처리 상태는 앞·뒤 값도 남김(정해진 4개 값)
+//   공지는 대상 이름(한국어 제목)과 문구 앞·뒤도 남김(공개 문구, 시안 V23 펼치기)
 // - 남기지 않는 것: 문의 본문·내부 메모·반려 이유 글·이메일(바뀐 항목 이름만 남김)
 // - 운영 API 쓰기는 업무 변경과 같은 트랜잭션에 넣음(versionedWrite) → 기록 없는 변경·변경 없는 기록이 없음
 // - 샘플 계정은 로그인(/ops/me)·조회·거절된 요청을 모두 남김. 기록에 실패하면 응답하지 않음(500)
@@ -306,7 +307,12 @@ export function parseAuditQuery(
     q,
     cursor,
     limit: limitText,
+    counts,
   } = params;
+  // counts=0: 탭 수를 세지 않음(화면이 이미 가짐). 다른 값은 거부
+  if (counts !== undefined && counts !== "0") {
+    return { ok: false, field: "counts" };
+  }
   const limit =
     limitText === undefined ? AUDIT_PAGE_DEFAULT : Number(limitText);
   if (!Number.isInteger(limit) || limit < 1 || limit > AUDIT_PAGE_MAX) {

@@ -244,9 +244,11 @@ async function auditRoute(
   const now = data.now();
   const page = await listAudit(data.client, data.opsTable, check.query, now);
   // 탭 수는 첫 쪽에만(다음 쪽마다 기간 전체를 다시 세지 않게)
-  const counts = check.query.cursor
-    ? undefined
-    : await countAudit(data.client, data.opsTable, check.query.filter, now);
+  // 화면이 이미 같은 거르기의 수를 가졌으면(분류 탭만 바꿈) counts=0으로 세지 않게 함
+  const counts =
+    check.query.cursor || event.queryStringParameters?.counts === "0"
+      ? undefined
+      : await countAudit(data.client, data.opsTable, check.query.filter, now);
   return json(200, counts ? { ...page, counts } : page, ids);
 }
 
