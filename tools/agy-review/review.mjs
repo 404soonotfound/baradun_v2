@@ -4,7 +4,7 @@
 // 종료 코드: 리뷰 완료 0, 리뷰 미완료 1, 사용법·준비 오류 2
 // 저장소 밖(기본 OS 임시 폴더)에만 씀. Codex 샌드박스에서는 네트워크·~/.gemini 기록 때문에 샌드박스 밖 실행 승인이 필요함
 import { spawnSync } from "node:child_process";
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import {
   mkdirSync,
   mkdtempSync,
@@ -29,7 +29,9 @@ import {
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, "../..");
-const MAX_PROMPT_BYTES = 800_000; // 명령 인자 한도(macOS ARG_MAX 1MB) 아래로
+// agy는 입력이 약 73k 토큰을 넘으면 뒷부분을 알리지 않고 자름(2026-11-04 실측: 150KB 통과, 200KB부터 잘림).
+// 크기로 먼저 거르고, 잘림 자체는 끝 표지(end_marker)로 확인함
+const MAX_PROMPT_BYTES = 150_000;
 
 // 거부 규칙은 공유 허용 목록보다 우선함(2026-11-04 실증). --mode는 쓰지 않음(plan은 계획 문서를 쓰고 auto는 실행함)
 export const REVIEW_SETTINGS = {
@@ -94,10 +96,10 @@ function treeHash(dir) {
   return h.digest("hex");
 }
 
+// 프롬프트는 stdin으로 넘김: 인자 하나로 넘기면 Linux에서 128KiB를 넘을 때 E2BIG로 실패함
+// (-p 없이 stdin이 파이프면 agy가 한 턴만 실행하는 print 모드로 돎, agy 1.4.12에서 거부 설정 적용 확인)
 function agy(prompt, { model, cwd, settingsPath, timeout, schemaPath }) {
   const args = [
-    "-p",
-    prompt,
     "--model",
     model,
     "--disable-slash-commands",
@@ -109,6 +111,7 @@ function agy(prompt, { model, cwd, settingsPath, timeout, schemaPath }) {
   // print-timeout이 듣지 않을 때를 대비한 바깥 제한
   const r = run("agy", args, {
     cwd,
+    input: prompt,
     timeout: (timeout + 60) * 1000,
     allowTimeout: true,
   });
@@ -248,7 +251,40 @@ export function main(argv = process.argv.slice(2)) {
     const schemaPath = join(HERE, "schema.json");
     const expectedBase = { model: opts.model, cwd: snapshot };
 
-    // 4) 거부 시험: 통과하지 못하면 리뷰를 시작하지 않음
+    // 4) 리뷰 프롬프트: 크기 초과는 거부 시험(한도 사용) 전에 멈춤
+    const guidelines = readFileSync(join(snapshot, "AGENTS.md"), "utf8").split(
+      "## Review guidelines",
+    )[1];
+    if (!guidelines)
+      throw new UsageError("사본 AGENTS.md에 Review guidelines 절이 없음");
+    const endMarker = randomBytes(8).toString("hex");
+    const prompt = buildReviewPrompt({
+      baseSha,
+      headSha,
+      scope,
+      guidelines: `## Review guidelines${guidelines}`,
+      diffStat: git("diff", "--stat", "--no-renames", baseSha, headSha),
+      diff: git("diff", "-U20", "--no-renames", baseSha, headSha),
+      evidence,
+      previous: previous && {
+        headSha: previous.headSha,
+        findings: previous.verdict?.review?.findings ?? [],
+        handling: opts.handling ? readFileSync(opts.handling, "utf8") : "",
+      },
+      incrementalDiff:
+        scope === "incremental"
+          ? git("diff", "-U20", "--no-renames", previous.headSha, headSha)
+          : "",
+      sensitiveChanged,
+      endMarker,
+    });
+    if (Buffer.byteLength(prompt) > MAX_PROMPT_BYTES)
+      throw new UsageError(
+        `프롬프트가 ${Buffer.byteLength(prompt)}바이트로 한도 ${MAX_PROMPT_BYTES}바이트를 넘음(agy가 뒷부분을 자름). 리뷰 범위를 나눠 실행`,
+      );
+    writeFileSync(join(outDir, "prompt.txt"), prompt);
+
+    // 5) 거부 시험: 통과하지 못하면 리뷰를 시작하지 않음
     log(`거부 시험 (${opts.model}, 사본 ${snapshot})`);
     const before = treeHash(snapshot);
     const p = agy(PROBE_PROMPT, {
@@ -279,37 +315,7 @@ export function main(argv = process.argv.slice(2)) {
     };
     let stderr = "";
     if (probe.ok) {
-      // 5) 리뷰
-      const guidelines = readFileSync(
-        join(snapshot, "AGENTS.md"),
-        "utf8",
-      ).split("## Review guidelines")[1];
-      if (!guidelines)
-        throw new UsageError("사본 AGENTS.md에 Review guidelines 절이 없음");
-      const prompt = buildReviewPrompt({
-        baseSha,
-        headSha,
-        scope,
-        guidelines: `## Review guidelines${guidelines}`,
-        diffStat: git("diff", "--stat", "--no-renames", baseSha, headSha),
-        diff: git("diff", "-U20", "--no-renames", baseSha, headSha),
-        evidence,
-        previous: previous && {
-          headSha: previous.headSha,
-          findings: previous.verdict?.review?.findings ?? [],
-          handling: opts.handling ? readFileSync(opts.handling, "utf8") : "",
-        },
-        incrementalDiff:
-          scope === "incremental"
-            ? git("diff", "-U20", "--no-renames", previous.headSha, headSha)
-            : "",
-        sensitiveChanged,
-      });
-      if (Buffer.byteLength(prompt) > MAX_PROMPT_BYTES)
-        throw new UsageError(
-          `프롬프트가 ${MAX_PROMPT_BYTES}바이트를 넘음. 리뷰 범위를 나눠 실행`,
-        );
-      writeFileSync(join(outDir, "prompt.txt"), prompt);
+      // 6) 리뷰
       log(
         `리뷰 시작 (${scope}, ${baseSha.slice(0, 12)}..${headSha.slice(0, 12)}, 제한 ${opts.timeout}초)`,
       );
@@ -336,6 +342,7 @@ export function main(argv = process.argv.slice(2)) {
           diffFiles,
           sensitivePrefixes,
           evidenceCount: evidence.length,
+          endMarker,
         },
       });
       if (r.signal)

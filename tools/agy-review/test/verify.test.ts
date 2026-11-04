@@ -69,6 +69,7 @@ const review = (over = {}) => ({
   not_reviewed_files: [],
   not_reviewed_aspects: ["실제 AWS 동작"],
   limitations: [],
+  end_marker: "e1d2c3b4a5f60718",
   ...over,
 });
 const expected = (over = {}) => ({
@@ -81,6 +82,7 @@ const expected = (over = {}) => ({
   diffFiles: ["services/src/admin/inquiries.ts"],
   sensitivePrefixes: SENSITIVE,
   evidenceCount: 1,
+  endMarker: "e1d2c3b4a5f60718",
   ...over,
 });
 const verify = (text: string, over = {}, exitCode = 0) =>
@@ -128,6 +130,33 @@ describe("리뷰 판정", () => {
     expect(verify(jsonl(init())).reasons).toContain("결과 이벤트(result) 없음");
     expect(verify(`${ok()}\n{깨진 줄`).reasons).toContain(
       "stream-json 4번째 줄을 읽지 못함",
+    );
+  });
+
+  it("null·false·0·빈 문자열 JSON 응답도 스키마 검사를 거쳐 미완료", () => {
+    for (const response of ["null", "false", "0", '""']) {
+      const v = verify(
+        jsonl(init(), readOf("services/src/admin/policy.ts"), result(response)),
+      );
+      expect(v.complete, response).toBe(false);
+      expect(
+        v.reasons.some((r: string) => r.startsWith("스키마 위반")),
+        response,
+      ).toBe(true);
+    }
+  });
+
+  it("프롬프트 끝 표지를 돌려받지 못하면(입력 잘림) 미완료", () => {
+    const v = verify(
+      jsonl(
+        init(),
+        readOf("services/src/admin/policy.ts"),
+        result(review({ end_marker: "" })),
+      ),
+    );
+    expect(v.complete).toBe(false);
+    expect(v.reasons).toContain(
+      "프롬프트 끝 표지 불일치(입력이 잘렸을 수 있음): 빈 값",
     );
   });
 

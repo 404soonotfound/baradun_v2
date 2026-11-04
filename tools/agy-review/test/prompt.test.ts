@@ -14,6 +14,7 @@ const input = (over = {}) => ({
   previous: null,
   incrementalDiff: "",
   sensitiveChanged: [],
+  endMarker: "0123456789abcdef",
   ...over,
 });
 
@@ -29,7 +30,9 @@ describe("리뷰 프롬프트", () => {
     const p = buildReviewPrompt(input());
     const diffBlock = p.split("## 최종 전체 diff (주변 20줄 포함)\n")[1];
     expect(diffBlock.startsWith("````\n")).toBe(true);
-    expect(p.trimEnd().endsWith("````\n</자료>")).toBe(true);
+    expect(p.endsWith("````\n</자료>\n자료 끝 표지: 0123456789abcdef")).toBe(
+      true,
+    );
   });
 
   it("추가 리뷰에는 이전 결과·처리 내용·증분 diff와 최종 전체 diff를 함께 넘김", () => {

@@ -160,24 +160,32 @@ export function verifyReview({ exitCode, text, expected, validate }) {
   for (const p of reads.filter((p) => !p.startsWith(prefix)))
     reasons.push(`사본 밖 파일을 읽음: ${p}`);
 
+  // 파싱 성공과 값의 참·거짓을 나눔: null·false·0·"" 같은 JSON도 스키마 검사를 거쳐야 함
   let review = null;
   const response = result?.response ?? "";
   if (result && !response.trim()) reasons.push("응답이 비어 있음");
   else if (result) {
+    let parsed;
+    let ok = false;
     try {
-      review = JSON.parse(response);
+      parsed = JSON.parse(response);
+      ok = true;
     } catch {
       reasons.push("응답이 JSON이 아님");
     }
-  }
-  if (review) {
-    const schemaErrors = validate(review);
-    if (schemaErrors.length) {
-      reasons.push(...schemaErrors.map((e) => `스키마 위반: ${e}`));
-      review = null;
+    if (ok) {
+      const schemaErrors = validate(parsed);
+      if (schemaErrors.length)
+        reasons.push(...schemaErrors.map((e) => `스키마 위반: ${e}`));
+      else review = parsed;
     }
   }
   if (review) {
+    // agy가 긴 입력의 뒷부분을 알리지 않고 자르므로, 프롬프트 맨 끝 표지를 돌려받아야 끝까지 읽은 것으로 봄
+    if (review.end_marker !== expected.endMarker)
+      reasons.push(
+        `프롬프트 끝 표지 불일치(입력이 잘렸을 수 있음): ${review.end_marker || "빈 값"}`,
+      );
     if (review.base_sha !== expected.baseSha)
       reasons.push(`base SHA 불일치: ${review.base_sha}`);
     if (review.head_sha !== expected.headSha)

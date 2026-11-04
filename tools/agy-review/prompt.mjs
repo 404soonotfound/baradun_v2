@@ -34,6 +34,7 @@ export function buildReviewPrompt(input) {
     previous,
     incrementalDiff,
     sensitiveChanged,
+    endMarker,
   } = input;
   const lines = [
     "너는 이 저장소의 독립 코드 리뷰어다. 현재 폴더는 검토 대상 head 커밋의 사본이다.",
@@ -48,6 +49,7 @@ export function buildReviewPrompt(input) {
     "- reviewed_files: 실제로 diff나 파일 내용을 확인한 저장소 상대 경로만 적는다. diff 밖 파일은 사본에서 직접 읽은 것만 적는다.",
     "- not_reviewed_files: 봐야 했지만 확인하지 못한 파일. not_reviewed_aspects: 확인하지 못한 관점(예: 실제 AWS 동작, 화면 렌더링).",
     "- limitations: 제공되지 않은 근거, 모델·도구 한계.",
+    "- end_marker: 이 프롬프트 맨 마지막 줄 '자료 끝 표지:' 뒤의 값을 그대로 적는다. 그 줄이 보이지 않으면(입력이 잘렸으면) 빈 문자열을 적는다. 값을 짐작하지 않는다.",
   ];
   if (scope === "incremental")
     lines.push(
@@ -92,6 +94,8 @@ export function buildReviewPrompt(input) {
     fence(diffStat),
   );
   lines.push("## 최종 전체 diff (주변 20줄 포함)", fence(diff), "</자료>");
+  // 맨 마지막 줄: 응답 end_marker로 돌려받아 입력이 끝까지 전달됐는지 확인
+  lines.push(`자료 끝 표지: ${endMarker}`);
   return lines.join("\n");
 }
 
