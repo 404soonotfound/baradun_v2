@@ -108,7 +108,6 @@ export function ExploreScreen({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
   const mobileCardRef = useRef<HTMLDivElement>(null);
-  useScrollSpace(mobileCardRef, selectedId !== null);
 
   // 지역은 홈 기본 지역과 같은 저장 값(10/27 결정). 저장값 없음·목록에 없어진 지역·고른 전국은 전국으로 봄
   const saved = useRegion();
@@ -173,6 +172,8 @@ export function ExploreScreen({
   );
   // 고른 해변이 거르기로 빠지면 카드도 닫힘
   const selectedItem = items.find((item) => item.id === selectedId) ?? null;
+  // 모바일 카드가 그려질 때마다(다른 지역에서 돌아와 다시 생길 때 포함) 그 높이를 스크롤 여백에 더함
+  useScrollSpace(mobileCardRef, selectedItem !== null);
   const statusGroups = useMemo(
     () => (mode === "status" && !loading ? groupItems(items, intlLocale) : []),
     [mode, loading, items, intlLocale],
