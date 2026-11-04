@@ -30,6 +30,28 @@ test.describe("로그인 화면", () => {
     });
   }
 
+  // BRD-180: 켜져 있지 않으면 위반이 0건이어도 아무것도 지키지 않으므로 켜졌는지 확인
+  test("Trusted Types가 켜져 있고 default 정책 하나만 있다", async ({
+    page,
+  }) => {
+    await page.goto("/login/");
+    await expect(page.getByLabel("이메일")).toBeVisible();
+    const state = await page.evaluate(() => ({
+      csp: document
+        .querySelector('meta[http-equiv="Content-Security-Policy"]')
+        ?.getAttribute("content"),
+      policy: (
+        window as unknown as {
+          trustedTypes?: { defaultPolicy?: { name: string } | null };
+        }
+      ).trustedTypes?.defaultPolicy?.name,
+    }));
+    expect(state.csp).toContain(
+      "require-trusted-types-for 'script'; trusted-types default",
+    );
+    expect(state.policy).toBe("default");
+  });
+
   test("검색 노출을 막고, 기본 로그인 화면에는 데모 입구가 없다(D17-2)", async ({
     page,
   }) => {

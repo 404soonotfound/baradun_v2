@@ -287,5 +287,30 @@ export async function expectNoA11yViolations(page: Page) {
   ).toEqual([]);
 }
 
-export const test = base;
+// 모든 테스트에서 Trusted Types 위반이 없어야 함(BRD-180). 새 탭도 같은 컨텍스트라 함께 봄
+// 위반은 콘솔 오류로, 정책·입력 지점이 던진 오류는 잡히지 않은 페이지 오류로 남음
+const TRUSTED_TYPES_ERROR = /Trusted(HTML|Script)|trusted-types/i;
+export const test = base.extend<{ trustedTypesGuard: void }>({
+  trustedTypesGuard: [
+    async ({ context }, use) => {
+      const violations: string[] = [];
+      context.on("console", (message) => {
+        if (
+          message.type() === "error" &&
+          TRUSTED_TYPES_ERROR.test(message.text())
+        ) {
+          violations.push(message.text());
+        }
+      });
+      context.on("weberror", (error) => {
+        if (TRUSTED_TYPES_ERROR.test(error.error().message)) {
+          violations.push(error.error().message);
+        }
+      });
+      await use();
+      expect(violations).toEqual([]);
+    },
+    { auto: true },
+  ],
+});
 export { expect };
