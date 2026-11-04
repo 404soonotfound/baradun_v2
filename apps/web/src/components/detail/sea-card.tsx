@@ -8,6 +8,7 @@ import { WaveChart } from "@/components/detail/wave-chart";
 import { WaveFigure } from "@/components/detail/wave-figure";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/cn";
+import { compassPoint } from "@/lib/direction";
 import type { Locale } from "@/lib/i18n";
 import { joinMeta } from "@/lib/meta-join";
 import type { DetailInfo } from "@/lib/snapshot/detail";
@@ -15,11 +16,12 @@ import { useMetaText } from "@/lib/snapshot/use-meta-text";
 import { useTimeText } from "@/lib/snapshot/use-time-text";
 import type { BeachView, MetricKey, MetricView } from "@/lib/snapshot/view";
 
-// 바다 상태 (BRD-32 · 노션 2장 DET 5·6, 3장 SeaCard·StatGrid · Figma 220:3650·183:816, BRD-129)
-// 모바일: 제목 줄(파고 측정소 · 측정 시각) → 파고 큰 숫자 + 파주기 → 파도 그림 → 지난 24시간 파고. 그 아래 2×2: 수온 · 바람 · 파주기 · 이안류
-// PC(lg): '지금 바다' 제목 줄 → 4칸(파고 · 파주기 · 수온 · 바람) → 파도 크기 비교 | 지난 24시간 파고 + 이안류 한 줄
+// 바다 상태 (BRD-32 · 노션 2장 DET 5·6, 3장 SeaCard·StatGrid · Figma 220:3650·183:816, BRD-129 · 시안 D안 BRD-182)
+// 모바일: 제목 줄(파고 측정소 · 측정 시각) → 파고 큰 숫자 + 파주기 → 파도 그림 → 지난 24시간 파고. 그 아래 2×2: 수온 · 바람 · 파도 방향 · 이안류
+// PC(lg): '지금 바다' 제목 줄 → 5칸(파고 · 파주기 · 파도 방향 · 수온 · 바람, 칸 아래는 측정 시각만) → 파도 크기 비교 | 지난 24시간 파고 + 이안류 한 줄
 // 값 자리는 세 가지로 구분: '가까운 관측 없음'(측정소 없음) / '측정이 늦어지고 있어요'(지연·만료, B4) / "–"(일시 결측).
 // 파장은 표시하지 않음(B2-파장). 값은 0이나 정상으로 채우지 않음. 풍향은 받는 값이 없어 두지 않음(Figma '북동풍')
+// 파도 방향은 파향(파도가 오는 쪽, 도)을 16방위로 '남남동 쪽에서'(D18-3). 측정소 이름은 정보 출처에 둠
 
 type Ready = Extract<BeachView, { kind: "ready" }>;
 
@@ -65,6 +67,30 @@ export function MetricValue({
   size?: keyof typeof VALUE_SIZE;
 }) {
   const t = useTranslations();
+  // 파향(도)은 숫자 대신 16방위 + '쪽에서'(D18-3). 언어마다 순서가 달라 문구 키로 잇기
+  if (metric.kind === "value" && metric.unit === "deg") {
+    return (
+      <span className="font-bold whitespace-nowrap text-text-default">
+        {t.rich("observation.directionFrom", {
+          dir: () => (
+            <span className={VALUE_SIZE[size].value}>
+              {t(`observation.direction.${compassPoint(metric.value)}`)}
+            </span>
+          ),
+          from: (chunks) => (
+            <span
+              className={cn(
+                "mx-1 font-medium tracking-normal text-text-muted first:ml-0 last:mr-0",
+                VALUE_SIZE[size].unit,
+              )}
+            >
+              {chunks}
+            </span>
+          ),
+        })}
+      </span>
+    );
+  }
   if (metric.kind === "value") {
     return (
       <span
@@ -132,12 +158,8 @@ export function SeaCard({
   const titleId = useId();
   const { measuredAgoText } = useTimeText();
 
-  const title = (
-    <>
-      <span className="lg:hidden">{t("detail.sea.title")}</span>
-      <span className="hidden lg:inline">{t("detail.sea.titleWide")}</span>
-    </>
-  );
+  // 카드 이름은 모바일·PC 모두 '지금 바다'(D18-3)
+  const title = t("detail.sea.title");
 
   if (view.kind !== "ready") {
     return (
@@ -234,7 +256,8 @@ export function SeaCard({
   );
 }
 
-// PC 4칸: 파고 · 파주기 · 수온 · 바람(Figma 183:820: 칸 사이 세로 줄, 아래 구분선)
+// PC 5칸: 파고 · 파주기 · 파도 방향 · 수온 · 바람(시안 D안 ActR_D_PLD: 칸 사이 세로 줄, 아래 구분선, 파도 방향 칸만 조금 넓게)
+// 칸 아래는 'n분 전 측정'만. 측정소 이름은 정보 출처(D18-3)
 function WideStats({
   view,
   stations,
@@ -245,14 +268,18 @@ function WideStats({
   nowMs: number;
 }) {
   const t = useTranslations();
-  const locale = useLocale() as Locale;
   const { measuredAgoText } = useTimeText();
-  const keys = ["waveHeight", "wavePeriod", "waterTemp", "wind"] as const;
+  const keys = [
+    "waveHeight",
+    "wavePeriod",
+    "waveDirection",
+    "waterTemp",
+    "wind",
+  ] as const;
   return (
-    <ul className="hidden border-b border-border-default px-5 pt-3.5 pb-[17px] lg:grid lg:grid-cols-4">
+    <ul className="hidden border-b border-border-default px-5 pt-3.5 pb-[17px] lg:grid lg:grid-cols-[1fr_1fr_1.25fr_1fr_1fr]">
       {keys.map((key, index) => {
         const metric = shownMetric(view, stations, key);
-        const station = shownStation(metric, stations, key);
         return (
           <li
             key={key}
@@ -265,14 +292,9 @@ function WideStats({
               {t(`observation.metric.${key}`)}
             </span>
             <MetricValue metric={metric} size="l" />
-            {station && (
-              <span className="text-caption text-text-muted">
-                {joinMeta([
-                  station.name[locale],
-                  metric.kind === "value"
-                    ? measuredAgoText(metric.observedAt, nowMs)
-                    : null,
-                ])}
+            {metric.kind === "value" && (
+              <span className="text-caption whitespace-nowrap text-text-muted">
+                {measuredAgoText(metric.observedAt, nowMs)}
               </span>
             )}
           </li>
@@ -321,7 +343,8 @@ function RipLine({
   );
 }
 
-// 모바일 2×2 지표 카드 (3장 StatGrid · Figma card.grid2 220:3713): 수온 · 바람 · 파주기 · 이안류
+// 모바일 2×2 지표 카드 (3장 StatGrid · Figma card.grid2 220:3713 · 시안 D안): 수온 · 바람 · 파도 방향 · 이안류
+// 파주기는 위 파고 큰 숫자 옆에 있어 두지 않음(D18-3)
 // 한 카드 안 4칸, 칸 사이 구분선. 칸마다 측정소 이름 · 측정 시각
 export function StatGrid({
   view,
@@ -340,7 +363,7 @@ export function StatGrid({
   const rip = useRipText(ripCurrent, nowMs);
   if (view.kind !== "ready") return null;
 
-  const keys = ["waterTemp", "wind", "wavePeriod"] as const;
+  const keys = ["waterTemp", "wind", "waveDirection"] as const;
   // 칸 구분선: 왼쪽 칸은 오른쪽 줄, 위 줄은 아래 줄
   const cell = (index: number) =>
     cn(

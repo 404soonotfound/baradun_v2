@@ -29,6 +29,7 @@ export function DetailSheet({
   view,
   detail,
   stations,
+  warningZones,
   nowMs,
   kmaData,
 }: {
@@ -37,12 +38,13 @@ export function DetailSheet({
   view: BeachView;
   detail: DetailInfo;
   stations: Beach["stations"];
+  warningZones: Beach["warningZones"]; // 특보 칸의 범위: 해변 특보구역 이름(D18-11)
   nowMs: number;
   kmaData: boolean; // 받은(또는 기기에 저장된) 상태가 있음 → 기상청 출처 줄
 }) {
   const t = useTranslations();
   const { confirmedUntilText } = useBadgeText();
-  const { stationText, agencyText } = useMetaText();
+  const { stationText, agencyText, zonesText } = useMetaText();
   const { measuredAgoText } = useTimeText();
 
   const ready = view.kind === "ready" ? view : null;
@@ -61,7 +63,7 @@ export function DetailSheet({
       ready.reasons.some((reason) => reason.kind === "warning_unknown");
     const time = kstStamp(ready.confirmedAt, nowMs);
     warningMeta = joinMeta([
-      t("detailSheet.warningScope"),
+      zonesText(warningZones),
       detail.warningSource && agencyText(detail.warningSource),
       unconfirmed || !time
         ? confirmedUntilText(ready.confirmedAt, nowMs)

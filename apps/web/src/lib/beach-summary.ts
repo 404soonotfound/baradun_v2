@@ -18,6 +18,7 @@ export type BeachSummary = {
   coords: Beach["coords"]; // 거리 계산은 기기 안에서만
   activities: Beach["activities"]; // 활동 타일로 거를 때 씀
   stations: Beach["stations"]; // 관측값 출처(측정소 이름·거리) 표시용
+  warningZones: Beach["warningZones"]; // '특보 없음' 근거 줄의 특보구역 이름(D18-11)
   photo: Beach["photo"]; // 지도 카드 참고 사진(공공누리 1유형만, 없으면 null → 일러스트)
   // 검색용(BRD-31). 화면 언어와 관계없이 한국어·영어 둘 다로 찾음
   names: readonly string[]; // [한국어 이름, 영어 이름]

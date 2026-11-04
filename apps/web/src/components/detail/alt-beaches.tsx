@@ -7,6 +7,7 @@ import { useId } from "react";
 
 import { MiniWaveChart } from "@/components/home/mini-wave-chart";
 import { ReasonBadge } from "@/components/reason-badge";
+import type { Activity } from "@/lib/activity";
 import type { BeachSummary } from "@/lib/beach-summary";
 import { localizedPath, type Locale } from "@/lib/i18n";
 import { formatKm, joinMeta } from "@/lib/meta-join";
@@ -18,15 +19,18 @@ import type { BeachView, MetricView } from "@/lib/snapshot/view";
 // 가까운 특보 없는 해변 (BRD-32 · 노션 2장 DET 3, 결정 기록 9장 대안 해변 · Figma 177:568, BRD-129)
 // 고르는 규칙은 lib/alternatives.ts. 여기서는 그리기만. '추천' 표현을 쓰지 않음
 // 판단 카드가 '특보 없음'이 아닐 때만 부르는 쪽이 보여줌
-// 제목(카드 밖) → 해변마다 테두리 카드 한 줄(파고 글리프 · 이름 · 거리·측정 시각 · 배지) → '탐색에서 다른 해변 더 보기'
-// 행마다 '특보 없음' 근거(이 해변 특보구역 · 기관 · 확인 시각)를 한 줄 더 둠(Figma에는 없음, Review guidelines '특보 없음' 근거 규칙)
+// 제목(카드 밖) → 해변마다 테두리 카드 한 줄(파고 글리프 · 이름 · 거리·측정 시각 · 배지) → '활동과 관계없이 전체 해변 보기'(탐색, D18-11)
+// 행마다 '특보 없음' 근거(해변 특보구역 이름 · 기관 · 확인 시각, D18-11)를 한 줄 더 둠(Figma에는 없음, Review guidelines '특보 없음' 근거 규칙)
+// 탐색은 활동으로 거르지 않아(D14-15) '서핑 해변 더 보기'처럼 활동으로 거른 목록 링크는 두지 않음
 // 현장 우선 문구는 판단 카드에 한 번만(10/30 사용자 결정)
 export function AltBeaches({
   locale,
+  activity,
   items,
   nowMs,
 }: {
   locale: Locale;
+  activity: Activity; // 홈에서 고른 활동. 대안은 이 활동이 확인된 해변만(lib/alternatives)
   // warningSource: 그 해변 특보 확인 기관(예: 기상청, status warning.source)
   items: (BeachSummary & {
     distanceKm: number;
@@ -38,7 +42,7 @@ export function AltBeaches({
   const t = useTranslations();
   const titleId = useId();
   const { measuredAgoText } = useTimeText();
-  const { agencyText } = useMetaText();
+  const { agencyText, zonesText } = useMetaText();
 
   // '특보 없음'은 범위·기관·확인 시각이 모두 있을 때만 보여줌. 하나라도 없으면 행을 두지 않음
   const rows = items.flatMap((beach) => {
@@ -56,7 +60,11 @@ export function AltBeaches({
       </h2>
       {rows.length === 0 ? (
         <p className="rounded-tile border border-brand-border bg-bg-surface px-[15px] py-[13px] text-body-s text-text-body">
-          {t("detail.alt.none")}
+          {activity === "swimming"
+            ? t("detail.alt.none")
+            : t("detail.alt.noneActivity", {
+                activity: t(`activity.${activity}`),
+              })}
         </p>
       ) : (
         <ul className="flex flex-col gap-2">
@@ -92,6 +100,7 @@ export function AltBeaches({
                     </span>
                     <span className="text-caption text-text-muted">
                       {t("detail.verdict.clearBasis", {
+                        zones: zonesText(beach.warningZones),
                         source: agencyText(source),
                         time,
                       })}
@@ -104,13 +113,13 @@ export function AltBeaches({
           })}
         </ul>
       )}
+      {/* 시안 D안(ActR_D_WXMW): 줄 전체가 누르는 곳(높이 44), 글자 왼쪽 · › 오른쪽 */}
       <Link
         href={localizedPath(locale, "/explore/")}
-        // 보이는 줄은 18px, 누르는 영역은 위아래로 넓혀 44px(BRD-39)
-        className="relative inline-flex items-center gap-0.5 self-start text-label-s font-bold text-brand-default before:absolute before:inset-x-0 before:-inset-y-[13px] before:content-['']"
+        className="flex min-h-touch items-center justify-between text-label font-medium text-text-body"
       >
-        {rows.length === 0 ? t("detail.alt.explore") : t("detail.alt.more")}
-        <ChevronRight aria-hidden="true" size={12} strokeWidth={2.6} />
+        {t("detail.alt.more")}
+        <ChevronRight aria-hidden="true" size={16} />
       </Link>
     </section>
   );

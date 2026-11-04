@@ -110,6 +110,7 @@ export function listBeachSummaries(locale: Locale): BeachSummary[] {
       coords: beach.coords,
       activities: beach.activities,
       stations: beach.stations,
+      warningZones: beach.warningZones,
       photo: beach.photo,
       names: [beach.name.ko, beach.name.en],
       aliases: aliases.get(beach.id) ?? [],

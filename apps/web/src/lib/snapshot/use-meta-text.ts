@@ -1,11 +1,13 @@
-import type { StationRef } from "@baradun/contracts";
+import type { Beach, StationRef } from "@baradun/contracts";
 import { useLocale, useTranslations } from "next-intl";
 
 import { agencyKeyOf } from "@/lib/agencies";
+import type { Locale } from "@/lib/i18n";
 import { formatKm, joinMeta } from "@/lib/meta-join";
 
 import { useTimeText } from "@/lib/snapshot/use-time-text";
 import type { MetricKey } from "@/lib/snapshot/view";
+import { beachZonesText } from "@/lib/zone-name";
 
 export function useMetaText() {
   const t = useTranslations();
@@ -52,5 +54,11 @@ export function useMetaText() {
     return key ? t(`observation.agency.${key}`) : source;
   }
 
-  return { observationMeta, warningMeta, stationText, agencyText };
+  // '특보 없음' 근거 줄의 범위: 해변의 특보구역 이름 '강원중부앞바다, 강릉평지'(D18-11 ①).
+  // 이름을 다 알 수 없으면 일반 이름 '해변 특보구역'('이 해변'은 쓰지 않음, D18-10)
+  function zonesText(zones: Beach["warningZones"]): string {
+    return beachZonesText(zones, locale as Locale) ?? t("warning.beachZones");
+  }
+
+  return { observationMeta, warningMeta, stationText, agencyText, zonesText };
 }

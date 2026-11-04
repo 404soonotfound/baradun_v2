@@ -12,6 +12,7 @@ import type { BeachSummary } from "@/lib/beach-summary";
 import { removeRecent } from "@/lib/favorites";
 import { localizedPath, type Locale } from "@/lib/i18n";
 import { useBadgeText } from "@/lib/snapshot/use-badge-text";
+import { useMetaText } from "@/lib/snapshot/use-meta-text";
 import { useSnapshot } from "@/lib/snapshot/use-snapshot";
 import { deriveBeachView } from "@/lib/snapshot/view";
 import { kstStamp } from "@/lib/snapshot/clock";
@@ -34,6 +35,7 @@ export function RecentBeaches({
   const visits = useRecentVisits(); // 본 시각·그때 고른 활동(기기에만)
   const snapshot = useSnapshot(); // Vue: mapState
   const { confirmedUntilText } = useBadgeText();
+  const { zonesText } = useMetaText();
   const toast = useToast();
 
   // [2] 배열 구조 분해: 첫 칸과 나머지. noUncheckedIndexedAccess라 first는 undefined일 수 있음
@@ -81,7 +83,12 @@ export function RecentBeaches({
   const isClear =
     view.kind === "ready" && !view.stale && view.badge.kind === "clear";
   const scope =
-    isClear && time ? tRoot("home.near.clearScope", { time }) : null;
+    isClear && time
+      ? tRoot("home.near.clearScope", {
+          zones: zonesText(first.warningZones),
+          time,
+        })
+      : null;
 
   // [3] ✕ 누름 → 지우고 토스트
   function remove(beach: BeachSummary) {

@@ -60,7 +60,8 @@
     "nearbyUnknown": "Other {level}",
     "zoneOriginal": "Original text from KMA (Korean)",
     "zoneLine": "{name} · <zone></zone>",
-    "zoneOriginalInline": "<zone></zone> <note>(Original text from KMA (Korean))</note>"
+    "zoneOriginalInline": "<zone></zone> <note>(Original text from KMA (Korean))</note>",
+    "beachZones": "Beach warning zones"
   },
   "observation": {
     "none": "No nearby observation",
@@ -83,7 +84,26 @@
       "kto": "Korea Tourism Organization"
     },
     "agoShort": "{minutes} min ago",
-    "timeUnknown": "measurement time unknown"
+    "timeUnknown": "measurement time unknown",
+    "direction": {
+      "N": "N",
+      "NNE": "NNE",
+      "NE": "NE",
+      "ENE": "ENE",
+      "E": "E",
+      "ESE": "ESE",
+      "SE": "SE",
+      "SSE": "SSE",
+      "S": "S",
+      "SSW": "SSW",
+      "SW": "SW",
+      "WSW": "WSW",
+      "W": "W",
+      "WNW": "WNW",
+      "NW": "NW",
+      "NNW": "NNW"
+    },
+    "directionFrom": "<from>from</from><dir></dir>"
   },
   "source": {
     "agency": "Source: {agency}",
@@ -137,7 +157,7 @@
     "near": {
       "title": "Nearby beaches",
       "all": "See all",
-      "clearScope": "This beach's warning zone · KMA · checked {time}",
+      "clearScope": "{zones} · KMA · checked {time}",
       "noValue": "No value",
       "locating": "Finding your location",
       "noBeach": "No beaches confirmed for this activity yet",
@@ -231,7 +251,7 @@
     "region": "{region} · {km}km",
     "offSeason": "Season {from}–{to}",
     "verdict": {
-      "clearBasis": "This beach's warning zones · {source} checked {time}",
+      "clearBasis": "{zones} · {source} checked {time}",
       "basisIssued": "Issued {time}",
       "basisObserved": "Observed {time}",
       "basisChecked": "Checked {time}",
@@ -252,20 +272,21 @@
       "openWarning": "Warning details",
       "waveNoValue": "No wave height value",
       "waveNone": "Wave height · No nearby observation",
-      "checkedWarningActive": "Warning in effect"
+      "checkedWarningActive": "Warning in effect",
+      "collapse": "Collapse",
+      "nearbyCount": "{count} nearby warnings"
     },
     "alt": {
       "title": "Nearby beaches with no warnings",
       "none": "No nearby beaches without warnings",
-      "explore": "See in Explore",
-      "more": "See more beaches in Explore",
+      "noneActivity": "No other beaches within 30km without warnings have confirmed {activity} information",
+      "more": "See all beaches, regardless of activity",
       "distance": "{km}km from here"
     },
     "sea": {
-      "title": "Sea conditions",
+      "title": "Sea now",
       "period": "Period {value}s",
-      "waveDelayed": "Wave height measurement is delayed",
-      "titleWide": "Sea now"
+      "waveDelayed": "Wave height measurement is delayed"
     },
     "figure": {
       "label": "Wave height {height}m, period {period}s",
@@ -276,8 +297,8 @@
       "knee": "Knee",
       "waist": "Waist",
       "chest": "Chest",
-      "caption": "The buoy rides the front wave up and down once every {period}s (wave period) · Front wave height and the blue band on the left = wave height {height}m · Back waves and wave spacing are for mood · Reference lines use average adult height",
-      "captionNoPeriod": "Front wave height and the blue band on the left = wave height {height}m · No wave period measurement, so it doesn't move · Back waves and wave spacing are for mood · Reference lines use average adult height",
+      "caption": "The front wave is {height}m high and rises and falls every {period}s · Reference lines use average adult height",
+      "captionNoPeriod": "The front wave is {height}m high · No wave period value, so it stays still · Reference lines use average adult height",
       "delayed": "Measurement is delayed, so we don't draw the wave",
       "title": "Wave size comparison",
       "guideLabel": "{name} {value}m"
@@ -323,7 +344,7 @@
     "cta": {
       "favorite": "Favorite",
       "directions": "Directions",
-      "directionsSecondary": "Directions to this beach",
+      "directionsSecondary": "Directions to the beach",
       "newWindow": "Kakao Map, new window"
     },
     "regionFromMe": "{region} · {km}km from you"
@@ -364,7 +385,7 @@
   },
   "activity": {
     "label": "Activity",
-    "choose": "Choose activity",
+    "confirmed": "Confirmed activities",
     "swimming": "Swimming",
     "surfing": "Surfing",
     "scuba": "Scuba",
@@ -460,7 +481,6 @@
     "intro": "We only judge two things we can confirm as facts. Please decide for yourself whether the wave height suits you.",
     "warningTitle": "5 sea-related warning types",
     "warningBody": "Wind wave, strong wind, typhoon, storm surge and tsunami. Heavy rain, heatwaves and others appear only under Nearby warnings.",
-    "warningScope": "This beach's warning zones",
     "timeTitle": "Measurement time",
     "timeBody": "When wave height was last measured. If measurements are late, we show 'Observation delayed'.",
     "controlTitle": "Access closures",
@@ -489,7 +509,7 @@
       "nearest": "Nearest {km}km"
     },
     "row": {
-      "clearScopeNoTime": "This beach's warning zone · KMA · check time unknown"
+      "clearScopeNoTime": "{zones} · KMA · check time unknown"
     },
     "noClear": {
       "title": "No beach is confirmed as 'No warnings' right now",
