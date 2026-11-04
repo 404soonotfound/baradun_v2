@@ -32,6 +32,7 @@ import {
 import { useAuthSession, useSessionSnapshot } from "@/lib/auth/provider";
 import { fetchInquiries } from "@/lib/inquiries";
 import {
+  badgeOwner,
   receivedCountKnown,
   setReceivedCount,
   useReceivedCount,
@@ -155,7 +156,7 @@ function NavList({
 }) {
   const compact = tip !== undefined;
   const pathname = usePathname();
-  const received = useReceivedCount();
+  const received = useReceivedCount(badgeOwner(useSessionSnapshot()));
   return (
     <nav aria-label={t.label} className="flex flex-col gap-4">
       {GROUPS.map((group, i) => (
@@ -361,21 +362,21 @@ function Drawer({ open, onClose }: { open: boolean; onClose: () => void }) {
 function useReceivedCountOnce(): void {
   const session = useAuthSession();
   const snapshot = useSessionSnapshot();
-  const signedIn = snapshot.status === "signed_in";
+  const owner = snapshot.status === "signed_in" ? badgeOwner(snapshot) : null;
   useEffect(() => {
-    if (!signedIn || receivedCountKnown()) return;
+    if (owner === null || receivedCountKnown(owner)) return;
     let live = true;
     void fetchInquiries(() => session.accessToken(), { limit: 1 }).then(
       (result) => {
         if (live && result.ok && result.body.counts) {
-          setReceivedCount(result.body.counts.received);
+          setReceivedCount(owner, result.body.counts.received);
         }
       },
     );
     return () => {
       live = false;
     };
-  }, [session, signedIn]);
+  }, [session, owner]);
 }
 
 export function AdminShell({

@@ -13,7 +13,11 @@ import {
 import type { OpsResult } from "@/lib/auth/ops-fetch";
 import { useAuthSession, useSessionSnapshot } from "@/lib/auth/provider";
 import type { BeachName } from "@/lib/beach-names";
-import { adjustReceivedCount, setReceivedCount } from "@/lib/inquiry-badge";
+import {
+  adjustReceivedCount,
+  badgeOwner,
+  setReceivedCount,
+} from "@/lib/inquiry-badge";
 import {
   fetchInquiries,
   fetchInquiry,
@@ -239,6 +243,7 @@ function InquiryList({
   // 받은 응답을 요청 조건과 함께 둠. 조건이 바뀌면 응답이 올 때까지 '불러오는 중'
   // 다시 로그인하면(generation이 늚) 'reauth'로 끝난 읽기를 저절로 다시 함
   const generation = snapshot.status === "signed_out" ? 0 : snapshot.generation;
+  const owner = badgeOwner(snapshot);
   const key = `${status ?? "all"}|${cursor ?? ""}|${attempt}|${generation}`;
   const [loaded, setLoaded] = useState<{
     key: string;
@@ -256,13 +261,13 @@ function InquiryList({
       setLoaded({ key, result: next });
       if (next.ok && next.body.counts) {
         setCounts(next.body.counts);
-        setReceivedCount(next.body.counts.received);
+        if (owner) setReceivedCount(owner, next.body.counts.received);
       }
     });
     return () => {
       live = false;
     };
-  }, [session, status, cursor, key]);
+  }, [session, status, cursor, key, owner]);
 
   const changeStatus = (next: InquiryStatus | null) => {
     setStatus(next);
@@ -500,28 +505,56 @@ function InquiryActions({
 }) {
   const session = useAuthSession();
   const block = useEditBlock();
-  const known = isInquiryStatus(item.status);
+  // 쓰는 중인 값의 기준이 된 상세. 상세를 다시 읽어도(다시 로그인·저장 뒤) 쓰던 내용을 조용히 지우지 않음
+  const [base, setBase] = useState(item);
+  const known = isInquiryStatus(base.status);
   const [status, setStatus] = useState<InquiryStatus | null>(
-    known ? (item.status as InquiryStatus) : null,
+    known ? (base.status as InquiryStatus) : null,
   );
-  const [reason, setReason] = useState(item.rejectReason ?? "");
-  const [memo, setMemo] = useState(item.memo ?? "");
+  const [reason, setReason] = useState(base.rejectReason ?? "");
+  const [memo, setMemo] = useState(base.memo ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<SaveError | null>(null);
   const [copied, setCopied] = useState(false);
+  // 내가 저장해 받은 version, 또는 '새 내용 불러오기'를 눌러 다음 상세를 그대로 받기로 함
+  const [accept, setAccept] = useState<number | "next" | null>(null);
   // 마지막으로 보낸 내용과 그 멱등 키. 내용이 같으면 키를 다시 씀
   const attempt = useRef<{ body: string; key: string } | null>(null);
 
-  const statusChanged = status !== null && status !== item.status;
+  const statusChanged = status !== null && status !== base.status;
   const reasonChanged =
-    status === "rejected" && reason.trim() !== (item.rejectReason ?? "");
+    status === "rejected" && reason.trim() !== (base.rejectReason ?? "");
   // 공백만 남긴 메모는 '메모 없음'(null)과 같음 → 바뀐 내용으로 세지 않음
   const memoValue = memo.trim() === "" ? null : memo;
-  const memoChanged = memoValue !== (item.memo ?? null);
+  const memoChanged = memoValue !== (base.memo ?? null);
   const changes =
     (statusChanged ? 1 : 0) + (reasonChanged ? 1 : 0) + (memoChanged ? 1 : 0);
+
+  const adopt = (next: InquiryDetail) => {
+    setBase(next);
+    setStatus(
+      isInquiryStatus(next.status) ? (next.status as InquiryStatus) : null,
+    );
+    setReason(next.rejectReason ?? "");
+    setMemo(next.memo ?? "");
+    setAccept(null);
+    setError(null);
+    // 멱등 키는 보낼 내용이 바뀌면 save()가 새로 만듦(여기서 ref를 건드리지 않음: 그리는 중에도 불림)
+  };
+  // 상세가 새 version으로 바뀜: 내가 저장했거나·불러오기를 눌렀거나·쓰던 게 없으면 새 값으로 바꿈
+  // 쓰던 게 있는데 남이 바꿨으면 그대로 두고 아래에서 알림(저장하면 서버가 409로 막음)
+  if (
+    item.version !== base.version &&
+    (accept === item.version || accept === "next" || changes === 0)
+  ) {
+    adopt(item);
+  }
+  const stale = item.version !== base.version;
+
   const reasonMissing = status === "rejected" && reason.trim() === "";
-  const reasonTooLong = charCount(reason) > REJECT_REASON_MAX;
+  // 반려 이유는 반려일 때만 보내므로 길이도 그때만 봄
+  const reasonTooLong =
+    status === "rejected" && charCount(reason) > REJECT_REASON_MAX;
   const memoTooLong = charCount(memo) > MEMO_MAX;
   const disabled = block !== null || busy;
 
@@ -533,7 +566,8 @@ function InquiryActions({
     }
     if (reasonTooLong || memoTooLong) return;
     const patch: InquiryPatch = {
-      version: item.version,
+      // 쓰기 시작한 기준 version. 그사이 바뀌었으면 서버가 409로 막음(덮어쓰지 않음)
+      version: base.version,
       // 반려 이유만 고쳐도 서버 규칙상 반려 상태와 함께 보냄
       ...(statusChanged || reasonChanged ? { status: status! } : {}),
       ...((statusChanged || reasonChanged) && status === "rejected"
@@ -552,12 +586,13 @@ function InquiryActions({
       .then((result) => {
         if (result.ok) {
           attempt.current = null;
+          setAccept(result.body.version);
           onSaved(
             {
-              status: patch.status ?? (item.status as InquiryStatus),
+              status: patch.status ?? (base.status as InquiryStatus),
               version: result.body.version,
             },
-            item.status,
+            base.status,
           );
           return;
         }
@@ -696,6 +731,32 @@ function InquiryActions({
         </p>
       </div>
 
+      {stale && (
+        <Notice tone="warn" title={t.staleDraft} role="alert">
+          <div className="mt-2 flex flex-wrap gap-2">
+            <Button
+              variant="secondary"
+              size="small"
+              onClick={() => adopt(item)}
+            >
+              {t.reload}
+            </Button>
+            {memoChanged && (
+              <Button
+                variant="secondary"
+                size="small"
+                onClick={() => {
+                  void navigator.clipboard
+                    ?.writeText(memo)
+                    .then(() => setCopied(true));
+                }}
+              >
+                {copied ? t.copied : t.copyMemo}
+              </Button>
+            )}
+          </div>
+        </Notice>
+      )}
       {error && error.kind !== "reason" && (
         <Notice
           tone={error.kind === "failed" ? "fail" : "warn"}
@@ -708,8 +769,8 @@ function InquiryActions({
                   ? t.expired
                   : fill(t.saveFailed, {
                       status: known
-                        ? t.status[item.status as InquiryStatus]
-                        : item.status,
+                        ? t.status[base.status as InquiryStatus]
+                        : base.status,
                     })
           }
           role="alert"
@@ -724,7 +785,14 @@ function InquiryActions({
           )}
           {(error.kind === "conflict" || error.kind === "replay") && (
             <div className="mt-2 flex flex-wrap gap-2">
-              <Button variant="secondary" size="small" onClick={onReload}>
+              <Button
+                variant="secondary"
+                size="small"
+                onClick={() => {
+                  setAccept("next");
+                  onReload();
+                }}
+              >
                 {t.reload}
               </Button>
               {error.kind === "conflict" && memoChanged && (
@@ -781,6 +849,7 @@ function InquiryDetailView({
   const snapshot = useSessionSnapshot();
   const [attempt, setAttempt] = useState(0);
   // 다시 로그인하면(generation이 늚) 'reauth'로 끝난 읽기를 저절로 다시 함
+  const owner = badgeOwner(snapshot);
   const generation = snapshot.status === "signed_out" ? 0 : snapshot.generation;
   const key = `${id}|${attempt}|${generation}`;
   const [loaded, setLoaded] = useState<{
@@ -912,7 +981,7 @@ function InquiryDetailView({
       {/* 보기 권한은 메모·반려 이유를 받지 않으므로 처리 칸을 그리지 않음(빈 칸을 실제 값처럼 보이지 않게) */}
       {!item.restricted && (
         <InquiryActions
-          key={`${item.inquiryId}|${item.version}`}
+          key={item.inquiryId}
           item={item}
           onReload={() => {
             setNotice(null);
@@ -921,9 +990,9 @@ function InquiryDetailView({
           onSaved={(saved, from) => {
             onSaved(item.inquiryId, saved);
             if (from === "received" && saved.status !== "received") {
-              adjustReceivedCount(-1);
+              if (owner) adjustReceivedCount(owner, -1);
             } else if (from !== "received" && saved.status === "received") {
-              adjustReceivedCount(1);
+              if (owner) adjustReceivedCount(owner, 1);
             }
             setNotice({
               id,
