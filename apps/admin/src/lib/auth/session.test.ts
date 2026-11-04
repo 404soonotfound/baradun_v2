@@ -138,12 +138,22 @@ describe("AuthSession", () => {
     session.signIn("demo", tokens(120));
     await advance(58 * MIN);
     expect(session.getSnapshot()).toMatchObject({ phase: "idle_warning" });
-    await advance(2 * MIN);
+    // 끝내기 전에 다른 탭에 활동 시각을 한 번 물어봄(0.4초)
+    await advance(2 * MIN + JOIN_WAIT_MS);
     expect(session.getSnapshot()).toEqual({
       status: "signed_out",
       reason: "idle",
     });
-    expect(posted).toEqual(["logout"]);
+    expect(posted).toEqual([
+      expect.objectContaining({ kind: "activity", ask: true }),
+      {
+        kind: "logout",
+        reason: "idle",
+        pool: "demo",
+        sub: "operator-sub",
+        authTimeMs: AUTH,
+      },
+    ]);
     expect(deps.refresh).not.toHaveBeenCalled();
   });
 
@@ -172,11 +182,19 @@ describe("AuthSession", () => {
     a.session.signIn("operator", tokens());
     await a.session.logout();
     expect(a.deps.revoke).toHaveBeenCalledWith("operator", "refresh-1");
-    expect(a.posted).toEqual(["logout"]);
+    expect(a.posted).toEqual([
+      {
+        kind: "logout",
+        reason: "logout",
+        pool: "operator",
+        sub: "operator-sub",
+        authTimeMs: AUTH,
+      },
+    ]);
 
     const b = setup();
     b.session.signIn("operator", tokens());
-    b.other("logout");
+    b.other(a.posted[0]);
     expect(b.session.getSnapshot()).toEqual({
       status: "signed_out",
       reason: "other_tab",
@@ -245,24 +263,101 @@ describe("탭 사이 로그인", () => {
     });
   });
 
-  it("로그아웃한 탭은 다른 탭의 갱신 신호로 다시 로그인되지 않고, 다른 계정 신호는 받지 않는다", () => {
+  it("다른 사용자 탭의 신호(토큰·활동·로그아웃)는 따르지 않고, 로그아웃한 탭은 갱신 신호로 다시 로그인되지 않는다", async () => {
     const { a, b } = pair();
-    a.session.signIn("operator", tokens());
-    b.session.signIn("operator", {
-      ...tokens(),
+    a.session.signIn("operator", tokens(30));
+    const other = {
+      ...tokens(15),
       accessToken: fakeAccess({
         sub: "someone-else",
-        exp: AUTH_SEC + 30 * 60,
+        exp: AUTH_SEC + 15 * 60,
         auth_time: AUTH_SEC,
       }),
-    });
+    };
+    b.session.signIn("operator", other);
+    const idleEnd = () => {
+      const snap = b.session.getSnapshot();
+      return snap.status === "signed_out" ? null : snap.times.idleEndAt;
+    };
+    const before = idleEnd();
+    await a.advance(10 * MIN);
     a.session.touch();
-    // b는 다른 사용자라 a의 신호로 토큰이 바뀌지 않음
-    expect(b.deps.refresh).not.toHaveBeenCalled();
+    // a가 더 늦게 만료되는 토큰을 가졌지만 다른 사용자라 b는 받지 않음
+    expect(await b.session.accessToken()).toBe(other.accessToken);
+    expect(idleEnd()).toBe(before);
     void a.session.logout();
-    expect(b.session.getSnapshot()).toMatchObject({ status: "signed_out" });
-    a.session.touch();
-    expect(b.session.getSnapshot()).toMatchObject({ status: "signed_out" });
+    expect(b.session.getSnapshot()).toMatchObject({ status: "signed_in" });
+
+    // 로그아웃한 탭(a)은 b의 신호로 다시 로그인되지 않음
+    b.session.touch();
+    expect(a.session.getSnapshot()).toMatchObject({ status: "signed_out" });
+  });
+
+  it("멈춰 있던 탭이 옛 활동 시각으로 유휴 만료를 보내도 쓰던 탭은 로그아웃되지 않는다", async () => {
+    const { a, b } = pair({
+      refresh: vi.fn(async () => tokens(500, AUTH_SEC, 2)),
+    });
+    a.session.signIn("operator", tokens(500));
+    b.session.join();
+    // b가 멈춘 동안(신호를 못 받음) a에서 계속 씀
+    const deliver = a.deps.channel!.post;
+    a.deps.channel!.post = (m) => a.posted.push(m);
+    for (let i = 0; i < 3; i++) {
+      await a.advance(28 * MIN);
+      a.session.touch();
+    }
+    a.deps.channel!.post = deliver;
+    // b가 깨어나 자기 기준 유휴 만료 → 먼저 a에 물어보고 a의 늦은 활동 시각을 받아 이어 감
+    await b.advance(84 * MIN + JOIN_WAIT_MS);
+    expect(b.session.getSnapshot()).toMatchObject({ status: "signed_in" });
+    expect(a.session.getSnapshot()).toMatchObject({ status: "signed_in" });
+  });
+
+  it("쓰던 탭은 같은 묶음의 유휴 만료 신호를 받아도 로그아웃되지 않고, 직접 로그아웃 신호는 따른다", () => {
+    const { session, other } = setup();
+    session.signIn("operator", tokens());
+    const group = { pool: "operator", sub: "operator-sub", authTimeMs: AUTH };
+    other({ kind: "logout", reason: "idle", ...group });
+    expect(session.getSnapshot()).toMatchObject({ status: "signed_in" });
+    other({ kind: "logout", reason: "logout", ...group, authTimeMs: 1 });
+    expect(session.getSnapshot()).toEqual({
+      status: "signed_out",
+      reason: "other_tab",
+    });
+  });
+
+  it("다시 로그인을 기다리던 탭은 다른 탭이 같은 계정으로 다시 로그인하면 이어 간다", async () => {
+    const { a, b } = pair({
+      refresh: vi.fn(async () => {
+        throw new Error("revoked");
+      }),
+    });
+    a.session.signIn("operator", tokens());
+    b.session.join();
+    await a.advance(14 * MIN + 2_000);
+    await b.advance(14 * MIN + 2_000);
+    expect(a.session.getSnapshot().status).toBe("reauth_required");
+    expect(b.session.getSnapshot().status).toBe("reauth_required");
+    const generation = (s: AuthSession) => {
+      const snap = s.getSnapshot();
+      return snap.status === "signed_out" ? null : snap.generation;
+    };
+    const bBefore = generation(b.session);
+    const fresh = tokens(60, AUTH_SEC + 900, 9);
+    expect(a.session.reauthenticate(fresh)).toBe(true);
+    expect(b.session.getSnapshot().status).toBe("signed_in");
+    expect(generation(b.session)).toBe(bBefore! + 1);
+    expect(await b.session.accessToken()).toBe(fresh.accessToken);
+  });
+
+  it("데모 로그인 화면의 넘겨받기는 운영자 탭에서 받지 않는다", () => {
+    const { a, b } = pair();
+    a.session.signIn("operator", tokens());
+    b.session.join("demo");
+    expect(b.session.getSnapshot()).toMatchObject({
+      status: "signed_out",
+      joining: true,
+    });
   });
 
   it("한 탭이 갱신하면 다른 탭은 새 토큰을 받아 다시 갱신하지 않는다", async () => {

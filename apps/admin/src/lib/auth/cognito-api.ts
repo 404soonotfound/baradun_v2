@@ -1,4 +1,4 @@
-import { COGNITO_ENDPOINT } from "./policy";
+import { COGNITO_ENDPOINT, COGNITO_TIMEOUT_MS } from "./policy";
 
 // Cognito 사용자 풀 공개 API 직접 부르기 (BRD-148, 결정 기록 D17-1)
 // SRP 계산이 필요 없는 호출(토큰 갱신·폐기·비밀번호 찾기·변경·인증 앱 등록)은 라이브러리 없이 이 함수로 함
@@ -31,6 +31,7 @@ export async function callCognito<T>(
     }
   }
   let response: Response;
+  let text: string;
   try {
     response = await fetcher(COGNITO_ENDPOINT, {
       method: "POST",
@@ -40,11 +41,13 @@ export async function callCognito<T>(
       },
       body: JSON.stringify(body),
       cache: "no-store",
+      signal: AbortSignal.timeout(COGNITO_TIMEOUT_MS),
     });
+    text = await response.text();
   } catch {
+    // 연결 실패·시간 초과(본문 읽기 포함)는 모두 네트워크 오류
     throw new CognitoError("NetworkError", "network");
   }
-  const text = await response.text();
   let value: Record<string, unknown> = {};
   try {
     value = text ? (JSON.parse(text) as Record<string, unknown>) : {};

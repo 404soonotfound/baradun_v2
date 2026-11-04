@@ -23,3 +23,7 @@ export const ACCESS_TOKEN_HEADER = "x-baradun-access-token";
 export const LOGOUT_CHANNEL = "baradun-admin-auth";
 // 탭 사이 토큰 갱신 잠금 이름(Web Locks). refresh token 회전 유예가 0초라 한 탭씩 갱신
 export const REFRESH_LOCK = "baradun-admin-refresh";
+// 갱신 잠금을 기다리는 최대 시간. Cognito 호출 시간 제한(COGNITO_TIMEOUT_MS)·실패 뒤 기다림(1.5초)보다 길게
+export const REFRESH_LOCK_WAIT_MS = 30_000;
+// Cognito 호출 하나의 시간 제한. 응답이 없으면 네트워크 오류로 다룸(갱신 잠금을 오래 쥐지 않게)
+export const COGNITO_TIMEOUT_MS = 15_000;

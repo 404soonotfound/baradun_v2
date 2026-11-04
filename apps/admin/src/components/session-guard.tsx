@@ -230,8 +230,8 @@ export function SessionGuard({ children }: { children: ReactNode }) {
   const snapshot = useSessionSnapshot();
 
   useEffect(() => {
-    // 새 탭: 로그인 화면으로 보내기 전에 넘겨받기를 먼저 시작함(탭마다 한 번)
-    // 이 효과가 AuthProvider의 효과보다 먼저 돌아 첫 화면에선 아직 joining이 아님 → 지금 상태를 다시 읽음
+    // 새 탭: 로그인 화면으로 보내기 전에 넘겨받기를 먼저 시작함(탭마다 한 번, 로그인 화면은 LoginFlow가 풀을 정해 부름)
+    // 시작한 직후의 상태(joining)를 보려고 스냅숏을 다시 읽음
     session.join();
     const current = session.getSnapshot();
     // 다른 탭에서 로그인을 넘겨받는 중이면 기다림(받으면 이 화면 그대로)

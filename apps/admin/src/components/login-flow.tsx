@@ -141,6 +141,11 @@ export function LoginFlow({ pool }: { pool: PoolKind }) {
   const [busy, setBusy] = useState(false);
   const [showKey, setShowKey] = useState(false);
 
+  // 새 탭으로 로그인 화면을 열면 같은 풀로 로그인한 탭에서 넘겨받음(데모 주소는 데모 탭만)
+  useEffect(() => {
+    session.join(pool);
+  }, [session, pool]);
+
   // 이미 로그인한 탭이면 보던 화면(없으면 운영 홈)으로. 돌아갈 화면은 한 번만 꺼냄
   // (개발 서버의 StrictMode가 효과를 두 번 부르면 두 번째가 홈으로 덮어씀)
   const leaving = useRef(false);
