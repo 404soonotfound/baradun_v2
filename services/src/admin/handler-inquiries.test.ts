@@ -258,6 +258,54 @@ describe("문의 처리(PATCH)", () => {
     });
   });
 
+  it("개인정보 가리기는 고른 부분만 '[가림]'으로 바꾸고 이력에는 'message'만 남긴다", async () => {
+    const table = seeded({ message: "제 번호는 010-1234-5678 이에요" });
+    const range = { start: 6, end: 19, text: "010-1234-5678" };
+    const res = await handleOps(
+      patch({ version: 1, redactions: [range] }),
+      deps("editor", table),
+    );
+    expect(res.statusCode).toBe(200);
+    expect(
+      table.items.get(table.id("Inquiry", { pk: `INQUIRY#${ID}` })),
+    ).toMatchObject({
+      message: "제 번호는 [가림] 이에요",
+      inquiryStatus: "received",
+      version: 2,
+    });
+    const [entry] = audits(table);
+    expect(entry).toMatchObject({ changes: ["message"] });
+    expect(JSON.stringify(entry)).not.toContain("010");
+    // 응답을 못 받아 같은 키로 다시 보내면 이미 가린 본문과 맞지 않아도 앞 결과를 줌
+    const again = await handleOps(
+      patch({ version: 1, redactions: [range] }),
+      deps("editor", table),
+    );
+    expect(again.statusCode).toBe(200);
+    expect(body(again)).toEqual({ inquiryId: ID, version: 2 });
+  });
+
+  it("가릴 부분이 지금 본문과 다르면 400, 낡은 version이면 409로 본문을 바꾸지 않는다", async () => {
+    const table = seeded({ message: "이름은 홍길동" });
+    const wrong = await handleOps(
+      patch({ version: 1, redactions: [{ start: 0, end: 2, text: "홍길" }] }),
+      deps("editor", table),
+    );
+    expect(wrong.statusCode).toBe(400);
+    expect(body(wrong).error).toMatchObject({ field: "redactions" });
+    const stale = await handleOps(
+      patch(
+        { version: 0, redactions: [{ start: 4, end: 7, text: "홍길동" }] },
+        KEY_B,
+      ),
+      deps("editor", table),
+    );
+    expect(stale.statusCode).toBe(409);
+    expect(
+      table.items.get(table.id("Inquiry", { pk: `INQUIRY#${ID}` })),
+    ).toMatchObject({ message: "이름은 홍길동", version: 1 });
+  });
+
   it("읽은 version이 낡았으면 409", async () => {
     const table = seeded({ version: 3 });
     const res = await handleOps(

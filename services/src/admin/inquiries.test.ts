@@ -4,6 +4,7 @@ import {
   decodeCursor,
   encodeCursor,
   getInquiry,
+  applyRedactions,
   inquiryPatchFields,
   listInquiries,
   MEMO_MAX,
@@ -388,5 +389,73 @@ describe("저장 속성", () => {
     expect(inquiryPatchFields({ version: 1, memo: "m" })).toEqual({
       memo: "m",
     });
+  });
+});
+
+describe("개인정보 가리기", () => {
+  it("범위를 앞에서부터 겹치지 않게 받는다", () => {
+    expect(
+      parseInquiryPatch({
+        version: 1,
+        redactions: [
+          { start: 0, end: 2, text: "ab" },
+          { start: 2, end: 3, text: "c" },
+        ],
+      }),
+    ).toMatchObject({ ok: true });
+  });
+
+  it.each([
+    ["빈 배열", []],
+    [
+      "너무 많음",
+      Array.from({ length: 21 }, (_, i) => ({
+        start: i,
+        end: i + 1,
+        text: "x",
+      })),
+    ],
+    [
+      "겹침",
+      [
+        { start: 0, end: 3, text: "abc" },
+        { start: 2, end: 4, text: "cd" },
+      ],
+    ],
+    ["빈 범위", [{ start: 2, end: 2, text: "" }]],
+    ["글 길이가 범위와 다름", [{ start: 0, end: 3, text: "ab" }]],
+    ["모르는 칸", [{ start: 0, end: 1, text: "a", note: "x" }]],
+    ["정수 아님", [{ start: 0.5, end: 1, text: "a" }]],
+  ])("%s이면 거부", (_, redactions) => {
+    expect(parseInquiryPatch({ version: 1, redactions })).toEqual({
+      ok: false,
+      field: "redactions",
+    });
+  });
+
+  it("고른 부분을 표시로 바꾸고, 본문과 다르거나 글자를 자르면 null", () => {
+    const message = "이름 홍길동, 번호 010-0000-0000";
+    expect(
+      applyRedactions(message, [
+        { start: 3, end: 6, text: "홍길동" },
+        { start: 11, end: 24, text: "010-0000-0000" },
+      ]),
+    ).toBe("이름 [가림], 번호 [가림]");
+    expect(
+      applyRedactions(message, [{ start: 0, end: 2, text: "홍길" }]),
+    ).toBeNull();
+    expect(
+      applyRedactions(message, [{ start: 2, end: 3, text: " " }]),
+    ).toBeNull();
+    expect(
+      applyRedactions("ab", [{ start: 1, end: 3, text: "b?" }]),
+    ).toBeNull();
+    // 이모지(서로게이트 쌍) 가운데를 자르지 않음
+    expect(
+      applyRedactions("a😀b", [{ start: 1, end: 2, text: "\ud83d" }]),
+    ).toBeNull();
+    expect(applyRedactions("a😀b", [{ start: 1, end: 3, text: "😀" }])).toBe(
+      "a[가림]b",
+    );
   });
 });
