@@ -27,6 +27,7 @@ const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
 export const COLLECTION_WINDOW_DAYS = 7;
 // 한 수집기에서 읽는 쪽 수 상한. 7일 기록은 15분 주기도 672건(1쪽 안). 상한을 넘으면 truncated로 알림
+// 최신부터 읽음 → 잘려도 빠지는 쪽은 오래된 기록(마지막 실행·마지막 성공이 옛 값이 되지 않게)
 const MAX_PAGES = 10;
 
 export interface RunView {
@@ -117,18 +118,17 @@ function count(runs: readonly RunView[]): RunCounts {
   };
 }
 
+// 장애 안의 실패 사유를 한 줄씩. count는 한 실행 안에서 같은 사유로 실패한 해변 수라
+// 실행끼리 더하지 않고 가장 많았던 실행의 값을 둠(화면이 'N곳'으로 보여 줌. 실행 수는 Incident.runs)
 function mergeFailures(runs: readonly RunView[]): RunFailure[] {
   const merged = new Map<string, RunFailure>();
   for (const run of runs) {
     for (const failure of run.failures) {
       const id = JSON.stringify([failure.source, failure.reason, failure.code]);
       const current = merged.get(id);
-      merged.set(
-        id,
-        current
-          ? { ...current, count: (current.count ?? 1) + (failure.count ?? 1) }
-          : failure,
-      );
+      if (!current || (failure.count ?? 1) > (current.count ?? 1)) {
+        merged.set(id, failure);
+      }
     }
   }
   return [...merged.values()];
@@ -207,6 +207,7 @@ async function readRuns(
         ProjectionExpression: "startedAt, finishedAt, #status, failures",
         ExpressionAttributeNames: { "#status": "status" },
         ExpressionAttributeValues: { ":pk": runLogPk(job), ":from": from },
+        ScanIndexForward: false,
         ...(startKey ? { ExclusiveStartKey: startKey } : {}),
       }),
     );
@@ -215,9 +216,9 @@ async function readRuns(
       if (run) runs.push(run);
     }
     startKey = result.LastEvaluatedKey as Record<string, unknown> | undefined;
-    if (!startKey) return { runs, truncated: false };
+    if (!startKey) return { runs: runs.reverse(), truncated: false };
   }
-  return { runs, truncated: true };
+  return { runs: runs.reverse(), truncated: true };
 }
 
 async function readPublishedVersion(

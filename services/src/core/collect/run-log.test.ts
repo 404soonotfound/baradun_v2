@@ -42,11 +42,19 @@ describe("collapseFailures", () => {
     ]);
   });
 
-  it("상한까지만 남긴다", () => {
+  it("상한까지만 남기고 앞에 둔 사유(저장 실패 등)는 지킨다", () => {
     const many = Array.from({ length: RUN_FAILURES_MAX + 5 }, (_, i) => ({
       source: "rip",
       reason: `r${i}`,
     }));
-    expect(collapseFailures(many)).toHaveLength(RUN_FAILURES_MAX);
+    const kept = collapseFailures([
+      { source: "storage", reason: "readings_not_saved" },
+      ...many,
+    ]);
+    expect(kept).toHaveLength(RUN_FAILURES_MAX);
+    expect(kept[0]).toEqual({
+      source: "storage",
+      reason: "readings_not_saved",
+    });
   });
 });

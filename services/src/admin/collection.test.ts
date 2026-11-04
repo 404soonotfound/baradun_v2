@@ -44,12 +44,15 @@ function fakeOps(items: Record<string, unknown>[], version?: string) {
       if (command instanceof QueryCommand) {
         const values = command.input.ExpressionAttributeValues!;
         sent.push(`query ${values[":pk"]}`);
+        const forward = command.input.ScanIndexForward !== false;
         return {
-          Items: items.filter(
-            (item) =>
-              item.pk === values[":pk"] &&
-              String(item.sk) >= String(values[":from"]),
-          ),
+          Items: items
+            .filter(
+              (item) =>
+                item.pk === values[":pk"] &&
+                String(item.sk) >= String(values[":from"]),
+            )
+            .sort((a, b) => (String(a.sk) < String(b.sk) === forward ? -1 : 1)),
         };
       }
       throw new Error("이 경로는 Query·Get만 씀");
@@ -139,9 +142,25 @@ describe("수집 현황 집계", () => {
         startedAt: "2026-11-04T01:00:00.000Z",
         endedAt: "2026-11-04T01:30:00.000Z",
         runs: 2,
-        failures: [{ source: "pwncd", reason: "timeout", count: 2 }],
+        // 실행 수는 runs. count(해변 수)는 실행끼리 더하지 않음
+        failures: [{ source: "pwncd", reason: "timeout" }],
       },
     ]);
+  });
+
+  it("해변 수(count)는 실행끼리 더하지 않고 가장 많았던 실행의 값을 둔다", () => {
+    const [incident] = incidentsOf([
+      run("2026-11-04T01:00:00.000Z", "partial", [
+        { source: "rip", reason: "timeout", count: 3 },
+      ]),
+      run("2026-11-04T01:30:00.000Z", "partial", [
+        { source: "rip", reason: "timeout", count: 2 },
+      ]),
+    ]);
+    expect(incident).toMatchObject({
+      runs: 2,
+      failures: [{ source: "rip", reason: "timeout", count: 3 }],
+    });
   });
 
   it("모르는 상태 값은 정상이 아니라 실패로 읽고, 시각이 없는 기록은 버린다", () => {

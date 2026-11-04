@@ -276,16 +276,17 @@ export async function collectCatalog(
   });
   if (status === "complete") return { status, slotId };
   // 해변별 실패는 같은 사유끼리 묶음. 시간 예산으로 못 본 사진은 unchecked
+  // 저장 실패·키·미확인을 먼저 둠 → 해변별 사유가 많아 상한(RUN_FAILURES_MAX)에 닿아도 빠지지 않게
   const failures: RunFailure[] = [];
+  if (key !== null && records.size > 0 && !saved)
+    failures.push({ source: "storage", reason: "photos_not_saved" });
   if (key === null) failures.push({ source: "photo", reason: "api_key" });
+  const unchecked = counts.unchecked ?? 0;
+  if (key !== null && unchecked > 0)
+    failures.push({ source: "photo", reason: "unchecked", count: unchecked });
   for (const result of results.values()) {
     if (result.status === "failed")
       failures.push({ source: "photo", reason: result.reason });
   }
-  const unchecked = counts.unchecked ?? 0;
-  if (key !== null && unchecked > 0)
-    failures.push({ source: "photo", reason: "unchecked", count: unchecked });
-  if (key !== null && records.size > 0 && !saved)
-    failures.push({ source: "storage", reason: "photos_not_saved" });
   return { status, slotId, failures: collapseFailures(failures) };
 }
