@@ -69,9 +69,18 @@ describe("배포 워크플로 가드레일 (11장)", () => {
       "github.event.workflow_run.head_repository.full_name == github.repository",
     );
     expect(text).toMatch(
-      /SHA:\s*\$\{\{\s*github\.event\.workflow_run\.head_sha \|\| github\.sha\s*\}\}/,
+      /HEAD_SHA:\s*\$\{\{\s*github\.event\.workflow_run\.head_sha \|\| github\.sha\s*\}\}/,
     );
-    expect(text).toMatch(/ref:\s*\$\{\{\s*env\.SHA\s*\}\}/);
+    // 올리는 커밋은 ci-ok가 성공한 커밋만: 수동은 그 커밋, 자동은 main에서 ci-ok가 성공한 가장 새 커밋(BRD-178)
+    for (const job of ["site", "admin"]) {
+      const lines = jobLines(deploy?.text ?? "", job).join("\n");
+      expect(lines, job).toMatch(
+        /ref:\s*\$\{\{\s*steps\.target\.outputs\.sha\s*\}\}/,
+      );
+      expect(lines, job).toContain("commits?sha=main&per_page=30");
+      expect(lines, job).toMatch(/"\$\(ci_ok "\$sha"\)" = "success"/);
+      expect(lines, job).toContain('echo "SHA=$target" >> "$GITHUB_ENV"');
+    }
     // 배포 그룹은 작업 수준: 조건에서 건너뛰는 실행이 대기 중인 배포를 취소하지 않게 함
     expect(text).not.toMatch(/^concurrency:/m);
     expect(jobLines(deploy?.text ?? "", "site").join("\n")).toMatch(
@@ -127,10 +136,16 @@ const jobLines = (text: string, job: string) => {
   return lines.slice(start, end < 0 ? undefined : end);
 };
 
+// 작업의 실행 조건(if: 한 줄)
+const jobIf = (text: string, job: string) =>
+  jobLines(text, job)
+    .map((l) => l.match(/^\s{4}if:\s*(.+)$/)?.[1])
+    .find((v) => v !== undefined);
+
 // 웹 빌드 단계의 env에 적힌 NEXT_PUBLIC_SITE_URL 값. 단계가 없거나 값이 없으면 undefined
 const webBuildSiteUrl = (lines: string[]) => {
   const at = lines.findIndex((l) =>
-    /^\s*-\s*run:\s*npm run build -w apps\/web\s*$/.test(l),
+    /^\s*(-\s*)?run:\s*npm run build -w apps\/web\s*$/.test(l),
   );
   if (at < 0) return undefined;
   const next = lines.findIndex((l, i) => i > at && /^\s*-\s/.test(l));
@@ -163,12 +178,17 @@ describe("PR 필수 웹 검사 (BRD-102 결정 41·42)", () => {
     );
   });
 
-  it("web 작업은 타입 검사와, 사이트 주소를 명시한 정적 빌드를 돌린다", () => {
+  // 정적 빌드는 e2e-build에서 한 번만(BRD-178): web 작업은 검사만, 빌드 결과의 CSP 검사는 e2e-build
+  it("web 작업은 타입 검사를 돌리고, 정적 빌드·CSP 검사는 e2e-build가 한 번 한다", () => {
     const web = jobLines(ci?.text ?? "", "web");
     expect(web).toContainEqual(
       expect.stringMatching(/^\s*-\s*run:\s*npm run typecheck -w apps\/web$/),
     );
-    expect(webBuildSiteUrl(web)).toMatch(/^https?:\/\/\S+$/);
+    expect(web.join("\n")).not.toContain("npm run build -w apps/web");
+    const build = jobLines(ci?.text ?? "", "e2e-build").join("\n");
+    expect(build.indexOf("npm run check:csp -w apps/web")).toBeGreaterThan(
+      build.indexOf("npm run build -w apps/web"),
+    );
   });
 
   it("e2e 빌드도 사이트 주소를 명시한다", () => {
@@ -190,14 +210,146 @@ describe("PR 필수 웹 검사 (BRD-102 결정 41·42)", () => {
     );
   });
 
-  // main CI 성공이 배포 조건이라, main push에서는 바뀐 영역과 상관없이 웹 전체를 검사해야 함 (BRD-133)
-  it("main push에서는 web·e2e를 늘 돌린다", () => {
-    for (const job of ["web", "e2e-build", "e2e"]) {
-      const cond = jobLines(ci?.text ?? "", job)
-        .map((l) => l.match(/^\s{4}if:\s*(.+)$/)?.[1])
-        .find((v) => v !== undefined);
-      expect(cond, job).toContain("github.event_name == 'push'");
+  // main push도 바뀐 영역만(BRD-178, 10/30 BRD-133 '늘 전체'를 바꿈). main 규칙이 '최신 브랜치만 머지'라 PR CI가 같은 내용을 검사함
+  // 대신 main push CI는 커밋마다 따로 돌고 취소하지 않음(취소되면 그 커밋의 변경이 배포에서 빠짐)
+  it("main push도 바뀐 영역만 검사하고, main push CI는 커밋마다 따로 돌며 취소하지 않는다", () => {
+    for (const job of [
+      "web",
+      "e2e-build",
+      "e2e",
+      "admin",
+      "admin-build",
+      "admin-e2e",
+    ]) {
+      const cond = jobIf(ci?.text ?? "", job);
+      const area = job.startsWith("admin") ? "admin" : "web";
+      expect(cond, job).toBe(`needs.changes.outputs.${area} == 'true'`);
     }
+    const text = codeLines(ci?.text ?? "").join("\n");
+    expect(text).toContain(
+      "group: ci-${{ github.event_name == 'schedule' && 'schedule' || (github.event_name == 'push' && github.sha) || github.ref }}",
+    );
+    expect(text).toContain(
+      "cancel-in-progress: ${{ github.event_name == 'pull_request' }}",
+    );
+  });
+
+  // 바뀐 앱만 배포하므로, 빌드가 읽는 앱 밖 파일과 배포 빌드 방법(deploy.yml)도 그 앱의 변경으로 봄
+  it("빌드가 읽는 앱 밖 파일과 deploy.yml은 그 앱의 바뀐 영역에 들어간다", () => {
+    const changes = jobLines(ci?.text ?? "", "changes");
+    const filter = (area: string) => {
+      const start = changes.findIndex((l) =>
+        new RegExp(`^\\s{12}${area}:`).test(l),
+      );
+      const end = changes.findIndex(
+        (l, i) => i > start && /^\s{12}[a-z_]+:/.test(l),
+      );
+      return changes.slice(start, end < 0 ? undefined : end).join("\n");
+    };
+    for (const path of [
+      "data/beaches/**",
+      "data/beach-meta.json",
+      ".github/workflows/deploy.yml",
+    ]) {
+      expect(filter("web"), path).toContain(`'${path}'`);
+    }
+    for (const path of ["data/beaches/**", ".github/workflows/deploy.yml"]) {
+      expect(filter("admin"), path).toContain(`'${path}'`);
+    }
+  });
+
+  // 바뀐 앱만 배포(BRD-178): 앱마다 마지막으로 올린 커밋(deploy-version.txt)과 비교
+  // 옛 커밋이 새 배포를 덮지 않고, CI가 실패했던 커밋의 변경도 다음 배포에 함께 실림
+  const deployPaths = (job: string) => {
+    const lines = jobLines(deploy?.text ?? "", job);
+    const start = lines.findIndex((l) => /^\s*paths=\($/.test(l));
+    const end = lines.findIndex((l, i) => i > start && /^\s*\)$/.test(l));
+    return lines.slice(start + 1, end).map((l) => l.trim());
+  };
+  const ciFilter = (name: string) => {
+    // paths-filter의 filters 블록 안에서 찾음(changes 출력의 같은 이름과 섞이지 않게)
+    const text = codeLines(ci?.text ?? "");
+    const block = text.findIndex((l) => l.trim() === "filters: |");
+    const at = text.findIndex(
+      (l, i) => i > block && /^\s*([\w-]+):/.exec(l)?.[1] === name,
+    );
+    const out: string[] = [];
+    for (const l of text.slice(at + 1)) {
+      const m = l.match(/^\s*-\s*'([^']+)'\s*$/);
+      if (m) out.push(m[1]!.replace(/\/\*\*$/, ""));
+      else if (/^\s*-\s*\*shared\s*$/.test(l)) continue;
+      else break;
+    }
+    return out;
+  };
+
+  it("배포 비교 경로는 ci.yml의 바뀐 영역 필터(공통 + 앱)와 같다", () => {
+    const shared = ciFilter("shared");
+    expect(shared.length).toBeGreaterThan(0);
+    expect(deployPaths("site").sort()).toEqual(
+      [...shared, ...ciFilter("web")].sort(),
+    );
+    expect(deployPaths("admin").sort()).toEqual(
+      [...shared, ...ciFilter("admin")].sort(),
+    );
+  });
+
+  it("배포는 마지막으로 올린 커밋과 비교해 같거나 옛 커밋·바뀐 것 없음이면 건너뛰고, 올릴 때 표시를 남긴다", () => {
+    for (const [job, dir] of [
+      ["site", "apps/web/out"],
+      ["admin", "apps/admin/out"],
+    ] as const) {
+      const lines = jobLines(deploy?.text ?? "", job);
+      const text = lines.join("\n");
+      expect(text, job).toContain("fetch-depth: 0");
+      expect(text, job).toContain(
+        'git merge-base --is-ancestor "$SHA" "$deployed"',
+      );
+      expect(text, job).toContain('git diff --quiet "$deployed" "$SHA" --');
+      // 기본은 올림(수동 실행·표시를 못 읽음은 올리는 쪽)
+      expect(text, job).toMatch(/^\s*deploy=true$/m);
+      // 정하기 뒤의 모든 단계는 결과를 따름
+      const decide = lines.findIndex((l) => l.includes("- id: decide"));
+      const steps = lines.slice(decide + 1).filter((l) => /^\s{6}-\s/.test(l));
+      expect(steps.length, job).toBeGreaterThan(3);
+      for (const step of steps) {
+        expect(step, job).toBe(
+          "      - if: steps.decide.outputs.deploy == 'true'",
+        );
+      }
+      // 표시는 동기화·캐시 비우기가 모두 끝난 뒤 마지막에 올림(중간에 실패한 배포를 다시 실행하면 건너뛰지 않게)
+      // 빌드 결과 폴더에 넣지 않음: 넣으면 동기화 도중 실패해도 표시가 먼저 올라갈 수 있음
+      const marker = lines.findIndex((l) =>
+        l.includes('aws s3 cp - "s3://$BUCKET/deploy-version.txt"'),
+      );
+      const lastSync = lines.reduce(
+        (at, l, i) => (l.includes("aws s3 sync") ? i : at),
+        -1,
+      );
+      const invalidation = lines.findIndex((l) =>
+        l.includes("aws cloudfront create-invalidation"),
+      );
+      expect(marker, job).toBeGreaterThan(lastSync);
+      expect(marker, job).toBeGreaterThan(invalidation);
+      expect(text, job).not.toContain("> deploy-version.txt");
+      expect(text, job).toContain(`working-directory: ${dir}`);
+    }
+  });
+
+  it("E2E는 Playwright 브라우저를 lock 파일 기준으로 캐시하고, 운영자 E2E는 빌드 결과를 받아 돈다", () => {
+    for (const job of ["e2e", "admin-e2e"]) {
+      const lines = jobLines(ci?.text ?? "", job).join("\n");
+      expect(lines, job).toContain("path: ~/.cache/ms-playwright");
+      expect(lines, job).toContain(
+        "key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}",
+      );
+    }
+    expect(jobLines(ci?.text ?? "", "admin-e2e").join("\n")).toMatch(
+      /needs:\s*\[changes, admin-build\]/,
+    );
+    expect(jobLines(ci?.text ?? "", "admin-e2e").join("\n")).toMatch(
+      /name:\s*admin-site\s*\n\s*path:\s*apps\/admin\/out/,
+    );
   });
 
   it("web·e2e 결과는 ci-ok에 모인다", () => {
@@ -207,7 +359,15 @@ describe("PR 필수 웹 검사 (BRD-102 결정 41·42)", () => {
       .split(",")
       .map((n) => n.trim());
     expect(needs).toEqual(
-      expect.arrayContaining(["web", "e2e-build", "e2e", "gitleaks"]),
+      expect.arrayContaining([
+        "web",
+        "e2e-build",
+        "e2e",
+        "admin",
+        "admin-build",
+        "admin-e2e",
+        "gitleaks",
+      ]),
     );
   });
 
