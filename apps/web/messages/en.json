@@ -540,6 +540,13 @@
     "zoomIn": "Zoom in",
     "zoomOut": "Zoom out",
     "cluster": "{count} beaches grouped · select to zoom in",
+    "nearby": {
+      "button": "Show nearby",
+      "locating": "Finding location…",
+      "denied": "Location permission isn't allowed, so the map didn't move. Allow location in your browser settings to use this",
+      "off": "Location is turned off in Settings, so the map didn't move. You can turn it back on in Settings",
+      "unavailable": "We couldn't find your location, so the map didn't move. Please try again in a moment"
+    },
     "attribution": {
       "label": "Map data sources",
       "openfreemap": "OpenFreeMap",

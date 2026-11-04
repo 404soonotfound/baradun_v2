@@ -18,7 +18,11 @@ export const MAX_BOUNDS: LngLatBox = [
 ];
 
 // 범위에 맞출 때 가장자리 여백(px)과 최대 확대(해변 하나일 때 너무 가까이 가지 않게)
-export const FIT_OPTIONS = { padding: 40, maxZoom: 12 } as const;
+// 오른쪽은 확대·축소·내 주변 보기 버튼 열(44px + 여백 12) 만큼 더 띄움: 마커·묶음이 버튼 밑에서 시작하지 않게(BRD-114)
+export const FIT_OPTIONS = {
+  padding: { top: 40, bottom: 40, left: 40, right: 72 },
+  maxZoom: 12,
+} as const;
 
 // [2] 좌표들을 감싸는 상자. 숫자가 아니거나 범위 밖 좌표는 빼고, 남는 게 없으면 남한 범위
 export function boundsOf(points: readonly LatLng[]): LngLatBox {

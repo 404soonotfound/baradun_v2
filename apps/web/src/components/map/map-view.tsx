@@ -27,11 +27,15 @@ import { useResolvedTheme } from "@/lib/theme";
 // - 실패(스타일·타일·WebGL 오류, 또는 15초 안에 바다가 그려지지 않음)하면 지도 자리에만 '목록으로 볼 수 있어요' + 다시 시도
 // - 출처 표기는 지도 아래 우리 줄(링크라 키보드·화면 읽기 가능, 토큰 색이라 다크에서도 읽힘)
 // - 지도 색은 지금 테마(설정·기기 설정)를 따름. 바뀌면 만든 지도의 색만 바꿈(BRD-44)
-// - 사용자 위치는 받지도 쓰지도 않음. 처음 범위는 넘겨받은 해변 범위(bounds)
+// - 처음 범위는 넘겨받은 해변 범위(bounds). 사용자 위치는 '내 주변 보기'를 누를 때만 받고 거리 계산에만 씀(nearby-button.tsx)
 // - 다 그린 뒤에만 overlay(마커·범례·카드, BRD-30)를 지도 위에 그림
+// 지금 범위와 따로 옮겨 갈 범위('내 주변 보기' 등). key가 바뀔 때마다 한 번 옮김, maxZoom보다 깊게 확대하지 않음
+export type MapFocus = { box: LngLatBox; maxZoom: number; key: number };
+
 export function MapView({
   locale,
   bounds,
+  focus,
   overlay,
   dataSource,
   onShowList,
@@ -39,6 +43,7 @@ export function MapView({
 }: {
   locale: Locale;
   bounds: LngLatBox; // 처음 보이는 범위
+  focus?: MapFocus | null;
   overlay?: (api: MapHandle) => ReactNode;
   // 지도 위에 그린 정보(마커)의 출처 글자(예: '출처: 기상청 …', BRD-113). 지도를 다 그린 뒤에만 출처 줄 위에 보임
   dataSource?: string | null;
@@ -55,9 +60,15 @@ export function MapView({
   // 다 그린 지도(overlay에 넘김). 시도마다 그 시도의 지도로 바뀜
   const [api, setApi] = useState<MapHandle | null>(null);
   // 지도를 만들 때 쓸 최신 값. 바뀌어도 이미 만든 지도를 다시 만들지 않음
-  const latest = useRef({ locale, theme, bounds, canvasLabel: t("canvas") });
+  const latest = useRef({
+    locale,
+    theme,
+    bounds,
+    focus,
+    canvasLabel: t("canvas"),
+  });
   useEffect(() => {
-    latest.current = { locale, theme, bounds, canvasLabel: t("canvas") };
+    latest.current = { locale, theme, bounds, focus, canvasLabel: t("canvas") };
   });
 
   // [1] 처음 화면에 보이면 시작. 보이지 않는 동안(숨긴 열·스크롤 밖)은 아무것도 받지 않음
@@ -139,6 +150,21 @@ export function MapView({
       animate: !prefersReducedMotion(),
     });
   }, [ready, boundsKey]);
+
+  // [6] 옮겨 갈 범위가 새로 오면 그 범위로. [5] 뒤에 둬서 지역이 같이 바뀐 경우(내 주변이 지역 밖)에도 이쪽이 마지막
+  // 한 번 옮긴 범위는 다시 쓰지 않음: 다시 시도로 지도를 새로 만들 때 지난 '내 주변' 범위가 지금 지역 범위를 덮지 않게
+  const focusKey = focus?.key;
+  const appliedFocusKey = useRef<number | null>(null);
+  useEffect(() => {
+    const target = latest.current.focus;
+    if (!ready || !target || appliedFocusKey.current === target.key) return;
+    appliedFocusKey.current = target.key;
+    handleRef.current?.map.fitBounds(target.box, {
+      padding: FIT_OPTIONS.padding,
+      maxZoom: target.maxZoom,
+      animate: !prefersReducedMotion(),
+    });
+  }, [ready, focusKey]);
 
   function zoom(direction: 1 | -1) {
     const map = handleRef.current?.map;

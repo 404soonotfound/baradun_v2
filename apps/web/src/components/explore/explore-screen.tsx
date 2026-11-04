@@ -10,7 +10,8 @@ import { LocationOffBanner } from "@/components/home/location-off-banner";
 import { BeachMarkers, type MapMarker } from "@/components/map/beach-markers";
 import { MapCard } from "@/components/map/map-card";
 import { MapLegend } from "@/components/map/map-legend";
-import { MapView } from "@/components/map/map-view";
+import { NearbyButton } from "@/components/map/nearby-button";
+import { MapView, type MapFocus } from "@/components/map/map-view";
 import { RegionSheet } from "@/components/region/region-sheet";
 import { SampleNote } from "@/components/sample-note";
 import { SituationBanner } from "@/components/situation-banner";
@@ -45,8 +46,10 @@ import {
 import { cn } from "@/lib/cn";
 import { localizedPath, type Locale } from "@/lib/i18n";
 import { showsKmaSource } from "@/lib/kma-source";
+import type { LatLng } from "@/lib/geo";
 import { requestLocation, useUserLocation } from "@/lib/location";
 import { boundsOf } from "@/lib/map/bounds";
+import { NEARBY_MAX_ZOOM, nearbyBeaches } from "@/lib/map/nearby";
 import { formatKm } from "@/lib/meta-join";
 import { setRegion, useRegion } from "@/lib/region";
 import {
@@ -128,11 +131,27 @@ export function ExploreScreen({
       ),
     [shown, coords, snapshot],
   );
-  // 지도 범위 = 지금 목록에 보이는 해변(사용자 위치로 옮기지 않음)
+  // 지도 범위 = 지금 목록에 보이는 해변(처음·지역을 바꿀 때 사용자 위치로 옮기지 않음)
   const mapBounds = useMemo(
     () => boundsOf(shown.map((beach) => beach.coords)),
     [shown],
   );
+  // '내 주변 보기'로 옮길 범위(BRD-114 · 결정 5). key는 누를 때마다 바뀌어 같은 범위도 다시 옮김
+  const [mapFocus, setMapFocus] = useState<MapFocus | null>(null);
+
+  // 받은 위치에서 가까운 해변을 고른 지역과 상관없이 전체에서 고름. 지역 밖이면 탐색 지역을 전국으로 바꿔
+  // 옮겨 간 곳에도 마커가 보이게 함(전국 선택은 홈에도 저장, D14-3). 범위에는 내 위치를 넣지 않음
+  function showNearby(from: LatLng) {
+    const nearest = nearbyBeaches(beaches, from);
+    if (nearest.length === 0) return;
+    const shownIds = new Set(shown.map((beach) => beach.id));
+    if (nearest.some((beach) => !shownIds.has(beach.id))) setRegion(NATIONWIDE);
+    setMapFocus({
+      box: boundsOf(nearest.map((beach) => beach.coords)),
+      maxZoom: NEARBY_MAX_ZOOM,
+      key: Date.now(),
+    });
+  }
   const loading = isLoading(items);
   // 지도 마커: 상태를 받은 해변만(첫 응답 전에는 마커를 미리 그리지 않음)
   const markers = useMemo<MapMarker[]>(
@@ -508,6 +527,7 @@ export function ExploreScreen({
         <MapView
           locale={locale}
           bounds={mapBounds}
+          focus={mapFocus}
           // 마커(해변 상태)를 그릴 때만 지도 아래 출처 줄에 기상청 출처
           dataSource={
             hasKmaData && markers.length > 0 ? t("source.kmaStatus") : null
@@ -528,6 +548,14 @@ export function ExploreScreen({
                 clearScope={mapClearScope}
                 className="absolute top-3 left-3 hidden max-w-[360px] lg:flex"
               />
+              {/* 내 주변 보기(결정 5): 확대·축소 버튼(오른쪽 위, 44×2) 바로 아래. PC 지도 카드(왼쪽 아래 380)와 좁은 PC에서도 겹치지 않게 */}
+              {beaches.length > 0 && (
+                <NearbyButton
+                  api={api}
+                  onLocated={showNearby}
+                  className="absolute top-[112px] right-3"
+                />
+              )}
               {/* PC는 지도 왼쪽 아래 380. 모바일 카드는 지도 밖(아래) */}
               {selectedItem && (
                 <MapCard
