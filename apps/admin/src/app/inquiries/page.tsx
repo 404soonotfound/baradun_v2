@@ -1,7 +1,7 @@
-import { PreparingScreen } from "@/components/preparing-screen";
-import { messages } from "@/lib/messages";
+import { InquiriesScreen } from "@/components/inquiries-screen";
+import { loadBeachNames } from "@/lib/beach-names";
 
-// 화면 자리 (BRD-171). 화면 설계서 6장 화면 목록의 경로
+// 문의 목록·상세 (BRD-153). 해변 이름표는 빌드 때 data/beaches에서 만들어 화면에 내려 줌
 export default function Page() {
-  return <PreparingScreen title={messages.nav.inquiries} />;
+  return <InquiriesScreen beaches={loadBeachNames()} />;
 }
