@@ -723,6 +723,7 @@ function NoticeEditor({
   onReload: () => void;
   onLeave: () => void;
 }) {
+  const router = useRouter();
   const session = useAuthSession();
   const { edit, publish } = usePermissions();
   const [now] = useState(() => Date.now());
@@ -866,16 +867,62 @@ function NoticeEditor({
 
   // 저장하지 않은 변경이 있으면 탭을 닫거나 새로고침할 때 브라우저가 묻게 함
   const dirty = changes > 0 && !busy;
+  // 나가려던 곳: 안쪽 주소(메뉴 등 링크) 또는 'back'(브라우저 뒤로). null이면 공지 목록
+  const [leaveTo, setLeaveTo] = useState<string | null>(null);
+  // '나가기'를 누른 뒤에는 아래 가로채기를 하지 않음
+  const leaving = useRef(false);
   useEffect(() => {
     if (!dirty) return;
     const warn = (e: BeforeUnloadEvent) => e.preventDefault();
+    // 앱 안 링크(왼쪽 메뉴 등)는 페이지를 새로 불러오지 않아 beforeunload가 없음 → 눌림을 먼저 가로채 확인
+    // React보다 먼저 받도록 document 캡처 단계에서 받음(Next Link의 이동을 막음)
+    const click = (e: MouseEvent) => {
+      if (leaving.current || e.defaultPrevented || e.button !== 0) return;
+      if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      const link = (e.target as Element | null)?.closest?.("a[href]");
+      if (!(link instanceof HTMLAnchorElement) || link.target === "_blank")
+        return;
+      const url = new URL(link.href, window.location.href);
+      if (url.origin !== window.location.origin) return;
+      e.preventDefault();
+      e.stopPropagation();
+      setLeaveTo(`${url.pathname}${url.search}`);
+      setConfirm("leave");
+    };
+    // 브라우저 뒤로: 같은 주소를 하나 더 쌓아 두고, 뒤로 가면 다시 쌓은 뒤 확인을 띄움
+    window.history.pushState(window.history.state, "", window.location.href);
+    const back = () => {
+      if (leaving.current) return;
+      window.history.pushState(window.history.state, "", window.location.href);
+      setLeaveTo("back");
+      setConfirm("leave");
+    };
     window.addEventListener("beforeunload", warn);
-    return () => window.removeEventListener("beforeunload", warn);
+    document.addEventListener("click", click, true);
+    window.addEventListener("popstate", back);
+    return () => {
+      window.removeEventListener("beforeunload", warn);
+      document.removeEventListener("click", click, true);
+      window.removeEventListener("popstate", back);
+    };
   }, [dirty]);
 
   const leave = () => {
+    setLeaveTo(null);
     if (changes > 0) setConfirm("leave");
     else onLeave();
+  };
+
+  const confirmLeave = () => {
+    leaving.current = true;
+    if (leaveTo === "back") {
+      // 쌓아 둔 같은 주소 두 칸(처음·확인 때)을 건너 원래 앞 화면으로
+      window.history.go(-2);
+    } else if (leaveTo) {
+      router.push(leaveTo);
+    } else {
+      onLeave();
+    }
   };
 
   const state = base?.state ?? null;
@@ -973,7 +1020,7 @@ function NoticeEditor({
           cancelLabel={t.stay}
           busy={false}
           focusCancel
-          onConfirm={onLeave}
+          onConfirm={confirmLeave}
           onCancel={() => setConfirm(null)}
         />
       )}
