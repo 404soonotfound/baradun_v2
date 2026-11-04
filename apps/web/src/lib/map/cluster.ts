@@ -44,24 +44,20 @@ function unproject({ x, y }: { x: number; y: number }, zoom: number): LatLng {
   };
 }
 
-// [2] 묶기. keep의 해변(고른·가리킨 마커)은 늘 따로 둠(강조한 마커가 묶음에 숨지 않게)
-// 화면에서 가장 가까운 두 무리를 반경 안에 없을 때까지 하나씩 합침(무리 자리 = 속한 마커 화면 좌표의 평균)
+// [2] 묶기. 화면에서 가장 가까운 두 무리를 반경 안에 없을 때까지 하나씩 합침(무리 자리 = 속한 마커 화면 좌표의 평균)
 // 거리는 가로·세로 차이 중 큰 값: 누르는 자리가 정사각형이라 대각선으로 반경보다 멀어도 겹칠 수 있음
 // → 남은 마커·묶음끼리는 누르는 자리가 겹치지 않음(WCAG 2.5.8)
 // 같은 거리면 id 순서가 앞인 쪽부터 → 같은 입력이면 늘 같은 결과
 export function clusterMarkers<T extends { id: string; coords: LatLng }>(
   items: readonly T[],
   zoom: number,
-  keep: ReadonlySet<string> = new Set(),
   radius = CLUSTER_RADIUS_PX,
 ): MapGroup<T>[] {
   if (!(zoom < CLUSTER_MAX_ZOOM)) {
     return items.map((item) => ({ kind: "single", item }));
   }
-  const sorted = [...items].sort((a, b) => a.id.localeCompare(b.id));
-  const kept = sorted.filter((item) => keep.has(item.id));
-  const heaps = sorted
-    .filter((item) => !keep.has(item.id))
+  const heaps = [...items]
+    .sort((a, b) => a.id.localeCompare(b.id))
     .map((item) => ({ members: [item], ...project(item.coords, zoom) }));
 
   for (;;) {
@@ -87,7 +83,7 @@ export function clusterMarkers<T extends { id: string; coords: LatLng }>(
     heaps.splice(best.j, 1);
   }
 
-  const groups: MapGroup<T>[] = kept.map((item) => ({ kind: "single", item }));
+  const groups: MapGroup<T>[] = [];
   for (const { members, x, y } of heaps) {
     const [first] = members;
     if (members.length === 1 && first) {
@@ -105,4 +101,29 @@ export function clusterMarkers<T extends { id: string; coords: LatLng }>(
     });
   }
   return groups;
+}
+
+// [3] keep의 해변(고른·가리킨 마커)을 묶음에서 꺼내 따로 둠(강조한 마커가 숫자 뒤로 숨지 않게, 화면 설계서 EXP-M·D-EXP)
+// 그 해변이 든 묶음만 남은 해변으로 다시 묶고, 나머지 묶음은 그대로(key가 같아 마커를 다시 붙이지 않음)
+// 꺼낸 마커는 다른 무리와 누르는 자리가 겹칠 수 있음: 맨 위에 그리고(data-front), 같은 해변은 목록·카드로도 닿음
+export function releaseMarkers<T extends { id: string; coords: LatLng }>(
+  groups: readonly MapGroup<T>[],
+  keep: ReadonlySet<string>,
+  zoom: number,
+  radius = CLUSTER_RADIUS_PX,
+): MapGroup<T>[] {
+  if (keep.size === 0) return [...groups];
+  return groups.flatMap((group) => {
+    if (
+      group.kind === "single" ||
+      !group.items.some((item) => keep.has(item.id))
+    )
+      return [group];
+    const kept = group.items.filter((item) => keep.has(item.id));
+    const rest = group.items.filter((item) => !keep.has(item.id));
+    return [
+      ...kept.map((item) => ({ kind: "single" as const, item })),
+      ...clusterMarkers(rest, zoom, radius),
+    ];
+  });
 }

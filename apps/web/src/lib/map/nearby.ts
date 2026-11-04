@@ -1,4 +1,7 @@
 import { sortByDistance, type LatLng } from "@/lib/geo";
+import { locationRetrying, type LocationState } from "@/lib/location";
+import { boundsOf, type LngLatBox } from "./bounds";
+import { CLUSTER_MAX_ZOOM } from "./cluster";
 
 // 지도 '내 주변 보기' (BRD-114 · 결정 기록 12장 결정 5)
 // 정확한 위치는 여기서 거리 계산에만 씀. 옮길 범위는 가까운 해변 좌표만으로 만들고 내 위치는 넣지 않음
@@ -8,15 +11,54 @@ import { sortByDistance, type LatLng } from "@/lib/geo";
 export const NEARBY_BEACH_COUNT = 3;
 
 // 이보다 깊게 확대하지 않음(해변이 한곳에 몰려 있어도 내 위치 근처를 크게 보여 주지 않게)
-export const NEARBY_MAX_ZOOM = 10;
+// 묶음이 풀리는 단계(11)까지: 그보다 낮으면 가까운 해변끼리 숫자 묶음 하나로 보여 상태·사유가 안 보임
+export const NEARBY_MAX_ZOOM = CLUSTER_MAX_ZOOM;
 
-// 내 위치에서 가까운 순으로 count곳. 고른 지역과 상관없이 받은 해변 전체에서 고름
+const validCoords = ({ lat, lng }: LatLng) =>
+  Number.isFinite(lat) &&
+  Number.isFinite(lng) &&
+  Math.abs(lat) <= 90 &&
+  Math.abs(lng) <= 180;
+
+// [1] 내 위치에서 가까운 순으로 count곳. 고른 지역과 상관없이 받은 해변 전체에서 고름
+// 좌표가 잘못된 해변은 정렬 전에 뺌(거리가 NaN이면 정렬 순서가 어긋남)
 export function nearbyBeaches<T extends { coords: LatLng }>(
   beaches: readonly T[],
   from: LatLng,
   count = NEARBY_BEACH_COUNT,
 ): (T & { distanceKm: number })[] {
-  return sortByDistance(beaches, from)
-    .filter((beach) => Number.isFinite(beach.distanceKm))
-    .slice(0, count);
+  if (!validCoords(from)) return [];
+  return sortByDistance(
+    beaches.filter((beach) => validCoords(beach.coords)),
+    from,
+  ).slice(0, count);
+}
+
+// [2] 옮길 곳. 가까운 해변이 지금 보이는 해변(고른 지역) 밖에 하나라도 있으면 전국으로 바꿔야 마커가 보임
+// 옮길 해변이 없으면 null
+export function nearbyPlan<T extends { id: string; coords: LatLng }>(
+  beaches: readonly T[],
+  shownIds: ReadonlySet<string>,
+  from: LatLng,
+): { box: LngLatBox; nationwide: boolean } | null {
+  const nearest = nearbyBeaches(beaches, from);
+  if (nearest.length === 0) return null;
+  return {
+    box: boundsOf(nearest.map((beach) => beach.coords)),
+    nationwide: nearest.some((beach) => !shownIds.has(beach.id)),
+  };
+}
+
+// [3] 눌러서 위치를 기다리는 중에 위치 상태가 바뀌면 할 일
+// move = 받은 위치로 옮기고 기다림 끝 · wait = 계속 기다림(받는 중, 다른 곳의 '다시 시도' 답을 기다리는 중 포함)
+// stop = 기다림 끝(거부·꺼짐·받을 수 없음. 나중에 다른 곳이 받은 위치로 지도를 옮기지 않게)
+export function nearbyWaitStep(state: LocationState): "move" | "wait" | "stop" {
+  if (state.status === "ready") return "move";
+  if (
+    state.status === "locating" ||
+    state.status === "checking" ||
+    locationRetrying(state)
+  )
+    return "wait";
+  return "stop";
 }

@@ -49,7 +49,7 @@ import { showsKmaSource } from "@/lib/kma-source";
 import type { LatLng } from "@/lib/geo";
 import { requestLocation, useUserLocation } from "@/lib/location";
 import { boundsOf } from "@/lib/map/bounds";
-import { NEARBY_MAX_ZOOM, nearbyBeaches } from "@/lib/map/nearby";
+import { NEARBY_MAX_ZOOM, nearbyPlan } from "@/lib/map/nearby";
 import { formatKm } from "@/lib/meta-join";
 import { setRegion, useRegion } from "@/lib/region";
 import {
@@ -144,15 +144,14 @@ export function ExploreScreen({
   // 받은 위치에서 가까운 해변을 고른 지역과 상관없이 전체에서 고름. 지역 밖이면 탐색 지역을 전국으로 바꿔
   // 옮겨 간 곳에도 마커가 보이게 함(전국 선택은 홈에도 저장, D14-3). 범위에는 내 위치를 넣지 않음
   function showNearby(from: LatLng) {
-    const nearest = nearbyBeaches(beaches, from);
-    if (nearest.length === 0) return;
-    const shownIds = new Set(shown.map((beach) => beach.id));
-    if (nearest.some((beach) => !shownIds.has(beach.id))) setRegion(NATIONWIDE);
-    setMapFocus({
-      box: boundsOf(nearest.map((beach) => beach.coords)),
-      maxZoom: NEARBY_MAX_ZOOM,
-      key: Date.now(),
-    });
+    const plan = nearbyPlan(
+      beaches,
+      new Set(shown.map((beach) => beach.id)),
+      from,
+    );
+    if (!plan) return;
+    if (plan.nationwide) setRegion(NATIONWIDE);
+    setMapFocus({ box: plan.box, maxZoom: NEARBY_MAX_ZOOM, key: Date.now() });
   }
   const loading = isLoading(items);
   // 지도 마커: 상태를 받은 해변만(첫 응답 전에는 마커를 미리 그리지 않음)

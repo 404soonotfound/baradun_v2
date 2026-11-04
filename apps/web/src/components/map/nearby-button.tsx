@@ -6,7 +6,12 @@ import { useEffect, useRef, useState } from "react";
 
 import { cn } from "@/lib/cn";
 import type { LatLng } from "@/lib/geo";
-import { requestLocation, useUserLocation } from "@/lib/location";
+import {
+  locationRetrying,
+  requestLocation,
+  useUserLocation,
+} from "@/lib/location";
+import { nearbyWaitStep } from "@/lib/map/nearby";
 import type { MapHandle } from "@/lib/map/engine";
 
 // 지도 '내 주변 보기' (BRD-114 · 결정 기록 12장 결정 5)
@@ -41,6 +46,11 @@ export function NearbyButton({
       return;
     }
     setPressed(true);
+    // 다른 곳(위치 배너)의 '다시 시도' 답을 기다리는 중이면 그 답을 같이 기다림(새로 묻지 않음)
+    if (locationRetrying(location)) {
+      waitingRef.current = true;
+      return;
+    }
     // 거부·꺼짐은 다시 묻지 않음(안내만). 그 밖은 지금 물음
     if (location.status === "denied" || location.status === "off") return;
     waitingRef.current = true;
@@ -49,16 +59,11 @@ export function NearbyButton({
 
   useEffect(() => {
     if (!waitingRef.current) return;
-    if (location.status === "ready") {
-      waitingRef.current = false;
+    const step = nearbyWaitStep(location);
+    if (step === "wait") return;
+    waitingRef.current = false;
+    if (step === "move" && location.status === "ready")
       onLocated(location.coords);
-    } else if (
-      location.status !== "locating" &&
-      location.status !== "checking"
-    ) {
-      // 거부·꺼짐·받을 수 없음으로 끝나면 기다림을 끝냄(나중에 다른 곳이 받은 위치로 지도를 옮기지 않게)
-      waitingRef.current = false;
-    }
   }, [location, onLocated]);
 
   useEffect(() => {
@@ -72,10 +77,11 @@ export function NearbyButton({
     };
   }, [api]);
 
-  const busy = location.status === "locating";
+  const busy = location.status === "locating" || locationRetrying(location);
   const label = busy ? t("locating") : t("button");
   const notice =
     pressed &&
+    !busy &&
     (location.status === "denied" ||
       location.status === "off" ||
       location.status === "unavailable")
@@ -97,15 +103,25 @@ export function NearbyButton({
         <LocateFixed aria-hidden="true" size={18} />
         <span className="hidden lg:inline">{label}</span>
       </button>
-      <p
-        role="status"
-        className={cn(
-          "max-w-[260px] rounded-card bg-bg-surface px-3 py-2 text-caption text-text-body shadow-card",
-          notice === null && "sr-only",
-        )}
-      >
-        {notice !== null && t(notice)}
-      </p>
+      <NearbyNotice notice={notice} />
     </div>
   );
 }
+
+// 옮기지 못한 까닭 안내(무슨 일 → 영향 → 다음 행동). 안내가 없을 때도 자리(role=status)를 둬 바뀔 때 읽힘
+export function NearbyNotice({ notice }: { notice: NearbyNoticeKind | null }) {
+  const t = useTranslations("map.nearby");
+  return (
+    <p
+      role="status"
+      className={cn(
+        "max-w-[260px] rounded-card bg-bg-surface px-3 py-2 text-caption text-text-body shadow-card",
+        notice === null && "sr-only",
+      )}
+    >
+      {notice !== null && t(notice)}
+    </p>
+  );
+}
+
+export type NearbyNoticeKind = "denied" | "off" | "unavailable";
