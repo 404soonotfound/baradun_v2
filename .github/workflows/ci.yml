@@ -68,6 +68,7 @@ jobs:
               - *shared
               - 'infra/**'
               - '.github/workflows/**' # 워크플로 가드레일 테스트
+              - '.github/scripts/**' # 배포 판단 스크립트(BRD-178, workflows.test.ts가 읽음)
             contracts:                  # 공통 설정 + 계약 폴더가 바뀌면
               - *shared
               - 'packages/contracts/**'
@@ -119,8 +120,9 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
-      # Next 빌드 캐시(BRD-178). 바뀐 파일만 다시 컴파일함. 결과물(out/)이 아니라 중간 캐시라 검사를 건너뛰지 않음
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      # Next 빌드 캐시(BRD-178). 결과물(out/)이 아니라 중간 캐시라 검사를 건너뛰지 않음. main push에서만 저장하고 PR은 복원만(캐시가 실행마다 쌓이지 않게)
+      - id: next-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: apps/web/.next/cache
           key: next-web-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ hashFiles('apps/web/**', 'packages/**', '!**/node_modules/**') }}
@@ -128,6 +130,11 @@ jobs:
       - run: npm run build -w apps/web # 배포와 같은 정적 빌드, 사이트 주소만 테스트 값 (BRD-102)
         env:
           NEXT_PUBLIC_SITE_URL: https://example.test # 예약 도메인(.test). 운영 값은 deploy.yml의 vars.SITE_URL
+      - if: github.event_name == 'push' && steps.next-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: apps/web/.next/cache
+          key: next-web-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ hashFiles('apps/web/**', 'packages/**', '!**/node_modules/**') }}
       - run: npm run check:csp -w apps/web # CSP meta 해시 일치 검사 (BRD-118)
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -202,7 +209,9 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      # Next 빌드 캐시는 main push에서만 저장하고 PR은 복원만(캐시가 실행마다 쌓이지 않게, BRD-178)
+      - id: next-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: apps/admin/.next/cache
           key: next-admin-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ hashFiles('apps/admin/**', 'packages/**', '!**/node_modules/**') }}
@@ -213,6 +222,11 @@ jobs:
           NEXT_PUBLIC_OPERATOR_CLIENT_ID: testoperatorclient0000000001
           NEXT_PUBLIC_DEMO_USER_POOL_ID: ap-northeast-2_TestDemo
           NEXT_PUBLIC_DEMO_CLIENT_ID: testdemoclient00000000000001
+      - if: github.event_name == 'push' && steps.next-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: apps/admin/.next/cache
+          key: next-admin-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ hashFiles('apps/admin/**', 'packages/**', '!**/node_modules/**') }}
       - run: npm run check:out -w apps/admin # 고치지 않고 다시 검사(빌드 결과가 그대로인지)
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
