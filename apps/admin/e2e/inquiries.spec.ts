@@ -544,3 +544,56 @@ test("충돌 뒤 '새 내용 불러오기'는 서버의 새 내용으로 바꾼�
   await expect(memo).toHaveValue("다른 운영자 메모");
   await expect(detail.getByText("바뀐 내용 없음")).toBeVisible();
 });
+
+test("저장 뒤 다시 읽기가 실패해도 내용과 처리 칸을 지우지 않고, 다시 읽을 때까지 잠근다", async ({
+  page,
+}) => {
+  await signIn(page);
+  let version = 1;
+  let failNext = false;
+  await mockInquiries(page, {
+    detail: () =>
+      failNext
+        ? ((failNext = false),
+          {
+            status: 500,
+            body: { error: { code: "internal", requestId: "req-5" } },
+          })
+        : {
+            status: 200,
+            body: {
+              ...summary(1, { version }),
+              restricted: false,
+              message: "본문",
+              memo: version > 1 ? "저장한 메모" : null,
+              rejectReason: null,
+              emailCollected: false,
+              photosCollected: false,
+            },
+          },
+    patch: () => {
+      version = 2;
+      failNext = true;
+      return { status: 200, body: { inquiryId: id(1), version: 2 } };
+    },
+  });
+  await openInquiries(page);
+  await rows(page).first().getByRole("link").click();
+  const detail = detailOf(page);
+  const memo = detail.getByLabel("처리 메모(내부용)");
+  await memo.fill("저장한 메모");
+  await detail.getByRole("button", { name: "저장" }).click();
+
+  const alert = detail
+    .getByRole("alert")
+    .filter({ hasText: "문의를 불러오지 못했어요" });
+  await expect(alert).toContainText("오류 번호 req-5");
+  await expect(detail.getByText("본문")).toBeVisible();
+  await expect(memo).toHaveValue("저장한 메모");
+  await expect(memo).toBeDisabled();
+
+  await alert.getByRole("button", { name: "다시 시도" }).click();
+  await expect(memo).toBeEnabled();
+  await expect(memo).toHaveValue("저장한 메모");
+  await expect(detail.getByText("바뀐 내용 없음")).toBeVisible();
+});
