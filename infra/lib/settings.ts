@@ -78,6 +78,10 @@ export const TABLE_CAPACITY = {
 // 운영 API는 목록, publisher는 노출본 읽기에 이 파티션만 Query함
 export const NOTICE_KEY = "admin#notice";
 
+// 수집 실행 기록 파티션 키 앞부분 (BRD-149). services/src/core/collect/run-log.ts RUN_LOG_PREFIX와 같아야 함(permissions.test.ts가 확인)
+// 수집 함수는 Ops PutItem으로 쓰고(기존 권한 안), 운영 API는 수집 현황 화면에서 이 파티션만 Query함
+export const RUN_LOG_KEY_PREFIX = "collect#run#";
+
 // 문의 목록 GSI (결정 기록 D16-B4: 상태 + 접수 시각, 요약만 projection, BRD-153)
 // 이름은 services/src/inquiry/policy.ts INQUIRY_STATUS_INDEX_NAME과 같아야 함(tables.test.ts가 확인)
 // 용량 1/1 → 테이블 11/11 + GSI 1/1 = 12/12, 상한(25) 안. 목록 요약만이라 본문·이메일·사진 키는 넣지 않음

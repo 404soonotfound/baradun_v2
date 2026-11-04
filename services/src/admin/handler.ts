@@ -12,6 +12,7 @@ import {
   recordAudit,
   type AuditEntry,
 } from "./audit";
+import { readCollection } from "./collection";
 import {
   authenticate,
   createTokenVerifier,
@@ -345,6 +346,14 @@ export async function handleOps(
     }
     if (decision.pattern === "/ops/inquiries" && method === "GET") {
       return await listRoute(event, principal, deps.data, ids);
+    }
+    if (decision.pattern === "/ops/collection" && method === "GET") {
+      const view = await readCollection(
+        deps.data.client,
+        deps.data.opsTable,
+        deps.data.now(),
+      );
+      return json(200, view, ids);
     }
     if (decision.pattern === "/ops/audit" && method === "GET") {
       return await auditRoute(event, deps.data, ids);
