@@ -533,8 +533,9 @@ function InquiryActions({
   onReload,
 }: {
   item: InquiryDetail;
-  // 내가 개인정보 가리기로 저장해 받은 version. 상태·메모는 그대로라 쓰던 내용을 두고 기준만 옮김
-  rebase: number | null;
+  // 내가 개인정보 가리기로 저장한 version 앞(from)·뒤(to). 상태·메모는 그대로라 쓰던 내용을 두고 기준만 옮김
+  // 초안 기준이 from일 때만 옮김(이미 낡은 초안은 충돌 안내를 그대로 둠)
+  rebase: { from: number; to: number } | null;
   onSaved: (saved: Pick<Saved, "status" | "version">, from: string) => void;
   onReload: () => void;
 }) {
@@ -583,7 +584,11 @@ function InquiryActions({
     (accept === item.version || accept === "next" || changes === 0)
   ) {
     adopt(item);
-  } else if (item.version !== base.version && item.version === rebase) {
+  } else if (
+    rebase !== null &&
+    item.version === rebase.to &&
+    base.version === rebase.from
+  ) {
     setBase(item);
   }
   const stale = item.version !== base.version;
@@ -883,7 +888,7 @@ function InquiryMessage({
   onReload,
 }: {
   item: InquiryDetail;
-  onRedacted: (version: number) => void;
+  onRedacted: (from: number, to: number) => void;
   onReload: () => void;
 }) {
   const session = useAuthSession();
@@ -937,7 +942,7 @@ function InquiryMessage({
         // 성공하면 새 상세를 받아 이 칸이 다시 그려질 때까지 잠가 둠(같은 가리기를 두 번 누르지 않게)
         if (result.ok) {
           attempt.current = null;
-          onRedacted(result.body.version);
+          onRedacted(patch.version, result.body.version);
           return;
         }
         setBusy(false);
@@ -1128,7 +1133,8 @@ function InquiryDetailView({
   // 내가 개인정보 가리기로 저장한 version(처리 칸이 쓰던 내용을 두고 기준만 옮기게)
   const [redacted, setRedacted] = useState<{
     id: string;
-    version: number;
+    from: number;
+    to: number;
   } | null>(null);
 
   useEffect(() => {
@@ -1225,8 +1231,8 @@ function InquiryDetailView({
             setNotice(null);
             setAttempt((n) => n + 1);
           }}
-          onRedacted={(version) => {
-            setRedacted({ id, version });
+          onRedacted={(from, to) => {
+            setRedacted({ id, from, to });
             setNotice({ id, text: t.redacted });
             setAttempt((n) => n + 1);
           }}
@@ -1267,7 +1273,11 @@ function InquiryDetailView({
         <InquiryActions
           key={item.inquiryId}
           item={item}
-          rebase={redacted?.id === id ? redacted.version : null}
+          rebase={
+            redacted?.id === id
+              ? { from: redacted.from, to: redacted.to }
+              : null
+          }
           onReload={() => {
             setNotice(null);
             setAttempt((n) => n + 1);
