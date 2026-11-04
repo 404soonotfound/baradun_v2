@@ -485,3 +485,62 @@ test("저장 실패: 화면 상태를 먼저 바꾸지 않고, 다시 보내면 
   expect(calls.patches).toHaveLength(2);
   expect(calls.patches[1]?.key).toBe(calls.patches[0]?.key);
 });
+
+test("반려 이유 길이는 반려일 때만 보고, 다른 상태로 바꾸면 저장할 수 있다", async ({
+  page,
+}) => {
+  await signIn(page);
+  const calls = await mockInquiries(page);
+  await openInquiries(page);
+  await rows(page).first().getByRole("link").click();
+  const detail = detailOf(page);
+  await detail.getByText("반려", { exact: true }).click();
+  await detail.getByLabel("반려 이유").fill("가".repeat(501));
+  await expect(detail.getByText(/500자까지 쓸 수 있어요/)).toBeVisible();
+  await expect(detail.getByRole("button", { name: "저장" })).toBeDisabled();
+  await detail.getByText("완료", { exact: true }).click();
+  await detail.getByRole("button", { name: "저장" }).click();
+  await expect(
+    detail.getByRole("status").filter({ hasText: "‘완료’(으)로 바꿨어요" }),
+  ).toBeVisible();
+  expect(calls.patches[0]?.body).toEqual({ version: 1, status: "resolved" });
+});
+
+test("충돌 뒤 '새 내용 불러오기'는 서버의 새 내용으로 바꾼다(쓰던 메모는 그때 사라짐)", async ({
+  page,
+}) => {
+  await signIn(page);
+  let version = 1;
+  await mockInquiries(page, {
+    detail: () => ({
+      status: 200,
+      body: {
+        ...summary(1, { version }),
+        restricted: false,
+        message: "본문",
+        memo: version > 1 ? "다른 운영자 메모" : null,
+        rejectReason: null,
+        emailCollected: false,
+        photosCollected: false,
+      },
+    }),
+    patch: () => {
+      version = 2; // 다른 운영자가 먼저 바꾼 상태
+      return {
+        status: 409,
+        body: {
+          error: { code: "conflict", reason: "version", requestId: "r" },
+        },
+      };
+    },
+  });
+  await openInquiries(page);
+  await rows(page).first().getByRole("link").click();
+  const detail = detailOf(page);
+  const memo = detail.getByLabel("처리 메모(내부용)");
+  await memo.fill("내가 쓴 메모");
+  await detail.getByRole("button", { name: "저장" }).click();
+  await detail.getByRole("button", { name: "새 내용 불러오기" }).click();
+  await expect(memo).toHaveValue("다른 운영자 메모");
+  await expect(detail.getByText("바뀐 내용 없음")).toBeVisible();
+});
