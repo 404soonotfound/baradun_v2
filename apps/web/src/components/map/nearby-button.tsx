@@ -7,18 +7,25 @@ import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 import type { LatLng } from "@/lib/geo";
 import {
+  deviceLocationGuide,
   locationRetrying,
+  refreshLocation,
   requestLocation,
   useUserLocation,
+  watchLocation,
+  type LocationState,
 } from "@/lib/location";
-import { nearbyWaitStep } from "@/lib/map/nearby";
 import type { MapHandle } from "@/lib/map/engine";
+import { nearbyWaitStep } from "@/lib/map/nearby";
 
 // 지도 '내 주변 보기' (BRD-114 · 결정 기록 12장 결정 5)
-// - 누를 때만 위치를 물음(앱 위치 저장소의 request: 거부·꺼짐이면 다시 묻지 않고 안내만)
-// - 위치 허용이 먼저: 받은 위치를 onLocated로 넘기면 화면이 내 위치에서 가까운 해변으로 지도를 옮김(explore-screen)
+// - 위치 허용이 먼저: 누를 때만 위치를 물음(앱 위치 저장소의 request: 거부·꺼짐이면 다시 묻지 않고 안내만)
+// - 이미 받은 위치가 있어도 누를 때마다 새로 받음(앱을 연 뒤 옮겨 간 곳 기준으로)
+// - 받은 위치를 onLocated로 넘기면 화면이 내 위치에서 가까운 해변으로 지도를 옮김(explore-screen). 못 옮기면 false
 // - 내 위치 점을 그리지 않고, 위치를 저장·전송하지 않음
 // - 옮기지 못하면 무슨 일 → 영향 → 다음 행동을 버튼 아래에 알림(role=status)
+
+export type NearbyNoticeKind = "denied" | "off" | "unavailable" | "outside";
 
 export function NearbyButton({
   api,
@@ -26,49 +33,72 @@ export function NearbyButton({
   className,
 }: {
   api: MapHandle;
-  // 위치를 받으면 한 번 부름. 정확한 위치는 기기 안 거리 계산에만 씀
-  onLocated: (coords: LatLng) => void;
+  // 위치를 받으면 한 번 부름. 정확한 위치는 기기 안 거리 계산에만 씀. 지도를 옮겼으면 true
+  onLocated: (coords: LatLng) => boolean;
   className?: string;
 }) {
   const t = useTranslations("map.nearby");
   const location = useUserLocation();
-  // 이 버튼을 눌렀는지. 안내는 '눌렀음 + 지금 위치 상태'로 정함(따로 들고 있지 않음)
-  // 지도를 직접 움직이거나 누르면 내려서 지난 안내를 지움
-  const [pressed, setPressed] = useState(false);
-  // 눌러서 위치를 기다리는 중. 위치가 오면 한 번만 옮김(다른 화면이 받은 위치로는 옮기지 않음)
-  const waitingRef = useRef(false);
+  const [notice, setNotice] = useState<NearbyNoticeKind | null>(null);
+  // 이미 받은 위치를 새로 받는 중(저장소 상태는 ready 그대로라 따로 둠)
+  const [refreshing, setRefreshing] = useState(false);
+  // 눌러서 기다리는 위치 알림을 그만 받는 함수(다시 누르거나 화면을 떠날 때)
+  const stopWaiting = useRef<(() => void) | null>(null);
+  const onLocatedRef = useRef(onLocated);
+  useEffect(() => {
+    onLocatedRef.current = onLocated;
+  });
 
-  function press() {
-    if (location.status === "ready") {
-      // 바로 옮김. 알릴 실패가 없어 지난 안내도 지움(뒤에 다른 곳의 위치 실패가 이 버튼 안내로 보이지 않게)
-      setPressed(false);
-      onLocated(location.coords);
-      return;
-    }
-    setPressed(true);
-    // 다른 곳(위치 배너)의 '다시 시도' 답을 기다리는 중이면 그 답을 같이 기다림(새로 묻지 않음)
-    if (locationRetrying(location)) {
-      waitingRef.current = true;
-      return;
-    }
-    // 거부·꺼짐은 다시 묻지 않음(안내만). 그 밖은 지금 물음
-    if (location.status === "denied" || location.status === "off") return;
-    waitingRef.current = true;
-    requestLocation();
+  function settle(coords: LatLng | null, failed: NearbyNoticeKind) {
+    if (coords === null) setNotice(failed);
+    else if (!onLocatedRef.current(coords)) setNotice("outside");
   }
 
-  useEffect(() => {
-    if (!waitingRef.current) return;
-    const step = nearbyWaitStep(location);
-    if (step === "wait") return;
-    waitingRef.current = false;
-    if (step === "move" && location.status === "ready")
-      onLocated(location.coords);
-  }, [location, onLocated]);
+  function press() {
+    setNotice(null);
+    stopWaiting.current?.();
+    stopWaiting.current = null;
+    if (location.status === "ready") {
+      setRefreshing(true);
+      void refreshLocation().then((coords) => {
+        setRefreshing(false);
+        settle(coords, "unavailable");
+      });
+      return;
+    }
+    // 거부·꺼짐은 다시 묻지 않음(안내만). 다른 곳의 '다시 시도' 답을 기다리는 중이면 그 답을 같이 기다림
+    if (
+      (location.status === "denied" && !locationRetrying(location)) ||
+      location.status === "off"
+    ) {
+      setNotice(location.status);
+      return;
+    }
+    // 위치 답(받음·거부·받을 수 없음)이 오면 한 번 처리하고 그만 받음
+    const stop = watchLocation((state: LocationState) => {
+      const step = nearbyWaitStep(state);
+      if (step === "wait") return;
+      stop();
+      if (stopWaiting.current === stop) stopWaiting.current = null;
+      if (step === "move" && state.status === "ready")
+        settle(state.coords, "unavailable");
+      else
+        setNotice(
+          state.status === "denied" || state.status === "off"
+            ? state.status
+            : "unavailable",
+        );
+    });
+    stopWaiting.current = stop;
+    if (!locationRetrying(location)) requestLocation();
+  }
 
+  useEffect(() => () => stopWaiting.current?.(), []);
+
+  // 지도를 직접 움직이거나 누르면 지난 안내를 지움
   useEffect(() => {
     const map = api.map;
-    const clear = () => setPressed(false);
+    const clear = () => setNotice(null);
     map.on("dragstart", clear);
     map.on("click", clear);
     return () => {
@@ -77,16 +107,9 @@ export function NearbyButton({
     };
   }, [api]);
 
-  const busy = location.status === "locating" || locationRetrying(location);
+  const busy =
+    refreshing || location.status === "locating" || locationRetrying(location);
   const label = busy ? t("locating") : t("button");
-  const notice =
-    pressed &&
-    !busy &&
-    (location.status === "denied" ||
-      location.status === "off" ||
-      location.status === "unavailable")
-      ? location.status
-      : null;
 
   return (
     <div className={cn("flex flex-col items-end gap-2", className)}>
@@ -103,25 +126,30 @@ export function NearbyButton({
         <LocateFixed aria-hidden="true" size={18} />
         <span className="hidden lg:inline">{label}</span>
       </button>
-      <NearbyNotice notice={notice} />
+      <NearbyNotice notice={busy ? null : notice} />
     </div>
   );
 }
 
 // 옮기지 못한 까닭 안내(무슨 일 → 영향 → 다음 행동). 안내가 없을 때도 자리(role=status)를 둬 바뀔 때 읽힘
+// 거부는 기기별 설정 경로(아이폰·아이패드는 기기 위치 서비스, 그 밖은 브라우저 사이트 설정, BRD-139와 같은 판별)
 export function NearbyNotice({ notice }: { notice: NearbyNoticeKind | null }) {
   const t = useTranslations("map.nearby");
+  const key =
+    notice === "denied"
+      ? deviceLocationGuide() === "ios"
+        ? "deniedIos"
+        : "deniedBrowser"
+      : notice;
   return (
     <p
       role="status"
       className={cn(
         "max-w-[260px] rounded-card bg-bg-surface px-3 py-2 text-caption text-text-body shadow-card",
-        notice === null && "sr-only",
+        key === null && "sr-only",
       )}
     >
-      {notice !== null && t(notice)}
+      {key !== null && t(key)}
     </p>
   );
 }
-
-export type NearbyNoticeKind = "denied" | "off" | "unavailable";

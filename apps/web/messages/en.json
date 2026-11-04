@@ -543,9 +543,11 @@
     "nearby": {
       "button": "Show nearby",
       "locating": "Finding location…",
-      "denied": "Location permission isn't allowed, so the map didn't move. Allow location in your browser settings to use this",
+      "deniedBrowser": "Location permission isn't allowed, so the map didn't move. Allow location for this site in your browser settings to use this",
+      "deniedIos": "Location permission isn't allowed, so the map didn't move. Go to Settings → Privacy & Security → Location Services and set the browser you're using (Safari Websites for Safari, or that app for other browsers) to “While Using the App” to use this",
       "off": "Location is turned off in Settings, so the map didn't move. You can turn it back on in Settings",
-      "unavailable": "We couldn't find your location, so the map didn't move. Please try again in a moment"
+      "unavailable": "We couldn't find your location, so the map didn't move. Please try again in a moment",
+      "outside": "Your location is outside the area this map covers, so the map didn't move. Choose where to look with the region button"
     },
     "attribution": {
       "label": "Map data sources",

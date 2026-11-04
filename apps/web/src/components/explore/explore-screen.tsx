@@ -139,19 +139,24 @@ export function ExploreScreen({
   );
   // '내 주변 보기'로 옮길 범위(BRD-114 · 결정 5). key는 누를 때마다 바뀌어 같은 범위도 다시 옮김
   const [mapFocus, setMapFocus] = useState<MapFocus | null>(null);
+  // 내 주변 해변. 범위가 넓어 확대 11보다 낮게 맞춰져도 묶음에서 꺼내 상태·이름이 보이게 함. 지역을 직접 고르면 지움
+  const [nearbyIds, setNearbyIds] = useState<readonly string[]>([]);
 
   // 받은 위치에서 가까운 해변을 고른 지역과 상관없이 전체에서 고름. 지역 밖이면 탐색 지역을 전국으로 바꿔
   // 옮겨 간 곳에도 마커가 보이게 함(전국 선택은 홈에도 저장, D14-3). 범위에는 내 위치를 넣지 않음
-  function showNearby(from: LatLng) {
+  function showNearby(from: LatLng): boolean {
     const plan = nearbyPlan(
       beaches,
       new Set(shown.map((beach) => beach.id)),
       from,
     );
-    if (!plan) return;
+    if (!plan) return false;
     if (plan.nationwide) setRegion(NATIONWIDE);
+    setNearbyIds(plan.ids);
     setMapFocus({ box: plan.box, maxZoom: NEARBY_MAX_ZOOM, key: Date.now() });
+    return true;
   }
+
   const loading = isLoading(items);
   // 지도 마커: 상태를 받은 해변만(첫 응답 전에는 마커를 미리 그리지 않음)
   const markers = useMemo<MapMarker[]>(
@@ -504,6 +509,7 @@ export function ExploreScreen({
           value={region}
           onSelect={(next) => {
             setRegion(next);
+            setNearbyIds([]);
             regionSheet.close();
           }}
           // '전국'(맨 앞): 전국을 고른 것으로 저장(BRD-127 · 10/29 결정 B). 저장값 없는 기본 전국도 선택으로 보임
@@ -511,6 +517,7 @@ export function ExploreScreen({
             selected: region === null,
             onSelect: () => {
               setRegion(NATIONWIDE);
+              setNearbyIds([]);
               regionSheet.close();
             },
           }}
@@ -545,6 +552,7 @@ export function ExploreScreen({
                 markers={markers}
                 selectedId={selectedId}
                 highlightedId={highlightedId}
+                pinnedIds={nearbyIds}
                 onSelect={setSelectedId}
               />
               {/* PC는 범례를 지도 왼쪽 위에, 모바일은 지도를 덜 가리게 지도 아래에 */}

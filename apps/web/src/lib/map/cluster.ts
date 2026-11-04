@@ -25,7 +25,7 @@ export type MapGroup<T> =
     };
 
 // [1] 좌표 → 확대 z의 화면 좌표(px, 웹 메르카토르)
-function project({ lat, lng }: LatLng, zoom: number) {
+export function project({ lat, lng }: LatLng, zoom: number) {
   const size = TILE_SIZE * 2 ** zoom;
   const sin = Math.sin((lat * Math.PI) / 180);
   return {
@@ -103,27 +103,54 @@ export function clusterMarkers<T extends { id: string; coords: LatLng }>(
   return groups;
 }
 
-// [3] keep의 해변(고른·가리킨 마커)을 묶음에서 꺼내 따로 둠(강조한 마커가 숫자 뒤로 숨지 않게, 화면 설계서 EXP-M·D-EXP)
-// 그 해변이 든 묶음만 남은 해변으로 다시 묶고, 나머지 묶음은 그대로(key가 같아 마커를 다시 붙이지 않음)
-// 꺼낸 마커는 다른 무리와 누르는 자리가 겹칠 수 있음: 맨 위에 그리고(data-front), 같은 해변은 목록·카드로도 닿음
+// [3] keep의 해변(고른·가리킨·내 주변 해변)을 묶음에서 꺼내 따로 둠(강조한 마커가 숫자 뒤로 숨지 않게, 화면 설계서 EXP-M·D-EXP)
+// 그 해변이 든 묶음의 남은 해변만 다시 묶음. 다시 묶은 무리가 이웃 무리와 누르는 자리가 겹치면 그 이웃까지 넣어
+// 겹침이 없어질 때까지 다시 묶음(남은 마커·묶음끼리 겹치지 않음, WCAG 2.5.8). 상관없는 무리는 그대로(key가 같아 다시 붙이지 않음)
+// 꺼낸 마커만은 다른 무리와 겹칠 수 있음: 맨 위에 그리고(data-front), 같은 해변은 목록·카드로도 닿음
 export function releaseMarkers<T extends { id: string; coords: LatLng }>(
   groups: readonly MapGroup<T>[],
   keep: ReadonlySet<string>,
   zoom: number,
   radius = CLUSTER_RADIUS_PX,
 ): MapGroup<T>[] {
-  if (keep.size === 0) return [...groups];
-  return groups.flatMap((group) => {
-    if (
-      group.kind === "single" ||
-      !group.items.some((item) => keep.has(item.id))
-    )
-      return [group];
-    const kept = group.items.filter((item) => keep.has(item.id));
-    const rest = group.items.filter((item) => !keep.has(item.id));
-    return [
-      ...kept.map((item) => ({ kind: "single" as const, item })),
-      ...clusterMarkers(rest, zoom, radius),
+  const hit = (group: MapGroup<T>) =>
+    group.kind === "cluster" && group.items.some((item) => keep.has(item.id));
+  if (!groups.some(hit)) return [...groups];
+
+  let pool: T[] = [];
+  let untouched: MapGroup<T>[] = [];
+  const kept: MapGroup<T>[] = [];
+  for (const group of groups) {
+    if (!hit(group) || group.kind === "single") {
+      untouched.push(group);
+      continue;
+    }
+    for (const item of group.items) {
+      if (keep.has(item.id)) kept.push({ kind: "single", item });
+      else pool.push(item);
+    }
+  }
+  const spot = (group: MapGroup<T>) =>
+    project(group.kind === "cluster" ? group.center : group.item.coords, zoom);
+  const near = (a: MapGroup<T>, b: MapGroup<T>) => {
+    const p = spot(a);
+    const q = spot(b);
+    return Math.max(Math.abs(p.x - q.x), Math.abs(p.y - q.y)) < radius;
+  };
+  for (;;) {
+    const regrouped = clusterMarkers(pool, zoom, radius);
+    const clash = untouched.filter(
+      (group) =>
+        !(group.kind === "single" && keep.has(group.item.id)) &&
+        regrouped.some((other) => near(group, other)),
+    );
+    if (clash.length === 0) return [...untouched, ...kept, ...regrouped];
+    untouched = untouched.filter((group) => !clash.includes(group));
+    pool = [
+      ...pool,
+      ...clash.flatMap((group) =>
+        group.kind === "cluster" ? group.items : [group.item],
+      ),
     ];
-  });
+  }
 }

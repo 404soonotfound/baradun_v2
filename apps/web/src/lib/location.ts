@@ -282,7 +282,39 @@ export function createLocationStore(
     locate(true, onSettled);
   }
 
-  return { getState: () => state, subscribe, request, retry, setEnabled };
+  // 이미 받은 위치를 새로 받음('내 주변 보기', BRD-114). 받는 동안 상태는 그대로(ready, 지난 좌표)라 목록이 흔들리지 않음
+  // 받으면 새 좌표로 바꾸고 돌려줌. 못 받았거나 그사이 스위치를 끄는 등 차례가 바뀌면 null(상태는 그대로)
+  // 1분 안에 받은 위치는 다시 씀(누를 때마다 기기가 위치를 새로 재지 않게)
+  function refresh(): Promise<LatLng | null> {
+    if (state.status !== "ready" || !enabled || !("geolocation" in navigator))
+      return Promise.resolve(null);
+    const mine = generation;
+    return new Promise((resolve) => {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          if (mine !== generation || state.status !== "ready")
+            return resolve(null);
+          const coords = {
+            lat: position.coords.latitude,
+            lng: position.coords.longitude,
+          };
+          setState({ status: "ready", coords });
+          resolve(coords);
+        },
+        () => resolve(null),
+        { enableHighAccuracy: false, timeout: 10_000, maximumAge: 60_000 },
+      );
+    });
+  }
+
+  return {
+    getState: () => state,
+    subscribe,
+    request,
+    retry,
+    refresh,
+    setEnabled,
+  };
 }
 
 // [4] 앱 전체에서 하나
@@ -290,6 +322,16 @@ const store = createLocationStore();
 
 export function requestLocation() {
   store.request();
+}
+
+// 이미 받은 위치를 새로 받음. ready가 아니면 null
+export function refreshLocation(): Promise<LatLng | null> {
+  return store.refresh();
+}
+
+// 화면 밖(이벤트 처리기)에서 위치 상태가 바뀌는 것을 한 번 기다릴 때. 돌려준 함수로 그만 받음
+export function watchLocation(onChange: (state: LocationState) => void) {
+  return store.subscribe(() => onChange(store.getState()));
 }
 
 export function retryLocation(onSettled?: (result: RetryResult) => void) {

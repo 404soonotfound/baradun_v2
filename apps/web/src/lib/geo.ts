@@ -5,6 +5,16 @@
 // [1] 좌표 모양
 export type LatLng = { lat: number; lng: number };
 
+// [1-1] 쓸 수 있는 좌표인지(숫자이고 위도 ±90·경도 ±180 안). 지도 범위·가까운 해변 고르기가 같은 규칙을 씀
+export function isValidLatLng({ lat, lng }: LatLng): boolean {
+  return (
+    Number.isFinite(lat) &&
+    Number.isFinite(lng) &&
+    Math.abs(lat) <= 90 &&
+    Math.abs(lng) <= 180
+  );
+}
+
 // [2] 지구 평균 반지름
 const EARTH_RADIUS_KM = 6371;
 
