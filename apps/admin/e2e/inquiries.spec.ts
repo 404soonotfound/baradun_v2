@@ -35,6 +35,8 @@ const COUNTS = { received: 2, in_progress: 1, resolved: 0, rejected: 0 };
 
 interface Calls {
   list: URLSearchParams[];
+  detail: number;
+  patches: { body: Record<string, unknown>; key: string | undefined }[];
 }
 
 async function mockInquiries(
@@ -42,9 +44,14 @@ async function mockInquiries(
   options: {
     detail?: (inquiryId: string) => { status: number; body: unknown };
     listStatus?: number;
+    // 처리 저장(PATCH) 응답. 없으면 200 + version 2
+    patch?: (body: Record<string, unknown>) => {
+      status: number;
+      body: unknown;
+    };
   } = {},
 ): Promise<Calls> {
-  const calls: Calls = { list: [] };
+  const calls: Calls = { list: [], detail: 0, patches: [] };
   await page.route(/\/ops\/inquiries(\?.*)?$/, async (route: Route) => {
     const url = new URL(route.request().url());
     calls.list.push(url.searchParams);
@@ -90,6 +97,24 @@ async function mockInquiries(
     const inquiryId = decodeURIComponent(
       new URL(route.request().url()).pathname.split("/").pop()!,
     );
+    if (route.request().method() === "PATCH") {
+      const body = JSON.parse(route.request().postData() ?? "{}");
+      calls.patches.push({
+        body,
+        key: route.request().headers()["x-idempotency-key"],
+      });
+      const reply = options.patch?.(body) ?? {
+        status: 200,
+        body: { inquiryId, version: 2 },
+      };
+      await route.fulfill({
+        status: reply.status,
+        contentType: "application/json",
+        body: JSON.stringify(reply.body),
+      });
+      return;
+    }
+    calls.detail += 1;
     const reply = options.detail?.(inquiryId) ?? {
       status: 200,
       body: {
@@ -346,4 +371,117 @@ test("다음 쪽이 비어도(그사이 지워짐) 이전 쪽으로 돌아갈 �
   await expect(page.getByText("문의가 없어요", { exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "이전" }).click();
   await expect(rows(page)).toHaveCount(3);
+});
+
+test("처리: 반려는 이유가 있어야 저장되고, 저장하면 안내·목록·메뉴 배지에 바로 반영된다(목록 응답이 늦어도 되돌리지 않음)", async ({
+  page,
+}) => {
+  await signIn(page);
+  const calls = await mockInquiries(page);
+  await openInquiries(page);
+  // PC 메뉴(모바일은 서랍 안이라 여기서는 PC만 봄)
+  const menuBadge = page
+    .getByRole("navigation", { name: "운영 메뉴" })
+    .filter({ visible: true })
+    .first();
+  if (!isMobile(page)) {
+    await expect(
+      menuBadge.getByRole("link", { name: "문의, 접수 2건" }),
+    ).toBeVisible();
+  }
+  await rows(page).first().getByRole("link").click();
+  const detail = detailOf(page);
+  await expect(detail.getByText("바뀐 내용 없음")).toBeVisible();
+
+  await detail.getByText("반려", { exact: true }).click();
+  await detail.getByRole("button", { name: "저장" }).click();
+  await expect(detail.getByText("반려 이유를 써 주세요.")).toBeVisible();
+  expect(calls.patches).toHaveLength(0);
+
+  await detail.getByLabel("반려 이유").fill("  내용을 알아볼 수 없어요.  ");
+  await detail.getByLabel("처리 메모(내부용)").fill("스팸으로 보임");
+  await expect(detail.getByText("바뀐 내용 3")).toBeVisible();
+  await expectNoA11yViolations(page);
+  await detail.getByRole("button", { name: "저장" }).click();
+  await expect(
+    detail.getByRole("status").filter({ hasText: "‘반려’(으)로 바꿨어요" }),
+  ).toBeVisible();
+  expect(calls.patches[0]?.body).toEqual({
+    version: 1,
+    status: "rejected",
+    rejectReason: "내용을 알아볼 수 없어요.",
+    memo: "스팸으로 보임",
+  });
+  expect(calls.patches[0]?.key).toMatch(/^[0-9a-f-]{36}$/);
+  // 저장 뒤 상세를 다시 읽음
+  expect(calls.detail).toBeGreaterThanOrEqual(2);
+
+  if (isMobile(page)) {
+    await detail.getByRole("link", { name: /문의 목록으로/ }).click();
+  } else {
+    await page.keyboard.press("Escape");
+    await expect(
+      menuBadge.getByRole("link", { name: "문의, 접수 1건" }),
+    ).toBeVisible();
+  }
+  // 가짜 목록은 여전히 '접수'(version 1)를 주지만 저장한 상태(version 2)로 보임
+  await expect(rows(page).first()).toContainText("반려");
+});
+
+test("처리 충돌(409): 다른 운영자가 먼저 바꿨으면 덮어쓰지 않고 새 내용 불러오기·메모 복사를 준다", async ({
+  page,
+}) => {
+  await signIn(page);
+  const calls = await mockInquiries(page, {
+    patch: () => ({
+      status: 409,
+      body: {
+        error: { code: "conflict", reason: "version", requestId: "req-2" },
+      },
+    }),
+  });
+  await openInquiries(page);
+  await rows(page).first().getByRole("link").click();
+  const detail = detailOf(page);
+  await detail.getByLabel("처리 메모(내부용)").fill("내가 쓴 메모");
+  await detail.getByRole("button", { name: "저장" }).click();
+  const alert = detail.getByRole("alert");
+  await expect(alert).toContainText("다른 운영자가 먼저 이 문의를 바꿨어요");
+  await expect(
+    alert.getByRole("button", { name: "내 메모 복사" }),
+  ).toBeVisible();
+  const before = calls.detail;
+  await alert.getByRole("button", { name: "새 내용 불러오기" }).click();
+  await expect.poll(() => calls.detail).toBeGreaterThan(before);
+});
+
+test("저장 실패: 화면 상태를 먼저 바꾸지 않고, 다시 보내면 같은 요청 번호를 쓴다", async ({
+  page,
+}) => {
+  await signIn(page);
+  let fail = true;
+  const calls = await mockInquiries(page, {
+    patch: () =>
+      fail
+        ? {
+            status: 500,
+            body: { error: { code: "internal", requestId: "req-9" } },
+          }
+        : { status: 200, body: { inquiryId: id(1), version: 2 } },
+  });
+  await openInquiries(page);
+  await rows(page).first().getByRole("link").click();
+  const detail = detailOf(page);
+  await detail.getByText("확인 중", { exact: true }).click();
+  await detail.getByRole("button", { name: "저장" }).click();
+  const alert = detail.getByRole("alert");
+  await expect(alert).toContainText("지금 상태는 ‘접수’ 그대로예요");
+  await expect(alert).toContainText("오류 번호 req-9");
+  fail = false;
+  await detail.getByRole("button", { name: "저장" }).click();
+  await expect(
+    detail.getByRole("status").filter({ hasText: "‘확인 중’(으)로 바꿨어요" }),
+  ).toBeVisible();
+  expect(calls.patches).toHaveLength(2);
+  expect(calls.patches[1]?.key).toBe(calls.patches[0]?.key);
 });
