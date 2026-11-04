@@ -98,6 +98,16 @@ function DayBars({ job }: { job: JobCollection | undefined }) {
   );
 }
 
+// 상태 배지가 어느 실행 기준인지 함께 보여 줌(오래전 실행의 '정상'을 지금 정상으로 읽지 않게)
+function LastRun({ job }: { job: JobCollection | undefined }) {
+  if (!job?.lastRun) return null;
+  return (
+    <p className="mt-1 text-label-s whitespace-nowrap text-text-muted tabular-nums">
+      {fill(t.lastRun, { time: kstDateTime(job.lastRun.startedAt) })}
+    </p>
+  );
+}
+
 function rowJob(view: CollectionView, row: SourceRow) {
   return view.jobs.find((j) => j.job === row.job);
 }
@@ -106,7 +116,8 @@ function Summary({ view }: { view: CollectionView }) {
   const jobs = SOURCE_ROWS.map((row) => rowJob(view, row));
   const okCount = jobs.filter((job) => sourceState(job) === "ok").length;
   const judgment = SOURCE_ROWS.filter((row) => row.judgment).length;
-  const week = sumCounts(view.jobs.map((job) => job.week));
+  // 화면 줄(SOURCE_ROWS)과 같은 수집기만 셈(정상 출처 수와 기준을 맞춤)
+  const week = sumCounts(jobs.map((job) => job?.week ?? { runs: 0, ok: 0 }));
   const rate = successRate(week);
   const published = versionTime(view.publishedVersion);
   const card =
@@ -202,6 +213,7 @@ function SourceTable({ view }: { view: CollectionView }) {
                 </th>
                 <td className={cell}>
                   <StateBadge state={sourceState(job)} />
+                  <LastRun job={job} />
                   {job?.truncated && (
                     <p className="mt-1 text-label-s text-text-muted">
                       {t.truncated}
@@ -266,6 +278,7 @@ function SourceTable({ view }: { view: CollectionView }) {
                 <SourceName row={row} />
                 <StateBadge state={sourceState(job)} />
               </span>
+              <LastRun job={job} />
               <DayBars job={job} />
               <dl className="grid grid-cols-3 gap-2 text-body-s">
                 <div>
@@ -302,7 +315,17 @@ function SourceTable({ view }: { view: CollectionView }) {
               {t.seasonState}
             </span>
           </span>
-          <span className="text-body-s text-text-body">{t.seasonHint}</span>
+          <span className="text-body-s text-text-body">
+            {t.seasonHint}{" "}
+            <a
+              href={SEASON_FILE}
+              target="_blank"
+              rel="noreferrer"
+              className="font-medium text-brand-default underline underline-offset-2"
+            >
+              {t.seasonLink}
+            </a>
+          </span>
         </li>
       </ul>
     </section>
