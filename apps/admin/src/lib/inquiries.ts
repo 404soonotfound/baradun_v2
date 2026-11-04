@@ -85,6 +85,43 @@ export interface InquiryPatch {
   readonly status?: InquiryStatus;
   readonly memo?: string | null;
   readonly rejectReason?: string;
+  readonly redactions?: readonly Redaction[];
+}
+
+// 개인정보 가리기(화면 설계서 6장 ADM-INQ). 가린 자리는 서버가 이 표시로 바꿈(services/src/admin/inquiries.ts)
+export const REDACTION_MARK = "[가림]";
+
+// 저장된 본문의 UTF-16 위치(끝 미포함)와 그 자리 글. 서버가 글이 맞는지 다시 확인함
+export interface Redaction {
+  readonly start: number;
+  readonly end: number;
+  readonly text: string;
+}
+
+// textarea는 줄바꿈(\r\n·\r)을 \n으로 바꿔 보여 줌 → 화면에서 고른 위치를 원래 본문 위치로 되돌림
+export function linesNormalized(message: string): string {
+  return message.replace(/\r\n?/g, "\n");
+}
+
+export function redactionOf(
+  message: string,
+  shownStart: number,
+  shownEnd: number,
+): Redaction | null {
+  const toOriginal = (shown: number) => {
+    let at = 0;
+    for (let i = 0; i < shown && at < message.length; i++) {
+      at += message[at] === "\r" && message[at + 1] === "\n" ? 2 : 1;
+    }
+    return at;
+  };
+  let start = toOriginal(Math.min(shownStart, shownEnd));
+  let end = toOriginal(Math.max(shownStart, shownEnd));
+  // 앞뒤 공백은 빼고 가림(가린 표시 양옆 띄어쓰기를 지키려고)
+  while (start < end && /\s/.test(message[start]!)) start++;
+  while (end > start && /\s/.test(message[end - 1]!)) end--;
+  if (start === end) return null;
+  return { start, end, text: message.slice(start, end) };
 }
 
 // 같은 내용을 다시 보낼 때(응답을 못 받음)는 같은 멱등 키를 씀 → 서버가 한 번만 저장하고 같은 결과를 줌(D16-B6)

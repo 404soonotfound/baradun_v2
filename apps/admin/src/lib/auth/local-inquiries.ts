@@ -15,7 +15,7 @@ interface Example {
   status: Status;
   version: number;
   readonly legacy: boolean;
-  readonly message: string;
+  message: string;
   memo: string | null;
   rejectReason: string | null;
 }
@@ -55,7 +55,8 @@ const EXAMPLES: Example[] = Array.from({ length: 26 }, (_, i) => {
     status,
     version: 1,
     legacy: i === 20,
-    message: `(로컬 예시 ${i + 1}) 현장에 입수 금지 깃발이 걸려 있어요. 15:10에 봤어요.`,
+    // 개인정보 가리기를 해 볼 수 있게 몇 개에는 예시 이름·번호를 넣음(실제 사람 아님)
+    message: `(로컬 예시 ${i + 1}) 현장에 입수 금지 깃발이 걸려 있어요. 15:10에 봤어요.${i % 4 === 0 ? "\n제 이름은 김바다, 번호는 010-0000-0000이에요." : ""}`,
     memo: i % 3 === 0 ? "출입 통제는 출시에 판단하지 않음(G2)." : null,
     rejectReason: status === "rejected" ? "내용을 알아볼 수 없어요." : null,
   };
@@ -125,6 +126,7 @@ export function localSaveInquiry<T>(id: string, body: unknown): OpsResult<T> {
     status?: Status;
     memo?: string | null;
     rejectReason?: string;
+    redactions?: { start: number; end: number; text: string }[];
   };
   if (patch.version !== e.version) {
     return {
@@ -144,11 +146,31 @@ export function localSaveInquiry<T>(id: string, body: unknown): OpsResult<T> {
       field: "rejectReason",
     };
   }
+  // 서버처럼 그 자리 글이 맞을 때만 가림(아무것도 바꾸기 전에 확인)
+  if (
+    patch.redactions &&
+    !patch.redactions.every((r) => e.message.slice(r.start, r.end) === r.text)
+  ) {
+    return {
+      ok: false,
+      status: 400,
+      code: "invalid_request",
+      requestId: null,
+      field: "redactions",
+    };
+  }
   if (patch.status) {
     e.status = patch.status;
     e.rejectReason = patch.status === "rejected" ? patch.rejectReason! : null;
   }
   if (patch.memo !== undefined) e.memo = patch.memo;
+  if (patch.redactions) {
+    // 뒤에서부터 바꿈(앞 위치가 밀리지 않게)
+    for (const r of [...patch.redactions].reverse()) {
+      e.message =
+        e.message.slice(0, r.start) + "[가림]" + e.message.slice(r.end);
+    }
+  }
   e.version += 1;
   return {
     ok: true,

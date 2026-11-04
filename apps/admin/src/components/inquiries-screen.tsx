@@ -27,7 +27,9 @@ import {
   INQUIRY_STATUSES,
   isInquiryStatus,
   kstDateTime,
+  linesNormalized,
   PAGE_SIZE,
+  redactionOf,
   retentionDate,
   shortId,
   type InquiryCounts,
@@ -36,6 +38,7 @@ import {
   type InquiryPatch,
   type InquiryStatus,
   type InquirySummary,
+  type Redaction,
 } from "@/lib/inquiries";
 import { fill, messages } from "@/lib/messages";
 import { AdminShell } from "./admin-shell";
@@ -525,10 +528,13 @@ type SaveError =
 // - 같은 내용을 다시 보내면(응답을 못 받음) 같은 멱등 키 → 서버가 한 번만 저장
 function InquiryActions({
   item,
+  rebase,
   onSaved,
   onReload,
 }: {
   item: InquiryDetail;
+  // 내가 개인정보 가리기로 저장해 받은 version. 상태·메모는 그대로라 쓰던 내용을 두고 기준만 옮김
+  rebase: number | null;
   onSaved: (saved: Pick<Saved, "status" | "version">, from: string) => void;
   onReload: () => void;
 }) {
@@ -577,6 +583,8 @@ function InquiryActions({
     (accept === item.version || accept === "next" || changes === 0)
   ) {
     adopt(item);
+  } else if (item.version !== base.version && item.version === rebase) {
+    setBase(item);
   }
   const stale = item.version !== base.version;
 
@@ -865,6 +873,218 @@ function InquiryActions({
   );
 }
 
+// 개인정보 가리기(화면 설계서 6장 ADM-INQ: 내용에 이름·전화번호가 섞이면 그 부분을 지워 저장)
+// - 읽기 전용 칸에서 고른 부분을 서버가 '[가림]'으로 바꿈. 한 번에 한 부분, 확인을 거쳐 바로 저장
+// - 원래 글은 되돌릴 수 없고 변경 이력에도 남기지 않음(D16-B5)
+// - 상세가 새 version이 되면 key가 바뀌어 처음 상태로 돌아감
+function InquiryMessage({
+  item,
+  onRedacted,
+  onReload,
+}: {
+  item: InquiryDetail;
+  onRedacted: (version: number) => void;
+  onReload: () => void;
+}) {
+  const session = useAuthSession();
+  const block = useEditBlock();
+  const message = item.message ?? "";
+  const [mode, setMode] = useState<"view" | "select" | "confirm">("view");
+  const [range, setRange] = useState<Redaction | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<SaveError | { kind: "changed" } | null>(
+    null,
+  );
+  const attempt = useRef<{ body: string; key: string } | null>(null);
+  const shown = linesNormalized(message);
+  // 고른 범위: 브라우저 select 이벤트(끌기·키보드·터치 모두)를 직접 들음
+  // React onSelect는 마우스·키 입력 뒤에만 다시 읽어 일부 선택 변경을 놓침
+  const area = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    const el = area.current;
+    if (!el) return;
+    const read = () => {
+      setRange(redactionOf(message, el.selectionStart, el.selectionEnd));
+      setError(null);
+    };
+    el.addEventListener("select", read);
+    return () => el.removeEventListener("select", read);
+  }, [message, mode]);
+
+  const close = () => {
+    setMode("view");
+    setRange(null);
+    setError(null);
+  };
+
+  const redact = () => {
+    if (!range || busy || block) return;
+    const patch: InquiryPatch = { version: item.version, redactions: [range] };
+    const body = JSON.stringify(patch);
+    if (attempt.current?.body !== body) {
+      attempt.current = { body, key: crypto.randomUUID() };
+    }
+    const { key } = attempt.current;
+    setBusy(true);
+    setError(null);
+    void saveInquiry(
+      () => session.accessToken(),
+      item.inquiryId,
+      patch,
+      key,
+    ).then(
+      (result) => {
+        // 성공하면 새 상세를 받아 이 칸이 다시 그려질 때까지 잠가 둠(같은 가리기를 두 번 누르지 않게)
+        if (result.ok) {
+          attempt.current = null;
+          onRedacted(result.body.version);
+          return;
+        }
+        setBusy(false);
+        if (result.code === "reauth") {
+          setError({ kind: "failed", requestId: null });
+        } else if (result.status === 409) {
+          setError({
+            kind:
+              result.reason === "idempotency_mismatch" ? "replay" : "conflict",
+          });
+        } else if (result.status === 404) {
+          setError({ kind: "expired" });
+        } else if (result.status === 400 && result.field === "redactions") {
+          setError({ kind: "changed" });
+        } else {
+          setError({
+            kind: "failed",
+            requestId: "requestId" in result ? result.requestId : null,
+          });
+        }
+      },
+      () => {
+        // 토큰 읽기 등에서 예외가 나도 잠긴 채로 두지 않음
+        setBusy(false);
+        setError({ kind: "failed", requestId: null });
+      },
+    );
+  };
+
+  return (
+    <section aria-label={t.message} className="flex flex-col gap-2">
+      {mode === "view" ? (
+        <p className="text-body leading-relaxed whitespace-pre-wrap text-text-default">
+          {message}
+        </p>
+      ) : (
+        <>
+          <p id="redact-hint" className="text-body-s text-text-body">
+            {t.redactHint}
+          </p>
+          <textarea
+            readOnly
+            aria-label={t.message}
+            aria-describedby="redact-hint redact-selected"
+            value={shown}
+            rows={Math.min(10, shown.split("\n").length + 1)}
+            disabled={mode === "confirm"}
+            ref={area}
+            className="w-full resize-y rounded-admin-control border border-border-strong bg-bg-surface px-2.5 py-2 text-body leading-relaxed text-text-default outline-none selection:bg-brand-border focus:border-brand-default focus:ring-[3px] focus:ring-brand-border disabled:bg-bg-page"
+          />
+          <p
+            id="redact-selected"
+            aria-live="polite"
+            className="text-label-s break-all text-text-muted"
+          >
+            {range
+              ? fill(t.redactSelected, {
+                  count: [...range.text].length,
+                  text: `“${range.text}”`,
+                })
+              : t.redactNone}
+          </p>
+        </>
+      )}
+
+      {error && (
+        <Notice
+          tone={error.kind === "failed" ? "fail" : "warn"}
+          title={
+            error.kind === "changed" || error.kind === "conflict"
+              ? t.redactChanged
+              : error.kind === "replay"
+                ? t.conflictReplay
+                : error.kind === "expired"
+                  ? t.expired
+                  : t.redactFailed
+          }
+          role="alert"
+        >
+          {error.kind === "failed" && error.requestId && (
+            <p>{fill(t.requestId, { id: error.requestId })}</p>
+          )}
+          {(error.kind === "changed" ||
+            error.kind === "conflict" ||
+            error.kind === "replay") && (
+            <div className="mt-2">
+              <Button variant="secondary" size="small" onClick={onReload}>
+                {t.reload}
+              </Button>
+            </div>
+          )}
+        </Notice>
+      )}
+
+      {mode === "confirm" && range && (
+        <Notice
+          tone="warn"
+          title={fill(t.redactConfirm, { count: [...range.text].length })}
+          role="alert"
+        >
+          <div className="mt-2 flex flex-wrap gap-2">
+            <Button size="small" disabled={busy} onClick={redact}>
+              {busy ? t.saving : t.redactConfirmButton}
+            </Button>
+            <Button
+              variant="secondary"
+              size="small"
+              disabled={busy}
+              onClick={() => setMode("select")}
+            >
+              {t.redactCancel}
+            </Button>
+          </div>
+        </Notice>
+      )}
+
+      <div className="flex flex-wrap justify-end gap-2">
+        {mode === "view" ? (
+          <Button
+            variant="secondary"
+            size="small"
+            disabled={block !== null || message === ""}
+            onClick={() => setMode("select")}
+          >
+            {t.redactOpen}
+          </Button>
+        ) : (
+          mode === "select" && (
+            <>
+              <Button variant="secondary" size="small" onClick={close}>
+                {t.redactCancel}
+              </Button>
+              <Button
+                size="small"
+                disabled={!range}
+                onClick={() => setMode("confirm")}
+              >
+                {t.redactApply}
+              </Button>
+            </>
+          )
+        )}
+      </div>
+    </section>
+  );
+}
+
 function InquiryDetailView({
   id,
   beaches,
@@ -905,6 +1125,11 @@ function InquiryDetailView({
   const [notice, setNotice] = useState<{ id: string; text: string } | null>(
     null,
   );
+  // 내가 개인정보 가리기로 저장한 version(처리 칸이 쓰던 내용을 두고 기준만 옮기게)
+  const [redacted, setRedacted] = useState<{
+    id: string;
+    version: number;
+  } | null>(null);
 
   useEffect(() => {
     let live = true;
@@ -993,11 +1218,19 @@ function InquiryDetailView({
       {item.restricted ? (
         <Notice tone="neutral" title={t.restricted} />
       ) : (
-        <section aria-label={t.message}>
-          <p className="text-body leading-relaxed whitespace-pre-wrap text-text-default">
-            {item.message}
-          </p>
-        </section>
+        <InquiryMessage
+          key={`${item.inquiryId}|${item.version}`}
+          item={item}
+          onReload={() => {
+            setNotice(null);
+            setAttempt((n) => n + 1);
+          }}
+          onRedacted={(version) => {
+            setRedacted({ id, version });
+            setNotice({ id, text: t.redacted });
+            setAttempt((n) => n + 1);
+          }}
+        />
       )}
 
       <dl className="divide-y divide-border-default border-y border-border-default">
@@ -1034,6 +1267,7 @@ function InquiryDetailView({
         <InquiryActions
           key={item.inquiryId}
           item={item}
+          rebase={redacted?.id === id ? redacted.version : null}
           onReload={() => {
             setNotice(null);
             setAttempt((n) => n + 1);
