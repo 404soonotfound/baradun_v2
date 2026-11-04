@@ -3,7 +3,7 @@
 import { Search, SearchX } from "lucide-react";
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 
 import { BeachRow } from "@/components/beach-row";
 import { LocationOffBanner } from "@/components/home/location-off-banner";
@@ -107,6 +107,8 @@ export function ExploreScreen({
   // 지도에서 고른 해변(카드)과 PC 목록에서 가리킨 해변(마커 강조)
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
+  const mobileCardRef = useRef<HTMLDivElement>(null);
+  useScrollSpace(mobileCardRef, selectedId !== null);
 
   // 지역은 홈 기본 지역과 같은 저장 값(10/27 결정). 저장값 없음·목록에 없어진 지역·고른 전국은 전국으로 봄
   const saved = useRegion();
@@ -534,6 +536,8 @@ export function ExploreScreen({
           }
           className="h-[62dvh] min-h-[380px] lg:h-[calc(100dvh-112px)]"
           onShowList={() => setExploreView("list")}
+          // 지도가 실패하면 고른 해변을 놓음(지도 밖에 있는 모바일 카드도 닫힘, PC 카드와 같게)
+          onFailed={() => setSelectedId(null)}
           overlay={(api) => (
             <>
               <BeachMarkers
@@ -570,18 +574,44 @@ export function ExploreScreen({
           )}
         />
         {/* 모바일 카드는 지도 안에 두면 지도를 거의 다 가려서 지도 아래 흐름에 두고 하단 탭 바로 위에 붙임(BRD-177)
-            fixed로 띄우면 끝까지 스크롤해도 지도 출처 링크·범례가 가려져서 sticky로 둠: 끝에 닿으면 제자리로 돌아와 아래 내용이 보임 */}
+            fixed로 띄우면 끝까지 스크롤해도 지도 출처 링크·범례가 가려져서 sticky로 둠: 끝에 닿으면 제자리로 돌아와 아래 내용이 보임
+            붙어 있는 동안 키보드 포커스(묶음·출처 링크)가 카드 뒤로 숨지 않게 카드 높이를 페이지 스크롤 여백에 더함(WCAG 2.4.11) */}
         {selectedItem && (
-          <MapCard
-            locale={locale}
-            item={selectedItem}
-            nowMs={nowMs}
-            onClose={() => setSelectedId(null)}
+          <div
+            ref={mobileCardRef}
             className="sticky bottom-[calc(var(--spacing-tabbar)+max(14px,env(safe-area-inset-bottom))+8px)] z-30 lg:hidden"
-          />
+          >
+            <MapCard
+              locale={locale}
+              item={selectedItem}
+              nowMs={nowMs}
+              onClose={() => setSelectedId(null)}
+            />
+          </div>
         )}
         <MapLegend clearScope={mapClearScope} className="lg:hidden" />
       </div>
     </div>
   );
+}
+
+// 아래에 붙는 요소(모바일 지도 카드)의 높이를 페이지 스크롤 여백(globals.css --sticky-space)에 더함
+// Tab으로 옮긴 포커스를 브라우저가 그만큼 위로 띄워 보여 줌. 숨긴 요소(PC)는 높이 0
+function useScrollSpace(ref: RefObject<HTMLElement | null>, active: boolean) {
+  useEffect(() => {
+    const element = ref.current;
+    if (!active || !element) return;
+    const root = document.documentElement;
+    const observer = new ResizeObserver(() => {
+      root.style.setProperty(
+        "--sticky-space",
+        `${element.offsetHeight > 0 ? element.offsetHeight + 8 : 0}px`,
+      );
+    });
+    observer.observe(element);
+    return () => {
+      observer.disconnect();
+      root.style.removeProperty("--sticky-space");
+    };
+  }, [ref, active]);
 }
