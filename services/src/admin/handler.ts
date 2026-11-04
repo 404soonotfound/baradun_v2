@@ -6,6 +6,7 @@ import type {
 } from "aws-lambda";
 import {
   actorOf,
+  countAudit,
   listAudit,
   parseAuditQuery,
   recordAudit,
@@ -240,11 +241,13 @@ async function auditRoute(
   if (!check.ok) {
     return errorJson(400, "invalid_request", ids, { field: check.field });
   }
-  return json(
-    200,
-    await listAudit(data.client, data.opsTable, check.query, data.now()),
-    ids,
-  );
+  const now = data.now();
+  const page = await listAudit(data.client, data.opsTable, check.query, now);
+  // 탭 수는 첫 쪽에만(다음 쪽마다 기간 전체를 다시 세지 않게)
+  const counts = check.query.cursor
+    ? undefined
+    : await countAudit(data.client, data.opsTable, check.query.filter, now);
+  return json(200, counts ? { ...page, counts } : page, ids);
 }
 
 // 샘플 요청 기록의 대상: 경로 모양만(문의 ID 등 실제 값은 넣지 않음)

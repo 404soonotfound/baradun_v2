@@ -24,6 +24,7 @@ import {
   parseNoticeInput,
   parseVersionBody,
   queryNotices,
+  type NoticeContent,
   type NoticeRecord,
 } from "./notices";
 import { IDEMPOTENCY_KEY, IDEMPOTENCY_KEY_HEADER } from "./policy";
@@ -92,9 +93,17 @@ async function write(
     readonly set: Record<string, unknown>;
     readonly action: AuditAction;
     readonly changes: readonly string[];
+    // 변경 이력에 남길 공지 문구 앞·뒤(공개 문구라 남김, 시안 V23 펼치기)
+    readonly notice: {
+      readonly before: NoticeContent | null;
+      readonly after: NoticeContent | null;
+    };
   },
   now: Date,
 ): Promise<Result> {
+  const label = (
+    options.notice.after ?? options.notice.before
+  )?.title.ko.trim();
   const result = await versionedWrite(
     data.client,
     { ops: data.opsTable },
@@ -105,11 +114,13 @@ async function write(
       idempotencyKey: request.key,
       payloadHash: payloadHashOf(request.raw),
       actorSub: principal.sub,
-      // 문구는 넣지 않고 바뀐 항목 이름만(D16-B5)
+      // 바뀐 항목 이름과 공지 문구 앞·뒤(공개 문구). 문의 본문·이메일은 여기 없음(D16-B5)
       audit: {
         actor: actorOf(principal),
         action: options.action,
         target: { kind: "notice", id: options.id },
+        ...(label ? { targetLabel: label } : {}),
+        notice: options.notice,
         changes: options.changes,
         ids,
       },
@@ -178,6 +189,7 @@ export async function createNoticeRoute(
       },
       action: "notice.create",
       changes: noticeChanges(null, check.content),
+      notice: { before: null, after: check.content },
     },
     now,
   );
@@ -241,6 +253,7 @@ export async function updateNoticeRoute(
       set: { draft: check.content },
       action: "notice.update",
       changes: noticeChanges(record.draft, check.content),
+      notice: { before: record.draft, after: check.content },
     },
     data.now(),
   );
@@ -286,6 +299,7 @@ export async function exposeNoticeRoute(
       set: { live: record.draft, exposedAt: now.toISOString() },
       action: "notice.expose",
       changes: noticeChanges(record.live, record.draft),
+      notice: { before: record.live, after: record.draft },
     },
     now,
   );
@@ -339,6 +353,10 @@ export async function endNoticeRoute(
       set,
       action: "notice.end",
       changes: state === "scheduled" ? ["live"] : ["endsAt"],
+      notice: {
+        before: record.live,
+        after: state === "scheduled" ? null : { ...record.live!, endsAt },
+      },
     },
     now,
   );
@@ -384,6 +402,7 @@ export async function deleteNoticeRoute(
       set: { deletedAt: now.toISOString() },
       action: "notice.delete",
       changes: ["deletedAt"],
+      notice: { before: record.draft, after: null },
     },
     now,
   );
