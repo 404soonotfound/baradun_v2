@@ -29,8 +29,9 @@ import {
   type RequestIds,
 } from "./http";
 import {
-  decodeCursor,
+  applyRedactions,
   countInquiries,
+  decodeCursor,
   getInquiry,
   INQUIRY_PAGE_DEFAULT,
   INQUIRY_PAGE_MAX,
@@ -143,7 +144,7 @@ async function detailRoute(
   return detail ? json(200, detail, ids) : errorJson(404, "not_found", ids);
 }
 
-// PATCH /ops/inquiries/{id}: 처리 상태·반려 이유·내부 메모 (D16-D5·D6, B6)
+// PATCH /ops/inquiries/{id}: 처리 상태·반려 이유·내부 메모·개인정보 가리기 (D16-D5·D6, B6)
 async function patchRoute(
   event: APIGatewayProxyEventV2,
   id: string,
@@ -175,6 +176,18 @@ async function patchRoute(
   if (!current) return errorJson(404, "not_found", ids);
 
   const fields = inquiryPatchFields(check.patch);
+  // 개인정보 가리기: 화면이 본 version의 본문에서만 계산함. version이 다르면 지금 본문을 그대로 넣어
+  // 쓰기를 시도 → 같은 키 재시도면 앞 결과, 아니면 version 조건에 걸려 409(어느 쪽도 본문을 바꾸지 않음)
+  if (check.patch.redactions !== undefined) {
+    const message =
+      current.version === check.patch.version
+        ? applyRedactions(current.message ?? "", check.patch.redactions)
+        : (current.message ?? "");
+    if (message === null) {
+      return errorJson(400, "invalid_request", ids, { field: "redactions" });
+    }
+    fields.message = message;
+  }
   // 이전 도구를 돌리기 전 문의(상태·version 없음)는 메모만 바꿔도 목록(GSI)에 들어가게 상태를 '접수'로 함께 채움
   // 이미 상태가 있는 이전 문의(version 1 이상)는 상태를 건드리지 않음(메모만 바꿀 때 '확인 중'이 되돌아가지 않게)
   if (current.legacy && current.version === 0) {
