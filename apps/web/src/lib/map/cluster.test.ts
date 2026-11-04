@@ -1,14 +1,21 @@
 import { describe, expect, it } from "vitest";
 
 import { listBeachSummaries } from "@/lib/beaches";
+import type { LocationState } from "@/lib/location";
 import {
   CLUSTER_MAX_ZOOM,
   CLUSTER_RADIUS_PX,
   clusterMarkers,
+  releaseMarkers,
   type MapGroup,
 } from "./cluster";
 import { boundsOf } from "./bounds";
-import { NEARBY_BEACH_COUNT, nearbyBeaches } from "./nearby";
+import {
+  NEARBY_BEACH_COUNT,
+  nearbyBeaches,
+  nearbyPlan,
+  nearbyWaitStep,
+} from "./nearby";
 
 // 지도 마커 묶음·내 주변 보기 (BRD-114 · 결정 기록 12장 결정 5·8)
 
@@ -64,12 +71,6 @@ describe("clusterMarkers", () => {
     expect(allSingle(clusterMarkers(beaches, 14))).toBe(true);
   });
 
-  it("고른·가리킨 해변은 묶지 않는다", () => {
-    const groups = clusterMarkers([b1, b2, b3], 8, new Set(["b2"]));
-    expect(groups).toContainEqual({ kind: "single", item: b2 });
-    expect(clusterIds(groups)).toEqual([["b1", "b3"]]);
-  });
-
   it("입력 순서가 달라도 결과가 같다", () => {
     const keys = (list: typeof beaches) =>
       clusterMarkers(list, 8).map((group) =>
@@ -80,10 +81,39 @@ describe("clusterMarkers", () => {
 
   it("화면에서 묶는 거리보다 멀면 묶지 않는다", () => {
     // 확대 10에서 b1·b2는 화면에서 가로 약 22px · 세로 약 37px 떨어짐
-    expect(clusterIds(clusterMarkers([b1, b2], 10, new Set(), 44))).toEqual([
+    expect(clusterIds(clusterMarkers([b1, b2], 10, 44))).toEqual([
       ["b1", "b2"],
     ]);
-    expect(allSingle(clusterMarkers([b1, b2], 10, new Set(), 36))).toBe(true);
+    expect(allSingle(clusterMarkers([b1, b2], 10, 36))).toBe(true);
+  });
+});
+
+describe("releaseMarkers", () => {
+  it("고른·가리킨 해변을 묶음에서 꺼내고, 남은 해변만 다시 묶는다", () => {
+    const groups = releaseMarkers(
+      clusterMarkers([b1, b2, b3], 8),
+      new Set(["b2"]),
+      8,
+    );
+    expect(groups).toContainEqual({ kind: "single", item: b2 });
+    expect(clusterIds(groups)).toEqual([["b1", "b3"]]);
+  });
+
+  it("고른 해변이 없는 묶음은 그대로 둔다(key가 같아 마커를 다시 붙이지 않음)", () => {
+    const base = clusterMarkers(beaches, 8);
+    const released = releaseMarkers(base, new Set(["b9"]), 8);
+    expect(released).toEqual(base);
+    expect(releaseMarkers(base, new Set(), 8)).toEqual(base);
+  });
+
+  it("남은 해변이 하나면 개별 마커로 둔다", () => {
+    const groups = releaseMarkers(
+      clusterMarkers([b1, b2], 8),
+      new Set(["b1"]),
+      8,
+    );
+    expect(allSingle(groups)).toBe(true);
+    expect(groups).toHaveLength(2);
   });
 });
 
@@ -116,6 +146,63 @@ describe("nearbyBeaches", () => {
 
   it("해변이 없으면 빈 목록", () => {
     expect(nearbyBeaches([], me)).toEqual([]);
+  });
+
+  it("좌표가 잘못된 해변은 빼고 고른다(정렬이 어긋나지 않게)", () => {
+    const broken = { id: "bx", coords: { lat: Number.NaN, lng: 128.9 } };
+    expect(
+      nearbyBeaches([broken, b9, b1, b2, b3], me).map((b) => b.id),
+    ).toEqual(["b2", "b3", "b1"]);
+  });
+
+  it("내 위치가 잘못된 값이면 고르지 않는다", () => {
+    expect(nearbyBeaches(beaches, { lat: Number.NaN, lng: 0 })).toEqual([]);
+  });
+});
+
+describe("nearbyPlan", () => {
+  it("가까운 해변이 지금 보이는 지역 안이면 지역을 그대로 둔다", () => {
+    const plan = nearbyPlan(beaches, new Set(["b1", "b2", "b3"]), {
+      lat: 37.75,
+      lng: 128.9,
+    });
+    expect(plan).toEqual({
+      box: [
+        [128.915, 37.785],
+        [128.93, 37.805],
+      ],
+      nationwide: false,
+    });
+  });
+
+  it("가까운 해변이 지역 밖에 있으면 전국으로 바꾼다", () => {
+    const plan = nearbyPlan(beaches, new Set(["b1", "b2", "b3"]), {
+      lat: 35.16,
+      lng: 129.15,
+    });
+    expect(plan?.nationwide).toBe(true);
+  });
+
+  it("옮길 해변이 없으면 null", () => {
+    expect(nearbyPlan([], new Set(), { lat: 37.75, lng: 128.9 })).toBeNull();
+  });
+});
+
+describe("nearbyWaitStep", () => {
+  const coords = { lat: 37.75, lng: 128.9 };
+  it.each([
+    [{ status: "ready", coords }, "move"],
+    [{ status: "locating", coords: null }, "wait"],
+    [{ status: "checking", coords: null }, "wait"],
+    // 다른 곳의 '다시 시도' 답을 기다리는 중
+    [{ status: "denied", coords: null, retry: "pending" }, "wait"],
+    [{ status: "denied", coords: null }, "stop"],
+    [{ status: "denied", coords: null, retry: "denied" }, "stop"],
+    [{ status: "off", coords: null }, "stop"],
+    [{ status: "unavailable", coords: null }, "stop"],
+    [{ status: "idle", coords: null }, "stop"],
+  ] as const)("%o → %s", (state, step) => {
+    expect(nearbyWaitStep(state as LocationState)).toBe(step);
   });
 });
 

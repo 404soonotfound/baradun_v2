@@ -15,7 +15,11 @@ import { badgeTone, type VerdictTone } from "@/lib/badge-tone";
 import { cn } from "@/lib/cn";
 import type { LatLng } from "@/lib/geo";
 import { FIT_OPTIONS, type LngLatBox } from "@/lib/map/bounds";
-import { CLUSTER_MAX_ZOOM, clusterMarkers } from "@/lib/map/cluster";
+import {
+  CLUSTER_MAX_ZOOM,
+  clusterMarkers,
+  releaseMarkers,
+} from "@/lib/map/cluster";
 import type { MapHandle } from "@/lib/map/engine";
 import { shortName } from "@/lib/map/short-name";
 import { prefersReducedMotion } from "@/lib/motion";
@@ -79,16 +83,44 @@ export function BeachMarkers({
 }) {
   const t = useTranslations("map");
   const [zoom, setZoom] = useState(() => api.map.getZoom());
-  // 고른·가리킨 해변은 묶지 않음(강조한 마커가 숫자 뒤로 숨지 않게)
+  // 전체 묶기는 해변·확대가 바뀔 때만. 고른·가리킨 해변은 그 해변이 든 묶음만 다시 묶어 꺼냄
+  // (PC 목록 행에 마우스를 올릴 때마다 전체를 다시 묶지 않게)
+  const clustered = useMemo(
+    () => clusterMarkers(markers, zoom),
+    [markers, zoom],
+  );
   const groups = useMemo(
     () =>
-      clusterMarkers(
-        markers,
-        zoom,
+      releaseMarkers(
+        clustered,
         new Set([selectedId, highlightedId].filter((id) => id !== null)),
+        zoom,
       ),
-    [markers, zoom, selectedId, highlightedId],
+    [clustered, selectedId, highlightedId, zoom],
   );
+  // 키보드 포커스가 있던 묶음 버튼이 다시 묶이며 사라지면(+/− 키 확대, 목록 행 가리키기) 포커스를 지도 캔버스로
+  // 그대로 두면 포커스가 페이지 처음으로 튐
+  const focusedRef = useRef<Element | null>(null);
+  useEffect(() => {
+    const container = api.map.getContainer();
+    const onFocusIn = (event: FocusEvent) => {
+      focusedRef.current =
+        event.target instanceof Element &&
+        event.target.closest("[data-beach-marker]")
+          ? event.target
+          : null;
+    };
+    container.addEventListener("focusin", onFocusIn);
+    return () => container.removeEventListener("focusin", onFocusIn);
+  }, [api]);
+  useEffect(() => {
+    const focused = focusedRef.current;
+    if (!focused || focused.isConnected) return;
+    focusedRef.current = null;
+    const active = document.activeElement;
+    if (active === null || active === document.body)
+      api.map.getCanvas().focus({ preventScroll: true });
+  }, [groups, api]);
   // 지도 이벤트에서 부를 최신 onSelect(이벤트를 다시 걸지 않게)
   const onSelectRef = useRef(onSelect);
   useEffect(() => {
@@ -247,7 +279,7 @@ function MarkerFace({
 
 // 묶음: 해변 수만 보여 주는 중립 원(상태 색·아이콘 없음 → 대표 상태로 읽히지 않게). 누르면 그 범위로 확대
 // 해변 마커와 같은 44px 누르는 자리. 접근 가능한 이름에 해변 수와 동작을 담음
-function ClusterFace({
+export function ClusterFace({
   count,
   label,
   onClick,
