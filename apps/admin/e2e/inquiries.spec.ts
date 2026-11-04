@@ -597,3 +597,29 @@ test("저장 뒤 다시 읽기가 실패해도 내용과 처리 칸을 지우지
   await expect(memo).toHaveValue("저장한 메모");
   await expect(detail.getByText("바뀐 내용 없음")).toBeVisible();
 });
+
+test("접수 탭에서 완료로 저장하면 그 문의는 탭에서 빠지고 탭 수도 옮겨진다(목록 응답이 늦어도)", async ({
+  page,
+}) => {
+  await signIn(page);
+  await mockInquiries(page);
+  await openInquiries(page);
+  const tabs = page.getByRole("group", { name: "처리 상태로 거르기" });
+  await tabs.getByRole("button", { name: "접수 2" }).click();
+  await expect(rows(page)).toHaveCount(2);
+  await rows(page).first().getByRole("link").click();
+  const detail = detailOf(page);
+  await detail.getByText("완료", { exact: true }).click();
+  await detail.getByRole("button", { name: "저장" }).click();
+  await expect(
+    detail.getByRole("status").filter({ hasText: "‘완료’(으)로 바꿨어요" }),
+  ).toBeVisible();
+  if (isMobile(page)) {
+    await detail.getByRole("link", { name: /문의 목록으로/ }).click();
+  } else {
+    await page.keyboard.press("Escape");
+  }
+  await expect(rows(page)).toHaveCount(1);
+  await expect(tabs.getByRole("button", { name: "접수 1" })).toBeVisible();
+  await expect(tabs.getByRole("button", { name: "완료 1" })).toBeVisible();
+});
