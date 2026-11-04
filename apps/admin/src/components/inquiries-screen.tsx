@@ -556,7 +556,9 @@ function InquiryActions({
   const reasonTooLong =
     status === "rejected" && charCount(reason) > REJECT_REASON_MAX;
   const memoTooLong = charCount(memo) > MEMO_MAX;
-  const disabled = block !== null || busy;
+  // 저장한 뒤 그 version을 다시 읽어 올 때까지 잠금(그사이 쓴 내용이 새 값으로 덮이지 않게)
+  const waiting = typeof accept === "number";
+  const disabled = block !== null || busy || waiting;
 
   const save = () => {
     if (block || busy || changes === 0) return;
@@ -816,7 +818,7 @@ function InquiryActions({
       {/* 저장 바: 아래에 붙어 있어 긴 메모를 쓰는 중에도 보임(화면 설계서 6장 모바일 규칙 '저장은 아래 고정 바') */}
       <div className="sticky bottom-0 -mx-1 flex items-center justify-end gap-3 border-t border-border-default bg-bg-surface px-1 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
         <span className="text-body-s text-text-muted" aria-live="polite">
-          {busy
+          {busy || waiting
             ? t.saving
             : changes > 0
               ? fill(t.changes, { count: changes })
@@ -854,16 +856,22 @@ function InquiryDetailView({
   const key = `${id}|${attempt}|${generation}`;
   const [loaded, setLoaded] = useState<{
     key: string;
-    id: string;
     result: OpsResult<InquiryDetail>;
   } | null>(null);
-  // 같은 문의를 다시 읽는 동안(저장 뒤·새 내용 불러오기)은 앞서 받은 내용을 그대로 둠
-  const result =
-    loaded?.key === key
-      ? loaded.result
-      : loaded?.id === id && loaded.result.ok
-        ? loaded.result
-        : null;
+  // 마지막으로 성공한 상세. 다시 읽는 중이거나 다시 읽기가 실패해도 이 내용과 쓰던 처리 칸을 그대로 둠
+  const [good, setGood] = useState<{
+    id: string;
+    detail: InquiryDetail;
+  } | null>(null);
+  const current = loaded?.key === key ? loaded.result : null;
+  const kept = good?.id === id ? good.detail : null;
+  const result: OpsResult<InquiryDetail> | null = current?.ok
+    ? current
+    : kept
+      ? { ok: true, status: 200, body: kept }
+      : current;
+  // 앞서 받은 내용을 보이는 채로 다시 읽기만 실패함 → 내용 위에 실패만 알림
+  const refreshFailure = kept && current && !current.ok ? current : null;
   // 저장 성공 안내. 다시 읽은 뒤에도 남김(다른 문의를 열면 사라짐)
   const [notice, setNotice] = useState<{ id: string; text: string } | null>(
     null,
@@ -872,7 +880,9 @@ function InquiryDetailView({
   useEffect(() => {
     let live = true;
     void fetchInquiry(() => session.accessToken(), id).then((next) => {
-      if (live) setLoaded({ key, id, result: next });
+      if (!live) return;
+      setLoaded({ key, result: next });
+      if (next.ok) setGood({ id, detail: next.body });
     });
     return () => {
       live = false;
@@ -915,6 +925,18 @@ function InquiryDetailView({
 
   return (
     <article aria-labelledby="inquiry-type" className="flex flex-col gap-4">
+      {refreshFailure &&
+        (refreshFailure.status === 404 ? (
+          <Notice tone="warn" title={t.notFoundTitle} role="alert">
+            {t.notFoundBody}
+          </Notice>
+        ) : (
+          <Failure
+            title={t.detailError}
+            result={refreshFailure}
+            onRetry={() => setAttempt((n) => n + 1)}
+          />
+        ))}
       <div className="flex flex-col gap-1">
         <p className="flex items-center gap-2 text-label-s text-text-muted">
           <StatusBadge status={item.status} />
