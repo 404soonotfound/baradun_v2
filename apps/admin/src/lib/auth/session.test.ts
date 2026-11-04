@@ -510,10 +510,13 @@ describe("새로고침해도 로그인 유지", () => {
     expect(tab.session.getSnapshot()).toMatchObject({ status: "signed_in" });
   });
 
-  it("유휴 60분이나 최초 인증 8시간이 지난 저장 값은 쓰지 않고 지운다", async () => {
-    for (const now of [AUTH + 60 * MIN, AUTH + 8 * 60 * MIN]) {
+  it("유휴 60분이나 최초 인증 8시간이 지난 저장 값은 쓰지 않고 지우며 만료 안내를 보여 준다", async () => {
+    for (const [now, reason] of [
+      [AUTH + 60 * MIN, "idle"],
+      [AUTH + 8 * 60 * MIN, "max"],
+    ] as const) {
       const saved =
-        now === AUTH + 60 * MIN ? SAVED : { ...SAVED, lastActivityMs: now };
+        reason === "idle" ? SAVED : { ...SAVED, lastActivityMs: now };
       const { session, deps, setNow, advance, store } = reloaded(saved);
       setNow(now);
       session.join();
@@ -521,65 +524,165 @@ describe("새로고침해도 로그인 유지", () => {
       expect(deps.refresh).not.toHaveBeenCalled();
       expect(session.getSnapshot()).toEqual({
         status: "signed_out",
-        reason: null,
+        reason,
+        pool: "operator",
       });
       expect(store.get()).toBeNull();
     }
   });
 
-  it("갱신이 실패하거나 다른 계정·다른 최초 인증의 토큰이면 지우고 로그인 화면으로", async () => {
-    const answers: (() => Promise<Tokens>)[] = [
-      () => Promise.reject(new Error("NotAuthorizedException")),
-      async () => tokens(30, AUTH_SEC + 60, 2),
-      async () => ({
-        ...tokens(30, AUTH_SEC, 2),
-        accessToken: fakeAccess({
-          sub: "other-sub",
-          exp: AUTH_SEC + 30 * 60,
+  it("토큰이 거부되거나 다른 계정·다른 최초 인증의 토큰이면 지우고 로그인 화면으로(받지 않은 토큰은 폐기)", async () => {
+    const answers: [() => Promise<Tokens>, boolean][] = [
+      [() => Promise.reject({ name: "NotAuthorizedException" }), false],
+      [async () => tokens(30, AUTH_SEC + 60, 2), true],
+      [
+        async () => ({
+          ...tokens(30, AUTH_SEC, 2),
+          accessToken: fakeAccess({
+            sub: "other-sub",
+            exp: AUTH_SEC + 30 * 60,
+          }),
         }),
-      }),
+        true,
+      ],
     ];
-    for (const answer of answers) {
+    for (const [answer, revoked] of answers) {
       const store = memoryStore(SAVED);
       const tab = setup({ store, refresh: vi.fn(answer) });
       tab.session.join();
-      await tab.advance(JOIN_WAIT_MS);
+      await tab.advance(JOIN_WAIT_MS + 2_000);
       expect(tab.session.getSnapshot()).toEqual({
         status: "signed_out",
-        reason: null,
+        reason: "resume_rejected",
+        pool: "operator",
       });
       expect(store.get()).toBeNull();
-      // 받은 토큰을 쓰지 않으면 그 refresh token을 폐기함(갱신 자체가 실패하면 폐기할 토큰이 없음)
-      if (answer === answers[0]) expect(tab.deps.revoke).not.toHaveBeenCalled();
-      else
+      if (revoked) {
         expect(tab.deps.revoke).toHaveBeenCalledWith("operator", "refresh-2");
+      } else {
+        expect(tab.deps.revoke).not.toHaveBeenCalled();
+      }
     }
   });
 
-  it("저장 값이 있으면 그 풀의 열린 탭에만 넘겨받기를 묻는다", () => {
-    const { session, posted } = reloaded({ ...SAVED, pool: "demo" });
-    session.join();
-    expect(posted).toContainEqual({
-      kind: "hello",
-      id: "tab-new",
-      pool: "demo",
+  it("망 오류·시간 초과·요청 제한·잠금 오류면 저장 값을 두고 다시 새로고침하면 다시 시도한다고 안내한다", async () => {
+    const failures: Partial<SessionDeps>[] = [
+      { refresh: vi.fn(() => Promise.reject({ name: "NetworkError" })) },
+      { refresh: vi.fn(() => Promise.reject({ name: "TimeoutError" })) },
+      {
+        refresh: vi.fn(() =>
+          Promise.reject({ name: "TooManyRequestsException" }),
+        ),
+      },
+      // 잠금이 바로 던져도(지원이 덜 된 브라우저) 이어 가는 중에 멈추지 않음
+      {
+        lock: () => {
+          throw new TypeError("AbortSignal.timeout is not a function");
+        },
+      },
+    ];
+    for (const failure of failures) {
+      const store = memoryStore(SAVED);
+      const tab = setup({ store, ...failure });
+      tab.session.join();
+      await tab.advance(JOIN_WAIT_MS + 2_000);
+      expect(tab.session.getSnapshot()).toEqual({
+        status: "signed_out",
+        reason: "resume_failed",
+        pool: "operator",
+      });
+      expect(store.get()).toEqual(SAVED);
+      expect(tab.deps.revoke).not.toHaveBeenCalled();
+    }
+  });
+
+  describe("함께 복원된 같은 묶음의 두 탭(브라우저 세션 복원)", () => {
+    // 잠금을 한 탭씩 차례로 주는 가짜 Web Locks
+    function locks() {
+      let queue = Promise.resolve();
+      return <T>(fn: () => Promise<T>): Promise<T> => {
+        const run = queue.then(fn);
+        queue = run.then(
+          () => undefined,
+          () => undefined,
+        );
+        return run;
+      };
+    }
+    // 실제 Cognito처럼 refresh-1은 한 번만 회전됨(두 번째는 거부). gate가 있으면 첫 응답을 그때까지 늦춤
+    function cognito(gate?: Promise<void>) {
+      let rotated = false;
+      return vi.fn(async (_pool: string, token: string) => {
+        if (token !== "refresh-1" || rotated) {
+          throw { name: "NotAuthorizedException" };
+        }
+        rotated = true;
+        await gate;
+        return tokens(30, AUTH_SEC, 2);
+      });
+    }
+    function tabs(refresh: SessionDeps["refresh"]) {
+      const lock = locks();
+      const make = (id: string) => {
+        const tab = setup({
+          store: memoryStore(SAVED),
+          lock,
+          refresh,
+          newId: () => id,
+        });
+        tab.setNow(AUTH + 10 * MIN);
+        return tab;
+      };
+      const a = make("a");
+      const b = make("b");
+      a.deps.channel!.post = (m) => b.other(m);
+      b.deps.channel!.post = (m) => a.other(m);
+      return { a, b };
+    }
+    const flush = async () => {
+      for (let i = 0; i < 20; i++) await Promise.resolve();
+    };
+
+    it("먼저 이어 간 탭이 나눈 토큰을 기다리던 탭이 받아 다시 갱신하지 않는다", async () => {
+      const refresh = cognito();
+      const { a, b } = tabs(refresh);
+      a.session.join();
+      b.session.join();
+      await a.advance(JOIN_WAIT_MS);
+      await flush();
+      await b.advance(JOIN_WAIT_MS);
+      await flush();
+      expect(refresh).toHaveBeenCalledTimes(1);
+      expect(b.session.getSnapshot()).toMatchObject({ status: "signed_in" });
+      expect(await b.session.accessToken()).toBe(
+        tokens(30, AUTH_SEC, 2).accessToken,
+      );
+    });
+
+    it("둘 다 이어 가는 중이면 잠금을 나중에 얻은 탭은 나눈 토큰을 써서 갱신을 부르지 않는다", async () => {
+      let open: () => void = () => undefined;
+      const refresh = cognito(new Promise<void>((done) => (open = done)));
+      const { a, b } = tabs(refresh);
+      a.session.join();
+      b.session.join();
+      await a.advance(JOIN_WAIT_MS);
+      await b.advance(JOIN_WAIT_MS);
+      expect(b.session.getSnapshot()).toMatchObject({ joining: true });
+      open();
+      await flush();
+      expect(refresh).toHaveBeenCalledTimes(1);
+      expect(a.session.getSnapshot()).toMatchObject({ status: "signed_in" });
+      expect(b.session.getSnapshot()).toMatchObject({ status: "signed_in" });
     });
   });
 
-  it("망 오류로 갱신하지 못하면 로그인 화면으로 가되 저장 값은 두어 다시 새로고침하면 다시 시도한다", async () => {
-    const store = memoryStore(SAVED);
-    const tab = setup({
-      store,
-      refresh: vi.fn(() => Promise.reject({ name: "NetworkError" })),
-    });
-    tab.session.join();
-    await tab.advance(JOIN_WAIT_MS);
-    expect(tab.session.getSnapshot()).toEqual({
-      status: "signed_out",
-      reason: null,
-    });
-    expect(store.get()).toEqual(SAVED);
-    expect(tab.deps.revoke).not.toHaveBeenCalled();
+  it("다른 로그인으로 저장 값을 덮어쓰면 이전 refresh token을 폐기한다(회전·같은 로그인은 폐기하지 않음)", async () => {
+    const store = memoryStore({ ...SAVED, refreshToken: "refresh-old" });
+    const { session, deps, advance } = setup({ store });
+    session.signIn("operator", tokens(15, AUTH_SEC + 3_600));
+    expect(deps.revoke).toHaveBeenCalledWith("operator", "refresh-old");
+    await advance(14 * MIN);
+    expect(deps.revoke).toHaveBeenCalledTimes(1);
   });
 
   it("데모 로그인 화면은 운영자 저장 값으로 이어 가지 않는다", async () => {

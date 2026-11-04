@@ -22,12 +22,21 @@ import type { Tokens } from "./srp";
 // 시계·타이머·Cognito 호출·탭 신호·잠금은 바깥에서 받음(테스트에서 바꿔 끼움)
 
 export type SignOutReason =
-  "logout" | "idle" | "max" | "other_tab" | "invalid_token";
+  | "logout"
+  | "idle"
+  | "max"
+  | "other_tab"
+  | "invalid_token"
+  // 새로고침 때 이 탭에 둔 로그인을 이어 가지 못함: 토큰 거부(저장 값 지움) · 일시적 실패(저장 값 둠, D17-11)
+  | "resume_rejected"
+  | "resume_failed";
 
 export type SessionSnapshot =
   | {
       readonly status: "signed_out";
       readonly reason: SignOutReason | null;
+      // 끝난 저장 값의 풀(로그인 화면을 그 풀로). 이어 가기·저장 값이 끝났을 때만
+      readonly pool?: PoolKind;
       // 다른 탭에서 로그인을 넘겨받기를 기다리는 중(짧게). 로그인 화면은 이 동안 그리지 않음
       readonly joining?: true;
     }
@@ -199,8 +208,14 @@ export class AuthSession {
   private joinId: string | null = null;
   // 넘겨받기는 탭을 연 뒤 한 번만(로그아웃 뒤 다시 넘겨받지 않음)
   private joinTried = false;
-  // 이 탭에 둔 refresh token으로 갱신해 이어 가는 중(로그인 화면은 이 동안 그리지 않음)
-  private restoring = false;
+  // 이 탭에 둔 refresh token으로 갱신해 이어 가는 중인 저장 값(로그인 화면은 이 동안 그리지 않음)
+  private restoring: SavedSession | null = null;
+  // 넘겨받기를 기다리거나 이어 가는 동안의 저장 값(같은 묶음 탭이 나눈 토큰을 알아보려고)
+  private resumable: SavedSession | null = null;
+  // 이어 가는 동안 같은 묶음의 다른 탭이 회전해 나눈 토큰
+  private adopted: Tokens | null = null;
+  // 이어 가기·저장 값이 끝난 풀(로그인 화면을 그 풀로 보냄). 새로고침하면 모듈 메모리의 마지막 풀이 사라지므로
+  private signedOutPool: PoolKind | null = null;
   // 유휴 만료 전에 다른 탭의 활동 시각을 한 번 물어봤는지(새 활동이 오면 다시 물음)
   private idleAsked = false;
 
@@ -224,6 +239,7 @@ export class AuthSession {
     const saved = this.savedFor(pool);
     if (!channel && !saved) return;
     this.joinTried = true;
+    this.resumable = saved;
     const id = this.deps.newId?.() ?? crypto.randomUUID();
     this.joinId = id;
     this.publishSignedOut();
@@ -237,7 +253,10 @@ export class AuthSession {
       () => {
         if (this.joinId !== id) return;
         this.joinId = null;
-        if (this.live) return;
+        if (this.live) {
+          this.resumable = null;
+          return;
+        }
         if (saved) void this.restore(saved);
         else this.publishSignedOut();
       },
@@ -263,51 +282,85 @@ export class AuthSession {
     );
     if (phase === "idle_expired" || phase === "max_expired") {
       store.save(null);
+      // 로그인 화면에 만료 안내(보던 화면·저장하지 않은 변경)
+      this.signedOutReason = phase === "max_expired" ? "max" : "idle";
+      this.signedOutPool = saved.pool;
       return null;
     }
     return saved;
   }
 
-  // 새로고침: 이 탭에 둔 refresh token으로 갱신해 로그인을 이어 감(회전 유예 0초라 잠금 안에서)
-  // 실패하거나 다른 계정·다른 최초 인증의 토큰이면 저장 값을 지우고 로그인 화면
-  // 망 오류(응답 없음·시간 초과)는 토큰이 아직 쓸 수 있을 수 있어 저장 값을 두고 로그인 화면(다시 새로고침하면 다시 시도)
+  // 새로고침: 이 탭에 둔 refresh token으로 갱신해 로그인을 이어 감(D17-11)
+  // - 회전 유예 0초라 잠금 안에서 갱신하고, 잠금을 풀기 전에 로그인·새 토큰 나누기까지 끝냄
+  // - 함께 복원된 같은 묶음의 탭(브라우저 세션 복원)이 먼저 회전해 나눈 토큰이 있으면 그것을 받음
+  // - 토큰이 거부되면(NotAuthorized·다른 계정·다른 최초 인증) 저장 값을 지우고 로그인 화면
+  // - 그 밖의 실패(망 오류·시간 초과·요청 제한·서버 오류)는 저장 값을 두고 로그인 화면(다시 새로고침하면 다시 시도)
   private async restore(saved: SavedSession): Promise<void> {
-    this.restoring = true;
+    this.restoring = saved;
+    this.adopted = null;
     this.publishSignedOut();
     const lock = this.deps.lock ?? ((fn) => fn());
-    let offline = false;
-    const tokens = await lock(() =>
-      this.deps.refresh(saved.pool, saved.refreshToken),
-    ).catch((error: unknown) => {
-      offline = authFailureOf(error) === "network";
-      return null;
-    });
-    this.restoring = false;
-    if (this.live) return;
-    const access = tokens ? accessClaims(tokens.accessToken) : null;
+    let outcome: "ok" | "rejected" | "failed";
+    try {
+      outcome = await lock(async () => {
+        if (this.live) return "ok";
+        let tokens = this.adopted;
+        if (!tokens) {
+          try {
+            tokens = await this.deps.refresh(saved.pool, saved.refreshToken);
+          } catch (error) {
+            // 같은 묶음의 탭이 먼저 회전시켰을 수 있음 → 그 탭이 나눈 새 토큰을 잠깐 기다림
+            if (this.deps.channel) {
+              await new Promise<void>((done) =>
+                this.deps.setTimer(() => done(), ADOPT_WAIT_MS),
+              );
+            }
+            tokens = this.adopted;
+            if (!tokens) throw error;
+          }
+        }
+        return this.resume(saved, tokens) ? "ok" : "rejected";
+      });
+    } catch (error) {
+      const failure = authFailureOf(error);
+      outcome =
+        failure === "wrong_credentials" || failure === "session_expired"
+          ? "rejected"
+          : "failed";
+    } finally {
+      this.restoring = null;
+      this.resumable = null;
+      this.adopted = null;
+    }
+    if (outcome === "ok" || this.live) return;
+    if (outcome === "rejected") this.deps.store?.save(null);
+    this.signedOutReason =
+      outcome === "rejected" ? "resume_rejected" : "resume_failed";
+    this.signedOutPool = saved.pool;
+    this.publishSignedOut();
+  }
+
+  // 이어 가기로 받은 토큰을 확인하고 로그인. 다른 계정·다른 최초 인증이면 받지 않고 그 refresh token을 폐기
+  private resume(saved: SavedSession, tokens: Tokens): boolean {
+    const access = accessClaims(tokens.accessToken);
     if (
-      !tokens ||
       !access ||
       access.sub !== saved.sub ||
       access.authTimeMs !== saved.authTimeMs
     ) {
-      if (!offline) this.deps.store?.save(null);
-      // 받지 않은 토큰의 refresh token을 남겨 두지 않음(회전됐으면 새것, 아니면 저장했던 것)
-      if (tokens) {
-        void this.deps
-          .revoke(saved.pool, tokens.refreshToken || saved.refreshToken)
-          .catch(() => undefined);
-      }
-      this.publishSignedOut();
-      return;
+      void this.deps
+        .revoke(saved.pool, tokens.refreshToken || saved.refreshToken)
+        .catch(() => undefined);
+      return false;
     }
     const ok = this.signIn(saved.pool, {
       accessToken: tokens.accessToken,
       idToken: tokens.idToken,
       refreshToken: tokens.refreshToken || saved.refreshToken,
     });
-    // 늦게 답한 같은 묶음의 탭이 회전 전 refresh token을 쥐고 있지 않게 새 토큰을 나눔
+    // 같은 묶음의 다른 탭이 회전 전 refresh token을 쥐고 있지 않게 새 토큰을 나눔(잠금을 풀기 전에)
     if (ok) this.share(null);
+    return ok;
   }
 
   private group(): Group | null {
@@ -388,6 +441,26 @@ export class AuthSession {
     if (!access) return;
     const live = this.live;
     if (!live) {
+      const resumable = this.resumable;
+      // 함께 복원된 같은 묶음의 탭이 회전해 나눈 토큰(이 탭의 저장 토큰은 이제 쓸 수 없음)
+      const sibling =
+        resumable !== null &&
+        message.to === null &&
+        message.pool === resumable.pool &&
+        access.sub === resumable.sub &&
+        access.authTimeMs === resumable.authTimeMs;
+      if (this.restoring) {
+        // 이어 가는 중: 받아 두고 잠금 안에서 씀
+        if (sibling) this.adopted = message.tokens;
+        return;
+      }
+      if (sibling && this.joinId) {
+        // 아직 넘겨받기를 기다리는 중: 넘겨받은 것과 같음
+        this.joinId = null;
+        this.resumable = null;
+        if (this.signIn(message.pool, message.tokens)) this.postActivity(false);
+        return;
+      }
       // 내가 기다리던 답만 받음(로그아웃한 탭이 남의 갱신 신호로 다시 로그인되지 않게)
       if (message.to === null || message.to !== this.joinId) return;
       this.joinId = null;
@@ -453,6 +526,7 @@ export class AuthSession {
       reauth: false,
     };
     this.signedOutReason = null;
+    this.signedOutPool = null;
     this.joinId = null;
     this.idleAsked = false;
     this.generation += 1;
@@ -587,6 +661,7 @@ export class AuthSession {
     const group = this.group();
     this.live = null;
     this.signedOutReason = reason;
+    this.signedOutPool = null;
     if (
       broadcast &&
       group &&
@@ -603,18 +678,32 @@ export class AuthSession {
 
   // 새로고침해도 이어 가도록 이 탭에 refresh token·시각을 둠. 로그아웃·만료면 지움
   private persist(): void {
+    const store = this.deps.store;
+    if (!store) return;
     const live = this.live;
-    this.deps.store?.save(
-      live
-        ? {
-            pool: live.pool,
-            sub: live.sub,
-            refreshToken: live.tokens.refreshToken,
-            authTimeMs: live.authTimeMs,
-            lastActivityMs: live.lastActivityMs,
-          }
-        : null,
-    );
+    if (!live) {
+      store.save(null);
+      return;
+    }
+    // 다른 로그인(다른 풀·계정·최초 인증)의 저장 값을 덮어쓰면 그 refresh token을 폐기(쓸 수 있는 채로 남기지 않음)
+    const before = parseSaved(store.load());
+    if (
+      before &&
+      (before.pool !== live.pool ||
+        before.sub !== live.sub ||
+        before.authTimeMs !== live.authTimeMs)
+    ) {
+      void this.deps
+        .revoke(before.pool, before.refreshToken)
+        .catch(() => undefined);
+    }
+    store.save({
+      pool: live.pool,
+      sub: live.sub,
+      refreshToken: live.tokens.refreshToken,
+      authTimeMs: live.authTimeMs,
+      lastActivityMs: live.lastActivityMs,
+    });
   }
 
   // 상태를 다시 계산하고 다음 경계에 깨어나게 함
@@ -675,11 +764,12 @@ export class AuthSession {
   }
 
   private publishSignedOut(): void {
-    this.publish(
-      this.joinId || this.restoring
-        ? { status: "signed_out", reason: this.signedOutReason, joining: true }
-        : { status: "signed_out", reason: this.signedOutReason },
-    );
+    this.publish({
+      status: "signed_out",
+      reason: this.signedOutReason,
+      ...(this.signedOutPool ? { pool: this.signedOutPool } : {}),
+      ...(this.joinId || this.restoring ? { joining: true as const } : {}),
+    });
   }
 
   private publish(next: SessionSnapshot): void {
