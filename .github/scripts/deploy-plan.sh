@@ -2,14 +2,16 @@
 # 배포할 커밋과 배포 여부 정하기 (BRD-178, deploy.yml의 site·admin 작업이 함께 씀)
 # 사용: deploy-plan.sh <운영 주소> <앱 경로>...
 #   앱 경로: 이 앱 빌드가 읽는 파일(ci.yml 바뀐 영역 필터와 같음, workflows.test.ts가 확인)
-# 환경: GH_TOKEN·GITHUB_REPOSITORY·GITHUB_OUTPUT·GITHUB_ENV, MANUAL(true/false), HEAD_SHA(수동 실행 커밋)
+# 환경: GH_TOKEN·GITHUB_REPOSITORY·GITHUB_OUTPUT·GITHUB_ENV, MANUAL(true/false), HEAD_SHA(수동 실행 커밋),
+#   CI_JOB(이 앱을 빌드하는 ci.yml 작업 이름. 바뀐 영역 검사로 건너뛰면 그 실행은 이 앱을 검사하지 않은 것)
 # 전제: main을 전체 이력으로 체크아웃한 상태(HEAD = main 최신). 끝에 고른 커밋으로 바꿈
 #
 # 자동 배포
-# - 올린 커밋 표시(운영 주소의 deploy-version.txt) 뒤로, 이 앱 파일을 바꾼 커밋 중 main push CI가 성공한
-#   가장 새 커밋을 올림. 그 커밋의 CI가 그 트리에서 앱 전체를 검사했으므로, CI가 실패한 앞 커밋의 변경도
-#   검사를 거친 뒤에만 나감. 표시 뒤에 그런 커밋이 없으면 건너뜀(옛 커밋이 새 배포를 덮지 않음)
-# - 표시를 못 읽으면(첫 배포·주소 오류) 경고를 남기고, 최근 이력에서 앱 파일을 바꾼 성공 커밋(없으면 성공한 가장 새 커밋)을 올림
+# - 올린 커밋 표시(운영 주소의 deploy-version.txt) 뒤로, main push CI가 성공하고 그 실행에서 이 앱 빌드 작업까지
+#   성공한 가장 새 커밋을 올림. 검사는 push 단위라(여러 커밋 머지는 맨 위 커밋만 실행) 커밋별 변경이 아닌 실행 결과로 봄.
+#   CI가 실패한 커밋의 변경은 그 앱을 다시 검사한 실행을 거친 뒤에만 나감. 그런 커밋이 없거나 표시와 앱 파일이
+#   같으면 건너뜀(옛 커밋이 새 배포를 덮지 않음)
+# - 표시를 못 읽으면(첫 배포·주소 오류) 경고를 남기고, 최근 이력에서 이 앱을 검사한 성공 커밋(없으면 성공한 가장 새 커밋)을 올림
 # - CI 결과는 main push 실행만 봄(PR 실행 결과를 main 검증으로 쓰지 않음). 조회 실패는 실패로 멈춤
 # 수동 실행: HEAD_SHA의 main push CI가 성공일 때만, 그 커밋을 늘 올림
 set -euo pipefail
@@ -17,15 +19,27 @@ set -euo pipefail
 url=$1
 shift
 paths=("$@")
+: "${CI_JOB:?CI_JOB(이 앱 빌드 작업 이름)이 없음}"
 
 # main push CI 실행 결과(최신 실행이 먼저). 같은 커밋을 다시 돌렸으면 마지막 결과
 if ! runs=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?branch=main&event=push&per_page=100" \
-  --jq '.workflow_runs[] | "\(.head_sha) \(.conclusion // "pending")"'); then
+  --jq '.workflow_runs[] | "\(.head_sha) \(.conclusion // "pending") \(.id)"'); then
   echo "::error::main CI 실행 결과를 읽지 못했어요. 잠시 뒤 다시 실행해 주세요."
   exit 1
 fi
 ci_ok() { awk -v s="$1" '$1 == s { print $2; exit }' <<<"$runs"; }
-touches() { ! git diff --quiet "$1^" "$1" -- "${paths[@]}"; }
+# 그 커밋의 CI가 성공했고, 그 실행에서 이 앱 빌드 작업도 성공했는지(건너뜀은 검사 안 함)
+checked() {
+  [ "$(ci_ok "$1")" = "success" ] || return 1
+  local id job
+  id=$(awk -v s="$1" '$1 == s { print $3; exit }' <<<"$runs")
+  if ! job=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$id/jobs?per_page=100" \
+    --jq ".jobs[] | select(.name == \"$CI_JOB\") | .conclusion"); then
+    echo "::error::main CI 실행 $id 의 작업 결과를 읽지 못했어요. 잠시 뒤 다시 실행해 주세요."
+    exit 1
+  fi
+  [ "$job" = "success" ]
+}
 
 deploy=true
 if [ "${MANUAL:-false}" = "true" ]; then
@@ -42,13 +56,21 @@ else
     git cat-file -e "$deployed^{commit}" 2>/dev/null &&
     git merge-base --is-ancestor "$deployed" HEAD; then
     for c in $(git rev-list --first-parent "$deployed..HEAD"); do
-      if touches "$c" && [ "$(ci_ok "$c")" = "success" ]; then
+      if checked "$c"; then
         target=$c
         break
       fi
     done
     if [ -z "$target" ]; then
-      echo "$deployed 뒤로 이 앱을 바꾸고 main CI가 성공한 커밋이 없음: 건너뜀"
+      echo "$deployed 뒤로 main CI가 이 앱($CI_JOB)까지 검사해 성공한 커밋이 없음: 건너뜀"
+      # 앱 파일은 바뀌었는데 검사한 실행이 없으면(CI 실패 뒤 다른 영역만 고침 등) 다음 앱 변경까지 남으므로 알림
+      if ! git diff --quiet "$deployed" HEAD -- "${paths[@]}"; then
+        echo "::warning::$deployed 뒤 앱 파일 변경이 아직 main CI($CI_JOB) 검사를 거치지 않았어요. 검사가 진행 중이면 끝난 뒤 올라가고, 실패했으면 그 CI를 다시 실행하거나 npm run deploy:prod로 올려 주세요."
+      fi
+      deploy=false
+      target=$deployed
+    elif git diff --quiet "$deployed" "$target" -- "${paths[@]}"; then
+      echo "$deployed 와 $target 의 앱 파일이 같음: 건너뜀"
       deploy=false
       target=$deployed
     else
@@ -60,7 +82,7 @@ else
     for c in $(git rev-list --first-parent --max-count=100 HEAD); do
       [ "$(ci_ok "$c")" = "success" ] || continue
       [ -n "$newest" ] || newest=$c
-      if touches "$c"; then
+      if checked "$c"; then
         target=$c
         break
       fi

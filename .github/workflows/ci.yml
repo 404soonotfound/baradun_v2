@@ -10,7 +10,7 @@ permissions:
   contents: read
 concurrency:
   # 정기 실행은 main push CI와 그룹을 나눠 서로 취소하지 않게 함
-  # main push는 커밋마다 따로 돌리고 취소하지 않음(BRD-178): 바뀐 영역만 검사·배포하므로
+  # main push는 push마다(맨 위 커밋) 따로 돌리고 취소하지 않음(BRD-178): 바뀐 영역만 검사·배포하므로
   # 앞 실행이 취소되면 그 커밋의 변경이 배포에서 빠짐. PR은 새 push가 오면 앞 실행을 취소함
   group: ci-${{ github.event_name == 'schedule' && 'schedule' || (github.event_name == 'push' && github.sha) || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
