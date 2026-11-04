@@ -27,6 +27,8 @@ export type SessionSnapshot =
       readonly email: string | null;
       readonly groups: readonly string[];
       readonly phase: SessionPhase;
+      // 로그인·다시 로그인할 때마다 1씩 늚(토큰 갱신에는 늘지 않음). 화면이 '다시 로그인 뒤 다시 읽기'에 씀
+      readonly generation: number;
       readonly times: SessionTimes;
     };
 
@@ -59,6 +61,7 @@ const LOGOUT_MESSAGE = "logout";
 export class AuthSession {
   private live: Live | null = null;
   private signedOutReason: SignOutReason | null = null;
+  private generation = 0;
   private timer: unknown = null;
   private refreshing: Promise<boolean> | null = null;
   private listeners = new Set<() => void>();
@@ -95,6 +98,7 @@ export class AuthSession {
       reauth: false,
     };
     this.signedOutReason = null;
+    this.generation += 1;
     this.update();
     return true;
   }
@@ -220,6 +224,7 @@ export class AuthSession {
       groups: live.groups,
       phase,
       times,
+      generation: this.generation,
     });
     // 다시 로그인을 기다리는 동안은 갱신 시각으로 깨지 않음(갱신 실패를 계속 되풀이하지 않게)
     const wake = nextWakeAt(
