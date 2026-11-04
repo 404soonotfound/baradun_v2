@@ -130,6 +130,12 @@ async function signIn(page: Page, groups = ["editor"]) {
   await expect(page.getByRole("heading", { name: "운영 홈" })).toBeVisible();
 }
 
+// 상세: PC는 목록 위 모달 패널(dialog), 모바일은 목록 대신 상세 영역
+const detailOf = (page: Page) =>
+  isMobile(page)
+    ? page.getByRole("region", { name: "문의 상세" })
+    : page.getByRole("dialog");
+
 const rows = (page: Page) =>
   isMobile(page)
     ? page.locator("ul li").filter({ visible: true })
@@ -171,15 +177,17 @@ test("목록: 상태 탭에 수, 해변 이름·활동, 없는 해변 ID도 숨�
   expect(calls.list.at(-1)?.get("cursor")).toBeNull();
 });
 
-test("상세: 내용·보관 기한·받지 않는 연락처를 보여 주고, PC는 옆 시트(Esc로 닫음), 모바일은 목록 대신 상세", async ({
+test("상세: 내용·보관 기한·받지 않는 연락처를 보여 주고, PC는 목록을 밀지 않는 딤 패널(Esc·바깥 누르기로 닫음), 모바일은 목록 대신 상세", async ({
   page,
 }) => {
   await signIn(page);
   await mockInquiries(page);
   await openInquiries(page);
+  const table = page.locator("table");
+  const before = isMobile(page) ? null : await table.boundingBox();
   await rows(page).first().getByRole("link").click();
   await expect(page).toHaveURL(new RegExp(`\\?id=${id(1)}$`));
-  const detail = page.getByRole("complementary", { name: "문의 상세" });
+  const detail = detailOf(page);
   await expect(
     detail.getByText("현장에 입수 금지 깃발이 걸려 있어요."),
   ).toBeVisible();
@@ -195,10 +203,15 @@ test("상세: 내용·보관 기한·받지 않는 연락처를 보여 주고, P
     ).toBeHidden();
     await detail.getByRole("link", { name: /문의 목록으로/ }).click();
   } else {
-    await expect(
-      page.getByRole("heading", { name: "문의", level: 1 }),
-    ).toBeVisible();
+    // 패널이 열려도 표 위치·너비가 그대로(목록 위에 뜸)
+    expect(await table.boundingBox()).toEqual(before);
+    await expect(detail).toHaveAttribute("aria-labelledby", "inquiry-type");
     await page.keyboard.press("Escape");
+    await expect(page).toHaveURL(/\/inquiries\/$/);
+    // 바깥(딤) 누르기로도 닫힘
+    await rows(page).nth(1).getByRole("link").click();
+    await expect(detail).toBeVisible();
+    await page.mouse.click(100, 400);
   }
   await expect(page).toHaveURL(/\/inquiries\/$/);
   await expect(detail).toBeHidden();
@@ -221,7 +234,7 @@ test("보기 권한은 내용·메모를 받지 않음을 알리고, 이전 문�
   });
   await openInquiries(page);
   await rows(page).first().getByRole("link").click();
-  const detail = page.getByRole("complementary", { name: "문의 상세" });
+  const detail = detailOf(page);
   await expect(detail.getByText(/보기 권한으로는 문의 내용/)).toBeVisible();
   await expect(detail.getByText("이전 문의 · 처리 이력 없음")).toBeVisible();
   await expect(detail.getByText("처리 메모(내부용)")).toHaveCount(0);
