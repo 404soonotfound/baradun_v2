@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { createLogger } from "../core/collect/log";
 import type { CollectRunResult } from "./ocean";
-import { finishRun, triggerPublish, type FinishDeps } from "./trigger";
+import {
+  finishRun,
+  runCollector,
+  triggerPublish,
+  type FinishDeps,
+} from "./trigger";
 
 const FAILURES = [{ source: "sea_obs", reason: "timeout" }];
 
@@ -160,5 +165,58 @@ describe("finishRun 실행 기록", () => {
       slotId: "s1",
       error: "ProvisionedThroughputExceededException",
     });
+  });
+});
+
+// 수집 함수가 예외로 끝난 실행도 실패로 기록함(기록이 없으면 이전 정상 기록이 계속 '정상'으로 보임)
+describe("runCollector", () => {
+  it("예외로 끝나면 실패로 기록하고 그대로 던지며 깨우지 않음", async () => {
+    let calls = 0;
+    const recorded: unknown[] = [];
+    const { deps: d } = deps(
+      async () => {
+        calls += 1;
+      },
+      async (result) => {
+        recorded.push(result);
+      },
+    );
+    const boom = Object.assign(new Error("throttled"), {
+      name: "ProvisionedThroughputExceededException",
+    });
+    await expect(
+      runCollector(async () => {
+        throw boom;
+      }, d),
+    ).rejects.toBe(boom);
+    expect(calls).toBe(0);
+    expect(recorded).toEqual([
+      {
+        status: "failed",
+        slotId: "",
+        failures: [
+          {
+            source: "run",
+            reason: "exception:ProvisionedThroughputExceededException",
+          },
+        ],
+      },
+    ]);
+  });
+
+  it("정상으로 끝나면 finishRun과 같이 기록하고 깨움", async () => {
+    let calls = 0;
+    let records = 0;
+    const { deps: d } = deps(
+      async () => {
+        calls += 1;
+      },
+      async () => {
+        records += 1;
+      },
+    );
+    const result = { status: "complete", slotId: "s1" } as const;
+    expect(await runCollector(async () => result, d)).toEqual(result);
+    expect([records, calls]).toEqual([1, 1]);
   });
 });

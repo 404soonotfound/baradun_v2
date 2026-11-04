@@ -28,7 +28,7 @@ import {
 } from "./ocean";
 import { COLLECT_POLICY } from "./policy";
 import { collectRip, parseRipLedger, RIP_JOB, type RipSource } from "./rip";
-import { finishRun } from "./trigger";
+import { runCollector } from "./trigger";
 import { collectWarnings, WARNINGS_JOB } from "./warnings";
 import { formatUtcIso } from "../core/warnings/time";
 
@@ -96,14 +96,15 @@ function maskFailure(failure: RunFailure): RunFailure {
     : { ...masked, message: maskSecrets(failure.message, loadedKeys) };
 }
 
-async function finish(
+// 수집 함수가 예외로 끝나도 실행 기록에 실패로 남김(trigger.ts runCollector)
+async function run(
   job: string,
   context: LambdaContext,
-  startedMs: number,
-  result: CollectRunResult,
+  collect: () => Promise<CollectRunResult>,
 ): Promise<CollectRunResult> {
+  const startedMs = Date.now();
   const runLog = new DynamoRunLog(documents, requiredEnv("OPS_TABLE_NAME"));
-  return finishRun(result, {
+  return runCollector(collect, {
     record: async (claimed) => {
       const nowMs = Date.now();
       await runLog.record(
@@ -138,12 +139,8 @@ export async function oceanHandler(
   _event: unknown,
   context: LambdaContext,
 ): Promise<CollectRunResult> {
-  const startedMs = Date.now();
-  return finish(
-    OCEAN_JOB,
-    context,
-    startedMs,
-    await collectOcean(deps(context.awsRequestId)),
+  return run(OCEAN_JOB, context, () =>
+    collectOcean(deps(context.awsRequestId)),
   );
 }
 
@@ -151,12 +148,8 @@ export async function warningsHandler(
   _event: unknown,
   context: LambdaContext,
 ): Promise<CollectRunResult> {
-  const startedMs = Date.now();
-  return finish(
-    WARNINGS_JOB,
-    context,
-    startedMs,
-    await collectWarnings(deps(context.awsRequestId)),
+  return run(WARNINGS_JOB, context, () =>
+    collectWarnings(deps(context.awsRequestId)),
   );
 }
 
@@ -170,16 +163,9 @@ export async function catalogHandler(
   _event: unknown,
   context: LambdaContext,
 ): Promise<CollectRunResult> {
-  catalogPhotos ??= parsePhotoLedger(photoLedger);
-  const startedMs = Date.now();
-  return finish(
-    CATALOG_JOB,
-    context,
-    startedMs,
-    await collectCatalog({
-      ...deps(context.awsRequestId),
-      photos: catalogPhotos,
-    }),
+  const photos = (catalogPhotos ??= parsePhotoLedger(photoLedger));
+  return run(CATALOG_JOB, context, () =>
+    collectCatalog({ ...deps(context.awsRequestId), photos }),
   );
 }
 
@@ -190,12 +176,8 @@ export async function ripHandler(
   _event: unknown,
   context: LambdaContext,
 ): Promise<CollectRunResult> {
-  ripSources ??= parseRipLedger(ripLedger);
-  const startedMs = Date.now();
-  return finish(
-    RIP_JOB,
-    context,
-    startedMs,
-    await collectRip({ ...deps(context.awsRequestId), sources: ripSources }),
+  const sources = (ripSources ??= parseRipLedger(ripLedger));
+  return run(RIP_JOB, context, () =>
+    collectRip({ ...deps(context.awsRequestId), sources }),
   );
 }
