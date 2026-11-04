@@ -192,6 +192,21 @@ test.describe("운영자 로그인", () => {
     await expect(page).toHaveURL(/\/login\/$/);
   });
 
+  test("운영자 탭이 열려 있어도 데모 주소의 새 탭은 넘겨받지 않고 데모 로그인 화면을 보여 준다", async ({
+    page,
+    context,
+  }) => {
+    await mockCognito(page, srpScript({ email: OPS, after: "tokens" }));
+    await mockOps(page, ME_OK);
+    await signInWithPassword(page, "/login/", OPS);
+    await expect(page.getByRole("heading", { name: "운영 홈" })).toBeVisible();
+
+    const second = await context.newPage();
+    await second.goto("/login/demo/");
+    await expect(second.getByLabel("이메일")).toBeVisible();
+    await expect(second).toHaveURL(/\/login\/demo\/$/);
+  });
+
   test("로그인한 탭이 없으면 새 탭은 로그인 화면으로 간다", async ({
     page,
   }) => {
