@@ -636,7 +636,7 @@ async function selectText(page: Page, text: string) {
   }, text);
 }
 
-test("개인정보 가리기: 고른 부분을 확인 뒤 가리고, 쓰던 메모는 그대로 둔다", async ({
+test("개인정보 가리기: 선택한 부분을 확인 뒤 가리고, 쓰던 메모는 그대로 둔다", async ({
   page,
 }) => {
   await signIn(page);
@@ -667,18 +667,18 @@ test("개인정보 가리기: 고른 부분을 확인 뒤 가리고, 쓰던 메�
   const detail = detailOf(page);
   await detail.getByLabel("처리 메모(내부용)").fill("쓰던 메모");
   await detail.getByRole("button", { name: "개인정보 가리기" }).click();
-  const apply = detail.getByRole("button", { name: "고른 부분 가리기" });
+  const apply = detail.getByRole("button", { name: "가리기", exact: true });
   await expect(apply).toBeDisabled();
   await selectText(page, "010-0000-0000");
-  await expect(detail.getByText("고른 부분 13자")).toBeVisible();
+  await expect(detail.getByText("선택한 글 13자")).toBeVisible();
   await expectNoA11yViolations(page);
   await apply.click();
   await expect(detail.getByRole("alert")).toContainText(
     "원래 글은 되돌릴 수 없어요",
   );
-  await detail.getByRole("button", { name: "가리기", exact: true }).click();
+  await detail.getByRole("button", { name: "가리고 저장" }).click();
   await expect(
-    detail.getByRole("status").filter({ hasText: "고른 부분을 가렸어요" }),
+    detail.getByRole("status").filter({ hasText: "개인정보를 가렸어요" }),
   ).toBeVisible();
   // 원래 본문(\r\n) 위치로 보내고, 그 자리 글을 함께 보냄
   const start = message.indexOf("010");
@@ -713,8 +713,8 @@ test("개인정보 가리기: 본문이 그사이 바뀌었으면(400) 가리지
   const detail = detailOf(page);
   await detail.getByRole("button", { name: "개인정보 가리기" }).click();
   await selectText(page, "입수 금지");
-  await detail.getByRole("button", { name: "고른 부분 가리기" }).click();
   await detail.getByRole("button", { name: "가리기", exact: true }).click();
+  await detail.getByRole("button", { name: "가리고 저장" }).click();
   const alert = detail
     .getByRole("alert")
     .filter({ hasText: "가리지 않았어요" });
