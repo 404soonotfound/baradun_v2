@@ -210,6 +210,11 @@ test.describe("운영자 로그인", () => {
     await page.reload();
     await expect(page).toHaveURL(/\/login\/$/);
     await expect(page.getByLabel("이메일")).toBeVisible();
+    await expect(page.getByText("로그인을 이어 가지 못했어요")).toBeVisible();
+    await expect(
+      page.getByText("이 탭에 남아 있던 로그인이 만료됐거나"),
+    ).toBeVisible();
+    await expectNoA11yViolations(page);
     const stored = await page.evaluate(() => sessionStorage.length);
     expect(stored).toBe(0);
   });
