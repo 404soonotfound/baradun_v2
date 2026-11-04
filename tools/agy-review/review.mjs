@@ -253,7 +253,10 @@ export function main(argv = process.argv.slice(2)) {
     rmSync(tarPath);
     const settingsPath = join(outDir, "settings.json");
     writeFileSync(settingsPath, JSON.stringify(REVIEW_SETTINGS, null, 2));
-    const schemaPath = join(HERE, "schema.json");
+    // 스키마는 기록 폴더로 복사하고 검사기도 지금 만듦: 리뷰 도중 작업 폴더 checkout이 바뀌어도 그대로 씀
+    const schemaPath = join(outDir, "schema.json");
+    writeFileSync(schemaPath, readFileSync(join(HERE, "schema.json")));
+    const validate = createValidator(schemaPath);
     const expectedBase = { model: opts.model, cwd: snapshot };
     // agy가 함께 설치한 내장 안내 문서 폴더: 여기 읽기만 사본 밖이어도 참고로 남김
     const agyBuiltinDir = join(homedir(), ".gemini/antigravity-cli/builtin");
@@ -341,7 +344,7 @@ export function main(argv = process.argv.slice(2)) {
       verdict = verifyReview({
         exitCode: r.exitCode,
         text: r.stdout,
-        validate: createValidator(schemaPath),
+        validate,
         expected: {
           ...expectedBase,
           baseSha,
