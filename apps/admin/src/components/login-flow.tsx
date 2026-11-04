@@ -241,6 +241,9 @@ export function LoginFlow({ pool }: { pool: PoolKind }) {
     setView({ kind: "form", error: null });
   };
 
+  // 다른 탭에서 로그인을 넘겨받는 동안(최대 0.4초)은 로그인 칸을 그리지 않음(받으면 바로 보던 화면으로)
+  if (snapshot.status === "signed_out" && snapshot.joining) return null;
+
   switch (view.kind) {
     case "form":
       return (
