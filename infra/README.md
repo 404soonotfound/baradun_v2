@@ -10,7 +10,7 @@ npx cdk synth                               # CloudFormation 템플릿 생성 (i
 npx cdk diff --method=change-set            # 배포된 스택과 변경 세트 비교
 ```
 
-사이트 자동 배포(`.github/workflows/deploy.yml`, `npm run deploy:prod`)는 GitHub OIDC로 사이트 전용 역할(`DeployRole`)을 맡아 S3 파일 동기화와 CloudFront 캐시 무효화만 수행하며, CloudFormation이나 CDK 실행 정책을 거치지 않습니다. 자동 배포는 main에서 `ci-ok`가 성공한 가장 새 커밋을 올리며(CI가 늦게 끝난 옛 커밋이 새 배포를 덮지 않게), 앱마다 마지막으로 올린 커밋(사이트 주소의 `deploy-version.txt`, 저장소 변수 `SITE_URL`·`ADMIN_SITE_URL`로 읽음) 이후 그 앱이 쓰는 파일이 바뀐 앱(사용자 사이트·운영자 사이트)만 올리고, `npm run deploy:prod`(수동 실행)는 두 앱을 모두 올립니다(BRD-178). 저장소 변수(사이트 주소·버킷·로그인 풀 값 등 빌드 값)만 바꾼 경우는 파일 변경이 아니라 자동 배포가 건너뛰므로 `npm run deploy:prod`로 다시 올립니다. main push CI는 커밋마다 따로 돌고 취소하지 않으며, main 규칙은 최신 브랜치만 머지할 수 있게 합니다.
+사이트 자동 배포(`.github/workflows/deploy.yml`, `npm run deploy:prod`)는 GitHub OIDC로 사이트 전용 역할(`DeployRole`)을 맡아 S3 파일 동기화와 CloudFront 캐시 무효화만 수행하며, CloudFormation이나 CDK 실행 정책을 거치지 않습니다. 자동 배포는 앱(사용자 사이트·운영자 사이트)마다 마지막으로 올린 커밋(운영 주소의 `deploy-version.txt`, 저장소 변수 `SITE_URL`·`ADMIN_SITE_URL`로 읽음) 뒤로 그 앱이 쓰는 파일을 바꾸고 main push CI가 성공한 가장 새 커밋을 올립니다(`.github/scripts/deploy-plan.sh`). 그런 커밋이 없으면 건너뛰므로, CI가 늦게 끝난 옛 커밋이 새 배포를 덮지 않고 CI가 실패한 커밋의 변경은 그 앱을 다시 검사한 뒤 커밋으로만 나갑니다. 표시를 못 읽으면 경고를 남기고 최근 이력에서 고른 커밋을 올리며, `npm run deploy:prod`(수동 실행)는 두 앱을 모두 올립니다(BRD-178). 저장소 변수(사이트 주소·버킷·로그인 풀 값 등 빌드 값)만 바꾼 경우는 파일 변경이 아니라 자동 배포가 건너뛰므로 `npm run deploy:prod`로 다시 올립니다. main push CI는 커밋마다 따로 돌고 취소하지 않으며, main 규칙은 최신 브랜치만 머지할 수 있게 합니다.
 
 인프라 스택 배포는 요청이 있을 때만 사람이 실행하고, 최신 `origin/main`을 꺼낸 배포용 작업 트리에서 합니다. 작업 중인 브랜치에서 배포하면 머지되지 않은 코드가 실환경에 올라갑니다. 아래 명령 하나가 그 순서를 모두 합니다(BRD-169, `infra/scripts/deploy.mjs`).
 
