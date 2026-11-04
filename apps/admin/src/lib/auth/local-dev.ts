@@ -5,6 +5,7 @@ import {
   localSaveInquiry,
 } from "./local-inquiries";
 import { localAudit } from "./local-audit";
+import { localCollection } from "./local-collection";
 import { localNotices } from "./local-notices";
 import { SESSION } from "./policy";
 import type { AuthSession } from "./session";
@@ -152,6 +153,9 @@ export function localOps<T>(
   }
   if (method === "GET" && url.pathname === "/ops/audit") {
     return localAudit<T>(url.searchParams);
+  }
+  if (method === "GET" && url.pathname === "/ops/collection") {
+    return localCollection<T>();
   }
   if (url.pathname.startsWith("/ops/notices")) {
     const notices = localNotices<T>(url.pathname, request);
