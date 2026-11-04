@@ -140,7 +140,19 @@ describe("collectWarnings", () => {
       tsunami: TSUNAMI_NONE,
     });
 
-    expect((await collectWarnings(deps)).status).toBe("partial");
+    const result = await collectWarnings(deps);
+    expect(result.status).toBe("partial");
+    // 실행 기록(BRD-149)에도 출처 code·정제한 message를 남김
+    expect(result).toMatchObject({
+      failures: [
+        {
+          source: "pwncd",
+          reason: "resultCode:22",
+          code: "22",
+          message: "LIMITED raw key: *** encoded key: ***",
+        },
+      ],
+    });
     expect((await savedAttempt(state))?.sources.pwncd).toMatchObject({
       status: "failed",
       reason: "resultCode:22",

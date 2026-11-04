@@ -167,7 +167,12 @@ describe("collectCatalog", () => {
       reason: "timeout",
       attempts: 2,
     }));
-    expect((await collectCatalog(deps())).status).toBe("failed");
+    const result = await collectCatalog(deps());
+    expect(result.status).toBe("failed");
+    // 같은 사유는 한 줄로 묶음(BRD-149 실행 기록)
+    expect(result).toMatchObject({
+      failures: [{ source: "photo", reason: "timeout" }],
+    });
     expect(
       await state.getState(CATALOG_STATE.photos.pk, CATALOG_STATE.photos.sk),
     ).toBeNull();
@@ -177,7 +182,11 @@ describe("collectCatalog", () => {
     const { deps, urls } = setup(() => common("1", A.url, "Type1"), {
       key: null,
     });
-    expect((await collectCatalog(deps())).status).toBe("failed");
+    expect(await collectCatalog(deps())).toEqual({
+      status: "failed",
+      slotId: expect.any(String),
+      failures: [{ source: "photo", reason: "api_key" }],
+    });
     expect(urls).toEqual([]);
   });
 
@@ -197,6 +206,15 @@ describe("collectCatalog", () => {
     const result = await collectCatalog(deps(many));
     expect(result.status).toBe("partial");
     expect(urls.length).toBeLessThan(many.length);
+    expect(result).toMatchObject({
+      failures: [
+        {
+          source: "photo",
+          reason: "unchecked",
+          count: many.length - urls.length,
+        },
+      ],
+    });
   });
 
   it("로그에 API 키가 남지 않음", async () => {

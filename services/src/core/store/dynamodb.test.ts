@@ -8,6 +8,7 @@ import {
 import { describe, expect, it } from "vitest";
 import {
   DynamoOpsStore,
+  DynamoRunLog,
   DynamoStateStore,
   type DocumentSender,
 } from "./dynamodb";
@@ -295,5 +296,48 @@ describe("DynamoStateStore", () => {
     await expect(
       state.putState("wave#1", "latest", { height: 1.5 }, NOW + 1),
     ).rejects.toBe(throttled);
+  });
+});
+
+describe("DynamoRunLog (BRD-149)", () => {
+  const record = {
+    job: "collect-warnings",
+    slotId: "202611041403",
+    startedAt: "2026-11-04T05:03:00.000Z",
+    finishedAt: "2026-11-04T05:03:02.000Z",
+    status: "partial",
+    failures: [{ source: "tsunami", reason: "http:500" }],
+  } as const;
+
+  it("수집기 파티션에 새 키로만 쓰고 8일 TTL을 붙인다", async () => {
+    const { client, sent } = fakeClient({});
+    await new DynamoRunLog(client, OPS).record(record, "req-1", NOW);
+    expect(sent).toHaveLength(1);
+    expect(sent[0]).toBeInstanceOf(PutCommand);
+    expect(sent[0]!.input).toEqual({
+      TableName: OPS,
+      Item: {
+        pk: "collect#run#collect-warnings",
+        sk: "2026-11-04T05:03:00.000Z#req-1",
+        ...record,
+        ttl: Math.floor((NOW + 8 * 24 * 60 * 60 * 1000) / 1000),
+      },
+      ConditionExpression: "attribute_not_exists(pk)",
+    });
+  });
+
+  it("같은 키가 있으면 덮지 않고 넘어가며, 그 밖의 오류는 던진다", async () => {
+    await new DynamoRunLog(fakeClient(conditionFailed()).client, OPS).record(
+      record,
+      "req-1",
+      NOW,
+    );
+    await expect(
+      new DynamoRunLog(fakeClient(throttled).client, OPS).record(
+        record,
+        "req-1",
+        NOW,
+      ),
+    ).rejects.toThrow("Rate exceeded");
   });
 });
