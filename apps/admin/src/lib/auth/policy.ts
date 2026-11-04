@@ -19,7 +19,7 @@ export const PASSWORD_RULE = { minLength: 12, reuseBlocked: 5 } as const;
 // 운영 API 토큰 헤더. services/src/admin/policy.ts ACCESS_TOKEN_HEADER와 같음
 export const ACCESS_TOKEN_HEADER = "x-baradun-access-token";
 
-// 탭 사이 로그인 채널 이름. 로그아웃 신호, 새 탭 넘겨받기, 갱신 토큰·활동 시각 나누기(2026-11-04 D16-A10 변경)
+// 탭 사이 로그인 채널 이름. 로그아웃 신호, 새 탭 넘겨받기, 갱신 토큰·활동 시각 나누기(결정 기록 D17-9)
 export const LOGOUT_CHANNEL = "baradun-admin-auth";
 // 탭 사이 토큰 갱신 잠금 이름(Web Locks). refresh token 회전 유예가 0초라 한 탭씩 갱신
 export const REFRESH_LOCK = "baradun-admin-refresh";

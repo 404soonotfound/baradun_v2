@@ -198,7 +198,7 @@ describe("AuthSession", () => {
   });
 });
 
-// 새 탭 넘겨받기·탭 사이 갱신 (2026-11-04 사용자 결정, D16-A10 변경). 토큰은 메모리에만
+// 새 탭 넘겨받기·탭 사이 갱신 (결정 기록 D17-9). 토큰은 메모리에만
 describe("탭 사이 로그인", () => {
   // 두 탭을 같은 채널로 잇는 가짜 BroadcastChannel(보낸 탭은 받지 않음)
   function pair(overrides: Partial<SessionDeps> = {}) {
