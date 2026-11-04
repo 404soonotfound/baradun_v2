@@ -1,5 +1,9 @@
 import type { PoolKind } from "./config";
-import { localInquiry, localInquiryPage } from "./local-inquiries";
+import {
+  localInquiry,
+  localInquiryPage,
+  localSaveInquiry,
+} from "./local-inquiries";
 import { SESSION } from "./policy";
 import type { AuthSession } from "./session";
 import type { Tokens } from "./srp";
@@ -140,6 +144,9 @@ export function localOps<T>(
   const inquiry = /^\/ops\/inquiries\/([^/]+)$/.exec(url.pathname);
   if (method === "GET" && inquiry) {
     return localInquiry<T>(decodeURIComponent(inquiry[1]!));
+  }
+  if (method === "PATCH" && inquiry) {
+    return localSaveInquiry<T>(decodeURIComponent(inquiry[1]!), request.body);
   }
   if (method === "GET" && path === "/ops/me") {
     return {

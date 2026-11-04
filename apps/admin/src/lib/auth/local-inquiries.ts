@@ -12,11 +12,12 @@ interface Example {
   readonly beachId?: string;
   readonly activity?: string;
   readonly hoursAgo: number;
-  readonly status: Status;
+  status: Status;
+  version: number;
   readonly legacy: boolean;
   readonly message: string;
-  readonly memo: string | null;
-  readonly rejectReason: string | null;
+  memo: string | null;
+  rejectReason: string | null;
 }
 
 const TYPES = [
@@ -34,7 +35,8 @@ const BEACHES: readonly (readonly [string | undefined, string | undefined])[] =
     ["b9999", "scuba"], // 해변 목록에 없는 ID(이름표에 없을 때 화면 확인용)
   ];
 
-const EXAMPLES: readonly Example[] = Array.from({ length: 26 }, (_, i) => {
+// 처리 저장을 해 볼 수 있게 이 탭 메모리에서 바뀜(새로고침하면 처음으로)
+const EXAMPLES: Example[] = Array.from({ length: 26 }, (_, i) => {
   const status: Status =
     i < 9
       ? "received"
@@ -51,6 +53,7 @@ const EXAMPLES: readonly Example[] = Array.from({ length: 26 }, (_, i) => {
     ...(activity ? { activity } : {}),
     hoursAgo: 2 + i * 7,
     status,
+    version: 1,
     legacy: i === 20,
     message: `(로컬 예시 ${i + 1}) 현장에 입수 금지 깃발이 걸려 있어요. 15:10에 봤어요.`,
     memo: i % 3 === 0 ? "출입 통제는 출시에 판단하지 않음(G2)." : null,
@@ -66,7 +69,7 @@ function summary(e: Example, now: number) {
     ...(e.activity ? { activity: e.activity } : {}),
     receivedAt: new Date(now - e.hoursAgo * 3_600_000).toISOString(),
     status: e.status,
-    version: 1,
+    version: e.version,
     legacy: e.legacy,
   };
 }
@@ -110,5 +113,46 @@ export function localInquiry<T>(id: string): OpsResult<T> {
       emailCollected: false,
       photosCollected: false,
     } as T,
+  };
+}
+
+// 처리 저장(PATCH). 서버처럼 version이 다르면 409, 반려는 이유가 필요함
+export function localSaveInquiry<T>(id: string, body: unknown): OpsResult<T> {
+  const e = EXAMPLES.find((x) => x.inquiryId === id);
+  if (!e) return { ok: false, status: 404, code: "not_found", requestId: null };
+  const patch = body as {
+    version: number;
+    status?: Status;
+    memo?: string | null;
+    rejectReason?: string;
+  };
+  if (patch.version !== e.version) {
+    return {
+      ok: false,
+      status: 409,
+      code: "conflict",
+      requestId: null,
+      reason: "version",
+    };
+  }
+  if (patch.status === "rejected" && !patch.rejectReason?.trim()) {
+    return {
+      ok: false,
+      status: 400,
+      code: "invalid_request",
+      requestId: null,
+      field: "rejectReason",
+    };
+  }
+  if (patch.status) {
+    e.status = patch.status;
+    e.rejectReason = patch.status === "rejected" ? patch.rejectReason! : null;
+  }
+  if (patch.memo !== undefined) e.memo = patch.memo;
+  e.version += 1;
+  return {
+    ok: true,
+    status: 200,
+    body: { inquiryId: id, version: e.version } as T,
   };
 }
