@@ -7,6 +7,7 @@ import {
   type RipReading,
   type RipResponse,
 } from "../core/rip/rip-current";
+import { collapseFailures, type RunFailure } from "../core/collect/run-log";
 import type { StateValue } from "../core/store/types";
 import { formatUtcIso, parseUtcIso } from "../core/warnings/time";
 import {
@@ -295,5 +296,16 @@ export async function collectRip(deps: RipDeps): Promise<CollectRunResult> {
     status,
     ...counts,
   });
-  return { status, slotId };
+  if (status === "complete") return { status, slotId };
+  // 해변별 실패는 같은 사유끼리 묶어 해변 수로 남김
+  const failures: RunFailure[] = [];
+  for (const result of results.values()) {
+    if (result.status === "failed")
+      failures.push({ source: "rip", reason: result.reason });
+    else if (result.status === "none" && inSeason)
+      failures.push({ source: "rip", reason: "no_data" });
+  }
+  if (!saved)
+    failures.push({ source: "storage", reason: "readings_not_saved" });
+  return { status, slotId, failures: collapseFailures(failures) };
 }

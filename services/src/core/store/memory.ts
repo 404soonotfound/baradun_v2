@@ -1,3 +1,4 @@
+import type { RunLog, RunRecord } from "../collect/run-log";
 import {
   assertSnapshotVersion,
   decideStateWrite,
@@ -141,5 +142,14 @@ export class MemoryOpsStore implements OpsStore {
     }
     this.publishedVersion = version;
     return true;
+  }
+}
+
+// 수집 실행 기록. 테스트에서 남긴 기록을 확인할 때 records를 봄
+export class MemoryRunLog implements RunLog {
+  readonly records: { record: RunRecord; owner: string }[] = [];
+
+  async record(record: RunRecord, owner: string): Promise<void> {
+    this.records.push({ record, owner });
   }
 }
