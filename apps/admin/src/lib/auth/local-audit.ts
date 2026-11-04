@@ -1,4 +1,4 @@
-import type { AuditView } from "../audit";
+import { AUDIT_CATEGORIES, categoryOf, type AuditView } from "../audit";
 import type { OpsResult } from "./ops-fetch";
 
 // 로컬 테스트 로그인용 예시 변경 이력 (BRD-155). local-dev.ts가 불러와 개발 서버에서만 씀(배포 빌드에서 빠짐)
@@ -21,9 +21,32 @@ function examples(now: number): AuditView[] {
   return [
     {
       ...base(1, SUBS[0]!, "publisher"),
-      action: "notice.expose",
+      action: "notice.update",
       target: { kind: "notice", id: "n-local-live" },
-      changes: ["endsAt"],
+      targetLabel: "(로컬 예시) 새벽 점검 예고",
+      changes: ["title"],
+      notice: {
+        before: {
+          kind: "maintenance_notice",
+          title: { ko: "(로컬 예시) 새벽 점검 예고", en: "" },
+          body: { ko: "새벽 2시~4시에 늦게 바뀔 수 있어요.", en: "" },
+          startsAt: at(3),
+          endsAt: at(-20),
+        },
+        after: {
+          kind: "maintenance_notice",
+          title: {
+            ko: "(로컬 예시) 새벽 점검 예고",
+            en: "(Local) Planned maintenance",
+          },
+          body: {
+            ko: "새벽 2시~4시에 늦게 바뀔 수 있어요.",
+            en: "Updates may be late from 2 to 4 a.m.",
+          },
+          startsAt: at(3),
+          endsAt: at(-20),
+        },
+      },
     },
     {
       ...base(2, SUBS[1]!, "editor"),
@@ -41,14 +64,16 @@ function examples(now: number): AuditView[] {
     },
     {
       ...base(30, SUBS[0]!, "publisher"),
-      action: "notice.update",
+      action: "notice.create",
       target: { kind: "notice", id: "n-local-draft" },
-      changes: ["title", "body"],
+      targetLabel: "(로컬 예시) 영어 문구를 아직 안 씀",
+      changes: ["kind", "title", "body", "startsAt", "endsAt"],
     },
     {
       ...base(50, SUBS[0]!, "publisher"),
       action: "notice.delete",
       target: { kind: "notice", id: "n-local-old" },
+      targetLabel: "(로컬 예시) 지난 안내",
       changes: ["deletedAt"],
     },
   ];
@@ -56,30 +81,34 @@ function examples(now: number): AuditView[] {
 
 export function localAudit<T>(query: URLSearchParams): OpsResult<T> {
   const now = Date.now();
-  const action = query.get("action");
+  const category = query.get("category");
   const actor = query.get("actor");
+  const q = query.get("q");
   const from =
     query.get("from") ?? new Date(now - 30 * 86_400_000).toISOString();
   const to = query.get("to") ?? new Date(now).toISOString();
-  const items = examples(now).filter(
+  const base = examples(now).filter(
     (e) =>
-      (!action || e.action === action) &&
       (!actor || e.actorSub === actor) &&
+      (!q || (e.targetLabel ?? "").includes(q) || e.target.id.includes(q)) &&
       e.at >= from &&
       e.at <= to,
   );
+  const counts = Object.fromEntries([
+    ["all", base.length],
+    ...AUDIT_CATEGORIES.map((c) => [
+      c,
+      base.filter((e) => categoryOf(e.action) === c).length,
+    ]),
+  ]);
   return {
     ok: true,
     status: 200,
     body: {
-      filter: {
-        from,
-        to,
-        ...(action ? { action } : {}),
-        ...(actor ? { actor } : {}),
-      },
-      items,
+      filter: { from, to },
+      items: base.filter((e) => !category || categoryOf(e.action) === category),
       nextCursor: null,
+      ...(query.get("cursor") ? {} : { counts }),
     } as T,
   };
 }
