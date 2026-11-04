@@ -1,4 +1,5 @@
 import type { PoolKind } from "./config";
+import { localInquiry, localInquiryPage } from "./local-inquiries";
 import { SESSION } from "./policy";
 import type { AuthSession } from "./session";
 import type { Tokens } from "./srp";
@@ -132,6 +133,14 @@ export function localOps<T>(
   request: OpsRequest,
 ): OpsResult<T> {
   const method = request.method ?? "GET";
+  const url = new URL(path, "http://local");
+  if (method === "GET" && url.pathname === "/ops/inquiries") {
+    return localInquiryPage<T>(url.searchParams);
+  }
+  const inquiry = /^\/ops\/inquiries\/([^/]+)$/.exec(url.pathname);
+  if (method === "GET" && inquiry) {
+    return localInquiry<T>(decodeURIComponent(inquiry[1]!));
+  }
   if (method === "GET" && path === "/ops/me") {
     return {
       ok: true,
