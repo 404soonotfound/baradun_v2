@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
-import { AuthSession, JOIN_WAIT_MS, type SessionDeps } from "./session";
+import {
+  AuthSession,
+  JOIN_WAIT_MS,
+  type SavedSession,
+  type SessionDeps,
+} from "./session";
 import type { Tokens } from "./srp";
 import { fakeAccess, fakeJwt } from "./test-helpers";
 
@@ -425,5 +430,164 @@ describe("탭 사이 로그인", () => {
     b.session.touch();
     await a.advance(20 * MIN);
     expect(a.session.getSnapshot()).toMatchObject({ status: "signed_in" });
+  });
+});
+
+// 2026-11-04 사용자 결정(D17-11): refresh token만 이 탭의 저장소에 두고 새로고침해도 이어 감
+describe("새로고침해도 로그인 유지", () => {
+  function memoryStore(initial: SavedSession | null = null) {
+    let value: unknown = initial;
+    return {
+      load: () => value,
+      save: vi.fn((saved: SavedSession | null) => {
+        value = saved;
+      }),
+      get: () => value,
+    };
+  }
+
+  const SAVED: SavedSession = {
+    pool: "operator",
+    sub: "operator-sub",
+    refreshToken: "refresh-1",
+    authTimeMs: AUTH,
+    lastActivityMs: AUTH,
+  };
+
+  // 새로고침한 탭: 저장 값을 가진 채 10분 뒤에 열림
+  function reloaded(saved: SavedSession | null = SAVED) {
+    const store = memoryStore(saved);
+    const tab = setup({ store, newId: () => "tab-new" });
+    tab.setNow(AUTH + 10 * MIN);
+    return { ...tab, store };
+  }
+
+  it("로그인하면 refresh token·최초 인증·활동 시각만 두고, 갱신하면 회전된 토큰으로 바꾸고, 로그아웃하면 지운다", async () => {
+    const store = memoryStore();
+    const { session, advance } = setup({ store });
+    session.signIn("operator", tokens());
+    expect(store.get()).toEqual(SAVED);
+    expect(JSON.stringify(store.get())).not.toMatch(/eyJ/);
+    await advance(14 * MIN);
+    expect(store.get()).toMatchObject({ refreshToken: "refresh-2" });
+    await session.logout();
+    expect(store.get()).toBeNull();
+  });
+
+  it("열린 탭이 없으면 저장한 refresh token으로 갱신해 같은 최초 인증으로 이어 간다(그동안 로그인 화면을 그리지 않음)", async () => {
+    const { session, deps, advance, store } = reloaded();
+    session.join();
+    expect(session.getSnapshot()).toMatchObject({ joining: true });
+    await advance(JOIN_WAIT_MS);
+    expect(deps.refresh).toHaveBeenCalledWith("operator", "refresh-1");
+    expect(session.getSnapshot()).toMatchObject({
+      status: "signed_in",
+      pool: "operator",
+      email: "ops@example.test",
+      times: { maxEndAt: AUTH + 8 * 60 * MIN },
+    });
+    expect(store.get()).toMatchObject({
+      refreshToken: "refresh-2",
+      lastActivityMs: AUTH + 10 * MIN + JOIN_WAIT_MS,
+    });
+  });
+
+  it("갱신하는 동안 로그인 화면을 그리지 않는다", async () => {
+    let finish: (t: Tokens) => void = () => undefined;
+    const store = memoryStore(SAVED);
+    const tab = setup({
+      store,
+      refresh: vi.fn(() => new Promise<Tokens>((done) => (finish = done))),
+    });
+    tab.session.join();
+    await tab.advance(JOIN_WAIT_MS);
+    expect(tab.session.getSnapshot()).toMatchObject({
+      status: "signed_out",
+      joining: true,
+    });
+    finish(tokens(30, AUTH_SEC, 2));
+    await new Promise((done) => setTimeout(done, 0));
+    expect(tab.session.getSnapshot()).toMatchObject({ status: "signed_in" });
+  });
+
+  it("유휴 60분이나 최초 인증 8시간이 지난 저장 값은 쓰지 않고 지운다", async () => {
+    for (const now of [AUTH + 60 * MIN, AUTH + 8 * 60 * MIN]) {
+      const saved =
+        now === AUTH + 60 * MIN ? SAVED : { ...SAVED, lastActivityMs: now };
+      const { session, deps, setNow, advance, store } = reloaded(saved);
+      setNow(now);
+      session.join();
+      await advance(JOIN_WAIT_MS);
+      expect(deps.refresh).not.toHaveBeenCalled();
+      expect(session.getSnapshot()).toEqual({
+        status: "signed_out",
+        reason: null,
+      });
+      expect(store.get()).toBeNull();
+    }
+  });
+
+  it("갱신이 실패하거나 다른 계정·다른 최초 인증의 토큰이면 지우고 로그인 화면으로", async () => {
+    const answers: (() => Promise<Tokens>)[] = [
+      () => Promise.reject(new Error("NotAuthorizedException")),
+      async () => tokens(30, AUTH_SEC + 60, 2),
+      async () => ({
+        ...tokens(30, AUTH_SEC, 2),
+        accessToken: fakeAccess({
+          sub: "other-sub",
+          exp: AUTH_SEC + 30 * 60,
+        }),
+      }),
+    ];
+    for (const answer of answers) {
+      const store = memoryStore(SAVED);
+      const tab = setup({ store, refresh: vi.fn(answer) });
+      tab.session.join();
+      await tab.advance(JOIN_WAIT_MS);
+      expect(tab.session.getSnapshot()).toEqual({
+        status: "signed_out",
+        reason: null,
+      });
+      expect(store.get()).toBeNull();
+    }
+  });
+
+  it("데모 로그인 화면은 운영자 저장 값으로 이어 가지 않는다", async () => {
+    const { session, deps, advance, store } = reloaded();
+    session.join("demo");
+    await advance(JOIN_WAIT_MS);
+    expect(deps.refresh).not.toHaveBeenCalled();
+    expect(session.getSnapshot()).toEqual({
+      status: "signed_out",
+      reason: null,
+    });
+    expect(store.get()).toEqual(SAVED);
+  });
+
+  it("열린 탭이 답하면 저장 값으로 갱신하지 않고 넘겨받은 토큰을 저장한다", async () => {
+    const a = setup({ newId: () => "tab-a" });
+    const b = reloaded({ ...SAVED, refreshToken: "refresh-old" });
+    a.deps.channel!.post = (m) => b.other(m);
+    b.deps.channel!.post = (m) => a.other(m);
+    a.session.signIn("operator", tokens());
+    b.session.join();
+    await b.advance(JOIN_WAIT_MS);
+    expect(b.deps.refresh).not.toHaveBeenCalled();
+    expect(b.session.getSnapshot()).toMatchObject({ status: "signed_in" });
+    expect(b.store.get()).toMatchObject({ refreshToken: "refresh-1" });
+  });
+
+  it("다른 탭의 로그아웃 신호로 로그아웃하면 저장 값도 지운다", () => {
+    const store = memoryStore();
+    const { session, other } = setup({ store });
+    session.signIn("operator", tokens());
+    other({
+      kind: "logout",
+      reason: "logout",
+      pool: "operator",
+      sub: "operator-sub",
+      authTimeMs: AUTH,
+    });
+    expect(store.get()).toBeNull();
   });
 });

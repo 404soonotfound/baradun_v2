@@ -22,7 +22,13 @@ function jwt(payload: Record<string, unknown>): string {
 }
 
 // expIn: access 만료까지 초(기본 15분). 시계를 빨리 감는 테스트는 발급마다 다르게 줌
-export function tokensFor(email: string, groups: string[], expIn = 900) {
+// authTime: 최초 인증 시각(초). refresh 갱신 응답은 처음 로그인과 같은 값이어야 함
+export function tokensFor(
+  email: string,
+  groups: string[],
+  expIn = 900,
+  authTime?: number,
+) {
   const now = Math.floor(Date.now() / 1000);
   return {
     AccessToken: jwt({
@@ -30,7 +36,7 @@ export function tokensFor(email: string, groups: string[], expIn = 900) {
       sub: `sub-${email}`,
       exp: now + expIn,
       iat: now,
-      auth_time: now,
+      auth_time: authTime ?? now,
       client_id: "test",
       username: email,
       "cognito:groups": groups,
@@ -40,7 +46,7 @@ export function tokensFor(email: string, groups: string[], expIn = 900) {
       email,
       exp: now + 900,
       iat: now,
-      auth_time: now,
+      auth_time: authTime ?? now,
     }),
     RefreshToken: "test-refresh",
     ExpiresIn: 900,
@@ -81,10 +87,17 @@ export function srpScript(options: {
   totpCode?: string;
   // 발급마다 access 만료까지 초(기본 15분)
   expIn?: () => number;
+  // 최초 인증 시각(초). refresh 갱신 응답과 맞출 때만
+  authTime?: number;
 }): CognitoHandler {
   const groups = options.groups ?? ["publisher"];
   const issue = () =>
-    tokensFor(options.email, groups, options.expIn?.() ?? 900);
+    tokensFor(
+      options.email,
+      groups,
+      options.expIn?.() ?? 900,
+      options.authTime,
+    );
   return (target, body) => {
     if (target === "InitiateAuth") {
       if (options.after === "wrong")
