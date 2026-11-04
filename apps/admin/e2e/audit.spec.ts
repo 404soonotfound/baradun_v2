@@ -26,10 +26,26 @@ const entry = (n: number, overrides: Record<string, unknown> = {}) => ({
   role: "publisher",
   action: "notice.update",
   target: { kind: "notice", id: "n-maintenance" },
-  changes: ["title", "body"],
-  requestId: `req-${n}`,
+  targetLabel: "11/5 점검 예고",
+  changes: ["title"],
+  notice: {
+    before: NOTICE,
+    after: {
+      ...NOTICE,
+      title: { ko: "11/5(수) 02:00~04:30 점검해요", en: "Maintenance" },
+    },
+  },
+  requestId: `req-a91f${n}`,
   ...overrides,
 });
+
+const NOTICE = {
+  kind: "maintenance_notice",
+  title: { ko: "11/5(수) 02:00~04:00 점검해요", en: "" },
+  body: { ko: "점검 중에는 해변 정보를 볼 수 없어요.", en: "" },
+  startsAt: "2026-11-04T00:00:00Z",
+  endsAt: "2026-11-04T17:00:00Z",
+};
 
 const PAGE_1 = [
   entry(1),
@@ -38,12 +54,30 @@ const PAGE_1 = [
     role: "editor",
     action: "inquiry.update",
     target: { kind: "inquiry", id: INQUIRY },
+    targetLabel: undefined,
+    notice: undefined,
     changes: ["status", "memo"],
     statusFrom: "received",
     statusTo: "in_progress",
   }),
-  entry(3, { action: "brand.new", changes: [] }),
+  entry(3, {
+    action: "brand.new",
+    target: { kind: "notice", id: "n-other" },
+    targetLabel: "데이터 출처 안내",
+    changes: ["something"],
+    notice: undefined,
+  }),
 ];
+
+const COUNTS = {
+  all: 3,
+  notice: 1,
+  beach: 0,
+  publish: 0,
+  inquiry: 1,
+  permission: 0,
+  login: 0,
+};
 
 async function mockAudit(
   page: Page,
@@ -71,12 +105,10 @@ async function mockAudit(
     await route.fulfill({
       contentType: "application/json",
       body: JSON.stringify({
-        filter: {
-          from: params.get("from"),
-          to: params.get("to"),
-        },
+        filter: { from: params.get("from"), to: params.get("to") },
         items,
         nextCursor: cursor || actor ? null : "c1",
+        ...(cursor ? {} : { counts: { ...COUNTS, all: 4 } }),
       }),
     });
   });
@@ -105,76 +137,139 @@ async function openAudit(page: Page) {
 // 표(태블릿·PC) 또는 카드(모바일) 중 보이는 것
 const records = (page: Page) =>
   isMobile(page)
-    ? page
-        .locator("li")
-        .filter({ visible: true, hasText: /공지|문의|알 수 없는/ })
-    : page.locator("tbody tr");
+    ? page.locator("section li").filter({ visible: true })
+    : page.locator("tbody tr").filter({ has: page.locator("td >> nth=5") });
 
-test("목록: 종류·대상·바뀐 항목 이름·상태 앞뒤만 보이고, 모르는 종류도 숨기지 않으며, 기간을 UTC로 보낸다", async ({
+test("목록(시안 V23): 분류 탭 수, 종류 배지·대상·바뀐 내용 요약·바뀐 곳, 기본 기간 7일을 UTC로 보낸다", async ({
+  page,
+}) => {
+  await signIn(page);
+  const calls = await mockAudit(page);
+  await openAudit(page);
+  const tabs = page.getByRole("group", { name: "분류로 거르기" });
+  for (const name of [
+    "전체 4",
+    "공지 1",
+    "해변 0",
+    "게시 0",
+    "문의 1",
+    "권한 0",
+    "로그인 0",
+  ]) {
+    await expect(tabs.getByRole("button", { name })).toBeVisible();
+  }
+  await expect(
+    page.getByRole("button", { name: "기간: 최근 7일" }),
+  ).toBeVisible();
+  await expect(records(page)).toHaveCount(3);
+  const notice = records(page).filter({ hasText: "11/5 점검 예고" });
+  await expect(notice).toContainText("공지");
+  await expect(notice).toContainText("문구 수정 · 영어 문구 추가");
+  const inquiry = records(page).filter({ hasText: "접수 → 확인 중" });
+  await expect(inquiry).toContainText("문의");
+  await expect(inquiry).toContainText("메모 수정");
+  // 모르는 종류도 숨기지 않고 바뀐 항목 이름으로
+  await expect(records(page).filter({ hasText: "something 바뀜" })).toHaveCount(
+    1,
+  );
+  if (!isMobile(page)) {
+    await expect(notice).toContainText("운영자 aaaa");
+    await expect(notice).toContainText("운영자 화면");
+  }
+  await expect(page.getByText("최근 7일 4건 중 1–3")).toBeVisible();
+  const first = calls[0]!;
+  expect(Date.parse(first.get("to")!) - Date.parse(first.get("from")!)).toBe(
+    7 * 86_400_000,
+  );
+  expect(first.get("to")).toMatch(/Z$/);
+  await expectNoA11yViolations(page);
+
+  await inquiry.getByRole("link", { name: /3f2a/ }).click();
+  await expect(page).toHaveURL(new RegExp(`/inquiries/\\?id=${INQUIRY}$`));
+});
+
+test("공지 줄을 누르면 문구 앞·뒤를 줄 번호와 뺀 줄·더한 줄로 펼친다(PC)", async ({
+  page,
+}) => {
+  test.skip(isMobile(page), "펼치기는 PC 표");
+  await signIn(page);
+  await mockAudit(page);
+  await openAudit(page);
+  const toggle = page.getByRole("button", {
+    name: "문구 수정 · 영어 문구 추가",
+  });
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
+  const diff = page.getByRole("group", { name: "공지 문구 바뀐 내용" });
+  await expect(diff).toContainText("notices/n-maintenance");
+  await expect(diff).toContainText("+2");
+  await expect(diff).toContainText("−2");
+  await expect(diff).toContainText(
+    "뺌: title.ko: 11/5(수) 02:00~04:00 점검해요",
+  );
+  await expect(diff).toContainText(
+    "더함: title.ko: 11/5(수) 02:00~04:30 점검해요",
+  );
+  await expect(diff).toContainText("뺌: title.en: (없음)");
+  await expect(diff).toContainText("더함: title.en: Maintenance");
+  await expect(diff).toContainText("kind: 점검 예고");
+  await expect(diff).toContainText("placement: 홈 상단 배너");
+  await expectNoA11yViolations(page);
+  await toggle.click();
+  await expect(diff).toHaveCount(0);
+});
+
+test("거르기: 탭은 분류, 찾기는 대상·내용, +운영자·+기간 칩으로 다시 받는다", async ({
   page,
 }) => {
   await signIn(page);
   const calls = await mockAudit(page);
   await openAudit(page);
   await expect(records(page)).toHaveCount(3);
-  const inquiry = records(page).filter({ hasText: "문의 처리" });
-  await expect(inquiry).toContainText("처리 상태 · 처리 메모");
-  await expect(inquiry).toContainText("접수 → 확인 중");
-  await expect(inquiry).toContainText("편집");
-  await expect(
-    records(page).filter({ hasText: "알 수 없는 종류(brand.new)" }),
-  ).toHaveCount(1);
-  const first = calls[0]!;
-  expect(first.get("from")).toMatch(/Z$/);
-  expect(first.get("to")).toMatch(/Z$/);
-  expect(Date.parse(first.get("to")!) - Date.parse(first.get("from")!)).toBe(
-    30 * 86_400_000,
-  );
-  await expectNoA11yViolations(page);
-
-  // 대상을 누르면 그 문의 화면으로
-  await inquiry.getByRole("link", { name: /문의 3f2a/ }).click();
-  await expect(page).toHaveURL(new RegExp(`/inquiries/\\?id=${INQUIRY}$`));
-});
-
-test("거르기: 종류·기간을 바꾸면 첫 쪽부터 다시 받고, 운영자를 누르면 그 운영자 기록만", async ({
-  page,
-}) => {
-  await signIn(page);
-  const calls = await mockAudit(page);
-  await openAudit(page);
-  await page.getByLabel("종류").selectOption("notice.delete");
-  await expect.poll(() => calls.at(-1)?.get("action")).toBe("notice.delete");
-  await page.getByLabel("기간").selectOption("7");
+  const tabs = page.getByRole("group", { name: "분류로 거르기" });
+  await tabs.getByRole("button", { name: /^문의/ }).click();
+  await expect.poll(() => calls.at(-1)?.get("category")).toBe("inquiry");
+  await tabs.getByRole("button", { name: /^전체/ }).click();
+  await page.getByLabel("대상·내용 찾기").fill("점검");
+  await expect.poll(() => calls.at(-1)?.get("q")).toBe("점검");
+  await page.getByLabel("대상·내용 찾기").fill("");
+  await page.getByRole("button", { name: "기간: 최근 7일" }).click();
+  await page
+    .getByRole("group", { name: "기간 고르기" })
+    .getByRole("button", { name: "최근 30일" })
+    .click();
   await expect
     .poll(() => {
       const last = calls.at(-1)!;
       return Date.parse(last.get("to")!) - Date.parse(last.get("from")!);
     })
-    .toBe(7 * 86_400_000);
-  await page.getByLabel("종류").selectOption("");
-  await records(page)
-    .filter({ hasText: "문의 처리" })
-    .getByRole("button", { name: /이 운영자 기록만 보기/ })
+    .toBe(30 * 86_400_000);
+  await page.getByRole("button", { name: "운영자", exact: true }).click();
+  await page
+    .getByRole("group", { name: "운영자 고르기" })
+    .getByRole("button", { name: /운영자 bbbb/ })
     .click();
   await expect.poll(() => calls.at(-1)?.get("actor")).toBe(SUB_B);
   await expect(records(page)).toHaveCount(1);
-  await expect(page.getByText("운영자 bbbbbbbb…의 기록만")).toBeVisible();
-  await page.getByRole("button", { name: "운영자 거르기 풀기" }).click();
-  await expect(records(page)).toHaveCount(3);
+  await expect(
+    page.getByRole("button", { name: "운영자: 운영자 bbbb" }),
+  ).toBeVisible();
 });
 
-test("더 보기는 cursor만 보내 이어 붙이고, 끝나면 모두 봤다고 알린다", async ({
+test("다음·이전: 다음은 cursor만 보내고, 이전은 앞 쪽으로 돌아간다", async ({
   page,
 }) => {
   await signIn(page);
   const calls = await mockAudit(page);
   await openAudit(page);
-  await page.getByRole("button", { name: "더 보기" }).click();
-  await expect(records(page)).toHaveCount(4);
-  const last = calls.at(-1)!;
-  expect([...last.keys()]).toEqual(["cursor"]);
-  await expect(page.getByText("이 기간의 기록을 모두 봤어요.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "이전" })).toBeDisabled();
+  await page.getByRole("button", { name: "다음" }).click();
+  await expect(records(page)).toHaveCount(1);
+  expect([...calls.at(-1)!.keys()].sort()).toEqual(["cursor", "limit"]);
+  await expect(page.getByText("최근 7일 4건 중 21–21")).toBeVisible();
+  await page.getByRole("button", { name: "이전" }).click();
+  await expect(records(page)).toHaveCount(3);
 });
 
 test("불러오지 못하면 영향·오류 번호·다시 시도를 보여 주고 빈 목록으로 꾸미지 않는다", async ({
