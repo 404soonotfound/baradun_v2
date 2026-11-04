@@ -1,4 +1,5 @@
 import type { StateValue } from "../core/store/types";
+import { maskSecrets } from "../core/collect/log";
 import { packItems } from "../core/warnings/archive";
 import {
   responseItems,
@@ -37,6 +38,17 @@ const SOURCES: readonly Source[] = ["pwncd", "tsunami"];
 type SourceOutcome =
   | { status: "ok"; confirmedAt: string; rowCount: number; attempts: number }
   | (ResponseFailure & { attempts: number });
+
+function withMaskedSourceFailure(
+  result: ResponseFailure,
+  key: string,
+  attempts: number,
+): SourceOutcome {
+  if ("source" in result && result.message !== null) {
+    return { ...result, message: maskSecrets(result.message, [key]), attempts };
+  }
+  return { ...result, attempts };
+}
 
 function requestUrl(
   base: string,
@@ -97,12 +109,14 @@ async function collectSource(
   let rowCount: number;
   if (source === "pwncd") {
     const result = normalizePwnCdResponse(json, numOfRows);
-    if (result.status === "failed") return { ...result, attempts };
+    if (result.status === "failed")
+      return withMaskedSourceFailure(result, key, attempts);
     items = responseItems(json) ?? []; // 정상 판정을 통과해 목록이 있음
     rowCount = result.rowCount;
   } else {
     const result = normalizeTsunamiResponse(json, numOfRows);
-    if (result.status === "failed") return { ...result, attempts };
+    if (result.status === "failed")
+      return withMaskedSourceFailure(result, key, attempts);
     // 03 = 발표 없음 확인 → 빈 행 묶음으로 저장(확인된 '없음')
     items = result.status === "none" ? [] : (responseItems(json) ?? []);
     rowCount = items.length;

@@ -133,7 +133,7 @@ describe("collectWarnings", () => {
         response: {
           header: {
             resultCode: "22",
-            resultMsg: "  LIMITED\n ServiceKey=LEAK  ",
+            resultMsg: `  LIMITED\n raw key: ${KEY}\n encoded key: ${encodeURIComponent(KEY)}  `,
           },
         },
       },
@@ -146,7 +146,7 @@ describe("collectWarnings", () => {
       reason: "resultCode:22",
       source: "getPwnCd",
       code: "22",
-      message: "LIMITED ServiceKey=***",
+      message: "LIMITED raw key: *** encoded key: ***",
     });
     expect(lines.map((line) => JSON.parse(line))).toContainEqual(
       expect.objectContaining({
@@ -154,10 +154,13 @@ describe("collectWarnings", () => {
         source: "pwncd",
         apiSource: "getPwnCd",
         code: "22",
-        message: "LIMITED ServiceKey=***",
+        message: "LIMITED raw key: *** encoded key: ***",
       }),
     );
-    expect(lines.join("\n")).not.toContain("LEAK");
+    for (const secret of [KEY, encodeURIComponent(KEY)]) {
+      expect(JSON.stringify(await savedAttempt(state))).not.toContain(secret);
+      expect(lines.join("\n")).not.toContain(secret);
+    }
   });
 
   it.each([
