@@ -1,7 +1,6 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import QRCode from "qrcode";
 import { useState, type FormEvent, type ReactNode } from "react";
 import {
   associateTotp,
@@ -16,6 +15,7 @@ import { messages } from "@/lib/messages";
 import { roleLabel } from "@/lib/roles";
 import { AdminShell } from "./admin-shell";
 import { CodeInput, Field, PasswordRules, passwordChecks } from "./fields";
+import { QrCode, qrShape, type QrShape } from "./qr-code";
 import { Button, Notice } from "./ui";
 
 // 내 계정 (BRD-148, 캔버스 V24·VM18, D16-A4·A9·A10)
@@ -136,7 +136,7 @@ function TotpSection({
   token: () => Promise<string | null>;
   email: string;
 }) {
-  const [setup, setSetup] = useState<{ secret: string; qr: string } | null>(
+  const [setup, setSetup] = useState<{ secret: string; qr: QrShape } | null>(
     null,
   );
   const [code, setCode] = useState("");
@@ -154,11 +154,7 @@ function TotpSection({
       if (!access) return;
       try {
         const secret = await associateTotp(access);
-        const qr = await QRCode.toString(otpauthUri(secret, email), {
-          type: "svg",
-          margin: 0,
-          errorCorrectionLevel: "M",
-        });
+        const qr = qrShape(otpauthUri(secret, email));
         setCode("");
         setSetup({ secret, qr });
       } catch (err) {
@@ -223,13 +219,7 @@ function TotpSection({
 
   return (
     <form className="flex flex-col gap-3" onSubmit={verify} noValidate>
-      <div
-        role="img"
-        aria-label={t.welcome.qrLabel}
-        className="size-[160px] rounded-admin-control border border-border-default bg-white p-2 [&_svg]:size-full"
-        // QR 라이브러리가 만든 SVG(키만 담음). 외부 주소·스크립트 없음
-        dangerouslySetInnerHTML={{ __html: setup.qr }}
-      />
+      <QrCode shape={setup.qr} label={t.welcome.qrLabel} />
       <p className="text-label-s text-text-muted">
         {t.welcome.keyLabel}:{" "}
         <span className="font-mono text-text-default select-all">

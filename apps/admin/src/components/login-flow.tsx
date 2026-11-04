@@ -1,7 +1,6 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import QRCode from "qrcode";
 import {
   lazy,
   Suspense,
@@ -24,6 +23,7 @@ import {
 } from "@/lib/auth/srp";
 import { messages } from "@/lib/messages";
 import { CodeInput, Field, PasswordRules, passwordChecks } from "./fields";
+import { QrCode, qrShape, type QrShape } from "./qr-code";
 import { SessionResuming } from "./session-guard";
 import { AuthShell, Button, Notice, TextLink } from "./ui";
 
@@ -58,7 +58,7 @@ type View =
   | {
       kind: "totp_setup";
       step: Extract<SignInStep, { kind: "totp_setup" }>;
-      qr: string;
+      qr: QrShape;
       error: boolean;
     }
   | { kind: "done"; tokens: Tokens };
@@ -192,11 +192,7 @@ export function LoginFlow({ pool }: { pool: PoolKind }) {
         setView({ kind: "new_password", step, error: null });
         return;
       case "totp_setup": {
-        const qr = await QRCode.toString(otpauthUri(step.secret, email), {
-          type: "svg",
-          margin: 0,
-          errorCorrectionLevel: "M",
-        });
+        const qr = qrShape(otpauthUri(step.secret, email));
         setShowKey(false);
         setView({ kind: "totp_setup", step, qr, error: false });
         return;
@@ -441,13 +437,7 @@ export function LoginFlow({ pool }: { pool: PoolKind }) {
           description={t.welcome.setupDescription}
         >
           <div className="flex flex-col items-center gap-2">
-            <div
-              role="img"
-              aria-label={t.welcome.qrLabel}
-              className="size-[160px] rounded-admin-control border border-border-default bg-white p-2 [&_svg]:size-full"
-              // QR 라이브러리가 만든 SVG(키만 담음). 외부 주소·스크립트 없음
-              dangerouslySetInnerHTML={{ __html: view.qr }}
-            />
+            <QrCode shape={view.qr} label={t.welcome.qrLabel} />
             <Button
               variant="quiet"
               size="small"
