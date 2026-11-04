@@ -279,7 +279,8 @@
       "title": "Nearby beaches with no warnings",
       "activityNote": "Only beaches with confirmed activity info are shown · {activity}",
       "none": "No nearby beaches without warnings",
-      "noneActivity": "No other beaches within 30km have no warnings and confirmed activity info · {activity}",
+      "noneActivity": "No other beaches within {km}km have no warnings and confirmed activity info · {activity}",
+      "unconfirmed": "Couldn't read the warning check time for nearby beaches · Check beach status in Explore",
       "more": "See all beaches, regardless of activity",
       "distance": "{km}km from here"
     },

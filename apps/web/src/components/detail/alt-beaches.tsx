@@ -8,6 +8,7 @@ import { useId } from "react";
 import { MiniWaveChart } from "@/components/home/mini-wave-chart";
 import { ReasonBadge } from "@/components/reason-badge";
 import type { Activity } from "@/lib/activity";
+import { ALT_MAX_KM } from "@/lib/alternatives";
 import type { BeachSummary } from "@/lib/beach-summary";
 import { localizedPath, type Locale } from "@/lib/i18n";
 import { formatKm, joinMeta } from "@/lib/meta-join";
@@ -70,11 +71,15 @@ export function AltBeaches({
       </div>
       {rows.length === 0 ? (
         <p className="rounded-tile border border-brand-border bg-bg-surface px-[15px] py-[13px] text-body-s text-text-body">
-          {activity === "swimming"
-            ? t("detail.alt.none")
-            : t("detail.alt.noneActivity", {
-                activity: t(`activity.${activity}`),
-              })}
+          {/* 후보는 있는데 확인 시각을 읽지 못해 모두 뺀 경우는 '없어요'라고 단정하지 않음(리뷰 PR #177) */}
+          {items.length > 0
+            ? t("detail.alt.unconfirmed")
+            : activity === "swimming"
+              ? t("detail.alt.none")
+              : t("detail.alt.noneActivity", {
+                  km: ALT_MAX_KM,
+                  activity: t(`activity.${activity}`),
+                })}
         </p>
       ) : (
         <ul className="flex flex-col gap-2">
