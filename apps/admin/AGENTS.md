@@ -13,6 +13,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 - access·ID token은 메모리에만 두고, refresh token만 그 탭의 sessionStorage(`SESSION_STORE_KEY`)에 최초 인증·활동 시각과 함께 둔다. localStorage·쿠키에는 두지 않는다(D16-A2·D17-11). 새로고침·새 탭은 열려 있는 로그인한 탭에서 BroadcastChannel로 넘겨받고(D17-9), 없으면 그 탭에 둔 refresh token으로 갱신해 이어 간다. 그것도 없거나 실패하면 다시 로그인한다. 토큰 갱신은 Web Locks로 한 탭씩 하고 새 토큰·활동 시각을 다른 탭과 맞춘다.
 - 공개 웹(`apps/web`)의 서비스 워커·문의 로컬 저장·분석 도구를 가져오지 않는다(구현 제안 I05).
 - 모든 페이지는 검색 노출을 막는다(noindex meta·robots.txt·응답 헤더). `npm run build -w apps/admin`의 postbuild 검사가 확인한다.
+- DOM에 HTML 문자열을 넣지 않는다(`dangerouslySetInnerHTML`·`innerHTML` 금지, 린트가 막음). 모든 페이지는 Trusted Types를 켠다: postbuild가 CSP meta에 `require-trusted-types-for 'script'; trusted-types default`와 같은 주소 `/_next/static/` 스크립트만 통과시키는 default 정책을 넣고, E2E는 위반이 있으면 실패한다(BRD-180).
 - 화면 문구는 `messages/ko.json` 문구 키로 쓴다.
 - 판단 상태(특보 없음·이용불가·판단불가)는 어떤 화면에서도 바꾸지 않는다(G1).
 - 화면 안 이동은 `next/link`·`router`로만 한다. `<a href>`로 페이지를 새로 불러오면 메모리의 로그인이 사라진다.
