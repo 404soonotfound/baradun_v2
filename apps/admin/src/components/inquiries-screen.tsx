@@ -285,7 +285,8 @@ function InquiryList({
           onRetry={() => setAttempt((n) => n + 1)}
         />
       )}
-      {result?.ok && items.length === 0 && (
+      {/* 첫 쪽이 비면 '문의가 없어요'. 다음 쪽만 비면(그사이 지워짐·상태 경계) 이전으로 돌아가게 안내하고 쪽 넘기기는 남김 */}
+      {result?.ok && items.length === 0 && pageIndex === 0 && (
         <div className="rounded-admin-box border border-border-default bg-bg-surface px-4 py-6 text-center">
           <p className="text-title-s font-semibold text-text-default">
             {t.emptyTitle}
@@ -296,6 +297,9 @@ function InquiryList({
               : t.emptyAll}
           </p>
         </div>
+      )}
+      {result?.ok && items.length === 0 && pageIndex > 0 && (
+        <Notice tone="neutral" title={t.emptyPage} role="status" />
       )}
       {result?.ok && items.length > 0 && (
         <>
@@ -385,39 +389,42 @@ function InquiryList({
               </li>
             ))}
           </ul>
-
-          <nav
-            aria-label={t.pagination}
-            className="flex items-center justify-between gap-3 text-body-s text-text-muted"
-          >
-            <span className="tabular-nums">
-              {total !== null
-                ? fill(t.range, { total, from, to })
-                : fill(t.rangeNoTotal, { from, to })}
-            </span>
-            <span className="flex gap-2">
-              <Button
-                variant="secondary"
-                size="small"
-                disabled={pageIndex === 0}
-                onClick={() => setCursors((c) => c.slice(0, -1))}
-              >
-                {t.prev}
-              </Button>
-              <Button
-                variant="secondary"
-                size="small"
-                disabled={!result.body.nextCursor}
-                onClick={() => {
-                  const next = result.body.nextCursor;
-                  if (next) setCursors((c) => [...c, next]);
-                }}
-              >
-                {t.next}
-              </Button>
-            </span>
-          </nav>
         </>
+      )}
+      {result?.ok && (items.length > 0 || pageIndex > 0) && (
+        <nav
+          aria-label={t.pagination}
+          className="flex items-center justify-between gap-3 text-body-s text-text-muted"
+        >
+          <span className="tabular-nums">
+            {/* 빈 쪽은 범위를 보여 주지 않음(21–20처럼 거꾸로 되지 않게) */}
+            {items.length > 0 &&
+              (total !== null
+                ? fill(t.range, { total, from, to })
+                : fill(t.rangeNoTotal, { from, to }))}
+          </span>
+          <span className="flex gap-2">
+            <Button
+              variant="secondary"
+              size="small"
+              disabled={pageIndex === 0}
+              onClick={() => setCursors((c) => c.slice(0, -1))}
+            >
+              {t.prev}
+            </Button>
+            <Button
+              variant="secondary"
+              size="small"
+              disabled={!result.body.nextCursor}
+              onClick={() => {
+                const next = result.body.nextCursor;
+                if (next) setCursors((c) => [...c, next]);
+              }}
+            >
+              {t.next}
+            </Button>
+          </span>
+        </nav>
       )}
     </section>
   );
