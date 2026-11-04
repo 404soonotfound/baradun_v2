@@ -142,7 +142,14 @@ describe("collectRip", () => {
       HAE: "{}", // 200인데 모양이 다름 → 실패
     });
     await seed(state, previous);
-    expect((await collectRip(deps)).status).toBe("failed");
+    const result = await collectRip(deps);
+    expect(result).toMatchObject({
+      status: "failed",
+      failures: [
+        { source: "rip", reason: "timeout" },
+        { source: "rip", reason: "format:shape" },
+      ],
+    });
     expect((await readings(state))?.beaches).toEqual(previous);
     expect((await attempt(state)).sources).toEqual({
       b0096: { status: "failed", reason: "timeout" },
@@ -190,7 +197,10 @@ describe("collectRip", () => {
       SONGJUNG: realOn("2026-08-16"),
       // HAE는 NO_DATA(기본)
     });
-    expect((await collectRip(deps)).status).toBe("partial");
+    expect(await collectRip(deps)).toMatchObject({
+      status: "partial",
+      failures: [{ source: "rip", reason: "no_data" }],
+    });
     expect((await attempt(state)).counts).toEqual({
       ok: 1,
       none: 1,
