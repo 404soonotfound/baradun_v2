@@ -39,6 +39,7 @@ export function MapView({
   overlay,
   dataSource,
   onShowList,
+  onFailed,
   className,
 }: {
   locale: Locale;
@@ -49,6 +50,8 @@ export function MapView({
   dataSource?: string | null;
   // 실패 화면의 '목록으로 보기'(모바일 지도 보기). PC(lg)는 목록이 옆에 있어 버튼을 숨김
   onShowList?: () => void;
+  // 지도가 실패(처음·다 그린 뒤)하면 한 번 부름. 지도 위에 올린 고르기 등을 정리할 때
+  onFailed?: () => void;
   className?: string;
 }) {
   const t = useTranslations("map");
@@ -129,10 +132,15 @@ export function MapView({
   }, [attempt]);
 
   // [3] 실패하면 지도를 지움(더 받지 않음). 다시 시도 때 [2]가 새로 만듦
+  const onFailedRef = useRef(onFailed);
+  useEffect(() => {
+    onFailedRef.current = onFailed;
+  });
   useEffect(() => {
     if (load.phase !== "failed") return;
     handleRef.current?.destroy();
     handleRef.current = null;
+    onFailedRef.current?.();
   }, [load.phase]);
 
   // [4] 테마가 바뀌면 지도 색을 바꿈. 만드는 중에 바뀐 것도 여기서 따라감(만들 때 값과 같으면 엔진이 무시)
