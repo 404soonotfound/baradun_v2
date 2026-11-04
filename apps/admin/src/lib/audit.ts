@@ -105,10 +105,12 @@ export function periodFilter(
 }
 
 // 다음 쪽은 cursor만 보냄(서버가 cursor에 담긴 필터를 씀)
+// withCounts=false: 탭 수를 다시 세지 않음(같은 거르기의 수를 이미 가짐, 분류 탭만 바꿀 때)
 export function fetchAudit(
   accessToken: () => Promise<string | null>,
   filter: AuditFilter,
   cursor: string | null,
+  withCounts = true,
 ): Promise<OpsResult<AuditPage>> {
   const params = new URLSearchParams(
     cursor
@@ -120,6 +122,7 @@ export function fetchAudit(
           ...(filter.category ? { category: filter.category } : {}),
           ...(filter.actor ? { actor: filter.actor } : {}),
           ...(filter.q ? { q: filter.q } : {}),
+          ...(withCounts ? {} : { counts: "0" }),
         },
   );
   return opsFetch(`/ops/audit?${params.toString()}`, accessToken);

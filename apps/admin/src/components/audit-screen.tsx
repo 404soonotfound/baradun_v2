@@ -444,6 +444,8 @@ function AuditBody() {
   const countKey = JSON.stringify({ ...filter, category: null });
   const cursor = cursors.at(-1) ?? null;
   const key = `${filterText}|${cursor}|${attempt}|${generation}`;
+  const countsKey = useRef<string | null>(null);
+  const [seen, setSeen] = useState<string[]>([]);
   const [loaded, setLoaded] = useState<{
     key: string;
     result: OpsResult<AuditPage>;
@@ -453,12 +455,28 @@ function AuditBody() {
     if (demo) return;
     let live = true;
     const asked = JSON.parse(filterText) as AuditFilter;
-    void fetchAudit(() => session.accessToken(), asked, cursor).then((next) => {
+    // 같은 거르기(분류 제외)의 탭 수를 이미 가졌으면 서버가 다시 세지 않게 함(분류 탭만 바꿈)
+    const haveCounts = countsKey.current === countKey;
+    void fetchAudit(
+      () => session.accessToken(),
+      asked,
+      cursor,
+      !haveCounts,
+    ).then((next) => {
       if (!live) return;
       setLoaded({ key, result: next });
-      if (next.ok && next.body.counts) {
+      if (!next.ok) return;
+      if (next.body.counts) {
+        countsKey.current = countKey;
         setCounts({ key: countKey, counts: next.body.counts });
       }
+      // '+ 운영자' 목록: 이 화면에서 본 운영자를 모두 기억(고른 뒤에도 다른 운영자로 바꿀 수 있게)
+      setSeen((prev) => {
+        const fresh = [
+          ...new Set(next.body.items.map((item) => item.actorSub)),
+        ].filter((sub) => !prev.includes(sub));
+        return fresh.length > 0 ? [...prev, ...fresh] : prev;
+      });
     });
     return () => {
       live = false;
@@ -499,8 +517,8 @@ function AuditBody() {
   const to = pageIndex * AUDIT_PAGE_SIZE + items.length;
   const periodLabel = t.periodDays[String(days) as keyof typeof t.periodDays];
 
-  // 운영자 고르기 목록: 지금 쪽에 나온 운영자(이름이 기록에 없어 운영자 목록 API가 없음)
-  const actors = [...new Set(items.map((item) => item.actorSub))];
+  // 운영자 고르기 목록: 이 화면에서 본 운영자(이름이 기록에 없어 운영자 목록 API가 없음)
+  const actors = seen;
 
   // 모바일: 날짜(KST)별로 묶음. 오늘은 '오늘 · 11/2'
   const today = kstDay(new Date(now).toISOString());
@@ -543,7 +561,12 @@ function AuditBody() {
                   key={c ?? "all"}
                   type="button"
                   aria-pressed={on}
-                  onClick={() => refilter(() => setCategory(c))}
+                  onClick={() => {
+                    // 분류만 바꿈: 기간 끝(지금)을 그대로 두어 탭 수를 다시 세지 않음
+                    setCategory(c);
+                    setCursors([null]);
+                    setOpen(null);
+                  }}
                   className={`-mb-px flex min-h-touch shrink-0 items-center gap-1.5 border-b-2 px-2 text-body whitespace-nowrap lg:min-h-admin-control ${
                     on
                       ? "border-brand-default font-semibold text-brand-default"
