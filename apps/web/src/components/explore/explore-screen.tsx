@@ -528,18 +528,30 @@ export function ExploreScreen({
                 clearScope={mapClearScope}
                 className="absolute top-3 left-3 hidden max-w-[360px] lg:flex"
               />
+              {/* PC는 지도 왼쪽 아래 380. 모바일 카드는 지도 밖(아래) */}
               {selectedItem && (
                 <MapCard
                   locale={locale}
                   item={selectedItem}
                   nowMs={nowMs}
                   onClose={() => setSelectedId(null)}
-                  className="absolute inset-x-3 bottom-3 lg:right-auto lg:w-[380px]"
+                  className="absolute bottom-3 left-3 hidden w-[380px] lg:flex"
                 />
               )}
             </>
           )}
         />
+        {/* 모바일 카드는 지도 안에 두면 지도를 거의 다 가려서 지도 아래 흐름에 두고 하단 탭 바로 위에 붙임(BRD-177)
+            fixed로 띄우면 끝까지 스크롤해도 지도 출처 링크·범례가 가려져서 sticky로 둠: 끝에 닿으면 제자리로 돌아와 아래 내용이 보임 */}
+        {selectedItem && (
+          <MapCard
+            locale={locale}
+            item={selectedItem}
+            nowMs={nowMs}
+            onClose={() => setSelectedId(null)}
+            className="sticky bottom-[calc(var(--spacing-tabbar)+max(14px,env(safe-area-inset-bottom))+8px)] z-30 lg:hidden"
+          />
+        )}
         <MapLegend clearScope={mapClearScope} className="lg:hidden" />
       </div>
     </div>
