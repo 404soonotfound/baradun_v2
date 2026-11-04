@@ -1,0 +1,58 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "base_sha",
+    "head_sha",
+    "scope",
+    "reviewed_files",
+    "findings",
+    "not_reviewed_files",
+    "not_reviewed_aspects",
+    "limitations"
+  ],
+  "properties": {
+    "base_sha": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "head_sha": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "scope": { "type": "string", "enum": ["full", "incremental"] },
+    "reviewed_files": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "severity",
+          "file",
+          "line",
+          "problem",
+          "reason",
+          "fix_direction"
+        ],
+        "properties": {
+          "severity": { "type": "string", "enum": ["P0", "P1", "P2", "P3"] },
+          "file": { "type": "string", "minLength": 1 },
+          "line": { "type": "integer", "minimum": 0 },
+          "problem": { "type": "string", "minLength": 1 },
+          "reason": { "type": "string", "minLength": 1 },
+          "fix_direction": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "not_reviewed_files": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "not_reviewed_aspects": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "limitations": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    }
+  }
+}
