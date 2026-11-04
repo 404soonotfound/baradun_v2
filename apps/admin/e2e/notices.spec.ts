@@ -503,3 +503,42 @@ test("저장하지 않은 변경이 있으면 노출 종료·삭제를 막고 �
       .first(),
   ).toBeVisible();
 });
+
+test("저장하지 않은 변경이 있으면 왼쪽 메뉴·브라우저 뒤로로 나갈 때도 묻는다", async ({
+  page,
+}) => {
+  await signIn(page);
+  await mockNotices(page);
+  await openNotices(page);
+  await openNotice(page, "데이터 출처 안내");
+  await page.getByLabel("Body").fill("Unsaved body");
+  const confirm = page
+    .getByRole("alert")
+    .filter({ hasText: "저장하지 않은 변경이 있어요" });
+
+  // 브라우저 뒤로: 확인을 띄우고 '계속 쓰기'면 그대로
+  await page.goBack();
+  await expect(
+    confirm.getByRole("button", { name: "계속 쓰기" }),
+  ).toBeFocused();
+  await confirm.getByRole("button", { name: "계속 쓰기" }).click();
+  await expect(page.getByLabel("Body")).toHaveValue("Unsaved body");
+
+  if (!isMobile(page)) {
+    // 왼쪽 메뉴 링크: 이동하지 않고 확인 → 나가기면 그 화면으로
+    await page
+      .getByRole("navigation", { name: "운영 메뉴" })
+      .filter({ visible: true })
+      .getByRole("link", { name: /문의/ })
+      .click();
+    await expect(page).toHaveURL(/\/notices\//);
+    await confirm.getByRole("button", { name: "나가기" }).click();
+    await expect(page).toHaveURL(/\/inquiries\//);
+  } else {
+    await page.goBack();
+    await confirm.getByRole("button", { name: "나가기" }).click();
+    await expect(
+      page.getByRole("heading", { name: "공지", level: 1 }),
+    ).toBeVisible();
+  }
+});
