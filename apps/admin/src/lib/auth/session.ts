@@ -60,6 +60,7 @@ export interface SessionDeps {
 
 interface Live {
   pool: PoolKind;
+  sub: string;
   tokens: Tokens;
   email: string | null;
   groups: readonly string[];
@@ -69,19 +70,33 @@ interface Live {
   reauth: boolean;
 }
 
-const LOGOUT_MESSAGE = "logout";
-
 // 넘겨받기를 기다리는 시간. 로그인한 탭은 같은 기기라 바로 답함
 export const JOIN_WAIT_MS = 400;
 // 갱신에 실패했을 때 다른 탭이 먼저 갱신해 보낸 새 토큰을 기다리는 시간(잠금과 신호 도착 순서가 어긋날 때)
 const ADOPT_WAIT_MS = 1500;
 
+// 탭 사이 신호. 받는 쪽은 모양을 확인하고, 같은 풀·같은 사용자(·같은 최초 인증)의 신호만 따름
+// - logout: 로그아웃·유휴·상한으로 끝남. 유휴는 받는 탭이 더 늦은 활동을 봤으면 따르지 않음
+// - hello: 새 탭이 로그인을 달라고 함(pool이 있으면 그 풀만 답함)
+// - share: 토큰 나누기(넘겨받기 답장 to=요청 id, 갱신·다시 로그인 뒤 to=null)
+// - activity: 활동 시각만 맞춤(토큰 없음). ask면 받은 탭도 자기 활동 시각을 답함(유휴 만료 전 확인)
+interface Group {
+  readonly pool: PoolKind;
+  readonly sub: string;
+  readonly authTimeMs: number;
+}
+
+interface LogoutMessage extends Group {
+  readonly kind: "logout";
+  readonly reason: "logout" | "idle" | "max";
+}
+
 interface HelloMessage {
   readonly kind: "hello";
   readonly id: string;
+  readonly pool: PoolKind | null;
 }
 
-// 로그인 상태 나누기. to: 넘겨받기 요청 id(답장), null이면 모든 탭(갱신·활동)
 interface ShareMessage {
   readonly kind: "share";
   readonly to: string | null;
@@ -90,29 +105,59 @@ interface ShareMessage {
   readonly lastActivityMs: number;
 }
 
-function isHello(m: unknown): m is HelloMessage {
+interface ActivityMessage extends Group {
+  readonly kind: "activity";
+  readonly lastActivityMs: number;
+  readonly ask: boolean;
+}
+
+type Message = LogoutMessage | HelloMessage | ShareMessage | ActivityMessage;
+
+const isPool = (v: unknown): v is PoolKind => v === "operator" || v === "demo";
+
+function isGroup(v: Record<string, unknown>): boolean {
   return (
-    typeof m === "object" &&
-    m !== null &&
-    (m as HelloMessage).kind === "hello" &&
-    typeof (m as HelloMessage).id === "string"
+    isPool(v.pool) &&
+    typeof v.sub === "string" &&
+    typeof v.authTimeMs === "number"
   );
 }
 
-function isShare(m: unknown): m is ShareMessage {
-  if (typeof m !== "object" || m === null) return false;
-  const v = m as ShareMessage;
-  return (
-    v.kind === "share" &&
-    (v.to === null || typeof v.to === "string") &&
-    (v.pool === "operator" || v.pool === "demo") &&
-    typeof v.lastActivityMs === "number" &&
-    typeof v.tokens === "object" &&
-    v.tokens !== null &&
-    typeof v.tokens.accessToken === "string" &&
-    typeof v.tokens.idToken === "string" &&
-    typeof v.tokens.refreshToken === "string"
-  );
+function parseMessage(m: unknown): Message | null {
+  if (typeof m !== "object" || m === null) return null;
+  const v = m as Record<string, unknown>;
+  switch (v.kind) {
+    case "logout":
+      return isGroup(v) &&
+        (v.reason === "logout" || v.reason === "idle" || v.reason === "max")
+        ? (v as unknown as LogoutMessage)
+        : null;
+    case "hello":
+      return typeof v.id === "string" && (v.pool === null || isPool(v.pool))
+        ? (v as unknown as HelloMessage)
+        : null;
+    case "share": {
+      const tokens = v.tokens as Record<string, unknown> | null;
+      return (v.to === null || typeof v.to === "string") &&
+        isPool(v.pool) &&
+        typeof v.lastActivityMs === "number" &&
+        typeof tokens === "object" &&
+        tokens !== null &&
+        typeof tokens.accessToken === "string" &&
+        typeof tokens.idToken === "string" &&
+        typeof tokens.refreshToken === "string"
+        ? (v as unknown as ShareMessage)
+        : null;
+    }
+    case "activity":
+      return isGroup(v) &&
+        typeof v.lastActivityMs === "number" &&
+        typeof v.ask === "boolean"
+        ? (v as unknown as ActivityMessage)
+        : null;
+    default:
+      return null;
+  }
 }
 
 export class AuthSession {
@@ -126,28 +171,30 @@ export class AuthSession {
   private joinId: string | null = null;
   // 넘겨받기는 탭을 연 뒤 한 번만(로그아웃 뒤 다시 넘겨받지 않음)
   private joinTried = false;
+  // 유휴 만료 전에 다른 탭의 활동 시각을 한 번 물어봤는지(새 활동이 오면 다시 물음)
+  private idleAsked = false;
 
   constructor(private readonly deps: SessionDeps) {
-    deps.channel?.listen((message) => {
-      if (message === LOGOUT_MESSAGE) {
-        if (this.live) this.end("other_tab", false);
-      } else if (isHello(message)) {
-        this.answerHello(message.id);
-      } else if (isShare(message)) {
-        this.receiveShare(message);
-      }
+    deps.channel?.listen((raw) => {
+      const message = parseMessage(raw);
+      if (!message) return;
+      if (message.kind === "logout") this.receiveLogout(message);
+      else if (message.kind === "hello") this.answerHello(message);
+      else if (message.kind === "share") this.receiveShare(message);
+      else this.receiveActivity(message);
     });
   }
 
   // 새 탭: 열려 있는 로그인한 탭에 로그인을 달라고 함. 잠깐 기다려 답이 없으면 로그인 화면
-  join(): void {
+  // pool: 로그인 화면이 정한 풀(데모 주소면 데모 탭만 답함). 없으면 아무 풀
+  join(pool: PoolKind | null = null): void {
     const channel = this.deps.channel;
     if (!channel || this.live || this.joinTried) return;
     this.joinTried = true;
     const id = this.deps.newId?.() ?? crypto.randomUUID();
     this.joinId = id;
     this.publishSignedOut();
-    channel.post({ kind: "hello", id } satisfies HelloMessage);
+    channel.post({ kind: "hello", id, pool } satisfies HelloMessage);
     this.deps.setTimer(() => {
       if (this.joinId !== id) return;
       this.joinId = null;
@@ -155,13 +202,41 @@ export class AuthSession {
     }, JOIN_WAIT_MS);
   }
 
-  private answerHello(id: string): void {
+  private group(): Group | null {
+    const live = this.live;
+    return live
+      ? { pool: live.pool, sub: live.sub, authTimeMs: live.authTimeMs }
+      : null;
+  }
+
+  private sameGroup(other: Group, withAuthTime = true): boolean {
+    const live = this.live;
+    return (
+      !!live &&
+      other.pool === live.pool &&
+      other.sub === live.sub &&
+      (!withAuthTime || other.authTimeMs === live.authTimeMs)
+    );
+  }
+
+  private receiveLogout(message: LogoutMessage): void {
+    // 직접 로그아웃은 같은 계정의 모든 탭(다시 로그인해 최초 인증이 달라도). 유휴·상한은 같은 묶음만
+    if (!this.sameGroup(message, message.reason !== "logout")) return;
+    // 멈춰 있던 탭이 옛 활동 시각으로 유휴 만료를 보내면 쓰던 탭은 따르지 않음
+    if (message.reason === "idle" && this.currentPhase() !== "idle_expired") {
+      return;
+    }
+    this.end("other_tab", false);
+  }
+
+  private answerHello(message: HelloMessage): void {
     const live = this.live;
     if (!live || live.reauth) return;
+    if (message.pool !== null && message.pool !== live.pool) return;
     // 끝날 때가 된 세션은 넘기지 않음(update가 곧 끝냄)
     const phase = this.currentPhase();
     if (phase === "idle_expired" || phase === "max_expired") return;
-    this.share(id);
+    this.share(message.id);
   }
 
   private share(to: string | null): void {
@@ -176,6 +251,30 @@ export class AuthSession {
     } satisfies ShareMessage);
   }
 
+  private postActivity(ask: boolean): void {
+    const group = this.group();
+    if (!group || !this.live) return;
+    this.deps.channel?.post({
+      kind: "activity",
+      ...group,
+      lastActivityMs: this.live.lastActivityMs,
+      ask,
+    } satisfies ActivityMessage);
+  }
+
+  private receiveActivity(message: ActivityMessage): void {
+    const live = this.live;
+    if (!live || !this.sameGroup(message)) return;
+    if (message.lastActivityMs > live.lastActivityMs) {
+      live.lastActivityMs = message.lastActivityMs;
+      this.idleAsked = false;
+      this.update();
+    } else if (message.ask && live.lastActivityMs > message.lastActivityMs) {
+      // 묻는 탭보다 늦은 활동을 봤으면 알려 줌(그 탭이 유휴로 끝나지 않게)
+      this.postActivity(false);
+    }
+  }
+
   private receiveShare(message: ShareMessage): void {
     const access = accessClaims(message.tokens.accessToken);
     if (!access) return;
@@ -185,28 +284,38 @@ export class AuthSession {
       if (message.to === null || message.to !== this.joinId) return;
       this.joinId = null;
       // 새 탭을 연 것도 활동으로 셈(signIn이 지금 시각으로 둠). 다른 탭의 유휴 시각도 함께 늦춤
-      if (this.signIn(message.pool, message.tokens)) this.share(null);
+      if (this.signIn(message.pool, message.tokens)) this.postActivity(false);
       return;
     }
     if (message.to !== null) return;
-    // 같은 풀·같은 사용자·같은 최초 인증의 탭끼리만 맞춤(다른 계정·새 로그인과 섞지 않음)
-    const mine = accessClaims(live.tokens.accessToken);
-    if (
-      message.pool !== live.pool ||
-      !mine ||
-      access.sub !== mine.sub ||
-      access.authTimeMs !== live.authTimeMs
-    ) {
-      return;
-    }
-    if (access.expMs > live.accessExpMs) {
+    const group = {
+      pool: message.pool,
+      sub: access.sub,
+      authTimeMs: access.authTimeMs,
+    };
+    if (this.sameGroup(group)) {
+      // 같은 묶음: 더 늦게 만료되는 토큰(다른 탭이 갱신한 것)을 받음
+      if (access.expMs <= live.accessExpMs) return;
       live.tokens = message.tokens;
       live.accessExpMs = access.expMs;
       // 다시 로그인을 기다리던 탭이 풀리면 화면이 다시 읽도록 generation을 늘림
       if (live.reauth) this.generation += 1;
       live.reauth = false;
+    } else if (live.reauth && this.sameGroup(group, false)) {
+      // 다시 로그인을 기다리던 탭: 같은 계정이 다른 탭에서 다시 로그인했으면 그 로그인으로 이어 감
+      live.tokens = message.tokens;
+      live.accessExpMs = access.expMs;
+      live.authTimeMs = access.authTimeMs;
+      live.groups = access.groups;
+      live.reauth = false;
+      this.generation += 1;
+    } else {
+      return;
     }
-    live.lastActivityMs = Math.max(live.lastActivityMs, message.lastActivityMs);
+    if (message.lastActivityMs > live.lastActivityMs) {
+      live.lastActivityMs = message.lastActivityMs;
+      this.idleAsked = false;
+    }
     this.update();
   }
 
@@ -226,6 +335,7 @@ export class AuthSession {
     }
     this.live = {
       pool,
+      sub: access.sub,
       tokens,
       email: idClaims(tokens.idToken).email,
       groups: access.groups,
@@ -236,6 +346,7 @@ export class AuthSession {
     };
     this.signedOutReason = null;
     this.joinId = null;
+    this.idleAsked = false;
     this.generation += 1;
     this.update();
     return true;
@@ -247,9 +358,10 @@ export class AuthSession {
     const phase = this.currentPhase();
     if (phase === "idle_expired" || phase === "max_expired") return;
     this.live.lastActivityMs = this.deps.now();
+    this.idleAsked = false;
     this.update();
-    // 다른 탭의 유휴 시각도 늦춤(쓰지 않던 탭이 쓰던 탭까지 로그아웃시키지 않게)
-    this.share(null);
+    // 다른 탭의 유휴 시각도 늦춤(쓰지 않던 탭이 쓰던 탭까지 로그아웃시키지 않게). 토큰은 보내지 않음
+    this.postActivity(false);
   }
 
   // 운영 API에 실을 access token. 만료가 가까우면 먼저 갱신. 다시 로그인이 필요하면 null
@@ -257,7 +369,14 @@ export class AuthSession {
     if (!this.live || this.live.reauth) return null;
     const times = this.times();
     if (times && this.deps.now() >= times.refreshAt) {
-      if (!(await this.refreshNow())) return null;
+      const before = this.live;
+      if (!(await this.refreshNow())) {
+        // 잠금을 기다리는 사이 이 탭에서 다시 로그인했으면 새 세션의 토큰을 씀
+        const now = this.live;
+        return now && now !== before && !now.reauth
+          ? now.tokens.accessToken
+          : null;
+      }
     }
     return this.live?.reauth ? null : (this.live?.tokens.accessToken ?? null);
   }
@@ -266,7 +385,10 @@ export class AuthSession {
   reauthenticate(tokens: Tokens): boolean {
     const pool = this.live?.pool;
     if (!pool) return false;
-    return this.signIn(pool, tokens);
+    // 같은 계정으로 다시 로그인을 기다리던 다른 탭도 이 로그인으로 이어 가게 나눔
+    const ok = this.signIn(pool, tokens);
+    if (ok) this.share(null);
+    return ok;
   }
 
   async logout(): Promise<void> {
@@ -352,10 +474,20 @@ export class AuthSession {
   }
 
   private end(reason: SignOutReason, broadcast: boolean): void {
-    const wasSignedIn = this.live !== null;
+    const group = this.group();
     this.live = null;
     this.signedOutReason = reason;
-    if (broadcast && wasSignedIn) this.deps.channel?.post(LOGOUT_MESSAGE);
+    if (
+      broadcast &&
+      group &&
+      (reason === "logout" || reason === "idle" || reason === "max")
+    ) {
+      this.deps.channel?.post({
+        kind: "logout",
+        reason,
+        ...group,
+      } satisfies LogoutMessage);
+    }
     this.update();
   }
 
@@ -373,6 +505,16 @@ export class AuthSession {
     }
     const now = this.deps.now();
     const phase = sessionPhase(times, now);
+    // 유휴 만료 전에 다른 탭에 한 번 물어봄(이 탭이 멈춰 있어 활동 신호를 못 받았을 수 있음)
+    if (phase === "idle_expired" && this.deps.channel && !this.idleAsked) {
+      this.idleAsked = true;
+      this.postActivity(true);
+      this.timer = this.deps.setTimer(() => {
+        this.timer = null;
+        this.update();
+      }, JOIN_WAIT_MS);
+      return;
+    }
     if (phase === "max_expired" || phase === "idle_expired") {
       this.end(phase === "max_expired" ? "max" : "idle", true);
       return;

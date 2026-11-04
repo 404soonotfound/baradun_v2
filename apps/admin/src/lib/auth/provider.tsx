@@ -10,7 +10,7 @@ import {
 } from "react";
 import { refreshTokens, revokeRefreshToken } from "./cognito-api";
 import { POOLS, type PoolKind } from "./config";
-import { LOGOUT_CHANNEL, REFRESH_LOCK } from "./policy";
+import { LOGOUT_CHANNEL, REFRESH_LOCK, REFRESH_LOCK_WAIT_MS } from "./policy";
 import { AuthSession, type SessionSnapshot } from "./session";
 
 // 화면 전체가 같은 로그인 세션을 쓰게 함 (BRD-148)
@@ -67,7 +67,12 @@ function createSession(): AuthSession {
     ...(typeof navigator !== "undefined" && navigator.locks
       ? {
           lock: <T,>(fn: () => Promise<T>) =>
-            navigator.locks.request(REFRESH_LOCK, fn) as Promise<T>,
+            // 잠금을 쥔 탭의 갱신이 멈춰도 다른 탭이 끝없이 기다리지 않게 시간 제한(넘으면 갱신 실패로 다룸)
+            navigator.locks.request(
+              REFRESH_LOCK,
+              { signal: AbortSignal.timeout(REFRESH_LOCK_WAIT_MS) },
+              fn,
+            ) as Promise<T>,
         }
       : {}),
   });
@@ -98,11 +103,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       live = false;
       stop?.();
     };
-  }, [session]);
-
-  // 열려 있는 로그인한 탭에서 로그인을 넘겨받음(없으면 잠깐 뒤 로그인 화면)
-  useEffect(() => {
-    session.join();
   }, [session]);
 
   useEffect(() => {
