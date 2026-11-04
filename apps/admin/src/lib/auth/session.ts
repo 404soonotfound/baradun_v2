@@ -1,4 +1,5 @@
 import type { PoolKind } from "./config";
+import { authFailureOf } from "./errors";
 import { accessClaims, idClaims } from "./tokens";
 import {
   nextWakeAt,
@@ -226,7 +227,12 @@ export class AuthSession {
     const id = this.deps.newId?.() ?? crypto.randomUUID();
     this.joinId = id;
     this.publishSignedOut();
-    channel?.post({ kind: "hello", id, pool } satisfies HelloMessage);
+    // 저장 값이 있으면 그 풀의 탭에만 물음(데모로 쓰던 탭이 새로고침에 운영자 로그인으로 바뀌지 않게)
+    channel?.post({
+      kind: "hello",
+      id,
+      pool: pool ?? saved?.pool ?? null,
+    } satisfies HelloMessage);
     this.deps.setTimer(
       () => {
         if (this.joinId !== id) return;
@@ -264,13 +270,18 @@ export class AuthSession {
 
   // 새로고침: 이 탭에 둔 refresh token으로 갱신해 로그인을 이어 감(회전 유예 0초라 잠금 안에서)
   // 실패하거나 다른 계정·다른 최초 인증의 토큰이면 저장 값을 지우고 로그인 화면
+  // 망 오류(응답 없음·시간 초과)는 토큰이 아직 쓸 수 있을 수 있어 저장 값을 두고 로그인 화면(다시 새로고침하면 다시 시도)
   private async restore(saved: SavedSession): Promise<void> {
     this.restoring = true;
     this.publishSignedOut();
     const lock = this.deps.lock ?? ((fn) => fn());
+    let offline = false;
     const tokens = await lock(() =>
       this.deps.refresh(saved.pool, saved.refreshToken),
-    ).catch(() => null);
+    ).catch((error: unknown) => {
+      offline = authFailureOf(error) === "network";
+      return null;
+    });
     this.restoring = false;
     if (this.live) return;
     const access = tokens ? accessClaims(tokens.accessToken) : null;
@@ -280,7 +291,13 @@ export class AuthSession {
       access.sub !== saved.sub ||
       access.authTimeMs !== saved.authTimeMs
     ) {
-      this.deps.store?.save(null);
+      if (!offline) this.deps.store?.save(null);
+      // 받지 않은 토큰의 refresh token을 남겨 두지 않음(회전됐으면 새것, 아니면 저장했던 것)
+      if (tokens) {
+        void this.deps
+          .revoke(saved.pool, tokens.refreshToken || saved.refreshToken)
+          .catch(() => undefined);
+      }
       this.publishSignedOut();
       return;
     }
