@@ -223,6 +223,24 @@ export function SessionNotices() {
   );
 }
 
+// 로그인을 이어 가는 동안(열린 탭에서 넘겨받기 최대 0.4초, 새로고침 갱신은 Cognito 응답까지, D17-11) 안내
+// 짧은 넘겨받기에서 깜박이지 않게 1초 뒤에 글을 넣음(알림 영역은 처음부터 둠)
+export function SessionResuming() {
+  const [shown, setShown] = useState(false);
+  useEffect(() => {
+    const timer = setTimeout(() => setShown(true), 1000);
+    return () => clearTimeout(timer);
+  }, []);
+  return (
+    <p
+      role="status"
+      className="px-4 py-10 text-center text-body-s text-text-muted"
+    >
+      {shown ? t.session.resuming : ""}
+    </p>
+  );
+}
+
 export function SessionGuard({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -244,7 +262,9 @@ export function SessionGuard({ children }: { children: ReactNode }) {
     }
   }, [session, snapshot, pathname, router]);
 
-  if (snapshot.status === "signed_out") return null;
+  if (snapshot.status === "signed_out") {
+    return snapshot.joining ? <SessionResuming /> : null;
+  }
 
   return (
     <>

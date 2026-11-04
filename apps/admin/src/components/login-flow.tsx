@@ -24,6 +24,7 @@ import {
 } from "@/lib/auth/srp";
 import { messages } from "@/lib/messages";
 import { CodeInput, Field, PasswordRules, passwordChecks } from "./fields";
+import { SessionResuming } from "./session-guard";
 import { AuthShell, Button, Notice, TextLink } from "./ui";
 
 // 로그인 흐름 (BRD-148, 캔버스 V26·V27·V28, F2)
@@ -246,8 +247,10 @@ export function LoginFlow({ pool }: { pool: PoolKind }) {
     setView({ kind: "form", error: null });
   };
 
-  // 다른 탭에서 로그인을 넘겨받는 동안(최대 0.4초)은 로그인 칸을 그리지 않음(받으면 바로 보던 화면으로)
-  if (snapshot.status === "signed_out" && snapshot.joining) return null;
+  // 로그인을 이어 가는 동안(넘겨받기·새로고침 갱신)은 로그인 칸을 그리지 않음(받으면 바로 보던 화면으로)
+  if (snapshot.status === "signed_out" && snapshot.joining) {
+    return <SessionResuming />;
+  }
 
   switch (view.kind) {
     case "form":
