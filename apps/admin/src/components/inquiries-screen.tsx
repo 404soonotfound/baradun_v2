@@ -56,8 +56,27 @@ type Beaches = Readonly<Record<string, BeachName>>;
 interface Saved {
   readonly status: InquiryStatus;
   readonly version: number;
+  // 저장 전 상태와 저장 시각: 그 뒤에 받은 상태별 수가 아니면 탭 수를 이만큼 옮김
+  readonly from: string;
+  readonly at: number;
 }
 type SavedMap = Readonly<Record<string, Saved>>;
+
+// 탭 수를 이 탭에서 저장한 만큼 옮김(서버 수는 GSI라 늦을 수 있음, D16-B4)
+function adjustCounts(
+  counts: InquiryCounts,
+  countedAt: number,
+  saved: SavedMap,
+): InquiryCounts {
+  const next = { ...counts };
+  for (const mine of Object.values(saved)) {
+    if (mine.at <= countedAt || mine.from === mine.status) continue;
+    if (!isInquiryStatus(mine.from)) continue;
+    next[mine.from] = Math.max(0, next[mine.from] - 1);
+    next[mine.status] += 1;
+  }
+  return next;
+}
 
 function withSaved(item: InquirySummary, saved: SavedMap): InquirySummary {
   const mine = saved[item.inquiryId];
@@ -237,7 +256,11 @@ function InquiryList({
   const [status, setStatus] = useState<InquiryStatus | null>(null);
   // 지나온 쪽의 cursor. 첫 쪽은 null. 이전으로 가면 하나 뺌
   const [cursors, setCursors] = useState<readonly (string | null)[]>([null]);
-  const [counts, setCounts] = useState<InquiryCounts | null>(null);
+  // 상태별 수와 받은 시각(이 시각 뒤의 저장만 탭 수에 더함. 그 전 저장은 서버 수에 이미 들었을 수 있음)
+  const [received, setReceived] = useState<{
+    counts: InquiryCounts;
+    at: number;
+  } | null>(null);
   const [attempt, setAttempt] = useState(0);
   const cursor = cursors.at(-1) ?? null;
   // 받은 응답을 요청 조건과 함께 둠. 조건이 바뀌면 응답이 올 때까지 '불러오는 중'
@@ -260,7 +283,7 @@ function InquiryList({
       if (!live) return;
       setLoaded({ key, result: next });
       if (next.ok && next.body.counts) {
-        setCounts(next.body.counts);
+        setReceived({ counts: next.body.counts, at: Date.now() });
         if (owner) setReceivedCount(owner, next.body.counts.received);
       }
     });
@@ -275,9 +298,15 @@ function InquiryList({
   };
 
   const pageIndex = cursors.length - 1;
+  // 저장한 상태로 바꿔 보이고, 고른 탭과 맞지 않게 된 문의는 이 탭에서 뺌(예: 접수 탭에서 완료로 저장)
   const items = result?.ok
-    ? result.body.items.map((item) => withSaved(item, saved))
+    ? result.body.items
+        .map((item) => withSaved(item, saved))
+        .filter((item) => !status || item.status === status)
     : [];
+  const counts = received
+    ? adjustCounts(received.counts, received.at, saved)
+    : null;
   const total = counts
     ? status
       ? counts[status]
@@ -500,7 +529,7 @@ function InquiryActions({
   onReload,
 }: {
   item: InquiryDetail;
-  onSaved: (saved: Saved, from: string) => void;
+  onSaved: (saved: Pick<Saved, "status" | "version">, from: string) => void;
   onReload: () => void;
 }) {
   const session = useAuthSession();
@@ -1010,7 +1039,7 @@ function InquiryDetailView({
             setAttempt((n) => n + 1);
           }}
           onSaved={(saved, from) => {
-            onSaved(item.inquiryId, saved);
+            onSaved(item.inquiryId, { ...saved, from, at: Date.now() });
             if (from === "received" && saved.status !== "received") {
               if (owner) adjustReceivedCount(owner, -1);
             } else if (from !== "received" && saved.status === "received") {
