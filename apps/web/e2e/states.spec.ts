@@ -1,5 +1,8 @@
 import type { Page } from "@playwright/test";
 
+import ko from "../messages/ko.json";
+import { ZONE_NAMES_KO } from "../src/lib/zone-names-ko";
+
 import {
   CLEAR_ID,
   DELAYED_ID,
@@ -13,6 +16,11 @@ import {
 // 상태별 핵심 흐름 (BRD-39 · 노션 9.1 '실패 경로', 리뷰 점검표 3·4·5)
 const FINAL_CALL = "최종 판단은 현장 통제와 안전요원 안내가 우선이에요";
 const CONFIRMED = /기상청 \d{1,2}:\d{2} 확인/;
+// 범위: 예보업무규정 별표 구역 이름 1~2개('강원중부앞바다, 강릉평지') 또는 이름을 모를 때의 '해변 특보구역'(D18-11)
+const ZONE = `(?:${Object.values(ZONE_NAMES_KO)
+  .map((name) => name.replace(/[.()]/g, "\\$&"))
+  .join("|")})`;
+const SCOPE = `(?:${ZONE}(?:, ${ZONE})?|${ko.warning.beachZones})`;
 
 // 화면에 보이는 '특보 없음' 배지 개수
 // PC 홈 상태 요약 카드의 분류 이름('특보 없음 0곳')은 판단 배지가 아니라 빼고 셈(data-summary-category, BRD-129)
@@ -30,7 +38,7 @@ function clearBadges(page: Page) {
 // 배지에서 바깥으로 올라가며 '기상청 HH:MM 확인'이 든 가장 가까운 묶음을 찾고, 그 묶음이 든 구역에 현장 우선 문구가 있는지 봄
 async function clearPlacesWithoutBasis(page: Page) {
   return page.evaluate(
-    ({ finalCall, confirmed }) => {
+    ({ finalCall, confirmed, scope }) => {
       const pattern = new RegExp(confirmed);
       const missing: string[] = [];
       const badges = [...document.querySelectorAll("main *")].filter(
@@ -50,11 +58,10 @@ async function clearPlacesWithoutBasis(page: Page) {
           box = box.parentElement;
           depth += 1;
         }
-        // 범위: 해변 특보구역 이름('강원중부앞바다, 강릉평지') 또는 이름을 모를 때의 '해변 특보구역'(D18-11)
         const scopeOk =
           box !== null &&
           depth < 8 &&
-          new RegExp(`[가-힣.()]+ · ${confirmed}`).test(box.textContent ?? "");
+          new RegExp(`${scope} · ${confirmed}`).test(box.textContent ?? "");
         const section = box?.closest("section, [role='region'], main");
         const finalOk = (section?.textContent ?? "").includes(finalCall);
         if (!scopeOk || !finalOk) {
@@ -65,7 +72,7 @@ async function clearPlacesWithoutBasis(page: Page) {
       }
       return { count: badges.length, missing };
     },
-    { finalCall: FINAL_CALL, confirmed: CONFIRMED.source },
+    { finalCall: FINAL_CALL, confirmed: CONFIRMED.source, scope: SCOPE },
   );
 }
 
