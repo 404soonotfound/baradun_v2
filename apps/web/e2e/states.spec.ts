@@ -50,10 +50,11 @@ async function clearPlacesWithoutBasis(page: Page) {
           box = box.parentElement;
           depth += 1;
         }
+        // 범위: 해변 특보구역 이름('강원중부앞바다, 강릉평지') 또는 이름을 모를 때의 '해변 특보구역'(D18-11)
         const scopeOk =
           box !== null &&
           depth < 8 &&
-          (box.textContent ?? "").includes("특보구역");
+          new RegExp(`[가-힣.()]+ · ${confirmed}`).test(box.textContent ?? "");
         const section = box?.closest("section, [role='region'], main");
         const finalOk = (section?.textContent ?? "").includes(finalCall);
         if (!scopeOk || !finalOk) {
