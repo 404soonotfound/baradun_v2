@@ -866,13 +866,23 @@ function NoticeEditor({
   };
 
   // 저장하지 않은 변경이 있으면 탭을 닫거나 새로고침할 때 브라우저가 묻게 함
-  const dirty = changes > 0 && !busy;
+  // 저장 요청 중에도 보호를 유지함(실패하면 쓰던 내용이 그대로 남으므로)
+  const dirty = changes > 0;
   // 나가려던 곳: 안쪽 주소(메뉴 등 링크) 또는 'back'(브라우저 뒤로). null이면 공지 목록
   const [leaveTo, setLeaveTo] = useState<string | null>(null);
   // '나가기'를 누른 뒤에는 아래 가로채기를 하지 않음
   const leaving = useRef(false);
+  // 브라우저 뒤로 보호용으로 쌓은 같은 주소 항목이 있는지. 한 번에 하나만 둠
+  const guarded = useRef(false);
   useEffect(() => {
-    if (!dirty) return;
+    if (!dirty) {
+      // 보호를 풂(저장함·되돌림): 쌓아 둔 항목을 걷어 뒤로 가기가 실제 앞 화면으로 가게 함
+      if (guarded.current && !leaving.current) {
+        guarded.current = false;
+        window.history.back();
+      }
+      return;
+    }
     const warn = (e: BeforeUnloadEvent) => e.preventDefault();
     // 앱 안 링크(왼쪽 메뉴 등)는 페이지를 새로 불러오지 않아 beforeunload가 없음 → 눌림을 먼저 가로채 확인
     // React보다 먼저 받도록 document 캡처 단계에서 받음(Next Link의 이동을 막음)
@@ -889,11 +899,15 @@ function NoticeEditor({
       setLeaveTo(`${url.pathname}${url.search}`);
       setConfirm("leave");
     };
-    // 브라우저 뒤로: 같은 주소를 하나 더 쌓아 두고, 뒤로 가면 다시 쌓은 뒤 확인을 띄움
-    window.history.pushState(window.history.state, "", window.location.href);
+    // 브라우저 뒤로: 같은 주소를 하나 쌓아 두고, 뒤로 가면(그 항목이 빠짐) 다시 쌓은 뒤 확인을 띄움
+    const guard = () => {
+      window.history.pushState(window.history.state, "", window.location.href);
+      guarded.current = true;
+    };
+    if (!guarded.current) guard();
     const back = () => {
       if (leaving.current) return;
-      window.history.pushState(window.history.state, "", window.location.href);
+      guard();
       setLeaveTo("back");
       setConfirm("leave");
     };
@@ -916,7 +930,7 @@ function NoticeEditor({
   const confirmLeave = () => {
     leaving.current = true;
     if (leaveTo === "back") {
-      // 쌓아 둔 같은 주소 두 칸(처음·확인 때)을 건너 원래 앞 화면으로
+      // 쌓아 둔 보호 항목과 이 화면을 건너 원래 앞 화면으로
       window.history.go(-2);
     } else if (leaveTo) {
       router.push(leaveTo);
