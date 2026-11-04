@@ -21,6 +21,9 @@ export const INQUIRY_PAGE_MAX = 50;
 // 반려 이유·내부 메모 길이 상한(글자). 화면 입력 상한과 같게 맞춤(BRD-148 화면에서 확인)
 export const REJECT_REASON_MAX = 500;
 export const MEMO_MAX = 2000;
+// 개인정보 가리기: 한 번에 가릴 수 있는 부분 수와 가린 자리에 넣는 표시(화면 설계서 6장 ADM-INQ)
+export const REDACTION_MAX = 20;
+export const REDACTION_MARK = "[가림]";
 
 // 목록 항목의 version은 GSI(최종적 일관성) 값이라 저장 직후 이전 값일 수 있음
 // 처리(PATCH)에는 상세(강한 일관성)에서 받은 version을 씀
@@ -270,6 +273,15 @@ export interface InquiryPatch {
   readonly status?: InquiryStatus;
   readonly memo?: string | null;
   readonly rejectReason?: string;
+  readonly redactions?: readonly Redaction[];
+}
+
+// 본문에서 가릴 부분. start·end는 저장된 본문의 UTF-16 위치(끝 미포함), text는 그 자리의 글
+// text를 함께 받아 화면이 본 본문과 서버 본문이 어긋나면 거부함(엉뚱한 곳을 지우지 않게)
+export interface Redaction {
+  readonly start: number;
+  readonly end: number;
+  readonly text: string;
 }
 
 export type PatchCheck =
@@ -282,10 +294,16 @@ export function parseInquiryPatch(body: unknown): PatchCheck {
     return { ok: false, field: "body" };
   }
   const value = body as Raw;
-  const allowed = new Set(["version", "status", "memo", "rejectReason"]);
+  const allowed = new Set([
+    "version",
+    "status",
+    "memo",
+    "rejectReason",
+    "redactions",
+  ]);
   const unknown = Object.keys(value).find((k) => !allowed.has(k));
   if (unknown) return { ok: false, field: unknown };
-  const { version, status, memo, rejectReason } = value;
+  const { version, status, memo, rejectReason, redactions } = value;
   if (!Number.isSafeInteger(version) || (version as number) < 0) {
     return { ok: false, field: "version" };
   }
@@ -311,7 +329,9 @@ export function parseInquiryPatch(body: unknown): PatchCheck {
   } else if (rejectReason !== undefined) {
     return { ok: false, field: "rejectReason" };
   }
-  if (status === undefined && memo === undefined) {
+  const ranges = redactions === undefined ? undefined : parseRanges(redactions);
+  if (ranges === null) return { ok: false, field: "redactions" };
+  if (status === undefined && memo === undefined && ranges === undefined) {
     return { ok: false, field: "body" };
   }
   return {
@@ -323,8 +343,67 @@ export function parseInquiryPatch(body: unknown): PatchCheck {
       ...(status === "rejected"
         ? { rejectReason: (rejectReason as string).trim() }
         : {}),
+      ...(ranges !== undefined ? { redactions: ranges } : {}),
     },
   };
+}
+
+// 모양만 검사(1~20개, 정수 위치, 겹치지 않게 앞에서부터). 본문과 맞는지는 applyRedactions가 봄
+function parseRanges(value: unknown): Redaction[] | null {
+  if (!Array.isArray(value) || value.length === 0) return null;
+  if (value.length > REDACTION_MAX) return null;
+  const ranges: Redaction[] = [];
+  let last = 0;
+  for (const entry of value) {
+    if (typeof entry !== "object" || entry === null) return null;
+    const keys = Object.keys(entry as Raw);
+    if (keys.some((k) => k !== "start" && k !== "end" && k !== "text")) {
+      return null;
+    }
+    const { start, end, text } = entry as Raw;
+    if (
+      !Number.isSafeInteger(start) ||
+      !Number.isSafeInteger(end) ||
+      typeof text !== "string" ||
+      (start as number) < last ||
+      (end as number) <= (start as number) ||
+      text.length !== (end as number) - (start as number)
+    ) {
+      return null;
+    }
+    ranges.push({ start: start as number, end: end as number, text });
+    last = end as number;
+  }
+  return ranges;
+}
+
+const isHigh = (code: number) => code >= 0xd800 && code <= 0xdbff;
+const isLow = (code: number) => code >= 0xdc00 && code <= 0xdfff;
+
+// 가린 본문. 범위가 본문 밖이거나, 그 자리 글이 text와 다르거나, 글자(서로게이트 쌍) 가운데를 자르면 null
+// 공백만 고른 범위도 거부함(가린 것처럼 보이지만 지운 개인정보가 없음)
+export function applyRedactions(
+  message: string,
+  ranges: readonly Redaction[],
+): string | null {
+  let out = "";
+  let at = 0;
+  for (const { start, end, text } of ranges) {
+    if (end > message.length) return null;
+    if (message.slice(start, end) !== text || text.trim() === "") return null;
+    if (
+      isLow(message.charCodeAt(start)) &&
+      isHigh(message.charCodeAt(start - 1))
+    ) {
+      return null;
+    }
+    if (isHigh(message.charCodeAt(end - 1)) && isLow(message.charCodeAt(end))) {
+      return null;
+    }
+    out += message.slice(at, start) + REDACTION_MARK;
+    at = end;
+  }
+  return out + message.slice(at);
 }
 
 // 저장할 속성. 반려가 아닌 상태로 바꾸면 반려 이유를 지움(null)
@@ -342,7 +421,7 @@ export function inquiryPatchFields(
   };
 }
 
-// 감사 기록의 바뀐 항목 이름(값은 넣지 않음, D16-B5·D6)
+// 감사 기록의 바뀐 항목 이름(값은 넣지 않음, D16-B5·D6). 개인정보 가리기는 'message'만 남김(가린 글은 복사 안 함)
 // 반려가 아닌 상태로 바꿔 반려 이유가 지워지는 경우도 바뀐 항목으로 셈
 export function inquiryAuditChanges(
   patch: InquiryPatch,
@@ -358,5 +437,6 @@ export function inquiryAuditChanges(
       ? ["rejectReason"]
       : []),
     ...(patch.memo !== undefined ? ["memo"] : []),
+    ...(patch.redactions !== undefined ? ["message"] : []),
   ];
 }
