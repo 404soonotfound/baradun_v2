@@ -27,19 +27,24 @@ export function qrShape(text: string): QrShape {
   return { size: modules.size, path };
 }
 
+// 둘레 흰 여백(칸 수, QR 규격 권장 4칸). 인증 앱이 찍으려면 다크 모드에서도 흰 바탕·여백이 있어야 함
+const QUIET = 4;
+
 export function QrCode({ shape, label }: { shape: QrShape; label: string }) {
+  const full = shape.size + QUIET * 2;
   return (
     <div
       role="img"
       aria-label={label}
-      className="size-[160px] rounded-admin-control border border-border-default bg-white p-2 [&_svg]:size-full"
+      className="size-[160px] overflow-hidden rounded-admin-control border border-border-default"
     >
       <svg
-        viewBox={`0 0 ${shape.size} ${shape.size}`}
+        viewBox={`${-QUIET} ${-QUIET} ${full} ${full}`}
+        className="block size-full"
         shapeRendering="crispEdges"
         aria-hidden="true"
       >
-        <rect width={shape.size} height={shape.size} fill="#fff" />
+        <rect x={-QUIET} y={-QUIET} width={full} height={full} fill="#fff" />
         <path d={shape.path} fill="#000" />
       </svg>
     </div>
