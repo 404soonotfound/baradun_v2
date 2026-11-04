@@ -58,11 +58,42 @@ describe("로컬 샘플 응답", () => {
       ok: true,
       body: { kind: "sample" },
     });
-    expect(localOps("/ops/inquiries", "operator", {})).toEqual({
+    expect(localOps("/ops/audit", "operator", {})).toEqual({
       ok: false,
       status: 501,
       code: "local_sample_missing",
       requestId: null,
+    });
+  });
+});
+
+describe("로컬 예시 문의 (BRD-153)", () => {
+  it("첫 쪽에만 상태별 수를 주고, cursor로 다음 쪽을 이어 가며, 없는 문의는 404", () => {
+    const first = localOps<{
+      items: { inquiryId: string }[];
+      nextCursor: string | null;
+      counts?: Record<string, number>;
+    }>("/ops/inquiries?limit=20", "operator", {});
+    if (!first.ok) throw new Error("첫 쪽 실패");
+    expect(first.body.items).toHaveLength(20);
+    expect(first.body.counts).toBeDefined();
+    const next = localOps<{ items: unknown[]; counts?: unknown }>(
+      `/ops/inquiries?limit=20&cursor=${first.body.nextCursor}`,
+      "operator",
+      {},
+    );
+    if (!next.ok) throw new Error("다음 쪽 실패");
+    expect(next.body.counts).toBeUndefined();
+    expect(
+      localOps(
+        `/ops/inquiries/${first.body.items[0]!.inquiryId}`,
+        "operator",
+        {},
+      ),
+    ).toMatchObject({ ok: true, body: { restricted: false } });
+    expect(localOps("/ops/inquiries/nope", "operator", {})).toMatchObject({
+      ok: false,
+      status: 404,
     });
   });
 });
