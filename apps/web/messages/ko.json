@@ -539,6 +539,7 @@
     },
     "zoomIn": "지도 확대",
     "zoomOut": "지도 축소",
+    "cluster": "해변 {count}곳 묶음 · 눌러서 확대",
     "attribution": {
       "label": "지도 출처",
       "openfreemap": "OpenFreeMap",

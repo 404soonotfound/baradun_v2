@@ -7,14 +7,18 @@ import {
   TriangleAlert,
   type LucideIcon,
 } from "lucide-react";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useTranslations } from "next-intl";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
 import { badgeTone, type VerdictTone } from "@/lib/badge-tone";
 import { cn } from "@/lib/cn";
 import type { LatLng } from "@/lib/geo";
+import { FIT_OPTIONS, type LngLatBox } from "@/lib/map/bounds";
+import { CLUSTER_MAX_ZOOM, clusterMarkers } from "@/lib/map/cluster";
 import type { MapHandle } from "@/lib/map/engine";
 import { shortName } from "@/lib/map/short-name";
+import { prefersReducedMotion } from "@/lib/motion";
 import type { BadgeLabel } from "@/lib/snapshot/view";
 
 // 해변 마커 (BRD-30 · 노션 2장 EXP-M '마커 = 상태 아이콘 + 짧은 이름', 4장 지도 마커 원)
@@ -22,6 +26,7 @@ import type { BadgeLabel } from "@/lib/snapshot/view";
 // 색 + 아이콘(+ 점선)으로 구분(색만으로 구분하지 않음). 분류는 게시값 그대로(G1)
 // 마커는 화면 읽기·Tab에서 뺌(aria-hidden): 같은 해변은 목록에서 모두 키보드로 닿음(206곳을 Tab으로 돌지 않게)
 // 이름은 가까이 볼 때(확대 11 이상)와 고른·가리킨 마커만 보여 지명 라벨·다른 마커와 덜 겹치게 함
+// 확대 11 미만에서 겹치는 마커는 숫자 묶음 버튼으로(BRD-114 · 결정 8). 묶음은 해변 수만 보여 주고 상태 색을 쓰지 않음
 
 export type MapMarker = {
   id: string;
@@ -72,7 +77,18 @@ export function BeachMarkers({
   highlightedId: string | null; // PC 목록 행에 마우스·포커스가 있는 해변
   onSelect: (id: string | null) => void;
 }) {
+  const t = useTranslations("map");
   const [zoom, setZoom] = useState(() => api.map.getZoom());
+  // 고른·가리킨 해변은 묶지 않음(강조한 마커가 숫자 뒤로 숨지 않게)
+  const groups = useMemo(
+    () =>
+      clusterMarkers(
+        markers,
+        zoom,
+        new Set([selectedId, highlightedId].filter((id) => id !== null)),
+      ),
+    [markers, zoom, selectedId, highlightedId],
+  );
   // 지도 이벤트에서 부를 최신 onSelect(이벤트를 다시 걸지 않게)
   const onSelectRef = useRef(onSelect);
   useEffect(() => {
@@ -97,7 +113,24 @@ export function BeachMarkers({
     };
   }, [api]);
 
-  return markers.map((marker) => {
+  return groups.map((group) => {
+    if (group.kind === "cluster") {
+      return (
+        <BeachMarker
+          key={group.key}
+          api={api}
+          lngLat={[group.center.lng, group.center.lat]}
+          hidden={false}
+        >
+          <ClusterFace
+            count={group.items.length}
+            label={t("cluster", { count: group.items.length })}
+            onClick={() => zoomToCluster(api, group.bounds)}
+          />
+        </BeachMarker>
+      );
+    }
+    const marker = group.item;
     const selected = marker.id === selectedId;
     const emphasized = selected || marker.id === highlightedId;
     return (
@@ -118,20 +151,43 @@ export function BeachMarkers({
   });
 }
 
+// 묶음을 누르면 그 해변들이 보이는 범위로 확대. 범위가 넓어도 적어도 한 단계는 확대(누를 때마다 풀리게)
+// 확대 11(CLUSTER_MAX_ZOOM)까지만 맞춰서 한 곳에 몰린 묶음도 개별 마커로 풀림
+// 여백은 지도 범위 맞추기와 같음(오른쪽 버튼 열 밑으로 마커가 들어가지 않게)
+// 누른 묶음은 풀리면서 사라지므로 포커스를 지도 캔버스로 옮김(키보드 포커스가 페이지 처음으로 튀지 않게)
+function zoomToCluster(api: MapHandle, bounds: LngLatBox) {
+  const map = api.map;
+  const camera = map.cameraForBounds(bounds, {
+    padding: FIT_OPTIONS.padding,
+    maxZoom: CLUSTER_MAX_ZOOM,
+  });
+  map.getCanvas().focus({ preventScroll: true });
+  const atLeast = Math.min(map.getZoom() + 1, map.getMaxZoom());
+  const [[west, south], [east, north]] = bounds;
+  map.easeTo({
+    center: camera?.center ?? [(west + east) / 2, (south + north) / 2],
+    zoom: Math.max(camera?.zoom ?? 0, atLeast),
+    animate: !prefersReducedMotion(),
+  });
+}
+
 // 마커 하나: 지도에 붙일 요소를 만들고 그 안에 React로 그림(포털)
+// hidden: 해변 마커는 화면 읽기·Tab에서 뺌(목록에서 모두 닿음). 묶음은 누르는 버튼이라 뺄 수 없음(결정 8 키보드 조작)
 function BeachMarker({
   api,
   lngLat,
+  hidden = true,
   children,
 }: {
   api: MapHandle;
   lngLat: [number, number];
+  hidden?: boolean;
   children: ReactNode;
 }) {
   // 지도에 붙일 빈 요소. 지도가 다 그려진 뒤(브라우저)에만 이 부품이 그려지므로 document를 씀
   const [node] = useState(() => {
     const element = document.createElement("div");
-    element.setAttribute("aria-hidden", "true");
+    if (hidden) element.setAttribute("aria-hidden", "true");
     element.dataset.beachMarker = "";
     return element;
   });
@@ -186,5 +242,33 @@ function MarkerFace({
         </span>
       )}
     </div>
+  );
+}
+
+// 묶음: 해변 수만 보여 주는 중립 원(상태 색·아이콘 없음 → 대표 상태로 읽히지 않게). 누르면 그 범위로 확대
+// 해변 마커와 같은 44px 누르는 자리. 접근 가능한 이름에 해변 수와 동작을 담음
+function ClusterFace({
+  count,
+  label,
+  onClick,
+}: {
+  count: number;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      onClick={onClick}
+      className="flex size-touch cursor-pointer items-center justify-center rounded-full"
+    >
+      <span
+        aria-hidden="true"
+        className="flex size-9 items-center justify-center rounded-full border-2 border-text-body bg-bg-surface text-caption font-bold text-text-default tabular-nums shadow-card"
+      >
+        {count}
+      </span>
+    </button>
   );
 }
