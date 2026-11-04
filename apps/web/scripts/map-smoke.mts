@@ -1,7 +1,9 @@
 // OpenFreeMap 스모크 테스트 (BRD-114 · 결정 기록 12장 결정 10, 아키텍처 16.4.3·16.4.5)
 // 고정한 것(타일 판·sprite 판)이 아직 그대로 있는지, 고정할 수 없는 것(글꼴)이 응답하는지 실제 서버로 확인함
 // - 고정 타일 판이 지워지면 서버는 돌려보내기(3xx)나 오류 없이 최신 판 타일을 200으로 줌(2026-11-04 없는 판 이름으로 확인)
-//   → 판별 TileJSON이 고정 판을 가리키는지로 확인함(3xx·오류도 실패)
+//   → 같은 타일을 '없는 판 이름'으로도 받아 내용이 똑같으면 고정 판이 사라진 것으로 봄(3xx·오류도 실패)
+//   판별 TileJSON(/planet/{판})은 쓰지 않음: CDN 캐시에 없으면(MISS) 판과 상관없이 최신 판을 가리켜, 판이 있어도 사라진 것처럼 보임
+//   (2026-11-04 CI에서 오탐. 같은 때 고정 판 타일은 최신 판과 내용이 달라 서버에 그대로 있었음)
 // - CI 정기 실행(매일)과 배포 전(npm run check:map -w apps/web)에 돌림. 수동 눈 확인만으로 두지 않음
 // 위치·사용자 정보는 보내지 않음(공개 타일·글꼴 주소만 부름)
 import { readFileSync } from "node:fs";
@@ -56,6 +58,13 @@ async function expectBody(url: string, what: string) {
   }
   pass(`${what} (${body.length} bytes)`);
   return body;
+}
+
+// 서버에 없는 판 이름(서버가 최신 판으로 대신 줌)
+const MISSING_VERSION = "00000000_000000_pt";
+
+function sameBytes(a: Uint8Array, b: Uint8Array) {
+  return a.length === b.length && a.every((value, index) => value === b[index]);
 }
 
 // 좌표 → 타일 번호(웹 메르카토르)
@@ -113,34 +122,43 @@ else {
     { name: "해운대", lat: 35.159, lng: 129.16 },
     { name: "제주 협재", lat: 33.394, lng: 126.24 },
   ];
-  // 고정 판이 서버에 있는지: 판별 TileJSON(/planet/{판})의 타일 주소가 그 판을 가리키는지 봄
-  // 없는 판이면 오류 없이 최신 판 주소를 돌려줌(2026-11-04 확인). 타일 내용 비교와 달리 판 사이에 안 바뀐 타일로 오탐하지 않음
-  const own = await get(`${TILE_HOST}/planet/${pinned}`);
-  const ownTiles = own?.ok
-    ? ((await own.json()) as { tiles?: string[] }).tiles?.[0]
-    : undefined;
-  if (ownTiles === undefined) fail(`고정 판 ${pinned} TileJSON을 받지 못함`);
-  else if (!ownTiles.includes(`/${pinned}/`))
-    fail(
-      `고정 판 ${pinned}이 서버에 없음(TileJSON이 ${ownTiles}를 가리킴, 최신 판으로 바뀌어 옴)`,
-    );
-  else pass(`고정 판 ${pinned}이 서버에 있음`);
-  // 참고: 지금 최신 판(다르면 올릴지 표본 해변 화면을 보고 정함, 16.4.3)
+  // 최신 판 이름. 고정 판과 같으면 '없는 판'과 내용이 같아도 정상이라 비교하지 않음
   const tilejson = await get(`${TILE_HOST}/planet`);
-  if (tilejson?.ok) {
-    const latest = ((await tilejson.json()) as { tiles?: string[] }).tiles?.[0];
-    console.log(`  최신 판: ${latest ?? "알 수 없음"} · 고정 판: ${pinned}`);
-  }
-  // 표본 타일이 고정 판 주소로 응답하는지(동해·서해·남해·제주 × z6·10·14)
+  const latest = tilejson?.ok
+    ? ((await tilejson.json()) as { tiles?: string[] }).tiles?.[0]
+    : undefined;
+  if (latest === undefined) fail("최신 판 TileJSON을 받지 못함");
+  // 참고: 다르면 올릴지 표본 해변 화면을 보고 정함(16.4.3)
+  else console.log(`  최신 판: ${latest} · 고정 판: ${pinned}`);
+  const compare = latest !== undefined && !latest.includes(`/${pinned}/`);
+  // 판 사이에 안 바뀐 타일은 내용이 같을 수 있어, 비교한 표본이 모두 최신과 같을 때만 사라진 것으로 봄
+  let compared = 0;
+  let replaced = 0;
   for (const sample of samples) {
     for (const z of [6, 10, 14]) {
       const { x, y } = tileOf(sample.lat, sample.lng, z);
-      await expectBody(
+      const body = await expectBody(
         `${TILE_HOST}/planet/${pinned}/${z}/${x}/${y}.pbf`,
         `고정 타일 ${pinned} ${sample.name} z${z}`,
       );
+      if (!body || !compare) continue;
+      const fallback = await get(
+        `${TILE_HOST}/planet/${MISSING_VERSION}/${z}/${x}/${y}.pbf`,
+      );
+      if (!fallback?.ok) continue;
+      compared += 1;
+      if (sameBytes(body, new Uint8Array(await fallback.arrayBuffer())))
+        replaced += 1;
     }
   }
+  if (compared > 0 && replaced === compared)
+    fail(
+      `고정 판 ${pinned}: 표본 ${compared}장이 모두 최신 판과 같음(서버에 고정 판이 없어 최신 판으로 바뀌어 옴)`,
+    );
+  else if (compared > 0)
+    pass(
+      `고정 판이 최신 판과 다름 확인(표본 ${compared}장 중 같은 것 ${replaced}장)`,
+    );
 }
 
 // [2] sprite(판이 주소에 있음): 1x·2x 그림과 목록, 스타일이 쓰는 아이콘이 모두 있는지
