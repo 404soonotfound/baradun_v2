@@ -9,13 +9,13 @@ import {
 } from "./session-time";
 import type { Tokens } from "./srp";
 
-// 로그인 세션 (BRD-148, 결정 기록 D16-A2·A3·A10·E1)
-// - 토큰은 이 객체의 메모리에만 있음. 새로고침·새 탭은 열린 로그인한 탭에서 넘겨받고, 없으면 다시 로그인
+// 로그인 세션 (BRD-148·179, 결정 기록 D16-A2·A3·A10·E1·D17-11)
+// - access·ID token은 이 객체의 메모리에만 있음. refresh token만 이 탭의 저장소(sessionStorage)에도 둠(D17-11)
+// - 새로고침·새 탭은 열린 로그인한 탭에서 넘겨받고, 없으면 이 탭에 둔 refresh token으로 갱신해 이어 감. 그것도 없으면 다시 로그인
 // - access 만료 1분 전 refresh 회전으로 갱신. 실패하면 '다시 로그인' 상태(화면은 그대로 두고 로그인 창을 띄움)
 // - 유휴 60분·최초 인증 8시간에 끝, 2분 전 경고. 8시간은 활동해도 늘지 않음
 // - 로그아웃하면 다른 탭에도 알림. 즉시 전역 폐기를 보장하지 않음
 // - 새 탭은 열려 있는 로그인한 탭에서 토큰을 넘겨받음(BroadcastChannel, 결정 기록 D17-9)
-//   토큰은 계속 메모리에만 있음(D16-A2 그대로). 로그인한 탭이 하나도 없으면 다시 로그인
 //   같은 계정·같은 최초 인증 시각의 탭끼리만 새 토큰·활동 시각을 맞춤 → 유휴 60분·8시간 상한은 탭 묶음에 한 번
 // - refresh token은 회전(유예 0초)이라 두 탭이 같은 토큰으로 갱신하면 한쪽이 끊김 → 갱신은 잠금 안에서 한 탭씩
 // 시계·타이머·Cognito 호출·탭 신호·잠금은 바깥에서 받음(테스트에서 바꿔 끼움)
@@ -56,6 +56,33 @@ export interface SessionDeps {
   readonly lock?: <T>(fn: () => Promise<T>) => Promise<T>;
   // 넘겨받기 요청 id(테스트에서 고정)
   readonly newId?: () => string;
+  // 새로고침해도 로그인을 잇는 이 탭의 저장소(sessionStorage, D17-11). 없으면 새로고침은 다시 로그인
+  readonly store?: {
+    load: () => unknown;
+    save: (saved: SavedSession | null) => void;
+  };
+}
+
+// 이 탭에 두는 값. access·ID token은 두지 않음
+export interface SavedSession {
+  readonly pool: PoolKind;
+  readonly sub: string;
+  readonly refreshToken: string;
+  readonly authTimeMs: number;
+  readonly lastActivityMs: number;
+}
+
+function parseSaved(v: unknown): SavedSession | null {
+  if (typeof v !== "object" || v === null) return null;
+  const s = v as Record<string, unknown>;
+  return isPool(s.pool) &&
+    typeof s.sub === "string" &&
+    typeof s.refreshToken === "string" &&
+    s.refreshToken !== "" &&
+    typeof s.authTimeMs === "number" &&
+    typeof s.lastActivityMs === "number"
+    ? (s as unknown as SavedSession)
+    : null;
 }
 
 interface Live {
@@ -171,6 +198,8 @@ export class AuthSession {
   private joinId: string | null = null;
   // 넘겨받기는 탭을 연 뒤 한 번만(로그아웃 뒤 다시 넘겨받지 않음)
   private joinTried = false;
+  // 이 탭에 둔 refresh token으로 갱신해 이어 가는 중(로그인 화면은 이 동안 그리지 않음)
+  private restoring = false;
   // 유휴 만료 전에 다른 탭의 활동 시각을 한 번 물어봤는지(새 활동이 오면 다시 물음)
   private idleAsked = false;
 
@@ -185,21 +214,83 @@ export class AuthSession {
     });
   }
 
-  // 새 탭: 열려 있는 로그인한 탭에 로그인을 달라고 함. 잠깐 기다려 답이 없으면 로그인 화면
-  // pool: 로그인 화면이 정한 풀(데모 주소면 데모 탭만 답함). 없으면 아무 풀
+  // 새 탭·새로고침: 열려 있는 로그인한 탭에 로그인을 달라고 함. 잠깐 기다려 답이 없으면
+  // 이 탭에 둔 refresh token으로 이어 가고(D17-11), 그것도 없으면 로그인 화면
+  // pool: 로그인 화면이 정한 풀(데모 주소면 데모 탭·데모 저장 값만). 없으면 아무 풀
   join(pool: PoolKind | null = null): void {
     const channel = this.deps.channel;
-    if (!channel || this.live || this.joinTried) return;
+    if (this.live || this.joinTried) return;
+    const saved = this.savedFor(pool);
+    if (!channel && !saved) return;
     this.joinTried = true;
     const id = this.deps.newId?.() ?? crypto.randomUUID();
     this.joinId = id;
     this.publishSignedOut();
-    channel.post({ kind: "hello", id, pool } satisfies HelloMessage);
-    this.deps.setTimer(() => {
-      if (this.joinId !== id) return;
-      this.joinId = null;
-      if (!this.live) this.publishSignedOut();
-    }, JOIN_WAIT_MS);
+    channel?.post({ kind: "hello", id, pool } satisfies HelloMessage);
+    this.deps.setTimer(
+      () => {
+        if (this.joinId !== id) return;
+        this.joinId = null;
+        if (this.live) return;
+        if (saved) void this.restore(saved);
+        else this.publishSignedOut();
+      },
+      channel ? JOIN_WAIT_MS : 0,
+    );
+  }
+
+  // 이어 갈 수 있는 저장 값. 유휴 60분·8시간이 지났으면 지움
+  private savedFor(pool: PoolKind | null): SavedSession | null {
+    const store = this.deps.store;
+    if (!store) return null;
+    const saved = parseSaved(store.load());
+    if (!saved) return null;
+    if (pool !== null && saved.pool !== pool) return null;
+    const now = this.deps.now();
+    const phase = sessionPhase(
+      sessionTimes({
+        authTimeMs: saved.authTimeMs,
+        accessExpMs: now,
+        lastActivityMs: saved.lastActivityMs,
+      }),
+      now,
+    );
+    if (phase === "idle_expired" || phase === "max_expired") {
+      store.save(null);
+      return null;
+    }
+    return saved;
+  }
+
+  // 새로고침: 이 탭에 둔 refresh token으로 갱신해 로그인을 이어 감(회전 유예 0초라 잠금 안에서)
+  // 실패하거나 다른 계정·다른 최초 인증의 토큰이면 저장 값을 지우고 로그인 화면
+  private async restore(saved: SavedSession): Promise<void> {
+    this.restoring = true;
+    this.publishSignedOut();
+    const lock = this.deps.lock ?? ((fn) => fn());
+    const tokens = await lock(() =>
+      this.deps.refresh(saved.pool, saved.refreshToken),
+    ).catch(() => null);
+    this.restoring = false;
+    if (this.live) return;
+    const access = tokens ? accessClaims(tokens.accessToken) : null;
+    if (
+      !tokens ||
+      !access ||
+      access.sub !== saved.sub ||
+      access.authTimeMs !== saved.authTimeMs
+    ) {
+      this.deps.store?.save(null);
+      this.publishSignedOut();
+      return;
+    }
+    const ok = this.signIn(saved.pool, {
+      accessToken: tokens.accessToken,
+      idToken: tokens.idToken,
+      refreshToken: tokens.refreshToken || saved.refreshToken,
+    });
+    // 늦게 답한 같은 묶음의 탭이 회전 전 refresh token을 쥐고 있지 않게 새 토큰을 나눔
+    if (ok) this.share(null);
   }
 
   private group(): Group | null {
@@ -458,6 +549,8 @@ export class AuthSession {
         refreshToken: tokens.refreshToken || live.tokens.refreshToken,
       };
       live.accessExpMs = access.expMs;
+      // 회전된 refresh token을 바로 저장(옛 토큰은 이미 쓸 수 없음)
+      this.persist();
       // 잠금을 풀기 전에 알림(다음 탭이 회전된 refresh token으로 다시 부르지 않게)
       this.share(null);
       return true;
@@ -491,12 +584,29 @@ export class AuthSession {
     this.update();
   }
 
+  // 새로고침해도 이어 가도록 이 탭에 refresh token·시각을 둠. 로그아웃·만료면 지움
+  private persist(): void {
+    const live = this.live;
+    this.deps.store?.save(
+      live
+        ? {
+            pool: live.pool,
+            sub: live.sub,
+            refreshToken: live.tokens.refreshToken,
+            authTimeMs: live.authTimeMs,
+            lastActivityMs: live.lastActivityMs,
+          }
+        : null,
+    );
+  }
+
   // 상태를 다시 계산하고 다음 경계에 깨어나게 함
   private update(): void {
     if (this.timer !== null) {
       this.deps.clearTimer(this.timer);
       this.timer = null;
     }
+    this.persist();
     const live = this.live;
     const times = this.times();
     if (!live || !times) {
@@ -549,7 +659,7 @@ export class AuthSession {
 
   private publishSignedOut(): void {
     this.publish(
-      this.joinId
+      this.joinId || this.restoring
         ? { status: "signed_out", reason: this.signedOutReason, joining: true }
         : { status: "signed_out", reason: this.signedOutReason },
     );
