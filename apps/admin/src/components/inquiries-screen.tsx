@@ -2,7 +2,14 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useState, type ReactNode } from "react";
+import {
+  Suspense,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from "react";
 import type { OpsResult } from "@/lib/auth/ops-fetch";
 import { useAuthSession, useSessionSnapshot } from "@/lib/auth/provider";
 import type { BeachName } from "@/lib/beach-names";
@@ -564,51 +571,99 @@ function InquiryDetailView({
   );
 }
 
+// PC(1024 이상)인지. 정적 내보내기라 서버 렌더는 좁은 화면으로 보고 브라우저에서 다시 맞춤
+const WIDE = "(min-width: 1024px)";
+function subscribeWide(onChange: () => void): () => void {
+  const query = window.matchMedia(WIDE);
+  query.addEventListener("change", onChange);
+  return () => query.removeEventListener("change", onChange);
+}
+function useWide(): boolean {
+  return useSyncExternalStore(
+    subscribeWide,
+    () => window.matchMedia(WIDE).matches,
+    () => false,
+  );
+}
+
+// 닫힘 동작 시간(ms). 동작 줄이기를 켰으면 바로 닫음
+const CLOSE_MS = 200;
+
+// PC 상세: 목록 위에 뜨는 오른쪽 패널(모달 <dialog>). 목록은 움직이지 않고 뒤를 딤 처리함
+// 열 때 오른쪽에서 밀려 들어오고 닫을 때 밀려 나감(@starting-style·allow-discrete). 동작 줄이기면 바로
+// 포커스는 패널 안에 갇히고 Esc·바깥(딤) 누르기·닫기 버튼으로 닫음. 닫히면 포커스가 누른 줄로 돌아감
+function DetailPanel({
+  id,
+  beaches,
+  onClosed,
+}: {
+  id: string;
+  beaches: Beaches;
+  onClosed: () => void;
+}) {
+  const ref = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (el && !el.open) el.showModal();
+  }, []);
+  const close = () => ref.current?.close();
+  return (
+    <dialog
+      ref={ref}
+      aria-labelledby="inquiry-type"
+      onClose={() => {
+        const reduce = window.matchMedia(
+          "(prefers-reduced-motion: reduce)",
+        ).matches;
+        window.setTimeout(onClosed, reduce ? 0 : CLOSE_MS);
+      }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) close();
+      }}
+      className="fixed inset-y-0 right-0 left-auto m-0 h-dvh max-h-none w-[480px] max-w-full overflow-y-auto border-l border-border-default bg-bg-surface px-6 py-5 text-text-default shadow-floating transition-[translate,overlay,display] transition-discrete duration-200 ease-out not-open:translate-x-full backdrop:bg-[rgb(11_26_44/0.4)] backdrop:transition-[opacity,overlay,display] backdrop:transition-discrete backdrop:duration-200 not-open:backdrop:opacity-0 starting:open:translate-x-full starting:open:backdrop:opacity-0 motion-reduce:transition-none motion-reduce:backdrop:transition-none"
+    >
+      <div className="flex flex-col gap-3">
+        <div className="flex justify-end">
+          <button
+            type="button"
+            onClick={close}
+            className="flex min-h-admin-control items-center rounded-admin-control px-2 text-body-s font-medium text-text-body hover:bg-bg-page"
+          >
+            {t.close}
+          </button>
+        </div>
+        <InquiryDetailView id={id} beaches={beaches} onClose={close} />
+      </div>
+    </dialog>
+  );
+}
+
 function InquiriesBody({ beaches }: { beaches: Beaches }) {
   const router = useRouter();
   const params = useSearchParams();
   const id = params.get("id");
-  const close = () => router.push("/inquiries/");
-
-  // PC 옆 시트는 Esc로 닫음
-  useEffect(() => {
-    if (!id) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") router.push("/inquiries/");
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [id, router]);
+  const wide = useWide();
+  const toList = () => router.push("/inquiries/");
 
   return (
     <div className="px-4 py-5 md:px-10 md:pt-6 md:pb-10">
-      {/* 좁은 화면: 상세를 열면 목록 대신 상세 */}
-      {/* PC: 시트(480)가 덮지 않게 목록 오른쪽을 비움(본문 여백 40을 빼고 사이 24를 더함) */}
-      <div className={id ? "hidden lg:mr-[464px] lg:block" : undefined}>
+      {/* 좁은 화면: 상세를 열면 목록 대신 상세. PC: 목록은 그대로 두고 위에 패널 */}
+      <div className={id && !wide ? "hidden" : undefined}>
         <InquiryList beaches={beaches} selectedId={id} />
       </div>
-      {id && (
-        <aside
-          aria-label={t.detailLabel}
-          className="flex flex-col gap-3 lg:fixed lg:inset-y-0 lg:right-0 lg:z-20 lg:w-[480px] lg:overflow-y-auto lg:border-l lg:border-border-default lg:bg-bg-surface lg:px-6 lg:py-5 lg:shadow-floating"
-        >
-          <div className="flex items-center justify-between">
-            <Link
-              href="/inquiries/"
-              className="flex min-h-touch items-center text-body-s font-medium text-brand-default lg:hidden"
-            >
-              ← {t.backToList}
-            </Link>
-            <button
-              type="button"
-              onClick={close}
-              className="ml-auto hidden min-h-admin-control items-center rounded-admin-control px-2 text-body-s font-medium text-text-body hover:bg-bg-page lg:flex"
-            >
-              {t.close}
-            </button>
-          </div>
-          <InquiryDetailView id={id} beaches={beaches} onClose={close} />
-        </aside>
+      {id && !wide && (
+        <section aria-label={t.detailLabel} className="flex flex-col gap-3">
+          <Link
+            href="/inquiries/"
+            className="flex min-h-touch items-center self-start text-body-s font-medium text-brand-default"
+          >
+            ← {t.backToList}
+          </Link>
+          <InquiryDetailView id={id} beaches={beaches} onClose={toList} />
+        </section>
+      )}
+      {id && wide && (
+        <DetailPanel key={id} id={id} beaches={beaches} onClosed={toList} />
       )}
     </div>
   );
