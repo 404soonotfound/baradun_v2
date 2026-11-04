@@ -68,6 +68,7 @@ export function MetricValue({
 }) {
   const t = useTranslations();
   // 파향(도)은 숫자 대신 16방위 + '쪽에서'(D18-3). 언어마다 순서가 달라 문구 키로 잇기
+  // 사이 띄움은 문구의 빈칸(글자로 남아 화면 읽기·복사에서 'fromSSE'처럼 붙지 않게)
   if (metric.kind === "value" && metric.unit === "deg") {
     return (
       <span className="font-bold whitespace-nowrap text-text-default">
@@ -80,7 +81,7 @@ export function MetricValue({
           from: (chunks) => (
             <span
               className={cn(
-                "mx-1 font-medium tracking-normal text-text-muted first:ml-0 last:mr-0",
+                "font-medium tracking-normal text-text-muted",
                 VALUE_SIZE[size].unit,
               )}
             >

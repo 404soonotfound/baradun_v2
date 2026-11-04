@@ -55,9 +55,19 @@ export function AltBeaches({
 
   return (
     <section aria-labelledby={titleId} className="flex flex-col gap-2">
-      <h2 id={titleId} className="text-title-m text-text-default">
-        {t("detail.alt.title")}
-      </h2>
+      <div className="flex flex-col gap-0.5">
+        <h2 id={titleId} className="text-title-m text-text-default">
+          {t("detail.alt.title")}
+        </h2>
+        {/* 상세에서는 활동을 고르지 않아(D18-4) 홈에서 고른 활동으로 거른 것을 알림(시안 M_D4). 수영은 전 해변이라 두지 않음 */}
+        {activity !== "swimming" && (
+          <p className="text-caption text-text-muted">
+            {t("detail.alt.activityNote", {
+              activity: t(`activity.${activity}`),
+            })}
+          </p>
+        )}
+      </div>
       {rows.length === 0 ? (
         <p className="rounded-tile border border-brand-border bg-bg-surface px-[15px] py-[13px] text-body-s text-text-body">
           {activity === "swimming"

@@ -247,7 +247,7 @@ export function SourceList({
       key: "wave",
       label: t("detail.sources.wave"),
       // 파도 방향도 칸에 측정소 이름이 없으니(D18-3) 여기서 출처를 밝힘(같은 측정소면 한 번만)
-      main: observedBy(["waveHeight", "wavePeriod", "wind"]),
+      main: observedBy(["waveHeight", "wavePeriod", "waveDirection", "wind"]),
       time: timeOf("waveHeight"),
     },
     {

@@ -63,12 +63,6 @@ function clearScopeText(confirmedAt: string, nowMs: number): string {
     .replace("{time}", time);
 }
 
-function badgeScopeText(confirmedAt: string, nowMs: number): string {
-  const time = kstStamp(confirmedAt, nowMs);
-  if (!time) throw new Error(`시각 계산 실패: ${confirmedAt}`);
-  return ko.home.near.badgeScope.replace("{time}", time);
-}
-
 function countScopeText(confirmedAt: string, nowMs: number): string {
   const time = kstStamp(confirmedAt, nowMs);
   if (!time) throw new Error(`시각 계산 실패: ${confirmedAt}`);
@@ -162,9 +156,7 @@ for (const scheme of ["light", "dark"] as const) {
 
       const times = await readSnapshotTimes(page);
       await expect(clearCard).toContainText(
-        desktop
-          ? badgeScopeText(times.clearConfirmedAt, times.nowMs)
-          : clearScopeText(times.clearConfirmedAt, times.nowMs),
+        clearScopeText(times.clearConfirmedAt, times.nowMs),
       );
 
       if (desktop) {
@@ -514,9 +506,7 @@ test.describe("validUntil 1분 전 경계값", () => {
     // 1. 홈: 일반 해변 카드와 개수 카드/상태 요약에 '특보 없음' 유지, '이후 확인 못 함' 없음
     await expect(clearCard).toContainText(CLEAR_TITLE);
     await expect(clearCard).toContainText(
-      desktop
-        ? badgeScopeText(times.clearConfirmedAt, beforeExpiryMs)
-        : clearScopeText(times.clearConfirmedAt, beforeExpiryMs),
+      clearScopeText(times.clearConfirmedAt, beforeExpiryMs),
     );
     await expect(
       page.getByText(confirmedUntil(times.clearConfirmedAt, beforeExpiryMs)),

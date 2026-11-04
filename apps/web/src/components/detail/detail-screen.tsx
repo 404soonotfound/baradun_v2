@@ -142,6 +142,13 @@ export function DetailScreen({
       ? 0
       : detail.nearbyWarnings.length + detail.unreadableNearby;
 
+  const toggleLabel =
+    nearbyCount > 0
+      ? t("detail.verdict.nearbyCount", { count: nearbyCount })
+      : hasNearby
+        ? t("detail.nearby.title")
+        : t("detail.verdict.checked");
+
   // 헤더 2줄째: 지역 · 거리(위치가 있을 때만, 기기 안에서만 계산). PC는 '내 위치에서 2.1km'(Figma 183:806)
   const region = `${beach.region.sido[locale]} ${beach.region.sigungu[locale]}`;
   const km =
@@ -266,15 +273,16 @@ export function DetailScreen({
                     // 보이는 줄은 18px, 누르는 영역은 위아래·옆으로 넓혀 44px(BRD-39)
                     className="relative inline-flex items-center gap-0.5 text-label-s font-bold text-text-body before:absolute before:-inset-x-2 before:-inset-y-[13px] before:content-['']"
                   >
-                    {expanded
-                      ? t("detail.verdict.collapse")
-                      : nearbyCount > 0
-                        ? t("detail.verdict.nearbyCount", {
-                            count: nearbyCount,
-                          })
-                        : hasNearby
-                          ? t("detail.nearby.title")
-                          : t("detail.verdict.checked")}
+                    {/* 접힌 이름('주변 특보 n건'·'확인한 것')은 펼친 뒤에도 화면 읽기에 남겨 무엇을 접는지 알림.
+                        보이는 글자는 시안 D안대로 '접기'(접근 가능한 이름이 보이는 글자를 포함) */}
+                    {expanded ? (
+                      <>
+                        <span className="sr-only">{toggleLabel} </span>
+                        {t("detail.verdict.collapse")}
+                      </>
+                    ) : (
+                      toggleLabel
+                    )}
                     {expanded ? (
                       <ChevronUp
                         aria-hidden="true"
