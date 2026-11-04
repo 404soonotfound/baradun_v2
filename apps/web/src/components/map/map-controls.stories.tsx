@@ -33,6 +33,7 @@ function Demo({ locale }: { locale: "ko" | "en" }) {
         <NearbyNotice notice="denied" />
         <NearbyNotice notice="off" />
         <NearbyNotice notice="unavailable" />
+        <NearbyNotice notice="outside" />
       </div>
     </NextIntlClientProvider>
   );

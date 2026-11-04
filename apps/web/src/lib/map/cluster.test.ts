@@ -6,6 +6,7 @@ import {
   CLUSTER_MAX_ZOOM,
   CLUSTER_RADIUS_PX,
   clusterMarkers,
+  project,
   releaseMarkers,
   type MapGroup,
 } from "./cluster";
@@ -106,6 +107,36 @@ describe("releaseMarkers", () => {
     expect(releaseMarkers(base, new Set(), 8)).toEqual(base);
   });
 
+  it("출시 해변 전체에서 꺼낸 뒤에도 남은 마커·묶음끼리 누르는 자리가 겹치지 않는다", () => {
+    const all = listBeachSummaries("ko");
+    for (const zoom of [5, 6, 8]) {
+      const base = clusterMarkers(all, zoom);
+      // 각 묶음의 첫 해변을 차례로 꺼내 봄
+      for (const group of base) {
+        if (group.kind !== "cluster") continue;
+        const keepId = group.items[0]!.id;
+        const released = releaseMarkers(base, new Set([keepId]), zoom);
+        const spots = released
+          .filter((g) => !(g.kind === "single" && g.item.id === keepId))
+          .map((g) =>
+            project(g.kind === "cluster" ? g.center : g.item.coords, zoom),
+          );
+        for (let i = 0; i < spots.length; i++)
+          for (let j = i + 1; j < spots.length; j++)
+            expect(
+              Math.max(
+                Math.abs(spots[i]!.x - spots[j]!.x),
+                Math.abs(spots[i]!.y - spots[j]!.y),
+              ),
+            ).toBeGreaterThanOrEqual(CLUSTER_RADIUS_PX);
+        const ids = released.flatMap((g) =>
+          g.kind === "cluster" ? g.items.map((b) => b.id) : [g.item.id],
+        );
+        expect(ids.sort()).toEqual(all.map((b) => b.id).sort());
+      }
+    }
+  });
+
   it("남은 해변이 하나면 개별 마커로 둔다", () => {
     const groups = releaseMarkers(
       clusterMarkers([b1, b2], 8),
@@ -171,6 +202,7 @@ describe("nearbyPlan", () => {
         [128.915, 37.785],
         [128.93, 37.805],
       ],
+      ids: ["b2", "b3", "b1"],
       nationwide: false,
     });
   });
@@ -181,6 +213,18 @@ describe("nearbyPlan", () => {
       lng: 129.15,
     });
     expect(plan?.nationwide).toBe(true);
+  });
+
+  it("고른 해변 id를 돌려준다(묶음에서 꺼내 보여 줌)", () => {
+    const plan = nearbyPlan(beaches, new Set(), { lat: 37.75, lng: 128.9 });
+    expect(plan?.ids).toEqual(["b2", "b3", "b1"]);
+  });
+
+  it("내 위치가 지도 범위(MAX_BOUNDS) 밖이면 옮기지 않는다", () => {
+    // 도쿄
+    expect(
+      nearbyPlan(beaches, new Set(), { lat: 35.68, lng: 139.76 }),
+    ).toBeNull();
   });
 
   it("옮길 해변이 없으면 null", () => {

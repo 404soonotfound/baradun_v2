@@ -632,3 +632,58 @@ describe("locationGuide (BRD-139 · 사용자 결정 10/30)", () => {
     }
   });
 });
+
+describe("refresh (BRD-114 내 주변 보기)", () => {
+  it("이미 받은 위치를 새로 받아 바꾸고 돌려줌(받는 동안 상태는 ready 그대로)", async () => {
+    const options = {
+      query: () =>
+        Promise.resolve({
+          state: "granted" as PermissionState,
+          onchange: null,
+        }),
+      position: { latitude: 37.5, longitude: 127.0 },
+      hold: false,
+    };
+    const fake = fakeNavigator(options);
+    vi.stubGlobal("navigator", fake.navigator);
+    try {
+      const store = createLocationStore();
+      store.subscribe(() => {});
+      await flush();
+      expect(store.getState().status).toBe("ready");
+      // 앱을 연 뒤 강릉으로 옮겨 감. 답을 붙잡아 받는 동안 상태를 봄
+      options.position = { latitude: 37.75, longitude: 128.9 };
+      options.hold = true;
+      const result = store.refresh();
+      expect(store.getState()).toEqual({
+        status: "ready",
+        coords: { lat: 37.5, lng: 127.0 },
+      });
+      fake.pending.forEach((answer) => answer());
+      await expect(result).resolves.toEqual({ lat: 37.75, lng: 128.9 });
+      expect(store.getState()).toEqual({
+        status: "ready",
+        coords: { lat: 37.75, lng: 128.9 },
+      });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("아직 위치가 없으면 묻지 않고 null(권한 요청은 request로만)", async () => {
+    const fake = fakeNavigator({
+      query: () => Promise.resolve({ state: "prompt", onchange: null }),
+      position: { latitude: 37.75, longitude: 128.9 },
+    });
+    vi.stubGlobal("navigator", fake.navigator);
+    try {
+      const store = createLocationStore();
+      store.subscribe(() => {});
+      await flush();
+      await expect(store.refresh()).resolves.toBeNull();
+      expect(fake.getCurrentPosition).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});

@@ -39,6 +39,8 @@ export type MapMarker = {
   badge: BadgeLabel;
 };
 
+const NO_IDS: readonly string[] = [];
+
 // 이 확대 단계부터 모든 마커에 이름을 붙임. 동해안처럼 해변이 촘촘한 곳은 z10에서 이름끼리 겹쳐 11부터
 const NAME_ZOOM = 11;
 
@@ -73,17 +75,19 @@ export function BeachMarkers({
   markers,
   selectedId,
   highlightedId,
+  pinnedIds = NO_IDS,
   onSelect,
 }: {
   api: MapHandle;
   markers: readonly MapMarker[];
   selectedId: string | null;
   highlightedId: string | null; // PC 목록 행에 마우스·포커스가 있는 해변
+  pinnedIds?: readonly string[]; // 묶지 않고 따로 보여 줄 해변('내 주변 보기'로 고른 해변)
   onSelect: (id: string | null) => void;
 }) {
   const t = useTranslations("map");
   const [zoom, setZoom] = useState(() => api.map.getZoom());
-  // 전체 묶기는 해변·확대가 바뀔 때만. 고른·가리킨 해변은 그 해변이 든 묶음만 다시 묶어 꺼냄
+  // 전체 묶기는 해변·확대가 바뀔 때만. 고른·가리킨·내 주변 해변은 그 해변이 든 묶음만 다시 묶어 꺼냄
   // (PC 목록 행에 마우스를 올릴 때마다 전체를 다시 묶지 않게)
   const clustered = useMemo(
     () => clusterMarkers(markers, zoom),
@@ -93,10 +97,13 @@ export function BeachMarkers({
     () =>
       releaseMarkers(
         clustered,
-        new Set([selectedId, highlightedId].filter((id) => id !== null)),
+        new Set([
+          ...pinnedIds,
+          ...[selectedId, highlightedId].filter((id) => id !== null),
+        ]),
         zoom,
       ),
-    [clustered, selectedId, highlightedId, zoom],
+    [clustered, selectedId, highlightedId, pinnedIds, zoom],
   );
   // 키보드 포커스가 있던 묶음 버튼이 다시 묶이며 사라지면(+/− 키 확대, 목록 행 가리키기) 포커스를 지도 캔버스로
   // 그대로 두면 포커스가 페이지 처음으로 튐
@@ -175,7 +182,10 @@ export function BeachMarkers({
           name={shortName(marker.name)}
           tone={badgeTone(marker.badge)}
           emphasized={emphasized}
-          showName={emphasized || zoom >= NAME_ZOOM}
+          // 내 주변 해변은 낮은 확대에서도 이름을 붙임(어느 해변인지 바로 보이게)
+          showName={
+            emphasized || zoom >= NAME_ZOOM || pinnedIds.includes(marker.id)
+          }
           onClick={() => onSelect(marker.id)}
         />
       </BeachMarker>
