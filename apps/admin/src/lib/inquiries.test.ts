@@ -3,7 +3,13 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { loadBeachNames } from "./beach-names";
-import { kstDateTime, retentionDate, shortId } from "./inquiries";
+import {
+  kstDateTime,
+  linesNormalized,
+  redactionOf,
+  retentionDate,
+  shortId,
+} from "./inquiries";
 
 // 운영자 문의 화면 도우미 (BRD-153)
 
@@ -65,5 +71,28 @@ describe("해변 이름표", () => {
     );
     expect(Object.keys(names).length).toBeGreaterThan(100);
     expect(names.b0001?.name).toBe("강문해수욕장");
+  });
+});
+
+describe("개인정보 가리기 범위", () => {
+  it("화면(줄바꿈 \\n)에서 고른 위치를 원래 본문(\\r\\n) 위치로 되돌린다", () => {
+    const message = "첫 줄\r\n이름 김바다\r\n끝";
+    const shown = linesNormalized(message);
+    const at = shown.indexOf("김바다");
+    expect(redactionOf(message, at, at + 3)).toEqual({
+      start: message.indexOf("김바다"),
+      end: message.indexOf("김바다") + 3,
+      text: "김바다",
+    });
+  });
+
+  it("앞뒤 공백은 빼고, 공백만 고르면 없음", () => {
+    expect(redactionOf("a 010 b", 1, 6)).toEqual({
+      start: 2,
+      end: 5,
+      text: "010",
+    });
+    expect(redactionOf("a   b", 1, 4)).toBeNull();
+    expect(redactionOf("abc", 2, 2)).toBeNull();
   });
 });

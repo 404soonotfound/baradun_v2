@@ -623,3 +623,115 @@ test("접수 탭에서 완료로 저장하면 그 문의는 탭에서 빠지고 
   await expect(tabs.getByRole("button", { name: "접수 1" })).toBeVisible();
   await expect(tabs.getByRole("button", { name: "완료 1" })).toBeVisible();
 });
+
+// 읽기 전용 칸에서 글을 끌어 고른 것처럼 선택 범위를 정함
+async function selectText(page: Page, text: string) {
+  const box = detailOf(page).getByRole("textbox", { name: "내용" });
+  await box.evaluate((el, target) => {
+    const area = el as HTMLTextAreaElement;
+    const start = area.value.indexOf(target);
+    area.focus();
+    area.setSelectionRange(start, start + target.length);
+    area.dispatchEvent(new Event("select", { bubbles: true }));
+  }, text);
+}
+
+test("개인정보 가리기: 고른 부분을 확인 뒤 가리고, 쓰던 메모는 그대로 둔다", async ({
+  page,
+}) => {
+  await signIn(page);
+  const message = "깃발이 있어요.\r\n제 번호는 010-0000-0000이에요.";
+  let redacted = false;
+  const calls = await mockInquiries(page, {
+    detail: () => ({
+      status: 200,
+      body: {
+        ...summary(1, { version: redacted ? 2 : 1 }),
+        restricted: false,
+        message: redacted
+          ? "깃발이 있어요.\r\n제 번호는 [가림]이에요."
+          : message,
+        memo: null,
+        rejectReason: null,
+        emailCollected: false,
+        photosCollected: false,
+      },
+    }),
+    patch: () => {
+      redacted = true;
+      return { status: 200, body: { inquiryId: id(1), version: 2 } };
+    },
+  });
+  await openInquiries(page);
+  await rows(page).first().getByRole("link").click();
+  const detail = detailOf(page);
+  await detail.getByLabel("처리 메모(내부용)").fill("쓰던 메모");
+  await detail.getByRole("button", { name: "개인정보 가리기" }).click();
+  const apply = detail.getByRole("button", { name: "고른 부분 가리기" });
+  await expect(apply).toBeDisabled();
+  await selectText(page, "010-0000-0000");
+  await expect(detail.getByText("고른 부분 13자")).toBeVisible();
+  await expectNoA11yViolations(page);
+  await apply.click();
+  await expect(detail.getByRole("alert")).toContainText(
+    "원래 글은 되돌릴 수 없어요",
+  );
+  await detail.getByRole("button", { name: "가리기", exact: true }).click();
+  await expect(
+    detail.getByRole("status").filter({ hasText: "고른 부분을 가렸어요" }),
+  ).toBeVisible();
+  // 원래 본문(\r\n) 위치로 보내고, 그 자리 글을 함께 보냄
+  const start = message.indexOf("010");
+  expect(calls.patches.at(-1)?.body).toEqual({
+    version: 1,
+    redactions: [{ start, end: start + 13, text: "010-0000-0000" }],
+  });
+  await expect(detail.getByText("제 번호는 [가림]이에요.")).toBeVisible();
+  // 가리기는 상태·메모를 바꾸지 않으므로 쓰던 메모를 '그사이 바뀜'으로 막지 않음
+  await expect(detail.getByLabel("처리 메모(내부용)")).toHaveValue("쓰던 메모");
+  await expect(detail.getByText("이 문의가 그사이 바뀌었어요")).toHaveCount(0);
+});
+
+test("개인정보 가리기: 본문이 그사이 바뀌었으면(400) 가리지 않았다고 알리고 새 내용 불러오기를 준다", async ({
+  page,
+}) => {
+  await signIn(page);
+  await mockInquiries(page, {
+    patch: () => ({
+      status: 400,
+      body: {
+        error: {
+          code: "invalid_request",
+          field: "redactions",
+          requestId: "req-3",
+        },
+      },
+    }),
+  });
+  await openInquiries(page);
+  await rows(page).first().getByRole("link").click();
+  const detail = detailOf(page);
+  await detail.getByRole("button", { name: "개인정보 가리기" }).click();
+  await selectText(page, "입수 금지");
+  await detail.getByRole("button", { name: "고른 부분 가리기" }).click();
+  await detail.getByRole("button", { name: "가리기", exact: true }).click();
+  const alert = detail
+    .getByRole("alert")
+    .filter({ hasText: "가리지 않았어요" });
+  await expect(alert).toBeVisible();
+  await expect(
+    alert.getByRole("button", { name: "새 내용 불러오기" }),
+  ).toBeVisible();
+});
+
+test("개인정보 가리기: 편집 권한이 없으면 버튼을 숨기지 않고 비활성으로 둔다", async ({
+  page,
+}) => {
+  await signIn(page, ["viewer"]);
+  await mockInquiries(page);
+  await openInquiries(page);
+  await rows(page).first().getByRole("link").click();
+  await expect(
+    detailOf(page).getByRole("button", { name: "개인정보 가리기" }),
+  ).toBeDisabled();
+});
