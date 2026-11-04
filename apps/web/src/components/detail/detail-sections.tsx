@@ -246,6 +246,7 @@ export function SourceList({
     {
       key: "wave",
       label: t("detail.sources.wave"),
+      // 파도 방향도 칸에 측정소 이름이 없으니(D18-3) 여기서 출처를 밝힘(같은 측정소면 한 번만)
       main: observedBy(["waveHeight", "wavePeriod", "wind"]),
       time: timeOf("waveHeight"),
     },
@@ -311,49 +312,53 @@ export function SourceList({
           {t("detail.sources.inquiry")}
         </Link>
       </div>
-      {compact ? (
-        <dl className="flex flex-col text-label-s leading-[1.5]">
-          {rows.map((row, index) => (
-            <div
-              key={row.key}
+      {/* compact(PC 묶음 안): 카드 없이 이름 칸 64 · 출처와 시각 위아래. 기본: 카드 표, PC는 시각을 오른쪽 끝 */}
+      <dl
+        className={cn(
+          "flex flex-col text-label-s leading-[1.5]",
+          !compact &&
+            "overflow-hidden rounded-card bg-bg-surface shadow-card lg:text-label lg:leading-[1.45] lg:font-normal",
+        )}
+      >
+        {rows.map((row, index) => (
+          <div
+            key={row.key}
+            className={cn(
+              "flex",
+              compact
+                ? cn("gap-3 py-2", index > 0 && "border-t border-border-subtle")
+                : cn(
+                    "gap-2 px-4 pt-3 pb-[11px] lg:gap-4 lg:px-[18px] lg:pt-[13px] lg:pb-3",
+                    index === 0
+                      ? "pt-[11px] lg:border-t lg:border-border-subtle"
+                      : "border-t border-border-default lg:border-border-subtle",
+                  ),
+            )}
+          >
+            <dt
               className={cn(
-                "flex gap-3 py-2",
-                index > 0 && "border-t border-border-subtle",
+                "shrink-0 text-text-muted",
+                compact ? "w-16" : "w-[70px] lg:w-[110px]",
               )}
             >
-              <dt className="w-16 shrink-0 text-text-muted">{row.label}</dt>
-              <dd className="flex min-w-0 flex-1 flex-col gap-0.5 text-text-default">
-                <span>{row.main ?? "–"}</span>
-                {row.time && (
-                  <span className="text-text-muted">{row.time}</span>
-                )}
-              </dd>
-            </div>
-          ))}
-        </dl>
-      ) : (
-        <dl className="flex flex-col overflow-hidden rounded-card bg-bg-surface text-label-s leading-[1.5] shadow-card lg:text-label lg:leading-[1.45] lg:font-normal">
-          {rows.map((row, index) => (
-            <div
-              key={row.key}
+              {row.label}
+            </dt>
+            <dd
               className={cn(
-                "flex gap-2 px-4 pt-3 pb-[11px] lg:gap-4 lg:px-[18px] lg:pt-[13px] lg:pb-3",
-                index === 0
-                  ? "pt-[11px] lg:border-t lg:border-border-subtle"
-                  : "border-t border-border-default lg:border-border-subtle",
+                "flex min-w-0 flex-1 flex-col text-text-default",
+                compact ? "gap-0.5" : "lg:flex-row lg:justify-between lg:gap-4",
               )}
             >
-              <dt className="w-[70px] shrink-0 text-text-muted lg:w-[110px]">
-                {row.label}
-              </dt>
-              <dd className="flex min-w-0 flex-1 flex-col text-text-default lg:flex-row lg:justify-between lg:gap-4">
-                <span>{row.main ?? "–"}</span>
-                {row.time && <span className="lg:shrink-0">{row.time}</span>}
-              </dd>
-            </div>
-          ))}
-        </dl>
-      )}
+              <span>{row.main ?? "–"}</span>
+              {row.time && (
+                <span className={compact ? "text-text-muted" : "lg:shrink-0"}>
+                  {row.time}
+                </span>
+              )}
+            </dd>
+          </div>
+        ))}
+      </dl>
     </section>
   );
 }
