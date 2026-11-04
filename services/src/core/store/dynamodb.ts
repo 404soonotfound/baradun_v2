@@ -6,6 +6,13 @@ import {
   type DynamoDBDocumentClient,
 } from "@aws-sdk/lib-dynamodb";
 import {
+  runLogPk,
+  runLogSk,
+  runRecordTtl,
+  type RunLog,
+  type RunRecord,
+} from "../collect/run-log";
+import {
   assertSnapshotVersion,
   decideStateWrite,
   slotRecordTtl,
@@ -35,6 +42,7 @@ import type {
 // - 슬롯 기록: slot#{job} / {slotId}
 // - 잠금:      lock#{name} / lock
 // - 게시 버전: publish / version
+// - 수집 실행 기록: collect#run#{job} / {시작 시각}#{실행 id} (BRD-149, DynamoRunLog)
 
 // 가짜 클라이언트로 바꿀 수 있게 send만 요구함
 export type DocumentSender = Pick<DynamoDBDocumentClient, "send">;
@@ -42,7 +50,8 @@ export type DocumentSender = Pick<DynamoDBDocumentClient, "send">;
 // infra TTL_ATTRIBUTE와 같은 이름 (테이블의 TimeToLiveSpecification)
 const TTL = "ttl";
 
-const PUBLISHED_VERSION_KEY = { pk: "publish", sk: "version" } as const;
+// 운영 API(수집 현황)도 이 키를 읽음(services/src/admin/collection.ts)
+export const PUBLISHED_VERSION_KEY = { pk: "publish", sk: "version" } as const;
 
 const slotKey = (job: string, slotId: string) => ({
   pk: `slot#${job}`,
@@ -281,6 +290,31 @@ export class DynamoOpsStore implements OpsStore {
           "attribute_not_exists(#version) OR #version < :version",
         ExpressionAttributeNames: { "#version": "version" },
         ExpressionAttributeValues: { ":version": version },
+      }),
+    );
+  }
+}
+
+// 수집 실행 기록 (BRD-149, core/collect/run-log.ts). 키: collect#run#{job} / {시작 시각}#{실행 id}
+// 수집 역할의 Ops PutItem 권한 안. 같은 키가 있으면 덮지 않음(조건 실패는 그대로 둠)
+export class DynamoRunLog implements RunLog {
+  constructor(
+    private readonly client: DocumentSender,
+    private readonly tableName: string,
+  ) {}
+
+  async record(record: RunRecord, owner: string, nowMs: number) {
+    await sendConditional(
+      this.client,
+      new PutCommand({
+        TableName: this.tableName,
+        Item: {
+          pk: runLogPk(record.job),
+          sk: runLogSk(record.startedAt, owner),
+          ...record,
+          [TTL]: runRecordTtl(nowMs),
+        },
+        ConditionExpression: "attribute_not_exists(pk)",
       }),
     );
   }

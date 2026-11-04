@@ -1,5 +1,6 @@
 import type { StateValue } from "../core/store/types";
 import { maskSecrets } from "../core/collect/log";
+import type { RunFailure } from "../core/collect/run-log";
 import { packItems } from "../core/warnings/archive";
 import {
   responseItems,
@@ -223,5 +224,22 @@ export async function collectWarnings(
     slotId,
     status,
   });
-  return { status, slotId };
+  if (status === "complete") return { status, slotId };
+  const failures: RunFailure[] = [];
+  for (const source of SOURCES) {
+    const outcome = outcomes[source];
+    if (outcome.status !== "failed") continue;
+    // 출처가 돌려준 code·정제한 message(D16-E7)도 함께 남김
+    failures.push(
+      "source" in outcome
+        ? {
+            source,
+            reason: outcome.reason,
+            ...(outcome.code !== null ? { code: outcome.code } : {}),
+            ...(outcome.message !== null ? { message: outcome.message } : {}),
+          }
+        : { source, reason: outcome.reason },
+    );
+  }
+  return { status, slotId, failures };
 }

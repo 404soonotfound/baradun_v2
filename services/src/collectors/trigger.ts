@@ -29,12 +29,28 @@ export async function triggerPublish(
   }
 }
 
-// 수집 Lambda 마무리: 먼저 깨우고, 다 저장하지 못했으면(partial·failed) 그 뒤에 던짐(Lambda 오류 지표)
+export type ClaimedRunResult = Exclude<CollectRunResult, { status: "skipped" }>;
+
+export interface FinishDeps extends TriggerDeps {
+  // 실행 기록 남기기(core/collect/run-log.ts, BRD-149). 슬롯을 맡은 실행만
+  readonly record: (result: ClaimedRunResult) => Promise<void>;
+}
+
+// 수집 Lambda 마무리: 실행 기록 → 깨우기 → 다 저장하지 못했으면(partial·failed) 그 뒤에 던짐(Lambda 오류 지표)
 // 순서를 바꾸면 이력 저장만 실패한 실행도 게시를 깨우지 못함 → 테스트로 고정(BRD-94)
+// 실행 기록은 운영 화면용이라 쓰기에 실패해도 오류 로그만 남기고 깨우기를 막지 않음
 export async function finishRun(
   result: CollectRunResult,
-  deps: TriggerDeps,
+  deps: FinishDeps,
 ): Promise<CollectRunResult> {
+  if (result.status !== "skipped") {
+    await deps.record(result).catch((error: unknown) => {
+      deps.log("error", "run_record_failed", {
+        slotId: result.slotId,
+        error: error instanceof Error ? error.name : typeof error,
+      });
+    });
+  }
   await triggerPublish(result, deps);
   if (result.status === "partial" || result.status === "failed") {
     throw new Error(`수집 ${result.status}: ${result.slotId}`);

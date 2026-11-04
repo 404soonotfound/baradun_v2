@@ -154,7 +154,13 @@ describe("collectOcean", () => {
       sea_obs: { status: "failed", reason: "http:503", attempts: 2 },
       kma_buoy: "<html>error</html>",
     });
-    expect((await collectOcean(deps)).status).toBe("failed");
+    expect(await collectOcean(deps)).toMatchObject({
+      status: "failed",
+      failures: [
+        { source: "sea_obs", reason: "http:503" },
+        { source: "kma_buoy" },
+      ],
+    });
     expect(await readings(state)).toBeNull();
     expect((await attempt(state)).sources).toMatchObject({
       sea_obs: { status: "failed", reason: "http:503" },
@@ -416,7 +422,11 @@ describe("collectOcean", () => {
       return putState(pk, sk, ...rest);
     };
     const result = await collectOcean(deps);
-    expect(result).toEqual({ status: "failed", slotId: "202610210040" });
+    expect(result).toEqual({
+      status: "failed",
+      slotId: "202610210040",
+      failures: [{ source: "storage", reason: "readings_not_saved" }],
+    });
     expect(await readings(state)).toBeNull();
     expect((await history(state))?.stations["22520"]).toEqual([
       [sec("2026-10-20T15:00:00Z"), 0.7],
@@ -429,6 +439,7 @@ describe("collectOcean", () => {
     let invoked = 0;
     await expect(
       finishRun(result, {
+        record: async () => {},
         invoke: async () => {
           invoked += 1;
         },
@@ -449,7 +460,11 @@ describe("collectOcean", () => {
       return putState(pk, sk, ...rest);
     };
     const result = await collectOcean(deps);
-    expect(result).toEqual({ status: "partial", slotId: "202610210040" });
+    expect(result).toEqual({
+      status: "partial",
+      slotId: "202610210040",
+      failures: [{ source: "storage", reason: "history_not_saved" }],
+    });
     expect((await readings(state))?.readings["22520"]?.waveHeight?.value).toBe(
       0.7,
     );
@@ -472,6 +487,7 @@ describe("collectOcean", () => {
     let invoked = 0;
     await expect(
       finishRun(result, {
+        record: async () => {},
         invoke: async () => {
           invoked += 1;
         },

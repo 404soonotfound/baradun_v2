@@ -3,18 +3,34 @@ import { InvokeCommand, LambdaClient } from "@aws-sdk/client-lambda";
 import { SSMClient } from "@aws-sdk/client-ssm";
 import { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
 import { getText } from "../core/collect/http";
-import { createLogger } from "../core/collect/log";
+import { createLogger, maskSecrets } from "../core/collect/log";
+import type { RunFailure } from "../core/collect/run-log";
 import { SsmApiKeys } from "../core/secrets/ssm";
-import { DynamoOpsStore, DynamoStateStore } from "../core/store/dynamodb";
+import {
+  DynamoOpsStore,
+  DynamoRunLog,
+  DynamoStateStore,
+} from "../core/store/dynamodb";
 import type { ApiKeyName } from "../core/secrets/api-keys";
 import photoLedger from "../../../data/photo-sources.json";
 import ripLedger from "../../../data/rip-current-beaches.json";
-import { collectCatalog, parsePhotoLedger, type PhotoSource } from "./catalog";
-import { collectOcean, type CollectDeps, type CollectRunResult } from "./ocean";
+import {
+  CATALOG_JOB,
+  collectCatalog,
+  parsePhotoLedger,
+  type PhotoSource,
+} from "./catalog";
+import {
+  collectOcean,
+  OCEAN_JOB,
+  type CollectDeps,
+  type CollectRunResult,
+} from "./ocean";
 import { COLLECT_POLICY } from "./policy";
-import { collectRip, parseRipLedger, type RipSource } from "./rip";
+import { collectRip, parseRipLedger, RIP_JOB, type RipSource } from "./rip";
 import { finishRun } from "./trigger";
-import { collectWarnings } from "./warnings";
+import { collectWarnings, WARNINGS_JOB } from "./warnings";
+import { formatUtcIso } from "../core/warnings/time";
 
 // Lambda 진입점 (아키텍처 5장). 실제 AWS 클라이언트를 묶어 수집 함수에 넘김
 // 테이블 이름은 환경 변수(STATE_TABLE_NAME·OPS_TABLE_NAME, PR ② infra가 넣음)
@@ -22,6 +38,7 @@ import { collectWarnings } from "./warnings";
 // 같은 owner도 lease(2분) 안에는 슬롯을 다시 맡지 않음(10/22 사용자 결정) → lease 안에 온 재시도는 busy로 건너뜀
 // 실패한 슬롯은 다음 슬롯이 메움(아키텍처 5장: 재시도는 같은 슬롯 안에서 제한, 다음 슬롯을 막지 않음)
 // 수집을 마치면 publish-snapshot을 비동기로 깨움(아키텍처 6.2, BRD-61 PR ②) → triggerPublish 설명
+// 슬롯을 맡은 실행은 그 전에 실행 기록을 Ops에 남김(BRD-149, 운영 화면 수집 현황). 사유 글에서 읽은 키를 가림
 
 function requiredEnv(name: string): string {
   const value = process.env[name];
@@ -68,8 +85,43 @@ interface LambdaContext {
 
 const lambda = new LambdaClient({});
 
-async function finish(result: CollectRunResult): Promise<CollectRunResult> {
+// 사유·message에 키가 섞여 들어와도 기록에 남기지 않게 가림(로그와 같은 규칙)
+function maskFailure(failure: RunFailure): RunFailure {
+  const masked = {
+    ...failure,
+    reason: maskSecrets(failure.reason, loadedKeys),
+  };
+  return failure.message === undefined
+    ? masked
+    : { ...masked, message: maskSecrets(failure.message, loadedKeys) };
+}
+
+async function finish(
+  job: string,
+  context: LambdaContext,
+  startedMs: number,
+  result: CollectRunResult,
+): Promise<CollectRunResult> {
+  const runLog = new DynamoRunLog(documents, requiredEnv("OPS_TABLE_NAME"));
   return finishRun(result, {
+    record: async (claimed) => {
+      const nowMs = Date.now();
+      await runLog.record(
+        {
+          job,
+          slotId: claimed.slotId,
+          startedAt: formatUtcIso(startedMs),
+          finishedAt: formatUtcIso(nowMs),
+          status: claimed.status,
+          failures:
+            claimed.status === "complete"
+              ? []
+              : claimed.failures.map(maskFailure),
+        },
+        context.awsRequestId,
+        nowMs,
+      );
+    },
     invoke: async () => {
       await lambda.send(
         new InvokeCommand({
@@ -86,14 +138,26 @@ export async function oceanHandler(
   _event: unknown,
   context: LambdaContext,
 ): Promise<CollectRunResult> {
-  return finish(await collectOcean(deps(context.awsRequestId)));
+  const startedMs = Date.now();
+  return finish(
+    OCEAN_JOB,
+    context,
+    startedMs,
+    await collectOcean(deps(context.awsRequestId)),
+  );
 }
 
 export async function warningsHandler(
   _event: unknown,
   context: LambdaContext,
 ): Promise<CollectRunResult> {
-  return finish(await collectWarnings(deps(context.awsRequestId)));
+  const startedMs = Date.now();
+  return finish(
+    WARNINGS_JOB,
+    context,
+    startedMs,
+    await collectWarnings(deps(context.awsRequestId)),
+  );
 }
 
 // 확인할 사진 목록은 빌드 때 번들에 들어감(data/photo-sources.json, esbuild가 JSON을 그대로 묶음)
@@ -107,7 +171,11 @@ export async function catalogHandler(
   context: LambdaContext,
 ): Promise<CollectRunResult> {
   catalogPhotos ??= parsePhotoLedger(photoLedger);
+  const startedMs = Date.now();
   return finish(
+    CATALOG_JOB,
+    context,
+    startedMs,
     await collectCatalog({
       ...deps(context.awsRequestId),
       photos: catalogPhotos,
@@ -123,7 +191,11 @@ export async function ripHandler(
   context: LambdaContext,
 ): Promise<CollectRunResult> {
   ripSources ??= parseRipLedger(ripLedger);
+  const startedMs = Date.now();
   return finish(
+    RIP_JOB,
+    context,
+    startedMs,
     await collectRip({ ...deps(context.awsRequestId), sources: ripSources }),
   );
 }

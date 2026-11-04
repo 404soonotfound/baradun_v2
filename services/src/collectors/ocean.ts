@@ -11,6 +11,7 @@ import {
   mergeWaveHistory,
   readWaveHistory,
 } from "../core/observations/wave-history";
+import type { RunFailure } from "../core/collect/run-log";
 import type { ApiKeys } from "../core/secrets/api-keys";
 import type {
   OpsStore,
@@ -63,9 +64,15 @@ type SourceOutcome =
   | { status: "failed"; reason: string; attempts: number };
 
 // skipped: 다른 실행이 슬롯을 맡았거나 이미 끝남(off_season: collect-rip 비수기의 호출 없는 슬롯). complete: 두 출처 모두 저장. partial·failed: 다음 슬롯·재시도가 메움
+// failures: 실행 기록(core/collect/run-log.ts)에 남길 실패 사유. complete면 없음
 export type CollectRunResult =
   | { status: "skipped"; slotId: string; claim: "done" | "busy" | "off_season" }
-  | { status: "complete" | "partial" | "failed"; slotId: string };
+  | { status: "complete"; slotId: string }
+  | {
+      status: "partial" | "failed";
+      slotId: string;
+      failures: readonly RunFailure[];
+    };
 
 interface ReadingsValue {
   readings: StationReadings;
@@ -353,5 +360,16 @@ export async function collectOcean(
     slotId,
     status,
   });
-  return { status, slotId };
+  if (status === "complete") return { status, slotId };
+  const failures: RunFailure[] = [];
+  for (const source of SOURCES) {
+    const outcome = outcomes[source];
+    if (outcome.status === "failed")
+      failures.push({ source, reason: outcome.reason });
+  }
+  if (anyOk && !saved)
+    failures.push({ source: "storage", reason: "readings_not_saved" });
+  if (seaObs!.status === "ok" && !historySaved)
+    failures.push({ source: "storage", reason: "history_not_saved" });
+  return { status, slotId, failures };
 }
