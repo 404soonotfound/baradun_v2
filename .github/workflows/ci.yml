@@ -5,7 +5,7 @@ on:
   push:
     branches: [main]
   schedule:
-    - cron: "17 0 * * *" # 매일 09:17 KST 취약점·비밀값 검사만 돌림, 정각 혼잡 회피 (BRD-91, BRD-132)
+    - cron: "17 0 * * *" # 매일 09:17 KST 취약점·비밀값·지도 서버(map-smoke) 검사만 돌림, 정각 혼잡 회피 (BRD-91, BRD-132, BRD-114)
 permissions:
   contents: read
 concurrency:
@@ -266,6 +266,21 @@ jobs:
           cache: npm
       - run: npm ci # lock 파일대로 설치(ajv는 contracts 설치본)
       - run: npm run test:agy-review
+
+  # OpenFreeMap 스모크 (BRD-114 · 결정 기록 12장 결정 10): 고정 타일 판·sprite·글꼴이 아직 그대로 있는지 실제 서버로 확인
+  # 매일 정기 실행과 웹 변경 PR에서 돌림. 제3자 서버 상태라 ci-ok(머지 필수)에는 넣지 않고, 실패하면 이 작업만 빨간불
+  map-smoke:
+    needs: changes
+    if: ${{ !cancelled() && (github.event_name == 'schedule' || needs.changes.outputs.web == 'true') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .nvmrc
+      - run: npm run check:map -w apps/web # 의존성 없이 node만 씀(npm ci 불필요)
 
   # 의존성 취약점: 런타임(high 이상)은 실패, 개발 도구는 보고만 (BRD-90)
   # 고치지 못하는 지적은 Linear 이슈로 사유를 남김. lock 파일만 읽으므로 npm ci 불필요
