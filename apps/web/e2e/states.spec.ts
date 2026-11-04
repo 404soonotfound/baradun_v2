@@ -18,7 +18,8 @@ const FINAL_CALL = "최종 판단은 현장 통제와 안전요원 안내가 우
 const CONFIRMED = /기상청 \d{1,2}:\d{2} 확인/;
 // 범위: 예보업무규정 별표 구역 이름 1~2개('강원중부앞바다, 강릉평지') 또는 이름을 모를 때의 '해변 특보구역'(D18-11)
 const ZONE = `(?:${Object.values(ZONE_NAMES_KO)
-  .map((name) => name.replace(/[.()]/g, "\\$&"))
+  // 정규식 특수 문자를 모두 이스케이프(백슬래시 포함, CodeQL js/incomplete-sanitization)
+  .map((name) => name.replace(/[\\^$.*+?()[\]{}|]/g, "\\$&"))
   .join("|")})`;
 const SCOPE = `(?:${ZONE}(?:, ${ZONE})?|${ko.warning.beachZones})`;
 
