@@ -540,6 +540,13 @@
     "zoomIn": "지도 확대",
     "zoomOut": "지도 축소",
     "cluster": "해변 {count}곳 묶음 · 눌러서 확대",
+    "nearby": {
+      "button": "내 주변 보기",
+      "locating": "위치 확인 중…",
+      "denied": "위치 권한이 허용되지 않아 지도를 옮기지 못했어요. 브라우저 설정에서 위치를 허용하면 쓸 수 있어요",
+      "off": "설정에서 위치 사용을 꺼 두어 지도를 옮기지 않았어요. 설정에서 다시 켤 수 있어요",
+      "unavailable": "위치를 확인하지 못해 지도를 옮기지 못했어요. 잠시 뒤 다시 눌러 주세요"
+    },
     "attribution": {
       "label": "지도 출처",
       "openfreemap": "OpenFreeMap",
