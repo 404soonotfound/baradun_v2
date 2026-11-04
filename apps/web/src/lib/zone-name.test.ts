@@ -1,8 +1,9 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
-import { zoneNameText, zoneScopeText } from "./zone-name";
+import { beachZonesText, zoneNameText, zoneScopeText } from "./zone-name";
 import { ZONE_NAMES_EN } from "./zone-names-en";
+import { ZONE_NAMES_KO } from "./zone-names-ko";
 
 // 특보 구역 이름 (BRD-33·48): 번역표 조회, 표에 없거나 이름이 어긋나면 원문
 const zone = { zoneCode: "S1151200", zoneName: "강원중부앞바다" };
@@ -125,6 +126,80 @@ describe("ZONE_NAMES_EN", () => {
     for (const [code, { en }] of Object.entries(ZONE_NAMES_EN)) {
       expect(en.trim(), code).not.toBe("");
       expect(/[가-힣]/.test(en), code).toBe(false);
+    }
+  });
+});
+
+// 해변 특보구역 이름 (BRD-182 · 결정 기록 18장 D18-11): 근거 줄 '강원중부앞바다, 강릉평지'
+describe("beachZonesText", () => {
+  const zones = { sea: "S1151200", land: "L1022510" };
+  const ko = { S1151200: "강원중부앞바다", L1022510: "강릉평지" };
+
+  it("한국어 화면: 바다 → 육상 순으로 별표 이름", () => {
+    expect(beachZonesText(zones, "ko", ko, {})).toBe(
+      "강원중부앞바다, 강릉평지",
+    );
+  });
+
+  it("영어 화면: 두 이름 모두 번역표에 있으면 영어 이름", () => {
+    expect(
+      beachZonesText(zones, "en", ko, {
+        ...TABLE,
+        L1022510: { ko: "강릉평지", en: "Flatland of Gangneung" },
+      }),
+    ).toBe("Nearshore waters of central Gangwon, Flatland of Gangneung");
+  });
+
+  it("영어 화면: 하나라도 번역표에 없으면 null(일반 이름을 씀)", () => {
+    expect(beachZonesText(zones, "en", ko, TABLE)).toBeNull();
+  });
+
+  it("이름표에 없는 코드가 있으면 null(구역 이름을 지어내지 않음)", () => {
+    expect(
+      beachZonesText({ sea: "S1151200", land: "L9999999" }, "ko", ko, {}),
+    ).toBeNull();
+  });
+
+  it("육상 구역이 없는 장소는 바다 구역만", () => {
+    expect(beachZonesText({ sea: "S1151200" }, "ko", ko, {})).toBe(
+      "강원중부앞바다",
+    );
+  });
+});
+
+describe("ZONE_NAMES_KO", () => {
+  const annex = JSON.parse(
+    readFileSync(
+      new URL("../../../../tools/beaches/annex-tables.json", import.meta.url),
+      "utf8",
+    ),
+  ) as {
+    annex5: { zones: Record<string, { name: string }> };
+    annex9: {
+      sigungu: Record<string, { rows: { code: string; name: string }[] }>;
+    };
+  };
+  const official: Record<string, string> = {};
+  for (const [code, { name }] of Object.entries(annex.annex5.zones)) {
+    official[code] = name;
+  }
+  for (const { rows } of Object.values(annex.annex9.sigungu)) {
+    for (const { code, name } of rows) official[code] = name;
+  }
+
+  it("공식 구역표(별표5·9)와 코드·이름이 모두 같음", () => {
+    expect(ZONE_NAMES_KO).toEqual(official);
+  });
+
+  it("data/beaches의 모든 해변 구역 코드에 이름이 있음", () => {
+    const dir = new URL("../../../../data/beaches/", import.meta.url);
+    const files = readdirSync(dir).filter((file) => file.endsWith(".json"));
+    expect(files.length).toBeGreaterThan(0);
+    for (const file of files) {
+      const beach = JSON.parse(readFileSync(new URL(file, dir), "utf8")) as {
+        warningZones: { sea: string; land?: string };
+      };
+      expect(beachZonesText(beach.warningZones, "ko"), file).not.toBeNull();
     }
   });
 });
