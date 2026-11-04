@@ -10,7 +10,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 - 운영자 사이트다. 기준은 Notion 아키텍처 18장, 결정 기록 15·16장, 화면 설계서 6장이다.
 - 정적 내보내기(`output: 'export'`)만 쓴다(G3). Server Action, 요청 기반 Route Handler, ISR, Proxy를 쓰지 않는다.
 - 화면 파일에 데이터·비밀값을 넣지 않는다. 데이터는 로그인 뒤 운영 API(`/ops/*`)로만 받는다. 저장소가 공개라 화면 코드도 공개라는 전제다.
-- 토큰(access·ID·refresh)은 메모리에만 둔다. localStorage·sessionStorage·쿠키에 두지 않는다(D16-A2). 새로고침·새 탭은 열려 있는 로그인한 탭에서 BroadcastChannel로 넘겨받고, 로그인한 탭이 없으면 다시 로그인한다(결정 기록 D17-9). 토큰 갱신은 Web Locks로 한 탭씩 하고 새 토큰·활동 시각을 다른 탭과 맞춘다.
+- access·ID token은 메모리에만 두고, refresh token만 그 탭의 sessionStorage(`SESSION_STORE_KEY`)에 최초 인증·활동 시각과 함께 둔다. localStorage·쿠키에는 두지 않는다(D16-A2·D17-11). 새로고침·새 탭은 열려 있는 로그인한 탭에서 BroadcastChannel로 넘겨받고(D17-9), 없으면 그 탭에 둔 refresh token으로 갱신해 이어 간다. 그것도 없거나 실패하면 다시 로그인한다. 토큰 갱신은 Web Locks로 한 탭씩 하고 새 토큰·활동 시각을 다른 탭과 맞춘다.
 - 공개 웹(`apps/web`)의 서비스 워커·문의 로컬 저장·분석 도구를 가져오지 않는다(구현 제안 I05).
 - 모든 페이지는 검색 노출을 막는다(noindex meta·robots.txt·응답 헤더). `npm run build -w apps/admin`의 postbuild 검사가 확인한다.
 - 화면 문구는 `messages/ko.json` 문구 키로 쓴다.
