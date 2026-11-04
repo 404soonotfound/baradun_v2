@@ -230,6 +230,10 @@ test("거르기: 탭은 분류, 찾기는 대상·내용, +운영자·+기간 �
   const tabs = page.getByRole("group", { name: "분류로 거르기" });
   await tabs.getByRole("button", { name: /^문의/ }).click();
   await expect.poll(() => calls.at(-1)?.get("category")).toBe("inquiry");
+  // 분류만 바꾸면 기간은 그대로, 탭 수는 다시 세지 않고(counts=0) 계속 보임
+  expect(calls.at(-1)?.get("counts")).toBe("0");
+  expect(calls.at(-1)?.get("to")).toBe(calls[0]?.get("to"));
+  await expect(tabs.getByRole("button", { name: "전체 4" })).toBeVisible();
   await tabs.getByRole("button", { name: /^전체/ }).click();
   await page.getByLabel("대상·내용 찾기").fill("점검");
   await expect.poll(() => calls.at(-1)?.get("q")).toBe("점검");
@@ -255,6 +259,13 @@ test("거르기: 탭은 분류, 찾기는 대상·내용, +운영자·+기간 �
   await expect(
     page.getByRole("button", { name: "운영자: 운영자 bbbb" }),
   ).toBeVisible();
+  // 고른 뒤에도 앞서 본 다른 운영자로 바로 바꿀 수 있음
+  await page.getByRole("button", { name: "운영자: 운영자 bbbb" }).click();
+  await page
+    .getByRole("group", { name: "운영자 고르기" })
+    .getByRole("button", { name: /운영자 aaaa/ })
+    .click();
+  await expect.poll(() => calls.at(-1)?.get("actor")).toBe(SUB_A);
 });
 
 test("다음·이전: 다음은 cursor만 보내고, 이전은 앞 쪽으로 돌아간다", async ({
