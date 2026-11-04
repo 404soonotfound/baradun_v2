@@ -25,6 +25,7 @@ import { SituationBanner } from "@/components/situation-banner";
 import { WarningSheet } from "@/components/warning-sheet";
 import { ACTIVITIES, currentActivity, useActivity } from "@/lib/activity";
 import { alternativeBeaches, isClearView } from "@/lib/alternatives";
+import { cn } from "@/lib/cn";
 import type { BeachSummary } from "@/lib/beach-summary";
 import { addRecent } from "@/lib/favorites";
 import { recordVisit } from "@/lib/recent-visits";
@@ -134,20 +135,28 @@ export function DetailScreen({
     notice: null,
   });
 
-  // 주변 특보 수(모바일 열고 접기 버튼 이름 '주변 특보 n건'). 읽지 못한 항목도 셈, 전부 못 읽으면 수 없이 '주변 특보'
-  const hasNearby =
-    detail.nearbyWarnings.length > 0 || detail.unreadableNearby !== 0;
-  const nearbyCount =
-    detail.unreadableNearby === "all"
-      ? 0
-      : detail.nearbyWarnings.length + detail.unreadableNearby;
+  // 모바일 열고 접기 버튼 이름: 읽은 주변 특보 수 '주변 특보 n건'(없으면 '확인한 것')
+  // 읽지 못한 주변 특보가 있으면 접지 않고 늘 보여 '내용을 읽지 못했어요' 안내가 가려지지 않게 함(리뷰 PR #177)
+  const nearbyCount = detail.nearbyWarnings.length;
+  const nearbyUnreadable = detail.unreadableNearby !== 0;
+  // 주변 특보를 접을 때만 버튼이 주변 특보를 말함(읽지 못한 항목이 있어 늘 보이면 '확인한 것'만 여닫음)
+  const nearbyFolds = nearbyCount > 0 && !nearbyUnreadable;
+  const toggleLabel = nearbyFolds
+    ? t("detail.verdict.nearbyCount", { count: nearbyCount })
+    : t("detail.verdict.checked");
+  // 정보 출처는 PC 묶음 안·모바일 본문 맨 아래 두 자리에 그림. 넘기는 값은 한곳에서
+  const sourceProps = {
+    locale,
+    beachSlug: beach.slug,
+    view,
+    detail,
+    stations: beach.stations,
+    warningZones: beach.warningZones,
+    nowMs: snapshot.nowMs,
+    kmaSource,
+  };
 
-  const toggleLabel =
-    nearbyCount > 0
-      ? t("detail.verdict.nearbyCount", { count: nearbyCount })
-      : hasNearby
-        ? t("detail.nearby.title")
-        : t("detail.verdict.checked");
+  const Chevron = expanded ? ChevronUp : ChevronDown;
 
   // 헤더 2줄째: 지역 · 거리(위치가 있을 때만, 기기 안에서만 계산). PC는 '내 위치에서 2.1km'(Figma 183:806)
   const region = `${beach.region.sido[locale]} ${beach.region.sigungu[locale]}`;
@@ -210,11 +219,18 @@ export function DetailScreen({
                     className="inline-flex items-center gap-0.5 text-caption font-medium text-text-muted lg:gap-1 lg:text-label-s"
                   >
                     <ActivityIcon activity={item} />
-                    {t(
-                      item === "scuba"
-                        ? "activity.scubaFull"
-                        : `activity.${item}`,
-                    )}
+                    {/* 세 활동이 모두면 모바일 머리 줄이 좁아 지역·거리가 잘리지 않게 아이콘만(이름은 화면 읽기에) */}
+                    <span
+                      className={cn(
+                        beach.activities.length > 2 && "max-lg:sr-only",
+                      )}
+                    >
+                      {t(
+                        item === "scuba"
+                          ? "activity.scubaFull"
+                          : `activity.${item}`,
+                      )}
+                    </span>
                   </li>
                 ),
               )}
@@ -267,7 +283,7 @@ export function DetailScreen({
                     type="button"
                     aria-expanded={expanded}
                     aria-controls={
-                      hasNearby ? `${checkedId} ${nearbyId}` : checkedId
+                      nearbyFolds ? `${checkedId} ${nearbyId}` : checkedId
                     }
                     onClick={() => setExpanded((open) => !open)}
                     // 보이는 줄은 18px, 누르는 영역은 위아래·옆으로 넓혀 44px(BRD-39)
@@ -283,19 +299,7 @@ export function DetailScreen({
                     ) : (
                       toggleLabel
                     )}
-                    {expanded ? (
-                      <ChevronUp
-                        aria-hidden="true"
-                        size={14}
-                        strokeWidth={2.4}
-                      />
-                    ) : (
-                      <ChevronDown
-                        aria-hidden="true"
-                        size={14}
-                        strokeWidth={2.4}
-                      />
-                    )}
+                    <Chevron aria-hidden="true" size={14} strokeWidth={2.4} />
                   </button>
                 )
               }
@@ -334,24 +338,14 @@ export function DetailScreen({
             <NearbyWarnings
               embedded
               id={nearbyId}
-              className={expanded ? "" : "max-lg:hidden"}
+              className={expanded || nearbyUnreadable ? "" : "max-lg:hidden"}
               items={detail.nearbyWarnings}
               unreadable={detail.unreadableNearby}
               nowMs={snapshot.nowMs}
             />
             {/* PC: 정보 출처도 묶음 안. 모바일은 본문 맨 아래 */}
             <div className="hidden px-4 pt-3 pb-1 lg:block">
-              <SourceList
-                compact
-                locale={locale}
-                beachSlug={beach.slug}
-                view={view}
-                detail={detail}
-                stations={beach.stations}
-                warningZones={beach.warningZones}
-                nowMs={snapshot.nowMs}
-                kmaSource={kmaSource}
-              />
+              <SourceList compact {...sourceProps} />
             </div>
           </div>
           {showAlt && (
@@ -381,16 +375,7 @@ export function DetailScreen({
           />
           <Call119 />
           <div className="lg:hidden">
-            <SourceList
-              locale={locale}
-              beachSlug={beach.slug}
-              view={view}
-              detail={detail}
-              stations={beach.stations}
-              warningZones={beach.warningZones}
-              nowMs={snapshot.nowMs}
-              kmaSource={kmaSource}
-            />
+            <SourceList {...sourceProps} />
           </div>
         </div>
       </div>

@@ -214,9 +214,32 @@ export function SeaCard({
         ) : (
           <MetricValue metric={wave} size="xl" />
         )}
-        {period.kind === "value" && (
+        {/* 파주기는 모바일 2×2에 칸이 없어 값이 없어도 여기서 이유를 보임(결측을 숨기지 않음, 리뷰 PR #177) */}
+        {period.kind === "value" ? (
           <span className="text-body-s text-text-body">
             {t("detail.sea.period", { value: period.value })}
+          </span>
+        ) : period.kind === "hidden" ? (
+          <span className="text-body-s text-text-muted">
+            {t("observation.metric.wavePeriod")}{" "}
+            <span aria-hidden="true">–</span>
+            <span className="sr-only">{t("home.near.noValue")}</span>
+          </span>
+        ) : (
+          <span
+            className={cn(
+              "text-body-s",
+              period.kind === "delayed"
+                ? "font-bold text-status-stale-fg"
+                : "text-text-muted",
+            )}
+          >
+            {joinMeta([
+              t("observation.metric.wavePeriod"),
+              period.kind === "delayed"
+                ? t("observation.delayed")
+                : t("observation.none"),
+            ])}
           </span>
         )}
       </div>
