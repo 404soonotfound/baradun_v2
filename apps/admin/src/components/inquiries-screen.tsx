@@ -118,6 +118,7 @@ function Failure({
   onRetry: () => void;
 }) {
   if (result.code === "reauth") {
+    // 다시 로그인 창에서 로그인하면 화면이 저절로 다시 읽음(generation)
     return <Notice tone="warn" title={t.reauth} role="alert" />;
   }
   return (
@@ -214,7 +215,9 @@ function InquiryList({
   const [attempt, setAttempt] = useState(0);
   const cursor = cursors.at(-1) ?? null;
   // 받은 응답을 요청 조건과 함께 둠. 조건이 바뀌면 응답이 올 때까지 '불러오는 중'
-  const key = `${status ?? "all"}|${cursor ?? ""}|${attempt}`;
+  // 다시 로그인하면(generation이 늚) 'reauth'로 끝난 읽기를 저절로 다시 함
+  const generation = snapshot.status === "signed_out" ? 0 : snapshot.generation;
+  const key = `${status ?? "all"}|${cursor ?? ""}|${attempt}|${generation}`;
   const [loaded, setLoaded] = useState<{
     key: string;
     result: OpsResult<InquiryPage>;
@@ -439,8 +442,11 @@ function InquiryDetailView({
   onClose: () => void;
 }) {
   const session = useAuthSession();
+  const snapshot = useSessionSnapshot();
   const [attempt, setAttempt] = useState(0);
-  const key = `${id}|${attempt}`;
+  // 다시 로그인하면(generation이 늚) 'reauth'로 끝난 읽기를 저절로 다시 함
+  const generation = snapshot.status === "signed_out" ? 0 : snapshot.generation;
+  const key = `${id}|${attempt}|${generation}`;
   const [loaded, setLoaded] = useState<{
     key: string;
     result: OpsResult<InquiryDetail>;
@@ -610,7 +616,8 @@ function DetailPanel({
   return (
     <dialog
       ref={ref}
-      aria-labelledby="inquiry-type"
+      // 불러오는 중·실패에도 이름이 있게 고정 문구로 이름을 붙임
+      aria-label={t.detailLabel}
       onClose={() => {
         const reduce = window.matchMedia(
           "(prefers-reduced-motion: reduce)",
