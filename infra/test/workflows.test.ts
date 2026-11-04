@@ -8,6 +8,11 @@ const workflows = readdirSync(dir)
   .filter((f) => /\.ya?ml$/.test(f))
   .map((f) => ({ name: f, text: readFileSync(resolve(dir, f), "utf8") }));
 const deploy = workflows.find((w) => w.name === "deploy.yml");
+// 배포 판단 스크립트(BRD-178). deploy.yml의 site·admin 작업이 함께 씀
+const plan = readFileSync(
+  resolve(__dirname, "../../.github/scripts/deploy-plan.sh"),
+  "utf8",
+);
 
 // 주석(# 뒤)은 빼고 검사함
 const codeLines = (text: string) =>
@@ -71,15 +76,21 @@ describe("배포 워크플로 가드레일 (11장)", () => {
     expect(text).toMatch(
       /HEAD_SHA:\s*\$\{\{\s*github\.event\.workflow_run\.head_sha \|\| github\.sha\s*\}\}/,
     );
-    // 올리는 커밋은 ci-ok가 성공한 커밋만: 수동은 그 커밋, 자동은 main에서 ci-ok가 성공한 가장 새 커밋(BRD-178)
+    // 올릴 커밋은 main push CI 실행 결과만 보고 정함(PR 실행 결과를 main 검증으로 쓰지 않음, BRD-178)
+    expect(plan).toContain(
+      "actions/workflows/ci.yml/runs?branch=main&event=push",
+    );
+    expect(plan).toMatch(
+      /touches "\$c" && \[ "\$\(ci_ok "\$c"\)" = "success" \]/,
+    );
+    // 조회 실패는 실패로 멈춤(빈 결과를 '성공 없음'으로 읽지 않음)
+    expect(plan).toMatch(/if ! runs=\$\(gh api[\s\S]*?exit 1/);
     for (const job of ["site", "admin"]) {
       const lines = jobLines(deploy?.text ?? "", job).join("\n");
-      expect(lines, job).toMatch(
-        /ref:\s*\$\{\{\s*steps\.target\.outputs\.sha\s*\}\}/,
-      );
-      expect(lines, job).toContain("commits?sha=main&per_page=30");
-      expect(lines, job).toMatch(/"\$\(ci_ok "\$sha"\)" = "success"/);
-      expect(lines, job).toContain('echo "SHA=$target" >> "$GITHUB_ENV"');
+      expect(lines, job).toContain("ref: main");
+      expect(lines, job).toContain("fetch-depth: 0");
+      expect(lines, job).toContain(".github/scripts/deploy-plan.sh");
+      expect(lines, job).toContain("actions: read");
     }
     // 배포 그룹은 작업 수준: 조건에서 건너뛰는 실행이 대기 중인 배포를 취소하지 않게 함
     expect(text).not.toMatch(/^concurrency:/m);
@@ -88,16 +99,9 @@ describe("배포 워크플로 가드레일 (11장)", () => {
     );
   });
 
-  it("수동 실행은 체크아웃 전에 그 커밋의 ci-ok 성공을 확인하고, 아니면 멈춘다 (BRD-133)", () => {
-    const lines = codeLines(deploy?.text ?? "");
-    const guard = lines.findIndex((l) => l.includes("check_name=ci-ok"));
-    const checkout = lines.findIndex((l) =>
-      /uses:\s*actions\/checkout@/.test(l),
-    );
-    expect(guard).toBeGreaterThan(-1);
-    expect(guard).toBeLessThan(checkout);
-    expect(lines.slice(guard, checkout).join("\n")).toMatch(
-      /"\$conclusion" != "success"[\s\S]*exit 1/,
+  it("수동 실행은 그 커밋의 main CI가 성공일 때만 올리고, 아니면 멈춘다 (BRD-133)", () => {
+    expect(plan).toMatch(
+      /MANUAL:-false\}" = "true"[\s\S]*?ci_ok "\$HEAD_SHA"\)" != "success"[\s\S]*?exit 1/,
     );
   });
 
@@ -258,13 +262,21 @@ describe("PR 필수 웹 검사 (BRD-102 결정 41·42)", () => {
     }
   });
 
-  // 바뀐 앱만 배포(BRD-178): 앱마다 마지막으로 올린 커밋(deploy-version.txt)과 비교
-  // 옛 커밋이 새 배포를 덮지 않고, CI가 실패했던 커밋의 변경도 다음 배포에 함께 실림
+  // 바뀐 앱만 배포(BRD-178): 마지막으로 올린 커밋(deploy-version.txt) 뒤로 그 앱을 바꾸고 main CI가 성공한 가장 새 커밋
+  // 옛 커밋이 새 배포를 덮지 않고, CI가 실패한 커밋의 변경은 그 앱을 다시 검사한 뒤 커밋으로만 나감
   const deployPaths = (job: string) => {
     const lines = jobLines(deploy?.text ?? "", job);
-    const start = lines.findIndex((l) => /^\s*paths=\($/.test(l));
-    const end = lines.findIndex((l, i) => i > start && /^\s*\)$/.test(l));
-    return lines.slice(start + 1, end).map((l) => l.trim());
+    const start = lines.findIndex((l) =>
+      l.includes(".github/scripts/deploy-plan.sh"),
+    );
+    const out: string[] = [];
+    for (const l of lines.slice(start + 1)) {
+      const m = l.match(/^\s+(\S+?)(\s*\\)?$/);
+      if (!m || /^\s*-\s/.test(l)) break;
+      out.push(m[1]!);
+      if (!m[2]) break;
+    }
+    return out;
   };
   const ciFilter = (name: string) => {
     // paths-filter의 filters 블록 안에서 찾음(changes 출력의 같은 이름과 섞이지 않게)
@@ -283,8 +295,10 @@ describe("PR 필수 웹 검사 (BRD-102 결정 41·42)", () => {
     return out;
   };
 
-  it("배포 비교 경로는 ci.yml의 바뀐 영역 필터(공통 + 앱)와 같다", () => {
-    const shared = ciFilter("shared");
+  it("배포 비교 경로는 ci.yml의 바뀐 영역 필터(공통 + 앱)에서 빌드와 상관없는 ci.yml만 뺀 것과 같다", () => {
+    const shared = ciFilter("shared").filter(
+      (p) => p !== ".github/workflows/ci.yml",
+    );
     expect(shared.length).toBeGreaterThan(0);
     expect(deployPaths("site").sort()).toEqual(
       [...shared, ...ciFilter("web")].sort(),
@@ -294,21 +308,18 @@ describe("PR 필수 웹 검사 (BRD-102 결정 41·42)", () => {
     );
   });
 
-  it("배포는 마지막으로 올린 커밋과 비교해 같거나 옛 커밋·바뀐 것 없음이면 건너뛰고, 올릴 때 표시를 남긴다", () => {
+  it("배포는 정한 결과를 따르고, 표시는 동기화·캐시 비우기가 끝난 뒤 마지막에 올리며, 빌드 캐시를 복원하지 않는다", () => {
+    // 표시 뒤로 고를 커밋이 없으면 건너뜀, 표시를 못 읽으면 경고 뒤 올림
+    expect(plan).toContain('git merge-base --is-ancestor "$deployed" HEAD');
+    expect(plan).toContain('git rev-list --first-parent "$deployed..HEAD"');
+    expect(plan).toMatch(/deploy=false/);
+    expect(plan).toContain("::warning::");
     for (const [job, dir] of [
       ["site", "apps/web/out"],
       ["admin", "apps/admin/out"],
     ] as const) {
       const lines = jobLines(deploy?.text ?? "", job);
       const text = lines.join("\n");
-      expect(text, job).toContain("fetch-depth: 0");
-      expect(text, job).toContain(
-        'git merge-base --is-ancestor "$SHA" "$deployed"',
-      );
-      expect(text, job).toContain('git diff --quiet "$deployed" "$SHA" --');
-      // 기본은 올림(수동 실행·표시를 못 읽음은 올리는 쪽)
-      expect(text, job).toMatch(/^\s*deploy=true$/m);
-      // 정하기 뒤의 모든 단계는 결과를 따름
       const decide = lines.findIndex((l) => l.includes("- id: decide"));
       const steps = lines.slice(decide + 1).filter((l) => /^\s{6}-\s/.test(l));
       expect(steps.length, job).toBeGreaterThan(3);
@@ -317,8 +328,7 @@ describe("PR 필수 웹 검사 (BRD-102 결정 41·42)", () => {
           "      - if: steps.decide.outputs.deploy == 'true'",
         );
       }
-      // 표시는 동기화·캐시 비우기가 모두 끝난 뒤 마지막에 올림(중간에 실패한 배포를 다시 실행하면 건너뛰지 않게)
-      // 빌드 결과 폴더에 넣지 않음: 넣으면 동기화 도중 실패해도 표시가 먼저 올라갈 수 있음
+      // 중간에 실패한 배포를 다시 실행하면 건너뛰지 않게 표시는 맨 마지막
       const marker = lines.findIndex((l) =>
         l.includes('aws s3 cp - "s3://$BUCKET/deploy-version.txt"'),
       );
@@ -333,6 +343,19 @@ describe("PR 필수 웹 검사 (BRD-102 결정 41·42)", () => {
       expect(marker, job).toBeGreaterThan(invalidation);
       expect(text, job).not.toContain("> deploy-version.txt");
       expect(text, job).toContain(`working-directory: ${dir}`);
+      // OIDC 토큰을 받는 배포 작업은 캐시를 복원하지 않음(CodeQL actions/cache-poisoning)
+      expect(text, job).not.toMatch(/actions\/cache/);
+    }
+  });
+
+  it("CI의 Next 빌드 캐시는 main push에서만 저장한다", () => {
+    for (const job of ["e2e-build", "admin-build"]) {
+      const text = jobLines(ci?.text ?? "", job).join("\n");
+      expect(text, job).toMatch(/uses: actions\/cache\/restore@/);
+      expect(text, job).toMatch(
+        /if: github\.event_name == 'push' && steps\.next-cache\.outputs\.cache-hit != 'true'\s*\n\s*uses: actions\/cache\/save@/,
+      );
+      expect(text, job).not.toMatch(/uses: actions\/cache@/);
     }
   });
 
