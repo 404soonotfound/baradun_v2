@@ -13,9 +13,13 @@ import {
 import type { OpsResult } from "@/lib/auth/ops-fetch";
 import { useAuthSession, useSessionSnapshot } from "@/lib/auth/provider";
 import type { BeachName } from "@/lib/beach-names";
+import { adjustReceivedCount, setReceivedCount } from "@/lib/inquiry-badge";
 import {
   fetchInquiries,
   fetchInquiry,
+  MEMO_MAX,
+  REJECT_REASON_MAX,
+  saveInquiry,
   INQUIRY_STATUSES,
   isInquiryStatus,
   kstDateTime,
@@ -25,6 +29,7 @@ import {
   type InquiryCounts,
   type InquiryDetail,
   type InquiryPage,
+  type InquiryPatch,
   type InquiryStatus,
   type InquirySummary,
 } from "@/lib/inquiries";
@@ -41,6 +46,21 @@ import { Button, Notice } from "./ui";
 const t = messages.inquiries;
 
 type Beaches = Readonly<Record<string, BeachName>>;
+
+// 이 탭에서 저장한 결과. 목록(GSI)은 최종적 일관성이라 저장 직후 이전 상태를 줄 수 있어
+// 목록 항목 version이 저장한 version보다 낮으면 저장한 상태로 보여 줌(오래된 응답이 저장 결과를 되돌리지 않게, D16-B4)
+interface Saved {
+  readonly status: InquiryStatus;
+  readonly version: number;
+}
+type SavedMap = Readonly<Record<string, Saved>>;
+
+function withSaved(item: InquirySummary, saved: SavedMap): InquirySummary {
+  const mine = saved[item.inquiryId];
+  return mine && mine.version > item.version
+    ? { ...item, status: mine.status, version: mine.version }
+    : item;
+}
 
 // 상태 배지: 글자로 상태를 말하고, 색·테두리 모양은 보조(색만으로 구분하지 않음)
 // 확인 중은 점선 테두리라 색 없이도 구분됨(시안 S3 배지). 성공색 토큰은 아직 정하지 않아 완료는 정보색
@@ -202,9 +222,11 @@ function StatusTabs({
 function InquiryList({
   beaches,
   selectedId,
+  saved,
 }: {
   beaches: Beaches;
   selectedId: string | null;
+  saved: SavedMap;
 }) {
   const session = useAuthSession();
   const snapshot = useSessionSnapshot();
@@ -232,7 +254,10 @@ function InquiryList({
     }).then((next) => {
       if (!live) return;
       setLoaded({ key, result: next });
-      if (next.ok && next.body.counts) setCounts(next.body.counts);
+      if (next.ok && next.body.counts) {
+        setCounts(next.body.counts);
+        setReceivedCount(next.body.counts.received);
+      }
     });
     return () => {
       live = false;
@@ -245,7 +270,9 @@ function InquiryList({
   };
 
   const pageIndex = cursors.length - 1;
-  const items = result?.ok ? result.body.items : [];
+  const items = result?.ok
+    ? result.body.items.map((item) => withSaved(item, saved))
+    : [];
   const total = counts
     ? status
       ? counts[status]
@@ -439,14 +466,316 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
+// 바꿀 수 있는지: 운영자 풀의 편집·노출 변경 권한만. 서버가 요청마다 다시 확인함(D16-A7)
+// 권한이 없어도 숨기지 않고 비활성 + 안내(10/16 결정)
+function useEditBlock(): string | null {
+  const snapshot = useSessionSnapshot();
+  if (snapshot.status === "signed_out") return t.needEditor;
+  if (snapshot.pool === "demo") return t.demoReadOnly;
+  return snapshot.groups.some((g) => g === "editor" || g === "publisher")
+    ? null
+    : t.needEditor;
+}
+
+const charCount = (text: string) => [...text].length;
+
+type SaveError =
+  | { kind: "conflict" }
+  | { kind: "replay" }
+  | { kind: "expired" }
+  | { kind: "reason" }
+  | { kind: "failed"; requestId: string | null };
+
+// 처리: 상태(접수·확인 중·완료·반려)·반려 이유·내부 메모 (D16-D5·D6, 시안 V20·E6 3~5·E11 6·8)
+// - 화면 상태를 먼저 바꾸지 않음: 저장이 성공해야 상세를 다시 읽어 바뀐 값을 보여 줌
+// - 같은 내용을 다시 보내면(응답을 못 받음) 같은 멱등 키 → 서버가 한 번만 저장
+function InquiryActions({
+  item,
+  onSaved,
+  onReload,
+}: {
+  item: InquiryDetail;
+  onSaved: (saved: Saved, from: string) => void;
+  onReload: () => void;
+}) {
+  const session = useAuthSession();
+  const block = useEditBlock();
+  const known = isInquiryStatus(item.status);
+  const [status, setStatus] = useState<InquiryStatus | null>(
+    known ? (item.status as InquiryStatus) : null,
+  );
+  const [reason, setReason] = useState(item.rejectReason ?? "");
+  const [memo, setMemo] = useState(item.memo ?? "");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<SaveError | null>(null);
+  const [copied, setCopied] = useState(false);
+  // 마지막으로 보낸 내용과 그 멱등 키. 내용이 같으면 키를 다시 씀
+  const attempt = useRef<{ body: string; key: string } | null>(null);
+
+  const statusChanged = status !== null && status !== item.status;
+  const reasonChanged =
+    status === "rejected" && reason.trim() !== (item.rejectReason ?? "");
+  // 공백만 남긴 메모는 '메모 없음'(null)과 같음 → 바뀐 내용으로 세지 않음
+  const memoValue = memo.trim() === "" ? null : memo;
+  const memoChanged = memoValue !== (item.memo ?? null);
+  const changes =
+    (statusChanged ? 1 : 0) + (reasonChanged ? 1 : 0) + (memoChanged ? 1 : 0);
+  const reasonMissing = status === "rejected" && reason.trim() === "";
+  const reasonTooLong = charCount(reason) > REJECT_REASON_MAX;
+  const memoTooLong = charCount(memo) > MEMO_MAX;
+  const disabled = block !== null || busy;
+
+  const save = () => {
+    if (block || busy || changes === 0) return;
+    if (reasonMissing) {
+      setError({ kind: "reason" });
+      return;
+    }
+    if (reasonTooLong || memoTooLong) return;
+    const patch: InquiryPatch = {
+      version: item.version,
+      // 반려 이유만 고쳐도 서버 규칙상 반려 상태와 함께 보냄
+      ...(statusChanged || reasonChanged ? { status: status! } : {}),
+      ...((statusChanged || reasonChanged) && status === "rejected"
+        ? { rejectReason: reason.trim() }
+        : {}),
+      ...(memoChanged ? { memo: memoValue } : {}),
+    };
+    const body = JSON.stringify(patch);
+    if (attempt.current?.body !== body) {
+      attempt.current = { body, key: crypto.randomUUID() };
+    }
+    const { key } = attempt.current;
+    setBusy(true);
+    setError(null);
+    void saveInquiry(() => session.accessToken(), item.inquiryId, patch, key)
+      .then((result) => {
+        if (result.ok) {
+          attempt.current = null;
+          onSaved(
+            {
+              status: patch.status ?? (item.status as InquiryStatus),
+              version: result.body.version,
+            },
+            item.status,
+          );
+          return;
+        }
+        if (result.code === "reauth") {
+          // 다시 로그인 창이 뜸. 로그인한 뒤 같은 키로 다시 누르면 한 번만 저장됨
+          setError({ kind: "failed", requestId: null });
+        } else if (result.status === 409) {
+          setError({
+            kind:
+              result.reason === "idempotency_mismatch" ? "replay" : "conflict",
+          });
+        } else if (result.status === 404) {
+          setError({ kind: "expired" });
+        } else if (result.status === 400 && result.field === "rejectReason") {
+          setError({ kind: "reason" });
+        } else {
+          setError({
+            kind: "failed",
+            requestId: "requestId" in result ? result.requestId : null,
+          });
+        }
+      })
+      .finally(() => setBusy(false));
+  };
+
+  const fieldClass =
+    "w-full rounded-admin-control border border-border-strong bg-bg-surface px-2.5 py-2 text-body text-text-default outline-none placeholder:text-text-muted focus:border-brand-default focus:ring-[3px] focus:ring-brand-border disabled:bg-bg-page disabled:text-text-muted";
+
+  return (
+    <section
+      aria-labelledby="inquiry-actions"
+      className="flex flex-col gap-4 border-t border-border-default pt-4"
+    >
+      <h3
+        id="inquiry-actions"
+        className="text-title-s font-semibold text-text-default"
+      >
+        {t.editTitle}
+      </h3>
+      {block && <Notice tone="neutral" title={block} />}
+
+      <fieldset disabled={disabled} className="flex flex-col gap-2">
+        <legend className="mb-2 text-body font-medium text-text-default">
+          {t.statusLegend}
+        </legend>
+        <div className="grid grid-cols-4 gap-1 rounded-admin-control bg-bg-page p-1">
+          {INQUIRY_STATUSES.map((s) => (
+            <label
+              key={s}
+              className="flex min-h-touch cursor-pointer items-center justify-center rounded-admin-control text-body-s font-medium text-text-body has-checked:bg-bg-surface has-checked:font-semibold has-checked:text-text-default has-checked:shadow-card has-focus-visible:ring-[3px] has-focus-visible:ring-brand-border has-disabled:cursor-not-allowed lg:min-h-admin-control"
+            >
+              <input
+                type="radio"
+                name="inquiry-status"
+                value={s}
+                checked={status === s}
+                onChange={() => {
+                  setStatus(s);
+                  setError(null);
+                }}
+                className="sr-only"
+              />
+              {t.status[s]}
+            </label>
+          ))}
+        </div>
+      </fieldset>
+
+      {status === "rejected" && (
+        <div className="flex flex-col gap-1.5">
+          <label
+            htmlFor="reject-reason"
+            className="text-body font-medium text-text-default"
+          >
+            {t.rejectReason}
+          </label>
+          <textarea
+            id="reject-reason"
+            rows={3}
+            value={reason}
+            disabled={disabled}
+            aria-invalid={
+              reasonMissing && error?.kind === "reason" ? true : undefined
+            }
+            aria-describedby="reject-reason-hint"
+            onChange={(e) => {
+              setReason(e.target.value);
+              setError(null);
+            }}
+            className={fieldClass}
+          />
+          <p id="reject-reason-hint" className="text-label-s text-text-muted">
+            {error?.kind === "reason" ? (
+              <span className="text-danger-text">{t.rejectReasonRequired}</span>
+            ) : reasonTooLong ? (
+              <span className="text-danger-text">
+                {fill(t.tooLong, {
+                  max: REJECT_REASON_MAX,
+                  count: charCount(reason),
+                })}
+              </span>
+            ) : (
+              t.rejectReasonHint
+            )}
+          </p>
+        </div>
+      )}
+
+      <div className="flex flex-col gap-1.5">
+        <label
+          htmlFor="inquiry-memo"
+          className="text-body font-medium text-text-default"
+        >
+          {t.memo}
+        </label>
+        <textarea
+          id="inquiry-memo"
+          rows={4}
+          value={memo}
+          disabled={disabled}
+          aria-describedby="inquiry-memo-hint"
+          onChange={(e) => {
+            setMemo(e.target.value);
+            setError(null);
+          }}
+          className={fieldClass}
+        />
+        <p id="inquiry-memo-hint" className="text-label-s text-text-muted">
+          {memoTooLong ? (
+            <span className="text-danger-text">
+              {fill(t.tooLong, { max: MEMO_MAX, count: charCount(memo) })}
+            </span>
+          ) : (
+            t.memoHint
+          )}
+        </p>
+      </div>
+
+      {error && error.kind !== "reason" && (
+        <Notice
+          tone={error.kind === "failed" ? "fail" : "warn"}
+          title={
+            error.kind === "conflict"
+              ? t.conflictVersion
+              : error.kind === "replay"
+                ? t.conflictReplay
+                : error.kind === "expired"
+                  ? t.expired
+                  : fill(t.saveFailed, {
+                      status: known
+                        ? t.status[item.status as InquiryStatus]
+                        : item.status,
+                    })
+          }
+          role="alert"
+        >
+          {error.kind === "failed" && (
+            <>
+              <p>{t.saveFailedHint}</p>
+              {error.requestId && (
+                <p>{fill(t.requestId, { id: error.requestId })}</p>
+              )}
+            </>
+          )}
+          {(error.kind === "conflict" || error.kind === "replay") && (
+            <div className="mt-2 flex flex-wrap gap-2">
+              <Button variant="secondary" size="small" onClick={onReload}>
+                {t.reload}
+              </Button>
+              {error.kind === "conflict" && memoChanged && (
+                <Button
+                  variant="secondary"
+                  size="small"
+                  onClick={() => {
+                    void navigator.clipboard
+                      ?.writeText(memo)
+                      .then(() => setCopied(true));
+                  }}
+                >
+                  {copied ? t.copied : t.copyMemo}
+                </Button>
+              )}
+            </div>
+          )}
+        </Notice>
+      )}
+
+      {/* 저장 바: 아래에 붙어 있어 긴 메모를 쓰는 중에도 보임(화면 설계서 6장 모바일 규칙 '저장은 아래 고정 바') */}
+      <div className="sticky bottom-0 -mx-1 flex items-center justify-end gap-3 border-t border-border-default bg-bg-surface px-1 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+        <span className="text-body-s text-text-muted" aria-live="polite">
+          {busy
+            ? t.saving
+            : changes > 0
+              ? fill(t.changes, { count: changes })
+              : t.noChanges}
+        </span>
+        <Button
+          size="small"
+          disabled={disabled || changes === 0 || reasonTooLong || memoTooLong}
+          onClick={save}
+        >
+          {t.save}
+        </Button>
+      </div>
+    </section>
+  );
+}
+
 function InquiryDetailView({
   id,
   beaches,
   onClose,
+  onSaved,
 }: {
   id: string;
   beaches: Beaches;
   onClose: () => void;
+  onSaved: (inquiryId: string, saved: Saved) => void;
 }) {
   const session = useAuthSession();
   const snapshot = useSessionSnapshot();
@@ -456,14 +785,25 @@ function InquiryDetailView({
   const key = `${id}|${attempt}|${generation}`;
   const [loaded, setLoaded] = useState<{
     key: string;
+    id: string;
     result: OpsResult<InquiryDetail>;
   } | null>(null);
-  const result = loaded?.key === key ? loaded.result : null;
+  // 같은 문의를 다시 읽는 동안(저장 뒤·새 내용 불러오기)은 앞서 받은 내용을 그대로 둠
+  const result =
+    loaded?.key === key
+      ? loaded.result
+      : loaded?.id === id && loaded.result.ok
+        ? loaded.result
+        : null;
+  // 저장 성공 안내. 다시 읽은 뒤에도 남김(다른 문의를 열면 사라짐)
+  const [notice, setNotice] = useState<{ id: string; text: string } | null>(
+    null,
+  );
 
   useEffect(() => {
     let live = true;
     void fetchInquiry(() => session.accessToken(), id).then((next) => {
-      if (live) setLoaded({ key, result: next });
+      if (live) setLoaded({ key, id, result: next });
     });
     return () => {
       live = false;
@@ -564,22 +904,38 @@ function InquiryDetailView({
             </span>
           )}
         </Row>
-        {!item.restricted && item.status === "rejected" && (
-          <Row label={t.rejectReason}>
-            <span className="whitespace-pre-wrap">
-              {item.rejectReason ?? t.memoEmpty}
-            </span>
-          </Row>
-        )}
-        {!item.restricted && (
-          <Row label={t.memo}>
-            <span className="whitespace-pre-wrap">
-              {item.memo ?? t.memoEmpty}
-            </span>
-          </Row>
-        )}
+        {/* 반려 이유·메모는 아래 처리 칸에서 보여 주고 고침(같은 값을 두 번 보이지 않게) */}
       </dl>
-      <p className="text-body-s text-text-muted">{t.readOnlyNote}</p>
+      {notice?.id === id && (
+        <Notice tone="brand" title={notice.text} role="status" />
+      )}
+      {/* 보기 권한은 메모·반려 이유를 받지 않으므로 처리 칸을 그리지 않음(빈 칸을 실제 값처럼 보이지 않게) */}
+      {!item.restricted && (
+        <InquiryActions
+          key={`${item.inquiryId}|${item.version}`}
+          item={item}
+          onReload={() => {
+            setNotice(null);
+            setAttempt((n) => n + 1);
+          }}
+          onSaved={(saved, from) => {
+            onSaved(item.inquiryId, saved);
+            if (from === "received" && saved.status !== "received") {
+              adjustReceivedCount(-1);
+            } else if (from !== "received" && saved.status === "received") {
+              adjustReceivedCount(1);
+            }
+            setNotice({
+              id,
+              text:
+                saved.status !== from
+                  ? fill(t.savedStatus, { status: t.status[saved.status] })
+                  : t.savedMemo,
+            });
+            setAttempt((n) => n + 1);
+          }}
+        />
+      )}
     </article>
   );
 }
@@ -609,10 +965,12 @@ function DetailPanel({
   id,
   beaches,
   onClosed,
+  onSaved,
 }: {
   id: string;
   beaches: Beaches;
   onClosed: () => void;
+  onSaved: (inquiryId: string, saved: Saved) => void;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
@@ -646,7 +1004,12 @@ function DetailPanel({
             {t.close}
           </button>
         </div>
-        <InquiryDetailView id={id} beaches={beaches} onClose={close} />
+        <InquiryDetailView
+          id={id}
+          beaches={beaches}
+          onClose={close}
+          onSaved={onSaved}
+        />
       </div>
     </dialog>
   );
@@ -658,12 +1021,15 @@ function InquiriesBody({ beaches }: { beaches: Beaches }) {
   const id = params.get("id");
   const wide = useWide();
   const toList = () => router.push("/inquiries/");
+  const [saved, setSaved] = useState<SavedMap>({});
+  const onSaved = (inquiryId: string, next: Saved) =>
+    setSaved((prev) => ({ ...prev, [inquiryId]: next }));
 
   return (
     <div className="px-4 py-5 md:px-10 md:pt-6 md:pb-10">
       {/* 좁은 화면: 상세를 열면 목록 대신 상세. PC: 목록은 그대로 두고 위에 패널 */}
       <div className={id && !wide ? "hidden" : undefined}>
-        <InquiryList beaches={beaches} selectedId={id} />
+        <InquiryList beaches={beaches} selectedId={id} saved={saved} />
       </div>
       {id && !wide && (
         <section aria-label={t.detailLabel} className="flex flex-col gap-3">
@@ -673,11 +1039,22 @@ function InquiriesBody({ beaches }: { beaches: Beaches }) {
           >
             ← {t.backToList}
           </Link>
-          <InquiryDetailView id={id} beaches={beaches} onClose={toList} />
+          <InquiryDetailView
+            id={id}
+            beaches={beaches}
+            onClose={toList}
+            onSaved={onSaved}
+          />
         </section>
       )}
       {id && wide && (
-        <DetailPanel key={id} id={id} beaches={beaches} onClosed={toList} />
+        <DetailPanel
+          key={id}
+          id={id}
+          beaches={beaches}
+          onClosed={toList}
+          onSaved={onSaved}
+        />
       )}
     </div>
   );

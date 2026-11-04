@@ -30,7 +30,13 @@ import {
   type ReactNode,
 } from "react";
 import { useAuthSession, useSessionSnapshot } from "@/lib/auth/provider";
-import { messages } from "@/lib/messages";
+import { fetchInquiries } from "@/lib/inquiries";
+import {
+  receivedCountKnown,
+  setReceivedCount,
+  useReceivedCount,
+} from "@/lib/inquiry-badge";
+import { fill, messages } from "@/lib/messages";
 import { roleLabel } from "@/lib/roles";
 import { SessionGuard, SessionNotices } from "./session-guard";
 
@@ -149,6 +155,7 @@ function NavList({
 }) {
   const compact = tip !== undefined;
   const pathname = usePathname();
+  const received = useReceivedCount();
   return (
     <nav aria-label={t.label} className="flex flex-col gap-4">
       {GROUPS.map((group, i) => (
@@ -160,17 +167,26 @@ function NavList({
               {group.label}
             </p>
           )}
-          {group.items.map(({ href, label, icon: Icon }) => {
+          {group.items.map(({ href, label: name, icon: Icon }) => {
             const current = isCurrent(pathname, href);
+            // '문의'에 접수 수 배지(0이면 없음). 이름에도 넣어 화면 읽기로도 들림
+            const badge =
+              href === "/inquiries/" && received !== null && received > 0
+                ? received
+                : null;
+            const label =
+              badge === null
+                ? name
+                : fill(messages.inquiries.navBadge, { count: badge });
             return (
               <Link
                 key={href}
                 href={href}
                 {...(onNavigate ? { onClick: onNavigate } : {})}
                 aria-current={current ? "page" : undefined}
-                aria-label={compact ? label : undefined}
+                aria-label={compact || badge !== null ? label : undefined}
                 {...(tip ? tip(label) : {})}
-                className={`flex min-h-touch items-center gap-2.5 rounded-admin-control px-2 text-body whitespace-nowrap hover:bg-bg-page lg:min-h-admin-control ${
+                className={`relative flex min-h-touch items-center gap-2.5 rounded-admin-control px-2 text-body whitespace-nowrap hover:bg-bg-page lg:min-h-admin-control ${
                   compact ? "justify-center" : ""
                 } ${
                   // 지금 화면: 시안처럼 배경 없이 파란 글자·아이콘. 색만으로 구분하지 않게 굵기도 바꿈(aria-current도 둠)
@@ -183,7 +199,18 @@ function NavList({
                   aria-hidden="true"
                   className={`size-4 shrink-0 ${current ? "text-brand-default" : "text-text-muted"}`}
                 />
-                {!compact && label}
+                {!compact && name}
+                {badge !== null && (
+                  <span
+                    aria-hidden="true"
+                    className={`min-w-5 rounded-full bg-brand-default px-1.5 text-center text-caption font-semibold text-brand-on tabular-nums ${
+                      // 레일: 아이콘 오른쪽 위(항목이 기준 위치)
+                      compact ? "absolute top-0.5 right-0.5" : "ml-auto"
+                    }`}
+                  >
+                    {badge}
+                  </span>
+                )}
               </Link>
             );
           })}
@@ -330,6 +357,27 @@ function Drawer({ open, onClose }: { open: boolean; onClose: () => void }) {
   );
 }
 
+// 처음 연 화면에서 한 번만 접수 수를 읽음(문의 목록 첫 쪽의 상태별 수). 실패하면 배지만 없음(목록 화면은 따로 실패를 알림)
+function useReceivedCountOnce(): void {
+  const session = useAuthSession();
+  const snapshot = useSessionSnapshot();
+  const signedIn = snapshot.status === "signed_in";
+  useEffect(() => {
+    if (!signedIn || receivedCountKnown()) return;
+    let live = true;
+    void fetchInquiries(() => session.accessToken(), { limit: 1 }).then(
+      (result) => {
+        if (live && result.ok && result.body.counts) {
+          setReceivedCount(result.body.counts.received);
+        }
+      },
+    );
+    return () => {
+      live = false;
+    };
+  }, [session, signedIn]);
+}
+
 export function AdminShell({
   title,
   children,
@@ -339,6 +387,7 @@ export function AdminShell({
   children: ReactNode;
 }) {
   const pathname = usePathname();
+  useReceivedCountOnce();
   const [drawerOpen, setDrawerOpen] = useState(false);
   // 태블릿 레일 펼침(이 탭 메모리만)
   const [railOpen, setRailOpen] = useState(false);
