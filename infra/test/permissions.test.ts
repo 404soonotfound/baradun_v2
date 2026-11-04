@@ -7,9 +7,14 @@ import {
   template,
   toList,
 } from "./stack-template";
-import { GITHUB_OIDC_SUBJECT, INQUIRY_STATUS_INDEX } from "../lib/settings";
+import {
+  GITHUB_OIDC_SUBJECT,
+  INQUIRY_STATUS_INDEX,
+  RUN_LOG_KEY_PREFIX,
+} from "../lib/settings";
 // services 감사 키 접두어와 IAM 조건이 맞는지 비교함(한쪽만 바뀌면 테스트가 깨짐)
 import { AUDIT_PREFIX, NOTICE_PK } from "../../services/src/admin/keys";
+import { RUN_LOG_PREFIX } from "../../services/src/core/collect/run-log";
 
 // 역할의 논리 ID를 찾음 (CDK가 이름 뒤에 해시를 붙이므로 앞부분으로 찾기)
 function roleId(prefix: string): string {
@@ -243,7 +248,11 @@ describe("DynamoDB 권한 (BRD-55)", () => {
   });
 
   // 감사 기록(BRD-155, D16-B5): 쓰기만 주고 수정·삭제 권한 없음
-  it("운영 API 역할의 Ops Query는 감사 키·공지 파티션에만 되고, 감사 키 수정·삭제는 명시적으로 거부된다", () => {
+  it("수집 실행 기록 키 앞부분이 수집기와 운영 API에서 같다", () => {
+    expect(RUN_LOG_KEY_PREFIX).toBe(RUN_LOG_PREFIX);
+  });
+
+  it("운영 API 역할의 Ops Query는 감사 키·공지·수집 실행 기록 파티션에만 되고, 감사 키 수정·삭제는 명시적으로 거부된다", () => {
     const statements = allIamPolicies()
       .filter((p) => p.roles.includes(roleId("OpsApiRole")))
       .flatMap((p) => p.statements)
@@ -258,10 +267,14 @@ describe("DynamoDB 권한 (BRD-55)", () => {
     );
     expect(query).toHaveLength(1);
     expect(toList(query[0]!.Action)).toEqual(["dynamodb:Query"]);
-    // 감사 기록 월 파티션과 공지 파티션만(BRD-151)
+    // 감사 기록 월 파티션·공지 파티션(BRD-151)·수집 실행 기록(BRD-149)만
     expect(query[0]!.Condition).toEqual({
       "ForAllValues:StringLike": {
-        "dynamodb:LeadingKeys": [`${AUDIT_PREFIX}*`, NOTICE_PK],
+        "dynamodb:LeadingKeys": [
+          `${AUDIT_PREFIX}*`,
+          NOTICE_PK,
+          `${RUN_LOG_PREFIX}*`,
+        ],
       },
       Null: { "dynamodb:LeadingKeys": "false" },
     });
