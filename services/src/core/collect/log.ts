@@ -14,8 +14,12 @@ const MASK = "***";
 // 주소 안의 키 인자. 대소문자 섞임(ServiceKey)도 가림
 const KEY_PARAM = /((?:authKey|serviceKey)=)[^&\s"]*/gi;
 
+export function maskRequestKeys(text: string): string {
+  return text.replace(KEY_PARAM, `$1${MASK}`);
+}
+
 export function maskSecrets(text: string, secrets: readonly string[]): string {
-  let masked = text.replace(KEY_PARAM, `$1${MASK}`);
+  let masked = maskRequestKeys(text);
   for (const secret of secrets) {
     if (secret === "") continue;
     masked = masked.split(secret).join(MASK);

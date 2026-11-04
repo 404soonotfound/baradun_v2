@@ -74,6 +74,13 @@ async function seed(state: MemoryStateStore, source: "pwncd" | "tsunami") {
   );
 }
 
+async function savedAttempt(state: MemoryStateStore) {
+  const { pk, sk } = WARNINGS_STATE.attempt;
+  return (await state.getState(pk, sk))?.value as {
+    sources: Record<string, Record<string, unknown>>;
+  } | null;
+}
+
 describe("collectWarnings", () => {
   it("두 출처 모두 정상 → 원본 행 압축 저장, 출처마다 확인 시각 갱신", async () => {
     const { deps, state, urls, lines } = setup({
@@ -118,6 +125,39 @@ describe("collectWarnings", () => {
     expect((await collectWarnings(deps)).status).toBe("partial");
     expect((await saved(state, "pwncd"))?.lastConfirmedAt).toBe(NOW);
     expect((await saved(state, "tsunami"))?.lastConfirmedAt).toBe(OLD);
+  });
+
+  it("출처 오류의 원래 code와 정제한 message를 시도 기록·로그에 남김", async () => {
+    const { deps, state, lines } = setup({
+      pwncd: {
+        response: {
+          header: {
+            resultCode: "22",
+            resultMsg: "  LIMITED\n ServiceKey=LEAK  ",
+          },
+        },
+      },
+      tsunami: TSUNAMI_NONE,
+    });
+
+    expect((await collectWarnings(deps)).status).toBe("partial");
+    expect((await savedAttempt(state))?.sources.pwncd).toMatchObject({
+      status: "failed",
+      reason: "resultCode:22",
+      source: "getPwnCd",
+      code: "22",
+      message: "LIMITED ServiceKey=***",
+    });
+    expect(lines.map((line) => JSON.parse(line))).toContainEqual(
+      expect.objectContaining({
+        event: "warnings_source_failed",
+        source: "pwncd",
+        apiSource: "getPwnCd",
+        code: "22",
+        message: "LIMITED ServiceKey=***",
+      }),
+    );
+    expect(lines.join("\n")).not.toContain("LEAK");
   });
 
   it.each([

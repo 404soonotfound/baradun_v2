@@ -3,7 +3,18 @@
 // 목록 자리가 없으면 null(빈 목록으로 바꾸지 않음). 행 하나하나의 모양 검사는 부르는 쪽이 함
 // 결과 코드 읽기(03 처리)는 API마다 달라 부르는 쪽이 함(getPwnCd 실패, getTsunamiMsg 발표 없음 확인, 아키텍처 4장)
 
-export type ResponseFailure = { status: "failed"; reason: string };
+import { maskRequestKeys } from "../collect/log";
+
+export type WarningSource = "getPwnCd" | "getTsunamiMsg";
+export type ResponseFailure =
+  | { status: "failed"; reason: string }
+  | {
+      status: "failed";
+      reason: string;
+      source: WarningSource;
+      code: string | null;
+      message: string | null;
+    };
 
 export function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -21,6 +32,29 @@ export function responseHeader(json: unknown): Record<string, unknown> | null {
   const response = isObject(json) ? json.response : undefined;
   const header = isObject(response) ? response.header : undefined;
   return isObject(header) ? header : null;
+}
+
+// 출처가 돌려준 오류는 code를 바꾸지 않고 보존하고, message만 로그·운영 기록에 안전한 한 줄로 정리함(D16-E7)
+export function sourceResponseFailure(
+  source: WarningSource,
+  header: Readonly<Record<string, unknown>>,
+  code: string | null,
+): ResponseFailure {
+  const rawMessage = header.resultMsg;
+  const message =
+    typeof rawMessage === "string"
+      ? maskRequestKeys(rawMessage)
+          .replace(/[\u0000-\u001f\u007f]+/g, " ")
+          .replace(/\s+/g, " ")
+          .trim() || null
+      : null;
+  return {
+    status: "failed",
+    reason: `resultCode:${code ?? ""}`,
+    source,
+    code,
+    message,
+  };
 }
 
 // 정상 코드인데 목록이 비었거나 요청한 만큼 꽉 찬 응답 → 실패. 문제없으면 null
