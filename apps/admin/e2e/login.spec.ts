@@ -9,9 +9,10 @@ import {
   signInWithPassword,
   srpScript,
   test,
+  tokensFor,
 } from "./fixtures";
 
-// 운영자 로그인 흐름 (BRD-148, 캔버스 V26~V29·E8·E11, D16-A2·A5, D17-2)
+// 운영자 로그인 흐름 (BRD-148·179, 캔버스 V26~V29·E8·E11, D16-A2·A5, D17-2·D17-11)
 
 const OPS = "ops@example.test";
 
@@ -90,7 +91,7 @@ test.describe("운영자 로그인", () => {
     await expectNoA11yViolations(page);
   });
 
-  test("비밀번호 → 인증 앱 코드(틀림 → 맞음) → 운영 홈, 토큰은 저장소에 남지 않는다", async ({
+  test("비밀번호 → 인증 앱 코드(틀림 → 맞음) → 운영 홈, access·ID token은 저장소에 남지 않는다", async ({
     page,
   }) => {
     const calls = await mockCognito(
@@ -130,32 +131,87 @@ test.describe("운영자 로그인", () => {
       "RespondToAuthChallenge",
       "RespondToAuthChallenge",
     ]);
-    // D16-A2: 토큰을 브라우저 저장소에 두지 않음
-    const stored = await page.evaluate(() => [
-      Object.keys(localStorage).length,
-      Object.keys(sessionStorage).length,
-      document.cookie,
-    ]);
-    expect(stored).toEqual([0, 0, ""]);
+    // D16-A2·D17-11: access·ID token은 저장소에 두지 않고, 이 탭의 sessionStorage에 refresh token만
+    const stored = await page.evaluate(() => ({
+      local: Object.keys(localStorage).length,
+      cookie: document.cookie,
+      session: JSON.stringify({ ...sessionStorage }),
+    }));
+    expect(stored).toMatchObject({ local: 0, cookie: "" });
+    expect(stored.session).toContain("refreshToken");
+    expect(stored.session).not.toMatch(/eyJ/);
   });
 
-  test("새로고침하면 다시 로그인해야 하고, 로그인 뒤 보던 화면으로 돌아간다", async ({
+  // 2026-11-04 사용자 결정(D17-11): 하나뿐인 탭도 새로고침하면 이 탭에 둔 refresh token으로 이어 감
+  test("새로고침해도 다시 로그인하지 않고 보던 화면에 남으며, 로그아웃한 뒤 새로고침하면 로그인 화면이다", async ({
     page,
   }) => {
-    await mockCognito(page, srpScript({ email: OPS, after: "tokens" }));
+    const authTime = Math.floor(Date.now() / 1000) - 60;
+    const calls = await mockCognito(
+      page,
+      srpScript({ email: OPS, after: "tokens", authTime }),
+      (target) =>
+        target === "GetTokensFromRefreshToken"
+          ? {
+              body: {
+                AuthenticationResult: tokensFor(
+                  OPS,
+                  ["publisher"],
+                  900,
+                  authTime,
+                ),
+              },
+            }
+          : undefined,
+    );
     await mockOps(page, ME_OK);
     await signInWithPassword(page, "/login/", OPS);
     await expect(page.getByRole("heading", { name: "운영 홈" })).toBeVisible();
     await page.getByRole("link", { name: "내 계정" }).click();
     await expect(page.getByRole("heading", { name: "내 계정" })).toBeVisible();
+
+    const visited: string[] = [];
+    page.on("framenavigated", (frame) => {
+      if (frame === page.mainFrame()) visited.push(frame.url());
+    });
+    await page.reload();
+    await expect(page.getByRole("heading", { name: "내 계정" })).toBeVisible();
+    await expect(page).toHaveURL(/\/account\/$/);
+    expect(visited.filter((url) => url.includes("/login"))).toEqual([]);
+    expect(
+      calls.filter((c) => c.target === "GetTokensFromRefreshToken"),
+    ).toHaveLength(1);
     await expectNoA11yViolations(page);
 
+    await page.getByRole("button", { name: "이 기기에서 로그아웃" }).click();
+    await expect(page).toHaveURL(/\/login\/$/);
+    await page.goto("/account/");
+    await expect(page).toHaveURL(/\/login\/$/);
+    await expect(page.getByLabel("이메일")).toBeVisible();
+  });
+
+  test("새로고침 때 refresh token으로 이어 가지 못하면 로그인 화면으로 간다", async ({
+    page,
+  }) => {
+    await mockCognito(
+      page,
+      srpScript({ email: OPS, after: "tokens" }),
+      (target) =>
+        target === "GetTokensFromRefreshToken"
+          ? COGNITO_ERRORS.error(
+              "NotAuthorizedException",
+              "Refresh Token has been revoked",
+            )
+          : undefined,
+    );
+    await mockOps(page, ME_OK);
+    await signInWithPassword(page, "/login/", OPS);
+    await expect(page.getByRole("heading", { name: "운영 홈" })).toBeVisible();
     await page.reload();
     await expect(page).toHaveURL(/\/login\/$/);
-    await page.getByLabel("이메일").fill(OPS);
-    await page.getByLabel("비밀번호", { exact: true }).fill("test-password-1");
-    await page.getByRole("button", { name: "다음" }).click();
-    await expect(page).toHaveURL(/\/account\/$/);
+    await expect(page.getByLabel("이메일")).toBeVisible();
+    const stored = await page.evaluate(() => sessionStorage.length);
+    expect(stored).toBe(0);
   });
 
   // 2026-11-04 사용자 결정(D16-A10 변경): 새 탭은 열린 로그인한 탭에서 넘겨받음. 토큰은 저장소에 두지 않음
@@ -181,11 +237,11 @@ test.describe("운영자 로그인", () => {
     ).toBeVisible();
     await expect(second).toHaveURL(/\/stats\/$/);
     expect(visited.filter((url) => url.includes("/login"))).toEqual([]);
-    // 넘겨받아도 토큰을 브라우저 저장소에 두지 않음(D16-A2)
+    // 넘겨받아도 access·ID token은 브라우저 저장소에 두지 않음(D16-A2·D17-11)
     const stored = await second.evaluate(() =>
       JSON.stringify({ ...localStorage, ...sessionStorage }),
     );
-    expect(stored).not.toMatch(/eyJ|refresh/i);
+    expect(stored).not.toMatch(/eyJ/);
 
     await logout(second);
     await expect(second).toHaveURL(/\/login\/$/);
