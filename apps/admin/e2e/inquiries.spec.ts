@@ -327,3 +327,23 @@ test("토큰 갱신에 실패해 다시 로그인하면 문의 목록을 저절�
   await expect(rows(page)).toHaveCount(3);
   await expect(page.getByText(/로그인을 다시 확인해야 해요/)).toHaveCount(0);
 });
+
+test("다음 쪽이 비어도(그사이 지워짐) 이전 쪽으로 돌아갈 수 있고 '문의가 없어요'로 보이지 않는다", async ({
+  page,
+}) => {
+  await signIn(page);
+  await mockInquiries(page);
+  // 나중에 건 route가 먼저 받음: cursor가 있는 쪽은 빈 목록
+  await page.route(/\/ops\/inquiries\?.*cursor=/, (route) =>
+    route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({ items: [], nextCursor: null }),
+    }),
+  );
+  await openInquiries(page);
+  await page.getByRole("button", { name: "다음" }).click();
+  await expect(page.getByText(/이 쪽에는 문의가 없어요/)).toBeVisible();
+  await expect(page.getByText("문의가 없어요", { exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "이전" }).click();
+  await expect(rows(page)).toHaveCount(3);
+});
