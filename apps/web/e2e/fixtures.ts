@@ -4,6 +4,7 @@ import path from "node:path";
 import AxeBuilder from "@axe-core/playwright";
 import type { Beach } from "@baradun/contracts";
 import { NOTICE_VERSION } from "../src/lib/notice-version";
+import { beachZonesText } from "../src/lib/zone-name";
 import {
   test as base,
   expect,
@@ -35,6 +36,13 @@ export const DELAYED_ID = "b0003";
 export const UNKNOWN_ID = "b0004";
 export const slugOf = (id: string) =>
   BEACHES.find((beach) => beach.id === id)?.slug ?? id;
+// '특보 없음' 근거 줄의 해변 특보구역 이름(한국어, D18-11): "강원중부앞바다, 강릉평지"
+export const zonesOf = (id: string): string => {
+  const beach = BEACHES.find((item) => item.id === id);
+  const text = beach ? beachZonesText(beach.warningZones, "ko") : null;
+  if (!text) throw new Error(`특보구역 이름 없음: ${id}`);
+  return text;
+};
 export const coordsOf = (id: string) =>
   BEACHES.find((beach) => beach.id === id)?.coords ?? null;
 // 노출 중인 해변 수(홈 '전국' 개수 카드 확인용, BRD-127)

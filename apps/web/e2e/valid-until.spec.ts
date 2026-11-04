@@ -11,6 +11,7 @@ import {
   test,
   UNKNOWN_ID,
   WARNING_ID,
+  zonesOf,
 } from "./fixtures";
 
 // 정상 스냅샷의 validUntil 경과 재현 (BRD-131 · 노션 결정 기록 B5 · 아키텍처 9.1)
@@ -57,7 +58,9 @@ function confirmedUntil(confirmedAt: string, nowMs: number): string {
 function clearScopeText(confirmedAt: string, nowMs: number): string {
   const time = kstStamp(confirmedAt, nowMs);
   if (!time) throw new Error(`시각 계산 실패: ${confirmedAt}`);
-  return ko.home.near.clearScope.replace("{time}", time);
+  return ko.home.near.clearScope
+    .replace("{zones}", zonesOf(CLEAR_ID))
+    .replace("{time}", time);
 }
 
 function badgeScopeText(confirmedAt: string, nowMs: number): string {
@@ -591,4 +594,3 @@ test.describe("validUntil 1분 전 경계값", () => {
     ).toBe(statusBefore);
   });
 });
-

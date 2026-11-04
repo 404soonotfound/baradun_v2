@@ -33,6 +33,19 @@ async function focusNotBehindDialog(page: Page) {
   });
 }
 
+// 모바일 판단 묶음은 '확인한 것'·'주변 특보'를 접어 둠(D18-11 ②) → 배지 줄 버튼으로 연 뒤 '자세히'를 누름. PC는 늘 펼침
+async function openChecked(page: Page, project: string) {
+  if (project === "desktop") return;
+  const toggle = page.getByRole("button", {
+    name: /^(확인한 것|주변 특보)/,
+    expanded: false,
+  });
+  await toggle.click();
+  await expect(
+    page.getByRole("button", { name: "접기", expanded: true }),
+  ).toBeVisible();
+}
+
 // 대화상자: 열면 포커스가 안으로, Tab은 안에서만 돌고, Esc로 닫히면 연 버튼으로 돌아오고 스크롤 잠금이 풀림
 async function checkSheet(page: Page, opener: string, title: string) {
   const button = page.getByRole("button", { name: opener }).first();
@@ -79,16 +92,10 @@ test.describe("대화상자", () => {
     await expect(page.getByText("풍랑주의보").first()).toBeVisible();
     await checkSheet(page, "공유", "공유하기");
     await checkSheet(page, "특보 상세 보기", "풍랑주의보");
-    if (testInfo.project.name === "desktop") {
-      // PC는 시트 대신 머리 줄 활동 세그먼트(Figma 183:807, BRD-129)
-      const segment = page.getByRole("group", { name: "활동" });
-      await segment.getByRole("button", { name: "서핑" }).click();
-      await expect(
-        segment.getByRole("button", { name: "서핑" }),
-      ).toHaveAttribute("aria-pressed", "true");
-    } else {
-      await checkSheet(page, "수영", "활동 고르기");
-    }
+    // 상세에서는 활동을 고르지 않고 확인된 활동만 보여줌(D18-4). 고르는 버튼·세그먼트가 없음
+    await expect(page.getByRole("button", { name: "수영" })).toHaveCount(0);
+    await expect(page.getByRole("group", { name: "활동" })).toHaveCount(0);
+    await openChecked(page, testInfo.project.name);
     await checkSheet(page, "자세히", "무엇을 확인했나요");
   });
 
@@ -98,6 +105,7 @@ test.describe("대화상자", () => {
     test("긴 시트 내용도 키보드로 닿음", async ({ page }) => {
       await page.goto(`/spots/${slugOf(WARNING_ID)}/`);
       await expect(page.getByText("풍랑주의보").first()).toBeVisible();
+      await openChecked(page, "mobile");
       await checkSheet(page, "자세히", "무엇을 확인했나요");
     });
   });
