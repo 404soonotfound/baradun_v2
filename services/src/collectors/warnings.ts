@@ -1,6 +1,9 @@
 import type { StateValue } from "../core/store/types";
 import { packItems } from "../core/warnings/archive";
-import { responseItems } from "../core/warnings/response-items";
+import {
+  responseItems,
+  type ResponseFailure,
+} from "../core/warnings/response-items";
 import { normalizePwnCdResponse } from "../core/warnings/pwncd-response";
 import { formatUtcIso } from "../core/warnings/time";
 import { normalizeTsunamiResponse } from "../core/warnings/tsunami";
@@ -33,7 +36,7 @@ const SOURCES: readonly Source[] = ["pwncd", "tsunami"];
 
 type SourceOutcome =
   | { status: "ok"; confirmedAt: string; rowCount: number; attempts: number }
-  | { status: "failed"; reason: string; attempts: number };
+  | (ResponseFailure & { attempts: number });
 
 function requestUrl(
   base: string,
@@ -161,10 +164,19 @@ export async function collectWarnings(
     const outcome = outcomes[source];
     sources[source] = { ...outcome };
     if (outcome.status === "failed") {
+      const sourceDetails =
+        "source" in outcome
+          ? {
+              apiSource: outcome.source,
+              code: outcome.code,
+              message: outcome.message,
+            }
+          : {};
       deps.log("error", "warnings_source_failed", {
         slotId,
         source,
         reason: outcome.reason,
+        ...sourceDetails,
       });
     }
   }

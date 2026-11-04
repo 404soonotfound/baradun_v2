@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createLogger, maskSecrets } from "./log";
+import { createLogger, maskRequestKeys, maskSecrets } from "./log";
 
 // 로그 키 마스킹 (BRD-56)
 describe("maskSecrets", () => {
@@ -7,6 +7,14 @@ describe("maskSecrets", () => {
     expect(
       maskSecrets("a?authKey=abc123&tm=1 b?ServiceKey=x%2By&pageNo=1", []),
     ).toBe("a?authKey=***&tm=1 b?ServiceKey=***&pageNo=1");
+  });
+
+  it("출처 message에 들어온 요청 URL 키도 값만 가림", () => {
+    expect(
+      maskRequestKeys(
+        "요청 실패 https://example.test?ServiceKey=LEAK&from=20261104",
+      ),
+    ).toBe("요청 실패 https://example.test?ServiceKey=***&from=20261104");
   });
 
   it("받은 비밀값은 원문·인코딩 모양 모두 가림", () => {

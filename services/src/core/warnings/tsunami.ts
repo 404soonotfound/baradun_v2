@@ -6,6 +6,7 @@ import {
   isObject,
   listSizeFailure,
   responseHeader,
+  sourceResponseFailure,
   type ResponseFailure,
   responseItems,
 } from "./response-items";
@@ -113,7 +114,7 @@ export function normalizeTsunamiResponse(
   if (code === "03") return { status: "none" };
   // 00이 정상. 활용가이드 예제는 "0"으로 적혀 있어 둘 다 받음
   if (code !== "00" && code !== "0") {
-    return { status: "failed", reason: `resultCode:${code ?? ""}` };
+    return sourceResponseFailure("getTsunamiMsg", header, code);
   }
 
   const list = responseItems(json);

@@ -95,6 +95,9 @@ describe("normalizeTsunamiResponse", () => {
     expect(normalizeTsunamiResponse(fixture("error-99"), ROWS)).toEqual({
       status: "failed",
       reason: "resultCode:99",
+      source: "getTsunamiMsg",
+      code: "99",
+      message: "LIMITED_DATE_RANGE",
     });
   });
 
@@ -128,10 +131,15 @@ describe("normalizeTsunamiResponse", () => {
       "empty", // 발표 없음은 03으로 옴
     ],
   ])("형식 오류 %j → 조회 실패", (json, reason) => {
-    expect(normalizeTsunamiResponse(json, ROWS)).toEqual({
-      status: "failed",
-      reason,
-    });
+    const result = normalizeTsunamiResponse(json, ROWS);
+    expect(result).toMatchObject({ status: "failed", reason });
+    if (reason.startsWith("resultCode:")) {
+      expect(result).toMatchObject({
+        source: "getTsunamiMsg",
+        code: reason.slice("resultCode:".length) || null,
+        message: null,
+      });
+    }
   });
 });
 

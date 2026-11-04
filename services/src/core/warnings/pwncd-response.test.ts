@@ -81,12 +81,42 @@ describe("정상", () => {
 
 describe("실패", () => {
   it.each([
-    ["no-data-reversed", "resultCode:03"], // 03은 '특보 없음'이 아님
-    ["too-old", "resultCode:99"],
-  ])("실응답 %s → %s", (id, reason) => {
+    ["no-data-reversed", "03", "NO_DATA"], // 03은 '특보 없음'이 아님
+    [
+      "too-old",
+      "99",
+      "최대 조회 기간은 오늘 기준으로 60일 전까지입니다.",
+    ],
+  ])("실응답 %s → code %s를 실패로 보존", (id, code, message) => {
     expect(normalizePwnCdResponse(fixture(id), ROWS)).toEqual({
       status: "failed",
-      reason,
+      reason: `resultCode:${code}`,
+      source: "getPwnCd",
+      code,
+      message,
+    });
+  });
+
+  it("출처 message를 한 줄로 정리하고 URL의 키를 가림", () => {
+    expect(
+      normalizePwnCdResponse(
+        {
+          response: {
+            header: {
+              resultCode: "22",
+              resultMsg:
+                "  요청 초과\nhttps://example.test?ServiceKey=LEAK&x=1\t ",
+            },
+          },
+        },
+        ROWS,
+      ),
+    ).toEqual({
+      status: "failed",
+      reason: "resultCode:22",
+      source: "getPwnCd",
+      code: "22",
+      message: "요청 초과 https://example.test?ServiceKey=***&x=1",
     });
   });
 
@@ -112,10 +142,15 @@ describe("실패", () => {
     ],
     [{ response: { header: { resultCode: 0 } } }, "resultCode:0"],
   ])("응답 모양 오류: %j", (json, reason) => {
-    expect(normalizePwnCdResponse(json, ROWS)).toEqual({
-      status: "failed",
-      reason,
-    });
+    const result = normalizePwnCdResponse(json, ROWS);
+    expect(result).toMatchObject({ status: "failed", reason });
+    if (reason === "resultCode:0") {
+      expect(result).toMatchObject({
+        source: "getPwnCd",
+        code: "0",
+        message: null,
+      });
+    }
   });
 
   it.each([

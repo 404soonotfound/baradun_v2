@@ -4,6 +4,7 @@ import {
   isObject,
   listSizeFailure,
   responseHeader,
+  sourceResponseFailure,
   type ResponseFailure,
   responseItems,
 } from "./response-items";
@@ -72,7 +73,7 @@ export function normalizePwnCdResponse(
   // 정상은 정확히 "00"만. 03(NO_DATA)·99 등은 모두 실패
   const code = asText(header.resultCode);
   if (code !== "00") {
-    return { status: "failed", reason: `resultCode:${code ?? ""}` };
+    return sourceResponseFailure("getPwnCd", header, code);
   }
 
   const list = responseItems(json);
