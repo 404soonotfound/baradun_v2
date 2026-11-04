@@ -1,8 +1,9 @@
 # 사이트 배포: main에 합친 웹·운영자 사이트 변경을 S3·CloudFront에 올림 (아키텍처 11장 가드레일)
 # - 장기 키 없음: OIDC로 1시간짜리 임시 키만 받음
-# - main push로 돈 CI(ci 워크플로)가 성공한 커밋만, 그 커밋 그대로 올림 (BRD-133). 자동 배포는 그중 main의 가장 새 커밋(BRD-178)
+# - main push로 돈 CI(ci 워크플로)가 성공한 커밋만, 그 커밋 그대로 올림 (BRD-133)
 #   CI와 배포가 동시에 돌면 합친 main이 CI에서 실패해도 배포가 먼저 끝날 수 있어서 CI 뒤로 둠
-# - 앱마다 마지막으로 올린 커밋(deploy-version.txt)과 비교해 바뀐 앱만 올림(BRD-178). 수동 실행은 두 앱 모두
+# - 앱마다 마지막으로 올린 커밋(deploy-version.txt) 뒤로 그 앱을 바꾸고 main CI가 성공한 가장 새 커밋을 올림(BRD-178). 수동 실행은 두 앱 모두
+# - 배포 작업은 OIDC 토큰을 받으므로 빌드 캐시를 복원하지 않음(캐시 오염 방지, CodeQL actions/cache-poisoning)
 # - production environment는 main 브랜치만 쓸 수 있음
 # - data/는 publisher 구역이라 동기화에서 빼고, IAM에서도 거부됨
 name: deploy
@@ -36,7 +37,7 @@ jobs:
       cancel-in-progress: false # 배포 도중 끊지 않음
     permissions:
       contents: read
-      checks: read # 수동 실행 때 ci-ok 결과를 읽음
+      actions: read # main CI 실행 결과를 읽음(deploy-plan.sh)
       id-token: write # OIDC 토큰은 이 작업만 받음
     env:
       BUCKET: ${{ vars.SITE_BUCKET }}
@@ -44,82 +45,32 @@ jobs:
       # 이 배포를 부른 CI의 커밋(수동 실행은 실행한 브랜치 main의 커밋). 실제로 올릴 커밋(SHA)은 '올릴 커밋 정하기'가 정함
       HEAD_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
     steps:
-      # 올릴 커밋 정하기(BRD-178). 수동 실행은 이 커밋(ci-ok 성공일 때만), 자동 배포는 main에서 ci-ok가 성공한 가장 새 커밋
-      # main push CI가 커밋마다 따로 돌아 끝나는 순서가 바뀔 수 있고, 같은 배포 그룹은 대기 실행을 하나만 남겨 앞 대기 실행이 취소될 수 있음
-      # → 어느 실행이 돌든 그때 가장 새 검증 커밋을 올림(취소된 실행의 커밋도 빠지지 않고, 옛 커밋이 새 배포를 덮지 않음)
-      - id: target
-        name: 올릴 커밋 정하기
+      # 전체 이력의 main을 받아 올릴 커밋·배포 여부를 정함(BRD-178, .github/scripts/deploy-plan.sh)
+      # 자동 배포: 마지막으로 올린 커밋 뒤로 이 앱을 바꾸고 main CI가 성공한 가장 새 커밋. 수동: 이 커밋(CI 성공일 때만)
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: main
+          persist-credentials: false
+          fetch-depth: 0
+      - id: decide
+        name: 사이트 올릴 커밋 정하기
         env:
           GH_TOKEN: ${{ github.token }}
           MANUAL: ${{ github.event_name == 'workflow_dispatch' }}
-        run: |
-          ci_ok() {
-            gh api "repos/$GITHUB_REPOSITORY/commits/$1/check-runs?check_name=ci-ok" \
-              --jq '[.check_runs[] | select(.app.slug == "github-actions")] | sort_by(.completed_at) | last | .conclusion // ""'
-          }
-          if [ "$MANUAL" = "true" ]; then
-            conclusion=$(ci_ok "$HEAD_SHA")
-            if [ "$conclusion" != "success" ]; then
-              echo "::error::$HEAD_SHA 의 ci-ok가 성공이 아니에요(${conclusion:-결과 없음}). main CI가 통과한 뒤 다시 실행해 주세요."
-              exit 1
-            fi
-            target="$HEAD_SHA"
-          else
-            target=""
-            for sha in $(gh api "repos/$GITHUB_REPOSITORY/commits?sha=main&per_page=30" --jq '.[].sha'); do
-              if [ "$(ci_ok "$sha")" = "success" ]; then target="$sha"; break; fi
-            done
-            if [ -z "$target" ]; then
-              echo "::error::main 최근 30개 커밋에 ci-ok가 성공한 커밋이 없어요."
-              exit 1
-            fi
-          fi
-          echo "올릴 커밋: $target (이 배포를 부른 커밋: $HEAD_SHA)"
-          echo "SHA=$target" >> "$GITHUB_ENV"
-          echo "sha=$target" >> "$GITHUB_OUTPUT"
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-        with:
-          ref: ${{ steps.target.outputs.sha }}
-          persist-credentials: false
-          fetch-depth: 0 # 마지막으로 올린 커밋과 비교(BRD-178)
-      # 배포할지 정하기(BRD-178): 운영 주소의 deploy-version.txt(마지막으로 올린 커밋)와 비교
-      # - 수동 실행·첫 배포·표시를 못 읽음 → 올림(안전 쪽)
-      # - 이 커밋이 이미 올린 커밋과 같거나 더 옛것 → 건너뜀(늦게 끝난 옛 CI가 새 배포를 덮지 않게)
-      # - 올린 커밋 이후 이 앱이 쓰는 파일이 바뀌지 않음 → 건너뜀. 바뀌었으면 사이 커밋 변경까지 함께 올림
-      # 비교 경로는 ci.yml의 바뀐 영역 필터와 같아야 함(workflows.test.ts가 확인). 같은 앱 배포는 동시 실행 그룹으로 한 번에 하나씩
-      - id: decide
-        name: 사이트 배포할지 정하기
-        env:
-          MANUAL: ${{ github.event_name == 'workflow_dispatch' }}
           URL: ${{ vars.SITE_URL }}
+        # 경로는 이 앱 빌드가 읽는 파일(ci.yml 바뀐 영역 필터에서 ci.yml 제외, workflows.test.ts가 확인)
         run: |
-          paths=(
-            package.json
-            package-lock.json
-            tsconfig.base.json
-            .nvmrc
-            .github/workflows/ci.yml
-            apps/web
-            packages/contracts
-            packages/design-tokens
-            data/beaches
-            data/beach-meta.json
+          .github/scripts/deploy-plan.sh "$URL" \
+            package.json \
+            package-lock.json \
+            tsconfig.base.json \
+            .nvmrc \
+            apps/web \
+            packages/contracts \
+            packages/design-tokens \
+            data/beaches \
+            data/beach-meta.json \
             .github/workflows/deploy.yml
-          )
-          deployed=$(curl -fsS --max-time 10 --retry 3 "$URL/deploy-version.txt" 2>/dev/null | tr -d '[:space:]' || true)
-          deploy=true
-          if [ "$MANUAL" = "true" ]; then
-            echo "수동 실행: 올림"
-          elif ! printf '%s' "$deployed" | grep -Eq '^[0-9a-f]{40}$' || ! git cat-file -e "$deployed^{commit}" 2>/dev/null; then
-            echo "올린 커밋을 알 수 없음(${deployed:-없음}): 올림"
-          elif git merge-base --is-ancestor "$SHA" "$deployed"; then
-            echo "이미 $deployed(같거나 더 새 커밋)가 올라가 있음: 건너뜀"; deploy=false
-          elif git diff --quiet "$deployed" "$SHA" -- "${paths[@]}"; then
-            echo "$deployed 이후 바뀐 파일 없음: 건너뜀"; deploy=false
-          else
-            echo "$deployed 이후 바뀜: 올림"
-          fi
-          echo "deploy=$deploy" >> "$GITHUB_OUTPUT"
       - if: steps.decide.outputs.deploy == 'true'
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
@@ -137,12 +88,6 @@ jobs:
             echo "::error::vars.INQUIRY_PHOTO_BUCKET에 스택 출력 InquiryPhotoBucketName 값을 넣어 주세요(infra/README '데이터 문의 접수')."
             exit 1
           fi
-      - if: steps.decide.outputs.deploy == 'true'
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: apps/web/.next/cache
-          key: next-web-deploy-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ hashFiles('apps/web/**', 'packages/**', '!**/node_modules/**') }}
-          restore-keys: next-web-deploy-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-
       - if: steps.decide.outputs.deploy == 'true'
         run: npm run build -w apps/web
         env:
@@ -190,7 +135,7 @@ jobs:
       cancel-in-progress: false
     permissions:
       contents: read
-      checks: read
+      actions: read
       id-token: write
     env:
       BUCKET: ${{ vars.ADMIN_SITE_BUCKET }}
@@ -198,81 +143,31 @@ jobs:
       # 이 배포를 부른 CI의 커밋(수동 실행은 실행한 브랜치 main의 커밋). 실제로 올릴 커밋(SHA)은 '올릴 커밋 정하기'가 정함
       HEAD_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
     steps:
-      # 올릴 커밋 정하기(BRD-178). 수동 실행은 이 커밋(ci-ok 성공일 때만), 자동 배포는 main에서 ci-ok가 성공한 가장 새 커밋
-      # main push CI가 커밋마다 따로 돌아 끝나는 순서가 바뀔 수 있고, 같은 배포 그룹은 대기 실행을 하나만 남겨 앞 대기 실행이 취소될 수 있음
-      # → 어느 실행이 돌든 그때 가장 새 검증 커밋을 올림(취소된 실행의 커밋도 빠지지 않고, 옛 커밋이 새 배포를 덮지 않음)
-      - id: target
-        name: 올릴 커밋 정하기
+      # 전체 이력의 main을 받아 올릴 커밋·배포 여부를 정함(BRD-178, .github/scripts/deploy-plan.sh)
+      # 자동 배포: 마지막으로 올린 커밋 뒤로 이 앱을 바꾸고 main CI가 성공한 가장 새 커밋. 수동: 이 커밋(CI 성공일 때만)
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: main
+          persist-credentials: false
+          fetch-depth: 0
+      - id: decide
+        name: 운영자 사이트 올릴 커밋 정하기
         env:
           GH_TOKEN: ${{ github.token }}
           MANUAL: ${{ github.event_name == 'workflow_dispatch' }}
-        run: |
-          ci_ok() {
-            gh api "repos/$GITHUB_REPOSITORY/commits/$1/check-runs?check_name=ci-ok" \
-              --jq '[.check_runs[] | select(.app.slug == "github-actions")] | sort_by(.completed_at) | last | .conclusion // ""'
-          }
-          if [ "$MANUAL" = "true" ]; then
-            conclusion=$(ci_ok "$HEAD_SHA")
-            if [ "$conclusion" != "success" ]; then
-              echo "::error::$HEAD_SHA 의 ci-ok가 성공이 아니에요(${conclusion:-결과 없음}). main CI가 통과한 뒤 다시 실행해 주세요."
-              exit 1
-            fi
-            target="$HEAD_SHA"
-          else
-            target=""
-            for sha in $(gh api "repos/$GITHUB_REPOSITORY/commits?sha=main&per_page=30" --jq '.[].sha'); do
-              if [ "$(ci_ok "$sha")" = "success" ]; then target="$sha"; break; fi
-            done
-            if [ -z "$target" ]; then
-              echo "::error::main 최근 30개 커밋에 ci-ok가 성공한 커밋이 없어요."
-              exit 1
-            fi
-          fi
-          echo "올릴 커밋: $target (이 배포를 부른 커밋: $HEAD_SHA)"
-          echo "SHA=$target" >> "$GITHUB_ENV"
-          echo "sha=$target" >> "$GITHUB_OUTPUT"
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-        with:
-          ref: ${{ steps.target.outputs.sha }}
-          persist-credentials: false
-          fetch-depth: 0 # 마지막으로 올린 커밋과 비교(BRD-178)
-      # 배포할지 정하기(BRD-178): 운영 주소의 deploy-version.txt(마지막으로 올린 커밋)와 비교
-      # - 수동 실행·첫 배포·표시를 못 읽음 → 올림(안전 쪽)
-      # - 이 커밋이 이미 올린 커밋과 같거나 더 옛것 → 건너뜀(늦게 끝난 옛 CI가 새 배포를 덮지 않게)
-      # - 올린 커밋 이후 이 앱이 쓰는 파일이 바뀌지 않음 → 건너뜀. 바뀌었으면 사이 커밋 변경까지 함께 올림
-      # 비교 경로는 ci.yml의 바뀐 영역 필터와 같아야 함(workflows.test.ts가 확인). 같은 앱 배포는 동시 실행 그룹으로 한 번에 하나씩
-      - id: decide
-        name: 운영자 사이트 배포할지 정하기
-        env:
-          MANUAL: ${{ github.event_name == 'workflow_dispatch' }}
           URL: ${{ vars.ADMIN_SITE_URL }}
+        # 경로는 이 앱 빌드가 읽는 파일(ci.yml 바뀐 영역 필터에서 ci.yml 제외, workflows.test.ts가 확인)
         run: |
-          paths=(
-            package.json
-            package-lock.json
-            tsconfig.base.json
-            .nvmrc
-            .github/workflows/ci.yml
-            apps/admin
-            packages/contracts
-            packages/design-tokens
-            data/beaches
+          .github/scripts/deploy-plan.sh "$URL" \
+            package.json \
+            package-lock.json \
+            tsconfig.base.json \
+            .nvmrc \
+            apps/admin \
+            packages/contracts \
+            packages/design-tokens \
+            data/beaches \
             .github/workflows/deploy.yml
-          )
-          deployed=$(curl -fsS --max-time 10 --retry 3 "$URL/deploy-version.txt" 2>/dev/null | tr -d '[:space:]' || true)
-          deploy=true
-          if [ "$MANUAL" = "true" ]; then
-            echo "수동 실행: 올림"
-          elif ! printf '%s' "$deployed" | grep -Eq '^[0-9a-f]{40}$' || ! git cat-file -e "$deployed^{commit}" 2>/dev/null; then
-            echo "올린 커밋을 알 수 없음(${deployed:-없음}): 올림"
-          elif git merge-base --is-ancestor "$SHA" "$deployed"; then
-            echo "이미 $deployed(같거나 더 새 커밋)가 올라가 있음: 건너뜀"; deploy=false
-          elif git diff --quiet "$deployed" "$SHA" -- "${paths[@]}"; then
-            echo "$deployed 이후 바뀐 파일 없음: 건너뜀"; deploy=false
-          else
-            echo "$deployed 이후 바뀜: 올림"
-          fi
-          echo "deploy=$deploy" >> "$GITHUB_OUTPUT"
       - if: steps.decide.outputs.deploy == 'true'
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
@@ -295,12 +190,6 @@ jobs:
           for value in "$OPERATOR_CLIENT" "$DEMO_CLIENT"; do
             printf '%s' "$value" | grep -Eq '^[a-z0-9]+$' || { echo "::error::vars.OPERATOR_CLIENT_ID·DEMO_CLIENT_ID에 스택 출력 값을 넣어 주세요(infra/README '운영자 사이트')."; exit 1; }
           done
-      - if: steps.decide.outputs.deploy == 'true'
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: apps/admin/.next/cache
-          key: next-admin-deploy-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ hashFiles('apps/admin/**', 'packages/**', '!**/node_modules/**') }}
-          restore-keys: next-admin-deploy-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-
       - if: steps.decide.outputs.deploy == 'true'
         run: npm run build -w apps/admin # postbuild가 검색 차단·CSP meta·비밀값 0건을 검사함
         env:
