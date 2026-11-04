@@ -12,6 +12,9 @@ export type OpsResult<T> =
       readonly status: number;
       readonly code: string;
       readonly requestId: string | null;
+      // 409의 까닭(version·idempotency_mismatch), 400의 틀린 칸 이름. 없으면 빠짐
+      readonly reason?: string;
+      readonly field?: string;
     }
   | {
       readonly ok: false;
@@ -76,12 +79,21 @@ export async function opsFetch<T>(
   if (response.ok)
     return { ok: true, status: response.status, body: value as T };
   const error = (
-    value as { error?: { code?: unknown; requestId?: unknown } } | null
+    value as {
+      error?: {
+        code?: unknown;
+        requestId?: unknown;
+        reason?: unknown;
+        field?: unknown;
+      };
+    } | null
   )?.error;
   return {
     ok: false,
     status: response.status,
     code: typeof error?.code === "string" ? error.code : "unknown",
     requestId: typeof error?.requestId === "string" ? error.requestId : null,
+    ...(typeof error?.reason === "string" ? { reason: error.reason } : {}),
+    ...(typeof error?.field === "string" ? { field: error.field } : {}),
   };
 }

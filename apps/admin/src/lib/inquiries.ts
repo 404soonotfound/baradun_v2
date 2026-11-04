@@ -75,6 +75,32 @@ export function fetchInquiry(
   );
 }
 
+// 처리 상태·반려 이유·내부 메모 저장(편집 이상). 서버 상한과 같음(services/src/admin/inquiries.ts)
+export const REJECT_REASON_MAX = 500;
+export const MEMO_MAX = 2000;
+
+export interface InquiryPatch {
+  // 상세(강한 일관성)에서 받은 version. 목록 version은 늦을 수 있어 쓰지 않음
+  readonly version: number;
+  readonly status?: InquiryStatus;
+  readonly memo?: string | null;
+  readonly rejectReason?: string;
+}
+
+// 같은 내용을 다시 보낼 때(응답을 못 받음)는 같은 멱등 키를 씀 → 서버가 한 번만 저장하고 같은 결과를 줌(D16-B6)
+export function saveInquiry(
+  accessToken: Token,
+  inquiryId: string,
+  patch: InquiryPatch,
+  idempotencyKey: string,
+): Promise<OpsResult<{ inquiryId: string; version: number }>> {
+  return opsFetch(
+    `/ops/inquiries/${encodeURIComponent(inquiryId)}`,
+    accessToken,
+    { method: "PATCH", body: patch, idempotencyKey },
+  );
+}
+
 // 화면 시각은 KST(저장은 UTC ISO, 구현 제안 I09)
 const KST = "Asia/Seoul";
 
