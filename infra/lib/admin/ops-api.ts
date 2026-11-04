@@ -11,6 +11,7 @@ import {
   LOG_RETENTION,
   NOTICE_KEY,
   RETRY_LIMITS,
+  RUN_LOG_KEY_PREFIX,
 } from "../settings";
 import type { OperatorAuth } from "./operator-auth";
 
@@ -24,7 +25,7 @@ import type { OperatorAuth } from "./operator-auth";
 //   트랜잭션(TransactWriteItems)은 품목별 동작(PutItem·UpdateItem)으로 판정됨
 // - 변경 이력(감사, BRD-155·D16-B5): Ops admin#audit#… 키에 Put만. 바꾸기·지우기는 명시적으로 거부
 //   추가 전용은 Put 권한만으로는 성립하지 않음 → 코드가 새 키에만 씀(attribute_not_exists)·업무 변경과 같은 트랜잭션
-//   Ops Query는 감사 키(월 파티션)와 공지 파티션에만 허용
+//   Ops Query는 감사 키(월 파티션)·공지 파티션·수집 실행 기록(BRD-149, 수집기별 파티션)에만 허용
 // - 토큰 검증 공개 키(JWKS)는 Cognito 공개 주소에서 받음(키·비밀값 없음)
 
 export interface OpsApiProps {
@@ -70,7 +71,11 @@ export class OpsApi extends Construct {
         conditions: {
           // 키가 없는 요청에 ForAllValues가 참이 되지 않게 Null 검사를 함께 둠
           "ForAllValues:StringLike": {
-            "dynamodb:LeadingKeys": [AUDIT_KEYS, NOTICE_KEY],
+            "dynamodb:LeadingKeys": [
+              AUDIT_KEYS,
+              NOTICE_KEY,
+              `${RUN_LOG_KEY_PREFIX}*`,
+            ],
           },
           Null: { "dynamodb:LeadingKeys": "false" },
         },
