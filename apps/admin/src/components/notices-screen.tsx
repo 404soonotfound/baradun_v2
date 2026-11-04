@@ -752,6 +752,19 @@ function NoticeEditor({
     setForm(formOf(notice.draft));
     setAccept(null);
     setError(null);
+  } else if (
+    notice &&
+    base &&
+    notice !== base &&
+    notice.version === base.version
+  ) {
+    // 같은 version을 다시 받음: 상태(예약→노출→종료)는 version 없이 시각으로 바뀌므로 상태만 새로 받음
+    // 문구는 version이 같아 그대로라 쓰던 내용은 두고, '새 내용 불러오기'로 기다리던 잠금을 풂
+    setBase(notice);
+    if (accept === "next") {
+      setAccept(null);
+      setError(null);
+    }
   }
   const stale =
     notice !== null && base !== null && notice.version !== base.version;
@@ -873,18 +886,22 @@ function NoticeEditor({
     changes === 0 &&
     blocks.length === 0 &&
     (base.live === null || base.pendingEdit);
+  // 노출 종료·삭제는 저장하지 않은 변경이 있으면 막음(결과를 받으며 쓰던 문구를 덮어쓰지 않게)
   const canEnd =
     base !== null &&
     publish === null &&
+    changes === 0 &&
     (state === "live" || state === "scheduled");
   const deleteBlock =
     base === null
       ? null
       : state === "live"
         ? t.deleteLive
-        : state === "scheduled"
-          ? publish
-          : edit;
+        : changes > 0
+          ? t.unsavedBlocks
+          : state === "scheduled"
+            ? publish
+            : edit;
   const copyText = [form.titleKo, form.bodyKo, form.titleEn, form.bodyEn]
     .filter((s) => s.trim())
     .join("\n");
@@ -1270,11 +1287,13 @@ function NoticeEditor({
           </div>
           <p id="notice-action-hint" className="text-label-s text-text-muted">
             {publish ??
-              (changes > 0 || blocks.length > 0
-                ? t.exposeBlocked
-                : state === "live"
-                  ? t.deleteLive
-                  : "")}
+              (changes > 0
+                ? t.unsavedBlocks
+                : blocks.length > 0
+                  ? t.exposeBlocked
+                  : state === "live"
+                    ? t.deleteLive
+                    : "")}
           </p>
         </div>
       )}
