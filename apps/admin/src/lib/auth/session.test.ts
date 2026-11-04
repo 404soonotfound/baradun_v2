@@ -549,7 +549,37 @@ describe("새로고침해도 로그인 유지", () => {
         reason: null,
       });
       expect(store.get()).toBeNull();
+      // 받은 토큰을 쓰지 않으면 그 refresh token을 폐기함(갱신 자체가 실패하면 폐기할 토큰이 없음)
+      if (answer === answers[0]) expect(tab.deps.revoke).not.toHaveBeenCalled();
+      else
+        expect(tab.deps.revoke).toHaveBeenCalledWith("operator", "refresh-2");
     }
+  });
+
+  it("저장 값이 있으면 그 풀의 열린 탭에만 넘겨받기를 묻는다", () => {
+    const { session, posted } = reloaded({ ...SAVED, pool: "demo" });
+    session.join();
+    expect(posted).toContainEqual({
+      kind: "hello",
+      id: "tab-new",
+      pool: "demo",
+    });
+  });
+
+  it("망 오류로 갱신하지 못하면 로그인 화면으로 가되 저장 값은 두어 다시 새로고침하면 다시 시도한다", async () => {
+    const store = memoryStore(SAVED);
+    const tab = setup({
+      store,
+      refresh: vi.fn(() => Promise.reject({ name: "NetworkError" })),
+    });
+    tab.session.join();
+    await tab.advance(JOIN_WAIT_MS);
+    expect(tab.session.getSnapshot()).toEqual({
+      status: "signed_out",
+      reason: null,
+    });
+    expect(store.get()).toEqual(SAVED);
+    expect(tab.deps.revoke).not.toHaveBeenCalled();
   });
 
   it("데모 로그인 화면은 운영자 저장 값으로 이어 가지 않는다", async () => {
