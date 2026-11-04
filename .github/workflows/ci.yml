@@ -355,9 +355,10 @@ jobs:
 
   # OpenFreeMap 스모크 (BRD-114 · 결정 기록 12장 결정 10): 고정 타일 판·sprite·글꼴이 아직 그대로 있는지 실제 서버로 확인
   # 매일 정기 실행과 웹 변경 PR에서 돌림. 제3자 서버 상태라 ci-ok(머지 필수)에는 넣지 않고, 실패하면 이 작업만 빨간불
+  # main push에서는 돌리지 않음: 실패하면 실행 결론이 실패가 되어 그 커밋의 배포가 막힘(BRD-178, deploy-plan.sh)
   map-smoke:
     needs: changes
-    if: ${{ !cancelled() && (github.event_name == 'schedule' || needs.changes.outputs.web == 'true') }}
+    if: ${{ !cancelled() && (github.event_name == 'schedule' || (github.event_name == 'pull_request' && needs.changes.outputs.web == 'true')) }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
