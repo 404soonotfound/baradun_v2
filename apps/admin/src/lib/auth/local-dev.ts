@@ -4,6 +4,7 @@ import {
   localInquiryPage,
   localSaveInquiry,
 } from "./local-inquiries";
+import { localNotices } from "./local-notices";
 import { SESSION } from "./policy";
 import type { AuthSession } from "./session";
 import type { Tokens } from "./srp";
@@ -147,6 +148,10 @@ export function localOps<T>(
   }
   if (method === "PATCH" && inquiry) {
     return localSaveInquiry<T>(decodeURIComponent(inquiry[1]!), request.body);
+  }
+  if (url.pathname.startsWith("/ops/notices")) {
+    const notices = localNotices<T>(url.pathname, request);
+    if (notices) return notices;
   }
   if (method === "GET" && path === "/ops/me") {
     return {
