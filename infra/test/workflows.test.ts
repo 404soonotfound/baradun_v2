@@ -8,6 +8,7 @@ const workflows = readdirSync(dir)
   .filter((f) => /\.ya?ml$/.test(f))
   .map((f) => ({ name: f, text: readFileSync(resolve(dir, f), "utf8") }));
 const deploy = workflows.find((w) => w.name === "deploy.yml");
+const ci = workflows.find((w) => w.name === "ci.yml");
 // 배포 판단 스크립트(BRD-178). deploy.yml의 site·admin 작업이 함께 씀
 const plan = readFileSync(
   resolve(__dirname, "../../.github/scripts/deploy-plan.sh"),
@@ -80,9 +81,10 @@ describe("배포 워크플로 가드레일 (11장)", () => {
     expect(plan).toContain(
       "actions/workflows/ci.yml/runs?branch=main&event=push",
     );
-    expect(plan).toMatch(
-      /touches "\$c" && \[ "\$\(ci_ok "\$c"\)" = "success" \]/,
-    );
+    // 검사는 push 단위(여러 커밋 머지는 맨 위 커밋만 실행)라, 그 실행에서 이 앱 빌드 작업이 성공했는지로 고름
+    expect(plan).toContain("actions/runs/$id/jobs");
+    expect(plan).toMatch(/if checked "\$c"; then/);
+    expect(plan).not.toMatch(/touches\(\)/);
     // 조회 실패는 실패로 멈춤(빈 결과를 '성공 없음'으로 읽지 않음)
     expect(plan).toMatch(/if ! runs=\$\(gh api[\s\S]*?exit 1/);
     for (const job of ["site", "admin"]) {
@@ -96,6 +98,40 @@ describe("배포 워크플로 가드레일 (11장)", () => {
     expect(text).not.toMatch(/^concurrency:/m);
     expect(jobLines(deploy?.text ?? "", "site").join("\n")).toMatch(
       /^\s{4}concurrency:\s*\n\s{6}group:\s*deploy-production/m,
+    );
+  });
+
+  it("배포 판단의 CI_JOB은 ci.yml에서 그 앱 영역이 바뀔 때만 도는 빌드 작업이다", () => {
+    for (const [job, ciJob, area] of [
+      ["site", "e2e-build", "web"],
+      ["admin", "admin-build", "admin"],
+    ] as const) {
+      const lines = jobLines(deploy?.text ?? "", job).join("\n");
+      expect(lines, job).toMatch(new RegExp(`^\\s+CI_JOB: ${ciJob}$`, "m"));
+      expect(jobIf(ci?.text ?? "", ciJob), ciJob).toBe(
+        `needs.changes.outputs.${area} == 'true'`,
+      );
+      // 작업 API는 표시 이름(name)으로 찾으므로, name을 따로 두면 작업 키와 달라져 배포가 늘 건너뜀
+      expect(
+        jobLines(ci?.text ?? "", ciJob).some((l) => /^\s{4}name:/.test(l)),
+        ciJob,
+      ).toBe(false);
+    }
+    // 작업 이름이 없으면 멈춤, 표시와 앱 파일이 같으면 건너뜀, 검사 안 된 앱 변경이 남으면 경고
+    expect(plan).toContain(': "${CI_JOB:?');
+    expect(plan).toContain(
+      'git diff --quiet "$deployed" "$target" -- "${paths[@]}"',
+    );
+    expect(plan).toMatch(
+      /git diff --quiet "\$deployed" HEAD -- "\$\{paths\[@\]\}"; then\s*\n\s*echo "::warning::/,
+    );
+  });
+
+  it("지도 서버 스모크(map-smoke)는 main push에서 돌지 않는다(실패하면 실행 결론이 실패라 배포가 막힘)", () => {
+    const cond = jobIf(ci?.text ?? "", "map-smoke") ?? "";
+    expect(cond).toContain("github.event_name == 'pull_request'");
+    expect(cond).not.toMatch(
+      /\|\|\s*needs\.changes\.outputs\.web == 'true'\s*\)/,
     );
   });
 
@@ -160,8 +196,6 @@ const webBuildSiteUrl = (lines: string[]) => {
 };
 
 describe("PR 필수 웹 검사 (BRD-102 결정 41·42)", () => {
-  const ci = workflows.find((w) => w.name === "ci.yml");
-
   it("infra CI는 고정 IAM·CFN 자료를 검사하고 최신 감사는 별도 읽기 전용 실행이다", () => {
     const infra = jobLines(ci?.text ?? "", "infra").join("\n");
     expect(infra).toContain("npm run check:iam-actions -w @baradun/infra");
@@ -262,7 +296,7 @@ describe("PR 필수 웹 검사 (BRD-102 결정 41·42)", () => {
     }
   });
 
-  // 바뀐 앱만 배포(BRD-178): 마지막으로 올린 커밋(deploy-version.txt) 뒤로 그 앱을 바꾸고 main CI가 성공한 가장 새 커밋
+  // 바뀐 앱만 배포(BRD-178): 마지막으로 올린 커밋(deploy-version.txt) 뒤로 main CI가 그 앱 빌드 작업까지 성공한 가장 새 커밋
   // 옛 커밋이 새 배포를 덮지 않고, CI가 실패한 커밋의 변경은 그 앱을 다시 검사한 뒤 커밋으로만 나감
   const deployPaths = (job: string) => {
     const lines = jobLines(deploy?.text ?? "", job);
