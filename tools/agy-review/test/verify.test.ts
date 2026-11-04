@@ -211,6 +211,34 @@ describe("리뷰 판정", () => {
     expect(v.reasons).toContain(
       "사본 밖 파일을 읽음: /Users/soo/.ssh/id_ed25519",
     );
+    // 사본 경로로 시작해도 ../로 빠져나가면 사본 밖
+    const escaped = verify(
+      jsonl(
+        init(),
+        readOf("services/src/admin/policy.ts"),
+        tool("read_file", "DONE", { Path: `${CWD}/../../etc/passwd` }),
+        result(review()),
+      ),
+    );
+    expect(escaped.reasons).toContain("사본 밖 파일을 읽음: /etc/passwd");
+  });
+
+  it("파일 만들기·명령 입력·웹 도구가 성공해도 미완료", () => {
+    for (const name of [
+      "create_file",
+      "send_command_input",
+      "read_url_content",
+    ]) {
+      const v = verify(
+        jsonl(
+          init(),
+          tool(name, "DONE", {}),
+          readOf("services/src/admin/policy.ts"),
+          result(review()),
+        ),
+      );
+      expect(v.reasons).toContain(`쓰기·실행 도구가 성공함: ${name}`);
+    }
   });
 
   it("사본 안 없는 경로를 읽으려 한 것은 참고로만, 사본 밖이면 미완료", () => {

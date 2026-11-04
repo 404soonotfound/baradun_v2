@@ -3,16 +3,16 @@
 // 기록 형식은 agy 1.4.12 stream-json(init·step_update·result 이벤트)에서 확인한 것
 import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, "../..");
 
 export const PERMISSION_MODE = "request-review";
-// 읽기 외 도구가 성공하면 거부 설정이 뚫린 것으로 봄
+// 읽기 외 도구가 성공하면 거부 설정이 뚫린 것으로 봄(파일 만들기·명령 입력·웹 도구 포함)
 const WRITE_OR_EXEC =
-  /write|edit|replace|delete|move|run_command|execute|browser|mcp|ask_/i;
+  /write|edit|replace|delete|move|rename|copy|create|mkdir|command|execute|browser|url|web|mcp|ask_/i;
 
 // ajv는 packages/contracts 설치본만 사용(새로 설치하지 않음)
 export function createValidator(schemaPath = join(HERE, "schema.json")) {
@@ -80,10 +80,10 @@ function checkResult(exitCode, events, reasons) {
   }
   if (result.status !== "SUCCESS")
     reasons.push(`agy 상태 ${result.status}: ${result.error ?? "사유 없음"}`);
+  else if (result.error) reasons.push(`agy 오류: ${result.error}`);
   // 시간 초과도 SUCCESS·종료 코드 0으로 오고 finished_reason만 다름(print_timeout)
   if (result.finished_reason != null)
     reasons.push(`종료 사유 ${result.finished_reason}`);
-  if (result.error) reasons.push(`agy 오류: ${result.error}`);
   return result;
 }
 
@@ -93,11 +93,7 @@ export function verifyProbe({ exitCode, text, expected, snapshotUnchanged }) {
   const { events, errors } = parseEvents(text);
   reasons.push(...errors);
   checkInit(events, expected, reasons);
-  const result = events.findLast((e) => e.event === "result")?.result;
-  if (exitCode !== 0) reasons.push(`agy 종료 코드 ${exitCode}`);
-  if (!result) reasons.push("결과 이벤트(result) 없음");
-  else if (result.status !== "SUCCESS")
-    reasons.push(`agy 상태 ${result.status}: ${result.error ?? "사유 없음"}`);
+  checkResult(exitCode, events, reasons);
   const steps = toolSteps(events);
   const denied = (kind) =>
     steps.some(
@@ -135,21 +131,25 @@ export function verifyReview({ exitCode, text, expected, validate }) {
   checkInit(events, expected, reasons);
   const result = checkResult(exitCode, events, reasons);
   const steps = toolSteps(events);
+  // ../로 사본 밖을 가리키는 경로도 잡도록 정규화
   const reads = steps
     .filter((s) => s.state === "DONE" && s.path)
-    .map((s) => s.path);
+    .map((s) => resolve(s.path));
 
   const prefix = expected.cwd.endsWith("/") ? expected.cwd : `${expected.cwd}/`;
   // 사본 안에서 없는 경로를 짐작해 읽은 것은 거부가 아니라 탐색이라 참고로만 남김(2026-11-04 실제 리뷰에서 확인)
   const notes = [];
   const missingInSnapshot = (s) =>
     !WRITE_OR_EXEC.test(s.tool) &&
-    s.path?.startsWith(prefix) &&
+    s.path != null &&
+    resolve(s.path).startsWith(prefix) &&
     /does not exist/i.test(s.error ?? "") &&
     !/permission|denied/i.test(s.error ?? "");
   for (const s of steps.filter((s) => s.state === "ERROR")) {
     if (missingInSnapshot(s))
-      notes.push(`없는 파일을 읽으려 함: ${s.path.slice(prefix.length)}`);
+      notes.push(
+        `없는 파일을 읽으려 함: ${resolve(s.path).slice(prefix.length)}`,
+      );
     else
       reasons.push(`리뷰 중 도구 거부·오류: ${s.tool} ${s.error ?? ""}`.trim());
   }
@@ -208,16 +208,14 @@ export function verifyReview({ exitCode, text, expected, validate }) {
     expected.diffFiles,
     expected.sensitivePrefixes,
   );
-  const notion =
-    sensitiveChanged.length === 0
-      ? {
-          status: expected.evidenceCount ? "제공" : "해당 없음",
-          sensitiveChanged,
-        }
-      : {
-          status: expected.evidenceCount ? "제공" : "미완료",
-          sensitiveChanged,
-        };
+  const notion = {
+    status: expected.evidenceCount
+      ? "제공"
+      : sensitiveChanged.length
+        ? "미완료"
+        : "해당 없음",
+    sensitiveChanged,
+  };
 
   const limits = [];
   if (/flash/i.test(expected.model))
