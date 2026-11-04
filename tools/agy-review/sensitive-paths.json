@@ -1,0 +1,19 @@
+{
+  "description": "인증·판단 로직·게시·되돌리기 경로. 바뀌면 노션 Rev.2.2 근거가 필요하고, 미검토로 남으면 리뷰 미완료. 앞부분 일치로 판정",
+  "prefixes": [
+    "services/src/core/",
+    "services/src/publisher/",
+    "services/src/admin/",
+    "services/src/inquiry/",
+    "packages/contracts/",
+    "apps/web/src/lib/snapshot/",
+    "apps/admin/src/lib/auth/",
+    "apps/admin/src/lib/roles.ts",
+    "infra/lib/publish/",
+    "infra/lib/deploy/",
+    "infra/lib/admin/",
+    "infra/lib/inquiry/",
+    ".github/workflows/",
+    "scripts/deploy-prod.mjs"
+  ]
+}
