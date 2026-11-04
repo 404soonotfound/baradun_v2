@@ -67,17 +67,21 @@ export function CodeInput({
       <label htmlFor={id} className="sr-only">
         {label}
       </label>
+      {/* 입력 칸은 6칸 위에 겹친 투명 칸 하나. 포커스 링은 다음에 넣을 칸에만 그림(겹친 칸 전체 테두리 없음) */}
       <div className="group relative">
         <div aria-hidden="true" className="grid grid-cols-6 gap-2">
           {digits.map((d, i) => (
             <span
               key={i}
               className={`flex h-touch items-center justify-center rounded-admin-control border text-num-count font-medium tabular-nums ${
-                error
-                  ? "border-danger-text"
-                  : i === Math.min(value.length, 5)
-                    ? "border-border-strong group-focus-within:border-brand-default"
+                i !== Math.min(value.length, 5)
+                  ? error
+                    ? "border-danger-text"
                     : "border-border-strong"
+                  : // 틀린 코드여도 포커스 링은 남김(키보드로 어디 있는지 보이게)
+                    error
+                    ? "border-danger-text group-focus-within:ring-[3px] group-focus-within:ring-brand-border"
+                    : "border-border-strong group-focus-within:border-brand-default group-focus-within:ring-[3px] group-focus-within:ring-brand-border"
               }`}
             >
               {d.trim()}
@@ -97,7 +101,7 @@ export function CodeInput({
           autoFocus={autoFocus}
           aria-invalid={error ? true : undefined}
           aria-describedby={error ? `${id}-error` : undefined}
-          className="absolute inset-0 h-full w-full cursor-text rounded-admin-control bg-transparent text-transparent caret-transparent outline-none focus:ring-[3px] focus:ring-brand-border"
+          className="absolute inset-0 h-full w-full cursor-text rounded-admin-control bg-transparent text-transparent caret-transparent outline-none"
         />
       </div>
       {error && (

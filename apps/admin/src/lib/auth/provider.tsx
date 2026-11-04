@@ -10,11 +10,11 @@ import {
 } from "react";
 import { refreshTokens, revokeRefreshToken } from "./cognito-api";
 import { POOLS, type PoolKind } from "./config";
-import { LOGOUT_CHANNEL } from "./policy";
+import { LOGOUT_CHANNEL, REFRESH_LOCK, REFRESH_LOCK_WAIT_MS } from "./policy";
 import { AuthSession, type SessionSnapshot } from "./session";
 
 // 화면 전체가 같은 로그인 세션을 쓰게 함 (BRD-148)
-// 세션 객체는 이 탭의 메모리에만 하나 있음(D16-A2). 새로고침하면 새 객체 → 다시 로그인
+// 세션 객체는 이 탭의 메모리에만 하나 있음(D16-A2). 새로고침·새 탭은 열려 있는 로그인한 탭에서 넘겨받고, 없으면 다시 로그인
 // 활동(누르기·입력·스크롤)은 유휴 시각만 새로 셈. 경고 시트의 '계속 쓰기'도 같은 touch
 
 function createSession(): AuthSession {
@@ -56,13 +56,23 @@ function createSession(): AuthSession {
     ...(channel
       ? {
           channel: {
-            post: (message: string) => channel.postMessage(message),
-            listen: (fn: (message: string) => void) => {
-              channel.onmessage = (event) => {
-                if (typeof event.data === "string") fn(event.data);
-              };
+            post: (message: unknown) => channel.postMessage(message),
+            listen: (fn: (message: unknown) => void) => {
+              channel.onmessage = (event) => fn(event.data);
             },
           },
+        }
+      : {}),
+    // 탭 사이 갱신 잠금(Web Locks). 없는 브라우저는 잠금 없이(드물게 두 탭이 함께 갱신하면 한쪽이 다시 로그인)
+    ...(typeof navigator !== "undefined" && navigator.locks
+      ? {
+          lock: <T,>(fn: () => Promise<T>) =>
+            // 잠금을 쥔 탭의 갱신이 멈춰도 다른 탭이 끝없이 기다리지 않게 시간 제한(넘으면 갱신 실패로 다룸)
+            navigator.locks.request(
+              REFRESH_LOCK,
+              { signal: AbortSignal.timeout(REFRESH_LOCK_WAIT_MS) },
+              fn,
+            ) as Promise<T>,
         }
       : {}),
   });

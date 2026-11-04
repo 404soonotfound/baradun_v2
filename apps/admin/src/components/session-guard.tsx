@@ -21,6 +21,7 @@ import { Button, Notice } from "./ui";
 
 // 로그인한 화면을 감쌈 (BRD-148, 캔버스 V31·E8·E11·VE3, D16-A3·E1)
 // - 로그아웃 상태면 보던 주소를 기억하고 로그인 화면으로(데모 계정이었으면 데모 로그인으로)
+//   새 탭은 먼저 열린 탭에서 로그인을 넘겨받기를 잠깐 기다림(provider·session.join)
 // - 유휴 만료 2분 전: '계속 쓰기' 경고. 8시간 상한 2분 전: 연장 없는 경고
 // - 갱신 실패: 화면을 그대로 두고 위에 다시 로그인 창(같은 계정만). 쓰던 입력은 이 탭 메모리에 그대로
 
@@ -225,16 +226,23 @@ export function SessionNotices() {
 export function SessionGuard({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
+  const session = useAuthSession();
   const snapshot = useSessionSnapshot();
 
   useEffect(() => {
-    if (snapshot.status === "signed_out") {
+    // 새 탭: 로그인 화면으로 보내기 전에 넘겨받기를 먼저 시작함(탭마다 한 번, 로그인 화면은 LoginFlow가 풀을 정해 부름)
+    // 시작한 직후의 상태(joining)를 보려고 스냅숏을 다시 읽음
+    session.join();
+    const current = session.getSnapshot();
+    // 다른 탭에서 로그인을 넘겨받는 중이면 기다림(받으면 이 화면 그대로)
+    if (current.status === "signed_out" && current.joining) return;
+    if (current.status === "signed_out") {
       rememberReturnTo(pathname);
       router.replace(lastPool === "demo" ? "/login/demo/" : "/login/");
     } else {
-      lastPool = snapshot.pool;
+      lastPool = current.pool;
     }
-  }, [snapshot, pathname, router]);
+  }, [session, snapshot, pathname, router]);
 
   if (snapshot.status === "signed_out") return null;
 

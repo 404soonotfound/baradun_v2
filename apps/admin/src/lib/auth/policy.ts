@@ -19,5 +19,11 @@ export const PASSWORD_RULE = { minLength: 12, reuseBlocked: 5 } as const;
 // 운영 API 토큰 헤더. services/src/admin/policy.ts ACCESS_TOKEN_HEADER와 같음
 export const ACCESS_TOKEN_HEADER = "x-baradun-access-token";
 
-// 다른 탭에 로그아웃을 알리는 채널 이름(D16-A10). 토큰은 보내지 않음
+// 탭 사이 로그인 채널 이름. 로그아웃 신호, 새 탭 넘겨받기, 갱신 토큰·활동 시각 나누기(결정 기록 D17-9)
 export const LOGOUT_CHANNEL = "baradun-admin-auth";
+// 탭 사이 토큰 갱신 잠금 이름(Web Locks). refresh token 회전 유예가 0초라 한 탭씩 갱신
+export const REFRESH_LOCK = "baradun-admin-refresh";
+// 갱신 잠금을 기다리는 최대 시간. Cognito 호출 시간 제한(COGNITO_TIMEOUT_MS)·실패 뒤 기다림(1.5초)보다 길게
+export const REFRESH_LOCK_WAIT_MS = 30_000;
+// Cognito 호출 하나의 시간 제한. 응답이 없으면 네트워크 오류로 다룸(갱신 잠금을 오래 쥐지 않게)
+export const COGNITO_TIMEOUT_MS = 15_000;

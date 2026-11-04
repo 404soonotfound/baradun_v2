@@ -158,6 +158,63 @@ test.describe("운영자 로그인", () => {
     await expect(page).toHaveURL(/\/account\/$/);
   });
 
+  // 2026-11-04 사용자 결정(D16-A10 변경): 새 탭은 열린 로그인한 탭에서 넘겨받음. 토큰은 저장소에 두지 않음
+  test("새 탭은 로그인한 탭에서 넘겨받아 다시 로그인하지 않고, 한 탭에서 로그아웃하면 다른 탭도 로그아웃된다", async ({
+    page,
+    context,
+  }) => {
+    await mockCognito(page, srpScript({ email: OPS, after: "tokens" }));
+    await mockOps(page, ME_OK);
+    await signInWithPassword(page, "/login/", OPS);
+    await expect(page.getByRole("heading", { name: "운영 홈" })).toBeVisible();
+
+    const second = await context.newPage();
+    await mockOps(second, ME_OK);
+    // 넘겨받는 동안 로그인 화면을 거쳐 돌아오지 않음(보던 주소 그대로)
+    const visited: string[] = [];
+    second.on("framenavigated", (frame) => {
+      if (frame === second.mainFrame()) visited.push(frame.url());
+    });
+    await second.goto("/stats/");
+    await expect(
+      second.getByRole("heading", { name: "이용 통계", level: 1 }),
+    ).toBeVisible();
+    await expect(second).toHaveURL(/\/stats\/$/);
+    expect(visited.filter((url) => url.includes("/login"))).toEqual([]);
+    // 넘겨받아도 토큰을 브라우저 저장소에 두지 않음(D16-A2)
+    const stored = await second.evaluate(() =>
+      JSON.stringify({ ...localStorage, ...sessionStorage }),
+    );
+    expect(stored).not.toMatch(/eyJ|refresh/i);
+
+    await logout(second);
+    await expect(second).toHaveURL(/\/login\/$/);
+    await expect(page).toHaveURL(/\/login\/$/);
+  });
+
+  test("운영자 탭이 열려 있어도 데모 주소의 새 탭은 넘겨받지 않고 데모 로그인 화면을 보여 준다", async ({
+    page,
+    context,
+  }) => {
+    await mockCognito(page, srpScript({ email: OPS, after: "tokens" }));
+    await mockOps(page, ME_OK);
+    await signInWithPassword(page, "/login/", OPS);
+    await expect(page.getByRole("heading", { name: "운영 홈" })).toBeVisible();
+
+    const second = await context.newPage();
+    await second.goto("/login/demo/");
+    await expect(second.getByLabel("이메일")).toBeVisible();
+    await expect(second).toHaveURL(/\/login\/demo\/$/);
+  });
+
+  test("로그인한 탭이 없으면 새 탭은 로그인 화면으로 간다", async ({
+    page,
+  }) => {
+    await page.goto("/account/");
+    await expect(page).toHaveURL(/\/login\/$/);
+    await expect(page.getByLabel("이메일")).toBeVisible();
+  });
+
   test("로그아웃하면 refresh token을 폐기하고 로그인 화면에 안내를 보여 준다", async ({
     page,
   }) => {
