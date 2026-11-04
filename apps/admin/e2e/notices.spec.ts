@@ -542,3 +542,59 @@ test("저장하지 않은 변경이 있으면 왼쪽 메뉴·브라우저 뒤로
     ).toBeVisible();
   }
 });
+
+test("저장 실패 뒤에도 뒤로 가기 '나가기'는 목록으로 가고, 저장하면 보호 항목을 걷어 뒤로 한 번에 목록으로 간다", async ({
+  page,
+}) => {
+  await signIn(page);
+  let failSave = true;
+  let saved: Record<string, unknown> | null = null;
+  await mockNotices(page, {
+    // 저장에 성공하면 목록이 저장한 문구·새 version을 줌
+    items: () =>
+      saved
+        ? [view("n-hidden", { version: 3, draft: saved, pendingEdit: true })]
+        : ITEMS(),
+    write: (w) => {
+      if (failSave) {
+        return {
+          status: 500,
+          body: { error: { code: "internal", requestId: "req-9" } },
+        };
+      }
+      saved = Object.fromEntries(
+        Object.entries(w.body).filter(([k]) => k !== "version"),
+      );
+      return { status: 200, body: { noticeId: "n-hidden", version: 3 } };
+    },
+  });
+  await openNotices(page);
+  const list = page.getByRole("heading", { name: "공지", level: 1 });
+  await openNotice(page, "데이터 출처 안내");
+  await page.getByLabel("Body").fill("Unsaved body");
+  await page.getByRole("button", { name: "저장" }).click();
+  await expect(
+    page.getByRole("alert").filter({ hasText: "저장하지 못했어요" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "저장" }).click();
+  await expect(
+    page.getByRole("alert").filter({ hasText: "저장하지 못했어요" }),
+  ).toBeVisible();
+  await page.goBack();
+  await page
+    .getByRole("alert")
+    .filter({ hasText: "저장하지 않은 변경이 있어요" })
+    .getByRole("button", { name: "나가기" })
+    .click();
+  await expect(list).toBeVisible();
+
+  failSave = false;
+  await openNotice(page, "데이터 출처 안내");
+  await page.getByLabel("Body").fill("Saved body");
+  await page.getByRole("button", { name: "저장" }).click();
+  await expect(
+    page.getByRole("status").filter({ hasText: "저장했어요" }),
+  ).toBeVisible();
+  await page.goBack();
+  await expect(list).toBeVisible();
+});
