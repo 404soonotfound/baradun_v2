@@ -49,14 +49,16 @@ export const REVIEW_SETTINGS = {
 
 class UsageError extends Error {}
 
-function run(cmd, args, opts = {}) {
+// allowTimeout: 제한 시간 초과(ETIMEDOUT)는 던지지 않고 결과로 돌려줌(리뷰 미완료로 기록하려고)
+function run(cmd, args, { allowTimeout = false, ...opts } = {}) {
   const r = spawnSync(cmd, args, {
     cwd: ROOT,
     encoding: "utf8",
     maxBuffer: 256 * 1024 * 1024,
     ...opts,
   });
-  if (r.error) throw new UsageError(`${cmd} 실행 실패: ${r.error.message}`);
+  if (r.error && !(allowTimeout && r.error.code === "ETIMEDOUT"))
+    throw new UsageError(`${cmd} 실행 실패: ${r.error.message}`);
   return r;
 }
 
@@ -105,7 +107,11 @@ function agy(prompt, { model, cwd, settingsPath, timeout, schemaPath }) {
   args.push("--output-format", "stream-json", "--print-timeout", `${timeout}s`);
   if (schemaPath) args.push("--json-schema", schemaPath);
   // print-timeout이 듣지 않을 때를 대비한 바깥 제한
-  const r = run("agy", args, { cwd, timeout: (timeout + 60) * 1000 });
+  const r = run("agy", args, {
+    cwd,
+    timeout: (timeout + 60) * 1000,
+    allowTimeout: true,
+  });
   return {
     exitCode: r.status ?? -1,
     signal: r.signal,
@@ -160,13 +166,19 @@ export function main(argv = process.argv.slice(2)) {
   ).trim();
   if (baseSha === headSha)
     throw new UsageError("base와 head가 같아 리뷰할 변경이 없음");
-  const agyVersion = run("agy", ["--version"]).stdout.trim();
-  const models = run("agy", ["models"])
+  const PREFLIGHT = { timeout: 60_000 }; // 미리 확인이 멈춰 있지 않도록
+  const agyVersion = run("agy", ["--version"], PREFLIGHT).stdout.trim();
+  const models = run("agy", ["models"], PREFLIGHT)
     .stdout.split("\n")
     .map((l) => l.split("\t")[0].trim());
   if (!models.includes(opts.model))
     throw new UsageError(`agy models 목록에 없음: ${opts.model}`);
-  const quota = run("agy", ["-p", "/quota"]).stdout.trim(); // 한도를 쓰지 않는 조회
+  // 한도를 쓰지 않는 조회. 혹시 모델 턴이 시작돼도 거부 설정으로 저장소 밖(OS 임시 폴더)에서만 돌게 함
+  const quota = run(
+    "agy",
+    ["-p", "/quota", "--settings", JSON.stringify(REVIEW_SETTINGS)],
+    { ...PREFLIGHT, cwd: tmpdir() },
+  ).stdout.trim();
 
   // 2) 추가 리뷰 범위
   const previous = opts.previous
@@ -175,6 +187,10 @@ export function main(argv = process.argv.slice(2)) {
   let prevHeadIsAncestor = false;
   let mergeCommits = 0;
   if (previous) {
+    if (previous.headSha === headSha)
+      throw new UsageError(
+        "이전 기록과 head가 같아 추가 리뷰할 변경이 없음(--previous 없이 다시 실행)",
+      );
     prevHeadIsAncestor =
       run("git", ["merge-base", "--is-ancestor", previous.headSha, headSha])
         .status === 0;
@@ -220,17 +236,18 @@ export function main(argv = process.argv.slice(2)) {
   const snapshot = realpathSync(
     mkdtempSync(join(tmpdir(), `agy-review-snap-${headSha.slice(0, 12)}-`)),
   );
-  const tarPath = join(outDir, "head.tar");
-  git("archive", "--format=tar", "-o", tarPath, headSha);
-  if (run("tar", ["-xf", tarPath, "-C", snapshot]).status !== 0)
-    throw new UsageError("사본 풀기 실패");
-  rmSync(tarPath);
-  const settingsPath = join(outDir, "settings.json");
-  writeFileSync(settingsPath, JSON.stringify(REVIEW_SETTINGS, null, 2));
-  const schemaPath = join(HERE, "schema.json");
-  const expectedBase = { model: opts.model, cwd: snapshot };
 
   try {
+    const tarPath = join(outDir, "head.tar");
+    git("archive", "--format=tar", "-o", tarPath, headSha);
+    if (run("tar", ["-xf", tarPath, "-C", snapshot]).status !== 0)
+      throw new UsageError("사본 풀기 실패");
+    rmSync(tarPath);
+    const settingsPath = join(outDir, "settings.json");
+    writeFileSync(settingsPath, JSON.stringify(REVIEW_SETTINGS, null, 2));
+    const schemaPath = join(HERE, "schema.json");
+    const expectedBase = { model: opts.model, cwd: snapshot };
+
     // 4) 거부 시험: 통과하지 못하면 리뷰를 시작하지 않음
     log(`거부 시험 (${opts.model}, 사본 ${snapshot})`);
     const before = treeHash(snapshot);
@@ -242,11 +259,12 @@ export function main(argv = process.argv.slice(2)) {
     });
     writeFileSync(join(outDir, "probe.jsonl"), p.stdout);
     writeFileSync(join(outDir, "probe.stderr.txt"), p.stderr);
+    const afterProbe = treeHash(snapshot);
     const probe = verifyProbe({
       exitCode: p.exitCode,
       text: p.stdout,
       expected: expectedBase,
-      snapshotUnchanged: treeHash(snapshot) === before,
+      snapshotUnchanged: afterProbe === before,
     });
 
     let verdict = {
@@ -295,7 +313,6 @@ export function main(argv = process.argv.slice(2)) {
       log(
         `리뷰 시작 (${scope}, ${baseSha.slice(0, 12)}..${headSha.slice(0, 12)}, 제한 ${opts.timeout}초)`,
       );
-      const beforeReview = treeHash(snapshot);
       const r = agy(prompt, {
         model: opts.model,
         cwd: snapshot,
@@ -323,7 +340,7 @@ export function main(argv = process.argv.slice(2)) {
       });
       if (r.signal)
         verdict.reasons.push(`바깥 제한 시간으로 중단됨(${r.signal})`);
-      if (treeHash(snapshot) !== beforeReview)
+      if (treeHash(snapshot) !== afterProbe)
         verdict.reasons.push("리뷰 뒤 사본 내용이 바뀜");
       verdict.complete = verdict.reasons.length === 0;
     }
