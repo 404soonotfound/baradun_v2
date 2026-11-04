@@ -4,6 +4,7 @@ import {
   localInquiryPage,
   localSaveInquiry,
 } from "./local-inquiries";
+import { localAudit } from "./local-audit";
 import { localNotices } from "./local-notices";
 import { SESSION } from "./policy";
 import type { AuthSession } from "./session";
@@ -148,6 +149,9 @@ export function localOps<T>(
   }
   if (method === "PATCH" && inquiry) {
     return localSaveInquiry<T>(decodeURIComponent(inquiry[1]!), request.body);
+  }
+  if (method === "GET" && url.pathname === "/ops/audit") {
+    return localAudit<T>(url.searchParams);
   }
   if (url.pathname.startsWith("/ops/notices")) {
     const notices = localNotices<T>(url.pathname, request);
