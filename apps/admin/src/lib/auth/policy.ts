@@ -21,6 +21,8 @@ export const ACCESS_TOKEN_HEADER = "x-baradun-access-token";
 
 // 탭 사이 로그인 채널 이름. 로그아웃 신호, 새 탭 넘겨받기, 갱신 토큰·활동 시각 나누기(결정 기록 D17-9)
 export const LOGOUT_CHANNEL = "baradun-admin-auth";
+// 새로고침해도 로그인을 잇는 이 탭의 저장 키(sessionStorage). refresh token·최초 인증·활동 시각만(결정 기록 D17-11)
+export const SESSION_STORE_KEY = "baradun-admin-session";
 // 탭 사이 토큰 갱신 잠금 이름(Web Locks). refresh token 회전 유예가 0초라 한 탭씩 갱신
 export const REFRESH_LOCK = "baradun-admin-refresh";
 // 갱신 잠금을 기다리는 최대 시간. Cognito 호출 시간 제한(COGNITO_TIMEOUT_MS)·실패 뒤 기다림(1.5초)보다 길게

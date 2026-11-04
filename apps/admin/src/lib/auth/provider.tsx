@@ -10,11 +10,21 @@ import {
 } from "react";
 import { refreshTokens, revokeRefreshToken } from "./cognito-api";
 import { POOLS, type PoolKind } from "./config";
-import { LOGOUT_CHANNEL, REFRESH_LOCK, REFRESH_LOCK_WAIT_MS } from "./policy";
-import { AuthSession, type SessionSnapshot } from "./session";
+import {
+  LOGOUT_CHANNEL,
+  REFRESH_LOCK,
+  REFRESH_LOCK_WAIT_MS,
+  SESSION_STORE_KEY,
+} from "./policy";
+import {
+  AuthSession,
+  type SavedSession,
+  type SessionSnapshot,
+} from "./session";
 
 // 화면 전체가 같은 로그인 세션을 쓰게 함 (BRD-148)
-// 세션 객체는 이 탭의 메모리에만 하나 있음(D16-A2). 새로고침·새 탭은 열려 있는 로그인한 탭에서 넘겨받고, 없으면 다시 로그인
+// 세션 객체는 이 탭의 메모리에 하나 있음(D16-A2). 새로고침·새 탭은 열려 있는 로그인한 탭에서 넘겨받고,
+// 없으면 이 탭의 sessionStorage에 둔 refresh token으로 이어 감(D17-11). 그것도 없으면 다시 로그인
 // 활동(누르기·입력·스크롤)은 유휴 시각만 새로 셈. 경고 시트의 '계속 쓰기'도 같은 touch
 
 function createSession(): AuthSession {
@@ -59,6 +69,36 @@ function createSession(): AuthSession {
             post: (message: unknown) => channel.postMessage(message),
             listen: (fn: (message: unknown) => void) => {
               channel.onmessage = (event) => fn(event.data);
+            },
+          },
+        }
+      : {}),
+    // 이 탭에만 남는 저장소(탭을 닫으면 사라짐). localStorage·쿠키는 쓰지 않음. 못 쓰면 새로고침은 다시 로그인
+    ...(typeof window !== "undefined"
+      ? {
+          store: {
+            load: () => {
+              try {
+                return JSON.parse(
+                  sessionStorage.getItem(SESSION_STORE_KEY) ?? "null",
+                ) as unknown;
+              } catch {
+                return null;
+              }
+            },
+            save: (saved: SavedSession | null) => {
+              try {
+                if (saved) {
+                  sessionStorage.setItem(
+                    SESSION_STORE_KEY,
+                    JSON.stringify(saved),
+                  );
+                } else {
+                  sessionStorage.removeItem(SESSION_STORE_KEY);
+                }
+              } catch {
+                // 저장소를 못 쓰면 새로고침 때 이어 가기만 안 됨
+              }
             },
           },
         }
