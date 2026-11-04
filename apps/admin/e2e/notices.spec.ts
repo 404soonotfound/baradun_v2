@@ -451,3 +451,55 @@ test("저장 뒤 목록 다시 읽기가 실패해도 편집 칸과 쓰던 내�
   ).toContainText("req-1a2b3c4d");
   await expect(page.getByLabel("Body")).toHaveValue("Saved body");
 });
+
+test("열어 둔 사이 끝나 노출 종료가 거절되면(not_live) 새 내용 불러오기로 같은 version의 '종료'를 받고 잠금을 푼다", async ({
+  page,
+}) => {
+  await signIn(page);
+  let ended = false;
+  await mockNotices(page, {
+    items: () => [view("n-live", ended ? { state: "ended" } : {})],
+    write: () => {
+      ended = true;
+      return {
+        status: 409,
+        body: { error: { code: "conflict", reason: "not_live" } },
+      };
+    },
+  });
+  await openNotices(page);
+  await openNotice(page, "데이터 출처 안내");
+  await page.getByRole("button", { name: "노출 종료" }).click();
+  await page
+    .getByRole("alert")
+    .filter({ hasText: "노출을 끝내요" })
+    .getByRole("button", { name: "노출 종료" })
+    .click();
+  const alert = page
+    .getByRole("alert")
+    .filter({ hasText: "노출 중이 아니에요" });
+  await alert.getByRole("button", { name: "새 내용 불러오기" }).click();
+  await expect(
+    page.getByRole("heading", { level: 1 }).locator("..").getByText("종료"),
+  ).toBeVisible();
+  await expect(page.getByLabel("Body")).toBeEnabled();
+  await expect(page.getByRole("button", { name: "노출 종료" })).toBeDisabled();
+});
+
+test("저장하지 않은 변경이 있으면 노출 종료·삭제를 막고 먼저 저장하라고 알린다", async ({
+  page,
+}) => {
+  await signIn(page);
+  await mockNotices(page);
+  await openNotices(page);
+  await openNotice(page, "데이터 출처 안내");
+  await expect(page.getByRole("button", { name: "노출 종료" })).toBeEnabled();
+  await page.getByLabel("Body").fill("Unsaved body");
+  await expect(page.getByRole("button", { name: "노출 종료" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "삭제" })).toBeDisabled();
+  await expect(
+    page
+      .getByText("저장하지 않은 변경이 있어요. 먼저 저장하거나 취소해야")
+      .first(),
+  ).toBeVisible();
+});
