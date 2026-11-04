@@ -58,7 +58,7 @@ describe("로컬 샘플 응답", () => {
       ok: true,
       body: { kind: "sample" },
     });
-    expect(localOps("/ops/audit", "operator", {})).toEqual({
+    expect(localOps("/ops/publish", "operator", {})).toEqual({
       ok: false,
       status: 501,
       code: "local_sample_missing",
