@@ -104,13 +104,16 @@ function createSession(): AuthSession {
         }
       : {}),
     // 탭 사이 갱신 잠금(Web Locks). 없는 브라우저는 잠금 없이(드물게 두 탭이 함께 갱신하면 한쪽이 다시 로그인)
+    // AbortSignal.timeout이 없는 브라우저(Safari 15.4~15.x)는 시간 제한 없이 잠금(던지면 갱신·이어 가기가 늘 실패하므로)
     ...(typeof navigator !== "undefined" && navigator.locks
       ? {
           lock: <T,>(fn: () => Promise<T>) =>
             // 잠금을 쥔 탭의 갱신이 멈춰도 다른 탭이 끝없이 기다리지 않게 시간 제한(넘으면 갱신 실패로 다룸)
             navigator.locks.request(
               REFRESH_LOCK,
-              { signal: AbortSignal.timeout(REFRESH_LOCK_WAIT_MS) },
+              typeof AbortSignal.timeout === "function"
+                ? { signal: AbortSignal.timeout(REFRESH_LOCK_WAIT_MS) }
+                : {},
               fn,
             ) as Promise<T>,
         }

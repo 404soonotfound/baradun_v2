@@ -256,7 +256,9 @@ export function SessionGuard({ children }: { children: ReactNode }) {
     if (current.status === "signed_out" && current.joining) return;
     if (current.status === "signed_out") {
       rememberReturnTo(pathname);
-      router.replace(lastPool === "demo" ? "/login/demo/" : "/login/");
+      // 새로고침하면 lastPool은 처음 값이라, 끝난 저장 값의 풀이 있으면 그 풀로 보냄
+      const pool = current.pool ?? lastPool;
+      router.replace(pool === "demo" ? "/login/demo/" : "/login/");
     } else {
       lastPool = current.pool;
     }
