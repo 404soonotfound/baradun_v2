@@ -1,5 +1,5 @@
 // 운영자 사이트 빌드 결과 검사 (BRD-147, 아키텍처 18.7)
-// - 모든 HTML: 검색 노출 차단 meta(noindex·nofollow), 인라인 스크립트 해시 CSP meta
+// - 모든 HTML: 검색 노출 차단 meta(noindex·nofollow), 인라인 스크립트 해시 CSP meta, Trusted Types 정책(BRD-180)
 // - robots.txt: 전체 차단
 // - 모든 파일: 비밀값 모양(접근 키·개인 키·비밀값 대입) 0건. 저장소가 공개라 화면 코드도 공개라는 전제
 // - 모든 파일: 로컬 개발 서버 전용 테스트 로그인 코드 0건(BRD-172). 배포 빌드에 들어가면 비밀번호 없이 들어갈 길이 생김
@@ -42,17 +42,35 @@ export function inlineScriptHashes(html: string): string[] {
 const META_CSP =
   /<meta\s+http-equiv=["']Content-Security-Policy["']\s+content=(?:"([^"]*)"|'([^']*)')\s*\/?>/i;
 
-// 외부 스크립트 출처 없음(분석 도구를 넣지 않음). 'self'와 이 페이지 인라인 해시만
+// Trusted Types(BRD-180): DOM에 문자열로 HTML·스크립트·스크립트 주소를 넣는 곳을 브라우저가 막음
+// - 정책은 'default' 하나만 만들 수 있고, 페이지 맨 앞의 인라인 스크립트가 먼저 만듦(다른 스크립트가 정책을 만들지 못함)
+// - default 정책은 Next가 JS 조각을 불러올 때 쓰는 같은 주소의 /_next/static/ 스크립트 주소만 그대로 통과시킴
+//   (절대 주소로 바꿔 돌려주면 Next가 불러온 조각을 알아보지 못해 화면 이동이 멈춤)
+// - 그 밖의 주소(읽을 수 없는 주소 포함)는 값을 돌려주지 않음 → 브라우저가 막고 CSP 위반으로 콘솔에 남김(E2E가 위반으로 잡음)
+//   정책 안에서 throw하면 위반으로 남지 않으므로 주소 해석 오류도 삼킴
+// - HTML·스크립트 문자열은 정책에 없으므로 늘 막힘(운영자 사이트 코드는 innerHTML을 쓰지 않음, 린트로도 막음)
+export const TRUSTED_TYPES =
+  "require-trusted-types-for 'script'; trusted-types default";
+export const TRUSTED_TYPES_POLICY =
+  'if(window.trustedTypes&&trustedTypes.createPolicy){trustedTypes.createPolicy("default",{createScriptURL:function(u){try{var x=new URL(u,location.href);if(x.origin===location.origin&&x.pathname.indexOf("/_next/static/")===0)return u}catch(e){}}})}';
+export const POLICY_TAG = `<script id="baradun-trusted-types">${TRUSTED_TYPES_POLICY}</script>`;
+const POLICY_SCRIPT = /<script id="baradun-trusted-types">[\s\S]*?<\/script>/i;
+
+// 외부 스크립트 출처 없음(분석 도구를 넣지 않음). 'self'와 이 페이지 인라인 해시만 + Trusted Types
+// head 첫머리에 CSP meta → 정책 스크립트 순서로 넣음(정책이 Next 스크립트보다 먼저 만들어지게)
+// 첫머리가 charset meta면 그 뒤에 넣음. S3가 charset 없는 text/html로 주므로 charset meta가 앞 1024바이트 안에 있어야 함
 export function injectMetaCsp(html: string): string {
-  const clean = html.replace(META_CSP, "");
-  const head = /<head\b[^>]*>/i.exec(clean);
+  const clean = html.replace(META_CSP, "").replace(POLICY_SCRIPT, "");
+  const head =
+    /<head\b[^>]*>(?:<meta\s+charset=["']?[\w-]+["']?\s*\/?>)?/i.exec(clean);
   if (!head) throw new Error("<head> 태그를 찾지 못함");
-  const tag = `<meta http-equiv="Content-Security-Policy" content="${[
+  const scripts = [
     "script-src 'self'",
-    ...inlineScriptHashes(clean),
-  ].join(" ")}">`;
+    ...inlineScriptHashes(clean + POLICY_TAG),
+  ].join(" ");
+  const tag = `<meta http-equiv="Content-Security-Policy" content="${scripts}; ${TRUSTED_TYPES}">`;
   const at = head.index + head[0].length;
-  return clean.slice(0, at) + tag + clean.slice(at);
+  return clean.slice(0, at) + tag + POLICY_TAG + clean.slice(at);
 }
 
 const ROBOTS_META =
@@ -99,6 +117,26 @@ export function checkOut(outDir: string): string[] {
       problems.push(`${rel(file)}: CSP meta 없음`);
     } else {
       const content = meta[1] ?? meta[2] ?? "";
+      if (!content.includes(TRUSTED_TYPES)) {
+        problems.push(`${rel(file)}: CSP meta에 Trusted Types 없음`);
+      }
+      if (!body.includes(POLICY_TAG)) {
+        problems.push(`${rel(file)}: Trusted Types 정책 스크립트 없음`);
+      } else if (body.search(/<script\b/i) !== body.indexOf(POLICY_TAG)) {
+        // 정책이 Next 스크립트보다 먼저 만들어져야 함(늦으면 Next가 조각을 못 불러오거나 다른 정책이 먼저 생김)
+        problems.push(
+          `${rel(file)}: Trusted Types 정책 스크립트가 맨 앞 스크립트가 아님`,
+        );
+      }
+      // S3가 charset 없는 text/html로 주므로 charset meta가 앞 1024바이트 안에 있어야 함(CSP meta를 앞에 넣어도 밀리지 않게)
+      const charset = /<meta\s+charset=/i.exec(body);
+      if (
+        !charset ||
+        Buffer.byteLength(body.slice(0, charset.index + charset[0].length)) >
+          1024
+      ) {
+        problems.push(`${rel(file)}: charset meta가 앞 1024바이트 안에 없음`);
+      }
       for (const hash of inlineScriptHashes(body)) {
         if (!content.includes(hash)) {
           problems.push(
