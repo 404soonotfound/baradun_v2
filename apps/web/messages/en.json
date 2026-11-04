@@ -539,6 +539,7 @@
     },
     "zoomIn": "Zoom in",
     "zoomOut": "Zoom out",
+    "cluster": "{count} beaches grouped · select to zoom in",
     "attribution": {
       "label": "Map data sources",
       "openfreemap": "OpenFreeMap",
