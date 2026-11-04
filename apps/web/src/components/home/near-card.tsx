@@ -99,12 +99,11 @@ export function NearCard({
     scopeText = view.stale
       ? confirmedUntilText(view.confirmedAt, nowMs)
       : view.badge.kind === "clear" && time
-        ? t(
-            variant === "wide"
-              ? "home.near.badgeScope"
-              : "home.near.clearScope",
-            { zones: zonesText(beach.warningZones), time },
-          )
+        ? // 모바일·PC 모두 해변 특보구역 이름 · 기상청 · 확인 시각(D18-11 ①)
+          t("home.near.clearScope", {
+            zones: zonesText(beach.warningZones),
+            time,
+          })
         : null;
     const shownKeys: readonly MetricKey[] =
       variant === "wide" ? ["waveHeight", ...WIDE_OTHERS] : CARD_METRICS;

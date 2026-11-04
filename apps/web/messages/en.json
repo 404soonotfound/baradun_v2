@@ -103,7 +103,7 @@
       "NW": "NW",
       "NNW": "NNW"
     },
-    "directionFrom": "<from>from</from><dir></dir>"
+    "directionFrom": "<from>from</from> <dir></dir>"
   },
   "source": {
     "agency": "Source: {agency}",
@@ -162,7 +162,6 @@
       "locating": "Finding your location",
       "noBeach": "No beaches confirmed for this activity yet",
       "last24h": "Last 24 hours",
-      "badgeScope": "Warning zone · KMA · checked {time}",
       "timeWithOthers": "{main} ({others})",
       "noValueNext": "We'll show new measurements when they come in",
       "groupNone": "No nearby observation ({metrics})",
@@ -274,12 +273,13 @@
       "waveNone": "Wave height · No nearby observation",
       "checkedWarningActive": "Warning in effect",
       "collapse": "Collapse",
-      "nearbyCount": "{count} nearby warnings"
+      "nearbyCount": "{count, plural, one {# nearby warning} other {# nearby warnings}}"
     },
     "alt": {
       "title": "Nearby beaches with no warnings",
+      "activityNote": "Only beaches with confirmed activity info are shown · {activity}",
       "none": "No nearby beaches without warnings",
-      "noneActivity": "No other beaches within 30km without warnings have confirmed {activity} information",
+      "noneActivity": "No other beaches within 30km have no warnings and confirmed activity info · {activity}",
       "more": "See all beaches, regardless of activity",
       "distance": "{km}km from here"
     },
