@@ -113,6 +113,20 @@ describe("AuthSession", () => {
     expect(session.getSnapshot().status).toBe("reauth_required");
   });
 
+  it("로그인·다시 로그인마다 generation이 늘고, 토큰 갱신으로는 늘지 않는다", async () => {
+    const { session, advance } = setup();
+    const generation = () => {
+      const snap = session.getSnapshot();
+      return snap.status === "signed_out" ? null : snap.generation;
+    };
+    session.signIn("operator", tokens());
+    expect(generation()).toBe(1);
+    await advance(14 * MIN); // 갱신(refresh)
+    expect(generation()).toBe(1);
+    session.reauthenticate(tokens(60));
+    expect(generation()).toBe(2);
+  });
+
   it("활동 없이 58분이면 경고, 60분이면 로그아웃하고 다른 탭에 알린다", async () => {
     const { session, advance, posted, deps } = setup();
     session.signIn("demo", tokens(120));

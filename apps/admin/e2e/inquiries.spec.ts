@@ -205,7 +205,7 @@ test("상세: 내용·보관 기한·받지 않는 연락처를 보여 주고, P
   } else {
     // 패널이 열려도 표 위치·너비가 그대로(목록 위에 뜸)
     expect(await table.boundingBox()).toEqual(before);
-    await expect(detail).toHaveAttribute("aria-labelledby", "inquiry-type");
+    await expect(detail).toHaveAttribute("aria-label", "문의 상세");
     await page.keyboard.press("Escape");
     await expect(page).toHaveURL(/\/inquiries\/$/);
     // 바깥(딤) 누르기로도 닫힘
@@ -291,4 +291,39 @@ test("모르는 처리 상태·유형은 숨기지 않고 그 값을 그대로 �
   await openInquiries(page);
   await expect(rows(page).first()).toContainText("알 수 없는 상태(archived)");
   await expect(rows(page).first()).toContainText("알 수 없는 유형(new_kind)");
+});
+
+test("토큰 갱신에 실패해 다시 로그인하면 문의 목록을 저절로 다시 읽는다", async ({
+  page,
+}) => {
+  // 첫 발급은 곧 만료(바로 갱신 필요) → 갱신은 가짜 서버가 거절 → 다시 로그인 창. 두 번째 발급은 15분
+  let issued = 0;
+  await mockCognito(
+    page,
+    srpScript({
+      email: OPS,
+      after: "tokens",
+      groups: ["editor"],
+      expIn: () => (issued++ === 0 ? 30 : 900),
+    }),
+  );
+  await mockOps(page, ME_OK);
+  await mockInquiries(page);
+  // 보던 화면이 문의 목록이면 로그인 뒤 바로 문의 목록을 읽음
+  await page.goto("/inquiries/");
+  await expect(page).toHaveURL(/\/login\/$/);
+  await page.getByLabel("이메일").fill(OPS);
+  await page.getByLabel("비밀번호", { exact: true }).fill("test-password-1");
+  await page.getByRole("button", { name: "다음" }).click();
+  await expect(page).toHaveURL(/\/inquiries\/$/);
+  await expect(page.getByText(/로그인을 다시 확인해야 해요/)).toBeVisible();
+
+  const dialog = page.getByRole("dialog", {
+    name: "로그인을 이어가지 못했어요",
+  });
+  await dialog.getByLabel("비밀번호", { exact: true }).fill("test-password-1");
+  await dialog.getByRole("button", { name: "로그인" }).click();
+  await expect(dialog).toBeHidden();
+  await expect(rows(page)).toHaveCount(3);
+  await expect(page.getByText(/로그인을 다시 확인해야 해요/)).toHaveCount(0);
 });
