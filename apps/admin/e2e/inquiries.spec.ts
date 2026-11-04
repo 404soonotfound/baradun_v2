@@ -735,3 +735,68 @@ test("개인정보 가리기: 편집 권한이 없으면 버튼을 숨기지 않
     detailOf(page).getByRole("button", { name: "개인정보 가리기" }),
   ).toBeDisabled();
 });
+
+test("개인정보 가리기: 처리 초안이 이미 낡았으면 가린 뒤에도 '그사이 바뀜' 안내를 그대로 둔다", async ({
+  page,
+}) => {
+  await signIn(page);
+  // 서버 상태: 1(처음) → 2(다른 운영자가 저장) → 3(내가 가림)
+  let version = 1;
+  const calls = await mockInquiries(page, {
+    detail: () => ({
+      status: 200,
+      body: {
+        ...summary(1, {
+          version,
+          status: version >= 2 ? "in_progress" : "received",
+        }),
+        restricted: false,
+        message:
+          version >= 3 ? "번호는 [가림]이에요." : "번호는 010-0000-0000이에요.",
+        memo: version >= 2 ? "다른 운영자 메모" : null,
+        rejectReason: null,
+        emailCollected: false,
+        photosCollected: false,
+      },
+    }),
+    patch: (body) => {
+      if (body.version !== version) {
+        return {
+          status: 409,
+          body: { error: { code: "conflict", reason: "version" } },
+        };
+      }
+      version += 1;
+      return { status: 200, body: { inquiryId: id(1), version } };
+    },
+  });
+  await openInquiries(page);
+  await rows(page).first().getByRole("link").click();
+  const detail = detailOf(page);
+  const memo = detail.getByLabel("처리 메모(내부용)");
+  await memo.fill("쓰던 메모");
+  version = 2; // 그사이 다른 운영자가 저장함
+  const redact = async () => {
+    await detail.getByRole("button", { name: "개인정보 가리기" }).click();
+    await selectText(page, "010-0000-0000");
+    await detail.getByRole("button", { name: "가리기", exact: true }).click();
+    await detail.getByRole("button", { name: "가리고 저장" }).click();
+  };
+  await redact();
+  await detail
+    .getByRole("alert")
+    .filter({ hasText: "가리지 않았어요" })
+    .getByRole("button", { name: "새 내용 불러오기" })
+    .click();
+  const stale = detail.getByText("이 문의가 그사이 바뀌었어요");
+  await expect(stale).toBeVisible();
+  await redact();
+  await expect(
+    detail.getByRole("status").filter({ hasText: "개인정보를 가렸어요" }),
+  ).toBeVisible();
+  await expect(detail.getByText("번호는 [가림]이에요.")).toBeVisible();
+  expect(calls.patches.at(-1)?.body.version).toBe(2);
+  // 초안은 v1 기준이라 v3로 옮기지 않음 → 저장해도 서버가 409로 막음(남의 메모를 덮어쓰지 않음)
+  await expect(stale).toBeVisible();
+  await expect(memo).toHaveValue("쓰던 메모");
+});
