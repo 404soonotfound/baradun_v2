@@ -42,6 +42,8 @@ import {
 // 판단 카드 (BRD-32 · 노션 2장 DET 2, 3장 VerdictCard, 5장 우선순위 · Figma 176:204·183:1032, BRD-129)
 // ① 사유 배지(+ 운영 기간 아님 정보 배지) ② 결론 문장 ③ 근거(범위 → 기관 → 시각) ④ 사유 상자
 // ⑤ 확인한 것 3칸(특보 · 측정 시각 · 파고) ⑥ 현장 우선 문구. 분류는 view 그대로(G1)
+// 상세 D안(BRD-182 · D18-11 ②): 묶음 카드 안(embedded)에 두고, 모바일은 배지 줄 오른쪽 열고 접기(toggle)로
+//   ⑤를 기본 접음(expanded). '특보 없음' 결론 문장은 배지와 같은 말이라 모바일에서는 화면 읽기에만 둠
 // '다음 측정 예정 시각'은 10/22 결정(nextExpectedAt 출시에서 항상 null)으로 두지 않음
 
 // 근거 줄 하나. text는 겹침 확인·React key, node는 화면에 그리는 것
@@ -58,16 +60,22 @@ export function VerdictCard({
   view,
   detail,
   stations,
+  warningZones,
   nowMs,
   kmaSource,
   onOpenWarning,
   more,
+  embedded = false,
+  toggle,
+  checkedId,
+  expanded = true,
   children,
 }: {
   beachId: string;
   view: BeachView;
   detail: DetailInfo;
   stations: Beach["stations"];
+  warningZones: Beach["warningZones"]; // '특보 없음' 근거 줄의 특보구역 이름(D18-11)
   nowMs: number;
   // 배지(특보·관측을 가공한 분류) 아래 기상청 출처 줄을 둘지(BRD-113, showsKmaSource)
   kmaSource: boolean;
@@ -75,22 +83,29 @@ export function VerdictCard({
   onOpenWarning?: (item: WarningItem) => void;
   // ⑤ '확인한 것' 제목 줄 오른쪽(BRD-33의 '자세히')
   more?: ReactNode;
+  // 묶음 카드 안에 둠: 카드 바탕·그림자는 묶음이 그림
+  embedded?: boolean;
+  // ① 배지 줄 오른쪽(모바일만): 확인한 것·주변 특보 열고 접기
+  toggle?: ReactNode;
+  checkedId?: string; // ⑤의 id(열고 접기 버튼 aria-controls)
+  expanded?: boolean; // 모바일에서 ⑤를 보임. PC는 늘 보임
   // ⑥ 아래에 덧붙일 것(PC 길찾기). 판단과 상관없어 불러오는 중 모양에서도 그림
   children?: ReactNode;
 }) {
   const t = useTranslations();
   const { badgeText, confirmedUntilText } = useBadgeText();
   const { measuredAgoText, issuedAtText } = useTimeText();
-  const { agencyText } = useMetaText();
+  const { agencyText, zonesText } = useMetaText();
   const locale = useLocale() as Locale;
   const titleId = useId();
+  // 묶음 안: 바탕·그림자 없이 안쪽 여백만. 모바일은 시안 D안처럼 줄 사이를 좁힘
+  const sectionClass = embedded
+    ? "flex flex-col gap-3 p-4 max-lg:gap-1.5 max-lg:py-3.5"
+    : "flex flex-col gap-3 rounded-card bg-bg-surface p-4 shadow-raised";
 
   if (view.kind !== "ready") {
     return (
-      <section
-        aria-busy="true"
-        className="flex flex-col gap-3 rounded-card bg-bg-surface p-4 shadow-raised"
-      >
+      <section aria-busy="true" className={sectionClass}>
         <Skeleton className="h-badge w-24 rounded-badge" />
         <Skeleton className="h-7 w-3/4" />
         <Skeleton className="h-4 w-1/2" />
@@ -176,11 +191,12 @@ export function VerdictCard({
       ),
     };
   }
-  // '특보 없음' 근거(이 해변 특보구역 · 기관 · 확인 시각). 셋 중 하나라도 없으면 null → '특보 없음'을 보이지 않음
+  // '특보 없음' 근거(해변 특보구역 이름 · 기관 · 확인 시각, D18-11). 기관·시각이 없으면 null → '특보 없음'을 보이지 않음
   const confirmedTime = kstStamp(view.confirmedAt, nowMs);
   const clearBasis =
     confirmedTime && detail.warningSource
       ? t("detail.verdict.clearBasis", {
+          zones: zonesText(warningZones),
           source: agencyText(detail.warningSource),
           time: confirmedTime,
         })
@@ -252,10 +268,7 @@ export function VerdictCard({
 
   return (
     // Figma card 176:204·183:1032: 안쪽 16, 사이 12, 그림자 y8 blur24
-    <section
-      aria-labelledby={titleId}
-      className="flex flex-col gap-3 rounded-card bg-bg-surface p-4 shadow-raised"
-    >
+    <section aria-labelledby={titleId} className={sectionClass}>
       {/* ① 배지. 정보 배지는 판단 배지 오른쪽(분류 영향 없음, N4)
           Figma 오른쪽 '새 측정값 HH:MM 예정'은 10/22 결정(nextExpectedAt 출시에서 항상 null)으로 두지 않음 */}
       <div className="flex flex-wrap items-center gap-2">
@@ -273,6 +286,7 @@ export function VerdictCard({
             })}
           </span>
         )}
+        {toggle && <span className="ml-auto lg:hidden">{toggle}</span>}
       </div>
 
       {/* ② 결론 + ③ 근거(Figma 사이 4). 상태가 바뀌면 결론만 읽어 줌(3장 접근성) */}
@@ -280,7 +294,11 @@ export function VerdictCard({
         <div aria-live="polite">
           <h2
             id={titleId}
-            className="text-[20px] leading-[1.3] font-bold tracking-[-0.4px] text-text-default lg:text-[23px] lg:tracking-[-0.5px]"
+            className={cn(
+              "text-[20px] leading-[1.3] font-bold tracking-[-0.4px] text-text-default lg:text-[23px] lg:tracking-[-0.5px]",
+              // '특보 없음'은 배지가 같은 말을 해 모바일 화면에서는 숨김(화면 읽기에는 남김, 시안 D안)
+              embedded && view.badge.kind === "clear" && "max-lg:sr-only",
+            )}
           >
             {sentence(view.badge)}
           </h2>
@@ -309,7 +327,13 @@ export function VerdictCard({
       />
 
       {/* ⑤ 확인한 것(Figma 위 구분선 · 위 9 · 제목 줄 오른쪽에 '자세히') */}
-      <div className="border-t border-border-default pt-[9px]">
+      <div
+        id={checkedId}
+        className={cn(
+          "border-t border-border-default pt-[9px]",
+          !expanded && "hidden lg:block",
+        )}
+      >
         <div className="flex items-start justify-between gap-2">
           <h3 className="text-label-s font-bold text-text-default">
             {t("detail.verdict.checked")}

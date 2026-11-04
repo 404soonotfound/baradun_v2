@@ -267,7 +267,7 @@ export function ExploreScreen({
           meta={rowMeta(item.region, item.distanceKm, view, nowMs)}
           wave={view.metrics.waveHeight}
           status={view.badge}
-          detail={rowDetail(view, nowMs)}
+          detail={rowDetail(view, nowMs, item.warningZones)}
           // PC 지도에서 고른 해변은 행도 강조(파란 줄 + 연한 바탕)
           highlight={item.id === selectedId}
           onHighlight={(on) =>

@@ -1,8 +1,10 @@
+import type { Beach } from "@baradun/contracts";
 import { useTranslations } from "next-intl";
 
 import { formatKm, joinMeta } from "@/lib/meta-join";
 import { kstStamp } from "@/lib/snapshot/clock";
 import { useBadgeText } from "@/lib/snapshot/use-badge-text";
+import { useMetaText } from "@/lib/snapshot/use-meta-text";
 import { useTimeText } from "@/lib/snapshot/use-time-text";
 import type { BeachView, MetricKey, MetricView } from "@/lib/snapshot/view";
 
@@ -13,6 +15,7 @@ export function useRowText() {
   const t = useTranslations();
   const { badgeText, confirmedUntilText } = useBadgeText();
   const { measuredAgoText } = useTimeText();
+  const { zonesText } = useMetaText();
 
   // 2줄째: "강원 양양 · 2.1km · 10분 전 측정". 값이 있는 파고만 측정 시각을 붙임
   function rowMeta(
@@ -45,22 +48,31 @@ export function useRowText() {
     }
   }
 
-  // 근거 줄: 특보 없음이면 범위 · 기관 · 확인 시각, 오래된 정보면 "HH:MM 확인 · 이후 확인 못 함". 그 외는 null
-  function rowBasis(view: BeachView, nowMs: number): string | null {
+  // 근거 줄: 특보 없음이면 범위(해변 특보구역 이름, D18-11) · 기관 · 확인 시각, 오래된 정보면 "HH:MM 확인 · 이후 확인 못 함". 그 외는 null
+  function rowBasis(
+    view: BeachView,
+    nowMs: number,
+    zones: Beach["warningZones"],
+  ): string | null {
     if (view.kind !== "ready") return null;
     if (view.stale) return confirmedUntilText(view.confirmedAt, nowMs);
     if (view.badge.kind !== "clear") return null;
     const time = kstStamp(view.confirmedAt, nowMs);
+    const scope = zonesText(zones);
     return time
-      ? t("home.near.clearScope", { time })
-      : t("explore.row.clearScopeNoTime");
+      ? t("home.near.clearScope", { zones: scope, time })
+      : t("explore.row.clearScopeNoTime", { zones: scope });
   }
 
   // 3줄째. 이용불가는 특보 이름만(S17)이라 값 줄을 두지 않음
   //   특보 없음: 범위 · 기관 · 확인 시각 + 값 / 판단불가: 값(+ 남은 사유) / 오래된 정보: "HH:MM 확인 · 이후 확인 못 함"
-  function rowDetail(view: BeachView, nowMs: number): string | null {
+  function rowDetail(
+    view: BeachView,
+    nowMs: number,
+    zones: Beach["warningZones"],
+  ): string | null {
     if (view.kind !== "ready") return null;
-    const lines: (string | null)[] = [rowBasis(view, nowMs)];
+    const lines: (string | null)[] = [rowBasis(view, nowMs, zones)];
     // 배지로 쓴 첫 사유 뒤의 사유도 버리지 않음(모르는 사유는 일반 단어로 이미 바뀌어 있음)
     lines.push(...view.reasons.slice(1).map(badgeText));
     if (view.category !== "unavailable") {

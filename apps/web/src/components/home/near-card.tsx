@@ -20,6 +20,7 @@ import {
 } from "@/lib/near-metric";
 import { kstStamp } from "@/lib/snapshot/clock";
 import { useBadgeText } from "@/lib/snapshot/use-badge-text";
+import { useMetaText } from "@/lib/snapshot/use-meta-text";
 import type { BeachView, MetricKey, MetricView } from "@/lib/snapshot/view";
 
 // 가까운 바다 카드 (노션 2장 HOME 7 · 3장 NearCard, Figma S_M01_01 171:379)
@@ -64,6 +65,7 @@ export function NearCard({
 }) {
   const t = useTranslations();
   const { confirmedUntilText } = useBadgeText();
+  const { zonesText } = useMetaText();
 
   // [2] 거리: 2.1 → "2.1km". joinMeta가 null·빈 칸을 빼고 " · "로 이어 줌
   const km = distanceKm === null ? null : formatKm(distanceKm);
@@ -101,9 +103,7 @@ export function NearCard({
             variant === "wide"
               ? "home.near.badgeScope"
               : "home.near.clearScope",
-            {
-              time,
-            },
+            { zones: zonesText(beach.warningZones), time },
           )
         : null;
     const shownKeys: readonly MetricKey[] =

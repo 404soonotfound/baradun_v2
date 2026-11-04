@@ -54,7 +54,7 @@ export function MapCard({
   const place = joinMeta([item.region, km && `${km}km`]);
   const notes: string[] = [];
   if (view.kind === "ready") {
-    const detail = rowDetail(view, nowMs);
+    const detail = rowDetail(view, nowMs, item.warningZones);
     if (detail) notes.push(detail);
     for (const key of SOURCED_METRICS) {
       const metric = view.metrics[key];

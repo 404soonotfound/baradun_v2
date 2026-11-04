@@ -1,11 +1,11 @@
 "use client"; // 바다 정보·위치·활동·기기 저장을 쓰므로 브라우저 부품
 
 import type { Beach, WarningItem } from "@baradun/contracts";
-import { ChevronRight } from "lucide-react";
+import { ChevronDown, ChevronRight, ChevronUp, MapPin } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
-import { ActivityButton } from "@/components/detail/activity-button";
+import { ActivityIcon } from "@/components/activity-icon";
 import { AltBeaches } from "@/components/detail/alt-beaches";
 import { BackButton } from "@/components/detail/back-button";
 import {
@@ -22,14 +22,8 @@ import { DetailSheet } from "@/components/detail/detail-sheet";
 import { VerdictCard } from "@/components/detail/verdict-card";
 import { SampleNote } from "@/components/sample-note";
 import { SituationBanner } from "@/components/situation-banner";
-import { ViewToggle } from "@/components/ui/view-toggle";
 import { WarningSheet } from "@/components/warning-sheet";
-import {
-  ACTIVITIES,
-  currentActivity,
-  setActivity,
-  useActivity,
-} from "@/lib/activity";
+import { ACTIVITIES, currentActivity, useActivity } from "@/lib/activity";
 import { alternativeBeaches, isClearView } from "@/lib/alternatives";
 import type { BeachSummary } from "@/lib/beach-summary";
 import { addRecent } from "@/lib/favorites";
@@ -46,10 +40,12 @@ import { deriveBeachView } from "@/lib/snapshot/view";
 import { useOnline } from "@/lib/use-online";
 import { useSheet } from "@/lib/use-sheet";
 
-// 장소 상세 (BRD-32 · 노션 2장 DET/D-DET, Figma S_M04_01~05·183:748·183:1438·184:748, BRD-129)
-// 모바일 순서: 헤더 → 상황 배너 → 판단 카드 → 대안 해변(특보 없음이 아닐 때) → 바다 상태 → 2×2 지표 →
-//   주변 특보 → 119 → 정보 출처 → 하단 고정 즐겨찾기·길찾기
-// PC(lg): 머리 두 줄 → 본문(지금 바다·주변 특보·출처) + 오른쪽 384px 열(판단 카드 안 길찾기 → 대안 → 119)
+// 장소 상세 (BRD-32 · 노션 2장 DET/D-DET, Figma S_M04_01~05·183:748·183:1438·184:748, BRD-129 · 시안 D안 BRD-182)
+// 모바일 순서: 헤더 → 상황 배너 → 판단 묶음(판단 카드 + 열면 주변 특보) → 대안 해변(특보 없음이 아닐 때) →
+//   지금 바다 → 2×2 지표 → 119 → 정보 출처 → 하단 고정 즐겨찾기·길찾기
+// PC(lg): 머리 두 줄 → 본문(지금 바다 · 119) + 오른쪽 384px 열(판단 묶음: 판단 카드 안 길찾기 · 주변 특보 · 정보 출처 → 대안)
+// 판단 묶음(D18-11 ②): 모바일은 배지 줄 '주변 특보 n건'·'확인한 것'으로 확인한 것·주변 특보를 열고 접음(기본 접음).
+//   PC는 늘 펼침이라 버튼 없음. 특보 사유 상자는 접지 않음
 // Figma '현장 화면'(CCTV) 카드는 출시에서 뺌(10/30 사용자 결정)
 // 119·길찾기는 자리마다 하나씩 두고 화면 크기에 맞는 쪽만 보임(display:none이라 화면 읽기에도 하나만)
 // 상황 배너(결정 2로 확정): 오프라인·형식 미지원·불러오기 실패·확인된 판단 없음(BRD-38·결정 1)만. 관측 지연은 판단 카드가, 위치는 상세에 해당 없음
@@ -80,6 +76,10 @@ export function DetailScreen({
   const detailSheet = useSheet("detail");
   const warningSheet = useSheet("warning");
   const [warningItem, setWarningItem] = useState<WarningItem | null>(null);
+  // 모바일 판단 묶음 열고 접기(D18-11 ②). 해변을 옮기면 접힌 상태로 시작(상세 화면이 새로 그려짐)
+  const [expanded, setExpanded] = useState(false);
+  const checkedId = useId();
+  const nearbyId = useId();
 
   // 최근 본 해변에 넣음(기기 저장). 본 시각과 그때 고른 활동도 이 기기에만(홈 최근 본 카드, BRD-129)
   // 활동은 훅 값 대신 저장값을 바로 읽음(첫 그림의 기본값 '수영'이 남지 않게)
@@ -134,6 +134,14 @@ export function DetailScreen({
     notice: null,
   });
 
+  // 주변 특보 수(모바일 열고 접기 버튼 이름 '주변 특보 n건'). 읽지 못한 항목도 셈, 전부 못 읽으면 수 없이 '주변 특보'
+  const hasNearby =
+    detail.nearbyWarnings.length > 0 || detail.unreadableNearby !== 0;
+  const nearbyCount =
+    detail.unreadableNearby === "all"
+      ? 0
+      : detail.nearbyWarnings.length + detail.unreadableNearby;
+
   // 헤더 2줄째: 지역 · 거리(위치가 있을 때만, 기기 안에서만 계산). PC는 '내 위치에서 2.1km'(Figma 183:806)
   const region = `${beach.region.sido[locale]} ${beach.region.sigungu[locale]}`;
   const km =
@@ -143,15 +151,16 @@ export function DetailScreen({
 
   return (
     <div className="pb-[calc(var(--spacing-button)+32px)] lg:-mt-4 lg:px-6 lg:pb-0">
-      {/* 머리. 모바일 한 줄(Figma hbar 62: 뒤로 · 이름 · 활동 칩 · 공유),
-          PC 두 줄(Figma 183:784·183:803: '‹ 뒤로' | 즐겨찾기·공유 칩 / 큰 이름 | 활동 세그먼트) */}
-      <header className="-mr-3 -ml-4 flex h-detail-header items-center gap-1 lg:mx-0 lg:grid lg:h-auto lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end lg:gap-x-6 lg:gap-y-3.5">
+      {/* 머리(시안 D안 ActR_D_WXM·PLD, D18-4). 모바일 한 줄: 뒤로 · 이름 / 지역·거리 | 확인된 활동 · 공유,
+          PC 두 줄: '‹ 뒤로' / 34px 이름 + 지역 줄 | 즐겨찾기·공유 칩.
+          활동은 고르는 버튼이 아니라 이 해변에서 확인된 활동 글자(누를 수 없음). 활동은 홈 활동 타일에서만 고름 */}
+      <header className="-mr-3 -ml-4 mb-2 flex h-detail-header items-center gap-1 lg:mx-0 lg:mb-0 lg:grid lg:h-auto lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end lg:gap-x-6 lg:gap-y-3">
         <BackButton
           locale={locale}
           labelWide
           className="lg:col-start-1 lg:row-start-1 lg:self-center lg:justify-self-start"
         />
-        <div className="min-w-0 flex-1 lg:col-start-1 lg:row-start-2">
+        <div className="min-w-0 flex-1 lg:col-start-1 lg:row-start-2 lg:flex lg:flex-col lg:gap-2">
           <h1
             ref={titleRef}
             tabIndex={-1}
@@ -159,35 +168,53 @@ export function DetailScreen({
           >
             {beach.name[locale]}
           </h1>
-          <p className="truncate text-caption text-text-muted lg:text-[13.5px]">
-            {km ? (
-              <>
-                <span className="lg:hidden">
-                  {t("detail.region", { region, km })}
-                </span>
-                <span className="hidden lg:inline">
-                  {t("detail.regionFromMe", { region, km })}
-                </span>
-              </>
-            ) : (
-              region
-            )}
-          </p>
+          <div className="flex min-w-0 items-center gap-2 lg:gap-3">
+            <p className="truncate text-caption text-text-muted lg:flex lg:items-center lg:gap-1.5 lg:text-[14px] lg:font-medium lg:text-text-body">
+              <MapPin
+                aria-hidden="true"
+                size={16}
+                className="hidden shrink-0 text-text-muted lg:block"
+              />
+              {km ? (
+                <>
+                  <span className="lg:hidden">
+                    {t("detail.region", { region, km })}
+                  </span>
+                  <span className="hidden lg:inline">
+                    {t("detail.regionFromMe", { region, km })}
+                  </span>
+                </>
+              ) : (
+                region
+              )}
+            </p>
+            <span
+              aria-hidden="true"
+              className="h-2.5 w-px shrink-0 bg-border-strong lg:h-3"
+            />
+            <ul
+              aria-label={t("activity.confirmed")}
+              className="flex shrink-0 cursor-default gap-2 select-none lg:gap-3 [&_svg]:size-3.5 lg:[&_svg]:size-4"
+            >
+              {ACTIVITIES.filter((item) => beach.activities.includes(item)).map(
+                (item) => (
+                  <li
+                    key={item}
+                    className="inline-flex items-center gap-0.5 text-caption font-medium text-text-muted lg:gap-1 lg:text-label-s"
+                  >
+                    <ActivityIcon activity={item} />
+                    {t(
+                      item === "scuba"
+                        ? "activity.scubaFull"
+                        : `activity.${item}`,
+                    )}
+                  </li>
+                ),
+              )}
+            </ul>
+          </div>
         </div>
-        <ActivityButton className="lg:hidden" />
-        <ViewToggle
-          label={t("activity.label")}
-          options={ACTIVITIES.map((item) => ({
-            value: item,
-            label: t(
-              item === "scuba" ? "activity.scubaFull" : `activity.${item}`,
-            ),
-          }))}
-          value={activity}
-          onChange={setActivity}
-          className="hidden w-[420px] lg:col-start-2 lg:row-start-2 lg:flex"
-        />
-        <div className="flex gap-2 lg:col-start-2 lg:row-start-1 lg:self-center lg:justify-self-end">
+        <div className="flex gap-2 lg:col-start-2 lg:row-start-2 lg:items-center lg:self-center lg:justify-self-end">
           <FavoriteButton
             beachId={beach.id}
             variant="pill"
@@ -213,53 +240,120 @@ export function DetailScreen({
       {/* 본문. 모바일 사이 14(Figma pad.stack), PC 두 열 740 | 384 · 사이 28(Figma 183:814) */}
       <div className="flex flex-col gap-3.5 lg:mt-[18px] lg:grid lg:grid-cols-[minmax(0,1fr)_384px] lg:items-start lg:gap-7">
         {/* 오른쪽 열(PC) · 위쪽(모바일) */}
-        <div className="flex flex-col gap-3.5 lg:sticky lg:top-20 lg:col-start-2 lg:row-start-1">
-          <VerdictCard
-            beachId={beach.id}
-            view={view}
-            detail={detail}
-            stations={beach.stations}
-            nowMs={snapshot.nowMs}
-            kmaSource={kmaSource}
-            onOpenWarning={(item) => {
-              setWarningItem(item);
-              warningSheet.show();
-            }}
-            more={
-              // 불러온 뒤에만 '자세히'(확인한 것이 있어야 보여줄 수 있음)
-              view.kind === "ready" && (
-                <button
-                  type="button"
-                  aria-haspopup="dialog"
-                  onClick={detailSheet.show}
-                  // 보이는 줄은 17px, 누르는 영역은 위아래로 넓혀 44px(BRD-39)
-                  className="relative inline-flex items-center gap-0.5 text-caption font-bold text-brand-default before:absolute before:inset-x-0 before:-inset-y-[13px] before:content-['']"
-                >
-                  {t("detailSheet.more")}
-                  <ChevronRight
-                    aria-hidden="true"
-                    size={12}
-                    strokeWidth={2.6}
-                  />
-                </button>
-              )
-            }
-          >
-            {/* PC: 길찾기는 판단 카드 안 맨 아래(Figma 183:1032). 모바일은 하단 고정 줄 */}
-            <DirectionsLink
-              beach={beach}
+        <div className="flex flex-col gap-3.5 lg:col-start-2 lg:row-start-1">
+          {/* 판단 묶음: 칸 사이 구분선, 바탕·그림자는 묶음이 그림(시안 D안) */}
+          <div className="flex flex-col divide-y divide-border-default overflow-hidden rounded-card bg-bg-surface shadow-card lg:shadow-raised">
+            <VerdictCard
+              beachId={beach.id}
               view={view}
-              className="hidden lg:flex"
+              detail={detail}
+              stations={beach.stations}
+              warningZones={beach.warningZones}
+              nowMs={snapshot.nowMs}
+              kmaSource={kmaSource}
+              embedded
+              checkedId={checkedId}
+              expanded={expanded}
+              toggle={
+                view.kind === "ready" && (
+                  <button
+                    type="button"
+                    aria-expanded={expanded}
+                    aria-controls={
+                      hasNearby ? `${checkedId} ${nearbyId}` : checkedId
+                    }
+                    onClick={() => setExpanded((open) => !open)}
+                    // 보이는 줄은 18px, 누르는 영역은 위아래·옆으로 넓혀 44px(BRD-39)
+                    className="relative inline-flex items-center gap-0.5 text-label-s font-bold text-text-body before:absolute before:-inset-x-2 before:-inset-y-[13px] before:content-['']"
+                  >
+                    {expanded
+                      ? t("detail.verdict.collapse")
+                      : nearbyCount > 0
+                        ? t("detail.verdict.nearbyCount", {
+                            count: nearbyCount,
+                          })
+                        : hasNearby
+                          ? t("detail.nearby.title")
+                          : t("detail.verdict.checked")}
+                    {expanded ? (
+                      <ChevronUp
+                        aria-hidden="true"
+                        size={14}
+                        strokeWidth={2.4}
+                      />
+                    ) : (
+                      <ChevronDown
+                        aria-hidden="true"
+                        size={14}
+                        strokeWidth={2.4}
+                      />
+                    )}
+                  </button>
+                )
+              }
+              onOpenWarning={(item) => {
+                setWarningItem(item);
+                warningSheet.show();
+              }}
+              more={
+                // 불러온 뒤에만 '자세히'(확인한 것이 있어야 보여줄 수 있음)
+                view.kind === "ready" && (
+                  <button
+                    type="button"
+                    aria-haspopup="dialog"
+                    onClick={detailSheet.show}
+                    // 보이는 줄은 17px, 누르는 영역은 위아래로 넓혀 44px(BRD-39)
+                    className="relative inline-flex items-center gap-0.5 text-caption font-bold text-brand-default before:absolute before:inset-x-0 before:-inset-y-[13px] before:content-['']"
+                  >
+                    {t("detailSheet.more")}
+                    <ChevronRight
+                      aria-hidden="true"
+                      size={12}
+                      strokeWidth={2.6}
+                    />
+                  </button>
+                )
+              }
+            >
+              {/* PC: 길찾기는 판단 카드 안 맨 아래(Figma 183:1032). 모바일은 하단 고정 줄 */}
+              <DirectionsLink
+                beach={beach}
+                view={view}
+                className="hidden lg:flex"
+              />
+            </VerdictCard>
+            {/* 모바일은 열었을 때만, PC는 늘 */}
+            <NearbyWarnings
+              embedded
+              id={nearbyId}
+              className={expanded ? "" : "max-lg:hidden"}
+              items={detail.nearbyWarnings}
+              unreadable={detail.unreadableNearby}
+              nowMs={snapshot.nowMs}
             />
-          </VerdictCard>
+            {/* PC: 정보 출처도 묶음 안. 모바일은 본문 맨 아래 */}
+            <div className="hidden px-4 pt-3 pb-1 lg:block">
+              <SourceList
+                compact
+                locale={locale}
+                beachSlug={beach.slug}
+                view={view}
+                detail={detail}
+                stations={beach.stations}
+                warningZones={beach.warningZones}
+                nowMs={snapshot.nowMs}
+                kmaSource={kmaSource}
+              />
+            </div>
+          </div>
           {showAlt && (
             <AltBeaches
               locale={locale}
+              activity={activity}
               items={alternatives}
               nowMs={snapshot.nowMs}
             />
           )}
-          <Call119 className="hidden lg:flex" />
         </div>
 
         {/* 본문(PC 왼쪽) · 사이 18(Figma 183:815) */}
@@ -277,21 +371,19 @@ export function DetailScreen({
             ripCurrent={detail.ripCurrent}
             nowMs={snapshot.nowMs}
           />
-          <NearbyWarnings
-            items={detail.nearbyWarnings}
-            unreadable={detail.unreadableNearby}
-            nowMs={snapshot.nowMs}
-          />
-          <Call119 className="lg:hidden" />
-          <SourceList
-            locale={locale}
-            beachSlug={beach.slug}
-            view={view}
-            detail={detail}
-            stations={beach.stations}
-            nowMs={snapshot.nowMs}
-            kmaSource={kmaSource}
-          />
+          <Call119 />
+          <div className="lg:hidden">
+            <SourceList
+              locale={locale}
+              beachSlug={beach.slug}
+              view={view}
+              detail={detail}
+              stations={beach.stations}
+              warningZones={beach.warningZones}
+              nowMs={snapshot.nowMs}
+              kmaSource={kmaSource}
+            />
+          </div>
         </div>
       </div>
 
@@ -306,6 +398,7 @@ export function DetailScreen({
         view={view}
         detail={detail}
         stations={beach.stations}
+        warningZones={beach.warningZones}
         nowMs={snapshot.nowMs}
         kmaData={kmaSource}
       />

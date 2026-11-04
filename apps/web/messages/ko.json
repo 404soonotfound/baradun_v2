@@ -60,7 +60,8 @@
     "nearbyUnknown": "기타 {level}",
     "zoneOriginal": "기상청 발표 원문",
     "zoneLine": "<zone></zone> {name}",
-    "zoneOriginalInline": "<zone></zone> <note>(기상청 발표 원문)</note>"
+    "zoneOriginalInline": "<zone></zone> <note>(기상청 발표 원문)</note>",
+    "beachZones": "해변 특보구역"
   },
   "observation": {
     "none": "가까운 관측 없음",
@@ -69,7 +70,7 @@
     "metric": {
       "waveHeight": "파고",
       "wavePeriod": "파주기",
-      "waveDirection": "파향",
+      "waveDirection": "파도 방향",
       "waterTemp": "수온",
       "wind": "바람"
     },
@@ -83,7 +84,26 @@
       "kto": "한국관광공사"
     },
     "agoShort": "{minutes}분 전",
-    "timeUnknown": "측정 시각 모름"
+    "timeUnknown": "측정 시각 모름",
+    "direction": {
+      "N": "북",
+      "NNE": "북북동",
+      "NE": "북동",
+      "ENE": "동북동",
+      "E": "동",
+      "ESE": "동남동",
+      "SE": "남동",
+      "SSE": "남남동",
+      "S": "남",
+      "SSW": "남남서",
+      "SW": "남서",
+      "WSW": "서남서",
+      "W": "서",
+      "WNW": "서북서",
+      "NW": "북서",
+      "NNW": "북북서"
+    },
+    "directionFrom": "<dir></dir><from>쪽에서</from>"
   },
   "source": {
     "agency": "출처: {agency}",
@@ -137,7 +157,7 @@
     "near": {
       "title": "가까운 바다",
       "all": "전체 보기",
-      "clearScope": "이 해변 특보구역 · 기상청 {time} 확인",
+      "clearScope": "{zones} · 기상청 {time} 확인",
       "noValue": "값 없음",
       "locating": "위치를 확인하고 있어요",
       "noBeach": "이 활동이 확인된 해변이 아직 없어요",
@@ -231,7 +251,7 @@
     "region": "{region} · {km}km",
     "offSeason": "운영 기간 {from}~{to}",
     "verdict": {
-      "clearBasis": "이 해변 특보구역 · {source} {time} 확인",
+      "clearBasis": "{zones} · {source} {time} 확인",
       "basisIssued": "{time} 발표",
       "basisObserved": "{time} 관측",
       "basisChecked": "{time} 확인",
@@ -252,20 +272,21 @@
       "openWarning": "특보 상세 보기",
       "waveNoValue": "파고 값 없음",
       "waveNone": "파고 · 가까운 관측 없음",
-      "checkedWarningActive": "특보 발효 중"
+      "checkedWarningActive": "특보 발효 중",
+      "collapse": "접기",
+      "nearbyCount": "주변 특보 {count}건"
     },
     "alt": {
       "title": "가까운 특보 없는 해변",
       "none": "근처에 특보 없는 해변이 없어요",
-      "explore": "탐색에서 보기",
-      "more": "탐색에서 다른 해변 더 보기",
+      "noneActivity": "30km 안에 특보가 없고 {activity} 활동 정보가 확인된 다른 해변이 없어요",
+      "more": "활동과 관계없이 전체 해변 보기",
       "distance": "여기서 {km}km"
     },
     "sea": {
-      "title": "바다 상태",
+      "title": "지금 바다",
       "period": "파주기 {value}초",
-      "waveDelayed": "파고 측정이 늦어지고 있어요",
-      "titleWide": "지금 바다"
+      "waveDelayed": "파고 측정이 늦어지고 있어요"
     },
     "figure": {
       "label": "파고 {height}m, 파주기 {period}초",
@@ -276,8 +297,8 @@
       "knee": "무릎",
       "waist": "허리",
       "chest": "가슴",
-      "caption": "부표가 앞 물결을 타고 {period}초(파주기)마다 한 번 오르내려요 · 앞 물결 높이와 왼쪽 파란 띠 = 파고 {height}m · 뒤 물결과 물결 간격은 분위기용 · 기준선은 성인 평균 키",
-      "captionNoPeriod": "앞 물결 높이와 왼쪽 파란 띠 = 파고 {height}m · 파주기 측정값이 없어 움직이지 않아요 · 뒤 물결과 물결 간격은 분위기용 · 기준선은 성인 평균 키",
+      "caption": "앞 물결이 파고 {height}m, {period}초마다 오르내려요 · 기준선은 성인 평균 키",
+      "captionNoPeriod": "앞 물결이 파고 {height}m · 파주기 값이 없어 멈춰 있어요 · 기준선은 성인 평균 키",
       "delayed": "측정이 늦어져 파도를 그리지 않아요",
       "title": "파도 크기 비교",
       "guideLabel": "{name} {value}m"
@@ -323,7 +344,7 @@
     "cta": {
       "favorite": "즐겨찾기",
       "directions": "길찾기",
-      "directionsSecondary": "이 해변 길찾기",
+      "directionsSecondary": "해변 길찾기",
       "newWindow": "카카오맵 새 창"
     },
     "regionFromMe": "{region} · 내 위치에서 {km}km"
@@ -364,7 +385,7 @@
   },
   "activity": {
     "label": "활동",
-    "choose": "활동 고르기",
+    "confirmed": "확인된 활동",
     "swimming": "수영",
     "surfing": "서핑",
     "scuba": "스쿠버",
@@ -460,7 +481,6 @@
     "intro": "사실로 확인할 수 있는 두 가지만 판단해요. 파고가 나에게 맞는지는 직접 판단해 주세요.",
     "warningTitle": "바다 관련 특보 5종",
     "warningBody": "풍랑·강풍·태풍·폭풍해일·지진해일. 호우·폭염 등은 '주변 특보'로만 보여줘요.",
-    "warningScope": "이 해변 특보구역",
     "timeTitle": "측정 시각",
     "timeBody": "파고를 마지막으로 측정한 시각이에요. 측정이 늦어지면 '관측 지연'으로 보여줘요.",
     "controlTitle": "출입 통제",
@@ -489,7 +509,7 @@
       "nearest": "가장 가까운 곳 {km}km"
     },
     "row": {
-      "clearScopeNoTime": "이 해변 특보구역 · 기상청 · 확인 시각 모름"
+      "clearScopeNoTime": "{zones} · 기상청 · 확인 시각 모름"
     },
     "noClear": {
       "title": "지금 '특보 없음'으로 확인된 해변이 없어요",

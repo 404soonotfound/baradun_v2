@@ -158,7 +158,7 @@ export function FavoritesScreen({
       meta: rowMeta(beach.region, null, view, nowMs),
       wave: view.metrics.waveHeight,
       status: view.badge,
-      detail: rowDetail(view, nowMs),
+      detail: rowDetail(view, nowMs, beach.warningZones),
     };
     const remove =
       tab === "recent"

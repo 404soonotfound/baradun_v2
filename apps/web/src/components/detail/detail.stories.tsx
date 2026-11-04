@@ -205,6 +205,7 @@ function Gallery({
           view={DELAYED}
           detail={{ ...BASE, offSeason: null }}
           stations={STATIONS}
+          warningZones={BEACH.warningZones}
           nowMs={NOW}
           kmaData
         />
@@ -225,6 +226,7 @@ function Gallery({
             view={CLEAR}
             detail={BASE}
             stations={STATIONS}
+            warningZones={BEACH.warningZones}
             nowMs={NOW}
             kmaSource
           />
@@ -236,12 +238,14 @@ function Gallery({
             view={BLOCKED}
             detail={BLOCKED_DETAIL}
             stations={STATIONS}
+            warningZones={BEACH.warningZones}
             nowMs={NOW}
             kmaSource
           />
           <DetailActions beach={BEACH} view={BLOCKED} />
           <AltBeaches
             locale={locale}
+            activity="swimming"
             items={altEmpty ? [] : [alt]}
             nowMs={NOW}
           />
@@ -252,6 +256,7 @@ function Gallery({
             view={UNKNOWN}
             detail={{ ...BASE, warningConfirmedNone: false, offSeason: null }}
             stations={STATIONS}
+            warningZones={BEACH.warningZones}
             nowMs={NOW}
             kmaSource
           />
@@ -260,6 +265,7 @@ function Gallery({
             view={DELAYED}
             detail={{ ...BASE, offSeason: null }}
             stations={STATIONS}
+            warningZones={BEACH.warningZones}
             nowMs={NOW}
             kmaSource
           />
@@ -272,6 +278,7 @@ function Gallery({
               warnings: [{ ...ITEM, type: "strong_wind" }],
             }}
             stations={STATIONS}
+            warningZones={BEACH.warningZones}
             nowMs={NOW}
             kmaSource
           />
@@ -280,6 +287,7 @@ function Gallery({
             view={{ kind: "loading" }}
             detail={BASE}
             stations={STATIONS}
+            warningZones={BEACH.warningZones}
             nowMs={NOW}
             kmaSource
           />

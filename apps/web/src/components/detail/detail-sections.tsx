@@ -24,14 +24,21 @@ import type { BeachView, MetricKey } from "@/lib/snapshot/view";
 // 주변 특보(정보만) → 긴급신고 119 → 정보 출처 + '정보가 실제와 달라요' / 하단 즐겨찾기·길찾기
 
 // 주변 특보 (B3): 판단에 쓰지 않는 특보(호우·폭염 등). 없으면 카드를 두지 않음
+// embedded: 판단 카드 묶음 안(시안 D안, D18-11 ②). 바탕·그림자는 묶음이 그림
 export function NearbyWarnings({
   items,
   unreadable,
   nowMs,
+  embedded = false,
+  id,
+  className,
 }: {
   items: DetailInfo["nearbyWarnings"];
   unreadable: DetailInfo["unreadableNearby"]; // 읽지 못한 항목 수. 있으면 카드를 숨기지 않고 알림
   nowMs: number;
+  embedded?: boolean;
+  id?: string; // 모바일 열고 접기 버튼 aria-controls
+  className?: string;
 }) {
   const t = useTranslations();
   const { issuedAtText } = useTimeText();
@@ -41,8 +48,13 @@ export function NearbyWarnings({
   // 행은 누르는 곳이 아님(주변 특보 상세 화면 없음) → Figma의 › 는 두지 않음
   return (
     <section
+      id={id}
       aria-labelledby={titleId}
-      className="flex flex-col overflow-hidden rounded-card bg-bg-surface shadow-card"
+      className={cn(
+        "flex flex-col overflow-hidden",
+        !embedded && "rounded-card bg-bg-surface shadow-card",
+        className,
+      )}
     >
       <div className="flex items-start justify-between gap-3 px-4 pt-3.5 pb-2.5">
         <h2 id={titleId} className="shrink-0 text-title-s text-text-default">
@@ -141,25 +153,30 @@ export function Call119({ className }: { className?: string }) {
 // 기관(기상청)은 기상법 출처 표시(BRD-113): 받은 실제 상태가 있고(kmaSource) 측정소를 보일 때만.
 // 불러오는 중·처음부터 못 받음·개발용 예시에서는 측정소 이름(정적 목록)만 남고 기관을 붙이지 않음
 // 이안류를 받았으면 4행째: 국립해양조사원 원문 링크 + 공공누리 제1유형 + 발표 시각
+// compact: PC 판단 카드 묶음 안(시안 D안). 표를 카드 없이 좁게(이름 칸 64 · 출처와 시각을 위아래로)
 export function SourceList({
   locale,
   beachSlug,
   view,
   detail,
   stations,
+  warningZones,
   nowMs,
   kmaSource,
+  compact = false,
 }: {
   locale: Locale;
   beachSlug: string;
   view: BeachView;
   detail: DetailInfo;
   stations: Beach["stations"];
+  warningZones: Beach["warningZones"]; // 특보 행: 해변 특보구역 이름(D18-11)
   nowMs: number;
   kmaSource: boolean; // 받은 실제 상태가 있음(showsKmaSource)
+  compact?: boolean;
 }) {
   const t = useTranslations();
-  const { stationText, agencyText } = useMetaText();
+  const { stationText, agencyText, zonesText } = useMetaText();
   const titleId = useId();
   const { issuedAtText } = useTimeText();
   const { confirmedUntilText } = useBadgeText();
@@ -236,7 +253,7 @@ export function SourceList({
       key: "warning",
       label: t("detail.sources.warning"),
       main: joinMeta([
-        t("detailSheet.warningScope"),
+        zonesText(warningZones),
         detail.warningSource && agencyText(detail.warningSource),
       ]),
       time: warningTime,
@@ -277,7 +294,10 @@ export function SourceList({
 
   // 제목 줄은 카드 밖(Figma 정보 출처 · 정보가 실제와 달라요), 행 사이 구분선
   return (
-    <section aria-labelledby={titleId} className="flex flex-col gap-3.5">
+    <section
+      aria-labelledby={titleId}
+      className={cn("flex flex-col", compact ? "gap-1.5" : "gap-3.5")}
+    >
       <div className="flex items-baseline justify-between gap-2">
         <h2 id={titleId} className="text-title-s text-text-default">
           {t("detail.sources.title")}
@@ -291,27 +311,49 @@ export function SourceList({
           {t("detail.sources.inquiry")}
         </Link>
       </div>
-      <dl className="flex flex-col overflow-hidden rounded-card bg-bg-surface text-label-s leading-[1.5] shadow-card lg:text-label lg:leading-[1.45] lg:font-normal">
-        {rows.map((row, index) => (
-          <div
-            key={row.key}
-            className={cn(
-              "flex gap-2 px-4 pt-3 pb-[11px] lg:gap-4 lg:px-[18px] lg:pt-[13px] lg:pb-3",
-              index === 0
-                ? "pt-[11px] lg:border-t lg:border-border-subtle"
-                : "border-t border-border-default lg:border-border-subtle",
-            )}
-          >
-            <dt className="w-[70px] shrink-0 text-text-muted lg:w-[110px]">
-              {row.label}
-            </dt>
-            <dd className="flex min-w-0 flex-1 flex-col text-text-default lg:flex-row lg:justify-between lg:gap-4">
-              <span>{row.main ?? "–"}</span>
-              {row.time && <span className="lg:shrink-0">{row.time}</span>}
-            </dd>
-          </div>
-        ))}
-      </dl>
+      {compact ? (
+        <dl className="flex flex-col text-label-s leading-[1.5]">
+          {rows.map((row, index) => (
+            <div
+              key={row.key}
+              className={cn(
+                "flex gap-3 py-2",
+                index > 0 && "border-t border-border-subtle",
+              )}
+            >
+              <dt className="w-16 shrink-0 text-text-muted">{row.label}</dt>
+              <dd className="flex min-w-0 flex-1 flex-col gap-0.5 text-text-default">
+                <span>{row.main ?? "–"}</span>
+                {row.time && (
+                  <span className="text-text-muted">{row.time}</span>
+                )}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      ) : (
+        <dl className="flex flex-col overflow-hidden rounded-card bg-bg-surface text-label-s leading-[1.5] shadow-card lg:text-label lg:leading-[1.45] lg:font-normal">
+          {rows.map((row, index) => (
+            <div
+              key={row.key}
+              className={cn(
+                "flex gap-2 px-4 pt-3 pb-[11px] lg:gap-4 lg:px-[18px] lg:pt-[13px] lg:pb-3",
+                index === 0
+                  ? "pt-[11px] lg:border-t lg:border-border-subtle"
+                  : "border-t border-border-default lg:border-border-subtle",
+              )}
+            >
+              <dt className="w-[70px] shrink-0 text-text-muted lg:w-[110px]">
+                {row.label}
+              </dt>
+              <dd className="flex min-w-0 flex-1 flex-col text-text-default lg:flex-row lg:justify-between lg:gap-4">
+                <span>{row.main ?? "–"}</span>
+                {row.time && <span className="lg:shrink-0">{row.time}</span>}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      )}
     </section>
   );
 }
@@ -381,7 +423,7 @@ export function FavoriteButton({
   );
 }
 
-// 길찾기(Figma '버튼 · 새' 높이 52 · 글자 15.5 굵게). 이용불가·판단불가면 보조 스타일 '이 해변 길찾기'로 낮춤
+// 길찾기(Figma '버튼 · 새' 높이 52 · 글자 15.5 굵게). 이용불가·판단불가면 보조 스타일 '해변 길찾기'로 낮춤(D18-10)
 export function DirectionsLink({
   beach,
   view,

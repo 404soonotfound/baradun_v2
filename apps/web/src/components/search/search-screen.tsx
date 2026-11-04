@@ -234,7 +234,7 @@ export function SearchScreen({
                 query={query}
                 match={match}
                 view={view}
-                basis={rowBasis(view, nowMs)}
+                basis={rowBasis(view, nowMs, beach.warningZones)}
                 onOpen={() => saveRecentSearch({ q: query, id: beach.id })}
               />
             ))}
