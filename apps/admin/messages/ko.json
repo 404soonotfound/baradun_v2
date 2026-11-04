@@ -94,6 +94,9 @@
   },
   "session": {
     "resuming": "로그인을 이어 가고 있어요",
+    "resumeTitle": "로그인을 이어 가지 못했어요",
+    "resumeRejectedDescription": "이 탭에 남아 있던 로그인이 만료됐거나 더 이상 쓸 수 없어요. 다시 로그인해 주세요.",
+    "resumeFailedDescription": "연결이 불안정하거나 응답이 늦어 로그인을 확인하지 못했어요. 잠시 뒤 새로고침하면 다시 이어 가요. 바로 쓰려면 다시 로그인해 주세요.",
     "expiredTitle": "로그인이 만료됐어요",
     "idleDescription": "60분 동안 활동이 없어 로그아웃했어요.",
     "maxDescription": "로그인한 지 8시간이 지나 로그아웃했어요. 보안을 위해 연장하지 않아요.",

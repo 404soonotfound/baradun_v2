@@ -117,6 +117,18 @@ function SignedOutNotice({ reason }: { reason: SignOutReason | null }) {
           {t.session.logoutDescription}
         </Notice>
       );
+    case "resume_rejected":
+    case "resume_failed":
+      return (
+        <Notice tone="neutral" title={t.session.resumeTitle} role="status">
+          <p>
+            {reason === "resume_rejected"
+              ? t.session.resumeRejectedDescription
+              : t.session.resumeFailedDescription}
+          </p>
+          {returnRow}
+        </Notice>
+      );
     case "invalid_token":
       return (
         <Notice tone="fail" title={t.session.invalidTitle} role="alert">
