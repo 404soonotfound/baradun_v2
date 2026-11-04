@@ -10,9 +10,17 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, "../..");
 
 export const PERMISSION_MODE = "request-review";
-// 읽기 외 도구가 성공하면 거부 설정이 뚫린 것으로 봄(파일 만들기·명령 입력·웹 도구 포함)
-const WRITE_OR_EXEC =
-  /write|edit|replace|delete|move|rename|copy|create|mkdir|command|execute|browser|url|web|mcp|ask_/i;
+// 허용 목록: 읽기·목록·검색과 응답 마침만. 그 밖의 도구가 성공하면 거부 설정이 뚫린 것으로 봄
+// (agy 1.4.12 init.tools 60개 중 고름. schedule·define_subagent처럼 이름만으론 모르는 도구도 막힘)
+const READ_ONLY_TOOLS = new Set([
+  "read_file",
+  "view_file",
+  "list_dir",
+  "find_by_name",
+  "grep_search",
+  "finish",
+]);
+const isReadOnly = (tool) => READ_ONLY_TOOLS.has(tool);
 
 // ajv는 packages/contracts 설치본만 사용(새로 설치하지 않음)
 export function createValidator(schemaPath = join(HERE, "schema.json")) {
@@ -107,9 +115,9 @@ export function verifyProbe({ exitCode, text, expected, snapshotUnchanged }) {
   if (!denied("command"))
     reasons.push("명령 실행이 deny 규칙으로 거부된 기록 없음");
   for (const s of steps.filter(
-    (s) => s.state === "DONE" && WRITE_OR_EXEC.test(s.tool),
+    (s) => s.state === "DONE" && !isReadOnly(s.tool),
   ))
-    reasons.push(`쓰기·실행 도구가 성공함: ${s.tool}`);
+    reasons.push(`읽기 외 도구가 성공함: ${s.tool}`);
   if (!snapshotUnchanged) reasons.push("거부 시험 뒤 사본 내용이 바뀜");
   return { ok: reasons.length === 0, reasons };
 }
@@ -131,34 +139,39 @@ export function verifyReview({ exitCode, text, expected, validate }) {
   checkInit(events, expected, reasons);
   const result = checkResult(exitCode, events, reasons);
   const steps = toolSteps(events);
-  // ../로 사본 밖을 가리키는 경로도 잡도록 정규화
+  // 상대 경로는 사본 기준으로 풀고, ../로 사본 밖을 가리키는 경로도 잡도록 정규화
+  const abs = (p) => resolve(expected.cwd, p);
+  const under = (p, dir) =>
+    !!dir && abs(p).startsWith(dir.endsWith("/") ? dir : `${dir}/`);
   const reads = steps
     .filter((s) => s.state === "DONE" && s.path)
-    .map((s) => resolve(s.path));
+    .map((s) => abs(s.path));
 
   const prefix = expected.cwd.endsWith("/") ? expected.cwd : `${expected.cwd}/`;
-  // 사본 안에서 없는 경로를 짐작해 읽은 것은 거부가 아니라 탐색이라 참고로만 남김(2026-11-04 실제 리뷰에서 확인)
   const notes = [];
+  // 사본 안에서 없는 경로를 짐작해 읽은 것은 거부가 아니라 탐색이라 참고로만 남김(2026-11-04 실제 리뷰에서 확인)
   const missingInSnapshot = (s) =>
-    !WRITE_OR_EXEC.test(s.tool) &&
+    isReadOnly(s.tool) &&
     s.path != null &&
-    resolve(s.path).startsWith(prefix) &&
+    under(s.path, expected.cwd) &&
     /does not exist/i.test(s.error ?? "") &&
     !/permission|denied/i.test(s.error ?? "");
   for (const s of steps.filter((s) => s.state === "ERROR")) {
     if (missingInSnapshot(s))
-      notes.push(
-        `없는 파일을 읽으려 함: ${resolve(s.path).slice(prefix.length)}`,
-      );
+      notes.push(`없는 파일을 읽으려 함: ${abs(s.path).slice(prefix.length)}`);
     else
       reasons.push(`리뷰 중 도구 거부·오류: ${s.tool} ${s.error ?? ""}`.trim());
   }
   for (const s of steps.filter(
-    (s) => s.state === "DONE" && WRITE_OR_EXEC.test(s.tool),
+    (s) => s.state === "DONE" && !isReadOnly(s.tool),
   ))
-    reasons.push(`쓰기·실행 도구가 성공함: ${s.tool}`);
-  for (const p of reads.filter((p) => !p.startsWith(prefix)))
-    reasons.push(`사본 밖 파일을 읽음: ${p}`);
+    reasons.push(`읽기 외 도구가 성공함: ${s.tool}`);
+  // agy가 함께 설치한 내장 안내 문서(사용자 파일 아님)는 참고로만. 그 밖의 사본 밖 읽기는 미완료
+  for (const p of reads.filter((p) => !p.startsWith(prefix))) {
+    if (under(p, expected.agyBuiltinDir))
+      notes.push(`agy 내장 안내 문서를 읽음: ${p}`);
+    else reasons.push(`사본 밖 파일을 읽음: ${p}`);
+  }
 
   // 파싱 성공과 값의 참·거짓을 나눔: null·false·0·"" 같은 JSON도 스키마 검사를 거쳐야 함
   let review = null;
@@ -201,7 +214,7 @@ export function verifyReview({ exitCode, text, expected, validate }) {
     const diffFiles = new Set(expected.diffFiles);
     const readSet = new Set(reads);
     for (const f of review.reviewed_files.filter(
-      (f) => !diffFiles.has(f) && !readSet.has(join(expected.cwd, f)),
+      (f) => !diffFiles.has(f) && !readSet.has(abs(f)),
     ))
       reasons.push(`읽은 기록 없는 주변 파일: ${f}`);
     for (const f of sensitiveOf(
@@ -255,7 +268,7 @@ export function decideScope({
 }) {
   if (!previous) return { scope: "full", reasons: ["첫 리뷰"] };
   const reasons = [];
-  if (previous.base_sha !== baseSha) reasons.push("base가 바뀜");
+  if (previous.baseSha !== baseSha) reasons.push("base가 바뀜");
   if (!prevHeadIsAncestor)
     reasons.push("이전 head가 지금 head의 조상이 아님(리베이스·강제 push)");
   if (mergeCommits > 0)

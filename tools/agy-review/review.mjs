@@ -6,6 +6,7 @@
 import { spawnSync } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
 import {
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -14,7 +15,7 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
@@ -72,6 +73,13 @@ function git(...args) {
 }
 
 const sha = (ref) => git("rev-parse", "--verify", `${ref}^{commit}`).trim();
+
+// --evidence·--handling·--previous는 파일 경로. 없으면 알아볼 수 있는 사용법 오류로 멈춤
+function readInput(path, label) {
+  if (!existsSync(path))
+    throw new UsageError(`${label} 파일을 찾을 수 없음: ${path}`);
+  return readFileSync(path, "utf8");
+}
 const names = (from, to) =>
   git("diff", "--name-only", "--no-renames", from, to)
     .split("\n")
@@ -185,7 +193,7 @@ export function main(argv = process.argv.slice(2)) {
 
   // 2) 추가 리뷰 범위
   const previous = opts.previous
-    ? JSON.parse(readFileSync(opts.previous, "utf8"))
+    ? JSON.parse(readInput(opts.previous, "--previous 기록"))
     : null;
   let prevHeadIsAncestor = false;
   let mergeCommits = 0;
@@ -207,10 +215,7 @@ export function main(argv = process.argv.slice(2)) {
         .filter(Boolean).length;
   }
   const { scope, reasons: scopeReasons } = decideScope({
-    previous: previous && {
-      base_sha: previous.baseSha,
-      verdict: previous.verdict,
-    },
+    previous,
     baseSha,
     prevHeadIsAncestor,
     mergeCommits,
@@ -224,7 +229,7 @@ export function main(argv = process.argv.slice(2)) {
   );
   const sensitiveChanged = sensitiveOf(diffFiles, sensitivePrefixes);
   const evidence = opts.evidence.map((p) => {
-    const text = readFileSync(p, "utf8");
+    const text = readInput(p, "--evidence 노션 근거");
     if (!text.trim()) throw new UsageError(`노션 근거 파일이 비어 있음: ${p}`);
     return {
       name: p.split("/").pop(),
@@ -250,6 +255,8 @@ export function main(argv = process.argv.slice(2)) {
     writeFileSync(settingsPath, JSON.stringify(REVIEW_SETTINGS, null, 2));
     const schemaPath = join(HERE, "schema.json");
     const expectedBase = { model: opts.model, cwd: snapshot };
+    // agy가 함께 설치한 내장 안내 문서 폴더: 여기 읽기만 사본 밖이어도 참고로 남김
+    const agyBuiltinDir = join(homedir(), ".gemini/antigravity-cli/builtin");
 
     // 4) 리뷰 프롬프트: 크기 초과는 거부 시험(한도 사용) 전에 멈춤
     const guidelines = readFileSync(join(snapshot, "AGENTS.md"), "utf8").split(
@@ -269,7 +276,9 @@ export function main(argv = process.argv.slice(2)) {
       previous: previous && {
         headSha: previous.headSha,
         findings: previous.verdict?.review?.findings ?? [],
-        handling: opts.handling ? readFileSync(opts.handling, "utf8") : "",
+        handling: opts.handling
+          ? readInput(opts.handling, "--handling 지적 처리 내용")
+          : "",
       },
       incrementalDiff:
         scope === "incremental"
@@ -343,6 +352,7 @@ export function main(argv = process.argv.slice(2)) {
           sensitivePrefixes,
           evidenceCount: evidence.length,
           endMarker,
+          agyBuiltinDir,
         },
       });
       if (r.signal)
