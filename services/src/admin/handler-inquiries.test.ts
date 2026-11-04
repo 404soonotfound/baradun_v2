@@ -622,7 +622,20 @@ describe("변경 이력 목록 GET /ops/audit", () => {
     expect(body(found).counts.all).toBe(1);
   });
 
+  it("counts=0이면 탭 수를 세지 않는다(화면이 같은 거르기의 수를 이미 가짐)", async () => {
+    const res = await handleOps(
+      event("GET", "/ops/audit", {
+        query: { category: "inquiry", counts: "0" },
+      }),
+      deps("viewer", await withHistory()),
+    );
+    expect(res.statusCode).toBe(200);
+    expect(body(res)).not.toHaveProperty("counts");
+    expect(body(res).items).toHaveLength(1);
+  });
+
   it.each([
+    ["counts 값이 0이 아님", { counts: "1" }, "counts"],
     ["모르는 분류", { category: "beaches" }, "category"],
     ["빈 찾기", { q: "" }, "q"],
     ["앞뒤 공백 찾기", { q: " 공지" }, "q"],
