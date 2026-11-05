@@ -10,6 +10,7 @@ import { createHash } from "node:crypto";
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { parse, type DefaultTreeAdapterTypes } from "parse5";
 
 const WEB = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 const DEFAULT_OUT = path.join(WEB, "out");
@@ -28,21 +29,27 @@ export function listHtmlFiles(dir: string): string[] {
 
 // 인라인 <script> 본문들의 sha256 해시 목록 계산 ('sha256-<base64>' 형식)
 export function extractInlineScriptHashes(html: string): string[] {
-  const scriptRegex = /<script\b([^>]*)>([\s\S]*?)<\/script>/gi;
   const hashes = new Set<string>();
+  const document = parse(html);
 
-  let match: RegExpExecArray | null;
-  while ((match = scriptRegex.exec(html)) !== null) {
-    const attrs = match[1] ?? "";
-    const body = match[2] ?? "";
-    // 외부 스크립트(src="...")는 인라인 해시 대상이 아님
-    if (/\bsrc\s*=/i.test(attrs)) {
-      continue;
+  const visit = (node: DefaultTreeAdapterTypes.Node) => {
+    if ("tagName" in node && node.tagName === "script") {
+      // 외부 스크립트(src="...")는 인라인 해시 대상이 아님
+      if (node.attrs.some((attr) => attr.name === "src")) return;
+      // 브라우저는 원문이 아니라 파서가 만든 본문(CRLF→LF·NUL 치환·SVG 문자 참조 해석 뒤)으로 해시함
+      const body = node.childNodes
+        .map((child) => ("value" in child ? child.value : ""))
+        .join("");
+      const hash = createHash("sha256").update(body, "utf8").digest("base64");
+      hashes.add(`'sha256-${hash}'`);
     }
-    // 인라인 스크립트 본문 원문 그대로 sha256 해시 계산
-    const hash = createHash("sha256").update(body, "utf8").digest("base64");
-    hashes.add(`'sha256-${hash}'`);
-  }
+    if ("childNodes" in node) {
+      for (const child of node.childNodes) visit(child);
+    }
+    // <template> 안 스크립트는 content에 있음(복제해 넣으면 실행되므로 해시 대상)
+    if ("content" in node) visit(node.content);
+  };
+  visit(document);
 
   return [...hashes].sort();
 }

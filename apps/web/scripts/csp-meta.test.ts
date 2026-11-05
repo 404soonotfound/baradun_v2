@@ -33,6 +33,32 @@ describe("CSP meta 주입 (BRD-118)", () => {
     );
   });
 
+  it("브라우저가 허용하는 공백 있는 script 종료 태그도 같은 본문으로 해시한다", () => {
+    expect(extractInlineScriptHashes("<script>self.x=1</script >")).toEqual(
+      extractInlineScriptHashes("<script>self.x=1</script>"),
+    );
+  });
+
+  it("대소문자가 다른 src 속성의 외부 스크립트는 해시하지 않는다", () => {
+    expect(
+      extractInlineScriptHashes('<SCRIPT SRC="/app.js"></SCRIPT >'),
+    ).toEqual([]);
+  });
+
+  it("브라우저처럼 CRLF를 LF로 바꾼 본문으로 해시한다", () => {
+    expect(extractInlineScriptHashes("<script>a=1\r\nb=2</script>")).toEqual(
+      extractInlineScriptHashes("<script>a=1\nb=2</script>"),
+    );
+  });
+
+  it("template 안의 인라인 스크립트도 해시한다", () => {
+    expect(
+      extractInlineScriptHashes(
+        "<template><script>self.x=1</script></template>",
+      ),
+    ).toEqual(extractInlineScriptHashes("<script>self.x=1</script>"));
+  });
+
   // meta에 넣은 외부 출처가 헤더에 없으면 둘 다 통과해야 하는 브라우저가 막음(BRD-143)
   it("meta CSP의 외부 스크립트 출처는 헤더 CSP(static-server)의 script-src에도 있다", async () => {
     const { buildCspHeader } = await import("../e2e/static-server.mjs");
