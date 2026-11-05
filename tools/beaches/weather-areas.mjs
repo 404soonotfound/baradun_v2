@@ -9,6 +9,7 @@
 //   --check: 파일을 쓰지 않고 지금 data/weather-areas.json과 같은지만 확인(다르면 종료 코드 1)
 //   --verify: DATA_GO_KR_SERVICE_KEY로 격자·구역·지점마다 한 번씩 실호출해 응답이 오는지 확인하고 결과를 _meta.verified에 남김
 //   키는 환경 변수로만 읽고 출력·저장하지 않음
+import { createHash } from "node:crypto";
 import { readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -151,6 +152,22 @@ export function buildAreas(beaches, zones = ZONES) {
   return out;
 }
 
+// 대응표가 쓰는 격자·육상 구역·기온 지점(중복 없이, 정렬)
+export function codeSets(areas) {
+  const values = Object.values(areas);
+  const uniq = (list) => [...new Set(list)].sort();
+  return {
+    grids: uniq(values.map((a) => `${a.grid.nx},${a.grid.ny}`)),
+    midLand: uniq(values.map((a) => a.midLand.regId)),
+    midTa: uniq(values.map((a) => a.midTa.regId)),
+  };
+}
+
+// 실호출로 확인한 코드 묶음의 지문. 대응이 바뀌면 달라져 이전 확인 기록을 그대로 믿지 않게 함
+export function codesDigest(sets) {
+  return createHash("sha256").update(JSON.stringify(sets)).digest("hex");
+}
+
 const META = {
   note: "BRD-181 해변 → 기상청 날씨 예보 구역. 생성: node tools/beaches/weather-areas.mjs (규칙은 그 파일 머리 주석)",
   grid: "기상청 단기예보·초단기실황 5km 격자(nx, ny). 단기예보 활용가이드 LCC 변환식",
@@ -184,18 +201,24 @@ function latestBase(nowMs, hours, delayMinutes) {
   throw new Error("발표 시각을 찾지 못함");
 }
 
+// 실패 사유만 돌려줌(정상이면 null). 시간 초과·연결 실패도 사유로 남겨 한 번의 실패가 확인 전체를 멈추지 않게 함
+// 예외 원문은 요청 주소(키)를 담을 수 있어 오류 이름만 남김
 async function call(op, params) {
   const base = op.startsWith("getMid")
     ? "https://apis.data.go.kr/1360000/MidFcstInfoService"
     : "https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0";
   const url = `${base}/${op}?${new URLSearchParams({ ...params, dataType: "JSON", pageNo: "1" })}`;
-  const res = await fetch(url, { signal: AbortSignal.timeout(15_000) });
-  const json = await res.json().catch(() => null);
-  const code = json?.response?.header?.resultCode;
-  const total = json?.response?.body?.totalCount ?? 0;
-  return res.ok && code === "00" && total > 0
-    ? null
-    : `http ${res.status} code ${code ?? "?"} rows ${total}`;
+  try {
+    const res = await fetch(url, { signal: AbortSignal.timeout(15_000) });
+    const json = await res.json().catch(() => null);
+    const code = json?.response?.header?.resultCode;
+    const total = json?.response?.body?.totalCount ?? 0;
+    return res.ok && code === "00" && total > 0
+      ? null
+      : `http ${res.status} code ${code ?? "?"} rows ${total}`;
+  } catch (error) {
+    return `exception ${error instanceof Error ? error.name : typeof error}`;
+  }
 }
 
 // 격자·구역·지점마다 한 번씩 호출. 실패 목록을 돌려줌(키·주소는 남기지 않음)
@@ -203,14 +226,10 @@ async function verify(areas, key) {
   const now = Date.now();
   const short = latestBase(now, [2, 5, 8, 11, 14, 17, 20, 23], 10);
   const mid = latestBase(now, [6, 18], 10);
-  const grids = new Set(
-    Object.values(areas).map((a) => `${a.grid.nx},${a.grid.ny}`),
-  );
-  const lands = new Set(Object.values(areas).map((a) => a.midLand.regId));
-  const tas = new Set(Object.values(areas).map((a) => a.midTa.regId));
+  const sets = codeSets(areas);
   const failures = [];
   const jobs = [
-    ...[...grids].map((g) => async () => {
+    ...sets.grids.map((g) => async () => {
       const [nx, ny] = g.split(",");
       const why = await call("getVilageFcst", {
         serviceKey: key,
@@ -222,7 +241,7 @@ async function verify(areas, key) {
       });
       if (why) failures.push(`grid ${g}: ${why}`);
     }),
-    ...[...lands].map((regId) => async () => {
+    ...sets.midLand.map((regId) => async () => {
       const why = await call("getMidLandFcst", {
         serviceKey: key,
         numOfRows: "10",
@@ -231,7 +250,7 @@ async function verify(areas, key) {
       });
       if (why) failures.push(`midLand ${regId}: ${why}`);
     }),
-    ...[...tas].map((regId) => async () => {
+    ...sets.midTa.map((regId) => async () => {
       const why = await call("getMidTa", {
         serviceKey: key,
         numOfRows: "10",
@@ -251,9 +270,10 @@ async function verify(areas, key) {
       checkedAt: new Date(now).toISOString().replace(/\.\d{3}Z$/, "Z"),
       shortBase: `${short.day}${short.time}`,
       midTmFc: `${mid.day}${mid.time}`,
-      grids: grids.size,
-      midLand: lands.size,
-      midTa: tas.size,
+      grids: sets.grids.length,
+      midLand: sets.midLand.length,
+      midTa: sets.midTa.length,
+      codes: codesDigest(sets),
     },
   };
 }
@@ -264,14 +284,20 @@ function serialize(areas, verified) {
 
 async function main(argv) {
   const areas = buildAreas(readPublicBeaches());
-  // 첫 생성이면 파일이 없음 → 이전 실호출 기록 없음
+  // 첫 생성이면 파일이 없음 → 이전 실호출 기록 없음. 그 밖의 읽기 오류는 그대로 던짐
   let previous = "";
   try {
     previous = readFileSync(OUT, "utf8");
-  } catch {}
-  let verified = previous
-    ? (JSON.parse(previous)._meta?.verified ?? null)
-    : null;
+  } catch (error) {
+    if (error?.code !== "ENOENT") throw error;
+  }
+  // 이전 확인 기록은 같은 코드 묶음일 때만 이어 씀. 대응이 바뀌면 지움(--verify로 다시 확인)
+  const digest = codesDigest(codeSets(areas));
+  const kept = previous ? (JSON.parse(previous)._meta?.verified ?? null) : null;
+  let verified = kept?.codes === digest ? kept : null;
+  if (kept && !verified) {
+    console.warn("대응이 바뀌어 실호출 확인 기록을 지움: --verify로 다시 확인");
+  }
   if (argv.includes("--verify")) {
     const key = process.env.DATA_GO_KR_SERVICE_KEY;
     if (!key) throw new Error("DATA_GO_KR_SERVICE_KEY 없음");
@@ -294,11 +320,8 @@ async function main(argv) {
     return;
   }
   writeFileSync(OUT, text);
-  const grids = new Set(
-    Object.values(areas).map((a) => `${a.grid.nx},${a.grid.ny}`),
-  );
   console.log(
-    `해변 ${Object.keys(areas).length}곳 · 격자 ${grids.size}개 → ${OUT}`,
+    `해변 ${Object.keys(areas).length}곳 · 격자 ${codeSets(areas).grids.length}개 → ${OUT}`,
   );
 }
 
