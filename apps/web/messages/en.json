@@ -169,6 +169,13 @@
       "groupMissing": "No value ({metrics})",
       "noStationNext": "Check the badge above for warning info"
     },
+    "map": {
+      "title": "Seas nationwide now",
+      "open": "View on map",
+      "total": "{count} public beaches",
+      "highlight": "large dots: {count} beaches in {region}",
+      "highlightActivity": "large dots: {count} beaches in {region} with confirmed {activity}"
+    },
     "activityEmpty": {
       "title": "No beaches have confirmed {activity} yet",
       "body": "We only show activities confirmed by public data for each beach. Once {activity} information is added, beaches will appear as cards like the one below.",
