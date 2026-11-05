@@ -166,6 +166,7 @@
       "noStationNext": "특보 정보는 위 배지를 확인하세요"
     },
     "map": {
+      "restricted": "이용불가 · 이용 제한",
       "title": "지금 전국 바다",
       "open": "지도에서 보기",
       "total": "공개 해변 {count}곳",

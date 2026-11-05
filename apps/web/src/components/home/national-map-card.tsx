@@ -17,7 +17,8 @@ import { clearCheckedAt, staleCheckedAt } from "@/lib/status-count";
 // PC 홈 히어로 오른쪽 '지금 전국 바다' (11/5 홈 v3 시안 ActR_P_V3*, 상태 요약 3장을 대신함)
 // 공개 해변 전체를 점으로(색 = 게시된 배지 색, 큰 점 = 지금 보는 범위) + 4가지 묶음 개수 + 근거 줄 → 탐색 지도
 // 묶음 이름·아이콘은 탐색 지도 범례와 같음(map.legend: 이용불가 · 특보, 판단불가 · 확인 못 함 …). 실제 사유는 배지·목록이 보여줌
-// 개수는 게시된 분류 그대로(badgeTone, G1). 모르는 사유 code의 이용불가도 이용불가로 셈(낮추지 않음)
+// 개수는 게시된 분류 그대로(badgeTone, G1). 모르는 사유 code의 이용불가는 '특보'로 세지 않고
+// '이용불가 · 이용 제한' 줄로 따로 셈(9.1: 이름만 '이용 제한', 분류는 낮추지 않음). 그런 해변이 있을 때만 줄을 보임
 // 점 그림은 꾸밈(aria-hidden): 같은 정보를 개수 글자가 줌. 바탕 지도 윤곽선은 출처가 정해지지 않아 그리지 않음
 const TONES: VerdictTone[] = ["clear", "blocked", "unknown", "stale"];
 const DOT: Record<VerdictTone, string> = {
@@ -76,10 +77,39 @@ export function NationalMapCard({
     unknown: 0,
     stale: 0,
   };
+  let restricted = 0;
   const tones = views.map((view) =>
     view.kind === "ready" ? badgeTone(view.badge) : null,
   );
-  for (const tone of tones) if (tone) counts[tone] += 1;
+  views.forEach((view, i) => {
+    const tone = tones[i];
+    if (!tone || view.kind !== "ready") return;
+    if (view.badge.kind === "restricted") restricted += 1;
+    else counts[tone] += 1;
+  });
+  // 줄 목록: 4가지 묶음은 0곳이어도 늘 같은 자리, 이용 제한은 있을 때만 이용불가 바로 아래
+  const rows: {
+    key: string;
+    tone: VerdictTone;
+    label: string;
+    count: number;
+  }[] = [];
+  for (const tone of TONES) {
+    rows.push({
+      key: tone,
+      tone,
+      label: t(`map.legend.${tone}`),
+      count: counts[tone],
+    });
+    if (tone === "blocked" && restricted > 0) {
+      rows.push({
+        key: "restricted",
+        tone: "blocked",
+        label: t("home.map.restricted"),
+        count: restricted,
+      });
+    }
+  }
 
   // 근거 줄: '특보 없음'이 있을 때만 범위·기관·확인 시각. 오래된(B5) 해변이 있으면 'HH:MM 확인 · 이후 확인 못 함'
   const time = counts.clear > 0 ? kstStamp(clearCheckedAt(views), nowMs) : null;
@@ -134,17 +164,17 @@ export function NationalMapCard({
           </span>
         ) : (
           <ul className="flex flex-col gap-1.5">
-            {TONES.map((tone) => {
+            {rows.map(({ key, tone, label, count }) => {
               const { Icon } = MARKER_TONE[tone];
               return (
                 <li
-                  key={tone}
-                  data-national-tone={tone}
+                  key={key}
+                  data-national-tone={key}
                   className="flex items-center justify-between gap-2 text-label-s"
                 >
                   {/* data-summary-category: 판단 배지가 아니라 묶음 이름(E2E가 '특보 없음' 배지와 구분) */}
                   <span
-                    data-summary-category={tone}
+                    data-summary-category={key}
                     className={cn(
                       "flex items-center gap-1.5 font-bold",
                       tone === "clear" && "text-status-clear-fg",
@@ -154,10 +184,10 @@ export function NationalMapCard({
                     )}
                   >
                     <Icon aria-hidden="true" size={14} />
-                    {t(`map.legend.${tone}`)}
+                    {label}
                   </span>
                   <span className="font-bold text-text-default tabular-nums">
-                    {t("home.hero.count", { count: counts[tone] })}
+                    {t("home.hero.count", { count })}
                   </span>
                 </li>
               );

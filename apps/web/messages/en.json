@@ -166,6 +166,7 @@
       "noStationNext": "Check the badge above for warning info"
     },
     "map": {
+      "restricted": "Unavailable · restricted",
       "title": "Seas nationwide now",
       "open": "View on map",
       "total": "{count} public beaches",
