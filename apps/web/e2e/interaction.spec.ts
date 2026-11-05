@@ -94,7 +94,9 @@ test.describe("대화상자", () => {
     await checkSheet(page, "특보 상세 보기", "풍랑주의보");
     // 상세에서는 활동을 고르지 않고 확인된 활동만 보여줌(D18-4). 고르는 버튼·세그먼트가 없음
     await expect(page.getByRole("button", { name: "수영" })).toHaveCount(0);
-    await expect(page.getByRole("group", { name: "활동" })).toHaveCount(0);
+    await expect(
+      page.getByRole("group", { name: "어떤 활동을 찾아볼까요?" }),
+    ).toHaveCount(0);
     await openChecked(page, testInfo.project.name);
     await checkSheet(page, "자세히", "무엇을 확인했나요");
   });
