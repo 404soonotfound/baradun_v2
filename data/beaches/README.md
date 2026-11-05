@@ -80,6 +80,18 @@ CI는 PR마다 main과 비교해서 slug 변경, 해변 삭제, slug 재사용�
   - `훈령1185-별표9`: 같은 훈령 별표9, <https://www.law.go.kr/LSW/flDownload.do?flSeq=166843509&bylClsCd=200201>
 - 검사: `npm run check:coverage -w packages/contracts` (근거 없는 매핑·필수 칸 누락·제외 사유 없는 행이면 실패)
 
+## 날씨 예보 구역 (`data/weather-areas.json`, BRD-181)
+
+날씨는 참고 정보예요. 분류·관측 지연·대안 해변에 쓰지 않아요(결정 기록 18장 D18-1).
+
+- 단기예보·초단기실황 격자(`grid.nx`·`grid.ny`): 해변 좌표를 기상청 5km 격자로 바꾼 값(단기예보 활용가이드 LCC 변환식). 공개 206곳 = 격자 140개
+- 중기예보 기온 지점(`midTa`): 해변 시·군 이름과 같은 지점(`rule: sigungu`), 광역시의 구·군은 광역시 지점(`rule: metro`, 예: 인천 옹진군 → 인천). 맞는 지점이 없으면 생성이 멈춰요(2026-11-05 사용자 결정)
+- 중기예보 육상 구역(`midLand`): 기온 지점이 속한 구역(예: 강릉 → 강원영동). 해변 시도와 한 번 더 대조
+- 코드표: `tools/beaches/mid-zones.json`(기상청 중기예보 조회서비스 활용가이드 첨부 '중기기온예보구역코드 2025.12', 출처·해시는 그 파일 `_meta`)
+- `_meta.verified`: 격자·구역·지점마다 한 번씩 실제로 불러 응답을 확인한 기록
+- 생성: `node tools/beaches/weather-areas.mjs` · 실호출 확인: `DATA_GO_KR_SERVICE_KEY=... node tools/beaches/weather-areas.mjs --verify`
+- 해변을 공개하거나 숨기면 다시 생성해요. `npm run test:beaches`가 공개 해변과 대응표가 어긋나면 실패해요
+
 ## 법정 읍면동 경계 (BRD-126)
 
 `land_zone`·`land_basis`(특보 육상 구역 L1)와 관측소 앞바다 구역 판정의 읍면동은 이 경계로 정해요.
