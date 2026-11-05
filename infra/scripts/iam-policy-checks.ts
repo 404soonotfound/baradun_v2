@@ -26,6 +26,14 @@ export type PolicyDocument = {
   Statement?: PolicyStatement | PolicyStatement[];
 };
 
+const PASS_ROLE_SERVICE_BY_TYPE: Readonly<Record<string, string>> = {
+  "AWS::Lambda::Function": "lambda.amazonaws.com",
+  "AWS::Scheduler::Schedule": "scheduler.amazonaws.com",
+};
+const ALLOWED_PASS_ROLE_SERVICES = new Set(
+  Object.values(PASS_ROLE_SERVICE_BY_TYPE),
+);
+
 export function policyActionErrors(doc: PolicyDocument): string[] {
   const errors: string[] = [];
   const statements = toList(doc.Statement);
@@ -218,13 +226,19 @@ export function statementScopeErrors(
         )
           errors.push(`리전 조건의 리소스별 근거 없음: ${key}`);
       } else if (key === "iam:PassedToService") {
-        const target =
-          type === "AWS::Lambda::Function"
-            ? "lambda.amazonaws.com"
-            : type === "AWS::Scheduler::Schedule"
-              ? "scheduler.amazonaws.com"
-              : undefined;
-        if (action !== "iam:PassRole" || !target || !values.includes(target))
+        const target = PASS_ROLE_SERVICE_BY_TYPE[type];
+        const onlyAllowedServices = values.every(
+          (service) =>
+            typeof service === "string" &&
+            ALLOWED_PASS_ROLE_SERVICES.has(service),
+        );
+        const hasTargetService = values.some((service) => service === target);
+        if (
+          action !== "iam:PassRole" ||
+          !target ||
+          !onlyAllowedServices ||
+          !hasTargetService
+        )
           errors.push(`해당 리소스에 맞는 PassRole 서비스가 없음: ${type}`);
       } else if (key === "iam:PermissionsBoundary") {
         const roles = Object.values(resources).filter(
