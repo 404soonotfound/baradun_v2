@@ -82,6 +82,7 @@ jobs:
               - 'data/beach-coverage.csv'
               - 'data/beach-meta.json'
               - 'data/photo-sources.json' # 대표 사진 TourAPI 관광지 대장(BRD-58)
+              - 'data/weather-areas.json' # 해변 → 날씨 예보 격자·중기 구역(BRD-181)
               - 'packages/contracts/schemas/**'
               - 'packages/contracts/scripts/**'
             agy_review: # 대체 리뷰 도구 판정 규칙이 바뀌면(agy는 부르지 않음)
