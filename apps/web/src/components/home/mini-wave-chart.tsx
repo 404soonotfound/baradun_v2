@@ -5,7 +5,11 @@ import { useTranslations } from "next-intl";
 
 import { cn } from "@/lib/cn";
 import { useStationHistory } from "@/lib/snapshot/history";
-import { type ChartPoint, waveChart } from "@/lib/wave-chart";
+import {
+  type ChartPoint,
+  type WaveChart as WaveChartModel,
+  waveChart,
+} from "@/lib/wave-chart";
 
 // PC 가까운 바다 카드의 24시간 파고 미니 그래프 (Figma 181:871 244×40, BRD-129 · #105 결정 2)
 // 데이터·규칙은 상세 WaveChart와 같음: 같은 history.json(한 번만 받아 상세·홈이 같이 씀), 90분 넘는 간격·결측은 끊고 빗금
@@ -26,15 +30,26 @@ export function MiniWaveChart({
   nowMs: number;
   className?: string; // 그리는 크기(기본 높이 40). 상세 대안 해변 글리프는 38×12
 }) {
-  const t = useTranslations("detail.chart");
   const history = useStationHistory(stationId);
-  const hatchId = useId();
   // 불러오는 중에만 자리를 잡고, 실패·기록 없음·그릴 값 없음이면 자리째 뺌(카드에 빈칸이 남지 않게)
   if (history.kind === "loading")
     return <span aria-hidden="true" className={cn("block h-10", className)} />;
   if (history.kind !== "ready" || history.history === null) return null;
   const chart = waveChart(history.history.points, nowMs, latest);
   if (chart.kind === "empty") return null;
+  return <MiniWaveSvg chart={chart} className={className} />;
+}
+
+// 그린 차트 하나(받기·실패 판단은 부르는 쪽). 홈 서핑 카드는 같은 차트로 최고·최저 글도 씀
+export function MiniWaveSvg({
+  chart,
+  className,
+}: {
+  chart: Extract<WaveChartModel, { kind: "ready" }>;
+  className?: string | undefined;
+}) {
+  const t = useTranslations("detail.chart");
+  const hatchId = useId();
 
   // 0부터 시작하는 세로축(상세와 같음). 높이가 작아 0.5m 단위로 올림
   const topM = Math.max(1, Math.ceil(chart.maxV * 2) / 2);
