@@ -258,10 +258,14 @@ for (const scheme of ["light", "dark"] as const) {
         name: new RegExp(`^${CLEAR_TITLE} \\d+곳$`),
       });
       const blockedGroup = page.getByRole("region", {
-        name: new RegExp(`^${ko.home.hero.category.unavailable} \\d+곳$`),
+        name: new RegExp(
+          `^${ko.explore.group.unavailable.replace("{count}", "\\d+")}$`,
+        ),
       });
       const unknownGroup = page.getByRole("region", {
-        name: new RegExp(`^${ko.home.hero.category.undetermined} \\d+곳$`),
+        name: new RegExp(
+          `^${ko.explore.group.undetermined.replace("{count}", "\\d+")}$`,
+        ),
       });
 
       await expect(clearGroup).toBeVisible();
@@ -547,7 +551,9 @@ test.describe("validUntil 1분 전 경계값", () => {
     await page.getByRole("button", { name: ko.nav.back }).first().click();
     await expect(page).toHaveURL(/\/explore\/$/);
     const blockedGroup = page.getByRole("region", {
-      name: new RegExp(`^${ko.home.hero.category.unavailable} \\d+곳$`),
+      name: new RegExp(
+        `^${ko.explore.group.unavailable.replace("{count}", "\\d+")}$`,
+      ),
     });
     await blockedGroup
       .getByRole("link", { name: new RegExp(WARNING_NAME) })
