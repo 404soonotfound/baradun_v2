@@ -38,7 +38,9 @@ const WARNING_SENTENCE = ko.verdict.warning.sentence.replace(
   WARNING_TITLE,
 );
 const SEA_TITLE = ko.home.region.seaTitle.replace("{region}", REGION_NAME);
-const CLEAR_SUMMARY_ZERO = `${ko.home.hero.category.clear} ${ko.home.hero.count.replace("{count}", "0")}`;
+// PC 히어로 '지금 전국 바다' 카드의 특보 없음 줄(묶음 이름 + 개수)
+const clearMapRow = (page: Page) =>
+  page.locator('[data-national-tone="clear"]');
 
 interface SnapshotTimes {
   nowMs: number;
@@ -165,11 +167,7 @@ for (const scheme of ["light", "dark"] as const) {
         });
         await expect(warningCard).toBeVisible();
         await expect(warningCard).toContainText(WARNING_TITLE);
-        await expect(
-          page.getByRole("link", {
-            name: new RegExp(`^${ko.home.hero.category.clear} [1-9]`),
-          }),
-        ).toBeVisible();
+        await expect(clearMapRow(page)).toContainText(/[1-9]\d*곳$/);
       } else {
         const countCard = seaRegion.getByRole("link", {
           name: new RegExp(`^${REGION_NAME} 해변 \\d+곳 지금 상태`),
@@ -212,23 +210,15 @@ for (const scheme of ["light", "dark"] as const) {
         await expect(warningCard).toContainText(
           confirmedUntil(times.warningConfirmedAt, expiredMs),
         );
-        // PC 상태 요약은 '특보 없음 0곳'만 남고 확인 시각 근거는 사라짐
-        const summaryClear = page.getByRole("link", {
-          name: CLEAR_SUMMARY_ZERO,
-        });
-        await expect(summaryClear).toBeVisible();
-        await expect(
-          page.getByRole("link", {
-            name: new RegExp(`^${ko.home.hero.category.clear} [1-9]`),
-          }),
-        ).toHaveCount(0);
+        // PC 전국 지도 카드는 '특보 없음 0곳'만 남고 확인 시각 근거는 사라짐
+        await expect(clearMapRow(page)).toHaveText(/0곳$/);
         await expect(
           visibleExactText(
             page,
             confirmedUntil(times.oldestConfirmedAt, expiredMs),
           ),
         ).toBeVisible();
-        // 화면 전체에서 '특보 없음' 글자는 PC 상태 요약 분류 이름('특보 없음 0곳') 한 곳뿐
+        // 화면 전체에서 '특보 없음' 글자는 PC 전국 지도 카드 묶음 이름('특보 없음 0곳') 한 곳뿐
         await expect(visibleExactText(page, CLEAR_TITLE)).toHaveCount(1);
       } else {
         const countCard = seaRegion.getByRole("link", {
@@ -512,11 +502,7 @@ test.describe("validUntil 1분 전 경계값", () => {
       page.getByText(confirmedUntil(times.clearConfirmedAt, beforeExpiryMs)),
     ).toHaveCount(0);
     if (desktop) {
-      await expect(
-        page.getByRole("link", {
-          name: new RegExp(`^${ko.home.hero.category.clear} [1-9]`),
-        }),
-      ).toBeVisible();
+      await expect(clearMapRow(page)).toContainText(/[1-9]\d*곳$/);
     } else {
       const countCard = seaRegion.getByRole("link", {
         name: new RegExp(`^${REGION_NAME} 해변 \\d+곳 지금 상태`),
