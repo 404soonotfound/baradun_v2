@@ -70,6 +70,10 @@ describe("hourCells", () => {
     expect(cells[1]!.date).toBe("2026-11-06");
   });
 
+  it("지금 시각을 모르면(NaN) 칸을 만들지 않음(던지지 않음)", () => {
+    expect(hourCells(points, NaN)).toEqual([]);
+  });
+
   it("풍향은 불어가는 쪽으로 180° 돌림, 값 없음은 null 그대로", () => {
     const cells = hourCells(points, NOW);
     expect(cells[0]!.windTo).toBe(180);
@@ -153,6 +157,13 @@ describe("laterDays", () => {
     };
     // 구역 예보가 모두 결측이고 기온만 있어도 안내
     expect(laterDays(short, empty, ta, NOW).midFailed).toBe(true);
+  });
+
+  it("지금 시각을 모르면 이후 날도 만들지 않음", () => {
+    expect(laterDays(short, land, ta, NaN)).toEqual({
+      days: [],
+      midFailed: true,
+    });
   });
 
   it("글피 칸이 없을 때(KST 00:00~02:10)는 중기 3일만", () => {
