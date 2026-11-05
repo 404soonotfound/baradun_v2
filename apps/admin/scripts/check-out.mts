@@ -26,6 +26,7 @@ export function listFiles(dir: string): string[] {
 }
 
 // 인라인 <script> 본문의 sha256 목록('sha256-<base64>'). src가 있는 스크립트는 빼고 'self'로 허용
+// 앱끼리 코드를 공유하지 않아(ADR 0001) apps/web/scripts/csp-meta.mts extractInlineScriptHashes와 같은 순회를 따로 둠. 한쪽을 고치면 다른 쪽도 같이 고침
 export function inlineScriptHashes(html: string): string[] {
   const hashes = new Set<string>();
   const document = parse(html);
