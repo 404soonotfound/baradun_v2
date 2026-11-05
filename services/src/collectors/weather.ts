@@ -247,6 +247,13 @@ export async function collectWeather(
   // 다시 받을 시간이 없으면 처음 실패 사유로 남김(요청은 이미 보냈으므로 budget으로 세지 않음)
   const retries: { run: () => Promise<void>; giveUp: () => void }[] = [];
   let recovered = 0;
+  // 기상청이 결측(-999)으로 준 실황 격자. 수집 실패로 치지 않고(다시 받아도 같음) 곳과 개수만 남김
+  // 저장값은 덮지 않으므로 그 격자 '지금 기온'은 오래되면 publisher가 null로 거름(확인하지 못했어요)
+  const nowMissing: GridKey[] = [];
+  const missing = (target: GridKey) => {
+    nowMissing.push(target);
+    deps.log("info", "weather_now_missing", { target });
+  };
   const record = <T>(
     source: string,
     target: string,
@@ -265,7 +272,8 @@ export async function collectWeather(
         if (retried.status === "ok") {
           recovered += 1;
           ok(retried.value);
-        } else fail(source, target, retried.reason);
+        } else if (retried.reason === "t1h_missing") missing(target);
+        else fail(source, target, retried.reason);
       },
       giveUp: () => fail(source, target, first),
     });
@@ -386,6 +394,9 @@ export async function collectWeather(
         }
         const base = noCurrent(probed) ? prevHour : nowBase;
         const result = reuse ? probed : await fetchNow(g, base);
+        if (result.status === "failed" && result.reason === "t1h_missing") {
+          return missing(gridKey(g));
+        }
         record(
           "now",
           gridKey(g),
@@ -416,6 +427,14 @@ export async function collectWeather(
       if (!tried.has(i)) r.giveUp();
     });
     retriedCount = tried.size;
+    // 결측 격자가 많으면 바다 격자 몇 곳이 아니라 기상청 쪽 문제로 보고 실패로 남김(경보가 알게)
+    if (nowMissing.length >= COLLECT_POLICY.weatherNowMissingMax) {
+      failures.push({
+        source: "now",
+        reason: "t1h_missing",
+        count: nowMissing.length,
+      });
+    }
   }
 
   // 받은 것만 이전 값에 합쳐 씀. 받은 것이 없으면 쓰지 않음(저장한 것으로 침)
@@ -508,6 +527,7 @@ export async function collectWeather(
     now: {
       ok: nowFresh.size,
       tried: key === null ? 0 : deps.areas.grids.length,
+      missing: nowMissing.length,
     },
     short: {
       ok: shortFresh.size,
@@ -555,6 +575,7 @@ export async function collectWeather(
     skipped,
     retried: retriedCount,
     recovered,
+    nowMissing: nowMissing.length,
   });
   if (status === "complete") return { status, slotId };
   return { status, slotId, failures: all };

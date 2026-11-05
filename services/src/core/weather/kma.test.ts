@@ -87,6 +87,7 @@ describe("다시 받을 실패 (BRD-186)", () => {
       "result:22",
       "result:30",
       "result:missing",
+      "t1h_missing",
       "not_json",
       "truncated:3/10",
       "no_rows",
@@ -215,6 +216,37 @@ describe("초단기실황", () => {
       status: "failed",
       reason: "no_t1h",
     });
+  });
+
+  // BRD-186: 2026-11-05 삼척해수욕장 격자 98,126은 T1H=-999(모든 항목 결측 표기)
+  const t1h = (obsrValue: string) =>
+    envelope([
+      {
+        baseDate: "20261105",
+        baseTime: "0900",
+        category: "T1H",
+        nx: 93,
+        ny: 133,
+        obsrValue,
+      },
+    ]);
+
+  it("기상청 결측 표기(-999·-998.9·900 이상)는 t1h_missing으로 나눔", () => {
+    for (const v of ["-999", "-998.9", "900"]) {
+      expect(parseNow(t1h(v), base, GRID)).toEqual({
+        status: "failed",
+        reason: "t1h_missing",
+      });
+    }
+  });
+
+  it("결측 표기가 아닌 범위 밖 값(60·-80)은 no_t1h", () => {
+    for (const v of ["60", "-80"]) {
+      expect(parseNow(t1h(v), base, GRID)).toEqual({
+        status: "failed",
+        reason: "no_t1h",
+      });
+    }
   });
 });
 
