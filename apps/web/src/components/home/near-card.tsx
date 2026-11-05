@@ -28,7 +28,7 @@ import { useMetaText } from "@/lib/snapshot/use-meta-text";
 import type { BeachView, MetricKey } from "@/lib/snapshot/view";
 import { useBeachWeather, type WeatherView } from "@/lib/snapshot/weather";
 import { waveChart } from "@/lib/wave-chart";
-import { hourCells, type HourCell } from "@/lib/weather";
+import { hourCells, kstDay, type HourCell } from "@/lib/weather";
 
 // 홈 해변 카드 (노션 2장 HOME 7 · 3장 NearCard, 11/5 홈 v3 시안 ActR_M_V3SW·SF·SC · P_V3*)
 // 모바일·PC 같은 모양: 배지 + › → 이름 → 거리(또는 지역) · 측정 시각 → 큰 값 2칸 → 회색 그림 칸 → 아래 한 줄
@@ -331,7 +331,10 @@ function TodayWeather({
   const first = cells[0] ?? null;
   const pops = cells.flatMap((c) => (c.pop === null ? [] : [c.pop]));
   const pop = pops.length > 0 ? Math.round(Math.max(...pops)) : null;
-  const { min, max } = grid.today;
+  // publisher 오늘 값은 그 날짜가 지금 한국 날짜일 때만 '오늘'로 씀(이전 파일·시각 모름이면 그리지 않음)
+  const isToday = Number.isFinite(nowMs) && grid.today.date === kstDay(nowMs);
+  const min = isToday ? grid.today.min : null;
+  const max = isToday ? grid.today.max : null;
   const now = grid.now;
   const nowTime = now ? kstStamp(now.observedAt, nowMs) : null;
   const issued = grid.short ? kstStamp(grid.short.issuedAt, nowMs) : null;
@@ -443,18 +446,26 @@ function WaveStrip({
       </PictureBox>
     );
   }
+  // 받지 못함·지금 시각 모름은 '기록 없음'이 아니라 실패로 알림(실패를 빈 기록으로 보이지 않게)
+  if (history.kind === "failed" || !Number.isFinite(nowMs)) {
+    return <PictureNote>{t("home.card.waveFailed")}</PictureNote>;
+  }
   const latest =
     wave.kind === "value"
       ? { t: Date.parse(wave.observedAt), v: wave.value }
       : null;
   const chart =
-    history.kind === "ready" && history.history !== null
+    history.history !== null
       ? waveChart(history.history.points, nowMs, latest)
       : null;
   if (!chart || chart.kind === "empty") {
     return <PictureNote>{t("home.card.waveNoRecord")}</PictureNote>;
   }
-  const values = chart.runs.flat().map((p) => p.v);
+  // 최고는 그래프 읽는 글(MiniWaveChart)과 같은 maxV, 최저도 그린 점 + 지금 값에서 셈
+  const minV = Math.min(
+    ...chart.runs.flat().map((p) => p.v),
+    ...(chart.current ? [chart.current.v] : []),
+  );
   return (
     <PictureBox>
       <span className="flex h-[49px] w-full flex-col justify-between">
@@ -470,10 +481,7 @@ function WaveStrip({
         >
           <span>{t("detail.chart.dayAgo")}</span>
           <span>
-            {t("home.card.waveRange", {
-              max: Math.max(...values),
-              min: Math.min(...values),
-            })}
+            {t("home.card.waveRange", { max: chart.maxV, min: minV })}
           </span>
           <span>{t("detail.chart.now")}</span>
         </span>
