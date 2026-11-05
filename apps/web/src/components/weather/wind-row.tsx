@@ -31,6 +31,28 @@ function segments(cells: readonly WindCell[], max: number) {
   return out;
 }
 
+// 불어가는 쪽 화살표 하나(11px). 홈 '앞으로 바람' 칸도 같은 그림을 씀
+export function WindArrow({ windTo }: { windTo: number }) {
+  return (
+    <svg
+      width="11"
+      height="11"
+      viewBox="0 0 12 12"
+      className="shrink-0"
+      style={{ transform: `rotate(${Math.round(windTo)}deg)` }}
+    >
+      <path
+        d="M6 10.5V1.8M2.6 5.1 6 1.6l3.4 3.5"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 export function WindRow({ cells }: { cells: readonly WindCell[] }) {
   const width = cells.length * WEATHER_COLUMN;
   const max = Math.max(1, ...cells.map((c) => c.windSpeed ?? 0));
@@ -46,22 +68,7 @@ export function WindRow({ cells }: { cells: readonly WindCell[] }) {
             {cell.windTo === null || cell.windSpeed === null ? (
               <span className="h-[11px]" />
             ) : (
-              <svg
-                width="11"
-                height="11"
-                viewBox="0 0 12 12"
-                className="shrink-0"
-                style={{ transform: `rotate(${Math.round(cell.windTo)}deg)` }}
-              >
-                <path
-                  d="M6 10.5V1.8M2.6 5.1 6 1.6l3.4 3.5"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.8"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
+              <WindArrow windTo={cell.windTo} />
             )}
             <span className="text-[11.5px] leading-none font-bold text-text-default tabular-nums">
               {cell.windSpeed === null ? "–" : Math.round(cell.windSpeed)}

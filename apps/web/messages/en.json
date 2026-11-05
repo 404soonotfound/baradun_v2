@@ -161,12 +161,8 @@
       "noValue": "No value",
       "locating": "Finding your location",
       "noBeach": "No beaches confirmed for this activity yet",
-      "last24h": "Last 24 hours",
       "timeWithOthers": "{main} ({others})",
       "noValueNext": "We'll show new measurements when they come in",
-      "groupNone": "No nearby observation ({metrics})",
-      "groupDelayed": "Measurements delayed ({metrics})",
-      "groupMissing": "No value ({metrics})",
       "noStationNext": "Check the badge above for warning info"
     },
     "map": {
@@ -203,8 +199,8 @@
       "issuedShort": "forecast {time}",
       "weatherFailed": "Couldn't check today's weather · See warnings and measurements above",
       "waveRange": "high {max}m · low {min}m",
-      "waveFailed": "Couldn't load the last 24 hours of wave height · See the current wave height above",
       "waveNoRecord": "No wave height records in the last 24 hours",
+      "waveFailed": "Couldn't load the last 24 hours of wave height · See the current wave height above",
       "waveNoStation": "No station within 20km, so no chart",
       "windAhead": "<b>Wind m/s</b> · arrows point where the wind blows",
       "forecastAt": "Forecast {time}",
@@ -256,7 +252,6 @@
         "undetermined": "Cannot determine"
       },
       "count": "{count, plural, one {# beach} other {# beaches}}",
-      "reason": "{reason} · {count}",
       "clearScope": "Each beach's warning zone · KMA · checked {time}",
       "clearScopeNoTime": "Each beach's warning zone · KMA · check time unknown"
     },

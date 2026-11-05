@@ -161,12 +161,8 @@
       "noValue": "값 없음",
       "locating": "위치를 확인하고 있어요",
       "noBeach": "이 활동이 확인된 해변이 아직 없어요",
-      "last24h": "지난 24시간",
       "timeWithOthers": "{main}({others})",
       "noValueNext": "새 측정값이 들어오면 다시 보여드려요",
-      "groupNone": "가까운 관측 없음({metrics})",
-      "groupDelayed": "측정이 늦어지고 있어요({metrics})",
-      "groupMissing": "값 없음({metrics})",
       "noStationNext": "특보 정보는 위 배지를 확인하세요"
     },
     "map": {
@@ -203,8 +199,8 @@
       "issuedShort": "예보 {time} 발표",
       "weatherFailed": "오늘 날씨를 확인하지 못했어요 · 특보와 측정값은 위에서 확인하세요",
       "waveRange": "최고 {max}m · 최저 {min}m",
-      "waveFailed": "24시간 파고를 불러오지 못했어요 · 지금 파고는 위에서 확인하세요",
       "waveNoRecord": "지난 24시간 파고 기록이 없어요",
+      "waveFailed": "24시간 파고를 불러오지 못했어요 · 지금 파고는 위에서 확인하세요",
       "waveNoStation": "20km 안에 측정소가 없어 그리지 않아요",
       "windAhead": "<b>바람 m/s</b> · 화살표는 불어가는 쪽",
       "forecastAt": "예보 {time}",
@@ -256,7 +252,6 @@
         "undetermined": "판단불가"
       },
       "count": "{count}곳",
-      "reason": "{reason} {count}곳",
       "clearScope": "각 해변 특보구역 · 기상청 {time} 확인",
       "clearScopeNoTime": "각 해변 특보구역 · 기상청 · 확인 시각 모름"
     },
