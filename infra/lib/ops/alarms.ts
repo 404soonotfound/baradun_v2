@@ -21,6 +21,8 @@ import { LOG_RETENTION, LOGIN_ABUSE_ALARM, RETRY_LIMITS } from "../settings";
 //            + 로그인 반복 요청 1(결정 기록 D17-4)
 // settings.ts MAX_ALARMS(11)를 다 씀. 경보를 더 넣으려면 기존 경보를 합치거나 상한을 다시 정해야 함
 // catalog는 하루 1회라 심장박동 없이 오류 경보만. 데이터 문의 함수 경보는 두지 않음(BRD-63 결정)
+// 날씨 수집기(Weather, BRD-181)는 경보를 두지 않음: 참고 정보라 분류에 영향이 없고 상한을 다 씀
+// 실패는 Lambda 오류 지표·로그·실행 기록에 남고, 화면은 오래된 값을 null로 받아 '날씨를 확인하지 못했어요'로 보여 줌
 
 const REPO_ROOT = path.join(__dirname, "..", "..", "..");
 const NOTIFICATION_HANDLER_FILE = path.join(
