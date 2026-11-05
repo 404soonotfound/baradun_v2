@@ -324,6 +324,31 @@ describe("공식 IAM·CFN 검증기", () => {
     ).toEqual([]);
   });
 
+  it.each([
+    "evil-lambda.amazonaws.com",
+    "https://evil.example/lambda.amazonaws.com",
+  ])("PassRole 서비스 이름의 부분 일치나 URL을 거부함: %s", (service) => {
+    expect(
+      statementScopeErrors(
+        {
+          Effect: "Allow",
+          Action: "iam:PassRole",
+          Resource: "arn:aws:iam::717304679248:role/BaradunV2-*",
+          Condition: {
+            StringEquals: {
+              "iam:PassedToService": ["lambda.amazonaws.com", service],
+            },
+          },
+        },
+        "iam:PassRole",
+        "AWS::Lambda::Function",
+        { typeName: "AWS::Lambda::Function" },
+        {},
+        cloudfrontRef,
+      ),
+    ).toEqual([expect.stringContaining("PassRole 서비스가 없음")]);
+  });
+
   it("사용자 태그는 모든 배포에 명시돼야 RequestTag·ResourceTag 근거로 인정한다", () => {
     const type = "AWS::CloudFront::Distribution";
     const resources = {
