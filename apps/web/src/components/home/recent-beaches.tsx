@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 
 import { SectionHead } from "@/components/home/section-head";
@@ -36,18 +36,20 @@ export function RecentBeaches({
   // 칩 줄이 오른쪽으로 더 있는지(넘치고 끝까지 넘기지 않았을 때만 흐림)
   const chipsRef = useRef<HTMLUListElement>(null);
   const [more, setMore] = useState(false);
-  function updateMore() {
+  const updateMore = useCallback(() => {
     const el = chipsRef.current;
     setMore(!!el && el.scrollLeft + el.clientWidth < el.scrollWidth - 1);
-  }
-  useEffect(() => {
+  }, []);
+  // 칩 목록이 바뀔 때만 다시 잼(렌더마다 관찰자를 새로 만들지 않음). 그리기 전에 재서 흐림이 늦게 붙지 않게
+  const chipIds = beaches.map((beach) => beach.id).join(",");
+  useLayoutEffect(() => {
     const el = chipsRef.current;
     if (!el) return;
     updateMore();
     const observer = new ResizeObserver(updateMore);
     observer.observe(el);
     return () => observer.disconnect();
-  });
+  }, [updateMore, chipIds]);
   const tRoot = useTranslations(); // home.near.clearScope · activity.*
   const visits = useRecentVisits(); // 본 시각·그때 고른 활동(기기에만)
   const snapshot = useSnapshot(); // Vue: mapState
