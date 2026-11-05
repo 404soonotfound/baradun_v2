@@ -12,7 +12,11 @@ import { cn } from "@/lib/cn";
 import { kstStamp } from "@/lib/snapshot/clock";
 import { useBadgeText } from "@/lib/snapshot/use-badge-text";
 import type { BeachView } from "@/lib/snapshot/view";
-import { clearCheckedAt, staleCheckedAt } from "@/lib/status-count";
+import {
+  clearCheckedAt,
+  nationalCounts,
+  staleCheckedAt,
+} from "@/lib/status-count";
 
 // PC 홈 히어로 오른쪽 '지금 전국 바다' (11/5 홈 v3 시안 ActR_P_V3*, 상태 요약 3장을 대신함)
 // 공개 해변 전체를 점으로(색 = 게시된 배지 색, 큰 점 = 지금 보는 범위) + 4가지 묶음 개수 + 근거 줄 → 탐색 지도
@@ -71,22 +75,10 @@ export function NationalMapCard({
   const loading = views.some((view) => view.kind === "loading");
   const project = projector(beaches);
 
-  const counts: Record<VerdictTone, number> = {
-    clear: 0,
-    blocked: 0,
-    unknown: 0,
-    stale: 0,
-  };
-  let restricted = 0;
+  const { counts, restricted } = nationalCounts(views);
   const tones = views.map((view) =>
     view.kind === "ready" ? badgeTone(view.badge) : null,
   );
-  views.forEach((view, i) => {
-    const tone = tones[i];
-    if (!tone || view.kind !== "ready") return;
-    if (view.badge.kind === "restricted") restricted += 1;
-    else counts[tone] += 1;
-  });
   // 줄 목록: 4가지 묶음은 0곳이어도 늘 같은 자리, 이용 제한은 있을 때만 이용불가 바로 아래
   const rows: {
     key: string;

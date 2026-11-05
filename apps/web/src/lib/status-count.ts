@@ -1,3 +1,4 @@
+import { badgeTone, type VerdictTone } from "@/lib/badge-tone";
 import type { BadgeLabel, BeachView, Category } from "@/lib/snapshot/view";
 
 // 지역 해변 상태별 개수 (노션 2장 HOME 8 '지역 해변 상태별 개수 카드', BRD-27)
@@ -86,4 +87,26 @@ export function staleCheckedAt(
 ): { confirmedAt: string | null } | null {
   const confirmedAt = oldestConfirmedAt(views, (view) => view.stale);
   return confirmedAt === undefined ? null : { confirmedAt };
+}
+
+// [8] PC 전국 지도 카드의 묶음 개수(탐색 지도 범례 4가지 색 + 이용 제한). 게시된 배지 색 그대로 셈(badgeTone, G1)
+// 모르는 사유 code의 이용불가(restricted)는 '이용불가 · 특보'로 세지 않고 따로 셈(9.1: 이름만 '이용 제한', 분류는 낮추지 않음)
+// 불러오는 중·노출 끈 해변은 세지 않음(불러오는 중이면 부르는 쪽이 개수를 보이지 않음)
+export function nationalCounts(views: readonly BeachView[]): {
+  counts: Record<VerdictTone, number>;
+  restricted: number;
+} {
+  const counts: Record<VerdictTone, number> = {
+    clear: 0,
+    blocked: 0,
+    unknown: 0,
+    stale: 0,
+  };
+  let restricted = 0;
+  for (const view of views) {
+    if (view.kind !== "ready") continue;
+    if (view.badge.kind === "restricted") restricted += 1;
+    else counts[badgeTone(view.badge)] += 1;
+  }
+  return { counts, restricted };
 }
