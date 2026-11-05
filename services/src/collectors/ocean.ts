@@ -127,8 +127,8 @@ export function exceptionReason(error: unknown): string {
 // 이전 값을 읽어 합친 뒤 씀. 읽은 recordVersion을 넘겨 사이에 다른 실행이 쓰면(conflict) 다시 읽어 한 번 더 합침
 // build: 이전 기록 → 쓸 값·순서 기준(이전 orderAt에서 시작해 뒤로 가지 않음)·부르는 쪽 결과
 // stale은 orderAt이 줄지 않아 정상 흐름에서는 나오지 않지만 저장소 계약상 가능한 결과라 저장 못 함으로 봄
-// 로그 이름: {event}_stale(warn)·{event}_conflict(error)
-async function mergeAndPut<T>(
+// 로그 이름: {event}_stale(warn)·{event}_conflict(error). collect-weather도 씀
+export async function mergeAndPut<T>(
   deps: CollectDeps,
   key: { readonly pk: string; readonly sk: string },
   event: string,
