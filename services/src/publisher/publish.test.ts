@@ -8,6 +8,7 @@ import {
   HEAVY_RAIN_ROW,
   NOW,
   SEASONS,
+  WEATHER_AREAS,
   WIND_WAVE_ROW,
   ZONES,
   seedReadings,
@@ -55,6 +56,7 @@ async function setup(
     beaches: BEACHES,
     zones: ZONES,
     seasons: SEASONS,
+    weatherAreas: WEATHER_AREAS,
     notices: options.notices ?? (async () => []),
     log: createLogger(
       () => [],
@@ -104,6 +106,7 @@ describe("publishSnapshot", () => {
         "manifest.json",
         "nationwide-warnings.json",
         "status.json",
+        "weather.json",
       ].map((name) => `data/${V1}/${name}`),
     );
     expect(manifest()).toMatchObject({
