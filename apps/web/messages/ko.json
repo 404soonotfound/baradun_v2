@@ -169,6 +169,18 @@
       "groupMissing": "값 없음({metrics})",
       "noStationNext": "특보 정보는 위 배지를 확인하세요"
     },
+    "activityEmpty": {
+      "title": "아직 {activity} 활동이 확인된 해변이 없어요",
+      "body": "해변마다 공공 자료로 확인된 활동만 보여드려요. {activity} 활동 정보가 추가되면 아래 모양의 카드로 바로 보여드려요.",
+      "bodyWide": "해변마다 공공 자료로 확인된 활동만 보여드려요. {activity} 활동 정보가 추가되면 오른쪽 모양의 카드로 이 목록에 바로 보여드려요.",
+      "how": "활동 정보는 어떻게 확인하나요?",
+      "preview": "확인되면 이렇게 보여요",
+      "picture": {
+        "swimming": "오늘 날씨",
+        "surfing": "지난 24시간 파고",
+        "scuba": "앞으로 바람"
+      }
+    },
     "card": {
       "seconds": "초",
       "directionFrom": "파도 방향 {dir}쪽에서",
