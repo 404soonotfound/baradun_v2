@@ -29,6 +29,18 @@ const BEACHES: Beach[] = readdirSync(BEACH_DIR)
       JSON.parse(readFileSync(path.join(BEACH_DIR, file), "utf8")) as Beach,
   );
 
+// 날씨 대응표(BRD-185). 해변 → 격자·중기 구역·기온 지점은 빌드에 들어간 대응표 그대로, 예보 값은 가짜
+const WEATHER_AREAS = JSON.parse(
+  readFileSync(path.join(REPO, "data/weather-areas.json"), "utf8"),
+).beaches as Record<
+  string,
+  {
+    grid: { nx: number; ny: number };
+    midLand: { regId: string };
+    midTa: { regId: string };
+  }
+>;
+
 // 상태를 따로 정한 해변(강릉시 4곳). 나머지는 '특보 없음'
 export const CLEAR_ID = "b0001";
 export const WARNING_ID = "b0002";
@@ -251,6 +263,7 @@ function manifestFile(now: number, extra: Record<string, unknown> = {}) {
       status: `/data/${version}/status.json`,
       history: `/data/${version}/history.json`,
       nationwideWarnings: `/data/${version}/nationwide-warnings.json`,
+      weather: `/data/${version}/weather.json`,
     },
     ...extra,
   };
@@ -337,6 +350,101 @@ function historyFile(now: number) {
   };
 }
 
+// 날씨 파일(계약 WeatherFile). midFailed: 중기 구역 값 없음 / failed: 파일 자체를 못 받음(경로가 404)
+type WeatherMode = "ok" | "midFailed" | "failed";
+const KST = 9 * 60 * MIN;
+const kstDate = (ms: number) => new Date(ms + KST).toISOString().slice(0, 10);
+function weatherFile(now: number, mode: WeatherMode) {
+  // 오늘(KST) 00시부터 모레 21시까지 3시간 간격. 발표 시각은 지금 2시간 전
+  const todayKst = Date.parse(`${kstDate(now)}T00:00:00Z`) - KST;
+  const points = Array.from({ length: 24 }, (_, i) => ({
+    at: iso(todayKst + i * 3 * 60 * MIN),
+    sky: (["clear", "mostlyCloudy", "cloudy"] as const)[i % 3],
+    precip: i % 8 === 5 ? "rain" : "none",
+    temperature: 10 + (i % 6),
+    pop: i % 8 === 5 ? 70 : (i % 4) * 10,
+    windFrom: (i * 45) % 360,
+    windSpeed: 2 + (i % 5),
+  }));
+  const day = (offset: number) => kstDate(now + offset * 24 * 60 * MIN);
+  const grids: Record<string, unknown> = {};
+  const beaches: Record<string, unknown> = {};
+  const land = new Set<string>();
+  const ta = new Set<string>();
+  for (const [id, area] of Object.entries(WEATHER_AREAS)) {
+    const grid = `${area.grid.nx},${area.grid.ny}`;
+    beaches[id] = {
+      grid,
+      midLand: area.midLand.regId,
+      midTa: area.midTa.regId,
+    };
+    land.add(area.midLand.regId);
+    ta.add(area.midTa.regId);
+    grids[grid] = {
+      short: {
+        issuedAt: iso(now - 2 * 60 * MIN),
+        points,
+        days: [
+          {
+            date: day(3),
+            pop: 30,
+            popAt: iso(Date.parse(`${day(3)}T06:00:00Z`) - KST),
+            sky: "cloudy",
+            precip: "none",
+            min: 6,
+            max: 13,
+          },
+        ],
+      },
+      today: {
+        date: day(0),
+        min: 9,
+        minIssuedAt: iso(now - 9 * 60 * MIN),
+        max: 16,
+        maxIssuedAt: iso(now - 9 * 60 * MIN),
+      },
+      now: { observedAt: iso(now - 40 * MIN), temperature: 14.2 },
+    };
+  }
+  const midDays = [4, 5, 6].map(day);
+  return {
+    beaches,
+    grids,
+    midLand:
+      mode === "midFailed"
+        ? {}
+        : Object.fromEntries(
+            [...land].map((regId) => [
+              regId,
+              {
+                name: "시험 구역",
+                days: midDays.map((date, i) => ({
+                  date,
+                  issuedAt: iso(now - 6 * 60 * MIN),
+                  pop: [10, 0, 20][i],
+                  sky: (["mostlyCloudy", "clear", "mostlyCloudy"] as const)[i],
+                  precip: "none",
+                })),
+              },
+            ]),
+          ),
+    midTa: Object.fromEntries(
+      [...ta].map((regId) => [
+        regId,
+        {
+          name: "시험 지점",
+          days: midDays.map((date, i) => ({
+            date,
+            issuedAt: iso(now - 6 * 60 * MIN),
+            min: 7 + i,
+            max: 15 + i,
+          })),
+        },
+      ]),
+    ),
+  };
+}
+
 type Scenario =
   | "normal" // 정상(특보 없음·이용불가·관측 지연·특보 확인 못 함이 섞임)
   | "loading" // manifest 응답 없음
@@ -351,6 +459,8 @@ type Scenario =
 interface DataControl {
   // 지금 쓰는 시나리오를 바꿈(다음 조회부터)
   set: (scenario: Scenario) => void;
+  // 날씨 파일 모양을 바꿈(BRD-185, 다음 조회부터)
+  setWeather: (mode: WeatherMode) => void;
   // 지금까지 받은 /data 요청 경로
   requests: string[];
 }
@@ -370,6 +480,7 @@ async function mockData(
 ): Promise<DataControl> {
   let scenario = initial;
   const requests: string[] = [];
+  let weather: WeatherMode = "ok";
   // 주소 맨 앞이 /data/인 것만(화면 주소 /about/data/는 제외)
   await context.route(
     (url) => url.pathname.startsWith("/data/"),
@@ -418,10 +529,17 @@ async function mockData(
       if (pathname.endsWith("/history.json")) {
         return json(route, historyFile(now));
       }
+      if (pathname.endsWith("/weather.json") && weather !== "failed") {
+        return json(route, weatherFile(now, weather));
+      }
       return route.fulfill({ status: 404, body: "" });
     },
   );
-  return { set: (next) => (scenario = next), requests };
+  return {
+    set: (next) => (scenario = next),
+    setWeather: (mode) => (weather = mode),
+    requests,
+  };
 }
 
 // 같은 출처 밖 요청(지도 타일·글꼴 서버 등)은 모두 막음. 지도는 '목록으로 볼 수 있어요' 경로로 감
