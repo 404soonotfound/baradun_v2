@@ -1,0 +1,128 @@
+{
+  "beaches": {
+    "b0002": {
+      "grid": "93,133",
+      "midLand": "11D20000",
+      "midTa": "11D20501"
+    },
+    "b0008": {
+      "grid": "93,132",
+      "midLand": "11D20000",
+      "midTa": "11D20501"
+    }
+  },
+  "grids": {
+    "93,133": {
+      "short": {
+        "issuedAt": "2026-11-04T23:00:00Z",
+        "points": [
+          {
+            "at": "2026-11-05T00:00:00Z",
+            "sky": "cloudy",
+            "precip": "rain",
+            "temperature": 12,
+            "pop": 70,
+            "windFrom": 262,
+            "windSpeed": 1.5
+          },
+          {
+            "at": "2026-11-05T03:00:00Z",
+            "sky": "mostlyCloudy",
+            "precip": "none",
+            "temperature": 15,
+            "pop": 0,
+            "windFrom": 280,
+            "windSpeed": 3.1
+          }
+        ],
+        "days": [
+          {
+            "date": "2026-11-08",
+            "pop": 30,
+            "popAt": "2026-11-08T06:00:00Z",
+            "sky": "mostlyCloudy",
+            "precip": "none",
+            "min": 4,
+            "max": 12
+          }
+        ]
+      },
+      "today": {
+        "date": "2026-11-05",
+        "min": 11,
+        "minIssuedAt": "2026-11-04T17:00:00Z",
+        "max": 16,
+        "maxIssuedAt": "2026-11-04T20:00:00Z"
+      },
+      "now": {
+        "observedAt": "2026-11-05T00:00:00Z",
+        "temperature": 11.2
+      },
+      "category": "clear"
+    },
+    "93,132": {
+      "short": null,
+      "today": {
+        "date": "2026-11-05",
+        "min": null,
+        "minIssuedAt": null,
+        "max": null,
+        "maxIssuedAt": null
+      },
+      "now": null
+    }
+  },
+  "midLand": {
+    "11D20000": {
+      "name": "강원영동",
+      "days": [
+        {
+          "date": "2026-11-09",
+          "issuedAt": "2026-11-04T21:00:00Z",
+          "pop": 20,
+          "sky": "mostlyCloudy",
+          "precip": "none"
+        },
+        {
+          "date": "2026-11-10",
+          "issuedAt": "2026-11-04T21:00:00Z",
+          "pop": 10,
+          "sky": "clear",
+          "precip": "none"
+        },
+        {
+          "date": "2026-11-11",
+          "issuedAt": null,
+          "pop": null,
+          "sky": null,
+          "precip": null
+        }
+      ]
+    }
+  },
+  "midTa": {
+    "11D20501": {
+      "name": "강릉",
+      "days": [
+        {
+          "date": "2026-11-09",
+          "issuedAt": "2026-11-04T21:00:00Z",
+          "min": 5,
+          "max": 13
+        },
+        {
+          "date": "2026-11-10",
+          "issuedAt": "2026-11-04T21:00:00Z",
+          "min": 6,
+          "max": 17
+        },
+        {
+          "date": "2026-11-11",
+          "issuedAt": null,
+          "min": null,
+          "max": null
+        }
+      ]
+    }
+  }
+}
