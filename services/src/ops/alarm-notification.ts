@@ -35,6 +35,7 @@ export const ALARM_LABELS = [
   ["PublishStopped", "데이터 게시 중단"],
   ["NotificationFailed", "운영 알림 발송 실패"],
   ["LoginAbuse", "운영자 로그인 반복 요청"],
+  ["WeatherFailing", "날씨 수집 계속 실패"],
 ] as const;
 
 export interface AlarmNotification {
