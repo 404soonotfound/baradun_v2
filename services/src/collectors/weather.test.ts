@@ -424,6 +424,29 @@ describe("collectWeather", () => {
     ).toMatchObject({ target: "93,133", reason: "result:01" });
   });
 
+  it("일시 실패가 많으면(기상청 전면 장애) 상한 20곳까지만 다시 받음", async () => {
+    const s = setup();
+    s.deps.areas = {
+      ...AREAS,
+      grids: Array.from({ length: 21 }, (_, i) => ({ nx: 93, ny: 133 + i })),
+    };
+    sequence(s, {
+      getUltraSrtNcst: Array.from({ length: 50 }, () => RESULT("01")),
+    });
+    const result = await collectWeather(s.deps);
+    expect(calls(s.urls, "getUltraSrtNcst")).toBe(21 + 20);
+    expect(
+      (result as { failures: readonly unknown[] }).failures,
+    ).toContainEqual({
+      source: "now",
+      reason: "result:01",
+      count: 21,
+    });
+    expect(
+      s.events().find((e) => e.event === "weather_run_finished"),
+    ).toMatchObject({ retried: 20, recovered: 0 });
+  });
+
   it("같은 슬롯을 이미 끝냈으면 건너뜀", async () => {
     const state = new MemoryStateStore();
     const first = setup({ state });

@@ -54,4 +54,7 @@ export const COLLECT_POLICY = {
   // 한 번에 보내는 요청 수와 새 요청을 보내지 않는 시간(catalog와 같은 이유로 Lambda 60초 안)
   weatherConcurrency: 8,
   weatherBudgetMs: 30 * SECOND_MS,
+  // 기상청 일시 오류(01 등)를 같은 실행에서 다시 받는 곳 수 상한(BRD-186). 평소 한 실행에 0~2곳
+  // 전면 장애 때 매시 이만큼만 더 부름 → 하루 종일 이어져도 약 +480회로 하루 10,000회 안(평소 약 4,600회)
+  weatherRetryMax: 20,
 } as const;
