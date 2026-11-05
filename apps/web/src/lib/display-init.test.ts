@@ -6,6 +6,7 @@ import tokens from "@baradun/design-tokens/tokens.json";
 import {
   DISPLAY_INIT_SCRIPT,
   MOTION_STORAGE_KEY,
+  serializeInlineScriptValue,
   THEME_STORAGE_KEY,
 } from "./display-init";
 import { resolveTheme } from "./theme";
@@ -126,6 +127,16 @@ function run({
 }
 
 describe("그리기 전 화면 설정", () => {
+  it("HTML script를 닫는 문자와 줄 구분자를 안전하게 직렬화함", () => {
+    const value = "</script><script>self.injected=1</script>\u2028&";
+    const serialized = serializeInlineScriptValue(value);
+    expect(serialized.toLowerCase()).not.toContain("</script");
+    expect(serialized).not.toContain("\u2028");
+    const context: { result?: string } = {};
+    vm.runInNewContext(`result=${serialized}`, context);
+    expect(context.result).toBe(value);
+  });
+
   it("저장된 테마·움직임을 <html>에 붙임", () => {
     const page = run({
       stored: { [THEME_STORAGE_KEY]: "dark", [MOTION_STORAGE_KEY]: "off" },
