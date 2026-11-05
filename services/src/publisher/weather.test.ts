@@ -193,6 +193,27 @@ describe("오래된 값은 null(2026-11-05 사용자 결정: 단기 12시간·�
   });
 });
 
+describe("글피 하루 한 칸은 그날을 다 담은 발표에서만", () => {
+  it("발표가 글피의 00시만 담으면(KST 00:00~02:10, 전날 23:00 발표) 칸을 두지 않음", () => {
+    // 픽스처(11/5 02:00 발표)는 11/9 00시 한 칸까지 담음. KST 11/6 00:30에는 글피 = 11/9
+    const at = Date.parse("2026-11-05T15:30:00Z");
+    // 발표 시각만 11/5 23:00으로 바꿔 12시간 안에 둠(값은 그대로)
+    const late = {
+      [KEY]: { ...parsed.value, issuedAt: "2026-11-05T14:00:00Z" },
+    };
+    const grid = buildWeather(
+      WEATHER_AREAS,
+      BEACHES,
+      inputs({ short: late }),
+      at,
+      noLog,
+    ).grids[KEY]!;
+    expect(grid.short!.days).toEqual([]);
+    // 오늘~모레 점은 그대로
+    expect(grid.short!.points.length).toBeGreaterThan(0);
+  });
+});
+
 describe("구역표 읽기", () => {
   it("계약 모양이 아닌 해변만 빼고 알림(나머지 해변의 날씨는 게시)", () => {
     const events: string[] = [];
