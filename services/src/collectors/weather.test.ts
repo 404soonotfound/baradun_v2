@@ -218,6 +218,47 @@ describe("collectWeather", () => {
     );
   });
 
+  it("이번 시각 확인은 첫 격자로 한 번만: 나왔으면 그 응답을 쓰고, 없으면 모든 격자를 한 시간 전으로 부름", async () => {
+    const grids = [
+      { nx: 93, ny: 133 },
+      { nx: 93, ny: 134 },
+    ];
+    const nowReply = (nx: string, ny: string, time: string) =>
+      NOW_0900.replaceAll('"nx":93', `"nx":${nx}`)
+        .replaceAll('"ny":133', `"ny":${ny}`)
+        .replaceAll('"0900"', `"${time}"`);
+    const run = async (current: boolean) => {
+      const { deps, urls } = setup({ now: "2026-11-05T01:15:00Z" });
+      deps.areas = { ...AREAS, grids };
+      deps.get = async (url: string) => {
+        urls.push(url);
+        const p = new URL(url).searchParams;
+        if (op(url) !== "getUltraSrtNcst") {
+          return ok(
+            op(url) === "getVilageFcst"
+              ? SHORT_0800.replaceAll(
+                  '"nx":93',
+                  `"nx":${p.get("nx")}`,
+                ).replaceAll('"ny":133', `"ny":${p.get("ny")}`)
+              : (REAL[op(url)] as string),
+          );
+        }
+        const time = p.get("base_time")!;
+        return ok(
+          time === "1000" && !current
+            ? JSON.stringify({ response: { header: { resultCode: "03" } } })
+            : nowReply(p.get("nx")!, p.get("ny")!, time),
+        );
+      };
+      await collectWeather(deps);
+      return urls
+        .filter((u) => op(u) === "getUltraSrtNcst")
+        .map((u) => new URL(u).searchParams.get("base_time"));
+    };
+    expect(await run(true)).toEqual(["1000", "1000"]);
+    expect(await run(false)).toEqual(["1000", "0900", "0900"]);
+  });
+
   it("단기·중기를 실황보다 먼저 부름(시간 예산에 걸려도 덜 자주 오는 발표를 지킴)", async () => {
     const { deps, urls } = setup();
     await collectWeather(deps);
