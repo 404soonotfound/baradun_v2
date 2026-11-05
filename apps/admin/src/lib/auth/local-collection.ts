@@ -106,6 +106,7 @@ export function localCollection<T>(): OpsResult<T> {
         run(10, "partial"),
       ),
       job("collect-rip", now, 24 * 60, [], [], run(19 * 60, "complete")),
+      job("collect-weather", now, 60, [], [], run(20, "complete")),
       job("collect-catalog", now, 24 * 60, [], [], run(19 * 60, "complete")),
     ],
   };

@@ -19,6 +19,7 @@ export const COLLECTION_JOBS = [
   "collect-warnings",
   "collect-ocean",
   "collect-rip",
+  "collect-weather",
   "collect-catalog",
 ] as const;
 export type CollectionJob = (typeof COLLECTION_JOBS)[number];
