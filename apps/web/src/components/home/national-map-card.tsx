@@ -165,9 +165,12 @@ export function NationalMapCard({
           </ul>
         )}
         <span className="mt-auto flex flex-col gap-1">
-          {!loading && time && (
+          {/* '특보 없음'이 있으면 범위·기관은 늘 함께. 확인 시각을 모르는 해변이 섞이면 '확인 시각 모름' */}
+          {!loading && counts.clear > 0 && (
             <span className="text-[11.5px] text-text-muted">
-              {t("home.hero.clearScope", { time })}
+              {time
+                ? t("home.hero.clearScope", { time })
+                : t("home.hero.clearScopeNoTime")}
             </span>
           )}
           {!loading && stale !== null && (

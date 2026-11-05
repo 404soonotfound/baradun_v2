@@ -201,8 +201,9 @@
       "todayTemp": "Today's temperature",
       "nowShort": "now {temperature}°C ({time})",
       "issuedShort": "forecast {time}",
-      "weatherFailed": "Couldn't check today's weather",
+      "weatherFailed": "Couldn't check today's weather · See warnings and measurements above",
       "waveRange": "high {max}m · low {min}m",
+      "waveFailed": "Couldn't load the last 24 hours of wave height · See the current wave height above",
       "waveNoRecord": "No wave height records in the last 24 hours",
       "waveNoStation": "No station within 20km, so no chart",
       "windAhead": "<b>Wind m/s</b> · arrows point where the wind blows",
@@ -210,7 +211,7 @@
       "windAheadLabel": "Wind ahead: {cells}. KMA forecast issued {time}",
       "windCell": "{hour}:00 {dir} wind {speed}m/s",
       "windCellNoValue": "{hour}:00 no value",
-      "windFailed": "Couldn't check the wind forecast"
+      "windFailed": "Couldn't check the wind forecast · See warnings and measurements above"
     },
     "recent": {
       "title": "Recently viewed",
