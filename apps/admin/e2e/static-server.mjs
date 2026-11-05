@@ -42,7 +42,13 @@ export const ADMIN_HEADERS = {
 };
 
 async function fileFor(urlPath) {
-  let rel = decodeURIComponent(urlPath.split("?")[0]);
+  let rel;
+  try {
+    rel = decodeURIComponent(urlPath.split("?")[0]);
+  } catch {
+    // 잘못된 퍼센트 인코딩(/%zz)은 없는 파일과 같게 403. 예외가 서버를 끝내지 않게 함
+    return null;
+  }
   if (rel.endsWith("/")) rel += "index.html";
   else if (!path.basename(rel).includes(".")) rel += "/index.html";
   const full = path.join(OUT, rel);
@@ -82,13 +88,28 @@ export function buildOpsProxyTarget(rawUrl, proxyOrigin) {
   }
   // origin-form·absolute-form 요청 모두 pathname만 사용함. URL 정규화 뒤 /ops 밖이거나
   // 인코딩·경로 순회 가능성이 있는 문자는 프록시하지 않음
-  if (!/^\/ops(?:\/[A-Za-z0-9._~-]+)*\/?$/.test(incoming.pathname)) {
+  if (!/^\/ops(?:\/[A-Za-z0-9._~-]+)+\/?$/.test(incoming.pathname)) {
     return null;
   }
   const target = new URL(proxyOrigin);
   target.pathname = incoming.pathname;
   target.search = incoming.search;
   return target;
+}
+
+// redirect: "manual"이라 3xx를 그대로 돌려주므로 Location도 넘김. OPS_PROXY 주소로 가는 Location은
+// 이 서버 기준 경로로 바꿈(그대로 두면 브라우저가 다른 출처로 가서 CORS로 막힘). 다른 출처면 그대로 둠
+export function proxyLocation(location, proxyOrigin) {
+  if (!location) return null;
+  let url;
+  try {
+    url = new URL(location, proxyOrigin);
+  } catch {
+    return null;
+  }
+  return url.origin === proxyOrigin
+    ? `${url.pathname}${url.search}${url.hash}`
+    : url.href;
 }
 
 async function proxyOps(req, res, target) {
@@ -102,14 +123,18 @@ async function proxyOps(req, res, target) {
     body: chunks.length > 0 ? Buffer.concat(chunks) : undefined,
     redirect: "manual",
   });
-  // redirect: "manual"이라 3xx를 그대로 돌려주므로 Location도 함께 넘김(없으면 브라우저가 갈 곳을 모름)
-  const location = upstream.headers.get("location");
+  // 본문을 다 읽은 뒤 헤더를 보냄(읽다 실패하면 아직 헤더 전이라 502로 바꿀 수 있음)
+  const body = Buffer.from(await upstream.arrayBuffer());
+  const location = proxyLocation(
+    upstream.headers.get("location"),
+    target.origin,
+  );
   res.writeHead(upstream.status, {
     "content-type": upstream.headers.get("content-type") ?? "application/json",
     "cache-control": "no-store",
     ...(location ? { location } : {}),
   });
-  res.end(Buffer.from(await upstream.arrayBuffer()));
+  res.end(body);
 }
 
 // 테스트가 헤더 값만 가져갈 때는 서버를 띄우지 않음(infra/test/admin-site.test.ts)
@@ -124,9 +149,15 @@ if (isMain)
     const proxyTarget = buildOpsProxyTarget(req.url, OPS_PROXY);
     if (proxyTarget) {
       await proxyOps(req, res, proxyTarget).catch(() => {
-        res.writeHead(502);
+        if (!res.headersSent) res.writeHead(502);
         res.end();
       });
+      return;
+    }
+    // 프록시를 켰는데 넘기지 않은 /ops 요청은 정적 파일 403(권한 문제처럼 보임)이 아니라 400으로 알림
+    if (OPS_PROXY && req.url?.startsWith("/ops")) {
+      res.writeHead(400, { "content-type": "text/plain; charset=utf-8" });
+      res.end("OPS_PROXY로 넘기지 않는 /ops 경로");
       return;
     }
     const file = await fileFor(req.url ?? "/");

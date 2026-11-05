@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildOpsProxyTarget,
+  proxyLocation,
   validateOpsProxyOrigin,
 } from "../e2e/static-server.mjs";
 
@@ -29,6 +30,9 @@ describe("운영 API 로컬 프록시", () => {
 
   it.each([
     "/not-ops/inquiries",
+    "/ops",
+    "/ops/",
+    "/opsx/inquiries",
     "/ops/../internal",
     "/ops/%2e%2e/internal",
     "/ops/inquiries%2Fsecret",
@@ -46,5 +50,15 @@ describe("운영 API 로컬 프록시", () => {
     expect(() =>
       validateOpsProxyOrigin("https://admin.example.test/base"),
     ).toThrow(/origin/);
+  });
+
+  it("OPS_PROXY로 가는 Location은 이 서버 기준 경로로 바꾸고, 다른 출처는 그대로 둠", () => {
+    const origin = "https://admin.example.test";
+    expect(proxyLocation(`${origin}/ops/me?x=1`, origin)).toBe("/ops/me?x=1");
+    expect(proxyLocation("/ops/me", origin)).toBe("/ops/me");
+    expect(proxyLocation("https://idp.example/login", origin)).toBe(
+      "https://idp.example/login",
+    );
+    expect(proxyLocation(null, origin)).toBeNull();
   });
 });
