@@ -57,6 +57,9 @@ export interface WeatherInputs {
 }
 
 const HOUR_MS = 60 * 60 * 1000;
+// 계약 WeatherAreas의 코드 모양
+const LAND_ID = /^11[A-H][0-9]0000$/;
+const TA_ID = /^(11|21)[A-H][0-9]{5}$/;
 
 // data/weather-areas.json → 게시용 표. 모양이 틀린 항목은 빼고 알림(날씨 하나 때문에 판단 게시를 멈추지 않음)
 export function parseWeatherAreaTable(
@@ -76,13 +79,21 @@ export function parseWeatherAreaTable(
       midLand?: { regId?: unknown; name?: unknown };
       midTa?: { regId?: unknown; name?: unknown };
     };
+    // 계약(WeatherAreas)과 같은 모양만 받음. 틀린 해변 하나가 weather.json 전체의 계약 검사를 깨지 않게 그 해변만 뺌
     const ok =
       Number.isInteger(e.grid?.nx) &&
+      (e.grid!.nx as number) >= 0 &&
       Number.isInteger(e.grid?.ny) &&
+      (e.grid!.ny as number) >= 0 &&
+      /^b[0-9]{4}$/.test(id) &&
       typeof e.midLand?.regId === "string" &&
+      LAND_ID.test(e.midLand.regId) &&
       typeof e.midLand.name === "string" &&
+      e.midLand.name !== "" &&
       typeof e.midTa?.regId === "string" &&
-      typeof e.midTa.name === "string";
+      TA_ID.test(e.midTa.regId) &&
+      typeof e.midTa.name === "string" &&
+      e.midTa.name !== "";
     if (!ok) {
       invalid.push(id);
       continue;
