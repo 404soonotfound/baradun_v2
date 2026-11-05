@@ -37,7 +37,8 @@ import { formatKst, slotStart } from "./schedule";
 
 // collect-weather (BRD-181, 결정 기록 18장 D18-1·D18-8, 데이터 출처 문서 14장)
 // 매시 :15. 대응표(data/weather-areas.json)의 격자·구역마다
-// - 초단기실황(지금 기온): 매 실행, 그 시각 정시 실황
+// - 초단기실황(지금 기온): 매 실행, 그 시각 정시 실황. 아직 없으면(resultCode 03) 한 시간 전 실황
+//   (2026-11-05 10:04 실호출: 10:00 실황이 아직 03. 제공 시각 근거가 없어 받을 수 있는 가장 늦은 실황을 씀)
 // - 단기예보: 가장 늦은 발표(02·05·…·23시)를 아직 저장하지 않은 격자만. 놓친 발표는 다음 실행이 메움
 // - 중기예보: 가장 늦은 발표(06·18시)를 아직 저장하지 않은 육상 구역·기온 지점만
 // 날씨는 참고 정보. 분류·관측 지연·대안 해변에 쓰지 않음(G1) → publisher가 weather.json에만 넣음
@@ -264,15 +265,6 @@ export async function collectWeather(
         nx: String(g.nx),
         ny: String(g.ny),
       });
-    for (const g of deps.areas.grids) {
-      tasks.push(async () => {
-        const url = `${SHORT_BASE}getUltraSrtNcst?${shortParams(g, nowBase, COLLECT_POLICY.weatherNowNumOfRows)}`;
-        const result = await safe(
-          fetchJson(deps, url, (body) => parseNow(body, nowBase, g)),
-        );
-        record("now", result, (v) => nowFresh.set(gridKey(g), v));
-      });
-    }
     for (const g of shortNeeded) {
       tasks.push(async () => {
         const url = `${SHORT_BASE}getVilageFcst?${shortParams(g, shortBase, COLLECT_POLICY.weatherShortNumOfRows)}`;
@@ -313,6 +305,27 @@ export async function collectWeather(
           ),
         );
         record("mid_ta", result, (v) => taFresh.set(regId, v));
+      });
+    }
+    // 실황은 매시 다시 받으므로 맨 뒤. 시간 예산에 걸리면 덜 자주 오는 단기·중기 발표를 먼저 지킴
+    const prevHour = latestBase(nowBase.ms - HOUR_MS, ALL_HOURS, 0);
+    const nowUrl = (g: Grid, base: { date: string; time: string }) =>
+      `${SHORT_BASE}getUltraSrtNcst?${shortParams(g, base, COLLECT_POLICY.weatherNowNumOfRows)}`;
+    for (const g of deps.areas.grids) {
+      tasks.push(async () => {
+        let result = await safe(
+          fetchJson(deps, nowUrl(g, nowBase), (body) =>
+            parseNow(body, nowBase, g),
+          ),
+        );
+        if (result.status === "failed" && result.reason === "result:03") {
+          result = await safe(
+            fetchJson(deps, nowUrl(g, prevHour), (body) =>
+              parseNow(body, prevHour, g),
+            ),
+          );
+        }
+        record("now", result, (v) => nowFresh.set(gridKey(g), v));
       });
     }
     skipped = await runTasks(deps, startedMs, tasks);
@@ -360,32 +373,28 @@ export async function collectWeather(
       }),
     shortFresh.size > 0 &&
       save("short", async () => {
-        let packFailed: string | null = null;
+        // 깨진 기록은 버리고 새 값으로 덮으므로 남김. 충돌 재시도로 build가 다시 돌아도 한 번만
+        let invalid = false;
         const { saved } = await mergeAndPut(
           deps,
           WEATHER_STATE.short,
           "weather_short",
           (previous) => {
             const prev = readShort(previous?.value);
-            if (previous && prev === null)
-              deps.log("warn", "weather_short_invalid");
+            invalid = previous !== null && prev === null;
             const grids = mergeShort(prev ?? {}, shortFresh, keepGrids, today);
             const packed = packShort(grids);
-            // 너무 크면 이전 기록을 그대로 다시 씀(저장 실패로 남김)
-            packFailed = packed.status === "failed" ? packed.reason : null;
+            // 너무 크면 쓰지 않고 던짐 → save가 저장 실패(short_not_saved)로 남김. 이전 기록은 그대로
+            if (packed.status === "failed") throw new RangeError(packed.reason);
             return {
-              value:
-                packed.status === "ok"
-                  ? ({ archive: packed.archive } as StateValue)
-                  : (previous?.value ?? null),
+              value: { archive: packed.archive } as StateValue,
               orderAt: Math.max(previous?.orderAt ?? 0, shortBase.ms),
               result: null,
             };
           },
         );
-        if (packFailed)
-          deps.log("error", "weather_short_too_large", { reason: packFailed });
-        return saved && packFailed === null;
+        if (invalid) deps.log("warn", "weather_short_invalid");
+        return saved;
       }),
     landFresh.size + taFresh.size > 0 &&
       save("mid", async () => {

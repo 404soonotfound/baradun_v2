@@ -1,4 +1,4 @@
-import { KST_OFFSET_MS, formatUtcIso } from "../warnings/time";
+import { KST_OFFSET_MS, formatUtcIso, parseKstTime } from "../warnings/time";
 
 // 기상청 날씨 예보 응답 해석 (BRD-181, 결정 기록 18장 D18-1·D18-8·D18-9, 데이터 출처 문서 14장)
 // 단기예보 getVilageFcst · 초단기실황 getUltraSrtNcst · 중기예보 getMidLandFcst·getMidTa (공공데이터포털, dataType JSON)
@@ -45,19 +45,10 @@ export function parseEnvelope(body: string): Parsed<unknown[]> {
   return { status: "ok", value: list };
 }
 
-// KST 날짜(yyyymmdd)·시각(HHMM) → UTC ms. 형식이 틀리거나 달력에 없으면 null
+// KST 날짜(yyyymmdd)·시각(HHMM) → UTC ms. 형식이 틀리거나 달력에 없으면 null(특보 시각 변환과 같은 함수)
 export function kstToMs(date: string, time = "0000"): number | null {
-  if (!/^\d{8}$/.test(date) || !/^\d{4}$/.test(time)) return null;
-  const y = Number(date.slice(0, 4));
-  const m = Number(date.slice(4, 6));
-  const d = Number(date.slice(6, 8));
-  const hh = Number(time.slice(0, 2));
-  const mm = Number(time.slice(2, 4));
-  if (hh > 23 || mm > 59) return null;
-  const asUtc = Date.UTC(y, m - 1, d, hh, mm);
-  const back = new Date(asUtc);
-  if (back.getUTCMonth() !== m - 1 || back.getUTCDate() !== d) return null;
-  return asUtc - KST_OFFSET_MS;
+  const parsed = parseKstTime(`${date}${time}`);
+  return parsed.kind === "time" ? Date.parse(parsed.iso) : null;
 }
 
 // UTC ms → KST 날짜 글자(yyyy-mm-dd, 계약의 날짜 형식)
