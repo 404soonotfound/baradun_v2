@@ -175,9 +175,14 @@ export function parseWf(
   return precip === undefined ? null : { sky, precip };
 }
 
+// 하루 한 칸은 그날 3시간 간격 칸(00~21시)을 발표가 모두 담을 때만 만듦
+// KST 00:00~02:10에는 가장 늦은 발표가 전날 23:00이라 글피는 00시 한 칸뿐 → 한 시각 값을 하루 값처럼 쓰지 않고 칸을 두지 않음
+const DAY_SLOTS = [0, 3, 6, 9, 12, 15, 18, 21];
+
 function shortDay(grid: ShortGrid, date: string): WeatherShortDay | null {
   const rows = grid.hours.filter((row) => kstDate(row[0] * 1000) === date);
-  if (rows.length === 0) return null;
+  const covered = new Set(rows.map((row) => kstHour(row[0])));
+  if (!DAY_SLOTS.every((h) => covered.has(h))) return null;
   let best: HourRow | null = null;
   for (const row of rows) {
     const pop = field(row, "POP");

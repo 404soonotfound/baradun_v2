@@ -201,7 +201,7 @@
         "days": {
           "type": "array",
           "items": { "$ref": "#/$defs/WeatherShortDay" },
-          "description": "글피 하루 한 칸(D18-9). 발표에 없으면 빈 배열."
+          "description": "글피 하루 한 칸(D18-9). 발표가 그날 3시간 간격 칸(KST 00~21시)을 모두 담을 때만 있음. KST 00:00~02:10(전날 23:00 발표가 최신)에는 빈 배열."
         }
       }
     },
