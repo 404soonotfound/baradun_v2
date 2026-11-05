@@ -424,7 +424,8 @@
     "terms": "About & terms"
   },
   "activity": {
-    "label": "Activity",
+    "label": "What would you like to do?",
+    "hint": "Choosing an activity changes which beaches are listed. Warnings and sea conditions stay the same.",
     "confirmed": "Confirmed activities",
     "swimming": "Swimming",
     "surfing": "Surfing",
