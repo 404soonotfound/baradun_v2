@@ -11,13 +11,13 @@ import { HeroWaves, HomeSky } from "@/components/home/home-sky";
 import { HomeTopBar } from "@/components/home/home-top-bar";
 import { LocationOffBanner } from "@/components/home/location-off-banner";
 import { NationwideWarnings } from "@/components/home/nationwide-warnings";
+import { NationalMapCard } from "@/components/home/national-map-card";
 import { NearCard } from "@/components/home/near-card";
 import { PageUnavailableNote } from "@/components/home/page-unavailable-note";
 import { RecentBeaches, RecentEmpty } from "@/components/home/recent-beaches";
 import { RegionButton } from "@/components/home/region-button";
 import { RegionCountCard } from "@/components/home/region-count-card";
 import { SectionHead } from "@/components/home/section-head";
-import { StatusSummary } from "@/components/home/status-summary";
 import { RegionSheet } from "@/components/region/region-sheet";
 import { SampleNote } from "@/components/sample-note";
 import { SituationBanner } from "@/components/situation-banner";
@@ -173,8 +173,18 @@ export function HomeScreen({
         (activity === "swimming" || beach.activities.includes(activity)),
     );
   }, [byList, regionBeaches, nearestPlace, beaches, activity]);
-  const summaryViews = summaryBeaches.map((beach) =>
+  // PC 전국 지도 카드: 공개 해변 전체의 화면 상태 + 큰 점(지금 보는 범위, 전국이면 없음)
+  const allViews = beaches.map((beach) =>
     deriveBeachView({ id: beach.id, hidden: false }, snapshot),
+  );
+  const highlightIds = useMemo(
+    () =>
+      new Set(
+        scope.kind === "nationwide"
+          ? []
+          : summaryBeaches.map((beach) => beach.id),
+      ),
+    [scope.kind, summaryBeaches],
   );
 
   // [6] 홈에 보이는 해변 카드(지역·전국 → 이름 순, 위치가 있으면 거리도 / 가까운 바다 → 가까운 순)
@@ -255,12 +265,32 @@ export function HomeScreen({
           .join(" · ")
       : null;
 
+  // 지도 카드 부제: "공개 해변 206곳 · 큰 점은 강원 강릉시 해변 19곳"(서핑·스쿠버는 그 활동이 확인된 해변)
+  const mapSubtitle = [
+    t("map.total", { count: beaches.length }),
+    scope.kind !== "nationwide" &&
+      regionLabel !== null &&
+      highlightIds.size > 0 &&
+      (activity === "swimming"
+        ? t("map.highlight", { region: regionLabel, count: highlightIds.size })
+        : t("map.highlightActivity", {
+            region: regionLabel,
+            activity: tRoot(
+              activity === "scuba"
+                ? "activity.scubaFull"
+                : `activity.${activity}`,
+            ),
+            count: highlightIds.size,
+          })),
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
   // 상황 배너 하나(BRD-28). 모바일은 제목 아래, PC는 안내 칸(Figma 181:1004). 한 번만 그림
   // PC에서도 오프라인·불러오기 실패·형식 오류·확인된 판단 없음은 화면 전체에 영향이 있어 제목 아래에 둠
   // (안내 칸은 첫 화면 밖이라 놓칠 수 있음). 공지도 '홈 상단 배너'라 제목 아래(ADM-NTC). 관측 지연·위치 없이 보는 중만 Figma처럼 안내 칸
-  const bannerInInfo =
-    desktop &&
-    (situation?.kind === "delayed" || situation?.kind === "noLocation");
+  // 위치 없이 보는 중은 PC도 제목 아래(11/5 홈 v3 시안)
+  const bannerInInfo = desktop && situation?.kind === "delayed";
   // 위치 없이 보는 중은 홈 배너, 나머지(오프라인·실패·지연 등)는 공용 상황 배너
   const banner =
     situation?.kind === "noLocation" ? (
@@ -292,7 +322,7 @@ export function HomeScreen({
       {/* [10] 머리: 모바일은 상단 줄 → 제목 → 배너 → 활동 타일, PC는 바다 띠(Figma 181:775)
           PC 띠는 화면 끝까지 넓히고(100vw) 안쪽 여백으로 본문 64px 선에 맞춤(본문 여백 40 + 24) */}
       {/* 묶음(section)이 아니라 머리 영역: 상태 요약의 근거·현장 우선 문구는 아래 가까운 바다 묶음과 함께 읽힘 */}
-      <div className="relative flex flex-col lg:mx-[calc(50%-50vw)] lg:bg-home-hero lg:px-[calc(50vw-50%+24px)] lg:pt-11 lg:pb-32">
+      <div className="relative flex flex-col lg:mx-[calc(50%-50vw)] lg:bg-home-hero lg:px-[calc(50vw-50%+24px)] lg:pt-8 lg:pb-16">
         <HeroWaves />
         <HomeTopBar
           locale={locale}
@@ -300,8 +330,9 @@ export function HomeScreen({
           nearby={regionNearby}
           onPickRegion={regionSheet.show}
         />
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:gap-12">
-          <div className="flex min-w-0 flex-col gap-4 lg:flex-1 lg:gap-3">
+        {/* PC: 왼쪽 글(지역 · 제목 · 요약 · 배너 · 활동 타일) | 오른쪽 '지금 전국 바다'(11/5 홈 v3 시안) */}
+        <div className="flex flex-col gap-4 lg:grid lg:grid-cols-[minmax(0,1fr)_520px] lg:items-center lg:gap-10">
+          <div className="flex min-w-0 flex-col gap-4 lg:gap-3">
             {/* PC는 상단 줄이 없어 제목 위에 같은 지역 버튼(지역 보기·'내 주변' 전환) */}
             <RegionButton
               label={regionLabel}
@@ -314,14 +345,14 @@ export function HomeScreen({
               id="home-title"
               ref={titleRef}
               tabIndex={-1}
-              className="text-title-home text-text-default outline-none lg:text-display"
+              className="text-title-home text-text-default outline-none lg:text-[30px] lg:leading-[1.25] lg:font-extrabold lg:tracking-[-0.8px]"
             >
               {t("titleLine1")}
               {/* PC는 한 줄. 줄 머리 공백은 모바일 줄바꿈 뒤에서 사라짐 */}
               <br className="lg:hidden" /> {t("titleLine2")}
             </h1>
             {summaryLine && (
-              <p className="hidden text-title-s font-normal text-text-body lg:block">
+              <p className="hidden text-body-s text-text-body lg:block">
                 {summaryLine}
               </p>
             )}
@@ -330,24 +361,22 @@ export function HomeScreen({
             {!bannerInInfo && banner}
             {/* 연결이 없어 다른 화면을 열지 못하고 홈으로 왔을 때만(서비스 워커 표식, BRD-106) */}
             <PageUnavailableNote />
+            <div className="lg:mt-3">
+              <ActivityTiles />
+            </div>
           </div>
-          {/* 1152 폭에서 왼쪽 544 · 타일 560(Figma). 좁은 PC(1024)에서는 타일이 절반까지 줄어듦 */}
-          <div className="lg:w-[560px] lg:max-w-[50%] lg:shrink">
-            <ActivityTiles />
-          </div>
-        </div>
-        {/* PC 상태 요약 3장(지역 글자와 같은 범위의 해변). 게시된 분류 그대로 셈(G1) */}
-        {desktop && summaryBeaches.length > 0 && (
-          <div className="mt-7">
-            <StatusSummary
+          {/* PC 전국 지도 카드. 개수는 공개 해변 전체, 게시된 분류 그대로 셈(G1) */}
+          {desktop && beaches.length > 0 && (
+            <NationalMapCard
               href={localizedPath(locale, "/explore/")}
-              counts={countByStatus(summaryViews)}
-              clearCheckedAt={clearCheckedAt(summaryViews)}
-              staleChecked={staleCheckedAt(summaryViews)}
+              beaches={beaches}
+              views={allViews}
+              highlightIds={highlightIds}
+              subtitle={mapSubtitle}
               nowMs={snapshot.nowMs}
             />
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       {/* [11] 아래 묶음. 모바일은 한 줄씩(최근 본 → 가까운 바다 → 해상 특보 → 안내)
