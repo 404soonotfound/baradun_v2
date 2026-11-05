@@ -84,6 +84,28 @@ describe("injectMetaCsp", () => {
       [],
     );
   });
+
+  it("브라우저가 허용하는 공백 있는 script 종료 태그도 같은 본문으로 해시한다", () => {
+    expect(inlineScriptHashes("<script>self.x=1</script >")).toEqual(
+      inlineScriptHashes("<script>self.x=1</script>"),
+    );
+  });
+
+  it("대소문자가 다른 src 속성의 외부 스크립트는 해시하지 않는다", () => {
+    expect(inlineScriptHashes('<SCRIPT SRC="/app.js"></SCRIPT >')).toEqual([]);
+  });
+
+  it("브라우저처럼 CRLF를 LF로 바꾼 본문으로 해시한다", () => {
+    expect(inlineScriptHashes("<script>a=1\r\nb=2</script>")).toEqual(
+      inlineScriptHashes("<script>a=1\nb=2</script>"),
+    );
+  });
+
+  it("template 안의 인라인 스크립트도 해시한다", () => {
+    expect(
+      inlineScriptHashes("<template><script>self.x=1</script></template>"),
+    ).toEqual(inlineScriptHashes("<script>self.x=1</script>"));
+  });
 });
 
 describe("checkOut", () => {
