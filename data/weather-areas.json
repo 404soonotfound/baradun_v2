@@ -1,0 +1,3109 @@
+{
+  "_meta": {
+    "note": "BRD-181 해변 → 기상청 날씨 예보 구역. 생성: node tools/beaches/weather-areas.mjs (규칙은 그 파일 머리 주석)",
+    "grid": "기상청 단기예보·초단기실황 5km 격자(nx, ny). 단기예보 활용가이드 LCC 변환식",
+    "midTa": "중기예보 기온 지점(getMidTa regId). 해변 시·군 이름과 같은 지점, 광역시의 구·군은 광역시 지점(rule: sigungu·metro)",
+    "midLand": "중기예보 육상 구역(getMidLandFcst regId). 기온 지점이 속한 구역, 해변 시도와 대조",
+    "zoneTable": "tools/beaches/mid-zones.json",
+    "verified": {
+      "checkedAt": "2026-11-05T00:26:20Z",
+      "shortBase": "202611050800",
+      "midTmFc": "202611050600",
+      "grids": 140,
+      "midLand": 8,
+      "midTa": 34
+    }
+  },
+  "beaches": {
+    "b0001": {
+      "grid": {
+        "nx": 93,
+        "ny": 133
+      },
+      "midLand": {
+        "regId": "11D20000",
+        "name": "강원영동"
+      },
+      "midTa": {
+        "regId": "11D20501",
+        "name": "강릉",
+        "rule": "sigungu"
+      }
+    },
+    "b0002": {
+      "grid": {
+        "nx": 93,
+        "ny": 133
+      },
+      "midLand": {
+        "regId": "11D20000",
+        "name": "강원영동"
+      },
+      "midTa": {
+        "regId": "11D20501",
+        "name": "강릉",
+        "rule": "sigungu"
+      }
+    },
+    "b0003": {
+      "grid": {
+        "nx": 93,
+        "ny": 133
+      },
+      "midLand": {
+        "regId": "11D20000",
+        "name": "강원영동"
+      },
+      "midTa": {
+        "regId": "11D20501",
+        "name": "강릉",
+        "rule": "sigungu"
+      }
+    },
+    "b0004": {
+      "grid": {
+        "nx": 92,
+        "ny": 133
+      },
+      "midLand": {
+        "regId": "11D20000",
+        "name": "강원영동"
+      },
+      "midTa": {
+        "regId": "11D20501",
+        "name": "강릉",
+        "rule": "sigungu"
+      }
+    },
+    "b0005": {
+      "grid": {
+        "nx": 93,
+        "ny": 132
+      },
+      "midLand": {
+        "regId": "11D20000",
+        "name": "강원영동"
+      },
+      "midTa": {
+        "regId": "11D20501",
+        "name": "강릉",
+        "rule": "sigungu"
+      }
+    },
+    "b0006": {
+      "grid": {
+        "nx": 93,
+        "ny": 132
+      },
+      "midLand": {
+        "regId": "11D20000",
+        "name": "강원영동"
+      },
+      "midTa": {
+        "regId": "11D20501",
+        "name": "강릉",
+        "rule": "sigungu"
+      }
+    },
+    "b0007": {
+      "grid": {
+        "nx": 92,
+        "ny": 134
+      },
+      "midLand": {
+        "regId": "11D20000",
+        "name": "강원영동"
+      },
+      "midTa": {
+        "regId": "11D20501",
+        "name": "강릉",
+        "rule": "sigungu"
+      }
+    },
+    "b0008": {
+      "grid": {
+        "nx": 95,
+        "ny": 129
+      },
+      "midLand": {
+        "regId": "11D20000",
+        "name": "강원영동"
+      },
+      "midTa": {
+        "regId": "11D20501",
+        "name": "강릉",
+        "rule": "sigungu"
+      }
+    },
+    "b0009": {
+      "grid": {
+        "nx": 95,
+        "ny": 130
+      },
+      "midLand": {
+        "regId": "11D20000",
+        "name": "강원영동"
+      },
+      "midTa": {
+        "regId": "11D20501",
+        "name": "강릉",
+        "rule": "sigungu"
+      }
+    },
+    "b0010": {
+      "grid": {
+        "nx": 91,
+        "ny": 135
+      },
+      "midLand": {
+        "regId": "11D20000",
+        "name": "강원영동"
+      },
+      "midTa": {
+        "regId": "11D20501",
+        "name": "강릉",
+        "rule": "sigungu"
+      }
+    },
+    "b0011": {
+      "grid": {
+        "nx": 92,
+        "ny": 134
+      },
+      "midLand": {
+        "regId": "11D20000",
+        "name": "강원영동"
+      },
+      "midTa": {
+        "regId": "11D20501",
+        "name": "강릉",
+        "rule": "sigungu"
+      }
+    },
+    "b0012": {
+      "grid": {
+        "nx": 95,
+        "ny": 129
+      },
+      "midLand": {
+        "regId": "11D20000",
+        "name": "강원영동"
+      },
+      "midTa": {
+        "regId": "11D20501",
+        "name": "강릉",
+        "rule": "sigungu"
+      }
+    },
+    "b0013": {
+      "grid": {
+        "nx": 94,
+        "ny": 132
+      },
+      "midLand": {
+        "regId": "11D20000",
+        "name": "강원영동"
+      },
+      "midTa": {
+        "regId": "11D20501",
+        "name": "강릉",
+        "rule": "sigungu"
+      }
+    },
+    "b0014": {
+      "grid": {
+        "nx": 96,
+        "ny": 129
+      },
+      "midLand": {
+        "regId": "11D20000",
+        "name": "강원영동"
+      },
+      "midTa": {
+        "regId": "11D20501",
+        "name": "강릉",
+        "rule": "sigungu"
+      }
+    },
+    "b0015": {
+      "grid": {
+        "nx": 95,
+        "ny": 131
+      },
+      "midLand": {
+        "regId": "11D20000",
+        "name": "강원영동"
+      },
+      "midTa": {
+        "regId": "11D20501",
+        "name": "강릉",
+        "rule": "sigungu"
+      }
+    },
+    "b0016": {
+      "grid": {
+        "nx": 92,
+        "ny": 133
+      },
+      "midLand": {
+        "regId": "11D20000",
+        "name": "강원영동"
+      },
+      "midTa": {
+        "regId": "11D20501",
+        "name": "강릉",
+        "rule": "sigungu"
+      }
+    },
+    "b0017": {
+      "grid": {
+        "nx": 93,
+        "ny": 133
+      },
+      "midLand": {
+        "regId": "11D20000",
+        "name": "강원영동"
+      },
+      "midTa": {
+        "regId": "11D20501",
+        "name": "강릉",
+        "rule": "sigungu"
+      }
+    },
+    "b0018": {
+      "grid": {
+        "nx": 94,
+        "ny": 131
+      },
+      "midLand": {
+        "regId": "11D20000",
+        "name": "강원영동"
+      },
+      "midTa": {
+        "regId": "11D20501",
+        "name": "강릉",
+        "rule": "sigungu"
+      }
+    },
+    "b0020": {
+      "grid": {
+        "nx": 92,
+        "ny": 134
+      },
+      "midLand": {
+        "regId": "11D20000",
+        "name": "강원영동"
+      },
+      "midTa": {
+        "regId": "11D20501",
+        "name": "강릉",
+        "rule": "sigungu"
+      }
+    },
+    "b0021": {
+      "grid": {
+        "nx": 84,
+        "ny": 148
+      },
+      "midLand": {
+        "regId": "11D20000",
+        "name": "강원영동"
+      },
+      "midTa": {
+        "regId": "11D20402",
+        "name": "고성",
+        "rule": "sigungu"
+      }
+    },
+    "b0022": {
+      "grid": {
+        "nx": 86,
+        "ny": 143
+      },
+      "midLand": {
+        "regId": "11D20000",
+        "name": "강원영동"
+      },
+      "midTa": {
+        "regId": "11D20402",
+        "name": "고성",
+        "rule": "sigungu"
+      }
+    },
+    "b0023": {
+      "grid": {
+        "nx": 86,
+        "ny": 144
+      },
+      "midLand": {
+        "regId": "11D20000",
+        "name": "강원영동"
+      },
+      "midTa": {
+        "regId": "11D20402",
+        "name": "고성",
+        "rule": "sigungu"
+      }
+    },
+    "b0024": {
+      "grid": {
+        "nx": 86,
+        "ny": 144
+      },
+      "midLand": {
+        "regId": "11D20000",
+        "name": "강원영동"
+      },
+      "midTa": {
+        "regId": "11D20402",
+        "name": "고성",
+        "rule": "sigungu"
+      }
+    },
+    "b0025": {
+      "grid": {
+        "nx": 86,
+        "ny": 144
+      },
+      "midLand": {
+        "regId": "11D20000",
+        "name": "강원영동"
+      },
+      "midTa": {
+        "regId": "11D20402",
+        "name": "고성",
+        "rule": "sigungu"
+      }
+    },
+    "b0026": {
+      "grid": {
+        "nx": 86,
+        "ny": 144
+      },
+      "midLand": {
+        "regId": "11D20000",
+        "name": "강원영동"
+      },
+      "midTa": {
+        "regId": "11D20402",
+        "name": "고성",
+        "rule": "sigungu"
+      }
+    },
+    "b0027": {
+      "grid": {
+        "nx": 87,
+        "ny": 142
+      },
+      "midLand": {
+        "regId": "11D20000",
+        "name": "강원영동"
+      },
+      "midTa": {
+        "regId": "11D20402",
+        "name": "고성",
+        "rule": "sigungu"
+      }
+    },
+    "b0028": {
+      "grid": {
+        "nx": 84,
+        "ny": 147
+      },
+      "midLand": {
+        "regId": "11D20000",
+        "name": "강원영동"
+      },
+      "midTa": {
+        "regId": "11D20402",
+        "name": "고성",
+        "rule": "sigungu"
+      }
+    },
+    "b0029": {
+      "grid": {
+        "nx": 86,
+        "ny": 145
+      },
+      "midLand": {
+        "regId": "11D20000",
+        "name": "강원영동"
+      },
+      "midTa": {
+        "regId": "11D20402",
+        "name": "고성",
+        "rule": "sigungu"
+      }
+    },
+    "b0030": {
+      "grid": {
+        "nx": 85,
+        "ny": 146
+      },
+      "midLand": {
+        "regId": "11D20000",
+        "name": "강원영동"
+      },
+      "midTa": {
+        "regId": "11D20402",
+        "name": "고성",
+        "rule": "sigungu"
+      }
+    },
+    "b0031": {
+      "grid": {
+        "nx": 85,
+        "ny": 146
+      },
+      "midLand": {
+        "regId": "11D20000",
+        "name": "강원영동"
+      },
+      "midTa": {
+        "regId": "11D20402",
+        "name": "고성",
+        "rule": "sigungu"
+      }
+    },
+    "b0032": {
+      "grid": {
+        "nx": 86,
+        "ny": 144
+      },
+      "midLand": {
+        "regId": "11D20000",
+        "name": "강원영동"
+      },
+      "midTa": {
+        "regId": "11D20402",
+        "name": "고성",
+        "rule": "sigungu"
+      }
+    },
+    "b0033": {
+      "grid": {
+        "nx": 86,
+        "ny": 144
+      },
+      "midLand": {
+        "regId": "11D20000",
+        "name": "강원영동"
+      },
+      "midTa": {
+        "regId": "11D20402",
+        "name": "고성",
+        "rule": "sigungu"
+      }
+    },
+    "b0034": {
+      "grid": {
+        "nx": 86,
+        "ny": 143
+      },
+      "midLand": {
+        "regId": "11D20000",
+        "name": "강원영동"
+      },
+      "midTa": {
+        "regId": "11D20402",
+        "name": "고성",
+        "rule": "sigungu"
+      }
+    },
+    "b0035": {
+      "grid": {
+        "nx": 84,
+        "ny": 148
+      },
+      "midLand": {
+        "regId": "11D20000",
+        "name": "강원영동"
+      },
+      "midTa": {
+        "regId": "11D20402",
+        "name": "고성",
+        "rule": "sigungu"
+      }
+    },
+    "b0036": {
+      "grid": {
+        "nx": 84,
+        "ny": 147
+      },
+      "midLand": {
+        "regId": "11D20000",
+        "name": "강원영동"
+      },
+      "midTa": {
+        "regId": "11D20402",
+        "name": "고성",
+        "rule": "sigungu"
+      }
+    },
+    "b0037": {
+      "grid": {
+        "nx": 84,
+        "ny": 148
+      },
+      "midLand": {
+        "regId": "11D20000",
+        "name": "강원영동"
+      },
+      "midTa": {
+        "regId": "11D20402",
+        "name": "고성",
+        "rule": "sigungu"
+      }
+    },
+    "b0038": {
+      "grid": {
+        "nx": 86,
+        "ny": 143
+      },
+      "midLand": {
+        "regId": "11D20000",
+        "name": "강원영동"
+      },
+      "midTa": {
+        "regId": "11D20402",
+        "name": "고성",
+        "rule": "sigungu"
+      }
+    },
+    "b0039": {
+      "grid": {
+        "nx": 85,
+        "ny": 146
+      },
+      "midLand": {
+        "regId": "11D20000",
+        "name": "강원영동"
+      },
+      "midTa": {
+        "regId": "11D20402",
+        "name": "고성",
+        "rule": "sigungu"
+      }
+    },
+    "b0040": {
+      "grid": {
+        "nx": 87,
+        "ny": 142
+      },
+      "midLand": {
+        "regId": "11D20000",
+        "name": "강원영동"
+      },
+      "midTa": {
+        "regId": "11D20402",
+        "name": "고성",
+        "rule": "sigungu"
+      }
+    },
+    "b0041": {
+      "grid": {
+        "nx": 86,
+        "ny": 143
+      },
+      "midLand": {
+        "regId": "11D20000",
+        "name": "강원영동"
+      },
+      "midTa": {
+        "regId": "11D20402",
+        "name": "고성",
+        "rule": "sigungu"
+      }
+    },
+    "b0042": {
+      "grid": {
+        "nx": 86,
+        "ny": 143
+      },
+      "midLand": {
+        "regId": "11D20000",
+        "name": "강원영동"
+      },
+      "midTa": {
+        "regId": "11D20402",
+        "name": "고성",
+        "rule": "sigungu"
+      }
+    },
+    "b0043": {
+      "grid": {
+        "nx": 86,
+        "ny": 143
+      },
+      "midLand": {
+        "regId": "11D20000",
+        "name": "강원영동"
+      },
+      "midTa": {
+        "regId": "11D20402",
+        "name": "고성",
+        "rule": "sigungu"
+      }
+    },
+    "b0044": {
+      "grid": {
+        "nx": 86,
+        "ny": 143
+      },
+      "midLand": {
+        "regId": "11D20000",
+        "name": "강원영동"
+      },
+      "midTa": {
+        "regId": "11D20402",
+        "name": "고성",
+        "rule": "sigungu"
+      }
+    },
+    "b0045": {
+      "grid": {
+        "nx": 84,
+        "ny": 147
+      },
+      "midLand": {
+        "regId": "11D20000",
+        "name": "강원영동"
+      },
+      "midTa": {
+        "regId": "11D20402",
+        "name": "고성",
+        "rule": "sigungu"
+      }
+    },
+    "b0046": {
+      "grid": {
+        "nx": 87,
+        "ny": 142
+      },
+      "midLand": {
+        "regId": "11D20000",
+        "name": "강원영동"
+      },
+      "midTa": {
+        "regId": "11D20402",
+        "name": "고성",
+        "rule": "sigungu"
+      }
+    },
+    "b0047": {
+      "grid": {
+        "nx": 96,
+        "ny": 128
+      },
+      "midLand": {
+        "regId": "11D20000",
+        "name": "강원영동"
+      },
+      "midTa": {
+        "regId": "11D20601",
+        "name": "동해",
+        "rule": "sigungu"
+      }
+    },
+    "b0048": {
+      "grid": {
+        "nx": 96,
+        "ny": 128
+      },
+      "midLand": {
+        "regId": "11D20000",
+        "name": "강원영동"
+      },
+      "midTa": {
+        "regId": "11D20601",
+        "name": "동해",
+        "rule": "sigungu"
+      }
+    },
+    "b0049": {
+      "grid": {
+        "nx": 96,
+        "ny": 128
+      },
+      "midLand": {
+        "regId": "11D20000",
+        "name": "강원영동"
+      },
+      "midTa": {
+        "regId": "11D20601",
+        "name": "동해",
+        "rule": "sigungu"
+      }
+    },
+    "b0050": {
+      "grid": {
+        "nx": 96,
+        "ny": 128
+      },
+      "midLand": {
+        "regId": "11D20000",
+        "name": "강원영동"
+      },
+      "midTa": {
+        "regId": "11D20601",
+        "name": "동해",
+        "rule": "sigungu"
+      }
+    },
+    "b0051": {
+      "grid": {
+        "nx": 97,
+        "ny": 128
+      },
+      "midLand": {
+        "regId": "11D20000",
+        "name": "강원영동"
+      },
+      "midTa": {
+        "regId": "11D20601",
+        "name": "동해",
+        "rule": "sigungu"
+      }
+    },
+    "b0052": {
+      "grid": {
+        "nx": 97,
+        "ny": 126
+      },
+      "midLand": {
+        "regId": "11D20000",
+        "name": "강원영동"
+      },
+      "midTa": {
+        "regId": "11D20601",
+        "name": "동해",
+        "rule": "sigungu"
+      }
+    },
+    "b0053": {
+      "grid": {
+        "nx": 99,
+        "ny": 124
+      },
+      "midLand": {
+        "regId": "11D20000",
+        "name": "강원영동"
+      },
+      "midTa": {
+        "regId": "11D20602",
+        "name": "삼척",
+        "rule": "sigungu"
+      }
+    },
+    "b0054": {
+      "grid": {
+        "nx": 99,
+        "ny": 124
+      },
+      "midLand": {
+        "regId": "11D20000",
+        "name": "강원영동"
+      },
+      "midTa": {
+        "regId": "11D20602",
+        "name": "삼척",
+        "rule": "sigungu"
+      }
+    },
+    "b0055": {
+      "grid": {
+        "nx": 100,
+        "ny": 122
+      },
+      "midLand": {
+        "regId": "11D20000",
+        "name": "강원영동"
+      },
+      "midTa": {
+        "regId": "11D20602",
+        "name": "삼척",
+        "rule": "sigungu"
+      }
+    },
+    "b0056": {
+      "grid": {
+        "nx": 99,
+        "ny": 123
+      },
+      "midLand": {
+        "regId": "11D20000",
+        "name": "강원영동"
+      },
+      "midTa": {
+        "regId": "11D20602",
+        "name": "삼척",
+        "rule": "sigungu"
+      }
+    },
+    "b0057": {
+      "grid": {
+        "nx": 98,
+        "ny": 126
+      },
+      "midLand": {
+        "regId": "11D20000",
+        "name": "강원영동"
+      },
+      "midTa": {
+        "regId": "11D20602",
+        "name": "삼척",
+        "rule": "sigungu"
+      }
+    },
+    "b0058": {
+      "grid": {
+        "nx": 98,
+        "ny": 124
+      },
+      "midLand": {
+        "regId": "11D20000",
+        "name": "강원영동"
+      },
+      "midTa": {
+        "regId": "11D20602",
+        "name": "삼척",
+        "rule": "sigungu"
+      }
+    },
+    "b0059": {
+      "grid": {
+        "nx": 98,
+        "ny": 125
+      },
+      "midLand": {
+        "regId": "11D20000",
+        "name": "강원영동"
+      },
+      "midTa": {
+        "regId": "11D20602",
+        "name": "삼척",
+        "rule": "sigungu"
+      }
+    },
+    "b0060": {
+      "grid": {
+        "nx": 100,
+        "ny": 122
+      },
+      "midLand": {
+        "regId": "11D20000",
+        "name": "강원영동"
+      },
+      "midTa": {
+        "regId": "11D20602",
+        "name": "삼척",
+        "rule": "sigungu"
+      }
+    },
+    "b0061": {
+      "grid": {
+        "nx": 99,
+        "ny": 122
+      },
+      "midLand": {
+        "regId": "11D20000",
+        "name": "강원영동"
+      },
+      "midTa": {
+        "regId": "11D20602",
+        "name": "삼척",
+        "rule": "sigungu"
+      }
+    },
+    "b0062": {
+      "grid": {
+        "nx": 101,
+        "ny": 120
+      },
+      "midLand": {
+        "regId": "11D20000",
+        "name": "강원영동"
+      },
+      "midTa": {
+        "regId": "11D20602",
+        "name": "삼척",
+        "rule": "sigungu"
+      }
+    },
+    "b0063": {
+      "grid": {
+        "nx": 98,
+        "ny": 125
+      },
+      "midLand": {
+        "regId": "11D20000",
+        "name": "강원영동"
+      },
+      "midTa": {
+        "regId": "11D20602",
+        "name": "삼척",
+        "rule": "sigungu"
+      }
+    },
+    "b0064": {
+      "grid": {
+        "nx": 100,
+        "ny": 122
+      },
+      "midLand": {
+        "regId": "11D20000",
+        "name": "강원영동"
+      },
+      "midTa": {
+        "regId": "11D20602",
+        "name": "삼척",
+        "rule": "sigungu"
+      }
+    },
+    "b0065": {
+      "grid": {
+        "nx": 97,
+        "ny": 126
+      },
+      "midLand": {
+        "regId": "11D20000",
+        "name": "강원영동"
+      },
+      "midTa": {
+        "regId": "11D20602",
+        "name": "삼척",
+        "rule": "sigungu"
+      }
+    },
+    "b0066": {
+      "grid": {
+        "nx": 99,
+        "ny": 124
+      },
+      "midLand": {
+        "regId": "11D20000",
+        "name": "강원영동"
+      },
+      "midTa": {
+        "regId": "11D20602",
+        "name": "삼척",
+        "rule": "sigungu"
+      }
+    },
+    "b0067": {
+      "grid": {
+        "nx": 98,
+        "ny": 124
+      },
+      "midLand": {
+        "regId": "11D20000",
+        "name": "강원영동"
+      },
+      "midTa": {
+        "regId": "11D20602",
+        "name": "삼척",
+        "rule": "sigungu"
+      }
+    },
+    "b0068": {
+      "grid": {
+        "nx": 99,
+        "ny": 123
+      },
+      "midLand": {
+        "regId": "11D20000",
+        "name": "강원영동"
+      },
+      "midTa": {
+        "regId": "11D20602",
+        "name": "삼척",
+        "rule": "sigungu"
+      }
+    },
+    "b0069": {
+      "grid": {
+        "nx": 87,
+        "ny": 141
+      },
+      "midLand": {
+        "regId": "11D20000",
+        "name": "강원영동"
+      },
+      "midTa": {
+        "regId": "11D20401",
+        "name": "속초",
+        "rule": "sigungu"
+      }
+    },
+    "b0070": {
+      "grid": {
+        "nx": 87,
+        "ny": 141
+      },
+      "midLand": {
+        "regId": "11D20000",
+        "name": "강원영동"
+      },
+      "midTa": {
+        "regId": "11D20401",
+        "name": "속초",
+        "rule": "sigungu"
+      }
+    },
+    "b0071": {
+      "grid": {
+        "nx": 87,
+        "ny": 141
+      },
+      "midLand": {
+        "regId": "11D20000",
+        "name": "강원영동"
+      },
+      "midTa": {
+        "regId": "11D20401",
+        "name": "속초",
+        "rule": "sigungu"
+      }
+    },
+    "b0072": {
+      "grid": {
+        "nx": 88,
+        "ny": 139
+      },
+      "midLand": {
+        "regId": "11D20000",
+        "name": "강원영동"
+      },
+      "midTa": {
+        "regId": "11D20403",
+        "name": "양양",
+        "rule": "sigungu"
+      }
+    },
+    "b0073": {
+      "grid": {
+        "nx": 91,
+        "ny": 136
+      },
+      "midLand": {
+        "regId": "11D20000",
+        "name": "강원영동"
+      },
+      "midTa": {
+        "regId": "11D20403",
+        "name": "양양",
+        "rule": "sigungu"
+      }
+    },
+    "b0074": {
+      "grid": {
+        "nx": 89,
+        "ny": 138
+      },
+      "midLand": {
+        "regId": "11D20000",
+        "name": "강원영동"
+      },
+      "midTa": {
+        "regId": "11D20403",
+        "name": "양양",
+        "rule": "sigungu"
+      }
+    },
+    "b0075": {
+      "grid": {
+        "nx": 87,
+        "ny": 140
+      },
+      "midLand": {
+        "regId": "11D20000",
+        "name": "강원영동"
+      },
+      "midTa": {
+        "regId": "11D20403",
+        "name": "양양",
+        "rule": "sigungu"
+      }
+    },
+    "b0076": {
+      "grid": {
+        "nx": 88,
+        "ny": 140
+      },
+      "midLand": {
+        "regId": "11D20000",
+        "name": "강원영동"
+      },
+      "midTa": {
+        "regId": "11D20403",
+        "name": "양양",
+        "rule": "sigungu"
+      }
+    },
+    "b0077": {
+      "grid": {
+        "nx": 91,
+        "ny": 135
+      },
+      "midLand": {
+        "regId": "11D20000",
+        "name": "강원영동"
+      },
+      "midTa": {
+        "regId": "11D20403",
+        "name": "양양",
+        "rule": "sigungu"
+      }
+    },
+    "b0078": {
+      "grid": {
+        "nx": 90,
+        "ny": 137
+      },
+      "midLand": {
+        "regId": "11D20000",
+        "name": "강원영동"
+      },
+      "midTa": {
+        "regId": "11D20403",
+        "name": "양양",
+        "rule": "sigungu"
+      }
+    },
+    "b0079": {
+      "grid": {
+        "nx": 90,
+        "ny": 136
+      },
+      "midLand": {
+        "regId": "11D20000",
+        "name": "강원영동"
+      },
+      "midTa": {
+        "regId": "11D20403",
+        "name": "양양",
+        "rule": "sigungu"
+      }
+    },
+    "b0080": {
+      "grid": {
+        "nx": 90,
+        "ny": 136
+      },
+      "midLand": {
+        "regId": "11D20000",
+        "name": "강원영동"
+      },
+      "midTa": {
+        "regId": "11D20403",
+        "name": "양양",
+        "rule": "sigungu"
+      }
+    },
+    "b0081": {
+      "grid": {
+        "nx": 91,
+        "ny": 135
+      },
+      "midLand": {
+        "regId": "11D20000",
+        "name": "강원영동"
+      },
+      "midTa": {
+        "regId": "11D20403",
+        "name": "양양",
+        "rule": "sigungu"
+      }
+    },
+    "b0082": {
+      "grid": {
+        "nx": 90,
+        "ny": 136
+      },
+      "midLand": {
+        "regId": "11D20000",
+        "name": "강원영동"
+      },
+      "midTa": {
+        "regId": "11D20403",
+        "name": "양양",
+        "rule": "sigungu"
+      }
+    },
+    "b0083": {
+      "grid": {
+        "nx": 90,
+        "ny": 136
+      },
+      "midLand": {
+        "regId": "11D20000",
+        "name": "강원영동"
+      },
+      "midTa": {
+        "regId": "11D20403",
+        "name": "양양",
+        "rule": "sigungu"
+      }
+    },
+    "b0084": {
+      "grid": {
+        "nx": 90,
+        "ny": 137
+      },
+      "midLand": {
+        "regId": "11D20000",
+        "name": "강원영동"
+      },
+      "midTa": {
+        "regId": "11D20403",
+        "name": "양양",
+        "rule": "sigungu"
+      }
+    },
+    "b0085": {
+      "grid": {
+        "nx": 91,
+        "ny": 135
+      },
+      "midLand": {
+        "regId": "11D20000",
+        "name": "강원영동"
+      },
+      "midTa": {
+        "regId": "11D20403",
+        "name": "양양",
+        "rule": "sigungu"
+      }
+    },
+    "b0086": {
+      "grid": {
+        "nx": 90,
+        "ny": 136
+      },
+      "midLand": {
+        "regId": "11D20000",
+        "name": "강원영동"
+      },
+      "midTa": {
+        "regId": "11D20403",
+        "name": "양양",
+        "rule": "sigungu"
+      }
+    },
+    "b0087": {
+      "grid": {
+        "nx": 90,
+        "ny": 137
+      },
+      "midLand": {
+        "regId": "11D20000",
+        "name": "강원영동"
+      },
+      "midTa": {
+        "regId": "11D20403",
+        "name": "양양",
+        "rule": "sigungu"
+      }
+    },
+    "b0088": {
+      "grid": {
+        "nx": 88,
+        "ny": 140
+      },
+      "midLand": {
+        "regId": "11D20000",
+        "name": "강원영동"
+      },
+      "midTa": {
+        "regId": "11D20403",
+        "name": "양양",
+        "rule": "sigungu"
+      }
+    },
+    "b0089": {
+      "grid": {
+        "nx": 90,
+        "ny": 136
+      },
+      "midLand": {
+        "regId": "11D20000",
+        "name": "강원영동"
+      },
+      "midTa": {
+        "regId": "11D20403",
+        "name": "양양",
+        "rule": "sigungu"
+      }
+    },
+    "b0090": {
+      "grid": {
+        "nx": 89,
+        "ny": 138
+      },
+      "midLand": {
+        "regId": "11D20000",
+        "name": "강원영동"
+      },
+      "midTa": {
+        "regId": "11D20403",
+        "name": "양양",
+        "rule": "sigungu"
+      }
+    },
+    "b0094": {
+      "grid": {
+        "nx": 97,
+        "ny": 73
+      },
+      "midLand": {
+        "regId": "11H20000",
+        "name": "경상남도"
+      },
+      "midTa": {
+        "regId": "11H20201",
+        "name": "부산",
+        "rule": "metro"
+      }
+    },
+    "b0095": {
+      "grid": {
+        "nx": 99,
+        "ny": 75
+      },
+      "midLand": {
+        "regId": "11H20000",
+        "name": "경상남도"
+      },
+      "midTa": {
+        "regId": "11H20201",
+        "name": "부산",
+        "rule": "metro"
+      }
+    },
+    "b0096": {
+      "grid": {
+        "nx": 100,
+        "ny": 76
+      },
+      "midLand": {
+        "regId": "11H20000",
+        "name": "경상남도"
+      },
+      "midTa": {
+        "regId": "11H20201",
+        "name": "부산",
+        "rule": "metro"
+      }
+    },
+    "b0097": {
+      "grid": {
+        "nx": 99,
+        "ny": 75
+      },
+      "midLand": {
+        "regId": "11H20000",
+        "name": "경상남도"
+      },
+      "midTa": {
+        "regId": "11H20201",
+        "name": "부산",
+        "rule": "metro"
+      }
+    },
+    "b0107": {
+      "grid": {
+        "nx": 45,
+        "ny": 119
+      },
+      "midLand": {
+        "regId": "11B00000",
+        "name": "서울.인천.경기"
+      },
+      "midTa": {
+        "regId": "11B20201",
+        "name": "인천",
+        "rule": "metro"
+      }
+    },
+    "b0108": {
+      "grid": {
+        "nx": 51,
+        "ny": 120
+      },
+      "midLand": {
+        "regId": "11B00000",
+        "name": "서울.인천.경기"
+      },
+      "midTa": {
+        "regId": "11B20201",
+        "name": "인천",
+        "rule": "metro"
+      }
+    },
+    "b0109": {
+      "grid": {
+        "nx": 49,
+        "ny": 126
+      },
+      "midLand": {
+        "regId": "11B00000",
+        "name": "서울.인천.경기"
+      },
+      "midTa": {
+        "regId": "11B20201",
+        "name": "인천",
+        "rule": "metro"
+      }
+    },
+    "b0110": {
+      "grid": {
+        "nx": 48,
+        "ny": 118
+      },
+      "midLand": {
+        "regId": "11B00000",
+        "name": "서울.인천.경기"
+      },
+      "midTa": {
+        "regId": "11B20201",
+        "name": "인천",
+        "rule": "metro"
+      }
+    },
+    "b0112": {
+      "grid": {
+        "nx": 51,
+        "ny": 120
+      },
+      "midLand": {
+        "regId": "11B00000",
+        "name": "서울.인천.경기"
+      },
+      "midTa": {
+        "regId": "11B20201",
+        "name": "인천",
+        "rule": "metro"
+      }
+    },
+    "b0113": {
+      "grid": {
+        "nx": 48,
+        "ny": 120
+      },
+      "midLand": {
+        "regId": "11B00000",
+        "name": "서울.인천.경기"
+      },
+      "midTa": {
+        "regId": "11B20201",
+        "name": "인천",
+        "rule": "metro"
+      }
+    },
+    "b0117": {
+      "grid": {
+        "nx": 49,
+        "ny": 124
+      },
+      "midLand": {
+        "regId": "11B00000",
+        "name": "서울.인천.경기"
+      },
+      "midTa": {
+        "regId": "11B20201",
+        "name": "인천",
+        "rule": "metro"
+      }
+    },
+    "b0118": {
+      "grid": {
+        "nx": 49,
+        "ny": 124
+      },
+      "midLand": {
+        "regId": "11B00000",
+        "name": "서울.인천.경기"
+      },
+      "midTa": {
+        "regId": "11B20201",
+        "name": "인천",
+        "rule": "metro"
+      }
+    },
+    "b0119": {
+      "grid": {
+        "nx": 50,
+        "ny": 123
+      },
+      "midLand": {
+        "regId": "11B00000",
+        "name": "서울.인천.경기"
+      },
+      "midTa": {
+        "regId": "11B20201",
+        "name": "인천",
+        "rule": "metro"
+      }
+    },
+    "b0120": {
+      "grid": {
+        "nx": 104,
+        "ny": 83
+      },
+      "midLand": {
+        "regId": "11H20000",
+        "name": "경상남도"
+      },
+      "midTa": {
+        "regId": "11H20101",
+        "name": "울산",
+        "rule": "metro"
+      }
+    },
+    "b0121": {
+      "grid": {
+        "nx": 102,
+        "ny": 80
+      },
+      "midLand": {
+        "regId": "11H20000",
+        "name": "경상남도"
+      },
+      "midTa": {
+        "regId": "11H20101",
+        "name": "울산",
+        "rule": "metro"
+      }
+    },
+    "b0122": {
+      "grid": {
+        "nx": 50,
+        "ny": 115
+      },
+      "midLand": {
+        "regId": "11C20000",
+        "name": "충청남도"
+      },
+      "midTa": {
+        "regId": "11C20103",
+        "name": "당진",
+        "rule": "sigungu"
+      }
+    },
+    "b0123": {
+      "grid": {
+        "nx": 52,
+        "ny": 115
+      },
+      "midLand": {
+        "regId": "11C20000",
+        "name": "충청남도"
+      },
+      "midTa": {
+        "regId": "11C20103",
+        "name": "당진",
+        "rule": "sigungu"
+      }
+    },
+    "b0124": {
+      "grid": {
+        "nx": 52,
+        "ny": 99
+      },
+      "midLand": {
+        "regId": "11C20000",
+        "name": "충청남도"
+      },
+      "midTa": {
+        "regId": "11C20201",
+        "name": "보령",
+        "rule": "sigungu"
+      }
+    },
+    "b0125": {
+      "grid": {
+        "nx": 52,
+        "ny": 98
+      },
+      "midLand": {
+        "regId": "11C20000",
+        "name": "충청남도"
+      },
+      "midTa": {
+        "regId": "11C20201",
+        "name": "보령",
+        "rule": "sigungu"
+      }
+    },
+    "b0127": {
+      "grid": {
+        "nx": 46,
+        "ny": 108
+      },
+      "midLand": {
+        "regId": "11C20000",
+        "name": "충청남도"
+      },
+      "midTa": {
+        "regId": "11C20102",
+        "name": "태안",
+        "rule": "sigungu"
+      }
+    },
+    "b0129": {
+      "grid": {
+        "nx": 46,
+        "ny": 112
+      },
+      "midLand": {
+        "regId": "11C20000",
+        "name": "충청남도"
+      },
+      "midTa": {
+        "regId": "11C20102",
+        "name": "태안",
+        "rule": "sigungu"
+      }
+    },
+    "b0131": {
+      "grid": {
+        "nx": 49,
+        "ny": 105
+      },
+      "midLand": {
+        "regId": "11C20000",
+        "name": "충청남도"
+      },
+      "midTa": {
+        "regId": "11C20102",
+        "name": "태안",
+        "rule": "sigungu"
+      }
+    },
+    "b0132": {
+      "grid": {
+        "nx": 49,
+        "ny": 103
+      },
+      "midLand": {
+        "regId": "11C20000",
+        "name": "충청남도"
+      },
+      "midTa": {
+        "regId": "11C20102",
+        "name": "태안",
+        "rule": "sigungu"
+      }
+    },
+    "b0133": {
+      "grid": {
+        "nx": 48,
+        "ny": 113
+      },
+      "midLand": {
+        "regId": "11C20000",
+        "name": "충청남도"
+      },
+      "midTa": {
+        "regId": "11C20102",
+        "name": "태안",
+        "rule": "sigungu"
+      }
+    },
+    "b0136": {
+      "grid": {
+        "nx": 48,
+        "ny": 106
+      },
+      "midLand": {
+        "regId": "11C20000",
+        "name": "충청남도"
+      },
+      "midTa": {
+        "regId": "11C20102",
+        "name": "태안",
+        "rule": "sigungu"
+      }
+    },
+    "b0137": {
+      "grid": {
+        "nx": 46,
+        "ny": 110
+      },
+      "midLand": {
+        "regId": "11C20000",
+        "name": "충청남도"
+      },
+      "midTa": {
+        "regId": "11C20102",
+        "name": "태안",
+        "rule": "sigungu"
+      }
+    },
+    "b0138": {
+      "grid": {
+        "nx": 48,
+        "ny": 107
+      },
+      "midLand": {
+        "regId": "11C20000",
+        "name": "충청남도"
+      },
+      "midTa": {
+        "regId": "11C20102",
+        "name": "태안",
+        "rule": "sigungu"
+      }
+    },
+    "b0139": {
+      "grid": {
+        "nx": 50,
+        "ny": 102
+      },
+      "midLand": {
+        "regId": "11C20000",
+        "name": "충청남도"
+      },
+      "midTa": {
+        "regId": "11C20102",
+        "name": "태안",
+        "rule": "sigungu"
+      }
+    },
+    "b0142": {
+      "grid": {
+        "nx": 49,
+        "ny": 104
+      },
+      "midLand": {
+        "regId": "11C20000",
+        "name": "충청남도"
+      },
+      "midTa": {
+        "regId": "11C20102",
+        "name": "태안",
+        "rule": "sigungu"
+      }
+    },
+    "b0144": {
+      "grid": {
+        "nx": 49,
+        "ny": 105
+      },
+      "midLand": {
+        "regId": "11C20000",
+        "name": "충청남도"
+      },
+      "midTa": {
+        "regId": "11C20102",
+        "name": "태안",
+        "rule": "sigungu"
+      }
+    },
+    "b0145": {
+      "grid": {
+        "nx": 49,
+        "ny": 102
+      },
+      "midLand": {
+        "regId": "11C20000",
+        "name": "충청남도"
+      },
+      "midTa": {
+        "regId": "11C20102",
+        "name": "태안",
+        "rule": "sigungu"
+      }
+    },
+    "b0146": {
+      "grid": {
+        "nx": 46,
+        "ny": 111
+      },
+      "midLand": {
+        "regId": "11C20000",
+        "name": "충청남도"
+      },
+      "midTa": {
+        "regId": "11C20102",
+        "name": "태안",
+        "rule": "sigungu"
+      }
+    },
+    "b0148": {
+      "grid": {
+        "nx": 45,
+        "ny": 109
+      },
+      "midLand": {
+        "regId": "11C20000",
+        "name": "충청남도"
+      },
+      "midTa": {
+        "regId": "11C20102",
+        "name": "태안",
+        "rule": "sigungu"
+      }
+    },
+    "b0149": {
+      "grid": {
+        "nx": 47,
+        "ny": 108
+      },
+      "midLand": {
+        "regId": "11C20000",
+        "name": "충청남도"
+      },
+      "midTa": {
+        "regId": "11C20102",
+        "name": "태안",
+        "rule": "sigungu"
+      }
+    },
+    "b0150": {
+      "grid": {
+        "nx": 46,
+        "ny": 111
+      },
+      "midLand": {
+        "regId": "11C20000",
+        "name": "충청남도"
+      },
+      "midTa": {
+        "regId": "11C20102",
+        "name": "태안",
+        "rule": "sigungu"
+      }
+    },
+    "b0151": {
+      "grid": {
+        "nx": 49,
+        "ny": 102
+      },
+      "midLand": {
+        "regId": "11C20000",
+        "name": "충청남도"
+      },
+      "midTa": {
+        "regId": "11C20102",
+        "name": "태안",
+        "rule": "sigungu"
+      }
+    },
+    "b0152": {
+      "grid": {
+        "nx": 46,
+        "ny": 110
+      },
+      "midLand": {
+        "regId": "11C20000",
+        "name": "충청남도"
+      },
+      "midTa": {
+        "regId": "11C20102",
+        "name": "태안",
+        "rule": "sigungu"
+      }
+    },
+    "b0153": {
+      "grid": {
+        "nx": 48,
+        "ny": 107
+      },
+      "midLand": {
+        "regId": "11C20000",
+        "name": "충청남도"
+      },
+      "midTa": {
+        "regId": "11C20102",
+        "name": "태안",
+        "rule": "sigungu"
+      }
+    },
+    "b0155": {
+      "grid": {
+        "nx": 45,
+        "ny": 109
+      },
+      "midLand": {
+        "regId": "11C20000",
+        "name": "충청남도"
+      },
+      "midTa": {
+        "regId": "11C20102",
+        "name": "태안",
+        "rule": "sigungu"
+      }
+    },
+    "b0156": {
+      "grid": {
+        "nx": 47,
+        "ny": 112
+      },
+      "midLand": {
+        "regId": "11C20000",
+        "name": "충청남도"
+      },
+      "midTa": {
+        "regId": "11C20102",
+        "name": "태안",
+        "rule": "sigungu"
+      }
+    },
+    "b0157": {
+      "grid": {
+        "nx": 51,
+        "ny": 81
+      },
+      "midLand": {
+        "regId": "11F10000",
+        "name": "전북자치도"
+      },
+      "midTa": {
+        "regId": "21F10601",
+        "name": "고창",
+        "rule": "sigungu"
+      }
+    },
+    "b0164": {
+      "grid": {
+        "nx": 48,
+        "ny": 84
+      },
+      "midLand": {
+        "regId": "11F10000",
+        "name": "전북자치도"
+      },
+      "midTa": {
+        "regId": "21F10602",
+        "name": "부안",
+        "rule": "sigungu"
+      }
+    },
+    "b0165": {
+      "grid": {
+        "nx": 64,
+        "ny": 59
+      },
+      "midLand": {
+        "regId": "11F20000",
+        "name": "전라남도"
+      },
+      "midTa": {
+        "regId": "11F20403",
+        "name": "고흥",
+        "rule": "sigungu"
+      }
+    },
+    "b0168": {
+      "grid": {
+        "nx": 66,
+        "ny": 65
+      },
+      "midLand": {
+        "regId": "11F20000",
+        "name": "전라남도"
+      },
+      "midTa": {
+        "regId": "11F20403",
+        "name": "고흥",
+        "rule": "sigungu"
+      }
+    },
+    "b0170": {
+      "grid": {
+        "nx": 67,
+        "ny": 60
+      },
+      "midLand": {
+        "regId": "11F20000",
+        "name": "전라남도"
+      },
+      "midTa": {
+        "regId": "11F20403",
+        "name": "고흥",
+        "rule": "sigungu"
+      }
+    },
+    "b0171": {
+      "grid": {
+        "nx": 63,
+        "ny": 59
+      },
+      "midLand": {
+        "regId": "11F20000",
+        "name": "전라남도"
+      },
+      "midTa": {
+        "regId": "11F20403",
+        "name": "고흥",
+        "rule": "sigungu"
+      }
+    },
+    "b0173": {
+      "grid": {
+        "nx": 64,
+        "ny": 63
+      },
+      "midLand": {
+        "regId": "11F20000",
+        "name": "전라남도"
+      },
+      "midTa": {
+        "regId": "11F20403",
+        "name": "고흥",
+        "rule": "sigungu"
+      }
+    },
+    "b0174": {
+      "grid": {
+        "nx": 64,
+        "ny": 58
+      },
+      "midLand": {
+        "regId": "11F20000",
+        "name": "전라남도"
+      },
+      "midTa": {
+        "regId": "11F20403",
+        "name": "고흥",
+        "rule": "sigungu"
+      }
+    },
+    "b0175": {
+      "grid": {
+        "nx": 65,
+        "ny": 64
+      },
+      "midLand": {
+        "regId": "11F20000",
+        "name": "전라남도"
+      },
+      "midTa": {
+        "regId": "11F20403",
+        "name": "고흥",
+        "rule": "sigungu"
+      }
+    },
+    "b0177": {
+      "grid": {
+        "nx": 50,
+        "ny": 70
+      },
+      "midLand": {
+        "regId": "11F20000",
+        "name": "전라남도"
+      },
+      "midTa": {
+        "regId": "21F20804",
+        "name": "무안",
+        "rule": "sigungu"
+      }
+    },
+    "b0178": {
+      "grid": {
+        "nx": 49,
+        "ny": 72
+      },
+      "midLand": {
+        "regId": "11F20000",
+        "name": "전라남도"
+      },
+      "midTa": {
+        "regId": "21F20804",
+        "name": "무안",
+        "rule": "sigungu"
+      }
+    },
+    "b0179": {
+      "grid": {
+        "nx": 63,
+        "ny": 64
+      },
+      "midLand": {
+        "regId": "11F20000",
+        "name": "전라남도"
+      },
+      "midTa": {
+        "regId": "11F20404",
+        "name": "보성",
+        "rule": "sigungu"
+      }
+    },
+    "b0181": {
+      "grid": {
+        "nx": 40,
+        "ny": 62
+      },
+      "midLand": {
+        "regId": "11F20000",
+        "name": "전라남도"
+      },
+      "midTa": {
+        "regId": "21F20803",
+        "name": "신안",
+        "rule": "sigungu"
+      }
+    },
+    "b0183": {
+      "grid": {
+        "nx": 44,
+        "ny": 67
+      },
+      "midLand": {
+        "regId": "11F20000",
+        "name": "전라남도"
+      },
+      "midTa": {
+        "regId": "21F20803",
+        "name": "신안",
+        "rule": "sigungu"
+      }
+    },
+    "b0184": {
+      "grid": {
+        "nx": 43,
+        "ny": 68
+      },
+      "midLand": {
+        "regId": "11F20000",
+        "name": "전라남도"
+      },
+      "midTa": {
+        "regId": "21F20803",
+        "name": "신안",
+        "rule": "sigungu"
+      }
+    },
+    "b0185": {
+      "grid": {
+        "nx": 42,
+        "ny": 64
+      },
+      "midLand": {
+        "regId": "11F20000",
+        "name": "전라남도"
+      },
+      "midTa": {
+        "regId": "21F20803",
+        "name": "신안",
+        "rule": "sigungu"
+      }
+    },
+    "b0186": {
+      "grid": {
+        "nx": 43,
+        "ny": 62
+      },
+      "midLand": {
+        "regId": "11F20000",
+        "name": "전라남도"
+      },
+      "midTa": {
+        "regId": "21F20803",
+        "name": "신안",
+        "rule": "sigungu"
+      }
+    },
+    "b0188": {
+      "grid": {
+        "nx": 42,
+        "ny": 66
+      },
+      "midLand": {
+        "regId": "11F20000",
+        "name": "전라남도"
+      },
+      "midTa": {
+        "regId": "21F20803",
+        "name": "신안",
+        "rule": "sigungu"
+      }
+    },
+    "b0191": {
+      "grid": {
+        "nx": 41,
+        "ny": 65
+      },
+      "midLand": {
+        "regId": "11F20000",
+        "name": "전라남도"
+      },
+      "midTa": {
+        "regId": "21F20803",
+        "name": "신안",
+        "rule": "sigungu"
+      }
+    },
+    "b0194": {
+      "grid": {
+        "nx": 74,
+        "ny": 66
+      },
+      "midLand": {
+        "regId": "11F20000",
+        "name": "전라남도"
+      },
+      "midTa": {
+        "regId": "11F20401",
+        "name": "여수",
+        "rule": "sigungu"
+      }
+    },
+    "b0195": {
+      "grid": {
+        "nx": 75,
+        "ny": 67
+      },
+      "midLand": {
+        "regId": "11F20000",
+        "name": "전라남도"
+      },
+      "midTa": {
+        "regId": "11F20401",
+        "name": "여수",
+        "rule": "sigungu"
+      }
+    },
+    "b0196": {
+      "grid": {
+        "nx": 75,
+        "ny": 64
+      },
+      "midLand": {
+        "regId": "11F20000",
+        "name": "전라남도"
+      },
+      "midTa": {
+        "regId": "11F20401",
+        "name": "여수",
+        "rule": "sigungu"
+      }
+    },
+    "b0197": {
+      "grid": {
+        "nx": 75,
+        "ny": 63
+      },
+      "midLand": {
+        "regId": "11F20000",
+        "name": "전라남도"
+      },
+      "midTa": {
+        "regId": "11F20401",
+        "name": "여수",
+        "rule": "sigungu"
+      }
+    },
+    "b0198": {
+      "grid": {
+        "nx": 76,
+        "ny": 60
+      },
+      "midLand": {
+        "regId": "11F20000",
+        "name": "전라남도"
+      },
+      "midTa": {
+        "regId": "11F20401",
+        "name": "여수",
+        "rule": "sigungu"
+      }
+    },
+    "b0199": {
+      "grid": {
+        "nx": 72,
+        "ny": 63
+      },
+      "midLand": {
+        "regId": "11F20000",
+        "name": "전라남도"
+      },
+      "midTa": {
+        "regId": "11F20401",
+        "name": "여수",
+        "rule": "sigungu"
+      }
+    },
+    "b0200": {
+      "grid": {
+        "nx": 73,
+        "ny": 66
+      },
+      "midLand": {
+        "regId": "11F20000",
+        "name": "전라남도"
+      },
+      "midTa": {
+        "regId": "11F20401",
+        "name": "여수",
+        "rule": "sigungu"
+      }
+    },
+    "b0201": {
+      "grid": {
+        "nx": 50,
+        "ny": 79
+      },
+      "midLand": {
+        "regId": "11F20000",
+        "name": "전라남도"
+      },
+      "midTa": {
+        "regId": "21F20102",
+        "name": "영광",
+        "rule": "sigungu"
+      }
+    },
+    "b0202": {
+      "grid": {
+        "nx": 46,
+        "ny": 77
+      },
+      "midLand": {
+        "regId": "11F20000",
+        "name": "전라남도"
+      },
+      "midTa": {
+        "regId": "21F20102",
+        "name": "영광",
+        "rule": "sigungu"
+      }
+    },
+    "b0203": {
+      "grid": {
+        "nx": 62,
+        "ny": 56
+      },
+      "midLand": {
+        "regId": "11F20000",
+        "name": "전라남도"
+      },
+      "midTa": {
+        "regId": "11F20301",
+        "name": "완도",
+        "rule": "sigungu"
+      }
+    },
+    "b0206": {
+      "grid": {
+        "nx": 60,
+        "ny": 56
+      },
+      "midLand": {
+        "regId": "11F20000",
+        "name": "전라남도"
+      },
+      "midTa": {
+        "regId": "11F20301",
+        "name": "완도",
+        "rule": "sigungu"
+      }
+    },
+    "b0207": {
+      "grid": {
+        "nx": 59,
+        "ny": 56
+      },
+      "midLand": {
+        "regId": "11F20000",
+        "name": "전라남도"
+      },
+      "midTa": {
+        "regId": "11F20301",
+        "name": "완도",
+        "rule": "sigungu"
+      }
+    },
+    "b0208": {
+      "grid": {
+        "nx": 58,
+        "ny": 56
+      },
+      "midLand": {
+        "regId": "11F20000",
+        "name": "전라남도"
+      },
+      "midTa": {
+        "regId": "11F20301",
+        "name": "완도",
+        "rule": "sigungu"
+      }
+    },
+    "b0209": {
+      "grid": {
+        "nx": 60,
+        "ny": 57
+      },
+      "midLand": {
+        "regId": "11F20000",
+        "name": "전라남도"
+      },
+      "midTa": {
+        "regId": "11F20301",
+        "name": "완도",
+        "rule": "sigungu"
+      }
+    },
+    "b0213": {
+      "grid": {
+        "nx": 62,
+        "ny": 63
+      },
+      "midLand": {
+        "regId": "11F20000",
+        "name": "전라남도"
+      },
+      "midTa": {
+        "regId": "11F20304",
+        "name": "장흥",
+        "rule": "sigungu"
+      }
+    },
+    "b0214": {
+      "grid": {
+        "nx": 49,
+        "ny": 58
+      },
+      "midLand": {
+        "regId": "11F20000",
+        "name": "전라남도"
+      },
+      "midTa": {
+        "regId": "21F20201",
+        "name": "진도",
+        "rule": "sigungu"
+      }
+    },
+    "b0215": {
+      "grid": {
+        "nx": 44,
+        "ny": 54
+      },
+      "midLand": {
+        "regId": "11F20000",
+        "name": "전라남도"
+      },
+      "midTa": {
+        "regId": "21F20201",
+        "name": "진도",
+        "rule": "sigungu"
+      }
+    },
+    "b0216": {
+      "grid": {
+        "nx": 44,
+        "ny": 55
+      },
+      "midLand": {
+        "regId": "11F20000",
+        "name": "전라남도"
+      },
+      "midTa": {
+        "regId": "21F20201",
+        "name": "진도",
+        "rule": "sigungu"
+      }
+    },
+    "b0217": {
+      "grid": {
+        "nx": 48,
+        "ny": 58
+      },
+      "midLand": {
+        "regId": "11F20000",
+        "name": "전라남도"
+      },
+      "midTa": {
+        "regId": "21F20201",
+        "name": "진도",
+        "rule": "sigungu"
+      }
+    },
+    "b0218": {
+      "grid": {
+        "nx": 51,
+        "ny": 73
+      },
+      "midLand": {
+        "regId": "11F20000",
+        "name": "전라남도"
+      },
+      "midTa": {
+        "regId": "21F20101",
+        "name": "함평",
+        "rule": "sigungu"
+      }
+    },
+    "b0222": {
+      "grid": {
+        "nx": 104,
+        "ny": 86
+      },
+      "midLand": {
+        "regId": "11H10000",
+        "name": "경상북도"
+      },
+      "midTa": {
+        "regId": "11H10202",
+        "name": "경주",
+        "rule": "sigungu"
+      }
+    },
+    "b0223": {
+      "grid": {
+        "nx": 105,
+        "ny": 89
+      },
+      "midLand": {
+        "regId": "11H10000",
+        "name": "경상북도"
+      },
+      "midTa": {
+        "regId": "11H10202",
+        "name": "경주",
+        "rule": "sigungu"
+      }
+    },
+    "b0224": {
+      "grid": {
+        "nx": 105,
+        "ny": 88
+      },
+      "midLand": {
+        "regId": "11H10000",
+        "name": "경상북도"
+      },
+      "midTa": {
+        "regId": "11H10202",
+        "name": "경주",
+        "rule": "sigungu"
+      }
+    },
+    "b0225": {
+      "grid": {
+        "nx": 105,
+        "ny": 90
+      },
+      "midLand": {
+        "regId": "11H10000",
+        "name": "경상북도"
+      },
+      "midTa": {
+        "regId": "11H10202",
+        "name": "경주",
+        "rule": "sigungu"
+      }
+    },
+    "b0226": {
+      "grid": {
+        "nx": 105,
+        "ny": 89
+      },
+      "midLand": {
+        "regId": "11H10000",
+        "name": "경상북도"
+      },
+      "midTa": {
+        "regId": "11H10202",
+        "name": "경주",
+        "rule": "sigungu"
+      }
+    },
+    "b0229": {
+      "grid": {
+        "nx": 102,
+        "ny": 101
+      },
+      "midLand": {
+        "regId": "11H10000",
+        "name": "경상북도"
+      },
+      "midTa": {
+        "regId": "11H10102",
+        "name": "영덕",
+        "rule": "sigungu"
+      }
+    },
+    "b0231": {
+      "grid": {
+        "nx": 103,
+        "ny": 103
+      },
+      "midLand": {
+        "regId": "11H10000",
+        "name": "경상북도"
+      },
+      "midTa": {
+        "regId": "11H10102",
+        "name": "영덕",
+        "rule": "sigungu"
+      }
+    },
+    "b0232": {
+      "grid": {
+        "nx": 102,
+        "ny": 100
+      },
+      "midLand": {
+        "regId": "11H10000",
+        "name": "경상북도"
+      },
+      "midTa": {
+        "regId": "11H10102",
+        "name": "영덕",
+        "rule": "sigungu"
+      }
+    },
+    "b0233": {
+      "grid": {
+        "nx": 103,
+        "ny": 102
+      },
+      "midLand": {
+        "regId": "11H10000",
+        "name": "경상북도"
+      },
+      "midTa": {
+        "regId": "11H10102",
+        "name": "영덕",
+        "rule": "sigungu"
+      }
+    },
+    "b0236": {
+      "grid": {
+        "nx": 101,
+        "ny": 118
+      },
+      "midLand": {
+        "regId": "11H10000",
+        "name": "경상북도"
+      },
+      "midTa": {
+        "regId": "11H10101",
+        "name": "울진",
+        "rule": "sigungu"
+      }
+    },
+    "b0237": {
+      "grid": {
+        "nx": 102,
+        "ny": 115
+      },
+      "midLand": {
+        "regId": "11H10000",
+        "name": "경상북도"
+      },
+      "midTa": {
+        "regId": "11H10101",
+        "name": "울진",
+        "rule": "sigungu"
+      }
+    },
+    "b0238": {
+      "grid": {
+        "nx": 102,
+        "ny": 117
+      },
+      "midLand": {
+        "regId": "11H10000",
+        "name": "경상북도"
+      },
+      "midTa": {
+        "regId": "11H10101",
+        "name": "울진",
+        "rule": "sigungu"
+      }
+    },
+    "b0239": {
+      "grid": {
+        "nx": 102,
+        "ny": 117
+      },
+      "midLand": {
+        "regId": "11H10000",
+        "name": "경상북도"
+      },
+      "midTa": {
+        "regId": "11H10101",
+        "name": "울진",
+        "rule": "sigungu"
+      }
+    },
+    "b0241": {
+      "grid": {
+        "nx": 106,
+        "ny": 94
+      },
+      "midLand": {
+        "regId": "11H10000",
+        "name": "경상북도"
+      },
+      "midTa": {
+        "regId": "11H10201",
+        "name": "포항",
+        "rule": "sigungu"
+      }
+    },
+    "b0242": {
+      "grid": {
+        "nx": 104,
+        "ny": 94
+      },
+      "midLand": {
+        "regId": "11H10000",
+        "name": "경상북도"
+      },
+      "midTa": {
+        "regId": "11H10201",
+        "name": "포항",
+        "rule": "sigungu"
+      }
+    },
+    "b0247": {
+      "grid": {
+        "nx": 91,
+        "ny": 72
+      },
+      "midLand": {
+        "regId": "11H20000",
+        "name": "경상남도"
+      },
+      "midTa": {
+        "regId": "11H20403",
+        "name": "거제",
+        "rule": "sigungu"
+      }
+    },
+    "b0249": {
+      "grid": {
+        "nx": 91,
+        "ny": 72
+      },
+      "midLand": {
+        "regId": "11H20000",
+        "name": "경상남도"
+      },
+      "midTa": {
+        "regId": "11H20403",
+        "name": "거제",
+        "rule": "sigungu"
+      }
+    },
+    "b0254": {
+      "grid": {
+        "nx": 90,
+        "ny": 72
+      },
+      "midLand": {
+        "regId": "11H20000",
+        "name": "경상남도"
+      },
+      "midTa": {
+        "regId": "11H20403",
+        "name": "거제",
+        "rule": "sigungu"
+      }
+    },
+    "b0255": {
+      "grid": {
+        "nx": 89,
+        "ny": 69
+      },
+      "midLand": {
+        "regId": "11H20000",
+        "name": "경상남도"
+      },
+      "midTa": {
+        "regId": "11H20403",
+        "name": "거제",
+        "rule": "sigungu"
+      }
+    },
+    "b0257": {
+      "grid": {
+        "nx": 90,
+        "ny": 71
+      },
+      "midLand": {
+        "regId": "11H20000",
+        "name": "경상남도"
+      },
+      "midTa": {
+        "regId": "11H20403",
+        "name": "거제",
+        "rule": "sigungu"
+      }
+    },
+    "b0262": {
+      "grid": {
+        "nx": 91,
+        "ny": 72
+      },
+      "midLand": {
+        "regId": "11H20000",
+        "name": "경상남도"
+      },
+      "midTa": {
+        "regId": "11H20403",
+        "name": "거제",
+        "rule": "sigungu"
+      }
+    },
+    "b0263": {
+      "grid": {
+        "nx": 92,
+        "ny": 71
+      },
+      "midLand": {
+        "regId": "11H20000",
+        "name": "경상남도"
+      },
+      "midTa": {
+        "regId": "11H20403",
+        "name": "거제",
+        "rule": "sigungu"
+      }
+    },
+    "b0264": {
+      "grid": {
+        "nx": 77,
+        "ny": 66
+      },
+      "midLand": {
+        "regId": "11H20000",
+        "name": "경상남도"
+      },
+      "midTa": {
+        "regId": "11H20405",
+        "name": "남해",
+        "rule": "sigungu"
+      }
+    },
+    "b0265": {
+      "grid": {
+        "nx": 76,
+        "ny": 66
+      },
+      "midLand": {
+        "regId": "11H20000",
+        "name": "경상남도"
+      },
+      "midTa": {
+        "regId": "11H20405",
+        "name": "남해",
+        "rule": "sigungu"
+      }
+    },
+    "b0266": {
+      "grid": {
+        "nx": 79,
+        "ny": 65
+      },
+      "midLand": {
+        "regId": "11H20000",
+        "name": "경상남도"
+      },
+      "midTa": {
+        "regId": "11H20405",
+        "name": "남해",
+        "rule": "sigungu"
+      }
+    },
+    "b0267": {
+      "grid": {
+        "nx": 79,
+        "ny": 65
+      },
+      "midLand": {
+        "regId": "11H20000",
+        "name": "경상남도"
+      },
+      "midTa": {
+        "regId": "11H20405",
+        "name": "남해",
+        "rule": "sigungu"
+      }
+    },
+    "b0268": {
+      "grid": {
+        "nx": 81,
+        "ny": 70
+      },
+      "midLand": {
+        "regId": "11H20000",
+        "name": "경상남도"
+      },
+      "midTa": {
+        "regId": "11H20402",
+        "name": "사천",
+        "rule": "sigungu"
+      }
+    },
+    "b0269": {
+      "grid": {
+        "nx": 83,
+        "ny": 68
+      },
+      "midLand": {
+        "regId": "11H20000",
+        "name": "경상남도"
+      },
+      "midTa": {
+        "regId": "11H20401",
+        "name": "통영",
+        "rule": "sigungu"
+      }
+    },
+    "b0270": {
+      "grid": {
+        "nx": 87,
+        "ny": 65
+      },
+      "midLand": {
+        "regId": "11H20000",
+        "name": "경상남도"
+      },
+      "midTa": {
+        "regId": "11H20401",
+        "name": "통영",
+        "rule": "sigungu"
+      }
+    },
+    "b0272": {
+      "grid": {
+        "nx": 60,
+        "ny": 37
+      },
+      "midLand": {
+        "regId": "11G00000",
+        "name": "제주도"
+      },
+      "midTa": {
+        "regId": "11G00401",
+        "name": "서귀포",
+        "rule": "sigungu"
+      }
+    },
+    "b0273": {
+      "grid": {
+        "nx": 51,
+        "ny": 32
+      },
+      "midLand": {
+        "regId": "11G00000",
+        "name": "제주도"
+      },
+      "midTa": {
+        "regId": "11G00401",
+        "name": "서귀포",
+        "rule": "sigungu"
+      }
+    },
+    "b0274": {
+      "grid": {
+        "nx": 58,
+        "ny": 34
+      },
+      "midLand": {
+        "regId": "11G00000",
+        "name": "제주도"
+      },
+      "midTa": {
+        "regId": "11G00401",
+        "name": "서귀포",
+        "rule": "sigungu"
+      }
+    },
+    "b0275": {
+      "grid": {
+        "nx": 49,
+        "ny": 32
+      },
+      "midLand": {
+        "regId": "11G00000",
+        "name": "제주도"
+      },
+      "midTa": {
+        "regId": "11G00401",
+        "name": "서귀포",
+        "rule": "sigungu"
+      }
+    },
+    "b0276": {
+      "grid": {
+        "nx": 49,
+        "ny": 37
+      },
+      "midLand": {
+        "regId": "11G00000",
+        "name": "제주도"
+      },
+      "midTa": {
+        "regId": "11G00201",
+        "name": "제주",
+        "rule": "sigungu"
+      }
+    },
+    "b0278": {
+      "grid": {
+        "nx": 57,
+        "ny": 39
+      },
+      "midLand": {
+        "regId": "11G00000",
+        "name": "제주도"
+      },
+      "midTa": {
+        "regId": "11G00201",
+        "name": "제주",
+        "rule": "sigungu"
+      }
+    },
+    "b0279": {
+      "grid": {
+        "nx": 54,
+        "ny": 39
+      },
+      "midLand": {
+        "regId": "11G00000",
+        "name": "제주도"
+      },
+      "midTa": {
+        "regId": "11G00201",
+        "name": "제주",
+        "rule": "sigungu"
+      }
+    },
+    "b0280": {
+      "grid": {
+        "nx": 51,
+        "ny": 38
+      },
+      "midLand": {
+        "regId": "11G00000",
+        "name": "제주도"
+      },
+      "midTa": {
+        "regId": "11G00201",
+        "name": "제주",
+        "rule": "sigungu"
+      }
+    },
+    "b0281": {
+      "grid": {
+        "nx": 55,
+        "ny": 39
+      },
+      "midLand": {
+        "regId": "11G00000",
+        "name": "제주도"
+      },
+      "midTa": {
+        "regId": "11G00201",
+        "name": "제주",
+        "rule": "sigungu"
+      }
+    }
+  }
+}
