@@ -24,7 +24,7 @@ const ZONE = `(?:${Object.values(ZONE_NAMES_KO)
 const SCOPE = `(?:${ZONE}(?:, ${ZONE})?|${ko.warning.beachZones})`;
 
 // 화면에 보이는 '특보 없음' 배지 개수
-// PC 홈 상태 요약 카드의 분류 이름('특보 없음 0곳')은 판단 배지가 아니라 빼고 셈(data-summary-category, BRD-129)
+// PC 홈 전국 지도 카드의 묶음 이름('특보 없음 0곳')은 판단 배지가 아니라 빼고 셈(data-summary-category)
 function notSummaryLabel(page: Page) {
   return page.locator(":not([data-summary-category])");
 }
@@ -284,22 +284,23 @@ test.describe("공지", () => {
   });
 });
 
-// PC 홈 상태 요약은 0곳인 분류도 3장(Figma 181:736, #105 사용자 결정 10/30). 0곳 카드는 근거 줄 없이 이름·개수만
-test.describe("PC 상태 요약", () => {
+// PC 홈 전국 지도 카드는 0곳인 묶음도 4줄(11/5 홈 v3 시안). 특보 없음이 0곳이면 확인 시각 근거 줄 없음
+test.describe("PC 전국 지도 카드", () => {
   test.use({ scenario: "noConfirmed" });
-  test("확인된 판단이 없어도 특보 없음·이용불가·판단불가 3장, 특보 없음은 0곳", async ({
+  test("확인된 판단이 없어도 4가지 묶음, 특보 없음은 0곳이고 확인 시각을 내세우지 않음", async ({
     page,
   }, info) => {
-    test.skip(info.project.name !== "desktop", "상태 요약은 PC 히어로만");
+    test.skip(info.project.name !== "desktop", "전국 지도 카드는 PC 히어로만");
     await page.goto("/");
     const labels = page.locator("[data-summary-category]");
-    await expect(labels).toHaveCount(3);
-    const clearCard = page.getByRole("link").filter({
+    await expect(labels).toHaveCount(4);
+    await expect(page.locator('[data-national-tone="clear"]')).toHaveText(
+      /0곳$/,
+    );
+    const card = page.getByRole("link").filter({
       has: page.locator('[data-summary-category="clear"]'),
     });
-    await expect(clearCard).toContainText("0곳");
-    // 0곳 카드에는 확인 시각을 내세우지 않음
-    await expect(clearCard).not.toContainText(/기상청 \d{1,2}:\d{2} 확인/);
+    await expect(card).not.toContainText(/기상청 \d{1,2}:\d{2} 확인/);
   });
 });
 
