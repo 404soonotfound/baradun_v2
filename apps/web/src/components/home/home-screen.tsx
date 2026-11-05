@@ -174,9 +174,12 @@ export function HomeScreen({
     );
   }, [byList, regionBeaches, nearestPlace, beaches, activity]);
   // PC 전국 지도 카드: 공개 해변 전체의 화면 상태 + 큰 점(지금 보는 범위, 전국이면 없음)
-  const allViews = beaches.map((beach) =>
-    deriveBeachView({ id: beach.id, hidden: false }, snapshot),
-  );
+  // 모바일은 지도 카드가 없어 계산하지 않음
+  const allViews = desktop
+    ? beaches.map((beach) =>
+        deriveBeachView({ id: beach.id, hidden: false }, snapshot),
+      )
+    : [];
   const highlightIds = useMemo(
     () =>
       new Set(

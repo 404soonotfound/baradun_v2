@@ -8,6 +8,7 @@ import { SkyGlyph } from "@/components/detail/weather-card";
 import { MiniWaveChart } from "@/components/home/mini-wave-chart";
 import { ReasonBadge } from "@/components/reason-badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { WindArrow } from "@/components/weather/wind-row";
 import { type Activity, useActivity } from "@/lib/activity";
 import type { BeachSummary } from "@/lib/beach-summary";
 import { compassPoint } from "@/lib/direction";
@@ -567,24 +568,7 @@ function WindAhead({ beachId, nowMs }: { beachId: string; nowMs: number }) {
                 {cell.windTo === null || cell.windSpeed === null ? (
                   <span className="block size-[11px]" />
                 ) : (
-                  <svg
-                    width="11"
-                    height="11"
-                    viewBox="0 0 12 12"
-                    className="shrink-0"
-                    style={{
-                      transform: `rotate(${Math.round(cell.windTo)}deg)`,
-                    }}
-                  >
-                    <path
-                      d="M6 10.5V1.8M2.6 5.1 6 1.6l3.4 3.5"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="1.8"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
+                  <WindArrow windTo={cell.windTo} />
                 )}
               </span>
               <span className="text-label-s leading-none font-bold text-text-default tabular-nums">
