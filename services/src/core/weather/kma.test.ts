@@ -67,7 +67,7 @@ describe("응답 껍데기", () => {
 });
 
 describe("다시 받을 실패 (BRD-186)", () => {
-  it("기상청 일시 오류·T1H 없음·잘린 응답만 다시 받음", () => {
+  it("기상청 일시 오류·T1H 없음만 다시 받음", () => {
     for (const r of [
       "result:01",
       "result:02",
@@ -75,13 +75,12 @@ describe("다시 받을 실패 (BRD-186)", () => {
       "result:05",
       "result:99",
       "no_t1h",
-      "truncated:3/10",
     ]) {
       expect(isTransientReason(r)).toBe(true);
     }
   });
 
-  it("자료 없음·요청 오류·권한·한도·키 오류·XML 응답·전송 실패는 다시 받지 않음", () => {
+  it("자료 없음·요청 오류·권한·한도·키 오류·XML 응답·잘린 응답·전송 실패는 다시 받지 않음", () => {
     for (const r of [
       "result:03",
       "result:10",
@@ -89,6 +88,7 @@ describe("다시 받을 실패 (BRD-186)", () => {
       "result:30",
       "result:missing",
       "not_json",
+      "truncated:3/10",
       "no_rows",
       "grid_mismatch",
       "timeout",

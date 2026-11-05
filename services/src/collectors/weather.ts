@@ -400,20 +400,22 @@ export async function collectWeather(
       failures.push({ source: "weather", reason: "budget", count: skipped });
     }
     // 다시 받기는 한 번만(다시 받은 실패는 retries에 넣지 않음). runTasks가 예산을 보고 새 요청을 멈춤
-    const pending = retries.splice(0);
+    // 기상청 전면 장애로 실패가 많으면 상한까지만 다시 받음(같은 서비스 하루 한도를 장애 시간마다 크게 쓰지 않게)
     const tried = new Set<number>();
     await runTasks(
       deps,
       startedMs,
-      pending.map((r, i) => async () => {
-        tried.add(i);
-        await r.run();
-      }),
+      retries
+        .slice(0, COLLECT_POLICY.weatherRetryMax)
+        .map((r, i) => async () => {
+          tried.add(i);
+          await r.run();
+        }),
     );
-    pending.forEach((r, i) => {
+    retries.forEach((r, i) => {
       if (!tried.has(i)) r.giveUp();
     });
-    retriedCount = pending.length;
+    retriedCount = tried.size;
   }
 
   // 받은 것만 이전 값에 합쳐 씀. 받은 것이 없으면 쓰지 않음(저장한 것으로 침)
