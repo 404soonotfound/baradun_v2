@@ -128,10 +128,14 @@ export function RecentBeaches({
         )}
       </Link>
       {rest.length > 0 && (
-        <ul className="flex flex-wrap gap-2">
+        // 모바일은 한 줄 가로 스크롤 + 오른쪽 끝을 흐리게 해 더 있음을 알림, PC는 여러 줄(11/5 홈 v3 시안)
+        <ul
+          aria-label={t("chips", { count: rest.length })}
+          className="flex flex-wrap gap-2 max-lg:-mx-4 max-lg:flex-nowrap max-lg:overflow-x-auto max-lg:px-4 max-lg:pb-1 max-lg:[scrollbar-width:none] max-lg:[mask-image:linear-gradient(to_right,#000_calc(100%-24px),transparent)] max-lg:[&::-webkit-scrollbar]:hidden"
+        >
           {/* Vue: v-for="beach in rest" :key="beach.id" */}
           {rest.map((beach) => (
-            <li key={beach.id}>
+            <li key={beach.id} className="shrink-0">
               <RemovableChip
                 removeLabel={t("remove", { name: beach.name })}
                 onRemove={() => remove(beach)}

@@ -173,6 +173,7 @@
       "title": "Recently viewed",
       "all": "See all",
       "remove": "Remove {name} from recently viewed",
+      "chips": "{count} more recently viewed beaches",
       "removed": "Removed from recently viewed",
       "undo": "Undo",
       "viewedToday": "Viewed today at {time}",

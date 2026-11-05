@@ -173,6 +173,7 @@
       "title": "최근 본 해변",
       "all": "전체 보기",
       "remove": "{name} 최근 본 목록에서 지우기",
+      "chips": "최근 본 해변 {count}곳",
       "removed": "최근 본 목록에서 지웠어요",
       "undo": "되돌리기",
       "viewedToday": "오늘 {time}에 봤어요",
