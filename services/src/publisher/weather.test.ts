@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { parseShortForecast } from "../core/weather/kma";
 import type { WeatherInputs } from "./weather";
 import { BEACHES, WEATHER_AREAS } from "./fixtures";
-import { buildWeather, parseWf } from "./weather";
+import { buildWeather, parseWeatherAreaTable, parseWf } from "./weather";
 import { contractErrors } from "./validate";
 
 // weather.json 만들기 (BRD-181, D18-2·D18-8·D18-9). 실응답 픽스처(경포 격자 93,133, 11/5 02:00 발표)
@@ -190,6 +190,31 @@ describe("오래된 값은 null(2026-11-05 사용자 결정: 단기 12시간·�
       },
       now: null,
     });
+  });
+});
+
+describe("구역표 읽기", () => {
+  it("계약 모양이 아닌 해변만 빼고 알림(나머지 해변의 날씨는 게시)", () => {
+    const events: string[] = [];
+    const table = parseWeatherAreaTable(
+      {
+        beaches: {
+          b0001: {
+            grid: { nx: 93, ny: 133 },
+            midLand: { regId: "11D20000", name: "강원영동" },
+            midTa: { regId: "11D20501", name: "강릉" },
+          },
+          b0002: {
+            grid: { nx: 93, ny: 133 },
+            midLand: { regId: "11D20000", name: "강원영동" },
+            midTa: { regId: "x", name: "강릉" },
+          },
+        },
+      },
+      (_level, event) => events.push(event),
+    );
+    expect(Object.keys(table.beaches)).toEqual(["b0001"]);
+    expect(events).toEqual(["weather_areas_invalid"]);
   });
 });
 
