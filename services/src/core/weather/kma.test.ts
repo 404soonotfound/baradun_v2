@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   addDays,
   HOUR_FIELDS,
+  isTransientReason,
   kstDate,
   kstToMs,
   parseEnvelope,
@@ -62,6 +63,39 @@ describe("응답 껍데기", () => {
       status: "failed",
       reason: "truncated:1/5",
     });
+  });
+});
+
+describe("다시 받을 실패 (BRD-186)", () => {
+  it("기상청 일시 오류·T1H 없음·잘린 응답만 다시 받음", () => {
+    for (const r of [
+      "result:01",
+      "result:02",
+      "result:04",
+      "result:05",
+      "result:99",
+      "no_t1h",
+      "truncated:3/10",
+    ]) {
+      expect(isTransientReason(r)).toBe(true);
+    }
+  });
+
+  it("자료 없음·요청 오류·권한·한도·키 오류·XML 응답·전송 실패는 다시 받지 않음", () => {
+    for (const r of [
+      "result:03",
+      "result:10",
+      "result:22",
+      "result:30",
+      "result:missing",
+      "not_json",
+      "no_rows",
+      "grid_mismatch",
+      "timeout",
+      "http:500",
+    ]) {
+      expect(isTransientReason(r)).toBe(false);
+    }
   });
 });
 

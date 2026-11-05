@@ -45,6 +45,25 @@ export function parseEnvelope(body: string): Parsed<unknown[]> {
   return { status: "ok", value: list };
 }
 
+// 같은 실행 안에서 한 번 더 받아 볼 실패(BRD-186). 기상청 쪽 일시 오류와 잘린 응답만
+// 01 응용·02 DB·04 HTTP·05 서비스 시간 초과·99 알 수 없음(활용가이드 오류 코드)
+// 03(자료 없음 = 아직 발표 전)·10~12(요청 값 오류)·20~22(권한·하루 한도)·30~33(키 오류)는 다시 받아도 같거나 한도만 씀
+// not_json은 넣지 않음: 키 미등록·호출 한도 초과가 XML로 옴(다시 받으면 모든 곳이 한 번씩 더 한도를 씀)
+// 전송 실패(시간 초과·http:5xx)는 HTTP 층이 이미 다시 받았으므로 넣지 않음(Lambda 60초 안)
+// 2026-11-05 11:15 첫 정기 실행: 약 280건 중 01 하나·T1H 없음 하나로 일부 실패
+const TRANSIENT_REASONS = new Set([
+  "result:01",
+  "result:02",
+  "result:04",
+  "result:05",
+  "result:99",
+  "no_t1h",
+]);
+
+export function isTransientReason(reason: string): boolean {
+  return TRANSIENT_REASONS.has(reason) || reason.startsWith("truncated:");
+}
+
 // KST 날짜(yyyymmdd)·시각(HHMM) → UTC ms. 형식이 틀리거나 달력에 없으면 null(특보 시각 변환과 같은 함수)
 export function kstToMs(date: string, time = "0000"): number | null {
   const parsed = parseKstTime(`${date}${time}`);
