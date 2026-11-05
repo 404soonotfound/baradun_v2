@@ -2,6 +2,8 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   buildAreas,
+  codeSets,
+  codesDigest,
   landOf,
   midAreaOf,
   readPublicBeaches,
@@ -15,7 +17,14 @@ const data = new URL("../../../data/", import.meta.url);
 const file = JSON.parse(
   readFileSync(new URL("weather-areas.json", data), "utf8"),
 ) as {
-  _meta: { verified: { grids: number; midLand: number; midTa: number } | null };
+  _meta: {
+    verified: {
+      grids: number;
+      midLand: number;
+      midTa: number;
+      codes: string;
+    } | null;
+  };
   beaches: Record<string, unknown>;
 };
 const zones = JSON.parse(
@@ -83,12 +92,13 @@ describe("data/weather-areas.json", () => {
     expect(file.beaches).toEqual(areas);
   });
 
-  it("실호출 확인 기록이 지금 격자·구역·지점 수와 같음(대응이 바뀌면 --verify로 다시 확인)", () => {
-    const values = Object.values(areas);
+  it("실호출 확인 기록이 지금 격자·구역·지점 묶음과 같음(대응이 바뀌면 --verify로 다시 확인)", () => {
+    const sets = codeSets(areas);
     expect(file._meta.verified).toMatchObject({
-      grids: new Set(values.map((a) => `${a.grid.nx},${a.grid.ny}`)).size,
-      midLand: new Set(values.map((a) => a.midLand.regId)).size,
-      midTa: new Set(values.map((a) => a.midTa.regId)).size,
+      grids: sets.grids.length,
+      midLand: sets.midLand.length,
+      midTa: sets.midTa.length,
+      codes: codesDigest(sets),
     });
   });
 });
