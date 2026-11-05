@@ -96,6 +96,8 @@ export function hourCells(
   points: readonly WeatherPoint[],
   nowMs: number,
 ): HourCell[] {
+  // 지금 시각을 모르면(store가 NaN을 줌: 서버 시각 없음 + 기기 시계가 늦음) 칸을 나눌 수 없음 → 카드는 못 받음 안내
+  if (!Number.isFinite(nowMs)) return [];
   const today = kstDay(nowMs);
   const cells: HourCell[] = [];
   for (const point of points) {
@@ -141,6 +143,7 @@ export function laterDays(
   midTa: MidTaForecast | null,
   nowMs: number,
 ): { days: DayCell[]; midFailed: boolean } {
+  if (!Number.isFinite(nowMs)) return { days: [], midFailed: true };
   const today = kstDay(nowMs);
   const days: DayCell[] = short.days
     .filter((d) => daysBetween(today, d.date) > 2)
