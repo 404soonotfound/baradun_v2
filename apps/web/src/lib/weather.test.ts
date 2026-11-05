@@ -123,7 +123,8 @@ describe("laterDays", () => {
     expect(days[3]!.icon).toBe("unknown");
   });
 
-  it("중기 구역이 없거나 받은 값이 하나도 없으면 중기만 실패", () => {
+  it("중기 구역·기온 지점이 없거나 받은 값이 하나도 없으면 중기만 실패", () => {
+    expect(laterDays(short, land, null, NOW).midFailed).toBe(true);
     expect(laterDays(short, null, null, NOW)).toMatchObject({
       midFailed: true,
       days: [{ date: "2026-11-08" }],
