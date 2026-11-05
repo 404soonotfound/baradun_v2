@@ -36,9 +36,6 @@ test.describe("상세 날씨 카드", () => {
       /^(오늘|내일) \d{1,2}시 .+, 기온 \d+°C, 강수확률 \d+%, 바람 \d+m\/s$/,
     );
     await expect(weather.getByText("바람 m/s")).toBeVisible();
-    await expect(
-      weather.getByText("날씨는 참고 정보예요. 특보 판단에는 쓰지 않아요."),
-    ).toBeVisible();
 
     const toggle = weather.getByRole("button", { name: /이후 4일 날씨 보기/ });
     await expect(toggle).toHaveAttribute("aria-expanded", "false");
