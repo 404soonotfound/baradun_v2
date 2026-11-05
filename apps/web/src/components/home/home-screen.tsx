@@ -396,7 +396,6 @@ export function HomeScreen({
             byList={byList}
             byRegion={region !== null}
             snapshot={snapshot}
-            variant={desktop ? "wide" : "compact"}
           />
           {/* 지역·전국 해변 상태별 개수(모바일, 가까운 바다에서는 없음). PC는 히어로 상태 요약이 같은 일을 함
               게시된 분류 그대로 셈(G1) */}
@@ -504,7 +503,6 @@ function NearContent({
   byList,
   byRegion,
   snapshot,
-  variant,
 }: {
   locale: Locale;
   status: LocationState["status"];
@@ -512,7 +510,6 @@ function NearContent({
   byList: boolean; // 지역·전국(이름 순 목록)
   byRegion: boolean; // 시·도·시·군을 고름(빈 목록 문구가 다름)
   snapshot: SnapshotState;
-  variant: "compact" | "wide"; // 카드 모양(모바일 · PC)
 }) {
   const t = useTranslations("home");
 
@@ -542,7 +539,7 @@ function NearContent({
     );
   }
   return (
-    <ul className="grid gap-3 lg:grid-cols-4 lg:gap-4">
+    <ul className="grid grid-cols-1 gap-3 lg:grid-cols-4 lg:gap-4">
       {shown.map((beach, index) => (
         // 모바일은 첫 카드만, PC는 4장
         <li key={beach.id} className={index > 0 ? "hidden lg:block" : ""}>
@@ -552,7 +549,6 @@ function NearContent({
             distanceKm={beach.distanceKm}
             view={deriveBeachView({ id: beach.id, hidden: false }, snapshot)}
             nowMs={snapshot.nowMs}
-            variant={variant}
           />
         </li>
       ))}
