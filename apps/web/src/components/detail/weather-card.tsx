@@ -430,10 +430,6 @@ export function WeatherCard({
           </div>
         </div>
       )}
-
-      <p className="text-caption text-text-muted lg:px-5 lg:pb-4">
-        {t("note")}
-      </p>
     </section>
   );
 }

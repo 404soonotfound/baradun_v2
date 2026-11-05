@@ -386,8 +386,7 @@
       "midFailedTitle": "Couldn't check the later days",
       "midFailedBody": "We didn't receive the KMA medium-range forecast. The forecast above is still shown.",
       "failed": "<b>Couldn't check the weather.</b> We didn't receive the KMA forecast. Warnings and measurements above are unaffected.",
-      "loading": "Loading the weather",
-      "note": "Weather is for reference only. It isn't used to check warnings."
+      "loading": "Loading the weather"
     }
   },
   "photo": {
