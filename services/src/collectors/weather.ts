@@ -149,7 +149,8 @@ async function fetchJson<T>(
   return parse(response.body);
 }
 
-type Task = () => Promise<void>;
+// 작업이 시간 예산 때문에 요청을 보내지 않고 끝나면 false(건너뛴 것으로 셈)
+type Task = () => Promise<boolean | void>;
 
 // 몇 개씩 나눠 보냄. 시간 예산이 지나면 새 요청을 보내지 않음(남은 곳은 다음 실행이 메움)
 async function runTasks(
@@ -166,7 +167,7 @@ async function runTasks(
         queue.length = 0;
         return;
       }
-      await task();
+      if ((await task()) === false) skipped += 1;
     }
   };
   await Promise.all(
@@ -324,10 +325,17 @@ export async function collectWeather(
     for (const g of deps.areas.grids) {
       tasks.push(async () => {
         const probed = await probeNow();
-        const result =
-          g === first && !noCurrent(probed)
-            ? probed
-            : await fetchNow(g, noCurrent(probed) ? prevHour : nowBase);
+        // 첫 격자 확인을 기다리는 동안 예산이 지났으면 새 요청을 보내지 않음(Lambda 60초 안에 저장까지 끝내게)
+        const reuse = g === first && !noCurrent(probed);
+        if (
+          !reuse &&
+          deps.clock() - startedMs > COLLECT_POLICY.weatherBudgetMs
+        ) {
+          return false;
+        }
+        const result = reuse
+          ? probed
+          : await fetchNow(g, noCurrent(probed) ? prevHour : nowBase);
         record("now", result, (v) => nowFresh.set(gridKey(g), v));
       });
     }
