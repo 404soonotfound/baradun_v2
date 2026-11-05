@@ -255,7 +255,9 @@ for (const scheme of ["light", "dark"] as const) {
       await page.goto("/explore/");
 
       const clearGroup = page.getByRole("region", {
-        name: new RegExp(`^${CLEAR_TITLE} \\d+곳$`),
+        name: new RegExp(
+          `^${ko.explore.group.clear.replace("{count}", "\\d+")}$`,
+        ),
       });
       const blockedGroup = page.getByRole("region", {
         name: new RegExp(

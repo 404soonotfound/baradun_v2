@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   clearCheckedAt,
   countByStatus,
+  nationalCounts,
   staleCheckedAt,
 } from "@/lib/status-count";
 import type { BadgeLabel, BeachView, Category } from "@/lib/snapshot/view";
@@ -137,5 +138,31 @@ describe("staleCheckedAt", () => {
     expect(
       staleCheckedAt([{ kind: "loading" }, { kind: "hidden" }]),
     ).toBeNull();
+  });
+});
+
+describe("nationalCounts", () => {
+  it("모르는 사유 이용불가는 '특보'로 세지 않고 이용 제한으로 따로 셈", () => {
+    const restricted = ready("unavailable", { kind: "restricted" });
+    expect(
+      nationalCounts([
+        clear,
+        strongWind,
+        restricted,
+        restricted,
+        unknown,
+        delayed,
+      ]),
+    ).toEqual({
+      counts: { clear: 1, blocked: 1, unknown: 1, stale: 1 },
+      restricted: 2,
+    });
+  });
+
+  it("불러오는 중·노출 끈 해변은 세지 않음", () => {
+    expect(nationalCounts([{ kind: "loading" }, { kind: "hidden" }])).toEqual({
+      counts: { clear: 0, blocked: 0, unknown: 0, stale: 0 },
+      restricted: 0,
+    });
   });
 });
