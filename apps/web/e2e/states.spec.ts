@@ -15,7 +15,8 @@ import {
 
 // 상태별 핵심 흐름 (BRD-39 · 노션 9.1 '실패 경로', 리뷰 점검표 3·4·5)
 const FINAL_CALL = "최종 판단은 현장 통제와 안전요원 안내가 우선이에요";
-const CONFIRMED = /기상청 \d{1,2}:\d{2} 확인/;
+// 자정 직후에는 확인 시각이 전날이라 날짜가 붙음(kstStamp: "11/05 23:59")
+const CONFIRMED = /기상청 (?:\d{2}\/\d{2} )?\d{1,2}:\d{2} 확인/;
 // 범위: 예보업무규정 별표 구역 이름 1~2개('강원중부앞바다, 강릉평지') 또는 이름을 모를 때의 '해변 특보구역'(D18-11)
 const ZONE = `(?:${Object.values(ZONE_NAMES_KO)
   // 정규식 특수 문자를 모두 이스케이프(백슬래시 포함, CodeQL js/incomplete-sanitization)
@@ -300,7 +301,7 @@ test.describe("PC 전국 지도 카드", () => {
     const card = page.getByRole("link").filter({
       has: page.locator('[data-summary-category="clear"]'),
     });
-    await expect(card).not.toContainText(/기상청 \d{1,2}:\d{2} 확인/);
+    await expect(card).not.toContainText(CONFIRMED);
   });
 });
 
