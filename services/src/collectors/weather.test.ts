@@ -320,6 +320,110 @@ describe("collectWeather", () => {
     expect(lines.join("\n")).not.toContain(KEY);
   });
 
+  // BRD-186: 기상청 일시 오류는 같은 실행 안에서 한 번 더 받음
+  const RESULT = (code: string) =>
+    JSON.stringify({ response: { header: { resultCode: code } } });
+  // op마다 정해 둔 응답을 차례로 줌(다 쓰면 실응답)
+  const sequence = (
+    s: ReturnType<typeof setup>,
+    plan: Record<string, Reply[]>,
+  ) => {
+    s.deps.get = async (url: string) => {
+      s.urls.push(url);
+      const reply = plan[op(url)]?.shift() ?? REAL[op(url)]!;
+      return typeof reply === "string" ? ok(reply) : reply;
+    };
+  };
+  const calls = (urls: string[], name: string) =>
+    urls.filter((u) => op(u) === name).length;
+
+  it("단기예보가 01(일시 오류)이면 한 번 더 받아 성공하면 완료", async () => {
+    const s = setup();
+    sequence(s, { getVilageFcst: [RESULT("01")] });
+    expect(await collectWeather(s.deps)).toEqual({
+      status: "complete",
+      slotId: "202611050915",
+    });
+    expect(calls(s.urls, "getVilageFcst")).toBe(2);
+    expect((await stored(s.state)).short!["93,133"]).toBeDefined();
+    expect(s.events().map((e) => e.event)).not.toContain(
+      "weather_target_failed",
+    );
+    expect(
+      s.events().find((e) => e.event === "weather_run_finished"),
+    ).toMatchObject({ status: "complete", retried: 1, recovered: 1 });
+  });
+
+  it("다시 받아도 실패하면 일부 실패로 남기고 실패한 격자를 키 없이 로그에 남김", async () => {
+    const s = setup();
+    sequence(s, { getVilageFcst: [RESULT("01"), RESULT("01")] });
+    expect(await collectWeather(s.deps)).toEqual({
+      status: "partial",
+      slotId: "202611050915",
+      failures: [{ source: "short", reason: "result:01" }],
+    });
+    expect(calls(s.urls, "getVilageFcst")).toBe(2);
+    expect((await stored(s.state)).short).toBeNull();
+    expect(
+      s.events().find((e) => e.event === "weather_target_failed"),
+    ).toMatchObject({ source: "short", target: "93,133", reason: "result:01" });
+    expect(s.lines.join("\n")).not.toContain(KEY);
+  });
+
+  it("실황에 기온(T1H)이 없으면 한 번 더 받음", async () => {
+    const s = setup();
+    sequence(s, {
+      getUltraSrtNcst: [NOW_0900.replaceAll('"T1H"', '"XXX"')],
+    });
+    expect(await collectWeather(s.deps)).toMatchObject({ status: "complete" });
+    expect(calls(s.urls, "getUltraSrtNcst")).toBe(2);
+    expect((await stored(s.state)).now!["93,133"]!.temperature).toBe(11.2);
+  });
+
+  it("하루 한도(22)·요청 오류(10)·응답이 JSON이 아님은 다시 받지 않음", async () => {
+    const s = setup();
+    sequence(s, {
+      getMidTa: [RESULT("22")],
+      getMidLandFcst: [RESULT("10")],
+      getVilageFcst: ["<OpenAPI_ServiceResponse/>"],
+    });
+    const result = await collectWeather(s.deps);
+    expect(result).toMatchObject({ status: "partial" });
+    expect((result as { failures: readonly unknown[] }).failures).toEqual(
+      expect.arrayContaining([
+        { source: "mid_ta", reason: "result:22" },
+        { source: "mid_land", reason: "result:10" },
+        { source: "short", reason: "not_json" },
+      ]),
+    );
+    expect(calls(s.urls, "getMidTa")).toBe(1);
+    expect(calls(s.urls, "getMidLandFcst")).toBe(1);
+    expect(calls(s.urls, "getVilageFcst")).toBe(1);
+  });
+
+  it("시간 예산이 지났으면 다시 받지 않고 처음 실패 사유로 남김(budget으로 세지 않음)", async () => {
+    const s = setup();
+    s.deps.get = async (url: string) => {
+      s.urls.push(url);
+      if (op(url) === "getVilageFcst") {
+        s.at("2026-11-05T00:15:40Z"); // 첫 차례 안에서 예산(30초)을 넘김
+        return ok(RESULT("01"));
+      }
+      return ok(REAL[op(url)] as string);
+    };
+    const result = await collectWeather(s.deps);
+    expect(calls(s.urls, "getVilageFcst")).toBe(1);
+    expect(
+      (result as { failures: readonly unknown[] }).failures,
+    ).toContainEqual({
+      source: "short",
+      reason: "result:01",
+    });
+    expect(
+      s.events().find((e) => e.event === "weather_target_failed"),
+    ).toMatchObject({ target: "93,133", reason: "result:01" });
+  });
+
   it("같은 슬롯을 이미 끝냈으면 건너뜀", async () => {
     const state = new MemoryStateStore();
     const first = setup({ state });

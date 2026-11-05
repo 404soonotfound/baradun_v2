@@ -1,6 +1,7 @@
 import { collapseFailures, type RunFailure } from "../core/collect/run-log";
 import type { StateValue } from "../core/store/types";
 import {
+  isTransientReason,
   kstDate,
   parseMidLand,
   parseMidTa,
@@ -237,9 +238,37 @@ export async function collectWeather(
   const shortFresh = new Map<GridKey, ShortForecast>();
   const landFresh = new Map<string, Record<string, MidLandDay>>();
   const taFresh = new Map<string, Record<string, MidTaDay>>();
-  const record = <T>(source: string, result: Parsed<T>, ok: (v: T) => void) => {
-    if (result.status === "ok") ok(result.value);
-    else failures.push({ source, reason: result.reason });
+  // 최종 실패는 곳(격자·구역)과 함께 로그에 남김. 실행 기록은 사유별로 묶으므로 곳은 로그에서만 찾음(BRD-186)
+  const fail = (source: string, target: string, reason: string) => {
+    failures.push({ source, reason });
+    deps.log("warn", "weather_target_failed", { source, target, reason });
+  };
+  // 일시 실패는 바로 실패로 두지 않고 모아 두었다가, 첫 차례가 끝난 뒤 남은 시간 안에서 한 번 더 받음
+  // 다시 받을 시간이 없으면 처음 실패 사유로 남김(요청은 이미 보냈으므로 budget으로 세지 않음)
+  const retries: { run: () => Promise<void>; giveUp: () => void }[] = [];
+  let recovered = 0;
+  const record = <T>(
+    source: string,
+    target: string,
+    result: Parsed<T>,
+    ok: (v: T) => void,
+    again: () => Promise<Parsed<T>>,
+  ) => {
+    if (result.status === "ok") return ok(result.value);
+    if (!isTransientReason(result.reason)) {
+      return fail(source, target, result.reason);
+    }
+    const first = result.reason;
+    retries.push({
+      run: async () => {
+        const retried = await again();
+        if (retried.status === "ok") {
+          recovered += 1;
+          ok(retried.value);
+        } else fail(source, target, retried.reason);
+      },
+      giveUp: () => fail(source, target, first),
+    });
   };
   const safe = <T>(p: Promise<Parsed<T>>) =>
     p.catch((error: unknown): Parsed<T> => ({
@@ -249,6 +278,7 @@ export async function collectWeather(
 
   const tasks: Task[] = [];
   let skipped = 0;
+  let retriedCount = 0;
   if (key === null) {
     failures.push({ source: "weather", reason: "api_key" });
   } else {
@@ -268,14 +298,21 @@ export async function collectWeather(
         ny: String(g.ny),
       });
     for (const g of shortNeeded) {
-      tasks.push(async () => {
-        const url = `${SHORT_BASE}getVilageFcst?${shortParams(g, shortBase, COLLECT_POLICY.weatherShortNumOfRows)}`;
-        const result = await safe(
+      const url = `${SHORT_BASE}getVilageFcst?${shortParams(g, shortBase, COLLECT_POLICY.weatherShortNumOfRows)}`;
+      const load = () =>
+        safe(
           fetchJson(deps, url, (body) =>
             parseShortForecast(body, shortBase, g),
           ),
         );
-        record("short", result, (v) => shortFresh.set(gridKey(g), v));
+      tasks.push(async () => {
+        record(
+          "short",
+          gridKey(g),
+          await load(),
+          (v) => shortFresh.set(gridKey(g), v),
+          load,
+        );
       });
     }
     const midParams = (regId: string) =>
@@ -288,25 +325,39 @@ export async function collectWeather(
         tmFc,
       });
     for (const regId of landNeeded) {
-      tasks.push(async () => {
-        const result = await safe(
+      const load = () =>
+        safe(
           fetchJson(
             deps,
             `${MID_BASE}getMidLandFcst?${midParams(regId)}`,
             (body) => parseMidLand(body, regId, tmFc),
           ),
         );
-        record("mid_land", result, (v) => landFresh.set(regId, v));
+      tasks.push(async () => {
+        record(
+          "mid_land",
+          regId,
+          await load(),
+          (v) => landFresh.set(regId, v),
+          load,
+        );
       });
     }
     for (const regId of taNeeded) {
-      tasks.push(async () => {
-        const result = await safe(
+      const load = () =>
+        safe(
           fetchJson(deps, `${MID_BASE}getMidTa?${midParams(regId)}`, (body) =>
             parseMidTa(body, regId, tmFc),
           ),
         );
-        record("mid_ta", result, (v) => taFresh.set(regId, v));
+      tasks.push(async () => {
+        record(
+          "mid_ta",
+          regId,
+          await load(),
+          (v) => taFresh.set(regId, v),
+          load,
+        );
       });
     }
     // 실황은 매시 다시 받으므로 맨 뒤. 시간 예산에 걸리면 덜 자주 오는 단기·중기 발표를 먼저 지킴
@@ -333,16 +384,36 @@ export async function collectWeather(
         ) {
           return false;
         }
-        const result = reuse
-          ? probed
-          : await fetchNow(g, noCurrent(probed) ? prevHour : nowBase);
-        record("now", result, (v) => nowFresh.set(gridKey(g), v));
+        const base = noCurrent(probed) ? prevHour : nowBase;
+        const result = reuse ? probed : await fetchNow(g, base);
+        record(
+          "now",
+          gridKey(g),
+          result,
+          (v) => nowFresh.set(gridKey(g), v),
+          () => fetchNow(g, base),
+        );
       });
     }
     skipped = await runTasks(deps, startedMs, tasks);
     if (skipped > 0) {
       failures.push({ source: "weather", reason: "budget", count: skipped });
     }
+    // 다시 받기는 한 번만(다시 받은 실패는 retries에 넣지 않음). runTasks가 예산을 보고 새 요청을 멈춤
+    const pending = retries.splice(0);
+    const tried = new Set<number>();
+    await runTasks(
+      deps,
+      startedMs,
+      pending.map((r, i) => async () => {
+        tried.add(i);
+        await r.run();
+      }),
+    );
+    pending.forEach((r, i) => {
+      if (!tried.has(i)) r.giveUp();
+    });
+    retriedCount = pending.length;
   }
 
   // 받은 것만 이전 값에 합쳐 씀. 받은 것이 없으면 쓰지 않음(저장한 것으로 침)
@@ -480,6 +551,8 @@ export async function collectWeather(
     midLand: landFresh.size,
     midTa: taFresh.size,
     skipped,
+    retried: retriedCount,
+    recovered,
   });
   if (status === "complete") return { status, slotId };
   return { status, slotId, failures: all };
