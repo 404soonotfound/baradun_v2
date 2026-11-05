@@ -241,11 +241,13 @@ export function WeatherCard({
     weather.kind === "ready"
       ? laterDays(short, weather.midLand, weather.midTa, nowMs)
       : { days: [], midFailed: true };
+  // 요일은 한국 날짜의 정오(UTC 03시)로 읽음. 포맷터는 한 번만 만듦
+  const weekdayFormat = new Intl.DateTimeFormat(locale, {
+    weekday: "short",
+    timeZone: "Asia/Seoul",
+  });
   const weekday = (date: string) =>
-    new Intl.DateTimeFormat(locale, {
-      weekday: "short",
-      timeZone: "Asia/Seoul",
-    }).format(new Date(`${date}T03:00:00Z`));
+    weekdayFormat.format(new Date(`${date}T03:00:00Z`));
   const range =
     later.days.length === 0
       ? null
