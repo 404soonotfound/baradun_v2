@@ -19,7 +19,7 @@
 
 # 작업 관리 (GitHub · Notion)
 
-- 기준 문서는 Notion 'V2 공식 문서 인덱스 · 현재 기준'이 지정한 최종본이다. 실행(일정·진행)은 GitHub 저장소 `404soonotfound/baradun_v2`의 이슈와 Project '바라던 바다 V2'(`projects/4`)에서 관리한다.
+- 기준 문서는 Notion 'V2 공식 문서 인덱스 · 현재 기준'이 지정한 최종본이다. 실행(일정·진행)은 GitHub 저장소 `404soonotfound/baradun_v2`의 이슈와 사용자 Project '바라던 바다 V2'(`users/404soonotfound/projects/4`, CLI는 `gh project view 4 --owner 404soonotfound`)에서 관리한다.
 - 2026-11 Linear에서 옮겨 왔다. 옛 이슈 키 `BRD-n`은 GitHub 이슈 제목 앞 `[BRD-n]`으로 찾는다. 코드·주석·커밋에 이미 있는 `BRD-n`은 고치지 않는다. Linear는 더 쓰지 않는다.
 - 스펙은 Notion이 원본이다. 이슈에는 기준 버전, Notion 링크, 화면 ID, 완료 조건만 있다. 이슈와 Notion 내용이 다르면 Notion을 따르고 충돌을 보고한다.
 - 이슈마다 기준 버전은 하나다(Rev.2.1 또는 Rev.2.2). 한 작업에서 두 기준을 섞지 않는다.
@@ -28,7 +28,7 @@
 ## 브랜치·커밋·PR
 
 - 브랜치 이름은 이슈 번호만 쓴다: `gh-365`. 한글과 다른 접두어를 넣지 않는다. 여러 이슈를 한 PR로 묶을 때는 대표 이슈 번호를 쓰고, 머지 뒤 브랜치를 지운다.
-- 커밋 메시지 형식: `GH-<번호> <type>(<scope>): <제목>` — 예: `GH-365 feat(core): 특보 유효시간 45분 경계 판정 추가`. GitHub가 `GH-365`를 이슈 #365 링크로 바꾼다. `#365`로 시작하지 않는다(git이 `#`로 시작하는 줄을 주석으로 지움).
+- 커밋 메시지 형식: `GH-<번호> <type>(<scope>): <제목>` — 예: `GH-365 feat(core): 특보 유효시간 45분 경계 판정 추가`. GitHub가 `GH-365`를 이슈 #365 링크로 바꾼다. `#365`로 시작하지 않는다(`--amend`·rebase reword처럼 편집기로 고칠 때 git이 `#`로 시작하는 줄을 주석으로 지움).
   - 같은 작업이라도 성격이 다르면 커밋을 나눈다. 한 커밋에 feat·style·format·test를 섞지 않는다.
   - type
     - `feat`: 새 기능·새 부품·새 화면
@@ -43,7 +43,7 @@
   - 제목: 한국어, 50자 안팎, 마침표 없음
   - 나눈 커밋 하나하나가 타입 검사·린트를 통과해야 한다.
   - 커밋 전에 나눌 계획(커밋별 메시지와 파일)을 먼저 보여주고, 한 파일에 성격이 섞이면 `git add -p`로 나눈다.
-  - 이슈와 연결되지 않는 변경(오타·서식·설정 한두 줄 수준)만 이슈 번호를 생략할 수 있다: `docs: README 오타 수정`. 그 밖의 변경은 먼저 이슈를 만들어 Project에 넣은 뒤 번호를 붙인다.
+  - 이슈와 연결되지 않는 변경(오타·서식·설정 한두 줄 수준)만 이슈 번호를 생략할 수 있다: `docs: README 오타 수정`. 그 밖의 변경은 먼저 이슈를 만든 뒤(Project에는 자동으로 들어감) 번호를 붙인다.
 - PR은 이슈 하나당 하나를 기본으로 한다. 2,000줄을 넘거나 배포 위험·독립 검증 때문에 나눠야 하면 나눈 이유를 PR 설명에 적는다. 줄 수는 additions + deletions이고 lockfile·생성 파일은 뺀다.
 - 구현이 작은 이슈나 API가 이미 있는 화면만 2~3개까지 한 PR로 묶을 수 있다. 묶은 PR도 2,000줄을 넘기지 않는다.
 - 머지는 `Rebase and merge`로 해서 이슈별·성격별 커밋을 main에 남긴다. `wip`·fixup 커밋은 머지 전에 정리한다.
@@ -53,7 +53,9 @@
   - 여러 이슈: `Fixes #365, fixes #366` (이슈마다 `Fixes`를 붙여야 닫힘)
 - 머지 전 push는 첫 push와 지적 일괄 수정, 2회를 목표로 한다. 지적은 모아서 한 번에 고친다.
 - `services`나 `infra`가 바뀐 PR은 머지 뒤 `npm run deploy:infra` 필요 여부를 PR 설명 '배포' 칸에 적고, 실행 결과를 이슈 댓글로 남긴다.
-- Project 워크플로가 상태를 바꾼다: 새 이슈는 Project에 들어가 Backlog, `Fixes #n` PR이 연결되면 In Review, 이슈가 닫히거나 PR이 머지되면 Done. Todo·In Progress, `Part of #n` PR의 In Review, Canceled는 손으로 옮긴다. 상태를 바꿔도 이슈는 자동으로 닫히지 않는다(Auto-close issue 꺼 둠). 닫힌 이유와 상관없이 닫으면 Done이 되므로, Canceled·중복은 이슈를 먼저 닫은 뒤 Status를 Canceled로 고친다.
+- Project에는 이슈만 넣는다(PR은 넣지 않음). Project 워크플로가 상태를 바꾼다: 새 이슈는 Project에 들어가 Backlog, `Fixes #n` PR이 연결되면 In Review, 이슈가 닫히면 Done. Todo·In Progress, `Part of #n` PR의 In Review, Canceled는 손으로 옮긴다. 상태를 바꿔도 이슈는 자동으로 닫히지 않는다(Auto-close issue 꺼 둠).
+  - 닫힌 이유와 상관없이 닫으면 Done이 된다. Canceled·중복은 이슈를 닫고 Status가 Done으로 바뀐 것을 확인한 뒤 Canceled로 고친다(워크플로가 늦게 돌면 먼저 넣은 Canceled를 덮음).
+  - 다시 연 이슈는 Status가 그대로 남으므로 손으로 In Progress나 Todo로 되돌린다.
 - PR 담당자(assignee)는 저장소 소유자(@404soonotfound)로 지정한다: `gh pr create --assignee @me`. 작성자 본인은 리뷰어로 지정할 수 없으므로 리뷰 요청(`--reviewer`)은 하지 않는다.
 - PR을 만들기 전에 `/code-review high --fix`로 브랜치 변경을 리뷰한다. 지적은 모두 고치거나, 고치지 않는 지적은 노션 근거와 함께 PR 설명 '리뷰 전 확인'에 적는다. 둘 중 하나로 모든 지적을 처리한 뒤 PR을 만든다(근거를 적은 지적은 남은 지적으로 보지 않는다).
 - 리뷰 때 특히 확인한다(지난 Codex 지적에서 반복된 것):
@@ -86,10 +88,10 @@ Project의 Status 필드로 관리한다.
 | Canceled    | 하지 않기로 함. 이유를 댓글로 남김(닫힘: 계획 없음)   |
 
 - 다른 이슈와 같으면 `Duplicate of #n` 댓글을 남기고 '중복'으로 닫은 뒤 Status를 Canceled로 고친다.
-- `상태:결정 대기` 이슈는 결정을 Notion 결정 기록에 반영한 뒤 이슈를 '완료'로 닫아 Done으로 옮긴다. 반영이 남았으면 In Review에 두고 `상태:문서 반영 필요` 라벨을 붙인다. 이슈 댓글을 결정의 원본으로 쓰지 않는다.
+- `상태:결정 대기` 이슈는 결정을 Notion 결정 기록에 반영한 뒤 `상태:결정 대기`를 떼고 이슈를 '완료'로 닫아 Done으로 옮긴다. 반영이 남았으면 `상태:결정 대기`를 `상태:문서 반영 필요`로 바꾸고 In Review에 둔다. 반영을 마치면 그 라벨도 떼고 닫는다. `상태:` 라벨은 열린 이슈에만 둔다. 이슈 댓글을 결정의 원본으로 쓰지 않는다.
 - 다른 이슈에 막힌(blocked) 이슈는 상태를 바꾸지 않고 둔다.
 - Iteration은 1주(월요일 시작)다. 마일스톤은 화면 기준(M0 공통 기반 ~ M6 운영자 화면)과 데이터 기준(MD 데이터 수집·게시)이다.
-- 라벨은 `유형:`·`영역:`·`관심사:`·`상태:` 네 묶음에서 고른다.
+- 이슈 라벨은 `유형:`·`영역:`·`관심사:`·`상태:` 네 묶음에서 고른다. GitHub 기본 라벨(`duplicate`·`wontfix` 등)은 쓰지 않는다.
 
 ## Review guidelines
 
