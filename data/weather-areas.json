@@ -6,12 +6,13 @@
     "midLand": "중기예보 육상 구역(getMidLandFcst regId). 기온 지점이 속한 구역, 해변 시도와 대조",
     "zoneTable": "tools/beaches/mid-zones.json",
     "verified": {
-      "checkedAt": "2026-11-05T00:26:20Z",
+      "checkedAt": "2026-11-05T00:30:21Z",
       "shortBase": "202611050800",
       "midTmFc": "202611050600",
       "grids": 140,
       "midLand": 8,
-      "midTa": 34
+      "midTa": 34,
+      "codes": "2e10c6c4192a100d635a854686e0ff4343d6d259fbee83fbe57d0f812c5b6b7b"
     }
   },
   "beaches": {
