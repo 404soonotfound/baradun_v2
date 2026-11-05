@@ -192,6 +192,38 @@ describe("collectWeather", () => {
     );
   });
 
+  it("이번 시각 실황이 아직 없으면(03) 한 시간 전 실황을 받음", async () => {
+    const { deps, state, urls } = setup({ now: "2026-11-05T01:15:00Z" });
+    // 10:00 실황은 아직 없음, 09:00 실황은 픽스처
+    deps.get = async (url: string) => {
+      urls.push(url);
+      const params = new URL(url).searchParams;
+      if (op(url) === "getUltraSrtNcst") {
+        return ok(
+          params.get("base_time") === "0900"
+            ? NOW_0900
+            : JSON.stringify({ response: { header: { resultCode: "03" } } }),
+        );
+      }
+      return ok(REAL[op(url)] as string);
+    };
+    expect(await collectWeather(deps)).toMatchObject({ status: "complete" });
+    expect(
+      urls
+        .filter((u) => op(u) === "getUltraSrtNcst")
+        .map((u) => new URL(u).searchParams.get("base_time")),
+    ).toEqual(["1000", "0900"]);
+    expect((await stored(state)).now!["93,133"]!.observedAt).toBe(
+      "2026-11-05T00:00:00Z",
+    );
+  });
+
+  it("단기·중기를 실황보다 먼저 부름(시간 예산에 걸려도 덜 자주 오는 발표를 지킴)", async () => {
+    const { deps, urls } = setup();
+    await collectWeather(deps);
+    expect(urls.map(op).at(-1)).toBe("getUltraSrtNcst");
+  });
+
   it("키를 읽지 못하면 부르지 않고 실패, 저장값은 그대로", async () => {
     const { deps, state, urls } = setup({ key: false });
     expect(await collectWeather(deps)).toEqual({
