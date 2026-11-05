@@ -233,12 +233,17 @@ export function statementScopeErrors(
             ALLOWED_PASS_ROLE_SERVICES.has(service),
         );
         const hasTargetService = values.some((service) => service === target);
-        if (
-          action !== "iam:PassRole" ||
-          !target ||
-          !onlyAllowedServices ||
-          !hasTargetService
-        )
+        if (!onlyAllowedServices)
+          errors.push(
+            `허용 목록 밖 PassRole 서비스: ${values
+              .filter(
+                (v) =>
+                  typeof v !== "string" || !ALLOWED_PASS_ROLE_SERVICES.has(v),
+              )
+              .map(String)
+              .join(", ")}`,
+          );
+        else if (action !== "iam:PassRole" || !target || !hasTargetService)
           errors.push(`해당 리소스에 맞는 PassRole 서비스가 없음: ${type}`);
       } else if (key === "iam:PermissionsBoundary") {
         const roles = Object.values(resources).filter(

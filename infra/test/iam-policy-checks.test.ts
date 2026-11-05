@@ -346,7 +346,7 @@ describe("공식 IAM·CFN 검증기", () => {
         {},
         cloudfrontRef,
       ),
-    ).toEqual([expect.stringContaining("PassRole 서비스가 없음")]);
+    ).toEqual([`허용 목록 밖 PassRole 서비스: ${service}`]);
   });
 
   it("사용자 태그는 모든 배포에 명시돼야 RequestTag·ResourceTag 근거로 인정한다", () => {
