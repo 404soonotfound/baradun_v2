@@ -51,7 +51,7 @@ const ICONS: Record<Exclude<SkyIcon, "unknown">, LucideIcon> = {
 };
 
 // 강수는 브랜드 파랑, 해는 wx-sun 토큰, 나머지는 본문색(시안). 뜻은 글자(칸별 읽는 글)가 맡음
-function SkyGlyph({ icon }: { icon: SkyIcon }) {
+export function SkyGlyph({ icon }: { icon: SkyIcon }) {
   if (icon === "unknown") {
     return (
       <span className="flex size-[18px] items-center justify-center text-[11px] text-text-muted">
