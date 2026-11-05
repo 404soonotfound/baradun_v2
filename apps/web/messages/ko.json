@@ -340,7 +340,11 @@
       "waterTemp": "수온",
       "ripCurrent": "이안류",
       "ripCredit": "<link>국립해양조사원 「이안류 지수 조회」</link> · 공공누리 제1유형",
-      "inquiry": "정보가 실제와 달라요"
+      "inquiry": "정보가 실제와 달라요",
+      "weather": "날씨",
+      "weatherShort": "기상청 단기예보(해변 위치 5km 격자)",
+      "weatherMid": "4일째부터 기상청 중기예보({zone})",
+      "weatherIssued": "{times} 발표"
     },
     "cta": {
       "favorite": "즐겨찾기",
@@ -348,7 +352,43 @@
       "directionsSecondary": "해변 길찾기",
       "newWindow": "카카오맵 새 창"
     },
-    "regionFromMe": "{region} · 내 위치에서 {km}km"
+    "regionFromMe": "{region} · 내 위치에서 {km}km",
+    "weather": {
+      "title": "날씨",
+      "now": "지금 <b>{temperature}°C</b> · {time} 기준",
+      "issued": "{region} · 기상청 단기예보 · {time} 발표 · 3시간 간격",
+      "day": {
+        "0": "오늘",
+        "1": "내일",
+        "2": "모레"
+      },
+      "hour": "{hour}시",
+      "wind": "<b>바람 m/s</b> · 화살표는 바람이 불어가는 쪽",
+      "cell": "{day} {hour} {sky}, 기온 {temperature}, 강수확률 {pop}, 바람 {wind}",
+      "temperature": "{value}°C",
+      "pop": "{value}%",
+      "windSpeed": "{value}m/s",
+      "noValue": "값 없음",
+      "skyUnknown": "하늘 값 없음",
+      "sky": {
+        "clear": "맑음",
+        "mostlyCloudy": "구름 많음",
+        "cloudy": "흐림",
+        "rain": "비",
+        "shower": "소나기",
+        "snow": "눈",
+        "rainSnow": "비 또는 눈"
+      },
+      "more": "이후 {count}일 날씨 보기",
+      "less": "이후 날씨 접기",
+      "laterHead": "<b>{range}</b> · 하루 최저 / 최고",
+      "dayCell": "{weekday} {date} {sky}, 강수확률 {pop}, 최저 {min}, 최고 {max}",
+      "midFailedTitle": "이후 날씨를 확인하지 못했어요",
+      "midFailedBody": "기상청 중기예보를 받지 못했어요. 위 날씨는 그대로 확인할 수 있어요.",
+      "failed": "<b>날씨를 확인하지 못했어요.</b> 기상청 예보를 받지 못했어요. 특보와 측정값은 위에서 그대로 확인할 수 있어요.",
+      "loading": "날씨를 불러오고 있어요",
+      "note": "날씨는 참고 정보예요. 특보 판단에는 쓰지 않아요."
+    }
   },
   "photo": {
     "alt": "{name} 사진",
