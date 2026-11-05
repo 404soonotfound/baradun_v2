@@ -259,6 +259,40 @@ describe("collectWeather", () => {
     expect(await run(false)).toEqual(["1000", "0900", "0900"]);
   });
 
+  it("첫 격자 실황 확인을 기다리는 동안 시간 예산이 지나면 다른 격자는 부르지 않고 budget으로 남김", async () => {
+    const grids = [
+      { nx: 93, ny: 133 },
+      { nx: 93, ny: 134 },
+    ];
+    // 단기·중기는 이미 받아 둠 → 다음 실행은 실황만 부름
+    const state = new MemoryStateStore();
+    const first = setup({ state });
+    first.deps.areas = { ...AREAS, grids: [grids[0]!] };
+    await collectWeather(first.deps);
+    const { deps, urls, at } = setup({ state, now: "2026-11-05T01:15:00Z" });
+    deps.areas = { ...AREAS, grids };
+    deps.get = async (url: string) => {
+      urls.push(url);
+      // 확인 요청(첫 실황)이 느려 예산(30초)을 넘긴 뒤 03으로 끝남
+      if (op(url) === "getUltraSrtNcst") at("2026-11-05T01:15:40Z");
+      return ok(
+        op(url) === "getUltraSrtNcst"
+          ? JSON.stringify({ response: { header: { resultCode: "03" } } })
+          : (REAL[op(url)] as string),
+      );
+    };
+    const result = await collectWeather(deps);
+    expect(result).toMatchObject({ status: "failed" });
+    expect(
+      (result as { failures: readonly unknown[] }).failures,
+    ).toContainEqual({
+      source: "weather",
+      reason: "budget",
+      count: 2,
+    });
+    expect(urls.filter((u) => op(u) === "getUltraSrtNcst")).toHaveLength(1);
+  });
+
   it("단기·중기를 실황보다 먼저 부름(시간 예산에 걸려도 덜 자주 오는 발표를 지킴)", async () => {
     const { deps, urls } = setup();
     await collectWeather(deps);
