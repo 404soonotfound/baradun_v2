@@ -51,7 +51,9 @@ export function parseEnvelope(body: string): Parsed<unknown[]> {
 // not_json은 넣지 않음: 키 미등록·호출 한도 초과가 XML로 옴(다시 받으면 모든 곳이 한 번씩 더 한도를 씀)
 // 잘린 응답(truncated)도 넣지 않음: 행 수 설정(numOfRows)이 모자라면 늘 같게 잘림
 // 전송 실패(시간 초과·http:5xx)는 HTTP 층이 이미 다시 받았으므로 넣지 않음(Lambda 60초 안)
-// 2026-11-05 11:15 첫 정기 실행: 약 280건 중 01 하나·T1H 없음 하나로 일부 실패
+// 2026-11-05 11:15 첫 정기 실행: 약 280건 중 01 하나(가계해수욕장 49,58 단기, 12:15에는 정상)
+// no_t1h(기온 항목 없음·결측 표기 아닌 범위 밖 값)는 응답 일부가 빠진 경우 대비로 넣음. 일시적이라는 실측 근거는 아직 없음
+// 그날 본 'T1H 없음'은 삼척해수욕장 98,126의 상시 결측(-999)이었고 parseNow가 t1h_missing으로 따로 나눔(다시 받지 않음)
 const TRANSIENT_REASONS = new Set([
   "result:01",
   "result:02",
