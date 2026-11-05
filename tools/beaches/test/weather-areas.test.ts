@@ -52,12 +52,29 @@ describe("중기 구역", () => {
   });
 
   it("광역시의 구·군은 광역시 지점: 인천 옹진군 → 인천, 부산 해운대구 → 부산", () => {
-    expect(midAreaOf(beach("인천", "옹진군")).midTa).toEqual({
+    const citySea = new Map([["인천", new Set(["S1251200"])]]);
+    const ongjin = {
+      ...beach("인천", "옹진군"),
+      warningZones: { sea: "S1251200" },
+    };
+    expect(midAreaOf(ongjin, undefined, citySea).midTa).toEqual({
       regId: "11B20201",
       name: "인천",
       rule: "metro",
     });
     expect(midAreaOf(beach("부산", "해운대구")).midTa.regId).toBe("11H20201");
+  });
+
+  it("광역시의 군인데 앞바다가 광역시 구 해변과 다르면 멈춤(서해5도가 인천 지점에 붙지 않게)", () => {
+    const citySea = new Map([["인천", new Set(["S1251200"])]]);
+    const baengnyeong = {
+      ...beach("인천", "옹진군"),
+      warningZones: { sea: "S1251100" },
+    };
+    expect(() => midAreaOf(baengnyeong, undefined, citySea)).toThrow(
+      /광역시 지점을 쓰지 않음/,
+    );
+    expect(() => midAreaOf(beach("인천", "옹진군"))).toThrow(/앞바다 없음/);
   });
 
   it("같은 이름이 두 시도에 있으면 시도로 가름: 강원 고성 · 경남 고성", () => {
