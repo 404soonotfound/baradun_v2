@@ -212,6 +212,8 @@ export function WaveChart({
               aria-hidden="true"
               className="inline-block h-2.5 w-3.5 shrink-0 rounded-[2px] border border-border-strong bg-[repeating-linear-gradient(45deg,var(--color-border-strong)_0_1.5px,transparent_1.5px_4px)]"
             />
+            {/* 견본은 그림이라 화면 읽기에는 '빗금'을 글로 알림 */}
+            <span className="sr-only">{t("gapsSwatch")}</span>
             {since ? t("gapSince", { time: since }) : t("gaps")}
           </p>
         )}
@@ -223,9 +225,9 @@ export function WaveChart({
 
   return (
     <div className="flex flex-col gap-1">
-      {/* 모바일은 제목 오른쪽에 '측정값', PC는 제목 아래로 쌓음(11/5 시안 D안) */}
-      <div className="flex items-baseline justify-between gap-2 lg:flex-col lg:items-start lg:gap-1">
-        <h3 className="text-body font-bold text-text-default lg:text-label">
+      {/* 한 열은 제목 오른쪽에 '측정값', 두 열(카드 너비 @2xl, 옆 그림 제목과 같은 글자)은 제목 아래로 쌓음(11/5 시안 D안) */}
+      <div className="flex items-baseline justify-between gap-2 @2xl:flex-col @2xl:items-start @2xl:gap-1">
+        <h3 className="text-body font-bold text-text-default @2xl:text-label">
           {t("title")}
         </h3>
         <p className="text-caption text-text-muted">{t("measured")}</p>
