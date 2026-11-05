@@ -312,7 +312,7 @@
       "halfDayAgo": "12h ago",
       "now": "Now",
       "gapSince": "No measurements since {time}",
-      "gaps": "Hatched areas have no measurements",
+      "gaps": "No measurements",
       "empty": "No measurements, so we don't draw the chart",
       "loading": "Loading the last 24 hours of wave height",
       "failed": "Couldn't load the last 24 hours of wave height · See the sea condition values above",
