@@ -464,7 +464,7 @@ function WaveStrip({
   if (!chart || chart.kind === "empty") {
     return <PictureNote>{t("home.card.waveNoRecord")}</PictureNote>;
   }
-  // 최고는 그래프 읽는 글(MiniWaveChart)과 같은 maxV, 최저도 그린 점 + 지금 값에서 셈
+  // 최고는 그래프 읽는 글(MiniWaveSvg)과 같은 maxV, 최저도 그린 점 + 지금 값에서 셈
   const minV = Math.min(
     ...chart.runs.flat().map((p) => p.v),
     ...(chart.current ? [chart.current.v] : []),
