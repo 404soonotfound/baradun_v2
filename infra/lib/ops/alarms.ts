@@ -13,16 +13,20 @@ import * as sqs from "aws-cdk-lib/aws-sqs"; // 알림 발송 실패 대기열
 import * as subscriptions from "aws-cdk-lib/aws-sns-subscriptions"; // 이메일 구독
 import { Construct } from "constructs";
 import * as path from "node:path";
-import { LOG_RETENTION, LOGIN_ABUSE_ALARM, RETRY_LIMITS } from "../settings";
+import {
+  LOG_RETENTION,
+  LOGIN_ABUSE_ALARM,
+  RETRY_LIMITS,
+  WEATHER_ALARM,
+} from "../settings";
 
 // ② 운영 경보 (아키텍처 10장, BRD-62)
 // 수집 중단·게시 실패·validUntil 초과(게시 멈춤)를 한국어 SNS 이메일로 알림
-// 경보 11개 = 오류 5(수집기 4 + 게시) + 심장박동 4(특보·관측·이안류·게시) + 알림 발송 실패 1
-//            + 로그인 반복 요청 1(결정 기록 D17-4)
-// settings.ts MAX_ALARMS(11)를 다 씀. 경보를 더 넣으려면 기존 경보를 합치거나 상한을 다시 정해야 함
+// 경보 12개 = 오류 5(수집기 4 + 게시) + 심장박동 4(특보·관측·이안류·게시) + 알림 발송 실패 1
+//            + 로그인 반복 요청 1(결정 기록 D17-4) + 날씨 수집 계속 실패 1(BRD-181)
+// settings.ts MAX_ALARMS(12)를 다 씀. 경보를 더 넣으려면 기존 경보를 합치거나 상한을 다시 정해야 함
 // catalog는 하루 1회라 심장박동 없이 오류 경보만. 데이터 문의 함수 경보는 두지 않음(BRD-63 결정)
-// 날씨 수집기(Weather, BRD-181)는 경보를 두지 않음: 참고 정보라 분류에 영향이 없고 상한을 다 씀
-// 실패는 Lambda 오류 지표·로그·실행 기록에 남고, 화면은 오래된 값을 null로 받아 '날씨를 확인하지 못했어요'로 보여 줌
+// 날씨 수집기(Weather, BRD-181)는 오류·실행 없음을 경보 하나로 묶음(⑤-4). 한 번의 일부 실패는 알리지 않음
 
 const REPO_ROOT = path.join(__dirname, "..", "..", "..");
 const NOTIFICATION_HANDLER_FILE = path.join(
@@ -141,6 +145,7 @@ export class OpsAlarms extends Construct {
     );
 
     this.loginAbuseAlarm(props.signInClients);
+    this.weatherAlarm(collector("Weather"));
 
     this.addKoreanNotifications();
   }
@@ -205,6 +210,29 @@ export class OpsAlarms extends Construct {
       // 로그인이 없는 구간은 정상(요청이 없으면 반복도 없음)
       treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
       alarmDescription: `로그인 반복 요청. 5분에 로그인 실패 ${LOGIN_ABUSE_ALARM.signInFailures}회 또는 비밀번호 찾기·변경 ${LOGIN_ABUSE_ALARM.accountRecoveryCalls}회 이상. Cognito 잠금·요청 제한이 막고 있음`,
+    });
+    this.alarms.push(alarm);
+  }
+
+  // ⑤-4 날씨 수집 계속 실패(BRD-181): 1시간 구간마다 '오류가 있었거나 실행이 없었음'이 3번 이어지면 울림
+  // 매시 한 번 도는 수집기는 일부 실패(아직 안 나온 발표·시간 예산)를 다음 실행이 메움 → 한 번은 알리지 않음
+  // 실행이 없어 지표가 빈 구간도 실패로 봄(BREACHING) → 일정이 멈춘 것도 이 경보로 잡음(경보 자리 1개)
+  // 성공한 실행은 오류 0을 남겨 그 구간이 정상이 됨
+  private weatherAlarm(fn: lambda.IFunction): void {
+    const alarm = new cloudwatch.Alarm(this, "WeatherFailing", {
+      alarmName: this.alarmName("WeatherFailing"),
+      metric: fn.metricErrors({
+        period: Duration.minutes(WEATHER_ALARM.periodMinutes),
+        statistic: "Sum",
+      }),
+      threshold: 1,
+      comparisonOperator:
+        cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+      evaluationPeriods: WEATHER_ALARM.periods,
+      datapointsToAlarm: WEATHER_ALARM.periods,
+      treatMissingData: cloudwatch.TreatMissingData.BREACHING,
+      alarmDescription:
+        "날씨 수집이 3시간 넘게 실패하거나 돌지 않음. 사유는 CloudWatch 로그의 reason. 단기예보는 발표 12시간 뒤 화면에서 '확인하지 못했어요'가 됨(특보·분류에는 영향 없음)",
     });
     this.alarms.push(alarm);
   }

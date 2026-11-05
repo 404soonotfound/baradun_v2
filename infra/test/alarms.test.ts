@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { COLLECT_POLICY } from "../../services/src/collectors/policy";
 import { OBSERVATION_POLICY } from "../../services/src/core/observations/policy";
 import { WARNING_POLICY } from "../../services/src/core/warnings/policy";
 import { ALARM_LABELS } from "../../services/src/ops/alarm-notification";
@@ -6,6 +7,7 @@ import {
   COLLECTOR_SCHEDULE_MINUTES,
   LOGIN_ABUSE_ALARM,
   RETRY_LIMITS,
+  WEATHER_ALARM,
 } from "../lib/settings";
 import { template } from "./stack-template";
 
@@ -71,8 +73,8 @@ const failureQueueId = Object.keys(
 ).find((id) => id.startsWith("OpsNotificationFailures"))!;
 
 describe("운영 경보 (BRD-62)", () => {
-  it("경보는 11개: 오류 5(수집기 4·게시) + 심장박동 4(특보·관측·이안류·게시) + 알림 발송 실패 1 + 로그인 반복 요청 1", () => {
-    expect(alarms).toHaveLength(11);
+  it("경보는 12개: 오류 5(수집기 4·게시) + 심장박동 4(특보·관측·이안류·게시) + 알림 발송 실패 1 + 로그인 반복 요청 1 + 날씨 수집 계속 실패 1", () => {
+    expect(alarms).toHaveLength(12);
     expect(
       alarms.filter(([id]) => id.startsWith("OpsLoginAbuse")),
     ).toHaveLength(1);
@@ -85,6 +87,7 @@ describe("운영 경보 (BRD-62)", () => {
       expect.stringMatching(/^CollectOceanFunction/),
       expect.stringMatching(/^CollectRipFunction/),
       expect.stringMatching(/^CollectWarningsFunction/),
+      expect.stringMatching(/^CollectWeatherFunction/),
       expect.stringMatching(/^PublishFunction/),
     ]);
     expect(byMetric("Invocations")).toHaveLength(4);
@@ -99,8 +102,10 @@ describe("운영 경보 (BRD-62)", () => {
       // 심장박동은 실행이 없으면(지표 없음) 위반, 오류·대기열은 지표 없음에 상태를 유지함(정상으로 보지 않음)
       // 로그인 반복 요청은 로그인이 없으면 반복도 없으므로 정상(반복이 끝나면 OK로 돌아가 다음 반복에 다시 알림)
       const login = id.startsWith("OpsLoginAbuse");
+      // 날씨는 실행 없음도 실패로 보는 오류 경보(경보 하나로 오류·중단을 함께 잡음, BRD-181)
+      const weather = id.startsWith("OpsWeatherFailing");
       expect(p.TreatMissingData, id).toBe(
-        login ? "notBreaching" : beat ? "breaching" : "ignore",
+        login ? "notBreaching" : beat || weather ? "breaching" : "ignore",
       );
       expect(p.AlarmActions, id).toBeUndefined();
       expect(p.OKActions, id).toBeUndefined();
@@ -112,6 +117,25 @@ describe("운영 경보 (BRD-62)", () => {
       );
       expect(p.Threshold, id).toBe(1);
     }
+  });
+
+  it("날씨 수집 경보: 1시간 구간 오류(또는 실행 없음)가 3번 이어질 때만 울린다(BRD-181)", () => {
+    const [[, a]] = alarms.filter(([id]) => id.startsWith("OpsWeatherFailing"));
+    expect(fnOf(a)).toMatch(/^CollectWeatherFunction/);
+    expect(a.Properties).toMatchObject({
+      MetricName: "Errors",
+      Statistic: "Sum",
+      Period: WEATHER_ALARM.periodMinutes * 60,
+      EvaluationPeriods: WEATHER_ALARM.periods,
+      DatapointsToAlarm: WEATHER_ALARM.periods,
+      Threshold: 1,
+      ComparisonOperator: "GreaterThanOrEqualToThreshold",
+      TreatMissingData: "breaching",
+    });
+    // 매시 한 번 도는 수집기라 구간 하나에 실행이 하나씩 들어감
+    expect(WEATHER_ALARM.periodMinutes).toBe(
+      COLLECT_POLICY.weatherSchedule.periodMinutes,
+    );
   });
 
   it("심장박동은 빈 구간을 0으로 채워 지난 실행이 최근 빈 구간을 대신하지 않는다", () => {
@@ -223,7 +247,7 @@ describe("운영 경보 (BRD-62)", () => {
       "detail-type": ["CloudWatch Alarm State Change"],
       detail: { state: { value: ["ALARM"] } },
     });
-    expect(rule!.Properties.EventPattern.resources).toHaveLength(11);
+    expect(rule!.Properties.EventPattern.resources).toHaveLength(12);
     expect(rule!.Properties.Targets).toHaveLength(1);
     // 전달 실패도 버리지 않고 같은 실패 대기열로 보냄
     expect(rule!.Properties.Targets[0].DeadLetterConfig).toEqual({

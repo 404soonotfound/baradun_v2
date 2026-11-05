@@ -46,6 +46,7 @@ describe("운영 경보 한국어 알림", () => {
     ["PublishStopped", "데이터 게시 중단"],
     ["NotificationFailed", "운영 알림 발송 실패"],
     ["LoginAbuse", "운영자 로그인 반복 요청"],
+    ["WeatherFailing", "날씨 수집 계속 실패"],
   ])("%s 경보를 %s 제목으로 보낸다", (alarmId, label) => {
     const result = formatAlarmNotification(
       alarmEvent(alarmId, `${label}. 운영 설명`),

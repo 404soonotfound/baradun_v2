@@ -564,12 +564,14 @@
       "collect-warnings": "기상청 해상 특보",
       "collect-ocean": "기상청 해양 관측",
       "collect-rip": "국립해양조사원 이안류",
+      "collect-weather": "기상청 날씨 예보",
       "collect-catalog": "한국관광공사 사진"
     },
     "cycle": {
       "collect-warnings": "15분",
       "collect-ocean": "30분",
       "collect-rip": "6~9월 30분 · 그 밖 하루 1회",
+      "collect-weather": "1시간",
       "collect-catalog": "하루 1회"
     },
     "season": "해양수산부 운영 기간",

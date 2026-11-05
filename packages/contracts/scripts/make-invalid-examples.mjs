@@ -35,6 +35,26 @@ add("manifest.notice-kst-time", "manifest.with-notices", (d) => {
 add("manifest.notice-with-status", "manifest.with-notices", (d) => {
   d.notices[0].category = "unavailable";
 });
+// 날씨(BRD-181): 받지 못한 지금 기온을 칸째 빼지 않음(null로 남김)
+add("weather.missing-now", "weather", (d) => {
+  delete d.grids["93,133"].now;
+});
+// 강수확률은 0~100 정수
+add("weather.pop-over-100", "weather", (d) => {
+  d.grids["93,133"].short.points[0].pop = 120;
+});
+// 모르는 하늘 값을 만들지 않음(원문 글자를 모르면 null)
+add("weather.unknown-sky", "weather", (d) => {
+  d.grids["93,133"].short.points[0].sky = "sunny";
+});
+// 예보 시각은 UTC(Z)만
+add("weather.kst-time", "weather", (d) => {
+  d.grids["93,133"].short.issuedAt = "2026-11-05T08:00:00+09:00";
+});
+// 날씨가 판단 상태를 담을 칸은 없음(G1)
+add("weather.with-category", "weather", (d) => {
+  d.grids["93,133"].category = "clear";
+});
 // 필수 필드 누락
 add("status.missing-valid-until", "status", (d) => {
   delete d.beaches.b0001.validUntil;

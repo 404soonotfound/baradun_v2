@@ -8,6 +8,7 @@ import {
   HEAVY_RAIN_ROW,
   NOW,
   SEASONS,
+  WEATHER_AREAS,
   WIND_WAVE_ROW,
   ZONES,
   seedReadings,
@@ -55,6 +56,7 @@ async function setup(
     beaches: BEACHES,
     zones: ZONES,
     seasons: SEASONS,
+    weatherAreas: WEATHER_AREAS,
     notices: options.notices ?? (async () => []),
     log: createLogger(
       () => [],
@@ -104,6 +106,7 @@ describe("publishSnapshot", () => {
         "manifest.json",
         "nationwide-warnings.json",
         "status.json",
+        "weather.json",
       ].map((name) => `data/${V1}/${name}`),
     );
     expect(manifest()).toMatchObject({
@@ -654,6 +657,64 @@ describe("공지 싣기 (BRD-151, D16-B3·D4, 아키텍처 18.4)", () => {
   });
 });
 
+describe("weather.json (BRD-181)", () => {
+  it("날씨를 받지 못했어도 모든 칸이 null인 weather.json을 게시하고 manifest에 싣는다", async () => {
+    const { snapshots, deps, manifest } = await setup();
+    await publishSnapshot(deps());
+    const path = manifest()!.files.weather!;
+    expect(path).toBe(`/data/${V1}/weather.json`);
+    const weather = JSON.parse(snapshots.files.get(path.slice(1))!.body);
+    expect(weather.beaches.b0001).toEqual(WEATHER_AREAS.beaches.b0001);
+    // b0003은 숨긴 해변 → 날씨에도 없음
+    expect(weather.beaches.b0003).toBeUndefined();
+    const grid = weather.grids[WEATHER_AREAS.beaches.b0001!.grid];
+    expect(grid.short).toBeNull();
+    expect(grid.now).toBeNull();
+    expect(grid.today).toMatchObject({ min: null, max: null });
+  });
+
+  it("날씨가 계약을 통과하지 못하면 날씨만 빼고 판단 파일은 게시한다(G1)", async () => {
+    const { snapshots, deps, manifest, events } = await setup();
+    const result = await publishSnapshot({
+      ...deps(),
+      weatherAreas: {
+        beaches: {
+          b0001: { grid: "bad", midLand: "11D20000", midTa: "11D20501" },
+        },
+        landNames: { "11D20000": "강원영동" },
+        taNames: { "11D20501": "강릉" },
+      },
+    });
+    expect(result).toMatchObject({ status: "published", version: V1 });
+    expect(manifest()!.files.weather).toBeUndefined();
+    expect(snapshots.files.has(`data/${V1}/weather.json`)).toBe(false);
+    expect(snapshots.files.has(`data/${V1}/status.json`)).toBe(true);
+    expect(events().some((e) => e.event === "publish_weather_contract")).toBe(
+      true,
+    );
+  });
+
+  it("날씨 파일 유무가 바뀌면 판단 파일이 같아도 새로 게시한다", async () => {
+    const { deps, advance, manifest } = await setup();
+    await publishSnapshot({
+      ...deps(),
+      weatherAreas: { beaches: {}, landNames: {}, taNames: {} },
+    });
+    expect(manifest()!.files.weather).toBeDefined();
+    const v2 = advance(60_000);
+    await publishSnapshot({
+      ...deps(),
+      weatherAreas: {
+        beaches: { b0001: { grid: "bad", midLand: "11D20000", midTa: "x" } },
+        landNames: { "11D20000": "강원영동" },
+        taNames: { x: "강릉" },
+      },
+    });
+    expect(manifest()).toMatchObject({ snapshotVersion: v2 });
+    expect(manifest()!.files.weather).toBeUndefined();
+  });
+});
+
 describe("rollbackManifest (T06)", () => {
   it("이전 버전으로 manifest를 되돌림 — 파일 경로는 사본 그대로, 점검·최소 화면 버전은 지금 설정", async () => {
     const { state, snapshots, deps, advance, manifest } = await setup();
@@ -740,5 +801,15 @@ describe("rollbackManifest (T06)", () => {
       reason: "files_missing",
     });
     expect(snapshots.files.get(MANIFEST_PATH)).toBe(before);
+  });
+
+  it("날씨가 실린 버전은 weather.json이 빠져 있으면 되돌리지 않음", async () => {
+    const { snapshots, deps } = await setup();
+    await publishSnapshot(deps());
+    snapshots.files.delete(`data/${V1}/weather.json`);
+    expect(await rollbackManifest(snapshots, V1)).toEqual({
+      status: "failed",
+      reason: "files_missing",
+    });
   });
 });

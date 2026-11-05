@@ -5,6 +5,7 @@ import { WARNINGS_STATE } from "../collectors/warnings";
 import type { StateStore } from "../core/store/types";
 import { packItems } from "../core/warnings/archive";
 import { parseBeachMeta } from "./season";
+import { parseWeatherAreaTable } from "./weather";
 import { zoneTablesFromAnnex, type AnnexTables } from "./zones";
 
 // publisher 테스트 공용 입력. 실제 data/beaches 파일과 별표 구역표를 씀
@@ -31,6 +32,12 @@ export const BEACHES: Beach[] = [
   readJson<Beach>("data/beaches/b0002.json"),
   { ...readJson<Beach>("data/beaches/b0003.json"), hidden: true },
 ];
+
+// 날씨 예보 구역표: 실제 data/weather-areas.json(BRD-181)
+export const WEATHER_AREAS = parseWeatherAreaTable(
+  readJson("data/weather-areas.json"),
+  () => {},
+);
 
 // getPwnCd 원본 행(수집기가 저장하는 모양). 시각은 KST yyyymmddHHMM
 export function pwnRow(fields: {

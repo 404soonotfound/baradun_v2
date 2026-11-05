@@ -24,6 +24,13 @@ export const PUBLISH_POLICY = {
     manifest: "public, max-age=60",
     versioned: "public, max-age=31536000, immutable",
   },
+  // 날씨(weather.json, BRD-181): 발표·실황 기준 시각 뒤 이 시간이 지나면 받지 못한 것으로 봄(2026-11-05 사용자 결정)
+  // 단기예보는 3시간마다 발표 → 4번 놓치면, 중기예보는 12시간마다 → 2번, 초단기실황은 매시 → 2번 놓치면 결측
+  weatherMaxAgeMs: {
+    short: 12 * 60 * MINUTE_MS,
+    mid: 24 * 60 * MINUTE_MS,
+    now: 2 * 60 * MINUTE_MS,
+  },
 } as const;
 
 export const MANIFEST_SETTINGS = {

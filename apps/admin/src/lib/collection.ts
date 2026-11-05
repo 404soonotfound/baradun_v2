@@ -6,7 +6,11 @@ import { opsFetch, type OpsResult } from "./auth/ops-fetch";
 // - '지연' 기준(N분)은 미결(D15-9)이라 여기서 정하지 않음
 
 export type CollectionJobId =
-  "collect-warnings" | "collect-ocean" | "collect-rip" | "collect-catalog";
+  | "collect-warnings"
+  | "collect-ocean"
+  | "collect-rip"
+  | "collect-weather"
+  | "collect-catalog";
 
 export type RunStatus = "complete" | "partial" | "failed";
 
@@ -75,6 +79,8 @@ export const SOURCE_ROWS: readonly SourceRow[] = [
   { job: "collect-warnings", judgment: true },
   { job: "collect-ocean", judgment: true },
   { job: "collect-rip", judgment: false },
+  // 날씨 예보(BRD-181): 참고 정보라 판단에 쓰지 않음
+  { job: "collect-weather", judgment: false },
   { job: "collect-catalog", judgment: false },
 ];
 

@@ -29,6 +29,10 @@ export type NullableUtcDateTime = string | null;
  */
 export type SnapshotPath = string;
 /**
+ * 날씨 예보(BRD-181, D18-1). 선택 칸: schemaVersion 1에 더한 칸이라 이 칸을 모르는 화면은 무시함. 없으면 화면은 '날씨를 확인하지 못했어요'. 판단 상태와 상관없음.
+ */
+export type SnapshotPath1 = string;
+/**
  * This interface was referenced by `Contract`'s JSON-Schema
  * via the `definition` "Beach".
  */
@@ -119,6 +123,55 @@ export type NearbyWarningType =
  */
 export type DateTime1 = string;
 /**
+ * 하늘. 기상청 단기예보 SKY 1 맑음·3 구름많음·4 흐림, 중기예보 wf 글자의 앞부분. null = 값 없음(맑음으로 채우지 않음).
+ *
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "WeatherSky".
+ */
+export type WeatherSky = 'clear' | 'mostlyCloudy' | 'cloudy' | null;
+/**
+ * 강수 형태. 기상청 단기예보 PTY 0 없음·1 비·2 비/눈·3 눈·4 소나기, 중기예보 wf 글자의 뒷부분. null = 값 없음.
+ *
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "WeatherPrecip".
+ */
+export type WeatherPrecip = 'none' | 'rain' | 'rainSnow' | 'snow' | 'shower' | null;
+/**
+ * 한국 시각 날짜. 예: 2026-11-05
+ *
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "KstDate".
+ */
+export type KstDate = string;
+/**
+ * 그 강수확률이 나온 시각(같은 값이면 이른 시각).
+ */
+export type NullableUtcDateTime1 = string | null;
+/**
+ * 하늘. 기상청 단기예보 SKY 1 맑음·3 구름많음·4 흐림, 중기예보 wf 글자의 앞부분. null = 값 없음(맑음으로 채우지 않음).
+ */
+export type WeatherSky1 = 'clear' | 'mostlyCloudy' | 'cloudy' | null;
+/**
+ * 강수 형태. 기상청 단기예보 PTY 0 없음·1 비·2 비/눈·3 눈·4 소나기, 중기예보 wf 글자의 뒷부분. null = 값 없음.
+ */
+export type WeatherPrecip1 = 'none' | 'rain' | 'rainSnow' | 'snow' | 'shower' | null;
+/**
+ * UTC(Z)만. 시간대가 붙은 값(+09:00)은 거부(KST·UTC 섞임 방지). 예: 2026-10-17T05:30:00Z
+ */
+export type UtcDateTime1 = string;
+/**
+ * 이 날짜 값을 준 발표 시각. null = 받지 못함 또는 발표 뒤 24시간 지남(이때 나머지 칸도 null).
+ */
+export type NullableUtcDateTime2 = string | null;
+/**
+ * 하늘. 기상청 단기예보 SKY 1 맑음·3 구름많음·4 흐림, 중기예보 wf 글자의 앞부분. null = 값 없음(맑음으로 채우지 않음).
+ */
+export type WeatherSky2 = 'clear' | 'mostlyCloudy' | 'cloudy' | null;
+/**
+ * 강수 형태. 기상청 단기예보 PTY 0 없음·1 비·2 비/눈·3 눈·4 소나기, 중기예보 wf 글자의 뒷부분. null = 값 없음.
+ */
+export type WeatherPrecip2 = 'none' | 'rain' | 'rainSnow' | 'snow' | 'shower' | null;
+/**
  * This interface was referenced by `Contract`'s JSON-Schema
  * via the `definition` "InquiryPhotoContentType".
  */
@@ -207,6 +260,7 @@ export interface ManifestFile {
     status: SnapshotPath;
     history: SnapshotPath;
     nationwideWarnings: SnapshotPath;
+    weather?: SnapshotPath1;
   };
 }
 /**
@@ -520,6 +574,220 @@ export interface WaveHeightHistory {
 export interface NationwideWarningsFile {
   lastConfirmedAt: NullableDateTime2;
   items: WarningItem[];
+}
+/**
+ * /data/{v}/weather.json. 기상청 단기예보·초단기실황·중기예보(BRD-181, 결정 기록 18장 D18-1·D18-2·D18-8·D18-9). 참고 정보: 분류·관측 지연·대안 해변에 쓰지 않음(G1). 받지 못했거나 오래된 값은 null(0·맑음·빈 칸으로 채우지 않음). 출처 표시 '출처: 기상청'(기상법).
+ *
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "WeatherFile".
+ */
+export interface WeatherFile {
+  /**
+   * 해변 id → 예보 구역(data/weather-areas.json). 없는 해변은 날씨 없음.
+   */
+  beaches: {
+    [k: string]: WeatherAreas;
+  };
+  /**
+   * 격자 'nx,ny' → 단기예보·오늘 최저/최고·지금 기온.
+   */
+  grids: {
+    [k: string]: WeatherGrid;
+  };
+  /**
+   * 중기 육상 구역 → 하늘·강수확률(글피 다음 날부터 3일).
+   */
+  midLand: {
+    [k: string]: MidLandForecast;
+  };
+  /**
+   * 중기 기온 지점 → 최저·최고(글피 다음 날부터 3일).
+   */
+  midTa: {
+    [k: string]: MidTaForecast;
+  };
+}
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "WeatherAreas".
+ */
+export interface WeatherAreas {
+  /**
+   * 단기예보·초단기실황 5km 격자 'nx,ny'.
+   */
+  grid: string;
+  /**
+   * 중기예보 육상 구역 코드(getMidLandFcst regId).
+   */
+  midLand: string;
+  /**
+   * 중기예보 기온 지점 코드(getMidTa regId).
+   */
+  midTa: string;
+}
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "WeatherGrid".
+ */
+export interface WeatherGrid {
+  /**
+   * 단기예보. null = 받지 못함 또는 발표 뒤 12시간 지남.
+   */
+  short: WeatherShort | null;
+  today: WeatherToday;
+  /**
+   * 지금 기온(초단기실황 T1H, D18-8 ③). null = 받지 못함 또는 실황 기준 시각 뒤 2시간 지남.
+   */
+  now: WeatherNow | null;
+}
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "WeatherShort".
+ */
+export interface WeatherShort {
+  issuedAt: UtcDateTime;
+  /**
+   * 오늘~모레(KST) 3시간 간격(00·03·…·21시) 예보, 시각 순. 발표에 없는 시각(발표 전 시각)은 없음.
+   *
+   * @maxItems 24
+   */
+  points: WeatherPoint[];
+  /**
+   * 글피 하루 한 칸(D18-9). 발표가 그날 3시간 간격 칸(KST 00~21시)을 모두 담을 때만 있음. KST 00:00~02:10(전날 23:00 발표가 최신)에는 빈 배열.
+   */
+  days: WeatherShortDay[];
+}
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "WeatherPoint".
+ */
+export interface WeatherPoint {
+  at: UtcDateTime;
+  sky: WeatherSky;
+  precip: WeatherPrecip;
+  /**
+   * 기온(°C, TMP).
+   */
+  temperature: number | null;
+  /**
+   * 강수확률(%). 0도 값. null = 값 없음.
+   */
+  pop: number | null;
+  /**
+   * 바람이 불어오는 방향(도, VEC). 화살표는 180° 돌려 불어가는 쪽으로 그림.
+   */
+  windFrom: number | null;
+  /**
+   * 풍속(m/s, WSD).
+   */
+  windSpeed: number | null;
+}
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "WeatherShortDay".
+ */
+export interface WeatherShortDay {
+  date: KstDate;
+  /**
+   * 그날 예보 중 가장 높은 강수확률(D18-9). null = 그날 강수확률 값 없음.
+   */
+  pop: number | null;
+  popAt: NullableUtcDateTime1;
+  sky: WeatherSky1;
+  precip: WeatherPrecip1;
+  /**
+   * 최저기온(°C, TMN).
+   */
+  min: number | null;
+  /**
+   * 최고기온(°C, TMX).
+   */
+  max: number | null;
+}
+/**
+ * 오늘(KST) 최저·최고(TMN·TMX, D18-8 ②). 오늘 값을 담은 가장 늦은 발표(02:00·05:00, 없으면 전날 발표) 값을 그날 내내 씀. 시간별 기온으로 대신하지 않음. 없으면 null.
+ *
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "WeatherToday".
+ */
+export interface WeatherToday {
+  date: KstDate;
+  /**
+   * 오늘 최저기온(°C).
+   */
+  min: number | null;
+  minIssuedAt: NullableUtcDateTime;
+  /**
+   * 오늘 최고기온(°C).
+   */
+  max: number | null;
+  maxIssuedAt: NullableUtcDateTime;
+}
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "WeatherNow".
+ */
+export interface WeatherNow {
+  observedAt: UtcDateTime1;
+  /**
+   * 기온(°C, T1H).
+   */
+  temperature: number;
+}
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "MidLandForecast".
+ */
+export interface MidLandForecast {
+  /**
+   * 기상청 중기 육상 구역 이름(코드표 원문, 예: 강원영동).
+   */
+  name: string;
+  /**
+   * 글피 다음 날부터 3일(KST), 날짜 순.
+   */
+  days: MidLandDay[];
+}
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "MidLandDay".
+ */
+export interface MidLandDay {
+  date: KstDate;
+  issuedAt: NullableUtcDateTime2;
+  /**
+   * 그날 오전·오후 중 높은 강수확률(D18-9, 같으면 오전). 8~10일은 하루 값.
+   */
+  pop: number | null;
+  sky: WeatherSky2;
+  precip: WeatherPrecip2;
+}
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "MidTaForecast".
+ */
+export interface MidTaForecast {
+  /**
+   * 기상청 중기 기온 지점 이름(코드표 원문, 예: 강릉).
+   */
+  name: string;
+  days: MidTaDay[];
+}
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "MidTaDay".
+ */
+export interface MidTaDay {
+  date: KstDate;
+  issuedAt: NullableUtcDateTime;
+  /**
+   * 최저기온(°C, taMin).
+   */
+  min: number | null;
+  /**
+   * 최고기온(°C, taMax).
+   */
+  max: number | null;
 }
 /**
  * 문의 사진 업로드 양식 발급 요청.
