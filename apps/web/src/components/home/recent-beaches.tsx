@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 
 import { SectionHead } from "@/components/home/section-head";
@@ -16,6 +17,7 @@ import { useMetaText } from "@/lib/snapshot/use-meta-text";
 import { useSnapshot } from "@/lib/snapshot/use-snapshot";
 import { deriveBeachView } from "@/lib/snapshot/view";
 import { kstStamp } from "@/lib/snapshot/clock";
+import { cn } from "@/lib/cn";
 import { joinMeta } from "@/lib/meta-join";
 import { useRecentVisits, viewedTime } from "@/lib/recent-visits";
 
@@ -31,6 +33,21 @@ export function RecentBeaches({
   beaches: BeachSummary[];
 }) {
   const t = useTranslations("home.recent");
+  // 칩 줄이 오른쪽으로 더 있는지(넘치고 끝까지 넘기지 않았을 때만 흐림)
+  const chipsRef = useRef<HTMLUListElement>(null);
+  const [more, setMore] = useState(false);
+  function updateMore() {
+    const el = chipsRef.current;
+    setMore(!!el && el.scrollLeft + el.clientWidth < el.scrollWidth - 1);
+  }
+  useEffect(() => {
+    const el = chipsRef.current;
+    if (!el) return;
+    updateMore();
+    const observer = new ResizeObserver(updateMore);
+    observer.observe(el);
+    return () => observer.disconnect();
+  });
   const tRoot = useTranslations(); // home.near.clearScope · activity.*
   const visits = useRecentVisits(); // 본 시각·그때 고른 활동(기기에만)
   const snapshot = useSnapshot(); // Vue: mapState
@@ -128,10 +145,16 @@ export function RecentBeaches({
         )}
       </Link>
       {rest.length > 0 && (
-        // 모바일은 한 줄 가로 스크롤 + 오른쪽 끝을 흐리게 해 더 있음을 알림, PC는 여러 줄(11/5 홈 v3 시안)
+        // 모바일은 한 줄 가로 스크롤, 오른쪽에 더 있을 때만 끝을 흐리게 함, PC는 여러 줄(11/5 홈 v3 시안)
         <ul
+          ref={chipsRef}
+          onScroll={updateMore}
           aria-label={t("chips", { count: rest.length })}
-          className="flex flex-wrap gap-2 max-lg:-mx-4 max-lg:flex-nowrap max-lg:overflow-x-auto max-lg:px-4 max-lg:pb-1 max-lg:[scrollbar-width:none] max-lg:[mask-image:linear-gradient(to_right,#000_calc(100%-24px),transparent)] max-lg:[&::-webkit-scrollbar]:hidden"
+          className={cn(
+            "flex flex-wrap gap-2 max-lg:-mx-4 max-lg:flex-nowrap max-lg:overflow-x-auto max-lg:px-4 max-lg:pb-1 max-lg:[scrollbar-width:none] max-lg:[&::-webkit-scrollbar]:hidden",
+            more &&
+              "max-lg:[mask-image:linear-gradient(to_right,#000_calc(100%-24px),transparent)]",
+          )}
         >
           {/* Vue: v-for="beach in rest" :key="beach.id" */}
           {rest.map((beach) => (
