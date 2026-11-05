@@ -19,7 +19,7 @@ import { hidesLastValues, isRecord } from "./view";
 export type WeatherView =
   | { kind: "loading" }
   | { kind: "failed" } // 받지 못함·읽을 수 없음·이 해변 격자가 계약 모양이 아님 → 카드 자리에 안내 한 줄
-  | { kind: "none" } // 이 해변이 날씨 대응표에 없음 → 카드를 두지 않음
+  | { kind: "none" } // 이 해변이 날씨 대응표에 없음, 또는 특보·측정값도 숨긴 화면 → 카드를 두지 않음
   | {
       kind: "ready";
       grid: WeatherGrid;
@@ -204,11 +204,13 @@ export function useBeachWeather(beachId: string): WeatherView {
     () => EMPTY,
   );
 
-  if (hidden) return { kind: "failed" };
+  // 점검·업데이트 필요·처음부터 못 받음: 특보·측정값도 보이지 않는 화면이라 카드를 두지 않음
+  // ('특보와 측정값은 위에서 그대로' 안내가 사실과 달라지지 않게)
+  if (hidden) return { kind: "none" };
   if (!manifest) {
     return snapshot.phase === "loading"
       ? { kind: "loading" }
-      : { kind: "failed" };
+      : { kind: "none" };
   }
   if (url === null) return { kind: "failed" };
   // 이전 버전 파일은 지금 스냅샷의 날씨가 아님 → 새 파일을 받을 때까지 loading

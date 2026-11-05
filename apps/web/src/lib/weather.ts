@@ -133,7 +133,7 @@ export interface DayCell {
 }
 
 // 펼친 곳: 글피(단기예보 하루 한 칸) + 중기예보(그 뒤 3일). 모두 합쳐 최대 4일
-// midFailed: 중기 구역 값이 없거나, 단기 다음 날짜 칸에 받은 값이 하나도 없음 → '이후 날씨를 확인하지 못했어요'
+// midFailed: 중기 구역·기온 지점 값이 없거나, 단기 다음 날짜 칸에 받은 값이 하나도 없음 → '이후 날씨를 확인하지 못했어요'
 export function laterDays(
   short: WeatherShort,
   midLand: MidLandForecast | null,
@@ -177,7 +177,8 @@ export function laterDays(
     (d) =>
       d.word !== null || d.pop !== null || d.min !== null || d.max !== null,
   );
-  const midFailed = midLand === null || received.length === 0;
+  // 기온 지점만 못 받아도 중기예보를 못 받은 것으로 봄(최저·최고가 이유 없이 '–'로만 보이지 않게)
+  const midFailed = midLand === null || midTa === null || received.length === 0;
   return {
     days: [...days, ...(midFailed ? [] : mid)].slice(0, 4),
     midFailed,
