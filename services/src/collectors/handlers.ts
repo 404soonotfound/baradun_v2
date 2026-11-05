@@ -14,6 +14,7 @@ import {
 import type { ApiKeyName } from "../core/secrets/api-keys";
 import photoLedger from "../../../data/photo-sources.json";
 import ripLedger from "../../../data/rip-current-beaches.json";
+import weatherAreasJson from "../../../data/weather-areas.json";
 import {
   CATALOG_JOB,
   collectCatalog,
@@ -30,6 +31,12 @@ import { COLLECT_POLICY } from "./policy";
 import { collectRip, parseRipLedger, RIP_JOB, type RipSource } from "./rip";
 import { runCollector } from "./trigger";
 import { collectWarnings, WARNINGS_JOB } from "./warnings";
+import {
+  collectWeather,
+  parseWeatherAreas,
+  WEATHER_JOB,
+  type WeatherAreas,
+} from "./weather";
 import { formatUtcIso } from "../core/warnings/time";
 
 // Lambda 진입점 (아키텍처 5장). 실제 AWS 클라이언트를 묶어 수집 함수에 넘김
@@ -179,5 +186,18 @@ export async function ripHandler(
   const sources = (ripSources ??= parseRipLedger(ripLedger));
   return run(RIP_JOB, context, () =>
     collectRip({ ...deps(context.awsRequestId), sources }),
+  );
+}
+
+// 날씨 예보 구역 대응표도 번들에 들어감(data/weather-areas.json, BRD-181). catalog와 같은 이유로 첫 실행에서 검사
+let weatherAreas: WeatherAreas | null = null;
+
+export async function weatherHandler(
+  _event: unknown,
+  context: LambdaContext,
+): Promise<CollectRunResult> {
+  const areas = (weatherAreas ??= parseWeatherAreas(weatherAreasJson));
+  return run(WEATHER_JOB, context, () =>
+    collectWeather({ ...deps(context.awsRequestId), areas }),
   );
 }

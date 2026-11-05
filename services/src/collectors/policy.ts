@@ -38,4 +38,19 @@ export const COLLECT_POLICY = {
   // 이 시간이 지나면 새 요청을 보내지 않음(남은 해변은 이전 확인 결과 유지)
   // 마지막 요청이 최악 21초 걸려도 51초 → Lambda 시간 제한(60초) 안에서 저장까지 끝냄
   catalogBudgetMs: 30 * SECOND_MS,
+
+  // collect-weather: 매시 :15(BRD-181, 결정 기록 18장 D18-1·D18-8)
+  // 초단기실황 140격자 매시 + 단기예보 140격자 하루 8회 + 중기 육상 8·기온 34 하루 2회 ≈ 하루 4,500회(각 API 하루 10,000회 안)
+  weatherSchedule: { periodMinutes: 60, offsetMinutes: 15 },
+  // 발표 뒤 받기까지 기다리는 분. 단기예보·초단기실황은 활용가이드 '발표 10분 뒤 제공'
+  // 중기예보(06·18시)는 제공 시각 근거가 없어 1시간 여유(덜 기다려 '행 없음' 실패를 만들지 않게)
+  weatherShortDelayMinutes: 10,
+  weatherNowDelayMinutes: 10,
+  weatherMidDelayMinutes: 60,
+  // 한 번에 받는 행 수. 단기예보 02:00 발표 한 격자 944행(2026-11-05 실측), 초단기실황 8행
+  weatherShortNumOfRows: 1000,
+  weatherNowNumOfRows: 20,
+  // 한 번에 보내는 요청 수와 새 요청을 보내지 않는 시간(catalog와 같은 이유로 Lambda 60초 안)
+  weatherConcurrency: 8,
+  weatherBudgetMs: 30 * SECOND_MS,
 } as const;
