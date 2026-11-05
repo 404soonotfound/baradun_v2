@@ -39,7 +39,7 @@
     - `test`: 테스트 추가·수정
     - `docs`: 문서 변경
     - `chore`: 빌드·설정·의존성(`chore(deps)`)·스크립트
-  - scope: `web` · `core` · `contracts` · `infra` · `data` · `tools` (분명하지 않으면 생략)
+  - scope: `web` · `admin` · `services` · `core` · `contracts` · `infra` · `data` · `tools` (분명하지 않으면 생략). `core`·`contracts`를 뺀 scope는 `area:` 라벨과 이름이 같다.
   - 제목: 한국어, 50자 안팎, 마침표 없음
   - 나눈 커밋 하나하나가 타입 검사·린트를 통과해야 한다.
   - 커밋 전에 나눌 계획(커밋별 메시지와 파일)을 먼저 보여주고, 한 파일에 성격이 섞이면 `git add -p`로 나눈다.
@@ -78,20 +78,20 @@
 
 Project의 Status 필드로 관리한다.
 
-| 상태        | 의미                                                  |
-| ----------- | ----------------------------------------------------- |
-| Backlog     | 하기로 했지만 Iteration에 넣지 않음                   |
-| Todo        | 이번 Iteration에 할 일                                |
-| In Progress | 작업 시작                                             |
-| In Review   | 작업 완료, PR 검토·화면 확인 또는 Notion 반영 확인 중 |
-| Done        | 이슈의 완료 조건을 모두 충족(이슈 닫힘: 완료)         |
-| Canceled    | 하지 않기로 함. 이유를 댓글로 남김(닫힘: 계획 없음)   |
+| 상태        | 의미                                                     |
+| ----------- | -------------------------------------------------------- |
+| Backlog     | 하기로 했지만 Iteration에 넣지 않음                      |
+| Todo        | 이번 Iteration에 할 일                                   |
+| In Progress | 작업 시작                                                |
+| In Review   | 작업 완료, PR 검토·화면 확인 또는 Notion 반영 확인 중    |
+| Done        | 이슈의 완료 조건을 모두 충족(이슈 닫힘: 완료)            |
+| Canceled    | 하지 않기로 함. 이유를 댓글로 남김(닫힘: 계획 없음·중복) |
 
 - 다른 이슈와 같으면 `Duplicate of #n` 댓글을 남기고 '중복'으로 닫은 뒤 Status를 Canceled로 고친다.
-- `상태:결정 대기` 이슈는 결정을 Notion 결정 기록에 반영한 뒤 `상태:결정 대기`를 떼고 이슈를 '완료'로 닫아 Done으로 옮긴다. 반영이 남았으면 `상태:결정 대기`를 `상태:문서 반영 필요`로 바꾸고 In Review에 둔다. 반영을 마치면 그 라벨도 떼고 닫는다. `상태:` 라벨은 열린 이슈에만 둔다. 이슈 댓글을 결정의 원본으로 쓰지 않는다.
+- `status:needs-decision` 이슈는 결정을 Notion 결정 기록에 반영한 뒤 `status:needs-decision`을 떼고 이슈를 '완료'로 닫아 Done으로 옮긴다. 반영이 남았으면 `status:needs-decision`을 `status:needs-notion`으로 바꾸고 In Review에 둔다. 반영을 마치면 그 라벨도 떼고 닫는다. `status:` 라벨은 열린 이슈에만 둔다. 이슈 댓글을 결정의 원본으로 쓰지 않는다.
 - 다른 이슈에 막힌(blocked) 이슈는 상태를 바꾸지 않고 둔다.
 - Iteration은 1주(월요일 시작)다. 마일스톤은 화면 기준(M0 공통 기반 ~ M6 운영자 화면)과 데이터 기준(MD 데이터 수집·게시)이다.
-- 이슈 라벨은 `유형:`·`영역:`·`관심사:`·`상태:` 네 묶음에서 고른다. GitHub 기본 라벨(`duplicate`·`wontfix` 등)은 쓰지 않는다.
+- 이슈 라벨은 `type:`(`feat`·`fix`·`refactor`·`docs`는 커밋 type과 같은 이름, 결정 이슈는 `decision`)·`area:`(`web`·`admin`·`services`·`infra`·`data`·`tools`, 커밋 scope와 같은 이름)·`topic:`·`status:` 네 묶음에서 고른다. 라벨 이름은 영어, 설명은 한국어다. GitHub 기본 라벨(`duplicate`·`wontfix` 등)은 쓰지 않는다.
 
 ## Review guidelines
 
