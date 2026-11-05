@@ -19,6 +19,7 @@ export type ContractFile =
   | "StatusFile"
   | "HistoryFile"
   | "NationwideWarningsFile"
+  | "WeatherFile"
   // 공지 하나(manifest 안). 게시 전에 하나씩 걸러 냄(BRD-151)
   | "Notice";
 

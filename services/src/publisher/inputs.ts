@@ -3,6 +3,7 @@ import { OCEAN_STATE } from "../collectors/ocean";
 import { COLLECT_POLICY } from "../collectors/policy";
 import { RIP_STATE } from "../collectors/rip";
 import { WARNINGS_STATE } from "../collectors/warnings";
+import { WEATHER_STATE } from "../collectors/weather";
 import type { Logger } from "../core/collect/log";
 import type { StationReadings } from "../core/observations/freshness";
 import {
@@ -20,6 +21,8 @@ import {
   normalizeTsunamiResponse,
   type TsunamiResult,
 } from "../core/warnings/tsunami";
+import { readMid, readNow, readShort } from "../core/weather/state";
+import type { WeatherInputs } from "./weather";
 
 // State 묶음 조회 → 게시 입력 (아키텍처 6.2, 결정 기록 11장 BRD-56 ④⑤)
 // 수집기가 남긴 원본 행을 풀어 기존 정규화를 그대로 다시 씀(규칙이 바뀌어도 다시 계산할 수 있게)
@@ -41,6 +44,8 @@ export interface PublishInputs {
   readonly ripReadings: Readonly<Record<string, RipReading>>;
   // collect-catalog의 사진 확인 결과(해변 id → 기록). 기록·확인이 없는 해변은 칸이 없음
   readonly photoChecks: Readonly<Record<string, PhotoRecord>>;
+  // collect-weather의 날씨 원래 값(BRD-181). 없거나 깨진 기록은 빈 값 → weather.json의 그 칸 null
+  readonly weather: WeatherInputs;
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -166,18 +171,60 @@ async function waveHistoryInput(
   );
 }
 
+// 날씨는 분류에 쓰지 않음 → 파고 이력처럼 읽기 예외·깨진 기록은 게시를 막지 않고 빈 값 + warn
+// 빈 값은 '받지 못함'(weather.json null)으로 나감. 맑음·0으로 바뀌지 않음
+async function weatherInput(
+  state: StateStore,
+  log?: Logger,
+): Promise<WeatherInputs> {
+  const read = async (key: { pk: string; sk: string }) => {
+    try {
+      return (await state.getState(key.pk, key.sk))?.value;
+    } catch (error) {
+      log?.("warn", "publish_weather_unreadable", {
+        sk: key.sk,
+        error: error instanceof Error ? error.name : typeof error,
+      });
+      return undefined;
+    }
+  };
+  const [short, now, mid] = await Promise.all([
+    read(WEATHER_STATE.short),
+    read(WEATHER_STATE.now),
+    read(WEATHER_STATE.mid),
+  ]);
+  const parsed = {
+    short: readShort(short),
+    now: readNow(now),
+    mid: readMid(mid),
+  };
+  for (const [sk, value] of Object.entries(parsed)) {
+    const raw = { short, now, mid }[sk];
+    if (raw !== undefined && raw !== null && value === null) {
+      log?.("warn", "publish_weather_invalid", { sk });
+    }
+  }
+  return {
+    short: parsed.short ?? {},
+    now: parsed.now ?? {},
+    mid: parsed.mid ?? { land: {}, ta: {} },
+  };
+}
+
 export async function readPublishInputs(
   state: StateStore,
   log?: Logger,
 ): Promise<PublishInputs> {
-  const [pwncd, tsunami, ocean, catalog, waveHistory, rip] = await Promise.all([
-    state.getState(WARNINGS_STATE.pwncd.pk, WARNINGS_STATE.pwncd.sk),
-    state.getState(WARNINGS_STATE.tsunami.pk, WARNINGS_STATE.tsunami.sk),
-    state.getState(OCEAN_STATE.readings.pk, OCEAN_STATE.readings.sk),
-    state.getState(CATALOG_STATE.photos.pk, CATALOG_STATE.photos.sk),
-    waveHistoryInput(state, log),
-    state.getState(RIP_STATE.readings.pk, RIP_STATE.readings.sk),
-  ]);
+  const [pwncd, tsunami, ocean, catalog, waveHistory, rip, weather] =
+    await Promise.all([
+      state.getState(WARNINGS_STATE.pwncd.pk, WARNINGS_STATE.pwncd.sk),
+      state.getState(WARNINGS_STATE.tsunami.pk, WARNINGS_STATE.tsunami.sk),
+      state.getState(OCEAN_STATE.readings.pk, OCEAN_STATE.readings.sk),
+      state.getState(CATALOG_STATE.photos.pk, CATALOG_STATE.photos.sk),
+      waveHistoryInput(state, log),
+      state.getState(RIP_STATE.readings.pk, RIP_STATE.readings.sk),
+      weatherInput(state, log),
+    ]);
   return {
     pwncd: pwncdInput(pwncd?.value),
     tsunami: tsunamiInput(tsunami?.value),
@@ -185,5 +232,6 @@ export async function readPublishInputs(
     waveHistory,
     photoChecks: photoChecksInput(catalog?.value),
     ripReadings: readRipReadings(rip?.value ?? null),
+    weather,
   };
 }

@@ -5,6 +5,7 @@ import type { Beach } from "@baradun/contracts";
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import beachMeta from "../../../data/beach-meta.json";
+import weatherAreasJson from "../../../data/weather-areas.json";
 import annexTables from "../../../tools/beaches/annex-tables.json";
 import { liveNotices, queryNotices } from "../admin/notices";
 import { createLogger } from "../core/collect/log";
@@ -16,6 +17,7 @@ import {
   type PublishResult,
 } from "./publish";
 import { parseBeachMeta, type SeasonTable } from "./season";
+import { parseWeatherAreaTable } from "./weather";
 import { zoneTablesFromAnnex, type AnnexTables } from "./zones";
 
 // publish-snapshot Lambda 진입점 (아키텍처 6.2, BRD-61 PR ②)
@@ -79,6 +81,9 @@ function setup() {
   return cached;
 }
 
+// 날씨 예보 구역표(BRD-181). 틀린 항목은 빼고 알림(날씨 때문에 판단 게시를 멈추지 않음)
+const weatherAreas = parseWeatherAreaTable(weatherAreasJson, log);
+
 // 구역표는 모듈 로드 때 만듦. 원문이 어긋났으면 시작부터 실패(이름을 골라 쓰지 않음, zones.ts)
 const zones = zoneTablesFromAnnex(annexTables as unknown as AnnexTables);
 
@@ -132,6 +137,7 @@ export async function publishHandler(
     beaches,
     zones,
     seasons,
+    weatherAreas,
     log,
     clock: () => Date.now(),
     owner: context.awsRequestId,
