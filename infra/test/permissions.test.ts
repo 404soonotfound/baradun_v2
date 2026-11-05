@@ -220,6 +220,7 @@ describe("DynamoDB 권한 (BRD-55)", () => {
         roleId("CollectWarningsRole"),
         roleId("CollectCatalogRole"),
         roleId("CollectRipRole"),
+        roleId("CollectWeatherRole"),
         roleId("InquiryInquiryRole"),
         roleId("OpsApiRole"),
       ].sort(),
@@ -397,6 +398,7 @@ describe("함수·역할별 최소 권한 범위 (BRD-67)", () => {
         roleId("CollectWarningsRole"),
         roleId("CollectCatalogRole"),
         roleId("CollectRipRole"),
+        roleId("CollectWeatherRole"),
         roleId("PublisherRole"),
         roleId("InquiryInquiryRole"),
         roleId("OpsNotificationRole"),
@@ -474,8 +476,10 @@ describe("함수·역할별 최소 권한 범위 (BRD-67)", () => {
   it("Scheduler 역할은 수집 Lambda 함수를 깨우는(lambda:InvokeFunction) 권한만 갖는다", () => {
     const collectorFunctionIds = Object.keys(
       template.findResources("AWS::Lambda::Function"),
-    ).filter((id) => /^Collect(Ocean|Warnings|Catalog|Rip)Function/.test(id));
-    expect(collectorFunctionIds).toHaveLength(4);
+    ).filter((id) =>
+      /^Collect(Ocean|Warnings|Catalog|Rip|Weather)Function/.test(id),
+    );
+    expect(collectorFunctionIds).toHaveLength(5);
     const allowedTargets = new Set(
       collectorFunctionIds.flatMap((id) => [`${id}.Arn`, `${id}.Arn:*`]),
     );
@@ -518,7 +522,13 @@ describe("함수·역할별 최소 권한 범위 (BRD-67)", () => {
       `${tableId("Ops")}.Arn`,
       `${tableId("State")}.Arn`,
     ].sort();
-    for (const name of ["Ocean", "Warnings", "Catalog", "Rip"] as const) {
+    for (const name of [
+      "Ocean",
+      "Warnings",
+      "Catalog",
+      "Rip",
+      "Weather",
+    ] as const) {
       const actions = allowedActionsOfRole(roleId(`Collect${name}Role`));
       expect((actions.get("dynamodb:PutItem") ?? []).sort()).toEqual(expected);
     }
