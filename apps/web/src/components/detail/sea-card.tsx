@@ -249,8 +249,8 @@ export function SeaCard({
 
       {/* 그림 | 그래프 두 열은 카드가 넓을 때만(카드 너비 42rem 이상, 1280 화면 740px). 좁은 PC(1024 → 484px)에서
           두 열이면 그래프가 116px로 줄어 글자를 읽기 어려워 모바일처럼 세로로 둠(Codex P2).
-          두 열 여부는 화면이 아닌 카드 너비로 정하므로 제목도 카드 너비 기준. 두 칸을 같은 너비로 나눠 그림 칸과 그래프 높이를 맞춤(wave-chart H) */}
-      <div className="flex flex-col gap-3 lg:px-5 lg:pt-4 lg:pb-[18px] @2xl:grid @2xl:grid-cols-2 @2xl:gap-7">
+          두 열 여부는 화면이 아닌 카드 너비로 정하므로 제목도 카드 너비 기준. 그림 칸은 300px 고정, 그래프가 남은 너비를 씀(11/5 시안 D안) */}
+      <div className="flex flex-col gap-3 lg:px-5 lg:pt-4 lg:pb-[18px] @2xl:grid @2xl:grid-cols-[300px_minmax(0,1fr)] @2xl:gap-7">
         <div className="flex flex-col gap-1.5">
           <h3 className="hidden text-label text-text-default @2xl:block">
             {t("detail.figure.title")}

@@ -142,7 +142,8 @@ export function WaveFigure({
           role="img"
           aria-label={label}
           viewBox={`0 0 ${W} ${H}`}
-          className="block h-auto w-full overflow-hidden"
+          // 모바일은 그림 높이를 140으로 묶어 가운데 둠, PC는 칸 너비에 맞춤(11/5 시안 D안)
+          className="mx-auto block h-auto max-h-[140px] w-auto max-w-full overflow-hidden lg:max-h-none lg:w-full"
         >
           <defs>
             <clipPath id={clipId}>
