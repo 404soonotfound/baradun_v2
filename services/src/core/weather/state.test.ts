@@ -6,6 +6,7 @@ import {
   mergeNow,
   mergeShort,
   packShort,
+  readMid,
   readShort,
   type ShortGrids,
 } from "./state";
@@ -164,5 +165,51 @@ describe("중기예보 합치기", () => {
       "2026-11-10": { issuedAt: pm18, am: { pop: 30, wf: "흐림" } },
     });
     expect(latestIssue(merged.land["11D20000"])).toBe(Date.parse(pm18));
+  });
+});
+
+describe("깨진 칸 읽기", () => {
+  it("단기: 모양이 틀린 행·최저최고 칸만 버리고 나머지는 읽음", () => {
+    const packed = packShort({
+      [KEY]: {
+        issuedAt: T02,
+        hours: [[1, 12, 1, 0, 0, 270, 2], "깨짐", [2, 12]] as never,
+        extremes: {
+          "2026-11-05": { tmn: { v: 11, issuedAt: T02 }, tmx: { v: "16" } },
+        } as never,
+      },
+    });
+    if (packed.status !== "ok") throw new Error("pack");
+    expect(readShort({ archive: packed.archive })).toEqual({
+      [KEY]: {
+        issuedAt: T02,
+        hours: [[1, 12, 1, 0, 0, 270, 2]],
+        extremes: { "2026-11-05": { tmn: { v: 11, issuedAt: T02 } } },
+      },
+    });
+  });
+
+  it("중기: null·발표 시각 없는 날짜 칸은 버림(수집 전체를 멈추지 않음)", () => {
+    expect(
+      readMid({
+        land: {
+          "11D20000": {
+            "2026-11-09": null,
+            "2026-11-10": { am: { pop: 10, wf: "맑음" } },
+            "2026-11-11": { issuedAt: T02, am: { pop: 10, wf: "맑음" } },
+          },
+        },
+        ta: {
+          "11D20501": { "2026-11-09": { issuedAt: T02, min: "6", max: 12 } },
+        },
+      }),
+    ).toEqual({
+      land: {
+        "11D20000": {
+          "2026-11-11": { issuedAt: T02, am: { pop: 10, wf: "맑음" } },
+        },
+      },
+      ta: { "11D20501": {} },
+    });
   });
 });
