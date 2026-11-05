@@ -2,14 +2,16 @@ import { gunzipSync, gzipSync } from "node:zlib";
 import type { StateValue } from "../store/types";
 import { MAX_ARCHIVE_CHARS } from "../warnings/archive";
 import { parseUtcIso } from "../warnings/time";
-import type {
-  DayExtremes,
-  Extreme,
-  HourRow,
-  MidLandDay,
-  MidTaDay,
-  NowObservation,
-  ShortForecast,
+import {
+  HOUR_FIELDS,
+  type DayExtremes,
+  type Extreme,
+  type HourRow,
+  type MidHalf,
+  type MidLandDay,
+  type MidTaDay,
+  type NowObservation,
+  type ShortForecast,
 } from "./kma";
 
 // 날씨 수집 저장 형식 (BRD-181). collect-weather가 쓰고 publisher가 읽음
@@ -53,30 +55,70 @@ export function packShort(grids: ShortGrids): Packed {
     : { status: "ok", archive };
 }
 
-// 깨진 기록은 null(읽지 못함). 빈 값으로 바꾸지 않고 부르는 쪽이 정함
+// 칸 하나하나의 모양 검사. 틀린 칸은 버림(값이 없는 것으로 봄, 0·맑음으로 바꾸지 않음)
+const isIso = (v: unknown): v is string =>
+  typeof v === "string" && parseUtcIso(v) !== null;
+const isNum = (v: unknown): v is number =>
+  typeof v === "number" && Number.isFinite(v);
+const numOrNull = (v: unknown) => v === null || isNum(v);
+
+// [시각(초, 정수), 값 × HOUR_FIELDS] 모양만
+function isHourRow(row: unknown): row is HourRow {
+  return (
+    Array.isArray(row) &&
+    row.length === HOUR_FIELDS.length + 1 &&
+    Number.isInteger(row[0]) &&
+    row.slice(1).every(numOrNull)
+  );
+}
+
+function readExtreme(v: unknown): Extreme | undefined {
+  return isObject(v) && numOrNull(v.v) && isIso(v.issuedAt)
+    ? { v: v.v as number | null, issuedAt: v.issuedAt }
+    : undefined;
+}
+
+function readExtremes(v: unknown): Record<string, DayExtremes> {
+  const out: Record<string, DayExtremes> = {};
+  if (!isObject(v)) return out;
+  for (const [date, day] of Object.entries(v)) {
+    if (!isObject(day)) continue;
+    const tmn = readExtreme(day.tmn);
+    const tmx = readExtreme(day.tmx);
+    if (tmn || tmx)
+      out[date] = { ...(tmn ? { tmn } : {}), ...(tmx ? { tmx } : {}) };
+  }
+  return out;
+}
+
+// 깨진 기록은 null(읽지 못함). 빈 값으로 바꾸지 않고 부르는 쪽이 정함. 틀린 격자·행·칸만 버림
 export function readShort(value: StateValue | undefined): ShortGrids | null {
   if (!isObject(value) || typeof value.archive !== "string") return null;
+  let json: unknown;
   try {
-    const json: unknown = JSON.parse(
+    json = JSON.parse(
       gunzipSync(Buffer.from(value.archive, "base64")).toString("utf8"),
     );
-    if (!isObject(json)) return null;
-    const out: Record<string, ShortGrid> = {};
-    for (const [key, grid] of Object.entries(json)) {
-      if (
-        isObject(grid) &&
-        typeof grid.issuedAt === "string" &&
-        parseUtcIso(grid.issuedAt) !== null &&
-        Array.isArray(grid.hours) &&
-        isObject(grid.extremes)
-      ) {
-        out[key] = grid as unknown as ShortGrid;
-      }
-    }
-    return out;
   } catch {
     return null;
   }
+  if (!isObject(json)) return null;
+  const out: Record<string, ShortGrid> = {};
+  for (const [key, grid] of Object.entries(json)) {
+    if (
+      !isObject(grid) ||
+      !isIso(grid.issuedAt) ||
+      !Array.isArray(grid.hours)
+    ) {
+      continue;
+    }
+    out[key] = {
+      issuedAt: grid.issuedAt,
+      hours: grid.hours.filter(isHourRow),
+      extremes: readExtremes(grid.extremes),
+    };
+  }
+  return out;
 }
 
 export function readNow(value: StateValue | undefined): NowGrids | null {
@@ -95,11 +137,55 @@ export function readNow(value: StateValue | undefined): NowGrids | null {
   return out;
 }
 
+function readHalf(v: unknown): MidHalf | undefined {
+  return isObject(v) &&
+    numOrNull(v.pop) &&
+    (v.wf === null || typeof v.wf === "string")
+    ? { pop: v.pop as number | null, wf: v.wf as string | null }
+    : undefined;
+}
+
+// 구역·지점마다 날짜 칸을 하나씩 검사해 틀린 칸만 버림(깨진 칸 하나가 수집 전체를 멈추지 않게)
 export function readMid(value: StateValue | undefined): MidState | null {
   if (!isObject(value) || !isObject(value.land) || !isObject(value.ta)) {
     return null;
   }
-  return value as unknown as MidState;
+  const land: Record<string, Record<string, MidLandDay>> = {};
+  for (const [regId, days] of Object.entries(value.land)) {
+    const out: Record<string, MidLandDay> = {};
+    for (const [date, day] of Object.entries(isObject(days) ? days : {})) {
+      if (!isObject(day) || !isIso(day.issuedAt)) continue;
+      const halves: Partial<Record<"am" | "pm" | "all", MidHalf>> = {};
+      for (const k of ["am", "pm", "all"] as const) {
+        const h = readHalf(day[k]);
+        if (h) halves[k] = h;
+      }
+      if (Object.keys(halves).length > 0) {
+        out[date] = { issuedAt: day.issuedAt, ...halves };
+      }
+    }
+    land[regId] = out;
+  }
+  const ta: Record<string, Record<string, MidTaDay>> = {};
+  for (const [regId, days] of Object.entries(value.ta)) {
+    const out: Record<string, MidTaDay> = {};
+    for (const [date, day] of Object.entries(isObject(days) ? days : {})) {
+      if (
+        isObject(day) &&
+        isIso(day.issuedAt) &&
+        numOrNull(day.min) &&
+        numOrNull(day.max)
+      ) {
+        out[date] = {
+          issuedAt: day.issuedAt,
+          min: day.min as number | null,
+          max: day.max as number | null,
+        };
+      }
+    }
+    ta[regId] = out;
+  }
+  return { land, ta };
 }
 
 // 날짜별 최저·최고는 칸마다 더 늦은 발표 값을 남김. today(KST) 이전 날짜는 버림

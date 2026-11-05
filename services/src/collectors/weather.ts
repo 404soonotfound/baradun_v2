@@ -212,7 +212,8 @@ export async function collectWeather(
   );
   const tmFc = `${midBase.date}${midBase.time}`;
 
-  // 이미 받은 발표는 다시 부르지 않음. 저장값을 읽지 못하면 모두 부름(덮을 때는 다시 읽어 합침)
+  // 이미 받은 발표는 다시 부르지 않음. 저장값을 읽지 못하면 모두 부름
+  // 저장할 때 mergeAndPut이 다시 읽음: 그 사이 다른 실행이 쓴 값과 합쳐야 해서 이 읽기를 다시 쓰지 않음
   const [prevShortRec, prevMidRec] = await Promise.all([
     deps.state.getState(WEATHER_STATE.short.pk, WEATHER_STATE.short.sk),
     deps.state.getState(WEATHER_STATE.mid.pk, WEATHER_STATE.mid.sk),
@@ -311,20 +312,22 @@ export async function collectWeather(
     const prevHour = latestBase(nowBase.ms - HOUR_MS, ALL_HOURS, 0);
     const nowUrl = (g: Grid, base: { date: string; time: string }) =>
       `${SHORT_BASE}getUltraSrtNcst?${shortParams(g, base, COLLECT_POLICY.weatherNowNumOfRows)}`;
+    const fetchNow = (g: Grid, base: { date: string; time: string }) =>
+      safe(fetchJson(deps, nowUrl(g, base), (body) => parseNow(body, base, g)));
+    // 이번 시각이 나왔는지는 첫 격자로 한 번만 확인(격자마다 두 번 부르면 같은 서비스 하루 한도에 가까워짐)
+    // 나왔으면 첫 격자는 그 응답을 그대로 씀. 없으면(03) 모든 격자를 한 시간 전 실황으로 부름
+    const first = deps.areas.grids[0]!;
+    let probe: Promise<Parsed<NowObservation>> | null = null;
+    const probeNow = () => (probe ??= fetchNow(first, nowBase));
+    const noCurrent = (r: Parsed<NowObservation>) =>
+      r.status === "failed" && r.reason === "result:03";
     for (const g of deps.areas.grids) {
       tasks.push(async () => {
-        let result = await safe(
-          fetchJson(deps, nowUrl(g, nowBase), (body) =>
-            parseNow(body, nowBase, g),
-          ),
-        );
-        if (result.status === "failed" && result.reason === "result:03") {
-          result = await safe(
-            fetchJson(deps, nowUrl(g, prevHour), (body) =>
-              parseNow(body, prevHour, g),
-            ),
-          );
-        }
+        const probed = await probeNow();
+        const result =
+          g === first && !noCurrent(probed)
+            ? probed
+            : await fetchNow(g, noCurrent(probed) ? prevHour : nowBase);
         record("now", result, (v) => nowFresh.set(gridKey(g), v));
       });
     }
