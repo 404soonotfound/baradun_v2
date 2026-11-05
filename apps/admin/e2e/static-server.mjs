@@ -54,21 +54,60 @@ async function fileFor(urlPath) {
   }
 }
 
-const OPS_PROXY = process.env.OPS_PROXY;
+export function validateOpsProxyOrigin(raw) {
+  if (!raw) return null;
+  const proxy = new URL(raw);
+  if (!["http:", "https:"].includes(proxy.protocol)) {
+    throw new Error("OPS_PROXY는 http 또는 https 주소여야 함");
+  }
+  if (
+    proxy.username ||
+    proxy.password ||
+    proxy.pathname !== "/" ||
+    proxy.search ||
+    proxy.hash
+  ) {
+    throw new Error("OPS_PROXY는 인증 정보·경로·쿼리가 없는 origin이어야 함");
+  }
+  return proxy.origin;
+}
 
-async function proxyOps(req, res) {
+export function buildOpsProxyTarget(rawUrl, proxyOrigin) {
+  if (!proxyOrigin) return null;
+  let incoming;
+  try {
+    incoming = new URL(rawUrl ?? "/", "http://localhost");
+  } catch {
+    return null;
+  }
+  // origin-form·absolute-form 요청 모두 pathname만 사용함. URL 정규화 뒤 /ops 밖이거나
+  // 인코딩·경로 순회 가능성이 있는 문자는 프록시하지 않음
+  if (!/^\/ops(?:\/[A-Za-z0-9._~-]+)*\/?$/.test(incoming.pathname)) {
+    return null;
+  }
+  const target = new URL(proxyOrigin);
+  target.pathname = incoming.pathname;
+  target.search = incoming.search;
+  return target;
+}
+
+async function proxyOps(req, res, target) {
   const chunks = [];
   for await (const chunk of req) chunks.push(chunk);
   const headers = { ...req.headers };
   delete headers.host;
-  const upstream = await fetch(new URL(req.url, OPS_PROXY), {
+  const upstream = await fetch(target, {
     method: req.method,
     headers,
     body: chunks.length > 0 ? Buffer.concat(chunks) : undefined,
+    redirect: "manual",
   });
+  // redirect: "manual"이라 3xx를 그대로 돌려주므로 Location도 함께 넘김(없으면 브라우저가 갈 곳을 모름)
+  const location = upstream.headers.get("location");
   res.writeHead(upstream.status, {
     "content-type": upstream.headers.get("content-type") ?? "application/json",
     "cache-control": "no-store",
+    ...(location ? { location } : {}),
   });
   res.end(Buffer.from(await upstream.arrayBuffer()));
 }
@@ -77,10 +116,14 @@ async function proxyOps(req, res) {
 const isMain =
   process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
 
+// 서버를 띄울 때만 검사함(헤더 값만 가져가는 테스트가 개발자 환경의 OPS_PROXY 값 때문에 깨지지 않게)
+const OPS_PROXY = isMain ? validateOpsProxyOrigin(process.env.OPS_PROXY) : null;
+
 if (isMain)
   createServer(async (req, res) => {
-    if (OPS_PROXY && req.url?.startsWith("/ops/")) {
-      await proxyOps(req, res).catch(() => {
+    const proxyTarget = buildOpsProxyTarget(req.url, OPS_PROXY);
+    if (proxyTarget) {
+      await proxyOps(req, res, proxyTarget).catch(() => {
         res.writeHead(502);
         res.end();
       });
@@ -100,4 +143,6 @@ if (isMain)
       "content-type": TYPES[path.extname(file)] ?? "application/octet-stream",
     });
     res.end(await readFile(file));
-  }).listen(PORT, () => console.log(`admin static http://localhost:${PORT}`));
+  }).listen(PORT, "127.0.0.1", () =>
+    console.log(`admin static http://127.0.0.1:${PORT}`),
+  );
