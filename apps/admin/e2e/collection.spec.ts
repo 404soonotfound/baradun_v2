@@ -72,11 +72,13 @@ test("출처별 상태(시안 V9·VM2): 정상·일부 실패·기록 없음을 
   await expect(sourceRow(page, "국립해양조사원 이안류")).toContainText(
     "기록 없음",
   );
+  // 날씨 예보(BRD-181)도 기록이 없으면 '기록 없음'(정상으로 보지 않음)
+  await expect(sourceRow(page, "기상청 날씨 예보")).toContainText("기록 없음");
   await expect(sourceRow(page, "해양수산부 운영 기간")).toContainText(
     "수집하지 않음",
   );
   // 요약: 정상은 마지막 실행이 모두 성공한 출처만(해상 특보·사진)
-  await expect(page.getByText("2/4", { exact: true })).toBeVisible();
+  await expect(page.getByText("2/5", { exact: true })).toBeVisible();
   await expect(
     page.getByRole("img", { name: "최근 24시간 96회 중 95회 성공" }),
   ).toHaveCount(1);

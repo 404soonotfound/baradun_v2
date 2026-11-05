@@ -6,6 +6,7 @@ import { CATALOG_JOB } from "../collectors/catalog";
 import { OCEAN_JOB } from "../collectors/ocean";
 import { RIP_JOB } from "../collectors/rip";
 import { WARNINGS_JOB } from "../collectors/warnings";
+import { WEATHER_JOB } from "../collectors/weather";
 import type { AuthDependencies } from "./auth";
 import {
   COLLECTION_JOBS,
@@ -78,6 +79,7 @@ describe("수집 현황 집계", () => {
       WARNINGS_JOB,
       OCEAN_JOB,
       RIP_JOB,
+      WEATHER_JOB,
       CATALOG_JOB,
     ]);
   });
