@@ -169,6 +169,18 @@
       "groupMissing": "No value ({metrics})",
       "noStationNext": "Check the badge above for warning info"
     },
+    "activityEmpty": {
+      "title": "No beaches have confirmed {activity} yet",
+      "body": "We only show activities confirmed by public data for each beach. Once {activity} information is added, beaches will appear as cards like the one below.",
+      "bodyWide": "We only show activities confirmed by public data for each beach. Once {activity} information is added, beaches will appear in this list as cards like the ones on the right.",
+      "how": "How is activity information confirmed?",
+      "preview": "What it will look like",
+      "picture": {
+        "swimming": "Today's weather",
+        "surfing": "Last 24 hours of wave height",
+        "scuba": "Wind ahead"
+      }
+    },
     "card": {
       "seconds": "s",
       "directionFrom": "Waves from {dir}",

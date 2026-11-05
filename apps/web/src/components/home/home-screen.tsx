@@ -4,6 +4,7 @@ import { useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 
 import { ActivityTiles } from "@/components/activity-tiles";
+import { ActivityEmpty } from "@/components/home/activity-empty";
 import { FirstVisitCard } from "@/components/home/first-visit-card";
 import { GuideLink } from "@/components/home/guide-link";
 import { HeroWaves, HomeSky } from "@/components/home/home-sky";
@@ -22,7 +23,7 @@ import { SampleNote } from "@/components/sample-note";
 import { SituationBanner } from "@/components/situation-banner";
 import { KmaSourceNote } from "@/components/source-note";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useActivity } from "@/lib/activity";
+import { type Activity, useActivity } from "@/lib/activity";
 import type { BeachSummary } from "@/lib/beach-summary";
 import { useRecent } from "@/lib/favorites";
 import { distanceKm, sortByDistance } from "@/lib/geo";
@@ -396,6 +397,12 @@ export function HomeScreen({
             byList={byList}
             byRegion={region !== null}
             snapshot={snapshot}
+            activity={activity}
+            // 고른 활동이 확인된 해변이 전국에 한 곳도 없음(수영은 전체 해변이라 해당 없음)
+            activityEmpty={
+              activity !== "swimming" &&
+              !beaches.some((beach) => beach.activities.includes(activity))
+            }
           />
           {/* 지역·전국 해변 상태별 개수(모바일, 가까운 바다에서는 없음). PC는 히어로 상태 요약이 같은 일을 함
               게시된 분류 그대로 셈(G1) */}
@@ -503,6 +510,8 @@ function NearContent({
   byList,
   byRegion,
   snapshot,
+  activity,
+  activityEmpty,
 }: {
   locale: Locale;
   status: LocationState["status"];
@@ -510,6 +519,8 @@ function NearContent({
   byList: boolean; // 지역·전국(이름 순 목록)
   byRegion: boolean; // 시·도·시·군을 고름(빈 목록 문구가 다름)
   snapshot: SnapshotState;
+  activity: Activity;
+  activityEmpty: boolean;
 }) {
   const t = useTranslations("home");
 
@@ -531,6 +542,9 @@ function NearContent({
   }
 
   // [9] 위치가 있거나 지역·전국이면 카드 목록
+  if (shown.length === 0 && activityEmpty) {
+    return <ActivityEmpty locale={locale} activity={activity} />;
+  }
   if (shown.length === 0) {
     return (
       <p className="text-body-s text-text-muted">
