@@ -91,6 +91,12 @@ function num(raw: unknown, min: number, max: number): number | null {
   return Number.isFinite(v) && v >= min && v <= max ? v : null;
 }
 
+// 기상청 결측 표기(-998.9·-999 같은 -900 이하, 900 이상). 범위 밖 값과 달리 '값 없음'을 기상청이 알린 것
+const isMissingMarker = (raw: unknown) => {
+  const v = num(raw, -Infinity, Infinity);
+  return v !== null && (v <= -900 || v >= 900);
+};
+
 // 항목별 허용 범위. 하늘(SKY) 1 맑음·3 구름많음·4 흐림, 강수형태(PTY) 0 없음·1 비·2 비/눈·3 눈·4 소나기
 const temperature = (raw: unknown) => num(raw, -50, 50);
 const codeIn = (raw: unknown, allowed: readonly number[]) => {
@@ -205,6 +211,11 @@ export function parseNow(
   const t1h = env.value.find(
     (item) => isObject(item) && item.category === "T1H",
   ) as Record<string, unknown> | undefined;
+  // 기상청이 결측으로 표시한 기온(-999·900 이상)은 받지 못한 것과 나눔: 그 격자에 실황 분석값이 없다는 뜻(BRD-186)
+  // 2026-11-05 11·12시 실호출: 삼척해수욕장 격자 98,126은 모든 항목이 -998~-999, 옆 격자 97,127은 정상
+  if (t1h && isMissingMarker(t1h.obsrValue)) {
+    return { status: "failed", reason: "t1h_missing" };
+  }
   const value = t1h ? temperature(t1h.obsrValue) : null;
   if (value === null) return { status: "failed", reason: "no_t1h" };
   return {

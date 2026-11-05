@@ -447,6 +447,63 @@ describe("collectWeather", () => {
     ).toMatchObject({ retried: 20, recovered: 0 });
   });
 
+  const NOW_MISSING = NOW_0900.replace(
+    /"category":"T1H",("nx":93,"ny":133,)"obsrValue":"[^"]*"/,
+    '"category":"T1H",$1"obsrValue":"-999"',
+  );
+
+  it("실황 기온이 기상청 결측(-999)이면 실패로 치지 않고 다시 받지 않으며 곳만 남김", async () => {
+    const state = new MemoryStateStore();
+    await collectWeather(setup({ state }).deps);
+    const s = setup({ state, now: "2026-11-05T01:15:00Z" });
+    sequence(s, {
+      getUltraSrtNcst: [NOW_MISSING.replaceAll('"0900"', '"1000"')],
+    });
+    expect(await collectWeather(s.deps)).toMatchObject({ status: "complete" });
+    expect(calls(s.urls, "getUltraSrtNcst")).toBe(1);
+    // 이전 실황은 덮지 않음(오래되면 publisher가 null로 거름)
+    expect((await stored(state)).now!["93,133"]!.observedAt).toBe(
+      "2026-11-05T00:00:00Z",
+    );
+    expect(
+      s.events().find((e) => e.event === "weather_now_missing"),
+    ).toMatchObject({ target: "93,133" });
+    expect(
+      s.events().find((e) => e.event === "weather_run_finished"),
+    ).toMatchObject({ status: "complete", nowMissing: 1 });
+  });
+
+  it("일시 오류로 다시 받은 실황이 결측이어도 실패로 치지 않음", async () => {
+    const s = setup();
+    sequence(s, { getUltraSrtNcst: [RESULT("01"), NOW_MISSING] });
+    expect(await collectWeather(s.deps)).toMatchObject({ status: "complete" });
+    expect(calls(s.urls, "getUltraSrtNcst")).toBe(2);
+  });
+
+  it("결측 실황 격자가 10곳 이상이면 기상청 쪽 문제로 보고 실패로 남김", async () => {
+    const s = setup();
+    s.deps.areas = {
+      ...AREAS,
+      grids: Array.from({ length: 10 }, (_, i) => ({ nx: 93, ny: 133 + i })),
+    };
+    s.deps.get = async (url: string) => {
+      s.urls.push(url);
+      const p = new URL(url).searchParams;
+      if (op(url) === "getUltraSrtNcst") {
+        return ok(NOW_MISSING.replaceAll('"ny":133', `"ny":${p.get("ny")}`));
+      }
+      return ok(REAL[op(url)] as string);
+    };
+    const result = await collectWeather(s.deps);
+    expect(
+      (result as { failures: readonly unknown[] }).failures,
+    ).toContainEqual({
+      source: "now",
+      reason: "t1h_missing",
+      count: 10,
+    });
+  });
+
   it("같은 슬롯을 이미 끝냈으면 건너뜀", async () => {
     const state = new MemoryStateStore();
     const first = setup({ state });
