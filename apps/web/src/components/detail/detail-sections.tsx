@@ -19,6 +19,9 @@ import { useBadgeText } from "@/lib/snapshot/use-badge-text";
 import { useMetaText } from "@/lib/snapshot/use-meta-text";
 import { useTimeText } from "@/lib/snapshot/use-time-text";
 import type { BeachView, MetricKey } from "@/lib/snapshot/view";
+import type { WeatherView } from "@/lib/snapshot/weather";
+import { midIssuedAt } from "@/lib/weather";
+import { midLandName } from "@/lib/weather-zones";
 
 // 장소 상세 아래쪽 묶음 (BRD-32 · 노션 2장 DET 7·8, 3장 Call119·SourceList)
 // 주변 특보(정보만) → 긴급신고 119 → 정보 출처 + '정보가 실제와 달라요' / 하단 즐겨찾기·길찾기
@@ -163,6 +166,7 @@ export function SourceList({
   warningZones,
   nowMs,
   kmaSource,
+  weather,
   compact = false,
 }: {
   locale: Locale;
@@ -173,6 +177,7 @@ export function SourceList({
   warningZones: Beach["warningZones"]; // 특보 행: 해변 특보구역 이름(D18-11)
   nowMs: number;
   kmaSource: boolean; // 받은 실제 상태가 있음(showsKmaSource)
+  weather?: WeatherView; // 날씨 행(BRD-185 · D18-1). 단기예보를 받았을 때만 행을 둠
   compact?: boolean;
 }) {
   const t = useTranslations();
@@ -290,6 +295,31 @@ export function SourceList({
             })
           : agencyText(rip.source),
       time: issuedAtText(rip.publishedAt, nowMs),
+    });
+  }
+
+  // 날씨(참고 정보, D18-1): '기상청 단기예보(해변 위치 5km 격자) · 4일째부터 기상청 중기예보(구역)' + 발표 시각
+  // 단기예보를 받았을 때만. 중기예보를 받지 못했으면 중기 쪽 이름·시각을 빼(받지 않은 출처를 적지 않음)
+  const short = weather?.kind === "ready" ? weather.grid.short : null;
+  if (weather?.kind === "ready" && short) {
+    const midAt = midIssuedAt(weather.midLand);
+    const zone = midAt
+      ? midLandName(weather.midLandId, weather.midLand?.name ?? null, locale)
+      : null;
+    const times = [
+      kstStamp(short.issuedAt, nowMs),
+      midAt && kstStamp(midAt, nowMs),
+    ]
+      .filter((v): v is string => Boolean(v))
+      .join(" · ");
+    rows.push({
+      key: "weather",
+      label: t("detail.sources.weather"),
+      main: joinMeta([
+        t("detail.sources.weatherShort"),
+        zone && t("detail.sources.weatherMid", { zone }),
+      ]),
+      time: times ? t("detail.sources.weatherIssued", { times }) : null,
     });
   }
 

@@ -20,6 +20,7 @@ import { SeaCard, StatGrid } from "@/components/detail/sea-card";
 import { ShareButton } from "@/components/detail/share-button";
 import { DetailSheet } from "@/components/detail/detail-sheet";
 import { VerdictCard } from "@/components/detail/verdict-card";
+import { WeatherCard } from "@/components/detail/weather-card";
 import { SampleNote } from "@/components/sample-note";
 import { SituationBanner } from "@/components/situation-banner";
 import { WarningSheet } from "@/components/warning-sheet";
@@ -37,6 +38,7 @@ import { formatKm } from "@/lib/meta-join";
 import { pickSituation, noConfirmedVerdict } from "@/lib/situation";
 import { deriveDetail, warningSourceOf } from "@/lib/snapshot/detail";
 import { useSnapshot } from "@/lib/snapshot/use-snapshot";
+import { useBeachWeather } from "@/lib/snapshot/weather";
 import { deriveBeachView } from "@/lib/snapshot/view";
 import { useOnline } from "@/lib/use-online";
 import { useSheet } from "@/lib/use-sheet";
@@ -96,6 +98,8 @@ export function DetailScreen({
   const detail = deriveDetail(beach.id, view, snapshot);
   // 기상청 출처(줄·기관 이름)는 받은 실제 상태가 있을 때만(BRD-113, 개발용 예시 제외)
   const kmaSource = showsKmaSource(snapshot, sampleSnapshot);
+  // 참고 날씨(BRD-185, D18-1). 분류·대안 해변에 쓰지 않음(G1)
+  const weather = useBeachWeather(beach.id);
 
   // 대안 해변: 지금 보는 해변이 '특보 없음'이 아닐 때만(가까운 순, 사용자 위치와 무관)
   // B5(오프라인·만료)에는 다른 해변도 '특보 없음'을 확인할 수 없어 카드를 두지 않음
@@ -154,6 +158,7 @@ export function DetailScreen({
     warningZones: beach.warningZones,
     nowMs: snapshot.nowMs,
     kmaSource,
+    weather,
   };
 
   const Chevron = expanded ? ChevronUp : ChevronDown;
@@ -371,6 +376,13 @@ export function DetailScreen({
             view={view}
             stations={beach.stations}
             ripCurrent={detail.ripCurrent}
+            nowMs={snapshot.nowMs}
+          />
+          {/* 날씨: 모바일은 수온·바람 칸 다음, PC는 '지금 바다' 다음(시안 D안 · 노션 2장 DET 6-1) */}
+          <WeatherCard
+            weather={weather}
+            region={region}
+            locale={locale}
             nowMs={snapshot.nowMs}
           />
           <Call119 />

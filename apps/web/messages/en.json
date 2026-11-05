@@ -340,7 +340,11 @@
       "waterTemp": "Water temp",
       "ripCurrent": "Rip current",
       "ripCredit": "<link>KHOA “Rip Current Index”</link> · KOGL Type 1",
-      "inquiry": "Info doesn't match reality"
+      "inquiry": "Info doesn't match reality",
+      "weather": "Weather",
+      "weatherShort": "KMA short-range forecast (5 km grid at the beach)",
+      "weatherMid": "KMA medium-range forecast ({zone}) from day 4",
+      "weatherIssued": "Issued {times}"
     },
     "cta": {
       "favorite": "Favorite",
@@ -348,7 +352,43 @@
       "directionsSecondary": "Directions to the beach",
       "newWindow": "Kakao Map, new window"
     },
-    "regionFromMe": "{region} · {km}km from you"
+    "regionFromMe": "{region} · {km}km from you",
+    "weather": {
+      "title": "Weather",
+      "now": "Now <b>{temperature}°C</b> · as of {time}",
+      "issued": "{region} · KMA short-range forecast · issued {time} · every 3 hours",
+      "day": {
+        "0": "Today",
+        "1": "Tomorrow",
+        "2": "In 2 days"
+      },
+      "hour": "{hour}:00",
+      "wind": "<b>Wind m/s</b> · arrows point where the wind blows",
+      "cell": "{day} {hour}, {sky}, temperature {temperature}, chance of rain {pop}, wind {wind}",
+      "temperature": "{value}°C",
+      "pop": "{value}%",
+      "windSpeed": "{value} m/s",
+      "noValue": "no data",
+      "skyUnknown": "sky unknown",
+      "sky": {
+        "clear": "Clear",
+        "mostlyCloudy": "Mostly cloudy",
+        "cloudy": "Cloudy",
+        "rain": "Rain",
+        "shower": "Showers",
+        "snow": "Snow",
+        "rainSnow": "Rain or snow"
+      },
+      "more": "Show the next {count} days",
+      "less": "Hide later days",
+      "laterHead": "<b>{range}</b> · daily low / high",
+      "dayCell": "{weekday} {date}, {sky}, chance of rain {pop}, low {min}, high {max}",
+      "midFailedTitle": "Couldn't check the later days",
+      "midFailedBody": "We didn't receive the KMA medium-range forecast. The forecast above is still shown.",
+      "failed": "<b>Couldn't check the weather.</b> We didn't receive the KMA forecast. Warnings and measurements above are unaffected.",
+      "loading": "Loading the weather",
+      "note": "Weather is for reference only. It isn't used to check warnings."
+    }
   },
   "photo": {
     "alt": "Photo of {name}",
