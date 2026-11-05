@@ -112,7 +112,9 @@ test.describe("활동으로 거르지 않음", () => {
     await page.goto("/explore/");
     await expect(countText(page)).toBeVisible();
     // 활동 칩 묶음·활동 안내 문구 없음
-    await expect(page.getByRole("group", { name: "활동" })).toHaveCount(0);
+    await expect(
+      page.getByRole("group", { name: "어떤 활동을 찾아볼까요?" }),
+    ).toHaveCount(0);
     await expect(page.getByText(/활동 정보가 확인된/)).toHaveCount(0);
 
     // 검색 범위도 지역만("서핑 · 강원 강릉시"가 아님). 수영만 있는 강문해변도 찾음
