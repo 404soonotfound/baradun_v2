@@ -5,11 +5,11 @@ import Link from "next/link";
 import { useTranslations } from "next-intl";
 
 import { SkyGlyph } from "@/components/detail/weather-card";
-import { MiniWaveChart } from "@/components/home/mini-wave-chart";
+import { MiniWaveSvg } from "@/components/home/mini-wave-chart";
 import { ReasonBadge } from "@/components/reason-badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { WindArrow } from "@/components/weather/wind-row";
-import { type Activity, useActivity } from "@/lib/activity";
+import type { Activity } from "@/lib/activity";
 import type { BeachSummary } from "@/lib/beach-summary";
 import { compassPoint } from "@/lib/direction";
 import { localizedPath, type Locale } from "@/lib/i18n";
@@ -55,22 +55,23 @@ export const CARD_LAYOUT: Record<Activity, CardLayout> = {
   scuba: { big: ["waveHeight", "wind"], line: ["waterTemp", "waveDirection"] },
 };
 
-// [1] Vue: props: { locale, beach, distanceKm, view, nowMs }
+// [1] Vue: props: { locale, beach, distanceKm, view, nowMs, activity }
 export function NearCard({
   locale,
   beach,
   distanceKm,
   view,
   nowMs,
+  activity,
 }: {
   locale: Locale;
   beach: BeachSummary;
   distanceKm: number | null; // 위치가 없으면 null(거리 대신 지역)
   view: BeachView;
   nowMs: number;
+  activity: Activity; // 고른 활동(부르는 쪽이 정함)
 }) {
   const t = useTranslations();
-  const activity = useActivity();
   const { confirmedUntilText } = useBadgeText();
   const { zonesText } = useMetaText();
   const layout = CARD_LAYOUT[activity];
@@ -471,12 +472,7 @@ function WaveStrip({
   return (
     <PictureBox>
       <span className="flex h-[49px] w-full flex-col justify-between">
-        <MiniWaveChart
-          stationId={stationId}
-          latest={latest}
-          nowMs={nowMs}
-          className="h-9"
-        />
+        <MiniWaveSvg chart={chart} className="h-9" />
         <span
           aria-hidden="true"
           className="flex justify-between text-[10.5px] leading-none text-text-muted"

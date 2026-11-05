@@ -66,7 +66,7 @@ import { useSheet } from "@/lib/use-sheet";
 // 홈 (BRD-26·27·28 · 노션 2장 HOME/D-HOME, Figma S_M01_01~06·S_D07_01)
 // 페이지(서버)가 빌드 때 만든 해변 목록을 props로 받고, 나머지(활동·위치·지역·최근 본·바다 정보)는 브라우저에서 읽음
 // 모바일 순서: 상단 줄 → 제목 → 상황 배너 → 활동 타일 → 최근 본/처음 → 가까운 바다(또는 강원·전국 바다 + 상태별 개수) → 해상 특보 → 안내
-// PC(lg, Figma S_D07_01 181:736): 바다 띠(지역 · 한 줄 제목 · 요약 · 활동 타일 · 상태 요약 3장) → 가까운 바다 4장
+// PC(lg, 11/5 홈 v3 시안): 바다 띠(왼쪽 지역 · 한 줄 제목 · 요약 · 활동 타일 | 오른쪽 '지금 전국 바다' 지도 카드) → 가까운 바다 4장
 //   → 해상 특보 · 최근 본 · 안내(상황 배너 + 안내) 3단. 같은 부품을 한 번만 그리고 배치만 다름(BRD-129)
 // 지역(BRD-27 · 10/27 결정): 고른 지역이 있으면 위치와 관계없이 그 지역 해변(이름 순, 위치가 있으면 거리도)
 // 전국(BRD-127 · 10/29 사용자 요청): 시트에서 고르면 위치와 관계없이 공개 해변 전체(지역과 같은 규칙)
@@ -173,13 +173,15 @@ export function HomeScreen({
         (activity === "swimming" || beach.activities.includes(activity)),
     );
   }, [byList, regionBeaches, nearestPlace, beaches, activity]);
-  // PC 전국 지도 카드: 공개 해변 전체의 화면 상태 + 큰 점(지금 보는 범위, 전국이면 없음)
-  // 모바일은 지도 카드가 없어 계산하지 않음
-  const allViews = desktop
-    ? beaches.map((beach) =>
+  // 공개 해변 전체의 화면 상태. 확인된 판단 없음 배너와 PC 전국 지도 카드가 같이 씀(한 번만 계산)
+  const allViews = useMemo(
+    () =>
+      beaches.map((beach) =>
         deriveBeachView({ id: beach.id, hidden: false }, snapshot),
-      )
-    : [];
+      ),
+    [beaches, snapshot],
+  );
+  // PC 전국 지도 카드의 큰 점(지금 보는 범위, 전국이면 없음)
   const highlightIds = useMemo(
     () =>
       new Set(
@@ -213,11 +215,7 @@ export function HomeScreen({
     delayed,
     locationOff: locationOff && !offBannerClosed,
     // 확인된 판단 없음은 노출 중인 전체 해변으로 봄(지역·활동과 무관, BRD-38)
-    noConfirmed: noConfirmedVerdict(
-      beaches.map((beach) =>
-        deriveBeachView({ id: beach.id, hidden: false }, snapshot),
-      ),
-    ),
+    noConfirmed: noConfirmedVerdict(allViews),
     // 운영자 공지(BRD-151): 시작 포함·끝 제외, 서버 시각을 알 때만. 끝 시각에 store가 다시 계산해 숨김
     notice: activeNotice(
       snapshot.manifest?.notices,
@@ -436,8 +434,8 @@ export function HomeScreen({
               !beaches.some((beach) => beach.activities.includes(activity))
             }
           />
-          {/* 지역·전국 해변 상태별 개수(모바일, 가까운 바다에서는 없음). PC는 히어로 상태 요약이 같은 일을 함
-              게시된 분류 그대로 셈(G1) */}
+          {/* 지역·전국 해변 상태별 개수(모바일, 가까운 바다에서는 없음). 게시된 분류 그대로 셈(G1)
+              PC의 지역 개수는 해변 묶음 패널 머리 줄이 맡음 */}
           {/* Figma 171:818: 가까운 바다 카드와 개수 카드 사이 20(묶음 간격 10 + 10) */}
           {!desktop && byList && name && regionBeaches.length > 0 && (
             <div className="mt-2.5">
@@ -595,6 +593,7 @@ function NearContent({
             distanceKm={beach.distanceKm}
             view={deriveBeachView({ id: beach.id, hidden: false }, snapshot)}
             nowMs={snapshot.nowMs}
+            activity={activity}
           />
         </li>
       ))}

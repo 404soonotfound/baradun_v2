@@ -247,11 +247,6 @@
     "hero": {
       "summary": "Warnings and measurements for {count, plural, one {# beach} other {# beaches}} in {region}",
       "updated": "Updated {time}",
-      "category": {
-        "clear": "No warnings",
-        "unavailable": "Unavailable",
-        "undetermined": "Cannot determine"
-      },
       "count": "{count, plural, one {# beach} other {# beaches}}",
       "clearScope": "Each beach's warning zone · KMA · checked {time}",
       "clearScopeNoTime": "Each beach's warning zone · KMA · check time unknown"
