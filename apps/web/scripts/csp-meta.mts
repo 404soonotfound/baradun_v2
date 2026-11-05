@@ -28,6 +28,7 @@ export function listHtmlFiles(dir: string): string[] {
 }
 
 // 인라인 <script> 본문들의 sha256 해시 목록 계산 ('sha256-<base64>' 형식)
+// 앱끼리 코드를 공유하지 않아(ADR 0001) apps/admin/scripts/check-out.mts inlineScriptHashes와 같은 순회를 따로 둠. 한쪽을 고치면 다른 쪽도 같이 고침
 export function extractInlineScriptHashes(html: string): string[] {
   const hashes = new Set<string>();
   const document = parse(html);
