@@ -192,7 +192,8 @@ export function NearCard({
           {beach.name}
         </span>
         {meta && (
-          <span className="truncate text-caption text-text-muted">{meta}</span>
+          // 지표별 측정 시각이 잘리지 않게 줄을 바꿈
+          <span className="text-caption text-text-muted">{meta}</span>
         )}
       </span>
 
