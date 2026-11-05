@@ -56,8 +56,9 @@ export function skyWord(
   precip: string | null,
 ): SkyWord | null {
   if (precip !== null && PRECIP.has(precip)) return precip as SkyWord;
-  // 강수 값이 모르는 글자면 하늘로 대신하지 않음(비가 오는데 맑음으로 보일 수 있음)
-  if (precip !== null && precip !== "none") return null;
+  // 강수 값이 없거나(null) 모르는 글자면 하늘로 대신하지 않음(비가 오는데 맑음으로 보일 수 있음)
+  // publisher는 PTY가 빠지면 precip null로 게시함 → '강수 없음'이 확인된 칸만 하늘 값을 씀
+  if (precip !== "none") return null;
   return sky !== null && SKY.has(sky) ? (sky as SkyWord) : null;
 }
 
@@ -173,12 +174,12 @@ export function laterDays(
         max: t?.max ?? null,
       };
     });
-  const received = mid.filter(
-    (d) =>
-      d.word !== null || d.pop !== null || d.min !== null || d.max !== null,
-  );
-  // 기온 지점만 못 받아도 중기예보를 못 받은 것으로 봄(최저·최고가 이유 없이 '–'로만 보이지 않게)
-  const midFailed = midLand === null || midTa === null || received.length === 0;
+  // 구역(하늘·강수확률)과 기온 지점(최저·최고)을 따로 봄. 둘 중 하나라도 받은 날이 없으면 중기예보를 못 받은 것
+  // publisher는 기온 수집만 실패해도 날짜별 값이 모두 null인 기온 지점을 게시함(그 경우도 안내)
+  const landReceived = mid.some((d) => d.word !== null || d.pop !== null);
+  const taReceived = mid.some((d) => d.min !== null || d.max !== null);
+  const midFailed =
+    midLand === null || midTa === null || !landReceived || !taReceived;
   return {
     days: [...days, ...(midFailed ? [] : mid)].slice(0, 4),
     midFailed,

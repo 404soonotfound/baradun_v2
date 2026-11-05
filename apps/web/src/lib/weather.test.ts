@@ -45,6 +45,8 @@ describe("skyWord·skyIcon", () => {
     expect(skyWord("sunny", "none")).toBeNull();
     // 강수 값을 모르면 하늘로 대신하지 않음(비가 오는데 맑음으로 보일 수 있음)
     expect(skyWord("clear", "hail")).toBeNull();
+    // 강수 값이 빠진 칸(PTY 결측)도 맑음으로 그리지 않음
+    expect(skyWord("clear", null)).toBeNull();
     expect(skyIcon(null, false)).toBe("unknown");
   });
 });
@@ -125,6 +127,17 @@ describe("laterDays", () => {
 
   it("중기 구역·기온 지점이 없거나 받은 값이 하나도 없으면 중기만 실패", () => {
     expect(laterDays(short, land, null, NOW).midFailed).toBe(true);
+    // 기온 지점이 게시됐지만 값이 모두 null(기온 수집만 실패) → 안내
+    const taEmpty: MidTaForecast = {
+      ...ta,
+      days: ta.days.map((d) => ({
+        ...d,
+        issuedAt: null,
+        min: null,
+        max: null,
+      })),
+    };
+    expect(laterDays(short, land, taEmpty, NOW).midFailed).toBe(true);
     expect(laterDays(short, null, null, NOW)).toMatchObject({
       midFailed: true,
       days: [{ date: "2026-11-08" }],
@@ -138,7 +151,8 @@ describe("laterDays", () => {
         precip: null,
       })),
     };
-    expect(laterDays(short, empty, null, NOW).midFailed).toBe(true);
+    // 구역 예보가 모두 결측이고 기온만 있어도 안내
+    expect(laterDays(short, empty, ta, NOW).midFailed).toBe(true);
   });
 
   it("글피 칸이 없을 때(KST 00:00~02:10)는 중기 3일만", () => {
