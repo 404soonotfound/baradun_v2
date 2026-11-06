@@ -4,7 +4,10 @@ import { useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 
 import { ActivityTiles } from "@/components/activity-tiles";
-import { ActivityEmpty } from "@/components/home/activity-empty";
+import {
+  type ActivityAlternative,
+  ActivityEmpty,
+} from "@/components/home/activity-empty";
 import { FirstVisitCard } from "@/components/home/first-visit-card";
 import { GuideLink } from "@/components/home/guide-link";
 import { HeroWaves, HomeSky } from "@/components/home/home-sky";
@@ -23,7 +26,12 @@ import { SampleNote } from "@/components/sample-note";
 import { SituationBanner } from "@/components/situation-banner";
 import { KmaSourceNote } from "@/components/source-note";
 import { Skeleton } from "@/components/ui/skeleton";
-import { type Activity, useActivity } from "@/lib/activity";
+import {
+  ACTIVITIES,
+  type Activity,
+  setActivity,
+  useActivity,
+} from "@/lib/activity";
 import type { BeachSummary } from "@/lib/beach-summary";
 import { useRecent } from "@/lib/favorites";
 import { distanceKm, sortByDistance } from "@/lib/geo";
@@ -191,6 +199,51 @@ export function HomeScreen({
       ),
     [scope.kind, summaryBeaches],
   );
+
+  // 대신 찾아보기(노션 D18-6): 같은 활동이 전국에 있으면 '전국 ○○ 해변'이 먼저, 그다음 같은 범위의 다른 활동 해변
+  // 활동·범위만 바꿈(판단은 그대로). 0곳인 줄은 두지 않음. 가까운 바다로 볼 때는 개수 없이 활동만
+  const activityName = (act: Activity) =>
+    tRoot(act === "scuba" ? "activity.scubaFull" : `activity.${act}`);
+  const alternatives: ActivityAlternative[] = [];
+  if (activity !== "swimming") {
+    const nationwideCount = beaches.filter((beach) =>
+      beach.activities.includes(activity),
+    ).length;
+    if (scope.kind !== "nationwide" && nationwideCount > 0) {
+      alternatives.push({
+        key: "nationwide",
+        label: t("activityEmpty.altNationwide", {
+          activity: activityName(activity),
+          count: nationwideCount,
+        }),
+        onSelect: () => setRegion(NATIONWIDE),
+      });
+    }
+    for (const other of ACTIVITIES) {
+      if (other === activity) continue;
+      if (scope.kind === "nearby") {
+        alternatives.push({
+          key: other,
+          label: t("activityEmpty.altNearby", {
+            activity: activityName(other),
+          }),
+          onSelect: () => setActivity(other),
+        });
+        continue;
+      }
+      const count = scopeBeaches(beaches, scope, other).length;
+      if (count === 0) continue;
+      alternatives.push({
+        key: other,
+        label: t("activityEmpty.altScoped", {
+          activity: activityName(other),
+          place: name ?? t("nationwide.label"),
+          count,
+        }),
+        onSelect: () => setActivity(other),
+      });
+    }
+  }
 
   // [6] 홈에 보이는 해변 카드(지역·전국 → 이름 순, 위치가 있으면 거리도 / 가까운 바다 → 가까운 순)
   const shown: ShownBeach[] = byList
@@ -433,6 +486,8 @@ export function HomeScreen({
               activity !== "swimming" &&
               !beaches.some((beach) => beach.activities.includes(activity))
             }
+            place={name}
+            alternatives={alternatives}
           />
           {/* 지역·전국 해변 상태별 개수(모바일, 가까운 바다에서는 없음). 게시된 분류 그대로 셈(G1)
               PC의 지역 개수는 해변 묶음 패널 머리 줄이 맡음 */}
@@ -542,6 +597,8 @@ function NearContent({
   snapshot,
   activity,
   activityEmpty,
+  place,
+  alternatives,
 }: {
   locale: Locale;
   status: LocationState["status"];
@@ -551,6 +608,8 @@ function NearContent({
   snapshot: SnapshotState;
   activity: Activity;
   activityEmpty: boolean;
+  place: string | null;
+  alternatives: readonly ActivityAlternative[];
 }) {
   const t = useTranslations("home");
 
@@ -572,8 +631,20 @@ function NearContent({
   }
 
   // [9] 위치가 있거나 지역·전국이면 카드 목록
-  if (shown.length === 0 && activityEmpty) {
-    return <ActivityEmpty locale={locale} activity={activity} />;
+  // 고른 활동의 해변이 없음: 전국 0곳이면 안내 + 미리보기, 지역에만 없으면 안내 한 줄. 둘 다 '대신 찾아보기'(노션 D18-6)
+  if (
+    shown.length === 0 &&
+    (activityEmpty || (byRegion && activity !== "swimming"))
+  ) {
+    return (
+      <ActivityEmpty
+        locale={locale}
+        activity={activity}
+        place={place}
+        nationwideZero={activityEmpty}
+        alternatives={alternatives}
+      />
+    );
   }
   if (shown.length === 0) {
     return (
