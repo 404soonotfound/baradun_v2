@@ -249,7 +249,10 @@ test.describe("보안 응답 헤더 및 CSP 검증 (BRD-118)", () => {
     page,
   }) => {
     await assertZeroCspViolations(page, "/", async () => {
-      const exploreLink = page.getByRole("link", { name: "탐색" });
+      const exploreLink = page.getByRole("link", {
+        name: "탐색",
+        exact: true,
+      });
       await exploreLink.click();
       await page.waitForURL("**/explore/");
 

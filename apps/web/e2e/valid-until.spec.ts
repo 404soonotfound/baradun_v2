@@ -212,11 +212,12 @@ for (const scheme of ["light", "dark"] as const) {
         );
         // PC 전국 지도 카드는 '특보 없음 0곳'만 남고 확인 시각 근거는 사라짐
         await expect(clearMapRow(page)).toHaveText(/0곳$/);
+        // 지도 카드와 패널 머리 사유별 개수 둘 다 'HH:MM 확인 · 이후 확인 못 함'
         await expect(
           visibleExactText(
             page,
             confirmedUntil(times.oldestConfirmedAt, expiredMs),
-          ),
+          ).first(),
         ).toBeVisible();
         // 화면 전체에서 '특보 없음' 글자는 PC 전국 지도 카드 묶음 이름('특보 없음 0곳') 한 곳뿐
         await expect(visibleExactText(page, CLEAR_TITLE)).toHaveCount(1);
