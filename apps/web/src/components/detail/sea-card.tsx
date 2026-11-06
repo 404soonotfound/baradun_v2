@@ -57,6 +57,11 @@ const VALUE_SIZE = {
     unit: "text-body-s",
   },
   m: { value: "text-[22px] leading-[1.45]", unit: "text-caption" },
+  // PC 5칸: 카드가 좁으면(1024 화면 → 카드 484px, @2xl 미만) 한 단계 작게 해 값과 단위가 한 줄에 들어가게
+  wide: {
+    value: "text-[22px] leading-[1.45] @2xl:text-[28px] @2xl:tracking-[-0.8px]",
+    unit: "text-caption @2xl:text-body-s",
+  },
 };
 
 export function MetricValue({
@@ -96,7 +101,8 @@ export function MetricValue({
     return (
       <span
         className={cn(
-          "font-bold text-text-default tabular-nums",
+          // 값과 단위를 나누지 않음('18.4 °' / 'C'처럼 갈라지지 않게)
+          "font-bold whitespace-nowrap text-text-default tabular-nums",
           VALUE_SIZE[size].value,
         )}
       >
@@ -315,7 +321,7 @@ function WideStats({
             <span className="text-caption text-text-muted">
               {t(`observation.metric.${key}`)}
             </span>
-            <MetricValue metric={metric} size="l" />
+            <MetricValue metric={metric} size="wide" />
             {metric.kind === "value" && (
               <span className="text-caption whitespace-nowrap text-text-muted">
                 {measuredAgoText(metric.observedAt, nowMs)}
