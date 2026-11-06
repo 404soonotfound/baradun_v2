@@ -222,6 +222,8 @@
       "viewedOn": "{month}월 {date}일 {time}에 봤어요",
       "checkedNow": "지금 다시 확인했어요",
       "titleWithActivity": "{name} · {activity}",
+      "more": "{count}곳 더 보기",
+      "less": "접기",
       "emptyTitle": "아직 본 해변이 없어요",
       "emptyBody": "해변을 열어 보면 여기에서 다시 볼 수 있어요"
     },
