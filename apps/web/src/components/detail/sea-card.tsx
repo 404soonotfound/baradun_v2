@@ -46,21 +46,24 @@ export function shownStation(
   return metric.kind === "none" ? null : stations[key];
 }
 
-// 값 한 칸의 글자. size: xl 모바일 파고(40) · l PC 4칸(28) · m 모바일 2×2(22). 단위는 한 칸 띄운 보조 글자
+// 값 한 칸의 글자. size: xl 모바일 파고(40) · wide PC 5칸(28, 좁은 카드 22) · m 모바일 2×2(22)
+// 단위는 한 칸 띄운 보조 글자, empty는 값 없음("–") 칸
 const VALUE_SIZE = {
   xl: {
     value: "text-[40px] leading-none tracking-[-1.6px]",
     unit: "text-[16px]",
+    empty: "text-[28px] leading-[1.45]",
   },
-  l: {
-    value: "text-[28px] leading-[1.45] tracking-[-0.8px]",
-    unit: "text-body-s",
+  m: {
+    value: "text-[22px] leading-[1.45]",
+    unit: "text-caption",
+    empty: "text-[22px] leading-[1.45]",
   },
-  m: { value: "text-[22px] leading-[1.45]", unit: "text-caption" },
   // PC 5칸: 카드가 좁으면(1024 화면 → 카드 484px, @2xl 미만) 한 단계 작게 해 값과 단위가 한 줄에 들어가게
   wide: {
     value: "text-[22px] leading-[1.45] @2xl:text-[28px] @2xl:tracking-[-0.8px]",
     unit: "text-caption @2xl:text-body-s",
+    empty: "text-[22px] leading-[1.45] @2xl:text-[28px]",
   },
 };
 
@@ -139,16 +142,7 @@ export function MetricValue({
     );
   }
   return (
-    <span
-      className={cn(
-        "font-bold text-text-muted",
-        size === "m"
-          ? "text-[22px] leading-[1.45]"
-          : size === "wide"
-            ? "text-[22px] leading-[1.45] @2xl:text-[28px]"
-            : "text-[28px] leading-[1.45]",
-      )}
-    >
+    <span className={cn("font-bold text-text-muted", VALUE_SIZE[size].empty)}>
       <span aria-hidden="true">–</span>
       <span className="sr-only">{t("home.near.noValue")}</span>
     </span>
