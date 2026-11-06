@@ -23,11 +23,14 @@ test.describe("상세 날씨 카드", () => {
     await page.goto(DETAIL);
     const weather = card(page);
     await expect(weather).toBeVisible();
+    // 자정 직후에는 관측·발표 시각이 전날이라 날짜가 붙음(kstStamp: "11/05 23:59")
     await expect(
-      weather.getByText(/^지금 14°C · \d{2}:\d{2} 기준$/),
+      weather.getByText(/^지금 14°C · (\d{2}\/\d{2} )?\d{2}:\d{2} 기준$/),
     ).toBeVisible();
     await expect(
-      weather.getByText(/기상청 단기예보 · \d{2}:\d{2} 발표 · 3시간 간격/),
+      weather.getByText(
+        /기상청 단기예보 · (\d{2}\/\d{2} )?\d{2}:\d{2} 발표 · 3시간 간격/,
+      ),
     ).toBeVisible();
     // 칸마다 읽는 글(그림 줄은 aria-hidden)
     const cells = weather.locator("ol.sr-only > li");
