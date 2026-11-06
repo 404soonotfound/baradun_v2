@@ -63,8 +63,14 @@ export function RegionCountCard({
           </span>
         </span>
       ) : (
-        // [2] 칸 수가 지역마다 달라 grid 대신 flex로 나눔
-        <span className="flex gap-1">
+        // [2] 칸 수가 지역마다 달라 3칸까지는 한 줄로 나누고, 넘치면 3칸씩 줄바꿈(노션 D18-12, 전국 6칸 = 3칸 × 2줄)
+        <span
+          className={
+            counts.length > 3
+              ? "grid grid-cols-3 gap-x-1 gap-y-3"
+              : "flex gap-1"
+          }
+        >
           {counts.map((item) => {
             const text = badgeText(item.label);
             return (
