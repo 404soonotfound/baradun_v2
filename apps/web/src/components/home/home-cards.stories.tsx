@@ -199,7 +199,11 @@ function Board({
             beaches={MAP_BEACHES}
             views={MAP_VIEWS}
             highlightIds={new Set(["m2", "m3"])}
-            subtitle="공개 해변 11곳 · 큰 점은 강원 강릉시 해변 2곳"
+            subtitle={
+              locale === "ko"
+                ? "공개 해변 11곳 · 큰 점은 강원 강릉시 해변 2곳"
+                : "11 public beaches · large dots: 2 beaches in Gangwon Gangneung"
+            }
             nowMs={NOW}
           />
         </div>
@@ -209,7 +213,7 @@ function Board({
             beaches={MAP_BEACHES}
             views={MAP_BEACHES.map(() => ({ kind: "loading" }))}
             highlightIds={new Set()}
-            subtitle="공개 해변 11곳"
+            subtitle={locale === "ko" ? "공개 해변 11곳" : "11 public beaches"}
             nowMs={NOW}
           />
         </div>
