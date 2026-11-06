@@ -4,7 +4,6 @@ import { ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 
-import { ActivityIcon } from "@/components/activity-icon";
 import { CARD_LAYOUT } from "@/components/home/near-card";
 import type { Activity } from "@/lib/activity";
 import { cn } from "@/lib/cn";
@@ -64,7 +63,7 @@ export function ActivityEmpty({
 
   if (!nationwideZero) {
     return (
-      <div className="flex flex-col gap-3 rounded-card bg-bg-surface p-4 shadow-card lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,320px)] lg:items-start lg:gap-10 lg:px-6 lg:py-5">
+      <div className="flex flex-col gap-3 rounded-card bg-bg-surface p-4 shadow-card lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,320px)] lg:items-start lg:gap-10 lg:rounded-none lg:bg-transparent lg:p-0 lg:shadow-none">
         <p className="text-body-s text-text-body [word-break:keep-all]">
           {t("home.activityEmpty.titleScoped", {
             place: place ?? t("home.nationwide.label"),
@@ -77,14 +76,9 @@ export function ActivityEmpty({
   }
 
   return (
-    <div className="flex flex-col gap-4 rounded-card bg-bg-surface px-4 pt-[18px] pb-4 shadow-card lg:grid lg:grid-cols-[minmax(0,340px)_minmax(0,240px)_minmax(0,1fr)] lg:items-center lg:gap-8 lg:px-6 lg:py-6">
+    // PC는 해변 묶음 패널 안이라 상자를 겹치지 않음(노션 D18-6: 안쪽 상자·동그란 아이콘·꽉 찬 버튼 없음)
+    <div className="flex flex-col gap-4 rounded-card bg-bg-surface px-4 pt-[18px] pb-4 shadow-card lg:grid lg:grid-cols-[minmax(0,340px)_minmax(0,240px)_minmax(0,1fr)] lg:items-center lg:gap-8 lg:rounded-none lg:bg-transparent lg:px-0 lg:py-2 lg:shadow-none">
       <div className="flex flex-col gap-2">
-        <span
-          aria-hidden="true"
-          className="flex size-10 items-center justify-center rounded-full bg-brand-weak text-brand-default lg:size-11"
-        >
-          <ActivityIcon activity={activity} />
-        </span>
         <p className="text-title-s text-text-default [word-break:keep-all] lg:text-[19px] lg:leading-[1.4] lg:font-bold lg:tracking-[-0.3px]">
           {t("home.activityEmpty.title", { activity: name })}
         </p>
