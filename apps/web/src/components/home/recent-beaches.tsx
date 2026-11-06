@@ -20,6 +20,7 @@ import { kstStamp } from "@/lib/snapshot/clock";
 import { joinMeta } from "@/lib/meta-join";
 import { useRecentVisits, viewedTime } from "@/lib/recent-visits";
 import { useDesktop } from "@/lib/use-desktop";
+import { activityNameKey } from "@/lib/activity";
 
 // 최근 본 해변 (노션 2장 HOME 5, Figma S_M01_01) — 재방문만. 첫 방문이면 FirstVisitCard
 // 대표 1곳 카드(상태 배지) + 나머지 칩(✕로 확인 없이 지우고 토스트 '되돌리기')
@@ -128,7 +129,7 @@ export function RecentBeaches({
   const title = visit?.activity
     ? t("titleWithActivity", {
         name: first.name,
-        activity: tRoot(`activity.${visit.activity}`),
+        activity: tRoot(activityNameKey(visit.activity)),
       })
     : first.name;
   const isClear =
