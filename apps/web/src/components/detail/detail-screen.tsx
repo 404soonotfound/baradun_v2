@@ -24,7 +24,12 @@ import { WeatherCard } from "@/components/detail/weather-card";
 import { SampleNote } from "@/components/sample-note";
 import { SituationBanner } from "@/components/situation-banner";
 import { WarningSheet } from "@/components/warning-sheet";
-import { ACTIVITIES, currentActivity, useActivity } from "@/lib/activity";
+import {
+  ACTIVITIES,
+  activityNameKey,
+  currentActivity,
+  useActivity,
+} from "@/lib/activity";
 import { alternativeBeaches, isClearView } from "@/lib/alternatives";
 import { cn } from "@/lib/cn";
 import type { BeachSummary } from "@/lib/beach-summary";
@@ -230,11 +235,7 @@ export function DetailScreen({
                         beach.activities.length > 2 && "max-lg:sr-only",
                       )}
                     >
-                      {t(
-                        item === "scuba"
-                          ? "activity.scubaFull"
-                          : `activity.${item}`,
-                      )}
+                      {t(activityNameKey(item))}
                     </span>
                   </li>
                 ),

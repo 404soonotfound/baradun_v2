@@ -22,6 +22,7 @@ import { PageUnavailableNote } from "@/components/home/page-unavailable-note";
 import { RecentBeaches, RecentEmpty } from "@/components/home/recent-beaches";
 import { RegionButton } from "@/components/home/region-button";
 import { ReasonChips } from "@/components/home/reason-chips";
+import { HEAD_ACTION_CLASS } from "@/components/home/section-head";
 import { RegionCountCard } from "@/components/home/region-count-card";
 import { RegionSheet } from "@/components/region/region-sheet";
 import { SampleNote } from "@/components/sample-note";
@@ -29,11 +30,15 @@ import { SituationBanner } from "@/components/situation-banner";
 import { KmaSourceNote } from "@/components/source-note";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
-  ACTIVITIES,
   type Activity,
+  activityNameKey,
   setActivity,
   useActivity,
 } from "@/lib/activity";
+import {
+  activityAlternatives,
+  activityCount,
+} from "@/lib/activity-alternatives";
 import type { BeachSummary } from "@/lib/beach-summary";
 import { useRecent } from "@/lib/favorites";
 import { distanceKm, sortByDistance } from "@/lib/geo";
@@ -205,8 +210,10 @@ export function HomeScreen({
   );
 
   // 활동 이름(스쿠버는 '스쿠버다이빙'). 목록 제목·대신 찾아보기·지도 부제가 같이 씀
-  const activityName = (act: Activity) =>
-    tRoot(act === "scuba" ? "activity.scubaFull" : `activity.${act}`);
+  const activityName = (act: Activity) => tRoot(activityNameKey(act));
+  // 고른 활동이 확인된 해변이 전국에 한 곳도 없음(수영은 전체 해변이라 해당 없음). 빈 상태와 대신 찾아보기가 같이 씀
+  const activityEmpty =
+    activity !== "swimming" && activityCount(beaches, activity) === 0;
 
   // [6] 홈에 보이는 해변 카드(지역·전국 → 이름 순, 위치가 있으면 거리도 / 가까운 바다 → 가까운 순)
   const withDistance = (beach: BeachSummary): ShownBeach => ({
@@ -221,57 +228,40 @@ export function HomeScreen({
     : nearest;
 
   // 대신 찾아보기(노션 D18-6): 같은 활동이 전국에 있으면 '전국 ○○ 해변'이 먼저, 그다음 같은 범위의 다른 활동 해변
-  // 활동·범위만 바꿈(판단은 그대로). 0곳인 줄은 두지 않음. 가까운 바다로 볼 때는 개수 없이 활동만(전국에 있는 활동만)
-  // 빈 상태일 때만 셈(목록이 있으면 쓰지 않음). 고르면 버튼이 사라지므로 포커스를 묶음 제목으로 옮김
+  // 활동·범위만 바꿈(판단은 그대로). 고르면 버튼이 사라지므로 포커스를 묶음 제목으로 옮김
   const pickAlternative = (apply: () => void) => () => {
     apply();
     document.getElementById("home-near")?.focus();
   };
-  const alternatives: ActivityAlternative[] = [];
-  if (activity !== "swimming" && shown.length === 0) {
-    const nationwideCount = beaches.filter((beach) =>
-      beach.activities.includes(activity),
-    ).length;
-    if (scope.kind !== "nationwide" && nationwideCount > 0) {
-      alternatives.push({
-        key: "nationwide",
-        label: t("activityEmpty.altNationwide", {
-          activity: activityName(activity),
-          count: nationwideCount,
-        }),
-        onSelect: pickAlternative(() => setRegion(NATIONWIDE)),
-      });
-    }
-    for (const other of ACTIVITIES) {
-      if (other === activity) continue;
-      if (scope.kind === "nearby") {
-        if (
-          other !== "swimming" &&
-          !beaches.some((beach) => beach.activities.includes(other))
-        )
-          continue;
-        alternatives.push({
-          key: other,
-          label: t("activityEmpty.altNearby", {
-            activity: activityName(other),
+  // 줄 고르기는 lib/activity-alternatives.ts(단위 시험). 빈 상태일 때만 셈
+  const alternatives: ActivityAlternative[] = (
+    shown.length === 0 ? activityAlternatives(beaches, scope, activity) : []
+  ).map((item) =>
+    item.kind === "nationwide"
+      ? {
+          key: "nationwide",
+          label: t("activityEmpty.altNationwide", {
+            activity: activityName(item.activity),
+            count: item.count,
           }),
-          onSelect: pickAlternative(() => setActivity(other)),
-        });
-        continue;
-      }
-      const count = scopeBeaches(beaches, scope, other).length;
-      if (count === 0) continue;
-      alternatives.push({
-        key: other,
-        label: t("activityEmpty.altScoped", {
-          activity: activityName(other),
-          place: name ?? t("nationwide.label"),
-          count,
-        }),
-        onSelect: pickAlternative(() => setActivity(other)),
-      });
-    }
-  }
+          // 지역 시트에서 '전국'을 고른 것과 같음(기기에 기본 범위로 저장, 지역 버튼으로 되돌림)
+          onSelect: pickAlternative(() => setRegion(NATIONWIDE)),
+        }
+      : {
+          key: item.activity,
+          label:
+            item.kind === "nearby"
+              ? t("activityEmpty.altNearby", {
+                  activity: activityName(item.activity),
+                })
+              : t("activityEmpty.altScoped", {
+                  activity: activityName(item.activity),
+                  place: name ?? t("nationwide.label"),
+                  count: item.count,
+                }),
+          onSelect: pickAlternative(() => setActivity(item.activity)),
+        },
+  );
 
   // '해변 n곳 모두 보기'(그 자리 펼침): 지역·전국 목록이고 EXPAND_MAX곳 이하일 때만. 범위·활동이 바뀌면 다시 접힘
   // 열쇠가 바뀌면 그리는 중에 펼침을 지움(같은 범위·활동으로 돌아와도 다시 펼쳐지지 않게)
@@ -548,14 +538,14 @@ export function HomeScreen({
                   aria-expanded={expanded}
                   aria-controls="home-near-list"
                   onClick={() => setExpandedKey(expanded ? null : listKey)}
-                  className="relative -my-3 inline-flex min-h-touch min-w-touch shrink-0 items-center justify-end text-caption text-text-muted"
+                  className={HEAD_ACTION_CLASS}
                 >
                   {expanded ? t("panel.collapse") : t("near.all")}
                 </button>
               ) : (
                 <Link
                   href={localizedPath(locale, "/explore/")}
-                  className="relative -my-3 inline-flex min-h-touch min-w-touch shrink-0 items-center justify-end text-caption text-text-muted"
+                  className={HEAD_ACTION_CLASS}
                 >
                   {t("near.all")}
                 </Link>
@@ -579,11 +569,7 @@ export function HomeScreen({
             byRegion={region !== null}
             snapshot={snapshot}
             activity={activity}
-            // 고른 활동이 확인된 해변이 전국에 한 곳도 없음(수영은 전체 해변이라 해당 없음)
-            activityEmpty={
-              activity !== "swimming" &&
-              !beaches.some((beach) => beach.activities.includes(activity))
-            }
+            activityEmpty={activityEmpty}
             place={name}
             alternatives={alternatives}
           />
@@ -784,7 +770,6 @@ function NearContent({
   return (
     <ul id="home-near-list" className="grid grid-cols-1 gap-3 lg:grid-cols-4">
       {shown.map((beach, index) => (
-        // 모바일은 첫 카드만, PC는 4장
         // 모바일은 첫 카드만(모두 보기로 펼치면 전부), PC는 4장(펼치면 전부)
         <li
           key={beach.id}

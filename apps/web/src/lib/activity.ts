@@ -11,6 +11,13 @@ export const ACTIVITIES = [
 ] as const satisfies readonly Activity[];
 export const DEFAULT_ACTIVITY: Activity = "swimming";
 
+// 활동 이름 문구 키. 스쿠버다이빙은 줄인 '스쿠버'가 아닌 전체 이름(좁은 타일만 줄임)
+export function activityNameKey(
+  activity: Activity,
+): "activity.swimming" | "activity.surfing" | "activity.scubaFull" {
+  return activity === "scuba" ? "activity.scubaFull" : `activity.${activity}`;
+}
+
 // 앱을 닫았다 열어도 남아야 해서 sessionStorage가 아니라 localStorage(노션: 기기에 저장)
 const STORAGE_KEY = "baradun:activity";
 
