@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 
 import { SectionHead } from "@/components/home/section-head";
@@ -17,12 +17,13 @@ import { useMetaText } from "@/lib/snapshot/use-meta-text";
 import { useSnapshot } from "@/lib/snapshot/use-snapshot";
 import { deriveBeachView } from "@/lib/snapshot/view";
 import { kstStamp } from "@/lib/snapshot/clock";
-import { cn } from "@/lib/cn";
 import { joinMeta } from "@/lib/meta-join";
 import { useRecentVisits, viewedTime } from "@/lib/recent-visits";
+import { useDesktop } from "@/lib/use-desktop";
 
 // 최근 본 해변 (노션 2장 HOME 5, Figma S_M01_01) — 재방문만. 첫 방문이면 FirstVisitCard
 // 대표 1곳 카드(상태 배지) + 나머지 칩(✕로 확인 없이 지우고 토스트 '되돌리기')
+// 모바일 칩은 2줄까지, 넘치면 'n곳 더 보기' ↔ '접기'(노션 D18-12). PC는 모두 보임
 
 // [1] Vue: props: { locale, beaches }. beaches = 최근 본 순서로 이미 고른 목록
 export function RecentBeaches({
@@ -33,23 +34,49 @@ export function RecentBeaches({
   beaches: BeachSummary[];
 }) {
   const t = useTranslations("home.recent");
-  // 칩 줄이 오른쪽으로 더 있는지(넘치고 끝까지 넘기지 않았을 때만 흐림)
+  const desktop = useDesktop();
+  const listId = useId();
   const chipsRef = useRef<HTMLUListElement>(null);
-  const [more, setMore] = useState(false);
-  const updateMore = useCallback(() => {
-    const el = chipsRef.current;
-    setMore(!!el && el.scrollLeft + el.clientWidth < el.scrollWidth - 1);
-  }, []);
-  // 칩 목록이 바뀔 때만 다시 잼(렌더마다 관찰자를 새로 만들지 않음). 그리기 전에 재서 흐림이 늦게 붙지 않게
+  const [expanded, setExpanded] = useState(false);
+  // 접었을 때 보일 칩 수. 칩 목록·폭이 바뀌면 다시 잼(잰 때의 열쇠가 다르면 null = 재는 중, 모두 그린 뒤 그리기 전에 잼)
+  const [measured, setMeasured] = useState<{
+    key: string;
+    limit: number;
+  } | null>(null);
+  const [widthTick, setWidthTick] = useState(0);
   const chipIds = beaches.map((beach) => beach.id).join(",");
+  const measureKey = `${chipIds}|${widthTick}`;
+  const limit = measured?.key === measureKey ? measured.limit : null;
   useLayoutEffect(() => {
+    if (desktop || expanded || limit !== null) return;
     const el = chipsRef.current;
     if (!el) return;
-    updateMore();
-    const observer = new ResizeObserver(updateMore);
+    const items = [...el.children] as HTMLElement[];
+    const rows = [...new Set(items.map((item) => item.offsetTop))].sort(
+      (a, b) => a - b,
+    );
+    setMeasured({
+      key: measureKey,
+      limit:
+        rows.length <= 2
+          ? items.length
+          : items.filter((item) => item.offsetTop <= rows[1]!).length,
+    });
+  }, [desktop, expanded, limit, measureKey]);
+  // 폭이 바뀌면(회전·창 크기) 다시 잼. 높이 변화는 무시
+  useEffect(() => {
+    const el = chipsRef.current;
+    if (!el) return;
+    let width = el.clientWidth;
+    const observer = new ResizeObserver(() => {
+      if (el.clientWidth !== width) {
+        width = el.clientWidth;
+        setWidthTick((tick) => tick + 1);
+      }
+    });
     observer.observe(el);
     return () => observer.disconnect();
-  }, [updateMore, chipIds]);
+  }, [chipIds]);
   const tRoot = useTranslations(); // home.near.clearScope · activity.*
   const visits = useRecentVisits(); // 본 시각·그때 고른 활동(기기에만)
   const snapshot = useSnapshot(); // Vue: mapState
@@ -60,6 +87,10 @@ export function RecentBeaches({
   // [2] 배열 구조 분해: 첫 칸과 나머지. noUncheckedIndexedAccess라 first는 undefined일 수 있음
   const [first, ...rest] = beaches;
   if (!first) return null;
+  // 모바일에서 접혀 있을 때만 잘라 보임
+  const collapsed = !desktop && !expanded && limit !== null;
+  const visible = limit ?? rest.length;
+  const hidden = collapsed ? Math.max(0, rest.length - visible) : 0;
   const view = deriveBeachView({ id: first.id, hidden: false }, snapshot);
 
   // 보조 문구. '특보 없음'은 범위·기관·시각이 함께 있어야 함(가까운 바다 카드와 같은 규칙)
@@ -147,20 +178,15 @@ export function RecentBeaches({
         )}
       </Link>
       {rest.length > 0 && (
-        // 모바일은 한 줄 가로 스크롤, 오른쪽에 더 있을 때만 끝을 흐리게 함, PC는 여러 줄(11/5 홈 v3 시안)
         <ul
+          id={listId}
           ref={chipsRef}
-          onScroll={updateMore}
           aria-label={t("chips", { count: rest.length })}
-          className={cn(
-            "flex flex-wrap gap-2 max-lg:-mx-4 max-lg:flex-nowrap max-lg:overflow-x-auto max-lg:px-4 max-lg:pb-1 max-lg:[scrollbar-width:none] max-lg:[&::-webkit-scrollbar]:hidden",
-            more &&
-              "max-lg:[mask-image:linear-gradient(to_right,#000_calc(100%-24px),transparent)]",
-          )}
+          className="flex flex-wrap gap-2"
         >
           {/* Vue: v-for="beach in rest" :key="beach.id" */}
-          {rest.map((beach) => (
-            <li key={beach.id} className="shrink-0">
+          {(collapsed ? rest.slice(0, visible) : rest).map((beach) => (
+            <li key={beach.id}>
               <RemovableChip
                 removeLabel={t("remove", { name: beach.name })}
                 onRemove={() => remove(beach)}
@@ -173,6 +199,17 @@ export function RecentBeaches({
             </li>
           ))}
         </ul>
+      )}
+      {(hidden > 0 || (expanded && !desktop)) && (
+        <button
+          type="button"
+          aria-expanded={expanded}
+          aria-controls={listId}
+          onClick={() => setExpanded((open) => !open)}
+          className="inline-flex min-h-touch items-center self-start text-label-s font-bold text-text-body"
+        >
+          {expanded ? t("less") : t("more", { count: hidden })}
+        </button>
       )}
       <Toast message={toast.message} onHold={toast.hold} />
     </section>

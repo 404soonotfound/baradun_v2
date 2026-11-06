@@ -222,6 +222,8 @@
       "viewedOn": "Viewed {month}/{date} at {time}",
       "checkedNow": "Checked again just now",
       "titleWithActivity": "{name} · {activity}",
+      "more": "{count} more",
+      "less": "Show less",
       "emptyTitle": "No beaches viewed yet",
       "emptyBody": "Beaches you open will show up here"
     },
