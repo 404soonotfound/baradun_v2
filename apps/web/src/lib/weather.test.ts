@@ -9,6 +9,7 @@ import { describe, expect, it } from "vitest";
 import {
   hourCells,
   laterDays,
+  midDaysIssuedAt,
   midIssuedAt,
   monthDay,
   skyIcon,
@@ -204,5 +205,45 @@ describe("midIssuedAt·monthDay", () => {
     ).toBe("2026-11-04T21:00:00Z");
     expect(midIssuedAt(null)).toBeNull();
     expect(monthDay("2026-11-07")).toBe("11/7");
+  });
+});
+
+describe("midDaysIssuedAt", () => {
+  const land: MidLandForecast = {
+    name: "강원영동",
+    days: [
+      {
+        date: "2026-11-09",
+        issuedAt: "2026-11-04T21:00:00Z",
+        pop: 10,
+        sky: "clear",
+        precip: "none",
+      },
+      {
+        date: "2026-11-10",
+        issuedAt: null,
+        pop: 0,
+        sky: "clear",
+        precip: "none",
+      },
+    ],
+  };
+  const ta: MidTaForecast = {
+    name: "강릉",
+    days: [
+      { date: "2026-11-09", issuedAt: "2026-11-04T09:00:00Z", min: 7, max: 15 },
+      { date: "2026-11-10", issuedAt: "2026-11-04T21:00:00Z", min: 8, max: 16 },
+    ],
+  };
+
+  it("펼친 날들의 구역·기온 발표 시각 중 가장 이른 것(기온이 한 회차 밀리면 그 시각)", () => {
+    expect(midDaysIssuedAt(["2026-11-09"], land, ta)).toBe(
+      "2026-11-04T09:00:00Z",
+    );
+  });
+
+  it("하나라도 시각을 모르면 null", () => {
+    expect(midDaysIssuedAt(["2026-11-09", "2026-11-10"], land, ta)).toBeNull();
+    expect(midDaysIssuedAt(["2026-11-09"], land, null)).toBeNull();
   });
 });
