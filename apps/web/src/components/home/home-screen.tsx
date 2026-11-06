@@ -268,21 +268,19 @@ export function HomeScreen({
   const listKey = `${scope.kind}|${name ?? ""}|${activity}`;
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
   if (expandedKey !== null && expandedKey !== listKey) setExpandedKey(null);
+  // 접혔을 때 보이는 카드 수. 모바일은 첫 카드만, PC는 전부(NearContent의 hidden lg:block과 같은 기준)
+  const collapsedCount = desktop ? shown.length : Math.min(1, shown.length);
   const canExpand =
     byList &&
-    regionBeaches.length >
-      (desktop ? shown.length : Math.min(1, shown.length)) &&
+    regionBeaches.length > collapsedCount &&
     regionBeaches.length <= EXPAND_MAX;
   const expanded = canExpand && expandedKey === listKey;
   const listed: ShownBeach[] = expanded
     ? regionBeaches.map(withDistance)
     : shown;
-  // 'n곳 중 m곳을 보여드려요'(지역·전국 목록만). 모바일은 카드 1장
-  const visibleCount = expanded
-    ? regionBeaches.length
-    : desktop
-      ? shown.length
-      : Math.min(1, shown.length);
+  // 화면에 보이는 카드(펼치면 전부). 'n곳 중 m곳을 보여드려요'(지역·전국 목록만)와 관측 지연 배너가 같이 씀
+  const visibleCards = expanded ? listed : shown.slice(0, collapsedCount);
+  const visibleCount = visibleCards.length;
   const showingText =
     byList && regionBeaches.length > 0
       ? visibleCount < regionBeaches.length
@@ -318,9 +316,8 @@ export function HomeScreen({
 
   // [7] 상황 배너는 하나만(BRD-28). 관측 지연은 홈 카드 해변 중 배지가 관측 지연인 곳
   // 화면에 보이는 카드만(모바일 접힘은 첫 카드, 펼치면 전부). 카드 배지와 배너가 어긋나지 않게
-  const delayed = (desktop || expanded ? listed : listed.slice(0, 1)).filter(
-    (beach) =>
-      isDelayedView(deriveBeachView({ id: beach.id, hidden: false }, snapshot)),
+  const delayed = visibleCards.filter((beach) =>
+    isDelayedView(deriveBeachView({ id: beach.id, hidden: false }, snapshot)),
   );
   const situation = pickSituation({
     phase: snapshot.phase,
