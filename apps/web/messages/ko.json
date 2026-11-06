@@ -166,7 +166,14 @@
       "noStationNext": "특보 정보는 위 배지를 확인하세요"
     },
     "map": {
-      "restricted": "이용불가 · 이용 제한",
+      "row": {
+        "clear": "특보 없음",
+        "warning": "특보 발효 중",
+        "restricted": "이용 제한",
+        "warningUnknown": "특보 확인 못 함",
+        "unconfirmed": "확인 못 함",
+        "delayed": "관측 지연"
+      },
       "title": "지금 전국 바다",
       "open": "지도에서 보기",
       "total": "공개 해변 {count}곳",
@@ -215,6 +222,8 @@
       "all": "전체 보기",
       "remove": "{name} 최근 본 목록에서 지우기",
       "chips": "최근 본 해변 {count}곳",
+      "more": "{count}곳 더 보기",
+      "less": "접기",
       "removed": "최근 본 목록에서 지웠어요",
       "undo": "되돌리기",
       "viewedToday": "오늘 {time}에 봤어요",
@@ -222,8 +231,6 @@
       "viewedOn": "{month}월 {date}일 {time}에 봤어요",
       "checkedNow": "지금 다시 확인했어요",
       "titleWithActivity": "{name} · {activity}",
-      "more": "{count}곳 더 보기",
-      "less": "접기",
       "emptyTitle": "아직 본 해변이 없어요",
       "emptyBody": "해변을 열어 보면 여기에서 다시 볼 수 있어요"
     },
