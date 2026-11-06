@@ -1,5 +1,7 @@
 "use client"; // 활동·위치·기기 저장·바다 정보를 쓰므로 브라우저 부품
 
+import { ArrowRight } from "lucide-react";
+import Link from "next/link";
 import { useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 
@@ -19,8 +21,8 @@ import { NearCard } from "@/components/home/near-card";
 import { PageUnavailableNote } from "@/components/home/page-unavailable-note";
 import { RecentBeaches, RecentEmpty } from "@/components/home/recent-beaches";
 import { RegionButton } from "@/components/home/region-button";
+import { ReasonChips } from "@/components/home/reason-chips";
 import { RegionCountCard } from "@/components/home/region-count-card";
-import { SectionHead } from "@/components/home/section-head";
 import { RegionSheet } from "@/components/region/region-sheet";
 import { SampleNote } from "@/components/sample-note";
 import { SituationBanner } from "@/components/situation-banner";
@@ -82,6 +84,8 @@ import { useSheet } from "@/lib/use-sheet";
 
 // PC에서 보여줄 가까운 바다 카드 수(모바일은 1장)
 const NEAR_COUNT = 4;
+// '모두 보기'를 그 자리에서 펼칠 수 있는 최대 해변 수. 더 많으면(전국 등) 탐색으로 보냄
+const EXPAND_MAX = 30;
 
 // 위치가 있으면 km, 없으면 null
 type ShownBeach = BeachSummary & { distanceKm: number | null };
@@ -246,15 +250,66 @@ export function HomeScreen({
   }
 
   // [6] 홈에 보이는 해변 카드(지역·전국 → 이름 순, 위치가 있으면 거리도 / 가까운 바다 → 가까운 순)
+  const withDistance = (beach: BeachSummary): ShownBeach => ({
+    ...beach,
+    distanceKm:
+      location.status === "ready"
+        ? distanceKm(location.coords, beach.coords)
+        : null,
+  });
   const shown: ShownBeach[] = byList
-    ? regionBeaches.slice(0, NEAR_COUNT).map((beach) => ({
-        ...beach,
-        distanceKm:
-          location.status === "ready"
-            ? distanceKm(location.coords, beach.coords)
-            : null,
-      }))
+    ? regionBeaches.slice(0, NEAR_COUNT).map(withDistance)
     : nearest;
+  // '해변 n곳 모두 보기'(그 자리 펼침): 지역·전국 목록이고 EXPAND_MAX곳 이하일 때만. 범위·활동이 바뀌면 다시 접힘
+  const listKey = `${scope.kind}|${name ?? ""}|${activity}`;
+  const [expandedKey, setExpandedKey] = useState<string | null>(null);
+  const canExpand =
+    byList &&
+    regionBeaches.length >
+      (desktop ? shown.length : Math.min(1, shown.length)) &&
+    regionBeaches.length <= EXPAND_MAX;
+  const expanded = canExpand && expandedKey === listKey;
+  const listed: ShownBeach[] = expanded
+    ? regionBeaches.map(withDistance)
+    : shown;
+  // 'n곳 중 m곳을 보여드려요'(지역·전국 목록만). 모바일은 카드 1장
+  const visibleCount = expanded
+    ? regionBeaches.length
+    : desktop
+      ? shown.length
+      : Math.min(1, shown.length);
+  const showingText =
+    byList && regionBeaches.length > 0
+      ? visibleCount < regionBeaches.length
+        ? t("panel.showing", {
+            total: regionBeaches.length,
+            shown: visibleCount,
+          })
+        : t("panel.showingAll", { count: regionBeaches.length })
+      : null;
+  // 목록 제목: 수영은 '○○ 바다', 서핑·스쿠버다이빙은 '○○에서 서핑이 확인된 해변'(이슈 #362)
+  const listTitle =
+    scope.kind === "nationwide"
+      ? activity === "swimming"
+        ? t("nationwide.seaTitle")
+        : t("panel.activityTitleNationwide", {
+            activity: activityName(activity),
+          })
+      : byList && name
+        ? activity === "swimming"
+          ? t("region.seaTitle", { region: name })
+          : t("panel.activityTitleRegion", {
+              region: name,
+              activity: activityName(activity),
+            })
+        : t("near.title");
+  const expandText =
+    activity === "swimming"
+      ? t("panel.expand", { count: regionBeaches.length })
+      : t("panel.expandActivity", {
+          activity: activityName(activity),
+          count: regionBeaches.length,
+        });
 
   // [7] 상황 배너는 하나만(BRD-28). 관측 지연은 홈 카드 해변 중 배지가 관측 지연인 곳
   const delayed = shown.filter((beach) =>
@@ -452,31 +507,62 @@ export function HomeScreen({
           </div>
         )}
 
-        {/* 가까운 바다(지역을 고르면 '강원 바다', 전국이면 '전국 바다'). PC는 3칸 전체에 카드 4장 */}
+        {/* 해변 묶음(가까운 바다 · '강원 강릉시 바다' · '전국 바다' · 활동별 '…에서 서핑이 확인된 해변')
+            PC는 히어로에 겹치는 패널(11/5 홈 v3 시안): 머리 제목 + 'n곳 중 m곳' | 사유별 개수, 카드 4장, 아래 줄 모두 보기 · 현장 우선 · 전체 탐색
+            모바일(노션 D18-12): 제목 줄 오른쪽 '전체 보기', 카드 1장 → 개수 카드 → '활동과 관계없이 전체 해변 탐색하기' */}
         <section
           aria-labelledby="home-near"
-          className="flex flex-col gap-2.5 lg:order-1 lg:col-span-3 lg:gap-3.5"
+          className="flex flex-col gap-2.5 lg:relative lg:z-10 lg:order-1 lg:col-span-3 lg:-mt-10 lg:gap-4 lg:rounded-[20px] lg:bg-bg-surface lg:px-6 lg:py-5 lg:shadow-raised"
         >
-          <SectionHead
-            id="home-near"
-            title={
-              scope.kind === "nationwide"
-                ? t("nationwide.seaTitle")
-                : byList && name
-                  ? t("region.seaTitle", { region: name })
-                  : t("near.title")
-            }
-            href={localizedPath(locale, "/explore/")}
-            linkText={t("near.all")}
-            // PC는 카드마다 넣던 현장 우선 문구를 카드 4장 바로 위에 한 번(Figma 181:849)
-            note={desktop ? tRoot("safety.finalCall") : null}
-            large
-            focusable
-          />
+          <div className="flex items-end justify-between gap-3 lg:gap-6">
+            <div className="flex min-w-0 flex-col gap-0.5">
+              <h2
+                id="home-near"
+                tabIndex={-1}
+                className="text-title-m text-text-default outline-none [word-break:keep-all] lg:text-title-l"
+              >
+                {listTitle}
+              </h2>
+              {showingText && (
+                <p className="text-caption text-text-muted">{showingText}</p>
+              )}
+            </div>
+            {/* 모바일: 제목 줄 오른쪽 '전체 보기'(펼칠 수 있으면 그 자리 펼침, 아니면 탐색) */}
+            {!desktop &&
+              (canExpand ? (
+                <button
+                  type="button"
+                  aria-expanded={expanded}
+                  aria-controls="home-near-list"
+                  aria-label={expanded ? t("panel.collapse") : expandText}
+                  onClick={() => setExpandedKey(expanded ? null : listKey)}
+                  className="relative -my-3 inline-flex min-h-touch min-w-touch shrink-0 items-center justify-end text-caption text-text-muted"
+                >
+                  {expanded ? t("panel.collapse") : t("near.all")}
+                </button>
+              ) : (
+                <Link
+                  href={localizedPath(locale, "/explore/")}
+                  className="relative -my-3 inline-flex min-h-touch min-w-touch shrink-0 items-center justify-end text-caption text-text-muted"
+                >
+                  {t("near.all")}
+                </Link>
+              ))}
+            {/* PC: 사유별 개수(지역·전국 목록). 게시된 분류·사유 그대로(G1) */}
+            {desktop && byList && regionBeaches.length > 0 && (
+              <ReasonChips
+                counts={countByStatus(regionViews)}
+                clearCheckedAt={clearCheckedAt(regionViews)}
+                staleChecked={staleCheckedAt(regionViews)}
+                nowMs={snapshot.nowMs}
+              />
+            )}
+          </div>
           <NearContent
             locale={locale}
             status={location.status}
-            shown={shown}
+            shown={listed}
+            expanded={expanded}
             byList={byList}
             byRegion={region !== null}
             snapshot={snapshot}
@@ -490,7 +576,7 @@ export function HomeScreen({
             alternatives={alternatives}
           />
           {/* 지역·전국 해변 상태별 개수(모바일, 가까운 바다에서는 없음). 게시된 분류 그대로 셈(G1)
-              PC의 지역 개수는 해변 묶음 패널 머리 줄이 맡음 */}
+              PC의 지역 개수는 패널 머리 사유별 개수가 맡음 */}
           {/* Figma 171:818: 가까운 바다 카드와 개수 카드 사이 20(묶음 간격 10 + 10) */}
           {!desktop && byList && name && regionBeaches.length > 0 && (
             <div className="mt-2.5">
@@ -513,6 +599,34 @@ export function HomeScreen({
               />
             </div>
           )}
+          {/* 아래 줄: PC는 모두 보기 · 현장 우선 문구 | 전체 탐색, 모바일은 전체 탐색 링크만(현장 우선 문구는 카드 안) */}
+          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 lg:border-t lg:border-border-default lg:pt-3">
+            {desktop && (
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                {canExpand && (
+                  <button
+                    type="button"
+                    aria-expanded={expanded}
+                    aria-controls="home-near-list"
+                    onClick={() => setExpandedKey(expanded ? null : listKey)}
+                    className="inline-flex min-h-touch items-center text-label font-bold text-text-default"
+                  >
+                    {expanded ? t("panel.collapse") : expandText}
+                  </button>
+                )}
+                <span className="text-caption text-text-muted">
+                  {tRoot("safety.finalCall")}
+                </span>
+              </div>
+            )}
+            <Link
+              href={localizedPath(locale, "/explore/")}
+              className="inline-flex min-h-touch items-center gap-1.5 text-label font-bold text-text-body hover:text-text-default"
+            >
+              {t("panel.exploreAll")}
+              <ArrowRight aria-hidden="true" size={14} />
+            </Link>
+          </div>
         </section>
 
         {/* 해상 특보 · 안내. PC는 3단의 왼쪽·오른쪽 */}
@@ -592,6 +706,7 @@ function NearContent({
   locale,
   status,
   shown,
+  expanded,
   byList,
   byRegion,
   snapshot,
@@ -603,6 +718,7 @@ function NearContent({
   locale: Locale;
   status: LocationState["status"];
   shown: ShownBeach[];
+  expanded: boolean; // 모두 보기로 펼침(모바일도 모든 카드)
   byList: boolean; // 지역·전국(이름 순 목록)
   byRegion: boolean; // 시·도·시·군을 고름(빈 목록 문구가 다름)
   snapshot: SnapshotState;
@@ -654,10 +770,14 @@ function NearContent({
     );
   }
   return (
-    <ul className="grid grid-cols-1 gap-3 lg:grid-cols-4 lg:gap-4">
+    <ul id="home-near-list" className="grid grid-cols-1 gap-3 lg:grid-cols-4">
       {shown.map((beach, index) => (
         // 모바일은 첫 카드만, PC는 4장
-        <li key={beach.id} className={index > 0 ? "hidden lg:block" : ""}>
+        // 모바일은 첫 카드만(모두 보기로 펼치면 전부), PC는 4장(펼치면 전부)
+        <li
+          key={beach.id}
+          className={index > 0 && !expanded ? "hidden lg:block" : ""}
+        >
           <NearCard
             locale={locale}
             beach={beach}

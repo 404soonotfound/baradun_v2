@@ -165,6 +165,16 @@
       "noValueNext": "We'll show new measurements when they come in",
       "noStationNext": "Check the badge above for warning info"
     },
+    "panel": {
+      "activityTitleRegion": "Beaches in {region} with confirmed {activity}",
+      "activityTitleNationwide": "Beaches nationwide with confirmed {activity}",
+      "showing": "Showing {shown} of {total}",
+      "showingAll": "Showing all {count}",
+      "expand": "Show all {count} beaches",
+      "expandActivity": "Show all {count} {activity} beaches",
+      "collapse": "Show less",
+      "exploreAll": "Explore all beaches, any activity"
+    },
     "map": {
       "row": {
         "clear": "No warnings",
