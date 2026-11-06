@@ -138,7 +138,9 @@ export function MetricValue({
         "font-bold text-text-muted",
         size === "m"
           ? "text-[22px] leading-[1.45]"
-          : "text-[28px] leading-[1.45]",
+          : size === "wide"
+            ? "text-[22px] leading-[1.45] @2xl:text-[28px]"
+            : "text-[28px] leading-[1.45]",
       )}
     >
       <span aria-hidden="true">–</span>
