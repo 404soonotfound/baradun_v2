@@ -38,6 +38,7 @@ const TEXT = {
     nearby: "내 주변",
     nearSea: "가까운 바다",
     all: "전체 보기",
+    exploreAll: "활동과 관계없이 전체 해변 탐색하기",
     settings: "/settings/",
     defaultRegion: "기본 지역",
     clearRegion: "기본 지역 지우기",
@@ -68,6 +69,7 @@ const TEXT = {
     nearby: "Near me",
     nearSea: "Nearby beaches",
     all: "See all",
+    exploreAll: "Explore all beaches, any activity",
     settings: "/en/settings/",
     defaultRegion: "Default region",
     clearRegion: "Clear default region",
@@ -199,12 +201,16 @@ for (const locale of ["ko", "en"] as const) {
       await expect(seaHeading(page)).toHaveText(text.nationwideSea);
     });
 
-    test("전체 보기는 탐색 전국으로 이어짐", async ({ page }) => {
+    test("전체 보기·전체 탐색은 탐색 전국으로 이어짐", async ({ page }) => {
       await page.goto(text.home);
       await expect(seaHeading(page)).toHaveText(text.nationwideSea);
+      // 모바일은 제목 줄 '전체 보기', PC는 패널 아래 '활동과 관계없이 전체 해변 탐색하기'(전국은 그 자리에서 펼치지 않음)
       await page
         .getByRole("region", { name: text.nationwideSea })
-        .getByRole("link", { name: text.all })
+        .getByRole("link", {
+          name: new RegExp(`^(${text.all}|${text.exploreAll})$`),
+        })
+        .first()
         .click();
       await expect(page).toHaveURL(new RegExp(`${text.explore}$`));
       // 탐색 지역 버튼(BRD-128)도 전국이고, 시트의 '전국'이 고른 것으로 보임
