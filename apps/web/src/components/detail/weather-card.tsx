@@ -18,15 +18,18 @@ import { useTranslations } from "next-intl";
 import { useId, useState } from "react";
 
 import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/cn";
 import { WEATHER_COLUMN, WindRow } from "@/components/weather/wind-row";
 import type { Locale } from "@/lib/i18n";
 import { kstStamp } from "@/lib/snapshot/clock";
 import type { WeatherView } from "@/lib/snapshot/weather";
+import { midLandName } from "@/lib/weather-zones";
 import {
   type DayCell,
   type HourCell,
   hourCells,
   laterDays,
+  midIssuedAt,
   monthDay,
   type SkyIcon,
   type SkyWord,
@@ -254,12 +257,44 @@ export function WeatherCard({
       : later.days.length === 1
         ? weekday(later.days[0]!.date)
         : `${weekday(later.days[0]!.date)}~${weekday(later.days.at(-1)!.date)}`;
+  // 펼친 날을 출처별 두 구간으로(단기예보 글피 · 중기예보 그 뒤). 구간 제목에 출처·구역·발표 시각
+  const dayRange = (days: readonly DayCell[]) =>
+    days.length === 1
+      ? weekday(days[0]!.date)
+      : `${weekday(days[0]!.date)}~${weekday(days.at(-1)!.date)}`;
+  const midName =
+    weather.kind === "ready"
+      ? midLandName(weather.midLandId, weather.midLand?.name ?? null, locale)
+      : null;
+  const midTime =
+    weather.kind === "ready"
+      ? kstStamp(midIssuedAt(weather.midLand), nowMs)
+      : null;
+  const groups = (["short", "mid"] as const).flatMap((source) => {
+    const days = later.days.filter((day) => day.source === source);
+    if (days.length === 0) return [];
+    const range = dayRange(days);
+    const head =
+      source === "short"
+        ? t("laterShort", { range })
+        : [
+            t("laterMid", { range }),
+            midName && t("laterMidZone", { zone: midName }),
+            midTime
+              ? t("laterMidIssued", { time: midTime })
+              : t("laterMidSource"),
+          ]
+            .filter(Boolean)
+            .join(" · ");
+    return [{ source, days, head }];
+  });
   const Chevron = open ? ChevronUp : ChevronDown;
 
   return (
     <section
       aria-labelledby={titleId}
-      className="flex flex-col gap-2 rounded-card bg-bg-surface p-4 shadow-card lg:gap-0 lg:p-0"
+      // 펼친 날 칸은 카드 너비로 나눔(@container): 1024 화면의 좁은 카드(484px)는 모바일처럼 목록
+      className="@container flex flex-col gap-2 rounded-card bg-bg-surface p-4 shadow-card lg:gap-0 lg:p-0"
     >
       <div className="flex flex-col gap-1 pb-1.5 lg:px-5 lg:pt-4 lg:pb-2">
         {head}
@@ -397,24 +432,47 @@ export function WeatherCard({
                   })}
                 </p>
               )}
+              {/* 두 구간 제목(노션 D18-2): '토 · 단기예보' / '일~화 · 강원 영동(넓은 지역) · 기상청 중기예보 06:00 발표'
+                  PC는 칸 수만큼 가로로 나눠 4칸 한 줄 */}
               {later.days.length > 0 && (
-                <ul className="flex flex-col divide-y divide-border-default lg:grid lg:grid-cols-4 lg:gap-2 lg:divide-y-0">
-                  {later.days.map((day) => (
-                    <LaterDay
-                      key={day.date}
-                      day={day}
-                      label={t("dayCell", {
-                        weekday: weekday(day.date),
-                        date: monthDay(day.date),
-                        sky: skyText(day.word),
-                        pop: valueText("pop", day.pop),
-                        min: valueText("temperature", day.min),
-                        max: valueText("temperature", day.max),
-                      })}
-                      weekday={weekday(day.date)}
-                    />
+                <div className="flex flex-col gap-2 @2xl:flex-row @2xl:gap-2">
+                  {groups.map((group) => (
+                    <div
+                      key={group.source}
+                      // 넓은 카드는 칸 수만큼 너비를 나눔(1칸 : 3칸)
+                      className={cn(
+                        "flex min-w-0 flex-col gap-1",
+                        GROUP_GROW[group.days.length],
+                      )}
+                    >
+                      <p className="text-[11px] text-text-muted [word-break:keep-all]">
+                        {group.head}
+                      </p>
+                      <ul
+                        className={cn(
+                          "flex flex-col divide-y divide-border-default @2xl:grid @2xl:gap-2 @2xl:divide-y-0",
+                          LATER_COLS[group.days.length],
+                        )}
+                      >
+                        {group.days.map((day) => (
+                          <LaterDay
+                            key={day.date}
+                            day={day}
+                            label={t("dayCell", {
+                              weekday: weekday(day.date),
+                              date: monthDay(day.date),
+                              sky: skyText(day.word),
+                              pop: valueText("pop", day.pop),
+                              min: valueText("temperature", day.min),
+                              max: valueText("temperature", day.max),
+                            })}
+                            weekday={weekday(day.date)}
+                          />
+                        ))}
+                      </ul>
+                    </div>
                   ))}
-                </ul>
+                </div>
               )}
               {later.midFailed && (
                 <div className="flex flex-col gap-0.5 rounded-[10px] bg-bg-subtle px-3 py-2.5">
@@ -439,6 +497,20 @@ export function WeatherCard({
   );
 }
 
+// 구간 칸 수별 넓은 카드(@2xl) 너비 비율·가로 칸(Tailwind가 글자 그대로 찾도록 다 적음)
+const GROUP_GROW: Record<number, string> = {
+  1: "@2xl:flex-[1_1_0%]",
+  2: "@2xl:flex-[2_1_0%]",
+  3: "@2xl:flex-[3_1_0%]",
+  4: "@2xl:flex-[4_1_0%]",
+};
+const LATER_COLS: Record<number, string> = {
+  1: "@2xl:grid-cols-1",
+  2: "@2xl:grid-cols-2",
+  3: "@2xl:grid-cols-3",
+  4: "@2xl:grid-cols-4",
+};
+
 function LaterDay({
   day,
   label,
@@ -451,11 +523,11 @@ function LaterDay({
   return (
     <li
       aria-label={label}
-      className="flex h-10 items-center gap-2.5 lg:h-auto lg:flex-col lg:items-start lg:gap-1 lg:rounded-[10px] lg:bg-bg-subtle lg:px-3 lg:py-2.5"
+      className="flex h-10 items-center gap-2.5 @2xl:h-auto @2xl:flex-col @2xl:items-start @2xl:gap-1 @2xl:rounded-[10px] @2xl:bg-bg-subtle @2xl:px-3 @2xl:py-2.5"
     >
       <span
         aria-hidden="true"
-        className="w-14 shrink-0 text-label-s font-bold text-text-default lg:w-auto"
+        className="w-14 shrink-0 text-label-s font-bold text-text-default @2xl:w-auto"
       >
         {weekday}{" "}
         <span className="font-medium text-text-muted tabular-nums">
@@ -464,13 +536,13 @@ function LaterDay({
       </span>
       <span
         aria-hidden="true"
-        className="flex flex-1 items-center gap-2 lg:w-full"
+        className="flex flex-1 items-center gap-2 @2xl:w-full"
       >
         <SkyGlyph icon={day.icon} />
-        <span className="text-[11.5px] font-bold text-brand-default tabular-nums">
+        <span className="text-[11.5px] font-bold whitespace-nowrap text-brand-default tabular-nums">
           {day.pop === null ? "–" : `${Math.round(day.pop)}%`}
         </span>
-        <span className="ml-auto text-label-s tabular-nums">
+        <span className="ml-auto text-label-s whitespace-nowrap tabular-nums">
           <span className="text-text-muted">
             {day.min === null ? "–" : `${Math.round(day.min)}°`}
           </span>
