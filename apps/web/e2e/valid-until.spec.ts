@@ -217,8 +217,8 @@ for (const scheme of ["light", "dark"] as const) {
           visibleExactText(
             page,
             confirmedUntil(times.oldestConfirmedAt, expiredMs),
-          ).first(),
-        ).toBeVisible();
+          ),
+        ).toHaveCount(2);
         // 화면 전체에서 '특보 없음' 글자는 PC 전국 지도 카드 묶음 이름('특보 없음 0곳') 한 곳뿐
         await expect(visibleExactText(page, CLEAR_TITLE)).toHaveCount(1);
       } else {
