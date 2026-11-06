@@ -189,6 +189,25 @@ export function laterDays(
   };
 }
 
+// 펼친 중기 날들의 발표 시각: 그 날짜들의 구역(하늘·강수확률)·기온 지점(최저·최고) 발표 시각 중 가장 이른 것
+// (기온 수집이 한 회차 밀렸으면 더 오래된 값을 말함). 하나라도 시각을 모르면 null(시각을 내세우지 않음)
+export function midDaysIssuedAt(
+  dates: readonly string[],
+  midLand: MidLandForecast | null,
+  midTa: MidTaForecast | null,
+): string | null {
+  const land = new Map((midLand?.days ?? []).map((d) => [d.date, d.issuedAt]));
+  const ta = new Map((midTa?.days ?? []).map((d) => [d.date, d.issuedAt]));
+  let oldest: string | null = null;
+  for (const date of dates) {
+    for (const at of [land.get(date), ta.get(date)]) {
+      if (!at) return null;
+      if (oldest === null || at < oldest) oldest = at;
+    }
+  }
+  return oldest;
+}
+
 // 중기예보 발표 시각(받은 날 중 가장 늦은 것). 정보 출처 줄용
 export function midIssuedAt(midLand: MidLandForecast | null): string | null {
   let best: string | null = null;

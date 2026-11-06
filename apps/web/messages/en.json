@@ -446,6 +446,7 @@
       "laterMidZone": "{zone} (wide area)",
       "laterMidIssued": "KMA medium-range forecast issued {time}",
       "laterMidSource": "KMA medium-range forecast",
+      "laterLowHigh": "daily low / high",
       "dayCell": "{weekday} {date}, {sky}, chance of rain {pop}, low {min}, high {max}",
       "midFailedTitle": "Couldn't check the later days",
       "midFailedBody": "We didn't receive the KMA medium-range forecast. The forecast above is still shown.",

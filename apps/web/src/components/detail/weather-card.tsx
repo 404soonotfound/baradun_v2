@@ -30,7 +30,7 @@ import {
   type HourCell,
   hourCells,
   laterDays,
-  midIssuedAt,
+  midDaysIssuedAt,
   monthDay,
   type SkyIcon,
   type SkyWord,
@@ -258,14 +258,23 @@ export function WeatherCard({
       : `${weekday(days[0]!.date)}~${weekday(days.at(-1)!.date)}`;
   const range = later.days.length === 0 ? null : dayRange(later.days);
   // 펼친 날을 출처별 두 구간으로(단기예보 글피 · 중기예보 그 뒤). 구간 제목에 출처·구역·발표 시각
-  const midName =
+  // 중기 시각을 모르면 정보 출처 줄과 같게 구역 이름을 빼고 '기상청 중기예보'만(받지 않은 정보를 적지 않음)
+  // 단기 구간이 없으면 '하루 최저 / 최고' 안내를 중기 제목에 붙임
+  const midDays = later.days.filter((day) => day.source === "mid");
+  const midAt =
     weather.kind === "ready"
+      ? midDaysIssuedAt(
+          midDays.map((day) => day.date),
+          weather.midLand,
+          weather.midTa,
+        )
+      : null;
+  const midTime = kstStamp(midAt, nowMs);
+  const midName =
+    weather.kind === "ready" && midTime
       ? midLandName(weather.midLandId, weather.midLand?.name ?? null, locale)
       : null;
-  const midTime =
-    weather.kind === "ready"
-      ? kstStamp(midIssuedAt(weather.midLand), nowMs)
-      : null;
+  const hasShort = later.days.some((day) => day.source === "short");
   const groups = (["short", "mid"] as const).flatMap((source) => {
     const days = later.days.filter((day) => day.source === source);
     if (days.length === 0) return [];
@@ -278,6 +287,7 @@ export function WeatherCard({
             midTime
               ? t("laterMidIssued", { time: midTime })
               : t("laterMidSource"),
+            hasShort ? null : t("laterLowHigh"),
           ]);
     return [{ source, days, head }];
   });
@@ -420,14 +430,14 @@ export function WeatherCard({
               {/* 두 구간 제목(노션 3장 WeatherCard·D18-2): '토 · 단기예보 · 하루 최저 / 최고' / '일~화 · 강원 영동(넓은 지역) · 기상청 중기예보 06:00 발표'
                   PC는 칸 수만큼 가로로 나눠 4칸 한 줄 */}
               {later.days.length > 0 && (
-                <div className="flex flex-col gap-2 @2xl:flex-row @2xl:gap-2">
+                <div className="flex flex-col gap-2 @2xl:grid @2xl:grid-cols-4 @2xl:gap-2">
                   {groups.map((group) => (
                     <div
                       key={group.source}
-                      // 넓은 카드는 칸 수만큼 너비를 나눔(1칸 : 3칸)
+                      // 넓은 카드는 바깥 4칸 격자에서 칸 수만큼 차지하고, 안쪽도 같은 간격의 격자라 칸 너비가 같음
                       className={cn(
                         "flex min-w-0 flex-col gap-1",
-                        GROUP_GROW[group.days.length],
+                        LATER_SPAN[group.days.length],
                       )}
                     >
                       <h3 className="text-[11px] text-text-muted [word-break:keep-all]">
@@ -482,12 +492,12 @@ export function WeatherCard({
   );
 }
 
-// 구간 칸 수별 넓은 카드(@2xl) 너비 비율·가로 칸(Tailwind가 글자 그대로 찾도록 다 적음)
-const GROUP_GROW: Record<number, string> = {
-  1: "@2xl:flex-[1_1_0%]",
-  2: "@2xl:flex-[2_1_0%]",
-  3: "@2xl:flex-[3_1_0%]",
-  4: "@2xl:flex-[4_1_0%]",
+// 구간 칸 수별 넓은 카드(@2xl) 바깥 격자 차지 칸·안쪽 가로 칸(Tailwind가 글자 그대로 찾도록 다 적음)
+const LATER_SPAN: Record<number, string> = {
+  1: "@2xl:col-span-1",
+  2: "@2xl:col-span-2",
+  3: "@2xl:col-span-3",
+  4: "@2xl:col-span-4",
 };
 const LATER_COLS: Record<number, string> = {
   1: "@2xl:grid-cols-1",
