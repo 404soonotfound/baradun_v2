@@ -181,6 +181,11 @@
       "highlightActivity": "large dots: {count} beaches in {region} with confirmed {activity}"
     },
     "activityEmpty": {
+      "alternatives": "Look instead",
+      "altNationwide": "{activity} beaches nationwide ({count})",
+      "altScoped": "{activity} beaches · {place} ({count})",
+      "altNearby": "Nearby {activity} beaches",
+      "titleScoped": "No beaches in {place} have confirmed {activity} yet. You can look in another area or for another activity below.",
       "title": "No beaches have confirmed {activity} yet",
       "body": "We only show activities confirmed by public data for each beach. Once {activity} information is added, beaches will appear as cards like the one below.",
       "bodyWide": "We only show activities confirmed by public data for each beach. Once {activity} information is added, beaches will appear in this list as cards like the ones on the right.",

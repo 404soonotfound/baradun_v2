@@ -181,6 +181,11 @@
       "highlightActivity": "큰 점은 {region}에서 {activity}이 확인된 해변 {count}곳"
     },
     "activityEmpty": {
+      "alternatives": "대신 찾아보기",
+      "altNationwide": "전국 {activity} 해변 {count}곳",
+      "altScoped": "{activity} 해변 · {place} {count}곳",
+      "altNearby": "가까운 {activity} 해변",
+      "titleScoped": "{place}에는 아직 {activity} 활동이 확인된 해변이 없어요. 아래에서 다른 범위나 활동으로 찾아볼 수 있어요.",
       "title": "아직 {activity} 활동이 확인된 해변이 없어요",
       "body": "해변마다 공공 자료로 확인된 활동만 보여드려요. {activity} 활동 정보가 추가되면 아래 모양의 카드로 바로 보여드려요.",
       "bodyWide": "해변마다 공공 자료로 확인된 활동만 보여드려요. {activity} 활동 정보가 추가되면 오른쪽 모양의 카드로 이 목록에 바로 보여드려요.",
