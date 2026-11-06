@@ -154,15 +154,29 @@ describe("nationalCounts", () => {
         delayed,
       ]),
     ).toEqual({
-      counts: { clear: 1, blocked: 1, unknown: 1, stale: 1 },
+      clear: 1,
+      warning: 1,
       restricted: 2,
+      warningUnknown: 1,
+      unconfirmed: 0,
+      delayed: 1,
     });
+  });
+
+  it("데이터 없음(확인 못 함)은 '특보 확인 못 함'과 따로 셈", () => {
+    expect(
+      nationalCounts([ready("undetermined", { kind: "unconfirmed" }), unknown]),
+    ).toMatchObject({ warningUnknown: 1, unconfirmed: 1 });
   });
 
   it("불러오는 중·노출 끈 해변은 세지 않음", () => {
     expect(nationalCounts([{ kind: "loading" }, { kind: "hidden" }])).toEqual({
-      counts: { clear: 0, blocked: 0, unknown: 0, stale: 0 },
+      clear: 0,
+      warning: 0,
       restricted: 0,
+      warningUnknown: 0,
+      unconfirmed: 0,
+      delayed: 0,
     });
   });
 });

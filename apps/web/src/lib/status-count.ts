@@ -1,4 +1,4 @@
-import { badgeTone, type VerdictTone } from "@/lib/badge-tone";
+import type { VerdictTone } from "@/lib/badge-tone";
 import type { BadgeLabel, BeachView, Category } from "@/lib/snapshot/view";
 
 // 지역 해변 상태별 개수 (노션 2장 HOME 8 '지역 해변 상태별 개수 카드', BRD-27)
@@ -89,24 +89,51 @@ export function staleCheckedAt(
   return confirmedAt === undefined ? null : { confirmedAt };
 }
 
-// [8] PC 전국 지도 카드의 묶음 개수(탐색 지도 범례 4가지 색 + 이용 제한). 게시된 배지 색 그대로 셈(badgeTone, G1)
-// 모르는 사유 code의 이용불가(restricted)는 '이용불가 · 특보'로 세지 않고 따로 셈(9.1: 이름만 '이용 제한', 분류는 낮추지 않음)
+// [8] PC 전국 지도 카드의 줄별 개수(노션 D18-5 '특보 없음 · 특보 발효 중 · 특보 확인 못 함 · 관측 지연')
+// 게시된 배지 사유 그대로 셈(G1). 줄 이름이 사실과 어긋나지 않게 묶음 이름과 다른 사유는 따로 셈:
+//   모르는 사유 code의 이용불가(restricted)는 '특보 발효 중'이 아니라 '이용 제한'(9.1: 분류는 낮추지 않음)
+//   데이터 없음·지원 밖 형식(unconfirmed)은 '특보 확인 못 함'이 아니라 '확인 못 함'
 // 불러오는 중·노출 끈 해변은 세지 않음(불러오는 중이면 부르는 쪽이 개수를 보이지 않음)
-export function nationalCounts(views: readonly BeachView[]): {
-  counts: Record<VerdictTone, number>;
-  restricted: number;
-} {
-  const counts: Record<VerdictTone, number> = {
+export type NationalRow =
+  | "clear"
+  | "warning"
+  | "restricted"
+  | "warningUnknown"
+  | "unconfirmed"
+  | "delayed";
+
+export const NATIONAL_ROW_TONE: Record<NationalRow, VerdictTone> = {
+  clear: "clear",
+  warning: "blocked",
+  restricted: "blocked",
+  warningUnknown: "unknown",
+  unconfirmed: "unknown",
+  delayed: "stale",
+};
+
+const ROW_OF: Record<BadgeLabel["kind"], NationalRow> = {
+  clear: "clear",
+  warning: "warning",
+  restricted: "restricted",
+  warning_unknown: "warningUnknown",
+  unconfirmed: "unconfirmed",
+  observation_delayed: "delayed",
+};
+
+export function nationalCounts(
+  views: readonly BeachView[],
+): Record<NationalRow, number> {
+  const counts: Record<NationalRow, number> = {
     clear: 0,
-    blocked: 0,
-    unknown: 0,
-    stale: 0,
+    warning: 0,
+    restricted: 0,
+    warningUnknown: 0,
+    unconfirmed: 0,
+    delayed: 0,
   };
-  let restricted = 0;
   for (const view of views) {
     if (view.kind !== "ready") continue;
-    if (view.badge.kind === "restricted") restricted += 1;
-    else counts[badgeTone(view.badge)] += 1;
+    counts[ROW_OF[view.badge.kind]] += 1;
   }
-  return { counts, restricted };
+  return counts;
 }

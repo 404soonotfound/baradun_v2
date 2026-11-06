@@ -166,7 +166,14 @@
       "noStationNext": "Check the badge above for warning info"
     },
     "map": {
-      "restricted": "Unavailable · restricted",
+      "row": {
+        "clear": "No warnings",
+        "warning": "Warning in effect",
+        "restricted": "Restricted",
+        "warningUnknown": "Warnings not confirmed",
+        "unconfirmed": "Not confirmed",
+        "delayed": "Observation delayed"
+      },
       "title": "Seas nationwide now",
       "open": "View on map",
       "total": "{count} public beaches",
@@ -215,6 +222,8 @@
       "all": "See all",
       "remove": "Remove {name} from recently viewed",
       "chips": "{count} more recently viewed beaches",
+      "more": "{count} more",
+      "less": "Show less",
       "removed": "Removed from recently viewed",
       "undo": "Undo",
       "viewedToday": "Viewed today at {time}",
@@ -222,8 +231,6 @@
       "viewedOn": "Viewed {month}/{date} at {time}",
       "checkedNow": "Checked again just now",
       "titleWithActivity": "{name} · {activity}",
-      "more": "{count} more",
-      "less": "Show less",
       "emptyTitle": "No beaches viewed yet",
       "emptyBody": "Beaches you open will show up here"
     },

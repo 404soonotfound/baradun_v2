@@ -287,13 +287,16 @@ test.describe("공지", () => {
 // PC 홈 전국 지도 카드는 0곳인 묶음도 4줄(11/5 홈 v3 시안). 특보 없음이 0곳이면 확인 시각 근거 줄 없음
 test.describe("PC 전국 지도 카드", () => {
   test.use({ scenario: "noConfirmed" });
-  test("확인된 판단이 없어도 4가지 묶음, 특보 없음은 0곳이고 확인 시각을 내세우지 않음", async ({
+  test("확인된 판단이 없어도 노션 4줄은 늘 있고, 특보 없음은 0곳이며 확인 시각을 내세우지 않음", async ({
     page,
   }, info) => {
     test.skip(info.project.name !== "desktop", "전국 지도 카드는 PC 히어로만");
     await page.goto("/");
-    const labels = page.locator("[data-summary-category]");
-    await expect(labels).toHaveCount(4);
+    for (const row of ["clear", "warning", "warningUnknown", "delayed"]) {
+      await expect(
+        page.locator(`[data-summary-category="${row}"]`),
+      ).toBeVisible();
+    }
     await expect(page.locator('[data-national-tone="clear"]')).toHaveText(
       /0곳$/,
     );
