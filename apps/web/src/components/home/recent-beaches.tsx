@@ -64,10 +64,10 @@ export function RecentBeaches({
     });
   }, [desktop, expanded, limit, measureKey]);
   // 폭이 바뀌면(회전·창 크기) 다시 잼. 높이 변화는 무시
+  // PC에서도 지켜봄: PC 동안 폭 변화를 놓치면 모바일로 돌아왔을 때 예전 폭으로 잰 개수를 그대로 씀
   useEffect(() => {
     const el = chipsRef.current;
-    // PC는 칩을 접지 않아 잴 일이 없음
-    if (!el || desktop) return;
+    if (!el) return;
     let width = el.clientWidth;
     const observer = new ResizeObserver(() => {
       if (el.clientWidth !== width) {
@@ -77,7 +77,7 @@ export function RecentBeaches({
     });
     observer.observe(el);
     return () => observer.disconnect();
-  }, [chipIds, desktop]);
+  }, [chipIds]);
   const tRoot = useTranslations(); // home.near.clearScope · activity.*
   const visits = useRecentVisits(); // 본 시각·그때 고른 활동(기기에만)
   const snapshot = useSnapshot(); // Vue: mapState
