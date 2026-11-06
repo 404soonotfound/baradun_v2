@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useTranslations } from "next-intl";
 
 import { CARD_LAYOUT } from "@/components/home/near-card";
-import type { Activity } from "@/lib/activity";
+import { type Activity, activityNameKey } from "@/lib/activity";
 import { cn } from "@/lib/cn";
 import { localizedPath, type Locale } from "@/lib/i18n";
 
@@ -35,9 +35,7 @@ export function ActivityEmpty({
   alternatives: readonly ActivityAlternative[];
 }) {
   const t = useTranslations();
-  const name = t(
-    activity === "scuba" ? "activity.scubaFull" : `activity.${activity}`,
-  );
+  const name = t(activityNameKey(activity));
   const layout = CARD_LAYOUT[activity];
   const altList = alternatives.length > 0 && (
     <div className="flex flex-col gap-2">

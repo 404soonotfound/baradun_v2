@@ -66,7 +66,8 @@ export function RecentBeaches({
   // 폭이 바뀌면(회전·창 크기) 다시 잼. 높이 변화는 무시
   useEffect(() => {
     const el = chipsRef.current;
-    if (!el) return;
+    // PC는 칩을 접지 않아 잴 일이 없음
+    if (!el || desktop) return;
     let width = el.clientWidth;
     const observer = new ResizeObserver(() => {
       if (el.clientWidth !== width) {
@@ -76,7 +77,7 @@ export function RecentBeaches({
     });
     observer.observe(el);
     return () => observer.disconnect();
-  }, [chipIds]);
+  }, [chipIds, desktop]);
   const tRoot = useTranslations(); // home.near.clearScope · activity.*
   const visits = useRecentVisits(); // 본 시각·그때 고른 활동(기기에만)
   const snapshot = useSnapshot(); // Vue: mapState
