@@ -57,7 +57,7 @@ test.describe("상세 날씨 카드", () => {
     ).toBeVisible();
     await expect(
       weather.getByRole("heading", {
-        name: /^.~. · .+\(넓은 지역\) · 기상청 중기예보 \d{2}:\d{2} 발표$/,
+        name: /^.~. · .+\(넓은 지역\) · 기상청 중기예보 (\d{2}\/\d{2} )?\d{2}:\d{2} 발표$/,
       }),
     ).toBeVisible();
     const days = weather.locator("li[aria-label]");
