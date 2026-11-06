@@ -44,7 +44,7 @@ const GANGNEUNG: HomeScope = {
   kind: "region",
   region: { sido: "강원", sigungu: "강릉시" },
 };
-const YANGGU: HomeScope = {
+const GOSEONG: HomeScope = {
   kind: "region",
   region: { sido: "강원", sigungu: "고성군" },
 };
@@ -62,8 +62,22 @@ describe("activityAlternatives", () => {
   });
 
   it("지역에만 없고 전국에 있으면 '전국 ○○ 해변'이 먼저", () => {
-    expect(activityAlternatives(BEACHES, YANGGU, "surfing")).toEqual([
+    expect(activityAlternatives(BEACHES, GOSEONG, "surfing")).toEqual([
       { kind: "nationwide", activity: "surfing", count: 2 },
+    ]);
+  });
+
+  it("지역에 없는 활동이 전국에 있으면 전국 줄이 먼저, 그다음 같은 지역 다른 활동", () => {
+    expect(
+      activityAlternatives(
+        [...BEACHES, beach("d", "양양군", ["swimming", "scuba"])],
+        GANGNEUNG,
+        "scuba",
+      ),
+    ).toEqual([
+      { kind: "nationwide", activity: "scuba", count: 1 },
+      { kind: "scoped", activity: "swimming", count: 2 },
+      { kind: "scoped", activity: "surfing", count: 1 },
     ]);
   });
 

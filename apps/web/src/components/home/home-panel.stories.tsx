@@ -28,10 +28,35 @@ const COUNTS: StatusCount[] = [
 ];
 
 const noop = () => {};
-const ALTERNATIVES = [
-  { key: "swimming", label: "수영 해변 · 강원 강릉시 19곳", onSelect: noop },
-  { key: "surfing", label: "서핑 해변 · 강원 강릉시 3곳", onSelect: noop },
-];
+// 대신 찾아보기 줄 글은 부르는 쪽(home-screen)이 문구 키로 만듦. 여기서는 언어별 완성 글로 둠
+const ALTERNATIVES = {
+  ko: [
+    { key: "swimming", label: "수영 해변 · 강원 강릉시 19곳", onSelect: noop },
+    { key: "surfing", label: "서핑 해변 · 강원 강릉시 3곳", onSelect: noop },
+  ],
+  en: [
+    {
+      key: "swimming",
+      label: "Swimming beaches · 강원 강릉시 (19)",
+      onSelect: noop,
+    },
+    {
+      key: "surfing",
+      label: "Surfing beaches · 강원 강릉시 (3)",
+      onSelect: noop,
+    },
+  ],
+};
+const NATIONWIDE_ALT = {
+  ko: [{ key: "nationwide", label: "전국 서핑 해변 14곳", onSelect: noop }],
+  en: [
+    {
+      key: "nationwide",
+      label: "Surfing beaches nationwide (14)",
+      onSelect: noop,
+    },
+  ],
+};
 
 function Panel({ locale }: { locale: "ko" | "en" }) {
   return (
@@ -67,16 +92,14 @@ function Panel({ locale }: { locale: "ko" | "en" }) {
           activity="scuba"
           place="강원 강릉시"
           nationwideZero
-          alternatives={ALTERNATIVES}
+          alternatives={ALTERNATIVES[locale]}
         />
         <ActivityEmpty
           locale={locale}
           activity="surfing"
           place="강원 고성군"
           nationwideZero={false}
-          alternatives={[
-            { key: "nationwide", label: "전국 서핑 해변 14곳", onSelect: noop },
-          ]}
+          alternatives={NATIONWIDE_ALT[locale]}
         />
       </div>
     </NextIntlClientProvider>
