@@ -76,7 +76,13 @@ export function MetricValue({
   // 사이 띄움은 문구의 빈칸(글자로 남아 화면 읽기·복사에서 'fromSSE'처럼 붙지 않게)
   if (metric.kind === "value" && metric.unit === "deg") {
     return (
-      <span className="font-bold whitespace-nowrap text-text-default">
+      // 좁은 PC 카드(wide, @2xl 미만)는 '남남동' / '쪽에서'를 줄바꿈해 옆 칸으로 넘치지 않게
+      <span
+        className={cn(
+          "font-bold text-text-default",
+          size === "wide" ? "@2xl:whitespace-nowrap" : "whitespace-nowrap",
+        )}
+      >
         {t.rich("observation.directionFrom", {
           dir: () => (
             <span className={VALUE_SIZE[size].value}>
@@ -325,7 +331,8 @@ function WideStats({
             </span>
             <MetricValue metric={metric} size="wide" />
             {metric.kind === "value" && (
-              <span className="text-caption whitespace-nowrap text-text-muted">
+              // 좁은 카드에서는 줄바꿈(영어 'Measured 12 min ago'가 옆 칸으로 넘치지 않게)
+              <span className="text-caption text-text-muted @2xl:whitespace-nowrap">
                 {measuredAgoText(metric.observedAt, nowMs)}
               </span>
             )}
