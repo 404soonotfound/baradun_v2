@@ -430,6 +430,11 @@ export function WeatherCard({
           </div>
         </div>
       )}
+
+      {/* 날씨는 참고 정보(노션 D18-1): 분류·판단에 쓰지 않음을 카드 끝에 둠 */}
+      <p className="text-caption text-text-muted lg:px-5 lg:pb-4">
+        {t("note")}
+      </p>
     </section>
   );
 }
