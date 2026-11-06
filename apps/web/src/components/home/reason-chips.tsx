@@ -34,18 +34,18 @@ export function ReasonChips({
   const { badgeText, confirmedUntilText } = useBadgeText();
   if (counts === null) {
     return (
-      <span role="status" className="flex flex-col items-end gap-1">
+      <div role="status" className="flex flex-col items-end gap-1">
         <Skeleton className="h-7 w-56 rounded-[10px]" />
         <span className="text-caption text-text-muted">
           {t("home.region.countLoading")}
         </span>
-      </span>
+      </div>
     );
   }
   const hasClear = counts.some((item) => item.label.kind === "clear");
   const time = kstStamp(clearCheckedAt, nowMs);
   return (
-    <span className="flex flex-col items-end gap-1">
+    <div className="flex flex-col items-end gap-1">
       <ul className="flex flex-wrap justify-end gap-1.5">
         {counts.map((item) => {
           const text = badgeText(item.label);
@@ -74,6 +74,6 @@ export function ReasonChips({
           {confirmedUntilText(staleChecked.confirmedAt, nowMs)}
         </span>
       )}
-    </span>
+    </div>
   );
 }
