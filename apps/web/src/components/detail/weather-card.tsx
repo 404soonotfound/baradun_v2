@@ -21,6 +21,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/cn";
 import { WEATHER_COLUMN, WindRow } from "@/components/weather/wind-row";
 import type { Locale } from "@/lib/i18n";
+import { joinMeta } from "@/lib/meta-join";
 import { kstStamp } from "@/lib/snapshot/clock";
 import type { WeatherView } from "@/lib/snapshot/weather";
 import { midLandName } from "@/lib/weather-zones";
@@ -251,17 +252,12 @@ export function WeatherCard({
   });
   const weekday = (date: string) =>
     weekdayFormat.format(new Date(`${date}T03:00:00Z`));
-  const range =
-    later.days.length === 0
-      ? null
-      : later.days.length === 1
-        ? weekday(later.days[0]!.date)
-        : `${weekday(later.days[0]!.date)}~${weekday(later.days.at(-1)!.date)}`;
-  // 펼친 날을 출처별 두 구간으로(단기예보 글피 · 중기예보 그 뒤). 구간 제목에 출처·구역·발표 시각
   const dayRange = (days: readonly DayCell[]) =>
     days.length === 1
       ? weekday(days[0]!.date)
       : `${weekday(days[0]!.date)}~${weekday(days.at(-1)!.date)}`;
+  const range = later.days.length === 0 ? null : dayRange(later.days);
+  // 펼친 날을 출처별 두 구간으로(단기예보 글피 · 중기예보 그 뒤). 구간 제목에 출처·구역·발표 시각
   const midName =
     weather.kind === "ready"
       ? midLandName(weather.midLandId, weather.midLand?.name ?? null, locale)
@@ -273,19 +269,16 @@ export function WeatherCard({
   const groups = (["short", "mid"] as const).flatMap((source) => {
     const days = later.days.filter((day) => day.source === source);
     if (days.length === 0) return [];
-    const range = dayRange(days);
     const head =
       source === "short"
-        ? t("laterShort", { range })
-        : [
-            t("laterMid", { range }),
+        ? t("laterShort", { range: dayRange(days) })
+        : joinMeta([
+            dayRange(days),
             midName && t("laterMidZone", { zone: midName }),
             midTime
               ? t("laterMidIssued", { time: midTime })
               : t("laterMidSource"),
-          ]
-            .filter(Boolean)
-            .join(" · ");
+          ]);
     return [{ source, days, head }];
   });
   const Chevron = open ? ChevronUp : ChevronDown;
@@ -424,15 +417,7 @@ export function WeatherCard({
           </button>
           <div id={laterId} hidden={!open} className="pb-3">
             <div className="flex flex-col gap-2">
-              {range && (
-                <p className="text-[11.5px] text-text-muted">
-                  {t.rich("laterHead", {
-                    range,
-                    b: (chunks) => <b className="text-text-body">{chunks}</b>,
-                  })}
-                </p>
-              )}
-              {/* 두 구간 제목(노션 D18-2): '토 · 단기예보' / '일~화 · 강원 영동(넓은 지역) · 기상청 중기예보 06:00 발표'
+              {/* 두 구간 제목(노션 3장 WeatherCard·D18-2): '토 · 단기예보 · 하루 최저 / 최고' / '일~화 · 강원 영동(넓은 지역) · 기상청 중기예보 06:00 발표'
                   PC는 칸 수만큼 가로로 나눠 4칸 한 줄 */}
               {later.days.length > 0 && (
                 <div className="flex flex-col gap-2 @2xl:flex-row @2xl:gap-2">
@@ -445,9 +430,9 @@ export function WeatherCard({
                         GROUP_GROW[group.days.length],
                       )}
                     >
-                      <p className="text-[11px] text-text-muted [word-break:keep-all]">
+                      <h3 className="text-[11px] text-text-muted [word-break:keep-all]">
                         {group.head}
-                      </p>
+                      </h3>
                       <ul
                         className={cn(
                           "flex flex-col divide-y divide-border-default @2xl:grid @2xl:gap-2 @2xl:divide-y-0",
