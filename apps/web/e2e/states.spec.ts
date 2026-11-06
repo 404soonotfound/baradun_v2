@@ -298,6 +298,13 @@ test.describe("PC 전국 지도 카드", () => {
         page.locator(`[data-summary-category="${row}"]`),
       ).toBeVisible();
     }
+    // 이름과 다른 사유 줄(이용 제한·확인 못 함)은 있을 때만: 보이면 1곳 이상
+    const optional = page.locator(
+      '[data-national-tone="restricted"], [data-national-tone="unconfirmed"]',
+    );
+    for (const row of await optional.all()) {
+      await expect(row).toHaveText(/[1-9]\d*곳$/);
+    }
     await expect(page.locator('[data-national-tone="clear"]')).toHaveText(
       /0곳$/,
     );
