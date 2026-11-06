@@ -327,9 +327,10 @@ export function HomeScreen({
         });
 
   // [7] 상황 배너는 하나만(BRD-28). 관측 지연은 홈 카드 해변 중 배지가 관측 지연인 곳
-  // 모두 보기로 펼쳤으면 펼친 카드까지(카드 배지와 배너가 어긋나지 않게)
-  const delayed = listed.filter((beach) =>
-    isDelayedView(deriveBeachView({ id: beach.id, hidden: false }, snapshot)),
+  // 화면에 보이는 카드만(모바일 접힘은 첫 카드, 펼치면 전부). 카드 배지와 배너가 어긋나지 않게
+  const delayed = (desktop || expanded ? listed : listed.slice(0, 1)).filter(
+    (beach) =>
+      isDelayedView(deriveBeachView({ id: beach.id, hidden: false }, snapshot)),
   );
   const situation = pickSituation({
     phase: snapshot.phase,
