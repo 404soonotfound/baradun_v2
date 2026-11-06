@@ -200,7 +200,8 @@ export function RecentBeaches({
           ))}
         </ul>
       )}
-      {(hidden > 0 || (expanded && !desktop)) && (
+      {/* 칩을 모두 지우면 펼친 상태여도 '접기'를 두지 않음(가리킬 목록이 없음) */}
+      {rest.length > 0 && (hidden > 0 || (expanded && !desktop)) && (
         <button
           type="button"
           aria-expanded={expanded}
