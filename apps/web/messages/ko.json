@@ -165,6 +165,16 @@
       "noValueNext": "새 측정값이 들어오면 다시 보여드려요",
       "noStationNext": "특보 정보는 위 배지를 확인하세요"
     },
+    "panel": {
+      "activityTitleRegion": "{region}에서 {activity}이 확인된 해변",
+      "activityTitleNationwide": "전국에서 {activity}이 확인된 해변",
+      "showing": "{total}곳 중 {shown}곳을 보여드려요",
+      "showingAll": "{count}곳을 보여드려요",
+      "expand": "해변 {count}곳 모두 보기",
+      "expandActivity": "{activity} 해변 {count}곳 모두 보기",
+      "collapse": "접기",
+      "exploreAll": "활동과 관계없이 전체 해변 탐색하기"
+    },
     "map": {
       "row": {
         "clear": "특보 없음",
