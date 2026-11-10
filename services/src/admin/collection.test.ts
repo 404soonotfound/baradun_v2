@@ -1,6 +1,7 @@
 import { GetCommand, QueryCommand } from "@aws-sdk/lib-dynamodb";
 import type { APIGatewayProxyEventV2 } from "aws-lambda";
 import { describe, expect, it } from "vitest";
+import { PUBLISH_SUMMARY_PK } from "../core/collect/publish-summary";
 import { runLogPk, runLogSk } from "../core/collect/run-log";
 import { CATALOG_JOB } from "../collectors/catalog";
 import { OCEAN_JOB } from "../collectors/ocean";
@@ -110,15 +111,22 @@ describe("수집 현황 집계", () => {
     expect(job.week).toEqual({ runs: 5, ok: 4 });
     expect(job.lastSuccessAt).toBe("2026-11-04T05:03:00.000Z");
     // 마지막 칸이 지금 시간(05시), 앞 칸이 04시
+    // 04:18 성공 뒤 05:03까지 45분(기준 20분) → 04:38부터 지연이 05시 칸까지 걸침
     expect(job.hourly.at(-1)).toEqual({
       hour: "2026-11-04T05:00:00.000Z",
       runs: 1,
       ok: 1,
+      late: true,
     });
+    // 지금(05:20)은 05:03 성공 뒤 17분 → 지연 아님
+    expect(job.overdue).toBe(false);
+    expect(job.lateAfterMinutes).toBe(20);
+    // 전날 05:10 성공 뒤 04:18까지 성공이 없었음 → 04시 칸에 지연이 걸침
     expect(job.hourly.at(-2)).toEqual({
       hour: "2026-11-04T04:00:00.000Z",
       runs: 2,
       ok: 1,
+      late: true,
     });
     expect(job.hourly[0]!.hour).toBe("2026-11-03T06:00:00.000Z");
   });
@@ -139,6 +147,7 @@ describe("수집 현황 집계", () => {
         endedAt: null,
         runs: 1,
         failures: [{ source: "tsunami", reason: "resultCode:22", code: "22" }],
+        stations: [],
       },
       {
         startedAt: "2026-11-04T01:00:00.000Z",
@@ -146,6 +155,7 @@ describe("수집 현황 집계", () => {
         runs: 2,
         // 실행 수는 runs. count(해변 수)는 실행끼리 더하지 않음
         failures: [{ source: "pwncd", reason: "timeout" }],
+        stations: [],
       },
     ]);
   });
@@ -188,6 +198,90 @@ describe("수집 현황 집계", () => {
   });
 });
 
+describe("지연 판정·빠진 관측소 (BRD-187)", () => {
+  it("마지막 성공 뒤 기준(관측 35분)을 넘으면 overdue", () => {
+    const job = summarizeJob(
+      "collect-ocean",
+      [run("2026-11-04T04:40:00.000Z", "complete")],
+      NOW,
+      false,
+    );
+    expect(job.lateAfterMinutes).toBe(35);
+    expect(job.overdue).toBe(true); // 40분 지남
+  });
+
+  it("사진(하루 1회)과 이안류 비수기(11월)는 지연을 보지 않는다", () => {
+    const old = [run("2026-11-01T04:00:00.000Z", "complete")];
+    for (const name of ["collect-catalog", "collect-rip"] as const) {
+      const job = summarizeJob(name, old, NOW, false);
+      expect(job.lateAfterMinutes).toBeNull();
+      expect(job.overdue).toBe(false);
+      expect(job.hourly.some((h) => h.late)).toBe(false);
+    }
+  });
+
+  it("성공 기록이 없으면 overdue로 만들지 않는다(상태는 lastRun이 말함)", () => {
+    const job = summarizeJob(
+      "collect-warnings",
+      [run("2026-11-04T04:00:00.000Z", "failed")],
+      NOW,
+      false,
+    );
+    expect(job.overdue).toBe(false);
+  });
+
+  it("빠진 관측소만 있는 성공 실행도 장애로 묶고, 대조한 성공 실행에서 돌아온 시각을 둔다", () => {
+    const missing = (at: string, ids: string[]): RunView => ({
+      ...run(at, "complete"),
+      missingStations: ids,
+    });
+    const incidents = incidentsOf([
+      missing("2026-11-02T02:00:00.000Z", []),
+      missing("2026-11-02T02:10:00.000Z", ["22451", "22520"]),
+      // 출처가 실패해 대조하지 못한 실행은 돌아온 것으로 보지 않음
+      run("2026-11-02T02:40:00.000Z", "partial", [
+        { source: "sea_obs", reason: "timeout" },
+      ]),
+      missing("2026-11-02T03:00:00.000Z", ["22520"]),
+      missing("2026-11-02T03:10:00.000Z", []),
+    ]);
+    expect(incidents).toHaveLength(1);
+    expect(incidents[0]).toMatchObject({
+      startedAt: "2026-11-02T02:10:00.000Z",
+      endedAt: "2026-11-02T03:10:00.000Z",
+      runs: 3,
+      stations: [
+        {
+          id: "22451",
+          firstMissingAt: "2026-11-02T02:10:00.000Z",
+          lastMissingAt: "2026-11-02T02:10:00.000Z",
+          returnedAt: "2026-11-02T03:00:00.000Z",
+        },
+        {
+          id: "22520",
+          firstMissingAt: "2026-11-02T02:10:00.000Z",
+          lastMissingAt: "2026-11-02T03:00:00.000Z",
+          returnedAt: "2026-11-02T03:10:00.000Z",
+        },
+      ],
+    });
+  });
+
+  it("옛 기록(빠진 관측소 칸 없음)은 깨끗한 실행으로 읽고, 칸이 있으면 그대로 읽는다", () => {
+    expect(
+      toRunView({ startedAt: "2026-11-04T05:03:00.000Z", status: "complete" }),
+    ).not.toHaveProperty("missingStations");
+    expect(
+      toRunView({
+        startedAt: "2026-11-04T05:03:00.000Z",
+        status: "complete",
+        missingStations: ["22451", 3],
+        missingStationsTotal: 60,
+      }),
+    ).toMatchObject({ missingStations: ["22451"], missingStationsTotal: 60 });
+  });
+});
+
 describe("readCollection", () => {
   it("수집기마다 7일 기록을 읽고 게시본 버전을 함께 돌려준다", async () => {
     const { client, sent } = fakeOps(
@@ -202,6 +296,9 @@ describe("readCollection", () => {
     expect(sent.sort()).toEqual(
       [
         "get publish",
+        // 게시 요약: 최신 하나(관측소 표) + 8일 목록
+        `query ${PUBLISH_SUMMARY_PK}`,
+        `query ${PUBLISH_SUMMARY_PK}`,
         ...COLLECTION_JOBS.map((job) => `query ${runLogPk(job)}`),
       ].sort(),
     );
@@ -210,6 +307,23 @@ describe("readCollection", () => {
     expect(ocean.week).toEqual({ runs: 2, ok: 1 });
     expect(ocean.lastRun?.status).toBe("complete");
     expect(view.jobs.find((j) => j.job === WARNINGS_JOB)!.lastRun).toBeNull();
+  });
+
+  it("경보 읽기 도구가 없으면 경보는 확인 못 함, 장애의 경보는 null, 관측 장애에는 해변 영향을 둔다", async () => {
+    const { client } = fakeOps(
+      [stored(OCEAN_JOB, run("2026-11-04T05:10:00.000Z", "failed"))],
+      "20261104T051000Z",
+    );
+    const view = await readCollection(client, "Ops", NOW);
+    expect(view.alarms).toEqual({ status: "unavailable" });
+    // 게시 요약이 하나도 없음 → 관측 지연 해변 수를 0으로 만들지 않음
+    expect(view.publish).toBeNull();
+    const [incident] = view.jobs.find((j) => j.job === OCEAN_JOB)!.incidents;
+    expect(incident?.alarms).toBeNull();
+    expect(incident?.impact).toMatchObject({
+      status: "unknown",
+      reason: "summary_missing",
+    });
   });
 });
 

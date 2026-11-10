@@ -813,3 +813,59 @@ describe("rollbackManifest (T06)", () => {
     });
   });
 });
+
+// 게시 요약 (BRD-187): 운영 화면이 State·게시 파일 대신 읽음. 분류는 게시한 status 그대로
+describe("publishSnapshot 게시 요약", () => {
+  it("게시하면 해변 수·관측 지연 해변·관측소별 사용 해변을 남기고, 다음 게시는 앞 버전을 previous로 둔다", async () => {
+    const { ops, snapshots, deps, advance } = await setup();
+    await publishSnapshot(deps());
+    const first = ops.summaries.get(V1)!;
+    const status = JSON.parse(
+      snapshots.files.get(`data/${V1}/status.json`)!.body,
+    ) as { beaches: Record<string, { reasons: { code: string }[] }> };
+    expect(first).toMatchObject({
+      version: V1,
+      previous: null,
+      publishedAt: NOW,
+      beachCount: BEACHES.length,
+      delayedBeachIds: Object.entries(status.beaches)
+        .filter(([, s]) =>
+          s.reasons.some((r) => r.code === "observation_delayed"),
+        )
+        .map(([id]) => id)
+        .sort(),
+    });
+    const wave = BEACHES[0]!.stations.waveHeight!;
+    expect(first.stations[wave.id]).toMatchObject({
+      name: wave.name.ko,
+      waveBeachIds: expect.arrayContaining([BEACHES[0]!.id]),
+    });
+
+    // 파고 90분이 지나 분류가 바뀌는 시각으로 다시 게시 → 새 버전, previous는 앞 버전
+    const v2 = advance(2 * 60 * 60 * 1000);
+    expect(await publishSnapshot(deps())).toMatchObject({
+      status: "published",
+      version: v2,
+    });
+    expect(ops.summaries.get(v2)).toMatchObject({ previous: V1 });
+    expect(ops.summaries.get(v2)!.delayedBeachIds.length).toBeGreaterThan(0);
+  });
+
+  it("요약을 남기지 못해도 게시는 끝난 것으로 두고 경고만 남긴다", async () => {
+    const { ops, deps, events } = await setup();
+    ops.putPublishSummary = async () => {
+      throw new Error("ProvisionedThroughputExceededException");
+    };
+    expect(await publishSnapshot(deps())).toMatchObject({
+      status: "published",
+      version: V1,
+    });
+    expect(await ops.getPublishedVersion()).toBe(V1);
+    expect(events()).toContainEqual(
+      expect.objectContaining({
+        event: "publish_summary_not_recorded",
+        version: V1,
+      }),
+    );
+  });
+});
