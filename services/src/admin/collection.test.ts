@@ -412,6 +412,8 @@ describe("readCollection", () => {
       status: "unknown",
       reason: "summary_missing",
     });
+    // 관측소 표가 없음 → 관측소 목록은 확인 못 함(빈 목록으로 두지 않음)
+    expect(view.stations).toEqual({ status: "unavailable" });
   });
 });
 
