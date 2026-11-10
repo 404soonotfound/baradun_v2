@@ -8,7 +8,7 @@ import { localizedPath, type Locale } from "@/lib/i18n";
 
 // 사이트 푸터. 모든 화면 맨 아래(본문 main 밖, contentinfo)
 // - 모바일: 로고 → 안내 링크 2열 → 언어 → 안전 문구·저작권. 아래는 하단 탭 높이만큼 비워 가려지지 않게
-// - PC(lg 이상): 한 줄(로고·링크 왼쪽, 저작권·언어 오른쪽), 가운데 최대 1280
+// - PC(lg 이상): 첫 줄 로고·링크·언어, 아래 줄 안전 문구·저작권(D18-7), 가운데 최대 1280
 // 링크는 설정의 안내 화면들과 같은 순서·이름(pages.*)
 const LINKS = [
   { href: "/guide/", key: "guide" },
@@ -27,7 +27,7 @@ export async function SiteFooter({ locale }: { locale: Locale }) {
   return (
     // mt-auto: 본문이 짧은 화면에서도 푸터를 화면 맨 아래에 둠(body가 세로 flex, globals.css)
     <footer className="mt-auto border-t border-border-default bg-bg-surface pb-[calc(var(--spacing-tabbar)+max(14px,env(safe-area-inset-bottom)))] lg:pb-0">
-      <div className="mx-auto flex w-full max-w-[1280px] flex-col gap-5 px-gutter py-6 lg:flex-row lg:items-center lg:gap-8 lg:px-10 lg:py-5">
+      <div className="mx-auto flex w-full max-w-[1280px] flex-col gap-5 px-gutter py-6 lg:flex-row lg:flex-wrap lg:items-center lg:gap-x-8 lg:gap-y-3 lg:px-10 lg:py-5">
         <Link
           href={localizedPath(locale, "/")}
           className="flex w-fit items-center gap-2 border-b border-border-default pb-5 text-body font-bold text-text-default max-lg:w-full lg:border-0 lg:pb-0"
@@ -57,8 +57,8 @@ export async function SiteFooter({ locale }: { locale: Locale }) {
             ))}
           </ul>
         </nav>
-        {/* 모바일은 언어가 안전 문구 위, PC는 저작권 오른쪽 */}
-        <div className="lg:order-last">
+        {/* 모바일은 언어가 안전 문구 위, PC는 첫 줄 오른쪽 끝 */}
+        <div>
           <div className="lg:hidden">
             <LanguageMenu locale={locale} variant="row" />
           </div>
@@ -66,9 +66,10 @@ export async function SiteFooter({ locale }: { locale: Locale }) {
             <LanguageMenu locale={locale} variant="inline" />
           </div>
         </div>
-        <div className="flex flex-col gap-2 text-body-s text-text-muted">
-          <p className="lg:hidden">{t("footer.disclaimer")}</p>
-          <p>{t("footer.copyright", { year: YEAR })}</p>
+        {/* PC는 basis-full로 아래 줄에 따로 둠 */}
+        <div className="flex flex-col gap-2 text-body-s text-text-muted lg:basis-full lg:flex-row lg:justify-between lg:gap-6">
+          <p>{t("footer.disclaimer")}</p>
+          <p className="shrink-0">{t("footer.copyright", { year: YEAR })}</p>
         </div>
       </div>
     </footer>
