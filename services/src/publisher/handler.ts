@@ -38,8 +38,6 @@ function requiredEnv(name: string): string {
 
 const VERSION = /^[0-9]{8}T[0-9]{6}Z$/;
 
-export { loadBeaches };
-
 const log = createLogger(() => []);
 
 // 실행 환경이 살아 있는 동안 다시 씀(연결·파일 읽기 줄임)
