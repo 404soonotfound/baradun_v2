@@ -231,18 +231,26 @@ export function cloudWatchAlarmReader(
       } while (nextToken);
       return alarms;
     },
+    // 한 번에 최대 100건 → 끝까지 읽음(자주 오가는 경보의 옛 기록이 빠져 장애가 '경보 없음'으로 보이지 않게)
     async history(name, since) {
-      const result = await client.send(
-        new DescribeAlarmHistoryCommand({
-          AlarmName: name,
-          AlarmTypes: ["MetricAlarm"],
-          HistoryItemType: "StateUpdate",
-          StartDate: since,
-          ScanBy: "TimestampDescending",
-          MaxRecords: 100,
-        }),
-      );
-      return result.AlarmHistoryItems ?? [];
+      const items: unknown[] = [];
+      let nextToken: string | undefined;
+      do {
+        const result = await client.send(
+          new DescribeAlarmHistoryCommand({
+            AlarmName: name,
+            AlarmTypes: ["MetricAlarm"],
+            HistoryItemType: "StateUpdate",
+            StartDate: since,
+            ScanBy: "TimestampDescending",
+            MaxRecords: 100,
+            ...(nextToken ? { NextToken: nextToken } : {}),
+          }),
+        );
+        items.push(...(result.AlarmHistoryItems ?? []));
+        nextToken = result.NextToken;
+      } while (nextToken);
+      return items;
     },
   };
 }
