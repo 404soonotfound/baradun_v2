@@ -26,6 +26,9 @@ export interface RunFailure {
   readonly count?: number;
 }
 
+// 한 기록에 남기는 빠진 관측소 수(BRD-187). 넘으면 앞에서부터 자르고 missingStationsTotal에 전체 수
+export const MISSING_STATIONS_MAX = 50;
+
 export interface RunRecord {
   readonly job: string;
   readonly slotId: string;
@@ -33,6 +36,11 @@ export interface RunRecord {
   readonly finishedAt: string; // UTC ISO
   readonly status: RunStatus;
   readonly failures: readonly RunFailure[];
+  // 응답은 왔는데 해변에 배정된 관측소 값이 빠진 관측소 id(collect-ocean만, BRD-187)
+  // 실행 상태(status)는 바꾸지 않음 → 관측소 하나가 빠질 때마다 오류 경보가 울리지 않음
+  // 없으면(undefined) 대조하지 못함·기록 없음. 빈 배열이면 대조해서 빠진 관측소 없음
+  readonly missingStations?: readonly string[];
+  readonly missingStationsTotal?: number;
 }
 
 export function runLogPk(job: string): string {

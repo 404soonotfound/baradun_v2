@@ -11,7 +11,8 @@ import {
   mergeWaveHistory,
   readWaveHistory,
 } from "../core/observations/wave-history";
-import type { RunFailure } from "../core/collect/run-log";
+import { MISSING_STATIONS_MAX, type RunFailure } from "../core/collect/run-log";
+import type { MetricKey } from "../core/observations/values";
 import type { ApiKeys } from "../core/secrets/api-keys";
 import type {
   OpsStore,
@@ -39,7 +40,7 @@ export const OCEAN_STATE = {
 } as const;
 
 const BASE = "https://apihub.kma.go.kr/api/typ01/url/";
-type Source = "sea_obs" | "kma_buoy";
+export type Source = "sea_obs" | "kma_buoy";
 const SOURCES: readonly Source[] = ["sea_obs", "kma_buoy"];
 
 export interface CollectDeps {
@@ -53,7 +54,7 @@ export interface CollectDeps {
 }
 
 // 출처 하나의 결과. ok여도 건너뛴 줄 수는 알림용으로 남김
-type SourceOutcome =
+export type SourceOutcome =
   | {
       status: "ok";
       rows: ObservationRow[];
@@ -65,14 +66,88 @@ type SourceOutcome =
 
 // skipped: 다른 실행이 슬롯을 맡았거나 이미 끝남(off_season: collect-rip 비수기의 호출 없는 슬롯). complete: 두 출처 모두 저장. partial·failed: 다음 슬롯·재시도가 메움
 // failures: 실행 기록(core/collect/run-log.ts)에 남길 실패 사유. complete면 없음
+// missingStations: 응답은 왔는데 배정된 관측소 값이 빠진 관측소(collect-ocean만, BRD-187). 대조하지 못하면 없음
 export type CollectRunResult =
   | { status: "skipped"; slotId: string; claim: "done" | "busy" | "off_season" }
-  | { status: "complete"; slotId: string }
-  | {
+  | ({ status: "complete"; slotId: string } & MissingStations)
+  | ({
       status: "partial" | "failed";
       slotId: string;
       failures: readonly RunFailure[];
-    };
+    } & MissingStations);
+
+export interface MissingStations {
+  readonly missingStations?: readonly string[];
+  readonly missingStationsTotal?: number;
+}
+
+// 출처별로 받는 지표(sea-obs.ts·kma-buoy.ts 열과 같음)
+export const SOURCE_METRICS: Record<Source, readonly MetricKey[]> = {
+  sea_obs: ["waveHeight", "waterTemp", "wind"],
+  kma_buoy: ["wavePeriod", "waveDirection"],
+};
+
+// 출처별로 해변에 배정된 관측소와 그 관측소에서 쓰는 지표(data/beaches의 stations)
+export type ExpectedStations = ReadonlyMap<
+  Source,
+  ReadonlyMap<string, ReadonlySet<MetricKey>>
+>;
+
+type BeachStationsLike = Readonly<
+  Partial<Record<MetricKey, { readonly id: string } | null>>
+>;
+
+export function expectedStations(
+  beaches: readonly { readonly stations: BeachStationsLike }[],
+): ExpectedStations {
+  const expected = new Map<Source, Map<string, Set<MetricKey>>>();
+  for (const source of SOURCES) {
+    const stations = new Map<string, Set<MetricKey>>();
+    for (const beach of beaches) {
+      for (const metric of SOURCE_METRICS[source]) {
+        const id = beach.stations[metric]?.id;
+        if (!id) continue;
+        const metrics = stations.get(id) ?? new Set<MetricKey>();
+        metrics.add(metric);
+        stations.set(id, metrics);
+      }
+    }
+    expected.set(source, stations);
+  }
+  return expected;
+}
+
+// 정상 응답인데 배정된 지표 중 쓸 수 있는 값이 하나도 없는 관측소(줄이 없거나 모두 무효 값)
+// 실패한 출처는 대조하지 않음(출처 실패는 failures에 이미 있음)
+export function findMissingStations(
+  outcomes: Readonly<Record<Source, SourceOutcome>>,
+  expected: ExpectedStations,
+): MissingStations {
+  const missing = new Set<string>();
+  for (const source of SOURCES) {
+    const outcome = outcomes[source];
+    if (outcome.status !== "ok") continue;
+    const seen = new Set<string>();
+    for (const row of outcome.rows) {
+      const metrics = expected.get(source)?.get(row.stationId);
+      if (!metrics) continue;
+      for (const metric of metrics) {
+        const value = row[metric];
+        if (value !== undefined && value !== null) seen.add(row.stationId);
+      }
+    }
+    for (const id of expected.get(source)?.keys() ?? []) {
+      if (!seen.has(id)) missing.add(id);
+    }
+  }
+  const ids = [...missing].sort();
+  return {
+    missingStations: ids.slice(0, MISSING_STATIONS_MAX),
+    ...(ids.length > MISSING_STATIONS_MAX
+      ? { missingStationsTotal: ids.length }
+      : {}),
+  };
+}
 
 interface ReadingsValue {
   readings: StationReadings;
@@ -246,8 +321,10 @@ async function saveHistory(
   return saved;
 }
 
+// expected: 배정된 관측소(handlers.ts가 data/beaches에서 만듦). 없으면 빠진 관측소를 대조하지 않음
 export async function collectOcean(
   deps: CollectDeps,
+  expected?: ExpectedStations | null,
 ): Promise<CollectRunResult> {
   const startedMs = deps.clock();
   const slotMs = slotStart(startedMs, COLLECT_POLICY.oceanSchedule);
@@ -360,7 +437,11 @@ export async function collectOcean(
     slotId,
     status,
   });
-  if (status === "complete") return { status, slotId };
+  const missing = expected ? findMissingStations(outcomes, expected) : {};
+  if ((missing.missingStations?.length ?? 0) > 0) {
+    deps.log("warn", "ocean_stations_missing", { slotId, ...missing });
+  }
+  if (status === "complete") return { status, slotId, ...missing };
   const failures: RunFailure[] = [];
   for (const source of SOURCES) {
     const outcome = outcomes[source];
@@ -371,5 +452,5 @@ export async function collectOcean(
     failures.push({ source: "storage", reason: "readings_not_saved" });
   if (seaObs!.status === "ok" && !historySaved)
     failures.push({ source: "storage", reason: "history_not_saved" });
-  return { status, slotId, failures };
+  return { status, slotId, failures, ...missing };
 }
