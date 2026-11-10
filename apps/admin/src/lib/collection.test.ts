@@ -452,3 +452,42 @@ describe("경보 묶음", () => {
     );
   });
 });
+
+describe("장애 경과 순서 (Codex P2)", () => {
+  it("장애 앞뒤 10분 안의 경보도 시작·해결과 함께 시각순으로", () => {
+    const events = incidentTimeline(
+      {
+        kind: "failure",
+        startedAt: "2026-11-04T00:00:00.000Z",
+        endedAt: "2026-11-04T00:02:00.000Z",
+        runs: 1,
+        failures: [],
+        stations: [],
+        missingTruncated: false,
+        alarms: [
+          {
+            id: "OceanErrors",
+            name: "BaradunV2-OceanErrors",
+            at: "2026-11-04T00:05:00.000Z",
+            from: "OK",
+            to: "ALARM",
+          },
+          {
+            id: "OceanStopped",
+            name: "BaradunV2-OceanStopped",
+            at: "2026-11-03T23:55:00.000Z",
+            from: "OK",
+            to: "ALARM",
+          },
+        ],
+      },
+      "2026-11-04T01:00:00.000Z",
+    );
+    expect(events.map((e) => e.type)).toEqual([
+      "alarm",
+      "start",
+      "end",
+      "alarm",
+    ]);
+  });
+});

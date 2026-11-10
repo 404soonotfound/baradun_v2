@@ -411,7 +411,10 @@ export function incidentTimeline(
   incident: Incident,
   nowIso: string,
 ): TimelineEvent[] {
-  const middle: TimelineEvent[] = [
+  // 서버는 장애 앞뒤 10분 안의 경보도 붙임 → 시작·해결까지 모두 시각순(같은 시각이면 시작 → 경보 → 돌아옴 → 해결)
+  // 이어지는 중은 지금 시각이라 맨 끝
+  const events: TimelineEvent[] = [
+    { type: "start", at: incident.startedAt },
     ...(incident.alarms ?? []).map((alarm): TimelineEvent => ({
       type: "alarm",
       at: alarm.at,
@@ -424,14 +427,24 @@ export function incidentTimeline(
         at: gap.returnedAt as string,
         station: gap.id,
       })),
-  ].sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0));
-  return [
-    { type: "start", at: incident.startedAt },
-    ...middle,
-    incident.endedAt
-      ? { type: "end", at: incident.endedAt }
-      : { type: "ongoing", at: nowIso },
+    ...(incident.endedAt
+      ? [{ type: "end", at: incident.endedAt } as TimelineEvent]
+      : []),
   ];
+  const rank: Record<TimelineEvent["type"], number> = {
+    start: 0,
+    alarm: 1,
+    returned: 2,
+    end: 3,
+    ongoing: 4,
+  };
+  events.sort(
+    (a, b) =>
+      Date.parse(a.at) - Date.parse(b.at) || rank[a.type] - rank[b.type],
+  );
+  return incident.endedAt
+    ? events
+    : [...events, { type: "ongoing", at: nowIso }];
 }
 
 // 경보 이름(접두어 뺀 것) → 묶음과 출처. 모르는 경보는 other(이름을 그대로 보여 줌)
