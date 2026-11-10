@@ -11,10 +11,12 @@ import {
   GITHUB_OIDC_SUBJECT,
   INQUIRY_STATUS_INDEX,
   RUN_LOG_KEY_PREFIX,
+  PUBLISH_SUMMARY_KEY,
 } from "../lib/settings";
 // services 감사 키 접두어와 IAM 조건이 맞는지 비교함(한쪽만 바뀌면 테스트가 깨짐)
 import { AUDIT_PREFIX, NOTICE_PK } from "../../services/src/admin/keys";
 import { RUN_LOG_PREFIX } from "../../services/src/core/collect/run-log";
+import { PUBLISH_SUMMARY_PK } from "../../services/src/core/collect/publish-summary";
 
 // 역할의 논리 ID를 찾음 (CDK가 이름 뒤에 해시를 붙이므로 앞부분으로 찾기)
 function roleId(prefix: string): string {
@@ -253,6 +255,28 @@ describe("DynamoDB 권한 (BRD-55)", () => {
     expect(RUN_LOG_KEY_PREFIX).toBe(RUN_LOG_PREFIX);
   });
 
+  it("게시 요약 키가 publisher와 운영 API에서 같다(BRD-187)", () => {
+    expect(PUBLISH_SUMMARY_KEY).toBe(PUBLISH_SUMMARY_PK);
+  });
+
+  it("운영 API 역할은 이 스택 경보의 설정·기록 읽기만 받는다(BRD-187)", () => {
+    const statements = allIamPolicies()
+      .filter((p) => p.roles.includes(roleId("OpsApiRole")))
+      .flatMap((p) => p.statements)
+      .filter((s) =>
+        toList(s.Action).some((a) => String(a).startsWith("cloudwatch:")),
+      );
+    expect(statements).toHaveLength(1);
+    expect(statements[0]!.Effect).toBe("Allow");
+    expect(toList(statements[0]!.Action).sort()).toEqual([
+      "cloudwatch:DescribeAlarmHistory",
+      "cloudwatch:DescribeAlarms",
+    ]);
+    const resources = toList(statements[0]!.Resource).map(resourceText);
+    expect(resources).toHaveLength(1);
+    expect(resources[0]).toMatch(/:alarm:.*-\*$/);
+  });
+
   it("운영 API 역할의 Ops Query는 감사 키·공지·수집 실행 기록 파티션에만 되고, 감사 키 수정·삭제는 명시적으로 거부된다", () => {
     const statements = allIamPolicies()
       .filter((p) => p.roles.includes(roleId("OpsApiRole")))
@@ -275,6 +299,7 @@ describe("DynamoDB 권한 (BRD-55)", () => {
           `${AUDIT_PREFIX}*`,
           NOTICE_PK,
           `${RUN_LOG_PREFIX}*`,
+          PUBLISH_SUMMARY_PK,
         ],
       },
       Null: { "dynamodb:LeadingKeys": "false" },
@@ -414,6 +439,8 @@ describe("함수·역할별 최소 권한 범위 (BRD-67)", () => {
     expect(roles[api]!.Properties.ManagedPolicyArns ?? []).toEqual([]);
     const actions = allowedActionsOfRole(api);
     expect([...actions.keys()].sort()).toEqual([
+      "cloudwatch:DescribeAlarmHistory",
+      "cloudwatch:DescribeAlarms",
       "dynamodb:GetItem",
       "dynamodb:PutItem",
       "dynamodb:Query",

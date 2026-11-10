@@ -88,6 +88,10 @@ export const NOTICE_KEY = "admin#notice";
 // 수집 함수는 Ops PutItem으로 쓰고(기존 권한 안), 운영 API는 수집 현황 화면에서 이 파티션만 Query함
 export const RUN_LOG_KEY_PREFIX = "collect#run#";
 
+// 게시 요약 파티션 키 (BRD-187). services/src/core/collect/publish-summary.ts PUBLISH_SUMMARY_PK와 같아야 함(permissions.test.ts가 확인)
+// publisher가 Ops PutItem으로 쓰고(기존 권한 안), 운영 API는 수집 현황 화면에서 이 파티션만 Query함
+export const PUBLISH_SUMMARY_KEY = "publish#summary";
+
 // 문의 목록 GSI (결정 기록 D16-B4: 상태 + 접수 시각, 요약만 projection, BRD-153)
 // 이름은 services/src/inquiry/policy.ts INQUIRY_STATUS_INDEX_NAME과 같아야 함(tables.test.ts가 확인)
 // 용량 1/1 → 테이블 11/11 + GSI 1/1 = 12/12, 상한(25) 안. 목록 요약만이라 본문·이메일·사진 키는 넣지 않음

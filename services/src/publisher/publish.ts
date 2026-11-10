@@ -1,8 +1,13 @@
+import {
+  buildPublishSummary,
+  buildStationTable,
+} from "../core/collect/publish-summary";
 import type { Beach, ManifestFile, Notice } from "@baradun/contracts";
 import type { Logger } from "../core/collect/log";
 import type { SnapshotStore } from "../core/snapshots/types";
 import type { OpsStore, StateStore } from "../core/store/types";
 import type { ZoneTables } from "../core/warnings/beach-warnings";
+import { snapshotVersion } from "../core/snapshots/version";
 import { formatUtcIso } from "../core/warnings/time";
 import { readPublishInputs } from "./inputs";
 import { MANIFEST_SETTINGS, PUBLISH_POLICY } from "./policy";
@@ -58,11 +63,6 @@ const WEATHER = { name: "weather.json", contract: "WeatherFile" } as const;
 
 const versionPath = (version: string, name: string) =>
   `data/${version}/${name}`;
-
-// 20261017T053000Z (계약 snapshotVersion 형식). 초 단위 → 글자 순서 = 시각 순서
-export function snapshotVersion(ms: number): string {
-  return formatUtcIso(ms).replace(/[-:]/g, "");
-}
 
 // 게시본에 실을 공지(D16-B3·D4, 구현 제안 I09)
 // - 시작 시각이 지난 것만(예약 전 문구는 공개 게시본에 넣지 않음), 끝 시각이 지난 것은 뺌
@@ -217,6 +217,9 @@ async function removeOldVersions(
     return [];
   }
 }
+
+// 이 실행 환경에서 마지막으로 쓴 관측소 표(저장소별). 같으면 다시 쓰지 않음
+const writtenStationTables = new WeakMap<OpsStore, string>();
 
 export async function publishSnapshot(
   deps: PublishDeps,
@@ -403,6 +406,31 @@ export async function publishSnapshot(
     // 예외도 같게 봄: 여기서 던지면 이미 끝난 게시가 failed로 잘못 보고됨
     if (!(await ops.setPublishedVersion(version).catch(() => false))) {
       log("error", "publish_version_not_recorded", { version });
+    }
+    // 운영 화면용 게시 요약(BRD-187). 실패해도 게시는 끝난 것 → 경고만(빠진 요약은 previous 사슬로 드러남)
+    try {
+      await ops.putPublishSummary(
+        buildPublishSummary({
+          version,
+          previous: published,
+          publishedAt: now,
+          beachCount: deps.beaches.length,
+          status: snapshot.status.beaches,
+        }),
+        startedMs,
+      );
+      // 관측소 표는 해변 파일에서만 나옴 → 이 실행 환경에서 처음이거나 바뀌었을 때만 씀(쓰기 용량 아낌)
+      const table = buildStationTable(deps.beaches);
+      const text = JSON.stringify(table);
+      if (writtenStationTables.get(ops) !== text) {
+        await ops.putStationTable(table, now);
+        writtenStationTables.set(ops, text);
+      }
+    } catch (error) {
+      log("warn", "publish_summary_not_recorded", {
+        version,
+        error: error instanceof Error ? error.name : typeof error,
+      });
     }
     const removed = await removeOldVersions(snapshots, version, log);
     log("info", "publish_finished", {

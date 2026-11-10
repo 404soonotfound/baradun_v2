@@ -1,3 +1,4 @@
+import type { PublishSummary, StationTable } from "../collect/publish-summary";
 // 저장소 인터페이스 (BRD-55, 아키텍처 7장)
 // 판단·정규화 코드는 이 인터페이스만 씀. AWS SDK 호출은 dynamodb.ts 한 곳에만 둠(17.2 이식성)
 // 시각은 모두 인자로 받음(now, epoch ms). 저장소가 직접 시계를 읽지 않음 → 테스트가 시각을 정함
@@ -69,6 +70,11 @@ export interface OpsStore {
   getPublishedVersion(): Promise<string | null>;
   // 지금보다 큰 버전일 때만 바꾸고 true. 같거나 작으면 false(버전 역행 없음)
   setPublishedVersion(version: string): Promise<boolean>;
+
+  // 게시 요약 남기기(BRD-187, core/collect/publish-summary.ts). 같은 버전이 있으면 덮지 않음
+  putPublishSummary(summary: PublishSummary, nowMs: number): Promise<void>;
+  // 관측소 표 바꾸기(한 곳, 덮어씀). 내용이 바뀔 때만 부름(publish.ts)
+  putStationTable(table: StationTable, updatedAt: string): Promise<void>;
 }
 
 // 슬롯 기록을 남기는 기간. 지나면 DynamoDB TTL이 지움(정리용, 판단에 쓰지 않음)

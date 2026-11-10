@@ -59,6 +59,15 @@
       "Resource": "arn:aws:sqs:ap-northeast-2:717304679248:BaradunV2-*"
     },
     {
+      "Sid": "StackAlarmsRead",
+      "Effect": "Allow",
+      "Action": [
+        "cloudwatch:DescribeAlarmHistory",
+        "cloudwatch:DescribeAlarms"
+      ],
+      "Resource": "arn:aws:cloudwatch:ap-northeast-2:717304679248:alarm:BaradunV2-*"
+    },
+    {
       "Sid": "SiteBucketObjects",
       "Effect": "Allow",
       "Action": ["s3:DeleteObject", "s3:GetObject", "s3:PutObject"],

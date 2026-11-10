@@ -149,6 +149,20 @@ export class Collectors extends Construct {
           // Lambda에 이미 들어 있는 SDK는 버전이 달라질 수 있음 → 테스트한 버전 그대로 올림
           externalModules: [],
           target: "node22", // Node 22가 이해하는 문법으로 바꿔 묶음
+          // 바다 관측 수집기만: 해변 파일을 함수 폴더 beaches/로 복사함(빠진 관측소 대조, BRD-187)
+          // publisher와 같은 방식(infra/lib/publish/publisher.ts). 다른 수집기는 쓰지 않아 복사하지 않음
+          ...(c.id === "Ocean"
+            ? {
+                commandHooks: {
+                  beforeBundling: () => [],
+                  beforeInstall: () => [],
+                  afterBundling: (inputDir: string, outputDir: string) => [
+                    `mkdir -p "${outputDir}/beaches"`,
+                    `cp "${inputDir}"/data/beaches/b*.json "${outputDir}/beaches/"`,
+                  ],
+                },
+              }
+            : {}),
         },
         // 함수 안에서 읽을 설정값. 테이블 이름은 배포 때 AWS가 정해서 코드에 미리 적을 수 없음
         // handlers.ts가 process.env.STATE_TABLE_NAME 등으로 읽음

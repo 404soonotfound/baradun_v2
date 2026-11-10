@@ -2,6 +2,8 @@ import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { InvokeCommand, LambdaClient } from "@aws-sdk/client-lambda";
 import { SSMClient } from "@aws-sdk/client-ssm";
 import { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
+import path from "node:path";
+import { loadBeaches } from "../core/beaches/load";
 import { getText } from "../core/collect/http";
 import { createLogger, maskSecrets } from "../core/collect/log";
 import type { RunFailure } from "../core/collect/run-log";
@@ -23,9 +25,11 @@ import {
 } from "./catalog";
 import {
   collectOcean,
+  expectedStations,
   OCEAN_JOB,
   type CollectDeps,
   type CollectRunResult,
+  type ExpectedStations,
 } from "./ocean";
 import { COLLECT_POLICY } from "./policy";
 import { collectRip, parseRipLedger, RIP_JOB, type RipSource } from "./rip";
@@ -125,6 +129,12 @@ async function run(
             claimed.status === "complete"
               ? []
               : claimed.failures.map(maskFailure),
+          ...(claimed.missingStations
+            ? { missingStations: claimed.missingStations }
+            : {}),
+          ...(claimed.missingStationsTotal
+            ? { missingStationsTotal: claimed.missingStationsTotal }
+            : {}),
         },
         context.awsRequestId,
         nowMs,
@@ -142,12 +152,31 @@ async function run(
   });
 }
 
+// 빠진 관측소 대조표(BRD-187). 해변 파일은 묶을 때 함수 폴더 beaches/로 복사함(infra/lib/collect의 commandHooks)
+// 읽지 못하면 대조만 건너뜀(수집은 그대로). 기록에 missingStations가 없으면 운영 화면은 '대조 못 함'으로 봄
+// 읽은 표만 실행 환경에 둠. 실패는 두지 않아 다음 실행이 다시 읽고, 실패할 때마다 오류 로그가 남음
+let oceanStations: ExpectedStations | undefined;
+function oceanExpected(): ExpectedStations | null {
+  if (oceanStations) return oceanStations;
+  try {
+    oceanStations = expectedStations(
+      loadBeaches(process.env.BEACHES_DIR ?? path.join(__dirname, "beaches")),
+    );
+    return oceanStations;
+  } catch (error) {
+    log("error", "ocean_stations_unread", {
+      error: error instanceof Error ? error.name : typeof error,
+    });
+    return null;
+  }
+}
+
 export async function oceanHandler(
   _event: unknown,
   context: LambdaContext,
 ): Promise<CollectRunResult> {
   return run(OCEAN_JOB, context, () =>
-    collectOcean(deps(context.awsRequestId)),
+    collectOcean(deps(context.awsRequestId), oceanExpected()),
   );
 }
 

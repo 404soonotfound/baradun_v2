@@ -4,7 +4,13 @@ import type { HttpResult } from "../core/collect/http";
 import { createLogger } from "../core/collect/log";
 import { MemoryOpsStore, MemoryStateStore } from "../core/store/memory";
 import type { StateValue } from "../core/store/types";
-import { collectOcean, OCEAN_JOB, OCEAN_STATE } from "./ocean";
+import {
+  collectOcean,
+  expectedStations,
+  findMissingStations,
+  OCEAN_JOB,
+  OCEAN_STATE,
+} from "./ocean";
 import { finishRun } from "./trigger";
 
 // collect-ocean (BRD-56). HTTP·키·저장소를 가짜로 바꿔 실패 경로를 확인
@@ -169,8 +175,16 @@ describe("collectOcean", () => {
   });
 
   it.each([
-    ["HTTP 403 인증·한도 거부", { status: "failed", reason: "http:403", attempts: 1 }, "http:403"],
-    ["HTTP 429 요청 과다", { status: "failed", reason: "http:429", attempts: 2 }, "http:429"],
+    [
+      "HTTP 403 인증·한도 거부",
+      { status: "failed", reason: "http:403", attempts: 1 },
+      "http:403",
+    ],
+    [
+      "HTTP 429 요청 과다",
+      { status: "failed", reason: "http:429", attempts: 2 },
+      "http:429",
+    ],
     ["200 + 오류 본문(시작 표시 없음)", "<html>error</html>", "시작 표시 없음"],
   ] as const)(
     "KMA 한도·오류 응답(%s) → 이전 정상값·수신 시각은 그대로, 정상으로 기록하지 않음",
@@ -495,5 +509,145 @@ describe("collectOcean", () => {
       }),
     ).rejects.toThrow("수집 partial");
     expect(invoked).toBe(1);
+  });
+});
+
+// 빠진 관측소 (BRD-187): 배정된 관측소가 정상 응답에 없으면 기록. 실행 상태는 바꾸지 않음
+describe("collectOcean 빠진 관측소", () => {
+  const station = (id: string) => ({ id });
+  // 22520(sea_obs 파고)·22523(kma_buoy 파주기)은 응답에 있음, 99901·99902는 없음
+  const EXPECTED = expectedStations([
+    {
+      stations: { waveHeight: station("22520"), wavePeriod: station("22523") },
+    },
+    {
+      stations: { waveHeight: station("99901"), wavePeriod: station("99902") },
+    },
+    { stations: { waveHeight: null } },
+  ]);
+
+  it("배정 표를 출처별로 나눈다(파고·수온·바람 = sea_obs, 파주기·파향 = kma_buoy)", () => {
+    expect([...EXPECTED.get("sea_obs")!.keys()].sort()).toEqual([
+      "22520",
+      "99901",
+    ]);
+    expect([...EXPECTED.get("kma_buoy")!.keys()].sort()).toEqual([
+      "22523",
+      "99902",
+    ]);
+  });
+
+  it("두 출처가 정상이면 상태는 complete 그대로, 빠진 관측소만 남긴다", async () => {
+    const { deps } = setup({ sea_obs: SEA_OBS, kma_buoy: KMA_BUOY });
+    expect(await collectOcean(deps, EXPECTED)).toEqual({
+      status: "complete",
+      slotId: "202610210040",
+      missingStations: ["99901", "99902"],
+    });
+  });
+
+  it("실패한 출처는 대조하지 않는다(그 출처 관측소를 빠졌다고 적지 않음)", async () => {
+    const { deps } = setup({
+      sea_obs: SEA_OBS,
+      kma_buoy: { status: "failed", reason: "timeout", attempts: 2 },
+    });
+    expect(await collectOcean(deps, EXPECTED)).toMatchObject({
+      status: "partial",
+      missingStations: ["99901"],
+    });
+  });
+
+  it("대조표가 없으면 missingStations를 두지 않는다(빈 배열 = '빠진 곳 없음'과 구분)", async () => {
+    const { deps } = setup({ sea_obs: SEA_OBS, kma_buoy: KMA_BUOY });
+    expect(await collectOcean(deps, null)).not.toHaveProperty(
+      "missingStations",
+    );
+  });
+
+  it("줄은 있어도 배정된 지표 값이 모두 무효(null)면 빠진 것으로 본다", () => {
+    const expected = expectedStations([
+      { stations: { waterTemp: station("A"), waveHeight: station("B") } },
+    ]);
+    const row = (stationId: string, values: Record<string, number | null>) => ({
+      stationId,
+      observedAt: "2026-10-20T15:00:00Z",
+      ...values,
+    });
+    expect(
+      findMissingStations(
+        {
+          sea_obs: {
+            status: "ok",
+            // A는 수온만 배정됐는데 무효, 파고 값은 배정 지표가 아니라 세지 않음. B는 파고 정상
+            rows: [
+              row("A", { waterTemp: null, waveHeight: 1.2 }),
+              row("B", { waveHeight: 0 }),
+            ],
+            skippedRows: 0,
+            receivedAt: "2026-10-20T15:42:00Z",
+            attempts: 1,
+          },
+          kma_buoy: { status: "failed", reason: "timeout", attempts: 1 },
+        },
+        expected,
+        Date.parse("2026-10-20T15:42:00Z"),
+      ),
+    ).toEqual({ missingStations: ["A"] });
+  });
+
+  it("관측 시각이 미래이거나 틀린 줄만 있으면 돌아온 것으로 보지 않는다(저장 단계와 같은 기준)", () => {
+    const expected = expectedStations([
+      {
+        stations: {
+          waveHeight: station("A"),
+          waterTemp: station("B"),
+          wind: station("C"),
+        },
+      },
+    ]);
+    const row = (stationId: string, observedAt: string) => ({
+      stationId,
+      observedAt,
+      waveHeight: 1.2,
+      waterTemp: 18,
+      wind: 3,
+    });
+    expect(
+      findMissingStations(
+        {
+          sea_obs: {
+            status: "ok",
+            rows: [
+              row("A", "2026-10-20T15:43:00Z"), // 기준 시각보다 1분 늦음
+              row("B", "not-a-time"),
+              row("C", "2026-10-20T15:42:00Z"), // 경계(같은 시각)는 정상
+            ],
+            skippedRows: 0,
+            receivedAt: "2026-10-20T15:42:00Z",
+            attempts: 1,
+          },
+          kma_buoy: { status: "failed", reason: "timeout", attempts: 1 },
+        },
+        expected,
+        Date.parse("2026-10-20T15:42:00Z"),
+      ),
+    ).toEqual({ missingStations: ["A", "B"] });
+  });
+
+  it("두 출처가 모두 실패하면 대조 못 함(빈 배열을 두지 않음)", () => {
+    const failed = {
+      status: "failed",
+      reason: "timeout",
+      attempts: 1,
+    } as const;
+    expect(
+      findMissingStations(
+        { sea_obs: failed, kma_buoy: failed },
+        expectedStations([
+          { stations: { waveHeight: { id: "A" }, wavePeriod: { id: "C" } } },
+        ]),
+        Date.parse("2026-10-20T15:42:00Z"),
+      ),
+    ).toEqual({});
   });
 });
