@@ -9,7 +9,8 @@ import { describe, expect, it } from "vitest";
 import {
   hourCells,
   laterDays,
-  midIssuedAt,
+  midDaysIssuedAt,
+  midSource,
   monthDay,
   skyIcon,
   skyWord,
@@ -172,37 +173,93 @@ describe("laterDays", () => {
   });
 });
 
-describe("midIssuedAt·monthDay", () => {
-  it("가장 늦은 중기 발표 시각, 날짜는 앞 0 없이", () => {
-    expect(
-      midIssuedAt({
-        name: "x",
-        days: [
-          {
-            date: "2026-11-09",
-            issuedAt: "2026-11-04T09:00:00Z",
-            pop: 1,
-            sky: null,
-            precip: null,
-          },
-          {
-            date: "2026-11-10",
-            issuedAt: "2026-11-04T21:00:00Z",
-            pop: 1,
-            sky: null,
-            precip: null,
-          },
-          {
-            date: "2026-11-11",
-            issuedAt: null,
-            pop: null,
-            sky: null,
-            precip: null,
-          },
-        ],
-      }),
-    ).toBe("2026-11-04T21:00:00Z");
-    expect(midIssuedAt(null)).toBeNull();
+describe("monthDay", () => {
+  it("날짜는 앞 0 없이", () => {
     expect(monthDay("2026-11-07")).toBe("11/7");
+  });
+});
+
+describe("midDaysIssuedAt", () => {
+  const land: MidLandForecast = {
+    name: "강원영동",
+    days: [
+      {
+        date: "2026-11-09",
+        issuedAt: "2026-11-04T21:00:00Z",
+        pop: 10,
+        sky: "clear",
+        precip: "none",
+      },
+      {
+        date: "2026-11-10",
+        issuedAt: null,
+        pop: 0,
+        sky: "clear",
+        precip: "none",
+      },
+    ],
+  };
+  const ta: MidTaForecast = {
+    name: "강릉",
+    days: [
+      { date: "2026-11-09", issuedAt: "2026-11-04T09:00:00Z", min: 7, max: 15 },
+      { date: "2026-11-10", issuedAt: "2026-11-04T21:00:00Z", min: 8, max: 16 },
+    ],
+  };
+
+  it("펼친 날들의 구역·기온 발표 시각 중 가장 이른 것(기온이 한 회차 밀리면 그 시각)", () => {
+    expect(midDaysIssuedAt(["2026-11-09"], land, ta)).toBe(
+      "2026-11-04T09:00:00Z",
+    );
+  });
+
+  it("값이 있는데 시각을 모르면 null", () => {
+    expect(midDaysIssuedAt(["2026-11-09", "2026-11-10"], land, ta)).toBeNull();
+  });
+
+  it("값이 없는 날의 빈 시각은 건너뜀, 시각을 하나도 모르면 null", () => {
+    const blank: MidLandForecast = {
+      name: "강원영동",
+      days: [
+        land.days[0]!,
+        {
+          date: "2026-11-10",
+          issuedAt: null,
+          pop: null,
+          sky: null,
+          precip: null,
+        },
+      ],
+    };
+    expect(midDaysIssuedAt(["2026-11-09", "2026-11-10"], blank, ta)).toBe(
+      "2026-11-04T09:00:00Z",
+    );
+    expect(midDaysIssuedAt(["2026-11-10"], blank, null)).toBeNull();
+  });
+
+  it("날이 없으면 null", () => {
+    expect(midDaysIssuedAt([], land, ta)).toBeNull();
+  });
+
+  it("중기 출처: 펼친 중기 날 기준 구역 이름·시각, 시각을 모르면 구역 이름도 없이 null", () => {
+    const cell = (date: string, source: "short" | "mid") => ({
+      date,
+      source,
+      word: null,
+      icon: "sun" as const,
+      pop: null,
+      min: null,
+      max: null,
+    });
+    const weather = { midLandId: "11D20000", midLand: land, midTa: ta };
+    expect(
+      midSource(
+        [cell("2026-11-08", "short"), cell("2026-11-09", "mid")],
+        weather,
+        "ko",
+      ),
+    ).toEqual({ zone: "강원 영동", issuedAt: "2026-11-04T09:00:00Z" });
+    expect(midSource([cell("2026-11-10", "mid")], weather, "ko")).toBeNull();
+    expect(midSource([cell("2026-11-08", "short")], weather, "ko")).toBeNull();
   });
 });

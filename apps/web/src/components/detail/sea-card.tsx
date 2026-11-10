@@ -46,17 +46,25 @@ export function shownStation(
   return metric.kind === "none" ? null : stations[key];
 }
 
-// 값 한 칸의 글자. size: xl 모바일 파고(40) · l PC 4칸(28) · m 모바일 2×2(22). 단위는 한 칸 띄운 보조 글자
+// 값 한 칸의 글자. size: xl 모바일 파고(40) · wide PC 5칸(28, 좁은 카드 22) · m 모바일 2×2(22)
+// 단위는 한 칸 띄운 보조 글자, empty는 값 없음("–") 칸
 const VALUE_SIZE = {
   xl: {
     value: "text-[40px] leading-none tracking-[-1.6px]",
     unit: "text-[16px]",
+    empty: "text-[28px] leading-[1.45]",
   },
-  l: {
-    value: "text-[28px] leading-[1.45] tracking-[-0.8px]",
-    unit: "text-body-s",
+  m: {
+    value: "text-[22px] leading-[1.45]",
+    unit: "text-caption",
+    empty: "text-[22px] leading-[1.45]",
   },
-  m: { value: "text-[22px] leading-[1.45]", unit: "text-caption" },
+  // PC 5칸: 카드가 좁으면(1024 화면 → 카드 484px, @2xl 미만) 한 단계 작게 해 값과 단위가 한 줄에 들어가게
+  wide: {
+    value: "text-[22px] leading-[1.45] @2xl:text-[28px] @2xl:tracking-[-0.8px]",
+    unit: "text-caption @2xl:text-body-s",
+    empty: "text-[22px] leading-[1.45] @2xl:text-[28px]",
+  },
 };
 
 export function MetricValue({
@@ -71,7 +79,14 @@ export function MetricValue({
   // 사이 띄움은 문구의 빈칸(글자로 남아 화면 읽기·복사에서 'fromSSE'처럼 붙지 않게)
   if (metric.kind === "value" && metric.unit === "deg") {
     return (
-      <span className="font-bold whitespace-nowrap text-text-default">
+      // 좁은 PC 카드(wide, @2xl 미만)는 '남남동' / '쪽에서'를 줄바꿈해 옆 칸으로 넘치지 않게
+      // 한글은 글자 사이에서도 끊기므로 keep-all로 빈칸에서만 끊음('남남' / '동'처럼 갈라지지 않게)
+      <span
+        className={cn(
+          "font-bold text-text-default [word-break:keep-all]",
+          size === "wide" ? "@2xl:whitespace-nowrap" : "whitespace-nowrap",
+        )}
+      >
         {t.rich("observation.directionFrom", {
           dir: () => (
             <span className={VALUE_SIZE[size].value}>
@@ -96,7 +111,8 @@ export function MetricValue({
     return (
       <span
         className={cn(
-          "font-bold text-text-default tabular-nums",
+          // 값과 단위를 나누지 않음('18.4 °' / 'C'처럼 갈라지지 않게)
+          "font-bold whitespace-nowrap text-text-default tabular-nums",
           VALUE_SIZE[size].value,
         )}
       >
@@ -127,14 +143,7 @@ export function MetricValue({
     );
   }
   return (
-    <span
-      className={cn(
-        "font-bold text-text-muted",
-        size === "m"
-          ? "text-[22px] leading-[1.45]"
-          : "text-[28px] leading-[1.45]",
-      )}
-    >
+    <span className={cn("font-bold text-text-muted", VALUE_SIZE[size].empty)}>
       <span aria-hidden="true">–</span>
       <span className="sr-only">{t("home.near.noValue")}</span>
     </span>
@@ -315,9 +324,10 @@ function WideStats({
             <span className="text-caption text-text-muted">
               {t(`observation.metric.${key}`)}
             </span>
-            <MetricValue metric={metric} size="l" />
+            <MetricValue metric={metric} size="wide" />
             {metric.kind === "value" && (
-              <span className="text-caption whitespace-nowrap text-text-muted">
+              // 좁은 카드에서는 줄바꿈(영어 'Measured 12 min ago'가 옆 칸으로 넘치지 않게)
+              <span className="text-caption text-text-muted @2xl:whitespace-nowrap">
                 {measuredAgoText(metric.observedAt, nowMs)}
               </span>
             )}

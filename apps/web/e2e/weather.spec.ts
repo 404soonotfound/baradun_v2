@@ -49,6 +49,17 @@ test.describe("상세 날씨 카드", () => {
     await expect(
       weather.getByRole("button", { name: "이후 날씨 접기" }),
     ).toHaveAttribute("aria-expanded", "true");
+    // 두 구간 제목(노션 D18-2): 글피 단기예보 / 그 뒤 중기예보(넓은 지역 · 발표 시각)
+    await expect(
+      weather.getByRole("heading", {
+        name: /^.(~.)? · 단기예보 · 하루 최저 \/ 최고$/,
+      }),
+    ).toBeVisible();
+    await expect(
+      weather.getByRole("heading", {
+        name: /^.~. · .+\(넓은 지역\) · 기상청 중기예보 (\d{2}\/\d{2} )?\d{2}:\d{2} 발표$/,
+      }),
+    ).toBeVisible();
     const days = weather.locator("li[aria-label]");
     await expect(days).toHaveCount(4);
     await expect(days.first()).toHaveAttribute(

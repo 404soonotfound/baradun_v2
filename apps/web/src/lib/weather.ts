@@ -5,6 +5,9 @@ import type {
   WeatherShort,
 } from "@baradun/contracts";
 
+import type { Locale } from "@/lib/i18n";
+import { midLandName } from "@/lib/weather-zones";
+
 // 상세 날씨 카드 모델 (BRD-185 · 결정 기록 18장 D18-1·D18-2·D18-9, 노션 3장 WeatherCard)
 // 받은 값을 칸으로 나누기만 함. 하루 한 칸 고르기·오래된 값 거르기는 publisher가 이미 함(다시 계산하지 않음)
 // 값이 없는 칸은 null 그대로 둠: 화면이 '–'로 그리고 0·맑음으로 바꾸지 않음
@@ -189,13 +192,66 @@ export function laterDays(
   };
 }
 
-// 중기예보 발표 시각(받은 날 중 가장 늦은 것). 정보 출처 줄용
-export function midIssuedAt(midLand: MidLandForecast | null): string | null {
-  let best: string | null = null;
-  for (const day of midLand?.days ?? []) {
-    if (day.issuedAt && (best === null || day.issuedAt > best)) {
-      best = day.issuedAt;
+// 펼친 중기 날들의 발표 시각: 그 날짜들의 구역(하늘·강수확률)·기온 지점(최저·최고) 발표 시각 중 가장 이른 것
+// (기온 수집이 한 회차 밀렸으면 더 오래된 값을 말함). 값이 없는 날('–')의 빈 시각은 건너뜀
+// 값이 있는데 시각을 모르거나, 시각을 하나도 모르면 null(시각을 내세우지 않음)
+export function midDaysIssuedAt(
+  dates: readonly string[],
+  midLand: MidLandForecast | null,
+  midTa: MidTaForecast | null,
+): string | null {
+  const land = new Map((midLand?.days ?? []).map((d) => [d.date, d]));
+  const ta = new Map((midTa?.days ?? []).map((d) => [d.date, d]));
+  let oldest: string | null = null;
+  let oldestMs = Infinity;
+  for (const date of dates) {
+    const l = land.get(date);
+    const t = ta.get(date);
+    const entries = [
+      {
+        at: l?.issuedAt ?? null,
+        has: l ? l.pop !== null || l.sky !== null || l.precip !== null : false,
+      },
+      {
+        at: t?.issuedAt ?? null,
+        has: t ? t.min !== null || t.max !== null : false,
+      },
+    ];
+    for (const { at, has } of entries) {
+      if (at === null) {
+        if (has) return null;
+        continue;
+      }
+      const ms = Date.parse(at);
+      if (!Number.isFinite(ms)) return null;
+      if (ms < oldestMs) {
+        oldest = at;
+        oldestMs = ms;
+      }
     }
   }
-  return best;
+  return oldest;
+}
+
+// 중기 출처(구역 이름·발표 시각). 날씨 카드 중기 구간 제목과 정보 출처 줄이 같이 써 같은 값을 보여 줌
+// 펼친 중기 날의 발표 시각을 모르면(중기예보를 받지 못함 포함) null: 구역 이름도 적지 않음(받지 않은 정보를 적지 않음)
+export function midSource(
+  days: readonly DayCell[],
+  weather: {
+    midLandId: string;
+    midLand: MidLandForecast | null;
+    midTa: MidTaForecast | null;
+  },
+  locale: Locale,
+): { zone: string | null; issuedAt: string } | null {
+  const issuedAt = midDaysIssuedAt(
+    days.filter((day) => day.source === "mid").map((day) => day.date),
+    weather.midLand,
+    weather.midTa,
+  );
+  if (issuedAt === null) return null;
+  return {
+    zone: midLandName(weather.midLandId, weather.midLand?.name ?? null, locale),
+    issuedAt,
+  };
 }
