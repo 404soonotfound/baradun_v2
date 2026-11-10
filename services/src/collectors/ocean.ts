@@ -123,6 +123,8 @@ export function findMissingStations(
   outcomes: Readonly<Record<Source, SourceOutcome>>,
   expected: ExpectedStations,
 ): MissingStations {
+  // 대조한 출처가 하나도 없으면 빈 배열('빠진 곳 없음')이 아니라 대조 못 함(없음)
+  if (SOURCES.every((source) => outcomes[source].status !== "ok")) return {};
   const missing = new Set<string>();
   for (const source of SOURCES) {
     const outcome = outcomes[source];

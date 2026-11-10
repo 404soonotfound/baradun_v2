@@ -593,4 +593,20 @@ describe("collectOcean 빠진 관측소", () => {
       ),
     ).toEqual({ missingStations: ["A"] });
   });
+
+  it("두 출처가 모두 실패하면 대조 못 함(빈 배열을 두지 않음)", () => {
+    const failed = {
+      status: "failed",
+      reason: "timeout",
+      attempts: 1,
+    } as const;
+    expect(
+      findMissingStations(
+        { sea_obs: failed, kma_buoy: failed },
+        expectedStations([
+          { stations: { waveHeight: { id: "A" }, wavePeriod: { id: "C" } } },
+        ]),
+      ),
+    ).toEqual({});
+  });
 });
