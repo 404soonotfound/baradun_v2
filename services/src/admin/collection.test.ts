@@ -143,6 +143,8 @@ describe("수집 현황 집계", () => {
     ]);
     expect(incidents).toEqual([
       {
+        kind: "failure",
+        missingTruncated: false,
         startedAt: "2026-11-04T05:03:00.000Z",
         endedAt: null,
         runs: 1,
@@ -150,6 +152,8 @@ describe("수집 현황 집계", () => {
         stations: [],
       },
       {
+        kind: "failure",
+        missingTruncated: false,
         startedAt: "2026-11-04T01:00:00.000Z",
         endedAt: "2026-11-04T01:30:00.000Z",
         runs: 2,
@@ -220,17 +224,44 @@ describe("지연 판정·빠진 관측소 (BRD-187)", () => {
     }
   });
 
-  it("성공 기록이 없으면 overdue로 만들지 않는다(상태는 lastRun이 말함)", () => {
+  it("7일 동안 성공이 없으면 지연(overdue·막대 모두)으로 둔다", () => {
     const job = summarizeJob(
       "collect-warnings",
       [run("2026-11-04T04:00:00.000Z", "failed")],
       NOW,
       false,
     );
+    expect(job.overdue).toBe(true);
+    expect(job.hourly.every((h) => h.late)).toBe(true);
+  });
+
+  it("기록을 다 읽지 못했으면(truncated) 첫 성공 전은 지연으로 판정하지 않는다", () => {
+    const job = summarizeJob(
+      "collect-warnings",
+      [run("2026-11-04T04:00:00.000Z", "failed")],
+      NOW,
+      true,
+    );
     expect(job.overdue).toBe(false);
   });
 
-  it("빠진 관측소만 있는 성공 실행도 장애로 묶고, 대조한 성공 실행에서 돌아온 시각을 둔다", () => {
+  it("이안류는 비수기 성공 뒤 하루 1회 간격을 지연으로 보지 않는다(6월 1일 경계)", () => {
+    const june = new Date("2026-06-01T03:00:00Z"); // KST 6월 1일 12:00
+    const job = summarizeJob(
+      "collect-rip",
+      [
+        run("2026-05-30T19:12:00.000Z", "complete"), // KST 5월 31일 04:12(비수기 슬롯)
+        run("2026-06-01T02:42:00.000Z", "complete"), // 시즌 첫 실행
+      ],
+      june,
+      false,
+    );
+    expect(job.lateAfterMinutes).toBe(35);
+    expect(job.hourly.some((h) => h.late)).toBe(false);
+    expect(job.overdue).toBe(false);
+  });
+
+  it("빠진 관측소는 실패와 나눈 관측소 장애로 묶고, 대조한 성공 실행에서 돌아온 시각을 둔다", () => {
     const missing = (at: string, ids: string[]): RunView => ({
       ...run(at, "complete"),
       missingStations: ids,
@@ -245,11 +276,14 @@ describe("지연 판정·빠진 관측소 (BRD-187)", () => {
       missing("2026-11-02T03:00:00.000Z", ["22520"]),
       missing("2026-11-02T03:10:00.000Z", []),
     ]);
-    expect(incidents).toHaveLength(1);
-    expect(incidents[0]).toMatchObject({
-      startedAt: "2026-11-02T02:10:00.000Z",
-      endedAt: "2026-11-02T03:10:00.000Z",
-      runs: 3,
+    // 출처 실패는 따로 실패 장애, 빠진 관측소는 관측소 장애(관측소 장애가 실패를 삼키지 않음)
+    expect(incidents.map((i) => [i.kind, i.startedAt, i.endedAt])).toEqual([
+      ["failure", "2026-11-02T02:40:00.000Z", "2026-11-02T03:00:00.000Z"],
+      ["stations", "2026-11-02T02:10:00.000Z", "2026-11-02T03:10:00.000Z"],
+    ]);
+    expect(incidents[1]).toMatchObject({
+      runs: 2, // 관측소가 빠진 실행만 셈
+      failures: [],
       stations: [
         {
           id: "22451",
@@ -277,7 +311,7 @@ describe("지연 판정·빠진 관측소 (BRD-187)", () => {
     ]);
     expect(incident).toMatchObject({
       endedAt: null,
-      runs: 2,
+      runs: 1, // 대조하지 못한 실행은 세지 않음
       stations: [{ id: "22451", returnedAt: null }],
     });
   });

@@ -26,8 +26,9 @@ export interface RunFailure {
   readonly count?: number;
 }
 
-// 한 기록에 남기는 빠진 관측소 수(BRD-187). 넘으면 앞에서부터 자르고 missingStationsTotal에 전체 수
-export const MISSING_STATIONS_MAX = 50;
+// 한 기록에 남기는 빠진 관측소 수(BRD-187). 지금 배정 관측소(53곳)를 모두 담는 크기
+// 넘으면 앞에서부터 자르고 missingStationsTotal에 전체 수(운영 화면은 영향 범위를 출처 전체로 봄)
+export const MISSING_STATIONS_MAX = 100;
 
 export interface RunRecord {
   readonly job: string;
