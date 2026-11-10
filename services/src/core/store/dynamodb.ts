@@ -6,6 +6,11 @@ import {
   type DynamoDBDocumentClient,
 } from "@aws-sdk/lib-dynamodb";
 import {
+  PUBLISH_SUMMARY_PK,
+  publishSummaryTtl,
+  type PublishSummary,
+} from "../collect/publish-summary";
+import {
   runLogPk,
   runLogSk,
   runRecordTtl,
@@ -290,6 +295,21 @@ export class DynamoOpsStore implements OpsStore {
           "attribute_not_exists(#version) OR #version < :version",
         ExpressionAttributeNames: { "#version": "version" },
         ExpressionAttributeValues: { ":version": version },
+      }),
+    );
+  }
+  async putPublishSummary(summary: PublishSummary, nowMs: number) {
+    await sendConditional(
+      this.client,
+      new PutCommand({
+        TableName: this.tableName,
+        Item: {
+          pk: PUBLISH_SUMMARY_PK,
+          sk: summary.version,
+          ...summary,
+          [TTL]: publishSummaryTtl(nowMs),
+        },
+        ConditionExpression: "attribute_not_exists(pk)",
       }),
     );
   }

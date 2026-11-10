@@ -1,3 +1,4 @@
+import { buildPublishSummary } from "../core/collect/publish-summary";
 import type { Beach, ManifestFile, Notice } from "@baradun/contracts";
 import type { Logger } from "../core/collect/log";
 import type { SnapshotStore } from "../core/snapshots/types";
@@ -403,6 +404,24 @@ export async function publishSnapshot(
     // 예외도 같게 봄: 여기서 던지면 이미 끝난 게시가 failed로 잘못 보고됨
     if (!(await ops.setPublishedVersion(version).catch(() => false))) {
       log("error", "publish_version_not_recorded", { version });
+    }
+    // 운영 화면용 게시 요약(BRD-187). 실패해도 게시는 끝난 것 → 경고만(빠진 요약은 previous 사슬로 드러남)
+    try {
+      await ops.putPublishSummary(
+        buildPublishSummary({
+          version,
+          previous: published,
+          publishedAt: now,
+          beaches: deps.beaches,
+          status: snapshot.status.beaches,
+        }),
+        startedMs,
+      );
+    } catch (error) {
+      log("warn", "publish_summary_not_recorded", {
+        version,
+        error: error instanceof Error ? error.name : typeof error,
+      });
     }
     const removed = await removeOldVersions(snapshots, version, log);
     log("info", "publish_finished", {
