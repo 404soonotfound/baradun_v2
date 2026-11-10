@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { OpsResult } from "@/lib/auth/ops-fetch";
 import { useAuthSession, useSessionSnapshot } from "@/lib/auth/provider";
 import type { BeachName } from "@/lib/beach-names";
@@ -17,6 +17,7 @@ import {
   fetchCollection,
   incidentMinutes,
   incidentTimeline,
+  kstClock,
   kstHour,
   lambdaUrl,
   lowestHour,
@@ -31,27 +32,30 @@ import {
   type AlarmView,
   type BarState,
   type CollectionView,
+  type HourBucket,
   type HourCounts,
   type JobCollection,
   type JobIncident,
   type SourceFilter,
   type SourceRow,
   type SourceState,
+  type StationRow,
   type TimelineEvent,
 } from "@/lib/collection";
 import { kstDateTime } from "@/lib/inquiries";
 import { fill, messages } from "@/lib/messages";
 import { AdminShell } from "./admin-shell";
-import { Button, Notice } from "./ui";
+import { Notice } from "./ui";
 
-// 데이터 수집 현황 (BRD-149·GH-376, 화면 설계서 6장 ADM-COLLECT, 시안 4차 V9·VM2 + 2026-11-10 시안)
+// 데이터 수집 현황 (BRD-149·GH-376·GH-380, 화면 설계서 6장 ADM-COLLECT, 시안 4차 V9·V10·VM2)
 // - 요약 4칸(정상 출처·7일 성공·관측 지연 해변·마지막 게시) · 출처별 표(PC)/카드(모바일) · 시간별 성공률 선 그래프
-//   · 장애 기록 7일 → 장애 상세 시트 · 알림(CloudWatch 경보)
-// - 수집기가 남긴 실행 기록·게시 요약·경보만 씀. 기록이 없으면 '기록 없음', 요약·경보를 못 읽으면 '확인 못 함'
+//   · 장애 기록 7일 → 장애 상세 시트 · 알림(CloudWatch 경보) · 출처 줄 → 출처 시트(V10, 해양 관측은 관측소 목록)
+// - 수집기가 남긴 실행 기록·게시 요약·경보·관측소 표만 씀. 기록이 없으면 '기록 없음', 못 읽으면 '확인 못 함'
 //   (정상·'영향 없음'·'경보 없음'·0으로 보지 않음)
 // - 지연 기준(D15-9)은 서버가 내려준 값 그대로. 관측 지연 해변 수는 publisher가 게시할 때 계산한 그대로
 // - 해양수산부 운영 기간은 수집기가 없고 저장소 파일이 원본 → 수집하지 않는다고 그대로 보여 줌
 // - 읽기 전용. 판단 상태를 바꾸는 조작·사유 메모 없음(G1, 메모는 쓰기 API·감사 기록이 필요해 후속)
+// - 시안의 초록(정상·해결)은 공유 토큰의 초록 금지(노션 4장, 토큰 검사)로 브랜드 파랑을 씀
 
 const t = messages.collection;
 
@@ -60,79 +64,157 @@ type Beaches = Readonly<Record<string, BeachName>>;
 const SEASON_FILE =
   "https://github.com/404soonotfound/baradun_v2/blob/main/data/beach-meta.json";
 
-const BADGE =
-  "inline-flex h-6 shrink-0 items-center gap-1.5 rounded-admin-badge px-2 text-label-s font-medium whitespace-nowrap";
+// ── 공통 모양(시안 V9 w-bd·w-btn·w-t·w-li) ──
 
-const STATE_BADGE: Record<SourceState, string> = {
-  ok: "bg-info-bg text-info-fg ring-1 ring-border-default",
-  late: "bg-status-stale-bg text-status-stale-fg ring-1 ring-status-stale-border",
-  unchecked:
-    "bg-bg-surface text-text-body outline-1 outline-border-strong outline-dashed -outline-offset-1",
-  partial:
-    "bg-status-stale-bg text-status-stale-fg outline-1 outline-status-stale-border outline-dashed -outline-offset-1",
-  failed:
-    "bg-status-blocked-bg text-status-blocked-fg ring-1 ring-danger-border",
-  none: "bg-bg-surface text-text-muted ring-1 ring-border-strong",
+type BadgeTone = "clear" | "warn" | "error" | "unknown" | "neutral";
+
+const BADGE_TONE: Record<BadgeTone, string> = {
+  clear:
+    "bg-status-clear-bg text-status-clear-fg ring-1 ring-brand-border ring-inset",
+  warn: "bg-status-stale-bg text-status-stale-fg outline-1 outline-status-stale-border outline-dashed -outline-offset-1",
+  error:
+    "bg-status-blocked-bg text-status-blocked-fg ring-1 ring-danger-border ring-inset",
+  unknown:
+    "bg-status-unknown-bg text-status-unknown-fg outline-1 outline-status-unknown-border outline-dashed -outline-offset-1",
+  neutral: "bg-info-bg text-info-fg ring-1 ring-border-strong ring-inset",
 };
 
-// 상태 점. 점 모양도 상태마다 다르게 둠(색만으로 나누지 않음). 글자가 상태를 말함
-const STATE_DOT: Record<SourceState, string> = {
-  ok: "size-2 rounded-full bg-brand-default",
-  late: "size-2 rounded-full border-2 border-status-stale-fg",
-  unchecked: "size-2 rounded-full border border-dashed border-text-body",
-  partial: "size-2 rotate-45 bg-status-stale-fg",
-  failed: "size-2 bg-danger-border",
-  none: "size-2 rounded-full border border-border-strong",
+function Badge({
+  tone,
+  children,
+}: {
+  tone: BadgeTone;
+  children: React.ReactNode;
+}) {
+  return (
+    <span
+      className={`inline-flex shrink-0 items-center gap-1 rounded-admin-badge px-1.5 py-px text-[12px] leading-[18px] font-semibold whitespace-nowrap ${BADGE_TONE[tone]}`}
+    >
+      {children}
+    </span>
+  );
+}
+
+const STATE_TONE: Record<SourceState, BadgeTone> = {
+  ok: "clear",
+  late: "warn",
+  unchecked: "unknown",
+  partial: "warn",
+  failed: "error",
+  none: "neutral",
 };
 
 function StateBadge({ state }: { state: SourceState }) {
+  return <Badge tone={STATE_TONE[state]}>{t.state[state]}</Badge>;
+}
+
+// 상태 점 + 글자(시안 V9 표). 글자가 상태를 말하고 점은 장식
+const DOT: Record<SourceState, string> = {
+  ok: "bg-brand-default",
+  late: "bg-status-stale-border",
+  unchecked: "border border-dashed border-status-unknown-border",
+  partial: "bg-status-stale-border",
+  failed: "bg-status-blocked-fg",
+  none: "bg-border-note",
+};
+
+function Dot({ className }: { className: string }) {
   return (
-    <span className={`${BADGE} ${STATE_BADGE[state]}`}>
-      <span aria-hidden="true" className={STATE_DOT[state]} />
+    <span
+      aria-hidden="true"
+      className={`inline-block size-2 shrink-0 rounded-full ${className}`}
+    />
+  );
+}
+
+function StateDot({ state }: { state: SourceState }) {
+  return (
+    <span className="inline-flex items-center gap-2 whitespace-nowrap">
+      <Dot className={DOT[state]} />
       {t.state[state]}
     </span>
   );
 }
 
-const ALARM_BADGE: Record<AlarmState, SourceState> = {
-  ALARM: "failed",
-  OK: "ok",
-  INSUFFICIENT_DATA: "none",
-  unknown: "none",
+const ALARM_TONE: Record<AlarmState, BadgeTone> = {
+  ALARM: "error",
+  OK: "clear",
+  INSUFFICIENT_DATA: "neutral",
+  unknown: "unknown",
 };
 
-function AlarmBadge({ state }: { state: AlarmState }) {
-  const tone = ALARM_BADGE[state];
+function ChevronIcon({ size = 15 }: { size?: number }) {
   return (
-    <span className={`${BADGE} ${STATE_BADGE[tone]}`}>
-      <span aria-hidden="true" className={STATE_DOT[tone]} />
-      {t.alarmState[state]}
-    </span>
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      className="shrink-0"
+    >
+      <path d="m9 6 6 6-6 6" />
+    </svg>
   );
 }
+
+function OutIcon({ size = 14 }: { size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      className="shrink-0"
+    >
+      <path d="M7 17 17 7M9 7h8v8" />
+    </svg>
+  );
+}
+
+// 시안 w-btn(36, 모바일 터치 44) · w-btn.w-s(32)
+const BTN =
+  "inline-flex min-h-touch items-center justify-center gap-1.5 rounded-admin-control border border-border-strong bg-bg-surface px-3 text-[14px] font-medium whitespace-nowrap text-text-default shadow-card hover:bg-bg-page disabled:cursor-not-allowed disabled:opacity-45 aria-disabled:cursor-not-allowed aria-disabled:opacity-45 lg:h-admin-control lg:min-h-0";
+const BTN_S =
+  "inline-flex min-h-touch items-center justify-center gap-1.5 rounded-admin-control border border-border-strong bg-bg-surface px-2.5 text-[13px] font-medium whitespace-nowrap text-text-default shadow-card hover:bg-bg-page aria-disabled:cursor-not-allowed aria-disabled:opacity-45 lg:h-8 lg:min-h-0";
 
 // 새 탭으로 여는 바깥 링크(AWS 콘솔·GitHub). 화면 안 이동이 아니라 <a>를 씀
 function ExternalLink({
   href,
   children,
-  className = "",
+  className = "font-medium text-brand-default underline underline-offset-2",
 }: {
   href: string;
   children: React.ReactNode;
   className?: string;
 }) {
   return (
-    <a
-      href={href}
-      target="_blank"
-      rel="noreferrer"
-      className={`font-medium text-brand-default underline underline-offset-2 ${className}`}
-    >
+    <a href={href} target="_blank" rel="noreferrer" className={className}>
       {children}
       <span className="sr-only"> {t.newTab}</span>
     </a>
   );
 }
+
+// 표(시안 w-t). 머리 칸 바탕·모서리·칸 여백
+const TABLE =
+  "w-full border-separate border-spacing-0 rounded-admin-box border border-border-default bg-bg-surface text-[14px] shadow-card";
+const TH =
+  "border-b border-border-default bg-bg-page px-3 py-[7px] text-left text-[12.5px] font-semibold whitespace-nowrap text-text-body first:rounded-tl-admin-box first:pl-4 last:rounded-tr-admin-box last:pr-4";
+const TD =
+  "border-b border-border-default px-3 py-1.5 align-middle leading-[1.45] whitespace-nowrap text-text-body first:pl-4 last:pr-4 group-last/row:border-b-0";
+
+const SECTION_TITLE =
+  "text-[16px] leading-normal font-semibold text-text-default";
 
 function rateText(rate: number | null): string {
   return rate === null ? t.never : `${rate}%`;
@@ -142,15 +224,106 @@ function sourceName(job: string): string {
   return job in t.source ? t.source[job as keyof typeof t.source] : job;
 }
 
-// 24시간 막대 한 칸. 높이도 상태마다 다르게 둠(실패는 높게, 지연은 중간, 기록 없음은 낮게)
-const BAR: Record<BarState, string> = {
-  ok: "h-4 bg-brand-default",
-  late: "h-2.5 bg-status-stale-fg",
-  failed: "h-5 bg-danger-border",
-  none: "h-1 bg-border-strong",
+const pad2 = (n: number) => String(n).padStart(2, "0");
+
+// ── 요약 칸(시안 V9 요약 4칸·V10 시트 3칸): 테두리 하나에 칸을 세로줄로 나눔 ──
+
+interface Kpi {
+  readonly label: string;
+  readonly value: string;
+  readonly unit?: string;
+  readonly hint?: string;
+  readonly tone?: "stale";
+}
+
+const KPI_COLS: Record<number, string> = {
+  3: "sm:grid-cols-3",
+  4: "sm:grid-cols-2 xl:grid-cols-4",
 };
 
-function DayBars({ job }: { job: JobCollection | undefined }) {
+function KpiBox({ items }: { items: readonly Kpi[] }) {
+  return (
+    <dl
+      className={`grid grid-cols-1 overflow-hidden rounded-admin-box border border-border-default bg-bg-surface shadow-card ${KPI_COLS[items.length] ?? ""}`}
+    >
+      {items.map((kpi) => (
+        <div
+          key={kpi.label}
+          className="-mt-px -ml-px border-t border-l border-border-default px-4 py-3.5"
+        >
+          <dt className="text-[13px] font-semibold text-text-body">
+            {kpi.label}
+          </dt>
+          <dd className="mt-1 flex items-baseline gap-1.5">
+            <span
+              className={`text-[20px] leading-normal tabular-nums ${kpi.tone === "stale" ? "text-status-stale-fg" : "text-text-default"}`}
+            >
+              {kpi.value}
+            </span>
+            {kpi.unit && (
+              <span className="text-[12.5px] text-text-muted">{kpi.unit}</span>
+            )}
+          </dd>
+          {kpi.hint && (
+            <dd className="mt-0.5 text-[12px] text-text-muted">{kpi.hint}</dd>
+          )}
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+// ── 24시간 막대(시안 w-trk): 마우스를 올리면 그 칸의 시각·결과를 말풍선으로 ──
+
+const BAR: Record<BarState, string> = {
+  ok: "bg-brand-default",
+  late: "bg-status-stale-border",
+  failed: "bg-status-blocked-fg",
+  none: "bg-border-default",
+};
+
+function barTip(bucket: HourBucket): { time: string; detail: string } {
+  const from = kstHour(bucket.hour);
+  const time = fill(t.barTipTime, {
+    from: pad2(from),
+    to: pad2((from + 1) % 24),
+  });
+  const state = t.bar[barState(bucket)];
+  const runs =
+    bucket.runs === 0
+      ? t.barTipNoRuns
+      : fill(t.barTipRuns, { runs: bucket.runs, ok: bucket.ok });
+  return { time, detail: `${state} · ${runs}` };
+}
+
+function Tooltip({
+  children,
+  className = "",
+  style,
+}: {
+  children: React.ReactNode;
+  className?: string;
+  style?: React.CSSProperties;
+}) {
+  return (
+    <span
+      aria-hidden="true"
+      style={style}
+      className={`pointer-events-none absolute z-10 rounded-admin-control border border-border-default bg-bg-surface px-2.5 py-2 text-left text-[12px] leading-normal font-normal whitespace-nowrap text-text-default shadow-floating ${className}`}
+    >
+      {children}
+    </span>
+  );
+}
+
+function DayBars({
+  job,
+  wide = false,
+}: {
+  job: JobCollection | undefined;
+  wide?: boolean;
+}) {
+  const [hover, setHover] = useState<number | null>(null);
   const day = job?.day ?? { runs: 0, ok: 0 };
   const hourly = job?.hourly ?? [];
   const counts = barCounts(hourly);
@@ -167,15 +340,48 @@ function DayBars({ job }: { job: JobCollection | undefined }) {
     day.runs === 0 && counts.late === 0
       ? t.dayNone
       : fill(lateUnknown ? t.dayBarsLateUnknown : t.dayBars, values);
+  const active = hover === null ? undefined : hourly[hover];
+  const tip = active ? barTip(active) : null;
+  // 끝 칸 말풍선은 막대 밖으로 나가지 않게 한쪽에 붙임
+  const align =
+    hover === null
+      ? ""
+      : hover < 4
+        ? "translate-x-0"
+        : hover > hourly.length - 5
+          ? "-translate-x-full"
+          : "-translate-x-1/2";
+  const left =
+    hover === null
+      ? 0
+      : hover < 4
+        ? (hover / hourly.length) * 100
+        : hover > hourly.length - 5
+          ? ((hover + 1) / hourly.length) * 100
+          : ((hover + 0.5) / hourly.length) * 100;
   return (
-    <span role="img" aria-label={label} className="flex h-5 items-end gap-px">
-      {hourly.map((bucket) => (
+    <span
+      role="img"
+      aria-label={label}
+      onMouseLeave={() => setHover(null)}
+      className={`relative flex gap-0.5 ${wide ? "w-full" : "w-60"}`}
+    >
+      {hourly.map((bucket, i) => (
         <span
           key={bucket.hour}
           aria-hidden="true"
-          className={`w-1.5 rounded-[1px] ${BAR[barState(bucket)]}`}
+          onMouseEnter={() => setHover(i)}
+          className={`block h-4 flex-1 rounded-[2px] ${BAR[barState(bucket)]} ${hover === i ? "outline-2 outline-offset-1 outline-text-default" : ""}`}
         />
       ))}
+      {tip && (
+        <Tooltip
+          className={`bottom-full mb-2 ${align}`}
+          style={{ left: `${left}%` }}
+        >
+          <b className="font-semibold">{tip.time}</b> · {tip.detail}
+        </Tooltip>
+      )}
     </span>
   );
 }
@@ -185,13 +391,14 @@ function BarLegend() {
   return (
     <ul
       aria-label={t.legendTitle}
-      className="flex flex-wrap items-end gap-x-4 gap-y-1 text-label-s text-text-body"
+      className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-text-muted"
     >
       {states.map((state) => (
-        <li key={state} className="flex items-end gap-1.5">
-          <span className="flex h-5 items-end" aria-hidden="true">
-            <span className={`w-1.5 rounded-[1px] ${BAR[state]}`} />
-          </span>
+        <li key={state} className="inline-flex items-center gap-[5px]">
+          <span
+            aria-hidden="true"
+            className={`inline-block size-[9px] rounded-[2px] ${BAR[state]}`}
+          />
           {t.bar[state]}
         </li>
       ))}
@@ -199,13 +406,19 @@ function BarLegend() {
   );
 }
 
-// 상태 배지가 어느 실행 기준인지 함께 보여 줌(오래전 실행의 '정상'을 지금 정상으로 읽지 않게)
-function LastRun({ job }: { job: JobCollection | undefined }) {
+// 상태가 어느 실행 기준인지 함께 보여 줌(오래전 실행의 '정상'을 지금 정상으로 읽지 않게)
+function LastRun({
+  job,
+  nowIso,
+}: {
+  job: JobCollection | undefined;
+  nowIso: string;
+}) {
   if (!job?.lastRun) return null;
   return (
-    <p className="mt-1 text-label-s whitespace-nowrap text-text-muted tabular-nums">
-      {fill(t.lastRun, { time: kstDateTime(job.lastRun.startedAt) })}
-    </p>
+    <span className="block text-[12px] whitespace-nowrap text-text-muted tabular-nums">
+      {fill(t.lastRun, { time: kstClock(job.lastRun.startedAt, nowIso) })}
+    </span>
   );
 }
 
@@ -221,10 +434,10 @@ function Cycle({
 }) {
   const late = job?.lateAfterMinutes;
   return (
-    <span className="flex flex-col gap-0.5">
+    <span className="flex flex-col">
       <span>{t.cycle[row.job]}</span>
       {job && !legacy && (
-        <span className="text-label-s text-text-muted">
+        <span className="text-[12px] text-text-muted">
           {late == null ? t.cycleNoLate : fill(t.cycleLate, { minutes: late })}
         </span>
       )}
@@ -250,115 +463,74 @@ function Summary({ view }: { view: CollectionView }) {
   const { publish } = view;
   // 요약이 없으면 버전 시각만(검증 통과·해변 수는 요약에서만 알 수 있음)
   const published = publish?.publishedAt ?? versionTime(view.publishedVersion);
-  const card =
-    "flex flex-col gap-1 rounded-admin-box border border-border-default bg-bg-surface px-4 py-3";
-  const value = "text-title-l font-semibold text-text-default tabular-nums";
-  const hint = "text-label-s text-text-muted";
-  const label = "text-label-s font-medium text-text-body";
-  return (
-    <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-      <div className={card}>
-        <dt className={label}>{t.kpiSources}</dt>
-        <dd className={value}>
-          {unchecked > 0 ? t.kpiUnknown : `${okCount}/${SOURCE_ROWS.length}`}
-        </dd>
-        <dd className={hint}>
-          {unchecked > 0
-            ? fill(t.kpiSourcesUnchecked, { count: unchecked })
-            : fill(t.kpiSourcesHint, { judgment })}
-        </dd>
-      </div>
-      <div className={card}>
-        <dt className={label}>{t.kpiWeek}</dt>
-        <dd className={value}>{rate === null ? t.kpiWeekNone : `${rate}%`}</dd>
-        {rate !== null && (
-          <dd className={hint}>
-            {fill(t.kpiWeekHint, { failed: week.runs - week.ok })}
-          </dd>
-        )}
-      </div>
-      <div className={card}>
-        <dt className={label}>{t.kpiDelayed}</dt>
-        <dd className={value}>
-          {publish
-            ? fill(t.kpiDelayedValue, { count: publish.delayedBeaches })
-            : t.kpiUnknown}
-        </dd>
-        <dd className={hint}>
-          {publish
-            ? fill(t.kpiDelayedHint, { total: publish.beachCount })
-            : t.kpiDelayedUnknownHint}
-        </dd>
-      </div>
-      <div className={card}>
-        <dt className={label}>{t.kpiPublish}</dt>
-        <dd className={value}>
-          {published ? kstDateTime(published) : t.kpiPublishNone}
-        </dd>
-        {published && (
-          <dd className={hint}>
-            {publish
-              ? fill(t.kpiPublishHint, { count: publish.beachCount })
-              : t.kpiPublishHintNoSummary}
-          </dd>
-        )}
-      </div>
-    </dl>
-  );
+  const items: Kpi[] = [
+    {
+      label: t.kpiSources,
+      value: unchecked > 0 ? t.kpiUnknown : `${okCount}/${SOURCE_ROWS.length}`,
+      hint:
+        unchecked > 0
+          ? fill(t.kpiSourcesUnchecked, { count: unchecked })
+          : fill(t.kpiSourcesHint, { judgment }),
+    },
+    rate === null
+      ? { label: t.kpiWeek, value: t.kpiWeekNone }
+      : {
+          label: t.kpiWeek,
+          value: String(rate),
+          unit: "%",
+          hint: fill(t.kpiWeekHint, { failed: week.runs - week.ok }),
+        },
+    publish
+      ? {
+          label: t.kpiDelayed,
+          value: String(publish.delayedBeaches),
+          unit: t.unitPlaces,
+          hint: fill(t.kpiDelayedHint, { total: publish.beachCount }),
+          ...(publish.delayedBeaches > 0 ? { tone: "stale" as const } : {}),
+        }
+      : {
+          label: t.kpiDelayed,
+          value: t.kpiUnknown,
+          hint: t.kpiDelayedUnknownHint,
+        },
+    published
+      ? {
+          label: t.kpiPublish,
+          value: kstClock(published, view.generatedAt),
+          hint: publish
+            ? fill(t.kpiPublishHint, { count: publish.beachCount })
+            : t.kpiPublishHintNoSummary,
+        }
+      : { label: t.kpiPublish, value: t.kpiPublishNone },
+  ];
+  return <KpiBox items={items} />;
 }
 
 function SourceName({ row }: { row: SourceRow }) {
   return (
-    <span className="flex flex-col gap-0.5">
+    <span className="flex flex-col">
       <span className="font-medium text-text-default">{t.source[row.job]}</span>
-      <span className="text-label-s text-text-muted">
+      <span className="text-[12px] text-text-muted">
         {row.judgment ? t.judgment : t.reference}
       </span>
     </span>
   );
 }
 
-// 그 출처의 가장 최근 장애 상세로 바로 감. 장애가 없으면 '—'
-function IncidentJump({
-  row,
-  incidents,
-  onOpen,
-}: {
-  row: SourceRow;
-  incidents: readonly JobIncident[];
-  onOpen: (index: number) => void;
-}) {
-  const index = incidents.findIndex((i) => i.job === row.job);
-  const count = incidents.filter((i) => i.job === row.job).length;
-  if (index < 0) return <span className="text-text-muted">{t.never}</span>;
-  return (
-    <button
-      type="button"
-      onClick={() => onOpen(index)}
-      aria-label={fill(t.incidentsOfLabel, {
-        source: t.source[row.job],
-        count,
-      })}
-      className="min-h-touch rounded-admin-control px-1 text-body-s lg:min-h-admin-control font-medium whitespace-nowrap text-brand-default underline underline-offset-2 hover:bg-bg-page"
-    >
-      {fill(t.incidentsOf, { count })}
-    </button>
-  );
-}
-
 function SourceTable({
   view,
   legacy,
-  incidents,
+  selected,
   onOpen,
 }: {
   view: CollectionView;
   legacy: boolean;
-  incidents: readonly JobIncident[];
-  onOpen: (index: number) => void;
+  // 출처 시트가 열린 줄(시안 V10: 고른 줄 강조)
+  selected: string | null;
+  onOpen: (job: SourceRow["job"]) => void;
 }) {
-  const cell = "border-b border-border-default px-3 py-2.5 align-middle";
   const [filter, setFilter] = useState<SourceFilter>("all");
+  const nowIso = view.generatedAt;
   const states = SOURCE_ROWS.map((row) => sourceState(rowJob(view, row)));
   const filters: readonly SourceFilter[] = [
     "all",
@@ -373,21 +545,25 @@ function SourceTable({
   );
   // 운영 기간은 수집하지 않는 참고 정보라 전체·참고에서만 보여 줌
   const showSeason = filter === "all" || filter === "reference";
+  const openButton = (row: SourceRow) => (
+    <button
+      type="button"
+      onClick={() => onOpen(row.job)}
+      aria-label={fill(t.openSource, { source: t.source[row.job] })}
+      className="inline-flex size-touch items-center justify-center rounded-admin-control text-text-muted hover:bg-bg-page hover:text-text-default lg:size-7"
+    >
+      <ChevronIcon />
+    </button>
+  );
   return (
-    <section aria-labelledby="collection-sources">
-      <div className="mb-2 flex flex-wrap items-end justify-between gap-2">
-        <h2
-          id="collection-sources"
-          className="text-title-s font-semibold text-text-default"
-        >
-          {t.tableTitle}
-        </h2>
-        <BarLegend />
-      </div>
+    <section aria-labelledby="collection-sources" className="mt-7">
+      <h2 id="collection-sources" className={SECTION_TITLE}>
+        {t.tableTitle}
+      </h2>
       <div
         role="group"
         aria-label={t.filterLabel}
-        className="mb-2 flex flex-wrap gap-1.5"
+        className="mt-3 flex gap-6 overflow-x-auto border-b border-border-default"
       >
         {filters.map((f) => (
           <button
@@ -395,110 +571,112 @@ function SourceTable({
             type="button"
             aria-pressed={filter === f}
             onClick={() => setFilter(f)}
-            className="inline-flex min-h-touch items-center gap-1.5 rounded-admin-control border border-border-default bg-bg-surface px-3 text-body-s text-text-body hover:bg-bg-page aria-pressed:border-brand-default aria-pressed:font-semibold aria-pressed:text-brand-default lg:min-h-admin-control"
+            className="-mb-px inline-flex min-h-touch shrink-0 items-center gap-1 border-b-2 border-transparent px-0.5 py-2 text-[14px] font-medium whitespace-nowrap text-text-muted hover:text-text-default aria-pressed:border-brand-default aria-pressed:text-brand-default lg:min-h-0"
           >
             {t.filter[f]}
-            <span className="text-text-muted tabular-nums">{count(f)}</span>
+            <span className="font-normal text-text-muted tabular-nums">
+              {count(f)}
+            </span>
           </button>
         ))}
       </div>
+      <div className="mt-3.5 mb-0.5 flex justify-end">
+        <BarLegend />
+      </div>
       {rows.length === 0 && !showSeason && (
-        <p className="rounded-admin-box border border-border-default bg-bg-surface px-4 py-3 text-body-s text-text-muted">
+        <p className="rounded-admin-box border border-border-default bg-bg-surface px-4 py-3 text-[13px] text-text-muted">
           {t.filterEmpty}
         </p>
       )}
       {/* 태블릿·PC: 표 */}
       {(rows.length > 0 || showSeason) && (
-        <table className="hidden w-full border-separate border-spacing-0 overflow-hidden rounded-admin-box border border-border-default bg-bg-surface text-body md:table">
+        <table className={`hidden md:table ${TABLE}`}>
           <thead>
-            <tr className="bg-bg-page text-left text-label-s font-semibold text-text-body">
-              {[
-                t.colSource,
-                t.colState,
-                t.colDay,
-                t.colLastSuccess,
-                t.colCycle,
-                t.colWeek,
-                t.incidentsTitle,
-              ].map((label) => (
-                <th
-                  key={label}
-                  scope="col"
-                  className="border-b border-border-default px-3 py-2 first:pl-4"
-                >
-                  {label}
-                </th>
-              ))}
+            <tr>
+              <th scope="col" className={TH}>
+                {t.colSource}
+              </th>
+              <th scope="col" className={TH}>
+                {t.colState}
+              </th>
+              <th scope="col" className={TH}>
+                {t.colDay}
+              </th>
+              <th scope="col" className={`${TH} text-right!`}>
+                {t.colLastSuccess}
+              </th>
+              <th scope="col" className={`${TH} text-right!`}>
+                {t.colCycle}
+              </th>
+              <th scope="col" className={`${TH} text-right!`}>
+                {t.colWeek}
+              </th>
+              <th scope="col" className={TH}>
+                <span className="sr-only">{t.colOpen}</span>
+              </th>
             </tr>
           </thead>
           <tbody>
             {rows.map((row) => {
               const job = rowJob(view, row);
+              const on = selected === row.job;
+              const td = `${TD} ${on ? "bg-brand-weak" : ""}`;
               return (
-                <tr key={row.job}>
+                <tr key={row.job} className="group/row">
                   <th
                     scope="row"
-                    className={`${cell} pl-4 text-left font-normal`}
+                    className={`${td} text-left font-normal ${on ? "shadow-[inset_3px_0_0_var(--color-brand-default)]" : ""}`}
                   >
                     <SourceName row={row} />
                   </th>
-                  <td className={cell}>
-                    <StateBadge state={sourceState(job)} />
-                    <LastRun job={job} />
+                  <td className={td}>
+                    <StateDot state={sourceState(job)} />
+                    <LastRun job={job} nowIso={nowIso} />
                     {job?.truncated && (
-                      <p className="mt-1 text-label-s text-text-muted">
+                      <span className="block text-[12px] text-text-muted">
                         {t.truncated}
-                      </p>
+                      </span>
                     )}
                   </td>
-                  <td className={cell}>
+                  <td className={td}>
                     <DayBars job={job} />
                   </td>
-                  <td className={`${cell} whitespace-nowrap tabular-nums`}>
+                  <td className={`${td} text-right tabular-nums`}>
                     {job?.lastSuccessAt
-                      ? kstDateTime(job.lastSuccessAt)
+                      ? kstClock(job.lastSuccessAt, nowIso, true)
                       : t.never}
                   </td>
-                  <td className={`${cell} text-body-s text-text-body`}>
+                  <td
+                    className={`${td} min-w-28 text-right whitespace-normal!`}
+                  >
                     <Cycle row={row} job={job} legacy={legacy} />
                   </td>
-                  <td className={`${cell} tabular-nums`}>
+                  <td className={`${td} text-right tabular-nums`}>
                     {rateText(job ? successRate(job.week) : null)}
                   </td>
-                  <td className={cell}>
-                    <IncidentJump
-                      row={row}
-                      incidents={incidents}
-                      onOpen={onOpen}
-                    />
-                  </td>
+                  <td className={`${td} w-px`}>{openButton(row)}</td>
                 </tr>
               );
             })}
             {showSeason && (
-              <tr>
-                <th
-                  scope="row"
-                  className="px-3 py-2.5 pl-4 text-left font-normal"
-                >
-                  <span className="flex flex-col gap-0.5">
+              <tr className="group/row">
+                <th scope="row" className={`${TD} text-left font-normal`}>
+                  <span className="flex flex-col">
                     <span className="font-medium text-text-default">
                       {t.season}
                     </span>
-                    <span className="text-label-s text-text-muted">
+                    <span className="text-[12px] text-text-muted">
                       {t.reference}
                     </span>
                   </span>
                 </th>
-                <td className="px-3 py-2.5">
-                  <span className={`${BADGE} ${STATE_BADGE.none}`}>
+                <td className={TD}>
+                  <span className="inline-flex items-center gap-2">
+                    <Dot className={DOT.none} />
                     {t.seasonState}
                   </span>
                 </td>
-                <td
-                  colSpan={5}
-                  className="px-3 py-2.5 text-body-s text-text-body"
-                >
+                <td colSpan={5} className={`${TD} text-[13px]`}>
                   {t.seasonHint}{" "}
                   <ExternalLink href={SEASON_FILE}>{t.seasonLink}</ExternalLink>
                 </td>
@@ -510,30 +688,33 @@ function SourceTable({
 
       {/* 모바일(VM2): 카드. 표의 값을 빼지 않음 */}
       {(rows.length > 0 || showSeason) && (
-        <ul className="flex flex-col divide-y divide-border-default rounded-admin-box border border-border-default bg-bg-surface md:hidden">
+        <ul className="flex flex-col divide-y divide-border-default rounded-admin-box border border-border-default bg-bg-surface shadow-card md:hidden">
           {rows.map((row) => {
             const job = rowJob(view, row);
             return (
               <li key={row.job} className="flex flex-col gap-2 px-4 py-3">
                 <span className="flex items-start justify-between gap-3">
                   <SourceName row={row} />
-                  <StateBadge state={sourceState(job)} />
+                  <span className="flex items-center gap-1">
+                    <StateBadge state={sourceState(job)} />
+                    {openButton(row)}
+                  </span>
                 </span>
-                <LastRun job={job} />
-                <DayBars job={job} />
-                <dl className="grid grid-cols-3 gap-2 text-body-s">
+                <LastRun job={job} nowIso={nowIso} />
+                <DayBars job={job} wide />
+                <dl className="grid grid-cols-3 gap-2 text-[13px]">
                   <div>
-                    <dt className="text-label-s text-text-muted">
+                    <dt className="text-[12px] text-text-muted">
                       {t.colLastSuccess}
                     </dt>
                     <dd className="text-text-default tabular-nums">
                       {job?.lastSuccessAt
-                        ? kstDateTime(job.lastSuccessAt)
+                        ? kstClock(job.lastSuccessAt, nowIso, true)
                         : t.never}
                     </dd>
                   </div>
                   <div>
-                    <dt className="text-label-s text-text-muted">
+                    <dt className="text-[12px] text-text-muted">
                       {t.colCycle}
                     </dt>
                     <dd className="text-text-default">
@@ -541,24 +722,15 @@ function SourceTable({
                     </dd>
                   </div>
                   <div>
-                    <dt className="text-label-s text-text-muted">
-                      {t.colWeek}
-                    </dt>
+                    <dt className="text-[12px] text-text-muted">{t.colWeek}</dt>
                     <dd className="text-text-default tabular-nums">
                       {rateText(job ? successRate(job.week) : null)}
                     </dd>
                   </div>
                 </dl>
                 {job?.truncated && (
-                  <p className="text-label-s text-text-muted">{t.truncated}</p>
+                  <p className="text-[12px] text-text-muted">{t.truncated}</p>
                 )}
-                <span>
-                  <IncidentJump
-                    row={row}
-                    incidents={incidents}
-                    onOpen={onOpen}
-                  />
-                </span>
               </li>
             );
           })}
@@ -568,11 +740,9 @@ function SourceTable({
                 <span className="font-medium text-text-default">
                   {t.season}
                 </span>
-                <span className={`${BADGE} ${STATE_BADGE.none}`}>
-                  {t.seasonState}
-                </span>
+                <Badge tone="neutral">{t.seasonState}</Badge>
               </span>
-              <span className="text-body-s text-text-body">
+              <span className="text-[13px] text-text-body">
                 {t.seasonHint}{" "}
                 <ExternalLink href={SEASON_FILE}>{t.seasonLink}</ExternalLink>
               </span>
@@ -591,14 +761,19 @@ function hourLabel(bucket: HourCounts): string {
     : fill(t.hourlyBar, { hour, ok: bucket.ok, runs: bucket.runs });
 }
 
-// 시간별 성공률 선 그래프(0~100%). 실행이 없는 칸은 선을 끊음(0%로 그리지 않음)
-// 가장 낮은 칸에 말풍선. 화면 읽기 프로그램에는 칸별 값 목록을 따로 둠
-const CHART_W = 240;
-const CHART_H = 80;
+// ── 시간별 성공률 선 그래프(시안 V9): 0~100%, 실행이 없는 칸은 선을 끊음(0%로 그리지 않음) ──
+// 말풍선은 마우스를 올리거나 키보드(←→)로 고른 칸에서만. 가장 낮은 칸은 점으로만 두고 글로 요약
+// 화면 읽기 프로그램에는 칸별 값 목록을 따로 둠
+const CHART_W = 410;
+const CHART_H = 130;
 
 function Hourly({ view }: { view: CollectionView }) {
+  const gradient = useId();
+  const [active, setActive] = useState<number | null>(null);
   const hourly = overallHourly(view.jobs);
+  const n = hourly.length;
   const lowest = lowestHour(hourly);
+  const lowIndex = lowest ? hourly.indexOf(lowest) : -1;
   const any = hourly.some((b) => b.runs > 0);
   const summary = !any
     ? t.hourlyEmpty
@@ -608,127 +783,236 @@ function Hourly({ view }: { view: CollectionView }) {
           rate: successRate(lowest) ?? 0,
         })
       : t.hourlyFine;
-  const step = hourly.length > 1 ? CHART_W / (hourly.length - 1) : 0;
-  const point = (bucket: HourCounts, i: number) => ({
-    x: i * step,
-    y: (1 - bucket.ok / bucket.runs) * CHART_H,
-  });
-  // 실행이 있는 칸끼리 이어진 조각. 앞뒤가 비어 점 하나뿐인 조각은 같은 점을 두 번 넣어 둥근 끝으로 점을 그림
-  const segments: string[] = [];
-  let current: string[] = [];
-  const flush = () => {
-    if (current.length === 1) current.push(current[0]!);
-    if (current.length) segments.push(current.join(" "));
-    current = [];
-  };
+  const xOf = (i: number) => (n > 1 ? (i / (n - 1)) * CHART_W : 0);
+  const yOf = (b: HourCounts) => (1 - b.ok / b.runs) * CHART_H;
+  // 실행이 있는 칸끼리 이어진 조각
+  const segments: number[][] = [];
+  let current: number[] = [];
   hourly.forEach((bucket, i) => {
     if (bucket.runs === 0) {
-      flush();
+      if (current.length) segments.push(current);
+      current = [];
       return;
     }
-    const { x, y } = point(bucket, i);
-    current.push(`${x.toFixed(1)},${y.toFixed(1)}`);
+    current.push(i);
   });
-  flush();
-  const lowIndex = lowest ? hourly.indexOf(lowest) : -1;
-  const low = lowest && lowIndex >= 0 ? point(lowest, lowIndex) : null;
+  if (current.length) segments.push(current);
+  const pts = (idx: number[]) =>
+    idx
+      .map((i) => `${xOf(i).toFixed(1)},${yOf(hourly[i]!).toFixed(1)}`)
+      .join(" ");
+  const pct = (i: number) => (n > 1 ? (i / (n - 1)) * 100 : 0);
+  const lastIndex = hourly.findLastIndex((b) => b.runs > 0);
+  const dot = (i: number) => {
+    const b = hourly[i]!;
+    return (
+      <span
+        key={`dot-${i}`}
+        aria-hidden="true"
+        className="absolute -mt-[4.5px] -ml-[4.5px] block size-[9px] rounded-full border-2 border-chart bg-bg-surface"
+        style={{ left: `${pct(i)}%`, top: `${(yOf(b) / CHART_H) * 100}%` }}
+      />
+    );
+  };
+  const activeBucket = active === null ? undefined : hourly[active];
+  const tipText = activeBucket
+    ? activeBucket.runs === 0
+      ? fill(t.hourlyTipEmpty, { hour: pad2(kstHour(activeBucket.hour)) })
+      : `${fill(t.hourlyTip, {
+          hour: pad2(kstHour(activeBucket.hour)),
+          rate: successRate(activeBucket) ?? 0,
+        })} · ${fill(t.barTipRuns, { runs: activeBucket.runs, ok: activeBucket.ok })}`
+    : "";
+  const pick = (clientX: number, el: HTMLElement) => {
+    const r = el.getBoundingClientRect();
+    const ratio = Math.min(1, Math.max(0, (clientX - r.left) / r.width));
+    setActive(Math.round(ratio * (n - 1)));
+  };
+  const onKey = (e: React.KeyboardEvent) => {
+    const at = active ?? (lowIndex >= 0 ? lowIndex : n - 1);
+    const next =
+      e.key === "ArrowLeft"
+        ? at - 1
+        : e.key === "ArrowRight"
+          ? at + 1
+          : e.key === "Home"
+            ? 0
+            : e.key === "End"
+              ? n - 1
+              : null;
+    if (next === null) return;
+    e.preventDefault();
+    setActive(Math.min(n - 1, Math.max(0, next)));
+  };
   const ticks = hourly
     .map((bucket, i) => ({ bucket, i }))
-    .filter(({ i }) => i % 6 === 0 || i === hourly.length - 1);
+    .filter(({ i }) => i % 6 === 0 || i === n - 1);
+  const tickLabel = (bucket: HourCounts, i: number) => {
+    if (i === n - 1) return t.axisNow;
+    const hour = pad2(kstHour(bucket.hour));
+    // 첫 칸이 기준 시각과 다른 날(어제)이면 '어제'를 붙임(시안 V9 '어제 15시 · 21시 · …')
+    const other =
+      i === 0 && kstClock(bucket.hour, view.generatedAt).includes("/");
+    return other
+      ? fill(t.axisYesterday, { hour })
+      : fill(t.hourlyAxis, { hour });
+  };
+  const flip = active !== null && pct(active) > 60;
 
   return (
-    <section
-      aria-labelledby="collection-hourly"
-      className="rounded-admin-box border border-border-default bg-bg-surface px-4 py-3"
-    >
-      <h2
-        id="collection-hourly"
-        className="text-title-s font-semibold text-text-default"
-      >
+    <section aria-labelledby="collection-hourly">
+      <h2 id="collection-hourly" className={SECTION_TITLE}>
         {t.hourlyTitle}
       </h2>
-      <p className="text-label-s text-text-muted">{t.hourlyAll}</p>
-      {any && (
-        <div className="mt-3 flex gap-2" aria-hidden="true">
-          <div className="flex h-24 flex-col justify-between pb-0 text-label-s text-text-muted tabular-nums">
-            {[100, 50, 0].map((rate) => (
-              <span key={rate}>{fill(t.axisPercent, { rate })}</span>
-            ))}
-          </div>
-          <div className="relative flex-1">
+      <p className="text-[12px] text-text-muted">{t.hourlyAll}</p>
+      {any && n > 0 && (
+        <div className="relative mt-3 mr-1.5 ml-9">
+          <div
+            tabIndex={0}
+            role="group"
+            aria-label={t.hourlyChart}
+            aria-describedby="hourly-keys"
+            onKeyDown={onKey}
+            onBlur={() => setActive(null)}
+            onPointerMove={(e) => pick(e.clientX, e.currentTarget)}
+            onPointerLeave={() => setActive(null)}
+            className="relative rounded-[2px] outline-offset-4"
+          >
             <svg
+              width="100%"
+              height={CHART_H}
               viewBox={`0 0 ${CHART_W} ${CHART_H}`}
               preserveAspectRatio="none"
-              className="h-24 w-full overflow-visible"
+              aria-hidden="true"
+              className="block overflow-visible"
             >
-              {[0, 0.5, 1].map((r) => (
+              <defs>
+                <linearGradient id={gradient} x1="0" y1="0" x2="0" y2="1">
+                  <stop
+                    offset="0"
+                    style={{
+                      stopColor: "var(--color-chart)",
+                      stopOpacity: 0.22,
+                    }}
+                  />
+                  <stop
+                    offset="1"
+                    style={{ stopColor: "var(--color-chart)", stopOpacity: 0 }}
+                  />
+                </linearGradient>
+              </defs>
+              {[0, 0.25, 0.5, 0.75].map((r) => (
                 <line
                   key={r}
                   x1={0}
                   x2={CHART_W}
                   y1={r * CHART_H}
                   y2={r * CHART_H}
-                  className="stroke-border-default"
-                  strokeWidth={1}
+                  className="stroke-border-subtle"
                   vectorEffect="non-scaling-stroke"
                 />
               ))}
-              {segments.map((points) => (
+              <line
+                x1={0}
+                x2={CHART_W}
+                y1={CHART_H}
+                y2={CHART_H}
+                className="stroke-border-default"
+                vectorEffect="non-scaling-stroke"
+              />
+              {segments.map((idx) => (
+                <polygon
+                  key={`area-${idx[0]}`}
+                  points={`${xOf(idx[0]!).toFixed(1)},${CHART_H} ${pts(idx)} ${xOf(idx.at(-1)!).toFixed(1)},${CHART_H}`}
+                  fill={`url(#${gradient})`}
+                />
+              ))}
+              {segments.map((idx) => (
                 <polyline
-                  key={points}
-                  points={points}
+                  key={`line-${idx[0]}`}
+                  // 점 하나뿐인 조각은 같은 점을 두 번 넣어 둥근 끝으로 점을 그림
+                  points={
+                    idx.length === 1 ? `${pts(idx)} ${pts(idx)}` : pts(idx)
+                  }
                   fill="none"
-                  className="stroke-brand-default"
+                  className="stroke-chart"
                   strokeWidth={2}
                   strokeLinejoin="round"
                   strokeLinecap="round"
                   vectorEffect="non-scaling-stroke"
                 />
               ))}
-            </svg>
-            {low && lowest && (
-              <>
-                <span
-                  className="absolute size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-bg-surface bg-danger-border"
-                  style={{
-                    left: `${(low.x / CHART_W) * 100}%`,
-                    top: `${(low.y / CHART_H) * 96}px`,
-                  }}
+              {active !== null && (
+                <line
+                  x1={xOf(active)}
+                  x2={xOf(active)}
+                  y1={0}
+                  y2={CHART_H}
+                  className="stroke-border-note"
+                  strokeDasharray="3 3"
+                  vectorEffect="non-scaling-stroke"
                 />
-                <span
-                  className="absolute -translate-x-1/2 -translate-y-full rounded-admin-control bg-text-default px-1.5 py-0.5 text-label-s whitespace-nowrap text-bg-surface tabular-nums"
-                  style={{
-                    left: `clamp(2.5rem, ${(low.x / CHART_W) * 100}%, calc(100% - 2.5rem))`,
-                    top: `${Math.max((low.y / CHART_H) * 96 - 8, 0)}px`,
-                  }}
-                >
-                  {fill(t.hourlyCallout, {
-                    hour: kstHour(lowest.hour),
-                    rate: successRate(lowest) ?? 0,
-                  })}
-                </span>
-              </>
+              )}
+            </svg>
+            {lastIndex >= 0 && dot(lastIndex)}
+            {lowIndex >= 0 && lowIndex !== lastIndex && dot(lowIndex)}
+            {activeBucket &&
+              activeBucket.runs > 0 &&
+              active !== lastIndex &&
+              active !== lowIndex &&
+              dot(active!)}
+            {[0, 25, 50, 75, 100].map((rate) => (
+              <span
+                key={rate}
+                aria-hidden="true"
+                className="absolute right-[calc(100%+8px)] -translate-y-1/2 text-[11px] whitespace-nowrap text-text-muted tabular-nums"
+                style={{ top: `${100 - rate}%` }}
+              >
+                {fill(t.axisPercent, { rate })}
+              </span>
+            ))}
+            {activeBucket && (
+              <Tooltip
+                className="-top-1.5"
+                style={
+                  flip
+                    ? { right: `calc(${100 - pct(active!)}% + 10px)` }
+                    : { left: `calc(${pct(active!)}% + 10px)` }
+                }
+              >
+                {tipText}
+              </Tooltip>
             )}
-            <div className="relative mt-1 h-4 text-label-s text-text-muted tabular-nums">
-              {ticks.map(({ bucket, i }) => (
-                <span
-                  key={bucket.hour}
-                  className="absolute -translate-x-1/2 whitespace-nowrap first:translate-x-0 last:-translate-x-full"
-                  style={{ left: `${(i * step * 100) / CHART_W}%` }}
-                >
-                  {fill(t.hourlyAxis, { hour: kstHour(bucket.hour) })}
-                </span>
-              ))}
-            </div>
           </div>
+          <div
+            aria-hidden="true"
+            className="relative mt-2 h-4 text-[12px] text-text-muted tabular-nums"
+          >
+            {ticks.map(({ bucket, i }) => (
+              <span
+                key={bucket.hour}
+                className={`absolute whitespace-nowrap ${i === 0 ? "" : i === n - 1 ? "-translate-x-full" : "-translate-x-1/2"}`}
+                style={{ left: `${pct(i)}%` }}
+              >
+                {tickLabel(bucket, i)}
+              </span>
+            ))}
+          </div>
+          {/* 키보드로 고른 칸의 값(말풍선과 같은 글)을 화면 읽기 프로그램에 알림 */}
+          <p className="sr-only" aria-live="polite">
+            {tipText}
+          </p>
         </div>
       )}
+      <p id="hourly-keys" className="sr-only">
+        {t.hourlyKeys}
+      </p>
       <ol className="sr-only" aria-label={t.hourlyChart}>
         {hourly.map((bucket) => (
           <li key={bucket.hour}>{hourLabel(bucket)}</li>
         ))}
       </ol>
-      <p className="mt-2 text-body-s text-text-body">{summary}</p>
+      <p className="mt-3 text-[12px] text-text-muted">{summary}</p>
     </section>
   );
 }
@@ -752,15 +1036,9 @@ function incidentHeadline(incident: JobIncident): string {
 
 function OngoingBadge({ ended }: { ended: boolean }) {
   return (
-    <span
-      className={`${BADGE} ${ended ? STATE_BADGE.none : STATE_BADGE.failed}`}
-    >
-      <span
-        aria-hidden="true"
-        className={ended ? STATE_DOT.none : STATE_DOT.failed}
-      />
+    <Badge tone={ended ? "clear" : "error"}>
       {ended ? t.incidentResolved : t.incidentOngoing}
-    </span>
+    </Badge>
   );
 }
 
@@ -775,7 +1053,97 @@ function impactSummary(incident: JobIncident): string | null {
   });
 }
 
+// 장애 한 줄(시안 w-li): 제목 · 출처 메시지 · 시각·걸린 시간 · 상태 배지 · 화살표
+function IncidentRow({
+  incident,
+  nowMs,
+  onOpen,
+}: {
+  incident: JobIncident;
+  nowMs: number;
+  onOpen: () => void;
+}) {
+  const first = incident.failures[0];
+  const impact = impactSummary(incident);
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="flex w-full items-center gap-3 border-b border-border-default py-2.5 pr-2 text-left hover:bg-bg-page"
+    >
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span className="text-[14px] font-medium text-text-default">
+          {incidentHeadline(incident)}
+        </span>
+        {first?.message && (
+          <span className="text-[12px] break-words text-text-muted">
+            {first.message}
+          </span>
+        )}
+        <span className="text-[12px] text-text-muted tabular-nums">
+          {t.incidentKind[incident.kind]} ·{" "}
+          {fill(t.incidentMeta, {
+            time: kstDateTime(incident.startedAt),
+            minutes: incidentMinutes(incident, nowMs),
+            runs: incident.runs,
+          })}
+          {impact && ` · ${impact}`}
+        </span>
+      </span>
+      <OngoingBadge ended={incident.endedAt !== null} />
+      <span className="text-border-note">
+        <ChevronIcon size={16} />
+      </span>
+    </button>
+  );
+}
+
 const PAGE_SIZE = 5;
+
+function Pager({
+  label,
+  text,
+  atStart,
+  atEnd,
+  onPrev,
+  onNext,
+}: {
+  label: string;
+  text: string;
+  atStart: boolean;
+  atEnd: boolean;
+  onPrev: () => void;
+  onNext: () => void;
+}) {
+  return (
+    <nav
+      aria-label={label}
+      className="mt-3 flex items-center gap-2 text-[12.5px] text-text-muted"
+    >
+      <span className="tabular-nums">{text}</span>
+      <span className="flex-1" />
+      {/* 끝 쪽에서 disabled로 바꾸면 누른 버튼의 포커스가 사라져 aria-disabled로 둠 */}
+      <span className="flex gap-2">
+        <button
+          type="button"
+          aria-disabled={atStart}
+          onClick={() => !atStart && onPrev()}
+          className={BTN_S}
+        >
+          {t.prev}
+        </button>
+        <button
+          type="button"
+          aria-disabled={atEnd}
+          onClick={() => !atEnd && onNext()}
+          className={BTN_S}
+        >
+          {t.next}
+        </button>
+      </span>
+    </nav>
+  );
+}
 
 function Incidents({
   incidents,
@@ -793,99 +1161,46 @@ function Incidents({
   const from = current * PAGE_SIZE;
   const shown = incidents.slice(from, from + PAGE_SIZE);
   return (
-    <section
-      aria-labelledby="collection-incidents"
-      className="rounded-admin-box border border-border-default bg-bg-surface px-4 py-3"
-    >
+    <section aria-labelledby="collection-incidents">
       <h2
         id="collection-incidents"
         tabIndex={-1}
-        className="text-title-s font-semibold text-text-default outline-none"
+        className={`flex items-baseline gap-2 outline-none ${SECTION_TITLE}`}
       >
-        {t.incidentsTitle}{" "}
-        <span className="text-text-muted tabular-nums">{incidents.length}</span>
+        {t.incidentsTitle}
+        <span className="text-[13px] font-normal text-text-muted tabular-nums">
+          {incidents.length}
+        </span>
       </h2>
       {incidents.length === 0 ? (
-        <p className="mt-2 text-body-s text-text-muted">{t.incidentsEmpty}</p>
+        <p className="mt-3 text-[13px] text-text-muted">{t.incidentsEmpty}</p>
       ) : (
-        <ul className="mt-2 flex flex-col divide-y divide-border-default">
-          {shown.map((incident, i) => {
-            const index = from + i;
-            const first = incident.failures[0];
-            const impact = impactSummary(incident);
-            return (
+        <>
+          <ul className="mt-3 flex flex-col border-t border-border-default">
+            {shown.map((incident, i) => (
               <li key={incidentKey(incident)}>
-                <button
-                  type="button"
-                  onClick={() => onOpen(index)}
-                  className="flex w-full items-start justify-between gap-3 rounded-admin-control py-2.5 text-left hover:bg-bg-page"
-                >
-                  <span className="flex flex-col gap-0.5">
-                    <span className="text-body text-text-default">
-                      {incidentHeadline(incident)}
-                    </span>
-                    {first?.message && (
-                      <span className="text-label-s break-all text-text-muted">
-                        {first.message}
-                      </span>
-                    )}
-                    <span className="text-label-s text-text-muted tabular-nums">
-                      {t.incidentKind[incident.kind]} ·{" "}
-                      {fill(t.incidentMeta, {
-                        time: kstDateTime(incident.startedAt),
-                        minutes: incidentMinutes(incident, nowMs),
-                        runs: incident.runs,
-                      })}
-                      {impact && ` · ${impact}`}
-                    </span>
-                  </span>
-                  <span className="flex shrink-0 flex-col items-end gap-1">
-                    <OngoingBadge ended={incident.endedAt !== null} />
-                    <span className="text-label-s text-brand-default">
-                      {t.incidentOpen}
-                    </span>
-                  </span>
-                </button>
+                <IncidentRow
+                  incident={incident}
+                  nowMs={nowMs}
+                  onOpen={() => onOpen(from + i)}
+                />
               </li>
-            );
-          })}
-        </ul>
-      )}
-      {pages > 1 && (
-        <nav
-          aria-label={t.pagerLabel}
-          className="mt-2 flex flex-wrap items-center justify-between gap-2 border-t border-border-default pt-2"
-        >
-          <span className="text-label-s text-text-muted tabular-nums">
-            {fill(t.pager, {
+            ))}
+          </ul>
+          <Pager
+            label={t.pagerLabel}
+            text={fill(t.pager, {
               total: incidents.length,
               from: from + 1,
               to: from + shown.length,
               size: PAGE_SIZE,
             })}
-          </span>
-          {/* 끝 쪽에서 disabled로 바꾸면 누른 버튼의 포커스가 사라져 aria-disabled로 둠(시트 이전·다음과 같음) */}
-          <span className="flex gap-1.5">
-            <Button
-              variant="secondary"
-              size="small"
-              aria-disabled={current === 0}
-              onClick={() => current > 0 && setPage(current - 1)}
-              className="aria-disabled:cursor-not-allowed aria-disabled:opacity-45"
-            >
-              {t.prev}
-            </Button>
-            <Button
-              variant="secondary"
-              size="small"
-              aria-disabled={current >= pages - 1}
-              onClick={() => current < pages - 1 && setPage(current + 1)}
-              className="aria-disabled:cursor-not-allowed aria-disabled:opacity-45"
-            >
-              {t.next}
-            </Button>
-          </span>
-        </nav>
+            atStart={current === 0}
+            atEnd={current >= pages - 1}
+            onPrev={() => setPage(current - 1)}
+            onNext={() => setPage(current + 1)}
+          />
+        </>
       )}
     </section>
   );
@@ -917,53 +1232,47 @@ function alarmRegion(view: CollectionView): string | null {
 function Alerts({ view }: { view: CollectionView }) {
   const { alarms } = view;
   return (
-    <section
-      aria-labelledby="collection-alerts"
-      className="rounded-admin-box border border-border-default bg-bg-surface px-4 py-3"
-    >
-      <h2
-        id="collection-alerts"
-        className="text-title-s font-semibold text-text-default"
-      >
+    <section aria-labelledby="collection-alerts" className="mt-8">
+      <h2 id="collection-alerts" className={SECTION_TITLE}>
         {t.alertsTitle}
       </h2>
-      <p className="text-label-s text-text-muted">{t.alertsHint}</p>
+      <p className="text-[12px] text-text-muted">{t.alertsHint}</p>
       {alarms.status !== "ok" ? (
-        <div className="mt-2">
+        <div className="mt-3">
           <Notice tone="warn" title={t.alertsUnavailable}>
             <p>{t.alertsUnavailableHint}</p>
           </Notice>
         </div>
       ) : alarms.list.length === 0 ? (
-        <p className="mt-2 text-body-s text-text-muted">{t.alertsEmpty}</p>
+        <p className="mt-3 text-[13px] text-text-muted">{t.alertsEmpty}</p>
       ) : (
-        <div className="mt-2 grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <div className="mt-3 flex flex-col gap-4">
           {groupedAlarms(alarms.list).map((group) => (
             <section
               key={group.kind}
               aria-labelledby={`alert-group-${group.kind}`}
-              className="flex flex-col"
             >
               <h3
                 id={`alert-group-${group.kind}`}
-                className="text-body font-semibold text-text-default"
+                className="text-[12px] leading-6 font-medium text-text-muted"
               >
                 {t.alertGroup[group.kind]}
+                <span className="sr-only">
+                  {" "}
+                  · {t.alertGroupHint[group.kind]}
+                </span>
               </h3>
-              <p className="text-label-s text-text-muted">
-                {t.alertGroupHint[group.kind]}
-              </p>
-              <ul className="mt-1 flex flex-col divide-y divide-border-default">
+              <ul className="flex flex-col border-t border-border-default">
                 {group.alarms.map((alarm) => (
                   <li
                     key={alarm.id}
-                    className="flex items-start justify-between gap-3 py-2"
+                    className="flex items-center gap-3 border-b border-border-default py-2.5"
                   >
-                    <span className="flex flex-col gap-0.5">
-                      <span className="text-body-s text-text-default">
+                    <span className="flex min-w-0 flex-1 flex-col">
+                      <span className="text-[14px] font-medium text-text-default">
                         {alarmTitle(alarm)}
                       </span>
-                      <span className="text-label-s text-text-muted tabular-nums">
+                      <span className="text-[12px] text-text-muted tabular-nums">
                         {alarm.windowMinutes === null
                           ? t.alarmWindowUnknown
                           : fill(t.alarmWindow, {
@@ -974,15 +1283,15 @@ function Alerts({ view }: { view: CollectionView }) {
                           ` · ${fill(t.alarmSince, { time: kstDateTime(alarm.stateUpdatedAt) })}`}
                       </span>
                     </span>
-                    <span className="flex shrink-0 flex-col items-end gap-1">
-                      <AlarmBadge state={alarm.state} />
-                      <ExternalLink
-                        href={cloudWatchUrl(alarms.region, alarm.name)}
-                        className="text-label-s"
-                      >
-                        {t.alarmLink}
-                      </ExternalLink>
-                    </span>
+                    <Badge tone={ALARM_TONE[alarm.state]}>
+                      {t.alarmState[alarm.state]}
+                    </Badge>
+                    <ExternalLink
+                      href={cloudWatchUrl(alarms.region, alarm.name)}
+                      className="inline-flex min-h-touch items-center gap-0.5 text-[12px] font-medium text-brand-default underline underline-offset-2 lg:min-h-0"
+                    >
+                      {t.alarmLink}
+                    </ExternalLink>
                   </li>
                 ))}
               </ul>
@@ -1290,8 +1599,85 @@ function Alarms({
 // 닫힘 동작 시간(ms). 동작 줄이기를 켰으면 바로 닫음
 const CLOSE_MS = 200;
 
-// 장애 상세 시트: 오른쪽 패널(모달 <dialog>, 문의 상세 패널과 같은 방식). 모바일은 화면 너비 전체
-// 포커스는 시트 안에 갇히고 Esc·바깥(딤) 누르기·닫기 버튼으로 닫음. ↑↓(또는 이전·다음 버튼)로 장애를 옮김
+// 오른쪽 시트 틀(모달 <dialog>, 문의 상세 패널과 같은 방식). 모바일은 화면 너비 전체
+// 포커스는 시트 안에 갇히고 Esc·바깥(딤) 누르기·닫기 버튼으로 닫음
+function Drawer({
+  nonce,
+  labelledBy,
+  describedBy,
+  className,
+  onClosed,
+  children,
+}: {
+  // 열 때마다 바뀌는 값. 닫히는 동작(0.2초) 중에 다시 열어도 showModal을 다시 부르게 함
+  nonce: number;
+  labelledBy: string;
+  describedBy: string;
+  className: string;
+  onClosed: (nonce: number) => void;
+  children: React.ReactNode;
+}) {
+  const ref = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (el && !el.open) el.showModal();
+  }, [nonce]);
+  const close = () => ref.current?.close();
+  return (
+    <dialog
+      ref={ref}
+      aria-labelledby={labelledBy}
+      aria-describedby={describedBy}
+      onClose={() => {
+        const reduce = window.matchMedia(
+          "(prefers-reduced-motion: reduce)",
+        ).matches;
+        // 닫을 때의 nonce를 넘김 → 그사이 다시 열었으면 부모가 지우지 않음
+        const closed = nonce;
+        window.setTimeout(() => onClosed(closed), reduce ? 0 : CLOSE_MS);
+      }}
+      onClick={(e) => {
+        // 시트 안 빈 곳·여백도 target이 <dialog>라 좌표로 바깥(딤)인지 가림
+        if (e.target !== e.currentTarget) return;
+        const r = e.currentTarget.getBoundingClientRect();
+        const inside =
+          e.clientX >= r.left &&
+          e.clientX <= r.right &&
+          e.clientY >= r.top &&
+          e.clientY <= r.bottom;
+        if (!inside) close();
+      }}
+      className={`fixed inset-y-0 right-0 left-auto m-0 h-dvh max-h-none max-w-full overflow-y-auto border-l border-border-default bg-bg-surface text-text-default shadow-floating transition-[translate,overlay,display] transition-discrete duration-200 ease-out not-open:translate-x-full backdrop:transition-[opacity,overlay,display] backdrop:transition-discrete backdrop:duration-200 not-open:backdrop:opacity-0 starting:open:translate-x-full starting:open:backdrop:opacity-0 motion-reduce:transition-none motion-reduce:backdrop:transition-none ${className}`}
+    >
+      {children}
+    </dialog>
+  );
+}
+
+// 시트 안 닫기 버튼: 가장 가까운 <dialog>를 닫음(닫힘 처리는 Drawer의 onClose가 맡음)
+function closeDialog(e: React.MouseEvent<HTMLElement>) {
+  e.currentTarget.closest("dialog")?.close();
+}
+
+function CloseIcon() {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M6 6l12 12M18 6 6 18" />
+    </svg>
+  );
+}
+
+// 장애 상세 시트. ↑↓(또는 이전·다음 버튼)로 장애를 옮김
 function IncidentSheet({
   incidents,
   index,
@@ -1303,19 +1689,12 @@ function IncidentSheet({
 }: {
   incidents: readonly JobIncident[];
   index: number;
-  // 열 때마다 바뀌는 값. 닫히는 동작(0.2초) 중에 다시 열어도 showModal을 다시 부르게 함
   nonce: number;
   view: CollectionView;
   beaches: Beaches;
   onMove: (index: number) => void;
   onClosed: (nonce: number) => void;
 }) {
-  const ref = useRef<HTMLDialogElement>(null);
-  useEffect(() => {
-    const el = ref.current;
-    if (el && !el.open) el.showModal();
-  }, [nonce]);
-  const close = () => ref.current?.close();
   const total = incidents.length;
   const move = (next: number) => {
     if (next >= 0 && next < total) onMove(next);
@@ -1341,129 +1720,420 @@ function IncidentSheet({
   if (!incident) return null;
   const nowMs = Date.parse(view.generatedAt);
   return (
-    <dialog
-      ref={ref}
-      aria-labelledby="incident-sheet-title"
-      aria-describedby="incident-sheet-keys"
-      onClose={() => {
-        const reduce = window.matchMedia(
-          "(prefers-reduced-motion: reduce)",
-        ).matches;
-        // 닫을 때의 nonce를 넘김 → 그사이 다시 열었으면 부모가 지우지 않음
-        const closed = nonce;
-        window.setTimeout(() => onClosed(closed), reduce ? 0 : CLOSE_MS);
-      }}
-      onClick={(e) => {
-        // 시트 안 빈 곳·여백도 target이 <dialog>라 좌표로 바깥(딤)인지 가림
-        if (e.target !== e.currentTarget) return;
-        const r = e.currentTarget.getBoundingClientRect();
-        const inside =
-          e.clientX >= r.left &&
-          e.clientX <= r.right &&
-          e.clientY >= r.top &&
-          e.clientY <= r.bottom;
-        if (!inside) close();
-      }}
-      className="fixed inset-y-0 right-0 left-auto m-0 h-dvh max-h-none w-[480px] max-w-full overflow-y-auto border-l border-border-default bg-bg-surface px-6 pt-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] text-text-default shadow-floating transition-[translate,overlay,display] transition-discrete duration-200 ease-out not-open:translate-x-full backdrop:bg-[rgb(11_26_44/0.4)] backdrop:transition-[opacity,overlay,display] backdrop:transition-discrete backdrop:duration-200 not-open:backdrop:opacity-0 starting:open:translate-x-full starting:open:backdrop:opacity-0 motion-reduce:transition-none motion-reduce:backdrop:transition-none"
+    <Drawer
+      nonce={nonce}
+      labelledBy="incident-sheet-title"
+      describedBy="incident-sheet-keys"
+      onClosed={onClosed}
+      className="w-[480px] px-6 pt-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] backdrop:bg-[rgb(11_26_44/0.4)]"
     >
-      <div className="flex flex-col gap-3">
-        <div className="flex items-center justify-between gap-2">
-          <span className="flex items-center gap-1">
+      {
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center justify-between gap-2">
+            <span className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => move(index - 1)}
+                aria-disabled={index === 0}
+                aria-label={t.sheetPrev}
+                className="flex size-touch items-center justify-center rounded-admin-control text-body text-text-body hover:bg-bg-page aria-disabled:text-text-muted aria-disabled:opacity-50"
+              >
+                <span aria-hidden="true">↑</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => move(index + 1)}
+                aria-disabled={index === total - 1}
+                aria-label={t.sheetNext}
+                className="flex size-touch items-center justify-center rounded-admin-control text-body text-text-body hover:bg-bg-page aria-disabled:text-text-muted aria-disabled:opacity-50"
+              >
+                <span aria-hidden="true">↓</span>
+              </button>
+              <span className="text-label-s text-text-muted tabular-nums">
+                {fill(t.sheetPosition, { index: index + 1, total })}
+              </span>
+            </span>
             <button
               type="button"
-              onClick={() => move(index - 1)}
-              aria-disabled={index === 0}
-              aria-label={t.sheetPrev}
-              className="flex size-touch items-center justify-center rounded-admin-control text-body text-text-body hover:bg-bg-page aria-disabled:text-text-muted aria-disabled:opacity-50"
+              onClick={closeDialog}
+              className="flex min-h-touch items-center rounded-admin-control px-2 text-body-s font-medium text-text-body hover:bg-bg-page"
             >
-              <span aria-hidden="true">↑</span>
+              {t.close}
             </button>
+          </div>
+          <p id="incident-sheet-keys" className="text-label-s text-text-muted">
+            {t.sheetKeys}
+          </p>
+
+          <div className="flex flex-col gap-1">
+            <span className="flex flex-wrap items-center gap-2">
+              <OngoingBadge ended={incident.endedAt !== null} />
+              <span className="text-label-s text-text-muted">
+                {t.incidentKind[incident.kind]}
+              </span>
+            </span>
+            <h2
+              id="incident-sheet-title"
+              className="text-title-s font-semibold text-text-default"
+              aria-live="polite"
+            >
+              {incidentHeadline(incident)}
+            </h2>
+          </div>
+
+          <dl className="flex flex-col gap-1.5">
+            <Field label={t.startedAt}>
+              <span className="tabular-nums">
+                {kstDateTime(incident.startedAt)}
+              </span>
+            </Field>
+            <Field label={t.endedAt}>
+              <span className="tabular-nums">
+                {incident.endedAt ? kstDateTime(incident.endedAt) : t.notEnded}
+              </span>
+            </Field>
+            <Field label={t.duration}>
+              <span className="tabular-nums">
+                {fill(t.durationValue, {
+                  minutes: incidentMinutes(incident, nowMs),
+                  runs: incident.runs,
+                })}
+              </span>
+            </Field>
+          </dl>
+
+          <Cause incident={incident} />
+          <Impact incident={incident} beaches={beaches} />
+          <Timeline incident={incident} nowIso={view.generatedAt} />
+          <Alarms incident={incident} view={view} />
+        </div>
+      }
+    </Drawer>
+  );
+}
+
+// ── 출처 시트(시안 V10): 요약 3칸 · 최근 24시간 · (해양 관측) 관측소 · 장애 기록 ──
+
+const STATION_DOT: Record<StationRow["state"], string> = {
+  missing: "bg-status-stale-border",
+  unknown: "border border-dashed border-status-unknown-border",
+  ok: "bg-brand-default",
+};
+
+const STATIONS_PAGE = 6;
+
+type StationFilter = "problem" | "all";
+
+function Stations({
+  view,
+  beaches,
+}: {
+  view: CollectionView;
+  beaches: Beaches;
+}) {
+  const [filter, setFilter] = useState<StationFilter>("all");
+  const [page, setPage] = useState(0);
+  const { stations } = view;
+  const heading = (
+    <h3 className="flex-1 text-[15px] font-semibold text-text-default">
+      {t.stationsHeading}
+    </h3>
+  );
+  if (stations.status !== "ok") {
+    return (
+      <section aria-label={t.stationsHeading} className="flex flex-col gap-2">
+        {heading}
+        <Notice tone="warn" title={t.stationsUnavailable}>
+          <p>{t.stationsUnavailableHint}</p>
+        </Notice>
+      </section>
+    );
+  }
+  const problems = stations.list.filter((s) => s.state !== "ok");
+  const list = filter === "problem" ? problems : stations.list;
+  const pages = Math.max(1, Math.ceil(list.length / STATIONS_PAGE));
+  const current = Math.min(page, pages - 1);
+  const from = current * STATIONS_PAGE;
+  const shown = list.slice(from, from + STATIONS_PAGE);
+  const nowIso = view.generatedAt;
+  const beachText = (s: StationRow) => {
+    const names = s.beachIds.map((id) => beaches[id]?.name ?? id);
+    if (names.length === 0) return null;
+    return names.length === 1
+      ? names[0]!
+      : fill(t.stationBeachMore, { name: names[0]!, count: names.length - 1 });
+  };
+  return (
+    <section aria-label={t.stationsHeading}>
+      <div className="flex items-center gap-3">
+        {heading}
+        <div
+          role="group"
+          aria-label={t.stationsFilterLabel}
+          className="inline-flex overflow-hidden rounded-admin-control border border-border-strong shadow-card"
+        >
+          {(["problem", "all"] as const).map((f) => (
             <button
+              key={f}
               type="button"
-              onClick={() => move(index + 1)}
-              aria-disabled={index === total - 1}
-              aria-label={t.sheetNext}
-              className="flex size-touch items-center justify-center rounded-admin-control text-body text-text-body hover:bg-bg-page aria-disabled:text-text-muted aria-disabled:opacity-50"
+              aria-pressed={filter === f}
+              onClick={() => {
+                setFilter(f);
+                setPage(0);
+              }}
+              className="inline-flex min-h-touch items-center border-l border-border-strong bg-bg-surface px-3 text-[13.5px] font-medium whitespace-nowrap text-text-body first:border-l-0 aria-pressed:bg-bg-page aria-pressed:font-semibold aria-pressed:text-text-default lg:h-[34px] lg:min-h-0"
             >
-              <span aria-hidden="true">↓</span>
-            </button>
-            <span className="text-label-s text-text-muted tabular-nums">
-              {fill(t.sheetPosition, { index: index + 1, total })}
-            </span>
-          </span>
-          <button
-            type="button"
-            onClick={close}
-            className="flex min-h-touch items-center rounded-admin-control px-2 text-body-s font-medium text-text-body hover:bg-bg-page"
-          >
-            {t.close}
-          </button>
-        </div>
-        <p id="incident-sheet-keys" className="text-label-s text-text-muted">
-          {t.sheetKeys}
-        </p>
-
-        <div className="flex flex-col gap-1">
-          <span className="flex flex-wrap items-center gap-2">
-            <OngoingBadge ended={incident.endedAt !== null} />
-            <span className="text-label-s text-text-muted">
-              {t.incidentKind[incident.kind]}
-            </span>
-          </span>
-          <h2
-            id="incident-sheet-title"
-            className="text-title-s font-semibold text-text-default"
-            aria-live="polite"
-          >
-            {incidentHeadline(incident)}
-          </h2>
-        </div>
-
-        <dl className="flex flex-col gap-1.5">
-          <Field label={t.startedAt}>
-            <span className="tabular-nums">
-              {kstDateTime(incident.startedAt)}
-            </span>
-          </Field>
-          <Field label={t.endedAt}>
-            <span className="tabular-nums">
-              {incident.endedAt ? kstDateTime(incident.endedAt) : t.notEnded}
-            </span>
-          </Field>
-          <Field label={t.duration}>
-            <span className="tabular-nums">
-              {fill(t.durationValue, {
-                minutes: incidentMinutes(incident, nowMs),
-                runs: incident.runs,
+              {fill(t.stationsFilter[f], {
+                count: f === "problem" ? problems.length : stations.list.length,
               })}
-            </span>
-          </Field>
-        </dl>
-
-        <Cause incident={incident} />
-        <Impact incident={incident} beaches={beaches} />
-        <Timeline incident={incident} nowIso={view.generatedAt} />
-        <Alarms incident={incident} view={view} />
+            </button>
+          ))}
+        </div>
       </div>
-    </dialog>
+      <p className="mt-1 text-[12px] text-text-muted">
+        {stations.checkedAt
+          ? fill(t.stationsChecked, {
+              time: kstClock(stations.checkedAt, nowIso),
+            })
+          : t.stationsUnchecked}
+      </p>
+      {shown.length === 0 ? (
+        <p className="mt-2 text-[13px] text-text-muted">
+          {t.stationsEmptyProblem}
+        </p>
+      ) : (
+        <table className={`mt-2 ${TABLE}`}>
+          <thead>
+            <tr>
+              <th scope="col" className={TH}>
+                {t.colStation}
+              </th>
+              <th scope="col" className={TH}>
+                {t.colState}
+              </th>
+              <th scope="col" className={`${TH} text-right!`}>
+                {t.colMissingSince}
+              </th>
+              <th scope="col" className={`${TH} text-right!`}>
+                {t.colBeaches}
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {shown.map((s) => {
+              const sub = s.state === "missing" ? beachText(s) : null;
+              return (
+                <tr key={s.id} className="group/row">
+                  <th scope="row" className={`${TD} text-left font-normal`}>
+                    <span className="flex flex-col">
+                      <span className="font-medium text-text-default">
+                        {s.name}
+                      </span>
+                      {sub && (
+                        <span className="text-[12px] text-text-muted">
+                          {sub}
+                        </span>
+                      )}
+                    </span>
+                  </th>
+                  <td className={TD}>
+                    <span className="inline-flex items-center gap-2">
+                      <Dot className={STATION_DOT[s.state]} />
+                      {t.stationState[s.state]}
+                    </span>
+                  </td>
+                  <td className={`${TD} text-right tabular-nums`}>
+                    {s.missingSince
+                      ? kstClock(s.missingSince, nowIso)
+                      : t.never}
+                  </td>
+                  <td className={`${TD} text-right tabular-nums`}>
+                    {fill(t.stationBeachCount, { count: s.beachIds.length })}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      )}
+      {list.length > 0 && (
+        <Pager
+          label={t.stationsPagerLabel}
+          text={fill(t.stationsPager, {
+            total: list.length,
+            from: from + 1,
+            to: from + shown.length,
+          })}
+          atStart={current === 0}
+          atEnd={current >= pages - 1}
+          onPrev={() => setPage(current - 1)}
+          onNext={() => setPage(current + 1)}
+        />
+      )}
+    </section>
+  );
+}
+
+function SourceSheet({
+  row,
+  nonce,
+  view,
+  beaches,
+  incidents,
+  onClosed,
+  onOpenIncident,
+}: {
+  row: SourceRow;
+  nonce: number;
+  view: CollectionView;
+  beaches: Beaches;
+  incidents: readonly JobIncident[];
+  onClosed: (nonce: number) => void;
+  onOpenIncident: (index: number) => void;
+}) {
+  const job = rowJob(view, row);
+  const state = sourceState(job);
+  const nowIso = view.generatedAt;
+  const nowMs = Date.parse(nowIso);
+  const rate = job ? successRate(job.week) : null;
+  const mine = incidents
+    .map((incident, index) => ({ incident, index }))
+    .filter(({ incident }) => incident.job === row.job);
+  const ongoing = mine.filter(({ incident }) => incident.endedAt === null);
+  const ocean = row.job === "collect-ocean";
+  const stationCount =
+    view.stations.status === "ok" ? view.stations.list.length : null;
+  const stationProblems =
+    view.stations.status === "ok"
+      ? view.stations.list.filter((s) => s.state !== "ok").length
+      : 0;
+  const items: Kpi[] = [
+    {
+      label: t.colLastSuccess,
+      value: job?.lastSuccessAt ? kstClock(job.lastSuccessAt, nowIso) : t.never,
+      hint: fill(t.sheetCycle, { cycle: t.cycle[row.job] }),
+    },
+    rate === null
+      ? { label: t.colWeek, value: t.never }
+      : { label: t.colWeek, value: String(rate), unit: "%" },
+    ocean
+      ? stationCount === null
+        ? { label: t.stationsHeading, value: t.kpiUnknown }
+        : {
+            label: t.stationsHeading,
+            value: String(stationCount),
+            unit: t.unitPlaces,
+            hint: fill(t.stationsKpiHint, { count: stationProblems }),
+          }
+      : {
+          label: t.incidentsTitle,
+          value: String(mine.length),
+          unit: t.unitCases,
+          hint: fill(t.sheetOngoing, { count: ongoing.length }),
+        },
+  ];
+  return (
+    <Drawer
+      nonce={nonce}
+      labelledBy="source-sheet-title"
+      describedBy="source-sheet-keys"
+      onClosed={onClosed}
+      className="w-[560px] backdrop:bg-[rgb(11_26_44/0.2)]"
+    >
+      {
+        <div className="flex min-h-full flex-col">
+          <div className="flex items-start gap-3 border-b border-border-default px-6 pt-5 pb-4">
+            <div className="min-w-0 flex-1">
+              <p className="text-[12px] text-text-muted">
+                {fill(t.sheetEyebrow, {
+                  kind: row.judgment ? t.judgment : t.reference,
+                })}
+              </p>
+              <h2
+                id="source-sheet-title"
+                className="mt-0.5 text-[18px] leading-snug font-semibold text-text-default"
+              >
+                {t.source[row.job]}
+              </h2>
+            </div>
+            <StateBadge state={state} />
+            <button
+              type="button"
+              onClick={closeDialog}
+              aria-label={t.close}
+              className="-mt-2 -mr-2 inline-flex size-touch items-center justify-center rounded-admin-control text-text-body hover:bg-bg-page lg:size-10"
+            >
+              <CloseIcon />
+            </button>
+          </div>
+          <div className="flex flex-1 flex-col gap-6 px-6 py-5">
+            <KpiBox items={items} />
+            <div>
+              <p className="mb-2 text-[13px] font-semibold text-text-body">
+                {t.colDay}
+              </p>
+              <DayBars job={job} wide />
+            </div>
+            {ocean && <Stations view={view} beaches={beaches} />}
+            <section aria-labelledby="source-sheet-incidents">
+              <h3
+                id="source-sheet-incidents"
+                className="flex items-baseline gap-2 text-[15px] font-semibold text-text-default"
+              >
+                {t.incidentsTitle}
+                <span className="text-[13px] font-normal text-text-muted tabular-nums">
+                  {mine.length}
+                </span>
+              </h3>
+              {mine.length === 0 ? (
+                <p className="mt-2 text-[13px] text-text-muted">
+                  {t.incidentsEmptySource}
+                </p>
+              ) : (
+                <ul className="mt-2 flex flex-col border-t border-border-default">
+                  {mine.map(({ incident, index }) => (
+                    <li key={incidentKey(incident)}>
+                      <IncidentRow
+                        incident={incident}
+                        nowMs={nowMs}
+                        onOpen={() => onOpenIncident(index)}
+                      />
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          </div>
+          <div className="sticky bottom-0 flex items-center gap-2 border-t border-border-default bg-bg-surface px-6 pt-3.5 pb-[max(0.875rem,env(safe-area-inset-bottom))]">
+            <span
+              id="source-sheet-keys"
+              className="text-[12px] text-text-muted"
+            >
+              {t.sheetEsc}
+            </span>
+            <span className="flex-1" />
+            <ExternalLink
+              href={cloudWatchUrl(alarmRegion(view))}
+              className={BTN_S}
+            >
+              <OutIcon size={13} />
+              {t.cloudWatchShort}
+            </ExternalLink>
+          </div>
+        </div>
+      }
+    </Drawer>
   );
 }
 
 function LoadingPlaceholder() {
   return (
-    <div role="status" className="flex flex-col gap-3">
-      <span className="text-body-s text-text-muted">{t.loading}</span>
-      <div
+    <div role="status" className="mt-6 flex flex-col gap-3">
+      <span className="text-[13px] text-text-muted">{t.loading}</span>
+      <span
         aria-hidden="true"
-        className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4"
-      >
-        {[0, 1, 2, 3].map((i) => (
-          <span
-            key={i}
-            className="h-[88px] rounded-admin-box border border-border-default bg-bg-page"
-          />
-        ))}
-      </div>
+        className="h-[96px] rounded-admin-box border border-border-default bg-bg-page"
+      />
       <span
         aria-hidden="true"
         className="h-64 rounded-admin-box border border-border-default bg-bg-page"
@@ -1487,17 +2157,24 @@ function CollectionBody({ beaches }: { beaches: Beaches }) {
   const [sheet, setSheet] = useState<{ key: string; nonce: number } | null>(
     null,
   );
+  // 출처 시트(V10). 출처 줄의 수집기 이름으로 듦
+  const [source, setSource] = useState<{
+    job: SourceRow["job"];
+    nonce: number;
+  } | null>(null);
   const nonce = useRef(0);
   // 비동기 결과·닫힘 타이머에서 지금 시트를 보려고 ref로도 둠
   const sheetRef = useRef(sheet);
+  const sourceRef = useRef(source);
   useEffect(() => {
     sheetRef.current = sheet;
+    sourceRef.current = source;
   });
   // 시트를 닫으면 포커스를 연 버튼으로 돌려줌
   const opener = useRef<HTMLElement | null>(null);
+  const sourceOpener = useRef<HTMLElement | null>(null);
   // 연 버튼이 사라졌으면(그 장애가 목록에서 빠짐) 장애 기록 제목으로(포커스가 문서 맨 앞으로 떨어지지 않게)
-  const restoreFocus = () => {
-    const target = opener.current;
+  const restoreFocus = (target: HTMLElement | null) => {
     if (target && document.contains(target)) target.focus();
     else document.getElementById("collection-incidents")?.focus();
   };
@@ -1505,7 +2182,7 @@ function CollectionBody({ beaches }: { beaches: Beaches }) {
   useEffect(() => {
     if (sheet === null && focusPending.current) {
       focusPending.current = false;
-      restoreFocus();
+      restoreFocus(opener.current);
     }
   });
 
@@ -1525,6 +2202,11 @@ function CollectionBody({ beaches }: { beaches: Beaches }) {
         // 모달이 열린 동안 뒤 화면은 inert라 포커스가 옮겨지지 않음 → 시트가 화면에서 빠진 뒤(아래 효과) 옮김
         focusPending.current = true;
       }
+      // 불러오지 못하면 출처 시트도 닫음(앞 값으로 시트를 계속 보여 주지 않게)
+      if (!result.ok && sourceRef.current) {
+        sourceRef.current = null;
+        setSource(null);
+      }
     });
     return () => {
       live = false;
@@ -1542,13 +2224,14 @@ function CollectionBody({ beaches }: { beaches: Beaches }) {
   const sheetIndex = sheet
     ? incidents.findIndex((i) => incidentKey(i) === sheet.key)
     : -1;
-  const open = (index: number) => {
+  const open = (index: number, from: HTMLElement | null = null) => {
     const target = incidents[index];
     if (!target) return;
     opener.current =
-      document.activeElement instanceof HTMLElement
+      from ??
+      (document.activeElement instanceof HTMLElement
         ? document.activeElement
-        : null;
+        : null);
     nonce.current += 1;
     setSheet({ key: incidentKey(target), nonce: nonce.current });
   };
@@ -1560,79 +2243,110 @@ function CollectionBody({ beaches }: { beaches: Beaches }) {
       );
     }
   };
+  const openSource = (job: SourceRow["job"]) => {
+    sourceOpener.current =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+    nonce.current += 1;
+    setSource({ job, nonce: nonce.current });
+  };
+  // 출처 시트의 장애 줄 → 출처 시트를 닫고 장애 시트를 엶. 장애 시트를 닫으면 출처 줄 화살표로 돌아감
+  const openFromSource = (index: number) => {
+    sourceRef.current = null;
+    setSource(null);
+    open(index, sourceOpener.current);
+  };
+  const sourceRow = source
+    ? SOURCE_ROWS.find((row) => row.job === source.job)
+    : undefined;
 
   return (
-    <div className="flex w-full flex-col gap-4 px-4 py-5 md:px-10 md:pt-6 md:pb-10">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-title-l font-semibold text-text-default">
+    <div className="flex w-full flex-col px-4 py-5 md:px-10 md:pt-6 md:pb-10">
+      <div className="flex flex-wrap items-end gap-3">
+        <div className="w-full min-w-0 sm:w-auto sm:flex-1">
+          <h1 className="text-[20px] leading-[1.4] font-semibold tracking-[-0.01em] text-text-default">
             {t.title}
           </h1>
           {view && (
-            <p className="mt-1 text-body-s text-text-muted">
+            <p className="mt-0.5 text-[12.5px] text-text-muted">
               {fill(t.asOf, { time: kstDateTime(view.generatedAt) })}
               {demo && ` · ${t.demoNote}`}
             </p>
           )}
         </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <ExternalLink
-            href={cloudWatchUrl(view ? alarmRegion(view) : null)}
-            className="text-body-s"
-          >
-            {t.cloudWatch}
-          </ExternalLink>
-          <Button
-            variant="secondary"
-            size="small"
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            className={BTN}
             disabled={loaded !== null && loaded.key !== key}
             onClick={() => setAttempt((n) => n + 1)}
           >
             {t.refresh}
-          </Button>
+          </button>
+          <ExternalLink
+            href={cloudWatchUrl(view ? alarmRegion(view) : null)}
+            className={BTN}
+          >
+            <OutIcon />
+            {t.cloudWatchShort}
+          </ExternalLink>
         </div>
       </div>
 
       {result === null && <LoadingPlaceholder />}
-      {result &&
-        !result.ok &&
-        (result.code === "reauth" ? (
-          <Notice tone="warn" title={messages.inquiries.reauth} role="alert" />
-        ) : (
-          <Notice tone="fail" title={t.error} role="alert">
-            <p>{t.errorHint}</p>
-            {"requestId" in result && result.requestId && (
-              <p>
-                {fill(messages.inquiries.requestId, { id: result.requestId })}
-              </p>
-            )}
-            <Button
-              variant="secondary"
-              size="small"
-              className="mt-2"
-              onClick={() => setAttempt((n) => n + 1)}
-            >
-              {messages.inquiries.retry}
-            </Button>
-          </Notice>
-        ))}
+      {result && !result.ok && (
+        <div className="mt-6">
+          {result.code === "reauth" ? (
+            <Notice
+              tone="warn"
+              title={messages.inquiries.reauth}
+              role="alert"
+            />
+          ) : (
+            <Notice tone="fail" title={t.error} role="alert">
+              <p>{t.errorHint}</p>
+              {"requestId" in result && result.requestId && (
+                <p>
+                  {fill(messages.inquiries.requestId, {
+                    id: result.requestId,
+                  })}
+                </p>
+              )}
+              <button
+                type="button"
+                className={`mt-2 ${BTN_S}`}
+                onClick={() => setAttempt((n) => n + 1)}
+              >
+                {messages.inquiries.retry}
+              </button>
+            </Notice>
+          )}
+        </div>
+      )}
       {view && (
         <>
           {view.legacy && (
-            <Notice tone="warn" title={t.oldResponse} role="status" />
+            <div className="mt-4">
+              <Notice tone="warn" title={t.oldResponse} role="status" />
+            </div>
           )}
-          <Summary view={view} />
+          <section aria-label={t.kpiTitle} className="mt-6">
+            <Summary view={view} />
+          </section>
           <SourceTable
             view={view}
             legacy={view.legacy}
-            incidents={incidents}
-            onOpen={open}
+            selected={source?.job ?? null}
+            onOpen={openSource}
           />
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <div className="mt-7 grid grid-cols-1 gap-8 lg:grid-cols-[1.4fr_1fr]">
             <Hourly view={view} />
-            <Incidents incidents={incidents} nowMs={nowMs} onOpen={open} />
+            <div className="min-w-0">
+              <Incidents incidents={incidents} nowMs={nowMs} onOpen={open} />
+              <Alerts view={view} />
+            </div>
           </div>
-          <Alerts view={view} />
           {sheet !== null && sheetIndex >= 0 && (
             <IncidentSheet
               incidents={incidents}
@@ -1645,13 +2359,30 @@ function CollectionBody({ beaches }: { beaches: Beaches }) {
                 if (sheetRef.current?.nonce !== closed) return;
                 sheetRef.current = null;
                 setSheet(null);
-                restoreFocus();
+                restoreFocus(opener.current);
+              }}
+            />
+          )}
+          {source !== null && sourceRow && (
+            <SourceSheet
+              key={source.nonce}
+              row={sourceRow}
+              nonce={source.nonce}
+              view={view}
+              beaches={beaches}
+              incidents={incidents}
+              onOpenIncident={openFromSource}
+              onClosed={(closed) => {
+                if (sourceRef.current?.nonce !== closed) return;
+                sourceRef.current = null;
+                setSource(null);
+                restoreFocus(sourceOpener.current);
               }}
             />
           )}
         </>
       )}
-      <p className="text-label-s text-text-muted">{t.note}</p>
+      <p className="mt-8 text-[12px] text-text-muted">{t.note}</p>
     </div>
   );
 }

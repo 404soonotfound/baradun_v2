@@ -779,7 +779,6 @@
     "kpiUnknown": "확인 못 함",
     "kpiDelayedUnknownHint": "지금 게시본의 요약을 읽지 못했어요 · 0곳이라는 뜻이 아니에요 · 다시 불러오거나 앱 화면에서 확인해 주세요",
     "kpiPublishHintNoSummary": "지금 앱에 보이는 게시본 · 요약 없음",
-    "cloudWatch": "CloudWatch에서 보기",
     "newTab": "(새 탭)",
     "cycleLate": "{minutes}분 넘으면 지연",
     "cycleNoLate": "지연 표시 안 함",
@@ -790,12 +789,8 @@
       "failed": "실패",
       "none": "기록 없음"
     },
-    "incidentsOf": "장애 {count}건",
-    "incidentsOfLabel": "{source} 장애 기록 {count}건 보기",
     "hourlyChart": "시간별 성공률 선 그래프",
     "hourlyAxis": "{hour}시",
-    "hourlyCallout": "{hour}시 {rate}%",
-    "incidentOpen": "상세 보기",
     "incidentKind": {
       "failure": "수집 실패",
       "stations": "관측소 빠짐"
@@ -916,6 +911,49 @@
     "dayBarsLateUnknown": "최근 24시간 {runs}회 중 {ok}회 성공 · 실패 {failed}시간 · 기록 없음 {none}시간 · 지연 확인 못 함",
     "kpiSourcesUnchecked": "지연을 판정하지 못한 출처 {count}곳 · 예전 응답",
     "impactAffectedWhole": "이 장애의 영향 범위(파고 출처 전체)에서 장애 동안 새로 관측 지연으로 게시된 해변 {count}곳",
-    "impactNoneWhole": "이 장애의 영향 범위(파고 출처 전체)에서 장애 동안 새로 관측 지연으로 게시된 해변이 없어요. 장애 전부터 지연이던 해변은 세지 않아요."
+    "impactNoneWhole": "이 장애의 영향 범위(파고 출처 전체)에서 장애 동안 새로 관측 지연으로 게시된 해변이 없어요. 장애 전부터 지연이던 해변은 세지 않아요.",
+    "cloudWatchShort": "CloudWatch",
+    "kpiTitle": "수집 요약",
+    "unitPlaces": "곳",
+    "unitCases": "건",
+    "colOpen": "자세히",
+    "openSource": "{source} 자세히 보기",
+    "barTipTime": "{from}:00–{to}:00",
+    "barTipRuns": "{runs}회 중 {ok}회 성공",
+    "barTipNoRuns": "실행 없음",
+    "hourlyTip": "{hour}시 · 성공 {rate}%",
+    "hourlyTipEmpty": "{hour}시 · 실행 없음",
+    "hourlyKeys": "←→로 시간을 옮기면 그 시간의 성공률을 보여 줘요.",
+    "axisYesterday": "어제 {hour}시",
+    "axisNow": "지금",
+    "sheetEyebrow": "출처 · {kind}",
+    "sheetEsc": "Esc 닫기",
+    "sheetOngoing": "이어지는 중 {count}건",
+    "incidentsEmptySource": "이 출처는 최근 7일 장애가 없어요.",
+    "stationsHeading": "관측소",
+    "stationsFilterLabel": "관측소 거르기",
+    "stationsFilter": {
+      "problem": "문제 {count}",
+      "all": "전체 {count}"
+    },
+    "stationsKpiHint": "빠짐·확인 못 함 {count}",
+    "stationsChecked": "{time} 실행 기준 · 관측소별 마지막 측정 시각은 운영 화면에서 보지 않아요",
+    "stationsUnchecked": "관측소를 대조한 성공 실행이 없어 상태를 확인하지 못했어요. 정상이라는 뜻이 아니에요.",
+    "stationsUnavailable": "관측소 목록을 불러오지 못했어요",
+    "stationsUnavailableHint": "관측소 표를 읽지 못했거나 운영 API가 아직 예전 응답을 보내고 있어요. 빠진 관측소는 장애 기록에서 확인해 주세요.",
+    "stationsEmptyProblem": "문제 있는 관측소가 없어요.",
+    "stationsPager": "{total}곳 중 {from}–{to}",
+    "stationsPagerLabel": "관측소 쪽 이동",
+    "colStation": "관측소",
+    "colMissingSince": "처음 빠짐",
+    "colBeaches": "쓰는 해변",
+    "stationState": {
+      "ok": "정상",
+      "missing": "빠짐",
+      "unknown": "확인 못 함"
+    },
+    "stationBeachMore": "{name} 외 {count}곳",
+    "stationBeachCount": "{count}곳",
+    "sheetCycle": "주기 {cycle}"
   }
 }
