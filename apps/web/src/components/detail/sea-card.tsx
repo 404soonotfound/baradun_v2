@@ -80,9 +80,10 @@ export function MetricValue({
   if (metric.kind === "value" && metric.unit === "deg") {
     return (
       // 좁은 PC 카드(wide, @2xl 미만)는 '남남동' / '쪽에서'를 줄바꿈해 옆 칸으로 넘치지 않게
+      // 한글은 글자 사이에서도 끊기므로 keep-all로 빈칸에서만 끊음('남남' / '동'처럼 갈라지지 않게)
       <span
         className={cn(
-          "font-bold text-text-default",
+          "font-bold text-text-default [word-break:keep-all]",
           size === "wide" ? "@2xl:whitespace-nowrap" : "whitespace-nowrap",
         )}
       >
