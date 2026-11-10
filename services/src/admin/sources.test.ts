@@ -1,28 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { BASE as CATALOG_BASE, CATALOG_JOB } from "../collectors/catalog";
-import { BASE as OCEAN_BASE, OCEAN_JOB } from "../collectors/ocean";
-import { BASE as RIP_BASE, RIP_JOB } from "../collectors/rip";
-import { PWNCD_URL, TSUNAMI_URL, WARNINGS_JOB } from "../collectors/warnings";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import {
-  ALL_HOURS,
-  MID_BASE,
-  MID_HOURS,
-  SHORT_BASE,
-  SHORT_HOURS,
-  WEATHER_JOB,
-} from "../collectors/weather";
+import { CATALOG_JOB } from "../collectors/catalog";
+import { ENDPOINTS } from "../collectors/endpoints";
+import { OCEAN_JOB } from "../collectors/ocean";
+import { RIP_JOB } from "../collectors/rip";
+import { WARNINGS_JOB } from "../collectors/warnings";
+import { WEATHER_JOB } from "../collectors/weather";
 import { ApiKeyMissingError, type ApiKeyTags } from "../core/secrets/api-keys";
 import { COLLECTION_JOBS } from "./collection";
-import {
-  daysLeft,
-  readKeys,
-  readSources,
-  SOURCE_CATALOG,
-  SOURCE_URLS,
-  WEATHER_HOURS,
-} from "./sources";
+import { daysLeft, readKeys, readSources, SOURCE_CATALOG } from "./sources";
 import type { Sender } from "./writes";
 
 // 데이터 출처 (BRD-149 ADM-SRC). 인증키는 등록 여부·만료일만, 확인 못 하면 '확인 못 함'
@@ -30,16 +17,15 @@ import type { Sender } from "./writes";
 const NOW = new Date("2026-11-10T05:00:00Z");
 
 describe("출처 목록", () => {
-  it("호출 주소가 수집기 코드의 상수와 같다(옮겨 적은 값이 어긋나지 않게)", () => {
-    expect(SOURCE_URLS).toEqual({
-      pwncd: PWNCD_URL,
-      tsunami: TSUNAMI_URL,
-      oceanBase: OCEAN_BASE,
-      rip: RIP_BASE,
-      weatherShort: SHORT_BASE,
-      weatherMid: MID_BASE,
-      catalog: CATALOG_BASE,
-    });
+  it("호출 주소는 수집기와 같은 ENDPOINTS를 씀(옮겨 적지 않음)", () => {
+    const urls = SOURCE_CATALOG.flatMap((s) => s.calls.map((c) => c.url));
+    const bases = Object.values(ENDPOINTS);
+    for (const url of urls) {
+      expect(
+        bases.some((base) => url.startsWith(base)),
+        url,
+      ).toBe(true);
+    }
   });
 
   it("출처 줄은 수집기 이름·수집 현황 목록과 같은 순서", () => {
@@ -239,20 +225,19 @@ describe("출처 목록 대조 (리뷰 지적)", () => {
     for (const source of SOURCE_CATALOG) {
       const text = code(source.id);
       expect(text, source.id).toContain(`keys.get("${source.key}")`);
+      // 기능 이름은 수집기 코드나 공용 주소(endpoints.ts)에 있음
+      const withEndpoints =
+        text +
+        readFileSync(join(__dirname, "../collectors/endpoints.ts"), "utf8");
       for (const call of source.calls) {
-        expect(text, `${source.id} ${call.operation}`).toContain(
+        expect(withEndpoints, `${source.id} ${call.operation}`).toContain(
           call.operation,
         );
       }
     }
   });
 
-  it("날씨 발표 시각이 수집기 값과 같고, 단기·중기는 발표 때만 부른다", () => {
-    expect(WEATHER_HOURS).toEqual({
-      now: ALL_HOURS,
-      short: SHORT_HOURS,
-      mid: MID_HOURS,
-    });
+  it("날씨는 실황 매시·단기 하루 8회·중기 하루 2회 발표 때 부른다", () => {
     const weather = SOURCE_CATALOG.find((s) => s.id === "collect-weather")!;
     expect(
       weather.calls.map((c) => [c.operation, c.issued?.hoursKst.length]),

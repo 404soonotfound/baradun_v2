@@ -1,5 +1,6 @@
 import type { HttpResult } from "../core/collect/http";
 import type { Logger } from "../core/collect/log";
+import { ENDPOINTS } from "./endpoints";
 import {
   mergeReadings,
   type ObservationRow,
@@ -39,7 +40,7 @@ export const OCEAN_STATE = {
   attempt: { pk: "ocean", sk: "attempt" },
 } as const;
 
-export const BASE = "https://apihub.kma.go.kr/api/typ01/url/";
+const BASE = ENDPOINTS.oceanBase;
 export type Source = "sea_obs" | "kma_buoy";
 const SOURCES: readonly Source[] = ["sea_obs", "kma_buoy"];
 

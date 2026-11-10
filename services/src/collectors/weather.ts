@@ -1,5 +1,6 @@
 import { collapseFailures, type RunFailure } from "../core/collect/run-log";
 import type { StateValue } from "../core/store/types";
+import { ENDPOINTS, WEATHER_ISSUE_HOURS } from "./endpoints";
 import {
   isTransientReason,
   kstDate,
@@ -53,9 +54,8 @@ export const WEATHER_STATE = {
   attempt: { pk: "weather", sk: "attempt" },
 } as const;
 
-export const SHORT_BASE =
-  "https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/";
-export const MID_BASE = "https://apis.data.go.kr/1360000/MidFcstInfoService/";
+const SHORT_BASE = ENDPOINTS.weatherShort;
+const MID_BASE = ENDPOINTS.weatherMid;
 const HOUR_MS = 60 * 60 * 1000;
 const MINUTE_MS = 60 * 1000;
 
@@ -135,9 +135,9 @@ export function latestBase(
   throw new Error("발표 시각을 찾지 못함");
 }
 
-export const SHORT_HOURS = [2, 5, 8, 11, 14, 17, 20, 23];
-export const ALL_HOURS = Array.from({ length: 24 }, (_, h) => h);
-export const MID_HOURS = [6, 18];
+const SHORT_HOURS = WEATHER_ISSUE_HOURS.short;
+const ALL_HOURS = WEATHER_ISSUE_HOURS.now;
+const MID_HOURS = WEATHER_ISSUE_HOURS.mid;
 
 async function fetchJson<T>(
   deps: WeatherDeps,
