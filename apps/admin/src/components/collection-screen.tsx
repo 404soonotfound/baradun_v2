@@ -21,7 +21,7 @@ import {
   lambdaUrl,
   lowestHour,
   overallHourly,
-  reasonOf,
+  reasonText,
   SOURCE_ROWS,
   sourceState,
   successRate,
@@ -34,7 +34,6 @@ import {
   type HourCounts,
   type JobCollection,
   type JobIncident,
-  type RunFailure,
   type SourceFilter,
   type SourceRow,
   type SourceState,
@@ -137,14 +136,6 @@ function ExternalLink({
 
 function rateText(rate: number | null): string {
   return rate === null ? t.never : `${rate}%`;
-}
-
-function reasonText(failure: RunFailure): string {
-  const { key, value } = reasonOf(failure);
-  const base = fill(t.reason[key], { value });
-  return failure.count && failure.count > 1
-    ? fill(t.reasonCount, { reason: base, count: failure.count })
-    : base;
 }
 
 function sourceName(job: string): string {

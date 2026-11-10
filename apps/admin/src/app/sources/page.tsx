@@ -1,7 +1,6 @@
-import { PreparingScreen } from "@/components/preparing-screen";
-import { messages } from "@/lib/messages";
+import { SourcesScreen } from "@/components/sources-screen";
 
-// 화면 자리 (BRD-171). 화면 설계서 6장 화면 목록의 경로
+// 데이터 출처 목록·상세 (BRD-149·GH-328, 화면 설계서 6장 ADM-SRC). 읽기 전용. 상세는 ?id=
 export default function Page() {
-  return <PreparingScreen title={messages.nav.sources} />;
+  return <SourcesScreen />;
 }
