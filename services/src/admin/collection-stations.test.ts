@@ -45,6 +45,12 @@ describe("stationsView", () => {
     expect(stationsView(null, [])).toEqual({ status: "unavailable" });
   });
 
+  it("관측소 표가 비었으면 '0곳·문제 없음'이 아니라 unavailable", () => {
+    expect(
+      stationsView({}, [run("2026-11-10T05:10:00.000Z", "complete", [])]),
+    ).toEqual({ status: "unavailable" });
+  });
+
   it("대조한 성공 실행 기준으로 빠짐·정상을 나누고, 빠진 관측소가 먼저 온다", () => {
     const view = stationsView(TABLE, [
       run("2026-11-10T04:10:00.000Z", "complete", []),
@@ -97,6 +103,30 @@ describe("stationsView", () => {
       ["22451", "missing", "2026-11-10T05:10:00.000Z"],
       ["22104", "unknown", null],
       ["22520", "unknown", null],
+    ]);
+  });
+
+  it("관측소 표에 없는 빠진 관측소도 목록에 남기고(이름 모름), 잘린 실행에서 처음 빠진 시각을 끊지 않는다", () => {
+    const view = stationsView(TABLE, [
+      // 120곳 중 일부만 기록: 22451이 목록에 없어도 돌아왔다고 보지 않음
+      run("2026-11-10T04:10:00.000Z", "complete", ["22451"], 120),
+      run("2026-11-10T04:40:00.000Z", "complete", ["22520"], 120),
+      run("2026-11-10T05:10:00.000Z", "complete", ["22520", "29999"]),
+    ]);
+    expect(view.status === "ok" && view.list.slice(0, 2)).toEqual([
+      expect.objectContaining({
+        id: "29999",
+        name: "29999",
+        state: "missing",
+        inTable: false,
+        beachIds: [],
+      }),
+      expect.objectContaining({
+        id: "22520",
+        state: "missing",
+        inTable: true,
+        missingSince: "2026-11-10T04:40:00.000Z",
+      }),
     ]);
   });
 });
