@@ -196,7 +196,7 @@ export function normalizeCollection(raw: unknown): CollectionView & {
 } {
   const view = (raw ?? {}) as Loose<CollectionView>;
   let legacy = !("publish" in view) || !("alarms" in view);
-  const jobs = (Array.isArray(view.jobs) ? view.jobs : []).map((item) => {
+  const jobs = (view.jobs as readonly unknown[]).map((item) => {
     const job = item as Loose<JobCollection> & JobCollection;
     if (typeof job.overdue !== "boolean") legacy = true;
     return {
@@ -204,18 +204,16 @@ export function normalizeCollection(raw: unknown): CollectionView & {
       lateAfterMinutes:
         typeof job.lateAfterMinutes === "number" ? job.lateAfterMinutes : null,
       overdue: typeof job.overdue === "boolean" ? job.overdue : null,
-      hourly: (Array.isArray(job.hourly) ? job.hourly : []).map((bucket) => ({
+      hourly: job.hourly.map((bucket) => ({
         ...bucket,
         late: bucket.late === true,
       })),
-      incidents: (Array.isArray(job.incidents) ? job.incidents : []).map(
-        (incident): Incident => ({
-          ...incident,
-          kind: incident.kind === "stations" ? "stations" : "failure",
-          stations: Array.isArray(incident.stations) ? incident.stations : [],
-          missingTruncated: incident.missingTruncated === true,
-        }),
-      ),
+      incidents: job.incidents.map((incident): Incident => ({
+        ...incident,
+        kind: incident.kind === "stations" ? "stations" : "failure",
+        stations: Array.isArray(incident.stations) ? incident.stations : [],
+        missingTruncated: incident.missingTruncated === true,
+      })),
     };
   });
   const alarms = view.alarms as AlarmsView | undefined;
