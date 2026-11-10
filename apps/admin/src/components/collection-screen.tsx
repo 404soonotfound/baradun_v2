@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { OpsResult } from "@/lib/auth/ops-fetch";
 import { useAuthSession, useSessionSnapshot } from "@/lib/auth/provider";
 import type { BeachName } from "@/lib/beach-names";
 import {
   alarmInfo,
   allIncidents,
+  incidentKey,
   groupedAlarms,
   logsUrl,
   matchesFilter,
@@ -648,9 +649,9 @@ function Hourly({ view }: { view: CollectionView }) {
       {any && (
         <div className="mt-3 flex gap-2" aria-hidden="true">
           <div className="flex h-24 flex-col justify-between pb-0 text-label-s text-text-muted tabular-nums">
-            <span>100%</span>
-            <span>50%</span>
-            <span>0%</span>
+            {[100, 50, 0].map((rate) => (
+              <span key={rate}>{fill(t.axisPercent, { rate })}</span>
+            ))}
           </div>
           <div className="relative flex-1">
             <svg
@@ -1143,7 +1144,9 @@ function Impact({
               return (
                 <li key={gap.id} className="flex flex-col gap-0.5 py-1.5">
                   <span className="text-body-s text-text-default">
-                    {info?.name ? `${info.name} (${gap.id})` : gap.id}
+                    {info?.name
+                      ? fill(t.stationName, { name: info.name, id: gap.id })
+                      : gap.id}
                   </span>
                   <span className="text-label-s text-text-muted tabular-nums">
                     {fill(t.stationMissing, {
@@ -1284,6 +1287,7 @@ const CLOSE_MS = 200;
 function IncidentSheet({
   incidents,
   index,
+  nonce,
   view,
   beaches,
   onMove,
@@ -1291,16 +1295,18 @@ function IncidentSheet({
 }: {
   incidents: readonly JobIncident[];
   index: number;
+  // 열 때마다 바뀌는 값. 닫히는 동작(0.2초) 중에 다시 열어도 showModal을 다시 부르게 함
+  nonce: number;
   view: CollectionView;
   beaches: Beaches;
   onMove: (index: number) => void;
-  onClosed: () => void;
+  onClosed: (nonce: number) => void;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
     const el = ref.current;
     if (el && !el.open) el.showModal();
-  }, []);
+  }, [nonce]);
   const close = () => ref.current?.close();
   const total = incidents.length;
   const move = (next: number) => {
@@ -1335,7 +1341,9 @@ function IncidentSheet({
         const reduce = window.matchMedia(
           "(prefers-reduced-motion: reduce)",
         ).matches;
-        window.setTimeout(onClosed, reduce ? 0 : CLOSE_MS);
+        // 닫을 때의 nonce를 넘김 → 그사이 다시 열었으면 부모가 지우지 않음
+        const closed = nonce;
+        window.setTimeout(() => onClosed(closed), reduce ? 0 : CLOSE_MS);
       }}
       onClick={(e) => {
         // 시트 안 빈 곳·여백도 target이 <dialog>라 좌표로 바깥(딤)인지 가림
@@ -1467,14 +1475,34 @@ function CollectionBody({ beaches }: { beaches: Beaches }) {
     key: string;
     result: OpsResult<CollectionView & { readonly legacy: boolean }>;
   } | null>(null);
-  const [sheet, setSheet] = useState<number | null>(null);
+  // 시트는 장애 번호가 아니라 장애 키로 듦(다시 불러와 목록이 바뀌어도 다른 장애로 바뀌지 않게)
+  const [sheet, setSheet] = useState<{ key: string; nonce: number } | null>(
+    null,
+  );
+  const nonce = useRef(0);
+  // 비동기 결과·닫힘 타이머에서 지금 시트를 보려고 ref로도 둠
+  const sheetRef = useRef(sheet);
+  useEffect(() => {
+    sheetRef.current = sheet;
+  });
   // 시트를 닫으면 포커스를 연 버튼으로 돌려줌
   const opener = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     let live = true;
     void fetchCollection(() => session.accessToken()).then((result) => {
-      if (live) setLoaded({ key, result });
+      if (!live) return;
+      setLoaded({ key, result });
+      // 새 결과에 연 장애가 없으면(불러오기 실패 포함) 시트를 닫음. 남겨 두면 나중에 저절로 다시 열림
+      const keys = result.ok
+        ? new Set(allIncidents(result.body.jobs).map(incidentKey))
+        : new Set<string>();
+      const current = sheetRef.current;
+      if (current && !keys.has(current.key)) {
+        sheetRef.current = null;
+        setSheet(null);
+        opener.current?.focus();
+      }
     });
     return () => {
       live = false;
@@ -1485,13 +1513,30 @@ function CollectionBody({ beaches }: { beaches: Beaches }) {
   const result = loaded?.result ?? null;
   const view = result?.ok ? result.body : null;
   const nowMs = view ? Date.parse(view.generatedAt) : 0;
-  const incidents = view ? allIncidents(view.jobs) : [];
+  const incidents = useMemo(
+    () => (view ? allIncidents(view.jobs) : []),
+    [view],
+  );
+  const sheetIndex = sheet
+    ? incidents.findIndex((i) => incidentKey(i) === sheet.key)
+    : -1;
   const open = (index: number) => {
+    const target = incidents[index];
+    if (!target) return;
     opener.current =
       document.activeElement instanceof HTMLElement
         ? document.activeElement
         : null;
-    setSheet(index);
+    nonce.current += 1;
+    setSheet({ key: incidentKey(target), nonce: nonce.current });
+  };
+  const move = (index: number) => {
+    const target = incidents[index];
+    if (target) {
+      setSheet((current) =>
+        current ? { ...current, key: incidentKey(target) } : current,
+      );
+    }
   };
 
   return (
@@ -1566,14 +1611,17 @@ function CollectionBody({ beaches }: { beaches: Beaches }) {
             <Incidents incidents={incidents} nowMs={nowMs} onOpen={open} />
           </div>
           <Alerts view={view} />
-          {sheet !== null && (
+          {sheet !== null && sheetIndex >= 0 && (
             <IncidentSheet
               incidents={incidents}
-              index={sheet}
+              index={sheetIndex}
+              nonce={sheet.nonce}
               view={view}
               beaches={beaches}
-              onMove={setSheet}
-              onClosed={() => {
+              onMove={move}
+              onClosed={(closed) => {
+                if (sheetRef.current?.nonce !== closed) return;
+                sheetRef.current = null;
                 setSheet(null);
                 opener.current?.focus();
               }}

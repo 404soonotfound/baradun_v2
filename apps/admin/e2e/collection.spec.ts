@@ -429,3 +429,99 @@ test("해변 영향 '없음'은 이 장애의 관측소 범위에서 새로 지�
     "장애 전부터 지연이던 해변과 범위 밖 해변은 세지 않아요",
   );
 });
+
+// 시트를 장애 번호로 들던 결함(Claude 리뷰 #378) 재현: 다시 불러오기·닫히는 중 다시 열기·불러오기 실패
+async function mockSequence(page: Page, bodies: (object | number)[]) {
+  let i = 0;
+  await page.route(/\/ops\/collection$/, async (route: Route) => {
+    const body = bodies[Math.min(i, bodies.length - 1)]!;
+    i += 1;
+    await route.fulfill(
+      typeof body === "number"
+        ? {
+            status: body,
+            contentType: "application/json",
+            body: JSON.stringify({ error: { code: "internal" } }),
+          }
+        : {
+            status: 200,
+            contentType: "application/json",
+            body: JSON.stringify(body),
+          },
+    );
+  });
+}
+
+const withoutStations = {
+  ...VIEW,
+  jobs: VIEW.jobs.map((job) => ({
+    ...job,
+    incidents: job.incidents.filter((incident) => incident.kind !== "stations"),
+  })),
+};
+
+// 시트를 연 채 다시 불러오기(모달 밖 버튼은 눌리지 않아 페이지 스크립트로 누름. 다른 탭 재로그인과 같은 다시 불러오기)
+async function reloadBehindSheet(page: Page) {
+  await page.evaluate(() => {
+    const button = [...document.querySelectorAll("button")].find(
+      (b) => b.textContent === "다시 불러오기",
+    );
+    button?.click();
+  });
+}
+
+test("연 장애가 다시 불러온 목록에 없으면 시트를 닫고, 다른 장애는 다시 열린다", async ({
+  page,
+}) => {
+  await mockSequence(page, [VIEW, withoutStations]);
+  await openCollection(page);
+  const region = page.getByRole("region", { name: /장애 기록/ });
+  await region.getByRole("button", { name: /관측소 1곳 값이 빠짐/ }).click();
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await reloadBehindSheet(page);
+  await expect(region.getByRole("listitem")).toHaveCount(2);
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await region.getByRole("button", { name: /출처 오류 코드 22/ }).click();
+  await expect(
+    page.getByRole("dialog", { name: /출처 오류 코드 22/ }),
+  ).toBeVisible();
+});
+
+test("시트가 닫히는 동안 다른 장애를 눌러도 그 장애 시트가 열린다", async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  await mockSequence(page, [VIEW]);
+  await openCollection(page);
+  const region = page.getByRole("region", { name: /장애 기록/ });
+  await region.getByRole("button", { name: /관측소 1곳 값이 빠짐/ }).click();
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await page.keyboard.press("Escape");
+  // 닫힘 동작(0.2초)이 끝나기 전에 바로 다른 장애를 누름
+  await region.getByRole("button", { name: /출처 오류 코드 22/ }).click();
+  const sheet = page.getByRole("dialog", { name: /출처 오류 코드 22/ });
+  await expect(sheet).toBeVisible();
+  await page.waitForTimeout(400);
+  await expect(sheet).toBeVisible();
+});
+
+test("불러오기가 실패하면 열려 있던 시트를 닫고, 다시 성공해도 저절로 열리지 않는다", async ({
+  page,
+}) => {
+  await mockSequence(page, [VIEW, 500, VIEW]);
+  await openCollection(page);
+  const region = page.getByRole("region", { name: /장애 기록/ });
+  const opener = region.getByRole("button", { name: /관측소 1곳 값이 빠짐/ });
+  await opener.click();
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await reloadBehindSheet(page);
+  await expect(
+    page
+      .getByRole("alert")
+      .filter({ hasText: "수집 현황을 불러오지 못했어요" }),
+  ).toBeVisible();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await page.getByRole("button", { name: "다시 시도" }).click();
+  await expect(region.getByRole("listitem")).toHaveCount(3);
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+});

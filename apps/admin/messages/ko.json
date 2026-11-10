@@ -615,7 +615,7 @@
     "kpiDelayedValue": "{count}곳",
     "kpiDelayedHint": "게시본 {total}곳 중 · 파고 측정 90분 기준",
     "kpiUnknown": "확인 못 함",
-    "kpiDelayedUnknownHint": "지금 게시본의 요약을 읽지 못했어요",
+    "kpiDelayedUnknownHint": "지금 게시본의 요약을 읽지 못했어요 · 0곳이라는 뜻이 아니에요 · 다시 불러오거나 앱 화면에서 확인해 주세요",
     "kpiPublishHintNoSummary": "지금 앱에 보이는 게시본 · 요약 없음",
     "cloudWatch": "CloudWatch에서 보기",
     "newTab": "(새 탭)",
@@ -749,6 +749,8 @@
       "other": "수집 밖의 운영 경보예요"
     },
     "logsLink": "로그",
-    "oldResponse": "운영 API가 아직 예전 응답을 보내고 있어요. 지연·게시 요약·경보는 확인 못 함으로 보여 줘요."
+    "oldResponse": "운영 API가 아직 예전 응답을 보내고 있어요. 지연·게시 요약·경보는 확인 못 함으로 보여요. 운영 API를 배포하면 실제 값이 보이고, 그전에는 CloudWatch에서 확인해 주세요.",
+    "axisPercent": "{rate}%",
+    "stationName": "{name} ({id})"
   }
 }

@@ -171,6 +171,17 @@ export async function fetchCollection(
   return { ...result, body: normalizeCollection(body) };
 }
 
+function validPublish(value: unknown): value is PublishView {
+  if (typeof value !== "object" || value === null) return false;
+  const p = value as Record<string, unknown>;
+  return (
+    typeof p.version === "string" &&
+    typeof p.publishedAt === "string" &&
+    Number.isFinite(p.beachCount) &&
+    Number.isFinite(p.delayedBeaches)
+  );
+}
+
 // 예전 응답에도 있던 필수 칸. 빠지거나 null이면 '장애 없음'·'실행 없음'으로 채우지 않고 본문 오류로 봄
 function validJob(item: unknown): boolean {
   if (typeof item !== "object" || item === null) return false;
@@ -191,6 +202,7 @@ type Loose<T> = { -readonly [K in keyof T]?: unknown };
 // 운영 API가 GH-375 전 응답(지연·게시 요약·경보·장애 종류 없음)을 보내도 화면이 깨지지 않게 채움
 // 모르는 값은 '확인 못 함' 쪽으로: 게시 요약 null, 경보 unavailable, 지연 기준 null(지연 표시 안 함)
 // legacy: 새 필드가 하나라도 빠진 응답. 화면이 '예전 응답' 안내를 띄워 지연이 없다고 읽지 않게 함
+// jobs·hourly·incidents가 배열인지는 fetchCollection(validJob)이 먼저 확인함 → 여기서 빈 배열로 채우지 않음
 export function normalizeCollection(raw: unknown): CollectionView & {
   readonly legacy: boolean;
 } {
@@ -221,7 +233,8 @@ export function normalizeCollection(raw: unknown): CollectionView & {
     generatedAt: String(view.generatedAt ?? ""),
     publishedVersion:
       typeof view.publishedVersion === "string" ? view.publishedVersion : null,
-    publish: (view.publish as PublishView | null | undefined) ?? null,
+    // 칸이 빠지거나 숫자가 아니면 '확인 못 함'(null). 'undefined곳'으로 보이지 않게
+    publish: validPublish(view.publish) ? view.publish : null,
     alarms:
       alarms?.status === "ok" &&
       typeof alarms.region === "string" &&
@@ -329,6 +342,11 @@ export interface JobIncident extends Incident {
 }
 
 // 수집기 장애를 한 목록으로(최신 먼저)
+// 장애 하나를 가리키는 키(수집기·종류·시작 시각). 다시 불러와 순서가 바뀌어도 같은 장애를 가리킴
+export function incidentKey(incident: JobIncident): string {
+  return `${incident.job}|${incident.kind}|${incident.startedAt}`;
+}
+
 export function allIncidents(jobs: readonly JobCollection[]): JobIncident[] {
   return jobs
     .flatMap((job) => job.incidents.map((i) => ({ ...i, job: job.job })))
