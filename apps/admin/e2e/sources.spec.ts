@@ -99,7 +99,7 @@ test("목록(시안 V12·VM13): 판단 출처 카드·참고 출처·인증키�
   ).toContainText("등록됨 · 만료일 없음");
   await expect(page.getByText("판단 2 · 참고 3")).toBeVisible();
   await expect(page.getByText("1/2 성공")).toBeVisible();
-  await expect(page.getByText("2/2 등록")).toBeVisible();
+  await expect(page.getByText("2/2 등록·만료 전")).toBeVisible();
   // 읽기 전용: 받아오기 같은 조작 없음
   await expect(page.getByRole("button", { name: /받아오기/ })).toHaveCount(0);
   await expectNoA11yViolations(page);
@@ -176,6 +176,8 @@ test("기록 null·읽지 못한 기록·키 확인 못 함은 정상·등록 �
     keys.getByRole("listitem").filter({ hasText: "kma-apihub" }),
   ).toContainText("확인 못 함");
   await expect(keys).not.toContainText("등록 안 됨");
+  // 요약도 수 대신 '확인 못 함'(미등록 키가 있는 것처럼 '0/2'로 보이지 않게)
+  await expect(page.getByText(/\/2 등록·만료 전/)).toHaveCount(0);
 
   await page
     .getByRole("link", { name: "해양 관측 상세 보기" })
@@ -185,6 +187,43 @@ test("기록 null·읽지 못한 기록·키 확인 못 함은 정상·등록 �
   await expect(
     page.getByRole("heading", { name: "해양 관측", level: 2 }),
   ).toBeVisible();
+});
+
+test("성공한 실행의 빠진 관측소는 숨기지 않고, 만료된 키는 등록 수에서 뺀다", async ({
+  page,
+}) => {
+  await mockSources(page, 200, {
+    ...VIEW,
+    keys: [{ ...VIEW.keys[0], daysLeft: -3 }, VIEW.keys[1]],
+    sources: VIEW.sources.map((s) =>
+      s.id === "collect-ocean" && s.recentRuns
+        ? {
+            ...s,
+            recentRuns: [
+              {
+                ...s.recentRuns[1],
+                missingStations: ["22105", "22190"],
+                missingStationsTotal: 2,
+              },
+              ...s.recentRuns.slice(1),
+            ],
+          }
+        : s,
+    ),
+  });
+  await openSources(page);
+  await expect(page.getByText("1/2 등록·만료 전")).toBeVisible();
+  await expect(page.getByText(/만료 지남 1/)).toBeVisible();
+  await page
+    .getByRole("link", { name: "해양 관측 상세 보기" })
+    .filter({ visible: true })
+    .click();
+  const latest = page
+    .getByRole("region", { name: "최근 수집" })
+    .locator("ol > li")
+    .first();
+  await expect(latest).toContainText("성공");
+  await expect(latest).toContainText("관측소 2곳 값이 빠짐(22105 · 22190)");
 });
 
 test("샘플 계정 응답(keysHidden)은 키 상태를 '확인 못 함'이 아니라 보여 주지 않는다고 안내한다", async ({
