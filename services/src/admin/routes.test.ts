@@ -46,6 +46,18 @@ describe("허용표", () => {
     });
   });
 
+  it("/ops/sources는 GET만 있고 세 역할과 샘플이 읽을 수 있다(ADM-SRC)", () => {
+    expect(Object.keys(ROUTES["/ops/sources"]!)).toEqual(["GET"]);
+    for (const role of OPERATOR_ROLES) {
+      expect(decideRoute("/ops/sources", "GET", operator(role))).toMatchObject({
+        ok: true,
+      });
+    }
+    expect(decideRoute("/ops/sources", "GET", sample)).toMatchObject({
+      ok: true,
+    });
+  });
+
   it("샘플이 허락된 쓰기 경로가 없다(표에 잘못 넣어도 쓰기는 막음)", () => {
     for (const [path, methods] of Object.entries(ROUTES)) {
       for (const [method, rule] of Object.entries(methods)) {
