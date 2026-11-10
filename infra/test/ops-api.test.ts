@@ -19,6 +19,7 @@ describe("운영 API", () => {
       "INQUIRY_TABLE_NAME",
       "OPERATOR_CLIENT_ID",
       "OPERATOR_USER_POOL_ID",
+      "OPS_ALARM_PREFIX",
       "OPS_TABLE_NAME",
       "SAMPLE_CLIENT_ID",
       "SAMPLE_USER_POOL_ID",
