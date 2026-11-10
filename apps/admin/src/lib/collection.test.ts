@@ -5,6 +5,10 @@ import {
   barCounts,
   barState,
   cloudWatchUrl,
+  groupedAlarms,
+  logsUrl,
+  matchesFilter,
+  normalizeCollection,
   incidentTimeline,
   lambdaUrl,
   sortedAlarms,
@@ -317,6 +321,125 @@ describe("경보", () => {
     );
     expect(lambdaUrl("ap-northeast-2", "BaradunV2-Ocean")).toBe(
       "https://ap-northeast-2.console.aws.amazon.com/lambda/home?region=ap-northeast-2#/functions/BaradunV2-Ocean",
+    );
+  });
+});
+
+describe("normalizeCollection", () => {
+  it("GH-375 전 응답은 게시 요약 null·경보 unavailable·지연 기준 null로 채우고 legacy로 표시", () => {
+    const view = normalizeCollection({
+      generatedAt: "2026-11-04T05:10:00.000Z",
+      publishedVersion: "20261104T051000Z",
+      jobs: [
+        {
+          job: "collect-ocean",
+          lastRun: null,
+          lastSuccessAt: null,
+          day: { runs: 0, ok: 0 },
+          week: { runs: 0, ok: 0 },
+          hourly: [{ hour: "2026-11-04T01:00:00.000Z", runs: 2, ok: 2 }],
+          incidents: [
+            {
+              startedAt: "2026-11-04T01:00:00.000Z",
+              endedAt: null,
+              runs: 1,
+              failures: [],
+            },
+          ],
+          truncated: false,
+        },
+      ],
+    });
+    expect(view.legacy).toBe(true);
+    expect(view.publish).toBeNull();
+    expect(view.alarms).toEqual({ status: "unavailable" });
+    expect(view.jobs[0]).toMatchObject({
+      lateAfterMinutes: null,
+      overdue: false,
+    });
+    expect(view.jobs[0]!.hourly[0]!.late).toBe(false);
+    expect(view.jobs[0]!.incidents[0]).toMatchObject({
+      kind: "failure",
+      stations: [],
+      missingTruncated: false,
+    });
+  });
+
+  it("새 응답은 그대로 두고 legacy가 아님. 모양이 틀린 경보는 읽지 못함으로", () => {
+    const fresh = normalizeCollection({
+      generatedAt: "2026-11-04T05:10:00.000Z",
+      publishedVersion: null,
+      publish: null,
+      alarms: { status: "ok", region: "ap-northeast-2", list: [], history: [] },
+      jobs: [
+        {
+          job: "collect-warnings",
+          lastRun: null,
+          lastSuccessAt: null,
+          day: { runs: 0, ok: 0 },
+          week: { runs: 0, ok: 0 },
+          hourly: [],
+          incidents: [],
+          truncated: false,
+          lateAfterMinutes: 20,
+          overdue: true,
+        },
+      ],
+    });
+    expect(fresh.legacy).toBe(false);
+    expect(fresh.jobs[0]).toMatchObject({
+      lateAfterMinutes: 20,
+      overdue: true,
+    });
+    expect(fresh.alarms.status).toBe("ok");
+    expect(
+      normalizeCollection({ publish: null, alarms: { status: "ok" }, jobs: [] })
+        .alarms,
+    ).toEqual({ status: "unavailable" });
+  });
+});
+
+describe("출처 거르기", () => {
+  const judgment = { job: "collect-warnings" as const, judgment: true };
+  const reference = { job: "collect-rip" as const, judgment: false };
+  it("문제 있음은 정상이 아닌 출처(기록 없음 포함)", () => {
+    expect(matchesFilter("all", reference, "ok")).toBe(true);
+    expect(matchesFilter("judgment", judgment, "ok")).toBe(true);
+    expect(matchesFilter("judgment", reference, "ok")).toBe(false);
+    expect(matchesFilter("reference", reference, "ok")).toBe(true);
+    expect(matchesFilter("problem", judgment, "ok")).toBe(false);
+    expect(matchesFilter("problem", reference, "none")).toBe(true);
+    expect(matchesFilter("problem", judgment, "late")).toBe(true);
+  });
+});
+
+describe("경보 묶음", () => {
+  const alarm = (id: string, state: AlarmView["state"] = "OK"): AlarmView => ({
+    id,
+    name: `BaradunV2-${id}`,
+    state,
+    stateUpdatedAt: null,
+    description: "",
+    windowMinutes: 5,
+    functionName: null,
+  });
+  it("응답 없음 → 실행 오류 → 실패 이어짐 → 그 밖, 빈 묶음은 뺌", () => {
+    const groups = groupedAlarms([
+      alarm("LoginAbuse"),
+      alarm("OceanErrors"),
+      alarm("WarningsStopped"),
+      alarm("OceanStopped", "ALARM"),
+    ]);
+    expect(groups.map((g) => [g.kind, g.alarms.map((a) => a.id)])).toEqual([
+      ["stopped", ["OceanStopped", "WarningsStopped"]],
+      ["errors", ["OceanErrors"]],
+      ["other", ["LoginAbuse"]],
+    ]);
+  });
+
+  it("로그 주소는 로그 그룹 이름의 /를 콘솔 형식으로 바꿈", () => {
+    expect(logsUrl("ap-northeast-2", "BaradunV2-Ocean")).toBe(
+      "https://ap-northeast-2.console.aws.amazon.com/cloudwatch/home?region=ap-northeast-2#logsV2:log-groups/log-group/$252Faws$252Flambda$252FBaradunV2-Ocean",
     );
   });
 });

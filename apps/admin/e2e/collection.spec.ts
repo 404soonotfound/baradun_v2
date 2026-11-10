@@ -11,7 +11,13 @@ import {
   srpScript,
   test,
 } from "./fixtures";
-import { VIEW, VIEW_DEGRADED, VIEW_LATE } from "./collection-data";
+import {
+  VIEW,
+  VIEW_DEGRADED,
+  VIEW_LATE,
+  VIEW_LEGACY,
+  VIEW_MANY,
+} from "./collection-data";
 
 // 데이터 수집 현황 (BRD-149·GH-376, 화면 설계서 6장 ADM-COLLECT). 운영 API는 가짜 응답
 
@@ -271,4 +277,65 @@ test("처음 불러오는 동안 자리 표시와 안내를 보여 준다", asyn
   await expect(page.getByText("수집 기록을 불러오고 있어요.")).toBeVisible();
   release();
   await expect(page.getByText("2/5", { exact: true })).toBeVisible();
+});
+
+test("출처 거르기(시안 V9): 판단에 씀·참고·문제 있음으로 줄을 거르고 수를 함께 보여 준다", async ({
+  page,
+}) => {
+  await mockCollection(page);
+  await openCollection(page);
+  const filters = page.getByRole("group", { name: "출처 거르기" });
+  await expect(filters.getByRole("button", { name: /^전체/ })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await filters.getByRole("button", { name: /^문제 있음/ }).click();
+  // 해양 관측(일부 실패)·이안류(기록 없음). 날씨는 응답에 없어 기록 없음
+  await expect(sourceRow(page, "기상청 해양 관측")).toHaveCount(1);
+  await expect(sourceRow(page, "국립해양조사원 이안류")).toHaveCount(1);
+  await expect(sourceRow(page, "기상청 해상 특보")).toHaveCount(0);
+  await expect(sourceRow(page, "해양수산부 운영 기간")).toHaveCount(0);
+  await filters.getByRole("button", { name: /^판단에 씀/ }).click();
+  await expect(sourceRow(page, "기상청 해상 특보")).toHaveCount(1);
+  await expect(sourceRow(page, "한국관광공사 사진")).toHaveCount(0);
+  await expectNoA11yViolations(page);
+});
+
+test("장애 목록: 해변 영향 요약을 줄에 보여 주고 5건씩 쪽을 나눈다", async ({
+  page,
+}) => {
+  await mockCollection(page, 200, VIEW_MANY);
+  await openCollection(page);
+  const region = page.getByRole("region", { name: /장애 기록/ });
+  const items = region.getByRole("listitem");
+  await expect(items).toHaveCount(5);
+  await expect(items.first()).toContainText("해변 영향 확인 못 함");
+  await expect(items.nth(1)).toContainText("해변 2곳 관측 지연");
+  const pager = region.getByRole("navigation", { name: "장애 기록 쪽 이동" });
+  await expect(pager).toContainText("7건 중 1–5 · 5건씩");
+  await pager.getByRole("button", { name: "다음" }).click();
+  await expect(items).toHaveCount(2);
+  await expect(pager).toContainText("7건 중 6–7");
+  await expect(pager.getByRole("button", { name: "다음" })).toBeDisabled();
+});
+
+test("운영 API가 예전 응답을 보내도 화면이 깨지지 않고 확인 못 함·예전 응답 안내를 보여 준다", async ({
+  page,
+}) => {
+  await mockCollection(page, 200, VIEW_LEGACY);
+  await openCollection(page);
+  await expect(
+    page.getByText("운영 API가 아직 예전 응답을 보내고 있어요."),
+  ).toBeVisible();
+  await expect(
+    page
+      .locator("dl > div")
+      .filter({ has: page.getByText("관측 지연 해변", { exact: true }) }),
+  ).toContainText("확인 못 함");
+  await expect(page.getByRole("region", { name: "알림" })).toContainText(
+    "경보 상태를 불러오지 못했어요",
+  );
+  await expect(sourceRow(page, "기상청 해상 특보")).toContainText("정상");
+  // 지연 기준을 모르니 '지연 표시 안 함'·'N분 넘으면 지연'을 쓰지 않음
+  await expect(sourceRow(page, "기상청 해상 특보")).not.toContainText("지연");
 });
