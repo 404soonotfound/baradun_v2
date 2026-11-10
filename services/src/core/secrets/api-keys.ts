@@ -2,7 +2,8 @@
 // 수집기는 이 인터페이스만 씀. AWS SDK 호출은 ssm.ts 한 곳에만(17.2 이식성)
 // 이름 규칙은 infra/lib/settings.ts의 API_KEY_PARAMETER_PREFIX와 같아야 함(services는 infra를 가져오지 않음)
 
-export type ApiKeyName = "data-go-kr" | "kma-apihub";
+export const API_KEY_NAMES = ["data-go-kr", "kma-apihub"] as const;
+export type ApiKeyName = (typeof API_KEY_NAMES)[number];
 
 export const API_KEY_PARAMETER_PREFIX = "/baradun/v2/api-keys/";
 

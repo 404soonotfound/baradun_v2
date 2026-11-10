@@ -53,8 +53,9 @@ export const WEATHER_STATE = {
   attempt: { pk: "weather", sk: "attempt" },
 } as const;
 
-const SHORT_BASE = "https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/";
-const MID_BASE = "https://apis.data.go.kr/1360000/MidFcstInfoService/";
+export const SHORT_BASE =
+  "https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/";
+export const MID_BASE = "https://apis.data.go.kr/1360000/MidFcstInfoService/";
 const HOUR_MS = 60 * 60 * 1000;
 const MINUTE_MS = 60 * 1000;
 
@@ -328,7 +329,7 @@ export async function collectWeather(
         serviceKey: key,
         dataType: "JSON",
         pageNo: "1",
-        numOfRows: "10",
+        numOfRows: String(COLLECT_POLICY.weatherMidNumOfRows),
         regId,
         tmFc,
       });

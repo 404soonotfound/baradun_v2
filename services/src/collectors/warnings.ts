@@ -30,8 +30,9 @@ export const WARNINGS_STATE = {
   attempt: { pk: "warnings", sk: "attempt" },
 } as const;
 
-const PWNCD_URL = "https://apis.data.go.kr/1360000/WthrWrnInfoService/getPwnCd";
-const TSUNAMI_URL =
+export const PWNCD_URL =
+  "https://apis.data.go.kr/1360000/WthrWrnInfoService/getPwnCd";
+export const TSUNAMI_URL =
   "https://apis.data.go.kr/1360000/EqkInfoService/getTsunamiMsg";
 type Source = "pwncd" | "tsunami";
 const SOURCES: readonly Source[] = ["pwncd", "tsunami"];

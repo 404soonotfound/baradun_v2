@@ -31,7 +31,7 @@ export const RIP_STATE = {
   attempt: { pk: "rip", sk: "attempt" },
 } as const;
 
-const BASE =
+export const BASE =
   "https://apis.data.go.kr/1192136/ripCurrent/GetRipCurrentApiService";
 const MINUTE_MS = 60 * 1000;
 const DAY_MS = 24 * 60 * MINUTE_MS;
