@@ -52,6 +52,10 @@ export const ROUTES: Readonly<
   "/ops/collection": {
     GET: { roles: ["viewer", "editor", "publisher"], sample: true },
   },
+  // 데이터 출처(BRD-149 ADM-SRC). 읽기 전용. 인증키는 등록 여부·만료일만
+  "/ops/sources": {
+    GET: { roles: ["viewer", "editor", "publisher"], sample: true },
+  },
   // 변경 이력(BRD-155). 읽기 전용, 샘플은 받지 않음(D15-3)
   "/ops/audit": {
     GET: { roles: ["viewer", "editor", "publisher"], sample: false },
