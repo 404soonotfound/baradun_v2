@@ -1,5 +1,8 @@
 import type { Page } from "@playwright/test";
 
+import en from "../messages/en.json";
+import ko from "../messages/ko.json";
+
 import {
   CLEAR_ID,
   expect,
@@ -241,15 +244,20 @@ test.describe("PC·모바일 같은 기능", () => {
     ).toBeVisible();
   });
 
-  // 사이트 푸터의 안전 보장 아님 문구는 PC·모바일 모두 보임(D18-7)
-  test("푸터 안전 보장 아님 문구", async ({ page }) => {
-    await page.goto("/");
-    await expect(
-      page
-        .getByRole("contentinfo")
-        .getByText("바라던 바다는 바다 이용이 안전하다고 보장하지 않아요"),
-    ).toBeVisible();
-  });
+  // 사이트 푸터의 안전 보장 아님 문구는 PC·모바일, 한국어·영어, 홈·상세 모두 문장 전체가 보임(D18-7)
+  // 문구 원본은 messages(footer.disclaimer)에서 읽음
+  for (const [path, text] of [
+    ["/", ko.footer.disclaimer],
+    ["/en/", en.footer.disclaimer],
+    [`/spots/${slugOf(CLEAR_ID)}/`, ko.footer.disclaimer],
+  ] as const) {
+    test(`푸터 안전 보장 아님 문구 ${path}`, async ({ page }) => {
+      await page.goto(path);
+      await expect(
+        page.getByRole("contentinfo").getByText(text, { exact: true }),
+      ).toBeVisible();
+    });
+  }
 });
 
 // 좁은 폭 320px, PC 1280px를 200% 확대한 폭(640px), 그 사이 폭에서 가로 스크롤 없음
