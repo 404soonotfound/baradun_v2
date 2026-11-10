@@ -1,4 +1,5 @@
 import { opsFetch, type OpsResult } from "./auth/ops-fetch";
+import { fill, messages } from "./messages";
 
 // 수집 현황 (BRD-149·GH-376, 화면 ADM-COLLECT, 시안 4차 V9·VM2 + 2026-11-10 시안)
 // 운영 API GET /ops/collection 응답 모양과 화면용 계산. 서버(services/src/admin/collection*.ts)가 원본이라 모양만 맞춤
@@ -497,6 +498,16 @@ export function reasonOf(failure: RunFailure): {
   if (head === "exception") return { key: "exception", value: tail };
   if (reason === "unknown_status") return { key: "unknownStatus", value: "" };
   return { key: "other", value: reason };
+}
+
+// 실패 사유 화면 문구(같은 사유가 여러 번이면 횟수를 붙임). 수집 현황·데이터 출처가 같이 씀
+export function reasonText(failure: RunFailure): string {
+  const t = messages.collection;
+  const { key, value } = reasonOf(failure);
+  const base = fill(t.reason[key], { value });
+  return failure.count && failure.count > 1
+    ? fill(t.reasonCount, { reason: base, count: failure.count })
+    : base;
 }
 
 // 게시본 버전(20261104T051000Z) → UTC ISO. 모양이 틀리면 null
