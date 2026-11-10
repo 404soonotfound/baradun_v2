@@ -1,5 +1,15 @@
-import { GetParameterCommand, type SSMClient } from "@aws-sdk/client-ssm";
-import { apiKeyParameterName, type ApiKeyName, type ApiKeys } from "./api-keys";
+import {
+  GetParameterCommand,
+  ListTagsForResourceCommand,
+  type SSMClient,
+} from "@aws-sdk/client-ssm";
+import {
+  ApiKeyMissingError,
+  apiKeyParameterName,
+  type ApiKeyName,
+  type ApiKeys,
+  type ApiKeyTags,
+} from "./api-keys";
 
 // SSM Parameter Store SecureString 읽기 (아키텍처 11장: Standard, 기본 키)
 // Lambda 실행 환경이 살아 있는 동안 한 번 읽은 값을 다시 씀(호출 수·지연 줄임)
@@ -35,5 +45,29 @@ export class SsmApiKeys implements ApiKeys {
       throw new Error(`API 키 없음: ${name}`);
     }
     return value.trim();
+  }
+}
+
+// 키 파라미터의 태그만 읽음(ListTagsForResource). 값을 돌려주는 GetParameter는 쓰지 않음
+// 운영 API의 데이터 출처 화면이 씀. 권한도 태그 읽기만 받음(infra/lib/admin/ops-api.ts)
+export class SsmApiKeyTags implements ApiKeyTags {
+  constructor(private readonly client: ParameterSender) {}
+
+  async tags(name: ApiKeyName, signal?: AbortSignal) {
+    try {
+      const result = await this.client.send(
+        new ListTagsForResourceCommand({
+          ResourceType: "Parameter",
+          ResourceId: apiKeyParameterName(name),
+        }),
+        signal ? { abortSignal: signal } : {},
+      );
+      return result.TagList ?? [];
+    } catch (error) {
+      if ((error as { name?: string }).name === "InvalidResourceId") {
+        throw new ApiKeyMissingError(name);
+      }
+      throw error;
+    }
   }
 }
