@@ -77,6 +77,42 @@ describe("handleOps", () => {
     });
   });
 
+  it("/ops/sources는 출처 목록과 키 상태를 돌려주고 키 값은 담지 않는다(ADM-SRC)", async () => {
+    const res = await handleOps(event("/ops/sources", "GET", "t"), {
+      auth: authDeps(operatorClaims),
+      ids: () => IDS,
+      data: {
+        ...NO_DATA,
+        client: { send: async () => ({ Items: [] }) },
+        keys: {
+          tags: async () => [{ Key: "expires", Value: "2027-03-31" }],
+        },
+      },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers).toMatchObject({ "cache-control": "no-store" });
+    const body = JSON.parse(res.body!);
+    expect(body.sources).toHaveLength(5);
+    expect(body.keys).toEqual([
+      {
+        name: "data-go-kr",
+        status: "registered",
+        expiresOn: "2027-03-31",
+        daysLeft: 148,
+        expiresInvalid: false,
+      },
+      {
+        name: "kma-apihub",
+        status: "registered",
+        expiresOn: "2027-03-31",
+        daysLeft: 148,
+        expiresInvalid: false,
+      },
+    ]);
+    expect(body.keysHidden).toBe(false);
+    expect(res.body).not.toMatch(/ServiceKey|authKey/);
+  });
+
   it("토큰이 없으면 401과 짧은 요청 번호·전체 ID를 돌려준다", async () => {
     const res = await handleOps(event("/ops/me", "GET"), {
       auth: authDeps(operatorClaims),

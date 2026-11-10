@@ -277,6 +277,23 @@ describe("DynamoDB 권한 (BRD-55)", () => {
     expect(resources[0]).toMatch(/:alarm:.*-\*$/);
   });
 
+  it("운영 API 역할은 인증키 파라미터 두 개의 태그만 읽고 값(GetParameter)은 못 읽는다(ADM-SRC)", () => {
+    const statements = allIamPolicies()
+      .filter((p) => p.roles.includes(roleId("OpsApiRole")))
+      .flatMap((p) => p.statements)
+      .filter((s) =>
+        toList(s.Action).some((a) => String(a).startsWith("ssm:")),
+      );
+    expect(statements).toHaveLength(1);
+    expect(statements[0]!.Effect).toBe("Allow");
+    expect(toList(statements[0]!.Action)).toEqual(["ssm:ListTagsForResource"]);
+    const resources = toList(statements[0]!.Resource).map(resourceText);
+    expect(resources).toHaveLength(2);
+    expect(resources.join(" ")).toMatch(
+      /parameter\/baradun\/v2\/api-keys\/data-go-kr.*parameter\/baradun\/v2\/api-keys\/kma-apihub/,
+    );
+  });
+
   it("운영 API 역할의 Ops Query는 감사 키·공지·수집 실행 기록 파티션에만 되고, 감사 키 수정·삭제는 명시적으로 거부된다", () => {
     const statements = allIamPolicies()
       .filter((p) => p.roles.includes(roleId("OpsApiRole")))
@@ -447,6 +464,7 @@ describe("함수·역할별 최소 권한 범위 (BRD-67)", () => {
       "dynamodb:UpdateItem",
       "logs:CreateLogStream",
       "logs:PutLogEvents",
+      "ssm:ListTagsForResource",
     ]);
     const logGroup = Object.keys(
       template.findResources("AWS::Logs::LogGroup"),

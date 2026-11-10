@@ -4,6 +4,7 @@ import {
   type PhotoCheck,
   type PhotoImage,
 } from "../core/catalog/photo-check";
+import { ENDPOINTS } from "./endpoints";
 import { collapseFailures, type RunFailure } from "../core/collect/run-log";
 import type { StateValue } from "../core/store/types";
 import { formatUtcIso, parseUtcIso } from "../core/warnings/time";
@@ -29,7 +30,7 @@ export const CATALOG_STATE = {
   attempt: { pk: "catalog", sk: "attempt" },
 } as const;
 
-const BASE = "https://apis.data.go.kr/B551011/KorService2";
+const BASE = ENDPOINTS.catalog;
 
 // 대장(data/photo-sources.json) 항목 하나. url은 저장소 photo.url과 같음(CI가 확인)
 export interface PhotoSource {
@@ -85,7 +86,11 @@ function requestUrl(key: string, source: PhotoSource): string {
     _type: "json",
     contentId: source.contentId,
     ...(source.image === "detail"
-      ? { imageYN: "Y", numOfRows: "100", pageNo: "1" }
+      ? {
+          imageYN: "Y",
+          numOfRows: String(COLLECT_POLICY.catalogImageNumOfRows),
+          pageNo: "1",
+        }
       : {}),
   });
   const op = source.image === "first" ? "detailCommon2" : "detailImage2";

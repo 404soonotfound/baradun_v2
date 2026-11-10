@@ -7,6 +7,7 @@ import {
   type RipReading,
   type RipResponse,
 } from "../core/rip/rip-current";
+import { ENDPOINTS } from "./endpoints";
 import { collapseFailures, type RunFailure } from "../core/collect/run-log";
 import type { StateValue } from "../core/store/types";
 import { formatUtcIso, parseUtcIso } from "../core/warnings/time";
@@ -31,8 +32,7 @@ export const RIP_STATE = {
   attempt: { pk: "rip", sk: "attempt" },
 } as const;
 
-const BASE =
-  "https://apis.data.go.kr/1192136/ripCurrent/GetRipCurrentApiService";
+const BASE = ENDPOINTS.rip;
 const MINUTE_MS = 60 * 1000;
 const DAY_MS = 24 * 60 * MINUTE_MS;
 

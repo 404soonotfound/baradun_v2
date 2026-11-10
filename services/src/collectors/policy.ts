@@ -35,6 +35,8 @@ export const COLLECT_POLICY = {
   catalogSchedule: { periodMinutes: 24 * 60, offsetMinutes: 19 * 60 + 20 },
   // 한 번에 보내는 요청 수. 사진 86곳 × 1회
   catalogConcurrency: 4,
+  // detailImage2(상세 사진 목록)에서 한 번에 받는 행 수
+  catalogImageNumOfRows: 100,
   // 이 시간이 지나면 새 요청을 보내지 않음(남은 해변은 이전 확인 결과 유지)
   // 마지막 요청이 최악 21초 걸려도 51초 → Lambda 시간 제한(60초) 안에서 저장까지 끝냄
   catalogBudgetMs: 30 * SECOND_MS,
@@ -51,6 +53,8 @@ export const COLLECT_POLICY = {
   // 한 번에 받는 행 수. 단기예보 02:00 발표 한 격자 944행(2026-11-05 실측), 초단기실황 8행
   weatherShortNumOfRows: 1000,
   weatherNowNumOfRows: 20,
+  // 중기 육상·기온(구역 하나씩 요청)에서 한 번에 받는 행 수
+  weatherMidNumOfRows: 10,
   // 한 번에 보내는 요청 수와 새 요청을 보내지 않는 시간(catalog와 같은 이유로 Lambda 60초 안)
   weatherConcurrency: 8,
   weatherBudgetMs: 30 * SECOND_MS,

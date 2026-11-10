@@ -1,5 +1,6 @@
 import type { StateValue } from "../core/store/types";
 import { maskSecrets } from "../core/collect/log";
+import { ENDPOINTS } from "./endpoints";
 import type { RunFailure } from "../core/collect/run-log";
 import { packItems } from "../core/warnings/archive";
 import {
@@ -30,9 +31,8 @@ export const WARNINGS_STATE = {
   attempt: { pk: "warnings", sk: "attempt" },
 } as const;
 
-const PWNCD_URL = "https://apis.data.go.kr/1360000/WthrWrnInfoService/getPwnCd";
-const TSUNAMI_URL =
-  "https://apis.data.go.kr/1360000/EqkInfoService/getTsunamiMsg";
+const PWNCD_URL = ENDPOINTS.pwncd;
+const TSUNAMI_URL = ENDPOINTS.tsunami;
 type Source = "pwncd" | "tsunami";
 const SOURCES: readonly Source[] = ["pwncd", "tsunami"];
 
