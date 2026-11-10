@@ -9,7 +9,6 @@ import type { Incident } from "./collection";
 import {
   incidentImpact,
   readPublishSummaries,
-  versionOf,
   type SummaryLite,
   type SummaryRead,
 } from "./collection-publish";
@@ -68,6 +67,8 @@ function read(list: SummaryLite[], failed = false): SummaryRead {
 
 // 02:10~03:00 관측소 22451이 빠짐(돌아온 03:00으로 장애가 끝남)
 const INCIDENT: Incident = {
+  kind: "stations",
+  missingTruncated: false,
   startedAt: "2026-11-02T02:10:00.000Z",
   endedAt: "2026-11-02T03:00:00.000Z",
   runs: 2,
@@ -184,9 +185,66 @@ describe("incidentImpact", () => {
     });
   });
 
+  it("장애 시작 때 이미 관측 지연이던 해변은 이 장애의 영향으로 세지 않는다", () => {
+    const chain = [
+      lite("20261102T015000Z", "20261102T013500Z", ["b0001"]),
+      lite("20261102T022500Z", "20261102T015000Z", ["b0001"]),
+      CHAIN[2]!,
+    ];
+    expect(
+      incidentImpact(INCIDENT, read(chain), "20261102T025500Z", NOW_MS),
+    ).toMatchObject({ status: "none", delayedBeachIds: [] });
+  });
+
+  it("빠진 관측소 기록이 상한에서 잘렸으면 영향 범위를 출처 전체로 본다(잘린 관측소 해변을 빠뜨리지 않음)", () => {
+    const incident: Incident = { ...INCIDENT, missingTruncated: true };
+    const chain = [
+      CHAIN[0]!,
+      lite("20261102T022500Z", "20261102T015000Z", ["b0099"]),
+      CHAIN[2]!,
+    ];
+    expect(
+      incidentImpact(incident, read(chain), "20261102T025500Z", NOW_MS),
+    ).toMatchObject({
+      status: "affected",
+      wholeSource: true,
+      delayedBeachIds: ["b0099"],
+    });
+  });
+
+  it("어느 관측소에 걸리는지 모르는 실패(실행 예외)는 확인 못 함", () => {
+    const incident: Incident = {
+      ...INCIDENT,
+      kind: "failure",
+      failures: [{ source: "run", reason: "exception:TypeError" }],
+      stations: [],
+    };
+    expect(
+      incidentImpact(incident, read(CHAIN), "20261102T025500Z", NOW_MS),
+    ).toMatchObject({ status: "unknown", reason: "failure_unknown" });
+  });
+
+  it("이력 저장 실패는 파고 분류와 무관해 출처 전체로 넓히지 않는다", () => {
+    const incident: Incident = {
+      ...INCIDENT,
+      kind: "failure",
+      failures: [{ source: "storage", reason: "history_not_saved" }],
+      stations: [],
+    };
+    const chain = [
+      CHAIN[0]!,
+      lite("20261102T022500Z", "20261102T015000Z", ["b0099"]),
+      CHAIN[2]!,
+    ];
+    expect(
+      incidentImpact(incident, read(chain), "20261102T025500Z", NOW_MS),
+    ).toMatchObject({ status: "none", wholeSource: false });
+  });
+
   it("파고를 받는 출처가 통째로 실패하면 모든 관측 지연 해변을 영향으로 셈", () => {
     const incident: Incident = {
       ...INCIDENT,
+      kind: "failure",
       failures: [{ source: "sea_obs", reason: "timeout" }],
       stations: [],
     };
@@ -207,6 +265,7 @@ describe("incidentImpact", () => {
   it("파주기·파향 출처(kma_buoy)만 실패하면 파고 관측소는 영향 범위가 아님", () => {
     const incident: Incident = {
       ...INCIDENT,
+      kind: "failure",
       failures: [{ source: "kma_buoy", reason: "timeout" }],
       stations: [],
     };
@@ -320,13 +379,5 @@ describe("readPublishSummaries", () => {
         (await readPublishSummaries(sender, "Ops", null)).stations,
       ).toBeNull();
     }
-  });
-});
-
-describe("versionOf", () => {
-  it("UTC 시각을 게시 버전 모양으로 바꾼다", () => {
-    expect(versionOf(Date.parse("2026-11-04T05:10:00.123Z"))).toBe(
-      "20261104T051000Z",
-    );
   });
 });

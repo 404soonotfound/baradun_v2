@@ -95,14 +95,23 @@ export interface StationGap {
   readonly returnedAt: string | null;
 }
 
+// failure: 이어진 실패·일부 실패(다음 성공 실행에서 끝남)
+// stations: 빠진 관측소(collect-ocean, 대조한 성공 실행에서 빠진 곳이 없을 때 끝남)
+// 둘을 나눠 오래 빠진 관측소 하나가 그 사이 출처 실패·경보를 한 장애로 삼키지 않게 함
+export type IncidentKind = "failure" | "stations";
+
 export interface Incident {
+  readonly kind: IncidentKind;
   readonly startedAt: string;
-  // 다음 깨끗한 실행(성공 + 빠진 관측소 없음) 시작 시각. null이면 아직 이어지는 중
+  // 끝난 실행 시작 시각. null이면 아직 이어지는 중
   readonly endedAt: string | null;
+  // failure: 실패한 실행 수. stations: 관측소가 빠진 실행 수
   readonly runs: number;
   readonly failures: readonly RunFailure[];
-  // 장애 동안 빠졌던 관측소(collect-ocean). 다른 수집기는 빈 배열
+  // 장애 동안 빠졌던 관측소(stations 장애). failure 장애는 빈 배열
   readonly stations: readonly StationGap[];
+  // 한 실행의 빠진 관측소가 기록 상한을 넘어 일부만 남음 → 영향 범위를 출처 전체로 봄
+  readonly missingTruncated: boolean;
   // 해변 영향(collect-ocean만, 게시 요약으로 판정). 다른 수집기는 없음
   readonly impact?: ImpactView;
   // 이 장애 동안 울린 경보. null이면 경보 기록을 읽지 못함('경보 없음'으로 보지 않음)
@@ -121,7 +130,7 @@ export interface JobCollection {
   readonly truncated: boolean;
   // 지연 기준(분). null이면 이 출처는 지연을 표시하지 않음
   readonly lateAfterMinutes: number | null;
-  // 지금 마지막 성공 뒤 지연 기준을 넘김. 성공 기록이 없으면 false(상태는 lastRun이 말함)
+  // 지금 마지막 성공 뒤 지연 기준을 넘김. 7일 동안 성공이 없어도 true(기록을 다 읽지 못했으면 false)
   readonly overdue: boolean;
 }
 
@@ -211,17 +220,6 @@ function mergeFailures(runs: readonly RunView[]): RunFailure[] {
   return [...merged.values()];
 }
 
-// 깨끗한 실행: 성공했고 빠진 관측소도 없음. 빠진 관측소만 있는 실행도 장애로 묶음(상태·성공률은 그대로)
-// 빠진 관측소가 있던 장애는 대조한 실행(missingStations 있음)에서만 끝남
-// → 대조표를 읽지 못한 실행을 '관측소가 돌아옴'으로 보지 않음
-function clean(run: RunView, open: readonly RunView[]): boolean {
-  if (run.status !== "complete" || run.missingStations?.length) return false;
-  return (
-    run.missingStations !== undefined ||
-    !open.some((r) => r.missingStations?.length)
-  );
-}
-
 // 관측소가 돌아온 시각: 마지막으로 빠진 뒤, 대조한 성공 실행에서 다시 빠지지 않은 첫 실행
 // 출처가 실패한 실행은 대조하지 않아 돌아온 것으로 보지 않음
 function stationGaps(
@@ -238,7 +236,7 @@ function stationGaps(
   return [...gaps.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([id, gap]) => {
-      const back = [...open, ...later].find(
+      const back = later.find(
         (run) =>
           run.startedAt > gap.last &&
           run.status === "complete" &&
@@ -254,43 +252,95 @@ function stationGaps(
     });
 }
 
-// 이어진 실패(partial 포함)·빠진 관측소를 한 장애로 묶음. 최신 장애가 먼저
-export function incidentsOf(runs: readonly RunView[]): Incident[] {
+// 이어진 실패(partial 포함). 다음 성공 실행에서 끝남
+function failureIncidents(runs: readonly RunView[]): Incident[] {
+  const incidents: Incident[] = [];
+  let open: RunView[] = [];
+  const close = (endedAt: string | null) => {
+    if (open.length === 0) return;
+    incidents.push({
+      kind: "failure",
+      startedAt: open[0]!.startedAt,
+      endedAt,
+      runs: open.length,
+      failures: mergeFailures(open),
+      stations: [],
+      missingTruncated: false,
+    });
+    open = [];
+  };
+  for (const run of runs) {
+    if (run.status === "complete") close(run.startedAt);
+    else open.push(run);
+  }
+  close(null);
+  return incidents;
+}
+
+// 빠진 관측소. 대조해서 빠진 곳이 없는 성공 실행에서만 끝남
+// 대조하지 못한 실행(칸 없음)·일부 실패 실행은 끝내지도 세지도 않음(돌아왔다고 보지 않음)
+function stationIncidents(runs: readonly RunView[]): Incident[] {
   const incidents: Incident[] = [];
   let open: RunView[] = [];
   const close = (endedAt: string | null, index: number) => {
     if (open.length === 0) return;
     incidents.push({
+      kind: "stations",
       startedAt: open[0]!.startedAt,
       endedAt,
       runs: open.length,
-      failures: mergeFailures(open),
-      stations: stationGaps(open, runs.slice(index)),
+      failures: [],
+      stations: stationGaps(
+        open,
+        runs.slice(runs.indexOf(open[0]!), index + 1),
+      ),
+      missingTruncated: open.some(
+        (run) =>
+          (run.missingStationsTotal ?? 0) > (run.missingStations?.length ?? 0),
+      ),
     });
     open = [];
   };
   runs.forEach((run, index) => {
-    if (clean(run, open)) close(run.startedAt, index);
-    else open.push(run);
+    if (run.missingStations?.length) open.push(run);
+    else if (run.status === "complete" && run.missingStations !== undefined)
+      close(run.startedAt, index);
   });
-  close(null, runs.length);
-  return incidents.reverse();
+  close(null, runs.length - 1);
+  return incidents;
+}
+
+// 실패 장애와 빠진 관측소 장애. 최신 장애가 먼저
+export function incidentsOf(runs: readonly RunView[]): Incident[] {
+  return [...failureIncidents(runs), ...stationIncidents(runs)].sort((a, b) =>
+    a.startedAt === b.startedAt
+      ? a.kind.localeCompare(b.kind)
+      : a.startedAt < b.startedAt
+        ? 1
+        : -1,
+  );
 }
 
 // 지연 구간: 성공과 다음 성공(없으면 지금) 사이가 기준보다 길면 (성공 + 기준, 다음 성공)
-// 7일 창 안 첫 성공 전은 앞 성공을 몰라 지연으로 보지 않음
+// windowStartMs: 7일 창 시작. 그 전 성공은 창 시작보다 앞이므로, 첫 성공 전도 창 시작 + 기준부터 지연
+//   기록을 다 읽지 못했으면(truncated) null → 첫 성공 전은 판정하지 않음
+// applies: 그 성공 뒤에 지연을 볼지(이안류는 비수기 성공 뒤 하루 1회 간격을 지연으로 보지 않음)
 function lateRanges(
   runs: readonly RunView[],
   lateMs: number,
   nowMs: number,
+  windowStartMs: number | null,
+  applies: (ms: number) => boolean,
 ): [number, number][] {
   const successes = runs
     .filter((run) => run.status === "complete")
     .map((run) => Date.parse(run.startedAt));
+  const starts =
+    windowStartMs === null ? successes : [windowStartMs, ...successes];
   const ranges: [number, number][] = [];
-  successes.forEach((at, i) => {
-    const next = successes[i + 1] ?? nowMs;
-    if (next - at > lateMs) ranges.push([at + lateMs, next]);
+  starts.forEach((at, i) => {
+    const next = starts[i + 1] ?? nowMs;
+    if (next - at > lateMs && applies(at)) ranges.push([at + lateMs, next]);
   });
   return ranges;
 }
@@ -307,7 +357,16 @@ export function summarizeJob(
   const day = runs.filter((run) => Date.parse(run.startedAt) > dayStart);
   const firstHour = Math.floor(nowMs / HOUR_MS) * HOUR_MS - 23 * HOUR_MS;
   const late = lateAfterMinutes(job, nowMs);
-  const ranges = late === null ? [] : lateRanges(runs, late * 60_000, nowMs);
+  const ranges =
+    late === null
+      ? []
+      : lateRanges(
+          runs,
+          late * 60_000,
+          nowMs,
+          truncated ? null : nowMs - COLLECTION_WINDOW_DAYS * DAY_MS,
+          job === "collect-rip" ? inRipSeason : () => true,
+        );
   const hourly: HourBucket[] = Array.from({ length: 24 }, (_, i) => {
     const start = firstHour + i * HOUR_MS;
     const end = Math.min(start + HOUR_MS, nowMs);
@@ -332,10 +391,8 @@ export function summarizeJob(
     incidents: incidentsOf(runs),
     truncated,
     lateAfterMinutes: late,
-    overdue:
-      late !== null &&
-      lastSuccess !== undefined &&
-      nowMs - Date.parse(lastSuccess.startedAt) > late * 60_000,
+    // 마지막 지연 구간이 지금까지 이어짐
+    overdue: ranges.some(([from, to]) => from <= nowMs && to >= nowMs),
   };
 }
 
@@ -420,7 +477,10 @@ export async function readCollection(
         ...(job.job === "collect-ocean"
           ? { impact: incidentImpact(incident, read, publishedVersion, nowMs) }
           : {}),
-        alarms: incidentAlarms(alarms, job.job, incident, nowMs),
+        // 경보는 실행 실패에서 울림 → 실패 장애에만 붙임(빠진 관측소는 실행 상태를 바꾸지 않음)
+        ...(incident.kind === "failure"
+          ? { alarms: incidentAlarms(alarms, job.job, incident, nowMs) }
+          : {}),
       })),
     })),
     publish: read.live(publishedVersion),

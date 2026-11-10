@@ -5,6 +5,7 @@ import {
   type StationTable,
   type StationUse,
 } from "../core/collect/publish-summary";
+import { snapshotVersion } from "../core/snapshots/version";
 import type { Incident } from "./collection";
 import type { Sender } from "./writes";
 
@@ -59,16 +60,17 @@ export interface StationImpact {
 export type ImpactUnknownReason =
   | "summary_unread" // 요약을 읽지 못함
   | "summary_missing" // 장애 구간의 게시 요약이 빠짐(사슬 끊김·첫 게시본 없음)
-  | "station_unknown"; // 빠진 관측소가 지금 게시본 요약에 없음
+  | "station_unknown" // 빠진 관측소가 지금 게시본 요약에 없음
+  | "failure_unknown"; // 실행 예외 등 어느 관측소에 걸리는지 모르는 실패
 
 export interface ImpactView {
   // affected: 장애 구간에 그 관측소를 쓰는 해변이 '관측 지연'으로 게시됨
   // none: 구간 요약을 모두 확인했고 그런 해변이 없음. unknown: 확인 못 함
   readonly status: "affected" | "none" | "unknown";
   readonly reason?: ImpactUnknownReason;
-  // 출처 전체 실패(파고를 받는 sea_obs·저장 실패 등) → 모든 파고 관측소가 영향 범위
+  // 파고를 받는 출처(sea_obs) 실패·측정값 저장 실패·빠진 관측소 기록 상한 초과 → 모든 파고 관측소가 영향 범위
   readonly wholeSource: boolean;
-  // 영향 범위에서 '관측 지연'으로 게시된 해변(unknown이면 빈 배열)
+  // 영향 범위에서 장애 동안 새로 '관측 지연'으로 게시된 해변(장애 시작 때 이미 지연이던 해변은 뺌, unknown이면 빈 배열)
   readonly delayedBeachIds: readonly string[];
   readonly stations: readonly StationImpact[];
 }
@@ -118,11 +120,6 @@ function toStations(value: unknown): Record<string, StationUse> | null {
     };
   }
   return stations;
-}
-
-// UTC ISO → 게시 버전 모양(20261104T051000Z). 요약 키(sk)와 비교함
-export function versionOf(ms: number): string {
-  return `${new Date(ms).toISOString().slice(0, 19).replace(/[-:]/g, "")}Z`;
 }
 
 function summaryRead(
@@ -200,7 +197,7 @@ export async function readPublishSummaries(
     );
     if (fromMs === null) return summaryRead([], latest, stations, false);
 
-    const from = versionOf(fromMs);
+    const from = snapshotVersion(fromMs);
     // 장애 시작 때 보이던 게시본(시작 시각 이하에서 가장 최근) 하나
     const before = items(
       await query("pk = :pk AND sk <= :from", { ":from": from }, false, {
@@ -235,12 +232,12 @@ function windowSummaries(
   publishedVersion: string | null,
   nowMs: number,
 ): SummaryLite[] | null {
-  const startVersion = versionOf(Date.parse(incident.startedAt));
+  const startVersion = snapshotVersion(Date.parse(incident.startedAt));
   const endMs =
     incident.endedAt === null
       ? nowMs
       : Math.min(nowMs, Date.parse(incident.endedAt) + PUBLISH_LAG_MS);
-  const endVersion = versionOf(endMs);
+  const endVersion = snapshotVersion(endMs);
   let first = -1;
   list.forEach((summary, i) => {
     if (summary.version <= startVersion) first = i;
@@ -276,15 +273,27 @@ function unknown(
   };
 }
 
+// 어느 파고 관측소에 걸리는지 아는 실패. 파주기·파향(kma_buoy)·이력 저장 실패는 파고 분류와 무관
+function failureScope(failure: {
+  source: string;
+  reason: string;
+}): "all" | "none" | "unknown" {
+  if (failure.source === "sea_obs") return "all";
+  if (failure.source === "storage")
+    return failure.reason === "readings_not_saved" ? "all" : "none";
+  if (failure.source === "kma_buoy") return "none";
+  return "unknown";
+}
+
 // collect-ocean 장애의 해변 영향. 파고 관측소만 분류(관측 지연)에 쓰이므로 파고로 쓰는 해변만 셈
-// 파주기·파향 출처(kma_buoy)만 실패했으면 파고 관측소는 영향 범위가 아님
 export function incidentImpact(
   incident: Incident,
   read: SummaryRead,
   publishedVersion: string | null,
   nowMs: number,
 ): ImpactView {
-  const wholeSource = incident.failures.some((f) => f.source !== "kma_buoy");
+  const scopes = incident.failures.map(failureScope);
+  const wholeSource = incident.missingTruncated || scopes.includes("all");
   const table = read.stations;
   const stations: StationImpact[] = incident.stations.map(({ id }) => {
     const use = table?.[id];
@@ -296,9 +305,11 @@ export function incidentImpact(
     };
   });
   if (read.failed) return unknown("summary_unread", wholeSource, stations);
+  if (!wholeSource && scopes.includes("unknown"))
+    return unknown("failure_unknown", wholeSource, stations);
   const window = windowSummaries(read.list, incident, publishedVersion, nowMs);
   if (!window) return unknown("summary_missing", wholeSource, stations);
-  let scope: Set<string> | null = null; // null = 모든 해변(출처 전체 실패)
+  let scope: Set<string> | null = null; // null = 모든 해변(출처 전체)
   if (!wholeSource) {
     if (!table || stations.some((s) => s.waveBeaches === null)) {
       return unknown("station_unknown", wholeSource, stations);
@@ -307,10 +318,12 @@ export function incidentImpact(
       incident.stations.flatMap(({ id }) => table[id]!.waveBeachIds),
     );
   }
+  // 장애 시작 때 보이던 게시본(window[0])에서 이미 지연이던 해변은 이 장애 탓이 아님
+  const before = new Set(window[0]!.delayedBeachIds);
   const delayed = new Set<string>();
-  for (const summary of window) {
+  for (const summary of window.slice(1)) {
     for (const id of summary.delayedBeachIds) {
-      if (scope === null || scope.has(id)) delayed.add(id);
+      if (!before.has(id) && (scope === null || scope.has(id))) delayed.add(id);
     }
   }
   return {
