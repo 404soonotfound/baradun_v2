@@ -303,3 +303,37 @@ describe("인증키 만료·취소 (리뷰 지적)", () => {
     expect(aborted).toBe(true);
   });
 });
+
+describe("최종 리뷰 지적", () => {
+  it("최근 실행은 수집 현황과 같은 7일 창으로만 읽음", async () => {
+    const inputs: Record<string, unknown>[] = [];
+    const spy = {
+      async send(command: { input: Record<string, unknown> }) {
+        inputs.push(command.input);
+        return { Items: [] };
+      },
+    } as unknown as Sender;
+    await readSources(spy, "ops", NOW, null);
+    expect(inputs[0]).toMatchObject({
+      KeyConditionExpression: "pk = :pk AND sk >= :from",
+      ExpressionAttributeValues: {
+        ":pk": "collect#run#collect-warnings",
+        ":from": "2026-11-03T05:00:00.000Z",
+      },
+    });
+  });
+
+  it("만료일 태그 키 이름만 틀리면(Expires) 태그 없음이 아니라 모양 오류", async () => {
+    const keys = await readKeys(
+      reader({
+        "data-go-kr": [{ Key: "Expires", Value: "2027-03-31" }],
+        "kma-apihub": [],
+      }),
+      NOW,
+    );
+    expect(keys.map((k) => [k.expiresOn, k.expiresInvalid])).toEqual([
+      [null, true],
+      [null, false],
+    ]);
+  });
+});
