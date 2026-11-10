@@ -15,3 +15,16 @@ export interface ApiKeys {
   // 값이 없거나 빈 글자면 오류. 키 없이 호출해 실패를 '없음'으로 읽지 않게 함
   get(name: ApiKeyName): Promise<string>;
 }
+
+// API 키 파라미터의 태그 읽기(운영 화면 데이터 출처: 등록 여부·만료일). 값은 읽지 않음
+// 파라미터가 없으면 ApiKeyMissingError, 그 밖의 오류는 그대로 던짐. signal로 취소하면 요청을 멈춤
+export interface ApiKeyTag {
+  readonly Key?: string | undefined;
+  readonly Value?: string | undefined;
+}
+
+export interface ApiKeyTags {
+  tags(name: ApiKeyName, signal?: AbortSignal): Promise<readonly ApiKeyTag[]>;
+}
+
+export class ApiKeyMissingError extends Error {}
