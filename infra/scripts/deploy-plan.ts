@@ -197,3 +197,227 @@ export function failedEventsSince(
       Date.parse(e.Timestamp ?? "") >= since.getTime(),
   );
 }
+
+// ── 스택 밖 IAM 정책(boundary·실행 정책) 비교 (GH-382) ──
+// 저장소 bootstrap/*.json이 원본. AWS 기본 버전과 문장(Sid) 단위로 비교함
+
+export interface PolicyStatement {
+  readonly Sid?: string;
+  readonly [key: string]: unknown;
+}
+
+export interface PolicyDocument {
+  readonly Version?: string;
+  readonly Statement?: PolicyStatement | readonly PolicyStatement[];
+}
+
+export interface PolicyDiff {
+  readonly same: boolean;
+  readonly added: string[]; // 저장소에만 있는 문장
+  readonly removed: string[]; // AWS에만 있는 문장
+  readonly changed: string[]; // 둘 다 있는데 내용이 다른 문장
+}
+
+// 키 순서와 상관없이 같은 문서면 같은 문자열(배열 순서는 그대로 봄)
+export function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  if (value && typeof value === "object") {
+    const entries = Object.entries(value as Record<string, unknown>)
+      .filter(([, v]) => v !== undefined)
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+    return `{${entries.map(([k, v]) => `${JSON.stringify(k)}:${canonicalJson(v)}`).join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function statements(doc: PolicyDocument): Map<string, string> {
+  const list = doc.Statement
+    ? Array.isArray(doc.Statement)
+      ? doc.Statement
+      : [doc.Statement as PolicyStatement]
+    : [];
+  return new Map(
+    list.map((s, i) => [s.Sid ?? `#${i + 1}`, canonicalJson(s)] as const),
+  );
+}
+
+export function policyDiff(
+  local: PolicyDocument,
+  remote: PolicyDocument,
+): PolicyDiff {
+  const a = statements(local);
+  const b = statements(remote);
+  return {
+    same: canonicalJson(local) === canonicalJson(remote),
+    added: [...a.keys()].filter((k) => !b.has(k)),
+    removed: [...b.keys()].filter((k) => !a.has(k)),
+    changed: [...a.keys()].filter((k) => b.has(k) && a.get(k) !== b.get(k)),
+  };
+}
+
+export function formatPolicyDiff(name: string, diff: PolicyDiff): string {
+  if (diff.same) return `   ${name}: 저장소와 같음`;
+  const parts = [
+    diff.added.length > 0 ? `추가 ${diff.added.join(", ")}` : "",
+    diff.removed.length > 0 ? `삭제 ${diff.removed.join(", ")}` : "",
+    diff.changed.length > 0 ? `바뀜 ${diff.changed.join(", ")}` : "",
+  ].filter(Boolean);
+  // 문장은 같은데 문서 머리(Version 등)만 다른 경우도 '다름'으로 보여 줌
+  return `   ${name}: 저장소와 다름 · ${parts.length > 0 ? parts.join(" · ") : "문서 머리(Version 등)"}`;
+}
+
+export interface PolicyVersion {
+  readonly VersionId: string;
+  readonly IsDefaultVersion: boolean;
+  readonly CreateDate: string;
+}
+
+// IAM 관리형 정책은 버전을 5개까지만 둠. 꽉 찼으면 기본 버전이 아닌 가장 오래된 것만 지움(되돌릴 기본 버전은 남김)
+export function versionToPrune(
+  versions: readonly PolicyVersion[],
+): string | null {
+  if (versions.length < 5) return null;
+  const old = versions
+    .filter((v) => !v.IsDefaultVersion)
+    .sort((x, y) => Date.parse(x.CreateDate) - Date.parse(y.CreateDate));
+  return old[0]?.VersionId ?? null;
+}
+
+// ── 배포 뒤 로그 점검 (GH-382) ──
+// 서비스 로그는 한 줄 JSON {level, event, ...}(Lambda Text 형식이면 앞에 시각·요청 ID가 붙음)
+
+export interface LogFinding {
+  readonly level: "error" | "warn";
+  readonly event: string;
+  readonly count: number;
+}
+
+export interface LogScan {
+  readonly invocations: number; // START RequestId 줄 수(실행 횟수)
+  readonly findings: LogFinding[];
+}
+
+const RAW_MARKERS: readonly [RegExp, string][] = [
+  [/Task timed out/, "lambda_timeout"],
+  [/AccessDenied|not authorized to perform/, "access_denied"],
+  [/"errorType"|Runtime\.\w+Error/, "lambda_uncaught_error"],
+];
+
+// 줄 안의 첫 { 부터 JSON으로 읽음. 못 읽으면 null(원문 표시로 봄)
+function parseLogJson(
+  line: string,
+): { level?: unknown; event?: unknown } | null {
+  const start = line.indexOf("{");
+  if (start < 0) return null;
+  try {
+    const value: unknown = JSON.parse(line.slice(start));
+    return value && typeof value === "object"
+      ? (value as { level?: unknown; event?: unknown })
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+export function scanLogLines(lines: readonly string[]): LogScan {
+  const counts = new Map<string, LogFinding>();
+  const add = (level: "error" | "warn", event: string) => {
+    const key = `${level}|${event}`;
+    const prev = counts.get(key);
+    counts.set(key, { level, event, count: (prev?.count ?? 0) + 1 });
+  };
+  let invocations = 0;
+  for (const line of lines) {
+    if (/^START RequestId/.test(line)) {
+      invocations += 1;
+      continue;
+    }
+    const parsed = parseLogJson(line);
+    if (parsed && typeof parsed.level === "string") {
+      if (parsed.level === "error" || parsed.level === "warn") {
+        add(parsed.level, String(parsed.event ?? "event_unknown"));
+      }
+      continue;
+    }
+    const marker = RAW_MARKERS.find(([re]) => re.test(line));
+    if (marker) add("error", marker[1]);
+  }
+  const findings = [...counts.values()].sort(
+    (a, b) =>
+      (a.level === b.level ? 0 : a.level === "error" ? -1 : 1) ||
+      b.count - a.count,
+  );
+  return { invocations, findings };
+}
+
+export interface FunctionCheck {
+  readonly logicalId: string;
+  // 로그를 읽지 못한 이유. 있으면 '확인 못 함'
+  readonly error?: string;
+  readonly scan?: LogScan;
+}
+
+// 한 줄 요약. 실행이 없거나 읽지 못하면 '확인 못 함'(정상으로 보지 않음)
+export function checkLine(check: FunctionCheck): string {
+  if (check.error || !check.scan) {
+    return `${check.logicalId}: 확인 못 함(로그를 읽지 못함${check.error ? `: ${check.error}` : ""})`;
+  }
+  const { invocations, findings } = check.scan;
+  const list = findings
+    .map((f) => `${f.level} ${f.event} ${f.count}회`)
+    .join(", ");
+  // START 줄이 없어도(초기화 실패 등) 잡힌 오류는 숨기지 않음
+  if (invocations === 0) {
+    return `${check.logicalId}: 확인 못 함(보는 동안 실행 없음)${list ? ` · ${list}` : ""}`;
+  }
+  if (findings.length === 0) {
+    return `${check.logicalId}: 실행 ${invocations}회 · error·warn 없음`;
+  }
+  return `${check.logicalId}: 실행 ${invocations}회 · ${list}`;
+}
+
+export interface DeployReport {
+  readonly subject: string; // 배포한 커밋 한 줄
+  readonly changeSet: string;
+  readonly rows: readonly ChangeRow[];
+  readonly boundary: string; // '저장소와 같음' 또는 반영한 버전
+  readonly executionPolicies: readonly string[]; // formatPolicyDiff 줄
+  readonly watchMinutes: number;
+  readonly checks: readonly FunctionCheck[];
+}
+
+// 이슈 댓글(마크다운). 비밀값·계정 번호를 넣지 않음
+export function deployComment(report: DeployReport): string {
+  const permission = report.rows.filter((r) => r.permission).length;
+  const danger = report.rows.filter((r) => r.danger).length;
+  const lines = [
+    "## 인프라 배포 결과 (`npm run deploy:infra`)",
+    "",
+    `- 커밋: ${report.subject}`,
+    `- 변경 세트: \`${report.changeSet}\` · 리소스 ${report.rows.length}개(권한 ${permission} · 삭제·교체 ${danger})`,
+    `- boundary: ${report.boundary}`,
+    ...report.executionPolicies.map((l) => `- 실행 정책: ${l.trim()}`),
+    "",
+    report.watchMinutes === 0
+      ? "### 배포 뒤 로그 점검: 하지 않음(--watch 0)"
+      : report.checks.length === 0
+        ? "### 배포 뒤 로그 점검: 하지 않음(바뀐 함수 없음)"
+        : `### 배포 뒤 ${report.watchMinutes}분 로그 점검(바뀐 함수)`,
+    ...report.checks.map((c) => `- ${checkLine(c)}`),
+  ];
+  return `${lines.join("\n")}\n`;
+}
+
+// ── 인증키 만료일 태그 (GH-382) ──
+
+// 달력에 있는 YYYY-MM-DD인지(2027-02-30 같은 날은 거부)
+export function isCalendarDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date = new Date(`${value}T00:00:00Z`);
+  return (
+    !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value
+  );
+}
+
+// 운영 API가 읽는 만료일 태그 이름(services/src/admin/sources.ts KEY_EXPIRES_TAG와 같아야 함)
+export const KEY_EXPIRES_TAG = "expires";
