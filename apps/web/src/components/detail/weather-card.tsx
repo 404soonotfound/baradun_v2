@@ -24,13 +24,12 @@ import type { Locale } from "@/lib/i18n";
 import { joinMeta } from "@/lib/meta-join";
 import { kstStamp } from "@/lib/snapshot/clock";
 import type { WeatherView } from "@/lib/snapshot/weather";
-import { midLandName } from "@/lib/weather-zones";
 import {
   type DayCell,
   type HourCell,
   hourCells,
   laterDays,
-  midDaysIssuedAt,
+  midSource,
   monthDay,
   type SkyIcon,
   type SkyWord,
@@ -258,22 +257,12 @@ export function WeatherCard({
       : `${weekday(days[0]!.date)}~${weekday(days.at(-1)!.date)}`;
   const range = later.days.length === 0 ? null : dayRange(later.days);
   // 펼친 날을 출처별 두 구간으로(단기예보 글피 · 중기예보 그 뒤). 구간 제목에 출처·구역·발표 시각
-  // 중기 시각을 모르면 정보 출처 줄과 같게 구역 이름을 빼고 '기상청 중기예보'만(받지 않은 정보를 적지 않음)
+  // 중기 구역·시각은 정보 출처 줄과 같은 함수로(시각을 모르면 구역 이름을 빼고 '기상청 중기예보'만)
   // 단기 구간이 없으면 '하루 최저 / 최고' 안내를 중기 제목에 붙임
-  const midDays = later.days.filter((day) => day.source === "mid");
-  const midAt =
-    weather.kind === "ready"
-      ? midDaysIssuedAt(
-          midDays.map((day) => day.date),
-          weather.midLand,
-          weather.midTa,
-        )
-      : null;
-  const midTime = kstStamp(midAt, nowMs);
-  const midName =
-    weather.kind === "ready" && midTime
-      ? midLandName(weather.midLandId, weather.midLand?.name ?? null, locale)
-      : null;
+  const mid =
+    weather.kind === "ready" ? midSource(later.days, weather, locale) : null;
+  const midTime = kstStamp(mid?.issuedAt ?? null, nowMs);
+  const midName = midTime ? (mid?.zone ?? null) : null;
   const hasShort = later.days.some((day) => day.source === "short");
   const groups = (["short", "mid"] as const).flatMap((source) => {
     const days = later.days.filter((day) => day.source === source);
