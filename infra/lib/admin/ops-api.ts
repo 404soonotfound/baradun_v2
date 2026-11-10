@@ -1,4 +1,4 @@
-import { Duration, Stack } from "aws-cdk-lib";
+import { ArnFormat, Duration, Stack } from "aws-cdk-lib";
 import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
 import * as iam from "aws-cdk-lib/aws-iam";
 import * as lambda from "aws-cdk-lib/aws-lambda";
@@ -10,6 +10,7 @@ import {
   INQUIRY_STATUS_INDEX,
   LOG_RETENTION,
   NOTICE_KEY,
+  PUBLISH_SUMMARY_KEY,
   RETRY_LIMITS,
   RUN_LOG_KEY_PREFIX,
 } from "../settings";
@@ -25,7 +26,8 @@ import type { OperatorAuth } from "./operator-auth";
 //   트랜잭션(TransactWriteItems)은 품목별 동작(PutItem·UpdateItem)으로 판정됨
 // - 변경 이력(감사, BRD-155·D16-B5): Ops admin#audit#… 키에 Put만. 바꾸기·지우기는 명시적으로 거부
 //   추가 전용은 Put 권한만으로는 성립하지 않음 → 코드가 새 키에만 씀(attribute_not_exists)·업무 변경과 같은 트랜잭션
-//   Ops Query는 감사 키(월 파티션)·공지 파티션·수집 실행 기록(BRD-149, 수집기별 파티션)에만 허용
+//   Ops Query는 감사 키(월 파티션)·공지 파티션·수집 실행 기록(BRD-149, 수집기별 파티션)·게시 요약(BRD-187)에만 허용
+// - CloudWatch 경보(BRD-187): 이 스택 경보(스택 이름-*)의 설정·상태 변경 기록 읽기만. 구독(받는 주소)·바꾸기 권한 없음
 // - 토큰 검증 공개 키(JWKS)는 Cognito 공개 주소에서 받음(키·비밀값 없음)
 
 export interface OpsApiProps {
@@ -75,6 +77,7 @@ export class OpsApi extends Construct {
               AUDIT_KEYS,
               NOTICE_KEY,
               `${RUN_LOG_KEY_PREFIX}*`,
+              PUBLISH_SUMMARY_KEY,
             ],
           },
           Null: { "dynamodb:LeadingKeys": "false" },
@@ -89,6 +92,23 @@ export class OpsApi extends Construct {
         conditions: {
           "ForAnyValue:StringLike": { "dynamodb:LeadingKeys": [AUDIT_KEYS] },
         },
+      }),
+    );
+    // 수집 현황의 경보 설정·기록(BRD-187). 지표 경보만 경보 ARN으로 좁힘(복합 경보는 * 범위가 필요해 쓰지 않음)
+    this.role.addToPolicy(
+      new iam.PolicyStatement({
+        actions: [
+          "cloudwatch:DescribeAlarms",
+          "cloudwatch:DescribeAlarmHistory",
+        ],
+        resources: [
+          Stack.of(this).formatArn({
+            service: "cloudwatch",
+            resource: "alarm",
+            resourceName: `${Stack.of(this).stackName}-*`,
+            arnFormat: ArnFormat.COLON_RESOURCE_NAME,
+          }),
+        ],
       }),
     );
     // 문의: 상세 읽기·처리 상태 바꾸기(트랜잭션 Update)·목록 GSI 조회. 만들기·지우기·Scan은 없음
@@ -132,6 +152,8 @@ export class OpsApi extends Construct {
         OPERATOR_CLIENT_ID: props.auth.client.userPoolClientId,
         SAMPLE_USER_POOL_ID: props.auth.samplePool.userPoolId,
         SAMPLE_CLIENT_ID: props.auth.sampleClient.userPoolClientId,
+        // 경보 이름 접두어(infra/lib/ops/alarms.ts alarmName = 스택 이름-경보 ID)
+        OPS_ALARM_PREFIX: `${Stack.of(this).stackName}-`,
       },
     });
     // 함수 URL로만 부름(동기). 비동기 호출 재시도는 막아 둠(11장 재시도 제한)
