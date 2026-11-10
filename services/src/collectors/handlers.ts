@@ -154,20 +154,21 @@ async function run(
 
 // 빠진 관측소 대조표(BRD-187). 해변 파일은 묶을 때 함수 폴더 beaches/로 복사함(infra/lib/collect의 commandHooks)
 // 읽지 못하면 대조만 건너뜀(수집은 그대로). 기록에 missingStations가 없으면 운영 화면은 '대조 못 함'으로 봄
-let oceanStations: ExpectedStations | null | undefined;
+// 읽은 표만 실행 환경에 둠. 실패는 두지 않아 다음 실행이 다시 읽고, 실패할 때마다 오류 로그가 남음
+let oceanStations: ExpectedStations | undefined;
 function oceanExpected(): ExpectedStations | null {
-  if (oceanStations !== undefined) return oceanStations;
+  if (oceanStations) return oceanStations;
   try {
     oceanStations = expectedStations(
       loadBeaches(process.env.BEACHES_DIR ?? path.join(__dirname, "beaches")),
     );
+    return oceanStations;
   } catch (error) {
     log("error", "ocean_stations_unread", {
       error: error instanceof Error ? error.name : typeof error,
     });
-    oceanStations = null;
+    return null;
   }
-  return oceanStations;
 }
 
 export async function oceanHandler(
