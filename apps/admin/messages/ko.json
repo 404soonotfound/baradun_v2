@@ -552,6 +552,7 @@
     "state": {
       "ok": "정상",
       "late": "지연",
+      "unchecked": "지연 확인 못 함",
       "partial": "일부 실패",
       "failed": "실패",
       "none": "기록 없음"

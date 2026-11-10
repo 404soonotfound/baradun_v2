@@ -66,6 +66,8 @@ const BADGE =
 const STATE_BADGE: Record<SourceState, string> = {
   ok: "bg-info-bg text-info-fg ring-1 ring-border-default",
   late: "bg-status-stale-bg text-status-stale-fg ring-1 ring-status-stale-border",
+  unchecked:
+    "bg-bg-surface text-text-body outline-1 outline-border-strong outline-dashed -outline-offset-1",
   partial:
     "bg-status-stale-bg text-status-stale-fg outline-1 outline-status-stale-border outline-dashed -outline-offset-1",
   failed:
@@ -77,6 +79,7 @@ const STATE_BADGE: Record<SourceState, string> = {
 const STATE_DOT: Record<SourceState, string> = {
   ok: "size-2 rounded-full bg-brand-default",
   late: "size-2 rounded-full border-2 border-status-stale-fg",
+  unchecked: "size-2 rounded-full border border-dashed border-text-body",
   partial: "size-2 rotate-45 bg-status-stale-fg",
   failed: "size-2 bg-danger-border",
   none: "size-2 rounded-full border border-border-strong",
@@ -342,15 +345,16 @@ function IncidentJump({
 
 function SourceTable({
   view,
+  legacy,
   incidents,
   onOpen,
 }: {
   view: CollectionView;
+  legacy: boolean;
   incidents: readonly JobIncident[];
   onOpen: (index: number) => void;
 }) {
   const cell = "border-b border-border-default px-3 py-2.5 align-middle";
-  const legacy = "legacy" in view && view.legacy === true;
   const [filter, setFilter] = useState<SourceFilter>("all");
   const states = SOURCE_ROWS.map((row) => sourceState(rowJob(view, row)));
   const filters: readonly SourceFilter[] = [
@@ -858,20 +862,23 @@ function Incidents({
               size: PAGE_SIZE,
             })}
           </span>
+          {/* 끝 쪽에서 disabled로 바꾸면 누른 버튼의 포커스가 사라져 aria-disabled로 둠(시트 이전·다음과 같음) */}
           <span className="flex gap-1.5">
             <Button
               variant="secondary"
               size="small"
-              disabled={current === 0}
-              onClick={() => setPage(current - 1)}
+              aria-disabled={current === 0}
+              onClick={() => current > 0 && setPage(current - 1)}
+              className="aria-disabled:cursor-not-allowed aria-disabled:opacity-45"
             >
               {t.prev}
             </Button>
             <Button
               variant="secondary"
               size="small"
-              disabled={current >= pages - 1}
-              onClick={() => setPage(current + 1)}
+              aria-disabled={current >= pages - 1}
+              onClick={() => current < pages - 1 && setPage(current + 1)}
+              className="aria-disabled:cursor-not-allowed aria-disabled:opacity-45"
             >
               {t.next}
             </Button>
@@ -1548,7 +1555,12 @@ function CollectionBody({ beaches }: { beaches: Beaches }) {
             <Notice tone="warn" title={t.oldResponse} role="status" />
           )}
           <Summary view={view} />
-          <SourceTable view={view} incidents={incidents} onOpen={open} />
+          <SourceTable
+            view={view}
+            legacy={view.legacy}
+            incidents={incidents}
+            onOpen={open}
+          />
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             <Hourly view={view} />
             <Incidents incidents={incidents} nowMs={nowMs} onOpen={open} />

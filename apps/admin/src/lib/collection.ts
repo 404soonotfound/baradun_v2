@@ -127,7 +127,8 @@ export interface JobCollection {
   readonly incidents: readonly Incident[];
   readonly truncated: boolean;
   readonly lateAfterMinutes: number | null;
-  readonly overdue: boolean;
+  // null: 예전 응답이라 지연을 판정하지 못함(정상으로 보지 않음)
+  readonly overdue: boolean | null;
 }
 
 export interface PublishView {
@@ -151,7 +152,22 @@ export async function fetchCollection(
 ): Promise<OpsResult<CollectionView & { readonly legacy: boolean }>> {
   const result = await opsFetch<unknown>("/ops/collection", accessToken);
   if (!result.ok) return result;
-  return { ...result, body: normalizeCollection(result.body) };
+  // 본문을 읽지 못했거나(null) 모양이 틀리면 불러오기 실패. 빈 목록·'기록 없음'으로 채우지 않음
+  const body = result.body as { generatedAt?: unknown; jobs?: unknown } | null;
+  if (
+    typeof body !== "object" ||
+    body === null ||
+    typeof body.generatedAt !== "string" ||
+    !Array.isArray(body.jobs)
+  ) {
+    return {
+      ok: false,
+      status: result.status,
+      code: "format",
+      requestId: null,
+    };
+  }
+  return { ...result, body: normalizeCollection(body) };
 }
 
 type Loose<T> = { -readonly [K in keyof T]?: unknown };
@@ -171,7 +187,7 @@ export function normalizeCollection(raw: unknown): CollectionView & {
       ...job,
       lateAfterMinutes:
         typeof job.lateAfterMinutes === "number" ? job.lateAfterMinutes : null,
-      overdue: job.overdue === true,
+      overdue: typeof job.overdue === "boolean" ? job.overdue : null,
       hourly: (Array.isArray(job.hourly) ? job.hourly : []).map((bucket) => ({
         ...bucket,
         late: bucket.late === true,
@@ -193,7 +209,9 @@ export function normalizeCollection(raw: unknown): CollectionView & {
       typeof view.publishedVersion === "string" ? view.publishedVersion : null,
     publish: (view.publish as PublishView | null | undefined) ?? null,
     alarms:
-      alarms?.status === "ok" && Array.isArray(alarms.list)
+      alarms?.status === "ok" &&
+      typeof alarms.region === "string" &&
+      Array.isArray(alarms.list)
         ? alarms
         : { status: "unavailable" },
     jobs,
@@ -218,13 +236,15 @@ export const SOURCE_ROWS: readonly SourceRow[] = [
 ];
 
 // 정상: 마지막 실행이 모두 성공 · 지연(마지막 성공 뒤 지연 기준을 넘김) · 일부 실패 · 실패 · 기록 없음(7일 안 실행 없음)
-// 실패·일부 실패가 지연보다 앞섬(더 무거운 사유를 먼저)
-export type SourceState = "ok" | "late" | "partial" | "failed" | "none";
+// 실패·일부 실패가 지연보다 앞섬(더 무거운 사유를 먼저). 지연을 판정하지 못한 응답은 '지연 확인 못 함'(unchecked)
+export type SourceState =
+  "ok" | "late" | "unchecked" | "partial" | "failed" | "none";
 
 export function sourceState(job: JobCollection | undefined): SourceState {
   if (!job?.lastRun) return "none";
   const { status } = job.lastRun;
   if (status !== "complete") return status;
+  if (job.overdue === null) return "unchecked";
   return job.overdue ? "late" : "ok";
 }
 
@@ -479,10 +499,13 @@ export function groupedAlarms(
   list: readonly AlarmView[],
 ): { kind: AlarmKind; alarms: AlarmView[] }[] {
   const order: readonly AlarmKind[] = ["stopped", "errors", "failing", "other"];
-  return order
-    .map((kind) => ({
-      kind,
-      alarms: sortedAlarms(list.filter((a) => alarmInfo(a.id).kind === kind)),
-    }))
-    .filter((group) => group.alarms.length > 0);
+  const byKind = new Map<AlarmKind, AlarmView[]>();
+  for (const alarm of list) {
+    const { kind } = alarmInfo(alarm.id);
+    byKind.set(kind, [...(byKind.get(kind) ?? []), alarm]);
+  }
+  return order.flatMap((kind) => {
+    const alarms = byKind.get(kind);
+    return alarms ? [{ kind, alarms: sortedAlarms(alarms) }] : [];
+  });
 }
