@@ -15,12 +15,8 @@ import {
   seedWarnings,
 } from "./fixtures";
 import { MANIFEST_SETTINGS, PUBLISH_POLICY } from "./policy";
-import {
-  MANIFEST_PATH,
-  publishSnapshot,
-  rollbackManifest,
-  snapshotVersion,
-} from "./publish";
+import { snapshotVersion } from "../core/snapshots/version";
+import { MANIFEST_PATH, publishSnapshot, rollbackManifest } from "./publish";
 
 // publish-snapshot (BRD-61). T01 게시 원자성: 실패하면 manifest 그대로, T06 manifest 교체·롤백
 // 버전 경로 파일 → manifest 순서, Cache-Control, 게시 잠금, 48개 보존

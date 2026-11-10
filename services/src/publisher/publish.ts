@@ -7,6 +7,7 @@ import type { Logger } from "../core/collect/log";
 import type { SnapshotStore } from "../core/snapshots/types";
 import type { OpsStore, StateStore } from "../core/store/types";
 import type { ZoneTables } from "../core/warnings/beach-warnings";
+import { snapshotVersion } from "../core/snapshots/version";
 import { formatUtcIso } from "../core/warnings/time";
 import { readPublishInputs } from "./inputs";
 import { MANIFEST_SETTINGS, PUBLISH_POLICY } from "./policy";
@@ -62,11 +63,6 @@ const WEATHER = { name: "weather.json", contract: "WeatherFile" } as const;
 
 const versionPath = (version: string, name: string) =>
   `data/${version}/${name}`;
-
-// 20261017T053000Z (계약 snapshotVersion 형식). 초 단위 → 글자 순서 = 시각 순서
-export function snapshotVersion(ms: number): string {
-  return formatUtcIso(ms).replace(/[-:]/g, "");
-}
 
 // 게시본에 실을 공지(D16-B3·D4, 구현 제안 I09)
 // - 시작 시각이 지난 것만(예약 전 문구는 공개 게시본에 넣지 않음), 끝 시각이 지난 것은 뺌
