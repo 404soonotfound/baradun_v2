@@ -4,7 +4,7 @@
 // - 키 값은 읽지도 바꾸지도 않음. 태그만 달고 다시 읽어 확인함
 // - 키를 갱신할 때만 씀(배포마다 하는 일 아님)
 import { spawnSync } from "node:child_process";
-import { API_KEY_NAMES, API_KEY_PARAMETER_PREFIX } from "../lib/settings.ts";
+import { API_KEY_NAMES, apiKeyParameterName } from "../lib/settings.ts";
 import { isCalendarDate, KEY_EXPIRES_TAG, REGION } from "./deploy-plan.ts";
 
 function fail(message) {
@@ -44,6 +44,8 @@ for (const key of [
   "AWS_ACCESS_KEY_ID",
   "AWS_SECRET_ACCESS_KEY",
   "AWS_SESSION_TOKEN",
+  // 남아 있으면 --profile보다 앞서 다른 계정에 태그가 달릴 수 있음(deploy.mjs와 같음)
+  "AWS_DEFAULT_PROFILE",
 ]) {
   delete env[key];
 }
@@ -66,7 +68,7 @@ const aws = (cmdArgs) => {
   return result.stdout;
 };
 
-const parameter = `${API_KEY_PARAMETER_PREFIX}${name}`;
+const parameter = apiKeyParameterName(name);
 aws([
   "ssm",
   "add-tags-to-resource",
@@ -91,7 +93,7 @@ const tags =
 const saved = tags.find((t) => t.Key === KEY_EXPIRES_TAG)?.Value;
 if (saved !== date)
   fail(`태그를 다시 읽었는데 값이 달라요: ${saved ?? "없음"}`);
-// 대소문자만 다른 태그(Expires 등)가 남아 있으면 화면이 '형식 오류'로 볼 수 있어 알림
+// 대소문자만 다른 태그(Expires 등): 정확한 expires가 있으면 화면은 그것만 읽어 영향 없음. 헷갈리지 않게 정리 안내만
 const stray = tags.filter(
   (t) =>
     t.Key !== KEY_EXPIRES_TAG &&
@@ -99,7 +101,7 @@ const stray = tags.filter(
 );
 if (stray.length > 0) {
   console.warn(
-    `   주의: 대소문자만 다른 태그 ${stray.map((t) => t.Key).join(", ")}가 남아 있어요. 지우려면:\n` +
+    `   참고: 대소문자만 다른 태그 ${stray.map((t) => t.Key).join(", ")}가 남아 있어요(화면은 expires만 읽어 영향 없음). 정리하려면:\n` +
       `   aws ssm remove-tags-from-resource --resource-type Parameter --resource-id ${parameter} --tag-keys ${stray.map((t) => t.Key).join(" ")}`,
   );
 }

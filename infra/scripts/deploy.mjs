@@ -29,6 +29,7 @@ import {
   isEmptyChangeSet,
   isStackReady,
   policyDiff,
+  redactAccount,
   REGION,
   scanLogLines,
   STACK_NAME,
@@ -72,6 +73,8 @@ function run(
     env: env ?? process.env,
     encoding: "utf8",
     input,
+    // 기본 1MB를 넘는 출력(로그·큰 변경 세트)도 받음
+    maxBuffer: 256 * 1024 * 1024,
     stdio: capture
       ? [input === undefined ? "ignore" : "pipe", "pipe", "pipe"]
       : "inherit",
@@ -90,6 +93,9 @@ function run(
 // cdk에 넘기는 임시 키의 최소 남은 시간. 변경 세트 만들기(몇 분)만 쓰고, 실행·대기는 프로필로 함
 // aws login 프로필은 15분짜리 키를 받아 aws CLI가 스스로 갱신하므로 긴 시간을 요구하면 늘 멈춤
 const MIN_CREDENTIAL_MINUTES = 5;
+
+// 배포 뒤 로그 점검에서 함수마다 읽는 최대 줄 수
+const LOG_MAX_EVENTS = 20_000;
 
 const step = (n, text) => console.log(`\n[${n}/8] ${text}`);
 
@@ -363,7 +369,7 @@ const executionLines = executionChecks.map((c) => c.line);
 console.log(boundaryLine);
 for (const line of executionLines) console.log(line);
 
-// 5. 변경 세트. cdk는 aws login 프로필을 직접 못 읽는 경우가 있어 지금 키를 내보내 cdk에만 넘김
+// 6. 변경 세트. cdk는 aws login 프로필을 직접 못 읽는 경우가 있어 지금 키를 내보내 cdk에만 넘김
 const exported = aws(
   [
     "configure",
@@ -515,7 +521,7 @@ if (!hasChangeSet && boundaryDiff.same) {
   process.exit(0);
 }
 
-// 7. 실행
+// 7. 실행(boundary 먼저 → 변경 세트)
 const rl = createInterface({ input: process.stdin, output: process.stdout });
 const answer = (
   await rl.question(
@@ -543,6 +549,28 @@ step(
     .join(" → ") + "을 해요",
 );
 let boundaryResult = `저장소와 같음(${boundaryRemote.version})`;
+let boundaryApplied = false;
+// 되돌리기 명령. 이슈 댓글에는 계정 번호 대신 <계정>
+const boundaryRollback = (accountText) =>
+  `되돌리기: aws iam set-default-policy-version --policy-arn arn:aws:iam::${accountText}:policy/${BOUNDARY} --version-id ${boundaryRemote.version}`;
+
+// 이슈 댓글(--issue). 실패해도 배포 결과를 바꾸지 않고 붙일 내용을 화면에 남김
+function postIssueComment(body) {
+  if (issue === null) return;
+  const posted = run(
+    "gh",
+    ["issue", "comment", String(issue), "--repo", repo, "--body-file", "-"],
+    { capture: true, input: body, allowFail: true },
+  );
+  if (posted.status === 0) {
+    console.log(`\n이슈 #${issue}에 결과 댓글을 남겼어요.`);
+  } else {
+    process.stderr.write(posted.stderr ?? "");
+    console.error(
+      `\n이슈 #${issue} 댓글을 남기지 못했어요. 아래 내용을 직접 붙여 주세요:\n\n${body}`,
+    );
+  }
+}
 if (!boundaryDiff.same) {
   console.log(`   boundary(${BOUNDARY})를 먼저 반영해요`);
   const versions = JSON.parse(
@@ -551,7 +579,7 @@ if (!boundaryDiff.same) {
   ).Versions;
   const prune = versionToPrune(versions);
   if (prune) {
-    // 되돌릴 기본 버전은 남기고 가장 오래된 비기본 버전만 지움
+    // IAM은 5개가 차면 새 버전을 만들 수 없어 먼저 지워야 함. 되돌릴 기본 버전은 남기고 가장 오래된 비기본 버전만
     iam([
       "iam",
       "delete-policy-version",
@@ -562,8 +590,8 @@ if (!boundaryDiff.same) {
     ]);
     console.log(`   버전이 5개라 가장 오래된 ${prune}를 지웠어요`);
   }
-  const created = JSON.parse(
-    iam([
+  const createdRun = iam(
+    [
       "iam",
       "create-policy-version",
       "--set-as-default",
@@ -571,13 +599,24 @@ if (!boundaryDiff.same) {
       policyArn(BOUNDARY),
       "--policy-document",
       `file://${BOUNDARY_FILE}`,
-    ]).stdout,
-  ).PolicyVersion.VersionId;
-  // 이슈 댓글에는 계정 번호를 넣지 않음 → 되돌리기 명령의 ARN은 화면에만, 댓글에는 자리표시로
-  const rollback = (arn) =>
-    `${boundaryRemote.version} → ${created} 반영(되돌리기: aws iam set-default-policy-version --policy-arn ${arn} --version-id ${boundaryRemote.version})`;
-  boundaryResult = rollback(`arn:aws:iam::<계정>:policy/${BOUNDARY}`);
-  console.log(`   ${rollback(policyArn(BOUNDARY))}`);
+    ],
+    { allowFail: true },
+  );
+  if (createdRun.status !== 0) {
+    process.stderr.write(createdRun.stderr ?? "");
+    fail(
+      `boundary 새 버전을 만들지 못했어요. 기본 버전 ${boundaryRemote.version}은 그대로라 변경 세트는 실행하지 않았어요.` +
+        (prune
+          ? ` 자리를 비우려고 오래된 비기본 버전 ${prune}를 지웠어요(되돌릴 수 없음).`
+          : ""),
+    );
+  }
+  const created = JSON.parse(createdRun.stdout).PolicyVersion.VersionId;
+  boundaryApplied = true;
+  boundaryResult = `${boundaryRemote.version} → ${created} 반영(${boundaryRollback("<계정>")})`;
+  console.log(
+    `   ${boundaryRemote.version} → ${created} 반영(${boundaryRollback(account)})`,
+  );
   // IAM 변경은 바로 퍼지지 않음 → 변경 세트 실행 전에 잠깐 기다림
   console.log("   IAM 반영을 15초 기다려요");
   await new Promise((resolve) => setTimeout(resolve, 15_000));
@@ -628,6 +667,31 @@ if (hasChangeSet) {
         `   ${e.LogicalResourceId}: ${e.ResourceStatus} ${e.ResourceStatusReason ?? ""}`,
       );
     }
+    // boundary를 먼저 반영했다면 스택이 롤백돼도 boundary는 새 버전 그대로 → 되돌리는 명령을 바로 보여 줌
+    if (boundaryApplied) {
+      console.error(
+        `\n   boundary는 새 버전으로 반영된 채예요. 스택이 예전으로 롤백됐고 새 boundary가 권한을 줄였다면 되돌려 주세요:\n   ${boundaryRollback(account)}`,
+      );
+    }
+    postIssueComment(
+      redactAccount(
+        [
+          "## 인프라 배포 실패 (`npm run deploy:infra`)",
+          "",
+          `- 커밋: ${subject}`,
+          `- 변경 세트: \`${name}\``,
+          `- boundary: ${boundaryResult}`,
+          ...failed
+            .slice(0, 5)
+            .map(
+              (e) =>
+                `- ${e.LogicalResourceId}: ${e.ResourceStatus} ${e.ResourceStatusReason ?? ""}`,
+            ),
+          "",
+          "스택 상태를 콘솔에서 확인해 주세요. 진행 중이면 다시 배포하지 않아요.",
+        ].join("\n") + "\n",
+      ),
+    );
     fail(
       "배포가 끝났는지 확인하지 못했어요(실패·롤백, 1시간 넘게 진행 중, 또는 자격 증명 만료). 위 이유와 콘솔의 스택 상태를 확인하고, 진행 중이면 다시 배포하지 마세요.",
     );
@@ -697,6 +761,9 @@ if (watchMinutes > 0 && functions.length > 0) {
         logGroup,
         "--start-time",
         String(deployedAt.getTime()),
+        // 오류를 반복해 로그가 아주 많아도 멈추지 않게 앞부분만 셈
+        "--max-items",
+        String(LOG_MAX_EVENTS),
       ],
       { allowFail: true },
     );
@@ -707,10 +774,13 @@ if (watchMinutes > 0 && functions.length > 0) {
       });
       continue;
     }
-    const lines = (JSON.parse(logs.stdout).events ?? []).map(
-      (e) => e.message ?? "",
-    );
-    logChecks.push({ logicalId: fn.logicalId, scan: scanLogLines(lines) });
+    const parsed = JSON.parse(logs.stdout);
+    const lines = (parsed.events ?? []).map((e) => e.message ?? "");
+    logChecks.push({
+      logicalId: fn.logicalId,
+      scan: scanLogLines(lines),
+      truncated: Boolean(parsed.NextToken),
+    });
   }
   for (const check of logChecks) console.log(`   ${checkLine(check)}`);
 } else {
@@ -722,8 +792,8 @@ if (watchMinutes > 0 && functions.length > 0) {
   );
 }
 
-if (issue !== null) {
-  const body = deployComment({
+postIssueComment(
+  deployComment({
     subject,
     changeSet: hasChangeSet ? name : "없음(boundary만 반영)",
     rows,
@@ -731,18 +801,5 @@ if (issue !== null) {
     executionPolicies: executionLines,
     watchMinutes,
     checks: logChecks,
-  });
-  const posted = run(
-    "gh",
-    ["issue", "comment", String(issue), "--repo", repo, "--body-file", "-"],
-    { capture: true, input: body, allowFail: true },
-  );
-  if (posted.status === 0)
-    console.log(`\n이슈 #${issue}에 결과 댓글을 남겼어요.`);
-  else {
-    process.stderr.write(posted.stderr ?? "");
-    console.error(
-      `\n이슈 #${issue} 댓글을 남기지 못했어요. 아래 내용을 직접 붙여 주세요:\n\n${body}`,
-    );
-  }
-}
+  }),
+);
