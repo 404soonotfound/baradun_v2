@@ -226,6 +226,7 @@
     "sqs:UntagQueue",
     "ssm:GetParameter",
     "ssm:GetParameters",
+    "ssm:ListTagsForResource",
     "wafv2:GetWebACL"
   ]
 }

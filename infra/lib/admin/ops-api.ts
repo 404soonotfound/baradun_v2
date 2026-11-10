@@ -7,6 +7,8 @@ import * as logs from "aws-cdk-lib/aws-logs";
 import { Construct } from "constructs";
 import * as path from "node:path";
 import {
+  API_KEY_NAMES,
+  apiKeyParameterName,
   INQUIRY_STATUS_INDEX,
   LOG_RETENTION,
   NOTICE_KEY,
@@ -109,6 +111,20 @@ export class OpsApi extends Construct {
             arnFormat: ArnFormat.COLON_RESOURCE_NAME,
           }),
         ],
+      }),
+    );
+    // 데이터 출처의 인증키 등록 여부·만료일(ADM-SRC). 태그만 읽음(값을 돌려주는 ssm:GetParameter는 주지 않음)
+    // 키 파라미터 두 개로만 좁힘. 파라미터가 없으면 InvalidResourceId → 화면은 '등록 안 됨'
+    this.role.addToPolicy(
+      new iam.PolicyStatement({
+        actions: ["ssm:ListTagsForResource"],
+        resources: API_KEY_NAMES.map((name) =>
+          Stack.of(this).formatArn({
+            service: "ssm",
+            resource: "parameter",
+            resourceName: apiKeyParameterName(name).slice(1),
+          }),
+        ),
       }),
     );
     // 문의: 상세 읽기·처리 상태 바꾸기(트랜잭션 Update)·목록 GSI 조회. 만들기·지우기·Scan은 없음
