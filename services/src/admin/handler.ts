@@ -14,6 +14,7 @@ import {
 } from "./audit";
 import { readCollection } from "./collection";
 import { cloudWatchAlarmReader, type AlarmReader } from "./collection-alarms";
+import { readSources, ssmKeyTagReader, type KeyTagReader } from "./sources";
 import {
   authenticate,
   createTokenVerifier,
@@ -74,6 +75,8 @@ export interface DataDependencies {
   readonly now: () => Date;
   // CloudWatch 경보 읽기(수집 현황, BRD-187). 없으면 경보는 '확인 못 함'
   readonly alarms?: AlarmReader | null;
+  // 인증키 태그 읽기(데이터 출처). 없으면 키는 '확인 못 함'
+  readonly keys?: KeyTagReader | null;
 }
 
 export interface OpsDependencies {
@@ -359,6 +362,17 @@ export async function handleOps(
       );
       return json(200, view, ids);
     }
+    if (decision.pattern === "/ops/sources" && method === "GET") {
+      const view = await readSources(
+        deps.data.client,
+        deps.data.opsTable,
+        deps.data.now(),
+        deps.data.keys ?? null,
+        // 샘플(시연) 계정은 운영 키 등록 여부·만료일을 받지 않음
+        { hideKeys: principal.kind === "sample" },
+      );
+      return json(200, view, ids);
+    }
     if (decision.pattern === "/ops/audit" && method === "GET") {
       return await auditRoute(event, deps.data, ids);
     }
@@ -425,6 +439,12 @@ function alarmReader(): AlarmReader | null {
   return prefix && region ? cloudWatchAlarmReader(region, prefix) : null;
 }
 
+// 인증키 태그 읽기. 지역이 없으면 키만 '확인 못 함'
+function keyTagReader(): KeyTagReader | null {
+  const region = process.env.AWS_REGION;
+  return region ? ssmKeyTagReader(region) : null;
+}
+
 let runtime: OpsDependencies | undefined;
 
 function runtimeDependencies(): OpsDependencies {
@@ -450,7 +470,14 @@ function runtimeDependencies(): OpsDependencies {
       samplePolicy: () => readSamplePolicy(client, opsTable),
       now,
     },
-    data: { client, opsTable, inquiryTable, now, alarms: alarmReader() },
+    data: {
+      client,
+      opsTable,
+      inquiryTable,
+      now,
+      alarms: alarmReader(),
+      keys: keyTagReader(),
+    },
   };
   return runtime;
 }
