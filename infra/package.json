@@ -7,7 +7,8 @@
     "test": "vitest run",
     "cdk": "cdk",
     "check:iam-actions": "node --import tsx scripts/check-iam-actions.mjs",
-    "deploy": "node --import tsx scripts/deploy.mjs"
+    "deploy": "node --import tsx scripts/deploy.mjs",
+    "keys:expires": "node --import tsx scripts/key-expires.mjs"
   },
   "devDependencies": {
     "@aws-sdk/client-cognito-identity-provider": "^3.1156.0",
