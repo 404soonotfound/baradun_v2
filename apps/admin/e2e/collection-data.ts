@@ -46,8 +46,39 @@ const alarm = (
   functionName,
 });
 
+// 관측소 8곳(GH-380 · 시안 V10): 빠짐 1 · 확인 못 함 1 · 정상 6 → 6곳씩 쪽을 나눔
+const STATION = (id: string, name: string, state = "ok") => ({
+  id,
+  name,
+  beachIds: ["b0003"],
+  waveBeachIds: [],
+  state,
+  missingSince: null as string | null,
+});
+
+export const STATIONS = {
+  status: "ok",
+  checkedAt: ago(40),
+  list: [
+    {
+      ...STATION("22451", "속초 파고부이", "missing"),
+      beachIds: ["b0001", "b0002"],
+      waveBeachIds: ["b0001", "b0002"],
+      missingSince: ago(70),
+    },
+    STATION("22999", "새 관측소", "unknown"),
+    STATION("22104", "강릉 파고부이"),
+    STATION("22105", "동해 해양기상부이"),
+    STATION("22106", "삼척 파고부이"),
+    STATION("22107", "울진 해양기상부이"),
+    STATION("22108", "포항 파고부이"),
+    STATION("22520", "울산 해양기상부이"),
+  ],
+};
+
 export const VIEW = {
   generatedAt: new Date().toISOString(),
+  stations: STATIONS,
   publishedVersion: "20261104T051000Z",
   publish: {
     version: "20261104T051000Z",
@@ -199,6 +230,7 @@ export const VIEW = {
 // 게시 요약·경보를 읽지 못한 응답. 장애의 경보는 null(읽지 못함), 해변 영향은 '확인 못 함'
 export const VIEW_DEGRADED = {
   ...VIEW,
+  stations: { status: "unavailable" },
   publish: null,
   alarms: { status: "unavailable" },
   jobs: VIEW.jobs.map((job) => ({

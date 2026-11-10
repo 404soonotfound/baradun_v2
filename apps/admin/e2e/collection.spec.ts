@@ -162,7 +162,7 @@ test("요약 4칸과 알림: 관측 지연 해변·검증 통과 게시본, 울�
     "기준 시간 모름",
   );
   await expect(
-    page.getByRole("link", { name: /CloudWatch에서 보기/ }),
+    page.getByRole("link", { name: /^CloudWatch/ }).first(),
   ).toHaveAttribute(
     "href",
     /ap-northeast-2\.console\.aws\.amazon\.com\/cloudwatch/,
@@ -580,4 +580,121 @@ test("다시 불러와 시트가 닫히면 포커스가 연 버튼으로 돌아�
   await expect(
     page.getByRole("heading", { name: /장애 기록/, level: 2 }),
   ).toBeFocused();
+});
+
+test("출처 시트(시안 V10): 해양 관측은 관측소 목록을 빠짐 먼저 6곳씩 보여 주고, Esc로 닫으면 포커스가 화살표로 돌아온다", async ({
+  page,
+}) => {
+  await mockCollection(page);
+  await openCollection(page);
+  const opener = page
+    .getByRole("button", { name: "기상청 해양 관측 자세히 보기" })
+    .filter({ visible: true });
+  await opener.click();
+  const sheet = page.getByRole("dialog", { name: "기상청 해양 관측" });
+  await expect(sheet).toBeVisible();
+  await expect(sheet).toContainText("출처 · 판단에 씀");
+  await expect(
+    sheet.locator("dl > div").filter({ hasText: "관측소" }),
+  ).toContainText("8곳");
+  const rows = sheet.locator("tbody tr");
+  await expect(rows).toHaveCount(6);
+  // 빠진 관측소가 먼저, 쓰는 해변 이름(공개 해변 데이터)과 처음 빠진 시각
+  await expect(rows.first()).toContainText("속초 파고부이");
+  await expect(rows.first()).toContainText("빠짐");
+  await expect(rows.first()).toContainText("외 1곳");
+  // 대조하지 못한 관측소는 정상이 아니라 확인 못 함
+  await expect(rows.nth(1)).toContainText("확인 못 함");
+  // 마지막 측정 시각은 보여 주지 않는다고 알림(D19-5)
+  await expect(sheet).toContainText(
+    "마지막 측정 시각은 운영 화면에서 보지 않아요",
+  );
+  const pager = sheet.getByRole("navigation", { name: "관측소 쪽 이동" });
+  await expect(pager).toContainText("8곳 중 1–6");
+  await pager.getByRole("button", { name: "다음" }).click();
+  await expect(pager).toContainText("8곳 중 7–8");
+  await sheet.getByRole("button", { name: /^문제 2/ }).click();
+  await expect(rows).toHaveCount(2);
+  await expectNoA11yViolations(page);
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(opener).toBeFocused();
+});
+
+test("출처 시트의 장애 줄을 누르면 장애 상세 시트로 바뀌고, 닫으면 출처 줄 화살표로 돌아온다", async ({
+  page,
+}) => {
+  await mockCollection(page);
+  await openCollection(page);
+  const opener = page
+    .getByRole("button", { name: "기상청 해상 특보 자세히 보기" })
+    .filter({ visible: true });
+  await opener.click();
+  const sheet = page.getByRole("dialog", { name: "기상청 해상 특보" });
+  // 해양 관측이 아니면 관측소 대신 장애 수
+  await expect(sheet).not.toContainText("관측소 쪽 이동");
+  await sheet.getByRole("button", { name: /출처 오류 코드 22/ }).click();
+  await expect(
+    page.getByRole("dialog", { name: /출처 오류 코드 22/ }),
+  ).toBeVisible();
+  await expect(page.getByRole("dialog")).toHaveCount(1);
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(opener).toBeFocused();
+});
+
+test("관측소 표를 읽지 못하면 출처 시트는 빈 목록이 아니라 '불러오지 못함'으로 보여 준다", async ({
+  page,
+}) => {
+  await mockCollection(page, 200, VIEW_DEGRADED);
+  await openCollection(page);
+  await page
+    .getByRole("button", { name: "기상청 해양 관측 자세히 보기" })
+    .filter({ visible: true })
+    .click();
+  const sheet = page.getByRole("dialog", { name: "기상청 해양 관측" });
+  await expect(sheet).toContainText("관측소 목록을 불러오지 못했어요");
+  await expect(
+    sheet.locator("dl > div").filter({ hasText: "관측소" }),
+  ).toContainText("확인 못 함");
+  await expect(sheet.locator("tbody tr")).toHaveCount(0);
+});
+
+test("말풍선은 마우스를 올리거나 키보드로 고를 때만: 24시간 막대는 칸 시각, 선 그래프는 그 시간 성공률", async ({
+  page,
+}) => {
+  test.skip(isMobile(page), "마우스 올리기는 PC에서만 확인");
+  await mockCollection(page);
+  await openCollection(page);
+  const tip = page.locator("span.shadow-floating[aria-hidden=true]");
+  await expect(tip).toHaveCount(0);
+
+  const bars = sourceRow(page, "기상청 해상 특보").getByRole("img");
+  await bars.scrollIntoViewIfNeeded();
+  const box = (await bars.boundingBox())!;
+  await page.mouse.move(box.x + box.width - 2, box.y + box.height / 2);
+  await expect(tip).toHaveCount(1);
+  await expect(tip).toHaveText(
+    /^\d{2}:00–\d{2}:00 · (정상|지연|실패|기록 없음) · /,
+  );
+  await page.mouse.move(0, 0);
+  await expect(tip).toHaveCount(0);
+
+  const chart = page.getByRole("group", { name: "시간별 성공률 선 그래프" });
+  await chart.scrollIntoViewIfNeeded();
+  const cb = (await chart.boundingBox())!;
+  await page.mouse.move(cb.x + cb.width / 2, cb.y + cb.height / 2);
+  await expect(tip).toHaveCount(1);
+  await expect(tip).toContainText("시 · ");
+  await page.mouse.move(0, 0);
+  await expect(tip).toHaveCount(0);
+
+  // 키보드: 그래프에 포커스하고 ←→로 옮기면 말풍선과 같은 글을 알림
+  await chart.focus();
+  await page.keyboard.press("End");
+  await expect(tip).toHaveCount(1);
+  await expect(page.locator("p[aria-live=polite]").first()).toContainText(
+    "시 · ",
+  );
+  await expectNoA11yViolations(page);
 });
