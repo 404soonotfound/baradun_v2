@@ -640,6 +640,7 @@ describe("관측소 목록 (GH-380)", () => {
     beachIds: ["b0001"],
     waveBeachIds: ["b0001"],
     state: "missing",
+    inTable: true,
     missingSince: "2026-11-10T05:00:00.000Z",
   };
   const base = { generatedAt: "2026-11-10T06:00:00.000Z", jobs: [] };
@@ -656,11 +657,23 @@ describe("관측소 목록 (GH-380)", () => {
     });
   });
 
+  it("빈 목록·읽을 수 없는 기준 시각은 '0곳·문제 없음'이 아니라 확인 못 함", () => {
+    for (const stations of [
+      { status: "ok", checkedAt: null, list: [] },
+      { status: "ok", checkedAt: "모름", list: [station] },
+    ]) {
+      expect(normalizeCollection({ ...base, stations }).stations).toEqual({
+        status: "unavailable",
+      });
+    }
+  });
+
   it("한 줄이라도 모양이 틀리거나 모르는 상태면 목록 전체를 확인 못 함(남은 줄을 전체로 보이지 않게)", () => {
     for (const bad of [
       { ...station, state: "late" },
       { ...station, beachIds: null },
       { ...station, missingSince: 3 },
+      { ...station, missingSince: "어제" },
     ]) {
       expect(
         normalizeCollection({
