@@ -20,8 +20,7 @@ import { useMetaText } from "@/lib/snapshot/use-meta-text";
 import { useTimeText } from "@/lib/snapshot/use-time-text";
 import type { BeachView, MetricKey } from "@/lib/snapshot/view";
 import type { WeatherView } from "@/lib/snapshot/weather";
-import { midIssuedAt } from "@/lib/weather";
-import { midLandName } from "@/lib/weather-zones";
+import { laterDays, midSource } from "@/lib/weather";
 
 // 장소 상세 아래쪽 묶음 (BRD-32 · 노션 2장 DET 7·8, 3장 Call119·SourceList)
 // 주변 특보(정보만) → 긴급신고 119 → 정보 출처 + '정보가 실제와 달라요' / 하단 즐겨찾기·길찾기
@@ -302,14 +301,15 @@ export function SourceList({
   // 단기예보를 받았을 때만. 중기예보를 받지 못했으면 중기 쪽 이름·시각을 빼(받지 않은 출처를 적지 않음)
   const short = weather?.kind === "ready" ? weather.grid.short : null;
   if (weather?.kind === "ready" && short) {
-    const midAt = midIssuedAt(weather.midLand);
-    const zone = midAt
-      ? midLandName(weather.midLandId, weather.midLand?.name ?? null, locale)
-      : null;
-    const times = [
-      kstStamp(short.issuedAt, nowMs),
-      midAt && kstStamp(midAt, nowMs),
-    ]
+    // 중기 구역·시각은 날씨 카드 중기 구간 제목과 같은 함수로(펼친 날 기준, 같은 값을 보여 줌)
+    const mid = midSource(
+      laterDays(short, weather.midLand, weather.midTa, nowMs).days,
+      weather,
+      locale,
+    );
+    const midTime = kstStamp(mid?.issuedAt ?? null, nowMs);
+    const zone = midTime ? (mid?.zone ?? null) : null;
+    const times = [kstStamp(short.issuedAt, nowMs), midTime]
       .filter((v): v is string => Boolean(v))
       .join(" · ");
     rows.push({
