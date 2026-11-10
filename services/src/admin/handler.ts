@@ -13,6 +13,7 @@ import {
   type AuditEntry,
 } from "./audit";
 import { readCollection } from "./collection";
+import { cloudWatchAlarmReader, type AlarmReader } from "./collection-alarms";
 import {
   authenticate,
   createTokenVerifier,
@@ -71,6 +72,8 @@ export interface DataDependencies {
   readonly opsTable: string;
   readonly inquiryTable: string;
   readonly now: () => Date;
+  // CloudWatch 경보 읽기(수집 현황, BRD-187). 없으면 경보는 '확인 못 함'
+  readonly alarms?: AlarmReader | null;
 }
 
 export interface OpsDependencies {
@@ -352,6 +355,7 @@ export async function handleOps(
         deps.data.client,
         deps.data.opsTable,
         deps.data.now(),
+        deps.data.alarms ?? null,
       );
       return json(200, view, ids);
     }
@@ -414,6 +418,13 @@ function requiredEnv(name: string): string {
   return value;
 }
 
+// 경보 접두어(스택 이름-)는 infra가 넣음. 없으면 경보만 '확인 못 함'(수집 현황의 다른 값은 그대로)
+function alarmReader(): AlarmReader | null {
+  const prefix = process.env.OPS_ALARM_PREFIX;
+  const region = process.env.AWS_REGION;
+  return prefix && region ? cloudWatchAlarmReader(region, prefix) : null;
+}
+
 let runtime: OpsDependencies | undefined;
 
 function runtimeDependencies(): OpsDependencies {
@@ -439,7 +450,7 @@ function runtimeDependencies(): OpsDependencies {
       samplePolicy: () => readSamplePolicy(client, opsTable),
       now,
     },
-    data: { client, opsTable, inquiryTable, now },
+    data: { client, opsTable, inquiryTable, now, alarms: alarmReader() },
   };
   return runtime;
 }
