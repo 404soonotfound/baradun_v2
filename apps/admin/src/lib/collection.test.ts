@@ -6,6 +6,7 @@ import {
   barState,
   cloudWatchUrl,
   groupedAlarms,
+  incidentKey,
   logsUrl,
   matchesFilter,
   normalizeCollection,
@@ -489,5 +490,55 @@ describe("장애 경과 순서 (Codex P2)", () => {
       "end",
       "alarm",
     ]);
+  });
+});
+
+describe("게시 요약 모양·장애 키 (Claude 리뷰)", () => {
+  const base = {
+    generatedAt: "2026-11-04T05:10:00.000Z",
+    publishedVersion: null,
+    alarms: { status: "unavailable" },
+    jobs: [],
+  };
+  it("게시 요약 칸이 빠지거나 숫자가 아니면 null('확인 못 함')", () => {
+    expect(
+      normalizeCollection({
+        ...base,
+        publish: { version: "v", publishedAt: "t" },
+      }).publish,
+    ).toBeNull();
+    expect(
+      normalizeCollection({
+        ...base,
+        publish: {
+          version: "v",
+          publishedAt: "t",
+          beachCount: "214",
+          delayedBeaches: 1,
+        },
+      }).publish,
+    ).toBeNull();
+    const ok = {
+      version: "v",
+      publishedAt: "t",
+      beachCount: 214,
+      delayedBeaches: 0,
+    };
+    expect(normalizeCollection({ ...base, publish: ok }).publish).toEqual(ok);
+  });
+
+  it("장애 키는 수집기·종류·시작 시각으로 같은 장애를 가리킴", () => {
+    expect(
+      incidentKey({
+        job: "collect-ocean",
+        kind: "stations",
+        startedAt: "2026-11-04T01:00:00.000Z",
+        endedAt: null,
+        runs: 1,
+        failures: [],
+        stations: [],
+        missingTruncated: false,
+      }),
+    ).toBe("collect-ocean|stations|2026-11-04T01:00:00.000Z");
   });
 });
