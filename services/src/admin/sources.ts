@@ -1,5 +1,6 @@
 import { QueryCommand } from "@aws-sdk/lib-dynamodb";
 import { SSMClient } from "@aws-sdk/client-ssm";
+import { ENDPOINTS, WEATHER_ISSUE_HOURS } from "../collectors/endpoints";
 import { COLLECT_POLICY } from "../collectors/policy";
 import { runLogPk } from "../core/collect/run-log";
 import { RIP_SEASON_MONTHS } from "../core/rip/rip-current";
@@ -21,8 +22,8 @@ import { safeLog } from "./http";
 import type { Sender } from "./writes";
 
 // 데이터 출처 (BRD-149 ADM-SRC, 화면 V12·V13·VM13, 아키텍처 5장 수집 주기·10장 원문 저장 안 함)
-// - 연결 정보(제공처·호출 주소·주기·시간 제한·받는 행 한도)는 수집기 코드 값을 그대로 옮김
-//   운영 API 묶음에 수집기 코드를 넣지 않으려고 값만 두고, sources.test.ts가 수집기 상수와 같은지 확인함
+// - 연결 정보(제공처·호출 주소·주기·시간 제한·받는 행 한도)는 수집기와 같은 값(collectors/endpoints·policy)을 씀
+//   두 모듈은 값만 담아 운영 API 묶음에 수집기 코드가 들어가지 않음. 키·기능 이름은 sources.test.ts가 수집기 코드와 대조
 // - 인증키는 등록 여부·만료일만. 값은 읽지 않음(SSM 태그만 읽는 권한, ssm:GetParameter 없음)
 //   만료일은 키 파라미터의 태그 expires=YYYY-MM-DD(KST 날짜, 발급처 표기 그대로). 태그가 없거나 모양이 틀리면 null('확인 못 함')
 // - 원문 응답은 저장하지 않으므로(10장) 내보내지 않음. 최근 실행 기록만
@@ -114,25 +115,9 @@ const grid = (s: { periodMinutes: number; offsetMinutes: number }) => ({
   offSeason: null,
 });
 
-// 수집기 코드의 호출 주소(sources.test.ts가 collectors/*의 상수와 같은지 확인)
-export const SOURCE_URLS = {
-  pwncd: "https://apis.data.go.kr/1360000/WthrWrnInfoService/getPwnCd",
-  tsunami: "https://apis.data.go.kr/1360000/EqkInfoService/getTsunamiMsg",
-  oceanBase: "https://apihub.kma.go.kr/api/typ01/url/",
-  rip: "https://apis.data.go.kr/1192136/ripCurrent/GetRipCurrentApiService",
-  weatherShort: "https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/",
-  weatherMid: "https://apis.data.go.kr/1360000/MidFcstInfoService/",
-  catalog: "https://apis.data.go.kr/B551011/KorService2",
-} as const;
+const U = ENDPOINTS;
 
-const U = SOURCE_URLS;
-
-// 날씨 발표 시(KST). collectors/weather.ts의 ALL_HOURS·SHORT_HOURS·MID_HOURS와 같아야 함(sources.test.ts가 확인)
-export const WEATHER_HOURS = {
-  now: Array.from({ length: 24 }, (_, h) => h),
-  short: [2, 5, 8, 11, 14, 17, 20, 23],
-  mid: [6, 18],
-} as const;
+const WEATHER_HOURS = WEATHER_ISSUE_HOURS;
 
 const MID_ISSUED = {
   hoursKst: WEATHER_HOURS.mid,
