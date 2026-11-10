@@ -119,9 +119,12 @@ export function expectedStations(
 
 // 정상 응답인데 배정된 지표 중 쓸 수 있는 값이 하나도 없는 관측소(줄이 없거나 모두 무효 값)
 // 실패한 출처는 대조하지 않음(출처 실패는 failures에 이미 있음)
+// 관측 시각이 틀렸거나 nowMs보다 늦은 줄은 저장 단계(mergeReadings)가 버리므로 여기서도 세지 않음
+// → 저장되지 않은 줄 때문에 관측소가 돌아왔다고 보지 않음
 export function findMissingStations(
   outcomes: Readonly<Record<Source, SourceOutcome>>,
   expected: ExpectedStations,
+  nowMs: number,
 ): MissingStations {
   // 대조한 출처가 하나도 없으면 빈 배열('빠진 곳 없음')이 아니라 대조 못 함(없음)
   if (SOURCES.every((source) => outcomes[source].status !== "ok")) return {};
@@ -133,6 +136,8 @@ export function findMissingStations(
     for (const row of outcome.rows) {
       const metrics = expected.get(source)?.get(row.stationId);
       if (!metrics) continue;
+      const observedMs = parseUtcIso(row.observedAt);
+      if (observedMs === null || observedMs > nowMs) continue;
       for (const metric of metrics) {
         const value = row[metric];
         if (value !== undefined && value !== null) seen.add(row.stationId);
@@ -439,7 +444,9 @@ export async function collectOcean(
     slotId,
     status,
   });
-  const missing = expected ? findMissingStations(outcomes, expected) : {};
+  const missing = expected
+    ? findMissingStations(outcomes, expected, deps.clock())
+    : {};
   if ((missing.missingStations?.length ?? 0) > 0) {
     deps.log("warn", "ocean_stations_missing", { slotId, ...missing });
   }
