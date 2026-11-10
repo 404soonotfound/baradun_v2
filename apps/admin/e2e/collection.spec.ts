@@ -182,7 +182,7 @@ test("장애 상세 시트: 원인·해변 영향·경과·경보를 보여 주�
   const sheet = page.getByRole("dialog", { name: /관측소 1곳 값이 빠짐/ });
   await expect(sheet).toBeVisible();
   await expect(sheet).toContainText("2/3");
-  await expect(sheet).toContainText("관측 지연으로 새로 게시된 해변 2곳");
+  await expect(sheet).toContainText("새로 관측 지연으로 게시된 해변 2곳");
   await expect(sheet).toContainText("강문해수욕장");
   await expect(sheet).toContainText("경포해수욕장");
   await expect(sheet).toContainText("강릉 부이 (22105)");
@@ -310,7 +310,7 @@ test("장애 목록: 해변 영향 요약을 줄에 보여 주고 5건씩 쪽을
   const items = region.getByRole("listitem");
   await expect(items).toHaveCount(5);
   await expect(items.first()).toContainText("해변 영향 확인 못 함");
-  await expect(items.nth(1)).toContainText("해변 2곳 관측 지연");
+  await expect(items.nth(1)).toContainText("새 관측 지연 해변 2곳");
   const pager = region.getByRole("navigation", { name: "장애 기록 쪽 이동" });
   await expect(pager).toContainText("7건 중 1–5 · 5건씩");
   await pager.getByRole("button", { name: "다음" }).click();
@@ -387,4 +387,45 @@ test("장애 목록이 빠진(null) 응답은 '장애 없음'이 아니라 불�
       .filter({ hasText: "수집 현황을 불러오지 못했어요" }),
   ).toBeVisible();
   await expect(page.getByText("최근 7일 장애가 없어요.")).toHaveCount(0);
+});
+
+test("해변 영향 '없음'은 이 장애의 관측소 범위에서 새로 지연된 해변이 없다는 뜻으로만 보여 준다 (Codex P2)", async ({
+  page,
+}) => {
+  const none = {
+    ...VIEW,
+    jobs: VIEW.jobs.map((job) => ({
+      ...job,
+      incidents: job.incidents.map((incident) =>
+        incident.kind === "stations"
+          ? {
+              ...incident,
+              impact: {
+                status: "none",
+                wholeSource: false,
+                delayedBeachIds: [],
+                stations: [
+                  {
+                    id: "22105",
+                    name: "강릉 부이",
+                    beaches: 3,
+                    waveBeaches: 2,
+                  },
+                ],
+              },
+            }
+          : incident,
+      ),
+    })),
+  };
+  await mockCollection(page, 200, none);
+  await openCollection(page);
+  const region = page.getByRole("region", { name: /장애 기록/ });
+  await expect(region.getByRole("listitem").nth(1)).toContainText(
+    "새 관측 지연 해변 없음",
+  );
+  await region.getByRole("button", { name: /관측소 1곳 값이 빠짐/ }).click();
+  await expect(page.getByRole("dialog")).toContainText(
+    "장애 전부터 지연이던 해변과 범위 밖 해변은 세지 않아요",
+  );
 });
