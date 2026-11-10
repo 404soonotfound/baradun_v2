@@ -70,6 +70,15 @@ describe("sourceState", () => {
       "partial",
     );
   });
+
+  it("예전 응답이라 지연을 판정하지 못하면(overdue null) 정상이 아니라 '지연 확인 못 함'", () => {
+    expect(sourceState(job({ lastRun: run("complete"), overdue: null }))).toBe(
+      "unchecked",
+    );
+    expect(sourceState(job({ lastRun: run("failed"), overdue: null }))).toBe(
+      "failed",
+    );
+  });
 });
 
 describe("successRate", () => {
@@ -355,7 +364,7 @@ describe("normalizeCollection", () => {
     expect(view.alarms).toEqual({ status: "unavailable" });
     expect(view.jobs[0]).toMatchObject({
       lateAfterMinutes: null,
-      overdue: false,
+      overdue: null,
     });
     expect(view.jobs[0]!.hourly[0]!.late).toBe(false);
     expect(view.jobs[0]!.incidents[0]).toMatchObject({

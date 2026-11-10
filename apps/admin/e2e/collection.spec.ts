@@ -335,7 +335,37 @@ test("운영 API가 예전 응답을 보내도 화면이 깨지지 않고 확인
   await expect(page.getByRole("region", { name: "알림" })).toContainText(
     "경보 상태를 불러오지 못했어요",
   );
-  await expect(sourceRow(page, "기상청 해상 특보")).toContainText("정상");
+  // 마지막 실행이 성공이어도 지연을 판정하지 못했으니 정상으로 세지 않음
+  await expect(sourceRow(page, "기상청 해상 특보")).toContainText(
+    "지연 확인 못 함",
+  );
+  await expect(sourceRow(page, "기상청 해상 특보")).not.toContainText("정상");
+  await expect(page.getByText("0/5", { exact: true })).toBeVisible();
   // 지연 기준을 모르니 '지연 표시 안 함'·'N분 넘으면 지연'을 쓰지 않음
-  await expect(sourceRow(page, "기상청 해상 특보")).not.toContainText("지연");
+  await expect(sourceRow(page, "기상청 해상 특보")).not.toContainText(
+    "지연 표시 안 함",
+  );
+  await expect(sourceRow(page, "기상청 해상 특보")).not.toContainText(
+    "넘으면 지연",
+  );
+  await expectNoA11yViolations(page);
+});
+
+test("200이어도 본문 모양이 틀리면 빈 화면이 아니라 불러오지 못함으로 보여 준다", async ({
+  page,
+}) => {
+  await page.route(/\/ops\/collection$/, (route: Route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: "null",
+    }),
+  );
+  await openCollection(page);
+  await expect(
+    page
+      .getByRole("alert")
+      .filter({ hasText: "수집 현황을 불러오지 못했어요" }),
+  ).toBeVisible();
+  await expect(page.getByText("기록 없음")).toHaveCount(0);
 });
