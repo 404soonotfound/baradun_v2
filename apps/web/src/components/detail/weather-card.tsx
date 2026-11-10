@@ -419,11 +419,17 @@ export function WeatherCard({
               {/* 두 구간 제목(노션 3장 WeatherCard·D18-2): '토 · 단기예보 · 하루 최저 / 최고' / '일~화 · 강원 영동(넓은 지역) · 기상청 중기예보 06:00 발표'
                   PC는 칸 수만큼 가로로 나눠 4칸 한 줄 */}
               {later.days.length > 0 && (
-                <div className="flex flex-col gap-2 @2xl:grid @2xl:grid-cols-4 @2xl:gap-2">
+                <div
+                  // 바깥 격자는 펼친 날 수만큼 나눔(중기예보를 못 받아 1칸뿐이어도 카드 너비를 채움)
+                  className={cn(
+                    "flex flex-col gap-2 @2xl:grid @2xl:gap-2",
+                    LATER_COLS[later.days.length],
+                  )}
+                >
                   {groups.map((group) => (
                     <div
                       key={group.source}
-                      // 넓은 카드는 바깥 4칸 격자에서 칸 수만큼 차지하고, 안쪽도 같은 간격의 격자라 칸 너비가 같음
+                      // 넓은 카드는 바깥 격자에서 칸 수만큼 차지하고, 안쪽도 같은 간격의 격자라 칸 너비가 같음
                       className={cn(
                         "flex min-w-0 flex-col gap-1",
                         LATER_SPAN[group.days.length],
