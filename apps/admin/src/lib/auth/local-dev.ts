@@ -7,6 +7,7 @@ import {
 import { localAudit } from "./local-audit";
 import { localCollection } from "./local-collection";
 import { localNotices } from "./local-notices";
+import { localSources } from "./local-sources";
 import { SESSION } from "./policy";
 import type { AuthSession } from "./session";
 import type { Tokens } from "./srp";
@@ -156,6 +157,9 @@ export function localOps<T>(
   }
   if (method === "GET" && url.pathname === "/ops/collection") {
     return localCollection<T>();
+  }
+  if (method === "GET" && url.pathname === "/ops/sources") {
+    return localSources<T>();
   }
   if (url.pathname.startsWith("/ops/notices")) {
     const notices = localNotices<T>(url.pathname, request);
