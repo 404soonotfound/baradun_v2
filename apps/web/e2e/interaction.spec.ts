@@ -240,6 +240,16 @@ test.describe("PC·모바일 같은 기능", () => {
       page.getByRole("searchbox").or(page.getByRole("textbox")).first(),
     ).toBeVisible();
   });
+
+  // 사이트 푸터의 안전 보장 아님 문구는 PC·모바일 모두 보임(D18-7)
+  test("푸터 안전 보장 아님 문구", async ({ page }) => {
+    await page.goto("/");
+    await expect(
+      page
+        .getByRole("contentinfo")
+        .getByText("바라던 바다는 바다 이용이 안전하다고 보장하지 않아요"),
+    ).toBeVisible();
+  });
 });
 
 // 좁은 폭 320px, PC 1280px를 200% 확대한 폭(640px), 그 사이 폭에서 가로 스크롤 없음
