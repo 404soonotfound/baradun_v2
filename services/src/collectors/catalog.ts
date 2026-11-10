@@ -29,7 +29,7 @@ export const CATALOG_STATE = {
   attempt: { pk: "catalog", sk: "attempt" },
 } as const;
 
-const BASE = "https://apis.data.go.kr/B551011/KorService2";
+export const BASE = "https://apis.data.go.kr/B551011/KorService2";
 
 // 대장(data/photo-sources.json) 항목 하나. url은 저장소 photo.url과 같음(CI가 확인)
 export interface PhotoSource {
@@ -85,7 +85,11 @@ function requestUrl(key: string, source: PhotoSource): string {
     _type: "json",
     contentId: source.contentId,
     ...(source.image === "detail"
-      ? { imageYN: "Y", numOfRows: "100", pageNo: "1" }
+      ? {
+          imageYN: "Y",
+          numOfRows: String(COLLECT_POLICY.catalogImageNumOfRows),
+          pageNo: "1",
+        }
       : {}),
   });
   const op = source.image === "first" ? "detailCommon2" : "detailImage2";

@@ -39,7 +39,7 @@ export const OCEAN_STATE = {
   attempt: { pk: "ocean", sk: "attempt" },
 } as const;
 
-const BASE = "https://apihub.kma.go.kr/api/typ01/url/";
+export const BASE = "https://apihub.kma.go.kr/api/typ01/url/";
 export type Source = "sea_obs" | "kma_buoy";
 const SOURCES: readonly Source[] = ["sea_obs", "kma_buoy"];
 
