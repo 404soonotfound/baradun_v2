@@ -1,5 +1,5 @@
 import { opsFetch, type OpsResult } from "./auth/ops-fetch";
-import type { CollectionJobId, RunView } from "./collection";
+import { validFailure, type CollectionJobId, type RunView } from "./collection";
 
 // 데이터 출처 (BRD-149·GH-328, 화면 설계서 6장 ADM-SRC, 시안 4차 V12·V13·VM13)
 // 운영 API GET /ops/sources 응답 모양과 화면용 계산. 서버(services/src/admin/sources.ts)가 원본이라 모양만 맞춤
@@ -115,12 +115,12 @@ function validRun(v: unknown): boolean {
     isTime(v.finishedAt) &&
     RUN_STATUSES.includes(v.status as string) &&
     Array.isArray(v.failures) &&
-    v.failures.every(
-      (f) =>
-        isObj(f) &&
-        typeof f.source === "string" &&
-        typeof f.reason === "string",
-    )
+    v.failures.every(validFailure) &&
+    // 빠진 관측소(collect-ocean)는 있으면 모양까지 봄(틀리면 성공만 보이고 빠진 곳이 숨지 않게 불러오기 실패)
+    (v.missingStations === undefined ||
+      (Array.isArray(v.missingStations) &&
+        v.missingStations.every((s) => typeof s === "string"))) &&
+    (v.missingStationsTotal === undefined || isNum(v.missingStationsTotal))
   );
 }
 
@@ -156,14 +156,15 @@ function validKey(v: unknown): boolean {
 
 // 모양이 하나라도 틀리면 불러오기 실패. 빈 목록·'기록 없음'·'등록 안 됨'으로 채우지 않음
 export function validSources(body: unknown): body is SourcesView {
+  if (!isObj(body) || !Array.isArray(body.sources)) return false;
+  const sources: readonly unknown[] = body.sources;
   return (
-    isObj(body) &&
     isTime(body.generatedAt) &&
-    Array.isArray(body.sources) &&
-    body.sources.every(validSource) &&
+    sources.every(validSource) &&
+    // 출처 5곳이 한 번씩 모두 있어야 함. 빠지면(판단 출처 포함) '0/0'·'연결된 출처 0곳'처럼 정상으로 보이고,
     // 같은 출처가 두 번 오면 상세·목록 키가 겹침
-    new Set(body.sources.map((s) => (s as Obj).id)).size ===
-      body.sources.length &&
+    sources.length === JOBS.length &&
+    JOBS.every((job) => sources.some((s) => (s as Obj).id === job)) &&
     isObj(body.http) &&
     isNum(body.http.timeoutMs) &&
     isNum(body.http.retries) &&
@@ -223,6 +224,31 @@ export function scheduleSlots(schedule: SourceSchedule): string[] {
     slots.push(kstClock(m));
   }
   return slots.sort();
+}
+
+// 시즌 달을 이어지는 구간으로([6,7,8,9] → [[6,9]], [11,12,1,2] → [[11,2]], [6,8] → [[6,6],[8,8]])
+export function monthRanges(months: readonly number[]): [number, number][] {
+  const sorted = [...new Set(months)].sort((a, b) => a - b);
+  const ranges: [number, number][] = [];
+  for (const m of sorted) {
+    const last = ranges.at(-1);
+    if (last && m === last[1] + 1) last[1] = m;
+    else ranges.push([m, m]);
+  }
+  // 12월과 1월이 이어지면 해를 넘는 한 구간으로
+  const first = ranges[0];
+  const tail = ranges.at(-1);
+  if (ranges.length > 1 && first && tail && first[0] === 1 && tail[1] === 12) {
+    ranges.pop();
+    ranges[0] = [tail[0], first[1]];
+    ranges.push(ranges.shift()!);
+  }
+  return ranges;
+}
+
+// 출처들이 쓰는 인증키 이름(요약·키 목록이 같은 목록을 씀)
+export function keyNames(view: SourcesView): KeyName[] {
+  return [...new Set(view.sources.map((s) => s.key))];
 }
 
 export function keyOf(view: SourcesView, name: KeyName): KeyView | undefined {

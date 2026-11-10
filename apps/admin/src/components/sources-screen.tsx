@@ -10,10 +10,12 @@ import { kstDateTime } from "@/lib/inquiries";
 import { fill, messages } from "@/lib/messages";
 import {
   fetchSources,
+  keyNames,
   keyOf,
   keyState,
   kstClock,
   latestState,
+  monthRanges,
   scheduleSlots,
   type KeyState,
   type RunState,
@@ -113,11 +115,15 @@ function ExternalLink({
   );
 }
 
+// 하루를 나누는 주기만 '하루 n회'. 그 밖은 분 그대로(반올림한 횟수로 보이지 않게)
 function periodText(minutes: number): string {
-  if (minutes < 60) return fill(t.every, { minutes });
+  const DAY = 24 * 60;
   if (minutes === 60) return t.everyHour;
-  if (minutes === 24 * 60) return t.daily;
-  return fill(t.everyDays, { times: Math.round((24 * 60) / minutes) });
+  if (minutes === DAY) return t.daily;
+  if (minutes > 60 && minutes < DAY && DAY % minutes === 0) {
+    return fill(t.everyDays, { times: DAY / minutes });
+  }
+  return fill(t.every, { minutes });
 }
 
 function cycleText(schedule: SourceSchedule): string {
@@ -128,10 +134,11 @@ function cycleText(schedule: SourceSchedule): string {
   const off = schedule.offSeason;
   if (!off || off.seasonMonths.length === 0) return base;
   return fill(t.offSeasonText, {
-    months: fill(t.months, {
-      from: Math.min(...off.seasonMonths),
-      to: Math.max(...off.seasonMonths),
-    }),
+    months: monthRanges(off.seasonMonths)
+      .map(([from, to]) =>
+        from === to ? String(from) : fill(t.monthRange, { from, to }),
+      )
+      .join(t.monthJoin),
     period: base,
     slot: kstClock(off.slotUtcMinutes),
   });
@@ -150,7 +157,9 @@ function termsText(source: SourceView): string {
     : t.terms.other;
 }
 
+// 기록을 읽지 못했거나 읽지 못한 기록이 있으면 '확인 못 함'(배지와 같은 기준, 읽힌 기록 중 최신으로 가리지 않음)
 function lastRunText(source: SourceView): string {
+  if (latestState(source) === "unknown") return t.runState.unknown;
   const run = source.recentRuns?.[0];
   return run ? kstDateTime(run.startedAt) : t.none;
 }
@@ -177,15 +186,11 @@ function Summary({ view }: { view: SourcesView }) {
   const judgmentOk = judgment.filter(
     (s) => latestState(s) === "complete",
   ).length;
-  const names = [...new Set(view.sources.map((s) => s.key))];
+  const names = keyNames(view);
   const states = names.map((name) => keyState(view, name));
-  const registered = states.filter(
-    (s) =>
-      s === "registered" ||
-      s === "noExpiry" ||
-      s === "invalid" ||
-      s === "expired",
-  ).length;
+  const count = (state: KeyState) => states.filter((s) => s === state).length;
+  // 만료일이 지나지 않은 등록 키만 셈. 하나라도 확인 못 하면 수 대신 '확인 못 함'(미등록처럼 보이지 않게)
+  const usable = count("registered") + count("noExpiry") + count("invalid");
   const value = "text-title-l font-semibold text-text-default tabular-nums";
   return (
     <dl className="grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -218,12 +223,15 @@ function Summary({ view }: { view: SourcesView }) {
         ) : (
           <>
             <dd className={value}>
-              {fill(t.kpiKeysValue, { registered, total: names.length })}
+              {count("unknown") > 0
+                ? t.keyState.unknown
+                : fill(t.kpiKeysValue, { ok: usable, total: names.length })}
             </dd>
             <dd className={HINT}>
               {fill(t.kpiKeysHint, {
-                expired: states.filter((s) => s === "expired").length,
-                unknown: states.filter((s) => s === "unknown").length,
+                expired: count("expired"),
+                missing: count("missing"),
+                unknown: count("unknown"),
               })}
             </dd>
           </>
@@ -251,7 +259,7 @@ function JudgmentCard({ source }: { source: SourceView }) {
             </Link>
           </h3>
           <p className="text-label-s text-text-muted">
-            {source.calls.map((c) => c.operation).join(" · ")}
+            {source.calls.map((c) => c.operation).join(t.listJoin)}
           </p>
         </div>
         <RunBadge state={latestState(source)} />
@@ -331,7 +339,7 @@ function ReferenceList({ sources }: { sources: readonly SourceView[] }) {
                   <span className={`block ${HINT}`}>{t.provider[s.id]}</span>
                 </th>
                 <td className={cell}>
-                  {s.calls.map((c) => c.operation).join(" · ")}
+                  {s.calls.map((c) => c.operation).join(t.listJoin)}
                 </td>
                 <td className={cell}>{t.values[s.id]}</td>
                 <td className={cell}>{cycleText(s.schedule)}</td>
@@ -347,7 +355,8 @@ function ReferenceList({ sources }: { sources: readonly SourceView[] }) {
                 {t.season}
               </th>
               <td className={cell} colSpan={4}>
-                {t.seasonHint} ·{" "}
+                {t.seasonHint}
+                {t.listJoin}
                 <ExternalLink href={SEASON_FILE}>{t.seasonLink}</ExternalLink>
               </td>
               <td className={cell}>
@@ -379,7 +388,7 @@ function ReferenceList({ sources }: { sources: readonly SourceView[] }) {
             </div>
             <dl className="mt-2 grid grid-cols-[5rem_1fr] gap-x-2 gap-y-1 text-body-s">
               <dt className="text-text-muted">{t.colCalls}</dt>
-              <dd>{s.calls.map((c) => c.operation).join(" · ")}</dd>
+              <dd>{s.calls.map((c) => c.operation).join(t.listJoin)}</dd>
               <dt className="text-text-muted">{t.colValues}</dt>
               <dd>{t.values[s.id]}</dd>
               <dt className="text-text-muted">{t.colCycle}</dt>
@@ -399,7 +408,8 @@ function ReferenceList({ sources }: { sources: readonly SourceView[] }) {
             </span>
           </div>
           <p className="mt-1 text-body-s text-text-body">
-            {t.seasonHint} ·{" "}
+            {t.seasonHint}
+            {t.listJoin}
             <ExternalLink href={SEASON_FILE}>{t.seasonLink}</ExternalLink>
           </p>
         </li>
@@ -414,7 +424,7 @@ function KeyHint({ state }: { state: KeyState }) {
 }
 
 function Keys({ view }: { view: SourcesView }) {
-  const names = [...new Set(view.sources.map((s) => s.key))];
+  const names = keyNames(view);
   return (
     <section aria-labelledby="sources-keys" className="flex flex-col gap-2">
       <div>
@@ -436,7 +446,7 @@ function Keys({ view }: { view: SourcesView }) {
             const usedBy = view.sources
               .filter((s) => s.key === name)
               .map((s) => t.name[s.id])
-              .join(" · ");
+              .join(t.listJoin);
             return (
               <li key={name} className={CARD}>
                 <div className="flex items-start justify-between gap-2">
@@ -480,7 +490,7 @@ function SourcesList({ view }: { view: SourcesView }) {
             id="sources-judgment"
             className="text-title-s font-semibold text-text-default"
           >
-            {t.judgmentTitle} {judgment.length}
+            {fill(t.judgmentTitle, { count: judgment.length })}
           </h2>
           <p className={HINT}>{t.judgmentHint}</p>
         </div>
@@ -499,7 +509,7 @@ function SourcesList({ view }: { view: SourcesView }) {
             id="sources-reference"
             className="text-title-s font-semibold text-text-default"
           >
-            {t.referenceTitle} {reference.length}
+            {fill(t.referenceTitle, { count: reference.length })}
           </h2>
           <p className={HINT}>{t.referenceHint}</p>
         </div>
@@ -534,7 +544,7 @@ function Calls({ source }: { source: SourceView }) {
           <li key={`${call.url}|${call.operation}`} className={CARD}>
             <p className="font-medium text-text-default">{call.operation}</p>
             <p className="mt-1 font-mono text-label-s break-all text-text-body">
-              GET {call.url}
+              {fill(t.callLine, { url: call.url })}
             </p>
             <ul className="mt-2 flex flex-col gap-0.5 text-body-s text-text-body">
               <li>
@@ -593,6 +603,7 @@ function Runs({ source }: { source: SourceView }) {
 
 function RunRow({ run }: { run: RunView }) {
   const ms = Date.parse(run.finishedAt) - Date.parse(run.startedAt);
+  const missing = run.missingStationsTotal ?? run.missingStations?.length ?? 0;
   return (
     <li className="flex flex-col gap-1 py-2.5">
       <div className="flex flex-wrap items-center gap-2 text-body-s">
@@ -610,10 +621,19 @@ function RunRow({ run }: { run: RunView }) {
         <ul className="text-label-s text-text-body">
           {run.failures.map((f, i) => (
             <li key={`${f.source}|${f.reason}|${i}`}>
-              {f.source} · {reasonText(f)}
+              {fill(t.runFailure, { source: f.source, reason: reasonText(f) })}
             </li>
           ))}
         </ul>
+      )}
+      {/* 성공한 실행이어도 빠진 관측소는 숨기지 않음(collect-ocean, BRD-187) */}
+      {missing > 0 && (
+        <p className="text-label-s text-text-body">
+          {fill(t.runMissing, {
+            count: missing,
+            ids: (run.missingStations ?? []).join(t.listJoin),
+          })}
+        </p>
       )}
     </li>
   );
@@ -635,7 +655,10 @@ function SourceDetail({
     state === "hidden" || state === "unknown" || state === "missing"
       ? t.keyState[state]
       : key?.expiresOn
-        ? `${key.expiresOn} · ${daysText(key.daysLeft)}`
+        ? fill(t.expiresWithDays, {
+            date: key.expiresOn,
+            days: daysText(key.daysLeft),
+          })
         : t.keyState[state];
   const info: readonly [string, React.ReactNode][] = [
     [t.infoProvider, t.provider[source.id]],
@@ -662,8 +685,11 @@ function SourceDetail({
           <RunBadge state={latestState(source)} />
         </div>
         <p className="text-body-s text-text-muted">
-          {t.provider[source.id]} · {source.judgment ? t.judgment : t.reference}{" "}
-          · {fill(t.collector, { id: source.id })}
+          {fill(t.detailMeta, {
+            provider: t.provider[source.id],
+            use: source.judgment ? t.judgment : t.reference,
+            id: source.id,
+          })}
         </p>
       </div>
       <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -793,7 +819,7 @@ function SourcesBody() {
           href="/sources/"
           className="inline-flex min-h-touch items-center self-start text-body-s font-medium text-brand-default underline-offset-2 hover:underline lg:min-h-admin-control"
         >
-          ← {t.back}
+          {t.backLink}
         </Link>
       )}
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -802,10 +828,13 @@ function SourcesBody() {
             {t.title}
           </h1>
           <p className="mt-1 text-body-s text-text-muted">
-            {t.intro}
-            {view &&
-              ` · ${fill(t.asOf, { time: kstDateTime(view.generatedAt) })}`}
-            {demo && ` · ${t.demoNote}`}
+            {[
+              t.intro,
+              view && fill(t.asOf, { time: kstDateTime(view.generatedAt) }),
+              demo && t.demoNote,
+            ]
+              .filter(Boolean)
+              .join(t.listJoin)}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
@@ -818,7 +847,8 @@ function SourcesBody() {
           <Button
             variant="secondary"
             size="small"
-            disabled={loaded !== null && loaded.key !== key}
+            // 첫 불러오기 중에도 막음(누를 때마다 요청이 새로 나가지 않게)
+            disabled={loaded === null || loaded.key !== key}
             onClick={reload}
           >
             {t.refresh}
