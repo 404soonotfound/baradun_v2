@@ -207,14 +207,18 @@ function validIncident(item: unknown): boolean {
     typeof i.startedAt === "string" &&
     (i.endedAt === null || typeof i.endedAt === "string") &&
     Array.isArray(i.failures) &&
-    i.failures.every(
-      (f) =>
-        typeof f === "object" &&
-        f !== null &&
-        typeof (f as Record<string, unknown>).source === "string" &&
-        typeof (f as Record<string, unknown>).reason === "string",
-    ) &&
+    i.failures.every(validFailure) &&
     (i.stations === undefined || Array.isArray(i.stations))
+  );
+}
+
+// 실패 사유 한 건의 필수 칸(수집 현황·데이터 출처가 같이 씀)
+export function validFailure(f: unknown): f is RunFailure {
+  return (
+    typeof f === "object" &&
+    f !== null &&
+    typeof (f as Record<string, unknown>).source === "string" &&
+    typeof (f as Record<string, unknown>).reason === "string"
   );
 }
 
