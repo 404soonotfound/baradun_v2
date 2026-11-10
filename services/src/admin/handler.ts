@@ -14,7 +14,8 @@ import {
 } from "./audit";
 import { readCollection } from "./collection";
 import { cloudWatchAlarmReader, type AlarmReader } from "./collection-alarms";
-import { readSources, ssmKeyTagReader, type KeyTagReader } from "./sources";
+import type { ApiKeyTags } from "../core/secrets/api-keys";
+import { readSources, ssmKeyTagReader } from "./sources";
 import {
   authenticate,
   createTokenVerifier,
@@ -76,7 +77,7 @@ export interface DataDependencies {
   // CloudWatch 경보 읽기(수집 현황, BRD-187). 없으면 경보는 '확인 못 함'
   readonly alarms?: AlarmReader | null;
   // 인증키 태그 읽기(데이터 출처). 없으면 키는 '확인 못 함'
-  readonly keys?: KeyTagReader | null;
+  readonly keys?: ApiKeyTags | null;
 }
 
 export interface OpsDependencies {
@@ -440,7 +441,7 @@ function alarmReader(): AlarmReader | null {
 }
 
 // 인증키 태그 읽기. 지역이 없으면 키만 '확인 못 함'
-function keyTagReader(): KeyTagReader | null {
+function keyTagReader(): ApiKeyTags | null {
   const region = process.env.AWS_REGION;
   return region ? ssmKeyTagReader(region) : null;
 }

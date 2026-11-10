@@ -135,9 +135,9 @@ export function latestBase(
   throw new Error("발표 시각을 찾지 못함");
 }
 
-const SHORT_HOURS = [2, 5, 8, 11, 14, 17, 20, 23];
-const ALL_HOURS = Array.from({ length: 24 }, (_, h) => h);
-const MID_HOURS = [6, 18];
+export const SHORT_HOURS = [2, 5, 8, 11, 14, 17, 20, 23];
+export const ALL_HOURS = Array.from({ length: 24 }, (_, h) => h);
+export const MID_HOURS = [6, 18];
 
 async function fetchJson<T>(
   deps: WeatherDeps,

@@ -98,12 +98,14 @@ describe("handleOps", () => {
         name: "data-go-kr",
         status: "registered",
         expiresOn: "2027-03-31",
+        daysLeft: 148,
         expiresInvalid: false,
       },
       {
         name: "kma-apihub",
         status: "registered",
         expiresOn: "2027-03-31",
+        daysLeft: 148,
         expiresInvalid: false,
       },
     ]);
