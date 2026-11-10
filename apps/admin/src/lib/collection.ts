@@ -366,12 +366,10 @@ export function alarmInfo(id: string): {
   kind: AlarmKind;
   source: AlarmSource;
 } {
-  const source =
-    ALARM_SOURCES.find(([head]) => id.startsWith(head))?.[1] ?? null;
-  if (source === null) return { kind: "other", source };
-  const rest = id.slice(
-    ALARM_SOURCES.find(([, s]) => s === source)?.[0].length ?? 0,
-  );
+  const entry = ALARM_SOURCES.find(([head]) => id.startsWith(head));
+  if (!entry) return { kind: "other", source: null };
+  const [head, source] = entry;
+  const rest = id.slice(head.length);
   if (rest === "Stopped") return { kind: "stopped", source };
   if (rest === "Errors") return { kind: "errors", source };
   if (rest === "Failing") return { kind: "failing", source };
