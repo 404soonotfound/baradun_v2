@@ -230,14 +230,25 @@ export function canonicalJson(value: unknown): string {
   return JSON.stringify(value);
 }
 
-function statements(doc: PolicyDocument): Map<string, string> {
+interface StatementEntry {
+  readonly label: string; // 화면에 보일 이름(Sid, 없으면 'Sid 없음 #순번')
+  readonly canon: string;
+}
+
+// 문장 목록. Sid가 있으면 Sid로, 없으면 내용으로 맞춤(IAM은 문장 순서로 권한이 바뀌지 않으므로 순서는 보지 않음)
+function statements(doc: PolicyDocument): Map<string, StatementEntry> {
   const list = doc.Statement
     ? Array.isArray(doc.Statement)
       ? doc.Statement
       : [doc.Statement as PolicyStatement]
     : [];
   return new Map(
-    list.map((s, i) => [s.Sid ?? `#${i + 1}`, canonicalJson(s)] as const),
+    list.map((s, i) => {
+      const canon = canonicalJson(s);
+      return s.Sid
+        ? ([s.Sid, { label: s.Sid, canon }] as const)
+        : ([`~${canon}`, { label: `Sid 없음 #${i + 1}`, canon }] as const);
+    }),
   );
 }
 
@@ -247,11 +258,22 @@ export function policyDiff(
 ): PolicyDiff {
   const a = statements(local);
   const b = statements(remote);
+  const { Statement: _localStatements, ...localHead } = local;
+  const { Statement: _remoteStatements, ...remoteHead } = remote;
+  const added = [...a.keys()].filter((k) => !b.has(k));
+  const removed = [...b.keys()].filter((k) => !a.has(k));
+  const changed = [...a.keys()].filter(
+    (k) => b.has(k) && a.get(k)!.canon !== b.get(k)!.canon,
+  );
   return {
-    same: canonicalJson(local) === canonicalJson(remote),
-    added: [...a.keys()].filter((k) => !b.has(k)),
-    removed: [...b.keys()].filter((k) => !a.has(k)),
-    changed: [...a.keys()].filter((k) => b.has(k) && a.get(k) !== b.get(k)),
+    same:
+      added.length === 0 &&
+      removed.length === 0 &&
+      changed.length === 0 &&
+      canonicalJson(localHead) === canonicalJson(remoteHead),
+    added: added.map((k) => a.get(k)!.label),
+    removed: removed.map((k) => b.get(k)!.label),
+    changed: changed.map((k) => a.get(k)!.label),
   };
 }
 
@@ -355,6 +377,8 @@ export interface FunctionCheck {
   // 로그를 읽지 못한 이유. 있으면 '확인 못 함'
   readonly error?: string;
   readonly scan?: LogScan;
+  // 로그가 많아 앞부분만 셈
+  readonly truncated?: boolean;
 }
 
 // 한 줄 요약. 실행이 없거나 읽지 못하면 '확인 못 함'(정상으로 보지 않음)
@@ -363,15 +387,15 @@ export function checkLine(check: FunctionCheck): string {
     return `${check.logicalId}: 확인 못 함(로그를 읽지 못함${check.error ? `: ${check.error}` : ""})`;
   }
   const { invocations, findings } = check.scan;
-  const list = findings
-    .map((f) => `${f.level} ${f.event} ${f.count}회`)
-    .join(", ");
+  const list =
+    findings.map((f) => `${f.level} ${f.event} ${f.count}회`).join(", ") +
+    (check.truncated ? " (로그가 많아 앞부분만 셈)" : "");
   // START 줄이 없어도(초기화 실패 등) 잡힌 오류는 숨기지 않음
   if (invocations === 0) {
     return `${check.logicalId}: 확인 못 함(보는 동안 실행 없음)${list ? ` · ${list}` : ""}`;
   }
   if (findings.length === 0) {
-    return `${check.logicalId}: 실행 ${invocations}회 · error·warn 없음`;
+    return `${check.logicalId}: 실행 ${invocations}회 · error·warn 없음${check.truncated ? " (로그가 많아 앞부분만 셈)" : ""}`;
   }
   return `${check.logicalId}: 실행 ${invocations}회 · ${list}`;
 }
@@ -405,7 +429,13 @@ export function deployComment(report: DeployReport): string {
         : `### 배포 뒤 ${report.watchMinutes}분 로그 점검(바뀐 함수)`,
     ...report.checks.map((c) => `- ${checkLine(c)}`),
   ];
-  return `${lines.join("\n")}\n`;
+  // AWS 오류 문구(역할 ARN 등)에 섞인 계정 번호도 가림
+  return redactAccount(`${lines.join("\n")}\n`);
+}
+
+// 12자리 AWS 계정 번호를 <계정>으로(이슈 댓글은 공개 저장소에 남음)
+export function redactAccount(text: string): string {
+  return text.replace(/(?<!\d)\d{12}(?!\d)/g, "<계정>");
 }
 
 // ── 인증키 만료일 태그 (GH-382) ──
