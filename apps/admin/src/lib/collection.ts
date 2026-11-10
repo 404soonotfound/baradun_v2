@@ -149,6 +149,8 @@ export interface StationRow {
   readonly beachIds: readonly string[];
   readonly waveBeachIds: readonly string[];
   readonly state: StationState;
+  // false: 빠졌는데 관측소 표에 없어 이름·쓰는 해변을 모름(이름 자리에 id)
+  readonly inTable: boolean;
   readonly missingSince: string | null;
 }
 
@@ -322,13 +324,20 @@ const STATION_STATES: readonly StationState[] = ["ok", "missing", "unknown"];
 const strings = (value: unknown): value is string[] =>
   Array.isArray(value) && value.every((v) => typeof v === "string");
 
+// null 또는 읽을 수 있는 시각 글자('NaN:NaN'으로 보이지 않게)
+const timeOrNull = (value: unknown): value is string | null =>
+  value === null ||
+  (typeof value === "string" && !Number.isNaN(Date.parse(value)));
+
 // 한 줄이라도 모양이 틀리면 목록 전체를 '확인 못 함'(틀린 줄을 빼고 남은 것을 전체로 보이지 않게)
+// 빈 목록도 '확인 못 함'('관측소 0곳·문제 없음'으로 보이지 않게)
 function toStations(value: unknown): StationsView {
   const v = value as Record<string, unknown> | undefined;
   if (
     v?.status !== "ok" ||
-    !(v.checkedAt === null || typeof v.checkedAt === "string") ||
-    !Array.isArray(v.list)
+    !timeOrNull(v.checkedAt) ||
+    !Array.isArray(v.list) ||
+    v.list.length === 0
   ) {
     return { status: "unavailable" };
   }
@@ -341,7 +350,8 @@ function toStations(value: unknown): StationsView {
       strings(s.beachIds) &&
       strings(s.waveBeachIds) &&
       STATION_STATES.includes(s.state as StationState) &&
-      (s.missingSince === null || typeof s.missingSince === "string")
+      typeof s.inTable === "boolean" &&
+      timeOrNull(s.missingSince)
     );
   });
   if (!valid) return { status: "unavailable" };
@@ -589,17 +599,23 @@ export function kstHour(iso: string): number {
 
 // 짧은 KST 시각(시안 V9: '14:33:05'·'14:40'). 기준 시각과 같은 날이면 시각만, 다른 날이면 '11/9 20:48'
 // seconds: 초까지(마지막 성공 열). 날짜가 다르면 초를 빼고 날짜를 붙임(어제 값을 오늘로 읽지 않게)
+const kstDate = (iso: string) => new Date(Date.parse(iso) + 9 * 3_600_000);
+
+// 두 시각이 KST로 같은 날인지
+export function sameKstDay(a: string, b: string): boolean {
+  return (
+    kstDate(a).toISOString().slice(0, 10) ===
+    kstDate(b).toISOString().slice(0, 10)
+  );
+}
+
 export function kstClock(iso: string, nowIso: string, seconds = false): string {
-  const kst = (value: string) => new Date(Date.parse(value) + 9 * 3_600_000);
-  const at = kst(iso);
-  const now = kst(nowIso);
+  const at = kstDate(iso);
   const pad = (n: number) => String(n).padStart(2, "0");
   const time = `${pad(at.getUTCHours())}:${pad(at.getUTCMinutes())}`;
-  const sameDay =
-    at.getUTCFullYear() === now.getUTCFullYear() &&
-    at.getUTCMonth() === now.getUTCMonth() &&
-    at.getUTCDate() === now.getUTCDate();
-  if (!sameDay) return `${at.getUTCMonth() + 1}/${at.getUTCDate()} ${time}`;
+  if (!sameKstDay(iso, nowIso)) {
+    return `${at.getUTCMonth() + 1}/${at.getUTCDate()} ${time}`;
+  }
   return seconds ? `${time}:${pad(at.getUTCSeconds())}` : time;
 }
 

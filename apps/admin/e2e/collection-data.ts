@@ -53,6 +53,7 @@ const STATION = (id: string, name: string, state = "ok") => ({
   beachIds: ["b0003"],
   waveBeachIds: [],
   state,
+  inTable: true,
   missingSince: null as string | null,
 });
 
@@ -64,6 +65,7 @@ export const STATIONS = {
       ...STATION("22451", "속초 파고부이", "missing"),
       beachIds: ["b0001", "b0002"],
       waveBeachIds: ["b0001", "b0002"],
+      inTable: true,
       missingSince: ago(70),
     },
     STATION("22999", "새 관측소", "unknown"),

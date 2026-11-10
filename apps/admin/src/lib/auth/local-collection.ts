@@ -114,6 +114,7 @@ function stations(missingSince: string): StationRow[] {
       beachIds: [beach(1), beach(2), beach(3)],
       waveBeachIds: [beach(1), beach(2)],
       state: "missing",
+      inTable: true,
       missingSince,
     },
     ...STATION_NAMES.map((name, i): StationRow => ({
@@ -126,6 +127,7 @@ function stations(missingSince: string): StationRow[] {
         beach(10 + i * 5 + k),
       ),
       state: "ok",
+      inTable: true,
       missingSince: null,
     })),
   ];

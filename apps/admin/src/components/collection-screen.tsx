@@ -23,6 +23,7 @@ import {
   lowestHour,
   overallHourly,
   reasonText,
+  sameKstDay,
   SOURCE_ROWS,
   sourceState,
   successRate,
@@ -343,22 +344,22 @@ function DayBars({
   const active = hover === null ? undefined : hourly[hover];
   const tip = active ? barTip(active) : null;
   // 끝 칸 말풍선은 막대 밖으로 나가지 않게 한쪽에 붙임
+  const edge =
+    hover === null
+      ? null
+      : hover < 4
+        ? "start"
+        : hover > hourly.length - 5
+          ? "end"
+          : "middle";
   const align =
-    hover === null
-      ? ""
-      : hover < 4
-        ? "translate-x-0"
-        : hover > hourly.length - 5
-          ? "-translate-x-full"
-          : "-translate-x-1/2";
-  const left =
-    hover === null
-      ? 0
-      : hover < 4
-        ? (hover / hourly.length) * 100
-        : hover > hourly.length - 5
-          ? ((hover + 1) / hourly.length) * 100
-          : ((hover + 0.5) / hourly.length) * 100;
+    edge === "start"
+      ? "translate-x-0"
+      : edge === "end"
+        ? "-translate-x-full"
+        : "-translate-x-1/2";
+  const offset = edge === "start" ? 0 : edge === "end" ? 1 : 0.5;
+  const left = hover === null ? 0 : ((hover + offset) / hourly.length) * 100;
   return (
     <span
       role="img"
@@ -829,12 +830,14 @@ function Hourly({ view }: { view: CollectionView }) {
     setActive(Math.round(ratio * (n - 1)));
   };
   const onKey = (e: React.KeyboardEvent) => {
+    // 고른 칸이 없으면 첫 ←→는 시작 칸(가장 낮은 칸, 없으면 지금)을 고름(그 칸을 건너뛰지 않게)
     const at = active ?? (lowIndex >= 0 ? lowIndex : n - 1);
+    const step = active === null ? 0 : 1;
     const next =
       e.key === "ArrowLeft"
-        ? at - 1
+        ? at - step
         : e.key === "ArrowRight"
-          ? at + 1
+          ? at + step
           : e.key === "Home"
             ? 0
             : e.key === "End"
@@ -851,8 +854,7 @@ function Hourly({ view }: { view: CollectionView }) {
     if (i === n - 1) return t.axisNow;
     const hour = pad2(kstHour(bucket.hour));
     // 첫 칸이 기준 시각과 다른 날(어제)이면 '어제'를 붙임(시안 V9 '어제 15시 · 21시 · …')
-    const other =
-      i === 0 && kstClock(bucket.hour, view.generatedAt).includes("/");
+    const other = i === 0 && !sameKstDay(bucket.hour, view.generatedAt);
     return other
       ? fill(t.axisYesterday, { hour })
       : fill(t.hourlyAxis, { hour });
@@ -1921,7 +1923,11 @@ function Stations({
           </thead>
           <tbody>
             {shown.map((s) => {
-              const sub = s.state === "missing" ? beachText(s) : null;
+              const sub = !s.inTable
+                ? t.stationNotInTable
+                : s.state === "missing"
+                  ? beachText(s)
+                  : null;
               return (
                 <tr key={s.id} className="group/row">
                   <th scope="row" className={`${TD} text-left font-normal`}>
@@ -1948,7 +1954,9 @@ function Stations({
                       : t.never}
                   </td>
                   <td className={`${TD} text-right tabular-nums`}>
-                    {fill(t.stationBeachCount, { count: s.beachIds.length })}
+                    {s.inTable
+                      ? fill(t.stationBeachCount, { count: s.beachIds.length })
+                      : t.kpiUnknown}
                   </td>
                 </tr>
               );

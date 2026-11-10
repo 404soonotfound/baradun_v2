@@ -954,6 +954,7 @@
     },
     "stationBeachMore": "{name} 외 {count}곳",
     "stationBeachCount": "{count}곳",
-    "sheetCycle": "주기 {cycle}"
+    "sheetCycle": "주기 {cycle}",
+    "stationNotInTable": "관측소 표에 없음 · 이름·쓰는 해변 확인 못 함"
   }
 }
