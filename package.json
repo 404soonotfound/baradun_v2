@@ -17,6 +17,7 @@
     "test:agy-review": "vitest run --root tools/agy-review",
     "build": "npm run build --workspaces --if-present",
     "deploy:prod": "node scripts/deploy-prod.mjs",
-    "deploy:infra": "npm run deploy -w infra --"
+    "deploy:infra": "npm run deploy -w infra --",
+    "keys:expires": "npm run keys:expires -w infra --"
   }
 }
