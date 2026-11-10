@@ -8,7 +8,9 @@ import {
 import {
   PUBLISH_SUMMARY_PK,
   publishSummaryTtl,
+  STATION_TABLE_KEY,
   type PublishSummary,
+  type StationTable,
 } from "../collect/publish-summary";
 import {
   runLogPk,
@@ -310,6 +312,15 @@ export class DynamoOpsStore implements OpsStore {
           [TTL]: publishSummaryTtl(nowMs),
         },
         ConditionExpression: "attribute_not_exists(pk)",
+      }),
+    );
+  }
+
+  async putStationTable(table: StationTable, updatedAt: string) {
+    await this.client.send(
+      new PutCommand({
+        TableName: this.tableName,
+        Item: { ...STATION_TABLE_KEY, stations: table, updatedAt },
       }),
     );
   }

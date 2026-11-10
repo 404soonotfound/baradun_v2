@@ -1,8 +1,9 @@
-import { QueryCommand } from "@aws-sdk/lib-dynamodb";
+import { GetCommand, QueryCommand } from "@aws-sdk/lib-dynamodb";
 import { describe, expect, it } from "vitest";
 import {
   PUBLISH_SUMMARY_PK,
-  type PublishSummary,
+  STATION_TABLE_KEY,
+  type StationTable,
 } from "../core/collect/publish-summary";
 import type { Incident } from "./collection";
 import {
@@ -19,7 +20,7 @@ import type { Sender } from "./writes";
 
 const NOW_MS = Date.parse("2026-11-02T03:30:00Z");
 
-const STATIONS: PublishSummary["stations"] = {
+const STATIONS: StationTable = {
   "22451": {
     name: "속초 파고부이",
     beachIds: ["b0001", "b0002"],
@@ -47,13 +48,11 @@ function lite(
 }
 
 function read(list: SummaryLite[], failed = false): SummaryRead {
-  const last = list.at(-1);
-  const latest: PublishSummary | null = last
-    ? { ...last, stations: STATIONS }
-    : null;
+  const latest = list.at(-1) ?? null;
   return {
     list,
     latest,
+    stations: failed ? null : STATIONS,
     failed,
     live: (version) =>
       latest && latest.version === version
@@ -127,6 +126,24 @@ describe("incidentImpact", () => {
       reason: "summary_missing",
       delayedBeachIds: [],
     });
+  });
+
+  it("구간 바로 뒤 요약의 previous가 구간 마지막이 아니면(구간 끝 요약이 빠짐) 확인 못 함", () => {
+    // 02:25 요약만 구간 안에 남고, 02:40 게시 요약이 빠짐 → 03:15 요약의 previous가 02:40
+    const gap = [
+      CHAIN[0]!,
+      CHAIN[1]!,
+      lite("20261102T031500Z", "20261102T024000Z"),
+    ];
+    expect(
+      incidentImpact(INCIDENT, read(gap), "20261102T031500Z", NOW_MS),
+    ).toMatchObject({ status: "unknown", reason: "summary_missing" });
+  });
+
+  it("뒤 요약이 없는데 구간 마지막이 지금 게시본이 아니면 확인 못 함", () => {
+    expect(
+      incidentImpact(INCIDENT, read(CHAIN), "20261102T031000Z", NOW_MS),
+    ).toMatchObject({ status: "unknown", reason: "summary_missing" });
   });
 
   it("장애 시작 때 보이던 게시본 요약이 없으면 확인 못 함", () => {
@@ -205,14 +222,37 @@ describe("incidentImpact", () => {
 });
 
 describe("readPublishSummaries", () => {
-  function client(items: Record<string, unknown>[] | Error): Sender {
-    return {
-      async send(command: QueryCommand) {
+  // 요약 Query(키 조건: 전체·sk <= :from·sk > :from)와 관측소 표 GetItem만 받는 가짜
+  function client(
+    items: Record<string, unknown>[] | Error,
+    table: unknown = STATIONS,
+  ) {
+    const sent: string[] = [];
+    const sender = {
+      async send(command: QueryCommand | GetCommand) {
         if (items instanceof Error) throw items;
+        if (command instanceof GetCommand) {
+          sent.push(`get ${command.input.Key?.pk}`);
+          return {
+            Item:
+              table === undefined
+                ? undefined
+                : { ...STATION_TABLE_KEY, stations: table },
+          };
+        }
+        const condition = command.input.KeyConditionExpression!;
+        const from = String(command.input.ExpressionAttributeValues?.[":from"]);
+        sent.push(`query ${condition}`);
         const forward = command.input.ScanIndexForward !== false;
-        const sorted = [...items].sort((a, b) =>
-          String(a.sk) < String(b.sk) === forward ? -1 : 1,
-        );
+        const sorted = items
+          .filter((item) =>
+            condition.includes("<=")
+              ? String(item.sk) <= from
+              : condition.includes(">")
+                ? String(item.sk) > from
+                : true,
+          )
+          .sort((a, b) => (String(a.sk) < String(b.sk) === forward ? -1 : 1));
         return {
           Items: command.input.Limit
             ? sorted.slice(0, command.input.Limit)
@@ -220,29 +260,27 @@ describe("readPublishSummaries", () => {
         };
       },
     } as unknown as Sender;
+    return { sender, sent };
   }
 
   const item = (version: string, previous: string | null) => ({
     pk: PUBLISH_SUMMARY_PK,
     sk: version,
     ...lite(version, previous, ["b0001"]),
-    stations: STATIONS,
   });
+  const ITEMS = [
+    item("20261102T013500Z", null),
+    item("20261102T015000Z", "20261102T013500Z"),
+    item("20261102T022500Z", "20261102T015000Z"),
+  ];
 
-  it("최신 요약이 지금 게시본이면 관측 지연 해변 수를 돌려준다", async () => {
-    const result = await readPublishSummaries(
-      client([
-        item("20261102T015000Z", null),
-        item("20261102T022500Z", "20261102T015000Z"),
-      ]),
-      "Ops",
-      new Date(NOW_MS),
-    );
+  it("관측 장애가 없으면 최신 요약과 관측소 표만 읽고 지금 게시본의 관측 지연 해변 수를 돌려준다", async () => {
+    const { sender, sent } = client(ITEMS);
+    const result = await readPublishSummaries(sender, "Ops", null);
+    expect(sent.sort()).toEqual(["get publish#stations", "query pk = :pk"]);
     expect(result.failed).toBe(false);
-    expect(result.list.map((s) => s.version)).toEqual([
-      "20261102T015000Z",
-      "20261102T022500Z",
-    ]);
+    expect(result.list).toEqual([]);
+    expect(result.stations).toEqual(STATIONS);
     expect(result.live("20261102T022500Z")).toEqual({
       version: "20261102T022500Z",
       publishedAt: "20261102T022500Z",
@@ -254,26 +292,34 @@ describe("readPublishSummaries", () => {
     expect(result.live(null)).toBeNull();
   });
 
-  it("읽기에 실패하면 failed로 두고 지금 게시본 요약도 null", async () => {
+  it("장애 시작 때 보이던 게시본 하나와 그 뒤 요약만 읽는다(더 오래된 요약은 읽지 않음)", async () => {
+    const { sender } = client(ITEMS);
     const result = await readPublishSummaries(
-      client(new Error("throttled")),
+      sender,
       "Ops",
-      new Date(NOW_MS),
+      Date.parse("2026-11-02T02:10:00Z"),
     );
+    expect(result.list.map((s) => s.version)).toEqual([
+      "20261102T015000Z",
+      "20261102T022500Z",
+    ]);
+  });
+
+  it("읽기에 실패하면 failed로 두고 지금 게시본 요약·관측소 표도 null", async () => {
+    const { sender } = client(new Error("throttled"));
+    const result = await readPublishSummaries(sender, "Ops", NOW_MS);
     expect(result.failed).toBe(true);
+    expect(result.stations).toBeNull();
     expect(result.live("20261102T022500Z")).toBeNull();
   });
 
-  it("관측소 표 모양이 틀린 최신 요약은 쓰지 않는다", async () => {
-    const result = await readPublishSummaries(
-      client([
-        { ...item("20261102T022500Z", null), stations: { x: { name: 1 } } },
-      ]),
-      "Ops",
-      new Date(NOW_MS),
-    );
-    expect(result.latest).toBeNull();
-    expect(result.live("20261102T022500Z")).toBeNull();
+  it("관측소 표가 없거나 모양이 틀리면 쓰지 않는다(영향 판정은 station_unknown)", async () => {
+    for (const table of [null, { x: { name: 1 } }]) {
+      const { sender } = client(ITEMS, table);
+      expect(
+        (await readPublishSummaries(sender, "Ops", null)).stations,
+      ).toBeNull();
+    }
   });
 });
 

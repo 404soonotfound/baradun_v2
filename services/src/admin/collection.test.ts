@@ -267,6 +267,21 @@ describe("지연 판정·빠진 관측소 (BRD-187)", () => {
     });
   });
 
+  it("빠진 관측소 장애는 대조하지 못한 성공 실행(칸 없음)으로 끝내지 않는다", () => {
+    const [incident] = incidentsOf([
+      {
+        ...run("2026-11-02T02:10:00.000Z", "complete"),
+        missingStations: ["22451"],
+      },
+      run("2026-11-02T02:40:00.000Z", "complete"), // 대조표를 못 읽은 실행
+    ]);
+    expect(incident).toMatchObject({
+      endedAt: null,
+      runs: 2,
+      stations: [{ id: "22451", returnedAt: null }],
+    });
+  });
+
   it("옛 기록(빠진 관측소 칸 없음)은 깨끗한 실행으로 읽고, 칸이 있으면 그대로 읽는다", () => {
     expect(
       toRunView({ startedAt: "2026-11-04T05:03:00.000Z", status: "complete" }),
@@ -296,7 +311,9 @@ describe("readCollection", () => {
     expect(sent.sort()).toEqual(
       [
         "get publish",
-        // 게시 요약: 최신 하나(관측소 표) + 8일 목록
+        // 게시 요약: 최신 하나 + 관측소 표 + 관측 장애(04:40) 시작 때 게시본 하나 + 그 뒤 목록
+        "get publish#stations",
+        `query ${PUBLISH_SUMMARY_PK}`,
         `query ${PUBLISH_SUMMARY_PK}`,
         `query ${PUBLISH_SUMMARY_PK}`,
         ...COLLECTION_JOBS.map((job) => `query ${runLogPk(job)}`),
