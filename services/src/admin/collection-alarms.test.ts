@@ -173,6 +173,14 @@ describe("readAlarms", () => {
     ]);
   });
 
+  it("제한 시간 안에 끝나지 않으면 경보만 확인 못 함(수집 현황 전체를 막지 않음)", async () => {
+    const slow: AlarmReader = {
+      ...reader([OCEAN_ERRORS], {}),
+      describe: () => new Promise(() => undefined),
+    };
+    expect(await readAlarms(slow, NOW, 10)).toEqual({ status: "unavailable" });
+  });
+
   it("설정이나 기록 하나라도 읽지 못하면 일부만 보여 주지 않고 확인 못 함", async () => {
     expect(
       await readAlarms(reader([OCEAN_ERRORS], {}, "describe"), NOW),
@@ -189,6 +197,8 @@ describe("readAlarms", () => {
 
 describe("incidentAlarms", () => {
   const incident: Incident = {
+    kind: "failure",
+    missingTruncated: false,
     startedAt: "2026-11-02T02:10:00.000Z",
     endedAt: "2026-11-02T03:00:00.000Z",
     runs: 2,

@@ -15,6 +15,9 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const HISTORY_DAYS = 8;
 // 장애 앞뒤로 경보가 늦게 울리는 시간(오류 경보 5분 구간 + 평가 지연)
 const ALARM_LAG_MS = 10 * 60 * 1000;
+// 경보 읽기 제한 시간. 운영 API 제한 시간(10초) 안에서 수집 현황 나머지가 응답하게 함
+// 넘으면 경보만 '확인 못 함'(호출 제한·재시도로 전체 응답이 실패하지 않게)
+export const ALARM_READ_TIMEOUT_MS = 3_000;
 
 export type AlarmState = "OK" | "ALARM" | "INSUFFICIENT_DATA" | "unknown";
 
@@ -145,8 +148,21 @@ export function toAlarmEvent(raw: unknown, prefix: string): AlarmEvent | null {
 export async function readAlarms(
   reader: AlarmReader | null,
   now: Date,
+  timeoutMs = ALARM_READ_TIMEOUT_MS,
 ): Promise<AlarmsView> {
   if (!reader) return { status: "unavailable" };
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<AlarmsView>((resolve) => {
+    timer = setTimeout(() => resolve({ status: "unavailable" }), timeoutMs);
+  });
+  try {
+    return await Promise.race([readAll(reader, now), timeout]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function readAll(reader: AlarmReader, now: Date): Promise<AlarmsView> {
   try {
     const list = (await reader.describe())
       .map((raw) => toAlarmView(raw, reader.prefix))
@@ -210,7 +226,8 @@ export function incidentAlarms(
 export function cloudWatchAlarmReader(
   region: string,
   prefix: string,
-  client = new CloudWatchClient({ region }),
+  // 재시도는 한 번만(제한 시간 안에 끝나게)
+  client = new CloudWatchClient({ region, maxAttempts: 2 }),
 ): AlarmReader {
   return {
     region,
