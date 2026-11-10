@@ -158,7 +158,8 @@ export async function fetchCollection(
     typeof body !== "object" ||
     body === null ||
     typeof body.generatedAt !== "string" ||
-    !Array.isArray(body.jobs)
+    !Array.isArray(body.jobs) ||
+    !body.jobs.every(validJob)
   ) {
     return {
       ok: false,
@@ -168,6 +169,21 @@ export async function fetchCollection(
     };
   }
   return { ...result, body: normalizeCollection(body) };
+}
+
+// 예전 응답에도 있던 필수 칸. 빠지거나 null이면 '장애 없음'·'실행 없음'으로 채우지 않고 본문 오류로 봄
+function validJob(item: unknown): boolean {
+  if (typeof item !== "object" || item === null) return false;
+  const job = item as Record<string, unknown>;
+  return (
+    typeof job.job === "string" &&
+    Array.isArray(job.hourly) &&
+    Array.isArray(job.incidents) &&
+    typeof job.day === "object" &&
+    job.day !== null &&
+    typeof job.week === "object" &&
+    job.week !== null
+  );
 }
 
 type Loose<T> = { -readonly [K in keyof T]?: unknown };
