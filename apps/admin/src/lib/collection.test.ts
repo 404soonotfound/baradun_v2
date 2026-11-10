@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
+  alarmInfo,
   allIncidents,
+  barCounts,
+  barState,
+  cloudWatchUrl,
+  incidentTimeline,
+  lambdaUrl,
+  sortedAlarms,
   incidentMinutes,
   kstHour,
   lowestHour,
@@ -9,6 +16,8 @@ import {
   sourceState,
   successRate,
   versionTime,
+  type AlarmView,
+  type Incident,
   type JobCollection,
 } from "./collection";
 
@@ -44,6 +53,18 @@ describe("sourceState", () => {
     expect(sourceState(job({ lastRun: run("complete") }))).toBe("ok");
     expect(sourceState(job({ lastRun: run("partial") }))).toBe("partial");
     expect(sourceState(job({ lastRun: run("failed") }))).toBe("failed");
+  });
+
+  it("마지막 실행이 성공이어도 지연 기준을 넘겼으면 '지연', 실패·일부 실패가 지연보다 앞섬", () => {
+    expect(sourceState(job({ lastRun: run("complete"), overdue: true }))).toBe(
+      "late",
+    );
+    expect(sourceState(job({ lastRun: run("failed"), overdue: true }))).toBe(
+      "failed",
+    );
+    expect(sourceState(job({ lastRun: run("partial"), overdue: true }))).toBe(
+      "partial",
+    );
   });
 });
 
@@ -160,5 +181,142 @@ describe("versionTime", () => {
     expect(versionTime("20261104T051000Z")).toBe("2026-11-04T05:10:00Z");
     expect(versionTime(null)).toBeNull();
     expect(versionTime("2026-11-04")).toBeNull();
+  });
+});
+
+describe("24시간 막대", () => {
+  const bucket = (runs: number, ok: number, late = false) => ({
+    hour: "2026-11-04T01:00:00.000Z",
+    runs,
+    ok,
+    late,
+  });
+
+  it("실패가 지연보다, 지연이 기록 없음보다 앞섬. 실행이 없어도 지연이면 지연", () => {
+    expect(barState(bucket(4, 3, true))).toBe("failed");
+    expect(barState(bucket(4, 4, true))).toBe("late");
+    expect(barState(bucket(0, 0, true))).toBe("late");
+    expect(barState(bucket(0, 0))).toBe("none");
+    expect(barState(bucket(4, 4))).toBe("ok");
+  });
+
+  it("상태별 칸 수를 셈(화면 읽기 프로그램 요약)", () => {
+    expect(
+      barCounts([bucket(4, 4), bucket(4, 3), bucket(0, 0), bucket(4, 4, true)]),
+    ).toEqual({ ok: 1, failed: 1, none: 1, late: 1 });
+  });
+});
+
+describe("장애 경과", () => {
+  const base: Incident = {
+    kind: "stations",
+    startedAt: "2026-11-04T01:00:00.000Z",
+    endedAt: null,
+    runs: 3,
+    failures: [],
+    stations: [
+      {
+        id: "22105",
+        firstMissingAt: "2026-11-04T01:00:00.000Z",
+        lastMissingAt: "2026-11-04T01:30:00.000Z",
+        returnedAt: "2026-11-04T02:00:00.000Z",
+      },
+      {
+        id: "22190",
+        firstMissingAt: "2026-11-04T01:00:00.000Z",
+        lastMissingAt: "2026-11-04T02:30:00.000Z",
+        returnedAt: null,
+      },
+    ],
+    missingTruncated: false,
+    alarms: [
+      {
+        id: "OceanErrors",
+        name: "BaradunV2-OceanErrors",
+        at: "2026-11-04T01:05:00.000Z",
+        from: "OK",
+        to: "ALARM",
+      },
+    ],
+  };
+
+  it("시작 → 경보·돌아온 관측소(시각순) → 이어지는 중. 돌아오지 않은 관측소는 넣지 않음", () => {
+    expect(
+      incidentTimeline(base, "2026-11-04T03:00:00.000Z").map((e) => [
+        e.type,
+        e.at,
+      ]),
+    ).toEqual([
+      ["start", "2026-11-04T01:00:00.000Z"],
+      ["alarm", "2026-11-04T01:05:00.000Z"],
+      ["returned", "2026-11-04T02:00:00.000Z"],
+      ["ongoing", "2026-11-04T03:00:00.000Z"],
+    ]);
+  });
+
+  it("끝난 장애는 해결로 끝나고, 경보를 읽지 못했으면(null) 경보 줄 없이 그대로", () => {
+    const events = incidentTimeline(
+      { ...base, endedAt: "2026-11-04T02:40:00.000Z", alarms: null },
+      "2026-11-04T03:00:00.000Z",
+    );
+    expect(events.map((e) => e.type)).toEqual(["start", "returned", "end"]);
+  });
+});
+
+describe("경보", () => {
+  it("경보 이름에서 묶음·출처를 읽고, 모르는 경보는 other(이름을 숨기지 않음)", () => {
+    expect(alarmInfo("OceanStopped")).toEqual({
+      kind: "stopped",
+      source: "collect-ocean",
+    });
+    expect(alarmInfo("WarningsErrors")).toEqual({
+      kind: "errors",
+      source: "collect-warnings",
+    });
+    expect(alarmInfo("WeatherFailing")).toEqual({
+      kind: "failing",
+      source: "collect-weather",
+    });
+    expect(alarmInfo("PublishStopped")).toEqual({
+      kind: "stopped",
+      source: "publish",
+    });
+    expect(alarmInfo("OceanSomethingNew")).toEqual({
+      kind: "other",
+      source: "collect-ocean",
+    });
+    expect(alarmInfo("LoginAbuse")).toEqual({ kind: "other", source: null });
+  });
+
+  it("울리는 경보를 먼저, 같은 상태는 이름순", () => {
+    const alarm = (id: string, state: AlarmView["state"]): AlarmView => ({
+      id,
+      name: `BaradunV2-${id}`,
+      state,
+      stateUpdatedAt: null,
+      description: "",
+      windowMinutes: 5,
+      functionName: null,
+    });
+    expect(
+      sortedAlarms([
+        alarm("RipErrors", "OK"),
+        alarm("OceanErrors", "INSUFFICIENT_DATA"),
+        alarm("WarningsStopped", "ALARM"),
+        alarm("CatalogErrors", "OK"),
+      ]).map((a) => a.id),
+    ).toEqual(["WarningsStopped", "OceanErrors", "CatalogErrors", "RipErrors"]);
+  });
+
+  it("콘솔 주소: 지역이 없으면 기본 콘솔, 경보·함수 이름은 주소에 맞게 바꿈", () => {
+    expect(cloudWatchUrl(null)).toBe(
+      "https://console.aws.amazon.com/cloudwatch/home#alarmsV2:",
+    );
+    expect(cloudWatchUrl("ap-northeast-2", "BaradunV2-Ocean Errors")).toBe(
+      "https://ap-northeast-2.console.aws.amazon.com/cloudwatch/home?region=ap-northeast-2#alarmsV2:alarm/BaradunV2-Ocean%20Errors",
+    );
+    expect(lambdaUrl("ap-northeast-2", "BaradunV2-Ocean")).toBe(
+      "https://ap-northeast-2.console.aws.amazon.com/lambda/home?region=ap-northeast-2#/functions/BaradunV2-Ocean",
+    );
   });
 });
