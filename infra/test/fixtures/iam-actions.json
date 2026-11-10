@@ -1,5 +1,5 @@
 {
-  "verifiedOn": "2026-11-03",
+  "verifiedOn": "2026-11-10",
   "sourceUrlTemplate": "https://servicereference.us-east-1.amazonaws.com/v1/{service}/{service}.json",
   "scope": "bootstrap 정책 Action 부분집합; CI에서 고정 AWS 공식 참조로 재검증, 최신 자료는 별도 감사",
   "actions": [
@@ -32,6 +32,7 @@
     "cloudfront:UpdateOriginAccessControl",
     "cloudfront:UpdateResponseHeadersPolicy",
     "cloudwatch:DeleteAlarms",
+    "cloudwatch:DescribeAlarmHistory",
     "cloudwatch:DescribeAlarms",
     "cloudwatch:ListTagsForResource",
     "cloudwatch:PutMetricAlarm",
