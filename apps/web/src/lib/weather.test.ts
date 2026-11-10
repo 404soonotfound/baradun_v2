@@ -213,9 +213,28 @@ describe("midDaysIssuedAt", () => {
     );
   });
 
-  it("하나라도 시각을 모르면 null", () => {
+  it("값이 있는데 시각을 모르면 null", () => {
     expect(midDaysIssuedAt(["2026-11-09", "2026-11-10"], land, ta)).toBeNull();
-    expect(midDaysIssuedAt(["2026-11-09"], land, null)).toBeNull();
+  });
+
+  it("값이 없는 날의 빈 시각은 건너뜀, 시각을 하나도 모르면 null", () => {
+    const blank: MidLandForecast = {
+      name: "강원영동",
+      days: [
+        land.days[0]!,
+        {
+          date: "2026-11-10",
+          issuedAt: null,
+          pop: null,
+          sky: null,
+          precip: null,
+        },
+      ],
+    };
+    expect(midDaysIssuedAt(["2026-11-09", "2026-11-10"], blank, ta)).toBe(
+      "2026-11-04T09:00:00Z",
+    );
+    expect(midDaysIssuedAt(["2026-11-10"], blank, null)).toBeNull();
   });
 
   it("날이 없으면 null", () => {

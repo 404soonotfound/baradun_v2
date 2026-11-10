@@ -193,20 +193,41 @@ export function laterDays(
 }
 
 // 펼친 중기 날들의 발표 시각: 그 날짜들의 구역(하늘·강수확률)·기온 지점(최저·최고) 발표 시각 중 가장 이른 것
-// (기온 수집이 한 회차 밀렸으면 더 오래된 값을 말함). 날이 없거나 하나라도 시각을 모르면 null(시각을 내세우지 않음)
+// (기온 수집이 한 회차 밀렸으면 더 오래된 값을 말함). 값이 없는 날('–')의 빈 시각은 건너뜀
+// 값이 있는데 시각을 모르거나, 시각을 하나도 모르면 null(시각을 내세우지 않음)
 export function midDaysIssuedAt(
   dates: readonly string[],
   midLand: MidLandForecast | null,
   midTa: MidTaForecast | null,
 ): string | null {
-  const land = new Map((midLand?.days ?? []).map((d) => [d.date, d.issuedAt]));
-  const ta = new Map((midTa?.days ?? []).map((d) => [d.date, d.issuedAt]));
+  const land = new Map((midLand?.days ?? []).map((d) => [d.date, d]));
+  const ta = new Map((midTa?.days ?? []).map((d) => [d.date, d]));
   let oldest: string | null = null;
+  let oldestMs = Infinity;
   for (const date of dates) {
-    for (const at of [land.get(date), ta.get(date)]) {
-      const ms = at ? Date.parse(at) : NaN;
-      if (!at || !Number.isFinite(ms)) return null;
-      if (oldest === null || ms < Date.parse(oldest)) oldest = at;
+    const l = land.get(date);
+    const t = ta.get(date);
+    const entries = [
+      {
+        at: l?.issuedAt ?? null,
+        has: l ? l.pop !== null || l.sky !== null || l.precip !== null : false,
+      },
+      {
+        at: t?.issuedAt ?? null,
+        has: t ? t.min !== null || t.max !== null : false,
+      },
+    ];
+    for (const { at, has } of entries) {
+      if (at === null) {
+        if (has) return null;
+        continue;
+      }
+      const ms = Date.parse(at);
+      if (!Number.isFinite(ms)) return null;
+      if (ms < oldestMs) {
+        oldest = at;
+        oldestMs = ms;
+      }
     }
   }
   return oldest;
