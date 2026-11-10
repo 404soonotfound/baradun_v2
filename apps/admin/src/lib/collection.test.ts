@@ -28,6 +28,8 @@ import {
 
 // 수집 현황 화면 계산 (BRD-149). 기록 없음·일부 실패를 정상으로 바꾸지 않음
 
+const job_ = (partial: Partial<JobCollection>) => job(partial);
+
 function job(partial: Partial<JobCollection>): JobCollection {
   return {
     job: "collect-ocean",
@@ -540,5 +542,92 @@ describe("게시 요약 모양·장애 키 (Claude 리뷰)", () => {
         missingTruncated: false,
       }),
     ).toBe("collect-ocean|stations|2026-11-04T01:00:00.000Z");
+  });
+});
+
+describe("최종 리뷰 지적 (#378)", () => {
+  const base = {
+    generatedAt: "2026-11-04T05:10:00.000Z",
+    publishedVersion: null,
+    publish: null,
+  };
+  const incident = (extra: Record<string, unknown> = {}) => ({
+    kind: "failure",
+    startedAt: "2026-11-04T01:00:00.000Z",
+    endedAt: null,
+    runs: 1,
+    failures: [],
+    stations: [],
+    missingTruncated: false,
+    ...extra,
+  });
+
+  it("모르는 경보 상태는 unknown, 모양이 틀린 경보 목록은 읽지 못함", () => {
+    const view = normalizeCollection({
+      ...base,
+      alarms: {
+        status: "ok",
+        region: "ap-northeast-2",
+        list: [
+          { id: "OceanErrors", name: "BaradunV2-OceanErrors", state: "NEW" },
+        ],
+        history: [],
+      },
+      jobs: [],
+    });
+    expect(view.alarms.status === "ok" && view.alarms.list[0]!.state).toBe(
+      "unknown",
+    );
+    expect(
+      normalizeCollection({
+        ...base,
+        alarms: { status: "ok", region: "r", list: [{ name: 1 }], history: [] },
+        jobs: [],
+      }).alarms,
+    ).toEqual({ status: "unavailable" });
+  });
+
+  it("해변 영향·장애 경보 모양이 틀리면 영향은 빼고(응답에 없음) 경보는 null(확인 못 함)", () => {
+    const job = {
+      job: "collect-ocean",
+      lastRun: null,
+      lastSuccessAt: null,
+      day: { runs: 0, ok: 0 },
+      week: { runs: 0, ok: 0 },
+      hourly: [],
+      truncated: false,
+      lateAfterMinutes: 35,
+      overdue: false,
+      incidents: [
+        incident({ impact: { status: "affected" }, alarms: [{ at: 1 }] }),
+      ],
+    };
+    const view = normalizeCollection({
+      ...base,
+      alarms: { status: "unavailable" },
+      jobs: [job],
+    });
+    const out = view.jobs[0]!.incidents[0]!;
+    expect(out.impact).toBeUndefined();
+    expect(out.alarms).toBeNull();
+  });
+
+  it("같은 시각 장애는 실패 → 관측소 빠짐, 수집기 이름 순으로 늘 같은 순서", () => {
+    const at = "2026-11-04T01:00:00.000Z";
+    const mk = (job: string, kind: "failure" | "stations") =>
+      job_({
+        job,
+        incidents: [{ ...incident({ kind }), startedAt: at } as never],
+      });
+    const list = allIncidents([
+      mk("collect-ocean", "stations"),
+      mk("collect-warnings", "failure"),
+      mk("collect-ocean", "failure"),
+    ]);
+    expect(list.map((i) => `${i.job}|${i.kind}`)).toEqual([
+      "collect-ocean|failure",
+      "collect-warnings|failure",
+      "collect-ocean|stations",
+    ]);
   });
 });

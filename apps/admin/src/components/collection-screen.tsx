@@ -163,16 +163,19 @@ function DayBars({ job }: { job: JobCollection | undefined }) {
   const day = job?.day ?? { runs: 0, ok: 0 };
   const hourly = job?.hourly ?? [];
   const counts = barCounts(hourly);
+  // 예전 응답(overdue null)은 지연을 판정하지 못함 → '지연 0시간'이 아니라 '지연 확인 못 함'
+  const lateUnknown = job?.overdue === null;
+  const values = {
+    runs: day.runs,
+    ok: day.ok,
+    failed: counts.failed,
+    late: counts.late,
+    none: counts.none,
+  };
   const label =
     day.runs === 0 && counts.late === 0
       ? t.dayNone
-      : fill(t.dayBars, {
-          runs: day.runs,
-          ok: day.ok,
-          failed: counts.failed,
-          late: counts.late,
-          none: counts.none,
-        });
+      : fill(lateUnknown ? t.dayBarsLateUnknown : t.dayBars, values);
   return (
     <span role="img" aria-label={label} className="flex h-5 items-end gap-px">
       {hourly.map((bucket) => (
@@ -245,6 +248,10 @@ function rowJob(view: CollectionView, row: SourceRow) {
 function Summary({ view }: { view: CollectionView }) {
   const jobs = SOURCE_ROWS.map((row) => rowJob(view, row));
   const okCount = jobs.filter((job) => sourceState(job) === "ok").length;
+  // 지연을 판정하지 못한 출처가 있으면 정상 출처 수는 '확인 못 함'(0/5로 보이지 않게)
+  const unchecked = jobs.filter(
+    (job) => sourceState(job) === "unchecked",
+  ).length;
   const judgment = SOURCE_ROWS.filter((row) => row.judgment).length;
   // 화면 줄(SOURCE_ROWS)과 같은 수집기만 셈(정상 출처 수와 기준을 맞춤)
   const week = sumCounts(jobs.map((job) => job?.week ?? { runs: 0, ok: 0 }));
@@ -262,9 +269,13 @@ function Summary({ view }: { view: CollectionView }) {
       <div className={card}>
         <dt className={label}>{t.kpiSources}</dt>
         <dd className={value}>
-          {okCount}/{SOURCE_ROWS.length}
+          {unchecked > 0 ? t.kpiUnknown : `${okCount}/${SOURCE_ROWS.length}`}
         </dd>
-        <dd className={hint}>{fill(t.kpiSourcesHint, { judgment })}</dd>
+        <dd className={hint}>
+          {unchecked > 0
+            ? fill(t.kpiSourcesUnchecked, { count: unchecked })
+            : fill(t.kpiSourcesHint, { judgment })}
+        </dd>
       </div>
       <div className={card}>
         <dt className={label}>{t.kpiWeek}</dt>
@@ -797,7 +808,8 @@ function Incidents({
     >
       <h2
         id="collection-incidents"
-        className="text-title-s font-semibold text-text-default"
+        tabIndex={-1}
+        className="text-title-s font-semibold text-text-default outline-none"
       >
         {t.incidentsTitle}{" "}
         <span className="text-text-muted tabular-nums">{incidents.length}</span>
@@ -811,9 +823,7 @@ function Incidents({
             const first = incident.failures[0];
             const impact = impactSummary(incident);
             return (
-              <li
-                key={`${incident.job}|${incident.kind}|${incident.startedAt}`}
-              >
+              <li key={incidentKey(incident)}>
                 <button
                   type="button"
                   onClick={() => onOpen(index)}
@@ -1112,11 +1122,18 @@ function Impact({
           {impact.reason ? t.impactUnknownReason[impact.reason] : ""}
         </p>
       ) : impact.status === "none" ? (
-        <p className="text-body-s text-text-body">{t.impactNone}</p>
+        <p className="text-body-s text-text-body">
+          {impact.wholeSource ? t.impactNoneWhole : t.impactNone}
+        </p>
       ) : (
         <div className="flex flex-col gap-1">
           <p className="text-body-s font-medium text-text-default">
-            {fill(t.impactAffected, { count: impact.delayedBeachIds.length })}
+            {fill(
+              impact.wholeSource ? t.impactAffectedWhole : t.impactAffected,
+              {
+                count: impact.delayedBeachIds.length,
+              },
+            )}
           </p>
           <ul className="flex flex-wrap gap-1.5">
             {impact.delayedBeachIds.map((id) => (
@@ -1487,6 +1504,19 @@ function CollectionBody({ beaches }: { beaches: Beaches }) {
   });
   // 시트를 닫으면 포커스를 연 버튼으로 돌려줌
   const opener = useRef<HTMLElement | null>(null);
+  // 연 버튼이 사라졌으면(그 장애가 목록에서 빠짐) 장애 기록 제목으로(포커스가 문서 맨 앞으로 떨어지지 않게)
+  const restoreFocus = () => {
+    const target = opener.current;
+    if (target && document.contains(target)) target.focus();
+    else document.getElementById("collection-incidents")?.focus();
+  };
+  const focusPending = useRef(false);
+  useEffect(() => {
+    if (sheet === null && focusPending.current) {
+      focusPending.current = false;
+      restoreFocus();
+    }
+  });
 
   useEffect(() => {
     let live = true;
@@ -1501,7 +1531,8 @@ function CollectionBody({ beaches }: { beaches: Beaches }) {
       if (current && !keys.has(current.key)) {
         sheetRef.current = null;
         setSheet(null);
-        opener.current?.focus();
+        // 모달이 열린 동안 뒤 화면은 inert라 포커스가 옮겨지지 않음 → 시트가 화면에서 빠진 뒤(아래 효과) 옮김
+        focusPending.current = true;
       }
     });
     return () => {
@@ -1623,7 +1654,7 @@ function CollectionBody({ beaches }: { beaches: Beaches }) {
                 if (sheetRef.current?.nonce !== closed) return;
                 sheetRef.current = null;
                 setSheet(null);
-                opener.current?.focus();
+                restoreFocus();
               }}
             />
           )}

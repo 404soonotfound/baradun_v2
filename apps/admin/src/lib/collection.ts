@@ -190,11 +190,102 @@ function validJob(item: unknown): boolean {
     typeof job.job === "string" &&
     Array.isArray(job.hourly) &&
     Array.isArray(job.incidents) &&
+    job.incidents.every(validIncident) &&
     typeof job.day === "object" &&
     job.day !== null &&
     typeof job.week === "object" &&
     job.week !== null
   );
+}
+
+// 장애 안쪽의 필수 칸. 하나라도 틀리면 그리는 중에 깨지지 않게 본문 오류(불러오기 실패)로 봄
+function validIncident(item: unknown): boolean {
+  if (typeof item !== "object" || item === null) return false;
+  const i = item as Record<string, unknown>;
+  return (
+    typeof i.startedAt === "string" &&
+    (i.endedAt === null || typeof i.endedAt === "string") &&
+    Array.isArray(i.failures) &&
+    i.failures.every(
+      (f) =>
+        typeof f === "object" &&
+        f !== null &&
+        typeof (f as Record<string, unknown>).source === "string" &&
+        typeof (f as Record<string, unknown>).reason === "string",
+    ) &&
+    (i.stations === undefined || Array.isArray(i.stations))
+  );
+}
+
+// 해변 영향은 모양이 맞을 때만. 틀리면 없음으로 둬 화면이 '영향 정보가 응답에 없어요'(확인 못 함)로 보여 줌
+function validImpact(value: unknown): value is ImpactView {
+  if (typeof value !== "object" || value === null) return false;
+  const v = value as Record<string, unknown>;
+  return (
+    (v.status === "affected" ||
+      v.status === "none" ||
+      v.status === "unknown") &&
+    Array.isArray(v.delayedBeachIds) &&
+    Array.isArray(v.stations)
+  );
+}
+
+// 경보 상태는 아는 값만. 모르는 값은 unknown(배지 글자가 비거나 순서가 깨지지 않게)
+const ALARM_STATES: readonly AlarmState[] = [
+  "OK",
+  "ALARM",
+  "INSUFFICIENT_DATA",
+];
+const toAlarmState = (value: unknown): AlarmState =>
+  ALARM_STATES.includes(value as AlarmState)
+    ? (value as AlarmState)
+    : "unknown";
+
+function toAlarmEvents(value: unknown): AlarmEvent[] | null {
+  if (!Array.isArray(value)) return null;
+  const valid = value.every(
+    (e) =>
+      typeof e === "object" &&
+      e !== null &&
+      typeof (e as Record<string, unknown>).id === "string" &&
+      typeof (e as Record<string, unknown>).name === "string" &&
+      typeof (e as Record<string, unknown>).at === "string",
+  );
+  if (!valid) return null; // 틀린 기록은 '경보 없음'이 아니라 '확인 못 함'
+  return (value as AlarmEvent[]).map((e) => ({
+    ...e,
+    from: toAlarmState(e.from),
+    to: toAlarmState(e.to),
+  }));
+}
+
+function toAlarms(value: unknown): AlarmsView {
+  const a = value as Record<string, unknown> | undefined;
+  if (
+    a?.status !== "ok" ||
+    typeof a.region !== "string" ||
+    !Array.isArray(a.list) ||
+    !a.list.every(
+      (x) =>
+        typeof x === "object" &&
+        x !== null &&
+        typeof (x as Record<string, unknown>).id === "string" &&
+        typeof (x as Record<string, unknown>).name === "string",
+    )
+  ) {
+    return { status: "unavailable" };
+  }
+  const history = toAlarmEvents(a.history ?? []);
+  if (history === null) return { status: "unavailable" };
+  return {
+    status: "ok",
+    region: a.region,
+    list: (a.list as AlarmView[]).map((x) => ({
+      ...x,
+      state: toAlarmState(x.state),
+    })),
+    history,
+  };
 }
 
 type Loose<T> = { -readonly [K in keyof T]?: unknown };
@@ -220,27 +311,26 @@ export function normalizeCollection(raw: unknown): CollectionView & {
         ...bucket,
         late: bucket.late === true,
       })),
-      incidents: job.incidents.map((incident): Incident => ({
-        ...incident,
-        kind: incident.kind === "stations" ? "stations" : "failure",
-        stations: Array.isArray(incident.stations) ? incident.stations : [],
-        missingTruncated: incident.missingTruncated === true,
-      })),
+      incidents: job.incidents.map((incident): Incident => {
+        const { impact, alarms: events, ...rest } = incident;
+        return {
+          ...rest,
+          kind: incident.kind === "stations" ? "stations" : "failure",
+          stations: Array.isArray(incident.stations) ? incident.stations : [],
+          missingTruncated: incident.missingTruncated === true,
+          ...(validImpact(impact) ? { impact } : {}),
+          ...(events === undefined ? {} : { alarms: toAlarmEvents(events) }),
+        };
+      }),
     };
   });
-  const alarms = view.alarms as AlarmsView | undefined;
   return {
     generatedAt: String(view.generatedAt ?? ""),
     publishedVersion:
       typeof view.publishedVersion === "string" ? view.publishedVersion : null,
     // 칸이 빠지거나 숫자가 아니면 '확인 못 함'(null). 'undefined곳'으로 보이지 않게
     publish: validPublish(view.publish) ? view.publish : null,
-    alarms:
-      alarms?.status === "ok" &&
-      typeof alarms.region === "string" &&
-      Array.isArray(alarms.list)
-        ? alarms
-        : { status: "unavailable" },
+    alarms: toAlarms(view.alarms),
     jobs,
     legacy,
   };
@@ -341,16 +431,23 @@ export interface JobIncident extends Incident {
   readonly job: string;
 }
 
-// 수집기 장애를 한 목록으로(최신 먼저)
 // 장애 하나를 가리키는 키(수집기·종류·시작 시각). 다시 불러와 순서가 바뀌어도 같은 장애를 가리킴
 export function incidentKey(incident: JobIncident): string {
   return `${incident.job}|${incident.kind}|${incident.startedAt}`;
 }
 
+// 수집기 장애를 한 목록으로(최신 먼저). 같은 시각이면 실패 → 관측소 빠짐, 그다음 수집기 이름 순(목록·↑↓ 순서가 늘 같게)
+const KIND_ORDER: Record<IncidentKind, number> = { failure: 0, stations: 1 };
+
 export function allIncidents(jobs: readonly JobCollection[]): JobIncident[] {
   return jobs
     .flatMap((job) => job.incidents.map((i) => ({ ...i, job: job.job })))
-    .sort((a, b) => (a.startedAt < b.startedAt ? 1 : -1));
+    .sort(
+      (a, b) =>
+        (a.startedAt < b.startedAt ? 1 : a.startedAt > b.startedAt ? -1 : 0) ||
+        KIND_ORDER[a.kind] - KIND_ORDER[b.kind] ||
+        (a.job < b.job ? -1 : a.job > b.job ? 1 : 0),
+    );
 }
 
 // 장애가 이어진 시간(분). 끝나지 않았으면 지금까지

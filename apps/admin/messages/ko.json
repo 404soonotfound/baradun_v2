@@ -639,7 +639,6 @@
       "stations": "관측소 빠짐"
     },
     "incidentStations": "관측소 {count}곳 값이 빠짐",
-    "sheetLabel": "장애 상세",
     "sheetPosition": "{index}/{total}",
     "sheetPrev": "이전 장애",
     "sheetNext": "다음 장애",
@@ -751,6 +750,10 @@
     "logsLink": "로그",
     "oldResponse": "운영 API가 아직 예전 응답을 보내고 있어요. 지연·게시 요약·경보는 확인 못 함으로 보여요. 운영 API를 배포하면 실제 값이 보이고, 그전에는 CloudWatch에서 확인해 주세요.",
     "axisPercent": "{rate}%",
-    "stationName": "{name} ({id})"
+    "stationName": "{name} ({id})",
+    "dayBarsLateUnknown": "최근 24시간 {runs}회 중 {ok}회 성공 · 실패 {failed}시간 · 기록 없음 {none}시간 · 지연 확인 못 함",
+    "kpiSourcesUnchecked": "지연을 판정하지 못한 출처 {count}곳 · 예전 응답",
+    "impactAffectedWhole": "이 장애의 영향 범위(파고 출처 전체)에서 장애 동안 새로 관측 지연으로 게시된 해변 {count}곳",
+    "impactNoneWhole": "이 장애의 영향 범위(파고 출처 전체)에서 장애 동안 새로 관측 지연으로 게시된 해변이 없어요. 장애 전부터 지연이던 해변은 세지 않아요."
   }
 }

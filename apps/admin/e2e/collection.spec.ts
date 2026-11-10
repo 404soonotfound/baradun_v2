@@ -340,7 +340,13 @@ test("운영 API가 예전 응답을 보내도 화면이 깨지지 않고 확인
     "지연 확인 못 함",
   );
   await expect(sourceRow(page, "기상청 해상 특보")).not.toContainText("정상");
-  await expect(page.getByText("0/5", { exact: true })).toBeVisible();
+  // 정상 출처 수도 '0/5'가 아니라 '확인 못 함'
+  await expect(page.getByText("0/5", { exact: true })).toHaveCount(0);
+  await expect(
+    page
+      .locator("dl > div")
+      .filter({ has: page.getByText("정상 출처", { exact: true }) }),
+  ).toContainText("지연을 판정하지 못한 출처");
   // 지연 기준을 모르니 '지연 표시 안 함'·'N분 넘으면 지연'을 쓰지 않음
   await expect(sourceRow(page, "기상청 해상 특보")).not.toContainText(
     "지연 표시 안 함",
@@ -524,4 +530,54 @@ test("불러오기가 실패하면 열려 있던 시트를 닫고, 다시 성공
   await page.getByRole("button", { name: "다시 시도" }).click();
   await expect(region.getByRole("listitem")).toHaveCount(3);
   await expect(page.getByRole("dialog")).toHaveCount(0);
+});
+
+test("파고 출처 전체가 영향 범위면 '관측소 범위'가 아니라 출처 전체 문구로 보여 준다", async ({
+  page,
+}) => {
+  const whole = {
+    ...VIEW,
+    jobs: VIEW.jobs.map((job) => ({
+      ...job,
+      incidents: job.incidents.map((incident) =>
+        incident.kind === "stations"
+          ? {
+              ...incident,
+              impact: {
+                status: "affected",
+                wholeSource: true,
+                delayedBeachIds: ["b0001"],
+                stations: [],
+              },
+            }
+          : incident,
+      ),
+    })),
+  };
+  await mockCollection(page, 200, whole);
+  await openCollection(page);
+  await page
+    .getByRole("region", { name: /장애 기록/ })
+    .getByRole("button", { name: /관측소 1곳 값이 빠짐/ })
+    .click();
+  const sheet = page.getByRole("dialog");
+  await expect(sheet).toContainText("영향 범위(파고 출처 전체)에서");
+  await expect(sheet).not.toContainText("관측소 범위에서");
+});
+
+test("다시 불러와 시트가 닫히면 포커스가 연 버튼으로 돌아간다", async ({
+  page,
+}) => {
+  await mockSequence(page, [VIEW, withoutStations]);
+  await openCollection(page);
+  const region = page.getByRole("region", { name: /장애 기록/ });
+  const opener = region.getByRole("button", { name: /관측소 1곳 값이 빠짐/ });
+  await opener.click();
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await reloadBehindSheet(page);
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  // 연 장애가 목록에서 빠져 버튼도 사라짐 → 포커스는 장애 기록 제목으로(문서 맨 앞으로 떨어지지 않음)
+  await expect(
+    page.getByRole("heading", { name: /장애 기록/, level: 2 }),
+  ).toBeFocused();
 });
