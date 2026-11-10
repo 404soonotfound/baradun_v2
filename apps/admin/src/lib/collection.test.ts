@@ -9,6 +9,7 @@ import {
   incidentKey,
   logsUrl,
   matchesFilter,
+  kstClock,
   normalizeCollection,
   incidentTimeline,
   lambdaUrl,
@@ -629,5 +630,56 @@ describe("최종 리뷰 지적 (#378)", () => {
       "collect-warnings|failure",
       "collect-ocean|stations",
     ]);
+  });
+});
+
+describe("관측소 목록 (GH-380)", () => {
+  const station = {
+    id: "22105",
+    name: "강릉 부이",
+    beachIds: ["b0001"],
+    waveBeachIds: ["b0001"],
+    state: "missing",
+    missingSince: "2026-11-10T05:00:00.000Z",
+  };
+  const base = { generatedAt: "2026-11-10T06:00:00.000Z", jobs: [] };
+
+  it("모양이 맞으면 그대로, 칸이 없으면(배포 전 서버) 확인 못 함", () => {
+    expect(
+      normalizeCollection({
+        ...base,
+        stations: { status: "ok", checkedAt: null, list: [station] },
+      }).stations,
+    ).toEqual({ status: "ok", checkedAt: null, list: [station] });
+    expect(normalizeCollection(base).stations).toEqual({
+      status: "unavailable",
+    });
+  });
+
+  it("한 줄이라도 모양이 틀리거나 모르는 상태면 목록 전체를 확인 못 함(남은 줄을 전체로 보이지 않게)", () => {
+    for (const bad of [
+      { ...station, state: "late" },
+      { ...station, beachIds: null },
+      { ...station, missingSince: 3 },
+    ]) {
+      expect(
+        normalizeCollection({
+          ...base,
+          stations: { status: "ok", checkedAt: null, list: [station, bad] },
+        }).stations,
+      ).toEqual({ status: "unavailable" });
+    }
+  });
+});
+
+describe("kstClock", () => {
+  const now = "2026-11-10T06:00:00.000Z"; // KST 11/10 15:00
+  it("같은 날(KST)이면 시각만, 초를 원하면 초까지", () => {
+    expect(kstClock("2026-11-10T05:33:05.000Z", now)).toBe("14:33");
+    expect(kstClock("2026-11-10T05:33:05.000Z", now, true)).toBe("14:33:05");
+  });
+  it("다른 날이면 초 없이 날짜를 붙임(어제 값을 오늘로 읽지 않게)", () => {
+    // UTC로는 같은 날이지만 KST로는 11/9
+    expect(kstClock("2026-11-09T14:59:00.000Z", now, true)).toBe("11/9 23:59");
   });
 });

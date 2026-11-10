@@ -139,6 +139,28 @@ export interface PublishView {
   readonly delayedBeaches: number;
 }
 
+// 관측소 목록(관측 수집기, GH-380 · 시안 4차 V10). 서버 services/src/admin/collection-stations.ts
+// 관측소별 마지막 측정 시각은 운영 API가 State를 읽지 않아 없음(D19-5) → 빠짐 여부·처음 빠진 시각만
+export type StationState = "ok" | "missing" | "unknown";
+
+export interface StationRow {
+  readonly id: string;
+  readonly name: string;
+  readonly beachIds: readonly string[];
+  readonly waveBeachIds: readonly string[];
+  readonly state: StationState;
+  readonly missingSince: string | null;
+}
+
+export type StationsView =
+  | {
+      readonly status: "ok";
+      // 상태 기준 실행 시각. null이면 대조한 실행이 없어 모든 관측소가 unknown
+      readonly checkedAt: string | null;
+      readonly list: readonly StationRow[];
+    }
+  | { readonly status: "unavailable" };
+
 export interface CollectionView {
   readonly generatedAt: string;
   readonly publishedVersion: string | null;
@@ -146,6 +168,8 @@ export interface CollectionView {
   // 지금 게시본 요약. null이면 '확인 못 함'
   readonly publish: PublishView | null;
   readonly alarms: AlarmsView;
+  // 칸이 없거나(배포 전 서버) 모양이 틀리면 unavailable('확인 못 함')
+  readonly stations: StationsView;
 }
 
 export async function fetchCollection(
@@ -293,6 +317,41 @@ function toAlarms(value: unknown): AlarmsView {
   };
 }
 
+const STATION_STATES: readonly StationState[] = ["ok", "missing", "unknown"];
+
+const strings = (value: unknown): value is string[] =>
+  Array.isArray(value) && value.every((v) => typeof v === "string");
+
+// 한 줄이라도 모양이 틀리면 목록 전체를 '확인 못 함'(틀린 줄을 빼고 남은 것을 전체로 보이지 않게)
+function toStations(value: unknown): StationsView {
+  const v = value as Record<string, unknown> | undefined;
+  if (
+    v?.status !== "ok" ||
+    !(v.checkedAt === null || typeof v.checkedAt === "string") ||
+    !Array.isArray(v.list)
+  ) {
+    return { status: "unavailable" };
+  }
+  const valid = v.list.every((item) => {
+    if (typeof item !== "object" || item === null) return false;
+    const s = item as Record<string, unknown>;
+    return (
+      typeof s.id === "string" &&
+      typeof s.name === "string" &&
+      strings(s.beachIds) &&
+      strings(s.waveBeachIds) &&
+      STATION_STATES.includes(s.state as StationState) &&
+      (s.missingSince === null || typeof s.missingSince === "string")
+    );
+  });
+  if (!valid) return { status: "unavailable" };
+  return {
+    status: "ok",
+    checkedAt: v.checkedAt,
+    list: v.list as StationRow[],
+  };
+}
+
 type Loose<T> = { -readonly [K in keyof T]?: unknown };
 
 // 운영 API가 GH-375 전 응답(지연·게시 요약·경보·장애 종류 없음)을 보내도 화면이 깨지지 않게 채움
@@ -336,6 +395,7 @@ export function normalizeCollection(raw: unknown): CollectionView & {
     // 칸이 빠지거나 숫자가 아니면 '확인 못 함'(null). 'undefined곳'으로 보이지 않게
     publish: validPublish(view.publish) ? view.publish : null,
     alarms: toAlarms(view.alarms),
+    stations: toStations(view.stations),
     jobs,
     legacy,
   };
@@ -525,6 +585,22 @@ export function versionTime(version: string | null): string | null {
 // UTC ISO → KST 시(0~23). 시간별 칸 이름에 씀
 export function kstHour(iso: string): number {
   return new Date(Date.parse(iso) + 9 * 3_600_000).getUTCHours();
+}
+
+// 짧은 KST 시각(시안 V9: '14:33:05'·'14:40'). 기준 시각과 같은 날이면 시각만, 다른 날이면 '11/9 20:48'
+// seconds: 초까지(마지막 성공 열). 날짜가 다르면 초를 빼고 날짜를 붙임(어제 값을 오늘로 읽지 않게)
+export function kstClock(iso: string, nowIso: string, seconds = false): string {
+  const kst = (value: string) => new Date(Date.parse(value) + 9 * 3_600_000);
+  const at = kst(iso);
+  const now = kst(nowIso);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const time = `${pad(at.getUTCHours())}:${pad(at.getUTCMinutes())}`;
+  const sameDay =
+    at.getUTCFullYear() === now.getUTCFullYear() &&
+    at.getUTCMonth() === now.getUTCMonth() &&
+    at.getUTCDate() === now.getUTCDate();
+  if (!sameDay) return `${at.getUTCMonth() + 1}/${at.getUTCDate()} ${time}`;
+  return seconds ? `${time}:${pad(at.getUTCSeconds())}` : time;
 }
 
 // 장애 경과: 시작 → 경보 → 관측소 돌아옴 → 해결(시각순). 끝나지 않았으면 맨 끝에 '이어지는 중'

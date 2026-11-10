@@ -6,6 +6,7 @@ import type {
   Incident,
   JobCollection,
   RunView,
+  StationRow,
 } from "../collection";
 import type { OpsResult } from "./ops-fetch";
 
@@ -77,6 +78,59 @@ function alarm(
   };
 }
 
+// 관측소 24곳: 하나는 지금 빠짐(장애와 같은 22105), 나머지는 정상
+const STATION_NAMES = [
+  "속초 부이",
+  "동해 부이",
+  "삼척 부이",
+  "울진 부이",
+  "포항 부이",
+  "울산 부이",
+  "부산 부이",
+  "거제 부이",
+  "통영 부이",
+  "여수 부이",
+  "완도 부이",
+  "제주 부이",
+  "서귀포 부이",
+  "목포 부이",
+  "군산 부이",
+  "보령 부이",
+  "태안 부이",
+  "인천 부이",
+  "덕적도 부이",
+  "외연도 부이",
+  "칠발도 부이",
+  "거문도 부이",
+  "마라도 부이",
+];
+
+function stations(missingSince: string): StationRow[] {
+  const beach = (n: number) => `b${String(n).padStart(4, "0")}`;
+  return [
+    {
+      id: "22105",
+      name: "강릉 부이",
+      beachIds: [beach(1), beach(2), beach(3)],
+      waveBeachIds: [beach(1), beach(2)],
+      state: "missing",
+      missingSince,
+    },
+    ...STATION_NAMES.map((name, i): StationRow => ({
+      id: String(22190 + i),
+      name,
+      beachIds: Array.from({ length: (i % 5) + 1 }, (_, k) =>
+        beach(10 + i * 5 + k),
+      ),
+      waveBeachIds: Array.from({ length: i % 3 }, (_, k) =>
+        beach(10 + i * 5 + k),
+      ),
+      state: "ok",
+      missingSince: null,
+    })),
+  ];
+}
+
 export function localCollection<T>(): OpsResult<T> {
   const now = Date.now();
   const at = (minutes: number) =>
@@ -125,6 +179,7 @@ export function localCollection<T>(): OpsResult<T> {
       ],
       history: [pwncdAlarm],
     },
+    stations: { status: "ok", checkedAt: at(10), list: stations(at(70)) },
     jobs: [
       job(
         "collect-warnings",
