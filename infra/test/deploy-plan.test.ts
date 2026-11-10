@@ -13,6 +13,7 @@ import {
   isEmptyChangeSet,
   isStackReady,
   policyDiff,
+  redactAccount,
   scanLogLines,
   summarizeChanges,
   versionToPrune,
@@ -316,11 +317,11 @@ describe("스택 밖 IAM 정책 비교 (GH-382)", () => {
       doc([a, b]),
     );
     expect(diff.same).toBe(false);
-    expect(diff.added).toEqual(["#2"]);
+    expect(diff.added).toEqual(["Sid 없음 #2"]);
     expect(diff.removed).toEqual(["B"]);
     expect(diff.changed).toEqual(["A"]);
     expect(formatPolicyDiff("P(v3)", diff)).toBe(
-      "   P(v3): 저장소와 다름 · 추가 #2 · 삭제 B · 바뀜 A",
+      "   P(v3): 저장소와 다름 · 추가 Sid 없음 #2 · 삭제 B · 바뀜 A",
     );
   });
 
@@ -331,6 +332,11 @@ describe("스택 밖 IAM 정책 비교 (GH-382)", () => {
     );
     expect(diff.same).toBe(false);
     expect(formatPolicyDiff("P", diff)).toContain("문서 머리");
+  });
+
+  it("문장 순서만 다르면 같음(IAM은 순서로 권한이 바뀌지 않음), Sid 없는 문장도 내용으로 맞춤", () => {
+    const noSid = { Effect: "Allow", Action: "logs:*", Resource: "*" };
+    expect(policyDiff(doc([a, b, noSid]), doc([noSid, b, a])).same).toBe(true);
   });
 
   it("버전이 5개면 기본이 아닌 가장 오래된 버전만 지움", () => {
@@ -452,6 +458,40 @@ describe("배포 뒤 로그 점검 (GH-382)", () => {
       "- OpsApiFunction: 실행 2회 · error ops_sources_key_read_failed 2회",
     );
     expect(body).not.toMatch(/\d{12}/);
+  });
+
+  it("AWS 오류 문구·되돌리기 명령의 계정 번호도 댓글에서 가림", () => {
+    const body = deployComment({
+      subject: "abc1234 x",
+      changeSet: "c",
+      rows: [],
+      boundary:
+        "v5 → v6 반영(되돌리기: aws iam set-default-policy-version --policy-arn arn:aws:iam::717304679248:policy/B --version-id v5)",
+      executionPolicies: [],
+      watchMinutes: 16,
+      checks: [
+        {
+          logicalId: "F",
+          error:
+            "An error occurred (AccessDeniedException): User: arn:aws:sts::717304679248:assumed-role/x is not authorized",
+        },
+      ],
+    });
+    expect(body).not.toMatch(/\d{12}/);
+    expect(body).toContain("arn:aws:iam::<계정>:policy/B");
+    expect(redactAccount("1234567890123 717304679248")).toBe(
+      "1234567890123 <계정>",
+    );
+  });
+
+  it("로그가 많아 앞부분만 셌으면 알림", () => {
+    expect(
+      checkLine({
+        logicalId: "F",
+        scan: scanLogLines(["START RequestId: 1"]),
+        truncated: true,
+      }),
+    ).toBe("F: 실행 1회 · error·warn 없음 (로그가 많아 앞부분만 셈)");
   });
 });
 
