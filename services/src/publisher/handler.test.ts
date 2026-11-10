@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { loadBeaches } from "./handler";
+import { loadBeaches } from "../core/beaches/load";
 import { contractErrors } from "./validate";
 
 // publisher 진입점의 해변 파일 읽기 (BRD-61 PR ②)
