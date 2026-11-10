@@ -369,3 +369,22 @@ test("200이어도 본문 모양이 틀리면 빈 화면이 아니라 불러오�
   ).toBeVisible();
   await expect(page.getByText("기록 없음")).toHaveCount(0);
 });
+
+test("장애 목록이 빠진(null) 응답은 '장애 없음'이 아니라 불러오지 못함으로 보여 준다 (Codex P1)", async ({
+  page,
+}) => {
+  const broken = {
+    ...VIEW,
+    jobs: VIEW.jobs.map((job, i) =>
+      i === 0 ? { ...job, incidents: null } : job,
+    ),
+  };
+  await mockCollection(page, 200, broken);
+  await openCollection(page);
+  await expect(
+    page
+      .getByRole("alert")
+      .filter({ hasText: "수집 현황을 불러오지 못했어요" }),
+  ).toBeVisible();
+  await expect(page.getByText("최근 7일 장애가 없어요.")).toHaveCount(0);
+});
