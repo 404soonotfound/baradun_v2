@@ -182,7 +182,9 @@ test("장애 상세 시트: 원인·해변 영향·경과·경보를 보여 주�
   await expect(sheet).toContainText("강릉 부이 (22105)");
   await expect(sheet).toContainText("쓰는 해변 3곳 · 파고로 2곳");
   await expect(sheet).toContainText("관측소 22105 값 돌아옴");
-  await expect(sheet).toContainText("이 장애 동안 울린 경보가 없어요");
+  // 빠진 관측소 장애는 경보가 붙지 않음 → '확인 못 함'이 아니라 울리지 않는다고 안내
+  await expect(sheet).toContainText("경보가 울리지 않아요");
+  await expect(sheet).not.toContainText("경보 기록을 확인하지 못했어요");
   await expectNoA11yViolations(page);
 
   // 위: 이어지는 해양 관측 실패. 어느 관측소인지 모르면 영향 '확인 못 함'
@@ -234,6 +236,9 @@ test("게시 요약·경보를 읽지 못하면 '확인 못 함'으로 두고 �
     .click();
   const sheet = page.getByRole("dialog");
   await expect(sheet).toContainText("게시 요약을 읽지 못했어요");
+  // 실패 장애(위)로 옮겨 경보 '확인 못 함'을 봄
+  await page.keyboard.press("ArrowUp");
+  await expect(sheet).toContainText("1/3");
   await expect(sheet).toContainText("경보 기록을 확인하지 못했어요");
   await expect(sheet).not.toContainText("울린 경보가 없어요");
   await expectNoA11yViolations(page);

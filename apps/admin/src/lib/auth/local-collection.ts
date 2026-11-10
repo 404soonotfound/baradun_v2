@@ -190,7 +190,6 @@ export function localCollection<T>(): OpsResult<T> {
                 { id: "22190", name: "속초 부이", beaches: 1, waveBeaches: 0 },
               ],
             },
-            alarms: [],
           },
         ],
         run(10, "complete"),

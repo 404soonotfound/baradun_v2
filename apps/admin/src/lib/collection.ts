@@ -112,7 +112,8 @@ export interface Incident {
   readonly stations: readonly StationGap[];
   readonly missingTruncated: boolean;
   readonly impact?: ImpactView;
-  // null: 경보 기록을 읽지 못함('경보 없음'이 아님)
+  // 실패 장애에만 붙음. null: 경보 기록을 읽지 못함('경보 없음'이 아님)
+  // 빠진 관측소 장애(stations)는 경보가 울리지 않아 서버가 붙이지 않음
   readonly alarms?: readonly AlarmEvent[] | null;
 }
 

@@ -537,19 +537,23 @@ function Hourly({ view }: { view: CollectionView }) {
     x: i * step,
     y: (1 - bucket.ok / bucket.runs) * CHART_H,
   });
-  // 실행이 있는 칸끼리 이어진 조각
+  // 실행이 있는 칸끼리 이어진 조각. 앞뒤가 비어 점 하나뿐인 조각은 같은 점을 두 번 넣어 둥근 끝으로 점을 그림
   const segments: string[] = [];
   let current: string[] = [];
+  const flush = () => {
+    if (current.length === 1) current.push(current[0]!);
+    if (current.length) segments.push(current.join(" "));
+    current = [];
+  };
   hourly.forEach((bucket, i) => {
     if (bucket.runs === 0) {
-      if (current.length) segments.push(current.join(" "));
-      current = [];
+      flush();
       return;
     }
     const { x, y } = point(bucket, i);
     current.push(`${x.toFixed(1)},${y.toFixed(1)}`);
   });
-  if (current.length) segments.push(current.join(" "));
+  flush();
   const lowIndex = lowest ? hourly.indexOf(lowest) : -1;
   const low = lowest && lowIndex >= 0 ? point(lowest, lowIndex) : null;
   const ticks = hourly
@@ -601,6 +605,7 @@ function Hourly({ view }: { view: CollectionView }) {
                   className="stroke-brand-default"
                   strokeWidth={2}
                   strokeLinejoin="round"
+                  strokeLinecap="round"
                   vectorEffect="non-scaling-stroke"
                 />
               ))}
@@ -1064,7 +1069,15 @@ function Alarms({
 }) {
   const region = alarmRegion(view);
   const list = view.alarms.status === "ok" ? view.alarms.list : [];
-  // null·없음은 읽지 못함('경보 없음'이 아님)
+  // 빠진 관측소는 실행 상태를 바꾸지 않아 경보가 울리지 않음 → 서버가 경보를 붙이지 않음(읽기 실패가 아님)
+  if (incident.kind === "stations") {
+    return (
+      <SheetSection title={t.alarmsTitle}>
+        <p className="text-body-s text-text-body">{t.alarmsStations}</p>
+      </SheetSection>
+    );
+  }
+  // 실패 장애의 null·없음은 읽지 못함('경보 없음'이 아님)
   const events = incident.alarms ?? null;
   return (
     <SheetSection title={t.alarmsTitle}>
@@ -1168,7 +1181,15 @@ function IncidentSheet({
         window.setTimeout(onClosed, reduce ? 0 : CLOSE_MS);
       }}
       onClick={(e) => {
-        if (e.target === e.currentTarget) close();
+        // 시트 안 빈 곳·여백도 target이 <dialog>라 좌표로 바깥(딤)인지 가림
+        if (e.target !== e.currentTarget) return;
+        const r = e.currentTarget.getBoundingClientRect();
+        const inside =
+          e.clientX >= r.left &&
+          e.clientX <= r.right &&
+          e.clientY >= r.top &&
+          e.clientY <= r.bottom;
+        if (!inside) close();
       }}
       className="fixed inset-y-0 right-0 left-auto m-0 h-dvh max-h-none w-[480px] max-w-full overflow-y-auto border-l border-border-default bg-bg-surface px-6 pt-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] text-text-default shadow-floating transition-[translate,overlay,display] transition-discrete duration-200 ease-out not-open:translate-x-full backdrop:bg-[rgb(11_26_44/0.4)] backdrop:transition-[opacity,overlay,display] backdrop:transition-discrete backdrop:duration-200 not-open:backdrop:opacity-0 starting:open:translate-x-full starting:open:backdrop:opacity-0 motion-reduce:transition-none motion-reduce:backdrop:transition-none"
     >

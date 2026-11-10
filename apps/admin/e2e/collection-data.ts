@@ -156,7 +156,7 @@ export const VIEW = {
               { id: "22105", name: "강릉 부이", beaches: 3, waveBeaches: 2 },
             ],
           },
-          alarms: [],
+          // 빠진 관측소 장애에는 서버가 경보를 붙이지 않음(services/src/admin/collection.ts)
         },
       ],
       truncated: false,
