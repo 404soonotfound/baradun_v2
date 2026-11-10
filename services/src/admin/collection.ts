@@ -4,7 +4,8 @@ import {
   type RunFailure,
   type RunStatus,
 } from "../core/collect/run-log";
-import { inRipSeason } from "../core/rip/rip-current";
+import { inRipSeason, RIP_SEASON_MONTHS } from "../core/rip/rip-current";
+import { KST_OFFSET_MS } from "../core/warnings/time";
 import { PUBLISHED_VERSION_KEY } from "../core/store/dynamodb";
 import {
   incidentAlarms,
@@ -324,13 +325,13 @@ export function incidentsOf(runs: readonly RunView[]): Incident[] {
 // 지연 구간: 성공과 다음 성공(없으면 지금) 사이가 기준보다 길면 (성공 + 기준, 다음 성공)
 // windowStartMs: 7일 창 시작. 그 전 성공은 창 시작보다 앞이므로, 첫 성공 전도 창 시작 + 기준부터 지연
 //   기록을 다 읽지 못했으면(truncated) null → 첫 성공 전은 판정하지 않음
-// applies: 그 성공 뒤에 지연을 볼지(이안류는 비수기 성공 뒤 하루 1회 간격을 지연으로 보지 않음)
+// countFrom: 그 성공 뒤 지연을 세기 시작하는 시각(이안류는 비수기 하루 1회 간격을 빼고 시즌 시작부터 셈)
 function lateRanges(
   runs: readonly RunView[],
   lateMs: number,
   nowMs: number,
   windowStartMs: number | null,
-  applies: (ms: number) => boolean,
+  countFrom: (ms: number) => number,
 ): [number, number][] {
   const successes = runs
     .filter((run) => run.status === "complete")
@@ -340,9 +341,23 @@ function lateRanges(
   const ranges: [number, number][] = [];
   starts.forEach((at, i) => {
     const next = starts[i + 1] ?? nowMs;
-    if (next - at > lateMs && applies(at)) ranges.push([at + lateMs, next]);
+    const from = countFrom(at);
+    if (next - from > lateMs) ranges.push([from + lateMs, next]);
   });
   return ranges;
+}
+
+// 이안류: 시즌 중이면 그 시각, 비수기면 다음 시즌 첫날(6월 1일 KST 0시)
+// → 비수기 마지막 성공 뒤 시즌에 들어와 성공이 없어도 시즌 시작 + 기준부터 지연(수집 중단을 숨기지 않음)
+function ripLateCountFrom(ms: number): number {
+  if (inRipSeason(ms)) return ms;
+  const kst = new Date(ms + KST_OFFSET_MS);
+  const firstMonth = RIP_SEASON_MONTHS[0];
+  const year =
+    kst.getUTCMonth() + 1 < firstMonth
+      ? kst.getUTCFullYear()
+      : kst.getUTCFullYear() + 1;
+  return Date.UTC(year, firstMonth - 1, 1) - KST_OFFSET_MS;
 }
 
 // runs: 시작 시각 오름차순
@@ -365,7 +380,7 @@ export function summarizeJob(
           late * 60_000,
           nowMs,
           truncated ? null : nowMs - COLLECTION_WINDOW_DAYS * DAY_MS,
-          job === "collect-rip" ? inRipSeason : () => true,
+          job === "collect-rip" ? ripLateCountFrom : (ms) => ms,
         );
   const hourly: HourBucket[] = Array.from({ length: 24 }, (_, i) => {
     const start = firstHour + i * HOUR_MS;

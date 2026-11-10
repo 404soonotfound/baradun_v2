@@ -247,11 +247,20 @@ describe("지연 판정·빠진 관측소 (BRD-187)", () => {
 
   it("이안류는 비수기 성공 뒤 하루 1회 간격을 지연으로 보지 않는다(6월 1일 경계)", () => {
     const june = new Date("2026-06-01T03:00:00Z"); // KST 6월 1일 12:00
+    // 시즌 슬롯 :12/:42(KST 6월 1일 00:12 = UTC 5월 31일 15:12)부터 30분마다 성공
+    const season = Array.from({ length: 24 }, (_, i) =>
+      run(
+        new Date(
+          Date.parse("2026-05-31T15:12:00Z") + i * 1_800_000,
+        ).toISOString(),
+        "complete",
+      ),
+    );
     const job = summarizeJob(
       "collect-rip",
       [
         run("2026-05-30T19:12:00.000Z", "complete"), // KST 5월 31일 04:12(비수기 슬롯)
-        run("2026-06-01T02:42:00.000Z", "complete"), // 시즌 첫 실행
+        ...season,
       ],
       june,
       false,
@@ -259,6 +268,34 @@ describe("지연 판정·빠진 관측소 (BRD-187)", () => {
     expect(job.lateAfterMinutes).toBe(35);
     expect(job.hourly.some((h) => h.late)).toBe(false);
     expect(job.overdue).toBe(false);
+  });
+
+  it("이안류 시즌에 들어와 성공이 없으면 시즌 시작 + 35분부터 지연이다(비수기 성공에 가리지 않음)", () => {
+    const june = new Date("2026-06-01T17:30:00Z"); // KST 6월 2일 02:30
+    const job = summarizeJob(
+      "collect-rip",
+      [
+        run("2026-05-30T19:12:00.000Z", "complete"), // KST 5월 31일 04:12(비수기 마지막 성공)
+        run("2026-05-31T15:12:00.000Z", "failed"), // 시즌 첫 슬롯부터 실패
+      ],
+      june,
+      false,
+    );
+    expect(job.overdue).toBe(true);
+    // 시즌 시작(UTC 5월 31일 15:00) + 35분 = 15:35. 그 전 시각 칸은 비수기라 지연 아님
+    const late = job.hourly.filter((h) => h.late).map((h) => h.hour);
+    expect(late[0]).toBe("2026-05-31T18:00:00.000Z"); // 24시간 막대 첫 칸부터 지연
+    expect(late).toHaveLength(24);
+  });
+
+  it("이안류: 7일 창 시작이 비수기여도 시즌 시작부터 지연을 센다", () => {
+    const june = new Date("2026-06-01T03:00:00Z"); // KST 6월 1일 12:00
+    const job = summarizeJob("collect-rip", [], june, false);
+    expect(job.overdue).toBe(true);
+    // KST 6월 1일 00:35(UTC 5월 31일 15:35)가 든 15시 칸부터 지연, 그 앞 칸은 아님
+    const hours = job.hourly.map((h) => [h.hour, h.late]);
+    expect(hours).toContainEqual(["2026-05-31T14:00:00.000Z", false]);
+    expect(hours).toContainEqual(["2026-05-31T15:00:00.000Z", true]);
   });
 
   it("빠진 관측소는 실패와 나눈 관측소 장애로 묶고, 대조한 성공 실행에서 돌아온 시각을 둔다", () => {
