@@ -2,12 +2,12 @@ import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { S3Client } from "@aws-sdk/client-s3";
 import { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
 import type { Beach } from "@baradun/contracts";
-import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import beachMeta from "../../../data/beach-meta.json";
 import weatherAreasJson from "../../../data/weather-areas.json";
 import annexTables from "../../../tools/beaches/annex-tables.json";
 import { liveNotices, queryNotices } from "../admin/notices";
+import { loadBeaches } from "../core/beaches/load";
 import { createLogger } from "../core/collect/log";
 import { S3SnapshotStore } from "../core/snapshots/s3";
 import { DynamoOpsStore, DynamoStateStore } from "../core/store/dynamodb";
@@ -36,20 +36,9 @@ function requiredEnv(name: string): string {
   return value;
 }
 
-const BEACH_FILE = /^b[0-9]{4}\.json$/;
 const VERSION = /^[0-9]{8}T[0-9]{6}Z$/;
 
-// 해변 파일 읽기. 하나도 없으면 던짐(빈 목록으로 게시해 모든 해변이 사라지지 않게)
-// 계약 모양 검사는 게시 전 계약 검사(BeachesFile)가 함
-export function loadBeaches(dir: string): Beach[] {
-  const names = readdirSync(dir)
-    .filter((name) => BEACH_FILE.test(name))
-    .sort();
-  if (names.length === 0) throw new Error(`해변 파일 없음: ${dir}`);
-  return names.map(
-    (name) => JSON.parse(readFileSync(path.join(dir, name), "utf8")) as Beach,
-  );
-}
+export { loadBeaches };
 
 const log = createLogger(() => []);
 
