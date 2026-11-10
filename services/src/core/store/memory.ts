@@ -1,4 +1,4 @@
-import type { PublishSummary } from "../collect/publish-summary";
+import type { PublishSummary, StationTable } from "../collect/publish-summary";
 import {
   assertSnapshotVersion,
   decideStateWrite,
@@ -76,6 +76,8 @@ export class MemoryOpsStore implements OpsStore {
   private publishedVersion: string | null = null;
   // 게시 요약(버전 → 요약). 테스트에서 확인할 때 씀
   readonly summaries = new Map<string, PublishSummary>();
+  stationTable: { table: StationTable; updatedAt: string } | null = null;
+  stationTableWrites = 0;
 
   // 테스트에서 저장된 슬롯 기록(ttl 등)을 확인할 때 씀
   slotRecord(job: string, slotId: string): SlotRecord | undefined {
@@ -150,5 +152,10 @@ export class MemoryOpsStore implements OpsStore {
     if (!this.summaries.has(summary.version)) {
       this.summaries.set(summary.version, summary);
     }
+  }
+
+  async putStationTable(table: StationTable, updatedAt: string): Promise<void> {
+    this.stationTable = { table, updatedAt };
+    this.stationTableWrites += 1;
   }
 }

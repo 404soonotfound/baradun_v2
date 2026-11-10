@@ -1,4 +1,7 @@
-import { buildPublishSummary } from "../core/collect/publish-summary";
+import {
+  buildPublishSummary,
+  buildStationTable,
+} from "../core/collect/publish-summary";
 import type { Beach, ManifestFile, Notice } from "@baradun/contracts";
 import type { Logger } from "../core/collect/log";
 import type { SnapshotStore } from "../core/snapshots/types";
@@ -219,6 +222,9 @@ async function removeOldVersions(
   }
 }
 
+// 이 실행 환경에서 마지막으로 쓴 관측소 표(저장소별). 같으면 다시 쓰지 않음
+const writtenStationTables = new WeakMap<OpsStore, string>();
+
 export async function publishSnapshot(
   deps: PublishDeps,
 ): Promise<PublishResult> {
@@ -412,11 +418,18 @@ export async function publishSnapshot(
           version,
           previous: published,
           publishedAt: now,
-          beaches: deps.beaches,
+          beachCount: deps.beaches.length,
           status: snapshot.status.beaches,
         }),
         startedMs,
       );
+      // 관측소 표는 해변 파일에서만 나옴 → 이 실행 환경에서 처음이거나 바뀌었을 때만 씀(쓰기 용량 아낌)
+      const table = buildStationTable(deps.beaches);
+      const text = JSON.stringify(table);
+      if (writtenStationTables.get(ops) !== text) {
+        await ops.putStationTable(table, now);
+        writtenStationTables.set(ops, text);
+      }
     } catch (error) {
       log("warn", "publish_summary_not_recorded", {
         version,

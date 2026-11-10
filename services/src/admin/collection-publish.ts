@@ -1,7 +1,8 @@
-import { QueryCommand } from "@aws-sdk/lib-dynamodb";
+import { GetCommand, QueryCommand } from "@aws-sdk/lib-dynamodb";
 import {
   PUBLISH_SUMMARY_PK,
-  type PublishSummary,
+  STATION_TABLE_KEY,
+  type StationTable,
   type StationUse,
 } from "../core/collect/publish-summary";
 import type { Incident } from "./collection";
@@ -11,10 +12,8 @@ import type { Sender } from "./writes";
 // publisher가 게시할 때 남긴 요약(core/collect/publish-summary.ts)만 읽어 관측 지연 해변 수와 장애의 해변 영향을 만듦
 // - 분류를 다시 계산하지 않음. '관측 지연'은 publisher가 게시한 사유 그대로
 // - 요약이 빠졌거나(previous 사슬이 끊김) 읽지 못하면 '확인 못 함'. '영향 없음'·0으로 바꾸지 않음
+// - Ops는 고정 읽기 용량(5)이라 기간 요약은 관측 장애가 있을 때 가장 오래된 장애 시작부터만 읽음
 
-const DAY_MS = 24 * 60 * 60 * 1000;
-// 7일 장애 기록의 시작 시각에 보이던 게시본까지 찾도록 하루 더 읽음
-const SUMMARY_WINDOW_DAYS = 8;
 const MAX_PAGES = 10;
 // 장애 앞뒤로 게시가 늦게 따라오는 시간. 수집 뒤 게시가 깨어나 끝날 때까지
 const PUBLISH_LAG_MS = 10 * 60 * 1000;
@@ -39,9 +38,12 @@ export interface PublishView {
 export interface SummaryRead {
   // 버전 오름차순. failed면 비어 있음
   readonly list: readonly SummaryLite[];
-  // 가장 최근 요약(관측소 표 포함). 없으면 null
-  readonly latest: PublishSummary | null;
-  // 읽기 실패·상한 초과. 이때는 모든 영향이 '확인 못 함'
+  // 가장 최근 요약. 없으면 null
+  readonly latest: SummaryLite | null;
+  // 관측소 표(publisher가 해변 파일로 만든 것). 없거나 모양이 틀리면 null
+  readonly stations: StationTable | null;
+  // 읽기 실패. 이때는 모든 영향이 '확인 못 함'
+  // 상한 초과는 최근 쪽 요약이 빠져 구간 끝 사슬 확인에서 그 장애가 summary_missing이 됨
   readonly failed: boolean;
   // 지금 게시본의 요약. 버전이 다르거나 없으면 null
   live(version: string | null): PublishView | null;
@@ -118,12 +120,6 @@ function toStations(value: unknown): Record<string, StationUse> | null {
   return stations;
 }
 
-function toFull(item: Record<string, unknown>): PublishSummary | null {
-  const lite = toLite(item);
-  const stations = toStations(item.stations);
-  return lite && stations ? { ...lite, stations } : null;
-}
-
 // UTC ISO → 게시 버전 모양(20261104T051000Z). 요약 키(sk)와 비교함
 export function versionOf(ms: number): string {
   return `${new Date(ms).toISOString().slice(0, 19).replace(/[-:]/g, "")}Z`;
@@ -131,12 +127,14 @@ export function versionOf(ms: number): string {
 
 function summaryRead(
   list: readonly SummaryLite[],
-  latest: PublishSummary | null,
+  latest: SummaryLite | null,
+  stations: StationTable | null,
   failed: boolean,
 ): SummaryRead {
   return {
     list,
     latest,
+    stations,
     failed,
     live(version) {
       if (failed || !latest || version === null || latest.version !== version)
@@ -151,64 +149,86 @@ function summaryRead(
   };
 }
 
+const LITE_PROJECTION = {
+  ProjectionExpression: "#v, #p, #at, #n, #d",
+  ExpressionAttributeNames: {
+    "#v": "version",
+    "#p": "previous",
+    "#at": "publishedAt",
+    "#n": "beachCount",
+    "#d": "delayedBeachIds",
+  },
+} as const;
+
+// fromMs: 해변 영향을 볼 가장 오래된 장애 시작. null이면 기간 요약을 읽지 않음(최신 요약·관측소 표만)
 export async function readPublishSummaries(
   client: Sender,
   opsTable: string,
-  now: Date,
+  fromMs: number | null,
 ): Promise<SummaryRead> {
   try {
-    const from = versionOf(now.getTime() - SUMMARY_WINDOW_DAYS * DAY_MS);
-    const latestResult = await client.send(
-      new QueryCommand({
-        TableName: opsTable,
-        KeyConditionExpression: "pk = :pk",
-        ExpressionAttributeValues: { ":pk": PUBLISH_SUMMARY_PK },
-        ScanIndexForward: false,
+    const query = (
+      condition: string,
+      values: Record<string, string>,
+      forward: boolean,
+      extra: Record<string, unknown> = {},
+    ) =>
+      client.send(
+        new QueryCommand({
+          TableName: opsTable,
+          KeyConditionExpression: condition,
+          ...LITE_PROJECTION,
+          ExpressionAttributeValues: { ":pk": PUBLISH_SUMMARY_PK, ...values },
+          ScanIndexForward: forward,
+          ...extra,
+        }),
+      );
+    const items = (result: { Items?: unknown[] | undefined }) =>
+      ((result.Items ?? []) as Record<string, unknown>[])
+        .map(toLite)
+        .filter((lite): lite is SummaryLite => lite !== null);
+
+    const [latestResult, tableResult] = await Promise.all([
+      query("pk = :pk", {}, false, { Limit: 1 }),
+      client.send(
+        new GetCommand({ TableName: opsTable, Key: STATION_TABLE_KEY }),
+      ),
+    ]);
+    const latest = items(latestResult)[0] ?? null;
+    const stations = toStations(
+      (tableResult.Item as Record<string, unknown> | undefined)?.stations,
+    );
+    if (fromMs === null) return summaryRead([], latest, stations, false);
+
+    const from = versionOf(fromMs);
+    // 장애 시작 때 보이던 게시본(시작 시각 이하에서 가장 최근) 하나
+    const before = items(
+      await query("pk = :pk AND sk <= :from", { ":from": from }, false, {
         Limit: 1,
       }),
     );
-    const latestItem = latestResult.Items?.[0] as
-      Record<string, unknown> | undefined;
-    const latest = latestItem ? toFull(latestItem) : null;
-    // 최신부터 읽음 → 상한에 걸려 빠지는 쪽은 오래된 요약(첫 게시본이 없어 그 장애만 '확인 못 함')
-    const list: SummaryLite[] = [];
+    // 그 뒤 요약은 오래된 순. 상한에 걸리면 최근 쪽이 빠짐(구간 끝 사슬 확인이 '확인 못 함'으로 막음)
+    const after: SummaryLite[] = [];
     let startKey: Record<string, unknown> | undefined;
     for (let page = 0; page < MAX_PAGES; page++) {
-      const result = await client.send(
-        new QueryCommand({
-          TableName: opsTable,
-          KeyConditionExpression: "pk = :pk AND sk >= :from",
-          ProjectionExpression: "#v, #p, #at, #n, #d",
-          ExpressionAttributeNames: {
-            "#v": "version",
-            "#p": "previous",
-            "#at": "publishedAt",
-            "#n": "beachCount",
-            "#d": "delayedBeachIds",
-          },
-          ExpressionAttributeValues: {
-            ":pk": PUBLISH_SUMMARY_PK,
-            ":from": from,
-          },
-          ScanIndexForward: false,
-          ...(startKey ? { ExclusiveStartKey: startKey } : {}),
-        }),
+      const result = await query(
+        "pk = :pk AND sk > :from",
+        { ":from": from },
+        true,
+        startKey ? { ExclusiveStartKey: startKey } : {},
       );
-      for (const item of (result.Items ?? []) as Record<string, unknown>[]) {
-        const lite = toLite(item);
-        if (lite) list.push(lite);
-      }
+      after.push(...items(result));
       startKey = result.LastEvaluatedKey as Record<string, unknown> | undefined;
       if (!startKey) break;
     }
-    return summaryRead(list.reverse(), latest, false);
+    return summaryRead([...before, ...after], latest, stations, false);
   } catch {
-    return summaryRead([], null, true);
+    return summaryRead([], null, null, true);
   }
 }
 
 // 장애 구간에 앱에 보였던 게시본 요약. 시작 시각에 보이던 게시본부터 끝(+게시 지연)까지
-// 사슬(previous)이 끊겼거나, 이어지는 장애인데 마지막이 지금 게시본이 아니면 null
+// 사슬(previous)이 끊겼거나(구간 바로 뒤 요약 포함), 뒤 요약이 없는데 마지막이 지금 게시본이 아니면 null
 function windowSummaries(
   list: readonly SummaryLite[],
   incident: Incident,
@@ -234,12 +254,11 @@ function windowSummaries(
   for (let i = 1; i < window.length; i++) {
     if (window[i]!.previous !== window[i - 1]!.version) return null;
   }
-  if (
-    incident.endedAt === null &&
-    window.at(-1)!.version !== publishedVersion
-  ) {
-    return null;
-  }
+  // 구간 마지막 요약 바로 뒤도 사슬로 확인함. 뒤 요약이 없으면 마지막이 지금 게시본이어야 함
+  // (구간 끝 직전·시작 직전 요약이 빠진 채 구간 안 요약이 하나뿐이어도 '영향 없음'이 되지 않게)
+  const next = list[first + window.length];
+  const last = window.at(-1)!.version;
+  if (next ? next.previous !== last : last !== publishedVersion) return null;
   return window;
 }
 
@@ -266,7 +285,7 @@ export function incidentImpact(
   nowMs: number,
 ): ImpactView {
   const wholeSource = incident.failures.some((f) => f.source !== "kma_buoy");
-  const table = read.latest?.stations ?? null;
+  const table = read.stations;
   const stations: StationImpact[] = incident.stations.map(({ id }) => {
     const use = table?.[id];
     return {

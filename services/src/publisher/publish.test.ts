@@ -835,8 +835,10 @@ describe("publishSnapshot 게시 요약", () => {
         .map(([id]) => id)
         .sort(),
     });
+    // 버전별 요약에는 관측소 표를 싣지 않음(Ops 고정 용량). 표는 한 곳에 따로
+    expect(first).not.toHaveProperty("stations");
     const wave = BEACHES[0]!.stations.waveHeight!;
-    expect(first.stations[wave.id]).toMatchObject({
+    expect(ops.stationTable?.table[wave.id]).toMatchObject({
       name: wave.name.ko,
       waveBeachIds: expect.arrayContaining([BEACHES[0]!.id]),
     });
@@ -849,6 +851,8 @@ describe("publishSnapshot 게시 요약", () => {
     });
     expect(ops.summaries.get(v2)).toMatchObject({ previous: V1 });
     expect(ops.summaries.get(v2)!.delayedBeachIds.length).toBeGreaterThan(0);
+    // 해변 파일이 같으면 관측소 표는 다시 쓰지 않음
+    expect(ops.stationTableWrites).toBe(1);
   });
 
   it("요약을 남기지 못해도 게시는 끝난 것으로 두고 경고만 남긴다", async () => {

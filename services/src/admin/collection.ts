@@ -212,8 +212,14 @@ function mergeFailures(runs: readonly RunView[]): RunFailure[] {
 }
 
 // 깨끗한 실행: 성공했고 빠진 관측소도 없음. 빠진 관측소만 있는 실행도 장애로 묶음(상태·성공률은 그대로)
-function clean(run: RunView): boolean {
-  return run.status === "complete" && !run.missingStations?.length;
+// 빠진 관측소가 있던 장애는 대조한 실행(missingStations 있음)에서만 끝남
+// → 대조표를 읽지 못한 실행을 '관측소가 돌아옴'으로 보지 않음
+function clean(run: RunView, open: readonly RunView[]): boolean {
+  if (run.status !== "complete" || run.missingStations?.length) return false;
+  return (
+    run.missingStations !== undefined ||
+    !open.some((r) => r.missingStations?.length)
+  );
 }
 
 // 관측소가 돌아온 시각: 마지막으로 빠진 뒤, 대조한 성공 실행에서 다시 빠지지 않은 첫 실행
@@ -264,7 +270,7 @@ export function incidentsOf(runs: readonly RunView[]): Incident[] {
     open = [];
   };
   runs.forEach((run, index) => {
-    if (clean(run)) close(run.startedAt, index);
+    if (clean(run, open)) close(run.startedAt, index);
     else open.push(run);
   });
   close(null, runs.length);
@@ -384,33 +390,40 @@ export async function readCollection(
   now: Date,
   alarmReader: AlarmReader | null = null,
 ): Promise<CollectionView> {
-  const [publishedVersion, summaries, alarms, ...jobs] = await Promise.all([
-    readPublishedVersion(client, opsTable),
-    readPublishSummaries(client, opsTable, now),
-    readAlarms(alarmReader, now),
-    ...COLLECTION_JOBS.map(async (job) => {
-      const { runs, truncated } = await readRuns(client, opsTable, job, now);
-      return summarizeJob(job, runs, now, truncated);
-    }),
-  ]);
-  const version = publishedVersion as string | null;
-  const read = summaries as Awaited<ReturnType<typeof readPublishSummaries>>;
-  const alarmView = alarms as AlarmsView;
   const nowMs = now.getTime();
+  const [publishedVersion, alarms, jobs] = await Promise.all([
+    readPublishedVersion(client, opsTable),
+    readAlarms(alarmReader, now),
+    Promise.all(
+      COLLECTION_JOBS.map(async (job) => {
+        const { runs, truncated } = await readRuns(client, opsTable, job, now);
+        return summarizeJob(job, runs, now, truncated);
+      }),
+    ),
+  ]);
+  // 해변 영향은 관측 장애에만 → 게시 요약은 가장 오래된 관측 장애 시작부터만 읽음(Ops 읽기 용량)
+  const oceanStarts = jobs
+    .filter((job) => job.job === "collect-ocean")
+    .flatMap((job) => job.incidents.map((i) => Date.parse(i.startedAt)));
+  const read = await readPublishSummaries(
+    client,
+    opsTable,
+    oceanStarts.length > 0 ? Math.min(...oceanStarts) : null,
+  );
   return {
     generatedAt: now.toISOString(),
-    publishedVersion: version,
-    jobs: (jobs as JobCollection[]).map((job) => ({
+    publishedVersion,
+    jobs: jobs.map((job) => ({
       ...job,
       incidents: job.incidents.map((incident) => ({
         ...incident,
         ...(job.job === "collect-ocean"
-          ? { impact: incidentImpact(incident, read, version, nowMs) }
+          ? { impact: incidentImpact(incident, read, publishedVersion, nowMs) }
           : {}),
-        alarms: incidentAlarms(alarmView, job.job, incident, nowMs),
+        alarms: incidentAlarms(alarms, job.job, incident, nowMs),
       })),
     })),
-    publish: read.live(version),
-    alarms: alarmView,
+    publish: read.live(publishedVersion),
+    alarms,
   };
 }
