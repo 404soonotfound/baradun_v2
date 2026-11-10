@@ -228,3 +228,41 @@ export const VIEW_LATE = {
     job.job === "collect-warnings" ? { ...job, overdue: true } : job,
   ),
 };
+
+// 장애가 7건: 5건씩 쪽을 나눔
+export const VIEW_MANY = {
+  ...VIEW,
+  jobs: VIEW.jobs.map((job) =>
+    job.job === "collect-warnings"
+      ? {
+          ...job,
+          incidents: Array.from({ length: 5 }, (_, i) => ({
+            ...job.incidents[0]!,
+            startedAt: ago(300 + i * 60),
+            endedAt: ago(290 + i * 60),
+          })),
+        }
+      : job,
+  ),
+};
+
+// GH-375 배포 전 운영 API 응답(지연·게시 요약·경보·장애 종류 없음)
+export const VIEW_LEGACY = {
+  generatedAt: VIEW.generatedAt,
+  publishedVersion: VIEW.publishedVersion,
+  jobs: VIEW.jobs.map((job) => ({
+    job: job.job,
+    lastRun: job.lastRun,
+    lastSuccessAt: job.lastSuccessAt,
+    day: job.day,
+    week: job.week,
+    truncated: job.truncated,
+    hourly: job.hourly.map((b) => ({ hour: b.hour, runs: b.runs, ok: b.ok })),
+    incidents: job.incidents.map((incident) => ({
+      startedAt: incident.startedAt,
+      endedAt: incident.endedAt,
+      runs: incident.runs,
+      failures: incident.failures,
+    })),
+  })),
+};
