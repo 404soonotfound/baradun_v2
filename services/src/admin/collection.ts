@@ -4,7 +4,21 @@ import {
   type RunFailure,
   type RunStatus,
 } from "../core/collect/run-log";
+import { inRipSeason } from "../core/rip/rip-current";
 import { PUBLISHED_VERSION_KEY } from "../core/store/dynamodb";
+import {
+  incidentAlarms,
+  readAlarms,
+  type AlarmEvent,
+  type AlarmReader,
+  type AlarmsView,
+} from "./collection-alarms";
+import {
+  incidentImpact,
+  readPublishSummaries,
+  type ImpactView,
+  type PublishView,
+} from "./collection-publish";
 import type { Sender } from "./writes";
 
 // 수집 현황 (BRD-149, 화면 ADM-COLLECT, 시안 4차 V9·VM2)
@@ -12,7 +26,8 @@ import type { Sender } from "./writes";
 // - State 테이블(수집 사실)은 읽지 않음(G1·D16-B2). 판단 상태도 바꾸지 않음
 // - 기록이 없는 출처를 정상으로 보지 않음: lastRun null → 화면은 '기록 없음'
 // - partial(일부 실패)도 성공으로 세지 않음. 실패 사유는 그대로 돌려줌(모르는 사유도 숨기지 않음)
-// - '지연' 기준(N분)은 미결(D15-9) → 여기서 정하지 않고 마지막 실행·마지막 성공 시각만 돌려줌
+// - '지연' 기준(D15-9, 2026-11-10 사용자 결정 BRD-187): 마지막 성공 뒤 주기+5분(LATE_AFTER_MINUTES)
+//   알림 '출처 응답 없음'은 CloudWatch 경보 설정 그대로(collection-alarms.ts가 읽음)
 
 // 수집기 이름(services/src/collectors의 *_JOB과 같아야 함, collection.test.ts가 확인)
 export const COLLECTION_JOBS = [
@@ -31,11 +46,34 @@ export const COLLECTION_WINDOW_DAYS = 7;
 // 최신부터 읽음 → 잘려도 빠지는 쪽은 오래된 기록(마지막 실행·마지막 성공이 옛 값이 되지 않게)
 const MAX_PAGES = 10;
 
+// 막대 '지연' 기준(분). 마지막 성공 뒤 이만큼 지나도록 새 성공이 없으면 지연
+// 특보 15분·관측·이안류 30분 주기 + 5분(심장박동 경보 창 infra/lib/ops/alarms.ts HEARTBEAT_WINDOWS보다 앞섬)
+// 날씨(매시 15분)는 WeatherFailing 경보와 같은 3시간. 사진(하루 1회, 판단에 안 씀)은 지연 표시 없음(null)
+// 이안류 비수기(10~5월)는 하루 1회 슬롯만 기록이 남아 지연 표시 없음(lateAfterMinutes)
+export const LATE_AFTER_MINUTES: Record<CollectionJob, number | null> = {
+  "collect-warnings": 20,
+  "collect-ocean": 35,
+  "collect-rip": 35,
+  "collect-weather": 180,
+  "collect-catalog": null,
+};
+
+export function lateAfterMinutes(
+  job: CollectionJob,
+  nowMs: number,
+): number | null {
+  if (job === "collect-rip" && !inRipSeason(nowMs)) return null;
+  return LATE_AFTER_MINUTES[job];
+}
+
 export interface RunView {
   readonly startedAt: string;
   readonly finishedAt: string;
   readonly status: RunStatus;
   readonly failures: readonly RunFailure[];
+  // 빠진 관측소(collect-ocean, BRD-187). 없으면 대조하지 못함·옛 기록
+  readonly missingStations?: readonly string[];
+  readonly missingStationsTotal?: number;
 }
 
 export interface RunCounts {
@@ -45,14 +83,30 @@ export interface RunCounts {
 
 export interface HourBucket extends RunCounts {
   readonly hour: string; // 그 시간의 시작(UTC ISO)
+  // 그 시간 안에 마지막 성공 뒤 지연 기준을 넘긴 때가 있었음. 기준이 없는 출처는 항상 false
+  readonly late: boolean;
+}
+
+// 장애 안에서 빠졌던 관측소 하나. returnedAt: 대조한 성공 실행에서 다시 값이 들어온 시각(null이면 아직)
+export interface StationGap {
+  readonly id: string;
+  readonly firstMissingAt: string;
+  readonly lastMissingAt: string;
+  readonly returnedAt: string | null;
 }
 
 export interface Incident {
   readonly startedAt: string;
-  // 다음 성공 실행 시작 시각. null이면 아직 이어지는 중
+  // 다음 깨끗한 실행(성공 + 빠진 관측소 없음) 시작 시각. null이면 아직 이어지는 중
   readonly endedAt: string | null;
   readonly runs: number;
   readonly failures: readonly RunFailure[];
+  // 장애 동안 빠졌던 관측소(collect-ocean). 다른 수집기는 빈 배열
+  readonly stations: readonly StationGap[];
+  // 해변 영향(collect-ocean만, 게시 요약으로 판정). 다른 수집기는 없음
+  readonly impact?: ImpactView;
+  // 이 장애 동안 울린 경보. null이면 경보 기록을 읽지 못함('경보 없음'으로 보지 않음)
+  readonly alarms?: readonly AlarmEvent[] | null;
 }
 
 export interface JobCollection {
@@ -65,6 +119,10 @@ export interface JobCollection {
   readonly incidents: readonly Incident[];
   // 읽은 기록이 상한을 넘어 일부만 셈
   readonly truncated: boolean;
+  // 지연 기준(분). null이면 이 출처는 지연을 표시하지 않음
+  readonly lateAfterMinutes: number | null;
+  // 지금 마지막 성공 뒤 지연 기준을 넘김. 성공 기록이 없으면 false(상태는 lastRun이 말함)
+  readonly overdue: boolean;
 }
 
 export interface CollectionView {
@@ -72,6 +130,10 @@ export interface CollectionView {
   // 지금 앱에 보이는 게시본 버전(Ops publish/version). 없으면 null
   readonly publishedVersion: string | null;
   readonly jobs: readonly JobCollection[];
+  // 지금 게시본의 요약(BRD-187). 요약이 없거나 버전이 다르면 null('확인 못 함')
+  readonly publish: PublishView | null;
+  // CloudWatch 경보 설정·기록. 읽지 못하면 unavailable
+  readonly alarms: AlarmsView;
 }
 
 const RUN_STATUSES: readonly RunStatus[] = ["complete", "partial", "failed"];
@@ -93,6 +155,19 @@ function toFailure(value: unknown): RunFailure | null {
 }
 
 // 모양이 틀린 기록은 버리지 않고 실패로 셈(모르는 형식을 정상으로 읽지 않음)
+function toMissing(item: Record<string, unknown>) {
+  const { missingStations, missingStationsTotal } = item;
+  if (!Array.isArray(missingStations)) return {};
+  return {
+    missingStations: missingStations.filter(
+      (id): id is string => typeof id === "string",
+    ),
+    ...(typeof missingStationsTotal === "number"
+      ? { missingStationsTotal }
+      : {}),
+  };
+}
+
 export function toRunView(item: Record<string, unknown>): RunView | null {
   const { startedAt, finishedAt, status, failures } = item;
   if (typeof startedAt !== "string" || Number.isNaN(Date.parse(startedAt))) {
@@ -109,6 +184,7 @@ export function toRunView(item: Record<string, unknown>): RunView | null {
     failures: known
       ? list
       : [...list, { source: "record", reason: "unknown_status" }],
+    ...toMissing(item),
   };
 }
 
@@ -135,26 +211,82 @@ function mergeFailures(runs: readonly RunView[]): RunFailure[] {
   return [...merged.values()];
 }
 
-// 이어진 실패(partial 포함)를 한 장애로 묶음. 최신 장애가 먼저
+// 깨끗한 실행: 성공했고 빠진 관측소도 없음. 빠진 관측소만 있는 실행도 장애로 묶음(상태·성공률은 그대로)
+function clean(run: RunView): boolean {
+  return run.status === "complete" && !run.missingStations?.length;
+}
+
+// 관측소가 돌아온 시각: 마지막으로 빠진 뒤, 대조한 성공 실행에서 다시 빠지지 않은 첫 실행
+// 출처가 실패한 실행은 대조하지 않아 돌아온 것으로 보지 않음
+function stationGaps(
+  open: readonly RunView[],
+  later: readonly RunView[],
+): StationGap[] {
+  const gaps = new Map<string, { first: string; last: string }>();
+  for (const run of open) {
+    for (const id of run.missingStations ?? []) {
+      const gap = gaps.get(id);
+      gaps.set(id, { first: gap?.first ?? run.startedAt, last: run.startedAt });
+    }
+  }
+  return [...gaps.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([id, gap]) => {
+      const back = [...open, ...later].find(
+        (run) =>
+          run.startedAt > gap.last &&
+          run.status === "complete" &&
+          run.missingStations !== undefined &&
+          !run.missingStations.includes(id),
+      );
+      return {
+        id,
+        firstMissingAt: gap.first,
+        lastMissingAt: gap.last,
+        returnedAt: back?.startedAt ?? null,
+      };
+    });
+}
+
+// 이어진 실패(partial 포함)·빠진 관측소를 한 장애로 묶음. 최신 장애가 먼저
 export function incidentsOf(runs: readonly RunView[]): Incident[] {
   const incidents: Incident[] = [];
   let open: RunView[] = [];
-  const close = (endedAt: string | null) => {
+  const close = (endedAt: string | null, index: number) => {
     if (open.length === 0) return;
     incidents.push({
       startedAt: open[0]!.startedAt,
       endedAt,
       runs: open.length,
       failures: mergeFailures(open),
+      stations: stationGaps(open, runs.slice(index)),
     });
     open = [];
   };
-  for (const run of runs) {
-    if (run.status === "complete") close(run.startedAt);
+  runs.forEach((run, index) => {
+    if (clean(run)) close(run.startedAt, index);
     else open.push(run);
-  }
-  close(null);
+  });
+  close(null, runs.length);
   return incidents.reverse();
+}
+
+// 지연 구간: 성공과 다음 성공(없으면 지금) 사이가 기준보다 길면 (성공 + 기준, 다음 성공)
+// 7일 창 안 첫 성공 전은 앞 성공을 몰라 지연으로 보지 않음
+function lateRanges(
+  runs: readonly RunView[],
+  lateMs: number,
+  nowMs: number,
+): [number, number][] {
+  const successes = runs
+    .filter((run) => run.status === "complete")
+    .map((run) => Date.parse(run.startedAt));
+  const ranges: [number, number][] = [];
+  successes.forEach((at, i) => {
+    const next = successes[i + 1] ?? nowMs;
+    if (next - at > lateMs) ranges.push([at + lateMs, next]);
+  });
+  return ranges;
 }
 
 // runs: 시작 시각 오름차순
@@ -168,13 +300,20 @@ export function summarizeJob(
   const dayStart = nowMs - DAY_MS;
   const day = runs.filter((run) => Date.parse(run.startedAt) > dayStart);
   const firstHour = Math.floor(nowMs / HOUR_MS) * HOUR_MS - 23 * HOUR_MS;
+  const late = lateAfterMinutes(job, nowMs);
+  const ranges = late === null ? [] : lateRanges(runs, late * 60_000, nowMs);
   const hourly: HourBucket[] = Array.from({ length: 24 }, (_, i) => {
     const start = firstHour + i * HOUR_MS;
+    const end = Math.min(start + HOUR_MS, nowMs);
     const inHour = runs.filter((run) => {
       const at = Date.parse(run.startedAt);
       return at >= start && at < start + HOUR_MS;
     });
-    return { hour: new Date(start).toISOString(), ...count(inHour) };
+    return {
+      hour: new Date(start).toISOString(),
+      ...count(inHour),
+      late: ranges.some(([from, to]) => from < end && to > start),
+    };
   });
   const lastSuccess = [...runs].reverse().find((r) => r.status === "complete");
   return {
@@ -186,6 +325,11 @@ export function summarizeJob(
     hourly,
     incidents: incidentsOf(runs),
     truncated,
+    lateAfterMinutes: late,
+    overdue:
+      late !== null &&
+      lastSuccess !== undefined &&
+      nowMs - Date.parse(lastSuccess.startedAt) > late * 60_000,
   };
 }
 
@@ -205,7 +349,8 @@ async function readRuns(
       new QueryCommand({
         TableName: opsTable,
         KeyConditionExpression: "pk = :pk AND sk >= :from",
-        ProjectionExpression: "startedAt, finishedAt, #status, failures",
+        ProjectionExpression:
+          "startedAt, finishedAt, #status, failures, missingStations, missingStationsTotal",
         ExpressionAttributeNames: { "#status": "status" },
         ExpressionAttributeValues: { ":pk": runLogPk(job), ":from": from },
         ScanIndexForward: false,
@@ -237,17 +382,35 @@ export async function readCollection(
   client: Sender,
   opsTable: string,
   now: Date,
+  alarmReader: AlarmReader | null = null,
 ): Promise<CollectionView> {
-  const [publishedVersion, ...jobs] = await Promise.all([
+  const [publishedVersion, summaries, alarms, ...jobs] = await Promise.all([
     readPublishedVersion(client, opsTable),
+    readPublishSummaries(client, opsTable, now),
+    readAlarms(alarmReader, now),
     ...COLLECTION_JOBS.map(async (job) => {
       const { runs, truncated } = await readRuns(client, opsTable, job, now);
       return summarizeJob(job, runs, now, truncated);
     }),
   ]);
+  const version = publishedVersion as string | null;
+  const read = summaries as Awaited<ReturnType<typeof readPublishSummaries>>;
+  const alarmView = alarms as AlarmsView;
+  const nowMs = now.getTime();
   return {
     generatedAt: now.toISOString(),
-    publishedVersion: publishedVersion as string | null,
-    jobs: jobs as JobCollection[],
+    publishedVersion: version,
+    jobs: (jobs as JobCollection[]).map((job) => ({
+      ...job,
+      incidents: job.incidents.map((incident) => ({
+        ...incident,
+        ...(job.job === "collect-ocean"
+          ? { impact: incidentImpact(incident, read, version, nowMs) }
+          : {}),
+        alarms: incidentAlarms(alarmView, job.job, incident, nowMs),
+      })),
+    })),
+    publish: read.live(version),
+    alarms: alarmView,
   };
 }
