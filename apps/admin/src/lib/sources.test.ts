@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { localSourcesView } from "./auth/local-sources";
 import {
+  keyNames,
   keyState,
   kstClock,
   latestState,
+  monthRanges,
   scheduleSlots,
   validSources,
   type SourcesView,
@@ -22,6 +24,16 @@ describe("validSources", () => {
     expect(validSources(view())).toBe(true);
   });
 
+  // 첫 출처(해상 특보)만 바꾸고 나머지 4곳은 그대로 둔 응답
+  const withFirst = (patch: object) => {
+    const base = view();
+    return {
+      ...base,
+      sources: [{ ...base.sources[0], ...patch }, ...base.sources.slice(1)],
+    };
+  };
+  const firstRun = view().sources[0]!.recentRuns![0]!;
+
   it("칸이 빠지거나 모양이 틀리면 불러오기 실패(빈 목록·기록 없음으로 채우지 않음)", () => {
     const base = view();
     const broken: unknown[] = [
@@ -29,53 +41,53 @@ describe("validSources", () => {
       { ...base, sources: undefined },
       { ...base, keysHidden: undefined },
       { ...base, http: { timeoutMs: "10s", retries: 1 } },
-      { ...base, sources: [{ ...base.sources[0], recentRuns: undefined }] },
-      { ...base, sources: [{ ...base.sources[0], id: "collect-cctv" }] },
-      {
-        ...base,
-        sources: [
-          {
-            ...base.sources[0],
-            recentRuns: [
-              { startedAt: "x", finishedAt: "y", status: "ok", failures: [] },
-            ],
-          },
+      withFirst({ recentRuns: undefined }),
+      withFirst({ id: "collect-cctv" }),
+      withFirst({
+        recentRuns: [
+          { startedAt: "x", finishedAt: "y", status: "ok", failures: [] },
         ],
-      },
-      {
-        ...base,
-        sources: [
-          {
-            ...base.sources[0],
-            recentRuns: [
-              { ...base.sources[0]!.recentRuns![0]!, startedAt: "x" },
-            ],
-          },
-        ],
-      },
+      }),
+      withFirst({ recentRuns: [{ ...firstRun, startedAt: "x" }] }),
+      withFirst({ recentRuns: [{ ...firstRun, missingStations: [22105] }] }),
+      withFirst({ recentRuns: [{ ...firstRun, missingStationsTotal: "3" }] }),
       { ...base, generatedAt: "어제" },
-      { ...base, sources: [base.sources[0], base.sources[0]] },
       { ...base, keys: [{ ...base.keys[0], status: "expired" }] },
-      {
-        ...base,
-        sources: [
-          {
-            ...base.sources[0],
-            schedule: { periodMinutes: 0, offsetMinutes: 3, offSeason: null },
-          },
-        ],
-      },
+      withFirst({
+        schedule: { periodMinutes: 0, offsetMinutes: 3, offSeason: null },
+      }),
     ];
     for (const body of broken) expect(validSources(body)).toBe(false);
   });
 
-  it("최근 실행 null(읽지 못함)은 모양으로는 통과", () => {
+  it("출처가 비거나 빠지거나(판단 출처 포함) 겹치면 불러오기 실패('0/0 성공'으로 보이지 않게)", () => {
     const base = view();
+    expect(validSources({ ...base, sources: [] })).toBe(false);
+    expect(validSources({ ...base, sources: base.sources.slice(1) })).toBe(
+      false,
+    );
     expect(
       validSources({
         ...base,
-        sources: [{ ...base.sources[0], recentRuns: null }],
+        sources: [base.sources[1], ...base.sources.slice(1)],
       }),
+    ).toBe(false);
+  });
+
+  it("최근 실행 null(읽지 못함)·빠진 관측소 칸은 모양이 맞으면 통과", () => {
+    expect(validSources(withFirst({ recentRuns: null }))).toBe(true);
+    expect(
+      validSources(
+        withFirst({
+          recentRuns: [
+            {
+              ...firstRun,
+              missingStations: ["22105"],
+              missingStationsTotal: 3,
+            },
+          ],
+        }),
+      ),
     ).toBe(true);
   });
 });
@@ -120,6 +132,27 @@ describe("수집 시각(KST)", () => {
     ).toEqual(["04:20"]);
     expect(kstClock(19 * 60 + 12)).toBe("04:12");
     expect(kstClock(0)).toBe("09:00");
+  });
+});
+
+describe("monthRanges", () => {
+  it("이어지는 달은 한 구간, 끊기면 나누고, 12월·1월은 해를 넘는 한 구간", () => {
+    expect(monthRanges([6, 7, 8, 9])).toEqual([[6, 9]]);
+    expect(monthRanges([6, 8])).toEqual([
+      [6, 6],
+      [8, 8],
+    ]);
+    expect(monthRanges([11, 12, 1, 2])).toEqual([[11, 2]]);
+    expect(monthRanges([1, 6, 12])).toEqual([
+      [6, 6],
+      [12, 1],
+    ]);
+  });
+});
+
+describe("keyNames", () => {
+  it("출처들이 쓰는 키 이름을 한 번씩", () => {
+    expect(keyNames(view())).toEqual(["data-go-kr", "kma-apihub"]);
   });
 });
 
