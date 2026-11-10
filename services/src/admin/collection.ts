@@ -20,6 +20,7 @@ import {
   type ImpactView,
   type PublishView,
 } from "./collection-publish";
+import { stationsView, type StationsView } from "./collection-stations";
 import type { Sender } from "./writes";
 
 // 수집 현황 (BRD-149, 화면 ADM-COLLECT, 시안 4차 V9·VM2)
@@ -144,6 +145,8 @@ export interface CollectionView {
   readonly publish: PublishView | null;
   // CloudWatch 경보 설정·기록. 읽지 못하면 unavailable
   readonly alarms: AlarmsView;
+  // 관측소 목록(관측 수집기, GH-380). 관측소 표를 읽지 못하면 unavailable
+  readonly stations: StationsView;
 }
 
 const RUN_STATUSES: readonly RunStatus[] = ["complete", "partial", "failed"];
@@ -463,16 +466,19 @@ export async function readCollection(
   alarmReader: AlarmReader | null = null,
 ): Promise<CollectionView> {
   const nowMs = now.getTime();
-  const [publishedVersion, alarms, jobs] = await Promise.all([
+  const [publishedVersion, alarms, jobReads] = await Promise.all([
     readPublishedVersion(client, opsTable),
     readAlarms(alarmReader, now),
     Promise.all(
       COLLECTION_JOBS.map(async (job) => {
         const { runs, truncated } = await readRuns(client, opsTable, job, now);
-        return summarizeJob(job, runs, now, truncated);
+        return { runs, summary: summarizeJob(job, runs, now, truncated) };
       }),
     ),
   ]);
+  const jobs = jobReads.map((r) => r.summary);
+  const oceanRuns =
+    jobReads.find((r) => r.summary.job === "collect-ocean")?.runs ?? [];
   // 해변 영향은 관측 장애에만 → 게시 요약은 가장 오래된 관측 장애 시작부터만 읽음(Ops 읽기 용량)
   const oceanStarts = jobs
     .filter((job) => job.job === "collect-ocean")
@@ -500,5 +506,6 @@ export async function readCollection(
     })),
     publish: read.live(publishedVersion),
     alarms,
+    stations: stationsView(read.stations, oceanRuns),
   };
 }
