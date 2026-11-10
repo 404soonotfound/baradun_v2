@@ -11,8 +11,10 @@ import {
   type ApiKeyTags,
 } from "../core/secrets/api-keys";
 import { SsmApiKeyTags } from "../core/secrets/ssm";
-import { KST_OFFSET_MS } from "../core/warnings/time";
+import { kstDate } from "../core/weather/kma";
+import { parseUtcIso } from "../core/warnings/time";
 import {
+  COLLECTION_WINDOW_DAYS,
   lateAfterMinutes,
   toRunView,
   type CollectionJob,
@@ -268,17 +270,14 @@ export const SOURCE_CATALOG: readonly Catalog[] = [
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
+// 달력에 있는 날짜(YYYY-MM-DD)인지(publisher/season.ts와 같은 방식)
 function validDate(value: string): boolean {
-  if (!DATE.test(value)) return false;
-  const ms = Date.parse(`${value}T00:00:00Z`);
-  return !Number.isNaN(ms) && new Date(ms).toISOString().startsWith(value);
+  return DATE.test(value) && parseUtcIso(`${value}T00:00:00Z`) !== null;
 }
 
 // KST 오늘(YYYY-MM-DD)에서 만료일까지 남은 날. 날짜끼리 비교(만료일 태그가 KST 날짜)
 export function daysLeft(expiresOn: string, now: Date): number {
-  const today = new Date(now.getTime() + KST_OFFSET_MS)
-    .toISOString()
-    .slice(0, 10);
+  const today = kstDate(now.getTime());
   return Math.round(
     (Date.parse(`${expiresOn}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) /
       86_400_000,
@@ -294,13 +293,17 @@ async function readKey(
   try {
     const tags = await reader.tags(name, signal);
     const raw = tags.find((t) => t.Key === KEY_EXPIRES_TAG)?.Value?.trim();
+    // 'Expires'·' expires'처럼 키 이름만 틀린 태그는 '태그 없음'이 아니라 모양 오류로 알림
+    const misnamed =
+      raw === undefined &&
+      tags.some((t) => t.Key?.trim().toLowerCase() === KEY_EXPIRES_TAG);
     const ok = raw !== undefined && validDate(raw);
     return {
       name,
       status: "registered",
       expiresOn: ok ? raw : null,
       daysLeft: ok ? daysLeft(raw, now) : null,
-      expiresInvalid: raw !== undefined && !ok,
+      expiresInvalid: misnamed || (raw !== undefined && !ok),
     };
   } catch (error) {
     if (signal.aborted) return unknownKey(name);
@@ -336,9 +339,15 @@ export async function readKeys(
 ): Promise<KeyView[]> {
   if (!reader) return API_KEY_NAMES.map(unknownKey);
   const controller = new AbortController();
+  const pending = new Set<ApiKeyName>(API_KEY_NAMES);
   let timer: ReturnType<typeof setTimeout> | undefined;
   const expired = new Promise<void>((resolve) => {
     timer = setTimeout(() => {
+      // 시간 초과도 원인이 남게(SSM 지연·호출 제한과 boundary 미반영 AccessDenied를 나눔)
+      safeLog("warn", "ops_sources_key_read_timeout", {
+        keys: [...pending].join(","),
+        timeoutMs,
+      });
       controller.abort();
       resolve();
     }, timeoutMs);
@@ -347,7 +356,9 @@ export async function readKeys(
     return await Promise.all(
       API_KEY_NAMES.map((name) =>
         Promise.race([
-          readKey(reader, name, now, controller.signal),
+          readKey(reader, name, now, controller.signal).finally(() =>
+            pending.delete(name),
+          ),
           expired.then(() => unknownKey(name)),
         ]),
       ),
@@ -368,16 +379,23 @@ async function recentRuns(
   client: Sender,
   opsTable: string,
   job: CollectionJob,
+  now: Date,
 ): Promise<{ runs: RunView[]; unreadable: number } | null> {
   try {
     const result = await client.send(
       new QueryCommand({
         TableName: opsTable,
-        KeyConditionExpression: "pk = :pk",
+        // 수집 현황과 같은 7일 창(TTL이 지난 옛 기록을 '최근 수집'으로 보이지 않게)
+        KeyConditionExpression: "pk = :pk AND sk >= :from",
         ProjectionExpression:
           "startedAt, finishedAt, #status, failures, missingStations, missingStationsTotal",
         ExpressionAttributeNames: { "#status": "status" },
-        ExpressionAttributeValues: { ":pk": runLogPk(job) },
+        ExpressionAttributeValues: {
+          ":pk": runLogPk(job),
+          ":from": new Date(
+            now.getTime() - COLLECTION_WINDOW_DAYS * 86_400_000,
+          ).toISOString(),
+        },
         ScanIndexForward: false,
         Limit: RECENT_RUNS,
       }),
@@ -408,7 +426,9 @@ export async function readSources(
   const [keys, runs] = await Promise.all([
     hideKeys ? Promise.resolve([]) : readKeys(keyReader, now),
     Promise.all(
-      SOURCE_CATALOG.map((source) => recentRuns(client, opsTable, source.id)),
+      SOURCE_CATALOG.map((source) =>
+        recentRuns(client, opsTable, source.id, now),
+      ),
     ),
   ]);
   return {

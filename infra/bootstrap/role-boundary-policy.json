@@ -38,7 +38,12 @@
       "Sid": "ApiKeyTagsRead",
       "Effect": "Allow",
       "Action": "ssm:ListTagsForResource",
-      "Resource": "arn:aws:ssm:ap-northeast-2:717304679248:parameter/baradun/v2/api-keys/*"
+      "Resource": "arn:aws:ssm:ap-northeast-2:717304679248:parameter/baradun/v2/api-keys/*",
+      "Condition": {
+        "ArnLike": {
+          "lambda:SourceFunctionArn": "arn:aws:lambda:ap-northeast-2:717304679248:function:BaradunV2-*"
+        }
+      }
     },
     {
       "Sid": "DecryptApiKeysViaSsm",
