@@ -1,9 +1,10 @@
 import { opsFetch, type OpsResult } from "./auth/ops-fetch";
 
-// 수집 현황 (BRD-149, 화면 ADM-COLLECT, 시안 4차 V9·VM2)
-// 운영 API GET /ops/collection 응답 모양과 화면용 계산. 서버(services/src/admin/collection.ts)가 원본이라 모양만 맞춤
+// 수집 현황 (BRD-149·GH-376, 화면 ADM-COLLECT, 시안 4차 V9·VM2 + 2026-11-10 시안)
+// 운영 API GET /ops/collection 응답 모양과 화면용 계산. 서버(services/src/admin/collection*.ts)가 원본이라 모양만 맞춤
 // - 기록이 없는 출처는 '기록 없음'(정상이 아님). 일부 실패(partial)도 성공으로 세지 않음
-// - '지연' 기준(N분)은 미결(D15-9)이라 여기서 정하지 않음
+// - '지연' 기준(D15-9, GH-375)은 서버가 정해 내려줌(lateAfterMinutes·overdue·hourly.late). 화면에서 다시 정하지 않음
+// - 게시 요약·경보를 읽지 못하면 '확인 못 함'. '영향 없음'·'경보 없음'·0으로 바꾸지 않음
 
 export type CollectionJobId =
   | "collect-warnings"
@@ -27,6 +28,8 @@ export interface RunView {
   readonly finishedAt: string;
   readonly status: RunStatus;
   readonly failures: readonly RunFailure[];
+  readonly missingStations?: readonly string[];
+  readonly missingStationsTotal?: number;
 }
 
 export interface RunCounts {
@@ -34,15 +37,83 @@ export interface RunCounts {
   readonly ok: number;
 }
 
-export interface HourBucket extends RunCounts {
+// 시간 칸 하나의 실행 수(모든 출처를 더한 칸은 지연 표시 없이 이것만)
+export interface HourCounts extends RunCounts {
   readonly hour: string;
 }
 
+export interface HourBucket extends HourCounts {
+  // 그 시간 안에 지연 기준을 넘긴 때가 있었음. 기준이 없는 출처는 항상 false
+  readonly late: boolean;
+}
+
+export interface StationGap {
+  readonly id: string;
+  readonly firstMissingAt: string;
+  readonly lastMissingAt: string;
+  readonly returnedAt: string | null;
+}
+
+export type IncidentKind = "failure" | "stations";
+
+export interface StationImpact {
+  readonly id: string;
+  readonly name: string | null;
+  readonly beaches: number | null;
+  readonly waveBeaches: number | null;
+}
+
+export type ImpactUnknownReason =
+  "summary_unread" | "summary_missing" | "station_unknown" | "failure_unknown";
+
+export interface ImpactView {
+  readonly status: "affected" | "none" | "unknown";
+  readonly reason?: ImpactUnknownReason;
+  readonly wholeSource: boolean;
+  readonly delayedBeachIds: readonly string[];
+  readonly stations: readonly StationImpact[];
+}
+
+export type AlarmState = "OK" | "ALARM" | "INSUFFICIENT_DATA" | "unknown";
+
+export interface AlarmEvent {
+  readonly id: string;
+  readonly name: string;
+  readonly at: string;
+  readonly from: AlarmState;
+  readonly to: AlarmState;
+}
+
+export interface AlarmView {
+  readonly id: string;
+  readonly name: string;
+  readonly state: AlarmState;
+  readonly stateUpdatedAt: string | null;
+  readonly description: string;
+  readonly windowMinutes: number | null;
+  readonly functionName: string | null;
+}
+
+export type AlarmsView =
+  | {
+      readonly status: "ok";
+      readonly region: string;
+      readonly list: readonly AlarmView[];
+      readonly history: readonly AlarmEvent[];
+    }
+  | { readonly status: "unavailable" };
+
 export interface Incident {
+  readonly kind: IncidentKind;
   readonly startedAt: string;
   readonly endedAt: string | null;
   readonly runs: number;
   readonly failures: readonly RunFailure[];
+  readonly stations: readonly StationGap[];
+  readonly missingTruncated: boolean;
+  readonly impact?: ImpactView;
+  // null: 경보 기록을 읽지 못함('경보 없음'이 아님)
+  readonly alarms?: readonly AlarmEvent[] | null;
 }
 
 export interface JobCollection {
@@ -54,12 +125,24 @@ export interface JobCollection {
   readonly hourly: readonly HourBucket[];
   readonly incidents: readonly Incident[];
   readonly truncated: boolean;
+  readonly lateAfterMinutes: number | null;
+  readonly overdue: boolean;
+}
+
+export interface PublishView {
+  readonly version: string;
+  readonly publishedAt: string;
+  readonly beachCount: number;
+  readonly delayedBeaches: number;
 }
 
 export interface CollectionView {
   readonly generatedAt: string;
   readonly publishedVersion: string | null;
   readonly jobs: readonly JobCollection[];
+  // 지금 게시본 요약. null이면 '확인 못 함'
+  readonly publish: PublishView | null;
+  readonly alarms: AlarmsView;
 }
 
 export function fetchCollection(
@@ -84,13 +167,38 @@ export const SOURCE_ROWS: readonly SourceRow[] = [
   { job: "collect-catalog", judgment: false },
 ];
 
-// 정상: 마지막 실행이 모두 성공 · 일부 실패 · 실패 · 기록 없음(7일 안 실행 없음)
-export type SourceState = "ok" | "partial" | "failed" | "none";
+// 정상: 마지막 실행이 모두 성공 · 지연(마지막 성공 뒤 지연 기준을 넘김) · 일부 실패 · 실패 · 기록 없음(7일 안 실행 없음)
+// 실패·일부 실패가 지연보다 앞섬(더 무거운 사유를 먼저)
+export type SourceState = "ok" | "late" | "partial" | "failed" | "none";
 
 export function sourceState(job: JobCollection | undefined): SourceState {
-  const status = job?.lastRun?.status;
-  if (status === undefined) return "none";
-  return status === "complete" ? "ok" : status;
+  if (!job?.lastRun) return "none";
+  const { status } = job.lastRun;
+  if (status !== "complete") return status;
+  return job.overdue ? "late" : "ok";
+}
+
+// 24시간 막대 한 칸: 실패(실행 중 실패가 있음) · 지연 · 기록 없음 · 정상
+export type BarState = "failed" | "late" | "none" | "ok";
+
+export function barState(bucket: HourBucket): BarState {
+  if (bucket.runs > bucket.ok) return "failed";
+  if (bucket.late) return "late";
+  if (bucket.runs === 0) return "none";
+  return "ok";
+}
+
+export function barCounts(
+  hourly: readonly HourBucket[],
+): Record<BarState, number> {
+  const counts: Record<BarState, number> = {
+    failed: 0,
+    late: 0,
+    none: 0,
+    ok: 0,
+  };
+  for (const bucket of hourly) counts[barState(bucket)] += 1;
+  return counts;
 }
 
 // 성공률(%). 실행이 없으면 null(0%·100%로 바꾸지 않음). 99.95%는 100%로 올리지 않고 99.9%로 둠
@@ -107,7 +215,7 @@ export function sumCounts(list: readonly RunCounts[]): RunCounts {
 }
 
 // 수집기 전체의 시간별 성공(칸 시각이 같은 것끼리 더함)
-export function overallHourly(jobs: readonly JobCollection[]): HourBucket[] {
+export function overallHourly(jobs: readonly JobCollection[]): HourCounts[] {
   const byHour = new Map<string, RunCounts>();
   for (const job of jobs) {
     for (const bucket of job.hourly) {
@@ -121,8 +229,8 @@ export function overallHourly(jobs: readonly JobCollection[]): HourBucket[] {
 }
 
 // 성공률이 가장 낮았던 칸(실행이 있는 칸만). 모두 100%면 null
-export function lowestHour(hourly: readonly HourBucket[]): HourBucket | null {
-  let lowest: HourBucket | null = null;
+export function lowestHour(hourly: readonly HourCounts[]): HourCounts | null {
+  let lowest: HourCounts | null = null;
   for (const bucket of hourly) {
     if (bucket.runs === 0 || bucket.ok === bucket.runs) continue;
     if (!lowest || bucket.ok / bucket.runs < lowest.ok / lowest.runs) {
@@ -203,4 +311,98 @@ export function versionTime(version: string | null): string | null {
 // UTC ISO → KST 시(0~23). 시간별 칸 이름에 씀
 export function kstHour(iso: string): number {
   return new Date(Date.parse(iso) + 9 * 3_600_000).getUTCHours();
+}
+
+// 장애 경과: 시작 → 경보 → 관측소 돌아옴 → 해결(시각순). 끝나지 않았으면 맨 끝에 '이어지는 중'
+export type TimelineEvent =
+  | { readonly type: "start"; readonly at: string }
+  | { readonly type: "alarm"; readonly at: string; readonly alarm: AlarmEvent }
+  | { readonly type: "returned"; readonly at: string; readonly station: string }
+  | { readonly type: "end"; readonly at: string }
+  | { readonly type: "ongoing"; readonly at: string };
+
+export function incidentTimeline(
+  incident: Incident,
+  nowIso: string,
+): TimelineEvent[] {
+  const middle: TimelineEvent[] = [
+    ...(incident.alarms ?? []).map((alarm): TimelineEvent => ({
+      type: "alarm",
+      at: alarm.at,
+      alarm,
+    })),
+    ...incident.stations
+      .filter((gap) => gap.returnedAt !== null)
+      .map((gap): TimelineEvent => ({
+        type: "returned",
+        at: gap.returnedAt as string,
+        station: gap.id,
+      })),
+  ].sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0));
+  return [
+    { type: "start", at: incident.startedAt },
+    ...middle,
+    incident.endedAt
+      ? { type: "end", at: incident.endedAt }
+      : { type: "ongoing", at: nowIso },
+  ];
+}
+
+// 경보 이름(접두어 뺀 것) → 묶음과 출처. 모르는 경보는 other(이름을 그대로 보여 줌)
+export type AlarmKind = "stopped" | "errors" | "failing" | "other";
+export type AlarmSource = CollectionJobId | "publish" | null;
+
+const ALARM_SOURCES: readonly [string, AlarmSource][] = [
+  ["Warnings", "collect-warnings"],
+  ["Ocean", "collect-ocean"],
+  ["Rip", "collect-rip"],
+  ["Weather", "collect-weather"],
+  ["Catalog", "collect-catalog"],
+  ["Publish", "publish"],
+];
+
+export function alarmInfo(id: string): {
+  kind: AlarmKind;
+  source: AlarmSource;
+} {
+  const source =
+    ALARM_SOURCES.find(([head]) => id.startsWith(head))?.[1] ?? null;
+  if (source === null) return { kind: "other", source };
+  const rest = id.slice(
+    ALARM_SOURCES.find(([, s]) => s === source)?.[0].length ?? 0,
+  );
+  if (rest === "Stopped") return { kind: "stopped", source };
+  if (rest === "Errors") return { kind: "errors", source };
+  if (rest === "Failing") return { kind: "failing", source };
+  return { kind: "other", source };
+}
+
+// 울리는 경보를 먼저, 그다음 이름순
+const STATE_ORDER: Record<AlarmState, number> = {
+  ALARM: 0,
+  unknown: 1,
+  INSUFFICIENT_DATA: 2,
+  OK: 3,
+};
+
+export function sortedAlarms(list: readonly AlarmView[]): AlarmView[] {
+  return [...list].sort(
+    (a, b) =>
+      STATE_ORDER[a.state] - STATE_ORDER[b.state] || (a.id < b.id ? -1 : 1),
+  );
+}
+
+// AWS 콘솔 주소. region은 운영 API가 준 값(경보를 읽지 못하면 지역 없이 기본 콘솔)
+export function cloudWatchUrl(
+  region: string | null,
+  alarmName?: string,
+): string {
+  if (!region)
+    return "https://console.aws.amazon.com/cloudwatch/home#alarmsV2:";
+  const base = `https://${region}.console.aws.amazon.com/cloudwatch/home?region=${region}#alarmsV2:`;
+  return alarmName ? `${base}alarm/${encodeURIComponent(alarmName)}` : base;
+}
+
+export function lambdaUrl(region: string, functionName: string): string {
+  return `https://${region}.console.aws.amazon.com/lambda/home?region=${region}#/functions/${encodeURIComponent(functionName)}`;
 }

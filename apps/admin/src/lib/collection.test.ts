@@ -24,6 +24,8 @@ function job(partial: Partial<JobCollection>): JobCollection {
     hourly: [],
     incidents: [],
     truncated: false,
+    lateAfterMinutes: 35,
+    overdue: false,
     ...partial,
   };
 }
@@ -59,6 +61,7 @@ describe("시간별 성공률", () => {
     hour: `2026-11-04T${h}:00:00.000Z`,
     runs,
     ok,
+    late: false,
   });
 
   it("수집기 칸을 시각별로 더하고, 가장 낮은 칸을 고름", () => {
@@ -66,8 +69,14 @@ describe("시간별 성공률", () => {
       job({ hourly: [hour("01", 4, 4), hour("02", 4, 2)] }),
       job({ hourly: [hour("01", 2, 1), hour("02", 2, 2)] }),
     ]);
-    expect(hourly).toEqual([hour("01", 6, 5), hour("02", 6, 4)]);
-    expect(lowestHour(hourly)).toEqual(hour("02", 6, 4));
+    // 모든 출처를 더한 칸은 지연 표시 없이 실행 수만
+    const counts = (h: string, runs: number, ok: number) => ({
+      hour: `2026-11-04T${h}:00:00.000Z`,
+      runs,
+      ok,
+    });
+    expect(hourly).toEqual([counts("01", 6, 5), counts("02", 6, 4)]);
+    expect(lowestHour(hourly)).toEqual(counts("02", 6, 4));
     expect(lowestHour([hour("01", 4, 4), hour("02", 0, 0)])).toBeNull();
   });
 
@@ -87,6 +96,9 @@ describe("장애 기록", () => {
             endedAt: "2026-11-04T01:30:00.000Z",
             runs: 2,
             failures: [],
+            kind: "failure",
+            stations: [],
+            missingTruncated: false,
           },
         ],
       }),
@@ -98,6 +110,9 @@ describe("장애 기록", () => {
             endedAt: null,
             runs: 1,
             failures: [],
+            kind: "failure",
+            stations: [],
+            missingTruncated: false,
           },
         ],
       }),
