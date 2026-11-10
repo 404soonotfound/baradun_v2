@@ -717,6 +717,37 @@
     },
     "alarmWindow": "{minutes}분 기준",
     "alarmWindowUnknown": "기준 시간 모름",
-    "alarmSince": "{time}부터"
+    "alarmSince": "{time}부터",
+    "filterLabel": "출처 거르기",
+    "filter": {
+      "all": "전체",
+      "judgment": "판단에 씀",
+      "reference": "참고",
+      "problem": "문제 있음"
+    },
+    "filterEmpty": "조건에 맞는 출처가 없어요.",
+    "incidentImpact": {
+      "affected": "해변 {count}곳 관측 지연",
+      "none": "해변 영향 없음",
+      "unknown": "해변 영향 확인 못 함"
+    },
+    "pager": "{total}건 중 {from}–{to} · {size}건씩",
+    "pagerLabel": "장애 기록 쪽 이동",
+    "prev": "이전",
+    "next": "다음",
+    "alertGroup": {
+      "stopped": "출처 응답 없음",
+      "errors": "실행 오류",
+      "failing": "수집 실패 이어짐",
+      "other": "그 밖의 경보"
+    },
+    "alertGroupHint": {
+      "stopped": "출처별로 정한 시간 동안 수집이 돌지 않으면 알려요",
+      "errors": "실행이 실패하면 바로 알려요",
+      "failing": "정한 시간 넘게 실패가 이어지면 알려요",
+      "other": "수집 밖의 운영 경보예요"
+    },
+    "logsLink": "로그",
+    "oldResponse": "운영 API가 아직 예전 응답을 보내고 있어요. 지연·게시 요약·경보는 확인 못 함으로 보여 줘요."
   }
 }

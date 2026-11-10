@@ -146,10 +146,59 @@ export interface CollectionView {
   readonly alarms: AlarmsView;
 }
 
-export function fetchCollection(
+export async function fetchCollection(
   accessToken: () => Promise<string | null>,
-): Promise<OpsResult<CollectionView>> {
-  return opsFetch("/ops/collection", accessToken);
+): Promise<OpsResult<CollectionView & { readonly legacy: boolean }>> {
+  const result = await opsFetch<unknown>("/ops/collection", accessToken);
+  if (!result.ok) return result;
+  return { ...result, body: normalizeCollection(result.body) };
+}
+
+type Loose<T> = { -readonly [K in keyof T]?: unknown };
+
+// 운영 API가 GH-375 전 응답(지연·게시 요약·경보·장애 종류 없음)을 보내도 화면이 깨지지 않게 채움
+// 모르는 값은 '확인 못 함' 쪽으로: 게시 요약 null, 경보 unavailable, 지연 기준 null(지연 표시 안 함)
+// legacy: 새 필드가 하나라도 빠진 응답. 화면이 '예전 응답' 안내를 띄워 지연이 없다고 읽지 않게 함
+export function normalizeCollection(raw: unknown): CollectionView & {
+  readonly legacy: boolean;
+} {
+  const view = (raw ?? {}) as Loose<CollectionView>;
+  let legacy = !("publish" in view) || !("alarms" in view);
+  const jobs = (Array.isArray(view.jobs) ? view.jobs : []).map((item) => {
+    const job = item as Loose<JobCollection> & JobCollection;
+    if (typeof job.overdue !== "boolean") legacy = true;
+    return {
+      ...job,
+      lateAfterMinutes:
+        typeof job.lateAfterMinutes === "number" ? job.lateAfterMinutes : null,
+      overdue: job.overdue === true,
+      hourly: (Array.isArray(job.hourly) ? job.hourly : []).map((bucket) => ({
+        ...bucket,
+        late: bucket.late === true,
+      })),
+      incidents: (Array.isArray(job.incidents) ? job.incidents : []).map(
+        (incident): Incident => ({
+          ...incident,
+          kind: incident.kind === "stations" ? "stations" : "failure",
+          stations: Array.isArray(incident.stations) ? incident.stations : [],
+          missingTruncated: incident.missingTruncated === true,
+        }),
+      ),
+    };
+  });
+  const alarms = view.alarms as AlarmsView | undefined;
+  return {
+    generatedAt: String(view.generatedAt ?? ""),
+    publishedVersion:
+      typeof view.publishedVersion === "string" ? view.publishedVersion : null,
+    publish: (view.publish as PublishView | null | undefined) ?? null,
+    alarms:
+      alarms?.status === "ok" && Array.isArray(alarms.list)
+        ? alarms
+        : { status: "unavailable" },
+    jobs,
+    legacy,
+  };
 }
 
 // 화면 줄 순서와 출처 정보(화면 설계서 6장 '출처 이름은 실제 출처', 아키텍처 5장 주기)
@@ -402,6 +451,38 @@ export function cloudWatchUrl(
   return alarmName ? `${base}alarm/${encodeURIComponent(alarmName)}` : base;
 }
 
+export function logsUrl(region: string, functionName: string): string {
+  const group = `/aws/lambda/${functionName}`.replace(/\//g, "$252F");
+  return `https://${region}.console.aws.amazon.com/cloudwatch/home?region=${region}#logsV2:log-groups/log-group/${group}`;
+}
+
 export function lambdaUrl(region: string, functionName: string): string {
   return `https://${region}.console.aws.amazon.com/lambda/home?region=${region}#/functions/${encodeURIComponent(functionName)}`;
+}
+
+// 출처 표 거르기: 전체 · 판단에 씀 · 참고 · 문제 있음(정상이 아닌 출처. 기록 없음도 문제로 봄)
+export type SourceFilter = "all" | "judgment" | "reference" | "problem";
+
+export function matchesFilter(
+  filter: SourceFilter,
+  row: SourceRow,
+  state: SourceState,
+): boolean {
+  if (filter === "judgment") return row.judgment;
+  if (filter === "reference") return !row.judgment;
+  if (filter === "problem") return state !== "ok";
+  return true;
+}
+
+// 경보를 묶음별로(출처 응답 없음 · 실행 오류 · 실패 이어짐 · 그 밖). 묶음 안은 울리는 것 먼저
+export function groupedAlarms(
+  list: readonly AlarmView[],
+): { kind: AlarmKind; alarms: AlarmView[] }[] {
+  const order: readonly AlarmKind[] = ["stopped", "errors", "failing", "other"];
+  return order
+    .map((kind) => ({
+      kind,
+      alarms: sortedAlarms(list.filter((a) => alarmInfo(a.id).kind === kind)),
+    }))
+    .filter((group) => group.alarms.length > 0);
 }

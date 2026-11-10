@@ -7,6 +7,9 @@ import type { BeachName } from "@/lib/beach-names";
 import {
   alarmInfo,
   allIncidents,
+  groupedAlarms,
+  logsUrl,
+  matchesFilter,
   barCounts,
   barState,
   cloudWatchUrl,
@@ -19,7 +22,6 @@ import {
   overallHourly,
   reasonOf,
   SOURCE_ROWS,
-  sortedAlarms,
   sourceState,
   successRate,
   sumCounts,
@@ -32,6 +34,7 @@ import {
   type JobCollection,
   type JobIncident,
   type RunFailure,
+  type SourceFilter,
   type SourceRow,
   type SourceState,
   type TimelineEvent,
@@ -208,18 +211,21 @@ function LastRun({ job }: { job: JobCollection | undefined }) {
   );
 }
 
+// 예전 응답(legacy)은 지연 기준을 모르니 기준 줄을 빼 '지연 표시 안 함'으로 읽지 않게 함
 function Cycle({
   row,
   job,
+  legacy,
 }: {
   row: SourceRow;
   job: JobCollection | undefined;
+  legacy: boolean;
 }) {
   const late = job?.lateAfterMinutes;
   return (
     <span className="flex flex-col gap-0.5">
       <span>{t.cycle[row.job]}</span>
-      {job && (
+      {job && !legacy && (
         <span className="text-label-s text-text-muted">
           {late == null ? t.cycleNoLate : fill(t.cycleLate, { minutes: late })}
         </span>
@@ -344,6 +350,22 @@ function SourceTable({
   onOpen: (index: number) => void;
 }) {
   const cell = "border-b border-border-default px-3 py-2.5 align-middle";
+  const legacy = "legacy" in view && view.legacy === true;
+  const [filter, setFilter] = useState<SourceFilter>("all");
+  const states = SOURCE_ROWS.map((row) => sourceState(rowJob(view, row)));
+  const filters: readonly SourceFilter[] = [
+    "all",
+    "judgment",
+    "reference",
+    "problem",
+  ];
+  const count = (f: SourceFilter) =>
+    SOURCE_ROWS.filter((row, i) => matchesFilter(f, row, states[i]!)).length;
+  const rows = SOURCE_ROWS.filter((row, i) =>
+    matchesFilter(filter, row, states[i]!),
+  );
+  // 운영 기간은 수집하지 않는 참고 정보라 전체·참고에서만 보여 줌
+  const showSeason = filter === "all" || filter === "reference";
   return (
     <section aria-labelledby="collection-sources">
       <div className="mb-2 flex flex-wrap items-end justify-between gap-2">
@@ -355,155 +377,202 @@ function SourceTable({
         </h2>
         <BarLegend />
       </div>
+      <div
+        role="group"
+        aria-label={t.filterLabel}
+        className="mb-2 flex flex-wrap gap-1.5"
+      >
+        {filters.map((f) => (
+          <button
+            key={f}
+            type="button"
+            aria-pressed={filter === f}
+            onClick={() => setFilter(f)}
+            className="inline-flex min-h-touch items-center gap-1.5 rounded-admin-control border border-border-default bg-bg-surface px-3 text-body-s text-text-body hover:bg-bg-page aria-pressed:border-brand-default aria-pressed:font-semibold aria-pressed:text-brand-default lg:min-h-admin-control"
+          >
+            {t.filter[f]}
+            <span className="text-text-muted tabular-nums">{count(f)}</span>
+          </button>
+        ))}
+      </div>
+      {rows.length === 0 && !showSeason && (
+        <p className="rounded-admin-box border border-border-default bg-bg-surface px-4 py-3 text-body-s text-text-muted">
+          {t.filterEmpty}
+        </p>
+      )}
       {/* 태블릿·PC: 표 */}
-      <table className="hidden w-full border-separate border-spacing-0 overflow-hidden rounded-admin-box border border-border-default bg-bg-surface text-body md:table">
-        <thead>
-          <tr className="bg-bg-page text-left text-label-s font-semibold text-text-body">
-            {[
-              t.colSource,
-              t.colState,
-              t.colDay,
-              t.colLastSuccess,
-              t.colCycle,
-              t.colWeek,
-              t.incidentsTitle,
-            ].map((label) => (
-              <th
-                key={label}
-                scope="col"
-                className="border-b border-border-default px-3 py-2 first:pl-4"
-              >
-                {label}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {SOURCE_ROWS.map((row) => {
-            const job = rowJob(view, row);
-            return (
-              <tr key={row.job}>
+      {(rows.length > 0 || showSeason) && (
+        <table className="hidden w-full border-separate border-spacing-0 overflow-hidden rounded-admin-box border border-border-default bg-bg-surface text-body md:table">
+          <thead>
+            <tr className="bg-bg-page text-left text-label-s font-semibold text-text-body">
+              {[
+                t.colSource,
+                t.colState,
+                t.colDay,
+                t.colLastSuccess,
+                t.colCycle,
+                t.colWeek,
+                t.incidentsTitle,
+              ].map((label) => (
+                <th
+                  key={label}
+                  scope="col"
+                  className="border-b border-border-default px-3 py-2 first:pl-4"
+                >
+                  {label}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => {
+              const job = rowJob(view, row);
+              return (
+                <tr key={row.job}>
+                  <th
+                    scope="row"
+                    className={`${cell} pl-4 text-left font-normal`}
+                  >
+                    <SourceName row={row} />
+                  </th>
+                  <td className={cell}>
+                    <StateBadge state={sourceState(job)} />
+                    <LastRun job={job} />
+                    {job?.truncated && (
+                      <p className="mt-1 text-label-s text-text-muted">
+                        {t.truncated}
+                      </p>
+                    )}
+                  </td>
+                  <td className={cell}>
+                    <DayBars job={job} />
+                  </td>
+                  <td className={`${cell} whitespace-nowrap tabular-nums`}>
+                    {job?.lastSuccessAt
+                      ? kstDateTime(job.lastSuccessAt)
+                      : t.never}
+                  </td>
+                  <td className={`${cell} text-body-s text-text-body`}>
+                    <Cycle row={row} job={job} legacy={legacy} />
+                  </td>
+                  <td className={`${cell} tabular-nums`}>
+                    {rateText(job ? successRate(job.week) : null)}
+                  </td>
+                  <td className={cell}>
+                    <IncidentJump
+                      row={row}
+                      incidents={incidents}
+                      onOpen={onOpen}
+                    />
+                  </td>
+                </tr>
+              );
+            })}
+            {showSeason && (
+              <tr>
                 <th
                   scope="row"
-                  className={`${cell} pl-4 text-left font-normal`}
+                  className="px-3 py-2.5 pl-4 text-left font-normal"
                 >
-                  <SourceName row={row} />
+                  <span className="flex flex-col gap-0.5">
+                    <span className="font-medium text-text-default">
+                      {t.season}
+                    </span>
+                    <span className="text-label-s text-text-muted">
+                      {t.reference}
+                    </span>
+                  </span>
                 </th>
-                <td className={cell}>
+                <td className="px-3 py-2.5">
+                  <span className={`${BADGE} ${STATE_BADGE.none}`}>
+                    {t.seasonState}
+                  </span>
+                </td>
+                <td
+                  colSpan={5}
+                  className="px-3 py-2.5 text-body-s text-text-body"
+                >
+                  {t.seasonHint}{" "}
+                  <ExternalLink href={SEASON_FILE}>{t.seasonLink}</ExternalLink>
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      )}
+
+      {/* 모바일(VM2): 카드. 표의 값을 빼지 않음 */}
+      {(rows.length > 0 || showSeason) && (
+        <ul className="flex flex-col divide-y divide-border-default rounded-admin-box border border-border-default bg-bg-surface md:hidden">
+          {rows.map((row) => {
+            const job = rowJob(view, row);
+            return (
+              <li key={row.job} className="flex flex-col gap-2 px-4 py-3">
+                <span className="flex items-start justify-between gap-3">
+                  <SourceName row={row} />
                   <StateBadge state={sourceState(job)} />
-                  <LastRun job={job} />
-                  {job?.truncated && (
-                    <p className="mt-1 text-label-s text-text-muted">
-                      {t.truncated}
-                    </p>
-                  )}
-                </td>
-                <td className={cell}>
-                  <DayBars job={job} />
-                </td>
-                <td className={`${cell} whitespace-nowrap tabular-nums`}>
-                  {job?.lastSuccessAt
-                    ? kstDateTime(job.lastSuccessAt)
-                    : t.never}
-                </td>
-                <td className={`${cell} text-body-s text-text-body`}>
-                  <Cycle row={row} job={job} />
-                </td>
-                <td className={`${cell} tabular-nums`}>
-                  {rateText(job ? successRate(job.week) : null)}
-                </td>
-                <td className={cell}>
+                </span>
+                <LastRun job={job} />
+                <DayBars job={job} />
+                <dl className="grid grid-cols-3 gap-2 text-body-s">
+                  <div>
+                    <dt className="text-label-s text-text-muted">
+                      {t.colLastSuccess}
+                    </dt>
+                    <dd className="text-text-default tabular-nums">
+                      {job?.lastSuccessAt
+                        ? kstDateTime(job.lastSuccessAt)
+                        : t.never}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-label-s text-text-muted">
+                      {t.colCycle}
+                    </dt>
+                    <dd className="text-text-default">
+                      <Cycle row={row} job={job} legacy={legacy} />
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-label-s text-text-muted">
+                      {t.colWeek}
+                    </dt>
+                    <dd className="text-text-default tabular-nums">
+                      {rateText(job ? successRate(job.week) : null)}
+                    </dd>
+                  </div>
+                </dl>
+                {job?.truncated && (
+                  <p className="text-label-s text-text-muted">{t.truncated}</p>
+                )}
+                <span>
                   <IncidentJump
                     row={row}
                     incidents={incidents}
                     onOpen={onOpen}
                   />
-                </td>
-              </tr>
+                </span>
+              </li>
             );
           })}
-          <tr>
-            <th scope="row" className="px-3 py-2.5 pl-4 text-left font-normal">
-              <span className="flex flex-col gap-0.5">
+          {showSeason && (
+            <li className="flex flex-col gap-1 px-4 py-3">
+              <span className="flex items-start justify-between gap-3">
                 <span className="font-medium text-text-default">
                   {t.season}
                 </span>
-                <span className="text-label-s text-text-muted">
-                  {t.reference}
+                <span className={`${BADGE} ${STATE_BADGE.none}`}>
+                  {t.seasonState}
                 </span>
               </span>
-            </th>
-            <td className="px-3 py-2.5">
-              <span className={`${BADGE} ${STATE_BADGE.none}`}>
-                {t.seasonState}
-              </span>
-            </td>
-            <td colSpan={5} className="px-3 py-2.5 text-body-s text-text-body">
-              {t.seasonHint}{" "}
-              <ExternalLink href={SEASON_FILE}>{t.seasonLink}</ExternalLink>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-
-      {/* 모바일(VM2): 카드. 표의 값을 빼지 않음 */}
-      <ul className="flex flex-col divide-y divide-border-default rounded-admin-box border border-border-default bg-bg-surface md:hidden">
-        {SOURCE_ROWS.map((row) => {
-          const job = rowJob(view, row);
-          return (
-            <li key={row.job} className="flex flex-col gap-2 px-4 py-3">
-              <span className="flex items-start justify-between gap-3">
-                <SourceName row={row} />
-                <StateBadge state={sourceState(job)} />
-              </span>
-              <LastRun job={job} />
-              <DayBars job={job} />
-              <dl className="grid grid-cols-3 gap-2 text-body-s">
-                <div>
-                  <dt className="text-label-s text-text-muted">
-                    {t.colLastSuccess}
-                  </dt>
-                  <dd className="text-text-default tabular-nums">
-                    {job?.lastSuccessAt
-                      ? kstDateTime(job.lastSuccessAt)
-                      : t.never}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-label-s text-text-muted">{t.colCycle}</dt>
-                  <dd className="text-text-default">
-                    <Cycle row={row} job={job} />
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-label-s text-text-muted">{t.colWeek}</dt>
-                  <dd className="text-text-default tabular-nums">
-                    {rateText(job ? successRate(job.week) : null)}
-                  </dd>
-                </div>
-              </dl>
-              {job?.truncated && (
-                <p className="text-label-s text-text-muted">{t.truncated}</p>
-              )}
-              <span>
-                <IncidentJump row={row} incidents={incidents} onOpen={onOpen} />
+              <span className="text-body-s text-text-body">
+                {t.seasonHint}{" "}
+                <ExternalLink href={SEASON_FILE}>{t.seasonLink}</ExternalLink>
               </span>
             </li>
-          );
-        })}
-        <li className="flex flex-col gap-1 px-4 py-3">
-          <span className="flex items-start justify-between gap-3">
-            <span className="font-medium text-text-default">{t.season}</span>
-            <span className={`${BADGE} ${STATE_BADGE.none}`}>
-              {t.seasonState}
-            </span>
-          </span>
-          <span className="text-body-s text-text-body">
-            {t.seasonHint}{" "}
-            <ExternalLink href={SEASON_FILE}>{t.seasonLink}</ExternalLink>
-          </span>
-        </li>
-      </ul>
+          )}
+        </ul>
+      )}
     </section>
   );
 }
@@ -688,6 +757,19 @@ function OngoingBadge({ ended }: { ended: boolean }) {
   );
 }
 
+// 목록 줄의 해변 영향 요약(해양 관측만). 응답에 영향이 없으면 '확인 못 함'(영향 없음으로 보지 않음)
+function impactSummary(incident: JobIncident): string | null {
+  if (incident.job !== "collect-ocean") return null;
+  const { impact } = incident;
+  if (!impact || impact.status === "unknown") return t.incidentImpact.unknown;
+  if (impact.status === "none") return t.incidentImpact.none;
+  return fill(t.incidentImpact.affected, {
+    count: impact.delayedBeachIds.length,
+  });
+}
+
+const PAGE_SIZE = 5;
+
 function Incidents({
   incidents,
   nowMs,
@@ -697,6 +779,12 @@ function Incidents({
   nowMs: number;
   onOpen: (index: number) => void;
 }) {
+  const [page, setPage] = useState(0);
+  const pages = Math.max(1, Math.ceil(incidents.length / PAGE_SIZE));
+  // 다시 불러와 장애가 줄면 마지막 쪽으로
+  const current = Math.min(page, pages - 1);
+  const from = current * PAGE_SIZE;
+  const shown = incidents.slice(from, from + PAGE_SIZE);
   return (
     <section
       aria-labelledby="collection-incidents"
@@ -713,8 +801,10 @@ function Incidents({
         <p className="mt-2 text-body-s text-text-muted">{t.incidentsEmpty}</p>
       ) : (
         <ul className="mt-2 flex flex-col divide-y divide-border-default">
-          {incidents.map((incident, index) => {
+          {shown.map((incident, i) => {
+            const index = from + i;
             const first = incident.failures[0];
+            const impact = impactSummary(incident);
             return (
               <li
                 key={`${incident.job}|${incident.kind}|${incident.startedAt}`}
@@ -740,6 +830,7 @@ function Incidents({
                         minutes: incidentMinutes(incident, nowMs),
                         runs: incident.runs,
                       })}
+                      {impact && ` · ${impact}`}
                     </span>
                   </span>
                   <span className="flex shrink-0 flex-col items-end gap-1">
@@ -753,6 +844,39 @@ function Incidents({
             );
           })}
         </ul>
+      )}
+      {pages > 1 && (
+        <nav
+          aria-label={t.pagerLabel}
+          className="mt-2 flex flex-wrap items-center justify-between gap-2 border-t border-border-default pt-2"
+        >
+          <span className="text-label-s text-text-muted tabular-nums">
+            {fill(t.pager, {
+              total: incidents.length,
+              from: from + 1,
+              to: from + shown.length,
+              size: PAGE_SIZE,
+            })}
+          </span>
+          <span className="flex gap-1.5">
+            <Button
+              variant="secondary"
+              size="small"
+              disabled={current === 0}
+              onClick={() => setPage(current - 1)}
+            >
+              {t.prev}
+            </Button>
+            <Button
+              variant="secondary"
+              size="small"
+              disabled={current >= pages - 1}
+              onClick={() => setPage(current + 1)}
+            >
+              {t.next}
+            </Button>
+          </span>
+        </nav>
       )}
     </section>
   );
@@ -804,37 +928,58 @@ function Alerts({ view }: { view: CollectionView }) {
       ) : alarms.list.length === 0 ? (
         <p className="mt-2 text-body-s text-text-muted">{t.alertsEmpty}</p>
       ) : (
-        <ul className="mt-2 grid grid-cols-1 divide-y divide-border-default lg:grid-cols-2 lg:gap-x-6 lg:divide-y-0">
-          {sortedAlarms(alarms.list).map((alarm) => (
-            <li
-              key={alarm.id}
-              className="flex items-start justify-between gap-3 py-2.5 lg:border-b lg:border-border-default"
+        <div className="mt-2 grid grid-cols-1 gap-4 lg:grid-cols-2">
+          {groupedAlarms(alarms.list).map((group) => (
+            <section
+              key={group.kind}
+              aria-labelledby={`alert-group-${group.kind}`}
+              className="flex flex-col"
             >
-              <span className="flex flex-col gap-0.5">
-                <span className="text-body text-text-default">
-                  {alarmTitle(alarm)}
-                </span>
-                <span className="text-label-s text-text-muted tabular-nums">
-                  {alarm.windowMinutes === null
-                    ? t.alarmWindowUnknown
-                    : fill(t.alarmWindow, { minutes: alarm.windowMinutes })}
-                  {alarm.state === "ALARM" &&
-                    alarm.stateUpdatedAt &&
-                    ` · ${fill(t.alarmSince, { time: kstDateTime(alarm.stateUpdatedAt) })}`}
-                </span>
-              </span>
-              <span className="flex shrink-0 flex-col items-end gap-1">
-                <AlarmBadge state={alarm.state} />
-                <ExternalLink
-                  href={cloudWatchUrl(alarms.region, alarm.name)}
-                  className="text-label-s"
-                >
-                  {t.alarmLink}
-                </ExternalLink>
-              </span>
-            </li>
+              <h3
+                id={`alert-group-${group.kind}`}
+                className="text-body font-semibold text-text-default"
+              >
+                {t.alertGroup[group.kind]}
+              </h3>
+              <p className="text-label-s text-text-muted">
+                {t.alertGroupHint[group.kind]}
+              </p>
+              <ul className="mt-1 flex flex-col divide-y divide-border-default">
+                {group.alarms.map((alarm) => (
+                  <li
+                    key={alarm.id}
+                    className="flex items-start justify-between gap-3 py-2"
+                  >
+                    <span className="flex flex-col gap-0.5">
+                      <span className="text-body-s text-text-default">
+                        {alarmTitle(alarm)}
+                      </span>
+                      <span className="text-label-s text-text-muted tabular-nums">
+                        {alarm.windowMinutes === null
+                          ? t.alarmWindowUnknown
+                          : fill(t.alarmWindow, {
+                              minutes: alarm.windowMinutes,
+                            })}
+                        {alarm.state === "ALARM" &&
+                          alarm.stateUpdatedAt &&
+                          ` · ${fill(t.alarmSince, { time: kstDateTime(alarm.stateUpdatedAt) })}`}
+                      </span>
+                    </span>
+                    <span className="flex shrink-0 flex-col items-end gap-1">
+                      <AlarmBadge state={alarm.state} />
+                      <ExternalLink
+                        href={cloudWatchUrl(alarms.region, alarm.name)}
+                        className="text-label-s"
+                      >
+                        {t.alarmLink}
+                      </ExternalLink>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </section>
           ))}
-        </ul>
+        </div>
       )}
     </section>
   );
@@ -1105,9 +1250,14 @@ function Alarms({
                     {t.alarmLink}
                   </ExternalLink>
                   {fn && (
-                    <ExternalLink href={lambdaUrl(region, fn)}>
-                      {t.lambdaLink}
-                    </ExternalLink>
+                    <>
+                      <ExternalLink href={logsUrl(region, fn)}>
+                        {t.logsLink}
+                      </ExternalLink>
+                      <ExternalLink href={lambdaUrl(region, fn)}>
+                        {t.lambdaLink}
+                      </ExternalLink>
+                    </>
                   )}
                 </span>
               </li>
@@ -1308,7 +1458,7 @@ function CollectionBody({ beaches }: { beaches: Beaches }) {
   const key = `${attempt}|${generation}`;
   const [loaded, setLoaded] = useState<{
     key: string;
-    result: OpsResult<CollectionView>;
+    result: OpsResult<CollectionView & { readonly legacy: boolean }>;
   } | null>(null);
   const [sheet, setSheet] = useState<number | null>(null);
   // 시트를 닫으면 포커스를 연 버튼으로 돌려줌
@@ -1394,6 +1544,9 @@ function CollectionBody({ beaches }: { beaches: Beaches }) {
         ))}
       {view && (
         <>
+          {view.legacy && (
+            <Notice tone="warn" title={t.oldResponse} role="status" />
+          )}
           <Summary view={view} />
           <SourceTable view={view} incidents={incidents} onOpen={open} />
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
