@@ -5,7 +5,7 @@ on:
   push:
     branches: [main]
   schedule:
-    - cron: "17 0 * * *" # 매일 09:17 KST 취약점·비밀값·지도 서버(map-smoke) 검사만 돌림, 정각 혼잡 회피 (BRD-91, BRD-132, BRD-114)
+    - cron: "17 0 * * *" # 매일 09:17 KST 취약점·비밀값 검사만 돌림, 정각 혼잡 회피 (BRD-91, BRD-132)
 permissions:
   contents: read
 concurrency:
@@ -32,6 +32,7 @@ jobs:
       beaches: ${{ steps.filter.outputs.beaches }} # 해변 목록 변경 여부
       deps: ${{ steps.filter.outputs.deps }} # 의존성 변경 여부
       agy_review: ${{ steps.filter.outputs.agy_review }} # 대체 리뷰 도구(BRD-174)
+      map: ${{ steps.filter.outputs.map }} # 지도 판·지도 제공 경로(D19-1)
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - id: filter
@@ -91,6 +92,11 @@ jobs:
             agy_review: # 대체 리뷰 도구 판정 규칙이 바뀌면(agy는 부르지 않음)
               - *shared
               - 'tools/agy-review/**'
+            map: # 지도 판·스타일·지도 파일 도구가 바뀌면 실제 지도 파일 확인(D19-1 · #392)
+              - 'apps/web/src/lib/map/style.ts' # 지도 판 이름
+              - 'apps/web/src/lib/map/style-*.json' # 부르는 글꼴
+              - 'tools/map-tiles/**'
+              - '.github/workflows/map-tiles.yml'
 
   # 웹: 토큰·문구 키·린트·타입 검사·단위 테스트. 정적 빌드는 e2e-build에서 한 번만(BRD-178)
   # main push도 바뀐 영역만(BRD-178, 10/30 BRD-133 '늘 전체'를 바꿈). 대신 main 규칙이 '최신 브랜치만 머지'라
@@ -301,6 +307,7 @@ jobs:
       - run: npm ci
       - run: npm run build -w infra
       - run: npm run test -w infra
+      - run: npm run test:map-tiles # 지도 판 검사 도구 시험(D19-1, tools/map-tiles는 infra 필터에 있음)
       - run: npx cdk synth
         working-directory: infra
       # 고정된 공식 참조로 결정적으로 검사. 최신 공개 자료는 iam-reference-audit.yml에서 대조함
@@ -357,13 +364,17 @@ jobs:
       - run: npm ci # lock 파일대로 설치(ajv는 contracts 설치본)
       - run: npm run test:agy-review
 
-  # OpenFreeMap 스모크 (BRD-114 · 결정 기록 12장 결정 10): 고정 타일 판·sprite·글꼴이 아직 그대로 있는지 실제 서버로 확인
-  # 매일 정기 실행과 웹 변경 PR에서 돌림. 제3자 서버 상태라 ci-ok(머지 필수)에는 넣지 않고, 실패하면 이 작업만 빨간불
-  # main push에서는 돌리지 않음: 실패하면 실행 결론이 실패가 되어 그 커밋의 배포가 막힘(BRD-178, deploy-plan.sh)
-  map-smoke:
+  # 지도 판 확인 (D19-1 · #392): 웹이 쓰는 판(style.ts MAP_VERSION)이 운영 CloudFront에 다 올라가 있는지
+  # READY.txt 판 일치 → PMTiles 범위 요청(206·Content-Range·헤더) → 스타일이 부르는 sprite·글꼴 응답. 공개 주소 읽기만(AWS 권한 없음)
+  # 지도 판·스타일·지도 파일 도구가 바뀐 PR에서만 돌림. 지도와 무관한 웹 PR은 외부 요청 없음. 올리기는 map-tiles 워크플로 책임
+  # main push에서는 돌리지 않음: 같은 내용을 PR에서 확인했고, 실패하면 그 커밋의 배포가 막힘(BRD-178, deploy-plan.sh)
+  # 사이트 인프라(CloudFront·버킷·CSP) 변경은 PR 때 운영에 반영 전이라 여기서 보지 않음 → npm run deploy:infra가 배포 뒤 같은 검사를 돌림
+  map-files:
     needs: changes
-    if: ${{ !cancelled() && (github.event_name == 'schedule' || (github.event_name == 'pull_request' && needs.changes.outputs.web == 'true')) }}
+    if: github.event_name == 'pull_request' && needs.changes.outputs.map == 'true'
     runs-on: ubuntu-latest
+    env:
+      SITE_URL: ${{ vars.SITE_URL }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
@@ -371,7 +382,14 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version-file: .nvmrc
-      - run: npm run check:map -w apps/web # 의존성 없이 node만 씀(npm ci 불필요)
+      # 변수가 비면 확인 없이 초록불이 되지 않게 실패시킴
+      - name: 저장소 변수 확인
+        run: |
+          if [ -z "$SITE_URL" ]; then
+            echo "::error::저장소 변수 SITE_URL이 필요해요"
+            exit 1
+          fi
+      - run: node tools/map-tiles/verify.mjs --site "$SITE_URL" # 의존성 없이 node만 씀(npm ci 불필요)
 
   # 의존성 취약점: 런타임(high 이상)은 실패, 개발 도구는 보고만 (BRD-90)
   # 고치지 못하는 지적은 GitHub 이슈(topic:security)로 사유를 남김. lock 파일만 읽으므로 npm ci 불필요
@@ -452,6 +470,7 @@ jobs:
         contracts,
         beaches,
         agy-review,
+        map-files,
         audit,
         gitleaks,
       ] # 하나라도 실패하면 빨간불
