@@ -230,6 +230,7 @@
       "windAheadLabel": "앞으로 바람: {cells}. 기상청 예보 {time} 발표",
       "windCell": "{hour}시 {dir}풍 {speed}m/s",
       "windCellNoValue": "{hour}시 값 없음",
+      "windCellNoDir": "{hour}시 바람 {speed}m/s, 방향 값 없음",
       "windFailed": "바람 예보를 확인하지 못했어요 · 특보와 측정값은 위에서 확인하세요"
     },
     "recent": {

@@ -8,7 +8,7 @@ import { SkyGlyph } from "@/components/detail/weather-card";
 import { MiniWaveSvg } from "@/components/home/mini-wave-chart";
 import { ReasonBadge } from "@/components/reason-badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { WindArrow } from "@/components/weather/wind-row";
+import { WindRow } from "@/components/weather/wind-row";
 import type { Activity } from "@/lib/activity";
 import type { BeachSummary } from "@/lib/beach-summary";
 import { compassPoint } from "@/lib/direction";
@@ -29,7 +29,7 @@ import { useMetaText } from "@/lib/snapshot/use-meta-text";
 import type { BeachView, MetricKey } from "@/lib/snapshot/view";
 import { useBeachWeather, type WeatherView } from "@/lib/snapshot/weather";
 import { waveChart } from "@/lib/wave-chart";
-import { hourCells, kstDay, type HourCell } from "@/lib/weather";
+import { hourCells, kstDay, windCellText, type HourCell } from "@/lib/weather";
 
 // 홈 해변 카드 (노션 2장 HOME 7 · 3장 NearCard, 11/5 홈 v3 시안 ActR_M_V3SW·SF·SC · P_V3*)
 // 모바일·PC 같은 모양: 배지 + › → 이름 → 거리(또는 지역) · 측정 시각 → 큰 값 2칸 → 회색 그림 칸 → 아래 한 줄
@@ -55,7 +55,7 @@ export const CARD_LAYOUT: Record<Activity, CardLayout> = {
   scuba: { big: ["waveHeight", "wind"], line: ["waterTemp", "waveDirection"] },
 };
 
-// [1] Vue: props: { locale, beach, distanceKm, view, nowMs, activity }
+// [1] Vue: props: { locale, beach, distanceKm, view, nowMs, activity, weather }
 export function NearCard({
   locale,
   beach,
@@ -63,6 +63,7 @@ export function NearCard({
   view,
   nowMs,
   activity,
+  weather,
 }: {
   locale: Locale;
   beach: BeachSummary;
@@ -70,6 +71,7 @@ export function NearCard({
   view: BeachView;
   nowMs: number;
   activity: Activity; // 고른 활동(부르는 쪽이 정함)
+  weather?: WeatherView; // 넘기면 그 값만 그림(훅을 부르지 않음, Storybook 확인용). 없으면 해변 ID로 받음
 }) {
   const t = useTranslations();
   const { confirmedUntilText } = useBadgeText();
@@ -209,7 +211,11 @@ export function NearCard({
       </span>
 
       {activity === "swimming" && (
-        <TodayWeather beachId={beach.id} region={beach.region} nowMs={nowMs} />
+        <WeatherOf beachId={beach.id} given={weather}>
+          {(w) => (
+            <TodayWeather weather={w} region={beach.region} nowMs={nowMs} />
+          )}
+        </WeatherOf>
       )}
       {activity === "surfing" && (
         <WaveStrip
@@ -218,7 +224,11 @@ export function NearCard({
           nowMs={nowMs}
         />
       )}
-      {activity === "scuba" && <WindAhead beachId={beach.id} nowMs={nowMs} />}
+      {activity === "scuba" && (
+        <WeatherOf beachId={beach.id} given={weather}>
+          {(w) => <WindAhead weather={w} nowMs={nowMs} />}
+        </WeatherOf>
+      )}
 
       <span className="mt-auto flex flex-col gap-1 text-caption">
         {lines.length > 0 && (
@@ -277,6 +287,34 @@ function BigMetric({ label, metric }: { label: string; metric: CardMetric }) {
   );
 }
 
+// 날씨 줄 재료. 넘긴 값(Storybook)이 있으면 그대로, 없으면 해변 ID로 받음
+// 훅은 받을 때만 부름(넘긴 값이 있는데도 날씨 파일을 따로 받지 않게). 숨김 화면은 훅이 none으로 알림
+function WeatherOf({
+  beachId,
+  given,
+  children,
+}: {
+  beachId: string;
+  given: WeatherView | undefined;
+  children: (weather: WeatherView) => React.ReactNode;
+}) {
+  return given ? (
+    children(given)
+  ) : (
+    <FetchedWeather beachId={beachId} render={children} />
+  );
+}
+
+function FetchedWeather({
+  beachId,
+  render,
+}: {
+  beachId: string;
+  render: (weather: WeatherView) => React.ReactNode;
+}) {
+  return render(useBeachWeather(beachId));
+}
+
 // 회색 그림 칸 틀(시안 rounded 10 · 안쪽 높이 49)
 function PictureBox({ children }: { children: React.ReactNode }) {
   return (
@@ -308,16 +346,15 @@ function todayCells(weather: WeatherView, nowMs: number): HourCell[] {
 // 하늘 = 오늘 남은 첫 3시간 칸, 강수확률 = 오늘 남은 칸 중 가장 높은 값(값이 있는 칸만), 최저·최고 = publisher 오늘 값
 // 지금 기온은 실황이라 시각을 따로 붙임(예보 발표 시각과 섞지 않음). 값이 없는 자리는 그리지 않음(0·맑음으로 채우지 않음)
 function TodayWeather({
-  beachId,
+  weather,
   region,
   nowMs,
 }: {
-  beachId: string;
+  weather: WeatherView;
   region: string;
   nowMs: number;
 }) {
   const t = useTranslations();
-  const weather = useBeachWeather(beachId);
   if (weather.kind === "none") return null;
   if (weather.kind === "loading") {
     return (
@@ -488,11 +525,16 @@ function WaveStrip({
   );
 }
 
-// [6] 스쿠버다이빙: 앞으로 바람 7칸(3시간 간격). 칸 폭은 카드 폭에 맞춰 나눔(상세 바람 줄은 36px 고정)
+// [6] 스쿠버다이빙: 앞으로 바람 7칸(3시간 간격). 상세 바람 줄과 같은 부품(WindRow)을 카드 폭에 맞춰 씀
 const WIND_CELLS = 7;
-function WindAhead({ beachId, nowMs }: { beachId: string; nowMs: number }) {
+function WindAhead({
+  weather,
+  nowMs,
+}: {
+  weather: WeatherView;
+  nowMs: number;
+}) {
   const t = useTranslations();
-  const weather = useBeachWeather(beachId);
   if (weather.kind === "none") return null;
   if (weather.kind === "loading") {
     return (
@@ -511,33 +553,24 @@ function WindAhead({ beachId, nowMs }: { beachId: string; nowMs: number }) {
   }
   const label = t("home.card.windAheadLabel", {
     cells: cells
-      .map((cell) =>
-        cell.windSpeed === null || cell.windTo === null
-          ? t("home.card.windCellNoValue", { hour: cell.hour })
-          : t("home.card.windCell", {
-              hour: cell.hour,
-              dir: t(
-                `observation.direction.${compassPoint((cell.windTo + 180) % 360)}`,
-              ),
-              speed: Math.round(cell.windSpeed),
-            }),
-      )
+      .map((cell) => {
+        const text = windCellText(cell);
+        if (text.kind === "noValue")
+          return t("home.card.windCellNoValue", { hour: text.hour });
+        if (text.kind === "noDir")
+          return t("home.card.windCellNoDir", {
+            hour: text.hour,
+            speed: text.speed,
+          });
+        return t("home.card.windCell", {
+          hour: text.hour,
+          dir: t(`observation.direction.${text.from}`),
+          speed: text.speed,
+        });
+      })
       .join(", "),
     time: issued,
   });
-  // 면 그래프: 값이 이어진 구간마다 한 조각(값이 없는 칸에서 끊음, 0으로 그리지 않음)
-  const max = Math.max(1, ...cells.map((c) => c.windSpeed ?? 0));
-  const x = (i: number) => i * 10 + 5;
-  const y = (v: number) => 20 - (v / max) * 17;
-  const runs: { x: number; y: number }[][] = [];
-  let run: { x: number; y: number }[] = [];
-  cells.forEach((cell, i) => {
-    if (cell.windSpeed === null) {
-      if (run.length) runs.push(run);
-      run = [];
-    } else run.push({ x: x(i), y: y(cell.windSpeed) });
-  });
-  if (run.length) runs.push(run);
 
   return (
     <PictureBox>
@@ -555,54 +588,13 @@ function WindAhead({ beachId, nowMs }: { beachId: string; nowMs: number }) {
             {t("home.card.forecastAt", { time: issued })}
           </span>
         </span>
-        <span aria-hidden="true" className="grid grid-cols-7">
-          {cells.map((cell) => (
-            <span key={cell.at} className="flex flex-col items-center gap-0.5">
-              <span className="text-[10px] leading-none text-text-muted tabular-nums">
-                {t("detail.weather.hour", { hour: cell.hour })}
-              </span>
-              <span className="text-text-body">
-                {cell.windTo === null || cell.windSpeed === null ? (
-                  <span className="block size-[11px]" />
-                ) : (
-                  <WindArrow windTo={cell.windTo} />
-                )}
-              </span>
-              <span className="text-label-s leading-none font-bold text-text-default tabular-nums">
-                {cell.windSpeed === null ? "–" : Math.round(cell.windSpeed)}
-              </span>
-            </span>
-          ))}
-        </span>
-        <svg
-          aria-hidden="true"
-          viewBox={`0 0 ${WIND_CELLS * 10} 20`}
-          preserveAspectRatio="none"
-          className="block h-5 w-full"
-        >
-          {runs.map((points) => {
-            const line = points
-              .map((p, j) => `${j ? "L" : "M"}${p.x},${p.y.toFixed(1)}`)
-              .join(" ");
-            return (
-              <g key={points[0]!.x}>
-                <path
-                  d={`${line} L${points.at(-1)!.x},20 L${points[0]!.x},20 Z`}
-                  className="fill-chart"
-                  fillOpacity={0.14}
-                />
-                <path
-                  d={line}
-                  fill="none"
-                  className="stroke-chart"
-                  strokeWidth={1.6}
-                  strokeLinejoin="round"
-                  vectorEffect="non-scaling-stroke"
-                />
-              </g>
-            );
-          })}
-        </svg>
+        <WindRow
+          cells={cells}
+          hours={cells.map((cell) =>
+            t("detail.weather.hour", { hour: cell.hour }),
+          )}
+          columns={WIND_CELLS}
+        />
       </span>
     </PictureBox>
   );
