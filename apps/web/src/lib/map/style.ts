@@ -26,7 +26,7 @@ export const MAP_PATH = `/map/${MAP_VERSION}`;
 export const TILE_SOURCE_ID = "openmaptiles";
 
 // 지도 파일 주소. 화면과 같은 출처(운영 CloudFront)에서 받음(CSP 'self', 외부 출처 허용 없음)
-// 운영 CloudFront는 CORS 헤더를 주지 않아 개발 서버·Storybook에서 운영 지도 파일을 빌려 쓸 수 없음
+// 개발 서버·Storybook은 /map/ 요청을 운영 CloudFront로 넘겨 같은 출처로 받음(scripts/dev-map.mjs, CORS를 열지 않음)
 export function mapAssetUrls(origin: string) {
   const base = `${origin.replace(/\/+$/, "")}${MAP_PATH}`;
   return {
