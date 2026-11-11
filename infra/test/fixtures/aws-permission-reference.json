@@ -1112,6 +1112,39 @@
         ]
       }
     },
+    "AWS::Logs::MetricFilter": {
+      "typeName": "AWS::Logs::MetricFilter",
+      "handlers": {
+        "create": {
+          "permissions": [
+            "logs:PutMetricFilter",
+            "logs:DescribeMetricFilters"
+          ]
+        },
+        "read": {
+          "permissions": [
+            "logs:DescribeMetricFilters"
+          ]
+        },
+        "update": {
+          "permissions": [
+            "logs:PutMetricFilter",
+            "logs:DescribeMetricFilters"
+          ]
+        },
+        "delete": {
+          "permissions": [
+            "logs:DeleteMetricFilter",
+            "logs:DescribeMetricFilters"
+          ]
+        },
+        "list": {
+          "permissions": [
+            "logs:DescribeMetricFilters"
+          ]
+        }
+      }
+    },
     "AWS::S3::Bucket": {
       "typeName": "AWS::S3::Bucket",
       "handlers": {

@@ -190,6 +190,8 @@ export class BaradunStack extends Stack {
       email: alertEmail.valueAsString, // 예산·문의 알림과 같은 주소
       collectors: collectors.functions,
       publisher: publisher.function,
+      opsApi: opsApi.function, // 운영 API 5xx·권한 거부 급증 감시(D17-7)
+      opsApiLogGroup: opsApi.logGroup,
       // 로그인 반복 요청 감시(D17-4): 운영자·데모 풀의 관리자 앱 클라이언트
       signInClients: [
         {

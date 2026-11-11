@@ -6,6 +6,8 @@ import { ALARM_LABELS } from "../../services/src/ops/alarm-notification";
 import {
   COLLECTOR_SCHEDULE_MINUTES,
   LOGIN_ABUSE_ALARM,
+  MAX_ALARMS,
+  OPS_API_ALARM,
   RETRY_LIMITS,
   WEATHER_ALARM,
 } from "../lib/settings";
@@ -73,10 +75,13 @@ const failureQueueId = Object.keys(
 ).find((id) => id.startsWith("OpsNotificationFailures"))!;
 
 describe("운영 경보 (BRD-62)", () => {
-  it("경보는 12개: 오류 5(수집기 4·게시) + 심장박동 4(특보·관측·이안류·게시) + 알림 발송 실패 1 + 로그인 반복 요청 1 + 날씨 수집 계속 실패 1", () => {
-    expect(alarms).toHaveLength(12);
+  it("경보 수는 상한 MAX_ALARMS(13)와 같다", () => {
+    expect(alarms).toHaveLength(MAX_ALARMS);
     expect(
       alarms.filter(([id]) => id.startsWith("OpsLoginAbuse")),
+    ).toHaveLength(1);
+    expect(
+      alarms.filter(([id]) => id.startsWith("OpsOpsApiErrors")),
     ).toHaveLength(1);
     expect(
       byMetric("Errors")
@@ -100,18 +105,23 @@ describe("운영 경보 (BRD-62)", () => {
       const metric = statOf(a).MetricName;
       const beat = metric === "Invocations";
       // 심장박동은 실행이 없으면(지표 없음) 위반, 오류·대기열은 지표 없음에 상태를 유지함(정상으로 보지 않음)
-      // 로그인 반복 요청은 로그인이 없으면 반복도 없으므로 정상(반복이 끝나면 OK로 돌아가 다음 반복에 다시 알림)
+      // 로그인 반복 요청·운영 API 오류 급증은 호출이 없으면 오류도 없으므로 정상(notBreaching)
       const login = id.startsWith("OpsLoginAbuse");
+      const opsApi = id.startsWith("OpsOpsApiErrors");
       // 날씨는 실행 없음도 실패로 보는 오류 경보(경보 하나로 오류·중단을 함께 잡음, BRD-181)
       const weather = id.startsWith("OpsWeatherFailing");
       expect(p.TreatMissingData, id).toBe(
-        login ? "notBreaching" : beat || weather ? "breaching" : "ignore",
+        login || opsApi
+          ? "notBreaching"
+          : beat || weather
+            ? "breaching"
+            : "ignore",
       );
       expect(p.AlarmActions, id).toBeUndefined();
       expect(p.OKActions, id).toBeUndefined();
       expect(p.InsufficientDataActions, id).toBeUndefined();
-      // 로그인 반복 요청은 여러 지표의 수식이라 아래 전용 테스트에서 통계를 봄
-      if (login) continue;
+      // 로그인 반복 요청·운영 API 오류 급증은 여러 지표의 수식이라 아래 전용 테스트에서 통계를 봄
+      if (login || opsApi) continue;
       expect(statOf(a).Statistic, id).toBe(
         metric === "ApproximateNumberOfMessagesVisible" ? "Maximum" : "Sum",
       );
@@ -247,7 +257,7 @@ describe("운영 경보 (BRD-62)", () => {
       "detail-type": ["CloudWatch Alarm State Change"],
       detail: { state: { value: ["ALARM"] } },
     });
-    expect(rule!.Properties.EventPattern.resources).toHaveLength(12);
+    expect(rule!.Properties.EventPattern.resources).toHaveLength(alarms.length);
     expect(rule!.Properties.Targets).toHaveLength(1);
     // 전달 실패도 버리지 않고 같은 실패 대기열로 보냄
     expect(rule!.Properties.Targets[0].DeadLetterConfig).toEqual({
@@ -332,5 +342,57 @@ describe("운영 경보 (BRD-62)", () => {
       signInFailures: 10,
       accountRecoveryCalls: 5,
     });
+  });
+
+  // 운영 API 5xx·권한 거부 급증(결정 기록 D17-7): Lambda 함수 URL 5xx와 401·403 로그 지표를 5분 기준으로 나눠 큰 값 ≥ 1
+  it("운영 API 5xx·권한 거부 급증 경보는 함수 URL 5xx와 401·403 로그 지표를 5분 기준으로 본다", () => {
+    // 1) 로그 지표 필터 검증 (401·403에만 남는 ops_auth_denied 이벤트 수)
+    const filters = Object.entries(
+      template.findResources("AWS::Logs::MetricFilter"),
+    ) as [string, Resource][];
+    expect(filters).toHaveLength(1);
+    const [, filter] = filters[0];
+    const fp = filter.Properties;
+    // Lambda 텍스트 로그 접두어와 상관없이 맞도록 JSON 패턴이 아닌 정규식. 낱말이 아니라 "event":"ops_auth_denied" 필드만 셈
+    // (다른 줄 path 값에 같은 낱말이 있어도 세지 않음. 401·403 제한은 handleOps가 보장)
+    expect(fp.FilterPattern).toBe(
+      "%\\x22event\\x22:\\x22ops_auth_denied\\x22%",
+    );
+    expect(fp.MetricTransformations).toEqual([
+      {
+        MetricName: OPS_API_ALARM.metricName,
+        MetricNamespace: OPS_API_ALARM.metricNamespace,
+        MetricValue: "1",
+      },
+    ]);
+
+    // 2) 경보 설정 검증
+    const [, alarm] = alarms.find(([id]) => id.startsWith("OpsOpsApiErrors"))!;
+    const p = alarm.Properties;
+    expect(p.Threshold).toBe(1);
+    expect(p.ComparisonOperator).toBe("GreaterThanOrEqualToThreshold");
+    expect(p.EvaluationPeriods).toBe(1);
+    expect(p.TreatMissingData).toBe("notBreaching");
+    const metrics = p.Metrics as any[];
+    const expression = metrics.find((m) => m.Expression)?.Expression as string;
+    expect(expression).toBe(
+      `MAX([FILL(m5, 0) / ${OPS_API_ALARM.serverErrors}, FILL(m4, 0) / ${OPS_API_ALARM.authFailures}])`,
+    );
+    const stats = metrics.filter((m) => m.MetricStat).map((m) => m.MetricStat);
+    expect(
+      stats.every((s) => s.Period === OPS_API_ALARM.periodMinutes * 60),
+    ).toBe(true);
+    expect(stats.every((s) => s.Stat === "Sum")).toBe(true);
+    const m5 = stats.find((s) => s.Metric.MetricName === "Url5xxCount")!;
+    const m4 = stats.find(
+      (s) => s.Metric.MetricName === OPS_API_ALARM.metricName,
+    )!;
+    expect(m5.Metric.Namespace).toBe("AWS/Lambda");
+    expect(m4.Metric.Namespace).toBe(OPS_API_ALARM.metricNamespace);
+    expect(
+      m5.Metric.Dimensions.find((d: any) => d.Name === "FunctionName")?.Value
+        ?.Ref,
+    ).toMatch(/^OpsApiFunction/);
+    expect(m4.Metric.Dimensions).toBeUndefined();
   });
 });
