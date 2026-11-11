@@ -77,14 +77,16 @@ export function WindRow({
   columns?: number;
 }) {
   const fit = columns !== undefined;
+  // 홈은 칸 수(columns)를 넘는 칸을 그리지 않음(칸 줄이 100%를 넘거나 그래프가 잘리지 않게)
+  const shown = fit ? cells.slice(0, columns) : cells;
   const slots = columns ?? cells.length;
   const width = slots * WEATHER_COLUMN;
   const graphH = fit ? CARD_GRAPH_H : GRAPH_H;
-  const max = Math.max(1, ...cells.map((c) => c.windSpeed ?? 0));
+  const max = Math.max(1, ...shown.map((c) => c.windSpeed ?? 0));
   return (
     <span aria-hidden="true" className="block">
       <span className={cn("flex text-text-body", fit ? "w-full" : "mt-1")}>
-        {cells.map((cell, i) => (
+        {shown.map((cell, i) => (
           <span
             key={i}
             className="flex flex-col items-center gap-0.5"
@@ -119,7 +121,7 @@ export function WindRow({
         preserveAspectRatio={fit ? "none" : undefined}
         className={cn("block", fit ? "mt-1 h-5 w-full" : "mt-0.5")}
       >
-        {segments(cells, max, graphH).map((run, i) => {
+        {segments(shown, max, graphH).map((run, i) => {
           const line = run
             .map((p, j) => `${j ? "L" : "M"}${p.x},${p.y.toFixed(1)}`)
             .join(" ");
