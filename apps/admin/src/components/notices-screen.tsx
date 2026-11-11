@@ -9,20 +9,16 @@ import { kstDateTime } from "@/lib/inquiries";
 import { fill, messages } from "@/lib/messages";
 import {
   createNotice,
-  exposeProblems,
   fetchNotices,
   fromKstInput,
-  graphemeLength,
   isNoticeState,
   kstRange,
-  NOTICE_DRAFT_TEXT_MAX,
   NOTICE_KINDS,
   NOTICE_STATES,
-  NOTICE_TEXT_MAX,
   noticeAction,
-  noticeWarnings,
+  periodProblems,
   saveProblems,
-  textProblems,
+  textChecks,
   toKstInput,
   updateNotice,
   type NoticeContent,
@@ -31,9 +27,13 @@ import {
   type NoticeState,
   type NoticeTexts,
   type NoticeView,
-  type NoticeWarning,
   type TextField,
 } from "@/lib/notices";
+import {
+  graphemeLength,
+  NOTICE_DRAFT_TEXT_MAX,
+  NOTICE_TEXT_MAX,
+} from "@baradun/contracts/notice-rules";
 import { AdminShell } from "./admin-shell";
 import { Button, Notice } from "./ui";
 
@@ -807,13 +807,14 @@ function NoticeEditor({
     title: { ko: form.titleKo, en: form.titleEn },
     body: { ko: form.bodyKo, en: form.bodyEn },
   };
-  const blocks = content
-    ? exposeProblems(content, now)
-    : [...saveBlocks, ...textProblems(texts)];
+  const { problems: textBlocks, warnings } = textChecks(texts);
+  const blocks = [
+    ...textBlocks,
+    ...(content ? periodProblems(content, now) : saveBlocks),
+  ];
   const problemOf = (field: string) => blocks.find((p) => p.field === field);
   const problemsOf = (field: TextField) =>
     blocks.filter((p) => p.field === field);
-  const warnings: NoticeWarning[] = noticeWarnings(texts);
   const startPast = content !== null && Date.parse(content.startsAt) < now;
 
   const set = <K extends keyof Form>(key: K, value: Form[K]) => {
