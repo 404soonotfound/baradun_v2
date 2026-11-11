@@ -143,7 +143,16 @@ const COVERAGE_COLUMNS = [
   "sea_status",
   "land_zone",
   "land_status",
+  "sea_basis",
+  "sea_rule_url",
+  "sea_checked_at_kst",
+  "land_basis",
+  "land_rule_url",
+  "land_checked_at_kst",
   "station_basis",
+  "response_check",
+  "exclusion",
+  "review_reason",
 ] as const;
 
 // 목록·상세(해변마다 한 페이지) 빌드가 같은 파일을 해변 수만큼 다시 읽지 않게 폴더별로 한 번만 읽음
@@ -165,21 +174,21 @@ function readBeaches(dir: string, year: string): BeachRecord[] {
     readFileSync(path.join(dir, "beach-meta.json"), "utf8"),
   ) as { beaches?: Record<string, MetaEntry> };
   if (!meta.beaches) throw new Error("beach-meta.json: beaches 칸이 없음");
-  const rows = parseCsv(
-    readFileSync(path.join(dir, "beach-coverage.csv"), "utf8"),
-  );
-  const lacking = rows[0]
-    ? COVERAGE_COLUMNS.filter((name) => !(name in rows[0]!))
-    : [];
+  const csv = readFileSync(path.join(dir, "beach-coverage.csv"), "utf8");
+  // 칸 이름은 머리줄에서 봄(데이터 줄이 없어도 검사). 머리줄 칸 이름에는 따옴표·쉼표가 없음
+  const header = new Set(csv.split(/\r?\n/, 1)[0]!.split(","));
+  const lacking = COVERAGE_COLUMNS.filter((name) => !header.has(name));
   if (lacking.length > 0) {
     throw new Error(`beach-coverage.csv 칸이 없음: ${lacking.join(", ")}`);
   }
+  const rows = parseCsv(csv);
   const coverage = new Map(
     rows.filter((row) => row.id).map((row) => [row.id!, row]),
   );
   const beachDir = path.join(dir, "beaches");
+  // 해변 ID는 계약 BeachId(b + 숫자 4자리)와 같은 모양만(운영 API 메모 경로도 같은 규칙)
   return readdirSync(beachDir)
-    .filter((f) => /^b\d+\.json$/.test(f))
+    .filter((f) => /^b\d{4}\.json$/.test(f))
     .sort()
     .map((file) => {
       const beach = JSON.parse(
