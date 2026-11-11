@@ -24,7 +24,7 @@ import { payloadHashOf, versionedWrite, type Sender } from "./writes";
 
 // 해변 관리 (BRD-150, 화면 ADM-BCH, 결정 기록 D15-4, 아키텍처 18.1)
 // - 해변 정보(정의·별칭·노출·사진)는 저장소 파일이 원본. 운영 API는 다루지 않음(화면이 빌드 때 읽음)
-// - 지금 표시 상태: publisher가 게시한 status.json의 분류·사유를 그대로 돌려줌. 다시 계산하지 않음(G1)
+// - 지금 표시 상태: publisher가 게시한 status.json의 분류·사유·validUntil을 그대로 돌려줌. 다시 계산하지 않음(G1)
 //   게시본을 읽지 못하면 available: false. 화면은 모든 해변을 판단불가 계열로 보여 줌('특보 없음'으로 바꾸지 않음)
 // - 운영 메모: 해변별 내부용. Ops 테이블에만 둠. publisher는 admin#notice만 읽어 게시본에 나가지 않음
 //   변경 이력에는 바뀐 항목 이름만 남기고 메모 글은 복사하지 않음(D16-B5)
@@ -52,6 +52,8 @@ export type StatusUnavailableReason =
 export interface BeachStatusEntry {
   readonly category: StatusFile["beaches"][string]["category"];
   readonly reasons: readonly Reason[];
+  // 게시 분류를 믿을 수 있는 마지막 시각. 지나면 앱은 이용불가 외를 '특보 확인 못 함'으로 보여 줌(B5)
+  readonly validUntil: string;
 }
 
 export type BeachStatusView =
@@ -98,7 +100,11 @@ export async function readBeachStatus(
     }
     const beaches: Record<string, BeachStatusEntry> = {};
     for (const [id, beach] of Object.entries((status as StatusFile).beaches)) {
-      beaches[id] = { category: beach.category, reasons: beach.reasons };
+      beaches[id] = {
+        category: beach.category,
+        reasons: beach.reasons,
+        validUntil: beach.validUntil,
+      };
     }
     return { available: true, snapshotVersion, generatedAt, beaches };
   } catch {
