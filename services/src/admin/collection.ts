@@ -28,7 +28,8 @@ import type { Sender } from "./writes";
 // - State 테이블(수집 사실)은 읽지 않음(G1·D16-B2). 판단 상태도 바꾸지 않음
 // - 기록이 없는 출처를 정상으로 보지 않음: lastRun null → 화면은 '기록 없음'
 // - partial(일부 실패)도 성공으로 세지 않음. 실패 사유는 그대로 돌려줌(모르는 사유도 숨기지 않음)
-// - '지연' 기준(D15-10, 2026-11-10 사용자 결정 BRD-187): 마지막 성공 뒤 주기+5분(LATE_AFTER_MINUTES)
+// - '지연' 기준(D15-10, 2026-11-10 사용자 결정 BRD-187 · GH-375): 특보·관측·이안류는 마지막 성공 뒤 주기+5분,
+//   날씨는 3시간, 사진·이안류 비수기는 지연 표시 없음(LATE_AFTER_MINUTES)
 //   알림 '출처 응답 없음'은 CloudWatch 경보 설정 그대로(collection-alarms.ts가 읽음)
 
 // 수집기 이름(services/src/collectors의 *_JOB과 같아야 함, collection.test.ts가 확인)
