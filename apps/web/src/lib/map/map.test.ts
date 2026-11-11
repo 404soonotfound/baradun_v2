@@ -29,6 +29,12 @@ function labelFields(style: ReturnType<typeof buildMapStyle>) {
   );
 }
 
+// 고정 판 이름은 OpenFreeMap 판 형식(날짜_시각_pt)이어야 함. 주소 시험은 같은 상수로 기대값을 만들어
+// 빈 값·오타·'latest'를 잡지 못하므로 형식을 따로 확인함(실제로 남아 있는지는 check:map이 확인)
+it("고정 타일 판 이름은 YYYYMMDD_HHMMSS_pt 형식이다", () => {
+  expect(PINNED_TILES_VERSION).toMatch(/^\d{8}_\d{6}_pt$/);
+});
+
 describe.each(["light", "dark"] as const)("buildMapStyle(%s)", (theme) => {
   it("운영(pinned)은 검증한 타일 판 주소로 고정하고 TileJSON(최신)을 부르지 않는다", () => {
     const style = buildMapStyle({ locale: "ko", tiles: "pinned", theme });
