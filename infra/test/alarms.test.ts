@@ -354,8 +354,11 @@ describe("운영 경보 (BRD-62)", () => {
     expect(filters).toHaveLength(1);
     const [, filter] = filters[0];
     const fp = filter.Properties;
-    // Lambda 텍스트 로그 접두어와 상관없이 맞도록 JSON 패턴이 아닌 텍스트 패턴(401·403 제한은 handleOps가 보장)
-    expect(fp.FilterPattern).toBe('"ops_auth_denied"');
+    // Lambda 텍스트 로그 접두어와 상관없이 맞도록 JSON 패턴이 아닌 정규식. 낱말이 아니라 "event":"ops_auth_denied" 필드만 셈
+    // (다른 줄 path 값에 같은 낱말이 있어도 세지 않음. 401·403 제한은 handleOps가 보장)
+    expect(fp.FilterPattern).toBe(
+      "%\\x22event\\x22:\\x22ops_auth_denied\\x22%",
+    );
     expect(fp.MetricTransformations).toEqual([
       {
         MetricName: OPS_API_ALARM.metricName,

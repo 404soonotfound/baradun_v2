@@ -261,8 +261,12 @@ export class OpsAlarms extends Construct {
       metricNamespace: OPS_API_ALARM.metricNamespace,
       metricName: OPS_API_ALARM.metricName,
       // Lambda 기본 텍스트 로그는 "시각\t요청ID\tINFO\t{...}" 접두어가 붙어 JSON 패턴이 맞지 않음
-      // → 이벤트 이름 텍스트로 셈. 401·403만 남기는 것은 handleOps가 보장(handler.test.ts)
-      filterPattern: logs.FilterPattern.allTerms("ops_auth_denied"),
+      // → 정규식으로 "event":"ops_auth_denied" 필드만 셈(\x22는 큰따옴표). 낱말만 찾으면 다른 줄의
+      //   path 값에 같은 낱말이 있어도 셈. 값 안의 큰따옴표는 JSON에서 \"로 바뀌어 이 모양이 될 수 없음
+      // 401·403만 남기는 것은 handleOps가 보장(handler.test.ts)
+      filterPattern: logs.FilterPattern.literal(
+        "%\\x22event\\x22:\\x22ops_auth_denied\\x22%",
+      ),
       metricValue: "1",
     });
     const m4 = filter.metric({
