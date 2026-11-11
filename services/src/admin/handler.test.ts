@@ -252,19 +252,25 @@ describe("handleOps", () => {
         logs.length = 0;
         const r200 = await handleOps(event("/ops/me", "GET", "t"), deps);
         expect(r200.statusCode).toBe(200);
-        expect(logs.filter((l) => l.event === "ops_auth_denied")).toHaveLength(0);
+        expect(logs.filter((l) => l.event === "ops_auth_denied")).toHaveLength(
+          0,
+        );
 
         // 4) 404: 없는 경로
         logs.length = 0;
         const r404 = await handleOps(event("/ops/nope", "GET", "t"), deps);
         expect(r404.statusCode).toBe(404);
-        expect(logs.filter((l) => l.event === "ops_auth_denied")).toHaveLength(0);
+        expect(logs.filter((l) => l.event === "ops_auth_denied")).toHaveLength(
+          0,
+        );
 
         // 5) 405: 잘못된 method
         logs.length = 0;
         const r405 = await handleOps(event("/ops/me", "POST", "t"), deps);
         expect(r405.statusCode).toBe(405);
-        expect(logs.filter((l) => l.event === "ops_auth_denied")).toHaveLength(0);
+        expect(logs.filter((l) => l.event === "ops_auth_denied")).toHaveLength(
+          0,
+        );
       } finally {
         spy.mockRestore();
       }

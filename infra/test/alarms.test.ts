@@ -112,7 +112,11 @@ describe("운영 경보 (BRD-62)", () => {
       // 날씨는 실행 없음도 실패로 보는 오류 경보(경보 하나로 오류·중단을 함께 잡음, BRD-181)
       const weather = id.startsWith("OpsWeatherFailing");
       expect(p.TreatMissingData, id).toBe(
-        login || opsApi ? "notBreaching" : beat || weather ? "breaching" : "ignore",
+        login || opsApi
+          ? "notBreaching"
+          : beat || weather
+            ? "breaching"
+            : "ignore",
       );
       expect(p.AlarmActions, id).toBeUndefined();
       expect(p.OKActions, id).toBeUndefined();
@@ -383,11 +387,14 @@ describe("운영 경보 (BRD-62)", () => {
     ).toBe(true);
     expect(stats.every((s) => s.Stat === "Sum")).toBe(true);
     const m5 = stats.find((s) => s.Metric.MetricName === "Url5XXCount")!;
-    const m4 = stats.find((s) => s.Metric.MetricName === OPS_API_ALARM.metricName)!;
+    const m4 = stats.find(
+      (s) => s.Metric.MetricName === OPS_API_ALARM.metricName,
+    )!;
     expect(m5.Metric.Namespace).toBe("AWS/Lambda");
     expect(m4.Metric.Namespace).toBe(OPS_API_ALARM.metricNamespace);
     expect(
-      m5.Metric.Dimensions.find((d: any) => d.Name === "FunctionName")?.Value?.Ref,
+      m5.Metric.Dimensions.find((d: any) => d.Name === "FunctionName")?.Value
+        ?.Ref,
     ).toMatch(/^OpsApiFunction/);
     expect(m4.Metric.Dimensions).toBeUndefined();
     expect(OPS_API_ALARM).toEqual({
