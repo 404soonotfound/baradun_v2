@@ -2,7 +2,6 @@ import type { Notice } from "@baradun/contracts";
 import {
   checkNoticePhrases,
   graphemeLength,
-  NOTICE_DRAFT_TEXT_MAX,
   NOTICE_TEXT_MAX,
   type NoticePhraseCategory,
 } from "@baradun/contracts/notice-rules";
@@ -22,8 +21,7 @@ export const NOTICE_KINDS: readonly NoticeKind[] = [
 ];
 
 // 글자 수 상한(D16-D2, 넘으면 잘라 내지 않고 확정을 막음)·표현 검사 목록(D17-8)은
-// 운영 API와 같은 값을 쓰도록 계약 패키지 한 곳에 둠
-export { graphemeLength, NOTICE_DRAFT_TEXT_MAX, NOTICE_TEXT_MAX };
+// 운영 API와 같은 값을 쓰도록 계약 패키지(@baradun/contracts/notice-rules) 한 곳에 둠
 
 export const NOTICE_STATES = ["live", "scheduled", "draft", "ended"] as const;
 export type NoticeState = (typeof NOTICE_STATES)[number];
@@ -132,8 +130,6 @@ export function kstRange(
 
 export type TextField = `${"title" | "body"}.${"ko" | "en"}`;
 
-const TEXT_FIELDS = ["title.ko", "body.ko", "title.en", "body.en"] as const;
-
 export type NoticeProblem =
   | {
       readonly field: TextField | "startsAt" | "endsAt";
@@ -155,20 +151,6 @@ export interface NoticeWarning {
 
 export type NoticeTexts = Pick<NoticeContent, "title" | "body">;
 
-function textOf(content: NoticeTexts, field: TextField): string {
-  const [name, lang] = field.split(".") as ["title" | "body", "ko" | "en"];
-  return content[name][lang];
-}
-
-export function noticeWarnings(content: NoticeTexts): NoticeWarning[] {
-  return TEXT_FIELDS.flatMap((field) =>
-    checkNoticePhrases(textOf(content, field)).warned.map((hit) => ({
-      field,
-      text: hit.text,
-    })),
-  );
-}
-
 // 저장을 막는 것: 시각이 틀렸거나 기간이 거꾸로(시안 E5 2). 빈칸·글자 수는 초안이라 저장은 됨(D16-D1)
 export function saveProblems(
   startsAt: string | null,
@@ -189,9 +171,15 @@ export function saveProblems(
   return problems;
 }
 
-// 문구만으로 확정을 막는 것: 한·영 빈칸, 글자 수 넘침, 차단 표현. 시각이 틀려 내용을 못 만들 때도 씀
-export function textProblems(texts: NoticeTexts): NoticeProblem[] {
+// 문구만으로 하는 확인(시각이 틀려 내용을 못 만들 때도 씀). 칸마다 표현 검사는 한 번만 함
+// - problems: 확정을 막는 것(한·영 빈칸, 글자 수 넘침, 차단 표현)
+// - warnings: 문맥 확인 표현(D16-D1 경고). 확정은 막지 않음
+export function textChecks(texts: NoticeTexts): {
+  problems: NoticeProblem[];
+  warnings: NoticeWarning[];
+} {
   const problems: NoticeProblem[] = [];
+  const warnings: NoticeWarning[] = [];
   for (const name of ["title", "body"] as const) {
     for (const lang of ["ko", "en"] as const) {
       const field = `${name}.${lang}` as const;
@@ -203,7 +191,8 @@ export function textProblems(texts: NoticeTexts): NoticeProblem[] {
       if (graphemeLength(text) > NOTICE_TEXT_MAX[name][lang]) {
         problems.push({ field, reason: "too_long" });
       }
-      for (const hit of checkNoticePhrases(text).blocked) {
+      const { blocked, warned } = checkNoticePhrases(text);
+      for (const hit of blocked) {
         problems.push({
           field,
           reason: "blocked_phrase",
@@ -211,25 +200,30 @@ export function textProblems(texts: NoticeTexts): NoticeProblem[] {
           category: hit.category,
         });
       }
+      for (const hit of warned) warnings.push({ field, text: hit.text });
     }
   }
-  return problems;
+  return { problems, warnings };
 }
 
-// 확정을 막는 것: 문구 문제(textProblems), 끝이 시작 앞이거나 이미 지남
+// 기간 확인: 끝이 시작 앞이거나 이미 지나면 확정을 막음
+export function periodProblems(
+  content: NoticeContent,
+  now: number,
+): NoticeProblem[] {
+  return content.endsAt !== null &&
+    (Date.parse(content.endsAt) <= Date.parse(content.startsAt) ||
+      Date.parse(content.endsAt) <= now)
+    ? [{ field: "endsAt", reason: "order" }]
+    : [];
+}
+
+// 확정을 막는 것: 문구 문제(textChecks)와 기간 문제(periodProblems)
 export function exposeProblems(
   content: NoticeContent,
   now: number,
 ): NoticeProblem[] {
-  const problems = textProblems(content);
-  if (
-    content.endsAt !== null &&
-    (Date.parse(content.endsAt) <= Date.parse(content.startsAt) ||
-      Date.parse(content.endsAt) <= now)
-  ) {
-    problems.push({ field: "endsAt", reason: "order" });
-  }
-  return problems;
+  return [...textChecks(content).problems, ...periodProblems(content, now)];
 }
 
 export function sameContent(a: NoticeContent, b: NoticeContent): boolean {

@@ -1,12 +1,11 @@
+import { graphemeLength } from "@baradun/contracts/notice-rules";
 import { describe, expect, it } from "vitest";
 import {
   exposeProblems,
   fromKstInput,
-  graphemeLength,
-  noticeWarnings,
   sameContent,
   saveProblems,
-  textProblems,
+  textChecks,
   toKstInput,
   type NoticeContent,
 } from "./notices";
@@ -90,10 +89,10 @@ describe("저장·확정 전 확인", () => {
 
   it("문구 확인은 시각 없이도 빈칸·차단 표현을 알려 준다", () => {
     expect(
-      textProblems({
+      textChecks({
         title: { ko: "추천 해변", en: "" },
         body: { ko: "본문", en: "Body" },
-      }),
+      }).problems,
     ).toEqual([
       {
         field: "title.ko",
@@ -111,7 +110,7 @@ describe("저장·확정 전 확인", () => {
       body: { ko: "안전요원 안내를 따라 주세요", en: "Ask a lifeguard" },
     });
     expect(exposeProblems(calm, NOW)).toEqual([]);
-    expect(noticeWarnings(calm)).toEqual([
+    expect(textChecks(calm).warnings).toEqual([
       { field: "title.ko", text: "잔잔해요" },
       { field: "title.en", text: "Calm" },
     ]);
