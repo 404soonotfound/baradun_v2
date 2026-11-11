@@ -94,7 +94,13 @@ function reasonLabel(alarmName: string): string {
   if (id === "LoginAbuse") {
     return "5분 동안 로그인 실패 또는 비밀번호 찾기·변경 요청이 기준을 넘었습니다. 차단은 Cognito 잠금·요청 제한이 하고 있습니다.";
   }
-  return "재시도 뒤에도 알림을 보내지 못해 실패 대기열에 기록되었습니다.";
+  if (id === "WeatherFailing") {
+    return "1시간 구간에 오류가 있거나 실행이 없는 구간이 3번 이어졌습니다.";
+  }
+  if (id === "NotificationFailed") {
+    return "재시도 뒤에도 알림을 보내지 못해 실패 대기열에 기록되었습니다.";
+  }
+  return "설정된 운영 경보 조건을 충족했습니다.";
 }
 
 function cloudWatchUrl(region: string, alarmName: string): string {
