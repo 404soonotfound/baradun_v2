@@ -8,7 +8,7 @@ import { SkyGlyph } from "@/components/detail/weather-card";
 import { MiniWaveSvg } from "@/components/home/mini-wave-chart";
 import { ReasonBadge } from "@/components/reason-badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { WindArrow } from "@/components/weather/wind-row";
+import { WindRow } from "@/components/weather/wind-row";
 import type { Activity } from "@/lib/activity";
 import type { BeachSummary } from "@/lib/beach-summary";
 import { compassPoint } from "@/lib/direction";
@@ -488,7 +488,7 @@ function WaveStrip({
   );
 }
 
-// [6] 스쿠버다이빙: 앞으로 바람 7칸(3시간 간격). 칸 폭은 카드 폭에 맞춰 나눔(상세 바람 줄은 36px 고정)
+// [6] 스쿠버다이빙: 앞으로 바람 7칸(3시간 간격). 상세 바람 줄과 같은 부품(WindRow)을 카드 폭에 맞춰 씀
 const WIND_CELLS = 7;
 function WindAhead({ beachId, nowMs }: { beachId: string; nowMs: number }) {
   const t = useTranslations();
@@ -525,19 +525,6 @@ function WindAhead({ beachId, nowMs }: { beachId: string; nowMs: number }) {
       .join(", "),
     time: issued,
   });
-  // 면 그래프: 값이 이어진 구간마다 한 조각(값이 없는 칸에서 끊음, 0으로 그리지 않음)
-  const max = Math.max(1, ...cells.map((c) => c.windSpeed ?? 0));
-  const x = (i: number) => i * 10 + 5;
-  const y = (v: number) => 20 - (v / max) * 17;
-  const runs: { x: number; y: number }[][] = [];
-  let run: { x: number; y: number }[] = [];
-  cells.forEach((cell, i) => {
-    if (cell.windSpeed === null) {
-      if (run.length) runs.push(run);
-      run = [];
-    } else run.push({ x: x(i), y: y(cell.windSpeed) });
-  });
-  if (run.length) runs.push(run);
 
   return (
     <PictureBox>
@@ -555,54 +542,13 @@ function WindAhead({ beachId, nowMs }: { beachId: string; nowMs: number }) {
             {t("home.card.forecastAt", { time: issued })}
           </span>
         </span>
-        <span aria-hidden="true" className="grid grid-cols-7">
-          {cells.map((cell) => (
-            <span key={cell.at} className="flex flex-col items-center gap-0.5">
-              <span className="text-[10px] leading-none text-text-muted tabular-nums">
-                {t("detail.weather.hour", { hour: cell.hour })}
-              </span>
-              <span className="text-text-body">
-                {cell.windTo === null || cell.windSpeed === null ? (
-                  <span className="block size-[11px]" />
-                ) : (
-                  <WindArrow windTo={cell.windTo} />
-                )}
-              </span>
-              <span className="text-label-s leading-none font-bold text-text-default tabular-nums">
-                {cell.windSpeed === null ? "–" : Math.round(cell.windSpeed)}
-              </span>
-            </span>
-          ))}
-        </span>
-        <svg
-          aria-hidden="true"
-          viewBox={`0 0 ${WIND_CELLS * 10} 20`}
-          preserveAspectRatio="none"
-          className="block h-5 w-full"
-        >
-          {runs.map((points) => {
-            const line = points
-              .map((p, j) => `${j ? "L" : "M"}${p.x},${p.y.toFixed(1)}`)
-              .join(" ");
-            return (
-              <g key={points[0]!.x}>
-                <path
-                  d={`${line} L${points.at(-1)!.x},20 L${points[0]!.x},20 Z`}
-                  className="fill-chart"
-                  fillOpacity={0.14}
-                />
-                <path
-                  d={line}
-                  fill="none"
-                  className="stroke-chart"
-                  strokeWidth={1.6}
-                  strokeLinejoin="round"
-                  vectorEffect="non-scaling-stroke"
-                />
-              </g>
-            );
-          })}
-        </svg>
+        <WindRow
+          cells={cells}
+          hours={cells.map((cell) =>
+            t("detail.weather.hour", { hour: cell.hour }),
+          )}
+          fit
+        />
       </span>
     </PictureBox>
   );
