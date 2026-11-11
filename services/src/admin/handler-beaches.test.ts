@@ -146,7 +146,7 @@ async function putMemo(
 }
 
 describe("지금 표시 상태 GET /ops/beaches/published", () => {
-  it("게시본 status.json의 분류·사유를 그대로 돌려준다(다시 계산하지 않음)", async () => {
+  it("게시본 status.json의 분류·사유·validUntil을 그대로 돌려준다(다시 계산하지 않음)", async () => {
     const result = await handleOps(
       event("GET", "/ops/beaches/published"),
       deps("viewer", new FakeTable(), snapshots()),
@@ -163,11 +163,12 @@ describe("지금 표시 상태 GET /ops/beaches/published", () => {
       Object.keys(source).sort(),
     );
     for (const [id, beach] of Object.entries(source)) {
-      const { category, reasons } = beach as {
+      const { category, reasons, validUntil } = beach as {
         category: string;
         reasons: unknown;
+        validUntil: string;
       };
-      expect(body.beaches[id]).toEqual({ category, reasons });
+      expect(body.beaches[id]).toEqual({ category, reasons, validUntil });
     }
   });
 
