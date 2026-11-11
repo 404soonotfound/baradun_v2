@@ -10,26 +10,30 @@ import lightStyle from "./style-light.json";
 
 // 지도 스타일 (BRD-65 · 결정 D8, 아키텍처 16.4.3)
 // style-light.json = OpenFreeMap Positron 포크(우리 저장소가 원본). 원격 스타일 URL을 그대로 쓰지 않음
+// 타일·sprite·글꼴 주소는 JSON에 두지 않고 buildMapStyle이 지도 판 주소로 채움
 // 포크에서 바꾼 것: 도로 번호 표지·작은 도로 이름·공항 아이콘 레이어 삭제, 바다를 옅은 파랑으로(육지와 대비),
 // 지명 글자를 짙은 회색으로(해변 마커가 묻히지 않게), 라벨은 name:ko → name 순서
 // style-dark.json = style-light.json과 같은 레이어·필터·글자 설정에 색만 다크 토큰 계열로 바꾼 것(BRD-44)
 //   육지 #1F2A37·바다 #0D1722(육지·바다 대비는 라이트와 비슷한 1.2), 지명 글자는 text/body 다크(#B7C4D3)
 //   마커(상태 색·점선)가 땅·바다 어디서나 3:1 이상 보이게 고름. 테마가 바뀌면 지도도 바뀜(map-view)
 
-// [1] OpenFreeMap 벡터 타일. 개발은 최신(TileJSON), 운영 빌드는 검증한 판으로 고정(16.4.3 버전 전략)
-// 판 이름은 https://tiles.openfreemap.org/planet 응답의 tiles 주소에서 가져옴. 바꿀 때는 표본 해변 화면을 보고 올림
-export const OPENFREEMAP_TILEJSON = "https://tiles.openfreemap.org/planet";
-export const PINNED_TILES_VERSION = "20261101_080013_pt";
+// [1] 지도 판: 검증한 한국 지도 파일(PMTiles)·글꼴·sprite를 사이트 CloudFront의 map/<판>/에서 받음
+// (결정 기록 D19-1 · #392, 아키텍처 16.4.3). 외부 지도 서버를 부르지 않음
+// 판은 tools/map-tiles(map-tiles 워크플로)가 만들어 올린 것 중 READY.txt가 있고 표본 해변 화면을 본 것만 씀
+// 판을 바꾸면 CI map-files 작업이 실제 경로(READY.txt·범위 요청·sprite·글꼴)를 확인함(tools/map-tiles/verify.mjs)
+export const MAP_VERSION = "20261111-0654";
+export const MAP_PATH = `/map/${MAP_VERSION}`;
 export const TILE_SOURCE_ID = "openmaptiles";
-const TILE_HOST = "https://tiles.openfreemap.org";
 
-export type TileMode = "latest" | "pinned";
-
-// NODE_ENV가 production인 빌드(next build·build-storybook)는 고정 판, 그 밖(next dev·storybook dev·테스트)은 최신
-// 고정 판이 OpenFreeMap에서 지워지면 서버가 오류 없이 최신 판 타일을 줘서 조용히 최신 타일이 보일 수 있음
-// → scripts/map-smoke.mts(npm run check:map, CI 매일)가 고정 판·sprite·글꼴을 확인함(BRD-114 · 결정 10)
-export function tileModeFor(nodeEnv: string | undefined): TileMode {
-  return nodeEnv === "production" ? "pinned" : "latest";
+// 지도 파일 주소. 화면과 같은 출처(운영 CloudFront)에서 받음(CSP 'self', 외부 출처 허용 없음)
+// 운영 CloudFront는 CORS 헤더를 주지 않아 개발 서버·Storybook에서 운영 지도 파일을 빌려 쓸 수 없음
+export function mapAssetUrls(origin: string) {
+  const base = `${origin.replace(/\/+$/, "")}${MAP_PATH}`;
+  return {
+    tiles: `pmtiles://${base}/korea.pmtiles`,
+    sprite: `${base}/sprites/ofm`,
+    glyphs: `${base}/fonts/{fontstack}/{range}.pbf`,
+  };
 }
 
 // [2] 화면 언어별 라벨. 한국어는 name:ko 우선(D8), 영어는 영어 이름 → 로마자 → 원래 이름
@@ -42,27 +46,20 @@ const LABEL_FIELD = {
 // [3] 스타일 만들기. 원본 JSON은 고치지 않고 복사본을 돌려줌
 export function buildMapStyle({
   locale,
-  tiles,
+  origin,
   theme,
 }: {
   locale: Locale;
-  tiles: TileMode;
+  origin: string;
   theme: ResolvedTheme;
 }): StyleSpecification {
   const style = structuredClone(
     theme === "dark" ? darkStyle : lightStyle,
   ) as unknown as StyleSpecification;
-  style.sources[TILE_SOURCE_ID] =
-    tiles === "pinned"
-      ? {
-          type: "vector",
-          tiles: [
-            `${TILE_HOST}/planet/${PINNED_TILES_VERSION}/{z}/{x}/{y}.pbf`,
-          ],
-          minzoom: 0,
-          maxzoom: 14,
-        }
-      : { type: "vector", url: OPENFREEMAP_TILEJSON };
+  const urls = mapAssetUrls(origin);
+  style.sources[TILE_SOURCE_ID] = { type: "vector", url: urls.tiles };
+  style.sprite = urls.sprite;
+  style.glyphs = urls.glyphs;
   for (const layer of style.layers) {
     if (layer.type === "symbol" && layer.layout?.["text-field"]) {
       layer.layout["text-field"] = structuredClone(

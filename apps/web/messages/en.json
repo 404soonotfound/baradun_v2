@@ -901,7 +901,7 @@
       "storageTitle": "5. Storage location",
       "storageBody": "Inquiry messages are stored in the Amazon Web Services (AWS) Seoul Region (Republic of Korea). Usage statistics records are kept on Google servers (including outside the Republic of Korea) for 2 months.",
       "externalTitle": "6. Requests to external servers",
-      "externalBody": "To show maps and beach photos, your browser requests map tiles (OpenFreeMap) and photos (Korea Tourism Organization) directly. Your browser's default information — IP address, browser details and the Baradun address — reaches those servers. Your location is not sent. Their records follow each operator's policy.",
+      "externalBody": "To show beach photos, your browser requests photos from the Korea Tourism Organization directly (maps are served by Baradun Bada). Your browser's default information — IP address, browser details and the Baradun address — reaches that server. Your location is not sent. Its records follow the operator's policy.",
       "cookiesTitle": "7. Cookies and analytics",
       "cookiesBody": "To improve the service, we use Google Analytics by Google LLC to collect usage records with cookies, such as screens visited, device and browser type and approximate region. Names, contact details, device location and search terms are not sent. Records are processed on Google's servers and kept for 2 months. You can block collection by blocking cookies in your browser or using the Google Analytics Opt-out Browser Add-on (tools.google.com/dlpage/gaoptout).",
       "rightsTitle": "8. Your rights",
@@ -980,7 +980,7 @@
     },
     "map": {
       "name": "Map",
-      "provides": "Map data © OpenStreetMap contributors, vector tiles © OpenMapTiles, tiles served by OpenFreeMap, map style Positron (modified from the OpenFreeMap version)",
+      "provides": "Map data © OpenStreetMap contributors, vector tiles © OpenMapTiles (built and served by Baradun Bada), map style Positron and icons (modified from the OpenFreeMap version)",
       "terms": "OpenStreetMap data is under the ODbL, and attribution is shown on the map. The Positron map style is Copyright (c) 2024, MapTiler.com & OpenMapTiles contributors · Copyright (c) 2015, CartoDB Inc.; its code is under the BSD 3-Clause License and its design under CC-BY 4.0. Positron is derived from CartoDB Basemaps, designed by Stamen and Paul Norman for CartoDB Inc. (CC-BY 3.0).",
       "linkOsm": "OpenStreetMap copyright",
       "linkOmt": "OpenMapTiles",
