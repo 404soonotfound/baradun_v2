@@ -44,7 +44,9 @@ node tools/map-tiles/verify.mjs --site https://<사이트> [--version <판>]   #
 
 - 올리기(쓰기)는 `map-tiles` `upload` 작업만 해요. PR의 `map-files`는 공개 주소 읽기만 해요.
 - 지도와 무관한 웹 PR·main push·매일 정기 실행에서는 지도 서버를 부르지 않아요. 매일 정기 실행은 취약점(audit)·비밀값(gitleaks) 검사만 해요.
-- 운영 CloudFront는 CORS 헤더를 주지 않아서, 개발 서버(`npm run dev`)·Storybook에서는 지도 파일을 받지 못하고 지도 실패 화면이 보여요. 지도 화면은 빌드 결과를 운영과 같은 출처로 띄워 확인해요.
+- 개발 서버(`npm run dev`)와 Storybook(`npm run storybook`)은 `/map/` 요청만 운영 CloudFront로 넘겨 같은 출처로 받아요(`apps/web/scripts/dev-map.mjs`: `next dev` 전용 rewrite, Storybook Vite proxy). 범위 요청의 `206`·`Content-Range`·`ETag`가 그대로 오고, 운영 CloudFront에 CORS는 열지 않아요. 정적 빌드(`next build`)에는 들어가지 않아요.
+  - 다른 사이트의 지도 판을 쓰려면 `BARADUN_DEV_MAP_ORIGIN=https://<사이트>`를 줘요(기본은 운영 CloudFront 기본 주소).
+  - 개발 서버·Storybook도 `style.ts`의 `MAP_VERSION` 판을 받으므로, 새 판은 올리고 `READY.txt`가 열린 뒤에 PR에 넣어요.
 
 ## 로컬에서 만들어 보기
 
