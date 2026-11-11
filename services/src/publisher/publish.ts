@@ -3,6 +3,7 @@ import {
   buildStationTable,
 } from "../core/collect/publish-summary";
 import type { Beach, ManifestFile, Notice } from "@baradun/contracts";
+import { checkNoticePhrases } from "@baradun/contracts/notice-rules";
 import type { Logger } from "../core/collect/log";
 import type { SnapshotStore } from "../core/snapshots/types";
 import type { OpsStore, StateStore } from "../core/store/types";
@@ -67,6 +68,8 @@ const versionPath = (version: string, name: string) =>
 // 게시본에 실을 공지(D16-B3·D4, 구현 제안 I09)
 // - 시작 시각이 지난 것만(예약 전 문구는 공개 게시본에 넣지 않음), 끝 시각이 지난 것은 뺌
 // - 계약에 맞지 않거나 끝이 시작보다 이르면 그 공지만 빼고 알림(공지 하나 때문에 특보·관측 게시를 멈추지 않음)
+// - 차단 표현(D16-D1·D17-8)이 든 노출본도 그것만 빼고 알림. 노출(expose) 검사 전에 확정한 노출본이나
+//   다른 쓰기 경로로 들어온 문구가 게시되지 않게 함(게시 차단은 서버도 검사)
 // - ID 순으로 정렬해 같은 공지면 같은 manifest가 되게 함(바뀐 게 없으면 게시 생략)
 export function publishableNotices(
   candidates: readonly unknown[],
@@ -84,6 +87,14 @@ export function publishableNotices(
       log("error", "publish_notice_invalid", {
         noticeId: typeof notice?.id === "string" ? notice.id : "?",
       });
+      continue;
+    }
+    if (
+      [notice.title.ko, notice.title.en, notice.body.ko, notice.body.en].some(
+        (text) => checkNoticePhrases(text).blocked.length > 0,
+      )
+    ) {
+      log("error", "publish_notice_blocked_phrase", { noticeId: notice.id });
       continue;
     }
     if (Date.parse(notice.startsAt) > nowMs) continue;

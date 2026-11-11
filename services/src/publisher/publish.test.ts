@@ -564,6 +564,27 @@ describe("공지 싣기 (BRD-151, D16-B3·D4, 아키텍처 18.4)", () => {
     ).toEqual(["n-no-en", "n-kst", "n-order"]);
   });
 
+  it("차단 표현이 든 노출본은 그것만 빼고 알린다(D16-D1·D17-8)", async () => {
+    const { deps, manifest, events } = await setup({
+      notices: async () => [
+        notice("n-ok", {
+          body: { ko: "안전요원 안내를 따라 주세요", en: "Body" },
+        }),
+        notice("n-safe", { body: { ko: "오늘은 안전해요", en: "Body" } }),
+        notice("n-top", { title: { ko: "공지", en: "Top 3 beaches" } }),
+      ],
+    });
+    expect(await publishSnapshot(deps())).toMatchObject({
+      status: "published",
+    });
+    expect(manifest()!.notices!.map((n) => n.id)).toEqual(["n-ok"]);
+    expect(
+      events()
+        .filter((e) => e.event === "publish_notice_blocked_phrase")
+        .map((e) => e.noticeId),
+    ).toEqual(["n-safe", "n-top"]);
+  });
+
   it("데이터가 같아도 공지가 바뀌면 새 버전으로 게시하고, 같으면 생략한다", async () => {
     let candidates: unknown[] = [];
     const { deps, advance, manifest } = await setup({
