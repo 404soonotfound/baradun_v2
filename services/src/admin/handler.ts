@@ -311,10 +311,15 @@ export async function handleOps(
   event: APIGatewayProxyEventV2,
   deps: OpsDependencies,
 ): Promise<APIGatewayProxyStructuredResultV2> {
-  const res = await dispatchOps(event, deps);
+  const ids = (deps.ids ?? newRequestIds)();
+  const res = await dispatchOps(event, deps, ids);
   // 결정 기록 D17-7: 운영 API 401·403 권한 거부 급증 감시 로그
+  // traceId로 같은 요청의 사유 줄(ops_auth_rejected·ops_route_rejected)과 짝지음
   if (res.statusCode === 401 || res.statusCode === 403) {
-    safeLog("warn", "ops_auth_denied", { status: res.statusCode });
+    safeLog("warn", "ops_auth_denied", {
+      status: res.statusCode,
+      traceId: ids.traceId,
+    });
   }
   return res;
 }
@@ -322,8 +327,8 @@ export async function handleOps(
 async function dispatchOps(
   event: APIGatewayProxyEventV2,
   deps: OpsDependencies,
+  ids: RequestIds,
 ): Promise<APIGatewayProxyStructuredResultV2> {
-  const ids = (deps.ids ?? newRequestIds)();
   const path = event.rawPath;
   const method = event.requestContext?.http?.method ?? "";
 

@@ -230,6 +230,7 @@ describe("handleOps", () => {
           level: "warn",
           event: "ops_auth_denied",
           status: 401,
+          traceId: IDS.traceId,
         });
 
         // 2) 403: 역할 불명확
@@ -246,6 +247,7 @@ describe("handleOps", () => {
           level: "warn",
           event: "ops_auth_denied",
           status: 403,
+          traceId: IDS.traceId,
         });
 
         // 3) 200: 정상
