@@ -19,6 +19,7 @@ import {
   type BeachDisplay,
   type PublishedView,
 } from "@/lib/beaches";
+import { kstDateTime } from "@/lib/inquiries";
 import { fill, messages } from "@/lib/messages";
 import { Button, Notice } from "./ui";
 
@@ -109,7 +110,12 @@ export function DisplayBadge({ display }: { display: BeachDisplay }) {
   );
 }
 
-// 상세: 사유 모두
+// 상세: 사유 모두(범위·기관·발표·관측 시각). 계약 밖 값(글자가 아닌 칸)은 그리지 않음
+const textOf = (v: unknown): string | null =>
+  typeof v === "string" && v !== "" ? v : null;
+const timeOf = (v: unknown): string | null =>
+  typeof v === "string" && !Number.isNaN(Date.parse(v)) ? v : null;
+
 export function ReasonList({ display }: { display: BeachDisplay }) {
   if (display.kind !== "published" || display.category === "clear") {
     return null;
@@ -118,15 +124,21 @@ export function ReasonList({ display }: { display: BeachDisplay }) {
     <ul className="flex flex-col gap-1.5">
       {display.labels.map((label, i) => {
         const reason = display.reasons[i];
+        const scope = textOf(reason?.scope);
+        const source = textOf(reason?.source);
+        const at = timeOf(reason?.at);
         return (
           <li
             key={i}
             className="flex flex-wrap items-center gap-x-2 gap-y-1 text-body-s text-text-body"
           >
             <Badge label={label} />
-            {reason?.scope && <span>{reason.scope}</span>}
-            {reason?.source && (
-              <span className="text-text-muted">{reason.source}</span>
+            {scope && <span>{scope}</span>}
+            {source && <span className="text-text-muted">{source}</span>}
+            {at && (
+              <span className="text-text-muted">
+                {fill(t.reasonAt, { time: kstDateTime(at) })}
+              </span>
             )}
           </li>
         );

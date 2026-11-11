@@ -62,8 +62,9 @@ function observationText(b: BeachSummary): string {
   });
 }
 
-function aliasText(aliases: readonly string[]): string {
-  const [first, ...rest] = aliases;
+function aliasText(beach: BeachSummary): string {
+  if (!beach.inMeta) return t.metaMissing;
+  const [first, ...rest] = beach.aliases;
   if (!first) return t.aliasesNone;
   return rest.length > 0
     ? fill(t.aliasesMore, { first, count: rest.length })
@@ -88,7 +89,7 @@ function Links({ beach }: { beach: BeachSummary }) {
   const rows: [string, string][] = [
     [t.linkWarning, warningText(beach)],
     [t.linkObservation, observationText(beach)],
-    [t.linkSeason, seasonText(beach.season)],
+    [t.linkSeason, beach.inMeta ? seasonText(beach.season) : t.metaMissing],
   ];
   return (
     <dl className="grid grid-cols-[5rem_1fr] gap-x-2 gap-y-0.5 text-label-s">
@@ -183,7 +184,7 @@ function BeachTable({
             <td
               className={`${td} hidden text-body-s text-text-body lg:table-cell`}
             >
-              {aliasText(b.aliases)}
+              {aliasText(b)}
             </td>
             <td className={`${td} pr-4`}>
               <HistoryLink beach={b} />
@@ -229,7 +230,7 @@ function BeachCards({
               {b.hasPhoto ? t.photoYes : t.photoNo}
             </dd>
             <dt className="text-text-muted">{t.colAliases}</dt>
-            <dd className="text-text-body">{aliasText(b.aliases)}</dd>
+            <dd className="text-text-body">{aliasText(b)}</dd>
             <dt className="text-text-muted">{t.colHistory}</dt>
             <dd>
               <HistoryLink beach={b} />

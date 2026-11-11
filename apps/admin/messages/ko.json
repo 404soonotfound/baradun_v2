@@ -1048,7 +1048,6 @@
     "backToList": "해변 목록으로",
     "detailStatus": "지금 표시 상태",
     "detailStatusNote": "앱과 같은 판단 결과예요. 판단 상태는 데이터로만 정해지고 운영 화면에서 바꿀 수 없어요.",
-    "reasonLine": "{label} · {scope} · {source}",
     "reasonAt": "{time} 발표·관측",
     "basicTitle": "기본 정보",
     "fieldNameKo": "이름(한국어)",
