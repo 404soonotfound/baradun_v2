@@ -1,0 +1,36 @@
+# Dependabot 버전 갱신 (#303 보안 감사 후속)
+# 워크플로의 외부 Action은 커밋 SHA로 고정함(infra/test/workflows.test.ts). 고정한 SHA가 낡지 않게
+# Action만 버전 갱신 PR을 받음. SHA와 줄 끝 버전 주석(# v4.4.0)을 함께 바꿔 줌
+# - npm 의존성은 버전 갱신을 켜지 않음. 보안 갱신(저장소 설정)만 지금처럼 받음
+# - 새 버전은 나온 지 7일 지난 것만(공급망 사고가 드러날 시간을 둠). 보안 갱신에는 적용되지 않음
+# - 머지 전에 CI(ci-ok)가 바뀐 Action으로 돌아감
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    # "/"는 .github/workflows와 저장소 루트 action.yml을 봄
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Asia/Seoul"
+    cooldown:
+      default-days: 7
+    # 패치·마이너만 한 PR로 묶음. 메이저는 Action마다 따로 PR(하나가 CI를 깨도 나머지 갱신이 막히지 않게)
+    groups:
+      actions:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+    open-pull-requests-limit: 2
+    # 커밋·PR 제목을 저장소 규칙(chore(deps))에 맞춤. 기본값은 'Build(deps): Bump …'
+    commit-message:
+      prefix: "chore(deps)"
+    # 기본 생태계 라벨(github_actions)을 새로 만들지 않게 기존 dependencies 라벨만 씀(AGENTS.md 라벨 규칙)
+    labels:
+      - "dependencies"
+    # PR 담당자는 저장소 소유자(AGENTS.md)
+    assignees:
+      - "404soonotfound"
