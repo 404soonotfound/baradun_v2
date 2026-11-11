@@ -26,8 +26,7 @@
     "map:worker": "node scripts/copy-map-worker.mjs",
     "og:image": "node scripts/build-og-image.mjs",
     "check:tokens": "baradun-tokens-check",
-    "check:messages": "node scripts/check-messages.mjs",
-    "check:map": "node scripts/map-smoke.mts"
+    "check:messages": "node scripts/check-messages.mjs"
   },
   "dependencies": {
     "@baradun/contracts": "0.1.0",

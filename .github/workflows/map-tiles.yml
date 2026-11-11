@@ -3,7 +3,8 @@
 # - 만들기(외부 도구 실행)와 올리기를 작업으로 나눔. OIDC 토큰은 올리기 작업만 받음
 #   장기 키 없음: production environment에서 사이트 배포 역할(1시간 임시 키)을 받음
 # - 판 이름은 실행마다 새것(만든 시각 UTC)이고 올린 판은 덮어쓰지 않음. 다 올린 판에만 READY.txt. 웹은 코드에 적힌 판의 파일만 읽음
-# - 만든 판을 웹에 쓰려면: 표본 해변 시각 확인 뒤 apps/web/src/lib/map/style.ts의 판 이름을 PR로 올림
+# - 만든 판을 웹에 쓰려면: 표본 해변 시각 확인 뒤 apps/web/src/lib/map/style.ts의 MAP_VERSION을 PR로 올림(CI map-files가 실제 경로 확인)
+# - 확인: build 작업이 만든 파일 형식·자산(verify.mjs --dir), verify 작업이 올린 뒤 CloudFront 경로(verify.mjs --site)
 # - 사이트 배포(deploy.yml)의 s3 sync는 map/을 지우지 않음
 name: map-tiles
 on:
@@ -23,6 +24,9 @@ jobs:
           persist-credentials: false
       - name: 지도 파일 만들기
         run: JAVA="$JAVA_HOME_21_X64/bin/java" bash tools/map-tiles/build.sh "$RUNNER_TEMP/map"
+      # 형식·필수 자산 확인: PMTiles 헤더(벡터 타일·확대 0~14·한국 끝 지점), sprite 4개, 스타일이 부르는 글꼴 256범위
+      - name: 만든 지도 파일 확인
+        run: node tools/map-tiles/verify.mjs --dir "$RUNNER_TEMP/map/$(cat "$RUNNER_TEMP/map/VERSION")"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: map-tiles
@@ -66,6 +70,36 @@ jobs:
           role-to-assume: ${{ env.ROLE_ARN }}
           aws-region: ap-northeast-2
       - name: 사이트 버킷 map/<판>/에 올리기
+        id: upload
         run: |
           bash tools/map-tiles/upload.sh "$RUNNER_TEMP/map" "$BUCKET"
+          echo "version=$(cat "$RUNNER_TEMP/map/VERSION")" >> "$GITHUB_OUTPUT"
           echo "지도 판: $(cat "$RUNNER_TEMP/map/VERSION")" >> "$GITHUB_STEP_SUMMARY"
+    outputs:
+      version: ${{ steps.upload.outputs.version }}
+
+  # 올린 뒤 실제 CloudFront 경로 확인(READY.txt 판 일치·범위 요청 206·Content-Range·sprite·글꼴). AWS 권한 없이 공개 주소만 읽음
+  verify:
+    needs: upload
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    env:
+      SITE_URL: ${{ vars.SITE_URL }}
+      VERSION: ${{ needs.upload.outputs.version }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .nvmrc
+      - name: CloudFront에서 지도 판 확인
+        run: |
+          if [ -z "$SITE_URL" ] || [ -z "$VERSION" ]; then
+            echo "::error::SITE_URL 변수와 올린 판 이름이 필요해요"
+            exit 1
+          fi
+          node tools/map-tiles/verify.mjs --site "$SITE_URL" --version "$VERSION"
