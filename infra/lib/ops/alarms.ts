@@ -55,8 +55,8 @@ export interface OpsAlarmsProps {
   // 수집기 이름("Ocean"·"Warnings"·"Catalog"·"Rip") → 함수. Collectors가 만든 Map 그대로
   readonly collectors: ReadonlyMap<string, lambda.IFunction>;
   readonly publisher: lambda.IFunction; // publish-snapshot 함수
-  readonly opsApi?: lambda.IFunction; // 운영 API 함수 /ops/* (D17-7)
-  readonly opsApiLogGroup?: logs.ILogGroup; // 운영 API 로그 그룹 (D17-7 권한 거부 지표 필터용)
+  readonly opsApi: lambda.IFunction; // 운영 API 함수 /ops/* (D17-7)
+  readonly opsApiLogGroup: logs.ILogGroup; // 운영 API 로그 그룹 (D17-7 권한 거부 지표 필터용)
   // 로그인 반복 요청 감시 대상(운영자·데모 풀의 관리자 앱 클라이언트, D17-4)
   readonly signInClients: readonly {
     readonly userPoolId: string;
@@ -150,9 +150,7 @@ export class OpsAlarms extends Construct {
 
     this.loginAbuseAlarm(props.signInClients);
     this.weatherAlarm(collector("Weather"));
-    if (props.opsApi) {
-      this.opsApiErrorsAlarm(props.opsApi, props.opsApiLogGroup);
-    }
+    this.opsApiErrorsAlarm(props.opsApi, props.opsApiLogGroup);
 
     this.addKoreanNotifications();
   }
@@ -251,19 +249,15 @@ export class OpsAlarms extends Construct {
   // 호출이 없는 구간은 정상(요청이 없으면 오류도 급증하지 않음)
   private opsApiErrorsAlarm(
     fn: lambda.IFunction,
-    logGroup?: logs.ILogGroup,
+    logGroup: logs.ILogGroup,
   ): void {
     const period = Duration.minutes(OPS_API_ALARM.periodMinutes);
     const m5 = fn.metric("Url5xxCount", {
       statistic: "Sum",
       period,
     });
-    const targetLogGroup = logGroup ?? (fn as any).logGroup;
-    if (!targetLogGroup) {
-      throw new Error("운영 API 로그 그룹이 없어 권한 거부 지표 필터를 만들 수 없습니다");
-    }
     const filter = new logs.MetricFilter(this, "OpsApiAuthDeniedFilter", {
-      logGroup: targetLogGroup,
+      logGroup,
       metricNamespace: OPS_API_ALARM.metricNamespace,
       metricName: OPS_API_ALARM.metricName,
       // Lambda 기본 텍스트 로그는 "시각\t요청ID\tINFO\t{...}" 접두어가 붙어 JSON 패턴이 맞지 않음
@@ -288,7 +282,7 @@ export class OpsAlarms extends Construct {
         cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
       evaluationPeriods: 1,
       treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-      alarmDescription: `운영 API 오류 급증. 5분에 5xx ${OPS_API_ALARM.serverErrors}회 또는 권한 거부(401·403) ${OPS_API_ALARM.authFailures}회 이상. CloudWatch 로그 확인 필요`,
+      alarmDescription: `운영 API 오류 급증. ${OPS_API_ALARM.periodMinutes}분에 5xx ${OPS_API_ALARM.serverErrors}회 또는 권한 거부(401·403) ${OPS_API_ALARM.authFailures}회 이상. CloudWatch 로그 확인 필요`,
     });
     this.alarms.push(alarm);
   }

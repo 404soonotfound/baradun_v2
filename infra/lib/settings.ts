@@ -82,8 +82,7 @@ export const LOGIN_ABUSE_ALARM = {
 // 운영 API 5xx·권한 거부(401·403) 급증 경보 기준(D17-7, 출시 초기 운영자 소수 기준). 5분 동안 둘 중 하나라도 넘으면 알림
 // - 5xx: Lambda 함수 URL Url5xxCount (Sum, 5분)
 // - 권한 거부: 운영 API 로그 지표 필터(401·403에만 남는 ops_auth_denied 이벤트 수, Sum, 5분)
-// 기본값(안 1): 5xx 3회 또는 권한 거부 10회 (5분 구간). 보고에 '내 확인 필요' 표시
-// 대안(안 2): 5xx 5회 또는 권한 거부 20회 (5분 구간).
+// 5xx 3회 또는 권한 거부 10회(5분 구간). 출시 초기 기본값으로 둠(검토한 대안: 5회·20회)
 export const OPS_API_ALARM = {
   periodMinutes: 5,
   serverErrors: 3,
