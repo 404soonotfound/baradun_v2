@@ -166,6 +166,14 @@ const beachRow = (page: Page, name: string) =>
     .filter({ visible: true })
     .filter({ hasText: name });
 
+// 모바일 카드 206장 전체에 axe를 돌리면 CI 러너에서 30초를 넘김 → 같은 부품을 몇 곳으로 줄여 검사
+async function narrowForAxe(page: Page) {
+  await page.getByLabel("해변 찾기").fill("강릉");
+  await expect(page.getByText(/^206곳 중 \d+곳$/)).not.toHaveText(
+    "206곳 중 206곳",
+  );
+}
+
 async function openDetail(page: Page, name: string) {
   // 모바일 카드 링크 이름에는 지역·ID도 들어감. 첫 링크가 상세 링크(커밋 기록 링크는 뒤)
   await beachRow(page, name).getByRole("link", { name }).first().click();
@@ -210,6 +218,7 @@ test("목록: 저장소의 206곳을 읽기 전용으로 보여 주고 지금 �
     "href",
     "https://github.com/404soonotfound/baradun_v2/commits/main/data/beaches/b0001.json",
   );
+  await narrowForAxe(page);
   await expectNoA11yViolations(page);
 });
 
@@ -247,6 +256,41 @@ test("상태를 못 받으면 모든 해변이 판단불가 계열 '확인 못 �
   await expect(page.getByText("특보 없음", { exact: true })).toHaveCount(0);
   await alert.getByRole("button", { name: "다시 시도" }).click();
   await expect.poll(calls).toBe(2);
+  await narrowForAxe(page);
+  await expectNoA11yViolations(page);
+});
+
+test("유효 시각이 지난 게시 상태는 분류를 그대로 두고 지남을 따로 알린다(G1)", async ({
+  page,
+}) => {
+  const past = new Date(Date.now() - 5 * 60_000).toISOString();
+  await mockPublished(page, {
+    status: 200,
+    body: {
+      ...PUBLISHED,
+      beaches: {
+        ...PUBLISHED.beaches,
+        b0001: { category: "clear", reasons: [], validUntil: past },
+      },
+    },
+  });
+  await mockMemo(page);
+  await signIn(page, ["viewer"]);
+  await openBeaches(page);
+  const row = beachRow(page, "강문해수욕장");
+  await expect(row).toContainText("특보 없음");
+  await expect(row).toContainText("유효 시각 지남");
+  await expect(beachRow(page, "경포해수욕장")).not.toContainText(
+    "유효 시각 지남",
+  );
+  await openDetail(page, "강문해수욕장");
+  const status = page.getByRole("region", { name: "지금 표시 상태" });
+  await expect(status).toContainText("특보 없음");
+  await expect(status).toContainText("게시 상태의 유효 시각이 지났어요");
+  // 배지는 게시 분류 그대로(안내 문장 속 앱 설명과 구분해 배지 글자만 봄)
+  await expect(
+    status.getByText("특보 확인 못 함", { exact: true }),
+  ).toHaveCount(0);
   await expectNoA11yViolations(page);
 });
 
