@@ -20,14 +20,18 @@ import {
   NOTICE_STATES,
   NOTICE_TEXT_MAX,
   noticeAction,
+  noticeWarnings,
   saveProblems,
+  textProblems,
   toKstInput,
   updateNotice,
   type NoticeContent,
   type NoticeKind,
   type NoticeProblem,
   type NoticeState,
+  type NoticeTexts,
   type NoticeView,
+  type NoticeWarning,
   type TextField,
 } from "@/lib/notices";
 import { AdminShell } from "./admin-shell";
@@ -38,7 +42,8 @@ import { Button, Notice } from "./ui";
 // - 편집: 주소 ?id= (새 공지는 ?new=1). 한·영 제목·내용, 종류, 노출 기간(KST로 쓰고 UTC로 저장)
 // - 저장(편집 권한)은 대기본만 바꿈. '게시 대상으로 확정'·'노출 종료'는 노출 변경 권한(D16-D4)
 // - 저장·확정 성공을 앱 반영으로 말하지 않음. 앱에는 다음 게시 때 나감(D16-D4·C4)
-// - 초안은 빈칸·글자 수 초과도 저장됨(D16-D1). 확정은 한·영 모두·글자 수·기간을 확인(서버도 다시 봄)
+// - 초안은 빈칸·글자 수 초과·차단 표현도 저장됨(D16-D1). 확정은 한·영 모두·글자 수·차단 표현·기간을 확인(서버도 다시 봄)
+// - 표현 검사는 결정 기록 D17-8 목록. 차단은 확정을 막고, 문맥 확인 표현은 경고만 함
 // - '지금 게시'는 데이터 게시 화면(ADM-PUB)에서 함. 공지는 판단 상태·실제 점검을 바꾸지 않음(D16-C6)
 
 const t = messages.notices;
@@ -482,9 +487,20 @@ const FIELD_LABEL: Record<TextField, string> = {
   "body.en": `${t.en} ${t.bodyLabelEn}`,
 };
 
+// 한 칸에 문제가 여럿(글자 수·차단 표현 여러 개)일 수 있어 사유·맞은 문구까지 붙여 구분
+const problemKey = (p: NoticeProblem) =>
+  `${p.field}:${p.reason}:${"text" in p ? p.text : ""}`;
+
 function problemText(p: NoticeProblem): string {
   if (p.reason === "order" || p.reason === "invalid")
     return t.problem[p.reason];
+  if (p.reason === "blocked_phrase") {
+    return fill(t.problem.blocked_phrase, {
+      field: FIELD_LABEL[p.field],
+      text: p.text,
+      category: t.phraseCategory[p.category],
+    });
+  }
   const field = p.field as TextField;
   const [name, lang] = field.split(".") as ["title" | "body", "ko" | "en"];
   return fill(t.problem[p.reason], {
@@ -502,7 +518,7 @@ function TextInput({
   value,
   max,
   multiline,
-  problem,
+  problems,
   onChange,
 }: {
   id: string;
@@ -510,17 +526,22 @@ function TextInput({
   value: string;
   max: number;
   multiline?: boolean;
-  problem: NoticeProblem | undefined;
+  problems: NoticeProblem[];
   onChange: (next: string) => void;
 }) {
   const count = graphemeLength(value);
-  const over = problem?.reason === "too_long";
+  const over = problems.some((p) => p.reason === "too_long");
+  // 빈칸은 확인 목록에서만 알림(쓰는 중인 칸을 빨갛게 하지 않음)
+  const shown = problems.filter(
+    (p) => p.reason === "too_long" || p.reason === "blocked_phrase",
+  );
   const common = {
     id,
     value,
     maxLength: NOTICE_DRAFT_TEXT_MAX,
-    "aria-invalid": over ? true : undefined,
-    "aria-describedby": `${id}-count`,
+    "aria-invalid": shown.length > 0 ? true : undefined,
+    "aria-describedby":
+      shown.length > 0 ? `${id}-count ${id}-problems` : `${id}-count`,
     className: fieldClass,
   } as const;
   return (
@@ -549,8 +570,14 @@ function TextInput({
           onChange={(e) => onChange(e.target.value)}
         />
       )}
-      {over && problem && (
-        <p className="text-label-s text-danger-text">{problemText(problem)}</p>
+      {shown.length > 0 && (
+        <div id={`${id}-problems`} className="flex flex-col gap-0.5">
+          {shown.map((p) => (
+            <p key={problemKey(p)} className="text-label-s text-danger-text">
+              {problemText(p)}
+            </p>
+          ))}
+        </div>
       )}
     </div>
   );
@@ -607,7 +634,7 @@ function Preview({ form }: { form: Form }) {
 
 type WriteError =
   | { kind: "conflict" | "replay" | "notLive" | "deleteLive" | "notFound" }
-  | { kind: "invalid"; field: string }
+  | { kind: "invalid"; field: string; blocked: boolean }
   | { kind: "failed"; action: boolean; requestId: string | null };
 
 function writeError(result: Failed, action: boolean): WriteError {
@@ -621,7 +648,11 @@ function writeError(result: Failed, action: boolean): WriteError {
   }
   if (result.status === 404) return { kind: "notFound" };
   if (result.status === 400 && "field" in result && result.field) {
-    return { kind: "invalid", field: result.field };
+    return {
+      kind: "invalid",
+      field: result.field,
+      blocked: "reason" in result && result.reason === "blocked_phrase",
+    };
   }
   return {
     kind: "failed",
@@ -771,8 +802,18 @@ function NoticeEditor({
     notice !== null && base !== null && notice.version !== base.version;
 
   const { content, problems: saveBlocks } = contentOf(form);
-  const blocks = content ? exposeProblems(content, now) : saveBlocks;
+  // 문구 확인(빈칸·글자 수·차단 표현)과 문맥 확인 경고는 시각이 틀려 내용을 못 만들 때도 문구만으로 알림
+  const texts: NoticeTexts = {
+    title: { ko: form.titleKo, en: form.titleEn },
+    body: { ko: form.bodyKo, en: form.bodyEn },
+  };
+  const blocks = content
+    ? exposeProblems(content, now)
+    : [...saveBlocks, ...textProblems(texts)];
   const problemOf = (field: string) => blocks.find((p) => p.field === field);
+  const problemsOf = (field: TextField) =>
+    blocks.filter((p) => p.field === field);
+  const warnings: NoticeWarning[] = noticeWarnings(texts);
   const startPast = content !== null && Date.parse(content.startsAt) < now;
 
   const set = <K extends keyof Form>(key: K, value: Form[K]) => {
@@ -981,7 +1022,7 @@ function NoticeEditor({
         return t.notFoundTitle;
       case "invalid":
         // 확정 검사에 걸린 칸은 화면 이름으로(내부 칸 이름을 보이지 않게)
-        return fill(t.invalidField, {
+        return fill(e.blocked ? t.blockedField : t.invalidField, {
           field:
             e.field in FIELD_LABEL
               ? FIELD_LABEL[e.field as TextField]
@@ -1099,7 +1140,7 @@ function NoticeEditor({
               label={t.titleLabel}
               value={form.titleKo}
               max={NOTICE_TEXT_MAX.title.ko}
-              problem={problemOf("title.ko")}
+              problems={problemsOf("title.ko")}
               onChange={(v) => set("titleKo", v)}
             />
             <TextInput
@@ -1108,7 +1149,7 @@ function NoticeEditor({
               value={form.bodyKo}
               max={NOTICE_TEXT_MAX.body.ko}
               multiline
-              problem={problemOf("body.ko")}
+              problems={problemsOf("body.ko")}
               onChange={(v) => set("bodyKo", v)}
             />
           </Section>
@@ -1129,7 +1170,7 @@ function NoticeEditor({
               label={t.titleLabelEn}
               value={form.titleEn}
               max={NOTICE_TEXT_MAX.title.en}
-              problem={problemOf("title.en")}
+              problems={problemsOf("title.en")}
               onChange={(v) => set("titleEn", v)}
             />
             <TextInput
@@ -1138,7 +1179,7 @@ function NoticeEditor({
               value={form.bodyEn}
               max={NOTICE_TEXT_MAX.body.en}
               multiline
-              problem={problemOf("body.en")}
+              problems={problemsOf("body.en")}
               onChange={(v) => set("bodyEn", v)}
             />
           </Section>
@@ -1236,14 +1277,37 @@ function NoticeEditor({
                 }
                 label={t.checkPeriod}
               />
-              <Check ok={null} label={t.checkWords} />
+              <Check
+                ok={!blocks.some((p) => p.reason === "blocked_phrase")}
+                label={t.checkWords}
+              />
             </ul>
             {blocks.length > 0 && (
               <ul className="flex flex-col gap-1 text-label-s text-danger-text">
                 {blocks.map((p) => (
-                  <li key={p.field}>{problemText(p)}</li>
+                  <li key={problemKey(p)}>{problemText(p)}</li>
                 ))}
               </ul>
+            )}
+            {warnings.length > 0 && (
+              <div
+                id="notice-warnings"
+                className="flex flex-col gap-1 border-t border-border-default pt-2"
+              >
+                <p className="text-label-s font-semibold text-status-stale-fg">
+                  {fill(t.warnTitle, { count: warnings.length })}
+                </p>
+                <ul className="flex flex-col gap-1 text-label-s text-text-body">
+                  {warnings.map((w) => (
+                    <li key={`${w.field}:${w.text}`}>
+                      {fill(t.warnItem, {
+                        field: FIELD_LABEL[w.field],
+                        text: w.text,
+                      })}
+                    </li>
+                  ))}
+                </ul>
+              </div>
             )}
           </section>
           <Preview form={form} />

@@ -267,6 +267,94 @@ test("확정 전 확인: 영어 없음·글자 수 넘침은 저장은 되지만
   ).toBeVisible();
 });
 
+test("표현 검사(D17-8): 차단 표현은 저장은 되지만 확정을 막고, 문맥 확인 표현은 경고만, 허용 표현은 통과", async ({
+  page,
+}) => {
+  await signIn(page);
+  await mockNotices(page, {
+    items: () => [
+      view("n-ready", {
+        version: 4,
+        draft: content({ startsAt: at(5) }),
+        live: null,
+        state: "draft",
+      }),
+    ],
+  });
+  await openNotices(page);
+  await openNotice(page, "데이터 출처 안내");
+  const checks = page.locator("#notice-checks-list");
+  await expect(
+    checks.getByText("게시를 막는 표현 없음", { exact: false }),
+  ).toBeVisible();
+  await expect(checks).toContainText("통과: 게시를 막는 표현 없음");
+
+  const body = page.getByLabel("내용", { exact: true });
+  await body.fill("오늘은 안 전 해 요");
+  await expect(body).toHaveAttribute("aria-invalid", "true");
+  await expect(checks).toContainText("고칠 것: 게시를 막는 표현 없음");
+  await expect(
+    page
+      .getByText(
+        "한국어 내용의 ‘안 전 해 요’은(는) 안전 보장 표현이라 게시 대상으로 확정할 수 없어요.",
+        { exact: false },
+      )
+      .first(),
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "저장" })).toBeEnabled();
+  await expectNoA11yViolations(page);
+
+  await body.fill("안전요원 안내를 따라 주세요. 파도가 잔잔해요");
+  await expect(body).not.toHaveAttribute("aria-invalid", "true");
+  await expect(checks).toContainText("통과: 게시를 막는 표현 없음");
+  const warnings = page.locator("#notice-warnings");
+  await expect(warnings).toContainText("문맥 확인 1 · 확정은 막지 않아요");
+  await expect(warnings).toContainText("한국어 내용의 ‘잔잔해요’");
+  await expect(warnings).not.toContainText("안전요원");
+  await expectNoA11yViolations(page);
+});
+
+test("표현 검사: 서버가 차단 표현으로 확정을 거절하면 칸 이름과 다음 행동을 알린다", async ({
+  page,
+}) => {
+  await signIn(page);
+  await mockNotices(page, {
+    items: () => [
+      view("n-ready", {
+        version: 4,
+        draft: content({ startsAt: at(5) }),
+        live: null,
+        state: "draft",
+      }),
+    ],
+    write: () => ({
+      status: 400,
+      body: {
+        error: {
+          code: "invalid_request",
+          field: "body.en",
+          reason: "blocked_phrase",
+          requestId: "req-1234abcd",
+        },
+      },
+    }),
+  });
+  await openNotices(page);
+  await openNotice(page, "데이터 출처 안내");
+  await page.getByRole("button", { name: "게시 대상으로 확정" }).click();
+  await page
+    .getByRole("alert")
+    .filter({ hasText: "게시 대상으로 확정해요" })
+    .getByRole("button", { name: "게시 대상으로 확정" })
+    .click();
+  await expect(
+    page.getByRole("alert").filter({
+      hasText:
+        "서버가 ‘English Body’에서 게시할 수 없는 표현을 찾아 확정하지 않았어요.",
+    }),
+  ).toContainText("고쳐 저장한 뒤 다시 확정해 주세요.");
+});
+
 test("게시 대상 확정: 노출 변경 권한은 확인 뒤 확정하고, 편집 권한은 비활성 + 이유", async ({
   page,
 }) => {
