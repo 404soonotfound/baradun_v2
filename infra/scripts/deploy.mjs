@@ -3,7 +3,7 @@
 //   npm run deploy:infra [-- --profile <AWS 프로필>] [--admin-profile <IAM 정책을 고칠 프로필>] [--watch <분>] [--issue <번호>]
 // tsx로 실행함(판정 부분 deploy-plan.ts를 바로 가져옴)
 // 순서: 배포용 작업 트리를 origin/main으로 → ci-ok 확인 → npm ci → 자격 증명 → 스택 밖 IAM 정책 비교
-//   → 변경 세트 → 표 → yes일 때만 (boundary 반영) → 실행·대기 → 바뀐 함수 로그 점검 → (이슈 댓글)
+//   → 변경 세트 → 표 → yes일 때만 (boundary 반영) → 실행·대기 → 바뀐 함수 로그 점검 → 지도 판 확인 → (이슈 댓글)
 // - boundary(BaradunV2-RoleBoundary)는 스택 밖에 둠(배포 역할이 자기 권한 상한을 못 고치게). 저장소와 다르면
 //   같은 yes로 변경 세트보다 먼저 반영함(#375 때 빠뜨려 경보 읽기가 막힘). 반영은 --admin-profile(기본: --profile)로
 // - 실행 정책(BaradunCdkExecution·Workload)은 다르면 경고만 함. 바꾸는 순서가 따로 있어 자동 반영하지 않음(infra/README)
@@ -97,7 +97,7 @@ const MIN_CREDENTIAL_MINUTES = 5;
 // 배포 뒤 로그 점검에서 함수마다 읽는 최대 줄 수
 const LOG_MAX_EVENTS = 20_000;
 
-const step = (n, text) => console.log(`\n[${n}/8] ${text}`);
+const step = (n, text) => console.log(`\n[${n}/9] ${text}`);
 
 // 0 이상 정수 인자. 틀리면 기본값으로 넘어가지 않고 멈춤
 function intArg(name, fallback) {
@@ -792,6 +792,34 @@ if (watchMinutes > 0 && functions.length > 0) {
   );
 }
 
+// 9. 지도 판 확인 (D19-1 · #392): 사이트 CloudFront·버킷·CSP가 바뀐 뒤에도 웹이 쓰는 지도 판을 받을 수 있는지
+// 배포한 커밋의 tools/map-tiles/verify.mjs·style.ts 기준으로 공개 주소만 읽음(AWS 권한 안 씀)
+// 배포는 이미 끝났으므로 실패해도 멈추지 않고 결과를 화면·이슈 댓글에 남김(정상으로 보지 않음)
+step(9, "운영 CloudFront에서 웹이 쓰는 지도 판을 확인해요");
+const siteUrl = run("gh", ["variable", "get", "SITE_URL", "--repo", repo], {
+  capture: true,
+  allowFail: true,
+});
+let mapCheck;
+if (siteUrl.status !== 0 || !siteUrl.stdout.trim()) {
+  mapCheck = "확인 못 함(저장소 변수 SITE_URL을 읽지 못함)";
+} else {
+  const verified = run(
+    process.execPath,
+    [
+      path.join(deployDir, "tools", "map-tiles", "verify.mjs"),
+      "--site",
+      siteUrl.stdout.trim(),
+    ],
+    { allowFail: true },
+  );
+  mapCheck =
+    verified.status === 0
+      ? "통과"
+      : `실패(종료 코드 ${verified.status}) → tools/map-tiles/README '지도 판 확인'`;
+}
+console.log(`   지도 판 확인: ${mapCheck}`);
+
 postIssueComment(
   deployComment({
     subject,
@@ -801,5 +829,5 @@ postIssueComment(
     executionPolicies: executionLines,
     watchMinutes,
     checks: logChecks,
-  }),
+  }) + `\n- 지도 판 확인: ${mapCheck}\n`,
 );
