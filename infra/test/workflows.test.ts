@@ -51,6 +51,22 @@ describe("배포 워크플로 가드레일 (11장)", () => {
     }
   });
 
+  // 고정한 SHA가 낡지 않게 Dependabot이 Action 버전 갱신 PR을 냄(#303)
+  it("Dependabot이 github-actions를 매주 갱신하고 새 버전은 7일 기다린다", () => {
+    const dependabot = codeLines(
+      readFileSync(resolve(__dirname, "../../.github/dependabot.yml"), "utf8"),
+    ).join("\n");
+    expect(dependabot).toMatch(/^version:\s*2$/m);
+    // 다른 생태계 항목이 생겨도 github-actions 항목 안에서만 검사함
+    const actions = dependabot
+      .split(/^\s*-\s*package-ecosystem:/m)
+      .find((entry) => /^\s*"github-actions"/.test(entry));
+    expect(actions).toBeDefined();
+    expect(actions).toMatch(/^\s*directory:\s*"\/"\s*$/m);
+    expect(actions).toMatch(/interval:\s*"weekly"/);
+    expect(actions).toMatch(/default-days:\s*7\s*$/m);
+  });
+
   it("OIDC 토큰(id-token: write)은 배포 워크플로와 지도 파일 워크플로만 받는다", () => {
     for (const w of workflows) {
       const hasIdToken = codeLines(w.text).some((l) =>
