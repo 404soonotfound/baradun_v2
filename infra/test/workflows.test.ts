@@ -57,14 +57,26 @@ describe("배포 워크플로 가드레일 (11장)", () => {
       readFileSync(resolve(__dirname, "../../.github/dependabot.yml"), "utf8"),
     ).join("\n");
     expect(dependabot).toMatch(/^version:\s*2$/m);
-    // 다른 생태계 항목이 생겨도 github-actions 항목 안에서만 검사함
+    // 다른 생태계 항목이 생겨도 github-actions 항목 안에서만 검사함. 따옴표는 있어도 없어도 같은 값
+    const q = (value: string) => `["']?${value}["']?\\s*$`;
     const actions = dependabot
       .split(/^\s*-\s*package-ecosystem:/m)
-      .find((entry) => /^\s*"github-actions"/.test(entry));
+      .find((entry) =>
+        new RegExp(`^\\s*${q("github-actions")}`, "m").test(
+          entry.split("\n")[0],
+        ),
+      );
     expect(actions).toBeDefined();
-    expect(actions).toMatch(/^\s*directory:\s*"\/"\s*$/m);
-    expect(actions).toMatch(/interval:\s*"weekly"/);
-    expect(actions).toMatch(/default-days:\s*7\s*$/m);
+    expect(actions).toMatch(new RegExp(`^\\s*directory:\\s*${q("/")}`, "m"));
+    expect(actions).toMatch(
+      new RegExp(`^\\s*schedule:\\s*\\n\\s+interval:\\s*${q("weekly")}`, "m"),
+    );
+    expect(actions).toMatch(/^\s*cooldown:\s*\n\s+default-days:\s*7\s*$/m);
+    // 갱신이 조용히 꺼지는 설정: PR 상한 0, 전체 무시
+    expect(actions).not.toMatch(/^\s*open-pull-requests-limit:\s*0\s*$/m);
+    expect(actions).not.toMatch(
+      new RegExp(`dependency-name:\\s*${q("\\*")}`, "m"),
+    );
   });
 
   it("OIDC 토큰(id-token: write)은 배포 워크플로와 지도 파일 워크플로만 받는다", () => {
