@@ -403,7 +403,7 @@
       "ripCredit": "<link>KHOA “Rip Current Index”</link> · KOGL Type 1",
       "inquiry": "Info doesn't match reality",
       "weather": "Weather",
-      "weatherShort": "KMA short-range forecast (5 km grid at the beach)",
+      "weatherShort": "KMA short-range forecast (5km grid at the beach)",
       "weatherMid": "KMA medium-range forecast ({zone}) from day 4",
       "weatherIssued": "Issued {times}"
     },
@@ -428,7 +428,7 @@
       "cell": "{day} {hour}, {sky}, temperature {temperature}, chance of rain {pop}, wind {wind}",
       "temperature": "{value}°C",
       "pop": "{value}%",
-      "windSpeed": "{value} m/s",
+      "windSpeed": "{value}m/s",
       "noValue": "no data",
       "skyUnknown": "sky unknown",
       "sky": {
