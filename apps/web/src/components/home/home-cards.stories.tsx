@@ -13,7 +13,7 @@ import type { BadgeLabel, BeachView, MetricView } from "@/lib/snapshot/view";
 import { beachWeather, type WeatherView } from "@/lib/snapshot/weather";
 
 // 홈 해변 카드·PC '지금 전국 바다' 카드 확인용 (이슈 #362 · #364 · 노션 D18-5·D18-8 · 개발 전용 Storybook)
-// 카드: 활동 3개 × 값 있음(날씨 정상) · 값 없음(가까운 관측 없음·늦어짐·–, 날씨 실패) · 불러오는 중
+// 카드: 활동 3개 × 값 있음(날씨 정상) · 값 없음(가까운 관측 없음·늦어짐·–, 날씨 실패) · 앞으로 7칸과 결측 칸 · 불러오는 중
 // 지도 카드: 정상 · 불러오는 중 · 이용 제한·확인 못 함이 섞인 경우. 점 좌표는 예시
 // 지금 시각을 계약 날씨 예시(2026-11-05 KST 08:30)에 맞춰 고정
 const WEATHER_FILE = example as unknown as WeatherFile;
@@ -117,6 +117,33 @@ const MISSING = view(
   },
 );
 
+// 앞으로 8칸(3시간 간격, 카드에는 7칸). 풍속 없는 칸·풍향만 없는 칸을 섞어 결측 모양을 봄
+const LONG_WEATHER: WeatherView = (() => {
+  const base = beachWeather(WEATHER_FILE, "b0002");
+  if (base.kind !== "ready" || !base.grid.short) return base;
+  const first = base.grid.short.points[0]!;
+  const winds: [number | null, number | null][] = [
+    [262, 1.5],
+    [280, 3.1],
+    [300, 4.6],
+    [null, 5.2], // 풍향만 없음: 숫자·그래프는 그리고 화살표만 뺌
+    [320, null], // 풍속 없음: '–', 그래프 끊김
+    [340, 2.4],
+    [10, 1.8],
+    [30, 2.2],
+  ];
+  const points = winds.map(([windFrom, windSpeed], i) => ({
+    ...first,
+    at: new Date(Date.parse(first.at) + i * 3 * 3_600_000).toISOString(),
+    windFrom,
+    windSpeed,
+  }));
+  return {
+    ...base,
+    grid: { ...base.grid, short: { ...base.grid.short, points } },
+  };
+})();
+
 const CARDS: {
   beach: BeachSummary;
   view: BeachView;
@@ -131,6 +158,11 @@ const CARDS: {
     beach: beach("s2", "금진해수욕장", 37.64, 129.05),
     view: MISSING,
     weather: beachWeather(WEATHER_FILE, "b0008"),
+  },
+  {
+    beach: beach("s4", "사근진해변", 37.81, 128.91),
+    view: FULL,
+    weather: LONG_WEATHER,
   },
   {
     beach: beach("s3", "도직해수욕장", 37.6, 129.07, false),
