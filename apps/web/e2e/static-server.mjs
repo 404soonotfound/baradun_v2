@@ -29,7 +29,6 @@ const TYPES = {
 function buildCspHeader(photoBucket) {
   const connectSources = [
     "'self'",
-    "https://tiles.openfreemap.org",
     "https://www.googletagmanager.com",
     "https://*.google-analytics.com",
     "https://*.google.com",
@@ -41,7 +40,7 @@ function buildCspHeader(photoBucket) {
     "default-src 'self'",
     "script-src 'self' 'unsafe-inline' https://www.googletagmanager.com",
     "style-src 'self'",
-    "img-src 'self' blob: https://tiles.openfreemap.org https://tong.visitkorea.or.kr https://www.googletagmanager.com https://*.google-analytics.com",
+    "img-src 'self' blob: https://tong.visitkorea.or.kr https://www.googletagmanager.com https://*.google-analytics.com",
     "font-src 'self'",
     `connect-src ${connectSources.join(" ")}`,
     "worker-src 'self'",
