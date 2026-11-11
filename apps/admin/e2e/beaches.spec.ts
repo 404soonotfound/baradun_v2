@@ -18,14 +18,18 @@ import {
 
 const OPS = "ops@example.test";
 
+// 게시 분류를 믿을 수 있는 시각. 시험 중 지나지 않게 지금보다 뒤로 둠
+const VALID_UNTIL = new Date(Date.now() + 24 * 60 * 60_000).toISOString();
+
 const PUBLISHED = {
   available: true,
   snapshotVersion: "20261111T030000Z",
   generatedAt: "2026-11-11T03:00:12Z",
   beaches: {
-    b0001: { category: "clear", reasons: [] },
+    b0001: { category: "clear", reasons: [], validUntil: VALID_UNTIL },
     b0002: {
       category: "unavailable",
+      validUntil: VALID_UNTIL,
       reasons: [
         {
           code: "warning",
@@ -39,6 +43,7 @@ const PUBLISHED = {
     },
     b0004: {
       category: "undetermined",
+      validUntil: VALID_UNTIL,
       reasons: [
         {
           code: "observation_delayed",
