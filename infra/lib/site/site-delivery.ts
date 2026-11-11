@@ -45,6 +45,13 @@ export class SiteDelivery extends Construct {
       encryption: s3.BucketEncryption.S3_MANAGED,
       // 스택을 지워도 버킷과 스냅샷은 남김 (실수로 데이터가 사라지지 않게)
       removalPolicy: RemovalPolicy.RETAIN,
+      // 지도 파일(수백 MB)을 여러 조각으로 올리다 끊기면 보이지 않는 조각에 요금이 붙음 → 1일 뒤 지움(결정 기록 D19-1)
+      lifecycleRules: [
+        {
+          id: "AbortIncompleteUploads",
+          abortIncompleteMultipartUploadAfter: Duration.days(1),
+        },
+      ],
     });
 
     const [functionCodeBefore = "", functionCodeAfter = ""] =
