@@ -5,6 +5,7 @@ import {
   localSaveInquiry,
 } from "./local-inquiries";
 import { localAudit } from "./local-audit";
+import { localBeaches } from "./local-beaches";
 import { localCollection } from "./local-collection";
 import { localNotices } from "./local-notices";
 import { localSources } from "./local-sources";
@@ -160,6 +161,14 @@ export function localOps<T>(
   }
   if (method === "GET" && url.pathname === "/ops/sources") {
     return localSources<T>();
+  }
+  if (url.pathname.startsWith("/ops/beaches/")) {
+    // 데모 계정은 서버처럼 운영 메모를 받지 않음(허용표 sample: false)
+    if (pool === "demo" && url.pathname.endsWith("/memo")) {
+      return { ok: false, status: 403, code: "forbidden", requestId: null };
+    }
+    const beaches = localBeaches<T>(url.pathname, request);
+    if (beaches) return beaches;
   }
   if (url.pathname.startsWith("/ops/notices")) {
     const notices = localNotices<T>(url.pathname, request);

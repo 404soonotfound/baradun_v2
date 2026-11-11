@@ -22,6 +22,7 @@ import {
 } from "@/lib/audit";
 import type { OpsResult } from "@/lib/auth/ops-fetch";
 import { useAuthSession, useSessionSnapshot } from "@/lib/auth/provider";
+import type { BeachName } from "@/lib/beach-names";
 import { isInquiryStatus, kstDateTime, shortId } from "@/lib/inquiries";
 import { fill, messages } from "@/lib/messages";
 import { kstRange } from "@/lib/notices";
@@ -32,11 +33,14 @@ import { Button, Notice } from "./ui";
 // - 분류 탭(수) · 대상·내용 찾기 · +운영자 · +기간 칩 · 표(시각·누가·종류·대상·바뀐 내용·바뀐 곳) · 이전/다음
 // - 공지 줄을 누르면 문구 앞·뒤를 펼쳐 보여 줌(공지는 공개 문구). 문의는 본문·메모 값 없이 항목만(D16-B5)
 // - 운영자 이름은 기록에 없어 Cognito sub 앞부분으로 보여 줌
-// - 해변(저장소 커밋)·게시·권한·로그인 기록은 그 기능이 생기면 같은 탭에 쌓임. 지금은 0건
+// - 해변 탭: 운영 메모 저장 기록(BRD-150). 해변 정보 변경은 저장소 커밋이 이력. 게시·권한·로그인은 기능이 생기면 같은 탭에 쌓임
 // - 더한 줄 색: 시안은 초록이지만 디자인 시스템이 초록 계열을 쓰지 않아(노션 4장, 토큰 검사) 파랑(특보 없음 면)으로 둠
 // - 데모 계정은 변경 이력을 받지 않음(D15-3) → 요청하지 않고 안내만
 
 const t = messages.audit;
+
+// 해변 메모 기록의 대상 이름(공개 해변 데이터 이름표, 문의 화면과 같음)
+type Beaches = Readonly<Record<string, BeachName>>;
 const i = messages.inquiries;
 
 const REPO_DATA_COMMITS =
@@ -119,7 +123,7 @@ function summaryOf(item: AuditView): string {
     : item.action;
 }
 
-function Target({ item }: { item: AuditView }) {
+function Target({ item, beaches }: { item: AuditView; beaches: Beaches }) {
   const { kind, id } = item.target;
   const link =
     "font-medium text-brand-default underline-offset-2 hover:underline";
@@ -138,6 +142,13 @@ function Target({ item }: { item: AuditView }) {
     return (
       <Link href={`/notices/?id=${encodeURIComponent(id)}`} className={link}>
         {item.targetLabel ?? id}
+      </Link>
+    );
+  }
+  if (kind === "beach") {
+    return (
+      <Link href={`/beaches/${encodeURIComponent(id)}/`} className={link}>
+        {beaches[id]?.name ?? id}
       </Link>
     );
   }
@@ -416,7 +427,7 @@ function currentTime(): number {
   return Date.now();
 }
 
-function AuditBody() {
+function AuditBody({ beaches }: { beaches: Beaches }) {
   const session = useAuthSession();
   const snapshot = useSessionSnapshot();
   const demo = snapshot.status !== "signed_out" && snapshot.pool === "demo";
@@ -750,7 +761,7 @@ function AuditBody() {
                             <KindBadge item={item} />
                           </td>
                           <td className={cell}>
-                            <Target item={item} />
+                            <Target item={item} beaches={beaches} />
                           </td>
                           <td className={cell}>
                             {expandable ? (
@@ -805,7 +816,7 @@ function AuditBody() {
                           >
                             <span className="flex flex-wrap items-center gap-2 text-body">
                               <KindBadge item={item} />
-                              <Target item={item} />
+                              <Target item={item} beaches={beaches} />
                             </span>
                             <span className="flex flex-wrap items-center gap-1.5 text-body-s text-text-body">
                               <span>{summaryOf(item)}</span>
@@ -883,10 +894,10 @@ function AuditBody() {
   );
 }
 
-export function AuditScreen() {
+export function AuditScreen({ beaches }: { beaches: Beaches }) {
   return (
     <AdminShell title={t.title}>
-      <AuditBody />
+      <AuditBody beaches={beaches} />
     </AdminShell>
   );
 }
