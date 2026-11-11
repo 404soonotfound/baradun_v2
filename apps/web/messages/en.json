@@ -230,6 +230,7 @@
       "windAheadLabel": "Wind ahead: {cells}. KMA forecast issued {time}",
       "windCell": "{hour}:00 {dir} wind {speed}m/s",
       "windCellNoValue": "{hour}:00 no value",
+      "windCellNoDir": "{hour}:00 wind {speed}m/s, no direction",
       "windFailed": "Couldn't check the wind forecast · See warnings and measurements above"
     },
     "recent": {
