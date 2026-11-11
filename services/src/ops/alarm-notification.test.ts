@@ -126,7 +126,7 @@ describe("운영 경보 한국어 알림", () => {
       alarmEvent("OpsApiErrors", "운영 API 오류 급증"),
     );
     expect(result.message).toContain(
-      "판정: 5분 동안 운영 API 5xx 오류 또는 권한 거부(401·403) 요청이 기준을 넘었습니다.",
+      "판정: 운영 API 5xx 오류 또는 권한 거부(401·403) 요청이 기준을 넘었습니다.",
     );
   });
 
