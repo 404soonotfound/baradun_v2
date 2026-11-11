@@ -97,6 +97,17 @@ describe("배포 워크플로 가드레일 (11장)", () => {
     );
     // 변수가 비면 건너뛰지 않고 실패
     expect(upload).toMatch(/-z "\$ROLE_ARN"[\s\S]*?exit 1/);
+    // 만든 뒤 형식·자산 확인, 올린 뒤 CloudFront 경로 확인(토큰 없이 공개 주소 읽기)
+    expect(build).toMatch(/build\.sh[\s\S]*?verify\.mjs --dir/);
+    const verify = jobs.find((j) => j.startsWith("verify:")) ?? "";
+    expect(verify).toMatch(/needs:\s*upload/);
+    expect(verify).toContain(
+      'node tools/map-tiles/verify.mjs --site "$SITE_URL" --version "$VERSION"',
+    );
+    expect(verify).not.toMatch(
+      /id-token|configure-aws-credentials|environment:/,
+    );
+    expect(verify).toMatch(/-z "\$SITE_URL"[\s\S]*?exit 1/);
   });
 
   it("배포는 main push CI가 끝난 뒤(와 수동 실행)에서만, production environment에서 한다 (BRD-133)", () => {
@@ -172,12 +183,62 @@ describe("배포 워크플로 가드레일 (11장)", () => {
     );
   });
 
-  it("지도 서버 스모크(map-smoke)는 main push에서 돌지 않는다(실패하면 실행 결론이 실패라 배포가 막힘)", () => {
-    const cond = jobIf(ci?.text ?? "", "map-smoke") ?? "";
-    expect(cond).toContain("github.event_name == 'pull_request'");
-    expect(cond).not.toMatch(
-      /\|\|\s*needs\.changes\.outputs\.web == 'true'\s*\)/,
+  it("지도 판 확인(map-files)은 지도 판·스타일·도구 변경 PR에서만, 공개 주소 읽기로 돌고 ci-ok에 묶인다 (D19-1 · #392)", () => {
+    const text = ci?.text ?? "";
+    const cond = jobIf(text, "map-files") ?? "";
+    // main push·정기 실행에서는 돌지 않음(실패하면 배포가 막힘), 지도와 무관한 웹 PR은 외부 지도 요청 없음
+    expect(cond).toBe(
+      "github.event_name == 'pull_request' && needs.changes.outputs.map == 'true'",
     );
+    const job = codeLines(jobLines(text, "map-files").join("\n")).join("\n");
+    expect(job).toContain('node tools/map-tiles/verify.mjs --site "$SITE_URL"');
+    expect(job).not.toMatch(/id-token|configure-aws-credentials|secrets\./);
+    expect(job).toMatch(/-z "\$SITE_URL"[\s\S]*?exit 1/);
+    // 지도 판 이름·스타일·지도 제공 경로가 바뀌면 돎
+    const filter =
+      text.match(/\n {12}map:[^\n]*\n((?: {14}- .*\n)+)/)?.[1] ?? "";
+    for (const path of [
+      "apps/web/src/lib/map/style.ts",
+      "apps/web/src/lib/map/style-*.json",
+      "tools/map-tiles/**",
+      ".github/workflows/map-tiles.yml",
+    ]) {
+      expect(filter).toContain(`'${path}'`);
+    }
+    // 사이트 인프라는 PR 때 운영 반영 전이라 보지 않음(배포 뒤 deploy:infra가 확인). 넣으면 고치는 PR이 막힘
+    expect(filter).not.toContain("infra/");
+    expect(jobLines(text, "ci-ok").join("\n")).toMatch(/^\s+map-files,$/m);
+  });
+
+  it("인프라 배포(deploy:infra)는 배포 뒤 운영 CloudFront에서 지도 판을 확인하고 결과를 댓글에 남긴다 (D19-1 · #392)", () => {
+    const script = readFileSync(
+      resolve(__dirname, "../scripts/deploy.mjs"),
+      "utf8",
+    );
+    const at = script.indexOf(
+      'step(9, "운영 CloudFront에서 웹이 쓰는 지도 판을 확인해요")',
+    );
+    expect(at).toBeGreaterThan(
+      script.indexOf("console.log(`\\n배포 완료: ${subject}`)"),
+    );
+    expect(script.slice(at)).toMatch(
+      /"tools", "map-tiles", "verify\.mjs"[\s\S]*?"--site"[\s\S]*?postIssueComment\([\s\S]*?지도 판 확인: \$\{mapCheck\}/,
+    );
+    // SITE_URL을 못 읽으면 통과로 적지 않음
+    expect(script.slice(at)).toContain(
+      "확인 못 함(저장소 변수 SITE_URL을 읽지 못함)",
+    );
+  });
+
+  it("옛 OpenFreeMap 스모크는 없고, 정기 실행에는 audit·gitleaks가 남는다 (#392)", () => {
+    const text = ci?.text ?? "";
+    expect(jobLines(text, "map-smoke")).toEqual([]);
+    expect(codeLines(text).join("\n")).not.toMatch(/check:map|openfreemap/i);
+    expect(text).toMatch(/schedule:\s*\n\s*- cron:/);
+    expect(jobIf(text, "audit")).toContain("github.event_name == 'schedule'");
+    expect(
+      codeLines(jobLines(text, "gitleaks").join("\n")).join("\n"),
+    ).toContain('"${{ github.event_name }}" = "schedule"');
   });
 
   it("수동 실행은 그 커밋의 main CI가 성공일 때만 올리고, 아니면 멈춘다 (BRD-133)", () => {
