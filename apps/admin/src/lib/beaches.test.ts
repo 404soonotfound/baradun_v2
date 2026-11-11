@@ -118,24 +118,25 @@ describe("지금 표시 상태", () => {
     expect(badgeTone({ kind: "unconfirmed" })).toBe("unknown");
   });
 
-  it("validUntil이 지나면 앱과 같이 이용불가는 그대로, 그 외는 판단불가 '특보 확인 못 함'", () => {
+  it("validUntil이 지나도 게시 분류·사유는 바꾸지 않고(G1) 지남 표시만 켠다", () => {
     const later = Date.parse(VALID) + 1;
+    for (const id of ["b0001", "b0002", "b0004", "b0005"]) {
+      const before = displayOf(view, id, NOW);
+      const after = displayOf(view, id, later);
+      expect(before).toMatchObject({ kind: "published", expired: false });
+      expect(after).toMatchObject({ kind: "published", expired: true });
+      if (before.kind !== "published" || after.kind !== "published") continue;
+      expect(after.category).toBe(before.category);
+      expect(after.labels).toEqual(before.labels);
+      expect(after.reasons).toEqual(before.reasons);
+    }
     expect(displayOf(view, "b0001", later)).toMatchObject({
-      kind: "published",
-      category: "undetermined",
-      labels: [{ kind: "warning_unknown" }],
-    });
-    expect(displayOf(view, "b0002", later)).toMatchObject({
-      category: "unavailable",
-      labels: [{ kind: "warning" }, { kind: "observation_delayed" }],
-    });
-    // 판단불가의 일반 단어·특보 확인 못 함은 배지와 겹쳐 빼고 하나만
-    expect(displayOf(view, "b0005", later)).toMatchObject({
-      category: "undetermined",
-      labels: [{ kind: "warning_unknown" }],
-    });
-    expect(displayOf(view, "b0001", Date.parse(VALID))).toMatchObject({
       category: "clear",
+      labels: [{ kind: "clear" }],
+    });
+    // 경계: validUntil 그 시각까지는 지나지 않음
+    expect(displayOf(view, "b0001", Date.parse(VALID))).toMatchObject({
+      expired: false,
     });
   });
 
@@ -217,6 +218,9 @@ describe("저장소 파일 읽기", () => {
   });
 
   describe("모양이 틀리면 빌드를 멈춤", () => {
+    // beach-coverage.csv에서 읽는 칸 머리줄
+    const COLUMNS =
+      "id,stage,coords_source,sea_zone,sea_status,sea_basis,sea_rule_url,sea_checked_at_kst,land_zone,land_status,land_basis,land_rule_url,land_checked_at_kst,station_basis,response_check,exclusion,review_reason";
     let dir: string;
     afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
@@ -227,12 +231,26 @@ describe("저장소 파일 읽기", () => {
         path.join(dir, "beach-meta.json"),
         JSON.stringify({ beaches: {} }),
       );
-      writeFileSync(path.join(dir, "beach-coverage.csv"), "id,stage\n");
+      writeFileSync(path.join(dir, "beach-coverage.csv"), `${COLUMNS}\n`);
       writeFileSync(
         path.join(dir, "beaches", "b0001.json"),
         JSON.stringify({ id: "b0002" }),
       );
       expect(() => loadBeaches(dir)).toThrow(/b0001\.json/);
+    });
+
+    it("검증 기록에서 읽는 칸이 하나라도 없으면 데이터 줄이 없어도 던진다", () => {
+      dir = mkdtempSync(path.join(tmpdir(), "beaches-"));
+      mkdirSync(path.join(dir, "beaches"));
+      writeFileSync(
+        path.join(dir, "beach-meta.json"),
+        JSON.stringify({ beaches: {} }),
+      );
+      writeFileSync(
+        path.join(dir, "beach-coverage.csv"),
+        `${COLUMNS.replace(",response_check", "")}\n`,
+      );
+      expect(() => loadBeaches(dir)).toThrow(/response_check/);
     });
   });
 });
