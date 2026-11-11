@@ -5,6 +5,7 @@ import type {
   WeatherShort,
 } from "@baradun/contracts";
 
+import { compassPoint, type CompassPoint } from "@/lib/direction";
 import type { Locale } from "@/lib/i18n";
 import { midLandName } from "@/lib/weather-zones";
 
@@ -126,6 +127,29 @@ export function hourCells(
     });
   }
   return cells;
+}
+
+// 홈 '앞으로 바람' 칸 하나의 읽는 글 재료. 그림 줄에 보이는 것과 같게 고름:
+// 풍속이 없으면 값 없음, 풍향만 없으면 풍속은 읽고 방향 값 없음(그림은 화살표 없이 숫자·그래프만)
+// 읽는 글의 방향은 불어오는 쪽(서풍)이라 불어가는 쪽을 다시 180° 돌림
+export type WindCellText =
+  | { kind: "noValue"; hour: number }
+  | { kind: "noDir"; hour: number; speed: number }
+  | { kind: "full"; hour: number; from: CompassPoint; speed: number };
+
+export function windCellText(
+  cell: Pick<HourCell, "hour" | "windTo" | "windSpeed">,
+): WindCellText {
+  const { hour, windTo, windSpeed } = cell;
+  if (windSpeed === null) return { kind: "noValue", hour };
+  const speed = Math.round(windSpeed);
+  if (windTo === null) return { kind: "noDir", hour, speed };
+  return {
+    kind: "full",
+    hour,
+    from: compassPoint((windTo + 180) % 360),
+    speed,
+  };
 }
 
 export interface DayCell {

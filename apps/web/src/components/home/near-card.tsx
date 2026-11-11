@@ -29,7 +29,7 @@ import { useMetaText } from "@/lib/snapshot/use-meta-text";
 import type { BeachView, MetricKey } from "@/lib/snapshot/view";
 import { useBeachWeather, type WeatherView } from "@/lib/snapshot/weather";
 import { waveChart } from "@/lib/wave-chart";
-import { hourCells, kstDay, type HourCell } from "@/lib/weather";
+import { hourCells, kstDay, windCellText, type HourCell } from "@/lib/weather";
 
 // 홈 해변 카드 (노션 2장 HOME 7 · 3장 NearCard, 11/5 홈 v3 시안 ActR_M_V3SW·SF·SC · P_V3*)
 // 모바일·PC 같은 모양: 배지 + › → 이름 → 거리(또는 지역) · 측정 시각 → 큰 값 2칸 → 회색 그림 칸 → 아래 한 줄
@@ -553,22 +553,21 @@ function WindAhead({
   }
   const label = t("home.card.windAheadLabel", {
     cells: cells
-      .map((cell) =>
-        cell.windSpeed === null
-          ? t("home.card.windCellNoValue", { hour: cell.hour })
-          : cell.windTo === null
-            ? t("home.card.windCellNoDir", {
-                hour: cell.hour,
-                speed: Math.round(cell.windSpeed),
-              })
-            : t("home.card.windCell", {
-                hour: cell.hour,
-                dir: t(
-                  `observation.direction.${compassPoint((cell.windTo + 180) % 360)}`,
-                ),
-                speed: Math.round(cell.windSpeed),
-              }),
-      )
+      .map((cell) => {
+        const text = windCellText(cell);
+        if (text.kind === "noValue")
+          return t("home.card.windCellNoValue", { hour: text.hour });
+        if (text.kind === "noDir")
+          return t("home.card.windCellNoDir", {
+            hour: text.hour,
+            speed: text.speed,
+          });
+        return t("home.card.windCell", {
+          hour: text.hour,
+          dir: t(`observation.direction.${text.from}`),
+          speed: text.speed,
+        });
+      })
       .join(", "),
     time: issued,
   });
