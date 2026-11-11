@@ -71,7 +71,7 @@ export function NearCard({
   view: BeachView;
   nowMs: number;
   activity: Activity; // 고른 활동(부르는 쪽이 정함)
-  weather?: WeatherView; // 넘기면 그 값을 쓰고, 없으면 해변 ID로 받음(Storybook 확인용)
+  weather?: WeatherView; // 넘기면 그 값만 그림(훅을 부르지 않음, Storybook 확인용). 없으면 해변 ID로 받음
 }) {
   const t = useTranslations();
   const { confirmedUntilText } = useBadgeText();
@@ -211,12 +211,11 @@ export function NearCard({
       </span>
 
       {activity === "swimming" && (
-        <TodayWeather
-          beachId={beach.id}
-          region={beach.region}
-          nowMs={nowMs}
-          weather={weather}
-        />
+        <WeatherOf beachId={beach.id} given={weather}>
+          {(w) => (
+            <TodayWeather weather={w} region={beach.region} nowMs={nowMs} />
+          )}
+        </WeatherOf>
       )}
       {activity === "surfing" && (
         <WaveStrip
@@ -226,7 +225,9 @@ export function NearCard({
         />
       )}
       {activity === "scuba" && (
-        <WindAhead beachId={beach.id} nowMs={nowMs} weather={weather} />
+        <WeatherOf beachId={beach.id} given={weather}>
+          {(w) => <WindAhead weather={w} nowMs={nowMs} />}
+        </WeatherOf>
       )}
 
       <span className="mt-auto flex flex-col gap-1 text-caption">
@@ -287,6 +288,34 @@ function BigMetric({ label, metric }: { label: string; metric: CardMetric }) {
 }
 
 // 회색 그림 칸 틀(시안 rounded 10 · 안쪽 높이 49)
+// 날씨 줄 재료. 넘긴 값(Storybook)이 있으면 그대로, 없으면 해변 ID로 받음
+// 훅은 받을 때만 부름(넘긴 값이 있는데도 날씨 파일을 따로 받지 않게). 숨김 화면은 훅이 none으로 알림
+function WeatherOf({
+  beachId,
+  given,
+  children,
+}: {
+  beachId: string;
+  given: WeatherView | undefined;
+  children: (weather: WeatherView) => React.ReactNode;
+}) {
+  return given ? (
+    children(given)
+  ) : (
+    <FetchedWeather beachId={beachId} render={children} />
+  );
+}
+
+function FetchedWeather({
+  beachId,
+  render,
+}: {
+  beachId: string;
+  render: (weather: WeatherView) => React.ReactNode;
+}) {
+  return render(useBeachWeather(beachId));
+}
+
 function PictureBox({ children }: { children: React.ReactNode }) {
   return (
     <span className="block rounded-[10px] bg-bg-subtle px-3 pt-2.5 pb-2">
@@ -317,19 +346,15 @@ function todayCells(weather: WeatherView, nowMs: number): HourCell[] {
 // 하늘 = 오늘 남은 첫 3시간 칸, 강수확률 = 오늘 남은 칸 중 가장 높은 값(값이 있는 칸만), 최저·최고 = publisher 오늘 값
 // 지금 기온은 실황이라 시각을 따로 붙임(예보 발표 시각과 섞지 않음). 값이 없는 자리는 그리지 않음(0·맑음으로 채우지 않음)
 function TodayWeather({
-  beachId,
+  weather,
   region,
   nowMs,
-  weather: given,
 }: {
-  beachId: string;
+  weather: WeatherView;
   region: string;
   nowMs: number;
-  weather?: WeatherView | undefined;
 }) {
   const t = useTranslations();
-  const fetched = useBeachWeather(beachId);
-  const weather = given ?? fetched;
   if (weather.kind === "none") return null;
   if (weather.kind === "loading") {
     return (
@@ -503,17 +528,13 @@ function WaveStrip({
 // [6] 스쿠버다이빙: 앞으로 바람 7칸(3시간 간격). 상세 바람 줄과 같은 부품(WindRow)을 카드 폭에 맞춰 씀
 const WIND_CELLS = 7;
 function WindAhead({
-  beachId,
+  weather,
   nowMs,
-  weather: given,
 }: {
-  beachId: string;
+  weather: WeatherView;
   nowMs: number;
-  weather?: WeatherView | undefined;
 }) {
   const t = useTranslations();
-  const fetched = useBeachWeather(beachId);
-  const weather = given ?? fetched;
   if (weather.kind === "none") return null;
   if (weather.kind === "loading") {
     return (
