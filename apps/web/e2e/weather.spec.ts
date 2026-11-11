@@ -5,6 +5,7 @@ import {
   expect,
   expectNoA11yViolations,
   expectNoHorizontalScroll,
+  NO_STATION_ID,
   slugOf,
   test,
   WARNING_ID,
@@ -125,9 +126,11 @@ test.describe("상세 날씨 카드", () => {
   test("측정소 없는 해변: 측정값은 '가까운 관측 없음', 날씨 카드는 그대로", async ({
     page,
   }) => {
-    await page.goto(`/spots/${slugOf("b0014")}/`);
+    await page.goto(`/spots/${slugOf(NO_STATION_ID)}/`);
+    // 측정값 카드('지금 바다') 안의 파고·파주기 값 자리
+    const sea = page.getByRole("region", { name: "지금 바다" });
     await expect(
-      page.getByText("가까운 관측 없음").filter({ visible: true }).first(),
+      sea.getByText("가까운 관측 없음").filter({ visible: true }).first(),
     ).toBeVisible();
     const weather = card(page);
     await expect(weather).toBeVisible();
@@ -185,10 +188,15 @@ test.describe("홈 날씨 줄", () => {
         .filter({ visible: true })
         .first(),
     ).toBeVisible();
-    // 측정값(수온 18.4°C)과 특보 배지는 그대로 보임
+    // 같은 카드의 특보 배지와 측정값(수온 18.4°C)은 그대로 보임
+    const cardLink = region
+      .locator(`a[href$="/spots/${slugOf(CLEAR_ID)}/"]`)
+      .filter({ visible: true })
+      .first();
     await expect(
-      region.getByText("18.4").filter({ visible: true }).first(),
+      cardLink.getByText("특보 없음", { exact: true }),
     ).toBeVisible();
+    await expect(cardLink.getByText("18.4", { exact: true })).toBeVisible();
     await expectNoA11yViolations(page);
   });
 });

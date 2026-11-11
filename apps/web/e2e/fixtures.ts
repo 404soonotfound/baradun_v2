@@ -57,6 +57,17 @@ export const zonesOf = (id: string): string => {
 };
 export const coordsOf = (id: string) =>
   BEACHES.find((beach) => beach.id === id)?.coords ?? null;
+// 측정소가 하나도 없고 날씨 대응표에는 있는 노출 해변(BRD-185). 데이터를 다시 만들어도 조건으로 고름
+export const NO_STATION_ID = (() => {
+  const found = BEACHES.find(
+    (beach) =>
+      !beach.hidden &&
+      Object.values(beach.stations).every((station) => !station) &&
+      beach.id in WEATHER_AREAS,
+  );
+  if (!found) throw new Error("측정소 없는 노출 해변이 데이터에 없음");
+  return found.id;
+})();
 // 노출 중인 해변 수(홈 '전국' 개수 카드 확인용, BRD-127)
 export const PUBLIC_BEACH_COUNT = BEACHES.filter(
   (beach) => !beach.hidden,
