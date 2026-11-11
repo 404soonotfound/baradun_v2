@@ -258,7 +258,7 @@ describe("운영 경보 (BRD-62)", () => {
       "detail-type": ["CloudWatch Alarm State Change"],
       detail: { state: { value: ["ALARM"] } },
     });
-    expect(rule!.Properties.EventPattern.resources).toHaveLength(MAX_ALARMS);
+    expect(rule!.Properties.EventPattern.resources).toHaveLength(alarms.length);
     expect(rule!.Properties.Targets).toHaveLength(1);
     // 전달 실패도 버리지 않고 같은 실패 대기열로 보냄
     expect(rule!.Properties.Targets[0].DeadLetterConfig).toEqual({
