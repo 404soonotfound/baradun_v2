@@ -1,5 +1,6 @@
 import type { Reason, WarningLevel, WarningType } from "@baradun/contracts";
 import { opsFetch, type OpsResult } from "./auth/ops-fetch";
+import { MEMO_MAX } from "./inquiries";
 
 // 해변 관리 화면이 쓰는 모양·규칙 (BRD-150, 화면 ADM-BCH). 브라우저에서도 쓰므로 node 모듈을 가져오지 않음
 // - 해변 정보는 빌드 때 저장소 파일에서 읽음(beach-data.ts). 여기서는 고칠 수 없음(D15-4)
@@ -307,8 +308,8 @@ export function badgeTone(label: BadgeLabel): BadgeTone {
 // 해변 하나의 지금 표시 상태
 // - loading: 아직 응답 없음
 // - unconfirmed: 게시본을 못 받음·모양이 틀림·게시본에 해변이 없음 → 판단불가 계열 '확인 못 함'
-// - published: 게시본 분류·사유 그대로. 단 validUntil이 지났으면 앱과 같이(apps/web view.ts deriveBeachView B5)
-//   이용불가는 그대로, 그 외('특보 없음' 포함)는 판단불가 '특보 확인 못 함'(지난 '특보 없음'을 지금 상태로 보이지 않게)
+// - published: 게시본 분류·사유 그대로(G1, 화면에서 다시 계산하지 않음)
+//   validUntil이 지났으면 expired만 켜고 분류는 그대로 둠. 화면은 분류와 따로 '유효 시각 지남'을 알림
 export type BeachDisplay =
   | { readonly kind: "loading" }
   | {
@@ -320,6 +321,8 @@ export type BeachDisplay =
       readonly category: Category;
       readonly labels: [BadgeLabel, ...BadgeLabel[]];
       readonly reasons: readonly Partial<Reason>[];
+      readonly validUntil: string;
+      readonly expired: boolean;
     };
 
 export function displayOf(
@@ -333,31 +336,14 @@ export function displayOf(
   }
   const entry = published.beaches[id];
   if (!entry) return { kind: "unconfirmed", why: "missing" };
-  const expired = !(nowMs <= Date.parse(entry.validUntil));
-  if (expired && entry.category !== "unavailable") {
-    // 원래 판단불가였으면 게시된 사유(예: 관측 지연)를 뒤에 남김. 배지와 겹치는 일반 단어는 뺌
-    const previous =
-      entry.category === "undetermined"
-        ? entry.reasons.filter((r) => {
-            const kind = reasonLabel(r, "undetermined").kind;
-            return kind !== "warning_unknown" && kind !== "unconfirmed";
-          })
-        : [];
-    return {
-      kind: "published",
-      category: "undetermined",
-      labels: [
-        { kind: "warning_unknown" },
-        ...previous.map((r) => reasonLabel(r, "undetermined")),
-      ],
-      reasons: [{}, ...previous],
-    };
-  }
   return {
     kind: "published",
     category: entry.category,
     labels: reasonLabels(entry),
     reasons: entry.reasons,
+    validUntil: entry.validUntil,
+    // 시각을 읽을 수 없으면 지난 것으로 봄(parsePublished가 이미 막지만 한 번 더)
+    expired: !(nowMs <= Date.parse(entry.validUntil)),
   };
 }
 
@@ -369,8 +355,8 @@ export function fetchPublished(
 
 // ---- 운영 메모 ----
 
-// 문의 내부 메모 상한과 같음(services/src/admin/inquiries.ts MEMO_MAX). 해변 메모 상한은 노션에 따로 없음
-export const BEACH_MEMO_MAX = 2000;
+// 문의 내부 메모 상한을 그대로 씀(services/src/admin/inquiries.ts MEMO_MAX와 같음). 해변 메모 상한은 노션에 따로 없음
+export const BEACH_MEMO_MAX = MEMO_MAX;
 
 export interface BeachMemo {
   readonly beachId: string;

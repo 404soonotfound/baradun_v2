@@ -106,7 +106,31 @@ export function DisplayBadge({ display }: { display: BeachDisplay }) {
             ` · ${fill(t.moreReasons, { count: rest.length })}`}
         </span>
       )}
+      {/* 분류는 그대로 두고 유효 시각이 지났다는 사실만 따로 알림(G1) */}
+      {display.expired && (
+        <span className="inline-flex items-center gap-1 text-label-s font-semibold text-status-stale-fg">
+          <Clock size={14} aria-hidden="true" />
+          {t.expired}
+        </span>
+      )}
     </span>
+  );
+}
+
+// 상세: 유효 시각이 지났을 때 분류와 따로 알림(무슨 일 → 영향 → 다음 행동)
+export function ExpiredNotice({ display }: { display: BeachDisplay }) {
+  if (display.kind !== "published" || !display.expired) return null;
+  return (
+    <Notice tone="warn" title={t.expiredTitle} role="status">
+      <p>
+        {fill(t.expiredAt, {
+          time: timeOf(display.validUntil)
+            ? kstDateTime(display.validUntil)
+            : t.none,
+        })}
+      </p>
+      <p>{t.expiredBody}</p>
+    </Notice>
   );
 }
 
@@ -147,13 +171,22 @@ export function ReasonList({ display }: { display: BeachDisplay }) {
   );
 }
 
+// 유효 시각 지남을 다시 그리지 않아도 알아채게 지금 시각을 주기적으로 새로 받음
+const CLOCK_MS = 30_000;
+
 // 게시본 상태 읽기. 다시 로그인하면(generation이 늚) 저절로 다시 읽음
-// 결과: "loading" · PublishedView · null(모양이 틀림) · 실패 응답
+// 결과: "loading" · PublishedView · null(모양이 틀림) · 실패 응답 · 지금 시각(유효 시각 지남 판정용)
 export function usePublished(): {
   readonly published: PublishedView | null | "loading";
   readonly failure: Extract<OpsResult<unknown>, { ok: false }> | null;
   readonly retry: () => void;
+  readonly nowMs: number;
 } {
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = window.setInterval(() => setNowMs(Date.now()), CLOCK_MS);
+    return () => window.clearInterval(timer);
+  }, []);
   const session = useAuthSession();
   const snapshot = useSessionSnapshot();
   const generation = snapshot.status === "signed_out" ? 0 : snapshot.generation;
@@ -184,6 +217,7 @@ export function usePublished(): {
           : null,
     failure: result && !result.ok ? result : null,
     retry: () => setAttempt((n) => n + 1),
+    nowMs,
   };
 }
 
