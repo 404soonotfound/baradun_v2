@@ -1,5 +1,6 @@
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
+import { S3Client } from "@aws-sdk/client-s3";
 import type {
   APIGatewayProxyEventV2,
   APIGatewayProxyStructuredResultV2,
@@ -12,9 +13,16 @@ import {
   recordAudit,
   type AuditEntry,
 } from "./audit";
+import {
+  beachMemoGetRoute,
+  beachMemoPutRoute,
+  beachStatusRoute,
+} from "./beaches";
 import { readCollection } from "./collection";
 import { cloudWatchAlarmReader, type AlarmReader } from "./collection-alarms";
 import type { ApiKeyTags } from "../core/secrets/api-keys";
+import { S3SnapshotStore } from "../core/snapshots/s3";
+import type { SnapshotStore } from "../core/snapshots/types";
 import { readSources, ssmKeyTagReader } from "./sources";
 import {
   authenticate,
@@ -78,6 +86,8 @@ export interface DataDependencies {
   readonly alarms?: AlarmReader | null;
   // 인증키 태그 읽기(데이터 출처). 없으면 키는 '확인 못 함'
   readonly keys?: ApiKeyTags | null;
+  // 게시본 읽기(해변 관리의 지금 표시 상태, BRD-150). 없으면 상태는 '확인 못 함'(판단불가 계열)
+  readonly snapshots?: SnapshotStore | null;
 }
 
 export interface OpsDependencies {
@@ -377,6 +387,18 @@ export async function handleOps(
     if (decision.pattern === "/ops/audit" && method === "GET") {
       return await auditRoute(event, deps.data, ids);
     }
+    if (decision.pattern === "/ops/beaches/published" && method === "GET") {
+      return await beachStatusRoute(deps.data, ids);
+    }
+    if (decision.pattern === "/ops/beaches/{id}/memo") {
+      const id = decision.params.id ?? "";
+      if (method === "GET") {
+        return await beachMemoGetRoute(id, deps.data, ids);
+      }
+      if (method === "PUT" && principal.kind === "operator") {
+        return await beachMemoPutRoute(event, id, principal, deps.data, ids);
+      }
+    }
     if (decision.pattern === "/ops/notices") {
       if (method === "GET") {
         return await listNoticesRoute(principal, deps.data, ids);
@@ -446,6 +468,12 @@ function keyTagReader(): ApiKeyTags | null {
   return region ? ssmKeyTagReader(region) : null;
 }
 
+// 게시 버킷(publisher와 같은 SNAPSHOT_BUCKET). infra가 이름과 data/* 읽기 권한을 주기 전에는 없음 → 상태만 '확인 못 함'
+function snapshotReader(): SnapshotStore | null {
+  const bucket = process.env.SNAPSHOT_BUCKET;
+  return bucket ? new S3SnapshotStore(new S3Client({}), bucket) : null;
+}
+
 let runtime: OpsDependencies | undefined;
 
 function runtimeDependencies(): OpsDependencies {
@@ -478,6 +506,7 @@ function runtimeDependencies(): OpsDependencies {
       now,
       alarms: alarmReader(),
       keys: keyTagReader(),
+      snapshots: snapshotReader(),
     },
   };
   return runtime;

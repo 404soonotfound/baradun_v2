@@ -56,6 +56,17 @@ export const ROUTES: Readonly<
   "/ops/sources": {
     GET: { roles: ["viewer", "editor", "publisher"], sample: true },
   },
+  // 해변 관리(BRD-150, ADM-BCH). 해변 정보는 저장소 파일이 원본이라 운영 API에 없음(빌드 때 화면에 들어감)
+  // 지금 표시 상태: 게시본 status.json의 분류·사유 그대로(읽기만, G1). 공개 게시본과 같은 값이라 샘플도 받음
+  // 경로 이름에 status를 쓰지 않음(판단 상태를 쓰는 경로가 없음을 확인하는 검사가 이름으로 막음)
+  "/ops/beaches/published": {
+    GET: { roles: ["viewer", "editor", "publisher"], sample: true },
+  },
+  // 해변별 운영 메모(내부용). 저장은 편집 이상, 샘플은 읽기도 받지 않음(실제 운영 메모를 보이지 않게)
+  "/ops/beaches/{id}/memo": {
+    GET: { roles: ["viewer", "editor", "publisher"], sample: false },
+    PUT: { roles: ["editor", "publisher"], sample: false },
+  },
   // 변경 이력(BRD-155). 읽기 전용, 샘플은 받지 않음(D15-3)
   "/ops/audit": {
     GET: { roles: ["viewer", "editor", "publisher"], sample: false },

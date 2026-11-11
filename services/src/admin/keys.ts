@@ -6,6 +6,7 @@
 // - 쓰기 멱등 기록:      admin#idem#{key} / idem      (D16-B6, TTL 24시간)
 // - 감사 기록:           admin#audit#{YYYY-MM} / {시각}#{traceId}  (D16-B5, UTC 월별, TTL 1년, 추가 전용)
 // - 공지:               admin#notice / {공지 ID}       (BRD-151, 한 파티션이라 publisher가 Query 한 번으로 읽음)
+// - 해변 운영 메모:      admin#beach#{해변 ID} / memo (BRD-150, 내부용. publisher는 admin#notice만 읽어 게시본에 나가지 않음)
 // - 업무 항목:           admin#{종류}#{id} / {sk}     (메모 등, 해당 이슈에서 정함)
 
 export interface OpsKey {
@@ -28,6 +29,10 @@ export const NOTICE_PK = `${ADMIN_PREFIX}notice`;
 
 export function noticeKey(id: string): OpsKey {
   return { pk: NOTICE_PK, sk: id };
+}
+
+export function beachMemoKey(beachId: string): OpsKey {
+  return { pk: `${ADMIN_PREFIX}beach#${beachId}`, sk: "memo" };
 }
 
 export const AUDIT_PREFIX = `${ADMIN_PREFIX}audit#`;
