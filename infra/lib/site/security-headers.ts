@@ -47,7 +47,6 @@ export function buildContentSecurityPolicy(options: CspOptions = {}): string {
   const photoEnabled = options.photoUploadEnabled ?? readInquiryContactEnabled();
   const connectSources = [
     "'self'",
-    "https://tiles.openfreemap.org",
     ...GA_CONNECT_SOURCES,
   ];
 
@@ -62,7 +61,7 @@ export function buildContentSecurityPolicy(options: CspOptions = {}): string {
     "default-src 'self'",
     `script-src 'self' 'unsafe-inline' ${GA_SCRIPT_SOURCES.join(" ")}`,
     "style-src 'self'",
-    `img-src 'self' blob: https://tiles.openfreemap.org https://tong.visitkorea.or.kr ${GA_IMG_SOURCES.join(" ")}`,
+    `img-src 'self' blob: https://tong.visitkorea.or.kr ${GA_IMG_SOURCES.join(" ")}`,
     "font-src 'self'",
     `connect-src ${connectSources.join(" ")}`,
     "worker-src 'self'",
