@@ -53,7 +53,7 @@ export function createMap(options: CreateMapOptions): MapHandle | null {
     maplibregl.addProtocol("pmtiles", new Protocol().tile);
     protocolAdded = true;
   }
-  // 지도 판 파일은 화면과 같은 출처(운영 CloudFront)의 map/<판>/. 개발 서버에는 map/이 없어 실패 화면이 보임
+  // 지도 판 파일은 화면과 같은 출처의 map/<판>/(운영 CloudFront, 개발 서버·Storybook은 scripts/dev-map.mjs가 넘김)
   const origin = window.location.origin;
   let theme = options.theme;
   let map: maplibregl.Map;

@@ -6,7 +6,7 @@ import ko from "../../../messages/ko.json";
 import { KOREA_BOUNDS } from "@/lib/map/bounds";
 import { MapView } from "./map-view";
 
-// 지도 틀 확인용 (BRD-65 · 개발 전용 Storybook). 지도 판 파일(map/<판>/)은 같은 출처에만 있어 Storybook에서는 실패 화면이 보임
+// 지도 틀 확인용 (BRD-65 · 개발 전용 Storybook). 지도 판 파일(map/<판>/)을 운영에서 실제로 받음(.storybook/main.ts proxy)
 // 실패 화면은 브라우저 개발자 도구에서 map/ 요청을 막고 '다시 시도'로 확인
 function Demo({ locale }: { locale: "ko" | "en" }) {
   return (
