@@ -19,7 +19,7 @@ import lightStyle from "./style-light.json";
 // [1] OpenFreeMap 벡터 타일. 개발은 최신(TileJSON), 운영 빌드는 검증한 판으로 고정(16.4.3 버전 전략)
 // 판 이름은 https://tiles.openfreemap.org/planet 응답의 tiles 주소에서 가져옴. 바꿀 때는 표본 해변 화면을 보고 올림
 export const OPENFREEMAP_TILEJSON = "https://tiles.openfreemap.org/planet";
-export const PINNED_TILES_VERSION = "20261025_080012_pt";
+export const PINNED_TILES_VERSION = "20261101_080013_pt";
 export const TILE_SOURCE_ID = "openmaptiles";
 const TILE_HOST = "https://tiles.openfreemap.org";
 
