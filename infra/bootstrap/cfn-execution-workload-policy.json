@@ -63,10 +63,13 @@
       "Action": [
         "logs:CreateLogGroup",
         "logs:DeleteLogGroup",
+        "logs:DeleteMetricFilter",
         "logs:DeleteRetentionPolicy",
+        "logs:DescribeMetricFilters",
         "logs:GetDataProtectionPolicy",
         "logs:ListTagsForResource",
         "logs:ListTagsLogGroup",
+        "logs:PutMetricFilter",
         "logs:PutRetentionPolicy",
         "logs:TagLogGroup",
         "logs:TagResource",

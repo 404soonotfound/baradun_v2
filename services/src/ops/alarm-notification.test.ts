@@ -47,6 +47,7 @@ describe("운영 경보 한국어 알림", () => {
     ["NotificationFailed", "운영 알림 발송 실패"],
     ["LoginAbuse", "운영자 로그인 반복 요청"],
     ["WeatherFailing", "날씨 수집 계속 실패"],
+    ["OpsApiErrors", "운영 API 오류 급증"],
   ])("%s 경보를 %s 제목으로 보낸다", (alarmId, label) => {
     const result = formatAlarmNotification(
       alarmEvent(alarmId, `${label}. 운영 설명`),
@@ -105,6 +106,27 @@ describe("운영 경보 한국어 알림", () => {
     );
     expect(result.message).toContain(
       "판정: 5분 동안 로그인 실패 또는 비밀번호 찾기·변경 요청이 기준을 넘었습니다.",
+    );
+  });
+
+  // BRD-181: 날씨 경보는 알림 발송 실패 문구로 떨어지지 않음
+  it("날씨 수집 계속 실패 경보는 실패 구간이 이어졌다고 알린다", () => {
+    const result = formatAlarmNotification(
+      alarmEvent("WeatherFailing", "날씨 수집 계속 실패"),
+    );
+    expect(result.message).toContain(
+      "판정: 1시간 구간에 오류가 있거나 실행이 없는 구간이 3번 이어졌습니다.",
+    );
+    expect(result.message).not.toContain("실패 대기열");
+  });
+
+  // 결정 기록 D17-7: 운영 API 5xx 및 권한 거부 급증 알림
+  it("운영 API 오류 급증 경보는 5xx 또는 권한 거부가 기준을 넘었다고 알린다", () => {
+    const result = formatAlarmNotification(
+      alarmEvent("OpsApiErrors", "운영 API 오류 급증"),
+    );
+    expect(result.message).toContain(
+      "판정: 운영 API 5xx 오류 또는 권한 거부(401·403) 요청이 기준을 넘었습니다.",
     );
   });
 

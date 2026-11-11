@@ -718,6 +718,12 @@ const REQUIRED_CFN_ACTIONS_BY_RESOURCE_TYPE: Record<
     ],
     delete: ["logs:DescribeLogGroups", "logs:DeleteLogGroup"],
   },
+  "AWS::Logs::MetricFilter": {
+    create: ["logs:PutMetricFilter", "logs:DescribeMetricFilters"],
+    read: ["logs:DescribeMetricFilters"],
+    update: ["logs:PutMetricFilter", "logs:DescribeMetricFilters"],
+    delete: ["logs:DeleteMetricFilter", "logs:DescribeMetricFilters"],
+  },
   "AWS::S3::Bucket": {
     create: [
       "s3:CreateBucket",

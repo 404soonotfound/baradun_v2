@@ -36,6 +36,7 @@ export const ALARM_LABELS = [
   ["NotificationFailed", "운영 알림 발송 실패"],
   ["LoginAbuse", "운영자 로그인 반복 요청"],
   ["WeatherFailing", "날씨 수집 계속 실패"],
+  ["OpsApiErrors", "운영 API 오류 급증"],
 ] as const;
 
 export interface AlarmNotification {
@@ -81,6 +82,9 @@ function reasonLabel(alarmName: string): string {
   if (!knownAlarmLabel(alarmName)) {
     return "설정된 운영 경보 조건을 충족했습니다.";
   }
+  if (id === "OpsApiErrors") {
+    return "운영 API 5xx 오류 또는 권한 거부(401·403) 요청이 기준을 넘었습니다. CloudWatch 로그를 확인해 주세요.";
+  }
   if (id.endsWith("Errors")) {
     return "최근 실행에서 오류가 1회 이상 감지되었습니다.";
   }
@@ -90,7 +94,13 @@ function reasonLabel(alarmName: string): string {
   if (id === "LoginAbuse") {
     return "5분 동안 로그인 실패 또는 비밀번호 찾기·변경 요청이 기준을 넘었습니다. 차단은 Cognito 잠금·요청 제한이 하고 있습니다.";
   }
-  return "재시도 뒤에도 알림을 보내지 못해 실패 대기열에 기록되었습니다.";
+  if (id === "WeatherFailing") {
+    return "1시간 구간에 오류가 있거나 실행이 없는 구간이 3번 이어졌습니다.";
+  }
+  if (id === "NotificationFailed") {
+    return "재시도 뒤에도 알림을 보내지 못해 실패 대기열에 기록되었습니다.";
+  }
+  return "설정된 운영 경보 조건을 충족했습니다.";
 }
 
 function cloudWatchUrl(region: string, alarmName: string): string {
