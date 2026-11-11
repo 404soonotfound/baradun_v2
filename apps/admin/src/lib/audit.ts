@@ -12,6 +12,7 @@ export const AUDIT_ACTIONS = [
   "notice.expose",
   "notice.end",
   "notice.delete",
+  "beach.memo",
   "sample.read",
   "sample.denied",
 ] as const;
