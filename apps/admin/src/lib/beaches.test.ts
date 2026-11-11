@@ -19,14 +19,18 @@ import {
 // - 해변 정보는 저장소 파일 세 가지에서 읽음(읽기 전용)
 // - 지금 표시 상태는 게시본 그대로. 못 받거나 게시본에 없으면 판단불가 계열 '확인 못 함'
 
+const NOW = Date.parse("2026-11-11T03:10:00Z");
+const VALID = "2026-11-11T03:45:00Z";
+
 const PUBLISHED = {
   available: true,
   snapshotVersion: "20261111T030000Z",
   generatedAt: "2026-11-11T03:00:12Z",
   beaches: {
-    b0001: { category: "clear", reasons: [] },
+    b0001: { category: "clear", reasons: [], validUntil: VALID },
     b0002: {
       category: "unavailable",
+      validUntil: VALID,
       reasons: [
         {
           code: "warning",
@@ -47,11 +51,13 @@ const PUBLISHED = {
     // 모르는 사유 code: 이용불가는 그대로 두고 이름만 '이용 제한'
     b0003: {
       category: "unavailable",
+      validUntil: VALID,
       reasons: [{ code: "control_closed", scope: "x", source: "y", at: null }],
     },
-    b0004: { category: "undetermined", reasons: [] },
+    b0004: { category: "undetermined", reasons: [], validUntil: VALID },
     b0005: {
       category: "undetermined",
+      validUntil: VALID,
       reasons: [{ code: "warning_unknown", scope: "x", source: "기상청" }],
     },
   },
@@ -61,12 +67,12 @@ describe("지금 표시 상태", () => {
   const view = parsePublished(PUBLISHED);
 
   it("게시본의 분류·사유를 그대로 쓰고 배지는 실제 사유를 먼저 보여 준다", () => {
-    expect(displayOf(view, "b0001")).toMatchObject({
+    expect(displayOf(view, "b0001", NOW)).toMatchObject({
       kind: "published",
       category: "clear",
       labels: [{ kind: "clear" }],
     });
-    const blocked = displayOf(view, "b0002");
+    const blocked = displayOf(view, "b0002", NOW);
     expect(blocked).toMatchObject({
       kind: "published",
       category: "unavailable",
@@ -75,41 +81,62 @@ describe("지금 표시 상태", () => {
         { kind: "observation_delayed" },
       ],
     });
-    expect(displayOf(view, "b0005")).toMatchObject({
+    expect(displayOf(view, "b0005", NOW)).toMatchObject({
       category: "undetermined",
       labels: [{ kind: "warning_unknown" }],
     });
   });
 
   it("모르는 사유는 분류를 바꾸지 않고 일반 단어(이용 제한·확인 못 함)", () => {
-    expect(displayOf(view, "b0003")).toMatchObject({
+    expect(displayOf(view, "b0003", NOW)).toMatchObject({
       category: "unavailable",
       labels: [{ kind: "restricted" }],
     });
-    expect(displayOf(view, "b0004")).toMatchObject({
+    expect(displayOf(view, "b0004", NOW)).toMatchObject({
       category: "undetermined",
       labels: [{ kind: "unconfirmed" }],
     });
   });
 
   it("응답 전은 불러오는 중, 못 받음·게시 버킷 없음·게시본에 없음은 판단불가 계열 '확인 못 함'", () => {
-    expect(displayOf("loading", "b0001")).toEqual({ kind: "loading" });
-    expect(displayOf(null, "b0001")).toEqual({
+    expect(displayOf("loading", "b0001", NOW)).toEqual({ kind: "loading" });
+    expect(displayOf(null, "b0001", NOW)).toEqual({
       kind: "unconfirmed",
       why: "unavailable",
     });
     const off = parsePublished({ available: false, reason: "not_configured" });
     expect(off).toEqual({ available: false, reason: "not_configured" });
-    expect(displayOf(off, "b0001")).toEqual({
+    expect(displayOf(off, "b0001", NOW)).toEqual({
       kind: "unconfirmed",
       why: "unavailable",
     });
-    expect(displayOf(view, "b9999")).toEqual({
+    expect(displayOf(view, "b9999", NOW)).toEqual({
       kind: "unconfirmed",
       why: "missing",
     });
     // 어느 경우도 특보 없음(clear) 색이 아님
     expect(badgeTone({ kind: "unconfirmed" })).toBe("unknown");
+  });
+
+  it("validUntil이 지나면 앱과 같이 이용불가는 그대로, 그 외는 판단불가 '특보 확인 못 함'", () => {
+    const later = Date.parse(VALID) + 1;
+    expect(displayOf(view, "b0001", later)).toMatchObject({
+      kind: "published",
+      category: "undetermined",
+      labels: [{ kind: "warning_unknown" }],
+    });
+    expect(displayOf(view, "b0002", later)).toMatchObject({
+      category: "unavailable",
+      labels: [{ kind: "warning" }, { kind: "observation_delayed" }],
+    });
+    // 판단불가의 일반 단어·특보 확인 못 함은 배지와 겹쳐 빼고 하나만
+    expect(displayOf(view, "b0005", later)).toMatchObject({
+      category: "undetermined",
+      labels: [{ kind: "warning_unknown" }],
+    });
+    expect(displayOf(view, "b0001", Date.parse(VALID))).toMatchObject({
+      category: "clear",
+    });
   });
 
   it("모양이 틀린 응답은 해변 하나만 빼지 않고 전체를 못 읽은 것으로 봄", () => {
@@ -119,6 +146,11 @@ describe("지금 표시 상태", () => {
     bad.beaches.b0004!.category = "safe";
     expect(parsePublished(bad)).toBeNull();
     expect(parsePublished({ ...PUBLISHED, generatedAt: "어제" })).toBeNull();
+    const noValid = structuredClone(PUBLISHED) as {
+      beaches: Record<string, { validUntil?: string }>;
+    };
+    delete noValid.beaches.b0001!.validUntil;
+    expect(parsePublished(noValid)).toBeNull();
     expect(parsePublished({ ...PUBLISHED, available: "yes" })).toBeNull();
     expect(parsePublished(null)).toBeNull();
   });
