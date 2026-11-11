@@ -97,6 +97,36 @@ describe("공지 표현 검사 (D16-D1·D17-8)", () => {
     expect(blockedOf("별점 검토 결과")).toEqual(["별점"]);
   });
 
+  it("영문 차단 표현의 복수형도 막고, 활용형은 단어 경계로 가른다", () => {
+    expect(blockedOf("Best beaches this week")).toEqual(["best beach"]);
+    expect(blockedOf("Our top picks")).toEqual(["top pick"]);
+    expect(blockedOf("High scores and 5-star ratings")).toEqual([
+      "rating",
+      "score",
+    ]);
+    expect(blockedOf("No risks today")).toEqual(["no risk"]);
+    expect(blockedOf("Lifeguards on duty")).toEqual([]);
+    expect(warnedOf("Lifeguards on duty")).toEqual([]);
+    expect(blockedOf("The match was scored late")).toEqual([]);
+    expect(
+      checkNoticePhrases("Calm sea, calms down").warned.map((h) => h.text),
+    ).toEqual(["Calm", "calms"]);
+  });
+
+  it("하이픈·가운뎃점·# 같은 이음표를 끼워도 같은 표현으로 본다", () => {
+    expect(blockedOf("safe-to-swim zone")).toEqual(["safe to swim"]);
+    expect(blockedOf("TOP-5 해변")).toEqual(["TOP ○"]);
+    expect(blockedOf("Top #1 beach")).toEqual(["TOP ○"]);
+    expect(blockedOf("추천·해변 안내")).toEqual(["추천 해변"]);
+    expect(blockedOf("Risk‐free")).toEqual(["risk-free"]);
+  });
+
+  it("경계에 걸려 버린 자리 뒤의 표현도 다시 찾는다", () => {
+    expect(checkNoticePhrases("v2 5점").blocked).toEqual([
+      { phrase: "○점", text: "5점", category: "score" },
+    ]);
+  });
+
   it("차단으로 잡힌 자리는 경고로 한 번 더 세지 않는다", () => {
     expect(checkNoticePhrases("적합도 높은 곳")).toEqual({
       blocked: [{ phrase: "적합도", text: "적합도", category: "score" }],
