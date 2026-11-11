@@ -4,7 +4,7 @@ import { fill, messages } from "./messages";
 // 수집 현황 (BRD-149·GH-376, 화면 ADM-COLLECT, 시안 4차 V9·VM2 + 2026-11-10 시안)
 // 운영 API GET /ops/collection 응답 모양과 화면용 계산. 서버(services/src/admin/collection*.ts)가 원본이라 모양만 맞춤
 // - 기록이 없는 출처는 '기록 없음'(정상이 아님). 일부 실패(partial)도 성공으로 세지 않음
-// - '지연' 기준(D15-9, GH-375)은 서버가 정해 내려줌(lateAfterMinutes·overdue·hourly.late). 화면에서 다시 정하지 않음
+// - '지연' 기준(D15-10, GH-375)은 서버가 정해 내려줌(lateAfterMinutes·overdue·hourly.late). 화면에서 다시 정하지 않음
 // - 게시 요약·경보를 읽지 못하면 '확인 못 함'. '영향 없음'·'경보 없음'·0으로 바꾸지 않음
 
 export type CollectionJobId =
