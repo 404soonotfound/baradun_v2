@@ -72,6 +72,7 @@ jobs:
               - 'infra/**'
               - '.github/workflows/**' # 워크플로 가드레일 테스트
               - '.github/scripts/**' # 배포 판단 스크립트(BRD-178, workflows.test.ts가 읽음)
+              - '.github/dependabot.yml' # Action 버전 갱신 설정(#303, workflows.test.ts가 읽음)
               - 'tools/map-tiles/**' # 지도 파일 올리기 덮어쓰기 가드(D19-1, workflows.test.ts가 읽음)
             contracts:                  # 공통 설정 + 계약 폴더가 바뀌면
               - *shared
