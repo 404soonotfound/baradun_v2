@@ -1,6 +1,8 @@
+import type { WeatherFile } from "@baradun/contracts";
 import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import { NextIntlClientProvider } from "next-intl";
 
+import example from "../../../../../packages/contracts/examples/valid/weather.json";
 import en from "../../../messages/en.json";
 import ko from "../../../messages/ko.json";
 import { NationalMapCard } from "./national-map-card";
@@ -8,13 +10,15 @@ import { NearCard } from "./near-card";
 import type { Activity } from "@/lib/activity";
 import type { BeachSummary } from "@/lib/beach-summary";
 import type { BadgeLabel, BeachView, MetricView } from "@/lib/snapshot/view";
+import { beachWeather, type WeatherView } from "@/lib/snapshot/weather";
 
-// 홈 해변 카드·PC '지금 전국 바다' 카드 확인용 (이슈 #362 · 노션 D18-5 · 개발 전용 Storybook)
-// 카드: 활동 3개 × 값 있음 · 값 없음(가까운 관측 없음·늦어짐·–) · 불러오는 중. 날씨·24시간 파고는 Storybook에 데이터가 없어 불러오는 중 자리로 보임
+// 홈 해변 카드·PC '지금 전국 바다' 카드 확인용 (이슈 #362 · #364 · 노션 D18-5·D18-8 · 개발 전용 Storybook)
+// 카드: 활동 3개 × 값 있음(날씨 정상) · 값 없음(가까운 관측 없음·늦어짐·–, 날씨 실패) · 불러오는 중
 // 지도 카드: 정상 · 불러오는 중 · 이용 제한·확인 못 함이 섞인 경우. 점 좌표는 예시
-// 지금 시각을 2026-11-06 14:30(한국 시각)으로 고정
-const NOW = Date.parse("2026-11-06T05:30:00Z");
-const MEASURED = "2026-11-06T05:10:00Z";
+// 지금 시각을 계약 날씨 예시(2026-11-05 KST 08:30)에 맞춰 고정
+const WEATHER_FILE = example as unknown as WeatherFile;
+const NOW = Date.parse("2026-11-04T23:30:00Z");
+const MEASURED = "2026-11-04T23:10:00Z";
 
 function beach(
   id: string,
@@ -38,7 +42,7 @@ function beach(
     sigungu: { key: "강릉시", label: "강릉시" },
     region: "강원 강릉시",
     coords: { lat, lng },
-    activities: ["swimming", "surfing"],
+    activities: ["swimming", "surfing", "scuba"],
     stations: {
       waveHeight: station,
       wavePeriod: station,
@@ -81,7 +85,7 @@ function view(
     badge,
     reasons: [badge],
     stale: false,
-    confirmedAt: "2026-11-06T05:13:00Z",
+    confirmedAt: "2026-11-04T23:13:00Z",
     metrics: {
       waveHeight: { kind: "hidden" },
       wavePeriod: { kind: "hidden" },
@@ -113,12 +117,25 @@ const MISSING = view(
   },
 );
 
-const CARDS: { beach: BeachSummary; view: BeachView }[] = [
-  { beach: beach("s1", "강문해수욕장", 37.79, 128.92), view: FULL },
-  { beach: beach("s2", "금진해수욕장", 37.64, 129.05), view: MISSING },
+const CARDS: {
+  beach: BeachSummary;
+  view: BeachView;
+  weather: WeatherView;
+}[] = [
+  {
+    beach: beach("s1", "강문해수욕장", 37.79, 128.92),
+    view: FULL,
+    weather: beachWeather(WEATHER_FILE, "b0002"),
+  },
+  {
+    beach: beach("s2", "금진해수욕장", 37.64, 129.05),
+    view: MISSING,
+    weather: beachWeather(WEATHER_FILE, "b0008"),
+  },
   {
     beach: beach("s3", "도직해수욕장", 37.6, 129.07, false),
     view: { kind: "loading" },
+    weather: { kind: "loading" },
   },
 ];
 
@@ -180,7 +197,7 @@ function Board({
             listStyle: "none",
           }}
         >
-          {CARDS.map(({ beach: b, view: v }) => (
+          {CARDS.map(({ beach: b, view: v, weather: w }) => (
             <li key={b.id}>
               <NearCard
                 locale={locale}
@@ -189,6 +206,7 @@ function Board({
                 view={v}
                 nowMs={NOW}
                 activity={activity}
+                weather={w}
               />
             </li>
           ))}
