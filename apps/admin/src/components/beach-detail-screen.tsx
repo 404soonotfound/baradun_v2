@@ -26,6 +26,7 @@ import { AdminShell } from "./admin-shell";
 import { seasonText } from "./beaches-screen";
 import {
   DisplayBadge,
+  ExpiredNotice,
   PublishedAlert,
   ReasonList,
   usePublished,
@@ -151,13 +152,14 @@ function StatusSection({
   beach: BeachRecord;
   state: ReturnType<typeof usePublished>;
 }) {
-  const display = displayOf(state.published, beach.id);
+  const display = displayOf(state.published, beach.id, state.nowMs);
   return (
     <Section id="beach-status" title={t.detailStatus}>
       <PublishedAlert state={state} />
       <div className="flex flex-col gap-2">
         <DisplayBadge display={display} />
         <ReasonList display={display} />
+        <ExpiredNotice display={display} />
         {state.published !== "loading" && state.published?.available && (
           <p className="text-label-s text-text-muted">
             {fill(t.statusAsOf, {
@@ -442,7 +444,7 @@ function MemoSection({ beachId }: { beachId: string }) {
   const [error, setError] = useState<SaveError | null>(null);
   const [saved, setSaved] = useState(false);
   const [copied, setCopied] = useState(false);
-  // 다음에 받은 메모를 쓰던 값 대신 그대로 받음(저장 성공·'새 내용 불러오기')
+  // 다음에 받은 메모를 쓰던 값 대신 그대로 받음('새 내용 불러오기')
   const [accept, setAccept] = useState(false);
   const sent = useRef<{ body: string; key: string } | null>(null);
 
@@ -468,6 +470,14 @@ function MemoSection({ beachId }: { beachId: string }) {
     setBase(memo);
     setDraft(memo.memo ?? "");
     setAccept(false);
+  } else if (
+    memo &&
+    base !== null &&
+    memo.version === base.version &&
+    memo.updatedAt !== base.updatedAt
+  ) {
+    // 내가 저장한 version을 다시 읽음: 저장 시각만 받고 그사이 쓰던 내용은 그대로 둠
+    setBase({ ...base, updatedAt: memo.updatedAt });
   }
   const stale = memo !== null && base !== null && memo.version !== base.version;
   const tooLong = charCount(draft) > BEACH_MEMO_MAX;
@@ -502,7 +512,7 @@ function MemoSection({ beachId }: { beachId: string }) {
             version: res.body.version,
           });
           setSaved(true);
-          setAccept(true);
+          // 다시 읽기는 저장 시각만 받음(응답 전에 이어 쓴 내용을 덮지 않게 accept는 켜지 않음)
           setAttempt((n) => n + 1);
         } else if (res.status === 409) {
           setError({
@@ -542,7 +552,12 @@ function MemoSection({ beachId }: { beachId: string }) {
       )}
       {result && (!result.ok ? result.code !== "reauth" : memo === null) && (
         <Notice tone="fail" title={t.memoError} role="alert">
-          <p>{t.memoErrorHint}</p>
+          {/* 응답이 없거나 서버 오류일 때만 '응답하지 않아요'. 그 밖(403·404·모양이 틀림)은 읽지 못했다고 씀 */}
+          <p>
+            {!result.ok && (result.status === 0 || result.status >= 500)
+              ? t.memoErrorHint
+              : t.memoErrorUnknown}
+          </p>
           {!result.ok && "requestId" in result && result.requestId && (
             <p>{fill(t.requestId, { id: result.requestId })}</p>
           )}

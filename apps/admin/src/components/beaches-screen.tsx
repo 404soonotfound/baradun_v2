@@ -120,9 +120,11 @@ function HistoryLink({ beach }: { beach: BeachSummary }) {
 function BeachTable({
   items,
   published,
+  nowMs,
 }: {
   items: readonly BeachSummary[];
   published: Published["published"];
+  nowMs: number;
 }) {
   const th = "border-b border-border-default px-3 py-2 whitespace-nowrap";
   const td = "border-b border-border-default px-3 py-2 align-top";
@@ -171,7 +173,7 @@ function BeachTable({
               <ShownBadge hidden={b.hidden} />
             </td>
             <td className={td}>
-              <DisplayBadge display={displayOf(published, b.id)} />
+              <DisplayBadge display={displayOf(published, b.id, nowMs)} />
             </td>
             <td className={td}>
               <Links beach={b} />
@@ -200,9 +202,11 @@ function BeachTable({
 function BeachCards({
   items,
   published,
+  nowMs,
 }: {
   items: readonly BeachSummary[];
   published: Published["published"];
+  nowMs: number;
 }) {
   return (
     <ul className="flex flex-col divide-y divide-border-default rounded-admin-box border border-border-default bg-bg-surface md:hidden">
@@ -222,7 +226,7 @@ function BeachCards({
             </Link>
             <ShownBadge hidden={b.hidden} />
           </div>
-          <DisplayBadge display={displayOf(published, b.id)} />
+          <DisplayBadge display={displayOf(published, b.id, nowMs)} />
           <Links beach={b} />
           <dl className="grid grid-cols-[5rem_1fr] gap-x-2 gap-y-0.5 text-label-s">
             <dt className="text-text-muted">{t.colPhoto}</dt>
@@ -337,8 +341,16 @@ function BeachesBody({ beaches }: { beaches: readonly BeachSummary[] }) {
         </div>
       ) : (
         <>
-          <BeachTable items={items} published={state.published} />
-          <BeachCards items={items} published={state.published} />
+          <BeachTable
+            items={items}
+            published={state.published}
+            nowMs={state.nowMs}
+          />
+          <BeachCards
+            items={items}
+            published={state.published}
+            nowMs={state.nowMs}
+          />
         </>
       )}
     </section>
