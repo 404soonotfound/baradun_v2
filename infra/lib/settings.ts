@@ -52,10 +52,17 @@ export const RETRY_LIMITS = {
   asyncMaxEventAgeSeconds: 600,
 } as const;
 
-// 무료 범위 상한 (11장 기본값 함정)
-// 경보만 10 → 11(결정 기록 D17-4): 로그인 반복 요청 감시 1개. 무료 10개를 넘는 1개는 월 약 $0.10
-// 11 → 12(BRD-181, 2026-11-05 사용자 결정 '날씨 경보 필요'): 날씨 수집 계속 실패 1개. 무료를 넘는 2개는 월 약 $0.20
-// 12 → 13(BRD-157, 2026-11-11 사용자 결정): 운영 API 5xx·권한 거부 급증 1개(D17-7). 무료를 넘는 3개는 월 약 $0.30
+// 경보 상한 및 과금 기준 (11장 기본값 함정, AWS CloudWatch 비용 절감 안내서)
+// CloudWatch는 경보 개수가 아니라 '경보가 참조하는 표준 경보 지표 수'로 과금(수식 경보는 수식이 참조하는 지표마다 계산).
+// 무료 범위: 표준 경보 지표 10개 (us-east-1 기준 초과 지표당 월 $0.10, 서울 리전 단가 미확인)
+// 현재 경보 지표 수 계산(총 18개):
+// - 오류 경보 5개: 5개 (수집기 4 + 게시 1, Errors)
+// - 실행 없음 경보 4개: 4개 (특보·관측·이안류·게시 Invocations, FILL 수식 각 1지표)
+// - 알림 발송 실패 경보 1개: 1개 (대기열 메시지 수)
+// - 로그인 반복 요청 경보(LoginAbuse, D17-4): 5개 (풀 2 × [시도 1 + 성공 1] + 계정 복구 1) → 무료 초과 5개 × $0.10 ≈ 월 $0.50
+// - 날씨 수집 계속 실패(WeatherFailing, BRD-181): 1개 (Errors) → 무료 초과 6개 × $0.10 ≈ 월 $0.60
+// - 운영 API 오류 급증(OpsApiErrors, BRD-157·D17-7): 2개 (Url5XXCount 1 + AuthDenied 로그 지표 1) → 무료 초과 8개 × $0.10 ≈ 월 $0.80 (이번 경보 몫 +$0.20)
+// 경보 리소스 자체의 개수 상한은 13개로 유지
 export const MAX_ALARMS = 13;
 
 // 날씨 수집 계속 실패 경보(BRD-181). 1시간 구간에 오류가 있거나 실행이 없는 구간이 periods번 이어지면 울림
@@ -73,12 +80,16 @@ export const LOGIN_ABUSE_ALARM = {
 } as const;
 
 // 운영 API 5xx·권한 거부(401·403) 급증 경보 기준(D17-7, 출시 초기 운영자 소수 기준). 5분 동안 둘 중 하나라도 넘으면 알림
+// - 5xx: Lambda 함수 URL Url5XXCount (Sum, 5분)
+// - 권한 거부: 운영 API 로그 지표 필터(ops_auth_denied 이벤트, 401·403만 수집, Sum, 5분)
 // 기본값(안 1): 5xx 3회 또는 권한 거부 10회 (5분 구간). 보고에 '내 확인 필요' 표시
 // 대안(안 2): 5xx 5회 또는 권한 거부 20회 (5분 구간).
 export const OPS_API_ALARM = {
   periodMinutes: 5,
   serverErrors: 3,
   authFailures: 10,
+  metricNamespace: "Baradun/Ops",
+  metricName: "AuthDenied",
 } as const;
 export const MAX_DYNAMODB_CAPACITY_UNITS = 25; // 읽기·쓰기 각각, 모든 테이블·GSI 합계
 
