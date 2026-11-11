@@ -9,6 +9,12 @@ const workflows = readdirSync(dir)
   .map((f) => ({ name: f, text: readFileSync(resolve(dir, f), "utf8") }));
 const deploy = workflows.find((w) => w.name === "deploy.yml");
 const ci = workflows.find((w) => w.name === "ci.yml");
+// 한국 지도 파일 만들기(결정 기록 D19-1 · #392)
+const mapTiles = workflows.find((w) => w.name === "map-tiles.yml");
+const mapUpload = readFileSync(
+  resolve(__dirname, "../../tools/map-tiles/upload.sh"),
+  "utf8",
+);
 // 배포 판단 스크립트(BRD-178). deploy.yml의 site·admin 작업이 함께 씀
 const plan = readFileSync(
   resolve(__dirname, "../../.github/scripts/deploy-plan.sh"),
@@ -54,6 +60,43 @@ describe("배포 워크플로 가드레일 (11장)", () => {
         w.name === "deploy.yml" || w.name === "map-tiles.yml",
       );
     }
+  });
+
+  it("지도 파일 워크플로는 main 수동 실행만, 외부 도구를 돌리는 작업은 토큰 없이, 올리기만 production에서 토큰을 받는다 (D19-1)", () => {
+    expect(mapTiles).toBeDefined();
+    const text = codeLines(mapTiles?.text ?? "").join("\n");
+    // 트리거는 수동 실행 하나(on: 블록 안의 키가 workflow_dispatch뿐)
+    const onBlock = text.match(/^on:\s*\n((?:[ \t]+.*\n|\s*\n)*)/m)?.[1] ?? "";
+    const triggers = onBlock
+      .split("\n")
+      .map((l) => l.match(/^ {2}([a-z_]+):/)?.[1])
+      .filter((t): t is string => t !== undefined);
+    expect(triggers).toEqual(["workflow_dispatch"]);
+    // 워크플로 맨 위 권한은 읽기만(토큰은 올리기 작업에서만 받음)
+    const top = text.slice(0, text.indexOf("\njobs:"));
+    expect(top).not.toMatch(/id-token/);
+    const jobs = text.split(/^  (?=[a-z-]+:\s*$)/m);
+    const build = jobs.find((j) => j.startsWith("build:")) ?? "";
+    const upload = jobs.find((j) => j.startsWith("upload:")) ?? "";
+    expect(build).toContain("tools/map-tiles/build.sh");
+    expect(build).not.toMatch(/id-token:/);
+    expect(build).not.toMatch(/configure-aws-credentials/);
+    expect(build).toMatch(/github\.ref == 'refs\/heads\/main'/);
+    expect(upload).toMatch(/needs:\s*build/);
+    expect(upload).toMatch(/github\.ref == 'refs\/heads\/main'/);
+    expect(upload).toMatch(/environment:\s*production/);
+    expect(upload).toMatch(/id-token:\s*write/);
+    expect(upload).toContain("tools/map-tiles/upload.sh");
+    // 이미 있는 판 폴더는 덮어쓰지 않음(1년 캐시와 충돌하지 않게)
+    expect(mapUpload).toMatch(
+      /list-objects-v2[^\n]*--prefix "\$PREFIX\/"[\s\S]*?KeyCount[\s\S]*?exit 1/,
+    );
+    // 완료 표시(READY.txt)는 모든 파일을 올린 뒤 마지막에 둠
+    expect(mapUpload.lastIndexOf("aws s3 cp")).toBe(
+      mapUpload.indexOf('aws s3 cp - "s3://$BUCKET/$PREFIX/READY.txt"'),
+    );
+    // 변수가 비면 건너뛰지 않고 실패
+    expect(upload).toMatch(/-z "\$ROLE_ARN"[\s\S]*?exit 1/);
   });
 
   it("배포는 main push CI가 끝난 뒤(와 수동 실행)에서만, production environment에서 한다 (BRD-133)", () => {
