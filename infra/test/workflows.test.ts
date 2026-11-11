@@ -45,12 +45,14 @@ describe("배포 워크플로 가드레일 (11장)", () => {
     }
   });
 
-  it("OIDC 토큰(id-token: write)은 배포 워크플로만 받는다", () => {
+  it("OIDC 토큰(id-token: write)은 배포 워크플로와 지도 파일 워크플로만 받는다", () => {
     for (const w of workflows) {
       const hasIdToken = codeLines(w.text).some((l) =>
         /id-token:\s*write/.test(l),
       );
-      expect(hasIdToken, w.name).toBe(w.name === "deploy.yml");
+      expect(hasIdToken, w.name).toBe(
+        w.name === "deploy.yml" || w.name === "map-tiles.yml",
+      );
     }
   });
 
