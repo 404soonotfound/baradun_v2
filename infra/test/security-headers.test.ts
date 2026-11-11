@@ -97,14 +97,16 @@ describe("CloudFront 보안 응답 헤더 정책 (BRD-118)", () => {
       );
       expect(csp).toContain("style-src 'self'");
       expect(csp).toContain(
-        "img-src 'self' blob: https://tiles.openfreemap.org https://tong.visitkorea.or.kr https://www.googletagmanager.com https://*.google-analytics.com; ",
+        "img-src 'self' blob: https://tong.visitkorea.or.kr https://www.googletagmanager.com https://*.google-analytics.com; ",
       );
       expect(csp).toContain("font-src 'self'");
       expect(csp).toContain(
-        "connect-src 'self' https://tiles.openfreemap.org https://www.googletagmanager.com https://*.google-analytics.com https://*.google.com; ",
+        "connect-src 'self' https://www.googletagmanager.com https://*.google-analytics.com https://*.google.com; ",
       );
       expect(csp).not.toContain("test-photo-bucket");
       expect(csp).not.toContain("amazonaws.com");
+      // 지도 파일은 같은 출처 map/<판>/에서 받음(D19-1 · #392). 외부 지도 서버를 허용하지 않음
+      expect(csp).not.toMatch(/openfreemap/);
       expect(csp).toContain("worker-src 'self'");
       expect(csp).toContain("object-src 'none'");
       expect(csp).toContain("base-uri 'self'");
@@ -120,7 +122,7 @@ describe("CloudFront 보안 응답 헤더 정책 (BRD-118)", () => {
       });
       // 사진 버킷은 GA 출처 뒤(BRD-143)
       expect(csp).toContain(
-        "connect-src 'self' https://tiles.openfreemap.org https://www.googletagmanager.com https://*.google-analytics.com https://*.google.com https://baradun-inquiry-photos-prod.s3.ap-northeast-2.amazonaws.com; ",
+        "connect-src 'self' https://www.googletagmanager.com https://*.google-analytics.com https://*.google.com https://baradun-inquiry-photos-prod.s3.ap-northeast-2.amazonaws.com; ",
       );
       expect(csp.length).toBeLessThanOrEqual(CSP_MAX_LENGTH);
     });
