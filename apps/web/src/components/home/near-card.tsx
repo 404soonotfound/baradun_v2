@@ -55,7 +55,7 @@ export const CARD_LAYOUT: Record<Activity, CardLayout> = {
   scuba: { big: ["waveHeight", "wind"], line: ["waterTemp", "waveDirection"] },
 };
 
-// [1] Vue: props: { locale, beach, distanceKm, view, nowMs, activity }
+// [1] Vue: props: { locale, beach, distanceKm, view, nowMs, activity, weather }
 export function NearCard({
   locale,
   beach,
@@ -63,6 +63,7 @@ export function NearCard({
   view,
   nowMs,
   activity,
+  weather,
 }: {
   locale: Locale;
   beach: BeachSummary;
@@ -70,6 +71,7 @@ export function NearCard({
   view: BeachView;
   nowMs: number;
   activity: Activity; // 고른 활동(부르는 쪽이 정함)
+  weather?: WeatherView; // 넘기면 그 값을 쓰고, 없으면 해변 ID로 받음(Storybook 확인용)
 }) {
   const t = useTranslations();
   const { confirmedUntilText } = useBadgeText();
@@ -209,7 +211,12 @@ export function NearCard({
       </span>
 
       {activity === "swimming" && (
-        <TodayWeather beachId={beach.id} region={beach.region} nowMs={nowMs} />
+        <TodayWeather
+          beachId={beach.id}
+          region={beach.region}
+          nowMs={nowMs}
+          weather={weather}
+        />
       )}
       {activity === "surfing" && (
         <WaveStrip
@@ -218,7 +225,9 @@ export function NearCard({
           nowMs={nowMs}
         />
       )}
-      {activity === "scuba" && <WindAhead beachId={beach.id} nowMs={nowMs} />}
+      {activity === "scuba" && (
+        <WindAhead beachId={beach.id} nowMs={nowMs} weather={weather} />
+      )}
 
       <span className="mt-auto flex flex-col gap-1 text-caption">
         {lines.length > 0 && (
@@ -311,13 +320,16 @@ function TodayWeather({
   beachId,
   region,
   nowMs,
+  weather: given,
 }: {
   beachId: string;
   region: string;
   nowMs: number;
+  weather?: WeatherView | undefined;
 }) {
   const t = useTranslations();
-  const weather = useBeachWeather(beachId);
+  const fetched = useBeachWeather(beachId);
+  const weather = given ?? fetched;
   if (weather.kind === "none") return null;
   if (weather.kind === "loading") {
     return (
@@ -490,9 +502,18 @@ function WaveStrip({
 
 // [6] 스쿠버다이빙: 앞으로 바람 7칸(3시간 간격). 상세 바람 줄과 같은 부품(WindRow)을 카드 폭에 맞춰 씀
 const WIND_CELLS = 7;
-function WindAhead({ beachId, nowMs }: { beachId: string; nowMs: number }) {
+function WindAhead({
+  beachId,
+  nowMs,
+  weather: given,
+}: {
+  beachId: string;
+  nowMs: number;
+  weather?: WeatherView | undefined;
+}) {
   const t = useTranslations();
-  const weather = useBeachWeather(beachId);
+  const fetched = useBeachWeather(beachId);
+  const weather = given ?? fetched;
   if (weather.kind === "none") return null;
   if (weather.kind === "loading") {
     return (
