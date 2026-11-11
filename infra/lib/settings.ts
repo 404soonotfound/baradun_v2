@@ -55,7 +55,8 @@ export const RETRY_LIMITS = {
 // 무료 범위 상한 (11장 기본값 함정)
 // 경보만 10 → 11(결정 기록 D17-4): 로그인 반복 요청 감시 1개. 무료 10개를 넘는 1개는 월 약 $0.10
 // 11 → 12(BRD-181, 2026-11-05 사용자 결정 '날씨 경보 필요'): 날씨 수집 계속 실패 1개. 무료를 넘는 2개는 월 약 $0.20
-export const MAX_ALARMS = 12;
+// 12 → 13(BRD-157, 2026-11-11 사용자 결정): 운영 API 5xx·권한 거부 급증 1개(D17-7). 무료를 넘는 3개는 월 약 $0.30
+export const MAX_ALARMS = 13;
 
 // 날씨 수집 계속 실패 경보(BRD-181). 1시간 구간에 오류가 있거나 실행이 없는 구간이 periods번 이어지면 울림
 // 매시 한 번 도는 수집기라 한 번의 일부 실패(아직 안 나온 발표·시간 예산)는 다음 실행이 메움 → 3시간 이어질 때만 알림
@@ -69,6 +70,15 @@ export const LOGIN_ABUSE_ALARM = {
   periodMinutes: 5,
   signInFailures: 10,
   accountRecoveryCalls: 5,
+} as const;
+
+// 운영 API 5xx·권한 거부(401·403) 급증 경보 기준(D17-7, 출시 초기 운영자 소수 기준). 5분 동안 둘 중 하나라도 넘으면 알림
+// 기본값(안 1): 5xx 3회 또는 권한 거부 10회 (5분 구간). 보고에 '내 확인 필요' 표시
+// 대안(안 2): 5xx 5회 또는 권한 거부 20회 (5분 구간).
+export const OPS_API_ALARM = {
+  periodMinutes: 5,
+  serverErrors: 3,
+  authFailures: 10,
 } as const;
 export const MAX_DYNAMODB_CAPACITY_UNITS = 25; // 읽기·쓰기 각각, 모든 테이블·GSI 합계
 

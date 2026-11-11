@@ -16,15 +16,17 @@ import * as path from "node:path";
 import {
   LOG_RETENTION,
   LOGIN_ABUSE_ALARM,
+  OPS_API_ALARM,
   RETRY_LIMITS,
   WEATHER_ALARM,
 } from "../settings";
 
 // ② 운영 경보 (아키텍처 10장, BRD-62)
 // 수집 중단·게시 실패·validUntil 초과(게시 멈춤)를 한국어 SNS 이메일로 알림
-// 경보 12개 = 오류 5(수집기 4 + 게시) + 심장박동 4(특보·관측·이안류·게시) + 알림 발송 실패 1
+// 경보 13개 = 오류 5(수집기 4 + 게시) + 심장박동 4(특보·관측·이안류·게시) + 알림 발송 실패 1
 //            + 로그인 반복 요청 1(결정 기록 D17-4) + 날씨 수집 계속 실패 1(BRD-181)
-// settings.ts MAX_ALARMS(12)를 다 씀. 경보를 더 넣으려면 기존 경보를 합치거나 상한을 다시 정해야 함
+//            + 운영 API 5xx·권한 거부 급증 1(결정 기록 D17-7)
+// settings.ts MAX_ALARMS(13)를 다 씀. 경보를 더 넣으려면 기존 경보를 합치거나 상한을 다시 정해야 함
 // catalog는 하루 1회라 심장박동 없이 오류 경보만. 데이터 문의 함수 경보는 두지 않음(BRD-63 결정)
 // 날씨 수집기(Weather, BRD-181)는 오류·실행 없음을 경보 하나로 묶음(⑤-4). 한 번의 일부 실패는 알리지 않음
 
@@ -53,6 +55,7 @@ export interface OpsAlarmsProps {
   // 수집기 이름("Ocean"·"Warnings"·"Catalog"·"Rip") → 함수. Collectors가 만든 Map 그대로
   readonly collectors: ReadonlyMap<string, lambda.IFunction>;
   readonly publisher: lambda.IFunction; // publish-snapshot 함수
+  readonly opsApi?: lambda.IFunction; // 운영 API 함수 /ops/* (D17-7)
   // 로그인 반복 요청 감시 대상(운영자·데모 풀의 관리자 앱 클라이언트, D17-4)
   readonly signInClients: readonly {
     readonly userPoolId: string;
@@ -146,6 +149,9 @@ export class OpsAlarms extends Construct {
 
     this.loginAbuseAlarm(props.signInClients);
     this.weatherAlarm(collector("Weather"));
+    if (props.opsApi) {
+      this.opsApiErrorsAlarm(props.opsApi);
+    }
 
     this.addKoreanNotifications();
   }
@@ -233,6 +239,37 @@ export class OpsAlarms extends Construct {
       treatMissingData: cloudwatch.TreatMissingData.BREACHING,
       alarmDescription:
         "날씨 수집이 3시간 넘게 실패하거나 돌지 않음. 사유는 CloudWatch 로그의 reason. 단기예보는 발표 12시간 뒤 화면에서 '확인하지 못했어요'가 됨(특보·분류에는 영향 없음)",
+    });
+    this.alarms.push(alarm);
+  }
+
+  // ⑤-5 운영 API 5xx·권한 거부 급증 경보(D17-7): 5분 동안 5xx ≥ 3회 또는 권한 거부(401·403) ≥ 10회이면 울림
+  // Lambda 함수 URL 지표(Url5XXCount·Url4XXCount)를 각 기준으로 나눈 값 중 큰 값이 1 이상인지 수식 1개로 묶음(경보 자리 1개)
+  // 호출이 없는 구간은 정상(요청이 없으면 오류도 급증하지 않음)
+  private opsApiErrorsAlarm(fn: lambda.IFunction): void {
+    const period = Duration.minutes(OPS_API_ALARM.periodMinutes);
+    const m5 = fn.metric("Url5XXCount", {
+      statistic: "Sum",
+      period,
+    });
+    const m4 = fn.metric("Url4XXCount", {
+      statistic: "Sum",
+      period,
+    });
+    const alarm = new cloudwatch.Alarm(this, "OpsApiErrors", {
+      alarmName: this.alarmName("OpsApiErrors"),
+      metric: new cloudwatch.MathExpression({
+        expression: `MAX([FILL(m5, 0) / ${OPS_API_ALARM.serverErrors}, FILL(m4, 0) / ${OPS_API_ALARM.authFailures}])`,
+        usingMetrics: { m5, m4 },
+        period,
+        label: "운영 API 5xx·권한 거부 / 기준",
+      }),
+      threshold: 1,
+      comparisonOperator:
+        cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+      evaluationPeriods: 1,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+      alarmDescription: `운영 API 오류 급증. 5분에 5xx ${OPS_API_ALARM.serverErrors}회 또는 권한 거부(401·403) ${OPS_API_ALARM.authFailures}회 이상. CloudWatch 로그 확인 필요`,
     });
     this.alarms.push(alarm);
   }
