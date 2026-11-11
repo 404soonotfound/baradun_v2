@@ -134,15 +134,15 @@ interface Rule {
 }
 
 const WORD = /[\p{Script=Latin}0-9]/u;
-// 띄어쓰기와 보이지 않는 서식 문자(폭 없는 공백·soft hyphen 등 \p{Cf})는 지우고 비교
-// 붙여 넣은 문구의 폭 없는 공백으로 차단 표현이 빠져나가지 않게 함
-const SPACE = /[\s\p{Cf}]/u;
+// 띄어쓰기·보이지 않는 서식 문자(폭 없는 공백·soft hyphen 등 \p{Cf})·이음표(하이픈·가운뎃점·#·_·*)는 지우고 비교
+// 'safe-to-swim'·'TOP-5'·'추천·해변'·폭 없는 공백으로 차단 표현이 빠져나가지 않게 함
+const SEPARATOR = /[\s\p{Cf}\p{Pd}·・•_#*]/u;
 
 function squash(text: string): string {
   return text
     .normalize("NFKC")
     .toLowerCase()
-    .replace(/[\s\p{Cf}]+/gu, "");
+    .replace(/[\s\p{Cf}\p{Pd}·・•_#*]+/gu, "");
 }
 
 function rule(phrase: string): Rule {
@@ -153,9 +153,11 @@ function rule(phrase: string): Rule {
     .join("\\d+");
   const first = squashed[0] ?? "";
   const last = squashed.at(-1) ?? "";
+  // 영문 낱말로 끝나는 표현은 복수형(-s·-es)도 같은 표현으로 봄('best beaches'·'ratings')
+  const plural = /\p{Script=Latin}/u.test(last) ? "(?:e?s)?" : "";
   return {
     phrase,
-    pattern: new RegExp(source, "gu"),
+    pattern: new RegExp(`(${source})${plural}`, "gu"),
     edgeStart: first === "○" || WORD.test(first),
     edgeEnd: last === "○" || WORD.test(last),
   };
@@ -188,7 +190,7 @@ export function checkNoticePhrases(text: string): NoticePhraseResult {
   const ends: number[] = [];
   for (let i = 0; i < source.length;) {
     const char = String.fromCodePoint(source.codePointAt(i)!);
-    if (!SPACE.test(char)) {
+    if (!SEPARATOR.test(char)) {
       for (const unit of char.toLowerCase().split("")) {
         squashed += unit;
         starts.push(i);
@@ -200,21 +202,32 @@ export function checkNoticePhrases(text: string): NoticePhraseResult {
 
   const find = (r: Rule): (Span & { text: string })[] => {
     const spans: (Span & { text: string })[] = [];
-    for (const match of squashed.matchAll(r.pattern)) {
+    // 경계에 걸려 버린 자리는 한 글자 뒤에서 다시 찾음('v2 5점'의 '25점'을 버린 뒤 '5점'을 찾게)
+    // 복수형 접미사를 붙인 길이가 경계에 걸리면 접미사 없는 길이도 봄('calm sea'의 'calms'가 아닌 'calm')
+    const pattern = new RegExp(r.pattern.source, "gu");
+    for (
+      let match = pattern.exec(squashed);
+      match;
+      match = pattern.exec(squashed)
+    ) {
       const from = match.index;
-      const to = from + match[0].length;
       const before = source[starts[from]! - 1] ?? "";
-      const after = source[ends[to - 1]!] ?? "";
-      if (r.edgeStart && WORD.test(before)) continue;
-      if (r.edgeEnd && WORD.test(after)) continue;
+      const to = [from + match[0].length, from + match[1]!.length].find(
+        (end) => !(r.edgeEnd && WORD.test(source[ends[end - 1]!] ?? "")),
+      );
+      if ((r.edgeStart && WORD.test(before)) || to === undefined) {
+        pattern.lastIndex = from + 1;
+        continue;
+      }
       spans.push({ from, to, text: source.slice(starts[from], ends[to - 1]) });
+      pattern.lastIndex = to;
     }
     return spans;
   };
 
   const allowed = [
     ...ALLOWED.flatMap(find),
-    ...find(MAINTENANCE_RULE).filter((span) => !SPACE.test(span.text)),
+    ...find(MAINTENANCE_RULE).filter((span) => !SEPARATOR.test(span.text)),
   ];
   const free = (span: Span) => !allowed.some((a) => overlaps(a, span));
 
