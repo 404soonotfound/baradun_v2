@@ -10,7 +10,7 @@ import type { NoticeContent } from "./notices";
 // 변경 이력(감사 기록) (BRD-155, D16-B5, 아키텍처 18.3, 화면 ADM-AUD)
 // - 남기는 것: 시각·운영자(Cognito sub)·종류·대상·바뀐 항목 이름. 처리 상태는 앞·뒤 값도 남김(정해진 4개 값)
 //   공지는 대상 이름(한국어 제목)과 문구 앞·뒤도 남김(공개 문구, 시안 V23 펼치기)
-// - 남기지 않는 것: 문의 본문·내부 메모·반려 이유 글·이메일(바뀐 항목 이름만 남김)
+// - 남기지 않는 것: 문의 본문·내부 메모·해변 운영 메모·반려 이유 글·이메일(바뀐 항목 이름만 남김)
 // - 운영 API 쓰기는 업무 변경과 같은 트랜잭션에 넣음(versionedWrite) → 기록 없는 변경·변경 없는 기록이 없음
 // - 샘플 계정은 로그인(/ops/me)·조회·거절된 요청을 모두 남김. 기록에 실패하면 응답하지 않음(500)
 // - 추가 전용: 새 키에만 씀(attribute_not_exists). 운영 API 역할은 감사 키를 바꾸거나 지울 수 없음(IAM Deny)
@@ -25,6 +25,8 @@ export const AUDIT_ACTIONS = [
   "notice.expose",
   "notice.end",
   "notice.delete",
+  // 해변 운영 메모 저장(BRD-150). 메모 글은 넣지 않고 바뀐 항목 이름만
+  "beach.memo",
   // 샘플 계정이 허용된 조회를 함(로그인 뒤 /ops/me 포함)
   "sample.read",
   // 샘플 계정 요청을 거절함(쓰기·허용 밖 경로)
@@ -77,9 +79,9 @@ export function actorOf(principal: Principal): AuditActor {
   };
 }
 
-// 대상: 문의는 문의 ID, 공지는 공지 ID, 샘플 요청은 "METHOD 경로 모양"(실제 경로 값은 넣지 않음)
+// 대상: 문의는 문의 ID, 공지는 공지 ID, 해변은 해변 ID, 샘플 요청은 "METHOD 경로 모양"(실제 경로 값은 넣지 않음)
 export interface AuditTarget {
-  readonly kind: "inquiry" | "notice" | "route";
+  readonly kind: "inquiry" | "notice" | "beach" | "route";
   readonly id: string;
 }
 
@@ -418,6 +420,7 @@ function toView(item: Record<string, unknown>): AuditView {
     !isAuditAction(action) ||
     (targetKind !== "inquiry" &&
       targetKind !== "notice" &&
+      targetKind !== "beach" &&
       targetKind !== "route") ||
     typeof targetId !== "string" ||
     !Array.isArray(changes) ||
