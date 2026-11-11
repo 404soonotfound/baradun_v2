@@ -49,6 +49,7 @@ export class OpsApi extends Construct {
   readonly function: nodejs.NodejsFunction;
   readonly functionUrl: lambda.FunctionUrl;
   readonly role: iam.Role;
+  readonly logGroup: logs.LogGroup;
 
   constructor(scope: Construct, id: string, props: OpsApiProps) {
     super(scope, id);
@@ -146,6 +147,7 @@ export class OpsApi extends Construct {
     const logGroup = new logs.LogGroup(this, "Logs", {
       retention: LOG_RETENTION,
     });
+    this.logGroup = logGroup;
     logGroup.grant(this.role, "logs:CreateLogStream", "logs:PutLogEvents");
 
     this.function = new nodejs.NodejsFunction(this, "Function", {

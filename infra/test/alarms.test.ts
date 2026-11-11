@@ -341,8 +341,31 @@ describe("운영 경보 (BRD-62)", () => {
     });
   });
 
-  // 운영 API 5xx·권한 거부 급증(결정 기록 D17-7): Lambda 함수 URL의 5xx와 4xx(401·403)를 5분 기준으로 나눠 큰 값 ≥ 1
-  it("운영 API 5xx·권한 거부 급증 경보는 함수 URL 지표를 5분 기준으로 본다", () => {
+  // 운영 API 5xx·권한 거부 급증(결정 기록 D17-7): Lambda 함수 URL 5xx와 401·403 로그 지표를 5분 기준으로 나눠 큰 값 ≥ 1
+  it("운영 API 5xx·권한 거부 급증 경보는 함수 URL 5xx와 401·403 로그 지표를 5분 기준으로 본다", () => {
+    // 1) 로그 지표 필터 검증 (401·403만 수집, 다른 4xx 제외)
+    const filters = Object.entries(
+      template.findResources("AWS::Logs::MetricFilter"),
+    ) as [string, Resource][];
+    expect(filters).toHaveLength(1);
+    const [, filter] = filters[0];
+    const fp = filter.Properties;
+    expect(fp.FilterPattern).toBe(
+      '{ ($.event = "ops_auth_denied") && (($.status = 401) || ($.status = 403)) }',
+    );
+    // 다른 4xx(400, 404, 405, 409, 429)는 필터 패턴에 없음
+    expect(fp.FilterPattern).not.toContain("400");
+    expect(fp.FilterPattern).not.toContain("404");
+    expect(fp.FilterPattern).not.toContain("405");
+    expect(fp.MetricTransformations).toEqual([
+      {
+        MetricName: OPS_API_ALARM.metricName,
+        MetricNamespace: OPS_API_ALARM.metricNamespace,
+        MetricValue: "1",
+      },
+    ]);
+
+    // 2) 경보 설정 검증
     const [, alarm] = alarms.find(([id]) => id.startsWith("OpsOpsApiErrors"))!;
     const p = alarm.Properties;
     expect(p.Threshold).toBe(1);
@@ -360,19 +383,19 @@ describe("운영 경보 (BRD-62)", () => {
     ).toBe(true);
     expect(stats.every((s) => s.Stat === "Sum")).toBe(true);
     const m5 = stats.find((s) => s.Metric.MetricName === "Url5XXCount")!;
-    const m4 = stats.find((s) => s.Metric.MetricName === "Url4XXCount")!;
+    const m4 = stats.find((s) => s.Metric.MetricName === OPS_API_ALARM.metricName)!;
     expect(m5.Metric.Namespace).toBe("AWS/Lambda");
-    expect(m4.Metric.Namespace).toBe("AWS/Lambda");
+    expect(m4.Metric.Namespace).toBe(OPS_API_ALARM.metricNamespace);
     expect(
       m5.Metric.Dimensions.find((d: any) => d.Name === "FunctionName")?.Value?.Ref,
     ).toMatch(/^OpsApiFunction/);
-    expect(
-      m4.Metric.Dimensions.find((d: any) => d.Name === "FunctionName")?.Value?.Ref,
-    ).toMatch(/^OpsApiFunction/);
+    expect(m4.Metric.Dimensions).toBeUndefined();
     expect(OPS_API_ALARM).toEqual({
       periodMinutes: 5,
       serverErrors: 3,
       authFailures: 10,
+      metricNamespace: "Baradun/Ops",
+      metricName: "AuthDenied",
     });
   });
 });

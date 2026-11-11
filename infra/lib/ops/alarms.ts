@@ -56,6 +56,7 @@ export interface OpsAlarmsProps {
   readonly collectors: ReadonlyMap<string, lambda.IFunction>;
   readonly publisher: lambda.IFunction; // publish-snapshot 함수
   readonly opsApi?: lambda.IFunction; // 운영 API 함수 /ops/* (D17-7)
+  readonly opsApiLogGroup?: logs.ILogGroup; // 운영 API 로그 그룹 (D17-7 권한 거부 지표 필터용)
   // 로그인 반복 요청 감시 대상(운영자·데모 풀의 관리자 앱 클라이언트, D17-4)
   readonly signInClients: readonly {
     readonly userPoolId: string;
@@ -150,7 +151,7 @@ export class OpsAlarms extends Construct {
     this.loginAbuseAlarm(props.signInClients);
     this.weatherAlarm(collector("Weather"));
     if (props.opsApi) {
-      this.opsApiErrorsAlarm(props.opsApi);
+      this.opsApiErrorsAlarm(props.opsApi, props.opsApiLogGroup);
     }
 
     this.addKoreanNotifications();
@@ -244,15 +245,37 @@ export class OpsAlarms extends Construct {
   }
 
   // ⑤-5 운영 API 5xx·권한 거부 급증 경보(D17-7): 5분 동안 5xx ≥ 3회 또는 권한 거부(401·403) ≥ 10회이면 울림
-  // Lambda 함수 URL 지표(Url5XXCount·Url4XXCount)를 각 기준으로 나눈 값 중 큰 값이 1 이상인지 수식 1개로 묶음(경보 자리 1개)
+  // - 5xx: Lambda 함수 URL Url5XXCount 지표
+  // - 권한 거부: 운영 API 로그 지표 필터(ops_auth_denied 이벤트 중 401·403만 수집, 다른 4xx 제외)
+  // 두 지표를 각 기준으로 나눈 값 중 큰 값이 1 이상인지 수식 1개로 묶음(경보 자리 1개)
   // 호출이 없는 구간은 정상(요청이 없으면 오류도 급증하지 않음)
-  private opsApiErrorsAlarm(fn: lambda.IFunction): void {
+  private opsApiErrorsAlarm(
+    fn: lambda.IFunction,
+    logGroup?: logs.ILogGroup,
+  ): void {
     const period = Duration.minutes(OPS_API_ALARM.periodMinutes);
     const m5 = fn.metric("Url5XXCount", {
       statistic: "Sum",
       period,
     });
-    const m4 = fn.metric("Url4XXCount", {
+    const targetLogGroup = logGroup ?? (fn as any).logGroup;
+    if (!targetLogGroup) {
+      throw new Error("운영 API 로그 그룹이 없어 권한 거부 지표 필터를 만들 수 없습니다");
+    }
+    const filter = new logs.MetricFilter(this, "OpsApiAuthDeniedFilter", {
+      logGroup: targetLogGroup,
+      metricNamespace: OPS_API_ALARM.metricNamespace,
+      metricName: OPS_API_ALARM.metricName,
+      filterPattern: logs.FilterPattern.all(
+        logs.FilterPattern.stringValue("$.event", "=", "ops_auth_denied"),
+        logs.FilterPattern.any(
+          logs.FilterPattern.numberValue("$.status", "=", 401),
+          logs.FilterPattern.numberValue("$.status", "=", 403),
+        ),
+      ),
+      metricValue: "1",
+    });
+    const m4 = filter.metric({
       statistic: "Sum",
       period,
     });
