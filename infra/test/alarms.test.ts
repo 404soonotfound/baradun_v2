@@ -347,20 +347,15 @@ describe("운영 경보 (BRD-62)", () => {
 
   // 운영 API 5xx·권한 거부 급증(결정 기록 D17-7): Lambda 함수 URL 5xx와 401·403 로그 지표를 5분 기준으로 나눠 큰 값 ≥ 1
   it("운영 API 5xx·권한 거부 급증 경보는 함수 URL 5xx와 401·403 로그 지표를 5분 기준으로 본다", () => {
-    // 1) 로그 지표 필터 검증 (401·403만 수집, 다른 4xx 제외)
+    // 1) 로그 지표 필터 검증 (401·403에만 남는 ops_auth_denied 이벤트 수)
     const filters = Object.entries(
       template.findResources("AWS::Logs::MetricFilter"),
     ) as [string, Resource][];
     expect(filters).toHaveLength(1);
     const [, filter] = filters[0];
     const fp = filter.Properties;
-    expect(fp.FilterPattern).toBe(
-      '{ ($.event = "ops_auth_denied") && (($.status = 401) || ($.status = 403)) }',
-    );
-    // 다른 4xx(400, 404, 405, 409, 429)는 필터 패턴에 없음
-    expect(fp.FilterPattern).not.toContain("400");
-    expect(fp.FilterPattern).not.toContain("404");
-    expect(fp.FilterPattern).not.toContain("405");
+    // Lambda 텍스트 로그 접두어와 상관없이 맞도록 JSON 패턴이 아닌 텍스트 패턴(401·403 제한은 handleOps가 보장)
+    expect(fp.FilterPattern).toBe('"ops_auth_denied"');
     expect(fp.MetricTransformations).toEqual([
       {
         MetricName: OPS_API_ALARM.metricName,

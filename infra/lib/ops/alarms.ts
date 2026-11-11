@@ -246,7 +246,7 @@ export class OpsAlarms extends Construct {
 
   // ⑤-5 운영 API 5xx·권한 거부 급증 경보(D17-7): 5분 동안 5xx ≥ 3회 또는 권한 거부(401·403) ≥ 10회이면 울림
   // - 5xx: Lambda 함수 URL Url5xxCount 지표
-  // - 권한 거부: 운영 API 로그 지표 필터(ops_auth_denied 이벤트 중 401·403만 수집, 다른 4xx 제외)
+  // - 권한 거부: 운영 API 로그 지표 필터(401·403에만 남는 ops_auth_denied 이벤트 수, 다른 4xx 제외)
   // 두 지표를 각 기준으로 나눈 값 중 큰 값이 1 이상인지 수식 1개로 묶음(경보 자리 1개)
   // 호출이 없는 구간은 정상(요청이 없으면 오류도 급증하지 않음)
   private opsApiErrorsAlarm(
@@ -266,13 +266,9 @@ export class OpsAlarms extends Construct {
       logGroup: targetLogGroup,
       metricNamespace: OPS_API_ALARM.metricNamespace,
       metricName: OPS_API_ALARM.metricName,
-      filterPattern: logs.FilterPattern.all(
-        logs.FilterPattern.stringValue("$.event", "=", "ops_auth_denied"),
-        logs.FilterPattern.any(
-          logs.FilterPattern.numberValue("$.status", "=", 401),
-          logs.FilterPattern.numberValue("$.status", "=", 403),
-        ),
-      ),
+      // Lambda 기본 텍스트 로그는 "시각\t요청ID\tINFO\t{...}" 접두어가 붙어 JSON 패턴이 맞지 않음
+      // → 이벤트 이름 텍스트로 셈. 401·403만 남기는 것은 handleOps가 보장(handler.test.ts)
+      filterPattern: logs.FilterPattern.allTerms("ops_auth_denied"),
       metricValue: "1",
     });
     const m4 = filter.metric({
