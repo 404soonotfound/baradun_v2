@@ -83,7 +83,7 @@ function reasonLabel(alarmName: string): string {
     return "설정된 운영 경보 조건을 충족했습니다.";
   }
   if (id === "OpsApiErrors") {
-    return "5분 동안 운영 API 5xx 오류 또는 권한 거부(401·403) 요청이 기준을 넘었습니다. CloudWatch 로그를 확인해 주세요.";
+    return "운영 API 5xx 오류 또는 권한 거부(401·403) 요청이 기준을 넘었습니다. CloudWatch 로그를 확인해 주세요.";
   }
   if (id.endsWith("Errors")) {
     return "최근 실행에서 오류가 1회 이상 감지되었습니다.";
