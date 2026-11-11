@@ -141,6 +141,17 @@ describe("배포 워크플로 가드레일 (11장)", () => {
     );
   });
 
+  it("웹 사이트 동기화(s3 sync)는 지도 파일 구역 map/을 제외한다 (D19-1)", () => {
+    const text = deploy?.text ?? "";
+    const site = text.slice(
+      text.indexOf("\n  site:"),
+      text.indexOf("\n  admin:"),
+    );
+    const syncs = codeLines(site).filter((l) => l.includes("aws s3 sync"));
+    expect(syncs.length).toBeGreaterThan(0);
+    for (const line of syncs) expect(line).toContain('--exclude "map/*"');
+  });
+
   it("사이트 동기화(s3 sync)는 모두 data/를 제외한다", () => {
     const syncs = codeLines(deploy?.text ?? "").filter((l) =>
       l.includes("aws s3 sync"),
