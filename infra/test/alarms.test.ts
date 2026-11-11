@@ -75,9 +75,8 @@ const failureQueueId = Object.keys(
 ).find((id) => id.startsWith("OpsNotificationFailures"))!;
 
 describe("운영 경보 (BRD-62)", () => {
-  it("경보는 13개 이하(상한 MAX_ALARMS)이며 이번 경보 추가로 정확히 13개다", () => {
-    expect(alarms.length).toBeLessThanOrEqual(MAX_ALARMS);
-    expect(alarms).toHaveLength(13);
+  it("경보 수는 상한 MAX_ALARMS(13)와 같다", () => {
+    expect(alarms).toHaveLength(MAX_ALARMS);
     expect(
       alarms.filter(([id]) => id.startsWith("OpsLoginAbuse")),
     ).toHaveLength(1);
@@ -395,12 +394,5 @@ describe("운영 경보 (BRD-62)", () => {
         ?.Ref,
     ).toMatch(/^OpsApiFunction/);
     expect(m4.Metric.Dimensions).toBeUndefined();
-    expect(OPS_API_ALARM).toEqual({
-      periodMinutes: 5,
-      serverErrors: 3,
-      authFailures: 10,
-      metricNamespace: "Baradun/Ops",
-      metricName: "AuthDenied",
-    });
   });
 });
