@@ -1,5 +1,11 @@
 import { GetCommand, QueryCommand } from "@aws-sdk/lib-dynamodb";
 import type { Notice } from "@baradun/contracts";
+import {
+  checkNoticePhrases,
+  graphemeLength,
+  NOTICE_DRAFT_TEXT_MAX,
+  NOTICE_TEXT_MAX,
+} from "@baradun/contracts/notice-rules";
 import { NOTICE_PK, noticeKey } from "./keys";
 import type { Sender } from "./writes";
 
@@ -20,13 +26,8 @@ export const NOTICE_KINDS: readonly NoticeKind[] = [
   "general",
 ];
 
-// 노출 전 글자 수 상한(D16-D2 초기값, grapheme 기준). 넘으면 잘라 내지 않고 노출을 막음
-export const NOTICE_TEXT_MAX = {
-  title: { ko: 40, en: 60 },
-  body: { ko: 120, en: 200 },
-} as const;
-// 초안 저장 상한(글자). 노출 상한과 별개로 요청 크기만 막음
-export const NOTICE_DRAFT_TEXT_MAX = 1000;
+// 글자 수 상한(D16-D2)·표현 검사 목록(D17-8)은 운영자 화면과 같은 값을 쓰도록 계약 패키지 한 곳에 둠
+export { graphemeLength, NOTICE_DRAFT_TEXT_MAX, NOTICE_TEXT_MAX };
 
 export interface NoticeRecord {
   readonly id: string;
@@ -154,20 +155,15 @@ export function parseVersionBody(value: unknown): Check<{ version: number }> {
   return { ok: true, version: value.version as number };
 }
 
-const segmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" });
-
-export function graphemeLength(text: string): number {
-  let count = 0;
-  for (const _ of segmenter.segment(text)) count += 1;
-  return count;
-}
-
-// 노출해도 되는지(D16-D2·B3·D4). 한·영 모두 있고, 글자 수 안이고, 끝이 시작 뒤이며 아직 지나지 않아야 함
-// 표현 검사(D16-D1)의 차단·경고 목록은 미결(D15-9, BRD-158) → 목록이 정해지면 여기서 막음
+// 노출해도 되는지(D16-D1·D2·B3·D4). 한·영 모두 있고, 글자 수 안이고, 차단 표현이 없고,
+// 끝이 시작 뒤이며 아직 지나지 않아야 함. 경고 표현은 막지 않음(화면이 알림)
 export function exposeProblem(
   content: NoticeContent,
   now: Date,
-): { field: string; reason: "required" | "too_long" | "order" } | null {
+): {
+  field: string;
+  reason: "required" | "too_long" | "blocked_phrase" | "order";
+} | null {
   for (const name of ["title", "body"] as const) {
     for (const lang of ["ko", "en"] as const) {
       const text = content[name][lang];
@@ -176,6 +172,9 @@ export function exposeProblem(
       }
       if (graphemeLength(text) > NOTICE_TEXT_MAX[name][lang]) {
         return { field: `${name}.${lang}`, reason: "too_long" };
+      }
+      if (checkNoticePhrases(text).blocked.length > 0) {
+        return { field: `${name}.${lang}`, reason: "blocked_phrase" };
       }
     }
   }

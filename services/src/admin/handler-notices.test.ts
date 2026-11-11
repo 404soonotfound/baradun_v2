@@ -255,6 +255,40 @@ describe("노출·끝내기 (노출 변경)", () => {
     expect(stored(table, noticeId)?.live).toBeNull();
   });
 
+  it("차단 표현은 대기 저장은 되지만 노출은 서버가 막는다(D16-D1·D17-8)", async () => {
+    const table = new FakeTable();
+    const { noticeId } = await create(table, {
+      ...CONTENT,
+      body: { ko: "오늘은 안 전 해 요", en: CONTENT.body.en },
+    });
+    expect(stored(table, noticeId)?.draft).toMatchObject({
+      body: { ko: "오늘은 안 전 해 요" },
+    });
+    const result = await expose(table, noticeId, 1);
+    expect(result.statusCode).toBe(400);
+    expect(parse(result).error).toMatchObject({
+      field: "body.ko",
+      reason: "blocked_phrase",
+    });
+    expect(stored(table, noticeId)?.live).toBeNull();
+    expect(audits(table).map((a) => a.action)).toEqual(["notice.create"]);
+  });
+
+  it("경고 표현·허용 표현만 있으면 노출한다", async () => {
+    const table = new FakeTable();
+    const { noticeId } = await create(table, {
+      ...CONTENT,
+      title: { ko: "파도가 잔잔해요", en: "Calm sea notice" },
+      body: {
+        ko: "안전요원 안내를 따라 주세요",
+        en: "Follow the lifeguard on duty.",
+      },
+    });
+    const result = await expose(table, noticeId, 1);
+    expect(result.statusCode).toBe(200);
+    expect(stored(table, noticeId)?.live).not.toBeNull();
+  });
+
   it("노출하면 대기본이 노출본이 되고, 응답은 저장 결과만 준다(앱 반영은 다음 게시)", async () => {
     const table = new FakeTable();
     const { noticeId } = await create(table);

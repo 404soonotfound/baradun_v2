@@ -112,7 +112,32 @@ describe("parseNoticeInput", () => {
   });
 });
 
-describe("exposeProblem (D16-D2)", () => {
+describe("exposeProblem (D16-D1·D2)", () => {
+  it("차단 표현이 있는 칸은 노출하지 않고, 경고·허용 표현은 막지 않는다", () => {
+    expect(
+      exposeProblem(
+        { ...CONTENT, title: { ko: "데이터 점검", en: "Top 3 beaches" } },
+        NOW,
+      ),
+    ).toEqual({ field: "title.en", reason: "blocked_phrase" });
+    expect(
+      exposeProblem(
+        { ...CONTENT, body: { ko: "추천 해변 안내", en: "Updates" } },
+        NOW,
+      ),
+    ).toEqual({ field: "body.ko", reason: "blocked_phrase" });
+    expect(
+      exposeProblem(
+        {
+          ...CONTENT,
+          title: { ko: "02:00 점검", en: "Calm notice" },
+          body: { ko: "안전요원 안내를 따라 주세요", en: "Ask a lifeguard" },
+        },
+        NOW,
+      ),
+    ).toBeNull();
+  });
+
   it("한·영 중 하나라도 비면 노출하지 않는다", () => {
     expect(
       exposeProblem({ ...CONTENT, body: { ko: "본문", en: "  " } }, NOW),
