@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./notice-rules": "./src/notice-rules.ts",
     "./schema.json": "./schemas/contract.schema.json"
   },
   "scripts": {
