@@ -209,6 +209,30 @@ describe("공지 만들기·저장 (편집)", () => {
     );
   });
 
+  it("샘플은 고치기·노출·끝내기·지우기도 서버가 거절한다", async () => {
+    const table = new FakeTable();
+    const { noticeId } = await create(table);
+    const before = stored(table, noticeId);
+    for (const [method, path, body] of [
+      ["PUT", `/ops/notices/${noticeId}`, { ...CONTENT, version: 1 }],
+      ["POST", `/ops/notices/${noticeId}/expose`, { version: 1 }],
+      ["POST", `/ops/notices/${noticeId}/end`, { version: 1 }],
+      ["DELETE", `/ops/notices/${noticeId}`, { version: 1 }],
+    ] as const) {
+      const result = await handleOps(
+        event(method, path, body),
+        deps("sample", table),
+      );
+      expect(result.statusCode, `${method} ${path}`).toBe(403);
+    }
+    expect(stored(table, noticeId)).toEqual(before);
+    // 거절은 sample.denied로만 남고 공지 쓰기 기록은 만들기 하나뿐
+    expect(audits(table).map((a) => a.action)).toEqual([
+      "notice.create",
+      ...Array(4).fill("sample.denied"),
+    ]);
+  });
+
   it("멱등 키·본문이 틀리면 400", async () => {
     const table = new FakeTable();
     const noKey = await handleOps(

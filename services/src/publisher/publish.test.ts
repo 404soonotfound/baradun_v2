@@ -651,6 +651,29 @@ describe("공지 싣기 (BRD-151, D16-B3·D4, 아키텍처 18.4)", () => {
     await publishSnapshot(deps());
     expect(manifest()!.maintenance).toEqual(MANIFEST_SETTINGS.maintenance);
   });
+
+  it("공지는 해변 판단 상태·사유(배지)를 바꾸지 않는다(D15-6)", async () => {
+    const judged = async (notices: readonly unknown[]) => {
+      const { snapshots, deps, manifest } = await setup({
+        notices: async () => notices,
+      });
+      await publishSnapshot(deps());
+      const read = (path: string) => snapshots.files.get(path.slice(1))!.body;
+      return {
+        status: read(manifest()!.files.status),
+        beaches: read(manifest()!.files.beaches),
+        notices: manifest()!.notices?.length ?? 0,
+      };
+    };
+    const without = await judged([]);
+    const withNotices = await judged([
+      notice("n-m", { kind: "maintenance_notice" }),
+      notice("n-g"),
+    ]);
+    expect(withNotices.notices).toBe(2);
+    expect(withNotices.status).toBe(without.status);
+    expect(withNotices.beaches).toBe(without.beaches);
+  });
 });
 
 describe("weather.json (BRD-181)", () => {
