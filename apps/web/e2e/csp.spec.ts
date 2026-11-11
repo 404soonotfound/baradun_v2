@@ -30,11 +30,11 @@ test.describe("보안 응답 헤더 및 CSP 검증 (BRD-118)", () => {
     );
     expect(csp).toContain("style-src 'self'");
     expect(csp).toContain(
-      "img-src 'self' blob: https://tiles.openfreemap.org https://tong.visitkorea.or.kr https://www.googletagmanager.com https://*.google-analytics.com; ",
+      "img-src 'self' blob: https://tong.visitkorea.or.kr https://www.googletagmanager.com https://*.google-analytics.com; ",
     );
     expect(csp).toContain("font-src 'self'");
     expect(csp).toContain(
-      "connect-src 'self' https://tiles.openfreemap.org https://www.googletagmanager.com https://*.google-analytics.com https://*.google.com",
+      "connect-src 'self' https://www.googletagmanager.com https://*.google-analytics.com https://*.google.com",
     );
     expect(csp).not.toContain("default-src 'self' https://");
     expect(csp).not.toContain("style-src 'self' https://");
