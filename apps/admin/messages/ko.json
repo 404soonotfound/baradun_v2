@@ -881,7 +881,8 @@
     },
     "alarmOther": {
       "LoginAbuse": "운영자 로그인 시도 이상",
-      "NotificationFailed": "경보 메일 보내기 실패"
+      "NotificationFailed": "경보 메일 보내기 실패",
+      "OpsApiErrors": "운영 API 오류 급증"
     },
     "alarmWindow": "{minutes}분 기준",
     "alarmWindowUnknown": "기준 시간 모름",
