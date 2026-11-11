@@ -27,6 +27,20 @@ describe("버킷", () => {
     });
   });
 
+  it("사이트 버킷은 끊긴 여러 조각 업로드(지도 파일)를 1일 뒤 지운다 (D19-1)", () => {
+    template.hasResourceProperties("AWS::S3::Bucket", {
+      LifecycleConfiguration: {
+        Rules: Match.arrayWith([
+          Match.objectLike({
+            Id: "AbortIncompleteUploads",
+            Status: "Enabled",
+            AbortIncompleteMultipartUpload: { DaysAfterInitiation: 1 },
+          }),
+        ]),
+      },
+    });
+  });
+
   it("읽기 허용은 CloudFront뿐이고, 누구나(*) 허용은 없다", () => {
     // 사이트 S3·문의 함수 URL·운영자 사이트 S3·운영 API 함수 URL (BRD-147)
     template.resourceCountIs("AWS::CloudFront::OriginAccessControl", 4);
