@@ -34,6 +34,15 @@ function segments(cells: readonly WindCell[], max: number, h: number) {
   return out;
 }
 
+// 칸의 화살표. 풍향·풍속 중 하나라도 없으면 같은 크기의 빈 자리
+function arrowOf(cell: WindCell) {
+  return cell.windTo === null || cell.windSpeed === null ? (
+    <span className="block size-[11px]" />
+  ) : (
+    <WindArrow windTo={cell.windTo} />
+  );
+}
+
 // 불어가는 쪽 화살표 하나(11px)
 function WindArrow({ windTo }: { windTo: number }) {
   return (
@@ -86,10 +95,11 @@ export function WindRow({
                 {hours[i]}
               </span>
             )}
-            {cell.windTo === null || cell.windSpeed === null ? (
-              <span className="block size-[11px]" />
+            {fit ? (
+              // 홈은 예전처럼 줄 높이를 따르는 칸에 둠(화살표 줄 높이가 바뀌지 않게)
+              <span>{arrowOf(cell)}</span>
             ) : (
-              <WindArrow windTo={cell.windTo} />
+              arrowOf(cell)
             )}
             <span
               className={cn(
