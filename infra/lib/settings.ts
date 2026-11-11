@@ -62,7 +62,7 @@ export const RETRY_LIMITS = {
 // - 로그인 반복 요청 경보(LoginAbuse, D17-4): 5개 (풀 2 × [시도 1 + 성공 1] + 계정 복구 1) → 무료 초과 5개 × $0.10 ≈ 월 $0.50
 // - 날씨 수집 계속 실패(WeatherFailing, BRD-181): 1개 (Errors) → 무료 초과 6개 × $0.10 ≈ 월 $0.60
 // - 운영 API 오류 급증(OpsApiErrors, BRD-157·D17-7): 2개 (Url5xxCount 1 + AuthDenied 로그 지표 1) → 무료 초과 8개 × $0.10 ≈ 월 $0.80 (이번 경보 몫 +$0.20)
-// 경보 리소스 자체의 개수 상한은 13개로 유지
+// 경보 리소스 자체의 개수 상한: 12 → 13(OpsApiErrors 추가, D17-7)
 export const MAX_ALARMS = 13;
 
 // 날씨 수집 계속 실패 경보(BRD-181). 1시간 구간에 오류가 있거나 실행이 없는 구간이 periods번 이어지면 울림
