@@ -311,6 +311,18 @@ export async function handleOps(
   event: APIGatewayProxyEventV2,
   deps: OpsDependencies,
 ): Promise<APIGatewayProxyStructuredResultV2> {
+  const res = await dispatchOps(event, deps);
+  // 결정 기록 D17-7: 운영 API 401·403 권한 거부 급증 감시 로그
+  if (res.statusCode === 401 || res.statusCode === 403) {
+    safeLog("warn", "ops_auth_denied", { status: res.statusCode });
+  }
+  return res;
+}
+
+async function dispatchOps(
+  event: APIGatewayProxyEventV2,
+  deps: OpsDependencies,
+): Promise<APIGatewayProxyStructuredResultV2> {
   const ids = (deps.ids ?? newRequestIds)();
   const path = event.rawPath;
   const method = event.requestContext?.http?.method ?? "";

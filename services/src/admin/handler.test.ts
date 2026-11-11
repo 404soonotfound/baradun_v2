@@ -1,5 +1,5 @@
 import type { APIGatewayProxyEventV2 } from "aws-lambda";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { AuthDependencies } from "./auth";
 import { handleOps } from "./handler";
 import { ACCESS_TOKEN_HEADER } from "./policy";
@@ -200,5 +200,74 @@ describe("handleOps", () => {
     expect(res.statusCode).toBe(500);
     expect(res.body).not.toContain("DynamoDB");
     expect(JSON.parse(res.body!).error.code).toBe("internal");
+  });
+
+  describe("권한 거부 감시 로그 (D17-7)", () => {
+    it("401·403 응답에만 ops_auth_denied 로그가 남고 다른 응답에는 남지 않는다", async () => {
+      const logs: any[] = [];
+      const spy = vi.spyOn(console, "log").mockImplementation((msg) => {
+        try {
+          logs.push(JSON.parse(msg));
+        } catch {
+          logs.push(msg);
+        }
+      });
+
+      try {
+        const deps = {
+          auth: authDeps(operatorClaims),
+          ids: () => IDS,
+          data: NO_DATA,
+        };
+
+        // 1) 401: 토큰 누락
+        logs.length = 0;
+        const r401 = await handleOps(event("/ops/me", "GET"), deps);
+        expect(r401.statusCode).toBe(401);
+        const denied401 = logs.filter((l) => l.event === "ops_auth_denied");
+        expect(denied401).toHaveLength(1);
+        expect(denied401[0]).toEqual({
+          level: "warn",
+          event: "ops_auth_denied",
+          status: 401,
+        });
+
+        // 2) 403: 역할 불명확
+        logs.length = 0;
+        const unclearDeps = {
+          ...deps,
+          auth: authDeps({ ...operatorClaims, "cognito:groups": [] }),
+        };
+        const r403 = await handleOps(event("/ops/me", "GET", "t"), unclearDeps);
+        expect(r403.statusCode).toBe(403);
+        const denied403 = logs.filter((l) => l.event === "ops_auth_denied");
+        expect(denied403).toHaveLength(1);
+        expect(denied403[0]).toEqual({
+          level: "warn",
+          event: "ops_auth_denied",
+          status: 403,
+        });
+
+        // 3) 200: 정상
+        logs.length = 0;
+        const r200 = await handleOps(event("/ops/me", "GET", "t"), deps);
+        expect(r200.statusCode).toBe(200);
+        expect(logs.filter((l) => l.event === "ops_auth_denied")).toHaveLength(0);
+
+        // 4) 404: 없는 경로
+        logs.length = 0;
+        const r404 = await handleOps(event("/ops/nope", "GET", "t"), deps);
+        expect(r404.statusCode).toBe(404);
+        expect(logs.filter((l) => l.event === "ops_auth_denied")).toHaveLength(0);
+
+        // 5) 405: 잘못된 method
+        logs.length = 0;
+        const r405 = await handleOps(event("/ops/me", "POST", "t"), deps);
+        expect(r405.statusCode).toBe(405);
+        expect(logs.filter((l) => l.event === "ops_auth_denied")).toHaveLength(0);
+      } finally {
+        spy.mockRestore();
+      }
+    });
   });
 });
