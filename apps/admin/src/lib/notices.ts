@@ -1,4 +1,11 @@
 import type { Notice } from "@baradun/contracts";
+import {
+  checkNoticePhrases,
+  graphemeLength,
+  NOTICE_DRAFT_TEXT_MAX,
+  NOTICE_TEXT_MAX,
+  type NoticePhraseCategory,
+} from "@baradun/contracts/notice-rules";
 import { opsFetch, type OpsResult } from "./auth/ops-fetch";
 import { kstDateTime } from "./inquiries";
 
@@ -14,14 +21,9 @@ export const NOTICE_KINDS: readonly NoticeKind[] = [
   "maintenance_notice",
 ];
 
-// 노출 전 글자 수 상한(D16-D2 초기값, grapheme 기준). 서버 NOTICE_TEXT_MAX와 같음
-// 넘으면 잘라 내지 않고 확정을 막음
-export const NOTICE_TEXT_MAX = {
-  title: { ko: 40, en: 60 },
-  body: { ko: 120, en: 200 },
-} as const;
-// 초안 저장 상한(서버 NOTICE_DRAFT_TEXT_MAX). 요청 크기만 막음
-export const NOTICE_DRAFT_TEXT_MAX = 1000;
+// 글자 수 상한(D16-D2, 넘으면 잘라 내지 않고 확정을 막음)·표현 검사 목록(D17-8)은
+// 운영 API와 같은 값을 쓰도록 계약 패키지 한 곳에 둠
+export { graphemeLength, NOTICE_DRAFT_TEXT_MAX, NOTICE_TEXT_MAX };
 
 export const NOTICE_STATES = ["live", "scheduled", "draft", "ended"] as const;
 export type NoticeState = (typeof NOTICE_STATES)[number];
@@ -126,19 +128,45 @@ export function kstRange(
   return `${kstDateTime(startsAt)} ~ ${endsAt ? kstDateTime(endsAt) : openEnd}`;
 }
 
-// ---- 확정 전 확인 (서버 exposeProblem과 같은 규칙, D16-D2·B3) ----
-
-const segmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" });
-
-export function graphemeLength(text: string): number {
-  return [...segmenter.segment(text)].length;
-}
+// ---- 확정 전 확인 (서버 exposeProblem과 같은 규칙, D16-D1·D2·B3) ----
 
 export type TextField = `${"title" | "body"}.${"ko" | "en"}`;
 
-export interface NoticeProblem {
-  readonly field: TextField | "startsAt" | "endsAt";
-  readonly reason: "required" | "too_long" | "order" | "invalid";
+const TEXT_FIELDS = ["title.ko", "body.ko", "title.en", "body.en"] as const;
+
+export type NoticeProblem =
+  | {
+      readonly field: TextField | "startsAt" | "endsAt";
+      readonly reason: "required" | "too_long" | "order" | "invalid";
+    }
+  | {
+      readonly field: TextField;
+      readonly reason: "blocked_phrase";
+      // 문구에서 맞은 부분과 묶음(안전 보장·이용 판단·추천·점수)
+      readonly text: string;
+      readonly category: NoticePhraseCategory;
+    };
+
+// 문맥 확인 표현(D16-D1 경고). 확정은 막지 않음
+export interface NoticeWarning {
+  readonly field: TextField;
+  readonly text: string;
+}
+
+export type NoticeTexts = Pick<NoticeContent, "title" | "body">;
+
+function textOf(content: NoticeTexts, field: TextField): string {
+  const [name, lang] = field.split(".") as ["title" | "body", "ko" | "en"];
+  return content[name][lang];
+}
+
+export function noticeWarnings(content: NoticeTexts): NoticeWarning[] {
+  return TEXT_FIELDS.flatMap((field) =>
+    checkNoticePhrases(textOf(content, field)).warned.map((hit) => ({
+      field,
+      text: hit.text,
+    })),
+  );
 }
 
 // 저장을 막는 것: 시각이 틀렸거나 기간이 거꾸로(시안 E5 2). 빈칸·글자 수는 초안이라 저장은 됨(D16-D1)
@@ -161,22 +189,39 @@ export function saveProblems(
   return problems;
 }
 
-// 확정을 막는 것: 한·영 빈칸, 글자 수 넘침, 끝이 시작 앞이거나 이미 지남
+// 문구만으로 확정을 막는 것: 한·영 빈칸, 글자 수 넘침, 차단 표현. 시각이 틀려 내용을 못 만들 때도 씀
+export function textProblems(texts: NoticeTexts): NoticeProblem[] {
+  const problems: NoticeProblem[] = [];
+  for (const name of ["title", "body"] as const) {
+    for (const lang of ["ko", "en"] as const) {
+      const field = `${name}.${lang}` as const;
+      const text = texts[name][lang];
+      if (text.trim() === "") {
+        problems.push({ field, reason: "required" });
+        continue;
+      }
+      if (graphemeLength(text) > NOTICE_TEXT_MAX[name][lang]) {
+        problems.push({ field, reason: "too_long" });
+      }
+      for (const hit of checkNoticePhrases(text).blocked) {
+        problems.push({
+          field,
+          reason: "blocked_phrase",
+          text: hit.text,
+          category: hit.category,
+        });
+      }
+    }
+  }
+  return problems;
+}
+
+// 확정을 막는 것: 문구 문제(textProblems), 끝이 시작 앞이거나 이미 지남
 export function exposeProblems(
   content: NoticeContent,
   now: number,
 ): NoticeProblem[] {
-  const problems: NoticeProblem[] = [];
-  for (const name of ["title", "body"] as const) {
-    for (const lang of ["ko", "en"] as const) {
-      const text = content[name][lang];
-      if (text.trim() === "") {
-        problems.push({ field: `${name}.${lang}`, reason: "required" });
-      } else if (graphemeLength(text) > NOTICE_TEXT_MAX[name][lang]) {
-        problems.push({ field: `${name}.${lang}`, reason: "too_long" });
-      }
-    }
-  }
+  const problems = textProblems(content);
   if (
     content.endsAt !== null &&
     (Date.parse(content.endsAt) <= Date.parse(content.startsAt) ||

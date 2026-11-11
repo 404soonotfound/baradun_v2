@@ -3,8 +3,10 @@ import {
   exposeProblems,
   fromKstInput,
   graphemeLength,
+  noticeWarnings,
   sameContent,
   saveProblems,
+  textProblems,
   toKstInput,
   type NoticeContent,
 } from "./notices";
@@ -55,6 +57,64 @@ describe("저장·확정 전 확인", () => {
     expect(
       exposeProblems(content(), Date.parse("2030-01-03T00:00:00Z")),
     ).toEqual([{ field: "endsAt", reason: "order" }]);
+  });
+
+  it("차단 표현은 확정을 막고 칸·맞은 문구·묶음을 알려 준다(D17-8)", () => {
+    expect(
+      exposeProblems(
+        content({ body: { ko: "추천 해변 TOP 3", en: "Body" } }),
+        NOW,
+      ),
+    ).toEqual([
+      {
+        field: "body.ko",
+        reason: "blocked_phrase",
+        text: "추천 해변",
+        category: "recommend",
+      },
+      {
+        field: "body.ko",
+        reason: "blocked_phrase",
+        text: "TOP 3",
+        category: "score",
+      },
+    ]);
+    // 글자 수 넘침과 차단 표현은 함께 알림
+    expect(
+      exposeProblems(
+        content({ title: { ko: `${"가".repeat(40)} 안전해요`, en: "T" } }),
+        NOW,
+      ).map((p) => p.reason),
+    ).toEqual(["too_long", "blocked_phrase"]);
+  });
+
+  it("문구 확인은 시각 없이도 빈칸·차단 표현을 알려 준다", () => {
+    expect(
+      textProblems({
+        title: { ko: "추천 해변", en: "" },
+        body: { ko: "본문", en: "Body" },
+      }),
+    ).toEqual([
+      {
+        field: "title.ko",
+        reason: "blocked_phrase",
+        text: "추천 해변",
+        category: "recommend",
+      },
+      { field: "title.en", reason: "required" },
+    ]);
+  });
+
+  it("문맥 확인 표현은 경고만 하고, 허용 표현은 경고하지 않는다", () => {
+    const calm = content({
+      title: { ko: "파도가 잔잔해요", en: "Calm sea" },
+      body: { ko: "안전요원 안내를 따라 주세요", en: "Ask a lifeguard" },
+    });
+    expect(exposeProblems(calm, NOW)).toEqual([]);
+    expect(noticeWarnings(calm)).toEqual([
+      { field: "title.ko", text: "잔잔해요" },
+      { field: "title.en", text: "Calm" },
+    ]);
   });
 
   it("같은 시각을 다르게 쓴 값도 같은 문구로 본다", () => {
