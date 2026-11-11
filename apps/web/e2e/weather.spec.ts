@@ -127,11 +127,22 @@ test.describe("상세 날씨 카드", () => {
     page,
   }) => {
     await page.goto(`/spots/${slugOf(NO_STATION_ID)}/`);
-    // 측정값 카드('지금 바다') 안의 파고·파주기 값 자리
+    // 측정값 카드('지금 바다')의 보이는 값 자리가 모두 '가까운 관측 없음'(한 자리만 빈 값이어도 실패)
+    // PC는 파고·파주기·파향·수온·바람 5칸 줄, 모바일은 파고·파주기 큰 값 2자리가 보임
     const sea = page.getByRole("region", { name: "지금 바다" });
     await expect(
-      sea.getByText("가까운 관측 없음").filter({ visible: true }).first(),
+      sea.getByText("가까운 관측 없음").filter({ visible: true }),
+    ).toHaveCount(test.info().project.name === "mobile" ? 2 : 5);
+    // 측정소 없음은 분류에 영향 없음(결정 기록 11장 B3): 판단 배지는 '특보 없음' 그대로
+    await expect(
+      page
+        .getByText("특보 없음", { exact: true })
+        .filter({ visible: true })
+        .first(),
     ).toBeVisible();
+    await expect(
+      page.getByText("판단불가", { exact: true }).filter({ visible: true }),
+    ).toHaveCount(0);
     const weather = card(page);
     await expect(weather).toBeVisible();
     await expect(
