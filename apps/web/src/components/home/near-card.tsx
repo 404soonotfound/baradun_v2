@@ -287,7 +287,6 @@ function BigMetric({ label, metric }: { label: string; metric: CardMetric }) {
   );
 }
 
-// 회색 그림 칸 틀(시안 rounded 10 · 안쪽 높이 49)
 // 날씨 줄 재료. 넘긴 값(Storybook)이 있으면 그대로, 없으면 해변 ID로 받음
 // 훅은 받을 때만 부름(넘긴 값이 있는데도 날씨 파일을 따로 받지 않게). 숨김 화면은 훅이 none으로 알림
 function WeatherOf({
@@ -316,6 +315,7 @@ function FetchedWeather({
   return render(useBeachWeather(beachId));
 }
 
+// 회색 그림 칸 틀(시안 rounded 10 · 안쪽 높이 49)
 function PictureBox({ children }: { children: React.ReactNode }) {
   return (
     <span className="block rounded-[10px] bg-bg-subtle px-3 pt-2.5 pb-2">
