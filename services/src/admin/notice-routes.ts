@@ -260,7 +260,7 @@ export async function updateNoticeRoute(
 }
 
 // POST /ops/notices/{id}/expose: 저장한 문구를 노출본으로 확정(다음 게시 때 앱에 나감)
-// 한·영 모두·글자 수·끝 시각을 서버가 다시 확인. 통과 못 하면 잘라 내지 않고 거부(D16-D2)
+// 한·영 모두·글자 수·차단 표현·끝 시각을 서버가 다시 확인. 통과 못 하면 잘라 내지 않고 거부(D16-D1·D2)
 export async function exposeNoticeRoute(
   event: APIGatewayProxyEventV2,
   id: string,
