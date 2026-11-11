@@ -273,6 +273,75 @@ describe("handleOps", () => {
         expect(logs.filter((l) => l.event === "ops_auth_denied")).toHaveLength(
           0,
         );
+
+        // 6) 403: 인증은 통과했지만 역할이 모자람(라우터 거부, 열람자의 공지 만들기)
+        logs.length = 0;
+        const rRole = await handleOps(event("/ops/notices", "POST", "t"), deps);
+        expect(rRole.statusCode).toBe(403);
+        expect(logs.filter((l) => l.event === "ops_auth_denied")).toEqual([
+          {
+            level: "warn",
+            event: "ops_auth_denied",
+            status: 403,
+            traceId: IDS.traceId,
+          },
+        ]);
+
+        // 7) 403: 샘플 계정이 막힌 경로(sample.denied 감사 기록 뒤 거부)
+        logs.length = 0;
+        const sent: unknown[] = [];
+        const sampleDeps = {
+          auth: {
+            ...authDeps({
+              ...operatorClaims,
+              sub: "sample-user",
+              iss: `https://cognito-idp.ap-northeast-2.amazonaws.com/${TEST_CONFIG.sample.userPoolId}`,
+              "cognito:groups": ["sample"],
+            }),
+            samplePolicy: async () => ({
+              subs: ["sample-user"],
+              allowedFrom: new Date("2026-11-01T00:00:00Z"),
+              allowedUntil: new Date("2026-12-01T00:00:00Z"),
+            }),
+          },
+          ids: () => IDS,
+          data: {
+            ...NO_DATA,
+            client: {
+              send: async (command: unknown) => {
+                sent.push(command);
+                return {};
+              },
+            },
+          },
+        };
+        const rSample = await handleOps(
+          event("/ops/audit", "GET", "t"),
+          sampleDeps,
+        );
+        expect(rSample.statusCode).toBe(403);
+        expect(sent).toHaveLength(1); // sample.denied 감사 기록
+        expect(logs.filter((l) => l.event === "ops_auth_denied")).toHaveLength(
+          1,
+        );
+
+        // 8) 500: 내부 오류는 권한 거부로 세지 않음
+        logs.length = 0;
+        const r500 = await handleOps(event("/ops/audit", "GET", "t"), {
+          ...sampleDeps,
+          data: {
+            ...NO_DATA,
+            client: {
+              send: async () => {
+                throw new Error("DynamoDB down");
+              },
+            },
+          },
+        });
+        expect(r500.statusCode).toBe(500);
+        expect(logs.filter((l) => l.event === "ops_auth_denied")).toHaveLength(
+          0,
+        );
       } finally {
         spy.mockRestore();
       }
