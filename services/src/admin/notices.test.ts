@@ -1,8 +1,8 @@
+import { graphemeLength } from "@baradun/contracts/notice-rules";
 import { describe, expect, it } from "vitest";
 import { NOTICE_PK } from "./keys";
 import {
   exposeProblem,
-  graphemeLength,
   liveNotices,
   noticeState,
   noticeViews,
