@@ -386,7 +386,7 @@ describe("운영 경보 (BRD-62)", () => {
       stats.every((s) => s.Period === OPS_API_ALARM.periodMinutes * 60),
     ).toBe(true);
     expect(stats.every((s) => s.Stat === "Sum")).toBe(true);
-    const m5 = stats.find((s) => s.Metric.MetricName === "Url5XXCount")!;
+    const m5 = stats.find((s) => s.Metric.MetricName === "Url5xxCount")!;
     const m4 = stats.find(
       (s) => s.Metric.MetricName === OPS_API_ALARM.metricName,
     )!;
