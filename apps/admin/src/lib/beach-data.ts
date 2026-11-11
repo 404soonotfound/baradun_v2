@@ -257,6 +257,7 @@ export function summaryOf(beach: BeachRecord): BeachSummary {
     sigungu: beach.sigungu,
     hidden: beach.hidden,
     aliases: beach.aliases,
+    inMeta: beach.inMeta,
     seaZone: beach.zones.sea,
     seaStatus: beach.check?.sea.status ?? null,
     landStatus: beach.check?.land.status ?? null,

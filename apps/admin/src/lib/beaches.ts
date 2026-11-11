@@ -86,6 +86,8 @@ export interface BeachSummary {
   readonly sigungu: string;
   readonly hidden: boolean;
   readonly aliases: readonly string[];
+  // beach-meta.json에 해변 칸이 있는지(없으면 별칭·운영 기간을 '없음'이 아니라 '연결 안 됨'으로)
+  readonly inMeta: boolean;
   readonly seaZone: string;
   readonly seaStatus: string | null;
   readonly landStatus: string | null;
@@ -155,6 +157,8 @@ export type Category = "clear" | "unavailable" | "undetermined";
 export interface PublishedEntry {
   readonly category: Category;
   readonly reasons: readonly Partial<Reason>[];
+  // 게시 분류를 믿을 수 있는 마지막 시각(status.json validUntil)
+  readonly validUntil: string;
 }
 
 export type PublishedView =
@@ -213,13 +217,16 @@ export function parsePublished(value: unknown): PublishedView | null {
       !isRecord(entry) ||
       !(CATEGORIES as readonly unknown[]).includes(entry.category) ||
       !Array.isArray(entry.reasons) ||
-      !entry.reasons.every(isRecord)
+      !entry.reasons.every(isRecord) ||
+      typeof entry.validUntil !== "string" ||
+      Number.isNaN(Date.parse(entry.validUntil))
     ) {
       return null;
     }
     out[id] = {
       category: entry.category as Category,
       reasons: entry.reasons as Partial<Reason>[],
+      validUntil: entry.validUntil,
     };
   }
   return { available: true, snapshotVersion, generatedAt, beaches: out };
@@ -300,7 +307,8 @@ export function badgeTone(label: BadgeLabel): BadgeTone {
 // 해변 하나의 지금 표시 상태
 // - loading: 아직 응답 없음
 // - unconfirmed: 게시본을 못 받음·모양이 틀림·게시본에 해변이 없음 → 판단불가 계열 '확인 못 함'
-// - published: 게시본 분류·사유 그대로
+// - published: 게시본 분류·사유 그대로. 단 validUntil이 지났으면 앱과 같이(apps/web view.ts deriveBeachView B5)
+//   이용불가는 그대로, 그 외('특보 없음' 포함)는 판단불가 '특보 확인 못 함'(지난 '특보 없음'을 지금 상태로 보이지 않게)
 export type BeachDisplay =
   | { readonly kind: "loading" }
   | {
@@ -317,6 +325,7 @@ export type BeachDisplay =
 export function displayOf(
   published: PublishedView | null | "loading",
   id: string,
+  nowMs: number = Date.now(),
 ): BeachDisplay {
   if (published === "loading") return { kind: "loading" };
   if (!published || !published.available) {
@@ -324,6 +333,26 @@ export function displayOf(
   }
   const entry = published.beaches[id];
   if (!entry) return { kind: "unconfirmed", why: "missing" };
+  const expired = !(nowMs <= Date.parse(entry.validUntil));
+  if (expired && entry.category !== "unavailable") {
+    // 원래 판단불가였으면 게시된 사유(예: 관측 지연)를 뒤에 남김. 배지와 겹치는 일반 단어는 뺌
+    const previous =
+      entry.category === "undetermined"
+        ? entry.reasons.filter((r) => {
+            const kind = reasonLabel(r, "undetermined").kind;
+            return kind !== "warning_unknown" && kind !== "unconfirmed";
+          })
+        : [];
+    return {
+      kind: "published",
+      category: "undetermined",
+      labels: [
+        { kind: "warning_unknown" },
+        ...previous.map((r) => reasonLabel(r, "undetermined")),
+      ],
+      reasons: [{}, ...previous],
+    };
+  }
   return {
     kind: "published",
     category: entry.category,

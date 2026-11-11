@@ -8,14 +8,16 @@ const at = (minutes: number) =>
   new Date(Date.now() + minutes * 60_000).toISOString();
 
 export function localPublishedView() {
+  const validUntil = at(41);
   return {
     available: true,
     snapshotVersion: "20261111T030000Z",
     generatedAt: at(-4),
     beaches: {
-      b0001: { category: "clear", reasons: [] },
+      b0001: { category: "clear", reasons: [], validUntil },
       b0002: {
         category: "unavailable",
+        validUntil,
         reasons: [
           {
             code: "warning",
@@ -29,6 +31,7 @@ export function localPublishedView() {
       },
       b0003: {
         category: "undetermined",
+        validUntil,
         reasons: [
           {
             code: "warning_unknown",
@@ -40,6 +43,7 @@ export function localPublishedView() {
       },
       b0004: {
         category: "undetermined",
+        validUntil,
         reasons: [
           {
             code: "observation_delayed",
@@ -49,7 +53,7 @@ export function localPublishedView() {
           },
         ],
       },
-      b0005: { category: "clear", reasons: [] },
+      b0005: { category: "clear", reasons: [], validUntil },
     },
   };
 }
