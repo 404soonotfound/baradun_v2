@@ -1,0 +1,71 @@
+# 한국 지도 파일 만들기: 지도 타일(PMTiles)·글꼴·sprite를 만들어 사이트 버킷 map/<판>/에 올림 (결정 기록 D19-1 · #392)
+# - 수동 실행만(Actions 탭 → map-tiles → Run workflow, main). 정해진 주기 없음: 지도를 새로 만들 때만
+# - 만들기(외부 도구 실행)와 올리기를 작업으로 나눔. OIDC 토큰은 올리기 작업만 받음
+#   장기 키 없음: production environment에서 사이트 배포 역할(1시간 임시 키)을 받음
+# - 판 이름은 실행마다 새것(만든 시각 UTC)이고 올린 판은 덮어쓰지 않음. 다 올린 판에만 READY.txt. 웹은 코드에 적힌 판의 파일만 읽음
+# - 만든 판을 웹에 쓰려면: 표본 해변 시각 확인 뒤 apps/web/src/lib/map/style.ts의 판 이름을 PR로 올림
+# - 사이트 배포(deploy.yml)의 s3 sync는 map/을 지우지 않음
+name: map-tiles
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04 # Java 21(JAVA_HOME_21_X64)이 들어 있는 이미지
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - name: 지도 파일 만들기
+        run: JAVA="$JAVA_HOME_21_X64/bin/java" bash tools/map-tiles/build.sh "$RUNNER_TEMP/map"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: map-tiles
+          path: ${{ runner.temp }}/map
+          retention-days: 3
+          compression-level: 1 # 지도 파일은 이미 gzip, 글꼴(압축 안 된 protobuf)만 줄어서 빠른 압축으로 둠
+
+  upload:
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 30
+    concurrency:
+      group: map-tiles
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write # OIDC 임시 키
+    env:
+      BUCKET: ${{ vars.SITE_BUCKET }}
+      ROLE_ARN: ${{ vars.DEPLOY_ROLE_ARN }}
+    steps:
+      # 변수가 비면 건너뛰고 초록불로 끝나지 않게 실패시킴(아무것도 올라가지 않았는데 성공처럼 보이지 않게)
+      - name: 저장소 변수 확인
+        run: |
+          if [ -z "$ROLE_ARN" ] || [ -z "$BUCKET" ]; then
+            echo "::error::저장소 변수 DEPLOY_ROLE_ARN·SITE_BUCKET이 필요해요(infra/README 사이트 배포)"
+            exit 1
+          fi
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: map-tiles
+          path: ${{ runner.temp }}/map
+      - name: AWS 임시 키 받기
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ env.ROLE_ARN }}
+          aws-region: ap-northeast-2
+      - name: 사이트 버킷 map/<판>/에 올리기
+        run: |
+          bash tools/map-tiles/upload.sh "$RUNNER_TEMP/map" "$BUCKET"
+          echo "지도 판: $(cat "$RUNNER_TEMP/map/VERSION")" >> "$GITHUB_STEP_SUMMARY"
