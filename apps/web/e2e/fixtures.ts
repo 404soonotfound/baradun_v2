@@ -553,7 +553,8 @@ async function mockData(
   };
 }
 
-// 같은 출처 밖 요청(지도 타일·글꼴 서버 등)은 모두 막음. 지도는 '목록으로 볼 수 있어요' 경로로 감
+// 같은 출처 밖 요청(사진·분석 서버 등)은 모두 막음. 지도 판 파일(/map/)은 같은 출처지만 정적 서버에 없어(404)
+// 지도는 실패 화면('목록으로 볼 수 있어요') 경로로 감
 async function blockExternal(context: BrowserContext, baseURL: string) {
   const origin = new URL(baseURL).origin;
   await context.route(

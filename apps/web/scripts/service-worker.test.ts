@@ -238,11 +238,9 @@ describe("손대지 않는 요청", () => {
     ["바다 정보 manifest", "/data/manifest.json", {}],
     ["바다 정보 status", "/data/20261017T053000Z/status.json", {}],
     ["주소창으로 연 바다 정보", "/data/manifest.json", { mode: "navigate" }],
-    [
-      "지도 타일(다른 출처)",
-      "https://tiles.openfreemap.org/planet/1/2/3.pbf",
-      {},
-    ],
+    // 지도 판 파일(D19-1)은 판마다 1년 캐시라 브라우저 캐시에 맡김. 지도 파일은 범위 요청이라 위 조건에서도 빠짐
+    ["지도 판 sprite·글꼴", "/map/20261111-0000/sprites/ofm.json", {}],
+    ["다른 출처 파일", "https://maps.example.com/map/1/korea.pmtiles", {}],
     ["다른 출처 화면 이동", "https://example.com/", { mode: "navigate" }],
     [
       "GET이 아닌 요청",
