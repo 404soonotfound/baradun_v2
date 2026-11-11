@@ -4,6 +4,8 @@
 // 그림 줄이라 aria-hidden: 읽는 글은 부르는 쪽 목록(칸별 '바람 5m/s')이 맡음
 // 값이 없는 칸은 화살표 없이 '–', 그래프는 그 칸에서 끊음(0으로 그리지 않음)
 
+import { cn } from "@/lib/cn";
+
 export const WEATHER_COLUMN = 36; // 칸 너비(px, 시안 36)
 const GRAPH_H = 22;
 
@@ -31,8 +33,8 @@ function segments(cells: readonly WindCell[], max: number) {
   return out;
 }
 
-// 불어가는 쪽 화살표 하나(11px). 홈 '앞으로 바람' 칸도 같은 그림을 씀
-export function WindArrow({ windTo }: { windTo: number }) {
+// 불어가는 쪽 화살표 하나(11px)
+function WindArrow({ windTo }: { windTo: number }) {
   return (
     <svg
       width="11"
@@ -66,19 +68,14 @@ export function WindRow({
   const max = Math.max(1, ...cells.map((c) => c.windSpeed ?? 0));
   return (
     <span aria-hidden="true" className="block">
-      <span
-        className={
-          fit ? "flex w-full text-text-body" : "mt-1 flex text-text-body"
-        }
-      >
+      <span className={cn("flex text-text-body", fit ? "w-full" : "mt-1")}>
         {cells.map((cell, i) => (
           <span
             key={i}
-            className={
-              fit
-                ? "flex flex-1 flex-col items-center gap-0.5"
-                : "flex flex-col items-center gap-0.5"
-            }
+            className={cn(
+              "flex flex-col items-center gap-0.5",
+              fit && "flex-1",
+            )}
             style={fit ? undefined : { width: WEATHER_COLUMN }}
           >
             {hours?.[i] !== undefined && (
@@ -92,11 +89,10 @@ export function WindRow({
               <WindArrow windTo={cell.windTo} />
             )}
             <span
-              className={
-                fit
-                  ? "text-label-s leading-none font-bold text-text-default tabular-nums"
-                  : "text-[11.5px] leading-none font-bold text-text-default tabular-nums"
-              }
+              className={cn(
+                "leading-none font-bold text-text-default tabular-nums",
+                fit ? "text-label-s" : "text-[11.5px]",
+              )}
             >
               {cell.windSpeed === null ? "–" : Math.round(cell.windSpeed)}
             </span>
@@ -108,7 +104,7 @@ export function WindRow({
         height={fit ? undefined : GRAPH_H}
         viewBox={`0 0 ${width} ${GRAPH_H}`}
         preserveAspectRatio={fit ? "none" : undefined}
-        className={fit ? "mt-1 block h-5 w-full" : "mt-0.5 block"}
+        className={cn("block", fit ? "mt-1 h-5 w-full" : "mt-0.5")}
       >
         {segments(cells, max).map((run, i) => {
           const line = run
