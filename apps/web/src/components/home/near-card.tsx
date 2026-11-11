@@ -533,15 +533,20 @@ function WindAhead({
   const label = t("home.card.windAheadLabel", {
     cells: cells
       .map((cell) =>
-        cell.windSpeed === null || cell.windTo === null
+        cell.windSpeed === null
           ? t("home.card.windCellNoValue", { hour: cell.hour })
-          : t("home.card.windCell", {
-              hour: cell.hour,
-              dir: t(
-                `observation.direction.${compassPoint((cell.windTo + 180) % 360)}`,
-              ),
-              speed: Math.round(cell.windSpeed),
-            }),
+          : cell.windTo === null
+            ? t("home.card.windCellNoDir", {
+                hour: cell.hour,
+                speed: Math.round(cell.windSpeed),
+              })
+            : t("home.card.windCell", {
+                hour: cell.hour,
+                dir: t(
+                  `observation.direction.${compassPoint((cell.windTo + 180) % 360)}`,
+                ),
+                speed: Math.round(cell.windSpeed),
+              }),
       )
       .join(", "),
     time: issued,
