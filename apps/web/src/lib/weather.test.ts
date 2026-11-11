@@ -14,6 +14,7 @@ import {
   monthDay,
   skyIcon,
   skyWord,
+  windCellText,
 } from "./weather";
 
 // 상세 날씨 카드 모델 (BRD-185). 시각은 모두 UTC로 쓰고 한국 시각(+9)으로 나눔
@@ -80,6 +81,37 @@ describe("hourCells", () => {
     expect(cells[0]!.windTo).toBe(180);
     expect(cells[1]!.windTo).toBe(90);
     expect(cells[1]!.temperature).toBeNull();
+  });
+});
+
+describe("windCellText", () => {
+  it("풍속·풍향이 다 있으면 불어오는 쪽 방향과 반올림한 풍속", () => {
+    // 불어가는 쪽 90°(동) = 불어오는 쪽 270°(서)
+    expect(windCellText({ hour: 15, windTo: 90, windSpeed: 4.4 })).toEqual({
+      kind: "full",
+      hour: 15,
+      from: "W",
+      speed: 4,
+    });
+  });
+
+  it("풍향만 없으면 풍속은 읽음(그림에 숫자가 보이는 칸을 값 없음으로 읽지 않음)", () => {
+    expect(windCellText({ hour: 18, windTo: null, windSpeed: 4 })).toEqual({
+      kind: "noDir",
+      hour: 18,
+      speed: 4,
+    });
+  });
+
+  it("풍속이 없으면 풍향이 있어도 값 없음(0으로 읽지 않음)", () => {
+    expect(windCellText({ hour: 21, windTo: 90, windSpeed: null })).toEqual({
+      kind: "noValue",
+      hour: 21,
+    });
+    expect(windCellText({ hour: 0, windTo: null, windSpeed: null })).toEqual({
+      kind: "noValue",
+      hour: 0,
+    });
   });
 });
 
