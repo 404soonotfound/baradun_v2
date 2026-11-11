@@ -68,7 +68,8 @@ flowchart LR
 | `data/beaches` | 해변 목록 원본 (해변 하나당 파일 하나 `bXXXX.json`, 규칙은 [data/beaches/README.md](data/beaches/README.md)) |
 | `data` | 해변 부가 정보(`beach-meta.json`), 커버리지 매트릭스(`beach-coverage.csv`), 이안류 대응 목록 등 |
 | `tools/beaches` | 해변 데이터 생성·검증 도구 (공간 판정, 관측소 배정, 엑셀 파서) |
-| `.github/workflows` | CI 워크플로(`ci.yml`) 및 프로덕션 사이트 배포(`deploy.yml`, GitHub Actions OIDC) |
+| `tools/map-tiles` | 한국 지도 파일(PMTiles)·지도 글꼴·sprite 만들기와 올리기 (`map-tiles.yml`이 실행) |
+| `.github/workflows` | CI 워크플로(`ci.yml`), 프로덕션 사이트 배포(`deploy.yml`), 한국 지도 파일 만들기(`map-tiles.yml`, 수동 실행) — 배포 두 가지는 GitHub Actions OIDC |
 
 ## 로컬 실행 및 테스트
 
