@@ -61,7 +61,7 @@ export const RETRY_LIMITS = {
 // - 알림 발송 실패 경보 1개: 1개 (대기열 메시지 수)
 // - 로그인 반복 요청 경보(LoginAbuse, D17-4): 5개 (풀 2 × [시도 1 + 성공 1] + 계정 복구 1) → 무료 초과 5개 × $0.10 ≈ 월 $0.50
 // - 날씨 수집 계속 실패(WeatherFailing, BRD-181): 1개 (Errors) → 무료 초과 6개 × $0.10 ≈ 월 $0.60
-// - 운영 API 오류 급증(OpsApiErrors, BRD-157·D17-7): 2개 (Url5XXCount 1 + AuthDenied 로그 지표 1) → 무료 초과 8개 × $0.10 ≈ 월 $0.80 (이번 경보 몫 +$0.20)
+// - 운영 API 오류 급증(OpsApiErrors, BRD-157·D17-7): 2개 (Url5xxCount 1 + AuthDenied 로그 지표 1) → 무료 초과 8개 × $0.10 ≈ 월 $0.80 (이번 경보 몫 +$0.20)
 // 경보 리소스 자체의 개수 상한은 13개로 유지
 export const MAX_ALARMS = 13;
 
@@ -80,7 +80,7 @@ export const LOGIN_ABUSE_ALARM = {
 } as const;
 
 // 운영 API 5xx·권한 거부(401·403) 급증 경보 기준(D17-7, 출시 초기 운영자 소수 기준). 5분 동안 둘 중 하나라도 넘으면 알림
-// - 5xx: Lambda 함수 URL Url5XXCount (Sum, 5분)
+// - 5xx: Lambda 함수 URL Url5xxCount (Sum, 5분)
 // - 권한 거부: 운영 API 로그 지표 필터(ops_auth_denied 이벤트, 401·403만 수집, Sum, 5분)
 // 기본값(안 1): 5xx 3회 또는 권한 거부 10회 (5분 구간). 보고에 '내 확인 필요' 표시
 // 대안(안 2): 5xx 5회 또는 권한 거부 20회 (5분 구간).
