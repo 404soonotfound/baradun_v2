@@ -573,7 +573,7 @@ function WindAhead({
           hours={cells.map((cell) =>
             t("detail.weather.hour", { hour: cell.hour }),
           )}
-          fit
+          columns={WIND_CELLS}
         />
       </span>
     </PictureBox>
