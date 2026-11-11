@@ -1,18 +1,21 @@
 import "maplibre-gl/dist/maplibre-gl.css";
 
 import * as maplibregl from "maplibre-gl";
+import { Protocol } from "pmtiles";
 
 import type { Locale } from "@/lib/i18n";
 import type { ResolvedTheme } from "@/lib/theme";
 import { FIT_OPTIONS, MAX_BOUNDS, type LngLatBox } from "./bounds";
 import { createTileErrorCounter } from "./map-load";
-import { buildMapStyle, TILE_SOURCE_ID, tileModeFor } from "./style";
+import { buildMapStyle, TILE_SOURCE_ID } from "./style";
 
 // 지도 엔진 (BRD-65). 이 파일은 지도가 화면에 보일 때만 import()로 불러옴(첫 화면 용량에 넣지 않음)
 // MapLibre GL JS 6: 작업자(worker)는 별도 파일이라 public/vendor에 복사해 둔 것을 씀(scripts/copy-map-worker.mjs)
 
 // 이 시간 안에 바다가 그려지지 않으면 실패로 봄. 404처럼 MapLibre가 오류를 내지 않는 실패도 여기서 잡힘
 const FIRST_TILE_TIMEOUT_MS = 15_000;
+
+let protocolAdded = false;
 
 export type MapHandle = {
   map: maplibregl.Map;
@@ -45,13 +48,19 @@ export function createMap(options: CreateMapOptions): MapHandle | null {
     ).href,
   );
 
-  const tiles = tileModeFor(process.env.NODE_ENV);
+  // 지도 파일(PMTiles)은 범위 요청으로 필요한 타일만 받음. 등록은 페이지당 한 번
+  if (!protocolAdded) {
+    maplibregl.addProtocol("pmtiles", new Protocol().tile);
+    protocolAdded = true;
+  }
+  // 지도 판 파일은 화면과 같은 출처(운영 CloudFront)의 map/<판>/. 개발 서버에는 map/이 없어 실패 화면이 보임
+  const origin = window.location.origin;
   let theme = options.theme;
   let map: maplibregl.Map;
   try {
     map = new maplibregl.Map({
       container: options.container,
-      style: buildMapStyle({ locale: options.locale, tiles, theme }),
+      style: buildMapStyle({ locale: options.locale, origin, theme }),
       bounds: options.bounds,
       fitBoundsOptions: FIT_OPTIONS,
       maxBounds: MAX_BOUNDS,
@@ -128,7 +137,7 @@ export function createMap(options: CreateMapOptions): MapHandle | null {
     setTheme: (next) => {
       if (next === theme) return;
       theme = next;
-      map.setStyle(buildMapStyle({ locale: options.locale, tiles, theme }));
+      map.setStyle(buildMapStyle({ locale: options.locale, origin, theme }));
     },
     destroy: () => {
       window.clearTimeout(timer);

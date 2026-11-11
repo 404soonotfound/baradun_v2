@@ -39,6 +39,7 @@
     "maplibre-gl": "6.16.0",
     "next": "16.4.2",
     "next-intl": "^4.14.9",
+    "pmtiles": "4.5.0",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "tailwind-merge": "^3.7.0"

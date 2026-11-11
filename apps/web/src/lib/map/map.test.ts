@@ -8,13 +8,7 @@ import {
   TILE_ERROR_LIMIT,
   type MapLoad,
 } from "./map-load";
-import {
-  buildMapStyle,
-  OPENFREEMAP_TILEJSON,
-  PINNED_TILES_VERSION,
-  TILE_SOURCE_ID,
-  tileModeFor,
-} from "./style";
+import { buildMapStyle, MAP_PATH, MAP_VERSION, TILE_SOURCE_ID } from "./style";
 import tokens from "@baradun/design-tokens/tokens.json";
 import darkStyle from "./style-dark.json";
 import lightStyle from "./style-light.json";
@@ -29,47 +23,47 @@ function labelFields(style: ReturnType<typeof buildMapStyle>) {
   );
 }
 
-// 고정 판 이름은 OpenFreeMap 판 형식(날짜_시각_pt)이어야 함. 주소 시험은 같은 상수로 기대값을 만들어
-// 빈 값·오타·'latest'를 잡지 못하므로 형식을 따로 확인함(실제로 남아 있는지는 check:map이 확인)
-it("고정 타일 판 이름은 YYYYMMDD_HHMMSS_pt 형식이다", () => {
-  expect(PINNED_TILES_VERSION).toMatch(/^\d{8}_\d{6}_pt$/);
+// 지도 판 이름은 map-tiles 워크플로가 만든 판 형식(YYYYMMDD-HHMM, UTC)이어야 함. 주소 시험은 같은 상수로
+// 기대값을 만들어 빈 값·오타를 잡지 못하므로 형식을 따로 확인함(실제로 올라가 있는지는 CI map-files가 확인)
+it("지도 판 이름은 YYYYMMDD-HHMM 형식이다", () => {
+  expect(MAP_VERSION).toMatch(/^\d{8}-\d{4}$/);
 });
 
-describe.each(["light", "dark"] as const)("buildMapStyle(%s)", (theme) => {
-  it("운영(pinned)은 검증한 타일 판 주소로 고정하고 TileJSON(최신)을 부르지 않는다", () => {
-    const style = buildMapStyle({ locale: "ko", tiles: "pinned", theme });
-    const source = style.sources[TILE_SOURCE_ID];
-    expect(source).toEqual({
-      type: "vector",
-      tiles: [
-        `https://tiles.openfreemap.org/planet/${PINNED_TILES_VERSION}/{z}/{x}/{y}.pbf`,
-      ],
-      minzoom: 0,
-      maxzoom: 14,
-    });
-    expect(JSON.stringify(style)).not.toContain(`"${OPENFREEMAP_TILEJSON}"`);
-  });
+const ORIGIN = "https://site.example";
 
-  it("개발(latest)은 최신 TileJSON을 쓴다", () => {
-    const style = buildMapStyle({ locale: "ko", tiles: "latest", theme });
+describe.each(["light", "dark"] as const)("buildMapStyle(%s)", (theme) => {
+  it("타일·sprite·글꼴을 같은 출처의 지도 판 폴더에서 받는다(D19-1)", () => {
+    const style = buildMapStyle({ locale: "ko", origin: ORIGIN, theme });
+    expect(Object.keys(style.sources)).toEqual([TILE_SOURCE_ID]);
     expect(style.sources[TILE_SOURCE_ID]).toEqual({
       type: "vector",
-      url: OPENFREEMAP_TILEJSON,
+      url: `pmtiles://${ORIGIN}/map/${MAP_VERSION}/korea.pmtiles`,
     });
+    expect(style.sprite).toBe(`${ORIGIN}${MAP_PATH}/sprites/ofm`);
+    expect(style.glyphs).toBe(
+      `${ORIGIN}${MAP_PATH}/fonts/{fontstack}/{range}.pbf`,
+    );
   });
 
-  it("타일 출처는 OpenFreeMap 하나뿐이다(다른 지도 서버로 요청하지 않음)", () => {
-    const style = buildMapStyle({ locale: "ko", tiles: "pinned", theme });
-    expect(Object.keys(style.sources)).toEqual([TILE_SOURCE_ID]);
-    expect(style.glyphs).toMatch(/^https:\/\/tiles\.openfreemap\.org\//);
-    expect(String(style.sprite)).toMatch(
-      /^https:\/\/tiles\.openfreemap\.org\//,
-    );
+  it("출처 끝의 /는 한 번만 이어 붙인다", () => {
+    const style = buildMapStyle({ locale: "ko", origin: `${ORIGIN}/`, theme });
+    expect(style.sprite).toBe(`${ORIGIN}${MAP_PATH}/sprites/ofm`);
+  });
+
+  it("스타일에 외부 지도 서버 주소가 없다(받는 주소는 모두 지도 판 폴더)", () => {
+    // metadata의 포크 출처 기록은 받는 주소가 아니라 뺌
+    const style = { ...buildMapStyle({ locale: "ko", origin: ORIGIN, theme }) };
+    delete style.metadata;
+    const urls = JSON.stringify(style).match(/https?:\/\/[^"]+/g) ?? [];
+    expect(urls.length).toBeGreaterThan(0);
+    for (const url of urls)
+      expect(url.startsWith(`${ORIGIN}${MAP_PATH}/`)).toBe(true);
+    expect(JSON.stringify(style)).not.toMatch(/openfreemap/i);
   });
 
   it("한국어 라벨은 name:ko → name 순서", () => {
     const fields = labelFields(
-      buildMapStyle({ locale: "ko", tiles: "pinned", theme }),
+      buildMapStyle({ locale: "ko", origin: ORIGIN, theme }),
     );
     expect(fields.length).toBeGreaterThan(0);
     for (const field of fields) {
@@ -79,7 +73,7 @@ describe.each(["light", "dark"] as const)("buildMapStyle(%s)", (theme) => {
 
   it("영어 라벨은 name:en → name:latin → name 순서", () => {
     const fields = labelFields(
-      buildMapStyle({ locale: "en", tiles: "pinned", theme }),
+      buildMapStyle({ locale: "en", origin: ORIGIN, theme }),
     );
     for (const field of fields) {
       expect(field).toBe(
@@ -91,7 +85,7 @@ describe.each(["light", "dark"] as const)("buildMapStyle(%s)", (theme) => {
   it("도로 번호 표지·작은 도로 이름·공항 아이콘 레이어는 없다(해변 마커와 겹치지 않게)", () => {
     const ids = buildMapStyle({
       locale: "ko",
-      tiles: "pinned",
+      origin: ORIGIN,
       theme,
     }).layers.map((layer) => layer.id);
     for (const removed of [
@@ -106,7 +100,7 @@ describe.each(["light", "dark"] as const)("buildMapStyle(%s)", (theme) => {
 
   it("원본 스타일 JSON을 고치지 않는다", () => {
     const before = JSON.stringify([lightStyle, darkStyle]);
-    buildMapStyle({ locale: "en", tiles: "pinned", theme });
+    buildMapStyle({ locale: "en", origin: ORIGIN, theme });
     expect(JSON.stringify([lightStyle, darkStyle])).toBe(before);
   });
 });
@@ -144,8 +138,11 @@ function paintColor(
 describe("style-dark.json", () => {
   it("라이트와 레이어 순서·필터·글자 설정·출처가 같고 색만 다르다", () => {
     expect(darkStyle.sources).toEqual(lightStyle.sources);
-    expect(darkStyle.glyphs).toBe(lightStyle.glyphs);
-    expect(darkStyle.sprite).toBe(lightStyle.sprite);
+    // 타일·sprite·글꼴 주소는 JSON에 두지 않음(buildMapStyle이 지도 판 주소로 채움)
+    for (const style of [lightStyle, darkStyle]) {
+      expect(style).not.toHaveProperty("glyphs");
+      expect(style).not.toHaveProperty("sprite");
+    }
     expect(darkStyle.layers.map(withoutColors)).toEqual(
       lightStyle.layers.map(withoutColors),
     );
@@ -245,15 +242,6 @@ describe("style-dark.json", () => {
       paintColor(darkStyle, "water", "fill-color"),
     );
     expect(dark).toBeGreaterThanOrEqual(light - 0.01);
-  });
-});
-
-describe("tileModeFor", () => {
-  it("production만 고정 판, 그 밖(개발·없음)은 최신", () => {
-    expect(tileModeFor("production")).toBe("pinned");
-    expect(tileModeFor("development")).toBe("latest");
-    expect(tileModeFor("test")).toBe("latest");
-    expect(tileModeFor(undefined)).toBe("latest");
   });
 });
 
