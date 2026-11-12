@@ -32,7 +32,7 @@ import type { OperatorAuth } from "./operator-auth";
 //   추가 전용은 Put 권한만으로는 성립하지 않음 → 코드가 새 키에만 씀(attribute_not_exists)·업무 변경과 같은 트랜잭션
 //   Ops Query는 감사 키(월 파티션)·공지 파티션·수집 실행 기록(BRD-149, 수집기별 파티션)·게시 요약(BRD-187)에만 허용
 // - CloudWatch 경보(BRD-187): 이 스택 경보(스택 이름-*)의 설정·상태 변경 기록 읽기만. 구독(받는 주소)·바꾸기 권한 없음
-// - 해변 관리의 지금 표시 상태(BRD-150): 게시 버킷 data/ 아래 읽기(GetObject)만. 목록·쓰기·지우기 없음
+// - 해변 관리의 지금 표시 상태(BRD-150): 게시 버킷 data/ 아래 읽기(GetObject)와 data/ 접두어 목록만. 쓰기·지우기 없음
 //   publisher가 게시한 manifest → status.json을 그대로 돌려줌(다시 계산하지 않음, G1)
 // - 토큰 검증 공개 키(JWKS)는 Cognito 공개 주소에서 받음(키·비밀값 없음)
 
@@ -41,7 +41,7 @@ export interface OpsApiProps {
   // 문의 처리 상태·메모(BRD-153). 문의 항목 읽기·바꾸기와 상태 GSI 조회만
   readonly inquiryTable: dynamodb.ITable;
   readonly auth: OperatorAuth;
-  // 게시 버킷(publisher와 같은 버킷). data/ 아래 읽기만(BRD-150)
+  // 게시 버킷(publisher와 같은 버킷). data/ 아래 읽기·목록만(BRD-150)
   readonly snapshotBucket: s3.IBucket;
 }
 
@@ -134,12 +134,20 @@ export class OpsApi extends Construct {
         ),
       }),
     );
-    // 해변 관리 지금 표시 상태(BRD-150): 게시본 data/ 읽기만. ListBucket이 없어 없는 파일은 403이고
-    // S3SnapshotStore의 목록 확인(ListObjectsV2)도 거부됨 → 이유는 read_failed로 남고 화면은 '확인 못 함'
+    // 해변 관리 지금 표시 상태(BRD-150): 게시본 data/ 읽기만
     this.role.addToPolicy(
       new iam.PolicyStatement({
         actions: ["s3:GetObject"],
         resources: [props.snapshotBucket.arnForObjects(`${DATA_PREFIX}*`)],
+      }),
+    );
+    // 없는 파일에 S3가 403을 줄 때 S3SnapshotStore가 목록으로 정말 없는지 확인함(publisher와 같은 방식)
+    // → 첫 게시 전 manifest_missing·status_missing을 read_failed(권한·장애)와 구분. 목록도 data/ 접두어만(data/는 CloudFront로 공개된 경로)
+    this.role.addToPolicy(
+      new iam.PolicyStatement({
+        actions: ["s3:ListBucket"],
+        resources: [props.snapshotBucket.bucketArn],
+        conditions: { StringLike: { "s3:prefix": [`${DATA_PREFIX}*`] } },
       }),
     );
     // 문의: 상세 읽기·처리 상태 바꾸기(트랜잭션 Update)·목록 GSI 조회. 만들기·지우기·Scan은 없음
