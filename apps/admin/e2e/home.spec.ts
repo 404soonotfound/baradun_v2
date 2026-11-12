@@ -73,6 +73,19 @@ const AUDIT_ITEM = {
   requestId: "req-00000001",
 };
 
+// 데모 계정의 조회 기록: 변경이 아니라 최근 변경에 나오지 않아야 함
+const SAMPLE_READ = {
+  ...AUDIT_ITEM,
+  at: "2026-11-11T02:40:00Z",
+  actorSub: "sub-demo",
+  actorKind: "sample",
+  role: "sample",
+  action: "sample.read",
+  target: { kind: "collection", id: "collection" },
+  targetLabel: undefined,
+  requestId: "req-00000002",
+};
+
 type Reply = { status: number; body: unknown };
 const ok = (body: unknown): Reply => ({ status: 200, body });
 const fail: Reply = {
@@ -109,7 +122,7 @@ async function mockHome(
     [
       /\/ops\/audit(\?.*)?$/,
       replies.audit ??
-        ok({ filter: {}, items: [AUDIT_ITEM], nextCursor: null }),
+        ok({ filter: {}, items: [SAMPLE_READ, AUDIT_ITEM], nextCursor: null }),
     ],
   ];
   for (const [pattern, reply] of routes) {
@@ -177,6 +190,13 @@ test("모두 정상: 판단 출처 정상 한 줄, 요약 카드, 할 일 없음
   const recent = page.getByRole("region", { name: "최근 변경" });
   await expect(recent.getByText("정기 점검 안내")).toBeVisible();
   await expect(recent.getByText("11/11 11:30")).toBeVisible();
+  // 변경 이력 화면과 같은 종류·요약 표시, 조회 기록은 뺌
+  await expect(
+    recent.getByRole("link", { name: "정기 점검 안내" }),
+  ).toHaveAttribute("href", "/notices/?id=n1");
+  await expect(recent.getByText("새 공지")).toBeVisible();
+  await expect(recent.getByRole("listitem")).toHaveCount(1);
+  await expect(recent.getByText(/sample\.read|조회/)).toHaveCount(0);
   await expectNoA11yViolations(page);
 });
 

@@ -253,12 +253,10 @@ export async function mockOps(
   return calls;
 }
 
-// 운영 홈이 요약 읽기를 끝낼 때까지 기다림('할 일' 제목은 읽기가 끝나야 보임)
+// 운영 홈이 요약 칸을 모두 받을 때까지 기다림('기준' 시각 줄은 모든 칸을 받은 뒤에만 보임)
 // 로그인한 뒤에 가짜 응답을 거는 시험이 홈 요청과 섞이지 않게 함
 export async function expectHomeLoaded(page: Page) {
-  await expect(
-    page.getByRole("heading", { name: "할 일", level: 2 }),
-  ).toBeVisible();
+  await expect(page.getByText(/기준 · 화면이 보이는 동안/)).toBeVisible();
 }
 
 export const ME_OK = {
