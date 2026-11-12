@@ -134,8 +134,14 @@ function event(
   body?: unknown,
   key: string | null = newKey(),
 ): APIGatewayProxyEventV2 {
+  const [rawPath, query] = path.split("?");
   return {
-    rawPath: path,
+    rawPath,
+    ...(query
+      ? {
+          queryStringParameters: Object.fromEntries(new URLSearchParams(query)),
+        }
+      : {}),
     headers: {
       [ACCESS_TOKEN_HEADER]: "token",
       ...(body !== undefined ? { "content-type": "application/json" } : {}),
@@ -1094,5 +1100,144 @@ describe("다시 적용 (되돌림 풀기)", () => {
     expect(
       table.items.get(table.id("Ops", { pk: NOTICE_PK, sk: NOTICE_A.id })),
     ).toMatchObject({ version: 2 });
+  });
+});
+
+describe("되돌리기 미리보기 (GET /ops/publish/rollback-preview)", () => {
+  const { id: _a, ...contentA } = NOTICE_A;
+  const V = "20261112T050000Z";
+
+  it("고른 게시본 때 공지와 지금 노출본을 견줘 돌아감·빠짐·다시 실림을 준다", async () => {
+    const table = new FakeTable();
+    // A: 그 뒤 문구가 바뀜 → restore
+    const editedA = { ...contentA, title: { ko: "공사 연장", en: "Extended" } };
+    put(table, noticeItem(NOTICE_A, { draft: editedA, live: editedA }));
+    // B: 그 뒤 새로 노출 → remove
+    const B = {
+      ...NOTICE_A,
+      id: "n-bbbbbbbbbbbb",
+      title: { ko: "새 공지", en: "New" },
+    };
+    put(table, noticeItem(B));
+    // C: 그때 있었고 지금은 지움 → revive
+    const C = {
+      ...NOTICE_A,
+      id: "n-cccccccccccc",
+      title: { ko: "지운 공지", en: "Deleted" },
+    };
+    put(table, noticeItem(C, { deletedAt: "2026-11-12T05:30:00Z" }));
+    put(table, {
+      pk: "publish#notices",
+      sk: V,
+      notices: [{ id: NOTICE_A.id, ...contentA }, C],
+    });
+    const result = await handleOps(
+      event("GET", `/ops/publish/rollback-preview?version=${V}`),
+      deps("viewer", table),
+    );
+    expect(result.statusCode).toBe(200);
+    expect(parse(result)).toEqual({
+      available: true,
+      version: V,
+      items: [
+        { id: NOTICE_A.id, change: "restore", title: "공사 연장" },
+        { id: B.id, change: "remove", title: "새 공지" },
+        { id: C.id, change: "revive", title: "지운 공지" },
+      ],
+    });
+  });
+
+  it("공지 기록이 없는 게시본은 available false(되돌릴 수 없음)", async () => {
+    const table = new FakeTable();
+    const result = parse(
+      await handleOps(
+        event("GET", `/ops/publish/rollback-preview?version=${V}`),
+        deps("viewer", table),
+      ),
+    );
+    expect(result).toEqual({ available: false, version: V });
+  });
+
+  it("버전 형식이 틀리면 400, 데모 계정은 403", async () => {
+    const table = new FakeTable();
+    const bad = await handleOps(
+      event("GET", "/ops/publish/rollback-preview?version=2026-11-12"),
+      deps("viewer", table),
+    );
+    expect(bad.statusCode).toBe(400);
+    const sample = await handleOps(
+      event("GET", `/ops/publish/rollback-preview?version=${V}`),
+      deps("sample", table),
+    );
+    expect(sample.statusCode).toBe(403);
+  });
+});
+
+describe("게시 변경 미리보기 (GET /ops/publish/preview)", () => {
+  it("publisher가 계산한 미리보기를 그대로 준다(운영 API는 분류하지 않음)", async () => {
+    const table = new FakeTable();
+    const publisher = new FakePublisher();
+    const preview = {
+      status: "ready",
+      at: "2026-11-12T06:00:00Z",
+      current: { version: "20261112T054500Z", counts: null, readable: true },
+      next: { counts: { clear: 1, unavailable: 0, undetermined: 0 } },
+      changed: [],
+      changedCount: 0,
+      checks: { beachIds: null, expected: 1, contractErrors: 0 },
+    };
+    publisher.previewResult = preview;
+    const result = await handleOps(
+      event("GET", "/ops/publish/preview"),
+      deps("viewer", table, { publisher }),
+    );
+    expect(result.statusCode).toBe(200);
+    expect(parse(result)).toEqual({ ok: true, preview });
+    // 쓰기 없음
+    expect(table.transactions).toBe(0);
+    expect(publisher.events).toEqual([]);
+  });
+
+  it("시간 초과·publisher 오류·모양이 틀린 응답은 ok false('변경 없음'으로 보이지 않게)", async () => {
+    const table = new FakeTable();
+    const publisher = new FakePublisher();
+    const cases: [unknown, string][] = [
+      [
+        () => {
+          const error = new Error("aborted");
+          error.name = "AbortError";
+          throw error;
+        },
+        "timeout",
+      ],
+      [
+        () => {
+          throw new Error("FunctionError");
+        },
+        "failed",
+      ],
+      [{ status: "weird" }, "failed"],
+    ];
+    for (const [answer, reason] of cases) {
+      publisher.previewResult = answer;
+      const result = parse(
+        await handleOps(
+          event("GET", "/ops/publish/preview"),
+          deps("viewer", table, { publisher }),
+        ),
+      );
+      expect(result).toEqual({ ok: false, reason });
+    }
+  });
+
+  it("데모 계정은 403", async () => {
+    const table = new FakeTable();
+    const publisher = new FakePublisher();
+    const result = await handleOps(
+      event("GET", "/ops/publish/preview"),
+      deps("sample", table, { publisher }),
+    );
+    expect(result.statusCode).toBe(403);
+    expect(publisher.previews).toBe(0);
   });
 });
