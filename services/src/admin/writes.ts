@@ -19,6 +19,9 @@ import { IDEMPOTENCY_KEY, IDEMPOTENCY_TTL_SECONDS } from "./policy";
 //   ① 실패 → 같은 키가 이미 쓰임: 해시·대상·운영자가 같으면 앞 결과를 그대로 돌려줌(재전송), 다르면 409
 //   ② 실패 → 다른 사람이 먼저 바꿈(또는 항목이 없거나 보관 기한 지남): 409(덮어쓰지 않음)
 // 동시에 같은 키로 두 번 보내도 ①의 조건 때문에 한 번만 적용됨
+//   ④ 관련 쓰기(related, 선택): 업무 항목과 함께 바뀌어야 하는 다른 운영 항목(admin# 키만)
+//      예: 게시 작업 기록 만들기(#331), 공지를 노출·끝낼 때 되돌림 포인터에서 그 공지 빼기
+//      ④ 실패 → 관련 항목이 그사이 바뀜: 409(reason related). 아무것도 쓰이지 않음
 //
 // 쓸 수 있는 대상은 두 가지뿐
 // - ops: Ops 테이블의 운영 API 키(admin#…). 게시 잠금·슬롯·게시 버전·샘플 설정·멱등 기록은 안 됨
@@ -52,14 +55,30 @@ export interface VersionedWrite {
   readonly actorSub: string;
   // 변경 이력. 운영자는 actorSub와 같아야 함
   readonly audit: AuditEntry;
+  // 같은 트랜잭션에 넣는 관련 쓰기(④). Ops admin# 키만
+  readonly related?: readonly RelatedWrite[];
 }
+
+// put: 새 항목(아직 없을 때만) · update: 읽은 version이 그대로일 때만 바꾸고 version + 1
+export type RelatedWrite =
+  | {
+      readonly kind: "put";
+      readonly key: OpsKey;
+      readonly item: Readonly<Record<string, unknown>>;
+    }
+  | {
+      readonly kind: "update";
+      readonly key: OpsKey;
+      readonly expectedVersion: number;
+      readonly set: Readonly<Record<string, unknown>>;
+    };
 
 export type WriteResult =
   | { readonly status: "applied"; readonly version: number }
   | { readonly status: "replayed"; readonly version: number }
   | {
       readonly status: "conflict";
-      readonly reason: "version" | "idempotency_mismatch";
+      readonly reason: "version" | "idempotency_mismatch" | "related";
     };
 
 // 이 함수가 직접 쓰는 속성. 호출자가 set에 넣으면 같은 경로를 두 번 SET하거나 수정자 기록을 덮어씀
@@ -191,6 +210,9 @@ export async function versionedWrite(
     write.expectedVersion,
     now,
   );
+  const related = (write.related ?? []).map((one) =>
+    relatedItem(one, tables.ops, write.actorSub, now),
+  );
 
   const nextVersion = write.expectedVersion + 1;
   const names: Record<string, string> = {
@@ -255,6 +277,7 @@ export async function versionedWrite(
               ConditionExpression: "attribute_not_exists(pk)",
             },
           },
+          ...related,
         ],
       }),
     );
@@ -268,10 +291,85 @@ export async function versionedWrite(
     if (codes[1] === "ConditionalCheckFailed") {
       return { status: "conflict", reason: "version" };
     }
+    if (codes.slice(3).includes("ConditionalCheckFailed")) {
+      return { status: "conflict", reason: "related" };
+    }
     // ③ 실패(같은 감사 키가 이미 있음)는 일어나면 안 되는 일이라 그대로 던짐(500)
     // TransactionConflict 등(동시 트랜잭션과 겹침)은 결과를 모르므로 그대로 던짐 → 화면이 같은 키로 다시 확인
     throw error;
   }
+}
+
+// 관련 쓰기 한 건을 트랜잭션 품목으로. 업무 항목과 같은 규칙(admin# 키만·예약 속성 금지·값 없는 속성 금지)
+function relatedItem(
+  write: RelatedWrite,
+  opsTable: string,
+  actorSub: string,
+  now: Date,
+): Record<string, unknown> {
+  if (!isAdminKey(write.key)) {
+    throw new Error(`운영 API 범위 밖 키: ${write.key.pk}`);
+  }
+  const fields = Object.keys(write.kind === "put" ? write.item : write.set);
+  const values = write.kind === "put" ? write.item : write.set;
+  if (
+    fields.length === 0 ||
+    fields.some(
+      (f) => RESERVED.has(f) && !(write.kind === "put" && f === "ttl"),
+    )
+  ) {
+    throw new Error("관련 쓰기에 바꿀 속성이 없거나 예약된 속성이 있음");
+  }
+  const missing = fields.filter((f) => values[f] === undefined);
+  if (missing.length > 0) {
+    throw new Error(`값이 없는 속성: ${missing.join(", ")}`);
+  }
+  if (write.kind === "put") {
+    return {
+      Put: {
+        TableName: opsTable,
+        Item: { ...write.item, pk: write.key.pk, sk: write.key.sk },
+        ConditionExpression: "attribute_not_exists(pk)",
+      },
+    };
+  }
+  if (
+    !Number.isSafeInteger(write.expectedVersion) ||
+    write.expectedVersion < 1
+  ) {
+    throw new Error("관련 쓰기 expectedVersion은 1 이상의 정수");
+  }
+  const names: Record<string, string> = {
+    "#version": "version",
+    "#updatedAt": "updatedAt",
+    "#updatedBy": "updatedBy",
+  };
+  const exprValues: Record<string, unknown> = {
+    ":expected": write.expectedVersion,
+    ":next": write.expectedVersion + 1,
+    ":updatedAt": now.toISOString(),
+    ":updatedBy": actorSub,
+  };
+  const assignments = [
+    "#version = :next",
+    "#updatedAt = :updatedAt",
+    "#updatedBy = :updatedBy",
+  ];
+  fields.forEach((field, i) => {
+    names[`#r${i}`] = field;
+    exprValues[`:r${i}`] = write.set[field];
+    assignments.push(`#r${i} = :r${i}`);
+  });
+  return {
+    Update: {
+      TableName: opsTable,
+      Key: { pk: write.key.pk, sk: write.key.sk },
+      UpdateExpression: `SET ${assignments.join(", ")}`,
+      ConditionExpression: "attribute_exists(pk) AND #version = :expected",
+      ExpressionAttributeNames: names,
+      ExpressionAttributeValues: exprValues,
+    },
+  };
 }
 
 type ReplayKey = Pick<

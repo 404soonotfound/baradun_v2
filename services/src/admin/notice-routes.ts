@@ -28,11 +28,13 @@ import {
   type NoticeRecord,
 } from "./notices";
 import { IDEMPOTENCY_KEY, IDEMPOTENCY_KEY_HEADER } from "./policy";
+import { holdReleaseFor } from "./publish-reads";
 import { sampleNotices } from "./sample-data";
 import {
   payloadHashOf,
   previousWrite,
   versionedWrite,
+  type RelatedWrite,
   type WriteResult,
 } from "./writes";
 
@@ -56,13 +58,14 @@ export async function listNoticesRoute(
   return json(200, { items: noticeViews(records, data.now()) }, ids);
 }
 
-interface WriteRequest {
+export interface WriteRequest {
   readonly key: string;
   readonly raw: string;
   readonly value: unknown;
 }
 
-function readWrite(
+// 쓰기 요청 공통: 멱등 키 헤더(UUID v4)와 JSON 본문
+export function readWrite(
   event: APIGatewayProxyEventV2,
   ids: RequestIds,
 ): { request: WriteRequest } | { error: Result } {
@@ -98,9 +101,12 @@ async function write(
       readonly before: NoticeContent | null;
       readonly after: NoticeContent | null;
     };
+    // 같은 트랜잭션에 넣을 관련 쓰기(되돌림 풀기). 있으면 바뀐 항목에 hold를 더함
+    readonly related?: readonly RelatedWrite[];
   },
   now: Date,
 ): Promise<Result> {
+  const related = options.related ?? [];
   const label = (
     options.notice.after ?? options.notice.before
   )?.title.ko.trim();
@@ -121,9 +127,11 @@ async function write(
         target: { kind: "notice", id: options.id },
         ...(label ? { targetLabel: label } : {}),
         notice: options.notice,
-        changes: options.changes,
+        changes:
+          related.length > 0 ? [...options.changes, "hold"] : options.changes,
         ids,
       },
+      ...(related.length > 0 ? { related } : {}),
     },
     now,
   );
@@ -300,6 +308,8 @@ export async function exposeNoticeRoute(
       action: "notice.expose",
       changes: noticeChanges(record.live, record.draft),
       notice: { before: record.live, after: record.draft },
+      // 되돌림 상태인 공지를 다시 노출하면 되돌림도 풂(운영자가 지금 문구를 확정함, 사용자 결정 2026-11-12)
+      related: await holdReleaseFor(data.client, data.opsTable, id),
     },
     now,
   );
@@ -353,6 +363,8 @@ export async function endNoticeRoute(
       set,
       action: "notice.end",
       changes: state === "scheduled" ? ["live"] : ["endsAt"],
+      // 되돌림 상태인 공지의 노출을 끝내면 되돌림도 풂(그때 노출본을 계속 싣지 않게, 사용자 결정 2026-11-12)
+      related: await holdReleaseFor(data.client, data.opsTable, id),
       notice: {
         before: record.live,
         after: state === "scheduled" ? null : { ...record.live!, endsAt },

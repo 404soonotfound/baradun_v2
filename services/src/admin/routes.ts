@@ -67,6 +67,21 @@ export const ROUTES: Readonly<
     GET: { roles: ["viewer", "editor", "publisher"], sample: false },
     PUT: { roles: ["editor", "publisher"], sample: false },
   },
+  // 데이터 게시(#331, ADM-PUB). 보기는 모든 역할, 지금 게시·되돌리기·다시 적용은 노출 변경만(아키텍처 18.2)
+  // 샘플은 받지 않음: 대기·되돌림 공지에 공개 전 문구가 있음(사용자 결정 2026-11-12)
+  // 판단 상태를 바꾸는 경로가 아님(게시는 publisher가 마지막 수집 사실로 분류함, G1)
+  "/ops/publish": {
+    GET: { roles: ["viewer", "editor", "publisher"], sample: false },
+  },
+  "/ops/publish/jobs": {
+    POST: { roles: ["publisher"], sample: false },
+  },
+  "/ops/publish/jobs/{id}": {
+    GET: { roles: ["viewer", "editor", "publisher"], sample: false },
+  },
+  "/ops/publish/holds/{id}/reapply": {
+    POST: { roles: ["publisher"], sample: false },
+  },
   // 변경 이력(BRD-155). 읽기 전용, 샘플은 받지 않음(D15-3)
   "/ops/audit": {
     GET: { roles: ["viewer", "editor", "publisher"], sample: false },
