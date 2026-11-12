@@ -548,7 +548,16 @@ node tools/republish/republish.mjs --function <PublisherFunctionName> --version 
 - `rollback_hold_not_restored`: 표시를 앞 값으로 되돌려 놓지 못함
 - `rollback_hold_unknown`: 표시를 쓴 뒤 게시됐는지 확인하지 못함(manifest를 읽지 못함 등)
 
-운영 화면의 되돌리기·'다시 적용'은 #331의 다음 PR에서 들어옵니다. 그 전에는 위 명령으로 부르고, 다시 적용은 `notice-hold`의 `notices`에서 그 공지를 지우고 `version`을 1 올리는 것과 같습니다.
+### 운영 API의 지금 게시·되돌리기·다시 적용 (#331)
+
+운영 API(`/ops/publish*`, 노출 변경 권한만)는 작업을 만들고 publisher를 비동기로 부릅니다. 게시 파일은 계속 publisher만 씁니다.
+
+- **작업:** `POST /ops/publish/jobs`(`{"action":"publish"}` 또는 `{"action":"rollback","version":"…"}`)는 작업 ID를 돌려주고(202) Ops `admin#publish#job` / `{작업 ID}`에 '대기'로 남깁니다. publisher가 '대기'일 때만 '실행'으로 맡고(두 번 와도 한 번만), 끝나면 '게시 완료'(`done`, 결과 `published`·`unchanged`)나 '실패'로 바꿉니다. 2분 안에 맡지 못한 작업은 실행하지 않고 실패(`expired`)로 바꿉니다. 상태는 `GET /ops/publish/jobs/{작업 ID}`로 봅니다.
+- **멱등:** 같은 `x-idempotency-key`·같은 내용으로 다시 보내면 새 작업 없이 앞 작업을 돌려줍니다(응답 시간 초과는 실패가 아님, D16-C4). 같은 키·다른 내용은 409입니다. 끝나지 않은 작업이 있으면 새 작업도 409(`busy`)입니다.
+- **작업 기록이 빠질 때:** 실행 기록(`publish#run`)과 게시 요약(`publish#summary`)에 작업 ID가 함께 남아, 작업 기록을 바꾸지 못한 게시도 작업 조회가 결과를 찾습니다. 찾지 못하면 실패로 단정하지 않고 `overdue`로 보여 줍니다.
+- **다시 적용:** `POST /ops/publish/holds/{공지 ID}/reapply`(`{"version": 포인터 version}`)가 `notice-hold`의 `notices`에서 그 공지를 빼고 `version`을 1 올립니다. 되돌림 상태인 공지를 운영자가 다시 노출하거나 노출을 끝내도 같은 트랜잭션에서 되돌림이 풀립니다.
+
+명령줄 되돌리기(위 도구)는 작업 없이 그대로 쓸 수 있습니다.
 
 ### 옛 게시 파일 다시 내보내기 (급할 때만)
 
