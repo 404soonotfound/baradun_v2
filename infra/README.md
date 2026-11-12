@@ -698,7 +698,7 @@ OPERATOR_USER_POOL_ID=<SampleUserPoolId> OPERATOR_CLIENT_ID=<SampleAdminWebClien
 - **허용표:** `services/src/admin/routes.ts`가 경로·method별 허용 역할의 원본입니다. 지금 경로는 `GET /ops/me`(역할·세션 끝 시각) 하나이고, 업무 경로는 각 이슈에서 더합니다. 판단 상태를 쓰는 경로는 두지 않습니다.
 - **쓰기:** `versionedWrite`가 version 조건부 쓰기 + 멱등 키 + 본문 해시를 한 트랜잭션으로 씁니다. 같은 키·같은 내용은 앞 결과, 같은 키·다른 내용이나 version 불일치는 409입니다. 운영 API 키는 모두 `admin#`으로 시작해 게시 잠금·슬롯·게시 버전 키와 겹치지 않습니다.
 - **응답:** 모두 `cache-control: no-store`. 오류 본문은 `{ error: { code, requestId: "req-xxxxxxxx", traceId } }`이고 문구는 관리자 앱이 정합니다.
-- **권한:** 역할은 Ops 테이블 `GetItem`·`PutItem`·`UpdateItem`, 감사 키 `Query`(아래 변경 이력), 문의 처리(아래), 자기 로그만 씁니다. 해변 관리의 지금 표시 상태(BRD-150)를 보여 주려고 사이트 버킷 `data/` 아래 `GetObject`만 가집니다(publisher가 게시한 manifest → status.json을 그대로 읽음, 목록·쓰기·지우기 없음). State 테이블 권한은 없습니다. 실행 정책·boundary는 바뀌지 않습니다(기존 `BaradunV2-*` 범위 안).
+- **권한:** 역할은 Ops 테이블 `GetItem`·`PutItem`·`UpdateItem`, 감사 키 `Query`(아래 변경 이력), 문의 처리(아래), 자기 로그만 씁니다. 해변 관리의 지금 표시 상태(BRD-150)를 보여 주려고 사이트 버킷 `data/` 아래 `GetObject`와 `data/` 접두어 조건의 `ListBucket`만 가집니다(publisher가 게시한 manifest → status.json을 그대로 읽음. 목록은 없는 파일에 S3가 403을 줄 때 정말 없는지 확인하는 데만 씀, 쓰기·지우기 없음). State 테이블 권한은 없습니다. 실행 정책·boundary는 바뀌지 않습니다(기존 `BaradunV2-*` 범위 안).
 
 ### 샘플 시연 허용 설정
 
