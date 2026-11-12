@@ -28,7 +28,7 @@ interface RawBeach {
 // 모양이 틀린 파일은 조용히 빼지 않고 빌드를 멈춤(이름이 빠지면 화면이 ID만 보여 줘서 알아채기 어려움)
 export function loadBeachNames(dir = DATA_DIR): Record<string, BeachName> {
   const names: Record<string, BeachName> = {};
-  for (const file of readdirSync(dir).filter((f) => /^b\d+\.json$/.test(f))) {
+  for (const file of readdirSync(dir).filter((f) => /^b\d{4}\.json$/.test(f))) {
     const raw = JSON.parse(
       readFileSync(path.join(dir, file), "utf8"),
     ) as RawBeach;
