@@ -202,8 +202,9 @@ export class MemoryOpsStore implements OpsStore {
     return true;
   }
 
-  async putPublishRun(run: PublishRun): Promise<void> {
-    this.lastRun = run;
+  async putPublishRun(run: PublishRun, _nowMs?: number): Promise<void> {
     if (run.result === "failed") this.failedRuns.push(run);
+    // 시작 시각이 더 늦은 실행만 마지막 실행으로 남김
+    if (this.lastRun === null || this.lastRun.at <= run.at) this.lastRun = run;
   }
 }

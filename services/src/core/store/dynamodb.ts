@@ -454,10 +454,16 @@ export class DynamoOpsStore implements OpsStore {
         }),
       );
     }
-    await this.client.send(
+    // 마지막 실행은 시작 시각이 더 늦은 쪽만 남김. 잠금 시간을 넘겨 늦게 끝난 옛 실행이 새 실행의 결과를 덮지 않게 함
+    // (조건이 맞지 않으면 쓰지 않을 뿐 오류가 아님)
+    await sendConditional(
+      this.client,
       new PutCommand({
         TableName: this.tableName,
         Item: { pk: PUBLISH_RUN_PK, sk: PUBLISH_RUN_LAST_SK, ...run },
+        ConditionExpression: "attribute_not_exists(#at) OR #at <= :at",
+        ExpressionAttributeNames: { "#at": "at" },
+        ExpressionAttributeValues: { ":at": run.at },
       }),
     );
   }

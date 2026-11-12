@@ -25,13 +25,36 @@ import { republishVersion } from "./republish";
 const NOW_MS = Date.parse(NOW);
 const V1 = snapshotVersion(NOW_MS);
 
+const notice = (id: string, overrides: Record<string, unknown> = {}) => ({
+  id,
+  kind: "general",
+  title: { ko: "공지", en: "Notice" },
+  body: { ko: "본문", en: "Body" },
+  startsAt: "2026-10-23T02:00:00Z",
+  endsAt: null,
+  ...overrides,
+});
+
 // V1: 특보 없음 → V2: 풍랑주의보 발효. 그 뒤 V1 파일을 다시 내보내는 상황
-async function setup(options: { failOn?: (path: string) => boolean } = {}) {
+// first·second: V1·V2를 게시할 때 운영 DB에 있던 공지 노출본
+async function setup(
+  options: {
+    failOn?: (path: string) => boolean;
+    first?: unknown[];
+    second?: unknown[];
+  } = {},
+) {
   const state = new MemoryStateStore();
   const ops = new MemoryOpsStore();
   const snapshots = new MemorySnapshotStore({ failOn: options.failOn });
   const lines: string[] = [];
   let nowMs = NOW_MS;
+  // 운영 DB의 공지 노출본. unreadable이면 읽기 실패
+  const db = { candidates: options.first ?? [], unreadable: false };
+  const notices = async () => {
+    if (db.unreadable) throw new Error("AccessDenied");
+    return db.candidates;
+  };
   const log = createLogger(
     () => [],
     (line) => lines.push(line),
@@ -39,6 +62,7 @@ async function setup(options: { failOn?: (path: string) => boolean } = {}) {
   const base = (owner = "run-1") => ({
     ops,
     snapshots,
+    notices,
     log,
     clock: () => nowMs,
     owner,
@@ -52,7 +76,6 @@ async function setup(options: { failOn?: (path: string) => boolean } = {}) {
       zones: ZONES,
       seasons: SEASONS,
       weatherAreas: WEATHER_AREAS,
-      notices: async () => [],
     });
   const advance = (ms: number) => {
     nowMs += ms;
@@ -61,6 +84,7 @@ async function setup(options: { failOn?: (path: string) => boolean } = {}) {
   await seedWarnings(state, [HEAVY_RAIN_ROW]);
   await seedReadings(state);
   await publish();
+  db.candidates = options.second ?? options.first ?? [];
   await seedWarnings(state, [WIND_WAVE_ROW], {
     confirmedAt: "2026-10-23T02:31:00Z",
   });
@@ -71,7 +95,7 @@ async function setup(options: { failOn?: (path: string) => boolean } = {}) {
   const body = (path: string) => snapshots.files.get(path)?.body;
   const events = () =>
     lines.map((l) => JSON.parse(l) as Record<string, unknown>);
-  return { ops, snapshots, base, advance, manifest, body, events, v2 };
+  return { ops, snapshots, db, base, advance, manifest, body, events, v2 };
 }
 
 describe("republishVersion (D20-4)", () => {
@@ -143,7 +167,7 @@ describe("republishVersion (D20-4)", () => {
     });
   });
 
-  it("게시 요약과 실행 결과에 다시 내보내기임을 남기고, 되돌리기 기준(공지 상태)은 남기지 않는다", async () => {
+  it("게시 요약과 실행 결과에 다시 내보내기임을 남긴다", async () => {
     const { ops, base, advance, v2 } = await setup();
     const v3 = advance(60_000);
     await republishVersion(base(), V1);
@@ -156,7 +180,8 @@ describe("republishVersion (D20-4)", () => {
       // 분류는 옛 파일에 적힌 그대로
       delayedBeachIds: ops.summaries.get(V1)!.delayedBeachIds,
     });
-    expect(ops.publishNotices.has(v3)).toBe(false);
+    // 공지 상태는 이번에 읽은 지금 상태(공지 없음)를 남김
+    expect(ops.publishNotices.get(v3)).toEqual([]);
     expect(ops.lastRun).toMatchObject({
       source: "republish",
       result: "published",
@@ -209,6 +234,28 @@ describe("republishVersion (D20-4)", () => {
       });
     },
   );
+
+  it("사본이 다른 버전 경로의 파일을 가리키면 파일 없음과 다른 사유로 멈춘다", async () => {
+    const { snapshots, base, advance, body, events } = await setup();
+    const before = body(MANIFEST_PATH);
+    const copyPath = `data/${V1}/manifest.json`;
+    const copy = JSON.parse(body(copyPath)!) as ManifestFile;
+    await snapshots.putFile(
+      copyPath,
+      JSON.stringify({
+        ...copy,
+        files: { ...copy.files, status: "/data/20261001T000000Z/status.json" },
+      }),
+      "x",
+    );
+    advance(60_000);
+    expect(await republishVersion(base(), V1)).toMatchObject({
+      status: "failed",
+      reason: "files_mismatch",
+    });
+    expect(body(MANIFEST_PATH)).toBe(before);
+    expect(events().at(-1)).toMatchObject({ reason: "files_mismatch" });
+  });
 
   it("다른 판단 정책으로 게시된 버전은 다시 내보내지 않는다(모든 화면이 판단불가가 되므로)", async () => {
     const { snapshots, base, advance, body } = await setup();
@@ -272,6 +319,77 @@ describe("republishVersion (D20-4)", () => {
     expect(await republishVersion(base(), V1)).toMatchObject({
       status: "failed",
       reason: "version_not_newer",
+    });
+  });
+
+  // 공지는 사본의 값이 아니라 지금 상태로 실음(사용자 결정 2026-11-12, PR #407 리뷰)
+  describe("공지", () => {
+    it("그 뒤 운영자가 끝낸 공지는 다시 나가지 않고, 지금 노출 중인 공지가 실린다", async () => {
+      const { ops, base, advance, manifest, body } = await setup({
+        first: [notice("n-old")],
+        // V1 뒤에 n-old 노출을 끝내고 n-new를 노출함
+        second: [
+          notice("n-old", { endsAt: "2026-10-23T02:31:00Z" }),
+          notice("n-new"),
+        ],
+      });
+      expect(body(`data/${V1}/manifest.json`)).toContain("n-old");
+      const v3 = advance(60_000);
+      expect(await republishVersion(base(), V1)).toMatchObject({
+        status: "published",
+        version: v3,
+      });
+      expect(manifest().notices).toEqual([notice("n-new")]);
+      // 특보·관측 파일은 옛 것 그대로
+      expect(body(`data/${v3}/status.json`)).toBe(
+        body(`data/${V1}/status.json`),
+      );
+      expect(ops.publishNotices.get(v3)).toEqual([notice("n-new")]);
+    });
+
+    it("끝 시각이 지난 공지가 실린 사본도 다시 내보낸다(그 공지는 싣지 않음)", async () => {
+      const ending = notice("n-ending", { endsAt: "2026-10-23T02:31:00Z" });
+      const { base, advance, manifest } = await setup({ first: [ending] });
+      advance(60_000);
+      expect(await republishVersion(base(), V1)).toMatchObject({
+        status: "published",
+      });
+      expect(manifest()).not.toHaveProperty("notices");
+    });
+
+    it("되돌림으로 표시한 공지는 다시 내보내도 표시대로 싣는다", async () => {
+      const { ops, base, advance, manifest } = await setup({
+        first: [notice("n-a"), notice("n-b")],
+      });
+      const held = {
+        target: V1,
+        at: "2026-10-23T02:32:00Z",
+        live: null,
+      };
+      await ops.putNoticeHold({ "n-b": held }, 0, held.at);
+      advance(60_000);
+      await republishVersion(base(), V1);
+      expect(manifest().notices).toEqual([notice("n-a")]);
+      // 포인터는 건드리지 않음
+      expect(ops.noticeHold).toEqual({ version: 1, notices: { "n-b": held } });
+    });
+
+    it("운영 DB를 읽지 못하면 지금 게시본의 공지를 이어 쓰고, 공지 상태는 남기지 않는다", async () => {
+      const { ops, db, base, advance, manifest, events } = await setup({
+        first: [notice("n-old")],
+        second: [notice("n-now")],
+      });
+      db.unreadable = true;
+      const v3 = advance(60_000);
+      expect(await republishVersion(base(), V1)).toMatchObject({
+        status: "published",
+      });
+      // 사본(V1)의 n-old가 아니라 지금 게시본(V2)의 n-now
+      expect(manifest().notices).toEqual([notice("n-now")]);
+      expect(ops.publishNotices.has(v3)).toBe(false);
+      expect(events().some((e) => e.event === "publish_notices_unread")).toBe(
+        true,
+      );
     });
   });
 });

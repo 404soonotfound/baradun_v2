@@ -891,11 +891,15 @@ describe("되돌리기 (D20-1~3)", () => {
   });
 
   it("특보·관측은 지금 수집 사실을 쓴다: 발효 특보가 되돌리기로 사라지지 않고 관측·확인 시각을 고치지 않는다(D20-3)", async () => {
-    const { state, snapshots, deps, advance } = await setup();
+    const box = { candidates: [notice("n-a")] as unknown[] };
+    const { state, snapshots, deps, advance } = await setup({
+      notices: async () => box.candidates,
+    });
     await publishSnapshot(deps());
     expect(status(snapshots, V1).beaches.b0001!.category).toBe("clear");
 
-    // 그 뒤 풍랑주의보가 발효되고 새 관측이 들어옴
+    // 그 뒤 공지 문구가 바뀌고, 풍랑주의보가 발효되고 새 관측이 들어옴
+    box.candidates = [notice("n-a", CHANGED)];
     const confirmedAt = "2026-10-23T02:31:00Z";
     const observedAt = "2026-10-23T02:30:30Z";
     await seedWarnings(state, [WIND_WAVE_ROW], { confirmedAt });
@@ -1123,6 +1127,80 @@ describe("되돌리기 (D20-1~3)", () => {
       version: v2,
     });
     expect(manifest()!.notices!.map((n) => n.id)).toEqual(["n-a", "n-new"]);
+  });
+
+  it("같은 되돌리기를 다시 부르면 새 버전을 만들지 않고 변경 없음으로 끝낸다", async () => {
+    const { ops, snapshots, deps, advance, manifest, v2 } =
+      await twoPublishes();
+    const v3 = advance(60_000);
+    await publishSnapshot(deps(), { rollbackTo: V1 });
+    const hold = structuredClone(ops.noticeHold);
+
+    advance(60_000);
+    expect(await publishSnapshot(deps(), { rollbackTo: V1 })).toEqual({
+      status: "unchanged",
+      version: v3,
+    });
+    expect(manifest()!.snapshotVersion).toBe(v3);
+    expect(await snapshots.listVersions()).toEqual([V1, v2, v3]);
+    // 포인터도 다시 쓰지 않음(되돌린 시각·version 그대로)
+    expect(ops.noticeHold).toEqual(hold);
+    expect(ops.lastRun).toMatchObject({
+      source: "rollback",
+      result: "unchanged",
+    });
+  });
+
+  it("포인터 쓰기가 실제로는 됐는데 응답만 실패하면 다시 읽어 앞 값으로 되돌려 놓는다", async () => {
+    const { ops, deps, advance, manifest, v2 } = await twoPublishes();
+    const put = ops.putNoticeHold.bind(ops);
+    let calls = 0;
+    ops.putNoticeHold = async (...args) => {
+      calls += 1;
+      const written = await put(...args);
+      if (calls === 1) throw new Error("TimeoutError");
+      return written;
+    };
+    advance(60_000);
+    expect(await publishSnapshot(deps(), { rollbackTo: V1 })).toMatchObject({
+      status: "failed",
+      reason: "exception:Error",
+    });
+    expect(manifest()!.snapshotVersion).toBe(v2);
+    // 게시되지 않았으므로 표시가 남지 않음(다음 자동 게시가 공지를 되돌리지 않음)
+    expect(ops.noticeHold!.notices).toEqual({});
+  });
+
+  it("게시됐는지 알 수 없게 끝난 되돌리기는 포인터를 그대로 두고 확인이 필요하다고 알린다", async () => {
+    const { ops, snapshots, deps, advance, events } = await twoPublishes();
+    // 포인터를 쓴 뒤부터 manifest를 읽지 못함(교체도, 그 뒤 확인도 실패)
+    let broken = false;
+    const put = ops.putNoticeHold.bind(ops);
+    ops.putNoticeHold = async (...args) => {
+      const written = await put(...args);
+      broken = true;
+      return written;
+    };
+    const getTagged = snapshots.getTaggedFile.bind(snapshots);
+    snapshots.getTaggedFile = async (path) => {
+      if (broken) throw new Error("ServiceUnavailable");
+      return getTagged(path);
+    };
+    const getFile = snapshots.getFile.bind(snapshots);
+    snapshots.getFile = async (path) => {
+      if (broken && path === MANIFEST_PATH) {
+        throw new Error("ServiceUnavailable");
+      }
+      return getFile(path);
+    };
+    advance(60_000);
+    expect(await publishSnapshot(deps(), { rollbackTo: V1 })).toMatchObject({
+      status: "failed",
+    });
+    expect(Object.keys(ops.noticeHold!.notices)).toEqual(["n-a", "n-new"]);
+    expect(events()).toContainEqual(
+      expect.objectContaining({ event: "rollback_hold_unknown", target: V1 }),
+    );
   });
 
   it("포인터를 앞 값으로 되돌려 놓지 못하면 오류로 알린다", async () => {
@@ -1372,13 +1450,38 @@ describe("게시 실행 결과 (D16-C2)", () => {
     await publishSnapshot({ ...deps(), source: "operator" });
     expect(ops.lastRun).toMatchObject({ source: "operator" });
     expect(ops.summaries.get(V1)).toMatchObject({ source: "operator" });
+    // 되돌릴 것이 없는 되돌리기는 변경 없음으로 남음
     advance(60_000);
     await publishSnapshot(deps(), { rollbackTo: V1 });
     expect(ops.lastRun).toMatchObject({
       source: "rollback",
       target: V1,
-      result: "published",
+      result: "unchanged",
     });
+  });
+
+  it("먼저 시작했지만 늦게 끝난 실행이 더 새 실행의 결과를 덮지 않는다", async () => {
+    const { ops } = await setup();
+    const newer = {
+      at: "2026-10-23T02:35:00Z",
+      source: "auto",
+      result: "published",
+      version: "20261023T023500Z",
+    } as const;
+    await ops.putPublishRun(newer, NOW_MS);
+    await ops.putPublishRun(
+      {
+        at: "2026-10-23T02:32:00Z",
+        source: "rollback",
+        result: "failed",
+        version: "20261023T023200Z",
+        reason: "version_not_newer",
+      },
+      NOW_MS,
+    );
+    expect(ops.lastRun).toEqual(newer);
+    // 실패한 실행 자체는 따로 남음
+    expect(ops.failedRuns).toHaveLength(1);
   });
 
   it("결과를 남기지 못해도 게시 결과는 그대로이고 경고만 남긴다", async () => {

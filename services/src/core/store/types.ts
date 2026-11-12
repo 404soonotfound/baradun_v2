@@ -116,7 +116,7 @@ export interface OpsStore {
     updatedAt: string, // UTC ISO
   ): Promise<boolean>;
 
-  // 게시 실행 결과 남기기(D16-C2). 마지막 실행은 덮어쓰고, 실패한 실행은 따로도 남김
+  // 게시 실행 결과 남기기(D16-C2). 마지막 실행은 시작 시각이 더 늦을 때만 덮어쓰고, 실패한 실행은 따로도 남김
   putPublishRun(run: PublishRun, nowMs: number): Promise<void>;
 }
 

@@ -220,6 +220,54 @@ export function noticeHoldFor(
   return held;
 }
 
+// 두 포인터가 같은 공지를 같은 노출본으로 되돌리는지(고른 게시본·되돌린 시각은 보지 않음)
+export function sameHeldNotices(
+  a: NoticeHold["notices"],
+  b: NoticeHold["notices"],
+): boolean {
+  const lives = (held: NoticeHold["notices"]) =>
+    JSON.stringify(
+      Object.keys(held)
+        .sort()
+        .map((id) => [id, held[id]!.live]),
+    );
+  return lives(a) === lives(b);
+}
+
+// 지금 공지 읽기: 운영 DB 노출본에 되돌림 포인터를 반영함. 자동 게시와 다시 내보내기가 같이 씀
+// - notices: 게시본에 실을 공지(시작한 것만) · state: 지금 공지 상태(끝나지 않은 노출본 전부). 모르면 null
+// - 운영 DB나 포인터를 읽지 못하면 지금 manifest의 공지를 이어서 씀(끝난 것은 뺌)
+//   공지를 읽지 못했다고 특보·관측 게시를 멈추지 않고, 노출 중인 점검 예고가 조용히 사라지지도 않게 함
+//   포인터를 읽지 못했을 때 운영 DB 노출본을 그대로 실으면 되돌린 공지가 다시 나감 → 그것도 못 읽은 것으로 봄
+export async function readCurrentNotices(
+  deps: Pick<PublishDeps, "ops" | "notices" | "log">,
+  current: ManifestFile | null,
+  nowMs: number,
+  version: string,
+): Promise<{ notices: Notice[]; state: Notice[] | null }> {
+  try {
+    const [candidates, hold] = await Promise.all([
+      deps.notices(),
+      deps.ops.getNoticeHold(),
+    ]);
+    const state = currentNotices(
+      applyNoticeHold(candidates, hold),
+      nowMs,
+      deps.log,
+    );
+    return { notices: started(state, nowMs), state };
+  } catch (error) {
+    deps.log("warn", "publish_notices_unread", {
+      version,
+      error: error instanceof Error ? error.name : typeof error,
+    });
+    return {
+      notices: publishableNotices(current?.notices ?? [], nowMs, deps.log),
+      state: null,
+    };
+  }
+}
+
 function manifestFor(
   version: string,
   generatedAt: string,
@@ -400,6 +448,66 @@ export async function recordPublishRun(
 
 // 이 실행 환경에서 마지막으로 쓴 관측소 표(저장소별). 같으면 다시 쓰지 않음
 const writtenStationTables = new WeakMap<OpsStore, string>();
+
+// manifest를 바꾼 뒤 남기는 기록 둘. 서로 기다릴 필요가 없어 함께 보냄(게시 잠금을 잡고 있는 시간을 줄임)
+// 어느 쪽이든 남기지 못해도 게시는 끝난 것 → 경고만
+// - 이 게시 때의 공지 상태(되돌리기 기준, D20-2). 모르는 게시(운영 DB를 읽지 못함)는 남기지 않음
+//   → 기록이 없는 버전으로는 되돌릴 수 없음
+// - 운영 화면용 게시 요약(BRD-187, 빠진 요약은 previous 사슬로 드러남)과 관측소 표
+export async function recordPublished(
+  deps: Pick<PublishDeps, "ops" | "log"> & { beaches?: readonly Beach[] },
+  published: {
+    version: string;
+    previous: string | null;
+    now: string;
+    startedMs: number;
+    status: Parameters<typeof buildPublishSummary>[0]["status"];
+    source: PublishSource;
+    target: string | undefined;
+    noticeState: readonly Notice[] | null;
+  },
+): Promise<void> {
+  const { ops, log } = deps;
+  const { version, now, startedMs } = published;
+  const warn = (event: string) => (error: unknown) =>
+    log("warn", event, {
+      version,
+      error: error instanceof Error ? error.name : typeof error,
+    });
+  const noticeState = published.noticeState;
+  await Promise.all([
+    noticeState === null
+      ? undefined
+      : ops
+          .putPublishNotices(version, noticeState, startedMs)
+          .catch(warn("publish_notices_not_recorded")),
+    (async () => {
+      await ops.putPublishSummary(
+        buildPublishSummary({
+          version,
+          previous: published.previous,
+          publishedAt: now,
+          beachCount: Object.keys(published.status).length,
+          status: published.status,
+          source: published.source,
+          ...(published.target !== undefined
+            ? { target: published.target }
+            : {}),
+        }),
+        startedMs,
+      );
+      // 관측소 표는 해변 파일에서만 나옴 → 이 실행 환경에서 처음이거나 바뀌었을 때만 씀(쓰기 용량 아낌)
+      // 해변 파일을 읽지 않는 실행(다시 내보내기)은 쓰지 않음
+      if (!deps.beaches) return;
+      const table = buildStationTable(deps.beaches);
+      const text = JSON.stringify(table);
+      if (writtenStationTables.get(ops) !== text) {
+        await ops.putStationTable(table, now);
+        writtenStationTables.set(ops, text);
+      }
+    })().catch(warn("publish_summary_not_recorded")),
+  ]);
+}
 
 // 로그에 남기는 ID 수 상한(해변 전체가 어긋나도 한 줄이 너무 길어지지 않게)
 const LOGGED_IDS = 20;
@@ -586,28 +694,9 @@ async function runPublish(
       };
       notices = started(noticeState, startedMs);
     } else {
-      // 운영 DB나 되돌림 포인터를 읽지 못하면 지금 manifest의 공지를 이어서 씀(끝난 것은 뺌)
-      // 공지를 읽지 못했다고 특보·관측 게시를 멈추지 않고, 노출 중인 점검 예고가 조용히 사라지지도 않게 함
-      // 포인터를 읽지 못했을 때 운영 DB 노출본을 그대로 실으면 되돌린 공지가 다시 나감 → 그것도 못 읽은 것으로 봄
-      try {
-        const [candidates, hold] = await Promise.all([
-          deps.notices(),
-          ops.getNoticeHold(),
-        ]);
-        noticeState = currentNotices(
-          applyNoticeHold(candidates, hold),
-          startedMs,
-          log,
-        );
-        notices = started(noticeState, startedMs);
-      } catch (error) {
-        log("warn", "publish_notices_unread", {
-          version,
-          error: error instanceof Error ? error.name : typeof error,
-        });
-        noticeState = null;
-        notices = publishableNotices(current?.notices ?? [], startedMs, log);
-      }
+      const read = await readCurrentNotices(deps, current, startedMs, version);
+      notices = read.notices;
+      noticeState = read.state;
     }
 
     // 날씨는 판단 파일과 따로 검사. 예외·계약 오류면 날씨만 빼고 알림(분류·특보 게시를 막지 않음)
@@ -649,9 +738,13 @@ async function runPublish(
     const bodies = Object.fromEntries(
       KEYS.map((key) => [key, JSON.stringify(snapshot[key])]),
     ) as Record<keyof Snapshot, string>;
-    // 되돌리기는 내용이 같아도 생략하지 않음: 새 버전으로 다시 게시하고 포인터를 남겨야 다음 자동 게시가 따름(D20-1)
+    // 되돌리기는 되돌릴 것이 있으면 내용이 같아 보여도 새 버전으로 게시함(포인터를 남겨야 다음 자동 게시가 따름, D20-1)
+    // 포인터도 게시 내용도 지금과 같을 때만 생략함(같은 되돌리기를 다시 부른 경우. 사용자 결정 2026-11-12)
+    const nothingToRollBack =
+      nextHold === null ||
+      sameHeldNotices(nextHold.notices, nextHold.previous?.notices ?? {});
     if (
-      rollbackTo === undefined &&
+      nothingToRollBack &&
       (await sameAsCurrent(snapshots, current, bodies, notices, weatherBody))
     ) {
       log("info", "publish_unchanged", { version: current!.snapshotVersion });
@@ -697,13 +790,32 @@ async function runPublish(
     // 읽은 뒤 포인터가 바뀌었으면('다시 적용'·다른 되돌리기) 덮지 않고 멈춤
     if (nextHold) {
       const expected = nextHold.previous?.version ?? 0;
-      if (!(await ops.putNoticeHold(nextHold.notices, expected, now))) {
-        return fail("hold_conflict", { target: rollbackTo });
-      }
-      holdToRestore = {
+      const restore = {
         notices: nextHold.previous?.notices ?? {},
         version: expected + 1,
       };
+      let written: boolean;
+      try {
+        written = await ops.putNoticeHold(nextHold.notices, expected, now);
+      } catch (error) {
+        // 실제로는 쓰였는데 응답만 실패했을 수 있음 → 다시 읽어 이 실행이 쓴 값이면 되돌려 놓을 대상으로 둠
+        // 다시 읽지도 못하면 포인터가 어느 쪽인지 모름 → 알림(그대로면 다음 자동 게시가 공지를 되돌려 게시함)
+        const after = await ops.getNoticeHold().catch(() => undefined);
+        if (after === undefined) {
+          log("error", "rollback_hold_unknown", {
+            version,
+            target: rollbackTo,
+          });
+        } else if (
+          after?.version === restore.version &&
+          JSON.stringify(after.notices) === JSON.stringify(nextHold.notices)
+        ) {
+          holdToRestore = restore;
+        }
+        throw error;
+      }
+      if (!written) return fail("hold_conflict", { target: rollbackTo });
+      holdToRestore = restore;
     }
 
     const replaced = await replaceManifest(deps, version, manifestBody);
@@ -719,45 +831,16 @@ async function runPublish(
     if (!(await ops.setPublishedVersion(version).catch(() => false))) {
       log("error", "publish_version_not_recorded", { version });
     }
-    // 이 게시 때의 공지 상태(되돌리기 기준, D20-2). 공지 상태를 모르는 게시(운영 DB를 읽지 못함)는 남기지 않음
-    // 남기지 못해도 게시는 끝난 것 → 경고만. 기록이 없는 버전으로는 되돌릴 수 없음
-    if (noticeState) {
-      try {
-        await ops.putPublishNotices(version, noticeState, startedMs);
-      } catch (error) {
-        log("warn", "publish_notices_not_recorded", {
-          version,
-          error: error instanceof Error ? error.name : typeof error,
-        });
-      }
-    }
-    // 운영 화면용 게시 요약(BRD-187). 실패해도 게시는 끝난 것 → 경고만(빠진 요약은 previous 사슬로 드러남)
-    try {
-      await ops.putPublishSummary(
-        buildPublishSummary({
-          version,
-          previous: published,
-          publishedAt: now,
-          beachCount: deps.beaches.length,
-          status: snapshot.status.beaches,
-          source,
-          ...(rollbackTo !== undefined ? { target: rollbackTo } : {}),
-        }),
-        startedMs,
-      );
-      // 관측소 표는 해변 파일에서만 나옴 → 이 실행 환경에서 처음이거나 바뀌었을 때만 씀(쓰기 용량 아낌)
-      const table = buildStationTable(deps.beaches);
-      const text = JSON.stringify(table);
-      if (writtenStationTables.get(ops) !== text) {
-        await ops.putStationTable(table, now);
-        writtenStationTables.set(ops, text);
-      }
-    } catch (error) {
-      log("warn", "publish_summary_not_recorded", {
-        version,
-        error: error instanceof Error ? error.name : typeof error,
-      });
-    }
+    await recordPublished(deps, {
+      version,
+      previous: published,
+      now,
+      startedMs,
+      status: snapshot.status.beaches,
+      source,
+      target: rollbackTo,
+      noticeState,
+    });
     const removed = await removeOldVersions(snapshots, version, log);
     log("info", "publish_finished", {
       version,
@@ -774,7 +857,13 @@ async function runPublish(
   } finally {
     // manifest를 바꾸기 전에 멈춘 업로드는 지움(보존 48개 자리를 차지하지 않게). 실패해도 다음 정리가 지움
     // manifest 쓰기가 실제로는 됐는데 응답만 실패했을 수 있음 → manifest가 이 버전을 가리키거나 읽지 못하면 지우지 않음
-    if (uploaded && !(await manifestMayPointTo(snapshots, version))) {
+    const landed = uploaded && (await manifestMayPointTo(snapshots, version));
+    // manifest를 읽지 못해 게시됐는지 모르는 되돌리기: 포인터를 되돌려 놓지 않음(게시됐다면 그 표시가 맞음)
+    // 결과는 실패로 나가지만 포인터는 새 값이라, 그대로면 다음 자동 게시가 공지를 되돌려 게시함 → 알림
+    if (landed && holdToRestore) {
+      log("error", "rollback_hold_unknown", { version, target: rollbackTo });
+    }
+    if (uploaded && !landed) {
       await snapshots.deleteVersion(version).catch(() => undefined);
       // 게시되지 않은 되돌리기의 포인터를 앞 값으로 되돌려 놓음. 못 하면 알림
       // (그대로 남으면 다음 자동 게시가 이 포인터대로 공지를 되돌려 게시함)
