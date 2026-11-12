@@ -24,6 +24,48 @@ export interface InquiryBackendProps {
 const REPO_ROOT = path.join(__dirname, "..", "..", "..");
 const HANDLER_FILE = path.join(REPO_ROOT, "services/src/inquiry/handler.ts");
 
+// sharp는 네이티브/WASM 바이너리와 패키지 경로를 런타임에 읽으므로 esbuild로 합치지 않고
+// Lambda 번들 node_modules에 필요한 런타임 패키지를 복사함(BRD-116)
+const SHARP_REQUIRED_PACKAGES = [
+  "sharp",
+  "detect-libc",
+  "@emnapi/runtime",
+  "@img/colour",
+  "@img/sharp-wasm32",
+] as const;
+const SHARP_OPTIONAL_PACKAGES = [
+  "semver",
+  "@img/sharp-linux-arm64",
+  "@img/sharp-libvips-linux-arm64",
+] as const;
+
+export function sharpBundlingCommand(
+  inputDir: string,
+  outputDir: string,
+): string {
+  const script = [
+    "const fs = require('node:fs');",
+    "const path = require('node:path');",
+    `const inputNm = path.join(${JSON.stringify(inputDir)}, 'node_modules');`,
+    `const outputNm = path.join(${JSON.stringify(outputDir)}, 'node_modules');`,
+    `for (const pkg of ${JSON.stringify(SHARP_REQUIRED_PACKAGES)}) {`,
+    "  const src = path.join(inputNm, pkg);",
+    "  if (!fs.existsSync(src)) throw new Error('Missing sharp runtime package: ' + pkg);",
+    "  const dst = path.join(outputNm, pkg);",
+    "  fs.mkdirSync(path.dirname(dst), { recursive: true });",
+    "  fs.cpSync(src, dst, { recursive: true });",
+    "}",
+    `for (const pkg of ${JSON.stringify(SHARP_OPTIONAL_PACKAGES)}) {`,
+    "  const src = path.join(inputNm, pkg);",
+    "  if (!fs.existsSync(src)) continue;",
+    "  const dst = path.join(outputNm, pkg);",
+    "  fs.mkdirSync(path.dirname(dst), { recursive: true });",
+    "  fs.cpSync(src, dst, { recursive: true });",
+    "}",
+  ].join(" ");
+  return `node -e '${script.replace(/'/g, "'\\''")}'`;
+}
+
 export class InquiryBackend extends Construct {
   readonly function: nodejs.NodejsFunction;
   readonly photoBucket: s3.Bucket;
@@ -82,7 +124,21 @@ export class InquiryBackend extends Construct {
       description: "baradun v2 data inquiry intake",
       projectRoot: REPO_ROOT,
       depsLockFilePath: path.join(REPO_ROOT, "package-lock.json"),
-      bundling: { externalModules: [], target: "node22" },
+      bundling: {
+        externalModules: ["sharp"],
+        target: "node22",
+        commandHooks: {
+          beforeBundling(): string[] {
+            return [];
+          },
+          beforeInstall(): string[] {
+            return [];
+          },
+          afterBundling(inputDir: string, outputDir: string): string[] {
+            return [sharpBundlingCommand(inputDir, outputDir)];
+          },
+        },
+      },
       environment: {
         INQUIRY_TABLE_NAME: props.table.tableName,
         PHOTO_BUCKET_NAME: this.photoBucket.bucketName,
