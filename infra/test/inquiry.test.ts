@@ -172,6 +172,7 @@ describe("데이터 문의 접수 인프라", () => {
         "sharp",
         "detect-libc",
         "@emnapi/runtime",
+        "tslib",
         "@img/colour",
         "@img/sharp-wasm32",
       ]) {
@@ -180,14 +181,36 @@ describe("데이터 문의 접수 인프라", () => {
           pkg,
         ).toBe(true);
       }
+      // 저장소 밖 독립 디렉터리(outputDir)만으로 모든 전이 의존성 해석과 WASM 폴백 로딩이 동작하는지 검증함
       expect(() =>
         execFileSync(
           "node",
           [
             "-e",
-            `const sharp = require(${JSON.stringify(path.join(outputDir, "node_modules", "sharp"))}); sharp({ create: { width: 4, height: 4, channels: 3, background: { r: 0, g: 0, b: 0 } } }).png().toBuffer().then((b) => { if (b.length < 1) process.exit(1); });`,
+            [
+              "const fs = require('node:fs');",
+              "const path = require('node:path');",
+              "const { createRequire } = require('node:module');",
+              "const root = fs.realpathSync(process.cwd());",
+              "const req = createRequire(path.join(root, 'index.js'));",
+              "const pkgs = ['sharp', 'detect-libc', '@emnapi/runtime', 'tslib', '@img/colour', '@img/sharp-wasm32'];",
+              "for (const pkg of pkgs) {",
+              "  const pkgDir = path.join(root, 'node_modules', pkg);",
+              "  const meta = JSON.parse(fs.readFileSync(path.join(pkgDir, 'package.json'), 'utf8'));",
+              "  for (const dep of Object.keys(meta.dependencies || {})) {",
+              "    const resolved = fs.realpathSync(req.resolve(dep, { paths: [pkgDir] }));",
+              "    if (!resolved.startsWith(root)) throw new Error('Escaped bundle root: ' + dep + ' -> ' + resolved);",
+              "  }",
+              "}",
+              "req('@img/sharp-wasm32/sharp.node');",
+              "const sharp = req('sharp');",
+              "sharp({ create: { width: 4, height: 4, channels: 3, background: { r: 0, g: 0, b: 0 } } })",
+              "  .png()",
+              "  .toBuffer()",
+              "  .then((b) => { if (b.length < 1) process.exit(1); });",
+            ].join(" "),
           ],
-          { stdio: "pipe" },
+          { cwd: outputDir, stdio: "pipe" },
         ),
       ).not.toThrow();
       const emptyDir = mkdtempSync(
