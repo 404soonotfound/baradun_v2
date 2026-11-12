@@ -515,9 +515,33 @@ await fetch("/api/inquiries", {
 
 수집기 3개가 수집을 마칠 때마다 `publish-snapshot`을 비동기로 깨웁니다(아키텍처 6.2). 게시 함수는 State를 읽어 해변 상태를 계산하고 `data/{버전}/`에 파일 네 개를 올린 뒤 `data/manifest.json`을 조건부 쓰기(If-Match)로 바꿉니다. 실패하면 manifest는 이전 버전 그대로이고, 함수는 오류로 끝나 Lambda 오류 지표에 남습니다.
 
-롤백(T06)은 manifest를 이전 버전으로 되돌립니다. 버전 경로는 최근 48개가 남아 있습니다.
+게시 전에 해변 ID를 집합으로 대조합니다(결정 기록 D16-C1). 저장소 원본 목록(`data/beach-meta.json`의 해변 칸, 함수에 JSON으로 묶임)과 읽은 해변 파일(`beaches/`로 복사됨), 게시 결과(해변 목록·해변 상태)가 하나라도 다르면(누락·추가·중복) 게시하지 않고 앞 게시본을 둡니다. 비율 기준은 없습니다. 로그는 `publish_failed`의 `reason: beach_ids`와 어긋난 ID입니다. 관측을 받지 못한 해변은 빠지지 않고 분류만 판단불가가 됩니다.
 
-1. 게시 코드 문제로 되돌리는 경우 수집 일정을 먼저 멈춥니다. 멈추지 않으면 다음 수집(15분 안)이 새 버전으로 다시 게시합니다.
+게시 실행 결과는 Ops 테이블 `publish#run`에 남습니다(D16-C2). `last`는 마지막 실행 하나(게시됨 `published` · 변경이 없어 생략 `unchanged` · 실패 `failed`)를 덮어쓰고, 실패한 실행은 `publish#run` / `{시도한 버전}`에도 8일 동안 남습니다. 알림은 새로 만들지 않았습니다. 생략한 실행도 실행으로 세므로 게시 중단 알림(`PublishStopped`)은 울리지 않고, 실패는 오류 알림(`PublishErrors`)으로 갑니다.
+
+### 되돌리기 (공지만 그 게시본 때로)
+
+되돌리기는 옛 manifest를 되살리지 않습니다(결정 기록 D20-1~3). 자동 게시와 같은 게시 잠금을 쓰고, 지금보다 큰 새 버전으로 다시 게시합니다. 열린 화면은 이미 받은 것보다 작은 버전을 무시하기 때문입니다.
+
+- **공지:** 고른 게시본 때의 공지 상태로 되살립니다. 그 뒤에 바뀐 공지(문구 변경·새 공지·노출 끝내기)는 '되돌림'으로 표시하고, 다시 적용하기 전까지 자동 게시에 싣지 않습니다. 공지 항목(저장한 문구·노출본)은 건드리지 않고, 표시와 그때 노출본을 Ops `admin#publish` / `notice-hold`의 `notices`에 공지별로 둡니다.
+- **특보·관측:** 늘 지금 수집 사실을 씁니다. 옛 특보·관측은 되살리지 않으므로 발효 특보가 되돌리기로 사라지지 않고, 관측·확인 시각도 수집한 그대로입니다.
+- **점검·최소 화면 버전:** 배포된 코드의 `MANIFEST_SETTINGS` 그대로입니다(되돌리기로 풀리거나 내려가지 않음).
+- **고를 수 있는 버전:** 게시 때의 공지 상태(Ops `publish#notices` / `{버전}`)가 남아 있는 버전만입니다. 이 기능이 배포되기 전 게시, 운영 DB를 읽지 못한 게시, 다시 내보내기로 만든 버전은 `rollback_target_missing`으로 끝나고 아무것도 바뀌지 않습니다. 이 기록은 8일 뒤 지워집니다.
+
+```bash
+node tools/republish/republish.mjs --function <PublisherFunctionName> --version 20261017T053000Z --action rollback        # 부를 명령만 보여 줌
+node tools/republish/republish.mjs --function <PublisherFunctionName> --version 20261017T053000Z --action rollback --yes  # 실행
+```
+
+결과는 `{"status":"published","version":"<새 버전>"}`입니다. 다른 게시가 도는 중이면 `{"status":"busy"}`로 끝나므로 잠시 뒤 다시 부릅니다. 실패하면 함수가 오류로 끝나고(`되돌리기 실패: <사유>`) manifest와 되돌림 표시는 앞 상태 그대로입니다. 되돌림 표시를 앞 값으로 되돌려 놓지 못하면 `rollback_hold_not_restored` 로그가 남습니다. 이때는 `admin#publish` / `notice-hold`를 확인합니다(그대로 두면 다음 자동 게시가 그 표시대로 공지를 되돌려 게시함).
+
+운영 화면의 되돌리기·'다시 적용'은 #331의 다음 PR에서 들어옵니다. 그 전에는 위 명령으로 부르고, 다시 적용은 `notice-hold`의 `notices`에서 그 공지를 지우고 `version`을 1 올리는 것과 같습니다.
+
+### 옛 게시 파일 다시 내보내기 (급할 때만)
+
+게시 코드 오류의 기준 복구는 `git revert`로 배포하는 것입니다(결정 기록 D20-4). 배포를 기다릴 수 없을 때만 옛 게시 파일을 새 버전 번호로 다시 내보냅니다. 버전 경로는 최근 48개가 남아 있습니다. 파일 내용은 한 글자도 고치지 않으므로 관측·확인 시각이 그때 그대로이고, 시간이 지나면 화면은 '판단불가'로 보여줍니다(옛 값을 지금 확인한 값처럼 보이게 하지 않음). 운영 화면에는 이 기능의 버튼이 없습니다.
+
+1. 수집 일정을 먼저 멈춥니다. 멈추지 않으면 다음 수집(15분 안)이 지금 수집 사실로 새 버전을 다시 게시합니다.
 
    `update-schedule`은 넘기지 않은 선택 설정(시간대·재시도·유연 시간 등)을 기본값으로 되돌립니다. 예를 들어 시간대가 빠지면 UTC가 되어 collect-catalog가 KST 13:20에 돕니다. 그래서 그때그때 지금 설정을 읽어 상태만 바꿔 넘깁니다. 작업 파일은 저장소 밖 임시 폴더에 둡니다(계정 번호·ARN이 들어 있음).
 
@@ -535,23 +559,22 @@ await fetch("/api/inquiries", {
    set_state DISABLED   # 세 일정 모두 DISABLED로 나와야 함. '실패'가 있으면 다시 실행
    ```
 
-   일정을 꺼도 이미 시작된 수집이나 스케줄러 재시도(최대 10분 늦게 옴)가 게시를 한 번 더 깨울 수 있습니다. 롤백은 게시 잠금과 상관없이 manifest를 덮어쓰므로, 일정을 끄고 **11분 기다린 뒤** 롤백합니다. 급해서 바로 롤백했다면 4단계에서 11분 뒤 한 번 더 확인합니다.
+   일정을 꺼도 이미 시작된 수집이나 스케줄러 재시도(최대 10분 늦게 옴)가 게시를 한 번 더 깨울 수 있습니다. 다시 내보내기도 게시 잠금을 쓰지만 그 뒤에 온 게시가 더 큰 버전으로 덮으므로, 일정을 끄고 **11분 기다린 뒤** 부릅니다. 급해서 바로 불렀다면 4단계에서 11분 뒤 한 번 더 확인합니다.
 
-2. 되돌릴 버전을 고릅니다: `aws s3 ls s3://<SiteBucketName>/data/`
-3. 게시 함수를 롤백 이벤트로 직접 부릅니다(`PublisherFunctionName` 출력값).
+2. 다시 내보낼 버전을 고릅니다: `aws s3 ls s3://<SiteBucketName>/data/`
+3. 게시 함수를 다시 내보내기 이벤트로 부릅니다(`PublisherFunctionName` 출력값). 이 도구는 함수를 부르기만 하므로 그 함수의 `lambda:InvokeFunction` 권한만 있으면 됩니다(S3·DynamoDB 쓰기는 게시 함수만 함).
 
    ```bash
-   aws lambda invoke --function-name <PublisherFunctionName> \
-     --cli-binary-format raw-in-base64-out \
-     --payload '{"action":"rollback","version":"20261017T053000Z"}' /dev/stdout
+   node tools/republish/republish.mjs --function <PublisherFunctionName> --version 20261017T053000Z        # 부를 명령만 보여 줌
+   node tools/republish/republish.mjs --function <PublisherFunctionName> --version 20261017T053000Z --yes  # 실행
    ```
 
-   그 버전의 manifest 사본과 파일 네 개가 모두 있을 때만 되돌립니다. 하나라도 없으면 지금 manifest를 그대로 두고 오류로 끝납니다. 점검(`maintenance`)·최소 화면 버전(`minWebBuild`)은 사본의 값이 아니라 배포된 코드의 `MANIFEST_SETTINGS`로 씁니다(점검 중 롤백해도 점검이 풀리지 않음). 응답은 파일 대신 화면(`/dev/stdout`)으로 받아 작업 트리에 파일이 남지 않게 합니다.
+   그 버전의 manifest 사본과 파일(날씨가 실린 버전은 다섯 개)이 모두 있고 계약을 통과할 때만 다시 내보냅니다. 하나라도 없으면 지금 manifest를 그대로 두고 오류로 끝납니다. 다른 판단 정책으로 게시된 버전은 `policy_unsupported`로 거절합니다. 점검(`maintenance`)·최소 화면 버전(`minWebBuild`)은 사본의 값이 아니라 배포된 코드의 `MANIFEST_SETTINGS`로 씁니다(점검 중에 써도 점검이 풀리지 않음). 공지는 사본에 실린 그대로이고 되돌림 표시는 건드리지 않습니다. 응답은 파일 대신 화면(`/dev/stdout`)으로 받아 작업 트리에 파일이 남지 않게 합니다.
 
-4. 사이트에서 manifest가 바뀌었는지 확인합니다(manifest 캐시 60초): `curl -s https://<DistributionDomainName>/data/manifest.json | jq -r .snapshotVersion`. 그 뒤 게시 로그 그룹(`BaradunV2-PublishLogs…`)에 롤백 뒤 `publish_finished`가 새로 생겼다면 늦게 온 게시가 덮은 것이니 3단계를 다시 합니다.
+4. 사이트에서 manifest가 새 버전으로 바뀌었는지 확인합니다(manifest 캐시 60초): `curl -s https://<DistributionDomainName>/data/manifest.json | jq -r .snapshotVersion`. 그 뒤 게시 로그 그룹(`BaradunV2-PublishLogs…`)에 `republish_finished` 뒤로 `publish_finished`가 새로 생겼다면 늦게 온 게시가 덮은 것이니 3단계를 다시 합니다.
 5. 원인을 고친 뒤 일정을 다시 켭니다: `set_state ENABLED`(1단계와 같은 셸, 새 셸이면 함수를 다시 정의). 고친 코드를 `cdk deploy`했다면 배포가 일정을 이미 켰을 수 있으니 상태만 확인합니다. 다음 수집이 새 버전을 게시합니다. 지금 manifest와 내용이 같으면 `publish_unchanged`로 남고 새 버전은 만들지 않습니다.
 
-롤백 리허설 결과(일시·되돌린 버전·복구에 걸린 시간)는 Notion 'V2 AWS 운영 점검표'의 '데이터 게시 롤백 리허설 기록'에 남깁니다. 첫 실환경 리허설(2026-10-26) 기록이 그곳에 있습니다.
+롤백 리허설 결과(일시·되돌린 버전·복구에 걸린 시간)는 Notion 'V2 AWS 운영 점검표'의 '데이터 게시 롤백 리허설 기록'에 남깁니다. 첫 실환경 리허설(2026-10-26) 기록이 그곳에 있습니다. 그 기록은 옛 방식(manifest 되살리기)의 것이고, 새 방식(되돌리기·다시 내보내기)의 실환경 리허설은 아직 하지 않았습니다.
 
 ## 운영 경보(BRD-62)
 
@@ -769,7 +792,7 @@ npx --no-install tsx services/scripts/inquiry-status-backfill.ts --table <Inquir
 - **노출 검사:** 한·영 제목·본문이 모두 있어야 하고, 글자 수는 grapheme으로 제목 한 40/영 60·본문 한 120/영 200(D16-D2 초기값) 안이어야 합니다. 넘으면 잘라 내지 않고 거부합니다. 끝 시각은 시작 뒤이고 아직 지나지 않아야 합니다. 표현 검사(D16-D1)의 차단·경고 목록은 미결(D15-9, BRD-158)이라 아직 막지 않습니다.
 - **게시:** publisher가 게시할 때 노출본 중 시작 시각이 지났고 끝나지 않은 공지만 manifest `notices`에 ID 순으로 싣습니다(예약 전 문구는 공개 게시본에 없음). 저장 모양이 틀리거나 계약에 맞지 않는 공지는 그것만 빼고 `publish_notice_invalid`를 남깁니다. 운영 DB를 읽지 못하면 지금 manifest의 공지를 이어서 싣고 `publish_notices_unread`를 남깁니다(특보·관측 게시는 멈추지 않음). 공지만 바뀌어도 새 버전으로 게시합니다.
 - **권한:** publisher 역할의 Ops `Query`는 `dynamodb:LeadingKeys`가 `admin#notice`일 때만 됩니다.
-- **되돌리기:** `rollbackManifest`는 사본에 실린 공지를 그대로 되돌립니다. 되돌린 공지 변경을 다음 자동 게시에 다시 싣지 않는 방식(D16-C3)은 미결이라 BRD-152에서 정합니다.
+- **되돌리기:** 고른 게시본 때의 공지 상태로 되살리고, 그 뒤에 바뀐 공지는 '되돌림'으로 표시해 다시 적용하기 전까지 자동 게시에 싣지 않습니다(D20-2·D16-C3). 표시는 `admin#publish` / `notice-hold`에 두고 공지 항목은 건드리지 않습니다. 절차는 위 '데이터 게시와 롤백'의 '되돌리기'입니다.
 - **배포:** publisher·운영 API 함수 코드와 두 역할 정책 `Modify`만 바뀝니다(테이블 변경 없음).
 
 ## 점검·강제 업데이트

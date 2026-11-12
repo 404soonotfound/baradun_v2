@@ -146,19 +146,19 @@ npm run deploy:prod   # main 최신 커밋을 다시 배포 (gh 로그인 필요
 3. 즉시 반영하려면 게시 함수(`PublisherFunctionName`)를 직접 호출하거나 다음 수집(15분 이내)을 기다립니다.
 4. 상세 절차 및 점검 해제 방법: [infra/README.md#점검-켜기끄기](infra/README.md#점검-켜기끄기)
 
-### 2. 데이터 게시 롤백 (Rollback)
+### 2. 데이터 게시 되돌리기 (Rollback)
 
-잘못된 데이터가 게시되었을 때 이전 버전의 스냅샷으로 되돌립니다 (최근 48개 버전 보관).
+잘못 나간 공지를 앞 게시본 때 상태로 되돌립니다. 옛 manifest를 되살리지 않고 더 큰 새 버전으로 다시 게시하며, 특보·관측은 늘 지금 수집 사실을 씁니다(결정 기록 D20-1~3).
 
-1. 수집 일정이 새 버전으로 덮어쓰지 않도록 EventBridge Scheduler를 비활성화(`DISABLED`)하고 11분 대기합니다.
-2. 되돌릴 버전을 S3에서 확인한 뒤 게시 Lambda를 롤백 이벤트로 직접 호출합니다:
+1. 되돌릴 게시본(버전)을 정합니다. 게시 때의 공지 상태가 남아 있는 버전(최근 8일)만 고를 수 있습니다.
+2. 게시 Lambda를 되돌리기 이벤트로 부릅니다(`--yes`를 빼면 부를 명령만 보여 줌):
    ```bash
-   aws lambda invoke --function-name <PublisherFunctionName> \
-     --cli-binary-format raw-in-base64-out \
-     --payload '{"action":"rollback","version":"<되돌릴_스냅샷_버전>"}' /dev/stdout
+   node tools/republish/republish.mjs --function <PublisherFunctionName> \
+     --version <되돌릴_게시_버전> --action rollback --yes
    ```
-3. 사이트의 `data/manifest.json` 반영을 확인하고 원인 조치 후 스케줄러를 다시 활성화합니다.
-4. 상세 절차: [infra/README.md#데이터-게시publish-snapshot와-롤백](infra/README.md#데이터-게시publish-snapshot와-롤백)
+3. 사이트의 `data/manifest.json`이 새 버전으로 바뀌었는지 확인합니다. 되돌린 공지는 다시 적용하기 전까지 자동 게시에 실리지 않습니다.
+4. 게시 코드 오류는 `git revert`로 배포합니다. 급할 때만 옛 게시 파일을 새 버전 번호로 다시 내보냅니다(같은 도구, `--action` 생략).
+5. 상세 절차: [infra/README.md#데이터-게시publish-snapshot와-롤백](infra/README.md#데이터-게시publish-snapshot와-롤백)
 
 ### 3. 해변 추가 및 노출 숨김
 
