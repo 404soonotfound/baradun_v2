@@ -60,9 +60,18 @@ function newKey(): string {
 class FakePublisher {
   readonly events: PublisherJobEvent[] = [];
   fail = false;
+  // 미리보기 응답(함수면 불러서 던지거나 값을 돌려줌)
+  previewResult: unknown | (() => unknown) = { status: "blocked" };
+  previews = 0;
   async invoke(event: PublisherJobEvent) {
     if (this.fail) throw new Error("throttled");
     this.events.push(event);
+  }
+  async preview() {
+    this.previews++;
+    return typeof this.previewResult === "function"
+      ? (this.previewResult as () => unknown)()
+      : this.previewResult;
   }
 }
 

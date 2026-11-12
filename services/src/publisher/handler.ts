@@ -16,6 +16,7 @@ import { createLogger } from "../core/collect/log";
 import { S3SnapshotStore } from "../core/snapshots/s3";
 import { DynamoOpsStore, DynamoStateStore } from "../core/store/dynamodb";
 import type { OpsStore as OpsStoreLike } from "../core/store/types";
+import { previewSnapshot, type PublishPreview } from "./preview";
 import { publishSnapshot, type PublishResult } from "./publish";
 import { republishVersion } from "./republish";
 import { parseBeachMeta, type SeasonTable } from "./season";
@@ -32,6 +33,7 @@ import { zoneTablesFromAnnex, type AnnexTables } from "./zones";
 // - { "action": "publish", "jobId": "j-…" }: '지금 게시'. 새로 수집하지 않고 마지막 수집 사실 + 확정한 공지(D16-C4)
 // - { "action": "rollback", "version": "…", "jobId": "j-…" }: 운영 화면의 되돌리기
 //   작업이 '대기'이고 시작 제한 안일 때만 실행함(두 번 오거나 늦게 온 호출은 실행하지 않음). 결과를 작업에 남김
+// - { "action": "preview" }: 게시 변경 미리보기(동기 호출, preview.ts). 잠금·S3·Ops 어느 것도 쓰지 않고 결과만 돌려줌
 // 게시 실패는 오류를 던져 Lambda 오류 지표에 남김(BRD-62 경보). busy·unchanged는 정상
 // 사람이 부른 실행의 입력 문제(없는 버전 등)는 던지지 않고 { status: "failed", reason }으로 돌려줌
 // 변경이 없어 생략한 실행(unchanged)도 실행으로 세므로 게시 중단 알림(PublishStopped)은 울리지 않고,
@@ -95,6 +97,7 @@ interface LambdaContext {
 }
 
 export type ManualEvent =
+  | { action: "preview" }
   | { action: "rollback"; version: string; jobId?: string }
   | { action: "republish"; version: string }
   | { action: "publish"; jobId: string };
@@ -110,8 +113,15 @@ export function parseManualEvent(event: unknown): ManualEvent | null {
     version?: unknown;
     jobId?: unknown;
   };
+  if (action === "preview") {
+    // 미리보기는 다른 칸을 받지 않음(오타 난 게시 이벤트를 미리보기로 돌리지 않음)
+    if (version !== undefined || jobId !== undefined) {
+      throw new Error("preview에는 version·jobId를 받지 않음");
+    }
+    return { action };
+  }
   if (action !== "rollback" && action !== "republish" && action !== "publish") {
-    throw new Error("모르는 action(rollback·republish·publish만 받음)");
+    throw new Error("모르는 action(rollback·republish·publish·preview만 받음)");
   }
   if (
     jobId !== undefined &&
@@ -229,7 +239,7 @@ export async function runPublishJob(
 export async function publishHandler(
   event: unknown,
   context: LambdaContext,
-): Promise<PublishResult> {
+): Promise<PublishResult | PublishPreview> {
   const { beaches, beachIds, seasons, documents, s3 } = setup();
   const snapshots = new S3SnapshotStore(s3, requiredEnv("SNAPSHOT_BUCKET"));
   const opsTable = requiredEnv("OPS_TABLE_NAME");
@@ -246,6 +256,18 @@ export async function publishHandler(
     );
 
   const manual = parseManualEvent(event);
+  if (manual?.action === "preview") {
+    return previewSnapshot({
+      state: new DynamoStateStore(documents, requiredEnv("STATE_TABLE_NAME")),
+      snapshots,
+      beaches,
+      beachIds,
+      zones,
+      seasons,
+      log,
+      clock,
+    });
+  }
   if (manual?.action === "republish") {
     const result = await republishVersion(
       { ops, snapshots, notices, log, clock, owner },

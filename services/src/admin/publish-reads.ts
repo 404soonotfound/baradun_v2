@@ -19,12 +19,18 @@ import {
   type PublishSource,
 } from "../core/collect/publish-summary";
 import type { SnapshotStore } from "../core/snapshots/types";
-import { NOTICE_HOLD_KEY, toNoticeHold } from "../core/store/dynamodb";
+import {
+  DynamoOpsStore,
+  NOTICE_HOLD_KEY,
+  toNoticeHold,
+} from "../core/store/dynamodb";
 import type { NoticeHold } from "../core/store/types";
 import { MANIFEST_SETTINGS } from "../publisher/policy";
 import {
   applyNoticeHold,
+  currentNotices,
   MANIFEST_PATH,
+  noticeHoldFor,
   parseManifest,
   publishableNotices,
 } from "../publisher/notice-select";
@@ -641,4 +647,57 @@ export async function holdReleaseFor(
       set: { notices: rest },
     },
   ];
+}
+
+// 되돌리기 미리보기(#331, 확인 창 V30 '그 뒤 운영 변경 N건'). 읽기만 함
+// publisher 되돌리기와 같은 계산: 고른 게시본 때 공지 상태와 지금 운영 DB 노출본을 공지별로 견줌(D20-2)
+// - restore: 그때 문구·시각으로 돌아감 · remove: 그때 없던(또는 끝난) 공지라 빠짐 · revive: 지금은 없는 공지가 그때 문구로 다시 실림
+// - available false: 그 게시본의 공지 기록이 없음(되돌리면 rollback_target_missing으로 끝남)
+// 실제 되돌리기 때 시각으로 다시 계산하므로 미리보기와 결과가 다를 수 있음(그사이 공지가 바뀌거나 끝남)
+export interface RollbackPreviewItem {
+  readonly id: string;
+  readonly change: "restore" | "remove" | "revive";
+  readonly title: string | null; // 한국어 제목(지금 문구, 없으면 그때 문구)
+}
+
+export type RollbackPreview =
+  | { readonly available: false; readonly version: string }
+  | {
+      readonly available: true;
+      readonly version: string;
+      readonly items: readonly RollbackPreviewItem[];
+    };
+
+export async function readRollbackPreview(
+  client: Sender,
+  opsTable: string,
+  version: string,
+  now: Date,
+): Promise<RollbackPreview> {
+  const nowMs = now.getTime();
+  const [target, records] = await Promise.all([
+    new DynamoOpsStore(client, opsTable).getPublishNotices(version),
+    queryNotices(client, opsTable),
+  ]);
+  if (target === null) return { available: false, version };
+  const noop = () => undefined;
+  const then = currentNotices(target, nowMs, noop);
+  const live = currentNotices(liveNotices(records), nowMs, noop);
+  const liveById = new Map(live.map((n) => [n.id, n]));
+  const held = noticeHoldFor(then, live, version, now.toISOString());
+  const items = Object.entries(held).map(([id, entry]) => {
+    const current = liveById.get(id) ?? null;
+    const title = (current?.title.ko ?? entry.live?.title.ko ?? "").trim();
+    return {
+      id,
+      change:
+        entry.live === null
+          ? "remove"
+          : current === null
+            ? "revive"
+            : "restore",
+      title: title === "" ? null : title,
+    } satisfies RollbackPreviewItem;
+  });
+  return { available: true, version, items };
 }
