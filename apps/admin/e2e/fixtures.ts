@@ -219,11 +219,29 @@ export async function mockCognito(page: Page, ...handlers: CognitoHandler[]) {
   return calls;
 }
 
+const HOME_PARTS =
+  /\/ops\/(collection|beaches\/published|inquiries|notices|audit)(\?.*)?$/;
+
 export async function mockOps(
   page: Page,
   me: { status: number; body: unknown },
 ) {
   const calls: Record<string, string>[] = [];
+  // 운영 홈(/)은 로그인하자마자 요약용 운영 API 5곳을 읽음(ADM-HOME). 다른 화면 시험의 가짜 응답·호출 수에
+  // 섞이지 않게, 홈에서 나간 요청만 여기서 받고 그 밖은 원래 가짜 응답으로 넘김. 홈 시험은 이 뒤에 자기 응답을 둠
+  await page.route(HOME_PARTS, async (route) => {
+    if (new URL(route.request().frame().url()).pathname !== "/") {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({
+      status: 501,
+      contentType: "application/json",
+      body: JSON.stringify({
+        error: { code: "e2e_unmocked", requestId: null },
+      }),
+    });
+  });
   await page.route("**/ops/me", async (route) => {
     calls.push(route.request().headers());
     await route.fulfill({
@@ -233,6 +251,14 @@ export async function mockOps(
     });
   });
   return calls;
+}
+
+// 운영 홈이 요약 읽기를 끝낼 때까지 기다림('할 일' 제목은 읽기가 끝나야 보임)
+// 로그인한 뒤에 가짜 응답을 거는 시험이 홈 요청과 섞이지 않게 함
+export async function expectHomeLoaded(page: Page) {
+  await expect(
+    page.getByRole("heading", { name: "할 일", level: 2 }),
+  ).toBeVisible();
 }
 
 export const ME_OK = {

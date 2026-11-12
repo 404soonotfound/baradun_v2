@@ -3,6 +3,7 @@ import {
   ME_OK,
   expect,
   expectNoA11yViolations,
+  expectHomeLoaded,
   isMobile,
   mockCognito,
   mockOps,
@@ -146,6 +147,7 @@ async function signIn(page: Page, groups: string[]) {
   );
   await signInWithPassword(page, sample ? "/login/demo/" : "/login/", OPS);
   await expect(page.getByRole("heading", { name: "운영 홈" })).toBeVisible();
+  await expectHomeLoaded(page);
 }
 
 async function openBeaches(page: Page) {

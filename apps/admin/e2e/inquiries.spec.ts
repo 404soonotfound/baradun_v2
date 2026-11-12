@@ -3,6 +3,7 @@ import {
   ME_OK,
   expect,
   expectNoA11yViolations,
+  expectHomeLoaded,
   isMobile,
   mockCognito,
   mockOps,
@@ -153,6 +154,7 @@ async function signIn(page: Page, groups = ["editor"]) {
   await mockOps(page, ME_OK);
   await signInWithPassword(page, "/login/", OPS);
   await expect(page.getByRole("heading", { name: "운영 홈" })).toBeVisible();
+  await expectHomeLoaded(page);
 }
 
 // 상세: PC는 목록 위 모달 패널(dialog), 모바일은 목록 대신 상세 영역
