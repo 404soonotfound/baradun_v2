@@ -485,7 +485,7 @@ function keyTagReader(): ApiKeyTags | null {
   return region ? ssmKeyTagReader(region) : null;
 }
 
-// 게시 버킷(publisher와 같은 SNAPSHOT_BUCKET). infra가 이름과 data/* 읽기 권한을 주기 전에는 없음 → 상태만 '확인 못 함'
+// 게시 버킷(publisher와 같은 SNAPSHOT_BUCKET, infra가 이름과 data/ 읽기·목록 권한을 줌). 이름이 없으면 상태만 '확인 못 함'
 function snapshotReader(): SnapshotStore | null {
   const bucket = process.env.SNAPSHOT_BUCKET;
   return bucket ? new S3SnapshotStore(new S3Client({}), bucket) : null;
