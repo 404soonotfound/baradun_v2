@@ -56,11 +56,12 @@ function inspectJpeg(value: Buffer): PhotoMetadataInspection {
   if (!value.subarray(0, 2).equals(JPEG_START)) return "invalid";
   let offset = 2;
   while (offset < value.length) {
+    if (value[offset] !== 0xff) return "invalid";
     while (value[offset] === 0xff) offset += 1;
     if (offset >= value.length) return "invalid";
     const marker = value[offset];
     offset += 1;
-    if (marker === 0xd9 || marker === 0xda) return "none";
+    if (marker === 0xd9) return offset === value.length ? "none" : "invalid";
     if (marker === 0x01 || (marker !== undefined && marker >= 0xd0 && marker <= 0xd7)) {
       continue;
     }
@@ -69,9 +70,28 @@ function inspectJpeg(value: Buffer): PhotoMetadataInspection {
     if (length < 2 || offset + length > value.length) return "invalid";
     const payload = value.subarray(offset + 2, offset + length);
     if (marker === 0xe1 && payload.subarray(0, 6).equals(EXIF_PREFIX)) {
-      return inspectTiff(payload.subarray(6));
+      const exif = inspectTiff(payload.subarray(6));
+      if (exif !== "none") return exif;
     }
     offset += length;
+    // SOS(0xda) 뒤 압축 스캔 구간을 지나 다음 마커(재시작·다중 스캔·EOI)까지 진행함
+    if (marker === 0xda) {
+      while (offset < value.length) {
+        if (value[offset] !== 0xff) {
+          offset += 1;
+          continue;
+        }
+        while (value[offset] === 0xff) offset += 1;
+        if (offset >= value.length) return "invalid";
+        const next = value[offset];
+        if (next === 0x00 || (next !== undefined && next >= 0xd0 && next <= 0xd7)) {
+          offset += 1;
+          continue;
+        }
+        offset -= 1;
+        break;
+      }
+    }
   }
   return "invalid";
 }
@@ -85,8 +105,13 @@ function inspectPng(value: Buffer): PhotoMetadataInspection {
     const dataEnd = dataStart + length;
     if (dataEnd + 4 > value.length) return "invalid";
     const type = value.toString("ascii", offset + 4, offset + 8);
-    if (type === "eXIf") return inspectTiff(tiffPayload(value.subarray(dataStart, dataEnd)));
-    if (type === "IEND") return "none";
+    if (type === "eXIf") {
+      const exif = inspectTiff(tiffPayload(value.subarray(dataStart, dataEnd)));
+      if (exif !== "none") return exif;
+    }
+    if (type === "IEND") {
+      return length === 0 && dataEnd + 4 === value.length ? "none" : "invalid";
+    }
     offset = dataEnd + 4;
   }
   return "invalid";
@@ -100,6 +125,10 @@ function inspectWebp(value: Buffer): PhotoMetadataInspection {
   ) {
     return "invalid";
   }
+  const riffSize = value.readUInt32LE(4);
+  if (riffSize < 4 || 8 + riffSize !== value.length) {
+    return "invalid";
+  }
 
   let offset = 12;
   while (offset + 8 <= value.length) {
@@ -108,10 +137,17 @@ function inspectWebp(value: Buffer): PhotoMetadataInspection {
     const dataStart = offset + 8;
     const dataEnd = dataStart + length;
     if (dataEnd > value.length) return "invalid";
-    if (type === "EXIF") return inspectTiff(tiffPayload(value.subarray(dataStart, dataEnd)));
+    if (type === "EXIF") {
+      const exif = inspectTiff(tiffPayload(value.subarray(dataStart, dataEnd)));
+      if (exif !== "none") return exif;
+    }
     offset = dataEnd + (length % 2);
   }
-  return "none";
+  return offset === value.length ? "none" : "invalid";
+}
+
+export function inspectExifBuffer(value: Buffer): PhotoMetadataInspection {
+  return inspectTiff(tiffPayload(value));
 }
 
 export function inspectPhotoMetadata(

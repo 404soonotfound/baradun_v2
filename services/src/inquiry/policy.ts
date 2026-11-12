@@ -9,6 +9,12 @@ export const INQUIRY_PHOTO_RETENTION_DAYS = 30;
 export const INQUIRY_MAX_PHOTOS = 3;
 // 기기에서 줄인 최종 파일 상한(결정 기록 12장 결정 23: 최종 3~4MiB, 클라이언트·서버 양쪽 검사)
 export const INQUIRY_MAX_PHOTO_BYTES = 4 * 1024 * 1024;
+// 사진 디코딩 상한(BRD-116: 압축 폭탄 방지, 한 변 4096px·총 16,777,216px)
+export const INQUIRY_MAX_PHOTO_DIMENSION = 4096;
+export const INQUIRY_MAX_PHOTO_PIXELS =
+  INQUIRY_MAX_PHOTO_DIMENSION * INQUIRY_MAX_PHOTO_DIMENSION;
+// 손실 포맷(JPEG·WebP) 재인코딩 품질(BRD-116)
+export const INQUIRY_PHOTO_QUALITY = 82;
 export const INQUIRY_MAX_BODY_BYTES = 32 * 1024;
 export const INQUIRY_RATE_LIMIT_PER_MINUTE = 10;
 export const INQUIRY_NOTIFICATION_LIMIT_PER_DAY = 20;
