@@ -6,6 +6,7 @@
 //   관측·확인 시각을 고치지 않으므로 시간이 지나면 화면은 '판단불가'로 보여줌. 게시 코드 오류의 기준 복구는 git revert 배포
 // - rollback: 되돌리기. 공지만 그 게시본 때 상태로 되살리고 특보·관측은 지금 수집 사실로 새로 게시(D20-1~3)
 // --yes를 주지 않으면 부를 명령만 보여 주고 끝남(아무것도 부르지 않음). --yes를 주면 aws lambda invoke를 실행함
+// 종료 코드: 0 게시됨·변경 없음 / 1 실패(함수 오류·실패 결과·aws 실행 실패) / 2 다른 게시가 도는 중이라 하지 않음(잠시 뒤 다시)
 // S3·DynamoDB 쓰기는 게시 함수(publisher 역할) 하나만 함(아키텍처 6.2 단일 작성자)
 // → 이 도구를 쓰는 사람에게는 그 함수의 lambda:InvokeFunction 권한만 있으면 됨. 비밀값을 읽거나 남기지 않음
 import { spawnSync } from "node:child_process";
@@ -80,10 +81,44 @@ export function main(argv = process.argv.slice(2), run = spawnSync) {
     console.log("부르지 않았어요. 실행하려면 --yes를 붙여 다시 실행하세요.");
     return 0;
   }
-  const result = run("aws", cli, { stdio: "inherit" });
+  // 응답(함수가 돌려준 값과 호출 정보)을 받아 화면에 그대로 보여 주고 결과를 읽음
+  const result = run("aws", cli, {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "inherit"],
+  });
   if (result.error) throw result.error;
-  // 게시 함수는 실패를 오류로 던짐 → 응답에 FunctionError가 보이면 로그 그룹(BaradunV2-PublishLogs…)을 확인
-  return result.status ?? 1;
+  const output = result.stdout ?? "";
+  if (output) console.log(output.trimEnd());
+  return exitCode(result.status, output);
+}
+
+// aws lambda invoke는 함수가 오류로 끝나도 종료 코드 0을 줌(응답에 FunctionError만 담음)
+// → 응답 글자를 읽어 게시되지 않은 경우를 0이 아닌 코드로 알림
+export function exitCode(status, output) {
+  if (status !== 0) return status ?? 1;
+  if (/"FunctionError"\s*:/.test(output)) {
+    console.error(
+      "✗ 게시 함수가 오류로 끝났어요. 로그 그룹(BaradunV2-PublishLogs…)을 확인하세요.",
+    );
+    return 1;
+  }
+  if (/"status"\s*:\s*"failed"/.test(output)) {
+    console.error("✗ 게시하지 않았어요. 응답의 reason을 확인하세요.");
+    return 1;
+  }
+  if (/"status"\s*:\s*"busy"/.test(output)) {
+    console.error(
+      "✗ 다른 게시가 도는 중이라 하지 않았어요. 잠시 뒤 다시 부르세요.",
+    );
+    return 2;
+  }
+  if (!/"status"\s*:\s*"(published|unchanged)"/.test(output)) {
+    console.error(
+      "✗ 응답에서 결과를 읽지 못했어요. 게시됐는지 사이트에서 확인하세요.",
+    );
+    return 1;
+  }
+  return 0;
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {

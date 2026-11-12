@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { invokeArgs, main, parseArgs } from "../republish.mjs";
+import { exitCode, invokeArgs, main, parseArgs } from "../republish.mjs";
 
 // 게시 함수를 사람이 직접 부르는 도구 (결정 기록 D20-1~4)
 // 이 시험은 AWS를 부르지 않음: 실행기(run)를 가짜로 바꿔 넘긴 인자만 확인함
@@ -80,20 +80,23 @@ describe("main", () => {
     expect(shown).toContain("관측·확인 시각은 고치지 않아요");
   });
 
-  it("--yes를 주면 셸을 거치지 않고 aws를 인자 배열로 부르고 종료 코드를 돌려준다", () => {
+  it("--yes를 주면 셸을 거치지 않고 aws를 인자 배열로 부르고, 게시됐으면 0으로 끝난다", () => {
     vi.spyOn(console, "log").mockImplementation(() => {});
-    const run = vi.fn(() => ({ status: 3 }));
+    const run = vi.fn(() => ({
+      status: 0,
+      stdout: `{"status":"published","version":"${V}","removed":[]}{"StatusCode":200}`,
+    }));
     expect(
       main(
         ["--function", FN, "--version", V, "--action", "rollback", "--yes"],
         run,
       ),
-    ).toBe(3);
+    ).toBe(0);
     expect(run).toHaveBeenCalledTimes(1);
     expect(run).toHaveBeenCalledWith(
       "aws",
       invokeArgs({ functionName: FN, version: V, action: "rollback" }),
-      { stdio: "inherit" },
+      { encoding: "utf8", stdio: ["ignore", "pipe", "inherit"] },
     );
   });
 
@@ -103,5 +106,39 @@ describe("main", () => {
     expect(() =>
       main(["--function", FN, "--version", V, "--yes"], run),
     ).toThrow("ENOENT");
+  });
+});
+
+// aws lambda invoke는 함수가 오류로 끝나도 종료 코드 0을 줌 → 응답을 읽어 가림
+describe("exitCode", () => {
+  const META = '{"StatusCode":200,"ExecutedVersion":"$LATEST"}';
+
+  it.each([
+    [
+      "게시됨",
+      `{"status":"published","version":"${V}","removed":[]}${META}`,
+      0,
+    ],
+    ["변경 없음", `{"status":"unchanged","version":"${V}"}${META}`, 0],
+    [
+      "함수가 오류로 끝남",
+      `{"errorMessage":"되돌리기 실패: hold_conflict"}{"StatusCode":200,"FunctionError":"Unhandled"}`,
+      1,
+    ],
+    [
+      "입력 문제로 게시하지 않음",
+      `{"status":"failed","version":"${V}","reason":"rollback_target_missing"}${META}`,
+      1,
+    ],
+    ["다른 게시가 도는 중", `{"status":"busy"}${META}`, 2],
+    ["응답을 읽지 못함", META, 1],
+  ])("%s → %i", (_name, output, code) => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    expect(exitCode(0, output as string)).toBe(code);
+  });
+
+  it("aws가 0이 아닌 코드로 끝나면 그 코드를 그대로 돌려준다", () => {
+    expect(exitCode(254, "")).toBe(254);
+    expect(exitCode(null, "")).toBe(1);
   });
 });
