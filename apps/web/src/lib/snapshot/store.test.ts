@@ -528,8 +528,9 @@ describe("모르는 판단 정책 버전 (policyVersion, D20-6)", () => {
     first.store.start();
     await first.store.refresh();
     expect(first.reload).toHaveBeenCalledTimes(1);
+    // 정책 버전은 인코딩해 기록(쉼표가 섞여도 기록이 나뉘지 않게)
     expect(session.data.get("baradun:schema-reload")).toBe(
-      "policy:warnings-9+observations-9",
+      "policy:warnings-9%2Bobservations-9",
     );
 
     const second = setup({ session, server: first.server });
@@ -547,6 +548,50 @@ describe("모르는 판단 정책 버전 (policyVersion, D20-6)", () => {
     await store.refresh();
     expect(store.getState().phase).toBe("update_required");
     expect(reload).not.toHaveBeenCalled();
+  });
+
+  it("모르는 정책이어도 점검 중이면 점검 화면이 먼저", async () => {
+    const { store, server } = setup();
+    server.manifest = {
+      ...unknown,
+      maintenance: { active: true, until: null },
+    };
+    store.start();
+    await store.refresh();
+    expect(store.getState().phase).toBe("maintenance");
+  });
+
+  it("쉼표가 든 정책 버전도 새로고침은 한 번만(기록이 나뉘지 않음)", async () => {
+    const session = memoryStorage();
+    const first = setup({ session });
+    first.server.manifest = { ...manifestExample, policyVersion: "a,b" };
+    first.store.start();
+    await first.store.refresh();
+    expect(first.reload).toHaveBeenCalledTimes(1);
+    const second = setup({ session, server: first.server });
+    second.store.start();
+    await second.store.refresh();
+    expect(second.reload).not.toHaveBeenCalled();
+    expect(second.store.getState().phase).toBe("schema_unsupported");
+  });
+
+  it("값을 보여주던 중 모르는 정책이 오면 앞 값을 상태에서 비움", async () => {
+    const session = memoryStorage();
+    session.setItem(
+      "baradun:schema-reload",
+      "policy:warnings-9%2Bobservations-9",
+    );
+    const { store, server } = setup({ session });
+    store.start();
+    await store.refresh();
+    expect(store.getState().statuses).not.toBeNull();
+    server.manifest = unknown;
+    await store.refresh();
+    expect(store.getState()).toMatchObject({
+      phase: "schema_unsupported",
+      manifest: null,
+      statuses: null,
+    });
   });
 
   it("지금 정책 버전이면 정상, policyVersion이 글자가 아니면 못 읽은 것(지원 밖 형식으로 보지 않음)", async () => {
@@ -567,7 +612,7 @@ describe("모르는 판단 정책 버전 (policyVersion, D20-6)", () => {
     const session = memoryStorage();
     session.setItem(
       "baradun:schema-reload",
-      "policy:warnings-9+observations-9",
+      "policy:warnings-9%2Bobservations-9",
     );
     const online = setup({ storage, session });
     online.server.manifest = unknown;
