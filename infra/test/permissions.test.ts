@@ -451,7 +451,7 @@ describe("함수·역할별 최소 권한 범위 (BRD-67)", () => {
     );
   });
 
-  it("운영 API 역할은 Ops·문의 테이블과 자기 로그에만 쓰고, 게시 버킷은 data/ 읽기만 하며 관리형 정책이 없다", () => {
+  it("운영 API 역할은 Ops·문의 테이블과 자기 로그에만 쓰고, 게시 버킷은 data/ 읽기·목록만 하며 관리형 정책이 없다", () => {
     const api = roleId("OpsApiRole");
     expect(roles[api]!.Properties.ManagedPolicyArns ?? []).toEqual([]);
     const actions = allowedActionsOfRole(api);
@@ -465,13 +465,26 @@ describe("함수·역할별 최소 권한 범위 (BRD-67)", () => {
       "logs:CreateLogStream",
       "logs:PutLogEvents",
       "s3:GetObject",
+      "s3:ListBucket",
       "ssm:ListTagsForResource",
     ]);
-    // 해변 관리 지금 표시 상태(BRD-150): 사이트 버킷 data/ 아래 읽기만. 목록·쓰기 없음
+    // 해변 관리 지금 표시 상태(BRD-150): 사이트 버킷 data/ 아래 읽기와 data/ 접두어 목록만. 쓰기 없음
     const siteBucket = Object.keys(
       template.findResources("AWS::S3::Bucket"),
     ).find((id) => id.startsWith("SiteBucket"));
     expect(actions.get("s3:GetObject")).toEqual([`${siteBucket}.Arn/data/*`]);
+    expect(actions.get("s3:ListBucket")).toEqual([`${siteBucket}.Arn`]);
+    const list = allIamPolicies()
+      .filter((p) => p.roles.includes(api))
+      .flatMap((p) => p.statements)
+      .filter(
+        (s) =>
+          s.Effect === "Allow" && toList(s.Action).includes("s3:ListBucket"),
+      );
+    expect(list).toHaveLength(1);
+    expect(list[0]!.Condition).toEqual({
+      StringLike: { "s3:prefix": ["data/*"] },
+    });
     const logGroup = Object.keys(
       template.findResources("AWS::Logs::LogGroup"),
     ).find((id) => id.startsWith("OpsApiLogs"));
