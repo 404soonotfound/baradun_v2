@@ -6,6 +6,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./notice-rules": "./src/notice-rules.ts",
+    "./judgment-policy": "./src/judgment-policy.ts",
     "./schema.json": "./schemas/contract.schema.json"
   },
   "scripts": {
