@@ -552,21 +552,22 @@ function publisherInvoker(): PublisherInvoker | null {
         throw new Error(`publisher 호출 상태 ${result.StatusCode}`);
       }
     },
-    // 미리보기는 동기(RequestResponse). 함수 오류(FunctionError)면 던짐
+    // 미리보기는 따로 둔 읽기 전용 함수를 동기(RequestResponse)로 부름(게시 함수의 실행·오류 수에 섞이지 않게)
+    // 함수 이름이 없거나 함수 오류(FunctionError)면 던짐 → 화면은 '미리보기를 만들지 못했어요'
     async preview() {
+      const previewName = process.env.PREVIEW_FUNCTION_NAME;
+      if (!previewName) throw new Error("미리보기 함수 이름 없음");
       const result = await lambda.send(
         new InvokeCommand({
-          FunctionName: functionName,
+          FunctionName: previewName,
           InvocationType: "RequestResponse",
-          Payload: new TextEncoder().encode(
-            JSON.stringify({ action: "preview" }),
-          ),
+          Payload: new TextEncoder().encode("{}"),
         }),
         { abortSignal: AbortSignal.timeout(PREVIEW_WAIT_MS) },
       );
       if (result.FunctionError || !result.Payload) {
         throw new Error(
-          `publisher 미리보기 오류 ${result.FunctionError ?? "빈 응답"}`,
+          `미리보기 함수 오류 ${result.FunctionError ?? "빈 응답"}`,
         );
       }
       return JSON.parse(new TextDecoder().decode(result.Payload)) as unknown;

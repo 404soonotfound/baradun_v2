@@ -1174,13 +1174,18 @@ describe("되돌리기 미리보기 (GET /ops/publish/rollback-preview)", () => 
 });
 
 describe("게시 변경 미리보기 (GET /ops/publish/preview)", () => {
-  it("publisher가 계산한 미리보기를 그대로 준다(운영 API는 분류하지 않음)", async () => {
+  it("미리보기 함수가 계산한 결과를 그대로 준다(운영 API는 분류하지 않음)", async () => {
     const table = new FakeTable();
     const publisher = new FakePublisher();
     const preview = {
       status: "ready",
       at: "2026-11-12T06:00:00Z",
-      current: { version: "20261112T054500Z", counts: null, readable: true },
+      current: {
+        version: "20261112T054500Z",
+        counts: null,
+        readable: true,
+        missing: false,
+      },
       next: { counts: { clear: 1, unavailable: 0, undetermined: 0 } },
       changed: [],
       changedCount: 0,

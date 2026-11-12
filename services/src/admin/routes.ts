@@ -73,7 +73,7 @@ export const ROUTES: Readonly<
   "/ops/publish": {
     GET: { roles: ["viewer", "editor", "publisher"], sample: false },
   },
-  // 지금 게시 변경 미리보기(캔버스 N2). 분류는 publisher가 미리 계산, 쓰기 없음. 샘플은 받지 않음
+  // 지금 게시 변경 미리보기(캔버스 N2). 분류는 미리보기 전용 함수가 publisher 코드로 계산, 쓰기 없음. 샘플은 받지 않음
   "/ops/publish/preview": {
     GET: { roles: ["viewer", "editor", "publisher"], sample: false },
   },
