@@ -803,3 +803,16 @@ npx --no-install tsx services/scripts/inquiry-status-backfill.ts --table <Inquir
 3. 점검과 같은 방법(3·4단계)으로 반영을 확인합니다.
 
 서비스 워커(오프라인)가 생기면 새로고침이 이전 화면 파일을 내주지 않는지 그 작업에서 다시 확인합니다.
+
+### 판단 정책 바꾸기 (결정 기록 D20-5~7)
+
+판단 정책 값(특보 확인 45분, 지표 만료 90·60분)은 `packages/contracts/src/judgment-policy.ts` 한 곳에 있고, publisher와 웹이 함께 씁니다. 웹은 **지금 정책 하나만** 읽고, 모르는 `policyVersion`은 판단불가로 봅니다. 그래서 위 강제 업데이트와 달리 **publisher를 먼저** 배포합니다.
+
+1. 한 PR에서 함께 바꿉니다(하나라도 빠지면 `services` 시험 `policy-history.test.ts`·`infra` publisher 시험이 실패).
+   - 바뀐 쪽의 정책 버전(`WARNING_POLICY_VERSION`·`OBSERVATION_POLICY_VERSION`)과 값
+   - `POLICY_HISTORY` 끝에 새 항목 `{ policyVersion, minWebBuild: N+1 }`
+   - `WEB_BUILD`를 N+1로, `MANIFEST_SETTINGS.minWebBuild`를 N+1로
+2. 머지하면 `deploy.yml` 사이트 작업이 **'판단 정책 버전 확인'에서 멈춥니다**(운영 게시본이 아직 옛 정책이라 새 화면이 읽지 못함). 정상입니다. 화면은 옛 화면 그대로입니다.
+3. `npm run deploy:infra`로 publisher를 배포합니다. 다음 게시부터 새 정책·`minWebBuild` N+1이 나가고, 열려 있던 옛 화면(WEB_BUILD N)은 판단불가가 아니라 강제 업데이트 화면을 봅니다.
+4. 바로 `deploy` 워크플로를 다시 실행합니다(`npm run deploy:prod` 또는 Actions에서 수동 실행). 이번에는 확인을 통과해 새 화면이 올라가고, 강제 업데이트 화면의 버튼으로 새 화면을 받습니다.
+5. 3과 4 사이에는 모든 사용자가 강제 업데이트 화면을 보므로 이어서 합니다. 되돌리기(`rollback`)는 다른 정책으로 게시된 버전을 되살리지 않습니다(`policy_unsupported`).
