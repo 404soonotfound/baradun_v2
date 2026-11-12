@@ -1,4 +1,9 @@
-import type { PublishSummary, StationTable } from "../collect/publish-summary";
+import type {
+  NoticeSnapshot,
+  PublishRun,
+  PublishSummary,
+  StationTable,
+} from "../collect/publish-summary";
 import {
   assertSnapshotVersion,
   decideStateWrite,
@@ -6,6 +11,7 @@ import {
 } from "./rules";
 import type {
   ClaimSlotResult,
+  NoticeHold,
   OpsStore,
   PutStateResult,
   StateRecord,
@@ -78,6 +84,12 @@ export class MemoryOpsStore implements OpsStore {
   readonly summaries = new Map<string, PublishSummary>();
   stationTable: { table: StationTable; updatedAt: string } | null = null;
   stationTableWrites = 0;
+  // 게시 때의 공지 상태(버전 → 공지), 되돌림 포인터, 게시 실행 결과(마지막 실행·실패한 실행). 테스트에서 확인할 때 씀
+  readonly publishNotices = new Map<string, readonly NoticeSnapshot[]>();
+  noticeHold: NoticeHold | null = null;
+  noticeHoldUpdatedAt: string | null = null;
+  lastRun: PublishRun | null = null;
+  readonly failedRuns: PublishRun[] = [];
 
   // 테스트에서 저장된 슬롯 기록(ttl 등)을 확인할 때 씀
   slotRecord(job: string, slotId: string): SlotRecord | undefined {
@@ -154,8 +166,44 @@ export class MemoryOpsStore implements OpsStore {
     }
   }
 
+  async putPublishNotices(
+    version: string,
+    notices: readonly NoticeSnapshot[],
+  ): Promise<void> {
+    this.publishNotices.set(version, structuredClone(notices));
+  }
+
+  async getPublishNotices(
+    version: string,
+  ): Promise<readonly NoticeSnapshot[] | null> {
+    return structuredClone(this.publishNotices.get(version) ?? null);
+  }
+
   async putStationTable(table: StationTable, updatedAt: string): Promise<void> {
     this.stationTable = { table, updatedAt };
     this.stationTableWrites += 1;
+  }
+
+  async getNoticeHold(): Promise<NoticeHold | null> {
+    return structuredClone(this.noticeHold);
+  }
+
+  async putNoticeHold(
+    notices: NoticeHold["notices"],
+    expectedVersion: number,
+    updatedAt: string,
+  ): Promise<boolean> {
+    if ((this.noticeHold?.version ?? 0) !== expectedVersion) return false;
+    this.noticeHoldUpdatedAt = updatedAt;
+    this.noticeHold = structuredClone({
+      version: expectedVersion + 1,
+      notices,
+    });
+    return true;
+  }
+
+  async putPublishRun(run: PublishRun): Promise<void> {
+    this.lastRun = run;
+    if (run.result === "failed") this.failedRuns.push(run);
   }
 }

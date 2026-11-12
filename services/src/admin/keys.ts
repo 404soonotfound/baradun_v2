@@ -7,6 +7,7 @@
 // - 감사 기록:           admin#audit#{YYYY-MM} / {시각}#{traceId}  (D16-B5, UTC 월별, TTL 1년, 추가 전용)
 // - 공지:               admin#notice / {공지 ID}       (BRD-151, 한 파티션이라 publisher가 Query 한 번으로 읽음)
 // - 해변 운영 메모:      admin#beach#{해변 ID} / memo (BRD-150, 내부용. publisher는 admin#notice만 읽어 게시본에 나가지 않음)
+// - 되돌림 포인터:       admin#publish / notice-hold  (D20-2, publisher가 쓰고 읽음. 키는 core/store/dynamodb.ts NOTICE_HOLD_KEY)
 // - 업무 항목:           admin#{종류}#{id} / {sk}     (메모 등, 해당 이슈에서 정함)
 
 export interface OpsKey {

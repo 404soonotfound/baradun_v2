@@ -27,6 +27,20 @@ export interface StationUse {
   readonly waveBeachIds: readonly string[];
 }
 
+// 게시 원인. auto: 수집 뒤 자동 게시 · operator: 운영자의 '지금 게시'(D16-C4)
+// rollback: 되돌리기(공지만 고른 게시본 때로, 특보·관측은 최신. D20-1~3) · republish: 옛 게시 파일 다시 내보내기(긴급 도구, D20-4)
+export type PublishSource = "auto" | "operator" | "rollback" | "republish";
+
+// 게시에 쓴 공지 한 건. 계약(@baradun/contracts)의 Notice와 같은 모양(이 파일은 계약 패키지를 가져오지 않음)
+export interface NoticeSnapshot {
+  readonly id: string;
+  readonly kind: string;
+  readonly title: { readonly ko: string; readonly en: string };
+  readonly body: { readonly ko: string; readonly en: string };
+  readonly startsAt: string;
+  readonly endsAt: string | null;
+}
+
 export interface PublishSummary {
   readonly version: string;
   // 이 게시 직전에 앱에 보이던 버전. 없으면 null(첫 게시)
@@ -35,6 +49,34 @@ export interface PublishSummary {
   readonly beachCount: number;
   // 사유에 관측 지연(observation_delayed)이 있는 해변(publisher 분류 그대로)
   readonly delayedBeachIds: readonly string[];
+  // 게시 원인. 없으면 자동(이 칸이 생기기 전 요약)
+  readonly source?: PublishSource;
+  // 되돌리기·다시 내보내기에서 고른 게시본
+  readonly target?: string;
+}
+
+// 게시 때의 공지 상태(되돌리기 기준, D20-2): 끝나지 않은 노출본 전부(예약 전 포함, 되돌림 반영 뒤)
+// 키: publish#notices / {게시 버전}. 요약과 같은 기간 뒤 지움
+// - 요약에 싣지 않고 따로 둠: 요약은 운영 API가 기간 조회로 한꺼번에 읽어 수백 바이트로 유지해야 함(위 설명)
+//   공지 문구(공지마다 수백 바이트~1KB)는 되돌릴 때 그 버전 한 건만 읽음
+// - 없으면 그때 공지 상태를 모르는 게시(운영 DB를 읽지 못함·이 기록이 생기기 전·다시 내보내기) → 그 버전으로는 되돌릴 수 없음
+// - 예약 전 문구가 들어 있어 공개 게시본·운영 API 응답에 그대로 내보내지 않음
+export const PUBLISH_NOTICES_PK = "publish#notices";
+
+// 게시 실행 한 번의 결과(D16-C2). 변경이 없어 생략한 것(unchanged)과 실패(failed)를 나눠 남김
+// 키: publish#run / last(마지막 실행, 덮어씀) · publish#run / {시도한 버전}(실패한 실행만, 보존 기간 뒤 지움)
+// 다른 실행이 게시 중이라 물러난 실행(busy)은 남기지 않음
+export const PUBLISH_RUN_PK = "publish#run";
+export const PUBLISH_RUN_LAST_SK = "last";
+
+export interface PublishRun {
+  readonly at: string; // 실행 시작(UTC ISO)
+  readonly source: PublishSource;
+  readonly result: "published" | "unchanged" | "failed";
+  // published: 새 버전 · unchanged: 그대로인 지금 버전 · failed: 시도한 버전(게시되지 않음)
+  readonly version: string;
+  readonly reason?: string; // failed 사유
+  readonly target?: string; // 되돌리기·다시 내보내기에서 고른 게시본
 }
 
 export type StationTable = Readonly<Record<string, StationUse>>;
@@ -63,6 +105,8 @@ export function buildPublishSummary(input: {
   readonly publishedAt: string;
   readonly beachCount: number;
   readonly status: Readonly<Record<string, StatusReasons>>;
+  readonly source?: PublishSource;
+  readonly target?: string;
 }): PublishSummary {
   const delayedBeachIds = Object.entries(input.status)
     .filter(([, status]) =>
@@ -76,6 +120,9 @@ export function buildPublishSummary(input: {
     publishedAt: input.publishedAt,
     beachCount: input.beachCount,
     delayedBeachIds,
+    // 값이 없는 칸은 두지 않음(DynamoDB에 undefined를 쓰지 않음)
+    ...(input.source ? { source: input.source } : {}),
+    ...(input.target ? { target: input.target } : {}),
   };
 }
 
