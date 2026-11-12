@@ -1387,6 +1387,65 @@ describe("전체 재검증", () => {
   });
 });
 
+// 되돌리기는 옛 manifest를 되살리지 않고 더 큰 새 snapshotVersion으로 다시 게시함(결정 기록 D20-1, #256)
+// 열린 화면은 받은 것보다 작은 버전을 무시하므로(위 '전체 재검증'), 새 버전으로 와야 되돌린 내용이 반영됨
+describe("되돌리기 게시를 받는 열린 화면 (D20-1~3)", () => {
+  const b0001 = { id: "b0001", hidden: false };
+  const versioned = (version: string, generatedAt: string) => ({
+    ...manifestExample,
+    snapshotVersion: version,
+    generatedAt,
+    files: {
+      ...manifestExample.files,
+      status: `/data/${version}/status.json`,
+    },
+  });
+  const v2 = "20261017T060000Z";
+  const v3 = "20261017T060500Z";
+  const notices = read<ManifestFile>("manifest.with-notices.json").notices!;
+
+  it("더 큰 새 버전으로 온 되돌리기는 받아들인다: 되돌린 공지는 빠지고 발효 특보는 그대로", async () => {
+    const { store, server, statusCalls } = setup();
+    // 06:00 게시: 공지가 실려 있고 b0001에 풍랑주의보 발효
+    const withWarning = structuredClone(statusExample);
+    withWarning.beaches.b0001 = structuredClone(statusExample.beaches.b0094!);
+    server.manifest = { ...versioned(v2, "2026-10-17T06:00:10Z"), notices };
+    server.status = withWarning;
+    vi.setSystemTime(Date.parse("2026-10-17T06:01:00Z"));
+    store.start();
+    await store.refresh();
+    expect(store.getState().manifest?.notices).toHaveLength(notices.length);
+
+    // 06:05 되돌리기 게시: 공지만 앞 게시본 때로(없음), 특보·관측은 지금 수집 사실 그대로
+    server.manifest = versioned(v3, "2026-10-17T06:05:10Z");
+    vi.setSystemTime(Date.parse("2026-10-17T06:06:00Z"));
+    await store.refresh();
+    expect(store.getState()).toMatchObject({ phase: "ready", live: true });
+    expect(store.getState().manifest?.snapshotVersion).toBe(v3);
+    expect(store.getState().manifest?.notices ?? []).toEqual([]);
+    expect(statusCalls()).toBe(2);
+    // 되돌리기로 발효 특보가 '특보 없음'으로 바뀌지 않음
+    expect(deriveBeachView(b0001, store.getState())).toMatchObject({
+      category: "unavailable",
+    });
+  });
+
+  it("옛 manifest를 그대로 되살린 되돌리기(더 작은 버전)는 열린 화면에 반영되지 않는다", async () => {
+    const { store, server, statusCalls } = setup();
+    server.manifest = { ...versioned(v2, "2026-10-17T06:00:10Z"), notices };
+    vi.setSystemTime(Date.parse("2026-10-17T06:01:00Z"));
+    store.start();
+    await store.refresh();
+
+    // 05:30 manifest(공지 없음)를 그대로 되살린 경우: 열린 화면은 버리고 앞 값을 유지 → 공지가 계속 보임
+    server.manifest = manifestExample;
+    await store.refresh();
+    expect(store.getState().manifest?.snapshotVersion).toBe(v2);
+    expect(store.getState().manifest?.notices).toHaveLength(notices.length);
+    expect(statusCalls()).toBe(1);
+  });
+});
+
 describe("스냅샷 버전 형식·저장된 값의 시계", () => {
   it("형식이 틀린 snapshotVersion → 못 읽은 것으로 보고 이후 정상 버전을 막지 않음", async () => {
     const bad = "zzz";
