@@ -65,6 +65,20 @@ describe("해변 이름표", () => {
     expect(() => loadBeachNames(dir)).toThrow("b0001.json");
   });
 
+  it("해변 관리 정적 페이지와 같은 규칙: b+숫자 4자리 파일만 읽고, 파일 이름과 ID가 다르면 멈춘다", () => {
+    dir = mkdtempSync(path.join(tmpdir(), "beaches-"));
+    const beach = (id: string) => ({
+      id,
+      name: { ko: "강문해수욕장" },
+      region: { sido: { ko: "강원" }, sigungu: { ko: "강릉시" } },
+    });
+    write("b0001.json", beach("b0001"));
+    write("b10000.json", beach("b10000"));
+    expect(Object.keys(loadBeachNames(dir))).toEqual(["b0001"]);
+    write("b0005.json", beach("b0500"));
+    expect(() => loadBeachNames(dir)).toThrow("b0005.json");
+  });
+
   it("저장소의 실제 해변 데이터를 모두 읽는다", () => {
     const names = loadBeachNames(
       path.join(__dirname, "../../../../data/beaches"),
