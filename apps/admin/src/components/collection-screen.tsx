@@ -67,11 +67,12 @@ const SEASON_FILE =
 
 // ── 공통 모양(시안 V9 w-bd·w-btn·w-t·w-li) ──
 
-type BadgeTone = "clear" | "warn" | "error" | "unknown" | "neutral";
+type BadgeTone = "success" | "warn" | "error" | "unknown" | "neutral";
 
+// 수집 정상은 작업 성공색(color.success, 결정 E6·BRD-165). 해변 '특보 없음' 파랑(status.clear)과 섞지 않음
 const BADGE_TONE: Record<BadgeTone, string> = {
-  clear:
-    "bg-status-clear-bg text-status-clear-fg ring-1 ring-brand-border ring-inset",
+  success:
+    "bg-success-bg text-success-fg ring-1 ring-success-border ring-inset",
   warn: "bg-status-stale-bg text-status-stale-fg outline-1 outline-status-stale-border outline-dashed -outline-offset-1",
   error:
     "bg-status-blocked-bg text-status-blocked-fg ring-1 ring-danger-border ring-inset",
@@ -97,7 +98,7 @@ function Badge({
 }
 
 const STATE_TONE: Record<SourceState, BadgeTone> = {
-  ok: "clear",
+  ok: "success",
   late: "warn",
   unchecked: "unknown",
   partial: "warn",
@@ -111,7 +112,7 @@ function StateBadge({ state }: { state: SourceState }) {
 
 // 상태 점 + 글자(시안 V9 표). 글자가 상태를 말하고 점은 장식
 const DOT: Record<SourceState, string> = {
-  ok: "bg-brand-default",
+  ok: "bg-success-icon",
   late: "bg-status-stale-border",
   unchecked: "border border-dashed border-status-unknown-border",
   partial: "bg-status-stale-border",
@@ -139,7 +140,7 @@ function StateDot({ state }: { state: SourceState }) {
 
 const ALARM_TONE: Record<AlarmState, BadgeTone> = {
   ALARM: "error",
-  OK: "clear",
+  OK: "success",
   INSUFFICIENT_DATA: "neutral",
   unknown: "unknown",
 };
@@ -277,7 +278,7 @@ function KpiBox({ items }: { items: readonly Kpi[] }) {
 // ── 24시간 막대(시안 w-trk): 마우스를 올리면 그 칸의 시각·결과를 말풍선으로 ──
 
 const BAR: Record<BarState, string> = {
-  ok: "bg-brand-default",
+  ok: "bg-success-icon",
   late: "bg-status-stale-border",
   failed: "bg-status-blocked-fg",
   none: "bg-border-default",
@@ -1036,9 +1037,10 @@ function incidentHeadline(incident: JobIncident): string {
     .join("");
 }
 
+// 끝난 장애는 중립 회색. 성공색은 수집 정상에만(결정 E6), '특보 없음' 파랑과도 섞지 않음
 function OngoingBadge({ ended }: { ended: boolean }) {
   return (
-    <Badge tone={ended ? "clear" : "error"}>
+    <Badge tone={ended ? "neutral" : "error"}>
       {ended ? t.incidentResolved : t.incidentOngoing}
     </Badge>
   );
@@ -1819,7 +1821,7 @@ function IncidentSheet({
 const STATION_DOT: Record<StationRow["state"], string> = {
   missing: "bg-status-stale-border",
   unknown: "border border-dashed border-status-unknown-border",
-  ok: "bg-brand-default",
+  ok: "bg-success-icon",
 };
 
 const STATIONS_PAGE = 6;
