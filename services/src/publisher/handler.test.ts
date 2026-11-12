@@ -96,6 +96,14 @@ describe("parseManualEvent 운영자 게시 작업", () => {
     });
   });
 
+  it("미리보기는 다른 칸 없이 받는다", () => {
+    expect(parseManualEvent({ action: "preview" })).toEqual({
+      action: "preview",
+    });
+    expect(() => parseManualEvent({ action: "preview", jobId })).toThrow();
+    expect(() => parseManualEvent({ action: "preview", version })).toThrow();
+  });
+
   it.each([
     ["작업 ID 없는 지금 게시", { action: "publish" }],
     ["작업 ID 형식 틀림", { action: "publish", jobId: "j-xyz" }],
