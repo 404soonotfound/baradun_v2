@@ -40,7 +40,7 @@ import { Button, Notice } from "./ui";
 const t = messages.audit;
 
 // 해변 메모 기록의 대상 이름(공개 해변 데이터 이름표, 문의 화면과 같음)
-type Beaches = Readonly<Record<string, BeachName>>;
+export type Beaches = Readonly<Record<string, BeachName>>;
 const i = messages.inquiries;
 
 const REPO_DATA_COMMITS =
@@ -53,7 +53,8 @@ function roleLabel(role: string): string {
   return role in t.role ? t.role[role as keyof typeof t.role] : role;
 }
 
-function kindBadge(item: AuditView): string {
+// 운영 홈 '최근 변경'도 같은 표시를 씀(ADM-HOME)
+export function kindBadge(item: AuditView): string {
   const category = categoryOf(item.action);
   if (category) return t.category[category];
   return item.actorKind === "sample" ? t.demoBadge : t.unknownBadge;
@@ -62,7 +63,7 @@ function kindBadge(item: AuditView): string {
 const statusLabel = (s: string) => (isInquiryStatus(s) ? i.status[s] : s);
 
 // 바뀐 내용 한 줄 요약(시안 '문구 수정 · 영어 문구 추가', '접수 → 확인 중')
-function summaryOf(item: AuditView): string {
+export function summaryOf(item: AuditView): string {
   const s = t.summary;
   const parts: string[] = [];
   if (item.action === "notice.create") parts.push(s.noticeCreate);
@@ -123,7 +124,13 @@ function summaryOf(item: AuditView): string {
     : item.action;
 }
 
-function Target({ item, beaches }: { item: AuditView; beaches: Beaches }) {
+export function Target({
+  item,
+  beaches,
+}: {
+  item: AuditView;
+  beaches: Beaches;
+}) {
   const { kind, id } = item.target;
   const link =
     "font-medium text-brand-default underline-offset-2 hover:underline";
