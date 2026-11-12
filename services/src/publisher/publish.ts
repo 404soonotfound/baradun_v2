@@ -220,16 +220,28 @@ export function noticeHoldFor(
   return held;
 }
 
+// 칸 순서와 상관없이 견주려고 만든 글자(칸 이름 순으로 정렬)
+// DynamoDB는 맵의 칸 순서를 지키지 않음 → 읽어 온 포인터를 새로 계산한 값과 견줄 때는 JSON.stringify를 그대로 쓰지 않음
+function canonical(value: unknown): string {
+  return JSON.stringify(value, (_key, v: unknown) =>
+    typeof v === "object" && v !== null && !Array.isArray(v)
+      ? Object.fromEntries(
+          Object.entries(v).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)),
+        )
+      : v,
+  );
+}
+
 // 두 포인터가 같은 공지를 같은 노출본으로 되돌리는지(고른 게시본·되돌린 시각은 보지 않음)
 export function sameHeldNotices(
   a: NoticeHold["notices"],
   b: NoticeHold["notices"],
 ): boolean {
   const lives = (held: NoticeHold["notices"]) =>
-    JSON.stringify(
-      Object.keys(held)
-        .sort()
-        .map((id) => [id, held[id]!.live]),
+    canonical(
+      Object.fromEntries(
+        Object.entries(held).map(([id, entry]) => [id, entry.live]),
+      ),
     );
   return lives(a) === lives(b);
 }
@@ -808,7 +820,7 @@ async function runPublish(
           });
         } else if (
           after?.version === restore.version &&
-          JSON.stringify(after.notices) === JSON.stringify(nextHold.notices)
+          canonical(after.notices) === canonical(nextHold.notices)
         ) {
           holdToRestore = restore;
         }

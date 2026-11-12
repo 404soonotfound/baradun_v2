@@ -118,10 +118,11 @@ export const MANUAL_INPUT_FAILURES: readonly string[] = [
 ];
 
 // 이 결과를 오류로 던져 Lambda 오류 지표에 남길지. 자동 게시의 실패와, 사람이 부른 실행의 입력 문제가 아닌 실패
+// false여도 실패일 수 있음(입력 문제) → 타입을 좁히지 않고 참·거짓만 돌려줌
 export function isPublishFault(
   manual: ManualEvent | null,
   result: PublishResult,
-): result is Extract<PublishResult, { status: "failed" }> {
+): boolean {
   return (
     result.status === "failed" &&
     !(manual !== null && MANUAL_INPUT_FAILURES.includes(result.reason))
@@ -153,7 +154,7 @@ export async function publishHandler(
       { ops, snapshots, notices, log, clock, owner },
       manual.version,
     );
-    if (isPublishFault(manual, result)) {
+    if (result.status === "failed" && isPublishFault(manual, result)) {
       throw new Error(
         `다시 내보내기 실패: ${result.reason} (${manual.version})`,
       );
@@ -178,7 +179,7 @@ export async function publishHandler(
     },
     manual ? { rollbackTo: manual.version } : {},
   );
-  if (isPublishFault(manual, result)) {
+  if (result.status === "failed" && isPublishFault(manual, result)) {
     throw new Error(
       manual
         ? `되돌리기 실패: ${result.reason} (${manual.version})`
