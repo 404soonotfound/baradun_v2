@@ -19,6 +19,7 @@ import { CostBudget } from "./ops/cost-budget";
 import { OpsAlarms } from "./ops/alarms";
 import { Publisher } from "./publish/publisher";
 import { PublisherRole } from "./publish/publisher-role";
+import { PublishPreview } from "./publish/publish-preview";
 import { ROLE_BOUNDARY_POLICY_NAME } from "./settings";
 import { createSecurityHeadersPolicy } from "./site/security-headers";
 import { AdminSite } from "./admin/admin-site";
@@ -155,6 +156,12 @@ export class BaradunStack extends Stack {
       role: publisherRole.role,
     });
 
+    // 게시 변경 미리보기 함수(#331). State·data/ 읽기만, 운영 API가 동기 호출
+    const publishPreview = new PublishPreview(this, "PublishPreview", {
+      bucket: site.bucket,
+      stateTable: tables.state,
+    });
+
     // 수집 Lambda 3개와 실행 일정 (BRD-56·BRD-58)
     // 테이블 두 개를 넘겨서 수집기가 그 표를 읽고 쓰게 함. 수집 뒤 publisher를 깨움
     const collectors = new Collectors(this, "Collect", {
@@ -173,6 +180,7 @@ export class BaradunStack extends Stack {
       auth: operatorAuth,
       snapshotBucket: site.bucket, // 해변 관리 지금 표시 상태(BRD-150): data/ 읽기·목록만
       publisher: publisher.function, // 지금 게시·되돌리기 작업(#331): 비동기 호출만
+      preview: publishPreview.function, // 게시 변경 미리보기(#331): 동기 호출, 읽기 전용 함수
     });
 
     // 운영자 사이트: 사용자 사이트와 따로 버킷·CloudFront, /ops/*는 운영 API (BRD-147)

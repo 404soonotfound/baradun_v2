@@ -222,6 +222,7 @@ describe("DynamoDB 권한 (BRD-55)", () => {
     expect([...holders].sort()).toEqual(
       [
         roleId("PublisherRole"),
+        roleId("PublishPreviewRole"),
         roleId("CollectOceanRole"),
         roleId("CollectWarningsRole"),
         roleId("CollectCatalogRole"),
@@ -451,6 +452,7 @@ describe("함수·역할별 최소 권한 범위 (BRD-67)", () => {
         roleId("CollectRipRole"),
         roleId("CollectWeatherRole"),
         roleId("PublisherRole"),
+        roleId("PublishPreviewRole"),
         roleId("InquiryInquiryRole"),
         roleId("OpsNotificationRole"),
         roleId("OpsApiRole"),
@@ -492,10 +494,14 @@ describe("함수·역할별 최소 권한 범위 (BRD-67)", () => {
       template.findResources("AWS::Lambda::Function"),
     ).filter((id) => id.startsWith("PublishFunction"));
     expect(publisherFunction).toHaveLength(1);
-    // 버전·별칭 주소(:*) 없이 publish-snapshot 함수 하나에만
-    expect(actions.get("lambda:InvokeFunction")).toEqual([
-      `${publisherFunction[0]}.Arn`,
-    ]);
+    // 버전·별칭 주소(:*) 없이 publish-snapshot 함수와 미리보기 함수 둘에만
+    const previewFunction = Object.keys(
+      template.findResources("AWS::Lambda::Function"),
+    ).filter((id) => id.startsWith("PublishPreviewFunction"));
+    expect(previewFunction).toHaveLength(1);
+    expect(actions.get("lambda:InvokeFunction")?.sort()).toEqual(
+      [`${publisherFunction[0]}.Arn`, `${previewFunction[0]}.Arn`].sort(),
+    );
     const list = allIamPolicies()
       .filter((p) => p.roles.includes(api))
       .flatMap((p) => p.statements)
@@ -513,6 +519,29 @@ describe("함수·역할별 최소 권한 범위 (BRD-67)", () => {
     for (const action of ["logs:CreateLogStream", "logs:PutLogEvents"]) {
       expect(actions.get(action)).toEqual([`${logGroup}.Arn`]);
     }
+  });
+
+  it("미리보기 역할은 State·게시 버킷 data/ 읽기와 자기 로그만 갖고 쓰기·Ops 권한이 없다(#331)", () => {
+    const preview = roleId("PublishPreviewRole");
+    expect(roles[preview]!.Properties.ManagedPolicyArns ?? []).toEqual([]);
+    const actions = allowedActionsOfRole(preview);
+    expect([...actions.keys()].sort()).toEqual([
+      "dynamodb:BatchGetItem",
+      "dynamodb:GetItem",
+      "dynamodb:Query",
+      "logs:CreateLogStream",
+      "logs:PutLogEvents",
+      "s3:GetObject",
+      "s3:ListBucket",
+    ]);
+    for (const action of ["dynamodb:GetItem", "dynamodb:Query"]) {
+      expect(actions.get(action)).toEqual([`${tableId("State")}.Arn`]);
+    }
+    const siteBucket = Object.keys(
+      template.findResources("AWS::S3::Bucket"),
+    ).find((id) => id.startsWith("SiteBucket"));
+    expect(actions.get("s3:GetObject")).toEqual([`${siteBucket}.Arn/data/*`]);
+    expect(actions.get("s3:ListBucket")).toEqual([`${siteBucket}.Arn`]);
   });
 
   it("운영 알림 역할은 기존 운영 SNS 주제·실패 대기열·자기 로그에만 쓴다", () => {

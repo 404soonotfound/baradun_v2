@@ -49,6 +49,8 @@ export interface OpsApiProps {
   readonly snapshotBucket: s3.IBucket;
   // 지금 게시·되돌리기 작업을 넘길 publish-snapshot 함수(#331). 비동기 호출만
   readonly publisher: lambda.IFunction;
+  // 게시 변경 미리보기 함수(#331, 읽기 전용). 동기 호출
+  readonly preview: lambda.IFunction;
 }
 
 // 감사 기록 파티션 키 모양(services/src/admin/keys.ts AUDIT_PREFIX와 같음)
@@ -159,10 +161,11 @@ export class OpsApi extends Construct {
     );
     // 지금 게시·되돌리기 작업 넘기기(#331). publisher 함수 하나에만
     // grantInvoke 대신 직접 적음: grantInvoke는 함수 버전·별칭 주소(:*)까지 열어 줌(수집기와 같은 방식)
+    // 미리보기는 publisher가 아닌 미리보기 함수로(게시 알림의 실행·오류 수에 섞이지 않게)
     this.role.addToPolicy(
       new iam.PolicyStatement({
         actions: ["lambda:InvokeFunction"],
-        resources: [props.publisher.functionArn],
+        resources: [props.publisher.functionArn, props.preview.functionArn],
       }),
     );
     // 문의: 상세 읽기·처리 상태 바꾸기(트랜잭션 Update)·목록 GSI 조회. 만들기·지우기·Scan은 없음
@@ -213,6 +216,8 @@ export class OpsApi extends Construct {
         SNAPSHOT_BUCKET: props.snapshotBucket.bucketName,
         // 지금 게시·되돌리기 작업을 넘길 함수(services/src/admin/handler.ts publisherInvoker)
         PUBLISHER_FUNCTION_NAME: props.publisher.functionName,
+        // 게시 변경 미리보기 함수(services/src/admin/handler.ts publisherInvoker.preview)
+        PREVIEW_FUNCTION_NAME: props.preview.functionName,
       },
     });
     // 함수 URL로만 부름(동기). 비동기 호출 재시도는 막아 둠(11장 재시도 제한)

@@ -178,6 +178,9 @@ export const CATALOG_SCHEDULE_KST = { hour: "4", minute: "20" } as const;
 export const PUBLISHER_TIMEOUT_SECONDS = 60;
 // 해변 약 200곳 분류·계약 검사·JSON 4개 쓰기. 수집기와 같은 크기
 export const PUBLISHER_MEMORY_MB = 256;
+// 게시 변경 미리보기 함수 제한 시간(#331). 운영 API는 8초만 기다리고(PREVIEW_WAIT_MS) 함수 제한은 10초라
+// 그보다 오래 돌 이유가 없음. 늦은 실행이 계속 돌며 State 읽기 용량을 쓰지 않게 짧게 둠
+export const PREVIEW_TIMEOUT_SECONDS = 10;
 
 // 운영자 로그인 (BRD-145, 결정 기록 D16-A3, 아키텍처 18.2)
 // 이름 앞부분 BaradunV2-는 실행 정책의 사용자 풀 Resource 범위가 아니라 콘솔에서 찾기 쉽게 붙임
