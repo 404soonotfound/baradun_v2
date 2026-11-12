@@ -10,6 +10,7 @@ import type { SnapshotStore, TaggedFile } from "./types";
 // S3 게시 저장소 (BRD-61 PR ②, 아키텍처 6.2·17.2)
 // S3 호출은 이 파일에만 둠. 게시 순서·분류는 SnapshotStore 인터페이스만 씀(이식성)
 // 권한은 publisher 역할의 data/ 아래 Get·Put·Delete·List뿐(infra/lib/publish/publisher-role.ts)
+// 운영 API 역할은 읽기용으로 data/ 아래 Get·List만(infra/lib/admin/ops-api.ts, BRD-150)
 // 조건부 쓰기(If-Match·If-None-Match): S3 공식 문서 'conditional writes' 기준
 //   조건이 어긋나면 412, 같은 순간 겹친 요청은 409, If-Match 대상이 그 사이 지워졌으면 404
 //   → 셋 다 "다른 실행이 먼저 바꿈"으로 보고 false. 부르는 쪽이 다시 읽고 판단함

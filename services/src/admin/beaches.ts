@@ -11,6 +11,7 @@ import type { Principal } from "./auth";
 import type { DataDependencies } from "./handler";
 import {
   errorJson,
+  errorName,
   header,
   json,
   readJsonBody,
@@ -41,7 +42,7 @@ const MANIFEST_PATH = "data/manifest.json";
 const STATUS_PATH = /^\/(data\/[0-9]{8}T[0-9]{6}Z\/status\.json)$/;
 
 export type StatusUnavailableReason =
-  // 게시 버킷 설정이 없음(운영 API에 버킷 이름·읽기 권한을 아직 주지 않음)
+  // 게시 버킷 설정이 없음(SNAPSHOT_BUCKET 환경 변수 없음)
   | "not_configured"
   | "manifest_missing"
   | "manifest_invalid"
@@ -107,7 +108,11 @@ export async function readBeachStatus(
       };
     }
     return { available: true, snapshotVersion, generatedAt, beaches };
-  } catch {
+  } catch (error) {
+    // 권한(boundary 미반영 등)·장애가 '확인 못 함'으로만 보이고 원인이 묻히지 않게 이름만 남김
+    safeLog("warn", "ops_beach_status_read_failed", {
+      error: errorName(error),
+    });
     return { available: false, reason: "read_failed" };
   }
 }
