@@ -843,6 +843,28 @@ describe("rollbackManifest (T06)", () => {
     expect(snapshots.files.get(MANIFEST_PATH)).toBe(before);
   });
 
+  // 웹은 지금 판단 정책만 읽음(D20-6) → 다른 정책으로 게시된 버전을 되살리면 모든 화면이 판단불가
+  it("다른 판단 정책으로 게시된 버전으로는 되돌리지 않음(manifest 그대로)", async () => {
+    const { snapshots, deps } = await setup();
+    await publishSnapshot(deps());
+    const copyPath = `data/${V1}/manifest.json`;
+    const copy = snapshots.files.get(copyPath)!;
+    snapshots.files.set(copyPath, {
+      ...copy,
+      body: JSON.stringify({
+        ...(JSON.parse(copy.body) as ManifestFile),
+        policyVersion: "warnings-0+observations-0",
+      }),
+    });
+    const before = snapshots.files.get(MANIFEST_PATH);
+
+    expect(await rollbackManifest(snapshots, V1)).toEqual({
+      status: "failed",
+      reason: "policy_unsupported",
+    });
+    expect(snapshots.files.get(MANIFEST_PATH)).toBe(before);
+  });
+
   it("날씨가 실린 버전은 weather.json이 빠져 있으면 되돌리지 않음", async () => {
     const { snapshots, deps } = await setup();
     await publishSnapshot(deps());
