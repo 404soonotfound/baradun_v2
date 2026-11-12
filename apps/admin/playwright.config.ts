@@ -35,6 +35,16 @@ export default defineConfig({
       name: "desktop",
       use: { browserName: "chromium", viewport: { width: 1280, height: 800 } },
     },
+    // 지원 브라우저 기준안(D16-E2): Firefox·WebKit 엔진도 데스크톱 크기로 같은 시험을 돌림(BRD-147)
+    // 실제 Safari 확인과는 따로(WebKit 엔진 E2E일 뿐). npm run test:e2e:engines, CI admin-e2e-engines
+    {
+      name: "desktop-firefox",
+      use: { browserName: "firefox", viewport: { width: 1280, height: 800 } },
+    },
+    {
+      name: "desktop-webkit",
+      use: { browserName: "webkit", viewport: { width: 1280, height: 800 } },
+    },
   ],
   webServer: {
     command: "node e2e/static-server.mjs",
