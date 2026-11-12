@@ -530,7 +530,7 @@ function SourceTable({
   legacy: boolean;
   // 출처 시트가 열린 줄(시안 V10: 고른 줄 강조)
   selected: string | null;
-  onOpen: (job: SourceRow["job"]) => void;
+  onOpen: (job: SourceRow["job"], from: HTMLElement) => void;
 }) {
   const [filter, setFilter] = useState<SourceFilter>("all");
   const nowIso = view.generatedAt;
@@ -551,7 +551,8 @@ function SourceTable({
   const openButton = (row: SourceRow) => (
     <button
       type="button"
-      onClick={() => onOpen(row.job)}
+      // Safari(WebKit)는 마우스로 누른 버튼에 포커스를 주지 않아 document.activeElement로는 연 버튼을 못 찾음 → 누른 버튼을 직접 넘김
+      onClick={(event) => onOpen(row.job, event.currentTarget)}
       aria-label={fill(t.openSource, { source: t.source[row.job] })}
       className="inline-flex size-touch items-center justify-center rounded-admin-control text-text-muted hover:bg-bg-page hover:text-text-default lg:size-7"
     >
@@ -1066,14 +1067,15 @@ function IncidentRow({
 }: {
   incident: JobIncident;
   nowMs: number;
-  onOpen: () => void;
+  onOpen: (from: HTMLElement) => void;
 }) {
   const first = incident.failures[0];
   const impact = impactSummary(incident);
   return (
     <button
       type="button"
-      onClick={onOpen}
+      // Safari(WebKit)는 마우스로 누른 버튼에 포커스를 주지 않음 → 시트를 닫을 때 돌아올 버튼을 직접 넘김
+      onClick={(event) => onOpen(event.currentTarget)}
       className="flex w-full items-center gap-3 border-b border-border-default py-2.5 pr-2 text-left hover:bg-bg-page"
     >
       <span className="flex min-w-0 flex-1 flex-col">
@@ -1157,7 +1159,7 @@ function Incidents({
 }: {
   incidents: readonly JobIncident[];
   nowMs: number;
-  onOpen: (index: number) => void;
+  onOpen: (index: number, from: HTMLElement) => void;
 }) {
   const [page, setPage] = useState(0);
   const pages = Math.max(1, Math.ceil(incidents.length / PAGE_SIZE));
@@ -1187,7 +1189,7 @@ function Incidents({
                 <IncidentRow
                   incident={incident}
                   nowMs={nowMs}
-                  onOpen={() => onOpen(from + i)}
+                  onOpen={(button) => onOpen(from + i, button)}
                 />
               </li>
             ))}
@@ -2254,11 +2256,8 @@ function CollectionBody({ beaches }: { beaches: Beaches }) {
       );
     }
   };
-  const openSource = (job: SourceRow["job"]) => {
-    sourceOpener.current =
-      document.activeElement instanceof HTMLElement
-        ? document.activeElement
-        : null;
+  const openSource = (job: SourceRow["job"], from: HTMLElement) => {
+    sourceOpener.current = from;
     nonce.current += 1;
     setSource({ job, nonce: nonce.current });
   };
