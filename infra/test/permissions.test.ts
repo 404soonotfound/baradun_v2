@@ -11,12 +11,16 @@ import {
   GITHUB_OIDC_SUBJECT,
   INQUIRY_STATUS_INDEX,
   RUN_LOG_KEY_PREFIX,
+  PUBLISH_RUN_KEY,
   PUBLISH_SUMMARY_KEY,
 } from "../lib/settings";
 // services 감사 키 접두어와 IAM 조건이 맞는지 비교함(한쪽만 바뀌면 테스트가 깨짐)
 import { AUDIT_PREFIX, NOTICE_PK } from "../../services/src/admin/keys";
 import { RUN_LOG_PREFIX } from "../../services/src/core/collect/run-log";
-import { PUBLISH_SUMMARY_PK } from "../../services/src/core/collect/publish-summary";
+import {
+  PUBLISH_RUN_PK,
+  PUBLISH_SUMMARY_PK,
+} from "../../services/src/core/collect/publish-summary";
 
 // 역할의 논리 ID를 찾음 (CDK가 이름 뒤에 해시를 붙이므로 앞부분으로 찾기)
 function roleId(prefix: string): string {
@@ -259,6 +263,10 @@ describe("DynamoDB 권한 (BRD-55)", () => {
     expect(PUBLISH_SUMMARY_KEY).toBe(PUBLISH_SUMMARY_PK);
   });
 
+  it("게시 실행 결과 키가 publisher와 운영 API에서 같다(#331)", () => {
+    expect(PUBLISH_RUN_KEY).toBe(PUBLISH_RUN_PK);
+  });
+
   it("운영 API 역할은 이 스택 경보의 설정·기록 읽기만 받는다(BRD-187)", () => {
     const statements = allIamPolicies()
       .filter((p) => p.roles.includes(roleId("OpsApiRole")))
@@ -294,7 +302,7 @@ describe("DynamoDB 권한 (BRD-55)", () => {
     );
   });
 
-  it("운영 API 역할의 Ops Query는 감사 키·공지·수집 실행 기록 파티션에만 되고, 감사 키 수정·삭제는 명시적으로 거부된다", () => {
+  it("운영 API 역할의 Ops Query는 감사 키·공지·수집 실행 기록·게시 요약·게시 실행 결과 파티션에만 되고, 감사 키 수정·삭제는 명시적으로 거부된다", () => {
     const statements = allIamPolicies()
       .filter((p) => p.roles.includes(roleId("OpsApiRole")))
       .flatMap((p) => p.statements)
@@ -317,6 +325,7 @@ describe("DynamoDB 권한 (BRD-55)", () => {
           NOTICE_PK,
           `${RUN_LOG_PREFIX}*`,
           PUBLISH_SUMMARY_PK,
+          PUBLISH_RUN_PK,
         ],
       },
       Null: { "dynamodb:LeadingKeys": "false" },
@@ -462,6 +471,7 @@ describe("함수·역할별 최소 권한 범위 (BRD-67)", () => {
       "dynamodb:PutItem",
       "dynamodb:Query",
       "dynamodb:UpdateItem",
+      "lambda:InvokeFunction",
       "logs:CreateLogStream",
       "logs:PutLogEvents",
       "s3:GetObject",
@@ -474,6 +484,18 @@ describe("함수·역할별 최소 권한 범위 (BRD-67)", () => {
     ).find((id) => id.startsWith("SiteBucket"));
     expect(actions.get("s3:GetObject")).toEqual([`${siteBucket}.Arn/data/*`]);
     expect(actions.get("s3:ListBucket")).toEqual([`${siteBucket}.Arn`]);
+    // 게시 파일 쓰기는 없음(publisher만, 6.2 단일 작성자). 지금 게시·되돌리기는 publisher 함수 호출로만(#331)
+    for (const action of ["s3:PutObject", "s3:DeleteObject"]) {
+      expect(actions.has(action)).toBe(false);
+    }
+    const publisherFunction = Object.keys(
+      template.findResources("AWS::Lambda::Function"),
+    ).filter((id) => id.startsWith("PublishFunction"));
+    expect(publisherFunction).toHaveLength(1);
+    // 버전·별칭 주소(:*) 없이 publish-snapshot 함수 하나에만
+    expect(actions.get("lambda:InvokeFunction")).toEqual([
+      `${publisherFunction[0]}.Arn`,
+    ]);
     const list = allIamPolicies()
       .filter((p) => p.roles.includes(api))
       .flatMap((p) => p.statements)

@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { template } from "./stack-template";
+import { PUBLISHER_TIMEOUT_SECONDS } from "../lib/settings";
+import {
+  PUBLISH_JOB_RUN_LIMIT_MS,
+  PUBLISH_JOB_START_LIMIT_MS,
+} from "../../services/src/core/collect/publish-job";
 
 // 운영 API 함수 (BRD-146, D16-B1·B2·E4)
 
@@ -21,6 +26,7 @@ describe("운영 API", () => {
       "OPERATOR_USER_POOL_ID",
       "OPS_ALARM_PREFIX",
       "OPS_TABLE_NAME",
+      "PUBLISHER_FUNCTION_NAME",
       "SAMPLE_CLIENT_ID",
       "SAMPLE_USER_POOL_ID",
       "SNAPSHOT_BUCKET",
@@ -36,6 +42,24 @@ describe("운영 API", () => {
     expect(fn.Properties.Environment.Variables.SNAPSHOT_BUCKET).toEqual({
       Ref: expect.stringMatching(/^SiteBucket/),
     });
+  });
+
+  it("지금 게시·되돌리기 작업은 스택의 publish-snapshot 함수로 넘긴다(#331)", () => {
+    const fn = only("OpsApiFunction", "AWS::Lambda::Function").resource;
+    const publisher = only("PublishFunction", "AWS::Lambda::Function").id;
+    expect(fn.Properties.Environment.Variables.PUBLISHER_FUNCTION_NAME).toEqual(
+      { Ref: publisher },
+    );
+  });
+
+  it("publisher 함수 제한 시간은 게시 작업 실행 제한보다 짧다(실행 중으로 남은 작업을 늦어짐으로 볼 때 이미 끝난 실행)", () => {
+    expect(PUBLISHER_TIMEOUT_SECONDS * 1000).toBeLessThan(
+      PUBLISH_JOB_RUN_LIMIT_MS,
+    );
+    // 시작 제한 안에 맡은 작업도 함수 제한 시간 안에 끝남
+    expect(PUBLISHER_TIMEOUT_SECONDS * 1000).toBeLessThan(
+      PUBLISH_JOB_START_LIMIT_MS,
+    );
   });
 
   it("함수 URL은 IAM 인증이고, 아직 CloudFront에 연결하지 않는다(BRD-147에서 관리자 배포에 연결)", () => {
