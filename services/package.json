@@ -26,8 +26,10 @@
     "@aws-sdk/client-ssm": "^3.1155.0",
     "@aws-sdk/lib-dynamodb": "^3.1153.0",
     "@aws-sdk/s3-presigned-post": "^3.1156.0",
+    "@img/sharp-wasm32": "^0.35.5",
     "ajv": "^8.20.0",
     "ajv-formats": "^3.0.1",
-    "aws-jwt-verify": "^5.2.1"
+    "aws-jwt-verify": "^5.2.1",
+    "sharp": "^0.35.5"
   }
 }
