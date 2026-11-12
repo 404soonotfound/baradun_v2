@@ -211,6 +211,166 @@ describe("DynamoOpsStore 게시 버전", () => {
   });
 });
 
+// 되돌리기가 쓰는 Ops 항목 (결정 기록 D20-2·D16-C2·C3)
+describe("DynamoOpsStore 게시 때의 공지 상태·되돌림 포인터·게시 실행 결과", () => {
+  const V = "20261017T053000Z";
+  const NOTICE = {
+    id: "n-a",
+    kind: "general",
+    title: { ko: "공지", en: "Notice" },
+    body: { ko: "본문", en: "Body" },
+    startsAt: "2026-10-17T05:00:00Z",
+    endsAt: null,
+  };
+  const HELD = {
+    "n-a": { target: V, at: "2026-10-17T06:00:00Z", live: NOTICE },
+  };
+
+  it("게시 때의 공지 상태를 버전별로 남기고(요약과 같은 보존), 강한 일관성으로 읽는다", async () => {
+    const { client, sent } = fakeClient(
+      {},
+      {},
+      { Item: { pk: "publish#notices", sk: V, notices: [NOTICE], ttl: 1 } },
+    );
+    const ops = new DynamoOpsStore(client, OPS);
+    await ops.putPublishNotices(V, [NOTICE], NOW);
+    expect(await ops.getPublishNotices(V)).toBeNull();
+    expect(await ops.getPublishNotices(V)).toEqual([NOTICE]);
+    expect(sent[0]).toBeInstanceOf(PutCommand);
+    expect(sent[0]!.input).toEqual({
+      TableName: OPS,
+      Item: {
+        pk: "publish#notices",
+        sk: V,
+        notices: [NOTICE],
+        ttl: Math.floor((NOW + 8 * 24 * 60 * 60 * 1000) / 1000),
+      },
+    });
+    expect(sent[1]!.input).toEqual({
+      TableName: OPS,
+      Key: { pk: "publish#notices", sk: V },
+      ConsistentRead: true,
+    });
+  });
+
+  it("모양이 틀린 공지 상태·형식이 다른 버전은 없는 것으로 보지 않고 오류", async () => {
+    const { client, sent } = fakeClient({
+      Item: { pk: "publish#notices", sk: V, notices: "x" },
+    });
+    const ops = new DynamoOpsStore(client, OPS);
+    await expect(ops.getPublishNotices(V)).rejects.toThrow(
+      "invalid publish notices item",
+    );
+    await expect(ops.getPublishNotices("20261017")).rejects.toThrow(
+      "invalid snapshotVersion",
+    );
+    await expect(ops.putPublishNotices("20261017", [], NOW)).rejects.toThrow(
+      "invalid snapshotVersion",
+    );
+    expect(sent).toHaveLength(1);
+  });
+
+  it("되돌림 포인터를 강한 일관성으로 읽고, 없으면 null·모양이 틀리면 오류", async () => {
+    const { client, sent } = fakeClient(
+      {},
+      {
+        Item: {
+          pk: "admin#publish",
+          sk: "notice-hold",
+          version: 3,
+          notices: HELD,
+          updatedAt: "2026-10-17T06:00:00Z",
+          updatedBy: "publisher",
+        },
+      },
+      { Item: { pk: "admin#publish", sk: "notice-hold", version: 3 } },
+      {
+        Item: {
+          pk: "admin#publish",
+          sk: "notice-hold",
+          version: 3,
+          notices: { "n-a": { target: V, live: null } },
+        },
+      },
+    );
+    const ops = new DynamoOpsStore(client, OPS);
+    expect(await ops.getNoticeHold()).toBeNull();
+    expect(await ops.getNoticeHold()).toEqual({ version: 3, notices: HELD });
+    // 읽지 못한 포인터를 '되돌린 공지 없음'으로 바꾸지 않음
+    await expect(ops.getNoticeHold()).rejects.toThrow(
+      "invalid notice hold item",
+    );
+    await expect(ops.getNoticeHold()).rejects.toThrow(
+      "invalid notice hold item",
+    );
+    expect(sent[0]!.input).toEqual({
+      TableName: OPS,
+      Key: { pk: "admin#publish", sk: "notice-hold" },
+      ConsistentRead: true,
+    });
+  });
+
+  it("되돌림 포인터는 읽은 version 그대로일 때만 쓰고 version을 1 올린다", async () => {
+    const { client, sent } = fakeClient({}, {}, conditionFailed());
+    const ops = new DynamoOpsStore(client, OPS);
+    const at = "2026-10-17T06:00:00Z";
+    expect(await ops.putNoticeHold(HELD, 0, at)).toBe(true);
+    expect(await ops.putNoticeHold({}, 1, at)).toBe(true);
+    expect(await ops.putNoticeHold({}, 1, at)).toBe(false);
+    expect(sent[0]).toBeInstanceOf(PutCommand);
+    // 처음 만들 때: 항목이 아직 없어야 함
+    expect(sent[0]!.input).toEqual({
+      TableName: OPS,
+      Item: {
+        pk: "admin#publish",
+        sk: "notice-hold",
+        version: 1,
+        notices: HELD,
+        updatedAt: at,
+        updatedBy: "publisher",
+      },
+      ConditionExpression: "attribute_not_exists(pk)",
+    });
+    // 그 뒤: 읽은 version과 같아야 함(운영 API의 '다시 적용'과 겹치면 거절)
+    expect(sent[1]!.input).toMatchObject({
+      Item: { version: 2, notices: {} },
+      ConditionExpression: "#version = :expected",
+      ExpressionAttributeNames: { "#version": "version" },
+      ExpressionAttributeValues: { ":expected": 1 },
+    });
+  });
+
+  it("게시 실행 결과: 마지막 실행은 덮어쓰고, 실패한 실행만 버전별로도 남긴다", async () => {
+    const { client, sent } = fakeClient();
+    const ops = new DynamoOpsStore(client, OPS);
+    const run = {
+      at: "2026-10-17T05:30:00Z",
+      source: "auto",
+      result: "unchanged",
+      version: V,
+    } as const;
+    await ops.putPublishRun(run, NOW);
+    expect(sent.map((c) => c.input)).toEqual([
+      { TableName: OPS, Item: { pk: "publish#run", sk: "last", ...run } },
+    ]);
+
+    const failed = { ...run, result: "failed", reason: "beach_ids" } as const;
+    await ops.putPublishRun(failed, NOW);
+    expect(sent.slice(1).map((c) => c.input)).toEqual([
+      {
+        TableName: OPS,
+        Item: {
+          pk: "publish#run",
+          sk: V,
+          ...failed,
+          ttl: Math.floor((NOW + 8 * 24 * 60 * 60 * 1000) / 1000),
+        },
+      },
+      { TableName: OPS, Item: { pk: "publish#run", sk: "last", ...failed } },
+    ]);
+  });
+});
+
 describe("DynamoStateStore", () => {
   const stored = {
     pk: "wave#1",
