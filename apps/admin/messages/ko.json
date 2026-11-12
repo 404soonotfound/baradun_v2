@@ -1363,5 +1363,22 @@
     "reload": "새 내용 불러오기",
     "copyMemo": "내 메모 복사",
     "copied": "복사했어요"
+  },
+  "policies": {
+    "title": "운영 정책",
+    "intro": "원본은 노션 결정 기록이에요. 여기는 읽기 전용이에요.",
+    "openNotion": "노션에서 열기",
+    "newTab": "(새 탭)",
+    "revision": "노션 수정 {time}",
+    "fetchedAt": "가져온 시각 {time}",
+    "metaJoin": " · ",
+    "syncTitle": "노션을 고친 뒤 다시 가져와야 여기에 보여요",
+    "syncBody": "이 화면은 가져온 시각의 내용이에요. 노션 원문과 다르면 노션 원문이 기준이에요.",
+    "listLabel": "운영 정책 항목",
+    "itemTitle": "{number}. {title}",
+    "basis": "근거: {basis}",
+    "backLink": "← 운영 정책 목록",
+    "notFound": "찾는 정책 항목이 없어요",
+    "notFoundHint": "주소가 바뀌었을 수 있어요. 목록에서 다시 골라 주세요."
   }
 }
