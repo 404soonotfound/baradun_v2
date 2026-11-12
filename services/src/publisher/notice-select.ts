@@ -1,7 +1,7 @@
 import type { ManifestFile, Notice } from "@baradun/contracts";
 import { checkNoticePhrases } from "@baradun/contracts/notice-rules";
 import type { Logger } from "../core/collect/log";
-import type { NoticeHold } from "../core/store/types";
+import type { HeldNotice, NoticeHold } from "../core/store/types";
 import { contractErrors } from "./validate";
 
 // 게시본에 실을 공지 고르기와 manifest 읽기 (BRD-151·D20-2, #331)
@@ -101,4 +101,23 @@ export function parseManifest(body: string | null): ManifestFile | null {
   } catch {
     return null;
   }
+}
+
+// 되돌리기의 새 포인터: 고른 게시본 때 공지 상태(then)와 지금 운영 DB 노출본(live)을 공지별로 견줘
+// 다른 공지만 '되돌림'으로 표시함. 같은 공지는 표시하지 않음(앞 되돌리기의 표시도 이 계산으로 새로 정해짐)
+export function noticeHoldFor(
+  then: readonly Notice[],
+  live: readonly Notice[],
+  target: string,
+  at: string,
+): Record<string, HeldNotice> {
+  const before = new Map(then.map((notice) => [notice.id, notice]));
+  const now = new Map(live.map((notice) => [notice.id, notice]));
+  const held: Record<string, HeldNotice> = {};
+  for (const id of [...new Set([...before.keys(), ...now.keys()])].sort()) {
+    const was = before.get(id) ?? null;
+    if (JSON.stringify(was) === JSON.stringify(now.get(id) ?? null)) continue;
+    held[id] = { target, at, live: was };
+  }
+  return held;
 }
