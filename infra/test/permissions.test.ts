@@ -451,7 +451,7 @@ describe("함수·역할별 최소 권한 범위 (BRD-67)", () => {
     );
   });
 
-  it("운영 API 역할은 Ops·문의 테이블과 자기 로그에만 쓰고 관리형 정책이 없다", () => {
+  it("운영 API 역할은 Ops·문의 테이블과 자기 로그에만 쓰고, 게시 버킷은 data/ 읽기만 하며 관리형 정책이 없다", () => {
     const api = roleId("OpsApiRole");
     expect(roles[api]!.Properties.ManagedPolicyArns ?? []).toEqual([]);
     const actions = allowedActionsOfRole(api);
@@ -464,8 +464,14 @@ describe("함수·역할별 최소 권한 범위 (BRD-67)", () => {
       "dynamodb:UpdateItem",
       "logs:CreateLogStream",
       "logs:PutLogEvents",
+      "s3:GetObject",
       "ssm:ListTagsForResource",
     ]);
+    // 해변 관리 지금 표시 상태(BRD-150): 사이트 버킷 data/ 아래 읽기만. 목록·쓰기 없음
+    const siteBucket = Object.keys(
+      template.findResources("AWS::S3::Bucket"),
+    ).find((id) => id.startsWith("SiteBucket"));
+    expect(actions.get("s3:GetObject")).toEqual([`${siteBucket}.Arn/data/*`]);
     const logGroup = Object.keys(
       template.findResources("AWS::Logs::LogGroup"),
     ).find((id) => id.startsWith("OpsApiLogs"));
