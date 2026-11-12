@@ -53,15 +53,15 @@ test("메뉴 순서·지금 화면 표시, 아직 없는 화면은 '준비 중' 
     nav(page).getByRole("link", { name: "운영 홈" }),
   ).toHaveAttribute("aria-current", "page");
 
-  await nav(page).getByRole("link", { name: "운영 정책" }).click();
-  await expect(page).toHaveURL(/\/policies\/$/);
+  await nav(page).getByRole("link", { name: "이용 통계" }).click();
+  await expect(page).toHaveURL(/\/stats\/$/);
   await expect(
-    page.getByRole("heading", { name: "운영 정책", level: 1 }),
+    page.getByRole("heading", { name: "이용 통계", level: 1 }),
   ).toBeVisible();
   await expect(page.getByText("이 화면은 준비하고 있어요")).toBeVisible();
   await openMenu(page);
   await expect(
-    nav(page).getByRole("link", { name: "운영 정책" }),
+    nav(page).getByRole("link", { name: "이용 통계" }),
   ).toHaveAttribute("aria-current", "page");
   await expect(
     nav(page).getByRole("link", { name: "운영 홈" }),
