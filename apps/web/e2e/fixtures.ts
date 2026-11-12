@@ -265,7 +265,7 @@ function manifestFile(now: number, extra: Record<string, unknown> = {}) {
   return {
     schemaVersion: 1,
     snapshotVersion: version,
-    policyVersion: "2026-10-16",
+    policyVersion: "warnings-1+observations-1",
     generatedAt: iso(now - 5 * MIN),
     maintenance: { active: false, until: null },
     minWebBuild: 1,

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "snapshotVersion": "20261017T053000Z",
-  "policyVersion": "2026-10-16",
+  "policyVersion": "warnings-1+observations-1",
   "generatedAt": "2026-10-17T05:30:12Z",
   "maintenance": {
     "active": false,
