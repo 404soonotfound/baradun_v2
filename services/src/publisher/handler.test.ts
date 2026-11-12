@@ -4,7 +4,13 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { loadBeaches } from "../core/beaches/load";
-import { isPublishFault, parseManualEvent } from "./handler";
+import { MemoryOpsStore } from "../core/store/memory";
+import {
+  isPublishFault,
+  jobOutcomeOf,
+  parseManualEvent,
+  runPublishJob,
+} from "./handler";
 import { beachIdProblem } from "./publish";
 import { parseBeachMeta } from "./season";
 import { contractErrors } from "./validate";
@@ -67,6 +73,174 @@ describe("parseManualEvent", () => {
     ],
   ])("%s이면 보통 게시로 돌리지 않고 던진다", (_name, event) => {
     expect(() => parseManualEvent(event)).toThrow();
+  });
+});
+
+// 운영 API가 부르는 작업 이벤트(#331)
+describe("parseManualEvent 운영자 게시 작업", () => {
+  const version = "20261017T053000Z";
+  const jobId = "j-0123456789ab";
+
+  it("지금 게시는 작업 ID와 함께 받는다", () => {
+    expect(parseManualEvent({ action: "publish", jobId })).toEqual({
+      action: "publish",
+      jobId,
+    });
+  });
+
+  it("되돌리기는 작업 ID가 있어도 없어도 받는다(명령줄 되돌리기는 작업 없음)", () => {
+    expect(parseManualEvent({ action: "rollback", version, jobId })).toEqual({
+      action: "rollback",
+      version,
+      jobId,
+    });
+  });
+
+  it.each([
+    ["작업 ID 없는 지금 게시", { action: "publish" }],
+    ["작업 ID 형식 틀림", { action: "publish", jobId: "j-xyz" }],
+    ["작업 ID가 글자가 아님", { action: "rollback", version, jobId: 1 }],
+    ["다시 내보내기에 작업 ID", { action: "republish", version, jobId }],
+  ])("%s이면 던진다", (_name, event) => {
+    expect(() => parseManualEvent(event)).toThrow();
+  });
+});
+
+describe("runPublishJob", () => {
+  const NOW = Date.parse("2026-11-12T06:00:00Z");
+  const log = () => undefined;
+  function store(state: "pending" | "running" | "done", createdAtMs = NOW) {
+    const ops = new MemoryOpsStore();
+    ops.jobs.set("j-0123456789ab", {
+      jobId: "j-0123456789ab",
+      action: "publish",
+      state,
+      createdAt: new Date(createdAtMs).toISOString(),
+      createdAtMs,
+    });
+    return ops;
+  }
+
+  it("대기 작업을 맡아 게시하고 결과(게시 완료)를 작업에 남긴다", async () => {
+    const ops = store("pending");
+    let runs = 0;
+    const result = await runPublishJob(
+      { ops, clock: () => NOW, log },
+      "j-0123456789ab",
+      async () => {
+        runs++;
+        return {
+          status: "published",
+          version: "20261112T060000Z",
+          removed: [],
+        };
+      },
+    );
+    expect(result.status).toBe("published");
+    expect(runs).toBe(1);
+    expect(ops.jobs.get("j-0123456789ab")).toMatchObject({
+      state: "done",
+      result: "published",
+      snapshotVersion: "20261112T060000Z",
+      startedAt: "2026-11-12T06:00:00.000Z",
+    });
+  });
+
+  it("같은 작업 호출이 두 번 와도 한 번만 게시한다", async () => {
+    const ops = store("pending");
+    let runs = 0;
+    const run = async () => {
+      runs++;
+      return { status: "unchanged", version: "20261112T054500Z" } as const;
+    };
+    await runPublishJob({ ops, clock: () => NOW, log }, "j-0123456789ab", run);
+    const second = await runPublishJob(
+      { ops, clock: () => NOW, log },
+      "j-0123456789ab",
+      run,
+    );
+    expect(second).toEqual({ status: "busy" });
+    expect(runs).toBe(1);
+    expect(ops.jobs.get("j-0123456789ab")).toMatchObject({
+      state: "done",
+      result: "unchanged",
+    });
+  });
+
+  it("시작 제한이 지난 대기 작업은 게시하지 않고 실패(expired)로 바꾼다(늦게 온 호출)", async () => {
+    const ops = store("pending", NOW - 10 * 60 * 1000);
+    let runs = 0;
+    const result = await runPublishJob(
+      { ops, clock: () => NOW, log },
+      "j-0123456789ab",
+      async () => {
+        runs++;
+        return { status: "busy" } as const;
+      },
+    );
+    expect(result).toEqual({ status: "busy" });
+    expect(runs).toBe(0);
+    expect(ops.jobs.get("j-0123456789ab")).toMatchObject({
+      state: "failed",
+      reason: "expired",
+    });
+  });
+
+  it("게시가 예외를 던지면 작업을 실패로 남기고 예외를 그대로 던진다", async () => {
+    const ops = store("pending");
+    await expect(
+      runPublishJob({ ops, clock: () => NOW, log }, "j-0123456789ab", () =>
+        Promise.reject(new TypeError("boom")),
+      ),
+    ).rejects.toThrow("boom");
+    expect(ops.jobs.get("j-0123456789ab")).toMatchObject({
+      state: "failed",
+      reason: "exception:TypeError",
+    });
+  });
+
+  it("작업 결과를 남기지 못해도 게시 결과는 그대로 돌려준다", async () => {
+    const ops = store("pending");
+    ops.finishPublishJob = async () => {
+      throw new Error("throttled");
+    };
+    const result = await runPublishJob(
+      { ops, clock: () => NOW, log },
+      "j-0123456789ab",
+      async () => ({
+        status: "published",
+        version: "20261112T060000Z",
+        removed: [],
+      }),
+    );
+    expect(result.status).toBe("published");
+  });
+});
+
+describe("jobOutcomeOf", () => {
+  it("물러남(busy)은 이 작업이 게시하지 않은 것이라 실패(busy), 실패는 사유와 시도한 버전", () => {
+    expect(jobOutcomeOf({ status: "busy" })).toEqual({
+      state: "failed",
+      reason: "busy",
+    });
+    expect(
+      jobOutcomeOf({
+        status: "failed",
+        version: "20261112T060000Z",
+        reason: "beach_ids",
+      }),
+    ).toEqual({
+      state: "failed",
+      reason: "beach_ids",
+      snapshotVersion: "20261112T060000Z",
+    });
+    expect(
+      jobOutcomeOf({ status: "unchanged", version: "20261112T054500Z" }),
+    ).toEqual({
+      state: "done",
+      result: "unchanged",
+      snapshotVersion: "20261112T054500Z",
+    });
   });
 });
 

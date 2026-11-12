@@ -7,6 +7,7 @@ import {
 } from "@aws-sdk/lib-dynamodb";
 import { describe, expect, it } from "vitest";
 import {
+  claimPublishJobItem,
   DynamoOpsStore,
   DynamoRunLog,
   DynamoStateStore,
@@ -520,5 +521,97 @@ describe("DynamoRunLog (BRD-149)", () => {
         NOW,
       ),
     ).rejects.toThrow("Rate exceeded");
+  });
+});
+
+// 운영자 게시 작업 맡기·끝내기 (#331, core/collect/publish-job.ts)
+describe("DynamoOpsStore 게시 작업", () => {
+  const key = { pk: "admin#publish#job", sk: "j-0123456789ab" };
+
+  it("claimPublishJob은 '대기'이고 시작 제한(2분) 안일 때만 '실행'으로 바꾸는 조건부 Update를 보낸다", async () => {
+    const { client, sent } = fakeClient({});
+    const ops = new DynamoOpsStore(client, OPS);
+    expect(await ops.claimPublishJob("j-0123456789ab", NOW)).toBe("claimed");
+    expect(sent).toHaveLength(1);
+    expect(sent[0]).toBeInstanceOf(UpdateCommand);
+    expect(sent[0]!.input).toMatchObject({
+      TableName: OPS,
+      Key: key,
+      UpdateExpression: "SET #state = :running, #startedAt = :now",
+      ConditionExpression:
+        "attribute_exists(pk) AND #state = :pending AND #createdAtMs > :oldest",
+      ExpressionAttributeValues: {
+        ":running": "running",
+        ":pending": "pending",
+        ":oldest": NOW - 2 * 60 * 1000,
+      },
+    });
+  });
+
+  it("못 맡으면 다시 읽어 없음·이미 맡음·시작 제한 지남(실패로 바꿈)을 가른다", async () => {
+    const missing = fakeClient(conditionFailed(), {});
+    expect(
+      await claimPublishJobItem(missing.client, OPS, "j-0123456789ab", NOW),
+    ).toBe("missing");
+
+    const taken = fakeClient(conditionFailed(), {
+      Item: { ...key, state: "running" },
+    });
+    expect(
+      await claimPublishJobItem(taken.client, OPS, "j-0123456789ab", NOW),
+    ).toBe("taken");
+
+    const expired = fakeClient(
+      conditionFailed(),
+      { Item: { ...key, state: "pending" } },
+      {},
+    );
+    expect(
+      await claimPublishJobItem(expired.client, OPS, "j-0123456789ab", NOW),
+    ).toBe("expired");
+    expect(expired.sent[2]!.input).toMatchObject({
+      ConditionExpression: "attribute_exists(pk) AND #state = :pending",
+      ExpressionAttributeValues: { ":failed": "failed", ":reason": "expired" },
+    });
+  });
+
+  it("claimPublishJob은 조건 실패가 아닌 오류(용량 초과 등)를 숨기지 않는다", async () => {
+    const { client } = fakeClient(throttled);
+    const ops = new DynamoOpsStore(client, OPS);
+    await expect(ops.claimPublishJob("j-0123456789ab", NOW)).rejects.toThrow(
+      "Rate exceeded",
+    );
+  });
+
+  it("finishPublishJob은 '실행'일 때만 결과를 남긴다", async () => {
+    const { client, sent } = fakeClient({}, conditionFailed());
+    const ops = new DynamoOpsStore(client, OPS);
+    expect(
+      await ops.finishPublishJob(
+        "j-0123456789ab",
+        {
+          state: "done",
+          result: "published",
+          snapshotVersion: "20261020T053000Z",
+        },
+        NOW,
+      ),
+    ).toBe(true);
+    expect(sent[0]!.input).toMatchObject({
+      Key: key,
+      ConditionExpression: "attribute_exists(pk) AND #state = :running",
+      ExpressionAttributeValues: {
+        ":state": "done",
+        ":result": "published",
+        ":snapshotVersion": "20261020T053000Z",
+      },
+    });
+    expect(
+      await ops.finishPublishJob(
+        "j-0123456789ab",
+        { state: "failed", reason: "busy" },
+        NOW,
+      ),
+    ).toBe(false);
   });
 });

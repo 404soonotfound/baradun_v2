@@ -77,6 +77,31 @@ export class FakeTable {
       this.items.set(id, input.Item);
       return {};
     }
+    // 조건부 Update(트랜잭션 밖). 게시 작업 상태 바꾸기(core/store/dynamodb.ts)가 씀
+    if (name === "UpdateCommand") {
+      const input = command.input;
+      const id = this.id(input.TableName, input.Key);
+      const target = this.items.get(id);
+      const names = input.ExpressionAttributeNames ?? {};
+      const values = input.ExpressionAttributeValues ?? {};
+      if (
+        input.ConditionExpression !== undefined &&
+        !this.holds(input.ConditionExpression, target, names, values)
+      ) {
+        const error = new Error("condition");
+        error.name = "ConditionalCheckFailedException";
+        throw error;
+      }
+      const next: Item = { ...(target ?? input.Key) };
+      for (const part of input.UpdateExpression.replace("SET ", "").split(
+        ", ",
+      )) {
+        const [n, v] = part.split(" = ");
+        next[names[n] ?? n] = values[v];
+      }
+      this.items.set(id, next);
+      return {};
+    }
     if (name === "QueryCommand") {
       const input = command.input;
       // 공지 목록: pk만 같으면 모두(sk 오름차순, 한 쪽)

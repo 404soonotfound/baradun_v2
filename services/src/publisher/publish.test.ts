@@ -1492,6 +1492,38 @@ describe("게시 실행 결과 (D16-C2)", () => {
     });
   });
 
+  it("운영자 게시 작업 ID를 실행 기록과 게시 요약에 함께 남긴다(작업 기록이 빠져도 결과를 찾게, #331)", async () => {
+    const { ops, deps } = await setup();
+    await publishSnapshot({
+      ...deps(),
+      source: "operator",
+      jobId: "j-0123456789ab",
+    });
+    expect(ops.lastRun).toMatchObject({
+      source: "operator",
+      jobId: "j-0123456789ab",
+    });
+    expect(ops.summaries.get(V1)).toMatchObject({ jobId: "j-0123456789ab" });
+  });
+
+  it("게시 요약에 분류별 해변 수와 공지 요약값을 남긴다(운영 화면 '바뀐 것', #331)", async () => {
+    const { ops, snapshots, deps } = await setup();
+    await publishSnapshot(deps());
+    const status = JSON.parse(
+      snapshots.files.get(`data/${V1}/status.json`)!.body,
+    ) as { beaches: Record<string, { category: string }> };
+    const count = (category: string) =>
+      Object.values(status.beaches).filter((b) => b.category === category)
+        .length;
+    const summary = ops.summaries.get(V1)!;
+    expect(summary.categoryCounts).toEqual({
+      clear: count("clear"),
+      unavailable: count("unavailable"),
+      undetermined: count("undetermined"),
+    });
+    expect(summary.noticeDigest).toMatch(/^[0-9a-f]{16}$/);
+  });
+
   it("먼저 시작했지만 늦게 끝난 실행이 더 새 실행의 결과를 덮지 않는다", async () => {
     const { ops } = await setup();
     const newer = {
