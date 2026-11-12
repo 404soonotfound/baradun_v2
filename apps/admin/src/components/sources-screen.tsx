@@ -40,9 +40,10 @@ const BADGE =
 
 // 색만으로 나누지 않게 점 모양도 다르게 두고, 글자가 상태를 말함
 const RUN_BADGE: Record<RunState, { box: string; dot: string }> = {
+  // 성공한 수집은 작업 성공색(color.success, 결정 E6·BRD-165)
   complete: {
-    box: "bg-info-bg text-info-fg ring-1 ring-border-default",
-    dot: "size-2 rounded-full bg-brand-default",
+    box: "bg-success-bg text-success-fg ring-1 ring-success-border",
+    dot: "size-2 rounded-full bg-success-icon",
   },
   partial: {
     box: "bg-status-stale-bg text-status-stale-fg outline-1 outline-status-stale-border outline-dashed -outline-offset-1",
