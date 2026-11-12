@@ -286,9 +286,16 @@ export async function createPublishJobRoute(
   );
   if (result.status === "replayed") return resend();
   if (result.status === "conflict") {
-    // 작업 자리 version이 바뀜 = 그사이 다른 작업이 만들어짐
+    // version: 작업 자리 version이 바뀜 = 그사이 다른 작업이 만들어짐 → busy
+    // related: 같은 작업 ID가 이미 있음 = 멱등 기록(24시간)이 지난 뒤 같은 키로 다시 보냄(작업 기록은 8일 남음)
+    //   앞 작업의 내용·운영자를 확인할 수 없어 앞 결과로 돌려주지 않음 → 화면은 새 키로 다시 요청
     return errorJson(409, "conflict", ids, {
-      reason: result.reason === "version" ? "busy" : result.reason,
+      reason:
+        result.reason === "version"
+          ? "busy"
+          : result.reason === "related"
+            ? "idempotency_expired"
+            : result.reason,
     });
   }
   safeLog("info", "ops_publish_job_created", {
