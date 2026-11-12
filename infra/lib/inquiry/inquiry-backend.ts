@@ -25,11 +25,12 @@ const REPO_ROOT = path.join(__dirname, "..", "..", "..");
 const HANDLER_FILE = path.join(REPO_ROOT, "services/src/inquiry/handler.ts");
 
 // sharp는 네이티브/WASM 바이너리와 패키지 경로를 런타임에 읽으므로 esbuild로 합치지 않고
-// Lambda 번들 node_modules에 필요한 런타임 패키지를 복사함(BRD-116)
+// Lambda 번들 node_modules에 필요한 런타임 패키지(전이 의존성 포함)를 복사함(BRD-116)
 const SHARP_REQUIRED_PACKAGES = [
   "sharp",
   "detect-libc",
   "@emnapi/runtime",
+  "tslib",
   "@img/colour",
   "@img/sharp-wasm32",
 ] as const;
@@ -48,19 +49,26 @@ export function sharpBundlingCommand(
     "const path = require('node:path');",
     `const inputNm = path.join(${JSON.stringify(inputDir)}, 'node_modules');`,
     `const outputNm = path.join(${JSON.stringify(outputDir)}, 'node_modules');`,
-    `for (const pkg of ${JSON.stringify(SHARP_REQUIRED_PACKAGES)}) {`,
+    `const queue = [...${JSON.stringify(SHARP_REQUIRED_PACKAGES)}];`,
+    `for (const opt of ${JSON.stringify(SHARP_OPTIONAL_PACKAGES)}) {`,
+    "  if (fs.existsSync(path.join(inputNm, opt))) queue.push(opt);",
+    "}",
+    "const copied = new Set();",
+    "while (queue.length > 0) {",
+    "  const pkg = queue.shift();",
+    "  if (copied.has(pkg)) continue;",
+    "  copied.add(pkg);",
     "  const src = path.join(inputNm, pkg);",
     "  if (!fs.existsSync(src)) throw new Error('Missing sharp runtime package: ' + pkg);",
     "  const dst = path.join(outputNm, pkg);",
     "  fs.mkdirSync(path.dirname(dst), { recursive: true });",
     "  fs.cpSync(src, dst, { recursive: true });",
-    "}",
-    `for (const pkg of ${JSON.stringify(SHARP_OPTIONAL_PACKAGES)}) {`,
-    "  const src = path.join(inputNm, pkg);",
-    "  if (!fs.existsSync(src)) continue;",
-    "  const dst = path.join(outputNm, pkg);",
-    "  fs.mkdirSync(path.dirname(dst), { recursive: true });",
-    "  fs.cpSync(src, dst, { recursive: true });",
+    "  const meta = JSON.parse(fs.readFileSync(path.join(src, 'package.json'), 'utf8'));",
+    "  for (const dep of Object.keys(meta.dependencies || {})) {",
+    "    if (!fs.existsSync(path.join(src, 'node_modules', dep, 'package.json'))) {",
+    "      queue.push(dep);",
+    "    }",
+    "  }",
     "}",
   ].join(" ");
   return `node -e '${script.replace(/'/g, "'\\''")}'`;
