@@ -171,6 +171,7 @@ export class BaradunStack extends Stack {
       opsTable: tables.ops,
       inquiryTable: tables.inquiry,
       auth: operatorAuth,
+      snapshotBucket: site.bucket, // 해변 관리 지금 표시 상태(BRD-150): data/ 읽기만
     });
 
     // 운영자 사이트: 사용자 사이트와 따로 버킷·CloudFront, /ops/*는 운영 API (BRD-147)
