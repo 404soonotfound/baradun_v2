@@ -1,7 +1,10 @@
 import { Match } from "aws-cdk-lib/assertions";
-import { readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import * as os from "node:os";
 import * as path from "node:path";
 import { describe, expect, it } from "vitest";
+import { sharpBundlingCommand } from "../lib/inquiry/inquiry-backend";
 import { siteDistribution, template } from "./stack-template";
 
 describe("데이터 문의 접수 인프라", () => {
@@ -155,6 +158,55 @@ describe("데이터 문의 접수 인프라", () => {
     ).filter((id) => id.startsWith("InquiryPhotos"));
     expect(buckets).toHaveLength(1);
     expect(output[0]?.Value).toEqual({ Ref: buckets[0] });
+  });
+
+  it("문의 함수 번들 후처리 명령이 sharp와 WASM 폴백 런타임을 자산 디렉터리에 복사한다(BRD-116)", () => {
+    const repoRoot = path.join(__dirname, "..", "..");
+    const outputDir = mkdtempSync(
+      path.join(os.tmpdir(), "baradun-inquiry-sharp-"),
+    );
+    try {
+      const cmd = sharpBundlingCommand(repoRoot, outputDir);
+      execFileSync("bash", ["-c", cmd], { stdio: "pipe" });
+      for (const pkg of [
+        "sharp",
+        "detect-libc",
+        "@emnapi/runtime",
+        "@img/colour",
+        "@img/sharp-wasm32",
+      ]) {
+        expect(
+          existsSync(path.join(outputDir, "node_modules", pkg, "package.json")),
+          pkg,
+        ).toBe(true);
+      }
+      expect(() =>
+        execFileSync(
+          "node",
+          [
+            "-e",
+            `const sharp = require(${JSON.stringify(path.join(outputDir, "node_modules", "sharp"))}); sharp({ create: { width: 4, height: 4, channels: 3, background: { r: 0, g: 0, b: 0 } } }).png().toBuffer().then((b) => { if (b.length < 1) process.exit(1); });`,
+          ],
+          { stdio: "pipe" },
+        ),
+      ).not.toThrow();
+      const emptyDir = mkdtempSync(
+        path.join(os.tmpdir(), "baradun-inquiry-empty-"),
+      );
+      try {
+        expect(() =>
+          execFileSync(
+            "bash",
+            ["-c", sharpBundlingCommand(emptyDir, outputDir)],
+            { stdio: "pipe" },
+          ),
+        ).toThrow(/Missing sharp runtime package: sharp/);
+      } finally {
+        rmSync(emptyDir, { recursive: true, force: true });
+      }
+    } finally {
+      rmSync(outputDir, { recursive: true, force: true });
+    }
   });
 });
 
