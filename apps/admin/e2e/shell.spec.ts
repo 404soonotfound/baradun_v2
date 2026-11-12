@@ -130,25 +130,29 @@ test.describe("태블릿 아이콘 레일", () => {
     page,
   }, info) => {
     test.skip(info.project.name === "mobile", "PC 프로젝트에서 폭만 바꿔 봄");
-    // macOS WebKit은 Safari 기본 설정처럼 Tab이 링크로 가지 않음(시험 도구 차이, 화면 문제 아님) → Firefox·chromium에서 봄
-    test.skip(
-      info.project.name === "desktop-webkit",
-      "WebKit은 Tab이 링크로 가지 않음",
-    );
+    // WebKit은 Safari 기본 설정처럼 Tab이 링크로 가지 않음(시험 도구 차이, 화면 문제 아님)
+    // 말풍선은 키보드 포커스(:focus-visible)·마우스 올림 때만 뜨므로 WebKit에서는 마우스 올림으로 같은 말풍선을 봄
+    // Tab 이동과 :focus-visible은 chromium·Firefox에서 봄
+    const tabsToLinks = info.project.name !== "desktop-webkit";
     const rail = page.locator("aside");
     const home = nav(page).getByRole("link", { name: "운영 홈" });
     await expect(home).toBeVisible();
     expect((await rail.boundingBox())?.width).toBe(72);
     // 키보드로 옮겨 가야 :focus-visible 이 켜짐(브랜드 → 운영 홈)
-    await rail.getByRole("link", { name: "바라던 바다 운영" }).focus();
-    await page.keyboard.press("Tab");
-    await expect(home).toBeFocused();
+    if (tabsToLinks) {
+      await rail.getByRole("link", { name: "바라던 바다 운영" }).focus();
+      await page.keyboard.press("Tab");
+      await expect(home).toBeFocused();
+    } else {
+      await home.hover();
+    }
     // 말풍선은 레일(72px) 밖에 떠야 함. 스크롤 상자 안에 absolute로 두면 잘려서 안 보였음
     const tip = page.locator("[data-rail-tip]");
     await expect(tip).toHaveText("운영 홈");
     expect((await tip.boundingBox())?.x).toBeGreaterThanOrEqual(72);
     await expectNoA11yViolations(page);
-    await page.keyboard.press("Tab");
+    if (tabsToLinks) await page.keyboard.press("Tab");
+    else await nav(page).getByRole("link", { name: "이용 통계" }).hover();
     await expect(tip).toHaveText("이용 통계");
 
     // 계정 아이콘도 마우스를 올리면 이름이 보임

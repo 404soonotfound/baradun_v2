@@ -235,6 +235,8 @@ test("상세: 내용·보관 기한·받지 않는 연락처를 보여 주고, P
     await expect(detail).toHaveAttribute("aria-label", "문의 상세");
     await page.keyboard.press("Escape");
     await expect(page).toHaveURL(/\/inquiries\/$/);
+    // 닫으면 누른 줄로 포커스가 돌아옴(Safari는 마우스로 누른 링크에 포커스를 주지 않아 직접 돌려줌)
+    await expect(rows(page).first().getByRole("link")).toBeFocused();
     // 바깥(딤) 누르기로도 닫힘
     await rows(page).nth(1).getByRole("link").click();
     await expect(detail).toBeVisible();
