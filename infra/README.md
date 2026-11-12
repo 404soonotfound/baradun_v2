@@ -517,7 +517,7 @@ await fetch("/api/inquiries", {
 
 게시 전에 해변 ID를 집합으로 대조합니다(결정 기록 D16-C1). 저장소 원본 목록(`data/beach-meta.json`의 해변 칸, 함수에 JSON으로 묶임)과 읽은 해변 파일(`beaches/`로 복사됨), 게시 결과(해변 목록·해변 상태)가 하나라도 다르면(누락·추가·중복) 게시하지 않고 앞 게시본을 둡니다. 비율 기준은 없습니다. 로그는 `publish_failed`의 `reason: beach_ids`와 어긋난 ID입니다. 관측을 받지 못한 해변은 빠지지 않고 분류만 판단불가가 됩니다.
 
-게시 실행 결과는 Ops 테이블 `publish#run`에 남습니다(D16-C2). `last`는 마지막 실행 하나(게시됨 `published` · 변경이 없어 생략 `unchanged` · 실패 `failed`)를 덮어쓰고, 실패한 실행은 `publish#run` / `{시도한 버전}`에도 8일 동안 남습니다. 알림은 새로 만들지 않았습니다. 생략한 실행도 실행으로 세므로 게시 중단 알림(`PublishStopped`)은 울리지 않고, 실패는 오류 알림(`PublishErrors`)으로 갑니다.
+게시 실행 결과는 Ops 테이블 `publish#run`에 남습니다(D16-C2). `last`는 마지막 실행 하나(게시됨 `published` · 변경이 없어 생략 `unchanged` · 실패 `failed`)를 시작 시각이 더 늦을 때만 덮어쓰고, 실패한 실행은 `publish#run` / `{시도한 버전}`에도 8일 동안 남습니다. 알림은 새로 만들지 않았습니다. 생략한 실행도 실행으로 세므로 게시 중단 알림(`PublishStopped`)은 울리지 않고, 실패는 오류 알림(`PublishErrors`)으로 갑니다.
 
 ### 되돌리기 (공지만 그 게시본 때로)
 
@@ -526,14 +526,27 @@ await fetch("/api/inquiries", {
 - **공지:** 고른 게시본 때의 공지 상태로 되살립니다. 그 뒤에 바뀐 공지(문구 변경·새 공지·노출 끝내기)는 '되돌림'으로 표시하고, 다시 적용하기 전까지 자동 게시에 싣지 않습니다. 공지 항목(저장한 문구·노출본)은 건드리지 않고, 표시와 그때 노출본을 Ops `admin#publish` / `notice-hold`의 `notices`에 공지별로 둡니다.
 - **특보·관측:** 늘 지금 수집 사실을 씁니다. 옛 특보·관측은 되살리지 않으므로 발효 특보가 되돌리기로 사라지지 않고, 관측·확인 시각도 수집한 그대로입니다.
 - **점검·최소 화면 버전:** 배포된 코드의 `MANIFEST_SETTINGS` 그대로입니다(되돌리기로 풀리거나 내려가지 않음).
-- **고를 수 있는 버전:** 게시 때의 공지 상태(Ops `publish#notices` / `{버전}`)가 남아 있는 버전만입니다. 이 기능이 배포되기 전 게시, 운영 DB를 읽지 못한 게시, 다시 내보내기로 만든 버전은 `rollback_target_missing`으로 끝나고 아무것도 바뀌지 않습니다. 이 기록은 8일 뒤 지워집니다.
+- **고를 수 있는 버전:** 게시 때의 공지 상태(Ops `publish#notices` / `{버전}`)가 남아 있는 버전만입니다. 이 기능이 배포되기 전 게시와 운영 DB를 읽지 못한 게시는 `rollback_target_missing`으로 끝나고 아무것도 바뀌지 않습니다. 이 기록은 8일 뒤 지워집니다.
 
 ```bash
 node tools/republish/republish.mjs --function <PublisherFunctionName> --version 20261017T053000Z --action rollback        # 부를 명령만 보여 줌
 node tools/republish/republish.mjs --function <PublisherFunctionName> --version 20261017T053000Z --action rollback --yes  # 실행
 ```
 
-결과는 `{"status":"published","version":"<새 버전>"}`입니다. 다른 게시가 도는 중이면 `{"status":"busy"}`로 끝나므로 잠시 뒤 다시 부릅니다. 실패하면 함수가 오류로 끝나고(`되돌리기 실패: <사유>`) manifest와 되돌림 표시는 앞 상태 그대로입니다. 되돌림 표시를 앞 값으로 되돌려 놓지 못하면 `rollback_hold_not_restored` 로그가 남습니다. 이때는 `admin#publish` / `notice-hold`를 확인합니다(그대로 두면 다음 자동 게시가 그 표시대로 공지를 되돌려 게시함).
+결과와 도구의 종료 코드는 아래와 같습니다. `aws lambda invoke`는 함수가 오류로 끝나도 종료 코드 0을 주므로, 도구가 응답을 읽어 가려 줍니다.
+
+| 결과                                        | 종료 코드 | 뜻                                                                                                          |
+| ------------------------------------------- | --------- | ----------------------------------------------------------------------------------------------------------- |
+| `{"status":"published","version":"…"}`      | 0         | 새 버전으로 게시함                                                                                          |
+| `{"status":"unchanged","version":"…"}`      | 0         | 되돌릴 공지가 없고 게시 내용도 지금과 같음(같은 되돌리기를 다시 부른 경우). 새 버전을 만들지 않음           |
+| `{"status":"busy"}`                         | 2         | 다른 게시가 도는 중. 잠시 뒤 다시 부름                                                                      |
+| `{"status":"failed","reason":"…"}`          | 1         | 입력 문제(기록이 없는 버전 `rollback_target_missing` 등). 아무것도 바뀌지 않고 게시 오류 알림도 울리지 않음 |
+| 함수 오류(`FunctionError`, `되돌리기 실패`) | 1         | 게시 장애. manifest는 앞 게시본 그대로이고 게시 오류 알림(`PublishErrors`)이 울림                           |
+
+실패하면 되돌림 표시도 앞 값으로 되돌려 놓습니다. 다만 아래 두 로그가 남았다면 `admin#publish` / `notice-hold`를 직접 확인합니다(표시가 남아 있으면 다음 자동 게시가 그 표시대로 공지를 되돌려 게시함).
+
+- `rollback_hold_not_restored`: 표시를 앞 값으로 되돌려 놓지 못함
+- `rollback_hold_unknown`: 표시를 쓴 뒤 게시됐는지 확인하지 못함(manifest를 읽지 못함 등)
 
 운영 화면의 되돌리기·'다시 적용'은 #331의 다음 PR에서 들어옵니다. 그 전에는 위 명령으로 부르고, 다시 적용은 `notice-hold`의 `notices`에서 그 공지를 지우고 `version`을 1 올리는 것과 같습니다.
 
@@ -569,7 +582,7 @@ node tools/republish/republish.mjs --function <PublisherFunctionName> --version 
    node tools/republish/republish.mjs --function <PublisherFunctionName> --version 20261017T053000Z --yes  # 실행
    ```
 
-   그 버전의 manifest 사본과 파일(날씨가 실린 버전은 다섯 개)이 모두 있고 계약을 통과할 때만 다시 내보냅니다. 하나라도 없으면 지금 manifest를 그대로 두고 오류로 끝납니다. 다른 판단 정책으로 게시된 버전은 `policy_unsupported`로 거절합니다. 점검(`maintenance`)·최소 화면 버전(`minWebBuild`)은 사본의 값이 아니라 배포된 코드의 `MANIFEST_SETTINGS`로 씁니다(점검 중에 써도 점검이 풀리지 않음). 공지는 사본에 실린 그대로이고 되돌림 표시는 건드리지 않습니다. 응답은 파일 대신 화면(`/dev/stdout`)으로 받아 작업 트리에 파일이 남지 않게 합니다.
+   그 버전의 manifest 사본과 파일(날씨가 실린 버전은 다섯 개)이 모두 있고 계약을 통과할 때만 다시 내보냅니다. 하나라도 없으면 지금 manifest를 그대로 두고 오류로 끝납니다. 다른 판단 정책으로 게시된 버전은 `policy_unsupported`로 거절합니다. 사본이 다른 버전 경로의 파일을 가리키면 `files_mismatch`입니다. 점검(`maintenance`)·최소 화면 버전(`minWebBuild`)은 사본의 값이 아니라 배포된 코드의 `MANIFEST_SETTINGS`로 씁니다(점검 중에 써도 점검이 풀리지 않음). 공지도 사본의 값이 아니라 지금 상태(운영 DB 노출본과 되돌림 표시)로 싣습니다. 그 뒤 끝낸 공지나 되돌림으로 뺀 공지가 다시 나가지 않게 하려는 것이고, 운영 DB를 읽지 못하면 지금 게시본의 공지를 이어 씁니다. 되돌림 표시는 건드리지 않습니다. 결과와 종료 코드는 위 '되돌리기'의 표와 같습니다. 응답은 파일 대신 화면(`/dev/stdout`)으로 받아 작업 트리에 파일이 남지 않게 합니다.
 
 4. 사이트에서 manifest가 새 버전으로 바뀌었는지 확인합니다(manifest 캐시 60초): `curl -s https://<DistributionDomainName>/data/manifest.json | jq -r .snapshotVersion`. 그 뒤 게시 로그 그룹(`BaradunV2-PublishLogs…`)에 `republish_finished` 뒤로 `publish_finished`가 새로 생겼다면 늦게 온 게시가 덮은 것이니 3단계를 다시 합니다.
 5. 원인을 고친 뒤 일정을 다시 켭니다: `set_state ENABLED`(1단계와 같은 셸, 새 셸이면 함수를 다시 정의). 고친 코드를 `cdk deploy`했다면 배포가 일정을 이미 켰을 수 있으니 상태만 확인합니다. 다음 수집이 새 버전을 게시합니다. 지금 manifest와 내용이 같으면 `publish_unchanged`로 남고 새 버전은 만들지 않습니다.
