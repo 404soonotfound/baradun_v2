@@ -6,9 +6,14 @@ import {
   type DynamoDBDocumentClient,
 } from "@aws-sdk/lib-dynamodb";
 import {
+  PUBLISH_NOTICES_PK,
+  PUBLISH_RUN_LAST_SK,
+  PUBLISH_RUN_PK,
   PUBLISH_SUMMARY_PK,
   publishSummaryTtl,
   STATION_TABLE_KEY,
+  type NoticeSnapshot,
+  type PublishRun,
   type PublishSummary,
   type StationTable,
 } from "../collect/publish-summary";
@@ -26,6 +31,7 @@ import {
 } from "./rules";
 import type {
   ClaimSlotResult,
+  NoticeHold,
   OpsStore,
   PutStateResult,
   StateRecord,
@@ -50,6 +56,9 @@ import type {
 // - 잠금:      lock#{name} / lock
 // - 게시 버전: publish / version
 // - 수집 실행 기록: collect#run#{job} / {시작 시각}#{실행 id} (BRD-149, DynamoRunLog)
+// - 게시 실행 결과: publish#run / last · publish#run / {시도한 버전} (D16-C2, 실패한 실행만 버전별로)
+// - 게시 때의 공지 상태: publish#notices / {게시 버전} (D20-2, 되돌리기 기준)
+// - 되돌림 포인터: admin#publish / notice-hold (D20-2). 운영 API가 '다시 적용'으로 고칠 항목이라 admin# 키에 둠
 
 // 가짜 클라이언트로 바꿀 수 있게 send만 요구함
 export type DocumentSender = Pick<DynamoDBDocumentClient, "send">;
@@ -59,6 +68,12 @@ const TTL = "ttl";
 
 // 운영 API(수집 현황)도 이 키를 읽음(services/src/admin/collection.ts)
 export const PUBLISHED_VERSION_KEY = { pk: "publish", sk: "version" } as const;
+
+// 되돌림 포인터 한 곳. 운영 API의 version 조건부 쓰기(admin/writes.ts)와 같은 칸(version·updatedAt·updatedBy)을 씀
+export const NOTICE_HOLD_KEY = {
+  pk: "admin#publish",
+  sk: "notice-hold",
+} as const;
 
 const slotKey = (job: string, slotId: string) => ({
   pk: `slot#${job}`,
@@ -88,6 +103,29 @@ async function sendConditional(
     if (isConditionFailed(error)) return false;
     throw error;
   }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+// 저장된 모양이 틀리면 던짐(없는 것·빈 것으로 바꾸지 않음). 공지 내용의 계약 검사는 읽는 쪽(publisher)이 함
+function toNoticeHold(item: Record<string, unknown>): NoticeHold {
+  const { version, notices } = item;
+  if (
+    typeof version !== "number" ||
+    !isRecord(notices) ||
+    Object.values(notices).some(
+      (held) =>
+        !isRecord(held) ||
+        typeof held.target !== "string" ||
+        typeof held.at !== "string" ||
+        (held.live !== null && !isRecord(held.live)),
+    )
+  ) {
+    throw new Error("invalid notice hold item");
+  }
+  return { version, notices: notices as NoticeHold["notices"] };
 }
 
 function toStateRecord(item: Record<string, unknown>): StateRecord {
@@ -316,11 +354,110 @@ export class DynamoOpsStore implements OpsStore {
     );
   }
 
+  async putPublishNotices(
+    version: string,
+    notices: readonly NoticeSnapshot[],
+    nowMs: number,
+  ) {
+    assertSnapshotVersion(version);
+    await this.client.send(
+      new PutCommand({
+        TableName: this.tableName,
+        Item: {
+          pk: PUBLISH_NOTICES_PK,
+          sk: version,
+          notices,
+          [TTL]: publishSummaryTtl(nowMs),
+        },
+      }),
+    );
+  }
+
+  async getPublishNotices(
+    version: string,
+  ): Promise<readonly NoticeSnapshot[] | null> {
+    assertSnapshotVersion(version);
+    const result = await this.client.send(
+      new GetCommand({
+        TableName: this.tableName,
+        Key: { pk: PUBLISH_NOTICES_PK, sk: version },
+        ConsistentRead: true,
+      }),
+    );
+    if (!result.Item) return null;
+    const notices: unknown = result.Item.notices;
+    if (!Array.isArray(notices) || !notices.every(isRecord)) {
+      throw new Error("invalid publish notices item");
+    }
+    return notices as unknown as NoticeSnapshot[];
+  }
+
   async putStationTable(table: StationTable, updatedAt: string) {
     await this.client.send(
       new PutCommand({
         TableName: this.tableName,
         Item: { ...STATION_TABLE_KEY, stations: table, updatedAt },
+      }),
+    );
+  }
+
+  async getNoticeHold(): Promise<NoticeHold | null> {
+    const result = await this.client.send(
+      new GetCommand({
+        TableName: this.tableName,
+        Key: NOTICE_HOLD_KEY,
+        ConsistentRead: true,
+      }),
+    );
+    return result.Item ? toNoticeHold(result.Item) : null;
+  }
+
+  async putNoticeHold(
+    notices: NoticeHold["notices"],
+    expectedVersion: number,
+    updatedAt: string,
+  ): Promise<boolean> {
+    // 읽은 version 그대로일 때만 씀. 그 사이 '다시 적용'(운영 API)이나 다른 되돌리기가 끼어들었으면 false
+    return sendConditional(
+      this.client,
+      new PutCommand({
+        TableName: this.tableName,
+        Item: {
+          ...NOTICE_HOLD_KEY,
+          version: expectedVersion + 1,
+          notices,
+          updatedAt,
+          updatedBy: "publisher",
+        },
+        ...(expectedVersion === 0
+          ? { ConditionExpression: "attribute_not_exists(pk)" }
+          : {
+              ConditionExpression: "#version = :expected",
+              ExpressionAttributeNames: { "#version": "version" },
+              ExpressionAttributeValues: { ":expected": expectedVersion },
+            }),
+      }),
+    );
+  }
+
+  async putPublishRun(run: PublishRun, nowMs: number) {
+    if (run.result === "failed") {
+      await this.client.send(
+        new PutCommand({
+          TableName: this.tableName,
+          Item: {
+            pk: PUBLISH_RUN_PK,
+            sk: run.version,
+            ...run,
+            [TTL]: publishSummaryTtl(nowMs),
+          },
+        }),
+      );
+    }
+    await this.client.send(
+      new PutCommand({
+        TableName: this.tableName,
+        Item: { pk: PUBLISH_RUN_PK, sk: PUBLISH_RUN_LAST_SK, ...run },
       }),
     );
   }
