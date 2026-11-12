@@ -185,6 +185,22 @@ describe("배포 워크플로 가드레일 (11장)", () => {
     );
   });
 
+  // 결정 기록 D20-6·7: 웹은 지금 판단 정책만 읽음 → 운영 게시본 정책을 새 빌드가 읽지 못하면 올리지 않음(publisher 먼저)
+  it("사이트 배포는 빌드 뒤·파일 올리기 전에 운영 게시본의 판단 정책 버전을 확인한다", () => {
+    const lines = jobLines(deploy?.text ?? "", "site").join("\n");
+    const build = lines.indexOf("run: npm run build -w apps/web");
+    const check = lines.indexOf(
+      'run: node scripts/check-live-policy.mts "$URL"',
+    );
+    const upload = lines.indexOf("name: 사이트 파일 올리기");
+    expect(build).toBeGreaterThan(-1);
+    expect(check).toBeGreaterThan(build);
+    expect(upload).toBeGreaterThan(check);
+    expect(lines).toMatch(
+      /name: 판단 정책 버전 확인\s*\n\s*working-directory: apps\/web\s*\n\s*env:\s*\n\s*URL: \$\{\{ vars\.SITE_URL \}\}/,
+    );
+  });
+
   it("배포 판단의 CI_JOB은 ci.yml에서 그 앱 영역이 바뀔 때만 도는 빌드 작업이다", () => {
     for (const [job, ciJob, area] of [
       ["site", "e2e-build", "web"],
