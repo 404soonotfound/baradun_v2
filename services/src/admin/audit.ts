@@ -27,6 +27,11 @@ export const AUDIT_ACTIONS = [
   "notice.delete",
   // 해변 운영 메모 저장(BRD-150). 메모 글은 넣지 않고 바뀐 항목 이름만
   "beach.memo",
+  // 데이터 게시(#331, ADM-PUB): 지금 게시·되돌리기 작업 만들기, 되돌린 공지 다시 적용
+  // 공지 문구는 넣지 않음(대상은 작업 ID·공지 ID, 되돌리기는 고른 게시본 버전만)
+  "publish.now",
+  "publish.rollback",
+  "publish.reapply",
   // 샘플 계정이 허용된 조회를 함(로그인 뒤 /ops/me 포함)
   "sample.read",
   // 샘플 계정 요청을 거절함(쓰기·허용 밖 경로)
@@ -79,9 +84,10 @@ export function actorOf(principal: Principal): AuditActor {
   };
 }
 
-// 대상: 문의는 문의 ID, 공지는 공지 ID, 해변은 해변 ID, 샘플 요청은 "METHOD 경로 모양"(실제 경로 값은 넣지 않음)
+// 대상: 문의는 문의 ID, 공지는 공지 ID, 해변은 해변 ID, 게시 작업은 작업 ID,
+// 샘플 요청은 "METHOD 경로 모양"(실제 경로 값은 넣지 않음)
 export interface AuditTarget {
-  readonly kind: "inquiry" | "notice" | "beach" | "route";
+  readonly kind: "inquiry" | "notice" | "beach" | "publish" | "route";
   readonly id: string;
 }
 
@@ -421,6 +427,7 @@ function toView(item: Record<string, unknown>): AuditView {
     (targetKind !== "inquiry" &&
       targetKind !== "notice" &&
       targetKind !== "beach" &&
+      targetKind !== "publish" &&
       targetKind !== "route") ||
     typeof targetId !== "string" ||
     !Array.isArray(changes) ||

@@ -1,4 +1,5 @@
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
+import { InvokeCommand, LambdaClient } from "@aws-sdk/client-lambda";
 import { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
 import { S3Client } from "@aws-sdk/client-s3";
 import type {
@@ -67,6 +68,13 @@ import {
   IDEMPOTENCY_KEY_HEADER,
   OPS_SESSION_MAX_MS,
 } from "./policy";
+import {
+  createPublishJobRoute,
+  publishJobRoute,
+  publishOverviewRoute,
+  reapplyNoticeRoute,
+  type PublisherInvoker,
+} from "./publish-routes";
 import { decideRoute, matchRoute } from "./routes";
 import { readSamplePolicy } from "./sample";
 import { sampleInquiry, sampleInquiryPage } from "./sample-data";
@@ -88,6 +96,8 @@ export interface DataDependencies {
   readonly keys?: ApiKeyTags | null;
   // 게시본 읽기(해변 관리의 지금 표시 상태, BRD-150). 없으면 상태는 '확인 못 함'(판단불가 계열)
   readonly snapshots?: SnapshotStore | null;
+  // publisher 비동기 호출(지금 게시·되돌리기 작업, #331). 없으면 작업을 만들지 않음(500)
+  readonly publisher?: PublisherInvoker | null;
 }
 
 export interface OpsDependencies {
@@ -444,6 +454,26 @@ async function dispatchOps(
         return await endNoticeRoute(event, id, principal, deps.data, ids);
       }
     }
+    if (decision.pattern === "/ops/publish" && method === "GET") {
+      return await publishOverviewRoute(deps.data, ids);
+    }
+    if (decision.pattern === "/ops/publish/jobs/{id}" && method === "GET") {
+      return await publishJobRoute(decision.params.id ?? "", deps.data, ids);
+    }
+    if (principal.kind === "operator" && method === "POST") {
+      if (decision.pattern === "/ops/publish/jobs") {
+        return await createPublishJobRoute(event, principal, deps.data, ids);
+      }
+      if (decision.pattern === "/ops/publish/holds/{id}/reapply") {
+        return await reapplyNoticeRoute(
+          event,
+          decision.params.id ?? "",
+          principal,
+          deps.data,
+          ids,
+        );
+      }
+    }
     if (decision.pattern === "/ops/inquiries/{id}") {
       const id = decision.params.id ?? "";
       if (method === "GET") {
@@ -491,6 +521,28 @@ function snapshotReader(): SnapshotStore | null {
   return bucket ? new S3SnapshotStore(new S3Client({}), bucket) : null;
 }
 
+// publisher 함수(infra가 이름과 그 함수 하나의 InvokeFunction 권한을 줌). 비동기(Event)로만 부름
+// 202가 아니면 던짐 → 작업은 invoke_failed. 이름이 없으면 null(작업을 만들지 않음)
+function publisherInvoker(): PublisherInvoker | null {
+  const functionName = process.env.PUBLISHER_FUNCTION_NAME;
+  if (!functionName) return null;
+  const lambda = new LambdaClient({});
+  return {
+    async invoke(payload) {
+      const result = await lambda.send(
+        new InvokeCommand({
+          FunctionName: functionName,
+          InvocationType: "Event",
+          Payload: new TextEncoder().encode(JSON.stringify(payload)),
+        }),
+      );
+      if (result.StatusCode !== 202) {
+        throw new Error(`publisher 호출 상태 ${result.StatusCode}`);
+      }
+    },
+  };
+}
+
 let runtime: OpsDependencies | undefined;
 
 function runtimeDependencies(): OpsDependencies {
@@ -524,6 +576,7 @@ function runtimeDependencies(): OpsDependencies {
       alarms: alarmReader(),
       keys: keyTagReader(),
       snapshots: snapshotReader(),
+      publisher: publisherInvoker(),
     },
   };
   return runtime;

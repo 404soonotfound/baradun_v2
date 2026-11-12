@@ -8,6 +8,8 @@
 // - 공지:               admin#notice / {공지 ID}       (BRD-151, 한 파티션이라 publisher가 Query 한 번으로 읽음)
 // - 해변 운영 메모:      admin#beach#{해변 ID} / memo (BRD-150, 내부용. publisher는 admin#notice만 읽어 게시본에 나가지 않음)
 // - 되돌림 포인터:       admin#publish / notice-hold  (D20-2, publisher가 쓰고 읽음. 키는 core/store/dynamodb.ts NOTICE_HOLD_KEY)
+// - 게시 작업 자리:     admin#publish / job          (#331, 마지막으로 만든 작업 ID. version 조건부로 동시 요청을 하나만 받음)
+// - 게시 작업:          admin#publish#job / {작업 ID} (#331, publisher가 상태를 바꿈. 키는 core/collect/publish-job.ts)
 // - 업무 항목:           admin#{종류}#{id} / {sk}     (메모 등, 해당 이슈에서 정함)
 
 export interface OpsKey {
@@ -35,6 +37,12 @@ export function noticeKey(id: string): OpsKey {
 export function beachMemoKey(beachId: string): OpsKey {
   return { pk: `${ADMIN_PREFIX}beach#${beachId}`, sk: "memo" };
 }
+
+// 게시 작업 자리(#331). 지금 게시·되돌리기 작업을 만들 때 versionedWrite의 업무 항목
+export const PUBLISH_JOB_SLOT_KEY: OpsKey = {
+  pk: `${ADMIN_PREFIX}publish`,
+  sk: "job",
+};
 
 export const AUDIT_PREFIX = `${ADMIN_PREFIX}audit#`;
 
