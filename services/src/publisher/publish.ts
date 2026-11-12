@@ -3,6 +3,7 @@ import {
   buildStationTable,
 } from "../core/collect/publish-summary";
 import type { Beach, ManifestFile, Notice } from "@baradun/contracts";
+import { SUPPORTED_POLICY_VERSIONS } from "@baradun/contracts/judgment-policy";
 import { checkNoticePhrases } from "@baradun/contracts/notice-rules";
 import type { Logger } from "../core/collect/log";
 import type { SnapshotStore } from "../core/snapshots/types";
@@ -482,6 +483,10 @@ export async function rollbackManifest(
   );
   if (manifest === null || manifest.snapshotVersion !== version) {
     return { status: "failed", reason: "manifest_missing" };
+  }
+  // 웹은 지금 판단 정책만 읽음(D20-6) → 다른 정책으로 게시된 버전을 되살리면 모두 판단불가가 됨. 되돌리지 않고 실패로 알림
+  if (!SUPPORTED_POLICY_VERSIONS.includes(manifest.policyVersion)) {
+    return { status: "failed", reason: "policy_unsupported" };
   }
   const paths = [
     ...KEYS.map((key) => manifest.files[key]),
