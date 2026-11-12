@@ -247,6 +247,7 @@
     "backToList": "문의 목록으로",
     "id": "접수 ID",
     "beachActivity": "해변 · 활동",
+    "openBeach": "해변 관리에서 해변 정보 보기",
     "received": "받은 시각",
     "retention": "보관",
     "retentionValue": "{date}에 자동 삭제",
