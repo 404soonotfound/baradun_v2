@@ -1129,6 +1129,36 @@ describe("되돌리기 (D20-1~3)", () => {
     expect(manifest()!.notices!.map((n) => n.id)).toEqual(["n-a", "n-new"]);
   });
 
+  // DynamoDB는 맵의 칸 순서를 지키지 않음. 읽어 온 포인터의 칸 순서를 뒤집어 그 상황을 만듦
+  const reordered = <T>(value: T): T =>
+    typeof value === "object" && value !== null && !Array.isArray(value)
+      ? (Object.fromEntries(
+          Object.entries(value)
+            .reverse()
+            .map(([key, inner]) => [key, reordered(inner)]),
+        ) as T)
+      : value;
+  const readsReordered = (ops: Awaited<ReturnType<typeof setup>>["ops"]) => {
+    const get = ops.getNoticeHold.bind(ops);
+    ops.getNoticeHold = async () => reordered(await get());
+  };
+
+  it("저장소가 포인터의 칸 순서를 바꿔 돌려줘도 같은 되돌리기는 변경 없음으로 끝낸다", async () => {
+    const { ops, snapshots, deps, advance, v2 } = await twoPublishes();
+    const v3 = advance(60_000);
+    await publishSnapshot(deps(), { rollbackTo: V1 });
+    readsReordered(ops);
+    expect(JSON.stringify(await ops.getNoticeHold())).not.toBe(
+      JSON.stringify(ops.noticeHold),
+    );
+    advance(60_000);
+    expect(await publishSnapshot(deps(), { rollbackTo: V1 })).toEqual({
+      status: "unchanged",
+      version: v3,
+    });
+    expect(await snapshots.listVersions()).toEqual([V1, v2, v3]);
+  });
+
   it("같은 되돌리기를 다시 부르면 새 버전을 만들지 않고 변경 없음으로 끝낸다", async () => {
     const { ops, snapshots, deps, advance, manifest, v2 } =
       await twoPublishes();
@@ -1153,6 +1183,8 @@ describe("되돌리기 (D20-1~3)", () => {
 
   it("포인터 쓰기가 실제로는 됐는데 응답만 실패하면 다시 읽어 앞 값으로 되돌려 놓는다", async () => {
     const { ops, deps, advance, manifest, v2 } = await twoPublishes();
+    // 다시 읽은 포인터의 칸 순서가 쓴 것과 달라도 이 실행이 쓴 값으로 알아봄
+    readsReordered(ops);
     const put = ops.putNoticeHold.bind(ops);
     let calls = 0;
     ops.putNoticeHold = async (...args) => {
