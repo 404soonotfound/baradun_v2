@@ -621,7 +621,9 @@ function PreviewPanel({
               />
               {!preview.current.readable ? (
                 <p className="mt-2 text-body-s text-text-muted">
-                  {t.preview.beachesUnknown}
+                  {preview.current.missing
+                    ? t.preview.beachesNoCurrent
+                    : t.preview.beachesUnknown}
                 </p>
               ) : preview.changedCount === 0 ? (
                 <p className="mt-2 text-body-s text-text-body">
@@ -898,7 +900,15 @@ export function PublishScreen({
       void fetchJob(() => session.accessToken(), trackedId).then((result) => {
         if (!live) return;
         if (!result.ok) {
-          setPollRetry((n) => n + 1);
+          // 일시적 실패(연결·서버 오류)만 다시 조회. 기록 없음·권한 없음은 멈추고 '결과를 알 수 없어요'
+          // 다시 로그인이 필요하면 안내만 하고 멈춤(로그인하면 화면이 다시 읽음)
+          if (result.code === "reauth") {
+            setMessage({ tone: "warn", text: messages.inquiries.reauth });
+          } else if (result.code === "network" || result.status >= 500) {
+            setPollRetry((n) => n + 1);
+          } else if (shownJob) {
+            setJob({ ...shownJob, state: "unknown" });
+          }
           return;
         }
         setJob(result.body.job);
@@ -1293,6 +1303,11 @@ export function PublishScreen({
           onClose={() => setDialog(null)}
         >
           <p>{t.confirmPublishBody}</p>
+          {pending === null && (
+            <p role="alert" className="font-medium text-text-default">
+              {t.confirmPublishPendingUnread}
+            </p>
+          )}
           {pending && pending.length > 0 && (
             <ul className="list-disc pl-5">
               {pending.map((n) => (
