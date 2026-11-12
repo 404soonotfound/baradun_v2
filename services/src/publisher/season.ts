@@ -25,6 +25,9 @@ export interface ParsedBeachMeta {
   readonly seasons: SeasonTable;
   // 모양이 틀려 버린 해변 id. 그 해변은 배지를 숨김(로그로 알림)
   readonly invalid: readonly string[];
+  // 해변 칸에 있는 모든 해변 id(모양이 틀린 항목 포함). 저장소 원본 해변 ID 목록으로 씀(publish.ts 해변 ID 대조, D16-C1)
+  // 이 목록과 data/beaches 파일의 id가 같은지는 저장소 검사(packages/contracts check:coverage)가 봄
+  readonly beachIds: readonly string[];
 }
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -87,7 +90,7 @@ export function parseBeachMeta(json: unknown): ParsedBeachMeta {
     if (ok) seasons[id] = years;
     else invalid.push(id);
   }
-  return { seasons, invalid };
+  return { seasons, invalid, beachIds: Object.keys(beaches) };
 }
 
 // UTC ISO 시각 → 한국 날짜 YYYY-MM-DD
