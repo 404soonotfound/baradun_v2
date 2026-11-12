@@ -25,7 +25,7 @@ import {
   type SourceView,
 } from "@/lib/sources";
 import { AdminShell } from "./admin-shell";
-import { Button, Notice } from "./ui";
+import { Button, Notice, SUCCESS_BADGE } from "./ui";
 
 // 데이터 출처 목록·상세 (BRD-149·GH-328, 화면 설계서 6장 ADM-SRC, 시안 4차 V12·V13·VM13)
 // - 읽기 전용(6장 '조작 없음'). 시안의 '지금 한 번 받아오기'는 6장·S1에 API가 없어 두지 않음
@@ -42,7 +42,7 @@ const BADGE =
 const RUN_BADGE: Record<RunState, { box: string; dot: string }> = {
   // 성공한 수집은 작업 성공색(color.success, 결정 E6·BRD-165)
   complete: {
-    box: "bg-success-bg text-success-fg ring-1 ring-success-border",
+    box: SUCCESS_BADGE,
     dot: "size-2 rounded-full bg-success-icon",
   },
   partial: {

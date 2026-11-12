@@ -244,7 +244,7 @@ function NoticeList({
         </div>
       </div>
 
-      {flash && <Notice tone="brand" title={flash} role="status" />}
+      {flash && <Notice tone="success" title={flash} role="status" />}
       <p className="text-body-s text-text-body">{t.order}</p>
 
       <div
@@ -1548,7 +1548,7 @@ function NoticesBody() {
       {editing && (
         <section aria-label={t.editLabel} className="flex flex-col gap-3">
           {flash?.at === here && (
-            <Notice tone="brand" title={flash.text} role="status" />
+            <Notice tone="success" title={flash.text} role="status" />
           )}
           {refreshFailure && (
             <Failure
