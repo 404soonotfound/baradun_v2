@@ -6,6 +6,12 @@ import {
   type DynamoDBDocumentClient,
 } from "@aws-sdk/lib-dynamodb";
 import {
+  PUBLISH_JOB_START_LIMIT_MS,
+  publishJobKey,
+  type ClaimPublishJobResult,
+  type PublishJobOutcome,
+} from "../collect/publish-job";
+import {
   PUBLISH_NOTICES_PK,
   PUBLISH_RUN_LAST_SK,
   PUBLISH_RUN_PK,
@@ -59,6 +65,7 @@ import type {
 // - 게시 실행 결과: publish#run / last · publish#run / {시도한 버전} (D16-C2, 실패한 실행만 버전별로)
 // - 게시 때의 공지 상태: publish#notices / {게시 버전} (D20-2, 되돌리기 기준)
 // - 되돌림 포인터: admin#publish / notice-hold (D20-2). 운영 API가 '다시 적용'으로 고칠 항목이라 admin# 키에 둠
+// - 운영자 게시 작업: admin#publish#job / {작업 ID} (#331). 운영 API가 만들고 publisher가 상태를 바꿈
 
 // 가짜 클라이언트로 바꿀 수 있게 send만 요구함
 export type DocumentSender = Pick<DynamoDBDocumentClient, "send">;
@@ -110,7 +117,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 // 저장된 모양이 틀리면 던짐(없는 것·빈 것으로 바꾸지 않음). 공지 내용의 계약 검사는 읽는 쪽(publisher)이 함
-function toNoticeHold(item: Record<string, unknown>): NoticeHold {
+// 운영 API('다시 적용'·게시 현황)도 같은 해석을 씀
+export function toNoticeHold(item: Record<string, unknown>): NoticeHold {
   const { version, notices } = item;
   if (
     typeof version !== "number" ||
@@ -467,6 +475,142 @@ export class DynamoOpsStore implements OpsStore {
       }),
     );
   }
+
+  claimPublishJob(jobId: string, nowMs: number) {
+    return claimPublishJobItem(this.client, this.tableName, jobId, nowMs);
+  }
+
+  finishPublishJob(jobId: string, outcome: PublishJobOutcome, nowMs: number) {
+    return finishPublishJobItem(
+      this.client,
+      this.tableName,
+      jobId,
+      outcome,
+      nowMs,
+    );
+  }
+}
+
+// 운영자 게시 작업 맡기·끝내기(#331). 조건부 Update라 같은 작업을 두 실행이 맡지 못함
+// 운영 API가 작업을 만든 뒤 publisher 호출이 두 번 오거나(비동기 호출 재전달) 늦게 와도 한 번만 실행됨
+export async function claimPublishJobItem(
+  client: DocumentSender,
+  tableName: string,
+  jobId: string,
+  nowMs: number,
+): Promise<ClaimPublishJobResult> {
+  const key = publishJobKey(jobId);
+  const claimed = await sendConditional(
+    client,
+    new UpdateCommand({
+      TableName: tableName,
+      Key: key,
+      UpdateExpression: "SET #state = :running, #startedAt = :now",
+      ConditionExpression:
+        "attribute_exists(pk) AND #state = :pending AND #createdAtMs > :oldest",
+      ExpressionAttributeNames: {
+        "#state": "state",
+        "#startedAt": "startedAt",
+        "#createdAtMs": "createdAtMs",
+      },
+      ExpressionAttributeValues: {
+        ":running": "running",
+        ":pending": "pending",
+        ":now": new Date(nowMs).toISOString(),
+        ":oldest": nowMs - PUBLISH_JOB_START_LIMIT_MS,
+      },
+    }),
+  );
+  if (claimed) return "claimed";
+  // 왜 못 맡았는지: 기록이 없음 · 이미 맡음·끝남 · 시작 제한이 지남(실패로 바꿈)
+  const current = await client.send(
+    new GetCommand({ TableName: tableName, Key: key, ConsistentRead: true }),
+  );
+  if (!current.Item) return "missing";
+  if (current.Item.state !== "pending") return "taken";
+  const expired = await failPendingPublishJobItem(
+    client,
+    tableName,
+    jobId,
+    "expired",
+    nowMs,
+  );
+  return expired ? "expired" : "taken";
+}
+
+// 아직 '대기'인 작업을 실패로 바꿈(시작 제한 지남·운영 API의 publisher 호출 실패). 이미 맡았으면 false
+export function failPendingPublishJobItem(
+  client: DocumentSender,
+  tableName: string,
+  jobId: string,
+  reason: string,
+  nowMs: number,
+): Promise<boolean> {
+  return sendConditional(
+    client,
+    new UpdateCommand({
+      TableName: tableName,
+      Key: publishJobKey(jobId),
+      UpdateExpression:
+        "SET #state = :failed, #reason = :reason, #finishedAt = :now",
+      ConditionExpression: "attribute_exists(pk) AND #state = :pending",
+      ExpressionAttributeNames: {
+        "#state": "state",
+        "#reason": "reason",
+        "#finishedAt": "finishedAt",
+      },
+      ExpressionAttributeValues: {
+        ":failed": "failed",
+        ":pending": "pending",
+        ":reason": reason,
+        ":now": new Date(nowMs).toISOString(),
+      },
+    }),
+  );
+}
+
+export async function finishPublishJobItem(
+  client: DocumentSender,
+  tableName: string,
+  jobId: string,
+  outcome: PublishJobOutcome,
+  nowMs: number,
+): Promise<boolean> {
+  const names: Record<string, string> = {
+    "#state": "state",
+    "#finishedAt": "finishedAt",
+  };
+  const values: Record<string, unknown> = {
+    ":state": outcome.state,
+    ":running": "running",
+    ":now": new Date(nowMs).toISOString(),
+  };
+  const sets = ["#state = :state", "#finishedAt = :now"];
+  const fields: Record<string, unknown> =
+    outcome.state === "done"
+      ? { result: outcome.result, snapshotVersion: outcome.snapshotVersion }
+      : {
+          reason: outcome.reason,
+          ...(outcome.snapshotVersion !== undefined
+            ? { snapshotVersion: outcome.snapshotVersion }
+            : {}),
+        };
+  for (const [name, value] of Object.entries(fields)) {
+    names[`#${name}`] = name;
+    values[`:${name}`] = value;
+    sets.push(`#${name} = :${name}`);
+  }
+  return sendConditional(
+    client,
+    new UpdateCommand({
+      TableName: tableName,
+      Key: publishJobKey(jobId),
+      UpdateExpression: `SET ${sets.join(", ")}`,
+      ConditionExpression: "attribute_exists(pk) AND #state = :running",
+      ExpressionAttributeNames: names,
+      ExpressionAttributeValues: values,
+    }),
+  );
 }
 
 // 수집 실행 기록 (BRD-149, core/collect/run-log.ts). 키: collect#run#{job} / {시작 시각}#{실행 id}

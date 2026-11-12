@@ -1,4 +1,8 @@
 import type {
+  ClaimPublishJobResult,
+  PublishJobOutcome,
+} from "../collect/publish-job";
+import type {
   NoticeSnapshot,
   PublishRun,
   PublishSummary,
@@ -118,6 +122,16 @@ export interface OpsStore {
 
   // 게시 실행 결과 남기기(D16-C2). 마지막 실행은 시작 시각이 더 늦을 때만 덮어쓰고, 실패한 실행은 따로도 남김
   putPublishRun(run: PublishRun, nowMs: number): Promise<void>;
+
+  // 운영자 게시 작업(core/collect/publish-job.ts) 맡기: '대기'이고 시작 제한 안일 때만 '실행'으로 바꿈
+  // 시작 제한이 지난 '대기'는 실패(expired)로 바꾸고 expired
+  claimPublishJob(jobId: string, nowMs: number): Promise<ClaimPublishJobResult>;
+  // 운영자 게시 작업 끝내기: '실행'일 때만 바꾸고 true
+  finishPublishJob(
+    jobId: string,
+    outcome: PublishJobOutcome,
+    nowMs: number,
+  ): Promise<boolean>;
 }
 
 // 슬롯 기록을 남기는 기간. 지나면 DynamoDB TTL이 지움(정리용, 판단에 쓰지 않음)

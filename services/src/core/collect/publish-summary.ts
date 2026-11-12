@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { RUN_RECORD_RETENTION_MS } from "./run-log";
 
 // 게시 요약 (BRD-187, 화면 ADM-COLLECT)
@@ -53,6 +54,46 @@ export interface PublishSummary {
   readonly source?: PublishSource;
   // 되돌리기·다시 내보내기에서 고른 게시본
   readonly target?: string;
+  // 분류별 해변 수(publisher 분류 그대로). 운영 화면이 앞 게시와 견줘 '바뀐 것'을 보여 줌(#331)
+  // 없으면 이 칸이 생기기 전 요약 → 화면은 '확인 못 함'
+  readonly categoryCounts?: CategoryCounts;
+  // 게시본에 실은 공지의 요약값(NOTICE_DIGEST_LENGTH자). 앞 게시와 다르면 공지가 바뀐 것
+  // 공지 문구는 싣지 않음(요약을 수백 바이트로 유지, 예약 전 문구를 남기지 않음). 없으면 '확인 못 함'
+  readonly noticeDigest?: string;
+  // 운영자가 운영 API로 연 게시 작업(지금 게시·되돌리기)의 ID. 작업 기록이 늦게 남거나 빠져도 결과를 찾게 함
+  readonly jobId?: string;
+}
+
+// 분류(계약 BeachStatus.category)별 해변 수
+export const PUBLISH_CATEGORIES = [
+  "clear",
+  "unavailable",
+  "undetermined",
+] as const;
+export type PublishCategory = (typeof PUBLISH_CATEGORIES)[number];
+export type CategoryCounts = Readonly<Record<PublishCategory, number>>;
+
+export const NOTICE_DIGEST_LENGTH = 16;
+
+// 칸 순서와 상관없이 견주려고 만든 글자(칸 이름 순으로 정렬한 JSON)
+// DynamoDB 맵·게시본 JSON은 칸 순서를 지키지 않을 수 있음 → JSON.stringify를 그대로 견주지 않음
+// publisher(되돌림 포인터 비교)·운영 API(대기 공지 비교)·공지 요약값이 같이 씀
+export function canonicalJson(value: unknown): string {
+  return JSON.stringify(value, (_key, v: unknown) =>
+    typeof v === "object" && v !== null && !Array.isArray(v)
+      ? Object.fromEntries(
+          Object.entries(v).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)),
+        )
+      : v,
+  );
+}
+
+// 공지 목록의 요약값. 칸 순서와 상관없는 JSON의 SHA-256 앞부분 → 같은 공지면 같은 값
+export function noticeDigestOf(notices: readonly NoticeSnapshot[]): string {
+  return createHash("sha256")
+    .update(canonicalJson(notices), "utf8")
+    .digest("hex")
+    .slice(0, NOTICE_DIGEST_LENGTH);
 }
 
 // 게시 때의 공지 상태(되돌리기 기준, D20-2): 끝나지 않은 노출본 전부(예약 전 포함, 되돌림 반영 뒤)
@@ -77,6 +118,7 @@ export interface PublishRun {
   readonly version: string;
   readonly reason?: string; // failed 사유
   readonly target?: string; // 되돌리기·다시 내보내기에서 고른 게시본
+  readonly jobId?: string; // 운영자 게시 작업 ID(PublishSummary.jobId와 같음)
 }
 
 export type StationTable = Readonly<Record<string, StationUse>>;
@@ -96,6 +138,7 @@ interface BeachStations {
 }
 
 interface StatusReasons {
+  readonly category: string;
   readonly reasons: readonly { readonly code: string }[];
 }
 
@@ -107,6 +150,9 @@ export function buildPublishSummary(input: {
   readonly status: Readonly<Record<string, StatusReasons>>;
   readonly source?: PublishSource;
   readonly target?: string;
+  // 게시본에 실은 공지. 주면 요약값을 남김
+  readonly notices?: readonly NoticeSnapshot[];
+  readonly jobId?: string;
 }): PublishSummary {
   const delayedBeachIds = Object.entries(input.status)
     .filter(([, status]) =>
@@ -114,6 +160,18 @@ export function buildPublishSummary(input: {
     )
     .map(([id]) => id)
     .sort();
+  // 계약 검사를 통과한 분류만 들어옴. 모르는 분류가 섞이면 수를 남기지 않음(틀린 수를 보이지 않게)
+  const counts: Record<PublishCategory, number> = {
+    clear: 0,
+    unavailable: 0,
+    undetermined: 0,
+  };
+  let countsKnown = true;
+  for (const status of Object.values(input.status)) {
+    if ((PUBLISH_CATEGORIES as readonly string[]).includes(status.category)) {
+      counts[status.category as PublishCategory] += 1;
+    } else countsKnown = false;
+  }
   return {
     version: input.version,
     previous: input.previous,
@@ -123,6 +181,9 @@ export function buildPublishSummary(input: {
     // 값이 없는 칸은 두지 않음(DynamoDB에 undefined를 쓰지 않음)
     ...(input.source ? { source: input.source } : {}),
     ...(input.target ? { target: input.target } : {}),
+    ...(countsKnown ? { categoryCounts: counts } : {}),
+    ...(input.notices ? { noticeDigest: noticeDigestOf(input.notices) } : {}),
+    ...(input.jobId ? { jobId: input.jobId } : {}),
   };
 }
 
