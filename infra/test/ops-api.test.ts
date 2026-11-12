@@ -12,7 +12,7 @@ function only(prefix: string, type: string) {
 }
 
 describe("운영 API", () => {
-  it("services/src/admin의 opsHandler를 쓰고 두 풀·Ops·문의 테이블을 환경 변수로 받는다", () => {
+  it("services/src/admin의 opsHandler를 쓰고 두 풀·Ops·문의 테이블·게시 버킷을 환경 변수로 받는다", () => {
     const fn = only("OpsApiFunction", "AWS::Lambda::Function").resource;
     expect(fn.Properties.Handler).toBe("index.opsHandler");
     expect(Object.keys(fn.Properties.Environment.Variables).sort()).toEqual([
@@ -23,7 +23,19 @@ describe("운영 API", () => {
       "OPS_TABLE_NAME",
       "SAMPLE_CLIENT_ID",
       "SAMPLE_USER_POOL_ID",
+      "SNAPSHOT_BUCKET",
     ]);
+  });
+
+  it("게시 버킷은 publisher와 같은 사이트 버킷이다(BRD-150)", () => {
+    const fn = only("OpsApiFunction", "AWS::Lambda::Function").resource;
+    const publisher = only("PublishFunction", "AWS::Lambda::Function").resource;
+    expect(fn.Properties.Environment.Variables.SNAPSHOT_BUCKET).toEqual(
+      publisher.Properties.Environment.Variables.SNAPSHOT_BUCKET,
+    );
+    expect(fn.Properties.Environment.Variables.SNAPSHOT_BUCKET).toEqual({
+      Ref: expect.stringMatching(/^SiteBucket/),
+    });
   });
 
   it("함수 URL은 IAM 인증이고, 아직 CloudFront에 연결하지 않는다(BRD-147에서 관리자 배포에 연결)", () => {
