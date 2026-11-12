@@ -419,6 +419,7 @@ describe("PR 필수 웹 검사 (BRD-102 결정 41·42)", () => {
       "admin",
       "admin-build",
       "admin-e2e",
+      "admin-e2e-engines",
     ]) {
       const cond = jobIf(ci?.text ?? "", job);
       const area = job.startsWith("admin") ? "admin" : "web";
@@ -570,6 +571,22 @@ describe("PR 필수 웹 검사 (BRD-102 결정 41·42)", () => {
     );
   });
 
+  // 지원 브라우저 기준안(D16-E2): Firefox·WebKit 엔진 E2E는 admin-e2e와 나란히, 같은 빌드 결과로 돎
+  it("운영자 E2E는 chromium(admin-e2e)과 Firefox·WebKit(admin-e2e-engines)을 나눠 같은 빌드 결과로 돌린다", () => {
+    const chromium = jobLines(ci?.text ?? "", "admin-e2e").join("\n");
+    const engines = jobLines(ci?.text ?? "", "admin-e2e-engines").join("\n");
+    expect(chromium).toContain("npm run test:e2e -w apps/admin");
+    expect(engines).toMatch(/needs:\s*\[changes, admin-build\]/);
+    expect(engines).toMatch(
+      /name:\s*admin-site\s*\n\s*path:\s*apps\/admin\/out/,
+    );
+    expect(engines).toContain("playwright install --with-deps firefox webkit");
+    expect(engines).toContain(
+      "key: playwright-engines-${{ runner.os }}-${{ hashFiles('package-lock.json') }}",
+    );
+    expect(engines).toContain("npm run test:e2e:engines -w apps/admin");
+  });
+
   it("web·e2e 결과는 ci-ok에 모인다", () => {
     const needs = jobLines(ci?.text ?? "", "ci-ok")
       .join("\n")
@@ -584,6 +601,7 @@ describe("PR 필수 웹 검사 (BRD-102 결정 41·42)", () => {
         "admin",
         "admin-build",
         "admin-e2e",
+        "admin-e2e-engines",
         "gitleaks",
       ]),
     );
