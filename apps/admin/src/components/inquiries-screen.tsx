@@ -42,7 +42,7 @@ import {
 } from "@/lib/inquiries";
 import { fill, messages } from "@/lib/messages";
 import { AdminShell } from "./admin-shell";
-import { Button, Notice } from "./ui";
+import { Button, Notice, TextLink } from "./ui";
 
 // 운영자 문의 목록·상세 (BRD-153, 화면 설계서 6장 ADM-INQ, 시안 4차 V20·VM6·VM7·E6·E11·VE6)
 // - 목록: 상태 탭(첫 쪽에 온 상태별 수) + 표. 접수 먼저, 같은 상태 안에서는 최근 접수 순(서버가 정함)
@@ -1247,6 +1247,20 @@ function InquiryDetailView({
               ({beach.region})
             </span>
           )}
+          {/* '정보가 실제와 달라요'는 해변 관리 상세(읽기 전용)로 이동. 판단 상태는 바꾸지 않음(ADM-INQ)
+              저장소 이름표에 있는 해변만(= 정적 페이지가 있는 ID, beach-names.ts). 화면 안 이동이라 TextLink(next/link)
+              다시 읽기가 404(그사이 지워짐)면 없는 문의라 이동 링크를 거둠
+              모바일·태블릿은 터치 영역 44, 따로 선 링크라 밑줄을 늘 둠(색만으로 구분하지 않게) */}
+          {item.type === "data_error" &&
+            beach &&
+            refreshFailure?.status !== 404 && (
+              <TextLink
+                href={`/beaches/${item.beachId}/`}
+                className="mt-1 flex min-h-touch w-fit items-center font-medium underline lg:min-h-0"
+              >
+                {t.openBeach}
+              </TextLink>
+            )}
         </Row>
         <Row label={t.received}>
           <span className="tabular-nums">{kstDateTime(item.receivedAt)}</span>

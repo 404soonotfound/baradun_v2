@@ -26,9 +26,11 @@ interface RawBeach {
 }
 
 // 모양이 틀린 파일은 조용히 빼지 않고 빌드를 멈춤(이름이 빠지면 화면이 ID만 보여 줘서 알아채기 어려움)
+// 파일 이름·ID 규칙은 해변 관리 정적 페이지(beach-data.ts loadBeaches)와 같음
+// → 이름표에 있는 해변 = 상세 페이지가 있는 해변(문의 상세의 해변 관리 링크가 이 전제를 씀)
 export function loadBeachNames(dir = DATA_DIR): Record<string, BeachName> {
   const names: Record<string, BeachName> = {};
-  for (const file of readdirSync(dir).filter((f) => /^b\d+\.json$/.test(f))) {
+  for (const file of readdirSync(dir).filter((f) => /^b\d{4}\.json$/.test(f))) {
     const raw = JSON.parse(
       readFileSync(path.join(dir, file), "utf8"),
     ) as RawBeach;
@@ -36,6 +38,7 @@ export function loadBeachNames(dir = DATA_DIR): Record<string, BeachName> {
     const sigungu = raw.region?.sigungu?.ko;
     if (
       typeof raw.id !== "string" ||
+      `${raw.id}.json` !== file ||
       typeof raw.name?.ko !== "string" ||
       typeof sido !== "string" ||
       typeof sigungu !== "string"

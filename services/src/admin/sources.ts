@@ -20,7 +20,7 @@ import {
   type CollectionJob,
   type RunView,
 } from "./collection";
-import { safeLog } from "./http";
+import { errorName, safeLog } from "./http";
 import type { Sender } from "./writes";
 
 // 데이터 출처 (BRD-149 ADM-SRC, 화면 V12·V13·VM13, 아키텍처 5장 수집 주기·10장 원문 저장 안 함)
@@ -326,9 +326,6 @@ const unknownKey = (name: ApiKeyName): KeyView => ({
   daysLeft: null,
   expiresInvalid: false,
 });
-
-const errorName = (error: unknown): string =>
-  error instanceof Error ? error.name : "unknown";
 
 // 제한 시간을 넘거나 읽는 도구가 없으면 '확인 못 함'(등록 안 됨으로 보지 않음)
 // 제한 시간은 키마다 따짐 → 먼저 읽힌 키는 결과를 버리지 않음. 넘으면 남은 요청을 취소함

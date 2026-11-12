@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import type { APIGatewayProxyEventV2 } from "aws-lambda";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { MemorySnapshotStore } from "../core/snapshots/memory";
 import type { SnapshotStore } from "../core/snapshots/types";
 import type { AuthDependencies } from "./auth";
@@ -216,13 +216,35 @@ describe("지금 표시 상태 GET /ops/beaches/published", () => {
       });
     }
     const failing = snapshots();
+    const denied = Object.assign(
+      new Error("S3 AccessDenied data/manifest.json"),
+      {
+        name: "AccessDenied",
+      },
+    );
     failing.getFile = async () => {
-      throw new Error("S3 AccessDenied");
+      throw denied;
     };
-    expect(await readBeachStatus(failing)).toEqual({
-      available: false,
-      reason: "read_failed",
-    });
+    // 원인은 오류 이름만 로그에 남김(메시지의 경로는 남기지 않음)
+    const logs: string[] = [];
+    const spy = vi
+      .spyOn(console, "log")
+      .mockImplementation((msg: string) => void logs.push(msg));
+    try {
+      expect(await readBeachStatus(failing)).toEqual({
+        available: false,
+        reason: "read_failed",
+      });
+    } finally {
+      spy.mockRestore();
+    }
+    expect(logs.map((line) => JSON.parse(line))).toEqual([
+      {
+        level: "warn",
+        event: "ops_beach_status_read_failed",
+        error: "AccessDenied",
+      },
+    ]);
   });
 
   it("샘플 계정도 받는다(공개 게시본과 같은 값). 조회는 변경 이력에 남는다", async () => {

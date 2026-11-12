@@ -244,6 +244,71 @@ test("상세: 내용·보관 기한·받지 않는 연락처를 보여 주고, P
   await expect(detail).toBeHidden();
 });
 
+test("'정보가 실제와 달라요' 문의는 해변 관리 상세로 이동하고, 다른 유형·저장소에 없는 해변은 이동 링크가 없다", async ({
+  page,
+}) => {
+  await signIn(page);
+  // 1: 정보가 실제와 달라요 + 저장소 해변(b0001) / 2: 같은 유형 + 저장소에 없는 해변 / 3: 다른 유형
+  // 목록과 상세가 같은 문의를 말하게, 이 시험만 목록 응답을 따로 둠(나중에 단 route가 먼저 받음)
+  const items = [
+    summary(1),
+    summary(2, { beachId: "b9999" }),
+    summary(3, { type: "data_question" }),
+  ];
+  await mockInquiries(page, {
+    detail: (inquiryId) => ({
+      status: 200,
+      body: {
+        ...items.find((item) => item.inquiryId === inquiryId)!,
+        restricted: false,
+        message: "현장에 입수 금지 깃발이 걸려 있어요.",
+        memo: null,
+        rejectReason: null,
+        emailCollected: false,
+        photosCollected: false,
+      },
+    }),
+  });
+  await page.route(/\/ops\/inquiries(\?.*)?$/, (route) =>
+    route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        items,
+        nextCursor: null,
+        counts: { received: 3, in_progress: 0, resolved: 0, rejected: 0 },
+      }),
+    }),
+  );
+  await openInquiries(page);
+  const detail = detailOf(page);
+  const beachLink = detail.getByRole("link", {
+    name: "해변 관리에서 해변 정보 보기",
+  });
+
+  for (const n of [1, 2]) {
+    await rows(page).nth(n).getByRole("link").click();
+    await expect(page).toHaveURL(new RegExp(`\\?id=${id(n + 1)}$`));
+    await expect(detail.getByText("받지 않아요")).toBeVisible();
+    await expect(beachLink).toHaveCount(0);
+    if (isMobile(page)) {
+      await detail.getByRole("link", { name: /문의 목록으로/ }).click();
+    } else {
+      await page.keyboard.press("Escape");
+    }
+    await expect(page).toHaveURL(/\/inquiries\/$/);
+  }
+
+  await rows(page).first().getByRole("link").click();
+  await expect(beachLink).toHaveAttribute("href", "/beaches/b0001/");
+  await expectNoA11yViolations(page);
+  await beachLink.click();
+  // 주소만으로는 404 쪽·문의 목록으로 되돌아감을 못 거름: 해변 상세 제목까지 봄
+  await expect(
+    page.getByRole("heading", { name: "강문해수욕장", level: 1 }),
+  ).toBeVisible();
+  await expect(page).toHaveURL(/\/beaches\/b0001\/$/);
+});
+
 test("보기 권한은 내용·메모를 받지 않음을 알리고, 이전 문의 표시를 보여 준다", async ({
   page,
 }) => {

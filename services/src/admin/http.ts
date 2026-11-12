@@ -112,6 +112,10 @@ export function readJsonBody(
 }
 
 // 토큰·이메일·본문은 남기지 않음. 정해 둔 필드만
+// 로그에는 오류 이름만 남김(메시지에 경로·키가 섞일 수 있음)
+export const errorName = (error: unknown): string =>
+  error instanceof Error ? error.name : "unknown";
+
 export function safeLog(
   level: "info" | "warn" | "error",
   event: string,
