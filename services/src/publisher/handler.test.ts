@@ -96,12 +96,8 @@ describe("parseManualEvent 운영자 게시 작업", () => {
     });
   });
 
-  it("미리보기는 다른 칸 없이 받는다", () => {
-    expect(parseManualEvent({ action: "preview" })).toEqual({
-      action: "preview",
-    });
-    expect(() => parseManualEvent({ action: "preview", jobId })).toThrow();
-    expect(() => parseManualEvent({ action: "preview", version })).toThrow();
+  it("미리보기는 게시 함수가 받지 않는다(따로 둔 미리보기 함수가 맡음, 게시 알림과 섞이지 않게)", () => {
+    expect(() => parseManualEvent({ action: "preview" })).toThrow();
   });
 
   it.each([

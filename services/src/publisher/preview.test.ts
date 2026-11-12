@@ -56,7 +56,7 @@ describe("previewSnapshot", () => {
     const preview = await previewSnapshot(deps());
     expect(preview).toMatchObject({
       status: "ready",
-      current: { version: null, counts: null, readable: false },
+      current: { version: null, counts: null, readable: false, missing: true },
       changed: [],
       changedCount: 0,
       checks: { beachIds: null, expected: BEACHES.length, contractErrors: 0 },
@@ -98,6 +98,20 @@ describe("previewSnapshot", () => {
     expect(
       await ops.acquireLock("publish-snapshot", "other", NOW_MS + 60_000, 1),
     ).toBe(true);
+  });
+
+  it("게시본은 있는데 해변 상태 파일을 읽지 못하면 '없음'이 아니라 '읽지 못함'(missing false)", async () => {
+    const { snapshots, deps } = await setup();
+    await publishSnapshot(deps());
+    for (const path of [...snapshots.files.keys()]) {
+      if (path.endsWith("/status.json")) snapshots.files.delete(path);
+    }
+    const preview = await previewSnapshot(deps());
+    expect(preview).toMatchObject({
+      status: "ready",
+      current: { counts: null, readable: false, missing: false },
+      changed: [],
+    });
   });
 
   it("해변 ID가 원본 목록과 다르면 '이대로면 게시 안 함'(blocked)과 대조 결과를 준다", async () => {

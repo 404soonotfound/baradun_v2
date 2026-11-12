@@ -33,7 +33,8 @@ import { zoneTablesFromAnnex, type AnnexTables } from "./zones";
 // - { "action": "publish", "jobId": "j-…" }: '지금 게시'. 새로 수집하지 않고 마지막 수집 사실 + 확정한 공지(D16-C4)
 // - { "action": "rollback", "version": "…", "jobId": "j-…" }: 운영 화면의 되돌리기
 //   작업이 '대기'이고 시작 제한 안일 때만 실행함(두 번 오거나 늦게 온 호출은 실행하지 않음). 결과를 작업에 남김
-// - { "action": "preview" }: 게시 변경 미리보기(동기 호출, preview.ts). 잠금·S3·Ops 어느 것도 쓰지 않고 결과만 돌려줌
+// 게시 변경 미리보기는 이 함수가 아니라 따로 둔 읽기 전용 함수(previewHandler, infra publish-preview.ts)가 맡음
+// → 미리보기 호출이 게시 중단 알림(PublishStopped, 이 함수의 실행 수)·게시 오류 알림(이 함수의 오류 수)에 섞이지 않음
 // 게시 실패는 오류를 던져 Lambda 오류 지표에 남김(BRD-62 경보). busy·unchanged는 정상
 // 사람이 부른 실행의 입력 문제(없는 버전 등)는 던지지 않고 { status: "failed", reason }으로 돌려줌
 // 변경이 없어 생략한 실행(unchanged)도 실행으로 세므로 게시 중단 알림(PublishStopped)은 울리지 않고,
@@ -97,7 +98,6 @@ interface LambdaContext {
 }
 
 export type ManualEvent =
-  | { action: "preview" }
   | { action: "rollback"; version: string; jobId?: string }
   | { action: "republish"; version: string }
   | { action: "publish"; jobId: string };
@@ -113,15 +113,8 @@ export function parseManualEvent(event: unknown): ManualEvent | null {
     version?: unknown;
     jobId?: unknown;
   };
-  if (action === "preview") {
-    // 미리보기는 다른 칸을 받지 않음(오타 난 게시 이벤트를 미리보기로 돌리지 않음)
-    if (version !== undefined || jobId !== undefined) {
-      throw new Error("preview에는 version·jobId를 받지 않음");
-    }
-    return { action };
-  }
   if (action !== "rollback" && action !== "republish" && action !== "publish") {
-    throw new Error("모르는 action(rollback·republish·publish·preview만 받음)");
+    throw new Error("모르는 action(rollback·republish·publish만 받음)");
   }
   if (
     jobId !== undefined &&
@@ -239,7 +232,7 @@ export async function runPublishJob(
 export async function publishHandler(
   event: unknown,
   context: LambdaContext,
-): Promise<PublishResult | PublishPreview> {
+): Promise<PublishResult> {
   const { beaches, beachIds, seasons, documents, s3 } = setup();
   const snapshots = new S3SnapshotStore(s3, requiredEnv("SNAPSHOT_BUCKET"));
   const opsTable = requiredEnv("OPS_TABLE_NAME");
@@ -256,18 +249,6 @@ export async function publishHandler(
     );
 
   const manual = parseManualEvent(event);
-  if (manual?.action === "preview") {
-    return previewSnapshot({
-      state: new DynamoStateStore(documents, requiredEnv("STATE_TABLE_NAME")),
-      snapshots,
-      beaches,
-      beachIds,
-      zones,
-      seasons,
-      log,
-      clock,
-    });
-  }
   if (manual?.action === "republish") {
     const result = await republishVersion(
       { ops, snapshots, notices, log, clock, owner },
@@ -316,4 +297,21 @@ export async function publishHandler(
     );
   }
   return result;
+}
+
+// 게시 변경 미리보기 함수 진입점 (#331, 캔버스 N2). 운영 API가 동기 호출로 부름
+// publisher와 같은 코드·해변 자료로 분류만 미리 계산함(preview.ts). 역할은 State·게시본 읽기만(infra publish-preview.ts)
+// 게시 잠금·S3 쓰기·Ops를 쓰지 않으므로 OPS_TABLE_NAME도 받지 않음. 이벤트 내용은 쓰지 않음
+export async function previewHandler(): Promise<PublishPreview> {
+  const { beaches, beachIds, seasons, documents, s3 } = setup();
+  return previewSnapshot({
+    state: new DynamoStateStore(documents, requiredEnv("STATE_TABLE_NAME")),
+    snapshots: new S3SnapshotStore(s3, requiredEnv("SNAPSHOT_BUCKET")),
+    beaches,
+    beachIds,
+    zones,
+    seasons,
+    log,
+    clock: () => Date.now(),
+  });
 }

@@ -1,5 +1,6 @@
 import type { StatusFile } from "@baradun/contracts";
 import {
+  canonicalJson,
   categoryCountsOf,
   type CategoryCounts,
 } from "../core/collect/publish-summary";
@@ -59,6 +60,8 @@ export type PublishPreview =
         readonly version: string | null;
         readonly counts: CategoryCounts | null;
         readonly readable: boolean;
+        // 아직 게시본이 없음(첫 게시 전). readable false지만 장애가 아님
+        readonly missing: boolean;
       };
       readonly next: { readonly counts: CategoryCounts | null };
       // 분류나 사유가 바뀌는 해변(최대 PREVIEW_CHANGED_LIMIT건, 해변 ID 순)
@@ -88,36 +91,36 @@ function stateOf(status: {
   };
 }
 
+// 칸 순서와 상관없이 분류·사유가 같은지(publish-summary.ts canonicalJson)
 const same = (a: PreviewBeachState, b: PreviewBeachState) =>
-  a.category === b.category &&
-  a.reasons.length === b.reasons.length &&
-  a.reasons.every(
-    (r, i) =>
-      r.code === b.reasons[i]!.code &&
-      r.type === b.reasons[i]!.type &&
-      r.level === b.reasons[i]!.level,
-  );
+  canonicalJson(a) === canonicalJson(b);
 
-// 지금 게시본의 해변 상태. 읽지 못하면(없음 포함) null
-async function currentStatus(
-  snapshots: PublishDeps["snapshots"],
-): Promise<{ version: string | null; status: StatusFile | null }> {
+// 지금 게시본의 해변 상태. missing: 아직 게시본이 없음(첫 게시 전) · status null: 읽지 못함
+async function currentStatus(snapshots: PublishDeps["snapshots"]): Promise<{
+  version: string | null;
+  status: StatusFile | null;
+  missing: boolean;
+}> {
   try {
-    const manifest = parseManifest(await snapshots.getFile(MANIFEST_PATH));
-    if (manifest === null) return { version: null, status: null };
-    const body = await snapshots.getFile(
+    const body = await snapshots.getFile(MANIFEST_PATH);
+    if (body === null) return { version: null, status: null, missing: true };
+    const manifest = parseManifest(body);
+    if (manifest === null)
+      return { version: null, status: null, missing: false };
+    const statusBody = await snapshots.getFile(
       manifest.files.status.replace(/^\//, ""),
     );
-    const parsed: unknown = body === null ? null : JSON.parse(body);
+    const parsed: unknown = statusBody === null ? null : JSON.parse(statusBody);
     return {
       version: manifest.snapshotVersion,
+      missing: false,
       status:
         parsed !== null && contractErrors("StatusFile", parsed).length === 0
           ? (parsed as StatusFile)
           : null,
     };
   } catch {
-    return { version: null, status: null };
+    return { version: null, status: null, missing: false };
   }
 }
 
@@ -213,6 +216,7 @@ export async function previewSnapshot(
       version: current.version,
       counts: before ? categoryCountsOf(before) : null,
       readable: before !== null,
+      missing: current.missing,
     },
     next: { counts: categoryCountsOf(next) },
     changed: changed.slice(0, PREVIEW_CHANGED_LIMIT),
