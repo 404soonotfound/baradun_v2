@@ -95,6 +95,14 @@ jobs:
         env:
           NEXT_PUBLIC_SITE_URL: ${{ vars.SITE_URL }}
           NEXT_PUBLIC_INQUIRY_PHOTO_BUCKET: ${{ vars.INQUIRY_PHOTO_BUCKET }}
+      # 판단 정책 버전 확인(결정 기록 D20-6·7): 웹은 지금 판단 정책 하나만 읽음 → 정책을 바꾼 PR은 publisher(deploy:infra)를 먼저 배포
+      # 운영 게시본의 policyVersion을 이 빌드가 읽지 못하면(게시본을 못 읽어도) 올리지 않고 멈춤. publisher 배포 뒤 이 워크플로를 다시 실행
+      - if: steps.decide.outputs.deploy == 'true'
+        name: 판단 정책 버전 확인
+        working-directory: apps/web
+        env:
+          URL: ${{ vars.SITE_URL }}
+        run: node scripts/check-live-policy.mts "$URL"
       - if: steps.decide.outputs.deploy == 'true'
         uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
         with:
