@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 // 토큰 검사 (BRD-22): 대비 기준 + 금지 색. 패키지 없이 node만으로 실행됨.
 // 실패하면 종료 코드 1 → CI가 막음.
-import { readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import path from "node:path";
 
-import { isAdminOnly } from "./admin-only.mjs";
+import { ADMIN_ONLY_PATHS, isAdminOnly } from "./admin-only.mjs";
 
 const tokens = JSON.parse(
   readFileSync(new URL("../tokens.json", import.meta.url), "utf8"),
@@ -129,7 +130,9 @@ PAIRS.push(
   ["color.success.icon", "color.success.bg", 3, "성공 알림 아이콘"],
   ["color.success.icon", "color.bg.surface", 3, "수집 정상 막대·점"],
   ["color.success.icon", "color.bg.page", 3, "바탕 위 성공 아이콘"],
-  // 다크는 테두리로도 면을 구분(라이트 테두리는 글자·아이콘이 상태를 말하는 장식이라 참고만)
+  // 다크는 테두리로도 면을 구분. 안쪽 테두리(ring-inset)가 맞닿는 면은 자기 바탕(success.bg)과 카드 둘 다
+  // (라이트 테두리는 글자·아이콘이 상태를 말하는 장식이라 참고만)
+  ["color.success.border", "color.success.bg", 3, "성공 배지 테두리", "dark"],
   ["color.success.border", "color.bg.surface", 3, "성공 알림 테두리", "dark"],
 );
 
@@ -137,8 +140,8 @@ PAIRS.push(
 const INFO_PAIRS = [
   [
     "color.success.border",
-    "color.bg.surface",
-    "성공 알림 테두리(라이트는 장식)",
+    "color.success.bg",
+    "성공 배지 테두리(라이트는 장식)",
     "light",
   ],
 ];
@@ -242,6 +245,56 @@ function walkDark(node, path = []) {
   }
 }
 walkDark(tokens);
+
+// 운영자 전용 토큰(adminOnly, 결정 E6·BRD-165)을 사용자 사이트가 쓰지 않는지(앱에서 --admin 없이 부를 때)
+// - 앱 tokens 스크립트에 --admin이 붙으면 운영자 전용 색이 앱 CSS로 나감 → 실패
+// - 앱 코드가 클래스(bg-success-icon)·CSS 변수(--color-success-*)·tokens.json 경로(color.success)로 쓰면 → 실패
+// 사용자 사이트 CI: npm run check:tokens -w apps/web(작업 폴더가 그 앱)
+function adminOnlyRefs(file, names) {
+  const text = readFileSync(file, "utf8");
+  return names.filter(
+    (name) =>
+      new RegExp(`[-:]${name}-`).test(text) ||
+      text.includes(`--color-${name}-`) ||
+      text.includes(`color.${name}`) ||
+      text.includes(`color["${name}"]`),
+  );
+}
+function sourceFiles(dir) {
+  return readdirSync(dir).flatMap((name) => {
+    const full = path.join(dir, name);
+    if (statSync(full).isDirectory()) return sourceFiles(full);
+    return /\.(tsx?|jsx?|mjs|css)$/.test(name) &&
+      !/(^|\/)tokens\.css$/.test(full)
+      ? [full]
+      : [];
+  });
+}
+const appDir = process.cwd();
+const appPackage = path.join(appDir, "package.json");
+if (!process.argv.includes("--admin") && existsSync(appPackage)) {
+  const pkg = JSON.parse(readFileSync(appPackage, "utf8"));
+  if (pkg.name !== "@baradun/design-tokens") {
+    if (/baradun-tokens\b[^&|;]*--admin/.test(pkg.scripts?.tokens ?? "")) {
+      failed += 1;
+      console.log(
+        `실패  ${pkg.name}: tokens 스크립트에 --admin(운영자 전용 색이 이 앱 CSS로 나감)`,
+      );
+    }
+    const names = ADMIN_ONLY_PATHS.filter((p) => p[0] === "color").map((p) =>
+      p.slice(1).join("-"),
+    );
+    const src = path.join(appDir, "src");
+    for (const file of existsSync(src) ? sourceFiles(src) : []) {
+      for (const name of adminOnlyRefs(file, names)) {
+        failed += 1;
+        console.log(
+          `실패  운영자 전용 색(${name})을 씀: ${path.relative(appDir, file)}`,
+        );
+      }
+    }
+  }
+}
 
 // 결정 32: 10/16 다크 초안(노션 4장 7절 표)에 다크 값이 없던 토큰 14개(처음에 13개로 셌던 목록).
 // 노션 4장 7절 '다크 값 확인 토큰 14개'·아키텍처 9.1과 같은 목록. 색은 다크 값, 그림자는 다크에서 바뀌는 색 변수를 씀
