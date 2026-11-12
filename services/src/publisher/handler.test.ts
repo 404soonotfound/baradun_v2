@@ -4,7 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { loadBeaches } from "../core/beaches/load";
-import { parseManualEvent } from "./handler";
+import { isPublishFault, parseManualEvent } from "./handler";
 import { beachIdProblem } from "./publish";
 import { parseBeachMeta } from "./season";
 import { contractErrors } from "./validate";
@@ -67,6 +67,62 @@ describe("parseManualEvent", () => {
     ],
   ])("%s이면 보통 게시로 돌리지 않고 던진다", (_name, event) => {
     expect(() => parseManualEvent(event)).toThrow();
+  });
+});
+
+// 오류로 던져 게시 오류 알림(PublishErrors)으로 보낼 결과인지(D16-C2)
+describe("isPublishFault", () => {
+  const version = "20261017T053000Z";
+  const failed = (reason: string) =>
+    ({ status: "failed", version, reason }) as const;
+  const rollback = { action: "rollback", version } as const;
+  const republish = { action: "republish", version } as const;
+
+  it("자동 게시의 실패는 모두 던진다", () => {
+    expect(isPublishFault(null, failed("beach_ids"))).toBe(true);
+    expect(isPublishFault(null, failed("contract"))).toBe(true);
+    // 자동 게시에서는 생기지 않는 사유지만, 생겼다면 숨기지 않음
+    expect(isPublishFault(null, failed("manifest_missing"))).toBe(true);
+  });
+
+  it("사람이 부른 실행의 입력 문제는 던지지 않고 결과로 돌려준다", () => {
+    for (const reason of [
+      "rollback_target_missing",
+      "rollback_target_invalid",
+    ]) {
+      expect(isPublishFault(rollback, failed(reason))).toBe(false);
+    }
+    for (const reason of [
+      "manifest_missing",
+      "files_missing",
+      "files_mismatch",
+      "policy_unsupported",
+    ]) {
+      expect(isPublishFault(republish, failed(reason))).toBe(false);
+    }
+  });
+
+  it("사람이 부른 실행이어도 게시 장애는 던진다", () => {
+    for (const reason of [
+      "beach_ids",
+      "classify",
+      "contract",
+      "hold_conflict",
+      "manifest_conflict",
+      "exception:Error",
+    ]) {
+      expect(isPublishFault(rollback, failed(reason))).toBe(true);
+    }
+  });
+
+  it("게시됨·변경 없음·물러남은 던지지 않는다", () => {
+    expect(
+      isPublishFault(null, { status: "published", version, removed: [] }),
+    ).toBe(false);
+    expect(isPublishFault(rollback, { status: "unchanged", version })).toBe(
+      false,
+    );
+    expect(isPublishFault(null, { status: "busy" })).toBe(false);
   });
 });
 

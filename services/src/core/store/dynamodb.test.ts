@@ -340,7 +340,7 @@ describe("DynamoOpsStore 게시 때의 공지 상태·되돌림 포인터·게�
     });
   });
 
-  it("게시 실행 결과: 마지막 실행은 덮어쓰고, 실패한 실행만 버전별로도 남긴다", async () => {
+  it("게시 실행 결과: 마지막 실행은 시작 시각이 더 늦을 때만 덮어쓰고, 실패한 실행만 버전별로도 남긴다", async () => {
     const { client, sent } = fakeClient();
     const ops = new DynamoOpsStore(client, OPS);
     const run = {
@@ -349,10 +349,15 @@ describe("DynamoOpsStore 게시 때의 공지 상태·되돌림 포인터·게�
       result: "unchanged",
       version: V,
     } as const;
+    const last = (item: object) => ({
+      TableName: OPS,
+      Item: { pk: "publish#run", sk: "last", ...item },
+      ConditionExpression: "attribute_not_exists(#at) OR #at <= :at",
+      ExpressionAttributeNames: { "#at": "at" },
+      ExpressionAttributeValues: { ":at": run.at },
+    });
     await ops.putPublishRun(run, NOW);
-    expect(sent.map((c) => c.input)).toEqual([
-      { TableName: OPS, Item: { pk: "publish#run", sk: "last", ...run } },
-    ]);
+    expect(sent.map((c) => c.input)).toEqual([last(run)]);
 
     const failed = { ...run, result: "failed", reason: "beach_ids" } as const;
     await ops.putPublishRun(failed, NOW);
@@ -366,8 +371,24 @@ describe("DynamoOpsStore 게시 때의 공지 상태·되돌림 포인터·게�
           ttl: Math.floor((NOW + 8 * 24 * 60 * 60 * 1000) / 1000),
         },
       },
-      { TableName: OPS, Item: { pk: "publish#run", sk: "last", ...failed } },
+      last(failed),
     ]);
+  });
+
+  it("더 새 실행의 기록이 이미 있으면 마지막 실행을 덮지 않고 오류 없이 끝난다", async () => {
+    const { client } = fakeClient(conditionFailed());
+    const ops = new DynamoOpsStore(client, OPS);
+    await expect(
+      ops.putPublishRun(
+        {
+          at: "2026-10-17T05:30:00Z",
+          source: "auto",
+          result: "published",
+          version: V,
+        },
+        NOW,
+      ),
+    ).resolves.toBeUndefined();
   });
 });
 

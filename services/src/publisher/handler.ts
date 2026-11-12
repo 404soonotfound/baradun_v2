@@ -24,6 +24,7 @@ import { zoneTablesFromAnnex, type AnnexTables } from "./zones";
 //   지금 수집 사실과 함께 새 버전으로 게시함(결정 기록 D20-1~3)
 // - { "action": "republish", "version": "…" }: 옛 게시 파일을 새 버전 번호로 다시 내보냄(급할 때만, D20-4)
 // 게시 실패는 오류를 던져 Lambda 오류 지표에 남김(BRD-62 경보). busy·unchanged는 정상
+// 사람이 부른 실행의 입력 문제(없는 버전 등)는 던지지 않고 { status: "failed", reason }으로 돌려줌
 // 변경이 없어 생략한 실행(unchanged)도 실행으로 세므로 게시 중단 알림(PublishStopped)은 울리지 않고,
 // 실패는 오류 알림(PublishErrors)으로 감(D16-C2: 같은 알림을 새로 만들지 않음)
 //
@@ -105,6 +106,28 @@ export function parseManualEvent(event: unknown): ManualEvent | null {
   return { action, version };
 }
 
+// 사람이 부른 실행에서 입력이 잘못된 경우의 실패 사유(없는 버전·기록이 없는 버전 등)
+// 게시 장애가 아니므로 던지지 않고 결과로 돌려줌 → 게시 오류 알림(PublishErrors)이 울리지 않음(D16-C2)
+export const MANUAL_INPUT_FAILURES: readonly string[] = [
+  "rollback_target_missing",
+  "rollback_target_invalid",
+  "manifest_missing",
+  "files_missing",
+  "files_mismatch",
+  "policy_unsupported",
+];
+
+// 이 결과를 오류로 던져 Lambda 오류 지표에 남길지. 자동 게시의 실패와, 사람이 부른 실행의 입력 문제가 아닌 실패
+export function isPublishFault(
+  manual: ManualEvent | null,
+  result: PublishResult,
+): result is Extract<PublishResult, { status: "failed" }> {
+  return (
+    result.status === "failed" &&
+    !(manual !== null && MANUAL_INPUT_FAILURES.includes(result.reason))
+  );
+}
+
 export async function publishHandler(
   event: unknown,
   context: LambdaContext,
@@ -116,13 +139,21 @@ export async function publishHandler(
   const clock = () => Date.now();
   const owner = context.awsRequestId;
 
+  // 운영 DB의 공지 노출본(BRD-151). 권한은 admin#notice 파티션 Query만(infra publisher-role)
+  const notices = async () =>
+    liveNotices(
+      await queryNotices(documents, opsTable, (noticeId) =>
+        log("error", "publish_notice_invalid", { noticeId }),
+      ),
+    );
+
   const manual = parseManualEvent(event);
   if (manual?.action === "republish") {
     const result = await republishVersion(
-      { ops, snapshots, log, clock, owner },
+      { ops, snapshots, notices, log, clock, owner },
       manual.version,
     );
-    if (result.status === "failed") {
+    if (isPublishFault(manual, result)) {
       throw new Error(
         `다시 내보내기 실패: ${result.reason} (${manual.version})`,
       );
@@ -134,13 +165,7 @@ export async function publishHandler(
     {
       state: new DynamoStateStore(documents, requiredEnv("STATE_TABLE_NAME")),
       ops,
-      // 운영 DB의 공지 노출본(BRD-151). 권한은 admin#notice 파티션 Query만(infra publisher-role)
-      notices: async () =>
-        liveNotices(
-          await queryNotices(documents, opsTable, (noticeId) =>
-            log("error", "publish_notice_invalid", { noticeId }),
-          ),
-        ),
+      notices,
       snapshots,
       beaches,
       beachIds,
@@ -153,7 +178,7 @@ export async function publishHandler(
     },
     manual ? { rollbackTo: manual.version } : {},
   );
-  if (result.status === "failed") {
+  if (isPublishFault(manual, result)) {
     throw new Error(
       manual
         ? `되돌리기 실패: ${result.reason} (${manual.version})`
