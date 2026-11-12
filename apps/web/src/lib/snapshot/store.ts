@@ -1,4 +1,5 @@
 import type { ManifestFile } from "@baradun/contracts";
+import { SUPPORTED_POLICY_VERSIONS } from "@baradun/contracts/judgment-policy";
 
 import {
   clockFromHeaders,
@@ -47,9 +48,11 @@ const SCHEMA_RELOAD_KEY = "baradun:schema-reload";
 const HIDDEN_PHASE_KEY = "baradun:hidden-phase";
 
 type HiddenPhase = "schema_unsupported" | "maintenance" | "update_required";
+// 지원 밖 형식: 계약 버전(schemaVersion) 또는 판단 정책 버전(policyVersion, D20-6)
+type Unsupported = { schemaVersion: number } | { policyVersion: string };
 type HiddenRecord =
   | { phase: "maintenance" | "update_required"; manifest: ManifestFile }
-  | { phase: "schema_unsupported"; schemaVersion: number };
+  | ({ phase: "schema_unsupported" } & Unsupported);
 
 export interface SnapshotState extends ViewSource {
   manifest: ManifestFile | null;
@@ -129,6 +132,8 @@ function readManifest(value: unknown): ManifestFile | "unsupported" | null {
   if (!SUPPORTED_SCHEMA_VERSIONS.includes(value.schemaVersion as number)) {
     return "unsupported";
   }
+  // 판단 정책 버전이 글자가 아니면 못 읽은 것(B5). 모르는 정책인지는 강제 업데이트 판단 뒤에 봄(run, D20-6·7)
+  if (typeof value.policyVersion !== "string") return null;
   const files = value.files;
   const maintenance = value.maintenance;
   if (
@@ -335,8 +340,13 @@ export function createSnapshotStore(deps: SnapshotDeps): SnapshotStore {
     if (!isRecord(stored)) return null;
     if (stored.phase === "schema_unsupported") {
       const version = stored.schemaVersion;
-      return Number.isInteger(version) &&
-        !SUPPORTED_SCHEMA_VERSIONS.includes(version as number)
+      const policy = stored.policyVersion;
+      const stillUnsupported =
+        typeof policy === "string"
+          ? !SUPPORTED_POLICY_VERSIONS.includes(policy)
+          : Number.isInteger(version) &&
+            !SUPPORTED_SCHEMA_VERSIONS.includes(version as number);
+      return stillUnsupported
         ? { phase: "schema_unsupported", manifest: null }
         : null;
     }
@@ -362,6 +372,9 @@ export function createSnapshotStore(deps: SnapshotDeps): SnapshotStore {
     const manifest = isRecord(stored) ? readManifest(stored.manifest) : null;
     const statuses = isRecord(stored) ? readStatuses(stored.status) : null;
     if (!manifest || manifest === "unsupported" || !statuses) return null;
+    // 이 화면이 모르는 판단 정책으로 계산한 값은 꺼내지 않음(D20-6)
+    if (!SUPPORTED_POLICY_VERSIONS.includes(manifest.policyVersion))
+      return null;
     return { manifest, statuses };
   }
 
@@ -440,10 +453,15 @@ export function createSnapshotStore(deps: SnapshotDeps): SnapshotStore {
     return true;
   }
 
-  // 지원 밖 schemaVersion: 새 화면 파일이 나왔을 수 있어 버전마다 한 번 새로고침, 그래도 안 되면 판단불가 배너
-  function unsupported(version: number) {
-    if (reloadOnce(SCHEMA_RELOAD_KEY, String(version))) return;
-    rememberHidden({ phase: "schema_unsupported", schemaVersion: version });
+  // 지원 밖 형식(schemaVersion·policyVersion): 새 화면 파일이 나왔을 수 있어 버전마다 한 번 새로고침,
+  // 그래도 안 되면 판단불가 배너('지원하지 않는 데이터 형식', D20-6)
+  function unsupported(what: Unsupported) {
+    const key =
+      "schemaVersion" in what
+        ? String(what.schemaVersion)
+        : `policy:${what.policyVersion}`;
+    if (reloadOnce(SCHEMA_RELOAD_KEY, key)) return;
+    rememberHidden({ phase: "schema_unsupported", ...what });
     set({ phase: "schema_unsupported", live: false, nowMs: now() });
   }
 
@@ -497,7 +515,9 @@ export function createSnapshotStore(deps: SnapshotDeps): SnapshotStore {
     }
     // "unsupported"는 정수 schemaVersion일 때만 나옴(readManifest)
     if (manifest === "unsupported") {
-      return unsupported((body as { schemaVersion: number }).schemaVersion);
+      return unsupported({
+        schemaVersion: (body as { schemaVersion: number }).schemaVersion,
+      });
     }
     // 읽을 수 없는 응답(캡티브 포털·프록시 오류 등)의 Date 헤더는 우리 서버 시각이 아닐 수 있어 쓰지 않음
     if (!manifest) return fail();
@@ -535,6 +555,12 @@ export function createSnapshotStore(deps: SnapshotDeps): SnapshotStore {
     // 점검보다 먼저 봄: 새 화면이 점검 여부를 다시 확인함
     if (manifest.minWebBuild > deps.webBuild) {
       return hideAll("update_required", manifest, clock);
+    }
+
+    // 이 화면이 모르는 판단 정책(D20-6): 강제 업데이트 뒤에 봄. 정책을 바꾸면 minWebBuild도 함께 올리므로(D20-7)
+    // 옛 화면은 위 강제 업데이트로 가고, 여기는 minWebBuild를 올리지 않은 경우의 안전망(판단불가)
+    if (!SUPPORTED_POLICY_VERSIONS.includes(manifest.policyVersion)) {
+      return unsupported({ policyVersion: manifest.policyVersion });
     }
 
     // 점검 중이면 마지막 값도 숨김(화면이 전체를 덮음, 9.1)
