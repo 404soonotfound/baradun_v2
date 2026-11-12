@@ -557,6 +557,8 @@ node tools/republish/republish.mjs --function <PublisherFunctionName> --version 
 - **작업 기록이 빠질 때:** 실행 기록(`publish#run`)과 게시 요약(`publish#summary`)에 작업 ID가 함께 남아, 작업 기록을 바꾸지 못한 게시도 작업 조회가 결과를 찾습니다. 찾지 못하면 실패로 단정하지 않고 `overdue`로 보여 줍니다.
 - **다시 적용:** `POST /ops/publish/holds/{공지 ID}/reapply`(`{"version": 포인터 version}`)가 `notice-hold`의 `notices`에서 그 공지를 빼고 `version`을 1 올립니다. 되돌림 상태인 공지를 운영자가 다시 노출하거나 노출을 끝내도 같은 트랜잭션에서 되돌림이 풀립니다.
 
+- **미리보기:** 되돌리기 확인 창의 영향 목록(`GET /ops/publish/rollback-preview`)은 운영 API가 직접 읽습니다. 지금 게시 뒤 해변 분류 변화(`GET /ops/publish/preview`)는 따로 둔 읽기 전용 함수(`PublishPreview`, State·`data/` 읽기만)가 publisher와 같은 코드로 계산합니다. publisher 함수로 부르면 미리보기 호출이 게시 중단 알림(`PublishStopped`, publisher 실행 수)을 가리고 미리보기 실패가 게시 오류 알림을 울리기 때문입니다. 미리보기 함수에는 알림이 없고, 운영 API는 8초까지 기다린 뒤 '만들지 못함'으로 답합니다.
+
 명령줄 되돌리기(위 도구)는 작업 없이 그대로 쓸 수 있습니다.
 
 ### 옛 게시 파일 다시 내보내기 (급할 때만)
