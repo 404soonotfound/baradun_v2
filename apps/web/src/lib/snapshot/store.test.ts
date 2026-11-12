@@ -515,6 +515,80 @@ describe("지원 범위 밖 schemaVersion", () => {
   });
 });
 
+describe("모르는 판단 정책 버전 (policyVersion, D20-6)", () => {
+  const unknown = {
+    ...manifestExample,
+    policyVersion: "warnings-9+observations-9",
+  };
+
+  it("지원 밖 형식과 같게: 자동 새로고침 1회 → 다시 열어도 안 되면 판단불가 상태", async () => {
+    const session = memoryStorage();
+    const first = setup({ session });
+    first.server.manifest = unknown;
+    first.store.start();
+    await first.store.refresh();
+    expect(first.reload).toHaveBeenCalledTimes(1);
+    expect(session.data.get("baradun:schema-reload")).toBe(
+      "policy:warnings-9+observations-9",
+    );
+
+    const second = setup({ session, server: first.server });
+    second.store.start();
+    await second.store.refresh();
+    expect(second.reload).not.toHaveBeenCalled();
+    expect(second.store.getState().phase).toBe("schema_unsupported");
+  });
+
+  // D20-7: 정책을 바꾸면 minWebBuild도 함께 올림 → 옛 화면은 자동 새로고침 없는 강제 업데이트로(2026-10-26)
+  it("모르는 정책이어도 minWebBuild가 이 화면보다 높으면 강제 업데이트가 먼저(자동 새로고침 없음)", async () => {
+    const { store, server, reload } = setup({ webBuild: 1 });
+    server.manifest = { ...unknown, minWebBuild: 2 };
+    store.start();
+    await store.refresh();
+    expect(store.getState().phase).toBe("update_required");
+    expect(reload).not.toHaveBeenCalled();
+  });
+
+  it("지금 정책 버전이면 정상, policyVersion이 글자가 아니면 못 읽은 것(지원 밖 형식으로 보지 않음)", async () => {
+    const { store, server, reload } = setup();
+    store.start();
+    await store.refresh();
+    expect(store.getState().phase).toBe("ready");
+
+    server.manifest = { ...manifestExample, policyVersion: 3 };
+    await store.refresh();
+    expect(reload).not.toHaveBeenCalled();
+    // 실패 경로(B5): 지원 밖 형식이 아니고, 보여주던 값은 live가 아님
+    expect(store.getState()).toMatchObject({ phase: "ready", live: false });
+  });
+
+  it("모르는 정책 상태를 기억해 오프라인으로 다시 열어도 저장된 값을 꺼내지 않음", async () => {
+    const storage = memoryStorage();
+    const session = memoryStorage();
+    session.setItem(
+      "baradun:schema-reload",
+      "policy:warnings-9+observations-9",
+    );
+    const online = setup({ storage, session });
+    online.server.manifest = unknown;
+    online.store.start();
+    await online.store.refresh();
+    expect(online.store.getState().phase).toBe("schema_unsupported");
+    expect(
+      JSON.parse(storage.data.get("baradun:hidden-phase") ?? "null"),
+    ).toEqual({
+      phase: "schema_unsupported",
+      policyVersion: "warnings-9+observations-9",
+    });
+
+    const offline = setup({ storage, session });
+    offline.server.down = true;
+    offline.store.start();
+    await offline.store.refresh();
+    expect(offline.store.getState().phase).toBe("schema_unsupported");
+  });
+});
+
 describe("최소 화면 버전 (minWebBuild, BRD-43)", () => {
   const newer = { ...manifestExample, minWebBuild: 2 };
 
@@ -1580,6 +1654,11 @@ describe("지난 값을 숨기는 상태를 기기에 기억 (BRD-42)", () => {
       JSON.stringify({ phase: "maintenance", manifest: manifestExample }), // 점검 중 아님
       JSON.stringify({ phase: "schema_unsupported", schemaVersion: 1 }), // 지원함
       JSON.stringify({ phase: "schema_unsupported", schemaVersion: "2" }),
+      // 지금 지원하는 정책 버전이면 숨김 상태가 아님(D20-6)
+      JSON.stringify({
+        phase: "schema_unsupported",
+        policyVersion: manifestExample.policyVersion,
+      }),
       JSON.stringify({ phase: "ready" }),
     ]) {
       const storage = memoryStorage();
