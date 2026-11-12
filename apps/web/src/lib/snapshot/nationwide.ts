@@ -1,3 +1,4 @@
+import { WARNING_CONFIRMATION_TTL_MS } from "@baradun/contracts/judgment-policy";
 import { useEffect, useSyncExternalStore } from "react";
 
 import type { NationwideWarningsFile, WarningItem } from "@baradun/contracts";
@@ -19,7 +20,6 @@ import {
   hidesLastValues,
   includes,
   isRecord,
-  WARNING_CONFIRM_VALID_MS,
   WARNING_LEVELS,
   WARNING_TYPES,
   type ViewSource,
@@ -81,7 +81,7 @@ export function nationwideView(
   const fresh =
     confirmedAt !== null &&
     !isExpired(
-      new Date(confirmedMs + WARNING_CONFIRM_VALID_MS).toISOString(),
+      new Date(confirmedMs + WARNING_CONFIRMATION_TTL_MS).toISOString(),
       source.nowMs,
       source.clock,
     );
@@ -205,7 +205,7 @@ export function useNationwideWarnings(): NationwideView {
   const expiresAt =
     view.kind === "ready" && !view.stale && view.confirmedAt !== null
       ? new Date(
-          Date.parse(view.confirmedAt) + WARNING_CONFIRM_VALID_MS,
+          Date.parse(view.confirmedAt) + WARNING_CONFIRMATION_TTL_MS,
         ).toISOString()
       : null;
   const { clock } = snapshot;
