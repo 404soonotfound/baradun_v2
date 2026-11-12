@@ -48,7 +48,7 @@ jobs:
     steps:
       # 전체 이력의 main을 받아 올릴 커밋·배포 여부를 정함(BRD-178, .github/scripts/deploy-plan.sh)
       # 자동 배포: 마지막으로 올린 커밋 뒤로 main CI가 이 앱 빌드 작업(CI_JOB)까지 성공한 가장 새 커밋. 수동: 이 커밋(CI 성공일 때만)
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: main
           persist-credentials: false
@@ -147,7 +147,7 @@ jobs:
     steps:
       # 전체 이력의 main을 받아 올릴 커밋·배포 여부를 정함(BRD-178, .github/scripts/deploy-plan.sh)
       # 자동 배포: 마지막으로 올린 커밋 뒤로 main CI가 이 앱 빌드 작업(CI_JOB)까지 성공한 가장 새 커밋. 수동: 이 커밋(CI 성공일 때만)
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: main
           persist-credentials: false
