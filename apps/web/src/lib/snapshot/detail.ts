@@ -1,3 +1,4 @@
+import { WARNING_CONFIRMATION_TTL_MS } from "@baradun/contracts/judgment-policy";
 import type {
   NearbyWarningItem,
   NearbyWarningType,
@@ -11,7 +12,6 @@ import {
   isRecord,
   WARNING_LEVELS,
   WARNING_TYPES,
-  WARNING_CONFIRM_VALID_MS,
   type BeachView,
   type ViewSource,
 } from "./view";
@@ -243,7 +243,7 @@ export function deriveDetail(
     text(warning.source) !== null &&
     confirmedAt <= source.nowMs + CLOCK_TOLERANCE_MS &&
     !isExpired(
-      new Date(confirmedAt + WARNING_CONFIRM_VALID_MS).toISOString(),
+      new Date(confirmedAt + WARNING_CONFIRMATION_TTL_MS).toISOString(),
       source.nowMs,
       source.clock,
     );
