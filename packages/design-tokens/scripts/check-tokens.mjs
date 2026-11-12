@@ -3,6 +3,8 @@
 // 실패하면 종료 코드 1 → CI가 막음.
 import { readFileSync } from "node:fs";
 
+import { isAdminOnly } from "./admin-only.mjs";
+
 const tokens = JSON.parse(
   readFileSync(new URL("../tokens.json", import.meta.url), "utf8"),
 );
@@ -119,8 +121,27 @@ PAIRS.push(
   ],
 );
 
-// 참고로만 찍는 조합 (지금은 없음)
-const INFO_PAIRS = [];
+// 운영자 사이트 작업 성공색(결정 E6·BRD-165): 저장·게시 완료·수집 정상에만. 자기 면·카드·바탕 위 글자·아이콘
+PAIRS.push(
+  ["color.success.fg", "color.success.bg", 4.5, "성공 알림 글자"],
+  ["color.success.fg", "color.bg.surface", 4.5, "카드 위 성공 글자"],
+  ["color.success.fg", "color.bg.page", 4.5, "바탕 위 성공 글자"],
+  ["color.success.icon", "color.success.bg", 3, "성공 알림 아이콘"],
+  ["color.success.icon", "color.bg.surface", 3, "수집 정상 막대·점"],
+  ["color.success.icon", "color.bg.page", 3, "바탕 위 성공 아이콘"],
+  // 다크는 테두리로도 면을 구분(라이트 테두리는 글자·아이콘이 상태를 말하는 장식이라 참고만)
+  ["color.success.border", "color.bg.surface", 3, "성공 알림 테두리", "dark"],
+);
+
+// 참고로만 찍는 조합 [글자·아이콘, 바탕, 설명, (선택) 이 모드에서만]
+const INFO_PAIRS = [
+  [
+    "color.success.border",
+    "color.bg.surface",
+    "성공 알림 테두리(라이트는 장식)",
+    "light",
+  ],
+];
 
 let failed = 0;
 for (const mode of ["light", "dark"]) {
@@ -134,13 +155,16 @@ for (const mode of ["light", "dark"]) {
       `${ok ? "통과" : "실패"}  ${r.toFixed(2).padStart(5)} (기준 ${min})  ${label}`,
     );
   }
-  for (const [fg, bg, label] of INFO_PAIRS) {
+  for (const [fg, bg, label, only] of INFO_PAIRS) {
+    if (only && only !== mode) continue;
     const r = ratio(get(fg, mode), get(bg, mode));
     console.log(`참고  ${r.toFixed(2).padStart(5)}            ${label}`);
   }
 }
 
 // 금지 색: 초록 계열(색상각 90~170°, 채도 있는 색)을 쓰지 않음 (노션 4장)
+// 예외: 운영자 사이트 전용 작업 성공색 color.success(결정 E6·BRD-165). 사용자 사이트 CSS에는 나가지 않음
+// (build-tokens가 --admin일 때만 내보냄)
 function hue(hex) {
   const n = hex.replace("#", "");
   const [r, g, b] = [0, 2, 4].map((i) => parseInt(n.slice(i, i + 2), 16) / 255);
@@ -172,7 +196,9 @@ function walk(node, path = []) {
     return;
   }
   for (const [key, child] of Object.entries(node ?? {})) {
-    if (!key.startsWith("$")) walk(child, [...path, key]);
+    if (key.startsWith("$")) continue;
+    if (isAdminOnly([...path, key])) continue;
+    walk(child, [...path, key]);
   }
 }
 walk(tokens);

@@ -9,7 +9,7 @@
     "build": "next build",
     "postbuild": "node scripts/check-out.mts --write",
     "check:out": "node scripts/check-out.mts",
-    "tokens": "baradun-tokens src/styles/tokens.css",
+    "tokens": "baradun-tokens src/styles/tokens.css --admin",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "pretest": "npm run tokens",

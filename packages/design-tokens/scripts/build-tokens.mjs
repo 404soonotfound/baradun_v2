@@ -15,10 +15,18 @@ import { fileURLToPath } from "node:url";
 import StyleDictionary from "style-dictionary";
 import { fileHeader, formattedVariables } from "style-dictionary/utils";
 
+import { isAdminOnly } from "./admin-only.mjs";
+
 const SOURCE = fileURLToPath(new URL("../tokens.json", import.meta.url));
-const target = process.argv[2];
-if (!target) {
-  console.error("사용법: baradun-tokens <만들 CSS 경로>");
+// --admin: 운영자 사이트 전용 색(color.success, 결정 E6·BRD-165)까지 내보냄
+// 사용자 사이트는 넘기지 않음 → 변수가 없어 초록 성공색 클래스를 쓸 수 없음(노션 4장 '초록은 쓰지 않아요')
+// 모르는 플래그·남는 인자는 막음(오타면 성공색 변수 없이 조용히 무색이 되므로)
+const args = process.argv.slice(2);
+const flags = args.filter((arg) => arg.startsWith("--"));
+const [target, ...extra] = args.filter((arg) => !arg.startsWith("--"));
+const admin = flags.includes("--admin");
+if (!target || extra.length > 0 || flags.some((flag) => flag !== "--admin")) {
+  console.error("사용법: baradun-tokens <만들 CSS 경로> [--admin]");
   process.exit(1);
 }
 const out = path.resolve(process.cwd(), target);
@@ -102,7 +110,11 @@ const sd = new StyleDictionary({
       transforms: ["name/baradun"],
       buildPath: `${path.dirname(out)}/`,
       files: [
-        { destination: path.basename(out), format: "baradun/tokens-css" },
+        {
+          destination: path.basename(out),
+          format: "baradun/tokens-css",
+          filter: (token) => admin || !isAdminOnly(token.path),
+        },
       ],
     },
   },
