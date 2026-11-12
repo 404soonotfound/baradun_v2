@@ -3,6 +3,7 @@ import {
   ME_OK,
   expect,
   expectNoA11yViolations,
+  expectHomeLoaded,
   isMobile,
   mockCognito,
   mockOps,
@@ -128,6 +129,7 @@ async function signIn(page: Page, groups = ["publisher"]) {
   await mockOps(page, ME_OK);
   await signInWithPassword(page, "/login/", OPS);
   await expect(page.getByRole("heading", { name: "운영 홈" })).toBeVisible();
+  await expectHomeLoaded(page);
 }
 
 async function openNotices(page: Page) {

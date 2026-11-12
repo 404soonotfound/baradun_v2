@@ -141,7 +141,8 @@ test.describe("운영자 로그인", () => {
     await expect(
       page.getByText(`${OPS}로 로그인했어요 · 노출 변경 권한`),
     ).toBeVisible();
-    await expect(page.getByText("운영 화면을 준비하고 있어요.")).toBeVisible();
+    // 운영 홈 본문(가짜 응답이 없는 운영 API는 '확인 못 함'으로 보임)
+    await expect(page.getByRole("heading", { name: "할 일" })).toBeVisible();
     await expectNoA11yViolations(page);
 
     // 운영 API에는 전용 헤더로 access token만(Authorization 없음)
