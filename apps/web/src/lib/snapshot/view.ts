@@ -6,10 +6,16 @@ import type {
   WarningType,
 } from "@baradun/contracts";
 
+import {
+  METRIC_EXPIRY_MS,
+  WARNING_CONFIRMATION_TTL_MS,
+} from "@baradun/contracts/judgment-policy";
+
 import { CLOCK_TOLERANCE_MS, isExpired, isTime, type Clock } from "./clock";
 
 // 특보 확인 유효시간 45분(아키텍처 14.3 N2). '특보 없음' 근거 검증에만 씀(분류 계산 아님)
-export const WARNING_CONFIRM_VALID_MS = 45 * 60_000;
+// publisher와 같은 값(계약 패키지, D20-5)
+export const WARNING_CONFIRM_VALID_MS = WARNING_CONFIRMATION_TTL_MS;
 
 // 해변 하나의 화면 상태 (아키텍처 9.1, 결정 기록 11장 B4·B5, BRD-41)
 // 분류(category)는 publisher가 게시한 값을 그대로 씀(G1). 여기서 하는 일은 셋뿐:
@@ -23,13 +29,13 @@ export type MetricKey = keyof BeachStatus["observation"]["metrics"];
 // 지표 표. 키 순서 = 화면에 보이는 순서
 // unit: 계약 6.3 단위. 키와 단위가 어긋나면 값을 보여주지 않음
 // validMs: 유효시간(아키텍처 14.1 N1·결정 기록 B4, 계약 6.3 expiresAt): 파고·수온·바람 90분,
-//   파주기·파향 60분(파향은 파주기와 같은 kma_buoy 출처, 10/21 노션 반영)
+//   파주기·파향 60분(파향은 파주기와 같은 kma_buoy 출처, 10/21 노션 반영). publisher와 같은 값(계약 패키지, D20-5)
 const METRIC_SPEC = {
-  waveHeight: { unit: "m", validMs: 90 * 60_000 },
-  wavePeriod: { unit: "s", validMs: 60 * 60_000 },
-  waveDirection: { unit: "deg", validMs: 60 * 60_000 },
-  waterTemp: { unit: "°C", validMs: 90 * 60_000 },
-  wind: { unit: "m/s", validMs: 90 * 60_000 },
+  waveHeight: { unit: "m", validMs: METRIC_EXPIRY_MS.waveHeight },
+  wavePeriod: { unit: "s", validMs: METRIC_EXPIRY_MS.wavePeriod },
+  waveDirection: { unit: "deg", validMs: METRIC_EXPIRY_MS.waveDirection },
+  waterTemp: { unit: "°C", validMs: METRIC_EXPIRY_MS.waterTemp },
+  wind: { unit: "m/s", validMs: METRIC_EXPIRY_MS.wind },
 } as const satisfies Record<
   MetricKey,
   { unit: Metric["unit"]; validMs: number }
