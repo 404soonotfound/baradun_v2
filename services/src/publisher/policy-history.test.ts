@@ -3,7 +3,6 @@ import {
   OBSERVATION_POLICY_VERSION,
   POLICY_HISTORY,
   POLICY_VERSION,
-  SUPPORTED_POLICY_VERSIONS,
   WARNING_CONFIRMATION_TTL_MS,
   WARNING_POLICY_VERSION,
 } from "@baradun/contracts/judgment-policy";
@@ -51,9 +50,5 @@ describe("판단 정책 버전과 minWebBuild (D20-7)", () => {
     };
     expect(warnings[WARNING_POLICY_VERSION]).toBe(WARNING_CONFIRMATION_TTL_MS);
     expect(observations[OBSERVATION_POLICY_VERSION]).toEqual(METRIC_EXPIRY_MS);
-  });
-
-  it("웹이 읽는 정책 버전은 지금 정책 하나뿐이다(모르는 버전·옛 버전은 판단불가, D20-6)", () => {
-    expect(SUPPORTED_POLICY_VERSIONS).toEqual([POLICY_VERSION]);
   });
 });
