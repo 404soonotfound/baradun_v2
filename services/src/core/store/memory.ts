@@ -1,3 +1,9 @@
+import {
+  PUBLISH_JOB_START_LIMIT_MS,
+  type ClaimPublishJobResult,
+  type PublishJob,
+  type PublishJobOutcome,
+} from "../collect/publish-job";
 import type {
   NoticeSnapshot,
   PublishRun,
@@ -206,5 +212,44 @@ export class MemoryOpsStore implements OpsStore {
     if (run.result === "failed") this.failedRuns.push(run);
     // 시작 시각이 더 늦은 실행만 마지막 실행으로 남김
     if (this.lastRun === null || this.lastRun.at <= run.at) this.lastRun = run;
+  }
+
+  // 운영자 게시 작업(시험이 jobs에 '대기' 작업을 직접 넣음)
+  readonly jobs = new Map<string, PublishJob>();
+
+  async claimPublishJob(
+    jobId: string,
+    nowMs: number,
+  ): Promise<ClaimPublishJobResult> {
+    const job = this.jobs.get(jobId);
+    if (!job) return "missing";
+    if (job.state !== "pending") return "taken";
+    const iso = new Date(nowMs).toISOString();
+    if (job.createdAtMs <= nowMs - PUBLISH_JOB_START_LIMIT_MS) {
+      this.jobs.set(jobId, {
+        ...job,
+        state: "failed",
+        reason: "expired",
+        finishedAt: iso,
+      });
+      return "expired";
+    }
+    this.jobs.set(jobId, { ...job, state: "running", startedAt: iso });
+    return "claimed";
+  }
+
+  async finishPublishJob(
+    jobId: string,
+    outcome: PublishJobOutcome,
+    nowMs: number,
+  ): Promise<boolean> {
+    const job = this.jobs.get(jobId);
+    if (!job || job.state !== "running") return false;
+    this.jobs.set(jobId, {
+      ...job,
+      ...outcome,
+      finishedAt: new Date(nowMs).toISOString(),
+    });
+    return true;
   }
 }

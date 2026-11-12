@@ -1,6 +1,7 @@
 import {
   buildPublishSummary,
   buildStationTable,
+  canonicalJson,
   type PublishRun,
   type PublishSource,
 } from "../core/collect/publish-summary";
@@ -52,6 +53,8 @@ export interface PublishDeps {
   readonly owner: string; // 이 실행의 id(Lambda 요청 id)
   // 게시 원인. 없으면 자동 게시. 되돌리기는 options.rollbackTo가 정함
   readonly source?: "auto" | "operator";
+  // 운영 API가 연 게시 작업 ID(#331). 실행 기록·게시 요약에 함께 남겨 작업 기록이 빠져도 결과를 찾게 함
+  readonly jobId?: string;
 }
 
 export interface PublishOptions {
@@ -220,17 +223,8 @@ export function noticeHoldFor(
   return held;
 }
 
-// 칸 순서와 상관없이 견주려고 만든 글자(칸 이름 순으로 정렬)
-// DynamoDB는 맵의 칸 순서를 지키지 않음 → 읽어 온 포인터를 새로 계산한 값과 견줄 때는 JSON.stringify를 그대로 쓰지 않음
-function canonical(value: unknown): string {
-  return JSON.stringify(value, (_key, v: unknown) =>
-    typeof v === "object" && v !== null && !Array.isArray(v)
-      ? Object.fromEntries(
-          Object.entries(v).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)),
-        )
-      : v,
-  );
-}
+// 칸 순서와 상관없는 비교(DynamoDB는 맵의 칸 순서를 지키지 않음, publish-summary.ts canonicalJson)
+const canonical = canonicalJson;
 
 // 두 포인터가 같은 공지를 같은 노출본으로 되돌리는지(고른 게시본·되돌린 시각은 보지 않음)
 export function sameHeldNotices(
@@ -477,6 +471,9 @@ export async function recordPublished(
     source: PublishSource;
     target: string | undefined;
     noticeState: readonly Notice[] | null;
+    // 게시본에 실은 공지(요약값을 남겨 운영 화면이 공지 변경 여부를 보여 줌)
+    notices: readonly Notice[];
+    jobId: string | undefined;
   },
 ): Promise<void> {
   const { ops, log } = deps;
@@ -505,6 +502,8 @@ export async function recordPublished(
           ...(published.target !== undefined
             ? { target: published.target }
             : {}),
+          notices: published.notices,
+          ...(published.jobId !== undefined ? { jobId: published.jobId } : {}),
         }),
         startedMs,
       );
@@ -528,7 +527,7 @@ const LOGGED_IDS = 20;
 // 자동 게시·'지금 게시'·되돌리기(publishSnapshot)와 다시 내보내기(republish.ts)가 같이 씀(같은 잠금, D20-1·D16-C4)
 // 다른 실행이 게시 중이면 아무것도 하지 않고 busy(실행 결과도 남기지 않음)
 export async function withPublishLock(
-  deps: Pick<PublishDeps, "ops" | "log" | "clock" | "owner">,
+  deps: Pick<PublishDeps, "ops" | "log" | "clock" | "owner" | "jobId">,
   source: PublishSource,
   target: string | undefined,
   body: (run: {
@@ -565,6 +564,7 @@ export async function withPublishLock(
           version: result.version,
           ...(result.status === "failed" ? { reason: result.reason } : {}),
           ...(target !== undefined ? { target } : {}),
+          ...(deps.jobId !== undefined ? { jobId: deps.jobId } : {}),
         },
         startedMs,
       );
@@ -852,6 +852,8 @@ async function runPublish(
       source,
       target: rollbackTo,
       noticeState,
+      notices,
+      jobId: deps.jobId,
     });
     const removed = await removeOldVersions(snapshots, version, log);
     log("info", "publish_finished", {

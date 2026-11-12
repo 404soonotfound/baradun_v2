@@ -188,6 +188,8 @@ export async function republishVersion(
           source: "republish",
           target: from,
           noticeState: read.state,
+          notices: read.notices,
+          jobId: undefined,
         });
         const removed = await removeOldVersions(snapshots, version, log);
         log("warn", "republish_finished", {

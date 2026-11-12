@@ -7,10 +7,15 @@ import beachMeta from "../../../data/beach-meta.json";
 import weatherAreasJson from "../../../data/weather-areas.json";
 import annexTables from "../../../tools/beaches/annex-tables.json";
 import { liveNotices, queryNotices } from "../admin/notices";
+import {
+  PUBLISH_JOB_ID,
+  type PublishJobOutcome,
+} from "../core/collect/publish-job";
 import { loadBeaches } from "../core/beaches/load";
 import { createLogger } from "../core/collect/log";
 import { S3SnapshotStore } from "../core/snapshots/s3";
 import { DynamoOpsStore, DynamoStateStore } from "../core/store/dynamodb";
+import type { OpsStore as OpsStoreLike } from "../core/store/types";
 import { publishSnapshot, type PublishResult } from "./publish";
 import { republishVersion } from "./republish";
 import { parseBeachMeta, type SeasonTable } from "./season";
@@ -23,6 +28,10 @@ import { zoneTablesFromAnnex, type AnnexTables } from "./zones";
 // - { "action": "rollback", "version": "20261017T053000Z" }: 되돌리기. 공지만 그 게시본 때 상태로 되살려
 //   지금 수집 사실과 함께 새 버전으로 게시함(결정 기록 D20-1~3)
 // - { "action": "republish", "version": "…" }: 옛 게시 파일을 새 버전 번호로 다시 내보냄(급할 때만, D20-4)
+// 운영 API가 비동기로 부르는 이벤트(#331, 운영자 게시 작업 core/collect/publish-job.ts). jobId가 있음
+// - { "action": "publish", "jobId": "j-…" }: '지금 게시'. 새로 수집하지 않고 마지막 수집 사실 + 확정한 공지(D16-C4)
+// - { "action": "rollback", "version": "…", "jobId": "j-…" }: 운영 화면의 되돌리기
+//   작업이 '대기'이고 시작 제한 안일 때만 실행함(두 번 오거나 늦게 온 호출은 실행하지 않음). 결과를 작업에 남김
 // 게시 실패는 오류를 던져 Lambda 오류 지표에 남김(BRD-62 경보). busy·unchanged는 정상
 // 사람이 부른 실행의 입력 문제(없는 버전 등)는 던지지 않고 { status: "failed", reason }으로 돌려줌
 // 변경이 없어 생략한 실행(unchanged)도 실행으로 세므로 게시 중단 알림(PublishStopped)은 울리지 않고,
@@ -85,25 +94,66 @@ interface LambdaContext {
   readonly awsRequestId: string;
 }
 
-export type ManualEvent = {
-  action: "rollback" | "republish";
-  version: string;
-};
+export type ManualEvent =
+  | { action: "rollback"; version: string; jobId?: string }
+  | { action: "republish"; version: string }
+  | { action: "publish"; jobId: string };
 
 // 사람이 부른 이벤트 해석. action이 없으면 자동 게시(null)
-// action이 있는데 모르는 값이거나 버전 형식이 틀리면 던짐: 오타 난 되돌리기를 보통 게시로 돌리지 않음
+// action이 있는데 모르는 값이거나 버전·작업 ID 형식이 틀리면 던짐: 오타 난 되돌리기를 보통 게시로 돌리지 않음
 export function parseManualEvent(event: unknown): ManualEvent | null {
   if (typeof event !== "object" || event === null || !("action" in event)) {
     return null;
   }
-  const { action, version } = event as { action: unknown; version?: unknown };
-  if (action !== "rollback" && action !== "republish") {
-    throw new Error("모르는 action(rollback 또는 republish만 받음)");
+  const { action, version, jobId } = event as {
+    action: unknown;
+    version?: unknown;
+    jobId?: unknown;
+  };
+  if (action !== "rollback" && action !== "republish" && action !== "publish") {
+    throw new Error("모르는 action(rollback·republish·publish만 받음)");
+  }
+  if (
+    jobId !== undefined &&
+    (typeof jobId !== "string" || !PUBLISH_JOB_ID.test(jobId))
+  ) {
+    throw new Error("작업 ID 형식 오류(예: j-0123456789ab)");
+  }
+  if (action === "publish") {
+    // '지금 게시'는 운영 API 작업으로만 부름(작업 없이 부르면 결과를 볼 곳이 없음)
+    if (jobId === undefined) throw new Error("publish에는 jobId가 필요함");
+    return { action, jobId };
   }
   if (typeof version !== "string" || !VERSION.test(version)) {
     throw new Error("게시 버전 형식 오류(예: 20261017T053000Z)");
   }
-  return { action, version };
+  if (action === "republish") {
+    // 다시 내보내기는 명령줄 도구만(운영 화면 버튼 없음, D20-4)
+    if (jobId !== undefined) throw new Error("republish에는 jobId를 받지 않음");
+    return { action, version };
+  }
+  return jobId === undefined ? { action, version } : { action, version, jobId };
+}
+
+// 게시 결과 → 작업 결과. busy(다른 게시가 잠금을 잡음)는 이 작업이 게시하지 않은 것 → 실패(busy)
+export function jobOutcomeOf(result: PublishResult): PublishJobOutcome {
+  switch (result.status) {
+    case "published":
+    case "unchanged":
+      return {
+        state: "done",
+        result: result.status,
+        snapshotVersion: result.version,
+      };
+    case "busy":
+      return { state: "failed", reason: "busy" };
+    case "failed":
+      return {
+        state: "failed",
+        reason: result.reason,
+        snapshotVersion: result.version,
+      };
+  }
 }
 
 // 사람이 부른 실행에서 입력이 잘못된 경우의 실패 사유(없는 버전·기록이 없는 버전 등)
@@ -127,6 +177,53 @@ export function isPublishFault(
     result.status === "failed" &&
     !(manual !== null && MANUAL_INPUT_FAILURES.includes(result.reason))
   );
+}
+
+// 작업이 있는 실행: 작업을 맡은 뒤 게시하고 결과를 작업에 남김. 못 맡으면 게시하지 않음(busy로 돌려줌)
+// 결과를 남기지 못하면 경고만(실행 기록·게시 요약의 jobId로 운영 API가 결과를 찾음)
+export async function runPublishJob(
+  deps: {
+    readonly ops: Pick<OpsStoreLike, "claimPublishJob" | "finishPublishJob">;
+    readonly clock: () => number;
+    readonly log: typeof log;
+  },
+  jobId: string,
+  run: () => Promise<PublishResult>,
+): Promise<PublishResult> {
+  const claim = await deps.ops.claimPublishJob(jobId, deps.clock());
+  if (claim !== "claimed") {
+    deps.log(claim === "missing" ? "error" : "warn", "publish_job_skipped", {
+      jobId,
+      claim,
+    });
+    return { status: "busy" };
+  }
+  let result: PublishResult;
+  try {
+    result = await run();
+  } catch (error) {
+    await deps.ops
+      .finishPublishJob(
+        jobId,
+        {
+          state: "failed",
+          reason: `exception:${error instanceof Error ? error.name : typeof error}`,
+        },
+        deps.clock(),
+      )
+      .catch(() => false);
+    throw error;
+  }
+  const finished = await deps.ops
+    .finishPublishJob(jobId, jobOutcomeOf(result), deps.clock())
+    .catch(() => false);
+  if (!finished) {
+    deps.log("warn", "publish_job_not_recorded", {
+      jobId,
+      result: result.status,
+    });
+  }
+  return result;
 }
 
 export async function publishHandler(
@@ -162,28 +259,38 @@ export async function publishHandler(
     return result;
   }
 
-  const result = await publishSnapshot(
-    {
-      state: new DynamoStateStore(documents, requiredEnv("STATE_TABLE_NAME")),
-      ops,
-      notices,
-      snapshots,
-      beaches,
-      beachIds,
-      zones,
-      seasons,
-      weatherAreas,
-      log,
-      clock,
-      owner,
-    },
-    manual ? { rollbackTo: manual.version } : {},
-  );
+  const jobId = manual?.jobId;
+  const publish = () =>
+    publishSnapshot(
+      {
+        state: new DynamoStateStore(documents, requiredEnv("STATE_TABLE_NAME")),
+        ops,
+        notices,
+        snapshots,
+        beaches,
+        beachIds,
+        zones,
+        seasons,
+        weatherAreas,
+        log,
+        clock,
+        owner,
+        ...(manual?.action === "publish" ? { source: "operator" } : {}),
+        ...(jobId !== undefined ? { jobId } : {}),
+      },
+      manual?.action === "rollback" ? { rollbackTo: manual.version } : {},
+    );
+  const result =
+    jobId === undefined
+      ? await publish()
+      : await runPublishJob({ ops, clock, log }, jobId, publish);
   if (result.status === "failed" && isPublishFault(manual, result)) {
     throw new Error(
-      manual
+      manual?.action === "rollback"
         ? `되돌리기 실패: ${result.reason} (${manual.version})`
-        : `게시 실패: ${result.reason} (${result.version})`,
+        : manual?.action === "publish"
+          ? `지금 게시 실패: ${result.reason} (${result.version})`
+          : `게시 실패: ${result.reason} (${result.version})`,
     );
   }
   return result;
