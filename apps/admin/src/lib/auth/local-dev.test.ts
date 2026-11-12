@@ -58,11 +58,24 @@ describe("로컬 샘플 응답", () => {
       ok: true,
       body: { kind: "sample" },
     });
-    expect(localOps("/ops/publish", "operator", {})).toEqual({
+    expect(localOps("/ops/stats", "operator", {})).toEqual({
       ok: false,
       status: 501,
       code: "local_sample_missing",
       requestId: null,
+    });
+  });
+});
+
+describe("로컬 예시 데이터 게시 (#331)", () => {
+  it("게시 현황을 주고, 데모 계정은 서버처럼 403", () => {
+    expect(localOps("/ops/publish", "operator", {})).toMatchObject({
+      ok: true,
+      body: { current: { ok: true }, history: { ok: true } },
+    });
+    expect(localOps("/ops/publish", "demo", {})).toMatchObject({
+      ok: false,
+      status: 403,
     });
   });
 });
