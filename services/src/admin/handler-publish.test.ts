@@ -442,6 +442,30 @@ describe("작업 만들기 (지금 게시·되돌리기)", () => {
     expect(publisher.events).toHaveLength(1);
   });
 
+  it("멱등 기록이 지난 뒤(24시간) 같은 키로 다시 보내면 새로 실행하지 않고 409(idempotency_expired)", async () => {
+    const table = new FakeTable();
+    const publisher = new FakePublisher();
+    const key = newKey();
+    await createJob(table, { action: "publish" }, { publisher }, key);
+    // 앞 작업은 끝났고, 멱등 기록만 TTL로 지워진 상태(작업 기록은 8일 남음)
+    for (const [id, item] of [...table.items.entries()]) {
+      if (id.startsWith("Ops|admin#idem#")) table.items.delete(id);
+      if (item.pk === PUBLISH_JOB_PK) {
+        table.items.set(id, { ...item, state: "done", result: "published" });
+      }
+    }
+    const again = await createJob(
+      table,
+      { action: "publish" },
+      { publisher },
+      key,
+    );
+    expect(again.statusCode).toBe(409);
+    expect(parse(again).error.reason).toBe("idempotency_expired");
+    expect(jobs(table)).toHaveLength(1);
+    expect(publisher.events).toHaveLength(1);
+  });
+
   it("다른 운영자가 같은 키를 쓰면 409(앞 작업을 자기 것처럼 돌려주지 않음)", async () => {
     const table = new FakeTable();
     const key = newKey();
