@@ -129,7 +129,12 @@ test.describe("태블릿 아이콘 레일", () => {
   test("아이콘만 보이고 이름은 접근 가능한 이름·말풍선으로, 펼치기 버튼으로 이름까지 보인다", async ({
     page,
   }, info) => {
-    test.skip(info.project.name !== "desktop", "PC 프로젝트에서 폭만 바꿔 봄");
+    test.skip(info.project.name === "mobile", "PC 프로젝트에서 폭만 바꿔 봄");
+    // macOS WebKit은 Safari 기본 설정처럼 Tab이 링크로 가지 않음(시험 도구 차이, 화면 문제 아님) → Firefox·chromium에서 봄
+    test.skip(
+      info.project.name === "desktop-webkit",
+      "WebKit은 Tab이 링크로 가지 않음",
+    );
     const rail = page.locator("aside");
     const home = nav(page).getByRole("link", { name: "운영 홈" });
     await expect(home).toBeVisible();
