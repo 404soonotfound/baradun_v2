@@ -67,6 +67,7 @@ jobs:
               - 'services/**'
               - 'packages/contracts/**'
               - 'data/photo-sources.json' # Lambda 번들에 들어가는 대장(catalog.test가 읽힘을 검사)
+              - 'tools/republish/**' # 게시 함수를 사람이 부르는 도구(D20-4, 게시 함수 이벤트와 같은 모양)
             infra:
               - *shared
               - 'infra/**'
@@ -325,6 +326,7 @@ jobs:
       - run: npm run lint -w services --if-present
       - run: npm run typecheck -w services --if-present
       - run: npm run test -w services --if-present
+      - run: npm run test:republish # 게시 함수 호출 도구 시험(D20-4, tools/republish는 services 필터에 있음)
 
   # 인프라: 타입 검사·테스트(Vitest)·CDK synth
   infra:
