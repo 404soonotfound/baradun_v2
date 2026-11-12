@@ -1,13 +1,19 @@
 import {
   buildPublishSummary,
   buildStationTable,
+  type PublishRun,
+  type PublishSource,
 } from "../core/collect/publish-summary";
 import type { Beach, ManifestFile, Notice } from "@baradun/contracts";
-import { SUPPORTED_POLICY_VERSIONS } from "@baradun/contracts/judgment-policy";
 import { checkNoticePhrases } from "@baradun/contracts/notice-rules";
 import type { Logger } from "../core/collect/log";
 import type { SnapshotStore } from "../core/snapshots/types";
-import type { OpsStore, StateStore } from "../core/store/types";
+import type {
+  HeldNotice,
+  NoticeHold,
+  OpsStore,
+  StateStore,
+} from "../core/store/types";
 import type { ZoneTables } from "../core/warnings/beach-warnings";
 import { snapshotVersion } from "../core/snapshots/version";
 import { formatUtcIso } from "../core/warnings/time";
@@ -19,8 +25,12 @@ import { contractErrors, type ContractFile } from "./validate";
 import { buildWeather, type WeatherAreaTable } from "./weather";
 
 // publish-snapshot (아키텍처 6.2, BRD-61)
-// 순서: 게시 잠금 → State 묶음 조회 → 분류 → 계약 검사 → /data/{v}/ 업로드 → manifest 교체 → 게시 버전 기록 → 오래된 버전 정리
+// 순서: 게시 잠금 → 해변 ID 대조 → State 묶음 조회 → 분류 → 계약 검사 → /data/{v}/ 업로드 → manifest 교체 → 게시 버전 기록 → 오래된 버전 정리
 // 어느 단계든 실패하면 manifest를 바꾸지 않음(이전 버전 유지). 바뀐 게 없으면 게시 생략(11장)
+// 자동 게시·'지금 게시'·되돌리기가 모두 이 함수 하나를 씀(같은 잠금·같은 계약 검사, 결정 기록 D20-1·D16-C4)
+// - 되돌리기(rollbackTo): 옛 manifest를 되살리지 않고 지금보다 큰 새 snapshotVersion으로 다시 게시함(D20-1)
+//   공지만 고른 게시본 때 상태로 되살리고(D20-2), 특보·관측은 늘 지금 수집 사실을 씀(D20-3)
+// - 옛 게시 파일을 그대로 다시 내보내는 긴급 도구는 republish.ts(D20-4)
 
 export const MANIFEST_PATH = "data/manifest.json";
 
@@ -29,6 +39,9 @@ export interface PublishDeps {
   readonly ops: OpsStore;
   readonly snapshots: SnapshotStore;
   readonly beaches: readonly Beach[]; // data/beaches
+  // 저장소 원본 해변 ID 목록(data/beach-meta.json의 해변 칸). 해변 파일과 따로 묶여 들어온 목록이라
+  // 읽은 해변 파일·게시 결과와 집합으로 대조함(D16-C1)
+  readonly beachIds: readonly string[];
   readonly zones: ZoneTables;
   readonly seasons: SeasonTable; // data/beach-meta.json 운영 기간
   readonly weatherAreas: WeatherAreaTable; // data/weather-areas.json(BRD-181)
@@ -37,6 +50,13 @@ export interface PublishDeps {
   readonly notices: () => Promise<readonly unknown[]>;
   readonly clock: () => number; // 서버 시각(epoch ms)
   readonly owner: string; // 이 실행의 id(Lambda 요청 id)
+  // 게시 원인. 없으면 자동 게시. 되돌리기는 options.rollbackTo가 정함
+  readonly source?: "auto" | "operator";
+}
+
+export interface PublishOptions {
+  // 되돌리기: 이 게시본 때의 공지 상태로 되살려 새 버전으로 게시함(D20-1~3)
+  readonly rollbackTo?: string;
 }
 
 // busy: 다른 실행이 게시 중. unchanged: 지금 manifest와 내용이 같음. failed: manifest 그대로
@@ -46,8 +66,8 @@ export type PublishResult =
   | { status: "busy" }
   | { status: "failed"; version: string; reason: string };
 
-// 게시 버전 경로에 올리는 파일. manifest.json 사본은 롤백 때 그대로 되돌리려고 둠
-const FILES = {
+// 게시 버전 경로에 올리는 파일. manifest.json 사본은 긴급 다시 내보내기(republish.ts)가 읽음
+export const FILES = {
   beaches: { name: "beaches.json", contract: "BeachesFile" },
   status: { name: "status.json", contract: "StatusFile" },
   history: { name: "history.json", contract: "HistoryFile" },
@@ -59,12 +79,46 @@ const FILES = {
   keyof Snapshot,
   { name: string; contract: ContractFile }
 >;
-const KEYS = Object.keys(FILES) as (keyof Snapshot)[];
+export const KEYS = Object.keys(FILES) as (keyof Snapshot)[];
 // 날씨(BRD-181)는 참고 정보라 판단 파일과 따로 다룸: 만들지 못하면 이 파일만 빼고 판단 파일은 게시함
-const WEATHER = { name: "weather.json", contract: "WeatherFile" } as const;
+export const WEATHER = {
+  name: "weather.json",
+  contract: "WeatherFile",
+} as const;
 
-const versionPath = (version: string, name: string) =>
+export const versionPath = (version: string, name: string) =>
   `data/${version}/${name}`;
+
+// 해변 ID 집합 대조(D16-C1). 저장소 원본 목록과 다르면(누락·추가·중복) 게시하지 않음
+// 비율 기준 없음: 하나라도 다르면 멈춤. 관측 실패는 해변을 빼지 않으므로(분류만 판단불가) 여기 걸리지 않음
+export interface BeachIdProblem {
+  readonly missing: string[]; // 원본에 있는데 없음
+  readonly extra: string[]; // 원본에 없는데 있음
+  readonly duplicate: string[]; // 두 번 이상 나옴(원본 목록 안의 중복 포함)
+}
+
+export function beachIdProblem(
+  expected: readonly string[],
+  actual: readonly string[],
+): BeachIdProblem | null {
+  const want = new Set(expected);
+  const have = new Set(actual);
+  const repeated = (ids: readonly string[]) =>
+    ids.filter((id, i) => ids.indexOf(id) !== i);
+  const problem = {
+    missing: [...want].filter((id) => !have.has(id)).sort(),
+    extra: [...have].filter((id) => !want.has(id)).sort(),
+    duplicate: [
+      ...new Set([...repeated(expected), ...repeated(actual)]),
+    ].sort(),
+  };
+  return problem.missing.length +
+    problem.extra.length +
+    problem.duplicate.length >
+    0
+    ? problem
+    : null;
+}
 
 // 게시본에 실을 공지(D16-B3·D4, 구현 제안 I09)
 // - 시작 시각이 지난 것만(예약 전 문구는 공개 게시본에 넣지 않음), 끝 시각이 지난 것은 뺌
@@ -73,6 +127,20 @@ const versionPath = (version: string, name: string) =>
 //   다른 쓰기 경로로 들어온 문구가 게시되지 않게 함(게시 차단은 서버도 검사)
 // - ID 순으로 정렬해 같은 공지면 같은 manifest가 되게 함(바뀐 게 없으면 게시 생략)
 export function publishableNotices(
+  candidates: readonly unknown[],
+  nowMs: number,
+  log: Logger,
+): Notice[] {
+  return started(currentNotices(candidates, nowMs, log), nowMs);
+}
+
+function started(notices: readonly Notice[], nowMs: number): Notice[] {
+  return notices.filter((notice) => Date.parse(notice.startsAt) <= nowMs);
+}
+
+// 지금 공지 상태: 검사를 통과하고 끝나지 않은 노출본 전부(예약 전 포함). ID 순
+// 게시할 때마다 Ops에 남겨 되돌리기의 기준으로 쓰고(D20-2), 여기서 시작한 것만 골라 게시본에 실음
+export function currentNotices(
   candidates: readonly unknown[],
   nowMs: number,
   log: Logger,
@@ -98,7 +166,6 @@ export function publishableNotices(
       log("error", "publish_notice_blocked_phrase", { noticeId: notice.id });
       continue;
     }
-    if (Date.parse(notice.startsAt) > nowMs) continue;
     if (notice.endsAt !== null && Date.parse(notice.endsAt) <= nowMs) continue;
     // 칸 순서를 고정함. 운영 DB의 맵은 칸 순서를 지키지 않아 같은 공지가 다른 manifest로 보이면 매번 새로 게시됨
     valid.push({
@@ -111,6 +178,46 @@ export function publishableNotices(
     });
   }
   return valid.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+}
+
+// 되돌림 반영(D20-2·D16-C3): 포인터에 있는 공지는 운영 DB 노출본 대신 그때 노출본을 씀(null이면 뺌)
+// 운영 DB에는 노출본이 없어졌지만 포인터에 그때 노출본이 있는 공지도 그 값으로 실음
+// 포인터가 없거나 비어 있으면 운영 DB 노출본 그대로
+export function applyNoticeHold(
+  candidates: readonly unknown[],
+  hold: NoticeHold | null,
+): unknown[] {
+  const held = hold?.notices ?? {};
+  const idOf = (candidate: unknown) =>
+    typeof (candidate as { id?: unknown } | null)?.id === "string"
+      ? (candidate as { id: string }).id
+      : null;
+  return [
+    ...candidates.filter((candidate) => {
+      const id = idOf(candidate);
+      return id === null || !Object.hasOwn(held, id);
+    }),
+    ...Object.values(held).flatMap((entry) => (entry.live ? [entry.live] : [])),
+  ];
+}
+
+// 되돌리기의 새 포인터: 고른 게시본 때 공지 상태(then)와 지금 운영 DB 노출본(live)을 공지별로 견줘
+// 다른 공지만 '되돌림'으로 표시함. 같은 공지는 표시하지 않음(앞 되돌리기의 표시도 이 계산으로 새로 정해짐)
+export function noticeHoldFor(
+  then: readonly Notice[],
+  live: readonly Notice[],
+  target: string,
+  at: string,
+): Record<string, HeldNotice> {
+  const before = new Map(then.map((notice) => [notice.id, notice]));
+  const now = new Map(live.map((notice) => [notice.id, notice]));
+  const held: Record<string, HeldNotice> = {};
+  for (const id of [...new Set([...before.keys(), ...now.keys()])].sort()) {
+    const was = before.get(id) ?? null;
+    if (JSON.stringify(was) === JSON.stringify(now.get(id) ?? null)) continue;
+    held[id] = { target, at, live: was };
+  }
+  return held;
 }
 
 function manifestFor(
@@ -141,7 +248,7 @@ function manifestFor(
   };
 }
 
-function parseManifest(body: string | null): ManifestFile | null {
+export function parseManifest(body: string | null): ManifestFile | null {
   if (body === null) return null;
   try {
     const value: unknown = JSON.parse(body);
@@ -155,13 +262,16 @@ function parseManifest(body: string | null): ManifestFile | null {
 
 // 지금 manifest가 이 버전을 가리킬 수 있는지. 읽지 못하면 그럴 수 있다고 봄(지우지 않는 쪽)
 // 둘 중 늦은 버전. 자릿수가 고정된 형식이라 글자 비교 = 시각 순서. 둘 다 없으면 null
-function newestVersion(a: string | null, b: string | null): string | null {
+export function newestVersion(
+  a: string | null,
+  b: string | null,
+): string | null {
   if (a === null) return b;
   if (b === null) return a;
   return a >= b ? a : b;
 }
 
-async function manifestMayPointTo(
+export async function manifestMayPointTo(
   snapshots: SnapshotStore,
   version: string,
 ): Promise<boolean> {
@@ -210,7 +320,7 @@ async function sameAsCurrent(
 }
 
 // 오래된 버전 정리. 최근 48개와 지금 manifest가 가리키는 버전은 남김. 실패해도 게시는 그대로(다음 게시가 다시 지움)
-async function removeOldVersions(
+export async function removeOldVersions(
   snapshots: SnapshotStore,
   keep: string,
   log: Logger,
@@ -230,13 +340,84 @@ async function removeOldVersions(
   }
 }
 
+// manifest 교체는 조건부 쓰기(읽은 manifest가 그대로일 때만). 잠금 시간을 넘긴 실행과 새 실행이
+// 거의 같은 순간 써도, 확인과 쓰기 사이에 끼어든 쓰기가 있으면 이 쓰기는 거절됨 → 다시 읽고 판단
+// 더 새 버전이 이미 게시됐으면 manifest를 옛 버전으로 되돌리지 않음
+export async function replaceManifest(
+  deps: Pick<PublishDeps, "ops" | "snapshots" | "log">,
+  version: string,
+  manifestBody: string,
+): Promise<
+  | { ok: true }
+  | { ok: false; reason: "version_not_newer"; published: string }
+  | { ok: false; reason: "manifest_conflict" }
+> {
+  const { ops, snapshots, log } = deps;
+  for (
+    let attempt = 1;
+    attempt <= PUBLISH_POLICY.manifestWriteAttempts;
+    attempt += 1
+  ) {
+    const currentFile = await snapshots.getTaggedFile(MANIFEST_PATH);
+    const latest = newestVersion(
+      await ops.getPublishedVersion(),
+      parseManifest(currentFile?.body ?? null)?.snapshotVersion ?? null,
+    );
+    if (latest !== null && version <= latest) {
+      return { ok: false, reason: "version_not_newer", published: latest };
+    }
+    if (
+      await snapshots.putFileIf(
+        MANIFEST_PATH,
+        manifestBody,
+        PUBLISH_POLICY.cacheControl.manifest,
+        currentFile?.etag ?? null,
+      )
+    ) {
+      return { ok: true };
+    }
+    log("warn", "publish_manifest_conflict", { version, attempt });
+  }
+  return { ok: false, reason: "manifest_conflict" };
+}
+
+// 게시 실행 결과 남기기(D16-C2: 변경이 없어 생략한 것과 실패를 나눔). 남기지 못해도 게시 결과는 그대로 → 경고만
+export async function recordPublishRun(
+  deps: Pick<PublishDeps, "ops" | "log">,
+  run: PublishRun,
+  nowMs: number,
+): Promise<void> {
+  try {
+    await deps.ops.putPublishRun(run, nowMs);
+  } catch (error) {
+    deps.log("warn", "publish_run_not_recorded", {
+      version: run.version,
+      result: run.result,
+      error: error instanceof Error ? error.name : typeof error,
+    });
+  }
+}
+
 // 이 실행 환경에서 마지막으로 쓴 관측소 표(저장소별). 같으면 다시 쓰지 않음
 const writtenStationTables = new WeakMap<OpsStore, string>();
 
-export async function publishSnapshot(
-  deps: PublishDeps,
+// 로그에 남기는 ID 수 상한(해변 전체가 어긋나도 한 줄이 너무 길어지지 않게)
+const LOGGED_IDS = 20;
+
+// 게시 잠금을 잡고 body를 한 번 돌린 뒤 실행 결과를 남기고 잠금을 풂
+// 자동 게시·'지금 게시'·되돌리기(publishSnapshot)와 다시 내보내기(republish.ts)가 같이 씀(같은 잠금, D20-1·D16-C4)
+// 다른 실행이 게시 중이면 아무것도 하지 않고 busy(실행 결과도 남기지 않음)
+export async function withPublishLock(
+  deps: Pick<PublishDeps, "ops" | "log" | "clock" | "owner">,
+  source: PublishSource,
+  target: string | undefined,
+  body: (run: {
+    startedMs: number;
+    version: string;
+    now: string;
+  }) => Promise<PublishResult>,
 ): Promise<PublishResult> {
-  const { ops, snapshots, log } = deps;
+  const { ops, log } = deps;
   const startedMs = deps.clock();
   const version = snapshotVersion(startedMs);
   const now = formatUtcIso(startedMs);
@@ -252,12 +433,79 @@ export async function publishSnapshot(
     return { status: "busy" };
   }
 
+  try {
+    const result = await body({ startedMs, version, now });
+    if (result.status !== "busy") {
+      await recordPublishRun(
+        deps,
+        {
+          at: now,
+          source,
+          result: result.status,
+          version: result.version,
+          ...(result.status === "failed" ? { reason: result.reason } : {}),
+          ...(target !== undefined ? { target } : {}),
+        },
+        startedMs,
+      );
+    }
+    return result;
+  } finally {
+    await ops
+      .releaseLock(PUBLISH_POLICY.lockName, deps.owner)
+      .catch(() => false);
+  }
+}
+
+export async function publishSnapshot(
+  deps: PublishDeps,
+  options: PublishOptions = {},
+): Promise<PublishResult> {
+  const source: PublishSource =
+    options.rollbackTo !== undefined ? "rollback" : (deps.source ?? "auto");
+  return withPublishLock(deps, source, options.rollbackTo, (run) =>
+    runPublish(deps, options, { ...run, source }),
+  );
+}
+
+// 잠금을 잡은 뒤의 게시 한 번. 잠금 해제와 실행 결과 기록은 withPublishLock이 함
+async function runPublish(
+  deps: PublishDeps,
+  options: PublishOptions,
+  run: {
+    startedMs: number;
+    version: string;
+    now: string;
+    source: PublishSource;
+  },
+): Promise<PublishResult> {
+  const { ops, snapshots, log } = deps;
+  const { startedMs, version, now, source } = run;
+  const rollbackTo = options.rollbackTo;
+
   const fail = (reason: string, fields: Record<string, unknown> = {}) => {
-    log("error", "publish_failed", { version, reason, ...fields });
+    log("error", "publish_failed", { version, reason, source, ...fields });
     return { status: "failed", version, reason } as const;
   };
+  const failBeachIds = (
+    where: "source" | "beaches" | "status",
+    problem: BeachIdProblem,
+  ) =>
+    fail("beach_ids", {
+      where,
+      missing: problem.missing.slice(0, LOGGED_IDS),
+      extra: problem.extra.slice(0, LOGGED_IDS),
+      duplicate: problem.duplicate.slice(0, LOGGED_IDS),
+      missingCount: problem.missing.length,
+      extraCount: problem.extra.length,
+    });
 
   let uploaded = false;
+  // 되돌리기가 포인터를 바꾼 뒤 manifest 교체에 실패하면 되돌려 놓을 앞 포인터
+  let holdToRestore: {
+    notices: NoticeHold["notices"];
+    version: number;
+  } | null = null;
   try {
     // 같은 초에 두 번 돌았거나 시계가 뒤로 감 → 이미 쓴 버전 경로를 덮지 않음(immutable 캐시라 같은 주소에 다른 내용이 생김)
     // Ops 기록은 manifest 교체 뒤에 쓰므로 실제보다 뒤처질 수 있음 → 지금 manifest가 가리키는 버전도 함께 봄
@@ -269,6 +517,13 @@ export async function publishSnapshot(
     if (published !== null && version <= published) {
       return fail("version_not_newer", { published });
     }
+
+    // 읽은 해변 파일이 저장소 원본 목록과 같은지(묶을 때 빠진 파일·같은 수의 다른 ID·중복)
+    const sourceProblem = beachIdProblem(
+      deps.beachIds,
+      deps.beaches.map((beach) => beach.id),
+    );
+    if (sourceProblem) return failBeachIds("source", sourceProblem);
 
     let snapshot: Snapshot;
     const inputs = await readPublishInputs(deps.state, log);
@@ -291,17 +546,68 @@ export async function publishSnapshot(
       throw error;
     }
 
-    // 운영 DB를 읽지 못하면 지금 manifest의 공지를 이어서 씀(끝난 것은 뺌)
-    // 공지를 읽지 못했다고 특보·관측 게시를 멈추지 않고, 노출 중인 점검 예고가 조용히 사라지지도 않게 함
+    // 게시 결과(해변 목록·해변 상태)도 원본 목록과 같은지. 조립 중에 해변이 빠지거나 더해지면 게시하지 않음
+    const beachesProblem = beachIdProblem(
+      deps.beachIds,
+      snapshot.beaches.beaches.map((beach) => beach.id),
+    );
+    if (beachesProblem) return failBeachIds("beaches", beachesProblem);
+    const statusProblem = beachIdProblem(
+      deps.beachIds,
+      Object.keys(snapshot.status.beaches),
+    );
+    if (statusProblem) return failBeachIds("status", statusProblem);
+
+    // 공지. noticeState: 이 게시 때의 공지 상태(끝나지 않은 노출본 전부, Ops에 남김). null이면 모름
     let notices: Notice[];
-    try {
-      notices = publishableNotices(await deps.notices(), startedMs, log);
-    } catch (error) {
-      log("warn", "publish_notices_unread", {
-        version,
-        error: error instanceof Error ? error.name : typeof error,
-      });
-      notices = publishableNotices(current?.notices ?? [], startedMs, log);
+    let noticeState: Notice[] | null;
+    // 되돌리기에서 manifest 교체 직전에 쓸 새 포인터
+    let nextHold: {
+      notices: NoticeHold["notices"];
+      previous: NoticeHold | null;
+    } | null = null;
+    if (rollbackTo !== undefined) {
+      // 되돌리기는 추정하지 않음: 고른 게시본의 공지 상태나 지금 운영 DB를 읽지 못하면 하지 않음(manifest 그대로)
+      const target = await ops.getPublishNotices(rollbackTo);
+      if (target === null) {
+        return fail("rollback_target_missing", { target: rollbackTo });
+      }
+      if (
+        target.some((notice) => contractErrors("Notice", notice).length > 0)
+      ) {
+        return fail("rollback_target_invalid", { target: rollbackTo });
+      }
+      const previous = await ops.getNoticeHold();
+      const live = currentNotices(await deps.notices(), startedMs, log);
+      noticeState = currentNotices(target, startedMs, log);
+      nextHold = {
+        notices: noticeHoldFor(noticeState, live, rollbackTo, now),
+        previous,
+      };
+      notices = started(noticeState, startedMs);
+    } else {
+      // 운영 DB나 되돌림 포인터를 읽지 못하면 지금 manifest의 공지를 이어서 씀(끝난 것은 뺌)
+      // 공지를 읽지 못했다고 특보·관측 게시를 멈추지 않고, 노출 중인 점검 예고가 조용히 사라지지도 않게 함
+      // 포인터를 읽지 못했을 때 운영 DB 노출본을 그대로 실으면 되돌린 공지가 다시 나감 → 그것도 못 읽은 것으로 봄
+      try {
+        const [candidates, hold] = await Promise.all([
+          deps.notices(),
+          ops.getNoticeHold(),
+        ]);
+        noticeState = currentNotices(
+          applyNoticeHold(candidates, hold),
+          startedMs,
+          log,
+        );
+        notices = started(noticeState, startedMs);
+      } catch (error) {
+        log("warn", "publish_notices_unread", {
+          version,
+          error: error instanceof Error ? error.name : typeof error,
+        });
+        noticeState = null;
+        notices = publishableNotices(current?.notices ?? [], startedMs, log);
+      }
     }
 
     // 날씨는 판단 파일과 따로 검사. 예외·계약 오류면 날씨만 빼고 알림(분류·특보 게시를 막지 않음)
@@ -343,7 +649,11 @@ export async function publishSnapshot(
     const bodies = Object.fromEntries(
       KEYS.map((key) => [key, JSON.stringify(snapshot[key])]),
     ) as Record<keyof Snapshot, string>;
-    if (await sameAsCurrent(snapshots, current, bodies, notices, weatherBody)) {
+    // 되돌리기는 내용이 같아도 생략하지 않음: 새 버전으로 다시 게시하고 포인터를 남겨야 다음 자동 게시가 따름(D20-1)
+    if (
+      rollbackTo === undefined &&
+      (await sameAsCurrent(snapshots, current, bodies, notices, weatherBody))
+    ) {
       log("info", "publish_unchanged", { version: current!.snapshotVersion });
       return { status: "unchanged", version: current!.snapshotVersion };
     }
@@ -381,43 +691,45 @@ export async function publishSnapshot(
       (result): result is PromiseRejectedResult => result.status === "rejected",
     );
     if (rejected !== undefined) throw rejected.reason;
-    // manifest 교체는 조건부 쓰기(읽은 manifest가 그대로일 때만). 잠금 시간을 넘긴 실행과 새 실행이
-    // 거의 같은 순간 써도, 확인과 쓰기 사이에 끼어든 쓰기가 있으면 이 쓰기는 거절됨 → 다시 읽고 판단
-    // 더 새 버전이 이미 게시됐으면 manifest를 옛 버전으로 되돌리지 않음
-    let replaced = false;
-    for (
-      let attempt = 1;
-      attempt <= PUBLISH_POLICY.manifestWriteAttempts;
-      attempt += 1
-    ) {
-      const currentFile = await snapshots.getTaggedFile(MANIFEST_PATH);
-      const latest = newestVersion(
-        await ops.getPublishedVersion(),
-        parseManifest(currentFile?.body ?? null)?.snapshotVersion ?? null,
-      );
-      if (latest !== null && version <= latest) {
-        return fail("version_not_newer", { published: latest });
+
+    // 되돌리기: manifest를 바꾸기 직전에 포인터를 먼저 씀. 순서가 반대면 포인터 쓰기만 실패했을 때
+    // 다음 자동 게시가 되돌린 공지를 다시 내보냄. manifest 교체가 실패하면 finally가 앞 포인터로 되돌려 놓음
+    // 읽은 뒤 포인터가 바뀌었으면('다시 적용'·다른 되돌리기) 덮지 않고 멈춤
+    if (nextHold) {
+      const expected = nextHold.previous?.version ?? 0;
+      if (!(await ops.putNoticeHold(nextHold.notices, expected, now))) {
+        return fail("hold_conflict", { target: rollbackTo });
       }
-      if (
-        await snapshots.putFileIf(
-          MANIFEST_PATH,
-          manifestBody,
-          PUBLISH_POLICY.cacheControl.manifest,
-          currentFile?.etag ?? null,
-        )
-      ) {
-        replaced = true;
-        break;
-      }
-      log("warn", "publish_manifest_conflict", { version, attempt });
+      holdToRestore = {
+        notices: nextHold.previous?.notices ?? {},
+        version: expected + 1,
+      };
     }
-    if (!replaced) return fail("manifest_conflict");
+
+    const replaced = await replaceManifest(deps, version, manifestBody);
+    if (!replaced.ok) {
+      return replaced.reason === "version_not_newer"
+        ? fail(replaced.reason, { published: replaced.published })
+        : fail(replaced.reason);
+    }
     uploaded = false; // manifest가 이 버전을 가리킴 → 지우면 안 됨
 
     // 잠금 안에서는 생기지 않아야 함. manifest는 이미 바뀌었으므로 알리기만 함
     // 예외도 같게 봄: 여기서 던지면 이미 끝난 게시가 failed로 잘못 보고됨
     if (!(await ops.setPublishedVersion(version).catch(() => false))) {
       log("error", "publish_version_not_recorded", { version });
+    }
+    // 이 게시 때의 공지 상태(되돌리기 기준, D20-2). 공지 상태를 모르는 게시(운영 DB를 읽지 못함)는 남기지 않음
+    // 남기지 못해도 게시는 끝난 것 → 경고만. 기록이 없는 버전으로는 되돌릴 수 없음
+    if (noticeState) {
+      try {
+        await ops.putPublishNotices(version, noticeState, startedMs);
+      } catch (error) {
+        log("warn", "publish_notices_not_recorded", {
+          version,
+          error: error instanceof Error ? error.name : typeof error,
+        });
+      }
     }
     // 운영 화면용 게시 요약(BRD-187). 실패해도 게시는 끝난 것 → 경고만(빠진 요약은 previous 사슬로 드러남)
     try {
@@ -428,6 +740,8 @@ export async function publishSnapshot(
           publishedAt: now,
           beachCount: deps.beaches.length,
           status: snapshot.status.beaches,
+          source,
+          ...(rollbackTo !== undefined ? { target: rollbackTo } : {}),
         }),
         startedMs,
       );
@@ -447,8 +761,10 @@ export async function publishSnapshot(
     const removed = await removeOldVersions(snapshots, version, log);
     log("info", "publish_finished", {
       version,
+      source,
       beaches: deps.beaches.length,
       removed: removed.length,
+      ...(rollbackTo !== undefined ? { target: rollbackTo } : {}),
     });
     return { status: "published", version, removed };
   } catch (error) {
@@ -460,53 +776,19 @@ export async function publishSnapshot(
     // manifest 쓰기가 실제로는 됐는데 응답만 실패했을 수 있음 → manifest가 이 버전을 가리키거나 읽지 못하면 지우지 않음
     if (uploaded && !(await manifestMayPointTo(snapshots, version))) {
       await snapshots.deleteVersion(version).catch(() => undefined);
+      // 게시되지 않은 되돌리기의 포인터를 앞 값으로 되돌려 놓음. 못 하면 알림
+      // (그대로 남으면 다음 자동 게시가 이 포인터대로 공지를 되돌려 게시함)
+      if (holdToRestore) {
+        const restored = await ops
+          .putNoticeHold(holdToRestore.notices, holdToRestore.version, now)
+          .catch(() => false);
+        if (!restored) {
+          log("error", "rollback_hold_not_restored", {
+            version,
+            target: rollbackTo,
+          });
+        }
+      }
     }
-    await ops
-      .releaseLock(PUBLISH_POLICY.lockName, deps.owner)
-      .catch(() => false);
   }
-}
-
-// 롤백 (아키텍처 1장: manifest를 이전 버전으로 되돌려 수 분 내 복구, T06)
-// 그 버전 경로의 manifest 사본과 파일 네 개(날씨가 실린 버전은 다섯 개)가 모두 있어야 되돌림. 하나라도 없으면 지금 manifest 그대로
-// 다음 게시가 새 버전으로 다시 덮으므로, 게시 코드 문제로 되돌릴 때는 수집기 일정을 먼저 멈춤
-// 점검·최소 화면 버전은 데이터가 아니라 운영 설정 → 사본의 값이 아니라 지금 코드의 MANIFEST_SETTINGS를 씀
-// (점검 중 롤백해도 점검이 풀리지 않고, 올린 minWebBuild가 되돌아가지 않음. BRD-43 리뷰)
-// 공지는 사본에 실린 그대로 되돌아감. 되돌린 공지 변경을 다음 자동 게시에서 다시 싣지 않는 방식(D16-C3)은
-// 미결이라 되돌리기 화면(BRD-152)에서 정함
-export async function rollbackManifest(
-  snapshots: SnapshotStore,
-  version: string,
-): Promise<{ status: "rolled_back" } | { status: "failed"; reason: string }> {
-  const manifest = parseManifest(
-    await snapshots.getFile(versionPath(version, "manifest.json")),
-  );
-  if (manifest === null || manifest.snapshotVersion !== version) {
-    return { status: "failed", reason: "manifest_missing" };
-  }
-  // 웹은 지금 판단 정책만 읽음(D20-6) → 다른 정책으로 게시된 버전을 되살리면 모두 판단불가가 됨. 되돌리지 않고 실패로 알림
-  if (!SUPPORTED_POLICY_VERSIONS.includes(manifest.policyVersion)) {
-    return { status: "failed", reason: "policy_unsupported" };
-  }
-  const paths = [
-    ...KEYS.map((key) => manifest.files[key]),
-    ...(manifest.files.weather ? [manifest.files.weather] : []),
-  ];
-  const files = await Promise.all(
-    paths.map((path) => snapshots.getFile(path.replace(/^\//, ""))),
-  );
-  if (files.some((body) => body === null)) {
-    return { status: "failed", reason: "files_missing" };
-  }
-  const restored: ManifestFile = {
-    ...manifest,
-    maintenance: { ...MANIFEST_SETTINGS.maintenance },
-    minWebBuild: MANIFEST_SETTINGS.minWebBuild,
-  };
-  await snapshots.putFile(
-    MANIFEST_PATH,
-    JSON.stringify(restored),
-    PUBLISH_POLICY.cacheControl.manifest,
-  );
-  return { status: "rolled_back" };
 }

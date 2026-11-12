@@ -16,9 +16,9 @@ import {
 } from "./fixtures";
 import { MANIFEST_SETTINGS, PUBLISH_POLICY } from "./policy";
 import { snapshotVersion } from "../core/snapshots/version";
-import { MANIFEST_PATH, publishSnapshot, rollbackManifest } from "./publish";
+import { MANIFEST_PATH, publishSnapshot } from "./publish";
 
-// publish-snapshot (BRD-61). T01 게시 원자성: 실패하면 manifest 그대로, T06 manifest 교체·롤백
+// publish-snapshot (BRD-61). T01 게시 원자성: 실패하면 manifest 그대로, T06 manifest 교체
 // 버전 경로 파일 → manifest 순서, Cache-Control, 게시 잠금, 48개 보존
 
 const NOW_MS = Date.parse(NOW);
@@ -50,6 +50,8 @@ async function setup(
     ops,
     snapshots,
     beaches: BEACHES,
+    // 저장소 원본 해변 ID 목록(해변 파일과 따로 들어오는 목록, D16-C1)
+    beachIds: BEACHES.map((beach) => beach.id),
     zones: ZONES,
     seasons: SEASONS,
     weatherAreas: WEATHER_AREAS,
@@ -755,128 +757,6 @@ describe("weather.json (BRD-181)", () => {
   });
 });
 
-describe("rollbackManifest (T06)", () => {
-  it("이전 버전으로 manifest를 되돌림 — 파일 경로는 사본 그대로, 점검·최소 화면 버전은 지금 설정", async () => {
-    const { state, snapshots, deps, advance, manifest } = await setup();
-    await publishSnapshot(deps());
-    const copyPath = `data/${V1}/manifest.json`;
-    // 사본에 지금과 다른 운영 설정이 남아 있던 경우(그때 점검 중이었거나 minWebBuild가 달랐음)
-    const copy = snapshots.files.get(copyPath)!;
-    const v1Manifest = JSON.parse(copy.body) as ManifestFile;
-    snapshots.files.set(copyPath, {
-      ...copy,
-      body: JSON.stringify({
-        ...v1Manifest,
-        maintenance: {
-          ...MANIFEST_SETTINGS.maintenance,
-          active: !MANIFEST_SETTINGS.maintenance.active,
-        },
-        minWebBuild: MANIFEST_SETTINGS.minWebBuild + 1,
-      }),
-    });
-    advance(60_000);
-    await seedWarnings(state, [WIND_WAVE_ROW], {
-      confirmedAt: "2026-10-23T02:25:00Z",
-    });
-    await publishSnapshot(deps());
-
-    expect(await rollbackManifest(snapshots, V1)).toEqual({
-      status: "rolled_back",
-    });
-    expect(snapshots.files.get(MANIFEST_PATH)!.cacheControl).toBe(
-      "public, max-age=60",
-    );
-    expect(manifest()).toEqual({
-      ...v1Manifest,
-      maintenance: MANIFEST_SETTINGS.maintenance,
-      minWebBuild: MANIFEST_SETTINGS.minWebBuild,
-    });
-  });
-
-  // 공지 칸(BRD-151, 구현 제안 I06): 공지가 실린 사본도 계약을 통과해야 되돌릴 수 있음
-  it("공지 칸이 있는 사본으로도 되돌림", async () => {
-    const { state, snapshots, deps, advance } = await setup();
-    await publishSnapshot(deps());
-    const copyPath = `data/${V1}/manifest.json`;
-    const copy = snapshots.files.get(copyPath)!;
-    snapshots.files.set(copyPath, {
-      ...copy,
-      body: JSON.stringify({
-        ...(JSON.parse(copy.body) as ManifestFile),
-        notices: [
-          {
-            id: "n-1",
-            kind: "general",
-            title: { ko: "공지", en: "Notice" },
-            body: { ko: "본문", en: "Body" },
-            startsAt: "2026-10-23T00:00:00Z",
-            endsAt: null,
-          },
-        ],
-      }),
-    });
-    advance(60_000);
-    await seedWarnings(state, [WIND_WAVE_ROW], {
-      confirmedAt: "2026-10-23T02:25:00Z",
-    });
-    await publishSnapshot(deps());
-
-    expect(await rollbackManifest(snapshots, V1)).toEqual({
-      status: "rolled_back",
-    });
-  });
-
-  it("없는 버전이나 파일이 빠진 버전으로는 되돌리지 않음(manifest 그대로)", async () => {
-    const { snapshots, deps } = await setup();
-    await publishSnapshot(deps());
-    const before = snapshots.files.get(MANIFEST_PATH);
-
-    expect(await rollbackManifest(snapshots, "20261001T000000Z")).toEqual({
-      status: "failed",
-      reason: "manifest_missing",
-    });
-    snapshots.files.delete(`data/${V1}/history.json`);
-    expect(await rollbackManifest(snapshots, V1)).toEqual({
-      status: "failed",
-      reason: "files_missing",
-    });
-    expect(snapshots.files.get(MANIFEST_PATH)).toBe(before);
-  });
-
-  // 웹은 지금 판단 정책만 읽음(D20-6) → 다른 정책으로 게시된 버전을 되살리면 모든 화면이 판단불가
-  it("다른 판단 정책으로 게시된 버전으로는 되돌리지 않음(manifest 그대로)", async () => {
-    const { snapshots, deps } = await setup();
-    await publishSnapshot(deps());
-    const copyPath = `data/${V1}/manifest.json`;
-    const copy = snapshots.files.get(copyPath)!;
-    snapshots.files.set(copyPath, {
-      ...copy,
-      body: JSON.stringify({
-        ...(JSON.parse(copy.body) as ManifestFile),
-        policyVersion: "warnings-0+observations-0",
-      }),
-    });
-    const before = snapshots.files.get(MANIFEST_PATH);
-
-    expect(await rollbackManifest(snapshots, V1)).toEqual({
-      status: "failed",
-      reason: "policy_unsupported",
-    });
-    expect(snapshots.files.get(MANIFEST_PATH)).toBe(before);
-  });
-
-  it("날씨가 실린 버전은 weather.json이 빠져 있으면 되돌리지 않음", async () => {
-    const { snapshots, deps } = await setup();
-    await publishSnapshot(deps());
-    snapshots.files.delete(`data/${V1}/weather.json`);
-    expect(await rollbackManifest(snapshots, V1)).toEqual({
-      status: "failed",
-      reason: "files_missing",
-    });
-  });
-});
-
-// 게시 요약 (BRD-187): 운영 화면이 State·게시 파일 대신 읽음. 분류는 게시한 status 그대로
 describe("publishSnapshot 게시 요약", () => {
   it("게시하면 해변 수·관측 지연 해변·관측소별 사용 해변을 남기고, 다음 게시는 앞 버전을 previous로 둔다", async () => {
     const { ops, snapshots, deps, advance } = await setup();
