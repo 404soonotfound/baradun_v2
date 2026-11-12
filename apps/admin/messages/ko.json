@@ -169,6 +169,7 @@
     "newTab": "(새 탭)",
     "recentTitle": "최근 변경",
     "recentNone": "최근 7일 동안 운영자가 바꾼 것이 없어요",
+    "recentOnlyReads": "최근 기록이 데모 계정의 조회 기록뿐이라 여기서는 보여 주지 않아요. 변경 이력에서 확인해 주세요.",
     "recentForbidden": "이 계정으로는 변경 이력을 볼 수 없어요",
     "recentFailed": "최근 변경을 불러오지 못했어요. 앱 사용자 화면에는 영향이 없어요.",
     "recentAll": "변경 이력 전체 보기",

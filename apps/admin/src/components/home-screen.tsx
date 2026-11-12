@@ -3,12 +3,7 @@
 import { useEffect, useState } from "react";
 import { opsFetch, type OpsResult } from "@/lib/auth/ops-fetch";
 import { useAuthSession, useSessionSnapshot } from "@/lib/auth/provider";
-import {
-  categoryOf,
-  fetchAudit,
-  periodFilter,
-  type AuditView,
-} from "@/lib/audit";
+import { fetchAudit, periodFilter } from "@/lib/audit";
 import {
   fetchPublished,
   parsePublished,
@@ -22,17 +17,21 @@ import {
   noticeCounts,
   partOf,
   receivedCount,
+  recentChanges,
+  settle,
   todos,
   undeterminedCount,
   valueOf,
+  type RecentView,
   type Slot,
 } from "@/lib/home";
 import { badgeOwner, setReceivedCount } from "@/lib/inquiry-badge";
-import { fetchInquiries, kstDateTime, shortId } from "@/lib/inquiries";
+import { fetchInquiries, kstDateTime } from "@/lib/inquiries";
 import { fill, messages } from "@/lib/messages";
 import { fetchNotices, type NoticeView } from "@/lib/notices";
 import { roleLabel } from "@/lib/roles";
 import { AdminShell } from "./admin-shell";
+import { kindBadge, summaryOf, Target, type Beaches } from "./audit-screen";
 import { Button, Notice, TextLink } from "./ui";
 
 // 운영 홈 (BRD-149, 화면 설계서 6장 ADM-HOME). 로그인 뒤 /ops/me로 서버가 이 세션을 받아 주는지 먼저 확인함
@@ -67,7 +66,7 @@ interface Parts {
   readonly published: Slot<Extract<PublishedView, { available: true }>>;
   readonly inquiries: Slot<number>;
   readonly notices: Slot<readonly NoticeView[]>;
-  readonly recent: Slot<readonly AuditView[]>;
+  readonly recent: Slot<RecentView>;
 }
 
 const LOADING = { state: "loading" } as const;
@@ -93,7 +92,7 @@ type Loaders = {
 };
 
 function loaders(token: Token, owner: string | null, demo: boolean): Loaders {
-  return {
+  const raw = {
     collection: async () => partOf(await fetchCollection(token), (b) => b),
     published: async () =>
       partOf(await fetchPublished(token), (body) => {
@@ -118,9 +117,20 @@ function loaders(token: Token, owner: string | null, demo: boolean): Loaders {
         demo
           ? FORBIDDEN
           : await fetchAudit(token, periodFilter(7, Date.now()), null, false),
+        // 조회 기록을 빼고도 몇 건이 남게 한 쪽(20건)을 받아 거름
         (body) =>
-          Array.isArray(body?.items) ? body.items.slice(0, RECENT_COUNT) : null,
+          Array.isArray(body?.items)
+            ? recentChanges(body.items, RECENT_COUNT)
+            : null,
       ),
+  };
+  // 칸마다 시간 제한·예외 처리(멈춘 칸이 '불러오는 중'에 머물지 않게)
+  return {
+    collection: () => settle(raw.collection),
+    published: () => settle(raw.published),
+    inquiries: () => settle(raw.inquiries),
+    notices: () => settle(raw.notices),
+    recent: () => settle(raw.recent),
   };
 }
 
@@ -332,7 +342,13 @@ function Todos({ parts }: { parts: Parts }) {
   );
 }
 
-function Recent({ part }: { part: Slot<readonly AuditView[]> }) {
+function Recent({
+  part,
+  beaches,
+}: {
+  part: Slot<RecentView>;
+  beaches: Beaches;
+}) {
   return (
     <section aria-labelledby="home-recent" className="flex flex-col gap-2">
       <h2
@@ -354,34 +370,29 @@ function Recent({ part }: { part: Slot<readonly AuditView[]> }) {
           {h.recentFailed}
         </p>
       )}
-      {part.state === "ok" && part.value.length === 0 && (
-        <p className="text-body-s text-text-body">{h.recentNone}</p>
+      {part.state === "ok" && part.value.items.length === 0 && (
+        <p className="text-body-s text-text-body">
+          {part.value.onlyReads ? h.recentOnlyReads : h.recentNone}
+        </p>
       )}
-      {part.state === "ok" && part.value.length > 0 && (
+      {part.state === "ok" && part.value.items.length > 0 && (
         <ul className="flex flex-col divide-y divide-border-default rounded-admin-box border border-border-default bg-bg-surface">
-          {part.value.map((item) => {
-            const category = categoryOf(item.action);
-            return (
-              <li
-                key={`${item.at}|${item.requestId}`}
-                className="flex flex-wrap items-baseline gap-x-2 px-4 py-2.5 text-body-s"
-              >
-                <span className="tabular-nums text-text-muted">
-                  {kstDateTime(item.at)}
-                </span>
-                <span className="font-medium text-text-default">
-                  {category ? t.audit.category[category] : item.action}
-                </span>
-                {/* 문의는 이름이 없어 접수 ID를 문의 화면처럼 줄여 보여 줌(전체는 title) */}
-                <span className="text-text-body" title={item.target.id}>
-                  {item.targetLabel ??
-                    (item.target.kind === "inquiry"
-                      ? shortId(item.target.id)
-                      : item.target.id)}
-                </span>
-              </li>
-            );
-          })}
+          {/* 종류·대상·요약은 변경 이력 화면과 같은 표시(audit-screen) */}
+          {part.value.items.map((item) => (
+            <li
+              key={`${item.at}|${item.requestId}`}
+              className="flex flex-wrap items-baseline gap-x-2 px-4 py-2.5 text-body-s"
+            >
+              <span className="tabular-nums text-text-muted">
+                {kstDateTime(item.at)}
+              </span>
+              <span className="font-medium text-text-default">
+                {kindBadge(item)}
+              </span>
+              <Target item={item} beaches={beaches} />
+              <span className="text-text-body">{summaryOf(item)}</span>
+            </li>
+          ))}
         </ul>
       )}
       {part.state !== "forbidden" && (
@@ -396,7 +407,7 @@ function Recent({ part }: { part: Slot<readonly AuditView[]> }) {
   );
 }
 
-function HomeBody() {
+function HomeBody({ beaches }: { beaches: Beaches }) {
   const session = useAuthSession();
   const snapshot = useSessionSnapshot();
   const owner = badgeOwner(snapshot);
@@ -408,6 +419,8 @@ function HomeBody() {
   // 게시본을 받은 시각. 유효 시각 지남을 이 시각 기준으로 셈(그리는 중에 시계를 읽지 않음)
   const [publishedAt, setPublishedAt] = useState(0);
   const [attempt, setAttempt] = useState(0);
+  // 요약 칸만 다시 읽기(/ops/me 확인을 다시 하지 않아 화면·포커스가 사라지지 않음)
+  const [round, setRound] = useState(0);
 
   useEffect(() => {
     let live = true;
@@ -420,7 +433,8 @@ function HomeBody() {
   }, [session, attempt]);
 
   // 서버가 세션을 받아 준 뒤에만 읽음. 화면이 보이는 동안만 60초마다 다시 읽음(D16-E1)
-  // 숨겨졌던 탭이 다시 보일 때 마지막 읽기가 60초를 넘었으면 바로 다시 읽음
+  // 숨겨졌던 탭이 다시 보일 때 마지막 읽기가 60초를 넘었으면 바로 다시 읽음(바로 뒤 주기와 겹쳐 두 번 읽지 않게 간격을 봄)
+  // 데모 계정은 자동으로 다시 읽지 않음: 데모 조회는 서버가 모두 sample.read로 기록해 60초마다 기록이 쌓임
   // 읽기가 60초보다 오래 걸려 겹치면 늦게 끝난 앞 읽기가 새 값을 덮지 않게 칸마다 순번으로 거름
   const ready = me?.ok === true;
   useEffect(() => {
@@ -448,16 +462,20 @@ function HomeBody() {
       });
     };
     refresh();
+    if (demo) {
+      return () => {
+        live = false;
+      };
+    }
+    // 주기 타이머는 약간 일찍 울릴 수 있어 1초 여유를 둠
+    const due = () =>
+      document.visibilityState === "visible" &&
+      Date.now() - lastStart >= REFRESH_MS - 1_000;
     const timer = window.setInterval(() => {
-      if (document.visibilityState === "visible") refresh();
+      if (due()) refresh();
     }, REFRESH_MS);
     const onVisible = () => {
-      if (
-        document.visibilityState === "visible" &&
-        Date.now() - lastStart >= REFRESH_MS
-      ) {
-        refresh();
-      }
+      if (due()) refresh();
     };
     document.addEventListener("visibilitychange", onVisible);
     return () => {
@@ -465,12 +483,15 @@ function HomeBody() {
       window.clearInterval(timer);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [ready, session, owner, demo, attempt]);
+  }, [ready, session, owner, demo, attempt, round]);
 
+  // 서버 세션 확인부터 다시(운영 서버 오류 알림의 다시 시도)
   const load = () => {
     setMe(null);
     setAttempt((n) => n + 1);
   };
+  // 요약 칸만 다시 읽음(앞 값은 그대로 두고 받은 칸부터 바꿈)
+  const reload = () => setRound((n) => n + 1);
 
   if (snapshot.status === "signed_out") return null;
   const role = roleLabel(snapshot.pool, snapshot.groups);
@@ -516,14 +537,14 @@ function HomeBody() {
         )}
       {ready && (
         <>
-          <SourcesLine part={parts.collection} onRetry={load} />
+          <SourcesLine part={parts.collection} onRetry={reload} />
           {anyFailed && (
             <Notice tone="warn" title={h.partFailed} role="alert">
               <Button
                 variant="secondary"
                 size="small"
                 className="mt-1"
-                onClick={load}
+                onClick={reload}
               >
                 {h.retry}
               </Button>
@@ -531,7 +552,7 @@ function HomeBody() {
           )}
           <Summary parts={parts} nowMs={publishedAt} />
           <Todos parts={parts} />
-          <Recent part={parts.recent} />
+          <Recent part={parts.recent} beaches={beaches} />
           {at && (
             <p className={HINT}>{fill(h.asOf, { time: kstDateTime(at) })}</p>
           )}
@@ -542,10 +563,10 @@ function HomeBody() {
   );
 }
 
-export function HomeScreen() {
+export function HomeScreen({ beaches }: { beaches: Beaches }) {
   return (
     <AdminShell title={messages.home.title}>
-      <HomeBody />
+      <HomeBody beaches={beaches} />
     </AdminShell>
   );
 }
