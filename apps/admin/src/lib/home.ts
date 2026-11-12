@@ -1,3 +1,4 @@
+import type { AuditView } from "./audit";
 import type { OpsResult } from "./auth/ops-fetch";
 import type { PublishedView } from "./beaches";
 import {
@@ -161,6 +162,42 @@ export function partOf<T, U>(
   return value === null
     ? { state: "failed", requestId: null }
     : { state: "ok", value };
+}
+
+// 칸 하나의 시간 제한(D16-E1 일반 조회 30초). 넘거나 예외가 나면 불러오지 못함
+// (opsFetch에 취소가 없어 요청 자체는 남지만, 칸이 '불러오는 중'에 머물지 않게 함)
+export const PART_TIMEOUT_MS = 30_000;
+
+export function settle<T>(
+  load: () => Promise<Part<T>>,
+  timeoutMs: number = PART_TIMEOUT_MS,
+): Promise<Part<T>> {
+  const failed: Part<T> = { state: "failed", requestId: null };
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  return Promise.race([
+    load().catch(() => failed),
+    new Promise<Part<T>>((resolve) => {
+      timer = setTimeout(() => resolve(failed), timeoutMs);
+    }),
+  ]).finally(() => clearTimeout(timer));
+}
+
+// 최근 변경: 운영자가 바꾼 기록만. 데모 계정의 조회·거절 기록(sample.*)은 변경이 아니라 뺌
+export interface RecentView {
+  readonly items: readonly AuditView[];
+  // 받은 기록이 있었지만 모두 조회 기록이라 보여 줄 변경이 없음('바뀐 것이 없어요'와 구분)
+  readonly onlyReads: boolean;
+}
+
+export function recentChanges(
+  items: readonly AuditView[],
+  count: number,
+): RecentView {
+  const changes = items.filter((item) => !item.action.startsWith("sample."));
+  return {
+    items: changes.slice(0, count),
+    onlyReads: changes.length === 0 && items.length > 0,
+  };
 }
 
 // 칸 하나: 응답을 기다리는 중이거나 결과(Part). 다시 읽는 동안은 앞 결과를 그대로 둠
