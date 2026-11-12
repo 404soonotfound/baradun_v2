@@ -142,6 +142,25 @@ interface StatusReasons {
   readonly reasons: readonly { readonly code: string }[];
 }
 
+// 분류별 해변 수. 계약 검사를 통과한 분류만 들어옴. 모르는 분류가 섞이면 null(틀린 수를 보이지 않게)
+// 게시 요약과 분류 미리보기(publisher preview)가 같이 씀
+export function categoryCountsOf(
+  status: Readonly<Record<string, { readonly category: string }>>,
+): CategoryCounts | null {
+  const counts: Record<PublishCategory, number> = {
+    clear: 0,
+    unavailable: 0,
+    undetermined: 0,
+  };
+  for (const one of Object.values(status)) {
+    if (!(PUBLISH_CATEGORIES as readonly string[]).includes(one.category)) {
+      return null;
+    }
+    counts[one.category as PublishCategory] += 1;
+  }
+  return counts;
+}
+
 export function buildPublishSummary(input: {
   readonly version: string;
   readonly previous: string | null;
@@ -160,18 +179,7 @@ export function buildPublishSummary(input: {
     )
     .map(([id]) => id)
     .sort();
-  // 계약 검사를 통과한 분류만 들어옴. 모르는 분류가 섞이면 수를 남기지 않음(틀린 수를 보이지 않게)
-  const counts: Record<PublishCategory, number> = {
-    clear: 0,
-    unavailable: 0,
-    undetermined: 0,
-  };
-  let countsKnown = true;
-  for (const status of Object.values(input.status)) {
-    if ((PUBLISH_CATEGORIES as readonly string[]).includes(status.category)) {
-      counts[status.category as PublishCategory] += 1;
-    } else countsKnown = false;
-  }
+  const counts = categoryCountsOf(input.status);
   return {
     version: input.version,
     previous: input.previous,
@@ -181,7 +189,7 @@ export function buildPublishSummary(input: {
     // 값이 없는 칸은 두지 않음(DynamoDB에 undefined를 쓰지 않음)
     ...(input.source ? { source: input.source } : {}),
     ...(input.target ? { target: input.target } : {}),
-    ...(countsKnown ? { categoryCounts: counts } : {}),
+    ...(counts ? { categoryCounts: counts } : {}),
     ...(input.notices ? { noticeDigest: noticeDigestOf(input.notices) } : {}),
     ...(input.jobId ? { jobId: input.jobId } : {}),
   };

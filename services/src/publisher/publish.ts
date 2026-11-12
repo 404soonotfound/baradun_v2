@@ -8,12 +8,7 @@ import {
 import type { Beach, ManifestFile, Notice } from "@baradun/contracts";
 import type { Logger } from "../core/collect/log";
 import type { SnapshotStore } from "../core/snapshots/types";
-import type {
-  HeldNotice,
-  NoticeHold,
-  OpsStore,
-  StateStore,
-} from "../core/store/types";
+import type { NoticeHold, OpsStore, StateStore } from "../core/store/types";
 import type { ZoneTables } from "../core/warnings/beach-warnings";
 import { snapshotVersion } from "../core/snapshots/version";
 import { formatUtcIso } from "../core/warnings/time";
@@ -22,6 +17,7 @@ import {
   applyNoticeHold,
   currentNotices,
   MANIFEST_PATH,
+  noticeHoldFor,
   parseManifest,
   publishableNotices,
   started,
@@ -45,6 +41,7 @@ export {
   applyNoticeHold,
   currentNotices,
   MANIFEST_PATH,
+  noticeHoldFor,
   parseManifest,
   publishableNotices,
 };
@@ -135,25 +132,6 @@ export function beachIdProblem(
     0
     ? problem
     : null;
-}
-
-// 되돌리기의 새 포인터: 고른 게시본 때 공지 상태(then)와 지금 운영 DB 노출본(live)을 공지별로 견줘
-// 다른 공지만 '되돌림'으로 표시함. 같은 공지는 표시하지 않음(앞 되돌리기의 표시도 이 계산으로 새로 정해짐)
-export function noticeHoldFor(
-  then: readonly Notice[],
-  live: readonly Notice[],
-  target: string,
-  at: string,
-): Record<string, HeldNotice> {
-  const before = new Map(then.map((notice) => [notice.id, notice]));
-  const now = new Map(live.map((notice) => [notice.id, notice]));
-  const held: Record<string, HeldNotice> = {};
-  for (const id of [...new Set([...before.keys(), ...now.keys()])].sort()) {
-    const was = before.get(id) ?? null;
-    if (JSON.stringify(was) === JSON.stringify(now.get(id) ?? null)) continue;
-    held[id] = { target, at, live: was };
-  }
-  return held;
 }
 
 // 칸 순서와 상관없는 비교(DynamoDB는 맵의 칸 순서를 지키지 않음, publish-summary.ts canonicalJson)
