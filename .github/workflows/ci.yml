@@ -32,6 +32,7 @@ jobs:
       beaches: ${{ steps.filter.outputs.beaches }} # 해변 목록 변경 여부
       deps: ${{ steps.filter.outputs.deps }} # 의존성 변경 여부
       agy_review: ${{ steps.filter.outputs.agy_review }} # 대체 리뷰 도구(BRD-174)
+      ops_policy: ${{ steps.filter.outputs.ops_policy }} # 운영 정책 원본 가져오기 도구(D20-11)
       map: ${{ steps.filter.outputs.map }} # 지도 판·지도 제공 경로(D19-1)
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -94,6 +95,9 @@ jobs:
             agy_review: # 대체 리뷰 도구 판정 규칙이 바뀌면(agy는 부르지 않음)
               - *shared
               - 'tools/agy-review/**'
+            ops_policy: # 운영 정책 원본 가져오기 도구가 바뀌면(노션은 부르지 않음, CI에 노션 토큰 없음 D20-11)
+              - *shared
+              - 'tools/ops-policy/**'
             map: # 지도 판·스타일·지도 파일 도구가 바뀌면 실제 지도 파일 확인(D19-1 · #392)
               - 'apps/web/src/lib/map/style.ts' # 지도 판 이름
               - 'apps/web/src/lib/map/style-*.json' # 부르는 글꼴
@@ -399,6 +403,20 @@ jobs:
       - run: npm ci # lock 파일대로 설치(ajv는 contracts 설치본)
       - run: npm run test:agy-review
 
+  # 운영 정책 원본 가져오기 도구: 9개 항목 검증·실패 때 파일 안 씀 회귀 검사 (D20-11·D16-E5, #335)
+  ops-policy:
+    needs: changes
+    if: needs.changes.outputs.ops_policy == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci # lock 파일대로 설치(vitest)
+      - run: npm run test:ops-policy
+
   # 지도 판 확인 (D19-1 · #392): 웹이 쓰는 판(style.ts MAP_VERSION)이 운영 CloudFront에 다 올라가 있는지
   # READY.txt 판 일치 → PMTiles 범위 요청(206·Content-Range·헤더) → 스타일이 부르는 sprite·글꼴 응답. 공개 주소 읽기만(AWS 권한 없음)
   # 지도 판·스타일·지도 파일 도구가 바뀐 PR에서만 돌림. 지도와 무관한 웹 PR은 외부 요청 없음. 올리기는 map-tiles 워크플로 책임
@@ -506,6 +524,7 @@ jobs:
         contracts,
         beaches,
         agy-review,
+        ops-policy,
         map-files,
         audit,
         gitleaks,
