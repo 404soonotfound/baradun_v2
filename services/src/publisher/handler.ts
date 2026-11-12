@@ -12,15 +12,17 @@ import { createLogger } from "../core/collect/log";
 import { S3SnapshotStore } from "../core/snapshots/s3";
 import { DynamoOpsStore, DynamoStateStore } from "../core/store/dynamodb";
 import { publishSnapshot, type PublishResult } from "./publish";
+import { republishVersion } from "./republish";
 import { parseBeachMeta, type SeasonTable } from "./season";
 import { parseWeatherAreaTable } from "./weather";
 import { zoneTablesFromAnnex, type AnnexTables } from "./zones";
 
 // publish-snapshot Lambda 진입점 (아키텍처 6.2, BRD-61 PR ②)
 // 수집기 3개가 수집을 마칠 때마다 비동기로 깨움. 이벤트 내용은 쓰지 않음(State를 다시 읽음)
-// 사람이 직접 부르는 이벤트(infra/README '데이터 게시와 되돌리기'). 자동 게시와 같은 게시 잠금을 씀
+// 사람이 직접 부르는 이벤트(infra/README '데이터 게시와 되돌리기'). 둘 다 자동 게시와 같은 게시 잠금을 씀
 // - { "action": "rollback", "version": "20261017T053000Z" }: 되돌리기. 공지만 그 게시본 때 상태로 되살려
 //   지금 수집 사실과 함께 새 버전으로 게시함(결정 기록 D20-1~3)
+// - { "action": "republish", "version": "…" }: 옛 게시 파일을 새 버전 번호로 다시 내보냄(급할 때만, D20-4)
 // 게시 실패는 오류를 던져 Lambda 오류 지표에 남김(BRD-62 경보). busy·unchanged는 정상
 // 변경이 없어 생략한 실행(unchanged)도 실행으로 세므로 게시 중단 알림(PublishStopped)은 울리지 않고,
 // 실패는 오류 알림(PublishErrors)으로 감(D16-C2: 같은 알림을 새로 만들지 않음)
@@ -83,7 +85,7 @@ interface LambdaContext {
 }
 
 export type ManualEvent = {
-  action: "rollback";
+  action: "rollback" | "republish";
   version: string;
 };
 
@@ -94,8 +96,8 @@ export function parseManualEvent(event: unknown): ManualEvent | null {
     return null;
   }
   const { action, version } = event as { action: unknown; version?: unknown };
-  if (action !== "rollback") {
-    throw new Error("모르는 action(rollback만 받음)");
+  if (action !== "rollback" && action !== "republish") {
+    throw new Error("모르는 action(rollback 또는 republish만 받음)");
   }
   if (typeof version !== "string" || !VERSION.test(version)) {
     throw new Error("게시 버전 형식 오류(예: 20261017T053000Z)");
@@ -115,6 +117,19 @@ export async function publishHandler(
   const owner = context.awsRequestId;
 
   const manual = parseManualEvent(event);
+  if (manual?.action === "republish") {
+    const result = await republishVersion(
+      { ops, snapshots, log, clock, owner },
+      manual.version,
+    );
+    if (result.status === "failed") {
+      throw new Error(
+        `다시 내보내기 실패: ${result.reason} (${manual.version})`,
+      );
+    }
+    return result;
+  }
+
   const result = await publishSnapshot(
     {
       state: new DynamoStateStore(documents, requiredEnv("STATE_TABLE_NAME")),
