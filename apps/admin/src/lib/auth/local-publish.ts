@@ -177,6 +177,7 @@ export function localPublish<T>(
           version: versions[0]!,
           counts: { clear: 180, unavailable: 23, undetermined: 3 },
           readable: true,
+          missing: false,
         },
         next: { counts: { clear: 179, unavailable: 24, undetermined: 3 } },
         changed: [

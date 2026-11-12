@@ -149,6 +149,8 @@ export type PublishPreview =
         readonly version: string | null;
         readonly counts: CategoryCounts | null;
         readonly readable: boolean;
+        // 아직 게시본이 없음(첫 게시 전). readable false지만 장애가 아님
+        readonly missing: boolean;
       };
       readonly next: { readonly counts: CategoryCounts | null };
       readonly changed: readonly {

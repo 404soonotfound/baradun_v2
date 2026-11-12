@@ -452,7 +452,7 @@ test("변경 미리보기: 분류별 수와 바뀌는 해변(사유 먼저)을 �
             preview: {
               status: "ready",
               at: iso(base + 4 * MINUTE),
-              current: { version: V0, counts, readable: true },
+              current: { version: V0, counts, readable: true, missing: false },
               next: {
                 counts: { clear: 179, unavailable: 24, undetermined: 3 },
               },
@@ -539,4 +539,119 @@ test("데모 계정은 데이터 게시를 볼 수 없다고 알리고 운영 AP
     page.getByText("데모 계정은 데이터 게시 화면을 볼 수 없어요."),
   ).toBeVisible();
   expect(calls.overviews).toBe(0);
+});
+
+test("다른 운영자가 연 진행 중 작업은 이 탭의 끝난 작업보다 먼저 보여 주고 버튼을 잠근다", async ({
+  page,
+}) => {
+  await signIn(page);
+  let other = false;
+  await mockPublish(page, {
+    overview: () =>
+      overview({
+        latestJob: {
+          ok: true,
+          job: other
+            ? job({ jobId: "j-bbbbbbbbbbbb", state: "running" })
+            : null,
+        },
+      }),
+    jobs: () => job({ state: "done", result: "published" }),
+  });
+  await openPublish(page);
+  await page.getByRole("button", { name: "지금 게시" }).click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "지금 게시" })
+    .click();
+  await expect(
+    page.getByText("게시했어요. 앱의 다음 갱신 때 반영돼요."),
+  ).toBeVisible();
+  // 다른 운영자가 새 작업을 시작한 뒤, 이 탭이 게시 현황을 다시 읽음(다시 적용 뒤 다시 읽기)
+  // 새로고침하지 않으므로 이 탭의 끝난 작업은 메모리에 남아 있음
+  other = true;
+  await page.getByRole("button", { name: "다시 적용" }).click();
+  await expect(
+    page.getByText("다시 적용했어요 · 다음 게시 때 앱에 반영돼요"),
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "지금 게시" })).toBeDisabled();
+  await expect(page.getByText("게시 중이에요", { exact: true })).toBeVisible();
+});
+
+test("작업 조회가 한 번 실패해도 다시 조회하고, 기록이 없으면 멈추고 결과를 알 수 없다고 알린다", async ({
+  page,
+}) => {
+  await signIn(page);
+  let polls = 0;
+  await mockPublish(page);
+  // 상태 조회만 따로: 첫 번째는 서버 오류, 두 번째는 게시 완료
+  await page.route(/\/ops\/publish\/jobs\/j-/, async (route) => {
+    polls += 1;
+    if (polls === 1) {
+      await route.fulfill({
+        status: 503,
+        contentType: "application/json",
+        body: JSON.stringify({ error: { code: "internal", requestId: null } }),
+      });
+      return;
+    }
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        jobId: "j-0123456789ab",
+        job: job({ state: "done", result: "published" }),
+      }),
+    });
+  });
+  await openPublish(page);
+  await page.getByRole("button", { name: "지금 게시" }).click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "지금 게시" })
+    .click();
+  await expect(
+    page.getByText("게시했어요. 앱의 다음 갱신 때 반영돼요."),
+  ).toBeVisible({ timeout: 15_000 });
+  expect(polls).toBe(2);
+});
+
+test("작업 기록이 없어지면(404) 조회를 멈추고 결과를 알 수 없다고 알린다", async ({
+  page,
+}) => {
+  await signIn(page);
+  let polls = 0;
+  await mockPublish(page);
+  await page.route(/\/ops\/publish\/jobs\/j-/, async (route) => {
+    polls += 1;
+    await route.fulfill({
+      status: 404,
+      contentType: "application/json",
+      body: JSON.stringify({ error: { code: "not_found", requestId: null } }),
+    });
+  });
+  await openPublish(page);
+  await page.getByRole("button", { name: "지금 게시" }).click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "지금 게시" })
+    .click();
+  await expect(
+    page.getByText("결과를 알 수 없어요. 게시 기록에서 확인해 주세요."),
+  ).toBeVisible({ timeout: 10_000 });
+  await page.waitForTimeout(4_000);
+  expect(polls).toBe(1);
+});
+
+test("대기 공지를 읽지 못하면 지금 게시 확인 창에 그 사실을 함께 알린다", async ({
+  page,
+}) => {
+  await signIn(page);
+  await mockPublish(page, {
+    overview: () => overview({ pendingNotices: { ok: false } }),
+  });
+  await openPublish(page);
+  await page.getByRole("button", { name: "지금 게시" }).click();
+  await expect(page.getByRole("dialog")).toContainText(
+    "대기 중인 변경을 불러오지 못해 무엇이 함께 나가는지 보여 드리지 못해요.",
+  );
 });
