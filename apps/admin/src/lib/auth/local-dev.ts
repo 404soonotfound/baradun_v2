@@ -8,6 +8,7 @@ import { localAudit } from "./local-audit";
 import { localBeaches } from "./local-beaches";
 import { localCollection } from "./local-collection";
 import { localNotices } from "./local-notices";
+import { localPublish } from "./local-publish";
 import { localSources } from "./local-sources";
 import { SESSION } from "./policy";
 import type { AuthSession } from "./session";
@@ -173,6 +174,14 @@ export function localOps<T>(
   if (url.pathname.startsWith("/ops/notices")) {
     const notices = localNotices<T>(url.pathname, request);
     if (notices) return notices;
+  }
+  if (url.pathname.startsWith("/ops/publish")) {
+    // 데모 계정은 서버처럼 데이터 게시를 받지 않음(허용표 sample: false)
+    if (pool === "demo") {
+      return { ok: false, status: 403, code: "forbidden", requestId: null };
+    }
+    const publish = localPublish<T>(url.pathname, url.searchParams, request);
+    if (publish) return publish;
   }
   if (method === "GET" && path === "/ops/me") {
     return {
