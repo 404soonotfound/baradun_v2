@@ -72,7 +72,10 @@ import {
   createPublishJobRoute,
   publishJobRoute,
   publishOverviewRoute,
+  publishPreviewRoute,
+  PREVIEW_WAIT_MS,
   reapplyNoticeRoute,
+  rollbackPreviewRoute,
   type PublisherInvoker,
 } from "./publish-routes";
 import { decideRoute, matchRoute } from "./routes";
@@ -457,6 +460,15 @@ async function dispatchOps(
     if (decision.pattern === "/ops/publish" && method === "GET") {
       return await publishOverviewRoute(deps.data, ids);
     }
+    if (decision.pattern === "/ops/publish/preview" && method === "GET") {
+      return await publishPreviewRoute(deps.data, ids);
+    }
+    if (
+      decision.pattern === "/ops/publish/rollback-preview" &&
+      method === "GET"
+    ) {
+      return await rollbackPreviewRoute(event, deps.data, ids);
+    }
     if (decision.pattern === "/ops/publish/jobs/{id}" && method === "GET") {
       return await publishJobRoute(decision.params.id ?? "", deps.data, ids);
     }
@@ -539,6 +551,25 @@ function publisherInvoker(): PublisherInvoker | null {
       if (result.StatusCode !== 202) {
         throw new Error(`publisher 호출 상태 ${result.StatusCode}`);
       }
+    },
+    // 미리보기는 동기(RequestResponse). 함수 오류(FunctionError)면 던짐
+    async preview() {
+      const result = await lambda.send(
+        new InvokeCommand({
+          FunctionName: functionName,
+          InvocationType: "RequestResponse",
+          Payload: new TextEncoder().encode(
+            JSON.stringify({ action: "preview" }),
+          ),
+        }),
+        { abortSignal: AbortSignal.timeout(PREVIEW_WAIT_MS) },
+      );
+      if (result.FunctionError || !result.Payload) {
+        throw new Error(
+          `publisher 미리보기 오류 ${result.FunctionError ?? "빈 응답"}`,
+        );
+      }
+      return JSON.parse(new TextDecoder().decode(result.Payload)) as unknown;
     },
   };
 }

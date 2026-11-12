@@ -73,6 +73,14 @@ export const ROUTES: Readonly<
   "/ops/publish": {
     GET: { roles: ["viewer", "editor", "publisher"], sample: false },
   },
+  // 지금 게시 변경 미리보기(캔버스 N2). 분류는 publisher가 미리 계산, 쓰기 없음. 샘플은 받지 않음
+  "/ops/publish/preview": {
+    GET: { roles: ["viewer", "editor", "publisher"], sample: false },
+  },
+  // 되돌리기 확인 창의 영향 목록(읽기만). 공개 전 공지 제목이 있어 샘플은 받지 않음
+  "/ops/publish/rollback-preview": {
+    GET: { roles: ["viewer", "editor", "publisher"], sample: false },
+  },
   "/ops/publish/jobs": {
     POST: { roles: ["publisher"], sample: false },
   },

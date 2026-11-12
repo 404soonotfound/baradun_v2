@@ -29,6 +29,7 @@ import {
   readLastRun,
   readNoticeHold,
   readPublishOverview,
+  readRollbackPreview,
   readSummaries,
   type JobView,
 } from "./publish-reads";
@@ -47,7 +48,12 @@ type Operator = Principal & { kind: "operator" };
 // 운영 API가 publisher를 비동기로 부르는 방법(handler가 Lambda 호출로 만듦). 시험은 가짜로 바꿈
 export interface PublisherInvoker {
   invoke(event: PublisherJobEvent): Promise<void>;
+  // 게시 변경 미리보기(동기 호출). publisher가 돌려준 값을 그대로 줌. 시간 초과·함수 오류는 던짐
+  preview(): Promise<unknown>;
 }
+
+// 운영 API 함수 제한 시간(infra 10초) 안에서 미리보기를 기다리는 시간. 넘으면 '만들지 못함'으로 답함
+export const PREVIEW_WAIT_MS = 8000;
 
 export type PublisherJobEvent =
   | { readonly action: "publish"; readonly jobId: string }
@@ -71,6 +77,59 @@ export async function publishOverviewRoute(
     data.now(),
   );
   return json(200, view, ids);
+}
+
+// GET /ops/publish/rollback-preview?version=…: 되돌리기 확인 창의 영향 목록
+export async function rollbackPreviewRoute(
+  event: APIGatewayProxyEventV2,
+  data: DataDependencies,
+  ids: RequestIds,
+): Promise<Result> {
+  const version = event.queryStringParameters?.version;
+  if (typeof version !== "string" || !VERSION.test(version)) {
+    return errorJson(400, "invalid_request", ids, { field: "version" });
+  }
+  const preview = await readRollbackPreview(
+    data.client,
+    data.opsTable,
+    version,
+    data.now(),
+  );
+  return json(200, preview, ids);
+}
+
+// GET /ops/publish/preview: '지금 게시'를 하면 해변 분류가 어떻게 바뀌는지(캔버스 N2)
+// 분류는 publisher가 계산함(운영 API는 State를 읽지 않음). 쓰기 없음
+// 만들지 못하면(시간 초과·publisher 오류·모양 틀림) { ok: false } — 변경 없음으로 보이지 않게 함
+export async function publishPreviewRoute(
+  data: DataDependencies,
+  ids: RequestIds,
+): Promise<Result> {
+  if (!data.publisher) {
+    safeLog("error", "ops_publish_invoker_missing", { traceId: ids.traceId });
+    return json(200, { ok: false, reason: "unavailable" }, ids);
+  }
+  try {
+    const preview = await data.publisher.preview();
+    const status = (preview as { status?: unknown } | null)?.status;
+    if (status !== "ready" && status !== "blocked") {
+      throw new Error("미리보기 모양이 틀림");
+    }
+    return json(200, { ok: true, preview }, ids);
+  } catch (error) {
+    const timeout =
+      error instanceof Error &&
+      (error.name === "AbortError" || error.name === "TimeoutError");
+    safeLog("warn", "ops_publish_preview_failed", {
+      traceId: ids.traceId,
+      error: error instanceof Error ? error.name : "unknown",
+    });
+    return json(
+      200,
+      { ok: false, reason: timeout ? "timeout" : "failed" },
+      ids,
+    );
+  }
 }
 
 type JobRequest =
