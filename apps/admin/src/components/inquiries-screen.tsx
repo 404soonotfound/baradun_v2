@@ -1362,6 +1362,13 @@ function DetailPanel({
       // 불러오는 중·실패에도 이름이 있게 고정 문구로 이름을 붙임
       aria-label={t.detailLabel}
       onClose={() => {
+        // <dialog>는 닫힐 때 열기 전 포커스로 돌려주지만, Safari는 마우스로 누른 줄 링크에 포커스를 주지 않아
+        // 돌아갈 곳이 문서 맨 앞이 됨 → 그 문의 줄 링크로 직접 돌려줌(목록은 패널 뒤에 그대로 있음)
+        document
+          .querySelector<HTMLAnchorElement>(
+            `table a[href="${CSS.escape(detailHref(id))}"]`,
+          )
+          ?.focus();
         const reduce = window.matchMedia(
           "(prefers-reduced-motion: reduce)",
         ).matches;

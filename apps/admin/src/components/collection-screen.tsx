@@ -2237,14 +2237,12 @@ function CollectionBody({ beaches }: { beaches: Beaches }) {
   const sheetIndex = sheet
     ? incidents.findIndex((i) => incidentKey(i) === sheet.key)
     : -1;
-  const open = (index: number, from: HTMLElement | null = null) => {
+  // from: 시트를 연 버튼. document.activeElement로 찾지 않음(Safari는 마우스로 누른 버튼에 포커스를 주지 않음)
+  // 없으면(null) 닫을 때 장애 기록 제목으로 돌아감
+  const open = (index: number, from: HTMLElement | null) => {
     const target = incidents[index];
     if (!target) return;
-    opener.current =
-      from ??
-      (document.activeElement instanceof HTMLElement
-        ? document.activeElement
-        : null);
+    opener.current = from;
     nonce.current += 1;
     setSheet({ key: incidentKey(target), nonce: nonce.current });
   };
