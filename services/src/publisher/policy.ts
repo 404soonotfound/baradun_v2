@@ -1,5 +1,4 @@
-import { OBSERVATION_POLICY } from "../core/observations/policy";
-import { WARNING_POLICY } from "../core/warnings/policy";
+import { POLICY_VERSION } from "@baradun/contracts/judgment-policy";
 
 // 게시 정책값 (아키텍처 6.2·6.3·11장, BRD-61)
 // 숫자를 코드 곳곳에 두지 않고 여기 한 곳에만 둠
@@ -8,8 +7,8 @@ import { WARNING_POLICY } from "../core/warnings/policy";
 const MINUTE_MS = 60 * 1000;
 
 export const PUBLISH_POLICY = {
-  // 분류 규칙 버전 = 특보·관측 정책 버전. 어느 쪽이든 값을 바꾸면 그쪽 version을 올림(14.3)
-  policyVersion: `${WARNING_POLICY.version}+${OBSERVATION_POLICY.version}`,
+  // 분류 규칙 버전 = 특보·관측 정책 버전(14.3). 계약 패키지가 원본(D20-5), 웹은 모르는 버전을 판단불가로 봄(D20-6)
+  policyVersion: POLICY_VERSION,
   // 게시 잠금(아키텍처 6.2: 연속 호출은 하나만 실행). Ops 키 lock#{name}
   lockName: "publish-snapshot",
   // Lambda 시간 제한(PR ② infra)보다 길게. 끝나면 바로 풀고, 실행이 죽으면 이 시간 뒤 다음 실행이 맡음
