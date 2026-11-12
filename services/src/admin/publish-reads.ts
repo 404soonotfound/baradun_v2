@@ -27,7 +27,7 @@ import {
   MANIFEST_PATH,
   parseManifest,
   publishableNotices,
-} from "../publisher/publish";
+} from "../publisher/notice-select";
 import { PUBLISH_JOB_SLOT_KEY } from "./keys";
 import { liveNotices, queryNotices, type NoticeRecord } from "./notices";
 import type { RelatedWrite, Sender } from "./writes";
@@ -103,7 +103,7 @@ export interface HeldNoticeView {
 }
 
 export interface JobView extends Omit<PublishJob, "createdAtMs"> {
-  // 대기·실행이 시간 제한을 넘김. 실패로 단정하지 않음(D16-C4). 화면 문구는 PR4에서 정함
+  // 대기·실행이 시간 제한을 넘김. 실패로 단정하지 않음(D16-C4). 화면 문구는 ADM-PUB(#331)에서 정함
   readonly overdue: boolean;
 }
 
