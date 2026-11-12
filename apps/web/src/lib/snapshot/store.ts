@@ -456,13 +456,21 @@ export function createSnapshotStore(deps: SnapshotDeps): SnapshotStore {
   // 지원 밖 형식(schemaVersion·policyVersion): 새 화면 파일이 나왔을 수 있어 버전마다 한 번 새로고침,
   // 그래도 안 되면 판단불가 배너('지원하지 않는 데이터 형식', D20-6)
   function unsupported(what: Unsupported) {
+    // 새로고침 기록은 쉼표로 나눠 저장함 → 정책 버전(아무 글자)은 인코딩해 쉼표가 섞이지 않게
     const key =
       "schemaVersion" in what
         ? String(what.schemaVersion)
-        : `policy:${what.policyVersion}`;
+        : `policy:${encodeURIComponent(what.policyVersion)}`;
     if (reloadOnce(SCHEMA_RELOAD_KEY, key)) return;
     rememberHidden({ phase: "schema_unsupported", ...what });
-    set({ phase: "schema_unsupported", live: false, nowMs: now() });
+    // 읽지 못하는 형식이라 앞에서 보여주던 값(다른 형식·정책으로 만든 값)도 상태에서 비움(hideAll과 같음)
+    set({
+      phase: "schema_unsupported",
+      manifest: null,
+      statuses: null,
+      live: false,
+      nowMs: now(),
+    });
   }
 
   // 응답 받기 + 본문 읽기를 합쳐 10초 제한. 넘으면 요청을 끊고(abort) 실패로 끝냄.
@@ -557,15 +565,15 @@ export function createSnapshotStore(deps: SnapshotDeps): SnapshotStore {
       return hideAll("update_required", manifest, clock);
     }
 
-    // 이 화면이 모르는 판단 정책(D20-6): 강제 업데이트 뒤에 봄. 정책을 바꾸면 minWebBuild도 함께 올리므로(D20-7)
-    // 옛 화면은 위 강제 업데이트로 가고, 여기는 minWebBuild를 올리지 않은 경우의 안전망(판단불가)
-    if (!SUPPORTED_POLICY_VERSIONS.includes(manifest.policyVersion)) {
-      return unsupported({ policyVersion: manifest.policyVersion });
-    }
-
     // 점검 중이면 마지막 값도 숨김(화면이 전체를 덮음, 9.1)
     if (manifest.maintenance.active) {
       return hideAll("maintenance", manifest, clock);
+    }
+
+    // 이 화면이 모르는 판단 정책(D20-6): 강제 업데이트·점검 뒤에 봄(둘 다 값을 보여주지 않으므로 그 안내가 먼저)
+    // 정책을 바꾸면 minWebBuild도 함께 올리므로(D20-7) 옛 화면은 위 강제 업데이트로 가고, 여기는 안전망(판단불가)
+    if (!SUPPORTED_POLICY_VERSIONS.includes(manifest.policyVersion)) {
+      return unsupported({ policyVersion: manifest.policyVersion });
     }
 
     let statuses = state.statuses;
