@@ -14,8 +14,8 @@
     "typecheck": "tsc --noEmit",
     "pretest": "npm run tokens",
     "test": "vitest run",
-    "test:e2e": "playwright test --project=mobile --project=desktop",
-    "test:e2e:engines": "playwright test --project=desktop-firefox --project=desktop-webkit"
+    "test:e2e": "playwright test",
+    "test:e2e:engines": "E2E_ENGINES=1 playwright test --project=desktop-firefox --project=desktop-webkit"
   },
   "dependencies": {
     "@baradun/contracts": "0.1.0",
