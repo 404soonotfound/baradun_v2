@@ -1,12 +1,15 @@
 import { describe, expect, it } from "vitest";
 import type { PublishedView } from "./beaches";
 import type { CollectionView, JobCollection } from "./collection";
+import type { AuditView } from "./audit";
 import {
   expiredCount,
   judgmentLine,
   noticeCounts,
   partOf,
   receivedCount,
+  recentChanges,
+  settle,
   todos,
   undeterminedCount,
 } from "./home";
@@ -244,5 +247,42 @@ describe("응답 하나의 결과", () => {
       state: "failed",
       requestId: null,
     });
+  });
+});
+
+describe("최근 변경·시간 제한", () => {
+  const audit = (action: string, n: number) =>
+    ({ action, requestId: `req-${n}` }) as AuditView;
+
+  it("데모 계정의 조회·거절 기록은 빼고 운영자 변경만 앞에서 몇 건", () => {
+    const items = [
+      audit("sample.read", 1),
+      audit("notice.create", 2),
+      audit("sample.denied", 3),
+      audit("inquiry.update", 4),
+      audit("beach.memo", 5),
+    ];
+    expect(recentChanges(items, 2)).toEqual({
+      items: [items[1], items[3]],
+      onlyReads: false,
+    });
+    expect(recentChanges([audit("sample.read", 1)], 5)).toEqual({
+      items: [],
+      onlyReads: true,
+    });
+    expect(recentChanges([], 5)).toEqual({ items: [], onlyReads: false });
+  });
+
+  it("응답이 시간 안에 오지 않거나 예외가 나면 불러오지 못함(불러오는 중에 머물지 않음)", async () => {
+    await expect(settle(() => new Promise(() => {}), 10)).resolves.toEqual({
+      state: "failed",
+      requestId: null,
+    });
+    await expect(
+      settle(() => Promise.reject(new Error("x")), 10),
+    ).resolves.toEqual({ state: "failed", requestId: null });
+    await expect(
+      settle(() => Promise.resolve({ state: "ok", value: 1 }), 10),
+    ).resolves.toEqual({ state: "ok", value: 1 });
   });
 });
