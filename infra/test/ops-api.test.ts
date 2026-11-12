@@ -26,6 +26,7 @@ describe("운영 API", () => {
       "OPERATOR_USER_POOL_ID",
       "OPS_ALARM_PREFIX",
       "OPS_TABLE_NAME",
+      "PREVIEW_FUNCTION_NAME",
       "PUBLISHER_FUNCTION_NAME",
       "SAMPLE_CLIENT_ID",
       "SAMPLE_USER_POOL_ID",
@@ -50,6 +51,28 @@ describe("운영 API", () => {
     expect(fn.Properties.Environment.Variables.PUBLISHER_FUNCTION_NAME).toEqual(
       { Ref: publisher },
     );
+  });
+
+  it("게시 변경 미리보기는 publisher가 아닌 따로 둔 미리보기 함수로 부른다(게시 알림의 실행·오류 수에 섞이지 않게, #331)", () => {
+    const fn = only("OpsApiFunction", "AWS::Lambda::Function").resource;
+    const preview = only("PublishPreviewFunction", "AWS::Lambda::Function");
+    expect(fn.Properties.Environment.Variables.PREVIEW_FUNCTION_NAME).toEqual({
+      Ref: preview.id,
+    });
+    expect(preview.resource.Properties.Handler).toBe("index.previewHandler");
+    // 미리보기 함수는 게시 버킷·State만 받음(Ops 테이블 없음)
+    expect(
+      Object.keys(preview.resource.Properties.Environment.Variables).sort(),
+    ).toEqual(["SNAPSHOT_BUCKET", "STATE_TABLE_NAME"]);
+    // 미리보기 함수 제한 시간은 운영 API 함수 제한 시간을 넘지 않음(늦은 실행이 남지 않게)
+    expect(preview.resource.Properties.Timeout).toBeLessThanOrEqual(
+      fn.Properties.Timeout,
+    );
+    // 게시 알림은 publisher 함수만 봄: 미리보기 함수에는 경보가 없음
+    const alarmsOnPreview = Object.values(
+      template.findResources("AWS::CloudWatch::Alarm"),
+    ).filter((a) => JSON.stringify(a.Properties).includes(preview.id));
+    expect(alarmsOnPreview).toEqual([]);
   });
 
   it("publisher 함수 제한 시간은 게시 작업 실행 제한보다 짧다(실행 중으로 남은 작업을 늦어짐으로 볼 때 이미 끝난 실행)", () => {
