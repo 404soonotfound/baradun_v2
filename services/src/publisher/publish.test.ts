@@ -1,4 +1,4 @@
-import type { ManifestFile } from "@baradun/contracts";
+import type { Beach, ManifestFile, StatusFile } from "@baradun/contracts";
 import { describe, expect, it } from "vitest";
 import { createLogger } from "../core/collect/log";
 import { MemorySnapshotStore } from "../core/snapshots/memory";
@@ -16,13 +16,17 @@ import {
 } from "./fixtures";
 import { MANIFEST_SETTINGS, PUBLISH_POLICY } from "./policy";
 import { snapshotVersion } from "../core/snapshots/version";
-import { MANIFEST_PATH, publishSnapshot } from "./publish";
+import { MANIFEST_PATH, beachIdProblem, publishSnapshot } from "./publish";
 
 // publish-snapshot (BRD-61). T01 게시 원자성: 실패하면 manifest 그대로, T06 manifest 교체
 // 버전 경로 파일 → manifest 순서, Cache-Control, 게시 잠금, 48개 보존
+// 되돌리기(D20-1~3)·해변 ID 대조(D16-C1)·게시 실행 결과(D16-C2)는 아래 따로
 
 const NOW_MS = Date.parse(NOW);
 const V1 = snapshotVersion(NOW_MS); // 20261023T023000Z
+// 게시 시각 글자(UTC ISO, 초 단위). publisher가 남기는 시각과 같은 모양
+const formatAt = (ms: number) =>
+  new Date(ms).toISOString().replace(".000Z", "Z");
 
 async function setup(
   options: {
@@ -30,6 +34,8 @@ async function setup(
     beforeConditionalPut?: (path: string) => Promise<void> | void;
     seed?: boolean;
     notices?: () => Promise<readonly unknown[]>;
+    beaches?: readonly Beach[];
+    beachIds?: readonly string[];
   } = {},
 ) {
   const state = new MemoryStateStore();
@@ -49,9 +55,9 @@ async function setup(
     state,
     ops,
     snapshots,
-    beaches: BEACHES,
+    beaches: options.beaches ?? BEACHES,
     // 저장소 원본 해변 ID 목록(해변 파일과 따로 들어오는 목록, D16-C1)
-    beachIds: BEACHES.map((beach) => beach.id),
+    beachIds: options.beachIds ?? BEACHES.map((beach) => beach.id),
     zones: ZONES,
     seasons: SEASONS,
     weatherAreas: WEATHER_AREAS,
@@ -754,6 +760,639 @@ describe("weather.json (BRD-181)", () => {
     });
     expect(manifest()).toMatchObject({ snapshotVersion: v2 });
     expect(manifest()!.files.weather).toBeUndefined();
+  });
+});
+
+// 되돌리기 (결정 기록 D20-1~3, D16-C3, #256·#331)
+// 옛 manifest를 되살리지 않고, 같은 게시 잠금으로 지금보다 큰 새 버전을 게시함
+// 공지만 고른 게시본 때 상태로 되살리고 특보·관측은 지금 수집 사실을 씀
+describe("되돌리기 (D20-1~3)", () => {
+  const notice = (id: string, overrides: Record<string, unknown> = {}) => ({
+    id,
+    kind: "general",
+    title: { ko: "공지", en: "Notice" },
+    body: { ko: "본문", en: "Body" },
+    startsAt: "2026-10-23T02:00:00Z",
+    endsAt: null,
+    ...overrides,
+  });
+  const CHANGED = { title: { ko: "바뀐 공지", en: "Changed" } };
+
+  // V1: n-a(처음 문구) → V2: n-a 문구를 바꾸고 n-new를 더함
+  async function twoPublishes(extra: Parameters<typeof setup>[0] = {}) {
+    const box = { candidates: [notice("n-a")] as unknown[] };
+    const ctx = await setup({ notices: async () => box.candidates, ...extra });
+    await publishSnapshot(ctx.deps());
+    box.candidates = [notice("n-a", CHANGED), notice("n-new")];
+    const v2 = ctx.advance(60_000);
+    expect(await publishSnapshot(ctx.deps())).toMatchObject({
+      status: "published",
+      version: v2,
+    });
+    return { ...ctx, box, v2 };
+  }
+  const status = (
+    snapshots: Awaited<ReturnType<typeof setup>>["snapshots"],
+    version: string,
+  ) =>
+    JSON.parse(
+      snapshots.files.get(`data/${version}/status.json`)!.body,
+    ) as StatusFile;
+
+  it("지금보다 큰 새 버전으로 게시하고, 옛 manifest를 되살리지 않는다(D20-1)", async () => {
+    const { ops, snapshots, deps, advance, manifest, v2 } =
+      await twoPublishes();
+    const v3 = advance(60_000);
+    expect(await publishSnapshot(deps(), { rollbackTo: V1 })).toEqual({
+      status: "published",
+      version: v3,
+      removed: [],
+    });
+    expect(v3 > v2 && v2 > V1).toBe(true);
+    // 열린 웹은 받은 것보다 작은 버전을 무시하므로 manifest는 새 버전을 가리켜야 함
+    expect(manifest()).toMatchObject({
+      snapshotVersion: v3,
+      files: { status: `/data/${v3}/status.json` },
+    });
+    expect(await ops.getPublishedVersion()).toBe(v3);
+    // 고른 게시본의 파일은 건드리지 않음(그대로 남음)
+    expect(await snapshots.listVersions()).toEqual([V1, v2, v3]);
+    expect(ops.summaries.get(v3)).toMatchObject({
+      source: "rollback",
+      target: V1,
+      previous: v2,
+    });
+    // 잠금을 풀어 다음 게시가 바로 맡을 수 있음
+    expect(
+      await ops.acquireLock(PUBLISH_POLICY.lockName, "next", NOW_MS, 1),
+    ).toBe(true);
+  });
+
+  it("고른 게시본 때의 공지를 되살리고, 그 뒤에 바뀐 공지는 '되돌림'으로 표시한다(D20-2)", async () => {
+    const { ops, deps, advance, manifest } = await twoPublishes();
+    expect(manifest()!.notices!.map((n) => n.id)).toEqual(["n-a", "n-new"]);
+    advance(60_000);
+    await publishSnapshot(deps(), { rollbackTo: V1 });
+    // n-a는 그때 문구로, 그 뒤에 생긴 n-new는 빠짐
+    expect(manifest()!.notices).toEqual([notice("n-a")]);
+    const at = formatAt(NOW_MS + 120_000);
+    expect(ops.noticeHold!.notices).toEqual({
+      "n-a": { target: V1, at, live: notice("n-a") },
+      "n-new": { target: V1, at, live: null },
+    });
+  });
+
+  it("되돌린 공지는 다음 자동 게시에 실리지 않고, 다시 적용하면 실린다(D16-C3)", async () => {
+    const { state, ops, deps, advance, manifest } = await twoPublishes();
+    const v3 = advance(60_000);
+    await publishSnapshot(deps(), { rollbackTo: V1 });
+
+    // 바뀐 것이 없으면 생략(되돌린 공지를 다시 싣느라 새로 게시하지 않음)
+    advance(60_000);
+    expect(await publishSnapshot(deps())).toEqual({
+      status: "unchanged",
+      version: v3,
+    });
+    // 데이터가 바뀌어 새로 게시해도 공지는 되돌린 그대로
+    await seedWarnings(state, [WIND_WAVE_ROW], {
+      confirmedAt: "2026-10-23T02:33:00Z",
+    });
+    advance(60_000);
+    expect(await publishSnapshot(deps())).toMatchObject({
+      status: "published",
+    });
+    expect(manifest()!.notices).toEqual([notice("n-a")]);
+
+    // n-new만 다시 적용: 포인터에서 그 공지를 지움 → 다음 자동 게시부터 실림. n-a는 아직 그때 문구
+    const hold = ops.noticeHold!;
+    await ops.putNoticeHold(
+      { "n-a": hold.notices["n-a"]! },
+      hold.version,
+      "2026-10-23T02:35:00Z",
+    );
+    advance(60_000);
+    expect(await publishSnapshot(deps())).toMatchObject({
+      status: "published",
+    });
+    expect(manifest()!.notices).toEqual([notice("n-a"), notice("n-new")]);
+
+    // n-a도 다시 적용 → 운영 DB의 지금 노출본(바뀐 문구)이 실림
+    await ops.putNoticeHold(
+      {},
+      ops.noticeHold!.version,
+      "2026-10-23T02:36:00Z",
+    );
+    advance(60_000);
+    await publishSnapshot(deps());
+    expect(manifest()!.notices).toEqual([
+      notice("n-a", CHANGED),
+      notice("n-new"),
+    ]);
+  });
+
+  it("특보·관측은 지금 수집 사실을 쓴다: 발효 특보가 되돌리기로 사라지지 않고 관측·확인 시각을 고치지 않는다(D20-3)", async () => {
+    const { state, snapshots, deps, advance } = await setup();
+    await publishSnapshot(deps());
+    expect(status(snapshots, V1).beaches.b0001!.category).toBe("clear");
+
+    // 그 뒤 풍랑주의보가 발효되고 새 관측이 들어옴
+    const confirmedAt = "2026-10-23T02:31:00Z";
+    const observedAt = "2026-10-23T02:30:30Z";
+    await seedWarnings(state, [WIND_WAVE_ROW], { confirmedAt });
+    await seedReadings(state, 1.2, observedAt);
+    const v2 = advance(120_000);
+    await publishSnapshot(deps());
+    expect(status(snapshots, v2).beaches.b0001!.category).toBe("unavailable");
+
+    const v3 = advance(60_000);
+    expect(await publishSnapshot(deps(), { rollbackTo: V1 })).toMatchObject({
+      status: "published",
+      version: v3,
+    });
+    const rolled = status(snapshots, v3).beaches.b0001!;
+    // 고른 게시본(V1)의 '특보 없음'으로 돌아가지 않음
+    expect(rolled.category).toBe("unavailable");
+    expect(rolled.reasons.map((r) => r.code)).toEqual(
+      status(snapshots, v2).beaches.b0001!.reasons.map((r) => r.code),
+    );
+    // 시각은 수집한 그대로(되돌린 시각이나 V1 때 시각으로 고치지 않음)
+    expect(rolled.warning.lastConfirmedAt).toBe(confirmedAt);
+    expect(rolled.observation.metrics.waveHeight).toMatchObject({
+      value: 1.2,
+      observedAt,
+    });
+    expect(JSON.stringify(status(snapshots, v3))).not.toContain(
+      formatAt(NOW_MS + 180_000),
+    );
+  });
+
+  it("자동 게시와 되돌리기가 겹치면 한쪽만 게시하고 manifest가 거꾸로 가지 않는다", async () => {
+    const { ops, snapshots, deps, advance, manifest, v2 } =
+      await twoPublishes();
+    const v3 = advance(60_000);
+    const results = await Promise.all([
+      publishSnapshot(deps("auto")),
+      publishSnapshot(deps("rollback"), { rollbackTo: V1 }),
+    ]);
+    // 같은 잠금 → 먼저 잡은 쪽만 돌고 다른 쪽은 물러남
+    expect(results.map((r) => r.status).sort()).toEqual(["busy", "unchanged"]);
+    expect(manifest()!.snapshotVersion).toBe(v2);
+
+    // 순서가 반대여도 같음: 되돌리기가 잠금을 잡으면 자동 게시가 물러나고, manifest는 더 큰 버전으로만 감
+    const reversed = await Promise.all([
+      publishSnapshot(deps("rollback"), { rollbackTo: V1 }),
+      publishSnapshot(deps("auto")),
+    ]);
+    expect(reversed.map((r) => r.status)).toEqual(["published", "busy"]);
+    expect(manifest()!.snapshotVersion).toBe(v3);
+    expect(await ops.getPublishedVersion()).toBe(v3);
+    expect(await snapshots.listVersions()).toEqual([V1, v2, v3]);
+  });
+
+  it("잠금 시간을 넘긴 되돌리기보다 새 게시가 먼저 끝나면 manifest를 옛 버전으로 덮지 않고 포인터도 되돌려 놓는다", async () => {
+    // 되돌리기 A가 잠금 시간을 넘겨 늦어진 사이, 자동 게시 B가 잠금을 새로 맡아 더 새 버전을 게시함
+    // A는 manifest를 확인한 뒤 쓰기 직전에 B가 끼어듦 → 조건부 쓰기가 거절되고, 다시 읽어 더 새 버전을 보고 멈춤
+    let interleaved = false;
+    let newer = "";
+    const ctx: { run?: () => Promise<void> } = {};
+    const { state, ops, snapshots, deps, advance, manifest, v2 } =
+      await twoPublishes({
+        beforeConditionalPut: async () => {
+          // 앞의 두 게시에서는 끼어들지 않음(ctx.run을 정한 뒤 한 번만)
+          if (interleaved || !ctx.run) return;
+          interleaved = true;
+          await ctx.run();
+        },
+      });
+    const v3 = advance(60_000);
+    ctx.run = async () => {
+      newer = advance(PUBLISH_POLICY.lockTtlMs + 1_000);
+      await seedWarnings(state, [WIND_WAVE_ROW], {
+        confirmedAt: "2026-10-23T02:33:00Z",
+      });
+      expect(await publishSnapshot(deps("b"))).toMatchObject({
+        status: "published",
+        version: newer,
+      });
+    };
+    expect(await publishSnapshot(deps("a"), { rollbackTo: V1 })).toEqual({
+      status: "failed",
+      version: v3,
+      reason: "version_not_newer",
+    });
+    expect(manifest()!.snapshotVersion).toBe(newer);
+    expect(await snapshots.listVersions()).toEqual([V1, v2, newer]);
+    // 게시되지 않은 되돌리기의 표시를 남기지 않음
+    expect(ops.noticeHold!.notices).toEqual({});
+  });
+
+  it("점검·최소 화면 버전은 되돌리기로 풀리거나 내려가지 않는다(지금 설정 그대로)", async () => {
+    const { snapshots, deps, advance, manifest } = await twoPublishes();
+    // 고른 게시본의 manifest 사본에 지금과 다른 설정이 남아 있어도 쓰지 않음
+    const copyPath = `data/${V1}/manifest.json`;
+    const copy = snapshots.files.get(copyPath)!;
+    await snapshots.putFile(
+      copyPath,
+      JSON.stringify({
+        ...(JSON.parse(copy.body) as ManifestFile),
+        maintenance: {
+          active: !MANIFEST_SETTINGS.maintenance.active,
+          until: null,
+        },
+        minWebBuild: MANIFEST_SETTINGS.minWebBuild - 1,
+      }),
+      copy.cacheControl,
+    );
+    advance(60_000);
+    await publishSnapshot(deps(), { rollbackTo: V1 });
+    expect(manifest()).toMatchObject({
+      maintenance: MANIFEST_SETTINGS.maintenance,
+      minWebBuild: MANIFEST_SETTINGS.minWebBuild,
+      policyVersion: PUBLISH_POLICY.policyVersion,
+    });
+  });
+
+  it("예약 전 공지도 그때 상태로 남겨 두지만 공개 게시본에는 넣지 않는다", async () => {
+    const later = notice("n-later", { startsAt: "2026-10-23T03:00:00Z" });
+    const box = { candidates: [notice("n-a"), later] as unknown[] };
+    const { ops, snapshots, deps, advance, manifest } = await setup({
+      notices: async () => box.candidates,
+    });
+    await publishSnapshot(deps());
+    expect(ops.publishNotices.get(V1)).toEqual([notice("n-a"), later]);
+    // 요약에는 공지를 싣지 않음(운영 API가 기간 조회로 읽는 항목을 작게 유지)
+    expect(ops.summaries.get(V1)).not.toHaveProperty("notices");
+    expect(JSON.stringify(manifest())).not.toContain("n-later");
+
+    // 그 뒤 예약 공지의 시각을 바꿈 → 되돌리면 그때 예약(03:00)으로 되살아나고, 시작 전이라 싣지 않음
+    box.candidates = [
+      notice("n-a"),
+      notice("n-later", { startsAt: "2026-10-23T02:31:00Z" }),
+    ];
+    advance(120_000);
+    await publishSnapshot(deps());
+    expect(manifest()!.notices!.map((n) => n.id)).toEqual(["n-a", "n-later"]);
+    const v3 = advance(60_000);
+    await publishSnapshot(deps(), { rollbackTo: V1 });
+    expect(manifest()!.notices).toEqual([notice("n-a")]);
+    expect(ops.noticeHold!.notices["n-later"]!.live).toEqual(later);
+    for (const [path, file] of snapshots.files) {
+      if (path.startsWith(`data/${v3}/`)) {
+        expect(file.body, path).not.toContain("n-later");
+      }
+    }
+  });
+
+  it("고른 게시본의 공지 상태를 모르면 되돌리지 않는다(manifest·포인터 그대로)", async () => {
+    const { ops, snapshots, deps, advance, manifest, events, v2 } =
+      await twoPublishes();
+    const before = snapshots.files.get(MANIFEST_PATH)!.body;
+    // 기록이 없는 버전(이 기능 전 게시·기록 쓰기 실패)
+    advance(60_000);
+    expect(
+      await publishSnapshot(deps(), { rollbackTo: "20261001T000000Z" }),
+    ).toMatchObject({ status: "failed", reason: "rollback_target_missing" });
+    // 요약은 있지만 공지 상태 기록이 없는 버전(그때 운영 DB를 읽지 못함)
+    ops.publishNotices.delete(V1);
+    advance(60_000);
+    expect(await publishSnapshot(deps(), { rollbackTo: V1 })).toMatchObject({
+      status: "failed",
+      reason: "rollback_target_missing",
+    });
+    expect(snapshots.files.get(MANIFEST_PATH)!.body).toBe(before);
+    expect(manifest()!.snapshotVersion).toBe(v2);
+    expect(ops.noticeHold).toBeNull();
+    expect(await snapshots.listVersions()).toEqual([V1, v2]);
+    expect(events().at(-1)).toMatchObject({
+      event: "publish_failed",
+      reason: "rollback_target_missing",
+      target: V1,
+    });
+  });
+
+  it("남겨 둔 공지 상태가 계약에 맞지 않으면 일부만 되살리지 않고 멈춘다", async () => {
+    const { ops, deps, advance, manifest, v2 } = await twoPublishes();
+    ops.publishNotices.set(V1, [
+      ...ops.publishNotices.get(V1)!,
+      { ...notice("n-bad"), kind: "unknown" },
+    ]);
+    advance(60_000);
+    expect(await publishSnapshot(deps(), { rollbackTo: V1 })).toMatchObject({
+      status: "failed",
+      reason: "rollback_target_invalid",
+    });
+    expect(manifest()!.snapshotVersion).toBe(v2);
+    expect(ops.noticeHold).toBeNull();
+  });
+
+  it("운영 DB를 읽지 못하면 되돌리지 않는다(지금 공지를 추정하지 않음)", async () => {
+    const { ops, box, deps, advance, manifest, v2 } = await twoPublishes();
+    Object.defineProperty(box, "candidates", {
+      get() {
+        throw new Error("AccessDenied");
+      },
+    });
+    advance(60_000);
+    expect(await publishSnapshot(deps(), { rollbackTo: V1 })).toMatchObject({
+      status: "failed",
+      reason: "exception:Error",
+    });
+    expect(manifest()!.snapshotVersion).toBe(v2);
+    expect(ops.noticeHold).toBeNull();
+  });
+
+  it("manifest 교체에 실패하면 포인터를 앞 값으로 되돌려 놓는다(다음 자동 게시가 공지를 되돌리지 않음)", async () => {
+    let failing = false;
+    const { ops, snapshots, deps, advance, manifest, v2 } = await twoPublishes({
+      failOn: (path) => failing && path === MANIFEST_PATH,
+    });
+    failing = true;
+    const v3 = advance(60_000);
+    expect(await publishSnapshot(deps(), { rollbackTo: V1 })).toMatchObject({
+      status: "failed",
+      version: v3,
+    });
+    expect(manifest()!.snapshotVersion).toBe(v2);
+    expect(await snapshots.listVersions()).toEqual([V1, v2]);
+    expect(ops.noticeHold!.notices).toEqual({});
+
+    failing = false;
+    advance(60_000);
+    expect(await publishSnapshot(deps())).toEqual({
+      status: "unchanged",
+      version: v2,
+    });
+    expect(manifest()!.notices!.map((n) => n.id)).toEqual(["n-a", "n-new"]);
+  });
+
+  it("포인터를 앞 값으로 되돌려 놓지 못하면 오류로 알린다", async () => {
+    let failing = false;
+    const { ops, deps, advance, events } = await twoPublishes({
+      failOn: (path) => failing && path === MANIFEST_PATH,
+    });
+    failing = true;
+    const put = ops.putNoticeHold.bind(ops);
+    let calls = 0;
+    ops.putNoticeHold = async (...args) => {
+      calls += 1;
+      if (calls > 1) throw new Error("ProvisionedThroughputExceededException");
+      return put(...args);
+    };
+    advance(60_000);
+    expect(await publishSnapshot(deps(), { rollbackTo: V1 })).toMatchObject({
+      status: "failed",
+    });
+    expect(events()).toContainEqual(
+      expect.objectContaining({
+        event: "rollback_hold_not_restored",
+        target: V1,
+      }),
+    );
+  });
+
+  it("읽은 뒤 포인터가 바뀌었으면('다시 적용'과 겹침) 덮지 않고 멈춘다", async () => {
+    const { ops, deps, advance, manifest, v2 } = await twoPublishes();
+    const get = ops.getNoticeHold.bind(ops);
+    ops.getNoticeHold = async () => {
+      const hold = await get();
+      // 되돌리기가 포인터를 읽은 직후 다른 쓰기가 끼어듦
+      await ops.putNoticeHold({}, hold?.version ?? 0, "2026-10-23T02:32:00Z");
+      return hold;
+    };
+    advance(60_000);
+    expect(await publishSnapshot(deps(), { rollbackTo: V1 })).toMatchObject({
+      status: "failed",
+      reason: "hold_conflict",
+    });
+    expect(manifest()!.snapshotVersion).toBe(v2);
+  });
+
+  it("자동 게시가 포인터를 읽지 못하면 운영 DB 노출본을 그대로 싣지 않고 지금 manifest의 공지를 이어 쓴다", async () => {
+    const { state, ops, deps, advance, manifest, events } =
+      await twoPublishes();
+    advance(60_000);
+    await publishSnapshot(deps(), { rollbackTo: V1 });
+    ops.getNoticeHold = async () => {
+      throw new Error("AccessDenied");
+    };
+    await seedWarnings(state, [WIND_WAVE_ROW], {
+      confirmedAt: "2026-10-23T02:33:00Z",
+    });
+    const v4 = advance(60_000);
+    expect(await publishSnapshot(deps())).toMatchObject({
+      status: "published",
+      version: v4,
+    });
+    // 되돌린 공지(n-new·바뀐 n-a)가 다시 나가지 않음
+    expect(manifest()!.notices).toEqual([notice("n-a")]);
+    expect(events().some((e) => e.event === "publish_notices_unread")).toBe(
+      true,
+    );
+    // 그때 공지 상태를 모르는 게시라 기록을 남기지 않음 → 이 버전으로는 되돌릴 수 없음
+    expect(ops.publishNotices.has(v4)).toBe(false);
+  });
+
+  it("공지 상태를 남기지 못해도 게시는 끝난 것으로 두고 경고만 남긴다(그 버전은 되돌릴 수 없음)", async () => {
+    const { ops, deps, advance, events } = await setup({
+      notices: async () => [notice("n-a")],
+    });
+    ops.putPublishNotices = async () => {
+      throw new Error("ProvisionedThroughputExceededException");
+    };
+    expect(await publishSnapshot(deps())).toMatchObject({
+      status: "published",
+      version: V1,
+    });
+    expect(events()).toContainEqual(
+      expect.objectContaining({ event: "publish_notices_not_recorded" }),
+    );
+    advance(60_000);
+    expect(await publishSnapshot(deps(), { rollbackTo: V1 })).toMatchObject({
+      status: "failed",
+      reason: "rollback_target_missing",
+    });
+  });
+
+  it("앞 되돌리기의 표시는 새 되돌리기에서 다시 계산한다(뒤 게시본으로 되돌리면 표시가 풀림)", async () => {
+    const { ops, deps, advance, manifest, v2 } = await twoPublishes();
+    advance(60_000);
+    await publishSnapshot(deps(), { rollbackTo: V1 });
+    expect(Object.keys(ops.noticeHold!.notices)).toEqual(["n-a", "n-new"]);
+    advance(60_000);
+    await publishSnapshot(deps(), { rollbackTo: v2 });
+    expect(ops.noticeHold!.notices).toEqual({});
+    expect(manifest()!.notices).toEqual([
+      notice("n-a", CHANGED),
+      notice("n-new"),
+    ]);
+  });
+});
+
+// 해변 ID 집합 대조 (결정 기록 D16-C1). 저장소 원본 목록과 다르면 게시하지 않고 앞 게시본을 둠
+describe("해변 ID 대조 (D16-C1)", () => {
+  const IDS = BEACHES.map((beach) => beach.id);
+
+  it("집합으로 견줘 누락·추가·중복을 가린다(수가 같아도 ID가 다르면 다름)", () => {
+    expect(beachIdProblem(IDS, IDS)).toBeNull();
+    expect(beachIdProblem(IDS, [...IDS].reverse())).toBeNull();
+    expect(beachIdProblem(IDS, IDS.slice(1))).toEqual({
+      missing: [IDS[0]],
+      extra: [],
+      duplicate: [],
+    });
+    expect(beachIdProblem(IDS, [...IDS.slice(1), "b9999"])).toEqual({
+      missing: [IDS[0]],
+      extra: ["b9999"],
+      duplicate: [],
+    });
+    expect(beachIdProblem(IDS, [...IDS, IDS[0]!])).toEqual({
+      missing: [],
+      extra: [],
+      duplicate: [IDS[0]],
+    });
+    // 원본 목록 안의 중복도 문제로 봄
+    expect(beachIdProblem([...IDS, IDS[1]!], IDS)).toMatchObject({
+      duplicate: [IDS[1]],
+    });
+  });
+
+  it.each([
+    ["해변 1개 누락", BEACHES.slice(1), { missing: [IDS[0]], extra: [] }],
+    [
+      "같은 수의 다른 ID",
+      [...BEACHES.slice(1), { ...BEACHES[0]!, id: "b9999" }],
+      { missing: [IDS[0]], extra: ["b9999"] },
+    ],
+    ["중복", [...BEACHES, BEACHES[0]!], { duplicate: [IDS[0]] }],
+  ])(
+    "%s이면 게시하지 않고 앞 게시본을 그대로 둔다",
+    async (_name, beaches, problem) => {
+      const first = await setup();
+      await publishSnapshot(first.deps());
+      const before = first.snapshots.files.get(MANIFEST_PATH)!.body;
+      // 같은 저장소에서 해변 파일만 어긋난 채로 다시 게시
+      const second = await setup({ beaches, seed: false });
+      const deps = {
+        ...second.deps(),
+        state: first.state,
+        ops: first.ops,
+        snapshots: first.snapshots,
+        clock: () => NOW_MS + 60_000,
+      };
+      expect(await publishSnapshot(deps)).toMatchObject({
+        status: "failed",
+        reason: "beach_ids",
+      });
+      expect(first.snapshots.files.get(MANIFEST_PATH)!.body).toBe(before);
+      expect(await first.snapshots.listVersions()).toEqual([V1]);
+      expect(await first.ops.getPublishedVersion()).toBe(V1);
+      expect(second.events().at(-1)).toMatchObject({
+        event: "publish_failed",
+        reason: "beach_ids",
+        where: "source",
+        ...problem,
+      });
+    },
+  );
+
+  it("비율 기준이 없다: 해변이 많아도 하나만 빠지면 게시하지 않는다", async () => {
+    const many = Array.from({ length: 200 }, (_, i) => ({
+      ...BEACHES[i % BEACHES.length]!,
+      id: `b${String(i + 1).padStart(4, "0")}`,
+      slug: `beach-${i + 1}`,
+    })) as Beach[];
+    const { snapshots, deps } = await setup({
+      beaches: many.slice(1),
+      beachIds: many.map((beach) => beach.id),
+    });
+    expect(await publishSnapshot(deps())).toMatchObject({
+      status: "failed",
+      reason: "beach_ids",
+    });
+    expect(snapshots.files.size).toBe(0);
+  });
+
+  it("관측을 받지 못해도 해변을 빼지 않는다(해변 수 그대로 게시, 분류만 판단불가)", async () => {
+    const { state, snapshots, deps } = await setup({ seed: false });
+    await seedWarnings(state, [HEAVY_RAIN_ROW]);
+    expect(await publishSnapshot(deps())).toMatchObject({
+      status: "published",
+    });
+    const status = JSON.parse(
+      snapshots.files.get(`data/${V1}/status.json`)!.body,
+    ) as StatusFile;
+    expect(Object.keys(status.beaches).sort()).toEqual([...IDS].sort());
+    expect(
+      Object.values(status.beaches).every((b) => b.category !== "clear"),
+    ).toBe(true);
+  });
+});
+
+// 게시 실행 결과 (결정 기록 D16-C2). 변경이 없어 생략한 것과 실패를 나눠 남김
+describe("게시 실행 결과 (D16-C2)", () => {
+  it("게시·생략·실패를 다른 결과로 남기고, 실패한 실행만 따로 모은다", async () => {
+    let failing = false;
+    const { ops, deps, advance } = await setup({
+      failOn: (path) => failing && path === MANIFEST_PATH,
+    });
+    await publishSnapshot(deps());
+    expect(ops.lastRun).toEqual({
+      at: NOW,
+      source: "auto",
+      result: "published",
+      version: V1,
+    });
+
+    advance(60_000);
+    await publishSnapshot(deps());
+    expect(ops.lastRun).toMatchObject({ result: "unchanged", version: V1 });
+    expect(ops.failedRuns).toEqual([]);
+
+    failing = true;
+    const v3 = advance(2 * 60 * 60 * 1000); // 파고 90분이 지나 분류가 바뀜 → 게시를 시도함
+    expect(await publishSnapshot(deps())).toMatchObject({ status: "failed" });
+    expect(ops.lastRun).toMatchObject({
+      result: "failed",
+      version: v3,
+      source: "auto",
+    });
+    expect(ops.lastRun!.reason).toMatch(/^exception:/);
+    expect(ops.failedRuns).toEqual([ops.lastRun]);
+  });
+
+  it("다른 실행이 게시 중이라 물러난 실행은 남기지 않는다", async () => {
+    const { ops, deps } = await setup();
+    await ops.acquireLock(PUBLISH_POLICY.lockName, "other", NOW_MS, 60_000);
+    expect(await publishSnapshot(deps())).toEqual({ status: "busy" });
+    expect(ops.lastRun).toBeNull();
+  });
+
+  it("운영자가 시작한 게시와 되돌리기는 원인을 구분해 남긴다", async () => {
+    const { ops, deps, advance } = await setup();
+    await publishSnapshot({ ...deps(), source: "operator" });
+    expect(ops.lastRun).toMatchObject({ source: "operator" });
+    expect(ops.summaries.get(V1)).toMatchObject({ source: "operator" });
+    advance(60_000);
+    await publishSnapshot(deps(), { rollbackTo: V1 });
+    expect(ops.lastRun).toMatchObject({
+      source: "rollback",
+      target: V1,
+      result: "published",
+    });
+  });
+
+  it("결과를 남기지 못해도 게시 결과는 그대로이고 경고만 남긴다", async () => {
+    const { ops, deps, events } = await setup();
+    ops.putPublishRun = async () => {
+      throw new Error("ProvisionedThroughputExceededException");
+    };
+    expect(await publishSnapshot(deps())).toMatchObject({
+      status: "published",
+      version: V1,
+    });
+    expect(events()).toContainEqual(
+      expect.objectContaining({ event: "publish_run_not_recorded" }),
+    );
   });
 });
 
