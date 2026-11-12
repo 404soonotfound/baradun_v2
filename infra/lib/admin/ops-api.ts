@@ -14,6 +14,7 @@ import {
   INQUIRY_STATUS_INDEX,
   LOG_RETENTION,
   NOTICE_KEY,
+  PUBLISH_RUN_KEY,
   PUBLISH_SUMMARY_KEY,
   RETRY_LIMITS,
   RUN_LOG_KEY_PREFIX,
@@ -35,6 +36,9 @@ import type { OperatorAuth } from "./operator-auth";
 // - 해변 관리의 지금 표시 상태(BRD-150): 게시 버킷 data/ 아래 읽기(GetObject)와 data/ 접두어 목록만. 쓰기·지우기 없음
 //   publisher가 게시한 manifest → status.json을 그대로 돌려줌(다시 계산하지 않음, G1)
 // - 토큰 검증 공개 키(JWKS)는 Cognito 공개 주소에서 받음(키·비밀값 없음)
+// - 데이터 게시(#331, 아키텍처 18.4·D16-C4): '지금 게시'·'되돌리기' 작업을 만들고 publisher 함수 하나를 비동기로 부름
+//   lambda:InvokeFunction을 그 함수 ARN에만 줌(버전·별칭 :* 없음). 게시 파일(S3 data/) 쓰기는 주지 않음(6.2 단일 작성자)
+//   작업 기록·작업 자리는 admin# 키라 기존 Ops 쓰기 권한 안. 실패한 실행 목록은 게시 실행 결과 파티션만 Query
 
 export interface OpsApiProps {
   readonly opsTable: dynamodb.ITable;
@@ -43,6 +47,8 @@ export interface OpsApiProps {
   readonly auth: OperatorAuth;
   // 게시 버킷(publisher와 같은 버킷). data/ 아래 읽기·목록만(BRD-150)
   readonly snapshotBucket: s3.IBucket;
+  // 지금 게시·되돌리기 작업을 넘길 publish-snapshot 함수(#331). 비동기 호출만
+  readonly publisher: lambda.IFunction;
 }
 
 // 감사 기록 파티션 키 모양(services/src/admin/keys.ts AUDIT_PREFIX와 같음)
@@ -87,6 +93,7 @@ export class OpsApi extends Construct {
               NOTICE_KEY,
               `${RUN_LOG_KEY_PREFIX}*`,
               PUBLISH_SUMMARY_KEY,
+              PUBLISH_RUN_KEY,
             ],
           },
           Null: { "dynamodb:LeadingKeys": "false" },
@@ -150,6 +157,14 @@ export class OpsApi extends Construct {
         conditions: { StringLike: { "s3:prefix": [`${DATA_PREFIX}*`] } },
       }),
     );
+    // 지금 게시·되돌리기 작업 넘기기(#331). publisher 함수 하나에만
+    // grantInvoke 대신 직접 적음: grantInvoke는 함수 버전·별칭 주소(:*)까지 열어 줌(수집기와 같은 방식)
+    this.role.addToPolicy(
+      new iam.PolicyStatement({
+        actions: ["lambda:InvokeFunction"],
+        resources: [props.publisher.functionArn],
+      }),
+    );
     // 문의: 상세 읽기·처리 상태 바꾸기(트랜잭션 Update)·목록 GSI 조회. 만들기·지우기·Scan은 없음
     this.role.addToPolicy(
       new iam.PolicyStatement({
@@ -196,6 +211,8 @@ export class OpsApi extends Construct {
         OPS_ALARM_PREFIX: `${Stack.of(this).stackName}-`,
         // 해변 관리 지금 표시 상태를 읽을 게시 버킷(services/src/admin/handler.ts snapshotReader)
         SNAPSHOT_BUCKET: props.snapshotBucket.bucketName,
+        // 지금 게시·되돌리기 작업을 넘길 함수(services/src/admin/handler.ts publisherInvoker)
+        PUBLISHER_FUNCTION_NAME: props.publisher.functionName,
       },
     });
     // 함수 URL로만 부름(동기). 비동기 호출 재시도는 막아 둠(11장 재시도 제한)
