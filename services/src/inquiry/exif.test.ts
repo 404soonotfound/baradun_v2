@@ -76,6 +76,9 @@ function png(gps: boolean): Buffer {
     Buffer.from("eXIf"),
     payload,
     Buffer.alloc(4),
+    Buffer.from([0x00, 0x00, 0x00, 0x00]),
+    Buffer.from("IEND"),
+    Buffer.alloc(4),
   ]);
 }
 
@@ -128,5 +131,51 @@ describe("사진 EXIF 위치 정보 검사", () => {
     expect(inspectPhotoMetadata("image/jpeg", Buffer.from("not-a-photo"))).toBe(
       "invalid",
     );
+  });
+
+  it("빈 EXIF 뒤에 두 번째 EXIF로 숨긴 GPS도 찾는다", () => {
+    const first = Buffer.concat([
+      Buffer.from("Exif\0\0", "binary"),
+      tiff(false),
+    ]);
+    const second = Buffer.concat([
+      Buffer.from("Exif\0\0", "binary"),
+      tiff(true),
+    ]);
+    const len1 = Buffer.alloc(2);
+    len1.writeUInt16BE(first.length + 2);
+    const len2 = Buffer.alloc(2);
+    len2.writeUInt16BE(second.length + 2);
+    const multiJpeg = Buffer.concat([
+      Buffer.from([0xff, 0xd8, 0xff, 0xe1]),
+      len1,
+      first,
+      Buffer.from([0xff, 0xe1]),
+      len2,
+      second,
+      Buffer.from([0xff, 0xd9]),
+    ]);
+    expect(inspectPhotoMetadata("image/jpeg", multiJpeg)).toBe("gps");
+  });
+
+  it("파일 끝 표지(EOI·IEND·RIFF 크기) 뒤에 여분 바이트가 붙은 변형 파일을 거부한다", () => {
+    expect(
+      inspectPhotoMetadata(
+        "image/jpeg",
+        Buffer.concat([jpeg(false), Buffer.from("trailing")]),
+      ),
+    ).toBe("invalid");
+    expect(
+      inspectPhotoMetadata(
+        "image/png",
+        Buffer.concat([png(false), Buffer.from("trailing")]),
+      ),
+    ).toBe("invalid");
+    expect(
+      inspectPhotoMetadata(
+        "image/webp",
+        Buffer.concat([webp(false), Buffer.from("trailing")]),
+      ),
+    ).toBe("invalid");
   });
 });
