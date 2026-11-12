@@ -658,7 +658,7 @@ function MemoSection({ beachId }: { beachId: string }) {
             </Notice>
           )}
           {saved && !changed && (
-            <Notice tone="brand" title={t.saved} role="status" />
+            <Notice tone="success" title={t.saved} role="status" />
           )}
           {/* 저장 바: 아래에 붙어 긴 메모를 쓰는 중에도 보임(화면 설계서 6장 모바일 규칙) */}
           <div className="sticky bottom-0 -mx-1 flex items-center justify-end gap-3 border-t border-border-default bg-bg-surface px-1 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">

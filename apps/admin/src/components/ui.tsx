@@ -64,13 +64,19 @@ export function AuthShell({
   );
 }
 
-type Tone = "warn" | "neutral" | "fail" | "brand";
+type Tone = "warn" | "neutral" | "fail" | "brand" | "success";
+
+// 작업 성공색(color.success, 결정 E6·BRD-165): 저장·게시 완료·수집 정상에만. 해변 '특보 없음' 파랑과 섞지 않음
+// 배지 모양은 수집 현황·데이터 출처가 함께 씀
+export const SUCCESS_BADGE =
+  "bg-success-bg text-success-fg ring-1 ring-success-border ring-inset";
 
 const TONES: Record<Tone, string> = {
   warn: "border-status-stale-border bg-status-stale-bg",
   neutral: "border-border-default bg-bg-page",
   fail: "border-danger-border bg-status-blocked-bg",
   brand: "border-brand-border bg-brand-weak",
+  success: "border-success-border bg-success-bg",
 };
 
 // 알림 상자: 굵은 첫 줄 + 설명. 색만으로 뜻을 나누지 않게 첫 줄 문구가 상태를 말함

@@ -1280,7 +1280,7 @@ function InquiryDetailView({
         {/* 반려 이유·메모는 아래 처리 칸에서 보여 주고 고침(같은 값을 두 번 보이지 않게) */}
       </dl>
       {notice?.id === id && (
-        <Notice tone="brand" title={notice.text} role="status" />
+        <Notice tone="success" title={notice.text} role="status" />
       )}
       {/* 보기 권한은 메모·반려 이유를 받지 않으므로 처리 칸을 그리지 않음(빈 칸을 실제 값처럼 보이지 않게) */}
       {!item.restricted && (

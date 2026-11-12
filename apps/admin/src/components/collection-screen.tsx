@@ -46,7 +46,7 @@ import {
 import { kstDateTime } from "@/lib/inquiries";
 import { fill, messages } from "@/lib/messages";
 import { AdminShell } from "./admin-shell";
-import { Notice } from "./ui";
+import { Notice, SUCCESS_BADGE } from "./ui";
 
 // 데이터 수집 현황 (BRD-149·GH-376·GH-380, 화면 설계서 6장 ADM-COLLECT, 시안 4차 V9·V10·VM2)
 // - 요약 4칸(정상 출처·7일 성공·관측 지연 해변·마지막 게시) · 출처별 표(PC)/카드(모바일) · 시간별 성공률 선 그래프
@@ -67,12 +67,13 @@ const SEASON_FILE =
 
 // ── 공통 모양(시안 V9 w-bd·w-btn·w-t·w-li) ──
 
-type BadgeTone = "success" | "warn" | "error" | "unknown" | "neutral";
+type BadgeTone = "success" | "ended" | "warn" | "error" | "unknown" | "neutral";
 
 // 수집 정상은 작업 성공색(color.success, 결정 E6·BRD-165). 해변 '특보 없음' 파랑(status.clear)과 섞지 않음
 const BADGE_TONE: Record<BadgeTone, string> = {
-  success:
-    "bg-success-bg text-success-fg ring-1 ring-success-border ring-inset",
+  success: SUCCESS_BADGE,
+  // 끝난 장애: 공지 화면의 '종료'와 같은 모양(정보·데이터 부족 회색과 구분)
+  ended: "bg-bg-surface text-text-muted ring-1 ring-border-strong",
   warn: "bg-status-stale-bg text-status-stale-fg outline-1 outline-status-stale-border outline-dashed -outline-offset-1",
   error:
     "bg-status-blocked-bg text-status-blocked-fg ring-1 ring-danger-border ring-inset",
@@ -1037,10 +1038,10 @@ function incidentHeadline(incident: JobIncident): string {
     .join("");
 }
 
-// 끝난 장애는 중립 회색. 성공색은 수집 정상에만(결정 E6), '특보 없음' 파랑과도 섞지 않음
+// 끝난 장애는 '종료' 모양. 성공색은 수집 정상에만(결정 E6), '특보 없음' 파랑과도 섞지 않음
 function OngoingBadge({ ended }: { ended: boolean }) {
   return (
-    <Badge tone={ended ? "neutral" : "error"}>
+    <Badge tone={ended ? "ended" : "error"}>
       {ended ? t.incidentResolved : t.incidentOngoing}
     </Badge>
   );
