@@ -49,6 +49,12 @@
   - 나눈 커밋 하나하나가 타입 검사·린트를 통과해야 한다.
   - 커밋 전에 나눌 계획(커밋별 메시지와 파일)을 먼저 보여주고, 한 파일에 성격이 섞이면 `git add -p`로 나눈다.
   - 이슈와 연결되지 않는 변경(오타·서식·설정 한두 줄 수준)만 이슈 번호를 생략할 수 있다: `docs: README 오타 수정`. 그 밖의 변경은 먼저 이슈를 만든 뒤(Project에는 자동으로 들어감) 번호를 붙인다.
+- Dependabot이 만든 PR(npm 보안 갱신, `.github/dependabot.yml`의 Action 버전 갱신)은 이 절의 브랜치·커밋·PR 제목·연결 문구 규칙의 예외다.
+  - Dependabot이 붙인 브랜치(`dependabot/…`)와 영어 제목을 그대로 둔다. Action 갱신은 `chore(deps): bump …`, npm 보안 갱신은 `dependabot.yml`에 npm 설정이 없어 Dependabot 기본 제목이다. 둘 다 이슈 번호가 없고, 이 PR을 위해 이슈를 만들지 않으며 연결 문구(`Fixes #n`)도 쓰지 않는다.
+  - 담당자가 비어 있으면(npm 보안 갱신) 저장소 소유자로 지정한다. PR 전 `/code-review`와 `@codex review`는 하지 않고, PR 본문의 릴리스 노트에서 큰 변경(BREAKING)이 우리 설정에 닿는지 확인한다. 머지 기준은 같다(`ci-ok` 통과, `Rebase and merge`).
+  - 한 번에 하나씩 머지한다. 머지 뒤 `deploy`가 돌면 그 실행 결과를 확인하고, 다음 PR은 그 뒤에 머지한다. `DEPLOY_PAUSED`·배포 건너뜀처럼 바뀐 Action 단계가 돌지 않은 실행은 확인으로 치지 않고, 다음에 그 단계가 실제로 돌 때 확인한다. PR에서 돌지 않는 워크플로 중 `map-tiles.yml`(수동 실행)은 다음에 지도를 만들 때, `iam-reference-audit.yml`(매주 정기 실행)은 다음 정기 실행 결과로 확인한다.
+  - `services`·`infra` 의존성이 바뀐 PR은 머지 뒤 `npm run deploy:infra`가 필요하다(Lambda는 이 명령으로만 배포됨). 배포는 다른 인프라 배포와 같은 승인 절차를 거치고, 결과는 이슈 대신 그 PR 댓글로 남긴다.
+  - 확인에서 실패하면 GitHub의 Revert로 되돌림 PR을 만든다. 이 되돌림 PR도 같은 예외를 따른다(제목 `Revert "…"`, 이슈 없음, `ci-ok` 통과 뒤 머지).
 - PR은 이슈 하나당 하나를 기본으로 한다. 2,000줄을 넘거나 배포 위험·독립 검증 때문에 나눠야 하면 나눈 이유를 PR 설명에 적는다. 줄 수는 additions + deletions이고 lockfile·생성 파일은 뺀다.
 - 구현이 작은 이슈나 API가 이미 있는 화면만 2~3개까지 한 PR로 묶을 수 있다. 묶은 PR도 2,000줄을 넘기지 않는다.
 - 머지는 `Rebase and merge`로 해서 이슈별·성격별 커밋을 main에 남긴다. `wip`·fixup 커밋은 머지 전에 정리한다.

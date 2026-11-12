@@ -3,8 +3,9 @@
 # Action만 버전 갱신 PR을 받음. SHA와 줄 끝 버전 주석(# v4.4.0)을 함께 바꿔 줌
 # - npm 의존성은 버전 갱신을 켜지 않음. 보안 갱신(저장소 설정)만 지금처럼 받음
 # - 새 버전은 나온 지 7일 지난 것만(공급망 사고가 드러날 시간을 둠). 보안 갱신에는 적용되지 않음
-# - PR CI(ci-ok)는 ci.yml의 Action만 실제로 돌림. deploy.yml·map-tiles.yml 등은 PR에서 글자 검사(가드레일)만 하므로
-#   그 파일이 바뀐 갱신 PR은 머지 직후 그 워크플로 실행 결과를 확인함(실패하면 되돌림 PR)
+# - PR CI(ci-ok)는 ci.yml의 Action만 실제로 돌림. deploy.yml·map-tiles.yml·iam-reference-audit.yml은 PR에서
+#   글자 검사(가드레일)만 하므로 갱신 PR은 하나씩 머지하고, 바뀐 단계가 실제로 돈 실행 결과로 확인함
+#   (deploy는 머지 직후, map-tiles는 다음 지도 만들 때, iam-reference-audit는 다음 정기 실행. 절차는 AGENTS.md)
 version: 2
 updates:
   - package-ecosystem: "github-actions"
