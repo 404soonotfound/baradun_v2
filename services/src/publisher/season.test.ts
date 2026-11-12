@@ -58,6 +58,12 @@ describe("parseBeachMeta", () => {
     expect(Object.keys(seasons).sort()).toEqual(["b0001", "b0014", "b0028"]);
   });
 
+  it("해변 칸의 모든 id를 원본 해변 ID 목록으로 돌려줌(모양이 틀린 항목도 빼지 않음)", () => {
+    const parsed = parseBeachMeta(meta);
+    expect(parsed.beachIds).toEqual(Object.keys(meta.beaches));
+    for (const id of parsed.invalid) expect(parsed.beachIds).toContain(id);
+  });
+
   it("beaches 칸이 없으면 빈 표로 바꾸지 않고 던짐", () => {
     expect(() => parseBeachMeta({})).toThrow("beaches 칸이 없음");
     expect(() => parseBeachMeta({ beaches: [] })).toThrow(
