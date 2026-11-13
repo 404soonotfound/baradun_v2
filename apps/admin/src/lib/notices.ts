@@ -33,6 +33,8 @@ export interface NoticeView {
   readonly live: NoticeContent | null;
   readonly exposedAt: string | null;
   readonly updatedAt: string;
+  // 서버 응답에 수정자 이메일·표시 이름이 오면 '누가 · 언제'로 보여 줌
+  readonly updatedBy?: string | null;
   // 서버가 새 상태를 더해도 숨기지 않게 넓게 받음
   readonly state: NoticeState | string;
   // 저장한 문구가 노출본과 다름(D16-D4 '수정 대기')
@@ -238,4 +240,35 @@ export function sameContent(a: NoticeContent, b: NoticeContent): boolean {
       ? b.endsAt === null
       : b.endsAt !== null && Date.parse(a.endsAt) === Date.parse(b.endsAt))
   );
+}
+
+// 목록 거르기(상태 탭 · 종류 · 제목/문구 찾기)
+export function filterNotices(
+  items: readonly NoticeView[],
+  options: {
+    state: NoticeState | null;
+    kind: NoticeKind | null;
+    query: string;
+  },
+): NoticeView[] {
+  const q = options.query.trim().toLowerCase();
+  return items.filter((n) => {
+    if (options.state !== null && n.state !== options.state) return false;
+    const shown = n.live ?? n.draft;
+    if (options.kind !== null && shown.kind !== options.kind) return false;
+    if (q !== "") {
+      const hay = [
+        n.draft.title.ko,
+        n.draft.title.en,
+        n.draft.body.ko,
+        n.draft.body.en,
+        n.live?.title.ko ?? "",
+        n.live?.title.en ?? "",
+        n.live?.body.ko ?? "",
+        n.live?.body.en ?? "",
+      ];
+      if (!hay.some((s) => s.toLowerCase().includes(q))) return false;
+    }
+    return true;
+  });
 }
