@@ -174,6 +174,22 @@ describe("쓰기 없는 생성·최종 객체 검증", () => {
     expect(JSON.parse(plan.files.get(join(f.root, "output/data/beaches/b0001.json")))).toEqual(prev);
     expect(plan.files.get(join(f.root, "output/data/beach-coverage.csv"))).toContain("gangmun,true,");
   });
+  it("좌표 보정표는 수집본 raw가 같을 때만 공식 출처 좌표로 채우고 출처를 남김", () => {
+    const f = fixture([{ ...source("송전", "양양군"), lat: "", lon: "" }]);
+    const plan = f.build();
+    expect(JSON.parse(plan.files.get(join(f.root, "output/data/beaches/b0001.json"))).coords).toEqual({ lat: 38.092625, lng: 128.661116 });
+    expect(plan.draft.beaches[0]._draft.coordsSource).toContain("TourAPI");
+    expect(plan.files.get(join(f.root, "output/data/beach-coverage.csv"))).toContain("한국관광공사 TourAPI");
+    // 다시 수집한 원자료에 좌표가 생기면 보정표가 덮지 않고 중단
+    expect(fixture([source("송전", "양양군")]).build).toThrow(/좌표 보정표 raw와 수집본 좌표 다름/);
+  });
+  it("판정 입력 좌표가 생성 좌표와 다르면(보정표만 고치고 재판정 안 함) 중단함", () => {
+    const f = fixture();
+    const evidence = JSON.parse(readFileSync(join(f.root, "input/beach-zone-evidence.json"), "utf8"));
+    evidence.beaches[0].land_proof = { coords: { lat: 37.7, lon: 128.9 } };
+    f.put("input/beach-zone-evidence.json", evidence);
+    expect(f.build).toThrow(/spatial-judge 다시 실행/);
+  });
   it("신규 해변에는 수영·null 사진·null CCTV·숨김 false 기본값을 사용함", () => {
     const f = fixture(); const b = f.build().draft.beaches[0];
     expect(b).toMatchObject({ name: { en: "Gangmun Beach" }, activities: ["swimming"], photo: null, cctv: null, hidden: false });

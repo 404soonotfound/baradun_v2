@@ -103,11 +103,18 @@ export const sigunguMatches = (fullName, sido, sigungu) =>
   (SIGUNGU_ALIAS[`${sido}|${sigungu}`] ?? [sigungu]).some((g) => fullName?.endsWith(` ${g}`));
 
 // 공식 출처 좌표 정정·보충표 적용 (원자료 beaches.csv는 수정하지 않음)
+// 수집본 좌표가 보정표의 raw(정정 전 값, null이면 좌표 없음)와 다르면 다시 수집된 원자료로 보고 중단(보정이 새 값을 몰래 덮지 않음)
 let coordOverridesCache = null;
+const sameRawCoords = (r, raw) =>
+  raw === null ? !r.lat && !r.lon : Boolean(r.lat && r.lon) && Number(r.lat) === raw.lat && Number(r.lon) === raw.lon;
 export const applyCoordOverrides = (rows) => {
   coordOverridesCache ??= JSON.parse(readFileSync(new URL("./coord-overrides.json", import.meta.url), "utf8")).overrides;
   return rows.map((r) => {
-    const ov = coordOverridesCache[`${r.sido_nm}|${r.gugun_nm}|${r.sta_nm}`];
-    return ov ? { ...r, lat: String(ov.lat), lon: String(ov.lon), coords_source: ov.source } : r;
+    const key = `${r.sido_nm}|${r.gugun_nm}|${r.sta_nm}`;
+    const ov = coordOverridesCache[key];
+    if (!ov) return r;
+    if (ov.raw === undefined || !sameRawCoords(r, ov.raw))
+      throw new Error(`좌표 보정표 raw와 수집본 좌표 다름 → 보정표 다시 검토: ${key} (수집본 ${r.lat || "없음"}, ${r.lon || "없음"})`);
+    return { ...r, lat: String(ov.lat), lon: String(ov.lon), coords_source: ov.source };
   });
 };

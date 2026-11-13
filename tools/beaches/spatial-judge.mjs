@@ -96,7 +96,7 @@ const beachPts = beachesSrc.map((b) => {
   const [x, y] = toEpsg5186(lat, lon);
   const [sx, sy] = toEpsg5186Snyder(lat, lon);
   if (Math.hypot(x - sx, y - sy) > 0.01) throw new Error(`좌표 변환 교차 확인 실패: ${b.sta_nm}`);
-  return { key: `${b.gugun_nm}|${b.sta_nm}`, sido: b.sido_nm, sigungu: b.gugun_nm, lat, lon, x, y };
+  return { key: `${b.gugun_nm}|${b.sta_nm}`, sido: b.sido_nm, sigungu: b.gugun_nm, lat, lon, x, y, coordsSource: b.coords_source };
 });
 
 // ── 1. L1 판정 ──
@@ -127,7 +127,7 @@ function judgeL1(b) {
     method: "COORDINATE_BOUNDARY",
     boundary_source: SOURCES.emd,
     sigungu_link: { source: SOURCES.bjd, rule: "법정구역정보 A4(원천시도시군구코드) + '00000' 법정동코드의 이름과 해수부 gugun_nm 이름 대조(코드끼리 비교 안 함)" },
-    coords: { lat: b.lat, lon: b.lon, source: "tools/coverage/out/beaches.csv (해수부 해수욕장정보, 2026-10-16 수집)", epsg5186: [m1(b.x), m1(b.y)], transform: "WGS84 → EPSG:5186 Krüger 급수, Snyder 급수 교차 확인 1cm 이내" },
+    coords: { lat: b.lat, lon: b.lon, source: b.coordsSource ? `${b.coordsSource} (tools/beaches/coord-overrides.json)` : "tools/coverage/out/beaches.csv (해수부 해수욕장정보, 2026-10-16 수집)", epsg5186: [m1(b.x), m1(b.y)], transform: "WGS84 → EPSG:5186 Krüger 급수, Snyder 급수 교차 확인 1cm 이내" },
     rule: "아키텍처 2.2 결정 4-A: ① 경계 안 → 그 읍면 ② 밖 100m 이하 → 최근접 ③ 300m 안 다른 읍면은 별표9 L1이 같으면 확정 ④ 다르면 자동 제외",
     annex9: { url: ANNEX9_URL, item: ANNEX9_ITEM, checked_at_kst: ANNEX9_CHECKED },
     checked_at_kst: CHECKED_AT,
