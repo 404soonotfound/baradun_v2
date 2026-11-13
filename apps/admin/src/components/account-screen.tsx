@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { useState, type FormEvent, type ReactNode } from "react";
 import {
   associateTotp,
   changePassword,
@@ -21,6 +21,7 @@ import { fill, messages } from "@/lib/messages";
 import { roleLabel } from "@/lib/roles";
 import { AdminShell } from "./admin-shell";
 import { ConfirmDialog } from "./confirm-dialog";
+import { useSlow } from "./use-slow";
 import { CodeInput, Field, PasswordRules, passwordChecks } from "./fields";
 import { QrCode, qrShape, type QrShape } from "./qr-code";
 import { Button, Notice } from "./ui";
@@ -255,7 +256,6 @@ function TotpSection({
 }
 
 const r = t.account.mfaReset;
-const SLOW_MS = 10_000;
 
 // 결과 문구. 성공·이미 없음은 안내(neutral), 그 밖은 실패(fail)
 function resetNotice(
@@ -292,20 +292,12 @@ function MfaResetSection({
   const [target, setTarget] = useState<string | null>(null);
   const [word, setWord] = useState("");
   const [busy, setBusy] = useState(false);
-  const [slow, setSlow] = useState(false);
   const [notice, setNotice] = useState<{
     tone: "neutral" | "fail";
     text: string;
   } | null>(null);
 
-  useEffect(() => {
-    if (!busy) return;
-    const timer = window.setTimeout(() => setSlow(true), SLOW_MS);
-    return () => {
-      window.clearTimeout(timer);
-      setSlow(false);
-    };
-  }, [busy]);
+  const slow = useSlow(busy);
 
   const open = (e: FormEvent) => {
     e.preventDefault();
@@ -392,7 +384,7 @@ function MfaResetSection({
               className="h-touch rounded-admin-control border border-border-strong bg-bg-surface px-3 text-body text-text-default lg:h-admin-control"
             />
           </label>
-          {busy && slow && (
+          {slow && (
             <p role="status" className="text-text-muted">
               {r.slow}
             </p>

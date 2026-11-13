@@ -34,6 +34,7 @@ import {
 import { AdminShell } from "./admin-shell";
 import { labelText } from "./beach-status";
 import { ConfirmDialog } from "./confirm-dialog";
+import { useSlow } from "./use-slow";
 import { Button, Notice } from "./ui";
 
 // 데이터 게시 (#331, 화면 설계서 6장 ADM-PUB, 시안 4차 V16·VM8·VM9·V30·N2·F4·E2·E4·E10·VE2)
@@ -48,7 +49,6 @@ const t = messages.publish;
 const tb = messages.beaches;
 
 // 첫 진입 뒤 이 시간이 지나도 응답이 없으면 '응답이 늦어요'(D16-E1)
-const SLOW_MS = 10_000;
 // 작업 상태를 다시 읽는 간격(게시 잠금 2분 안에 끝나는 작업을 따라감)
 const POLL_MS = 3_000;
 const ROLLBACK_WORD = t.confirmRollbackWord;
@@ -74,20 +74,6 @@ function usePermission(): {
     demo: false,
     publish: snapshot.groups.includes("publisher") ? null : t.needPublisher,
   };
-}
-
-// 읽기가 SLOW_MS를 넘기면 true(이전 값은 그대로 보여 줌)
-function useSlow(waiting: boolean): boolean {
-  const [slow, setSlow] = useState(false);
-  useEffect(() => {
-    if (!waiting) return;
-    const timer = window.setTimeout(() => setSlow(true), SLOW_MS);
-    return () => {
-      window.clearTimeout(timer);
-      setSlow(false);
-    };
-  }, [waiting]);
-  return waiting && slow;
 }
 
 function useOverview(enabled: boolean) {
