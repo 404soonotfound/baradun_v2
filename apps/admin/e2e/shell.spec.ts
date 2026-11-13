@@ -134,6 +134,13 @@ test.describe("PC 왼쪽 메뉴 (GH-450, 시안 V1 aside)", () => {
     expect((await aside.boundingBox())?.width).toBe(220);
     const home = nav(page).getByRole("link", { name: "운영 홈" });
     expect((await home.boundingBox())?.height).toBe(33);
+    // 지금 화면: 파란 글자 + 굵기 600 + aria-current(색만으로 구분하지 않음)
+    await expect(home).toHaveAttribute("aria-current", "page");
+    await expect(home).toHaveCSS("font-weight", "600");
+    await expect(nav(page).getByRole("link", { name: "이용 통계" })).toHaveCSS(
+      "font-weight",
+      "500",
+    );
     await expect(nav(page).getByText("기록", { exact: true })).toBeVisible();
 
     // 이름 칸 없이 이메일. 내 계정·로그아웃은 메뉴를 열기 전에는 보이지 않음
@@ -146,7 +153,12 @@ test.describe("PC 왼쪽 메뉴 (GH-450, 시안 V1 aside)", () => {
     await expect(status.getByText("상태 확인 못 함")).toBeVisible();
     await expect(status.getByText(/^운영 화면 /)).toBeVisible();
 
-    const more = aside.getByRole("button", { name: "계정 메뉴" });
+    // 이메일은 말줄임이어도 전체 값이 title과 '…' 단추 이름에 들어감
+    await expect(aside.getByText(OPS, { exact: true })).toHaveAttribute(
+      "title",
+      OPS,
+    );
+    const more = aside.getByRole("button", { name: `계정 메뉴 · ${OPS}` });
     await more.click();
     await expect(more).toHaveAttribute("aria-expanded", "true");
     await expect(aside.getByRole("button", { name: "로그아웃" })).toBeVisible();
