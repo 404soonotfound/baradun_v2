@@ -66,7 +66,27 @@ describe("checkPhoto · 대표 이미지(detailCommon2)", () => {
         URL,
         "1",
       ),
-    ).toEqual({ status: "failed", reason: "resultCode:22" });
+    ).toEqual({ status: "failed", reason: "resultCode:22", code: "22" });
+    expect(
+      checkPhoto(
+        {
+          response: {
+            header: {
+              resultCode: "99",
+              resultMsg: "UNKNOWN\tauthKey=SECRET_KEY",
+            },
+          },
+        },
+        "first",
+        URL,
+        "1",
+      ),
+    ).toEqual({
+      status: "failed",
+      reason: "resultCode:99",
+      code: "99",
+      message: "UNKNOWN authKey=***",
+    });
     expect(checkPhoto("<xml/>", "first", URL, "1")).toEqual({
       status: "failed",
       reason: "format:header",

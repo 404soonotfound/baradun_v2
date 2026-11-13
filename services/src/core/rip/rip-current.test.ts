@@ -131,12 +131,14 @@ describe("parseRipResponse", () => {
       "빈 목록인데 totalCount가 0이 아님",
       response({ item: [] }),
       "format:items",
+      undefined,
     ],
-    ["다른 오류 코드", response("", 0, "30"), "result:30"],
-  ])("%s → 실패(자료 없음으로 보지 않음)", (_, text, reason) => {
+    ["다른 오류 코드", response("", 0, "30"), "result:30", "30"],
+  ])("%s → 실패(자료 없음으로 보지 않음)", (_, text, reason, code?: string) => {
     expect(parseRipResponse(text, "SONGJUNG", AFTER, DAY)).toEqual({
       status: "failed",
       reason,
+      ...(code ? { code, message: "NORMAL_SERVICE" } : {}),
     });
   });
 
@@ -171,13 +173,36 @@ describe("parseRipResponse", () => {
 
   it.each([
     ["body 없이 header만 온 00", body({ header: { resultCode: "00" } })],
-    ["body 없이 header만 온 다른 코드", body({ header: { resultCode: "30" } })],
     ["header가 없는 응답", body({ body: { totalCount: 0 } })],
-    ["resultCode가 문자열 03이 아닌 숫자", body({ header: { resultCode: 3 } })],
   ])("형식 오류는 자료 없음으로 보지 않음: %s", (_, text) => {
     expect(parseRipResponse(text, "SONGJUNG", AFTER, DAY)).toEqual({
       status: "failed",
       reason: "format:shape",
+    });
+  });
+
+  // BRD-166(D16-E7): body 없이 온 오류 코드도 code와 정제한 message를 보존하고, 모르는 코드는 실패로 남김
+  it("body 없이 온 오류 코드와 모르는 코드는 원래 code와 정제한 message를 보존함", () => {
+    const noBody = body({
+      header: {
+        resultCode: "22",
+        resultMsg:
+          "LIMITED_NUMBER_OF_SERVICE_REQUESTS_EXCEEDS_ERROR serviceKey=SECRET123\n",
+      },
+    });
+    expect(parseRipResponse(noBody, "SONGJUNG", AFTER, DAY)).toEqual({
+      status: "failed",
+      reason: "result:22",
+      code: "22",
+      message:
+        "LIMITED_NUMBER_OF_SERVICE_REQUESTS_EXCEEDS_ERROR serviceKey=***",
+    });
+
+    const numCode = body({ header: { resultCode: 3 } });
+    expect(parseRipResponse(numCode, "SONGJUNG", AFTER, DAY)).toEqual({
+      status: "failed",
+      reason: "result:3",
+      code: "3",
     });
   });
 });
