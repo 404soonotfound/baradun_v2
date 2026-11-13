@@ -1,0 +1,53 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "AssumeCdkBootstrapRoles",
+      "Effect": "Allow",
+      "Action": "sts:AssumeRole",
+      "Resource": [
+        "arn:aws:iam::717304679248:role/cdk-hnb659fds-deploy-role-717304679248-ap-northeast-2",
+        "arn:aws:iam::717304679248:role/cdk-hnb659fds-file-publishing-role-717304679248-ap-northeast-2",
+        "arn:aws:iam::717304679248:role/cdk-hnb659fds-lookup-role-717304679248-ap-northeast-2"
+      ]
+    },
+    {
+      "Sid": "ReadOutOfStackPolicies",
+      "Effect": "Allow",
+      "Action": ["iam:GetPolicy", "iam:GetPolicyVersion"],
+      "Resource": [
+        "arn:aws:iam::717304679248:policy/BaradunV2-RoleBoundary",
+        "arn:aws:iam::717304679248:policy/BaradunCdkExecution",
+        "arn:aws:iam::717304679248:policy/BaradunCdkExecutionWorkload"
+      ]
+    },
+    {
+      "Sid": "ReadStack",
+      "Effect": "Allow",
+      "Action": [
+        "cloudformation:DescribeChangeSet",
+        "cloudformation:DescribeStackEvents",
+        "cloudformation:DescribeStackResource",
+        "cloudformation:DescribeStacks"
+      ],
+      "Resource": "arn:aws:cloudformation:ap-northeast-2:717304679248:stack/BaradunV2/*"
+    },
+    {
+      "Sid": "ReadStackFunctions",
+      "Effect": "Allow",
+      "Action": "lambda:GetFunctionConfiguration",
+      "Resource": "arn:aws:lambda:ap-northeast-2:717304679248:function:BaradunV2-*"
+    },
+    {
+      "Sid": "ReadStackLogs",
+      "Effect": "Allow",
+      "Action": "logs:FilterLogEvents",
+      "Resource": [
+        "arn:aws:logs:ap-northeast-2:717304679248:log-group:BaradunV2-*",
+        "arn:aws:logs:ap-northeast-2:717304679248:log-group:BaradunV2-*:*",
+        "arn:aws:logs:ap-northeast-2:717304679248:log-group:/aws/lambda/BaradunV2-*",
+        "arn:aws:logs:ap-northeast-2:717304679248:log-group:/aws/lambda/BaradunV2-*:*"
+      ]
+    }
+  ]
+}
