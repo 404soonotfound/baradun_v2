@@ -59,7 +59,7 @@ async function openPolicies(page: Page) {
 }
 
 const list = (page: Page) =>
-  page.getByRole("navigation", { name: "운영 정책 항목" });
+  page.getByRole("navigation", { name: "목차" });
 const detailTitle = (page: Page) =>
   page.getByRole("heading", { level: 2 }).filter({ visible: true });
 
@@ -70,14 +70,14 @@ test("revision·가져온 시각·원문 링크를 보여 주고 '최신'이라�
   await openPolicies(page);
   await expect(
     page.getByText(
-      `노션 수정 ${kst(snapshot.revision)} · 가져온 시각 ${kst(snapshot.fetchedAt)}`,
+      `노션 마지막 수정 ${kst(snapshot.revision)} · 마지막 동기화 ${kst(snapshot.fetchedAt)}`,
     ),
   ).toBeVisible();
   const notion = page.getByRole("link", { name: "노션에서 열기 (새 탭)" });
   await expect(notion).toHaveAttribute("href", snapshot.source.url);
   await expect(notion).toHaveAttribute("target", "_blank");
   await expect(
-    page.getByText("노션을 고친 뒤 다시 가져와야 여기에 보여요"),
+    page.getByText("노션과 자동으로 동기화되지 않아요"),
   ).toBeVisible();
   await expect(page.getByText("최신")).toHaveCount(0);
   // 9개 항목 모두 원본의 상태 표시와 함께
@@ -115,7 +115,7 @@ test("한 번에 하나씩 읽는다: PC는 왼쪽 목록 + 내용, 모바일은
   if (isMobile(page)) {
     await expect(list(page)).toBeHidden();
     await expectNoA11yViolations(page);
-    await page.getByRole("link", { name: "← 운영 정책 목록" }).click();
+    await page.getByRole("link", { name: "정책 목록으로" }).click();
     await expect(page).toHaveURL(/\/policies\/$/);
     await expect(list(page)).toBeVisible();
     await expect(detailTitle(page)).toHaveCount(0);
@@ -124,13 +124,13 @@ test("한 번에 하나씩 읽는다: PC는 왼쪽 목록 + 내용, 모바일은
       list(page).getByRole("link", { name: /6\. 장애 대응/ }),
     ).toHaveAttribute("aria-current", "page");
     await expect(
-      page.getByRole("link", { name: "← 운영 정책 목록" }),
+      page.getByRole("link", { name: "정책 목록으로" }),
     ).toBeHidden();
     await expectNoA11yViolations(page);
   }
 });
 
-test("없는 항목 주소는 '찾는 정책 항목이 없어요'와 목록을 보여 준다", async ({
+test("없는 항목 주소는 '찾는 정책이 없어요'와 목록을 보여 준다", async ({
   page,
 }) => {
   await signIn(page);
@@ -140,7 +140,7 @@ test("없는 항목 주소는 '찾는 정책 항목이 없어요'와 목록을 �
     window.history.pushState(null, "", "/policies/?id=12");
     window.dispatchEvent(new PopStateEvent("popstate"));
   });
-  await expect(page.getByText("찾는 정책 항목이 없어요")).toBeVisible();
+  await expect(page.getByText("찾는 정책이 없어요")).toBeVisible();
   await expect(list(page)).toBeVisible();
   await expect(detailTitle(page)).toHaveCount(0);
 });
