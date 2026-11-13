@@ -321,7 +321,7 @@ export function DetailScreen({
                     aria-haspopup="dialog"
                     onClick={detailSheet.show}
                     // 보이는 줄은 17px, 누르는 영역은 위아래로 넓혀 44px(BRD-39)
-                    className="relative inline-flex items-center gap-0.5 text-caption font-bold text-brand-default before:absolute before:inset-x-0 before:-inset-y-[13px] before:content-['']"
+                    className="relative inline-flex items-center gap-0.5 text-caption font-bold text-brand-default before:absolute before:inset-x-0 before:-inset-y-[14px] before:content-['']"
                   >
                     {t("detailSheet.more")}
                     <ChevronRight
