@@ -207,6 +207,7 @@ test("화면 테마 라디오 그룹은 키보드 이동·새로고침·새 탭�
   await mockOps(page, { ...ME_OK, body: { ...ME_OK.body, role: "viewer" } });
   await signInWithPassword(page, "/login/", OPS);
   await expect(page.getByRole("heading", { name: "운영 홈" })).toBeVisible();
+  await openAccountMenu(page);
   await page.getByRole("link", { name: "내 계정" }).click();
   await expect(page.getByRole("heading", { name: "내 계정" })).toBeVisible();
 
