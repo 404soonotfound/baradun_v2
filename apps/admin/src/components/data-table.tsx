@@ -6,7 +6,7 @@ import { pageWindow, PAGE_SIZE } from "@/lib/paging";
 // - 표 기본형: 겉 상자(카드) 없이 표 자체의 옅은 테두리 1px · 모서리 8 · 머리 칸 옅은 바탕
 // - 칸: 머리 위아래 7px · 본문 6px · 좌우 12px(첫·끝 칸 16px), 행 사이 1px 구분선, 마지막 행은 선 없음
 // - 화면들이 표 모양을 따로 만들지 않게 클래스를 나눠 둠. 행은 <tr className={TR}>로 감싸야 마지막 행 선이 빠짐
-// - 색·글자·모서리는 공유 토큰. 머리 위아래 7px만 맞는 토큰이 없어 그 값 그대로 씀
+// - 색·글자·모서리는 공유 토큰. 머리 위아래 7px만 맞는 토큰이 없어 그 값 그대로 씀(출처 보드 Admin_V1 table.w-t th)
 
 export const TABLE =
   "w-full border-separate border-spacing-0 rounded-admin-box border border-border-default bg-bg-surface text-body shadow-card";
