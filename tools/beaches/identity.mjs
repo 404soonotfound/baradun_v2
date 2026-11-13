@@ -59,6 +59,35 @@ export function preserveManual(record, previous) {
   };
 }
 
+/**
+ * beach-meta.json의 기존 수동 별칭(manualAliases)을 검증하고 생성된 별칭과 병합함.
+ * 잘못된 형식이면 해변 ID를 포함해 오류를 발생시킴.
+ */
+export function preserveManualAliases(generatedAliases, previousMeta, nameKo, id = "unknown") {
+  if (previousMeta !== undefined && (previousMeta === null || typeof previousMeta !== "object" || Array.isArray(previousMeta))) {
+    throw new Error(`${id}: beach-meta.json 항목 형식 오류`);
+  }
+  const validateAliasArray = (arr, field) => {
+    if (arr === undefined) return [];
+    if (!Array.isArray(arr)) throw new Error(`${id}: beach-meta.json ${field} 형식 오류(배열 아님)`);
+    return arr.map((a) => {
+      if (typeof a !== "string" || a.trim().length === 0) {
+        throw new Error(`${id}: beach-meta.json ${field} 형식 오류(비어 있거나 문자열 아님)`);
+      }
+      return a.trim();
+    });
+  };
+  validateAliasArray(previousMeta?.aliases, "aliases");
+  const manual = validateAliasArray(previousMeta?.manualAliases, "manualAliases");
+  const normalizedNameKo = typeof nameKo === "string" ? nameKo.trim() : "";
+  const normalizedGenerated = (generatedAliases ?? [])
+    .filter((a) => typeof a === "string" && a.trim().length > 0)
+    .map((a) => a.trim());
+  const dedupedManual = [...new Set(manual)].filter((a) => a !== normalizedNameKo);
+  const aliases = [...new Set([...normalizedGenerated, ...dedupedManual])].filter((a) => a !== normalizedNameKo);
+  return { aliases, manualAliases: dedupedManual };
+}
+
 export function assertSameName(id, nameKo, previous) {
   if (previous && previous.name?.ko !== nameKo)
     throw new Error(`같은 ID 이름 변경: ${id} (${previous.name?.ko} → ${nameKo}). 이름 변경 대응은 지원하지 않음, 사람이 확인하세요`);

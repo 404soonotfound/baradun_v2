@@ -14,7 +14,7 @@ vi.mock("../zone-proof.mjs", () => ({
 }));
 import { buildBeaches, writeBuild } from "../build.mjs";
 import { checkDraft } from "../check.mjs";
-import { idKey, validateIdentity, preserveManual, reserveSlug } from "../identity.mjs";
+import { idKey, validateIdentity, preserveManual, preserveManualAliases, reserveSlug } from "../identity.mjs";
 import { assignMetric, loadAssignContext } from "../station-assign.mjs";
 import { slimMatrix } from "../slim-matrix.mjs";
 import { validateCoverage } from "../../../packages/contracts/scripts/coverage-rules.mjs";
@@ -231,6 +231,37 @@ describe("쓰기 없는 생성·최종 객체 검증", () => {
     evidence.beaches[0].land_proof = { coords: { lat: 37.7, lon: 128.9 } };
     f.put("input/beach-zone-evidence.json", evidence);
     expect(f.build).toThrow(/spatial-judge 다시 실행/);
+  });
+  it("beach-meta.json의 수동 별칭(manualAliases)을 보존하고 생성 별칭 삭제·공백·중복·공식 이름을 정리함", () => {
+    expect(
+      preserveManualAliases(["강문"], { aliases: ["강문"], manualAliases: [" 강릉 강문 ", "강릉 강문", " 강문해수욕장 "] }, "강문해수욕장", "b0001"),
+    ).toEqual({ aliases: ["강문", "강릉 강문"], manualAliases: ["강릉 강문"] });
+
+    // NAMES/이전 생성 별칭에서 빠진 값은 수동 별칭이 아니면 다음 생성 때 사라짐
+    expect(
+      preserveManualAliases(["강문"], { aliases: ["강문", "옛생성별칭"], manualAliases: ["강릉 강문"] }, "강문해수욕장", "b0001"),
+    ).toEqual({ aliases: ["강문", "강릉 강문"], manualAliases: ["강릉 강문"] });
+    const f = fixture(); f.seed();
+    f.put("existing/beach-meta.json", { beaches: { b0001: { aliases: ["강문", "옛생성별칭"], manualAliases: [" 강릉 강문 ", "강문해수욕장"] } } });
+    const plan1 = f.build();
+    const meta1 = JSON.parse(plan1.files.get(join(f.root, "output/data/beach-meta.json")));
+    expect(meta1.beaches.b0001.aliases).toEqual(["강문", "강릉 강문"]);
+    expect(meta1.beaches.b0001.manualAliases).toEqual(["강릉 강문"]);
+
+    // 멱등성: 같은 입력과 생성된 meta로 다시 빌드해도 결과가 동일함
+    f.put("existing/beach-meta.json", meta1);
+    const plan2 = f.build();
+    expect(plan2.files.get(join(f.root, "output/data/beach-meta.json"))).toBe(plan1.files.get(join(f.root, "output/data/beach-meta.json")));
+  });
+  it("beach-meta.json이 손상되었거나 별칭 형식이 잘못되면 오류로 중단함", () => {
+    expect(() => preserveManualAliases(["강문"], { aliases: "강문" }, "강문해수욕장", "b0001")).toThrow(/b0001.*aliases 형식 오류/);
+    expect(() => preserveManualAliases(["강문"], { manualAliases: ["", "강릉 강문"] }, "강문해수욕장", "b0001")).toThrow(/b0001.*manualAliases 형식 오류/);
+    expect(() => preserveManualAliases(["강문"], { manualAliases: [123] }, "강문해수욕장", "b0001")).toThrow(/b0001.*manualAliases 형식 오류/);
+    expect(() => preserveManualAliases(["강문"], "bad", "강문해수욕장", "b0001")).toThrow(/b0001.*항목 형식 오류/);
+
+    const f = fixture(); f.seed();
+    f.put("existing/beach-meta.json", "{invalid-json");
+    expect(f.build).toThrow(/beach-meta\.json 파싱 실패/);
   });
   it("신규 해변에는 수영·null 사진·null CCTV·숨김 false 기본값을 사용함", () => {
     const f = fixture(); const b = f.build().draft.beaches[0];
