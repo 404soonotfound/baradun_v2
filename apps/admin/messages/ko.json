@@ -17,6 +17,14 @@
     "unknown": "알 수 없는 문제로 처리하지 못했어요. 입력한 내용은 그대로예요. 잠시 뒤 다시 시도해 주세요.",
     "limit": "요청이 너무 많아요. 잠시 뒤 다시 시도해 주세요."
   },
+  "table": {
+    "range": "{total}건 중 {from}–{to}",
+    "pageOf": "{page} / {pages}",
+    "prev": "이전",
+    "next": "다음",
+    "prevLabel": "이전 {label}",
+    "nextLabel": "다음 {label}"
+  },
   "login": {
     "title": "운영자 로그인",
     "description": "초대받은 운영자만 들어올 수 있어요.",
