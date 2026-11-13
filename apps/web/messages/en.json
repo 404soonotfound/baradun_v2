@@ -1125,6 +1125,7 @@
     "release": "Release to check for updates",
     "refreshing": "Checking for updates",
     "changed": "Updated as of {time} · {count, plural, one {# beach} other {# beaches}} changed",
+    "changedNoTime": "Updated just now · {count, plural, one {# beach} other {# beaches}} changed",
     "upToDate": "Already up to date",
     "failed": "Couldn't check for updates. Active warnings stay shown and others are marked unconfirmed. Try again in a moment.",
     "offline": "You're offline, so we couldn't check for updates. Active warnings stay shown and others are marked unconfirmed. Check your connection and try again."
