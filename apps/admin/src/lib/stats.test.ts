@@ -12,8 +12,10 @@ describe("이용 통계 계산 도우미 (#333)", () => {
     expect(sharePercent(10, null)).toBeNull();
     expect(sharePercent(10, 0)).toBeNull();
     expect(sharePercent(25, 100)).toBe(25);
+    expect(sumMetric([])).toBeNull();
     expect(sumMetric([null, null])).toBeNull();
-    expect(sumMetric([10, null, 20])).toBe(30);
+    expect(sumMetric([10, null, 20])).toBeNull();
+    expect(sumMetric([10, 20])).toBe(30);
   });
 
   it("GA4 metadata 제한 플래그는 true인 항목만 반환함(E8)", () => {

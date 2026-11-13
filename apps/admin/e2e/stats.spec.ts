@@ -127,3 +127,31 @@ test("GA4 미연결(configured: false)과 조회 실패(500) 안내", async ({ p
   await page.getByRole("button", { name: "새로 고침" }).click();
   await expect(page.getByText("이용 통계를 불러오지 못했어요.")).toBeVisible();
 });
+
+test("예시 데이터 배지와 세부 리포트 일부 실패(null) 구분 표시", async ({
+  page,
+}) => {
+  const base = localStatsView("7d");
+  await mockStats(page, () => ({
+    body: {
+      ...base,
+      sample: true,
+      period: {
+        ...base.period,
+        topBeaches: null,
+      },
+    },
+  }));
+  await openStats(page);
+
+  await expect(page.getByText("예시 데이터")).toBeVisible();
+  await expect(
+    page.getByText(
+      "이 항목을 불러오지 못했어요. 일부 집계가 비어 있으니 잠시 뒤 새로 고침해 주세요.",
+    ),
+  ).toBeVisible();
+  await expect(
+    page.getByText("집계된 해변 방문 기록이 없어요."),
+  ).toHaveCount(0);
+  await expectNoA11yViolations(page);
+});
