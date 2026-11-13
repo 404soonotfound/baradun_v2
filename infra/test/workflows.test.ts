@@ -418,13 +418,11 @@ describe("PR 필수 웹 검사 (BRD-102 결정 41·42)", () => {
     );
   });
 
-  // 빌드 한 번 + 4개 샤드(BRD-134): 샤드가 빠지거나 빌드 결과 없이 돌면 검사가 줄어듦
-  it("e2e는 e2e-build 결과를 받아 1/4~4/4 샤드로 모두 돌린다", () => {
+  it("web E2E는 빌드 결과를 받아 Chromium 핵심 흐름만 검사한다", () => {
     const e2e = jobLines(ci?.text ?? "", "e2e").join("\n");
     expect(e2e).toMatch(/needs:\s*\[changes, e2e-build\]/);
-    expect(e2e).toMatch(/shard:\s*\[1, 2, 3, 4\]/);
-    expect(e2e).toMatch(/fail-fast:\s*false/);
-    expect(e2e).toContain("--shard=${{ matrix.shard }}/4");
+    expect(e2e).toContain("npm run test:e2e:smoke -w apps/web");
+    expect(e2e).not.toContain("matrix.shard");
     expect(e2e).toMatch(/name:\s*e2e-site\s*\n\s*path:\s*apps\/web\/out/);
     expect(jobLines(ci?.text ?? "", "e2e-build").join("\n")).toMatch(
       /name:\s*e2e-site\s*\n\s*path:\s*apps\/web\/out/,
@@ -441,7 +439,6 @@ describe("PR 필수 웹 검사 (BRD-102 결정 41·42)", () => {
       "admin",
       "admin-build",
       "admin-e2e",
-      "admin-e2e-engines",
     ]) {
       const cond = jobIf(ci?.text ?? "", job);
       const area = job.startsWith("admin") ? "admin" : "web";
@@ -570,29 +567,10 @@ describe("PR 필수 웹 검사 (BRD-102 결정 41·42)", () => {
     );
   });
 
-  // 지원 브라우저 기준안(D16-E2): Firefox·WebKit 엔진 E2E는 admin-e2e와 나란히, 같은 빌드 결과로 돎
-  it("운영자 E2E는 chromium(admin-e2e)과 Firefox·WebKit(admin-e2e-engines)을 나눠 같은 빌드 결과로 돌린다", () => {
+  it("운영자 E2E는 Chromium 핵심 흐름만 CI에 넣고 다른 엔진은 수동 실행한다", () => {
     const chromium = jobLines(ci?.text ?? "", "admin-e2e").join("\n");
-    const engines = jobLines(ci?.text ?? "", "admin-e2e-engines").join("\n");
-    expect(chromium).toContain("npm run test:e2e -w apps/admin");
-    expect(engines).toMatch(/needs:\s*\[changes, admin-build\]/);
-    expect(engines).toMatch(
-      /name:\s*admin-site\s*\n\s*path:\s*apps\/admin\/out/,
-    );
-    expect(engines).toContain("engine: [firefox, webkit]");
-    expect(engines).toContain("fail-fast: false");
-    expect(engines).toContain(
-      "playwright install --with-deps ${{ matrix.engine }}",
-    );
-    // 캐시가 있을 때도 OS 의존성은 설치해야 함(빠지면 두 번째 실행부터 엔진이 시작하지 못함)
-    expect(engines).toContain("playwright install-deps ${{ matrix.engine }}");
-    expect(engines).toContain(
-      "key: playwright-${{ matrix.engine }}-${{ runner.os }}-${{ hashFiles('package-lock.json') }}",
-    );
-    expect(engines).toContain(
-      "playwright test --project=desktop-${{ matrix.engine }}",
-    );
-    expect(engines).toContain('E2E_ENGINES: "1"');
+    expect(chromium).toContain("npm run test:e2e:smoke -w apps/admin");
+    expect(ci?.text).not.toContain("admin-e2e-engines:");
   });
 
   it("web·e2e 결과는 ci-ok에 모인다", () => {
@@ -609,7 +587,6 @@ describe("PR 필수 웹 검사 (BRD-102 결정 41·42)", () => {
         "admin",
         "admin-build",
         "admin-e2e",
-        "admin-e2e-engines",
         "gitleaks",
       ]),
     );
