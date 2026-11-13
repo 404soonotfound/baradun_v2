@@ -291,7 +291,12 @@ export async function collectCatalog(
     failures.push({ source: "photo", reason: "unchecked", count: unchecked });
   for (const result of results.values()) {
     if (result.status === "failed")
-      failures.push({ source: "photo", reason: result.reason });
+      failures.push({
+        source: "photo",
+        reason: result.reason,
+        ...(result.code !== undefined ? { code: result.code } : {}),
+        ...(result.message !== undefined ? { message: result.message } : {}),
+      });
   }
   return { status, slotId, failures: collapseFailures(failures) };
 }

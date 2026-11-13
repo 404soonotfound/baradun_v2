@@ -1,4 +1,5 @@
 import type { BeachStatus } from "@baradun/contracts";
+import { sanitizeResultMessage } from "../collect/log";
 import {
   formatUtcIso,
   KST_OFFSET_MS,
@@ -32,7 +33,7 @@ export interface RipReading {
 export type RipResponse =
   | { status: "ok"; latest: RipReading; skippedRows: number }
   | { status: "none" }
-  | { status: "failed"; reason: string };
+  | { status: "failed"; reason: string; code?: string; message?: string };
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -77,11 +78,19 @@ export function parseRipResponse(
   const resultCode = json.header.resultCode;
   // 자료 없음(03)은 body 없이 header만 옴(2026-10-27 실응답) → body 검사보다 먼저 판정
   if (resultCode === "03") return { status: "none" };
+  if (resultCode !== "00") {
+    const code =
+      typeof resultCode === "string" ? resultCode : String(resultCode ?? "");
+    const message = sanitizeResultMessage(json.header.resultMsg);
+    return {
+      status: "failed",
+      reason: `result:${code}`,
+      ...(code !== "" ? { code } : {}),
+      ...(message !== undefined ? { message } : {}),
+    };
+  }
   if (!isObject(json.body)) {
     return { status: "failed", reason: "format:shape" };
-  }
-  if (resultCode !== "00") {
-    return { status: "failed", reason: `result:${String(resultCode)}` };
   }
   const { items, totalCount } = json.body;
   if (!Number.isInteger(totalCount)) {
