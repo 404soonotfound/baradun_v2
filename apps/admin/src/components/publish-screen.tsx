@@ -652,7 +652,7 @@ function PreviewDrawer({
   publishLocked: string | null;
   onRetry: () => void;
   onClose: () => void;
-  onPublish: (triggerEl: HTMLButtonElement | null) => void;
+  onPublish: () => void;
 }) {
   const slow = useSlow(waiting);
   const dialogRef = useRef<HTMLDialogElement>(null);
@@ -894,7 +894,7 @@ function PreviewDrawer({
           size="small"
           disabled={publishLocked !== null}
           aria-describedby={publishLocked ? "publish-locked" : undefined}
-          onClick={(e) => onPublish(e.currentTarget)}
+          onClick={() => onPublish()}
         >
           {t.publishButton}
         </Button>
@@ -1493,7 +1493,7 @@ export function PublishScreen({
     });
   };
 
-  const closePreview = () => {
+  const closePreview = (restoreFocus = true) => {
     setPreview({
       open: false,
       waiting: false,
@@ -1502,7 +1502,7 @@ export function PublishScreen({
     });
     const target = previewTrigger.current;
     previewTrigger.current = null;
-    if (target?.isConnected) {
+    if (restoreFocus && target?.isConnected) {
       window.requestAnimationFrame(() => target.focus());
     }
   };
@@ -1724,10 +1724,11 @@ export function PublishScreen({
             beaches={beaches}
             publishLocked={locked}
             onRetry={() => loadPreview()}
-            onClose={closePreview}
-            onPublish={(triggerEl) => {
-              closePreview();
-              openPublish(triggerEl);
+            onClose={() => closePreview()}
+            onPublish={() => {
+              const trigger = previewTrigger.current;
+              closePreview(false);
+              openPublish(trigger);
             }}
           />
         )}
