@@ -513,31 +513,35 @@ describe("PR 필수 웹 검사 (BRD-102 결정 41·42)", () => {
 
   // 바뀐 앱만 배포(BRD-178): 마지막으로 올린 커밋(deploy-version.txt) 뒤로 main CI가 그 앱 빌드 작업까지 성공한 가장 새 커밋
   // 옛 커밋이 새 배포를 덮지 않고, CI가 실패한 커밋의 변경은 그 앱을 다시 검사한 뒤 커밋으로만 나감
-  const deployPaths = (job: string) => {
-    const lines = jobLines(deploy?.text ?? "", job);
-    const start = lines.findIndex((l) =>
-      l.includes(".github/scripts/deploy-plan.sh"),
+  it("배포 비교 경로 생성물은 CI 경로 필터와 같고 두 앱 작업이 읽는다", () => {
+    const root = resolve(dir, "../..");
+    const saved = readFileSync(resolve(root, ".github/site-deploy-paths.json"), "utf8");
+    const generated = execFileSync(
+      process.execPath,
+      [
+        "--input-type=module",
+        "-e",
+        "import { readFileSync } from 'node:fs'; import { siteDeployPaths } from './.github/scripts/site-deploy-paths.mjs'; process.stdout.write(JSON.stringify(siteDeployPaths(readFileSync('.github/ci-filters.yml', 'utf8')), null, 2) + '\\n');",
+      ],
+      { cwd: root, encoding: "utf8" },
     );
-    const out: string[] = [];
-    for (const l of lines.slice(start + 1)) {
-      const m = l.match(/^\s+(\S+?)(\s*\\)?$/);
-      if (!m || /^\s*-\s/.test(l)) break;
-      out.push(m[1]!);
-      if (!m[2]) break;
+    expect(saved).toBe(generated);
+    const paths = JSON.parse(saved) as Record<"site" | "admin", string[]>;
+    for (const job of ["site", "admin"]) {
+      const text = jobLines(deploy?.text ?? "", job).join("\n");
+      expect(text).toContain(`jq -er '.${job}[]' .github/site-deploy-paths.json`);
+      expect(text).toContain('.github/scripts/deploy-plan.sh "$URL" "${app_paths[@]}"');
     }
-    return out;
-  };
-  it("배포 비교 경로는 CI 경로 필터(공통 + 앱)에서 ci.yml만 뺀 것과 같다", () => {
     const shared = ciFilterPaths("shared").filter(
       (p) => p !== ".github/workflows/ci.yml",
     );
     expect(shared.length).toBeGreaterThan(0);
-    expect(deployPaths("site").sort()).toEqual(
+    expect(paths.site.sort()).toEqual(
       [...shared, ...ciFilterPaths("web")]
         .map((path) => path.replace(/\/\*\*$/, ""))
         .sort(),
     );
-    expect(deployPaths("admin").sort()).toEqual(
+    expect(paths.admin.sort()).toEqual(
       [...shared, ...ciFilterPaths("admin")]
         .map((path) => path.replace(/\/\*\*$/, ""))
         .sort(),
