@@ -32,6 +32,7 @@ import {
   deployComment,
   deployFailureComment,
   formatTable,
+  infraCiCheck,
   isEmptyChangeSet,
   linkedIssues,
   touchesInfra,
@@ -44,8 +45,10 @@ import {
   checkFunctionLogs,
   compareOutOfStackPolicies,
   failedEventsOrNull,
+  IN_PROGRESS_MAX_WAIT_MS,
   isReady,
   readChangeSetPages,
+  sleepSync,
   stackStatus,
   waitWhileInProgress,
 } from "./deploy-aws.ts";
@@ -201,10 +204,101 @@ function identity() {
   return JSON.parse(aws(["sts", "get-caller-identity"]).stdout).Account;
 }
 
-// 다른 배포가 진행 중이면 끝날 때까지(최대 30분) 기다린 뒤, 새 변경을 받을 수 있는 상태인지 확인
-// 30분이 지나도 진행 중이면 멈춤(CI 역할 키 2시간 안에 자기 배포 대기를 남김)
+// 다른 배포를 기다리는 시간은 한 실행 전체에서 30분까지(여러 번 기다려도 합쳐서)
+// 그래야 다른 배포 대기 30분 + 자기 배포 대기 60분 + 변경 세트 만들기가 작업 제한 120분·키 2시간 안에 듦
+const waitDeadline = Date.now() + IN_PROGRESS_MAX_WAIT_MS;
+
+// 다른 배포가 진행 중이면 끝날 때까지(남은 대기 시간 안에서) 기다린 뒤, 새 변경을 받을 수 있는 상태인지 확인
+// 시간이 지나도 진행 중이면 멈춤
+function waitForOtherDeploy() {
+  return waitWhileInProgress(awsRunner, STACK_NAME, {
+    maxWaitMs: Math.max(0, waitDeadline - Date.now()),
+  });
+}
+
+// 이 트리의 인프라 영역(infra·services·contracts)을 main CI가 검사해 통과했는지(deploy-plan.ts infraCiCheck)
+// 바뀐 영역만 검사하므로, 앞 커밋에서 실패한 인프라 변경을 웹만 바꾼 다음 커밋이 배포하지 않게 거슬러 올라가 봄
+// 조회 실패는 멈춤. 앞 실행이 아직 돌고 있으면 남은 대기 시간 안에서 기다림
+const CI_HISTORY = 100;
+const CI_POLL_MS = 30_000;
+function readCommitCi() {
+  const runs = new Map();
+  for (const line of run("gh", [
+    "api",
+    `repos/${repo}/actions/workflows/ci.yml/runs?branch=main&event=push&per_page=${CI_HISTORY}`,
+    "--jq",
+    '.workflow_runs[] | "\\(.head_sha) \\(.id)"',
+  ])
+    .stdout.split("\n")
+    .filter(Boolean)) {
+    const [head, id] = line.split(" ");
+    if (!runs.has(head)) runs.set(head, id); // 최신 실행이 먼저
+  }
+  const commits = run("git", [
+    "rev-list",
+    "--first-parent",
+    `--max-count=${CI_HISTORY}`,
+    sha,
+  ])
+    .stdout.split("\n")
+    .filter(Boolean);
+  const cache = [];
+  return (i) => {
+    if (i >= commits.length) return undefined;
+    if (cache[i]) return cache[i];
+    const c = commits[i];
+    const id = runs.get(c);
+    let jobs = null;
+    if (id) {
+      jobs = {};
+      const listed = JSON.parse(
+        run("gh", ["api", `repos/${repo}/actions/runs/${id}/jobs?per_page=100`])
+          .stdout,
+      );
+      for (const j of listed.jobs ?? [])
+        jobs[j.name] = j.status === "completed" ? j.conclusion : null;
+    }
+    const files = run("git", [
+      "diff-tree",
+      "--no-commit-id",
+      "--name-only",
+      "-r",
+      "--root",
+      c,
+    ])
+      .stdout.split("\n")
+      .filter(Boolean);
+    cache[i] = { sha: c, jobs, touchesInfra: touchesInfra(files) };
+    return cache[i];
+  };
+}
+
+function infraChecked() {
+  for (;;) {
+    const got = infraCiCheck(readCommitCi());
+    if (got.unchecked.length === 0) return true;
+    if (got.pending && Date.now() + CI_POLL_MS < waitDeadline) {
+      console.log("앞 커밋의 main CI가 아직 돌고 있어 기다려요");
+      sleepSync(CI_POLL_MS);
+      continue;
+    }
+    const text =
+      "main CI가 이 트리의 인프라 영역(infra·services·contracts)을 검사해 통과했는지 확인하지 못해 자동 배포하지 않아요. 앞 커밋의 CI가 실패했으면 고친 커밋이 머지될 때 함께 배포되고, 진행 중이었으면 끝난 뒤 이 실행을 다시 돌려 주세요. 급하면 로컬 `npm run deploy:infra`로 배포해 주세요.";
+    summary(
+      `### 인프라 배포 건너뜀\n\n${text}\n\n${got.unchecked.map((r) => `- ${r}`).join("\n")}`,
+    );
+    output("kind", "unchecked");
+    console.log(`::warning::${got.unchecked.join(" / ")}`);
+    if (prsTouchInfra())
+      postComment(
+        `## 인프라 자동 배포 건너뜀 (${VIA})\n\n- 커밋: ${subject}\n- ${text}\n${got.unchecked.map((r) => `- ${r}`).join("\n")}\n- 실행 기록: ${runUrl}\n`,
+      );
+    return false;
+  }
+}
+
 function requireStackReady() {
-  const status = waitWhileInProgress(awsRunner, STACK_NAME);
+  const status = waitForOtherDeploy();
   if (!isReady(status)) {
     fail(
       `스택이 ${status ?? "확인 못 함"} 상태라 배포하지 않아요. 콘솔에서 상태를 확인해 주세요.`,
@@ -329,7 +423,7 @@ function createChangeSet(name) {
       fail(
         "변경 세트를 만들지 못했어요(cdk deploy --no-execute 실패). 위 로그를 확인해 주세요.",
       );
-    const status = waitWhileInProgress(awsRunner, STACK_NAME);
+    const status = waitForOtherDeploy();
     if (!isReady(status))
       fail(
         `스택이 ${status ?? "확인 못 함"} 상태라 변경 세트를 만들지 못했어요.`,
@@ -447,6 +541,7 @@ async function plan() {
   );
   if (ciConclusion(checks.check_runs) !== "success")
     fail("이 커밋의 ci-ok가 성공이 아니라 배포하지 않아요.");
+  if (!infraChecked()) return;
 
   // 2. 계정·스택·정책
   const account = identity();
