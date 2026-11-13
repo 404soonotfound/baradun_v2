@@ -95,6 +95,7 @@ interface Parts {
 }
 
 const LOADING = { state: "loading" } as const;
+const NO_STALE: ReadonlySet<keyof Parts> = new Set();
 const INITIAL: Parts = {
   collection: LOADING,
   published: LOADING,
@@ -632,7 +633,8 @@ function HomeBody({ beaches }: { beaches: Beaches }) {
   // 숨겨졌던 탭이 다시 보일 때 마지막 읽기가 60초를 넘었으면 바로 다시 읽음(바로 뒤 주기와 겹쳐 두 번 읽지 않게 간격을 봄)
   // 데모 계정은 자동으로 다시 읽지 않음: 데모 조회는 서버가 모두 sample.read로 기록해 60초마다 기록이 쌓임
   // 읽기가 60초보다 오래 걸려 겹치면 늦게 끝난 앞 읽기가 새 값을 덮지 않게 칸마다 순번으로 거름
-  const ready = me?.ok === true;
+  // 로그아웃·세션 만료 뒤에는 앞 세션의 확인 결과로 다시 읽지 않음
+  const ready = signedIn && me?.ok === true;
   useEffect(() => {
     if (!ready) return;
     let live = true;
@@ -723,19 +725,28 @@ function HomeBody({ beaches }: { beaches: Beaches }) {
   };
 
   // 서버 세션 확인이 실패하면 칸을 읽지 않으므로 로딩도 끝(알림만 남음)
+  // 로그아웃·세션 만료 뒤(로그인 화면으로 가는 중)에는 받아 둔 운영 데이터를 그리지 않고 첫 진입과 같은 자리표시만
+  // (세션 확인 중 틀과 같은 요소라 상태가 남아 있음, Codex 지적)
+  const view = signedIn
+    ? { me, parts, at, stale }
+    : { me: null, parts: INITIAL, at: null, stale: NO_STALE };
   const anyLoading =
     !signedIn ||
-    me === null ||
-    (me.ok &&
-      Object.values(parts).some((p: Slot<unknown>) => p.state === "loading"));
+    view.me === null ||
+    (view.me.ok &&
+      Object.values(view.parts).some(
+        (p: Slot<unknown>) => p.state === "loading",
+      ));
   // 5초 넘게 받는 칸이 있으면 제목 줄 오른쪽에 느림 안내(칸 높이를 바꾸지 않게 한 자리에서)
   const page = useLoadTiming(anyLoading);
   const role = signedIn ? roleLabel(snapshot.pool, snapshot.groups) : null;
-  const anyFailed = [parts.published, parts.inquiries, parts.notices].some(
-    (p) => p.state === "failed",
-  );
+  const anyFailed = [
+    view.parts.published,
+    view.parts.inquiries,
+    view.parts.notices,
+  ].some((p) => p.state === "failed");
   // 서버 세션 확인 전·확인됨이면 칸을 그림(확인 전에는 모두 자리표시). 확인 실패면 알림만
-  const showParts = !me || me.ok;
+  const showParts = !view.me || view.me.ok;
 
   return (
     <>
@@ -776,18 +787,18 @@ function HomeBody({ beaches }: { beaches: Beaches }) {
             </p>
           )}
         </div>
-        {me && !me.ok && me.code === "sample_not_allowed" && (
+        {view.me && !view.me.ok && view.me.code === "sample_not_allowed" && (
           <Notice tone="warn" title={h.demoPeriod} role="alert">
             {h.demoPeriodHint}
           </Notice>
         )}
-        {me &&
-          !me.ok &&
-          me.code !== "sample_not_allowed" &&
-          me.code !== "reauth" && (
+        {view.me &&
+          !view.me.ok &&
+          view.me.code !== "sample_not_allowed" &&
+          view.me.code !== "reauth" && (
             <Notice tone="fail" title={h.serverError} role="alert">
-              {"requestId" in me && me.requestId && (
-                <p>{fill(h.requestId, { id: me.requestId })}</p>
+              {"requestId" in view.me && view.me.requestId && (
+                <p>{fill(h.requestId, { id: view.me.requestId })}</p>
               )}
               <Button
                 variant="secondary"
@@ -801,7 +812,7 @@ function HomeBody({ beaches }: { beaches: Beaches }) {
           )}
         {showParts && (
           <>
-            <SourcesLine part={parts.collection} onRetry={reload} />
+            <SourcesLine part={view.parts.collection} onRetry={reload} />
             {anyFailed && (
               <Notice tone="warn" title={h.partFailed} role="alert">
                 <Button
@@ -814,22 +825,26 @@ function HomeBody({ beaches }: { beaches: Beaches }) {
                 </Button>
               </Notice>
             )}
-            <Summary parts={parts} nowMs={publishedAt} stale={stale} />
-            <Todos parts={parts} />
+            <Summary
+              parts={view.parts}
+              nowMs={publishedAt}
+              stale={view.stale}
+            />
+            <Todos parts={view.parts} />
             <Recent
-              part={parts.recent}
-              stale={stale.has("recent")}
+              part={view.parts.recent}
+              stale={view.stale.has("recent")}
               beaches={beaches}
             />
             <AsOf
-              at={at}
-              refreshing={reading && at !== null}
+              at={view.at}
+              refreshing={reading && view.at !== null}
               stale={
-                at === null
+                view.at === null
                   ? null
                   : staleSince(
-                      [...stale].map((key) => receivedAt[key]),
-                      at,
+                      [...view.stale].map((key) => receivedAt[key]),
+                      view.at,
                     )
               }
               onRetry={reload}
