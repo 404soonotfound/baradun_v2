@@ -1,3 +1,13 @@
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 
 import {
@@ -7,6 +17,7 @@ import {
   fetchFromNotion,
   main,
   parseArgs,
+  writeAtomic,
   parseInline,
   parsePolicyMarkdown,
 } from "../fetch.mjs";
@@ -50,7 +61,7 @@ describe("parseInline", () => {
   it("굵게·코드를 나누고 회색 글자 꾸밈과 백슬래시를 뺀다", () => {
     expect(
       parseInline(
-        "보기 \\< 편집 <b>미확정:</b> <code>/policies</code> **굵게** `코드` 3\\~6줄",
+        "보기 \\< 편집 <b>미확정:</b> <code>/policies</code> **굵게** \\`코드\\` 3\\~6줄",
       ),
     ).toEqual([
       { text: "보기 < 편집 " },
@@ -59,9 +70,7 @@ describe("parseInline", () => {
       { text: "/policies", code: true },
       { text: " " },
       { text: "굵게", bold: true },
-      { text: " " },
-      { text: "코드", code: true },
-      { text: " 3~6줄" },
+      { text: " `코드` 3~6줄" },
     ]);
     expect(parseInline('<span color="gray">근거: G1</span>')).toEqual([
       { text: "근거: G1" },
@@ -72,6 +81,13 @@ describe("parseInline", () => {
     ["링크", "[원문](https://example.test)"],
     ["모르는 태그", "<u>밑줄</u>"],
     ["다른 색", '<span color="red">빨강</span>'],
+    ["백틱 코드(노션은 <code>로 내보냄)", "보기 `코드`"],
+    ["닫히지 않은 회색 글자", '<span color="gray">근거: G1'],
+    ["짝 없는 </span>", "근거: G1</span>"],
+    [
+      "회색 글자 안의 회색 글자",
+      '<span color="gray"><span color="gray">a</span></span>',
+    ],
   ])("%s는 조용히 글자만 남기지 않고 멈춘다", (_, line) => {
     expect(() => parseInline(line)).toThrow();
   });
@@ -332,5 +348,41 @@ describe("main", () => {
       },
     );
     expect(write).not.toHaveBeenCalled();
+  });
+});
+
+describe("writeAtomic·main 실제 쓰기", () => {
+  const dir = () => mkdtempSync(path.join(tmpdir(), "ops-policy-"));
+
+  it("--markdown으로 임시 폴더 파일을 쓰고 .tmp를 남기지 않는다", async () => {
+    const root = dir();
+    const md = path.join(root, "p.md");
+    const out = path.join(root, "ops-policy.json");
+    writeFileSync(md, page());
+    await main(
+      ["--markdown", md, "--revision", REVISION],
+      {},
+      {
+        outFile: out,
+        log: vi.fn(),
+        now: () => FETCHED,
+      },
+    );
+    expect(JSON.parse(readFileSync(out, "utf8"))).toMatchObject({
+      revision: REVISION,
+      fetchedAt: FETCHED,
+    });
+    expect(readdirSync(root).sort()).toEqual(["ops-policy.json", "p.md"]);
+  });
+
+  it("바꿔 넣기에 실패하면 임시 파일을 지우고 멈춘다", () => {
+    const root = dir();
+    // 비어 있지 않은 폴더 자리에는 파일을 바꿔 넣을 수 없음
+    const out = path.join(root, "ops-policy.json");
+    mkdirSync(out);
+    writeFileSync(path.join(out, "keep"), "x");
+    expect(() => writeAtomic(out, "{}")).toThrow();
+    expect(existsSync(`${out}.tmp`)).toBe(false);
+    expect(readFileSync(path.join(out, "keep"), "utf8")).toBe("x");
   });
 });
