@@ -56,13 +56,13 @@ main push CI가 성공하면 `deploy.yml`의 `infra` 작업이 그 커밋으로 
 - 결과 댓글은 그 커밋을 머지한 PR 설명의 연결 이슈(`Fixes`·`Part of #n`)에, 없으면 PR에 남깁니다(계정 번호 가림). `DEPLOY_PAUSED=true`면 인프라 자동 배포도 멈춥니다.
 - CI 역할 `BaradunGitHubInfraDeploy`는 **스택 밖**에 둡니다. 스택 실행 정책은 `BaradunV2-*` 역할만 고칠 수 있어 스택 배포가 이 역할을 넓힐 수 없습니다. 권한은 CDK 부트스트랩 역할(배포·파일 올리기·조회) 맡기와 스택·정책·함수·로그 읽기뿐이고(`bootstrap/github-infra-deploy-policy.json`), IAM 쓰기가 없어 boundary·실행 정책을 고치지 못합니다. 신뢰는 이 저장소 `infra`·`infra-approval` environment의 OIDC 토큰만 받습니다(`bootstrap/github-infra-deploy-trust.json`).
 - 변경 세트 실행·지우기는 CDK 배포 역할(`cdk-hnb659fds-deploy-role-…`)로 합니다. 권한 상한은 계속 boundary가 막습니다.
-- 승인 실행(`infra-approve`)은 다음 자동 배포를 막지 않게 다른 동시 실행 그룹입니다. 그래서 두 작업은 스택이 진행 중이면 끝날 때까지 기다린 뒤 판정하고, 변경 세트 만들기·실행이 진행 중 충돌로 실패하면 한 번 다시 합니다. AWS 조회(정책·변경 세트·실패 이벤트·로그)는 로컬 명령과 같은 `scripts/deploy-aws.ts`를 씁니다.
+- 승인 실행(`infra-approve`)은 다음 자동 배포를 막지 않게 다른 동시 실행 그룹입니다. 그래서 두 작업은 스택이 진행 중이면 끝날 때까지(최대 30분, 넘으면 멈춤) 기다린 뒤 판정하고(기다리는 사이 main이 앞섰으면 건너뜀), 변경 세트 만들기·실행이 진행 중 충돌로 실패하면 한 번 다시 합니다. AWS 조회(정책·변경 세트·실패 이벤트·로그)는 로컬 명령과 같은 `scripts/deploy-aws.ts`를 씁니다.
 
 처음 한 번(관리자 프로필, 예: `AWS_PROFILE=baradun-sso`):
 
 ```bash
 cd infra
-aws iam create-role --role-name BaradunGitHubInfraDeploy --max-session-duration 3600 \
+aws iam create-role --role-name BaradunGitHubInfraDeploy --max-session-duration 7200 \
   --description "GitHub Actions infra deploy (infra, infra-approval environments only)" \
   --assume-role-policy-document file://bootstrap/github-infra-deploy-trust.json
 aws iam put-role-policy --role-name BaradunGitHubInfraDeploy --policy-name InfraDeploy \
