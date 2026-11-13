@@ -19,8 +19,10 @@ import { KmaSourceNote } from "@/components/source-note";
 import { Banner } from "@/components/ui/banner";
 import { Chip } from "@/components/ui/chip";
 import { EmptyState } from "@/components/ui/empty-state";
+import { PullToRefresh, RefreshButton } from "@/components/ui/pull-to-refresh";
 import { BeachRowSkeleton } from "@/components/ui/skeleton";
 import { StatusGroup } from "@/components/ui/status-group";
+import { Toast } from "@/components/ui/toast";
 import { ViewToggle } from "@/components/ui/view-toggle";
 import type { BeachSummary } from "@/lib/beach-summary";
 import {
@@ -53,6 +55,7 @@ import { boundsOf } from "@/lib/map/bounds";
 import { NEARBY_MAX_ZOOM, nearbyPlan } from "@/lib/map/nearby";
 import { formatKm } from "@/lib/meta-join";
 import { setRegion, useRegion } from "@/lib/region";
+import { useManualRefresh } from "@/lib/snapshot/use-manual-refresh";
 import {
   NATIONWIDE,
   regionGroups,
@@ -103,6 +106,13 @@ export function ExploreScreen({
   const { rowMeta, rowDetail } = useRowText();
   const titleRef = useRef<HTMLHeadingElement>(null);
   const regionSheet = useSheet("region");
+  const {
+    refreshing,
+    changedFromById,
+    triggerRefresh,
+    toastMessage,
+    holdToast,
+  } = useManualRefresh(beaches);
   // 위치 안내 배너를 닫았는지. 이번 방문 동안만 기억
   const [offBannerClosed, setOffBannerClosed] = useState(false);
   // 지도에서 고른 해변(카드)과 PC 목록에서 가리킨 해변(마커 강조)
@@ -269,6 +279,7 @@ export function ExploreScreen({
           wave={view.metrics.waveHeight}
           status={view.badge}
           detail={rowDetail(view, nowMs, item.warningZones)}
+          changedFrom={changedFromById.get(item.id) ?? null}
           // PC 지도에서 고른 해변은 행도 강조(파란 줄 + 연한 바탕)
           highlight={item.id === selectedId}
           onHighlight={(on) =>
@@ -357,17 +368,21 @@ export function ExploreScreen({
   }
 
   return (
-    <div className="lg:grid lg:grid-cols-[448px_minmax(0,1fr)] lg:items-start lg:gap-6">
-      {/* 묶음 간격: 모바일 12(Figma pad.stack), 머리(제목·검색·지역)는 11. PC는 16 그대로 */}
-      <div className="flex flex-col gap-3 lg:gap-4">
-        <div className="flex flex-col gap-[11px] lg:gap-4">
-          <h1
-            ref={titleRef}
-            tabIndex={-1}
-            className="text-title-xl text-text-default outline-none"
-          >
-            {t("pages.explore")}
-          </h1>
+    <PullToRefresh refreshing={refreshing} onRefresh={triggerRefresh}>
+      <div className="lg:grid lg:grid-cols-[448px_minmax(0,1fr)] lg:items-start lg:gap-6">
+        {/* 묶음 간격: 모바일 12(Figma pad.stack), 머리(제목·검색·지역)는 11. PC는 16 그대로 */}
+        <div className="flex flex-col gap-3 lg:gap-4">
+          <div className="flex flex-col gap-[11px] lg:gap-4">
+            <div className="flex items-center justify-between gap-2">
+              <h1
+                ref={titleRef}
+                tabIndex={-1}
+                className="text-title-xl text-text-default outline-none"
+              >
+                {t("pages.explore")}
+              </h1>
+              <RefreshButton refreshing={refreshing} onRefresh={triggerRefresh} />
+            </div>
 
           {/* 검색 입구(누르면 검색 화면). PC는 상단 내비에 검색이 있어 숨김. 모바일 지도 보기도 숨김(Figma 174:894) */}
           <Link
@@ -607,6 +622,8 @@ export function ExploreScreen({
         <MapLegend clearScope={mapClearScope} className="lg:hidden" />
       </div>
     </div>
+      <Toast message={toastMessage} onHold={holdToast} />
+    </PullToRefresh>
   );
 }
 
