@@ -62,7 +62,7 @@ export const RETRY_LIMITS = {
 // - 로그인 반복 요청 경보(LoginAbuse, D17-4): 5개 (풀 2 × [시도 1 + 성공 1] + 계정 복구 1) → 무료 초과 5개 × $0.10 ≈ 월 $0.50
 // - 날씨 수집 계속 실패(WeatherFailing, BRD-181): 1개 (Errors) → 무료 초과 6개 × $0.10 ≈ 월 $0.60
 // - 운영 API 오류 급증(OpsApiErrors, BRD-157·D17-7): 2개 (Url5xxCount 1 + AuthDenied 로그 지표 1) → 무료 초과 8개 × $0.10 ≈ 월 $0.80 (이번 경보 몫 +$0.20)
-// - 문의 이메일 기한 초과(InquiryEmailOverdue, BRD-119): 1개 (EmailOverdue 로그 지표 1) → 무료 초과 9개 × $0.10 ≈ 월 $0.90 (월 $1 예산 안)
+// - 문의 이메일 기한 초과(InquiryEmailOverdue, BRD-119): 2개 (EmailOverdue 로그 지표 1 + 정리 실패 대기열 1) → 무료 초과 10개 × $0.10 ≈ 월 $1.00 (월 $1 예산 안)
 // 경보 리소스 자체의 개수 상한: 13 → 14(InquiryEmailOverdue 추가, BRD-119)
 export const MAX_ALARMS = 14;
 
@@ -97,6 +97,15 @@ export const INQUIRY_EMAIL_OVERDUE_ALARM = {
   periodMinutes: 5,
   metricNamespace: "Baradun/Inquiry",
   metricName: "EmailOverdue",
+} as const;
+
+// 문의 이메일 정리 일일 작업용 희소 GSI (BRD-119)
+// 이름은 services/src/inquiry/policy.ts INQUIRY_EMAIL_INDEX_NAME과 같아야 함(tables.test.ts가 확인)
+// KEYS_ONLY 투영으로 email 원문을 GSI에 넣지 않음. 용량 1/1 → 전체 13/13, 상한(25) 안
+export const INQUIRY_EMAIL_INDEX = {
+  name: "emailCleanupPartition-receivedAt",
+  read: 1,
+  write: 1,
 } as const;
 export const MAX_DYNAMODB_CAPACITY_UNITS = 25; // 읽기·쓰기 각각, 모든 테이블·GSI 합계
 

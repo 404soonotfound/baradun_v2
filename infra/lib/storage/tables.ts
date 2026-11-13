@@ -1,6 +1,7 @@
 import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
 import { Construct } from "constructs";
 import {
+  INQUIRY_EMAIL_INDEX,
   INQUIRY_STATUS_INDEX,
   TABLE_CAPACITY,
   TTL_ATTRIBUTE,
@@ -72,6 +73,19 @@ export class StorageTables extends Construct {
       nonKeyAttributes: [...INQUIRY_STATUS_INDEX.projected],
       readCapacity: INQUIRY_STATUS_INDEX.read,
       writeCapacity: INQUIRY_STATUS_INDEX.write,
+    });
+    // 문의 이메일 일일 정리용 희소 GSI(BRD-119). emailCleanupPartition은 INQUIRY_EMAIL# 항목에만 넣음
+    // KEYS_ONLY 투영이라 email 본문은 GSI에 들어가지 않음
+    this.inquiry.addGlobalSecondaryIndex({
+      indexName: INQUIRY_EMAIL_INDEX.name,
+      partitionKey: {
+        name: "emailCleanupPartition",
+        type: dynamodb.AttributeType.STRING,
+      },
+      sortKey: { name: "receivedAt", type: dynamodb.AttributeType.STRING },
+      projectionType: dynamodb.ProjectionType.KEYS_ONLY,
+      readCapacity: INQUIRY_EMAIL_INDEX.read,
+      writeCapacity: INQUIRY_EMAIL_INDEX.write,
     });
   }
 }

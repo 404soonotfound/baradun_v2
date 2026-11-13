@@ -59,6 +59,7 @@ export interface OpsAlarmsProps {
   readonly opsApi: lambda.IFunction; // 운영 API 함수 /ops/* (D17-7)
   readonly opsApiLogGroup: logs.ILogGroup; // 운영 API 로그 그룹 (D17-7 권한 거부 지표 필터용)
   readonly inquiryLogGroup: logs.ILogGroup; // 문의 함수 로그 그룹 (BRD-119 이메일 기한 초과 지표 필터용)
+  readonly inquiryCleanupFailuresQueue: sqs.IQueue; // 일일 이메일 정리 실패 대기열 (BRD-119)
   // 로그인 반복 요청 감시 대상(운영자·데모 풀의 관리자 앱 클라이언트, D17-4)
   readonly signInClients: readonly {
     readonly userPoolId: string;
@@ -153,7 +154,10 @@ export class OpsAlarms extends Construct {
     this.loginAbuseAlarm(props.signInClients);
     this.weatherAlarm(collector("Weather"));
     this.opsApiErrorsAlarm(props.opsApi, props.opsApiLogGroup);
-    this.inquiryEmailOverdueAlarm(props.inquiryLogGroup);
+    this.inquiryEmailOverdueAlarm(
+      props.inquiryLogGroup,
+      props.inquiryCleanupFailuresQueue,
+    );
 
     this.addKoreanNotifications();
   }
@@ -294,8 +298,13 @@ export class OpsAlarms extends Construct {
     this.alarms.push(alarm);
   }
 
-  // ⑤-6 문의 이메일 기한 초과 경보(BRD-119): 89일 이상 남은 이메일 항목이 1건 이상 발견되면 울림
-  private inquiryEmailOverdueAlarm(logGroup: logs.ILogGroup): void {
+  // ⑤-6 문의 이메일 기한 초과·정리 실패 경보(BRD-119):
+  // - 기한 초과: 89일 이상 남은 이메일 항목이 1건 이상 발견됨(inquiry_email_overdue 로그)
+  // - 정리 실패: 일일 정리 작업 오류·시간 초과로 실패 대기열(DLQ)에 메시지가 들어옴
+  private inquiryEmailOverdueAlarm(
+    logGroup: logs.ILogGroup,
+    cleanupFailuresQueue: sqs.IQueue,
+  ): void {
     const period = Duration.minutes(INQUIRY_EMAIL_OVERDUE_ALARM.periodMinutes);
     const filter = new logs.MetricFilter(this, "InquiryEmailOverdueFilter", {
       logGroup,
@@ -306,11 +315,21 @@ export class OpsAlarms extends Construct {
       ),
       metricValue: "1",
     });
+    const overdue = filter.metric({
+      statistic: "Sum",
+      period,
+    });
+    const dlq = cleanupFailuresQueue.metricApproximateNumberOfMessagesVisible({
+      statistic: "Maximum",
+      period,
+    });
     const alarm = new cloudwatch.Alarm(this, "InquiryEmailOverdue", {
       alarmName: this.alarmName("InquiryEmailOverdue"),
-      metric: filter.metric({
-        statistic: "Sum",
+      metric: new cloudwatch.MathExpression({
+        expression: "MAX([FILL(overdue, 0), FILL(dlq, 0)])",
+        usingMetrics: { overdue, dlq },
         period,
+        label: "문의 이메일 기한 초과·정리 실패",
       }),
       threshold: 1,
       comparisonOperator:
@@ -318,7 +337,7 @@ export class OpsAlarms extends Construct {
       evaluationPeriods: 1,
       treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
       alarmDescription:
-        "89일 이상 남은 문의 이메일 항목이 발견됨. 일일 정리 작업 로그 확인 필요",
+        "89일 이상 남은 문의 이메일 항목이 발견되었거나 일일 정리 작업이 실패함. CloudWatch 로그와 실패 대기열 확인 필요",
     });
     this.alarms.push(alarm);
   }
