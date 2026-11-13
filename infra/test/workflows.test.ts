@@ -34,7 +34,7 @@ const ciFilterPaths = (name: string) => {
   if (start < 0) return [];
   const end = lines.findIndex((line, i) => i > start && /^\S/.test(line));
   return lines.slice(start + 1, end < 0 ? undefined : end).flatMap((line) => {
-    const path = line.match(/^  - '([^']+)'\s*$/)?.[1];
+    const path = line.match(/^  - (['"])(.+)\1\s*$/)?.[2];
     return path === undefined ? [] : [path];
   });
 };
