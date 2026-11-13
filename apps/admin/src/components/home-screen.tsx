@@ -993,12 +993,6 @@ const TODO_RHYTHM = [
   ["w-[176px]", "w-[168px]", "w-[46px]"],
 ] as const;
 
-const TODO_HREF = {
-  sources: "/collection/",
-  inquiries: "/inquiries/",
-  notices: "/publish/",
-} as const;
-
 function Todos({ parts }: { parts: Parts }) {
   const judgment = judgmentLine(valueOf(parts.collection));
   const received = inquirySummary(valueOf(parts.inquiries))?.received ?? null;
@@ -1081,7 +1075,7 @@ function Todos({ parts }: { parts: Parts }) {
                         </span>
                       )}
                     </span>
-                    <Link href={TODO_HREF[item.key]} className={SMALL_LINK}>
+                    <Link href={item.href} className={SMALL_LINK}>
                       {h.todoAction[item.key]}
                       <span className="sr-only"> · {title}</span>
                     </Link>
