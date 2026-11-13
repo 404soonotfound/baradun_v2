@@ -16,13 +16,13 @@ import type {
 } from "@baradun/contracts";
 import {
   INQUIRY_BODY_RETENTION_DAYS,
+  INQUIRY_EMAIL_CLEANUP_PARTITION,
+  INQUIRY_EMAIL_INDEX_NAME,
   INQUIRY_EMAIL_OVERDUE_DAYS,
   INQUIRY_EMAIL_RETENTION_DAYS,
   INQUIRY_IDEMPOTENCY_RETENTION_DAYS,
   INQUIRY_NOTIFICATION_LIMIT_PER_DAY,
   INQUIRY_RATE_LIMIT_PER_MINUTE,
-  INQUIRY_STATUSES,
-  INQUIRY_STATUS_INDEX_NAME,
   kstDate,
   type InquiryStatus,
   ttlAfterDays,
@@ -218,6 +218,7 @@ export class InquiryStore {
           Item: {
             pk: `INQUIRY_EMAIL#${inquiry.inquiryId}`,
             kind: "inquiry_email",
+            emailCleanupPartition: INQUIRY_EMAIL_CLEANUP_PARTITION,
             inquiryId: inquiry.inquiryId,
             email: inquiry.email,
             receivedAt,
@@ -251,8 +252,8 @@ export class InquiryStore {
     );
   }
 
-  // 상태 GSI에서 88일 지난 문의를 찾아 이메일 항목(INQUIRY_EMAIL#<id>)을 명시적으로 삭제함(BRD-119)
-  // email 원문은 읽지 않고 ReturnValues: "ALL_OLD"의 receivedAt으로 89일 이상 경과 건수만 셈
+  // 이메일 자체의 희소 GSI(KEYS_ONLY)에서 88일 지난 이메일 항목을 찾아 명시적으로 삭제함(BRD-119)
+  // 본문(90일 TTL)이 먼저 지워져도 이메일 항목을 누락하지 않으며, email 원문은 GSI에 투영되지 않음
   async cleanupExpiredEmails(now: Date): Promise<{
     readonly deletedCount: number;
     readonly overdueCount: number;
@@ -266,48 +267,51 @@ export class InquiryStore {
 
     let deletedCount = 0;
     let overdueCount = 0;
+    let exclusiveStartKey: Record<string, unknown> | undefined;
 
-    for (const status of INQUIRY_STATUSES) {
-      let exclusiveStartKey: Record<string, unknown> | undefined;
-      do {
-        const page = await this.documents.send(
-          new QueryCommand({
+    do {
+      const page = await this.documents.send(
+        new QueryCommand({
+          TableName: this.tableName,
+          IndexName: INQUIRY_EMAIL_INDEX_NAME,
+          KeyConditionExpression:
+            "emailCleanupPartition = :partition AND receivedAt <= :expiredBefore",
+          ExpressionAttributeValues: {
+            ":partition": INQUIRY_EMAIL_CLEANUP_PARTITION,
+            ":expiredBefore": expiredBefore,
+          },
+          ExclusiveStartKey: exclusiveStartKey,
+        }),
+      );
+
+      for (const item of page.Items ?? []) {
+        if (
+          typeof item.pk !== "string" ||
+          !item.pk.startsWith("INQUIRY_EMAIL#")
+        ) {
+          continue;
+        }
+        const deleted = await this.documents.send(
+          new DeleteCommand({
             TableName: this.tableName,
-            IndexName: INQUIRY_STATUS_INDEX_NAME,
-            KeyConditionExpression:
-              "inquiryStatus = :status AND receivedAt <= :expiredBefore",
-            ExpressionAttributeValues: {
-              ":status": status,
-              ":expiredBefore": expiredBefore,
-            },
-            ExclusiveStartKey: exclusiveStartKey,
+            Key: { pk: item.pk },
+            ReturnValues: "ALL_OLD",
           }),
         );
-
-        for (const item of page.Items ?? []) {
-          if (typeof item.inquiryId !== "string") continue;
-          const deleted = await this.documents.send(
-            new DeleteCommand({
-              TableName: this.tableName,
-              Key: { pk: `INQUIRY_EMAIL#${item.inquiryId}` },
-              ReturnValues: "ALL_OLD",
-            }),
-          );
-          if (!deleted.Attributes) continue;
-          deletedCount += 1;
-          if (
-            typeof deleted.Attributes.receivedAt === "string" &&
-            deleted.Attributes.receivedAt <= overdueBefore
-          ) {
-            overdueCount += 1;
-          }
+        if (!deleted.Attributes) continue;
+        deletedCount += 1;
+        if (
+          typeof deleted.Attributes.receivedAt === "string" &&
+          deleted.Attributes.receivedAt <= overdueBefore
+        ) {
+          overdueCount += 1;
         }
+      }
 
-        exclusiveStartKey = page.LastEvaluatedKey as
-          | Record<string, unknown>
-          | undefined;
-      } while (exclusiveStartKey);
-    }
+      exclusiveStartKey = page.LastEvaluatedKey as
+        | Record<string, unknown>
+        | undefined;
+    } while (exclusiveStartKey);
 
     return { deletedCount, overdueCount };
   }
