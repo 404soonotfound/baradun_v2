@@ -24,12 +24,34 @@ function collectLeafEntries(
   return out;
 }
 
+// ICU 메시지에서 최상위 치환 변수({name} 또는 {name, plural|select, ...})만 추출함
+// plural/select 선택지 본문(예: other {beaches})은 변수로 오인하지 않도록 건너뜀
 function extractPlaceholders(text: string): string[] {
-  return [
-    ...new Set(
-      [...text.matchAll(/\{([a-zA-Z0-9_]+)\s*(?:,|\})/g)].map((m) => m[1]!),
-    ),
-  ].sort();
+  const names = new Set<string>();
+  let i = 0;
+  while (i < text.length) {
+    if (text[i] === "'" && i + 1 < text.length && text[i + 1] === "{") {
+      i += 2;
+      continue;
+    }
+    if (text[i] !== "{") {
+      i++;
+      continue;
+    }
+    const rest = text.slice(i + 1);
+    const m = /^([a-zA-Z0-9_]+)\s*(?:(,)|(\}))/.exec(rest);
+    if (m) {
+      names.add(m[1]!);
+    }
+    let depth = 1;
+    i++;
+    while (i < text.length && depth > 0) {
+      if (text[i] === "{") depth++;
+      else if (text[i] === "}") depth--;
+      i++;
+    }
+  }
+  return [...names].sort();
 }
 
 describe("한국어·영어 문구 키 짝 맞춤 (#227 BRD-48)", () => {
@@ -42,6 +64,9 @@ describe("한국어·영어 문구 키 짝 맞춤 (#227 BRD-48)", () => {
     expect(onlyKo).toEqual([]);
     expect(onlyEn).toEqual([]);
 
+    for (const [key, value] of koMap) {
+      expect(value.trim().length, `empty ko key: ${key}`).toBeGreaterThan(0);
+    }
     for (const [key, value] of enMap) {
       expect(value.trim().length, `empty en key: ${key}`).toBeGreaterThan(0);
     }
