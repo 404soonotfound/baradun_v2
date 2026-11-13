@@ -18,14 +18,28 @@ export function maskRequestKeys(text: string): string {
   return text.replace(KEY_PARAM, `$1${MASK}`);
 }
 
-// 외부 API header.resultMsg를 저장·로그에 남기기 전에 키 인자·제어문자·연속 공백을 정제함(D16-E7)
-export function sanitizeResultMessage(raw: unknown): string | undefined {
+// 외부 API header.resultMsg를 저장·로그에 남기기 전에 키 인자·제어문자·연속 공백을 정제하고 길이를 제한함(D16-E7)
+export function sanitizeResultMessage(
+  raw: unknown,
+  maxLen = 200,
+): string | undefined {
   if (typeof raw !== "string") return undefined;
   const cleaned = maskRequestKeys(raw)
     .replace(/[\u0000-\u001f\u007f]+/g, " ")
     .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, maxLen)
     .trim();
   return cleaned === "" ? undefined : cleaned;
+}
+
+// 외부 API resultCode는 문자열·숫자만 허용하고 정제·길이 제한해 보존함
+export function normalizeResultCode(
+  raw: unknown,
+  maxLen = 64,
+): string | undefined {
+  if (typeof raw !== "string" && typeof raw !== "number") return undefined;
+  return sanitizeResultMessage(String(raw), maxLen);
 }
 
 export function maskSecrets(text: string, secrets: readonly string[]): string {

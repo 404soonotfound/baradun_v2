@@ -1,4 +1,4 @@
-import { sanitizeResultMessage } from "../collect/log";
+import { normalizeResultCode, sanitizeResultMessage } from "../collect/log";
 import { KST_OFFSET_MS, formatUtcIso, parseKstTime } from "../warnings/time";
 
 // 기상청 날씨 예보 응답 해석 (BRD-181, 결정 기록 18장 D18-1·D18-8·D18-9, 데이터 출처 문서 14장)
@@ -28,16 +28,16 @@ export function parseEnvelope(body: string): Parsed<unknown[]> {
   }
   const response = isObject(json) ? json.response : undefined;
   const header = isObject(response) ? response.header : undefined;
-  const code = isObject(header) ? header.resultCode : undefined;
-  if (code !== "00") {
-    const rawCode = typeof code === "string" ? code : undefined;
+  const rawCode = isObject(header) ? header.resultCode : undefined;
+  if (rawCode !== "00") {
+    const code = normalizeResultCode(rawCode);
     const message = isObject(header)
       ? sanitizeResultMessage(header.resultMsg)
       : undefined;
     return {
       status: "failed",
-      reason: `result:${rawCode ?? "missing"}`,
-      ...(rawCode !== undefined ? { code: rawCode } : {}),
+      reason: `result:${code ?? "missing"}`,
+      ...(code !== undefined ? { code } : {}),
       ...(message !== undefined ? { message } : {}),
     };
   }
