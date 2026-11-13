@@ -30,6 +30,7 @@
     "retry": "다시 시도",
     "refreshing": "다시 읽는 중",
     "stale": "마지막으로 받은 값이에요 · {time} 기준",
+    "staleShort": "마지막으로 받은 값",
     "checking": "확인 중…"
   },
   "table": {

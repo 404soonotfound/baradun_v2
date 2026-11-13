@@ -208,14 +208,31 @@ export const valueOf = <T>(part: Slot<T> | undefined): T | null =>
   part?.state === "ok" ? part.value : null;
 
 // 다시 읽은 칸 결과를 앞 값과 합침(GH-462, 보드 L0 '다시 읽기')
-// 다시 읽기가 실패해도 앞에서 받은 값은 지우지 않음(stale: 앞 값을 두고 '마지막으로 받은 값이에요' 줄)
+// 다시 읽기가 실패해도 앞에서 받은 값은 지우지 않음(stale: 앞 값을 두고 그 칸에 '마지막으로 받은 값' 표시)
 // 앞 값이 없거나 권한 없음이면 실패를 그대로 보임(결측을 정상·0으로 채우지 않음)
+// keep=false: 판단 출처 상태처럼 앞의 '정상'을 실패 뒤에도 보이면 안 되는 칸은 실패를 그대로 보임
 export function mergePart<T>(
   prev: Slot<T>,
   next: Part<T>,
+  keep = true,
 ): { part: Slot<T>; stale: boolean } {
-  if (next.state === "failed" && prev.state === "ok") {
+  if (keep && next.state === "failed" && prev.state === "ok") {
     return { part: prev, stale: true };
   }
   return { part: next, stale: false };
+}
+
+// 앞 값을 둔 칸 중 가장 오래 받은 시각. 기준 시각과 같은 날(서울)이면 시:분만, 아니면 날짜까지
+export function staleSince(
+  received: readonly (string | undefined)[],
+  asOf: string,
+): { iso: string; sameDay: boolean } | null {
+  const times = received.filter((t): t is string => typeof t === "string");
+  if (times.length === 0) return null;
+  const iso = times.reduce((a, b) => (Date.parse(a) <= Date.parse(b) ? a : b));
+  const day = (v: string) =>
+    new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(
+      new Date(v),
+    );
+  return { iso, sameDay: day(iso) === day(asOf) };
 }

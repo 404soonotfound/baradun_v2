@@ -20,6 +20,7 @@ import {
   receivedCount,
   recentChanges,
   settle,
+  staleSince,
   todos,
   undeterminedCount,
   valueOf,
@@ -255,14 +256,26 @@ function SourcesResult({
   );
 }
 
+// 다시 읽기가 실패해 앞 값을 둔 칸 표시(색만이 아니라 글로 알림)
+function StaleMark() {
+  return (
+    <span className="ml-1.5 align-middle text-label-s font-normal text-text-muted">
+      {t.loading.staleShort}
+    </span>
+  );
+}
+
 function Value({
   part,
   width = "w-[56px]",
+  stale = false,
   children,
 }: {
   part: Slot<unknown>;
   // 자리표시 너비 클래스(예상 값 길이)
   width?: string;
+  // 앞 값을 두고 있음
+  stale?: boolean;
   children: React.ReactNode;
 }) {
   const slot = useSlot(part);
@@ -274,7 +287,12 @@ function Value({
     );
   }
   if (part.state === "ok") {
-    return <dd className={`${VALUE} ${slot.cls}`}>{children}</dd>;
+    return (
+      <dd className={`${VALUE} ${slot.cls}`}>
+        {children}
+        {stale && <StaleMark />}
+      </dd>
+    );
   }
   return (
     <dd className={`${VALUE} text-title-s ${slot.cls}`}>
@@ -287,11 +305,13 @@ function Value({
 function Hint({
   part,
   width,
+  stale = false,
   children,
 }: {
   part: Slot<unknown>;
   // 자리표시 너비 클래스
   width: string;
+  stale?: boolean;
   children: React.ReactNode;
 }) {
   const slot = useSlot(part);
@@ -300,13 +320,24 @@ function Hint({
       {slot.placeholder || part.state === "loading" ? (
         <SkLine className={width} />
       ) : (
-        children
+        <>
+          {children}
+          {stale && ` · ${t.loading.staleShort}`}
+        </>
       )}
     </dd>
   );
 }
 
-function Summary({ parts, nowMs }: { parts: Parts; nowMs: number }) {
+function Summary({
+  parts,
+  nowMs,
+  stale,
+}: {
+  parts: Parts;
+  nowMs: number;
+  stale: ReadonlySet<keyof Parts>;
+}) {
   const published = valueOf(parts.published);
   const notices = noticeCounts(valueOf(parts.notices));
   const expired = expiredCount(published, nowMs);
@@ -317,7 +348,7 @@ function Summary({ parts, nowMs }: { parts: Parts; nowMs: number }) {
     >
       <div className={CARD}>
         <dt className={LABEL}>{h.kpiInquiries}</dt>
-        <Value part={parts.inquiries}>
+        <Value part={parts.inquiries} stale={stale.has("inquiries")}>
           {fill(h.kpiInquiriesValue, { count: valueOf(parts.inquiries) ?? 0 })}
         </Value>
         <dd className={HINT}>{h.kpiInquiriesHint}</dd>
@@ -325,7 +356,7 @@ function Summary({ parts, nowMs }: { parts: Parts; nowMs: number }) {
       <div className={CARD}>
         <dt className={LABEL}>{h.kpiUndetermined}</dt>
         {/* 게시본을 읽지 못하면(available: false 포함) 0곳이 아니라 확인 못 함 */}
-        <Value part={parts.published}>
+        <Value part={parts.published} stale={stale.has("published")}>
           {fill(h.kpiUndeterminedValue, {
             count: undeterminedCount(published) ?? 0,
           })}
@@ -346,10 +377,18 @@ function Summary({ parts, nowMs }: { parts: Parts; nowMs: number }) {
       </div>
       <div className={CARD}>
         <dt className={LABEL}>{h.kpiPublish}</dt>
-        <Value part={parts.published} width="w-[120px]">
+        <Value
+          part={parts.published}
+          width="w-[120px]"
+          stale={stale.has("published")}
+        >
           {published ? kstDateTime(published.generatedAt) : null}
         </Value>
-        <Hint part={parts.notices} width="w-[180px]">
+        <Hint
+          part={parts.notices}
+          width="w-[180px]"
+          stale={stale.has("notices")}
+        >
           {notices
             ? fill(h.kpiNotices, {
                 scheduled: notices.scheduled,
@@ -440,9 +479,12 @@ function Todos({ parts }: { parts: Parts }) {
 
 function Recent({
   part,
+  stale,
   beaches,
 }: {
   part: Slot<RecentView>;
+  // 다시 읽기가 실패해 앞 목록을 둠
+  stale: boolean;
   beaches: Beaches;
 }) {
   const slot = useSlot(part);
@@ -454,6 +496,7 @@ function Recent({
         className="text-title-s font-semibold text-text-default"
       >
         {h.recentTitle}
+        {stale && <StaleMark />}
       </h2>
       {placeholder && (
         // 한 쪽 행 수(5)만큼, 행 높이 그대로. 길이는 정해진 리듬으로 바꿈
@@ -542,8 +585,12 @@ function HomeBody({ beaches }: { beaches: Beaches }) {
   }, [parts]);
   // 마지막으로 모든 칸을 다 받은 시각(기준 시각). 아직 한 번도 다 받지 못했으면 null
   const [at, setAt] = useState<string | null>(null);
-  // 다시 읽기가 실패해 앞 값을 두고 있는 칸('마지막으로 받은 값이에요' 줄)
+  // 다시 읽기가 실패해 앞 값을 두고 있는 칸(그 칸에 '마지막으로 받은 값', 아래 '마지막으로 받은 값이에요' 줄)
   const [stale, setStale] = useState<ReadonlySet<keyof Parts>>(new Set());
+  // 칸마다 마지막으로 값을 받은 시각(앞 값을 둔 칸의 기준 시각)
+  const [receivedAt, setReceivedAt] = useState<
+    Partial<Record<keyof Parts, string>>
+  >({});
   // 읽는 중(첫 읽기 뒤에는 기준 시각 옆 회전 표시)
   const [reading, setReading] = useState(false);
   // 게시본을 받은 시각. 유효 시각 지남을 이 시각 기준으로 셈(그리는 중에 시계를 읽지 않음)
@@ -580,8 +627,6 @@ function HomeBody({ beaches }: { beaches: Beaches }) {
       const id = ++started;
       lastStart = Date.now();
       setReading(true);
-      // 이번 읽기에서 앞 값을 둔 칸이 있으면 기준 시각을 새로 잡지 않음(앞 값의 시각이 기준)
-      let keptStale = false;
       const keys = Object.keys(load) as (keyof Parts)[];
       void Promise.all(
         keys.map((key) =>
@@ -591,12 +636,17 @@ function HomeBody({ beaches }: { beaches: Beaches }) {
             if (key === "published" && part.state === "ok") {
               setPublishedAt(Date.now());
             }
+            if (part.state === "ok") {
+              const now = new Date().toISOString();
+              setReceivedAt((old) => ({ ...old, [key]: now }));
+            }
             // 이 칸은 이번 읽기만 바꾸므로 마지막으로 그린 값과 견주면 됨
+            // 판단 출처 상태(수집 현황)는 앞의 '정상'을 두지 않고 실패를 그대로 보임(조회 실패를 정상으로 두지 않음)
             const merged = mergePart(
               latest.current[key] as Slot<unknown>,
               part,
+              key !== "collection",
             );
-            if (merged.stale) keptStale = true;
             setStale((old) => {
               if (merged.stale === old.has(key)) return old;
               const next = new Set(old);
@@ -610,7 +660,8 @@ function HomeBody({ beaches }: { beaches: Beaches }) {
       ).then(() => {
         if (!live || id !== started) return;
         setReading(false);
-        if (!keptStale) setAt(new Date().toISOString());
+        // 기준 시각은 이번 읽기를 마친 시각. 앞 값을 둔 칸은 그 칸의 받은 시각을 따로 보임
+        setAt(new Date().toISOString());
       });
     };
     refresh();
@@ -739,13 +790,24 @@ function HomeBody({ beaches }: { beaches: Beaches }) {
               </Button>
             </Notice>
           )}
-          <Summary parts={parts} nowMs={publishedAt} />
+          <Summary parts={parts} nowMs={publishedAt} stale={stale} />
           <Todos parts={parts} />
-          <Recent part={parts.recent} beaches={beaches} />
+          <Recent
+            part={parts.recent}
+            stale={stale.has("recent")}
+            beaches={beaches}
+          />
           <AsOf
             at={at}
             refreshing={reading && at !== null}
-            stale={stale.size > 0}
+            stale={
+              at === null
+                ? null
+                : staleSince(
+                    [...stale].map((key) => receivedAt[key]),
+                    at,
+                  )
+            }
             onRetry={reload}
           />
         </>
@@ -756,7 +818,7 @@ function HomeBody({ beaches }: { beaches: Beaches }) {
 }
 
 // 기준 시각 줄(보드 LP ⑤): 다시 읽는 동안 옆에 작은 회전 표시 '다시 읽는 중'
-// 다시 읽기가 실패한 칸이 있으면 '마지막으로 받은 값이에요 · HH:MM 기준'(값은 그대로)
+// 다시 읽기가 실패한 칸이 있으면 '마지막으로 받은 값이에요 · HH:MM 기준'(그 칸이 값을 받은 시각, 다른 날이면 날짜까지)
 // 처음 받기 전에는 같은 줄 높이 자리표시
 function AsOf({
   at,
@@ -766,7 +828,7 @@ function AsOf({
 }: {
   at: string | null;
   refreshing: boolean;
-  stale: boolean;
+  stale: { iso: string; sameDay: boolean } | null;
   onRetry: () => void;
 }) {
   if (at === null) {
@@ -792,7 +854,11 @@ function AsOf({
           role="status"
           className="flex flex-wrap items-center gap-x-3 text-label-s font-medium text-text-default"
         >
-          {fill(t.loading.stale, { time: hourMinute(at) })}
+          {fill(t.loading.stale, {
+            time: stale.sameDay
+              ? hourMinute(stale.iso)
+              : kstDateTime(stale.iso),
+          })}
           <button
             type="button"
             onClick={onRetry}
