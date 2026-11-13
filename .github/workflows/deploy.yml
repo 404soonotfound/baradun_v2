@@ -17,12 +17,160 @@ on:
 permissions:
   contents: read
 jobs:
+  # 인프라 자동 배포(#418, 사용자 결정 2026-11-13 A안): main push CI가 성공한 커밋으로 변경 세트를 만들고 판정함
+  # - 삭제·교체(!!)가 없으면 바로 실행, 있으면 infra-approve가 GitHub 승인을 기다림, boundary가 다르면 멈춤(로컬 deploy:infra)
+  # - 사이트 작업보다 먼저 돎: 판단 정책을 바꾼 PR은 publisher가 먼저 배포돼야 함(D20-6·7)
+  # - CI 역할(vars.INFRA_DEPLOY_ROLE_ARN, BaradunGitHubInfraDeploy)은 스택 밖. infra·infra-approval environment에서만 맡음
+  # - 수동 실행(workflow_dispatch)은 사이트만 올림. 인프라를 손으로 배포할 때는 로컬 npm run deploy:infra
+  infra:
+    if: >-
+      vars.INFRA_DEPLOY_ROLE_ARN != '' &&
+      github.event_name == 'workflow_run' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_repository.full_name == github.repository &&
+      github.event.workflow_run.conclusion == 'success' &&
+      vars.DEPLOY_PAUSED != 'true'
+    runs-on: ubuntu-latest
+    environment: infra
+    concurrency:
+      group: deploy-infra
+      cancel-in-progress: false # 배포 도중 끊지 않음
+    timeout-minutes: 75
+    permissions:
+      contents: read
+      checks: read # ci-ok 확인
+      issues: write # 결과 댓글(연결 이슈)
+      pull-requests: write # 결과 댓글(연결 이슈가 없으면 PR)
+      id-token: write # OIDC 토큰은 인프라 작업만 받음
+    outputs:
+      kind: ${{ steps.run.outputs.kind }}
+      change_set: ${{ steps.run.outputs.change_set }}
+      deployed_at: ${{ steps.run.outputs.deployed_at }}
+      functions: ${{ steps.run.outputs.functions }}
+    env:
+      HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+      REPO: ${{ github.repository }}
+    steps:
+      # CI가 검사한 커밋 그대로. 전체 이력을 받아 main이 앞서 있는지 비교함
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      # OIDC 토큰을 받는 작업이라 캐시를 복원하지 않음(캐시 오염 방지)
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+      - run: npm ci
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ vars.INFRA_DEPLOY_ROLE_ARN }}
+          aws-region: ap-northeast-2
+      - id: run
+        working-directory: infra
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node --import tsx scripts/deploy-ci.mjs plan
+
+  # 삭제·교체가 있는 변경 세트: infra-approval environment의 승인(필수 검토자)을 받은 뒤 같은 변경 세트를 실행
+  # 승인을 기다리는 작업이 다음 자동 배포를 막지 않게 deploy-infra와 다른 그룹. 먼저 다른 배포가 실행되면 변경 세트가 낡아(OBSOLETE) 실행하지 않음
+  infra-approve:
+    needs: infra
+    if: needs.infra.outputs.kind == 'hold'
+    runs-on: ubuntu-latest
+    environment: infra-approval
+    concurrency:
+      group: deploy-infra-approve
+      cancel-in-progress: false
+    timeout-minutes: 75
+    permissions:
+      contents: read
+      checks: read # ci-ok 확인
+      issues: write # 결과 댓글(연결 이슈)
+      pull-requests: write # 결과 댓글(연결 이슈가 없으면 PR)
+      id-token: write # OIDC 토큰은 인프라 작업만 받음
+    outputs:
+      change_set: ${{ steps.run.outputs.change_set }}
+      deployed_at: ${{ steps.run.outputs.deployed_at }}
+      functions: ${{ steps.run.outputs.functions }}
+    env:
+      HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+      REPO: ${{ github.repository }}
+      CHANGE_SET: ${{ needs.infra.outputs.change_set }}
+    steps:
+      # CI가 검사한 커밋 그대로. 전체 이력을 받아 main이 앞서 있는지 비교함
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      # OIDC 토큰을 받는 작업이라 캐시를 복원하지 않음(캐시 오염 방지)
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+      - run: npm ci
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ vars.INFRA_DEPLOY_ROLE_ARN }}
+          aws-region: ap-northeast-2
+      - id: run
+        working-directory: infra
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node --import tsx scripts/deploy-ci.mjs execute
+
+  # 배포 뒤 바뀐 함수 로그 점검(16분)·지도 판 확인·결과 댓글. 사이트 작업을 기다리게 하지 않으려고 따로 둠
+  infra-watch:
+    needs: [infra, infra-approve]
+    if: >-
+      !cancelled() &&
+      (needs.infra-approve.outputs.deployed_at != '' || needs.infra.outputs.deployed_at != '')
+    runs-on: ubuntu-latest
+    environment: infra
+    timeout-minutes: 40
+    permissions:
+      contents: read
+      checks: read # ci-ok 확인
+      issues: write # 결과 댓글(연결 이슈)
+      pull-requests: write # 결과 댓글(연결 이슈가 없으면 PR)
+      id-token: write # OIDC 토큰은 인프라 작업만 받음
+    env:
+      HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+      REPO: ${{ github.repository }}
+      CHANGE_SET: ${{ needs.infra-approve.outputs.change_set || needs.infra.outputs.change_set }}
+      DEPLOYED_AT: ${{ needs.infra-approve.outputs.deployed_at || needs.infra.outputs.deployed_at }}
+      FUNCTIONS: ${{ needs.infra-approve.outputs.functions || needs.infra.outputs.functions }}
+      SITE_URL: ${{ vars.SITE_URL }}
+    steps:
+      # CI가 검사한 커밋 그대로. 전체 이력을 받아 main이 앞서 있는지 비교함
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      # OIDC 토큰을 받는 작업이라 캐시를 복원하지 않음(캐시 오염 방지)
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+      - run: npm ci
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ vars.INFRA_DEPLOY_ROLE_ARN }}
+          aws-region: ap-northeast-2
+      - id: run
+        working-directory: infra
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node --import tsx scripts/deploy-ci.mjs watch
+
   site:
+    # 인프라 작업 뒤에 돎(결과와 상관없이. 판단 정책 순서는 아래 '판단 정책 버전 확인'이 막음). 인프라 작업이 건너뛰어져도 돎(!cancelled)
+    needs: infra
     # 첫 인프라 배포 전(변수가 비어 있음)에는 건너뜀
     # 자동 배포는 main push CI가 성공했을 때만. 정기 실행·PR CI는 배포하지 않음
     # 저장소 변수 DEPLOY_PAUSED=true면 자동 배포를 멈춤(인프라와 순서를 맞출 때, infra/README)
     if: >-
-      vars.DEPLOY_ROLE_ARN != '' && (
+      !cancelled() && vars.DEPLOY_ROLE_ARN != '' && (
         github.event_name == 'workflow_dispatch' || (
           github.event.workflow_run.event == 'push' &&
           github.event.workflow_run.head_repository.full_name == github.repository &&
@@ -129,8 +277,9 @@ jobs:
   # 운영자 사이트(BRD-147): 사용자 사이트와 따로 버킷·CloudFront에 올림. 화면 파일만 있음(데이터는 /ops/*)
   # 인프라 배포 전(변수가 비어 있음)에는 건너뜀. 조건·권한·CI 확인은 site 작업과 같음
   admin:
+    needs: infra
     if: >-
-      vars.DEPLOY_ROLE_ARN != '' && vars.ADMIN_SITE_BUCKET != '' && (
+      !cancelled() && vars.DEPLOY_ROLE_ARN != '' && vars.ADMIN_SITE_BUCKET != '' && (
         github.event_name == 'workflow_dispatch' || (
           github.event.workflow_run.event == 'push' &&
           github.event.workflow_run.head_repository.full_name == github.repository &&
