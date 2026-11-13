@@ -1377,6 +1377,10 @@
     "listLabel": "목차",
     "itemTitle": "{number}. {title}",
     "basis": "근거: {basis}",
+    "status": {
+      "confirmed": "확정",
+      "draft": "초안"
+    },
     "backLink": "정책 목록으로",
     "notFound": "찾는 정책이 없어요",
     "notFoundHint": "주소가 틀렸거나 없는 정책이에요. 목차에서 다시 골라 주세요."
