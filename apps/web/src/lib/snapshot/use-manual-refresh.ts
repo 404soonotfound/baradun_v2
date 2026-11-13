@@ -6,10 +6,12 @@ import { useTranslations } from "next-intl";
 import { useToast } from "@/components/ui/toast";
 import { kstStamp } from "./clock";
 import { diffBeachStatuses } from "./diff";
+import type { SnapshotState } from "./store";
 import { useBadgeText } from "./use-badge-text";
-import { getSnapshotState, refreshSnapshot } from "./use-snapshot";
+import { getSnapshotState, refreshSnapshot, useSnapshot } from "./use-snapshot";
 
 const KST_OFFSET_MS = 9 * 60 * 60_000;
+const EMPTY_CHANGED = new Map<string, string>();
 
 function formatKstTime(ms: number): string | null {
   if (!Number.isFinite(ms)) return null;
@@ -22,12 +24,14 @@ export function useManualRefresh(
   beaches: readonly { id: string; hidden?: boolean }[],
 ) {
   const t = useTranslations();
+  const snapshot = useSnapshot();
   const { badgeText } = useBadgeText();
   const { message, show, hold } = useToast();
   const [refreshing, setRefreshing] = useState(false);
-  const [changedFromById, setChangedFromById] = useState<Map<string, string>>(
-    () => new Map(),
-  );
+  const [changedState, setChangedState] = useState<{
+    snapshot: SnapshotState;
+    map: Map<string, string>;
+  } | null>(null);
   const refreshingRef = useRef(false);
 
   const triggerRefresh = useCallback(async () => {
@@ -47,7 +51,7 @@ export function useManualRefresh(
     if (nextState.phase !== "ready") return;
 
     if (!nextState.live) {
-      setChangedFromById(new Map());
+      setChangedState(null);
       const offline =
         typeof navigator !== "undefined" && !navigator.onLine;
       show({ text: t(offline ? "refresh.offline" : "refresh.failed") });
@@ -56,7 +60,7 @@ export function useManualRefresh(
 
     const diff = diffBeachStatuses(beaches, prevState, nextState);
     if (diff.size === 0) {
-      setChangedFromById(new Map());
+      setChangedState(null);
       show({ text: t("refresh.upToDate") });
       return;
     }
@@ -65,7 +69,7 @@ export function useManualRefresh(
     for (const [id, prevBadge] of diff) {
       nextChanged.set(id, badgeText(prevBadge));
     }
-    setChangedFromById(nextChanged);
+    setChangedState({ snapshot: nextState, map: nextChanged });
 
     const time =
       kstStamp(nextState.manifest?.generatedAt, nextState.nowMs) ??
@@ -77,6 +81,11 @@ export function useManualRefresh(
           : t("refresh.changed", { time, count: diff.size }),
     });
   }, [badgeText, beaches, show, t]);
+
+  const changedFromById =
+    changedState && snapshot === changedState.snapshot
+      ? changedState.map
+      : EMPTY_CHANGED;
 
   return {
     refreshing,
