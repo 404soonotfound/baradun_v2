@@ -58,6 +58,16 @@ describe("허용표", () => {
     });
   });
 
+  it("사이트 배포는 실제 운영자 세 역할의 GET만 허락한다", () => {
+    const path = "/ops/site-deploy";
+    expect(Object.keys(ROUTES[path]!)).toEqual(["GET"]);
+    for (const role of OPERATOR_ROLES) {
+      expect(decideRoute(path, "GET", operator(role))).toMatchObject({ ok: true });
+      expect(decideRoute(path, "POST", operator(role))).toEqual({ ok: false, status: 405 });
+    }
+    expect(decideRoute(path, "GET", sample)).toEqual({ ok: false, status: 403 });
+  });
+
   it("샘플이 허락된 쓰기 경로가 없다(표에 잘못 넣어도 쓰기는 막음)", () => {
     for (const [path, methods] of Object.entries(ROUTES)) {
       for (const [method, rule] of Object.entries(methods)) {

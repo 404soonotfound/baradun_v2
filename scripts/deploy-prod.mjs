@@ -31,4 +31,26 @@ console.log(`운영 배포를 요청했어요: 실행 ${runId}`);
 const watch = spawnSync("gh", ["run", "watch", runId, "--exit-status"], {
   stdio: "inherit",
 });
+if (watch.status !== 0) {
+  const paused = spawnSync(
+    "gh",
+    [
+      "run",
+      "view",
+      runId,
+      "--json",
+      "jobs",
+      "--jq",
+      '.jobs[] | select(.name == "site-deploy-paused" and .conclusion == "failure") | .name',
+    ],
+    { encoding: "utf8" },
+  );
+  if (paused.status === 0 && paused.stdout.trim() === "site-deploy-paused") {
+    console.error(
+      "배포가 일시 정지 중이에요. DEPLOY_PAUSED를 해제한 뒤 다시 실행해 주세요.",
+    );
+  } else {
+    console.error(`배포 결과를 Actions에서 확인해 주세요: gh run view ${runId} --web`);
+  }
+}
 process.exit(watch.status ?? 1);

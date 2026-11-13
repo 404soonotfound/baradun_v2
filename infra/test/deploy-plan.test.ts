@@ -1,4 +1,6 @@
-import { readFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
@@ -35,6 +37,45 @@ import {
 } from "../scripts/deploy-plan";
 
 // 인프라 배포 명령의 판정 (BRD-169)
+
+describe("사이트 수동 배포 로컬 명령(D27-6)", () => {
+  it.each([
+    ["paused", 1, "배포가 일시 정지 중이에요"],
+    ["failed", 1, "gh run view 123 --web"],
+    ["ok", 0, ""],
+  ])("%s 실행의 종료 코드와 사유를 전달한다", (outcome, status, message) => {
+    const bin = mkdtempSync(resolve(tmpdir(), "baradun-deploy-test-"));
+    try {
+      writeFileSync(
+        resolve(bin, "gh"),
+        `#!/bin/sh
+case "$1 $2 $3" in
+  'workflow run deploy.yml') echo https://github.com/example/project/actions/runs/123 ;;
+  'run watch 123') [ "$DEPLOY_TEST_RESULT" = ok ] ;;
+  'run view 123')
+    if [ "$DEPLOY_TEST_RESULT" = paused ]; then echo site-deploy-paused; fi ;;
+  *) exit 2 ;;
+esac
+`,
+        { mode: 0o755 },
+      );
+      const result = spawnSync(
+        process.execPath,
+        [resolve(__dirname, "../../scripts/deploy-prod.mjs")],
+        {
+          encoding: "utf8",
+          env: { ...process.env, PATH: bin + ":" + process.env.PATH, DEPLOY_TEST_RESULT: outcome },
+        },
+      );
+      expect(result.status).toBe(status);
+      expect(result.stdout).toContain("실행 123");
+      if (message) expect(result.stderr).toContain(message);
+      else expect(result.stderr).toBe("");
+    } finally {
+      rmSync(bin, { recursive: true, force: true });
+    }
+  });
+});
 
 describe("변경 세트 이름", () => {
   it("커밋 7자와 UTC 시각으로 CloudFormation 규칙에 맞게 만든다", () => {

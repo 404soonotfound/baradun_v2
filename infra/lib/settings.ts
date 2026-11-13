@@ -33,6 +33,9 @@ export type ApiKeyName = (typeof API_KEY_NAMES)[number];
 // GA4 Data API 서비스 계정 키 파라미터(#333 ADM-STATS). RoleBoundary(/baradun/v2/api-keys/*) 범위 안에 둠
 export const GA4_SERVICE_ACCOUNT_PARAM = `${API_KEY_PARAMETER_PREFIX}ga4-service-account`;
 
+// 운영 API가 GitHub 배포 정보를 읽는 자격증명(D27-5).
+export const SITE_DEPLOY_TOKEN_PARAMETER = "/baradun/v2/ops/github-read-token";
+
 export function apiKeyParameterName(name: ApiKeyName): string {
   return `${API_KEY_PARAMETER_PREFIX}${name}`;
 }

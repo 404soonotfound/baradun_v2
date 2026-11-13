@@ -311,14 +311,14 @@ describe("DynamoDB 권한 (BRD-55)", () => {
     ]);
   });
 
-  it("운영 API 역할은 수집 API 키 2개의 태그만 읽고, GA4 서비스 계정 키 파라미터 1개만 값(GetParameter)을 읽는다(ADM-SRC·ADM-STATS)", () => {
+  it("운영 API 역할의 SSM 허용은 수집 태그·GA4 키·배포 조회 토큰의 지정 ARN뿐이다", () => {
     const statements = allIamPolicies()
       .filter((p) => p.roles.includes(roleId("OpsApiRole")))
       .flatMap((p) => p.statements)
       .filter((s) =>
         toList(s.Action).some((a) => String(a).startsWith("ssm:")),
       );
-    expect(statements).toHaveLength(2);
+    expect(statements).toHaveLength(3);
     expect(statements[0]!.Effect).toBe("Allow");
     expect(toList(statements[0]!.Action)).toEqual(["ssm:ListTagsForResource"]);
     const tagResources = toList(statements[0]!.Resource).map(resourceText);
@@ -332,6 +332,23 @@ describe("DynamoDB 권한 (BRD-55)", () => {
     expect(getResources).toHaveLength(1);
     expect(getResources[0]).toMatch(
       /parameter\/baradun\/v2\/api-keys\/ga4-service-account$/,
+    );
+    expect(statements[2]!.Effect).toBe("Allow");
+    expect(toList(statements[2]!.Action).sort()).toEqual([
+      "ssm:GetParameter",
+      "ssm:ListTagsForResource",
+    ]);
+    const tokenResources = toList(statements[2]!.Resource).map(resourceText);
+    expect(tokenResources).toHaveLength(1);
+    expect(tokenResources[0]).toMatch(
+      /parameter\/baradun\/v2\/ops\/github-read-token$/,
+    );
+    const allowed = allowedActionsOfRole(roleId("OpsApiRole"));
+    expect(allowed.get("ssm:GetParameter")?.sort()).toEqual(
+      [getResources[0], tokenResources[0]].sort(),
+    );
+    expect(allowed.get("ssm:ListTagsForResource")?.sort()).toEqual(
+      [...tagResources, ...tokenResources].sort(),
     );
   });
 

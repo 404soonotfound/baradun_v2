@@ -1,3 +1,8 @@
+import {
+  DEPLOY_VARIABLES,
+  SITE_DEPLOY_JOBS,
+  SITE_DEPLOY_MARKER_STEP,
+} from "../../services/src/admin/site-deploy";
 import { execFileSync } from "node:child_process";
 import { readdirSync, readFileSync } from "node:fs";
 import { posix, resolve } from "node:path";
@@ -174,14 +179,14 @@ describe("배포 워크플로 가드레일 (11장)", () => {
     expect(text).toMatch(/environment:\s*production/);
   });
 
-  it("정기 배포는 main push CI가 성공한 커밋만 올리고, DEPLOY_PAUSED로 멈출 수 있다 (BRD-133·GH-424)", () => {
+  it("사이트 배포는 main push CI가 성공한 커밋만 올리고 정기·수동 모두 정지할 수 있다 (BRD-133·GH-424)", () => {
     const lines = codeLines(deploy?.text ?? "");
     const text = lines.join("\n");
     for (const job of ["site", "admin"]) {
       const condition = jobLines(deploy?.text ?? "", job).join("\n");
-      // 정기 실행만 멈춤 변수를 봄. 수동 실행은 멈춤 중에도 올릴 수 있음(인프라 배포 뒤 바로 올릴 때)
+      // 정지 조건은 정기·수동 이벤트 둘 모두에 적용함(D27-6)
       expect(condition, job).toMatch(
-        /github\.event_name == 'workflow_dispatch' \|\| \(\s*github\.event_name == 'schedule' &&\s*vars\.DEPLOY_PAUSED != 'true'\s*\)/,
+        /vars\.DEPLOY_PAUSED != 'true' &&\s*\(github\.event_name == 'workflow_dispatch' \|\| github\.event_name == 'schedule'\)/,
       );
     }
     expect(text).toMatch(/HEAD_SHA:\s*\$\{\{\s*github\.sha\s*\}\}/);
@@ -207,6 +212,24 @@ describe("배포 워크플로 가드레일 (11장)", () => {
     expect(jobLines(deploy?.text ?? "", "site").join("\n")).toMatch(
       /^\s{4}concurrency:\s*\n\s{6}group:\s*deploy-production/m,
     );
+  });
+
+  it("정지 중 수동 배포는 사이트 작업 대신 권한 없는 안내 작업이 실패 사유를 남긴다", () => {
+    const workflow = deploy?.text ?? "";
+    const paused = jobLines(workflow, "site-deploy-paused").join("\n");
+    expect(jobIf(workflow, "site-deploy-paused")).toBe(
+      "github.event_name == 'workflow_dispatch' && vars.DEPLOY_PAUSED == 'true'",
+    );
+    expect(paused).toContain("permissions: {}");
+    expect(paused).not.toMatch(/concurrency:|environment:|id-token:/);
+    expect(paused).toContain("배포 일시 정지 중이라 실행하지 않음");
+    expect(paused).toContain("$GITHUB_STEP_SUMMARY");
+    expect(paused).toContain("exit 1");
+    for (const job of ["site", "admin"]) {
+      expect(jobLines(workflow, job).join("\n")).toContain(
+        "cancel-in-progress: false",
+      );
+    }
   });
 
   // 결정 기록 D20-6·7: 웹은 지금 판단 정책만 읽음 → 운영 게시본 정책을 새 빌드가 읽지 못하면 올리지 않음(publisher 먼저)
@@ -513,35 +536,59 @@ describe("PR 필수 웹 검사 (BRD-102 결정 41·42)", () => {
 
   // 바뀐 앱만 배포(BRD-178): 마지막으로 올린 커밋(deploy-version.txt) 뒤로 main CI가 그 앱 빌드 작업까지 성공한 가장 새 커밋
   // 옛 커밋이 새 배포를 덮지 않고, CI가 실패한 커밋의 변경은 그 앱을 다시 검사한 뒤 커밋으로만 나감
-  const deployPaths = (job: string) => {
-    const lines = jobLines(deploy?.text ?? "", job);
-    const start = lines.findIndex((l) =>
-      l.includes(".github/scripts/deploy-plan.sh"),
+  it("배포 비교 경로 생성물은 CI 경로 필터와 같고 두 앱 작업이 읽는다", () => {
+    const root = resolve(dir, "../..");
+    const saved = readFileSync(resolve(root, ".github/site-deploy-paths.json"), "utf8");
+    const generated = execFileSync(
+      process.execPath,
+      [
+        "--input-type=module",
+        "-e",
+        "import { readFileSync } from 'node:fs'; import { siteDeployPaths } from './.github/scripts/site-deploy-paths.mjs'; process.stdout.write(JSON.stringify(siteDeployPaths(readFileSync('.github/ci-filters.yml', 'utf8')), null, 2) + '\\n');",
+      ],
+      { cwd: root, encoding: "utf8" },
     );
-    const out: string[] = [];
-    for (const l of lines.slice(start + 1)) {
-      const m = l.match(/^\s+(\S+?)(\s*\\)?$/);
-      if (!m || /^\s*-\s/.test(l)) break;
-      out.push(m[1]!);
-      if (!m[2]) break;
+    expect(saved).toBe(generated);
+    const paths = JSON.parse(saved) as Record<"site" | "admin", string[]>;
+    for (const job of ["site", "admin"]) {
+      const text = jobLines(deploy?.text ?? "", job).join("\n");
+      expect(text).toContain(`jq -er '.${job}[]' .github/site-deploy-paths.json`);
+      expect(text).toContain('.github/scripts/deploy-plan.sh "$URL" "${app_paths[@]}"');
     }
-    return out;
-  };
-  it("배포 비교 경로는 CI 경로 필터(공통 + 앱)에서 ci.yml만 뺀 것과 같다", () => {
     const shared = ciFilterPaths("shared").filter(
       (p) => p !== ".github/workflows/ci.yml",
     );
     expect(shared.length).toBeGreaterThan(0);
-    expect(deployPaths("site").sort()).toEqual(
+    expect(paths.site.sort()).toEqual(
       [...shared, ...ciFilterPaths("web")]
         .map((path) => path.replace(/\/\*\*$/, ""))
         .sort(),
     );
-    expect(deployPaths("admin").sort()).toEqual(
+    expect(paths.admin.sort()).toEqual(
       [...shared, ...ciFilterPaths("admin")]
         .map((path) => path.replace(/\/\*\*$/, ""))
         .sort(),
     );
+  });
+
+  it("운영 API가 조회하는 사이트 작업·표지 단계·필수 변수는 배포 워크플로와 같다", () => {
+    const workflow = deploy?.text ?? "";
+    const apps = Object.keys(JSON.parse(
+      readFileSync(resolve(dir, "../site-deploy-paths.json"), "utf8"),
+    ));
+    expect([...SITE_DEPLOY_JOBS].sort()).toEqual(apps.sort());
+    const variables = new Set<string>();
+    for (const job of SITE_DEPLOY_JOBS) {
+      const lines = jobLines(workflow, job).join("\n");
+      expect(lines).toContain(`name: ${SITE_DEPLOY_MARKER_STEP}\n`);
+      for (const match of lines.matchAll(/\bvars\.([A-Z_]+)/g)) {
+        variables.add(match[1]!);
+      }
+    }
+    expect([...variables].sort()).toEqual(
+      [...DEPLOY_VARIABLES, "ADMIN_SITE_URL", "DEPLOY_PAUSED"].sort(),
+    );
+    expect(plan).toContain('head_sha=${HEAD_SHA:?');
   });
 
   it("배포는 정한 결과를 따르고, 표시는 동기화·캐시 비우기가 끝난 뒤 마지막에 올리며, 빌드 캐시를 복원하지 않는다", () => {

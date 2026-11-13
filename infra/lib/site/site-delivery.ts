@@ -72,6 +72,9 @@ export class SiteDelivery extends Construct {
       comment: "Rewrite folder paths to index.html",
     });
 
+    const siteOrigin = origins.S3BucketOrigin.withOriginAccessControl(
+      this.bucket,
+    );
     this.distribution = new cloudfront.Distribution(this, "Distribution", {
       comment: "baradun v2 site and data snapshots",
       defaultRootObject: "index.html",
@@ -79,7 +82,7 @@ export class SiteDelivery extends Construct {
       httpVersion: cloudfront.HttpVersion.HTTP2_AND_3,
       defaultBehavior: {
         // OAC: CloudFront만 버킷을 읽을 수 있게 하는 서명 방식 (OAI는 정액 요금제 미지원)
-        origin: origins.S3BucketOrigin.withOriginAccessControl(this.bucket),
+        origin: siteOrigin,
         viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
         responseHeadersPolicy: props.responseHeadersPolicy,
         // AWS 기본 정책: 파일의 Cache-Control 헤더를 따름.
@@ -92,6 +95,16 @@ export class SiteDelivery extends Construct {
             eventType: cloudfront.FunctionEventType.VIEWER_REQUEST,
           },
         ],
+      },
+      additionalBehaviors: {
+        // 배포 표지는 현재 확인값으로 읽으므로 CloudFront 캐시를 끔.
+        "deploy-version.txt": {
+          origin: siteOrigin,
+          viewerProtocolPolicy:
+            cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+          cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
+          responseHeadersPolicy: props.responseHeadersPolicy,
+        },
       },
       // OAC로 막힌 S3는 없는 파일에 404 대신 403을 줌. 사용자에게는 404 페이지로 보여 줌
       errorResponses: [
