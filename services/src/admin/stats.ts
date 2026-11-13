@@ -17,7 +17,7 @@ export const SSM_TIMEOUT_MS = 1_500;
 export const TOKEN_TIMEOUT_MS = 1_500;
 export const GA4_TIMEOUT_MS = 3_500;
 export const TOP_LIST_LIMIT = 10;
-export const GA4_TOP_BEACHES_FETCH_LIMIT = 250;
+export const GA4_TOP_BEACHES_FETCH_LIMIT = 1_000;
 export const GA4_LANGUAGES_FETCH_LIMIT = 50;
 const GA4_SCOPE = "https://www.googleapis.com/auth/analytics.readonly";
 
