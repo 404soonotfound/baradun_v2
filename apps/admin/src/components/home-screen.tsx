@@ -657,7 +657,7 @@ function HomeBody({ beaches }: { beaches: Beaches }) {
     !signedIn ||
     me === null ||
     Object.values(parts).some((p: Slot<unknown>) => p.state === "loading");
-  // 5초 넘게 받는 칸이 있으면 기준 시각 줄 자리에 느림 안내(칸 높이를 바꾸지 않게 맨 아래 줄 한 자리에서)
+  // 5초 넘게 받는 칸이 있으면 제목 줄 오른쪽에 느림 안내(칸 높이를 바꾸지 않게 한 자리에서)
   const page = useLoadTiming(anyLoading);
   const role = signedIn ? roleLabel(snapshot.pool, snapshot.groups) : null;
   const anyFailed = [parts.published, parts.inquiries, parts.notices].some(
@@ -676,10 +676,17 @@ function HomeBody({ beaches }: { beaches: Beaches }) {
         busy={signedIn && anyLoading}
         label={fill(t.loading.screen, { name: h.title })}
       />
-      <div>
+      {/* 느림 안내(5초)는 제목 줄 오른쪽에 겹쳐 띄움: 모바일 첫 화면에도 보이고 줄 높이·아래 칸이 밀리지 않음 */}
+      <div className="relative">
         <h1 className="text-title-l font-semibold text-text-default">
           {h.title}
         </h1>
+        <div
+          role="status"
+          className="absolute top-0 right-0 flex h-[calc(var(--text-title-l)*1.4)] max-w-[calc(100%-6rem)] items-center"
+        >
+          {page.slow && <SlowNote className="text-right" />}
+        </div>
         {signedIn ? (
           snapshot.email && (
             <p className="mt-1 text-body-s text-text-muted">
@@ -738,7 +745,6 @@ function HomeBody({ beaches }: { beaches: Beaches }) {
             at={at}
             refreshing={reading && at !== null}
             stale={stale.size > 0}
-            slow={page.slow}
             onRetry={reload}
           />
         </>
@@ -750,24 +756,20 @@ function HomeBody({ beaches }: { beaches: Beaches }) {
 
 // 기준 시각 줄(보드 LP ⑤): 다시 읽는 동안 옆에 작은 회전 표시 '다시 읽는 중'
 // 다시 읽기가 실패한 칸이 있으면 '마지막으로 받은 값이에요 · HH:MM 기준'(값은 그대로)
-// 처음 받기 전에는 같은 줄 높이 자리표시, 5초 넘으면 그 자리에 느림 안내
+// 처음 받기 전에는 같은 줄 높이 자리표시
 function AsOf({
   at,
   refreshing,
   stale,
-  slow,
   onRetry,
 }: {
   at: string | null;
   refreshing: boolean;
   stale: boolean;
-  slow: boolean;
   onRetry: () => void;
 }) {
   if (at === null) {
-    return slow ? (
-      <SlowNote />
-    ) : (
+    return (
       <p className={HINT}>
         <SkLine className="w-[280px] max-w-full" />
       </p>
