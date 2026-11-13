@@ -5,6 +5,7 @@ import {
   expectNoA11yViolations,
   mockCognito,
   mockOps,
+  openAccountMenu,
   signInWithPassword,
   srpScript,
   test,
@@ -40,6 +41,7 @@ async function openAccount(
   });
   await signInWithPassword(page, "/login/", OPS);
   await expect(page.getByRole("heading", { name: "운영 홈" })).toBeVisible();
+  await openAccountMenu(page);
   await page.getByRole("link", { name: "내 계정" }).click();
   await expect(page.getByRole("heading", { name: "내 계정" })).toBeVisible();
   return bodies;
@@ -173,6 +175,7 @@ test("데모 계정에는 초기화 칸이 없다", async ({ page }) => {
     },
   });
   await signInWithPassword(page, "/login/demo/", "demo@example.test");
+  await openAccountMenu(page);
   await page.getByRole("link", { name: "내 계정" }).click();
   await expect(page.getByRole("heading", { name: "내 계정" })).toBeVisible();
   await expect(
