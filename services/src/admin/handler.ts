@@ -80,7 +80,14 @@ import {
 } from "./publish-routes";
 import { decideRoute, matchRoute } from "./routes";
 import { readSamplePolicy } from "./sample";
-import { sampleInquiry, sampleInquiryPage } from "./sample-data";
+import { sampleInquiry, sampleInquiryPage, sampleStats } from "./sample-data";
+import {
+  createCachedStatsReader,
+  createGa4StatsReader,
+  parseStatsRange,
+  unconfiguredStats,
+  type StatsReader,
+} from "./stats";
 import { payloadHashOf, versionedWrite, type Sender } from "./writes";
 import { INQUIRY_ID, isInquiryStatus } from "../inquiry/policy";
 
@@ -101,6 +108,8 @@ export interface DataDependencies {
   readonly snapshots?: SnapshotStore | null;
   // publisher 비동기 호출(지금 게시·되돌리기 작업, #331). 없으면 작업을 만들지 않음(500)
   readonly publisher?: PublisherInvoker | null;
+  // GA4 이용 통계 읽기(#333 ADM-STATS). 없으면 configured: false 안내
+  readonly stats?: StatsReader | null;
 }
 
 export interface OpsDependencies {
@@ -420,6 +429,19 @@ async function dispatchOps(
     if (decision.pattern === "/ops/beaches/published" && method === "GET") {
       return await beachStatusRoute(deps.data, ids);
     }
+    if (decision.pattern === "/ops/stats" && method === "GET") {
+      const range = parseStatsRange(event.queryStringParameters?.range);
+      if (!range) {
+        return errorJson(400, "invalid_request", ids);
+      }
+      if (principal.kind === "sample") {
+        return json(200, sampleStats(range, deps.data.now()), ids);
+      }
+      if (!deps.data.stats) {
+        return json(200, unconfiguredStats(range, deps.data.now()), ids);
+      }
+      return json(200, await deps.data.stats.read(range), ids);
+    }
     if (decision.pattern === "/ops/beaches/{id}/memo") {
       const id = decision.params.id ?? "";
       if (method === "GET") {
@@ -575,6 +597,17 @@ function publisherInvoker(): PublisherInvoker | null {
   };
 }
 
+function statsReader(now: () => Date): StatsReader | null {
+  const propertyId = process.env.GA4_PROPERTY_ID;
+  const serviceAccountParam = process.env.GA4_SERVICE_ACCOUNT_PARAM;
+  const region = process.env.AWS_REGION;
+  if (!propertyId || !serviceAccountParam || !region) return null;
+  return createCachedStatsReader(
+    createGa4StatsReader({ propertyId, serviceAccountParam, region, now }),
+    now,
+  );
+}
+
 let runtime: OpsDependencies | undefined;
 
 function runtimeDependencies(): OpsDependencies {
@@ -609,6 +642,7 @@ function runtimeDependencies(): OpsDependencies {
       keys: keyTagReader(),
       snapshots: snapshotReader(),
       publisher: publisherInvoker(),
+      stats: statsReader(now),
     },
   };
   return runtime;

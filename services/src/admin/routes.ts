@@ -94,6 +94,10 @@ export const ROUTES: Readonly<
   "/ops/audit": {
     GET: { roles: ["viewer", "editor", "publisher"], sample: false },
   },
+  // 이용 통계(BRD-154, ADM-STATS). 읽기 전용, 개인정보 없음 → 샘플 계정 예시 응답 허용
+  "/ops/stats": {
+    GET: { roles: ["viewer", "editor", "publisher"], sample: true },
+  },
 };
 
 export type RouteDecision =
