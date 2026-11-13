@@ -21,6 +21,8 @@ describe("운영 API", () => {
     const fn = only("OpsApiFunction", "AWS::Lambda::Function").resource;
     expect(fn.Properties.Handler).toBe("index.opsHandler");
     expect(Object.keys(fn.Properties.Environment.Variables).sort()).toEqual([
+      "GA4_PROPERTY_ID",
+      "GA4_SERVICE_ACCOUNT_PARAM",
       "INQUIRY_TABLE_NAME",
       "OPERATOR_CLIENT_ID",
       "OPERATOR_USER_POOL_ID",
@@ -32,6 +34,12 @@ describe("운영 API", () => {
       "SAMPLE_USER_POOL_ID",
       "SNAPSHOT_BUCKET",
     ]);
+    expect(fn.Properties.Environment.Variables.GA4_PROPERTY_ID).toEqual({
+      Ref: "Ga4PropertyId",
+    });
+    expect(
+      fn.Properties.Environment.Variables.GA4_SERVICE_ACCOUNT_PARAM,
+    ).toBe("/baradun/v2/api-keys/ga4-service-account");
   });
 
   it("게시 버킷은 publisher와 같은 사이트 버킷이다(BRD-150)", () => {
