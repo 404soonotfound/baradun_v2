@@ -176,7 +176,7 @@ describe("저장소 파일 읽기", () => {
   const beaches = loadBeaches(undefined, "2026");
 
   it("data/beaches 파일마다 한 곳씩, beach-meta.json 별칭·beach-coverage.csv 검증 결과와 이어 붙인다", () => {
-    expect(beaches).toHaveLength(206);
+    expect(beaches).toHaveLength(222);
     expect(beaches.every((b) => b.inMeta)).toBe(true);
     expect(beaches.every((b) => b.check !== null)).toBe(true);
     const gangmun = beaches.find((b) => b.id === "b0001")!;

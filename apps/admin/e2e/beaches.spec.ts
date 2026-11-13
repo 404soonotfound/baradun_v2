@@ -168,11 +168,11 @@ const beachRow = (page: Page, name: string) =>
     .filter({ visible: true })
     .filter({ hasText: name });
 
-// 모바일 카드 206장 전체에 axe를 돌리면 CI 러너에서 30초를 넘김 → 같은 부품을 몇 곳으로 줄여 검사
+// 모바일 카드 222장 전체에 axe를 돌리면 CI 러너에서 30초를 넘김 → 같은 부품을 몇 곳으로 줄여 검사
 async function narrowForAxe(page: Page) {
   await page.getByLabel("해변 찾기").fill("강릉");
-  await expect(page.getByText(/^206곳 중 \d+곳$/)).not.toHaveText(
-    "206곳 중 206곳",
+  await expect(page.getByText(/^222곳 중 \d+곳$/)).not.toHaveText(
+    "222곳 중 222곳",
   );
 }
 
@@ -182,13 +182,13 @@ async function openDetail(page: Page, name: string) {
   await expect(page.getByRole("heading", { name, level: 1 })).toBeVisible();
 }
 
-test("목록: 저장소의 206곳을 읽기 전용으로 보여 주고 지금 표시 상태는 사유 먼저", async ({
+test("목록: 저장소의 222곳을 읽기 전용으로 보여 주고 지금 표시 상태는 사유 먼저", async ({
   page,
 }) => {
   await mockPublished(page);
   await signIn(page, ["viewer"]);
   await openBeaches(page);
-  await expect(page.getByText("206곳 중 206곳")).toBeVisible();
+  await expect(page.getByText("222곳 중 222곳")).toBeVisible();
   await expect(
     page.getByText(
       "해변 정보는 저장소가 원본이에요. 고치면 PR 머지 뒤 사이트가 다시 배포되면서 반영돼요.",
@@ -235,7 +235,7 @@ test("목록: 이름·별칭으로 찾고 지역으로 거르며, 없으면 빈 
   await page.getByLabel("지역").selectOption("강원");
   await expect(page.getByText("찾는 해변이 없어요")).toBeVisible();
   await page.getByLabel("해변 찾기").fill("");
-  await expect(page.getByText("206곳 중 89곳")).toBeVisible();
+  await expect(page.getByText("222곳 중 91곳")).toBeVisible();
 });
 
 test("상태를 못 받으면 모든 해변이 판단불가 계열 '확인 못 함'이고 무슨 일·영향·다음 행동을 알린다", async ({
