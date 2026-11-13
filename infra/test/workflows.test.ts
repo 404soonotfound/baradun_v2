@@ -586,7 +586,10 @@ describe("PR 필수 웹 검사 (BRD-102 결정 41·42)", () => {
   it("CI의 Next 빌드 캐시는 main push에서만 저장한다", () => {
     for (const job of ["e2e-build", "admin-build"]) {
       const text = jobLines(ci?.text ?? "", job).join("\n");
-      expect(text, job).toMatch(/uses: actions\/cache\/restore@/);
+      // node_modules 캐시 복원과 헷갈리지 않게 next-cache 단계로 확인함
+      expect(text, job).toMatch(
+        /id: next-cache\s*\n\s*uses: actions\/cache\/restore@/,
+      );
       expect(text, job).toMatch(
         /if: github\.event_name == 'push' && steps\.next-cache\.outputs\.cache-hit != 'true'\s*\n\s*uses: actions\/cache\/save@/,
       );
@@ -595,6 +598,25 @@ describe("PR 필수 웹 검사 (BRD-102 결정 41·42)", () => {
         /uses: actions\/cache@[^\n]*\n\s+with:\s*\n\s+path: ~\/\.cache\/ms-playwright/,
       );
     }
+  });
+
+  // 옛 node_modules로 검사가 통과하지 않게 함: lock 파일·Node 판이 정확히 같은 캐시만 쓰고, 아니면 npm ci로 설치함
+  it("node_modules 캐시는 키가 정확히 같을 때만 npm ci를 건너뛴다", () => {
+    const text = jobLines(ci?.text ?? "", "e2e-build").join("\n");
+    const key =
+      "key: node-modules-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.nvmrc', 'package-lock.json') }}";
+    expect(text).toMatch(
+      /id: node-modules\s*\n\s*uses: actions\/cache\/restore@/,
+    );
+    // 복원과 저장이 같은 키를 씀
+    expect(text.split(key)).toHaveLength(3);
+    expect(text).not.toContain("restore-keys: node-modules");
+    expect(text).toContain(
+      "if: steps.node-modules.outputs.cache-hit != 'true'\n        run: npm ci --no-audit",
+    );
+    expect(text).toMatch(
+      /if: steps\.node-modules\.outputs\.cache-hit != 'true'\s*\n\s*uses: actions\/cache\/save@/,
+    );
   });
 
   it("실제 배포 직전에는 올릴 빌드의 전체 Chromium E2E를 통과해야 한다", () => {
@@ -633,6 +655,74 @@ describe("PR 필수 웹 검사 (BRD-102 결정 41·42)", () => {
     ).toBeGreaterThan(adminBuild.indexOf("npm run check:out -w apps/admin"));
     expect(ci?.text).not.toMatch(/^  admin-e2e:$/m);
     expect(adminBuild).not.toContain("actions/upload-artifact@");
+  });
+
+  // 설치를 빌드와 함께 돌리되(GH-430 뒤 단축), 결과 확인 없이 E2E로 넘어가지 않게 함
+  it("두 앱의 Playwright 설치는 빌드 앞에서 뒤로 시작하고 E2E 직전에 결과를 확인한다", () => {
+    for (const [job, app, check] of [
+      ["e2e-build", "web", "npm run check:csp -w apps/web"],
+      ["admin-build", "admin", "npm run check:out -w apps/admin"],
+    ] as const) {
+      const text = jobLines(ci?.text ?? "", job).join("\n");
+      const cond = `github.event_name == 'push' || needs.changes.outputs.${app}_e2e == 'true'`;
+      const setup =
+        'bash "$GITHUB_WORKSPACE/.github/scripts/playwright-setup.sh" start';
+      const install = text.indexOf(
+        `if: (${cond}) && steps.playwright-cache.outputs.cache-hit != 'true'\n        run: ${setup} install --with-deps chromium\n        working-directory: apps/${app}`,
+      );
+      const deps = text.indexOf(
+        `if: (${cond}) && steps.playwright-cache.outputs.cache-hit == 'true'\n        run: ${setup} install-deps chromium\n        working-directory: apps/${app}`,
+      );
+      const build = text.indexOf(`npm run build -w apps/${app}`);
+      const wait = text.indexOf(
+        `if: ${cond}\n        run: bash .github/scripts/playwright-setup.sh wait`,
+      );
+      const smoke = text.indexOf(`npm run test:e2e:smoke -w apps/${app}`);
+      expect(install, job).toBeGreaterThan(text.indexOf("npm ci --no-audit"));
+      expect(deps, job).toBeGreaterThan(install);
+      expect(build, job).toBeGreaterThan(deps);
+      expect(wait, job).toBeGreaterThan(text.indexOf(check));
+      expect(smoke, job).toBeGreaterThan(wait);
+      // 스크립트를 거치지 않는 설치(기다리지 않는 설치)는 두지 않음
+      expect(text, job).not.toMatch(/run: npx --no-install playwright install/);
+      expect(
+        [...text.matchAll(/playwright-setup\.sh" start /g)],
+        job,
+      ).toHaveLength(2);
+      expect(
+        [...text.matchAll(/playwright-setup\.sh wait/g)],
+        job,
+      ).toHaveLength(1);
+    }
+  });
+
+  it("CI에서는 Playwright trace를 기록하지 않고 로컬은 실패한 것만 남긴다", () => {
+    for (const [app, ciJob, deployJob] of [
+      ["web", "e2e-build", "site"],
+      ["admin", "admin-build", "admin"],
+    ] as const) {
+      const config = codeLines(
+        readFileSync(
+          resolve(__dirname, `../../apps/${app}/playwright.config.ts`),
+          "utf8",
+        ),
+      )
+        .join("\n")
+        .replace(/^\s*\/\/.*$/gm, "");
+      expect(
+        [...config.matchAll(/^\s*trace:\s*(.+),$/gm)].map((m) => m[1]),
+        app,
+      ).toEqual(['process.env.CI ? "off" : "retain-on-failure"']);
+      // trace를 올리지 않는 동안만 끔(배포 전 E2E도 CI 환경에서 돎). 올리기 시작하면 이 검사와 설정을 함께 바꿈
+      expect(jobLines(ci?.text ?? "", ciJob).join("\n"), ciJob).not.toContain(
+        "actions/upload-artifact@",
+      );
+      const deployText = jobLines(deploy?.text ?? "", deployJob).join("\n");
+      expect(deployText, deployJob).toContain(
+        `npm run test:e2e -w apps/${app}`,
+      );
+      expect(deployText, deployJob).not.toContain("actions/upload-artifact@");
+    }
   });
 
   it("운영자 E2E는 Chromium 핵심 흐름만 CI에 넣고 다른 엔진은 수동 실행한다", () => {
