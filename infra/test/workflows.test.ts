@@ -9,6 +9,7 @@ const workflows = readdirSync(dir)
   .map((f) => ({ name: f, text: readFileSync(resolve(dir, f), "utf8") }));
 const deploy = workflows.find((w) => w.name === "deploy.yml");
 const ci = workflows.find((w) => w.name === "ci.yml");
+const ciFilters = readFileSync(resolve(dir, "../ci-filters.yml"), "utf8");
 // 한국 지도 파일 만들기(결정 기록 D19-1 · #392)
 const mapTiles = workflows.find((w) => w.name === "map-tiles.yml");
 const mapUpload = readFileSync(
@@ -26,6 +27,17 @@ const codeLines = (text: string) =>
   text
     .split("\n")
     .map((line) => line.replace(/\s+#.*$/, "").replace(/^\s*#.*$/, ""));
+
+const ciFilterPaths = (name: string) => {
+  const lines = codeLines(ciFilters);
+  const start = lines.findIndex((line) => line.startsWith(`${name}:`));
+  if (start < 0) return [];
+  const end = lines.findIndex((line, i) => i > start && /^\S/.test(line));
+  return lines.slice(start + 1, end < 0 ? undefined : end).flatMap((line) => {
+    const path = line.match(/^  - '([^']+)'\s*$/)?.[1];
+    return path === undefined ? [] : [path];
+  });
+};
 
 describe("배포 워크플로 가드레일 (11장)", () => {
   it("어떤 워크플로도 pull_request_target을 쓰지 않는다", () => {
@@ -239,18 +251,17 @@ describe("배포 워크플로 가드레일 (11장)", () => {
     expect(job).not.toMatch(/id-token|configure-aws-credentials|secrets\./);
     expect(job).toMatch(/-z "\$SITE_URL"[\s\S]*?exit 1/);
     // 지도 판 이름·스타일·지도 제공 경로가 바뀌면 돎
-    const filter =
-      text.match(/\n {12}map:[^\n]*\n((?: {14}- .*\n)+)/)?.[1] ?? "";
+    const filter = ciFilterPaths("map");
     for (const path of [
       "apps/web/src/lib/map/style.ts",
       "apps/web/src/lib/map/style-*.json",
       "tools/map-tiles/**",
       ".github/workflows/map-tiles.yml",
     ]) {
-      expect(filter).toContain(`'${path}'`);
+      expect(filter).toContain(path);
     }
     // 사이트 인프라는 PR 때 운영 반영 전이라 보지 않음(배포 뒤 deploy:infra가 확인). 넣으면 고치는 PR이 막힘
-    expect(filter).not.toContain("infra/");
+    expect(filter.some((path) => path.startsWith("infra/"))).toBe(false);
     expect(jobLines(text, "ci-ok").join("\n")).toMatch(/^\s+map-files,$/m);
   });
 
@@ -436,25 +447,15 @@ describe("PR 필수 웹 검사 (BRD-102 결정 41·42)", () => {
 
   // 바뀐 앱만 배포하므로, 빌드가 읽는 앱 밖 파일과 배포 빌드 방법(deploy.yml)도 그 앱의 변경으로 봄
   it("빌드가 읽는 앱 밖 파일과 deploy.yml은 그 앱의 바뀐 영역에 들어간다", () => {
-    const changes = jobLines(ci?.text ?? "", "changes");
-    const filter = (area: string) => {
-      const start = changes.findIndex((l) =>
-        new RegExp(`^\\s{12}${area}:`).test(l),
-      );
-      const end = changes.findIndex(
-        (l, i) => i > start && /^\s{12}[a-z_]+:/.test(l),
-      );
-      return changes.slice(start, end < 0 ? undefined : end).join("\n");
-    };
     for (const path of [
       "data/beaches/**",
       "data/beach-meta.json",
       ".github/workflows/deploy.yml",
     ]) {
-      expect(filter("web"), path).toContain(`'${path}'`);
+      expect(ciFilterPaths("web"), path).toContain(path);
     }
     for (const path of ["data/beaches/**", ".github/workflows/deploy.yml"]) {
-      expect(filter("admin"), path).toContain(`'${path}'`);
+      expect(ciFilterPaths("admin"), path).toContain(path);
     }
   });
 
@@ -474,33 +475,20 @@ describe("PR 필수 웹 검사 (BRD-102 결정 41·42)", () => {
     }
     return out;
   };
-  const ciFilter = (name: string) => {
-    // paths-filter의 filters 블록 안에서 찾음(changes 출력의 같은 이름과 섞이지 않게)
-    const text = codeLines(ci?.text ?? "");
-    const block = text.findIndex((l) => l.trim() === "filters: |");
-    const at = text.findIndex(
-      (l, i) => i > block && /^\s*([\w-]+):/.exec(l)?.[1] === name,
-    );
-    const out: string[] = [];
-    for (const l of text.slice(at + 1)) {
-      const m = l.match(/^\s*-\s*'([^']+)'\s*$/);
-      if (m) out.push(m[1]!.replace(/\/\*\*$/, ""));
-      else if (/^\s*-\s*\*shared\s*$/.test(l)) continue;
-      else break;
-    }
-    return out;
-  };
-
-  it("배포 비교 경로는 ci.yml의 바뀐 영역 필터(공통 + 앱)에서 빌드와 상관없는 ci.yml만 뺀 것과 같다", () => {
-    const shared = ciFilter("shared").filter(
+  it("배포 비교 경로는 CI 경로 필터(공통 + 앱)에서 ci.yml만 뺀 것과 같다", () => {
+    const shared = ciFilterPaths("shared").filter(
       (p) => p !== ".github/workflows/ci.yml",
     );
     expect(shared.length).toBeGreaterThan(0);
     expect(deployPaths("site").sort()).toEqual(
-      [...shared, ...ciFilter("web")].sort(),
+      [...shared, ...ciFilterPaths("web")]
+        .map((path) => path.replace(/\/\*\*$/, ""))
+        .sort(),
     );
     expect(deployPaths("admin").sort()).toEqual(
-      [...shared, ...ciFilter("admin")].sort(),
+      [...shared, ...ciFilterPaths("admin")]
+        .map((path) => path.replace(/\/\*\*$/, ""))
+        .sort(),
     );
   });
 
