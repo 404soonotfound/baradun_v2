@@ -1,0 +1,71 @@
+name: Project snapshot
+
+# 아침 보고 루틴용 읽기 전용 Project 4 스냅샷 (#413).
+# 저장소 코드를 체크아웃·실행하지 않고, 외부 Action도 쓰지 않음.
+on:
+  schedule:
+    - cron: "30 23 * * *" # 매일 08:30 KST
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: project-snapshot
+  cancel-in-progress: false
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Export Project 4 snapshot to project-snapshot branch
+        env:
+          GH_TOKEN: ${{ secrets.PROJECT_READ_TOKEN }}
+          PUSH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${GH_TOKEN}" ]; then
+            echo "PROJECT_READ_TOKEN is empty" >&2
+            exit 1
+          fi
+
+          work_dir=$(mktemp -d)
+          trap 'rm -rf "${work_dir}"' EXIT
+
+          gh project field-list 4 --owner 404soonotfound --format json > "${work_dir}/fields.json"
+          gh project item-list 4 --owner 404soonotfound --limit 500 --format json > "${work_dir}/items.json"
+
+          item_len=$(jq '.items | length' "${work_dir}/items.json")
+          total_count=$(jq '.totalCount // 0' "${work_dir}/items.json")
+
+          if [ "${item_len}" -eq 0 ] || [ "${item_len}" -ne "${total_count}" ]; then
+            echo "Invalid Project item count: len=${item_len}, totalCount=${total_count}" >&2
+            exit 1
+          fi
+
+          jq -n \
+            --arg generatedAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --slurpfile fields "${work_dir}/fields.json" \
+            --slurpfile items "${work_dir}/items.json" \
+            '{
+              generatedAt: $generatedAt,
+              totalCount: $items[0].totalCount,
+              fields: $fields[0].fields,
+              items: $items[0].items
+            }' > "${work_dir}/project-items.json"
+
+          repo_dir="${work_dir}/repo"
+          git init -q "${repo_dir}"
+          cd "${repo_dir}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git remote add origin "https://x-access-token:${PUSH_TOKEN}@github.com/${REPO}.git"
+
+          git checkout --orphan project-snapshot
+          cp "${work_dir}/project-items.json" project-items.json
+          git add project-items.json
+          git commit -q -m "chore: update project-items.json snapshot"
+          git push --force origin HEAD:refs/heads/project-snapshot

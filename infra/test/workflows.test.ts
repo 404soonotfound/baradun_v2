@@ -666,10 +666,17 @@ describe("PR 필수 웹 검사 (BRD-102 결정 41·42)", () => {
     );
   });
 
-  it("워크플로는 secrets.*나 API 키 환경 변수를 쓰지 않고, 웹 빌드에는 공개 변수만 넘긴다 (BRD-67)", () => {
+  it("워크플로는 secrets.*나 API 키 환경 변수를 쓰지 않고(project-snapshot.yml의 PROJECT_READ_TOKEN 예외), 웹 빌드에는 공개 변수만 넘긴다 (BRD-67 · #413)", () => {
     for (const w of workflows) {
       const text = codeLines(w.text).join("\n");
-      expect(text, w.name).not.toMatch(/\bsecrets\./);
+      const secretRefs = [...text.matchAll(/\bsecrets\.([A-Z0-9_]+)/g)].map(
+        (m) => m[1],
+      );
+      if (w.name === "project-snapshot.yml") {
+        expect(secretRefs).toEqual(["PROJECT_READ_TOKEN"]);
+      } else {
+        expect(secretRefs, w.name).toEqual([]);
+      }
       expect(text, w.name).not.toMatch(
         /\b(KMA_APIHUB_AUTH_KEY|DATA_GO_KR_SERVICE_KEY)\b/,
       );
@@ -703,6 +710,23 @@ describe("PR 필수 웹 검사 (BRD-102 결정 41·42)", () => {
     expect(gitleaks).toContain(
       "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb",
     );
+  });
+
+  it("project-snapshot.yml은 예약·수동 실행만 허용하고 외부 Action·저장소 코드 실행 없이 project-snapshot 브랜치만 갱신한다 (#413)", () => {
+    const snapshot = workflows.find((w) => w.name === "project-snapshot.yml");
+    expect(snapshot).toBeDefined();
+    const text = codeLines(snapshot?.text ?? "").join("\n");
+
+    expect(text).toContain("schedule:");
+    expect(text).toContain("workflow_dispatch:");
+    expect(text).not.toMatch(/^\s*(pull_request|push|issue_comment):/m);
+    expect(text).not.toMatch(/^\s*(?:-\s*)?uses:/m);
+    expect(text).not.toMatch(/id-token:\s*write/);
+    expect(text).toContain('if [ -z "${GH_TOKEN}" ]');
+    expect(text).toContain(
+      'if [ "${item_len}" -eq 0 ] || [ "${item_len}" -ne "${total_count}" ]',
+    );
+    expect(text).toContain("refs/heads/project-snapshot");
   });
 });
 
