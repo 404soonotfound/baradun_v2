@@ -10,6 +10,7 @@ import { localCollection } from "./local-collection";
 import { localNotices } from "./local-notices";
 import { localPublish } from "./local-publish";
 import { localSources } from "./local-sources";
+import { localStats } from "./local-stats";
 import { SESSION } from "./policy";
 import type { AuthSession } from "./session";
 import type { Tokens } from "./srp";
@@ -162,6 +163,9 @@ export function localOps<T>(
   }
   if (method === "GET" && url.pathname === "/ops/sources") {
     return localSources<T>();
+  }
+  if (method === "GET" && url.pathname === "/ops/stats") {
+    return localStats<T>(url.searchParams);
   }
   if (url.pathname.startsWith("/ops/beaches/")) {
     // 데모 계정은 서버처럼 운영 메모를 받지 않음(허용표 sample: false)

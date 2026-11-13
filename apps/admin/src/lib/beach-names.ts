@@ -12,11 +12,16 @@ export interface BeachName {
   readonly hidden: boolean;
 }
 
+export interface BeachSlugName extends BeachName {
+  readonly id: string;
+}
+
 // 명령이 apps/admin에서 실행되므로 저장소 맨 위는 두 칸 위(apps/web/src/lib/beaches.ts와 같음)
 const DATA_DIR = path.join(process.cwd(), "../../data/beaches");
 
 interface RawBeach {
   readonly id?: unknown;
+  readonly slug?: unknown;
   readonly name?: { readonly ko?: unknown };
   readonly region?: {
     readonly sido?: { readonly ko?: unknown };
@@ -52,4 +57,35 @@ export function loadBeachNames(dir = DATA_DIR): Record<string, BeachName> {
     };
   }
   return names;
+}
+
+// 이용 통계(ADM-STATS)에서 /spots/[slug] 경로를 해변 이름으로 바꿀 때 사용
+export function loadBeachNamesBySlug(
+  dir = DATA_DIR,
+): Record<string, BeachSlugName> {
+  const bySlug: Record<string, BeachSlugName> = {};
+  for (const file of readdirSync(dir).filter((f) => /^b\d{4}\.json$/.test(f))) {
+    const raw = JSON.parse(
+      readFileSync(path.join(dir, file), "utf8"),
+    ) as RawBeach;
+    const sido = raw.region?.sido?.ko;
+    const sigungu = raw.region?.sigungu?.ko;
+    if (
+      typeof raw.id !== "string" ||
+      `${raw.id}.json` !== file ||
+      typeof raw.slug !== "string" ||
+      typeof raw.name?.ko !== "string" ||
+      typeof sido !== "string" ||
+      typeof sigungu !== "string"
+    ) {
+      throw new Error(`해변 파일 모양이 틀림: ${file}`);
+    }
+    bySlug[raw.slug] = {
+      id: raw.id,
+      name: raw.name.ko,
+      region: `${sido} ${sigungu}`,
+      hidden: raw.hidden === true,
+    };
+  }
+  return bySlug;
 }

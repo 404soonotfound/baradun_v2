@@ -1384,5 +1384,61 @@
     "backLink": "정책 목록으로",
     "notFound": "찾는 정책이 없어요",
     "notFoundHint": "주소가 틀렸거나 없는 정책이에요. 목차에서 다시 골라 주세요."
+  },
+  "stats": {
+    "title": "이용 통계",
+    "intro": "Google Analytics(GA4)에서 집계한 방문 지표예요. 해변 판단 상태와 묶인 지표는 만들지 않아요.",
+    "fetchedAt": "기준 시각 {time}",
+    "cachedBadge": "잠시 저장된 응답",
+    "refresh": "새로 고침",
+    "loading": "이용 통계를 불러오고 있어요.",
+    "loadError": "이용 통계를 불러오지 못했어요.",
+    "loadErrorHint": "잠시 뒤 새로 고침을 눌러 다시 확인해 주세요.",
+    "unconfiguredTitle": "GA4 연동이 아직 설정되지 않았어요",
+    "unconfiguredBody": "운영 API에 GA4 속성 ID와 서비스 계정 키(SSM Parameter Store)를 연결하면 실제 지표를 보여 줘요.",
+    "rangeGroupLabel": "기간 선택",
+    "range": {
+      "today": "오늘",
+      "7d": "7일",
+      "28d": "28일",
+      "60d": "60일"
+    },
+    "realtimeTitle": "지금 사용 중 (최근 30분)",
+    "realtimeUnavailable": "실시간 집계를 확인하지 못했어요.",
+    "activeUsers": "활성 사용자",
+    "pageViews": "페이지뷰",
+    "countUnit": "{count}명",
+    "viewUnit": "{count}회",
+    "emptyValue": "–",
+    "metadataTitle": "일부 숫자가 가려졌거나 요약되었어요",
+    "metadataBody": "GA4 개인정보 보호·집계 기준에 따라 일부 숫자가 제한되어 있어요. 숨긴 숫자는 추정하지 않고 비워 둬요.",
+    "metadataReasons": {
+      "thresholding": "적은 방문자 구간은 개인정보 보호를 위해 가려질 수 있어요(thresholding).",
+      "sampling": "데이터 양이 많아 표본으로 계산되었어요(sampling).",
+      "otherRowLoss": "항목이 많아 일부가 '(other)'로 묶였어요."
+    },
+    "periodTitle": "기간 요약",
+    "periodUnavailable": "기간 통계를 확인하지 못했어요.",
+    "topBeachesTitle": "많이 본 해변",
+    "topBeachesEmpty": "집계된 해변 방문 기록이 없어요.",
+    "devicesTitle": "기기 비율",
+    "languagesTitle": "언어 비율",
+    "listEmpty": "집계된 항목이 없어요.",
+    "percentUnit": "{percent}%",
+    "deviceLabels": {
+      "mobile": "모바일",
+      "desktop": "PC",
+      "tablet": "태블릿"
+    },
+    "languageLabels": {
+      "ko": "한국어",
+      "en": "English"
+    },
+    "eventsTitle": "수집 이벤트",
+    "eventsNote": "출시 버전에서는 page_view만 수집해요.",
+    "eventStatus": {
+      "collecting": "수집 중",
+      "not_collecting": "수집 안 함(후속)"
+    }
   }
 }
