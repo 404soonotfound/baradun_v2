@@ -109,6 +109,8 @@ export function summaryOf(item: AuditView): string {
     if (item.changes.includes("rejectReason")) parts.push(s.rejectReason);
     if (item.changes.includes("memo")) parts.push(s.memo);
     if (item.changes.includes("message")) parts.push(s.message);
+  } else if (item.action === "permission.mfa_reset") {
+    parts.push(s.mfaReset);
   } else if (item.action === "sample.read") {
     parts.push(s.sampleRead);
   } else if (item.action === "sample.denied") {
@@ -144,6 +146,10 @@ export function Target({
         {shortId(id)}
       </Link>
     );
+  }
+  // 운영자 계정(2단계 인증 초기화 대상): 기록에 이메일이 없어 sub 앞부분으로(누가 칸과 같음)
+  if (kind === "account") {
+    return <span title={id}>{operatorName(id)}</span>;
   }
   if (kind === "notice") {
     return (

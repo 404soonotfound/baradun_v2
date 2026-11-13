@@ -291,6 +291,8 @@ export function SeaCard({
 
 // PC 5칸: 파고 · 파주기 · 파도 방향 · 수온 · 바람(시안 D안 ActR_D_PLD: 칸 사이 세로 줄, 아래 구분선, 파도 방향 칸만 조금 넓게)
 // 칸 아래는 'n분 전 측정'만. 측정소 이름은 정보 출처(D18-3)
+// 칸 비율: 첫 칸은 왼쪽 여백(19px)이 없어 덜 받고, 바람 칸에 더 줌. 1024 화면(카드 484px)에서
+// 두 자리 풍속('15.2 m/s')이 칸을 넘치지 않게 함(GH-349)
 function WideStats({
   view,
   stations,
@@ -310,7 +312,7 @@ function WideStats({
     "wind",
   ] as const;
   return (
-    <ul className="hidden border-b border-border-default px-5 pt-3.5 pb-[17px] lg:grid lg:grid-cols-[1fr_1fr_1.25fr_1fr_1fr]">
+    <ul className="hidden border-b border-border-default px-5 pt-3.5 pb-[17px] lg:grid lg:grid-cols-[0.85fr_1fr_1.2fr_1fr_1.1fr]">
       {keys.map((key, index) => {
         const metric = shownMetric(view, stations, key);
         return (

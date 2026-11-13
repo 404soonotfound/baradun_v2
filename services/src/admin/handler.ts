@@ -79,6 +79,11 @@ import {
   type PublisherInvoker,
 } from "./publish-routes";
 import { decideRoute, matchRoute } from "./routes";
+import {
+  cognitoMfaResetter,
+  mfaResetRoute,
+  type MfaResetter,
+} from "./mfa-reset";
 import { readSamplePolicy } from "./sample";
 import { sampleInquiry, sampleInquiryPage, sampleStats } from "./sample-data";
 import {
@@ -108,6 +113,8 @@ export interface DataDependencies {
   readonly snapshots?: SnapshotStore | null;
   // publisher 비동기 호출(지금 게시·되돌리기 작업, #331). 없으면 작업을 만들지 않음(500)
   readonly publisher?: PublisherInvoker | null;
+  // 운영자 풀 계정 확인·인증 앱 지우기(2단계 인증 초기화, #335). 없으면 그 요청만 500
+  readonly mfaReset?: MfaResetter | null;
   // GA4 이용 통계 읽기(#333 ADM-STATS). 없으면 configured: false 안내
   readonly stats?: StatsReader | null;
 }
@@ -508,6 +515,13 @@ async function dispatchOps(
         );
       }
     }
+    if (
+      decision.pattern === "/ops/account/mfa-reset" &&
+      method === "POST" &&
+      principal.kind === "operator"
+    ) {
+      return await mfaResetRoute(event, principal, deps.data, ids);
+    }
     if (decision.pattern === "/ops/inquiries/{id}") {
       const id = decision.params.id ?? "";
       if (method === "GET") {
@@ -642,6 +656,7 @@ function runtimeDependencies(): OpsDependencies {
       keys: keyTagReader(),
       snapshots: snapshotReader(),
       publisher: publisherInvoker(),
+      mfaReset: cognitoMfaResetter(config.operator.userPoolId),
       stats: statsReader(now),
     },
   };
