@@ -12,7 +12,7 @@ npx cdk diff --method=change-set            # 배포된 스택과 변경 세트 
 
 사이트 자동 배포(`.github/workflows/deploy.yml`, `npm run deploy:prod`)는 GitHub OIDC로 사이트 전용 역할(`DeployRole`)을 맡아 S3 파일 동기화와 CloudFront 캐시 무효화만 수행하며, CloudFormation이나 CDK 실행 정책을 거치지 않습니다. 자동 배포는 앱(사용자 사이트·운영자 사이트)마다 마지막으로 올린 커밋(운영 주소의 `deploy-version.txt`, 저장소 변수 `SITE_URL`·`ADMIN_SITE_URL`로 읽음) 뒤로 main push CI가 성공하고 그 실행에서 그 앱 빌드 작업(`e2e-build`·`admin-build`)까지 성공한 가장 새 커밋을 올립니다(`.github/scripts/deploy-plan.sh`). CI는 push 단위로 돌아 여러 커밋을 머지하면 맨 위 커밋에서만 실행되므로, 커밋별 변경이 아니라 실행 결과로 고릅니다. 그런 커밋이 없거나 올린 커밋과 앱 파일이 같으면 건너뛰므로, CI가 늦게 끝난 옛 커밋이 새 배포를 덮지 않고 CI가 실패한 커밋의 변경은 그 앱을 다시 검사한 뒤 커밋으로만 나갑니다(검사를 거치지 않은 앱 변경이 남으면 경고를 남김). 표시를 못 읽으면 경고를 남기고 최근 이력에서 고른 커밋을 올리며, `npm run deploy:prod`(수동 실행)는 두 앱을 모두 올립니다(BRD-178). 사이트 동기화는 `data/`(publisher 구역)와 `map/`(한국 지도 파일 구역, 결정 기록 D19-1)을 건드리지 않습니다. `map/<판>/`은 수동 워크플로 `map-tiles.yml`이 같은 배포 역할로 올립니다(`tools/map-tiles/README.md`). 저장소 변수(사이트 주소·버킷·로그인 풀 값 등 빌드 값)만 바꾼 경우는 파일 변경이 아니라 자동 배포가 건너뛰므로 `npm run deploy:prod`로 다시 올립니다. main push CI는 push마다 따로 돌고 취소하지 않으며, main 규칙은 최신 브랜치만 머지할 수 있게 합니다.
 
-인프라 스택 배포는 요청이 있을 때만 사람이 실행하고, 최신 `origin/main`을 꺼낸 배포용 작업 트리에서 합니다. 작업 중인 브랜치에서 배포하면 머지되지 않은 코드가 실환경에 올라갑니다. 아래 명령 하나가 그 순서를 모두 합니다(BRD-169, `infra/scripts/deploy.mjs`).
+인프라 스택은 main 머지 뒤 CI가 자동으로 배포합니다(아래 'main 머지 뒤 자동 배포'). 첫 설정·boundary 반영·비상 배포처럼 손으로 할 때는 최신 `origin/main`을 꺼낸 배포용 작업 트리에서 합니다. 작업 중인 브랜치에서 배포하면 머지되지 않은 코드가 실환경에 올라갑니다. 아래 명령 하나가 그 순서를 모두 합니다(BRD-169, `infra/scripts/deploy.mjs`).
 
 ```bash
 cd ../baradun_v2-deploy && npm run deploy:infra   # 프로필 기본값: AWS_PROFILE, 없으면 soo-login
@@ -41,6 +41,34 @@ npm run keys:expires -- kma-apihub 2027-03-31   # 기상청 API허브 인증키 
 ```
 
 스택 파라미터(`AlertEmail` 등)는 넘기지 않아 이전 값을 그대로 씁니다(아래 '배포'). 파라미터를 바꾸거나 `cdk bootstrap`처럼 다른 명령이 필요한 배포는 이 명령 대신 각 절의 절차를 따릅니다.
+
+## main 머지 뒤 자동 배포 (#418)
+
+main push CI가 성공하면 `deploy.yml`의 `infra` 작업이 그 커밋으로 변경 세트를 만들고 판정합니다(`infra/scripts/deploy-ci.mjs`, 판정 `autoDeployDecision`, 사용자 결정 2026-11-13 A안). 사이트·운영자 사이트 작업은 이 작업이 끝난 뒤에 돕니다(판단 정책을 바꾼 PR은 publisher가 먼저 배포돼야 함, D20-6·7). 수동 실행(`npm run deploy:prod`)은 사이트만 올립니다.
+
+| 판정           | 조건                                                                                                                      | 동작                                                                                                                                                                                                              |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 바로 실행      | 삭제·교체(`!!`)가 없고 boundary가 저장소와 같음. 코드·설정, 권한(`**`), 데이터 없는 리소스의 '교체될 수도 있음'(`~`) 포함 | 실행·대기 → `infra-watch`가 16분 로그 점검·지도 판 확인 → 결과 댓글                                                                                                                                               |
+| 승인 대기      | `!!`가 있음(데이터 리소스의 교체 가능성 포함)                                                                             | 변경 세트를 남기고 댓글로 알림. 실행 기록의 `infra-approve` 작업을 승인(`infra-approval` environment, 폰 GitHub 앱 가능)하면 같은 변경 세트를 실행. 그사이 다른 배포가 먼저 실행돼 낡은 변경 세트는 실행하지 않음 |
+| 로컬 배포 필요 | boundary가 저장소와 다름                                                                                                  | 실행하지 않고 실패로 표시·댓글. 로컬에서 위 `npm run deploy:infra`로 배포(boundary 반영 → 실행)                                                                                                                   |
+| 건너뜀         | main이 이미 다음 커밋으로 앞섬 / 바뀐 리소스 없음                                                                         | 다음 커밋의 실행이 배포 / 아무것도 안 함                                                                                                                                                                          |
+
+- 결과 댓글은 그 커밋을 머지한 PR 설명의 연결 이슈(`Fixes`·`Part of #n`)에, 없으면 PR에 남깁니다(계정 번호 가림). `DEPLOY_PAUSED=true`면 인프라 자동 배포도 멈춥니다.
+- CI 역할 `BaradunGitHubInfraDeploy`는 **스택 밖**에 둡니다. 스택 실행 정책은 `BaradunV2-*` 역할만 고칠 수 있어 스택 배포가 이 역할을 넓힐 수 없습니다. 권한은 CDK 부트스트랩 역할(배포·파일 올리기·조회) 맡기와 스택·정책·함수·로그 읽기뿐이고(`bootstrap/github-infra-deploy-policy.json`), IAM 쓰기가 없어 boundary·실행 정책을 고치지 못합니다. 신뢰는 이 저장소 `infra`·`infra-approval` environment의 OIDC 토큰만 받습니다(`bootstrap/github-infra-deploy-trust.json`).
+- 변경 세트 실행·지우기는 CDK 배포 역할(`cdk-hnb659fds-deploy-role-…`)로 합니다. 권한 상한은 계속 boundary가 막습니다.
+
+처음 한 번(관리자 프로필, 예: `AWS_PROFILE=baradun-sso`):
+
+```bash
+cd infra
+aws iam create-role --role-name BaradunGitHubInfraDeploy --max-session-duration 3600 \
+  --description "GitHub Actions infra deploy (infra, infra-approval environments only)" \
+  --assume-role-policy-document file://bootstrap/github-infra-deploy-trust.json
+aws iam put-role-policy --role-name BaradunGitHubInfraDeploy --policy-name InfraDeploy \
+  --policy-document file://bootstrap/github-infra-deploy-policy.json
+```
+
+GitHub 저장소 설정 → Environments에서 `infra`(배포 브랜치 `main`만, 검토자 없음)와 `infra-approval`(배포 브랜치 `main`만, 필수 검토자 저장소 소유자)을 만들고, 저장소 변수 `INFRA_DEPLOY_ROLE_ARN`에 `arn:aws:iam::<계정>:role/BaradunGitHubInfraDeploy`를 넣으면 다음 main 머지부터 돕니다(변수가 비면 `infra` 작업은 건너뜀). 두 정책 파일을 바꾼 PR은 머지 뒤 같은 명령(`update-assume-role-policy`·`put-role-policy`)으로 다시 반영합니다. CI는 자기 역할을 고치지 않습니다.
 
 ## 운영 도메인 연결 (BRD-162)
 
