@@ -482,14 +482,61 @@ export interface AutoDeployDecision {
   readonly reasons: readonly string[];
 }
 
+// 실행 정책에서 저장소 문서가 쓰는 Allow 동작 중 AWS 기본 버전이 허용하지 않는 것(와일드카드 비교, 대소문자 무시)
+// 리소스·조건은 보지 않음(좁아진 리소스는 안전, 넓어진 리소스는 CloudFormation이 막고 롤백함)
+// 하나라도 있으면 그 동작이 필요한 배포가 AccessDenied로 실패할 수 있음 → CI는 실행하지 않음(실행 정책은 README 절차로 반영)
+export function missingExecutionActions(
+  local: readonly PolicyDocument[],
+  remote: readonly PolicyDocument[],
+): string[] {
+  const allowActions = (docs: readonly PolicyDocument[]): string[] =>
+    docs.flatMap((d) => {
+      const list: readonly PolicyStatement[] =
+        d.Statement === undefined
+          ? []
+          : Array.isArray(d.Statement)
+            ? (d.Statement as readonly PolicyStatement[])
+            : [d.Statement as PolicyStatement];
+      return list
+        .filter((st) => st.Effect === "Allow")
+        .flatMap((st) => {
+          const a = st.Action as string | string[] | undefined;
+          return a === undefined ? [] : Array.isArray(a) ? a : [a];
+        });
+    });
+  const toPattern = (p: string) =>
+    new RegExp(
+      `^${p
+        .replace(/[.+^${}()|[\]\\]/g, "\\$&")
+        .replace(/\*/g, ".*")
+        .replace(/\?/g, ".")}$`,
+      "i",
+    );
+  const patterns = allowActions(remote).map(toPattern);
+  return [...new Set(allowActions(local))]
+    .filter((a) => !patterns.some((re) => re.test(a)))
+    .sort();
+}
+
+// CloudFormation이 알려 주는 변경 동작·교체 값 중 판정할 수 있는 것. 그 밖(Dynamic·Import·SyncWithActual 등)은 모르는 변경
+const KNOWN_ACTIONS = new Set(["Add", "Modify", "Remove"]);
+const KNOWN_REPLACEMENTS = new Set(["True", "False", "Conditional"]);
+
+function unknownChange(r: ChangeRow): boolean {
+  if (!KNOWN_ACTIONS.has(r.action)) return true;
+  return r.action === "Modify" && !KNOWN_REPLACEMENTS.has(r.replacement);
+}
+
 // 자동 실행 여부(사용자 결정 2026-11-13 A안)
 // - boundary가 저장소와 다르면 local: CI 역할은 boundary를 고칠 권한이 없음(배포 역할이 자기 권한 상한을 못 고치게)
-// - 삭제·교체(!!, 데이터 리소스는 교체 가능성 포함)가 있으면 hold: 데이터가 사라질 수 있어 사람이 봄
+// - 실행 정책이 저장소 문서의 동작을 허용하지 않으면 local: 실행 정책도 CI가 고치지 않음(README '정책 적용과 되돌리기 절차')
+// - 삭제·교체(!!, 데이터 리소스는 교체 가능성 포함)나 모르는 변경 동작·교체 값이 있으면 hold: 사람이 봄(모르는 것을 정상으로 보지 않음)
 // - 코드·설정(①)과 권한(②, **) 변경, 데이터 없는 리소스의 교체 가능성(~)은 auto. 권한 상한은 boundary가 막음
 export function autoDeployDecision(input: {
   readonly hasChangeSet: boolean;
   readonly rows: readonly ChangeRow[];
   readonly boundarySame: boolean;
+  readonly executionGaps?: readonly string[];
 }): AutoDeployDecision {
   if (!input.boundarySame) {
     return {
@@ -499,14 +546,31 @@ export function autoDeployDecision(input: {
       ],
     };
   }
+  const gaps = input.executionGaps ?? [];
+  if (gaps.length > 0) {
+    return {
+      kind: "local",
+      reasons: [
+        `실행 정책이 저장소 문서의 동작을 허용하지 않아요(${gaps.join(", ")}). infra/README '정책 적용과 되돌리기 절차'로 반영한 뒤 배포해 주세요.`,
+      ],
+    };
+  }
   if (!input.hasChangeSet) return { kind: "none", reasons: [] };
-  const dangers = input.rows.filter((r) => r.danger);
-  if (dangers.length > 0) {
+  const held = input.rows.filter((r) => r.danger || unknownChange(r));
+  if (held.length > 0) {
     return {
       kind: "hold",
-      reasons: dangers.map(
+      reasons: held.map(
         (r) =>
-          `${r.logicalId}(${r.type}): ${r.action === "Remove" ? "삭제" : r.replacement === "True" ? "교체" : "교체될 수도 있음(데이터 리소스)"}`,
+          `${r.logicalId}(${r.type}): ${
+            unknownChange(r)
+              ? `모르는 변경(${r.action}/${r.replacement})`
+              : r.action === "Remove"
+                ? "삭제"
+                : r.replacement === "True"
+                  ? "교체"
+                  : "교체될 수도 있음(데이터 리소스)"
+          }`,
       ),
     };
   }
