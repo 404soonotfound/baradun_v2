@@ -1,9 +1,12 @@
+import type { Reason } from "@baradun/contracts";
 import type { AuditView } from "./audit";
 import type { OpsResult } from "./auth/ops-fetch";
-import type { PublishedView } from "./beaches";
+import { reasonLabels, type BadgeLabel, type PublishedView } from "./beaches";
 import {
   SOURCE_ROWS,
   sourceState,
+  successRate,
+  sumCounts,
   type CollectionJobId,
   type CollectionView,
   type SourceState,
@@ -51,6 +54,147 @@ export function undeterminedCount(view: PublishedView | null): number | null {
   return Object.values(view.beaches).filter(
     (b) => b.category === "undetermined",
   ).length;
+}
+
+// 앱에 보이는 해변 칸(보드 V1 '앱에 보이는 해변'): 게시본의 분류별 해변 수. 게시본을 읽지 못하면 null
+// 분류는 게시본 값 그대로 셈(화면에서 다시 분류하지 않음, G1)
+export interface BeachCounts {
+  readonly total: number;
+  readonly clear: number;
+  readonly unavailable: number;
+  readonly undetermined: number;
+}
+
+export function beachCounts(view: PublishedView | null): BeachCounts | null {
+  if (!view || !view.available) return null;
+  const counts = { total: 0, clear: 0, unavailable: 0, undetermined: 0 };
+  for (const entry of Object.values(view.beaches)) {
+    counts.total += 1;
+    counts[entry.category] += 1;
+  }
+  return counts;
+}
+
+// 판단불가 해변 표 한 줄(보드 V1 '판단불가 해변'). 사유는 게시본 첫 사유 그대로
+export interface UndeterminedRow {
+  readonly id: string;
+  // 공개 해변 데이터 이름표에 없으면 null → 화면은 '이름 확인 못 함'(ID를 이름처럼 보이지 않음)
+  readonly name: string | null;
+  readonly region: string | null;
+  // 배지(사유 먼저): 게시본 첫 사유. 사유가 없거나 모르는 code면 '특보 확인 못 함'
+  readonly label: BadgeLabel;
+  // 첫 사유 원본(범위·기관·시각). 사유가 없으면 null
+  readonly reason: Partial<Reason> | null;
+}
+
+export function undeterminedRows(
+  view: PublishedView | null,
+  names: Readonly<Record<string, { readonly name: string; readonly region: string }>>,
+): UndeterminedRow[] | null {
+  if (!view || !view.available) return null;
+  return Object.entries(view.beaches)
+    .filter(([, entry]) => entry.category === "undetermined")
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    .map(([id, entry]) => ({
+      id,
+      name: names[id]?.name ?? null,
+      region: names[id]?.region ?? null,
+      label: reasonLabels(entry)[0],
+      reason: entry.reasons[0] ?? null,
+    }));
+}
+
+// 사유 칸의 시각 종류: 특보 확인 못 함은 마지막 확인 시각, 관측 지연은 마지막 측정 시각
+// 시각이 없거나 읽을 수 없으면 null(지금 시각 등으로 채우지 않음)
+export function reasonTime(
+  reason: Partial<Reason> | null,
+): { kind: "confirmed" | "observed"; at: string } | null {
+  if (!reason || typeof reason.at !== "string") return null;
+  if (Number.isNaN(Date.parse(reason.at))) return null;
+  if (reason.code === "warning_unknown") {
+    return { kind: "confirmed", at: reason.at };
+  }
+  if (reason.code === "observation_delayed") {
+    return { kind: "observed", at: reason.at };
+  }
+  return null;
+}
+
+// 수집 칸(보드 V1 '수집'): 보여 줄 출처 줄(보드 순서: 해상 특보 · 해양 관측 · 이안류)
+export const HOME_COLLECTION_JOBS: readonly CollectionJobId[] = [
+  "collect-warnings",
+  "collect-ocean",
+  "collect-rip",
+];
+
+export interface CollectionRow {
+  readonly job: CollectionJobId;
+  readonly state: SourceState;
+  // 최근 24시간 성공률(%). 실행이 없거나 출처가 응답에 없으면 null
+  readonly rate: number | null;
+  readonly lastSuccessAt: string | null;
+}
+
+export interface CollectionSummary {
+  // 수집 현황의 모든 출처(SOURCE_ROWS) 중 정상이 아닌 출처 수. 보이지 않는 줄의 문제도 셈
+  readonly problems: number;
+  // 모든 출처를 더한 최근 24시간 성공률. 실행이 없으면 null
+  readonly rate: number | null;
+  readonly rows: readonly CollectionRow[];
+}
+
+export function collectionSummary(
+  view: CollectionView | null,
+): CollectionSummary | null {
+  if (!view) return null;
+  const find = (job: CollectionJobId) => view.jobs.find((j) => j.job === job);
+  const all = SOURCE_ROWS.map((row) => find(row.job));
+  return {
+    problems: all.filter((job) => sourceState(job) !== "ok").length,
+    rate: successRate(
+      sumCounts(all.filter((j) => j !== undefined).map((j) => j.day)),
+    ),
+    rows: HOME_COLLECTION_JOBS.map((job) => {
+      const found = find(job);
+      return {
+        job,
+        state: sourceState(found),
+        rate: found ? successRate(found.day) : null,
+        lastSuccessAt: found?.lastSuccessAt ?? null,
+      };
+    }),
+  };
+}
+
+// 문의 칸(보드 V1 '문의'): 처리 상태별 수(보관 중인 문의 전체, 서버 counts). 하나라도 숫자가 아니면 null
+export interface InquirySummary {
+  readonly total: number;
+  readonly received: number;
+  readonly inProgress: number;
+  readonly resolved: number;
+  readonly rejected: number;
+}
+
+export function inquirySummary(page: InquiryPage | null): InquirySummary | null {
+  const c = page?.counts;
+  if (!c) return null;
+  const values = [c.received, c.in_progress, c.resolved, c.rejected];
+  if (!values.every((v) => typeof v === "number" && Number.isFinite(v) && v >= 0)) {
+    return null;
+  }
+  return {
+    total: values.reduce((a, b) => a + b, 0),
+    received: c.received,
+    inProgress: c.in_progress,
+    resolved: c.resolved,
+    rejected: c.rejected,
+  };
+}
+
+// 막대 길이(%). 전체가 0이면 0(빈 막대). 소수 첫째 자리까지
+export function ratioPercent(count: number, total: number): number {
+  if (!(total > 0)) return 0;
+  return Math.round((Math.min(count, total) / total) * 1000) / 10;
 }
 
 // 유효 시각(validUntil)이 지난 해변 수. 분류는 그대로 두고 따로 알림(해변 관리 displayOf와 같은 기준)

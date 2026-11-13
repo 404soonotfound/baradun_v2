@@ -3,7 +3,13 @@ import type { PublishedView } from "./beaches";
 import type { CollectionView, JobCollection } from "./collection";
 import type { AuditView } from "./audit";
 import {
+  beachCounts,
+  collectionSummary,
   expiredCount,
+  inquirySummary,
+  ratioPercent,
+  reasonTime,
+  undeterminedRows,
   judgmentLine,
   mergePart,
   noticeCounts,
@@ -355,5 +361,249 @@ describe("staleSince (앞 값을 둔 칸의 받은 시각)", () => {
 
   it("받은 시각이 없으면 null", () => {
     expect(staleSince([undefined], "2026-11-14T06:00:00Z")).toBeNull();
+  });
+});
+
+// ---- 시안 V1 세 칸·판단불가 표 (GH-453) ----
+
+const published = (
+  beaches: Record<string, { category: string; reasons?: object[] }>,
+): PublishedView =>
+  ({
+    available: true,
+    snapshotVersion: "20261111T030000Z",
+    generatedAt: "2026-11-11T03:00:12Z",
+    maintenance: { active: false, until: null },
+    beaches: Object.fromEntries(
+      Object.entries(beaches).map(([id, b]) => [
+        id,
+        { reasons: [], validUntil: "2026-11-11T04:00:00Z", ...b },
+      ]),
+    ),
+  }) as unknown as PublishedView;
+
+describe("앱에 보이는 해변 칸 (beachCounts)", () => {
+  it("게시본 분류 그대로 셈", () => {
+    expect(
+      beachCounts(
+        published({
+          b1: { category: "clear" },
+          b2: { category: "unavailable" },
+          b3: { category: "undetermined" },
+          b4: { category: "clear" },
+        }),
+      ),
+    ).toEqual({ total: 4, clear: 2, unavailable: 1, undetermined: 1 });
+  });
+
+  it("게시본을 못 읽었거나 게시본이 없다는 응답이면 0곳이 아니라 null", () => {
+    expect(beachCounts(null)).toBeNull();
+    expect(beachCounts({ available: false, reason: "missing" })).toBeNull();
+  });
+});
+
+describe("판단불가 해변 표 (undeterminedRows)", () => {
+  const names = {
+    b0002: { name: "경포해변", region: "강원 강릉시" },
+    b0003: { name: "망상해수욕장", region: "강원 동해시" },
+  };
+
+  it("판단불가만, ID 순으로, 첫 사유와 이름표 이름", () => {
+    const rows = undeterminedRows(
+      published({
+        b0003: {
+          category: "undetermined",
+          reasons: [
+            {
+              code: "observation_delayed",
+              scope: "삼척 파고부이",
+              source: "기상청",
+              at: "2026-11-11T01:00:00Z",
+            },
+          ],
+        },
+        b0001: { category: "clear" },
+        b0002: {
+          category: "undetermined",
+          reasons: [
+            {
+              code: "warning_unknown",
+              scope: "강원중부앞바다",
+              source: "기상청",
+              at: null,
+            },
+            {
+              code: "observation_delayed",
+              scope: "x",
+              source: "기상청",
+              at: null,
+            },
+          ],
+        },
+      }),
+      names,
+    );
+    expect(rows?.map((r) => r.id)).toEqual(["b0002", "b0003"]);
+    expect(rows?.[0]).toMatchObject({
+      name: "경포해변",
+      region: "강원 강릉시",
+      label: { kind: "warning_unknown" },
+      reason: { scope: "강원중부앞바다" },
+    });
+    expect(rows?.[1]?.label).toEqual({ kind: "observation_delayed" });
+  });
+
+  it("이름표에 없는 해변은 이름 null(ID를 이름으로 쓰지 않음), 사유가 없으면 '특보 확인 못 함' 계열", () => {
+    const rows = undeterminedRows(
+      published({ b9999: { category: "undetermined" } }),
+      names,
+    );
+    expect(rows).toEqual([
+      {
+        id: "b9999",
+        name: null,
+        region: null,
+        label: { kind: "unconfirmed" },
+        reason: null,
+      },
+    ]);
+  });
+
+  it("게시본을 못 읽으면 빈 표가 아니라 null", () => {
+    expect(undeterminedRows(null, names)).toBeNull();
+    expect(
+      undeterminedRows({ available: false, reason: "missing" }, names),
+    ).toBeNull();
+  });
+});
+
+describe("사유 시각 (reasonTime)", () => {
+  it("특보 확인 못 함은 마지막 확인, 관측 지연은 측정 시각", () => {
+    expect(
+      reasonTime({ code: "warning_unknown", at: "2026-11-11T05:30:00Z" }),
+    ).toEqual({ kind: "confirmed", at: "2026-11-11T05:30:00Z" });
+    expect(
+      reasonTime({ code: "observation_delayed", at: "2026-11-11T03:38:00Z" }),
+    ).toEqual({ kind: "observed", at: "2026-11-11T03:38:00Z" });
+  });
+
+  it("시각이 없거나 틀리거나 사유가 없으면 null(지금 시각으로 채우지 않음)", () => {
+    expect(reasonTime({ code: "warning_unknown", at: null })).toBeNull();
+    expect(reasonTime({ code: "observation_delayed", at: "어제" })).toBeNull();
+    expect(reasonTime(null)).toBeNull();
+    expect(
+      reasonTime({ code: "warning", at: "2026-11-11T03:38:00Z" }),
+    ).toBeNull();
+  });
+});
+
+const runJob = (
+  name: string,
+  runs: number,
+  ok: number,
+  status: "complete" | "failed" = "complete",
+): JobCollection =>
+  ({
+    job: name,
+    lastRun: {
+      startedAt: "2026-11-12T00:00:00Z",
+      finishedAt: "2026-11-12T00:01:00Z",
+      status,
+      failures: [],
+    },
+    lastSuccessAt: "2026-11-12T00:01:00Z",
+    day: { runs, ok },
+    week: { runs, ok },
+    hourly: [],
+    incidents: [],
+    truncated: false,
+    lateAfterMinutes: 45,
+    overdue: false,
+  }) as unknown as JobCollection;
+
+describe("수집 칸 (collectionSummary)", () => {
+  it("보이는 줄은 특보·해양 관측·이안류, 전체 성공률·문제 수는 모든 출처 기준", () => {
+    const summary = collectionSummary(
+      collection([
+        runJob("collect-warnings", 100, 99),
+        runJob("collect-ocean", 100, 100),
+        runJob("collect-rip", 50, 50),
+        runJob("collect-weather", 50, 45, "failed"),
+        runJob("collect-catalog", 0, 0),
+      ]),
+    );
+    expect(summary?.rows.map((r) => r.job)).toEqual([
+      "collect-warnings",
+      "collect-ocean",
+      "collect-rip",
+    ]);
+    expect(summary?.rows[0]).toMatchObject({ state: "ok", rate: 99 });
+    // 294 / 300
+    expect(summary?.rate).toBe(98);
+    // 날씨 예보 실패는 줄에 없어도 문제 수에 듦
+    expect(summary?.problems).toBe(1);
+  });
+
+  it("응답에 없는 출처는 '기록 없음'·성공률 null(정상·0%가 아님)", () => {
+    const summary = collectionSummary(
+      collection([runJob("collect-warnings", 10, 10)]),
+    );
+    expect(summary?.rows[1]).toEqual({
+      job: "collect-ocean",
+      state: "none",
+      rate: null,
+      lastSuccessAt: null,
+    });
+    expect(summary?.problems).toBe(4);
+  });
+
+  it("실행이 없으면 전체 성공률 null, 수집 현황을 못 읽으면 null", () => {
+    expect(
+      collectionSummary(collection([runJob("collect-warnings", 0, 0)]))?.rate,
+    ).toBeNull();
+    expect(collectionSummary(null)).toBeNull();
+  });
+});
+
+describe("문의 칸 (inquirySummary)", () => {
+  it("처리 상태별 수와 합", () => {
+    expect(
+      inquirySummary({
+        items: [],
+        nextCursor: null,
+        counts: { received: 3, in_progress: 2, resolved: 6, rejected: 1 },
+      }),
+    ).toEqual({
+      total: 12,
+      received: 3,
+      inProgress: 2,
+      resolved: 6,
+      rejected: 1,
+    });
+  });
+
+  it("상태별 수가 없거나 하나라도 숫자가 아니면 0건이 아니라 null", () => {
+    expect(inquirySummary(null)).toBeNull();
+    expect(inquirySummary({ items: [], nextCursor: null })).toBeNull();
+    expect(
+      inquirySummary({
+        items: [],
+        nextCursor: null,
+        counts: {
+          received: 3,
+          in_progress: Number.NaN,
+          resolved: 1,
+          rejected: 0,
+        },
+      }),
+    ).toBeNull();
+  });
+});
+
+describe("막대 길이 (ratioPercent)", () => {
+  it("전체 대비 %(소수 첫째 자리), 전체 0이면 0, 넘치면 100", () => {
+    expect(ratioPercent(3, 11)).toBe(27.3);
+    expect(ratioPercent(0, 0)).toBe(0);
+    expect(ratioPercent(5, 4)).toBe(100);
   });
 });
