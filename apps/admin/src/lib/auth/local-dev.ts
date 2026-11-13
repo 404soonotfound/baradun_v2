@@ -187,6 +187,30 @@ export function localOps<T>(
     const publish = localPublish<T>(url.pathname, url.searchParams, request);
     if (publish) return publish;
   }
+  // 2단계 인증 초기화(#335). 로컬에서는 Cognito를 부르지 않고 결과만 흉내 냄
+  // 'none@'으로 시작하면 이미 없음, 'missing@'이면 없는 계정, 그 밖은 초기화함
+  if (method === "POST" && url.pathname === "/ops/account/mfa-reset") {
+    if (pool === "demo") {
+      return { ok: false, status: 403, code: "forbidden", requestId: null };
+    }
+    const email = String((request.body as { email?: unknown })?.email ?? "");
+    if (email.startsWith("missing@")) {
+      return {
+        ok: false,
+        status: 404,
+        code: "not_found",
+        requestId: null,
+        reason: "account",
+      };
+    }
+    return {
+      ok: true,
+      status: 200,
+      body: {
+        result: email.startsWith("none@") ? "already_none" : "reset",
+      } as T,
+    };
+  }
   if (method === "GET" && path === "/ops/me") {
     return {
       ok: true,

@@ -32,6 +32,8 @@ export const AUDIT_ACTIONS = [
   "publish.now",
   "publish.rollback",
   "publish.reapply",
+  // 다른 운영자의 2단계 인증(인증 앱) 초기화(#335, D16-A9). 대상은 계정 sub, 이메일은 넣지 않음
+  "permission.mfa_reset",
   // 샘플 계정이 허용된 조회를 함(로그인 뒤 /ops/me 포함)
   "sample.read",
   // 샘플 계정 요청을 거절함(쓰기·허용 밖 경로)
@@ -85,9 +87,10 @@ export function actorOf(principal: Principal): AuditActor {
 }
 
 // 대상: 문의는 문의 ID, 공지는 공지 ID, 해변은 해변 ID, 게시 작업은 작업 ID,
-// 샘플 요청은 "METHOD 경로 모양"(실제 경로 값은 넣지 않음)
+// 운영자 계정은 Cognito sub(이메일은 넣지 않음), 샘플 요청은 "METHOD 경로 모양"(실제 경로 값은 넣지 않음)
 export interface AuditTarget {
-  readonly kind: "inquiry" | "notice" | "beach" | "publish" | "route";
+  readonly kind:
+    "inquiry" | "notice" | "beach" | "publish" | "account" | "route";
   readonly id: string;
 }
 
@@ -428,6 +431,7 @@ function toView(item: Record<string, unknown>): AuditView {
       targetKind !== "notice" &&
       targetKind !== "beach" &&
       targetKind !== "publish" &&
+      targetKind !== "account" &&
       targetKind !== "route") ||
     typeof targetId !== "string" ||
     !Array.isArray(changes) ||

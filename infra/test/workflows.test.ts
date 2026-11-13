@@ -418,31 +418,71 @@ describe("PR 필수 웹 검사 (BRD-102 결정 41·42)", () => {
     );
   });
 
-  // 빌드 한 번 + 4개 샤드(BRD-134): 샤드가 빠지거나 빌드 결과 없이 돌면 검사가 줄어듦
-  it("e2e는 e2e-build 결과를 받아 1/4~4/4 샤드로 모두 돌린다", () => {
-    const e2e = jobLines(ci?.text ?? "", "e2e").join("\n");
-    expect(e2e).toMatch(/needs:\s*\[changes, e2e-build\]/);
-    expect(e2e).toMatch(/shard:\s*\[1, 2, 3, 4\]/);
-    expect(e2e).toMatch(/fail-fast:\s*false/);
-    expect(e2e).toContain("--shard=${{ matrix.shard }}/4");
-    expect(e2e).toMatch(/name:\s*e2e-site\s*\n\s*path:\s*apps\/web\/out/);
-    expect(jobLines(ci?.text ?? "", "e2e-build").join("\n")).toMatch(
-      /name:\s*e2e-site\s*\n\s*path:\s*apps\/web\/out/,
+  it("web E2E는 빌드·CSP 검사 직후 같은 작업에서 Chromium 핵심 흐름만 검사한다", () => {
+    const build = jobLines(ci?.text ?? "", "e2e-build").join("\n");
+    expect(build).toContain("npm run test:e2e:smoke -w apps/web");
+    expect(build.indexOf("npm run test:e2e:smoke -w apps/web")).toBeGreaterThan(
+      build.indexOf("npm run check:csp -w apps/web"),
     );
+    expect(ci?.text).not.toMatch(/^  e2e:$/m);
+    expect(build).not.toContain("matrix.shard");
+    expect(build).not.toContain("actions/upload-artifact@");
+  });
+
+  it("화면·동작 관련 PR만 E2E를 실행하고, 테스트·문서 PR도 빌드는 검사한다", () => {
+    const ciText = ci?.text ?? "";
+    expect(ciText).toContain("predicate-quantifier: some-with-excludes");
+    for (const [area, job, smoke] of [
+      ["web", "e2e-build", "apps/web"],
+      ["admin", "admin-build", "apps/admin"],
+    ] as const) {
+      const filter = `${area}_e2e`;
+      expect(ciFilters).toMatch(new RegExp(`^${area}: &${area}$`, "m"));
+      expect(ciFilters).toMatch(
+        new RegExp(`^${filter}:.*\\n  - \\*${area}$`, "m"),
+      );
+      expect(ciFilterPaths(filter)).toEqual([
+        `!apps/${area}/**/*.test.ts`,
+        `!apps/${area}/**/*.test.tsx`,
+        `!apps/${area}/AGENTS.md`,
+        `!apps/${area}/CLAUDE.md`,
+        `!apps/${area}/eslint.config.mjs`,
+        `!apps/${area}/vitest.config.ts`,
+      ]);
+      expect(ciText).toContain(
+        filter + ": ${{ steps.filter.outputs." + filter + " }}",
+      );
+      const build = jobLines(ciText, job).join("\n");
+      expect(build).toContain(`needs.changes.outputs.${area} == 'true'`);
+      expect(build).toContain(`npm run build -w apps/${area}`);
+      expect(build).toMatch(
+        new RegExp(
+          `if: github\\.event_name == 'push' \\|\\| needs\\.changes\\.outputs\\.${filter} == 'true'\\s*\\n\\s*uses: actions/cache@`,
+        ),
+      );
+      expect(build).toMatch(
+        new RegExp(
+          `if: github\\.event_name == 'push' \\|\\| needs\\.changes\\.outputs\\.${filter} == 'true'\\s*\\n\\s*run: npm run test:e2e:smoke -w ${smoke}`,
+        ),
+      );
+      expect(build).toContain(
+        `(github.event_name == 'push' || needs.changes.outputs.${filter} == 'true') && steps.playwright-cache.outputs.cache-hit`,
+      );
+      expect(jobLines(ciText, area).join("\n")).toContain(
+        `node .github/scripts/check-smoke.mjs ${area}`,
+      );
+      expect(ciText).toContain("list-files: json");
+      expect(build).toContain(
+        "node .github/scripts/run-changed-e2e.mjs " + area,
+      );
+      expect(build).toContain(`npm run test:e2e -w apps/${area}`);
+    }
   });
 
   // main push도 바뀐 영역만(BRD-178, 10/30 BRD-133 '늘 전체'를 바꿈). main 규칙이 '최신 브랜치만 머지'라 PR CI가 같은 내용을 검사함
   // 대신 main push CI는 커밋마다 따로 돌고 취소하지 않음(취소되면 그 커밋의 변경이 배포에서 빠짐)
   it("main push도 바뀐 영역만 검사하고, main push CI는 커밋마다 따로 돌며 취소하지 않는다", () => {
-    for (const job of [
-      "web",
-      "e2e-build",
-      "e2e",
-      "admin",
-      "admin-build",
-      "admin-e2e",
-      "admin-e2e-engines",
-    ]) {
+    for (const job of ["web", "e2e-build", "admin", "admin-build"]) {
       const cond = jobIf(ci?.text ?? "", job);
       const area = job.startsWith("admin") ? "admin" : "web";
       expect(cond, job).toBe(`needs.changes.outputs.${area} == 'true'`);
@@ -550,52 +590,58 @@ describe("PR 필수 웹 검사 (BRD-102 결정 41·42)", () => {
       expect(text, job).toMatch(
         /if: github\.event_name == 'push' && steps\.next-cache\.outputs\.cache-hit != 'true'\s*\n\s*uses: actions\/cache\/save@/,
       );
-      expect(text, job).not.toMatch(/uses: actions\/cache@/);
+      expect([...text.matchAll(/uses: actions\/cache@/g)], job).toHaveLength(1);
+      expect(text, job).toMatch(
+        /uses: actions\/cache@[^\n]*\n\s+with:\s*\n\s+path: ~\/\.cache\/ms-playwright/,
+      );
     }
   });
 
-  it("E2E는 Playwright 브라우저를 lock 파일 기준으로 캐시하고, 운영자 E2E는 빌드 결과를 받아 돈다", () => {
-    for (const job of ["e2e", "admin-e2e"]) {
+  it("실제 배포 직전에는 올릴 빌드의 전체 Chromium E2E를 통과해야 한다", () => {
+    for (const [job, app] of [
+      ["site", "web"],
+      ["admin", "admin"],
+    ] as const) {
+      const lines = jobLines(deploy?.text ?? "", job).join("\n");
+      const build = lines.indexOf(`npm run build -w apps/${app}`);
+      const full = lines.indexOf(`npm run test:e2e -w apps/${app}`);
+      const credentials = lines.indexOf(
+        "aws-actions/configure-aws-credentials@",
+      );
+      expect(full, job).toBeGreaterThan(build);
+      expect(credentials, job).toBeGreaterThan(full);
+      expect(lines, job).toContain("playwright install --with-deps chromium");
+      if (app === "web") {
+        expect(lines).toMatch(
+          /run: npm run test:e2e -w apps\/web\s*\n\s+env:\s*\n\s+E2E_PRODUCTION_BUILD: "1"/,
+        );
+      }
+    }
+  });
+
+  it("두 앱의 E2E는 빌드 작업에서 lock 파일 기준 브라우저 캐시를 사용한다", () => {
+    for (const job of ["e2e-build", "admin-build"]) {
       const lines = jobLines(ci?.text ?? "", job).join("\n");
       expect(lines, job).toContain("path: ~/.cache/ms-playwright");
       expect(lines, job).toContain(
         "key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}",
       );
     }
-    expect(jobLines(ci?.text ?? "", "admin-e2e").join("\n")).toMatch(
-      /needs:\s*\[changes, admin-build\]/,
-    );
-    expect(jobLines(ci?.text ?? "", "admin-e2e").join("\n")).toMatch(
-      /name:\s*admin-site\s*\n\s*path:\s*apps\/admin\/out/,
-    );
+    const adminBuild = jobLines(ci?.text ?? "", "admin-build").join("\n");
+    expect(
+      adminBuild.indexOf("npm run test:e2e:smoke -w apps/admin"),
+    ).toBeGreaterThan(adminBuild.indexOf("npm run check:out -w apps/admin"));
+    expect(ci?.text).not.toMatch(/^  admin-e2e:$/m);
+    expect(adminBuild).not.toContain("actions/upload-artifact@");
   });
 
-  // 지원 브라우저 기준안(D16-E2): Firefox·WebKit 엔진 E2E는 admin-e2e와 나란히, 같은 빌드 결과로 돎
-  it("운영자 E2E는 chromium(admin-e2e)과 Firefox·WebKit(admin-e2e-engines)을 나눠 같은 빌드 결과로 돌린다", () => {
-    const chromium = jobLines(ci?.text ?? "", "admin-e2e").join("\n");
-    const engines = jobLines(ci?.text ?? "", "admin-e2e-engines").join("\n");
-    expect(chromium).toContain("npm run test:e2e -w apps/admin");
-    expect(engines).toMatch(/needs:\s*\[changes, admin-build\]/);
-    expect(engines).toMatch(
-      /name:\s*admin-site\s*\n\s*path:\s*apps\/admin\/out/,
-    );
-    expect(engines).toContain("engine: [firefox, webkit]");
-    expect(engines).toContain("fail-fast: false");
-    expect(engines).toContain(
-      "playwright install --with-deps ${{ matrix.engine }}",
-    );
-    // 캐시가 있을 때도 OS 의존성은 설치해야 함(빠지면 두 번째 실행부터 엔진이 시작하지 못함)
-    expect(engines).toContain("playwright install-deps ${{ matrix.engine }}");
-    expect(engines).toContain(
-      "key: playwright-${{ matrix.engine }}-${{ runner.os }}-${{ hashFiles('package-lock.json') }}",
-    );
-    expect(engines).toContain(
-      "playwright test --project=desktop-${{ matrix.engine }}",
-    );
-    expect(engines).toContain('E2E_ENGINES: "1"');
+  it("운영자 E2E는 Chromium 핵심 흐름만 CI에 넣고 다른 엔진은 수동 실행한다", () => {
+    const chromium = jobLines(ci?.text ?? "", "admin-build").join("\n");
+    expect(chromium).toContain("npm run test:e2e:smoke -w apps/admin");
+    expect(ci?.text).not.toContain("admin-e2e-engines:");
   });
 
-  it("web·e2e 결과는 ci-ok에 모인다", () => {
+  it("두 앱의 검사·빌드·E2E 결과는 ci-ok에 모인다", () => {
     const needs = jobLines(ci?.text ?? "", "ci-ok")
       .join("\n")
       .match(/needs:\s*\[([^\]]*)\]/)?.[1]
@@ -605,14 +651,13 @@ describe("PR 필수 웹 검사 (BRD-102 결정 41·42)", () => {
       expect.arrayContaining([
         "web",
         "e2e-build",
-        "e2e",
         "admin",
         "admin-build",
-        "admin-e2e",
-        "admin-e2e-engines",
         "gitleaks",
       ]),
     );
+    expect(needs).not.toContain("e2e");
+    expect(needs).not.toContain("admin-e2e");
   });
 
   it("배포 빌드는 저장소 변수 SITE_URL을 사이트 주소로 넣는다", () => {

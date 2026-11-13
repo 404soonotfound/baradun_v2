@@ -90,6 +90,11 @@ export const ROUTES: Readonly<
   "/ops/publish/holds/{id}/reapply": {
     POST: { roles: ["publisher"], sample: false },
   },
+  // 다른 운영자의 2단계 인증 초기화(#335, D16-A9). 사용자 결정(2026-11-13): 운영자 계정이면 역할과 상관없이
+  // 데모(샘플) 계정은 받지 않음. 본인·없는 계정·이미 없음은 처리에서 가름
+  "/ops/account/mfa-reset": {
+    POST: { roles: ["viewer", "editor", "publisher"], sample: false },
+  },
   // 변경 이력(BRD-155). 읽기 전용, 샘플은 받지 않음(D15-3)
   "/ops/audit": {
     GET: { roles: ["viewer", "editor", "publisher"], sample: false },

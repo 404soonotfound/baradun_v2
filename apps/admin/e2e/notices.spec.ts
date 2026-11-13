@@ -191,7 +191,7 @@ test("보기 권한은 새 공지를 비활성으로 두고 이유를 보여 주
   await expect(page.getByRole("button", { name: "저장" })).toBeDisabled();
 });
 
-test("새 공지: 한국 시간으로 쓴 기간을 UTC로 보내고, 저장은 앱 반영이 아니라고 알린다", async ({
+test("새 공지: 한국 시간으로 쓴 기간을 UTC로 보내고, 저장은 앱 반영이 아니라고 알린다 @smoke", async ({
   page,
 }) => {
   await signIn(page);
