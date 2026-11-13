@@ -1,8 +1,8 @@
 // 특보구역 코드 → 기상청 공식 영어 이름 (BRD-48 · 아키텍처 9.1 '특보 종류·구역·시각만 사람이 만든 번역표')
 // 출처: 기상청 영문 특보 CAP 피드 https://www.weather.go.kr/w/rss/cap/warning.do 의
-//   같은 발표 영문(…_EN.xml)·국문(…_KR.xml) 파일에서 같은 다각형을 가진 areaDesc를 짝지음(2026-10-28 받은 69건)
+//   같은 발표 영문(…_EN.xml)·국문(…_KR.xml) 파일에서 같은 다각형을 가진 areaDesc를 짝지음(2026-10-28 받은 69건 + 2026-11-10 KR.W2611075_202611100900_WWL_75_EN.xml 1건)
 //   예: https://www.weather.go.kr/w/repositary/xml/wrn/xml/KR.W2610186_202610281200_WWL_186_EN.xml
-// 우리가 새로 지은 이름은 넣지 않음. 피드에 아직 나오지 않은 구역(남해·경남·부산·울산 일부 등 25곳)은 표에 없어
+// 우리가 새로 지은 이름은 넣지 않음. 피드에 아직 나오지 않은 구역(남해·경남·울산 일부 등 24곳)은 표에 없어
 //   화면이 한국어 원문 + 'Original text from KMA (Korean)'으로 보여줌(PR 남은 결정)
 // ko: 예보업무규정 별표5·9 원문 이름(tools/beaches/annex-tables.json과 같음). 게시된 구역 이름이 이것과 다르면 영어로 바꾸지 않음
 export const ZONE_NAMES_EN: Readonly<
@@ -68,6 +68,7 @@ export const ZONE_NAMES_EN: Readonly<
   S1251200: { ko: "인천·경기남부앞바다", en: "Nearshore waters of Incheon and southern Gyeonggi" },
   S1251300: { ko: "충남북부앞바다", en: "Nearshore waters of northern Chungnam" },
   S1251400: { ko: "충남남부앞바다", en: "Nearshore waters of southern Chungnam" },
+  S1311100: { ko: "부산앞바다", en: "Nearshore waters of Busan" },
   S1323100: { ko: "제주도북부앞바다", en: "Nearshore waters of northern Jeju-do" },
   S1323200: { ko: "제주도동부앞바다", en: "Nearshore waters of eastern Jeju-do" },
   S1323300: { ko: "제주도남부앞바다", en: "Nearshore waters of southern Jeju-do" },
