@@ -196,9 +196,11 @@ function ReauthDialog({ pool, email }: { pool: PoolKind; email: string }) {
         )}
         <Button
           type="submit"
-          disabled={busy || (step ? code.length !== 6 : !password)}
+          busy={busy}
+          busyLabel={t.loading.checking}
+          disabled={!busy && (step ? code.length !== 6 : !password)}
         >
-          {busy ? t.common.working : t.session.reauthSubmit}
+          {t.session.reauthSubmit}
         </Button>
       </form>
     </dialog>
@@ -241,7 +243,16 @@ export function SessionResuming() {
   );
 }
 
-export function SessionGuard({ children }: { children: ReactNode }) {
+// fallback: 세션 확인이 끝나기 전(정적 HTML·넘겨받기·새로고침 갱신·로그인 화면으로 보내는 중)에 그릴 것
+// 로그인 화면이나 설정 오류를 먼저 보이지 않고 공통 틀 + 자리표시만 보임(보드 L10)
+// 화면이 fallback과 children에 같은 요소를 넘기면 세션이 확인돼도 다시 만들지 않고 이어서 그림
+export function SessionGuard({
+  children,
+  fallback = null,
+}: {
+  children: ReactNode;
+  fallback?: ReactNode;
+}) {
   const router = useRouter();
   const pathname = usePathname();
   const session = useAuthSession();
@@ -264,13 +275,9 @@ export function SessionGuard({ children }: { children: ReactNode }) {
     }
   }, [session, snapshot, pathname, router]);
 
-  if (snapshot.status === "signed_out") {
-    return snapshot.joining ? <SessionResuming /> : null;
-  }
-
   return (
     <>
-      {children}
+      {snapshot.status === "signed_out" ? fallback : children}
       {snapshot.status === "reauth_required" && snapshot.email && (
         <ReauthDialog pool={snapshot.pool} email={snapshot.email} />
       )}
