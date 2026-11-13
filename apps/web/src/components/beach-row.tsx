@@ -97,6 +97,9 @@ export function BeachRow({
       className={cn(
         "flex items-center",
         tone?.bar,
+        changedFrom &&
+          !tone &&
+          "shadow-[inset_4px_0_0_var(--color-brand-default)]",
         highlight &&
           "bg-brand-weak shadow-[inset_3px_0_0_var(--color-brand-default)]",
       )}

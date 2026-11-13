@@ -14,6 +14,7 @@ import type { BeachSummary } from "@/lib/beach-summary";
 import { compassPoint } from "@/lib/direction";
 import { localizedPath, type Locale } from "@/lib/i18n";
 import { formatKm, joinMeta } from "@/lib/meta-join";
+import { cn } from "@/lib/cn";
 import {
   cardMetric,
   noValueNext,
@@ -64,6 +65,7 @@ export function NearCard({
   nowMs,
   activity,
   weather,
+  changedFrom,
 }: {
   locale: Locale;
   beach: BeachSummary;
@@ -72,6 +74,7 @@ export function NearCard({
   nowMs: number;
   activity: Activity; // 고른 활동(부르는 쪽이 정함)
   weather?: WeatherView; // 넘기면 그 값만 그림(훅을 부르지 않음, Storybook 확인용). 없으면 해변 ID로 받음
+  changedFrom?: string | null;
 }) {
   const t = useTranslations();
   const { confirmedUntilText } = useBadgeText();
@@ -175,7 +178,10 @@ export function NearCard({
   return (
     <Link
       href={localizedPath(locale, `/spots/${beach.slug}/`)}
-      className="group flex h-full flex-col gap-3 rounded-[16px] border border-border-default bg-bg-surface px-4 pt-3.5 pb-4 shadow-card transition-colors hover:border-border-strong"
+      className={cn(
+        "group flex h-full flex-col gap-3 rounded-[16px] border border-border-default bg-bg-surface px-4 pt-3.5 pb-4 shadow-card transition-colors hover:border-border-strong",
+        changedFrom && "shadow-[inset_4px_0_0_var(--color-brand-default)]",
+      )}
     >
       <span className="flex items-center justify-between gap-2">
         {/* 첫 응답 전에는 배지 자리만 회색으로(빈 배지나 '특보 없음'을 미리 보이지 않게) */}
@@ -194,6 +200,11 @@ export function NearCard({
         <span className="truncate text-[17px] leading-[1.3] font-bold tracking-[-0.3px] text-text-default">
           {beach.name}
         </span>
+        {changedFrom && (
+          <span className="text-caption font-medium text-brand-text">
+            {t("row.changed", { previous: changedFrom })}
+          </span>
+        )}
         {meta && (
           // 지표별 측정 시각이 잘리지 않게 줄을 바꿈
           <span className="text-caption text-text-muted">{meta}</span>

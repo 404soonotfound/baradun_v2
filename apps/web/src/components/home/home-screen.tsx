@@ -28,7 +28,9 @@ import { RegionSheet } from "@/components/region/region-sheet";
 import { SampleNote } from "@/components/sample-note";
 import { SituationBanner } from "@/components/situation-banner";
 import { KmaSourceNote } from "@/components/source-note";
+import { PullToRefresh, RefreshButton } from "@/components/ui/pull-to-refresh";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Toast } from "@/components/ui/toast";
 import {
   type Activity,
   activityNameKey,
@@ -51,6 +53,7 @@ import {
   type LocationState,
 } from "@/lib/location";
 import { setRegion, useRegionChoice } from "@/lib/region";
+import { useManualRefresh } from "@/lib/snapshot/use-manual-refresh";
 import {
   homeScope,
   inRegion,
@@ -114,6 +117,13 @@ export function HomeScreen({
   const online = useOnline();
   // PC 배치인지. 상황 배너 자리(모바일 제목 아래 · PC 안내 칸)와 가까운 바다 카드 모양만 바꿈
   const desktop = useDesktop();
+  const {
+    refreshing,
+    changedFromById,
+    triggerRefresh,
+    toastMessage,
+    holdToast,
+  } = useManualRefresh(beaches);
   // 다시 시도가 성공해 배너가 사라지면 포커스를 제목으로 (Vue: ref="title")
   const titleRef = useRef<HTMLHeadingElement>(null);
   // [1] 기기에 저장한 기본 지역(전국 포함)과 위치 상태 → 홈이 보여줄 범위
@@ -424,7 +434,12 @@ export function HomeScreen({
   return (
     // PC 바다 띠를 상단 내비 바로 아래에 붙임(본문 위 여백 상쇄). 언어 안내가 위에 있으면(첫 칸이 아님) 덮지 않게 그대로 둠
     // 모바일 바다 배경은 이 묶음이 아니라 본문(main) 기준이라 relative를 두지 않음(언어 안내 아래에서 잘려 시작하지 않게)
-    <div className="isolate flex flex-col gap-6 lg:gap-2 lg:first:-mt-8">
+    <PullToRefresh
+      refreshing={refreshing}
+      onRefresh={triggerRefresh}
+      className="lg:first:-mt-8"
+    >
+      <div className="isolate flex flex-col gap-6 lg:gap-2">
       {/* 모바일 바다 배경(꾸밈) */}
       <HomeSky />
 
@@ -514,7 +529,7 @@ export function HomeScreen({
           aria-labelledby="home-near"
           className="flex flex-col gap-2.5 lg:relative lg:z-10 lg:order-1 lg:col-span-3 lg:-mt-10 lg:gap-4 lg:rounded-[20px] lg:bg-bg-surface lg:px-6 lg:py-5 lg:shadow-raised"
         >
-          <div className="flex items-end justify-between gap-3 lg:gap-6">
+          <div className="flex flex-wrap items-end justify-between gap-3 lg:gap-6">
             <div className="flex min-w-0 flex-col gap-0.5">
               <h2
                 id="home-near"
@@ -527,35 +542,38 @@ export function HomeScreen({
                 <p className="text-caption text-text-muted">{showingText}</p>
               )}
             </div>
-            {/* 모바일: 제목 줄 오른쪽 '전체 보기'(펼칠 수 있으면 그 자리 펼침, 아니면 탐색) */}
-            {!desktop &&
-              (canExpand ? (
-                <button
-                  type="button"
-                  aria-expanded={expanded}
-                  aria-controls="home-near-list"
-                  onClick={() => setExpandedKey(expanded ? null : listKey)}
-                  className={HEAD_ACTION_CLASS}
-                >
-                  {expanded ? t("panel.collapse") : t("near.all")}
-                </button>
-              ) : (
-                <Link
-                  href={localizedPath(locale, "/explore/")}
-                  className={HEAD_ACTION_CLASS}
-                >
-                  {t("near.all")}
-                </Link>
-              ))}
-            {/* PC: 사유별 개수(지역·전국 목록). 게시된 분류·사유 그대로(G1) */}
-            {desktop && byList && regionBeaches.length > 0 && (
-              <ReasonChips
-                counts={countByStatus(regionViews)}
-                clearCheckedAt={clearCheckedAt(regionViews)}
-                staleChecked={staleCheckedAt(regionViews)}
-                nowMs={snapshot.nowMs}
-              />
-            )}
+            <div className="flex flex-wrap items-center gap-2">
+              <RefreshButton refreshing={refreshing} onRefresh={triggerRefresh} />
+              {/* 모바일: 제목 줄 오른쪽 '전체 보기'(펼칠 수 있으면 그 자리 펼침, 아니면 탐색) */}
+              {!desktop &&
+                (canExpand ? (
+                  <button
+                    type="button"
+                    aria-expanded={expanded}
+                    aria-controls="home-near-list"
+                    onClick={() => setExpandedKey(expanded ? null : listKey)}
+                    className={HEAD_ACTION_CLASS}
+                  >
+                    {expanded ? t("panel.collapse") : t("near.all")}
+                  </button>
+                ) : (
+                  <Link
+                    href={localizedPath(locale, "/explore/")}
+                    className={HEAD_ACTION_CLASS}
+                  >
+                    {t("near.all")}
+                  </Link>
+                ))}
+              {/* PC: 사유별 개수(지역·전국 목록). 게시된 분류·사유 그대로(G1) */}
+              {desktop && byList && regionBeaches.length > 0 && (
+                <ReasonChips
+                  counts={countByStatus(regionViews)}
+                  clearCheckedAt={clearCheckedAt(regionViews)}
+                  staleChecked={staleCheckedAt(regionViews)}
+                  nowMs={snapshot.nowMs}
+                />
+              )}
+            </div>
           </div>
           <NearContent
             locale={locale}
@@ -569,6 +587,7 @@ export function HomeScreen({
             activityEmpty={activityEmpty}
             place={name}
             alternatives={alternatives}
+            changedFromById={changedFromById}
           />
           {/* 지역·전국 해변 상태별 개수(모바일, 가까운 바다에서는 없음). 게시된 분류 그대로 셈(G1)
               PC의 지역 개수는 패널 머리 사유별 개수가 맡음 */}
@@ -691,7 +710,9 @@ export function HomeScreen({
               }
         }
       />
-    </div>
+      </div>
+      <Toast message={toastMessage} onHold={holdToast} />
+    </PullToRefresh>
   );
 }
 
@@ -709,6 +730,7 @@ function NearContent({
   activityEmpty,
   place,
   alternatives,
+  changedFromById,
 }: {
   locale: Locale;
   status: LocationState["status"];
@@ -721,6 +743,7 @@ function NearContent({
   activityEmpty: boolean;
   place: string | null;
   alternatives: readonly ActivityAlternative[];
+  changedFromById: Map<string, string>;
 }) {
   const t = useTranslations("home");
 
@@ -779,6 +802,7 @@ function NearContent({
             view={deriveBeachView({ id: beach.id, hidden: false }, snapshot)}
             nowMs={snapshot.nowMs}
             activity={activity}
+            changedFrom={changedFromById.get(beach.id) ?? null}
           />
         </li>
       ))}

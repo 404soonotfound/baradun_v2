@@ -1118,5 +1118,15 @@
     "languageValue": "Language: {name}",
     "disclaimer": "Baradun Bada does not guarantee that it is safe to use the sea. For your final decision, on-site controls and lifeguard instructions come first.",
     "copyright": "© {year} Baradun Bada"
+  },
+  "refresh": {
+    "button": "Refresh",
+    "pull": "Pull to refresh",
+    "release": "Release to check for updates",
+    "refreshing": "Checking for updates",
+    "changed": "Updated as of {time} · {count, plural, one {# beach} other {# beaches}} changed",
+    "upToDate": "Already up to date",
+    "failed": "Couldn't check for updates. Active warnings stay shown and others are marked unconfirmed. Try again in a moment.",
+    "offline": "You're offline, so we couldn't check for updates. Active warnings stay shown and others are marked unconfirmed. Check your connection and try again."
   }
 }
