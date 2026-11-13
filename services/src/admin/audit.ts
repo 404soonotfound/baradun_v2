@@ -199,6 +199,8 @@ export interface AuditQuery {
 export interface AuditView {
   readonly at: string;
   readonly actorSub: string;
+  // 읽을 때 운영자 풀에서 채우는 이메일(저장하지 않음, 조회 실패·데모 계정은 비움)
+  readonly actorEmail?: string;
   readonly actorKind: Principal["kind"];
   readonly role: OperatorRole | "sample";
   readonly action: AuditAction;
