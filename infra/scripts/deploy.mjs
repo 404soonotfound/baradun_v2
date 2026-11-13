@@ -25,21 +25,20 @@ import {
   ciStateWithRuns,
   deployComment,
   deployFailureComment,
-  formatPolicyDiff,
   formatTable,
   isEmptyChangeSet,
   isStackReady,
-  policyDiff,
   REGION,
   STACK_NAME,
   summarizeChanges,
   versionToPrune,
 } from "./deploy-plan.ts";
 import {
+  BOUNDARY_POLICY,
   checkFunctionLogs,
+  compareOutOfStackPolicies,
   failedEventsOrNull,
   readChangeSetPages,
-  readRemotePolicy,
 } from "./deploy-aws.ts";
 
 // 실행을 시작할 때의 스크립트 내용. 배포용 폴더에서 실행하면 2단계 체크아웃 뒤 디스크 파일이 새 버전으로 바뀜
@@ -315,48 +314,31 @@ const policyArn = (policy) => `arn:aws:iam::${account}:policy/${policy}`;
 const iamRunner = (args) => iam(args, { allowFail: true });
 const awsRunner = (args) => aws(args, { allowFail: true });
 
-// AWS 기본 버전 문서. 없으면(NoSuchEntity) null, 그 밖의 실패는 멈춤(권한·네트워크 오류를 '같음'으로 보지 않음)
-function remotePolicy(policy) {
-  const got = readRemotePolicy(iamRunner, policyArn(policy));
-  if (got.kind === "missing") return null;
-  if (got.kind === "error") {
-    process.stderr.write(got.stderr);
-    fail(
-      `${policy} 정책을 읽지 못했어요. IAM 정책을 읽을 수 있는 프로필을 --admin-profile로 지정해 주세요.`,
-    );
-  }
-  return { version: got.version, doc: got.doc };
-}
-
 const localPolicy = (file) =>
   JSON.parse(readFileSync(path.join(BOOTSTRAP, file), "utf8"));
 
-const BOUNDARY = "BaradunV2-RoleBoundary";
-const BOUNDARY_FILE = path.join(BOOTSTRAP, "role-boundary-policy.json");
-const boundaryRemote = remotePolicy(BOUNDARY);
-if (!boundaryRemote)
+// 스택 밖 정책 비교(deploy-aws.ts, CI와 같은 목록). 조회 실패는 멈춤(권한·네트워크 오류를 '같음'으로 보지 않음)
+const BOUNDARY = BOUNDARY_POLICY.name;
+const BOUNDARY_FILE = path.join(BOOTSTRAP, BOUNDARY_POLICY.file);
+const policies = compareOutOfStackPolicies(iamRunner, account, localPolicy);
+for (const c of [policies.boundary, ...policies.executions]) {
+  if (c.remote.kind === "error") {
+    process.stderr.write(c.remote.stderr);
+    fail(
+      `${c.name} 정책을 읽지 못했어요. IAM 정책을 읽을 수 있는 프로필을 --admin-profile로 지정해 주세요.`,
+    );
+  }
+}
+if (policies.boundary.remote.kind !== "ok")
   fail(`${BOUNDARY} 정책이 없어요. infra/README 초기 설정을 먼저 해 주세요.`);
-const boundaryDiff = policyDiff(
-  localPolicy("role-boundary-policy.json"),
-  boundaryRemote.doc,
-);
-const boundaryLine = formatPolicyDiff(
-  `${BOUNDARY}(${boundaryRemote.version})`,
-  boundaryDiff,
-);
-const executionChecks = [
-  ["BaradunCdkExecution", "cfn-execution-policy.json"],
-  ["BaradunCdkExecutionWorkload", "cfn-execution-workload-policy.json"],
-].map(([policy, file]) => {
-  const remote = remotePolicy(policy);
-  if (!remote)
-    return { same: false, line: `   ${policy}: AWS에 없음(최초 분할 전)` };
-  const diff = policyDiff(localPolicy(file), remote.doc);
-  return {
-    same: diff.same,
-    line: formatPolicyDiff(`${policy}(${remote.version})`, diff),
-  };
-});
+const boundaryRemote = policies.boundary.remote;
+const boundaryDiff = policies.boundary.diff;
+const boundaryLine = policies.boundary.line;
+// 실행 정책은 다르더라도 경고만 함(사람이 표를 보고 yes를 입력함)
+const executionChecks = policies.executions.map((c) => ({
+  same: c.diff?.same ?? false,
+  line: c.line,
+}));
 const executionLines = executionChecks.map((c) => c.line);
 console.log(boundaryLine);
 for (const line of executionLines) console.log(line);

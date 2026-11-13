@@ -31,11 +31,9 @@ import {
   ciConclusion,
   deployComment,
   deployFailureComment,
-  formatPolicyDiff,
   formatTable,
   isEmptyChangeSet,
   linkedIssues,
-  policyDiff,
   redactAccount,
   REGION,
   STACK_NAME,
@@ -43,10 +41,10 @@ import {
 } from "./deploy-plan.ts";
 import {
   checkFunctionLogs,
+  compareOutOfStackPolicies,
   failedEventsOrNull,
   isReady,
   readChangeSetPages,
-  readRemotePolicy,
   stackStatus,
   waitWhileInProgress,
 } from "./deploy-aws.ts";
@@ -55,7 +53,6 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const infraDir = path.resolve(here, "..");
 const repoRoot = path.resolve(infraDir, "..");
 const BOOTSTRAP = path.join(infraDir, "bootstrap");
-const BOUNDARY = "BaradunV2-RoleBoundary";
 const VIA = "main 머지 뒤 자동 배포";
 // 배포 뒤 로그를 볼 시간(분). 해상 특보 수집 주기(15분)를 한 번은 지나게(deploy.mjs와 같음)
 const WATCH_MINUTES = 16;
@@ -188,50 +185,44 @@ function requireStackReady() {
 const localPolicy = (file) =>
   JSON.parse(readFileSync(path.join(BOOTSTRAP, file), "utf8"));
 
-// 스택 밖 정책 비교. strict면 읽지 못할 때 멈춤(판정에 씀). 아니면 '확인 못 함'으로 적고 이어 감(배포 뒤 보고)
+// 스택 밖 정책 비교(deploy-aws.ts, 로컬과 같은 목록)
+// strict면 하나라도 읽지 못할 때(없음 포함) 멈춤(판정에 씀). 아니면 '확인 못 함'으로 적고 이어 감(배포 뒤 보고)
 // account가 null(계정을 확인하지 못함)이면 모두 '확인 못 함'
 function comparePolicies(account, { strict }) {
-  const read = (policy, file) => {
-    const got =
-      account === null
-        ? { kind: "error", stderr: "" }
-        : readRemotePolicy(
-            awsRunner,
-            `arn:aws:iam::${account}:policy/${policy}`,
-          );
-    if (got.kind !== "ok") {
-      if (got.kind === "error") process.stderr.write(redactAccount(got.stderr));
-      if (strict)
-        fail(
-          `${policy} 정책을 읽지 못했어요(${got.kind === "missing" ? "없음" : "조회 실패"}). CI 역할 권한(infra/bootstrap/github-infra-deploy-policy.json)을 확인해 주세요.`,
-        );
-      return { policy, error: true };
-    }
+  if (account === null) {
+    if (strict) fail("계정을 확인하지 못해 정책을 비교하지 못했어요.");
+    const unknown = "확인 못 함(계정을 확인하지 못함)";
     return {
-      policy,
-      version: got.version,
-      diff: policyDiff(localPolicy(file), got.doc),
+      boundarySame: false,
+      boundaryLine: `   BaradunV2-RoleBoundary: ${unknown}`,
+      boundaryText: unknown,
+      executionLines: [],
+      executionGaps: null,
     };
-  };
-  const boundary = read(BOUNDARY, "role-boundary-policy.json");
-  const executions = [
-    read("BaradunCdkExecution", "cfn-execution-policy.json"),
-    read("BaradunCdkExecutionWorkload", "cfn-execution-workload-policy.json"),
-  ];
-  const line = (r) =>
-    r.error
-      ? `   ${r.policy}: 확인 못 함(정책을 읽지 못함)`
-      : formatPolicyDiff(`${r.policy}(${r.version})`, r.diff);
+  }
+  const got = compareOutOfStackPolicies(awsRunner, account, localPolicy);
+  for (const c of [got.boundary, ...got.executions]) {
+    if (c.remote.kind === "ok") continue;
+    if (c.remote.kind === "error")
+      process.stderr.write(redactAccount(c.remote.stderr));
+    if (strict)
+      fail(
+        `${c.name} 정책을 읽지 못했어요(${c.remote.kind === "missing" ? "없음" : "조회 실패"}). CI 역할 권한(infra/bootstrap/github-infra-deploy-policy.json)을 확인해 주세요.`,
+      );
+  }
+  const b = got.boundary;
   return {
     // 읽지 못하면 '같음'으로 보지 않음
-    boundarySame: !boundary.error && boundary.diff.same,
-    boundaryLine: line(boundary),
-    boundaryText: boundary.error
-      ? "확인 못 함(정책을 읽지 못함)"
-      : boundary.diff.same
-        ? `저장소와 같음(${boundary.version})`
-        : `저장소와 다름(${boundary.version})`,
-    executionLines: executions.map(line),
+    boundarySame: b.diff?.same ?? false,
+    boundaryLine: b.line,
+    boundaryText:
+      b.remote.kind !== "ok"
+        ? "확인 못 함(정책을 읽지 못함)"
+        : b.diff?.same
+          ? `저장소와 같음(${b.remote.version})`
+          : `저장소와 다름(${b.remote.version})`,
+    executionLines: got.executions.map((c) => c.line),
+    executionGaps: got.executionGaps,
   };
 }
 
@@ -433,7 +424,10 @@ async function plan() {
   // 3. 변경 세트(실행하지 않음). cdk는 환경 변수 키로 부트스트랩 역할을 맡음
   //    boundary가 다르면 CI가 배포할 수 없으니(local) 만들지 않음
   const name = changeSetName(sha, new Date());
-  const read = policies.boundarySame ? createChangeSet(name) : null;
+  //    실행 정책이 저장소 문서의 동작을 허용하지 않아도(local) 만들지 않음
+  const ciCanDeploy =
+    policies.boundarySame && policies.executionGaps.length === 0;
+  const read = ciCanDeploy ? createChangeSet(name) : null;
   let hasChangeSet = read !== null;
   let rows = [];
   if (read) {
@@ -461,12 +455,13 @@ async function plan() {
     hasChangeSet,
     rows,
     boundarySame: policies.boundarySame,
+    executionGaps: policies.executionGaps,
   });
   const title = {
     none: "바뀌는 스택 리소스가 없어요",
     auto: "삭제·교체가 없어 바로 실행해요",
     hold: "삭제·교체가 있어 승인을 기다려요",
-    local: "boundary가 저장소와 달라 로컬 배포가 필요해요",
+    local: "CI가 배포할 수 없어 로컬 배포가 필요해요",
   }[decision.kind];
   summary(
     [
@@ -475,9 +470,9 @@ async function plan() {
       `- 커밋: ${subject}`,
       hasChangeSet
         ? `- 변경 세트: \`${name}\` · 리소스 ${rows.length}개`
-        : policies.boundarySame
+        : ciCanDeploy
           ? "- 변경 세트: 없음"
-          : "- 변경 세트: 만들지 않음(boundary가 달라 CI가 배포하지 않음)",
+          : "- 변경 세트: 만들지 않음(CI가 배포할 수 없음)",
       `- boundary: ${policies.boundaryLine.trim()}`,
       ...policies.executionLines.map((l) => `- 실행 정책: ${l.trim()}`),
       ...decision.reasons.map((r) => `- 이유: ${r}`),
@@ -509,13 +504,13 @@ async function plan() {
         "",
         `- 커밋: ${subject}`,
         `- boundary: ${policies.boundaryLine.trim()}`,
+        ...policies.executionLines.map((l) => `- 실행 정책: ${l.trim()}`),
+        ...decision.reasons.map((r) => `- 이유: ${r}`),
         "",
-        `boundary(권한 상한)는 CI가 고치지 않아요. 로컬에서 \`npm run deploy:infra -- --issue <번호>\`로 배포해 주세요(boundary 반영 → 변경 세트 실행). 실행 기록: ${runUrl}`,
+        `boundary·실행 정책(권한 상한)은 CI가 고치지 않아요. 로컬에서 \`npm run deploy:infra -- --issue <번호>\`로 배포해 주세요. 실행 기록: ${runUrl}`,
       ].join("\n") + "\n",
     );
-    fail(
-      "boundary가 저장소와 달라 자동 배포를 멈췄어요. 로컬 npm run deploy:infra가 필요해요.",
-    );
+    fail(`자동 배포를 멈췄어요. ${decision.reasons.join(" ")}`);
   }
   if (decision.kind === "auto")
     await executeAndWait(account, name, rows, policies);

@@ -3,11 +3,16 @@
 // 실패는 '없음'·'같음'·'정상'으로 바꾸지 않고 종류를 나눠 돌려줌(멈출지는 부르는 쪽이 정함)
 import {
   failedEventsSince,
+  formatPolicyDiff,
   isStackReady,
+  missingExecutionActions,
+  policyDiff,
   scanLogLines,
   type Change,
   type ChangeSetSummary,
   type FunctionCheck,
+  type PolicyDiff,
+  type PolicyDocument,
   type StackEvent,
 } from "./deploy-plan";
 
@@ -58,6 +63,89 @@ export function readRemotePolicy(aws: AwsRunner, arn: string): RemotePolicy {
     kind: "ok",
     version,
     doc: typeof raw === "string" ? JSON.parse(decodeURIComponent(raw)) : raw,
+  };
+}
+
+// 스택 밖 정책(boundary·실행 정책)과 저장소 파일(infra/bootstrap). 로컬·CI가 같은 목록으로 비교함
+export const BOUNDARY_POLICY = {
+  name: "BaradunV2-RoleBoundary",
+  file: "role-boundary-policy.json",
+} as const;
+export const EXECUTION_POLICIES = [
+  { name: "BaradunCdkExecution", file: "cfn-execution-policy.json" },
+  {
+    name: "BaradunCdkExecutionWorkload",
+    file: "cfn-execution-workload-policy.json",
+  },
+] as const;
+
+export interface PolicyComparison {
+  readonly name: string;
+  readonly file: string;
+  readonly remote: RemotePolicy;
+  readonly diff: PolicyDiff | null; // 읽지 못했거나 없으면 null
+  readonly line: string; // 화면·댓글 한 줄
+}
+
+export interface OutOfStackPolicies {
+  readonly boundary: PolicyComparison;
+  readonly executions: readonly PolicyComparison[];
+  // 실행 정책이 허용하지 않는 저장소 문서의 동작. 실행 정책을 하나라도 못 읽으면 null(판단 못 함)
+  readonly executionGaps: readonly string[] | null;
+}
+
+// 스택 밖 정책을 AWS 기본 버전과 저장소 파일로 비교. 멈출지('없음'·'조회 실패')는 부르는 쪽이 정함
+export function compareOutOfStackPolicies(
+  aws: AwsRunner,
+  account: string,
+  readLocal: (file: string) => PolicyDocument,
+): OutOfStackPolicies {
+  const compare = (
+    policy: { readonly name: string; readonly file: string },
+    missingText: string,
+  ): PolicyComparison & { readonly local: PolicyDocument } => {
+    const local = readLocal(policy.file);
+    const remote = readRemotePolicy(
+      aws,
+      `arn:aws:iam::${account}:policy/${policy.name}`,
+    );
+    if (remote.kind !== "ok") {
+      return {
+        ...policy,
+        local,
+        remote,
+        diff: null,
+        line:
+          remote.kind === "missing"
+            ? `   ${policy.name}: ${missingText}`
+            : `   ${policy.name}: 확인 못 함(정책을 읽지 못함)`,
+      };
+    }
+    const diff = policyDiff(local, remote.doc as PolicyDocument);
+    return {
+      ...policy,
+      local,
+      remote,
+      diff,
+      line: formatPolicyDiff(`${policy.name}(${remote.version})`, diff),
+    };
+  };
+  const boundary = compare(BOUNDARY_POLICY, "AWS에 없음");
+  const executions = EXECUTION_POLICIES.map((p) =>
+    compare(p, "AWS에 없음(최초 분할 전)"),
+  );
+  const remoteDocs = executions.flatMap((e) =>
+    e.remote.kind === "ok" ? [e.remote.doc as PolicyDocument] : [],
+  );
+  return {
+    boundary,
+    executions,
+    executionGaps: executions.every((e) => e.remote.kind === "ok")
+      ? missingExecutionActions(
+          executions.map((e) => e.local),
+          remoteDocs,
+        )
+      : null,
   };
 }
 
