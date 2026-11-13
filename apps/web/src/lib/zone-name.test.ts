@@ -54,12 +54,21 @@ describe("zoneNameText", () => {
       text: "Nearshore waters of central Gangwon",
       untranslated: false,
     });
-  });
-
-  it("기본 번역표: 영어 이름을 아직 못 찾은 구역(부산앞바다)은 원문", () => {
     expect(
       zoneNameText({ zoneCode: "S1311100", zoneName: "부산앞바다" }, "en"),
-    ).toEqual({ text: "부산앞바다", untranslated: true });
+    ).toEqual({
+      text: "Nearshore waters of Busan",
+      untranslated: false,
+    });
+  });
+
+  it("기본 번역표: 영어 이름을 아직 못 찾은 구역(경남서부남해앞바다)은 원문", () => {
+    expect(
+      zoneNameText(
+        { zoneCode: "S1311200", zoneName: "경남서부남해앞바다" },
+        "en",
+      ),
+    ).toEqual({ text: "경남서부남해앞바다", untranslated: true });
   });
 });
 
