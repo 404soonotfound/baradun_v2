@@ -144,20 +144,6 @@ export function policyTime(iso: string): string {
   return `${get("year")}/${get("month")}/${get("day")} ${get("hour")}:${get("minute")}`;
 }
 
-// 운영 정책 머리 한 줄용 짧은 시각(KST, MM/DD HH:MM)
-export function policyShortTime(iso: string): string {
-  const parts = new Intl.DateTimeFormat("ko-KR", {
-    timeZone: "Asia/Seoul",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).formatToParts(new Date(iso));
-  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
-  return `${get("month")}/${get("day")} ${get("hour")}:${get("minute")}`;
-}
-
 // 주소 ?id= 를 항목 번호로. 숫자가 아니거나 범위 밖이면 null(화면이 '찾는 항목 없음'으로 보여 줌)
 export function sectionOf(
   snapshot: PolicySnapshot,
