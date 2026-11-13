@@ -8,6 +8,8 @@
 @layer base {
   html {
     background: var(--color-bg-page);
+    /* 맨 위에서 아래로 당길 때 Android Chrome 기본 새로고침 대신 앱 당겨서 새로고침(L16)이 동작하게 함 */
+    overscroll-behavior-y: contain;
     /* 키보드로 옮긴 포커스가 고정된 아래 탭 막대(안전 영역 포함, tab-bar.tsx)에 가려지지 않게
        그만큼 띄워 스크롤함 (BRD-39, WCAG 2.4.11). 모바일 지도 카드처럼 아래에 붙는 것이 있으면 그 높이도(--sticky-space, BRD-177) */
     scroll-padding-bottom: calc(
