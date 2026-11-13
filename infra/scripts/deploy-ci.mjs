@@ -25,6 +25,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   autoDeployDecision,
+  changedFunctionIds,
   changeSetName,
   checkLine,
   ciConclusion,
@@ -308,11 +309,6 @@ function createChangeSet(name) {
   }
 }
 
-const changedFunctions = (rows) =>
-  rows
-    .filter((r) => r.type === "AWS::Lambda::Function" && r.action !== "Remove")
-    .map((r) => r.logicalId);
-
 function tableMarkdown(rows) {
   return ["```", formatTable(rows), "```"].join("\n");
 }
@@ -545,7 +541,7 @@ async function watch() {
   const name = env("CHANGE_SET");
   const deployedAt = Number(env("DEPLOYED_AT"));
   const rows = JSON.parse(env("ROWS"));
-  const functions = changedFunctions(rows);
+  const functions = changedFunctionIds(rows);
   const account = identity();
   const policies = comparePolicies(account, { strict: false });
   let checks = [];

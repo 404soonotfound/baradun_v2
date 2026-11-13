@@ -21,6 +21,7 @@ import {
   changeSetName,
   checkLine,
   ciConclusion,
+  changedFunctionIds,
   ciStateWithRuns,
   deployComment,
   deployFailureComment,
@@ -652,9 +653,7 @@ const deployedAt = new Date();
 
 // 8. 바뀐 함수 로그 점검: 배포 뒤 정해진 시간 동안 error·warn·시간 초과·권한 거부를 셈
 // 실행이 없거나 로그를 못 읽으면 '확인 못 함'(정상으로 보지 않음)
-const functions = rows.filter(
-  (r) => r.type === "AWS::Lambda::Function" && r.action !== "Remove",
-);
+const functions = changedFunctionIds(rows);
 const logChecks = [];
 if (watchMinutes > 0 && functions.length > 0) {
   step(
@@ -670,7 +669,7 @@ if (watchMinutes > 0 && functions.length > 0) {
     ...checkFunctionLogs(
       awsRunner,
       STACK_NAME,
-      functions.map((fn) => fn.logicalId),
+      functions,
       deployedAt.getTime(),
       LOG_MAX_EVENTS,
     ),
