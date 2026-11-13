@@ -1,5 +1,6 @@
+import { execFileSync } from "node:child_process";
 import { readdirSync, readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { posix, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 // GitHub Actions 워크플로 파일을 글자로 읽어서 배포 가드레일을 검사함 (11장).
@@ -601,22 +602,71 @@ describe("PR 필수 웹 검사 (BRD-102 결정 41·42)", () => {
   });
 
   // 옛 node_modules로 검사가 통과하지 않게 함: lock 파일·Node 판이 정확히 같은 캐시만 쓰고, 아니면 npm ci로 설치함
-  it("node_modules 캐시는 키가 정확히 같을 때만 npm ci를 건너뛴다", () => {
-    const text = jobLines(ci?.text ?? "", "e2e-build").join("\n");
+  it("두 빌드 작업의 node_modules 캐시는 키가 정확히 같을 때만 npm ci를 건너뛰고 main push에서만 저장한다", () => {
     const key =
       "key: node-modules-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.nvmrc', 'package-lock.json') }}";
-    expect(text).toMatch(
-      /id: node-modules\s*\n\s*uses: actions\/cache\/restore@/,
-    );
-    // 복원과 저장이 같은 키를 씀
-    expect(text.split(key)).toHaveLength(3);
-    expect(text).not.toContain("restore-keys: node-modules");
-    expect(text).toContain(
-      "if: steps.node-modules.outputs.cache-hit != 'true'\n        run: npm ci --no-audit",
-    );
-    expect(text).toMatch(
-      /if: steps\.node-modules\.outputs\.cache-hit != 'true'\s*\n\s*uses: actions\/cache\/save@/,
-    );
+    // 캐시 경로는 루트와 작업 공간마다의 node_modules 전부. 작업 공간이 늘었는데 경로가 빠지면 그 안의 의존성 없이 복원됨
+    const { workspaces } = JSON.parse(
+      readFileSync(resolve(__dirname, "../../package.json"), "utf8"),
+    ) as { workspaces: string[] };
+    const cachePaths = [
+      "node_modules",
+      ...workspaces.map((w) => `${w}/node_modules`),
+    ];
+    for (const job of ["e2e-build", "admin-build"]) {
+      const text = jobLines(ci?.text ?? "", job).join("\n");
+      expect(text, job).toMatch(
+        /id: node-modules\s*\n\s*uses: actions\/cache\/restore@/,
+      );
+      // 복원과 저장이 같은 키를 씀
+      expect(text.split(key), job).toHaveLength(3);
+      // 경로도 같아야 함(경로가 다르면 캐시 판이 달라져 키가 같아도 복원되지 않음). 두 작업이 캐시 하나를 함께 씀
+      const paths = [
+        ...text.matchAll(/path: \|\n((?:\s+\S+\n)+?)\s+key: node-modules-/g),
+      ].map((m) => (m[1] ?? "").trim().split(/\s+/));
+      expect(paths, job).toEqual([cachePaths, cachePaths]);
+      expect(text, job).not.toContain("restore-keys: node-modules");
+      // 설치는 캐시가 맞지 않을 때만 건너뛰지 않고, 조건 없는 npm ci는 두지 않음
+      expect(
+        [...text.matchAll(/^\s*(?:-\s*)?run: npm ci\b.*$/gm)].length,
+        job,
+      ).toBe(1);
+      expect(text, job).toContain(
+        "if: steps.node-modules.outputs.cache-hit != 'true'\n        run: npm ci --no-audit",
+      );
+      expect(text, job).toMatch(
+        /if: github\.event_name == 'push' && steps\.node-modules\.outputs\.cache-hit != 'true'\s*\n\s*uses: actions\/cache\/save@/,
+      );
+      // PR에서 저장하는 단계(조건에 push가 없는 저장)는 두지 않음
+      expect(text, job).not.toMatch(
+        /if: steps\.node-modules\.outputs\.cache-hit != 'true'\s*\n\s*uses: actions\/cache\/save@/,
+      );
+    }
+  });
+
+  // 캐시가 맞으면 npm ci를 건너뛰므로 npm이 작업 공간 bin 파일에 실행 권한을 주지 않음(git에 올라간 권한 그대로 실행됨)
+  // 644로 올리면 올린 PR(lock 파일이 바뀌어 npm ci가 돎)은 통과하고, 캐시를 쓰는 다음 PR부터 빌드가 '권한 없음'으로 실패함
+  it("작업 공간 패키지의 bin 파일은 git에 실행 권한으로 올라가 있다", () => {
+    const root = resolve(__dirname, "../..");
+    const lock = JSON.parse(
+      readFileSync(resolve(root, "package-lock.json"), "utf8"),
+    ) as { packages: Record<string, { bin?: Record<string, string> }> };
+    const bins = Object.entries(lock.packages)
+      .filter(([dir]) => dir !== "" && !dir.includes("node_modules"))
+      .flatMap(([dir, pkg]) =>
+        Object.values(pkg.bin ?? {}).map((file) => posix.join(dir, file)),
+      );
+    expect(bins.length).toBeGreaterThan(0);
+    const listed = execFileSync("git", ["ls-files", "-s", "--", ...bins], {
+      cwd: root,
+      encoding: "utf8",
+    })
+      .trim()
+      .split("\n");
+    expect(listed).toHaveLength(bins.length);
+    for (const line of listed) {
+      expect(line).toMatch(/^100755 /);
+    }
   });
 
   it("실제 배포 직전에는 올릴 빌드의 전체 Chromium E2E를 통과해야 한다", () => {
