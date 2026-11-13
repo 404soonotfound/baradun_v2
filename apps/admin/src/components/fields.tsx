@@ -1,5 +1,6 @@
 "use client";
 
+import { Check, Info } from "lucide-react";
 import { useId, type InputHTMLAttributes, type ReactNode } from "react";
 import { messages } from "@/lib/messages";
 import { PASSWORD_RULE } from "@/lib/auth/policy";
@@ -136,15 +137,24 @@ export function PasswordRules({
     [checks.match, messages.rules.match],
   ] as const;
   return (
-    <ul className="flex flex-col gap-1 text-body-s text-text-body">
+    <ul className="flex flex-wrap gap-x-3.5 gap-y-1.5 text-label-s text-text-body">
       {rows.map(([ok, label]) => (
-        <li key={label} className="flex items-center gap-1.5">
-          <span
-            aria-hidden="true"
-            className={ok ? "text-brand-default" : "text-text-muted"}
-          >
-            {ok ? "✓" : "·"}
-          </span>
+        <li key={label} className="inline-flex items-center gap-1.5">
+          {ok ? (
+            <Check
+              aria-hidden="true"
+              size={14}
+              strokeWidth={2.4}
+              className="shrink-0 text-success-fg"
+            />
+          ) : (
+            <Info
+              aria-hidden="true"
+              size={14}
+              strokeWidth={2.2}
+              className="shrink-0 text-text-muted"
+            />
+          )}
           <span>{label}</span>
           <span className="sr-only">
             {ok ? messages.rules.met : messages.rules.notMet}

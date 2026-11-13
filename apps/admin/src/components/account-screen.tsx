@@ -1,7 +1,14 @@
 "use client";
 
+import { Check, LogOut } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState, type FormEvent, type ReactNode } from "react";
+import {
+  useRef,
+  useState,
+  type FormEvent,
+  type KeyboardEvent,
+  type ReactNode,
+} from "react";
 import {
   associateTotp,
   changePassword,
@@ -19,6 +26,7 @@ import { useAuthSession, useSessionSnapshot } from "@/lib/auth/provider";
 import { otpauthUri } from "@/lib/auth/srp";
 import { fill, messages } from "@/lib/messages";
 import { roleLabel } from "@/lib/roles";
+import { setTheme, THEMES, useTheme, type Theme } from "@/lib/theme";
 import { AdminShell } from "./admin-shell";
 import { ConfirmDialog } from "./confirm-dialog";
 import { useSlow } from "./use-slow";
@@ -38,31 +46,50 @@ const t = messages;
 
 function Section({
   title,
+  badge,
   hint,
   children,
 }: {
   title: string;
+  badge?: string;
   hint?: string;
   children: ReactNode;
 }) {
   return (
     <section className="grid gap-3 border-t border-border-default py-6 md:grid-cols-[260px_1fr] md:gap-7">
       <div>
-        <h2 className="text-title-s font-semibold text-text-default">
-          {title}
-        </h2>
-        {hint && <p className="mt-1 text-label-s text-text-muted">{hint}</p>}
+        <div className="flex flex-wrap items-center gap-2">
+          <h2 className="text-title-card font-semibold text-text-default">
+            {title}
+          </h2>
+          {badge && (
+            <span className="inline-flex items-center rounded-[4px] bg-info-bg px-1.5 py-0.5 text-caption font-semibold text-info-fg ring-1 ring-inset ring-border-strong">
+              {badge}
+            </span>
+          )}
+        </div>
+        {hint && (
+          <p className="mt-1 text-body leading-relaxed text-text-muted">
+            {hint}
+          </p>
+        )}
       </div>
-      <div className="flex max-w-[440px] flex-col gap-3">{children}</div>
+      <div className="flex min-w-0 flex-col gap-3">{children}</div>
     </section>
   );
 }
 
-function PasswordSection({ token }: { token: () => Promise<string | null> }) {
+function PasswordSection({
+  token,
+  onChanged,
+}: {
+  token: () => Promise<string | null>;
+  onChanged: () => void;
+}) {
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
   const [confirm, setConfirm] = useState("");
-  const [result, setResult] = useState<"ok" | string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const checks = passwordChecks(next, confirm);
   const ready = current && checks.length && checks.number && checks.match;
@@ -71,7 +98,7 @@ function PasswordSection({ token }: { token: () => Promise<string | null> }) {
     e.preventDefault();
     if (!ready || busy) return;
     setBusy(true);
-    setResult(null);
+    setError(null);
     void (async () => {
       const access = await token();
       if (!access) return;
@@ -80,10 +107,10 @@ function PasswordSection({ token }: { token: () => Promise<string | null> }) {
         setCurrent("");
         setNext("");
         setConfirm("");
-        setResult("ok");
+        onChanged();
       } catch (err) {
         const failure = authFailureOf(err);
-        setResult(
+        setError(
           failure === "wrong_credentials"
             ? t.account.wrongCurrent
             : failure === "password_rule"
@@ -102,16 +129,13 @@ function PasswordSection({ token }: { token: () => Promise<string | null> }) {
 
   return (
     <form className="flex flex-col gap-3" onSubmit={submit} noValidate>
-      {result === "ok" && (
-        <Notice tone="neutral" title={t.account.changed} role="status" />
-      )}
       <Field
         label={t.account.current}
         type="password"
         autoComplete="current-password"
         value={current}
         onChange={(e) => setCurrent(e.target.value)}
-        error={result && result !== "ok" ? result : null}
+        error={error}
       />
       <div className="grid gap-3 sm:grid-cols-2">
         <Field
@@ -130,7 +154,7 @@ function PasswordSection({ token }: { token: () => Promise<string | null> }) {
         />
       </div>
       <PasswordRules next={next} confirm={confirm} />
-      <div>
+      <div className="flex justify-end">
         <Button type="submit" size="small" disabled={busy || !ready}>
           {t.account.changePassword}
         </Button>
@@ -211,18 +235,25 @@ function TotpSection({
           />
         )}
         {error && <Notice tone="fail" title={error} role="alert" />}
-        <div className="flex items-center justify-between gap-3 rounded-admin-box border border-border-default bg-bg-surface px-3.5 py-3">
-          <p className="text-body-s text-text-body">
-            {t.account.mfaRegistered}
-          </p>
-          <Button
-            variant="secondary"
-            size="small"
-            onClick={start}
-            disabled={busy}
-          >
-            {t.account.reregister}
-          </Button>
+        <div className="border-t border-border-default">
+          <div className="flex items-center justify-between gap-4 border-b border-border-default py-2.5">
+            <div className="min-w-0 flex-1">
+              <p className="text-body font-medium text-text-default">
+                {t.account.mfaSummary}
+              </p>
+              <p className="text-caption text-text-muted">
+                {t.account.mfaDetail}
+              </p>
+            </div>
+            <Button
+              variant="secondary"
+              size="small"
+              onClick={start}
+              disabled={busy}
+            >
+              {t.account.reregister}
+            </Button>
+          </div>
         </div>
       </>
     );
@@ -252,6 +283,73 @@ function TotpSection({
         </Button>
       </div>
     </form>
+  );
+}
+
+const THEME_LABELS: Record<Theme, string> = {
+  system: t.account.themeSystem,
+  light: t.account.themeLight,
+  dark: t.account.themeDark,
+};
+
+function ThemeSection() {
+  const theme = useTheme();
+  const refs = useRef<(HTMLButtonElement | null)[]>([]);
+
+  const move = (index: number) => {
+    const next = THEMES[index];
+    if (!next) return;
+    setTheme(next);
+    refs.current[index]?.focus();
+  };
+
+  const onKeyDown = (index: number, e: KeyboardEvent<HTMLButtonElement>) => {
+    if (e.key === "ArrowRight" || e.key === "ArrowDown") {
+      e.preventDefault();
+      move((index + 1) % THEMES.length);
+    } else if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
+      e.preventDefault();
+      move((index - 1 + THEMES.length) % THEMES.length);
+    } else if (e.key === "Home") {
+      e.preventDefault();
+      move(0);
+    } else if (e.key === "End") {
+      e.preventDefault();
+      move(THEMES.length - 1);
+    }
+  };
+
+  return (
+    <div
+      role="radiogroup"
+      aria-label={t.account.themeLabel}
+      className="inline-flex self-start overflow-hidden rounded-admin-control border border-border-strong shadow-card"
+    >
+      {THEMES.map((value, index) => {
+        const selected = theme === value;
+        return (
+          <button
+            key={value}
+            ref={(el) => {
+              refs.current[index] = el;
+            }}
+            type="button"
+            role="radio"
+            aria-checked={selected}
+            tabIndex={selected ? 0 : -1}
+            onClick={() => setTheme(value)}
+            onKeyDown={(e) => onKeyDown(index, e)}
+            className={`inline-flex h-touch items-center gap-1.5 border-l border-border-strong px-3 text-[13.5px] whitespace-nowrap first:border-l-0 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand-default sm:h-[34px] ${
+              selected
+                ? "bg-bg-page font-semibold text-text-default"
+                : "bg-bg-surface font-medium text-text-body hover:bg-bg-page"
+            }`}
+          >
+            {THEME_LABELS[value]}
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
@@ -368,6 +466,7 @@ function MfaResetSection({
           cancelLabel={r.cancel}
           confirmDisabled={!sameEmail(word, target)}
           busy={busy}
+          tone="danger"
           onConfirm={confirm}
           onClose={() => setTarget(null)}
         >
@@ -400,6 +499,7 @@ function AccountBody() {
   const router = useRouter();
   const session = useAuthSession();
   const snapshot = useSessionSnapshot();
+  const [passwordChanged, setPasswordChanged] = useState(false);
   if (snapshot.status === "signed_out") return null;
   const token = () => session.accessToken();
   const loginPath = snapshot.pool === "demo" ? "/login/demo/" : "/login/";
@@ -413,6 +513,20 @@ function AccountBody() {
         {snapshot.email}
         {` · ${roleLabel(snapshot.pool, snapshot.groups) ?? ""}`}
       </p>
+      {passwordChanged && (
+        <div
+          role="status"
+          className="mt-5 mb-2 flex w-full max-w-[440px] items-center gap-2.5 rounded-admin-box border border-border-default bg-bg-surface px-3.5 py-3 text-body text-text-default shadow-floating"
+        >
+          <Check
+            aria-hidden="true"
+            size={16}
+            strokeWidth={2.4}
+            className="shrink-0 text-success-icon"
+          />
+          <span>{t.account.changed}</span>
+        </div>
+      )}
       <Section title={t.account.profile} hint={t.account.profileHint}>
         <Field label={t.account.email} value={snapshot.email ?? ""} readOnly />
       </Section>
@@ -423,15 +537,27 @@ function AccountBody() {
       ) : (
         <>
           <Section title={t.account.password} hint={t.account.passwordHint}>
-            <PasswordSection token={token} />
+            <PasswordSection
+              token={token}
+              onChanged={() => setPasswordChanged(true)}
+            />
           </Section>
           <Section title={t.account.mfa} hint={t.account.mfaHint}>
             <TotpSection token={token} email={snapshot.email ?? ""} />
           </Section>
-          <Section title={r.title} hint={r.hint}>
-            <MfaResetSection token={token} myEmail={snapshot.email ?? ""} />
-          </Section>
         </>
+      )}
+      <Section title={t.account.theme} hint={t.account.themeHint}>
+        <ThemeSection />
+      </Section>
+      {snapshot.pool !== "demo" && (
+        <Section
+          title={r.title}
+          badge={r.operatorLeadOnly}
+          hint={r.hint}
+        >
+          <MfaResetSection token={token} myEmail={snapshot.email ?? ""} />
+        </Section>
       )}
       <Section title={t.account.sessions} hint={t.account.sessionsHint}>
         <div className="flex flex-wrap gap-2">
@@ -449,6 +575,7 @@ function AccountBody() {
             <Button
               variant="secondary"
               size="small"
+              className="gap-1.5"
               onClick={() => {
                 void (async () => {
                   const access = await token();
@@ -459,6 +586,7 @@ function AccountBody() {
                 })();
               }}
             >
+              <LogOut aria-hidden="true" size={14} strokeWidth={1.8} />
               {t.account.logoutAll}
             </Button>
           )}
