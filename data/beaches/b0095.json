@@ -62,7 +62,14 @@
       },
       "distanceKm": 6.5
     },
-    "wind": null
+    "wind": {
+      "id": "22511",
+      "name": {
+        "ko": "기장 파고부이",
+        "en": "Gijang wave buoy"
+      },
+      "distanceKm": 15.2
+    }
   },
   "photo": {
     "url": "https://tong.visitkorea.or.kr/cms/resource/45/3311245_image2_1.jpg",
