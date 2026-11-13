@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   autoDeployDecision,
   canonicalJson,
+  changedFunctionIds,
   changeSetName,
   checkLine,
   ciConclusion,
@@ -362,6 +363,31 @@ describe("스택 밖 IAM 정책 비교 (GH-382)", () => {
 });
 
 describe("배포 뒤 로그 점검 (GH-382)", () => {
+  it("바뀐 함수만 고르고 지운 함수는 빼서 로컬·CI가 같은 목록을 씀", () => {
+    const change = (
+      Action: string,
+      LogicalResourceId: string,
+      ResourceType: string,
+    ) => ({
+      ResourceChange: {
+        Action,
+        LogicalResourceId,
+        ResourceType,
+        Replacement: "False",
+      },
+    });
+    const rows = summarizeChanges([
+      change("Modify", "PublisherFunction", "AWS::Lambda::Function"),
+      change("Add", "NewFunction", "AWS::Lambda::Function"),
+      change("Remove", "OldFunction", "AWS::Lambda::Function"),
+      change("Modify", "OpsApiRole", "AWS::IAM::Role"),
+    ]);
+    expect(changedFunctionIds(rows).sort()).toEqual([
+      "NewFunction",
+      "PublisherFunction",
+    ]);
+  });
+
   const lines = [
     "START RequestId: 1 Version: $LATEST",
     '2026-11-10T07:50:00Z\t1\tINFO\t{"level":"info","event":"run_done"}',
