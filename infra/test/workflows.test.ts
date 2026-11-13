@@ -441,15 +441,14 @@ describe("PR 필수 웹 검사 (BRD-102 결정 41·42)", () => {
       expect(ciFilters).toMatch(
         new RegExp(`^${filter}:.*\\n  - \\*${area}$`, "m"),
       );
-      const excluded = ciFilterPaths(filter);
-      for (const path of [
+      expect(ciFilterPaths(filter)).toEqual([
         `!apps/${area}/**/*.test.ts`,
         `!apps/${area}/**/*.test.tsx`,
         `!apps/${area}/AGENTS.md`,
         `!apps/${area}/CLAUDE.md`,
-      ]) {
-        expect(excluded, filter).toContain(path);
-      }
+        `!apps/${area}/eslint.config.mjs`,
+        `!apps/${area}/vitest.config.ts`,
+      ]);
       expect(ciText).toContain(
         filter + ": ${{ steps.filter.outputs." + filter + " }}",
       );
@@ -469,6 +468,14 @@ describe("PR 필수 웹 검사 (BRD-102 결정 41·42)", () => {
       expect(build).toContain(
         `(github.event_name == 'push' || needs.changes.outputs.${filter} == 'true') && steps.playwright-cache.outputs.cache-hit`,
       );
+      expect(jobLines(ciText, area).join("\n")).toContain(
+        `node .github/scripts/check-smoke.mjs ${area}`,
+      );
+      expect(ciText).toContain("list-files: json");
+      expect(build).toContain(
+        "node .github/scripts/run-changed-e2e.mjs " + area,
+      );
+      expect(build).toContain(`npm run test:e2e -w apps/${area}`);
     }
   });
 
@@ -583,7 +590,32 @@ describe("PR 필수 웹 검사 (BRD-102 결정 41·42)", () => {
       expect(text, job).toMatch(
         /if: github\.event_name == 'push' && steps\.next-cache\.outputs\.cache-hit != 'true'\s*\n\s*uses: actions\/cache\/save@/,
       );
-      expect(text, job).toContain("id: playwright-cache");
+      expect([...text.matchAll(/uses: actions\/cache@/g)], job).toHaveLength(1);
+      expect(text, job).toMatch(
+        /uses: actions\/cache@[^\n]*\n\s+with:\s*\n\s+path: ~\/\.cache\/ms-playwright/,
+      );
+    }
+  });
+
+  it("실제 배포 직전에는 올릴 빌드의 전체 Chromium E2E를 통과해야 한다", () => {
+    for (const [job, app] of [
+      ["site", "web"],
+      ["admin", "admin"],
+    ] as const) {
+      const lines = jobLines(deploy?.text ?? "", job).join("\n");
+      const build = lines.indexOf(`npm run build -w apps/${app}`);
+      const full = lines.indexOf(`npm run test:e2e -w apps/${app}`);
+      const credentials = lines.indexOf(
+        "aws-actions/configure-aws-credentials@",
+      );
+      expect(full, job).toBeGreaterThan(build);
+      expect(credentials, job).toBeGreaterThan(full);
+      expect(lines, job).toContain("playwright install --with-deps chromium");
+      if (app === "web") {
+        expect(lines).toMatch(
+          /run: npm run test:e2e -w apps\/web\s*\n\s+env:\s*\n\s+E2E_PRODUCTION_BUILD: "1"/,
+        );
+      }
     }
   });
 
