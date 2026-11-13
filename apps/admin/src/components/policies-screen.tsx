@@ -3,9 +3,9 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
-import { kstDateTime } from "@/lib/inquiries";
 import { fill, messages } from "@/lib/messages";
 import {
+  policyTime,
   sectionOf,
   type PolicyRun,
   type PolicySection,
@@ -165,8 +165,8 @@ function PoliciesBody({ snapshot }: { snapshot: PolicySnapshot }) {
           <p className="mt-1 text-body-s text-text-muted">{t.intro}</p>
           <p className="mt-1 text-label-s text-text-muted tabular-nums">
             {[
-              fill(t.revision, { time: kstDateTime(snapshot.revision) }),
-              fill(t.fetchedAt, { time: kstDateTime(snapshot.fetchedAt) }),
+              fill(t.revision, { time: policyTime(snapshot.revision) }),
+              fill(t.fetchedAt, { time: policyTime(snapshot.fetchedAt) }),
             ].join(t.metaJoin)}
           </p>
         </div>

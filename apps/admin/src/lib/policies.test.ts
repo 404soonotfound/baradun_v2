@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import committed from "../content/ops-policy.json";
-import { parsePolicySnapshot, sectionOf } from "./policies";
+import { parsePolicySnapshot, policyTime, sectionOf } from "./policies";
 
 // 운영 정책 원본 파일 확인 (#335, 결정 기록 D20-8~11·D16-E5)
 
@@ -98,5 +98,13 @@ describe("sectionOf", () => {
   });
   it.each([null, "", "0", "10", "01", "1a", "-1"])("%s는 null", (id) => {
     expect(sectionOf(snapshot, id)).toBeNull();
+  });
+});
+
+describe("policyTime", () => {
+  it("KST로 바꾸고 연도를 붙인다(해를 넘긴 동기화가 올해처럼 보이지 않게)", () => {
+    expect(policyTime("2026-11-12T15:15:22.234Z")).toBe("2026/11/13 00:15");
+    expect(policyTime("2025-12-31T14:59:00.000Z")).toBe("2025/12/31 23:59");
+    expect(policyTime("2025-12-31T15:00:00.000Z")).toBe("2026/01/01 00:00");
   });
 });
