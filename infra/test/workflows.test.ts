@@ -712,8 +712,10 @@ describe("인프라 자동 배포 (#418)", () => {
     expect(approve).toContain(
       "node --import tsx scripts/deploy-ci.mjs execute",
     );
-    // 승인 대기가 다음 자동 배포를 막지 않게 다른 그룹
-    expect(approve).not.toMatch(/group:\s*deploy-infra\s*$/m);
+    // 승인 대기가 다음 자동 배포를 막지 않게 다른 그룹, 앞 커밋의 승인 대기가 새 승인 작업을 붙잡지 않게 커밋마다
+    expect(approve).toContain(
+      "group: deploy-infra-approve-${{ github.event.workflow_run.head_sha }}",
+    );
     const watch = jobLines(text, "infra-watch").join("\n");
     expect(watch).toMatch(/needs:\s*\[infra, infra-approve\]/);
     expect(watch).toContain("!cancelled()");

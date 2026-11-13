@@ -77,14 +77,16 @@ jobs:
         run: node --import tsx scripts/deploy-ci.mjs plan
 
   # 삭제·교체가 있는 변경 세트: infra-approval environment의 승인(필수 검토자)을 받은 뒤 같은 변경 세트를 실행
-  # 승인을 기다리는 작업이 다음 자동 배포를 막지 않게 deploy-infra와 다른 그룹. 먼저 다른 배포가 실행되면 변경 세트가 낡아(OBSOLETE) 실행하지 않음
+  # 승인을 기다리는 작업이 다음 자동 배포를 막지 않게 deploy-infra와 다른 그룹
+  # 그룹은 커밋마다: 앞 커밋의 승인 대기가 새 커밋의 승인 작업을 붙잡거나, 셋째 승인 작업이 대기 중인 둘째를 취소하지 않게 함
+  # 앞 커밋의 변경 세트는 승인해도 main이 앞섰거나 낡아(OBSOLETE) 실행하지 않고 이유를 댓글로 남김
   infra-approve:
     needs: infra
     if: needs.infra.outputs.kind == 'hold'
     runs-on: ubuntu-latest
     environment: infra-approval
     concurrency:
-      group: deploy-infra-approve
+      group: deploy-infra-approve-${{ github.event.workflow_run.head_sha }}
       cancel-in-progress: false
     timeout-minutes: 120 # 다른 배포 대기 합계 최대 30분 + 자기 배포 대기 최대 60분
     permissions:
