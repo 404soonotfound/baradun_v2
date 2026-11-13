@@ -11,7 +11,7 @@
 // - 노션 쪽 모양(9개 항목·상태·근거 줄)이 바뀌면 조용히 빼지 않고 멈춤. 원본을 고치거나 이 도구를 고침
 // - 토큰은 환경 변수로만 받고 파일·출력에 남기지 않음
 // 종료 코드: 0 썼음(또는 --check 통과) / 1 실패(검증·네트워크·인자)
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, renameSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -164,7 +164,8 @@ export function parsePolicyMarkdown(markdown) {
     if (!current) continue; // 머리 설명
     if (/^#/.test(line))
       throw new Error(`${where}: 항목 안의 작은 제목은 읽지 못해요`);
-    if (/^\s*[-*]\s/.test(raw) && /^\s{2,}/.test(raw)) {
+    // 노션 마크다운은 하위 목록을 탭 한 칸으로 들여씀. 공백·탭 하나라도 있으면 안쪽 목록으로 봄
+    if (/^\s+[-*]\s/.test(raw)) {
       throw new Error(`${where}: 안쪽 목록은 읽지 못해요`);
     }
     const bullet = /^[-*]\s+(.+)$/.exec(line);
@@ -286,7 +287,14 @@ export async function fetchFromNotion({ token, fetchImpl = fetch }) {
 
 export async function main(argv, env = process.env, deps = {}) {
   const now = deps.now ?? (() => new Date().toISOString());
-  const write = deps.write ?? ((file, text) => writeFileSync(file, text));
+  // 임시 파일에 다 쓴 뒤 바꿔 넣음(쓰다 멈춰도 옛 파일이 그대로 남음, D16-E5)
+  const write =
+    deps.write ??
+    ((file, text) => {
+      const temp = `${file}.tmp`;
+      writeFileSync(temp, text);
+      renameSync(temp, file);
+    });
   const log = deps.log ?? console.log;
   const args = parseArgs(argv);
   const source = args.markdown
