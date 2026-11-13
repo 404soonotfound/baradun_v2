@@ -738,7 +738,7 @@ test("목록: 배너 순서 7칸 띠, 제목·문구 검색과 종류 필터, �
     .click();
   await expect(rows(page)).toHaveCount(5);
 
-  // PC 표 행 끝 '…' 메뉴: Esc 포커스 복원, 실패 후 재시도 시 같은 멱등 키 유지, 편집 이동
+  // PC 표 행 끝 '…' 메뉴: Esc 포커스 복원, 실패 후 재시도 시 같은 멱등 키 유지, 409 충돌 시 목록 새로고침, 편집 이동
   if (!isMobile(page)) {
     const rowTrigger = page.getByRole("button", {
       name: "새벽 점검 예고 작업 메뉴",
@@ -788,4 +788,39 @@ test("목록: 배너 순서 7칸 띠, 제목·문구 검색과 종류 필터, �
   } else {
     expect(writes).toHaveLength(0);
   }
+});
+
+test("목록: 행 작업 버전 충돌(409) 시 새 내용 불러오기 버튼을 제공한다", async ({
+  page,
+}) => {
+  await signIn(page);
+  let listCalls = 0;
+  await mockNotices(page, {
+    items: () => {
+      listCalls += 1;
+      return ITEMS();
+    },
+    write: () => ({
+      status: 409,
+      body: { error: { code: "conflict", reason: "version" } },
+    }),
+  });
+  await openNotices(page);
+  if (isMobile(page)) return;
+  const before = listCalls;
+  await page.getByRole("button", { name: "새벽 점검 예고 작업 메뉴" }).click();
+  await page
+    .getByRole("group", { name: "새벽 점검 예고 작업 메뉴" })
+    .getByRole("button", { name: "노출 종료" })
+    .click();
+  await page
+    .getByRole("alert")
+    .getByRole("button", { name: "노출 종료" })
+    .click();
+  const alert = page
+    .getByRole("alert")
+    .filter({ hasText: "다른 운영자가 먼저 이 공지를 바꿨어요" });
+  await expect(alert).toBeVisible();
+  await alert.getByRole("button", { name: "새 내용 불러오기" }).click();
+  await expect.poll(() => listCalls).toBeGreaterThan(before);
 });
