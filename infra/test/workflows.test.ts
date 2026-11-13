@@ -174,14 +174,14 @@ describe("배포 워크플로 가드레일 (11장)", () => {
     expect(text).toMatch(/environment:\s*production/);
   });
 
-  it("정기 배포는 main push CI가 성공한 커밋만 올리고, DEPLOY_PAUSED로 멈출 수 있다 (BRD-133·GH-424)", () => {
+  it("사이트 배포는 main push CI가 성공한 커밋만 올리고 정기·수동 모두 정지할 수 있다 (BRD-133·GH-424)", () => {
     const lines = codeLines(deploy?.text ?? "");
     const text = lines.join("\n");
     for (const job of ["site", "admin"]) {
       const condition = jobLines(deploy?.text ?? "", job).join("\n");
-      // 정기 실행만 멈춤 변수를 봄. 수동 실행은 멈춤 중에도 올릴 수 있음(인프라 배포 뒤 바로 올릴 때)
+      // 정지 조건은 정기·수동 이벤트 둘 모두에 적용함(D27-6)
       expect(condition, job).toMatch(
-        /github\.event_name == 'workflow_dispatch' \|\| \(\s*github\.event_name == 'schedule' &&\s*vars\.DEPLOY_PAUSED != 'true'\s*\)/,
+        /vars\.DEPLOY_PAUSED != 'true' &&\s*\(github\.event_name == 'workflow_dispatch' \|\| github\.event_name == 'schedule'\)/,
       );
     }
     expect(text).toMatch(/HEAD_SHA:\s*\$\{\{\s*github\.sha\s*\}\}/);
@@ -207,6 +207,24 @@ describe("배포 워크플로 가드레일 (11장)", () => {
     expect(jobLines(deploy?.text ?? "", "site").join("\n")).toMatch(
       /^\s{4}concurrency:\s*\n\s{6}group:\s*deploy-production/m,
     );
+  });
+
+  it("정지 중 수동 배포는 사이트 작업 대신 권한 없는 안내 작업이 실패 사유를 남긴다", () => {
+    const workflow = deploy?.text ?? "";
+    const paused = jobLines(workflow, "site-deploy-paused").join("\n");
+    expect(jobIf(workflow, "site-deploy-paused")).toBe(
+      "github.event_name == 'workflow_dispatch' && vars.DEPLOY_PAUSED == 'true'",
+    );
+    expect(paused).toContain("permissions: {}");
+    expect(paused).not.toMatch(/concurrency:|environment:|id-token:/);
+    expect(paused).toContain("배포 일시 정지 중이라 실행하지 않음");
+    expect(paused).toContain("$GITHUB_STEP_SUMMARY");
+    expect(paused).toContain("exit 1");
+    for (const job of ["site", "admin"]) {
+      expect(jobLines(workflow, job).join("\n")).toContain(
+        "cancel-in-progress: false",
+      );
+    }
   });
 
   // 결정 기록 D20-6·7: 웹은 지금 판단 정책만 읽음 → 운영 게시본 정책을 새 빌드가 읽지 못하면 올리지 않음(publisher 먼저)
