@@ -7,6 +7,11 @@ import {
   sharePercent,
   sumMetric,
   validStats,
+  statsShape,
+  missingItems,
+  topicParticle,
+  changePercent,
+  SHAPE_NONE,
 } from "./stats";
 
 describe("이용 통계 계산 도우미 (#333)", () => {
@@ -107,5 +112,93 @@ describe("이용 통계 계산 도우미 (#333)", () => {
       validStats({ ...good, period: { ...good.period, metadata: {} } }),
     ).toBe(false);
     expect(validStats({ ...good, range: "90d" })).toBe(false);
+  });
+
+  it("없을 수 있는 칸: 없으면 통과, null은 통과, 모양이 틀리면 실패", () => {
+    const good = localStatsView("28d", Date.parse("2026-11-13T05:00:00Z"));
+    const withPeriod = (extra: Record<string, unknown>) =>
+      validStats({ ...good, period: { ...good.period, ...extra } });
+    expect(
+      withPeriod({
+        daily: [{ date: "2026-11-13", activeUsers: 3, pageViews: null }],
+        hourly: [{ hour: 0, activeUsers: 1 }],
+        newUsers: 12,
+        previous: { activeUsers: 10, pageViews: null },
+        topScreens: [{ path: "/", title: null, pageViews: 4 }],
+        referrers: [{ channel: "Direct", sessions: 9 }],
+      }),
+    ).toBe(true);
+    expect(withPeriod({ daily: null, topScreens: null, previous: null })).toBe(
+      true,
+    );
+    expect(
+      withPeriod({ daily: [{ date: "11/13", activeUsers: 1, pageViews: 1 }] }),
+    ).toBe(false);
+    expect(withPeriod({ hourly: [{ hour: 24, activeUsers: 1 }] })).toBe(false);
+    expect(withPeriod({ newUsers: "12" })).toBe(false);
+    expect(
+      withPeriod({ topScreens: [{ path: "/", title: 3, pageViews: 1 }] }),
+    ).toBe(false);
+    expect(
+      withPeriod({ referrers: [{ channel: "Direct", sessions: "9" }] }),
+    ).toBe(false);
+  });
+});
+
+describe("응답 칸 유무와 '아직 보여 드릴 수 없어요' 줄", () => {
+  const good = localStatsView("28d", Date.parse("2026-11-13T05:00:00Z"));
+
+  it("지금 서버 응답은 새 칸이 모두 없음 → 네 항목 모두 줄에", () => {
+    expect(statsShape(good.period)).toEqual(SHAPE_NONE);
+    expect(statsShape(null)).toEqual(SHAPE_NONE);
+    expect(missingItems(SHAPE_NONE)).toEqual([
+      "dailyHourly",
+      "previous",
+      "topScreens",
+      "referrers",
+    ]);
+  });
+
+  it("칸이 생기면(null 포함) 줄에서 빠지고, 일별·시간대별은 하나만 있으면 없는 쪽만", () => {
+    const shape = statsShape({
+      ...good.period,
+      daily: null,
+      referrers: [],
+    });
+    expect(shape.daily).toBe(true);
+    expect(shape.referrers).toBe(true);
+    expect(missingItems(shape)).toEqual(["hourly", "previous", "topScreens"]);
+    expect(missingItems({ ...SHAPE_NONE, hourly: true })).toEqual([
+      "daily",
+      "previous",
+      "topScreens",
+      "referrers",
+    ]);
+    expect(
+      missingItems({
+        daily: true,
+        hourly: true,
+        newUsers: true,
+        previous: true,
+        topScreens: true,
+        referrers: true,
+      }),
+    ).toEqual([]);
+  });
+
+  it("주제 조사: 받침 있으면 '은', 없으면 '는'", () => {
+    expect(topicParticle("들어온 경로")).toBe("는");
+    expect(topicParticle("많이 본 화면")).toBe("은");
+    expect(topicParticle("앞 기간 비교")).toBe("는");
+    expect(topicParticle("abc")).toBe("는");
+  });
+
+  it("앞 기간 대비 변화: 두 값이 있고 앞 기간이 0보다 클 때만", () => {
+    expect(changePercent(118, 100)).toBe(18);
+    expect(changePercent(4910, 4147)).toBe(18.4);
+    expect(changePercent(90, 100)).toBe(-10);
+    expect(changePercent(null, 100)).toBeNull();
+    expect(changePercent(10, null)).toBeNull();
+    expect(changePercent(10, 0)).toBeNull();
   });
 });

@@ -80,31 +80,6 @@ const notice = (id: string, state: string, pendingEdit = false) => ({
   hidden: false,
 });
 
-const AUDIT_ITEM = {
-  at: "2026-11-11T02:30:00Z", // KST 11/11 11:30
-  actorSub: "sub-1",
-  actorKind: "operator",
-  role: "editor",
-  action: "notice.create",
-  target: { kind: "notice", id: "n1" },
-  targetLabel: "정기 점검 안내",
-  changes: [],
-  requestId: "req-00000001",
-};
-
-// 데모 계정의 조회 기록: 변경이 아니라 최근 변경에 나오지 않아야 함
-const SAMPLE_READ = {
-  ...AUDIT_ITEM,
-  at: "2026-11-11T02:40:00Z",
-  actorSub: "sub-demo",
-  actorKind: "sample",
-  role: "sample",
-  action: "sample.read",
-  target: { kind: "collection", id: "collection" },
-  targetLabel: undefined,
-  requestId: "req-00000002",
-};
-
 type Reply = { status: number; body: unknown };
 const ok = (body: unknown): Reply => ({ status: 200, body });
 const fail: Reply = {
@@ -119,7 +94,6 @@ async function mockHome(
     published?: Reply;
     inquiries?: Reply;
     notices?: Reply;
-    audit?: Reply;
     stats?: Reply;
   } = {},
 ) {
@@ -138,11 +112,6 @@ async function mockHome(
     [
       /\/ops\/notices$/,
       replies.notices ?? ok({ items: [notice("n1", "live")] }),
-    ],
-    [
-      /\/ops\/audit(\?.*)?$/,
-      replies.audit ??
-        ok({ filter: {}, items: [SAMPLE_READ, AUDIT_ITEM], nextCursor: null }),
     ],
     [
       /\/ops\/stats(\?.*)?$/,
@@ -182,6 +151,17 @@ async function signIn(
 const block = (page: Page, name: string) =>
   page.getByRole("region", { name, exact: true });
 
+// 판단 출처 한 줄: 모바일·태블릿만 보임. PC는 왼쪽 메뉴 상태 칸이 같은 내용이라 숨김(GH-453)
+async function expectSourcesLine(page: Page, text: string) {
+  const line = page.getByText(text, { exact: true });
+  if (isDesktop(page)) {
+    await expect(line).toBeAttached();
+    await expect(line).toBeHidden();
+  } else {
+    await expect(line).toBeVisible();
+  }
+}
+
 // PC 왼쪽 메뉴 아래 상태 칸(GH-450, 시안 V1·V6). 홈과 같은 수집 현황 응답으로 판단 출처를 봄
 const sideStatus = (page: Page) =>
   page.getByRole("group", { name: "운영 상태" });
@@ -194,28 +174,27 @@ test("수집 현황은 홈이 한 번 읽고, PC가 아니면 숨은 왼쪽 상�
     if (/\/ops\/collection(\?|$)/.test(req.url())) calls.push(req.url());
   });
   await signIn(page);
-  await expect(
-    page.getByText("판단에 쓰는 출처가 모두 정상이에요"),
-  ).toBeVisible();
+  await expectSourcesLine(page, "판단에 쓰는 출처가 모두 정상이에요");
   await page.waitForTimeout(500);
   // PC는 상태 칸이 보여 한 번 더 읽음(홈 화면 요청과 따로)
   expect(calls).toHaveLength(isDesktop(page) ? 2 : 1);
 });
 
-test("모두 정상: 판단 출처 정상 한 줄, 세 칸·판단불가 표·이용, 할 일 없음, 최근 변경", async ({
+test("모두 정상: 판단 출처 정상 한 줄(모바일만), 세 칸·판단불가 표·이용, 할 일 없음", async ({
   page,
 }) => {
   await signIn(page);
 
-  await expect(
-    page.getByText("판단에 쓰는 출처가 모두 정상이에요"),
-  ).toBeVisible();
-  await expect(page.getByText("기상청 해상 특보 정상")).toBeVisible();
-  await expect(page.getByText("기상청 해양 관측 정상")).toBeVisible();
+  await expectSourcesLine(page, "판단에 쓰는 출처가 모두 정상이에요");
+  await expectSourcesLine(page, "기상청 해상 특보 정상");
+  await expectSourcesLine(page, "기상청 해양 관측 정상");
   if (isDesktop(page)) {
     await expect(sideStatus(page).getByText("판단 출처 정상")).toBeVisible();
     await expect(sideStatus(page).getByText(/^앱 게시본 \d/)).toBeVisible();
   }
+  // 지운 칸: 로그인 계정 줄·최근 변경(GH-453 검토)
+  await expect(page.getByText(/로 로그인했어요/)).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "최근 변경" })).toHaveCount(0);
   // 머리: 기준 시각 + 세션 안내(D17-11 문구)
   await expect(page.getByText(/기준 · 화면이 보이는 동안 1분마다/)).toBeVisible();
   await expect(
@@ -273,16 +252,6 @@ test("모두 정상: 판단 출처 정상 한 줄, 세 칸·판단불가 표·�
   await expect(prs).toHaveAttribute("target", "_blank");
   await expect(prs).toHaveAttribute("href", /\/baradun_v2\/pulls$/);
 
-  const recent = page.getByRole("region", { name: "최근 변경" });
-  await expect(recent.getByText("정기 점검 안내")).toBeVisible();
-  await expect(recent.getByText("11/11 11:30")).toBeVisible();
-  // 변경 이력 화면과 같은 종류·요약 표시, 조회 기록은 뺌
-  await expect(
-    recent.getByRole("link", { name: "정기 점검 안내" }),
-  ).toHaveAttribute("href", "/notices/?id=n1");
-  await expect(recent.getByText("새 공지")).toBeVisible();
-  await expect(recent.getByRole("listitem")).toHaveCount(1);
-  await expect(recent.getByText(/sample\.read|조회/)).toHaveCount(0);
   await expectNoA11yViolations(page);
 });
 
@@ -355,19 +324,23 @@ test("판단 출처 문제·새 문의·수정 대기 공지가 있으면 문제
     }),
   });
 
-  const alert = page.getByRole("alert").filter({
-    hasText: "판단에 쓰는 출처에 문제가 있어요",
-  });
-  await expect(alert).toBeVisible();
-  await expect(alert.getByText("기상청 해상 특보 지연")).toBeVisible();
-  await expect(alert.getByText("기상청 해양 관측 일부 실패")).toBeVisible();
-  if (isDesktop(page))
+  if (isDesktop(page)) {
+    // PC: 문제 줄은 숨기고 왼쪽 메뉴 상태 칸이 알림
+    await expectSourcesLine(page, "판단에 쓰는 출처에 문제가 있어요");
     await expect(
       sideStatus(page).getByText("판단 출처 문제 2", { exact: true }),
     ).toBeVisible();
-  await expect(
-    alert.getByRole("link", { name: "수집 현황 보기" }),
-  ).toHaveAttribute("href", "/collection/");
+  } else {
+    const alert = page.getByRole("alert").filter({
+      hasText: "판단에 쓰는 출처에 문제가 있어요",
+    });
+    await expect(alert).toBeVisible();
+    await expect(alert.getByText("기상청 해상 특보 지연")).toBeVisible();
+    await expect(alert.getByText("기상청 해양 관측 일부 실패")).toBeVisible();
+    await expect(
+      alert.getByRole("link", { name: "수집 현황 보기" }),
+    ).toHaveAttribute("href", "/collection/");
+  }
   await expect(
     block(page, "수집").getByText(/^문제 \d/),
   ).toBeVisible();
@@ -411,23 +384,21 @@ test("불러오지 못한 값은 0·정상·'할 일 없음'으로 바꾸지 않
     inquiries: fail,
     notices: fail,
     stats: fail,
-    audit: {
-      status: 403,
-      body: { error: { code: "forbidden", requestId: "req-2" } },
-    },
   });
 
-  const sources = page.getByRole("alert").filter({
-    hasText: "판단에 쓰는 출처 상태를 불러오지 못했어요",
-  });
-  await expect(sources).toBeVisible();
-  await expect(sources.getByText("오류 번호 req-7f3a2c91")).toBeVisible();
   if (isDesktop(page)) {
+    await expectSourcesLine(page, "판단에 쓰는 출처 상태를 불러오지 못했어요");
     await expect(sideStatus(page).getByText("상태 확인 못 함")).toBeVisible();
     await expect(
       sideStatus(page).getByText("앱 게시본 확인 못 함"),
     ).toBeVisible();
     await expect(sideStatus(page).getByText("판단 출처 정상")).toHaveCount(0);
+  } else {
+    const sources = page.getByRole("alert").filter({
+      hasText: "판단에 쓰는 출처 상태를 불러오지 못했어요",
+    });
+    await expect(sources).toBeVisible();
+    await expect(sources.getByText("오류 번호 req-7f3a2c91")).toBeVisible();
   }
   await expect(
     page.getByText("판단에 쓰는 출처가 모두 정상이에요"),
@@ -457,12 +428,6 @@ test("불러오지 못한 값은 0·정상·'할 일 없음'으로 바꾸지 않
     ),
   ).toBeVisible();
   await expect(page.getByText("지금 할 일이 없어요")).toHaveCount(0);
-  await expect(
-    page.getByText("이 계정으로는 변경 이력을 볼 수 없어요"),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("link", { name: "변경 이력 전체 보기" }),
-  ).toHaveCount(0);
   await expectNoA11yViolations(page);
 
   // 문의 칸의 다시 시도: 그 칸만 다시 읽어 값으로 바뀜
@@ -494,17 +459,14 @@ test("한 칸의 응답이 오지 않아도 판단 출처 줄과 다른 칸은 �
   );
   await mockOps(page, ME_OK);
   await mockHome(page);
-  // 변경 이력 응답이 오지 않음(시간 초과 전). 나중에 건 route가 먼저 받음
-  await page.route(/\/ops\/audit(\?.*)?$/, () => new Promise<void>(() => {}));
+  // 이용 통계 응답이 오지 않음(시간 초과 전). 나중에 건 route가 먼저 받음
+  await page.route(/\/ops\/stats(\?.*)?$/, () => new Promise<void>(() => {}));
   await signInWithPassword(page, "/login/", OPS);
-  await expect(
-    page.getByText("판단에 쓰는 출처가 모두 정상이에요"),
-  ).toBeVisible();
+  await expectSourcesLine(page, "판단에 쓰는 출처가 모두 정상이에요");
   await expect(page.getByText("지금 할 일이 없어요")).toBeVisible();
-  // 최근 변경 칸만 한 쪽 행 수(5)만큼 자리표시(GH-462). 화면 읽기에는 '운영 홈 불러오는 중' 한 번
-  await expect(
-    page.locator('section[aria-labelledby="home-recent"] .sk'),
-  ).toHaveCount(5);
+  // 이용 칸만 값 자리 자리표시(GH-462), 다른 칸은 값. 화면 읽기에는 '운영 홈 불러오는 중' 한 번
+  await expect(block(page, "이용").locator(".sk").first()).toBeVisible();
+  await expect(block(page, "문의").locator(".sk")).toHaveCount(0);
   await expect(
     page.getByRole("status").filter({ hasText: "운영 홈 불러오는 중" }),
   ).toHaveCount(1);
@@ -513,7 +475,7 @@ test("한 칸의 응답이 오지 않아도 판단 출처 줄과 다른 칸은 �
 // ---- 로딩 (GH-462, 캔버스 로딩 보드 L0·LS·LP) ----
 
 const HOME_PART_URLS =
-  /\/ops\/(collection|beaches\/published|inquiries(\?.*)?|notices|audit(\?.*)?|stats(\?.*)?)$/;
+  /\/ops\/(collection|beaches\/published|inquiries(\?.*)?|notices|stats(\?.*)?)$/;
 
 // 운영 홈 칸 응답을 gate가 풀릴 때까지 붙잡음(풀리면 앞서 건 가짜 응답으로 넘김)
 async function holdHome(page: Page, gate: Promise<void>) {
@@ -534,9 +496,7 @@ test("다시 읽기가 실패하면 판단 출처 줄은 불러오지 못함으�
   await mockOps(page, ME_OK);
   await mockHome(page);
   await signInWithPassword(page, "/login/", OPS);
-  await expect(
-    page.getByText("판단에 쓰는 출처가 모두 정상이에요"),
-  ).toBeVisible();
+  await expectSourcesLine(page, "판단에 쓰는 출처가 모두 정상이에요");
   await expect(page.getByText(/기준 · 화면이 보이는 동안/)).toBeVisible();
 
   // 1분 뒤 다시 읽기: 수집 현황(판단 출처)과 문의가 늦게 실패
@@ -553,9 +513,7 @@ test("다시 읽기가 실패하면 판단 출처 줄은 불러오지 못함으�
   await page.clock.fastForward(61_000);
   await expect(page.getByText("다시 읽는 중")).toBeVisible();
   // 다시 읽는 동안 값은 그대로(자리표시로 바꾸지 않음)
-  await expect(
-    page.getByText("판단에 쓰는 출처가 모두 정상이에요"),
-  ).toBeVisible();
+  await expectSourcesLine(page, "판단에 쓰는 출처가 모두 정상이에요");
   release();
   await expect(
     page
@@ -564,9 +522,7 @@ test("다시 읽기가 실패하면 판단 출처 줄은 불러오지 못함으�
   ).toBeVisible();
   await expect(page.getByText("다시 읽는 중")).toHaveCount(0);
   // 판단 출처는 앞의 '정상'을 두지 않음(조회 실패를 정상으로 보이지 않게)
-  await expect(
-    page.getByText("판단에 쓰는 출처 상태를 불러오지 못했어요"),
-  ).toBeVisible();
+  await expectSourcesLine(page, "판단에 쓰는 출처 상태를 불러오지 못했어요");
   await expect(
     page.getByText("판단에 쓰는 출처가 모두 정상이에요"),
   ).toHaveCount(0);
@@ -634,17 +590,14 @@ test("운영 홈으로 이동하면 제목·칸 이름·목록 틀이 먼저 보
     "판단불가 해변",
     "할 일",
     "이용",
-    "최근 변경",
   ]) {
     await expect(page.getByRole("heading", { name, level: 2 })).toBeVisible();
   }
   const body = page.locator("#main main");
   await expect(body).toHaveAttribute("aria-busy", "true");
-  // 150ms 뒤 자리표시가 보임(값 자리: 판단 출처 줄·카드 값·할 일·최근 변경 5행·기준 시각)
+  // 150ms 뒤 자리표시가 보임(값 자리: 판단 출처 줄(모바일)·카드 값·판단불가 표·할 일·이용·기준 시각)
   await expect(body.locator(".sk").first()).toBeVisible();
-  await expect(
-    page.locator('section[aria-labelledby="home-recent"] .sk'),
-  ).toHaveCount(5);
+  await expect(block(page, "이용").locator(".sk").first()).toBeVisible();
   await expect(body.locator(".sk-wait")).toHaveCount(0);
 });
 
@@ -658,16 +611,12 @@ test("로딩이 끝나 값으로 바뀌어도 포커스를 옮기지 않는다",
   let release!: () => void;
   await holdHome(page, new Promise<void>((resolve) => (release = resolve)));
   await signInWithPassword(page, "/login/", OPS);
-  await expect(
-    page.locator('section[aria-labelledby="home-recent"] .sk'),
-  ).toHaveCount(5);
+  await expect(block(page, "이용").locator(".sk").first()).toBeVisible();
   const link = page.getByRole("link", { name: /해변 정보 변경 PR 보기/ });
   await link.focus();
   await expect(link).toBeFocused();
   release();
-  await expect(
-    page.getByText("판단에 쓰는 출처가 모두 정상이에요"),
-  ).toBeVisible();
+  await expectSourcesLine(page, "판단에 쓰는 출처가 모두 정상이에요");
   await expect(page.getByText(/기준 · 화면이 보이는 동안/)).toBeVisible();
   await expect(link).toBeFocused();
 });
@@ -686,9 +635,7 @@ test("로그아웃하면 로그인 화면으로 가는 동안에도 받아 둔 �
   await mockOps(page, ME_OK);
   await mockHome(page);
   await signInWithPassword(page, "/login/", OPS);
-  await expect(
-    page.getByText("판단에 쓰는 출처가 모두 정상이에요"),
-  ).toBeVisible();
+  await expectSourcesLine(page, "판단에 쓰는 출처가 모두 정상이에요");
   // 공통 틀이 로그아웃 상태로 그려진 순간(사용자 칸 자리표시)에 운영 데이터가 함께 남아 있으면 기록
   await page.evaluate(() => {
     const w = window as unknown as { leaked: string[] };
@@ -698,7 +645,7 @@ test("로그아웃하면 로그인 화면으로 가는 동안에도 받아 둔 �
       const text = document.querySelector("#main")?.textContent ?? "";
       for (const value of [
         "판단에 쓰는 출처가 모두 정상이에요",
-        "정기 점검 안내",
+        "경포해수욕장",
       ]) {
         if (text.includes(value)) w.leaked.push(value);
       }

@@ -3,6 +3,7 @@ import {
   ME_OK,
   expect,
   expectNoA11yViolations,
+  isDesktop,
   logout,
   mockCognito,
   mockOps,
@@ -139,9 +140,12 @@ test.describe("운영자 로그인", () => {
     await code.fill("123456");
     await page.getByRole("button", { name: "다시 확인" }).click();
     await expect(page.getByRole("heading", { name: "운영 홈" })).toBeVisible();
-    await expect(
-      page.getByText(`${OPS}로 로그인했어요 · 노출 변경 권한`),
-    ).toBeVisible();
+    // 로그인 계정·권한은 공통 틀(PC 왼쪽 메뉴)에서 확인. 운영 홈의 계정 줄은 지움(GH-453)
+    if (isDesktop(page)) {
+      const side = page.locator("aside");
+      await expect(side.getByText(OPS)).toBeVisible();
+      await expect(side.getByText(/운영 · 노출 변경/)).toBeVisible();
+    }
     // 운영 홈 본문(가짜 응답이 없는 운영 API는 '확인 못 함'으로 보임)
     await expect(page.getByRole("heading", { name: "할 일" })).toBeVisible();
     await expectNoA11yViolations(page);
