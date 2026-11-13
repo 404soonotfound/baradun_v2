@@ -691,7 +691,9 @@ export function AdminShell({
           <RailTip tip={railOpen ? null : rail.tip} />
         </aside>
 
-        <div className="flex min-w-0 flex-1 flex-col">
+        {/* 본문 바탕은 시안처럼 면 색(흰색, 다크는 면 색). 화면 제목(h1)은 시안 20px/600 · 줄 높이 1.4 · 자간 -0.01em
+            크기·굵기는 화면의 text-title-l·font-semibold, 줄 높이·자간은 맞는 토큰이 없어 여기서 한 번에 맞춤 */}
+        <div className="flex min-w-0 flex-1 flex-col bg-bg-surface">
           {/* 모바일 앱 바 */}
           <header className="sticky top-0 z-10 flex h-topbar items-center gap-1 border-b border-border-default bg-bg-surface px-2 md:hidden">
             <button
@@ -717,7 +719,11 @@ export function AdminShell({
               <UserRound aria-hidden="true" className="size-5" />
             </Link>
           </header>
-          <main id="main" tabIndex={-1} className="flex-1 outline-none">
+          <main
+            id="main"
+            tabIndex={-1}
+            className="flex-1 outline-none [&_h1]:leading-[1.4] [&_h1]:tracking-[-0.01em]"
+          >
             <SessionNotices />
             {children}
           </main>
