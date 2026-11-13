@@ -243,6 +243,10 @@ test("모두 정상: 판단 출처 정상 한 줄(모바일만), 세 칸·판단
   // 이용: GA 28일 합계·지금 사용 중. 응답에 일별 칸이 없으면 그래프 대신 한 줄
   const usage = block(page, "이용");
   await expect(usage.getByText("지금 사용 중 14명 · 최근 30분")).toBeVisible();
+  // 이용 칸 자기 기준 시각(GA 집계 받은 시각, 머리의 1분 주기와 따로 5분마다)
+  await expect(
+    usage.getByText("12:00 기준 · 5분마다 다시 읽어요", { exact: true }),
+  ).toBeVisible();
   await expect(usage.getByText("3,960", { exact: true })).toBeVisible();
   await expect(usage.getByText("9,240", { exact: true })).toBeVisible();
   await expect(
