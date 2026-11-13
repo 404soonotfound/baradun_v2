@@ -490,13 +490,14 @@ async function mockData(
   initial: Scenario,
 ): Promise<DataControl> {
   let scenario = initial;
+  let generation = 0;
   const requests: string[] = [];
   let weather: WeatherMode = "ok";
   // 주소 맨 앞이 /data/인 것만(화면 주소 /about/data/는 제외)
   await context.route(
     (url) => url.pathname.startsWith("/data/"),
     async (route) => {
-      const now = Date.now();
+      const now = Date.now() + generation * 1000;
       const pathname = new URL(route.request().url()).pathname;
       requests.push(pathname);
       if (scenario === "loading") return; // 응답하지 않음 → 로딩 유지
@@ -547,7 +548,10 @@ async function mockData(
     },
   );
   return {
-    set: (next) => (scenario = next),
+    set: (next) => {
+      scenario = next;
+      generation += 1;
+    },
     setWeather: (mode) => (weather = mode),
     requests,
   };
