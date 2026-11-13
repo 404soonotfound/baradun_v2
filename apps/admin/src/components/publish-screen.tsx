@@ -903,13 +903,17 @@ function PreviewDrawer({
   );
 }
 
+function historyRowKey(item: HistoryItem): string {
+  return `${item.result}:${item.version}`;
+}
+
 function HistoryList({
   items,
   page,
   onPage,
   currentVersion,
   rollbackBlocked,
-  selectedVersion,
+  selectedKey,
   onSelect,
   onRollback,
 }: {
@@ -918,8 +922,8 @@ function HistoryList({
   onPage: (page: number) => void;
   currentVersion: string | null;
   rollbackBlocked: string | null;
-  selectedVersion: string | null;
-  onSelect: (version: string | null) => void;
+  selectedKey: string | null;
+  onSelect: (key: string | null) => void;
   onRollback: (version: string, triggerEl: HTMLButtonElement | null) => void;
 }) {
   if (items.length === 0) {
@@ -946,12 +950,13 @@ function HistoryList({
       );
     }
     if (item.result !== "published") {
-      const selected = selectedVersion === item.version;
+      const rowKey = historyRowKey(item);
+      const selected = selectedKey === rowKey;
       return (
         <button
           type="button"
           aria-expanded={selected}
-          onClick={() => onSelect(selected ? null : item.version)}
+          onClick={() => onSelect(selected ? null : rowKey)}
           className="inline-flex min-h-touch items-center text-body-s font-medium text-brand-default underline-offset-2 hover:underline lg:min-h-0"
         >
           {selected ? t.hideReason : t.inspectReason}
@@ -988,11 +993,12 @@ function HistoryList({
           }
         >
           {paged.map((item) => {
+            const rowKey = historyRowKey(item);
             const selected =
-              item.result !== "published" && selectedVersion === item.version;
+              item.result !== "published" && selectedKey === rowKey;
             return (
               <tr
-                key={`${item.result}-${item.version}`}
+                key={rowKey}
                 className={`${TR} ${selected ? "bg-brand-weak" : ""}`}
               >
                 <td
@@ -1063,11 +1069,12 @@ function HistoryList({
       </div>
       <ul className="flex flex-col divide-y divide-border-default rounded-admin-box border border-border-default bg-bg-surface md:hidden">
         {paged.map((item) => {
+          const rowKey = historyRowKey(item);
           const selected =
-            item.result !== "published" && selectedVersion === item.version;
+            item.result !== "published" && selectedKey === rowKey;
           return (
             <li
-              key={`${item.result}-${item.version}`}
+              key={rowKey}
               className={`flex flex-col gap-1 px-3 py-2.5 text-body-s ${
                 selected ? "bg-brand-weak" : ""
               }`}
@@ -1570,13 +1577,14 @@ export function PublishScreen({
         ? next.warnings
         : next.observations,
     );
-    const activeSelectedVersion =
+    const firstFailed = historyItems.find((i) => i.result !== "published");
+    const activeSelectedKey =
       selectedVersion === undefined
-        ? (historyItems.find((i) => i.result !== "published")?.version ?? null)
+        ? (firstFailed ? historyRowKey(firstFailed) : null)
         : selectedVersion;
     const inspectedItem =
-      (activeSelectedVersion
-        ? historyItems.find((i) => i.version === activeSelectedVersion)
+      (activeSelectedKey
+        ? historyItems.find((i) => historyRowKey(i) === activeSelectedKey)
         : null) ??
       historyItems[0] ??
       null;
@@ -1742,7 +1750,7 @@ export function PublishScreen({
                 onPage={setHistoryPage}
                 currentVersion={currentVersion}
                 rollbackBlocked={locked}
-                selectedVersion={activeSelectedVersion}
+                selectedKey={activeSelectedKey}
                 onSelect={setSelectedVersion}
                 onRollback={openRollback}
               />
