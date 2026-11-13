@@ -10,7 +10,7 @@ npx cdk synth                               # CloudFormation 템플릿 생성 (i
 npx cdk diff --method=change-set            # 배포된 스택과 변경 세트 비교
 ```
 
-사이트 자동 배포(`.github/workflows/deploy.yml`, `npm run deploy:prod`)는 GitHub OIDC로 사이트 전용 역할(`DeployRole`)을 맡아 S3 파일 동기화와 CloudFront 캐시 무효화만 수행하며, CloudFormation이나 CDK 실행 정책을 거치지 않습니다. 자동 배포는 앱(사용자 사이트·운영자 사이트)마다 마지막으로 올린 커밋(운영 주소의 `deploy-version.txt`, 저장소 변수 `SITE_URL`·`ADMIN_SITE_URL`로 읽음) 뒤로 main push CI가 성공하고 그 실행에서 그 앱 빌드 작업(`e2e-build`·`admin-build`)까지 성공한 가장 새 커밋을 올립니다(`.github/scripts/deploy-plan.sh`). CI는 push 단위로 돌아 여러 커밋을 머지하면 맨 위 커밋에서만 실행되므로, 커밋별 변경이 아니라 실행 결과로 고릅니다. 그런 커밋이 없거나 올린 커밋과 앱 파일이 같으면 건너뛰므로, CI가 늦게 끝난 옛 커밋이 새 배포를 덮지 않고 CI가 실패한 커밋의 변경은 그 앱을 다시 검사한 뒤 커밋으로만 나갑니다(검사를 거치지 않은 앱 변경이 남으면 경고를 남김). 표시를 못 읽으면 경고를 남기고 최근 이력에서 고른 커밋을 올리며, `npm run deploy:prod`(수동 실행)는 두 앱을 모두 올립니다(BRD-178). 사이트 동기화는 `data/`(publisher 구역)와 `map/`(한국 지도 파일 구역, 결정 기록 D19-1)을 건드리지 않습니다. `map/<판>/`은 수동 워크플로 `map-tiles.yml`이 같은 배포 역할로 올립니다(`tools/map-tiles/README.md`). 저장소 변수(사이트 주소·버킷·로그인 풀 값 등 빌드 값)만 바꾼 경우는 파일 변경이 아니라 자동 배포가 건너뛰므로 `npm run deploy:prod`로 다시 올립니다. main push CI는 push마다 따로 돌고 취소하지 않으며, main 규칙은 최신 브랜치만 머지할 수 있게 합니다.
+사이트 배포(`.github/workflows/deploy.yml`)는 하루 한 번 정기 실행(매일 05:17 KST)과 수동 실행(`npm run deploy:prod`)에서만 돕니다(GH-424). main에 머지할 때마다 올리면 배포마다 파일을 전부 다시 올려 S3 쓰기 요청 요금이 쌓이기 때문입니다(2026-11-01~13 청구액 US$1.08 중 약 90%, 앱 배포 1회에 PutObject 약 1,850건). 머지한 변경을 바로 보려면 `npm run deploy:prod`를 씁니다. 배포는 GitHub OIDC로 사이트 전용 역할(`DeployRole`)을 맡아 S3 파일 동기화와 CloudFront 캐시 무효화만 수행하며, CloudFormation이나 CDK 실행 정책을 거치지 않습니다. 정기 배포는 앱(사용자 사이트·운영자 사이트)마다 마지막으로 올린 커밋(운영 주소의 `deploy-version.txt`, 저장소 변수 `SITE_URL`·`ADMIN_SITE_URL`로 읽음) 뒤로 main push CI가 성공하고 그 실행에서 그 앱 빌드 작업(`e2e-build`·`admin-build`)까지 성공한 가장 새 커밋을 올립니다(`.github/scripts/deploy-plan.sh`). CI는 push 단위로 돌아 여러 커밋을 머지하면 맨 위 커밋에서만 실행되므로, 커밋별 변경이 아니라 실행 결과로 고릅니다. 그런 커밋이 없거나 올린 커밋과 앱 파일이 같으면 건너뛰므로(이때는 S3에 쓰지 않음), CI가 늦게 끝난 옛 커밋이 새 배포를 덮지 않고 CI가 실패한 커밋의 변경은 그 앱을 다시 검사한 뒤 커밋으로만 나갑니다(검사를 거치지 않은 앱 변경이 남으면 경고를 남김). 표시를 못 읽으면 경고를 남기고 최근 이력에서 고른 커밋을 올리며, `npm run deploy:prod`(수동 실행)는 두 앱을 모두 올립니다(BRD-178). 사이트 동기화는 `data/`(publisher 구역)와 `map/`(한국 지도 파일 구역, 결정 기록 D19-1)을 건드리지 않습니다. `map/<판>/`은 수동 워크플로 `map-tiles.yml`이 같은 배포 역할로 올립니다(`tools/map-tiles/README.md`). 저장소 변수(사이트 주소·버킷·로그인 풀 값 등 빌드 값)만 바꾼 경우는 파일 변경이 아니라 정기 배포가 건너뛰므로 `npm run deploy:prod`로 다시 올립니다. main push CI는 push마다 따로 돌고 취소하지 않으며, main 규칙은 최신 브랜치만 머지할 수 있게 합니다.
 
 인프라 스택은 main 머지 뒤 CI가 자동으로 배포합니다(아래 'main 머지 뒤 자동 배포'). 첫 설정·boundary 반영·비상 배포처럼 손으로 할 때는 최신 `origin/main`을 꺼낸 배포용 작업 트리에서 합니다. 작업 중인 브랜치에서 배포하면 머지되지 않은 코드가 실환경에 올라갑니다. 아래 명령 하나가 그 순서를 모두 합니다(BRD-169, `infra/scripts/deploy.mjs`).
 
@@ -105,7 +105,7 @@ GitHub 저장소 설정 → Environments에서 `infra`(배포 브랜치 `main`�
 
 ### 출시일 전환 순서
 
-1. **자동 배포 멈춤**: 저장소 변수 `DEPLOY_PAUSED=true`.
+1. **정기 배포 멈춤**: 저장소 변수 `DEPLOY_PAUSED=true`.
 2. **스택 배포**: 최신 `origin/main` 작업 트리에서 도메인·인증서 값을 넣어 배포합니다(맨 위 배포 절차).
 
    ```bash
@@ -434,11 +434,16 @@ BRD121_ACCOUNT_ID="<계정>"
 기준은 Notion 'V2 아키텍처 기준 문서' 0장 G3와 11장 '과금·보안 가드레일'입니다.
 
 - 월 $1 예산(Budgets, 이 스택의 `CostBudget`)은 이메일 알림이라 과금을 막지 않습니다. 비용 이상 탐지(Cost Anomaly Detection)는 이 스택 밖의 계정 설정이라 `cdk diff`로 보이지 않습니다.
-- 지금 계정은 AWS Free 플랜입니다. 사용량은 크레딧에서 빠지고, 크레딧이 떨어지거나 만료일(2027-04-16)이 되면 계정이 닫힙니다.
-- CloudFront 정액 요금제는 Free 플랜 계정에서 쓸 수 없어 연결하지 않았습니다. 그래서 `SiteWebAclArn`은 비어 있고 배포에 web ACL이 없습니다.
+- 지금 계정은 AWS Paid 플랜입니다(2026-11-13 전환, GH-424). 월 구독료는 없고 쓴 만큼 청구되며, 상시 무료 한도는 그대로 적용됩니다. Free 플랜 크레딧은 전환 때 소멸해 남은 크레딧이 없습니다.
+  - 전환 경위: IAM Identity Center(SSO)를 설정하며 AWS Organizations를 만들었고, Free 플랜 계정은 Organizations에 등록되면 Paid로 올라가며 Free Tier 크레딧을 쓸 수 없게 됩니다([AWS Free Tier Terms](https://aws.amazon.com/free/terms/)). 되돌릴 수 없습니다.
+  - 계정·결제·조직 설정(Organizations, Control Tower, 요금제 구독 등)을 바꾸기 전에 요금 플랜 영향을 공식 문서로 먼저 확인합니다.
+- 상시 무료 밖에서 청구되는 항목은 S3 요청·저장과 CloudWatch 경보 지표 초과분입니다(2026-11-13 청구 내역 확인).
+  - S3 쓰기 요청: 사이트 배포 1회에 앱마다 PutObject 약 1,850건(약 US$0.008). 그래서 배포는 하루 한 번과 수동 실행만 합니다(맨 위 설명). 게시 함수의 `data/` 쓰기는 하루 약 1,170건으로 월 약 US$0.20입니다.
+  - 경보: 참조 지표 12개 중 무료 범위 10개를 넘는 2개에 월 약 US$0.20이 듭니다(아래 '운영 경보'의 '경보 지표 한도').
+- CloudFront 정액 요금제는 아직 연결하지 않았습니다. 그래서 `SiteWebAclArn`은 비어 있고 배포에 web ACL이 없습니다.
 - 정액 요금제의 '초과 요금 없음'은 CloudFront를 거치는 트래픽에만 해당합니다. Lambda·DynamoDB·S3 요청은 따로 청구됩니다.
 
-계속 운영하려면 만료 전에 Paid로 전환하고 정액 Free를 연결합니다.
+출시 전에 정액 Free를 연결합니다. 구독 전에 확인할 것: [요금제 기능 표](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/flat-rate-pricing-plan.html)에서 직접 만든 응답 헤더 정책(Custom response header rules)은 Business 이상으로 나와 있습니다. 이 스택은 CSP용 응답 헤더 정책을 직접 만들어 쓰므로(`lib/site/security-headers.ts`, BRD-118), Free 등급에서 그대로 구독되는지와 안 될 때의 헤더 방식을 먼저 정해야 합니다(미검증, GH-424).
 
 1. 콘솔에서 CloudFront 배포를 정액 Free에 먼저 구독합니다. 요금제가 web ACL을 붙입니다.
 2. 붙은 web ACL ARN을 `npx cdk deploy --parameters SiteWebAclArn=<ARN>`으로 넘깁니다.
@@ -448,7 +453,7 @@ BRD121_ACCOUNT_ID="<계정>"
 
 문의 API는 기존 CloudFront 배포의 `/api/inquiries*` 동작에서 AWS_IAM 함수 URL로 전달합니다. 함수 URL은 공개 인증 `NONE`을 쓰지 않으며, CloudFront OAC가 오리진 요청을 SigV4로 서명합니다. CloudFront Function은 메서드·경로·JSON 형식·32KiB 크기·본문 해시 헤더를 먼저 검사하고 Lambda가 같은 항목과 실제 본문 SHA-256을 다시 검사합니다.
 
-현재 Free 플랜 계정에서는 정액 CloudFront 플랜의 포함 WAF를 쓸 수 없습니다. 따라서 WAF 없이 CloudFront Function 선행 거부, Lambda 재검증, IP를 저장하지 않는 전체 10건/분 제한, 메일 20건/일 제한을 적용합니다. Paid 전환 뒤 정액 플랜과 포함 WAF 사용을 다시 검토합니다.
+정액 CloudFront 플랜을 아직 구독하지 않아 포함 WAF가 없습니다(문의 접수를 만든 때는 Free 플랜 계정이라 구독할 수 없었음). 따라서 WAF 없이 CloudFront Function 선행 거부, Lambda 재검증, IP를 저장하지 않는 전체 10건/분 제한, 메일 20건/일 제한을 적용합니다. 정액 플랜을 구독할 때 포함 WAF 사용을 다시 검토합니다('비용 방어 범위').
 
 2026-10-26 서울 리전의 Service Quotas `Concurrent executions`(`L-B99A9384`)와 Lambda `GetAccountSettings`는 모두 10이었습니다. Lambda가 요구하는 미예약 100개를 남길 수 없어 문의 함수의 예약 동시 실행 2는 설정하지 않았습니다. 한도가 102 이상으로 올라간 뒤 다음 명령과 콘솔의 Lambda 동시 실행 화면을 함께 확인하고 설정합니다.
 
@@ -514,7 +519,7 @@ await fetch("/api/inquiries", {
 
 이 변경을 처음 배포할 때는 순서를 지킵니다. 새 Lambda는 멱등 키가 없는 요청을 400으로 거부하고, 이전 Lambda는 멱등 키가 있는 요청을 400으로 거부합니다.
 
-1. 머지 전에 GitHub Variables `DEPLOY_PAUSED`를 `true`로 둡니다. main CI가 끝나도 사이트가 자동 배포되지 않습니다(BRD-133).
+1. 머지 전에 GitHub Variables `DEPLOY_PAUSED`를 `true`로 둡니다. 정기 배포(하루 한 번)가 사이트를 올리지 않습니다(BRD-133).
 2. 최신 `origin/main` 작업 트리에서 `npx cdk deploy`(맨 위 배포 절차) → 출력 `InquiryPhotoBucketName`을 GitHub Variables `INQUIRY_PHOTO_BUCKET`에 넣습니다.
 3. `DEPLOY_PAUSED`를 지우고 루트에서 `npm run deploy:prod`로 사이트를 배포합니다. 2와 3 사이에 열려 있던 이전 화면의 문의는 거부되므로 바로 이어서 합니다.
 
@@ -632,16 +637,20 @@ node tools/republish/republish.mjs --function <PublisherFunctionName> --version 
 
 ## 운영 경보(BRD-62)
 
-`OpsAlarms`가 CloudWatch 경보 14개(수집기 4개·게시 함수의 오류, 특보·관측·이안류 수집과 게시의 실행 없음, 운영 알림 발송 실패, 운영자 로그인 반복 요청, 날씨 수집 계속 실패, 운영 API 오류 급증, 문의 이메일 기한 초과)를 만듭니다. 오류 경보는 한 번의 실패에도 울립니다. 실행 없음 경보는 최근 창(특보·게시 25분, 관측·이안류 60분) 동안 실행이 없으면 울려서, 특보 확인 유효시간 45분·파고 90분보다 각각 20분·30분 먼저 알리고 정상 실행의 지표가 10분 이상 늦게 들어와도 울리지 않습니다. ALARM 상태 변경은 EventBridge가 공통 변환 Lambda로 보내며, Lambda가 한국어 제목·설명·KST 시각·콘솔 링크를 만들어 기존 운영 SNS 주제의 `AlertEmail` 구독에 발송합니다. 복구(OK) 메일은 보내지 않습니다. 날씨 수집 경보(`WeatherFailing`, BRD-181)는 1시간 구간에 오류가 있거나 실행이 없는 구간이 3번 이어질 때만 울립니다. 매시 한 번 도는 수집기의 한 번 실패(아직 안 나온 발표 등)는 다음 실행이 메우기 때문이고, 경보 하나로 실패와 중단을 함께 잡습니다(경보 지표 1개 참조, 전체 경보 비용은 아래 '운영 API 오류 급증' 항목). 기상청이 일시 오류(`resultCode` 01·02·04·05·99, 실황 기온 없음)를 주면 수집기가 같은 실행 안에서 남은 시간 동안 한 번 더 받고(한 실행에 최대 20곳), 그래도 실패한 격자·구역은 `weather_target_failed` 로그에 남깁니다(BRD-186). 기상청이 실황 기온을 결측(-999 등)으로 주는 격자는 수집 실패로 치지 않고 `weather_now_missing` 로그와 시도 기록(`counts.now.missing`)에만 남깁니다. 2026-11-05 기준 삼척해수욕장 격자(98,126) 한 곳이 늘 결측이라 그 해변의 지금 기온은 '확인하지 못했어요'로 보입니다. 결측 격자가 10곳 이상이면 기상청 쪽 문제로 보고 실패로 남깁니다. 같은 곳이 계속 실패하면 매시간 일부 실패가 이어져 3시간 뒤 이 경보가 울립니다.
+`OpsAlarms`가 CloudWatch 경보 10개(특보·관측·이안류 수집의 성공 없음, 사진 확인 수집과 게시 함수의 오류, 게시의 실행 없음, 운영 알림 발송 실패, 날씨 수집 계속 실패, 운영 API 오류 급증, 문의 이메일 기한 초과)를 만듭니다. 경보가 참조하는 지표는 12개이고 `test/guardrails.test.ts`가 지표 수를 막습니다(GH-424, 아래 '경보 지표 한도'). 성공 없음 경보(`WarningsFailing`·`OceanFailing`·`RipFailing`)는 수집기의 예전 오류 경보와 실행 없음 경보를 함수마다 하나로 합친 것으로, 최근 창(특보 25분, 관측·이안류 45분) 동안 성공한 수집이 없으면 울립니다. 실패가 이어져도, 일정이 멈춰도 같은 경보가 울리며 어느 쪽인지는 CloudWatch 로그로 확인합니다. 특보 확인 유효시간 45분·파고 90분보다 각각 20분·45분 먼저 알리고, 정상 실행의 지표가 10분 이상 늦게 들어와도 울리지 않습니다. 한 번만 실패해도 울립니다(성공 사이가 실행 간격의 2배로 벌어져 창보다 길어짐). 다만 예전 오류 경보(5분 안)보다 늦어서, 실패한 실행 뒤 특보 약 10분·관측과 이안류 약 15분에 메일이 오고 다음 성공에 OK로 돌아갑니다. 게시는 합치지 않았습니다. 수집이 끝날 때마다 돌아 성공이 잦아서, 합치면 한 번의 게시 실패(되돌리기 실패 등)를 다른 게시의 성공이 가리기 때문입니다(D16-C2). 게시 오류 경보(`PublishErrors`)와 사진 확인 수집 오류 경보(`CatalogErrors`)는 한 번의 실패에 5분 안에 울리고, 게시 실행 없음 경보(`PublishStopped`)는 25분 동안 실행이 없으면 울립니다. ALARM 상태 변경은 EventBridge가 공통 변환 Lambda로 보내며, Lambda가 한국어 제목·설명·KST 시각·콘솔 링크를 만들어 기존 운영 SNS 주제의 `AlertEmail` 구독에 발송합니다. 복구(OK) 메일은 보내지 않습니다. 날씨 수집 경보(`WeatherFailing`, BRD-181)는 1시간 구간에 오류가 있거나 실행이 없는 구간이 3번 이어질 때만 울립니다. 매시 한 번 도는 수집기의 한 번 실패(아직 안 나온 발표 등)는 다음 실행이 메우기 때문이고, 경보 하나로 실패와 중단을 함께 잡습니다(경보 지표 1개 참조, 전체 경보 비용은 아래 '경보 지표 한도' 항목). 기상청이 일시 오류(`resultCode` 01·02·04·05·99, 실황 기온 없음)를 주면 수집기가 같은 실행 안에서 남은 시간 동안 한 번 더 받고(한 실행에 최대 20곳), 그래도 실패한 격자·구역은 `weather_target_failed` 로그에 남깁니다(BRD-186). 기상청이 실황 기온을 결측(-999 등)으로 주는 격자는 수집 실패로 치지 않고 `weather_now_missing` 로그와 시도 기록(`counts.now.missing`)에만 남깁니다. 2026-11-05 기준 삼척해수욕장 격자(98,126) 한 곳이 늘 결측이라 그 해변의 지금 기온은 '확인하지 못했어요'로 보입니다. 결측 격자가 10곳 이상이면 기상청 쪽 문제로 보고 실패로 남깁니다. 같은 곳이 계속 실패하면 매시간 일부 실패가 이어져 3시간 뒤 이 경보가 울립니다.
 
 - 변환 Lambda는 실패하면 1번 더 시도합니다. 그래도 실패하거나 EventBridge가 전달하지 못하면 이벤트를 실패 대기열(SQS, `OpsNotificationFailures`, 14일 보관)에 남기고 `NotificationFailed` 경보가 울립니다. 이 경보도 같은 Lambda로 알리므로 고장이 계속되면 메일이 오지 않습니다. 운영 주제는 AWS 관리형 키(`alias/aws/sns`)로 암호화해서 CloudWatch가 직접 게시할 수 없고, 고객 관리형 키는 월 요금이 들어서 쓰지 않습니다. 실패 대기열에 메시지가 남아 있으면 CloudWatch 경보 화면에서 원래 경보를 확인하고, 원인을 고친 뒤 메시지를 지워 경보를 OK로 돌립니다.
 
 - 경보를 처음 넣는 배포 전에 실행 정책(`BaradunCdkExecution`·`BaradunCdkExecutionWorkload`)을 최신 버전으로 올립니다(위 '정책 적용과 되돌리기 절차' 4단계 명령). 올리지 않으면 `cloudwatch:PutMetricAlarm`이 거부되어 배포가 롤백됩니다.
 - 운영 주제는 문의 알림 주제와 따로라서 첫 배포 뒤 구독 확인 메일이 한 통 더 옵니다. 확인하지 않으면 경보가 울려도 메일이 가지 않습니다.
-- 실행이 없는 구간을 실패로 보는 경보(실행 없음·`WeatherFailing`)를 새로 만들면, 만든 직후에는 지난 구간에 지표가 없어 바로 ALARM이 되고 메일이 한 통 갑니다. 첫 실행이 성공하면 OK로 돌아가므로 배포 직후의 이 메일은 장애가 아닙니다(2026-11-05 `WeatherFailing` 첫 배포 10:52 KST, BRD-186).
-- **로그인 반복 요청(`LoginAbuse`, 결정 기록 D17-4):** 5분 동안 운영자·데모 풀의 로그인 실패 합계가 10회 이상이거나, 계정 복구 API(비밀번호 찾기·확인·변경, 첫 로그인 새 비밀번호) 호출이 5회 이상이면 울립니다. 사용자 풀 값이 화면 파일·공개 저장소에 드러나 누구나 요청을 보낼 수 있어서 둔 감시 경보입니다. 차단은 하지 않고(Cognito 잠금·요청 제한이 막음) 알기만 합니다. 로그인이 없는 구간은 정상으로 봐서, 반복이 끝나면 OK로 돌아가고 다음 반복에 다시 알립니다. 풀 2개의 로그인 지표(시도·성공 각 2개)와 계정 복구 호출 1개 등 총 5개 경보 지표를 참조합니다(전체 경보 비용은 아래 '운영 API 오류 급증' 항목). 실제 공격이 보이면 사용자 풀에 WAF를 붙일지 다시 정합니다.
-  - 계정 복구 호출 수는 계정 단위 사용량 지표(`AWS/Usage` `CallCount`, `Service=Cognito User Pool`·`Type=API`·`Resource=UserAccountRecovery`·`Class=None`)입니다. 2026-11-04 실제 지표(`aws cloudwatch list-metrics --namespace AWS/Usage`)로 확인한 값입니다. 문서 표기(`Cognito user pool`)와 대소문자가 달라서, 문서대로 쓰면 경보가 이 값을 보지 못합니다.
-- **운영 API 오류 급증(`OpsApiErrors`, 결정 기록 D17-7):** 5분 동안 운영 API Lambda 함수 URL의 5xx 오류가 3회 이상이거나 권한 거부(401·403)가 10회 이상이면 울립니다. 호출량이 적은 출시 초기를 전제로 수식 경보 하나(`MAX([FILL(m5,0)/3, FILL(m4,0)/10]) ≥ 1`)로 묶었습니다. 호출이 없는 구간은 정상으로 봅니다. 5xx 지표(`Url5xxCount`)와 권한 거부 지표(운영 API가 401·403 응답에만 남기는 `ops_auth_denied` 로그를 CloudWatch Logs 지표 필터(정규식 `%\x22event\x22:\x22ops_auth_denied\x22%`로 `"event":"ops_auth_denied"` 필드만 맞춤. Lambda 로그 접두어 때문에 JSON 패턴을 쓰지 않고, 낱말만 찾으면 다른 줄의 경로 값까지 세므로 필드 모양으로 좁힘)로 센 `Baradun/Ops` `AuthDenied` 사용자 지표) 2개를 참조합니다. 스택의 첫 로그 지표 필터라서, 배포 전에 실행 정책 `BaradunCdkExecutionWorkload`를 최신 버전(`logs:PutMetricFilter`·`logs:DescribeMetricFilters`·`logs:DeleteMetricFilter` 추가)으로 올립니다(위 '정책 적용과 되돌리기 절차' 4단계 명령). `deploy:infra`는 실행 정책이 다르면 경고만 하므로, 올리지 않으면 지표 필터 만들기가 거부되어 배포가 롤백됩니다. 이 경보 추가로 경보 상한은 12 → 13(경보 리소스 수)이 됐습니다. **전체 경보 비용(현재 합계):** CloudWatch는 경보가 참조하는 지표 수로 요금을 매기며, 경보 13개가 지표 18개(오류 5 + 실행 없음 4 + 알림 실패 1 + 로그인 감시 5 + 날씨 1 + 운영 API 2)를 참조해 무료 범위(10개)를 넘는 8개에 월 약 $0.80이 듭니다(이 경보 몫 +2개 = +$0.20, us-east-1 기준 초과 지표당 월 $0.10, 서울 리전 단가 미확인).
+- 실행이 없는 구간을 실패로 보는 경보(성공 없음·`WeatherFailing`)를 새로 만들면, 만든 직후에는 지난 구간에 지표가 없어 바로 ALARM이 되고 메일이 한 통 갑니다. 첫 실행이 성공하면 OK로 돌아가므로 배포 직후의 이 메일은 장애가 아닙니다(2026-11-05 `WeatherFailing` 첫 배포 10:52 KST, BRD-186).
+- **뺀 경보 — 로그인 반복 요청(`LoginAbuse`, 결정 기록 D17-4, 지표 3개):** 유료 플랜 전환으로 초과 지표가 실제 청구돼 뺐습니다(GH-424, 월 약 $0.30 절감). 이 경보는 알리기만 했고 차단은 하지 않았으므로, 막는 동작은 그대로입니다.
+  - 비밀번호를 5번 틀리면 Cognito가 그 사용자를 1초 잠그고, 그 뒤 틀릴 때마다 잠금 시간을 두 배로 늘려 최대 약 15분까지 잠급니다([Cognito 잠금 동작](https://docs.aws.amazon.com/cognito/latest/developerguide/authentication-flow-things-to-know.html)). 운영자 풀은 인증 앱 MFA가 필수이고 가입은 닫혀 있습니다.
+  - 달라지는 점: 누군가 로그인·비밀번호 찾기를 반복해도 메일이 오지 않습니다. 운영 API까지 닿은 권한 없는 요청은 `OpsApiErrors`(401·403)가 계속 알립니다.
+  - 의심될 때 직접 볼 지표: `AWS/Cognito` `SignInSuccesses`(표본 수 − 합계 = 실패 수)와 `AWS/Usage` `CallCount`(`Service=Cognito User Pool`·`Type=API`·`Resource=UserAccountRecovery`·`Class=None`, 문서 표기와 대소문자가 다름). 실제 공격이 보이면 경보를 다시 넣거나 사용자 풀에 WAF를 붙일지 정합니다.
+- **운영 API 오류 급증(`OpsApiErrors`, 결정 기록 D17-7):** 5분 동안 운영 API Lambda 함수 URL의 5xx 오류가 3회 이상이거나 권한 거부(401·403)가 10회 이상이면 울립니다. 호출량이 적은 출시 초기를 전제로 수식 경보 하나(`MAX([FILL(m5,0)/3, FILL(m4,0)/10]) ≥ 1`)로 묶었습니다. 호출이 없는 구간은 정상으로 봅니다. 5xx 지표(`Url5xxCount`)와 권한 거부 지표(운영 API가 401·403 응답에만 남기는 `ops_auth_denied` 로그를 CloudWatch Logs 지표 필터(정규식 `%\x22event\x22:\x22ops_auth_denied\x22%`로 `"event":"ops_auth_denied"` 필드만 맞춤. Lambda 로그 접두어 때문에 JSON 패턴을 쓰지 않고, 낱말만 찾으면 다른 줄의 경로 값까지 세므로 필드 모양으로 좁힘)로 센 `Baradun/Ops` `AuthDenied` 사용자 지표) 2개를 참조합니다. 스택의 첫 로그 지표 필터라서, 배포 전에 실행 정책 `BaradunCdkExecutionWorkload`를 최신 버전(`logs:PutMetricFilter`·`logs:DescribeMetricFilters`·`logs:DeleteMetricFilter` 추가)으로 올립니다(위 '정책 적용과 되돌리기 절차' 4단계 명령). `deploy:infra`는 실행 정책이 다르면 경고만 하므로, 올리지 않으면 지표 필터 만들기가 거부되어 배포가 롤백됩니다.
+- **경보 지표 한도(GH-424, 2026-11-13):** CloudWatch는 경보 수가 아니라 경보가 참조하는 지표 수로 요금을 매깁니다(무료 10개, us-east-1 기준 초과 지표당 월 $0.10, 서울 리전 단가 미확인). 같은 지표를 통계만 달리해 두 번 읽으면 1개로 셉니다. 2026-11 청구 내역으로 확인했습니다(경보 12개의 지표 참조가 16개이던 11-06~10에 하루 사용량이 지표 14개분. 로그인 경보가 같은 지표를 두 통계로 읽고 있었음). 성공 없음 경보는 이 점을 써서 Lambda `Errors` 지표 하나에서 실행 수(표본 수)와 오류 수(합계)를 읽습니다. 지금은 경보 10개가 지표 12개(성공 없음 3 + 오류 2 + 게시 실행 없음 1 + 알림 실패 1 + 날씨 1 + 운영 API 2 + 문의 이메일 2)를 참조해 무료 범위를 넘는 2개에 월 약 $0.20이 듭니다(바꾸기 전에는 18개, 월 약 $0.80). 지표를 하나 더하면 월 약 $0.10이 늘어나므로, 경보를 넣을 때는 `settings.ts`의 `MAX_ALARM_METRICS`와 월 요금을 함께 다시 정합니다.
+- 성공 없음 경보로 합친 변경을 배포하면 CloudFormation이 수집기의 예전 경보 6개(`WarningsErrors`·`WarningsStopped` 등)와 `LoginAbuse`를 지우고 새 경보 3개를 만듭니다. 새 경보는 만든 직후 지난 구간에 성공 기록이 없어 바로 ALARM이 되고 메일이 한 통씩 갑니다. 첫 성공 뒤 OK로 돌아가므로 배포 직후의 이 메일은 장애가 아닙니다. 실환경에서 실패·중단 때 울리는지는 아직 확인하지 않았습니다(배포 뒤 일정을 잠깐 꺼서 확인).
 
 ## 운영자 로그인 사용자 풀(BRD-145)
 

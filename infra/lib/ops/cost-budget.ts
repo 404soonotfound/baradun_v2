@@ -21,8 +21,9 @@ export class CostBudget extends Construct {
         budgetType: "COST",
         timeUnit: "MONTHLY",
         budgetLimit: { amount: MONTHLY_BUDGET_USD, unit: "USD" },
-        // 크레딧($100)이 비용을 덮으면 실제 사용량이 $0으로 보임.
+        // 크레딧이 비용을 덮으면 실제 사용량이 $0으로 보임.
         // 크레딧을 빼고 계산해야 "무료 범위를 넘었는지"를 알 수 있음.
+        // 2026-11-13 Paid 플랜 전환으로 Free Tier 크레딧은 없음(GH-424). 나중에 크레딧을 받아도 같은 기준으로 봄
         costTypes: { includeCredit: false },
       },
       notificationsWithSubscribers: [
