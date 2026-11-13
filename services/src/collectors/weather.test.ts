@@ -531,9 +531,9 @@ describe("latestBase", () => {
 });
 
 describe("parseWeatherAreas", () => {
-  it("실제 대응표: 격자 140·육상 구역 8·기온 지점 34", () => {
+  it("실제 대응표: 격자 154·육상 구역 8·기온 지점 34", () => {
     const areas = parseWeatherAreas(areasJson);
-    expect(areas.grids).toHaveLength(140);
+    expect(areas.grids).toHaveLength(154);
     expect(areas.land).toHaveLength(8);
     expect(areas.ta).toHaveLength(34);
   });
