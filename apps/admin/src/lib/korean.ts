@@ -10,3 +10,8 @@ function hasFinalConsonant(word: string): boolean {
 export function topicParticle(word: string): "은" | "는" {
   return hasFinalConsonant(word) ? "은" : "는";
 }
+
+// 서술 어미: 받침 있으면 '이에요', 없으면 '예요'
+export function copula(word: string): "이에요" | "예요" {
+  return hasFinalConsonant(word) ? "이에요" : "예요";
+}

@@ -66,14 +66,14 @@ export function beachCounts(view: PublishedView | null): BeachCounts | null {
   return counts;
 }
 
-// 판단불가 해변 표 한 줄(보드 V1 '판단불가 해변'). 사유는 게시본 첫 사유 그대로
+// 판단불가 해변 표 한 줄(보드 V1 '판단불가 해변'). 배지는 게시본 사유 전부(숨기지 않음), 범위·시각은 첫 사유
 export interface UndeterminedRow {
   readonly id: string;
   // 공개 해변 데이터 이름표에 없으면 null → 화면은 '이름 확인 못 함'(ID를 이름처럼 보이지 않음)
   readonly name: string | null;
   readonly region: string | null;
-  // 배지(사유 먼저): 게시본 첫 사유. 사유가 없거나 모르는 code면 '특보 확인 못 함'
-  readonly label: BadgeLabel;
+  // 배지(사유 먼저): 게시본 사유 순서 그대로 전부. 사유가 없거나 모르는 code면 '특보 확인 못 함'
+  readonly labels: readonly BadgeLabel[];
   // 첫 사유 원본(범위·기관·시각). 사유가 없으면 null
   readonly reason: Partial<Reason> | null;
 }
@@ -86,13 +86,17 @@ export function undeterminedRows(
   return Object.entries(view.beaches)
     .filter(([, entry]) => entry.category === "undetermined")
     .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
-    .map(([id, entry]) => ({
-      id,
-      name: names[id]?.name ?? null,
-      region: names[id]?.region ?? null,
-      label: reasonLabels(entry)[0],
-      reason: entry.reasons[0] ?? null,
-    }));
+    .map(([id, entry]) => {
+      // 'constructor' 같은 ID가 객체 기본 속성을 집지 않게 자기 키만 봄
+      const info = Object.hasOwn(names, id) ? names[id] : undefined;
+      return {
+        id,
+        name: info?.name ?? null,
+        region: info?.region ?? null,
+        labels: reasonLabels(entry),
+        reason: entry.reasons[0] ?? null,
+      };
+    });
 }
 
 // 사유 칸의 시각 종류: 특보 확인 못 함은 마지막 확인 시각, 관측 지연은 마지막 측정 시각
@@ -129,7 +133,7 @@ export interface CollectionRow {
 export interface CollectionSummary {
   // 수집 현황의 모든 출처(SOURCE_ROWS) 중 정상이 아닌 출처 수. 보이지 않는 줄의 문제도 셈
   readonly problems: number;
-  // 모든 출처를 더한 최근 24시간 성공률. 실행이 없으면 null
+  // 모든 출처를 더한 최근 24시간 성공률. 실행이 없거나 응답에 빠진 출처가 있으면 null(남은 출처만으로 셈하지 않음)
   readonly rate: number | null;
   readonly rows: readonly CollectionRow[];
 }
@@ -142,9 +146,9 @@ export function collectionSummary(
   const all = SOURCE_ROWS.map((row) => find(row.job));
   return {
     problems: all.filter((job) => sourceState(job) !== "ok").length,
-    rate: successRate(
-      sumCounts(all.filter((j) => j !== undefined).map((j) => j.day)),
-    ),
+    rate: all.every((j) => j !== undefined)
+      ? successRate(sumCounts(all.map((j) => j.day)))
+      : null,
     rows: HOME_COLLECTION_JOBS.map((job) => {
       const found = find(job);
       return {
