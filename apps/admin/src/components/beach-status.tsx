@@ -6,6 +6,7 @@ import {
   Clock,
   LoaderCircle,
   TriangleAlert,
+  Wrench,
 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import type { OpsResult } from "@/lib/auth/ops-fetch";
@@ -28,6 +29,8 @@ import { Button, Notice } from "./ui";
 // - 색만으로 나누지 않음: 글자(사유·분류)와 아이콘, 판단불가는 점선 테두리
 // - 못 받으면 모든 해변을 판단불가 계열 '확인 못 함'(특보 없음처럼 보이지 않게)
 //   이때 분류 이름(판단불가)은 붙이지 않음: 앱이 무엇으로 게시했는지 모르므로 '게시본을 받지 못했어요'라고만 씀
+// - 게시본이 점검 중이면 앱은 해변 상태를 숨김. 상태 칸은 '점검 중 · 앱에 표시 안 함', 마지막 게시 분류는 보조로(D23-11)
+//   점검 배지는 분류가 아니라서 분류 색을 쓰지 않음(중립 색 + 렌치 아이콘 + 글자)
 
 const t = messages.beaches;
 
@@ -71,6 +74,15 @@ function Badge({ label }: { label: BadgeLabel }) {
 
 const UNCONFIRMED: BadgeLabel = { kind: "unconfirmed" };
 
+function MaintenanceBadge() {
+  return (
+    <span className="inline-flex h-6 shrink-0 items-center gap-1 rounded-admin-badge border-[1.5px] border-border-strong bg-bg-page px-1.5 text-label-s font-semibold whitespace-nowrap text-text-default">
+      <Wrench size={14} aria-hidden="true" />
+      {t.maintenance}
+    </span>
+  );
+}
+
 // 배지 한 줄: 첫 사유 배지 + 분류 이름(+ 나머지 사유 수)
 export function DisplayBadge({ display }: { display: BeachDisplay }) {
   if (display.kind === "loading") {
@@ -82,6 +94,20 @@ export function DisplayBadge({ display }: { display: BeachDisplay }) {
           className="motion-safe:animate-spin"
         />
         {t.statusLoading}
+      </span>
+    );
+  }
+  if (display.kind === "maintenance") {
+    return (
+      <span className="inline-flex flex-wrap items-center gap-x-1.5 gap-y-1">
+        <MaintenanceBadge />
+        <span className="text-label-s text-text-muted">
+          {t.maintenanceHidden}
+        </span>
+        <span className="inline-flex flex-wrap items-center gap-x-1.5 gap-y-1 text-label-s text-text-muted">
+          {t.maintenanceLast}
+          <DisplayBadge display={display.last} />
+        </span>
       </span>
     );
   }
@@ -117,7 +143,13 @@ export function DisplayBadge({ display }: { display: BeachDisplay }) {
   );
 }
 
+// 점검 중이면 마지막 게시 분류를 기준으로 사유·유효 시각을 보여 줌(분류는 바꾸지 않음)
+const lastOf = (display: BeachDisplay): BeachDisplay =>
+  display.kind === "maintenance" ? display.last : display;
+
 // 상세: 유효 시각이 지났을 때 분류와 따로 알림(무슨 일 → 영향 → 다음 행동)
+// 점검 중에는 그리지 않음: 앱은 '특보 확인 못 함'이 아니라 점검 화면을 보여 주므로 안내가 어긋남(점검 알림이 대신함)
+// 지남 표시는 마지막 게시 분류 배지 옆에 그대로 남음
 export function ExpiredNotice({ display }: { display: BeachDisplay }) {
   if (display.kind !== "published" || !display.expired) return null;
   return (
@@ -140,7 +172,8 @@ const textOf = (v: unknown): string | null =>
 const timeOf = (v: unknown): string | null =>
   typeof v === "string" && !Number.isNaN(Date.parse(v)) ? v : null;
 
-export function ReasonList({ display }: { display: BeachDisplay }) {
+export function ReasonList({ display: shown }: { display: BeachDisplay }) {
+  const display = lastOf(shown);
   if (display.kind !== "published" || display.category === "clear") {
     return null;
   }
@@ -221,14 +254,33 @@ export function usePublished(): {
   };
 }
 
-// 상태를 못 받았을 때 맨 위 알림: 무슨 일 → 영향 → 다음 행동. 받았으면 그리지 않음
+// 게시본이 점검 중일 때 맨 위 알림: 무슨 일(점검·끝나는 시각) → 영향(앱이 상태를 숨김) → 다음 행동(저장소 설정)
+function MaintenanceNotice({ until }: { until: string | null }) {
+  return (
+    <Notice tone="warn" title={t.maintenanceTitle} role="status">
+      <p>
+        {until
+          ? fill(t.maintenanceUntil, { time: kstDateTime(until) })
+          : t.maintenanceUntilUnknown}
+      </p>
+      <p>{t.maintenanceBody}</p>
+    </Notice>
+  );
+}
+
+// 맨 위 알림. 못 받았을 때: 무슨 일 → 영향 → 다음 행동. 받았으면 점검 중일 때만 점검 알림
 export function PublishedAlert({
   state,
 }: {
   state: ReturnType<typeof usePublished>;
 }) {
   const { published, failure, retry } = state;
-  if (published === "loading" || published?.available) return null;
+  if (published === "loading") return null;
+  if (published?.available) {
+    return published.maintenance.active ? (
+      <MaintenanceNotice until={published.maintenance.until} />
+    ) : null;
+  }
   if (failure?.code === "reauth") {
     return <Notice tone="warn" title={t.reauth} role="alert" />;
   }

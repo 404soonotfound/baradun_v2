@@ -26,6 +26,7 @@ const PUBLISHED = {
   available: true,
   snapshotVersion: "20261111T030000Z",
   generatedAt: "2026-11-11T03:00:12Z",
+  maintenance: { active: false, until: null },
   beaches: {
     b0001: { category: "clear", reasons: [], validUntil: VALID_UNTIL },
     b0002: {

@@ -282,9 +282,12 @@ function BeachesBody({ beaches }: { beaches: readonly BeachSummary[] }) {
       <PublishedAlert state={state} />
       {state.published !== "loading" && state.published?.available && (
         <p className="text-label-s text-text-muted">
-          {fill(t.statusAsOf, {
-            time: kstDateTime(state.published.generatedAt),
-          })}
+          {fill(
+            state.published.maintenance.active
+              ? t.statusAsOfMaintenance
+              : t.statusAsOf,
+            { time: kstDateTime(state.published.generatedAt) },
+          )}
         </p>
       )}
 
