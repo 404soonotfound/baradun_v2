@@ -58,7 +58,11 @@ describe("로컬 샘플 응답", () => {
       ok: true,
       body: { kind: "sample" },
     });
-    expect(localOps("/ops/stats", "operator", {})).toEqual({
+    expect(localOps("/ops/stats", "operator", {})).toMatchObject({
+      ok: true,
+      body: { configured: true, range: "7d", realtime: { status: "ok" } },
+    });
+    expect(localOps("/ops/unknown", "operator", {})).toEqual({
       ok: false,
       status: 501,
       code: "local_sample_missing",
