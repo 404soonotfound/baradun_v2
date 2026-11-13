@@ -2,12 +2,14 @@ import { graphemeLength } from "@baradun/contracts/notice-rules";
 import { describe, expect, it } from "vitest";
 import {
   exposeProblems,
+  filterNotices,
   fromKstInput,
   sameContent,
   saveProblems,
   textChecks,
   toKstInput,
   type NoticeContent,
+  type NoticeView,
 } from "./notices";
 
 const content = (overrides: Partial<NoticeContent> = {}): NoticeContent => ({
@@ -121,5 +123,64 @@ describe("저장·확정 전 확인", () => {
       sameContent(content(), content({ startsAt: "2030-01-01T00:00:00Z" })),
     ).toBe(true);
     expect(sameContent(content(), content({ endsAt: null }))).toBe(false);
+  });
+});
+
+const view = (
+  id: string,
+  state: NoticeView["state"],
+  overrides: Partial<NoticeContent> = {},
+): NoticeView => {
+  const c = content(overrides);
+  return {
+    id,
+    version: 1,
+    draft: c,
+    live: state === "draft" ? null : c,
+    exposedAt: null,
+    updatedAt: "2030-01-01T00:00:00.000Z",
+    state,
+    pendingEdit: false,
+    hidden: false,
+  };
+};
+
+describe("공지 목록 거르기", () => {
+  const items: NoticeView[] = [
+    view("1", "live", {
+      kind: "maintenance_notice",
+      title: { ko: "새벽 점검 예고", en: "Maintenance" },
+      body: { ko: "새벽 2시 점검", en: "At 2am" },
+    }),
+    view("2", "draft", {
+      kind: "general",
+      title: { ko: "해변 추가", en: "More beaches" },
+      body: { ko: "출처 안내가 바뀌었어요", en: "Updated sources" },
+    }),
+  ];
+
+  it("상태·종류·제목/문구 검색어로 거른다", () => {
+    expect(
+      filterNotices(items, { state: "live", kind: null, query: "" }).map(
+        (n) => n.id,
+      ),
+    ).toEqual(["1"]);
+    expect(
+      filterNotices(items, { state: null, kind: "general", query: "" }).map(
+        (n) => n.id,
+      ),
+    ).toEqual(["2"]);
+    expect(
+      filterNotices(items, { state: null, kind: null, query: "출처" }).map(
+        (n) => n.id,
+      ),
+    ).toEqual(["2"]);
+    expect(
+      filterNotices(items, {
+        state: null,
+        kind: null,
+        query: "MAINTENANCE",
+      }).map((n) => n.id),
+    ).toEqual(["1"]);
   });
 });
