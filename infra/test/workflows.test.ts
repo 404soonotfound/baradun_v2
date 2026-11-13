@@ -679,6 +679,12 @@ describe("인프라 자동 배포 (#418)", () => {
       "role-to-assume: ${{ vars.INFRA_DEPLOY_ROLE_ARN }}",
     );
     expect(infra).toContain("node --import tsx scripts/deploy-ci.mjs plan");
+    // 다른 배포 대기(30분)+자기 배포 대기(60분)가 1시간 키를 넘지 않게 세 작업 모두 2시간 키
+    for (const job of ["infra", "infra-approve", "infra-watch"]) {
+      expect(jobLines(text, job).join("\n"), job).toMatch(
+        /role-duration-seconds:\s*7200/,
+      );
+    }
     // OIDC 토큰을 받는 작업은 캐시를 복원하지 않음
     expect(infra).not.toMatch(/cache:/);
   });

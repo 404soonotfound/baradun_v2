@@ -138,20 +138,41 @@ describe("변경 세트 읽기", () => {
 describe("다른 배포가 진행 중일 때 (CI)", () => {
   const stacks = (status: string) => ok({ Stacks: [{ StackStatus: status }] });
 
-  it("진행 중이면 끝나기를 기다린 뒤 상태를 다시 읽는다", () => {
+  it("진행 중(가져오기·롤백 포함)이면 정해진 간격으로 상태를 다시 읽어 끝난 상태를 돌려준다", () => {
+    const slept: number[] = [];
     const { runner, calls } = fake({
       "cloudformation describe-stacks": [
         stacks("UPDATE_IN_PROGRESS"),
-        stacks("UPDATE_COMPLETE"),
+        stacks("IMPORT_IN_PROGRESS"),
+        stacks("UPDATE_ROLLBACK_COMPLETE"),
       ],
-      "cloudformation wait": [ok({})],
     });
-    expect(waitWhileInProgress(runner, "BaradunV2")).toBe("UPDATE_COMPLETE");
-    expect(calls.map((c) => c[1])).toEqual([
-      "describe-stacks",
-      "wait",
-      "describe-stacks",
-    ]);
+    expect(
+      waitWhileInProgress(runner, "BaradunV2", {
+        pollMs: 10,
+        sleep: (ms) => slept.push(ms),
+      }),
+    ).toBe("UPDATE_ROLLBACK_COMPLETE");
+    expect(slept).toEqual([10, 10]);
+    // 업데이트 외 상태에서 끝나지 않는 waiter는 쓰지 않음
+    expect(calls.every((c) => c[1] === "describe-stacks")).toBe(true);
+  });
+
+  it("상한을 넘겨도 진행 중이면 그 상태를 돌려준다(부르는 쪽이 멈춤)", () => {
+    const { runner } = fake({
+      "cloudformation describe-stacks": [
+        stacks("UPDATE_IN_PROGRESS"),
+        stacks("UPDATE_IN_PROGRESS"),
+        stacks("UPDATE_IN_PROGRESS"),
+      ],
+    });
+    expect(
+      waitWhileInProgress(runner, "BaradunV2", {
+        maxWaitMs: 20,
+        pollMs: 10,
+        sleep: () => {},
+      }),
+    ).toBe("UPDATE_IN_PROGRESS");
   });
 
   it("진행 중이 아니면 기다리지 않고, 읽지 못하면 null", () => {
