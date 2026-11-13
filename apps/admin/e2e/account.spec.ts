@@ -127,6 +127,14 @@ for (const [name, reply, text] of [
     `${TARGET}에는 등록된 인증 앱이 없어요. 바꾼 것은 없어요.`,
   ],
   [
+    "로그인 만료(401)",
+    {
+      status: 401,
+      body: { error: { code: "session_expired", requestId: "r" } },
+    },
+    "로그인이 만료됐어요",
+  ],
+  [
     "서버 오류(확인 못 함)",
     { status: 500, body: { error: { code: "internal", requestId: "r" } } },
     "초기화했는지 확인하지 못했어요.",

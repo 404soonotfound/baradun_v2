@@ -13,7 +13,8 @@ export type MfaResetOutcome =
   | "not_found"
   | "invalid_email"
   | "forbidden"
-  | "reauth"
+  // 로그인이 만료됨(토큰 없음·401). 서버가 업무 처리 전에 거부했으니 바뀐 것이 없음
+  | "expired"
   | "unknown";
 
 // 서버와 같은 모양 검사(services/src/admin/mfa-reset.ts EMAIL·EMAIL_MAX)
@@ -39,8 +40,9 @@ export function mfaResetOutcome(
         : "unknown";
   }
   if (result.status === 0) {
-    return result.code === "reauth" ? "reauth" : "unknown";
+    return result.code === "reauth" ? "expired" : "unknown";
   }
+  if (result.status === 401) return "expired";
   if (result.status === 409 && result.reason === "self") return "self";
   // reason 없는 404는 경로가 없는 서버(배포 전)라 '없는 계정'으로 보이지 않게 함
   if (result.status === 404 && result.reason === "account") return "not_found";
