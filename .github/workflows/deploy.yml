@@ -46,7 +46,7 @@ jobs:
       kind: ${{ steps.run.outputs.kind }}
       change_set: ${{ steps.run.outputs.change_set }}
       deployed_at: ${{ steps.run.outputs.deployed_at }}
-      functions: ${{ steps.run.outputs.functions }}
+      rows: ${{ steps.run.outputs.rows }}
     env:
       HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
       REPO: ${{ github.repository }}
@@ -92,7 +92,7 @@ jobs:
     outputs:
       change_set: ${{ steps.run.outputs.change_set }}
       deployed_at: ${{ steps.run.outputs.deployed_at }}
-      functions: ${{ steps.run.outputs.functions }}
+      rows: ${{ steps.run.outputs.rows }}
     env:
       HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
       REPO: ${{ github.repository }}
@@ -139,7 +139,7 @@ jobs:
       REPO: ${{ github.repository }}
       CHANGE_SET: ${{ needs.infra-approve.outputs.change_set || needs.infra.outputs.change_set }}
       DEPLOYED_AT: ${{ needs.infra-approve.outputs.deployed_at || needs.infra.outputs.deployed_at }}
-      FUNCTIONS: ${{ needs.infra-approve.outputs.functions || needs.infra.outputs.functions }}
+      ROWS: ${{ needs.infra-approve.outputs.rows || needs.infra.outputs.rows }}
       SITE_URL: ${{ vars.SITE_URL }}
     steps:
       # CI가 검사한 커밋 그대로. 전체 이력을 받아 main이 앞서 있는지 비교함
