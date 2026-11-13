@@ -562,6 +562,10 @@ function UserRow() {
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
+      // 찾기 창·다시 로그인 창 같은 대화상자의 Esc는 그 창 몫(메뉴가 포커스를 가져가지 않게)
+      if (e.defaultPrevented || (e.target as Element).closest?.("dialog")) {
+        return;
+      }
       setOpen(false);
       button.current?.focus();
     };
