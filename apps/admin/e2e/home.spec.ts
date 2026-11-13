@@ -395,7 +395,7 @@ async function holdHome(page: Page, gate: Promise<void>) {
   });
 }
 
-test("다시 읽기가 실패해도 앞 값을 두고 '마지막으로 받은 값이에요 · HH:MM 기준', 다시 읽는 동안 기준 시각 옆 회전 표시", async ({
+test("다시 읽기가 실패하면 판단 출처 줄은 불러오지 못함으로 바꾸고, 다른 칸은 앞 값에 '마지막으로 받은 값'과 'HH:MM 기준' 줄, 다시 읽는 동안 회전 표시", async ({
   page,
 }) => {
   await page.clock.install();
@@ -411,10 +411,10 @@ test("다시 읽기가 실패해도 앞 값을 두고 '마지막으로 받은 �
   ).toBeVisible();
   await expect(page.getByText(/기준 · 화면이 보이는 동안/)).toBeVisible();
 
-  // 1분 뒤 다시 읽기: 수집 현황만 늦게 실패
+  // 1분 뒤 다시 읽기: 수집 현황(판단 출처)과 문의가 늦게 실패
   let release!: () => void;
   const gate = new Promise<void>((resolve) => (release = resolve));
-  await page.route(/\/ops\/collection$/, async (route) => {
+  await page.route(/\/ops\/(collection|inquiries(\?.*)?)$/, async (route) => {
     await gate;
     await route.fulfill({
       status: 500,
@@ -435,13 +435,41 @@ test("다시 읽기가 실패해도 앞 값을 두고 '마지막으로 받은 �
       .filter({ hasText: /^마지막으로 받은 값이에요 · \d{2}:\d{2} 기준/ }),
   ).toBeVisible();
   await expect(page.getByText("다시 읽는 중")).toHaveCount(0);
-  // 실패해도 화면을 비우지 않음: 앞에서 받은 판단 출처 줄이 남음
-  await expect(
-    page.getByText("판단에 쓰는 출처가 모두 정상이에요"),
-  ).toBeVisible();
+  // 판단 출처는 앞의 '정상'을 두지 않음(조회 실패를 정상으로 보이지 않게)
   await expect(
     page.getByText("판단에 쓰는 출처 상태를 불러오지 못했어요"),
+  ).toBeVisible();
+  await expect(
+    page.getByText("판단에 쓰는 출처가 모두 정상이에요"),
   ).toHaveCount(0);
+  // 문의 칸은 앞 값을 두고 그 칸에 표시(화면을 비우지 않음)
+  const inquiries = page.getByRole("definition").filter({ hasText: /^0건/ });
+  await expect(inquiries).toContainText("마지막으로 받은 값");
+});
+
+test("서버 세션 확인이 실패하면 로딩 표시를 끝내고 오류 알림만 남긴다", async ({
+  page,
+}) => {
+  await mockCognito(
+    page,
+    srpScript({ email: OPS, after: "tokens", groups: ["editor"] }),
+  );
+  await mockOps(page, fail);
+  await mockHome(page);
+  await signInWithPassword(page, "/login/", OPS);
+  await expect(
+    page.getByText(
+      "운영 서버가 응답하지 않아요. 앱 사용자 화면에는 영향이 없어요.",
+    ),
+  ).toBeVisible();
+  await expect(page.locator("#main main")).not.toHaveAttribute(
+    "aria-busy",
+    "true",
+  );
+  await expect(
+    page.getByRole("status").filter({ hasText: "운영 홈 불러오는 중" }),
+  ).toHaveCount(0);
+  await expect(page.locator("#main main .sk")).toHaveCount(0);
 });
 
 test("운영 홈으로 이동하면 제목·칸 이름·목록 틀이 먼저 보이고 값 자리만 자리표시", async ({
