@@ -111,10 +111,10 @@
       "sha256": "59367b42a72801f208e01e7ce16feead55eb2c7277a435302e58fb2f0cc3308f"
     },
     {
-      "name": "실응답 3차 저장본 지표 매트릭스",
+      "name": "실응답 3차 저장본 지표 매트릭스 (2026-11-13 보충 병합)",
       "path": "$BARADUN_DATA_DIR/baradun-coverage/responses/metric-matrix.json",
-      "base_date": "2026-10-20 수집(BRD-59 3차)",
-      "sha256": "6a955030c2cb195fb27b3addf80eff6ac02ae0933a0596d77142110af496a58c"
+      "base_date": "2026-10-20 수집(BRD-59 3차) + 2026-11-13 보충 수집(GH-253)",
+      "sha256": "97e018b4f00094e7a946a410bfd22de7ade481028f9d14968518237cae8d8d6b"
     },
     {
       "name": "실응답 3차 sea_obs 응답(authKey 제거)",
@@ -127,6 +127,18 @@
       "path": "$BARADUN_DATA_DIR/baradun-coverage/responses/kma_buoy-attempt-1.txt",
       "base_date": "2026-10-20 수집(BRD-59 3차)",
       "sha256": "ac50c3d55497e1ab91bda8d58a4e68af4527cb034ec7670c0e352a13010c1394"
+    },
+    {
+      "name": "실응답 보충 sea_obs 응답(authKey 제거)",
+      "path": "$BARADUN_DATA_DIR/baradun-coverage/responses/sea_obs-attempt-2.txt",
+      "base_date": "2026-11-13 수집(GH-253)",
+      "sha256": "5f0f2e47ab85070ac336e61588b6af61b98d9d5aa3a878a228674dc408fbc468"
+    },
+    {
+      "name": "실응답 보충 kma_buoy 응답(authKey 제거)",
+      "path": "$BARADUN_DATA_DIR/baradun-coverage/responses/kma_buoy-attempt-2.txt",
+      "base_date": "2026-11-13 수집(GH-253)",
+      "sha256": "a40552a0bf348a9981e2a439bfa748bb4c5d54d5bd7bb1d09480bdaae075076b"
     }
   ]
 }
