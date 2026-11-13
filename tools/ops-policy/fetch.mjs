@@ -11,7 +11,7 @@
 // - 노션 쪽 모양(9개 항목·상태·근거 줄)이 바뀌면 조용히 빼지 않고 멈춤. 원본을 고치거나 이 도구를 고침
 // - 토큰은 환경 변수로만 받고 파일·출력에 남기지 않음
 // 종료 코드: 0 썼음(또는 --check 통과) / 1 실패(검증·네트워크·인자)
-import { readFileSync, renameSync, writeFileSync } from "node:fs";
+import { readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -72,7 +72,9 @@ function isoOrThrow(value, label) {
 }
 
 // ── 글자 줄 해석 ──
-// 한 줄 안의 꾸밈: <b>굵게</b>·**굵게**·<code>코드</code>·`코드`, 회색 글자(<span color="gray">)는 꾸밈만 뺌
+// 한 줄 안의 꾸밈: <b>굵게</b>·**굵게**·<code>코드</code>, 회색 글자(<span color="gray">…</span>)는 꾸밈만 뺌
+// - 노션 v2 마크다운은 인라인 코드를 <code>로 내보냄. 백틱 코드는 백슬래시 처리 규칙이 달라 같은 글이 다르게 저장되므로 멈춤
+// - 회색 글자는 한 줄 안에서 여는·닫는 태그 짝이 맞아야 함
 // 그 밖의 태그·링크는 모르는 모양이라 멈춤(조용히 글자만 남기지 않음)
 
 const ESCAPES = /\\([\\`*_{}[\]()#+\-.!~<>|"'])/g;
@@ -95,8 +97,9 @@ export function parseInline(line) {
   };
   // 백슬래시로 막은 글자(\< 등)는 꾸밈으로 읽지 않게 먼저 잡음
   const pattern =
-    /\\[\\`*_{}[\]()#+\-.!~<>|"']|<(b|code)>(.*?)<\/\1>|\*\*(.+?)\*\*|`([^`]+)`|<span color="gray">|<\/span>|<[^>]*>|\[[^\]]*\]\([^)]*\)/g;
+    /\\[\\`*_{}[\]()#+\-.!~<>|"']|<(b|code)>(.*?)<\/\1>|\*\*(.+?)\*\*|(`)|<span color="gray">|<\/span>|<[^>]*>|\[[^\]]*\]\([^)]*\)/g;
   let at = 0;
+  let grayOpen = false;
   for (const match of line.matchAll(pattern)) {
     push(line.slice(at, match.index));
     at = match.index + match[0].length;
@@ -110,14 +113,22 @@ export function parseInline(line) {
     } else if (match[3] !== undefined) {
       push(match[3], "bold");
     } else if (match[4] !== undefined) {
-      runs.push({ text: match[4], code: true });
-    } else if (match[0] === '<span color="gray">' || match[0] === "</span>") {
-      continue;
+      throw new Error(
+        `백틱 코드는 읽지 못해요(노션은 <code>로 내보냄): ${line}`,
+      );
+    } else if (match[0] === '<span color="gray">') {
+      if (grayOpen) throw new Error(`회색 글자 안의 회색 글자예요: ${line}`);
+      grayOpen = true;
+    } else if (match[0] === "</span>") {
+      if (!grayOpen) throw new Error(`짝 없는 </span>이 있어요: ${line}`);
+      grayOpen = false;
     } else {
       throw new Error(`모르는 꾸밈·링크가 있어요: ${match[0]}`);
     }
   }
   push(line.slice(at));
+  if (grayOpen)
+    throw new Error(`회색 글자가 줄 안에서 닫히지 않았어요: ${line}`);
   return runs;
 }
 
@@ -285,16 +296,23 @@ export async function fetchFromNotion({ token, fetchImpl = fetch }) {
   };
 }
 
+// 임시 파일에 다 쓴 뒤 바꿔 넣음(쓰다 멈춰도 옛 파일이 그대로 남음, D16-E5)
+// 실패하면 임시 파일을 지워 다음 PR에 .tmp가 섞이지 않게 함
+export function writeAtomic(file, text) {
+  const temp = `${file}.tmp`;
+  try {
+    writeFileSync(temp, text);
+    renameSync(temp, file);
+  } catch (error) {
+    rmSync(temp, { force: true });
+    throw error;
+  }
+}
+
 export async function main(argv, env = process.env, deps = {}) {
   const now = deps.now ?? (() => new Date().toISOString());
-  // 임시 파일에 다 쓴 뒤 바꿔 넣음(쓰다 멈춰도 옛 파일이 그대로 남음, D16-E5)
-  const write =
-    deps.write ??
-    ((file, text) => {
-      const temp = `${file}.tmp`;
-      writeFileSync(temp, text);
-      renameSync(temp, file);
-    });
+  const write = deps.write ?? writeAtomic;
+  const outFile = deps.outFile ?? OUT_FILE;
   const log = deps.log ?? console.log;
   const args = parseArgs(argv);
   const source = args.markdown
@@ -310,9 +328,9 @@ export async function main(argv, env = process.env, deps = {}) {
     );
     return snapshot;
   }
-  write(OUT_FILE, `${JSON.stringify(snapshot, null, 2)}\n`);
+  write(outFile, `${JSON.stringify(snapshot, null, 2)}\n`);
   log(
-    `썼어요: ${path.relative(ROOT, OUT_FILE)} (revision ${snapshot.revision})`,
+    `썼어요: ${path.relative(ROOT, outFile)} (revision ${snapshot.revision})`,
   );
   return snapshot;
 }
