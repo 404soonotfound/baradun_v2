@@ -15,6 +15,9 @@ export function createSiteDeployCredential(
 ) {
   let saved: { value: string; until: number } | undefined;
   return {
+    invalidate(value: string): void {
+      if (saved?.value === value) saved = undefined;
+    },
     async token(signal: AbortSignal): Promise<string> {
       if (saved && saved.until > now().getTime()) return saved.value;
       const result = await client

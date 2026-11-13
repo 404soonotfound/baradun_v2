@@ -1,3 +1,8 @@
+import {
+  DEPLOY_VARIABLES,
+  SITE_DEPLOY_JOBS,
+  SITE_DEPLOY_MARKER_STEP,
+} from "../../services/src/admin/site-deploy";
 import { execFileSync } from "node:child_process";
 import { readdirSync, readFileSync } from "node:fs";
 import { posix, resolve } from "node:path";
@@ -564,6 +569,26 @@ describe("PR 필수 웹 검사 (BRD-102 결정 41·42)", () => {
         .map((path) => path.replace(/\/\*\*$/, ""))
         .sort(),
     );
+  });
+
+  it("운영 API가 조회하는 사이트 작업·표지 단계·필수 변수는 배포 워크플로와 같다", () => {
+    const workflow = deploy?.text ?? "";
+    const apps = Object.keys(JSON.parse(
+      readFileSync(resolve(dir, "../site-deploy-paths.json"), "utf8"),
+    ));
+    expect([...SITE_DEPLOY_JOBS].sort()).toEqual(apps.sort());
+    const variables = new Set<string>();
+    for (const job of SITE_DEPLOY_JOBS) {
+      const lines = jobLines(workflow, job).join("\n");
+      expect(lines).toContain(`name: ${SITE_DEPLOY_MARKER_STEP}\n`);
+      for (const match of lines.matchAll(/\bvars\.([A-Z_]+)/g)) {
+        variables.add(match[1]!);
+      }
+    }
+    expect([...variables].sort()).toEqual(
+      [...DEPLOY_VARIABLES, "ADMIN_SITE_URL", "DEPLOY_PAUSED"].sort(),
+    );
+    expect(plan).toContain('head_sha=${HEAD_SHA:?');
   });
 
   it("배포는 정한 결과를 따르고, 표시는 동기화·캐시 비우기가 끝난 뒤 마지막에 올리며, 빌드 캐시를 복원하지 않는다", () => {
