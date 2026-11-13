@@ -252,6 +252,14 @@ jobs:
         env:
           NEXT_PUBLIC_SITE_URL: ${{ vars.SITE_URL }}
           NEXT_PUBLIC_INQUIRY_PHOTO_BUCKET: ${{ vars.INQUIRY_PHOTO_BUCKET }}
+      # PR CI는 핵심 흐름만 빠르게 확인하고, 실제로 올릴 빌드 결과는 전체 Chromium E2E를 통과해야 함
+      - if: steps.decide.outputs.deploy == 'true'
+        run: npx --no-install playwright install --with-deps chromium
+        working-directory: apps/web
+      - if: steps.decide.outputs.deploy == 'true'
+        run: npm run test:e2e -w apps/web
+        env:
+          E2E_PRODUCTION_BUILD: "1" # 운영 빌드에서만 맞는 분석 태그 검사로 전환
       # 판단 정책 버전 확인(결정 기록 D20-6·7): 웹은 지금 판단 정책 하나만 읽음 → 정책을 바꾼 PR은 publisher(deploy:infra)를 먼저 배포
       # 운영 게시본의 policyVersion을 이 빌드가 읽지 못하면(게시본을 못 읽어도) 올리지 않고 멈춤. publisher 배포·새 정책 게시 뒤 이 워크플로를 다시 실행
       - if: steps.decide.outputs.deploy == 'true'
@@ -365,6 +373,11 @@ jobs:
           NEXT_PUBLIC_OPERATOR_CLIENT_ID: ${{ vars.OPERATOR_CLIENT_ID }}
           NEXT_PUBLIC_DEMO_USER_POOL_ID: ${{ vars.DEMO_USER_POOL_ID }}
           NEXT_PUBLIC_DEMO_CLIENT_ID: ${{ vars.DEMO_CLIENT_ID }}
+      - if: steps.decide.outputs.deploy == 'true'
+        run: npx --no-install playwright install --with-deps chromium
+        working-directory: apps/admin
+      - if: steps.decide.outputs.deploy == 'true'
+        run: npm run test:e2e -w apps/admin
       - if: steps.decide.outputs.deploy == 'true'
         uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
         with:
