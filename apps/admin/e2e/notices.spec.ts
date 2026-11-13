@@ -824,3 +824,25 @@ test("목록: 행 작업 버전 충돌(409) 시 새 내용 불러오기 버튼�
   await alert.getByRole("button", { name: "새 내용 불러오기" }).click();
   await expect.poll(() => listCalls).toBeGreaterThan(before);
 });
+
+test("목록: 행 작업 확인을 취소하면 원래 행의 작업 메뉴 버튼으로 포커스가 돌아간다", async ({
+  page,
+}) => {
+  await signIn(page);
+  await mockNotices(page, { items: () => ITEMS() });
+  await openNotices(page);
+  if (isMobile(page)) return;
+  const trigger = page.getByRole("button", { name: "새벽 점검 예고 작업 메뉴" });
+  await trigger.click();
+  await page
+    .getByRole("group", { name: "새벽 점검 예고 작업 메뉴" })
+    .getByRole("button", { name: "노출 종료" })
+    .click();
+  const confirm = page
+    .getByRole("alert")
+    .filter({ hasText: "이 공지의 노출을 끝내요" });
+  await expect(confirm).toBeVisible();
+  await confirm.getByRole("button", { name: "취소" }).click();
+  await expect(confirm).toBeHidden();
+  await expect(trigger).toBeFocused();
+});
