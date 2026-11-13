@@ -285,7 +285,8 @@
     "publishedUnknown": "앱 게시본 확인 못 함",
     "version": "운영 화면 {date} · {sha}",
     "versionUnknown": "운영 화면 버전 확인 못 함",
-    "userMenu": "계정 메뉴"
+    "userMenu": "계정 메뉴",
+    "userMenuFor": "계정 메뉴 · {email}"
   },
   "preparing": {
     "title": "이 화면은 준비하고 있어요",
