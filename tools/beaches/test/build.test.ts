@@ -14,7 +14,7 @@ vi.mock("../zone-proof.mjs", () => ({
 }));
 import { buildBeaches, writeBuild } from "../build.mjs";
 import { checkDraft } from "../check.mjs";
-import { idKey, validateIdentity, preserveManual, reserveSlug } from "../identity.mjs";
+import { idKey, validateIdentity, preserveManual, preserveManualAliases, reserveSlug } from "../identity.mjs";
 import { assignMetric, loadAssignContext } from "../station-assign.mjs";
 import { slimMatrix } from "../slim-matrix.mjs";
 import { validateCoverage } from "../../../packages/contracts/scripts/coverage-rules.mjs";
@@ -231,6 +231,14 @@ describe("쓰기 없는 생성·최종 객체 검증", () => {
     evidence.beaches[0].land_proof = { coords: { lat: 37.7, lon: 128.9 } };
     f.put("input/beach-zone-evidence.json", evidence);
     expect(f.build).toThrow(/spatial-judge 다시 실행/);
+  });
+  it("beach-meta.json의 기존 별칭을 보존하고 중복·공식 한국어 이름은 제외함", () => {
+    expect(preserveManualAliases(["강문"], { aliases: ["강문", "강릉 강문", "강문해수욕장", ""] }, "강문해수욕장")).toEqual(["강문", "강릉 강문"]);
+    const f = fixture(); f.seed();
+    f.put("existing/beach-meta.json", { beaches: { b0001: { aliases: ["강문", "강릉 강문"] } } });
+    const plan = f.build();
+    const meta = JSON.parse(plan.files.get(join(f.root, "output/data/beach-meta.json")));
+    expect(meta.beaches.b0001.aliases).toEqual(["강문", "강릉 강문"]);
   });
   it("신규 해변에는 수영·null 사진·null CCTV·숨김 false 기본값을 사용함", () => {
     const f = fixture(); const b = f.build().draft.beaches[0];
