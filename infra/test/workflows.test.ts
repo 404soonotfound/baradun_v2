@@ -429,6 +429,49 @@ describe("PR 필수 웹 검사 (BRD-102 결정 41·42)", () => {
     expect(build).not.toContain("actions/upload-artifact@");
   });
 
+  it("화면·동작 관련 PR만 E2E를 실행하고, 테스트·문서 PR도 빌드는 검사한다", () => {
+    const ciText = ci?.text ?? "";
+    expect(ciText).toContain("predicate-quantifier: some-with-excludes");
+    for (const [area, job, smoke] of [
+      ["web", "e2e-build", "apps/web"],
+      ["admin", "admin-build", "apps/admin"],
+    ] as const) {
+      const filter = `${area}_e2e`;
+      expect(ciFilters).toMatch(new RegExp(`^${area}: &${area}$`, "m"));
+      expect(ciFilters).toMatch(
+        new RegExp(`^${filter}:.*\\n  - \\*${area}$`, "m"),
+      );
+      const excluded = ciFilterPaths(filter);
+      for (const path of [
+        `!apps/${area}/**/*.test.ts`,
+        `!apps/${area}/**/*.test.tsx`,
+        `!apps/${area}/AGENTS.md`,
+        `!apps/${area}/CLAUDE.md`,
+      ]) {
+        expect(excluded, filter).toContain(path);
+      }
+      expect(ciText).toContain(
+        filter + ": ${{ steps.filter.outputs." + filter + " }}",
+      );
+      const build = jobLines(ciText, job).join("\n");
+      expect(build).toContain(`needs.changes.outputs.${area} == 'true'`);
+      expect(build).toContain(`npm run build -w apps/${area}`);
+      expect(build).toMatch(
+        new RegExp(
+          `if: github\\.event_name == 'push' \\|\\| needs\\.changes\\.outputs\\.${filter} == 'true'\\s*\\n\\s*uses: actions/cache@`,
+        ),
+      );
+      expect(build).toMatch(
+        new RegExp(
+          `if: github\\.event_name == 'push' \\|\\| needs\\.changes\\.outputs\\.${filter} == 'true'\\s*\\n\\s*run: npm run test:e2e:smoke -w ${smoke}`,
+        ),
+      );
+      expect(build).toContain(
+        `(github.event_name == 'push' || needs.changes.outputs.${filter} == 'true') && steps.playwright-cache.outputs.cache-hit`,
+      );
+    }
+  });
+
   // main push도 바뀐 영역만(BRD-178, 10/30 BRD-133 '늘 전체'를 바꿈). main 규칙이 '최신 브랜치만 머지'라 PR CI가 같은 내용을 검사함
   // 대신 main push CI는 커밋마다 따로 돌고 취소하지 않음(취소되면 그 커밋의 변경이 배포에서 빠짐)
   it("main push도 바뀐 영역만 검사하고, main push CI는 커밋마다 따로 돌며 취소하지 않는다", () => {
