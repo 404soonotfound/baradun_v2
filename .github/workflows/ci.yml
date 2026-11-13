@@ -101,7 +101,30 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: npm
-      - run: npm ci --no-audit
+      # node_modules 캐시 시험(이 작업에서만 측정): lock 파일·Node 판·실행기가 정확히 같을 때만 복원하고 npm ci를 건너뜀
+      # 측정하는 동안만 PR에서도 저장함. 8초 넘게 줄면 main push에서만 저장하도록 좁혀 다른 작업에 넓히고, 아니면 되돌림
+      - id: node-modules
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            node_modules
+            apps/*/node_modules
+            packages/*/node_modules
+            services/node_modules
+            infra/node_modules
+          key: node-modules-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.nvmrc', 'package-lock.json') }}
+      - if: steps.node-modules.outputs.cache-hit != 'true'
+        run: npm ci --no-audit
+      - if: steps.node-modules.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            node_modules
+            apps/*/node_modules
+            packages/*/node_modules
+            services/node_modules
+            infra/node_modules
+          key: node-modules-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.nvmrc', 'package-lock.json') }}
       # Playwright 브라우저 캐시(BRD-178). 판은 lock 파일이 정함. 캐시가 있어도 OS 의존성은 설치함
       - id: playwright-cache
         if: github.event_name == 'push' || needs.changes.outputs.web_e2e == 'true'
