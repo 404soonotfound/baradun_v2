@@ -84,7 +84,7 @@ function PasswordSection({
   onChanged,
 }: {
   token: () => Promise<string | null>;
-  onChanged: () => void;
+  onChanged: (changed: boolean) => void;
 }) {
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
@@ -99,6 +99,7 @@ function PasswordSection({
     if (!ready || busy) return;
     setBusy(true);
     setError(null);
+    onChanged(false);
     void (async () => {
       const access = await token();
       if (!access) return;
@@ -107,7 +108,7 @@ function PasswordSection({
         setCurrent("");
         setNext("");
         setConfirm("");
-        onChanged();
+        onChanged(true);
       } catch (err) {
         const failure = authFailureOf(err);
         setError(
@@ -539,7 +540,7 @@ function AccountBody() {
           <Section title={t.account.password} hint={t.account.passwordHint}>
             <PasswordSection
               token={token}
-              onChanged={() => setPasswordChanged(true)}
+              onChanged={setPasswordChanged}
             />
           </Section>
           <Section title={t.account.mfa} hint={t.account.mfaHint}>
