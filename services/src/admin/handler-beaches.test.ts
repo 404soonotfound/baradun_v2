@@ -157,6 +157,7 @@ describe("지금 표시 상태 GET /ops/beaches/published", () => {
       available: true,
       snapshotVersion: "20261017T053000Z",
       generatedAt: "2026-10-17T05:30:12Z",
+      maintenance: { active: false, until: null },
     });
     const source = JSON.parse(STATUS).beaches;
     expect(Object.keys(body.beaches).sort()).toEqual(
@@ -169,6 +170,34 @@ describe("지금 표시 상태 GET /ops/beaches/published", () => {
         validUntil: string;
       };
       expect(body.beaches[id]).toEqual({ category, reasons, validUntil });
+    }
+  });
+
+  it("manifest가 점검 중이면 점검·끝나는 시각을 같이 돌려주고 분류는 그대로 둔다", async () => {
+    const manifest = JSON.stringify({
+      ...JSON.parse(MANIFEST),
+      maintenance: { active: true, until: "2026-10-17T07:00:00Z" },
+    });
+    const result = await handleOps(
+      event("GET", "/ops/beaches/published"),
+      deps(
+        "viewer",
+        new FakeTable(),
+        snapshots({ "data/manifest.json": manifest, [STATUS_PATH]: STATUS }),
+      ),
+    );
+    expect(result.statusCode).toBe(200);
+    const body = parse(result);
+    expect(body.maintenance).toEqual({
+      active: true,
+      until: "2026-10-17T07:00:00Z",
+    });
+    const source = JSON.parse(STATUS).beaches as Record<
+      string,
+      { category: string }
+    >;
+    for (const [id, beach] of Object.entries(source)) {
+      expect(body.beaches[id].category).toBe(beach.category);
     }
   });
 
