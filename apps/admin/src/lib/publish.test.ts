@@ -7,6 +7,7 @@ import {
   jobInFlight,
   jobPhase,
   nonZeroCategoryDeltas,
+  parseAppSettings,
   pendingNoticeDiff,
   reasonKey,
   signed,
@@ -218,6 +219,29 @@ describe("게시 기록 페이징", () => {
       from: 11,
       to: 12,
       atEnd: true,
+    });
+  });
+});
+
+describe("parseAppSettings", () => {
+  it("응답에 settings가 없으면 absent, 있는데 비거나 형식이 틀리면 invalid, 올바르면 ok", () => {
+    expect(parseAppSettings(undefined)).toEqual({ kind: "absent" });
+    expect(parseAppSettings(null)).toEqual({ kind: "invalid" });
+    expect(parseAppSettings({})).toEqual({ kind: "invalid" });
+    expect(
+      parseAppSettings({ maintenance: { active: false }, minWebBuild: 0 }),
+    ).toEqual({ kind: "invalid" });
+    expect(
+      parseAppSettings({
+        maintenance: { active: true, until: "2026-11-14T06:00:00Z" },
+        minWebBuild: 1,
+      }),
+    ).toEqual({
+      kind: "ok",
+      value: {
+        maintenance: { active: true, until: "2026-11-14T06:00:00Z" },
+        minWebBuild: 1,
+      },
     });
   });
 });

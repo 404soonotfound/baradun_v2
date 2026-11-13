@@ -20,12 +20,12 @@ import {
   jobInFlight,
   jobPhase,
   nonZeroCategoryDeltas,
+  parseAppSettings,
   pendingNoticeDiff,
   reapplyNotice,
   reasonKey,
   signed,
   versionIso,
-  type AppSettingsView,
   type CategoryCounts,
   type HeldNoticeView,
   type HistoryItem,
@@ -41,7 +41,15 @@ import { pageRows } from "@/lib/paging";
 import { AdminShell } from "./admin-shell";
 import { labelText } from "./beach-status";
 import { ConfirmDialog } from "./confirm-dialog";
-import { CELL_END, CELL_NAME, DataTable, Pager, TD, TH, TR } from "./data-table";
+import {
+  CELL_END,
+  CELL_NAME,
+  DataTable,
+  Pager,
+  TD,
+  TH,
+  TR,
+} from "./data-table";
 import { useSlow } from "./use-slow";
 import { Button, Notice, SUCCESS_BADGE } from "./ui";
 
@@ -259,37 +267,50 @@ function AppSettingsBar({
   settings,
   maintenancePending,
 }: {
-  settings: AppSettingsView | null | undefined;
+  settings: unknown;
   maintenancePending: boolean | null;
 }) {
-  const maintenanceLabel = settings
-    ? settings.maintenance.active
-      ? t.settings.maintenanceOn
-      : t.settings.maintenanceOff
-    : t.settings.maintenanceUnknown;
-  const dotColor = settings?.maintenance.active
-    ? "bg-status-stale-fg"
-    : "bg-text-muted";
+  const state = parseAppSettings(settings);
+  const maintenanceLabel =
+    state.kind === "ok"
+      ? state.value.maintenance.active
+        ? t.settings.maintenanceOn
+        : t.settings.maintenanceOff
+      : t.settings.maintenanceUnknown;
+  const dotColor =
+    state.kind === "ok" && state.value.maintenance.active
+      ? "bg-status-stale-fg"
+      : "bg-text-muted";
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-admin-box border border-border-default bg-bg-surface px-3 py-2 text-body-s text-text-body">
       <b className="font-semibold text-text-default">{t.settings.title}</b>
-      <span className="inline-flex items-center gap-1.5">
-        <span
-          aria-hidden="true"
-          className={`size-2 shrink-0 rounded-full ${dotColor}`}
-        />
-        <span>{maintenanceLabel}</span>
-        {maintenancePending === true && (
-          <span className="text-status-stale-fg">
-            · {t.settings.maintenancePending}
+      {state.kind !== "absent" ? (
+        <>
+          <span className="inline-flex items-center gap-1.5">
+            <span
+              aria-hidden="true"
+              className={`size-2 shrink-0 rounded-full ${dotColor}`}
+            />
+            <span>{maintenanceLabel}</span>
+            {maintenancePending === true && (
+              <span className="text-status-stale-fg">
+                · {t.settings.maintenancePending}
+              </span>
+            )}
           </span>
-        )}
-      </span>
-      <span>
-        {settings
-          ? fill(t.settings.minWebBuild, { version: settings.minWebBuild })
-          : t.settings.minWebBuildUnknown}
-      </span>
+          <span>
+            {state.kind === "ok"
+              ? fill(t.settings.minWebBuild, { version: state.value.minWebBuild })
+              : t.settings.minWebBuildUnknown}
+          </span>
+        </>
+      ) : (
+        maintenancePending === true && (
+          <span className="text-status-stale-fg">
+            {t.settings.maintenancePending}
+          </span>
+        )
+      )}
       <span className="text-text-muted">{t.settings.note}</span>
       <a
         href={PUBLISH_POLICY_URL}
@@ -942,10 +963,9 @@ function HistoryList({
   };
   return (
     <>
-      <div className="hidden overflow-x-auto md:block">
+      <div className="hidden md:block">
         <DataTable
           caption={t.history}
-          className="[&_th]:px-2.5 [&_td]:px-2.5 [&_th:first-child]:pl-3.5 [&_td:first-child]:pl-3.5 [&_th:last-child]:pr-3.5 [&_td:last-child]:pr-3.5"
           head={
             <>
               <th scope="col" className={TH}>
@@ -988,7 +1008,7 @@ function HistoryList({
                     </p>
                   )}
                 </td>
-                <td className={TD.replace("whitespace-nowrap", "whitespace-normal")}>
+                <td className={`${TD} whitespace-normal`}>
                   <span className={CELL_NAME}>
                     {item.result === "published" ? changesText(item) : "—"}
                   </span>
@@ -996,20 +1016,16 @@ function HistoryList({
                     {sourceText(item)}
                   </p>
                 </td>
-                <td className={TD.replace("whitespace-nowrap", "whitespace-normal")}>
+                <td className={`${TD} whitespace-normal`}>
                   {item.result === "published" ? (
                     <span className="inline-flex items-center gap-1.5 text-body-s text-text-body">
                       <PassIcon />
                       <span>{t.verifyPass}</span>
                     </span>
                   ) : (
-                    <span className="flex max-w-[150px] items-start gap-1.5 text-body-s text-danger-fg">
-                      <span className="mt-0.5 shrink-0">
-                        <FailIcon />
-                      </span>
-                      <span className="min-w-0 [overflow-wrap:anywhere]">
-                        {reasonText(item.reason)}
-                      </span>
+                    <span className="inline-flex items-center gap-1.5 text-body-s text-danger-fg">
+                      <FailIcon />
+                      <span>{reasonText(item.reason)}</span>
                     </span>
                   )}
                 </td>
@@ -1431,7 +1447,10 @@ export function PublishScreen({
     setDialog({ kind: "publish" });
   };
 
-  const openRollback = (version: string, triggerEl: HTMLButtonElement | null) => {
+  const openRollback = (
+    version: string,
+    triggerEl: HTMLButtonElement | null,
+  ) => {
     dialogTrigger.current = triggerEl;
     setWord("");
     setDialog({ kind: "rollback", version });
@@ -1700,10 +1719,10 @@ export function PublishScreen({
           />
         )}
 
-        <div className="mt-4 grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_300px] lg:items-start">
+        <div className="mt-4 grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
           <section
             aria-labelledby="publish-history"
-            className="min-w-0 flex flex-col gap-3"
+            className="flex flex-col gap-3"
           >
             <h2
               id="publish-history"

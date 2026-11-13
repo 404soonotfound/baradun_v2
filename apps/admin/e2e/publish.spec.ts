@@ -256,14 +256,18 @@ test("게시 현황: 현재 게시본·다음 자동 게시·대기 공지·되�
     "해변 ID 대조 불일치(누락·추가·중복)",
   );
   await expect(history(page).nth(2)).toContainText("확인 못 함(이전 기록)");
+  await expect(history(page).nth(2)).toContainText("지금 게시 · 운영자");
   await expect(page.getByText("앱 설정")).toBeVisible();
+  await expect(page.getByText("서비스 점검 확인 못 함")).toHaveCount(0);
   await expect(
     page.getByRole("link", { name: "GitHub에서 보기" }),
   ).toBeVisible();
+  const pendingRegion = page.getByRole("region", { name: "대기 중인 변경" });
+  await expect(pendingRegion.getByText("title.ko: 새벽 점검 예고")).toBeVisible();
   await expect(
-    page
-      .getByRole("region", { name: "대기 중인 변경" })
-      .getByText("title.ko: 새벽 점검 예고"),
+    pendingRegion.getByText(
+      "이전 값은 아직 보여 드릴 수 없어요 · 바뀔 내용만 보여요",
+    ),
   ).toBeVisible();
   await expectNoA11yViolations(page);
 });
@@ -807,5 +811,21 @@ test("편집 권한(editor)은 데이터 게시를 볼 수 있지만 지금 게�
     page.getByText(
       '"노출 변경" 권한이 필요해요. 운영 책임자에게 요청해 주세요.',
     ),
+  ).toBeVisible();
+});
+
+test("앱 설정이 응답에 있는데 비었거나 형식이 틀리면 '확인 못 함'을 표시한다", async ({
+  page,
+}) => {
+  await signIn(page);
+  await mockPublish(page, {
+    overview: () => overview({ settings: {} }),
+  });
+  await openPublish(page);
+
+  await expect(page.getByText("서비스 점검 확인 못 함")).toBeVisible();
+  await expect(page.getByText("최소 화면 버전 확인 못 함")).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "GitHub에서 보기" }),
   ).toBeVisible();
 });
