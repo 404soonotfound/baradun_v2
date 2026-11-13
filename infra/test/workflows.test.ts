@@ -21,11 +21,6 @@ const plan = readFileSync(
   "utf8",
 );
 
-// Project 스냅샷(아침 보고용): 비밀값 금지의 유일한 예외
-const PROJECT_SNAPSHOT = "project-snapshot.yml";
-const PROJECT_TOKEN_REF = "${{ secrets.PROJECT_READ_TOKEN }}";
-const projectSnapshot = workflows.find((w) => w.name === PROJECT_SNAPSHOT);
-
 // 주석(# 뒤)은 빼고 검사함
 const codeLines = (text: string) =>
   text
@@ -622,11 +617,7 @@ describe("PR 필수 웹 검사 (BRD-102 결정 41·42)", () => {
 
   it("워크플로는 secrets.*나 API 키 환경 변수를 쓰지 않고, 웹 빌드에는 공개 변수만 넘긴다 (BRD-67)", () => {
     for (const w of workflows) {
-      let text = codeLines(w.text).join("\n");
-      // 예외 하나: Project 스냅샷의 읽기 전용 토큰(아래 테스트에서 범위를 따로 검사)
-      if (w.name === PROJECT_SNAPSHOT) {
-        text = text.replaceAll(PROJECT_TOKEN_REF, "");
-      }
+      const text = codeLines(w.text).join("\n");
       expect(text, w.name).not.toMatch(/\bsecrets\./);
       expect(text, w.name).not.toMatch(
         /\b(KMA_APIHUB_AUTH_KEY|DATA_GO_KR_SERVICE_KEY)\b/,
@@ -660,48 +651,6 @@ describe("PR 필수 웹 검사 (BRD-102 결정 41·42)", () => {
     expect(gitleaks).toContain("sha256sum -c -");
     expect(gitleaks).toContain(
       "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb",
-    );
-  });
-});
-
-describe("Project 스냅샷 워크플로: 비밀값 예외 범위", () => {
-  const text = codeLines(projectSnapshot?.text ?? "").join("\n");
-
-  it("예약·수동 실행만 받고 PR·push 이벤트로 돌지 않는다", () => {
-    expect(projectSnapshot).toBeDefined();
-    const on = text.slice(
-      text.indexOf("\non:"),
-      text.indexOf("\npermissions:"),
-    );
-    expect(on).toMatch(/schedule:/);
-    expect(on).toMatch(/workflow_dispatch:/);
-    expect(on).not.toMatch(
-      /\b(pull_request|push|issue_comment|workflow_run|repository_dispatch)\b/,
-    );
-  });
-
-  it("비밀값은 PROJECT_READ_TOKEN 하나를 한 번만 쓴다", () => {
-    expect(text.match(/\bsecrets\.[A-Za-z0-9_]+/g)).toEqual([
-      "secrets.PROJECT_READ_TOKEN",
-    ]);
-  });
-
-  it("저장소 코드를 받지 않고 외부 Action도 쓰지 않는다", () => {
-    expect(text).not.toMatch(/^\s*(?:-\s*)?uses:/m);
-    expect(text).not.toMatch(/\bnpm\b|\bnode\b/);
-  });
-
-  it("기본 권한은 읽기, 쓰기는 project-snapshot 브랜치 push 하나뿐이다", () => {
-    expect(text).toMatch(/^permissions:\n\s+contents: read$/m);
-    expect(text.match(/contents: write/g)).toHaveLength(1);
-    expect(text).not.toMatch(/id-token:|pull-requests: write|issues: write/);
-    const pushes = text.match(/HEAD:refs\/heads\/\S+/g);
-    expect(pushes).toEqual(["HEAD:refs/heads/project-snapshot"]);
-  });
-
-  it("항목이 비었거나 totalCount와 다르면 스냅샷을 바꾸지 않고 멈춘다", () => {
-    expect(text).toContain(
-      "(.items | length) > 0 and (.items | length) == .totalCount",
     );
   });
 });
