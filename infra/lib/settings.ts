@@ -30,6 +30,8 @@ export const LOG_RETENTION = logs.RetentionDays.ONE_WEEK;
 export const API_KEY_PARAMETER_PREFIX = "/baradun/v2/api-keys/";
 export const API_KEY_NAMES = ["data-go-kr", "kma-apihub"] as const;
 export type ApiKeyName = (typeof API_KEY_NAMES)[number];
+// GA4 Data API 서비스 계정 키 파라미터(#333 ADM-STATS). RoleBoundary(/baradun/v2/api-keys/*) 범위 안에 둠
+export const GA4_SERVICE_ACCOUNT_PARAM = `${API_KEY_PARAMETER_PREFIX}ga4-service-account`;
 
 export function apiKeyParameterName(name: ApiKeyName): string {
   return `${API_KEY_PARAMETER_PREFIX}${name}`;

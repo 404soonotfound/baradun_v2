@@ -11,6 +11,7 @@ import {
   API_KEY_NAMES,
   apiKeyParameterName,
   DATA_PREFIX,
+  GA4_SERVICE_ACCOUNT_PARAM,
   INQUIRY_STATUS_INDEX,
   LOG_RETENTION,
   NOTICE_KEY,
@@ -51,6 +52,8 @@ export interface OpsApiProps {
   readonly publisher: lambda.IFunction;
   // 게시 변경 미리보기 함수(#331, 읽기 전용). 동기 호출
   readonly preview: lambda.IFunction;
+  // GA4 속성 ID(#333 ADM-STATS). 비어 있으면 미연결로 동작
+  readonly ga4PropertyId: string;
 }
 
 // 감사 기록 파티션 키 모양(services/src/admin/keys.ts AUDIT_PREFIX와 같음)
@@ -143,6 +146,19 @@ export class OpsApi extends Construct {
         ),
       }),
     );
+    // 이용 통계 GA4 서비스 계정 키 읽기(#333 ADM-STATS). 해당 파라미터 1개로만 좁힘
+    this.role.addToPolicy(
+      new iam.PolicyStatement({
+        actions: ["ssm:GetParameter"],
+        resources: [
+          Stack.of(this).formatArn({
+            service: "ssm",
+            resource: "parameter",
+            resourceName: GA4_SERVICE_ACCOUNT_PARAM.slice(1),
+          }),
+        ],
+      }),
+    );
     // 해변 관리 지금 표시 상태(BRD-150): 게시본 data/ 읽기만
     this.role.addToPolicy(
       new iam.PolicyStatement({
@@ -218,6 +234,9 @@ export class OpsApi extends Construct {
         PUBLISHER_FUNCTION_NAME: props.publisher.functionName,
         // 게시 변경 미리보기 함수(services/src/admin/handler.ts publisherInvoker.preview)
         PREVIEW_FUNCTION_NAME: props.preview.functionName,
+        // 이용 통계 GA4 연동(#333 ADM-STATS)
+        GA4_PROPERTY_ID: props.ga4PropertyId,
+        GA4_SERVICE_ACCOUNT_PARAM,
       },
     });
     // 함수 URL로만 부름(동기). 비동기 호출 재시도는 막아 둠(11장 재시도 제한)
