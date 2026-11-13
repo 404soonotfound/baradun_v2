@@ -259,7 +259,7 @@ const r = t.account.mfaReset;
 
 // 결과 문구. 성공·이미 없음은 안내(neutral), 그 밖은 실패(fail)
 function resetNotice(
-  outcome: Exclude<MfaResetOutcome, "reauth">,
+  outcome: MfaResetOutcome,
   email: string,
 ): { tone: "neutral" | "fail"; text: string } {
   switch (outcome) {
@@ -275,6 +275,9 @@ function resetNotice(
       return { tone: "fail", text: r.invalidEmail };
     case "forbidden":
       return { tone: "fail", text: r.forbidden };
+    // 요청이 거부돼 바뀐 것이 없음. 세션 문구를 그대로 씀(다시 로그인하면 다시 할 수 있음)
+    case "expired":
+      return { tone: "fail", text: t.session.expiredTitle };
     case "unknown":
       return { tone: "fail", text: r.unknown };
   }
@@ -322,8 +325,6 @@ function MfaResetSection({
     setBusy(true);
     void (async () => {
       const outcome = await resetOperatorMfa(target, token);
-      // 다시 로그인이 필요하면 세션 감시가 로그인 화면으로 보냄. 여기서는 결과를 단정하지 않음
-      if (outcome === "reauth") return;
       setNotice(resetNotice(outcome, target));
       if (outcome === "reset" || outcome === "already_none") setEmail("");
       setTarget(null);

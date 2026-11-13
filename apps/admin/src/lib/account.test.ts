@@ -43,7 +43,8 @@ describe("mfaResetOutcome", () => {
     ["권한 없음", fail(403, { code: "forbidden" }), "forbidden"],
     ["서버 오류", fail(500, { code: "internal" }), "unknown"],
     ["응답 없음", { ok: false, status: 0, code: "network" }, "unknown"],
-    ["다시 로그인", { ok: false, status: 0, code: "reauth" }, "reauth"],
+    ["토큰 없음", { ok: false, status: 0, code: "reauth" }, "expired"],
+    ["로그인 만료(401)", fail(401, { code: "session_expired" }), "expired"],
   ])("%s → %s", (_, result, outcome) => {
     expect(mfaResetOutcome(result)).toBe(outcome);
   });
