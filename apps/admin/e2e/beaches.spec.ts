@@ -156,7 +156,7 @@ async function openBeaches(page: Page) {
   await page
     .getByRole("navigation", { name: "운영 메뉴" })
     .filter({ visible: true })
-    .getByRole("link", { name: "해변 관리" })
+    .getByRole("link", { name: "해변", exact: true })
     .click();
   await expect(
     page.getByRole("heading", { name: "해변 관리", level: 1 }),

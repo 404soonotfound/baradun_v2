@@ -51,7 +51,7 @@ async function openCollection(page: Page) {
   await page
     .getByRole("navigation", { name: "운영 메뉴" })
     .filter({ visible: true })
-    .getByRole("link", { name: "데이터 수집 현황" })
+    .getByRole("link", { name: "수집 현황" })
     .click();
   await expect(
     page.getByRole("heading", { name: "데이터 수집 현황", level: 1 }),

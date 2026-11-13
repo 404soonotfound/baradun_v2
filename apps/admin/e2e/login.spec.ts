@@ -6,6 +6,7 @@ import {
   logout,
   mockCognito,
   mockOps,
+  openAccountMenu,
   signInWithPassword,
   srpScript,
   test,
@@ -190,6 +191,7 @@ test.describe("운영자 로그인", () => {
     await mockOps(page, ME_OK);
     await signInWithPassword(page, "/login/", OPS);
     await expect(page.getByRole("heading", { name: "운영 홈" })).toBeVisible();
+    await openAccountMenu(page);
     await page.getByRole("link", { name: "내 계정" }).click();
     await expect(page.getByRole("heading", { name: "내 계정" })).toBeVisible();
 
@@ -443,6 +445,7 @@ test.describe("세션 시간 (D16-A3·E1, 캔버스 V31·E11)", () => {
     );
     await mockOps(page, ME_OK);
     await signInWithPassword(page, "/login/", OPS);
+    await openAccountMenu(page);
     await page.getByRole("link", { name: "내 계정" }).click();
     await expect(page.getByRole("heading", { name: "내 계정" })).toBeVisible();
 
@@ -492,6 +495,7 @@ test.describe("세션 시간 (D16-A3·E1, 캔버스 V31·E11)", () => {
     await signInWithPassword(page, "/login/", OPS);
     await page.getByLabel("인증 앱 코드 6자리").fill("123456");
     await page.getByRole("button", { name: "로그인", exact: true }).click();
+    await openAccountMenu(page);
     await page.getByRole("link", { name: "내 계정" }).click();
     await page.getByLabel("지금 비밀번호").fill("draft-kept");
 
