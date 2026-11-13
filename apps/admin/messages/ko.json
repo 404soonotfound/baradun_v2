@@ -13,6 +13,9 @@
     "back": "뒤로",
     "working": "확인하는 중이에요",
     "configError": "로그인 설정을 불러오지 못했어요. 이 화면으로는 로그인할 수 없어요. 운영 책임자에게 배포 설정을 확인해 달라고 해 주세요.",
+    "configErrorTitle": "로그인 설정을 불러오지 못했어요.",
+    "configErrorBody": "이 화면에서는 로그인할 수 없어요. 운영 책임자에게 배포 설정을 확인해 달라고 해 주세요.",
+    "retryLoad": "다시 불러오기",
     "network": "서버에 연결하지 못했어요. 입력한 내용은 그대로예요. 인터넷 연결을 확인하고 다시 시도해 주세요.",
     "unknown": "알 수 없는 문제로 처리하지 못했어요. 입력한 내용은 그대로예요. 잠시 뒤 다시 시도해 주세요.",
     "limit": "요청이 너무 많아요. 잠시 뒤 다시 시도해 주세요."
@@ -702,7 +705,7 @@
   },
   "audit": {
     "title": "변경 이력",
-    "description": "운영자가 바꾼 것 · 고치거나 지울 수 없어요 · 1년 보관",
+    "description": "운영자가 바꾼 것 · 고치거나 지울 수 없어요 · 1년 보관 · 추가만 돼요",
     "tabsLabel": "분류로 거르기",
     "all": "전체",
     "category": {
@@ -1432,17 +1435,13 @@
   },
   "policies": {
     "title": "운영 정책",
-    "intro": "원본은 노션 결정 기록이에요. 여기는 읽기 전용이에요.",
+    "introMeta": "{statusSummary} · 원본은 노션 결정 기록 · 노션 마지막 수정 {revision} · 동기화 {fetchedAt} · 노션에서 고치면 다시 동기화해야 반영돼요 · 읽기 전용",
+    "statusAllConfirmed": "{count}개 모두 확정",
+    "statusMixed": "{confirmed}개 확정 · {draft}개 초안",
     "openNotion": "노션에서 열기",
     "newTab": "(새 탭)",
-    "revision": "노션 마지막 수정 {time}",
-    "fetchedAt": "마지막 동기화 {time}",
-    "metaJoin": " · ",
-    "syncTitle": "노션과 자동으로 동기화되지 않아요",
-    "syncBody": "노션에서 고친 내용은 다시 동기화해야 반영돼요. 내용이 다르면 노션 원본이 기준이에요.",
     "listLabel": "목차",
-    "itemTitle": "{number}. {title}",
-    "basis": "근거: {basis}",
+    "basis": "근거 · {basis}",
     "status": {
       "confirmed": "확정",
       "draft": "초안"

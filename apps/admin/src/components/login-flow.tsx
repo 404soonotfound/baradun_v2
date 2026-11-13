@@ -1,5 +1,6 @@
 "use client";
 
+import { AlertCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
 import {
   lazy,
@@ -7,9 +8,11 @@ import {
   useEffect,
   useRef,
   useState,
+  useSyncExternalStore,
   type FormEvent,
+  type ReactNode,
 } from "react";
-import { POOLS, type PoolKind } from "@/lib/auth/config";
+import { POOLS, type PoolConfig, type PoolKind } from "@/lib/auth/config";
 import { authFailureOf, type AuthFailure } from "@/lib/auth/errors";
 import { useAuthSession, useSessionSnapshot } from "@/lib/auth/provider";
 import { peekReturnTo, takeReturnTo } from "@/lib/auth/return-to";
@@ -140,11 +143,81 @@ function SignedOutNotice({ reason }: { reason: SignOutReason | null }) {
   }
 }
 
-export function LoginFlow({ pool }: { pool: PoolKind }) {
+export type ConfigStatus = "checking" | "ready" | "error";
+
+export function configStatusOf(
+  resolved: boolean,
+  config: PoolConfig | undefined,
+): ConfigStatus {
+  if (!resolved) return "checking";
+  return config ? "ready" : "error";
+}
+
+export function LoginConfigError({
+  pool,
+  onRetry,
+  localDev,
+}: {
+  pool: PoolKind;
+  onRetry: () => void;
+  localDev?: ReactNode;
+}) {
+  return (
+    <AuthShell
+      title={pool === "demo" ? t.login.demoTitle : t.login.title}
+      description={
+        pool === "demo" ? t.login.demoDescription : t.login.description
+      }
+    >
+      <div
+        role="alert"
+        className="flex items-start gap-2.5 rounded-admin-control border border-danger-border bg-status-blocked-bg px-3 py-2.5 text-label-s leading-[1.55]"
+      >
+        <AlertCircle
+          size={16}
+          aria-hidden="true"
+          className="mt-px flex-none text-status-blocked-fg"
+        />
+        <p className="text-text-default">
+          <strong className="block font-semibold text-status-blocked-fg">
+            {t.common.configErrorTitle}
+          </strong>
+          {t.common.configErrorBody}
+        </p>
+      </div>
+      <Button variant="secondary" size="auth" onClick={onRetry}>
+        {t.common.retryLoad}
+      </Button>
+      {localDev}
+    </AuthShell>
+  );
+}
+
+const noopSubscribe = () => () => {};
+
+export function LoginFlow({
+  pool,
+  initialResolved,
+  poolConfig,
+  onRetryConfig,
+}: {
+  pool: PoolKind;
+  initialResolved?: boolean;
+  poolConfig?: PoolConfig | null;
+  onRetryConfig?: () => void;
+}) {
   const router = useRouter();
   const session = useAuthSession();
   const snapshot = useSessionSnapshot();
-  const config = POOLS?.[pool];
+  const config =
+    poolConfig === undefined ? POOLS?.[pool] : (poolConfig ?? undefined);
+  // 정적 HTML·첫 hydration 전에는 false(확인 중)로 두어 오류 상자가 잠깐 보이지 않게 함
+  const mounted = useSyncExternalStore(
+    noopSubscribe,
+    () => true,
+    () => false,
+  );
+  const resolved = initialResolved ?? mounted;
   const [view, setView] = useState<View>({ kind: "form", error: null });
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -217,12 +290,34 @@ export function LoginFlow({ pool }: { pool: PoolKind }) {
     </Suspense>
   ) : null;
 
-  if (!config) {
+  const configStatus = configStatusOf(resolved, config);
+
+  if (configStatus === "checking") {
     return (
-      <AuthShell title={pool === "demo" ? t.login.demoTitle : t.login.title}>
-        <Notice tone="fail" title={t.common.configError} role="alert" />
-        {localDev}
+      <AuthShell
+        title={pool === "demo" ? t.login.demoTitle : t.login.title}
+        description={
+          pool === "demo" ? t.login.demoDescription : t.login.description
+        }
+      >
+        {null}
       </AuthShell>
+    );
+  }
+
+  if (configStatus === "error" || !config) {
+    return (
+      <LoginConfigError
+        pool={pool}
+        localDev={localDev}
+        onRetry={() => {
+          if (onRetryConfig) {
+            onRetryConfig();
+          } else {
+            window.location.reload();
+          }
+        }}
+      />
     );
   }
 
