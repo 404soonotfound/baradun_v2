@@ -27,6 +27,7 @@ services:
   - "services/**"
   - "packages/contracts/**"
   - "data/photo-sources.json" # Lambda 번들에 들어가는 대장(catalog.test가 읽힘을 검사)
+  - "data/rip-current-beaches.json" # Lambda 번들에 들어가는 이안류 대응표(rip.test가 읽음)
   - "tools/republish/**" # 게시 함수를 사람이 부르는 도구(D20-4, 게시 함수 이벤트와 같은 모양)
 infra:
   - *shared
