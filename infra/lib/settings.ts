@@ -62,8 +62,9 @@ export const RETRY_LIMITS = {
 // - 로그인 반복 요청 경보(LoginAbuse, D17-4): 5개 (풀 2 × [시도 1 + 성공 1] + 계정 복구 1) → 무료 초과 5개 × $0.10 ≈ 월 $0.50
 // - 날씨 수집 계속 실패(WeatherFailing, BRD-181): 1개 (Errors) → 무료 초과 6개 × $0.10 ≈ 월 $0.60
 // - 운영 API 오류 급증(OpsApiErrors, BRD-157·D17-7): 2개 (Url5xxCount 1 + AuthDenied 로그 지표 1) → 무료 초과 8개 × $0.10 ≈ 월 $0.80 (이번 경보 몫 +$0.20)
-// 경보 리소스 자체의 개수 상한: 12 → 13(OpsApiErrors 추가, D17-7)
-export const MAX_ALARMS = 13;
+// - 문의 이메일 기한 초과(InquiryEmailOverdue, BRD-119): 1개 (EmailOverdue 로그 지표 1) → 무료 초과 9개 × $0.10 ≈ 월 $0.90 (월 $1 예산 안)
+// 경보 리소스 자체의 개수 상한: 13 → 14(InquiryEmailOverdue 추가, BRD-119)
+export const MAX_ALARMS = 14;
 
 // 날씨 수집 계속 실패 경보(BRD-181). 1시간 구간에 오류가 있거나 실행이 없는 구간이 periods번 이어지면 울림
 // 매시 한 번 도는 수집기라 한 번의 일부 실패(아직 안 나온 발표·시간 예산)는 다음 실행이 메움 → 3시간 이어질 때만 알림
@@ -89,6 +90,13 @@ export const OPS_API_ALARM = {
   authFailures: 10,
   metricNamespace: "Baradun/Ops",
   metricName: "AuthDenied",
+} as const;
+
+// 문의 이메일 기한 초과(89일 이상 남음) 경보 기준(BRD-119). 일일 정리 작업이 1건 이상 발견해 로그를 남기면 울림
+export const INQUIRY_EMAIL_OVERDUE_ALARM = {
+  periodMinutes: 5,
+  metricNamespace: "Baradun/Inquiry",
+  metricName: "EmailOverdue",
 } as const;
 export const MAX_DYNAMODB_CAPACITY_UNITS = 25; // 읽기·쓰기 각각, 모든 테이블·GSI 합계
 

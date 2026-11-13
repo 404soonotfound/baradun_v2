@@ -14,6 +14,7 @@ import * as subscriptions from "aws-cdk-lib/aws-sns-subscriptions"; // 이메일
 import { Construct } from "constructs";
 import * as path from "node:path";
 import {
+  INQUIRY_EMAIL_OVERDUE_ALARM,
   LOG_RETENTION,
   LOGIN_ABUSE_ALARM,
   OPS_API_ALARM,
@@ -57,6 +58,7 @@ export interface OpsAlarmsProps {
   readonly publisher: lambda.IFunction; // publish-snapshot 함수
   readonly opsApi: lambda.IFunction; // 운영 API 함수 /ops/* (D17-7)
   readonly opsApiLogGroup: logs.ILogGroup; // 운영 API 로그 그룹 (D17-7 권한 거부 지표 필터용)
+  readonly inquiryLogGroup: logs.ILogGroup; // 문의 함수 로그 그룹 (BRD-119 이메일 기한 초과 지표 필터용)
   // 로그인 반복 요청 감시 대상(운영자·데모 풀의 관리자 앱 클라이언트, D17-4)
   readonly signInClients: readonly {
     readonly userPoolId: string;
@@ -151,6 +153,7 @@ export class OpsAlarms extends Construct {
     this.loginAbuseAlarm(props.signInClients);
     this.weatherAlarm(collector("Weather"));
     this.opsApiErrorsAlarm(props.opsApi, props.opsApiLogGroup);
+    this.inquiryEmailOverdueAlarm(props.inquiryLogGroup);
 
     this.addKoreanNotifications();
   }
@@ -287,6 +290,35 @@ export class OpsAlarms extends Construct {
       evaluationPeriods: 1,
       treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
       alarmDescription: `운영 API 오류 급증. ${OPS_API_ALARM.periodMinutes}분에 5xx ${OPS_API_ALARM.serverErrors}회 또는 권한 거부(401·403) ${OPS_API_ALARM.authFailures}회 이상. CloudWatch 로그 확인 필요`,
+    });
+    this.alarms.push(alarm);
+  }
+
+  // ⑤-6 문의 이메일 기한 초과 경보(BRD-119): 89일 이상 남은 이메일 항목이 1건 이상 발견되면 울림
+  private inquiryEmailOverdueAlarm(logGroup: logs.ILogGroup): void {
+    const period = Duration.minutes(INQUIRY_EMAIL_OVERDUE_ALARM.periodMinutes);
+    const filter = new logs.MetricFilter(this, "InquiryEmailOverdueFilter", {
+      logGroup,
+      metricNamespace: INQUIRY_EMAIL_OVERDUE_ALARM.metricNamespace,
+      metricName: INQUIRY_EMAIL_OVERDUE_ALARM.metricName,
+      filterPattern: logs.FilterPattern.literal(
+        "%\\x22event\\x22:\\x22inquiry_email_overdue\\x22%",
+      ),
+      metricValue: "1",
+    });
+    const alarm = new cloudwatch.Alarm(this, "InquiryEmailOverdue", {
+      alarmName: this.alarmName("InquiryEmailOverdue"),
+      metric: filter.metric({
+        statistic: "Sum",
+        period,
+      }),
+      threshold: 1,
+      comparisonOperator:
+        cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+      evaluationPeriods: 1,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+      alarmDescription:
+        "89일 이상 남은 문의 이메일 항목이 발견됨. 일일 정리 작업 로그 확인 필요",
     });
     this.alarms.push(alarm);
   }

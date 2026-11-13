@@ -4,6 +4,7 @@ import * as s3 from "aws-cdk-lib/aws-s3";
 import * as sns from "aws-cdk-lib/aws-sns";
 import { Stack } from "aws-cdk-lib";
 import { Construct } from "constructs";
+import { INQUIRY_STATUS_INDEX } from "../settings";
 
 export interface InquiryRoleProps {
   readonly table: dynamodb.ITable;
@@ -35,6 +36,13 @@ export class InquiryRole extends Construct {
           "dynamodb:UpdateItem",
         ],
         resources: [props.table.tableArn],
+      }),
+    );
+    // 일일 이메일 정리 작업(BRD-119)이 기한 지난 문의를 찾기 위해 상태 GSI만 조회(테이블 Scan 없음)
+    this.role.addToPolicy(
+      new iam.PolicyStatement({
+        actions: ["dynamodb:Query"],
+        resources: [`${props.table.tableArn}/index/${INQUIRY_STATUS_INDEX.name}`],
       }),
     );
     this.role.addToPolicy(

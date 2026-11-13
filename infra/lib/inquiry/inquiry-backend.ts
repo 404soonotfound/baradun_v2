@@ -1,4 +1,4 @@
-import { Duration, RemovalPolicy } from "aws-cdk-lib";
+import { Duration, RemovalPolicy, TimeZone } from "aws-cdk-lib";
 import * as cloudfront from "aws-cdk-lib/aws-cloudfront";
 import * as origins from "aws-cdk-lib/aws-cloudfront-origins";
 import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
@@ -6,6 +6,8 @@ import * as lambda from "aws-cdk-lib/aws-lambda";
 import * as nodejs from "aws-cdk-lib/aws-lambda-nodejs";
 import * as logs from "aws-cdk-lib/aws-logs";
 import * as s3 from "aws-cdk-lib/aws-s3";
+import * as scheduler from "aws-cdk-lib/aws-scheduler";
+import * as targets from "aws-cdk-lib/aws-scheduler-targets";
 import * as sns from "aws-cdk-lib/aws-sns";
 import * as subscriptions from "aws-cdk-lib/aws-sns-subscriptions";
 import { Construct } from "constructs";
@@ -76,6 +78,7 @@ export function sharpBundlingCommand(
 
 export class InquiryBackend extends Construct {
   readonly function: nodejs.NodejsFunction;
+  readonly logGroup: logs.LogGroup;
   readonly photoBucket: s3.Bucket;
   readonly topic: sns.Topic;
   readonly functionUrl: lambda.FunctionUrl;
@@ -115,10 +118,10 @@ export class InquiryBackend extends Construct {
       photoBucket: this.photoBucket,
       topic: this.topic,
     });
-    const logGroup = new logs.LogGroup(this, "Logs", {
+    this.logGroup = new logs.LogGroup(this, "Logs", {
       retention: LOG_RETENTION,
     });
-    logGroup.grant(role.role, "logs:CreateLogStream", "logs:PutLogEvents");
+    this.logGroup.grant(role.role, "logs:CreateLogStream", "logs:PutLogEvents");
 
     this.function = new nodejs.NodejsFunction(this, "Function", {
       entry: HANDLER_FILE,
@@ -127,7 +130,7 @@ export class InquiryBackend extends Construct {
       architecture: lambda.Architecture.ARM_64,
       memorySize: 256,
       timeout: Duration.seconds(30),
-      logGroup,
+      logGroup: this.logGroup,
       role: role.role,
       description: "baradun v2 data inquiry intake",
       projectRoot: REPO_ROOT,
@@ -156,6 +159,23 @@ export class InquiryBackend extends Construct {
     this.function.configureAsyncInvoke({
       retryAttempts: 0,
       maxEventAge: Duration.seconds(RETRY_LIMITS.asyncMaxEventAgeSeconds),
+    });
+
+    // 하루 1회 기한(88일) 지난 문의 이메일 항목을 명시적으로 삭제함 (BRD-119)
+    new scheduler.Schedule(this, "EmailCleanupSchedule", {
+      schedule: scheduler.ScheduleExpression.cron({
+        minute: "30",
+        hour: "3",
+        timeZone: TimeZone.ASIA_SEOUL,
+      }),
+      target: new targets.LambdaInvoke(this.function, {
+        input: scheduler.ScheduleTargetInput.fromObject({
+          action: "cleanup_expired_emails",
+        }),
+        retryAttempts: RETRY_LIMITS.scheduleMaxRetries,
+        maxEventAge: Duration.seconds(RETRY_LIMITS.scheduleMaxEventAgeSeconds),
+      }),
+      description: "Delete expired inquiry email items daily (88-day retention)",
     });
 
     this.functionUrl = this.function.addFunctionUrl({
