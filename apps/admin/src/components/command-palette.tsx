@@ -45,6 +45,17 @@ export function CommandPalette({
     if (!open && el.open) el.close();
   }, [open]);
 
+  // ↑↓·검색어로 고른 결과를 목록 안에서 보이게 함. 포커스는 입력 칸에 남아 aria-activedescendant만으로는 스크롤되지 않음
+  // 마우스를 올려 고른 때는 스크롤하지 않음(누르려던 항목이 마우스 아래에서 움직이지 않게)
+  const follow = useRef(false);
+  useEffect(() => {
+    if (!open || !follow.current) return;
+    follow.current = false;
+    document
+      .getElementById(`${id}-option-${current}`)
+      ?.scrollIntoView({ block: "nearest" });
+  }, [open, id, current, query]);
+
   const close = () => {
     setQuery("");
     setActive(0);
@@ -64,6 +75,7 @@ export function CommandPalette({
       e.preventDefault();
       if (found.length === 0) return;
       const step = e.key === "ArrowDown" ? 1 : -1;
+      follow.current = true;
       setActive((current + step + found.length) % found.length);
     } else if (e.key === "Enter") {
       e.preventDefault();
@@ -103,6 +115,7 @@ export function CommandPalette({
               placeholder={t.searchPlaceholder}
               value={query}
               onChange={(e) => {
+                follow.current = true;
                 setQuery(e.target.value);
                 setActive(0);
               }}
