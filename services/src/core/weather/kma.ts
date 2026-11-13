@@ -17,8 +17,11 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const isObject = (v: unknown): v is Record<string, unknown> =>
   typeof v === "object" && v !== null && !Array.isArray(v);
 
-// 응답 껍데기 → 행 목록. resultCode 00이고 행이 있어야 정상. 받은 행이 totalCount보다 적으면 잘린 응답
-export function parseEnvelope(body: string): Parsed<unknown[]> {
+// 응답 한 쪽 → 행 목록과 전체 행 수(totalCount, 없으면 null). resultCode 00이고 행이 있어야 정상
+// 쪽을 나눠 받는 단기예보가 씀. 잘림 판단은 부르는 쪽이 함
+export function parsePage(
+  body: string,
+): Parsed<{ items: unknown[]; total: number | null }> {
   let json: unknown;
   try {
     json = JSON.parse(body);
@@ -47,10 +50,21 @@ export function parseEnvelope(body: string): Parsed<unknown[]> {
   const list = Array.isArray(raw) ? raw : raw === undefined ? [] : [raw];
   if (list.length === 0) return { status: "failed", reason: "no_rows" };
   const total = isObject(resBody) ? Number(resBody.totalCount) : NaN;
-  if (Number.isFinite(total) && total > list.length) {
-    return { status: "failed", reason: `truncated:${list.length}/${total}` };
+  return {
+    status: "ok",
+    value: { items: list, total: Number.isFinite(total) ? total : null },
+  };
+}
+
+// 응답 껍데기 → 행 목록. 받은 행이 totalCount보다 적으면 잘린 응답
+export function parseEnvelope(body: string): Parsed<unknown[]> {
+  const page = parsePage(body);
+  if (page.status === "failed") return page;
+  const { items, total } = page.value;
+  if (total !== null && total > items.length) {
+    return { status: "failed", reason: `truncated:${items.length}/${total}` };
   }
-  return { status: "ok", value: list };
+  return { status: "ok", value: items };
 }
 
 // 같은 실행 안에서 한 번 더 받아 볼 실패(BRD-186). 기상청 쪽 일시 오류와 실황 기온 없음만
@@ -158,12 +172,21 @@ export function parseShortForecast(
 ): Parsed<ShortForecast> {
   const env = parseEnvelope(body);
   if (env.status === "failed") return env;
+  return parseShortForecastItems(env.value, base, grid);
+}
+
+// 단기예보 행 목록 → 시각별 값·최저/최고. 쪽을 나눠 받은 행을 합친 뒤에도 씀
+export function parseShortForecastItems(
+  items: unknown[],
+  base: { date: string; time: string },
+  grid: Grid,
+): Parsed<ShortForecast> {
   const issuedMs = kstToMs(base.date, base.time);
   if (issuedMs === null) return { status: "failed", reason: "base_format" };
   const issuedAt = formatUtcIso(issuedMs);
   const hours = new Map<number, (number | null)[]>();
   const extremes: Record<string, { tmn?: Extreme; tmx?: Extreme }> = {};
-  for (const item of env.value) {
+  for (const item of items) {
     if (!isObject(item)) return { status: "failed", reason: "item_format" };
     if (item.baseDate !== base.date || item.baseTime !== base.time) {
       return { status: "failed", reason: "base_mismatch" };

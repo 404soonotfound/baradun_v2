@@ -7,7 +7,8 @@ import {
   parseMidLand,
   parseMidTa,
   parseNow,
-  parseShortForecast,
+  parsePage,
+  parseShortForecastItems,
   type Grid,
   type MidLandDay,
   type MidTaDay,
@@ -149,6 +150,40 @@ async function fetchJson<T>(
     return { status: "failed", reason: response.reason };
   }
   return parse(response.body);
+}
+
+// 단기예보 한 격자: totalCount가 한 쪽보다 크면 다음 쪽(pageNo)을 이어 받아 합친 뒤 해석함(17·20시 발표 1,052행)
+// 쪽 수 상한을 넘거나, 쪽마다 totalCount가 다르거나, 이어 받은 행이 totalCount보다 적으면 잘린 응답으로 실패
+// (일부 행만으로 저장하지 않음: 앞 발표가 남아 화면은 그 발표 시각을 보여 줌)
+// 다음 쪽은 시간 예산 안에서만 부름. 예산(30초)은 작업마다 요청 하나를 가정해 Lambda 60초에 맞춘 값이라
+// 예산이 지난 뒤 쪽을 더 부르면 최악 요청 시간(21초)이 겹쳐 60초를 넘을 수 있음 → 잘린 응답 실패로 남김
+async function fetchShortForecast(
+  deps: WeatherDeps,
+  pageUrl: (pageNo: number) => string,
+  base: { date: string; time: string },
+  grid: Grid,
+  withinBudget: () => boolean,
+): Promise<Parsed<ShortForecast>> {
+  const items: unknown[] = [];
+  let total: number | null = null;
+  for (let pageNo = 1; ; pageNo += 1) {
+    const response = await deps.get(pageUrl(pageNo));
+    if (response.status === "failed") {
+      return { status: "failed", reason: response.reason };
+    }
+    const page = parsePage(response.body);
+    if (page.status === "failed") return page;
+    if (pageNo > 1 && page.value.total !== total) {
+      return { status: "failed", reason: "total_mismatch" };
+    }
+    total = page.value.total;
+    items.push(...page.value.items);
+    if (total === null || items.length >= total) break;
+    if (pageNo >= COLLECT_POLICY.weatherShortMaxPages || !withinBudget()) {
+      return { status: "failed", reason: `truncated:${items.length}/${total}` };
+    }
+  }
+  return parseShortForecastItems(items, base, grid);
 }
 
 // 작업이 시간 예산 때문에 요청을 보내지 않고 끝나면 false(건너뛴 것으로 셈)
@@ -313,11 +348,12 @@ export async function collectWeather(
       g: Grid,
       base: { date: string; time: string },
       rows: number,
+      pageNo: number,
     ) =>
       new URLSearchParams({
         serviceKey: key,
         dataType: "JSON",
-        pageNo: "1",
+        pageNo: String(pageNo),
         numOfRows: String(rows),
         base_date: base.date,
         base_time: base.time,
@@ -325,13 +361,12 @@ export async function collectWeather(
         ny: String(g.ny),
       });
     for (const g of shortNeeded) {
-      const url = `${SHORT_BASE}getVilageFcst?${shortParams(g, shortBase, COLLECT_POLICY.weatherShortNumOfRows)}`;
+      const pageUrl = (pageNo: number) =>
+        `${SHORT_BASE}getVilageFcst?${shortParams(g, shortBase, COLLECT_POLICY.weatherShortNumOfRows, pageNo)}`;
+      const withinBudget = () =>
+        deps.clock() - startedMs <= COLLECT_POLICY.weatherBudgetMs;
       const load = () =>
-        safe(
-          fetchJson(deps, url, (body) =>
-            parseShortForecast(body, shortBase, g),
-          ),
-        );
+        safe(fetchShortForecast(deps, pageUrl, shortBase, g, withinBudget));
       tasks.push(async () => {
         record(
           "short",
@@ -390,7 +425,7 @@ export async function collectWeather(
     // 실황은 매시 다시 받으므로 맨 뒤. 시간 예산에 걸리면 덜 자주 오는 단기·중기 발표를 먼저 지킴
     const prevHour = latestBase(nowBase.ms - HOUR_MS, ALL_HOURS, 0);
     const nowUrl = (g: Grid, base: { date: string; time: string }) =>
-      `${SHORT_BASE}getUltraSrtNcst?${shortParams(g, base, COLLECT_POLICY.weatherNowNumOfRows)}`;
+      `${SHORT_BASE}getUltraSrtNcst?${shortParams(g, base, COLLECT_POLICY.weatherNowNumOfRows, 1)}`;
     const fetchNow = (g: Grid, base: { date: string; time: string }) =>
       safe(fetchJson(deps, nowUrl(g, base), (body) => parseNow(body, base, g)));
     // 이번 시각이 나왔는지는 첫 격자로 한 번만 확인(격자마다 두 번 부르면 같은 서비스 하루 한도에 가까워짐)
