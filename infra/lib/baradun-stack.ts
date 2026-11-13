@@ -202,6 +202,7 @@ export class BaradunStack extends Stack {
       publisher: publisher.function,
       opsApi: opsApi.function, // 운영 API 5xx·권한 거부 급증 감시(D17-7)
       opsApiLogGroup: opsApi.logGroup,
+      inquiryLogGroup: inquiry.logGroup, // 문의 이메일 89일 이상 기한 초과 감시(BRD-119)
       // 로그인 반복 요청 감시(D17-4): 운영자·데모 풀의 관리자 앱 클라이언트
       signInClients: [
         {
