@@ -9,6 +9,7 @@ import {
   type SourceState,
 } from "./collection";
 import type { InquiryPage } from "./inquiries";
+import { LOADING_TIMES } from "./loading-timing";
 import type { NoticeView } from "./notices";
 
 // 운영 홈 (BRD-149, 화면 설계서 6장 ADM-HOME). 이미 있는 운영 API 응답을 모아 요약만 계산함
@@ -164,9 +165,9 @@ export function partOf<T, U>(
     : { state: "ok", value };
 }
 
-// 칸 하나의 시간 제한(D16-E1 일반 조회 30초). 넘거나 예외가 나면 불러오지 못함
+// 칸 하나의 시간 제한(D26-4 15초, 옛 D16-E1 30초를 바꿈). 넘거나 예외가 나면 불러오지 못함
 // (opsFetch에 취소가 없어 요청 자체는 남지만, 칸이 '불러오는 중'에 머물지 않게 함)
-export const PART_TIMEOUT_MS = 30_000;
+export const PART_TIMEOUT_MS = LOADING_TIMES.timeout;
 
 export function settle<T>(
   load: () => Promise<Part<T>>,
@@ -205,3 +206,16 @@ export type Slot<T> = Part<T> | { readonly state: "loading" };
 
 export const valueOf = <T>(part: Slot<T> | undefined): T | null =>
   part?.state === "ok" ? part.value : null;
+
+// 다시 읽은 칸 결과를 앞 값과 합침(GH-462, 보드 L0 '다시 읽기')
+// 다시 읽기가 실패해도 앞에서 받은 값은 지우지 않음(stale: 앞 값을 두고 '마지막으로 받은 값이에요' 줄)
+// 앞 값이 없거나 권한 없음이면 실패를 그대로 보임(결측을 정상·0으로 채우지 않음)
+export function mergePart<T>(
+  prev: Slot<T>,
+  next: Part<T>,
+): { part: Slot<T>; stale: boolean } {
+  if (next.state === "failed" && prev.state === "ok") {
+    return { part: prev, stale: true };
+  }
+  return { part: next, stale: false };
+}
