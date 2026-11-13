@@ -4,6 +4,7 @@ import {
   ME_OK,
   expect,
   expectNoA11yViolations,
+  isDesktop,
   mockCognito,
   mockOps,
   signInWithPassword,
@@ -156,6 +157,26 @@ async function signIn(
 
 const cardsOf = (page: Page) => page.locator("dl[aria-label='운영 요약']");
 
+// PC 왼쪽 메뉴 아래 상태 칸(GH-450, 시안 V1·V6). 홈과 같은 수집 현황 응답으로 판단 출처를 봄
+const sideStatus = (page: Page) =>
+  page.getByRole("group", { name: "운영 상태" });
+
+test("수집 현황은 홈이 한 번 읽고, PC가 아니면 숨은 왼쪽 상태 칸은 따로 부르지 않는다", async ({
+  page,
+}) => {
+  const calls: string[] = [];
+  page.on("request", (req) => {
+    if (/\/ops\/collection(\?|$)/.test(req.url())) calls.push(req.url());
+  });
+  await signIn(page);
+  await expect(
+    page.getByText("판단에 쓰는 출처가 모두 정상이에요"),
+  ).toBeVisible();
+  await page.waitForTimeout(500);
+  // PC는 상태 칸이 보여 한 번 더 읽음(홈 화면 요청과 따로)
+  expect(calls).toHaveLength(isDesktop(page) ? 2 : 1);
+});
+
 test("모두 정상: 판단 출처 정상 한 줄, 요약 카드, 할 일 없음, 최근 변경", async ({
   page,
 }) => {
@@ -166,6 +187,10 @@ test("모두 정상: 판단 출처 정상 한 줄, 요약 카드, 할 일 없음
   ).toBeVisible();
   await expect(page.getByText("기상청 해상 특보 정상")).toBeVisible();
   await expect(page.getByText("기상청 해양 관측 정상")).toBeVisible();
+  if (isDesktop(page)) {
+    await expect(sideStatus(page).getByText("판단 출처 정상")).toBeVisible();
+    await expect(sideStatus(page).getByText(/^앱 게시본 \d/)).toBeVisible();
+  }
 
   const cards = cardsOf(page);
   await expect(cards.getByText("0건", { exact: true })).toBeVisible();
@@ -248,6 +273,10 @@ test("판단 출처 문제·새 문의·수정 대기 공지가 있으면 문제
   await expect(alert).toBeVisible();
   await expect(alert.getByText("기상청 해상 특보 지연")).toBeVisible();
   await expect(alert.getByText("기상청 해양 관측 일부 실패")).toBeVisible();
+  if (isDesktop(page))
+    await expect(
+      sideStatus(page).getByText("판단 출처 문제 2", { exact: true }),
+    ).toBeVisible();
   await expect(
     alert.getByRole("link", { name: "수집 현황 보기" }),
   ).toHaveAttribute("href", "/collection/");
@@ -294,6 +323,13 @@ test("불러오지 못한 값은 0·정상·'할 일 없음'으로 바꾸지 않
   });
   await expect(sources).toBeVisible();
   await expect(sources.getByText("오류 번호 req-7f3a2c91")).toBeVisible();
+  if (isDesktop(page)) {
+    await expect(sideStatus(page).getByText("상태 확인 못 함")).toBeVisible();
+    await expect(
+      sideStatus(page).getByText("앱 게시본 확인 못 함"),
+    ).toBeVisible();
+    await expect(sideStatus(page).getByText("판단 출처 정상")).toHaveCount(0);
+  }
   await expect(
     page.getByText("판단에 쓰는 출처가 모두 정상이에요"),
   ).toHaveCount(0);

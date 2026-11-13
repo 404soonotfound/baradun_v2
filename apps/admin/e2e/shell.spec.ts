@@ -2,6 +2,7 @@ import {
   ME_OK,
   expect,
   expectNoA11yViolations,
+  isDesktop,
   isMobile,
   mockCognito,
   mockOps,
@@ -18,9 +19,9 @@ const OPS = "ops@example.test";
 const MENU = [
   "운영 홈",
   "이용 통계",
-  "데이터 수집 현황",
+  "수집 현황",
   "데이터 출처",
-  "해변 관리",
+  "해변",
   "데이터 게시",
   "공지",
   "문의",
@@ -116,12 +117,118 @@ test("모바일 서랍: 메뉴 버튼으로 열고 Esc·바깥 누르기로 닫�
   await expect(drawer).toBeHidden();
 
   // 메뉴를 누르면 서랍이 닫히고 그 화면으로
-  await go(page, "해변 관리");
+  await go(page, "해변");
   await expect(drawer).toBeHidden();
   await expect(
     page.getByRole("heading", { name: "해변 관리", level: 1 }),
   ).toBeVisible();
   expect(await lock()).toBe("");
+});
+
+test.describe("PC 왼쪽 메뉴 (GH-450, 시안 V1 aside)", () => {
+  test("폭·항목 높이가 시안 값, 사용자 칸은 이메일과 '…' 메뉴(내 계정·로그아웃), Esc로 닫으면 포커스가 돌아온다 @smoke", async ({
+    page,
+  }, info) => {
+    test.skip(!isDesktop(page), "PC(1024px 이상)만");
+    const aside = page.locator("aside");
+    expect((await aside.boundingBox())?.width).toBe(220);
+    const home = nav(page).getByRole("link", { name: "운영 홈" });
+    expect((await home.boundingBox())?.height).toBe(33);
+    // 지금 화면: 파란 글자 + 굵기 600 + aria-current(색만으로 구분하지 않음)
+    await expect(home).toHaveAttribute("aria-current", "page");
+    await expect(home).toHaveCSS("font-weight", "600");
+    await expect(nav(page).getByRole("link", { name: "이용 통계" })).toHaveCSS(
+      "font-weight",
+      "500",
+    );
+    await expect(nav(page).getByText("기록", { exact: true })).toBeVisible();
+
+    // 이름 칸 없이 이메일. 내 계정·로그아웃은 메뉴를 열기 전에는 보이지 않음
+    await expect(aside.getByText(OPS, { exact: true })).toBeVisible();
+    await expect(aside.getByRole("button", { name: "로그아웃" })).toHaveCount(
+      0,
+    );
+    // 홈의 수집 현황 응답이 없으면(가짜 501) '확인 못 함'. 정상으로 두지 않음
+    const status = aside.getByRole("group", { name: "운영 상태" });
+    await expect(status.getByText("상태 확인 못 함")).toBeVisible();
+    await expect(status.getByText(/^운영 화면 /)).toBeVisible();
+
+    // 이메일은 말줄임이어도 전체 값이 title과 '…' 단추 이름에 들어감
+    await expect(aside.getByText(OPS, { exact: true })).toHaveAttribute(
+      "title",
+      OPS,
+    );
+    const more = aside.getByRole("button", { name: `계정 메뉴 · ${OPS}` });
+    await more.click();
+    await expect(more).toHaveAttribute("aria-expanded", "true");
+    await expect(aside.getByRole("button", { name: "로그아웃" })).toBeVisible();
+    await expectNoA11yViolations(page);
+    await page.keyboard.press("Escape");
+    await expect(more).toHaveAttribute("aria-expanded", "false");
+    await expect(more).toBeFocused();
+
+    // 키보드로 열면 Tab으로 바로 메뉴 항목에 닿고, 메뉴 밖으로 나가면 닫힘
+    // (WebKit은 Safari 기본 설정처럼 Tab이 링크로 가지 않아 Chromium·Firefox에서만 봄)
+    if (info.project.name !== "desktop-webkit") {
+      await page.keyboard.press("Enter");
+      await expect(more).toHaveAttribute("aria-expanded", "true");
+      await page.keyboard.press("Tab");
+      await expect(aside.getByRole("link", { name: "내 계정" })).toBeFocused();
+      await page.keyboard.press("Tab");
+      await expect(
+        aside.getByRole("button", { name: "로그아웃" }),
+      ).toBeFocused();
+      await page.keyboard.press("Tab");
+      await expect(more).toHaveAttribute("aria-expanded", "false");
+    }
+
+    await more.click();
+    await aside.getByRole("link", { name: "내 계정" }).click();
+    await expect(
+      page.getByRole("heading", { name: "내 계정", level: 1 }),
+    ).toBeVisible();
+  });
+
+  test("⌘K 찾기: 단축키·단추로 열고 화면 이름으로 찾아 Enter로 옮겨 간다", async ({
+    page,
+  }) => {
+    test.skip(!isDesktop(page), "PC(1024px 이상)만");
+    await page.keyboard.press("ControlOrMeta+k");
+    const dialog = page.getByRole("dialog", { name: "화면 찾기" });
+    await expect(dialog).toBeVisible();
+    const input = dialog.getByRole("combobox", { name: "화면 이름으로 찾기" });
+    await expect(input).toBeFocused();
+    // 검색어 없이 ↑로 맨 끝(내 계정)에 가면 그 항목이 목록 안에서 보이게 스크롤됨(Codex P2)
+    // 창 높이를 줄여 목록(최대 50vh)이 꼭 넘치게 한 뒤 원래 크기로 되돌림
+    const viewport = page.viewportSize();
+    await page.setViewportSize({ width: 1280, height: 560 });
+    await input.press("ArrowUp");
+    const last = dialog.getByRole("option", { name: "내 계정" });
+    await expect(last).toHaveAttribute("aria-selected", "true");
+    await expect(last).toBeInViewport();
+    if (viewport) await page.setViewportSize(viewport);
+    await input.fill("통계");
+    await expect(dialog.getByRole("option")).toHaveText(["이용 통계"]);
+    await expectNoA11yViolations(page);
+    await input.fill("없는화면");
+    await expect(dialog.getByRole("option")).toHaveCount(0);
+    await expect(dialog.getByRole("status")).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(dialog).toBeHidden();
+
+    await page.locator("aside").getByRole("button", { name: /찾기/ }).click();
+    await expect(dialog).toBeVisible();
+    await input.fill("공지");
+    await input.press("Enter");
+    await expect(dialog).toBeHidden();
+    await expect(
+      page.getByRole("heading", { name: "공지", level: 1 }),
+    ).toBeVisible();
+    await expect(nav(page).getByRole("link", { name: "공지" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+  });
 });
 
 test.describe("태블릿 아이콘 레일", () => {
@@ -161,9 +268,9 @@ test.describe("태블릿 아이콘 레일", () => {
     await expect(tip).toHaveText("로그아웃");
 
     await rail.getByRole("button", { name: "메뉴 펼치기" }).click();
-    expect((await rail.boundingBox())?.width).toBe(232);
+    expect((await rail.boundingBox())?.width).toBe(220);
     await expect(
-      rail.getByText("현황", { exact: true }).filter({ visible: true }),
+      rail.getByText("기록", { exact: true }).filter({ visible: true }),
     ).toBeVisible();
     await expect(
       rail.getByRole("button", { name: "메뉴 접기" }),

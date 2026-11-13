@@ -291,8 +291,19 @@ export async function openMenu(page: Page) {
     await page.getByRole("button", { name: "메뉴 열기" }).click();
 }
 
+// PC(1024px 이상)는 내 계정·로그아웃이 왼쪽 메뉴 아래 사용자 칸의 '…' 메뉴 안에 있음(GH-450)
+export function isDesktop(page: Page): boolean {
+  return (page.viewportSize()?.width ?? 1280) >= 1024;
+}
+
+export async function openAccountMenu(page: Page) {
+  if (isDesktop(page))
+    await page.getByRole("button", { name: "계정 메뉴" }).click();
+}
+
 export async function logout(page: Page) {
   await openMenu(page);
+  await openAccountMenu(page);
   await page.getByRole("button", { name: "로그아웃" }).click();
 }
 
