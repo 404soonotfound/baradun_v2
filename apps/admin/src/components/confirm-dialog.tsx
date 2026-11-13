@@ -12,6 +12,7 @@ export function ConfirmDialog({
   cancelLabel,
   confirmDisabled,
   busy,
+  tone = "primary",
   onConfirm,
   onClose,
 }: {
@@ -22,6 +23,7 @@ export function ConfirmDialog({
   cancelLabel: string;
   confirmDisabled: boolean;
   busy: boolean;
+  tone?: "primary" | "danger";
   onConfirm: () => void;
   onClose: () => void;
 }) {
@@ -62,6 +64,11 @@ export function ConfirmDialog({
           size="small"
           disabled={confirmDisabled || busy}
           onClick={onConfirm}
+          className={
+            tone === "danger"
+              ? "bg-danger-call text-danger-call-on hover:opacity-90"
+              : ""
+          }
         >
           {confirmLabel}
         </Button>
