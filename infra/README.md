@@ -72,6 +72,13 @@ aws iam put-role-policy --role-name BaradunGitHubInfraDeploy --policy-name Infra
 
 GitHub 저장소 설정 → Environments에서 `infra`(배포 브랜치 `main`만, 검토자 없음)와 `infra-approval`(배포 브랜치 `main`만, 필수 검토자 저장소 소유자)을 만들고, 저장소 변수 `INFRA_DEPLOY_ROLE_ARN`에 `arn:aws:iam::<계정>:role/BaradunGitHubInfraDeploy`를 넣으면 다음 main 머지부터 돕니다(변수가 비면 `infra` 작업은 건너뜀). 두 정책 파일을 바꾼 PR은 머지 뒤 같은 명령(`update-assume-role-policy`·`put-role-policy`)으로 다시 반영합니다. CI는 자기 역할을 고치지 않습니다.
 
+## 운영자 사이트의 사이트 배포 조회 (D27-5)
+
+- GitHub에서 이 저장소 하나만 선택한 세분화 토큰을 만듭니다. Actions·Contents·Variables는 읽기만 허용합니다. AWS 서울 리전의 `/baradun/v2/ops/github-read-token`에 Standard SecureString(기본 `aws/ssm`)으로 등록하고, `expires` 태그에 만료일(`YYYY-MM-DD`)을 넣습니다.
+- 권한 경계를 먼저 반영하고 스택을 배포합니다. 스택 매개변수 `AdminSiteDeployUrl`에는 `ADMIN_SITE_URL`과 같은 HTTPS 원본 주소를 넣습니다. 초기에는 `AdminDistributionDomainName` 출력의 HTTPS 주소를 씁니다. 사용자 사이트 주소는 스택의 대표 도메인 또는 CloudFront 기본 주소를 사용합니다.
+- `GET /ops/site-deploy`는 실제 운영자만 읽을 수 있습니다. 토큰 등록·조회 권한이나 주소를 확인하지 못하면 화면에서 확인 못 함으로 보입니다. 토큰을 교체하면 기존 실행 환경에서는 최대 10분 뒤 새 값을 읽습니다.
+- 사이트 빌드 경로를 바꾸면 `.github/ci-filters.yml`을 갱신하고 `node .github/scripts/site-deploy-paths.mjs`를 실행합니다. 생성된 `.github/site-deploy-paths.json`을 워크플로와 운영 API가 함께 사용합니다.
+
 ## 운영 도메인 연결 (BRD-162)
 
 대표 주소는 `https://www.baradun.app`입니다(2026-11-02 사용자 결정).
