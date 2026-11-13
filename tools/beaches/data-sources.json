@@ -111,10 +111,16 @@
       "sha256": "59367b42a72801f208e01e7ce16feead55eb2c7277a435302e58fb2f0cc3308f"
     },
     {
-      "name": "실응답 3차 저장본 지표 매트릭스 (2026-11-13 보충 병합)",
+      "name": "실응답 3차 저장본 지표 매트릭스 (2026-11-13 보충 병합, tools/beaches/live-matrix.mjs --write로 생성)",
       "path": "$BARADUN_DATA_DIR/baradun-coverage/responses/metric-matrix.json",
       "base_date": "2026-10-20 수집(BRD-59 3차) + 2026-11-13 보충 수집(GH-253)",
-      "sha256": "97e018b4f00094e7a946a410bfd22de7ade481028f9d14968518237cae8d8d6b"
+      "sha256": "59ca8ecf4c9c18244196dea7816e44936030c629d427dd03c97e125a9b1d0f6a"
+    },
+    {
+      "name": "실응답 호출 기록(요청 주소·HTTP 상태·응답 파일, live-matrix.mjs 입력)",
+      "path": "$BARADUN_DATA_DIR/baradun-coverage/responses/call-ledger.json",
+      "base_date": "2026-10-20 수집(BRD-59 3차) + 2026-11-13 보충 수집(GH-253)",
+      "sha256": "b0c3db00f03e49decad08324874e037d0990bce933b5f2a9834f5ee17b1e336b"
     },
     {
       "name": "실응답 3차 sea_obs 응답(authKey 제거)",
