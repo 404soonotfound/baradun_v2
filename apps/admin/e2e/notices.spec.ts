@@ -685,6 +685,7 @@ test("저장 실패 뒤에도 뒤로 가기 '나가기'는 목록으로 가고, 
   await expect(
     page.getByRole("status").filter({ hasText: "저장했어요" }),
   ).toBeVisible();
+  await expect(page.getByText("바뀐 내용 없음")).toBeVisible();
   await page.goBack();
   await expect(list).toBeVisible();
 });
@@ -693,7 +694,16 @@ test("목록: 배너 순서 7칸 띠, 제목·문구 검색과 종류 필터, �
   page,
 }) => {
   await signIn(page);
-  const { writes } = await mockNotices(page);
+  let failEnd = true;
+  const { writes } = await mockNotices(page, {
+    write: (w) =>
+      failEnd && w.path.endsWith("/end")
+        ? {
+            status: 500,
+            body: { error: { code: "internal", requestId: "req-row" } },
+          }
+        : undefined,
+  });
   await openNotices(page);
 
   // 배너 순서 7칸 띠
@@ -702,7 +712,7 @@ test("목록: 배너 순서 7칸 띠, 제목·문구 검색과 종류 필터, �
   await expect(banner.getByText("운영 공지")).toBeVisible();
   await expect(banner.getByText("● 노출 중")).toBeVisible();
 
-  // 제목·문구 찾기 + 종류 필터
+  // 제목·문구 찾기 + 종류 필터 (Esc 포커스 복원 포함)
   await expect(page.getByRole("heading", { name: "공지 목록" })).toBeVisible();
   await page.getByLabel("제목·문구 찾기").fill("새벽");
   await expect(rows(page)).toHaveCount(1);
@@ -710,7 +720,12 @@ test("목록: 배너 순서 7칸 띠, 제목·문구 검색과 종류 필터, �
   await page.getByLabel("제목·문구 찾기").fill("");
   await expect(rows(page)).toHaveCount(5);
 
-  await page.getByRole("button", { name: "종류", exact: true }).click();
+  const kindBtn = page.getByRole("button", { name: "종류", exact: true });
+  await kindBtn.click();
+  await page.keyboard.press("Escape");
+  await expect(kindBtn).toBeFocused();
+
+  await kindBtn.click();
   await page
     .getByRole("group", { name: "공지 종류 고르기" })
     .getByRole("button", { name: "점검 예고" })
@@ -723,9 +738,46 @@ test("목록: 배너 순서 7칸 띠, 제목·문구 검색과 종류 필터, �
     .click();
   await expect(rows(page)).toHaveCount(5);
 
-  // PC 표 행 끝 '…' 메뉴로 편집 이동
+  // PC 표 행 끝 '…' 메뉴: Esc 포커스 복원, 실패 후 재시도 시 같은 멱등 키 유지, 편집 이동
   if (!isMobile(page)) {
-    await page.getByRole("button", { name: "새벽 점검 예고 작업 메뉴" }).click();
+    const rowTrigger = page.getByRole("button", {
+      name: "새벽 점검 예고 작업 메뉴",
+    });
+    await rowTrigger.click();
+    await page.keyboard.press("Escape");
+    await expect(rowTrigger).toBeFocused();
+
+    await rowTrigger.click();
+    await page
+      .getByRole("group", { name: "새벽 점검 예고 작업 메뉴" })
+      .getByRole("button", { name: "노출 종료" })
+      .click();
+    await page
+      .getByRole("alert")
+      .getByRole("button", { name: "노출 종료" })
+      .click();
+    await expect(
+      page.getByRole("alert").filter({ hasText: "처리하지 못했어요" }),
+    ).toBeVisible();
+
+    failEnd = false;
+    await rowTrigger.click();
+    await page
+      .getByRole("group", { name: "새벽 점검 예고 작업 메뉴" })
+      .getByRole("button", { name: "노출 종료" })
+      .click();
+    await page
+      .getByRole("alert")
+      .getByRole("button", { name: "노출 종료" })
+      .click();
+    await expect(
+      page.getByRole("status").filter({ hasText: "노출을 끝냈어요" }),
+    ).toBeVisible();
+    expect(writes).toHaveLength(2);
+    expect(writes[0]?.key).toBeTruthy();
+    expect(writes[1]?.key).toBe(writes[0]?.key);
+
+    await rowTrigger.click();
     await page
       .getByRole("group", { name: "새벽 점검 예고 작업 메뉴" })
       .getByRole("button", { name: "편집" })
@@ -733,6 +785,7 @@ test("목록: 배너 순서 7칸 띠, 제목·문구 검색과 종류 필터, �
     await expect(
       page.getByRole("heading", { name: "새벽 점검 예고", level: 1 }),
     ).toBeVisible();
+  } else {
+    expect(writes).toHaveLength(0);
   }
-  expect(writes).toHaveLength(0);
 });
