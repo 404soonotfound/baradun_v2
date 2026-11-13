@@ -1,5 +1,5 @@
 {
-  "verifiedOn": "2026-11-03",
+  "verifiedOn": "2026-11-13",
   "schemas": {
     "AWS::Budgets::Budget": {
       "typeName": "AWS::Budgets::Budget"
@@ -1115,14 +1115,14 @@
     "AWS::Logs::MetricFilter": {
       "typeName": "AWS::Logs::MetricFilter",
       "handlers": {
-        "create": {
+        "read": {
           "permissions": [
-            "logs:PutMetricFilter",
             "logs:DescribeMetricFilters"
           ]
         },
-        "read": {
+        "create": {
           "permissions": [
+            "logs:PutMetricFilter",
             "logs:DescribeMetricFilters"
           ]
         },
@@ -1132,17 +1132,19 @@
             "logs:DescribeMetricFilters"
           ]
         },
-        "delete": {
-          "permissions": [
-            "logs:DeleteMetricFilter",
-            "logs:DescribeMetricFilters"
-          ]
-        },
         "list": {
           "permissions": [
             "logs:DescribeMetricFilters"
           ]
+        },
+        "delete": {
+          "permissions": [
+            "logs:DeleteMetricFilter"
+          ]
         }
+      },
+      "tagging": {
+        "taggable": false
       }
     },
     "AWS::S3::Bucket": {
@@ -1695,6 +1697,694 @@
             "aws:RequestTag/${TagKey}",
             "aws:ResourceTag/${TagKey}",
             "aws:TagKeys"
+          ]
+        }
+      ]
+    },
+    "cloudformation": {
+      "Actions": [
+        {
+          "Name": "ActivateOrganizationsAccess"
+        },
+        {
+          "Name": "ActivateType"
+        },
+        {
+          "Name": "BatchDescribeTypeConfigurations"
+        },
+        {
+          "Name": "CancelResourceRequest"
+        },
+        {
+          "Name": "CancelUpdateStack",
+          "Resources": [
+            {
+              "Name": "stack"
+            }
+          ]
+        },
+        {
+          "Name": "ContinueUpdateRollback",
+          "Resources": [
+            {
+              "Name": "stack"
+            }
+          ]
+        },
+        {
+          "Name": "CreateChangeSet",
+          "Resources": [
+            {
+              "Name": "stack"
+            }
+          ]
+        },
+        {
+          "Name": "CreateGeneratedTemplate"
+        },
+        {
+          "Name": "CreateResource"
+        },
+        {
+          "Name": "CreateStack",
+          "Resources": [
+            {
+              "Name": "stack"
+            }
+          ]
+        },
+        {
+          "Name": "CreateStackInstances",
+          "Resources": [
+            {
+              "Name": "stackset"
+            },
+            {
+              "Name": "stackset-target"
+            },
+            {
+              "Name": "type"
+            }
+          ]
+        },
+        {
+          "Name": "CreateStackRefactor",
+          "Resources": [
+            {
+              "Name": "stack"
+            }
+          ]
+        },
+        {
+          "Name": "CreateStackSet"
+        },
+        {
+          "Name": "CreateUploadBucket"
+        },
+        {
+          "Name": "DeactivateOrganizationsAccess"
+        },
+        {
+          "Name": "DeactivateType"
+        },
+        {
+          "Name": "DeleteChangeSet",
+          "Resources": [
+            {
+              "Name": "stack"
+            }
+          ]
+        },
+        {
+          "Name": "DeleteGeneratedTemplate"
+        },
+        {
+          "Name": "DeleteResource"
+        },
+        {
+          "Name": "DeleteStack",
+          "Resources": [
+            {
+              "Name": "stack"
+            }
+          ]
+        },
+        {
+          "Name": "DeleteStackInstances",
+          "Resources": [
+            {
+              "Name": "stackset"
+            },
+            {
+              "Name": "stackset-target"
+            },
+            {
+              "Name": "type"
+            }
+          ]
+        },
+        {
+          "Name": "DeleteStackSet",
+          "Resources": [
+            {
+              "Name": "stackset"
+            }
+          ]
+        },
+        {
+          "Name": "DeregisterType"
+        },
+        {
+          "Name": "DescribeAccountLimits"
+        },
+        {
+          "Name": "DescribeChangeSet",
+          "Resources": [
+            {
+              "Name": "stack"
+            }
+          ]
+        },
+        {
+          "Name": "DescribeChangeSetHooks",
+          "Resources": [
+            {
+              "Name": "stack"
+            }
+          ]
+        },
+        {
+          "Name": "DescribeEvents",
+          "Resources": [
+            {
+              "Name": "changeset"
+            },
+            {
+              "Name": "stack"
+            }
+          ]
+        },
+        {
+          "Name": "DescribeGeneratedTemplate"
+        },
+        {
+          "Name": "DescribeOrganizationsAccess"
+        },
+        {
+          "Name": "DescribePublisher"
+        },
+        {
+          "Name": "DescribeResourceScan"
+        },
+        {
+          "Name": "DescribeStackDriftDetectionStatus"
+        },
+        {
+          "Name": "DescribeStackEvents",
+          "Resources": [
+            {
+              "Name": "stack"
+            }
+          ]
+        },
+        {
+          "Name": "DescribeStackInstance",
+          "Resources": [
+            {
+              "Name": "stackset"
+            }
+          ]
+        },
+        {
+          "Name": "DescribeStackRefactor",
+          "Resources": [
+            {
+              "Name": "stack"
+            }
+          ]
+        },
+        {
+          "Name": "DescribeStackResource",
+          "Resources": [
+            {
+              "Name": "stack"
+            }
+          ]
+        },
+        {
+          "Name": "DescribeStackResourceDrifts",
+          "Resources": [
+            {
+              "Name": "stack"
+            }
+          ]
+        },
+        {
+          "Name": "DescribeStackResources",
+          "Resources": [
+            {
+              "Name": "stack"
+            }
+          ]
+        },
+        {
+          "Name": "DescribeStackSet",
+          "Resources": [
+            {
+              "Name": "stackset"
+            }
+          ]
+        },
+        {
+          "Name": "DescribeStackSetOperation",
+          "Resources": [
+            {
+              "Name": "stackset"
+            }
+          ]
+        },
+        {
+          "Name": "DescribeStacks",
+          "Resources": [
+            {
+              "Name": "stack"
+            }
+          ]
+        },
+        {
+          "Name": "DescribeType"
+        },
+        {
+          "Name": "DescribeTypeRegistration"
+        },
+        {
+          "Name": "DetectStackDrift",
+          "Resources": [
+            {
+              "Name": "stack"
+            }
+          ]
+        },
+        {
+          "Name": "DetectStackResourceDrift",
+          "Resources": [
+            {
+              "Name": "stack"
+            }
+          ]
+        },
+        {
+          "Name": "DetectStackSetDrift",
+          "Resources": [
+            {
+              "Name": "stackset"
+            }
+          ]
+        },
+        {
+          "Name": "EstimateTemplateCost"
+        },
+        {
+          "Name": "ExecuteChangeSet",
+          "Resources": [
+            {
+              "Name": "stack"
+            }
+          ]
+        },
+        {
+          "Name": "ExecuteStackRefactor",
+          "Resources": [
+            {
+              "Name": "stack"
+            }
+          ]
+        },
+        {
+          "Name": "GetGeneratedTemplate"
+        },
+        {
+          "Name": "GetHookResult"
+        },
+        {
+          "Name": "GetResource"
+        },
+        {
+          "Name": "GetResourceRequestStatus"
+        },
+        {
+          "Name": "GetStackPolicy",
+          "Resources": [
+            {
+              "Name": "stack"
+            }
+          ]
+        },
+        {
+          "Name": "GetTemplate",
+          "Resources": [
+            {
+              "Name": "stack"
+            }
+          ]
+        },
+        {
+          "Name": "GetTemplateSummary",
+          "Resources": [
+            {
+              "Name": "stack"
+            },
+            {
+              "Name": "stackset"
+            }
+          ]
+        },
+        {
+          "Name": "ImportStacksToStackSet",
+          "Resources": [
+            {
+              "Name": "stackset"
+            }
+          ]
+        },
+        {
+          "Name": "ListAllHookResults"
+        },
+        {
+          "Name": "ListChangeSets",
+          "Resources": [
+            {
+              "Name": "stack"
+            }
+          ]
+        },
+        {
+          "Name": "ListExports"
+        },
+        {
+          "Name": "ListGeneratedTemplates"
+        },
+        {
+          "Name": "ListHookResults",
+          "Resources": [
+            {
+              "Name": "stack"
+            }
+          ]
+        },
+        {
+          "Name": "ListImports"
+        },
+        {
+          "Name": "ListResourceRequests"
+        },
+        {
+          "Name": "ListResourceScanRelatedResources"
+        },
+        {
+          "Name": "ListResourceScanResources"
+        },
+        {
+          "Name": "ListResourceScans"
+        },
+        {
+          "Name": "ListResources"
+        },
+        {
+          "Name": "ListStackInstanceResourceDrifts",
+          "Resources": [
+            {
+              "Name": "stackset"
+            }
+          ]
+        },
+        {
+          "Name": "ListStackInstances",
+          "Resources": [
+            {
+              "Name": "stackset"
+            }
+          ]
+        },
+        {
+          "Name": "ListStackRefactorActions",
+          "Resources": [
+            {
+              "Name": "stack"
+            }
+          ]
+        },
+        {
+          "Name": "ListStackRefactors",
+          "Resources": [
+            {
+              "Name": "stack"
+            }
+          ]
+        },
+        {
+          "Name": "ListStackResources",
+          "Resources": [
+            {
+              "Name": "stack"
+            }
+          ]
+        },
+        {
+          "Name": "ListStackSetAutoDeploymentTargets",
+          "Resources": [
+            {
+              "Name": "stackset"
+            }
+          ]
+        },
+        {
+          "Name": "ListStackSetOperationResults",
+          "Resources": [
+            {
+              "Name": "stackset"
+            }
+          ]
+        },
+        {
+          "Name": "ListStackSetOperations",
+          "Resources": [
+            {
+              "Name": "stackset"
+            }
+          ]
+        },
+        {
+          "Name": "ListStackSets"
+        },
+        {
+          "Name": "ListStacks"
+        },
+        {
+          "Name": "ListTypeRegistrations"
+        },
+        {
+          "Name": "ListTypeVersions"
+        },
+        {
+          "Name": "ListTypes"
+        },
+        {
+          "Name": "PublishType"
+        },
+        {
+          "Name": "RecordHandlerProgress",
+          "Resources": [
+            {
+              "Name": "stack"
+            }
+          ]
+        },
+        {
+          "Name": "RegisterPublisher"
+        },
+        {
+          "Name": "RegisterType"
+        },
+        {
+          "Name": "RemoveAlias",
+          "Resources": [
+            {
+              "Name": "stack"
+            }
+          ]
+        },
+        {
+          "Name": "RollbackStack",
+          "Resources": [
+            {
+              "Name": "stack"
+            }
+          ]
+        },
+        {
+          "Name": "SetAlias",
+          "Resources": [
+            {
+              "Name": "stack"
+            }
+          ]
+        },
+        {
+          "Name": "SetStackPolicy",
+          "Resources": [
+            {
+              "Name": "stack"
+            }
+          ]
+        },
+        {
+          "Name": "SetTypeConfiguration"
+        },
+        {
+          "Name": "SetTypeDefaultVersion"
+        },
+        {
+          "Name": "SignalResource",
+          "Resources": [
+            {
+              "Name": "stack"
+            }
+          ]
+        },
+        {
+          "Name": "StartResourceScan"
+        },
+        {
+          "Name": "StopStackSetOperation",
+          "Resources": [
+            {
+              "Name": "stackset"
+            }
+          ]
+        },
+        {
+          "Name": "TagResource",
+          "Resources": [
+            {
+              "Name": "changeset"
+            },
+            {
+              "Name": "stack"
+            },
+            {
+              "Name": "stackset"
+            }
+          ]
+        },
+        {
+          "Name": "TestType"
+        },
+        {
+          "Name": "UntagResource",
+          "Resources": [
+            {
+              "Name": "changeset"
+            },
+            {
+              "Name": "stack"
+            },
+            {
+              "Name": "stackset"
+            }
+          ]
+        },
+        {
+          "Name": "UpdateGeneratedTemplate"
+        },
+        {
+          "Name": "UpdateResource"
+        },
+        {
+          "Name": "UpdateStack",
+          "Resources": [
+            {
+              "Name": "stack"
+            }
+          ]
+        },
+        {
+          "Name": "UpdateStackInstances",
+          "Resources": [
+            {
+              "Name": "stackset"
+            },
+            {
+              "Name": "stackset-target"
+            },
+            {
+              "Name": "type"
+            }
+          ]
+        },
+        {
+          "Name": "UpdateStackSet",
+          "Resources": [
+            {
+              "Name": "stackset"
+            },
+            {
+              "Name": "stackset-target"
+            },
+            {
+              "Name": "type"
+            }
+          ]
+        },
+        {
+          "Name": "UpdateTerminationProtection",
+          "Resources": [
+            {
+              "Name": "stack"
+            }
+          ]
+        },
+        {
+          "Name": "ValidateTemplate"
+        }
+      ],
+      "Operations": [],
+      "Resources": [
+        {
+          "Name": "changeset",
+          "ARNFormats": [
+            "arn:${Partition}:cloudformation:${Region}:${Account}:changeSet/${ChangeSetName}/${Id}"
+          ],
+          "ConditionKeys": [
+            "aws:ResourceTag/${TagKey}"
+          ]
+        },
+        {
+          "Name": "generatedtemplate",
+          "ARNFormats": [
+            "arn:${Partition}:cloudformation:${Region}:${Account}:generatedTemplate/${Id}"
+          ]
+        },
+        {
+          "Name": "resourcescan",
+          "ARNFormats": [
+            "arn:${Partition}:cloudformation:${Region}:${Account}:resourceScan/${Id}"
+          ]
+        },
+        {
+          "Name": "stack",
+          "ARNFormats": [
+            "arn:${Partition}:cloudformation:${Region}:${Account}:stack/${StackName}/${Id}"
+          ],
+          "ConditionKeys": [
+            "aws:ResourceTag/${TagKey}"
+          ]
+        },
+        {
+          "Name": "stackset",
+          "ARNFormats": [
+            "arn:${Partition}:cloudformation:${Region}:${Account}:stackset/${StackSetName}:${Id}"
+          ],
+          "ConditionKeys": [
+            "aws:ResourceTag/${TagKey}"
+          ]
+        },
+        {
+          "Name": "stackset-target",
+          "ARNFormats": [
+            "arn:${Partition}:cloudformation:${Region}:${Account}:stackset-target/${StackSetTarget}"
+          ]
+        },
+        {
+          "Name": "type",
+          "ARNFormats": [
+            "arn:${Partition}:cloudformation:${Region}:${Account}:type/resource/${Type}"
+          ]
+        },
+        {
+          "Name": "typeHook",
+          "ARNFormats": [
+            "arn:${Partition}:cloudformation:${Region}:${Account}:type/hook/${Type}"
           ]
         }
       ]
@@ -3406,6 +4096,14 @@
           ]
         },
         {
+          "Name": "DeleteMetricDataQueryDefinition",
+          "Resources": [
+            {
+              "Name": "metric-query-definition"
+            }
+          ]
+        },
+        {
           "Name": "DeleteMetricStream",
           "Resources": [
             {
@@ -3483,6 +4181,9 @@
         },
         {
           "Name": "DescribeInsightRules"
+        },
+        {
+          "Name": "DetectGroupOutliers"
         },
         {
           "Name": "DisableAlarmActions",
@@ -3642,6 +4343,14 @@
           ]
         },
         {
+          "Name": "GetMetricDataQueryDefinition",
+          "Resources": [
+            {
+              "Name": "metric-query-definition"
+            }
+          ]
+        },
+        {
           "Name": "GetMetricStatistics"
         },
         {
@@ -3728,6 +4437,9 @@
           "Name": "GetSpaceCredentialsForOrganization"
         },
         {
+          "Name": "GetSpaceDataAccess"
+        },
+        {
           "Name": "GetTelemetryQueryResults"
         },
         {
@@ -3790,6 +4502,9 @@
         },
         {
           "Name": "ListManagedInsightRules"
+        },
+        {
+          "Name": "ListMetricDataQueryDefinitions"
         },
         {
           "Name": "ListMetricStreams"
@@ -3855,6 +4570,12 @@
             },
             {
               "Name": "insight-rule",
+              "ConditionKeys": [
+                "aws:ResourceTag/${TagKey}"
+              ]
+            },
+            {
+              "Name": "metric-query-definition",
               "ConditionKeys": [
                 "aws:ResourceTag/${TagKey}"
               ]
@@ -3962,6 +4683,14 @@
               "ConditionKeys": [
                 "aws:ResourceTag/${TagKey}"
               ]
+            }
+          ]
+        },
+        {
+          "Name": "PutMetricDataQueryDefinition",
+          "Resources": [
+            {
+              "Name": "metric-query-definition"
             }
           ]
         },
@@ -4086,6 +4815,12 @@
               ]
             },
             {
+              "Name": "metric-query-definition",
+              "ConditionKeys": [
+                "aws:ResourceTag/${TagKey}"
+              ]
+            },
+            {
               "Name": "metric-stream",
               "ConditionKeys": [
                 "aws:ResourceTag/${TagKey}"
@@ -4134,6 +4869,12 @@
             },
             {
               "Name": "insight-rule",
+              "ConditionKeys": [
+                "aws:ResourceTag/${TagKey}"
+              ]
+            },
+            {
+              "Name": "metric-query-definition",
               "ConditionKeys": [
                 "aws:ResourceTag/${TagKey}"
               ]
@@ -4287,6 +5028,10 @@
           "Name": "PutMetricAlarm",
           "AuthorizedActions": [
             {
+              "Name": "ListTagsForResource",
+              "Service": "cloudwatch"
+            },
+            {
               "Name": "PutMetricAlarm",
               "Service": "cloudwatch"
             },
@@ -4424,6 +5169,15 @@
           ]
         },
         {
+          "Name": "metric-query-definition",
+          "ARNFormats": [
+            "arn:${Partition}:cloudwatch:${Region}:${Account}:metric-query-definition/${MetricDataQueryDefinitionId}"
+          ],
+          "ConditionKeys": [
+            "aws:ResourceTag/${TagKey}"
+          ]
+        },
+        {
           "Name": "metric-stream",
           "ARNFormats": [
             "arn:${Partition}:cloudwatch:${Region}:${Account}:metric-stream/${MetricStreamName}"
@@ -4489,7 +5243,7 @@
         {
           "Name": "view",
           "ARNFormats": [
-            "arn:${Partition}:cloudwatch:${Region}:${Account}:view/${ViewName}"
+            "arn:${Partition}:cloudwatch:${Region}:${Account}:view/${ViewName}/${ViewId}"
           ],
           "ConditionKeys": [
             "aws:ResourceTag/${TagKey}"
@@ -4660,6 +5414,14 @@
           ]
         },
         {
+          "Name": "AdminListUserSessions",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
           "Name": "AdminRemoveUserFromGroup",
           "Resources": [
             {
@@ -4677,6 +5439,14 @@
         },
         {
           "Name": "AdminRespondToAuthChallenge",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "AdminRevokeUserSession",
           "Resources": [
             {
               "Name": "userpool"
@@ -5090,7 +5860,23 @@
           "Name": "GetUserAttributeVerificationCode"
         },
         {
+          "Name": "GetUserPoolClientSessionConfiguration",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
           "Name": "GetUserPoolMfaConfig",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "GetUserPoolSessionConfiguration",
           "Resources": [
             {
               "Name": "userpool"
@@ -5198,6 +5984,9 @@
           "Name": "ListUserPools"
         },
         {
+          "Name": "ListUserSessions"
+        },
+        {
           "Name": "ListUsers",
           "Resources": [
             {
@@ -5221,6 +6010,9 @@
         },
         {
           "Name": "RevokeToken"
+        },
+        {
+          "Name": "RevokeUserSession"
         },
         {
           "Name": "SetLogDeliveryConfiguration",
@@ -5250,7 +6042,23 @@
           "Name": "SetUserMFAPreference"
         },
         {
+          "Name": "SetUserPoolClientSessionConfiguration",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
           "Name": "SetUserPoolMfaConfig",
+          "Resources": [
+            {
+              "Name": "userpool"
+            }
+          ]
+        },
+        {
+          "Name": "SetUserPoolSessionConfiguration",
           "Resources": [
             {
               "Name": "userpool"
@@ -5649,6 +6457,22 @@
           ]
         },
         {
+          "Name": "BulkPutItems",
+          "Resources": [
+            {
+              "Name": "table"
+            }
+          ]
+        },
+        {
+          "Name": "CancelBulkOperation",
+          "Resources": [
+            {
+              "Name": "bulk-operation"
+            }
+          ]
+        },
+        {
           "Name": "ConditionCheckItem",
           "Resources": [
             {
@@ -5755,6 +6579,14 @@
           "Resources": [
             {
               "Name": "backup"
+            }
+          ]
+        },
+        {
+          "Name": "DescribeBulkOperation",
+          "Resources": [
+            {
+              "Name": "bulk-operation"
             }
           ]
         },
@@ -5946,6 +6778,9 @@
           "Name": "ListBackups"
         },
         {
+          "Name": "ListBulkOperations"
+        },
+        {
           "Name": "ListContributorInsights"
         },
         {
@@ -6122,6 +6957,14 @@
           "Resources": [
             {
               "Name": "table"
+            }
+          ]
+        },
+        {
+          "Name": "StartBulkOperation",
+          "Resources": [
+            {
+              "Name": "bulk-operation"
             }
           ]
         },
@@ -6655,6 +7498,12 @@
           "Name": "backup",
           "ARNFormats": [
             "arn:${Partition}:dynamodb:${Region}:${Account}:table/${TableName}/backup/${BackupName}"
+          ]
+        },
+        {
+          "Name": "bulk-operation",
+          "ARNFormats": [
+            "arn:${Partition}:dynamodb:${Region}:${Account}:bulk-operation/${BulkOperationId}"
           ]
         },
         {
@@ -7576,6 +8425,7 @@
                 "aws:ResourceTag/${TagKey}",
                 "ec2:ImageID",
                 "ec2:ImageType",
+                "ec2:ImageWatermarkKeys",
                 "ec2:Owner",
                 "ec2:Public",
                 "ec2:ResourceTag/${TagKey}",
@@ -7838,7 +8688,8 @@
               "Name": "capacity-reservation",
               "ConditionKeys": [
                 "aws:ResourceTag/${TagKey}",
-                "ec2:CapacityReservationFleet"
+                "ec2:CapacityReservationFleet",
+                "ec2:FutureCapacitySpecification"
               ]
             },
             {
@@ -8140,11 +8991,32 @@
               "Name": "capacity-reservation",
               "ConditionKeys": [
                 "aws:ResourceTag/${TagKey}",
+                "ec2:FutureCapacitySpecification",
                 "ec2:ResourceTag/${TagKey}"
               ]
             },
             {
               "Name": "capacity-reservation-cancellation-quote",
+              "ConditionKeys": [
+                "aws:RequestTag/${TagKey}",
+                "aws:TagKeys"
+              ]
+            }
+          ]
+        },
+        {
+          "Name": "CreateCapacityReservationDateChangeQuote",
+          "Resources": [
+            {
+              "Name": "capacity-reservation",
+              "ConditionKeys": [
+                "aws:ResourceTag/${TagKey}",
+                "ec2:FutureCapacitySpecification",
+                "ec2:ResourceTag/${TagKey}"
+              ]
+            },
+            {
+              "Name": "capacity-reservation-modification-quote",
               "ConditionKeys": [
                 "aws:RequestTag/${TagKey}",
                 "aws:TagKeys"
@@ -8618,6 +9490,7 @@
                 "aws:ResourceTag/${TagKey}",
                 "ec2:ImageID",
                 "ec2:ImageType",
+                "ec2:ImageWatermarkKeys",
                 "ec2:Owner",
                 "ec2:Public",
                 "ec2:ResourceTag/${TagKey}",
@@ -9469,6 +10342,7 @@
                 "aws:ResourceTag/${TagKey}",
                 "ec2:ImageID",
                 "ec2:ImageType",
+                "ec2:ImageWatermarkKeys",
                 "ec2:Owner",
                 "ec2:Public",
                 "ec2:ResourceTag/${TagKey}",
@@ -9799,6 +10673,7 @@
                 "aws:ResourceTag/${TagKey}",
                 "ec2:ImageID",
                 "ec2:ImageType",
+                "ec2:ImageWatermarkKeys",
                 "ec2:Owner",
                 "ec2:Public",
                 "ec2:ResourceTag/${TagKey}",
@@ -9889,7 +10764,8 @@
               "ConditionKeys": [
                 "aws:RequestTag/${TagKey}",
                 "aws:ResourceTag/${TagKey}",
-                "aws:TagKeys"
+                "aws:TagKeys",
+                "ec2:FutureCapacitySpecification"
               ]
             },
             {
@@ -10073,6 +10949,7 @@
                 "aws:TagKeys",
                 "ec2:ImageID",
                 "ec2:ImageType",
+                "ec2:ImageWatermarkKeys",
                 "ec2:Owner",
                 "ec2:Public",
                 "ec2:ResourceTag/${TagKey}",
@@ -11633,9 +12510,7 @@
               "Name": "vpc-endpoint-service",
               "ConditionKeys": [
                 "aws:ResourceTag/${TagKey}",
-                "ec2:ResourceTag/${TagKey}",
-                "ec2:VpceMultiRegion",
-                "ec2:VpceServiceRegion"
+                "ec2:ResourceTag/${TagKey}"
               ]
             }
           ]
@@ -11828,6 +12703,24 @@
         },
         {
           "Name": "DeleteClientVpnEndpoint",
+          "Resources": [
+            {
+              "Name": "client-vpn-endpoint",
+              "ConditionKeys": [
+                "aws:ResourceTag/${TagKey}",
+                "ec2:ClientRootCertificateChainArn",
+                "ec2:CloudwatchLogGroupArn",
+                "ec2:CloudwatchLogStreamArn",
+                "ec2:DirectoryArn",
+                "ec2:ResourceTag/${TagKey}",
+                "ec2:SamlProviderArn",
+                "ec2:ServerCertificateArn"
+              ]
+            }
+          ]
+        },
+        {
+          "Name": "DeleteClientVpnEndpointAuthorizationPolicy",
           "Resources": [
             {
               "Name": "client-vpn-endpoint",
@@ -13988,9 +14881,7 @@
               "Name": "vpc-endpoint-service",
               "ConditionKeys": [
                 "aws:ResourceTag/${TagKey}",
-                "ec2:ResourceTag/${TagKey}",
-                "ec2:VpceMultiRegion",
-                "ec2:VpceSupportedRegion"
+                "ec2:ResourceTag/${TagKey}"
               ]
             }
           ]
@@ -14135,6 +15026,7 @@
                 "aws:ResourceTag/${TagKey}",
                 "ec2:ImageID",
                 "ec2:ImageType",
+                "ec2:ImageWatermarkKeys",
                 "ec2:Owner",
                 "ec2:Public",
                 "ec2:ResourceTag/${TagKey}",
@@ -14282,6 +15174,9 @@
         },
         {
           "Name": "DescribeCapacityReservationCancellationQuotes"
+        },
+        {
+          "Name": "DescribeCapacityReservationDateChangeQuotes"
         },
         {
           "Name": "DescribeCapacityReservationFleets"
@@ -14473,6 +15368,7 @@
                 "aws:ResourceTag/${TagKey}",
                 "ec2:ImageID",
                 "ec2:ImageType",
+                "ec2:ImageWatermarkKeys",
                 "ec2:Owner",
                 "ec2:Public",
                 "ec2:ResourceTag/${TagKey}",
@@ -14987,9 +15883,7 @@
               "Name": "vpc-endpoint-service",
               "ConditionKeys": [
                 "aws:ResourceTag/${TagKey}",
-                "ec2:ResourceTag/${TagKey}",
-                "ec2:VpceMultiRegion",
-                "ec2:VpceSupportedRegion"
+                "ec2:ResourceTag/${TagKey}"
               ]
             }
           ]
@@ -15072,6 +15966,7 @@
                 "aws:ResourceTag/${TagKey}",
                 "ec2:ImageID",
                 "ec2:ImageType",
+                "ec2:ImageWatermarkKeys",
                 "ec2:Owner",
                 "ec2:Public",
                 "ec2:ResourceTag/${TagKey}",
@@ -15347,6 +16242,7 @@
                 "aws:ResourceTag/${TagKey}",
                 "ec2:ImageID",
                 "ec2:ImageType",
+                "ec2:ImageWatermarkKeys",
                 "ec2:Owner",
                 "ec2:Public",
                 "ec2:ResourceTag/${TagKey}",
@@ -15367,6 +16263,7 @@
                 "aws:ResourceTag/${TagKey}",
                 "ec2:ImageID",
                 "ec2:ImageType",
+                "ec2:ImageWatermarkKeys",
                 "ec2:Owner",
                 "ec2:Public",
                 "ec2:ResourceTag/${TagKey}",
@@ -15384,6 +16281,7 @@
                 "aws:ResourceTag/${TagKey}",
                 "ec2:ImageID",
                 "ec2:ImageType",
+                "ec2:ImageWatermarkKeys",
                 "ec2:Owner",
                 "ec2:Public",
                 "ec2:ResourceTag/${TagKey}",
@@ -16026,6 +16924,7 @@
                 "aws:ResourceTag/${TagKey}",
                 "ec2:ImageID",
                 "ec2:ImageType",
+                "ec2:ImageWatermarkKeys",
                 "ec2:Owner",
                 "ec2:Public",
                 "ec2:ResourceTag/${TagKey}",
@@ -16090,6 +16989,7 @@
                 "aws:ResourceTag/${TagKey}",
                 "ec2:ImageID",
                 "ec2:ImageType",
+                "ec2:ImageWatermarkKeys",
                 "ec2:Owner",
                 "ec2:Public",
                 "ec2:ResourceTag/${TagKey}",
@@ -16351,6 +17251,7 @@
                 "aws:ResourceTag/${TagKey}",
                 "ec2:ImageID",
                 "ec2:ImageType",
+                "ec2:ImageWatermarkKeys",
                 "ec2:Owner",
                 "ec2:Public",
                 "ec2:ResourceTag/${TagKey}",
@@ -16430,7 +17331,26 @@
               "Name": "capacity-reservation",
               "ConditionKeys": [
                 "aws:ResourceTag/${TagKey}",
-                "ec2:CapacityReservationFleet"
+                "ec2:CapacityReservationFleet",
+                "ec2:FutureCapacitySpecification"
+              ]
+            }
+          ]
+        },
+        {
+          "Name": "GetClientVpnEndpointAuthorizationPolicy",
+          "Resources": [
+            {
+              "Name": "client-vpn-endpoint",
+              "ConditionKeys": [
+                "aws:ResourceTag/${TagKey}",
+                "ec2:ClientRootCertificateChainArn",
+                "ec2:CloudwatchLogGroupArn",
+                "ec2:CloudwatchLogStreamArn",
+                "ec2:DirectoryArn",
+                "ec2:ResourceTag/${TagKey}",
+                "ec2:SamlProviderArn",
+                "ec2:ServerCertificateArn"
               ]
             }
           ]
@@ -16553,7 +17473,8 @@
               "Name": "capacity-reservation",
               "ConditionKeys": [
                 "aws:ResourceTag/${TagKey}",
-                "ec2:CapacityReservationFleet"
+                "ec2:CapacityReservationFleet",
+                "ec2:FutureCapacitySpecification"
               ]
             }
           ]
@@ -16570,6 +17491,7 @@
                 "aws:ResourceTag/${TagKey}",
                 "ec2:ImageID",
                 "ec2:ImageType",
+                "ec2:ImageWatermarkKeys",
                 "ec2:Owner",
                 "ec2:Public",
                 "ec2:ResourceTag/${TagKey}",
@@ -16580,6 +17502,24 @@
         },
         {
           "Name": "GetImageBlockPublicAccessState"
+        },
+        {
+          "Name": "GetImageFindings",
+          "Resources": [
+            {
+              "Name": "image",
+              "ConditionKeys": [
+                "aws:ResourceTag/${TagKey}",
+                "ec2:ImageID",
+                "ec2:ImageType",
+                "ec2:ImageWatermarkKeys",
+                "ec2:Owner",
+                "ec2:Public",
+                "ec2:ResourceTag/${TagKey}",
+                "ec2:RootDeviceType"
+              ]
+            }
+          ]
         },
         {
           "Name": "GetInstanceMetadataDefaults"
@@ -17114,6 +18054,18 @@
           "Name": "GetSubnetCidrReservations"
         },
         {
+          "Name": "GetTransitGatewayAttachmentNatConfiguration",
+          "Resources": [
+            {
+              "Name": "transit-gateway-attachment",
+              "ConditionKeys": [
+                "aws:ResourceTag/${TagKey}",
+                "ec2:ResourceTag/${TagKey}"
+              ]
+            }
+          ]
+        },
+        {
           "Name": "GetTransitGatewayAttachmentPropagations"
         },
         {
@@ -17562,7 +18514,15 @@
                 "aws:ResourceTag/${TagKey}",
                 "ec2:Attribute",
                 "ec2:Attribute/${AttributeName}",
-                "ec2:CapacityReservationFleet"
+                "ec2:CapacityReservationFleet",
+                "ec2:FutureCapacitySpecification"
+              ]
+            },
+            {
+              "Name": "capacity-reservation-modification-quote",
+              "ConditionKeys": [
+                "aws:ResourceTag/${TagKey}",
+                "ec2:ResourceTag/${TagKey}"
               ]
             }
           ]
@@ -17623,6 +18583,26 @@
                 "ec2:ResourceTag/${TagKey}",
                 "ec2:Tenancy",
                 "ec2:VpcID"
+              ]
+            }
+          ]
+        },
+        {
+          "Name": "ModifyClientVpnEndpointAuthorizationPolicy",
+          "Resources": [
+            {
+              "Name": "client-vpn-endpoint",
+              "ConditionKeys": [
+                "aws:ResourceTag/${TagKey}",
+                "ec2:Attribute",
+                "ec2:Attribute/${AttributeName}",
+                "ec2:ClientRootCertificateChainArn",
+                "ec2:CloudwatchLogGroupArn",
+                "ec2:CloudwatchLogStreamArn",
+                "ec2:DirectoryArn",
+                "ec2:ResourceTag/${TagKey}",
+                "ec2:SamlProviderArn",
+                "ec2:ServerCertificateArn"
               ]
             }
           ]
@@ -17725,6 +18705,7 @@
                 "ec2:Attribute/${AttributeName}",
                 "ec2:ImageID",
                 "ec2:ImageType",
+                "ec2:ImageWatermarkKeys",
                 "ec2:Owner",
                 "ec2:Public",
                 "ec2:ResourceTag/${TagKey}",
@@ -17799,7 +18780,8 @@
             {
               "Name": "capacity-reservation",
               "ConditionKeys": [
-                "aws:ResourceTag/${TagKey}"
+                "aws:ResourceTag/${TagKey}",
+                "ec2:FutureCapacitySpecification"
               ]
             },
             {
@@ -18714,6 +19696,20 @@
           ]
         },
         {
+          "Name": "ModifyTransitGatewayAttachmentNatConfiguration",
+          "Resources": [
+            {
+              "Name": "transit-gateway-attachment",
+              "ConditionKeys": [
+                "aws:ResourceTag/${TagKey}",
+                "ec2:Attribute",
+                "ec2:Attribute/${AttributeName}",
+                "ec2:ResourceTag/${TagKey}"
+              ]
+            }
+          ]
+        },
+        {
           "Name": "ModifyTransitGatewayMeteringPolicy",
           "Resources": [
             {
@@ -19089,9 +20085,7 @@
               "Name": "vpc-endpoint-service",
               "ConditionKeys": [
                 "aws:ResourceTag/${TagKey}",
-                "ec2:ResourceTag/${TagKey}",
-                "ec2:VpceMultiRegion",
-                "ec2:VpceSupportedRegion"
+                "ec2:ResourceTag/${TagKey}"
               ]
             }
           ]
@@ -20217,6 +21211,7 @@
                 "ec2:Attribute/${AttributeName}",
                 "ec2:ImageID",
                 "ec2:ImageType",
+                "ec2:ImageWatermarkKeys",
                 "ec2:Owner",
                 "ec2:Public",
                 "ec2:ResourceTag/${TagKey}",
@@ -20435,6 +21430,7 @@
               "Name": "capacity-reservation",
               "ConditionKeys": [
                 "aws:ResourceTag/${TagKey}",
+                "ec2:FutureCapacitySpecification",
                 "ec2:IsLaunchTemplateResource",
                 "ec2:LaunchTemplate"
               ]
@@ -21178,6 +22174,7 @@
             "ec2:EndDate",
             "ec2:EndDateType",
             "ec2:EphemeralStorage",
+            "ec2:FutureCapacitySpecification",
             "ec2:InstanceCount",
             "ec2:InstanceMatchCriteria",
             "ec2:InstancePlatform",
@@ -21215,6 +22212,21 @@
           "Name": "capacity-reservation-fleet",
           "ARNFormats": [
             "arn:${Partition}:ec2:${Region}:${Account}:capacity-reservation-fleet/${CapacityReservationFleetId}"
+          ],
+          "ConditionKeys": [
+            "aws:RequestTag/${TagKey}",
+            "aws:ResourceTag/${TagKey}",
+            "aws:TagKeys",
+            "ec2:Attribute",
+            "ec2:Attribute/${AttributeName}",
+            "ec2:Region",
+            "ec2:ResourceTag/${TagKey}"
+          ]
+        },
+        {
+          "Name": "capacity-reservation-modification-quote",
+          "ARNFormats": [
+            "arn:${Partition}:ec2:${Region}:${Account}:capacity-reservation-modification-quote/${CapacityReservationModificationQuoteId}"
           ],
           "ConditionKeys": [
             "aws:RequestTag/${TagKey}",
@@ -21487,6 +22499,7 @@
             "ec2:BootModeOverride",
             "ec2:ImageID",
             "ec2:ImageType",
+            "ec2:ImageWatermarkKeys",
             "ec2:IsLaunchTemplateResource",
             "ec2:LaunchTemplate",
             "ec2:Owner",
@@ -29505,6 +30518,15 @@
           ]
         },
         {
+          "Name": "DeleteMetricFilter",
+          "AuthorizedActions": [
+            {
+              "Name": "DeleteMetricFilter",
+              "Service": "logs"
+            }
+          ]
+        },
+        {
           "Name": "DeleteResourcePolicy",
           "AuthorizedActions": [
             {
@@ -29545,6 +30567,15 @@
           "AuthorizedActions": [
             {
               "Name": "DescribeLogStreams",
+              "Service": "logs"
+            }
+          ]
+        },
+        {
+          "Name": "DescribeMetricFilters",
+          "AuthorizedActions": [
+            {
+              "Name": "DescribeMetricFilters",
               "Service": "logs"
             }
           ]
@@ -29626,6 +30657,15 @@
           "AuthorizedActions": [
             {
               "Name": "PutLogGroupDeletionProtection",
+              "Service": "logs"
+            }
+          ]
+        },
+        {
+          "Name": "PutMetricFilter",
+          "AuthorizedActions": [
+            {
+              "Name": "PutMetricFilter",
               "Service": "logs"
             }
           ]
@@ -32134,6 +33174,14 @@
     "s3tables": {
       "Actions": [
         {
+          "Name": "CompleteTableMigration",
+          "Resources": [
+            {
+              "Name": "Table"
+            }
+          ]
+        },
+        {
           "Name": "CreateNamespace",
           "Resources": [
             {
@@ -32262,6 +33310,14 @@
           ]
         },
         {
+          "Name": "GetTableBucketLogging",
+          "Resources": [
+            {
+              "Name": "TableBucket"
+            }
+          ]
+        },
+        {
           "Name": "GetTableBucketMaintenanceConfiguration",
           "Resources": [
             {
@@ -32342,6 +33398,14 @@
           ]
         },
         {
+          "Name": "GetTableMigration",
+          "Resources": [
+            {
+              "Name": "Table"
+            }
+          ]
+        },
+        {
           "Name": "GetTablePolicy",
           "Resources": [
             {
@@ -32401,6 +33465,17 @@
           "Name": "ListTableBuckets"
         },
         {
+          "Name": "ListTableMigrations",
+          "Resources": [
+            {
+              "Name": "Table"
+            },
+            {
+              "Name": "TableBucket"
+            }
+          ]
+        },
+        {
           "Name": "ListTables",
           "Resources": [
             {
@@ -32421,6 +33496,14 @@
         },
         {
           "Name": "PutTableBucketEncryption",
+          "Resources": [
+            {
+              "Name": "TableBucket"
+            }
+          ]
+        },
+        {
+          "Name": "PutTableBucketLogging",
           "Resources": [
             {
               "Name": "TableBucket"
@@ -32532,6 +33615,22 @@
           ]
         },
         {
+          "Name": "StartTableMigration",
+          "Resources": [
+            {
+              "Name": "TableBucket"
+            }
+          ]
+        },
+        {
+          "Name": "SyncTableMigration",
+          "Resources": [
+            {
+              "Name": "Table"
+            }
+          ]
+        },
+        {
           "Name": "TagResource",
           "Resources": [
             {
@@ -32555,6 +33654,14 @@
         },
         {
           "Name": "UpdateTableMetadataLocation",
+          "Resources": [
+            {
+              "Name": "Table"
+            }
+          ]
+        },
+        {
+          "Name": "UpdateTableMigration",
           "Resources": [
             {
               "Name": "Table"
@@ -33736,6 +34843,9 @@
           ]
         },
         {
+          "Name": "DeregisterDefaultHostManagementConfiguration"
+        },
+        {
           "Name": "DeregisterManagedInstance",
           "Resources": [
             {
@@ -34364,6 +35474,9 @@
           ]
         },
         {
+          "Name": "RegisterDefaultHostManagementConfiguration"
+        },
+        {
           "Name": "RegisterDefaultPatchBaseline",
           "Resources": [
             {
@@ -34964,6 +36077,138 @@
           "ConditionKeys": [
             "aws:ResourceTag/${TagKey}",
             "ssm:resourceTag/tag-key"
+          ]
+        }
+      ]
+    },
+    "sts": {
+      "Actions": [
+        {
+          "Name": "AssumeRole",
+          "Resources": [
+            {
+              "Name": "role"
+            }
+          ]
+        },
+        {
+          "Name": "AssumeRoleWithSAML",
+          "Resources": [
+            {
+              "Name": "role"
+            }
+          ]
+        },
+        {
+          "Name": "AssumeRoleWithWebIdentity",
+          "Resources": [
+            {
+              "Name": "role"
+            }
+          ]
+        },
+        {
+          "Name": "AssumeRoot",
+          "Resources": [
+            {
+              "Name": "root-user"
+            }
+          ]
+        },
+        {
+          "Name": "DecodeAuthorizationMessage"
+        },
+        {
+          "Name": "GetAccessKeyInfo"
+        },
+        {
+          "Name": "GetCallerIdentity"
+        },
+        {
+          "Name": "GetDelegatedAccessToken"
+        },
+        {
+          "Name": "GetFederationToken",
+          "Resources": [
+            {
+              "Name": "federated-user"
+            }
+          ]
+        },
+        {
+          "Name": "GetServiceBearerToken"
+        },
+        {
+          "Name": "GetSessionToken"
+        },
+        {
+          "Name": "GetWebIdentityToken"
+        },
+        {
+          "Name": "SetContext",
+          "Resources": [
+            {
+              "Name": "role"
+            },
+            {
+              "Name": "self-session"
+            }
+          ]
+        },
+        {
+          "Name": "SetSourceIdentity",
+          "Resources": [
+            {
+              "Name": "role"
+            }
+          ]
+        },
+        {
+          "Name": "TagGetWebIdentityToken"
+        },
+        {
+          "Name": "TagSession",
+          "Resources": [
+            {
+              "Name": "role"
+            }
+          ]
+        }
+      ],
+      "Operations": [],
+      "Resources": [
+        {
+          "Name": "context-provider",
+          "ARNFormats": [
+            "arn:${Partition}:iam::aws:contextProvider/${ContextProviderName}"
+          ]
+        },
+        {
+          "Name": "federated-user",
+          "ARNFormats": [
+            "arn:${Partition}:sts::${Account}:federated-user/${FederatedUserName}"
+          ]
+        },
+        {
+          "Name": "role",
+          "ARNFormats": [
+            "arn:${Partition}:iam::${Account}:role/${RoleNameWithPath}"
+          ],
+          "ConditionKeys": [
+            "aws:ResourceTag/${TagKey}",
+            "iam:ResourceTag/${TagKey}"
+          ]
+        },
+        {
+          "Name": "root-user",
+          "ARNFormats": [
+            "arn:${Partition}:iam::${Account}:root"
+          ]
+        },
+        {
+          "Name": "self-session",
+          "ARNFormats": [
+            "arn:${Partition}:sts::${Account}:self"
           ]
         }
       ]
@@ -35599,28 +36844,30 @@
     }
   },
   "sources": {
-    "https://schema.cloudformation.ap-northeast-2.amazonaws.com/CloudformationSchema.zip": "ebd9cafaca5a722b641f19353efe7494e10e859418c653a34a13e06a3753e7d7",
-    "https://servicereference.us-east-1.amazonaws.com/v1/budgets/budgets.json": "65ef8491b0963cc51e5d76dde1a7d527cc2134b2b4b28f55847f1715728fd435",
+    "https://schema.cloudformation.ap-northeast-2.amazonaws.com/CloudformationSchema.zip": "018a702bb09136201c77313634c92f6abed5e40d4f7462483b0c9b0581b95c2b",
+    "https://servicereference.us-east-1.amazonaws.com/v1/budgets/budgets.json": "8ac73d63b48998e38c365e037c5c54086a6871096c00ab53db1b9fa4abfca413",
+    "https://servicereference.us-east-1.amazonaws.com/v1/cloudformation/cloudformation.json": "49cc6549b4ca05328b0e94c7054b70e81043d19e3f5ab5d98a1fe190de37eb65",
     "https://servicereference.us-east-1.amazonaws.com/v1/cloudfront/cloudfront.json": "efc26446a6395ce5fce715f1b2e387a6b1d425914489cd80982ae34468f5ca7e",
-    "https://servicereference.us-east-1.amazonaws.com/v1/cloudwatch/cloudwatch.json": "b9d5a1437ba06c70429a21a202a515521b67d61c7a2358892bfb407675e6d2ce",
-    "https://servicereference.us-east-1.amazonaws.com/v1/cognito-idp/cognito-idp.json": "1bcae538aa0dc22c4377b7eb542f2dff1e8ff4ac3155ededd18bdbad9a1138a2",
-    "https://servicereference.us-east-1.amazonaws.com/v1/dynamodb/dynamodb.json": "402e6333e42297fdbaa5bc54f64d242a012591a604b4cfa285a40938a467cd2d",
-    "https://servicereference.us-east-1.amazonaws.com/v1/ec2/ec2.json": "ec4c773407db5ac2c87f87e0c3aa5fa90066e53bbbad65ebced7eeed31949ade",
+    "https://servicereference.us-east-1.amazonaws.com/v1/cloudwatch/cloudwatch.json": "81b24e861675c940a101b71ba6cc6eed41d28d5a2739d449a922d2ccf96e78a3",
+    "https://servicereference.us-east-1.amazonaws.com/v1/cognito-idp/cognito-idp.json": "484d0f04cf62747375d43d1d672ecd6ffbd9dc1e7a98a3e226960db1f85d9bff",
+    "https://servicereference.us-east-1.amazonaws.com/v1/dynamodb/dynamodb.json": "b0e865d3107e77c9e71faffaf7969fffba2fc841a3463c972f77495aeec94bac",
+    "https://servicereference.us-east-1.amazonaws.com/v1/ec2/ec2.json": "ef963b053ec7bf132a7b2d04a7498d056eb4ce18ad428a7ff0082d0c9118c41c",
     "https://servicereference.us-east-1.amazonaws.com/v1/elasticfilesystem/elasticfilesystem.json": "d9b274d8b9856c2df28d41086e27985cb29e73ff46883dfecb9d5dcedd8fbed4",
-    "https://servicereference.us-east-1.amazonaws.com/v1/events/events.json": "a902e40df5c8f7162c19508c25463d852c8b27a0922fee0acee59cfc84c1dbe5",
+    "https://servicereference.us-east-1.amazonaws.com/v1/events/events.json": "fade9b3dd9076195a11eb4fcd065477dcf83c135effe2d32b24647fd88484f6d",
     "https://servicereference.us-east-1.amazonaws.com/v1/firehose/firehose.json": "51442837b434b49384d263663b17cbb7b618fefb2dfc0c9062aeeeac66bd060c",
     "https://servicereference.us-east-1.amazonaws.com/v1/iam/iam.json": "64bbb6ee09c1ef7757b3cc32106cd26d4067b54142f8b873b5cab8a20a372191",
     "https://servicereference.us-east-1.amazonaws.com/v1/kinesis/kinesis.json": "af98822c350c23646b77e509fb3f025708fa7426d8778ded46d5bc366349cf93",
-    "https://servicereference.us-east-1.amazonaws.com/v1/kms/kms.json": "803516fcb4944d0925feba6f949c864600456549200947420e17f5d654e946d0",
-    "https://servicereference.us-east-1.amazonaws.com/v1/lambda/lambda.json": "2c9190fe6b3dd3340f2c217d87f2c94ba772c6b866d1701a5729cd94918fdfcc",
-    "https://servicereference.us-east-1.amazonaws.com/v1/logs/logs.json": "927b60e7fe3fa10276f5a95dddf3dca03c330da1e382ea709d33c2ed6e3d53f1",
+    "https://servicereference.us-east-1.amazonaws.com/v1/kms/kms.json": "85377382ef857be893afce73c8b73c92aa31979742abd676ba3e357fd3890932",
+    "https://servicereference.us-east-1.amazonaws.com/v1/lambda/lambda.json": "3814dfcc29ecbf550f314e098070da1539fa142c8ee1b971ac851e0b0b8db385",
+    "https://servicereference.us-east-1.amazonaws.com/v1/logs/logs.json": "5e16b4603657001213b545db6d8e29356d15e24a179c927a699a91a8080796ad",
     "https://servicereference.us-east-1.amazonaws.com/v1/s3/s3.json": "42a0406559f357e77fad1e4a77c1d3d9aa62bc90da4dd990c13149ae92147c6d",
     "https://servicereference.us-east-1.amazonaws.com/v1/s3files/s3files.json": "1fc9580122a899884d46e7159c48983e8ff2680288d534c63a47c3fa0d8c7276",
-    "https://servicereference.us-east-1.amazonaws.com/v1/s3tables/s3tables.json": "09957d0178087e3fcbada4f6259831e04b01cebe09248bad6c3835a75a246413",
+    "https://servicereference.us-east-1.amazonaws.com/v1/s3tables/s3tables.json": "98fce09e197aef7daa452b4e6fff93ff42a4ac0037fa655152bae3dce78af4e2",
     "https://servicereference.us-east-1.amazonaws.com/v1/scheduler/scheduler.json": "e76994420811a151e6fed96513a050bab62a6a35545395950c58ba79096f22cd",
     "https://servicereference.us-east-1.amazonaws.com/v1/sns/sns.json": "36396847c543959df076d04811fa0fc7895a19ab31d946b3aacd0464c4433ed3",
     "https://servicereference.us-east-1.amazonaws.com/v1/sqs/sqs.json": "ab3025f946395ff6dface0582385527a45435b149fdd3e99e3ee9e3d2eafd541",
-    "https://servicereference.us-east-1.amazonaws.com/v1/ssm/ssm.json": "c7de3c0eb97c48594a268629e5bcea9f3f05e1605d138bfa5e9ea5c4292e1ee7",
-    "https://servicereference.us-east-1.amazonaws.com/v1/wafv2/wafv2.json": "25ebc5ff92480a3805ab8f2f2c1d6e4ae2a3022572e97d0bb1163f5da7e628de"
+    "https://servicereference.us-east-1.amazonaws.com/v1/ssm/ssm.json": "933c5f3629115041fb0f1692c1c0deaae51efce1c6a8eba1e3a1329c4b3115c5",
+    "https://servicereference.us-east-1.amazonaws.com/v1/sts/sts.json": "06caa6df94aada85e79390a4089d786e4823820bf16dd0672f9b6bed4f96e5c4",
+    "https://servicereference.us-east-1.amazonaws.com/v1/wafv2/wafv2.json": "265d112dce2ea2326ee1a2ab14f17bf58b6191cb4d818bf73e1f41bb98b344f1"
   }
 }
