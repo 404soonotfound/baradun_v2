@@ -9,6 +9,7 @@ import {
 } from "./stack-template";
 import {
   GITHUB_OIDC_SUBJECT,
+  INQUIRY_EMAIL_INDEX,
   INQUIRY_STATUS_INDEX,
   RUN_LOG_KEY_PREFIX,
   PUBLISH_RUN_KEY,
@@ -349,20 +350,20 @@ describe("DynamoDB 권한 (BRD-55)", () => {
     }
   });
 
-  it("문의 역할은 Inquiry 항목 쓰기·멱등 기록 읽기·이메일 삭제·상태 GSI 조회만 할 수 있다", () => {
+  it("문의 역할은 Inquiry 항목 쓰기·멱등 기록 읽기·이메일 삭제·이메일 정리 GSI 조회만 할 수 있다", () => {
     const byResource = dynamoActionsByResource([roleId("InquiryInquiryRole")]);
     expect(Object.fromEntries(byResource)).toEqual({
       // 트랜잭션 Put은 dynamodb:PutItem으로 판정됨(품목별 동작). TransactWriteItems라는 동작은 없음
-      // GetItem은 같은 멱등 키의 첫 결과 읽기(BRD-103), Query는 일일 이메일 정리 작업용 상태 GSI 조회만(BRD-119)
+      // GetItem은 같은 멱등 키의 첫 결과 읽기(BRD-103), Query는 일일 이메일 정리 작업용 희소 GSI 조회만(BRD-119)
       [`${tableId("Inquiry")}.Arn`]: new Set([
         "dynamodb:DeleteItem",
         "dynamodb:GetItem",
         "dynamodb:PutItem",
         "dynamodb:UpdateItem",
       ]),
-      [`${tableId("Inquiry")}.Arn/index/${INQUIRY_STATUS_INDEX.name}`]: new Set(
-        ["dynamodb:Query"],
-      ),
+      [`${tableId("Inquiry")}.Arn/index/${INQUIRY_EMAIL_INDEX.name}`]: new Set([
+        "dynamodb:Query",
+      ]),
     });
   });
 
@@ -602,15 +603,30 @@ describe("함수·역할별 최소 권한 범위 (BRD-67)", () => {
       scheduledFunctionIds.flatMap((id) => [`${id}.Arn`, `${id}.Arn:*`]),
     );
 
+    const cleanupDlqs = Object.keys(
+      template.findResources("AWS::SQS::Queue"),
+    ).filter((id) => id.startsWith("InquiryEmailCleanupFailures"));
+    expect(cleanupDlqs).toHaveLength(1);
+    const allowedDlqs = new Set([`${cleanupDlqs[0]}.Arn`]);
+
     const schedulerRoles = Object.keys(roles).filter((id) =>
       id.startsWith("SchedulerRoleForTarget"),
     );
     for (const role of schedulerRoles) {
       expect(roles[role]!.Properties.ManagedPolicyArns ?? []).toEqual([]);
       const actions = allowedActionsOfRole(role);
-      expect([...actions.keys()]).toEqual(["lambda:InvokeFunction"]);
+      const keys = [...actions.keys()].sort();
+      expect(
+        keys.every(
+          (k) => k === "lambda:InvokeFunction" || k === "sqs:SendMessage",
+        ),
+      ).toBe(true);
+      expect(keys).toContain("lambda:InvokeFunction");
       for (const r of actions.get("lambda:InvokeFunction") ?? []) {
         expect(allowedTargets.has(r), r).toBe(true);
+      }
+      for (const r of actions.get("sqs:SendMessage") ?? []) {
+        expect(allowedDlqs.has(r), r).toBe(true);
       }
     }
   });

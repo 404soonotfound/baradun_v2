@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
+  INQUIRY_EMAIL_INDEX,
   INQUIRY_STATUS_INDEX,
   MAX_DYNAMODB_CAPACITY_UNITS,
   TABLE_CAPACITY,
@@ -48,11 +49,12 @@ describe("DynamoDB 테이블", () => {
     expect(inquiry.KeySchema).toEqual([
       { AttributeName: "pk", KeyType: "HASH" },
     ]);
-    // 테이블 키는 pk만. 나머지 두 속성은 상태 GSI 키(BRD-153)
+    // 테이블 키는 pk만. 나머지 속성은 상태 GSI·이메일 정리 희소 GSI 키(BRD-153·BRD-119)
     expect(inquiry.AttributeDefinitions).toEqual([
       { AttributeName: "pk", AttributeType: "S" },
       { AttributeName: "inquiryStatus", AttributeType: "S" },
       { AttributeName: "receivedAt", AttributeType: "S" },
+      { AttributeName: "emailCleanupPartition", AttributeType: "S" },
     ]);
   });
 
@@ -85,7 +87,7 @@ describe("DynamoDB 테이블", () => {
     template.resourceCountIs("AWS::ApplicationAutoScaling::ScalableTarget", 0);
   });
 
-  it("Inquiry GSI는 상태 + 접수 시각 하나뿐이고 요약만 담는다(D16-B4, BRD-153)", () => {
+  it("Inquiry GSI는 상태 목록(요약)과 이메일 정리(KEYS_ONLY) 두 개뿐이다(D16-B4, BRD-153, BRD-119)", () => {
     expect(table("Inquiry").Properties.GlobalSecondaryIndexes).toEqual([
       {
         IndexName: INQUIRY_STATUS_INDEX.name,
@@ -96,6 +98,17 @@ describe("DynamoDB 테이블", () => {
         Projection: {
           ProjectionType: "INCLUDE",
           NonKeyAttributes: [...INQUIRY_STATUS_INDEX.projected],
+        },
+        ProvisionedThroughput: { ReadCapacityUnits: 1, WriteCapacityUnits: 1 },
+      },
+      {
+        IndexName: INQUIRY_EMAIL_INDEX.name,
+        KeySchema: [
+          { AttributeName: "emailCleanupPartition", KeyType: "HASH" },
+          { AttributeName: "receivedAt", KeyType: "RANGE" },
+        ],
+        Projection: {
+          ProjectionType: "KEYS_ONLY",
         },
         ProvisionedThroughput: { ReadCapacityUnits: 1, WriteCapacityUnits: 1 },
       },
@@ -111,22 +124,26 @@ describe("DynamoDB 테이블", () => {
       join(__dirname, "../../services/src/inquiry/policy.ts"),
       "utf8",
     );
-    const match = /export const INQUIRY_STATUS_INDEX_NAME = "([^"]+)";/.exec(
+    const statusMatch = /export const INQUIRY_STATUS_INDEX_NAME = "([^"]+)";/.exec(
       text,
     );
-    expect(match?.[1]).toBe(INQUIRY_STATUS_INDEX.name);
+    expect(statusMatch?.[1]).toBe(INQUIRY_STATUS_INDEX.name);
+    const emailMatch = /export const INQUIRY_EMAIL_INDEX_NAME = "([^"]+)";/.exec(
+      text,
+    );
+    expect(emailMatch?.[1]).toBe(INQUIRY_EMAIL_INDEX.name);
   });
 
-  it("테이블과 GSI 용량 합계 12/12는 상한 안이다", () => {
+  it("테이블과 GSI 용량 합계 13/13은 상한 안이다", () => {
     const read = Object.values(TABLE_CAPACITY).reduce((s, c) => s + c.read, 0);
     const write = Object.values(TABLE_CAPACITY).reduce(
       (s, c) => s + c.write,
       0,
     );
     expect([
-      read + INQUIRY_STATUS_INDEX.read,
-      write + INQUIRY_STATUS_INDEX.write,
-    ]).toEqual([12, 12]);
+      read + INQUIRY_STATUS_INDEX.read + INQUIRY_EMAIL_INDEX.read,
+      write + INQUIRY_STATUS_INDEX.write + INQUIRY_EMAIL_INDEX.write,
+    ]).toEqual([13, 13]);
   });
 
   it("TTL은 Ops·Inquiry에만 있고 속성 이름은 ttl이다", () => {

@@ -780,4 +780,29 @@ describe("문의 이메일 일일 정리 이벤트 (BRD-119)", () => {
       logSpy.mockRestore();
     }
   });
+
+  it("정리 작업이 실패하면 inquiry_email_cleanup_failed 로그를 남기고 예외를 다시 던진다", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    try {
+      const deps = dependencies({
+        store: {
+          cleanupExpiredEmails: vi.fn(async () => {
+            throw new Error("dynamodb unavailable");
+          }),
+        } as never,
+      });
+
+      await expect(
+        handleInquiryEvent({ action: "cleanup_expired_emails" }, deps),
+      ).rejects.toThrow("dynamodb unavailable");
+      expect(logSpy).toHaveBeenCalledWith(
+        JSON.stringify({
+          level: "error",
+          event: "inquiry_email_cleanup_failed",
+        }),
+      );
+    } finally {
+      logSpy.mockRestore();
+    }
+  });
 });
