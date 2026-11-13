@@ -13,9 +13,12 @@ export const STATS_RANGES = ["today", "7d", "28d", "60d"] as const;
 export type StatsRange = (typeof STATS_RANGES)[number];
 
 export const STATS_CACHE_TTL_MS = 5 * 60_000;
-export const SSM_TIMEOUT_MS = 2_500;
-export const TOKEN_TIMEOUT_MS = 2_500;
-export const GA4_TIMEOUT_MS = 4_500;
+export const SSM_TIMEOUT_MS = 1_500;
+export const TOKEN_TIMEOUT_MS = 1_500;
+export const GA4_TIMEOUT_MS = 3_500;
+export const TOP_LIST_LIMIT = 10;
+export const GA4_TOP_BEACHES_FETCH_LIMIT = 250;
+export const GA4_LANGUAGES_FETCH_LIMIT = 50;
 const GA4_SCOPE = "https://www.googleapis.com/auth/analytics.readonly";
 
 export interface StatsMetadata {
@@ -207,9 +210,9 @@ export function parseTopBeachesReport(body: Ga4ReportBody): {
       });
     }
   }
-  const rows = [...bySlug.values()].sort((a, b) =>
-    compareMetricDesc(a.pageViews, b.pageViews),
-  );
+  const rows = [...bySlug.values()]
+    .sort((a, b) => compareMetricDesc(a.pageViews, b.pageViews))
+    .slice(0, TOP_LIST_LIMIT);
   return { rows, metadata: extractMetadataFlags(body.metadata) };
 }
 
@@ -248,7 +251,8 @@ export function parseLanguagesReport(body: Ga4ReportBody): {
   }
   const rows: StatsLanguageRow[] = [...byLang.entries()]
     .map(([language, activeUsers]) => ({ language, activeUsers }))
-    .sort((a, b) => compareMetricDesc(a.activeUsers, b.activeUsers));
+    .sort((a, b) => compareMetricDesc(a.activeUsers, b.activeUsers))
+    .slice(0, TOP_LIST_LIMIT);
   return { rows, metadata: extractMetadataFlags(body.metadata) };
 }
 
@@ -445,21 +449,21 @@ export function createGa4StatsReader(config: Ga4StatsConfig): StatsReader {
               },
             },
             orderBys: [{ metric: { metricName: "screenPageViews" }, desc: true }],
-            limit: 10,
+            limit: GA4_TOP_BEACHES_FETCH_LIMIT,
           }),
           postGa4("runReport", token, {
             dateRanges: [dateRange],
             dimensions: [{ name: "deviceCategory" }],
             metrics: [{ name: "activeUsers" }],
             orderBys: [{ metric: { metricName: "activeUsers" }, desc: true }],
-            limit: 10,
+            limit: TOP_LIST_LIMIT,
           }),
           postGa4("runReport", token, {
             dateRanges: [dateRange],
             dimensions: [{ name: "languageCode" }],
             metrics: [{ name: "activeUsers" }],
             orderBys: [{ metric: { metricName: "activeUsers" }, desc: true }],
-            limit: 10,
+            limit: GA4_LANGUAGES_FETCH_LIMIT,
           }),
         ]);
 
