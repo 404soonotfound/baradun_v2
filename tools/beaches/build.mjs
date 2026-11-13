@@ -324,7 +324,19 @@ export function buildBeaches({ coverageDir = COVERAGE_DIR, existingDataDir = joi
   validateIdentity(ids, existingItems, allSrc, previousMatrix);
   const existingById = new Map(existingItems.map(({ beach }) => [beach.id, beach]));
   const existingMetaPath = join(existingDataDir, "beach-meta.json");
-  const existingMetaBeaches = existsSync(existingMetaPath) ? (JSON.parse(readFileSync(existingMetaPath, "utf8"))?.beaches ?? {}) : {};
+  let existingMetaBeaches = {};
+  if (existsSync(existingMetaPath)) {
+    let parsedMeta;
+    try {
+      parsedMeta = JSON.parse(readFileSync(existingMetaPath, "utf8"));
+    } catch (e) {
+      throw new Error(`beach-meta.json 파싱 실패(${existingMetaPath}): ${e.message}`);
+    }
+    if (!parsedMeta || typeof parsedMeta !== "object" || Array.isArray(parsedMeta) || (parsedMeta.beaches !== undefined && (parsedMeta.beaches === null || typeof parsedMeta.beaches !== "object" || Array.isArray(parsedMeta.beaches)))) {
+      throw new Error(`beach-meta.json 형식 오류(${existingMetaPath}): beaches 객체 필요`);
+    }
+    existingMetaBeaches = parsedMeta.beaches ?? {};
+  }
   const pinnedSlug = new Map(
     existingItems.map(({ beach }) => [beach.id, beach.slug]),
   );
@@ -656,10 +668,14 @@ export function buildBeaches({ coverageDir = COVERAGE_DIR, existingDataDir = joi
         season_source: "해양수산부 해양레저관광과 '2026 해수욕장 주요 현황'(2026-08-11), https://www.mof.go.kr/doc/ko/selectDoc.do?menuSeq=427&bbsSeq=2&docSeq=67910",
         season_rule: "올해 일정이 없거나 연결되지 않으면 '운영 기간 아님' 배지를 숨김(지난해 일정으로 추정 안 함, 결정 기록 11장 10/21 ⑥)",
       },
-      beaches: Object.fromEntries(records.map((r) => [r.id, {
-        aliases: preserveManualAliases(r._draft.aliases, existingMetaBeaches[r.id], r.name.ko),
-        season: { 2026: r._draft.season2026.status != null ? { status: seasonStatus(r), openDate: r._draft.season2026.openDate, closeDate: r._draft.season2026.closeDate, sourceRow: r._draft.season2026.xlsxRow, link: r._draft.season2026.linkMethod } : null },
-      }])),
+      beaches: Object.fromEntries(records.map((r) => {
+        const { aliases, manualAliases } = preserveManualAliases(r._draft.aliases, existingMetaBeaches[r.id], r.name.ko, r.id);
+        return [r.id, {
+          aliases,
+          ...(manualAliases.length ? { manualAliases } : {}),
+          season: { 2026: r._draft.season2026.status != null ? { status: seasonStatus(r), openDate: r._draft.season2026.openDate, closeDate: r._draft.season2026.closeDate, sourceRow: r._draft.season2026.xlsxRow, link: r._draft.season2026.linkMethod } : null },
+        }];
+      })),
     };
     const final = [...records.map((r) => preserveManual(r, existing.get(r.id))), ...hidden.map(([, beach]) => beach)];
     validateFinalIdentity([...existing.values()], final);
