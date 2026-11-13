@@ -635,7 +635,7 @@ describe("PR 필수 웹 검사 (BRD-102 결정 41·42)", () => {
       expect(lines, job).toContain("playwright install --with-deps chromium");
       if (app === "web") {
         expect(lines).toMatch(
-          /run: npm run test:e2e -w apps\/web\s*\n\s+env:\s*\n\s+E2E_PRODUCTION_BUILD: "1"/,
+          /run: npm run test:e2e -w apps\/web\s*\n\s+env:\s*\n\s+E2E_SITE_URL: \$\{\{ vars\.SITE_URL \}\}/,
         );
       }
     }
