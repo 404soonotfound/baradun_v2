@@ -6,7 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 import { fill, messages } from "@/lib/messages";
 import {
-  policyShortTime,
+  policyTime,
   sectionOf,
   type PolicyRun,
   type PolicySection,
@@ -176,8 +176,8 @@ function PoliciesBody({ snapshot }: { snapshot: PolicySnapshot }) {
           <p className="mt-0.5 text-label-s text-text-muted tabular-nums">
             {fill(t.introMeta, {
               statusSummary,
-              revision: policyShortTime(snapshot.revision),
-              fetchedAt: policyShortTime(snapshot.fetchedAt),
+              revision: policyTime(snapshot.revision),
+              fetchedAt: policyTime(snapshot.fetchedAt),
             })}
           </p>
         </div>

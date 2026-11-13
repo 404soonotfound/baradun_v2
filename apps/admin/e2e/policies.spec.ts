@@ -1,6 +1,6 @@
 import type { Page } from "@playwright/test";
 import snapshot from "../src/content/ops-policy.json";
-import { policyShortTime } from "../src/lib/policies";
+import { policyTime } from "../src/lib/policies";
 import {
   ME_OK,
   expect,
@@ -57,7 +57,7 @@ test("revision·가져온 시각·원문 링크를 보여 주고 '최신'이라�
   await openPolicies(page);
   await expect(
     page.getByText(
-      `9개 모두 확정 · 원본은 노션 결정 기록 · 노션 마지막 수정 ${policyShortTime(snapshot.revision)} · 동기화 ${policyShortTime(snapshot.fetchedAt)} · 노션에서 고치면 다시 동기화해야 반영돼요 · 읽기 전용`,
+      `9개 모두 확정 · 원본은 노션 결정 기록 · 노션 마지막 수정 ${policyTime(snapshot.revision)} · 동기화 ${policyTime(snapshot.fetchedAt)} · 노션에서 고치면 다시 동기화해야 반영돼요 · 읽기 전용`,
     ),
   ).toBeVisible();
   const notion = page.getByRole("link", { name: "노션에서 열기 (새 탭)" });
