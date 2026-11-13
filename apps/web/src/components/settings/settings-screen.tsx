@@ -35,6 +35,7 @@ import { Button } from "@/components/ui/button";
 import { Sheet } from "@/components/ui/sheet";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/cn";
+import { trackEvent } from "@/lib/analytics/events";
 import { resetDeviceData } from "@/lib/device-reset";
 import { LOCALE_NAMES, LOCALES, localizedPath, type Locale } from "@/lib/i18n";
 import { setLanguageChoice } from "@/lib/language-choice";
@@ -108,6 +109,7 @@ export function SettingsScreen({
 
   function confirmReset() {
     resetDeviceData();
+    trackEvent("change_setting", { setting: "reset_data" });
     // 지운 결과는 바로 덮는 첫 실행 안내(ON-1) 맨 위에 보여 줌(lib/onboarding.ts showsResetNotice)
     resetSheet.close();
   }
@@ -387,7 +389,13 @@ function DisplayGroup({
         control={
           <Switch
             checked={motion}
-            onChange={setMotionEnabled}
+            onChange={(next) => {
+              setMotionEnabled(next);
+              trackEvent("change_setting", {
+                setting: "motion",
+                value: next ? "on" : "off",
+              });
+            }}
             labelledBy={motionId}
             describedBy={motionBodyId}
           />
@@ -408,6 +416,7 @@ function DisplayGroup({
                 aria-current={theme === value ? "true" : undefined}
                 onClick={() => {
                   setTheme(value);
+                  trackEvent("change_setting", { setting: "theme", value });
                   themeSheet.close();
                 }}
                 className={choiceClass(theme === value)}

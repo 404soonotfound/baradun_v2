@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl";
 
 import { ActivityIcon } from "@/components/activity-icon";
 import { ACTIVITIES, setActivity, useActivity } from "@/lib/activity";
+import { trackEvent } from "@/lib/analytics/events";
 import { cn } from "@/lib/cn";
 
 // 활동 타일 (노션 3장 ActivityTiles, Figma '활동 타일 · 새' 170:114·170:119): 3칸, 타일 72px(PC 76), 선택 = 브랜드 파랑 채움 + 오른쪽 위 체크, 하나만 고름
@@ -45,7 +46,13 @@ export function ActivityTiles() {
                 name={name}
                 value={item}
                 checked={selected}
-                onChange={() => setActivity(item)}
+                onChange={() => {
+                  setActivity(item);
+                  trackEvent("select_activity", {
+                    activity: item,
+                    surface: "home",
+                  });
+                }}
                 className="sr-only"
               />
               {/* 색만으로 고른 타일을 구분하지 않게 체크 표시를 더함 */}

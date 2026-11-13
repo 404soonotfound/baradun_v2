@@ -3,7 +3,7 @@
 import { SearchX } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
-import { useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 
 import { BackButton } from "@/components/detail/back-button";
 import { SampleNote } from "@/components/sample-note";
@@ -15,6 +15,7 @@ import { Chip, RemovableChip } from "@/components/ui/chip";
 import { EmptyState } from "@/components/ui/empty-state";
 import { SearchField } from "@/components/ui/search-field";
 import type { BeachSummary } from "@/lib/beach-summary";
+import { queryLengthBucket, trackEvent } from "@/lib/analytics/events";
 import { filterBeaches } from "@/lib/explore";
 import { localizedPath, type Locale } from "@/lib/i18n";
 import { showsKmaSource } from "@/lib/kma-source";
@@ -107,6 +108,22 @@ export function SearchScreen({
   const pool = scoped ? filterBeaches(beaches, region) : beaches;
   const hits = searchBeaches(pool, query, intlLocale);
   const searching = query.trim() !== "";
+  const lastNoResultKeyRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!searching || hits.length > 0) {
+      lastNoResultKeyRef.current = null;
+      return;
+    }
+    const bucket = queryLengthBucket(query);
+    const key = `${locale}:${scoped}:${bucket}`;
+    if (lastNoResultKeyRef.current === key) return;
+    lastNoResultKeyRef.current = key;
+    trackEvent("search_no_result", {
+      locale,
+      query_length_bucket: bucket,
+    });
+  }, [hits.length, locale, query, scoped, searching]);
 
   const visibleIds = useMemo(
     () => new Set(beaches.map((beach) => beach.id)),
@@ -235,7 +252,13 @@ export function SearchScreen({
                 match={match}
                 view={view}
                 basis={rowBasis(view, nowMs, beach.warningZones)}
-                onOpen={() => saveRecentSearch({ q: query, id: beach.id })}
+                onOpen={() => {
+                  saveRecentSearch({ q: query, id: beach.id });
+                  trackEvent("select_search_result", {
+                    result_kind: "beach",
+                    locale,
+                  });
+                }}
               />
             ))}
           </ul>
