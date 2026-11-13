@@ -3,6 +3,7 @@ import { getTranslations } from "next-intl/server";
 import { RootDocument } from "@/components/root-document";
 import { AppShell } from "@/components/shell/app-shell";
 import { HEAD_ICONS } from "@/lib/app-icons";
+import { rootRobotsMetadata } from "@/lib/seo";
 import { siteShareMetadata } from "@/lib/share-meta";
 import { siteUrl } from "@/lib/site-url";
 import { sharedViewport } from "@/lib/viewport";
@@ -13,8 +14,10 @@ import "../globals.css";
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations({ locale: "en", namespace: "meta" });
   const share = await getTranslations({ locale: "en", namespace: "share" });
+  const robots = rootRobotsMetadata();
   return {
     metadataBase: siteUrl(), // hreflang·og:image 절대 주소의 기준. 값이 없거나 틀리면 빌드 실패
+    ...(robots ? { robots } : {}),
     // 공유 미리보기 기본값: 모든 페이지가 자체 공통 일러스트(BRD-105). 상세는 이름·지역을 더해 덮어씀
     ...siteShareMetadata("en", {
       siteName: t("siteName"),
