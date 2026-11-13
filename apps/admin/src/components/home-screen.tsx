@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { opsFetch, type OpsResult } from "@/lib/auth/ops-fetch";
 import { useAuthSession, useSessionSnapshot } from "@/lib/auth/provider";
 import { fetchAudit, periodFilter } from "@/lib/audit";
@@ -14,11 +14,13 @@ import { fetchCollection, type CollectionView } from "@/lib/collection";
 import {
   expiredCount,
   judgmentLine,
+  mergePart,
   noticeCounts,
   partOf,
   receivedCount,
   recentChanges,
   settle,
+  staleSince,
   todos,
   undeterminedCount,
   valueOf,
@@ -27,11 +29,20 @@ import {
 } from "@/lib/home";
 import { badgeOwner, setReceivedCount } from "@/lib/inquiry-badge";
 import { fetchInquiries, kstDateTime } from "@/lib/inquiries";
+import { LOADING_TIMES } from "@/lib/loading-timing";
 import { fill, messages } from "@/lib/messages";
 import { fetchNotices, type NoticeView } from "@/lib/notices";
 import { roleLabel } from "@/lib/roles";
 import { AdminShell } from "./admin-shell";
 import { kindBadge, summaryOf, Target, type Beaches } from "./audit-screen";
+import {
+  loadClass,
+  LoadingStatus,
+  SkLine,
+  SlowNote,
+  Spinner,
+  useLoadTiming,
+} from "./loading";
 import { Button, Notice, TextLink } from "./ui";
 
 // 운영 홈 (BRD-149, 화면 설계서 6장 ADM-HOME). 로그인 뒤 /ops/me로 서버가 이 세션을 받아 주는지 먼저 확인함
@@ -41,17 +52,31 @@ import { Button, Notice, TextLink } from "./ui";
 // - 요약 카드·할 일·최근 변경은 이미 있는 운영 API(수집 현황·게시본·문의·공지·변경 이력)를 모아 보여 줌
 // - 못 읽은 값은 0·정상·'할 일 없음'으로 바꾸지 않고 '확인 못 함'. 다시 읽는 동안은 앞 값을 그대로 둠
 // - 화면이 보이는 동안 60초마다 다시 읽음(D16-E1 운영 홈 60초)
+// - 로딩(GH-462, 보드 L0·LS·LP 시범 적용): 칸마다 값과 같은 크기 자리표시(150ms 뒤 · 최소 400ms · 0.18초 페이드)
+//   다시 읽는 동안은 값을 두고 기준 시각 옆에 회전 표시. 다시 읽기가 실패한 칸은 앞 값을 두고 '마지막으로 받은 값' 줄
+//   세션 확인 중(첫 진입)에도 같은 요소를 그려 확인이 끝나면 자리표시를 이어서 씀(AdminShell loading)
 
 const t = messages;
 const h = messages.home;
 const REFRESH_MS = 60_000;
 const RECENT_COUNT = 5;
+// 최근 변경 자리표시 행 길이(행마다 다르게, RECENT_COUNT개)
+const RECENT_RHYTHM = [
+  "w-[72%]",
+  "w-[60%]",
+  "w-[84%]",
+  "w-[52%]",
+  "w-[66%]",
+] as const;
 
 const CARD =
   "flex flex-col gap-1 rounded-admin-box border border-border-default bg-bg-surface px-4 py-3";
 const LABEL = "text-label-s font-medium text-text-body";
 const VALUE = "text-title-l font-semibold text-text-default tabular-nums";
 const HINT = "text-label-s text-text-muted";
+// 할 일 안내 한 줄(0건·확인 못 함): 자리표시 한 행 상자(행 44 + 위아래 테두리 2)와 같은 최소 높이 → 응답 뒤 밀리지 않음
+const TODO_LINE =
+  "flex min-h-[calc(var(--spacing-touch)+2px)] items-center text-body-s text-text-body";
 
 interface Me {
   readonly kind: "operator" | "sample";
@@ -70,6 +95,7 @@ interface Parts {
 }
 
 const LOADING = { state: "loading" } as const;
+const NO_STALE: ReadonlySet<keyof Parts> = new Set();
 const INITIAL: Parts = {
   collection: LOADING,
   published: LOADING,
@@ -124,13 +150,23 @@ function loaders(token: Token, owner: string | null, demo: boolean): Loaders {
             : null,
       ),
   };
-  // 칸마다 시간 제한·예외 처리(멈춘 칸이 '불러오는 중'에 머물지 않게)
+  // 칸마다 시간 제한(15초, D26-4)·예외 처리(멈춘 칸이 '불러오는 중'에 머물지 않게)
   return {
     collection: () => settle(raw.collection),
     published: () => settle(raw.published),
     inquiries: () => settle(raw.inquiries),
     notices: () => settle(raw.notices),
     recent: () => settle(raw.recent),
+  };
+}
+
+// 칸 하나의 자리표시 여부와 바깥 클래스. 값(또는 실패)이 와도 최소 유지 시간 동안은 자리표시
+// 시간 제한 상태보다 받은 결과가 기준(15초에 settle이 실패로 바꿈)
+function useSlot(part: Slot<unknown>): { placeholder: boolean; cls: string } {
+  const timing = useLoadTiming(part.state === "loading");
+  return {
+    placeholder: part.state === "loading" || timing.phase !== "content",
+    cls: loadClass(timing),
   };
 }
 
@@ -141,13 +177,33 @@ function SourcesLine({
   part: Slot<CollectionView>;
   onRetry: () => void;
 }) {
-  if (part.state === "loading") {
-    return (
-      <p role="status" className="text-body-s text-text-muted">
-        {h.sourcesLoading}
-      </p>
-    );
-  }
+  const slot = useSlot(part);
+  return (
+    <div className={slot.cls}>
+      {slot.placeholder || part.state === "loading" ? (
+        // 정상 줄(알림 상자 제목 + 출처 줄)과 같은 높이. 정상·문제 색을 미리 보이지 않게 중립 상자
+        <div className="rounded-admin-box border border-border-default bg-bg-page px-3.5 py-3 text-body-s">
+          <p>
+            <SkLine className="w-[232px]" />
+          </p>
+          <p className="mt-1">
+            <SkLine className="w-[280px] max-w-full" />
+          </p>
+        </div>
+      ) : (
+        <SourcesResult part={part} onRetry={onRetry} />
+      )}
+    </div>
+  );
+}
+
+function SourcesResult({
+  part,
+  onRetry,
+}: {
+  part: Exclude<Slot<CollectionView>, { state: "loading" }>;
+  onRetry: () => void;
+}) {
   const line = judgmentLine(valueOf(part));
   const link = (
     <TextLink
@@ -202,29 +258,88 @@ function SourcesLine({
   );
 }
 
+// 다시 읽기가 실패해 앞 값을 둔 칸 표시(색만이 아니라 글로 알림)
+function StaleMark() {
+  return (
+    <span className="ml-1.5 align-middle text-label-s font-normal text-text-muted">
+      {t.loading.staleShort}
+    </span>
+  );
+}
+
 function Value({
   part,
+  width = "w-[56px]",
+  stale = false,
   children,
 }: {
   part: Slot<unknown>;
+  // 자리표시 너비 클래스(예상 값 길이)
+  width?: string;
+  // 앞 값을 두고 있음
+  stale?: boolean;
   children: React.ReactNode;
 }) {
-  if (part.state === "ok") return <dd className={VALUE}>{children}</dd>;
-  if (part.state === "loading") {
+  const slot = useSlot(part);
+  if (slot.placeholder || part.state === "loading") {
     return (
-      <dd className={`${VALUE} text-title-s text-text-muted`}>
-        {h.partLoading}
+      <dd className={`${VALUE} ${slot.cls}`}>
+        <SkLine className={width} />
+      </dd>
+    );
+  }
+  if (part.state === "ok") {
+    return (
+      <dd className={`${VALUE} ${slot.cls}`}>
+        {children}
+        {stale && <StaleMark />}
       </dd>
     );
   }
   return (
-    <dd className={`${VALUE} text-title-s`}>
+    <dd className={`${VALUE} text-title-s ${slot.cls}`}>
       {part.state === "forbidden" ? h.forbidden : h.unknown}
     </dd>
   );
 }
 
-function Summary({ parts, nowMs }: { parts: Parts; nowMs: number }) {
+// 카드 아래 보조 줄(값에 따라 바뀌는 것만 자리표시. 고정 설명은 바로 그림)
+function Hint({
+  part,
+  width,
+  stale = false,
+  children,
+}: {
+  part: Slot<unknown>;
+  // 자리표시 너비 클래스
+  width: string;
+  stale?: boolean;
+  children: React.ReactNode;
+}) {
+  const slot = useSlot(part);
+  return (
+    <dd className={`${HINT} ${slot.cls}`}>
+      {slot.placeholder || part.state === "loading" ? (
+        <SkLine className={width} />
+      ) : (
+        <>
+          {children}
+          {stale && ` · ${t.loading.staleShort}`}
+        </>
+      )}
+    </dd>
+  );
+}
+
+function Summary({
+  parts,
+  nowMs,
+  stale,
+}: {
+  parts: Parts;
+  nowMs: number;
+  stale: ReadonlySet<keyof Parts>;
+}) {
   const published = valueOf(parts.published);
   const notices = noticeCounts(valueOf(parts.notices));
   const expired = expiredCount(published, nowMs);
@@ -235,7 +350,7 @@ function Summary({ parts, nowMs }: { parts: Parts; nowMs: number }) {
     >
       <div className={CARD}>
         <dt className={LABEL}>{h.kpiInquiries}</dt>
-        <Value part={parts.inquiries}>
+        <Value part={parts.inquiries} stale={stale.has("inquiries")}>
           {fill(h.kpiInquiriesValue, { count: valueOf(parts.inquiries) ?? 0 })}
         </Value>
         <dd className={HINT}>{h.kpiInquiriesHint}</dd>
@@ -243,7 +358,7 @@ function Summary({ parts, nowMs }: { parts: Parts; nowMs: number }) {
       <div className={CARD}>
         <dt className={LABEL}>{h.kpiUndetermined}</dt>
         {/* 게시본을 읽지 못하면(available: false 포함) 0곳이 아니라 확인 못 함 */}
-        <Value part={parts.published}>
+        <Value part={parts.published} stale={stale.has("published")}>
           {fill(h.kpiUndeterminedValue, {
             count: undeterminedCount(published) ?? 0,
           })}
@@ -264,19 +379,25 @@ function Summary({ parts, nowMs }: { parts: Parts; nowMs: number }) {
       </div>
       <div className={CARD}>
         <dt className={LABEL}>{h.kpiPublish}</dt>
-        <Value part={parts.published}>
+        <Value
+          part={parts.published}
+          width="w-[120px]"
+          stale={stale.has("published")}
+        >
           {published ? kstDateTime(published.generatedAt) : null}
         </Value>
-        <dd className={HINT}>
+        <Hint
+          part={parts.notices}
+          width="w-[180px]"
+          stale={stale.has("notices")}
+        >
           {notices
             ? fill(h.kpiNotices, {
                 scheduled: notices.scheduled,
                 pending: notices.pendingEdit,
               })
-            : parts.notices.state === "loading"
-              ? h.partLoading
-              : h.kpiNoticesUnknown}
-        </dd>
+            : h.kpiNoticesUnknown}
+        </Hint>
       </div>
       <div className={CARD}>
         <dt className={LABEL}>{h.kpiUsers}</dt>
@@ -294,10 +415,14 @@ function Todos({ parts }: { parts: Parts }) {
     received: valueOf(parts.inquiries),
     notices: noticeCounts(valueOf(parts.notices)),
   });
-  // 아직 받는 중인 칸이 있으면 '못 불러옴'·'할 일 없음' 대신 확인 중
-  const loading = [parts.collection, parts.inquiries, parts.notices].some(
+  // 아직 받는 중인 칸이 있으면 '못 불러옴'·'할 일 없음' 대신 자리표시(할 일 한 행 상자)
+  const pending = [parts.collection, parts.inquiries, parts.notices].some(
     (p) => p.state === "loading",
   );
+  // 세 칸을 묶어 하나의 로딩 시간으로 봄
+  const timing = useLoadTiming(pending);
+  const slot = { cls: loadClass(timing) };
+  const loading = pending || timing.phase !== "content";
   return (
     <section aria-labelledby="home-todo" className="flex flex-col gap-2">
       <h2
@@ -306,8 +431,10 @@ function Todos({ parts }: { parts: Parts }) {
       >
         {h.todoTitle}
       </h2>
-      {list.items.length > 0 && (
-        <ul className="flex flex-col divide-y divide-border-default rounded-admin-box border border-border-default bg-bg-surface">
+      {!loading && list.items.length > 0 && (
+        <ul
+          className={`flex flex-col divide-y divide-border-default rounded-admin-box border border-border-default bg-bg-surface ${slot.cls}`}
+        >
           {list.items.map((item) => (
             <li key={item.key} className="px-4">
               <TextLink
@@ -321,16 +448,22 @@ function Todos({ parts }: { parts: Parts }) {
         </ul>
       )}
       {loading ? (
-        <p role="status" className="text-body-s text-text-muted">
-          {h.todoLoading}
-        </p>
+        // 할 일 한 행 상자와 같은 높이(0건·확인 못 함 안내 줄도 같은 최소 높이, TODO_LINE)
+        <ul
+          aria-hidden="true"
+          className={`flex flex-col rounded-admin-box border border-border-default bg-bg-surface ${slot.cls}`}
+        >
+          <li className="flex min-h-touch items-center px-4 text-label-s">
+            <SkLine className="w-[180px]" />
+          </li>
+        </ul>
       ) : list.incomplete ? (
-        <p role="status" className="text-body-s text-text-body">
+        <p role="status" className={`${TODO_LINE} ${slot.cls}`}>
           {h.todoIncomplete}
         </p>
       ) : (
         list.items.length === 0 && (
-          <p className="text-body-s text-text-body">{h.todoNone}</p>
+          <p className={`${TODO_LINE} ${slot.cls}`}>{h.todoNone}</p>
         )
       )}
       <div className="flex flex-col gap-0.5">
@@ -350,11 +483,16 @@ function Todos({ parts }: { parts: Parts }) {
 
 function Recent({
   part,
+  stale,
   beaches,
 }: {
   part: Slot<RecentView>;
+  // 다시 읽기가 실패해 앞 목록을 둠
+  stale: boolean;
   beaches: Beaches;
 }) {
+  const slot = useSlot(part);
+  const placeholder = slot.placeholder || part.state === "loading";
   return (
     <section aria-labelledby="home-recent" className="flex flex-col gap-2">
       <h2
@@ -362,27 +500,40 @@ function Recent({
         className="text-title-s font-semibold text-text-default"
       >
         {h.recentTitle}
+        {stale && <StaleMark />}
       </h2>
-      {part.state === "loading" && (
-        <p role="status" className="text-body-s text-text-muted">
-          {h.recentLoading}
+      {placeholder && (
+        // 한 쪽 행 수(5)만큼, 행 높이 그대로. 길이는 정해진 리듬으로 바꿈
+        <ul
+          aria-hidden="true"
+          className={`flex flex-col divide-y divide-border-default rounded-admin-box border border-border-default bg-bg-surface ${slot.cls}`}
+        >
+          {RECENT_RHYTHM.map((width, i) => (
+            <li key={i} className="px-4 py-2.5 text-body-s">
+              <SkLine className={width} />
+            </li>
+          ))}
+        </ul>
+      )}
+      {!placeholder && part.state === "forbidden" && (
+        <p className={`text-body-s text-text-body ${slot.cls}`}>
+          {h.recentForbidden}
         </p>
       )}
-      {part.state === "forbidden" && (
-        <p className="text-body-s text-text-body">{h.recentForbidden}</p>
-      )}
-      {part.state === "failed" && (
-        <p role="status" className="text-body-s text-text-body">
+      {!placeholder && part.state === "failed" && (
+        <p role="status" className={`text-body-s text-text-body ${slot.cls}`}>
           {h.recentFailed}
         </p>
       )}
-      {part.state === "ok" && part.value.items.length === 0 && (
-        <p className="text-body-s text-text-body">
+      {!placeholder && part.state === "ok" && part.value.items.length === 0 && (
+        <p className={`text-body-s text-text-body ${slot.cls}`}>
           {part.value.onlyReads ? h.recentOnlyReads : h.recentNone}
         </p>
       )}
-      {part.state === "ok" && part.value.items.length > 0 && (
-        <ul className="flex flex-col divide-y divide-border-default rounded-admin-box border border-border-default bg-bg-surface">
+      {!placeholder && part.state === "ok" && part.value.items.length > 0 && (
+        <ul
+          className={`flex flex-col divide-y divide-border-default rounded-admin-box border border-border-default bg-bg-surface ${slot.cls}`}
+        >
           {/* 종류·대상·요약은 변경 이력 화면과 같은 표시(audit-screen) */}
           {part.value.items.map((item) => (
             <li
@@ -413,36 +564,77 @@ function Recent({
   );
 }
 
+// 기준 시각 줄의 시:분(서울)
+function hourMinute(iso: string): string {
+  return new Intl.DateTimeFormat("ko-KR", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone: "Asia/Seoul",
+  }).format(new Date(iso));
+}
+
 function HomeBody({ beaches }: { beaches: Beaches }) {
   const session = useAuthSession();
   const snapshot = useSessionSnapshot();
+  const signedIn = snapshot.status !== "signed_out";
   const owner = badgeOwner(snapshot);
-  const demo = snapshot.status !== "signed_out" && snapshot.pool === "demo";
+  const demo = signedIn && snapshot.pool === "demo";
   const [me, setMe] = useState<OpsResult<Me> | null>(null);
   const [parts, setParts] = useState<Parts>(INITIAL);
+  // 다시 읽은 결과를 앞 값과 견주려고 마지막으로 그린 칸 값을 둠
+  const latest = useRef(parts);
+  useEffect(() => {
+    latest.current = parts;
+  }, [parts]);
   // 마지막으로 모든 칸을 다 받은 시각(기준 시각). 아직 한 번도 다 받지 못했으면 null
   const [at, setAt] = useState<string | null>(null);
+  // 다시 읽기가 실패해 앞 값을 두고 있는 칸(그 칸에 '마지막으로 받은 값', 아래 '마지막으로 받은 값이에요' 줄)
+  const [stale, setStale] = useState<ReadonlySet<keyof Parts>>(new Set());
+  // 칸마다 마지막으로 값을 받은 시각(앞 값을 둔 칸의 기준 시각)
+  const [receivedAt, setReceivedAt] = useState<
+    Partial<Record<keyof Parts, string>>
+  >({});
+  // 읽는 중(첫 읽기 뒤에는 기준 시각 옆 회전 표시)
+  const [reading, setReading] = useState(false);
   // 게시본을 받은 시각. 유효 시각 지남을 이 시각 기준으로 셈(그리는 중에 시계를 읽지 않음)
   const [publishedAt, setPublishedAt] = useState(0);
   const [attempt, setAttempt] = useState(0);
   // 요약 칸만 다시 읽기(/ops/me 확인을 다시 하지 않아 화면·포커스가 사라지지 않음)
   const [round, setRound] = useState(0);
 
+  // 세션 확인(첫 진입) 중에는 부르지 않음. 그동안은 자리표시만
   useEffect(() => {
+    if (!signedIn) return;
     let live = true;
-    void opsFetch<Me>("/ops/me", () => session.accessToken()).then((result) => {
+    // 15초(D26-4) 안에 답이 없으면 운영 서버 오류로 보임(자리표시가 끝없이 남지 않게, 다시 시도 가능)
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timedOut = new Promise<OpsResult<Me>>((resolve) => {
+      timer = setTimeout(
+        () =>
+          resolve({ ok: false, status: 0, code: "timeout", requestId: null }),
+        LOADING_TIMES.timeout,
+      );
+    });
+    void Promise.race([
+      opsFetch<Me>("/ops/me", () => session.accessToken()),
+      timedOut,
+    ]).then((result) => {
+      clearTimeout(timer);
       if (live) setMe(result);
     });
     return () => {
       live = false;
+      clearTimeout(timer);
     };
-  }, [session, attempt]);
+  }, [session, signedIn, attempt]);
 
   // 서버가 세션을 받아 준 뒤에만 읽음. 화면이 보이는 동안만 60초마다 다시 읽음(D16-E1)
   // 숨겨졌던 탭이 다시 보일 때 마지막 읽기가 60초를 넘었으면 바로 다시 읽음(바로 뒤 주기와 겹쳐 두 번 읽지 않게 간격을 봄)
   // 데모 계정은 자동으로 다시 읽지 않음: 데모 조회는 서버가 모두 sample.read로 기록해 60초마다 기록이 쌓임
   // 읽기가 60초보다 오래 걸려 겹치면 늦게 끝난 앞 읽기가 새 값을 덮지 않게 칸마다 순번으로 거름
-  const ready = me?.ok === true;
+  // 로그아웃·세션 만료 뒤에는 앞 세션의 확인 결과로 다시 읽지 않음
+  const ready = signedIn && me?.ok === true;
   useEffect(() => {
     if (!ready) return;
     let live = true;
@@ -453,18 +645,42 @@ function HomeBody({ beaches }: { beaches: Beaches }) {
     const refresh = () => {
       const id = ++started;
       lastStart = Date.now();
+      setReading(true);
       const keys = Object.keys(load) as (keyof Parts)[];
       void Promise.all(
         keys.map((key) =>
           load[key]().then((part) => {
             if (!live || id < (shown[key] ?? 0)) return;
             shown[key] = id;
-            if (key === "published") setPublishedAt(Date.now());
-            setParts((prev) => ({ ...prev, [key]: part }));
+            if (key === "published" && part.state === "ok") {
+              setPublishedAt(Date.now());
+            }
+            if (part.state === "ok") {
+              const now = new Date().toISOString();
+              setReceivedAt((old) => ({ ...old, [key]: now }));
+            }
+            // 이 칸은 이번 읽기만 바꾸므로 마지막으로 그린 값과 견주면 됨
+            // 판단 출처 상태(수집 현황)는 앞의 '정상'을 두지 않고 실패를 그대로 보임(조회 실패를 정상으로 두지 않음)
+            const merged = mergePart(
+              latest.current[key] as Slot<unknown>,
+              part,
+              key !== "collection",
+            );
+            setStale((old) => {
+              if (merged.stale === old.has(key)) return old;
+              const next = new Set(old);
+              if (merged.stale) next.add(key);
+              else next.delete(key);
+              return next;
+            });
+            if (!merged.stale) setParts((prev) => ({ ...prev, [key]: part }));
           }),
         ),
       ).then(() => {
-        if (live && id === started) setAt(new Date().toISOString());
+        if (!live || id !== started) return;
+        setReading(false);
+        // 기준 시각은 이번 읽기를 마친 시각. 앞 값을 둔 칸은 그 칸의 받은 시각을 따로 보임
+        setAt(new Date().toISOString());
       });
     };
     refresh();
@@ -496,83 +712,212 @@ function HomeBody({ beaches }: { beaches: Beaches }) {
     setMe(null);
     setAttempt((n) => n + 1);
   };
-  // 요약 칸만 다시 읽음(앞 값은 그대로 두고 받은 칸부터 바꿈)
-  const reload = () => setRound((n) => n + 1);
+  // 요약 칸만 다시 읽음. 받은 값은 그대로 두고, 실패한 칸만 다시 자리표시로(같은 칸 안에서 다시 시도)
+  const reload = () => {
+    setParts((prev) => {
+      const next = { ...prev } as Record<keyof Parts, Slot<unknown>>;
+      for (const key of Object.keys(prev) as (keyof Parts)[]) {
+        if (prev[key].state === "failed") next[key] = LOADING;
+      }
+      return next as unknown as Parts;
+    });
+    setRound((n) => n + 1);
+  };
 
-  if (snapshot.status === "signed_out") return null;
-  const role = roleLabel(snapshot.pool, snapshot.groups);
-  const anyFailed = [parts.published, parts.inquiries, parts.notices].some(
-    (p) => p.state === "failed",
-  );
+  // 서버 세션 확인이 실패하면 칸을 읽지 않으므로 로딩도 끝(알림만 남음)
+  // 로그아웃·세션 만료 뒤(로그인 화면으로 가는 중)에는 받아 둔 운영 데이터를 그리지 않고 첫 진입과 같은 자리표시만
+  // (세션 확인 중 틀과 같은 요소라 상태가 남아 있음, Codex 지적)
+  const view = signedIn
+    ? { me, parts, at, stale }
+    : { me: null, parts: INITIAL, at: null, stale: NO_STALE };
+  const anyLoading =
+    !signedIn ||
+    view.me === null ||
+    (view.me.ok &&
+      Object.values(view.parts).some(
+        (p: Slot<unknown>) => p.state === "loading",
+      ));
+  // 5초 넘게 받는 칸이 있으면 제목 줄 오른쪽에 느림 안내(칸 높이를 바꾸지 않게 한 자리에서)
+  const page = useLoadTiming(anyLoading);
+  const role = signedIn ? roleLabel(snapshot.pool, snapshot.groups) : null;
+  const anyFailed = [
+    view.parts.published,
+    view.parts.inquiries,
+    view.parts.notices,
+  ].some((p) => p.state === "failed");
+  // 서버 세션 확인 전·확인됨이면 칸을 그림(확인 전에는 모두 자리표시). 확인 실패면 알림만
+  const showParts = !view.me || view.me.ok;
 
   return (
-    <main className="flex w-full flex-col gap-5 px-4 py-5 md:px-10 md:pt-6 md:pb-10">
-      <div>
-        <h1 className="text-title-l font-semibold text-text-default">
-          {h.title}
-        </h1>
-        {snapshot.email && (
-          <p className="mt-1 text-body-s text-text-muted">
-            {fill(h.signedInAs, { email: snapshot.email })}
-            {role && ` · ${role}`}
-          </p>
-        )}
-      </div>
-      {me && !me.ok && me.code === "sample_not_allowed" && (
-        <Notice tone="warn" title={h.demoPeriod} role="alert">
-          {h.demoPeriodHint}
-        </Notice>
-      )}
-      {me &&
-        !me.ok &&
-        me.code !== "sample_not_allowed" &&
-        me.code !== "reauth" && (
-          <Notice tone="fail" title={h.serverError} role="alert">
-            {"requestId" in me && me.requestId && (
-              <p>{fill(h.requestId, { id: me.requestId })}</p>
-            )}
-            <Button
-              variant="secondary"
-              size="small"
-              className="mt-2"
-              onClick={load}
-            >
-              {h.retry}
-            </Button>
+    <>
+      {/* 알림 영역은 aria-busy 영역 밖에 둠(바쁜 동안 읽기를 미루는 화면 읽기도 바로 읽게)
+          세션 확인 중에는 공통 틀이 '운영 화면 여는 중'을 알림 → 여기서는 그 뒤 한 번만 */}
+      <LoadingStatus
+        busy={signedIn && anyLoading}
+        label={fill(t.loading.screen, { name: h.title })}
+      />
+      <span role="status" className="sr-only">
+        {page.slow ? t.loading.slow : ""}
+      </span>
+      <main
+        aria-busy={anyLoading || undefined}
+        className="flex w-full flex-col gap-5 px-4 py-5 md:px-10 md:pt-6 md:pb-10"
+      >
+        {/* 느림 안내(5초)는 제목 줄 오른쪽에 겹쳐 띄움: 모바일 첫 화면에도 보이고 줄 높이·아래 칸이 밀리지 않음 */}
+        <div className="relative">
+          <h1 className="text-title-l font-semibold text-text-default">
+            {h.title}
+          </h1>
+          <div
+            aria-hidden="true"
+            className="absolute top-0 right-0 flex h-[calc(var(--text-title-l)*1.4)] max-w-[calc(100%-6rem)] items-center"
+          >
+            {page.slow && <SlowNote className="text-right" />}
+          </div>
+          {signedIn ? (
+            snapshot.email && (
+              <p className="mt-1 text-body-s text-text-muted">
+                {fill(h.signedInAs, { email: snapshot.email })}
+                {role && ` · ${role}`}
+              </p>
+            )
+          ) : (
+            <p className="mt-1 text-body-s">
+              <SkLine className="w-[260px] max-w-full" />
+            </p>
+          )}
+        </div>
+        {view.me && !view.me.ok && view.me.code === "sample_not_allowed" && (
+          <Notice tone="warn" title={h.demoPeriod} role="alert">
+            {h.demoPeriodHint}
           </Notice>
         )}
-      {ready && (
-        <>
-          <SourcesLine part={parts.collection} onRetry={reload} />
-          {anyFailed && (
-            <Notice tone="warn" title={h.partFailed} role="alert">
+        {view.me &&
+          !view.me.ok &&
+          view.me.code !== "sample_not_allowed" &&
+          view.me.code !== "reauth" && (
+            <Notice tone="fail" title={h.serverError} role="alert">
+              {"requestId" in view.me && view.me.requestId && (
+                <p>{fill(h.requestId, { id: view.me.requestId })}</p>
+              )}
               <Button
                 variant="secondary"
                 size="small"
-                className="mt-1"
-                onClick={reload}
+                className="mt-2"
+                onClick={load}
               >
                 {h.retry}
               </Button>
             </Notice>
           )}
-          <Summary parts={parts} nowMs={publishedAt} />
-          <Todos parts={parts} />
-          <Recent part={parts.recent} beaches={beaches} />
-          {at && (
-            <p className={HINT}>{fill(h.asOf, { time: kstDateTime(at) })}</p>
-          )}
-        </>
+        {showParts && (
+          <>
+            <SourcesLine part={view.parts.collection} onRetry={reload} />
+            {anyFailed && (
+              <Notice tone="warn" title={h.partFailed} role="alert">
+                <Button
+                  variant="secondary"
+                  size="small"
+                  className="mt-1"
+                  onClick={reload}
+                >
+                  {h.retry}
+                </Button>
+              </Notice>
+            )}
+            <Summary
+              parts={view.parts}
+              nowMs={publishedAt}
+              stale={view.stale}
+            />
+            <Todos parts={view.parts} />
+            <Recent
+              part={view.parts.recent}
+              stale={view.stale.has("recent")}
+              beaches={beaches}
+            />
+            <AsOf
+              at={view.at}
+              refreshing={reading && view.at !== null}
+              stale={
+                view.at === null
+                  ? null
+                  : staleSince(
+                      [...view.stale].map((key) => receivedAt[key]),
+                      view.at,
+                    )
+              }
+              onRetry={reload}
+            />
+          </>
+        )}
+        <p className="text-label-s text-text-muted">{t.session.refreshNote}</p>
+      </main>
+    </>
+  );
+}
+
+// 기준 시각 줄(보드 LP ⑤): 다시 읽는 동안 옆에 작은 회전 표시 '다시 읽는 중'
+// 다시 읽기가 실패한 칸이 있으면 '마지막으로 받은 값이에요 · HH:MM 기준'(그 칸이 값을 받은 시각, 다른 날이면 날짜까지)
+// 처음 받기 전에는 같은 줄 높이 자리표시
+function AsOf({
+  at,
+  refreshing,
+  stale,
+  onRetry,
+}: {
+  at: string | null;
+  refreshing: boolean;
+  stale: { iso: string; sameDay: boolean } | null;
+  onRetry: () => void;
+}) {
+  if (at === null) {
+    return (
+      <p className={HINT}>
+        <SkLine className="w-[280px] max-w-full" />
+      </p>
+    );
+  }
+  return (
+    <div className="flex flex-col gap-1">
+      <p className={`${HINT} flex flex-wrap items-center gap-x-1.5`}>
+        <span>{fill(h.asOf, { time: kstDateTime(at) })}</span>
+        {refreshing && (
+          <span className="inline-flex items-center gap-1 text-brand-default">
+            <Spinner />
+            {t.loading.refreshing}
+          </span>
+        )}
+      </p>
+      {stale && (
+        <p
+          role="status"
+          className="flex flex-wrap items-center gap-x-3 text-label-s font-medium text-text-default"
+        >
+          {fill(t.loading.stale, {
+            time: stale.sameDay
+              ? hourMinute(stale.iso)
+              : kstDateTime(stale.iso),
+          })}
+          <button
+            type="button"
+            onClick={onRetry}
+            className="inline-flex min-h-touch items-center font-medium text-brand-default underline underline-offset-2 lg:min-h-0"
+          >
+            {t.loading.retry}
+          </button>
+        </p>
       )}
-      <p className="text-label-s text-text-muted">{t.session.refreshNote}</p>
-    </main>
+    </div>
   );
 }
 
 export function HomeScreen({ beaches }: { beaches: Beaches }) {
+  // 세션 확인 중(첫 진입)에도 같은 요소를 그려 자리표시를 이어서 씀(보드 L10)
+  const body = <HomeBody beaches={beaches} />;
   return (
-    <AdminShell title={messages.home.title}>
-      <HomeBody beaches={beaches} />
+    <AdminShell title={messages.home.title} loading={body}>
+      {body}
     </AdminShell>
   );
 }

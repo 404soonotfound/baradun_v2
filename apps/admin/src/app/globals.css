@@ -36,3 +36,127 @@
     }
   }
 }
+
+/* 로딩 (GH-462, 캔버스 로딩 보드 L0·LP·L2D). 부품은 components/loading.tsx
+   자리표시 면은 토큰(옅은 구분선 · 구분선)만. 빛은 라이트 면 색 75%, 다크는 글자 색 4.5%로 약하게(새 색 토큰 없음) */
+:root {
+  --sk-base: var(--color-border-subtle);
+  --sk-strong: var(--color-border-default);
+  --sk-shine: color-mix(in srgb, var(--color-bg-surface) 75%, transparent);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --sk-shine: color-mix(in srgb, var(--color-text-default) 4.5%, transparent);
+  }
+}
+:root[data-theme="dark"] {
+  --sk-shine: color-mix(in srgb, var(--color-text-default) 4.5%, transparent);
+}
+
+@layer components {
+  /* 빛은 화면 전체가 한 번에 왼쪽→오른쪽 1.6초(칸마다 따로 흐르지 않게 화면 기준 배경) */
+  .sk {
+    background-color: var(--sk-base);
+    background-image: linear-gradient(
+      100deg,
+      transparent 0%,
+      var(--sk-shine) 50%,
+      transparent 100%
+    );
+    background-size: 520px 100%;
+    background-repeat: no-repeat;
+    background-attachment: fixed;
+    animation: sk-shine 1.6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  }
+  .sk.sk-strong {
+    background-color: var(--sk-strong);
+  }
+  /* 차트 자리표시의 낮은 면(완만한 물결 윗선) */
+  .sk-area {
+    clip-path: polygon(
+      0 55%,
+      12% 48%,
+      25% 58%,
+      38% 42%,
+      50% 50%,
+      63% 38%,
+      75% 46%,
+      88% 34%,
+      100% 40%,
+      100% 100%,
+      0 100%
+    );
+  }
+  /* 도넛 자리표시: 안쪽을 비운 고리. 가림(mask) 색은 화면에 보이지 않고 불투명도만 씀 */
+  .sk-ring {
+    --sk-ring: 12px;
+    mask-image: radial-gradient(
+      farthest-side,
+      transparent calc(100% - var(--sk-ring)),
+      #000 calc(100% - var(--sk-ring) + 0.5px)
+    );
+  }
+  /* 150ms 전: 자리는 잡되 보이지 않음(빠른 응답은 깜빡임 없이 바로 값) */
+  .sk-wait .sk,
+  .sk-wait.sk {
+    background: transparent;
+    animation: none;
+  }
+  /* 값 교체 0.18초 페이드, 자리 이동 없음 */
+  .ld-fade {
+    animation: ld-fade 0.18s ease-out both;
+  }
+  .ld-spin {
+    animation: ld-spin 0.9s linear infinite;
+  }
+  /* 페이지 이동 진행 막대: 85%까지 느려지며 차오름(끝나면 사라짐) */
+  .ld-bar {
+    width: 85%;
+    animation: ld-bar 2.4s cubic-bezier(0.1, 0.6, 0.2, 1) both;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .sk {
+      background-image: none;
+      animation: none;
+    }
+    .ld-fade,
+    .ld-spin {
+      animation: none;
+    }
+    .ld-bar {
+      width: 60%;
+      animation: none;
+    }
+  }
+}
+
+@keyframes sk-shine {
+  from {
+    background-position: -520px 0;
+  }
+  to {
+    background-position: calc(100% + 520px) 0;
+  }
+}
+@keyframes ld-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes ld-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes ld-bar {
+  from {
+    width: 0;
+  }
+  to {
+    width: 85%;
+  }
+}

@@ -196,9 +196,11 @@ function ReauthDialog({ pool, email }: { pool: PoolKind; email: string }) {
         )}
         <Button
           type="submit"
-          disabled={busy || (step ? code.length !== 6 : !password)}
+          busy={busy}
+          busyLabel={t.loading.checking}
+          disabled={!busy && (step ? code.length !== 6 : !password)}
         >
-          {busy ? t.common.working : t.session.reauthSubmit}
+          {t.session.reauthSubmit}
         </Button>
       </form>
     </dialog>
@@ -223,8 +225,9 @@ export function SessionNotices() {
   );
 }
 
-// 로그인을 이어 가는 동안(열린 탭에서 넘겨받기 최대 0.4초, 새로고침 갱신은 Cognito 응답까지, D17-11) 안내
-// 짧은 넘겨받기에서 깜박이지 않게 1초 뒤에 글을 넣음(알림 영역은 처음부터 둠)
+// 로그인 화면에서 로그인을 이어 가는 동안(열린 탭에서 넘겨받기 최대 0.4초, 새로고침 갱신은 Cognito 응답까지, D17-11) 안내
+// 짧은 넘겨받기에서 깜박이지 않게 1초 뒤에 글을 넣음(알림 영역은 처음부터 둠). 로그인 카드 틀 안에 들어감
+// 로그인한 화면(공통 틀)은 이 글 대신 틀 + 자리표시를 보임(SessionGuard fallback)
 export function SessionResuming() {
   const [shown, setShown] = useState(false);
   useEffect(() => {
@@ -232,16 +235,22 @@ export function SessionResuming() {
     return () => clearTimeout(timer);
   }, []);
   return (
-    <p
-      role="status"
-      className="px-4 py-10 text-center text-body-s text-text-muted"
-    >
+    <p role="status" className="text-center text-body-s text-text-muted">
       {shown ? t.session.resuming : ""}
     </p>
   );
 }
 
-export function SessionGuard({ children }: { children: ReactNode }) {
+// fallback: 세션 확인이 끝나기 전(정적 HTML·넘겨받기·새로고침 갱신·로그인 화면으로 보내는 중)에 그릴 것
+// 로그인 화면이나 설정 오류를 먼저 보이지 않고 공통 틀 + 자리표시만 보임(보드 L10)
+// 화면이 fallback과 children에 같은 요소를 넘기면 세션이 확인돼도 다시 만들지 않고 이어서 그림
+export function SessionGuard({
+  children,
+  fallback = null,
+}: {
+  children: ReactNode;
+  fallback?: ReactNode;
+}) {
   const router = useRouter();
   const pathname = usePathname();
   const session = useAuthSession();
@@ -264,13 +273,9 @@ export function SessionGuard({ children }: { children: ReactNode }) {
     }
   }, [session, snapshot, pathname, router]);
 
-  if (snapshot.status === "signed_out") {
-    return snapshot.joining ? <SessionResuming /> : null;
-  }
-
   return (
     <>
-      {children}
+      {snapshot.status === "signed_out" ? fallback : children}
       {snapshot.status === "reauth_required" && snapshot.email && (
         <ReauthDialog pool={snapshot.pool} email={snapshot.email} />
       )}

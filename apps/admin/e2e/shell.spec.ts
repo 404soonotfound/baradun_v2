@@ -109,7 +109,8 @@ test("모바일 서랍: 메뉴 버튼으로 열고 Esc·바깥 누르기로 닫�
   await expectNoA11yViolations(page);
   await page.keyboard.press("Escape");
   await expect(drawer).toBeHidden();
-  expect(await lock()).toBe("");
+  // 서랍은 브라우저가 먼저 닫고 잠금은 React가 다음 그리기에서 풂 → 풀릴 때까지 기다림
+  await expect.poll(lock).toBe("");
 
   await button.click();
   await expect(drawer).toBeVisible();
@@ -122,7 +123,7 @@ test("모바일 서랍: 메뉴 버튼으로 열고 Esc·바깥 누르기로 닫�
   await expect(
     page.getByRole("heading", { name: "해변 관리", level: 1 }),
   ).toBeVisible();
-  expect(await lock()).toBe("");
+  await expect.poll(lock).toBe("");
 });
 
 test.describe("PC 왼쪽 메뉴 (GH-450, 시안 V1 aside)", () => {

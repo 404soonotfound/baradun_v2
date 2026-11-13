@@ -5,8 +5,10 @@ import {
   expect,
   expectNoA11yViolations,
   isDesktop,
+  logout,
   mockCognito,
   mockOps,
+  openMenu,
   signInWithPassword,
   srpScript,
   test,
@@ -356,7 +358,7 @@ test("불러오지 못한 값은 0·정상·'할 일 없음'으로 바꾸지 않
   await expectNoA11yViolations(page);
 });
 
-test("한 칸의 응답이 오지 않아도 판단 출처 줄과 다른 칸은 먼저 보이고, 그 칸만 불러오는 중으로 남는다", async ({
+test("한 칸의 응답이 오지 않아도 판단 출처 줄과 다른 칸은 먼저 보이고, 그 칸만 자리표시로 남는다", async ({
   page,
 }) => {
   await mockCognito(
@@ -372,5 +374,212 @@ test("한 칸의 응답이 오지 않아도 판단 출처 줄과 다른 칸은 �
     page.getByText("판단에 쓰는 출처가 모두 정상이에요"),
   ).toBeVisible();
   await expect(page.getByText("지금 할 일이 없어요")).toBeVisible();
-  await expect(page.getByText("최근 변경을 불러오는 중이에요")).toBeVisible();
+  // 최근 변경 칸만 한 쪽 행 수(5)만큼 자리표시(GH-462). 화면 읽기에는 '운영 홈 불러오는 중' 한 번
+  await expect(
+    page.locator('section[aria-labelledby="home-recent"] .sk'),
+  ).toHaveCount(5);
+  await expect(
+    page.getByRole("status").filter({ hasText: "운영 홈 불러오는 중" }),
+  ).toHaveCount(1);
+});
+
+// ---- 로딩 (GH-462, 캔버스 로딩 보드 L0·LS·LP) ----
+
+const HOME_PART_URLS =
+  /\/ops\/(collection|beaches\/published|inquiries(\?.*)?|notices|audit(\?.*)?)$/;
+
+// 운영 홈 칸 응답을 gate가 풀릴 때까지 붙잡음(풀리면 앞서 건 가짜 응답으로 넘김)
+async function holdHome(page: Page, gate: Promise<void>) {
+  await page.route(HOME_PART_URLS, async (route) => {
+    await gate;
+    await route.fallback();
+  });
+}
+
+test("다시 읽기가 실패하면 판단 출처 줄은 불러오지 못함으로 바꾸고, 다른 칸은 앞 값에 '마지막으로 받은 값'과 'HH:MM 기준' 줄, 다시 읽는 동안 회전 표시", async ({
+  page,
+}) => {
+  await page.clock.install();
+  await mockCognito(
+    page,
+    srpScript({ email: OPS, after: "tokens", groups: ["editor"] }),
+  );
+  await mockOps(page, ME_OK);
+  await mockHome(page);
+  await signInWithPassword(page, "/login/", OPS);
+  await expect(
+    page.getByText("판단에 쓰는 출처가 모두 정상이에요"),
+  ).toBeVisible();
+  await expect(page.getByText(/기준 · 화면이 보이는 동안/)).toBeVisible();
+
+  // 1분 뒤 다시 읽기: 수집 현황(판단 출처)과 문의가 늦게 실패
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => (release = resolve));
+  await page.route(/\/ops\/(collection|inquiries(\?.*)?)$/, async (route) => {
+    await gate;
+    await route.fulfill({
+      status: 500,
+      contentType: "application/json",
+      body: JSON.stringify(fail.body),
+    });
+  });
+  await page.clock.fastForward(61_000);
+  await expect(page.getByText("다시 읽는 중")).toBeVisible();
+  // 다시 읽는 동안 값은 그대로(자리표시로 바꾸지 않음)
+  await expect(
+    page.getByText("판단에 쓰는 출처가 모두 정상이에요"),
+  ).toBeVisible();
+  release();
+  await expect(
+    page
+      .getByRole("status")
+      .filter({ hasText: /^마지막으로 받은 값이에요 · \d{2}:\d{2} 기준/ }),
+  ).toBeVisible();
+  await expect(page.getByText("다시 읽는 중")).toHaveCount(0);
+  // 판단 출처는 앞의 '정상'을 두지 않음(조회 실패를 정상으로 보이지 않게)
+  await expect(
+    page.getByText("판단에 쓰는 출처 상태를 불러오지 못했어요"),
+  ).toBeVisible();
+  await expect(
+    page.getByText("판단에 쓰는 출처가 모두 정상이에요"),
+  ).toHaveCount(0);
+  // 문의 칸은 앞 값을 두고 그 칸에 표시(화면을 비우지 않음)
+  const inquiries = page.getByRole("definition").filter({ hasText: /^0건/ });
+  await expect(inquiries).toContainText("마지막으로 받은 값");
+});
+
+test("서버 세션 확인이 실패하면 로딩 표시를 끝내고 오류 알림만 남긴다", async ({
+  page,
+}) => {
+  await mockCognito(
+    page,
+    srpScript({ email: OPS, after: "tokens", groups: ["editor"] }),
+  );
+  await mockOps(page, fail);
+  await mockHome(page);
+  await signInWithPassword(page, "/login/", OPS);
+  await expect(
+    page.getByText(
+      "운영 서버가 응답하지 않아요. 앱 사용자 화면에는 영향이 없어요.",
+    ),
+  ).toBeVisible();
+  await expect(page.locator("#main main")).not.toHaveAttribute(
+    "aria-busy",
+    "true",
+  );
+  await expect(
+    page.getByRole("status").filter({ hasText: "운영 홈 불러오는 중" }),
+  ).toHaveCount(0);
+  await expect(page.locator("#main main .sk")).toHaveCount(0);
+});
+
+test("운영 홈으로 이동하면 제목·칸 이름·목록 틀이 먼저 보이고 값 자리만 자리표시", async ({
+  page,
+}) => {
+  await mockCognito(
+    page,
+    srpScript({ email: OPS, after: "tokens", groups: ["editor"] }),
+  );
+  await mockOps(page, ME_OK);
+  await mockHome(page);
+  await signInWithPassword(page, "/login/", OPS);
+  await expect(page.getByText(/기준 · 화면이 보이는 동안/)).toBeVisible();
+  await page.goto("/collection/");
+  await expect(
+    page.getByRole("heading", { name: "수집 현황", level: 1 }),
+  ).toBeVisible();
+
+  // 돌아온 운영 홈의 칸 응답은 오지 않음
+  await holdHome(page, new Promise<void>(() => {}));
+  await openMenu(page);
+  await page
+    .getByRole("navigation", { name: "운영 메뉴" })
+    .getByRole("link", { name: "운영 홈" })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "운영 홈", level: 1 }),
+  ).toBeVisible();
+  for (const name of ["할 일", "최근 변경"]) {
+    await expect(page.getByRole("heading", { name, level: 2 })).toBeVisible();
+  }
+  for (const label of ["새 문의", "판단불가 해변", "지금 게시본"]) {
+    await expect(page.getByText(label, { exact: true })).toBeVisible();
+  }
+  const body = page.locator("#main main");
+  await expect(body).toHaveAttribute("aria-busy", "true");
+  // 150ms 뒤 자리표시가 보임(값 자리: 판단 출처 줄·카드 값·할 일·최근 변경 5행·기준 시각)
+  await expect(body.locator(".sk").first()).toBeVisible();
+  await expect(
+    page.locator('section[aria-labelledby="home-recent"] .sk'),
+  ).toHaveCount(5);
+  await expect(body.locator(".sk-wait")).toHaveCount(0);
+});
+
+test("로딩이 끝나 값으로 바뀌어도 포커스를 옮기지 않는다", async ({ page }) => {
+  await mockCognito(
+    page,
+    srpScript({ email: OPS, after: "tokens", groups: ["editor"] }),
+  );
+  await mockOps(page, ME_OK);
+  await mockHome(page);
+  let release!: () => void;
+  await holdHome(page, new Promise<void>((resolve) => (release = resolve)));
+  await signInWithPassword(page, "/login/", OPS);
+  await expect(
+    page.locator('section[aria-labelledby="home-recent"] .sk'),
+  ).toHaveCount(5);
+  const link = page.getByRole("link", { name: /해변 정보 변경 PR 보기/ });
+  await link.focus();
+  await expect(link).toBeFocused();
+  release();
+  await expect(
+    page.getByText("판단에 쓰는 출처가 모두 정상이에요"),
+  ).toBeVisible();
+  await expect(page.getByText(/기준 · 화면이 보이는 동안/)).toBeVisible();
+  await expect(link).toBeFocused();
+});
+
+test("로그아웃하면 로그인 화면으로 가는 동안에도 받아 둔 운영 데이터를 그리지 않는다", async ({
+  page,
+}) => {
+  test.skip(
+    !isDesktop(page),
+    "로그아웃 상태 틀(왼쪽 사용자 칸 자리표시)은 PC 메뉴에서 봄",
+  );
+  await mockCognito(
+    page,
+    srpScript({ email: OPS, after: "tokens", groups: ["editor"] }),
+  );
+  await mockOps(page, ME_OK);
+  await mockHome(page);
+  await signInWithPassword(page, "/login/", OPS);
+  await expect(
+    page.getByText("판단에 쓰는 출처가 모두 정상이에요"),
+  ).toBeVisible();
+  // 공통 틀이 로그아웃 상태로 그려진 순간(사용자 칸 자리표시)에 운영 데이터가 함께 남아 있으면 기록
+  await page.evaluate(() => {
+    const w = window as unknown as { leaked: string[] };
+    w.leaked = [];
+    new MutationObserver(() => {
+      if (!document.querySelector("aside .sk.rounded-full")) return;
+      const text = document.querySelector("#main")?.textContent ?? "";
+      for (const value of [
+        "판단에 쓰는 출처가 모두 정상이에요",
+        "정기 점검 안내",
+      ]) {
+        if (text.includes(value)) w.leaked.push(value);
+      }
+    }).observe(document.body, {
+      subtree: true,
+      childList: true,
+      characterData: true,
+    });
+  });
+  await logout(page);
+  await expect(page).toHaveURL(/\/login\/$/);
+  expect(
+    await page.evaluate(
+      () => (window as unknown as { leaked: string[] }).leaked,
+    ),
+  ).toEqual([]);
 });
