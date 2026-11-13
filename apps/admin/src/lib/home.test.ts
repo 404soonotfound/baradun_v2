@@ -389,10 +389,14 @@ describe("판단불가 해변 표 (undeterminedRows)", () => {
     expect(rows?.[0]).toMatchObject({
       name: "경포해변",
       region: "강원 강릉시",
-      label: { kind: "warning_unknown" },
       reason: { scope: "강원중부앞바다" },
     });
-    expect(rows?.[1]?.label).toEqual({ kind: "observation_delayed" });
+    // 사유가 둘 이상이면 배지도 전부(첫 사유만 남기고 숨기지 않음)
+    expect(rows?.[0]?.labels.map((l) => l.kind)).toEqual([
+      "warning_unknown",
+      "observation_delayed",
+    ]);
+    expect(rows?.[1]?.labels[0]).toEqual({ kind: "observation_delayed" });
   });
 
   it("이름표에 없는 해변은 이름 null(ID를 이름으로 쓰지 않음), 사유가 없으면 '특보 확인 못 함' 계열", () => {
@@ -405,10 +409,18 @@ describe("판단불가 해변 표 (undeterminedRows)", () => {
         id: "b9999",
         name: null,
         region: null,
-        label: { kind: "unconfirmed" },
+        labels: [{ kind: "unconfirmed" }],
         reason: null,
       },
     ]);
+  });
+
+  it("객체 기본 속성 이름과 같은 ID도 이름표에 없으면 이름 null", () => {
+    const rows = undeterminedRows(
+      published({ constructor: { category: "undetermined" } }),
+      names,
+    );
+    expect(rows?.[0]).toMatchObject({ id: "constructor", name: null, region: null });
   });
 
   it("게시본을 못 읽으면 빈 표가 아니라 null", () => {
@@ -497,6 +509,8 @@ describe("수집 칸 (collectionSummary)", () => {
       lastSuccessAt: null,
     });
     expect(summary?.problems).toBe(4);
+    // 남은 출처(특보 10/10)만으로 100%라 하지 않음
+    expect(summary?.rate).toBeNull();
   });
 
   it("실행이 없으면 전체 성공률 null, 수집 현황을 못 읽으면 null", () => {

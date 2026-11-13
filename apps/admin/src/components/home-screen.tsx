@@ -38,12 +38,14 @@ import {
 import { badgeOwner, setReceivedCount } from "@/lib/inquiry-badge";
 import { fetchInquiries, kstDateTime, type InquiryPage } from "@/lib/inquiries";
 import { LOADING_TIMES } from "@/lib/loading-timing";
+import { copula } from "@/lib/korean";
 import { fill, messages } from "@/lib/messages";
 import { fetchNotices, type NoticeView } from "@/lib/notices";
-import { fetchStats, type StatsResponse } from "@/lib/stats";
+import { fetchStats, statsShape, type StatsResponse } from "@/lib/stats";
 import { pageWindow } from "@/lib/paging";
 import { AdminShell } from "./admin-shell";
 import type { Beaches } from "./audit-screen";
+import { BarChart, shortDate, type ChartRow } from "./bar-chart";
 import { Badge } from "./beach-status";
 import {
   CELL_END,
@@ -58,6 +60,7 @@ import {
   loadClass,
   LoadingStatus,
   SkLine,
+  SkChart,
   SkPill,
   Spinner,
   useLoadTiming,
@@ -82,6 +85,8 @@ import { Button, Notice, SUCCESS_BADGE, TextLink } from "./ui";
 const t = messages;
 const h = messages.home;
 const REFRESH_MS = 60_000;
+// 이용 칸은 GA 집계라 5분마다만 다시 읽음(서버 저장 5분과 같게, 60초마다 GA를 부르지 않음). 다시 시도는 바로
+const USAGE_REFRESH_MS = 5 * 60_000;
 // 판단불가 해변 표 한 쪽 줄 수(보드 V1은 3줄 예시). 넘치면 페이지 넘김
 const UNDETERMINED_PAGE = 5;
 // 운영 홈 이용 칸 기간(보드 V1 '앞 28일과 비교'의 28일)
@@ -292,23 +297,27 @@ function BlockFailed({
   part,
   onRetry,
   className = FOOT,
+  message,
 }: {
   part: Slot<unknown>;
   onRetry: () => void;
   className?: string;
+  // 응답은 왔지만 그 안의 리포트를 못 받은 경우(예: GA 기간 통계) 문구. 있으면 다시 시도도 보임
+  message?: string;
 }) {
+  const retry = part.state === "failed" || message !== undefined;
   return (
     <div
       role="status"
       className={`${className} flex flex-wrap items-center gap-x-2`}
     >
       <span className="text-text-default">
-        {part.state === "forbidden" ? h.forbidden : h.blockFailed}
+        {message ?? (part.state === "forbidden" ? h.forbidden : h.blockFailed)}
       </span>
       {part.state === "failed" && part.requestId && (
         <span>{fill(h.requestId, { id: part.requestId })}</span>
       )}
-      {part.state === "failed" && (
+      {retry && (
         <button
           type="button"
           onClick={onRetry}
@@ -534,6 +543,7 @@ function BeachesBlock({
               ? fill(h.beachesFoot, {
                   count: rows.length,
                   names: shown.join("·"),
+                  copula: copula(shown.join("·")),
                 })
               : fill(h.beachesFootMore, {
                   count: rows.length,
@@ -814,6 +824,17 @@ function whenText(row: UndeterminedRow, asOf: string): string {
   });
 }
 
+// 사유 배지: 게시본 사유 전부(첫 사유만 남기고 숨기지 않음). 범위·시각 칸은 첫 사유 기준
+function Badges({ labels }: { labels: UndeterminedRow["labels"] }) {
+  return (
+    <span className="flex flex-wrap gap-1">
+      {labels.map((label, i) => (
+        <Badge key={i} label={label} />
+      ))}
+    </span>
+  );
+}
+
 // 자리표시 줄 길이(보드 L1 판단불가 표 3줄)
 const UNDETERMINED_RHYTHM = [
   ["w-[56px]", "w-[32px]", "w-[104px]", "w-[80px]", "w-[48px]"],
@@ -945,7 +966,7 @@ function UndeterminedTable({
                   )}
                 </td>
                 <td className={TD}>
-                  <Badge label={row.label} />
+                  <Badges labels={row.labels} />
                 </td>
                 <td className={TD}>{reasonText(row)}</td>
                 <td className={`${TD} ${CELL_END}`}>{whenText(row, asOf)}</td>
@@ -964,7 +985,7 @@ function UndeterminedTable({
                     </span>
                   )}
                 </p>
-                <Badge label={row.label} />
+                <Badges labels={row.labels} />
                 <p className="text-body-s text-text-body">
                   {reasonText(row)} · {whenText(row, asOf)}
                 </p>
@@ -1111,7 +1132,8 @@ function Todos({ parts }: { parts: Parts }) {
   );
 }
 
-// 이용 칸 지표 하나(보드 V1 '사용자'·'화면 조회'). 앞 기간 비교·일별 추이는 응답에 없어 그리지 않고 같은 높이 안내
+// 이용 칸 지표 하나(보드 V1 '사용자'·'화면 조회'). 앞 기간 비교는 응답에 없어 그리지 않음
+// 일별 그래프(보드: 그래프 128 + 날짜 줄 24)는 응답에 일별 칸이 있을 때만(이용 통계 화면과 같은 기준)
 function UsageMetric({
   part,
   placeholder,
@@ -1119,6 +1141,8 @@ function UsageMetric({
   label,
   value,
   width,
+  showDaily,
+  daily,
 }: {
   part: Parts["usage"];
   placeholder: boolean;
@@ -1126,6 +1150,9 @@ function UsageMetric({
   label: string;
   value: number | null;
   width: string;
+  showDaily: boolean;
+  // 일별 값. null이면 리포트를 못 받음
+  daily: readonly ChartRow[] | null;
 }) {
   const data = valueOf(part);
   const known =
@@ -1148,15 +1175,24 @@ function UsageMetric({
           h.unknown
         )}
       </p>
-      {/* 차트 자리(보드: 그래프 128 + 날짜 줄 24). 응답에 일별 값이 없어 같은 크기 안내 상자 */}
-      <div className="mt-6 flex h-[152px] flex-col items-center justify-center gap-1 rounded-admin-box border border-dashed border-border-strong px-4 text-center">
-        <p className="text-body-s font-medium text-text-body">
-          {h.usageChartMissing}
-        </p>
-        <p className="text-caption text-text-muted">
-          {h.usageChartMissingHint}
-        </p>
-      </div>
+      {showDaily && (
+        <div className="mt-6 h-[152px]">
+          {placeholder ? (
+            <SkChart className="h-full" />
+          ) : daily === null ? (
+            <p className="flex h-full items-center justify-center rounded-admin-box border border-dashed border-border-strong px-4 text-center text-body-s text-text-body">
+              {t.stats.subReportUnavailable}
+            </p>
+          ) : (
+            <BarChart
+              rows={daily}
+              bars="h-[128px]"
+              head={t.stats.chartTableDate}
+              valueHead={label}
+            />
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -1173,6 +1209,15 @@ function Usage({
   const slot = useSlot(part);
   const placeholder = slot.placeholder || part.state === "loading";
   const data = placeholder ? null : valueOf(part);
+  // 받는 중에는 마지막으로 받은 응답 기준(첫 읽기 전에는 지금 서버가 주는 칸만)
+  const last = valueOf(part);
+  const period =
+    data?.configured && data.period.status === "ok" ? data.period : null;
+  const shape = statsShape(
+    period ??
+      (last?.configured && last.period.status === "ok" ? last.period : null),
+  );
+  const daily = period?.daily ?? null;
   const live =
     data && data.realtime.status === "ok" && data.realtime.activeUsers !== null
       ? fill(h.usageLive, {
@@ -1200,6 +1245,19 @@ function Usage({
         >
           {h.usageOpen}
         </TextLink>
+        {/* 응답에 일별 칸이 없으면 그래프 대신 한 줄(받는 중에는 같은 줄 높이 자리표시) */}
+        {!shape.daily &&
+          (placeholder ? (
+            <span className="basis-full">
+              <SkLine className="w-[220px] max-w-full h-[8px]" />
+            </span>
+          ) : (
+            period && (
+              <span className="basis-full text-text-body">
+                {h.usageDailyMissing}
+              </span>
+            )
+          ))}
       </div>
       {!placeholder && part.state !== "ok" && (
         <BlockFailed
@@ -1213,6 +1271,15 @@ function Usage({
           {h.usageUnconfigured}
         </p>
       )}
+      {/* 응답은 왔지만 GA 기간 통계를 못 받음: 무슨 일·영향·다시 시도(값은 '확인 못 함') */}
+      {data && data.configured && data.period.status === "unavailable" && (
+        <BlockFailed
+          part={part}
+          onRetry={onRetry}
+          className="mt-3 text-body-s"
+          message={h.usagePeriodFailed}
+        />
+      )}
       <div className="mt-6 grid gap-8 lg:grid-cols-2">
         <UsageMetric
           part={part}
@@ -1221,6 +1288,14 @@ function Usage({
           label={h.usageUsers}
           value={data?.period.activeUsers ?? null}
           width="w-[56px]"
+          showDaily={shape.daily}
+          daily={
+            daily?.map((d) => ({
+              key: d.date,
+              label: shortDate(d.date),
+              value: d.activeUsers,
+            })) ?? null
+          }
         />
         <UsageMetric
           part={part}
@@ -1229,6 +1304,14 @@ function Usage({
           label={h.usageViews}
           value={data?.period.pageViews ?? null}
           width="w-[72px]"
+          showDaily={shape.daily}
+          daily={
+            daily?.map((d) => ({
+              key: d.date,
+              label: shortDate(d.date),
+              value: d.pageViews,
+            })) ?? null
+          }
         />
       </div>
     </section>
@@ -1383,11 +1466,17 @@ function HomeBody({ beaches }: { beaches: Beaches }) {
     let lastStart = 0;
     const shown: Partial<Record<keyof Parts, number>> = {};
     const load = loaders(() => session.accessToken(), owner);
+    // 이용 칸을 마지막으로 부른 시각(이 읽기 묶음 안에서만. 다시 시도하면 묶음이 새로 시작해 바로 부름)
+    let usageStart = 0;
     const refresh = () => {
       const id = ++started;
       lastStart = Date.now();
       setReading(true);
-      const keys = Object.keys(load) as (keyof Parts)[];
+      const keys = (Object.keys(load) as (keyof Parts)[]).filter(
+        (key) =>
+          key !== "usage" || lastStart - usageStart >= USAGE_REFRESH_MS - 1_000,
+      );
+      if (keys.includes("usage")) usageStart = lastStart;
       void Promise.all(
         keys.map((key) =>
           load[key]().then((part) => {
