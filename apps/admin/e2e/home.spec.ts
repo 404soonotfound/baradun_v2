@@ -161,6 +161,22 @@ const cardsOf = (page: Page) => page.locator("dl[aria-label='운영 요약']");
 const sideStatus = (page: Page) =>
   page.getByRole("group", { name: "운영 상태" });
 
+test("수집 현황은 홈이 한 번 읽고, PC가 아니면 숨은 왼쪽 상태 칸은 따로 부르지 않는다", async ({
+  page,
+}) => {
+  const calls: string[] = [];
+  page.on("request", (req) => {
+    if (/\/ops\/collection(\?|$)/.test(req.url())) calls.push(req.url());
+  });
+  await signIn(page);
+  await expect(
+    page.getByText("판단에 쓰는 출처가 모두 정상이에요"),
+  ).toBeVisible();
+  await page.waitForTimeout(500);
+  // PC는 상태 칸이 보여 한 번 더 읽음(홈 화면 요청과 따로)
+  expect(calls).toHaveLength(isDesktop(page) ? 2 : 1);
+});
+
 test("모두 정상: 판단 출처 정상 한 줄, 요약 카드, 할 일 없음, 최근 변경", async ({
   page,
 }) => {
