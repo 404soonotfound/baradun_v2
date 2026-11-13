@@ -5,6 +5,7 @@
 export const INQUIRY_CONTACT_ENABLED = false;
 export const INQUIRY_BODY_RETENTION_DAYS = 90;
 export const INQUIRY_EMAIL_RETENTION_DAYS = 88;
+export const INQUIRY_EMAIL_OVERDUE_DAYS = 89;
 export const INQUIRY_PHOTO_RETENTION_DAYS = 30;
 export const INQUIRY_MAX_PHOTOS = 3;
 // 기기에서 줄인 최종 파일 상한(결정 기록 12장 결정 23: 최종 3~4MiB, 클라이언트·서버 양쪽 검사)
