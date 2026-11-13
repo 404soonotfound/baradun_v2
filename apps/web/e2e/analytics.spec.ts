@@ -1,13 +1,17 @@
+import { isProductionSiteUrl } from "../src/lib/site-env";
 import { CLEAR_ID, expect, slugOf, test } from "./fixtures";
 
 // Google Analytics는 운영 빌드에만 들어감 (BRD-143, lib/site-env.ts isProductionSite)
-// E2E 빌드는 NEXT_PUBLIC_SITE_URL=https://example.test라 비운영 → gtag.js 요청·태그·전역 객체가 전혀 없어야 함
+// CI E2E 빌드(https://example.test)와 운영 도메인 전환 전 배포 빌드(CloudFront 주소)는 비운영 → gtag.js 요청·태그·전역 객체가 전혀 없어야 함
 // (외부 요청은 fixtures가 막지만 요청 시도 자체가 page.on("request")에 잡히므로 0건을 확인함)
 const GA_HOSTS = /googletagmanager\.com|google-analytics\.com/;
+// 배포 워크플로가 E2E_SITE_URL로 빌드에 넣은 사이트 주소를 알려 줌. 운영 주소일 때만 운영 빌드로 봄
+// (운영 도메인 전환 전 CloudFront 주소 배포는 비운영 빌드라 GA가 없어야 함)
+const PRODUCTION_BUILD = isProductionSiteUrl(process.env.E2E_SITE_URL);
 
 test.describe("비운영 빌드에는 Google Analytics가 없다 (BRD-143)", () => {
   test.skip(
-    process.env.E2E_PRODUCTION_BUILD === "1",
+    PRODUCTION_BUILD,
     "운영 빌드는 아래 비운영 전용 검사의 대상이 아님",
   );
   for (const pathname of [
@@ -61,7 +65,7 @@ test.describe("비운영 빌드에는 Google Analytics가 없다 (BRD-143)", () 
 });
 
 test("운영 빌드에는 Google Analytics 스크립트가 있다", async ({ page }) => {
-  test.skip(process.env.E2E_PRODUCTION_BUILD !== "1", "운영 빌드에서만 확인");
+  test.skip(!PRODUCTION_BUILD, "운영 빌드에서만 확인");
   await page.goto("/");
   await expect(
     page.locator('script[src*="googletagmanager.com/gtag/js"]'),

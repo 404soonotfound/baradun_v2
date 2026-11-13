@@ -259,7 +259,7 @@ jobs:
       - if: steps.decide.outputs.deploy == 'true'
         run: npm run test:e2e -w apps/web
         env:
-          E2E_PRODUCTION_BUILD: "1" # 운영 빌드에서만 맞는 분석 태그 검사로 전환
+          E2E_SITE_URL: ${{ vars.SITE_URL }} # 빌드에 넣은 주소. 운영 주소일 때만 운영 빌드 분석 태그 검사로 전환
       # 판단 정책 버전 확인(결정 기록 D20-6·7): 웹은 지금 판단 정책 하나만 읽음 → 정책을 바꾼 PR은 publisher(deploy:infra)를 먼저 배포
       # 운영 게시본의 policyVersion을 이 빌드가 읽지 못하면(게시본을 못 읽어도) 올리지 않고 멈춤. publisher 배포·새 정책 게시 뒤 이 워크플로를 다시 실행
       - if: steps.decide.outputs.deploy == 'true'
