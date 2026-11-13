@@ -101,3 +101,13 @@ export const regionSlug = (regions) => (regions.length > 1 ? "national" : { 강�
 export const SIGUNGU_ALIAS = { "인천|중구": ["중구", "영종구"] };
 export const sigunguMatches = (fullName, sido, sigungu) =>
   (SIGUNGU_ALIAS[`${sido}|${sigungu}`] ?? [sigungu]).some((g) => fullName?.endsWith(` ${g}`));
+
+// 공식 출처 좌표 정정·보충표 적용 (원자료 beaches.csv는 수정하지 않음)
+let coordOverridesCache = null;
+export const applyCoordOverrides = (rows) => {
+  coordOverridesCache ??= JSON.parse(readFileSync(new URL("./coord-overrides.json", import.meta.url), "utf8")).overrides;
+  return rows.map((r) => {
+    const ov = coordOverridesCache[`${r.sido_nm}|${r.gugun_nm}|${r.sta_nm}`];
+    return ov ? { ...r, lat: String(ov.lat), lon: String(ov.lon), coords_source: ov.source } : r;
+  });
+};

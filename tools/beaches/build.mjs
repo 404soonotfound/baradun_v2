@@ -9,7 +9,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { METRICS, assignMetric, loadAssignContext, parseCsv, readCsv as readInputCsv, round1 } from "./station-assign.mjs";
 import { stationSourceOk, zoneProofVerified as verifyZoneProof } from "./zone-proof.mjs";
-import { COVERAGE_DIR, REGIONS, regionArg, regionSlug, verifyPinnedSources } from "./regions.mjs";
+import { COVERAGE_DIR, REGIONS, applyCoordOverrides, regionArg, regionSlug, verifyPinnedSources } from "./regions.mjs";
 import { SLIM_COLS, slimMatrix } from "./slim-matrix.mjs";
 import { checkDraft } from "./check.mjs";
 import { assertSameName, idKey, preserveManual, reserveSlug, validateFinalIdentity, validateIdentity } from "./identity.mjs";
@@ -168,6 +168,8 @@ export function buildBeaches({ coverageDir = COVERAGE_DIR, existingDataDir = joi
     "양양군|설악": { rom: "Seorak" },
     "양양군|지경": { rom: "Jigyeong" },
     "양양군|하조대": { rom: "Hajodae" },
+    "양양군|송전": { rom: "Songjeon" },
+    "양양군|기사문": { rom: "Gisamun" },
     "양양군|갯마을": { rom: "Gaenmaeul", review: "자음동화 표기(Gaenmaeul) 확인 필요" },
     "양양군|광진": { rom: "Gwangjin" },
     "양양군|남애1리": { rom: "Namae 1-ri" },
@@ -194,7 +196,7 @@ export function buildBeaches({ coverageDir = COVERAGE_DIR, existingDataDir = joi
       .replace(/^-|-$/g, "");
 
   // ── 입력 읽기 ──
-  const allSrc = readCsv("beaches.csv");
+  const allSrc = applyCoordOverrides(readCsv("beaches.csv"));
   const beachesSrc = allSrc.filter((b) => TARGET_REGIONS.includes(b.sido_nm));
   // 이름 겹침: 전국 285행에서 괄호를 뺀 해수욕장 이름이 같은 다른 해변 (결정 기록 11장 10/21 ②)
   const baseName = (s) => s.replace(/\([^)]*\)/g, "").trim();
@@ -425,7 +427,7 @@ export function buildBeaches({ coverageDir = COVERAGE_DIR, existingDataDir = joi
       official_id_note: "해수부 해수욕장정보 수집본에 ID 칸 없음",
       lat,
       lng,
-      coords_source: "해수부 해수욕장정보 API(2026-10-16 수집)",
+      coords_source: src.coords_source ?? "해수부 해수욕장정보 API(2026-10-16 수집)",
       coast: coastOf(seaZone) ?? "",
       sea_zone: seaZone,
       sea_basis: seaBasis,

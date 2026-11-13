@@ -14,7 +14,7 @@ import { linkOfficials } from "./official-link.mjs";
 import { METRICS, assignMetric, haversineKm, loadAssignContext, readCsv, round1 } from "./station-assign.mjs";
 import { seaEvidenceFor, zoneProofVerified } from "./zone-proof.mjs";
 import { ANNEX, ANNEX4_BOUNDARIES, ANNEX5, ANNEX5_URL, ANNEX9_CHECKED, ANNEX9_ITEM, ANNEX9_URL, annex9Lookup, splitFull, zoneOfFull } from "./annex.mjs";
-import { BJD_CSV, BJD_LABEL, COAST_DBF, COAST_SHP, COVERAGE_DIR, MOF_XLSX, REGIONS, gisLabel, regionArg, sha256, emdSource, sigunguMatches, verifyPinnedSources } from "./regions.mjs"; // sha256: 고정 해시 대조 때 계산한 값 재사용
+import { BJD_CSV, BJD_LABEL, COAST_DBF, COAST_SHP, COVERAGE_DIR, MOF_XLSX, REGIONS, applyCoordOverrides, gisLabel, regionArg, sha256, emdSource, sigunguMatches, verifyPinnedSources } from "./regions.mjs"; // sha256: 고정 해시 대조 때 계산한 값 재사용
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 verifyPinnedSources(); // 원자료가 data-sources.json 고정 해시와 다르면 판정·생성하지 않음
@@ -87,8 +87,9 @@ const sigunguOfCol = (col) => {
 const emds = readEmdBoundary(EMD_SOURCE, Object.values(REGIONS).map((r) => r.code)).map((e) => ({ ...e, sigungu: sigunguOfCol(e.COL_ADM_SE) }));
 for (const e of emds) if (!e.sigungu) throw new Error(`시군 이름 조회 실패: ${e.COL_ADM_SE}`);
 
-// ── 해변 좌표 (해수부 수집본, WGS84) ──
-const beachesSrc = readCsv("beaches.csv").filter((b) => TARGET_REGIONS.includes(b.sido_nm) && b.lat && b.lon);
+// ── 해변 좌표 (해수부 수집본 + 공식 출처 보정표, WGS84) ──
+const allBeachesSrc = applyCoordOverrides(readCsv("beaches.csv"));
+const beachesSrc = allBeachesSrc.filter((b) => TARGET_REGIONS.includes(b.sido_nm) && b.lat && b.lon);
 const beachPts = beachesSrc.map((b) => {
   const lat = Number(b.lat);
   const lon = Number(b.lon);
@@ -418,7 +419,7 @@ const mofRows = readFirstSheet(MOF_XLSX)
   }));
 // 시군 이름 바뀐 곳: 수집본 시군 → 2026 현황 관리청 후보 (인천 중구 → 영종구)
 const nameMap = JSON.parse(readFileSync(join(HERE, "name-map-2026.json"), "utf8"));
-const srcRows = readCsv("beaches.csv").filter((b) => TARGET_REGIONS.includes(b.sido_nm));
+const srcRows = allBeachesSrc.filter((b) => TARGET_REGIONS.includes(b.sido_nm));
 const links = linkOfficials(srcRows, mofRows, nameMap.entries);
 const sidoByKey = new Map(srcRows.map((b) => [`${b.gugun_nm}|${b.sta_nm}`, b.sido_nm]));
 
