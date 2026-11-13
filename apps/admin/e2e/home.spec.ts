@@ -356,7 +356,7 @@ test("불러오지 못한 값은 0·정상·'할 일 없음'으로 바꾸지 않
   await expectNoA11yViolations(page);
 });
 
-test("한 칸의 응답이 오지 않아도 판단 출처 줄과 다른 칸은 먼저 보이고, 그 칸만 불러오는 중으로 남는다", async ({
+test("한 칸의 응답이 오지 않아도 판단 출처 줄과 다른 칸은 먼저 보이고, 그 칸만 자리표시로 남는다", async ({
   page,
 }) => {
   await mockCognito(
@@ -372,5 +372,11 @@ test("한 칸의 응답이 오지 않아도 판단 출처 줄과 다른 칸은 �
     page.getByText("판단에 쓰는 출처가 모두 정상이에요"),
   ).toBeVisible();
   await expect(page.getByText("지금 할 일이 없어요")).toBeVisible();
-  await expect(page.getByText("최근 변경을 불러오는 중이에요")).toBeVisible();
+  // 최근 변경 칸만 한 쪽 행 수(5)만큼 자리표시(GH-462). 화면 읽기에는 '운영 홈 불러오는 중' 한 번
+  await expect(
+    page.locator('section[aria-labelledby="home-recent"] .sk'),
+  ).toHaveCount(5);
+  await expect(
+    page.getByRole("status").filter({ hasText: "운영 홈 불러오는 중" }),
+  ).toHaveCount(1);
 });
