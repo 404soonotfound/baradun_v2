@@ -3,9 +3,9 @@
 # 사용: playwright-setup.sh start <playwright 인자>...   예: start install-deps chromium
 #       playwright-setup.sh wait
 #   start: 설치를 뒤에서 시작하고 바로 돌아옴. 로그와 종료 코드는 RUNNER_TEMP 아래에 남김
-#   wait:  설치가 끝나기를 기다렸다가 로그를 보여 주고 설치의 종료 코드로 끝남
+#   wait:  설치가 끝나기를 기다렸다가 로그를 보여 줌. 설치가 성공했으면 0, 아니면 1로 끝남(설치의 종료 코드는 오류 문구에 적음)
 # 설치를 시작한 기록이 없거나, 종료 코드를 남기지 않고 끝났거나, 제한 시간을 넘기면 실패함(확인 없이 E2E로 넘어가지 않음)
-# 환경: RUNNER_TEMP, PLAYWRIGHT_SETUP_TIMEOUT(초, 기본 600)
+# 환경: RUNNER_TEMP, PLAYWRIGHT_SETUP_TIMEOUT(wait가 기다리는 시간, 초, 기본 600. 설치를 시작한 때가 아니라 wait를 부른 때부터 잼)
 set -euo pipefail
 
 dir="${RUNNER_TEMP:?RUNNER_TEMP가 없음}/playwright-setup"
