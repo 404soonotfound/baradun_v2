@@ -578,7 +578,7 @@ function NoticeList({
   } | null>(null);
   const [actionBusy, setActionBusy] = useState(false);
   const [actionFlash, setActionFlash] = useState<string | null>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<WriteError | null>(null);
   const actionAttempt = useRef<{ body: string; key: string } | null>(null);
 
   const all = result?.ok ? result.body.items : [];
@@ -627,12 +627,12 @@ function NoticeList({
           onReload();
           return;
         }
-        setActionError(t.actionFailed);
+        setActionError(writeError(res, true));
       },
       () => {
         setActionBusy(false);
         setPendingAction(null);
-        setActionError(t.actionFailed);
+        setActionError({ kind: "failed", action: true, requestId: null });
       },
     );
   };
@@ -698,7 +698,33 @@ function NoticeList({
       )}
       {actionError && (
         <div className="mt-4">
-          <Notice tone="fail" title={actionError} role="alert" />
+          <Notice
+            tone={actionError.kind === "failed" ? "fail" : "warn"}
+            title={errorTitle(actionError)}
+            role="alert"
+          >
+            {actionError.kind === "failed" && actionError.requestId && (
+              <p>
+                {fill(messages.inquiries.requestId, {
+                  id: actionError.requestId,
+                })}
+              </p>
+            )}
+            {(actionError.kind === "conflict" ||
+              actionError.kind === "replay" ||
+              actionError.kind === "notLive" ||
+              actionError.kind === "notFound") && (
+              <ReloadCopy
+                copied={false}
+                onReload={() => {
+                  actionAttempt.current = null;
+                  setActionError(null);
+                  onReload();
+                }}
+                onCopy={undefined}
+              />
+            )}
+          </Notice>
         </div>
       )}
 
@@ -880,7 +906,9 @@ function NoticeList({
                     const rowTitle = n.draft.title.ko.trim() || t.untitled;
                     return (
                       <tr key={n.id} className={`${TR} hover:bg-bg-page`}>
-                        <td className={TD}>
+                        <td
+                          className={`${TD} max-w-md whitespace-normal break-words`}
+                        >
                           <Link
                             href={editHref(n.id)}
                             className={`${CELL_NAME} underline-offset-2 hover:underline`}
@@ -1248,6 +1276,35 @@ function writeError(result: Failed, action: boolean): WriteError {
   };
 }
 
+function errorTitle(e: WriteError): string {
+  switch (e.kind) {
+    case "conflict":
+      return t.conflict;
+    case "replay":
+      return t.replay;
+    case "notLive":
+      return t.notLive;
+    case "deleteLive":
+      return t.deleteLive;
+    case "notFound":
+      return t.notFoundTitle;
+    case "invalid":
+      // 확정 검사에 걸린 칸은 화면 이름으로(내부 칸 이름을 보이지 않게)
+      return fill(e.blocked ? t.blockedField : t.invalidField, {
+        field:
+          e.field in FIELD_LABEL
+            ? FIELD_LABEL[e.field as TextField]
+            : e.field === "startsAt"
+              ? t.startsAt
+              : e.field === "endsAt"
+                ? t.endsAt
+                : e.field,
+      });
+    case "failed":
+      return e.action ? t.actionFailed : t.failed;
+  }
+}
+
 type Confirm = "expose" | "end" | "delete" | "leave";
 
 function ConfirmBox({
@@ -1595,35 +1652,6 @@ function NoticeEditor({
   const copyText = [form.titleKo, form.bodyKo, form.titleEn, form.bodyEn]
     .filter((s) => s.trim())
     .join("\n");
-
-  const errorTitle = (e: WriteError): string => {
-    switch (e.kind) {
-      case "conflict":
-        return t.conflict;
-      case "replay":
-        return t.replay;
-      case "notLive":
-        return t.notLive;
-      case "deleteLive":
-        return t.deleteLive;
-      case "notFound":
-        return t.notFoundTitle;
-      case "invalid":
-        // 확정 검사에 걸린 칸은 화면 이름으로(내부 칸 이름을 보이지 않게)
-        return fill(e.blocked ? t.blockedField : t.invalidField, {
-          field:
-            e.field in FIELD_LABEL
-              ? FIELD_LABEL[e.field as TextField]
-              : e.field === "startsAt"
-                ? t.startsAt
-                : e.field === "endsAt"
-                  ? t.endsAt
-                  : e.field,
-        });
-      case "failed":
-        return e.action ? t.actionFailed : t.failed;
-    }
-  };
 
   return (
     <article
