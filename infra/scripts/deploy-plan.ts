@@ -401,6 +401,8 @@ export function checkLine(check: FunctionCheck): string {
 }
 
 export interface DeployReport {
+  // 댓글 제목의 실행 방식. 없으면 로컬 명령(npm run deploy:infra)
+  readonly via?: string;
   readonly subject: string; // 배포한 커밋 한 줄
   readonly changeSet: string;
   readonly rows: readonly ChangeRow[];
@@ -415,7 +417,7 @@ export function deployComment(report: DeployReport): string {
   const permission = report.rows.filter((r) => r.permission).length;
   const danger = report.rows.filter((r) => r.danger).length;
   const lines = [
-    "## 인프라 배포 결과 (`npm run deploy:infra`)",
+    `## 인프라 배포 결과 (${report.via ?? "`npm run deploy:infra`"})`,
     "",
     `- 커밋: ${report.subject}`,
     `- 변경 세트: \`${report.changeSet}\` · 리소스 ${report.rows.length}개(권한 ${permission} · 삭제·교체 ${danger})`,
@@ -431,6 +433,57 @@ export function deployComment(report: DeployReport): string {
   ];
   // AWS 오류 문구(역할 ARN 등)에 섞인 계정 번호도 가림
   return redactAccount(`${lines.join("\n")}\n`);
+}
+
+// ── main 머지 뒤 자동 배포 (#418) ──
+
+// none: 바뀐 것 없음 · auto: 바로 실행 · hold: GitHub 승인 뒤 실행 · local: CI가 할 수 없어 로컬 deploy:infra 필요
+export type AutoDeployKind = "none" | "auto" | "hold" | "local";
+
+export interface AutoDeployDecision {
+  readonly kind: AutoDeployKind;
+  readonly reasons: readonly string[];
+}
+
+// 자동 실행 여부(사용자 결정 2026-11-13 A안)
+// - boundary가 저장소와 다르면 local: CI 역할은 boundary를 고칠 권한이 없음(배포 역할이 자기 권한 상한을 못 고치게)
+// - 삭제·교체(!!, 데이터 리소스는 교체 가능성 포함)가 있으면 hold: 데이터가 사라질 수 있어 사람이 봄
+// - 코드·설정(①)과 권한(②, **) 변경, 데이터 없는 리소스의 교체 가능성(~)은 auto. 권한 상한은 boundary가 막음
+export function autoDeployDecision(input: {
+  readonly hasChangeSet: boolean;
+  readonly rows: readonly ChangeRow[];
+  readonly boundarySame: boolean;
+}): AutoDeployDecision {
+  if (!input.boundarySame) {
+    return {
+      kind: "local",
+      reasons: [
+        "boundary가 저장소와 달라요. CI는 boundary를 고치지 않으니 로컬에서 npm run deploy:infra로 배포해 주세요.",
+      ],
+    };
+  }
+  if (!input.hasChangeSet) return { kind: "none", reasons: [] };
+  const dangers = input.rows.filter((r) => r.danger);
+  if (dangers.length > 0) {
+    return {
+      kind: "hold",
+      reasons: dangers.map(
+        (r) =>
+          `${r.logicalId}(${r.type}): ${r.action === "Remove" ? "삭제" : r.replacement === "True" ? "교체" : "교체될 수도 있음(데이터 리소스)"}`,
+      ),
+    };
+  }
+  return { kind: "auto", reasons: [] };
+}
+
+// 배포 결과를 남길 이슈: 머지된 PR 설명의 연결 문구(Fixes·Part of·Closes·Resolves #n). 순서 유지·중복 제거
+export function linkedIssues(prBody: string | null | undefined): number[] {
+  const found = [
+    ...(prBody ?? "").matchAll(
+      /\b(?:fix(?:e[sd])?|close[sd]?|resolve[sd]?|part of)\s+#(\d+)\b/gi,
+    ),
+  ].map((m) => Number(m[1]));
+  return [...new Set(found)];
 }
 
 // 12자리 AWS 계정 번호를 <계정>으로(이슈 댓글은 공개 저장소에 남음)
