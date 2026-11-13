@@ -53,7 +53,7 @@
   - Dependabot이 붙인 브랜치(`dependabot/…`)와 영어 제목을 그대로 둔다. Action 갱신은 `chore(deps): bump …`, npm 보안 갱신은 `dependabot.yml`에 npm 설정이 없어 Dependabot 기본 제목이다. 둘 다 이슈 번호가 없고, 이 PR을 위해 이슈를 만들지 않으며 연결 문구(`Fixes #n`)도 쓰지 않는다.
   - 담당자가 비어 있으면(npm 보안 갱신) 저장소 소유자로 지정한다. PR 전 `/code-review`와 `@codex review`는 하지 않고, PR 본문의 릴리스 노트에서 큰 변경(BREAKING)이 우리 설정에 닿는지 확인한다. 머지 기준은 같다(`ci-ok` 통과, `Rebase and merge`).
   - 한 번에 하나씩 머지한다. 머지 뒤 `deploy`가 돌면 그 실행 결과를 확인하고, 다음 PR은 그 뒤에 머지한다. `DEPLOY_PAUSED`·배포 건너뜀처럼 바뀐 Action 단계가 돌지 않은 실행은 확인으로 치지 않고, 다음에 그 단계가 실제로 돌 때 확인한다. PR에서 돌지 않는 워크플로 중 `map-tiles.yml`(수동 실행)은 다음에 지도를 만들 때, `iam-reference-audit.yml`(매주 정기 실행)은 다음 정기 실행 결과로 확인한다.
-  - `services`·`infra` 의존성이 바뀐 PR은 머지 뒤 `npm run deploy:infra`가 필요하다(Lambda는 이 명령으로만 배포됨). 배포는 다른 인프라 배포와 같은 승인 절차를 거치고, 결과는 이슈 대신 그 PR 댓글로 남긴다.
+  - `services`·`infra` 의존성이 바뀐 PR은 머지 뒤 인프라 배포가 필요하다. main CI가 성공하면 `deploy.yml` `infra` 작업이 자동으로 배포하고(#418), 결과는 연결 이슈가 없어 그 PR 댓글로 남는다. 승인 대기(`!!` 삭제·교체)·로컬 배포 필요(boundary 다름)로 멈추면 다른 인프라 배포와 같은 절차로 처리한다.
   - 확인에서 실패하면 GitHub의 Revert로 되돌림 PR을 만든다. 이 되돌림 PR도 같은 예외를 따른다(제목 `Revert "…"`, 이슈 없음, `ci-ok` 통과 뒤 머지).
 - PR은 이슈 하나당 하나를 기본으로 한다. 2,000줄을 넘거나 배포 위험·독립 검증 때문에 나눠야 하면 나눈 이유를 PR 설명에 적는다. 줄 수는 additions + deletions이고 lockfile·생성 파일은 뺀다.
 - 구현이 작은 이슈나 API가 이미 있는 화면만 2~3개까지 한 PR로 묶을 수 있다. 묶은 PR도 2,000줄을 넘기지 않는다.
@@ -63,7 +63,7 @@
   - 일부만 하거나 머지 뒤 확인이 남은 PR: `Part of #365` (머지돼도 닫히지 않음)
   - 여러 이슈: `Fixes #365, fixes #366` (이슈마다 `Fixes`를 붙여야 닫힘)
 - 머지 전 push는 첫 push와 지적 일괄 수정, 2회를 목표로 한다. 지적은 모아서 한 번에 고친다.
-- `services`나 `infra`가 바뀐 PR은 머지 뒤 `npm run deploy:infra` 필요 여부를 PR 설명 '배포' 칸에 적고, 실행 결과를 이슈 댓글로 남긴다.
+- `services`나 `infra`가 바뀐 PR은 PR 설명 '배포' 칸에 머지 뒤 인프라 배포가 필요한지와 예상 판정(자동 실행·승인 대기·로컬 배포 필요)을 적는다. main 머지 뒤 CI가 자동으로 배포하고 결과를 연결 이슈에 댓글로 남긴다(#418, `infra/README` 'main 머지 뒤 자동 배포'). 승인 대기면 실행 기록의 `infra-approve`를 승인하고, 로컬 배포 필요면 `npm run deploy:infra -- --issue <번호>`로 배포한다.
 - Project에는 이슈만 넣는다(PR은 넣지 않음). Project 워크플로가 상태를 바꾼다: 새 이슈는 Project에 들어가 Backlog, `Fixes #n` PR이 연결되면 In Review, 이슈가 닫히면 Done. Todo·In Progress, `Part of #n` PR의 In Review, Canceled는 손으로 옮긴다. 상태를 바꿔도 이슈는 자동으로 닫히지 않는다(Auto-close issue 꺼 둠).
   - 닫힌 이유와 상관없이 닫으면 Done이 된다. Canceled·중복은 이슈를 닫고 Status가 Done으로 바뀐 것을 확인한 뒤 Canceled로 고친다(워크플로가 늦게 돌면 먼저 넣은 Canceled를 덮음).
   - 다시 연 이슈는 Status가 그대로 남으므로 손으로 In Progress나 Todo로 되돌린다.
