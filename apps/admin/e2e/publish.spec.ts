@@ -517,6 +517,19 @@ test("변경 미리보기: 분류별 수와 바뀌는 해변(사유 먼저)을 �
   ).toBeVisible();
   await expect(panel).toContainText("판단 상태는 특보·관측값으로만 바뀌어요");
   await expectNoA11yViolations(page);
+  await panel.getByRole("button", { name: "미리보기 닫기" }).focus();
+  await page.keyboard.press("Shift+Tab");
+  const focusedInBackground = await page.evaluate(() => {
+    const active = document.activeElement;
+    const dialog = document.querySelector("dialog[open]");
+    return (
+      active !== null &&
+      active !== document.body &&
+      dialog !== null &&
+      !dialog.contains(active)
+    );
+  });
+  expect(focusedInBackground).toBe(false);
   await page.keyboard.press("Escape");
   await expect(panel).toHaveCount(0);
   await expect(previewTrigger).toBeFocused();

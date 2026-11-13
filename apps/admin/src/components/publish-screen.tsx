@@ -300,7 +300,9 @@ function AppSettingsBar({
           </span>
           <span>
             {state.kind === "ok"
-              ? fill(t.settings.minWebBuild, { version: state.value.minWebBuild })
+              ? fill(t.settings.minWebBuild, {
+                  version: state.value.minWebBuild,
+                })
               : t.settings.minWebBuildUnknown}
           </span>
         </>
@@ -653,15 +655,13 @@ function PreviewDrawer({
   onPublish: (triggerEl: HTMLButtonElement | null) => void;
 }) {
   const slow = useSlow(waiting);
+  const dialogRef = useRef<HTMLDialogElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
+    const el = dialogRef.current;
+    if (el && !el.open) el.showModal();
     closeRef.current?.focus();
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, []);
 
   let subtitle: string | null = null;
   if (answer?.ok) {
@@ -834,72 +834,72 @@ function PreviewDrawer({
   }
 
   return (
-    <div
-      className="fixed inset-0 z-40 flex justify-end bg-black/25"
+    <dialog
+      ref={dialogRef}
+      aria-labelledby="publish-preview-title"
+      onClose={onClose}
       onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose();
+        if (e.target === e.currentTarget) dialogRef.current?.close();
       }}
+      className="fixed inset-y-0 right-0 left-auto m-0 ml-auto flex h-dvh max-h-none w-full max-w-[540px] flex-col border-0 border-l border-border-default bg-bg-surface p-0 text-text-default shadow-floating backdrop:bg-black/25"
     >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="publish-preview-title"
-        className="flex h-full w-full max-w-[540px] flex-col border-l border-border-default bg-bg-surface shadow-floating"
-      >
-        <div className="flex items-start gap-3 border-b border-border-default px-6 pt-5 pb-4">
-          <div className="min-w-0 flex-1">
-            <h2
-              id="publish-preview-title"
-              className="text-title-m font-semibold text-text-default"
-            >
-              {t.preview.title}
-            </h2>
-            {subtitle && (
-              <p className="mt-1 text-caption text-text-muted">{subtitle}</p>
-            )}
-          </div>
-          <button
-            ref={closeRef}
-            type="button"
-            aria-label={t.preview.close}
-            onClick={onClose}
-            className="inline-flex size-10 shrink-0 items-center justify-center rounded-admin-control text-text-body hover:bg-bg-page hover:text-text-default"
+      <div className="flex items-start gap-3 border-b border-border-default px-6 pt-5 pb-4">
+        <div className="min-w-0 flex-1">
+          <h2
+            id="publish-preview-title"
+            className="text-title-m font-semibold text-text-default"
           >
-            <svg
-              width="18"
-              height="18"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.8"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <path d="M6 6l12 12M18 6 6 18" />
-            </svg>
-          </button>
+            {t.preview.title}
+          </h2>
+          {subtitle && (
+            <p className="mt-1 text-caption text-text-muted">{subtitle}</p>
+          )}
         </div>
-        <div className="flex-1 overflow-y-auto px-6 py-5">{body}</div>
-        <div className="flex flex-wrap items-center gap-2 border-t border-border-default px-6 py-3.5 pb-[calc(0.875rem+env(safe-area-inset-bottom))]">
-          <span className="text-caption text-text-muted">
-            {t.preview.judgment}
-          </span>
-          <span className="flex-1" />
-          <Button variant="secondary" size="small" onClick={onClose}>
-            {t.preview.drawerClose}
-          </Button>
-          <Button
-            size="small"
-            disabled={publishLocked !== null}
-            aria-describedby={publishLocked ? "publish-locked" : undefined}
-            onClick={(e) => onPublish(e.currentTarget)}
+        <button
+          ref={closeRef}
+          type="button"
+          aria-label={t.preview.close}
+          onClick={() => dialogRef.current?.close()}
+          className="inline-flex size-10 shrink-0 items-center justify-center rounded-admin-control text-text-body hover:bg-bg-page hover:text-text-default"
+        >
+          <svg
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
           >
-            {t.publishButton}
-          </Button>
-        </div>
+            <path d="M6 6l12 12M18 6 6 18" />
+          </svg>
+        </button>
       </div>
-    </div>
+      <div className="flex-1 overflow-y-auto px-6 py-5">{body}</div>
+      <div className="flex flex-wrap items-center gap-2 border-t border-border-default px-6 py-3.5 pb-[calc(0.875rem+env(safe-area-inset-bottom))]">
+        <span className="text-caption text-text-muted">
+          {t.preview.judgment}
+        </span>
+        <span className="flex-1" />
+        <Button
+          variant="secondary"
+          size="small"
+          onClick={() => dialogRef.current?.close()}
+        >
+          {t.preview.drawerClose}
+        </Button>
+        <Button
+          size="small"
+          disabled={publishLocked !== null}
+          aria-describedby={publishLocked ? "publish-locked" : undefined}
+          onClick={(e) => onPublish(e.currentTarget)}
+        >
+          {t.publishButton}
+        </Button>
+      </div>
+    </dialog>
   );
 }
 
@@ -963,9 +963,10 @@ function HistoryList({
   };
   return (
     <>
-      <div className="hidden md:block">
+      <div className="hidden overflow-x-auto md:block">
         <DataTable
           caption={t.history}
+          className="[&_th]:px-2.5 [&_td]:px-2.5 [&_th:first-child]:pl-3.5 [&_td:first-child]:pl-3.5 [&_th:last-child]:pr-3.5 [&_td:last-child]:pr-3.5"
           head={
             <>
               <th scope="col" className={TH}>
@@ -1008,7 +1009,7 @@ function HistoryList({
                     </p>
                   )}
                 </td>
-                <td className={`${TD} whitespace-normal`}>
+                <td className={TD.replace("whitespace-nowrap", "whitespace-normal")}>
                   <span className={CELL_NAME}>
                     {item.result === "published" ? changesText(item) : "—"}
                   </span>
@@ -1016,16 +1017,20 @@ function HistoryList({
                     {sourceText(item)}
                   </p>
                 </td>
-                <td className={`${TD} whitespace-normal`}>
+                <td className={TD.replace("whitespace-nowrap", "whitespace-normal")}>
                   {item.result === "published" ? (
                     <span className="inline-flex items-center gap-1.5 text-body-s text-text-body">
                       <PassIcon />
                       <span>{t.verifyPass}</span>
                     </span>
                   ) : (
-                    <span className="inline-flex items-center gap-1.5 text-body-s text-danger-fg">
-                      <FailIcon />
-                      <span>{reasonText(item.reason)}</span>
+                    <span className="flex max-w-[150px] items-start gap-1.5 text-body-s text-danger-fg">
+                      <span className="mt-0.5 shrink-0">
+                        <FailIcon />
+                      </span>
+                      <span className="min-w-0 [overflow-wrap:anywhere]">
+                        {reasonText(item.reason)}
+                      </span>
                     </span>
                   )}
                 </td>
@@ -1719,10 +1724,10 @@ export function PublishScreen({
           />
         )}
 
-        <div className="mt-4 grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
+        <div className="mt-4 grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_300px] lg:items-start">
           <section
             aria-labelledby="publish-history"
-            className="flex flex-col gap-3"
+            className="min-w-0 flex flex-col gap-3"
           >
             <h2
               id="publish-history"
