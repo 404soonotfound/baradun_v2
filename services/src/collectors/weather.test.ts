@@ -171,6 +171,110 @@ describe("collectWeather", () => {
     ).toMatchObject({ status: "partial", short: 0, now: 1 });
   });
 
+  // 단기예보를 쪽마다 나눈 응답. 실응답 행(944)을 앞에서부터 잘라 쪽마다 넣고 totalCount를 붙임
+  // (17·20시 발표 1,052행처럼 한 쪽을 넘는 경우를 재현. 행이 모자라면 앞 행을 다시 넣음: 같은 시각·항목이라 결과는 같음)
+  const shortPages = (total: number, sizes: number[]) => {
+    const json = JSON.parse(SHORT_0800) as {
+      response: { body: { items: { item: unknown[] }; totalCount: number } };
+    };
+    const rows = json.response.body.items.item;
+    let at = 0;
+    return sizes.map((size) => {
+      const item = Array.from(
+        { length: size },
+        (_, i) => rows[(at + i) % rows.length],
+      );
+      at += size;
+      const page = structuredClone(json);
+      page.response.body.items.item = item;
+      page.response.body.totalCount = total;
+      return JSON.stringify(page);
+    });
+  };
+  const byPage = (s: ReturnType<typeof setup>, pages: string[]) => {
+    const real = s.deps.get;
+    s.deps.get = async (url: string) => {
+      if (op(url) !== "getVilageFcst") return real(url);
+      s.urls.push(url);
+      const pageNo = Number(new URL(url).searchParams.get("pageNo"));
+      const body = pages[pageNo - 1];
+      return body === undefined
+        ? { status: "failed", reason: "http:404", attempts: 1 }
+        : ok(body);
+    };
+  };
+  const shortPageNos = (urls: string[]) =>
+    urls
+      .filter((u) => op(u) === "getVilageFcst")
+      .map((u) => new URL(u).searchParams.get("pageNo"));
+
+  it("단기예보가 한 쪽(1,000행)을 넘으면 다음 쪽을 이어 받아 저장(17·20시 발표 1,052행)", async () => {
+    const s = setup();
+    byPage(s, shortPages(1052, [1000, 52]));
+    expect(await collectWeather(s.deps)).toEqual({
+      status: "complete",
+      slotId: "202611050915",
+    });
+    expect(shortPageNos(s.urls)).toEqual(["1", "2"]);
+    const single = setup();
+    await collectWeather(single.deps);
+    expect((await stored(s.state)).short).toEqual(
+      (await stored(single.state)).short,
+    );
+  });
+
+  it("쪽 수 상한(2쪽)을 넘거나 쪽마다 totalCount가 다르면 잘린 응답으로 실패하고 저장하지 않음", async () => {
+    const over = setup();
+    byPage(over, shortPages(3000, [1000, 1000, 1000]));
+    expect(await collectWeather(over.deps)).toMatchObject({
+      status: "partial",
+      failures: [{ source: "short", reason: "truncated:2000/3000" }],
+    });
+    expect(shortPageNos(over.urls)).toEqual(["1", "2"]);
+    expect((await stored(over.state)).short).toBeNull();
+
+    const mismatch = setup();
+    const [first] = shortPages(1052, [1000]);
+    const [second] = shortPages(1100, [52]);
+    byPage(mismatch, [first!, second!]);
+    expect(await collectWeather(mismatch.deps)).toMatchObject({
+      status: "partial",
+      failures: [{ source: "short", reason: "total_mismatch" }],
+    });
+    expect((await stored(mismatch.state)).short).toBeNull();
+  });
+
+  it("시간 예산이 지났으면 다음 쪽을 부르지 않고 잘린 응답으로 실패(Lambda 60초 안)", async () => {
+    const s = setup();
+    const [first] = shortPages(1052, [1000]);
+    const real = s.deps.get;
+    s.deps.get = async (url: string) => {
+      if (op(url) !== "getVilageFcst") return real(url);
+      s.urls.push(url);
+      s.at("2026-11-05T00:15:31Z"); // 첫 쪽을 받는 동안 예산(30초)이 지남
+      return ok(first!);
+    };
+    // 예산이 지나 실황·중기도 부르지 않으므로(budget) 저장한 것이 없어 failed
+    expect(await collectWeather(s.deps)).toMatchObject({
+      status: "failed",
+      failures: expect.arrayContaining([
+        { source: "short", reason: "truncated:1000/1052" },
+      ]),
+    });
+    expect(shortPageNos(s.urls)).toEqual(["1"]);
+    expect((await stored(s.state)).short).toBeNull();
+  });
+
+  it("다음 쪽을 받지 못하면 그 격자는 실패로 남기고 앞 쪽 행만으로 저장하지 않음", async () => {
+    const s = setup();
+    byPage(s, shortPages(1052, [1000]));
+    expect(await collectWeather(s.deps)).toMatchObject({
+      status: "partial",
+      failures: [{ source: "short", reason: "http:404" }],
+    });
+    expect((await stored(s.state)).short).toBeNull();
+  });
+
   it("실황을 받지 못하면 이전 기온을 덮지 않음(오래되면 publisher가 null로 거름)", async () => {
     const state = new MemoryStateStore();
     await collectWeather(setup({ state }).deps);
