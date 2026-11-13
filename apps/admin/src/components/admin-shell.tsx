@@ -340,6 +340,9 @@ const SIDE = {
 // 출처 보드 Admin_V1 .w-main h1: 20px/600(화면의 text-title-l·font-semibold) · 줄 높이 1.4 · 자간 -0.01em
 const PAGE_TITLE = "[&_h1]:leading-[1.4] [&_h1]:tracking-[-0.01em]";
 
+// '편집 권한' → '편집'. 상자 폭(195)을 넘칠 때만 씀(GH-450 결정 2)
+const shortRole = (role: string) => role.replace(/\s*권한$/, "");
+
 // 작업 공간 상자: 서비스 이름 + '운영 · 권한'. 바꿀 작업 공간이 없어 전환 화살표는 두지 않고, 상자 전체가 운영 홈 링크
 function Workspace() {
   const snapshot = useSessionSnapshot();
@@ -347,6 +350,29 @@ function Workspace() {
     snapshot.status === "signed_out"
       ? null
       : roleLabel(snapshot.pool, snapshot.groups);
+  // 넘치면 '권한'을 뺌. 처음 그릴 때(ResizeObserver 첫 알림)와 글꼴을 다 받은 뒤 잼
+  // 뺀 권한 이름을 그 권한 값에 묶어 둠 → 계정이 바뀌면 다시 전체 이름부터
+  const line = useRef<HTMLSpanElement>(null);
+  const [shortFor, setShortFor] = useState<string | null>(null);
+  const short = role !== null && shortFor === role;
+  useEffect(() => {
+    const el = line.current;
+    if (!el || !role || short || shortRole(role) === role) return;
+    const check = () => {
+      if (el.scrollWidth > el.clientWidth) setShortFor(role);
+    };
+    const observer = new ResizeObserver(check);
+    observer.observe(el);
+    let live = true;
+    void document.fonts?.ready.then(() => {
+      if (live) check();
+    });
+    return () => {
+      live = false;
+      observer.disconnect();
+    };
+  }, [role, short]);
+  const shown = role && short ? shortRole(role) : role;
   return (
     <Link
       href="/"
@@ -365,10 +391,10 @@ function Workspace() {
         <span className="font-medium text-text-default">
           {messages.brand.name}
         </span>
-        <span className="truncate">
+        <span ref={line} className="truncate">
           <span className="text-caption text-text-body">
-            {role
-              ? fill(t.workspace, { sub: messages.brand.sub, role })
+            {shown
+              ? fill(t.workspace, { sub: messages.brand.sub, role: shown })
               : messages.brand.sub}
           </span>
         </span>
@@ -537,7 +563,7 @@ function UserRow() {
         <button
           ref={button}
           type="button"
-          aria-label={t.userMenu}
+          aria-label={email ? fill(t.userMenuFor, { email }) : t.userMenu}
           aria-expanded={open}
           aria-controls={open ? menuId : undefined}
           onClick={() => setOpen((v) => !v)}
