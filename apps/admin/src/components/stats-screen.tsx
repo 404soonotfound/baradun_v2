@@ -1,15 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import type { OpsResult } from "@/lib/auth/ops-fetch";
 import { useAuthSession, useSessionSnapshot } from "@/lib/auth/provider";
 import type { BeachSlugName } from "@/lib/beach-names";
 import { kstDateTime } from "@/lib/inquiries";
+import { LOADING_TIMES } from "@/lib/loading-timing";
 import { fill, messages } from "@/lib/messages";
 import {
   beachLabel,
   fetchStats,
   metadataReasons,
+  perUser,
   sharePercent,
   STATS_RANGES,
   sumMetric,
@@ -17,428 +19,793 @@ import {
   type StatsResponse,
 } from "@/lib/stats";
 import { AdminShell } from "./admin-shell";
+import {
+  loadClass,
+  LoadingStatus,
+  SkDonut,
+  SkLine,
+  Spinner,
+  useLoadTiming,
+} from "./loading";
 import { Button, Notice, SUCCESS_BADGE } from "./ui";
 
-// 이용 통계 (BRD-154·GH-333, 화면 설계서 6장 ADM-STATS)
-// - 수집 이벤트 상태(D22-1·D22-2): page_view와 연동된 비식별 기능 이벤트는 '수집 중', 미연동 스키마는 '수집 안 함(후속)'으로 표시
-// - GA4 metadata(thresholding·sampling·otherRowLoss)가 있을 때만 제한 안내 표시(E8)
-// - 숨긴 숫자는 추정하지 않고 '–'로 표시(0으로 바꾸지 않음)
-// - 해변 상태(특보 없음·이용불가·판단불가)와 묶은 지표는 만들지 않음
+// 이용 통계 (BRD-154·GH-333, 화면 설계서 6장 ADM-STATS · 시안 4차 보드 V8 · 로딩 L7, GH-453)
+// - GA Data API 집계만(운영 API /ops/stats). 해변 상태(특보 없음·이용불가·판단불가)와 묶은 지표는 만들지 않음
+// - 머리: 제목 옆 '지금 사용 중 N명 · 최근 30분'(GA 실시간 30분), 기간 단추(오늘·7일·28일·60일)
+// - 숫자 숨김 안내는 GA 응답 metadata(thresholding·sampling·otherRowLoss)가 있을 때만, 응답을 받은 뒤에만(E8 · L7)
+//   숨긴 숫자는 추정하지 않고 '–'(0으로 바꾸지 않음)
+// - 응답에 없는 값(앞 기간 비교·새 사용자 비율·일별·시간대별 추이·많이 본 화면·들어온 경로)은 지어내지 않고
+//   시안 자리 크기 그대로 '확인 못 함'. 차트 자리는 로딩 중에도 같은 크기로 고정(L7)
+// - 많이 본 해변은 /spots/[slug]를 공개 해변 데이터 이름으로. 못 찾으면 '이름 확인 못 함'(slug·경로를 이름으로 쓰지 않음)
+// - 수집 이벤트 목록(시안에 없음, 11/13 결정은 '두지 않음')은 기존 칸이라 지우지 않고 맨 아래 둠
+// - 로딩(GH-462 부품): 150ms 뒤 자리표시 · 최소 400ms · 5초 느림 · 15초 같은 자리 실패 + 다시 시도
+//   새로 고침은 받은 값을 두고 회전 표시. 기간을 바꾸면 다른 기간 값이라 자리표시로 바꿈
+// - 막대·도넛 길이는 SVG 속성으로(CSP style-src 'self', style 속성 0개)
 
 const t = messages.stats;
 
-const CARD =
-  "rounded-admin-card border border-border-default bg-bg-elevated p-5 shadow-admin-card";
+// 보드 V8 공통 값(.w-lbl · .w-sh h2 · .w-c · .w-sb)
+const LABEL = "text-label font-semibold text-text-body";
+const SECTION_TITLE = "text-title-card font-semibold text-text-default";
+const SECTION_NOTE = "text-body-s text-text-muted";
+// 보드 22px → 가장 가까운 토큰 num-m(21px)
+const KPI_VALUE = "text-num-m font-normal text-text-default tabular-nums";
 const BADGE =
-  "inline-flex h-6 shrink-0 items-center gap-1.5 rounded-admin-badge px-2 text-label-s font-medium whitespace-nowrap";
+  "inline-flex h-5 shrink-0 items-center gap-1 rounded-admin-badge px-1.5 text-caption font-semibold whitespace-nowrap";
 
-function formatNumber(n: number | null): string {
-  return n === null ? t.emptyValue : n.toLocaleString("ko-KR");
+type Loaded = {
+  readonly key: string;
+  readonly result: OpsResult<StatsResponse>;
+};
+
+const TIMEOUT: OpsResult<never> = {
+  ok: false,
+  status: 0,
+  code: "timeout",
+  requestId: null,
+};
+
+// 15초(D26-4) 안에 답이 없으면 같은 자리에서 실패(opsFetch에 취소가 없어 요청 자체는 남음)
+function withTimeout(
+  load: Promise<OpsResult<StatsResponse>>,
+): Promise<OpsResult<StatsResponse>> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  return Promise.race([
+    load.catch(() => TIMEOUT),
+    new Promise<OpsResult<StatsResponse>>((resolve) => {
+      timer = setTimeout(() => resolve(TIMEOUT), LOADING_TIMES.timeout);
+    }),
+  ]).finally(() => clearTimeout(timer));
 }
 
-function formatPeople(n: number | null): string {
-  return n === null ? t.emptyValue : fill(t.countUnit, { count: formatNumber(n) });
+const formatNumber = (n: number | null): string =>
+  n === null ? t.emptyValue : n.toLocaleString("ko-KR");
+
+const deviceLabel = (category: string): string =>
+  (t.deviceLabels as Record<string, string>)[category] ?? category;
+
+const languageLabel = (code: string): string =>
+  (t.languageLabels as Record<string, string>)[code] ?? code;
+
+// 응답에 없는 값 자리(시안 칸 크기 그대로 '확인 못 함' + 이유)
+function NotProvided({
+  className,
+  title = t.chartMissing,
+  hint = t.chartMissingHint,
+}: {
+  className: string;
+  title?: string;
+  hint?: string;
+}) {
+  return (
+    <div
+      className={`flex flex-col items-center justify-center gap-1 rounded-admin-box border border-dashed border-border-strong px-4 text-center ${className}`}
+    >
+      <p className="text-body-s font-medium text-text-body">{title}</p>
+      <p className="text-caption text-text-muted">{hint}</p>
+    </div>
+  );
 }
 
-function formatViews(n: number | null): string {
-  return n === null ? t.emptyValue : fill(t.viewUnit, { count: formatNumber(n) });
+// KPI 하나(보드 V8 머리 아래 4칸). 앞 기간 비교 배지·작은 추이선은 응답에 없어 그리지 않음
+function Kpi({
+  label,
+  placeholder,
+  width,
+  value,
+  unit,
+  note,
+}: {
+  label: string;
+  placeholder: boolean;
+  width: string;
+  value: string | null;
+  unit?: string;
+  note: string;
+}) {
+  return (
+    <div className="flex min-w-0 flex-col gap-0.5">
+      <dt className={LABEL}>{label}</dt>
+      <dd className="flex items-baseline gap-1">
+        <span className={KPI_VALUE}>
+          {placeholder ? (
+            <SkLine className={width} />
+          ) : value === null ? (
+            <span className="text-title-s font-semibold">{t.notProvided}</span>
+          ) : (
+            value
+          )}
+        </span>
+        {unit && !placeholder && value !== null && (
+          <span className="text-label-s text-text-muted">{unit}</span>
+        )}
+      </dd>
+      <dd className="text-caption text-text-muted">{note}</dd>
+    </div>
+  );
 }
 
-function deviceLabel(category: string): string {
-  return (t.deviceLabels as Record<string, string>)[category] ?? category;
+// 가로 막대 목록(보드 V8 많이 본 해변·화면·들어온 경로: 행 높이 32 · 사이 6 · 첫 행 진한 면)
+function BarList({
+  rows,
+}: {
+  rows: readonly { key: string; name: ReactNode; value: number | null }[];
+}) {
+  const max = Math.max(0, ...rows.map((r) => r.value ?? 0));
+  return (
+    <ul className="flex flex-col gap-1.5">
+      {rows.map((row, i) => {
+        const pct = row.value !== null && max > 0 ? (row.value / max) * 100 : 0;
+        return (
+          <li key={row.key} className="flex items-center gap-3">
+            <div className="relative h-8 min-w-0 flex-1 overflow-hidden rounded-admin-badge">
+              <svg aria-hidden="true" className="absolute inset-0 h-full w-full">
+                <rect
+                  width={`${pct}%`}
+                  height="100%"
+                  rx="4"
+                  className={i === 0 ? "fill-brand-border" : "fill-brand-weak"}
+                />
+              </svg>
+              <span className="relative block truncate pl-2.5 text-label leading-8 font-normal text-text-default">
+                {row.name}
+              </span>
+            </div>
+            <span className="w-13 shrink-0 text-right text-label font-medium tabular-nums">
+              {formatNumber(row.value)}
+            </span>
+          </li>
+        );
+      })}
+    </ul>
+  );
 }
 
-function languageLabel(code: string): string {
-  return (t.languageLabels as Record<string, string>)[code] ?? code;
+// 목록 칸 머리(제목 · 옅은 설명) + 열 이름 줄
+function ListHead({
+  id,
+  title,
+  note,
+  valueName,
+}: {
+  id: string;
+  title: string;
+  note: string;
+  valueName: string;
+}) {
+  return (
+    <>
+      <div className="flex items-baseline gap-2">
+        <h2 id={id} className={SECTION_TITLE}>
+          {title}
+        </h2>
+        <span className={SECTION_NOTE}>{note}</span>
+      </div>
+      <div className="mt-3 mb-1.5 flex justify-between text-caption text-text-muted">
+        <span>{t.colName}</span>
+        <span>{valueName}</span>
+      </div>
+    </>
+  );
 }
 
-export function StatsScreen({
+// 자리표시 막대 목록(행 5개, 같은 높이)
+const BAR_RHYTHM = ["w-[96px]", "w-[72px]", "w-[64px]", "w-[88px]", "w-[80px]"];
+
+function BarListSkeleton() {
+  return (
+    <ul aria-hidden="true" className="flex flex-col gap-1.5">
+      {BAR_RHYTHM.map((w, i) => (
+        <li key={i} className="flex items-center gap-3">
+          <span className="flex h-8 flex-1 items-center rounded-admin-badge bg-border-subtle pl-2.5 text-label">
+            <SkLine className={w} />
+          </span>
+          <span className="w-13 shrink-0 text-right text-label">
+            <SkLine className="w-[32px]" />
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+// 도넛(보드 V8 기기·화면 언어: 지름 140 · 가운데 합계). 비율은 받은 값의 합 기준, 값이 없으면 고리만
+const DONUT_FILLS = [
+  "stroke-brand-default",
+  "stroke-brand-border",
+  "stroke-border-note",
+  "stroke-border-strong",
+];
+const DONUT_SWATCH = [
+  "fill-brand-default",
+  "fill-brand-border",
+  "fill-border-note",
+  "fill-border-strong",
+];
+const RADIUS = 15.9155; // 둘레 100
+
+function Donut({
+  id,
+  title,
+  rows,
+  total,
+}: {
+  id: string;
+  title: string;
+  rows: readonly { key: string; label: string; value: number | null }[] | null;
+  total: number | null;
+}) {
+  let offset = 0;
+  const arcs =
+    rows && total !== null && total > 0
+      ? rows.slice(0, DONUT_FILLS.length).map((row, i) => {
+          const pct = row.value === null ? 0 : (row.value / total) * 100;
+          const arc = { key: row.key, pct, at: offset, i };
+          offset += pct;
+          return arc;
+        })
+      : [];
+  return (
+    <section aria-labelledby={id} className="min-w-0">
+      <h2 id={id} className={SECTION_TITLE}>
+        {title}
+      </h2>
+      <div className="mt-4 flex items-center gap-5">
+        <div className="relative size-[140px] shrink-0">
+          <svg
+            aria-hidden="true"
+            viewBox="0 0 36 36"
+            className="size-full -rotate-90"
+          >
+            <circle
+              cx="18"
+              cy="18"
+              r={RADIUS}
+              fill="none"
+              strokeWidth="4"
+              className="stroke-border-subtle"
+            />
+            {arcs.map((a) => (
+              <circle
+                key={a.key}
+                cx="18"
+                cy="18"
+                r={RADIUS}
+                fill="none"
+                strokeWidth="4"
+                strokeDasharray={`${a.pct} ${100 - a.pct}`}
+                strokeDashoffset={-a.at}
+                className={DONUT_FILLS[a.i]}
+              />
+            ))}
+          </svg>
+          <div className="absolute inset-0 flex flex-col items-center justify-center">
+            <span className="text-num-count font-normal tabular-nums">
+              {formatNumber(total)}
+            </span>
+            <span className="text-caption text-text-muted">{t.donutTotal}</span>
+          </div>
+        </div>
+        <div className="min-w-0 flex-1">
+          {rows === null ? (
+            <p className="text-body-s text-text-body">
+              {t.subReportUnavailable}
+            </p>
+          ) : rows.length === 0 ? (
+            <p className="text-body-s text-text-muted">{t.listEmpty}</p>
+          ) : (
+            <ul>
+              {rows.map((row, i) => {
+                const pct = sharePercent(row.value, total);
+                return (
+                  <li
+                    key={row.key}
+                    className="flex items-center gap-2 border-b border-border-default py-1.5 text-body-s"
+                  >
+                    <svg aria-hidden="true" className="size-2.5 shrink-0">
+                      <rect
+                        width="100%"
+                        height="100%"
+                        rx="2"
+                        className={
+                          DONUT_SWATCH[i] ?? "fill-border-default"
+                        }
+                      />
+                    </svg>
+                    <span className="flex-1 text-text-body">{row.label}</span>
+                    <b className="font-medium tabular-nums">
+                      {pct === null
+                        ? t.emptyValue
+                        : fill(t.percentUnit, { percent: pct })}
+                    </b>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+          {rows !== null && rows.length > 0 && (
+            <p className="mt-1.5 text-caption text-text-muted">{t.shareNote}</p>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function DonutSkeleton({ id, title }: { id: string; title: string }) {
+  return (
+    <section aria-labelledby={id} className="min-w-0">
+      <h2 id={id} className={SECTION_TITLE}>
+        {title}
+      </h2>
+      <div aria-hidden="true" className="mt-4 flex items-center gap-5">
+        <SkDonut className="size-[140px] [--sk-ring:16px]" />
+        <ul className="min-w-0 flex-1">
+          {["w-[56px]", "w-[40px]"].map((w, i) => (
+            <li
+              key={i}
+              className="flex items-center gap-2 border-b border-border-default py-1.5 text-body-s"
+            >
+              <span className="size-2.5 shrink-0 rounded-[2px] bg-border-default" />
+              <span className="flex-1">
+                <SkLine className={w} />
+              </span>
+              <SkLine className="w-[28px]" />
+            </li>
+          ))}
+        </ul>
+      </div>
+    </section>
+  );
+}
+
+function StatsBody({
   beachesBySlug,
 }: {
-  beachesBySlug: Record<string, BeachSlugName>;
+  beachesBySlug: Readonly<Record<string, BeachSlugName>>;
 }) {
   const session = useAuthSession();
   const snapshot = useSessionSnapshot();
-  const generation = snapshot.status === "signed_out" ? 0 : snapshot.generation;
-  const [range, setRange] = useState<StatsRange>("7d");
+  const signedIn = snapshot.status !== "signed_out";
+  const generation = signedIn ? snapshot.generation : 0;
+  // 보드 V8 기본 선택은 28일
+  const [range, setRange] = useState<StatsRange>("28d");
   const [reloadTick, setReloadTick] = useState(0);
   const key = `${range}|${reloadTick}|${generation}`;
-  const [loaded, setLoaded] = useState<{
-    key: string;
-    result: OpsResult<StatsResponse>;
-  } | null>(null);
+  const [loaded, setLoaded] = useState<Loaded | null>(null);
 
   useEffect(() => {
-    if (snapshot.status === "signed_out") return;
+    if (!signedIn) return;
     let live = true;
-    void fetchStats(range, () => session.accessToken()).then((result) => {
-      if (live) setLoaded({ key, result });
-    });
+    void withTimeout(fetchStats(range, () => session.accessToken())).then(
+      (result) => {
+        if (live) setLoaded({ key, result });
+      },
+    );
     return () => {
       live = false;
     };
-  }, [session, snapshot.status, key, range]);
+  }, [session, signedIn, key, range]);
 
-  const loading = snapshot.status !== "signed_out" && loaded?.key !== key;
-  const result = loaded?.key === key ? loaded.result : null;
-
+  // 같은 기간을 다시 읽는 중이면 받은 값을 둠(보드 L0 '다시 읽기 값 유지')
+  // 기간이 바뀌면 앞 값은 다른 기간, 다시 로그인했으면 앞 세션 값이라 버림
+  const [loadedRange, , loadedGeneration] = loaded?.key.split("|") ?? [];
+  const sameRange =
+    loadedRange === range && loadedGeneration === String(generation);
+  const current = signedIn && loaded && sameRange ? loaded : null;
+  const fetching = signedIn && loaded?.key !== key;
+  const pending = !signedIn || current === null;
+  const timing = useLoadTiming(pending);
+  const placeholder = pending || timing.phase !== "content";
+  const cls = loadClass(timing);
+  const result = placeholder ? null : current!.result;
   const data = result && result.ok ? result.body : null;
+  const refreshing = fetching && !pending;
+
   const isSample =
     (snapshot.status === "signed_in" && snapshot.pool === "demo") ||
     data?.sample === true;
   const reasons = data ? metadataReasons(data.period.metadata) : [];
+  const periodOk = data?.configured === true && data.period.status === "ok";
+  const period = periodOk ? data.period : null;
   const deviceTotal =
-    data && data.period.devices !== null
-      ? sumMetric(data.period.devices.map((d) => d.activeUsers))
+    period?.devices
+      ? sumMetric(period.devices.map((d) => d.activeUsers))
       : null;
   const languageTotal =
-    data && data.period.languages !== null
-      ? sumMetric(data.period.languages.map((l) => l.activeUsers))
+    period?.languages
+      ? sumMetric(period.languages.map((l) => l.activeUsers))
       : null;
+  const live =
+    data && data.realtime.status === "ok" ? data.realtime.activeUsers : null;
+  const ratio = perUser(period?.pageViews ?? null, period?.activeUsers ?? null);
 
   return (
-    <AdminShell title={t.title}>
-      <div className="space-y-6">
-        <header className="flex flex-wrap items-start justify-between gap-4">
-          <div className="space-y-1">
-            <h1 className="flex flex-wrap items-center gap-2 text-heading-l font-bold text-text-primary">
-              <span>{t.title}</span>
+    <>
+      <LoadingStatus
+        busy={signedIn && pending}
+        label={fill(messages.loading.screen, { name: t.title })}
+      />
+      <span role="status" className="sr-only">
+        {timing.slow ? messages.loading.slow : ""}
+      </span>
+      <div
+        aria-busy={pending || undefined}
+        className="flex w-full flex-col px-4 py-5 md:px-10 md:pt-6 md:pb-10"
+      >
+        {/* 머리(보드 .w-hd): 왼쪽 제목·지금 사용 중·설명·숫자 숨김 안내, 오른쪽 기간 단추 */}
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
+              <h1 className="text-title-l font-semibold text-text-default">
+                {t.title}
+              </h1>
+              <span className="inline-flex items-center gap-1.5 text-label-s text-text-body lg:ml-1.5">
+                <svg aria-hidden="true" className="size-2 shrink-0">
+                  <circle
+                    cx="50%"
+                    cy="50%"
+                    r="50%"
+                    className={
+                      !placeholder && live !== null
+                        ? "fill-success-icon"
+                        : "fill-border-strong"
+                    }
+                  />
+                </svg>
+                {t.liveLabel}{" "}
+                <b className="font-semibold text-text-default">
+                  {placeholder ? (
+                    <SkLine className="w-[24px] h-[8px]" />
+                  ) : live !== null ? (
+                    fill(t.liveCount, { count: formatNumber(live) })
+                  ) : (
+                    t.liveUnknown
+                  )}
+                </b>
+                <span className="text-text-muted">{t.liveWindow}</span>
+              </span>
               {isSample && (
                 <span
-                  className={`${BADGE} bg-status-warn-bg text-status-warn-fg`}
+                  className={`${BADGE} bg-status-stale-bg text-status-stale-fg`}
                 >
                   {t.sample}
                 </span>
               )}
-            </h1>
-            <p className="text-body-s text-text-muted">{t.intro}</p>
-            {data && (
-              <div className="flex flex-wrap items-center gap-2 pt-1 text-caption text-text-muted">
+            </div>
+            <p className="mt-0.5 text-label-s text-text-muted">
+              {fill(t.subtitle, { range: t.rangeLabel[range] })}
+            </p>
+            {/* 기준 시각·잠시 저장된 응답·새로 고침(시안에 없음, 기존 줄이라 남김) */}
+            <div className="mt-1 flex min-h-touch flex-wrap items-center gap-x-2 gap-y-1 text-caption text-text-muted lg:min-h-0">
+              {data ? (
                 <span>
                   {fill(t.fetchedAt, { time: kstDateTime(data.fetchedAt) })}
                 </span>
-                {data.cached && (
-                  <span
-                    className={`${BADGE} bg-bg-surface text-text-body ring-1 ring-border-default`}
-                  >
-                    {t.cachedBadge}
-                  </span>
-                )}
+              ) : (
+                <SkLine className="w-[120px] h-[8px]" />
+              )}
+              {data?.cached && (
+                <span
+                  className={`${BADGE} bg-bg-surface font-medium text-text-body ring-1 ring-border-default ring-inset`}
+                >
+                  {t.cachedBadge}
+                </span>
+              )}
+              {refreshing && (
+                <span className="inline-flex items-center gap-1 text-brand-default">
+                  <Spinner />
+                  {messages.loading.refreshing}
+                </span>
+              )}
+              <button
+                type="button"
+                aria-disabled={fetching || undefined}
+                onClick={() => !fetching && setReloadTick((n) => n + 1)}
+                className="inline-flex min-h-touch items-center font-medium text-brand-default underline underline-offset-2 aria-disabled:cursor-progress aria-disabled:opacity-60 lg:min-h-0"
+              >
+                {t.refresh}
+              </button>
+            </div>
+            {/* 숫자 숨김 안내: 응답을 받은 뒤 metadata가 있을 때만(L7: 로딩 중에는 자리도 두지 않음) */}
+            {!placeholder && reasons.length > 0 && (
+              <div className="mt-3 max-w-[760px]">
+                <div
+                  role="status"
+                  className="rounded-admin-control border border-border-default bg-bg-page py-2 pr-2.5 pl-3 text-label-s"
+                >
+                  <p className="font-semibold text-text-default">
+                    {reasons.includes("thresholding")
+                      ? t.hiddenTitle
+                      : t.limitedTitle}
+                  </p>
+                  {reasons.map((r) => (
+                    <p key={r} className="text-text-body">
+                      {t.hiddenReasons[r]}
+                    </p>
+                  ))}
+                </div>
+                <p className="mt-1.5 text-caption text-text-muted">
+                  {t.hiddenNote}
+                </p>
               </div>
             )}
           </div>
-          <Button
-            type="button"
-            variant="secondary"
-            disabled={loading}
-            onClick={() => setReloadTick((n) => n + 1)}
+          <div
+            role="group"
+            aria-label={t.rangeGroupLabel}
+            className="inline-flex w-fit shrink-0 overflow-hidden rounded-admin-control border border-border-strong shadow-card"
           >
-            {t.refresh}
-          </Button>
-        </header>
-
-        <div
-          role="group"
-          aria-label={t.rangeGroupLabel}
-          className="inline-flex flex-wrap gap-2"
-        >
-          {STATS_RANGES.map((r) => {
-            const active = range === r;
-            return (
-              <Button
-                key={r}
-                type="button"
-                variant={active ? "primary" : "secondary"}
-                aria-pressed={active}
-                onClick={() => setRange(r)}
-              >
-                {t.range[r]}
-              </Button>
-            );
-          })}
+            {STATS_RANGES.map((r) => {
+              const active = range === r;
+              return (
+                <button
+                  key={r}
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() => setRange(r)}
+                  className={`inline-flex h-touch items-center border-l border-border-strong px-3 text-label whitespace-nowrap first:border-l-0 lg:h-segment ${
+                    active
+                      ? "bg-bg-page font-semibold text-text-default"
+                      : "bg-bg-surface font-medium text-text-body hover:bg-bg-page"
+                  }`}
+                >
+                  {t.range[r]}
+                </button>
+              );
+            })}
+          </div>
         </div>
 
-        {loading && !data && (
-          <Notice tone="neutral" title={t.loading} />
-        )}
-
-        {!loading && result && !result.ok && (
-          <Notice tone="fail" title={t.loadError}>
-            {t.loadErrorHint}
-          </Notice>
+        {!placeholder && result && !result.ok && (
+          <div className="mt-6">
+            <Notice tone="fail" title={t.loadError} role="alert">
+              <p>{t.loadErrorHint}</p>
+              {"requestId" in result && result.requestId && (
+                <p>{fill(t.requestId, { id: result.requestId })}</p>
+              )}
+              <Button
+                variant="secondary"
+                size="small"
+                className="mt-2"
+                onClick={() => setReloadTick((n) => n + 1)}
+              >
+                {t.retry}
+              </Button>
+            </Notice>
+          </div>
         )}
 
         {data && !data.configured && (
-          <Notice tone="warn" title={t.unconfiguredTitle}>
-            {t.unconfiguredBody}
-          </Notice>
+          <div className="mt-6">
+            <Notice tone="warn" title={t.unconfiguredTitle} role="status">
+              {t.unconfiguredBody}
+            </Notice>
+          </div>
         )}
 
-        {data && data.configured && (
-          <>
-            {reasons.length > 0 && (
-              <Notice tone="warn" title={t.metadataTitle}>
-                <p>{t.metadataBody}</p>
-                <ul className="mt-2 list-disc space-y-1 pl-5">
-                  {reasons.map((key) => (
-                    <li key={key}>{t.metadataReasons[key]}</li>
-                  ))}
-                </ul>
-              </Notice>
+        {data && data.configured && data.period.status === "unavailable" && (
+          <div className="mt-6">
+            <Notice tone="warn" title={t.periodUnavailable} role="status">
+              {t.subReportUnavailable}
+            </Notice>
+          </div>
+        )}
+
+        <div className={cls}>
+          {/* KPI 4칸(보드 V8: 사용자 · 화면 조회 · 새 사용자 비율 · 사용자당 화면) */}
+          <dl className="mt-7 grid grid-cols-2 gap-x-8 gap-y-5 lg:grid-cols-4">
+            <Kpi
+              label={t.kpiUsers}
+              placeholder={placeholder}
+              width="w-[64px]"
+              value={period ? formatNumber(period.activeUsers) : null}
+              note={t.rangeLabel[range]}
+            />
+            <Kpi
+              label={t.kpiViews}
+              placeholder={placeholder}
+              width="w-[80px]"
+              value={period ? formatNumber(period.pageViews) : null}
+              note={t.rangeLabel[range]}
+            />
+            {/* 새 사용자 비율: 응답에 새 사용자 수가 없어 계산하지 않음 */}
+            <Kpi
+              label={t.kpiNewRatio}
+              placeholder={false}
+              width="w-[32px]"
+              value={null}
+              note={t.notProvidedHint}
+            />
+            <Kpi
+              label={t.kpiPerUser}
+              placeholder={placeholder}
+              width="w-[32px]"
+              value={ratio === null ? (period ? t.emptyValue : null) : ratio.toFixed(1)}
+              note={t.perUserHint}
+            />
+          </dl>
+
+          {/* 일별 사용자(보드: 그래프 200 + 날짜 줄 24). 응답에 일별 값이 없어 같은 크기 안내 상자 */}
+          <section aria-labelledby="stats-daily-users" className="mt-7">
+            <h2 id="stats-daily-users" className={SECTION_TITLE}>
+              {t.dailyUsers}
+            </h2>
+            <NotProvided className="mt-5 h-[224px]" />
+          </section>
+
+          <div className="mt-7 grid gap-8 lg:grid-cols-2">
+            <section aria-labelledby="stats-hourly">
+              <h2 id="stats-hourly" className={SECTION_TITLE}>
+                {t.hourlyUsers}
+              </h2>
+              {/* 보드: 위 여백 36 + 막대 120 + 시각 줄 22 */}
+              <NotProvided className="mt-9 h-[142px]" />
+            </section>
+            <section aria-labelledby="stats-daily-views">
+              <h2 id="stats-daily-views" className={SECTION_TITLE}>
+                {t.dailyViews}
+              </h2>
+              <NotProvided className="mt-5 h-[152px]" />
+            </section>
+          </div>
+
+          <div className="mt-7 grid gap-8 lg:grid-cols-2">
+            {placeholder ? (
+              <>
+                <DonutSkeleton id="stats-devices" title={t.devicesTitle} />
+                <DonutSkeleton id="stats-languages" title={t.languagesTitle} />
+              </>
+            ) : (
+              <>
+                <Donut
+                  id="stats-devices"
+                  title={t.devicesTitle}
+                  rows={
+                    period
+                      ? (period.devices?.map((d) => ({
+                          key: d.category,
+                          label: deviceLabel(d.category),
+                          value: d.activeUsers,
+                        })) ?? null)
+                      : null
+                  }
+                  total={deviceTotal}
+                />
+                <Donut
+                  id="stats-languages"
+                  title={t.languagesTitle}
+                  rows={
+                    period
+                      ? (period.languages?.map((l) => ({
+                          key: l.language,
+                          label: languageLabel(l.language),
+                          value: l.activeUsers,
+                        })) ?? null)
+                      : null
+                  }
+                  total={languageTotal}
+                />
+              </>
             )}
+          </div>
 
-            <div className="grid gap-4 md:grid-cols-2">
-              <section aria-labelledby="stats-realtime-heading" className={CARD}>
-                <h2
-                  id="stats-realtime-heading"
-                  className="text-heading-s font-semibold text-text-primary"
-                >
-                  {t.realtimeTitle}
-                </h2>
-                {data.realtime.status === "unavailable" ? (
-                  <p className="mt-3 text-body-s text-status-stale-fg">
-                    {t.realtimeUnavailable}
-                  </p>
-                ) : (
-                  <dl className="mt-4 grid grid-cols-2 gap-4">
-                    <div>
-                      <dt className="text-caption text-text-muted">
-                        {t.activeUsers}
-                      </dt>
-                      <dd className="mt-1 text-heading-m font-bold text-text-primary">
-                        {formatPeople(data.realtime.activeUsers)}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt className="text-caption text-text-muted">
-                        {t.pageViews}
-                      </dt>
-                      <dd className="mt-1 text-heading-m font-bold text-text-primary">
-                        {formatViews(data.realtime.pageViews)}
-                      </dd>
-                    </div>
-                  </dl>
-                )}
-              </section>
+          <div className="mt-7 grid gap-7 lg:grid-cols-3">
+            <section aria-labelledby="stats-beaches" className="min-w-0">
+              <ListHead
+                id="stats-beaches"
+                title={t.topBeachesTitle}
+                note={t.topBeachesNote}
+                valueName={t.colViews}
+              />
+              {placeholder ? (
+                <BarListSkeleton />
+              ) : !period || period.topBeaches === null ? (
+                <p className="text-body-s text-text-body">
+                  {t.subReportUnavailable}
+                </p>
+              ) : period.topBeaches.length === 0 ? (
+                <p className="text-body-s text-text-muted">
+                  {t.topBeachesEmpty}
+                </p>
+              ) : (
+                <BarList
+                  rows={period.topBeaches.map((row) => {
+                    const label = beachLabel(row, beachesBySlug);
+                    return {
+                      key: row.path,
+                      value: row.pageViews,
+                      name:
+                        label.name ?? (
+                          <span className="text-text-muted">
+                            {t.nameUnknown}
+                          </span>
+                        ),
+                    };
+                  })}
+                />
+              )}
+            </section>
+            <section aria-labelledby="stats-screens" className="min-w-0">
+              <ListHead
+                id="stats-screens"
+                title={t.topScreensTitle}
+                note={t.topScreensNote}
+                valueName={t.colViews}
+              />
+              {/* 응답에 화면별 조회가 없음(시안 행 5개 높이: 32×5 + 6×4) */}
+              <NotProvided
+                className="h-[184px]"
+                title={t.notProvided}
+                hint={t.listNotProvided}
+              />
+            </section>
+            <section aria-labelledby="stats-referrers" className="min-w-0">
+              <ListHead
+                id="stats-referrers"
+                title={t.referrersTitle}
+                note={t.referrersNote}
+                valueName={t.colSessions}
+              />
+              <NotProvided
+                className="h-[184px]"
+                title={t.notProvided}
+                hint={t.listNotProvided}
+              />
+            </section>
+          </div>
 
-              <section aria-labelledby="stats-period-heading" className={CARD}>
-                <h2
-                  id="stats-period-heading"
-                  className="text-heading-s font-semibold text-text-primary"
-                >
-                  {t.periodTitle} ({t.range[data.range]})
-                </h2>
-                {data.period.status === "unavailable" ? (
-                  <p className="mt-3 text-body-s text-status-stale-fg">
-                    {t.periodUnavailable}
-                  </p>
-                ) : (
-                  <dl className="mt-4 grid grid-cols-2 gap-4">
-                    <div>
-                      <dt className="text-caption text-text-muted">
-                        {t.activeUsers}
-                      </dt>
-                      <dd className="mt-1 text-heading-m font-bold text-text-primary">
-                        {formatPeople(data.period.activeUsers)}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt className="text-caption text-text-muted">
-                        {t.pageViews}
-                      </dt>
-                      <dd className="mt-1 text-heading-m font-bold text-text-primary">
-                        {formatViews(data.period.pageViews)}
-                      </dd>
-                    </div>
-                  </dl>
-                )}
-              </section>
-            </div>
+          <p className="mt-6 text-caption text-text-muted">{t.foot}</p>
 
-            {data.period.status === "ok" && (
-              <div className="grid gap-4 lg:grid-cols-3">
-                <section
-                  aria-labelledby="stats-beaches-heading"
-                  className={`${CARD} lg:col-span-1`}
-                >
-                  <h2
-                    id="stats-beaches-heading"
-                    className="text-heading-s font-semibold text-text-primary"
-                  >
-                    {t.topBeachesTitle}
-                  </h2>
-                  {data.period.topBeaches === null ? (
-                    <p className="mt-3 text-body-s text-status-warn-fg">
-                      {t.subReportUnavailable}
-                    </p>
-                  ) : data.period.topBeaches.length === 0 ? (
-                    <p className="mt-3 text-body-s text-text-muted">
-                      {t.topBeachesEmpty}
-                    </p>
-                  ) : (
-                    <ul className="mt-3 divide-y divide-border-subtle">
-                      {data.period.topBeaches.map((row) => {
-                        const label = beachLabel(row, beachesBySlug);
-                        return (
-                          <li
-                            key={row.path}
-                            className="flex items-center justify-between gap-3 py-2.5 text-body-s"
-                          >
-                            <div className="min-w-0">
-                              <p className="truncate font-medium text-text-primary">
-                                {label.title}
-                              </p>
-                              <p className="truncate text-caption text-text-muted">
-                                {label.region ?? row.path}
-                              </p>
-                            </div>
-                            <span className="shrink-0 font-semibold text-text-primary">
-                              {formatViews(row.pageViews)}
-                            </span>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  )}
-                </section>
-
-                <section aria-labelledby="stats-devices-heading" className={CARD}>
-                  <h2
-                    id="stats-devices-heading"
-                    className="text-heading-s font-semibold text-text-primary"
-                  >
-                    {t.devicesTitle}
-                  </h2>
-                  {deviceTotal !== null && (
-                    <p className="mt-0.5 text-caption text-text-muted">
-                      {t.shareNote}
-                    </p>
-                  )}
-                  {data.period.devices === null ? (
-                    <p className="mt-3 text-body-s text-status-warn-fg">
-                      {t.subReportUnavailable}
-                    </p>
-                  ) : data.period.devices.length === 0 ? (
-                    <p className="mt-3 text-body-s text-text-muted">
-                      {t.listEmpty}
-                    </p>
-                  ) : (
-                    <ul className="mt-3 divide-y divide-border-subtle">
-                      {data.period.devices.map((row) => {
-                        const pct = sharePercent(row.activeUsers, deviceTotal);
-                        return (
-                          <li
-                            key={row.category}
-                            className="flex items-center justify-between gap-3 py-2.5 text-body-s"
-                          >
-                            <span className="font-medium text-text-primary">
-                              {deviceLabel(row.category)}
-                            </span>
-                            <span className="text-text-body">
-                              {formatPeople(row.activeUsers)}
-                              {pct !== null && (
-                                <span className="ml-1.5 text-caption text-text-muted">
-                                  ({fill(t.percentUnit, { percent: pct })})
-                                </span>
-                              )}
-                            </span>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  )}
-                </section>
-
-                <section
-                  aria-labelledby="stats-languages-heading"
-                  className={CARD}
-                >
-                  <h2
-                    id="stats-languages-heading"
-                    className="text-heading-s font-semibold text-text-primary"
-                  >
-                    {t.languagesTitle}
-                  </h2>
-                  {languageTotal !== null && (
-                    <p className="mt-0.5 text-caption text-text-muted">
-                      {t.shareNote}
-                    </p>
-                  )}
-                  {data.period.languages === null ? (
-                    <p className="mt-3 text-body-s text-status-warn-fg">
-                      {t.subReportUnavailable}
-                    </p>
-                  ) : data.period.languages.length === 0 ? (
-                    <p className="mt-3 text-body-s text-text-muted">
-                      {t.listEmpty}
-                    </p>
-                  ) : (
-                    <ul className="mt-3 divide-y divide-border-subtle">
-                      {data.period.languages.map((row) => {
-                        const pct = sharePercent(
-                          row.activeUsers,
-                          languageTotal,
-                        );
-                        return (
-                          <li
-                            key={row.language}
-                            className="flex items-center justify-between gap-3 py-2.5 text-body-s"
-                          >
-                            <span className="font-medium text-text-primary">
-                              {languageLabel(row.language)}
-                            </span>
-                            <span className="text-text-body">
-                              {formatPeople(row.activeUsers)}
-                              {pct !== null && (
-                                <span className="ml-1.5 text-caption text-text-muted">
-                                  ({fill(t.percentUnit, { percent: pct })})
-                                </span>
-                              )}
-                            </span>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  )}
-                </section>
-              </div>
-            )}
-
-            <section aria-labelledby="stats-events-heading" className={CARD}>
+          {/* 수집 이벤트 목록(시안에 없음 · 11/13 결정 '두지 않음'. 기존 칸이라 지우지 않고 보고) */}
+          {data && data.configured && (
+            <section
+              aria-labelledby="stats-events"
+              className="mt-8 border-t border-border-default pt-6"
+            >
               <div className="flex flex-wrap items-baseline justify-between gap-2">
-                <h2
-                  id="stats-events-heading"
-                  className="text-heading-s font-semibold text-text-primary"
-                >
+                <h2 id="stats-events" className={SECTION_TITLE}>
                   {t.eventsTitle}
                 </h2>
                 <p className="text-caption text-text-muted">{t.eventsNote}</p>
               </div>
-              <ul className="mt-3 divide-y divide-border-subtle">
+              <ul className="mt-3 divide-y divide-border-default">
                 {data.events.map((ev) => (
                   <li
                     key={ev.name}
                     className="flex items-center justify-between gap-3 py-2.5 text-body-s"
                   >
-                    <code className="font-mono text-caption text-text-primary">
+                    <code className="font-mono text-caption text-text-default">
                       {ev.name}
                     </code>
                     {ev.status === "collecting" ? (
                       <span className={`${BADGE} ${SUCCESS_BADGE}`}>
-                        <span
-                          aria-hidden="true"
-                          className="size-2 rounded-full bg-success-icon"
-                        />
                         {t.eventStatus.collecting}
                       </span>
                     ) : (
                       <span
-                        className={`${BADGE} bg-bg-surface text-text-muted ring-1 ring-border-strong`}
+                        className={`${BADGE} bg-bg-surface text-text-muted ring-1 ring-border-strong ring-inset`}
                       >
-                        <span
-                          aria-hidden="true"
-                          className="size-2 rounded-full border border-border-strong"
-                        />
                         {t.eventStatus.not_collecting}
                       </span>
                     )}
@@ -446,9 +813,23 @@ export function StatsScreen({
                 ))}
               </ul>
             </section>
-          </>
-        )}
+          )}
+        </div>
       </div>
+    </>
+  );
+}
+
+export function StatsScreen({
+  beachesBySlug,
+}: {
+  beachesBySlug: Record<string, BeachSlugName>;
+}) {
+  // 세션 확인 중(첫 진입)에도 같은 요소를 그려 자리표시를 이어서 씀(보드 L10)
+  const body = <StatsBody beachesBySlug={beachesBySlug} />;
+  return (
+    <AdminShell title={t.title} loading={body}>
+      {body}
     </AdminShell>
   );
 }
