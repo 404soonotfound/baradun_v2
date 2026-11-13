@@ -418,8 +418,10 @@ function Todos({ parts }: { parts: Parts }) {
   const pending = [parts.collection, parts.inquiries, parts.notices].some(
     (p) => p.state === "loading",
   );
-  const slot = useSlot(pending ? { state: "loading" } : { state: "forbidden" });
-  const loading = pending || slot.placeholder;
+  // 세 칸을 묶어 하나의 로딩 시간으로 봄
+  const timing = useLoadTiming(pending);
+  const slot = { cls: loadClass(timing) };
+  const loading = pending || timing.phase !== "content";
   return (
     <section aria-labelledby="home-todo" className="flex flex-col gap-2">
       <h2

@@ -76,7 +76,7 @@ export function watchShellStatus(
       entry?.owner === owner && Date.now() - entry.at < STATUS_FRESH_MS;
     if ((!force && fresh) || inflight === owner) return;
     inflight = owner;
-    // 시간 제한(D16-E1 30초)·예외는 '확인 못 함'. 멈춘 요청이 '상태 확인 중'에 머물지 않게 함
+    // 시간 제한(D26-4 15초, settle 기본값)·예외는 '확인 못 함'. 멈춘 요청이 '상태 확인 중'에 머물지 않게 함
     void settle(async () =>
       partOf(await fetchCollection(accessToken), (body) => body),
     ).then((part) => {
