@@ -39,6 +39,7 @@ jobs:
     permissions:
       contents: read
       checks: read # ci-ok 확인
+      actions: read # 앞 커밋들의 main CI 작업 결과(인프라 영역 검사 여부)
       issues: write # 결과 댓글(연결 이슈)
       pull-requests: write # 결과 댓글(연결 이슈가 없으면 PR)
       id-token: write # OIDC 토큰은 인프라 작업만 받음

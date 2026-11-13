@@ -602,6 +602,65 @@ export function touchesInfra(paths: readonly string[]): boolean {
   );
 }
 
+// 인프라 배포에 들어가는 영역(스택·함수 코드·계약)을 검사하는 main CI 작업(ci.yml)
+// main push CI는 바뀐 영역만 검사하므로 맨 위 커밋의 ci-ok만으로는 그 트리의 인프라가 검사됐는지 알 수 없음
+export const INFRA_CI_JOBS = ["infra", "services", "contracts"] as const;
+
+export interface CommitCi {
+  readonly sha: string;
+  // 이 커밋의 main push CI 작업별 결과(진행 중이면 null 값). 실행이 없으면(여러 커밋 push의 중간 커밋 등) null
+  readonly jobs: Readonly<Record<string, string | null>> | null;
+  readonly touchesInfra: boolean;
+}
+
+export interface InfraCiCheck {
+  readonly unchecked: readonly string[]; // 검사를 확인하지 못한 이유(작업마다 하나)
+  readonly pending: boolean; // 이유 중 진행 중인 실행이 있음(끝나면 다시 볼 수 있음)
+}
+
+// 맨 위 커밋부터 거슬러 올라가며(first-parent) 작업마다 그 작업이 성공한 실행을 찾음(사이트 deploy-plan.sh와 같은 생각)
+// - 건너뜀(skipped)은 그 영역이 앞 push와 같다는 뜻이라 계속 거슬러 감
+// - 실패·취소·진행 중, 실행에 작업이 없음, 실행 없는 커밋이 인프라 파일을 바꿈, 목록 끝까지 못 찾음 → 검사 안 됨(모르는 것을 통과로 보지 않음)
+export function infraCiCheck(
+  commitAt: (index: number) => CommitCi | undefined,
+  jobs: readonly string[] = INFRA_CI_JOBS,
+): InfraCiCheck {
+  const unchecked: string[] = [];
+  let pending = false;
+  for (const job of jobs) {
+    let reason: string | null = "확인할 커밋 이력이 끝남";
+    for (let i = 0; ; i++) {
+      const c = commitAt(i);
+      if (c === undefined) break;
+      const short = c.sha.slice(0, 7);
+      if (c.jobs === null) {
+        if (c.touchesInfra) {
+          reason = `${short}: main CI 실행을 찾지 못했는데 인프라 파일을 바꿈`;
+          break;
+        }
+        continue;
+      }
+      const conclusion = c.jobs[job];
+      if (conclusion === "success") {
+        reason = null;
+        break;
+      }
+      if (conclusion === "skipped") continue;
+      if (conclusion === null) pending = true;
+      reason = `${short}: main CI의 ${job} 작업이 ${
+        conclusion === undefined
+          ? "없음"
+          : conclusion === null
+            ? "진행 중"
+            : conclusion
+      }`;
+      break;
+    }
+    if (reason !== null) unchecked.push(`${job} — ${reason}`);
+  }
+  return { unchecked, pending };
+}
+
 // 12자리 AWS 계정 번호를 <계정>으로(이슈 댓글은 공개 저장소에 남음)
 export function redactAccount(text: string): string {
   return text.replace(/(?<!\d)\d{12}(?!\d)/g, "<계정>");
