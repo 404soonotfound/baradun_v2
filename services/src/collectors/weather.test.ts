@@ -360,7 +360,7 @@ describe("collectWeather", () => {
     expect(await collectWeather(s.deps)).toEqual({
       status: "partial",
       slotId: "202611050915",
-      failures: [{ source: "short", reason: "result:01" }],
+      failures: [{ source: "short", reason: "result:01", code: "01" }],
     });
     expect(calls(s.urls, "getVilageFcst")).toBe(2);
     expect((await stored(s.state)).short).toBeNull();
@@ -391,8 +391,8 @@ describe("collectWeather", () => {
     expect(result).toMatchObject({ status: "partial" });
     expect((result as { failures: readonly unknown[] }).failures).toEqual(
       expect.arrayContaining([
-        { source: "mid_ta", reason: "result:22" },
-        { source: "mid_land", reason: "result:10" },
+        { source: "mid_ta", reason: "result:22", code: "22" },
+        { source: "mid_land", reason: "result:10", code: "10" },
         { source: "short", reason: "not_json" },
       ]),
     );
@@ -418,6 +418,7 @@ describe("collectWeather", () => {
     ).toContainEqual({
       source: "short",
       reason: "result:01",
+      code: "01",
     });
     expect(
       s.events().find((e) => e.event === "weather_target_failed"),
@@ -440,6 +441,7 @@ describe("collectWeather", () => {
     ).toContainEqual({
       source: "now",
       reason: "result:01",
+      code: "01",
       count: 21,
     });
     expect(
