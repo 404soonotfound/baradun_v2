@@ -44,7 +44,7 @@ test.beforeEach(async ({ page }) => {
   await expect(page.getByRole("heading", { name: "운영 홈" })).toBeVisible();
 });
 
-test("메뉴 순서·지금 화면 표시, 아직 없는 화면은 '준비 중' 자리로 열린다", async ({
+test("메뉴 순서·지금 화면 표시, 다른 메뉴로 이동하면 aria-current가 바뀐다", async ({
   page,
 }) => {
   await openMenu(page);
@@ -58,7 +58,6 @@ test("메뉴 순서·지금 화면 표시, 아직 없는 화면은 '준비 중' 
   await expect(
     page.getByRole("heading", { name: "이용 통계", level: 1 }),
   ).toBeVisible();
-  await expect(page.getByText("이 화면은 준비하고 있어요")).toBeVisible();
   await openMenu(page);
   await expect(
     nav(page).getByRole("link", { name: "이용 통계" }),
