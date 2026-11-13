@@ -198,6 +198,15 @@ test.describe("PC 왼쪽 메뉴 (GH-450, 시안 V1 aside)", () => {
     await expect(dialog).toBeVisible();
     const input = dialog.getByRole("combobox", { name: "화면 이름으로 찾기" });
     await expect(input).toBeFocused();
+    // 검색어 없이 ↑로 맨 끝(내 계정)에 가면 그 항목이 목록 안에서 보이게 스크롤됨(Codex P2)
+    // 창 높이를 줄여 목록(최대 50vh)이 꼭 넘치게 한 뒤 원래 크기로 되돌림
+    const viewport = page.viewportSize();
+    await page.setViewportSize({ width: 1280, height: 560 });
+    await input.press("ArrowUp");
+    const last = dialog.getByRole("option", { name: "내 계정" });
+    await expect(last).toHaveAttribute("aria-selected", "true");
+    await expect(last).toBeInViewport();
+    if (viewport) await page.setViewportSize(viewport);
     await input.fill("통계");
     await expect(dialog.getByRole("option")).toHaveText(["이용 통계"]);
     await expectNoA11yViolations(page);
