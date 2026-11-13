@@ -512,7 +512,7 @@ function ReasonBox({
                 aria-describedby={`${nameId}-${index}`}
                 onClick={() => onOpenWarning(item)}
                 // 보이는 줄은 18px, 누르는 영역은 위아래로 넓혀 44px(BRD-39)
-                className="relative mt-1.5 inline-flex items-center gap-0.5 text-caption font-bold text-status-blocked-fg before:absolute before:inset-x-0 before:-inset-y-[13px] before:content-['']"
+                className="relative mt-1.5 inline-flex items-center gap-0.5 text-caption font-bold text-status-blocked-fg before:absolute before:inset-x-0 before:-inset-y-[14px] before:content-['']"
               >
                 {t("openWarning")}
                 <ChevronRight aria-hidden="true" size={12} strokeWidth={2.6} />
