@@ -300,7 +300,7 @@ test.describe("데이터 문의", () => {
     expect(bodies[0]).not.toHaveProperty("activity");
   });
 
-  test("접수되면 완료를 알리고 임시 저장을 지움", async ({ page }) => {
+  test("접수되면 완료를 알리고 임시 저장을 지움 @smoke", async ({ page }) => {
     await page.route("**/api/inquiries**", (route) =>
       route.fulfill({
         status: 201,

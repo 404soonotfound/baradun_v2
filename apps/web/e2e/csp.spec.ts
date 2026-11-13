@@ -142,7 +142,7 @@ test.describe("보안 응답 헤더 및 CSP 검증 (BRD-118)", () => {
     ).toEqual([]);
   }
 
-  test("홈(/)에서 CSP 위반 및 하이드레이션 오류가 없다", async ({ page }) => {
+  test("홈(/)에서 CSP 위반 및 하이드레이션 오류가 없다 @smoke", async ({ page }) => {
     await assertZeroCspViolations(page, "/");
   });
 
