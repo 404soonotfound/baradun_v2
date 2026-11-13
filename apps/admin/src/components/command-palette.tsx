@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 import { messages } from "@/lib/messages";
+import { startNavigation } from "@/lib/navigation";
 import { SearchIcon, type NavIcon } from "./nav-icons";
 
 // ⌘K 찾기 (GH-450, 시안 4차 V7). 지금은 '화면' 묶음만: 메뉴 화면 이름으로 찾아 엶
@@ -65,6 +66,8 @@ export function CommandPalette({
   const go = (item: PaletteItem | undefined) => {
     if (!item) return;
     close();
+    // 찾기 창에서 고른 화면도 메뉴처럼 선택·진행 막대를 바로 보임
+    startNavigation(item.href, window.location.pathname);
     router.push(item.href);
   };
 

@@ -29,9 +29,17 @@ import {
   useReceivedCount,
 } from "@/lib/inquiry-badge";
 import { fill, messages } from "@/lib/messages";
+import {
+  finishNavigation,
+  internalHref,
+  pendingNavigation,
+  startNavigation,
+  subscribeNavigation,
+} from "@/lib/navigation";
 import { roleLabel } from "@/lib/roles";
 import { useShellStatus, type ShellStatus } from "@/lib/shell-status";
 import { CommandPalette } from "./command-palette";
+import { LoadingStatus, markFirstPaint, NavProgress, SkLine } from "./loading";
 import {
   AuditIcon,
   BeachesIcon,
@@ -55,6 +63,8 @@ import { SessionGuard, SessionNotices } from "./session-guard";
 // - 태블릿(768~1023px): 아이콘 레일 72px. 포커스·마우스 올림 때 이름 말풍선(useRailTip), 펼치기 버튼으로 이름까지 보임
 // - 모바일(767px 이하): 위 앱 바(메뉴 · 화면 이름 · 계정) + 왼쪽 서랍(포커스 가둠, Esc·바깥 누르기로 닫음, 배경 스크롤 잠금)
 // 지금 화면은 강조 + aria-current="page". 판단 상태를 바꾸는 메뉴는 없음(G1)
+// 로딩(GH-462, 보드 L9·L10): 메뉴·링크를 누르면 선택이 바로 바뀌고 본문 위 2px 진행 막대(150ms 뒤)
+//   세션 확인이 끝나기 전(첫 진입)에는 틀 + 자리표시만(계정·상태 칸은 자리표시, 본문은 화면이 준 loading)
 
 const t = messages.nav;
 
@@ -151,6 +161,17 @@ function RailTip({ tip }: { tip: Tip | null }) {
   );
 }
 
+// 이동 중이면 누른 주소, 아니면 지금 주소(메뉴 선택이 새 화면을 기다리지 않고 바로 바뀌게)
+function useActivePath(): string {
+  const pathname = usePathname();
+  const pending = useSyncExternalStore(
+    subscribeNavigation,
+    pendingNavigation,
+    () => null,
+  );
+  return pending?.href ?? pathname;
+}
+
 // 정적 내보내기는 trailingSlash라 주소 끝 / 를 맞춰 비교함
 function isCurrent(pathname: string, href: string): boolean {
   const path = pathname.endsWith("/") ? pathname : `${pathname}/`;
@@ -166,8 +187,9 @@ function NavList({
   onNavigate?: () => void;
 }) {
   const compact = tip !== undefined;
-  const pathname = usePathname();
-  const received = useReceivedCount(badgeOwner(useSessionSnapshot()));
+  const pathname = useActivePath();
+  const snapshot = useSessionSnapshot();
+  const received = useReceivedCount(badgeOwner(snapshot));
   return (
     <nav aria-label={t.label} className="flex flex-col gap-4 lg:gap-5">
       {GROUPS.map((group, i) => (
@@ -212,6 +234,12 @@ function NavList({
                   className={`size-4 shrink-0 ${current ? "text-brand-default" : "text-text-muted"}`}
                 />
                 {!compact && name}
+                {/* 세션 확인 전: 문의 수 자리표시(펼친 메뉴만) */}
+                {href === "/inquiries/" &&
+                  !compact &&
+                  snapshot.status === "signed_out" && (
+                    <SkLine className="ml-auto h-[9px] w-[10px]" />
+                  )}
                 {badge !== null && (
                   <span
                     aria-hidden="true"
@@ -254,7 +282,7 @@ function AccountBlock({
   onNavigate?: () => void;
 }) {
   const compact = tip !== undefined;
-  const pathname = usePathname();
+  const pathname = useActivePath();
   const snapshot = useSessionSnapshot();
   const logout = useLogout();
   if (snapshot.status === "signed_out") return null;
@@ -401,11 +429,15 @@ function Workspace() {
           {messages.brand.name}
         </span>
         <span ref={line} className="truncate">
-          <span className="text-caption text-text-body">
-            {shown
-              ? fill(t.workspace, { sub: messages.brand.sub, role: shown })
-              : messages.brand.sub}
-          </span>
+          {snapshot.status === "signed_out" ? (
+            <SkLine className="h-[9px] w-[79px]" />
+          ) : (
+            <span className="text-caption text-text-body">
+              {shown
+                ? fill(t.workspace, { sub: messages.brand.sub, role: shown })
+                : messages.brand.sub}
+            </span>
+          )}
         </span>
       </span>
     </Link>
@@ -452,6 +484,32 @@ function StatusBlock({ status }: { status: ShellStatus }) {
         : status.kind === "loading"
           ? t.statusLoading
           : t.statusUnknown;
+  if (status.kind === "loading") {
+    // 받기 전에는 같은 세 줄 자리에 자리표시(색 점은 정상·실패 색을 미리 보이지 않게 회색)
+    return (
+      <div
+        role="group"
+        aria-label={t.statusLabel}
+        aria-busy="true"
+        className="flex flex-col gap-1 border-t border-border-default pt-3.5 text-label-s text-text-body"
+      >
+        <span className="sr-only">{head}</span>
+        <p className="flex items-center gap-2">
+          <span
+            aria-hidden="true"
+            className="size-2 shrink-0 rounded-full bg-border-strong"
+          />
+          <SkLine className="h-[8px] w-[72px]" />
+        </p>
+        <p>
+          <SkLine className="h-[8px] w-[104px]" />
+        </p>
+        <p className="text-label-xs">
+          <SkLine className="h-[8px] w-[136px]" />
+        </p>
+      </div>
+    );
+  }
   return (
     <div
       role="group"
@@ -471,13 +529,11 @@ function StatusBlock({ status }: { status: ShellStatus }) {
           {head}
         </span>
       </p>
-      {status.kind !== "loading" && (
-        <p className="text-text-muted tabular-nums">
-          {status.kind !== "unknown" && status.published !== null
-            ? fill(t.publishedAt, { time: status.published })
-            : t.publishedUnknown}
-        </p>
-      )}
+      <p className="text-text-muted tabular-nums">
+        {status.kind !== "unknown" && status.published !== null
+          ? fill(t.publishedAt, { time: status.published })
+          : t.publishedUnknown}
+      </p>
       <p className="text-label-xs text-text-muted tabular-nums">
         {VERSION_DATE && VERSION_SHA
           ? fill(t.version, { date: VERSION_DATE, sha: VERSION_SHA })
@@ -491,7 +547,7 @@ function StatusBlock({ status }: { status: ShellStatus }) {
 // 메뉴는 단추 위로 펼침. Esc·바깥 누르기·포커스가 밖으로 나가면 닫고, Esc면 단추로 포커스를 돌려줌
 // 메뉴는 보이는 자리(위)와 달리 DOM에서 단추 뒤에 둠 → 단추에서 Tab으로 바로 메뉴 항목에 닿음
 function UserRow() {
-  const pathname = usePathname();
+  const pathname = useActivePath();
   const snapshot = useSessionSnapshot();
   const logout = useLogout();
   const [open, setOpen] = useState(false);
@@ -506,7 +562,23 @@ function UserRow() {
     document.addEventListener("pointerdown", onPointer);
     return () => document.removeEventListener("pointerdown", onPointer);
   }, [open]);
-  if (snapshot.status === "signed_out") return null;
+  if (snapshot.status === "signed_out") {
+    // 세션 확인 전: 아바타·이메일 자리표시(보드 L10). 메뉴 단추는 아직 쓸 수 없어 아이콘만
+    return (
+      <div
+        aria-hidden="true"
+        className="flex items-center gap-2.5 px-2 py-1.5 text-body"
+      >
+        <span className="sk size-8 shrink-0 rounded-full" />
+        <span className="min-w-0 flex-1">
+          <SkLine className="h-[10px] w-[56px]" />
+        </span>
+        <span className="-mr-1 flex size-7 shrink-0 items-center justify-center text-text-muted">
+          <MoreIcon className="size-4" />
+        </span>
+      </div>
+    );
+  }
   const email = snapshot.email ?? "";
   const accountCurrent = isCurrent(pathname, "/account/");
   const item =
@@ -695,16 +767,44 @@ function useReceivedCountOnce(): void {
   }, [session, owner]);
 }
 
+// 세션 확인 전 본문 기본값: 화면 제목은 바로, 데이터 자리는 자리표시(화면별 모양은 각 화면이 loading으로 넘김)
+function PageSkeleton({ title }: { title: string }) {
+  return (
+    <div className="flex w-full flex-col gap-5 px-4 py-5 md:px-10 md:pt-6 md:pb-10">
+      <h1 className="text-title-l font-semibold text-text-default">{title}</h1>
+      <div className="flex flex-col gap-2 text-body">
+        <SkLine className="w-[40%]" />
+        <SkLine className="w-[72%]" />
+        <SkLine className="w-[56%]" />
+      </div>
+    </div>
+  );
+}
+
 export function AdminShell({
   title,
   children,
+  loading,
 }: {
   // 모바일 앱 바에 보이는 화면 이름
   title: string;
   children: ReactNode;
+  // 세션 확인이 끝나기 전 본문(보드 L10). children과 같은 요소를 넘기면 확인 뒤 다시 만들지 않고 이어서 그림
+  loading?: ReactNode;
 }) {
   const pathname = usePathname();
+  const snapshot = useSessionSnapshot();
+  const navigating = useSyncExternalStore(
+    subscribeNavigation,
+    () => pendingNavigation() !== null,
+    () => false,
+  );
   useReceivedCountOnce();
+  // 새 화면이 그려지면 이동 끝(진행 막대·누른 메뉴 표시를 지움). 첫 그리기가 끝난 뒤 연 화면은 150ms 규칙대로
+  useEffect(() => {
+    finishNavigation();
+    markFirstPaint();
+  }, [pathname]);
   const [drawerOpen, setDrawerOpen] = useState(false);
   // 태블릿 레일 펼침(이 탭 메모리만)
   const [railOpen, setRailOpen] = useState(false);
@@ -729,7 +829,16 @@ export function AdminShell({
   }, []);
 
   return (
-    <SessionGuard>
+    // 안쪽 링크 누르기를 먼저 받아 이동 중으로 표시(메뉴·서랍·본문 링크 모두). 이동 자체는 Link가 함
+    // 틀을 만들지 않게 display: contents
+    <div
+      className="contents"
+      onClickCapture={(e) => {
+        const anchor = (e.target as Element).closest?.("a[href]") ?? null;
+        const href = internalHref(e, anchor);
+        if (href) startNavigation(href, pathname);
+      }}
+    >
       <a
         href="#main"
         className="sr-only z-50 rounded-admin-control bg-bg-surface px-3 py-2 focus:not-sr-only focus:fixed focus:top-2 focus:left-2"
@@ -802,10 +911,20 @@ export function AdminShell({
           <main
             id="main"
             tabIndex={-1}
-            className={`flex-1 outline-none ${PAGE_TITLE}`}
+            aria-busy={
+              navigating || snapshot.status === "signed_out" || undefined
+            }
+            className={`relative flex-1 outline-none ${PAGE_TITLE}`}
           >
+            <NavProgress />
+            <LoadingStatus
+              busy={snapshot.status === "signed_out"}
+              label={messages.loading.opening}
+            />
             <SessionNotices />
-            {children}
+            <SessionGuard fallback={loading ?? <PageSkeleton title={title} />}>
+              {children}
+            </SessionGuard>
           </main>
         </div>
       </div>
@@ -815,6 +934,6 @@ export function AdminShell({
         onClose={() => setPaletteOpen(false)}
         items={PALETTE_ITEMS}
       />
-    </SessionGuard>
+    </div>
   );
 }
