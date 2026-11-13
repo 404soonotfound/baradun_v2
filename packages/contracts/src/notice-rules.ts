@@ -1,7 +1,7 @@
 // 공지 문구 규칙 (BRD-151). 운영 API(services)와 운영자 화면(apps/admin)이 함께 씀
 // 입구(index.ts)와 달리 실행 코드라 '@baradun/contracts/notice-rules'로 따로 가져옴 → 공개 웹 번들에는 들어가지 않음
 
-// 노출 전 글자 수 상한(D16-D2 초기값, grapheme 기준, 레이아웃 확인 전이라 미확정)
+// 노출 전 글자 수 상한(grapheme 기준, D16-D2 초기값을 D20-20에서 확정)
 // 넘으면 잘라 내지 않고 노출을 막음
 export const NOTICE_TEXT_MAX = {
   title: { ko: 40, en: 60 },
