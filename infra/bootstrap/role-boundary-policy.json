@@ -83,7 +83,8 @@
       "Effect": "Allow",
       "Action": [
         "cognito-idp:AdminDeleteSoftwareToken",
-        "cognito-idp:AdminGetUser"
+        "cognito-idp:AdminGetUser",
+        "cognito-idp:ListUsers"
       ],
       "Resource": "arn:aws:cognito-idp:ap-northeast-2:717304679248:userpool/*"
     },

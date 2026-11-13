@@ -287,7 +287,7 @@ describe("DynamoDB 권한 (BRD-55)", () => {
     expect(resources[0]).toMatch(/:alarm:.*-\*$/);
   });
 
-  it("운영 API 역할의 Cognito 권한은 운영자 풀 하나의 계정 확인·인증 앱 지우기뿐이다(#335, D16-A9)", () => {
+  it("운영 API 역할의 Cognito 권한은 운영자 풀 하나의 계정 확인(AdminGetUser·ListUsers)·인증 앱 지우기뿐이다(#335·#465, D16-A9)", () => {
     const statements = allIamPolicies()
       .filter((p) => p.roles.includes(roleId("OpsApiRole")))
       .flatMap((p) => p.statements)
@@ -299,6 +299,7 @@ describe("DynamoDB 권한 (BRD-55)", () => {
     expect(toList(statements[0]!.Action).sort()).toEqual([
       "cognito-idp:AdminDeleteSoftwareToken",
       "cognito-idp:AdminGetUser",
+      "cognito-idp:ListUsers",
     ]);
     const pools = Object.keys(template.findResources("AWS::Cognito::UserPool"));
     const operatorPool = pools.filter((id) =>
@@ -505,6 +506,7 @@ describe("함수·역할별 최소 권한 범위 (BRD-67)", () => {
       "cloudwatch:DescribeAlarms",
       "cognito-idp:AdminDeleteSoftwareToken",
       "cognito-idp:AdminGetUser",
+      "cognito-idp:ListUsers",
       "dynamodb:GetItem",
       "dynamodb:PutItem",
       "dynamodb:Query",
