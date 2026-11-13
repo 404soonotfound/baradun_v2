@@ -28,6 +28,12 @@ const detailHref = (n: number) => `/policies/?id=${n}`;
 const BADGE =
   "inline-flex h-6 shrink-0 items-center rounded-admin-badge bg-bg-surface px-2 text-label-s font-medium whitespace-nowrap text-text-body ring-1 ring-border-strong ring-inset";
 
+// 원본의 확정·초안 표시를 문구 키로 보여 줌
+const STATUS_LABEL: Record<PolicySection["status"], string> = {
+  확정: t.status.confirmed,
+  초안: t.status.draft,
+};
+
 function Runs({ runs }: { runs: readonly PolicyRun[] }) {
   return runs.map((run, i) =>
     run.code ? (
@@ -88,7 +94,7 @@ function SectionList({
                 <span>
                   {fill(t.itemTitle, { number: s.number, title: s.title })}
                 </span>
-                <span className={BADGE}>{s.status}</span>
+                <span className={BADGE}>{STATUS_LABEL[s.status]}</span>
               </Link>
             </li>
           );
@@ -117,7 +123,7 @@ function SectionDetail({
         >
           {fill(t.itemTitle, { number: section.number, title: section.title })}
         </h2>
-        <span className={BADGE}>{section.status}</span>
+        <span className={BADGE}>{STATUS_LABEL[section.status]}</span>
       </div>
       <ul className="mt-3 flex list-disc flex-col gap-2 pl-5 text-body text-text-body marker:text-text-muted">
         {section.items.map((runs, i) => (
