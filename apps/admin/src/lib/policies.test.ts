@@ -49,7 +49,26 @@ describe("parsePolicySnapshot", () => {
     ["번호 뒤섞임", (r) => (r.sections[2]!.number = 5)],
     ["상태 모름", (r) => (r.sections[0]!.status = "검토 중")],
     ["빈 내용", (r) => (r.sections[0]!.items = [])],
-    ["빈 줄", (r) => (r.sections[0]!.items = [[{ text: "  " }]])],
+    [
+      "줄 2개",
+      (r) => (r.sections[0]!.items = [[{ text: "a" }], [{ text: "b" }]]),
+    ],
+    [
+      "줄 7개",
+      (r) =>
+        (r.sections[0]!.items = Array.from({ length: 7 }, () => [
+          { text: "a" },
+        ])),
+    ],
+    [
+      "빈 줄",
+      (r) =>
+        (r.sections[0]!.items = [
+          [{ text: "a" }],
+          [{ text: "b" }],
+          [{ text: "  " }],
+        ]),
+    ],
     [
       "모르는 꾸밈",
       (r) => (r.sections[0]!.items = [[{ text: "a", link: "https://x.test" }]]),

@@ -29,6 +29,8 @@ export interface PolicySnapshot {
 }
 
 export const SECTION_COUNT = 9;
+const MIN_ITEMS = 3;
+const MAX_ITEMS = 6;
 const STATUSES = new Set(["확정", "초안"]);
 const ISO = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/;
 const NOTION_URL = /^https:\/\/app\.notion\.com\/p\/[0-9a-f]{32}$/;
@@ -64,8 +66,13 @@ function parseSection(raw: unknown, index: number): PolicySection {
   if (typeof raw.status !== "string" || !STATUSES.has(raw.status)) {
     throw new Error(`${where}: 확정·초안 표시가 없어요`);
   }
-  if (!Array.isArray(raw.items) || raw.items.length === 0) {
-    throw new Error(`${where}: 내용이 없어요`);
+  // 항목마다 3~6줄(D20-10). 가져오기 도구와 같은 조건으로 손으로 고친 파일도 막음
+  if (
+    !Array.isArray(raw.items) ||
+    raw.items.length < MIN_ITEMS ||
+    raw.items.length > MAX_ITEMS
+  ) {
+    throw new Error(`${where}: 내용이 ${MIN_ITEMS}~${MAX_ITEMS}줄이 아니에요`);
   }
   const items = raw.items.map((item, i) => {
     if (!Array.isArray(item))
