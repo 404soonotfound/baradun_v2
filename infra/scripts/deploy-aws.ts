@@ -121,24 +121,39 @@ export function stackStatus(
   return { ...got, value: JSON.parse(got.stdout).Stacks[0].StackStatus };
 }
 
-// 다른 배포(승인 실행 등)가 진행 중이면 끝날 때까지 기다린 뒤 상태를 다시 읽음(CI 전용)
-// 진행 중이 아니면 바로 돌려줌. 읽지 못하면 null
+// 다른 배포(승인 실행 등)를 기다리는 상한. CI 역할 키(2시간)·작업 제한 안에서 자기 배포 대기(최대 60분)를 남김
+export const IN_PROGRESS_MAX_WAIT_MS = 30 * 60_000;
+export const IN_PROGRESS_POLL_MS = 30_000;
+
+// 동기 대기(spawnSync로 도는 스크립트라 이벤트 루프 없이 멈춤)
+export function sleepSync(ms: number): void {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+// 다른 배포가 진행 중(*_IN_PROGRESS, 가져오기·롤백 포함)이면 끝날 때까지 상태를 30초마다 다시 읽음(CI 전용)
+// 진행 중이 아니면 바로 돌려줌. 읽지 못하면 null. 상한을 넘겨도 진행 중이면 그 상태를 돌려줌(부르는 쪽이 멈춤)
+// waiter(stack-update-complete)는 업데이트 외 상태에서 끝나지 않고 60분을 다 써서 쓰지 않음
 export function waitWhileInProgress(
   aws: AwsRunner,
   stack: string,
+  options: {
+    readonly maxWaitMs?: number;
+    readonly pollMs?: number;
+    readonly sleep?: (ms: number) => void;
+  } = {},
 ): string | null {
-  const now = stackStatus(aws, stack);
-  if (now.value === undefined) return null;
-  if (!now.value.endsWith("_IN_PROGRESS")) return now.value;
-  // 롤백으로 끝나면 waiter가 실패를 돌려주지만, 상태는 아래에서 다시 읽어 판단함
-  aws([
-    "cloudformation",
-    "wait",
-    "stack-update-complete",
-    "--stack-name",
-    stack,
-  ]);
-  return stackStatus(aws, stack).value ?? null;
+  const maxWaitMs = options.maxWaitMs ?? IN_PROGRESS_MAX_WAIT_MS;
+  const pollMs = options.pollMs ?? IN_PROGRESS_POLL_MS;
+  const sleep = options.sleep ?? sleepSync;
+  let waited = 0;
+  for (;;) {
+    const now = stackStatus(aws, stack);
+    if (now.value === undefined) return null;
+    if (!now.value.endsWith("_IN_PROGRESS") || waited >= maxWaitMs)
+      return now.value;
+    sleep(pollMs);
+    waited += pollMs;
+  }
 }
 
 export const isReady = (status: string | null): boolean =>
