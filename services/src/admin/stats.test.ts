@@ -3,6 +3,7 @@ import {
   createCachedStatsReader,
   createGa4StatsReader,
   extractBeachSlug,
+  GA4_TIMEOUT_MS,
   parseDevicesReport,
   parseLanguagesReport,
   parseMetricInt,
@@ -10,6 +11,8 @@ import {
   parseStatsRange,
   parseSummaryReport,
   parseTopBeachesReport,
+  SSM_TIMEOUT_MS,
+  TOKEN_TIMEOUT_MS,
   unconfiguredStats,
   type StatsReader,
 } from "./stats";
@@ -198,5 +201,39 @@ describe("캐시 및 실패 경로", () => {
     expect(res.realtime.status).toBe("unavailable");
     expect(res.period.status).toBe("unavailable");
     expect(res.events[0]).toEqual({ name: "page_view", status: "collecting" });
+  });
+
+  it("해변·언어 11번째 이후 변형 행도 합산·정렬한 뒤 상위 10개만 남기고, 단계별 시간 예산 합은 7초 이하임", () => {
+    expect(SSM_TIMEOUT_MS + TOKEN_TIMEOUT_MS + GA4_TIMEOUT_MS).toBeLessThanOrEqual(
+      7_000,
+    );
+
+    const beachRows = Array.from({ length: 10 }, (_, i) => ({
+      dimensionValues: [{ value: `/spots/b${i + 1}` }],
+      metricValues: [{ value: String(100 - i * 5) }],
+    }));
+    beachRows.push({
+      dimensionValues: [{ value: "/en/spots/b10" }],
+      metricValues: [{ value: "50" }],
+    });
+    const beaches = parseTopBeachesReport({ rows: beachRows });
+    expect(beaches.rows).toHaveLength(10);
+    expect(beaches.rows[0]).toEqual({
+      path: "/spots/b10",
+      slug: "b10",
+      pageViews: 105,
+    });
+
+    const langRows = Array.from({ length: 10 }, (_, i) => ({
+      dimensionValues: [{ value: `l${i + 1}-aa` }],
+      metricValues: [{ value: String(100 - i * 5) }],
+    }));
+    langRows.push({
+      dimensionValues: [{ value: "l10-bb" }],
+      metricValues: [{ value: "50" }],
+    });
+    const languages = parseLanguagesReport({ rows: langRows });
+    expect(languages.rows).toHaveLength(10);
+    expect(languages.rows[0]).toEqual({ language: "l10", activeUsers: 105 });
   });
 });
