@@ -12,13 +12,21 @@ import { stationSourceOk, zoneProofVerified as verifyZoneProof } from "./zone-pr
 import { COVERAGE_DIR, REGIONS, applyCoordOverrides, regionArg, regionSlug, verifyPinnedSources } from "./regions.mjs";
 import { SLIM_COLS, slimMatrix } from "./slim-matrix.mjs";
 import { checkDraft } from "./check.mjs";
+import { diffMatrix } from "./live-matrix.mjs";
 import { assertSameName, idKey, preserveManual, reserveSlug, validateFinalIdentity, validateIdentity } from "./identity.mjs";
 import { validateBeaches } from "../../packages/contracts/scripts/validate-beaches.mjs";
 import { validateCoverage } from "../../packages/contracts/scripts/coverage-rules.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 // 이 함수는 검증된 쓰기 계획만 반환함. 검증 실패·dry 실행에서는 파일을 쓰지 않음.
-export function buildBeaches({ coverageDir = COVERAGE_DIR, existingDataDir = join(HERE, "../../data"), idsInput = join(HERE, "ids.json"), outputDir, dataOutputDir = outputDir ? join(outputDir, "data") : existingDataDir, idsOutput = outputDir ? join(outputDir, "ids.json") : idsInput, regions = regionArg(), publish = false, verifySources = verifyPinnedSources } = {}) {
+// 고정 해시 대조 + 실응답 지표 매트릭스가 응답 원문·보충 병합 규칙(live-matrix.mjs)으로 다시 만든 값과 같은지 확인
+function verifySourcesAndLiveMatrix(coverageDir) {
+  verifyPinnedSources(coverageDir);
+  const { diffs } = diffMatrix(JSON.parse(readFileSync(join(coverageDir, "responses/metric-matrix.json"), "utf8")), coverageDir);
+  if (diffs.length) throw new Error(`실응답 지표 매트릭스가 응답 원문·병합 규칙과 다름 → node tools/beaches/live-matrix.mjs --check: ${diffs.slice(0, 10).join(", ")}`);
+}
+
+export function buildBeaches({ coverageDir = COVERAGE_DIR, existingDataDir = join(HERE, "../../data"), idsInput = join(HERE, "ids.json"), outputDir, dataOutputDir = outputDir ? join(outputDir, "data") : existingDataDir, idsOutput = outputDir ? join(outputDir, "ids.json") : idsInput, regions = regionArg(), publish = false, verifySources = verifySourcesAndLiveMatrix } = {}) {
   verifySources(coverageDir);
   const TARGET_REGIONS = regions;
   const COVERAGE_DIR = coverageDir;
@@ -53,6 +61,23 @@ export function buildBeaches({ coverageDir = COVERAGE_DIR, existingDataDir = joi
   const RESPONSE_CHECK = liveReceived && liveTmUtc
     ? `실응답 저장본 재사용(${liveTmUtc}, ${SOURCE_KEYS.join("·")} HTTP ${liveHttp}, 새 호출 없음)`
     : "";
+  // 보충 저장본(live-matrix.mjs의 supplements): 기본 저장본에 값이 없던 칸만 채움. 배정 지표가 보충 응답에서 왔으면 그 행의 실응답 확인 칸에 보충 시각을 함께 적음
+  const primaryFiles = new Set(SOURCE_KEYS.map((k) => liveMatrix?.sources?.[k]?.response_file));
+  const supplementInfo = (liveMatrix?.supplements ?? []).map((sup) => {
+    const ok = SOURCE_KEYS.every((k) => sup?.[k]?.status === "RECEIVED" && sup[k].http_status === 200);
+    const tms = SOURCE_KEYS.map((k) => sourceTmUtc(sup?.[k]));
+    const tm = ok && tms.every(Boolean) && new Set(tms).size === 1 ? tms[0] : null;
+    return { files: new Set(SOURCE_KEYS.map((k) => sup?.[k]?.response_file)), text: tm ? `보충 저장본(${tm}, ${SOURCE_KEYS.join("·")} HTTP 200)` : null };
+  });
+  // 배정 관측소 지표의 응답 파일이 기본·보충 어디에도 없거나 보충 메타가 깨졌으면 빈 칸(publish 중단)
+  const responseCheckFor = (stationsOut) => {
+    if (!RESPONSE_CHECK) return "";
+    const used = new Set(Object.entries(stationsOut).filter(([, s]) => s).map(([metric, s]) => liveByStation.get(s.id)?.metrics?.[metric]?.response_file));
+    const sups = supplementInfo.filter((x) => [...x.files].some((f) => used.has(f)));
+    const known = [...used].every((f) => primaryFiles.has(f) || sups.some((x) => x.files.has(f)));
+    if (!known || sups.some((x) => !x.text)) return "";
+    return sups.length ? `${RESPONSE_CHECK} + ${sups.map((x) => x.text).join(" + ")}` : RESPONSE_CHECK;
+  };
 
   const csvCell = (v) => {
     const s = v === null || v === undefined ? "" : String(v);
@@ -456,7 +481,7 @@ export function buildBeaches({ coverageDir = COVERAGE_DIR, existingDataDir = joi
       occlusion: "미검토(지도 확인 안 함)",
       activity_candidates: "",
       season_candidates: "",
-      response_check: RESPONSE_CHECK,
+      response_check: responseCheckFor(stationsOut),
     };
 
     // 출시 자동 제외(결정 4-A): 레코드 만들지 않고 매트릭스에 사유 기록
@@ -594,6 +619,9 @@ export function buildBeaches({ coverageDir = COVERAGE_DIR, existingDataDir = joi
           ? `실응답 저장본의 sea_obs·kma_buoy 요청 시각이 서로 다르거나 읽지 못함(${liveTms.join(" / ")}) → 공개 파일을 쓰지 않음`
           : "실응답 저장본이 sea_obs·kma_buoy HTTP 200 수신이 아님 → 공개 파일을 쓰지 않음",
       );
+    // 행별 실응답 확인 칸: 배정 지표의 응답 파일 출처를 못 찾았거나 보충 저장본 메타가 깨졌으면 빈 칸
+    const noResponse = matrix.filter((r) => r.response_check === "").map((r) => `${r.sigungu}|${r.source_name}`);
+    if (noResponse.length) throw new Error(`배정 지표의 실응답 저장본 출처 확인 안 됨 → 공개 파일을 쓰지 않음: ${noResponse.join(", ")}`);
     const DATA = dataOutputDir;
     // 전부 검사·생성한 뒤에 씀(중간 실패로 일부만 바뀌지 않게)
     for (const r of records)
