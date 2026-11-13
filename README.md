@@ -125,13 +125,13 @@ echo 'BARADUN_DEV_DATA_ORIGIN=https://<운영 CloudFront>' >> apps/web/.env.loca
 
 ## 운영 배포
 
-사이트 배포(`deploy.yml`)는 main에 머지한 커밋의 CI(`ci.yml`)가 성공하면 자동으로 실행됩니다. CI가 실패한 커밋은 배포하지 않고, CI가 검사한 커밋을 그대로 올립니다. 로컬에는 AWS 키를 두지 않으며, 배포는 GitHub Actions가 OIDC 임시 키로 합니다.
+사이트 배포(`deploy.yml`)는 하루 한 번(매일 05:17 KST) 정기 실행과 수동 실행에서만 돕니다. main에 머지해도 바로 올라가지 않습니다(배포마다 S3 쓰기 요청 요금이 들어서, GH-424). CI(`ci.yml`)가 실패한 커밋은 배포하지 않고, CI가 검사한 커밋을 그대로 올립니다. 로컬에는 AWS 키를 두지 않으며, 배포는 GitHub Actions가 OIDC 임시 키로 합니다.
 
 ```bash
-npm run deploy:prod   # main 최신 커밋을 다시 배포 (gh 로그인 필요, 진행을 터미널에 보여 줌)
+npm run deploy:prod   # main 최신 커밋을 지금 배포 (gh 로그인 필요, 진행을 터미널에 보여 줌)
 ```
 
-수동 배포도 그 커밋의 `ci-ok`가 성공일 때만 올립니다. 인프라 변경과 순서를 맞춰야 할 때는 저장소 변수 `DEPLOY_PAUSED`를 `true`로 두면 자동 배포가 멈춥니다(절차는 [infra/README.md](infra/README.md)). 개발용 배포 사이트는 따로 두지 않고, 운영 데이터로 미리 보려면 `npm run live`를 씁니다.
+수동 배포도 그 커밋의 `ci-ok`가 성공일 때만 올립니다. 인프라 변경과 순서를 맞춰야 할 때는 저장소 변수 `DEPLOY_PAUSED`를 `true`로 두면 정기 배포가 멈춥니다(절차는 [infra/README.md](infra/README.md)). 개발용 배포 사이트는 따로 두지 않고, 운영 데이터로 미리 보려면 `npm run live`를 씁니다.
 
 ## 운영 방법
 
