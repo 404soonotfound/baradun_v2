@@ -6,7 +6,6 @@ import { ALARM_LABELS } from "../../services/src/ops/alarm-notification";
 import {
   COLLECTOR_SCHEDULE_MINUTES,
   INQUIRY_EMAIL_OVERDUE_ALARM,
-  LOGIN_ABUSE_ALARM,
   MAX_ALARMS,
   OPS_API_ALARM,
   RETRY_LIMITS,
@@ -30,10 +29,13 @@ const notificationFunctionId = Object.keys(
   template.findResources("AWS::Lambda::Function"),
 ).find((id) => id.startsWith("OpsNotificationFunction"))!;
 
-// 경보가 보는 원래 지표. 오류는 지표 하나, 심장박동은 수식(FILL)이 감싼 지표 m
+// 경보가 보는 원래 지표. 오류는 지표 하나, 심장박동은 수식(FILL)이 감싼 지표 m,
+// 성공 없음은 수식이 읽는 실행 수(runs: Errors 지표의 표본 수)
 const statOf = (a: Resource) => {
   const p = a.Properties;
-  const m = p.Metrics?.find((x: any) => x.Id === "m")?.MetricStat;
+  const m = p.Metrics?.find(
+    (x: any) => x.Id === "m" || x.Id === "runs",
+  )?.MetricStat;
   return m
     ? { ...m.Metric, Period: m.Period, Statistic: m.Stat }
     : {
@@ -43,6 +45,10 @@ const statOf = (a: Resource) => {
         Statistic: p.Statistic,
       };
 };
+
+// 성공 없음 경보(GH-424): 수집기의 오류 경보와 심장박동 경보를 함수마다 하나로 합친 것. 날씨(WeatherFailing)는 다른 방식
+const NO_SUCCESS_ID = /^Ops(Warnings|Ocean|Rip)Failing/;
+const noSuccess = alarms.filter(([id]) => NO_SUCCESS_ID.test(id));
 
 // 경보가 가리키는 함수의 논리 ID
 const fnOf = (a: Resource): string =>
@@ -63,9 +69,9 @@ const maxGapMinutes = (...schedules: string[]): number => {
   );
 };
 
-// 심장박동 경보의 슬라이딩 창 길이(초)
-const heartbeatWindow = (prefix: string): number => {
-  const a = byMetric("Invocations").find(([, a]) =>
+// 성공 없음·심장박동 경보의 슬라이딩 창 길이(초)
+const windowOf = (prefix: string): number => {
+  const a = [...noSuccess, ...byMetric("Invocations")].find(([, a]) =>
     fnOf(a).startsWith(prefix),
   )![1];
   return statOf(a).Period * a.Properties.EvaluationPeriods;
@@ -76,27 +82,42 @@ const failureQueueId = Object.keys(
 ).find((id) => id.startsWith("OpsNotificationFailures"))!;
 
 describe("운영 경보 (BRD-62)", () => {
-  it("경보 수는 상한 MAX_ALARMS(13)와 같다", () => {
+  it("경보 수는 상한 MAX_ALARMS(10)와 같다", () => {
     expect(alarms).toHaveLength(MAX_ALARMS);
+    // 로그인 반복 요청 경보(D17-4, 지표 3개)는 뺌(GH-424). 다시 넣으면 지표 상한 검사도 함께 봐야 함
     expect(
       alarms.filter(([id]) => id.startsWith("OpsLoginAbuse")),
-    ).toHaveLength(1);
+    ).toHaveLength(0);
     expect(
       alarms.filter(([id]) => id.startsWith("OpsOpsApiErrors")),
     ).toHaveLength(1);
+    // 성공 없음 경보: 특보·관측·이안류 수집
+    expect(noSuccess.map(([, a]) => fnOf(a)).sort()).toEqual([
+      expect.stringMatching(/^CollectOceanFunction/),
+      expect.stringMatching(/^CollectRipFunction/),
+      expect.stringMatching(/^CollectWarningsFunction/),
+    ]);
+    // 오류 지표를 그대로 보는 경보: 사진 확인(하루 1회)·날씨·게시
     expect(
-      byMetric("Errors")
+      alarms
+        .filter(([, a]) => a.Properties.MetricName === "Errors")
         .map(([, a]) => fnOf(a))
         .sort(),
     ).toEqual([
       expect.stringMatching(/^CollectCatalogFunction/),
-      expect.stringMatching(/^CollectOceanFunction/),
-      expect.stringMatching(/^CollectRipFunction/),
-      expect.stringMatching(/^CollectWarningsFunction/),
       expect.stringMatching(/^CollectWeatherFunction/),
       expect.stringMatching(/^PublishFunction/),
     ]);
-    expect(byMetric("Invocations")).toHaveLength(4);
+    // 심장박동은 게시만. 게시는 성공 없음으로 합치지 않음(한 번의 게시 실패를 다른 게시의 성공이 가리지 않게, D16-C2)
+    expect(byMetric("Invocations").map(([, a]) => fnOf(a))).toEqual([
+      expect.stringMatching(/^PublishFunction/),
+    ]);
+    // 합친 수집기의 예전 오류·실행 없음 경보 쌍은 남기지 않음(같은 일을 두 번 알리지 않고, 지표도 두 번 세지 않음)
+    expect(
+      alarms.filter(([id]) =>
+        /^Ops(Warnings|Ocean|Rip)(Errors|Stopped)/.test(id),
+      ),
+    ).toHaveLength(0);
     expect(byMetric("ApproximateNumberOfMessagesVisible")).toHaveLength(1);
   });
 
@@ -104,17 +125,17 @@ describe("운영 경보 (BRD-62)", () => {
     for (const [id, a] of alarms) {
       const p = a.Properties;
       const metric = statOf(a).MetricName;
-      const beat = metric === "Invocations";
-      // 심장박동은 실행이 없으면(지표 없음) 위반, 오류·대기열은 지표 없음에 상태를 유지함(정상으로 보지 않음)
-      // 로그인 반복 요청·운영 API 오류 급증은 호출이 없으면 오류도 없으므로 정상(notBreaching)
+      const quiet = NO_SUCCESS_ID.test(id);
+      const beat = metric === "Invocations" || quiet;
+      // 성공 없음·심장박동은 실행이 없으면(지표 없음) 위반, 오류·대기열은 지표 없음에 상태를 유지함(정상으로 보지 않음)
+      // 운영 API 오류 급증은 호출이 없으면 오류도 없으므로 정상(notBreaching)
       // 문의 이메일 기한 초과는 초과 항목이 발견된 날에만 지표가 나오므로 지표 없음은 정상(notBreaching)
-      const login = id.startsWith("OpsLoginAbuse");
       const opsApi = id.startsWith("OpsOpsApiErrors");
       const inquiryEmailOverdue = id.startsWith("OpsInquiryEmailOverdue");
       // 날씨는 실행 없음도 실패로 보는 오류 경보(경보 하나로 오류·중단을 함께 잡음, BRD-181)
       const weather = id.startsWith("OpsWeatherFailing");
       expect(p.TreatMissingData, id).toBe(
-        login || opsApi || inquiryEmailOverdue
+        opsApi || inquiryEmailOverdue
           ? "notBreaching"
           : beat || weather
             ? "breaching"
@@ -123,8 +144,8 @@ describe("운영 경보 (BRD-62)", () => {
       expect(p.AlarmActions, id).toBeUndefined();
       expect(p.OKActions, id).toBeUndefined();
       expect(p.InsufficientDataActions, id).toBeUndefined();
-      // 로그인 반복 요청·운영 API 오류 급증·문의 이메일 기한 초과는 여러 지표의 수식이라 아래 전용 테스트에서 통계를 봄
-      if (login || opsApi || inquiryEmailOverdue) continue;
+      // 성공 없음·운영 API 오류 급증·문의 이메일 기한 초과는 수식이라 아래 전용 테스트에서 통계를 봄
+      if (quiet || opsApi || inquiryEmailOverdue) continue;
       expect(statOf(a).Statistic, id).toBe(
         metric === "ApproximateNumberOfMessagesVisible" ? "Maximum" : "Sum",
       );
@@ -160,7 +181,45 @@ describe("운영 경보 (BRD-62)", () => {
     }
   });
 
-  // 슬라이딩 창: 마지막 실행 뒤 창 길이만큼 지나면 울림. 정상일 때는 (창 − 실행 간격)까지 지표 지연을 견딤
+  it("성공 없음 경보는 성공한 실행 수(실행 수 − 오류 수)가 1 미만인 구간이 이어지면 울린다", () => {
+    expect(noSuccess).toHaveLength(3);
+    for (const [id, a] of noSuccess) {
+      const p = a.Properties;
+      // 빈 구간을 0으로 채워 지난 성공이 최근 빈 구간을 대신하지 않음
+      const out = p.Metrics.filter((x: any) => x.ReturnData !== false);
+      expect(out, id).toEqual([
+        expect.objectContaining({
+          Expression: "FILL(runs, 0) - FILL(errors, 0)",
+        }),
+      ]);
+      expect(p.Threshold, id).toBe(1);
+      expect(p.ComparisonOperator, id).toBe("LessThanThreshold");
+      const stats = p.Metrics.filter((x: any) => x.MetricStat);
+      expect(
+        stats.map((x: any) => [x.Id, x.MetricStat.Stat]).sort(),
+        id,
+      ).toEqual([
+        ["errors", "Sum"],
+        ["runs", "SampleCount"],
+      ]);
+      // 과금: 두 통계가 같은 지표(이름·차원)를 읽어야 경보 지표 1개로 셈. Invocations를 따로 읽으면 2개가 됨
+      expect(
+        new Set(stats.map((x: any) => JSON.stringify(x.MetricStat.Metric)))
+          .size,
+        id,
+      ).toBe(1);
+      expect(stats[0].MetricStat.Metric).toMatchObject({
+        Namespace: "AWS/Lambda",
+        MetricName: "Errors",
+      });
+      expect(
+        stats.every((x: any) => x.MetricStat.Period === 5 * MINUTE),
+        id,
+      ).toBe(true);
+    }
+  });
+
+  // 슬라이딩 창: 마지막 성공(게시는 마지막 실행) 뒤 창 길이만큼 지나면 울림. 정상일 때는 (창 − 실행 간격)까지 지표 지연을 견딤
   const warningsTtl = WARNING_POLICY.confirmationTtlMs / 1000;
   const waveTtl = OBSERVATION_POLICY.expiryMs.waveHeight / 1000;
   const warningsGap = maxGapMinutes(COLLECTOR_SCHEDULE_MINUTES.warnings);
@@ -175,7 +234,7 @@ describe("운영 경보 (BRD-62)", () => {
   ] as const)(
     "%s 중단은 화면이 바뀌기(유효시간) 15분 이상 전에 감지한다",
     (_name, prefix, ttl) => {
-      expect(heartbeatWindow(prefix) + 15 * MINUTE).toBeLessThanOrEqual(ttl);
+      expect(windowOf(prefix) + 15 * MINUTE).toBeLessThanOrEqual(ttl);
     },
   );
 
@@ -193,11 +252,35 @@ describe("운영 경보 (BRD-62)", () => {
       maxGapMinutes(COLLECTOR_SCHEDULE_MINUTES.rip),
     ],
   ] as const)(
-    "%s 정상 실행은 지표가 10분 늦어도 심장박동 경보를 울리지 않는다",
+    "%s 정상 실행은 지표가 10분 늦어도 성공 없음·심장박동 경보를 울리지 않는다",
     (_name, prefix, gapMinutes) => {
-      expect(
-        heartbeatWindow(prefix) - gapMinutes * MINUTE,
-      ).toBeGreaterThanOrEqual(10 * MINUTE);
+      expect(windowOf(prefix) - gapMinutes * MINUTE).toBeGreaterThanOrEqual(
+        10 * MINUTE,
+      );
+    },
+  );
+
+  // 예전 오류 경보는 한 번의 실패에도 울렸음. 합친 뒤에도 수집기는 한 번의 실패를 알려야 함:
+  // 실패가 한 번 끼면 성공 사이가 실행 간격의 2배로 벌어짐 → 그 사이에 빈 구간이 창을 채울 만큼(구간 하나 여유) 있어야 울림
+  it.each([
+    [
+      "특보 수집",
+      "CollectWarningsFunction",
+      COLLECTOR_SCHEDULE_MINUTES.warnings,
+    ],
+    [
+      "바다 관측 수집",
+      "CollectOceanFunction",
+      COLLECTOR_SCHEDULE_MINUTES.ocean,
+    ],
+    ["이안류 수집", "CollectRipFunction", COLLECTOR_SCHEDULE_MINUTES.rip],
+  ] as const)(
+    "%s 실패가 한 번이어도 성공 없음 경보가 울린다",
+    (_name, prefix, schedule) => {
+      const interval = maxGapMinutes(schedule) * MINUTE;
+      expect(2 * interval - 5 * MINUTE).toBeGreaterThanOrEqual(
+        windowOf(prefix),
+      );
     },
   );
 
@@ -304,47 +387,6 @@ describe("운영 경보 (BRD-62)", () => {
         Resource: { Ref: opsTopicId },
       }),
     );
-  });
-
-  // 로그인 반복 요청(결정 기록 D17-4): 두 풀의 로그인 실패 합계와 계정 복구 API 호출을 기준으로 나눠 큰 값 ≥ 1
-  it("로그인 반복 요청 경보는 두 풀의 로그인 실패와 계정 복구 호출을 5분 기준으로 본다", () => {
-    const [, alarm] = alarms.find(([id]) => id.startsWith("OpsLoginAbuse"))!;
-    const p = alarm.Properties;
-    expect(p.Threshold).toBe(1);
-    expect(p.ComparisonOperator).toBe("GreaterThanOrEqualToThreshold");
-    expect(p.EvaluationPeriods).toBe(1);
-    const metrics = p.Metrics as any[];
-    const expression = metrics.find((m) => m.Expression)?.Expression as string;
-    expect(expression).toBe(
-      `MAX([((FILL(tries0, 0) - FILL(oks0, 0)) + (FILL(tries1, 0) - FILL(oks1, 0))) / ${LOGIN_ABUSE_ALARM.signInFailures}, FILL(recovery, 0) / ${LOGIN_ABUSE_ALARM.accountRecoveryCalls}])`,
-    );
-    const stats = metrics.filter((m) => m.MetricStat).map((m) => m.MetricStat);
-    expect(
-      stats.every((s) => s.Period === LOGIN_ABUSE_ALARM.periodMinutes * 60),
-    ).toBe(true);
-    const pools = stats
-      .filter((s) => s.Metric.MetricName === "SignInSuccesses")
-      .map((s) =>
-        JSON.stringify(
-          s.Metric.Dimensions.find((d: any) => d.Name === "UserPool").Value,
-        ),
-      );
-    // 운영자 풀·데모(샘플) 풀을 모두 봄
-    expect(pools.some((v) => v.includes("OperatorAuthUserPool"))).toBe(true);
-    expect(pools.some((v) => v.includes("OperatorAuthSamplePool"))).toBe(true);
-    expect(
-      stats.find((s) => s.Metric.Namespace === "AWS/Usage")?.Metric.Dimensions,
-    ).toEqual(
-      expect.arrayContaining([
-        { Name: "Resource", Value: "UserAccountRecovery" },
-        { Name: "Service", Value: "Cognito User Pool" },
-      ]),
-    );
-    expect(LOGIN_ABUSE_ALARM).toEqual({
-      periodMinutes: 5,
-      signInFailures: 10,
-      accountRecoveryCalls: 5,
-    });
   });
 
   // 운영 API 5xx·권한 거부 급증(결정 기록 D17-7): Lambda 함수 URL 5xx와 401·403 로그 지표를 5분 기준으로 나눠 큰 값 ≥ 1
