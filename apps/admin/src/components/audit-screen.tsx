@@ -1,5 +1,6 @@
 "use client";
 
+import { FileText } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
@@ -29,12 +30,12 @@ import { kstRange } from "@/lib/notices";
 import { AdminShell } from "./admin-shell";
 import { Button, Notice } from "./ui";
 
-// 운영자 변경 이력 (BRD-155, 화면 설계서 6장 ADM-AUD, 시안 4차 V23·VM14)
+// 운영자 변경 이력 (BRD-155·#460, 화면 설계서 6장 ADM-AUD, 시안 4차 V23·VM14)
 // - 분류 탭(수) · 대상·내용 찾기 · +운영자 · +기간 칩 · 표(시각·누가·종류·대상·바뀐 내용·바뀐 곳) · 이전/다음
 // - 공지 줄을 누르면 문구 앞·뒤를 펼쳐 보여 줌(공지는 공개 문구). 문의는 본문·메모 값 없이 항목만(D16-B5)
-// - 운영자 이름은 기록에 없어 Cognito sub 앞부분으로 보여 줌
+// - 운영자 이메일이 응답에 있으면 이니셜 아바타 + 이메일을 보여 주고, 없으면 sub 앞부분으로 대체함
 // - 해변 탭: 운영 메모 저장 기록(BRD-150). 해변 정보 변경은 저장소 커밋이 이력. 게시·권한·로그인은 기능이 생기면 같은 탭에 쌓임
-// - 더한 줄 색: 시안은 초록이지만 디자인 시스템이 초록 계열을 쓰지 않아(노션 4장, 토큰 검사) 파랑(특보 없음 면)으로 둠
+// - 더한 줄은 success 계열(초록), 뺀 줄은 blocked 계열(빨강) 토큰을 씀
 // - 데모 계정은 변경 이력을 받지 않음(D15-3) → 요청하지 않고 안내만
 
 const t = messages.audit;
@@ -48,6 +49,20 @@ const REPO_DATA_COMMITS =
 
 const operatorName = (sub: string) =>
   fill(t.operator, { name: sub.slice(0, 4) });
+
+function actorLabel(
+  item: Pick<AuditView, "actorSub" | "actorEmail">,
+): string {
+  const email = item.actorEmail?.trim();
+  return email ? email : operatorName(item.actorSub);
+}
+
+function actorInitial(
+  item: Pick<AuditView, "actorSub" | "actorEmail">,
+): string {
+  const email = item.actorEmail?.trim();
+  return (email ? email : item.actorSub).slice(0, 1).toUpperCase();
+}
 
 function roleLabel(role: string): string {
   return role in t.role ? t.role[role as keyof typeof t.role] : role;
@@ -168,13 +183,13 @@ export function Target({
   return <span className="text-text-body">{id}</span>;
 }
 
-function Avatar({ sub }: { sub: string }) {
+function Avatar({ initial }: { initial: string }) {
   return (
     <span
       aria-hidden="true"
-      className="inline-flex size-6 flex-none items-center justify-center rounded-full border border-border-strong text-caption text-text-body uppercase"
+      className="inline-flex size-6 flex-none items-center justify-center rounded-full border border-border-strong text-[10px] text-text-body uppercase"
     >
-      {sub.slice(0, 1)}
+      {initial}
     </span>
   );
 }
@@ -184,12 +199,12 @@ function Who({ item }: { item: AuditView }) {
     <span
       className="inline-flex items-center gap-2"
       title={fill(t.actorTitle, {
-        sub: item.actorSub,
+        sub: item.actorEmail?.trim() || item.actorSub,
         role: roleLabel(item.role),
       })}
     >
-      <Avatar sub={item.actorSub} />
-      {operatorName(item.actorSub)}
+      <Avatar initial={actorInitial(item)} />
+      {actorLabel(item)}
     </span>
   );
 }
@@ -233,9 +248,9 @@ const lineLabels = {
     kstRange(startsAt, endsAt, t.diffOpenEnd),
 };
 
-const DIFF_GRID = "grid grid-cols-[2.5rem_2.5rem_1.25rem_1fr] px-1";
+const DIFF_GRID = "grid grid-cols-[36px_36px_18px_1fr] leading-[22px]";
 
-// 공지 문구 앞·뒤 펼치기(시안 V23: 파일 이름 +n −n, 줄 번호, 뺀 줄·더한 줄)
+// 공지 문구 앞·뒤 펼치기(시안 V23: 파일 이름 +n −n, 줄 번호 두 칸, 뺀 줄 빨강·더한 줄 초록)
 function NoticeDiff({ item }: { item: AuditView }) {
   const before = item.notice?.before ?? null;
   const after = item.notice?.after ?? null;
@@ -250,61 +265,62 @@ function NoticeDiff({ item }: { item: AuditView }) {
     <div
       role="group"
       aria-label={t.diffLabel}
-      className="overflow-hidden rounded-admin-box border border-border-default bg-bg-surface"
+      className="overflow-hidden rounded-admin-control border border-border-default bg-bg-surface"
     >
-      <div className="flex flex-wrap items-center gap-2 border-b border-border-default bg-bg-page px-3 py-2 text-body-s">
+      <div className="flex flex-wrap items-center gap-2.5 border-b border-border-default bg-bg-page px-3 py-1.5 text-label-s text-text-body">
+        <FileText size={14} aria-hidden="true" className="flex-none" />
         <span className="font-mono font-semibold text-text-default">
           {fill(t.diffFile, { id: item.target.id })}
         </span>
-        <span className="font-semibold text-status-clear-fg">
+        <span className="font-semibold text-success-fg">
           <span className="sr-only">{t.diffAdded} </span>+{added}
         </span>
         <span className="font-semibold text-status-blocked-fg">
           <span className="sr-only">{t.diffRemoved} </span>−{removed}
         </span>
-        <span className="ml-auto text-label-s text-text-muted">
+        <span className="ml-auto text-caption text-text-muted">
           {fill(t.diffMeta, {
-            actor: operatorName(item.actorSub),
+            actor: actorLabel(item),
             time: kstDateTime(item.at),
             id: item.requestId.replace(/^req-/, "").slice(0, 4),
           })}
         </span>
       </div>
-      <div className="overflow-x-auto py-1 font-mono text-body-s">
-        <div className={`${DIFF_GRID} py-0.5 text-text-muted`}>
+      <div className="overflow-x-auto font-mono text-label-s">
+        <div className={`${DIFF_GRID} text-text-muted`}>
+          <span className="px-1.5" />
+          <span className="px-1.5" />
           <span />
-          <span />
-          <span />
-          <span>@@ {fill(t.diffHunk, { title })} @@</span>
+          <span className="pr-2.5">@@ {fill(t.diffHunk, { title })} @@</span>
         </div>
         {lines.map((line, n) => (
           <div
             key={n}
-            className={`${DIFF_GRID} py-0.5 ${
+            className={`${DIFF_GRID} ${
               line.kind === "add"
-                ? "bg-status-clear-bg text-status-clear-fg"
+                ? "bg-success-bg text-success-fg"
                 : line.kind === "del"
                   ? "bg-status-blocked-bg text-status-blocked-fg"
                   : "text-text-default"
             }`}
           >
-            <span className="pr-2 text-right opacity-70 tabular-nums">
+            <span className="px-1.5 text-right opacity-75 select-none tabular-nums">
               {line.oldNo ?? ""}
             </span>
-            <span className="pr-2 text-right opacity-70 tabular-nums">
+            <span className="px-1.5 text-right opacity-75 select-none tabular-nums">
               {line.newNo ?? ""}
             </span>
-            <span aria-hidden="true">
+            <span aria-hidden="true" className="text-center select-none">
               {line.kind === "add" ? "+" : line.kind === "del" ? "-" : ""}
             </span>
-            <span className="break-all whitespace-pre-wrap">
+            <code className="min-w-0 pr-2.5 break-all whitespace-pre-wrap">
               {line.kind !== "same" && (
                 <span className="sr-only">
                   {line.kind === "add" ? t.diffAdded : t.diffRemoved}:{" "}
                 </span>
               )}
               {line.text}
-            </span>
+            </code>
           </div>
         ))}
       </div>
@@ -659,7 +675,7 @@ function AuditBody({ beaches }: { beaches: Beaches }) {
                       }}
                     >
                       <span className="inline-flex items-center gap-2">
-                        <Avatar sub={sub} />
+                        <Avatar initial={sub.slice(0, 1).toUpperCase()} />
                         {operatorName(sub)}
                         <span className="font-mono text-label-s text-text-muted">
                           {shortSub(sub)}
@@ -834,9 +850,9 @@ function AuditBody({ beaches }: { beaches: Beaches }) {
                             <span className="flex flex-wrap items-center gap-1.5 text-body-s text-text-body">
                               <span>{summaryOf(item)}</span>
                               <span aria-hidden="true">·</span>
-                              <Avatar sub={item.actorSub} />
+                              <Avatar initial={actorInitial(item)} />
                               <span className="sr-only">
-                                {operatorName(item.actorSub)}
+                                {actorLabel(item)}
                               </span>
                               <span aria-hidden="true">·</span>
                               <span className="tabular-nums">

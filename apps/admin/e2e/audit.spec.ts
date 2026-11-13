@@ -220,6 +220,15 @@ test("공지 줄을 누르면 문구 앞·뒤를 줄 번호와 뺀 줄·더한 �
   await expectNoA11yViolations(page);
   await toggle.click();
   await expect(diff).toHaveCount(0);
+
+  // 키보드 Enter·Space로 펼침/접힘 전환
+  await toggle.focus();
+  await page.keyboard.press("Enter");
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
+  await expect(diff).toBeVisible();
+  await page.keyboard.press("Space");
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  await expect(diff).toHaveCount(0);
 });
 
 test("거르기: 탭은 분류, 찾기는 대상·내용, +운영자·+기간 칩으로 다시 받는다", async ({
