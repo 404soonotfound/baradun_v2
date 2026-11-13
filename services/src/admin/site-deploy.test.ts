@@ -32,8 +32,24 @@ const runs = (...workflow_runs: unknown[]) => ({
 });
 const settings = (value?: string) => {
   const variables = [
-    { name: "DEPLOY_ROLE_ARN", value: "configured" },
-    { name: "ADMIN_SITE_BUCKET", value: "configured" },
+    ...[
+      "DEPLOY_ROLE_ARN",
+      "SITE_BUCKET",
+      "DISTRIBUTION_ID",
+      "SITE_URL",
+      "INQUIRY_PHOTO_BUCKET",
+      "ADMIN_SITE_BUCKET",
+      "ADMIN_DISTRIBUTION_ID",
+      "OPERATOR_USER_POOL_ID",
+      "OPERATOR_CLIENT_ID",
+      "DEMO_USER_POOL_ID",
+      "DEMO_CLIENT_ID",
+    ].map((name) => ({
+      name,
+      value: name.endsWith("_POOL_ID")
+        ? "ap-northeast-2_Example"
+        : "configured",
+    })),
     ...(value === undefined ? [] : [{ name: "DEPLOY_PAUSED", value }]),
   ];
   return { total_count: variables.length, variables };
@@ -65,6 +81,8 @@ function setup(override: (url: URL) => Response | undefined = () => undefined) {
       return Response.json(commit(DEPLOYED));
     if (url.pathname.includes("/compare/")) return Response.json(diff);
     if (url.pathname.endsWith("/variables")) return Response.json(settings());
+    if (url.pathname.endsWith("/deploy.yml"))
+      return Response.json({ state: "active" });
     if (url.pathname.includes("/ci.yml/runs")) {
       return Response.json(runs(run({ event: "push", head_sha: HEAD })));
     }
@@ -200,6 +218,28 @@ describe("사이트 배포 상태 조회(D27-3·5)", () => {
       expect(result.nextScheduledAt).toBeNull();
     },
   );
+
+  it("필수 변수가 없거나 워크플로가 비활성화되면 배포할 수 없다", async () => {
+    const withoutBucket = setup((url) => {
+      if (!url.pathname.endsWith("/variables")) return undefined;
+      const variables = settings().variables.filter(
+        ({ name }) => name !== "SITE_BUCKET",
+      );
+      return Response.json({ total_count: variables.length, variables });
+    });
+    expect((await withoutBucket.read()).readiness).toBe("unconfigured");
+
+    const disabled = setup((url) =>
+      url.pathname.endsWith("/deploy.yml")
+        ? Response.json({ state: "disabled_manually" })
+        : undefined,
+    );
+    expect(await disabled.read()).toMatchObject({
+      readiness: "unconfigured",
+      nextScheduledAt: null,
+      workflowActive: { status: "known", value: false },
+    });
+  });
 
   it.each([
     ["queued", "deploying"],
@@ -357,8 +397,9 @@ describe("사이트 배포 상태 조회(D27-3·5)", () => {
     expect(result.main).toMatchObject({ value: { sha: next } });
     expect(result.ci).toMatchObject({
       status: "unknown",
-      last: { value: "success" },
+      reason: "unavailable",
     });
+    expect(result.ci).not.toHaveProperty("last");
   });
 
   it("KST 자정에 30초 캐시가 남아도 다시 집계하고 끝 페이지까지 센다", async () => {

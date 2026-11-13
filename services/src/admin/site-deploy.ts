@@ -46,7 +46,21 @@ const CACHE_MS = 30_000;
 const KST_MS = 9 * 60 * 60_000;
 const DAY_MS = 24 * 60 * 60_000;
 const DEPLOY_TIME_MS = (5 * 60 + 17) * 60_000;
-const RUNS = "/actions/workflows/deploy.yml/runs";
+const WORKFLOW = "/actions/workflows/deploy.yml";
+const RUNS = WORKFLOW + "/runs";
+const DEPLOY_VARIABLES = [
+  "DEPLOY_ROLE_ARN",
+  "SITE_BUCKET",
+  "DISTRIBUTION_ID",
+  "SITE_URL",
+  "INQUIRY_PHOTO_BUCKET",
+  "ADMIN_SITE_BUCKET",
+  "ADMIN_DISTRIBUTION_ID",
+  "OPERATOR_USER_POOL_ID",
+  "OPERATOR_CLIENT_ID",
+  "DEMO_USER_POOL_ID",
+  "DEMO_CLIENT_ID",
+];
 
 function sha(value: unknown): string {
   if (typeof value !== "string" || !SHA.test(value))
@@ -116,7 +130,7 @@ async function marker(
   if (url.protocol !== "https:" || url.username || url.password) {
     throw new SiteDeployError("unconfigured");
   }
-  // CloudFront 기본 정책은 쿼리를 캐시 키에 넣지 않음. 공개 주소의 관측값만 반환함.
+  // 두 배포의 표지 경로는 CloudFront 캐시를 끔. 공개 주소의 관측값을 반환함.
   url.searchParams.set("at", String(now.getTime()));
   const signal = AbortSignal.any([budget, AbortSignal.timeout(2_500)]);
   try {
@@ -200,21 +214,20 @@ async function compare(read: Read, from: string, to: string, app: App) {
 
 async function ci(read: Read, head: string): Promise<CiState> {
   const { body, next } = await read(
-    `/actions/workflows/ci.yml/runs?branch=main&event=push&head_sha=${head}&per_page=1`,
+    "/actions/workflows/ci.yml/runs?branch=main&event=push&per_page=100",
   );
-  const list = rows(record(body).workflow_runs);
-  if (!list.length) {
-    if (next || number(record(body).total_count) !== 0)
+  // 수동 배포 스크립트와 같은 main push CI 최근 100건을 확인함.
+  const data = record(body);
+  const list = rows(data.workflow_runs).map(record);
+  const run = list.find((item) => {
+    if (item.event !== "push" || item.head_branch !== "main")
+      throw new SiteDeployError("invalid");
+    return sha(item.head_sha) === head;
+  });
+  if (!run) {
+    if (next || number(data.total_count) > list.length)
       throw new SiteDeployError("truncated");
     return "missing";
-  }
-  const run = record(list[0]);
-  if (
-    run.event !== "push" ||
-    run.head_branch !== "main" ||
-    sha(run.head_sha) !== head
-  ) {
-    throw new SiteDeployError("invalid");
   }
   const status = runStatus(run.status);
   if (status !== "completed") return "pending";
@@ -225,27 +238,28 @@ async function ci(read: Read, head: string): Promise<CiState> {
 
 async function variables(read: Read) {
   let paused = false;
-  let siteConfigured = false;
-  let adminConfigured = false;
-  const names = new Set<string>();
+  const values = new Map<string, string>();
   for (let page = 1; ; page++) {
     const result = await read(`/actions/variables?per_page=30&page=${page}`);
     const data = record(result.body);
     for (const value of rows(data.variables)) {
       const item = record(value);
       const name = text(item.name);
-      if (names.has(name) || typeof item.value !== "string")
+      if (values.has(name) || typeof item.value !== "string")
         throw new SiteDeployError("invalid");
-      names.add(name);
+      values.set(name, item.value);
       if (name === "DEPLOY_PAUSED")
         paused = item.value.toLowerCase() === "true";
-      if (name === "DEPLOY_ROLE_ARN") siteConfigured = !!item.value.trim();
-      if (name === "ADMIN_SITE_BUCKET") adminConfigured = !!item.value.trim();
     }
     if (!result.next) {
-      if (number(data.total_count) !== names.size)
+      if (number(data.total_count) !== values.size)
         throw new SiteDeployError("truncated");
-      return { paused, configured: siteConfigured && adminConfigured };
+      return {
+        paused,
+        configured: DEPLOY_VARIABLES.every(
+          (name) => !!values.get(name)?.trim(),
+        ),
+      };
     }
     if (page >= 100) throw new SiteDeployError("truncated");
   }
@@ -302,7 +316,7 @@ async function runPages(
     if (!next) {
       // GitHub total_count는 검색에서 근삿값일 수 있어 페이지 링크로 끝을 판단함.
       if (
-        (!runs.size && number(data.total_count) > 0) ||
+        number(data.total_count) > runs.size ||
         (page === 10 && runs.size >= 1_000)
       ) {
         throw new SiteDeployError("truncated");
@@ -321,7 +335,10 @@ async function latest(read: Read, repo: string, event: Event) {
   const runs = rows(data.workflow_runs).map((value) =>
     deployRun(value, event, repo),
   );
-  if (!runs.length && (next || number(data.total_count) > 0))
+  if (
+    (!runs.length && next) ||
+    (!next && number(data.total_count) > runs.length)
+  )
     throw new SiteDeployError("truncated");
   const active = next
     ? (
@@ -427,7 +444,8 @@ export function createSiteDeployReader(
       scope = "",
     ): Promise<Field<T>> {
       const saved = cache.get(key);
-      const last = saved?.data as Confirmed<T> | undefined;
+      const last =
+        saved?.scope === scope ? (saved.data as Confirmed<T>) : undefined;
       if (
         last &&
         saved?.scope === scope &&
@@ -488,6 +506,13 @@ export function createSiteDeployReader(
         ),
       );
       const settings = observe("variables", () => variables(read));
+      const workflow = observe("workflow", async () => {
+        const state = record((await read(WORKFLOW)).body).state;
+        if (state === "active") return true;
+        if (typeof state === "string" && state.startsWith("disabled_"))
+          return false;
+        throw new SiteDeployError("invalid");
+      });
       const deployments = observe("deployments", async () => {
         const entries = await Promise.all(
           EVENTS.map((event) => latest(read, config.repo, event)),
@@ -592,6 +617,7 @@ export function createSiteDeployReader(
         mainResult,
         ciResult,
         settingsResult,
+        workflowResult,
         runs,
         approvalsResult,
         jobsResult,
@@ -602,6 +628,7 @@ export function createSiteDeployReader(
         main,
         ciField,
         settings,
+        workflow,
         deployments,
         approval,
         lastJobs,
@@ -641,8 +668,9 @@ export function createSiteDeployReader(
       else if (ciResult.status === "known" && ciResult.value === "missing")
         readiness = "ci_missing";
       else if (
-        settingsResult.status === "known" &&
-        !settingsResult.value.configured
+        (settingsResult.status === "known" &&
+          !settingsResult.value.configured) ||
+        (workflowResult.status === "known" && !workflowResult.value)
       )
         readiness = "unconfigured";
       else if (
@@ -650,6 +678,7 @@ export function createSiteDeployReader(
         ciResult.status === "known" &&
         ciResult.value === "success" &&
         settingsResult.status === "known" &&
+        workflowResult.status === "known" &&
         runs.status === "known" &&
         approvalsResult.status === "known" &&
         jobsResult.status === "known" &&
@@ -684,6 +713,7 @@ export function createSiteDeployReader(
         main: mainResult,
         ci: ciResult,
         settings: settingsResult,
+        workflowActive: workflowResult,
         deployments: runs,
         approvals: approvalsResult,
         recentJobs: jobsResult,
@@ -691,7 +721,10 @@ export function createSiteDeployReader(
         tokenExpiry: expiryResult,
         sites: siteResults,
         nextScheduledAt:
-          settingsResult.status === "known" && !settingsResult.value.paused
+          settingsResult.status === "known" &&
+          !settingsResult.value.paused &&
+          workflowResult.status === "known" &&
+          workflowResult.value
             ? nextSchedule(started)
             : null,
         workflowUrl: `https://github.com/${config.repo}/actions/workflows/deploy.yml`,
