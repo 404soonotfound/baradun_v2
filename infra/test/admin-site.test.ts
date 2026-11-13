@@ -60,7 +60,15 @@ describe("운영자 사이트 배포", () => {
     ).toContain(bucketId);
 
     const behaviors = config.CacheBehaviors as Record<string, any>[];
-    expect(behaviors.map((b) => b.PathPattern)).toEqual(["ops/*"]);
+    expect(behaviors.map((b) => b.PathPattern)).toEqual([
+      "ops/*",
+      "deploy-version.txt",
+    ]);
+    const marker = behaviors[1]!;
+    expect(marker.CachePolicyId).toBe("4135ea2d-6df8-44a3-9df3-4b5a84be39ad");
+    expect(marker.TargetOriginId).toBe(
+      config.DefaultCacheBehavior.TargetOriginId,
+    );
     const ops = behaviors[0]!;
     expect(JSON.stringify(target(ops.TargetOriginId)?.DomainName)).toContain(
       "OpsApiFunctionFunctionUrl",

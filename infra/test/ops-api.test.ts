@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { template } from "./stack-template";
+import { siteDistribution, template } from "./stack-template";
 import { PUBLISHER_TIMEOUT_SECONDS } from "../lib/settings";
 import {
   PUBLISH_JOB_RUN_LIMIT_MS,
@@ -41,9 +41,9 @@ describe("운영 API", () => {
     expect(fn.Properties.Environment.Variables.GA4_PROPERTY_ID).toEqual({
       Ref: "Ga4PropertyId",
     });
-    expect(
-      fn.Properties.Environment.Variables.GA4_SERVICE_ACCOUNT_PARAM,
-    ).toBe("/baradun/v2/api-keys/ga4-service-account");
+    expect(fn.Properties.Environment.Variables.GA4_SERVICE_ACCOUNT_PARAM).toBe(
+      "/baradun/v2/api-keys/ga4-service-account",
+    );
   });
 
   it("사이트 배포 조회는 배포 주소와 읽기 토큰 파라미터 이름만 받는다", () => {
@@ -56,6 +56,17 @@ describe("운영 API", () => {
     expect(env.ADMIN_SITE_URL).toEqual({ Ref: "AdminSiteDeployUrl" });
     expect(JSON.stringify(env.SITE_URL)).toContain("SiteDomainName");
     expect(JSON.stringify(env.SITE_URL)).toContain("SiteDistribution");
+  });
+
+  it("사용자 사이트 배포 표지는 기본 S3 원본에서 캐시 없이 읽는다", () => {
+    const config = siteDistribution().Properties.DistributionConfig;
+    expect(config.CacheBehaviors).toContainEqual(
+      expect.objectContaining({
+        PathPattern: "deploy-version.txt",
+        TargetOriginId: config.DefaultCacheBehavior.TargetOriginId,
+        CachePolicyId: "4135ea2d-6df8-44a3-9df3-4b5a84be39ad",
+      }),
+    );
   });
 
   it("게시 버킷은 publisher와 같은 사이트 버킷이다(BRD-150)", () => {

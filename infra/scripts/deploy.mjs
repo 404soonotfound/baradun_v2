@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // 인프라 배포 명령 하나 (BRD-169·GH-382):
-//   npm run deploy:infra [-- --profile <AWS 프로필>] [--admin-profile <IAM 정책을 고칠 프로필>] [--watch <분>] [--issue <번호>]
+//   npm run deploy:infra [-- --profile <AWS 프로필>] [--admin-profile <IAM 정책을 고칠 프로필>] [--watch <분>] [--issue <번호>] [--admin-site-deploy-url <HTTPS 주소>]
 // tsx로 실행함(판정 부분 deploy-plan.ts를 바로 가져옴)
 // 순서: 배포용 작업 트리를 origin/main으로 → ci-ok 확인 → npm ci → 자격 증명 → 스택 밖 IAM 정책 비교
 //   → 변경 세트 → 표 → yes일 때만 (boundary 반영) → 실행·대기 → 바뀐 함수 로그 점검 → 지도 판 확인 → (이슈 댓글)
@@ -9,7 +9,7 @@
 // - 실행 정책(BaradunCdkExecution·Workload)은 다르면 경고만 함. 바꾸는 순서가 따로 있어 자동 반영하지 않음(infra/README)
 // - 정책을 읽지 못하면 '같음'으로 넘기지 않고 멈춤
 // - 사람이 실행함. yes를 입력하지 않으면 변경 세트만 남기고 끝냄
-// - AlertEmail 등 스택 파라미터는 넘기지 않음(넘기면 예산 리소스가 교체되며 실패, infra/README 배포)
+// - 스택 파라미터는 기존 값을 유지함. 운영자 사이트 조회 주소는 전용 인자를 준 경우만 설정함
 // - 자격 증명은 이 프로세스의 하위 명령 환경 변수로만 넘김. 파일·화면에 남기지 않음
 // - 배포용 작업 트리 기본 위치: 저장소 옆 {저장소}-deploy. BARADUN_DEPLOY_DIR로 바꿀 수 있음
 import { spawnSync } from "node:child_process";
@@ -117,6 +117,10 @@ const adminProfile = arg("--admin-profile") ?? profile;
 const watchMinutes = intArg("--watch", 16);
 const issue = intArg("--issue", null);
 if (issue === 0) fail("--issue 뒤에 이슈 번호를 써 주세요");
+const adminSiteDeployUrl = arg("--admin-site-deploy-url");
+if (adminSiteDeployUrl && !/^https:\/\/[a-zA-Z0-9.-]+\/?$/.test(adminSiteDeployUrl)) {
+  fail("--admin-site-deploy-url에 경로 없이 HTTPS 주소를 써 주세요");
+}
 const commonDir = path.resolve(
   run("git", ["rev-parse", "--path-format=absolute", "--git-common-dir"], {
     capture: true,
@@ -390,6 +394,9 @@ run(
     name,
     "--require-approval",
     "never",
+    ...(adminSiteDeployUrl
+      ? ["--parameters", `AdminSiteDeployUrl=${adminSiteDeployUrl}`]
+      : []),
   ],
   { cwd: path.join(deployDir, "infra"), env: cdkEnv },
 );

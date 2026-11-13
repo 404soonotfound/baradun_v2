@@ -105,12 +105,15 @@ export class AdminSite extends Construct {
       },
     });
 
+    const siteOrigin = origins.S3BucketOrigin.withOriginAccessControl(
+      this.bucket,
+    );
     this.distribution = new cloudfront.Distribution(this, "Distribution", {
       comment: "baradun v2 operator console",
       defaultRootObject: "index.html",
       httpVersion: cloudfront.HttpVersion.HTTP2_AND_3,
       defaultBehavior: {
-        origin: origins.S3BucketOrigin.withOriginAccessControl(this.bucket),
+        origin: siteOrigin,
         viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
         responseHeadersPolicy: headers,
         // 파일의 Cache-Control을 따름(배포 때 해시 파일 1년, HTML은 매번 확인)
@@ -134,6 +137,14 @@ export class AdminSite extends Construct {
           cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
           originRequestPolicy:
             cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
+          responseHeadersPolicy: headers,
+        },
+        // 배포 표지는 현재 확인값으로 읽으므로 CloudFront 캐시를 끔.
+        "deploy-version.txt": {
+          origin: siteOrigin,
+          viewerProtocolPolicy:
+            cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+          cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
           responseHeadersPolicy: headers,
         },
       },
