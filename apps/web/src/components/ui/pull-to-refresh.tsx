@@ -2,7 +2,7 @@
 
 import { RefreshCw } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { type ReactNode, useRef, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 
 import { useReducedMotion } from "@/lib/motion";
 import { cn } from "@/lib/cn";
@@ -27,9 +27,25 @@ export function PullToRefresh({
 }: PullToRefreshProps) {
   const t = useTranslations();
   const reducedMotion = useReducedMotion();
+  const containerRef = useRef<HTMLDivElement>(null);
   const startYRef = useRef<number | null>(null);
   const pullRef = useRef(0);
   const [pullDistance, setPullDistance] = useState(0);
+
+  // React의 onTouchMove는 passive 리스너라 기본 당겨서 새로고침을 막을 수 없어 non-passive 리스너를 따로 둠
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    function onNativeTouchMove(e: TouchEvent) {
+      if (startYRef.current === null || refreshing || window.scrollY > 0) return;
+      const y = e.touches[0]?.clientY;
+      if (y !== undefined && y > startYRef.current && e.cancelable) {
+        e.preventDefault();
+      }
+    }
+    el.addEventListener("touchmove", onNativeTouchMove, { passive: false });
+    return () => el.removeEventListener("touchmove", onNativeTouchMove);
+  }, [refreshing]);
 
   function resetPull() {
     startYRef.current = null;
@@ -81,7 +97,8 @@ export function PullToRefresh({
 
   return (
     <div
-      className={cn("relative", className)}
+      ref={containerRef}
+      className={className}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
