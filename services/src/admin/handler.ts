@@ -7,6 +7,12 @@ import type {
   APIGatewayProxyStructuredResultV2,
 } from "aws-lambda";
 import {
+  cognitoOperatorEmailLookup,
+  createCachedOperatorEmailLookup,
+  enrichAuditActors,
+  type OperatorEmailLookup,
+} from "./actor-emails";
+import {
   actorOf,
   countAudit,
   listAudit,
@@ -115,6 +121,8 @@ export interface DataDependencies {
   readonly publisher?: PublisherInvoker | null;
   // 운영자 풀 계정 확인·인증 앱 지우기(2단계 인증 초기화, #335). 없으면 그 요청만 500
   readonly mfaReset?: MfaResetter | null;
+  // 변경 이력 운영자 sub → 이메일 조회(#465). 없으면 actorEmail 없이 응답
+  readonly actorEmails?: OperatorEmailLookup | null;
   // GA4 이용 통계 읽기(#333 ADM-STATS). 없으면 configured: false 안내
   readonly stats?: StatsReader | null;
 }
@@ -290,13 +298,18 @@ async function auditRoute(
   }
   const now = data.now();
   const page = await listAudit(data.client, data.opsTable, check.query, now);
+  const items = await enrichAuditActors(page.items, data.actorEmails, ids);
   // 탭 수는 첫 쪽에만(다음 쪽마다 기간 전체를 다시 세지 않게)
   // 화면이 이미 같은 거르기의 수를 가졌으면(분류 탭만 바꿈) counts=0으로 세지 않게 함
   const counts =
     check.query.cursor || event.queryStringParameters?.counts === "0"
       ? undefined
       : await countAudit(data.client, data.opsTable, check.query.filter, now);
-  return json(200, counts ? { ...page, counts } : page, ids);
+  return json(
+    200,
+    counts ? { ...page, items, counts } : { ...page, items },
+    ids,
+  );
 }
 
 // 샘플 요청 기록의 대상: 경로 모양만(문의 ID 등 실제 값은 넣지 않음)
@@ -657,6 +670,10 @@ function runtimeDependencies(): OpsDependencies {
       snapshots: snapshotReader(),
       publisher: publisherInvoker(),
       mfaReset: cognitoMfaResetter(config.operator.userPoolId),
+      actorEmails: createCachedOperatorEmailLookup(
+        cognitoOperatorEmailLookup(config.operator.userPoolId),
+        now,
+      ),
       stats: statsReader(now),
     },
   };
