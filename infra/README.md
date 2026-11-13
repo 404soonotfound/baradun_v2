@@ -10,7 +10,7 @@ npx cdk synth                               # CloudFormation 템플릿 생성 (i
 npx cdk diff --method=change-set            # 배포된 스택과 변경 세트 비교
 ```
 
-사이트 배포(`.github/workflows/deploy.yml`)는 하루 한 번 정기 실행(매일 05:17 KST)과 수동 실행(`npm run deploy:prod`)에서만 돕니다(GH-424). main에 머지할 때마다 올리면 배포마다 파일을 전부 다시 올려 S3 쓰기 요청 요금이 쌓이기 때문입니다(2026-11-01~13 청구액 US$1.08 중 약 90%, 앱 배포 1회에 PutObject 약 1,850건). 머지한 변경을 바로 보려면 `npm run deploy:prod`를 씁니다. 배포는 GitHub OIDC로 사이트 전용 역할(`DeployRole`)을 맡아 S3 파일 동기화와 CloudFront 캐시 무효화만 수행하며, CloudFormation이나 CDK 실행 정책을 거치지 않습니다. 정기 배포는 앱(사용자 사이트·운영자 사이트)마다 마지막으로 올린 커밋(운영 주소의 `deploy-version.txt`, 저장소 변수 `SITE_URL`·`ADMIN_SITE_URL`로 읽음) 뒤로 main push CI가 성공하고 그 실행에서 그 앱 빌드 작업(`e2e-build`·`admin-build`)까지 성공한 가장 새 커밋을 올립니다(`.github/scripts/deploy-plan.sh`). CI는 push 단위로 돌아 여러 커밋을 머지하면 맨 위 커밋에서만 실행되므로, 커밋별 변경이 아니라 실행 결과로 고릅니다. 그런 커밋이 없거나 올린 커밋과 앱 파일이 같으면 건너뛰므로(이때는 S3에 쓰지 않음), CI가 늦게 끝난 옛 커밋이 새 배포를 덮지 않고 CI가 실패한 커밋의 변경은 그 앱을 다시 검사한 뒤 커밋으로만 나갑니다(검사를 거치지 않은 앱 변경이 남으면 경고를 남김). 표시를 못 읽으면 경고를 남기고 최근 이력에서 고른 커밋을 올리며, `npm run deploy:prod`(수동 실행)는 두 앱을 모두 올립니다(BRD-178). 사이트 동기화는 `data/`(publisher 구역)와 `map/`(한국 지도 파일 구역, 결정 기록 D19-1)을 건드리지 않습니다. `map/<판>/`은 수동 워크플로 `map-tiles.yml`이 같은 배포 역할로 올립니다(`tools/map-tiles/README.md`). 저장소 변수(사이트 주소·버킷·로그인 풀 값 등 빌드 값)만 바꾼 경우는 파일 변경이 아니라 정기 배포가 건너뛰므로 `npm run deploy:prod`로 다시 올립니다. main push CI는 push마다 따로 돌고 취소하지 않으며, main 규칙은 최신 브랜치만 머지할 수 있게 합니다.
+사이트 배포(`.github/workflows/deploy.yml`)는 하루 한 번 정기 실행(매일 05:17 KST)과 수동 실행(`npm run deploy:prod`)에서만 돕니다(GH-424). main에 머지할 때마다 올리면 배포마다 파일을 전부 다시 올려 S3 쓰기 요청 요금이 쌓이기 때문입니다(2026-11-01~13 청구액 US$1.08 중 약 90%, 앱 배포 1회에 PutObject 약 1,850건). 머지한 변경을 바로 보려면 `npm run deploy:prod`를 씁니다. `DEPLOY_PAUSED=true`면 정기 실행과 새 수동 배포(CLI·Actions 탭)를 막습니다(D27-6). 수동 실행은 정지 사유를 실행 요약에 남기고 실패로 끝납니다. 이미 시작한 동기화는 그대로 끝납니다. 정지를 켠 뒤 GitHub Actions의 `deploy` 실행 목록에서 이미 대기 중인 수동 실행은 취소합니다. 긴급 배포는 정지를 해제한 뒤 실행합니다. 배포는 GitHub OIDC로 사이트 전용 역할(`DeployRole`)을 맡아 S3 파일 동기화와 CloudFront 캐시 무효화만 수행하며, CloudFormation이나 CDK 실행 정책을 거치지 않습니다. 정기 배포는 앱(사용자 사이트·운영자 사이트)마다 마지막으로 올린 커밋(운영 주소의 `deploy-version.txt`, 저장소 변수 `SITE_URL`·`ADMIN_SITE_URL`로 읽음) 뒤로 main push CI가 성공하고 그 실행에서 그 앱 빌드 작업(`e2e-build`·`admin-build`)까지 성공한 가장 새 커밋을 올립니다(`.github/scripts/deploy-plan.sh`). CI는 push 단위로 돌아 여러 커밋을 머지하면 맨 위 커밋에서만 실행되므로, 커밋별 변경이 아니라 실행 결과로 고릅니다. 그런 커밋이 없거나 올린 커밋과 앱 파일이 같으면 건너뛰므로(이때는 S3에 쓰지 않음), CI가 늦게 끝난 옛 커밋이 새 배포를 덮지 않고 CI가 실패한 커밋의 변경은 그 앱을 다시 검사한 뒤 커밋으로만 나갑니다(검사를 거치지 않은 앱 변경이 남으면 경고를 남김). 표시를 못 읽으면 경고를 남기고 최근 이력에서 고른 커밋을 올리며, `npm run deploy:prod`(수동 실행)는 두 앱을 모두 올립니다(BRD-178). 사이트 동기화는 `data/`(publisher 구역)와 `map/`(한국 지도 파일 구역, 결정 기록 D19-1)을 건드리지 않습니다. `map/<판>/`은 수동 워크플로 `map-tiles.yml`이 같은 배포 역할로 올립니다(`tools/map-tiles/README.md`). 저장소 변수(사이트 주소·버킷·로그인 풀 값 등 빌드 값)만 바꾼 경우는 파일 변경이 아니라 정기 배포가 건너뛰므로 `npm run deploy:prod`로 다시 올립니다. main push CI는 push마다 따로 돌고 취소하지 않으며, main 규칙은 최신 브랜치만 머지할 수 있게 합니다.
 
 인프라 스택은 main 머지 뒤 CI가 자동으로 배포합니다(아래 'main 머지 뒤 자동 배포'). 첫 설정·boundary 반영·비상 배포처럼 손으로 할 때는 최신 `origin/main`을 꺼낸 배포용 작업 트리에서 합니다. 작업 중인 브랜치에서 배포하면 머지되지 않은 코드가 실환경에 올라갑니다. 아래 명령 하나가 그 순서를 모두 합니다(BRD-169, `infra/scripts/deploy.mjs`).
 
@@ -114,7 +114,7 @@ GitHub 저장소 설정 → Environments에서 `infra`(배포 브랜치 `main`�
 
 ### 출시일 전환 순서
 
-1. **정기 배포 멈춤**: 저장소 변수 `DEPLOY_PAUSED=true`.
+1. **사이트 배포 멈춤**: 저장소 변수 `DEPLOY_PAUSED=true`.
 2. **스택 배포**: 최신 `origin/main` 작업 트리에서 도메인·인증서 값을 넣어 배포합니다(맨 위 배포 절차).
 
    ```bash
@@ -530,7 +530,7 @@ await fetch("/api/inquiries", {
 
 이 변경을 처음 배포할 때는 순서를 지킵니다. 새 Lambda는 멱등 키가 없는 요청을 400으로 거부하고, 이전 Lambda는 멱등 키가 있는 요청을 400으로 거부합니다.
 
-1. 머지 전에 GitHub Variables `DEPLOY_PAUSED`를 `true`로 둡니다. 정기 배포(하루 한 번)가 사이트를 올리지 않습니다(BRD-133).
+1. 머지 전에 GitHub Variables `DEPLOY_PAUSED`를 `true`로 둡니다. 정기 실행과 새 수동 배포가 사이트를 올리지 않습니다(D27-6).
 2. 최신 `origin/main` 작업 트리에서 `npx cdk deploy`(맨 위 배포 절차) → 출력 `InquiryPhotoBucketName`을 GitHub Variables `INQUIRY_PHOTO_BUCKET`에 넣습니다.
 3. `DEPLOY_PAUSED`를 지우고 루트에서 `npm run deploy:prod`로 사이트를 배포합니다. 2와 3 사이에 열려 있던 이전 화면의 문의는 거부되므로 바로 이어서 합니다.
 
