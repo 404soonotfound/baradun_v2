@@ -1,63 +1,63 @@
 shared: &shared
-  - 'package.json'
-  - 'package-lock.json'
-  - 'tsconfig.base.json'
-  - '.nvmrc'
-  - '.github/workflows/ci.yml'
+  - "package.json"
+  - "package-lock.json"
+  - "tsconfig.base.json"
+  - ".nvmrc"
+  - ".github/workflows/ci.yml"
 web:
   - *shared
-  - 'apps/web/**'
-  - 'packages/contracts/**'
-  - 'packages/design-tokens/**' # 디자인 토큰(결정 기록 D17-3)
-  - 'data/beaches/**' # 해변이 바뀌면 상세 페이지 빌드 확인
-  - 'data/beach-meta.json' # 검색 별칭·비시즌 배지(빌드 때 읽음, apps/web/src/lib/beaches.ts)
-  - '.github/workflows/deploy.yml' # 배포 빌드 방법이 바뀌면 다시 검사·배포(BRD-178)
+  - "apps/web/**"
+  - "packages/contracts/**"
+  - "packages/design-tokens/**" # 디자인 토큰(결정 기록 D17-3)
+  - "data/beaches/**" # 해변이 바뀌면 상세 페이지 빌드 확인
+  - "data/beach-meta.json" # 검색 별칭·비시즌 배지(빌드 때 읽음, apps/web/src/lib/beaches.ts)
+  - ".github/workflows/deploy.yml" # 배포 빌드 방법이 바뀌면 다시 검사·배포(BRD-178)
 admin:
   - *shared
-  - 'apps/admin/**'
-  - 'packages/contracts/**'
-  - 'packages/design-tokens/**'
-  - 'data/beaches/**' # 문의 해변 이름표(빌드 때 읽음, apps/admin/src/lib/beach-names.ts)
-  - 'data/beach-meta.json' # 해변 관리 별칭·운영 기간(빌드 때 읽음, apps/admin/src/lib/beach-data.ts)
-  - 'data/beach-coverage.csv' # 해변 관리 검증 결과(빌드 때 읽음, apps/admin/src/lib/beach-data.ts)
-  - '.github/workflows/deploy.yml' # 배포 빌드 방법이 바뀌면 다시 검사·배포(BRD-178)
+  - "apps/admin/**"
+  - "packages/contracts/**"
+  - "packages/design-tokens/**"
+  - "data/beaches/**" # 문의 해변 이름표(빌드 때 읽음, apps/admin/src/lib/beach-names.ts)
+  - "data/beach-meta.json" # 해변 관리 별칭·운영 기간(빌드 때 읽음, apps/admin/src/lib/beach-data.ts)
+  - "data/beach-coverage.csv" # 해변 관리 검증 결과(빌드 때 읽음, apps/admin/src/lib/beach-data.ts)
+  - ".github/workflows/deploy.yml" # 배포 빌드 방법이 바뀌면 다시 검사·배포(BRD-178)
 services:
   - *shared
-  - 'services/**'
-  - 'packages/contracts/**'
-  - 'data/photo-sources.json' # Lambda 번들에 들어가는 대장(catalog.test가 읽힘을 검사)
-  - 'tools/republish/**' # 게시 함수를 사람이 부르는 도구(D20-4, 게시 함수 이벤트와 같은 모양)
+  - "services/**"
+  - "packages/contracts/**"
+  - "data/photo-sources.json" # Lambda 번들에 들어가는 대장(catalog.test가 읽힘을 검사)
+  - "tools/republish/**" # 게시 함수를 사람이 부르는 도구(D20-4, 게시 함수 이벤트와 같은 모양)
 infra:
   - *shared
-  - 'infra/**'
-  - '.github/workflows/**' # 워크플로 가드레일 테스트
-  - '.github/scripts/**' # 배포 판단 스크립트(BRD-178, workflows.test.ts가 읽음)
-  - '.github/dependabot.yml' # Action 버전 갱신 설정(#303, workflows.test.ts가 읽음)
-  - 'tools/map-tiles/**' # 지도 파일 올리기 덮어쓰기 가드(D19-1, workflows.test.ts가 읽음)
-contracts:                  # 공통 설정 + 계약 폴더가 바뀌면
+  - "infra/**"
+  - ".github/workflows/**" # 워크플로 가드레일 테스트
+  - ".github/scripts/**" # 배포 판단 스크립트(BRD-178, workflows.test.ts가 읽음)
+  - ".github/dependabot.yml" # Action 버전 갱신 설정(#303, workflows.test.ts가 읽음)
+  - "tools/map-tiles/**" # 지도 파일 올리기 덮어쓰기 가드(D19-1, workflows.test.ts가 읽음)
+contracts: # 공통 설정 + 계약 폴더가 바뀌면
   - *shared
-  - 'packages/contracts/**'
+  - "packages/contracts/**"
 deps: # 의존성이 바뀌면 취약점 검사 (shared 포함: audit 잡 변경도 재검사)
   - *shared
-  - '**/package.json'
+  - "**/package.json"
 beaches: # 해변 목록 또는 검사 규칙이 바뀌면
   - *shared
-  - 'tools/beaches/**'
-  - 'data/beaches/**'
-  - 'data/beach-coverage.csv'
-  - 'data/beach-meta.json'
-  - 'data/photo-sources.json' # 대표 사진 TourAPI 관광지 대장(BRD-58)
-  - 'data/weather-areas.json' # 해변 → 날씨 예보 격자·중기 구역(BRD-181)
-  - 'packages/contracts/schemas/**'
-  - 'packages/contracts/scripts/**'
+  - "tools/beaches/**"
+  - "data/beaches/**"
+  - "data/beach-coverage.csv"
+  - "data/beach-meta.json"
+  - "data/photo-sources.json" # 대표 사진 TourAPI 관광지 대장(BRD-58)
+  - "data/weather-areas.json" # 해변 → 날씨 예보 격자·중기 구역(BRD-181)
+  - "packages/contracts/schemas/**"
+  - "packages/contracts/scripts/**"
 agy_review: # 대체 리뷰 도구 판정 규칙이 바뀌면(agy는 부르지 않음)
   - *shared
-  - 'tools/agy-review/**'
+  - "tools/agy-review/**"
 ops_policy: # 운영 정책 원본 가져오기 도구가 바뀌면(노션은 부르지 않음, CI에 노션 토큰 없음 D20-11)
   - *shared
-  - 'tools/ops-policy/**'
+  - "tools/ops-policy/**"
 map: # 지도 판·스타일·지도 파일 도구가 바뀌면 실제 지도 파일 확인(D19-1 · #392)
-  - 'apps/web/src/lib/map/style.ts' # 지도 판 이름
-  - 'apps/web/src/lib/map/style-*.json' # 부르는 글꼴
-  - 'tools/map-tiles/**'
-  - '.github/workflows/map-tiles.yml'
+  - "apps/web/src/lib/map/style.ts" # 지도 판 이름
+  - "apps/web/src/lib/map/style-*.json" # 부르는 글꼴
+  - "tools/map-tiles/**"
+  - ".github/workflows/map-tiles.yml"
