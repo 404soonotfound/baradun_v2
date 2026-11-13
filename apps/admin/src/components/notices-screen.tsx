@@ -435,7 +435,10 @@ function RowMenu({
   editBlocked: string | null;
   publishBlocked: string | null;
   onEdit: () => void;
-  onAction: (action: "expose" | "end" | "delete") => void;
+  onAction: (
+    action: "expose" | "end" | "delete",
+    triggerEl: HTMLButtonElement | null,
+  ) => void;
 }) {
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLDivElement>(null);
@@ -519,7 +522,7 @@ function RowMenu({
             disabled={!canExpose}
             onClick={() => {
               setOpen(false);
-              onAction("expose");
+              onAction("expose", trigger.current);
             }}
             className="flex min-h-touch items-center rounded-admin-control px-2.5 text-left text-body-s text-text-default hover:bg-bg-page disabled:cursor-not-allowed disabled:opacity-45 lg:min-h-admin-control"
           >
@@ -530,7 +533,7 @@ function RowMenu({
             disabled={!canEnd}
             onClick={() => {
               setOpen(false);
-              onAction("end");
+              onAction("end", trigger.current);
             }}
             className="flex min-h-touch items-center rounded-admin-control px-2.5 text-left text-body-s text-text-default hover:bg-bg-page disabled:cursor-not-allowed disabled:opacity-45 lg:min-h-admin-control"
           >
@@ -541,7 +544,7 @@ function RowMenu({
             disabled={!canDelete}
             onClick={() => {
               setOpen(false);
-              onAction("delete");
+              onAction("delete", trigger.current);
             }}
             className="flex min-h-touch items-center rounded-admin-control px-2.5 text-left text-body-s text-danger-text hover:bg-bg-page disabled:cursor-not-allowed disabled:opacity-45 lg:min-h-admin-control"
           >
@@ -576,6 +579,7 @@ function NoticeList({
     notice: NoticeView;
     action: "expose" | "end" | "delete";
   } | null>(null);
+  const pendingTrigger = useRef<HTMLButtonElement | null>(null);
   const [actionBusy, setActionBusy] = useState(false);
   const [actionFlash, setActionFlash] = useState<string | null>(null);
   const [actionError, setActionError] = useState<WriteError | null>(null);
@@ -593,6 +597,7 @@ function NoticeList({
 
   const runRowAction = () => {
     if (!pendingAction || actionBusy) return;
+    pendingTrigger.current = null;
     const { notice, action } = pendingAction;
     const reqBody = JSON.stringify({
       id: notice.id,
@@ -831,7 +836,12 @@ function NoticeList({
               cancelLabel={t.confirmCancel}
               busy={actionBusy}
               onConfirm={runRowAction}
-              onCancel={() => setPendingAction(null)}
+              onCancel={() => {
+                const target = pendingTrigger.current;
+                pendingTrigger.current = null;
+                setPendingAction(null);
+                if (target?.isConnected) target.focus();
+              }}
             />
           </div>
         )}
@@ -944,9 +954,10 @@ function NoticeList({
                             editBlocked={edit}
                             publishBlocked={publish}
                             onEdit={() => router.push(editHref(n.id))}
-                            onAction={(action) =>
-                              setPendingAction({ notice: n, action })
-                            }
+                            onAction={(action, triggerEl) => {
+                              pendingTrigger.current = triggerEl;
+                              setPendingAction({ notice: n, action });
+                            }}
                           />
                         </td>
                       </tr>
