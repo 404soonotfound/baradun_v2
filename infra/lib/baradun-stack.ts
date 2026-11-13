@@ -204,17 +204,6 @@ export class BaradunStack extends Stack {
       opsApiLogGroup: opsApi.logGroup,
       inquiryLogGroup: inquiry.logGroup, // 문의 이메일 기한 초과·정리 실패 감시(BRD-119)
       inquiryCleanupFailuresQueue: inquiry.cleanupFailuresQueue,
-      // 로그인 반복 요청 감시(D17-4): 운영자·데모 풀의 관리자 앱 클라이언트
-      signInClients: [
-        {
-          userPoolId: operatorAuth.userPool.userPoolId,
-          clientId: operatorAuth.client.userPoolClientId,
-        },
-        {
-          userPoolId: operatorAuth.samplePool.userPoolId,
-          clientId: operatorAuth.sampleClient.userPoolClientId,
-        },
-      ],
     });
 
     // 월 $1 예산 알림 (콘솔의 Zero-Spend 예산을 대신함)
