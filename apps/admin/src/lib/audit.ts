@@ -13,6 +13,8 @@ export const AUDIT_ACTIONS = [
   "notice.end",
   "notice.delete",
   "beach.memo",
+  // 다른 운영자의 2단계 인증 초기화(#335). 대상은 계정 sub
+  "permission.mfa_reset",
   "sample.read",
   "sample.denied",
 ] as const;
