@@ -101,23 +101,27 @@ async function expectDataFreeActions(page: Page) {
 
 test.describe("정상", () => {
   for (const url of ["/", "/explore/", `/spots/${slugOf(CLEAR_ID)}/`]) {
-    test(`'특보 없음' 자리마다 근거와 현장 우선 문구 ${url}${url === "/" ? " @smoke" : ""}`, async ({
-      page,
-    }) => {
-      await page.goto(url);
-      await expect(clearBadges(page).first()).toBeVisible();
-      // 받은 상태로 그린 뒤에 봄: 모바일 탐색 처음 보기(지도, BRD-128)의 범례는 상태를 받기 전에도 '특보 없음' 칸이 있고
-      // 범위·확인 시각 줄은 받은 뒤에 붙음
-      await expect(
-        page.getByText(CONFIRMED).filter({ visible: true }).first(),
-      ).toBeVisible();
-      const result = await clearPlacesWithoutBasis(page);
-      expect(result.count).toBeGreaterThan(0);
-      expect(result.missing).toEqual([]);
-    });
+    test(
+      `'특보 없음' 자리마다 근거와 현장 우선 문구 ${url}`,
+      { tag: url === "/" ? "@smoke" : [] },
+      async ({ page }) => {
+        await page.goto(url);
+        await expect(clearBadges(page).first()).toBeVisible();
+        // 받은 상태로 그린 뒤에 봄: 모바일 탐색 처음 보기(지도, BRD-128)의 범례는 상태를 받기 전에도 '특보 없음' 칸이 있고
+        // 범위·확인 시각 줄은 받은 뒤에 붙음
+        await expect(
+          page.getByText(CONFIRMED).filter({ visible: true }).first(),
+        ).toBeVisible();
+        const result = await clearPlacesWithoutBasis(page);
+        expect(result.count).toBeGreaterThan(0);
+        expect(result.missing).toEqual([]);
+      },
+    );
   }
 
-  test("이용불가는 실제 사유(풍랑주의보)를 먼저 보여줌 @smoke", async ({ page }) => {
+  test("이용불가는 실제 사유(풍랑주의보)를 먼저 보여줌 @smoke", async ({
+    page,
+  }) => {
     await page.goto(`/spots/${slugOf(WARNING_ID)}/`);
     await expect(
       page.getByRole("heading", { name: "풍랑주의보가 발효 중이에요" }),
@@ -319,7 +323,7 @@ test.describe("PC 전국 지도 카드", () => {
 for (const scenario of ["futureConfirm", "missingWarning"] as const) {
   test.describe(scenario, () => {
     test.use({ scenario });
-    test("'특보 없음'을 보여주지 않음", async ({ page }) => {
+    test("'특보 없음'을 보여주지 않음", { tag: "@smoke" }, async ({ page }) => {
       for (const url of ["/", `/spots/${slugOf(CLEAR_ID)}/`]) {
         await page.goto(url);
         await expect(page.getByText("확인 못 함").first()).toBeVisible();
@@ -350,20 +354,20 @@ test.describe("오프라인", () => {
     await expectNoA11yViolations(page);
   });
 
-  test("홈: 끊긴 동안 '특보 없음'을 보여주지 않음", async ({
-    page,
-    context,
-    data,
-  }) => {
-    await page.goto("/");
-    await expect(clearBadges(page).first()).toBeVisible();
-    data.set("noData");
-    await context.setOffline(true);
-    await expect(
-      page.getByText("인터넷에 연결되어 있지 않아요").first(),
-    ).toBeVisible();
-    await expect(clearBadges(page)).toHaveCount(0);
-  });
+  test(
+    "홈: 끊긴 동안 '특보 없음'을 보여주지 않음",
+    { tag: "@smoke" },
+    async ({ page, context, data }) => {
+      await page.goto("/");
+      await expect(clearBadges(page).first()).toBeVisible();
+      data.set("noData");
+      await context.setOffline(true);
+      await expect(
+        page.getByText("인터넷에 연결되어 있지 않아요").first(),
+      ).toBeVisible();
+      await expect(clearBadges(page)).toHaveCount(0);
+    },
+  );
 });
 
 // 점검·강제 업데이트: 화면 전체를 덮고 지난 값을 숨김(점검표 4)
