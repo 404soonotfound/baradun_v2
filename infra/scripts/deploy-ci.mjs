@@ -239,32 +239,46 @@ function readInfraEvidence() {
       "api",
       `repos/${repo}/actions/workflows/ci.yml/runs?branch=main&event=push&${query}`,
       "--jq",
-      '.workflow_runs[] | "\\(.head_sha) \\(.id)"',
+      '.workflow_runs[] | "\\(.head_sha) \\(.id) \\(.status)"',
     ])
       .stdout.split("\n")
       .filter(Boolean)
-      .map((line) => line.split(" "));
+      .map((line) => {
+        const [head, id, status] = line.split(" ");
+        return { head, id, completed: status === "completed" };
+      });
   const recent = new Map();
-  for (const [head, id] of ciRuns(`per_page=${CI_HISTORY}`))
-    if (!recent.has(head)) recent.set(head, id); // 최신 실행이 먼저
+  for (const r of ciRuns(`per_page=${CI_HISTORY}`))
+    if (!recent.has(r.head)) recent.set(r.head, r); // 최신 실행이 먼저
+  // 같은 커밋을 작업마다 다시 조회하지 않게 한 번 읽은 결과를 둠(실행이 없음도 null로 둠)
+  const looked = new Map();
   const runOf = (c) => {
     if (recent.has(c)) return recent.get(c);
-    const found = ciRuns(`head_sha=${c}&per_page=1`)[0];
-    return found ? found[1] : null;
+    if (!looked.has(c))
+      looked.set(c, ciRuns(`head_sha=${c}&per_page=1`)[0] ?? null);
+    return looked.get(c);
   };
   const jobsCache = new Map();
-  const jobsOf = (id) => {
-    if (!jobsCache.has(id)) {
+  // 실행이 아직 끝나지 않았는데 그 작업이 목록에 없으면(앞 작업 대기 중) 없음이 아니라 진행 중(null)
+  const resultOf = (ciRun, job) => {
+    if (!jobsCache.has(ciRun.id)) {
       const jobs = {};
       const listed = JSON.parse(
-        run("gh", ["api", `repos/${repo}/actions/runs/${id}/jobs?per_page=100`])
-          .stdout,
+        run("gh", [
+          "api",
+          `repos/${repo}/actions/runs/${ciRun.id}/jobs?per_page=100`,
+        ]).stdout,
       );
       for (const j of listed.jobs ?? [])
         jobs[j.name] = j.status === "completed" ? j.conclusion : null;
-      jobsCache.set(id, jobs);
+      jobsCache.set(ciRun.id, jobs);
     }
-    return jobsCache.get(id);
+    const jobs = jobsCache.get(ciRun.id);
+    return Object.hasOwn(jobs, job)
+      ? jobs[job]
+      : ciRun.completed
+        ? undefined
+        : null;
   };
   const lines = (args) => run("git", args).stdout.split("\n").filter(Boolean);
   return INFRA_CI_JOBS.map((job) => {
@@ -293,17 +307,17 @@ function readInfraEvidence() {
       // 1) 마지막 변경을 담은 push의 실행: 그 커밋부터 위로 처음 실행이 있는 커밋
       let at = -1;
       for (let i = 0; i < Math.min(range.length, PUSH_SEARCH); i++) {
-        const id = runOf(range[i]);
-        if (id) {
+        const ciRun = runOf(range[i]);
+        if (ciRun) {
           at = i;
-          yield { sha: range[i], result: jobsOf(id)[job] };
+          yield { sha: range[i], result: resultOf(ciRun, job) };
           break;
         }
       }
       // 2) 그 뒤 실행(최근 목록에 있는 것만, 최신부터): 다시 돌린 실행·공통 파일 변경으로 그 작업이 다시 돈 실행
       for (let i = range.length - 1; i > at; i--) {
-        const id = recent.get(range[i]);
-        if (id) yield { sha: range[i], result: jobsOf(id)[job] };
+        const ciRun = recent.get(range[i]);
+        if (ciRun) yield { sha: range[i], result: resultOf(ciRun, job) };
       }
     }
     return { job, lastChange, runs: runs() };
@@ -474,7 +488,14 @@ function tableMarkdown(rows) {
 }
 
 // 실행·대기. 실패하면 실패 이벤트를 댓글로 남기고 멈춤
-async function executeAndWait(account, name, rows, policies) {
+// afterStackWait: 다시 하기 전 스택 대기 뒤에 부르는 확인(승인 실행은 main이 앞섰는지 다시 봄)
+async function executeAndWait(
+  account,
+  name,
+  rows,
+  policies,
+  afterStackWait = () => {},
+) {
   const deployAws = deployRoleAws(account);
   // 실행하지 못하고 멈추면(실행 실패, 다시 하기 전 스택 대기 실패 등) 이 커밋의 변경이 반영되지 않음
   // → 실행 요약만이 아니라 댓글로도 알림. 실행이 시작되면 아래 대기 실패 댓글이 따로 남으므로 풂
@@ -516,6 +537,7 @@ async function executeAndWait(account, name, rows, policies) {
       fail(`변경 세트 ${name}를 실행하지 못했어요. 위 오류를 확인해 주세요.`);
     }
     requireStackReady();
+    afterStackWait();
   }
   beforeFail = null;
   console.log(`변경 세트 ${name}를 실행하고 끝날 때까지 기다려요`);
@@ -700,18 +722,27 @@ async function execute() {
   if (!name.startsWith(`deploy-${sha.slice(0, 7)}-`))
     fail(`변경 세트 ${name}는 이 커밋(${sha.slice(0, 7)})의 것이 아니에요.`);
   // 기다리는 동안 main이 앞서면 실행하지 않음(옛 변경 세트를 실행하면 새 커밋의 변경 세트가 지워져 새 변경이 남음)
-  const head = mainHead();
-  if (head !== sha)
-    fail(
-      `승인을 기다리는 동안 main이 ${head.slice(0, 7)}로 앞섰어요. 이 변경 세트는 실행하지 않으니 그 커밋의 실행 결과를 확인해 주세요.`,
-    );
+  // 승인 작업은 커밋마다 다른 그룹이라 스택 대기 중에도 main이 앞설 수 있음 → 대기 뒤에도 다시 확인
+  const requireMainAtSha = () => {
+    const head = mainHead();
+    if (head !== sha)
+      fail(
+        `승인을 기다리는 동안 main이 ${head.slice(0, 7)}로 앞섰어요. 이 변경 세트는 실행하지 않으니 그 커밋의 실행 결과를 확인해 주세요.`,
+      );
+  };
+  requireMainAtSha();
   const account = identity();
   requireStackReady();
-  // 기다리는 동안 boundary가 바뀌었으면 실행하지 않음
+  requireMainAtSha();
+  // 기다리는 동안 boundary·실행 정책이 바뀌었으면 실행하지 않음(plan의 판정과 같은 조건)
   const policies = comparePolicies(account, { strict: true });
   if (!policies.boundarySame)
     fail(
       "승인을 기다리는 동안 boundary가 저장소와 달라졌어요. 로컬 npm run deploy:infra로 배포해 주세요.",
+    );
+  if (policies.executionGaps.length > 0)
+    fail(
+      `승인을 기다리는 동안 실행 정책이 저장소 문서의 동작을 허용하지 않게 됐어요(${policies.executionGaps.join(", ")}). 로컬 npm run deploy:infra로 배포해 주세요.`,
     );
   const read = readChangeSet(name);
   if (!read)
@@ -730,7 +761,7 @@ async function execute() {
   summary(
     `### 승인받은 변경 세트 실행\n\n- 커밋: ${subject}\n- 변경 세트: \`${name}\`\n\n${tableMarkdown(rows)}`,
   );
-  await executeAndWait(account, name, rows, policies);
+  await executeAndWait(account, name, rows, policies, requireMainAtSha);
 }
 
 // ── watch: 배포 뒤 로그 점검·지도 판 확인·결과 댓글 ──

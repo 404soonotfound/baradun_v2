@@ -759,6 +759,31 @@ describe("실행 정책이 허용하지 않는 동작 (#418)", () => {
         ),
       ]),
     ).toEqual(["sqs:SendMessage"]);
+    // 저장소에도 같은 Deny NotAction이 있으면 의도한 거부로 봄(Deny Action과 같게)
+    expect(
+      missingExecutionActions(
+        [
+          doc(
+            {
+              Effect: "Allow",
+              Action: ["s3:GetObject", "sqs:SendMessage"],
+              Resource: "*",
+            },
+            {
+              Effect: "Deny",
+              NotAction: "S3:*",
+              Resource: "*",
+            },
+          ),
+        ],
+        [
+          doc(
+            { Effect: "Allow", Action: "*", Resource: "*" },
+            { Effect: "Deny", NotAction: "s3:*", Resource: "*" },
+          ),
+        ],
+      ),
+    ).toEqual([]);
     expect(
       missingExecutionActions(local, [
         doc({ Effect: "Allow", NotAction: "iam:*", Resource: "*" }),
@@ -896,8 +921,14 @@ describe("이 트리의 인프라 영역을 main CI가 검사했는지 (#418)", 
 });
 
 describe("인프라 배포에 영향이 있는 파일 (#418)", () => {
-  it("infra·services·계약 폴더와 루트 package 파일만 고른다", () => {
+  it("infra·services·계약 폴더, 루트 package 파일, Lambda 번들에 들어가는 data 파일만 고른다", () => {
     expect(touchesInfra(["infra/lib/stack.ts"])).toBe(true);
+    expect(touchesInfra(["data/beaches/b0001.json"])).toBe(true);
+    expect(touchesInfra(["data/weather-areas.json"])).toBe(true);
+    expect(touchesInfra(["tools/beaches/annex-tables.json"])).toBe(true);
+    expect(
+      touchesInfra(["tools/beaches/build.ts", "data/beach-coverage.csv"]),
+    ).toBe(false);
     expect(touchesInfra(["apps/web/a.ts", "services/src/x.ts"])).toBe(true);
     expect(touchesInfra(["packages/contracts/src/a.ts"])).toBe(true);
     expect(touchesInfra(["package-lock.json"])).toBe(true);
