@@ -357,6 +357,10 @@ export function buildBeaches({ coverageDir = COVERAGE_DIR, existingDataDir = joi
       throw new Error(`목록에 없는 좌표 보류·형식 오류: ${key}`);
     const lat = Number(Number(src.lat).toFixed(6));
     const lng = Number(Number(src.lon).toFixed(6));
+    // 판정 입력(L1 좌표 근거)이 지금 좌표(수집본 + coord-overrides.json)로 만들어졌는지 확인. 보정표만 고치고 spatial-judge를 다시 돌리지 않으면 중단
+    const proofCoords = evidence.land_proof?.coords;
+    if (proofCoords && (Number(proofCoords.lat) !== Number(src.lat) || Number(proofCoords.lon) !== Number(src.lon)))
+      throw new Error(`판정 입력 좌표와 생성 좌표 다름 → spatial-judge 다시 실행: ${key} (근거 ${proofCoords.lat}, ${proofCoords.lon} / 지금 ${src.lat}, ${src.lon})`);
     const id = (ids.ids[idKey(src)] ??= `b${String(nextSeq++).padStart(4, "0")}`);
     const koBase = n.ko ?? src.sta_nm;
     const nameKo = koBase.endsWith("비치") ? koBase : `${koBase}해수욕장`;
@@ -517,7 +521,7 @@ export function buildBeaches({ coverageDir = COVERAGE_DIR, existingDataDir = joi
         ])),
         aliases,
         coast: coastOf(seaZone),
-        coordsSource: "해양수산부 해수욕장정보 OceansBeachInfoService1/getOceansBeachInfo1 (2026-10-16 수집, tools/coverage/out/beaches.csv), 소수 6자리 반올림",
+        coordsSource: `${src.coords_source ? `${src.coords_source} (tools/beaches/coord-overrides.json)` : "해양수산부 해수욕장정보 OceansBeachInfoService1/getOceansBeachInfo1 (2026-10-16 수집, tools/coverage/out/beaches.csv)"}, 소수 6자리 반올림`,
         nameKoStatus: n.place || n.ko ? "사람 검토 필요" : "수집본 이름 + 해수욕장",
         nameEnStatus: "규칙 확정('<로마자> Beach', 결정 기록 11장 10/21 ③)",
         slugStatus: n.review ? "사람 검토 필요" : "규칙 확정",
@@ -555,6 +559,7 @@ export function buildBeaches({ coverageDir = COVERAGE_DIR, existingDataDir = joi
       note: "data/beaches 반영 전 초안. 레코드의 _draft는 Beach 계약 밖 검토용 칸. slug가 null이면 전국 확정 때 결정",
       sources: [
         "tools/coverage/out/beaches.csv (해수부 해수욕장정보, 2026-10-16)",
+        "tools/beaches/coord-overrides.json (수집본 좌표 오타 정정·누락 보충, 공식 출처 좌표)",
         "tools/coverage/beach-zone-evidence.json (좌표–법정 읍면동 경계 L1 판정·해상 구역·자동 제외 입력)",
         "tools/coverage/out/stations.csv, tools/coverage/station-zone-evidence.json (관측소 좌표·독립 검증 입력)",
         "tools/coverage/out/freshness/sea_obs_72h.csv, kma_buoy2_7d.csv (72시간 미수신 판정)",
