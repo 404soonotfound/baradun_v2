@@ -137,6 +137,14 @@ test("응답에 칸이 생기면 그 칸이 다시 보이고, 한 줄 안내에�
           { path: "/", title: null, pageViews: 5 },
           { path: "/search", title: "찾기", pageViews: 3 },
         ],
+        // 5개 이상이면 도넛은 앞 3개 + 기타
+        languages: [
+          { language: "ko", activeUsers: 100 },
+          { language: "en", activeUsers: 40 },
+          { language: "ja", activeUsers: 20 },
+          { language: "zh", activeUsers: 10 },
+          { language: "fr", activeUsers: 10 },
+        ],
       },
     },
   }));
@@ -160,6 +168,13 @@ test("응답에 칸이 생기면 그 칸이 다시 보이고, 한 줄 안내에�
   await expect(page.getByText("새 사용자 비율")).toBeVisible();
   await expect(page.getByText("25%", { exact: true })).toBeVisible();
   await expect(page.getByText("+20%")).toHaveCount(1);
+  const languages = section(page, "화면 언어");
+  await expect(languages.getByRole("listitem")).toHaveCount(4);
+  await expect(languages.getByText("기타")).toBeVisible();
+  // 기타 = zh 10 + fr 10 → 20 / 180 = 11%
+  await expect(
+    languages.getByRole("listitem").filter({ hasText: "기타" }),
+  ).toContainText("11%");
   const screens = section(page, "많이 본 화면");
   await expect(screens.getByText("찾기")).toBeVisible();
   await expect(screens.getByText("이름 확인 못 함")).toBeVisible();

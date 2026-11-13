@@ -240,12 +240,15 @@ test("모두 정상: 판단 출처 정상 한 줄(모바일만), 세 칸·판단
   await expect(shown.getByText(/09:38 측정/)).toBeVisible();
   await expect(table.getByText("b0002")).toHaveCount(0);
 
-  // 이용: GA 28일 합계·지금 사용 중. 응답에 없는 일별 추이는 그리지 않음
+  // 이용: GA 28일 합계·지금 사용 중. 응답에 일별 칸이 없으면 그래프 대신 한 줄
   const usage = block(page, "이용");
   await expect(usage.getByText("지금 사용 중 14명 · 최근 30분")).toBeVisible();
   await expect(usage.getByText("3,960", { exact: true })).toBeVisible();
   await expect(usage.getByText("9,240", { exact: true })).toBeVisible();
-  await expect(usage.getByText("일별 추이 확인 못 함")).toHaveCount(2);
+  await expect(
+    usage.getByText("일별 추이는 아직 보여 드릴 수 없어요", { exact: true }),
+  ).toBeVisible();
+  await expect(usage.locator("svg rect")).toHaveCount(0);
 
   await expect(page.getByText("지금 할 일이 없어요")).toBeVisible();
   const prs = page.getByRole("link", { name: /해변 정보 변경 PR 보기/ });
@@ -300,6 +303,75 @@ test("게시본이 점검 중이면 앱에 보이는 해변 칸에 점검 안내
       "앱이 점검 중이라 해변 상태를 보여 주지 않아요. 개수는 마지막 게시본 기준이에요.",
     ),
   ).toBeVisible();
+  await expectNoA11yViolations(page);
+});
+
+test("판단불가 사유가 여럿이면 배지를 모두 보이고, 이용 칸은 기간 통계 실패와 일별 그래프를 응답대로 보인다", async ({
+  page,
+}) => {
+  const stats = localStatsView("28d", Date.parse("2026-11-11T03:00:00Z"));
+  await signIn(page, {
+    published: ok({
+      ...PUBLISHED,
+      beaches: {
+        ...PUBLISHED.beaches,
+        b0002: {
+          ...PUBLISHED.beaches.b0002,
+          reasons: [
+            ...PUBLISHED.beaches.b0002.reasons,
+            {
+              code: "observation_delayed",
+              scope: "강릉 파고부이",
+              source: "기상청",
+              at: "2026-11-11T00:38:00Z",
+            },
+          ],
+        },
+      },
+    }),
+    stats: ok({
+      ...stats,
+      period: { ...stats.period, status: "unavailable" },
+    }),
+  });
+  const table = block(page, "판단불가 해변");
+  const shown = table.locator(isDesktop(page) ? "table" : "ul");
+  const row = shown
+    .locator(isDesktop(page) ? "tr" : "li")
+    .filter({ hasText: "경포해수욕장" });
+  await expect(row.getByText("특보 확인 못 함")).toBeVisible();
+  await expect(row.getByText("관측 지연")).toBeVisible();
+
+  // 기간 통계 실패: 값은 확인 못 함 + 무슨 일·영향 + 다시 시도
+  const usage = block(page, "이용");
+  await expect(
+    usage.getByText(/^기간 통계를 불러오지 못해 사용자·화면 조회를 확인하지 못했어요/),
+  ).toBeVisible();
+  await expect(usage.getByRole("button", { name: "다시 시도" })).toBeVisible();
+  await expect(usage.getByText("확인 못 함", { exact: true })).toHaveCount(2);
+
+  // 다시 시도: 일별 칸이 생긴 응답이면 그래프(값이 없는 날은 막대 없음)
+  await page.unroute(/\/ops\/stats(\?.*)?$/);
+  await page.route(/\/ops\/stats(\?.*)?$/, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        ...stats,
+        period: {
+          ...stats.period,
+          daily: [
+            { date: "2026-11-10", activeUsers: 120, pageViews: 300 },
+            { date: "2026-11-11", activeUsers: null, pageViews: 280 },
+          ],
+        },
+      }),
+    }),
+  );
+  await usage.getByRole("button", { name: "다시 시도" }).click();
+  await expect(usage.getByText("3,960", { exact: true })).toBeVisible();
+  await expect(usage.locator("svg rect")).toHaveCount(3);
+  await expect(usage.getByText("일별 추이는 아직 보여 드릴 수 없어요")).toHaveCount(0);
   await expectNoA11yViolations(page);
 });
 
