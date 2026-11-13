@@ -685,6 +685,164 @@ test("저장 실패 뒤에도 뒤로 가기 '나가기'는 목록으로 가고, 
   await expect(
     page.getByRole("status").filter({ hasText: "저장했어요" }),
   ).toBeVisible();
+  await expect(page.getByText("바뀐 내용 없음")).toBeVisible();
   await page.goBack();
   await expect(list).toBeVisible();
+});
+
+test("목록: 배너 순서 7칸 띠, 제목·문구 검색과 종류 필터, 행 끝 메뉴가 동작한다", async ({
+  page,
+}) => {
+  await signIn(page);
+  let failEnd = true;
+  const { writes } = await mockNotices(page, {
+    write: (w) =>
+      failEnd && w.path.endsWith("/end")
+        ? {
+            status: 500,
+            body: { error: { code: "internal", requestId: "req-row" } },
+          }
+        : undefined,
+  });
+  await openNotices(page);
+
+  // 배너 순서 7칸 띠
+  const banner = page.getByRole("region", { name: "앱 배너 순서" });
+  await expect(banner.locator("ol > li")).toHaveCount(7);
+  await expect(banner.getByText("운영 공지")).toBeVisible();
+  await expect(banner.getByText("● 노출 중")).toBeVisible();
+
+  // 제목·문구 찾기 + 종류 필터 (Esc 포커스 복원 포함)
+  await expect(page.getByRole("heading", { name: "공지 목록" })).toBeVisible();
+  await page.getByLabel("제목·문구 찾기").fill("새벽");
+  await expect(rows(page)).toHaveCount(1);
+  await expect(rows(page).first()).toContainText("새벽 점검 예고");
+  await page.getByLabel("제목·문구 찾기").fill("");
+  await expect(rows(page)).toHaveCount(5);
+
+  const kindBtn = page.getByRole("button", { name: "종류", exact: true });
+  await kindBtn.click();
+  await page.keyboard.press("Escape");
+  await expect(kindBtn).toBeFocused();
+
+  await kindBtn.click();
+  await page
+    .getByRole("group", { name: "공지 종류 고르기" })
+    .getByRole("button", { name: "점검 예고" })
+    .click();
+  await expect(rows(page)).toHaveCount(1);
+  await page.getByRole("button", { name: "종류: 점검 예고" }).click();
+  await page
+    .getByRole("group", { name: "공지 종류 고르기" })
+    .getByRole("button", { name: "모든 종류" })
+    .click();
+  await expect(rows(page)).toHaveCount(5);
+
+  // PC 표 행 끝 '…' 메뉴: Esc 포커스 복원, 실패 후 재시도 시 같은 멱등 키 유지, 409 충돌 시 목록 새로고침, 편집 이동
+  if (!isMobile(page)) {
+    const rowTrigger = page.getByRole("button", {
+      name: "새벽 점검 예고 작업 메뉴",
+    });
+    await rowTrigger.click();
+    await page.keyboard.press("Escape");
+    await expect(rowTrigger).toBeFocused();
+
+    await rowTrigger.click();
+    await page
+      .getByRole("group", { name: "새벽 점검 예고 작업 메뉴" })
+      .getByRole("button", { name: "노출 종료" })
+      .click();
+    await page
+      .getByRole("alert")
+      .getByRole("button", { name: "노출 종료" })
+      .click();
+    await expect(
+      page.getByRole("alert").filter({ hasText: "처리하지 못했어요" }),
+    ).toBeVisible();
+
+    failEnd = false;
+    await rowTrigger.click();
+    await page
+      .getByRole("group", { name: "새벽 점검 예고 작업 메뉴" })
+      .getByRole("button", { name: "노출 종료" })
+      .click();
+    await page
+      .getByRole("alert")
+      .getByRole("button", { name: "노출 종료" })
+      .click();
+    await expect(
+      page.getByRole("status").filter({ hasText: "노출을 끝냈어요" }),
+    ).toBeVisible();
+    expect(writes).toHaveLength(2);
+    expect(writes[0]?.key).toBeTruthy();
+    expect(writes[1]?.key).toBe(writes[0]?.key);
+
+    await rowTrigger.click();
+    await page
+      .getByRole("group", { name: "새벽 점검 예고 작업 메뉴" })
+      .getByRole("button", { name: "편집" })
+      .click();
+    await expect(
+      page.getByRole("heading", { name: "새벽 점검 예고", level: 1 }),
+    ).toBeVisible();
+  } else {
+    expect(writes).toHaveLength(0);
+  }
+});
+
+test("목록: 행 작업 버전 충돌(409) 시 새 내용 불러오기 버튼을 제공한다", async ({
+  page,
+}) => {
+  await signIn(page);
+  let listCalls = 0;
+  await mockNotices(page, {
+    items: () => {
+      listCalls += 1;
+      return ITEMS();
+    },
+    write: () => ({
+      status: 409,
+      body: { error: { code: "conflict", reason: "version" } },
+    }),
+  });
+  await openNotices(page);
+  if (isMobile(page)) return;
+  const before = listCalls;
+  await page.getByRole("button", { name: "새벽 점검 예고 작업 메뉴" }).click();
+  await page
+    .getByRole("group", { name: "새벽 점검 예고 작업 메뉴" })
+    .getByRole("button", { name: "노출 종료" })
+    .click();
+  await page
+    .getByRole("alert")
+    .getByRole("button", { name: "노출 종료" })
+    .click();
+  const alert = page
+    .getByRole("alert")
+    .filter({ hasText: "다른 운영자가 먼저 이 공지를 바꿨어요" });
+  await expect(alert).toBeVisible();
+  await alert.getByRole("button", { name: "새 내용 불러오기" }).click();
+  await expect.poll(() => listCalls).toBeGreaterThan(before);
+});
+
+test("목록: 행 작업 확인을 취소하면 원래 행의 작업 메뉴 버튼으로 포커스가 돌아간다", async ({
+  page,
+}) => {
+  await signIn(page);
+  await mockNotices(page, { items: () => ITEMS() });
+  await openNotices(page);
+  if (isMobile(page)) return;
+  const trigger = page.getByRole("button", { name: "새벽 점검 예고 작업 메뉴" });
+  await trigger.click();
+  await page
+    .getByRole("group", { name: "새벽 점검 예고 작업 메뉴" })
+    .getByRole("button", { name: "노출 종료" })
+    .click();
+  const confirm = page
+    .getByRole("alert")
+    .filter({ hasText: "이 공지의 노출을 끝내요" });
+  await expect(confirm).toBeVisible();
+  await confirm.getByRole("button", { name: "취소" }).click();
+  await expect(confirm).toBeHidden();
+  await expect(trigger).toBeFocused();
 });

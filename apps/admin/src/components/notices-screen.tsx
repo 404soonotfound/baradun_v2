@@ -9,7 +9,9 @@ import { kstDateTime } from "@/lib/inquiries";
 import { fill, messages } from "@/lib/messages";
 import {
   createNotice,
+  exposeProblems,
   fetchNotices,
+  filterNotices,
   fromKstInput,
   isNoticeState,
   kstRange,
@@ -35,7 +37,8 @@ import {
   NOTICE_TEXT_MAX,
 } from "@baradun/contracts/notice-rules";
 import { AdminShell } from "./admin-shell";
-import { Button, Notice } from "./ui";
+import { CELL_END, CELL_NAME, DataTable, TD, TH, TR } from "./data-table";
+import { Button, Notice, SUCCESS_BADGE } from "./ui";
 
 // 운영자 공지 목록·편집 (BRD-151, 화면 설계서 6장 ADM-NTC, 시안 4차 V18·V19·VM10·VM11·E5·E10·F5)
 // - 목록: 상태 탭(노출·예약·대기·종료) + 표(모바일은 카드). 수정 대기·가려짐은 보조 표시(D16-D4)
@@ -137,20 +140,20 @@ function Failure({
   );
 }
 
-// 상태 배지: 글자로 상태를 말하고 색·테두리는 보조(색만으로 구분하지 않음)
+// 상태 배지: 시안 V18 색·모양 + 글자로 상태를 말함(색만으로 구분하지 않음)
 const BADGE: Record<NoticeState, string> = {
-  live: "bg-brand-weak text-brand-default ring-1 ring-brand-border",
-  scheduled: "bg-info-bg text-info-fg ring-1 ring-border-default",
-  draft:
+  live: SUCCESS_BADGE,
+  scheduled:
     "bg-status-stale-bg text-status-stale-fg outline-1 outline-status-stale-border outline-dashed -outline-offset-1",
-  ended: "bg-bg-surface text-text-muted ring-1 ring-border-strong",
+  draft: "bg-info-bg text-info-fg ring-1 ring-border-strong ring-inset",
+  ended: "bg-info-bg text-info-fg ring-1 ring-border-strong ring-inset",
 };
 
 function StateBadge({ state }: { state: string }) {
   const known = isNoticeState(state);
   return (
     <span
-      className={`inline-flex items-center rounded-admin-badge px-1.5 text-caption font-semibold whitespace-nowrap ${
+      className={`inline-flex items-center rounded-admin-badge px-1.5 py-px text-caption leading-[18px] font-semibold whitespace-nowrap ${
         known
           ? BADGE[state]
           : "bg-bg-surface text-text-muted outline-1 outline-border-strong outline-dashed -outline-offset-1"
@@ -166,12 +169,15 @@ function SubBadges({ notice }: { notice: NoticeView }) {
   return (
     <>
       {notice.pendingEdit && (
-        <span className="inline-flex items-center rounded-admin-badge bg-bg-surface px-1.5 text-caption font-semibold whitespace-nowrap text-status-stale-fg ring-1 ring-status-stale-border">
+        <span className="inline-flex items-center rounded-admin-badge bg-status-stale-bg px-1.5 py-px text-caption leading-[18px] font-semibold whitespace-nowrap text-status-stale-fg ring-1 ring-status-stale-border ring-inset">
           {t.pendingEdit}
         </span>
       )}
       {notice.hidden && (
-        <span className="inline-flex items-center rounded-admin-badge bg-bg-surface px-1.5 text-caption font-semibold whitespace-nowrap text-text-muted ring-1 ring-border-strong">
+        <span
+          title={t.hiddenTitle}
+          className="inline-flex items-center rounded-admin-badge bg-info-bg px-1.5 py-px text-caption leading-[18px] font-semibold whitespace-nowrap text-info-fg ring-1 ring-border-strong ring-inset"
+        >
           {t.hidden}
         </span>
       )}
@@ -191,28 +197,456 @@ function langsLabel(content: NoticeContent): string {
 
 const editHref = (id: string) => `/notices/?id=${encodeURIComponent(id)}`;
 
+const updatedLabel = (n: NoticeView): string => {
+  const time = kstDateTime(n.updatedAt);
+  return n.updatedBy
+    ? fill(t.updatedByTime, { actor: n.updatedBy, time })
+    : time;
+};
+
+// 앱 배너 순서 7칸 띠(시안 V18): 왼쪽 번호부터 확인. 5번은 노출 중 공지가 있으면 강조
+function BannerOrderStrip({ hasLive }: { hasLive: boolean }) {
+  const slots = [
+    {
+      num: 1,
+      role: t.bannerRoleAuto,
+      name: t.bannerSlots.offline,
+      status: t.bannerStatusNone,
+      tone: "default" as const,
+    },
+    {
+      num: 2,
+      role: t.bannerRoleAuto,
+      name: t.bannerSlots.unsupported,
+      status: t.bannerStatusNone,
+      tone: "default" as const,
+    },
+    {
+      num: 3,
+      role: t.bannerRoleAuto,
+      name: t.bannerSlots.loadFailed,
+      status: t.bannerStatusNone,
+      tone: "default" as const,
+    },
+    {
+      num: 4,
+      role: t.bannerRoleAuto,
+      name: t.bannerSlots.noDecision,
+      status: t.bannerStatusFirstOnFailure,
+      tone: "warn" as const,
+    },
+    {
+      num: 5,
+      role: t.bannerRoleOperator,
+      name: t.bannerSlots.operatorNotice,
+      status: hasLive ? t.bannerStatusLive : t.bannerStatusNone,
+      tone: hasLive ? ("active" as const) : ("default" as const),
+    },
+    {
+      num: 6,
+      role: t.bannerRoleAuto,
+      name: t.bannerSlots.staleObs,
+      status: t.bannerStatusNone,
+      tone: "default" as const,
+    },
+    {
+      num: 7,
+      role: t.bannerRoleAuto,
+      name: t.bannerSlots.noLocation,
+      status: t.bannerStatusNone,
+      tone: "default" as const,
+    },
+  ];
+  return (
+    <section aria-labelledby="banner-order-title" className="mt-5">
+      <div className="flex flex-wrap items-baseline gap-2">
+        <h2
+          id="banner-order-title"
+          className="text-title-s font-semibold text-text-default"
+        >
+          {t.bannerOrderTitle}
+        </h2>
+        <span className="text-body-s text-text-muted">{t.bannerOrderSub}</span>
+      </div>
+      <ol className="mt-3 grid grid-cols-2 overflow-hidden rounded-admin-box border border-border-default bg-bg-surface shadow-card sm:grid-cols-4 lg:grid-cols-7">
+        {slots.map((slot) => {
+          const active = slot.tone === "active";
+          return (
+            <li
+              key={slot.num}
+              className={`flex min-w-0 flex-col gap-0.5 border-b border-border-default px-3 py-[9px] sm:border-l sm:first:border-l-0 lg:border-b-0 ${
+                active ? "bg-brand-default text-brand-on" : "bg-bg-surface"
+              }`}
+            >
+              <span
+                className={`flex items-center gap-1.5 text-caption ${
+                  active ? "text-brand-on" : "text-text-muted"
+                }`}
+              >
+                <b
+                  className={`font-bold ${
+                    active ? "text-brand-on" : "text-text-body"
+                  }`}
+                >
+                  {slot.num}
+                </b>
+                {slot.role}
+              </span>
+              <b
+                className={`text-body font-semibold whitespace-nowrap ${
+                  active ? "text-brand-on" : "text-text-default"
+                }`}
+              >
+                {slot.name}
+              </b>
+              <span
+                className={`text-caption ${
+                  active
+                    ? "font-semibold text-brand-on"
+                    : slot.tone === "warn"
+                      ? "text-status-stale-fg"
+                      : "text-text-muted"
+                }`}
+              >
+                {slot.status}
+              </span>
+            </li>
+          );
+        })}
+      </ol>
+      <p className="mt-2 text-caption text-text-muted">{t.bannerOrderNote}</p>
+    </section>
+  );
+}
+
+// '+ 종류' 칩: 누르면 고를 목록이 아래에 열림(Esc·바깥 누르기로 닫음)
+function KindFilterMenu({
+  value,
+  onChange,
+}: {
+  value: NoticeKind | null;
+  onChange: (next: NoticeKind | null) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const outside = (e: MouseEvent) => {
+      if (!box.current?.contains(e.target as Node)) setOpen(false);
+    };
+    const esc = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setOpen(false);
+        trigger.current?.focus();
+      }
+    };
+    document.addEventListener("mousedown", outside);
+    document.addEventListener("keydown", esc);
+    return () => {
+      document.removeEventListener("mousedown", outside);
+      document.removeEventListener("keydown", esc);
+    };
+  }, [open]);
+
+  const active = value !== null;
+  return (
+    <div ref={box} className="relative">
+      <button
+        ref={trigger}
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+        className={`inline-flex min-h-touch items-center gap-1.5 rounded-admin-control border px-2.5 text-body-s font-medium whitespace-nowrap lg:h-9 lg:min-h-0 ${
+          active
+            ? "border-brand-border bg-brand-weak text-brand-default"
+            : "border-dashed border-border-strong bg-bg-surface text-text-body hover:bg-bg-page"
+        }`}
+      >
+        {!active && (
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M12 5v14M5 12h14" />
+          </svg>
+        )}
+        {active ? fill(t.kindChip, { kind: t.kind[value] }) : t.kindFilter}
+      </button>
+      {open && (
+        <div
+          role="group"
+          aria-label={t.kindMenu}
+          className="absolute top-full left-0 z-20 mt-1 flex min-w-40 flex-col rounded-admin-box border border-border-default bg-bg-surface p-1 shadow-floating"
+        >
+          <button
+            type="button"
+            aria-pressed={value === null}
+            onClick={() => {
+              onChange(null);
+              setOpen(false);
+              trigger.current?.focus();
+            }}
+            className="flex min-h-touch items-center rounded-admin-control px-2.5 text-left text-body-s text-text-default hover:bg-bg-page aria-pressed:font-semibold aria-pressed:text-brand-default lg:min-h-admin-control"
+          >
+            {t.kindAll}
+          </button>
+          {NOTICE_KINDS.map((k) => (
+            <button
+              key={k}
+              type="button"
+              aria-pressed={value === k}
+              onClick={() => {
+                onChange(k);
+                setOpen(false);
+                trigger.current?.focus();
+              }}
+              className="flex min-h-touch items-center rounded-admin-control px-2.5 text-left text-body-s text-text-default hover:bg-bg-page aria-pressed:font-semibold aria-pressed:text-brand-default lg:min-h-admin-control"
+            >
+              {t.kind[k]}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// 행 끝 '…' 메뉴(시안 V18): 편집 이동 및 확정·노출 종료·삭제 빠른 실행
+function RowMenu({
+  notice,
+  title,
+  now,
+  editBlocked,
+  publishBlocked,
+  onEdit,
+  onAction,
+}: {
+  notice: NoticeView;
+  title: string;
+  now: number;
+  editBlocked: string | null;
+  publishBlocked: string | null;
+  onEdit: () => void;
+  onAction: (
+    action: "expose" | "end" | "delete",
+    triggerEl: HTMLButtonElement | null,
+  ) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const outside = (e: MouseEvent) => {
+      if (!box.current?.contains(e.target as Node)) setOpen(false);
+    };
+    const esc = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setOpen(false);
+        trigger.current?.focus();
+      }
+    };
+    document.addEventListener("mousedown", outside);
+    document.addEventListener("keydown", esc);
+    return () => {
+      document.removeEventListener("mousedown", outside);
+      document.removeEventListener("keydown", esc);
+    };
+  }, [open]);
+
+  const canExpose =
+    publishBlocked === null &&
+    (notice.live === null || notice.pendingEdit) &&
+    exposeProblems(notice.draft, now).length === 0;
+  const canEnd =
+    publishBlocked === null &&
+    (notice.state === "live" || notice.state === "scheduled");
+  const canDelete =
+    notice.state !== "live" &&
+    (notice.state === "scheduled"
+      ? publishBlocked === null
+      : editBlocked === null);
+
+  return (
+    <div ref={box} className="relative inline-flex justify-end">
+      <button
+        ref={trigger}
+        type="button"
+        aria-label={fill(t.rowMenuLabel, { title })}
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+        className="inline-flex size-8 items-center justify-center rounded-admin-control text-text-muted hover:bg-bg-page hover:text-text-default"
+      >
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <circle cx="5" cy="12" r="1" />
+          <circle cx="12" cy="12" r="1" />
+          <circle cx="19" cy="12" r="1" />
+        </svg>
+      </button>
+      {open && (
+        <div
+          role="group"
+          aria-label={fill(t.rowMenuLabel, { title })}
+          className="absolute top-full right-0 z-20 mt-1 flex min-w-44 flex-col rounded-admin-box border border-border-default bg-bg-surface p-1 text-left shadow-floating"
+        >
+          <button
+            type="button"
+            onClick={() => {
+              setOpen(false);
+              onEdit();
+            }}
+            className="flex min-h-touch items-center rounded-admin-control px-2.5 text-left text-body-s text-text-default hover:bg-bg-page lg:min-h-admin-control"
+          >
+            {t.rowEdit}
+          </button>
+          <button
+            type="button"
+            disabled={!canExpose}
+            onClick={() => {
+              setOpen(false);
+              onAction("expose", trigger.current);
+            }}
+            className="flex min-h-touch items-center rounded-admin-control px-2.5 text-left text-body-s text-text-default hover:bg-bg-page disabled:cursor-not-allowed disabled:opacity-45 lg:min-h-admin-control"
+          >
+            {t.expose}
+          </button>
+          <button
+            type="button"
+            disabled={!canEnd}
+            onClick={() => {
+              setOpen(false);
+              onAction("end", trigger.current);
+            }}
+            className="flex min-h-touch items-center rounded-admin-control px-2.5 text-left text-body-s text-text-default hover:bg-bg-page disabled:cursor-not-allowed disabled:opacity-45 lg:min-h-admin-control"
+          >
+            {t.end}
+          </button>
+          <button
+            type="button"
+            disabled={!canDelete}
+            onClick={() => {
+              setOpen(false);
+              onAction("delete", trigger.current);
+            }}
+            className="flex min-h-touch items-center rounded-admin-control px-2.5 text-left text-body-s text-danger-text hover:bg-bg-page disabled:cursor-not-allowed disabled:opacity-45 lg:min-h-admin-control"
+          >
+            {t.delete}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function NoticeList({
   result,
   onRetry,
+  onReload,
   flash,
 }: {
   result: OpsResult<{ items: NoticeView[] }> | null;
   onRetry: () => void;
+  onReload: () => void;
   flash: string | null;
 }) {
   const router = useRouter();
+  const session = useAuthSession();
   const snapshot = useSessionSnapshot();
-  const { edit } = usePermissions();
+  const { edit, publish } = usePermissions();
+  const [now] = useState(() => Date.now());
   const [filter, setFilter] = useState<NoticeState | null>(null);
+  const [kindFilter, setKindFilter] = useState<NoticeKind | null>(null);
+  const [query, setQuery] = useState("");
+  const [pendingAction, setPendingAction] = useState<{
+    notice: NoticeView;
+    action: "expose" | "end" | "delete";
+  } | null>(null);
+  const pendingTrigger = useRef<HTMLButtonElement | null>(null);
+  const [actionBusy, setActionBusy] = useState(false);
+  const [actionFlash, setActionFlash] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<WriteError | null>(null);
+  const actionAttempt = useRef<{ body: string; key: string } | null>(null);
+
   const all = result?.ok ? result.body.items : [];
   const count = (s: NoticeState) => all.filter((n) => n.state === s).length;
-  const items = filter ? all.filter((n) => n.state === filter) : all;
+  const items = filterNotices(all, {
+    state: filter,
+    kind: kindFilter,
+    query,
+  });
+  const hasLive = all.some((n) => n.state === "live");
+  const hasSubFilter = kindFilter !== null || query.trim() !== "";
+
+  const runRowAction = () => {
+    if (!pendingAction || actionBusy) return;
+    pendingTrigger.current = null;
+    const { notice, action } = pendingAction;
+    const reqBody = JSON.stringify({
+      id: notice.id,
+      action,
+      version: notice.version,
+    });
+    if (actionAttempt.current?.body !== reqBody) {
+      actionAttempt.current = { body: reqBody, key: crypto.randomUUID() };
+    }
+    const key = actionAttempt.current.key;
+    setActionBusy(true);
+    setActionError(null);
+    void noticeAction(
+      () => session.accessToken(),
+      notice.id,
+      action,
+      notice.version,
+      key,
+    ).then(
+      (res) => {
+        setActionBusy(false);
+        setPendingAction(null);
+        if (res.ok) {
+          actionAttempt.current = null;
+          setActionFlash(
+            action === "expose"
+              ? t.exposed
+              : action === "end"
+                ? t.ended
+                : t.deleted,
+          );
+          onReload();
+          return;
+        }
+        setActionError(writeError(res, true));
+      },
+      () => {
+        setActionBusy(false);
+        setPendingAction(null);
+        setActionError({ kind: "failed", action: true, requestId: null });
+      },
+    );
+  };
 
   return (
-    <section aria-labelledby="notices-title" className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="flex flex-col gap-1">
-          <div className="flex items-baseline gap-2">
+    <div className="flex flex-col">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div className="flex flex-col gap-0.5">
+          <div className="flex items-center gap-2.5">
             <h1
               id="notices-title"
               className="text-title-l font-semibold text-text-default"
@@ -225,15 +659,29 @@ function NoticeList({
               </span>
             )}
           </div>
-          <p className="text-body-s text-text-muted">{t.description}</p>
+          <p className="text-label-s text-text-muted">{t.description}</p>
         </div>
         <div className="flex flex-col items-end gap-1">
           <Button
             size="small"
             disabled={edit !== null}
             aria-describedby={edit ? "notice-new-block" : undefined}
+            className="gap-1.5"
             onClick={() => router.push("/notices/?new=1")}
           >
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M12 5v14M5 12h14" />
+            </svg>
             {t.new}
           </Button>
           {edit && (
@@ -244,157 +692,319 @@ function NoticeList({
         </div>
       </div>
 
-      {flash && <Notice tone="success" title={flash} role="status" />}
-      <p className="text-body-s text-text-body">{t.order}</p>
-
-      <div
-        role="group"
-        aria-label={t.tabsLabel}
-        className="flex gap-1 overflow-x-auto border-b border-border-default"
-      >
-        {[null, ...NOTICE_STATES].map((s) => {
-          const on = s === filter;
-          return (
-            <button
-              key={s ?? "all"}
-              type="button"
-              aria-pressed={on}
-              onClick={() => setFilter(s)}
-              className={`-mb-px flex min-h-touch shrink-0 items-center gap-1.5 border-b-2 px-2 text-body whitespace-nowrap lg:min-h-admin-control ${
-                on
-                  ? "border-brand-default font-semibold text-brand-default"
-                  : "border-transparent font-medium text-text-muted hover:text-text-default"
-              }`}
-            >
-              {s ? t.state[s] : t.all}
-              {result?.ok && (
-                <span className="text-label-s tabular-nums">
-                  {s ? count(s) : all.length}
-                </span>
-              )}
-            </button>
-          );
-        })}
-      </div>
-
-      {result === null && (
-        <p role="status" className="text-body-s text-text-muted">
-          {t.loading}
-        </p>
-      )}
-      {result && !result.ok && (
-        <Failure title={t.listError} result={result} onRetry={onRetry} />
-      )}
-      {result?.ok && items.length === 0 && (
-        <div className="rounded-admin-box border border-border-default bg-bg-surface px-4 py-6 text-center">
-          <p className="text-title-s font-semibold text-text-default">
-            {t.emptyTitle}
-          </p>
-          <p className="mt-1 text-body-s text-text-muted">
-            {filter
-              ? fill(t.emptyState, { state: t.state[filter] })
-              : t.emptyAll}
-          </p>
+      {(actionFlash ?? flash) && (
+        <div className="mt-4">
+          <Notice
+            tone="success"
+            title={(actionFlash ?? flash)!}
+            role="status"
+          />
         </div>
       )}
-      {result?.ok && items.length > 0 && (
-        <>
-          {/* 태블릿·PC: 표 */}
-          <table className="hidden w-full border-separate border-spacing-0 overflow-hidden rounded-admin-box border border-border-default bg-bg-surface text-body md:table">
-            <thead>
-              <tr className="bg-bg-page text-left text-label-s font-semibold text-text-body">
-                {[t.colTitle, t.colPeriod, t.colText, t.colState].map(
-                  (label) => (
-                    <th
-                      key={label}
-                      scope="col"
-                      className="border-b border-border-default px-3 py-2 first:pl-4"
-                    >
-                      {label}
-                    </th>
-                  ),
+      {actionError && (
+        <div className="mt-4">
+          <Notice
+            tone={actionError.kind === "failed" ? "fail" : "warn"}
+            title={errorTitle(actionError)}
+            role="alert"
+          >
+            {actionError.kind === "failed" && actionError.requestId && (
+              <p>
+                {fill(messages.inquiries.requestId, {
+                  id: actionError.requestId,
+                })}
+              </p>
+            )}
+            {(actionError.kind === "conflict" ||
+              actionError.kind === "replay" ||
+              actionError.kind === "notLive" ||
+              actionError.kind === "notFound") && (
+              <ReloadCopy
+                copied={false}
+                onReload={() => {
+                  actionAttempt.current = null;
+                  setActionError(null);
+                  onReload();
+                }}
+                onCopy={undefined}
+              />
+            )}
+          </Notice>
+        </div>
+      )}
+
+      <BannerOrderStrip hasLive={hasLive} />
+
+      <section aria-labelledby="notices-list-title" className="mt-7">
+        <div className="flex items-baseline gap-2">
+          <h2
+            id="notices-list-title"
+            className="text-title-s font-semibold text-text-default"
+          >
+            {t.listTitle}
+          </h2>
+          {result?.ok && (
+            <span className="text-body-s text-text-muted tabular-nums">
+              {all.length}
+            </span>
+          )}
+        </div>
+
+        <div
+          role="group"
+          aria-label={t.tabsLabel}
+          className="mt-3 flex gap-6 overflow-x-auto border-b border-border-default"
+        >
+          {[null, ...NOTICE_STATES].map((s) => {
+            const on = s === filter;
+            return (
+              <button
+                key={s ?? "all"}
+                type="button"
+                aria-pressed={on}
+                onClick={() => setFilter(s)}
+                className={`-mb-px flex min-h-touch shrink-0 items-center gap-1.5 border-b-2 px-0.5 text-body font-medium whitespace-nowrap lg:min-h-admin-control ${
+                  on
+                    ? "border-brand-default text-brand-default"
+                    : "border-transparent text-text-muted hover:text-text-default"
+                }`}
+              >
+                {s ? t.state[s] : t.all}
+                {result?.ok && (
+                  <span className="font-normal text-text-muted tabular-nums">
+                    {s ? count(s) : all.length}
+                  </span>
                 )}
-                <th
-                  scope="col"
-                  className="border-b border-border-default px-4 py-2 text-right"
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="mt-5 flex flex-wrap items-center gap-2">
+          <div className="relative w-full sm:w-[260px]">
+            <svg
+              width="15"
+              height="15"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+              className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-text-muted"
+            >
+              <circle cx="11" cy="11" r="7" />
+              <path d="m20 20-3.5-3.5" />
+            </svg>
+            <input
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder={t.searchPlaceholder}
+              aria-label={t.searchLabel}
+              className="h-touch w-full rounded-admin-control border border-border-strong bg-bg-surface pr-3 pl-8 text-body text-text-default shadow-card outline-none placeholder:text-text-muted focus:border-brand-default focus:ring-[3px] focus:ring-brand-border lg:h-9"
+            />
+          </div>
+          <KindFilterMenu value={kindFilter} onChange={setKindFilter} />
+        </div>
+
+        {pendingAction && (
+          <div className="mt-4">
+            <ConfirmBox
+              title={
+                pendingAction.action === "expose"
+                  ? t.exposeConfirm
+                  : pendingAction.action === "end"
+                    ? t.endConfirm
+                    : t.deleteConfirm
+              }
+              body={
+                pendingAction.action === "expose"
+                  ? t.exposeBody
+                  : pendingAction.action === "end"
+                    ? t.endBody
+                    : t.deleteBody
+              }
+              confirmLabel={
+                pendingAction.action === "expose"
+                  ? t.expose
+                  : pendingAction.action === "end"
+                    ? t.end
+                    : t.delete
+              }
+              cancelLabel={t.confirmCancel}
+              busy={actionBusy}
+              onConfirm={runRowAction}
+              onCancel={() => {
+                const target = pendingTrigger.current;
+                pendingTrigger.current = null;
+                setPendingAction(null);
+                if (target?.isConnected) target.focus();
+              }}
+            />
+          </div>
+        )}
+
+        <div className="mt-3">
+          {result === null && (
+            <p role="status" className="text-body-s text-text-muted">
+              {t.loading}
+            </p>
+          )}
+          {result && !result.ok && (
+            <Failure title={t.listError} result={result} onRetry={onRetry} />
+          )}
+          {result?.ok && items.length === 0 && (
+            <div className="rounded-admin-box border border-border-default bg-bg-surface px-4 py-6 text-center">
+              <p className="text-title-s font-semibold text-text-default">
+                {t.emptyTitle}
+              </p>
+              <p className="mt-1 text-body-s text-text-muted">
+                {hasSubFilter
+                  ? t.emptyFiltered
+                  : filter
+                    ? fill(t.emptyState, { state: t.state[filter] })
+                    : t.emptyAll}
+              </p>
+              {hasSubFilter && (
+                <Button
+                  variant="secondary"
+                  size="small"
+                  className="mt-3"
+                  onClick={() => {
+                    setKindFilter(null);
+                    setQuery("");
+                  }}
                 >
-                  {t.colUpdated}
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((n) => {
-                const c = shownContent(n);
-                return (
-                  <tr key={n.id} className="hover:bg-bg-page">
-                    <td className="border-b border-border-default py-2 pr-3 pl-4">
+                  {t.resetFilters}
+                </Button>
+              )}
+            </div>
+          )}
+          {result?.ok && items.length > 0 && (
+            <>
+              {/* 태블릿·PC: 공통 표 */}
+              <div className="hidden md:block">
+                <DataTable
+                  caption={t.listTitle}
+                  head={
+                    <>
+                      <th scope="col" className={TH}>
+                        {t.colTitle}
+                      </th>
+                      <th scope="col" className={TH}>
+                        {t.colPeriod}
+                      </th>
+                      <th scope="col" className={TH}>
+                        {t.colText}
+                      </th>
+                      <th scope="col" className={TH}>
+                        {t.colState}
+                      </th>
+                      <th scope="col" className={TH}>
+                        {t.colUpdated}
+                      </th>
+                      <th scope="col" className={`${TH} ${CELL_END}`}>
+                        <span className="sr-only">{t.colActions}</span>
+                      </th>
+                    </>
+                  }
+                >
+                  {items.map((n) => {
+                    const c = shownContent(n);
+                    const rowTitle = n.draft.title.ko.trim() || t.untitled;
+                    return (
+                      <tr key={n.id} className={`${TR} hover:bg-bg-page`}>
+                        <td
+                          className={`${TD} max-w-md whitespace-normal break-words`}
+                        >
+                          <Link
+                            href={editHref(n.id)}
+                            className={`${CELL_NAME} underline-offset-2 hover:underline`}
+                          >
+                            {rowTitle}
+                          </Link>
+                          <p className="text-caption text-text-muted">
+                            {t.kind[c.kind]} · {t.placement}
+                          </p>
+                        </td>
+                        <td className={`${TD} tabular-nums`}>
+                          {kstRange(c.startsAt, c.endsAt, t.openEnd)}
+                        </td>
+                        <td className={`${TD} text-caption text-text-body`}>
+                          {langsLabel(n.draft)}
+                        </td>
+                        <td className={TD}>
+                          <span className="inline-flex flex-wrap gap-1">
+                            <StateBadge state={n.state} />
+                            <SubBadges notice={n} />
+                          </span>
+                        </td>
+                        <td
+                          className={`${TD} text-caption text-text-muted tabular-nums`}
+                        >
+                          {updatedLabel(n)}
+                        </td>
+                        <td className={`${TD} ${CELL_END}`}>
+                          <RowMenu
+                            notice={n}
+                            title={rowTitle}
+                            now={now}
+                            editBlocked={edit}
+                            publishBlocked={publish}
+                            onEdit={() => router.push(editHref(n.id))}
+                            onAction={(action, triggerEl) => {
+                              pendingTrigger.current = triggerEl;
+                              setPendingAction({ notice: n, action });
+                            }}
+                          />
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </DataTable>
+              </div>
+
+              {/* 모바일: 카드(값은 빼지 않음) */}
+              <ul className="flex flex-col divide-y divide-border-default rounded-admin-box border border-border-default bg-bg-surface md:hidden">
+                {items.map((n) => {
+                  const c = shownContent(n);
+                  const rowTitle = n.draft.title.ko.trim() || t.untitled;
+                  return (
+                    <li key={n.id}>
                       <Link
                         href={editHref(n.id)}
-                        className="font-medium text-text-default underline-offset-2 hover:underline"
+                        className="flex min-h-touch flex-col gap-1 px-4 py-3 hover:bg-bg-page"
                       >
-                        {n.draft.title.ko.trim() || t.untitled}
+                        <span className="flex flex-wrap items-center gap-1">
+                          <StateBadge state={n.state} />
+                          <SubBadges notice={n} />
+                        </span>
+                        <span className="text-body font-medium text-text-default">
+                          {rowTitle}
+                        </span>
+                        <span className="text-body-s text-text-body">
+                          {t.kind[c.kind]} · {t.placement} ·{" "}
+                          <span className="tabular-nums">
+                            {kstRange(c.startsAt, c.endsAt, t.openEnd)}
+                          </span>
+                        </span>
+                        <span className="text-label-s text-text-muted">
+                          {langsLabel(n.draft)} ·{" "}
+                          {fill(t.updatedAt, { time: updatedLabel(n) })}
+                        </span>
                       </Link>
-                      <p className="text-label-s text-text-muted">
-                        {t.kind[c.kind]} · {t.placement}
-                      </p>
-                    </td>
-                    <td className="border-b border-border-default px-3 py-2 whitespace-nowrap text-text-body tabular-nums">
-                      {kstRange(c.startsAt, c.endsAt, t.openEnd)}
-                    </td>
-                    <td className="border-b border-border-default px-3 py-2 text-body-s text-text-body">
-                      {langsLabel(n.draft)}
-                    </td>
-                    <td className="border-b border-border-default px-3 py-2">
-                      <span className="flex flex-wrap gap-1">
-                        <StateBadge state={n.state} />
-                        <SubBadges notice={n} />
-                      </span>
-                    </td>
-                    <td className="border-b border-border-default px-4 py-2 text-right whitespace-nowrap text-text-body tabular-nums">
-                      {kstDateTime(n.updatedAt)}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-
-          {/* 모바일: 카드(값은 빼지 않음) */}
-          <ul className="flex flex-col divide-y divide-border-default rounded-admin-box border border-border-default bg-bg-surface md:hidden">
-            {items.map((n) => {
-              const c = shownContent(n);
-              return (
-                <li key={n.id}>
-                  <Link
-                    href={editHref(n.id)}
-                    className="flex min-h-touch flex-col gap-1 px-4 py-3 hover:bg-bg-page"
-                  >
-                    <span className="flex flex-wrap items-center gap-1">
-                      <StateBadge state={n.state} />
-                      <SubBadges notice={n} />
-                    </span>
-                    <span className="text-body font-medium text-text-default">
-                      {n.draft.title.ko.trim() || t.untitled}
-                    </span>
-                    <span className="text-body-s text-text-body">
-                      {t.kind[c.kind]} · {t.placement} ·{" "}
-                      <span className="tabular-nums">
-                        {kstRange(c.startsAt, c.endsAt, t.openEnd)}
-                      </span>
-                    </span>
-                    <span className="text-label-s text-text-muted">
-                      {langsLabel(n.draft)} ·{" "}
-                      {fill(t.updatedAt, { time: kstDateTime(n.updatedAt) })}
-                    </span>
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-          <p className="text-label-s text-text-muted">{t.legend}</p>
-        </>
-      )}
-    </section>
+                    </li>
+                  );
+                })}
+              </ul>
+            </>
+          )}
+        </div>
+      </section>
+      <p className="mt-4 text-caption text-text-muted">{t.legend}</p>
+    </div>
   );
 }
 
@@ -588,26 +1198,29 @@ function Preview({ form }: { form: Form }) {
   const title = lang === "ko" ? form.titleKo : form.titleEn;
   const body = lang === "ko" ? form.bodyKo : form.bodyEn;
   return (
-    <section aria-labelledby="notice-preview" className="flex flex-col gap-2">
-      <div className="flex items-center justify-between gap-2">
-        <h3
-          id="notice-preview"
-          className="text-body font-semibold text-text-default"
-        >
-          {t.preview}
-        </h3>
+    <section aria-labelledby="notice-preview" className="flex flex-col gap-3">
+      <h3
+        id="notice-preview"
+        className="text-title-s font-semibold text-text-default"
+      >
+        {t.preview}
+      </h3>
+      <div className="flex items-center justify-center gap-2">
+        <span className="text-caption text-text-muted">{t.previewLang}</span>
         <div
           role="group"
           aria-label={t.previewLang}
-          className="flex gap-1 rounded-admin-control bg-bg-page p-1"
+          className="inline-flex overflow-hidden rounded-admin-control border border-border-strong shadow-card"
         >
-          {(["ko", "en"] as const).map((l) => (
+          {(["ko", "en"] as const).map((l, idx) => (
             <button
               key={l}
               type="button"
               aria-pressed={lang === l}
               onClick={() => setLang(l)}
-              className="min-h-touch rounded-admin-control px-2.5 text-body-s font-medium text-text-body aria-pressed:bg-bg-surface aria-pressed:font-semibold aria-pressed:text-text-default aria-pressed:shadow-card lg:min-h-admin-control"
+              className={`min-h-touch px-3 text-body-s font-medium text-text-body aria-pressed:bg-bg-page aria-pressed:font-semibold aria-pressed:text-text-default lg:h-8 lg:min-h-0 ${
+                idx > 0 ? "border-l border-border-strong" : ""
+              } bg-bg-surface`}
             >
               {l === "ko" ? t.ko : t.en}
             </button>
@@ -616,15 +1229,28 @@ function Preview({ form }: { form: Form }) {
       </div>
       <div
         lang={lang}
-        className="rounded-admin-box border border-border-default bg-bg-page p-3"
+        className="mx-auto flex w-full max-w-[260px] flex-col overflow-hidden rounded-[30px] border-[7px] border-text-default bg-bg-page"
       >
-        <div className="rounded-admin-box border border-status-stale-border bg-status-stale-bg px-3 py-2.5">
-          <p className="text-body font-semibold text-text-default">
+        <div className="h-6" aria-hidden="true" />
+        <div className="flex items-center px-3.5 pt-1.5 pb-2.5">
+          <b className="flex-1 text-body font-semibold text-text-default">
+            {messages.brand.name}
+          </b>
+          <span
+            aria-hidden="true"
+            className="size-[22px] rounded-full bg-border-default"
+          />
+        </div>
+        <div className="mx-2.5 rounded-[10px] border border-status-stale-border bg-status-stale-bg px-2.5 py-2 text-caption leading-relaxed text-status-stale-fg">
+          <b className="block font-semibold text-text-default">
             {title.trim() || t.untitled}
-          </p>
-          {body.trim() && (
-            <p className="mt-0.5 text-body-s text-text-body">{body}</p>
-          )}
+          </b>
+          {body.trim() && <p className="mt-0.5">{body}</p>}
+        </div>
+        <div className="m-2.5 flex flex-col gap-1.5" aria-hidden="true">
+          <div className="h-14 rounded-[10px] border border-border-default bg-bg-surface" />
+          <div className="h-14 rounded-[10px] border border-border-default bg-bg-surface" />
+          <div className="h-14 rounded-[10px] border border-border-default bg-bg-surface" />
         </div>
       </div>
       <p className="text-label-s text-text-muted">{t.previewNote}</p>
@@ -659,6 +1285,35 @@ function writeError(result: Failed, action: boolean): WriteError {
     action,
     requestId: "requestId" in result ? result.requestId : null,
   };
+}
+
+function errorTitle(e: WriteError): string {
+  switch (e.kind) {
+    case "conflict":
+      return t.conflict;
+    case "replay":
+      return t.replay;
+    case "notLive":
+      return t.notLive;
+    case "deleteLive":
+      return t.deleteLive;
+    case "notFound":
+      return t.notFoundTitle;
+    case "invalid":
+      // 확정 검사에 걸린 칸은 화면 이름으로(내부 칸 이름을 보이지 않게)
+      return fill(e.blocked ? t.blockedField : t.invalidField, {
+        field:
+          e.field in FIELD_LABEL
+            ? FIELD_LABEL[e.field as TextField]
+            : e.field === "startsAt"
+              ? t.startsAt
+              : e.field === "endsAt"
+                ? t.endsAt
+                : e.field,
+      });
+    case "failed":
+      return e.action ? t.actionFailed : t.failed;
+  }
 }
 
 type Confirm = "expose" | "end" | "delete" | "leave";
@@ -1009,35 +1664,6 @@ function NoticeEditor({
     .filter((s) => s.trim())
     .join("\n");
 
-  const errorTitle = (e: WriteError): string => {
-    switch (e.kind) {
-      case "conflict":
-        return t.conflict;
-      case "replay":
-        return t.replay;
-      case "notLive":
-        return t.notLive;
-      case "deleteLive":
-        return t.deleteLive;
-      case "notFound":
-        return t.notFoundTitle;
-      case "invalid":
-        // 확정 검사에 걸린 칸은 화면 이름으로(내부 칸 이름을 보이지 않게)
-        return fill(e.blocked ? t.blockedField : t.invalidField, {
-          field:
-            e.field in FIELD_LABEL
-              ? FIELD_LABEL[e.field as TextField]
-              : e.field === "startsAt"
-                ? t.startsAt
-                : e.field === "endsAt"
-                  ? t.endsAt
-                  : e.field,
-        });
-      case "failed":
-        return e.action ? t.actionFailed : t.failed;
-    }
-  };
-
   return (
     <article
       aria-labelledby="notice-edit-title"
@@ -1046,12 +1672,26 @@ function NoticeEditor({
       <div className="flex flex-col gap-1">
         <button
           type="button"
+          aria-label={t.backToListAria}
           onClick={leave}
-          className="flex min-h-touch items-center self-start text-body-s font-medium text-brand-default"
+          className="inline-flex min-h-touch items-center gap-1 self-start text-label-s text-text-muted hover:text-text-default lg:min-h-0"
         >
-          ← {t.backToList}
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="m15 6-6 6 6 6" />
+          </svg>
+          {t.backToList}
         </button>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2.5">
           <h1
             id="notice-edit-title"
             className="text-title-l font-semibold text-text-default"
@@ -1063,7 +1703,7 @@ function NoticeEditor({
         </div>
         {base && (
           <p className="text-label-s text-text-muted">
-            {fill(t.updatedAt, { time: kstDateTime(base.updatedAt) })}
+            {fill(t.updatedAt, { time: updatedLabel(base) })}
           </p>
         )}
       </div>
@@ -1109,14 +1749,16 @@ function NoticeEditor({
         </Notice>
       )}
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] lg:gap-8">
         <fieldset disabled={locked} className="flex min-w-0 flex-col gap-4">
           <Section title={t.kindLegend} hint={t.kindHint}>
-            <div className="grid grid-cols-2 gap-1 rounded-admin-control bg-bg-page p-1">
-              {NOTICE_KINDS.map((k) => (
+            <div className="inline-flex self-start overflow-hidden rounded-admin-control border border-border-strong shadow-card">
+              {NOTICE_KINDS.map((k, idx) => (
                 <label
                   key={k}
-                  className="flex min-h-touch cursor-pointer items-center justify-center rounded-admin-control text-body-s font-medium text-text-body has-checked:bg-bg-surface has-checked:font-semibold has-checked:text-text-default has-checked:shadow-card has-focus-visible:ring-[3px] has-focus-visible:ring-brand-border has-disabled:cursor-not-allowed lg:min-h-admin-control"
+                  className={`flex min-h-touch cursor-pointer items-center justify-center bg-bg-surface px-3 text-body-s font-medium text-text-body has-checked:bg-bg-page has-checked:font-semibold has-checked:text-text-default has-focus-visible:ring-[3px] has-focus-visible:ring-brand-border has-disabled:cursor-not-allowed lg:h-[34px] lg:min-h-0 ${
+                    idx > 0 ? "border-l border-border-strong" : ""
+                  }`}
                 >
                   <input
                     type="radio"
@@ -1135,7 +1777,16 @@ function NoticeEditor({
             </p>
           </Section>
 
-          <Section title={t.ko} hint={t.koHint}>
+          <Section
+            title={
+              <span className="inline-flex items-center gap-2">
+                <span className="inline-flex items-center rounded-admin-badge bg-info-bg px-1.5 py-px text-caption leading-[18px] font-semibold text-info-fg ring-1 ring-border-strong ring-inset">
+                  {t.ko}
+                </span>
+              </span>
+            }
+            hint={t.koHint}
+          >
             <TextInput
               id="notice-title-ko"
               label={t.titleLabel}
@@ -1157,12 +1808,14 @@ function NoticeEditor({
 
           <Section
             title={
-              <>
-                {t.en}{" "}
-                <span className="text-label-s font-medium text-danger-text">
+              <span className="inline-flex items-center gap-1.5">
+                <span className="inline-flex items-center rounded-admin-badge bg-brand-weak px-1.5 py-px text-caption leading-[18px] font-semibold text-brand-default ring-1 ring-brand-border ring-inset">
+                  {t.en}
+                </span>
+                <span className="inline-flex items-center rounded-admin-badge bg-status-stale-bg px-1.5 py-px text-caption leading-[18px] font-semibold text-status-stale-fg outline-1 outline-status-stale-border outline-dashed -outline-offset-1">
                   {t.required}
                 </span>
-              </>
+              </span>
             }
             hint={t.enHint}
           >
@@ -1465,15 +2118,43 @@ function Check({ ok, label }: { ok: boolean | null; label: string }) {
     <li className="flex items-start gap-2">
       <span
         aria-hidden="true"
-        className={
+        className={`mt-0.5 inline-flex shrink-0 ${
           ok === null
             ? "text-text-muted"
             : ok
-              ? "text-brand-default"
+              ? "text-success-fg"
               : "text-danger-text"
-        }
+        }`}
       >
-        {ok === null ? "–" : ok ? "✓" : "!"}
+        {ok === null ? (
+          "–"
+        ) : ok ? (
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.4"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="m5 12 5 5 9-10" />
+          </svg>
+        ) : (
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.4"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M6 6l12 12M18 6 6 18" />
+          </svg>
+        )}
       </span>
       <span className={ok === null ? "text-text-muted" : "text-text-body"}>
         {ok !== null && (
@@ -1542,6 +2223,7 @@ function NoticesBody() {
         <NoticeList
           result={result}
           onRetry={reload}
+          onReload={reload}
           flash={flash?.at === "list" ? flash.text : null}
         />
       )}
