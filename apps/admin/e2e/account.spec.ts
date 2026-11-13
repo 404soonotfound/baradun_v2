@@ -8,6 +8,7 @@ import {
   signInWithPassword,
   srpScript,
   test,
+  tokensFor,
 } from "./fixtures";
 
 // 내 계정 · 다른 운영자의 2단계 인증 초기화 (#335, D16-A9, 화면 설계서 6장 ADM-CONFIRM)
@@ -180,4 +181,139 @@ test("데모 계정에는 초기화 칸이 없다", async ({ page }) => {
   await expect(
     page.getByRole("heading", { name: "다른 운영자의 2단계 인증 초기화" }),
   ).toHaveCount(0);
+});
+
+test("화면 테마 라디오 그룹은 키보드 이동·새로고침·새 탭·로그인 화면에서 유지되고 기기 설정보다 우선한다", async ({
+  browser,
+}) => {
+  const context = await browser.newContext({ colorScheme: "dark" });
+  const page = await context.newPage();
+  const authTime = Math.floor(Date.now() / 1000);
+  await mockCognito(
+    page,
+    srpScript({ email: OPS, after: "tokens", groups: ["viewer"], authTime }),
+    (target) =>
+      target === "GetTokensFromRefreshToken"
+        ? {
+            body: {
+              AuthenticationResult: tokensFor(OPS, ["viewer"], 900, authTime),
+            },
+          }
+        : undefined,
+  );
+  await mockOps(page, { ...ME_OK, body: { ...ME_OK.body, role: "viewer" } });
+  await signInWithPassword(page, "/login/", OPS);
+  await expect(page.getByRole("heading", { name: "운영 홈" })).toBeVisible();
+  await page.getByRole("link", { name: "내 계정" }).click();
+  await expect(page.getByRole("heading", { name: "내 계정" })).toBeVisible();
+
+  const group = page.getByRole("radiogroup", { name: "화면 테마" });
+  await expect(group).toBeVisible();
+  const systemRadio = group.getByRole("radio", { name: "시스템" });
+  const lightRadio = group.getByRole("radio", { name: "라이트" });
+  const darkRadio = group.getByRole("radio", { name: "다크" });
+
+  await expect(systemRadio).toBeChecked();
+  await systemRadio.focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(lightRadio).toBeChecked();
+  await expect(lightRadio).toBeFocused();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+
+  // 새로고침 후 유지
+  await page.reload();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+  expect(
+    await page.evaluate(() => localStorage.getItem("baradun-admin:theme")),
+  ).toBe("light");
+
+  // 새 탭에서도 유지
+  const second = await context.newPage();
+  await second.goto("/login/");
+  await expect(second.locator("html")).toHaveAttribute("data-theme", "light");
+  await expectNoA11yViolations(second);
+
+  // 다크 선택 시 기기 설정(light)과 무관하게 다크 유지, 다른 탭도 따라감
+  await page.emulateMedia({ colorScheme: "light" });
+  await lightRadio.focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(darkRadio).toBeChecked();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await expect(second.locator("html")).toHaveAttribute("data-theme", "dark");
+  await expectNoA11yViolations(page);
+
+  // 시스템으로 돌리면 저장 키와 data-theme 속성이 사라짐
+  await page.keyboard.press("ArrowRight");
+  await expect(systemRadio).toBeChecked();
+  await expect(page.locator("html")).not.toHaveAttribute("data-theme");
+  expect(
+    await page.evaluate(() => localStorage.getItem("baradun-admin:theme")),
+  ).toBeNull();
+
+  // 라이트 선택 후 로그아웃해도 테마 키는 지우지 않음
+  await lightRadio.click();
+  await page.getByRole("button", { name: "이 기기에서 로그아웃" }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+  expect(
+    await page.evaluate(() => localStorage.getItem("baradun-admin:theme")),
+  ).toBe("light");
+
+  await context.close();
+});
+
+test("내 계정 화면 구성(V24)과 비밀번호 변경 토스트가 기준에 맞다", async ({
+  page,
+}) => {
+  await openAccount(page);
+
+  // 프로필: 이메일만(이름 칸 없음)
+  await expect(
+    page.getByRole("textbox", { name: "이메일", exact: true }),
+  ).toHaveValue(OPS);
+  await expect(page.getByRole("textbox", { name: "이름" })).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "이름 바꾸기" }),
+  ).toHaveCount(0);
+
+  // 2단계 인증 줄 형태 + 운영 책임자만 배지 + 로그인 섹션
+  await expect(page.getByText("인증 앱 등록됨")).toBeVisible();
+  await expect(page.getByText("로그인마다 6자리 코드")).toBeVisible();
+  await expect(page.getByText("운영 책임자만")).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "이 기기에서 로그아웃" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "모든 기기에서 로그아웃" }),
+  ).toBeVisible();
+
+  // 넣지 않는 섹션 없음
+  await expect(
+    page.getByRole("heading", { name: "알림 받는 곳" }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("heading", { name: "로그인한 기기" }),
+  ).toHaveCount(0);
+
+  // 비밀번호 변경 성공 시 상단 토스트 표시
+  await page.route("https://cognito-idp.ap-northeast-2.amazonaws.com/", async (route) => {
+    const target = route.request().headers()["x-amz-target"] ?? "";
+    if (target.endsWith(".ChangePassword")) {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({}),
+      });
+      return;
+    }
+    await route.fallback();
+  });
+  await page.getByLabel("지금 비밀번호").fill("CurrentPass123!");
+  await page.getByLabel("새 비밀번호").fill("NextPassword123!");
+  await page.getByLabel("한 번 더").fill("NextPassword123!");
+  await page.getByRole("button", { name: "비밀번호 바꾸기" }).click();
+  await expect(
+    page.getByRole("status").filter({
+      hasText: "비밀번호를 바꿨어요. 다른 기기에서는 다시 로그인해야 해요.",
+    }),
+  ).toBeVisible();
 });
