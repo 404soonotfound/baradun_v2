@@ -400,13 +400,18 @@ export async function handleInquiryEvent(
     return { status: "email_deleted" };
   }
   if (isCleanupExpiredEmailsEvent(event)) {
-    const { deletedCount, overdueCount } =
-      await dependencies.store.cleanupExpiredEmails(dependencies.now());
-    safeLog("info", "inquiry_email_cleanup", { deletedCount, overdueCount });
-    if (overdueCount > 0) {
-      safeLog("warn", "inquiry_email_overdue", { overdueCount });
+    try {
+      const { deletedCount, overdueCount } =
+        await dependencies.store.cleanupExpiredEmails(dependencies.now());
+      safeLog("info", "inquiry_email_cleanup", { deletedCount, overdueCount });
+      if (overdueCount > 0) {
+        safeLog("warn", "inquiry_email_overdue", { overdueCount });
+      }
+      return { status: "emails_cleaned", deletedCount, overdueCount };
+    } catch (error) {
+      safeLog("error", "inquiry_email_cleanup_failed");
+      throw error;
     }
-    return { status: "emails_cleaned", deletedCount, overdueCount };
   }
   if (!isHttpEvent(event)) {
     throw new Error("지원하지 않는 문의 이벤트");
