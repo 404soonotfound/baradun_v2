@@ -1405,17 +1405,13 @@
   },
   "policies": {
     "title": "운영 정책",
-    "intro": "원본은 노션 결정 기록이에요. 여기는 읽기 전용이에요.",
+    "introMeta": "{statusSummary} · 원본은 노션 결정 기록 · 노션 마지막 수정 {revision} · 동기화 {fetchedAt} · 노션에서 고치면 다시 동기화해야 반영돼요 · 읽기 전용",
+    "statusAllConfirmed": "{count}개 모두 확정",
+    "statusMixed": "{confirmed}개 확정 · {draft}개 초안",
     "openNotion": "노션에서 열기",
     "newTab": "(새 탭)",
-    "revision": "노션 마지막 수정 {time}",
-    "fetchedAt": "마지막 동기화 {time}",
-    "metaJoin": " · ",
-    "syncTitle": "노션과 자동으로 동기화되지 않아요",
-    "syncBody": "노션에서 고친 내용은 다시 동기화해야 반영돼요. 내용이 다르면 노션 원본이 기준이에요.",
     "listLabel": "목차",
-    "itemTitle": "{number}. {title}",
-    "basis": "근거: {basis}",
+    "basis": "근거 · {basis}",
     "status": {
       "confirmed": "확정",
       "draft": "초안"
