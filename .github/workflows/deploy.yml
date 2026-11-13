@@ -1,7 +1,9 @@
 # 사이트 배포: main에 합친 웹·운영자 사이트 변경을 S3·CloudFront에 올림 (아키텍처 11장 가드레일)
 # - 장기 키 없음: OIDC로 1시간짜리 임시 키만 받음
+# - 사이트는 하루 한 번(정기 실행)과 수동 실행에서만 올림(GH-424). main push마다 올리면 배포 때마다 파일을 전부 다시 올려
+#   S3 쓰기 요청 요금이 쌓임(2026-11 청구액의 약 90%). push·CI 완료로는 사이트를 배포하지 않음
+# - main CI 완료(workflow_run)로는 인프라 자동 배포 작업(#418)만 돎. 사이트 작업은 조건에서 건너뜀
 # - main push로 돈 CI(ci 워크플로)가 성공한 커밋만, 그 커밋 그대로 올림 (BRD-133)
-#   CI와 배포가 동시에 돌면 합친 main이 CI에서 실패해도 배포가 먼저 끝날 수 있어서 CI 뒤로 둠
 # - 앱마다 마지막으로 올린 커밋(deploy-version.txt) 뒤로 main CI가 그 앱 빌드 작업까지 검사해 성공한 가장 새 커밋을 올림(BRD-178). 수동 실행은 두 앱 모두
 # - 배포 작업은 OIDC 토큰을 받으므로 빌드 캐시를 복원하지 않음(캐시 오염 방지, CodeQL actions/cache-poisoning)
 # - production environment는 main 브랜치만 쓸 수 있음
@@ -9,10 +11,12 @@
 # - map/은 지도 파일 구역(map-tiles 워크플로가 올림, 결정 기록 D19-1)이라 사이트 동기화에서 뺌
 name: deploy
 on:
-  workflow_run:
+  workflow_run: # 인프라 자동 배포(#418)만. 사이트 작업은 이 이벤트에서 돌지 않음(GH-424)
     workflows: [ci]
     types: [completed]
     branches: [main]
+  schedule:
+    - cron: "17 20 * * *" # 매일 05:17 KST(UTC 20:17). 정시는 GitHub 정기 실행이 밀리기 쉬워 피함
   workflow_dispatch: # npm run deploy:prod 또는 Actions 탭에서 수동 실행 (그 커밋의 ci-ok가 성공일 때만)
 permissions:
   contents: read
@@ -174,14 +178,12 @@ jobs:
     # 인프라 작업을 기다리지 않음. publisher를 배포해도 게시본 정책은 다음 게시에서 바뀌므로 같은 실행에서 순서를 맞출 수 없음
     # 판단 정책을 바꾼 PR은 아래 '판단 정책 버전 확인'에서 멈추고, 새 정책으로 게시된 뒤 다시 실행함(infra/README '판단 정책 바꾸기')
     # 첫 인프라 배포 전(변수가 비어 있음)에는 건너뜀
-    # 자동 배포는 main push CI가 성공했을 때만. 정기 실행·PR CI는 배포하지 않음
-    # 저장소 변수 DEPLOY_PAUSED=true면 자동 배포를 멈춤(인프라와 순서를 맞출 때, infra/README)
+    # 정기 배포는 하루 한 번. 올릴 커밋은 main push CI가 성공한 것만 고름(deploy-plan.sh)
+    # 저장소 변수 DEPLOY_PAUSED=true면 정기 배포를 멈춤(인프라와 순서를 맞출 때, infra/README)
     if: >-
       vars.DEPLOY_ROLE_ARN != '' && (
         github.event_name == 'workflow_dispatch' || (
-          github.event.workflow_run.event == 'push' &&
-          github.event.workflow_run.head_repository.full_name == github.repository &&
-          github.event.workflow_run.conclusion == 'success' &&
+          github.event_name == 'schedule' &&
           vars.DEPLOY_PAUSED != 'true'
         )
       )
@@ -198,11 +200,11 @@ jobs:
     env:
       BUCKET: ${{ vars.SITE_BUCKET }}
       DISTRIBUTION_ID: ${{ vars.DISTRIBUTION_ID }}
-      # 이 배포를 부른 CI의 커밋(수동 실행은 실행한 브랜치 main의 커밋). 실제로 올릴 커밋(SHA)은 '올릴 커밋 정하기'가 정함
-      HEAD_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+      # 수동 실행한 브랜치(main)의 커밋. 정기 배포는 쓰지 않음. 실제로 올릴 커밋(SHA)은 '올릴 커밋 정하기'가 정함
+      HEAD_SHA: ${{ github.sha }}
     steps:
       # 전체 이력의 main을 받아 올릴 커밋·배포 여부를 정함(BRD-178, .github/scripts/deploy-plan.sh)
-      # 자동 배포: 마지막으로 올린 커밋 뒤로 main CI가 이 앱 빌드 작업(CI_JOB)까지 성공한 가장 새 커밋. 수동: 이 커밋(CI 성공일 때만)
+      # 정기 배포: 마지막으로 올린 커밋 뒤로 main CI가 이 앱 빌드 작업(CI_JOB)까지 성공한 가장 새 커밋. 수동: 이 커밋(CI 성공일 때만)
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: main
@@ -287,9 +289,7 @@ jobs:
     if: >-
       vars.DEPLOY_ROLE_ARN != '' && vars.ADMIN_SITE_BUCKET != '' && (
         github.event_name == 'workflow_dispatch' || (
-          github.event.workflow_run.event == 'push' &&
-          github.event.workflow_run.head_repository.full_name == github.repository &&
-          github.event.workflow_run.conclusion == 'success' &&
+          github.event_name == 'schedule' &&
           vars.DEPLOY_PAUSED != 'true'
         )
       )
@@ -305,11 +305,11 @@ jobs:
     env:
       BUCKET: ${{ vars.ADMIN_SITE_BUCKET }}
       DISTRIBUTION_ID: ${{ vars.ADMIN_DISTRIBUTION_ID }}
-      # 이 배포를 부른 CI의 커밋(수동 실행은 실행한 브랜치 main의 커밋). 실제로 올릴 커밋(SHA)은 '올릴 커밋 정하기'가 정함
-      HEAD_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+      # 수동 실행한 브랜치(main)의 커밋. 정기 배포는 쓰지 않음. 실제로 올릴 커밋(SHA)은 '올릴 커밋 정하기'가 정함
+      HEAD_SHA: ${{ github.sha }}
     steps:
       # 전체 이력의 main을 받아 올릴 커밋·배포 여부를 정함(BRD-178, .github/scripts/deploy-plan.sh)
-      # 자동 배포: 마지막으로 올린 커밋 뒤로 main CI가 이 앱 빌드 작업(CI_JOB)까지 성공한 가장 새 커밋. 수동: 이 커밋(CI 성공일 때만)
+      # 정기 배포: 마지막으로 올린 커밋 뒤로 main CI가 이 앱 빌드 작업(CI_JOB)까지 성공한 가장 새 커밋. 수동: 이 커밋(CI 성공일 때만)
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: main

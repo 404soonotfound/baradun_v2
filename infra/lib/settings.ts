@@ -56,31 +56,27 @@ export const RETRY_LIMITS = {
 
 // 경보 상한 및 과금 기준 (11장 기본값 함정, AWS CloudWatch 비용 절감 안내서)
 // CloudWatch는 경보 개수가 아니라 '경보가 참조하는 표준 경보 지표 수'로 과금(수식 경보는 수식이 참조하는 지표마다 계산).
+// 같은 지표(이름·차원이 같음)를 통계만 달리해 여러 번 읽으면 1개로 셈. 2026-11 청구 내역으로 확인함(GH-424):
+//   경보 12개의 MetricStat이 16개이던 11-06~10에 하루 사용량이 지표 14개분이었음(로그인 경보 MetricStat 5개 = 지표 3개)
 // 무료 범위: 표준 경보 지표 10개 (us-east-1 기준 초과 지표당 월 $0.10, 서울 리전 단가 미확인)
-// 현재 경보 지표 수 계산(총 18개):
-// - 오류 경보 5개: 5개 (수집기 4 + 게시 1, Errors)
-// - 실행 없음 경보 4개: 4개 (특보·관측·이안류·게시 Invocations, FILL 수식 각 1지표)
+// 2026-11-13 유료 플랜 전환으로 초과분이 실제 청구됨(GH-424). 수집기의 오류·실행 없음 경보 3쌍을 성공 없음 경보로 합치고(−3) 로그인 반복 요청 경보를 빼(−3) 18개 → 12개
+// 현재 경보 지표 수 계산(총 12개 → 무료 초과 2개 × $0.10 ≈ 월 $0.20):
+// - 성공 없음 경보 3개: 3개 (특보·관측·이안류 수집. Errors 지표 하나를 SampleCount·Sum으로 읽음)
+// - 오류 경보 2개: 2개 (사진 확인 수집·게시, Errors)
+// - 실행 없음 경보 1개: 1개 (게시 Invocations, FILL 수식 1지표)
 // - 알림 발송 실패 경보 1개: 1개 (대기열 메시지 수)
-// - 로그인 반복 요청 경보(LoginAbuse, D17-4): 5개 (풀 2 × [시도 1 + 성공 1] + 계정 복구 1) → 무료 초과 5개 × $0.10 ≈ 월 $0.50
-// - 날씨 수집 계속 실패(WeatherFailing, BRD-181): 1개 (Errors) → 무료 초과 6개 × $0.10 ≈ 월 $0.60
-// - 운영 API 오류 급증(OpsApiErrors, BRD-157·D17-7): 2개 (Url5xxCount 1 + AuthDenied 로그 지표 1) → 무료 초과 8개 × $0.10 ≈ 월 $0.80 (이번 경보 몫 +$0.20)
-// - 문의 이메일 기한 초과(InquiryEmailOverdue, BRD-119): 2개 (EmailOverdue 로그 지표 1 + 정리 실패 대기열 1) → 무료 초과 10개 × $0.10 ≈ 월 $1.00 (월 $1 예산 안)
-// 경보 리소스 자체의 개수 상한: 13 → 14(InquiryEmailOverdue 추가, BRD-119)
-export const MAX_ALARMS = 14;
+// - 날씨 수집 계속 실패(WeatherFailing, BRD-181): 1개 (Errors)
+// - 운영 API 오류 급증(OpsApiErrors, BRD-157·D17-7): 2개 (Url5xxCount 1 + AuthDenied 로그 지표 1)
+// - 문의 이메일 기한 초과(InquiryEmailOverdue, BRD-119): 2개 (EmailOverdue 로그 지표 1 + 정리 실패 대기열 1)
+// 지표 1개를 더하면 월 약 $0.10이 늘어남. guardrails.test.ts가 지표 수를 막으므로, 넣으려면 이 상한과 월 요금을 함께 다시 정함
+export const MAX_ALARM_METRICS = 12;
+// 경보 리소스 자체의 개수 상한
+export const MAX_ALARMS = 10;
 
 // 날씨 수집 계속 실패 경보(BRD-181). 1시간 구간에 오류가 있거나 실행이 없는 구간이 periods번 이어지면 울림
 // 매시 한 번 도는 수집기라 한 번의 일부 실패(아직 안 나온 발표·시간 예산)는 다음 실행이 메움 → 3시간 이어질 때만 알림
 // 단기예보는 발표 뒤 12시간까지 쓰므로 3시간 안에 알면 화면이 '확인하지 못했어요'가 되기 전에 고칠 수 있음
 export const WEATHER_ALARM = { periodMinutes: 60, periods: 3 } as const;
-
-// 로그인 반복 요청 감시 기준(D17-4, 운영자 1명 기준). 5분 동안 둘 중 하나라도 넘으면 알림
-// - 로그인 실패: 운영자·데모 풀 합계(SignInSuccesses 표본 수 − 합계, 차단 요청 포함)
-// - 계정 복구 API: 비밀번호 찾기·확인·변경·첫 로그인 새 비밀번호(계정 전체, AWS/Usage UserAccountRecovery)
-export const LOGIN_ABUSE_ALARM = {
-  periodMinutes: 5,
-  signInFailures: 10,
-  accountRecoveryCalls: 5,
-} as const;
 
 // 운영 API 5xx·권한 거부(401·403) 급증 경보 기준(D17-7, 출시 초기 운영자 소수 기준). 5분 동안 둘 중 하나라도 넘으면 알림
 // - 5xx: Lambda 함수 URL Url5xxCount (Sum, 5분)

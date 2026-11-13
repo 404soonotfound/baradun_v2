@@ -16,7 +16,6 @@ import * as path from "node:path";
 import {
   INQUIRY_EMAIL_OVERDUE_ALARM,
   LOG_RETENTION,
-  LOGIN_ABUSE_ALARM,
   OPS_API_ALARM,
   RETRY_LIMITS,
   WEATHER_ALARM,
@@ -24,11 +23,20 @@ import {
 
 // ② 운영 경보 (아키텍처 10장, BRD-62)
 // 수집 중단·게시 실패·validUntil 초과(게시 멈춤)를 한국어 SNS 이메일로 알림
-// 경보 13개 = 오류 5(수집기 4 + 게시) + 심장박동 4(특보·관측·이안류·게시) + 알림 발송 실패 1
-//            + 로그인 반복 요청 1(결정 기록 D17-4) + 날씨 수집 계속 실패 1(BRD-181)
-//            + 운영 API 5xx·권한 거부 급증 1(결정 기록 D17-7)
-// settings.ts MAX_ALARMS(13)를 다 씀. 경보를 더 넣으려면 기존 경보를 합치거나 상한을 다시 정해야 함
-// catalog는 하루 1회라 심장박동 없이 오류 경보만. 데이터 문의 함수 경보는 두지 않음(BRD-63 결정)
+// 경보 10개 = 성공 없음 3(특보·관측·이안류 수집) + 오류 2(사진 확인 수집·게시) + 심장박동 1(게시)
+//            + 알림 발송 실패 1 + 날씨 수집 계속 실패 1(BRD-181)
+//            + 운영 API 5xx·권한 거부 급증 1(결정 기록 D17-7) + 문의 이메일 기한 초과·정리 실패 1(BRD-119)
+// 성공 없음 경보(GH-424): 수집기의 오류 경보와 심장박동(실행 없음) 경보를 함수마다 하나로 합침
+//   CloudWatch는 경보가 참조하는 지표 수로 과금하고, 같은 지표를 통계만 달리해 두 번 읽으면 1개로 셈
+//   (2026-11 청구 내역으로 확인: 로그인 경보의 MetricStat 5개가 지표 3개로 청구됨)
+//   → Errors 지표 하나에서 실행 수(SampleCount)와 오류 수(Sum)를 읽어 '성공한 실행 수'를 만들면 함수당 지표 1개
+// 게시는 합치지 않음: 게시는 수집이 끝날 때마다 돌아 성공이 잦아서, 합치면 한 번의 게시 실패(되돌리기 실패 등)를
+//   다른 게시의 성공이 가림. 게시 실패는 한 번이어도 알린다는 결정(D16-C2)을 지키려고 오류·심장박동 두 경보로 둠
+// 경보가 참조하는 지표는 12개. settings.ts MAX_ALARM_METRICS(12)를 다 씀(무료 10개 초과분 2개 ≈ 월 $0.20)
+// 경보·지표를 더 넣으려면 기존 것을 빼거나 상한(월 요금)을 다시 정해야 함
+// 로그인 반복 요청 경보(결정 기록 D17-4, 지표 3개)는 GH-424(2026-11-13)에서 뺌. 이 경보는 알리기만 했고
+//   차단은 Cognito 잠금·요청 제한이 그대로 함. 운영 API까지 닿은 권한 없는 요청은 OpsApiErrors가 알림
+// catalog는 하루 1회라 성공 없음 창을 두지 않고 오류 경보만. 데이터 문의 함수 경보는 두지 않음(BRD-63 결정)
 // 날씨 수집기(Weather, BRD-181)는 오류·실행 없음을 경보 하나로 묶음(⑤-4). 한 번의 일부 실패는 알리지 않음
 
 const REPO_ROOT = path.join(__dirname, "..", "..", "..");
@@ -37,16 +45,25 @@ const NOTIFICATION_HANDLER_FILE = path.join(
   "services/src/ops/alarm-notification.ts",
 );
 
-// 심장박동 창. CloudWatch 기본 평가는 슬라이딩 창이라 '최근 구간 길이 × 구간 수' 동안 실행이 없으면 울림
-// → 마지막 실행 뒤 창 길이만큼 지나면 감지, 정상일 때는 (창 길이 − 실행 간격)까지 지표 지연을 견딤
-// 특보·게시: 5분×5 = 25분. 유효시간 45분보다 20분 앞서 감지, 실행 간격 15분이라 지연 10분까지 견딤
-// 관측·이안류: 5분×12 = 60분. 관측 유효시간 90분보다 30분 앞서 감지, 실행 간격 30분이라 지연 30분까지 견딤
+// 성공 없음 창(수집기). CloudWatch 기본 평가는 슬라이딩 창이라 '최근 구간 길이 × 구간 수' 동안 성공한 실행이 없으면 울림
+// → 마지막 성공 뒤 창 길이만큼 지나면 감지, 정상일 때는 (창 길이 − 실행 간격)까지 지표 지연을 견딤
+// 특보: 5분×5 = 25분. 유효시간 45분보다 20분 앞서 감지, 실행 간격 15분이라 지연 10분까지 견딤
+// 관측·이안류: 5분×9 = 45분. 관측 유효시간 90분보다 45분 앞서 감지, 실행 간격 30분이라 지연 15분까지 견딤
+// 한 번의 실패도 알림: 실패가 한 번 끼면 성공 사이가 실행 간격의 2배(특보 30분, 관측·이안류 60분)로 벌어져
+//   창(25분·45분)보다 길어지므로 울렸다가 다음 성공에 OK로 돌아옴. 예전 오류 경보(5분 안)보다 늦게 옴:
+//   실패한 실행 뒤 특보 약 10분, 관측·이안류 약 15분
+//   관측·이안류 창이 예전 심장박동의 60분이면 한 번의 실패(성공 간격 60분)를 놓쳐서 45분으로 줄임
 // 구간은 5분으로 통일함. 창 경계가 어디서 끊기든 실행 시각과의 어긋남이 5분 안에 들어옴
 // 15분×1·30분×1은 창 길이 = 실행 간격이라 지표가 1분만 늦어도 울렸음(BRD-167)
-export const HEARTBEAT_WINDOWS = {
+export const NO_SUCCESS_WINDOWS = {
   Warnings: { periodMinutes: 5, periods: 5 },
-  Ocean: { periodMinutes: 5, periods: 12 },
-  Rip: { periodMinutes: 5, periods: 12 },
+  Ocean: { periodMinutes: 5, periods: 9 },
+  Rip: { periodMinutes: 5, periods: 9 },
+} as const;
+
+// 심장박동 창(게시). 마지막 실행 뒤 창 길이만큼 실행이 없으면 울림
+// 5분×5 = 25분. 유효시간 45분보다 20분 앞서 감지, 실행 간격 15분이라 지연 10분까지 견딤
+export const HEARTBEAT_WINDOWS = {
   Publish: { periodMinutes: 5, periods: 5 },
 } as const;
 
@@ -60,11 +77,6 @@ export interface OpsAlarmsProps {
   readonly opsApiLogGroup: logs.ILogGroup; // 운영 API 로그 그룹 (D17-7 권한 거부 지표 필터용)
   readonly inquiryLogGroup: logs.ILogGroup; // 문의 함수 로그 그룹 (BRD-119 이메일 기한 초과 지표 필터용)
   readonly inquiryCleanupFailuresQueue: sqs.IQueue; // 일일 이메일 정리 실패 대기열 (BRD-119)
-  // 로그인 반복 요청 감시 대상(운영자·데모 풀의 관리자 앱 클라이언트, D17-4)
-  readonly signInClients: readonly {
-    readonly userPoolId: string;
-    readonly clientId: string;
-  }[];
 }
 
 // ④ 클래스. 스택에서 new OpsAlarms(...) 한 줄로 아래가 전부 만들어짐
@@ -94,28 +106,35 @@ export class OpsAlarms extends Construct {
       return found;
     };
 
-    // ⑥-1 오류 경보 5개: 함수가 오류로 끝나면 5분 안에 울림
-    // 수집기는 partial·failed를 오류로 던지고(finishRun), 게시 실패도 오류로 던짐(publisher/handler.ts)
-    // 이안류 비수기 실행은 skipped(정상)로 끝나므로 오류가 아님
-    this.errorAlarm(
-      "WarningsErrors",
+    // ⑥-1 성공 없음 경보 3개: 정해진 시간 동안 성공한 수집이 없으면 울림(실패·일정 꺼짐·고장)
+    // 수집기는 partial·failed를 오류로 던지므로(finishRun) 성공으로 세지 않음
+    // 이안류 비수기 실행은 skipped(정상)로 끝나므로 성공으로 셈
+    this.noSuccessAlarm(
+      "WarningsFailing",
       collector("Warnings"),
-      "특보 수집 실패. 사유는 CloudWatch 로그의 reason",
+      NO_SUCCESS_WINDOWS.Warnings,
+      "특보 수집이 25분 동안 성공하지 못함(실패 또는 일정 멈춤). 사유는 CloudWatch 로그의 reason. 이어지면 45분 뒤 전 해변 '특보 확인 못 함'이 됨",
     );
-    this.errorAlarm(
-      "OceanErrors",
+    this.noSuccessAlarm(
+      "OceanFailing",
       collector("Ocean"),
-      "바다 관측 수집 실패. 사유는 CloudWatch 로그의 reason",
+      NO_SUCCESS_WINDOWS.Ocean,
+      "바다 관측 수집이 45분 동안 성공하지 못함(실패 또는 일정 멈춤). 사유는 CloudWatch 로그의 reason. 이어지면 90분 뒤 '관측 지연'이 됨",
     );
+    // 이안류는 비수기에도 30분마다 깨어남(비수기 판단은 수집기 안) → 1년 내내 같은 창
+    this.noSuccessAlarm(
+      "RipFailing",
+      collector("Rip"),
+      NO_SUCCESS_WINDOWS.Rip,
+      "이안류 수집이 45분 동안 성공하지 못함(실패 또는 일정 멈춤). 사유는 CloudWatch 로그의 reason. 장소 화면의 이안류 정보가 갱신되지 않음",
+    );
+
+    // ⑥-2 오류 경보 2개: 함수가 오류로 끝나면 5분 안에 울림
+    // 게시 실패는 오류로 던짐(publisher/handler.ts). 사진 확인 수집은 하루 1회
     this.errorAlarm(
       "CatalogErrors",
       collector("Catalog"),
       "사진 확인 수집 실패(하루 1회). 사유는 CloudWatch 로그",
-    );
-    this.errorAlarm(
-      "RipErrors",
-      collector("Rip"),
-      "이안류 수집 실패. 사유는 CloudWatch 로그의 reason",
     );
     this.errorAlarm(
       "PublishErrors",
@@ -123,26 +142,7 @@ export class OpsAlarms extends Construct {
       "데이터 게시 실패. manifest는 이전 버전 유지됨",
     );
 
-    // ⑥-2 심장박동 경보 4개: 정해진 시간 동안 실행 자체가 없으면 울림(일정 꺼짐·고장)
-    this.heartbeatAlarm(
-      "WarningsStopped",
-      collector("Warnings"),
-      HEARTBEAT_WINDOWS.Warnings,
-      "특보 수집이 돌지 않음(일정 확인). 45분 뒤 전 해변 '특보 확인 못 함'이 됨",
-    );
-    this.heartbeatAlarm(
-      "OceanStopped",
-      collector("Ocean"),
-      HEARTBEAT_WINDOWS.Ocean,
-      "바다 관측 수집이 돌지 않음(일정 확인). 90분 뒤 '관측 지연'이 됨",
-    );
-    // 이안류는 비수기에도 30분마다 깨어남(비수기 판단은 수집기 안) → 1년 내내 같은 창
-    this.heartbeatAlarm(
-      "RipStopped",
-      collector("Rip"),
-      HEARTBEAT_WINDOWS.Rip,
-      "이안류 수집이 돌지 않음(일정 확인). 장소 화면의 이안류 정보가 갱신되지 않음",
-    );
+    // ⑥-3 심장박동 경보 1개: 정해진 시간 동안 게시 실행 자체가 없으면 울림
     // 게시는 수집이 끝날 때마다 깨어남(특보만 따져도 15분마다)
     this.heartbeatAlarm(
       "PublishStopped",
@@ -151,7 +151,6 @@ export class OpsAlarms extends Construct {
       "데이터 게시가 멈춤. 45분 뒤 validUntil 초과로 전 해변 판단불가가 됨",
     );
 
-    this.loginAbuseAlarm(props.signInClients);
     this.weatherAlarm(collector("Weather"));
     this.opsApiErrorsAlarm(props.opsApi, props.opsApiLogGroup);
     this.inquiryEmailOverdueAlarm(
@@ -160,70 +159,6 @@ export class OpsAlarms extends Construct {
     );
 
     this.addKoreanNotifications();
-  }
-
-  // ⑤-3 로그인 반복 요청 경보(D17-4): 5분 동안 로그인 실패 합계 ≥ 10 또는 계정 복구 API ≥ 5이면 울림
-  // 두 값을 각 기준으로 나눈 것 중 큰 값이 1 이상인지로 한 경보에 묶음(경보 자리 1개)
-  // 차단은 하지 않음(Cognito 기본 잠금·요청 제한이 막고, 이 경보는 알기만 함)
-  private loginAbuseAlarm(
-    clients: readonly { userPoolId: string; clientId: string }[],
-  ): void {
-    const period = Duration.minutes(LOGIN_ABUSE_ALARM.periodMinutes);
-    const usingMetrics: Record<string, cloudwatch.IMetric> = {};
-    const failures: string[] = [];
-    clients.forEach((client, i) => {
-      const dimensionsMap = {
-        UserPool: client.userPoolId,
-        UserPoolClient: client.clientId,
-      };
-      // 시도 수(표본 수)와 성공 수(합계). 실패 = 시도 − 성공
-      usingMetrics[`tries${i}`] = new cloudwatch.Metric({
-        namespace: "AWS/Cognito",
-        metricName: "SignInSuccesses",
-        dimensionsMap,
-        statistic: "SampleCount",
-        period,
-      });
-      usingMetrics[`oks${i}`] = new cloudwatch.Metric({
-        namespace: "AWS/Cognito",
-        metricName: "SignInSuccesses",
-        dimensionsMap,
-        statistic: "Sum",
-        period,
-      });
-      failures.push(`(FILL(tries${i}, 0) - FILL(oks${i}, 0))`);
-    });
-    // 계정 단위 사용량 지표(두 풀 합계). 차원 값은 2026-11-04 실제 지표(list-metrics)로 확인함
-    // 문서 표기('Cognito user pool')와 대소문자가 달라 실제 값(Cognito User Pool)을 씀
-    usingMetrics.recovery = new cloudwatch.Metric({
-      namespace: "AWS/Usage",
-      metricName: "CallCount",
-      dimensionsMap: {
-        Service: "Cognito User Pool",
-        Type: "API",
-        Resource: "UserAccountRecovery",
-        Class: "None",
-      },
-      statistic: "Sum",
-      period,
-    });
-    const alarm = new cloudwatch.Alarm(this, "LoginAbuse", {
-      alarmName: this.alarmName("LoginAbuse"),
-      metric: new cloudwatch.MathExpression({
-        expression: `MAX([(${failures.join(" + ")}) / ${LOGIN_ABUSE_ALARM.signInFailures}, FILL(recovery, 0) / ${LOGIN_ABUSE_ALARM.accountRecoveryCalls}])`,
-        usingMetrics,
-        period,
-        label: "로그인 실패·계정 복구 요청 / 기준",
-      }),
-      threshold: 1,
-      comparisonOperator:
-        cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
-      evaluationPeriods: 1,
-      // 로그인이 없는 구간은 정상(요청이 없으면 반복도 없음)
-      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-      alarmDescription: `로그인 반복 요청. 5분에 로그인 실패 ${LOGIN_ABUSE_ALARM.signInFailures}회 또는 비밀번호 찾기·변경 ${LOGIN_ABUSE_ALARM.accountRecoveryCalls}회 이상. Cognito 잠금·요청 제한이 막고 있음`,
-    });
-    this.alarms.push(alarm);
   }
 
   // ⑤-4 날씨 수집 계속 실패(BRD-181): 1시간 구간마다 '오류가 있었거나 실행이 없었음'이 3번 이어지면 울림
@@ -358,10 +293,46 @@ export class OpsAlarms extends Construct {
       comparisonOperator:
         cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD, // 1 이상
       evaluationPeriods: 1, // 한 구간만 보고 판정(실패 1번도 알림)
-      // 실행이 없어 지표가 비면 지금 상태를 유지함. 실행 없음은 심장박동 경보의 몫(이중 알림 방지)
+      // 실행이 없어 지표가 비면 지금 상태를 유지함. 게시의 실행 없음은 심장박동 경보의 몫(이중 알림 방지)
       // 정상으로 보면(notBreaching) 실패 뒤 빈 구간마다 OK로 돌아가 실패 실행마다 메일이 다시 감
       // 성공한 실행은 오류 0을 남기므로 그때 OK로 돌아옴
       treatMissingData: cloudwatch.TreatMissingData.IGNORE,
+      alarmDescription: description,
+    });
+    this.alarms.push(alarm);
+  }
+
+  // ⑤-2a 성공 없음 경보 도우미: periodMinutes 구간의 성공한 실행 수 < 1이 periods번 이어지면 울림
+  // 오류 경보 + 심장박동 경보를 하나로 합친 것(GH-424). 실패만 이어져도, 아예 돌지 않아도 울림
+  private noSuccessAlarm(
+    id: string,
+    fn: lambda.IFunction,
+    window: { periodMinutes: number; periods: number },
+    description: string,
+  ): void {
+    const period = Duration.minutes(window.periodMinutes);
+    const alarm = new cloudwatch.Alarm(this, id, {
+      alarmName: this.alarmName(id),
+      // 성공한 실행 수 = 실행 수 − 오류 수. Lambda는 실행마다 Errors 값(성공 0, 실패 1)을 하나 남기므로
+      // 같은 Errors 지표의 표본 수가 실행 수, 합계가 오류 수. 지표 하나만 읽어 경보 지표 1개로 청구됨
+      // (Invocations 지표를 따로 읽으면 2개)
+      // 실행이 없으면 지표 자체가 안 생김. CloudWatch는 평가 구간보다 넓게 조회해 실제 값이 있으면
+      // treatMissingData를 쓰지 않으므로, 빈 구간을 0으로 채워 지난 성공이 최근 빈 구간을 대신하지 않게 함
+      metric: new cloudwatch.MathExpression({
+        expression: "FILL(runs, 0) - FILL(errors, 0)",
+        usingMetrics: {
+          runs: fn.metricErrors({ period, statistic: "SampleCount" }),
+          errors: fn.metricErrors({ period, statistic: "Sum" }),
+        },
+        period,
+        label: "성공한 실행 수 (빈 구간 0)",
+      }),
+      threshold: 1,
+      comparisonOperator: cloudwatch.ComparisonOperator.LESS_THAN_THRESHOLD, // 1 미만
+      evaluationPeriods: window.periods,
+      // 조회 범위 전체에 실행이 없어 수식 값도 없을 때를 위한 안전장치: 데이터 없음을 위반으로 봄
+      // (기본값이면 '데이터 부족'에 머물러 조용함. 데이터 없음을 정상으로 보지 않기)
+      treatMissingData: cloudwatch.TreatMissingData.BREACHING,
       alarmDescription: description,
     });
     this.alarms.push(alarm);
@@ -478,7 +449,7 @@ export class OpsAlarms extends Construct {
       onFailure: { bind: () => ({ destination: failures.queueArn }) },
     });
 
-    // ⑥-3 알림 발송 실패 경보: 실패 대기열에 메시지가 1개라도 있으면 울림
+    // ⑥-4 알림 발송 실패 경보: 실패 대기열에 메시지가 1개라도 있으면 울림
     // 이 경보도 같은 Lambda로 알리므로, 일시적 실패였다면 다음 시도에서 메일이 감
     // 계속 실패하면 메일 없이 CloudWatch 경보 화면과 대기열에만 남음(암호화 주제는 경보가 직접 게시 못 함)
     // 대기열이 비어 지표가 끊기면 지금 상태를 유지함. 메시지를 확인·삭제하면 0이 되어 OK로 돌아옴

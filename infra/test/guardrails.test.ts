@@ -15,6 +15,7 @@ import {
   API_KEY_NAMES,
   API_KEY_PARAMETER_PREFIX,
   LOG_RETENTION,
+  MAX_ALARM_METRICS,
   MAX_ALARMS,
   MAX_DYNAMODB_CAPACITY_UNITS,
   MONTHLY_BUDGET_USD,
@@ -248,12 +249,32 @@ describe("재시도·경보·용량 (11장 기본값 함정)", () => {
     }
   });
 
-  it("CloudWatch 경보는 10개 이하다 (무료 범위)", () => {
+  it("CloudWatch 경보가 참조하는 지표는 상한(12개, 월 약 $0.20) 이하다 (GH-424)", () => {
     const alarms =
       Object.keys(template.findResources("AWS::CloudWatch::Alarm")).length +
       Object.keys(template.findResources("AWS::CloudWatch::CompositeAlarm"))
         .length;
     expect(alarms).toBeLessThanOrEqual(MAX_ALARMS);
+    // 과금 단위는 경보 수가 아니라 경보가 참조하는 지표 수. 같은 지표(이름·차원)를 통계만 달리해 읽으면 1개로 셈
+    // (2026-11 청구 내역으로 확인, settings.ts). 무료 범위는 10개이고 초과 지표마다 월 약 $0.10
+    // → 상한을 올리는 것은 월 요금을 올리는 결정임
+    const metrics = Object.values(
+      template.findResources("AWS::CloudWatch::Alarm"),
+    ).reduce((sum, alarm) => {
+      const list = alarm.Properties.Metrics as
+        { MetricStat?: { Metric: unknown } }[] | undefined;
+      if (!list) return sum + 1;
+      const unique = new Set(
+        list
+          .filter((m) => m.MetricStat)
+          .map((m) => JSON.stringify(m.MetricStat?.Metric)),
+      );
+      return sum + unique.size;
+    }, 0);
+    expect(MAX_ALARM_METRICS).toBe(12);
+    expect(metrics).toBeLessThanOrEqual(MAX_ALARM_METRICS);
+    // 복합 경보는 지표 수를 셀 수 없어 두지 않음
+    template.resourceCountIs("AWS::CloudWatch::CompositeAlarm", 0);
   });
 
   it("DynamoDB는 Provisioned이고 읽기·쓰기 용량 합계가 각각 25 이하다", () => {

@@ -150,29 +150,40 @@ describe("배포 워크플로 가드레일 (11장)", () => {
     expect(verify).toMatch(/-z "\$SITE_URL"[\s\S]*?exit 1/);
   });
 
-  it("배포는 main push CI가 끝난 뒤(와 수동 실행)에서만, production environment에서 한다 (BRD-133)", () => {
+  it("배포는 하루 한 번 정기 실행과 수동 실행에서만, production environment에서 한다 (BRD-133·GH-424)", () => {
     expect(deploy).toBeDefined();
     const text = codeLines(deploy?.text ?? "").join("\n");
-    expect(text).toMatch(
-      /workflow_run:\s*\n\s*workflows:\s*\[ci\]\s*\n\s*types:\s*\[completed\]\s*\n\s*branches:\s*\[main\]/,
+    // 하루 한 번: 분·시가 숫자 하나씩이고 일·월·요일은 매번
+    const crons = [...text.matchAll(/^\s*-\s*cron:\s*"([^"]+)"/gm)].map(
+      (m) => m[1],
     );
-    // push로 바로 배포하면 CI와 동시에 돌아 CI 실패 커밋이 나갈 수 있음
+    expect(crons).toHaveLength(1);
+    expect(crons[0]).toMatch(/^\d{1,2} \d{1,2} \* \* \*$/);
+    expect(text).toMatch(/^\s{2}workflow_dispatch:/m);
+    // push·CI 완료마다 올리면 배포 때마다 파일을 전부 다시 올려 S3 쓰기 요청 요금이 쌓임(GH-424)
+    // push로 바로 배포하면 CI와 동시에 돌아 CI 실패 커밋이 나갈 수도 있음
     expect(text).not.toMatch(/^\s{2}push:/m);
     expect(text).not.toMatch(/pull_request/);
+    // CI 완료(workflow_run)는 인프라 자동 배포 작업(#418)만 씀. 사이트 작업은 정기·수동 실행만
+    for (const job of ["site", "admin"]) {
+      const lines = jobLines(deploy?.text ?? "", job).join("\n");
+      expect(lines, job).not.toMatch(/workflow_run/);
+      expect(lines, job).toMatch(/github\.event_name == 'schedule'/);
+    }
     expect(text).toMatch(/environment:\s*production/);
   });
 
-  it("자동 배포는 이 저장소 main push CI가 성공했을 때만, CI가 검사한 커밋을 올린다 (BRD-133)", () => {
+  it("정기 배포는 main push CI가 성공한 커밋만 올리고, DEPLOY_PAUSED로 멈출 수 있다 (BRD-133·GH-424)", () => {
     const lines = codeLines(deploy?.text ?? "");
     const text = lines.join("\n");
-    expect(text).toContain("github.event.workflow_run.event == 'push'");
-    expect(text).toContain("github.event.workflow_run.conclusion == 'success'");
-    expect(text).toContain(
-      "github.event.workflow_run.head_repository.full_name == github.repository",
-    );
-    expect(text).toMatch(
-      /HEAD_SHA:\s*\$\{\{\s*github\.event\.workflow_run\.head_sha \|\| github\.sha\s*\}\}/,
-    );
+    for (const job of ["site", "admin"]) {
+      const condition = jobLines(deploy?.text ?? "", job).join("\n");
+      // 정기 실행만 멈춤 변수를 봄. 수동 실행은 멈춤 중에도 올릴 수 있음(인프라 배포 뒤 바로 올릴 때)
+      expect(condition, job).toMatch(
+        /github\.event_name == 'workflow_dispatch' \|\| \(\s*github\.event_name == 'schedule' &&\s*vars\.DEPLOY_PAUSED != 'true'\s*\)/,
+      );
+    }
+    expect(text).toMatch(/HEAD_SHA:\s*\$\{\{\s*github\.sha\s*\}\}/);
     // 올릴 커밋은 main push CI 실행 결과만 보고 정함(PR 실행 결과를 main 검증으로 쓰지 않음, BRD-178)
     expect(plan).toContain(
       "actions/workflows/ci.yml/runs?branch=main&event=push",
