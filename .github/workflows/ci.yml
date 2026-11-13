@@ -25,7 +25,9 @@ jobs:
 
     outputs:
       web: ${{ steps.filter.outputs.web }}
+      web_e2e: ${{ steps.filter.outputs.web_e2e }}
       admin: ${{ steps.filter.outputs.admin }} # 운영자 사이트(BRD-147)
+      admin_e2e: ${{ steps.filter.outputs.admin_e2e }}
       services: ${{ steps.filter.outputs.services }}
       infra: ${{ steps.filter.outputs.infra == 'true' || steps.filter_config.outputs.changed == 'true' }}
       contracts: ${{ steps.filter.outputs.contracts }} # contracts 변경 여부
@@ -39,6 +41,7 @@ jobs:
       - id: filter
         uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         with:
+          predicate-quantifier: some-with-excludes # 앱 전체에서 테스트·문서 경로만 제외
           filters: .github/ci-filters.yml
       # 필터 파일의 내용과 관계없이 이 파일을 바꾸면 infra 가드레일을 실행함
       - id: filter_config
@@ -51,7 +54,7 @@ jobs:
         env:
           FILTER_OUTPUTS: ${{ toJSON(steps.filter.outputs) }}
         run: |
-          for area in web admin services infra contracts beaches deps agy_review ops_policy map; do
+          for area in web web_e2e admin admin_e2e services infra contracts beaches deps agy_review ops_policy map; do
             if ! jq -e --arg area "$area" '.[$area] == "true" or .[$area] == "false"' <<< "$FILTER_OUTPUTS" > /dev/null; then
               echo "::error::경로 필터 결과가 없거나 올바르지 않아요: $area"
               exit 1
@@ -78,7 +81,7 @@ jobs:
       - run: npm run typecheck -w apps/web # 가져다 쓰는 contracts 원본까지 검사 (BRD-102)
       - run: npm run test -w apps/web # 데이터 계층(Vitest)
 
-  # 웹 정적 빌드·CSP·Chromium 핵심 E2E를 같은 러너에서 실행해 재설치를 피함
+  # 웹 정적 빌드·CSP는 앱 변경마다 실행. Chromium 핵심 E2E는 화면 관련 PR과 main에서 실행
   e2e-build:
     needs: changes
     if: needs.changes.outputs.web == 'true'
@@ -109,18 +112,20 @@ jobs:
       - run: npm run check:csp -w apps/web # CSP meta 해시 일치 검사 (BRD-118)
       # Playwright 브라우저 캐시(BRD-178). 판은 lock 파일이 정함. 캐시가 있어도 OS 의존성은 설치함
       - id: playwright-cache
+        if: github.event_name == 'push' || needs.changes.outputs.web_e2e == 'true'
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
-      - if: steps.playwright-cache.outputs.cache-hit != 'true'
+      - if: (github.event_name == 'push' || needs.changes.outputs.web_e2e == 'true') && steps.playwright-cache.outputs.cache-hit != 'true'
         run: npx --no-install playwright install --with-deps chromium # lock 파일의 Playwright 판에 맞는 chromium
         working-directory: apps/web
-      - if: steps.playwright-cache.outputs.cache-hit == 'true'
+      - if: (github.event_name == 'push' || needs.changes.outputs.web_e2e == 'true') && steps.playwright-cache.outputs.cache-hit == 'true'
         run: npx --no-install playwright install-deps chromium
         working-directory: apps/web
       # /data/**는 가짜 응답만 씀(운영 데이터·외부 타일 서버에 기대지 않음)
-      - run: npm run test:e2e:smoke -w apps/web
+      - if: github.event_name == 'push' || needs.changes.outputs.web_e2e == 'true'
+        run: npm run test:e2e:smoke -w apps/web
 
   # 운영자 사이트: 린트·타입 검사·단위 테스트 (BRD-147). 빌드·E2E와 나란히 돌림
   admin:
@@ -138,7 +143,7 @@ jobs:
       - run: npm run typecheck -w apps/admin
       - run: npm run test -w apps/admin
 
-  # 운영자 사이트 정적 빌드·결과 검사·Chromium 핵심 E2E를 같은 러너에서 실행
+  # 운영자 사이트 정적 빌드·결과 검사는 앱 변경마다 실행. 핵심 E2E는 화면 관련 PR과 main에서 실행
   admin-build:
     needs: changes
     if: needs.changes.outputs.admin == 'true'
@@ -172,17 +177,19 @@ jobs:
       - run: npm run check:out -w apps/admin # 고치지 않고 다시 검사(빌드 결과가 그대로인지)
       # Playwright 브라우저 캐시(BRD-178). 판은 lock 파일이 정함. 캐시가 있어도 OS 의존성은 설치함
       - id: playwright-cache
+        if: github.event_name == 'push' || needs.changes.outputs.admin_e2e == 'true'
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
-      - if: steps.playwright-cache.outputs.cache-hit != 'true'
+      - if: (github.event_name == 'push' || needs.changes.outputs.admin_e2e == 'true') && steps.playwright-cache.outputs.cache-hit != 'true'
         run: npx --no-install playwright install --with-deps chromium # lock 파일의 Playwright 판에 맞는 chromium
         working-directory: apps/admin
-      - if: steps.playwright-cache.outputs.cache-hit == 'true'
+      - if: (github.event_name == 'push' || needs.changes.outputs.admin_e2e == 'true') && steps.playwright-cache.outputs.cache-hit == 'true'
         run: npx --no-install playwright install-deps chromium
         working-directory: apps/admin
-      - run: npm run test:e2e:smoke -w apps/admin # chromium(mobile·desktop)
+      - if: github.event_name == 'push' || needs.changes.outputs.admin_e2e == 'true'
+        run: npm run test:e2e:smoke -w apps/admin # chromium(mobile·desktop)
 
   # 백엔드: 린트·타입 검사·테스트(Vitest)
   services:
