@@ -71,8 +71,16 @@ describe("GA4 응답 및 metadata 제한 파싱 (E8)", () => {
           metricValues: [{ value: "88" }],
         },
         {
+          dimensionValues: [{ value: "/en/spots/haeundae" }],
+          metricValues: [{ value: "12" }],
+        },
+        {
           dimensionValues: [{ value: "/spots/unknown-slug" }],
           metricValues: [{ value: "" }],
+        },
+        {
+          dimensionValues: [{ value: "/spots/" }],
+          metricValues: [{ value: "5" }],
         },
       ],
       metadata: {
@@ -80,7 +88,7 @@ describe("GA4 응답 및 metadata 제한 파싱 (E8)", () => {
       },
     });
     expect(beaches.rows).toEqual([
-      { path: "/spots/haeundae", slug: "haeundae", pageViews: 88 },
+      { path: "/spots/haeundae", slug: "haeundae", pageViews: 100 },
       { path: "/spots/unknown-slug", slug: "unknown-slug", pageViews: null },
     ]);
     expect(beaches.metadata).toEqual({
@@ -96,8 +104,17 @@ describe("GA4 응답 및 metadata 제한 파싱 (E8)", () => {
     expect(devices.metadata.otherRowLoss).toBe(true);
 
     const languages = parseLanguagesReport({
-      rows: [{ dimensionValues: [{ value: "ko" }], metricValues: [{ value: "100" }] }],
+      rows: [
+        { dimensionValues: [{ value: "ko-kr" }], metricValues: [{ value: "100" }] },
+        { dimensionValues: [{ value: "en-us" }], metricValues: [{ value: "20" }] },
+        { dimensionValues: [{ value: "en-gb" }], metricValues: [{ value: "5" }] },
+        { dimensionValues: [{ value: "(not set)" }], metricValues: [{ value: "3" }] },
+      ],
     });
+    expect(languages.rows).toEqual([
+      { language: "ko", activeUsers: 100 },
+      { language: "en", activeUsers: 25 },
+    ]);
     expect(languages.metadata).toEqual({
       thresholding: false,
       sampling: false,
@@ -114,6 +131,15 @@ describe("캐시 및 실패 경로", () => {
       ...unconfiguredStats(range, now()),
       configured: true,
       realtime: { status: "ok", activeUsers: 5, pageViews: 10 },
+      period: {
+        status: "ok",
+        activeUsers: 50,
+        pageViews: 100,
+        topBeaches: [],
+        devices: [],
+        languages: [],
+        metadata: { thresholding: false, sampling: false, otherRowLoss: false },
+      },
     }));
     const cached = createCachedStatsReader({ read }, now, 60_000);
 
@@ -132,12 +158,22 @@ describe("캐시 및 실패 경로", () => {
     expect(read).toHaveBeenCalledTimes(2);
   });
 
-  it("실시간·기간이 모두 실패한 응답은 캐시하지 않고 재시도함", async () => {
+  it("일부 리포트라도 실패한 응답은 캐시하지 않고 재시도함", async () => {
     let ms = 1_700_000_000_000;
     const now = () => new Date(ms);
     const read = vi.fn<StatsReader["read"]>(async (range) => ({
       ...unconfiguredStats(range, now()),
       configured: true,
+      realtime: { status: "ok", activeUsers: 5, pageViews: 10 },
+      period: {
+        status: "ok",
+        activeUsers: 50,
+        pageViews: 100,
+        topBeaches: null,
+        devices: [],
+        languages: [],
+        metadata: { thresholding: false, sampling: false, otherRowLoss: false },
+      },
     }));
     const cached = createCachedStatsReader({ read }, now, 60_000);
 
