@@ -483,27 +483,24 @@ export interface AutoDeployDecision {
 }
 
 // 실행 정책에서 저장소 문서가 쓰는 Allow 동작 중 AWS 기본 버전이 허용하지 않는 것(와일드카드 비교, 대소문자 무시)
+// - AWS 쪽 Allow 동작에 맞지 않거나, AWS 쪽 Deny 문(저장소에는 없는 것)이 그 동작을 거부하면 빠진 동작
+// - Deny NotAction은 거기 적힌 동작 밖을 모두 거부함. Allow NotAction은 허용으로 치지 않음(모르면 빠졌다고 봄)
 // 리소스·조건은 보지 않음(좁아진 리소스는 안전, 넓어진 리소스는 CloudFormation이 막고 롤백함)
 // 하나라도 있으면 그 동작이 필요한 배포가 AccessDenied로 실패할 수 있음 → CI는 실행하지 않음(실행 정책은 README 절차로 반영)
 export function missingExecutionActions(
   local: readonly PolicyDocument[],
   remote: readonly PolicyDocument[],
 ): string[] {
-  const allowActions = (docs: readonly PolicyDocument[]): string[] =>
-    docs.flatMap((d) => {
-      const list: readonly PolicyStatement[] =
-        d.Statement === undefined
-          ? []
-          : Array.isArray(d.Statement)
-            ? (d.Statement as readonly PolicyStatement[])
-            : [d.Statement as PolicyStatement];
-      return list
-        .filter((st) => st.Effect === "Allow")
-        .flatMap((st) => {
-          const a = st.Action as string | string[] | undefined;
-          return a === undefined ? [] : Array.isArray(a) ? a : [a];
-        });
-    });
+  const statements = (docs: readonly PolicyDocument[]) =>
+    docs.flatMap((d): readonly PolicyStatement[] =>
+      d.Statement === undefined
+        ? []
+        : Array.isArray(d.Statement)
+          ? (d.Statement as readonly PolicyStatement[])
+          : [d.Statement as PolicyStatement],
+    );
+  const listOf = (v: unknown): string[] =>
+    v === undefined ? [] : Array.isArray(v) ? (v as string[]) : [v as string];
   const toPattern = (p: string) =>
     new RegExp(
       `^${p
@@ -512,9 +509,30 @@ export function missingExecutionActions(
         .replace(/\?/g, ".")}$`,
       "i",
     );
-  const patterns = allowActions(remote).map(toPattern);
-  return [...new Set(allowActions(local))]
-    .filter((a) => !patterns.some((re) => re.test(a)))
+  const matches = (patterns: readonly string[], action: string) =>
+    patterns.some((p) => toPattern(p).test(action));
+  const localSt = statements(local);
+  const remoteSt = statements(remote);
+  const actionsOf = (sts: readonly PolicyStatement[], effect: string) =>
+    sts.filter((st) => st.Effect === effect).flatMap((st) => listOf(st.Action));
+  const localDeny = new Set(
+    actionsOf(localSt, "Deny").map((a) => a.toLowerCase()),
+  );
+  const remoteAllow = actionsOf(remoteSt, "Allow");
+  // 저장소에도 같은 Deny가 있으면 의도한 거부라 빠진 동작으로 보지 않음
+  const remoteDeny = actionsOf(remoteSt, "Deny").filter(
+    (a) => !localDeny.has(a.toLowerCase()),
+  );
+  const remoteDenyNot = remoteSt
+    .filter((st) => st.Effect === "Deny" && st.NotAction !== undefined)
+    .map((st) => listOf(st.NotAction));
+  return [...new Set(actionsOf(localSt, "Allow"))]
+    .filter(
+      (a) =>
+        !matches(remoteAllow, a) ||
+        matches(remoteDeny, a) ||
+        remoteDenyNot.some((kept) => !matches(kept, a)),
+    )
     .sort();
 }
 
@@ -587,30 +605,92 @@ export function linkedIssues(prBody: string | null | undefined): number[] {
   return [...new Set(found)];
 }
 
-// 인프라 배포에 영향이 있는 파일(스택·함수 코드·계약·의존성). 건너뛴 커밋을 그 이슈에 알릴지 정할 때 씀
+// '/'로 끝나면 그 폴더 아래, 아니면 그 파일 하나
+const matchesAny = (paths: readonly string[], patterns: readonly string[]) =>
+  paths.some((f) =>
+    patterns.some((p) => (p.endsWith("/") ? f.startsWith(p) : f === p)),
+  );
+
+// 인프라 배포에 영향이 있는 파일(스택·함수 코드·계약·의존성·Lambda 번들에 들어가는 data 파일). 건너뛴 커밋을 그 이슈에 알릴지 정할 때 씀
 const INFRA_PATHS = [
   "infra/",
   "services/",
   "packages/contracts/",
   "package.json",
   "package-lock.json",
+  "data/beach-meta.json", // publisher/handler.ts
+  "data/photo-sources.json", // collectors/handlers.ts
+  "data/rip-current-beaches.json", // collectors/handlers.ts
+  "data/weather-areas.json", // collectors/handlers.ts
 ];
 
 export function touchesInfra(paths: readonly string[]): boolean {
-  return paths.some((f) =>
-    INFRA_PATHS.some((p) => (p.endsWith("/") ? f.startsWith(p) : f === p)),
-  );
+  return matchesAny(paths, INFRA_PATHS);
 }
 
-// 인프라 배포에 들어가는 영역(스택·함수 코드·계약)을 검사하는 main CI 작업(ci.yml)
+// 인프라 배포에 들어가는 영역을 검사하는 main CI 작업(ci.yml): 스택(infra)·함수 코드(services)·계약(contracts)·
+// Lambda 번들에 들어가는 해변 data(beaches: beach-meta·weather-areas·photo-sources)
 // main push CI는 바뀐 영역만 검사하므로 맨 위 커밋의 ci-ok만으로는 그 트리의 인프라가 검사됐는지 알 수 없음
-export const INFRA_CI_JOBS = ["infra", "services", "contracts"] as const;
+export const INFRA_CI_JOBS = [
+  "infra",
+  "services",
+  "contracts",
+  "beaches",
+] as const;
 
-export interface CommitCi {
-  readonly sha: string;
-  // 이 커밋의 main push CI 작업별 결과(진행 중이면 null 값). 실행이 없으면(여러 커밋 push의 중간 커밋 등) null
-  readonly jobs: Readonly<Record<string, string | null>> | null;
-  readonly touchesInfra: boolean;
+// 작업마다 그 작업을 돌게 하는 경로(.github/ci-filters.yml과 같게 둠, deploy-plan.test.ts가 대조함)
+// '/'로 끝나면 폴더. git log 경로 지정(pathspec)에 그대로 씀
+const CI_SHARED = [
+  "package.json",
+  "package-lock.json",
+  "tsconfig.base.json",
+  ".nvmrc",
+  ".github/workflows/ci.yml",
+];
+export const CI_JOB_PATHS: Readonly<Record<string, readonly string[]>> = {
+  infra: [
+    ...CI_SHARED,
+    "infra/",
+    ".github/workflows/",
+    ".github/scripts/",
+    ".github/dependabot.yml",
+    "tools/map-tiles/",
+    ".github/ci-filters.yml", // ci.yml filter_config
+  ],
+  services: [
+    ...CI_SHARED,
+    "services/",
+    "packages/contracts/",
+    "data/photo-sources.json",
+    "data/rip-current-beaches.json",
+    "tools/republish/",
+  ],
+  contracts: [...CI_SHARED, "packages/contracts/"],
+  beaches: [
+    ...CI_SHARED,
+    "tools/beaches/",
+    "data/beaches/",
+    "data/beach-coverage.csv",
+    "data/beach-meta.json",
+    "data/photo-sources.json",
+    "data/weather-areas.json",
+    "packages/contracts/schemas/",
+    "packages/contracts/scripts/",
+  ],
+};
+
+// main push CI 실행 하나에서 한 작업의 결과. 진행 중이면 null, 실행에 그 작업이 없으면 undefined
+export interface JobRun {
+  readonly sha: string; // 실행의 커밋(push 맨 위)
+  readonly result: string | null | undefined;
+}
+
+export interface InfraJobEvidence {
+  readonly job: string;
+  // 그 작업 영역을 마지막으로 바꾼 커밋(first-parent). 이력에서 못 찾으면 null
+  readonly lastChange: string | null;
+  // lastChange를 담은 push의 실행을 먼저, 그 뒤(맨 위까지)의 실행을 이어서. 성공을 찾으면 더 읽지 않음(늦게 읽어도 됨)
+  readonly runs: Iterable<JobRun>;
 }
 
 export interface InfraCiCheck {
@@ -618,45 +698,41 @@ export interface InfraCiCheck {
   readonly pending: boolean; // 이유 중 진행 중인 실행이 있음(끝나면 다시 볼 수 있음)
 }
 
-// 맨 위 커밋부터 거슬러 올라가며(first-parent) 작업마다 그 작업이 성공한 실행을 찾음(사이트 deploy-plan.sh와 같은 생각)
-// - 건너뜀(skipped)은 그 영역이 앞 push와 같다는 뜻이라 계속 거슬러 감
-// - 실패·취소·진행 중, 실행에 작업이 없음, 실행 없는 커밋이 인프라 파일을 바꿈, 목록 끝까지 못 찾음 → 검사 안 됨(모르는 것을 통과로 보지 않음)
+// 작업마다 그 영역을 마지막으로 바꾼 커밋 뒤(그 커밋을 담은 push 포함) 실행 중 그 작업이 성공한 실행이 있는지 봄
+// - 그 뒤로 영역이 바뀌지 않았으니 성공한 실행이 검사한 영역 = 지금 트리의 영역
+// - 성공한 실행이 없으면(실패·취소·건너뜀·작업 없음·진행 중·실행 못 찾음) 검사 안 됨(모르는 것을 통과로 보지 않음)
+// - 이력 길이와 상관없음: 오래 안 바뀐 영역도 마지막 변경의 실행만 보면 됨
 export function infraCiCheck(
-  commitAt: (index: number) => CommitCi | undefined,
-  jobs: readonly string[] = INFRA_CI_JOBS,
+  evidence: Iterable<InfraJobEvidence>,
 ): InfraCiCheck {
   const unchecked: string[] = [];
   let pending = false;
-  for (const job of jobs) {
-    let reason: string | null = "확인할 커밋 이력이 끝남";
-    for (let i = 0; ; i++) {
-      const c = commitAt(i);
-      if (c === undefined) break;
-      const short = c.sha.slice(0, 7);
-      if (c.jobs === null) {
-        if (c.touchesInfra) {
-          reason = `${short}: main CI 실행을 찾지 못했는데 인프라 파일을 바꿈`;
-          break;
-        }
-        continue;
-      }
-      const conclusion = c.jobs[job];
-      if (conclusion === "success") {
-        reason = null;
+  const describe = (r: JobRun["result"]) =>
+    r === undefined ? "없음" : r === null ? "진행 중" : r;
+  for (const { job, lastChange, runs } of evidence) {
+    if (lastChange === null) {
+      unchecked.push(`${job} — 영역을 바꾼 커밋을 이력에서 찾지 못함`);
+      continue;
+    }
+    let first: JobRun | undefined;
+    let running: JobRun | undefined;
+    let ok = false;
+    for (const r of runs) {
+      first ??= r;
+      if (r.result === "success") {
+        ok = true;
         break;
       }
-      if (conclusion === "skipped") continue;
-      if (conclusion === null) pending = true;
-      reason = `${short}: main CI의 ${job} 작업이 ${
-        conclusion === undefined
-          ? "없음"
-          : conclusion === null
-            ? "진행 중"
-            : conclusion
-      }`;
-      break;
+      if (r.result === null) running ??= r;
     }
-    if (reason !== null) unchecked.push(`${job} — ${reason}`);
+    if (ok) continue;
+    if (running) pending = true;
+    const shown = running ?? first;
+    unchecked.push(
+      shown === undefined
+        ? `${job} — ${lastChange.slice(0, 7)}(마지막 변경) 뒤로 main CI 실행을 찾지 못함`
+        : `${job} — ${shown.sha.slice(0, 7)}: main CI의 ${job} 작업이 ${describe(shown.result)}`,
+    );
   }
   return { unchecked, pending };
 }

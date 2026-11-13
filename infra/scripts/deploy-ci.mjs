@@ -32,6 +32,8 @@ import {
   deployComment,
   deployFailureComment,
   formatTable,
+  CI_JOB_PATHS,
+  INFRA_CI_JOBS,
   infraCiCheck,
   isEmptyChangeSet,
   linkedIssues,
@@ -135,15 +137,25 @@ const sha = env("HEAD_SHA");
 const runUrl = `${process.env.GITHUB_SERVER_URL ?? "https://github.com"}/${repo}/actions/runs/${process.env.GITHUB_RUN_ID ?? ""}`;
 const subject = run("git", ["log", "--oneline", "-1", sha]).stdout.trim();
 
+// 이 커밋을 머지한 PR 목록. 읽지 못하면 null. 한 실행에서 한 번만 읽음(댓글·알림 판정이 함께 씀)
+let pullsCache;
+function commitPulls() {
+  if (pullsCache === undefined) {
+    const got = run("gh", ["api", `repos/${repo}/commits/${sha}/pulls`], {
+      allowFail: true,
+    });
+    pullsCache = got.status === 0 ? JSON.parse(got.stdout) : null;
+  }
+  return pullsCache;
+}
+
 // 결과 댓글: 이 커밋을 머지한 PR 설명의 연결 이슈마다. 연결 이슈가 없으면 PR에. 실패해도 배포 결과는 바꾸지 않음
 function postComment(body) {
   const text = redactAccount(body);
-  const pulls = run("gh", ["api", `repos/${repo}/commits/${sha}/pulls`], {
-    allowFail: true,
-  });
+  const pulls = commitPulls();
   let targets = [];
-  if (pulls.status === 0) {
-    for (const pr of JSON.parse(pulls.stdout)) {
+  if (pulls !== null) {
+    for (const pr of pulls) {
       const issues = linkedIssues(pr.body);
       targets.push(...(issues.length > 0 ? issues : [pr.number]));
     }
@@ -170,11 +182,9 @@ function postComment(body) {
 
 // 이 커밋을 머지한 PR 중 인프라 배포에 영향이 있는 파일을 바꾼 것이 있는지. 읽지 못하면 있다고 봄(알림을 빠뜨리지 않음)
 function prsTouchInfra() {
-  const pulls = run("gh", ["api", `repos/${repo}/commits/${sha}/pulls`], {
-    allowFail: true,
-  });
-  if (pulls.status !== 0) return true;
-  for (const pr of JSON.parse(pulls.stdout)) {
+  const pulls = commitPulls();
+  if (pulls === null) return true;
+  for (const pr of pulls) {
     const files = run(
       "gh",
       [
@@ -216,66 +226,93 @@ function waitForOtherDeploy() {
   });
 }
 
-// 이 트리의 인프라 영역(infra·services·contracts)을 main CI가 검사해 통과했는지(deploy-plan.ts infraCiCheck)
-// 바뀐 영역만 검사하므로, 앞 커밋에서 실패한 인프라 변경을 웹만 바꾼 다음 커밋이 배포하지 않게 거슬러 올라가 봄
+// 이 트리의 인프라 영역(infra·services·contracts·beaches)을 main CI가 검사해 통과했는지(deploy-plan.ts infraCiCheck)
+// 바뀐 영역만 검사하므로, 앞 커밋에서 실패한 인프라 변경을 웹만 바꾼 다음 커밋이 배포하지 않게
+// 작업마다 그 영역을 마지막으로 바꾼 커밋을 찾고, 그 커밋을 담은 push의 실행과 그 뒤 실행에서 그 작업 결과를 봄
 // 조회 실패는 멈춤. 앞 실행이 아직 돌고 있으면 남은 대기 시간 안에서 기다림
-const CI_HISTORY = 100;
+const CI_HISTORY = 100; // 최근 main push 실행 목록(그 뒤 실행을 찾을 때)
+const PUSH_SEARCH = 50; // 마지막 변경을 담은 push의 실행을 찾을 때 거슬러 볼 커밋 수(PR 한 개의 커밋 수보다 넉넉히)
 const CI_POLL_MS = 30_000;
-function readCommitCi() {
-  const runs = new Map();
-  for (const line of run("gh", [
-    "api",
-    `repos/${repo}/actions/workflows/ci.yml/runs?branch=main&event=push&per_page=${CI_HISTORY}`,
-    "--jq",
-    '.workflow_runs[] | "\\(.head_sha) \\(.id)"',
-  ])
-    .stdout.split("\n")
-    .filter(Boolean)) {
-    const [head, id] = line.split(" ");
-    if (!runs.has(head)) runs.set(head, id); // 최신 실행이 먼저
-  }
-  const commits = run("git", [
-    "rev-list",
-    "--first-parent",
-    `--max-count=${CI_HISTORY}`,
-    sha,
-  ])
-    .stdout.split("\n")
-    .filter(Boolean);
-  const cache = [];
-  return (i) => {
-    if (i >= commits.length) return undefined;
-    if (cache[i]) return cache[i];
-    const c = commits[i];
-    const id = runs.get(c);
-    let jobs = null;
-    if (id) {
-      jobs = {};
+function readInfraEvidence() {
+  const ciRuns = (query) =>
+    run("gh", [
+      "api",
+      `repos/${repo}/actions/workflows/ci.yml/runs?branch=main&event=push&${query}`,
+      "--jq",
+      '.workflow_runs[] | "\\(.head_sha) \\(.id)"',
+    ])
+      .stdout.split("\n")
+      .filter(Boolean)
+      .map((line) => line.split(" "));
+  const recent = new Map();
+  for (const [head, id] of ciRuns(`per_page=${CI_HISTORY}`))
+    if (!recent.has(head)) recent.set(head, id); // 최신 실행이 먼저
+  const runOf = (c) => {
+    if (recent.has(c)) return recent.get(c);
+    const found = ciRuns(`head_sha=${c}&per_page=1`)[0];
+    return found ? found[1] : null;
+  };
+  const jobsCache = new Map();
+  const jobsOf = (id) => {
+    if (!jobsCache.has(id)) {
+      const jobs = {};
       const listed = JSON.parse(
         run("gh", ["api", `repos/${repo}/actions/runs/${id}/jobs?per_page=100`])
           .stdout,
       );
       for (const j of listed.jobs ?? [])
         jobs[j.name] = j.status === "completed" ? j.conclusion : null;
+      jobsCache.set(id, jobs);
     }
-    const files = run("git", [
-      "diff-tree",
-      "--no-commit-id",
-      "--name-only",
-      "-r",
-      "--root",
-      c,
-    ])
-      .stdout.split("\n")
-      .filter(Boolean);
-    cache[i] = { sha: c, jobs, touchesInfra: touchesInfra(files) };
-    return cache[i];
+    return jobsCache.get(id);
   };
+  const lines = (args) => run("git", args).stdout.split("\n").filter(Boolean);
+  return INFRA_CI_JOBS.map((job) => {
+    const lastChange =
+      lines([
+        "log",
+        "-1",
+        "--first-parent",
+        "--format=%H",
+        sha,
+        "--",
+        ...CI_JOB_PATHS[job],
+      ])[0] ?? null;
+    if (lastChange === null) return { job, lastChange, runs: [] };
+    // 마지막 변경부터 맨 위까지(오래된 것부터)
+    const range = [
+      lastChange,
+      ...lines([
+        "rev-list",
+        "--first-parent",
+        "--reverse",
+        `${lastChange}..${sha}`,
+      ]),
+    ];
+    function* runs() {
+      // 1) 마지막 변경을 담은 push의 실행: 그 커밋부터 위로 처음 실행이 있는 커밋
+      let at = -1;
+      for (let i = 0; i < Math.min(range.length, PUSH_SEARCH); i++) {
+        const id = runOf(range[i]);
+        if (id) {
+          at = i;
+          yield { sha: range[i], result: jobsOf(id)[job] };
+          break;
+        }
+      }
+      // 2) 그 뒤 실행(최근 목록에 있는 것만, 최신부터): 다시 돌린 실행·공통 파일 변경으로 그 작업이 다시 돈 실행
+      for (let i = range.length - 1; i > at; i--) {
+        const id = recent.get(range[i]);
+        if (id) yield { sha: range[i], result: jobsOf(id)[job] };
+      }
+    }
+    return { job, lastChange, runs: runs() };
+  });
 }
 
 function infraChecked() {
   for (;;) {
-    const got = infraCiCheck(readCommitCi());
+    const got = infraCiCheck(readInfraEvidence());
     if (got.unchecked.length === 0) return true;
     if (got.pending && Date.now() + CI_POLL_MS < waitDeadline) {
       console.log("앞 커밋의 main CI가 아직 돌고 있어 기다려요");
@@ -283,7 +320,7 @@ function infraChecked() {
       continue;
     }
     const text =
-      "main CI가 이 트리의 인프라 영역(infra·services·contracts)을 검사해 통과했는지 확인하지 못해 자동 배포하지 않아요. 앞 커밋의 CI가 실패했으면 고친 커밋이 머지될 때 함께 배포되고, 진행 중이었으면 끝난 뒤 이 실행을 다시 돌려 주세요. 급하면 로컬 `npm run deploy:infra`로 배포해 주세요.";
+      "main CI가 이 트리의 인프라 영역(infra·services·contracts·beaches)을 검사해 통과했는지 확인하지 못해 자동 배포하지 않아요. 앞 커밋의 CI가 실패했으면 고친 커밋이 머지될 때 함께 배포되고, 진행 중이었으면 끝난 뒤 이 실행을 다시 돌려 주세요. 급하면 로컬 `npm run deploy:infra`로 배포해 주세요.";
     summary(
       `### 인프라 배포 건너뜀\n\n${text}\n\n${got.unchecked.map((r) => `- ${r}`).join("\n")}`,
     );
@@ -439,6 +476,21 @@ function tableMarkdown(rows) {
 // 실행·대기. 실패하면 실패 이벤트를 댓글로 남기고 멈춤
 async function executeAndWait(account, name, rows, policies) {
   const deployAws = deployRoleAws(account);
+  // 실행하지 못하고 멈추면(실행 실패, 다시 하기 전 스택 대기 실패 등) 이 커밋의 변경이 반영되지 않음
+  // → 실행 요약만이 아니라 댓글로도 알림. 실행이 시작되면 아래 대기 실패 댓글이 따로 남으므로 풂
+  beforeFail = (message) =>
+    postComment(
+      [
+        `## 인프라 배포 실패 (${VIA})`,
+        "",
+        `- 커밋: ${subject}`,
+        `- 변경 세트: \`${name}\` (실행하지 못함, 스택은 바뀌지 않음)`,
+        `- 이유: ${redactAccount(message)}`,
+        `- 실행 기록: ${runUrl}`,
+        "",
+        "다른 배포가 먼저 실행돼 변경 세트가 지워졌을 수 있어요. 실행 기록의 오류를 확인하고, 이 커밋이 main 맨 위면 실행 기록에서 다시 실행하거나 로컬 `npm run deploy:infra`로 배포해 주세요.",
+      ].join("\n") + "\n",
+    );
   let startedAt;
   for (let attempt = 0; ; attempt += 1) {
     // 기다린 다른 배포의 실패 이벤트를 이번 실패로 적지 않게 실행할 때마다 다시 잼
@@ -461,22 +513,11 @@ async function executeAndWait(account, name, rows, policies) {
       attempt >= IN_PROGRESS_RETRIES ||
       !IN_PROGRESS_ERROR.test(executed.stderr)
     ) {
-      // 실행되지 않아 이 커밋의 변경이 반영되지 않음 → 실행 요약만이 아니라 댓글로도 알림
-      postComment(
-        [
-          `## 인프라 배포 실패 (${VIA})`,
-          "",
-          `- 커밋: ${subject}`,
-          `- 변경 세트: \`${name}\` (실행하지 못함, 스택은 바뀌지 않음)`,
-          `- 실행 기록: ${runUrl}`,
-          "",
-          "다른 배포가 먼저 실행돼 변경 세트가 지워졌을 수 있어요. 실행 기록의 오류를 확인하고, 이 커밋이 main 맨 위면 실행 기록에서 다시 실행하거나 로컬 `npm run deploy:infra`로 배포해 주세요.",
-        ].join("\n") + "\n",
-      );
       fail(`변경 세트 ${name}를 실행하지 못했어요. 위 오류를 확인해 주세요.`);
     }
     requireStackReady();
   }
+  beforeFail = null;
   console.log(`변경 세트 ${name}를 실행하고 끝날 때까지 기다려요`);
   const waited = aws(
     [

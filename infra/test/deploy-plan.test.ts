@@ -1,6 +1,9 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   autoDeployDecision,
+  CI_JOB_PATHS,
   canonicalJson,
   changedFunctionIds,
   changeSetName,
@@ -12,6 +15,7 @@ import {
   failedEventsSince,
   formatPolicyDiff,
   formatTable,
+  INFRA_CI_JOBS,
   infraCiCheck,
   isCalendarDate,
   isEmptyChangeSet,
@@ -25,7 +29,7 @@ import {
   touchesInfra,
   versionToPrune,
   type CheckRun,
-  type CommitCi,
+  type InfraJobEvidence,
   type PolicyDocument,
   type PolicyStatement,
 } from "../scripts/deploy-plan";
@@ -713,6 +717,55 @@ describe("실행 정책이 허용하지 않는 동작 (#418)", () => {
     ).toEqual([]);
   });
 
+  it("AWS 쪽 Deny 문이 거부하는 동작은 빠진 것으로 보고, 저장소에도 같은 Deny가 있으면 의도한 거부로 본다", () => {
+    const local = [
+      doc(
+        {
+          Effect: "Allow",
+          Action: ["logs:PutMetricFilter", "logs:CreateLogGroup"],
+          Resource: "*",
+        },
+        { Effect: "Deny", Action: "logs:CreateLogGroup", Resource: "*" },
+      ),
+    ];
+    const remote = [
+      doc(
+        { Effect: "Allow", Action: "logs:*", Resource: "*" },
+        {
+          Effect: "Deny",
+          Action: ["logs:PutMetric*", "logs:CreateLogGroup"],
+          Resource: "*",
+        },
+      ),
+    ];
+    expect(missingExecutionActions(local, remote)).toEqual([
+      "logs:PutMetricFilter",
+    ]);
+  });
+
+  it("AWS 쪽 Deny NotAction은 적힌 동작 밖을 거부하고, Allow NotAction은 허용으로 치지 않는다", () => {
+    const local = [
+      doc({
+        Effect: "Allow",
+        Action: ["s3:GetObject", "sqs:SendMessage"],
+        Resource: "*",
+      }),
+    ];
+    expect(
+      missingExecutionActions(local, [
+        doc(
+          { Effect: "Allow", Action: "*", Resource: "*" },
+          { Effect: "Deny", NotAction: "s3:*", Resource: "*" },
+        ),
+      ]),
+    ).toEqual(["sqs:SendMessage"]);
+    expect(
+      missingExecutionActions(local, [
+        doc({ Effect: "Allow", NotAction: "iam:*", Resource: "*" }),
+      ]),
+    ).toEqual(["s3:GetObject", "sqs:SendMessage"]);
+  });
+
   it("점 같은 정규식 문자를 그대로 비교한다", () => {
     expect(
       missingExecutionActions(
@@ -724,81 +777,121 @@ describe("실행 정책이 허용하지 않는 동작 (#418)", () => {
 });
 
 describe("이 트리의 인프라 영역을 main CI가 검사했는지 (#418)", () => {
-  const all = (conclusion: string | null) => ({
-    infra: conclusion,
-    services: conclusion,
-    contracts: conclusion,
+  const sha = (s: string) => s.padEnd(40, "0");
+  const ev = (
+    job: string,
+    lastChange: string | null,
+    ...runs: [string, string | null | undefined][]
+  ): InfraJobEvidence => ({
+    job,
+    lastChange: lastChange === null ? null : sha(lastChange),
+    runs: runs.map(([s, result]) => ({ sha: sha(s), result })),
   });
-  const at =
-    (...commits: CommitCi[]) =>
-    (i: number) =>
-      commits[i];
-  const c = (
-    sha: string,
-    jobs: CommitCi["jobs"],
-    touchesInfra = false,
-  ): CommitCi => ({ sha: sha.padEnd(40, "0"), jobs, touchesInfra });
 
-  it("맨 위 실행이 세 작업을 모두 통과했으면 검사됨", () => {
-    expect(infraCiCheck(at(c("a", all("success"))))).toEqual({
-      unchecked: [],
+  it("마지막 변경을 담은 push의 실행에서 그 작업이 성공했으면 검사됨(그 뒤 실행이 건너뛰어도)", () => {
+    expect(
+      infraCiCheck([
+        ev("infra", "x", ["x", "success"], ["y", "skipped"]),
+        ev("contracts", "a", ["a", "success"]),
+      ]),
+    ).toEqual({ unchecked: [], pending: false });
+  });
+
+  it("앞 커밋에서 실패한 인프라 검사를 웹만 바꾼 다음 커밋이 넘기지 않는다", () => {
+    const got = infraCiCheck([
+      ev("infra", "x", ["x", "failure"], ["y", "skipped"]),
+    ]);
+    expect(got).toEqual({
+      unchecked: ["infra — x000000: main CI의 infra 작업이 failure"],
       pending: false,
     });
   });
 
-  it("건너뛴 작업은 거슬러 올라가 그 작업이 성공한 실행을 찾고, 실행 없는 중간 커밋은 인프라 파일을 안 바꿨으면 지나간다", () => {
+  it("마지막 변경 뒤 실행이 그 작업을 다시 돌려 성공했으면 검사됨(다시 실행·공통 파일 변경)", () => {
     expect(
-      infraCiCheck(
-        at(
-          c("y", all("skipped")),
-          c("m", null),
-          c("x", {
-            infra: "success",
-            services: "skipped",
-            contracts: "skipped",
-          }),
-          c("w", all("success")),
-        ),
-      ).unchecked,
+      infraCiCheck([ev("services", "x", ["x", "failure"], ["z", "success"])])
+        .unchecked,
     ).toEqual([]);
   });
 
-  it("앞 커밋에서 실패한 인프라 검사를 웹만 바꾼 다음 커밋이 넘기지 않는다", () => {
-    const got = infraCiCheck(
-      at(
-        c("y", all("skipped")),
-        c("x", { infra: "failure", services: "skipped", contracts: "success" }),
-        c("w", all("success")),
-      ),
-    );
-    expect(got.unchecked).toEqual([
-      "infra — x000000: main CI의 infra 작업이 failure",
-    ]);
-    expect(got.pending).toBe(false);
+  it("성공을 찾으면 그 뒤 실행은 읽지 않는다(늦게 읽는 조회를 줄임)", () => {
+    let read = 0;
+    function* runs() {
+      read++;
+      yield { sha: sha("x"), result: "success" };
+      read++;
+      yield { sha: sha("y"), result: "failure" };
+    }
+    expect(
+      infraCiCheck([{ job: "infra", lastChange: sha("x"), runs: runs() }])
+        .unchecked,
+    ).toEqual([]);
+    expect(read).toBe(1);
   });
 
-  it("진행 중·작업 없음·실행 없이 인프라 파일을 바꾼 커밋·이력 끝은 검사 안 됨으로 본다", () => {
-    const pending = infraCiCheck(at(c("y", all("skipped")), c("x", all(null))));
-    expect(pending.pending).toBe(true);
-    expect(pending.unchecked).toHaveLength(3);
+  it("진행 중이면 pending, 작업 없음·건너뜀·취소·실행 못 찾음·마지막 변경 못 찾음은 검사 안 됨", () => {
     expect(
-      infraCiCheck(at(c("a", { infra: "success", services: "success" })))
-        .unchecked,
-    ).toEqual(["contracts — a000000: main CI의 contracts 작업이 없음"]);
+      infraCiCheck([ev("infra", "x", ["x", "failure"], ["y", null])]),
+    ).toEqual({
+      unchecked: ["infra — y000000: main CI의 infra 작업이 진행 중"],
+      pending: true,
+    });
     expect(
-      infraCiCheck(
-        at(c("y", all("skipped")), c("m", null, true), c("w", all("success"))),
-      ).unchecked,
-    ).toHaveLength(3);
-    expect(infraCiCheck(at(c("y", all("skipped")))).unchecked).toEqual([
-      "infra — 확인할 커밋 이력이 끝남",
-      "services — 확인할 커밋 이력이 끝남",
-      "contracts — 확인할 커밋 이력이 끝남",
+      infraCiCheck([
+        ev("contracts", "a", ["a", undefined]),
+        ev("beaches", "b", ["b", "skipped"]),
+        ev("infra", "c", ["c", "cancelled"]),
+        ev("services", "d"),
+        ev("infra", null),
+      ]),
+    ).toEqual({
+      unchecked: [
+        "contracts — a000000: main CI의 contracts 작업이 없음",
+        "beaches — b000000: main CI의 beaches 작업이 skipped",
+        "infra — c000000: main CI의 infra 작업이 cancelled",
+        "services — d000000(마지막 변경) 뒤로 main CI 실행을 찾지 못함",
+        "infra — 영역을 바꾼 커밋을 이력에서 찾지 못함",
+      ],
+      pending: false,
+    });
+  });
+
+  it("Lambda 번들에 들어가는 해변 data를 검사하는 beaches 작업도 확인한다", () => {
+    expect(INFRA_CI_JOBS).toEqual([
+      "infra",
+      "services",
+      "contracts",
+      "beaches",
     ]);
-    expect(
-      infraCiCheck(at(c("a", { ...all("success"), infra: "cancelled" })))
-        .unchecked,
-    ).toEqual(["infra — a000000: main CI의 infra 작업이 cancelled"]);
+  });
+
+  it("작업 영역은 .github/ci-filters.yml의 그 작업 필터와 같다", () => {
+    const text = readFileSync(
+      resolve(__dirname, "../../.github/ci-filters.yml"),
+      "utf8",
+    );
+    // 맨 앞 키마다 '- "경로"' 목록을 모음(*shared는 펼침). '**'로 끝나면 폴더(끝 '/')로 바꿈
+    const filters: Record<string, string[]> = {};
+    let key = "";
+    for (const line of text.split("\n")) {
+      const head = /^([a-z_]+):/.exec(line);
+      if (head) {
+        key = head[1]!;
+        filters[key] = [];
+        continue;
+      }
+      const item = /^\s*-\s*(?:"([^"]+)"|(\*shared))/.exec(line);
+      if (!item || !key) continue;
+      if (item[2]) filters[key]!.push(...filters.shared!);
+      else filters[key]!.push(item[1]!.replace(/\*\*$/, ""));
+    }
+    for (const job of INFRA_CI_JOBS) {
+      // infra 작업은 ci.yml filter_config로 ci-filters.yml이 바뀌어도 돎
+      const extra = job === "infra" ? [".github/ci-filters.yml"] : [];
+      expect([...CI_JOB_PATHS[job]!].sort(), job).toEqual(
+        [...filters[job]!, ...extra].sort(),
+      );
+    }
   });
 });
 
