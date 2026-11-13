@@ -56,14 +56,21 @@
       "distanceKm": 7.3
     },
     "waterTemp": {
-      "id": "22459",
+      "id": "22511",
       "name": {
-        "ko": "오륙도 파고부이",
-        "en": "Oryukdo wave buoy"
+        "ko": "기장 파고부이",
+        "en": "Gijang wave buoy"
       },
-      "distanceKm": 11.4
+      "distanceKm": 7.3
     },
-    "wind": null
+    "wind": {
+      "id": "22511",
+      "name": {
+        "ko": "기장 파고부이",
+        "en": "Gijang wave buoy"
+      },
+      "distanceKm": 7.3
+    }
   },
   "photo": {
     "url": "https://tong.visitkorea.or.kr/cms/resource/22/3495922_image2_1.jpg",

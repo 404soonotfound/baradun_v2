@@ -6,13 +6,13 @@
     "midLand": "중기예보 육상 구역(getMidLandFcst regId). 기온 지점이 속한 구역, 해변 시도와 대조",
     "zoneTable": "tools/beaches/mid-zones.json",
     "verified": {
-      "checkedAt": "2026-11-05T00:30:21Z",
-      "shortBase": "202611050800",
-      "midTmFc": "202611050600",
-      "grids": 140,
+      "checkedAt": "2026-11-13T02:48:28Z",
+      "shortBase": "202611131100",
+      "midTmFc": "202611130600",
+      "grids": 154,
       "midLand": 8,
       "midTa": 34,
-      "codes": "2e10c6c4192a100d635a854686e0ff4343d6d259fbee83fbe57d0f812c5b6b7b"
+      "codes": "39b938357ab4589589aa236a48adc8a0dff4ca55a38bb265ee59a40137b1202c"
     }
   },
   "beaches": {
@@ -1996,10 +1996,55 @@
         "rule": "sigungu"
       }
     },
+    "b0166": {
+      "grid": {
+        "nx": 69,
+        "ny": 59
+      },
+      "midLand": {
+        "regId": "11F20000",
+        "name": "전라남도"
+      },
+      "midTa": {
+        "regId": "11F20403",
+        "name": "고흥",
+        "rule": "sigungu"
+      }
+    },
+    "b0167": {
+      "grid": {
+        "nx": 70,
+        "ny": 62
+      },
+      "midLand": {
+        "regId": "11F20000",
+        "name": "전라남도"
+      },
+      "midTa": {
+        "regId": "11F20403",
+        "name": "고흥",
+        "rule": "sigungu"
+      }
+    },
     "b0168": {
       "grid": {
         "nx": 66,
         "ny": 65
+      },
+      "midLand": {
+        "regId": "11F20000",
+        "name": "전라남도"
+      },
+      "midTa": {
+        "regId": "11F20403",
+        "name": "고흥",
+        "rule": "sigungu"
+      }
+    },
+    "b0169": {
+      "grid": {
+        "nx": 69,
+        "ny": 61
       },
       "midLand": {
         "regId": "11F20000",
@@ -2029,6 +2074,21 @@
     "b0171": {
       "grid": {
         "nx": 63,
+        "ny": 59
+      },
+      "midLand": {
+        "regId": "11F20000",
+        "name": "전라남도"
+      },
+      "midTa": {
+        "regId": "11F20403",
+        "name": "고흥",
+        "rule": "sigungu"
+      }
+    },
+    "b0172": {
+      "grid": {
+        "nx": 70,
         "ny": 59
       },
       "midLand": {
@@ -2611,10 +2671,55 @@
         "rule": "sigungu"
       }
     },
+    "b0227": {
+      "grid": {
+        "nx": 103,
+        "ny": 104
+      },
+      "midLand": {
+        "regId": "11H10000",
+        "name": "경상북도"
+      },
+      "midTa": {
+        "regId": "11H10102",
+        "name": "영덕",
+        "rule": "sigungu"
+      }
+    },
+    "b0228": {
+      "grid": {
+        "nx": 103,
+        "ny": 107
+      },
+      "midLand": {
+        "regId": "11H10000",
+        "name": "경상북도"
+      },
+      "midTa": {
+        "regId": "11H10102",
+        "name": "영덕",
+        "rule": "sigungu"
+      }
+    },
     "b0229": {
       "grid": {
         "nx": 102,
         "ny": 101
+      },
+      "midLand": {
+        "regId": "11H10000",
+        "name": "경상북도"
+      },
+      "midTa": {
+        "regId": "11H10102",
+        "name": "영덕",
+        "rule": "sigungu"
+      }
+    },
+    "b0230": {
+      "grid": {
+        "nx": 103,
+        "ny": 106
       },
       "midLand": {
         "regId": "11H10000",
@@ -2668,6 +2773,36 @@
       "midTa": {
         "regId": "11H10102",
         "name": "영덕",
+        "rule": "sigungu"
+      }
+    },
+    "b0234": {
+      "grid": {
+        "nx": 103,
+        "ny": 110
+      },
+      "midLand": {
+        "regId": "11H10000",
+        "name": "경상북도"
+      },
+      "midTa": {
+        "regId": "11H10101",
+        "name": "울진",
+        "rule": "sigungu"
+      }
+    },
+    "b0235": {
+      "grid": {
+        "nx": 103,
+        "ny": 112
+      },
+      "midLand": {
+        "regId": "11H10000",
+        "name": "경상북도"
+      },
+      "midTa": {
+        "regId": "11H10101",
+        "name": "울진",
         "rule": "sigungu"
       }
     },
@@ -2731,6 +2866,21 @@
         "rule": "sigungu"
       }
     },
+    "b0240": {
+      "grid": {
+        "nx": 103,
+        "ny": 109
+      },
+      "midLand": {
+        "regId": "11H10000",
+        "name": "경상북도"
+      },
+      "midTa": {
+        "regId": "11H10101",
+        "name": "울진",
+        "rule": "sigungu"
+      }
+    },
     "b0241": {
       "grid": {
         "nx": 106,
@@ -2750,6 +2900,66 @@
       "grid": {
         "nx": 104,
         "ny": 94
+      },
+      "midLand": {
+        "regId": "11H10000",
+        "name": "경상북도"
+      },
+      "midTa": {
+        "regId": "11H10201",
+        "name": "포항",
+        "rule": "sigungu"
+      }
+    },
+    "b0243": {
+      "grid": {
+        "nx": 102,
+        "ny": 95
+      },
+      "midLand": {
+        "regId": "11H10000",
+        "name": "경상북도"
+      },
+      "midTa": {
+        "regId": "11H10201",
+        "name": "포항",
+        "rule": "sigungu"
+      }
+    },
+    "b0244": {
+      "grid": {
+        "nx": 102,
+        "ny": 98
+      },
+      "midLand": {
+        "regId": "11H10000",
+        "name": "경상북도"
+      },
+      "midTa": {
+        "regId": "11H10201",
+        "name": "포항",
+        "rule": "sigungu"
+      }
+    },
+    "b0245": {
+      "grid": {
+        "nx": 103,
+        "ny": 97
+      },
+      "midLand": {
+        "regId": "11H10000",
+        "name": "경상북도"
+      },
+      "midTa": {
+        "regId": "11H10201",
+        "name": "포항",
+        "rule": "sigungu"
+      }
+    },
+    "b0246": {
+      "grid": {
+        "nx": 102,
+        "ny": 99
       },
       "midLand": {
         "regId": "11H10000",
@@ -3103,6 +3313,36 @@
       "midTa": {
         "regId": "11G00201",
         "name": "제주",
+        "rule": "sigungu"
+      }
+    },
+    "b0283": {
+      "grid": {
+        "nx": 88,
+        "ny": 139
+      },
+      "midLand": {
+        "regId": "11D20000",
+        "name": "강원영동"
+      },
+      "midTa": {
+        "regId": "11D20403",
+        "name": "양양",
+        "rule": "sigungu"
+      }
+    },
+    "b0284": {
+      "grid": {
+        "nx": 90,
+        "ny": 137
+      },
+      "midLand": {
+        "regId": "11D20000",
+        "name": "강원영동"
+      },
+      "midTa": {
+        "regId": "11D20403",
+        "name": "양양",
         "rule": "sigungu"
       }
     }
