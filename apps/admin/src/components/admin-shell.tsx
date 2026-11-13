@@ -1,25 +1,12 @@
 "use client";
 
 import {
-  Activity,
-  BarChart3,
   ChevronsLeft,
   ChevronsRight,
-  Database,
-  FileText,
-  History,
-  House,
   LogOut,
-  Megaphone,
   Menu,
-  MessageSquare,
-  MoreHorizontal,
-  Search,
-  Upload,
   UserRound,
-  Waves,
   X,
-  type LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -44,6 +31,22 @@ import { fill, messages } from "@/lib/messages";
 import { roleLabel } from "@/lib/roles";
 import { useShellStatus, type ShellStatus } from "@/lib/shell-status";
 import { CommandPalette } from "./command-palette";
+import {
+  AuditIcon,
+  BeachesIcon,
+  CollectionIcon,
+  HomeIcon,
+  InquiriesIcon,
+  MoreIcon,
+  NoticesIcon,
+  PoliciesIcon,
+  PublishIcon,
+  SearchIcon,
+  SourcesIcon,
+  StatsIcon,
+  UpDownIcon,
+  type NavIcon,
+} from "./nav-icons";
 import { SessionGuard, SessionNotices } from "./session-guard";
 
 // 운영자 화면 공통 틀 (BRD-171, 화면 설계서 6장 '공통 틀', 캔버스 4차 V24)
@@ -58,7 +61,7 @@ const t = messages.nav;
 interface NavItem {
   readonly href: string;
   readonly label: string;
-  readonly icon: LucideIcon;
+  readonly icon: NavIcon;
 }
 
 // 시안 V1: 위 묶음은 이름 없이 일하는 화면, 아래 '기록' 묶음은 운영 정책·변경 이력
@@ -66,21 +69,21 @@ const GROUPS: readonly { label: string | null; items: readonly NavItem[] }[] = [
   {
     label: null,
     items: [
-      { href: "/", label: t.home, icon: House },
-      { href: "/stats/", label: t.stats, icon: BarChart3 },
-      { href: "/collection/", label: t.collection, icon: Activity },
-      { href: "/sources/", label: t.sources, icon: Database },
-      { href: "/beaches/", label: t.beaches, icon: Waves },
-      { href: "/publish/", label: t.publish, icon: Upload },
-      { href: "/notices/", label: t.notices, icon: Megaphone },
-      { href: "/inquiries/", label: t.inquiries, icon: MessageSquare },
+      { href: "/", label: t.home, icon: HomeIcon },
+      { href: "/stats/", label: t.stats, icon: StatsIcon },
+      { href: "/collection/", label: t.collection, icon: CollectionIcon },
+      { href: "/sources/", label: t.sources, icon: SourcesIcon },
+      { href: "/beaches/", label: t.beaches, icon: BeachesIcon },
+      { href: "/publish/", label: t.publish, icon: PublishIcon },
+      { href: "/notices/", label: t.notices, icon: NoticesIcon },
+      { href: "/inquiries/", label: t.inquiries, icon: InquiriesIcon },
     ],
   },
   {
     label: t.groupRecords,
     items: [
-      { href: "/policies/", label: t.policies, icon: FileText },
-      { href: "/audit/", label: t.audit, icon: History },
+      { href: "/policies/", label: t.policies, icon: PoliciesIcon },
+      { href: "/audit/", label: t.audit, icon: AuditIcon },
     ],
   },
 ];
@@ -321,7 +324,7 @@ function BrandLink({ compact }: { compact: boolean }) {
 
 // ---- PC 왼쪽 메뉴(1024px 이상, 시안 4차 V1 aside) ----
 
-// 작업 공간 상자: 서비스 이름 + '운영 · 권한'. 바꿀 작업 공간이 없어 시안의 위아래 화살표(전환)는 두지 않음
+// 작업 공간 상자: 서비스 이름 + '운영 · 권한' + 시안의 위아래 화살표(장식). 바꿀 작업 공간이 없어 누르면 운영 홈으로 감
 function Workspace() {
   const snapshot = useSessionSnapshot();
   const role =
@@ -339,17 +342,20 @@ function Workspace() {
       >
         {messages.brand.mark}
       </span>
-      {/* 시안 줄 높이 1.35(맞는 토큰 없음) */}
-      <span className="flex min-w-0 flex-1 flex-col">
-        <span className="text-body leading-[1.35] font-medium text-text-default">
+      {/* 시안: 14px · 줄 높이 1.35(맞는 토큰 없음) 두 줄. 둘째 줄 12px 글자도 14px 줄 높이를 따름(상자 높이 56) */}
+      <span className="flex min-w-0 flex-1 flex-col text-body leading-[1.35]">
+        <span className="font-medium text-text-default">
           {messages.brand.name}
         </span>
-        <span className="truncate text-caption leading-[1.35] text-text-body">
-          {role
-            ? fill(t.workspace, { sub: messages.brand.sub, role })
-            : messages.brand.sub}
+        <span className="truncate">
+          <span className="text-caption text-text-body">
+            {role
+              ? fill(t.workspace, { sub: messages.brand.sub, role })
+              : messages.brand.sub}
+          </span>
         </span>
       </span>
+      <UpDownIcon className="size-[18px] shrink-0 text-text-muted" />
     </Link>
   );
 }
@@ -364,7 +370,7 @@ function SearchButton({ onOpen }: { onOpen: () => void }) {
       aria-keyshortcuts="Meta+K Control+K"
       className="flex h-segment w-full items-center gap-2 rounded-admin-control border border-border-strong bg-bg-surface px-2.5 text-body-s text-text-muted shadow-card hover:bg-bg-page"
     >
-      <Search aria-hidden="true" className="size-[15px] shrink-0" />
+      <SearchIcon className="size-[15px] shrink-0" />
       <span className="flex-1 text-left">{t.search}</span>
       <span aria-hidden="true" className="text-caption">
         {t.searchShortcut}
@@ -520,7 +526,7 @@ function UserRow() {
           onClick={() => setOpen((v) => !v)}
           className="-mr-1 flex size-7 shrink-0 items-center justify-center rounded-admin-control text-text-muted hover:bg-bg-page"
         >
-          <MoreHorizontal aria-hidden="true" className="size-4" />
+          <MoreIcon className="size-4" />
         </button>
       </div>
     </div>
