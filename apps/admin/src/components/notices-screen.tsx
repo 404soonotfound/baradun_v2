@@ -329,13 +329,17 @@ function KindFilterMenu({
 }) {
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLDivElement>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     if (!open) return;
     const outside = (e: MouseEvent) => {
       if (!box.current?.contains(e.target as Node)) setOpen(false);
     };
     const esc = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
+      if (e.key === "Escape") {
+        setOpen(false);
+        trigger.current?.focus();
+      }
     };
     document.addEventListener("mousedown", outside);
     document.addEventListener("keydown", esc);
@@ -349,6 +353,7 @@ function KindFilterMenu({
   return (
     <div ref={box} className="relative">
       <button
+        ref={trigger}
         type="button"
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
@@ -387,6 +392,7 @@ function KindFilterMenu({
             onClick={() => {
               onChange(null);
               setOpen(false);
+              trigger.current?.focus();
             }}
             className="flex min-h-touch items-center rounded-admin-control px-2.5 text-left text-body-s text-text-default hover:bg-bg-page aria-pressed:font-semibold aria-pressed:text-brand-default lg:min-h-admin-control"
           >
@@ -400,6 +406,7 @@ function KindFilterMenu({
               onClick={() => {
                 onChange(k);
                 setOpen(false);
+                trigger.current?.focus();
               }}
               className="flex min-h-touch items-center rounded-admin-control px-2.5 text-left text-body-s text-text-default hover:bg-bg-page aria-pressed:font-semibold aria-pressed:text-brand-default lg:min-h-admin-control"
             >
@@ -432,13 +439,17 @@ function RowMenu({
 }) {
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLDivElement>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     if (!open) return;
     const outside = (e: MouseEvent) => {
       if (!box.current?.contains(e.target as Node)) setOpen(false);
     };
     const esc = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
+      if (e.key === "Escape") {
+        setOpen(false);
+        trigger.current?.focus();
+      }
     };
     document.addEventListener("mousedown", outside);
     document.addEventListener("keydown", esc);
@@ -464,6 +475,7 @@ function RowMenu({
   return (
     <div ref={box} className="relative inline-flex justify-end">
       <button
+        ref={trigger}
         type="button"
         aria-label={fill(t.rowMenuLabel, { title })}
         aria-expanded={open}
@@ -567,6 +579,7 @@ function NoticeList({
   const [actionBusy, setActionBusy] = useState(false);
   const [actionFlash, setActionFlash] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const actionAttempt = useRef<{ body: string; key: string } | null>(null);
 
   const all = result?.ok ? result.body.items : [];
   const count = (s: NoticeState) => all.filter((n) => n.state === s).length;
@@ -581,6 +594,15 @@ function NoticeList({
   const runRowAction = () => {
     if (!pendingAction || actionBusy) return;
     const { notice, action } = pendingAction;
+    const reqBody = JSON.stringify({
+      id: notice.id,
+      action,
+      version: notice.version,
+    });
+    if (actionAttempt.current?.body !== reqBody) {
+      actionAttempt.current = { body: reqBody, key: crypto.randomUUID() };
+    }
+    const key = actionAttempt.current.key;
     setActionBusy(true);
     setActionError(null);
     void noticeAction(
@@ -588,12 +610,13 @@ function NoticeList({
       notice.id,
       action,
       notice.version,
-      crypto.randomUUID(),
+      key,
     ).then(
       (res) => {
         setActionBusy(false);
         setPendingAction(null);
         if (res.ok) {
+          actionAttempt.current = null;
           setActionFlash(
             action === "expose"
               ? t.exposed
