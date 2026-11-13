@@ -8,6 +8,7 @@ import {
   mergePart,
   noticeCounts,
   PART_TIMEOUT_MS,
+  staleSince,
   partOf,
   receivedCount,
   recentChanges,
@@ -314,6 +315,13 @@ describe("mergePart (다시 읽기 값 유지, GH-462)", () => {
     expect(mergePart(failed, failed)).toEqual({ part: failed, stale: false });
   });
 
+  it("keep=false(판단 출처)면 앞의 정상 값을 두지 않고 실패를 그대로 보임", () => {
+    expect(mergePart(ok, failed, false)).toEqual({
+      part: failed,
+      stale: false,
+    });
+  });
+
   it("권한 없음은 앞 값을 두지 않고 그대로 보임", () => {
     expect(mergePart(ok, { state: "forbidden" })).toEqual({
       part: { state: "forbidden" },
@@ -325,5 +333,27 @@ describe("mergePart (다시 읽기 값 유지, GH-462)", () => {
 describe("PART_TIMEOUT_MS", () => {
   it("칸 시간 제한은 15초(D26-4)", () => {
     expect(PART_TIMEOUT_MS).toBe(15_000);
+  });
+});
+
+describe("staleSince (앞 값을 둔 칸의 받은 시각)", () => {
+  it("가장 오래 받은 시각을 고르고, 기준 시각과 같은 날(서울)인지 알려 줌", () => {
+    expect(
+      staleSince(
+        ["2026-11-14T05:10:00Z", undefined, "2026-11-14T04:00:00Z"],
+        "2026-11-14T06:00:00Z",
+      ),
+    ).toEqual({ iso: "2026-11-14T04:00:00Z", sameDay: true });
+  });
+
+  it("서울 날짜가 다르면 sameDay=false(자정 넘김)", () => {
+    // 11/13 23:50 KST → 11/14 00:10 KST
+    expect(
+      staleSince(["2026-11-13T14:50:00Z"], "2026-11-13T15:10:00Z"),
+    ).toEqual({ iso: "2026-11-13T14:50:00Z", sameDay: false });
+  });
+
+  it("받은 시각이 없으면 null", () => {
+    expect(staleSince([undefined], "2026-11-14T06:00:00Z")).toBeNull();
   });
 });
