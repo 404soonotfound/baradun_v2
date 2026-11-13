@@ -688,3 +688,51 @@ test("저장 실패 뒤에도 뒤로 가기 '나가기'는 목록으로 가고, 
   await page.goBack();
   await expect(list).toBeVisible();
 });
+
+test("목록: 배너 순서 7칸 띠, 제목·문구 검색과 종류 필터, 행 끝 메뉴가 동작한다", async ({
+  page,
+}) => {
+  await signIn(page);
+  const { writes } = await mockNotices(page);
+  await openNotices(page);
+
+  // 배너 순서 7칸 띠
+  const banner = page.getByRole("region", { name: "앱 배너 순서" });
+  await expect(banner.locator("ol > li")).toHaveCount(7);
+  await expect(banner.getByText("운영 공지")).toBeVisible();
+  await expect(banner.getByText("● 노출 중")).toBeVisible();
+
+  // 제목·문구 찾기 + 종류 필터
+  await expect(page.getByRole("heading", { name: "공지 목록" })).toBeVisible();
+  await page.getByLabel("제목·문구 찾기").fill("새벽");
+  await expect(rows(page)).toHaveCount(1);
+  await expect(rows(page).first()).toContainText("새벽 점검 예고");
+  await page.getByLabel("제목·문구 찾기").fill("");
+  await expect(rows(page)).toHaveCount(5);
+
+  await page.getByRole("button", { name: "종류", exact: true }).click();
+  await page
+    .getByRole("group", { name: "공지 종류 고르기" })
+    .getByRole("button", { name: "점검 예고" })
+    .click();
+  await expect(rows(page)).toHaveCount(1);
+  await page.getByRole("button", { name: "종류: 점검 예고" }).click();
+  await page
+    .getByRole("group", { name: "공지 종류 고르기" })
+    .getByRole("button", { name: "모든 종류" })
+    .click();
+  await expect(rows(page)).toHaveCount(5);
+
+  // PC 표 행 끝 '…' 메뉴로 편집 이동
+  if (!isMobile(page)) {
+    await page.getByRole("button", { name: "새벽 점검 예고 작업 메뉴" }).click();
+    await page
+      .getByRole("group", { name: "새벽 점검 예고 작업 메뉴" })
+      .getByRole("button", { name: "편집" })
+      .click();
+    await expect(
+      page.getByRole("heading", { name: "새벽 점검 예고", level: 1 }),
+    ).toBeVisible();
+  }
+  expect(writes).toHaveLength(0);
+});
