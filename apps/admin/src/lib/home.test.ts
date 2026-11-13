@@ -5,7 +5,9 @@ import type { AuditView } from "./audit";
 import {
   expiredCount,
   judgmentLine,
+  mergePart,
   noticeCounts,
+  PART_TIMEOUT_MS,
   partOf,
   receivedCount,
   recentChanges,
@@ -286,5 +288,42 @@ describe("최근 변경·시간 제한", () => {
     await expect(
       settle(() => Promise.resolve({ state: "ok", value: 1 }), 10),
     ).resolves.toEqual({ state: "ok", value: 1 });
+  });
+});
+
+describe("mergePart (다시 읽기 값 유지, GH-462)", () => {
+  const ok = { state: "ok", value: 3 } as const;
+  const failed = { state: "failed", requestId: "r1" } as const;
+
+  it("다시 읽기가 실패해도 앞에서 받은 값을 두고 stale로 알림", () => {
+    expect(mergePart(ok, failed)).toEqual({ part: ok, stale: true });
+  });
+
+  it("새 값이 오면 바꾸고 stale을 끔", () => {
+    expect(mergePart(ok, { state: "ok", value: 5 })).toEqual({
+      part: { state: "ok", value: 5 },
+      stale: false,
+    });
+  });
+
+  it("앞 값이 없으면(첫 읽기·이미 실패) 실패를 그대로 보임", () => {
+    expect(mergePart({ state: "loading" }, failed)).toEqual({
+      part: failed,
+      stale: false,
+    });
+    expect(mergePart(failed, failed)).toEqual({ part: failed, stale: false });
+  });
+
+  it("권한 없음은 앞 값을 두지 않고 그대로 보임", () => {
+    expect(mergePart(ok, { state: "forbidden" })).toEqual({
+      part: { state: "forbidden" },
+      stale: false,
+    });
+  });
+});
+
+describe("PART_TIMEOUT_MS", () => {
+  it("칸 시간 제한은 15초(D26-4)", () => {
+    expect(PART_TIMEOUT_MS).toBe(15_000);
   });
 });
