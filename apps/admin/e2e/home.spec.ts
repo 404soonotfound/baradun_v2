@@ -5,6 +5,7 @@ import {
   expect,
   expectNoA11yViolations,
   isDesktop,
+  logout,
   mockCognito,
   mockOps,
   openMenu,
@@ -536,4 +537,49 @@ test("로딩이 끝나 값으로 바뀌어도 포커스를 옮기지 않는다",
   ).toBeVisible();
   await expect(page.getByText(/기준 · 화면이 보이는 동안/)).toBeVisible();
   await expect(link).toBeFocused();
+});
+
+test("로그아웃하면 로그인 화면으로 가는 동안에도 받아 둔 운영 데이터를 그리지 않는다", async ({
+  page,
+}) => {
+  test.skip(
+    !isDesktop(page),
+    "로그아웃 상태 틀(왼쪽 사용자 칸 자리표시)은 PC 메뉴에서 봄",
+  );
+  await mockCognito(
+    page,
+    srpScript({ email: OPS, after: "tokens", groups: ["editor"] }),
+  );
+  await mockOps(page, ME_OK);
+  await mockHome(page);
+  await signInWithPassword(page, "/login/", OPS);
+  await expect(
+    page.getByText("판단에 쓰는 출처가 모두 정상이에요"),
+  ).toBeVisible();
+  // 공통 틀이 로그아웃 상태로 그려진 순간(사용자 칸 자리표시)에 운영 데이터가 함께 남아 있으면 기록
+  await page.evaluate(() => {
+    const w = window as unknown as { leaked: string[] };
+    w.leaked = [];
+    new MutationObserver(() => {
+      if (!document.querySelector("aside .sk.rounded-full")) return;
+      const text = document.querySelector("#main")?.textContent ?? "";
+      for (const value of [
+        "판단에 쓰는 출처가 모두 정상이에요",
+        "정기 점검 안내",
+      ]) {
+        if (text.includes(value)) w.leaked.push(value);
+      }
+    }).observe(document.body, {
+      subtree: true,
+      childList: true,
+      characterData: true,
+    });
+  });
+  await logout(page);
+  await expect(page).toHaveURL(/\/login\/$/);
+  expect(
+    await page.evaluate(
+      () => (window as unknown as { leaked: string[] }).leaked,
+    ),
+  ).toEqual([]);
 });
