@@ -36,9 +36,9 @@ export interface StatsPeriod {
   readonly status: "ok" | "unavailable";
   readonly activeUsers: number | null;
   readonly pageViews: number | null;
-  readonly topBeaches: readonly StatsBeachRow[];
-  readonly devices: readonly StatsDeviceRow[];
-  readonly languages: readonly StatsLanguageRow[];
+  readonly topBeaches: readonly StatsBeachRow[] | null;
+  readonly devices: readonly StatsDeviceRow[] | null;
+  readonly languages: readonly StatsLanguageRow[] | null;
   readonly metadata: StatsMetadata;
 }
 
@@ -49,6 +49,7 @@ export interface StatsEventStatus {
 
 export interface StatsResponse {
   readonly configured: boolean;
+  readonly sample?: boolean;
   readonly fetchedAt: string;
   readonly cached: boolean;
   readonly range: StatsRange;
@@ -80,15 +81,13 @@ export function sharePercent(
 export function sumMetric(
   values: readonly (number | null)[],
 ): number | null {
+  if (values.length === 0) return null;
   let sum = 0;
-  let hasAny = false;
   for (const v of values) {
-    if (v !== null) {
-      sum += v;
-      hasAny = true;
-    }
+    if (v === null) return null;
+    sum += v;
   }
-  return hasAny ? sum : null;
+  return sum;
 }
 
 export function metadataReasons(

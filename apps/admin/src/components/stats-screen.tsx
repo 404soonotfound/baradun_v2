@@ -83,21 +83,33 @@ export function StatsScreen({
   const result = loaded?.key === key ? loaded.result : null;
 
   const data = result && result.ok ? result.body : null;
+  const isSample =
+    (snapshot.status === "signed_in" && snapshot.pool === "demo") ||
+    data?.sample === true;
   const reasons = data ? metadataReasons(data.period.metadata) : [];
-  const deviceTotal = data
-    ? sumMetric(data.period.devices.map((d) => d.activeUsers))
-    : null;
-  const languageTotal = data
-    ? sumMetric(data.period.languages.map((l) => l.activeUsers))
-    : null;
+  const deviceTotal =
+    data && data.period.devices !== null
+      ? sumMetric(data.period.devices.map((d) => d.activeUsers))
+      : null;
+  const languageTotal =
+    data && data.period.languages !== null
+      ? sumMetric(data.period.languages.map((l) => l.activeUsers))
+      : null;
 
   return (
     <AdminShell title={t.title}>
       <div className="space-y-6">
         <header className="flex flex-wrap items-start justify-between gap-4">
           <div className="space-y-1">
-            <h1 className="text-heading-l font-bold text-text-primary">
-              {t.title}
+            <h1 className="flex flex-wrap items-center gap-2 text-heading-l font-bold text-text-primary">
+              <span>{t.title}</span>
+              {isSample && (
+                <span
+                  className={`${BADGE} bg-status-warn-bg text-status-warn-fg`}
+                >
+                  {t.sample}
+                </span>
+              )}
             </h1>
             <p className="text-body-s text-text-muted">{t.intro}</p>
             {data && (
@@ -255,7 +267,11 @@ export function StatsScreen({
                   >
                     {t.topBeachesTitle}
                   </h2>
-                  {data.period.topBeaches.length === 0 ? (
+                  {data.period.topBeaches === null ? (
+                    <p className="mt-3 text-body-s text-status-warn-fg">
+                      {t.subReportUnavailable}
+                    </p>
+                  ) : data.period.topBeaches.length === 0 ? (
                     <p className="mt-3 text-body-s text-text-muted">
                       {t.topBeachesEmpty}
                     </p>
@@ -293,7 +309,16 @@ export function StatsScreen({
                   >
                     {t.devicesTitle}
                   </h2>
-                  {data.period.devices.length === 0 ? (
+                  {deviceTotal !== null && (
+                    <p className="mt-0.5 text-caption text-text-muted">
+                      {t.shareNote}
+                    </p>
+                  )}
+                  {data.period.devices === null ? (
+                    <p className="mt-3 text-body-s text-status-warn-fg">
+                      {t.subReportUnavailable}
+                    </p>
+                  ) : data.period.devices.length === 0 ? (
                     <p className="mt-3 text-body-s text-text-muted">
                       {t.listEmpty}
                     </p>
@@ -334,7 +359,16 @@ export function StatsScreen({
                   >
                     {t.languagesTitle}
                   </h2>
-                  {data.period.languages.length === 0 ? (
+                  {languageTotal !== null && (
+                    <p className="mt-0.5 text-caption text-text-muted">
+                      {t.shareNote}
+                    </p>
+                  )}
+                  {data.period.languages === null ? (
+                    <p className="mt-3 text-body-s text-status-warn-fg">
+                      {t.subReportUnavailable}
+                    </p>
+                  ) : data.period.languages.length === 0 ? (
                     <p className="mt-3 text-body-s text-text-muted">
                       {t.listEmpty}
                     </p>

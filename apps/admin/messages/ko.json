@@ -1389,6 +1389,7 @@
     "title": "이용 통계",
     "intro": "Google Analytics(GA4)에서 집계한 방문 지표예요. 해변 판단 상태와 묶인 지표는 만들지 않아요.",
     "fetchedAt": "기준 시각 {time}",
+    "sample": "예시 데이터",
     "cachedBadge": "잠시 저장된 응답",
     "refresh": "새로 고침",
     "loading": "이용 통계를 불러오고 있어요.",
@@ -1404,7 +1405,7 @@
       "60d": "60일"
     },
     "realtimeTitle": "지금 사용 중 (최근 30분)",
-    "realtimeUnavailable": "실시간 집계를 확인하지 못했어요.",
+    "realtimeUnavailable": "실시간 집계를 확인하지 못했어요. 지금 사용 중 수치가 비어 있으니 잠시 뒤 새로 고침해 주세요.",
     "activeUsers": "활성 사용자",
     "pageViews": "페이지뷰",
     "countUnit": "{count}명",
@@ -1418,11 +1419,13 @@
       "otherRowLoss": "항목이 많아 일부가 '(other)'로 묶였어요."
     },
     "periodTitle": "기간 요약",
-    "periodUnavailable": "기간 통계를 확인하지 못했어요.",
+    "periodUnavailable": "기간 통계를 확인하지 못했어요. 기간 요약이 비어 있으니 잠시 뒤 새로 고침해 주세요.",
+    "subReportUnavailable": "이 항목을 불러오지 못했어요. 일부 집계가 비어 있으니 잠시 뒤 새로 고침해 주세요.",
     "topBeachesTitle": "많이 본 해변",
     "topBeachesEmpty": "집계된 해변 방문 기록이 없어요.",
     "devicesTitle": "기기 비율",
     "languagesTitle": "언어 비율",
+    "shareNote": "상위 10개 합계 기준",
     "listEmpty": "집계된 항목이 없어요.",
     "percentUnit": "{percent}%",
     "deviceLabels": {
