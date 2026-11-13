@@ -9,12 +9,16 @@ import { LOADING_TIMES } from "@/lib/loading-timing";
 import { fill, messages } from "@/lib/messages";
 import {
   beachLabel,
+  changePercent,
   fetchStats,
   metadataReasons,
+  missingItems,
   perUser,
   sharePercent,
   STATS_RANGES,
+  statsShape,
   sumMetric,
+  topicParticle,
   type StatsRange,
   type StatsResponse,
 } from "@/lib/stats";
@@ -22,6 +26,7 @@ import { AdminShell } from "./admin-shell";
 import {
   loadClass,
   LoadingStatus,
+  SkChart,
   SkDonut,
   SkLine,
   Spinner,
@@ -34,8 +39,9 @@ import { Button, Notice } from "./ui";
 // - 머리: 제목 옆 '지금 사용 중 N명 · 최근 30분'(GA 실시간 30분), 기간 단추(오늘·7일·28일·60일)
 // - 숫자 숨김 안내는 GA 응답 metadata(thresholding·sampling·otherRowLoss)가 있을 때만, 응답을 받은 뒤에만(E8 · L7)
 //   숨긴 숫자는 추정하지 않고 '–'(0으로 바꾸지 않음)
-// - 응답에 없는 값(앞 기간 비교·새 사용자 비율·일별·시간대별 추이·많이 본 화면·들어온 경로)은 지어내지 않고
-//   시안 자리 크기 그대로 '확인 못 함'. 차트 자리는 로딩 중에도 같은 크기로 고정(L7)
+// - 응답에 칸이 없는 값(앞 기간 비교·새 사용자·일별·시간대별 추이·많이 본 화면·들어온 경로)은 지어내지 않고 칸을 숨김
+//   기간 표시 아래 한 줄로 '… 아직 보여 드릴 수 없어요'. 응답에 칸이 생기면(null 포함) 칸이 다시 보임
+//   자리표시도 보이는 칸에만(받은 응답이 없으면 지금 서버가 주는 칸만). 차트 자리는 로딩 중에도 같은 크기(L7)
 // - 많이 본 해변은 /spots/[slug]를 공개 해변 데이터 이름으로. 못 찾으면 '이름 확인 못 함'(slug·경로를 이름으로 쓰지 않음)
 // - 로딩(GH-462 부품): 150ms 뒤 자리표시 · 최소 400ms · 5초 느림 · 15초 같은 자리 실패 + 다시 시도
 //   새로 고침은 받은 값을 두고 회전 표시. 기간을 바꾸면 다른 기간 값이라 자리표시로 바꿈
@@ -86,27 +92,137 @@ const deviceLabel = (category: string): string =>
 const languageLabel = (code: string): string =>
   (t.languageLabels as Record<string, string>)[code] ?? code;
 
-// 응답에 없는 값 자리(시안 칸 크기 그대로 '확인 못 함' + 이유)
-function NotProvided({
-  className,
-  title = t.chartMissing,
-  hint = t.chartMissingHint,
-}: {
-  className: string;
-  title?: string;
-  hint?: string;
-}) {
+// 차트 칸 안 안내(리포트 실패·빈 결과). 차트와 같은 높이 상자
+function ChartMessage({ text, muted }: { text: string; muted?: boolean }) {
   return (
-    <div
-      className={`flex flex-col items-center justify-center gap-1 rounded-admin-box border border-dashed border-border-strong px-4 text-center ${className}`}
+    <p
+      className={`flex h-full items-center justify-center rounded-admin-box border border-dashed border-border-strong px-4 text-center text-body-s ${
+        muted ? "text-text-muted" : "text-text-body"
+      }`}
     >
-      <p className="text-body-s font-medium text-text-body">{title}</p>
-      <p className="text-caption text-text-muted">{hint}</p>
-    </div>
+      {text}
+    </p>
   );
 }
 
-// KPI 하나(보드 V8 머리 아래 4칸). 앞 기간 비교 배지·작은 추이선은 응답에 없어 그리지 않음
+type ChartRow = { key: string; label: string; value: number | null };
+
+// 세로 막대 그래프(일별·시간대별). 막대 높이는 SVG 속성(CSP). 값이 없는 날·시각은 막대를 그리지 않음(0으로 그리지 않음)
+// 화면 읽기용으로 같은 값을 숨은 표로 둠
+function BarChart({
+  rows,
+  bars,
+  head,
+  valueHead,
+}: {
+  rows: readonly ChartRow[];
+  // 막대 영역 높이(아래 날짜 줄 24px은 따로)
+  bars: string;
+  head: string;
+  valueHead: string;
+}) {
+  const max = Math.max(0, ...rows.map((r) => r.value ?? 0));
+  return (
+    <>
+      <svg
+        aria-hidden="true"
+        viewBox={`0 0 ${rows.length} 100`}
+        preserveAspectRatio="none"
+        className={`block w-full border-b border-border-default ${bars}`}
+      >
+        {rows.map((row, i) => {
+          if (row.value === null || max <= 0) return null;
+          const h = (row.value / max) * 100;
+          return (
+            <rect
+              key={row.key}
+              x={i + 0.15}
+              width={0.7}
+              y={100 - h}
+              height={h}
+              className="fill-chart"
+            />
+          );
+        })}
+      </svg>
+      <div
+        aria-hidden="true"
+        className="flex h-6 items-end justify-between text-caption text-text-muted tabular-nums"
+      >
+        <span>{rows[0]?.label}</span>
+        <span>{rows.at(-1)?.label}</span>
+      </div>
+      <table className="sr-only">
+        <thead>
+          <tr>
+            <th scope="col">{head}</th>
+            <th scope="col">{valueHead}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.key}>
+              <td>{row.label}</td>
+              <td>{formatNumber(row.value)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </>
+  );
+}
+
+// 차트 칸 하나: 제목 + 같은 높이 틀(자리표시 · 실패 · 빈 결과 · 그래프)
+function ChartBlock({
+  id,
+  title,
+  top,
+  frame,
+  bars,
+  placeholder,
+  rows,
+  head,
+  valueHead,
+}: {
+  id: string;
+  title: string;
+  top: string;
+  // 틀 전체 높이(막대 + 날짜 줄 24)
+  frame: string;
+  bars: string;
+  placeholder: boolean;
+  rows: readonly ChartRow[] | null;
+  head: string;
+  valueHead: string;
+}) {
+  return (
+    <section aria-labelledby={id} className="min-w-0">
+      <h2 id={id} className={SECTION_TITLE}>
+        {title}
+      </h2>
+      <div className={`${top} ${frame}`}>
+        {placeholder ? (
+          <SkChart className="h-full" />
+        ) : rows === null ? (
+          <ChartMessage text={t.subReportUnavailable} />
+        ) : rows.length === 0 ? (
+          <ChartMessage text={t.listEmpty} muted />
+        ) : (
+          <BarChart rows={rows} bars={bars} head={head} valueHead={valueHead} />
+        )}
+      </div>
+    </section>
+  );
+}
+
+// 날짜 YYYY-MM-DD → '11/13'
+const shortDate = (date: string): string =>
+  `${Number(date.slice(5, 7))}/${Number(date.slice(8, 10))}`;
+
+const channelLabel = (channel: string): string =>
+  (t.channelLabels as Record<string, string>)[channel] ?? channel;
+
+// KPI 하나(보드 V8 머리 아래 4칸). 앞 기간 비교 배지는 응답에 앞 기간 값이 있을 때만. 작은 추이선은 그리지 않음
 function Kpi({
   label,
   placeholder,
@@ -114,6 +230,7 @@ function Kpi({
   value,
   unit,
   note,
+  change = null,
 }: {
   label: string;
   placeholder: boolean;
@@ -121,6 +238,8 @@ function Kpi({
   value: string | null;
   unit?: string;
   note: string;
+  // 앞 기간 대비 변화(%). 응답에 앞 기간 값이 없으면 null → 배지 없음. 좋고 나쁨 색은 쓰지 않음
+  change?: number | null;
 }) {
   return (
     <div className="flex min-w-0 flex-col gap-0.5">
@@ -137,6 +256,17 @@ function Kpi({
         </span>
         {unit && !placeholder && value !== null && (
           <span className="text-label-s text-text-muted">{unit}</span>
+        )}
+        {!placeholder && change !== null && (
+          <span
+            className={`${BADGE} self-center bg-bg-page font-medium text-text-body ring-1 ring-border-default ring-inset`}
+          >
+            <span className="sr-only">{t.changeLabel} </span>
+            {fill(t.changeValue, {
+              sign: change > 0 ? "+" : "",
+              percent: change,
+            })}
+          </span>
         )}
       </dd>
       <dd className="text-caption text-text-muted">{note}</dd>
@@ -226,6 +356,22 @@ function BarListSkeleton() {
       ))}
     </ul>
   );
+}
+
+// 응답에 칸이 생긴 목록(많이 본 화면·들어온 경로)의 본문: 자리표시 · 실패 · 빈 결과 · 막대 목록
+function ListBody({
+  placeholder,
+  rows,
+}: {
+  placeholder: boolean;
+  rows: readonly { key: string; name: ReactNode; value: number | null }[] | null;
+}) {
+  if (placeholder) return <BarListSkeleton />;
+  if (rows === null)
+    return <p className="text-body-s text-text-body">{t.subReportUnavailable}</p>;
+  if (rows.length === 0)
+    return <p className="text-body-s text-text-muted">{t.listEmpty}</p>;
+  return <BarList rows={rows} />;
 }
 
 // 도넛(보드 V8 기기·화면 언어: 지름 140 · 가운데 합계). 비율은 받은 값의 합 기준, 값이 없으면 고리만
@@ -438,6 +584,30 @@ function StatsBody({
   const live =
     data && data.realtime.status === "ok" ? data.realtime.activeUsers : null;
   const ratio = perUser(period?.pageViews ?? null, period?.activeUsers ?? null);
+  // 칸 유무: 받은 응답 기준. 받는 중에는 마지막으로 받은 응답(다른 기간이어도) 기준, 없으면 지금 서버가 주는 칸만
+  const lastBody = loaded?.result.ok ? loaded.result.body : null;
+  const shape = statsShape(
+    period ??
+      (lastBody?.configured && lastBody.period.status === "ok"
+        ? lastBody.period
+        : null),
+  );
+  const missing = missingItems(shape);
+  const missingText = missing.map((m) => t.missingItems[m]).join(", ");
+  const newRatio =
+    period?.newUsers !== undefined
+      ? sharePercent(period.newUsers, period.activeUsers)
+      : null;
+  const usersChange = changePercent(
+    period?.activeUsers ?? null,
+    period?.previous?.activeUsers ?? null,
+  );
+  const viewsChange = changePercent(
+    period?.pageViews ?? null,
+    period?.previous?.pageViews ?? null,
+  );
+  const daily = period?.daily ?? null;
+  const listCount = 1 + Number(shape.topScreens) + Number(shape.referrers);
 
   return (
     <>
@@ -495,6 +665,21 @@ function StatsBody({
             <p className="mt-0.5 text-label-s text-text-muted">
               {fill(t.subtitle, { range: t.rangeLabel[range] })}
             </p>
+            {/* 응답에 칸이 없는 항목 한 줄. 받는 중에는 같은 줄 높이 자리표시(값 뒤 높이 차이 없게) */}
+            {placeholder ? (
+              <p className="mt-0.5 text-label-s">
+                <SkLine className="w-[360px] max-w-full h-[8px]" />
+              </p>
+            ) : (
+              period &&
+              missing.length > 0 && (
+                <p className="mt-0.5 text-label-s text-text-body">
+                  {fill(t.missingLine, {
+                    items: `${missingText}${topicParticle(missingText)}`,
+                  })}
+                </p>
+              )
+            )}
             {/* 기준 시각·잠시 저장된 응답·새로 고침(시안에 없음, 기존 줄이라 남김) */}
             <div className="mt-1 flex min-h-touch flex-wrap items-center gap-x-2 gap-y-1 text-caption text-text-muted lg:min-h-0">
               {data ? (
@@ -612,14 +797,19 @@ function StatsBody({
         )}
 
         <div className={cls}>
-          {/* KPI 4칸(보드 V8: 사용자 · 화면 조회 · 새 사용자 비율 · 사용자당 화면) */}
-          <dl className="mt-7 grid grid-cols-2 gap-x-8 gap-y-5 lg:grid-cols-4">
+          {/* KPI(보드 V8: 사용자 · 화면 조회 · 새 사용자 비율 · 사용자당 화면). 새 사용자 비율은 응답에 칸이 있을 때만 */}
+          <dl
+            className={`mt-7 grid grid-cols-2 gap-x-8 gap-y-5 ${
+              shape.newUsers ? "lg:grid-cols-4" : "lg:grid-cols-3"
+            }`}
+          >
             <Kpi
               label={t.kpiUsers}
               placeholder={placeholder}
               width="w-[64px]"
               value={period ? formatNumber(period.activeUsers) : null}
               note={t.rangeLabel[range]}
+              change={usersChange}
             />
             <Kpi
               label={t.kpiViews}
@@ -627,15 +817,23 @@ function StatsBody({
               width="w-[80px]"
               value={period ? formatNumber(period.pageViews) : null}
               note={t.rangeLabel[range]}
+              change={viewsChange}
             />
-            {/* 새 사용자 비율: 응답에 새 사용자 수가 없어 계산하지 않음 */}
-            <Kpi
-              label={t.kpiNewRatio}
-              placeholder={false}
-              width="w-[32px]"
-              value={null}
-              note={t.notProvidedHint}
-            />
+            {shape.newUsers && (
+              <Kpi
+                label={t.kpiNewRatio}
+                placeholder={placeholder}
+                width="w-[32px]"
+                value={
+                  newRatio === null
+                    ? period
+                      ? t.emptyValue
+                      : null
+                    : fill(t.percentUnit, { percent: newRatio })
+                }
+                note={t.rangeLabel[range]}
+              />
+            )}
             <Kpi
               label={t.kpiPerUser}
               placeholder={placeholder}
@@ -645,29 +843,72 @@ function StatsBody({
             />
           </dl>
 
-          {/* 일별 사용자(보드: 그래프 200 + 날짜 줄 24). 응답에 일별 값이 없어 같은 크기 안내 상자 */}
-          <section aria-labelledby="stats-daily-users" className="mt-7">
-            <h2 id="stats-daily-users" className={SECTION_TITLE}>
-              {t.dailyUsers}
-            </h2>
-            <NotProvided className="mt-5 h-[224px]" />
-          </section>
+          {/* 일별 사용자(보드: 그래프 200 + 날짜 줄 24). 응답에 일별 칸이 있을 때만 */}
+          {shape.daily && (
+            <div className="mt-7">
+              <ChartBlock
+                id="stats-daily-users"
+                title={t.dailyUsers}
+                top="mt-5"
+                frame="h-[224px]"
+                bars="h-[200px]"
+                placeholder={placeholder}
+                rows={
+                  daily?.map((d) => ({
+                    key: d.date,
+                    label: shortDate(d.date),
+                    value: d.activeUsers,
+                  })) ?? null
+                }
+                head={t.chartTableDate}
+                valueHead={t.kpiUsers}
+              />
+            </div>
+          )}
 
-          <div className="mt-7 grid gap-8 lg:grid-cols-2">
-            <section aria-labelledby="stats-hourly">
-              <h2 id="stats-hourly" className={SECTION_TITLE}>
-                {t.hourlyUsers}
-              </h2>
-              {/* 보드: 위 여백 36 + 막대 120 + 시각 줄 22 */}
-              <NotProvided className="mt-9 h-[142px]" />
-            </section>
-            <section aria-labelledby="stats-daily-views">
-              <h2 id="stats-daily-views" className={SECTION_TITLE}>
-                {t.dailyViews}
-              </h2>
-              <NotProvided className="mt-5 h-[152px]" />
-            </section>
-          </div>
+          {(shape.hourly || shape.daily) && (
+            <div className="mt-7 grid gap-8 lg:grid-cols-2">
+              {shape.hourly && (
+                // 보드: 위 여백 36 + 막대 120 + 시각 줄 24
+                <ChartBlock
+                  id="stats-hourly"
+                  title={t.hourlyUsers}
+                  top="mt-9"
+                  frame="h-[144px]"
+                  bars="h-[120px]"
+                  placeholder={placeholder}
+                  rows={
+                    period?.hourly?.map((r) => ({
+                      key: String(r.hour),
+                      label: fill(t.hourLabel, { hour: r.hour }),
+                      value: r.activeUsers,
+                    })) ?? null
+                  }
+                  head={t.chartTableHour}
+                  valueHead={t.kpiUsers}
+                />
+              )}
+              {shape.daily && (
+                <ChartBlock
+                  id="stats-daily-views"
+                  title={t.dailyViews}
+                  top="mt-5"
+                  frame="h-[152px]"
+                  bars="h-[128px]"
+                  placeholder={placeholder}
+                  rows={
+                    daily?.map((d) => ({
+                      key: d.date,
+                      label: shortDate(d.date),
+                      value: d.pageViews,
+                    })) ?? null
+                  }
+                  head={t.chartTableDate}
+                  valueHead={t.kpiViews}
+                />
+              )}
+            </div>
+          )}
 
           <div className="mt-7 grid gap-8 lg:grid-cols-2">
             {placeholder ? (
@@ -709,7 +950,12 @@ function StatsBody({
             )}
           </div>
 
-          <div className="mt-7 grid gap-7 lg:grid-cols-3">
+          {/* 목록: 많이 본 해변 + 응답에 칸이 있는 목록(화면·들어온 경로). 하나뿐이면 도넛과 같은 반 폭 */}
+          <div
+            className={`mt-7 grid gap-7 ${
+              listCount === 3 ? "lg:grid-cols-3" : "lg:grid-cols-2"
+            }`}
+          >
             <section aria-labelledby="stats-beaches" className="min-w-0">
               <ListHead
                 id="stats-beaches"
@@ -745,33 +991,48 @@ function StatsBody({
                 />
               )}
             </section>
-            <section aria-labelledby="stats-screens" className="min-w-0">
-              <ListHead
-                id="stats-screens"
-                title={t.topScreensTitle}
-                note={t.topScreensNote}
-                valueName={t.colViews}
-              />
-              {/* 응답에 화면별 조회가 없음(시안 행 5개 높이: 32×5 + 6×4) */}
-              <NotProvided
-                className="h-[184px]"
-                title={t.notProvided}
-                hint={t.listNotProvided}
-              />
-            </section>
-            <section aria-labelledby="stats-referrers" className="min-w-0">
-              <ListHead
-                id="stats-referrers"
-                title={t.referrersTitle}
-                note={t.referrersNote}
-                valueName={t.colSessions}
-              />
-              <NotProvided
-                className="h-[184px]"
-                title={t.notProvided}
-                hint={t.listNotProvided}
-              />
-            </section>
+            {shape.topScreens && (
+              <section aria-labelledby="stats-screens" className="min-w-0">
+                <ListHead
+                  id="stats-screens"
+                  title={t.topScreensTitle}
+                  note={t.topScreensNote}
+                  valueName={t.colViews}
+                />
+                <ListBody
+                  placeholder={placeholder}
+                  rows={
+                    period?.topScreens?.map((row) => ({
+                      key: row.path,
+                      value: row.pageViews,
+                      name: row.title ?? (
+                        <span className="text-text-muted">{t.nameUnknown}</span>
+                      ),
+                    })) ?? null
+                  }
+                />
+              </section>
+            )}
+            {shape.referrers && (
+              <section aria-labelledby="stats-referrers" className="min-w-0">
+                <ListHead
+                  id="stats-referrers"
+                  title={t.referrersTitle}
+                  note={t.referrersNote}
+                  valueName={t.colSessions}
+                />
+                <ListBody
+                  placeholder={placeholder}
+                  rows={
+                    period?.referrers?.map((row) => ({
+                      key: row.channel,
+                      value: row.sessions,
+                      name: channelLabel(row.channel),
+                    })) ?? null
+                  }
+                />
+              </section>
+            )}
           </div>
 
           <p className="mt-6 text-caption text-text-muted">{t.foot}</p>
