@@ -60,7 +60,8 @@ export function labelText(label: BadgeLabel): string {
   return t.statusLabel[label.kind];
 }
 
-function Badge({ label }: { label: BadgeLabel }) {
+// 사유 배지 하나(운영 홈 판단불가 표도 씀)
+export function Badge({ label }: { label: BadgeLabel }) {
   const tone = badgeTone(label);
   return (
     <span
