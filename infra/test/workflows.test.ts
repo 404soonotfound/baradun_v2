@@ -679,10 +679,22 @@ describe("인프라 자동 배포 (#418)", () => {
       "role-to-assume: ${{ vars.INFRA_DEPLOY_ROLE_ARN }}",
     );
     expect(infra).toContain("node --import tsx scripts/deploy-ci.mjs plan");
-    // 다른 배포 대기(30분)+자기 배포 대기(60분)가 1시간 키를 넘지 않게 세 작업 모두 2시간 키
-    for (const job of ["infra", "infra-approve", "infra-watch"]) {
+    // 다른 배포 대기(합계 30분)+자기 배포 대기(60분)가 1시간 키를 넘지 않게 기다리는 두 작업은 2시간 키
+    for (const job of ["infra", "infra-approve"]) {
       expect(jobLines(text, job).join("\n"), job).toMatch(
         /role-duration-seconds:\s*7200/,
+      );
+    }
+    // 로그 점검(40분 제한)은 기다리지 않으므로 기본 1시간 키
+    expect(jobLines(text, "infra-watch").join("\n")).not.toMatch(
+      /role-duration-seconds/,
+    );
+    // ci-ok·앞 커밋 CI 작업 결과는 판정하는 infra 작업만 읽음
+    expect(infra).toMatch(/checks:\s*read/);
+    expect(infra).toMatch(/actions:\s*read/);
+    for (const job of ["infra-approve", "infra-watch"]) {
+      expect(jobLines(text, job).join("\n"), job).not.toMatch(
+        /checks:|actions:/,
       );
     }
     // OIDC 토큰을 받는 작업은 캐시를 복원하지 않음
@@ -708,14 +720,15 @@ describe("인프라 자동 배포 (#418)", () => {
     expect(watch).toContain("node --import tsx scripts/deploy-ci.mjs watch");
   });
 
-  it("사이트·운영자 사이트 작업은 인프라 작업 뒤에, 인프라 결과와 상관없이(건너뛰어도) 돈다", () => {
+  it("사이트·운영자 사이트 작업은 인프라 작업을 기다리지 않는다(판단 정책 순서는 '판단 정책 버전 확인'이 막음)", () => {
     for (const job of ["site", "admin"]) {
       const lines = jobLines(text, job).join("\n");
-      expect(lines, job).toMatch(/needs:\s*infra\s*$/m);
-      expect(lines, job).toMatch(
-        /if: >-\s*\n\s*!cancelled\(\) && vars\.DEPLOY_ROLE_ARN/,
-      );
+      expect(lines, job).not.toMatch(/^\s*needs:/m);
+      expect(lines, job).toMatch(/if: >-\s*\n\s*vars\.DEPLOY_ROLE_ARN/);
     }
+    expect(jobLines(text, "site").join("\n")).toContain(
+      "node scripts/check-live-policy.mts",
+    );
   });
 
   it("CI 역할 신뢰는 이 저장소 infra·infra-approval environment의 OIDC 토큰만 받는다", () => {
