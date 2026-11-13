@@ -1,19 +1,26 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import {
   associateTotp,
   changePassword,
   globalSignOut,
   verifyTotp,
 } from "@/lib/auth/cognito-api";
+import {
+  isEmail,
+  resetOperatorMfa,
+  sameEmail,
+  type MfaResetOutcome,
+} from "@/lib/account";
 import { authFailureOf } from "@/lib/auth/errors";
 import { useAuthSession, useSessionSnapshot } from "@/lib/auth/provider";
 import { otpauthUri } from "@/lib/auth/srp";
-import { messages } from "@/lib/messages";
+import { fill, messages } from "@/lib/messages";
 import { roleLabel } from "@/lib/roles";
 import { AdminShell } from "./admin-shell";
+import { ConfirmDialog } from "./confirm-dialog";
 import { CodeInput, Field, PasswordRules, passwordChecks } from "./fields";
 import { QrCode, qrShape, type QrShape } from "./qr-code";
 import { Button, Notice } from "./ui";
@@ -22,6 +29,9 @@ import { Button, Notice } from "./ui";
 // - 비밀번호 바꾸기·인증 앱 다시 등록은 운영자만. 데모 계정은 바꾸지 않음(읽기 전용)
 // - 이름·로그인한 기기 목록·알림 받는 곳은 이번 범위가 아님(이름 속성 쓰기 없음, 기기 추적 끔, 인프라 설정)
 // - 모든 기기에서 로그아웃: refresh token을 모두 무효로 함. 이미 받은 access token은 최대 15분 남음
+// - 다른 운영자의 2단계 인증 초기화(#335, D16-A9, 사용자 결정 2026-11-13): 운영자 계정이면 역할과 상관없이.
+//   대상 이메일 직접 입력 → 확인 창(취소에 먼저 포커스, 대상 이메일 다시 입력) → 운영 API. 데모 계정에는 보이지 않음
+//   운영자가 1명이면 인증 앱을 잃은 사람이 로그인하지 못해 이 칸을 쓸 수 없음 → AWS 콘솔 절차(6장)
 
 const t = messages;
 
@@ -244,6 +254,155 @@ function TotpSection({
   );
 }
 
+const r = t.account.mfaReset;
+const SLOW_MS = 10_000;
+
+// 결과 문구. 성공·이미 없음은 안내(neutral), 그 밖은 실패(fail)
+function resetNotice(
+  outcome: Exclude<MfaResetOutcome, "reauth">,
+  email: string,
+): { tone: "neutral" | "fail"; text: string } {
+  switch (outcome) {
+    case "reset":
+      return { tone: "neutral", text: fill(r.done, { email }) };
+    case "already_none":
+      return { tone: "neutral", text: fill(r.alreadyNone, { email }) };
+    case "self":
+      return { tone: "fail", text: r.self };
+    case "not_found":
+      return { tone: "fail", text: r.notFound };
+    case "invalid_email":
+      return { tone: "fail", text: r.invalidEmail };
+    case "forbidden":
+      return { tone: "fail", text: r.forbidden };
+    case "unknown":
+      return { tone: "fail", text: r.unknown };
+  }
+}
+
+function MfaResetSection({
+  token,
+  myEmail,
+}: {
+  token: () => Promise<string | null>;
+  myEmail: string;
+}) {
+  const [email, setEmail] = useState("");
+  const [inputError, setInputError] = useState<string | null>(null);
+  const [target, setTarget] = useState<string | null>(null);
+  const [word, setWord] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [slow, setSlow] = useState(false);
+  const [notice, setNotice] = useState<{
+    tone: "neutral" | "fail";
+    text: string;
+  } | null>(null);
+
+  useEffect(() => {
+    if (!busy) return;
+    const timer = window.setTimeout(() => setSlow(true), SLOW_MS);
+    return () => {
+      window.clearTimeout(timer);
+      setSlow(false);
+    };
+  }, [busy]);
+
+  const open = (e: FormEvent) => {
+    e.preventDefault();
+    const value = email.trim();
+    setNotice(null);
+    if (!isEmail(value)) {
+      setInputError(r.invalidEmail);
+      return;
+    }
+    // 본인은 서버에서도 거부함. 확인 창을 열기 전에 먼저 알려 줌
+    if (sameEmail(value, myEmail)) {
+      setInputError(r.self);
+      return;
+    }
+    setInputError(null);
+    setWord("");
+    setTarget(value);
+  };
+
+  const confirm = () => {
+    if (!target || busy || !sameEmail(word, target)) return;
+    setBusy(true);
+    void (async () => {
+      const outcome = await resetOperatorMfa(target, token);
+      // 다시 로그인이 필요하면 세션 감시가 로그인 화면으로 보냄. 여기서는 결과를 단정하지 않음
+      if (outcome === "reauth") return;
+      setNotice(resetNotice(outcome, target));
+      if (outcome === "reset" || outcome === "already_none") setEmail("");
+      setTarget(null);
+    })().finally(() => setBusy(false));
+  };
+
+  return (
+    <>
+      {notice && (
+        <Notice
+          tone={notice.tone}
+          title={notice.text}
+          role={notice.tone === "fail" ? "alert" : "status"}
+        />
+      )}
+      <form className="flex flex-col gap-3" onSubmit={open} noValidate>
+        <Field
+          label={r.emailLabel}
+          type="email"
+          autoComplete="off"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          error={inputError}
+        />
+        <div>
+          <Button
+            type="submit"
+            variant="secondary"
+            size="small"
+            disabled={busy || email.trim() === ""}
+          >
+            {r.start}
+          </Button>
+        </div>
+      </form>
+      {target && (
+        <ConfirmDialog
+          titleId="mfa-reset-confirm-title"
+          title={fill(r.confirmTitle, { email: target })}
+          confirmLabel={r.confirm}
+          cancelLabel={r.cancel}
+          confirmDisabled={!sameEmail(word, target)}
+          busy={busy}
+          onConfirm={confirm}
+          onClose={() => setTarget(null)}
+        >
+          <p>{r.confirmBody}</p>
+          <p>{r.confirmUndo}</p>
+          <label className="mt-1 flex flex-col gap-1">
+            <span className="font-medium text-text-default">
+              {r.confirmWordLabel}
+            </span>
+            <input
+              value={word}
+              onChange={(e) => setWord(e.target.value)}
+              type="email"
+              autoComplete="off"
+              className="h-touch rounded-admin-control border border-border-strong bg-bg-surface px-3 text-body text-text-default lg:h-admin-control"
+            />
+          </label>
+          {busy && slow && (
+            <p role="status" className="text-text-muted">
+              {r.slow}
+            </p>
+          )}
+        </ConfirmDialog>
+      )}
+    </>
+  );
+}
+
 function AccountBody() {
   const router = useRouter();
   const session = useAuthSession();
@@ -275,6 +434,9 @@ function AccountBody() {
           </Section>
           <Section title={t.account.mfa} hint={t.account.mfaHint}>
             <TotpSection token={token} email={snapshot.email ?? ""} />
+          </Section>
+          <Section title={r.title} hint={r.hint}>
+            <MfaResetSection token={token} myEmail={snapshot.email ?? ""} />
           </Section>
         </>
       )}
