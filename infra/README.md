@@ -436,18 +436,20 @@ BRD121_ACCOUNT_ID="<계정>"
 - 월 $1 예산(Budgets, 이 스택의 `CostBudget`)은 이메일 알림이라 과금을 막지 않습니다. 비용 이상 탐지(Cost Anomaly Detection)는 이 스택 밖의 계정 설정이라 `cdk diff`로 보이지 않습니다.
 - 지금 계정은 AWS Paid 플랜입니다(2026-11-13 전환, GH-424). 월 구독료는 없고 쓴 만큼 청구되며, 상시 무료 한도는 그대로 적용됩니다. Free 플랜 크레딧은 전환 때 소멸해 남은 크레딧이 없습니다.
   - 전환 경위: IAM Identity Center(SSO)를 설정하며 AWS Organizations를 만들었고, Free 플랜 계정은 Organizations에 등록되면 Paid로 올라가며 Free Tier 크레딧을 쓸 수 없게 됩니다([AWS Free Tier Terms](https://aws.amazon.com/free/terms/)). 되돌릴 수 없습니다.
-  - 계정·결제·조직 설정(Organizations, Control Tower, 요금제 구독 등)을 바꾸기 전에 요금 플랜 영향을 공식 문서로 먼저 확인합니다.
+  - 계정·결제·조직 설정(Organizations, Control Tower, 요금제 구독 등)을 바꾸기 전에 공식 문서로 과금·크레딧 소멸·되돌리기 가능 여부를 확인하고, 영향·대안·확인하지 못한 것을 알린 뒤 승인을 받습니다(저장소 `AGENTS.md`, 결정 기록 D25-7).
+- 무료 운영 기준: 엄격한 $0가 아니라 센트 단위 청구를 허용하고, 월 예산 알림 기준(US$1) 미만이면 무료 운영으로 봅니다. 무료 운영이 안 되면 공개 운영을 보류합니다(결정 기록 D25-1·D25-2). 2026-11-13 검토로 지금 구성은 월 약 US$0.4~0.9입니다(D25-3, 실제 청구액으로는 미확인). 2026-11-20 KST 또는 결정 뒤 추가 US$1 중 먼저 오는 때 다시 판단하며, 자동 차단·정지는 두지 않습니다(D25-4).
 - 상시 무료 밖에서 청구되는 항목은 S3 요청·저장과 CloudWatch 경보 지표 초과분입니다(2026-11-13 청구 내역 확인).
   - S3 쓰기 요청: 사이트 배포 1회에 앱마다 PutObject 약 1,850건(약 US$0.008). 그래서 배포는 하루 한 번과 수동 실행만 합니다(맨 위 설명). 게시 함수의 `data/` 쓰기는 하루 약 1,170건으로 월 약 US$0.20입니다.
   - 경보: 참조 지표 12개 중 무료 범위 10개를 넘는 2개에 월 약 US$0.20이 듭니다(아래 '운영 경보'의 '경보 지표 한도').
-- CloudFront 정액 요금제는 아직 연결하지 않았습니다. 그래서 `SiteWebAclArn`은 비어 있고 배포에 web ACL이 없습니다.
-- 정액 요금제의 '초과 요금 없음'은 CloudFront를 거치는 트래픽에만 해당합니다. Lambda·DynamoDB·S3 요청은 따로 청구됩니다.
+- CloudFront는 종량제를 유지하고 정액 요금제는 연결하지 않습니다(결정 기록 D25-5). 그래서 `SiteWebAclArn`은 비어 있고 배포에 web ACL이 없습니다. 종량제라 공격·급증 때 요금 상한이 없습니다.
+- 정액 요금제의 '초과 요금 없음'은 CloudFront를 거치는 트래픽에만 해당합니다. Lambda·DynamoDB·S3 요청은 따로 청구되고, S3는 Standard 저장 크레딧(Free 5GB)만 받습니다. 그래서 비용 때문에 정액 Free로 바꿀 이유는 없습니다.
 
-출시 전에 정액 Free를 연결합니다. 구독 전에 확인할 것: [요금제 기능 표](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/flat-rate-pricing-plan.html)에서 직접 만든 응답 헤더 정책(Custom response header rules)은 Business 이상으로 나와 있습니다. 이 스택은 CSP용 응답 헤더 정책을 직접 만들어 쓰므로(`lib/site/security-headers.ts`, BRD-118), Free 등급에서 그대로 구독되는지와 안 될 때의 헤더 방식을 먼저 정해야 합니다(미검증, GH-424).
+정액 Free는 CSP 등 지금 보안 설정과 핵심 기능을 유지할 수 있다고 확인될 때만 전환 후보입니다. [요금제 기능 표](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/flat-rate-pricing-plan.html)에서 직접 만든 응답 헤더 정책(Custom response header rules)은 Business 이상이고, 이 스택은 사이트·운영자 사이트 모두 응답 헤더 정책을 직접 만들어 씁니다(`lib/site/security-headers.ts`·`lib/admin/admin-site.ts`, BRD-118). 헤더를 viewer response CloudFront Function으로 옮기면 원본이 400 이상을 돌려준 응답(404 페이지·운영 API 401·403·문의 API 4xx)에는 함수가 실행되지 않아 그 헤더가 빠집니다([엣지 함수 제한](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/edge-function-restrictions-all.html)). 실제 구독은 검증 결과를 보고 따로 승인받은 뒤 아래 순서로 합니다. 아래 절차는 사이트 배포만 다룹니다. 운영자 사이트 배포에는 web ACL 파라미터가 없어, 같이 구독하려면 스택에 파라미터를 먼저 더해야 합니다.
 
-1. 콘솔에서 CloudFront 배포를 정액 Free에 먼저 구독합니다. 요금제가 web ACL을 붙입니다.
-2. 붙은 web ACL ARN을 `npx cdk deploy --parameters SiteWebAclArn=<ARN>`으로 넘깁니다.
-3. 요금제를 쓰는 배포는 web ACL을 뗄 수 없습니다. 구독한 뒤에는 `--no-previous-parameters`로 배포하지 않습니다. 이 옵션을 쓰면 파라미터가 빈 값으로 돌아가 web ACL이 빠집니다.
+1. 직접 만든 응답 헤더 정책을 Free 등급에서 쓸 수 있는 방식(관리형 응답 헤더 정책·CloudFront Function)으로 바꾸는 스택 변경을 먼저 배포하고, 정상 응답과 400 이상 응답의 헤더를 확인합니다. 이 변경 없이 구독하면 호환되지 않거나, 다음 `cdk deploy`가 직접 만든 정책을 다시 붙입니다.
+2. 콘솔에서 CloudFront 배포를 정액 Free에 구독합니다. 요금제가 web ACL을 붙입니다.
+3. 붙은 web ACL ARN을 `npx cdk deploy --parameters SiteWebAclArn=<ARN>`으로 넘깁니다.
+4. 요금제를 쓰는 배포는 web ACL을 뗄 수 없습니다. 구독한 뒤에는 `--no-previous-parameters`로 배포하지 않습니다. 이 옵션을 쓰면 파라미터가 빈 값으로 돌아가 web ACL이 빠집니다.
 
 ## 데이터 문의 접수(BRD-63)
 
