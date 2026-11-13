@@ -32,8 +32,12 @@ export function samePath(a: string, b: string): boolean {
 }
 
 export function startNavigation(href: string, current: string): void {
-  // 지금 화면을 다시 누르면 이동이 없어 막대가 남음
-  if (samePath(href, current)) return;
+  // 지금 화면을 누르면 이동이 없음. 앞서 누른 다른 화면 이동이 있었으면 그것도 취소된 것으로 보고 지움
+  // (지우지 않으면 메뉴 선택·진행 막대가 15초 동안 남음)
+  if (samePath(href, current)) {
+    finishNavigation();
+    return;
+  }
   clearTimers();
   pending = { href, visible: false };
   emit();
