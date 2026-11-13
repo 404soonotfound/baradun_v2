@@ -76,15 +76,6 @@ export const MAX_ALARMS = 10;
 // 단기예보는 발표 뒤 12시간까지 쓰므로 3시간 안에 알면 화면이 '확인하지 못했어요'가 되기 전에 고칠 수 있음
 export const WEATHER_ALARM = { periodMinutes: 60, periods: 3 } as const;
 
-// 로그인 반복 요청 감시 기준(D17-4, 운영자 1명 기준). 5분 동안 둘 중 하나라도 넘으면 알림
-// - 로그인 실패: 운영자·데모 풀 합계(SignInSuccesses 표본 수 − 합계, 차단 요청 포함)
-// - 계정 복구 API: 비밀번호 찾기·확인·변경·첫 로그인 새 비밀번호(계정 전체, AWS/Usage UserAccountRecovery)
-export const LOGIN_ABUSE_ALARM = {
-  periodMinutes: 5,
-  signInFailures: 10,
-  accountRecoveryCalls: 5,
-} as const;
-
 // 운영 API 5xx·권한 거부(401·403) 급증 경보 기준(D17-7, 출시 초기 운영자 소수 기준). 5분 동안 둘 중 하나라도 넘으면 알림
 // - 5xx: Lambda 함수 URL Url5xxCount (Sum, 5분)
 // - 권한 거부: 운영 API 로그 지표 필터(401·403에만 남는 ops_auth_denied 이벤트 수, Sum, 5분)
