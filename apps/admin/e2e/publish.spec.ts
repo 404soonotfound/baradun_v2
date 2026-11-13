@@ -888,3 +888,36 @@ test("같은 version을 가진 성공·실패 기록이 있어도 실패 행 선
   );
   await expect(checksRegion).not.toContainText("검증 통과");
 });
+
+test("미리보기에서 게시 확인 창으로 이동했다가 취소하면 변경 미리보기 버튼으로 포커스가 돌아간다", async ({
+  page,
+}) => {
+  await signIn(page);
+  await mockPublish(page, {
+    preview: () => ({
+      status: 200,
+      body: {
+        generatedAt: "2026-11-13T10:30:00.000Z",
+        sourceAt: "2026-11-13T10:25:00.000Z",
+        counts,
+        nextCounts: { clear: 180, unavailable: 24, undetermined: 2 },
+        changes: [],
+        changedCount: 0,
+        checks: { beachIds: null, expected: 206, contractErrors: 0 },
+      },
+    }),
+  });
+  await openPublish(page);
+
+  const previewTrigger = page.getByRole("button", { name: "변경 미리보기" });
+  await previewTrigger.click();
+  const panel = page.getByRole("dialog", { name: "변경 미리보기" });
+  await expect(panel).toBeVisible();
+
+  await panel.getByRole("button", { name: "지금 게시" }).click();
+  const confirmDialog = page.getByRole("dialog");
+  await expect(confirmDialog).toBeVisible();
+  await confirmDialog.getByRole("button", { name: "취소" }).click();
+
+  await expect(previewTrigger).toBeFocused();
+});
