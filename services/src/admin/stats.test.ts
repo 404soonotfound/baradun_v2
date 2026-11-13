@@ -236,4 +236,34 @@ describe("캐시 및 실패 경로", () => {
     expect(languages.rows).toHaveLength(10);
     expect(languages.rows[0]).toEqual({ language: "l10", activeUsers: 105 });
   });
+
+  it("STATS_EVENTS는 D22-1·D22-2에 따라 수집 중 11종과 미연동 스키마 4종을 구분한다", async () => {
+    const { STATS_EVENTS } = await import("./stats");
+    const collecting = STATS_EVENTS.filter((e) => e.status === "collecting").map(
+      (e) => e.name,
+    );
+    const notCollecting = STATS_EVENTS.filter(
+      (e) => e.status === "not_collecting",
+    ).map((e) => e.name);
+
+    expect(collecting).toEqual([
+      "page_view",
+      "select_activity",
+      "search_no_result",
+      "select_search_result",
+      "inquiry_sent",
+      "toggle_explore_view",
+      "toggle_favorite",
+      "share_spot",
+      "complete_onboarding_notice",
+      "respond_location_prompt",
+      "change_setting",
+    ]);
+    expect(notCollecting).toEqual([
+      "open_warning_sheet",
+      "open_weather_detail",
+      "select_alternative_beach",
+      "open_offline_fallback",
+    ]);
+  });
 });
