@@ -225,8 +225,9 @@ export function SessionNotices() {
   );
 }
 
-// 로그인을 이어 가는 동안(열린 탭에서 넘겨받기 최대 0.4초, 새로고침 갱신은 Cognito 응답까지, D17-11) 안내
-// 짧은 넘겨받기에서 깜박이지 않게 1초 뒤에 글을 넣음(알림 영역은 처음부터 둠)
+// 로그인 화면에서 로그인을 이어 가는 동안(열린 탭에서 넘겨받기 최대 0.4초, 새로고침 갱신은 Cognito 응답까지, D17-11) 안내
+// 짧은 넘겨받기에서 깜박이지 않게 1초 뒤에 글을 넣음(알림 영역은 처음부터 둠). 로그인 카드 틀 안에 들어감
+// 로그인한 화면(공통 틀)은 이 글 대신 틀 + 자리표시를 보임(SessionGuard fallback)
 export function SessionResuming() {
   const [shown, setShown] = useState(false);
   useEffect(() => {
@@ -234,10 +235,7 @@ export function SessionResuming() {
     return () => clearTimeout(timer);
   }, []);
   return (
-    <p
-      role="status"
-      className="px-4 py-10 text-center text-body-s text-text-muted"
-    >
+    <p role="status" className="text-center text-body-s text-text-muted">
       {shown ? t.session.resuming : ""}
     </p>
   );

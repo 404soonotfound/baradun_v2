@@ -291,8 +291,15 @@ export function LoginFlow({
   ) : null;
 
   const configStatus = configStatusOf(resolved, config);
+  // 세션 확인(넘겨받기·새로고침 갱신) 중이거나 이미 로그인해 보던 화면으로 가는 중이면
+  // 설정 오류·로그인 칸보다 먼저 확인 중 틀만 보임(GH-462 보드 L0 '첫 진입', 오류가 잠깐 보이지 않게)
+  const resuming = snapshot.status === "signed_out" && snapshot.joining;
 
-  if (configStatus === "checking") {
+  if (
+    configStatus === "checking" ||
+    resuming ||
+    snapshot.status === "signed_in"
+  ) {
     return (
       <AuthShell
         title={pool === "demo" ? t.login.demoTitle : t.login.title}
@@ -300,7 +307,7 @@ export function LoginFlow({
           pool === "demo" ? t.login.demoDescription : t.login.description
         }
       >
-        {null}
+        {resuming ? <SessionResuming /> : null}
       </AuthShell>
     );
   }
@@ -349,11 +356,6 @@ export function LoginFlow({
     setPassword("");
     setView({ kind: "form", error: null });
   };
-
-  // 로그인을 이어 가는 동안(넘겨받기·새로고침 갱신)은 로그인 칸을 그리지 않음(받으면 바로 보던 화면으로)
-  if (snapshot.status === "signed_out" && snapshot.joining) {
-    return <SessionResuming />;
-  }
 
   switch (view.kind) {
     case "form":
