@@ -79,6 +79,13 @@ export class BaradunStack extends Stack {
       description:
         "ACM certificate ARN in us-east-1 covering SiteDomainName (empty when SiteDomainName is empty)",
     });
+    const ga4PropertyId = new CfnParameter(this, "Ga4PropertyId", {
+      type: "String",
+      default: "",
+      allowedPattern: "^$|^[0-9]+$",
+      description:
+        "GA4 property ID for /ops/stats (empty keeps stats unconfigured)",
+    });
     const domainEmpty = Fn.conditionEquals(siteDomainName.valueAsString, "");
     const certificateEmpty = Fn.conditionEquals(
       siteCertificateArn.valueAsString,
@@ -181,6 +188,7 @@ export class BaradunStack extends Stack {
       snapshotBucket: site.bucket, // 해변 관리 지금 표시 상태(BRD-150): data/ 읽기·목록만
       publisher: publisher.function, // 지금 게시·되돌리기 작업(#331): 비동기 호출만
       preview: publishPreview.function, // 게시 변경 미리보기(#331): 동기 호출, 읽기 전용 함수
+      ga4PropertyId: ga4PropertyId.valueAsString, // 이용 통계(#333): 비어 있으면 미연결
     });
 
     // 운영자 사이트: 사용자 사이트와 따로 버킷·CloudFront, /ops/*는 운영 API (BRD-147)
