@@ -1019,13 +1019,20 @@ describe("CDK bootstrap 실행 정책 (11장, BRD-121)", () => {
     const actualFiles = readdirSync(resolve(__dirname, "../bootstrap"))
       .filter((name) => name.endsWith(".json"))
       .sort();
+    // 인프라 자동 배포 CI 역할(#418)의 권한·신뢰 정책도 스택 밖이라 여기 둠(검사는 workflows.test.ts)
     expect(actualFiles).toEqual(
-      [...EXECUTION_POLICY_FILES, "role-boundary-policy.json"].sort(),
+      [
+        ...EXECUTION_POLICY_FILES,
+        "role-boundary-policy.json",
+        "github-infra-deploy-policy.json",
+        "github-infra-deploy-trust.json",
+      ].sort(),
     );
 
     for (const { fileName, raw } of [
       ...executionPolicies,
       loadBootstrapPolicy("role-boundary-policy.json"),
+      loadBootstrapPolicy("github-infra-deploy-policy.json"),
     ]) {
       const nonWhitespaceLength = managedPolicyChars(raw);
       expect(
