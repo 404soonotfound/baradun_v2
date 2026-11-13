@@ -381,6 +381,13 @@ export interface FunctionCheck {
   readonly truncated?: boolean;
 }
 
+// 배포 뒤 로그를 볼 함수(바뀌었고 지우지 않은 Lambda 함수의 논리 ID). 로컬·CI 공통
+export function changedFunctionIds(rows: readonly ChangeRow[]): string[] {
+  return rows
+    .filter((r) => r.type === "AWS::Lambda::Function" && r.action !== "Remove")
+    .map((r) => r.logicalId);
+}
+
 // 한 줄 요약. 실행이 없거나 읽지 못하면 '확인 못 함'(정상으로 보지 않음)
 export function checkLine(check: FunctionCheck): string {
   if (check.error || !check.scan) {
