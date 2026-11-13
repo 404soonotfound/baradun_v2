@@ -47,6 +47,7 @@ import {
   isReady,
   readChangeSetPages,
   readRemotePolicy,
+  stackStatus,
   waitWhileInProgress,
 } from "./deploy-aws.ts";
 
@@ -173,7 +174,8 @@ function identity() {
   return JSON.parse(aws(["sts", "get-caller-identity"]).stdout).Account;
 }
 
-// 다른 배포가 진행 중이면 끝날 때까지 기다린 뒤, 새 변경을 받을 수 있는 상태인지 확인
+// 다른 배포가 진행 중이면 끝날 때까지(최대 30분) 기다린 뒤, 새 변경을 받을 수 있는 상태인지 확인
+// 30분이 지나도 진행 중이면 멈춤(CI 역할 키 2시간 안에 자기 배포 대기를 남김)
 function requireStackReady() {
   const status = waitWhileInProgress(awsRunner, STACK_NAME);
   if (!isReady(status)) {
@@ -187,12 +189,16 @@ const localPolicy = (file) =>
   JSON.parse(readFileSync(path.join(BOOTSTRAP, file), "utf8"));
 
 // 스택 밖 정책 비교. strict면 읽지 못할 때 멈춤(판정에 씀). 아니면 '확인 못 함'으로 적고 이어 감(배포 뒤 보고)
+// account가 null(계정을 확인하지 못함)이면 모두 '확인 못 함'
 function comparePolicies(account, { strict }) {
   const read = (policy, file) => {
-    const got = readRemotePolicy(
-      awsRunner,
-      `arn:aws:iam::${account}:policy/${policy}`,
-    );
+    const got =
+      account === null
+        ? { kind: "error", stderr: "" }
+        : readRemotePolicy(
+            awsRunner,
+            `arn:aws:iam::${account}:policy/${policy}`,
+          );
     if (got.kind !== "ok") {
       if (got.kind === "error") process.stderr.write(redactAccount(got.stderr));
       if (strict)
@@ -295,11 +301,13 @@ function createChangeSet(name) {
       { cwd: infraDir, capture: false, allowFail: true },
     );
     if (made.status === 0) return readChangeSet(name);
-    if (attempt >= IN_PROGRESS_RETRIES)
+    // 진행 중인 다른 배포 때문인지 상태로 확인(cdk 출력은 화면으로 바로 나가 읽지 않음)
+    // 진행 중이 아니면(합성 오류 등) 다시 해도 같으므로 바로 멈춤
+    const before = stackStatus(awsRunner, STACK_NAME).value;
+    if (attempt >= IN_PROGRESS_RETRIES || !before?.endsWith("_IN_PROGRESS"))
       fail(
         "변경 세트를 만들지 못했어요(cdk deploy --no-execute 실패). 위 로그를 확인해 주세요.",
       );
-    // 진행 중인 다른 배포 때문인지 상태로 확인(cdk 출력은 화면으로 바로 나가 읽지 않음)
     const status = waitWhileInProgress(awsRunner, STACK_NAME);
     if (!isReady(status))
       fail(
@@ -316,8 +324,10 @@ function tableMarkdown(rows) {
 // 실행·대기. 실패하면 실패 이벤트를 댓글로 남기고 멈춤
 async function executeAndWait(account, name, rows, policies) {
   const deployAws = deployRoleAws(account);
-  const startedAt = new Date();
+  let startedAt;
   for (let attempt = 0; ; attempt += 1) {
+    // 기다린 다른 배포의 실패 이벤트를 이번 실패로 적지 않게 실행할 때마다 다시 잼
+    startedAt = new Date();
     const executed = deployAws(
       [
         "cloudformation",
@@ -335,8 +345,21 @@ async function executeAndWait(account, name, rows, policies) {
     if (
       attempt >= IN_PROGRESS_RETRIES ||
       !IN_PROGRESS_ERROR.test(executed.stderr)
-    )
+    ) {
+      // 실행되지 않아 이 커밋의 변경이 반영되지 않음 → 실행 요약만이 아니라 댓글로도 알림
+      postComment(
+        [
+          `## 인프라 배포 실패 (${VIA})`,
+          "",
+          `- 커밋: ${subject}`,
+          `- 변경 세트: \`${name}\` (실행하지 못함, 스택은 바뀌지 않음)`,
+          `- 실행 기록: ${runUrl}`,
+          "",
+          "다른 배포가 먼저 실행돼 변경 세트가 지워졌을 수 있어요. 실행 기록의 오류를 확인하고, 이 커밋이 main 맨 위면 실행 기록에서 다시 실행하거나 로컬 `npm run deploy:infra`로 배포해 주세요.",
+        ].join("\n") + "\n",
+      );
       fail(`변경 세트 ${name}를 실행하지 못했어요. 위 오류를 확인해 주세요.`);
+    }
     requireStackReady();
   }
   console.log(`변경 세트 ${name}를 실행하고 끝날 때까지 기다려요`);
@@ -381,14 +404,16 @@ async function executeAndWait(account, name, rows, policies) {
 
 async function plan() {
   // 1. main이 이 커밋보다 앞서 있으면 건너뜀(새 커밋의 CI가 끝나면 그 실행이 배포함)
-  const head = mainHead();
-  if (head !== sha) {
+  const superseded = () => {
+    const head = mainHead();
+    if (head === sha) return false;
     summary(
       `### 인프라 배포 건너뜀\n\nmain이 이미 ${head.slice(0, 7)}로 앞서 있어요. 그 커밋의 CI가 끝나면 그 실행이 배포해요.`,
     );
     output("kind", "superseded");
-    return;
-  }
+    return true;
+  };
+  if (superseded()) return;
   const checks = JSON.parse(
     run("gh", [
       "api",
@@ -401,6 +426,8 @@ async function plan() {
   // 2. 계정·스택·정책
   const account = identity();
   requireStackReady();
+  // 다른 배포를 기다리는 사이 main이 앞섰으면 낡은 커밋을 배포하지 않음
+  if (superseded()) return;
   const policies = comparePolicies(account, { strict: true });
 
   // 3. 변경 세트(실행하지 않음). cdk는 환경 변수 키로 부트스트랩 역할을 맡음
@@ -542,7 +569,10 @@ async function watch() {
   const deployedAt = Number(env("DEPLOYED_AT"));
   const rows = JSON.parse(env("ROWS"));
   const functions = changedFunctionIds(rows);
-  const account = identity();
+  // 계정을 확인하지 못해도 멈추지 않음(정책은 '확인 못 함', 로그 점검·댓글은 이어 감)
+  const who = aws(["sts", "get-caller-identity"], { allowFail: true });
+  const account = who.status === 0 ? JSON.parse(who.stdout).Account : null;
+  if (account === null) process.stderr.write(redactAccount(who.stderr));
   const policies = comparePolicies(account, { strict: false });
   let checks = [];
   if (functions.length > 0) {
