@@ -3,6 +3,7 @@ import type { APIGatewayProxyEventV2 } from "aws-lambda";
 import { createHash } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 import {
+  handleInquiryEvent,
   handleInquiryHttp,
   requestFingerprint,
   type InquiryDependencies,
@@ -698,5 +699,85 @@ describe("문의 알림 개인정보 미포함 (BRD-120)", () => {
       receivedAt: expect.any(Date),
       hasEmail: false,
     });
+  });
+});
+
+describe("문의 이메일 일일 정리 이벤트 (BRD-119)", () => {
+  it("정리 결과를 반환하고 기한 초과 항목이 있으면 inquiry_email_overdue 로그를 남기며 개인정보는 기록하지 않는다", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    try {
+      const deps = dependencies({
+        store: {
+          cleanupExpiredEmails: vi.fn(async () => ({
+            deletedCount: 3,
+            overdueCount: 1,
+          })),
+        } as never,
+      });
+
+      const result = await handleInquiryEvent(
+        { action: "cleanup_expired_emails" },
+        deps,
+      );
+
+      expect(result).toEqual({
+        status: "emails_cleaned",
+        deletedCount: 3,
+        overdueCount: 1,
+      });
+      expect(logSpy).toHaveBeenCalledWith(
+        JSON.stringify({
+          level: "info",
+          event: "inquiry_email_cleanup",
+          deletedCount: 3,
+          overdueCount: 1,
+        }),
+      );
+      expect(logSpy).toHaveBeenCalledWith(
+        JSON.stringify({
+          level: "warn",
+          event: "inquiry_email_overdue",
+          overdueCount: 1,
+        }),
+      );
+    } finally {
+      logSpy.mockRestore();
+    }
+  });
+
+  it("기한 초과 항목이 0건이면 inquiry_email_overdue 경고를 남기지 않는다", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    try {
+      const deps = dependencies({
+        store: {
+          cleanupExpiredEmails: vi.fn(async () => ({
+            deletedCount: 2,
+            overdueCount: 0,
+          })),
+        } as never,
+      });
+
+      const result = await handleInquiryEvent(
+        { action: "cleanup_expired_emails" },
+        deps,
+      );
+
+      expect(result).toEqual({
+        status: "emails_cleaned",
+        deletedCount: 2,
+        overdueCount: 0,
+      });
+      expect(logSpy).toHaveBeenCalledTimes(1);
+      expect(logSpy).toHaveBeenCalledWith(
+        JSON.stringify({
+          level: "info",
+          event: "inquiry_email_cleanup",
+          deletedCount: 2,
+          overdueCount: 0,
+        }),
+      );
+    } finally {
+      logSpy.mockRestore();
+    }
   });
 });
