@@ -339,6 +339,18 @@ describe("cognitoMfaResetter", () => {
     expect(command!.input).toEqual({ UserPoolId: POOL, Username: TARGET });
   });
 
+  it("목록이 비어도 선호 설정이 인증 앱이면 mfa: true", async () => {
+    const preferred = cognitoMfaResetter(
+      POOL,
+      client(() => ({
+        Username: "u",
+        UserAttributes: [{ Name: "sub", Value: "s" }],
+        PreferredMfaSetting: "SOFTWARE_TOKEN_MFA",
+      })).client,
+    );
+    expect(await preferred.find(TARGET)).toMatchObject({ mfa: true });
+  });
+
   it("인증 앱이 없으면 mfa: false, 없는 계정은 null", async () => {
     const none = cognitoMfaResetter(
       POOL,

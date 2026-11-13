@@ -147,7 +147,10 @@ export function cognitoMfaResetter(
         return {
           username: user.Username,
           sub,
-          mfa: (user.UserMFASettingList ?? []).includes("SOFTWARE_TOKEN_MFA"),
+          // 목록과 선호 설정 중 하나라도 인증 앱이면 있음으로 봄(한쪽이 비어 '이미 없음'으로 잘못 끝나지 않게)
+          mfa:
+            (user.UserMFASettingList ?? []).includes("SOFTWARE_TOKEN_MFA") ||
+            user.PreferredMfaSetting === "SOFTWARE_TOKEN_MFA",
         };
       } catch (error) {
         if (error instanceof UserNotFoundException) return null;
