@@ -772,10 +772,10 @@ describe("인프라 자동 배포 (#418)", () => {
     );
     expect(script).toContain("autoDeployDecision(");
     expect(script).toMatch(
-      /deployAws\(\[\s*"cloudformation",\s*"execute-change-set"/,
+      /deployAws\(\s*\[\s*"cloudformation",\s*"execute-change-set"/,
     );
     expect(script).not.toMatch(
-      /(?<!deployAws)\(\[\s*"cloudformation",\s*"execute-change-set"/,
+      /(?<!deployAws)\(\s*\[\s*"cloudformation",\s*"execute-change-set"/,
     );
     // boundary를 고치는 명령이 없음
     expect(script).not.toMatch(

@@ -7,6 +7,7 @@ import {
   ciConclusion,
   ciStateWithRuns,
   deployComment,
+  deployFailureComment,
   failedEventsSince,
   formatPolicyDiff,
   formatTable,
@@ -595,5 +596,39 @@ describe("배포 결과를 남길 이슈 (#418)", () => {
   it("연결 문구가 없거나 설명이 비면 빈 목록", () => {
     expect(linkedIssues("관련 #12, GH-418")).toEqual([]);
     expect(linkedIssues(null)).toEqual([]);
+  });
+});
+
+describe("배포 실패 댓글 (#418)", () => {
+  const base = {
+    subject: "abc1234 GH-418 feat(infra): 자동 배포",
+    changeSet: "deploy-abc1234-20261113-010203",
+    boundary: "저장소와 같음(v5)",
+  };
+
+  it("실패 이벤트를 읽지 못했으면 '실패 없음'이 아니라 '읽지 못함'으로 적는다", () => {
+    const text = deployFailureComment({ ...base, failed: null });
+    expect(text).toContain("## 인프라 배포 실패 (`npm run deploy:infra`)");
+    expect(text).toContain(
+      "- 실패 이벤트: 읽지 못함(자격 증명 만료일 수 있음)",
+    );
+  });
+
+  it("실패 이벤트는 다섯 개까지 적고, 실행 방식·덧붙일 줄과 계정 번호 가림을 지킨다", () => {
+    const failed = Array.from({ length: 7 }, (_, i) => ({
+      LogicalResourceId: `Fn${i}`,
+      ResourceStatus: "UPDATE_FAILED",
+      ResourceStatusReason: "role arn:aws:iam::717304679248:role/x",
+    }));
+    const text = deployFailureComment({
+      ...base,
+      via: "main 머지 뒤 자동 배포",
+      failed,
+      extra: ["- 실행 기록: https://example.test/run"],
+    });
+    expect(text).toContain("## 인프라 배포 실패 (main 머지 뒤 자동 배포)");
+    expect(text.match(/UPDATE_FAILED/g)).toHaveLength(5);
+    expect(text).toContain("- 실행 기록: https://example.test/run");
+    expect(text).not.toContain("717304679248");
   });
 });
