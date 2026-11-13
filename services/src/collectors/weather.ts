@@ -240,9 +240,26 @@ export async function collectWeather(
   const landFresh = new Map<string, Record<string, MidLandDay>>();
   const taFresh = new Map<string, Record<string, MidTaDay>>();
   // 최종 실패는 곳(격자·구역)과 함께 로그에 남김. 실행 기록은 사유별로 묶으므로 곳은 로그에서만 찾음(BRD-186)
-  const fail = (source: string, target: string, reason: string) => {
-    failures.push({ source, reason });
-    deps.log("warn", "weather_target_failed", { source, target, reason });
+  const fail = (
+    source: string,
+    target: string,
+    reason: string,
+    code?: string,
+    message?: string,
+  ) => {
+    failures.push({
+      source,
+      reason,
+      ...(code !== undefined ? { code } : {}),
+      ...(message !== undefined ? { message } : {}),
+    });
+    deps.log("warn", "weather_target_failed", {
+      source,
+      target,
+      reason,
+      ...(code !== undefined ? { code } : {}),
+      ...(message !== undefined ? { message } : {}),
+    });
   };
   // 일시 실패는 바로 실패로 두지 않고 모아 두었다가, 첫 차례가 끝난 뒤 남은 시간 안에서 한 번 더 받음
   // 다시 받을 시간이 없으면 처음 실패 사유로 남김(요청은 이미 보냈으므로 budget으로 세지 않음)
@@ -264,9 +281,9 @@ export async function collectWeather(
   ) => {
     if (result.status === "ok") return ok(result.value);
     if (!isTransientReason(result.reason)) {
-      return fail(source, target, result.reason);
+      return fail(source, target, result.reason, result.code, result.message);
     }
-    const first = result.reason;
+    const { reason: first, code: firstCode, message: firstMessage } = result;
     retries.push({
       run: async () => {
         const retried = await again();
@@ -274,9 +291,10 @@ export async function collectWeather(
           recovered += 1;
           ok(retried.value);
         } else if (retried.reason === "t1h_missing") missing(target);
-        else fail(source, target, retried.reason);
+        else
+          fail(source, target, retried.reason, retried.code, retried.message);
       },
-      giveUp: () => fail(source, target, first),
+      giveUp: () => fail(source, target, first, firstCode, firstMessage),
     });
   };
   const safe = <T>(p: Promise<Parsed<T>>) =>

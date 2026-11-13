@@ -18,6 +18,16 @@ export function maskRequestKeys(text: string): string {
   return text.replace(KEY_PARAM, `$1${MASK}`);
 }
 
+// 외부 API header.resultMsg를 저장·로그에 남기기 전에 키 인자·제어문자·연속 공백을 정제함(D16-E7)
+export function sanitizeResultMessage(raw: unknown): string | undefined {
+  if (typeof raw !== "string") return undefined;
+  const cleaned = maskRequestKeys(raw)
+    .replace(/[\u0000-\u001f\u007f]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return cleaned === "" ? undefined : cleaned;
+}
+
 export function maskSecrets(text: string, secrets: readonly string[]): string {
   let masked = maskRequestKeys(text);
   for (const secret of secrets) {

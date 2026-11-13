@@ -1,3 +1,4 @@
+import { sanitizeResultMessage } from "../collect/log";
 import { KST_OFFSET_MS, formatUtcIso, parseKstTime } from "../warnings/time";
 
 // 기상청 날씨 예보 응답 해석 (BRD-181, 결정 기록 18장 D18-1·D18-8·D18-9, 데이터 출처 문서 14장)
@@ -8,7 +9,8 @@ import { KST_OFFSET_MS, formatUtcIso, parseKstTime } from "../warnings/time";
 // 단기예보의 파고 예보(WAV)·강수량(PCP)·적설(SNO)·습도(REH)·바람 성분(UUU·VVV)은 받지 않음(D18-8 ④, 화면에 쓰지 않음)
 
 export type Parsed<T> =
-  { status: "ok"; value: T } | { status: "failed"; reason: string };
+  | { status: "ok"; value: T }
+  | { status: "failed"; reason: string; code?: string; message?: string };
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -28,9 +30,15 @@ export function parseEnvelope(body: string): Parsed<unknown[]> {
   const header = isObject(response) ? response.header : undefined;
   const code = isObject(header) ? header.resultCode : undefined;
   if (code !== "00") {
+    const rawCode = typeof code === "string" ? code : undefined;
+    const message = isObject(header)
+      ? sanitizeResultMessage(header.resultMsg)
+      : undefined;
     return {
       status: "failed",
-      reason: `result:${typeof code === "string" ? code : "missing"}`,
+      reason: `result:${rawCode ?? "missing"}`,
+      ...(rawCode !== undefined ? { code: rawCode } : {}),
+      ...(message !== undefined ? { message } : {}),
     };
   }
   const resBody = isObject(response) ? response.body : undefined;
