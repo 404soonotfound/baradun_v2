@@ -35,7 +35,7 @@ jobs:
     concurrency:
       group: deploy-infra
       cancel-in-progress: false # 배포 도중 끊지 않음
-    timeout-minutes: 75
+    timeout-minutes: 120 # 다른 배포 대기 최대 30분 + 자기 배포 대기 최대 60분 + 변경 세트 만들기
     permissions:
       contents: read
       checks: read # ci-ok 확인
@@ -66,6 +66,8 @@ jobs:
         with:
           role-to-assume: ${{ vars.INFRA_DEPLOY_ROLE_ARN }}
           aws-region: ap-northeast-2
+          # 기다림(다른 배포 30분 + 자기 배포 60분)이 1시간을 넘을 수 있어 2시간(역할 최대 세션 7200초)
+          role-duration-seconds: 7200
       - id: run
         working-directory: infra
         env:
@@ -82,7 +84,7 @@ jobs:
     concurrency:
       group: deploy-infra-approve
       cancel-in-progress: false
-    timeout-minutes: 75
+    timeout-minutes: 120 # 다른 배포 대기 최대 30분 + 자기 배포 대기 최대 60분 + 변경 세트 만들기
     permissions:
       contents: read
       checks: read # ci-ok 확인
@@ -113,6 +115,8 @@ jobs:
         with:
           role-to-assume: ${{ vars.INFRA_DEPLOY_ROLE_ARN }}
           aws-region: ap-northeast-2
+          # 기다림(다른 배포 30분 + 자기 배포 60분)이 1시간을 넘을 수 있어 2시간(역할 최대 세션 7200초)
+          role-duration-seconds: 7200
       - id: run
         working-directory: infra
         env:
@@ -157,6 +161,8 @@ jobs:
         with:
           role-to-assume: ${{ vars.INFRA_DEPLOY_ROLE_ARN }}
           aws-region: ap-northeast-2
+          # 기다림(다른 배포 30분 + 자기 배포 60분)이 1시간을 넘을 수 있어 2시간(역할 최대 세션 7200초)
+          role-duration-seconds: 7200
       - id: run
         working-directory: infra
         env:
