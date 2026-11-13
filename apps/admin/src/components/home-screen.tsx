@@ -736,101 +736,107 @@ function HomeBody({ beaches }: { beaches: Beaches }) {
   const showParts = !me || me.ok;
 
   return (
-    <main
-      aria-busy={anyLoading || undefined}
-      className="flex w-full flex-col gap-5 px-4 py-5 md:px-10 md:pt-6 md:pb-10"
-    >
-      {/* 세션 확인 중에는 공통 틀이 '운영 화면 여는 중'을 알림 → 여기서는 그 뒤 한 번만 */}
+    <>
+      {/* 알림 영역은 aria-busy 영역 밖에 둠(바쁜 동안 읽기를 미루는 화면 읽기도 바로 읽게)
+          세션 확인 중에는 공통 틀이 '운영 화면 여는 중'을 알림 → 여기서는 그 뒤 한 번만 */}
       <LoadingStatus
         busy={signedIn && anyLoading}
         label={fill(t.loading.screen, { name: h.title })}
       />
-      {/* 느림 안내(5초)는 제목 줄 오른쪽에 겹쳐 띄움: 모바일 첫 화면에도 보이고 줄 높이·아래 칸이 밀리지 않음 */}
-      <div className="relative">
-        <h1 className="text-title-l font-semibold text-text-default">
-          {h.title}
-        </h1>
-        <div
-          role="status"
-          className="absolute top-0 right-0 flex h-[calc(var(--text-title-l)*1.4)] max-w-[calc(100%-6rem)] items-center"
-        >
-          {page.slow && <SlowNote className="text-right" />}
-        </div>
-        {signedIn ? (
-          snapshot.email && (
-            <p className="mt-1 text-body-s text-text-muted">
-              {fill(h.signedInAs, { email: snapshot.email })}
-              {role && ` · ${role}`}
+      <span role="status" className="sr-only">
+        {page.slow ? t.loading.slow : ""}
+      </span>
+      <main
+        aria-busy={anyLoading || undefined}
+        className="flex w-full flex-col gap-5 px-4 py-5 md:px-10 md:pt-6 md:pb-10"
+      >
+        {/* 느림 안내(5초)는 제목 줄 오른쪽에 겹쳐 띄움: 모바일 첫 화면에도 보이고 줄 높이·아래 칸이 밀리지 않음 */}
+        <div className="relative">
+          <h1 className="text-title-l font-semibold text-text-default">
+            {h.title}
+          </h1>
+          <div
+            aria-hidden="true"
+            className="absolute top-0 right-0 flex h-[calc(var(--text-title-l)*1.4)] max-w-[calc(100%-6rem)] items-center"
+          >
+            {page.slow && <SlowNote className="text-right" />}
+          </div>
+          {signedIn ? (
+            snapshot.email && (
+              <p className="mt-1 text-body-s text-text-muted">
+                {fill(h.signedInAs, { email: snapshot.email })}
+                {role && ` · ${role}`}
+              </p>
+            )
+          ) : (
+            <p className="mt-1 text-body-s">
+              <SkLine className="w-[260px] max-w-full" />
             </p>
-          )
-        ) : (
-          <p className="mt-1 text-body-s">
-            <SkLine className="w-[260px] max-w-full" />
-          </p>
-        )}
-      </div>
-      {me && !me.ok && me.code === "sample_not_allowed" && (
-        <Notice tone="warn" title={h.demoPeriod} role="alert">
-          {h.demoPeriodHint}
-        </Notice>
-      )}
-      {me &&
-        !me.ok &&
-        me.code !== "sample_not_allowed" &&
-        me.code !== "reauth" && (
-          <Notice tone="fail" title={h.serverError} role="alert">
-            {"requestId" in me && me.requestId && (
-              <p>{fill(h.requestId, { id: me.requestId })}</p>
-            )}
-            <Button
-              variant="secondary"
-              size="small"
-              className="mt-2"
-              onClick={load}
-            >
-              {h.retry}
-            </Button>
+          )}
+        </div>
+        {me && !me.ok && me.code === "sample_not_allowed" && (
+          <Notice tone="warn" title={h.demoPeriod} role="alert">
+            {h.demoPeriodHint}
           </Notice>
         )}
-      {showParts && (
-        <>
-          <SourcesLine part={parts.collection} onRetry={reload} />
-          {anyFailed && (
-            <Notice tone="warn" title={h.partFailed} role="alert">
+        {me &&
+          !me.ok &&
+          me.code !== "sample_not_allowed" &&
+          me.code !== "reauth" && (
+            <Notice tone="fail" title={h.serverError} role="alert">
+              {"requestId" in me && me.requestId && (
+                <p>{fill(h.requestId, { id: me.requestId })}</p>
+              )}
               <Button
                 variant="secondary"
                 size="small"
-                className="mt-1"
-                onClick={reload}
+                className="mt-2"
+                onClick={load}
               >
                 {h.retry}
               </Button>
             </Notice>
           )}
-          <Summary parts={parts} nowMs={publishedAt} stale={stale} />
-          <Todos parts={parts} />
-          <Recent
-            part={parts.recent}
-            stale={stale.has("recent")}
-            beaches={beaches}
-          />
-          <AsOf
-            at={at}
-            refreshing={reading && at !== null}
-            stale={
-              at === null
-                ? null
-                : staleSince(
-                    [...stale].map((key) => receivedAt[key]),
-                    at,
-                  )
-            }
-            onRetry={reload}
-          />
-        </>
-      )}
-      <p className="text-label-s text-text-muted">{t.session.refreshNote}</p>
-    </main>
+        {showParts && (
+          <>
+            <SourcesLine part={parts.collection} onRetry={reload} />
+            {anyFailed && (
+              <Notice tone="warn" title={h.partFailed} role="alert">
+                <Button
+                  variant="secondary"
+                  size="small"
+                  className="mt-1"
+                  onClick={reload}
+                >
+                  {h.retry}
+                </Button>
+              </Notice>
+            )}
+            <Summary parts={parts} nowMs={publishedAt} stale={stale} />
+            <Todos parts={parts} />
+            <Recent
+              part={parts.recent}
+              stale={stale.has("recent")}
+              beaches={beaches}
+            />
+            <AsOf
+              at={at}
+              refreshing={reading && at !== null}
+              stale={
+                at === null
+                  ? null
+                  : staleSince(
+                      [...stale].map((key) => receivedAt[key]),
+                      at,
+                    )
+              }
+              onRetry={reload}
+            />
+          </>
+        )}
+        <p className="text-label-s text-text-muted">{t.session.refreshNote}</p>
+      </main>
+    </>
   );
 }
 

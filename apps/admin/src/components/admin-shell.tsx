@@ -911,6 +911,11 @@ export function AdminShell({
               <UserRound aria-hidden="true" className="size-5" />
             </Link>
           </header>
+          {/* 알림 영역은 aria-busy 영역 밖에 둠(바쁜 동안 읽기를 미루는 화면 읽기도 바로 읽게) */}
+          <LoadingStatus
+            busy={snapshot.status === "signed_out"}
+            label={messages.loading.opening}
+          />
           <main
             id="main"
             tabIndex={-1}
@@ -920,10 +925,6 @@ export function AdminShell({
             className={`relative flex-1 outline-none ${PAGE_TITLE}`}
           >
             <NavProgress />
-            <LoadingStatus
-              busy={snapshot.status === "signed_out"}
-              label={messages.loading.opening}
-            />
             <SessionNotices />
             <SessionGuard fallback={loading ?? <PageSkeleton title={title} />}>
               {children}
