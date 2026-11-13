@@ -297,6 +297,44 @@ test("유효 시각이 지난 게시 상태는 분류를 그대로 두고 지남
   await expectNoA11yViolations(page);
 });
 
+test("게시본이 점검 중이면 상태 칸은 '점검 중 · 앱에 표시 안 함'이고 마지막 게시 분류는 그대로 함께 보인다(D23-11)", async ({
+  page,
+}) => {
+  await mockPublished(page, {
+    status: 200,
+    body: {
+      ...PUBLISHED,
+      maintenance: { active: true, until: "2026-11-11T05:00:00Z" },
+    },
+  });
+  await mockMemo(page);
+  await signIn(page, ["viewer"]);
+  await openBeaches(page);
+  const notice = page.getByRole("status").filter({ hasText: "점검 중이에요" });
+  await expect(notice).toContainText("앱이 지금 점검 중이에요");
+  await expect(notice).toContainText("점검 예정");
+  await expect(notice).toContainText("저장소의 점검 설정");
+  await expect(
+    page.getByText(/점검 중이라 앱에는 보이지 않아요/),
+  ).toBeVisible();
+  const row = beachRow(page, "강문해수욕장");
+  await expect(row).toContainText("점검 중");
+  await expect(row).toContainText("앱에 표시 안 함");
+  await expect(row).toContainText("마지막 게시 분류");
+  // 마지막 게시 분류는 바꾸지 않음(G1)
+  await expect(row).toContainText("특보 없음");
+  await narrowForAxe(page);
+  await expectNoA11yViolations(page);
+
+  await openDetail(page, "강문해수욕장");
+  const status = page.getByRole("region", { name: "지금 표시 상태" });
+  await expect(status).toContainText("앱이 지금 점검 중이에요");
+  await expect(status).toContainText("앱에 표시 안 함");
+  await expect(status).toContainText("특보 없음");
+  await expect(status).not.toContainText("앱과 같은 판단 결과예요");
+  await expectNoA11yViolations(page);
+});
+
 test("게시 버킷이 아직 없으면(available: false) 정상처럼 보이지 않는다", async ({
   page,
 }) => {
