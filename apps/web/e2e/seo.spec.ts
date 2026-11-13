@@ -60,7 +60,7 @@ test.describe("SEO · 메타 · 크롤링 제어 (BRD-144)", () => {
       const canonical = await page
         .locator('link[rel="canonical"]')
         .getAttribute("href");
-      expect(canonical).toMatch(new RegExp(`${item.path}$`));
+      expect(new URL(canonical!).pathname).toBe(item.path);
 
       const koHref = await page
         .locator('link[rel="alternate"][hreflang="ko"]')
@@ -71,19 +71,33 @@ test.describe("SEO · 메타 · 크롤링 제어 (BRD-144)", () => {
       const xDefault = await page
         .locator('link[rel="alternate"][hreflang="x-default"]')
         .getAttribute("href");
-      expect(koHref).toMatch(new RegExp(`${item.ko}$`));
-      expect(enHref).toMatch(new RegExp(`${item.en}$`));
+      expect(new URL(koHref!).pathname).toBe(item.ko);
+      expect(new URL(enHref!).pathname).toBe(item.en);
       expect(xDefault).toBe(koHref);
 
       const ogTitle = await page
         .locator('meta[property="og:title"]')
         .getAttribute("content");
+      const ogDescription = await page
+        .locator('meta[property="og:description"]')
+        .getAttribute("content");
       const ogImage = await page
         .locator('meta[property="og:image"]')
         .getAttribute("content");
+      const twitterTitle = await page
+        .locator('meta[name="twitter:title"]')
+        .getAttribute("content");
+      const twitterDescription = await page
+        .locator('meta[name="twitter:description"]')
+        .getAttribute("content");
       expect(ogTitle).toBeTruthy();
       expect(ogTitle).not.toMatch(STATUS_WORDS);
+      expect(ogDescription).toBeTruthy();
+      expect(ogDescription).not.toMatch(STATUS_WORDS);
       expect(ogImage).toMatch(/^https?:\/\//);
+      if (twitterTitle) expect(twitterTitle).not.toMatch(STATUS_WORDS);
+      if (twitterDescription)
+        expect(twitterDescription).not.toMatch(STATUS_WORDS);
     });
   }
 
