@@ -321,8 +321,15 @@ describe("collectWeather", () => {
   });
 
   // BRD-186: 기상청 일시 오류는 같은 실행 안에서 한 번 더 받음
-  const RESULT = (code: string) =>
-    JSON.stringify({ response: { header: { resultCode: code } } });
+  const RESULT = (code: string, msg?: string) =>
+    JSON.stringify({
+      response: {
+        header: {
+          resultCode: code,
+          ...(msg !== undefined ? { resultMsg: msg } : {}),
+        },
+      },
+    });
   // op마다 정해 둔 응답을 차례로 줌(다 쓰면 실응답)
   const sequence = (
     s: ReturnType<typeof setup>,
@@ -356,11 +363,23 @@ describe("collectWeather", () => {
 
   it("다시 받아도 실패하면 일부 실패로 남기고 실패한 격자를 키 없이 로그에 남김", async () => {
     const s = setup();
-    sequence(s, { getVilageFcst: [RESULT("01"), RESULT("01")] });
+    sequence(s, {
+      getVilageFcst: [
+        RESULT("01", "FIRST_MSG"),
+        RESULT("01", `RETRY_MSG serviceKey=${KEY}\n`),
+      ],
+    });
     expect(await collectWeather(s.deps)).toEqual({
       status: "partial",
       slotId: "202611050915",
-      failures: [{ source: "short", reason: "result:01", code: "01" }],
+      failures: [
+        {
+          source: "short",
+          reason: "result:01",
+          code: "01",
+          message: "RETRY_MSG serviceKey=***",
+        },
+      ],
     });
     expect(calls(s.urls, "getVilageFcst")).toBe(2);
     expect((await stored(s.state)).short).toBeNull();
@@ -407,7 +426,7 @@ describe("collectWeather", () => {
       s.urls.push(url);
       if (op(url) === "getVilageFcst") {
         s.at("2026-11-05T00:15:40Z"); // 첫 차례 안에서 예산(30초)을 넘김
-        return ok(RESULT("01"));
+        return ok(RESULT("01", "FIRST_ERROR"));
       }
       return ok(REAL[op(url)] as string);
     };
@@ -419,6 +438,7 @@ describe("collectWeather", () => {
       source: "short",
       reason: "result:01",
       code: "01",
+      message: "FIRST_ERROR",
     });
     expect(
       s.events().find((e) => e.event === "weather_target_failed"),
