@@ -327,6 +327,44 @@ export function versionIso(version: string): string | null {
   return m ? `${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:${m[6]}Z` : null;
 }
 
+export type AppSettingsState =
+  | { readonly kind: "absent" }
+  | { readonly kind: "invalid" }
+  | { readonly kind: "ok"; readonly value: AppSettingsView };
+
+// 앱 설정 응답 판정: 아예 없으면 'absent'(링크만), 있는데 비었거나 형식이 다르면 'invalid'('확인 못 함')
+export function parseAppSettings(raw: unknown): AppSettingsState {
+  if (raw === undefined) return { kind: "absent" };
+  if (raw === null || typeof raw !== "object") return { kind: "invalid" };
+  const obj = raw as Record<string, unknown>;
+  const maint = obj.maintenance;
+  const minBuild = obj.minWebBuild;
+  if (
+    maint === null ||
+    typeof maint !== "object" ||
+    typeof (maint as Record<string, unknown>).active !== "boolean" ||
+    typeof minBuild !== "number" ||
+    !Number.isInteger(minBuild) ||
+    minBuild < 1
+  ) {
+    return { kind: "invalid" };
+  }
+  const untilRaw = (maint as Record<string, unknown>).until;
+  if (untilRaw !== undefined && untilRaw !== null && typeof untilRaw !== "string") {
+    return { kind: "invalid" };
+  }
+  return {
+    kind: "ok",
+    value: {
+      maintenance: {
+        active: (maint as { active: boolean }).active,
+        until: typeof untilRaw === "string" ? untilRaw : null,
+      },
+      minWebBuild: minBuild,
+    },
+  };
+}
+
 export const PUBLISH_POLICY_URL = `${REPO_URL}/blob/main/services/src/publisher/policy.ts`;
 
 // 상태 개수 차이 항목(0이 아닌 분류만 순서대로 돌려줌)
