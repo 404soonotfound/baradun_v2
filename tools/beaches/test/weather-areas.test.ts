@@ -104,8 +104,8 @@ describe("중기 구역", () => {
 describe("data/weather-areas.json", () => {
   const areas = buildAreas(readPublicBeaches());
 
-  it("공개 해변 206곳이 모두 있고 지금 규칙으로 만든 결과와 같음(바뀌면 weather-areas.mjs로 다시 생성)", () => {
-    expect(Object.keys(areas)).toHaveLength(206);
+  it("공개 해변 222곳이 모두 있고 지금 규칙으로 만든 결과와 같음(바뀌면 weather-areas.mjs로 다시 생성)", () => {
+    expect(Object.keys(areas)).toHaveLength(222);
     expect(file.beaches).toEqual(areas);
   });
 
