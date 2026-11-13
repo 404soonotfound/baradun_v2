@@ -258,7 +258,7 @@ test("게시 현황: 현재 게시본·다음 자동 게시·대기 공지·되�
   await expectNoA11yViolations(page);
 });
 
-test("지금 게시: 확인 창(취소에 먼저 포커스) → 작업 ID → 게시 완료와 앱 반영을 나눠 보여 준다", async ({
+test("지금 게시: 확인 창(취소에 먼저 포커스) → 작업 ID → 게시 완료와 앱 반영을 나눠 보여 준다 @smoke", async ({
   page,
 }) => {
   await signIn(page);

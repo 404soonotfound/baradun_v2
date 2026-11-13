@@ -101,7 +101,7 @@ async function expectDataFreeActions(page: Page) {
 
 test.describe("정상", () => {
   for (const url of ["/", "/explore/", `/spots/${slugOf(CLEAR_ID)}/`]) {
-    test(`'특보 없음' 자리마다 근거와 현장 우선 문구 ${url}`, async ({
+    test(`'특보 없음' 자리마다 근거와 현장 우선 문구 ${url}${url === "/" ? " @smoke" : ""}`, async ({
       page,
     }) => {
       await page.goto(url);
@@ -117,7 +117,7 @@ test.describe("정상", () => {
     });
   }
 
-  test("이용불가는 실제 사유(풍랑주의보)를 먼저 보여줌", async ({ page }) => {
+  test("이용불가는 실제 사유(풍랑주의보)를 먼저 보여줌 @smoke", async ({ page }) => {
     await page.goto(`/spots/${slugOf(WARNING_ID)}/`);
     await expect(
       page.getByRole("heading", { name: "풍랑주의보가 발효 중이에요" }),
@@ -125,7 +125,7 @@ test.describe("정상", () => {
     await expect(page.getByText(FINAL_CALL).first()).toBeVisible();
   });
 
-  test("관측 지연이면 지난 파고 값을 숨기고 지연이라고 알림", async ({
+  test("관측 지연이면 지난 파고 값을 숨기고 지연이라고 알림 @smoke", async ({
     page,
   }) => {
     await page.goto(`/spots/${slugOf(DELAYED_ID)}/`);
@@ -169,7 +169,7 @@ test.describe("로딩", () => {
 test.describe("데이터 없음", () => {
   // 탐색은 목록의 배지를 봄(모바일 처음 보기는 지도, BRD-128)
   test.use({ scenario: "noData", exploreView: "list" });
-  test("처음 열 때 못 받으면 확인 못 함·다시 시도, 다시 받으면 정상으로", async ({
+  test("처음 열 때 못 받으면 확인 못 함·다시 시도, 다시 받으면 정상으로 @smoke", async ({
     page,
     data,
   }) => {

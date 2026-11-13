@@ -36,7 +36,7 @@ for (const scheme of ["light", "dark"] as const) {
         test.use({ deviceLanguage: locale });
         for (const screen of SCREENS) {
           const url = locale === "en" ? `/en${screen}` : screen;
-          test(`${url}`, async ({ page }) => {
+          test(`${url}${scheme === "light" && locale === "ko" && screen === "/" ? " @smoke" : ""}`, async ({ page }) => {
             await page.goto(url);
             await page.locator("main").first().waitFor();
             // 바다 정보가 들어온 뒤(로딩 표시가 사라진 뒤) 검사

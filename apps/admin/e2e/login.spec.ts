@@ -31,7 +31,7 @@ test.describe("로그인 화면", () => {
   }
 
   // BRD-180: 켜져 있지 않으면 위반이 0건이어도 아무것도 지키지 않으므로 켜졌는지 확인
-  test("Trusted Types가 켜져 있고 default 정책 하나만 있다", async ({
+  test("Trusted Types가 켜져 있고 default 정책 하나만 있다 @smoke", async ({
     page,
   }) => {
     await page.goto("/login/");
@@ -75,7 +75,7 @@ test.describe("로그인 화면", () => {
     ).toHaveCount(0);
   });
 
-  test("로그인하지 않고 운영 화면에 오면 로그인으로 보낸다", async ({
+  test("로그인하지 않고 운영 화면에 오면 로그인으로 보낸다 @smoke", async ({
     page,
   }) => {
     await page.goto("/account/");
@@ -113,7 +113,7 @@ test.describe("운영자 로그인", () => {
     await expectNoA11yViolations(page);
   });
 
-  test("비밀번호 → 인증 앱 코드(틀림 → 맞음) → 운영 홈, access·ID token은 저장소에 남지 않는다", async ({
+  test("비밀번호 → 인증 앱 코드(틀림 → 맞음) → 운영 홈, access·ID token은 저장소에 남지 않는다 @smoke", async ({
     page,
   }) => {
     const calls = await mockCognito(
