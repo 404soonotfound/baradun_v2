@@ -21,6 +21,7 @@ describe("운영 API", () => {
     const fn = only("OpsApiFunction", "AWS::Lambda::Function").resource;
     expect(fn.Properties.Handler).toBe("index.opsHandler");
     expect(Object.keys(fn.Properties.Environment.Variables).sort()).toEqual([
+      "ADMIN_SITE_URL",
       "GA4_PROPERTY_ID",
       "GA4_SERVICE_ACCOUNT_PARAM",
       "INQUIRY_TABLE_NAME",
@@ -32,6 +33,9 @@ describe("운영 API", () => {
       "PUBLISHER_FUNCTION_NAME",
       "SAMPLE_CLIENT_ID",
       "SAMPLE_USER_POOL_ID",
+      "SITE_DEPLOY_REPOSITORY",
+      "SITE_DEPLOY_TOKEN_PARAMETER",
+      "SITE_URL",
       "SNAPSHOT_BUCKET",
     ]);
     expect(fn.Properties.Environment.Variables.GA4_PROPERTY_ID).toEqual({
@@ -40,6 +44,18 @@ describe("운영 API", () => {
     expect(
       fn.Properties.Environment.Variables.GA4_SERVICE_ACCOUNT_PARAM,
     ).toBe("/baradun/v2/api-keys/ga4-service-account");
+  });
+
+  it("사이트 배포 조회는 배포 주소와 읽기 토큰 파라미터 이름만 받는다", () => {
+    const env = only("OpsApiFunction", "AWS::Lambda::Function").resource
+      .Properties.Environment.Variables;
+    expect(env.SITE_DEPLOY_TOKEN_PARAMETER).toBe(
+      "/baradun/v2/ops/github-read-token",
+    );
+    expect(env.SITE_DEPLOY_REPOSITORY).toBe("404soonotfound/baradun_v2");
+    expect(env.ADMIN_SITE_URL).toEqual({ Ref: "AdminSiteDeployUrl" });
+    expect(JSON.stringify(env.SITE_URL)).toContain("SiteDomainName");
+    expect(JSON.stringify(env.SITE_URL)).toContain("SiteDistribution");
   });
 
   it("게시 버킷은 publisher와 같은 사이트 버킷이다(BRD-150)", () => {

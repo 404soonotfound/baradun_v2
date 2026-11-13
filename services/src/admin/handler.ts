@@ -31,6 +31,7 @@ import type { ApiKeyTags } from "../core/secrets/api-keys";
 import { S3SnapshotStore } from "../core/snapshots/s3";
 import type { SnapshotStore } from "../core/snapshots/types";
 import { readSources, ssmKeyTagReader } from "./sources";
+import { siteDeployReader, type SiteDeployReader } from "./site-deploy";
 import {
   authenticate,
   createTokenVerifier,
@@ -125,6 +126,7 @@ export interface DataDependencies {
   readonly actorEmails?: OperatorEmailLookup | null;
   // GA4 이용 통계 읽기(#333 ADM-STATS). 없으면 configured: false 안내
   readonly stats?: StatsReader | null;
+  readonly siteDeploy?: SiteDeployReader | null;
 }
 
 export interface OpsDependencies {
@@ -502,6 +504,10 @@ async function dispatchOps(
     if (decision.pattern === "/ops/publish" && method === "GET") {
       return await publishOverviewRoute(deps.data, ids);
     }
+    if (decision.pattern === "/ops/site-deploy" && method === "GET") {
+      if (!deps.data.siteDeploy) return errorJson(503, "internal", ids);
+      return json(200, await deps.data.siteDeploy(), ids);
+    }
     if (decision.pattern === "/ops/publish/preview" && method === "GET") {
       return await publishPreviewRoute(deps.data, ids);
     }
@@ -675,6 +681,7 @@ function runtimeDependencies(): OpsDependencies {
         now,
       ),
       stats: statsReader(now),
+      siteDeploy: siteDeployReader(now),
     },
   };
   return runtime;

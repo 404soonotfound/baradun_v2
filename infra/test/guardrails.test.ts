@@ -1426,10 +1426,21 @@ describe("역할 권한 상한 (BRD-89)", () => {
     const statements = boundary.Statement.filter((s) =>
       toList(s.Action).includes("ssm:GetParameter"),
     );
-    expect(statements).toHaveLength(1);
+    expect(statements).toHaveLength(2);
     expect(statements[0].Condition?.ArnLike?.["lambda:SourceFunctionArn"]).toBe(
       `arn:aws:lambda:ap-northeast-2:${ACCOUNT}:function:BaradunV2-*`,
     );
+    expect(statements[1]).toMatchObject({
+      Sid: "SiteDeployReadToken",
+      Action: ["ssm:GetParameter", "ssm:ListTagsForResource"],
+      Resource: `arn:aws:ssm:ap-northeast-2:${ACCOUNT}:parameter/baradun/v2/ops/github-read-token`,
+      Condition: {
+        ArnLike: {
+          "lambda:SourceFunctionArn":
+            `arn:aws:lambda:ap-northeast-2:${ACCOUNT}:function:BaradunV2-OpsApiFunction*`,
+        },
+      },
+    });
   });
 
   // BRD-93: Resource ARN의 계정 자리에는 정책 변수를 쓸 수 없어 계정 번호를 그대로 씀

@@ -46,6 +46,17 @@
       }
     },
     {
+      "Sid": "SiteDeployReadToken",
+      "Effect": "Allow",
+      "Action": ["ssm:GetParameter", "ssm:ListTagsForResource"],
+      "Resource": "arn:aws:ssm:ap-northeast-2:717304679248:parameter/baradun/v2/ops/github-read-token",
+      "Condition": {
+        "ArnLike": {
+          "lambda:SourceFunctionArn": "arn:aws:lambda:ap-northeast-2:717304679248:function:BaradunV2-OpsApiFunction*"
+        }
+      }
+    },
+    {
       "Sid": "DecryptApiKeysViaSsm",
       "Effect": "Allow",
       "Action": "kms:Decrypt",

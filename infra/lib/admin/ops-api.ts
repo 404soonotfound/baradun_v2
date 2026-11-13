@@ -12,6 +12,9 @@ import {
   apiKeyParameterName,
   DATA_PREFIX,
   GA4_SERVICE_ACCOUNT_PARAM,
+  GITHUB_OWNER,
+  GITHUB_REPO_NAME,
+  SITE_DEPLOY_TOKEN_PARAMETER,
   INQUIRY_STATUS_INDEX,
   LOG_RETENTION,
   NOTICE_KEY,
@@ -55,6 +58,8 @@ export interface OpsApiProps {
   readonly preview: lambda.IFunction;
   // GA4 속성 ID(#333 ADM-STATS). 비어 있으면 미연결로 동작
   readonly ga4PropertyId: string;
+  readonly siteUrl: string;
+  readonly adminSiteUrl: string;
 }
 
 // 감사 기록 파티션 키 모양(services/src/admin/keys.ts AUDIT_PREFIX와 같음)
@@ -160,6 +165,19 @@ export class OpsApi extends Construct {
         ],
       }),
     );
+    // D27-5 배포 조회 토큰은 수집 키와 별도 파라미터로 제한함.
+    this.role.addToPolicy(
+      new iam.PolicyStatement({
+        actions: ["ssm:GetParameter", "ssm:ListTagsForResource"],
+        resources: [
+          Stack.of(this).formatArn({
+            service: "ssm",
+            resource: "parameter",
+            resourceName: SITE_DEPLOY_TOKEN_PARAMETER.slice(1),
+          }),
+        ],
+      }),
+    );
     // 해변 관리 지금 표시 상태(BRD-150): 게시본 data/ 읽기만
     this.role.addToPolicy(
       new iam.PolicyStatement({
@@ -252,6 +270,10 @@ export class OpsApi extends Construct {
         // 이용 통계 GA4 연동(#333 ADM-STATS)
         GA4_PROPERTY_ID: props.ga4PropertyId,
         GA4_SERVICE_ACCOUNT_PARAM,
+        SITE_DEPLOY_TOKEN_PARAMETER,
+        SITE_DEPLOY_REPOSITORY: `${GITHUB_OWNER}/${GITHUB_REPO_NAME}`,
+        SITE_URL: props.siteUrl,
+        ADMIN_SITE_URL: props.adminSiteUrl,
       },
     });
     // 함수 URL로만 부름(동기). 비동기 호출 재시도는 막아 둠(11장 재시도 제한)

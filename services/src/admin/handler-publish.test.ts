@@ -57,6 +57,27 @@ function newKey(): string {
   return `${String(keySeq).padStart(8, "0")}-7c1e-4a2b-9f00-1234567890ab`;
 }
 
+describe("사이트 배포 조회 라우팅", () => {
+  it.each([
+    ["viewer", 200],
+    ["editor", 200],
+    ["publisher", 200],
+    ["sample", 403],
+    ["unexpected-role", 403],
+  ])("%s 계정의 GET은 %s", async (role, status) => {
+    const base = deps(role, new FakeTable());
+    const siteDeploy = async () =>
+      ({ readiness: "unknown" as const }) as Awaited<
+        ReturnType<NonNullable<OpsDependencies["data"]["siteDeploy"]>>
+      >;
+    const result = await handleOps(event("GET", "/ops/site-deploy"), {
+      ...base,
+      data: { ...base.data, siteDeploy },
+    });
+    expect(result.statusCode).toBe(status);
+  });
+});
+
 class FakePublisher {
   readonly events: PublisherJobEvent[] = [];
   fail = false;

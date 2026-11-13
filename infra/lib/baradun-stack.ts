@@ -79,6 +79,13 @@ export class BaradunStack extends Stack {
       description:
         "ACM certificate ARN in us-east-1 covering SiteDomainName (empty when SiteDomainName is empty)",
     });
+    // AdminSite는 운영 API 함수 URL에 의존함. 역방향 참조를 피하려고 운영자 배포 주소를 매개변수로 받음.
+    const adminSiteDeployUrl = new CfnParameter(this, "AdminSiteDeployUrl", {
+      type: "String",
+      default: "",
+      allowedPattern: "^$|^https://[a-zA-Z0-9.-]+/?$",
+      description: "Public operator site origin used to read deploy-version.txt",
+    });
     const ga4PropertyId = new CfnParameter(this, "Ga4PropertyId", {
       type: "String",
       default: "",
@@ -188,6 +195,15 @@ export class BaradunStack extends Stack {
       snapshotBucket: site.bucket, // 해변 관리 지금 표시 상태(BRD-150): data/ 읽기·목록만
       publisher: publisher.function, // 지금 게시·되돌리기 작업(#331): 비동기 호출만
       preview: publishPreview.function, // 게시 변경 미리보기(#331): 동기 호출, 읽기 전용 함수
+      siteUrl: Fn.join("", [
+        "https://",
+        Fn.conditionIf(
+          hasSiteDomain.logicalId,
+          siteDomainName.valueAsString,
+          site.distribution.distributionDomainName,
+        ).toString(),
+      ]),
+      adminSiteUrl: adminSiteDeployUrl.valueAsString,
       ga4PropertyId: ga4PropertyId.valueAsString, // 이용 통계(#333): 비어 있으면 미연결
     });
 
