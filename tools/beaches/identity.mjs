@@ -59,6 +59,17 @@ export function preserveManual(record, previous) {
   };
 }
 
+/**
+ * beach-meta.json의 기존 별칭을 보존해 생성된 별칭과 병합함(중복·빈 값·공식 한국어 이름 제외).
+ */
+export function preserveManualAliases(generatedAliases, previousMeta, nameKo) {
+  const prev = Array.isArray(previousMeta?.aliases)
+    ? previousMeta.aliases.filter((a) => typeof a === "string" && a.trim().length > 0)
+    : [];
+  const merged = [...new Set([...(generatedAliases ?? []), ...prev])];
+  return nameKo ? merged.filter((a) => a !== nameKo) : merged;
+}
+
 export function assertSameName(id, nameKo, previous) {
   if (previous && previous.name?.ko !== nameKo)
     throw new Error(`같은 ID 이름 변경: ${id} (${previous.name?.ko} → ${nameKo}). 이름 변경 대응은 지원하지 않음, 사람이 확인하세요`);

@@ -13,7 +13,7 @@ import { COVERAGE_DIR, REGIONS, applyCoordOverrides, regionArg, regionSlug, veri
 import { SLIM_COLS, slimMatrix } from "./slim-matrix.mjs";
 import { checkDraft } from "./check.mjs";
 import { diffMatrix } from "./live-matrix.mjs";
-import { assertSameName, idKey, preserveManual, reserveSlug, validateFinalIdentity, validateIdentity } from "./identity.mjs";
+import { assertSameName, idKey, preserveManual, preserveManualAliases, reserveSlug, validateFinalIdentity, validateIdentity } from "./identity.mjs";
 import { validateBeaches } from "../../packages/contracts/scripts/validate-beaches.mjs";
 import { validateCoverage } from "../../packages/contracts/scripts/coverage-rules.mjs";
 
@@ -323,6 +323,8 @@ export function buildBeaches({ coverageDir = COVERAGE_DIR, existingDataDir = joi
   }
   validateIdentity(ids, existingItems, allSrc, previousMatrix);
   const existingById = new Map(existingItems.map(({ beach }) => [beach.id, beach]));
+  const existingMetaPath = join(existingDataDir, "beach-meta.json");
+  const existingMetaBeaches = existsSync(existingMetaPath) ? (JSON.parse(readFileSync(existingMetaPath, "utf8"))?.beaches ?? {}) : {};
   const pinnedSlug = new Map(
     existingItems.map(({ beach }) => [beach.id, beach.slug]),
   );
@@ -655,7 +657,7 @@ export function buildBeaches({ coverageDir = COVERAGE_DIR, existingDataDir = joi
         season_rule: "올해 일정이 없거나 연결되지 않으면 '운영 기간 아님' 배지를 숨김(지난해 일정으로 추정 안 함, 결정 기록 11장 10/21 ⑥)",
       },
       beaches: Object.fromEntries(records.map((r) => [r.id, {
-        aliases: r._draft.aliases,
+        aliases: preserveManualAliases(r._draft.aliases, existingMetaBeaches[r.id], r.name.ko),
         season: { 2026: r._draft.season2026.status != null ? { status: seasonStatus(r), openDate: r._draft.season2026.openDate, closeDate: r._draft.season2026.closeDate, sourceRow: r._draft.season2026.xlsxRow, link: r._draft.season2026.linkMethod } : null },
       }])),
     };
