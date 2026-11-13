@@ -17,11 +17,8 @@ export function rootRobotsMetadata(): Metadata["robots"] | undefined {
 export const INDEXABLE_STATIC_PATHS = [
   "/",
   "/explore/",
-  "/favorites/",
   "/guide/",
   "/about/data/",
-  "/settings/",
-  "/settings/inquiry/",
   "/terms/",
 ] as const;
 
@@ -33,11 +30,11 @@ export function buildRobots(): MetadataRoute.Robots {
   }
   const origin = siteUrl().origin;
   return {
+    // /search/는 Disallow로 막으면 noindex 메타를 읽지 못하므로 allow로 두고 페이지 메타의 noindex로 차단
     rules: [
       {
         userAgent: "*",
         allow: "/",
-        disallow: ["/search/", "/en/search/"],
       },
     ],
     sitemap: `${origin}/sitemap.xml`,
