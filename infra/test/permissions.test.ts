@@ -287,20 +287,27 @@ describe("DynamoDB 권한 (BRD-55)", () => {
     expect(resources[0]).toMatch(/:alarm:.*-\*$/);
   });
 
-  it("운영 API 역할은 인증키 파라미터 두 개의 태그만 읽고 값(GetParameter)은 못 읽는다(ADM-SRC)", () => {
+  it("운영 API 역할은 수집 API 키 2개의 태그만 읽고, GA4 서비스 계정 키 파라미터 1개만 값(GetParameter)을 읽는다(ADM-SRC·ADM-STATS)", () => {
     const statements = allIamPolicies()
       .filter((p) => p.roles.includes(roleId("OpsApiRole")))
       .flatMap((p) => p.statements)
       .filter((s) =>
         toList(s.Action).some((a) => String(a).startsWith("ssm:")),
       );
-    expect(statements).toHaveLength(1);
+    expect(statements).toHaveLength(2);
     expect(statements[0]!.Effect).toBe("Allow");
     expect(toList(statements[0]!.Action)).toEqual(["ssm:ListTagsForResource"]);
-    const resources = toList(statements[0]!.Resource).map(resourceText);
-    expect(resources).toHaveLength(2);
-    expect(resources.join(" ")).toMatch(
+    const tagResources = toList(statements[0]!.Resource).map(resourceText);
+    expect(tagResources).toHaveLength(2);
+    expect(tagResources.join(" ")).toMatch(
       /parameter\/baradun\/v2\/api-keys\/data-go-kr.*parameter\/baradun\/v2\/api-keys\/kma-apihub/,
+    );
+    expect(statements[1]!.Effect).toBe("Allow");
+    expect(toList(statements[1]!.Action)).toEqual(["ssm:GetParameter"]);
+    const getResources = toList(statements[1]!.Resource).map(resourceText);
+    expect(getResources).toHaveLength(1);
+    expect(getResources[0]).toMatch(
+      /parameter\/baradun\/v2\/api-keys\/ga4-service-account$/,
     );
   });
 
@@ -482,6 +489,7 @@ describe("함수·역할별 최소 권한 범위 (BRD-67)", () => {
       "logs:PutLogEvents",
       "s3:GetObject",
       "s3:ListBucket",
+      "ssm:GetParameter",
       "ssm:ListTagsForResource",
     ]);
     // 해변 관리 지금 표시 상태(BRD-150): 사이트 버킷 data/ 아래 읽기와 data/ 접두어 목록만. 쓰기 없음
