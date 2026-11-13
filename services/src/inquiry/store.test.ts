@@ -239,4 +239,81 @@ describe("문의 멱등 기록 (BRD-103)", () => {
       ).rejects.toThrow("멱등 기록");
     }
   });
+
+  it("일일 정리 작업이 88일이 지난 이메일을 삭제하고 89일 이상 남은 항목 수를 센다 (BRD-119)", async () => {
+    const now = new Date("2026-11-13T00:00:00.000Z");
+    const commands: Array<{ input: Record<string, unknown> }> = [];
+    const deletedKeys: string[] = [];
+
+    const existingEmails = new Map<string, Record<string, unknown>>([
+      [
+        "INQUIRY_EMAIL#id-88d",
+        {
+          pk: "INQUIRY_EMAIL#id-88d",
+          receivedAt: new Date(now.getTime() - 88 * 86_400_000).toISOString(),
+        },
+      ],
+      [
+        "INQUIRY_EMAIL#id-89d",
+        {
+          pk: "INQUIRY_EMAIL#id-89d",
+          receivedAt: new Date(now.getTime() - 89 * 86_400_000).toISOString(),
+        },
+      ],
+    ]);
+
+    let receivedPage = 0;
+    const documents = {
+      send: async (command: { input: Record<string, unknown> }) => {
+        commands.push(command);
+        if ("IndexName" in command.input) {
+          const status = (
+            command.input.ExpressionAttributeValues as Record<string, string>
+          )[":status"];
+          if (status === "received") {
+            receivedPage += 1;
+            if (receivedPage === 1) {
+              return {
+                Items: [{ inquiryId: "id-88d" }],
+                LastEvaluatedKey: { pk: "cursor-1" },
+              };
+            }
+            return { Items: [{ inquiryId: "id-already-gone" }] };
+          }
+          if (status === "resolved") {
+            return { Items: [{ inquiryId: "id-89d" }] };
+          }
+          return { Items: [] };
+        }
+        const key = (command.input.Key as { pk: string }).pk;
+        deletedKeys.push(key);
+        const old = existingEmails.get(key);
+        existingEmails.delete(key);
+        return old ? { Attributes: old } : {};
+      },
+    } as unknown as DynamoDBDocumentClient;
+
+    const store = new InquiryStore(documents, "InquiryTable");
+    const result = await store.cleanupExpiredEmails(now);
+
+    expect(result).toEqual({
+      deletedCount: 2,
+      overdueCount: 1,
+    });
+    expect(deletedKeys).toEqual([
+      "INQUIRY_EMAIL#id-88d",
+      "INQUIRY_EMAIL#id-already-gone",
+      "INQUIRY_EMAIL#id-89d",
+    ]);
+    const queries = commands.filter((c) => "IndexName" in c.input);
+    expect(queries.length).toBeGreaterThanOrEqual(4);
+    expect(
+      queries.every((q) => q.input.IndexName === "inquiryStatus-receivedAt"),
+    ).toBe(true);
+    expect(
+      (queries[0]?.input.ExpressionAttributeValues as Record<string, string>)?.[
+        ":expiredBefore"
+      ],
+    ).toBe(new Date(now.getTime() - 88 * 86_400_000).toISOString());
+  });
 });
