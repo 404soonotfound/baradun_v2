@@ -1,5 +1,4 @@
 import type { Reason } from "@baradun/contracts";
-import type { AuditView } from "./audit";
 import type { OpsResult } from "./auth/ops-fetch";
 import { reasonLabels, type BadgeLabel, type PublishedView } from "./beaches";
 import {
@@ -325,24 +324,6 @@ export function settle<T>(
       timer = setTimeout(() => resolve(failed), timeoutMs);
     }),
   ]).finally(() => clearTimeout(timer));
-}
-
-// 최근 변경: 운영자가 바꾼 기록만. 데모 계정의 조회·거절 기록(sample.*)은 변경이 아니라 뺌
-export interface RecentView {
-  readonly items: readonly AuditView[];
-  // 받은 기록이 있었지만 모두 조회 기록이라 보여 줄 변경이 없음('바뀐 것이 없어요'와 구분)
-  readonly onlyReads: boolean;
-}
-
-export function recentChanges(
-  items: readonly AuditView[],
-  count: number,
-): RecentView {
-  const changes = items.filter((item) => !item.action.startsWith("sample."));
-  return {
-    items: changes.slice(0, count),
-    onlyReads: changes.length === 0 && items.length > 0,
-  };
 }
 
 // 칸 하나: 응답을 기다리는 중이거나 결과(Part). 다시 읽는 동안은 앞 결과를 그대로 둠
