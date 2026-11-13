@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { queryLengthBucket, trackEvent } from "./events";
+import {
+  clearPendingAnalyticsEvents,
+  flushPendingAnalyticsEvents,
+  queryLengthBucket,
+  trackEvent,
+} from "./events";
 
 describe("queryLengthBucket", () => {
   it("검색어 원문 대신 길이 구간만 반환함", () => {
@@ -13,16 +18,34 @@ describe("queryLengthBucket", () => {
 
 describe("trackEvent", () => {
   afterEach(() => {
+    clearPendingAnalyticsEvents();
     vi.unstubAllGlobals();
   });
 
-  it("window.gtag가 없으면 전역 객체를 만들지 않고 조용히 끝남", () => {
+  it("window.gtag가 없으면 전역 객체를 만들지 않고 대기열에 보관했다가 초기화 뒤 전송함", () => {
     const win: Record<string, unknown> = {};
     vi.stubGlobal("window", win);
 
-    trackEvent("select_activity", { activity: "surfing", surface: "home" });
+    trackEvent("search_no_result", {
+      locale: "ko",
+      query_length_bucket: "2_3",
+    });
     expect("gtag" in win).toBe(false);
     expect("dataLayer" in win).toBe(false);
+
+    const gtag = vi.fn();
+    win.gtag = gtag;
+    flushPendingAnalyticsEvents();
+
+    expect(gtag).toHaveBeenCalledTimes(1);
+    expect(gtag).toHaveBeenCalledWith("event", "search_no_result", {
+      locale: "ko",
+      query_length_bucket: "2_3",
+    });
+
+    // 비운 뒤 다시 호출해도 중복 전송하지 않음
+    flushPendingAnalyticsEvents();
+    expect(gtag).toHaveBeenCalledTimes(1);
   });
 
   it("window.gtag가 있으면 undefined 속성을 빼고 이벤트를 전송함", () => {
