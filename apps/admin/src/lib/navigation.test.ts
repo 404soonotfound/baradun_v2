@@ -58,6 +58,13 @@ describe("페이지 이동 상태", () => {
     expect(pendingNavigation()).toBeNull();
   });
 
+  it("다른 화면을 누른 뒤 지금 화면을 누르면 이동 중 표시를 지움", () => {
+    startNavigation("/beaches/", "/collection/");
+    expect(pendingNavigation()?.href).toBe("/beaches/");
+    startNavigation("/collection/", "/collection/");
+    expect(pendingNavigation()).toBeNull();
+  });
+
   it("이동이 멈춰도 15초 뒤 지움", () => {
     startNavigation("/sources/", "/");
     vi.advanceTimersByTime(15_000);
