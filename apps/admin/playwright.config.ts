@@ -22,7 +22,8 @@ export default defineConfig({
     baseURL,
     locale: "ko-KR",
     timezoneId: "Asia/Seoul",
-    trace: "retain-on-failure",
+    // CI는 trace를 올리지 않아 실패해도 볼 수 없으므로 기록하지 않음(기록은 통과한 테스트에도 시간이 듦). 로컬은 실패한 것만 남김
+    trace: process.env.CI ? "off" : "retain-on-failure",
   },
   projects: [
     {
