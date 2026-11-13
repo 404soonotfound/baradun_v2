@@ -545,6 +545,7 @@ function StatusBlock({ status }: { status: ShellStatus }) {
 
 // 사용자 칸: 아바타 + 이메일 + '…' 메뉴(내 계정·로그아웃). 이름 칸이 없어 이메일로 보임(11/13 결정)
 // 메뉴는 단추 위로 펼침. Esc·바깥 누르기·포커스가 밖으로 나가면 닫고, Esc면 단추로 포커스를 돌려줌
+// Esc는 문서에서 받음: Safari(WebKit)는 마우스로 누른 단추에 포커스를 주지 않아 메뉴 상자에 키가 닿지 않음
 // 메뉴는 보이는 자리(위)와 달리 DOM에서 단추 뒤에 둠 → 단추에서 Tab으로 바로 메뉴 항목에 닿음
 function UserRow() {
   const pathname = useActivePath();
@@ -559,8 +560,17 @@ function UserRow() {
     const onPointer = (e: PointerEvent) => {
       if (!box.current?.contains(e.target as Node)) setOpen(false);
     };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      setOpen(false);
+      button.current?.focus();
+    };
     document.addEventListener("pointerdown", onPointer);
-    return () => document.removeEventListener("pointerdown", onPointer);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onPointer);
+      document.removeEventListener("keydown", onKey);
+    };
   }, [open]);
   if (snapshot.status === "signed_out") {
     // 세션 확인 전: 아바타·이메일 자리표시(보드 L10). 메뉴 단추는 아직 쓸 수 없어 아이콘만
@@ -587,13 +597,6 @@ function UserRow() {
     <div
       ref={box}
       className="relative"
-      onKeyDown={(e) => {
-        if (e.key === "Escape" && open) {
-          e.stopPropagation();
-          setOpen(false);
-          button.current?.focus();
-        }
-      }}
       // 키보드로 메뉴 밖으로 나가면 닫음. 받는 쪽이 없는 blur(Safari의 누르기 등)는 바깥 누르기 처리에 맡김
       onBlur={(e) => {
         const next = e.relatedTarget as Node | null;
