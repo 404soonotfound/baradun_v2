@@ -26,6 +26,7 @@ import { payloadHashOf, versionedWrite, type Sender } from "./writes";
 // 해변 관리 (BRD-150, 화면 ADM-BCH, 결정 기록 D15-4, 아키텍처 18.1)
 // - 해변 정보(정의·별칭·노출·사진)는 저장소 파일이 원본. 운영 API는 다루지 않음(화면이 빌드 때 읽음)
 // - 지금 표시 상태: publisher가 게시한 status.json의 분류·사유·validUntil을 그대로 돌려줌. 다시 계산하지 않음(G1)
+//   manifest의 점검(maintenance)도 같이 돌려줌. 점검 중이면 앱이 해변 상태를 숨기므로 화면이 그 사실을 보여 줌(D23-11)
 //   게시본을 읽지 못하면 available: false. 화면은 모든 해변을 판단불가 계열로 보여 줌('특보 없음'으로 바꾸지 않음)
 // - 운영 메모: 해변별 내부용. Ops 테이블에만 둠. publisher는 admin#notice만 읽어 게시본에 나가지 않음
 //   변경 이력에는 바뀐 항목 이름만 남기고 메모 글은 복사하지 않음(D16-B5)
@@ -57,11 +58,19 @@ export interface BeachStatusEntry {
   readonly validUntil: string;
 }
 
+export interface BeachMaintenance {
+  // true면 앱은 해변 상태를 숨기고 점검 화면을 보여 줌(manifest maintenance.active 그대로)
+  readonly active: boolean;
+  // 끝나는 예정 시각(UTC). 정하지 않았으면 null
+  readonly until: string | null;
+}
+
 export type BeachStatusView =
   | {
       readonly available: true;
       readonly snapshotVersion: string;
       readonly generatedAt: string;
+      readonly maintenance: BeachMaintenance;
       readonly beaches: Readonly<Record<string, BeachStatusEntry>>;
     }
   | { readonly available: false; readonly reason: StatusUnavailableReason };
@@ -88,7 +97,8 @@ export async function readBeachStatus(
     if (contractErrors("ManifestFile", manifest).length > 0) {
       return { available: false, reason: "manifest_invalid" };
     }
-    const { snapshotVersion, generatedAt, files } = manifest as ManifestFile;
+    const { snapshotVersion, generatedAt, files, maintenance } =
+      manifest as ManifestFile;
     const path = STATUS_PATH.exec(files.status)?.[1];
     if (!path) return { available: false, reason: "manifest_invalid" };
     const statusBody = await store.getFile(path);
@@ -107,7 +117,13 @@ export async function readBeachStatus(
         validUntil: beach.validUntil,
       };
     }
-    return { available: true, snapshotVersion, generatedAt, beaches };
+    return {
+      available: true,
+      snapshotVersion,
+      generatedAt,
+      maintenance: { active: maintenance.active, until: maintenance.until },
+      beaches,
+    };
   } catch (error) {
     // 권한(boundary 미반영 등)·장애가 '확인 못 함'으로만 보이고 원인이 묻히지 않게 이름만 남김
     safeLog("warn", "ops_beach_status_read_failed", {
