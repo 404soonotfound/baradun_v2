@@ -169,4 +169,28 @@ describe("enrichAuditActors", () => {
     expect(logged).not.toContain("bob@example.com");
     expect(logged).not.toContain("sub-fail");
   });
+
+  it("조회 시간 제한을 넘기면 중단 신호를 보내고 먼저 찾은 이메일만 채워 반환한다", async () => {
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    let aborted = false;
+    const lookup: OperatorEmailLookup = {
+      findEmailBySub: vi.fn((sub, signal) => {
+        if (sub === "sub-fast") return Promise.resolve("fast@example.com");
+        signal?.addEventListener("abort", () => {
+          aborted = true;
+        });
+        return new Promise<string | null>(() => {});
+      }),
+    };
+    const rows = [
+      item("sub-slow", "operator", "req-1"),
+      item("sub-fast", "operator", "req-2"),
+    ];
+
+    const out = await enrichAuditActors(rows, lookup, { traceId: "t-2" }, 20);
+    expect(aborted).toBe(true);
+    expect(out[0]).not.toHaveProperty("actorEmail");
+    expect(out[1]?.actorEmail).toBe("fast@example.com");
+    expect(log).toHaveBeenCalledTimes(1);
+  });
 });
