@@ -20,7 +20,7 @@ import { AdminShell } from "./admin-shell";
 import { Button, Notice, SUCCESS_BADGE } from "./ui";
 
 // 이용 통계 (BRD-154·GH-333, 화면 설계서 6장 ADM-STATS)
-// - 출시 수집은 page_view만. 다른 이벤트는 '수집 안 함(후속)'으로 표시
+// - 수집 이벤트 상태(D22-1·D22-2): page_view와 연동된 비식별 기능 이벤트는 '수집 중', 미연동 스키마는 '수집 안 함(후속)'으로 표시
 // - GA4 metadata(thresholding·sampling·otherRowLoss)가 있을 때만 제한 안내 표시(E8)
 // - 숨긴 숫자는 추정하지 않고 '–'로 표시(0으로 바꾸지 않음)
 // - 해변 상태(특보 없음·이용불가·판단불가)와 묶은 지표는 만들지 않음

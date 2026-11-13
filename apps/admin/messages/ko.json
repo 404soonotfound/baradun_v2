@@ -1468,7 +1468,7 @@
       "en": "English"
     },
     "eventsTitle": "수집 이벤트",
-    "eventsNote": "출시 버전에서는 page_view만 수집해요.",
+    "eventsNote": "개인정보와 해변 판단 상태를 제외한 비식별 이용 이벤트를 수집해요.",
     "eventStatus": {
       "collecting": "수집 중",
       "not_collecting": "수집 안 함(후속)"

@@ -75,11 +75,23 @@ export interface StatsResponse {
   readonly events: readonly StatsEventStatus[];
 }
 
+// D22-1·D22-2(#247): page_view와 apps/web에 연동된 비식별 기능 이벤트는 수집 중, 미연동 스키마만 후속 표시
 export const STATS_EVENTS: readonly StatsEventStatus[] = [
   { name: "page_view", status: "collecting" },
-  { name: "select_activity", status: "not_collecting" },
-  { name: "search_no_result", status: "not_collecting" },
-  { name: "inquiry_sent", status: "not_collecting" },
+  { name: "select_activity", status: "collecting" },
+  { name: "search_no_result", status: "collecting" },
+  { name: "select_search_result", status: "collecting" },
+  { name: "inquiry_sent", status: "collecting" },
+  { name: "toggle_explore_view", status: "collecting" },
+  { name: "toggle_favorite", status: "collecting" },
+  { name: "share_spot", status: "collecting" },
+  { name: "complete_onboarding_notice", status: "collecting" },
+  { name: "respond_location_prompt", status: "collecting" },
+  { name: "change_setting", status: "collecting" },
+  { name: "open_warning_sheet", status: "not_collecting" },
+  { name: "open_weather_detail", status: "not_collecting" },
+  { name: "select_alternative_beach", status: "not_collecting" },
+  { name: "open_offline_fallback", status: "not_collecting" },
 ];
 
 export interface StatsReader {

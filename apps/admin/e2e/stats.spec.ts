@@ -66,7 +66,7 @@ test("정상 조회·기간 전환·해변 이름 매핑·수집 이벤트 및 �
   await expect(page.getByText("14명")).toBeVisible();
   await expect(page.getByText("해운대해수욕장")).toBeVisible();
   await expect(page.getByText("부산 해운대구")).toBeVisible();
-  await expect(page.getByText("수집 중")).toBeVisible();
+  await expect(page.getByText("수집 중").first()).toBeVisible();
   await expect(page.getByText("수집 안 함(후속)").first()).toBeVisible();
   await expect(
     page.getByText("일부 숫자가 가려졌거나 요약되었어요"),
