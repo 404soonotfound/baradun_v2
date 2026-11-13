@@ -842,3 +842,49 @@ test("앱 설정이 응답에 있는데 비었거나 형식이 틀리면 '확인
     page.getByRole("link", { name: "GitHub에서 보기" }),
   ).toBeVisible();
 });
+
+test("같은 version을 가진 성공·실패 기록이 있어도 실패 행 선택 시 실패 검증 결과를 표시한다", async ({
+  page,
+}) => {
+  await signIn(page);
+  await mockPublish(page, {
+    overview: () =>
+      overview({
+        history: {
+          ok: true,
+          items: [
+            {
+              result: "published",
+              version: V0,
+              at: iso(base),
+              source: "auto",
+              beachCount: 206,
+              changes: {
+                notices: false,
+                categoryCounts: counts,
+                categoryDelta: { clear: 0, unavailable: 0, undetermined: 0 },
+                delayedBeaches: 0,
+                delayedDelta: 0,
+              },
+              gapBefore: false,
+            },
+            {
+              result: "failed",
+              version: V0,
+              at: iso(base),
+              source: "auto",
+              reason: "beach_ids",
+            },
+          ],
+        },
+      }),
+  });
+  await openPublish(page);
+
+  const checksRegion = page.getByRole("region", { name: /검증 결과/ });
+  await expect(checksRegion).toContainText("실패 사유");
+  await expect(checksRegion).toContainText(
+    "해변 ID 대조 불일치(누락·추가·중복)",
+  );
+  await expect(checksRegion).not.toContainText("검증 통과");
+});
