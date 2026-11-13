@@ -509,8 +509,14 @@ export function missingExecutionActions(
         .replace(/\?/g, ".")}$`,
       "i",
     );
+  // 같은 패턴을 동작마다 다시 컴파일하지 않게 둠
+  const compiled = new Map<string, RegExp>();
   const matches = (patterns: readonly string[], action: string) =>
-    patterns.some((p) => toPattern(p).test(action));
+    patterns.some((p) => {
+      let re = compiled.get(p);
+      if (re === undefined) compiled.set(p, (re = toPattern(p)));
+      return re.test(action);
+    });
   const localSt = statements(local);
   const remoteSt = statements(remote);
   const actionsOf = (sts: readonly PolicyStatement[], effect: string) =>
@@ -523,9 +529,20 @@ export function missingExecutionActions(
   const remoteDeny = actionsOf(remoteSt, "Deny").filter(
     (a) => !localDeny.has(a.toLowerCase()),
   );
-  const remoteDenyNot = remoteSt
-    .filter((st) => st.Effect === "Deny" && st.NotAction !== undefined)
-    .map((st) => listOf(st.NotAction));
+  // Deny NotAction도 저장소에 같은 목록이 있으면 의도한 거부라 빠진 동작으로 보지 않음(Deny Action과 같게)
+  const denyNotKey = (list: readonly string[]) =>
+    list
+      .map((a) => a.toLowerCase())
+      .sort()
+      .join(",");
+  const denyNotLists = (sts: readonly PolicyStatement[]) =>
+    sts
+      .filter((st) => st.Effect === "Deny" && st.NotAction !== undefined)
+      .map((st) => listOf(st.NotAction));
+  const localDenyNot = new Set(denyNotLists(localSt).map(denyNotKey));
+  const remoteDenyNot = denyNotLists(remoteSt).filter(
+    (kept) => !localDenyNot.has(denyNotKey(kept)),
+  );
   return [...new Set(actionsOf(localSt, "Allow"))]
     .filter(
       (a) =>
@@ -619,9 +636,11 @@ const INFRA_PATHS = [
   "package.json",
   "package-lock.json",
   "data/beach-meta.json", // publisher/handler.ts
+  "data/beaches/", // 묶을 때 함수 폴더 beaches/로 복사(lib/collect·lib/publish)
   "data/photo-sources.json", // collectors/handlers.ts
   "data/rip-current-beaches.json", // collectors/handlers.ts
   "data/weather-areas.json", // collectors/handlers.ts
+  "tools/beaches/annex-tables.json", // publisher/handler.ts
 ];
 
 export function touchesInfra(paths: readonly string[]): boolean {
