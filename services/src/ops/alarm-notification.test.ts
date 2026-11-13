@@ -35,17 +35,13 @@ function alarmEvent(
 
 describe("운영 경보 한국어 알림", () => {
   it.each([
-    ["WarningsErrors", "특보 수집 실패"],
-    ["OceanErrors", "바다 관측 수집 실패"],
+    ["WarningsFailing", "특보 수집 실패·중단"],
+    ["OceanFailing", "바다 관측 수집 실패·중단"],
+    ["RipFailing", "이안류 수집 실패·중단"],
     ["CatalogErrors", "사진 확인 수집 실패"],
-    ["RipErrors", "이안류 수집 실패"],
     ["PublishErrors", "데이터 게시 실패"],
-    ["WarningsStopped", "특보 수집 중단"],
-    ["OceanStopped", "바다 관측 수집 중단"],
-    ["RipStopped", "이안류 수집 중단"],
     ["PublishStopped", "데이터 게시 중단"],
     ["NotificationFailed", "운영 알림 발송 실패"],
-    ["LoginAbuse", "운영자 로그인 반복 요청"],
     ["WeatherFailing", "날씨 수집 계속 실패"],
     ["OpsApiErrors", "운영 API 오류 급증"],
   ])("%s 경보를 %s 제목으로 보낸다", (alarmId, label) => {
@@ -59,14 +55,15 @@ describe("운영 경보 한국어 알림", () => {
   it("영문 판정 원문 대신 한국어 판정·KST 시각·콘솔 링크를 넣는다", () => {
     const result = formatAlarmNotification(
       alarmEvent(
-        "OceanStopped",
-        "바다 관측 수집이 돌지 않음. 90분 뒤 관측 지연이 됨",
+        "OceanFailing",
+        "바다 관측 수집이 45분 동안 성공하지 못함. 이어지면 90분 뒤 관측 지연이 됨",
       ),
     );
 
     expect(result.message).toContain("발생 시각: 2026-11-03 12:41:04 KST");
+    // 오류 경보와 실행 없음 경보를 합친 성공 없음 경보(GH-424): 실패인지 중단인지는 로그로 확인
     expect(result.message).toContain(
-      "판정: 정해진 평가 구간 동안 실행 기록이 확인되지 않았습니다.",
+      "판정: 정해진 평가 구간 동안 성공한 실행이 없었습니다. 실행이 실패했거나 돌지 않았습니다.",
     );
     expect(result.message).toContain(
       "CloudWatch에서 확인: https://ap-northeast-2.console.aws.amazon.com/",
@@ -99,13 +96,15 @@ describe("운영 경보 한국어 알림", () => {
     );
   });
 
-  // 결정 기록 D17-4: 차단하지 않고 알기만 함. 막는 것은 Cognito 잠금·요청 제한
-  it("로그인 반복 요청 경보는 기준을 넘었고 Cognito가 막고 있다고 알린다", () => {
+  // 로그인 반복 요청 경보는 GH-424에서 빼서 제목 목록에 없음
+  // 배포 순서가 어긋나 옛 경보가 울려도 알림은 버리지 않고 설명 첫 문장을 제목으로 보냄
+  it("뺀 경보가 울려도 알림을 버리지 않고 설명 첫 문장을 제목으로 쓴다", () => {
     const result = formatAlarmNotification(
-      alarmEvent("LoginAbuse", "로그인 반복 요청"),
+      alarmEvent("LoginAbuse", "로그인 반복 요청. 운영 설명"),
     );
+    expect(result.subject).toBe("[바라던 바다] 로그인 반복 요청 · 경보 발생");
     expect(result.message).toContain(
-      "판정: 5분 동안 로그인 실패 또는 비밀번호 찾기·변경 요청이 기준을 넘었습니다.",
+      "판정: 설정된 운영 경보 조건을 충족했습니다.",
     );
   });
 
@@ -152,7 +151,7 @@ describe("운영 경보 한국어 알림", () => {
     } as unknown as SNSClient;
 
     await sendAlarmNotification(
-      alarmEvent("OceanErrors", "바다 관측 수집 실패"),
+      alarmEvent("CatalogErrors", "사진 확인 수집 실패"),
       sns,
       "arn:aws:sns:ap-northeast-2:123456789012:ops",
     );
@@ -160,7 +159,7 @@ describe("운영 경보 한국어 알림", () => {
     expect(commands).toHaveLength(1);
     expect(commands[0]?.input).toMatchObject({
       TopicArn: "arn:aws:sns:ap-northeast-2:123456789012:ops",
-      Subject: "[바라던 바다] 바다 관측 수집 실패 · 경보 발생",
+      Subject: "[바라던 바다] 사진 확인 수집 실패 · 경보 발생",
     });
     expect(String(commands[0]?.input.Message)).toContain(
       "판정: 최근 실행에서 오류가 1회 이상 감지되었습니다.",
