@@ -308,8 +308,14 @@ export async function logout(page: Page) {
 }
 
 export async function expectNoA11yViolations(page: Page) {
-  // 값 교체 페이드(0.18초, GH-462) 도중이면 글자가 반투명이라 대비를 잘못 잼 → 끝나는 애니메이션이 멈출 때까지 기다림
-  // 반짝임·회전처럼 끝없이 도는 애니메이션은 기다리지 않음
+  // 값 교체 페이드(0.18초, GH-462) 도중이면 글자가 반투명이라 대비를 잘못 잼
+  // 먼저 자리표시가 값으로 바뀌기를 잠깐(최대 2초) 기다리고(응답이 오지 않게 한 시험은 자리표시가 남으니 그대로 진행),
+  // 끝나는 애니메이션이 멈출 때까지 기다림. 반짝임·회전처럼 끝없이 도는 애니메이션은 기다리지 않음
+  await page
+    .waitForFunction(() => !document.querySelector("#main .sk"), undefined, {
+      timeout: 2_000,
+    })
+    .catch(() => {});
   await page.waitForFunction(() =>
     document
       .getAnimations()
