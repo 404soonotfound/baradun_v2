@@ -141,6 +141,14 @@ describe("parsePolicyMarkdown·buildSnapshot", () => {
         ].join("\n"),
     ],
     [
+      "탭으로 들여쓴 안쪽 목록",
+      HEAD +
+        [
+          section(1, 3, "\t- 안쪽"),
+          ...[2, 3, 4, 5, 6, 7, 8, 9].map((n) => section(n)),
+        ].join("\n"),
+    ],
+    [
       "항목 안 작은 제목",
       page().replace("<b>확정</b>", "<b>확정</b>\n\n### 작은 제목"),
     ],
