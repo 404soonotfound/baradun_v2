@@ -123,8 +123,8 @@ describe("운영 경보 (BRD-62)", () => {
       expect(p.AlarmActions, id).toBeUndefined();
       expect(p.OKActions, id).toBeUndefined();
       expect(p.InsufficientDataActions, id).toBeUndefined();
-      // 로그인 반복 요청·운영 API 오류 급증은 여러 지표의 수식이라 아래 전용 테스트에서 통계를 봄
-      if (login || opsApi) continue;
+      // 로그인 반복 요청·운영 API 오류 급증·문의 이메일 기한 초과는 여러 지표의 수식이라 아래 전용 테스트에서 통계를 봄
+      if (login || opsApi || inquiryEmailOverdue) continue;
       expect(statOf(a).Statistic, id).toBe(
         metric === "ApproximateNumberOfMessagesVisible" ? "Maximum" : "Sum",
       );
@@ -430,9 +430,26 @@ describe("운영 경보 (BRD-62)", () => {
     expect(p.ComparisonOperator).toBe("GreaterThanOrEqualToThreshold");
     expect(p.EvaluationPeriods).toBe(1);
     expect(p.TreatMissingData).toBe("notBreaching");
-    expect(p.Namespace).toBe(INQUIRY_EMAIL_OVERDUE_ALARM.metricNamespace);
-    expect(p.MetricName).toBe(INQUIRY_EMAIL_OVERDUE_ALARM.metricName);
-    expect(p.Statistic).toBe("Sum");
-    expect(p.Period).toBe(INQUIRY_EMAIL_OVERDUE_ALARM.periodMinutes * 60);
+    const metrics = p.Metrics as any[];
+    const expression = metrics.find((m) => m.Expression)?.Expression as string;
+    expect(expression).toBe("MAX([FILL(overdue, 0), FILL(dlq, 0)])");
+    const stats = metrics.filter((m) => m.MetricStat).map((m) => m.MetricStat);
+    expect(
+      stats.every(
+        (s) => s.Period === INQUIRY_EMAIL_OVERDUE_ALARM.periodMinutes * 60,
+      ),
+    ).toBe(true);
+    const overdueStat = stats.find(
+      (s) => s.Metric.MetricName === INQUIRY_EMAIL_OVERDUE_ALARM.metricName,
+    )!;
+    const dlqStat = stats.find(
+      (s) => s.Metric.MetricName === "ApproximateNumberOfMessagesVisible",
+    )!;
+    expect(overdueStat.Metric.Namespace).toBe(
+      INQUIRY_EMAIL_OVERDUE_ALARM.metricNamespace,
+    );
+    expect(overdueStat.Stat).toBe("Sum");
+    expect(dlqStat.Metric.Namespace).toBe("AWS/SQS");
+    expect(dlqStat.Stat).toBe("Maximum");
   });
 });

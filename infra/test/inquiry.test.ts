@@ -265,7 +265,11 @@ describe("문의 이메일 일일 정리 일정 (BRD-119)", () => {
     const props = schedules[0]![1].Properties as {
       ScheduleExpression: string;
       ScheduleExpressionTimezone: string;
-      Target: { Input: string; Arn: { "Fn::GetAtt": [string, string] } };
+      Target: {
+        Input: string;
+        Arn: { "Fn::GetAtt": [string, string] };
+        DeadLetterConfig?: { Arn: { "Fn::GetAtt": [string, string] } };
+      };
     };
     expect(props.ScheduleExpression).toBe("cron(30 3 * * ? *)");
     expect(props.ScheduleExpressionTimezone).toBe("Asia/Seoul");
@@ -273,5 +277,8 @@ describe("문의 이메일 일일 정리 일정 (BRD-119)", () => {
       action: "cleanup_expired_emails",
     });
     expect(props.Target.Arn["Fn::GetAtt"][0]).toMatch(/^InquiryFunction/);
+    expect(props.Target.DeadLetterConfig?.Arn["Fn::GetAtt"][0]).toMatch(
+      /^InquiryEmailCleanupFailures/,
+    );
   });
 });
