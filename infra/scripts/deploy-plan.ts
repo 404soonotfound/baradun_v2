@@ -587,6 +587,21 @@ export function linkedIssues(prBody: string | null | undefined): number[] {
   return [...new Set(found)];
 }
 
+// 인프라 배포에 영향이 있는 파일(스택·함수 코드·계약·의존성). 건너뛴 커밋을 그 이슈에 알릴지 정할 때 씀
+const INFRA_PATHS = [
+  "infra/",
+  "services/",
+  "packages/contracts/",
+  "package.json",
+  "package-lock.json",
+];
+
+export function touchesInfra(paths: readonly string[]): boolean {
+  return paths.some((f) =>
+    INFRA_PATHS.some((p) => (p.endsWith("/") ? f.startsWith(p) : f === p)),
+  );
+}
+
 // 12자리 AWS 계정 번호를 <계정>으로(이슈 댓글은 공개 저장소에 남음)
 export function redactAccount(text: string): string {
   return text.replace(/(?<!\d)\d{12}(?!\d)/g, "<계정>");

@@ -34,6 +34,7 @@ import {
   formatTable,
   isEmptyChangeSet,
   linkedIssues,
+  touchesInfra,
   redactAccount,
   REGION,
   STACK_NAME,
@@ -69,8 +70,13 @@ const env = (name) => {
   return value;
 };
 
+// 멈추기 전에 한 번 부르는 알림(승인 실행 중이면 이슈 댓글). 알림 안에서 다시 멈춰도 되풀이하지 않음
+let beforeFail = null;
 function fail(message) {
   console.error(`::error::${redactAccount(message)}`);
+  const hook = beforeFail;
+  beforeFail = null;
+  if (hook) hook(message);
   process.exit(1);
 }
 
@@ -157,6 +163,30 @@ function postComment(body) {
       console.log(`::warning::#${n}에 댓글을 남기지 못했어요`);
     }
   }
+}
+
+// 이 커밋을 머지한 PR 중 인프라 배포에 영향이 있는 파일을 바꾼 것이 있는지. 읽지 못하면 있다고 봄(알림을 빠뜨리지 않음)
+function prsTouchInfra() {
+  const pulls = run("gh", ["api", `repos/${repo}/commits/${sha}/pulls`], {
+    allowFail: true,
+  });
+  if (pulls.status !== 0) return true;
+  for (const pr of JSON.parse(pulls.stdout)) {
+    const files = run(
+      "gh",
+      [
+        "api",
+        "--paginate",
+        `repos/${repo}/pulls/${pr.number}/files`,
+        "--jq",
+        ".[].filename",
+      ],
+      { allowFail: true },
+    );
+    if (files.status !== 0) return true;
+    if (touchesInfra(files.stdout.split("\n").filter(Boolean))) return true;
+  }
+  return false;
 }
 
 // ── 공통: main·계정·스택·정책 ──
@@ -398,10 +428,14 @@ async function plan() {
   const superseded = () => {
     const head = mainHead();
     if (head === sha) return false;
-    summary(
-      `### 인프라 배포 건너뜀\n\nmain이 이미 ${head.slice(0, 7)}로 앞서 있어요. 그 커밋의 CI가 끝나면 그 실행이 배포해요.`,
-    );
+    const text = `main이 이미 ${head.slice(0, 7)}로 앞서 있어요. 이 커밋은 따로 배포하지 않고, 그 커밋의 자동 배포에 함께 반영돼요(그 커밋의 CI가 실패하면 반영되지 않음).`;
+    summary(`### 인프라 배포 건너뜀\n\n${text}`);
     output("kind", "superseded");
+    // 인프라에 영향이 있는 PR이었으면 그 이슈에도 남김(다음 커밋 결과 댓글은 다음 커밋의 이슈에만 달림)
+    if (prsTouchInfra())
+      postComment(
+        `## 인프라 자동 배포 건너뜀 (${VIA})\n\n- 커밋: ${subject}\n- ${text}\n- 실행 기록: ${runUrl}\n`,
+      );
     return true;
   };
   if (superseded()) return;
@@ -520,6 +554,12 @@ async function plan() {
 
 async function execute() {
   const name = env("CHANGE_SET");
+  // 승인했는데 실행하지 않고 끝나면(어느 단계에서 멈추든) 이슈에 '승인 대기' 댓글만 남지 않게 알림
+  // 실행을 시작한 뒤의 실패는 executeAndWait가 따로 댓글을 남기므로 그 전까지만 걺
+  beforeFail = (message) =>
+    postComment(
+      `## 승인한 인프라 변경 세트를 실행하지 않음 (${VIA})\n\n- 커밋: ${subject}\n- 변경 세트: \`${name}\` (스택은 바뀌지 않음)\n- 이유: ${redactAccount(message)}\n- 실행 기록: ${runUrl}\n`,
+    );
   // 이 실행의 커밋으로 만든 변경 세트만(다른 커밋의 변경 세트를 승인으로 실행하지 않음)
   if (!name.startsWith(`deploy-${sha.slice(0, 7)}-`))
     fail(`변경 세트 ${name}는 이 커밋(${sha.slice(0, 7)})의 것이 아니에요.`);
@@ -550,6 +590,7 @@ async function execute() {
       `변경 세트를 실행할 수 없는 상태예요: ${changeSet.Status}/${changeSet.ExecutionStatus}. 새 배포가 먼저 실행됐다면 그 결과를 확인해 주세요.`,
     );
   }
+  beforeFail = null;
   summary(
     `### 승인받은 변경 세트 실행\n\n- 커밋: ${subject}\n- 변경 세트: \`${name}\`\n\n${tableMarkdown(rows)}`,
   );
