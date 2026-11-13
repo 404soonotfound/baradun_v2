@@ -1,5 +1,5 @@
 import type { BeachStatus } from "@baradun/contracts";
-import { sanitizeResultMessage } from "../collect/log";
+import { normalizeResultCode, sanitizeResultMessage } from "../collect/log";
 import {
   formatUtcIso,
   KST_OFFSET_MS,
@@ -79,13 +79,12 @@ export function parseRipResponse(
   // 자료 없음(03)은 body 없이 header만 옴(2026-10-27 실응답) → body 검사보다 먼저 판정
   if (resultCode === "03") return { status: "none" };
   if (resultCode !== "00") {
-    const code =
-      typeof resultCode === "string" ? resultCode : String(resultCode ?? "");
+    const code = normalizeResultCode(resultCode);
     const message = sanitizeResultMessage(json.header.resultMsg);
     return {
       status: "failed",
-      reason: `result:${code}`,
-      ...(code !== "" ? { code } : {}),
+      reason: `result:${code ?? "missing"}`,
+      ...(code !== undefined ? { code } : {}),
       ...(message !== undefined ? { message } : {}),
     };
   }

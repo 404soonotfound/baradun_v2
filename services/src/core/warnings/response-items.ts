@@ -3,7 +3,7 @@
 // 목록 자리가 없으면 null(빈 목록으로 바꾸지 않음). 행 하나하나의 모양 검사는 부르는 쪽이 함
 // 결과 코드 읽기(03 처리)는 API마다 달라 부르는 쪽이 함(getPwnCd 실패, getTsunamiMsg 발표 없음 확인, 아키텍처 4장)
 
-import { maskRequestKeys } from "../collect/log";
+import { sanitizeResultMessage } from "../collect/log";
 
 export type WarningSource = "getPwnCd" | "getTsunamiMsg";
 export type ResponseFailure =
@@ -40,14 +40,7 @@ export function sourceResponseFailure(
   header: Readonly<Record<string, unknown>>,
   code: string | null,
 ): ResponseFailure {
-  const rawMessage = header.resultMsg;
-  const message =
-    typeof rawMessage === "string"
-      ? maskRequestKeys(rawMessage)
-          .replace(/[\u0000-\u001f\u007f]+/g, " ")
-          .replace(/\s+/g, " ")
-          .trim() || null
-      : null;
+  const message = sanitizeResultMessage(header.resultMsg) ?? null;
   return {
     status: "failed",
     reason: `resultCode:${code ?? ""}`,
