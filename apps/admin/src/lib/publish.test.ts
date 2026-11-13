@@ -1,8 +1,13 @@
 import { describe, expect, it } from "vitest";
+import { pageRows, pageWindow } from "./paging";
 import {
   canRollBackTo,
+  hasHeldNotices,
+  isRunSkipped,
   jobInFlight,
   jobPhase,
+  nonZeroCategoryDeltas,
+  pendingNoticeDiff,
   reasonKey,
   signed,
   versionIso,
@@ -94,5 +99,125 @@ describe("signed · versionIso", () => {
     expect(signed(0)).toBe("0");
     expect(versionIso("20261112T054500Z")).toBe("2026-11-12T05:45:00Z");
     expect(versionIso("2026-11-12")).toBeNull();
+  });
+});
+
+describe("nonZeroCategoryDeltas", () => {
+  it("0이 아닌 상태 개수 차이만 부호와 함께 돌려주고 null이면 빈 배열", () => {
+    expect(
+      nonZeroCategoryDeltas({ clear: -3, unavailable: 3, undetermined: 0 }),
+    ).toEqual([
+      { category: "clear", delta: -3, signed: "−3" },
+      { category: "unavailable", delta: 3, signed: "+3" },
+    ]);
+    expect(
+      nonZeroCategoryDeltas({ clear: 0, unavailable: 0, undetermined: 0 }),
+    ).toEqual([]);
+    expect(nonZeroCategoryDeltas(null)).toEqual([]);
+  });
+});
+
+describe("isRunSkipped · hasHeldNotices", () => {
+  it("바뀐 게 없어 건너뛴 실행과 되돌림 상태 공지 유무를 판정한다", () => {
+    expect(
+      isRunSkipped({
+        at: "2026-11-12T06:00:00Z",
+        source: "auto",
+        result: "unchanged",
+        version: "20261112T060000Z",
+      }),
+    ).toBe(true);
+    expect(
+      isRunSkipped({
+        at: "2026-11-12T06:00:00Z",
+        source: "auto",
+        result: "published",
+        version: "20261112T060000Z",
+      }),
+    ).toBe(false);
+    expect(isRunSkipped(null)).toBe(false);
+
+    expect(
+      hasHeldNotices({
+        ok: true,
+        version: 2,
+        items: [
+          {
+            id: "n-1",
+            title: "안내",
+            target: "20261112T050000Z",
+            at: "2026-11-12T05:30:00Z",
+            restoresLive: false,
+          },
+        ],
+      }),
+    ).toBe(true);
+    expect(hasHeldNotices({ ok: true, version: 0, items: [] })).toBe(false);
+    expect(hasHeldNotices({ ok: false })).toBe(false);
+  });
+});
+
+describe("pendingNoticeDiff", () => {
+  it("실제 공지 필드로 추가·삭제 줄을 만든다", () => {
+    const added = pendingNoticeDiff(
+      {
+        id: "n-1",
+        change: "add",
+        kind: "general",
+        title: "안내",
+        startsAt: "2026-11-12T06:00:00Z",
+        endsAt: null,
+      },
+      "일반 공지",
+      (iso) => iso,
+      "종료 없음",
+    );
+    expect(added.added).toBe(4);
+    expect(added.removed).toBe(0);
+    expect(added.lines[0]).toEqual({
+      beforeLine: null,
+      afterLine: 1,
+      kind: "add",
+      text: "kind: 일반 공지",
+    });
+
+    const removed = pendingNoticeDiff(
+      {
+        id: "n-2",
+        change: "remove",
+        kind: "maintenance_notice",
+        title: "점검",
+        startsAt: "2026-11-12T06:00:00Z",
+        endsAt: "2026-11-12T07:00:00Z",
+      },
+      "점검 예고",
+      (iso) => iso,
+      "종료 없음",
+    );
+    expect(removed.added).toBe(0);
+    expect(removed.removed).toBe(4);
+    expect(removed.lines[3]?.kind).toBe("del");
+  });
+});
+
+describe("게시 기록 페이징", () => {
+  it("한 쪽 5행 기준으로 범위를 계산하고 마지막 쪽을 넘기지 않는다", () => {
+    const rows = Array.from({ length: 12 }, (_, i) => i + 1);
+    expect(pageWindow(rows.length, 0)).toEqual({
+      page: 0,
+      pages: 3,
+      from: 1,
+      to: 5,
+      atStart: true,
+      atEnd: false,
+    });
+    expect(pageRows(rows, 1)).toEqual([6, 7, 8, 9, 10]);
+    expect(pageRows(rows, 2)).toEqual([11, 12]);
+    expect(pageWindow(rows.length, 9)).toMatchObject({
+      page: 2,
+      from: 11,
+      to: 12,
+      atEnd: true,
+    });
   });
 });

@@ -251,10 +251,20 @@ test("게시 현황: 현재 게시본·다음 자동 게시·대기 공지·되�
     "특보 없음 −3 · 이용불가 +3",
   );
   await expect(history(page).nth(0)).toContainText("현재 게시본");
+  await expect(history(page).nth(1)).toContainText("게시 안 함");
   await expect(history(page).nth(1)).toContainText(
-    "게시 안 함 · 해변 ID 대조 불일치(누락·추가·중복)",
+    "해변 ID 대조 불일치(누락·추가·중복)",
   );
   await expect(history(page).nth(2)).toContainText("확인 못 함(이전 기록)");
+  await expect(page.getByText("앱 설정")).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "GitHub에서 보기" }),
+  ).toBeVisible();
+  await expect(
+    page
+      .getByRole("region", { name: "대기 중인 변경" })
+      .getByText("title.ko: 새벽 점검 예고"),
+  ).toBeVisible();
   await expectNoA11yViolations(page);
 });
 
@@ -428,13 +438,23 @@ test(
   },
 );
 
-test("다시 적용: 되돌림 포인터 version을 보내고 다음 게시 때 반영된다고 알린다", async ({
+test("다시 적용: 확인 창에서 취소에 먼저 포커스하고, 확인하면 되돌림 포인터 version을 보내 다음 게시 때 반영된다고 알린다", async ({
   page,
 }) => {
   await signIn(page);
   const calls = await mockPublish(page);
   await openPublish(page);
-  await page.getByRole("button", { name: "다시 적용" }).click();
+  const trigger = page.getByRole("button", { name: "다시 적용" });
+  await trigger.click();
+  const dialog = page.getByRole("dialog", { name: /다시 적용할까요\?/ });
+  await expect(dialog.getByRole("button", { name: "취소" })).toBeFocused();
+  await dialog.getByRole("button", { name: "취소" }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(trigger).toBeFocused();
+  expect(calls.writes).toHaveLength(0);
+
+  await trigger.click();
+  await dialog.getByRole("button", { name: "다시 적용" }).click();
   await expect(
     page.getByText("다시 적용했어요 · 다음 게시 때 앱에 반영돼요"),
   ).toBeVisible();
@@ -480,8 +500,9 @@ test("변경 미리보기: 분류별 수와 바뀌는 해변(사유 먼저)을 �
           },
   });
   await openPublish(page);
-  await page.getByRole("button", { name: "변경 미리보기" }).click();
-  const panel = page.getByRole("region", { name: "변경 미리보기" });
+  const previewTrigger = page.getByRole("button", { name: "변경 미리보기" });
+  await previewTrigger.click();
+  const panel = page.getByRole("dialog", { name: "변경 미리보기" });
   await expect(panel).toContainText("미리보기가 늦어져 멈췄어요");
   fail = false;
   await panel.getByRole("button", { name: "다시 시도" }).click();
@@ -492,6 +513,9 @@ test("변경 미리보기: 분류별 수와 바뀌는 해변(사유 먼저)을 �
   ).toBeVisible();
   await expect(panel).toContainText("판단 상태는 특보·관측값으로만 바뀌어요");
   await expectNoA11yViolations(page);
+  await page.keyboard.press("Escape");
+  await expect(panel).toHaveCount(0);
+  await expect(previewTrigger).toBeFocused();
 });
 
 test("칸을 읽지 못하면 '확인 못 함'으로 알리고 빈 목록처럼 보이지 않는다", async ({
@@ -579,6 +603,10 @@ test("다른 운영자가 연 진행 중 작업은 이 탭의 끝난 작업보�
   // 새로고침하지 않으므로 이 탭의 끝난 작업은 메모리에 남아 있음
   other = true;
   await page.getByRole("button", { name: "다시 적용" }).click();
+  await page
+    .getByRole("dialog", { name: /다시 적용할까요\?/ })
+    .getByRole("button", { name: "다시 적용" })
+    .click();
   await expect(
     page.getByText("다시 적용했어요 · 다음 게시 때 앱에 반영돼요"),
   ).toBeVisible();
@@ -662,4 +690,122 @@ test("대기 공지를 읽지 못하면 지금 게시 확인 창에 그 사실�
   await expect(page.getByRole("dialog")).toContainText(
     "대기 중인 변경을 불러오지 못해 무엇이 함께 나가는지 보여 드리지 못해요.",
   );
+});
+
+test("게시 기록 페이징과 실패 행 '이유' 펼치기·접기가 동작한다", async ({
+  page,
+}) => {
+  await signIn(page);
+  const items = Array.from({ length: 12 }, (_, idx) => {
+    const atMs = base - idx * 5 * MINUTE;
+    if (idx === 1) {
+      return {
+        result: "failed",
+        version: version(atMs),
+        at: iso(atMs),
+        source: "auto",
+        reason: "beach_ids",
+      };
+    }
+    if (idx === 6) {
+      return {
+        result: "failed",
+        version: version(atMs),
+        at: iso(atMs),
+        source: "auto",
+        reason: "contract",
+      };
+    }
+    return {
+      result: "published",
+      version: version(atMs),
+      at: iso(atMs),
+      source: "auto",
+      beachCount: 206,
+      changes: {
+        notices: false,
+        categoryCounts: counts,
+        categoryDelta: { clear: 0, unavailable: 0, undetermined: 0 },
+        delayedBeaches: 0,
+        delayedDelta: 0,
+      },
+      gapBefore: false,
+    };
+  });
+  await mockPublish(page, {
+    overview: () => overview({ history: { ok: true, items } }),
+  });
+  await openPublish(page);
+
+  await expect(history(page)).toHaveCount(5);
+  const pager = page.getByRole("navigation", { name: "게시 기록 페이지" });
+  await expect(pager).toContainText("12건 중 1–5");
+  await expect(
+    pager.getByRole("button", { name: "이전 게시 기록 페이지" }),
+  ).toBeDisabled();
+
+  // 1페이지 실패 행은 기본 선택되어 '닫기' 상태, 누르면 접히고 다시 '이유'로 바뀐다
+  const togglePage1 = history(page)
+    .nth(1)
+    .getByRole("button", { name: /닫기|이유/ });
+  await expect(togglePage1).toHaveAttribute("aria-expanded", "true");
+  await togglePage1.click();
+  await expect(togglePage1).toHaveAttribute("aria-expanded", "false");
+  await togglePage1.click();
+  await expect(togglePage1).toHaveAttribute("aria-expanded", "true");
+
+  await pager.getByRole("button", { name: "다음 게시 기록 페이지" }).click();
+  await expect(pager).toContainText("12건 중 6–10");
+  await expect(history(page)).toHaveCount(5);
+  const togglePage2 = history(page)
+    .nth(1)
+    .getByRole("button", { name: /이유|닫기/ });
+  await togglePage2.click();
+  const checksRegion = page.getByRole("region", { name: /검증 결과/ });
+  await expect(checksRegion).toBeVisible();
+  await expect(checksRegion).toContainText("데이터 형식 검사 실패");
+
+  await pager.getByRole("button", { name: "다음 게시 기록 페이지" }).click();
+  await expect(pager).toContainText("12건 중 11–12");
+  await expect(history(page)).toHaveCount(2);
+  await expect(
+    pager.getByRole("button", { name: "다음 게시 기록 페이지" }),
+  ).toBeDisabled();
+});
+
+test("지금 게시 확인 창은 Esc로 닫으면 누른 버튼으로 포커스가 돌아온다", async ({
+  page,
+}) => {
+  await signIn(page);
+  await mockPublish(page);
+  await openPublish(page);
+
+  const publishTrigger = page.getByRole("button", { name: "지금 게시" });
+  await publishTrigger.click();
+  const dialog = page.getByRole("dialog", {
+    name: "대기 중인 변경 1건을 지금 게시할까요?",
+  });
+  await expect(dialog.getByRole("button", { name: "취소" })).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+  await expect(publishTrigger).toBeFocused();
+});
+
+test("편집 권한(editor)은 데이터 게시를 볼 수 있지만 지금 게시·되돌리기·다시 적용이 비활성이다", async ({
+  page,
+}) => {
+  await signIn(page, ["editor"]);
+  await mockPublish(page);
+  await openPublish(page);
+
+  await expect(page.getByRole("button", { name: "지금 게시" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "다시 적용" })).toBeDisabled();
+  await expect(
+    history(page).nth(2).getByRole("button", { name: /되돌리기/ }),
+  ).toBeDisabled();
+  await expect(
+    page.getByText(
+      '"노출 변경" 권한이 필요해요. 운영 책임자에게 요청해 주세요.',
+    ),
+  ).toBeVisible();
 });
