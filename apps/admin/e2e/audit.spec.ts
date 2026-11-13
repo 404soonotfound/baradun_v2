@@ -82,7 +82,7 @@ const COUNTS = {
 
 async function mockAudit(
   page: Page,
-  options: { status?: number } = {},
+  options: { status?: number; items?: unknown[] } = {},
 ): Promise<URLSearchParams[]> {
   const calls: URLSearchParams[] = [];
   await page.route(/\/ops\/audit(\?.*)?$/, async (route: Route) => {
@@ -100,9 +100,11 @@ async function mockAudit(
     }
     const cursor = params.get("cursor");
     const actor = params.get("actor");
-    const items = cursor
-      ? [entry(30, { action: "notice.delete", changes: ["deletedAt"] })]
-      : PAGE_1.filter((e) => !actor || e.actorSub === actor);
+    const items =
+      options.items ??
+      (cursor
+        ? [entry(30, { action: "notice.delete", changes: ["deletedAt"] })]
+        : PAGE_1.filter((e) => !actor || e.actorSub === actor));
     await route.fulfill({
       contentType: "application/json",
       body: JSON.stringify({
@@ -333,4 +335,48 @@ test("데모 계정은 변경 이력을 요청하지 않고 볼 수 없다고 �
     page.getByText("데모 계정은 변경 이력을 볼 수 없어요."),
   ).toBeVisible();
   expect(calls).toHaveLength(0);
+});
+
+test("누가 칸은 이메일·임시 표시·데모 계정을 구분해 보여 준다", async ({
+  page,
+}) => {
+  await signIn(page);
+  await mockAudit(page, {
+    items: [
+      entry(1, {
+        actorSub: SUB_A,
+        actorEmail: "alice@example.test",
+      }),
+      entry(2, {
+        actorSub: SUB_B,
+        action: "inquiry.update",
+        target: { kind: "inquiry", id: INQUIRY },
+        targetLabel: undefined,
+        notice: undefined,
+        changes: ["status"],
+        statusFrom: "received",
+        statusTo: "in_progress",
+      }),
+      entry(3, {
+        actorSub: "demo-1111",
+        actorKind: "sample",
+        role: "sample",
+        action: "sample.read",
+        target: { kind: "route", id: "GET /ops/me" },
+        targetLabel: undefined,
+        notice: undefined,
+        changes: [],
+      }),
+    ],
+  });
+  await openAudit(page);
+  await expect(
+    page.getByText("alice@example.test").locator("visible=true").first(),
+  ).toBeVisible();
+  await expect(
+    page.getByText("운영자 bbbb").locator("visible=true").first(),
+  ).toBeVisible();
+  await expect(
+    page.getByText("데모 계정").locator("visible=true").first(),
+  ).toBeVisible();
 });
