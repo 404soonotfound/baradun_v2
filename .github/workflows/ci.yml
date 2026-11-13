@@ -26,8 +26,14 @@ jobs:
     outputs:
       web: ${{ steps.filter.outputs.web }}
       web_e2e: ${{ steps.filter.outputs.web_e2e }}
+      web_e2e_specs: ${{ steps.filter.outputs.web_e2e_specs }}
+      web_e2e_specs_files: ${{ steps.filter.outputs.web_e2e_specs_files }}
+      web_e2e_shared: ${{ steps.filter.outputs.web_e2e_shared }}
       admin: ${{ steps.filter.outputs.admin }} # 운영자 사이트(BRD-147)
       admin_e2e: ${{ steps.filter.outputs.admin_e2e }}
+      admin_e2e_specs: ${{ steps.filter.outputs.admin_e2e_specs }}
+      admin_e2e_specs_files: ${{ steps.filter.outputs.admin_e2e_specs_files }}
+      admin_e2e_shared: ${{ steps.filter.outputs.admin_e2e_shared }}
       services: ${{ steps.filter.outputs.services }}
       infra: ${{ steps.filter.outputs.infra == 'true' || steps.filter_config.outputs.changed == 'true' }}
       contracts: ${{ steps.filter.outputs.contracts }} # contracts 변경 여부
@@ -42,6 +48,7 @@ jobs:
         uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         with:
           predicate-quantifier: some-with-excludes # 앱 전체에서 테스트·문서 경로만 제외
+          list-files: json # 변경된 E2E spec만 추가 실행할 때 파일명을 안전하게 전달
           filters: .github/ci-filters.yml
       # 필터 파일의 내용과 관계없이 이 파일을 바꾸면 infra 가드레일을 실행함
       - id: filter_config
@@ -54,7 +61,7 @@ jobs:
         env:
           FILTER_OUTPUTS: ${{ toJSON(steps.filter.outputs) }}
         run: |
-          for area in web web_e2e admin admin_e2e services infra contracts beaches deps agy_review ops_policy map; do
+          for area in web web_e2e web_e2e_specs web_e2e_shared admin admin_e2e admin_e2e_specs admin_e2e_shared services infra contracts beaches deps agy_review ops_policy map; do
             if ! jq -e --arg area "$area" '.[$area] == "true" or .[$area] == "false"' <<< "$FILTER_OUTPUTS" > /dev/null; then
               echo "::error::경로 필터 결과가 없거나 올바르지 않아요: $area"
               exit 1
@@ -75,6 +82,7 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci --no-audit
+      - run: node .github/scripts/check-smoke.mjs web # 필수 안전·접근성 E2E 태그 누락 방지
       - run: npm run check:tokens -w apps/web # 대비·금지 색
       - run: npm run check:messages -w apps/web # ko·en 문구 키
       - run: npm run lint -w apps/web
@@ -126,6 +134,12 @@ jobs:
       # /data/**는 가짜 응답만 씀(운영 데이터·외부 타일 서버에 기대지 않음)
       - if: github.event_name == 'push' || needs.changes.outputs.web_e2e == 'true'
         run: npm run test:e2e:smoke -w apps/web
+      - if: github.event_name == 'pull_request' && needs.changes.outputs.web_e2e_shared == 'true'
+        run: npm run test:e2e -w apps/web # 픽스처·설정 변경은 전체 Chromium 검사
+      - if: github.event_name == 'pull_request' && needs.changes.outputs.web_e2e_shared != 'true' && needs.changes.outputs.web_e2e_specs == 'true'
+        env:
+          CHANGED_E2E_SPECS: ${{ needs.changes.outputs.web_e2e_specs_files }}
+        run: node .github/scripts/run-changed-e2e.mjs web # 바뀐 spec의 비핵심 테스트만 추가 실행
 
   # 운영자 사이트: 린트·타입 검사·단위 테스트 (BRD-147). 빌드·E2E와 나란히 돌림
   admin:
@@ -139,6 +153,7 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci --no-audit
+      - run: node .github/scripts/check-smoke.mjs admin # 필수 로그인·권한 E2E 태그 누락 방지
       - run: npm run lint -w apps/admin
       - run: npm run typecheck -w apps/admin
       - run: npm run test -w apps/admin
@@ -190,6 +205,12 @@ jobs:
         working-directory: apps/admin
       - if: github.event_name == 'push' || needs.changes.outputs.admin_e2e == 'true'
         run: npm run test:e2e:smoke -w apps/admin # chromium(mobile·desktop)
+      - if: github.event_name == 'pull_request' && needs.changes.outputs.admin_e2e_shared == 'true'
+        run: npm run test:e2e -w apps/admin
+      - if: github.event_name == 'pull_request' && needs.changes.outputs.admin_e2e_shared != 'true' && needs.changes.outputs.admin_e2e_specs == 'true'
+        env:
+          CHANGED_E2E_SPECS: ${{ needs.changes.outputs.admin_e2e_specs_files }}
+        run: node .github/scripts/run-changed-e2e.mjs admin
 
   # 백엔드: 린트·타입 검사·테스트(Vitest)
   services:

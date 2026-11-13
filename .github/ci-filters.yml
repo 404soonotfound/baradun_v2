@@ -21,6 +21,12 @@ web_e2e: # PR에서는 테스트·문서만 바뀐 경우를 제외. 새 앱 파
   - "!apps/web/CLAUDE.md"
   - "!apps/web/eslint.config.mjs"
   - "!apps/web/vitest.config.ts"
+web_e2e_specs:
+  - "apps/web/e2e/**/*.spec.ts"
+web_e2e_shared: # spec 밖의 공통 픽스처·도구는 모든 웹 spec에 영향을 줄 수 있음
+  - "apps/web/e2e/**"
+  - "!apps/web/e2e/**/*.spec.ts"
+  - "apps/web/playwright.config.ts"
 admin: &admin
   - *shared
   - "apps/admin/**"
@@ -38,6 +44,12 @@ admin_e2e:
   - "!apps/admin/CLAUDE.md"
   - "!apps/admin/eslint.config.mjs"
   - "!apps/admin/vitest.config.ts"
+admin_e2e_specs:
+  - "apps/admin/e2e/**/*.spec.ts"
+admin_e2e_shared:
+  - "apps/admin/e2e/**"
+  - "!apps/admin/e2e/**/*.spec.ts"
+  - "apps/admin/playwright.config.ts"
 services:
   - *shared
   - "services/**"
