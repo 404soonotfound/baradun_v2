@@ -68,27 +68,29 @@ test("메뉴 순서·지금 화면 표시, 다른 메뉴로 이동하면 aria-cu
 });
 
 for (const scheme of ["light", "dark"] as const) {
-  test(`운영 홈·준비 중 화면 접근성과 가로 스크롤 없음 (${scheme})${scheme === "light" ? " @smoke" : ""}`, async ({
-    page,
-  }) => {
-    await page.emulateMedia({ colorScheme: scheme });
-    const check = async () => {
-      await expectNoA11yViolations(page);
-      expect(
-        await page.evaluate(
-          () =>
-            document.documentElement.scrollWidth -
-            document.documentElement.clientWidth,
-        ),
-      ).toBe(0);
-    };
-    await check();
-    await go(page, "공지");
-    await expect(
-      page.getByRole("heading", { name: "공지", level: 1 }),
-    ).toBeVisible();
-    await check();
-  });
+  test(
+    `운영 홈·준비 중 화면 접근성과 가로 스크롤 없음 (${scheme})`,
+    { tag: scheme === "light" ? "@smoke" : [] },
+    async ({ page }) => {
+      await page.emulateMedia({ colorScheme: scheme });
+      const check = async () => {
+        await expectNoA11yViolations(page);
+        expect(
+          await page.evaluate(
+            () =>
+              document.documentElement.scrollWidth -
+              document.documentElement.clientWidth,
+          ),
+        ).toBe(0);
+      };
+      await check();
+      await go(page, "공지");
+      await expect(
+        page.getByRole("heading", { name: "공지", level: 1 }),
+      ).toBeVisible();
+      await check();
+    },
+  );
 }
 
 test("모바일 서랍: 메뉴 버튼으로 열고 Esc·바깥 누르기로 닫는다, 열린 동안 배경 스크롤을 잠근다", async ({
