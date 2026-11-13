@@ -220,14 +220,14 @@ export async function mockCognito(page: Page, ...handlers: CognitoHandler[]) {
 }
 
 const HOME_PARTS =
-  /\/ops\/(collection|beaches\/published|inquiries|notices|audit|stats)(\?.*)?$/;
+  /\/ops\/(collection|beaches\/published|inquiries|notices|stats)(\?.*)?$/;
 
 export async function mockOps(
   page: Page,
   me: { status: number; body: unknown },
 ) {
   const calls: Record<string, string>[] = [];
-  // 운영 홈(/)은 로그인하자마자 요약용 운영 API 6곳을 읽음(ADM-HOME). 다른 화면 시험의 가짜 응답·호출 수에
+  // 운영 홈(/)은 로그인하자마자 요약용 운영 API 5곳을 읽음(ADM-HOME). 다른 화면 시험의 가짜 응답·호출 수에
   // 섞이지 않게, 홈에서 나간 요청만 여기서 받고 그 밖은 원래 가짜 응답으로 넘김. 홈 시험은 이 뒤에 자기 응답을 둠
   await page.route(HOME_PARTS, async (route) => {
     if (new URL(route.request().frame().url()).pathname !== "/") {

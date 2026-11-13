@@ -57,7 +57,10 @@ async function openStats(page: Page) {
 const section = (page: Page, name: string) =>
   page.getByRole("region", { name, exact: true });
 
-test("정상 조회: 머리 '지금 사용 중', 기본 28일, 해변 이름, 응답에 없는 값은 확인 못 함, 기간 전환", async ({
+const MISSING_ALL =
+  "일별·시간대별 추이, 앞 기간 비교, 많이 본 화면, 들어온 경로는 아직 보여 드릴 수 없어요";
+
+test("정상 조회: 머리 '지금 사용 중', 기본 28일, 해변 이름, 응답에 없는 칸은 숨기고 한 줄 안내, 기간 전환", async ({
   page,
 }) => {
   const ranges = await mockStats(page, (range) => ({
@@ -86,14 +89,20 @@ test("정상 조회: 머리 '지금 사용 중', 기본 28일, 해변 이름, �
   await expect(beaches.getByText("경포해수욕장")).toBeVisible();
   await expect(beaches.getByText(/\/spots\/|haeundae|gwangan-ri/)).toHaveCount(0);
 
-  // 응답에 없는 값: 지어내지 않고 같은 자리에 확인 못 함
-  await expect(page.getByText("그래프 확인 못 함")).toHaveCount(3);
-  await expect(
-    section(page, "많이 본 화면").getByText("확인 못 함", { exact: true }),
-  ).toBeVisible();
-  await expect(
-    section(page, "들어온 경로").getByText("확인 못 함", { exact: true }),
-  ).toBeVisible();
+  // 응답에 칸이 없는 값: 지어내지 않고 칸을 숨김 + 기간 표시 아래 한 줄
+  await expect(page.getByText(MISSING_ALL, { exact: true })).toBeVisible();
+  for (const name of [
+    "일별 사용자",
+    "시간대별 사용자",
+    "일별 화면 조회",
+    "많이 본 화면",
+    "들어온 경로",
+  ]) {
+    await expect(section(page, name)).toHaveCount(0);
+  }
+  await expect(page.getByText("새 사용자 비율")).toHaveCount(0);
+  // 지운 칸: 수집 이벤트 목록(GH-453 검토)
+  await expect(page.getByText("수집 이벤트")).toHaveCount(0);
   await expect(section(page, "기기").getByText("모바일")).toBeVisible();
   await expect(section(page, "화면 언어").getByText("한국어")).toBeVisible();
   await expect(page.getByText(/일부 숫자 (숨김|제한)이 있어요/)).toHaveCount(0);
@@ -106,6 +115,55 @@ test("정상 조회: 머리 '지금 사용 중', 기본 28일, 해변 이름, �
   ).toBeVisible();
   await expect(page.locator("dl").getByText("180", { exact: true })).toBeVisible();
   expect(ranges).toEqual(["28d", "today"]);
+});
+
+test("응답에 칸이 생기면 그 칸이 다시 보이고, 한 줄 안내에서 빠진다(null은 칸 안 실패)", async ({
+  page,
+}) => {
+  const base = localStatsView("28d");
+  await mockStats(page, () => ({
+    body: {
+      ...base,
+      period: {
+        ...base.period,
+        daily: [
+          { date: "2026-11-12", activeUsers: 120, pageViews: 300 },
+          { date: "2026-11-13", activeUsers: null, pageViews: 280 },
+        ],
+        hourly: null,
+        newUsers: 990,
+        previous: { activeUsers: 3300, pageViews: null },
+        topScreens: [
+          { path: "/", title: null, pageViews: 5 },
+          { path: "/search", title: "찾기", pageViews: 3 },
+        ],
+      },
+    },
+  }));
+  await openStats(page);
+
+  await expect(
+    page.getByText("들어온 경로는 아직 보여 드릴 수 없어요", { exact: true }),
+  ).toBeVisible();
+  await expect(section(page, "들어온 경로")).toHaveCount(0);
+  // 일별: 그래프 + 화면 읽기용 표(값이 없는 날은 0이 아닌 –)
+  const daily = section(page, "일별 사용자");
+  await expect(daily.getByText("11/12").first()).toBeAttached();
+  await expect(daily.locator("rect")).toHaveCount(1);
+  await expect(daily.getByRole("cell", { name: "–" })).toBeAttached();
+  await expect(section(page, "일별 화면 조회").locator("rect")).toHaveCount(2);
+  // 시간대별 리포트 실패(null): 칸은 두고 그 자리에서 실패
+  await expect(
+    section(page, "시간대별 사용자").getByText(/이 항목을 불러오지 못했어요/),
+  ).toBeVisible();
+  // 새 사용자 비율 990 ÷ 3,960 = 25%, 사용자 앞 기간 대비 +20%(화면 조회는 앞 기간 값이 없어 배지 없음)
+  await expect(page.getByText("새 사용자 비율")).toBeVisible();
+  await expect(page.getByText("25%", { exact: true })).toBeVisible();
+  await expect(page.getByText("+20%")).toHaveCount(1);
+  const screens = section(page, "많이 본 화면");
+  await expect(screens.getByText("찾기")).toBeVisible();
+  await expect(screens.getByText("이름 확인 못 함")).toBeVisible();
+  await expectNoA11yViolations(page);
 });
 
 test("이름표에 없는 해변은 slug·경로가 아니라 '이름 확인 못 함'", async ({
@@ -157,11 +215,14 @@ test("숫자 숨김 안내는 응답을 받은 뒤 metadata가 있을 때만, �
     });
   });
   await openStats(page);
-  // 응답 전: 자리표시만, 숨김 안내 자리는 두지 않음(L7). 차트 자리는 그대로
+  // 응답 전: 자리표시만, 숨김 안내 자리는 두지 않음(L7). 응답에 없을 칸은 자리표시도 두지 않음
   await expect(page.locator("#main .sk").first()).toBeVisible();
   await expect(page.getByText(/일부 숫자 숨김이 있어요/)).toHaveCount(0);
-  await expect(page.getByText("그래프 확인 못 함")).toHaveCount(3);
+  await expect(page.getByText(MISSING_ALL)).toHaveCount(0);
+  await expect(section(page, "일별 사용자")).toHaveCount(0);
+  await expect(section(page, "많이 본 화면")).toHaveCount(0);
   release();
+  await expect(page.getByText(MISSING_ALL, { exact: true })).toBeVisible();
 
   await expect(page.getByText("잠시 저장된 응답")).toBeVisible();
   const notice = page
