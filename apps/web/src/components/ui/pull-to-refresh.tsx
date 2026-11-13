@@ -53,8 +53,27 @@ export function PullToRefresh({
     setPullDistance(0);
   }
 
+  function shouldIgnoreTouch(target: EventTarget | null): boolean {
+    if (!(target instanceof Element)) return false;
+    // 열린 시트·대화상자 안의 스와이프는 당김 새로고침에서 제외함
+    if (target.closest("dialog[open], [role='dialog']")) return true;
+    let el: Element | null = target;
+    while (el && el !== containerRef.current) {
+      const { overflowY } = getComputedStyle(el);
+      if (
+        (overflowY === "auto" || overflowY === "scroll") &&
+        el.scrollHeight > el.clientHeight &&
+        el.scrollTop > 0
+      ) {
+        return true;
+      }
+      el = el.parentElement;
+    }
+    return false;
+  }
+
   function handleTouchStart(e: React.TouchEvent<HTMLDivElement>) {
-    if (refreshing || window.scrollY > 0) return;
+    if (refreshing || window.scrollY > 0 || shouldIgnoreTouch(e.target)) return;
     const y = e.touches[0]?.clientY;
     if (y === undefined) return;
     startYRef.current = y;
