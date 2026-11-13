@@ -740,6 +740,7 @@
     "colSummary": "바뀐 내용",
     "colWhere": "바뀐 곳",
     "operator": "운영자 {name}",
+    "demoActor": "데모 계정",
     "actorTitle": "운영자 ID {sub} · {role}",
     "role": {
       "viewer": "보기 권한",

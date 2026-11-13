@@ -51,15 +51,17 @@ const operatorName = (sub: string) =>
   fill(t.operator, { name: sub.slice(0, 4) });
 
 function actorLabel(
-  item: Pick<AuditView, "actorSub" | "actorEmail">,
+  item: Pick<AuditView, "actorSub" | "actorKind" | "actorEmail">,
 ): string {
+  if (item.actorKind === "sample") return t.demoActor;
   const email = item.actorEmail?.trim();
   return email ? email : operatorName(item.actorSub);
 }
 
 function actorInitial(
-  item: Pick<AuditView, "actorSub" | "actorEmail">,
+  item: Pick<AuditView, "actorSub" | "actorKind" | "actorEmail">,
 ): string {
+  if (item.actorKind === "sample") return t.demoActor.slice(0, 1);
   const email = item.actorEmail?.trim();
   return (email ? email : item.actorSub).slice(0, 1).toUpperCase();
 }
@@ -199,7 +201,10 @@ function Who({ item }: { item: AuditView }) {
     <span
       className="inline-flex items-center gap-2"
       title={fill(t.actorTitle, {
-        sub: item.actorEmail?.trim() || item.actorSub,
+        sub:
+          item.actorKind === "sample"
+            ? t.demoActor
+            : item.actorEmail?.trim() || item.actorSub,
         role: roleLabel(item.role),
       })}
     >
