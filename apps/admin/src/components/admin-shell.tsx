@@ -234,6 +234,18 @@ function NavList({
   );
 }
 
+// 로그아웃 뒤 그 풀의 로그인 화면으로(데모 계정은 숨은 데모 주소). PC 사용자 칸과 태블릿·모바일 계정 칸이 함께 씀
+function useLogout(): () => void {
+  const router = useRouter();
+  const session = useAuthSession();
+  const snapshot = useSessionSnapshot();
+  return () => {
+    const demo = snapshot.status !== "signed_out" && snapshot.pool === "demo";
+    void session.logout();
+    router.replace(demo ? "/login/demo/" : "/login/");
+  };
+}
+
 function AccountBlock({
   tip,
   onNavigate,
@@ -242,10 +254,9 @@ function AccountBlock({
   onNavigate?: () => void;
 }) {
   const compact = tip !== undefined;
-  const router = useRouter();
   const pathname = usePathname();
-  const session = useAuthSession();
   const snapshot = useSessionSnapshot();
+  const logout = useLogout();
   if (snapshot.status === "signed_out") return null;
   const role = roleLabel(snapshot.pool, snapshot.groups);
   const linkClass = `flex min-h-touch items-center gap-2.5 rounded-admin-control px-2 text-body whitespace-nowrap hover:bg-bg-page lg:min-h-admin-control ${compact ? "justify-center" : ""}`;
@@ -280,10 +291,7 @@ function AccountBlock({
         aria-label={compact ? t.logout : undefined}
         {...(tip ? tip(t.logout) : {})}
         className={`${linkClass} font-medium text-text-body`}
-        onClick={() => {
-          void session.logout();
-          router.replace(snapshot.pool === "demo" ? "/login/demo/" : "/login/");
-        }}
+        onClick={logout}
       >
         <LogOut
           aria-hidden="true"
@@ -483,10 +491,9 @@ function StatusBlock({ status }: { status: ShellStatus }) {
 // 메뉴는 단추 위로 펼침. Esc·바깥 누르기·포커스가 밖으로 나가면 닫고, Esc면 단추로 포커스를 돌려줌
 // 메뉴는 보이는 자리(위)와 달리 DOM에서 단추 뒤에 둠 → 단추에서 Tab으로 바로 메뉴 항목에 닿음
 function UserRow() {
-  const router = useRouter();
   const pathname = usePathname();
-  const session = useAuthSession();
   const snapshot = useSessionSnapshot();
+  const logout = useLogout();
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLDivElement>(null);
   const button = useRef<HTMLButtonElement>(null);
@@ -565,10 +572,7 @@ function UserRow() {
             className={`${item} text-text-body`}
             onClick={() => {
               setOpen(false);
-              void session.logout();
-              router.replace(
-                snapshot.pool === "demo" ? "/login/demo/" : "/login/",
-              );
+              logout();
             }}
           >
             <LogOut
