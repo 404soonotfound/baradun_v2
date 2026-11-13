@@ -29,11 +29,17 @@ const SHORT_TEXT = [
 
 const str = (v) => (v == null ? "" : String(v));
 const shorten = (v) => SHORT_TEXT.reduce((s, [from, to]) => (s === from ? to : s), str(v));
+// '실응답 2026-10-20T15:00Z HTTP 200', 보충 저장본을 쓴 행은 ' + 보충 2026-11-13T02:00Z HTTP 200'을 붙임
 const responseCheck = (v) => {
-  const m = str(v).match(/^실응답 (?:(\d+차) )?저장본 재사용\(([^,]+), sea_obs·kma_buoy HTTP ([^,]+), 새 호출 없음\)$/);
-  if (!m) return shorten(v);
+  const [head, ...sups] = str(v).split(" + ");
+  const m = head.match(/^실응답 (?:(\d+차) )?저장본 재사용\(([^,]+), sea_obs·kma_buoy HTTP ([^,]+), 새 호출 없음\)$/);
+  const supMatches = sups.map((x) => x.match(/^보충 저장본\(([^,]+), sea_obs·kma_buoy HTTP ([^,)]+)\)$/));
+  if (!m || supMatches.some((x) => !x)) return shorten(v);
   const [, ord, tm, http] = m;
-  return ["실응답", ord, tm.replace(":00Z", "Z"), `HTTP ${http}`].filter(Boolean).join(" ");
+  return [
+    ["실응답", ord, tm.replace(":00Z", "Z"), `HTTP ${http}`].filter(Boolean).join(" "),
+    ...supMatches.map(([, stm, shttp]) => `보충 ${stm.replace(":00Z", "Z")} HTTP ${shttp}`),
+  ].join(" + ");
 };
 
 // 'gugun_nm=서구 → 별표5 부산앞바다'. 형식이 다르면(자동 제외 사유 등) 원문 유지

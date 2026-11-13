@@ -14,7 +14,7 @@ import { linkOfficials } from "./official-link.mjs";
 import { METRICS, assignMetric, haversineKm, loadAssignContext, readCsv, round1 } from "./station-assign.mjs";
 import { seaEvidenceFor, zoneProofVerified } from "./zone-proof.mjs";
 import { ANNEX, ANNEX4_BOUNDARIES, ANNEX5, ANNEX5_URL, ANNEX9_CHECKED, ANNEX9_ITEM, ANNEX9_URL, annex9Lookup, splitFull, zoneOfFull } from "./annex.mjs";
-import { BJD_CSV, BJD_LABEL, COAST_DBF, COAST_SHP, COVERAGE_DIR, MOF_XLSX, REGIONS, gisLabel, regionArg, sha256, emdSource, sigunguMatches, verifyPinnedSources } from "./regions.mjs"; // sha256: 고정 해시 대조 때 계산한 값 재사용
+import { BJD_CSV, BJD_LABEL, COAST_DBF, COAST_SHP, COVERAGE_DIR, MOF_XLSX, REGIONS, applyCoordOverrides, gisLabel, regionArg, sha256, emdSource, sigunguMatches, verifyPinnedSources } from "./regions.mjs"; // sha256: 고정 해시 대조 때 계산한 값 재사용
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 verifyPinnedSources(); // 원자료가 data-sources.json 고정 해시와 다르면 판정·생성하지 않음
@@ -87,15 +87,16 @@ const sigunguOfCol = (col) => {
 const emds = readEmdBoundary(EMD_SOURCE, Object.values(REGIONS).map((r) => r.code)).map((e) => ({ ...e, sigungu: sigunguOfCol(e.COL_ADM_SE) }));
 for (const e of emds) if (!e.sigungu) throw new Error(`시군 이름 조회 실패: ${e.COL_ADM_SE}`);
 
-// ── 해변 좌표 (해수부 수집본, WGS84) ──
-const beachesSrc = readCsv("beaches.csv").filter((b) => TARGET_REGIONS.includes(b.sido_nm) && b.lat && b.lon);
+// ── 해변 좌표 (해수부 수집본 + 공식 출처 보정표, WGS84) ──
+const allBeachesSrc = applyCoordOverrides(readCsv("beaches.csv"));
+const beachesSrc = allBeachesSrc.filter((b) => TARGET_REGIONS.includes(b.sido_nm) && b.lat && b.lon);
 const beachPts = beachesSrc.map((b) => {
   const lat = Number(b.lat);
   const lon = Number(b.lon);
   const [x, y] = toEpsg5186(lat, lon);
   const [sx, sy] = toEpsg5186Snyder(lat, lon);
   if (Math.hypot(x - sx, y - sy) > 0.01) throw new Error(`좌표 변환 교차 확인 실패: ${b.sta_nm}`);
-  return { key: `${b.gugun_nm}|${b.sta_nm}`, sido: b.sido_nm, sigungu: b.gugun_nm, lat, lon, x, y };
+  return { key: `${b.gugun_nm}|${b.sta_nm}`, sido: b.sido_nm, sigungu: b.gugun_nm, lat, lon, x, y, coordsSource: b.coords_source };
 });
 
 // ── 1. L1 판정 ──
@@ -126,7 +127,7 @@ function judgeL1(b) {
     method: "COORDINATE_BOUNDARY",
     boundary_source: SOURCES.emd,
     sigungu_link: { source: SOURCES.bjd, rule: "법정구역정보 A4(원천시도시군구코드) + '00000' 법정동코드의 이름과 해수부 gugun_nm 이름 대조(코드끼리 비교 안 함)" },
-    coords: { lat: b.lat, lon: b.lon, source: "tools/coverage/out/beaches.csv (해수부 해수욕장정보, 2026-10-16 수집)", epsg5186: [m1(b.x), m1(b.y)], transform: "WGS84 → EPSG:5186 Krüger 급수, Snyder 급수 교차 확인 1cm 이내" },
+    coords: { lat: b.lat, lon: b.lon, source: b.coordsSource ? `${b.coordsSource} (tools/beaches/coord-overrides.json)` : "tools/coverage/out/beaches.csv (해수부 해수욕장정보, 2026-10-16 수집)", epsg5186: [m1(b.x), m1(b.y)], transform: "WGS84 → EPSG:5186 Krüger 급수, Snyder 급수 교차 확인 1cm 이내" },
     rule: "아키텍처 2.2 결정 4-A: ① 경계 안 → 그 읍면 ② 밖 100m 이하 → 최근접 ③ 300m 안 다른 읍면은 별표9 L1이 같으면 확정 ④ 다르면 자동 제외",
     annex9: { url: ANNEX9_URL, item: ANNEX9_ITEM, checked_at_kst: ANNEX9_CHECKED },
     checked_at_kst: CHECKED_AT,
@@ -418,7 +419,7 @@ const mofRows = readFirstSheet(MOF_XLSX)
   }));
 // 시군 이름 바뀐 곳: 수집본 시군 → 2026 현황 관리청 후보 (인천 중구 → 영종구)
 const nameMap = JSON.parse(readFileSync(join(HERE, "name-map-2026.json"), "utf8"));
-const srcRows = readCsv("beaches.csv").filter((b) => TARGET_REGIONS.includes(b.sido_nm));
+const srcRows = allBeachesSrc.filter((b) => TARGET_REGIONS.includes(b.sido_nm));
 const links = linkOfficials(srcRows, mofRows, nameMap.entries);
 const sidoByKey = new Map(srcRows.map((b) => [`${b.gugun_nm}|${b.sta_nm}`, b.sido_nm]));
 

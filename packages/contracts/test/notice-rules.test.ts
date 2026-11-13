@@ -152,7 +152,7 @@ describe("공지 표현 검사 (D16-D1·D17-8)", () => {
   });
 });
 
-describe("공지 글자 수 (D16-D2)", () => {
+describe("공지 글자 수 (D16-D2·D20-20)", () => {
   it("grapheme 기준으로 센다", () => {
     expect(graphemeLength("👨‍👩‍👧 가")).toBe(3);
     expect(graphemeLength("é")).toBe(1);

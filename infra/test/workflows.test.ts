@@ -568,13 +568,20 @@ describe("PR 필수 웹 검사 (BRD-102 결정 41·42)", () => {
     expect(engines).toMatch(
       /name:\s*admin-site\s*\n\s*path:\s*apps\/admin\/out/,
     );
-    expect(engines).toContain("playwright install --with-deps firefox webkit");
-    // 캐시가 있을 때도 OS 의존성은 설치해야 함(빠지면 두 번째 실행부터 엔진이 시작하지 못함)
-    expect(engines).toContain("playwright install-deps firefox webkit");
+    expect(engines).toContain("engine: [firefox, webkit]");
+    expect(engines).toContain("fail-fast: false");
     expect(engines).toContain(
-      "key: playwright-engines-${{ runner.os }}-${{ hashFiles('package-lock.json') }}",
+      "playwright install --with-deps ${{ matrix.engine }}",
     );
-    expect(engines).toContain("npm run test:e2e:engines -w apps/admin");
+    // 캐시가 있을 때도 OS 의존성은 설치해야 함(빠지면 두 번째 실행부터 엔진이 시작하지 못함)
+    expect(engines).toContain("playwright install-deps ${{ matrix.engine }}");
+    expect(engines).toContain(
+      "key: playwright-${{ matrix.engine }}-${{ runner.os }}-${{ hashFiles('package-lock.json') }}",
+    );
+    expect(engines).toContain(
+      "playwright test --project=desktop-${{ matrix.engine }}",
+    );
+    expect(engines).toContain('E2E_ENGINES: "1"');
   });
 
   it("web·e2e 결과는 ci-ok에 모인다", () => {

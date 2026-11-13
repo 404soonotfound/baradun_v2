@@ -20,7 +20,7 @@ export const NOTICE_KINDS: readonly NoticeKind[] = [
   "maintenance_notice",
 ];
 
-// 글자 수 상한(D16-D2, 넘으면 잘라 내지 않고 확정을 막음)·표현 검사 목록(D17-8)은
+// 글자 수 상한(D16-D2·D20-20, 넘으면 잘라 내지 않고 확정을 막음)·표현 검사 목록(D17-8)은
 // 운영 API와 같은 값을 쓰도록 계약 패키지(@baradun/contracts/notice-rules) 한 곳에 둠
 
 export const NOTICE_STATES = ["live", "scheduled", "draft", "ended"] as const;

@@ -9,16 +9,24 @@ import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { METRICS, assignMetric, loadAssignContext, parseCsv, readCsv as readInputCsv, round1 } from "./station-assign.mjs";
 import { stationSourceOk, zoneProofVerified as verifyZoneProof } from "./zone-proof.mjs";
-import { COVERAGE_DIR, REGIONS, regionArg, regionSlug, verifyPinnedSources } from "./regions.mjs";
+import { COVERAGE_DIR, REGIONS, applyCoordOverrides, regionArg, regionSlug, verifyPinnedSources } from "./regions.mjs";
 import { SLIM_COLS, slimMatrix } from "./slim-matrix.mjs";
 import { checkDraft } from "./check.mjs";
-import { assertSameName, idKey, preserveManual, reserveSlug, validateFinalIdentity, validateIdentity } from "./identity.mjs";
+import { diffMatrix } from "./live-matrix.mjs";
+import { assertSameName, idKey, preserveManual, preserveManualAliases, reserveSlug, validateFinalIdentity, validateIdentity } from "./identity.mjs";
 import { validateBeaches } from "../../packages/contracts/scripts/validate-beaches.mjs";
 import { validateCoverage } from "../../packages/contracts/scripts/coverage-rules.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 // 이 함수는 검증된 쓰기 계획만 반환함. 검증 실패·dry 실행에서는 파일을 쓰지 않음.
-export function buildBeaches({ coverageDir = COVERAGE_DIR, existingDataDir = join(HERE, "../../data"), idsInput = join(HERE, "ids.json"), outputDir, dataOutputDir = outputDir ? join(outputDir, "data") : existingDataDir, idsOutput = outputDir ? join(outputDir, "ids.json") : idsInput, regions = regionArg(), publish = false, verifySources = verifyPinnedSources } = {}) {
+// 고정 해시 대조 + 실응답 지표 매트릭스가 응답 원문·보충 병합 규칙(live-matrix.mjs)으로 다시 만든 값과 같은지 확인
+function verifySourcesAndLiveMatrix(coverageDir) {
+  verifyPinnedSources(coverageDir);
+  const { diffs } = diffMatrix(JSON.parse(readFileSync(join(coverageDir, "responses/metric-matrix.json"), "utf8")), coverageDir);
+  if (diffs.length) throw new Error(`실응답 지표 매트릭스가 응답 원문·병합 규칙과 다름 → node tools/beaches/live-matrix.mjs --check: ${diffs.slice(0, 10).join(", ")}`);
+}
+
+export function buildBeaches({ coverageDir = COVERAGE_DIR, existingDataDir = join(HERE, "../../data"), idsInput = join(HERE, "ids.json"), outputDir, dataOutputDir = outputDir ? join(outputDir, "data") : existingDataDir, idsOutput = outputDir ? join(outputDir, "ids.json") : idsInput, regions = regionArg(), publish = false, verifySources = verifySourcesAndLiveMatrix } = {}) {
   verifySources(coverageDir);
   const TARGET_REGIONS = regions;
   const COVERAGE_DIR = coverageDir;
@@ -53,6 +61,23 @@ export function buildBeaches({ coverageDir = COVERAGE_DIR, existingDataDir = joi
   const RESPONSE_CHECK = liveReceived && liveTmUtc
     ? `실응답 저장본 재사용(${liveTmUtc}, ${SOURCE_KEYS.join("·")} HTTP ${liveHttp}, 새 호출 없음)`
     : "";
+  // 보충 저장본(live-matrix.mjs의 supplements): 기본 저장본에 값이 없던 칸만 채움. 배정 지표가 보충 응답에서 왔으면 그 행의 실응답 확인 칸에 보충 시각을 함께 적음
+  const primaryFiles = new Set(SOURCE_KEYS.map((k) => liveMatrix?.sources?.[k]?.response_file));
+  const supplementInfo = (liveMatrix?.supplements ?? []).map((sup) => {
+    const ok = SOURCE_KEYS.every((k) => sup?.[k]?.status === "RECEIVED" && sup[k].http_status === 200);
+    const tms = SOURCE_KEYS.map((k) => sourceTmUtc(sup?.[k]));
+    const tm = ok && tms.every(Boolean) && new Set(tms).size === 1 ? tms[0] : null;
+    return { files: new Set(SOURCE_KEYS.map((k) => sup?.[k]?.response_file)), text: tm ? `보충 저장본(${tm}, ${SOURCE_KEYS.join("·")} HTTP 200)` : null };
+  });
+  // 배정 관측소 지표의 응답 파일이 기본·보충 어디에도 없거나 보충 메타가 깨졌으면 빈 칸(publish 중단)
+  const responseCheckFor = (stationsOut) => {
+    if (!RESPONSE_CHECK) return "";
+    const used = new Set(Object.entries(stationsOut).filter(([, s]) => s).map(([metric, s]) => liveByStation.get(s.id)?.metrics?.[metric]?.response_file));
+    const sups = supplementInfo.filter((x) => [...x.files].some((f) => used.has(f)));
+    const known = [...used].every((f) => primaryFiles.has(f) || sups.some((x) => x.files.has(f)));
+    if (!known || sups.some((x) => !x.text)) return "";
+    return sups.length ? `${RESPONSE_CHECK} + ${sups.map((x) => x.text).join(" + ")}` : RESPONSE_CHECK;
+  };
 
   const csvCell = (v) => {
     const s = v === null || v === undefined ? "" : String(v);
@@ -168,6 +193,8 @@ export function buildBeaches({ coverageDir = COVERAGE_DIR, existingDataDir = joi
     "양양군|설악": { rom: "Seorak" },
     "양양군|지경": { rom: "Jigyeong" },
     "양양군|하조대": { rom: "Hajodae" },
+    "양양군|송전": { rom: "Songjeon" },
+    "양양군|기사문": { rom: "Gisamun" },
     "양양군|갯마을": { rom: "Gaenmaeul", review: "자음동화 표기(Gaenmaeul) 확인 필요" },
     "양양군|광진": { rom: "Gwangjin" },
     "양양군|남애1리": { rom: "Namae 1-ri" },
@@ -194,7 +221,7 @@ export function buildBeaches({ coverageDir = COVERAGE_DIR, existingDataDir = joi
       .replace(/^-|-$/g, "");
 
   // ── 입력 읽기 ──
-  const allSrc = readCsv("beaches.csv");
+  const allSrc = applyCoordOverrides(readCsv("beaches.csv"));
   const beachesSrc = allSrc.filter((b) => TARGET_REGIONS.includes(b.sido_nm));
   // 이름 겹침: 전국 285행에서 괄호를 뺀 해수욕장 이름이 같은 다른 해변 (결정 기록 11장 10/21 ②)
   const baseName = (s) => s.replace(/\([^)]*\)/g, "").trim();
@@ -296,6 +323,20 @@ export function buildBeaches({ coverageDir = COVERAGE_DIR, existingDataDir = joi
   }
   validateIdentity(ids, existingItems, allSrc, previousMatrix);
   const existingById = new Map(existingItems.map(({ beach }) => [beach.id, beach]));
+  const existingMetaPath = join(existingDataDir, "beach-meta.json");
+  let existingMetaBeaches = {};
+  if (existsSync(existingMetaPath)) {
+    let parsedMeta;
+    try {
+      parsedMeta = JSON.parse(readFileSync(existingMetaPath, "utf8"));
+    } catch (e) {
+      throw new Error(`beach-meta.json 파싱 실패(${existingMetaPath}): ${e.message}`);
+    }
+    if (!parsedMeta || typeof parsedMeta !== "object" || Array.isArray(parsedMeta) || (parsedMeta.beaches !== undefined && (parsedMeta.beaches === null || typeof parsedMeta.beaches !== "object" || Array.isArray(parsedMeta.beaches)))) {
+      throw new Error(`beach-meta.json 형식 오류(${existingMetaPath}): beaches 객체 필요`);
+    }
+    existingMetaBeaches = parsedMeta.beaches ?? {};
+  }
   const pinnedSlug = new Map(
     existingItems.map(({ beach }) => [beach.id, beach.slug]),
   );
@@ -355,6 +396,10 @@ export function buildBeaches({ coverageDir = COVERAGE_DIR, existingDataDir = joi
       throw new Error(`목록에 없는 좌표 보류·형식 오류: ${key}`);
     const lat = Number(Number(src.lat).toFixed(6));
     const lng = Number(Number(src.lon).toFixed(6));
+    // 판정 입력(L1 좌표 근거)이 지금 좌표(수집본 + coord-overrides.json)로 만들어졌는지 확인. 보정표만 고치고 spatial-judge를 다시 돌리지 않으면 중단
+    const proofCoords = evidence.land_proof?.coords;
+    if (proofCoords && (Number(proofCoords.lat) !== Number(src.lat) || Number(proofCoords.lon) !== Number(src.lon)))
+      throw new Error(`판정 입력 좌표와 생성 좌표 다름 → spatial-judge 다시 실행: ${key} (근거 ${proofCoords.lat}, ${proofCoords.lon} / 지금 ${src.lat}, ${src.lon})`);
     const id = (ids.ids[idKey(src)] ??= `b${String(nextSeq++).padStart(4, "0")}`);
     const koBase = n.ko ?? src.sta_nm;
     const nameKo = koBase.endsWith("비치") ? koBase : `${koBase}해수욕장`;
@@ -425,7 +470,7 @@ export function buildBeaches({ coverageDir = COVERAGE_DIR, existingDataDir = joi
       official_id_note: "해수부 해수욕장정보 수집본에 ID 칸 없음",
       lat,
       lng,
-      coords_source: "해수부 해수욕장정보 API(2026-10-16 수집)",
+      coords_source: src.coords_source ?? "해수부 해수욕장정보 API(2026-10-16 수집)",
       coast: coastOf(seaZone) ?? "",
       sea_zone: seaZone,
       sea_basis: seaBasis,
@@ -450,7 +495,7 @@ export function buildBeaches({ coverageDir = COVERAGE_DIR, existingDataDir = joi
       occlusion: "미검토(지도 확인 안 함)",
       activity_candidates: "",
       season_candidates: "",
-      response_check: RESPONSE_CHECK,
+      response_check: responseCheckFor(stationsOut),
     };
 
     // 출시 자동 제외(결정 4-A): 레코드 만들지 않고 매트릭스에 사유 기록
@@ -515,7 +560,7 @@ export function buildBeaches({ coverageDir = COVERAGE_DIR, existingDataDir = joi
         ])),
         aliases,
         coast: coastOf(seaZone),
-        coordsSource: "해양수산부 해수욕장정보 OceansBeachInfoService1/getOceansBeachInfo1 (2026-10-16 수집, tools/coverage/out/beaches.csv), 소수 6자리 반올림",
+        coordsSource: `${src.coords_source ? `${src.coords_source} (tools/beaches/coord-overrides.json)` : "해양수산부 해수욕장정보 OceansBeachInfoService1/getOceansBeachInfo1 (2026-10-16 수집, tools/coverage/out/beaches.csv)"}, 소수 6자리 반올림`,
         nameKoStatus: n.place || n.ko ? "사람 검토 필요" : "수집본 이름 + 해수욕장",
         nameEnStatus: "규칙 확정('<로마자> Beach', 결정 기록 11장 10/21 ③)",
         slugStatus: n.review ? "사람 검토 필요" : "규칙 확정",
@@ -553,6 +598,7 @@ export function buildBeaches({ coverageDir = COVERAGE_DIR, existingDataDir = joi
       note: "data/beaches 반영 전 초안. 레코드의 _draft는 Beach 계약 밖 검토용 칸. slug가 null이면 전국 확정 때 결정",
       sources: [
         "tools/coverage/out/beaches.csv (해수부 해수욕장정보, 2026-10-16)",
+        "tools/beaches/coord-overrides.json (수집본 좌표 오타 정정·누락 보충, 공식 출처 좌표)",
         "tools/coverage/beach-zone-evidence.json (좌표–법정 읍면동 경계 L1 판정·해상 구역·자동 제외 입력)",
         "tools/coverage/out/stations.csv, tools/coverage/station-zone-evidence.json (관측소 좌표·독립 검증 입력)",
         "tools/coverage/out/freshness/sea_obs_72h.csv, kma_buoy2_7d.csv (72시간 미수신 판정)",
@@ -587,6 +633,9 @@ export function buildBeaches({ coverageDir = COVERAGE_DIR, existingDataDir = joi
           ? `실응답 저장본의 sea_obs·kma_buoy 요청 시각이 서로 다르거나 읽지 못함(${liveTms.join(" / ")}) → 공개 파일을 쓰지 않음`
           : "실응답 저장본이 sea_obs·kma_buoy HTTP 200 수신이 아님 → 공개 파일을 쓰지 않음",
       );
+    // 행별 실응답 확인 칸: 배정 지표의 응답 파일 출처를 못 찾았거나 보충 저장본 메타가 깨졌으면 빈 칸
+    const noResponse = matrix.filter((r) => r.response_check === "").map((r) => `${r.sigungu}|${r.source_name}`);
+    if (noResponse.length) throw new Error(`배정 지표의 실응답 저장본 출처 확인 안 됨 → 공개 파일을 쓰지 않음: ${noResponse.join(", ")}`);
     const DATA = dataOutputDir;
     // 전부 검사·생성한 뒤에 씀(중간 실패로 일부만 바뀌지 않게)
     for (const r of records)
@@ -619,10 +668,14 @@ export function buildBeaches({ coverageDir = COVERAGE_DIR, existingDataDir = joi
         season_source: "해양수산부 해양레저관광과 '2026 해수욕장 주요 현황'(2026-08-11), https://www.mof.go.kr/doc/ko/selectDoc.do?menuSeq=427&bbsSeq=2&docSeq=67910",
         season_rule: "올해 일정이 없거나 연결되지 않으면 '운영 기간 아님' 배지를 숨김(지난해 일정으로 추정 안 함, 결정 기록 11장 10/21 ⑥)",
       },
-      beaches: Object.fromEntries(records.map((r) => [r.id, {
-        aliases: r._draft.aliases,
-        season: { 2026: r._draft.season2026.status != null ? { status: seasonStatus(r), openDate: r._draft.season2026.openDate, closeDate: r._draft.season2026.closeDate, sourceRow: r._draft.season2026.xlsxRow, link: r._draft.season2026.linkMethod } : null },
-      }])),
+      beaches: Object.fromEntries(records.map((r) => {
+        const { aliases, manualAliases } = preserveManualAliases(r._draft.aliases, existingMetaBeaches[r.id], r.name.ko, r.id);
+        return [r.id, {
+          aliases,
+          ...(manualAliases.length ? { manualAliases } : {}),
+          season: { 2026: r._draft.season2026.status != null ? { status: seasonStatus(r), openDate: r._draft.season2026.openDate, closeDate: r._draft.season2026.closeDate, sourceRow: r._draft.season2026.xlsxRow, link: r._draft.season2026.linkMethod } : null },
+        }];
+      })),
     };
     const final = [...records.map((r) => preserveManual(r, existing.get(r.id))), ...hidden.map(([, beach]) => beach)];
     validateFinalIdentity([...existing.values()], final);

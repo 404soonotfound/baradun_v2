@@ -14,7 +14,7 @@ vi.mock("../zone-proof.mjs", () => ({
 }));
 import { buildBeaches, writeBuild } from "../build.mjs";
 import { checkDraft } from "../check.mjs";
-import { idKey, validateIdentity, preserveManual, reserveSlug } from "../identity.mjs";
+import { idKey, validateIdentity, preserveManual, preserveManualAliases, reserveSlug } from "../identity.mjs";
 import { assignMetric, loadAssignContext } from "../station-assign.mjs";
 import { slimMatrix } from "../slim-matrix.mjs";
 import { validateCoverage } from "../../../packages/contracts/scripts/coverage-rules.mjs";
@@ -135,6 +135,48 @@ describe("대표 측정기 공통 규칙을 적용하는 초안 검사", () => {
       expect(f.build).toThrow(/요청 시각이 서로 다르거나 읽지 못함/);
     }
   });
+  it("배정 지표가 보충 저장본에서 왔으면 그 행의 response_check에 보충 시각을 붙이고 출처를 못 찾으면 공개를 멈춤", () => {
+    const f = fixture();
+    const hours = Array.from({ length: 30 }, (_, i) => `20261020${String(i).padStart(2, "0")}`);
+    f.put("input/out/stations.csv", "stn_id,name,tp,lat,lon,in_kma_buoy\n22471,토성,C,37.796618,128.917591,False\n");
+    f.put("input/out/freshness/sea_obs_72h.csv", "req_tm,stn,wh,tw\n" + hours.map((h) => `${h},22471,1,20`).join("\n") + "\n");
+    f.put("input/station-zone-evidence.json", {
+      stations: [{
+        stn_id: "22471", status: "VERIFIED", zone: "S1151200", lat: 37.796618, lon: 128.917591,
+        boundary_source_url: "https://example.org/annex", boundary_rule_item: "고정 픽스처", checked_at_kst: "2026-10-22T10:00:00+09:00", basis: "고정 픽스처",
+        metrics: { waveHeight: { live_state: "VALUE_PRESENT", status: "VERIFIED" }, waterTemp: { live_state: "VALUE_PRESENT", status: "VERIFIED" } },
+      }],
+    });
+    // 파고·수온은 22471 배정, 나머지는 20km 안 부재
+    const evidence = JSON.parse(readFileSync(join(f.root, "input/beach-zone-evidence.json"), "utf8"));
+    for (const m of ["waveHeight", "waterTemp"]) delete evidence.beaches[0].station_absence[m];
+    f.put("input/beach-zone-evidence.json", evidence);
+    const url = (k, tm) => `https://apihub.kma.go.kr/api/typ01/url/${k}.php?tm=${tm}&stn=0&help=0`;
+    const meta = (tm, n) => Object.fromEntries(["sea_obs", "kma_buoy"].map((k) => [k, { status: "RECEIVED", http_status: 200, request_url: url(k, tm), response_file: `responses/${k}-attempt-${n}.txt` }]));
+    const matrix = (file, supplements) => ({
+      sources: meta("202610210000", 1),
+      supplements,
+      stations: [{ stn_id: "22471", metrics: {
+        waveHeight: { source: "sea_obs", state: "VALUE_PRESENT", response_file: file },
+        waterTemp: { source: "sea_obs", state: "VALUE_PRESENT", response_file: "responses/sea_obs-attempt-1.txt" },
+      } }],
+    });
+    f.put("input/responses/metric-matrix.json", matrix("responses/sea_obs-attempt-1.txt", [meta("202611131100", 2)]));
+    expect(f.build().matrix[0].response_check).toBe("실응답 저장본 재사용(2026-10-20T15:00:00Z, sea_obs·kma_buoy HTTP 200, 새 호출 없음)");
+
+    f.put("input/responses/metric-matrix.json", matrix("responses/sea_obs-attempt-2.txt", [meta("202611131100", 2)]));
+    const plan = f.build();
+    expect(plan.matrix[0].response_check).toBe("실응답 저장본 재사용(2026-10-20T15:00:00Z, sea_obs·kma_buoy HTTP 200, 새 호출 없음) + 보충 저장본(2026-11-13T02:00:00Z, sea_obs·kma_buoy HTTP 200)");
+    expect(plan.files.get(join(f.root, "output/data/beach-coverage.csv"))).toContain("실응답 2026-10-20T15:00Z HTTP 200 + 보충 2026-11-13T02:00Z HTTP 200");
+
+    // 보충 메타가 없거나(출처 모름) 요청 시각이 서로 다르면 행 칸이 비고 공개 파일을 쓰지 않음
+    f.put("input/responses/metric-matrix.json", matrix("responses/sea_obs-attempt-2.txt", []));
+    expect(f.build).toThrow(/실응답 저장본 출처 확인 안 됨/);
+    const broken = meta("202611131100", 2);
+    broken.kma_buoy.request_url = url("kma_buoy", "202611131200");
+    f.put("input/responses/metric-matrix.json", matrix("responses/sea_obs-attempt-2.txt", [broken]));
+    expect(f.build).toThrow(/실응답 저장본 출처 확인 안 됨/);
+  });
 });
 
 describe("쓰기 없는 생성·최종 객체 검증", () => {
@@ -173,6 +215,53 @@ describe("쓰기 없는 생성·최종 객체 검증", () => {
     const plan = f.build();
     expect(JSON.parse(plan.files.get(join(f.root, "output/data/beaches/b0001.json")))).toEqual(prev);
     expect(plan.files.get(join(f.root, "output/data/beach-coverage.csv"))).toContain("gangmun,true,");
+  });
+  it("좌표 보정표는 수집본 raw가 같을 때만 공식 출처 좌표로 채우고 출처를 남김", () => {
+    const f = fixture([{ ...source("송전", "양양군"), lat: "", lon: "" }]);
+    const plan = f.build();
+    expect(JSON.parse(plan.files.get(join(f.root, "output/data/beaches/b0001.json"))).coords).toEqual({ lat: 38.092625, lng: 128.661116 });
+    expect(plan.draft.beaches[0]._draft.coordsSource).toContain("TourAPI");
+    expect(plan.files.get(join(f.root, "output/data/beach-coverage.csv"))).toContain("한국관광공사 TourAPI");
+    // 다시 수집한 원자료에 좌표가 생기면 보정표가 덮지 않고 중단
+    expect(fixture([source("송전", "양양군")]).build).toThrow(/좌표 보정표 raw와 수집본 좌표 다름/);
+  });
+  it("판정 입력 좌표가 생성 좌표와 다르면(보정표만 고치고 재판정 안 함) 중단함", () => {
+    const f = fixture();
+    const evidence = JSON.parse(readFileSync(join(f.root, "input/beach-zone-evidence.json"), "utf8"));
+    evidence.beaches[0].land_proof = { coords: { lat: 37.7, lon: 128.9 } };
+    f.put("input/beach-zone-evidence.json", evidence);
+    expect(f.build).toThrow(/spatial-judge 다시 실행/);
+  });
+  it("beach-meta.json의 수동 별칭(manualAliases)을 보존하고 생성 별칭 삭제·공백·중복·공식 이름을 정리함", () => {
+    expect(
+      preserveManualAliases(["강문"], { aliases: ["강문"], manualAliases: [" 강릉 강문 ", "강릉 강문", " 강문해수욕장 "] }, "강문해수욕장", "b0001"),
+    ).toEqual({ aliases: ["강문", "강릉 강문"], manualAliases: ["강릉 강문"] });
+
+    // NAMES/이전 생성 별칭에서 빠진 값은 수동 별칭이 아니면 다음 생성 때 사라짐
+    expect(
+      preserveManualAliases(["강문"], { aliases: ["강문", "옛생성별칭"], manualAliases: ["강릉 강문"] }, "강문해수욕장", "b0001"),
+    ).toEqual({ aliases: ["강문", "강릉 강문"], manualAliases: ["강릉 강문"] });
+    const f = fixture(); f.seed();
+    f.put("existing/beach-meta.json", { beaches: { b0001: { aliases: ["강문", "옛생성별칭"], manualAliases: [" 강릉 강문 ", "강문해수욕장"] } } });
+    const plan1 = f.build();
+    const meta1 = JSON.parse(plan1.files.get(join(f.root, "output/data/beach-meta.json")));
+    expect(meta1.beaches.b0001.aliases).toEqual(["강문", "강릉 강문"]);
+    expect(meta1.beaches.b0001.manualAliases).toEqual(["강릉 강문"]);
+
+    // 멱등성: 같은 입력과 생성된 meta로 다시 빌드해도 결과가 동일함
+    f.put("existing/beach-meta.json", meta1);
+    const plan2 = f.build();
+    expect(plan2.files.get(join(f.root, "output/data/beach-meta.json"))).toBe(plan1.files.get(join(f.root, "output/data/beach-meta.json")));
+  });
+  it("beach-meta.json이 손상되었거나 별칭 형식이 잘못되면 오류로 중단함", () => {
+    expect(() => preserveManualAliases(["강문"], { aliases: "강문" }, "강문해수욕장", "b0001")).toThrow(/b0001.*aliases 형식 오류/);
+    expect(() => preserveManualAliases(["강문"], { manualAliases: ["", "강릉 강문"] }, "강문해수욕장", "b0001")).toThrow(/b0001.*manualAliases 형식 오류/);
+    expect(() => preserveManualAliases(["강문"], { manualAliases: [123] }, "강문해수욕장", "b0001")).toThrow(/b0001.*manualAliases 형식 오류/);
+    expect(() => preserveManualAliases(["강문"], "bad", "강문해수욕장", "b0001")).toThrow(/b0001.*항목 형식 오류/);
+
+    const f = fixture(); f.seed();
+    f.put("existing/beach-meta.json", "{invalid-json");
+    expect(f.build).toThrow(/beach-meta\.json 파싱 실패/);
   });
   it("신규 해변에는 수영·null 사진·null CCTV·숨김 false 기본값을 사용함", () => {
     const f = fixture(); const b = f.build().draft.beaches[0];

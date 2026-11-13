@@ -238,12 +238,16 @@ jobs:
       - run: npm run test:e2e -w apps/admin # chromium(mobile·desktop)
 
   # 지원 브라우저 기준안(D16-E2, BRD-147): Firefox·WebKit 엔진으로 같은 운영자 E2E를 데스크톱 크기로 돌림
-  # admin-e2e와 나란히 돌고, 운영자 사이트가 바뀔 때만. WebKit 엔진 시험이지 실제 Safari 확인은 아님
+  # 엔진마다 별도 러너에서 같은 빌드 결과로 돌림. WebKit 엔진 시험이지 실제 Safari 확인은 아님
   admin-e2e-engines:
     needs: [changes, admin-build]
     if: needs.changes.outputs.admin == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        engine: [firefox, webkit]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -251,23 +255,26 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci --no-audit
-      # 브라우저 캐시는 chromium 캐시와 따로(엔진이 달라 같은 키를 쓰면 서로 덮음)
+      # 브라우저 캐시는 엔진별로 나눔
       - id: playwright-cache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-engines-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          key: playwright-${{ matrix.engine }}-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
       - if: steps.playwright-cache.outputs.cache-hit != 'true'
-        run: npx --no-install playwright install --with-deps firefox webkit
+        run: npx --no-install playwright install --with-deps ${{ matrix.engine }}
         working-directory: apps/admin
       - if: steps.playwright-cache.outputs.cache-hit == 'true'
-        run: npx --no-install playwright install-deps firefox webkit
+        run: npx --no-install playwright install-deps ${{ matrix.engine }}
         working-directory: apps/admin
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: admin-site
           path: apps/admin/out
-      - run: npm run test:e2e:engines -w apps/admin
+      - run: npx --no-install playwright test --project=desktop-${{ matrix.engine }}
+        working-directory: apps/admin
+        env:
+          E2E_ENGINES: "1"
 
   # 백엔드: 린트·타입 검사·테스트(Vitest)
   services:
