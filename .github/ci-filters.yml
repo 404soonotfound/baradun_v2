@@ -1,3 +1,4 @@
+# 이 파일을 바꾸면 CI의 infra 가드레일이 실행됨. 각 검사에 해당하는 경로는 아래에서 관리함.
 shared: &shared
   - "package.json"
   - "package-lock.json"
