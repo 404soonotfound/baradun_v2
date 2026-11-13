@@ -9,6 +9,7 @@ import * as s3 from "aws-cdk-lib/aws-s3";
 import * as scheduler from "aws-cdk-lib/aws-scheduler";
 import * as targets from "aws-cdk-lib/aws-scheduler-targets";
 import * as sns from "aws-cdk-lib/aws-sns";
+import * as sqs from "aws-cdk-lib/aws-sqs";
 import * as subscriptions from "aws-cdk-lib/aws-sns-subscriptions";
 import { Construct } from "constructs";
 import * as path from "node:path";
@@ -79,6 +80,7 @@ export function sharpBundlingCommand(
 export class InquiryBackend extends Construct {
   readonly function: nodejs.NodejsFunction;
   readonly logGroup: logs.LogGroup;
+  readonly cleanupFailuresQueue: sqs.Queue;
   readonly photoBucket: s3.Bucket;
   readonly topic: sns.Topic;
   readonly functionUrl: lambda.FunctionUrl;
@@ -162,6 +164,11 @@ export class InquiryBackend extends Construct {
     });
 
     // 하루 1회 기한(88일) 지난 문의 이메일 항목을 명시적으로 삭제함 (BRD-119)
+    // 호출·실행·시간 초과 실패 시 Scheduler가 재시도 후 실패 대기열로 보내 경보에 연결됨
+    this.cleanupFailuresQueue = new sqs.Queue(this, "EmailCleanupFailures", {
+      encryption: sqs.QueueEncryption.SQS_MANAGED,
+      retentionPeriod: Duration.days(14),
+    });
     new scheduler.Schedule(this, "EmailCleanupSchedule", {
       schedule: scheduler.ScheduleExpression.cron({
         minute: "30",
@@ -172,6 +179,7 @@ export class InquiryBackend extends Construct {
         input: scheduler.ScheduleTargetInput.fromObject({
           action: "cleanup_expired_emails",
         }),
+        deadLetterQueue: this.cleanupFailuresQueue,
         retryAttempts: RETRY_LIMITS.scheduleMaxRetries,
         maxEventAge: Duration.seconds(RETRY_LIMITS.scheduleMaxEventAgeSeconds),
       }),
