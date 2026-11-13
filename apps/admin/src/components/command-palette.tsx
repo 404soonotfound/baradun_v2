@@ -1,9 +1,9 @@
 "use client";
 
-import { Search, type LucideIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 import { messages } from "@/lib/messages";
+import { SearchIcon, type NavIcon } from "./nav-icons";
 
 // ⌘K 찾기 (GH-450, 시안 4차 V7). 지금은 '화면' 묶음만: 메뉴 화면 이름으로 찾아 엶
 // 해변·문의 찾기(V7의 해변·문의 묶음)는 찾기 API가 없어 넣지 않음
@@ -15,7 +15,7 @@ const t = messages.nav;
 export interface PaletteItem {
   readonly href: string;
   readonly label: string;
-  readonly icon: LucideIcon;
+  readonly icon: NavIcon;
 }
 
 // 공백을 빼고 비교(한국어 이름 '수집현황'으로 찾아도 맞게)
@@ -83,7 +83,7 @@ export function CommandPalette({
       {open && (
         <div className="flex flex-col">
           <div className="flex items-center gap-2.5 border-b border-border-default px-4">
-            <Search
+            <SearchIcon
               aria-hidden="true"
               className="size-4 shrink-0 text-text-muted"
             />
