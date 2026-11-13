@@ -1,0 +1,22 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "GitHubInfraEnvironmentsOnly",
+      "Effect": "Allow",
+      "Principal": {
+        "Federated": "arn:aws:iam::717304679248:oidc-provider/token.actions.githubusercontent.com"
+      },
+      "Action": "sts:AssumeRoleWithWebIdentity",
+      "Condition": {
+        "StringEquals": {
+          "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
+          "token.actions.githubusercontent.com:sub": [
+            "repo:404soonotfound@202301114/baradun_v2@1423369390:environment:infra",
+            "repo:404soonotfound@202301114/baradun_v2@1423369390:environment:infra-approval"
+          ]
+        }
+      }
+    }
+  ]
+}
