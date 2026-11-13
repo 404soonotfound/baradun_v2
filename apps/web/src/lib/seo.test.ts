@@ -33,7 +33,6 @@ describe("seo", () => {
         {
           userAgent: "*",
           allow: "/",
-          disallow: ["/search/", "/en/search/"],
         },
       ],
       sitemap: `${PRODUCTION_SITE_ORIGIN}/sitemap.xml`,
