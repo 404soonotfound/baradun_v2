@@ -8,18 +8,24 @@ import { reasonLabels, type Category } from "@/lib/beaches";
 import { kstDateTime } from "@/lib/inquiries";
 import { fill, messages } from "@/lib/messages";
 import {
+  PUBLISH_POLICY_URL,
   canRollBackTo,
   createJob,
   fetchJob,
   fetchPublishOverview,
   fetchPublishPreview,
   fetchRollbackPreview,
+  hasHeldNotices,
+  isRunSkipped,
   jobInFlight,
   jobPhase,
+  nonZeroCategoryDeltas,
+  pendingNoticeDiff,
   reapplyNotice,
   reasonKey,
   signed,
   versionIso,
+  type AppSettingsView,
   type CategoryCounts,
   type HeldNoticeView,
   type HistoryItem,
@@ -31,11 +37,13 @@ import {
   type PublishOverview,
   type RollbackPreview,
 } from "@/lib/publish";
+import { pageRows } from "@/lib/paging";
 import { AdminShell } from "./admin-shell";
 import { labelText } from "./beach-status";
 import { ConfirmDialog } from "./confirm-dialog";
+import { CELL_END, CELL_NAME, DataTable, Pager, TD, TH, TR } from "./data-table";
 import { useSlow } from "./use-slow";
-import { Button, Notice } from "./ui";
+import { Button, Notice, SUCCESS_BADGE } from "./ui";
 
 // 데이터 게시 (#331, 화면 설계서 6장 ADM-PUB, 시안 4차 V16·VM8·VM9·V30·N2·F4·E2·E4·E10·VE2)
 // - 지금 앱에 보이는 게시본·다음 자동 게시·대기 중인 변경(확정한 공지만, 노션 6장)·게시 기록·되돌림 상태 공지
@@ -156,53 +164,226 @@ function Unread({ what, onRetry }: { what: string; onRetry: () => void }) {
   );
 }
 
-function Card({
+// V16 상단 4칸 요약 스트립의 한 칸
+function SummaryCell({
   label,
   value,
+  unit,
   hint,
+  accent = false,
 }: {
   label: string;
   value: string;
+  unit?: string;
   hint?: string | undefined;
+  accent?: boolean;
 }) {
   return (
-    <div className="flex flex-col gap-0.5 rounded-admin-box border border-border-default bg-bg-surface px-4 py-3">
-      <dt className="text-label-s text-text-muted">{label}</dt>
-      <dd className="text-title-m font-semibold text-text-default tabular-nums">
-        {value}
+    <div className="border-b border-border-default px-4 py-3.5 odd:border-r lg:border-r lg:border-b-0 lg:last:border-r-0 [&:nth-child(n+3)]:border-b-0">
+      <dt className="text-body-s font-semibold text-text-body">{label}</dt>
+      <dd className="mt-1 flex items-baseline gap-1 tabular-nums">
+        <span
+          className={`text-title-l font-normal ${
+            accent ? "text-brand-default" : "text-text-default"
+          }`}
+        >
+          {value}
+        </span>
+        {unit && <span className="text-body-s text-text-muted">{unit}</span>}
       </dd>
-      {hint && <dd className="text-label-s text-text-body">{hint}</dd>}
+      {hint && <dd className="mt-0.5 text-caption text-text-muted">{hint}</dd>}
     </div>
   );
 }
 
-function SectionBox({
-  title,
-  headingId,
-  aside,
-  children,
-}: {
-  title: string;
-  headingId: string;
-  aside?: ReactNode;
-  children: ReactNode;
-}) {
+function PassIcon() {
   return (
-    <section
-      aria-labelledby={headingId}
-      className="flex flex-col gap-3 rounded-admin-box border border-border-default bg-bg-surface p-4"
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.4"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      className="shrink-0 text-success-fg"
     >
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2
-          id={headingId}
-          className="text-title-s font-semibold text-text-default"
+      <path d="m5 12 5 5 9-10" />
+    </svg>
+  );
+}
+
+function FailIcon() {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.4"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      className="shrink-0 text-danger-fg"
+    >
+      <path d="M6 6l12 12M18 6 6 18" />
+    </svg>
+  );
+}
+
+function RollbackIcon() {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      className="shrink-0"
+    >
+      <path d="M9 14 4 9l5-5" />
+      <path d="M4 9h11a5 5 0 0 1 0 10h-3" />
+    </svg>
+  );
+}
+
+// 앱 설정 줄(V16): 서비스 점검·최소 화면 버전·GitHub 링크. 응답에 없으면 '확인 못 함' 표시
+function AppSettingsBar({
+  settings,
+  maintenancePending,
+}: {
+  settings: AppSettingsView | null | undefined;
+  maintenancePending: boolean | null;
+}) {
+  const maintenanceLabel = settings
+    ? settings.maintenance.active
+      ? t.settings.maintenanceOn
+      : t.settings.maintenanceOff
+    : t.settings.maintenanceUnknown;
+  const dotColor = settings?.maintenance.active
+    ? "bg-status-stale-fg"
+    : "bg-text-muted";
+  return (
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-admin-box border border-border-default bg-bg-surface px-3 py-2 text-body-s text-text-body">
+      <b className="font-semibold text-text-default">{t.settings.title}</b>
+      <span className="inline-flex items-center gap-1.5">
+        <span
+          aria-hidden="true"
+          className={`size-2 shrink-0 rounded-full ${dotColor}`}
+        />
+        <span>{maintenanceLabel}</span>
+        {maintenancePending === true && (
+          <span className="text-status-stale-fg">
+            · {t.settings.maintenancePending}
+          </span>
+        )}
+      </span>
+      <span>
+        {settings
+          ? fill(t.settings.minWebBuild, { version: settings.minWebBuild })
+          : t.settings.minWebBuildUnknown}
+      </span>
+      <span className="text-text-muted">{t.settings.note}</span>
+      <a
+        href={PUBLISH_POLICY_URL}
+        target="_blank"
+        rel="noreferrer"
+        className="ml-auto inline-flex items-center gap-1 font-medium text-brand-default underline-offset-2 hover:underline"
+      >
+        {t.settings.github}
+        <svg
+          width="13"
+          height="13"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
         >
-          {title}
-        </h2>
-        {aside}
+          <path d="M7 17 17 7M9 7h8v8" />
+        </svg>
+      </a>
+    </div>
+  );
+}
+
+// 대기 중인 공지 줄 단위 비교 상자(V16·N2 .w-gd)
+function NoticeDiffBox({
+  notice,
+  showKindBadge = false,
+}: {
+  notice: PendingNotice;
+  showKindBadge?: boolean;
+}) {
+  const kindLabel =
+    (messages.notices.kind as Record<string, string>)[notice.kind] ??
+    notice.kind;
+  const diff = pendingNoticeDiff(
+    notice,
+    kindLabel,
+    timeOf,
+    messages.notices.openEnd,
+  );
+  const changeLabel =
+    (t.noticeChange as Record<string, string>)[notice.change] ?? notice.change;
+  return (
+    <div className="overflow-hidden rounded-admin-control border border-border-default bg-bg-surface font-mono text-caption">
+      <div className="flex items-center gap-2 border-b border-border-default bg-bg-page px-3 py-1.5 font-sans text-caption text-text-body">
+        <span className="min-w-0 truncate font-mono font-semibold text-text-default">
+          notices/{notice.id}
+        </span>
+        {diff.added > 0 && (
+          <span className="font-semibold text-success-fg">+{diff.added}</span>
+        )}
+        {diff.removed > 0 && (
+          <span className="font-semibold text-danger-fg">−{diff.removed}</span>
+        )}
+        {showKindBadge && (
+          <span className="ml-auto inline-flex items-center rounded-admin-badge bg-brand-weak px-1.5 py-0.5 text-caption font-semibold text-brand-default ring-1 ring-brand-border ring-inset">
+            {changeLabel}
+          </span>
+        )}
       </div>
-      {children}
-    </section>
+      <div>
+        {diff.lines.map((line, i) => (
+          <div
+            key={`${line.kind}-${i}`}
+            className={`grid grid-cols-[28px_28px_16px_1fr] leading-[22px] ${
+              line.kind === "del"
+                ? "bg-status-blocked-bg text-danger-fg"
+                : "bg-success-bg text-success-fg"
+            }`}
+          >
+            <span className="px-1 text-right text-text-muted select-none">
+              {line.beforeLine ?? ""}
+            </span>
+            <span className="px-1 text-right text-text-muted select-none">
+              {line.afterLine ?? ""}
+            </span>
+            <span className="text-center select-none">
+              {line.kind === "del" ? "-" : "+"}
+            </span>
+            <code className="min-w-0 pr-2.5 font-mono break-all whitespace-pre-wrap">
+              {line.text}
+            </code>
+          </div>
+        ))}
+      </div>
+      {notice.change === "update" && (
+        <p className="border-t border-border-default bg-bg-page px-3 py-1 font-sans text-caption text-text-muted">
+          {t.pendingUpdateNote}
+        </p>
+      )}
+    </div>
   );
 }
 
@@ -228,13 +409,8 @@ function changesText(item: HistoryItem): string {
   if (!changes) return t.changeUnknown;
   const parts: string[] = [];
   if (changes.notices === true) parts.push(t.changeNotices);
-  if (changes.categoryDelta) {
-    for (const category of ["clear", "unavailable", "undetermined"] as const) {
-      const delta = changes.categoryDelta[category];
-      if (delta !== 0) {
-        parts.push(fill(t.changeCategory[category], { delta: signed(delta) }));
-      }
-    }
+  for (const entry of nonZeroCategoryDeltas(changes.categoryDelta)) {
+    parts.push(fill(t.changeCategory[entry.category], { delta: entry.signed }));
   }
   if (changes.delayedDelta !== null && changes.delayedDelta !== 0) {
     parts.push(
@@ -251,15 +427,6 @@ function changesText(item: HistoryItem): string {
     return t.changeUnknown;
   }
   return parts.length > 0 ? parts.join(" · ") : t.changeNone;
-}
-
-function resultText(item: HistoryItem, currentVersion: string | null) {
-  if (item.result === "published") {
-    return item.version === currentVersion
-      ? t.resultCurrent
-      : fill(t.resultPublished, { count: item.beachCount ?? 0 });
-  }
-  return fill(t.resultFailed, { reason: reasonText(item.reason) });
 }
 
 function noticeLine(notice: PendingNotice): string {
@@ -374,42 +541,53 @@ function CountsTable({
 }) {
   const rows = ["clear", "unavailable", "undetermined"] as const;
   return (
-    <table className="w-full text-body-s">
-      <thead>
-        <tr className="text-left text-label-s text-text-muted">
-          <th scope="col" className="py-1 font-medium">
+    <DataTable
+      caption={t.preview.beaches}
+      head={
+        <>
+          <th scope="col" className={TH}>
             {t.preview.table.label}
           </th>
-          <th scope="col" className="py-1 text-right font-medium">
+          <th scope="col" className={`${TH} ${CELL_END}`}>
             {t.preview.table.now}
           </th>
-          <th scope="col" className="py-1 text-right font-medium">
+          <th scope="col" className={`${TH} ${CELL_END}`}>
             {t.preview.table.next}
           </th>
-          <th scope="col" className="py-1 text-right font-medium">
+          <th scope="col" className={`${TH} ${CELL_END}`}>
             {t.preview.table.diff}
           </th>
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map((row) => (
-          <tr key={row} className="border-t border-border-default">
-            <th scope="row" className="py-1.5 text-left font-medium">
+        </>
+      }
+    >
+      {rows.map((row) => {
+        const diff = now && next ? next[row] - now[row] : null;
+        return (
+          <tr key={row} className={TR}>
+            <th scope="row" className={`${TD} text-left font-medium`}>
               {tb.category[row]}
             </th>
-            <td className="py-1.5 text-right tabular-nums">
+            <td className={`${TD} ${CELL_END} tabular-nums`}>
               {now ? now[row] : "—"}
             </td>
-            <td className="py-1.5 text-right tabular-nums">
+            <td className={`${TD} ${CELL_END} tabular-nums`}>
               {next ? next[row] : "—"}
             </td>
-            <td className="py-1.5 text-right tabular-nums">
-              {now && next ? signed(next[row] - now[row]) : "—"}
+            <td
+              className={`${TD} ${CELL_END} tabular-nums ${
+                diff !== null && diff < 0
+                  ? "text-danger-fg"
+                  : diff === 0
+                    ? "text-text-muted"
+                    : "text-text-default"
+              }`}
+            >
+              {diff !== null ? signed(diff) : "—"}
             </td>
           </tr>
-        ))}
-      </tbody>
-    </table>
+        );
+      })}
+    </DataTable>
   );
 }
 
@@ -429,15 +607,18 @@ function stateText(state: PreviewBeachState): string {
   return category === "clear" ? label : `${label} · ${tb.category[category]}`;
 }
 
-function PreviewPanel({
+// 변경 미리보기 오른쪽 서랍(시안 N2): Esc 닫기 및 연 버튼으로 포커스 복원
+function PreviewDrawer({
   answer,
   waiting,
   failure,
   pending,
   currentVersion,
   beaches,
+  publishLocked,
   onRetry,
   onClose,
+  onPublish,
 }: {
   answer: PreviewAnswer | null;
   waiting: boolean;
@@ -445,15 +626,34 @@ function PreviewPanel({
   pending: readonly PendingNotice[] | null;
   currentVersion: string | null;
   beaches: Readonly<Record<string, BeachName>>;
+  publishLocked: string | null;
   onRetry: () => void;
   onClose: () => void;
+  onPublish: (triggerEl: HTMLButtonElement | null) => void;
 }) {
   const slow = useSlow(waiting);
-  const close = (
-    <Button variant="quiet" size="small" onClick={onClose}>
-      {t.preview.close}
-    </Button>
-  );
+  const closeRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    closeRef.current?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  let subtitle: string | null = null;
+  if (answer?.ok) {
+    const p = answer.preview;
+    subtitle =
+      p.status === "ready" && currentVersion
+        ? fill(t.preview.hint, {
+            current: versionTime(currentVersion),
+            at: timeOf(p.at),
+          })
+        : fill(t.preview.hintNoCurrent, { at: timeOf(p.at) });
+  }
+
   let body: ReactNode;
   if (waiting) {
     body = (
@@ -491,31 +691,32 @@ function PreviewPanel({
   } else if (answer?.ok) {
     const preview = answer.preview;
     body = (
-      <div className="flex flex-col gap-4">
-        <p className="text-label-s text-text-muted">
-          {preview.status === "ready" && currentVersion
-            ? fill(t.preview.hint, {
-                current: versionTime(currentVersion),
-                at: timeOf(preview.at),
-              })
-            : fill(t.preview.hintNoCurrent, { at: timeOf(preview.at) })}
-        </p>
-        <div>
-          <h3 className="text-body font-semibold">{t.preview.notices}</h3>
+      <div className="flex flex-col gap-6">
+        <section>
+          <div className="flex items-baseline gap-2">
+            <h3 className="text-title-s font-semibold text-text-default">
+              {t.preview.notices}
+            </h3>
+            {pending !== null && (
+              <span className="text-body-s text-text-muted tabular-nums">
+                {pending.length}
+              </span>
+            )}
+          </div>
           {pending === null ? (
-            <p className="text-body-s text-text-muted">
+            <p className="mt-2 text-body-s text-text-muted">
               {fill(t.unread, { what: t.unreadWhat.pending })}
             </p>
           ) : pending.length === 0 ? (
-            <p className="text-body-s text-text-body">{t.pendingNone}</p>
+            <p className="mt-2 text-body-s text-text-body">{t.pendingNone}</p>
           ) : (
-            <ul className="mt-1 list-disc pl-5 text-body-s">
+            <div className="mt-3 flex flex-col gap-2">
               {pending.map((n) => (
-                <li key={n.id}>{noticeLine(n)}</li>
+                <NoticeDiffBox key={n.id} notice={n} showKindBadge />
               ))}
-            </ul>
+            </div>
           )}
-        </div>
+        </section>
         {preview.status === "blocked" ? (
           <Notice tone="fail" title={t.preview.blocked} role="status">
             <p>{reasonText(preview.reason)}</p>
@@ -531,16 +732,23 @@ function PreviewPanel({
           </Notice>
         ) : (
           <>
-            <div>
-              <h3 className="text-body font-semibold">
-                {t.preview.beaches}
-                {preview.current.readable &&
-                  ` · ${fill(t.preview.beachesCount, { count: preview.changedCount })}`}
-              </h3>
-              <CountsTable
-                now={preview.current.counts}
-                next={preview.next.counts}
-              />
+            <section>
+              <div className="flex items-baseline gap-2">
+                <h3 className="text-title-s font-semibold text-text-default">
+                  {t.preview.beaches}
+                </h3>
+                {preview.current.readable && (
+                  <span className="text-body-s text-text-muted tabular-nums">
+                    {preview.changedCount}
+                  </span>
+                )}
+              </div>
+              <div className="mt-3">
+                <CountsTable
+                  now={preview.current.counts}
+                  next={preview.next.counts}
+                />
+              </div>
               {!preview.current.readable ? (
                 <p className="mt-2 text-body-s text-text-muted">
                   {preview.current.missing
@@ -553,10 +761,10 @@ function PreviewPanel({
                 </p>
               ) : (
                 <>
-                  <ul className="mt-2 flex flex-col gap-1 text-body-s">
+                  <ul className="mt-2 flex flex-col gap-1 text-body-s text-text-body">
                     {preview.changed.map((change) => (
                       <li key={change.id}>
-                        <span className="font-medium">
+                        <span className="font-semibold text-text-default">
                           {beaches[change.id]?.name ?? change.id}
                         </span>{" "}
                         {change.before
@@ -577,137 +785,328 @@ function PreviewPanel({
                   )}
                 </>
               )}
-            </div>
-            <div>
-              <h3 className="text-body font-semibold">{t.preview.checks}</h3>
-              <ul className="mt-1 list-disc pl-5 text-body-s">
-                <li>{t.preview.checkContract}</li>
-                <li>
-                  {fill(t.preview.checkIds, {
-                    count: preview.checks.expected,
-                    expected: preview.checks.expected,
-                  })}
+            </section>
+            <section>
+              <h3 className="text-title-s font-semibold text-text-default">
+                {t.preview.checks}
+              </h3>
+              <ul className="mt-3 flex flex-col gap-1.5 text-body-s text-text-body">
+                <li className="flex items-center gap-2">
+                  <PassIcon />
+                  <span>{t.preview.checkContract}</span>
+                </li>
+                <li className="flex items-center gap-2">
+                  <PassIcon />
+                  <span>
+                    {fill(t.preview.checkIds, {
+                      count: preview.checks.expected,
+                      expected: preview.checks.expected,
+                    })}
+                  </span>
                 </li>
               </ul>
-            </div>
+            </section>
           </>
         )}
-        <p className="text-label-s text-text-muted">{t.preview.judgment}</p>
       </div>
     );
   }
+
   return (
-    <SectionBox
-      title={t.preview.title}
-      headingId="publish-preview"
-      aside={close}
+    <div
+      className="fixed inset-0 z-40 flex justify-end bg-black/25"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
     >
-      {body}
-    </SectionBox>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="publish-preview-title"
+        className="flex h-full w-full max-w-[540px] flex-col border-l border-border-default bg-bg-surface shadow-floating"
+      >
+        <div className="flex items-start gap-3 border-b border-border-default px-6 pt-5 pb-4">
+          <div className="min-w-0 flex-1">
+            <h2
+              id="publish-preview-title"
+              className="text-title-m font-semibold text-text-default"
+            >
+              {t.preview.title}
+            </h2>
+            {subtitle && (
+              <p className="mt-1 text-caption text-text-muted">{subtitle}</p>
+            )}
+          </div>
+          <button
+            ref={closeRef}
+            type="button"
+            aria-label={t.preview.close}
+            onClick={onClose}
+            className="inline-flex size-10 shrink-0 items-center justify-center rounded-admin-control text-text-body hover:bg-bg-page hover:text-text-default"
+          >
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M6 6l12 12M18 6 6 18" />
+            </svg>
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto px-6 py-5">{body}</div>
+        <div className="flex flex-wrap items-center gap-2 border-t border-border-default px-6 py-3.5 pb-[calc(0.875rem+env(safe-area-inset-bottom))]">
+          <span className="text-caption text-text-muted">
+            {t.preview.judgment}
+          </span>
+          <span className="flex-1" />
+          <Button variant="secondary" size="small" onClick={onClose}>
+            {t.preview.drawerClose}
+          </Button>
+          <Button
+            size="small"
+            disabled={publishLocked !== null}
+            aria-describedby={publishLocked ? "publish-locked" : undefined}
+            onClick={(e) => onPublish(e.currentTarget)}
+          >
+            {t.publishButton}
+          </Button>
+        </div>
+      </div>
+    </div>
   );
 }
 
 function HistoryList({
   items,
+  page,
+  onPage,
   currentVersion,
   rollbackBlocked,
+  selectedVersion,
+  onSelect,
   onRollback,
 }: {
   items: readonly HistoryItem[];
+  page: number;
+  onPage: (page: number) => void;
   currentVersion: string | null;
   rollbackBlocked: string | null;
-  onRollback: (version: string) => void;
+  selectedVersion: string | null;
+  onSelect: (version: string | null) => void;
+  onRollback: (version: string, triggerEl: HTMLButtonElement | null) => void;
 }) {
   if (items.length === 0) {
     return <p className="text-body-s text-text-muted">{t.historyEmpty}</p>;
   }
-  const action = (item: HistoryItem) =>
-    canRollBackTo(item, currentVersion) ? (
-      <Button
-        variant="secondary"
-        size="small"
-        disabled={rollbackBlocked !== null}
-        aria-describedby={rollbackBlocked ? "publish-locked" : undefined}
-        onClick={() => onRollback(item.version)}
-      >
-        {t.rollback}
-        <span className="sr-only"> {timeOf(item.at)}</span>
-      </Button>
-    ) : null;
+  const paged = pageRows(items, page);
+  const action = (item: HistoryItem) => {
+    if (canRollBackTo(item, currentVersion)) {
+      return (
+        <Button
+          variant="quiet"
+          size="small"
+          className="text-text-body no-underline hover:text-text-default hover:underline lg:h-8"
+          disabled={rollbackBlocked !== null}
+          aria-describedby={rollbackBlocked ? "publish-locked" : undefined}
+          onClick={(e) => onRollback(item.version, e.currentTarget)}
+        >
+          <span className="inline-flex items-center gap-1">
+            <RollbackIcon />
+            <span>{t.rollback}</span>
+          </span>
+          <span className="sr-only"> {timeOf(item.at)}</span>
+        </Button>
+      );
+    }
+    if (item.result !== "published") {
+      const selected = selectedVersion === item.version;
+      return (
+        <button
+          type="button"
+          aria-expanded={selected}
+          onClick={() => onSelect(selected ? null : item.version)}
+          className="inline-flex min-h-touch items-center text-body-s font-medium text-brand-default underline-offset-2 hover:underline lg:min-h-0"
+        >
+          {selected ? t.hideReason : t.inspectReason}
+          <span className="sr-only"> {timeOf(item.at)}</span>
+        </button>
+      );
+    }
+    return null;
+  };
   return (
     <>
-      <table className="hidden w-full text-body-s md:table">
-        <thead>
-          <tr className="text-left text-label-s text-text-muted">
-            <th scope="col" className="py-1.5 font-medium">
-              {t.col.at}
-            </th>
-            <th scope="col" className="py-1.5 font-medium">
-              {t.col.source}
-            </th>
-            <th scope="col" className="py-1.5 font-medium">
-              {t.col.changes}
-            </th>
-            <th scope="col" className="py-1.5 font-medium">
-              {t.col.result}
-            </th>
-            <th scope="col" className="py-1.5">
-              <span className="sr-only">{t.rollback}</span>
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {items.map((item) => (
-            <tr
-              key={`${item.result}-${item.version}`}
-              className="border-t border-border-default align-top"
-            >
-              <td className="py-2 tabular-nums">
-                {timeOf(item.at)}
-                {item.gapBefore && (
-                  <p className="text-label-s text-status-stale-fg">
-                    {t.gapBefore}
-                  </p>
-                )}
-              </td>
-              <td className="py-2">{sourceText(item)}</td>
-              <td className="py-2">
-                {item.result === "published" ? changesText(item) : "—"}
-              </td>
-              <td
-                className={`py-2 ${item.result === "published" ? "" : "font-medium text-danger-fg"}`}
+      <div className="hidden overflow-x-auto md:block">
+        <DataTable
+          caption={t.history}
+          className="[&_th]:px-2.5 [&_td]:px-2.5 [&_th:first-child]:pl-3.5 [&_td:first-child]:pl-3.5 [&_th:last-child]:pr-3.5 [&_td:last-child]:pr-3.5"
+          head={
+            <>
+              <th scope="col" className={TH}>
+                {t.col.at}
+              </th>
+              <th scope="col" className={TH}>
+                {t.col.changes}
+              </th>
+              <th scope="col" className={TH}>
+                {t.col.verify}
+              </th>
+              <th scope="col" className={TH}>
+                {t.col.result}
+              </th>
+              <th scope="col" className={`${TH} ${CELL_END}`}>
+                <span className="sr-only">{t.col.actions}</span>
+              </th>
+            </>
+          }
+        >
+          {paged.map((item) => {
+            const selected =
+              item.result !== "published" && selectedVersion === item.version;
+            return (
+              <tr
+                key={`${item.result}-${item.version}`}
+                className={`${TR} ${selected ? "bg-brand-weak" : ""}`}
               >
-                {resultText(item, currentVersion)}
-              </td>
-              <td className="py-2 text-right">{action(item)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      <ul className="flex flex-col gap-2 md:hidden">
-        {items.map((item) => (
-          <li
-            key={`${item.result}-${item.version}`}
-            className="flex flex-col gap-1 rounded-admin-box border border-border-default px-3 py-2.5 text-body-s"
-          >
-            <p className="font-medium tabular-nums">
-              {timeOf(item.at)} · {sourceText(item)}
-            </p>
-            {item.result === "published" && <p>{changesText(item)}</p>}
-            <p
-              className={
-                item.result === "published" ? "" : "font-medium text-danger-fg"
-              }
+                <td
+                  className={`${TD} tabular-nums ${
+                    selected
+                      ? "shadow-[inset_3px_0_0_var(--color-brand-default)]"
+                      : ""
+                  }`}
+                >
+                  <span className={CELL_NAME}>{timeOf(item.at)}</span>
+                  {item.gapBefore && (
+                    <p className="text-caption whitespace-normal text-status-stale-fg">
+                      {t.gapBefore}
+                    </p>
+                  )}
+                </td>
+                <td className={TD.replace("whitespace-nowrap", "whitespace-normal")}>
+                  <span className={CELL_NAME}>
+                    {item.result === "published" ? changesText(item) : "—"}
+                  </span>
+                  <p className="text-caption text-text-muted">
+                    {sourceText(item)}
+                  </p>
+                </td>
+                <td className={TD.replace("whitespace-nowrap", "whitespace-normal")}>
+                  {item.result === "published" ? (
+                    <span className="inline-flex items-center gap-1.5 text-body-s text-text-body">
+                      <PassIcon />
+                      <span>{t.verifyPass}</span>
+                    </span>
+                  ) : (
+                    <span className="flex max-w-[150px] items-start gap-1.5 text-body-s text-danger-fg">
+                      <span className="mt-0.5 shrink-0">
+                        <FailIcon />
+                      </span>
+                      <span className="min-w-0 [overflow-wrap:anywhere]">
+                        {reasonText(item.reason)}
+                      </span>
+                    </span>
+                  )}
+                </td>
+                <td className={TD}>
+                  {item.result === "published" ? (
+                    item.version === currentVersion ? (
+                      <span
+                        className={`inline-flex items-center rounded-admin-badge px-1.5 py-0.5 text-caption font-semibold whitespace-nowrap ${SUCCESS_BADGE}`}
+                      >
+                        {t.resultCurrent}
+                      </span>
+                    ) : (
+                      <span className="text-text-muted">
+                        {fill(t.resultPublished, {
+                          count: item.beachCount ?? 0,
+                        })}
+                      </span>
+                    )
+                  ) : (
+                    <span className="inline-flex items-center rounded-admin-badge bg-status-blocked-bg px-1.5 py-0.5 text-caption font-semibold whitespace-nowrap text-status-blocked-fg ring-1 ring-danger-border ring-inset">
+                      {t.lastRunFailed}
+                    </span>
+                  )}
+                </td>
+                <td className={`${TD} ${CELL_END}`}>{action(item)}</td>
+              </tr>
+            );
+          })}
+        </DataTable>
+      </div>
+      <ul className="flex flex-col divide-y divide-border-default rounded-admin-box border border-border-default bg-bg-surface md:hidden">
+        {paged.map((item) => {
+          const selected =
+            item.result !== "published" && selectedVersion === item.version;
+          return (
+            <li
+              key={`${item.result}-${item.version}`}
+              className={`flex flex-col gap-1 px-3 py-2.5 text-body-s ${
+                selected ? "bg-brand-weak" : ""
+              }`}
             >
-              {resultText(item, currentVersion)}
-            </p>
-            {item.gapBefore && (
-              <p className="text-label-s text-status-stale-fg">{t.gapBefore}</p>
-            )}
-            {canRollBackTo(item, currentVersion) && <div>{action(item)}</div>}
-          </li>
-        ))}
+              <div className="flex items-center justify-between gap-2">
+                <p className="font-medium text-text-default tabular-nums">
+                  {timeOf(item.at)} · {sourceText(item)}
+                </p>
+                {item.result === "published" ? (
+                  item.version === currentVersion ? (
+                    <span
+                      className={`inline-flex items-center rounded-admin-badge px-1.5 py-0.5 text-caption font-semibold ${SUCCESS_BADGE}`}
+                    >
+                      {t.resultCurrent}
+                    </span>
+                  ) : (
+                    <span className="text-caption text-text-muted">
+                      {fill(t.resultPublished, { count: item.beachCount ?? 0 })}
+                    </span>
+                  )
+                ) : (
+                  <span className="inline-flex items-center rounded-admin-badge bg-status-blocked-bg px-1.5 py-0.5 text-caption font-semibold text-status-blocked-fg ring-1 ring-danger-border ring-inset">
+                    {t.lastRunFailed}
+                  </span>
+                )}
+              </div>
+              {item.result === "published" && (
+                <p className="text-text-default">{changesText(item)}</p>
+              )}
+              <p className="inline-flex items-center gap-1.5">
+                {item.result === "published" ? (
+                  <>
+                    <PassIcon />
+                    <span>{t.verifyPass}</span>
+                  </>
+                ) : (
+                  <>
+                    <FailIcon />
+                    <span className="font-medium text-danger-fg">
+                      {reasonText(item.reason)}
+                    </span>
+                  </>
+                )}
+              </p>
+              {item.gapBefore && (
+                <p className="text-label-s text-status-stale-fg">
+                  {t.gapBefore}
+                </p>
+              )}
+              {action(item) && <div className="mt-1">{action(item)}</div>}
+            </li>
+          );
+        })}
       </ul>
+      <Pager
+        label={t.historyPager}
+        total={items.length}
+        page={page}
+        onPage={onPage}
+      />
     </>
   );
 }
@@ -721,44 +1120,134 @@ function HeldList({
   items: readonly HeldNoticeView[];
   blocked: string | null;
   busyId: string | null;
-  onReapply: (item: HeldNoticeView) => void;
+  onReapply: (
+    item: HeldNoticeView,
+    triggerEl: HTMLButtonElement | null,
+  ) => void;
 }) {
   return (
-    <ul className="flex flex-col gap-2">
+    <section
+      aria-label={t.held}
+      className="flex flex-col divide-y divide-status-stale-border rounded-admin-box border border-status-stale-border bg-status-stale-bg px-3 py-1 text-body-s text-text-body"
+    >
       {items.map((item) => (
-        <li
+        <div
           key={item.id}
-          className="flex flex-col gap-1.5 rounded-admin-box border border-border-default px-3 py-2.5 text-body-s sm:flex-row sm:items-center sm:justify-between"
+          className="flex flex-col gap-2 py-2 sm:flex-row sm:items-center sm:gap-3"
         >
-          <div>
-            <p className="font-medium">
-              {t.noticeLabel} · {item.title ?? t.untitled}{" "}
-              <span className="ml-1 inline-flex rounded-admin-badge border border-status-stale-border px-1.5 text-label-s text-status-stale-fg">
-                {t.heldTag}
-              </span>
-            </p>
-            <p className="text-text-body">
-              {fill(item.restoresLive ? t.heldRestored : t.heldRemoved, {
-                time: timeOf(item.at),
-              })}
-            </p>
+          <span className="font-semibold whitespace-nowrap text-status-stale-fg">
+            {t.heldTitle}
+          </span>
+          <span className="font-medium text-text-default">
+            {t.noticeLabel} · {item.title ?? t.untitled}
+          </span>
+          <span className="text-text-muted">
+            {fill(item.restoresLive ? t.heldRestored : t.heldRemoved, {
+              time: timeOf(item.at),
+            })}
+          </span>
+          <div className="sm:ml-auto">
+            <Button
+              variant="secondary"
+              size="small"
+              disabled={blocked !== null || busyId !== null}
+              aria-describedby={blocked ? "publish-locked" : undefined}
+              onClick={(e) => onReapply(item, e.currentTarget)}
+            >
+              {t.reapply}
+            </Button>
           </div>
-          <Button
-            variant="secondary"
-            size="small"
-            disabled={blocked !== null || busyId !== null}
-            aria-describedby={blocked ? "publish-locked" : undefined}
-            onClick={() => onReapply(item)}
-          >
-            {t.reapply}
-          </Button>
-        </li>
+        </div>
       ))}
-    </ul>
+    </section>
   );
 }
 
-type Dialog = { kind: "publish" } | { kind: "rollback"; version: string };
+// 선택하거나 최근 실패/게시된 기록의 검증 결과 요약(V16 오른쪽 아래)
+function ChecksSection({ item }: { item: HistoryItem | null }) {
+  const title = item
+    ? fill(t.checksTitle, { time: timeOf(item.at) })
+    : t.checksTitleLatest;
+  return (
+    <section aria-labelledby="publish-checks" className="flex flex-col gap-3">
+      <h2
+        id="publish-checks"
+        className="text-title-s font-semibold text-text-default"
+      >
+        {title}
+      </h2>
+      {!item ? (
+        <p className="text-body-s text-text-muted">{t.checksEmpty}</p>
+      ) : (
+        <>
+          <div className="divide-y divide-border-default border-t border-border-default">
+            {item.result === "failed" ? (
+              <>
+                <div className="flex items-center justify-between gap-3 py-2.5 text-body-s">
+                  <div>
+                    <p className="font-medium text-text-default">
+                      {t.checksFailReason}
+                    </p>
+                    <p className="text-caption text-text-muted">
+                      {reasonText(item.reason)}
+                    </p>
+                  </div>
+                  <FailIcon />
+                </div>
+                <div className="flex items-center justify-between gap-3 py-2.5 text-body-s">
+                  <div>
+                    <p className="font-medium text-text-default">
+                      {t.checksFailStatus}
+                    </p>
+                    <p className="text-caption text-text-muted">
+                      {t.checksFailStatusDetail}
+                    </p>
+                  </div>
+                  <FailIcon />
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="flex items-center justify-between gap-3 py-2.5 text-body-s">
+                  <div>
+                    <p className="font-medium text-text-default">
+                      {t.checksStatus}
+                    </p>
+                    <p className="text-caption text-text-muted">
+                      {t.checksPassDetail}
+                    </p>
+                  </div>
+                  <PassIcon />
+                </div>
+                {item.beachCount !== undefined && (
+                  <div className="flex items-center justify-between gap-3 py-2.5 text-body-s">
+                    <div>
+                      <p className="font-medium text-text-default">
+                        {t.checksBeachCount}
+                      </p>
+                      <p className="text-caption text-text-muted">
+                        {fill(t.checksCountValue, { count: item.beachCount })}
+                      </p>
+                    </div>
+                    <PassIcon />
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+          {item.result === "failed" && (
+            <p className="text-caption text-text-muted">{t.checksFailFoot}</p>
+          )}
+        </>
+      )}
+    </section>
+  );
+}
+
+type Dialog =
+  | { kind: "publish" }
+  | { kind: "rollback"; version: string }
+  | { kind: "reapply"; item: HeldNoticeView };
 
 type Message = { tone: "success" | "warn" | "fail"; text: string };
 
@@ -794,6 +1283,13 @@ export function PublishScreen({
     failure: Failed | null;
   }>({ open: false, waiting: false, answer: null, failure: null });
   const [reapplying, setReapplying] = useState<string | null>(null);
+  const [historyPage, setHistoryPage] = useState(0);
+  // null이면 아직 사용자가 고른 게 없음(실패한 첫 기록 또는 최신 기록을 기본 표시)
+  const [selectedVersion, setSelectedVersion] = useState<
+    string | null | undefined
+  >(undefined);
+  const dialogTrigger = useRef<HTMLButtonElement | null>(null);
+  const previewTrigger = useRef<HTMLButtonElement | null>(null);
   const attempt = useRef<{ body: string; key: string } | null>(null);
   // 다시 적용의 멱등 키(공지·포인터 version이 같으면 같은 키 → 응답을 못 받고 다시 눌러도 결과만 확인)
   const reapplyAttempt = useRef<{ id: string; key: string } | null>(null);
@@ -894,16 +1390,26 @@ export function PublishScreen({
     return false;
   };
 
+  const closeDialog = (restoreFocus: boolean) => {
+    setDialog(null);
+    setRollbackPreview(null);
+    const target = dialogTrigger.current;
+    dialogTrigger.current = null;
+    if (restoreFocus && target?.isConnected) {
+      window.requestAnimationFrame(() => target.focus());
+    }
+  };
+
   const confirmPublish = async () => {
     const request: JobRequest = { action: "publish" };
     await send(request, keyFor(request));
-    setDialog(null);
+    closeDialog(false);
   };
 
   const confirmRollback = async (version: string) => {
     const request: JobRequest = { action: "rollback", version };
     await send(request, keyFor(request));
-    setDialog(null);
+    closeDialog(false);
   };
 
   const recheck = () => {
@@ -920,7 +1426,13 @@ export function PublishScreen({
     );
   };
 
-  const openRollback = (version: string) => {
+  const openPublish = (triggerEl: HTMLButtonElement | null) => {
+    dialogTrigger.current = triggerEl;
+    setDialog({ kind: "publish" });
+  };
+
+  const openRollback = (version: string, triggerEl: HTMLButtonElement | null) => {
+    dialogTrigger.current = triggerEl;
     setWord("");
     setDialog({ kind: "rollback", version });
     setRollbackPreview("loading");
@@ -929,7 +1441,16 @@ export function PublishScreen({
     );
   };
 
-  const loadPreview = () => {
+  const openReapply = (
+    item: HeldNoticeView,
+    triggerEl: HTMLButtonElement | null,
+  ) => {
+    dialogTrigger.current = triggerEl;
+    setDialog({ kind: "reapply", item });
+  };
+
+  const loadPreview = (triggerEl?: HTMLButtonElement | null) => {
+    if (triggerEl) previewTrigger.current = triggerEl;
     setPreview({ open: true, waiting: true, answer: null, failure: null });
     void fetchPublishPreview(() => session.accessToken()).then((result) => {
       setPreview({
@@ -941,7 +1462,21 @@ export function PublishScreen({
     });
   };
 
-  const reapply = (item: HeldNoticeView) => {
+  const closePreview = () => {
+    setPreview({
+      open: false,
+      waiting: false,
+      answer: null,
+      failure: null,
+    });
+    const target = previewTrigger.current;
+    previewTrigger.current = null;
+    if (target?.isConnected) {
+      window.requestAnimationFrame(() => target.focus());
+    }
+  };
+
+  const confirmReapply = async (item: HeldNoticeView) => {
     if (!view?.heldNotices.ok) return;
     const holdVersion = view.heldNotices.version;
     const id = `${item.id}|${holdVersion}`;
@@ -950,25 +1485,25 @@ export function PublishScreen({
     }
     setReapplying(item.id);
     setMessage(null);
-    void reapplyNotice(
+    const result = await reapplyNotice(
       () => session.accessToken(),
       item.id,
       holdVersion,
       reapplyAttempt.current.key,
-    ).then((result) => {
-      setReapplying(null);
-      if (result.ok) {
-        reapplyAttempt.current = null;
-        setMessage({ tone: "success", text: t.reapplyDone });
-      } else if (result.status === 409 || result.status === 404) {
-        setMessage({ tone: "warn", text: t.reapplyConflict });
-      } else if (result.code === "reauth") {
-        setMessage({ tone: "warn", text: messages.inquiries.reauth });
-      } else {
-        setMessage({ tone: "fail", text: t.reapplyFailed });
-      }
-      overview.reload();
-    });
+    );
+    setReapplying(null);
+    closeDialog(false);
+    if (result.ok) {
+      reapplyAttempt.current = null;
+      setMessage({ tone: "success", text: t.reapplyDone });
+    } else if (result.status === 409 || result.status === 404) {
+      setMessage({ tone: "warn", text: t.reapplyConflict });
+    } else if (result.code === "reauth") {
+      setMessage({ tone: "warn", text: messages.inquiries.reauth });
+    } else {
+      setMessage({ tone: "fail", text: t.reapplyFailed });
+    }
+    overview.reload();
   };
 
   const pending = view?.pendingNotices.ok ? view.pendingNotices.items : null;
@@ -998,8 +1533,32 @@ export function PublishScreen({
     );
   } else {
     const next = view.nextAuto;
+    const historyItems = view.history.ok ? view.history.items : [];
+    const currentItem = currentVersion
+      ? historyItems.find(
+          (i) => i.result === "published" && i.version === currentVersion,
+        )
+      : undefined;
+    const lastRun = view.lastRun.ok ? view.lastRun.run : null;
+    const skipped = isRunSkipped(lastRun);
+    const nextTime = timeOf(
+      Date.parse(next.warnings) <= Date.parse(next.observations)
+        ? next.warnings
+        : next.observations,
+    );
+    const activeSelectedVersion =
+      selectedVersion === undefined
+        ? (historyItems.find((i) => i.result !== "published")?.version ?? null)
+        : selectedVersion;
+    const inspectedItem =
+      (activeSelectedVersion
+        ? historyItems.find((i) => i.version === activeSelectedVersion)
+        : null) ??
+      historyItems[0] ??
+      null;
+
     content = (
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-3">
         {overview.failure && (
           <FailureNotice
             title={fill(t.unread, { what: t.unreadWhat.current })}
@@ -1007,39 +1566,49 @@ export function PublishScreen({
             onRetry={overview.reload}
           />
         )}
-        <dl className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <dl className="mt-2 grid grid-cols-2 overflow-hidden rounded-admin-box border border-border-default bg-bg-surface shadow-card lg:grid-cols-4">
           {view.current.ok ? (
-            <Card
+            <SummaryCell
               label={t.current}
               value={
                 view.current.generatedAt
                   ? timeOf(view.current.generatedAt)
                   : t.currentNone
               }
+              hint={
+                currentItem?.beachCount !== undefined
+                  ? fill(t.currentBeachCount, { count: currentItem.beachCount })
+                  : undefined
+              }
             />
           ) : (
-            <Card
+            <SummaryCell
               label={t.current}
               value="—"
               hint={fill(t.unread, { what: t.unreadWhat.current })}
             />
           )}
-          <Card
+          <SummaryCell
             label={t.nextAuto}
-            value={timeOf(
-              Date.parse(next.warnings) <= Date.parse(next.observations)
-                ? next.warnings
-                : next.observations,
-            )}
-            hint={fill(t.nextAutoHint, {
-              warnings: timeOf(next.warnings),
-              observations: timeOf(next.observations),
-            })}
+            value={nextTime}
+            hint={
+              skipped && lastRun
+                ? `${fill(t.nextAutoHint, {
+                    warnings: timeOf(next.warnings),
+                    observations: timeOf(next.observations),
+                  })} · ${fill(t.nextAutoSkipped, { time: timeOf(lastRun.at) })}`
+                : fill(t.nextAutoHint, {
+                    warnings: timeOf(next.warnings),
+                    observations: timeOf(next.observations),
+                  })
+            }
           />
           {pending ? (
-            <Card
+            <SummaryCell
               label={t.pending}
-              value={fill(t.pendingCount, { count: pending.length })}
+              value={String(pending.length)}
+              unit={t.pendingCount.replace("{count}", "")}
+              accent={pending.length > 0}
               hint={
                 pending.length > 0
                   ? fill(t.pendingHint, { count: pending.length })
@@ -1047,21 +1616,21 @@ export function PublishScreen({
               }
             />
           ) : (
-            <Card
+            <SummaryCell
               label={t.pending}
               value="—"
               hint={fill(t.unread, { what: t.unreadWhat.pending })}
             />
           )}
           {view.lastRun.ok ? (
-            <Card
+            <SummaryCell
               label={t.lastRun}
               value={
                 view.lastRun.run ? timeOf(view.lastRun.run.at) : t.lastRunNone
               }
               hint={
                 view.lastRun.run
-                  ? view.lastRun.run.result === "unchanged"
+                  ? skipped
                     ? t.lastRunUnchanged
                     : view.lastRun.run.result === "published"
                       ? t.lastRunPublished
@@ -1070,13 +1639,35 @@ export function PublishScreen({
               }
             />
           ) : (
-            <Card
+            <SummaryCell
               label={t.lastRun}
               value="—"
               hint={fill(t.unread, { what: t.unreadWhat.lastRun })}
             />
           )}
         </dl>
+
+        <AppSettingsBar
+          settings={view.settings}
+          maintenancePending={
+            view.pendingNotices.ok
+              ? view.pendingNotices.maintenancePending
+              : null
+          }
+        />
+
+        {view.heldNotices.ok ? (
+          hasHeldNotices(view.heldNotices) && (
+            <HeldList
+              items={view.heldNotices.items}
+              blocked={permission.publish}
+              busyId={reapplying}
+              onReapply={openReapply}
+            />
+          )
+        ) : (
+          <Unread what={t.unreadWhat.held} onRetry={overview.reload} />
+        )}
 
         {(shownJob || unanswered) && (
           <JobPanel
@@ -1092,73 +1683,108 @@ export function PublishScreen({
         )}
 
         {preview.open && (
-          <PreviewPanel
+          <PreviewDrawer
             answer={preview.answer}
             waiting={preview.waiting}
             failure={preview.failure}
             pending={pending}
             currentVersion={currentVersion}
             beaches={beaches}
-            onRetry={loadPreview}
-            onClose={() =>
-              setPreview({
-                open: false,
-                waiting: false,
-                answer: null,
-                failure: null,
-              })
-            }
+            publishLocked={locked}
+            onRetry={() => loadPreview()}
+            onClose={closePreview}
+            onPublish={(triggerEl) => {
+              closePreview();
+              openPublish(triggerEl);
+            }}
           />
         )}
 
-        <SectionBox title={t.pending} headingId="publish-pending">
-          {pending === null ? (
-            <Unread what={t.unreadWhat.pending} onRetry={overview.reload} />
-          ) : pending.length === 0 ? (
-            <p className="text-body-s text-text-muted">
-              {fill(t.pendingEmpty, { time: timeOf(next.warnings) })}
-            </p>
-          ) : (
-            <ul className="flex flex-col gap-1.5 text-body-s">
-              {pending.map((notice) => (
-                <li key={notice.id}>{noticeLine(notice)}</li>
-              ))}
-            </ul>
-          )}
-        </SectionBox>
-
-        {view.heldNotices.ok ? (
-          view.heldNotices.items.length > 0 && (
-            <SectionBox title={t.held} headingId="publish-held">
-              <HeldList
-                items={view.heldNotices.items}
-                blocked={permission.publish}
-                busyId={reapplying}
-                onReapply={reapply}
+        <div className="mt-4 grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_300px] lg:items-start">
+          <section
+            aria-labelledby="publish-history"
+            className="min-w-0 flex flex-col gap-3"
+          >
+            <h2
+              id="publish-history"
+              className="text-title-s font-semibold text-text-default"
+            >
+              {t.history}
+            </h2>
+            {view.history.ok ? (
+              <HistoryList
+                items={view.history.items}
+                page={historyPage}
+                onPage={setHistoryPage}
+                currentVersion={currentVersion}
+                rollbackBlocked={locked}
+                selectedVersion={activeSelectedVersion}
+                onSelect={setSelectedVersion}
+                onRollback={openRollback}
               />
-            </SectionBox>
-          )
-        ) : (
-          <Unread what={t.unreadWhat.held} onRetry={overview.reload} />
-        )}
+            ) : (
+              <Unread what={t.unreadWhat.history} onRetry={overview.reload} />
+            )}
+          </section>
 
-        <SectionBox title={t.history} headingId="publish-history">
-          {view.history.ok ? (
-            <HistoryList
-              items={view.history.items}
-              currentVersion={currentVersion}
-              rollbackBlocked={locked}
-              onRollback={openRollback}
-            />
-          ) : (
-            <Unread what={t.unreadWhat.history} onRetry={overview.reload} />
-          )}
-        </SectionBox>
+          <div className="flex flex-col gap-8">
+            <section
+              aria-labelledby="publish-pending"
+              className="flex flex-col gap-3"
+            >
+              <div className="flex items-baseline gap-2">
+                <h2
+                  id="publish-pending"
+                  className="text-title-s font-semibold text-text-default"
+                >
+                  {t.pending}
+                </h2>
+                {pending !== null && (
+                  <span className="text-body-s text-text-muted tabular-nums">
+                    {pending.length}
+                  </span>
+                )}
+              </div>
+              {pending === null ? (
+                <Unread what={t.unreadWhat.pending} onRetry={overview.reload} />
+              ) : pending.length === 0 ? (
+                <p className="text-body-s text-text-muted">
+                  {fill(t.pendingEmpty, { time: timeOf(next.warnings) })}
+                </p>
+              ) : (
+                <ul className="flex flex-col divide-y divide-border-default border-t border-border-default">
+                  {pending.map((notice) => (
+                    <li key={notice.id} className="flex flex-col gap-2 py-3">
+                      <div className="flex items-center gap-2">
+                        <span className="inline-flex items-center rounded-admin-badge bg-bg-page px-1.5 py-0.5 text-caption font-semibold text-text-body ring-1 ring-border-strong ring-inset">
+                          {t.noticeLabel}
+                        </span>
+                        <span className="font-medium text-text-default">
+                          {notice.title.trim() || t.untitled}
+                        </span>
+                      </div>
+                      <p className="text-caption text-text-muted">
+                        {noticeLine(notice)} · {t.pendingStatusDraft} ·{" "}
+                        {fill(t.pendingStatusStart, {
+                          time: timeOf(notice.startsAt),
+                        })}
+                      </p>
+                      <NoticeDiffBox notice={notice} />
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+
+            {view.history.ok && <ChecksSection item={inspectedItem} />}
+          </div>
+        </div>
       </div>
     );
   }
 
   const rollbackVersion = dialog?.kind === "rollback" ? dialog.version : null;
+  const reapplyItem = dialog?.kind === "reapply" ? dialog.item : null;
   const rbResult =
     rollbackPreview && rollbackPreview !== "loading" ? rollbackPreview : null;
   const rbReady =
@@ -1180,7 +1806,7 @@ export function PublishScreen({
                 variant="secondary"
                 size="small"
                 disabled={!view || preview.waiting}
-                onClick={loadPreview}
+                onClick={(e) => loadPreview(e.currentTarget)}
               >
                 {t.previewButton}
               </Button>
@@ -1188,7 +1814,7 @@ export function PublishScreen({
                 size="small"
                 disabled={!view || locked !== null}
                 aria-describedby={locked ? "publish-locked" : undefined}
-                onClick={() => setDialog({ kind: "publish" })}
+                onClick={(e) => openPublish(e.currentTarget)}
               >
                 {t.publishButton}
               </Button>
@@ -1223,7 +1849,7 @@ export function PublishScreen({
           confirmDisabled={false}
           busy={writing}
           onConfirm={() => void confirmPublish()}
-          onClose={() => setDialog(null)}
+          onClose={() => closeDialog(true)}
         >
           <p>{t.confirmPublishBody}</p>
           {pending === null && (
@@ -1243,6 +1869,24 @@ export function PublishScreen({
         </ConfirmDialog>
       )}
 
+      {reapplyItem && (
+        <ConfirmDialog
+          cancelLabel={t.cancel}
+          titleId="reapply-confirm-title"
+          title={fill(t.confirmReapplyTitle, {
+            title: reapplyItem.title ?? t.untitled,
+          })}
+          confirmLabel={t.reapply}
+          confirmDisabled={false}
+          busy={reapplying !== null}
+          onConfirm={() => void confirmReapply(reapplyItem)}
+          onClose={() => closeDialog(true)}
+        >
+          <p>{t.confirmReapplyBody}</p>
+          <p>{t.confirmReapplyNote}</p>
+        </ConfirmDialog>
+      )}
+
       {rollbackVersion && (
         <ConfirmDialog
           cancelLabel={t.cancel}
@@ -1254,10 +1898,7 @@ export function PublishScreen({
           confirmDisabled={rbReady === null || word.trim() !== ROLLBACK_WORD}
           busy={writing}
           onConfirm={() => void confirmRollback(rollbackVersion)}
-          onClose={() => {
-            setDialog(null);
-            setRollbackPreview(null);
-          }}
+          onClose={() => closeDialog(true)}
         >
           <p>{t.confirmRollbackBody}</p>
           {rollbackPreview === "loading" && (
