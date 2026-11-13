@@ -58,6 +58,8 @@ export function CommandPalette({
   };
 
   const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    // 한글 조합 중 Enter·화살표는 글자를 확정하는 키라 고르기·열기로 쓰지 않음
+    if (e.nativeEvent.isComposing) return;
     if (e.key === "ArrowDown" || e.key === "ArrowUp") {
       e.preventDefault();
       if (found.length === 0) return;
@@ -113,7 +115,7 @@ export function CommandPalette({
               aria-label={t.searchClose}
               className="rounded-admin-badge border border-border-strong px-1.5 text-caption font-semibold text-text-body"
             >
-              Esc
+              {t.searchCloseKey}
             </button>
           </div>
           <div className="max-h-[50vh] overflow-y-auto p-2">
