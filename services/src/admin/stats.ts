@@ -13,7 +13,9 @@ export const STATS_RANGES = ["today", "7d", "28d", "60d"] as const;
 export type StatsRange = (typeof STATS_RANGES)[number];
 
 export const STATS_CACHE_TTL_MS = 5 * 60_000;
-export const GA4_TIMEOUT_MS = 8_000;
+export const SSM_TIMEOUT_MS = 2_500;
+export const TOKEN_TIMEOUT_MS = 2_500;
+export const GA4_TIMEOUT_MS = 4_500;
 const GA4_SCOPE = "https://www.googleapis.com/auth/analytics.readonly";
 
 export interface StatsMetadata {
@@ -48,9 +50,9 @@ export interface StatsPeriod {
   readonly status: "ok" | "unavailable";
   readonly activeUsers: number | null;
   readonly pageViews: number | null;
-  readonly topBeaches: readonly StatsBeachRow[];
-  readonly devices: readonly StatsDeviceRow[];
-  readonly languages: readonly StatsLanguageRow[];
+  readonly topBeaches: readonly StatsBeachRow[] | null;
+  readonly devices: readonly StatsDeviceRow[] | null;
+  readonly languages: readonly StatsLanguageRow[] | null;
   readonly metadata: StatsMetadata;
 }
 
@@ -61,6 +63,7 @@ export interface StatsEventStatus {
 
 export interface StatsResponse {
   readonly configured: boolean;
+  readonly sample?: boolean;
   readonly fetchedAt: string;
   readonly cached: boolean;
   readonly range: StatsRange;
@@ -164,20 +167,49 @@ export function parseSummaryReport(body: Ga4ReportBody): {
   };
 }
 
+function mergeMetricCount(
+  prev: number | null,
+  next: number | null,
+): number | null {
+  if (prev === null || next === null) return null;
+  return prev + next;
+}
+
+function compareMetricDesc(a: number | null, b: number | null): number {
+  if (a === null && b === null) return 0;
+  if (a === null) return 1;
+  if (b === null) return -1;
+  return b - a;
+}
+
 export function parseTopBeachesReport(body: Ga4ReportBody): {
   rows: readonly StatsBeachRow[];
   metadata: StatsMetadata;
 } {
-  const rows = (body.rows ?? [])
-    .map((r) => {
-      const path = r.dimensionValues?.[0]?.value ?? "";
-      return {
-        path,
-        slug: extractBeachSlug(path),
-        pageViews: parseMetricInt(r.metricValues?.[0]?.value),
-      };
-    })
-    .filter((r) => r.path !== "");
+  const bySlug = new Map<string, StatsBeachRow>();
+  for (const r of body.rows ?? []) {
+    const path = r.dimensionValues?.[0]?.value ?? "";
+    const slug = extractBeachSlug(path);
+    if (!slug) continue;
+    const pageViews = parseMetricInt(r.metricValues?.[0]?.value);
+    const prev = bySlug.get(slug);
+    if (!prev) {
+      bySlug.set(slug, {
+        path: `/spots/${slug}`,
+        slug,
+        pageViews,
+      });
+    } else {
+      bySlug.set(slug, {
+        path: prev.path,
+        slug,
+        pageViews: mergeMetricCount(prev.pageViews, pageViews),
+      });
+    }
+  }
+  const rows = [...bySlug.values()].sort((a, b) =>
+    compareMetricDesc(a.pageViews, b.pageViews),
+  );
   return { rows, metadata: extractMetadataFlags(body.metadata) };
 }
 
@@ -198,12 +230,25 @@ export function parseLanguagesReport(body: Ga4ReportBody): {
   rows: readonly StatsLanguageRow[];
   metadata: StatsMetadata;
 } {
-  const rows = (body.rows ?? [])
-    .map((r) => ({
-      language: r.dimensionValues?.[0]?.value ?? "",
-      activeUsers: parseMetricInt(r.metricValues?.[0]?.value),
-    }))
-    .filter((r) => r.language !== "");
+  const byLang = new Map<string, number | null>();
+  for (const r of body.rows ?? []) {
+    const raw = (r.dimensionValues?.[0]?.value ?? "").trim().toLowerCase();
+    if (!raw || raw === "(not set)") continue;
+    const primary = raw.split(/[-_]/, 1)[0] ?? "";
+    if (!primary) continue;
+    const activeUsers = parseMetricInt(r.metricValues?.[0]?.value);
+    if (!byLang.has(primary)) {
+      byLang.set(primary, activeUsers);
+    } else {
+      byLang.set(
+        primary,
+        mergeMetricCount(byLang.get(primary) ?? null, activeUsers),
+      );
+    }
+  }
+  const rows: StatsLanguageRow[] = [...byLang.entries()]
+    .map(([language, activeUsers]) => ({ language, activeUsers }))
+    .sort((a, b) => compareMetricDesc(a.activeUsers, b.activeUsers));
   return { rows, metadata: extractMetadataFlags(body.metadata) };
 }
 
@@ -237,9 +282,9 @@ export function unconfiguredStats(
       status: "unavailable",
       activeUsers: null,
       pageViews: null,
-      topBeaches: [],
-      devices: [],
-      languages: [],
+      topBeaches: null,
+      devices: null,
+      languages: null,
       metadata: { thresholding: false, sampling: false, otherRowLoss: false },
     },
     events: STATS_EVENTS,
@@ -263,10 +308,14 @@ export function createCachedStatsReader(
         return { ...hit.value, cached: true };
       }
       const fresh = await inner.read(range);
-      // 실시간·기간 둘 다 실패하면 캐시하지 않아 다음 요청이 바로 재시도함
+      // 실시간·기간·세부 리포트 중 하나라도 실패하면 캐시하지 않아 다음 새로고침이 바로 재시도함
       if (
         fresh.configured &&
-        (fresh.realtime.status === "ok" || fresh.period.status === "ok")
+        fresh.realtime.status === "ok" &&
+        fresh.period.status === "ok" &&
+        fresh.period.topBeaches !== null &&
+        fresh.period.devices !== null &&
+        fresh.period.languages !== null
       ) {
         cache.set(range, { expiresAtMs: currentMs + ttlMs, value: fresh });
       }
@@ -291,29 +340,53 @@ async function defaultLoadKeyJson(
   const ssm = new SSMClient({ region });
   const out = await ssm.send(
     new GetParameterCommand({ Name: paramName, WithDecryption: true }),
-    { abortSignal: AbortSignal.timeout(4_000) },
+    { abortSignal: AbortSignal.timeout(SSM_TIMEOUT_MS) },
   );
   return out.Parameter?.Value ?? null;
 }
 
+function withTimeout<T>(
+  promise: Promise<T>,
+  ms: number,
+  label: string,
+): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error(`${label} timeout`)), ms);
+    }),
+  ]).finally(() => {
+    if (timer) clearTimeout(timer);
+  });
+}
+
 export function createGa4StatsReader(config: Ga4StatsConfig): StatsReader {
-  let cachedCreds: Record<string, unknown> | null = null;
+  let cachedClient: Awaited<ReturnType<GoogleAuth["getClient"]>> | null = null;
   const fetchImpl = config.fetchFn ?? fetch;
 
   async function getAccessToken(): Promise<string> {
-    if (!cachedCreds) {
+    if (!cachedClient) {
       const raw = config.loadKeyJson
-        ? await config.loadKeyJson(config.serviceAccountParam)
+        ? await withTimeout(
+            config.loadKeyJson(config.serviceAccountParam),
+            SSM_TIMEOUT_MS,
+            "SSM",
+          )
         : await defaultLoadKeyJson(config.region, config.serviceAccountParam);
       if (!raw) throw new Error("GA4 서비스 계정 키 파라미터 비어 있음");
-      cachedCreds = JSON.parse(raw) as Record<string, unknown>;
+      const credentials = JSON.parse(raw) as Record<string, unknown>;
+      const auth = new GoogleAuth({
+        credentials,
+        scopes: [GA4_SCOPE],
+      });
+      cachedClient = await auth.getClient();
     }
-    const auth = new GoogleAuth({
-      credentials: cachedCreds,
-      scopes: [GA4_SCOPE],
-    });
-    const client = await auth.getClient();
-    const token = await client.getAccessToken();
+    const token = await withTimeout(
+      cachedClient.getAccessToken(),
+      TOKEN_TIMEOUT_MS,
+      "GA4 token",
+    );
     if (!token.token) throw new Error("GA4 액세스 토큰 발급 실패");
     return token.token;
   }
@@ -383,7 +456,7 @@ export function createGa4StatsReader(config: Ga4StatsConfig): StatsReader {
           }),
           postGa4("runReport", token, {
             dateRanges: [dateRange],
-            dimensions: [{ name: "language" }],
+            dimensions: [{ name: "languageCode" }],
             metrics: [{ name: "activeUsers" }],
             orderBys: [{ metric: { metricName: "activeUsers" }, desc: true }],
             limit: 10,
@@ -407,9 +480,9 @@ export function createGa4StatsReader(config: Ga4StatsConfig): StatsReader {
         status: "unavailable",
         activeUsers: null,
         pageViews: null,
-        topBeaches: [],
-        devices: [],
-        languages: [],
+        topBeaches: null,
+        devices: null,
+        languages: null,
         metadata: { thresholding: false, sampling: false, otherRowLoss: false },
       };
 
@@ -418,27 +491,42 @@ export function createGa4StatsReader(config: Ga4StatsConfig): StatsReader {
         const beaches =
           beachesRes.status === "fulfilled"
             ? parseTopBeachesReport(beachesRes.value)
-            : { rows: [], metadata: summary.metadata };
+            : null;
+        if (!beaches && beachesRes.status === "rejected") {
+          safeLog("warn", "stats_beaches_failed", {
+            error: errorName(beachesRes.reason),
+          });
+        }
         const devices =
           devicesRes.status === "fulfilled"
             ? parseDevicesReport(devicesRes.value)
-            : { rows: [], metadata: summary.metadata };
+            : null;
+        if (!devices && devicesRes.status === "rejected") {
+          safeLog("warn", "stats_devices_failed", {
+            error: errorName(devicesRes.reason),
+          });
+        }
         const languages =
           languagesRes.status === "fulfilled"
             ? parseLanguagesReport(languagesRes.value)
-            : { rows: [], metadata: summary.metadata };
+            : null;
+        if (!languages && languagesRes.status === "rejected") {
+          safeLog("warn", "stats_languages_failed", {
+            error: errorName(languagesRes.reason),
+          });
+        }
         period = {
           status: "ok",
           activeUsers: summary.activeUsers,
           pageViews: summary.pageViews,
-          topBeaches: beaches.rows,
-          devices: devices.rows,
-          languages: languages.rows,
+          topBeaches: beaches ? beaches.rows : null,
+          devices: devices ? devices.rows : null,
+          languages: languages ? languages.rows : null,
           metadata: mergeMetadataFlags([
             summary.metadata,
-            beaches.metadata,
-            devices.metadata,
-            languages.metadata,
+            ...(beaches ? [beaches.metadata] : []),
+            ...(devices ? [devices.metadata] : []),
+            ...(languages ? [languages.metadata] : []),
           ]),
         };
       } else {

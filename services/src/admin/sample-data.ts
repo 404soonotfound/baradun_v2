@@ -178,6 +178,7 @@ export function sampleStats(range: StatsRange, now: Date): StatsResponse {
   const m = SAMPLE_MULTIPLIER[range];
   return {
     configured: true,
+    sample: true,
     fetchedAt: now.toISOString(),
     cached: false,
     range,
