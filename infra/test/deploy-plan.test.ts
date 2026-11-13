@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  autoDeployDecision,
   canonicalJson,
   changeSetName,
   checkLine,
@@ -12,6 +13,7 @@ import {
   isCalendarDate,
   isEmptyChangeSet,
   isStackReady,
+  linkedIssues,
   policyDiff,
   redactAccount,
   scanLogLines,
@@ -502,5 +504,96 @@ describe("인증키 만료일 (GH-382)", () => {
     expect(isCalendarDate("2027-02-29")).toBe(false);
     expect(isCalendarDate("2027-3-31")).toBe(false);
     expect(isCalendarDate("20270331")).toBe(false);
+  });
+});
+
+describe("main 머지 뒤 자동 배포 판정 (#418)", () => {
+  const change = (
+    LogicalResourceId: string,
+    ResourceType: string,
+    Action = "Modify",
+    Replacement = "False",
+  ) => ({
+    ResourceChange: { Action, LogicalResourceId, ResourceType, Replacement },
+  });
+
+  it("코드·설정과 권한 변경, 데이터 없는 리소스의 교체 가능성은 바로 실행한다", () => {
+    const rows = summarizeChanges([
+      change("OpsApiFunction", "AWS::Lambda::Function"),
+      change("OpsApiRoleDefaultPolicy", "AWS::IAM::Policy"),
+      change("OpsApiUrl", "AWS::Lambda::Url", "Modify", "Conditional"),
+      change("CDKMetadata", "AWS::CDK::Metadata", "Modify", "Conditional"),
+    ]);
+    expect(
+      autoDeployDecision({ hasChangeSet: true, rows, boundarySame: true }),
+    ).toEqual({ kind: "auto", reasons: [] });
+  });
+
+  it("삭제·교체나 데이터 리소스의 교체 가능성이 있으면 승인을 기다리고 이유를 리소스마다 남긴다", () => {
+    const rows = summarizeChanges([
+      change("OpsApiFunction", "AWS::Lambda::Function"),
+      change("OldQueue", "AWS::SQS::Queue", "Remove", "-"),
+      change("SiteFn", "AWS::Lambda::Function", "Modify", "True"),
+      change("OpsTable", "AWS::DynamoDB::Table", "Modify", "Conditional"),
+    ]);
+    const decision = autoDeployDecision({
+      hasChangeSet: true,
+      rows,
+      boundarySame: true,
+    });
+    expect(decision.kind).toBe("hold");
+    expect(decision.reasons).toEqual([
+      "OldQueue(AWS::SQS::Queue): 삭제",
+      "SiteFn(AWS::Lambda::Function): 교체",
+      "OpsTable(AWS::DynamoDB::Table): 교체될 수도 있음(데이터 리소스)",
+    ]);
+  });
+
+  it("boundary가 저장소와 다르면 변경 세트와 상관없이 로컬 배포로 넘긴다(CI는 boundary를 고치지 않음)", () => {
+    for (const hasChangeSet of [true, false]) {
+      expect(
+        autoDeployDecision({ hasChangeSet, rows: [], boundarySame: false })
+          .kind,
+      ).toBe("local");
+    }
+  });
+
+  it("바뀐 것이 없으면 아무것도 하지 않는다", () => {
+    expect(
+      autoDeployDecision({ hasChangeSet: false, rows: [], boundarySame: true }),
+    ).toEqual({ kind: "none", reasons: [] });
+  });
+
+  it("CI 배포 댓글은 실행 방식을 제목에 적고, 없으면 로컬 명령으로 적는다", () => {
+    const base = {
+      subject: "abc1234 GH-418 feat(infra): 자동 배포",
+      changeSet: "deploy-abc1234-20261113-010203",
+      rows: [],
+      boundary: "저장소와 같음(v5)",
+      executionPolicies: [],
+      watchMinutes: 0,
+      checks: [],
+    };
+    expect(deployComment(base)).toContain(
+      "## 인프라 배포 결과 (`npm run deploy:infra`)",
+    );
+    expect(deployComment({ ...base, via: "main 머지 뒤 자동 배포" })).toContain(
+      "## 인프라 배포 결과 (main 머지 뒤 자동 배포)",
+    );
+  });
+});
+
+describe("배포 결과를 남길 이슈 (#418)", () => {
+  it("PR 설명의 Fixes·Part of·Closes 연결 문구에서 이슈 번호를 순서대로 한 번씩 고른다", () => {
+    expect(
+      linkedIssues(
+        "Fixes #365, fixes #366\nPart of #330\n관련: #12\nCloses #365\nResolves #7",
+      ),
+    ).toEqual([365, 366, 330, 7]);
+  });
+
+  it("연결 문구가 없거나 설명이 비면 빈 목록", () => {
+    expect(linkedIssues("관련 #12, GH-418")).toEqual([]);
+    expect(linkedIssues(null)).toEqual([]);
   });
 });
