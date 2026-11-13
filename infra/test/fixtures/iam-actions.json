@@ -56,6 +56,7 @@
     "cognito-idp:GetUserPoolMfaConfig",
     "cognito-idp:ListTagsForResource",
     "cognito-idp:ListUserPoolClientSecrets",
+    "cognito-idp:ListUsers",
     "cognito-idp:SetUserPoolMfaConfig",
     "cognito-idp:TagResource",
     "cognito-idp:UntagResource",

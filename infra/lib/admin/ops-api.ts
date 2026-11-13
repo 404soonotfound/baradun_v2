@@ -201,13 +201,15 @@ export class OpsApi extends Construct {
       }),
     );
 
-    // 다른 운영자의 2단계 인증 초기화(#335, D16-A9): 운영자 풀 하나에서 계정 확인·인증 앱 지우기만
+    // 다른 운영자의 2단계 인증 초기화(#335, D16-A9)와 변경 이력 운영자 이메일 조회(#465):
+    // 운영자 풀 하나에서 계정 확인(AdminGetUser·ListUsers)·인증 앱 지우기만
     // 데모(샘플) 풀·비밀번호·그룹·계정 만들기·지우기 권한은 주지 않음
     this.role.addToPolicy(
       new iam.PolicyStatement({
         actions: [
           "cognito-idp:AdminGetUser",
           "cognito-idp:AdminDeleteSoftwareToken",
+          "cognito-idp:ListUsers",
         ],
         resources: [props.auth.userPool.userPoolArn],
       }),
