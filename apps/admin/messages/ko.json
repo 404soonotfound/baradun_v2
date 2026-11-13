@@ -261,6 +261,7 @@
     "searchEmpty": "맞는 화면이 없어요. 다른 낱말로 찾아 주세요.",
     "searchHint": "↑↓ 이동 · Enter 열기 · Esc 닫기",
     "searchClose": "찾기 닫기",
+    "searchCloseKey": "Esc",
     "home": "운영 홈",
     "groupRecords": "기록",
     "stats": "이용 통계",

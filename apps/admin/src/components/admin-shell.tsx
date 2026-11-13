@@ -15,6 +15,7 @@ import {
   useId,
   useRef,
   useState,
+  useSyncExternalStore,
   type FocusEvent,
   type MouseEvent,
   type ReactNode,
@@ -479,7 +480,8 @@ function StatusBlock({ status }: { status: ShellStatus }) {
 }
 
 // 사용자 칸: 아바타 + 이메일 + '…' 메뉴(내 계정·로그아웃). 이름 칸이 없어 이메일로 보임(11/13 결정)
-// 메뉴는 단추 위로 펼침. Esc·바깥 누르기로 닫고, Esc면 단추로 포커스를 돌려줌
+// 메뉴는 단추 위로 펼침. Esc·바깥 누르기·포커스가 밖으로 나가면 닫고, Esc면 단추로 포커스를 돌려줌
+// 메뉴는 보이는 자리(위)와 달리 DOM에서 단추 뒤에 둠 → 단추에서 Tab으로 바로 메뉴 항목에 닿음
 function UserRow() {
   const router = useRouter();
   const pathname = usePathname();
@@ -513,7 +515,34 @@ function UserRow() {
           button.current?.focus();
         }
       }}
+      // 키보드로 메뉴 밖으로 나가면 닫음. 받는 쪽이 없는 blur(Safari의 누르기 등)는 바깥 누르기 처리에 맡김
+      onBlur={(e) => {
+        const next = e.relatedTarget as Node | null;
+        if (open && next && !e.currentTarget.contains(next)) setOpen(false);
+      }}
     >
+      <div className="flex items-center gap-2.5 px-2 py-1.5 text-body font-medium text-text-body">
+        <span
+          aria-hidden="true"
+          className="flex size-8 shrink-0 items-center justify-center rounded-full border border-border-strong text-caption"
+        >
+          {email.charAt(0).toUpperCase()}
+        </span>
+        <span className="min-w-0 flex-1 truncate" title={email}>
+          {email}
+        </span>
+        <button
+          ref={button}
+          type="button"
+          aria-label={email ? fill(t.userMenuFor, { email }) : t.userMenu}
+          aria-expanded={open}
+          aria-controls={open ? menuId : undefined}
+          onClick={() => setOpen((v) => !v)}
+          className="-mr-1 flex size-7 shrink-0 items-center justify-center rounded-admin-control text-text-muted hover:bg-bg-page"
+        >
+          <MoreIcon className="size-4" />
+        </button>
+      </div>
       {open && (
         <div
           id={menuId}
@@ -550,36 +579,34 @@ function UserRow() {
           </button>
         </div>
       )}
-      <div className="flex items-center gap-2.5 px-2 py-1.5 text-body font-medium text-text-body">
-        <span
-          aria-hidden="true"
-          className="flex size-8 shrink-0 items-center justify-center rounded-full border border-border-strong text-caption"
-        >
-          {email.charAt(0).toUpperCase()}
-        </span>
-        <span className="min-w-0 flex-1 truncate" title={email}>
-          {email}
-        </span>
-        <button
-          ref={button}
-          type="button"
-          aria-label={email ? fill(t.userMenuFor, { email }) : t.userMenu}
-          aria-expanded={open}
-          aria-controls={open ? menuId : undefined}
-          onClick={() => setOpen((v) => !v)}
-          className="-mr-1 flex size-7 shrink-0 items-center justify-center rounded-admin-control text-text-muted hover:bg-bg-page"
-        >
-          <MoreIcon className="size-4" />
-        </button>
-      </div>
     </div>
+  );
+}
+
+// PC 폭(1024px 이상, Tailwind lg). 상태 칸은 PC 메뉴에만 있어 이 폭에서만 운영 API를 부름
+const DESKTOP = "(min-width: 1024px)";
+
+function subscribeDesktop(onChange: () => void): () => void {
+  const query = window.matchMedia(DESKTOP);
+  query.addEventListener("change", onChange);
+  return () => query.removeEventListener("change", onChange);
+}
+
+function useDesktop(): boolean {
+  return useSyncExternalStore(
+    subscribeDesktop,
+    () => window.matchMedia(DESKTOP).matches,
+    () => false,
   );
 }
 
 function DesktopSide({ onSearch }: { onSearch: () => void }) {
   const session = useAuthSession();
   const snapshot = useSessionSnapshot();
-  const owner = snapshot.status === "signed_in" ? badgeOwner(snapshot) : null;
+  const desktop = useDesktop();
+  // 모바일·태블릿에서는 숨은 상태 칸 때문에 수집 현황을 부르지 않음(owner 없음 → 요청 없음)
+  const owner =
+    desktop && snapshot.status === "signed_in" ? badgeOwner(snapshot) : null;
   const status = useShellStatus(owner, () => session.accessToken());
   return (
     <div className="hidden h-full flex-col gap-5 lg:flex">
@@ -686,7 +713,8 @@ export function AdminShell({
       if (
         (e.metaKey || e.ctrlKey) &&
         !e.altKey &&
-        e.key.toLowerCase() === "k"
+        // 한글 자판 등에서는 key가 'k'가 아닐 수 있어 자리(code)로도 봄
+        (e.key.toLowerCase() === "k" || e.code === "KeyK")
       ) {
         e.preventDefault();
         setPaletteOpen(true);
