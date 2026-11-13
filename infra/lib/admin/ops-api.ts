@@ -37,6 +37,7 @@ import type { OperatorAuth } from "./operator-auth";
 // - 해변 관리의 지금 표시 상태(BRD-150): 게시 버킷 data/ 아래 읽기(GetObject)와 data/ 접두어 목록만. 쓰기·지우기 없음
 //   publisher가 게시한 manifest → status.json을 그대로 돌려줌(다시 계산하지 않음, G1)
 // - 토큰 검증 공개 키(JWKS)는 Cognito 공개 주소에서 받음(키·비밀값 없음)
+// - 2단계 인증 초기화(#335, D16-A9): 운영자 풀 ARN 하나에 AdminGetUser·AdminDeleteSoftwareToken만
 // - 데이터 게시(#331, 아키텍처 18.4·D16-C4): '지금 게시'·'되돌리기' 작업을 만들고 publisher 함수 하나를 비동기로 부름
 //   lambda:InvokeFunction을 그 함수 ARN에만 줌(버전·별칭 :* 없음). 게시 파일(S3 data/) 쓰기는 주지 않음(6.2 단일 작성자)
 //   작업 기록·작업 자리는 admin# 키라 기존 Ops 쓰기 권한 안. 실패한 실행 목록은 게시 실행 결과 파티션만 Query
@@ -197,6 +198,18 @@ export class OpsApi extends Construct {
         resources: [
           `${props.inquiryTable.tableArn}/index/${INQUIRY_STATUS_INDEX.name}`,
         ],
+      }),
+    );
+
+    // 다른 운영자의 2단계 인증 초기화(#335, D16-A9): 운영자 풀 하나에서 계정 확인·인증 앱 지우기만
+    // 데모(샘플) 풀·비밀번호·그룹·계정 만들기·지우기 권한은 주지 않음
+    this.role.addToPolicy(
+      new iam.PolicyStatement({
+        actions: [
+          "cognito-idp:AdminGetUser",
+          "cognito-idp:AdminDeleteSoftwareToken",
+        ],
+        resources: [props.auth.userPool.userPoolArn],
       }),
     );
 
