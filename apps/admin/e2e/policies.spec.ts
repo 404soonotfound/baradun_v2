@@ -1,6 +1,6 @@
 import type { Page } from "@playwright/test";
 import snapshot from "../src/content/ops-policy.json";
-import { policyTime } from "../src/lib/policies";
+import { policyShortTime } from "../src/lib/policies";
 import {
   ME_OK,
   expect,
@@ -57,7 +57,7 @@ test("revision·가져온 시각·원문 링크를 보여 주고 '최신'이라�
   await openPolicies(page);
   await expect(
     page.getByText(
-      `노션 마지막 수정 ${policyTime(snapshot.revision)} · 마지막 동기화 ${policyTime(snapshot.fetchedAt)}`,
+      `9개 모두 확정 · 원본은 노션 결정 기록 · 노션 마지막 수정 ${policyShortTime(snapshot.revision)} · 동기화 ${policyShortTime(snapshot.fetchedAt)} · 노션에서 고치면 다시 동기화해야 반영돼요 · 읽기 전용`,
     ),
   ).toBeVisible();
   const notion = page.getByRole("link", { name: "노션에서 열기 (새 탭)" });
@@ -65,14 +65,14 @@ test("revision·가져온 시각·원문 링크를 보여 주고 '최신'이라�
   await expect(notion).toHaveAttribute("target", "_blank");
   await expect(
     page.getByText("노션과 자동으로 동기화되지 않아요"),
-  ).toBeVisible();
+  ).toHaveCount(0);
   await expect(page.getByText("최신")).toHaveCount(0);
   // 9개 항목 모두 원본의 상태 표시와 함께
   const items = list(page).getByRole("link");
   await expect(items).toHaveCount(9);
-  await expect(items.first()).toContainText("1. 판단 원칙·표현 원칙");
+  await expect(items.first()).toContainText("판단 원칙·표현 원칙");
   await expect(items.first()).toContainText("확정");
-  await expect(items.nth(8)).toContainText("9. 문의 응대");
+  await expect(items.nth(8)).toContainText("문의 응대");
   // 운영 API를 부르지 않음
   expect(policyCalls).toEqual([]);
   await expectNoA11yViolations(page);
@@ -87,18 +87,18 @@ test("한 번에 하나씩 읽는다: PC는 왼쪽 목록 + 내용, 모바일은
     // 모바일 첫 화면은 목록만
     await expect(detailTitle(page)).toHaveCount(0);
   } else {
-    await expect(detailTitle(page)).toHaveText("1. 판단 원칙·표현 원칙");
+    await expect(detailTitle(page)).toHaveText("판단 원칙·표현 원칙");
   }
   await list(page)
-    .getByRole("link", { name: /6\. 장애 대응/ })
+    .getByRole("link", { name: /장애 대응/ })
     .click();
   await expect(page).toHaveURL(/\/policies\/\?id=6$/);
-  await expect(detailTitle(page)).toHaveText("6. 장애 대응");
+  await expect(detailTitle(page)).toHaveText("장애 대응");
   const detail = page.getByRole("article").filter({ visible: true });
   await expect(detail.getByRole("listitem")).toHaveCount(6);
   // 원본의 '미확정:' 굵은 글씨를 그대로 보여 줌
   await expect(detail.locator("strong", { hasText: "미확정:" })).toBeVisible();
-  await expect(detail).toContainText("근거: 12장 결정 1");
+  await expect(detail).toContainText("근거 · 12장 결정 1");
   if (isMobile(page)) {
     await expect(list(page)).toBeHidden();
     await expectNoA11yViolations(page);
@@ -108,7 +108,7 @@ test("한 번에 하나씩 읽는다: PC는 왼쪽 목록 + 내용, 모바일은
     await expect(detailTitle(page)).toHaveCount(0);
   } else {
     await expect(
-      list(page).getByRole("link", { name: /6\. 장애 대응/ }),
+      list(page).getByRole("link", { name: /장애 대응/ }),
     ).toHaveAttribute("aria-current", "page");
     await expect(
       page.getByRole("link", { name: "정책 목록으로" }),

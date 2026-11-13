@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import committed from "../content/ops-policy.json";
-import { parsePolicySnapshot, policyTime, sectionOf } from "./policies";
+import {
+  parsePolicySnapshot,
+  policyShortTime,
+  policyTime,
+  sectionOf,
+} from "./policies";
 
 // 운영 정책 원본 파일 확인 (#335, 결정 기록 D20-8~11·D16-E5)
 
@@ -106,5 +111,10 @@ describe("policyTime", () => {
     expect(policyTime("2026-11-12T15:15:22.234Z")).toBe("2026/11/13 00:15");
     expect(policyTime("2025-12-31T14:59:00.000Z")).toBe("2025/12/31 23:59");
     expect(policyTime("2025-12-31T15:00:00.000Z")).toBe("2026/01/01 00:00");
+  });
+
+  it("policyShortTime은 KST MM/DD HH:MM으로 바꾼다", () => {
+    expect(policyShortTime("2026-11-12T15:15:22.234Z")).toBe("11/13 00:15");
+    expect(policyShortTime("2026-11-03T00:05:00.000Z")).toBe("11/03 09:05");
   });
 });
