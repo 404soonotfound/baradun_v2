@@ -76,7 +76,9 @@ GitHub 저장소 설정 → Environments에서 `infra`(배포 브랜치 `main`�
 
 - GitHub에서 이 저장소 하나만 선택한 세분화 토큰을 만듭니다. Actions·Contents·Variables는 읽기만 허용합니다. AWS 서울 리전의 `/baradun/v2/ops/github-read-token`에 Standard SecureString(기본 `aws/ssm`)으로 등록하고, `expires` 태그에 만료일(`YYYY-MM-DD`)을 넣습니다.
 - 권한 경계를 먼저 반영하고 스택을 배포합니다. 스택 매개변수 `AdminSiteDeployUrl`에는 `ADMIN_SITE_URL`과 같은 HTTPS 원본 주소를 넣습니다. 초기에는 `AdminDistributionDomainName` 출력의 HTTPS 주소를 씁니다. 사용자 사이트 주소는 스택의 대표 도메인 또는 CloudFront 기본 주소를 사용합니다. 처음 설정하거나 주소를 바꿀 때는 배포용 작업 트리에서 `npm run deploy:infra -- --issue 471 --admin-site-deploy-url https://<운영자-사이트-호스트>`를 실행합니다.
-- `GET /ops/site-deploy`는 실제 운영자만 읽을 수 있습니다. 토큰 등록·조회 권한이나 주소를 확인하지 못하면 화면에서 확인 못 함으로 보입니다. 토큰을 교체하면 기존 실행 환경에서는 최대 10분 뒤 새 값을 읽습니다.
+- `GET /ops/site-deploy`는 실제 운영자만 읽을 수 있습니다. 토큰 등록·조회 권한이나 주소를 확인하지 못하면 화면에서 확인 못 함으로 보입니다. 토큰을 교체하면 기존 실행 환경에서는 최대 10분 뒤 새 값을 읽습니다. GitHub가 401을 반환하면 캐시를 비우고 다음 조회에서 SSM을 다시 읽습니다.
+- 배포 전 변경 세트에서 두 CloudFront 배포판이 수정으로 표시되고 교체되지 않는지 확인합니다. 배포 뒤 운영 API 함수 이름이 권한 경계의 `BaradunV2-OpsApiFunction*`에 맞는지와 GitHub 응답의 `x-ratelimit-used`로 조회 사용량을 확인합니다.
+- 운영자 사이트 주소를 설정하지 않았으면 운영자 사이트 표지의 `unconfigured` 사유를 화면에서 주소 설정 필요로 표시합니다.
 - 사이트 빌드 경로를 바꾸면 `.github/ci-filters.yml`을 갱신하고 `node .github/scripts/site-deploy-paths.mjs`를 실행합니다. 생성된 `.github/site-deploy-paths.json`을 워크플로와 운영 API가 함께 사용합니다.
 
 ## 운영 도메인 연결 (BRD-162)
