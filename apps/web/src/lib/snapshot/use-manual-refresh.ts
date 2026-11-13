@@ -11,7 +11,8 @@ import { getSnapshotState, refreshSnapshot } from "./use-snapshot";
 
 const KST_OFFSET_MS = 9 * 60 * 60_000;
 
-function formatKstTime(ms: number): string {
+function formatKstTime(ms: number): string | null {
+  if (!Number.isFinite(ms)) return null;
   return new Date(ms + KST_OFFSET_MS).toISOString().slice(11, 16);
 }
 
@@ -69,7 +70,12 @@ export function useManualRefresh(
     const time =
       kstStamp(nextState.manifest?.generatedAt, nextState.nowMs) ??
       formatKstTime(nextState.nowMs);
-    show({ text: t("refresh.changed", { time, count: diff.size }) });
+    show({
+      text:
+        time === null
+          ? t("refresh.changedNoTime", { count: diff.size })
+          : t("refresh.changed", { time, count: diff.size }),
+    });
   }, [badgeText, beaches, show, t]);
 
   return {
