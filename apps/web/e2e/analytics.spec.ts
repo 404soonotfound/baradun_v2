@@ -6,6 +6,10 @@ import { CLEAR_ID, expect, slugOf, test } from "./fixtures";
 const GA_HOSTS = /googletagmanager\.com|google-analytics\.com/;
 
 test.describe("비운영 빌드에는 Google Analytics가 없다 (BRD-143)", () => {
+  test.skip(
+    process.env.E2E_PRODUCTION_BUILD === "1",
+    "운영 빌드는 아래 비운영 전용 검사의 대상이 아님",
+  );
   for (const pathname of [
     "/",
     "/search/?q=test",
@@ -54,4 +58,12 @@ test.describe("비운영 빌드에는 Google Analytics가 없다 (BRD-143)", () 
       expect(html, pathname).not.toContain("googletagmanager.com/gtag/js");
     }
   });
+});
+
+test("운영 빌드에는 Google Analytics 스크립트가 있다", async ({ page }) => {
+  test.skip(process.env.E2E_PRODUCTION_BUILD !== "1", "운영 빌드에서만 확인");
+  await page.goto("/");
+  await expect(
+    page.locator('script[src*="googletagmanager.com/gtag/js"]'),
+  ).toHaveCount(1);
 });

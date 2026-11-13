@@ -25,7 +25,15 @@ jobs:
 
     outputs:
       web: ${{ steps.filter.outputs.web }}
+      web_e2e: ${{ steps.filter.outputs.web_e2e }}
+      web_e2e_specs: ${{ steps.filter.outputs.web_e2e_specs }}
+      web_e2e_specs_files: ${{ steps.filter.outputs.web_e2e_specs_files }}
+      web_e2e_shared: ${{ steps.filter.outputs.web_e2e_shared }}
       admin: ${{ steps.filter.outputs.admin }} # 운영자 사이트(BRD-147)
+      admin_e2e: ${{ steps.filter.outputs.admin_e2e }}
+      admin_e2e_specs: ${{ steps.filter.outputs.admin_e2e_specs }}
+      admin_e2e_specs_files: ${{ steps.filter.outputs.admin_e2e_specs_files }}
+      admin_e2e_shared: ${{ steps.filter.outputs.admin_e2e_shared }}
       services: ${{ steps.filter.outputs.services }}
       infra: ${{ steps.filter.outputs.infra == 'true' || steps.filter_config.outputs.changed == 'true' }}
       contracts: ${{ steps.filter.outputs.contracts }} # contracts 변경 여부
@@ -39,6 +47,8 @@ jobs:
       - id: filter
         uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         with:
+          predicate-quantifier: some-with-excludes # 앱 전체에서 테스트·문서 경로만 제외
+          list-files: json # 변경된 E2E spec만 추가 실행할 때 파일명을 안전하게 전달
           filters: .github/ci-filters.yml
       # 필터 파일의 내용과 관계없이 이 파일을 바꾸면 infra 가드레일을 실행함
       - id: filter_config
@@ -51,7 +61,7 @@ jobs:
         env:
           FILTER_OUTPUTS: ${{ toJSON(steps.filter.outputs) }}
         run: |
-          for area in web admin services infra contracts beaches deps agy_review ops_policy map; do
+          for area in web web_e2e web_e2e_specs web_e2e_shared admin admin_e2e admin_e2e_specs admin_e2e_shared services infra contracts beaches deps agy_review ops_policy map; do
             if ! jq -e --arg area "$area" '.[$area] == "true" or .[$area] == "false"' <<< "$FILTER_OUTPUTS" > /dev/null; then
               echo "::error::경로 필터 결과가 없거나 올바르지 않아요: $area"
               exit 1
@@ -72,17 +82,19 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci --no-audit
+      - run: node .github/scripts/check-smoke.mjs web # 필수 안전·접근성 E2E 태그 누락 방지
       - run: npm run check:tokens -w apps/web # 대비·금지 색
       - run: npm run check:messages -w apps/web # ko·en 문구 키
       - run: npm run lint -w apps/web
       - run: npm run typecheck -w apps/web # 가져다 쓰는 contracts 원본까지 검사 (BRD-102)
       - run: npm run test -w apps/web # 데이터 계층(Vitest)
 
-  # 웹 정적 빌드: 한 번만 빌드해 CSP 검사 뒤 결과(out/)를 E2E 샤드들이 나눠 씀 (BRD-134·178)
+  # 웹 정적 빌드·CSP는 앱 변경마다 실행. Chromium 핵심 E2E는 화면 관련 PR과 main에서 실행
   e2e-build:
     needs: changes
     if: needs.changes.outputs.web == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -106,52 +118,30 @@ jobs:
           path: apps/web/.next/cache
           key: next-web-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ hashFiles('apps/web/**', 'packages/**', '!**/node_modules/**') }}
       - run: npm run check:csp -w apps/web # CSP meta 해시 일치 검사 (BRD-118)
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: e2e-site
-          path: apps/web/out
-          include-hidden-files: true # 빌드 결과의 점 파일도 그대로
-          retention-days: 1
-          if-no-files-found: error
-
-  # 웹 E2E: 정적 빌드 결과로 전 화면 접근성(axe)·상태별 화면·키보드·반응형 검사 (BRD-39)
-  # /data/**는 테스트의 가짜 응답만 씀(운영 데이터·외부 타일 서버에 기대지 않음)
-  # 테스트를 4개로 나눠 동시에 돌림(BRD-134). 하나라도 실패하면 e2e 결과가 실패라 ci-ok도 실패
-  e2e:
-    needs: [changes, e2e-build]
-    if: needs.changes.outputs.web == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    strategy:
-      fail-fast: false # 한 조각이 실패해도 나머지 결과까지 봄
-      matrix:
-        shard: [1, 2, 3, 4]
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version-file: .nvmrc
-          cache: npm
-      - run: npm ci --no-audit
       # Playwright 브라우저 캐시(BRD-178). 판은 lock 파일이 정함. 캐시가 있어도 OS 의존성은 설치함
       - id: playwright-cache
+        if: github.event_name == 'push' || needs.changes.outputs.web_e2e == 'true'
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
-      - if: steps.playwright-cache.outputs.cache-hit != 'true'
+      - if: (github.event_name == 'push' || needs.changes.outputs.web_e2e == 'true') && steps.playwright-cache.outputs.cache-hit != 'true'
         run: npx --no-install playwright install --with-deps chromium # lock 파일의 Playwright 판에 맞는 chromium
         working-directory: apps/web
-      - if: steps.playwright-cache.outputs.cache-hit == 'true'
+      - if: (github.event_name == 'push' || needs.changes.outputs.web_e2e == 'true') && steps.playwright-cache.outputs.cache-hit == 'true'
         run: npx --no-install playwright install-deps chromium
         working-directory: apps/web
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: e2e-site
-          path: apps/web/out
-      - run: npm run test:e2e -w apps/web -- --shard=${{ matrix.shard }}/4
+      # /data/**는 가짜 응답만 씀(운영 데이터·외부 타일 서버에 기대지 않음)
+      - if: github.event_name == 'push' || needs.changes.outputs.web_e2e == 'true'
+        run: npm run test:e2e:smoke -w apps/web
+      - if: github.event_name == 'pull_request' && needs.changes.outputs.web_e2e_shared == 'true'
+        run: npm run test:e2e -w apps/web # 픽스처·설정 변경은 전체 Chromium 검사
+      - if: github.event_name == 'pull_request' && needs.changes.outputs.web_e2e_shared != 'true' && needs.changes.outputs.web_e2e_specs == 'true'
+        env:
+          CHANGED_E2E_SPECS: ${{ needs.changes.outputs.web_e2e_specs_files }}
+        run: node .github/scripts/run-changed-e2e.mjs web # 바뀐 spec의 비핵심 테스트만 추가 실행
 
-  # 운영자 사이트: 린트·타입 검사·단위 테스트 (BRD-147). 빌드·E2E는 아래 두 작업으로 나눠 나란히 돌림(BRD-178)
+  # 운영자 사이트: 린트·타입 검사·단위 테스트 (BRD-147). 빌드·E2E와 나란히 돌림
   admin:
     needs: changes
     if: needs.changes.outputs.admin == 'true'
@@ -163,15 +153,17 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci --no-audit
+      - run: node .github/scripts/check-smoke.mjs admin # 필수 로그인·권한 E2E 태그 누락 방지
       - run: npm run lint -w apps/admin
       - run: npm run typecheck -w apps/admin
       - run: npm run test -w apps/admin
 
-  # 운영자 사이트 정적 빌드·빌드 결과 검사(검색 차단·CSP meta·비밀값 0건). 결과(out/)를 E2E에 넘김
+  # 운영자 사이트 정적 빌드·결과 검사는 앱 변경마다 실행. 핵심 E2E는 화면 관련 PR과 main에서 실행
   admin-build:
     needs: changes
     if: needs.changes.outputs.admin == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -198,83 +190,27 @@ jobs:
           path: apps/admin/.next/cache
           key: next-admin-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ hashFiles('apps/admin/**', 'packages/**', '!**/node_modules/**') }}
       - run: npm run check:out -w apps/admin # 고치지 않고 다시 검사(빌드 결과가 그대로인지)
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: admin-site
-          path: apps/admin/out
-          include-hidden-files: true
-          retention-days: 1
-          if-no-files-found: error
-
-  # 운영자 사이트 E2E: 로그인 흐름·세션 시간·탭 넘겨받기·axe (Cognito·/ops/*는 가짜 응답, BRD-148)
-  admin-e2e:
-    needs: [changes, admin-build]
-    if: needs.changes.outputs.admin == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version-file: .nvmrc
-          cache: npm
-      - run: npm ci --no-audit
       # Playwright 브라우저 캐시(BRD-178). 판은 lock 파일이 정함. 캐시가 있어도 OS 의존성은 설치함
       - id: playwright-cache
+        if: github.event_name == 'push' || needs.changes.outputs.admin_e2e == 'true'
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
-      - if: steps.playwright-cache.outputs.cache-hit != 'true'
+      - if: (github.event_name == 'push' || needs.changes.outputs.admin_e2e == 'true') && steps.playwright-cache.outputs.cache-hit != 'true'
         run: npx --no-install playwright install --with-deps chromium # lock 파일의 Playwright 판에 맞는 chromium
         working-directory: apps/admin
-      - if: steps.playwright-cache.outputs.cache-hit == 'true'
+      - if: (github.event_name == 'push' || needs.changes.outputs.admin_e2e == 'true') && steps.playwright-cache.outputs.cache-hit == 'true'
         run: npx --no-install playwright install-deps chromium
         working-directory: apps/admin
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: admin-site
-          path: apps/admin/out
-      - run: npm run test:e2e -w apps/admin # chromium(mobile·desktop)
-
-  # 지원 브라우저 기준안(D16-E2, BRD-147): Firefox·WebKit 엔진으로 같은 운영자 E2E를 데스크톱 크기로 돌림
-  # 엔진마다 별도 러너에서 같은 빌드 결과로 돌림. WebKit 엔진 시험이지 실제 Safari 확인은 아님
-  admin-e2e-engines:
-    needs: [changes, admin-build]
-    if: needs.changes.outputs.admin == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
-    strategy:
-      fail-fast: false
-      matrix:
-        engine: [firefox, webkit]
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version-file: .nvmrc
-          cache: npm
-      - run: npm ci --no-audit
-      # 브라우저 캐시는 엔진별로 나눔
-      - id: playwright-cache
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ matrix.engine }}-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
-      - if: steps.playwright-cache.outputs.cache-hit != 'true'
-        run: npx --no-install playwright install --with-deps ${{ matrix.engine }}
-        working-directory: apps/admin
-      - if: steps.playwright-cache.outputs.cache-hit == 'true'
-        run: npx --no-install playwright install-deps ${{ matrix.engine }}
-        working-directory: apps/admin
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: admin-site
-          path: apps/admin/out
-      - run: npx --no-install playwright test --project=desktop-${{ matrix.engine }}
-        working-directory: apps/admin
+      - if: github.event_name == 'push' || needs.changes.outputs.admin_e2e == 'true'
+        run: npm run test:e2e:smoke -w apps/admin # chromium(mobile·desktop)
+      - if: github.event_name == 'pull_request' && needs.changes.outputs.admin_e2e_shared == 'true'
+        run: npm run test:e2e -w apps/admin
+      - if: github.event_name == 'pull_request' && needs.changes.outputs.admin_e2e_shared != 'true' && needs.changes.outputs.admin_e2e_specs == 'true'
         env:
-          E2E_ENGINES: "1"
+          CHANGED_E2E_SPECS: ${{ needs.changes.outputs.admin_e2e_specs_files }}
+        run: node .github/scripts/run-changed-e2e.mjs admin
 
   # 백엔드: 린트·타입 검사·테스트(Vitest)
   services:
@@ -475,11 +411,8 @@ jobs:
         changes,
         web,
         e2e-build,
-        e2e,
         admin,
         admin-build,
-        admin-e2e,
-        admin-e2e-engines,
         services,
         infra,
         contracts,

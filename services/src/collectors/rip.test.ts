@@ -177,13 +177,28 @@ describe("collectRip", () => {
     };
     const { deps, state, lines } = setup(IN_SEASON, {
       SONGJUNG: JSON.stringify({
-        header: { resultCode: "22" },
+        header: {
+          resultCode: "22",
+          resultMsg: `LIMIT serviceKey=${KEY}\n`,
+        },
         body: {},
       }),
       HAE: "<OpenAPI_ServiceResponse>",
     });
     await seed(state, previous);
-    expect((await collectRip(deps)).status).toBe("failed");
+    expect(await collectRip(deps)).toEqual({
+      status: "failed",
+      slotId: "202608160012",
+      failures: [
+        {
+          source: "rip",
+          reason: "result:22",
+          code: "22",
+          message: "LIMIT serviceKey=***",
+        },
+        { source: "rip", reason: "format:json" },
+      ],
+    });
     expect((await readings(state))?.beaches).toEqual(previous);
     expect((await attempt(state)).sources).toEqual({
       b0096: { status: "failed", reason: "result:22" },
