@@ -32,6 +32,10 @@ interface DeleteEmailEvent {
   readonly inquiryId: string;
 }
 
+interface CleanupExpiredEmailsEvent {
+  readonly action: "cleanup_expired_emails";
+}
+
 export interface InquiryDependencies {
   readonly store: InquiryStore;
   readonly photos: InquiryPhotos;
@@ -135,6 +139,16 @@ function isDeleteEmailEvent(event: unknown): event is DeleteEmailEvent {
     (event as { action?: unknown }).action === "delete_email" &&
     typeof (event as { inquiryId?: unknown }).inquiryId === "string" &&
     INQUIRY_ID.test((event as { inquiryId: string }).inquiryId)
+  );
+}
+
+function isCleanupExpiredEmailsEvent(
+  event: unknown,
+): event is CleanupExpiredEmailsEvent {
+  return (
+    typeof event === "object" &&
+    event !== null &&
+    (event as { action?: unknown }).action === "cleanup_expired_emails"
   );
 }
 
@@ -367,14 +381,32 @@ function setup(): InquiryDependencies {
   return cached;
 }
 
-export async function inquiryHandler(
+export type InquiryHandlerResult =
+  | APIGatewayProxyStructuredResultV2
+  | { readonly status: "email_deleted" }
+  | {
+      readonly status: "emails_cleaned";
+      readonly deletedCount: number;
+      readonly overdueCount: number;
+    };
+
+export async function handleInquiryEvent(
   event: unknown,
-): Promise<APIGatewayProxyStructuredResultV2 | { status: "email_deleted" }> {
-  const dependencies = setup();
+  dependencies: InquiryDependencies,
+): Promise<InquiryHandlerResult> {
   if (isDeleteEmailEvent(event)) {
     await dependencies.store.deleteEmail(event.inquiryId);
     safeLog("info", "inquiry_email_deleted");
     return { status: "email_deleted" };
+  }
+  if (isCleanupExpiredEmailsEvent(event)) {
+    const { deletedCount, overdueCount } =
+      await dependencies.store.cleanupExpiredEmails(dependencies.now());
+    safeLog("info", "inquiry_email_cleanup", { deletedCount, overdueCount });
+    if (overdueCount > 0) {
+      safeLog("warn", "inquiry_email_overdue", { overdueCount });
+    }
+    return { status: "emails_cleaned", deletedCount, overdueCount };
   }
   if (!isHttpEvent(event)) {
     throw new Error("지원하지 않는 문의 이벤트");
@@ -390,4 +422,10 @@ export async function inquiryHandler(
       "문의를 접수하지 못했습니다. 다시 시도해 주세요.",
     );
   }
+}
+
+export async function inquiryHandler(
+  event: unknown,
+): Promise<InquiryHandlerResult> {
+  return handleInquiryEvent(event, setup());
 }

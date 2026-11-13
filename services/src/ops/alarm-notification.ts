@@ -37,6 +37,7 @@ export const ALARM_LABELS = [
   ["LoginAbuse", "운영자 로그인 반복 요청"],
   ["WeatherFailing", "날씨 수집 계속 실패"],
   ["OpsApiErrors", "운영 API 오류 급증"],
+  ["InquiryEmailOverdue", "문의 이메일 보관 기한 초과"],
 ] as const;
 
 export interface AlarmNotification {
@@ -99,6 +100,9 @@ function reasonLabel(alarmName: string): string {
   }
   if (id === "NotificationFailed") {
     return "재시도 뒤에도 알림을 보내지 못해 실패 대기열에 기록되었습니다.";
+  }
+  if (id === "InquiryEmailOverdue") {
+    return "89일 이상 남은 문의 이메일 항목이 감지되었거나 일일 정리에 실패했습니다. CloudWatch 로그와 InquiryTable을 확인해 주세요.";
   }
   return "설정된 운영 경보 조건을 충족했습니다.";
 }
