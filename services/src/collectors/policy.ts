@@ -51,7 +51,13 @@ export const COLLECT_POLICY = {
   weatherNowDelayMinutes: 10,
   weatherMidDelayMinutes: 60,
   // 한 번에 받는 행 수. 단기예보 02:00 발표 한 격자 944행(2026-11-05 실측), 초단기실황 8행
+  // 17·20시 발표는 한 격자 1,052행(2026-11-13 실측)이라 한 쪽을 넘으면 다음 쪽(pageNo)을 이어 받음
+  // numOfRows를 1000보다 크게 받아도 되는지는 활용가이드에 근거가 없어 쪽 나눔으로 받음
   weatherShortNumOfRows: 1000,
+  // 단기예보 한 격자를 이어 받는 쪽 수 상한. 넘으면 잘린 응답으로 실패(일부 행으로 저장하지 않음)
+  // 2쪽째 요청은 1,000행을 넘는 발표(지금 17·20시)에만 생김 → 하루 +308회(154격자 × 2회), 약 5,300회
+  // 하루 8회 발표가 모두 넘어도 +1,232회(약 6,200회)로 10,000회 안
+  weatherShortMaxPages: 2,
   weatherNowNumOfRows: 20,
   // 중기 육상·기온(구역 하나씩 요청)에서 한 번에 받는 행 수
   weatherMidNumOfRows: 10,
