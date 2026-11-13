@@ -192,7 +192,11 @@ export function MapView({
         className,
       )}
     >
-      <div ref={frameRef} className="relative min-h-0 flex-1 bg-bg-subtle">
+      <div
+        ref={frameRef}
+        data-pull-ignore
+        className="relative min-h-0 flex-1 bg-bg-subtle"
+      >
         {/* MapLibre가 그리는 자리. 실패하면 숨김. MapLibre가 자기 틀에 position: relative를 붙여서 한 겹 감쌈 */}
         <div className={cn("absolute inset-0", failed && "hidden")}>
           <div ref={canvasRef} className="size-full" />

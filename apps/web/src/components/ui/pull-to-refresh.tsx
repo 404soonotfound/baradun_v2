@@ -55,8 +55,14 @@ export function PullToRefresh({
 
   function shouldIgnoreTouch(target: EventTarget | null): boolean {
     if (!(target instanceof Element)) return false;
-    // 열린 시트·대화상자 안의 스와이프는 당김 새로고침에서 제외함
-    if (target.closest("dialog[open], [role='dialog']")) return true;
+    // 열린 시트·대화상자·지도 영역 안의 스와이프는 당김 새로고침에서 제외함
+    if (
+      target.closest(
+        "dialog[open], [role='dialog'], .maplibregl-map, [data-pull-ignore]",
+      )
+    ) {
+      return true;
+    }
     let el: Element | null = target;
     while (el && el !== containerRef.current) {
       const { overflowY } = getComputedStyle(el);
