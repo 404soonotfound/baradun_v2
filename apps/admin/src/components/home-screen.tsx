@@ -4,7 +4,6 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { opsFetch, type OpsResult } from "@/lib/auth/ops-fetch";
 import { useAuthSession, useSessionSnapshot } from "@/lib/auth/provider";
-import { fetchAudit, periodFilter } from "@/lib/audit";
 import {
   fetchPublished,
   parsePublished,
@@ -27,14 +26,12 @@ import {
   partOf,
   ratioPercent,
   reasonTime,
-  recentChanges,
   settle,
   staleSince,
   todos,
   undeterminedRows,
   valueOf,
   type BeachCounts,
-  type RecentView,
   type Slot,
   type UndeterminedRow,
 } from "@/lib/home";
@@ -43,11 +40,10 @@ import { fetchInquiries, kstDateTime, type InquiryPage } from "@/lib/inquiries";
 import { LOADING_TIMES } from "@/lib/loading-timing";
 import { fill, messages } from "@/lib/messages";
 import { fetchNotices, type NoticeView } from "@/lib/notices";
-import { roleLabel } from "@/lib/roles";
 import { fetchStats, type StatsResponse } from "@/lib/stats";
 import { pageWindow } from "@/lib/paging";
 import { AdminShell } from "./admin-shell";
-import { kindBadge, summaryOf, Target, type Beaches } from "./audit-screen";
+import type { Beaches } from "./audit-screen";
 import { Badge } from "./beach-status";
 import {
   CELL_END,
@@ -72,9 +68,9 @@ import { Button, Notice, SUCCESS_BADGE, TextLink } from "./ui";
 // 로그인 뒤 /ops/me로 서버가 이 세션을 받아 주는지 먼저 확인함
 // 데모 계정이 허용 기간 밖이면 서버가 403(sample_not_allowed) → 화면에서도 막힘을 알림(D16-A8, 캔버스 E11-4)
 // - 머리: 제목 + 오른쪽 기준 시각('1분마다 다시 읽어요')·세션 안내(D17-11 문구)
-// - 판단 출처 상태 한 줄(시안에 없음, 기존 칸이라 남김): 하나라도 정상이 아니면 문제 줄(내부 화면이라 출처 이름을 씀)
+// - 판단 출처 상태 한 줄(시안에 없음): 모바일·태블릿만(PC는 왼쪽 메뉴 상태 칸). 하나라도 정상이 아니면 문제 줄(내부 화면이라 출처 이름을 씀)
 //   사용자 화면 배너 문구(12장 결정 1 '확인된 판단 없음')는 여기서 바꾸지 않음
-// - 세 칸(앱에 보이는 해변 · 수집 · 문의), 판단불가 해변 표, 할 일, 이용(GA 28일 합계), 최근 변경(시안에 없음, 남김)
+// - 세 칸(앱에 보이는 해변 · 수집 · 문의), 판단불가 해변 표, 할 일, 이용(GA 28일 합계)
 // - 못 읽은 값은 0·정상·'할 일 없음'으로 바꾸지 않고 '확인 못 함'. 다시 읽는 동안은 앞 값을 그대로 둠
 // - 응답에 없는 값(앞 기간 비교·일별 추이·다음 수집 시각·가장 오래된 문의)은 지어내지 않음
 // - 화면이 보이는 동안 60초마다 다시 읽음(D16-E1 운영 홈 60초)
@@ -86,20 +82,10 @@ import { Button, Notice, SUCCESS_BADGE, TextLink } from "./ui";
 const t = messages;
 const h = messages.home;
 const REFRESH_MS = 60_000;
-const RECENT_COUNT = 5;
 // 판단불가 해변 표 한 쪽 줄 수(보드 V1은 3줄 예시). 넘치면 페이지 넘김
 const UNDETERMINED_PAGE = 5;
 // 운영 홈 이용 칸 기간(보드 V1 '앞 28일과 비교'의 28일)
 const USAGE_RANGE = "28d" as const;
-// 최근 변경 자리표시 행 길이(행마다 다르게, RECENT_COUNT개)
-const RECENT_RHYTHM = [
-  "w-[72%]",
-  "w-[60%]",
-  "w-[84%]",
-  "w-[52%]",
-  "w-[66%]",
-] as const;
-
 // 보드 V1 공통 CSS 값(.w-blk · .w-foot · h2). 크기는 공유 토큰 글자 크기, 간격은 Tailwind 간격
 const BLOCK_TITLE =
   "flex items-center gap-2 text-body font-bold text-text-default";
@@ -126,7 +112,6 @@ const ORDER = {
   inquiries: "order-4 lg:order-none",
   undetermined: "order-5 lg:order-none",
   usage: "order-6 lg:order-none",
-  recent: "order-7 lg:order-none",
 } as const;
 
 interface Me {
@@ -142,7 +127,6 @@ interface Parts {
   readonly published: Slot<Extract<PublishedView, { available: true }>>;
   readonly inquiries: Slot<InquiryPage>;
   readonly notices: Slot<readonly NoticeView[]>;
-  readonly recent: Slot<RecentView>;
   readonly usage: Slot<StatsResponse>;
 }
 
@@ -153,24 +137,16 @@ const INITIAL: Parts = {
   published: LOADING,
   inquiries: LOADING,
   notices: LOADING,
-  recent: LOADING,
   usage: LOADING,
 };
 
 type Token = () => Promise<string | null>;
 
-const FORBIDDEN: OpsResult<never> = {
-  ok: false,
-  status: 403,
-  code: "forbidden",
-  requestId: null,
-};
-
 type Loaders = {
   readonly [K in keyof Parts]: () => Promise<Exclude<Parts[K], typeof LOADING>>;
 };
 
-function loaders(token: Token, owner: string | null, demo: boolean): Loaders {
+function loaders(token: Token, owner: string | null): Loaders {
   const raw = {
     collection: async () => partOf(await fetchCollection(token), (b) => b),
     published: async () =>
@@ -192,18 +168,6 @@ function loaders(token: Token, owner: string | null, demo: boolean): Loaders {
       partOf(await fetchNotices(token), (body) =>
         Array.isArray(body?.items) ? body.items : null,
       ),
-    recent: async () =>
-      partOf(
-        // 데모 계정은 변경 이력을 볼 수 없음(ADM-AUD 보기(샘플 제외)) → 요청하지 않음
-        demo
-          ? FORBIDDEN
-          : await fetchAudit(token, periodFilter(7, Date.now()), null, false),
-        // 조회 기록을 빼고도 몇 건이 남게 한 쪽(20건)을 받아 거름
-        (body) =>
-          Array.isArray(body?.items)
-            ? recentChanges(body.items, RECENT_COUNT)
-            : null,
-      ),
     // 이용 통계(GA Data API 집계, 서버가 5분 저장). 데모 계정은 서버가 예시 응답
     usage: async () => partOf(await fetchStats(USAGE_RANGE, token), (b) => b),
   };
@@ -213,7 +177,6 @@ function loaders(token: Token, owner: string | null, demo: boolean): Loaders {
     published: () => settle(raw.published),
     inquiries: () => settle(raw.inquiries),
     notices: () => settle(raw.notices),
-    recent: () => settle(raw.recent),
     usage: () => settle(raw.usage),
   };
 }
@@ -1278,89 +1241,6 @@ function Usage({
   );
 }
 
-function Recent({
-  part,
-  stale,
-  beaches,
-}: {
-  part: Slot<RecentView>;
-  // 다시 읽기가 실패해 앞 목록을 둠
-  stale: boolean;
-  beaches: Beaches;
-}) {
-  const slot = useSlot(part);
-  const placeholder = slot.placeholder || part.state === "loading";
-  return (
-    <section
-      aria-labelledby="home-recent"
-      className={`${ORDER.recent} flex flex-col gap-2`}
-    >
-      <h2 id="home-recent" className={SECTION_TITLE}>
-        {h.recentTitle}
-        {stale && <StaleMark />}
-      </h2>
-      {placeholder && (
-        // 한 쪽 행 수(5)만큼, 행 높이 그대로. 길이는 정해진 리듬으로 바꿈
-        <ul
-          aria-hidden="true"
-          className={`flex flex-col divide-y divide-border-default rounded-admin-box border border-border-default bg-bg-surface ${slot.cls}`}
-        >
-          {RECENT_RHYTHM.map((width, i) => (
-            <li key={i} className="px-4 py-2.5 text-body-s">
-              <SkLine className={width} />
-            </li>
-          ))}
-        </ul>
-      )}
-      {!placeholder && part.state === "forbidden" && (
-        <p className={`text-body-s text-text-body ${slot.cls}`}>
-          {h.recentForbidden}
-        </p>
-      )}
-      {!placeholder && part.state === "failed" && (
-        <p role="status" className={`text-body-s text-text-body ${slot.cls}`}>
-          {h.recentFailed}
-        </p>
-      )}
-      {!placeholder && part.state === "ok" && part.value.items.length === 0 && (
-        <p className={`text-body-s text-text-body ${slot.cls}`}>
-          {part.value.onlyReads ? h.recentOnlyReads : h.recentNone}
-        </p>
-      )}
-      {!placeholder && part.state === "ok" && part.value.items.length > 0 && (
-        <ul
-          className={`flex flex-col divide-y divide-border-default rounded-admin-box border border-border-default bg-bg-surface ${slot.cls}`}
-        >
-          {/* 종류·대상·요약은 변경 이력 화면과 같은 표시(audit-screen) */}
-          {part.value.items.map((item) => (
-            <li
-              key={`${item.at}|${item.requestId}`}
-              className="flex flex-wrap items-baseline gap-x-2 px-4 py-2.5 text-body-s"
-            >
-              <span className="tabular-nums text-text-muted">
-                {kstDateTime(item.at)}
-              </span>
-              <span className="font-medium text-text-default">
-                {kindBadge(item)}
-              </span>
-              <Target item={item} beaches={beaches} />
-              <span className="text-text-body">{summaryOf(item)}</span>
-            </li>
-          ))}
-        </ul>
-      )}
-      {part.state !== "forbidden" && (
-        <TextLink
-          href="/audit/"
-          className="inline-flex min-h-touch w-fit items-center font-medium underline lg:min-h-0"
-        >
-          {h.recentAll}
-        </TextLink>
-      )}
-    </section>
-  );
-}
-
 // 기준 시각 줄의 시:분(서울)
 function hourMinute(iso: string): string {
   return new Intl.DateTimeFormat("ko-KR", {
@@ -1508,7 +1388,7 @@ function HomeBody({ beaches }: { beaches: Beaches }) {
     let started = 0;
     let lastStart = 0;
     const shown: Partial<Record<keyof Parts, number>> = {};
-    const load = loaders(() => session.accessToken(), owner, demo);
+    const load = loaders(() => session.accessToken(), owner);
     const refresh = () => {
       const id = ++started;
       lastStart = Date.now();
@@ -1606,7 +1486,6 @@ function HomeBody({ beaches }: { beaches: Beaches }) {
       ));
   // 5초 넘게 받는 칸이 있으면 머리 첫 줄 자리에 느림 안내(칸 높이를 바꾸지 않게 한 자리에서)
   const page = useLoadTiming(anyLoading);
-  const role = signedIn ? roleLabel(snapshot.pool, snapshot.groups) : null;
   // 서버 세션 확인 전·확인됨이면 칸을 그림(확인 전에는 모두 자리표시). 확인 실패면 알림만
   const showParts = !view.me || view.me.ok;
 
@@ -1630,19 +1509,6 @@ function HomeBody({ beaches }: { beaches: Beaches }) {
             <h1 className="text-title-l font-semibold text-text-default">
               {h.title}
             </h1>
-            {/* 로그인 계정 줄(시안에 없음, 기존 줄이라 남김) */}
-            {signedIn ? (
-              snapshot.email && (
-                <p className="mt-1 text-body-s text-text-muted">
-                  {fill(h.signedInAs, { email: snapshot.email })}
-                  {role && ` · ${role}`}
-                </p>
-              )
-            ) : (
-              <p className="mt-1 text-body-s">
-                <SkLine className="w-[260px] max-w-full" />
-              </p>
-            )}
           </div>
           <HeadNote
             at={showParts ? view.at : null}
@@ -1689,8 +1555,9 @@ function HomeBody({ beaches }: { beaches: Beaches }) {
           )}
         {showParts && (
           <>
-            {/* 판단 출처 상태 한 줄(화면 설계서 ADM-HOME '맨 위 한 줄', 시안 V1에는 없음) */}
-            <div className="mt-6">
+            {/* 판단 출처 상태 한 줄(화면 설계서 ADM-HOME '맨 위 한 줄', 시안 V1에는 없음)
+                PC(lg)는 왼쪽 메뉴 상태 칸이 같은 내용을 보여 숨김. 모바일·태블릿만 */}
+            <div className="mt-6 lg:hidden">
               <SourcesLine part={view.parts.collection} onRetry={reload} />
             </div>
             {/* 모바일은 한 줄로 쌓고 보드 LM1 순서(order), PC는 보드 V1 격자 */}
@@ -1727,11 +1594,6 @@ function HomeBody({ beaches }: { beaches: Beaches }) {
                 part={view.parts.usage}
                 stale={view.stale.has("usage")}
                 onRetry={reload}
-              />
-              <Recent
-                part={view.parts.recent}
-                stale={view.stale.has("recent")}
-                beaches={beaches}
               />
             </div>
           </>
