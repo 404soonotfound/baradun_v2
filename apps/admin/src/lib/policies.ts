@@ -129,6 +129,21 @@ export function parsePolicySnapshot(raw: unknown): PolicySnapshot {
   };
 }
 
+// 화면 시각(KST, 연도 포함). 원본은 몇 달~몇 년 묵을 수 있어 연도 없이 보이면 오래된 동기화가 최신처럼 읽힘(D16-E5)
+export function policyTime(iso: string): string {
+  const parts = new Intl.DateTimeFormat("ko-KR", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(new Date(iso));
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
+  return `${get("year")}/${get("month")}/${get("day")} ${get("hour")}:${get("minute")}`;
+}
+
 // 주소 ?id= 를 항목 번호로. 숫자가 아니거나 범위 밖이면 null(화면이 '찾는 항목 없음'으로 보여 줌)
 export function sectionOf(
   snapshot: PolicySnapshot,

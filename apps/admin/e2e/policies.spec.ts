@@ -1,5 +1,6 @@
 import type { Page } from "@playwright/test";
 import snapshot from "../src/content/ops-policy.json";
+import { policyTime } from "../src/lib/policies";
 import {
   ME_OK,
   expect,
@@ -17,19 +18,6 @@ import {
 // 내용은 빌드에 넣은 저장소 파일(src/content/ops-policy.json). 운영 API를 부르지 않음
 
 const OPS = "ops@example.test";
-
-const kst = (iso: string) => {
-  const parts = new Intl.DateTimeFormat("ko-KR", {
-    timeZone: "Asia/Seoul",
-    month: "numeric",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).formatToParts(new Date(iso));
-  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
-  return `${get("month")}/${get("day")} ${get("hour")}:${get("minute")}`;
-};
 
 async function signIn(page: Page) {
   const policyCalls: string[] = [];
@@ -58,8 +46,7 @@ async function openPolicies(page: Page) {
   ).toBeVisible();
 }
 
-const list = (page: Page) =>
-  page.getByRole("navigation", { name: "목차" });
+const list = (page: Page) => page.getByRole("navigation", { name: "목차" });
 const detailTitle = (page: Page) =>
   page.getByRole("heading", { level: 2 }).filter({ visible: true });
 
@@ -70,7 +57,7 @@ test("revision·가져온 시각·원문 링크를 보여 주고 '최신'이라�
   await openPolicies(page);
   await expect(
     page.getByText(
-      `노션 마지막 수정 ${kst(snapshot.revision)} · 마지막 동기화 ${kst(snapshot.fetchedAt)}`,
+      `노션 마지막 수정 ${policyTime(snapshot.revision)} · 마지막 동기화 ${policyTime(snapshot.fetchedAt)}`,
     ),
   ).toBeVisible();
   const notion = page.getByRole("link", { name: "노션에서 열기 (새 탭)" });
