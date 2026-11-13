@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   checkFunctionLogs,
+  compareOutOfStackPolicies,
   failedEventsOrNull,
   readChangeSetPages,
   readRemotePolicy,
@@ -78,6 +79,84 @@ describe("스택 밖 정책 읽기", () => {
         "arn:p",
       ).kind,
     ).toBe("error");
+  });
+});
+
+describe("스택 밖 정책 비교 (로컬·CI 공용)", () => {
+  const doc = (...actions: string[]) => ({
+    Version: "2012-10-17",
+    Statement: [{ Effect: "Allow", Action: actions, Resource: "*" }],
+  });
+  const local: Record<string, ReturnType<typeof doc>> = {
+    "role-boundary-policy.json": doc("lambda:*"),
+    "cfn-execution-policy.json": doc("lambda:CreateFunction"),
+    "cfn-execution-workload-policy.json": doc("sqs:CreateQueue"),
+  };
+  const readLocal = (file: string) => local[file]!;
+  // get-policy(기본 버전)·get-policy-version(문서) 응답 한 쌍
+  const policy = (version: string, body: unknown) => ({
+    head: ok({ Policy: { DefaultVersionId: version } }),
+    body: ok({ PolicyVersion: { Document: body } }),
+  });
+
+  it("boundary·실행 정책 두 개를 계정 ARN으로 읽고, 실행 정책이 허용하지 않는 저장소 동작을 고른다", () => {
+    const b = policy("v3", doc("lambda:*"));
+    const e1 = policy("v2", doc("lambda:CreateFunction"));
+    const e2 = policy("v1", doc("sqs:DeleteQueue"));
+    const { runner, calls } = fake({
+      "iam get-policy": [b.head, e1.head, e2.head],
+      "iam get-policy-version": [b.body, e1.body, e2.body],
+    });
+    const got = compareOutOfStackPolicies(runner, "111122223333", readLocal);
+    expect(
+      calls
+        .filter((c) => c[1] === "get-policy")
+        .map((c) => c[c.indexOf("--policy-arn") + 1]),
+    ).toEqual([
+      "arn:aws:iam::111122223333:policy/BaradunV2-RoleBoundary",
+      "arn:aws:iam::111122223333:policy/BaradunCdkExecution",
+      "arn:aws:iam::111122223333:policy/BaradunCdkExecutionWorkload",
+    ]);
+    expect(got.boundary.diff?.same).toBe(true);
+    expect(got.executions.map((e) => e.diff?.same)).toEqual([true, false]);
+    // 두 실행 정책을 합쳐 비교함(어느 정책에 있든 허용이면 됨)
+    expect(got.executionGaps).toEqual(["sqs:CreateQueue"]);
+  });
+
+  it("실행 정책을 하나라도 읽지 못하면(없음·조회 실패) 빠진 동작을 '없음'으로 보지 않고 null", () => {
+    const b = policy("v3", doc("lambda:*"));
+    const e1 = policy("v2", doc("lambda:CreateFunction", "sqs:CreateQueue"));
+    const missing = fake({
+      "iam get-policy": [
+        b.head,
+        e1.head,
+        err("An error occurred (NoSuchEntity)"),
+      ],
+      "iam get-policy-version": [b.body, e1.body],
+    });
+    const got = compareOutOfStackPolicies(
+      missing.runner,
+      "111122223333",
+      readLocal,
+    );
+    expect(got.executionGaps).toBeNull();
+    expect(got.executions[1]!.diff).toBeNull();
+    expect(got.executions[1]!.line).toContain("AWS에 없음(최초 분할 전)");
+
+    const denied = fake({
+      "iam get-policy": [err("AccessDenied"), b.head, e1.head],
+      "iam get-policy-version": [b.body, e1.body],
+    });
+    const got2 = compareOutOfStackPolicies(
+      denied.runner,
+      "111122223333",
+      readLocal,
+    );
+    expect(got2.boundary.remote.kind).toBe("error");
+    expect(got2.boundary.diff).toBeNull();
+    expect(got2.boundary.line).toContain("확인 못 함");
+    // boundary 조회 실패는 boundary 쪽에만 남고(부르는 쪽이 멈춤), 실행 정책 비교는 따로 함
+    expect(got2.executionGaps).toEqual([]);
   });
 });
 

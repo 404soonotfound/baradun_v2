@@ -12,16 +12,22 @@ import {
   failedEventsSince,
   formatPolicyDiff,
   formatTable,
+  infraCiCheck,
   isCalendarDate,
   isEmptyChangeSet,
   isStackReady,
   linkedIssues,
+  missingExecutionActions,
   policyDiff,
   redactAccount,
   scanLogLines,
   summarizeChanges,
+  touchesInfra,
   versionToPrune,
   type CheckRun,
+  type CommitCi,
+  type PolicyDocument,
+  type PolicyStatement,
 } from "../scripts/deploy-plan";
 
 // 인프라 배포 명령의 판정 (BRD-169)
@@ -585,6 +591,56 @@ describe("main 머지 뒤 자동 배포 판정 (#418)", () => {
     }
   });
 
+  it("실행 정책이 저장소 문서의 동작을 허용하지 않으면 변경 세트와 상관없이 로컬 배포로 넘기고 동작을 이유에 적는다", () => {
+    for (const hasChangeSet of [true, false]) {
+      const decision = autoDeployDecision({
+        hasChangeSet,
+        rows: [],
+        boundarySame: true,
+        executionGaps: ["sqs:CreateQueue"],
+      });
+      expect(decision.kind).toBe("local");
+      expect(decision.reasons[0]).toContain("sqs:CreateQueue");
+    }
+    expect(
+      autoDeployDecision({
+        hasChangeSet: false,
+        rows: [],
+        boundarySame: true,
+        executionGaps: [],
+      }).kind,
+    ).toBe("none");
+  });
+
+  it("모르는 변경 동작(Dynamic·Import·없음)이나 Modify의 모르는 교체 값은 승인을 기다린다", () => {
+    const rows = summarizeChanges([
+      change("NewFn", "AWS::Lambda::Function", "Add", "-"),
+      change("OldFn", "AWS::Lambda::Function", "Remove", "-"),
+      change("DynFn", "AWS::Lambda::Function", "Dynamic", "False"),
+      change("Imported", "AWS::SQS::Queue", "Import", "-"),
+      {
+        ResourceChange: {
+          LogicalResourceId: "NoAction",
+          ResourceType: "AWS::SNS::Topic",
+        },
+      },
+      change("OddFn", "AWS::Lambda::Function", "Modify", "-"),
+    ]);
+    const decision = autoDeployDecision({
+      hasChangeSet: true,
+      rows,
+      boundarySame: true,
+    });
+    expect(decision.kind).toBe("hold");
+    expect(decision.reasons).toEqual([
+      "OldFn(AWS::Lambda::Function): 삭제",
+      "DynFn(AWS::Lambda::Function): 모르는 변경(Dynamic/False)",
+      "Imported(AWS::SQS::Queue): 모르는 변경(Import/-)",
+      "NoAction(AWS::SNS::Topic): 모르는 변경(?/-)",
+      "OddFn(AWS::Lambda::Function): 모르는 변경(Modify/-)",
+    ]);
+  });
+
   it("바뀐 것이 없으면 아무것도 하지 않는다", () => {
     expect(
       autoDeployDecision({ hasChangeSet: false, rows: [], boundarySame: true }),
@@ -607,6 +663,159 @@ describe("main 머지 뒤 자동 배포 판정 (#418)", () => {
     expect(deployComment({ ...base, via: "main 머지 뒤 자동 배포" })).toContain(
       "## 인프라 배포 결과 (main 머지 뒤 자동 배포)",
     );
+  });
+});
+
+describe("실행 정책이 허용하지 않는 동작 (#418)", () => {
+  const doc = (...Statement: PolicyStatement[]): PolicyDocument => ({
+    Version: "2012-10-17",
+    Statement,
+  });
+
+  it("저장소 문서의 Allow 동작을 AWS 문서의 와일드카드·대소문자 무시로 비교해 빠진 것만 정렬해 돌려준다", () => {
+    const local = [
+      doc(
+        {
+          Effect: "Allow",
+          Action: ["lambda:UpdateFunctionCode", "SQS:CreateQueue"],
+          Resource: "*",
+        },
+        { Effect: "Allow", Action: "s3:GetObject", Resource: "*" },
+        { Effect: "Deny", Action: "iam:*", Resource: "*" },
+      ),
+      doc({ Effect: "Allow", Action: "dynamodb:PutItem", Resource: "*" }),
+    ];
+    const remote = [
+      doc({
+        Effect: "Allow",
+        Action: ["lambda:Update*", "s3:Get?bject"],
+        Resource: "arn:x",
+      }),
+      // Deny 문장의 동작은 허용으로 치지 않음
+      doc({ Effect: "Deny", Action: "dynamodb:*", Resource: "*" }),
+    ];
+    expect(missingExecutionActions(local, remote)).toEqual([
+      "SQS:CreateQueue",
+      "dynamodb:PutItem",
+    ]);
+  });
+
+  it("문장이 객체 하나여도 읽고, 모두 허용하면 빈 목록", () => {
+    const one = {
+      Version: "2012-10-17",
+      Statement: { Effect: "Allow", Action: "sqs:*", Resource: "*" },
+    };
+    expect(
+      missingExecutionActions(
+        [doc({ Effect: "Allow", Action: "sqs:createqueue", Resource: "*" })],
+        [one],
+      ),
+    ).toEqual([]);
+  });
+
+  it("점 같은 정규식 문자를 그대로 비교한다", () => {
+    expect(
+      missingExecutionActions(
+        [doc({ Effect: "Allow", Action: "s3:GetObjectX", Resource: "*" })],
+        [doc({ Effect: "Allow", Action: "s3:GetObject.", Resource: "*" })],
+      ),
+    ).toEqual(["s3:GetObjectX"]);
+  });
+});
+
+describe("이 트리의 인프라 영역을 main CI가 검사했는지 (#418)", () => {
+  const all = (conclusion: string | null) => ({
+    infra: conclusion,
+    services: conclusion,
+    contracts: conclusion,
+  });
+  const at =
+    (...commits: CommitCi[]) =>
+    (i: number) =>
+      commits[i];
+  const c = (
+    sha: string,
+    jobs: CommitCi["jobs"],
+    touchesInfra = false,
+  ): CommitCi => ({ sha: sha.padEnd(40, "0"), jobs, touchesInfra });
+
+  it("맨 위 실행이 세 작업을 모두 통과했으면 검사됨", () => {
+    expect(infraCiCheck(at(c("a", all("success"))))).toEqual({
+      unchecked: [],
+      pending: false,
+    });
+  });
+
+  it("건너뛴 작업은 거슬러 올라가 그 작업이 성공한 실행을 찾고, 실행 없는 중간 커밋은 인프라 파일을 안 바꿨으면 지나간다", () => {
+    expect(
+      infraCiCheck(
+        at(
+          c("y", all("skipped")),
+          c("m", null),
+          c("x", {
+            infra: "success",
+            services: "skipped",
+            contracts: "skipped",
+          }),
+          c("w", all("success")),
+        ),
+      ).unchecked,
+    ).toEqual([]);
+  });
+
+  it("앞 커밋에서 실패한 인프라 검사를 웹만 바꾼 다음 커밋이 넘기지 않는다", () => {
+    const got = infraCiCheck(
+      at(
+        c("y", all("skipped")),
+        c("x", { infra: "failure", services: "skipped", contracts: "success" }),
+        c("w", all("success")),
+      ),
+    );
+    expect(got.unchecked).toEqual([
+      "infra — x000000: main CI의 infra 작업이 failure",
+    ]);
+    expect(got.pending).toBe(false);
+  });
+
+  it("진행 중·작업 없음·실행 없이 인프라 파일을 바꾼 커밋·이력 끝은 검사 안 됨으로 본다", () => {
+    const pending = infraCiCheck(at(c("y", all("skipped")), c("x", all(null))));
+    expect(pending.pending).toBe(true);
+    expect(pending.unchecked).toHaveLength(3);
+    expect(
+      infraCiCheck(at(c("a", { infra: "success", services: "success" })))
+        .unchecked,
+    ).toEqual(["contracts — a000000: main CI의 contracts 작업이 없음"]);
+    expect(
+      infraCiCheck(
+        at(c("y", all("skipped")), c("m", null, true), c("w", all("success"))),
+      ).unchecked,
+    ).toHaveLength(3);
+    expect(infraCiCheck(at(c("y", all("skipped")))).unchecked).toEqual([
+      "infra — 확인할 커밋 이력이 끝남",
+      "services — 확인할 커밋 이력이 끝남",
+      "contracts — 확인할 커밋 이력이 끝남",
+    ]);
+    expect(
+      infraCiCheck(at(c("a", { ...all("success"), infra: "cancelled" })))
+        .unchecked,
+    ).toEqual(["infra — a000000: main CI의 infra 작업이 cancelled"]);
+  });
+});
+
+describe("인프라 배포에 영향이 있는 파일 (#418)", () => {
+  it("infra·services·계약 폴더와 루트 package 파일만 고른다", () => {
+    expect(touchesInfra(["infra/lib/stack.ts"])).toBe(true);
+    expect(touchesInfra(["apps/web/a.ts", "services/src/x.ts"])).toBe(true);
+    expect(touchesInfra(["packages/contracts/src/a.ts"])).toBe(true);
+    expect(touchesInfra(["package-lock.json"])).toBe(true);
+    expect(
+      touchesInfra([
+        "apps/web/package.json",
+        "infra-notes.md",
+        "docs/infra/a.md",
+      ]),
+    ).toBe(false);
+    expect(touchesInfra([])).toBe(false);
   });
 });
 
