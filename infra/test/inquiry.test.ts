@@ -255,3 +255,23 @@ describe("문의 이메일·사진 받기 설정 (BRD-130)", () => {
     );
   });
 });
+
+describe("문의 이메일 일일 정리 일정 (BRD-119)", () => {
+  it("하루 1회 KST 03:30에 cleanup_expired_emails 동작으로 문의 함수를 호출한다", () => {
+    const schedules = Object.entries(
+      template.findResources("AWS::Scheduler::Schedule"),
+    ).filter(([id]) => id.startsWith("InquiryEmailCleanupSchedule"));
+    expect(schedules).toHaveLength(1);
+    const props = schedules[0]![1].Properties as {
+      ScheduleExpression: string;
+      ScheduleExpressionTimezone: string;
+      Target: { Input: string; Arn: { "Fn::GetAtt": [string, string] } };
+    };
+    expect(props.ScheduleExpression).toBe("cron(30 3 * * ? *)");
+    expect(props.ScheduleExpressionTimezone).toBe("Asia/Seoul");
+    expect(JSON.parse(props.Target.Input)).toEqual({
+      action: "cleanup_expired_emails",
+    });
+    expect(props.Target.Arn["Fn::GetAtt"][0]).toMatch(/^InquiryFunction/);
+  });
+});

@@ -5,6 +5,7 @@ import { WARNING_POLICY } from "../../services/src/core/warnings/policy";
 import { ALARM_LABELS } from "../../services/src/ops/alarm-notification";
 import {
   COLLECTOR_SCHEDULE_MINUTES,
+  INQUIRY_EMAIL_OVERDUE_ALARM,
   LOGIN_ABUSE_ALARM,
   MAX_ALARMS,
   OPS_API_ALARM,
@@ -106,12 +107,14 @@ describe("운영 경보 (BRD-62)", () => {
       const beat = metric === "Invocations";
       // 심장박동은 실행이 없으면(지표 없음) 위반, 오류·대기열은 지표 없음에 상태를 유지함(정상으로 보지 않음)
       // 로그인 반복 요청·운영 API 오류 급증은 호출이 없으면 오류도 없으므로 정상(notBreaching)
+      // 문의 이메일 기한 초과는 초과 항목이 발견된 날에만 지표가 나오므로 지표 없음은 정상(notBreaching)
       const login = id.startsWith("OpsLoginAbuse");
       const opsApi = id.startsWith("OpsOpsApiErrors");
+      const inquiryEmailOverdue = id.startsWith("OpsInquiryEmailOverdue");
       // 날씨는 실행 없음도 실패로 보는 오류 경보(경보 하나로 오류·중단을 함께 잡음, BRD-181)
       const weather = id.startsWith("OpsWeatherFailing");
       expect(p.TreatMissingData, id).toBe(
-        login || opsApi
+        login || opsApi || inquiryEmailOverdue
           ? "notBreaching"
           : beat || weather
             ? "breaching"
@@ -350,9 +353,11 @@ describe("운영 경보 (BRD-62)", () => {
     const filters = Object.entries(
       template.findResources("AWS::Logs::MetricFilter"),
     ) as [string, Resource][];
-    expect(filters).toHaveLength(1);
-    const [, filter] = filters[0];
-    const fp = filter.Properties;
+    const authFilter = filters.find(([id]) =>
+      id.startsWith("OpsOpsApiAuthDeniedFilter"),
+    );
+    expect(authFilter).toBeDefined();
+    const fp = authFilter![1].Properties;
     // Lambda 텍스트 로그 접두어와 상관없이 맞도록 JSON 패턴이 아닌 정규식. 낱말이 아니라 "event":"ops_auth_denied" 필드만 셈
     // (다른 줄 path 값에 같은 낱말이 있어도 세지 않음. 401·403 제한은 handleOps가 보장)
     expect(fp.FilterPattern).toBe(
@@ -394,5 +399,40 @@ describe("운영 경보 (BRD-62)", () => {
         ?.Ref,
     ).toMatch(/^OpsApiFunction/);
     expect(m4.Metric.Dimensions).toBeUndefined();
+  });
+
+  // 문의 이메일 기한 초과 경보(BRD-119): 89일 이상 남은 이메일 항목 발견 시 울림
+  it("문의 이메일 기한 초과 경보는 inquiry_email_overdue 로그 지표를 감시한다", () => {
+    const filters = Object.entries(
+      template.findResources("AWS::Logs::MetricFilter"),
+    ) as [string, Resource][];
+    const overdueFilter = filters.find(([id]) =>
+      id.startsWith("OpsInquiryEmailOverdueFilter"),
+    );
+    expect(overdueFilter).toBeDefined();
+    const fp = overdueFilter![1].Properties;
+    expect(fp.FilterPattern).toBe(
+      "%\\x22event\\x22:\\x22inquiry_email_overdue\\x22%",
+    );
+    expect(fp.MetricTransformations).toEqual([
+      {
+        MetricName: INQUIRY_EMAIL_OVERDUE_ALARM.metricName,
+        MetricNamespace: INQUIRY_EMAIL_OVERDUE_ALARM.metricNamespace,
+        MetricValue: "1",
+      },
+    ]);
+
+    const [, alarm] = alarms.find(([id]) =>
+      id.startsWith("OpsInquiryEmailOverdue"),
+    )!;
+    const p = alarm.Properties;
+    expect(p.Threshold).toBe(1);
+    expect(p.ComparisonOperator).toBe("GreaterThanOrEqualToThreshold");
+    expect(p.EvaluationPeriods).toBe(1);
+    expect(p.TreatMissingData).toBe("notBreaching");
+    expect(p.Namespace).toBe(INQUIRY_EMAIL_OVERDUE_ALARM.metricNamespace);
+    expect(p.MetricName).toBe(INQUIRY_EMAIL_OVERDUE_ALARM.metricName);
+    expect(p.Statistic).toBe("Sum");
+    expect(p.Period).toBe(INQUIRY_EMAIL_OVERDUE_ALARM.periodMinutes * 60);
   });
 });

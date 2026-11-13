@@ -349,17 +349,20 @@ describe("DynamoDB 권한 (BRD-55)", () => {
     }
   });
 
-  it("문의 역할은 Inquiry 항목 쓰기·멱등 기록 읽기·이메일 삭제만 할 수 있다", () => {
+  it("문의 역할은 Inquiry 항목 쓰기·멱등 기록 읽기·이메일 삭제·상태 GSI 조회만 할 수 있다", () => {
     const byResource = dynamoActionsByResource([roleId("InquiryInquiryRole")]);
     expect(Object.fromEntries(byResource)).toEqual({
       // 트랜잭션 Put은 dynamodb:PutItem으로 판정됨(품목별 동작). TransactWriteItems라는 동작은 없음
-      // GetItem은 같은 멱등 키의 첫 결과 읽기(BRD-103). Query·Scan은 없음
+      // GetItem은 같은 멱등 키의 첫 결과 읽기(BRD-103), Query는 일일 이메일 정리 작업용 상태 GSI 조회만(BRD-119)
       [`${tableId("Inquiry")}.Arn`]: new Set([
         "dynamodb:DeleteItem",
         "dynamodb:GetItem",
         "dynamodb:PutItem",
         "dynamodb:UpdateItem",
       ]),
+      [`${tableId("Inquiry")}.Arn/index/${INQUIRY_STATUS_INDEX.name}`]: new Set(
+        ["dynamodb:Query"],
+      ),
     });
   });
 
@@ -588,15 +591,15 @@ describe("함수·역할별 최소 권한 범위 (BRD-67)", () => {
     });
   });
 
-  it("Scheduler 역할은 수집 Lambda 함수를 깨우는(lambda:InvokeFunction) 권한만 갖는다", () => {
-    const collectorFunctionIds = Object.keys(
+  it("Scheduler 역할은 수집 Lambda 및 문의 이메일 정리 함수를 깨우는(lambda:InvokeFunction) 권한만 갖는다", () => {
+    const scheduledFunctionIds = Object.keys(
       template.findResources("AWS::Lambda::Function"),
     ).filter((id) =>
-      /^Collect(Ocean|Warnings|Catalog|Rip|Weather)Function/.test(id),
+      /^(Collect(Ocean|Warnings|Catalog|Rip|Weather)|Inquiry)Function/.test(id),
     );
-    expect(collectorFunctionIds).toHaveLength(5);
+    expect(scheduledFunctionIds).toHaveLength(6);
     const allowedTargets = new Set(
-      collectorFunctionIds.flatMap((id) => [`${id}.Arn`, `${id}.Arn:*`]),
+      scheduledFunctionIds.flatMap((id) => [`${id}.Arn`, `${id}.Arn:*`]),
     );
 
     const schedulerRoles = Object.keys(roles).filter((id) =>
@@ -671,6 +674,7 @@ describe("함수·역할별 최소 권한 범위 (BRD-67)", () => {
       "dynamodb:DeleteItem",
       "dynamodb:GetItem",
       "dynamodb:PutItem",
+      "dynamodb:Query",
       "dynamodb:UpdateItem",
       "logs:CreateLogStream",
       "logs:PutLogEvents",
