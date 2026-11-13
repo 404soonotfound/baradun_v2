@@ -21,8 +21,15 @@ shift
 paths=("$@")
 : "${CI_JOB:?CI_JOB(이 앱 빌드 작업 이름)이 없음}"
 
-# main push CI 실행 결과(최신 실행이 먼저). 같은 커밋을 다시 돌렸으면 마지막 결과
-if ! runs=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?branch=main&event=push&per_page=100" \
+# 수동 실행은 대상 SHA만 조회하고 정기 실행은 최근 main push 이력을 조회함.
+# 같은 커밋을 다시 돌렸으면 최신 결과를 사용함.
+ci_query="repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?branch=main&event=push"
+if [ "${MANUAL:-false}" = "true" ]; then
+  ci_query="$ci_query&head_sha=${HEAD_SHA:?HEAD_SHA(수동 실행 커밋)가 없음}&per_page=1"
+else
+  ci_query="$ci_query&per_page=100"
+fi
+if ! runs=$(gh api "$ci_query" \
   --jq '.workflow_runs[] | "\(.head_sha) \(.conclusion // "pending") \(.id)"'); then
   echo "::error::main CI 실행 결과를 읽지 못했어요. 잠시 뒤 다시 실행해 주세요."
   exit 1

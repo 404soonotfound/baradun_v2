@@ -40,7 +40,8 @@ const CONCLUSIONS = [
   "stale",
   "startup_failure",
 ];
-const APPS = ["site", "admin"] as const;
+export const SITE_DEPLOY_JOBS = ["site", "admin"] as const;
+export const SITE_DEPLOY_MARKER_STEP = "올린 커밋 표시";
 const EVENTS = ["schedule", "workflow_dispatch"] as const;
 const CACHE_MS = 30_000;
 const KST_MS = 9 * 60 * 60_000;
@@ -48,7 +49,7 @@ const DAY_MS = 24 * 60 * 60_000;
 const DEPLOY_TIME_MS = (5 * 60 + 17) * 60_000;
 const WORKFLOW = "/actions/workflows/deploy.yml";
 const RUNS = WORKFLOW + "/runs";
-const DEPLOY_VARIABLES = [
+export const DEPLOY_VARIABLES = [
   "DEPLOY_ROLE_ARN",
   "SITE_BUCKET",
   "DISTRIBUTION_ID",
@@ -214,21 +215,22 @@ async function compare(read: Read, from: string, to: string, app: App) {
 
 async function ci(read: Read, head: string): Promise<CiState> {
   const { body, next } = await read(
-    "/actions/workflows/ci.yml/runs?branch=main&event=push&per_page=100",
+    `/actions/workflows/ci.yml/runs?branch=main&event=push&head_sha=${head}&per_page=1`,
   );
-  // 수동 배포 스크립트와 같은 main push CI 최근 100건을 확인함.
   const data = record(body);
-  const list = rows(data.workflow_runs).map(record);
-  const run = list.find((item) => {
-    if (item.event !== "push" || item.head_branch !== "main")
-      throw new SiteDeployError("invalid");
-    return sha(item.head_sha) === head;
-  });
-  if (!run) {
-    if (next || number(data.total_count) > list.length)
+  const list = rows(data.workflow_runs);
+  if (!list.length) {
+    if (next || number(data.total_count) !== 0)
       throw new SiteDeployError("truncated");
     return "missing";
   }
+  const run = record(list[0]);
+  if (
+    run.event !== "push" ||
+    run.head_branch !== "main" ||
+    sha(run.head_sha) !== head
+  )
+    throw new SiteDeployError("invalid");
   const status = runStatus(run.status);
   if (status !== "completed") return "pending";
   return conclusion(run.conclusion, status) === "success"
@@ -388,7 +390,8 @@ async function jobs(read: Read, run: DeployRun | null) {
     const result = conclusion(item.conclusion, status);
     const steps = rows(item.steps).map(record);
     const wroteMarker = steps.some(
-      (step) => step.name === "올린 커밋 표시" && step.conclusion === "success",
+      (step) =>
+        step.name === SITE_DEPLOY_MARKER_STEP && step.conclusion === "success",
     );
     return {
       status,
@@ -397,7 +400,8 @@ async function jobs(read: Read, run: DeployRun | null) {
       completedAt: item.completed_at === null ? null : date(item.completed_at),
     };
   };
-  return { site: appJob("site"), admin: appJob("admin") };
+  const [site, admin] = SITE_DEPLOY_JOBS;
+  return { site: appJob(site), admin: appJob(admin) };
 }
 
 type Readiness =
@@ -491,8 +495,19 @@ export function createSiteDeployReader(
     };
     try {
       let token: Promise<string> | undefined;
-      const read: Read = async (path) =>
-        github(path, await (token ??= credential.token(budget)), budget);
+      const read: Read = async (path) => {
+        const value = await (token ??= credential.token(budget));
+        try {
+          return await github(path, value, budget);
+        } catch (error) {
+          if (
+            error instanceof SiteDeployError &&
+            error.reason === "unauthorized"
+          )
+            credential.invalidate(value);
+          throw error;
+        }
+      };
       const expiry = observe("expiry", () => credential.expiry(budget));
       const main = observe("main", async () => {
         const { body } = await read("/commits/main");
@@ -577,7 +592,7 @@ export function createSiteDeployReader(
         dayStart,
       );
       const sites = Promise.all(
-        APPS.map(async (app) => {
+        SITE_DEPLOY_JOBS.map(async (app) => {
           const deployed = observe(`${app}:marker`, () =>
             marker(config[app], request, budget, started),
           );

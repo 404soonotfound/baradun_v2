@@ -95,6 +95,7 @@ function setup(override: (url: URL) => Response | undefined = () => undefined) {
   const credential = {
     token: vi.fn(async () => "fixture-value"),
     expiry: vi.fn(async () => "2027-01-01"),
+    invalidate: vi.fn(),
   };
   const read = createSiteDeployReader(
     config,
@@ -400,6 +401,31 @@ describe("사이트 배포 상태 조회(D27-3·5)", () => {
       reason: "unavailable",
     });
     expect(result.ci).not.toHaveProperty("last");
+  });
+
+  it("main CI 실행이 아직 없으면 그 SHA만 조회해 결과 없음으로 표시한다", async () => {
+    const { read, request } = setup((url) =>
+      url.pathname.includes("/ci.yml/runs") ? Response.json(runs()) : undefined,
+    );
+    expect((await read()).readiness).toBe("ci_missing");
+    const ciUrl = request.mock.calls
+      .map(([url]) => new URL(String(url)))
+      .find((url) => url.pathname.includes("/ci.yml/runs"));
+    expect(ciUrl?.searchParams.get("head_sha")).toBe(HEAD);
+    expect(ciUrl?.searchParams.get("event")).toBe("push");
+  });
+
+  it("GitHub 401을 받으면 사용한 토큰을 무효화한다", async () => {
+    const { read, credential } = setup((url) =>
+      url.pathname.endsWith("/variables")
+        ? new Response(null, { status: 401 })
+        : undefined,
+    );
+    expect((await read()).settings).toMatchObject({
+      status: "unknown",
+      reason: "unauthorized",
+    });
+    expect(credential.invalidate).toHaveBeenCalledWith("fixture-value");
   });
 
   it("KST 자정에 30초 캐시가 남아도 다시 집계하고 끝 페이지까지 센다", async () => {
