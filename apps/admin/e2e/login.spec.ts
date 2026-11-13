@@ -201,6 +201,10 @@ test.describe("운영자 로그인", () => {
     });
     await page.reload();
     await expect(page.getByRole("heading", { name: "내 계정" })).toBeVisible();
+    // 제목은 세션 확인 중 틀(GH-462 보드 L10)에도 보이므로 이어 간 뒤의 내용까지 기다림
+    await expect(
+      page.getByRole("button", { name: "이 기기에서 로그아웃" }),
+    ).toBeVisible();
     await expect(page).toHaveURL(/\/account\/$/);
     expect(visited.filter((url) => url.includes("/login"))).toEqual([]);
     expect(
