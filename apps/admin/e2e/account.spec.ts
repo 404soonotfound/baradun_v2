@@ -28,7 +28,7 @@ async function openAccount(
     page,
     srpScript({ email: OPS, after: "tokens", groups: ["viewer"] }),
   );
-  await mockOps(page, ME_OK);
+  await mockOps(page, { ...ME_OK, body: { ...ME_OK.body, role: "viewer" } });
   await page.route("**/ops/account/mfa-reset", async (route) => {
     bodies.push(route.request().postDataJSON());
     await route.fulfill({
