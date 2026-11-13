@@ -9,6 +9,7 @@ import { useId, type ReactNode } from "react";
 import { shownMetric, shownStation } from "@/components/detail/sea-card";
 import { ZoneName } from "@/components/zone-name";
 import { AGENCY, agencyKeyOf, SOURCE_URL } from "@/lib/agencies";
+import { trackEvent } from "@/lib/analytics/events";
 import { cn } from "@/lib/cn";
 import { toggleFavorite, useFavorites } from "@/lib/favorites";
 import { localizedPath, type Locale } from "@/lib/i18n";
@@ -416,6 +417,11 @@ export function FavoriteButton({
   const t = useTranslations("detail.cta");
   const favorites = useFavorites();
   const favorite = favorites.includes(beachId);
+  function handleToggle() {
+    const nextAction = favorite ? "remove" : "add";
+    toggleFavorite(beachId);
+    trackEvent("toggle_favorite", { action: nextAction, surface: "spot" });
+  }
   const star = (
     <Star
       aria-hidden="true"
@@ -432,7 +438,7 @@ export function FavoriteButton({
         type="button"
         aria-label={t("favorite")}
         aria-pressed={favorite}
-        onClick={() => toggleFavorite(beachId)}
+        onClick={handleToggle}
         className={cn(
           "flex size-button shrink-0 items-center justify-center rounded-button border border-border-strong bg-bg-surface hover:bg-bg-subtle",
           className,
@@ -446,7 +452,7 @@ export function FavoriteButton({
     <button
       type="button"
       aria-pressed={favorite}
-      onClick={() => toggleFavorite(beachId)}
+      onClick={handleToggle}
       className={cn(
         "flex h-9 shrink-0 items-center gap-[5px] rounded-full border border-border-strong bg-bg-surface px-[13px] text-[13.5px] font-medium text-text-body hover:bg-bg-subtle",
         className,

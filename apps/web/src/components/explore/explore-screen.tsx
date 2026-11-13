@@ -38,6 +38,7 @@ import {
   type SortChoice,
 } from "@/lib/explore";
 import { setSortChoice, useSortChoice } from "@/lib/explore-sort";
+import { trackEvent } from "@/lib/analytics/events";
 import {
   setExploreView,
   useExploreView,
@@ -456,7 +457,10 @@ export function ExploreScreen({
               { value: "map", label: t("explore.view.map") },
             ]}
             value={view}
-            onChange={setExploreView}
+            onChange={(next) => {
+              setExploreView(next);
+              trackEvent("toggle_explore_view", { view: next });
+            }}
           />
         </div>
 
@@ -542,7 +546,10 @@ export function ExploreScreen({
             hasKmaData && markers.length > 0 ? t("source.kmaStatus") : null
           }
           className="h-[62dvh] min-h-[380px] lg:h-[calc(100dvh-112px)]"
-          onShowList={() => setExploreView("list")}
+          onShowList={() => {
+            setExploreView("list");
+            trackEvent("toggle_explore_view", { view: "list" });
+          }}
           // 지도가 실패하면 고른 해변을 놓음(지도 밖에 있는 모바일 카드도 닫힘, PC 카드와 같게)
           onFailed={() => setSelectedId(null)}
           overlay={(api) => (

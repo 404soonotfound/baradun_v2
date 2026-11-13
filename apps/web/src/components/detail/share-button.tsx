@@ -14,6 +14,7 @@ import {
 import { BeachPhoto } from "@/components/map/beach-photo";
 import { Sheet } from "@/components/ui/sheet";
 import { Toast, useToast } from "@/components/ui/toast";
+import { trackEvent } from "@/lib/analytics/events";
 import type { Locale } from "@/lib/i18n";
 import { copyText, shareUrl, shareWithDevice, smsHref } from "@/lib/share";
 import { useSheet } from "@/lib/use-sheet";
@@ -63,6 +64,7 @@ export function ShareButton({
       setCopyFailed(false);
       sheet.close();
       toast.show({ text: t("copied") });
+      trackEvent("share_spot", { method: "copy_link", locale });
       return;
     }
     // 복사 실패: 링크 칸을 골라 둠(선택해 직접 복사)
@@ -80,8 +82,10 @@ export function ShareButton({
         title: name,
         url: link,
       });
-      if (result === "shared") sheet.close();
-      else if (result === "unsupported" || result === "failed")
+      if (result === "shared") {
+        sheet.close();
+        trackEvent("share_spot", { method: "web_share", locale });
+      } else if (result === "unsupported" || result === "failed")
         await copy(link);
       // cancelled: 사용자가 닫음 → 시트 그대로
     } finally {

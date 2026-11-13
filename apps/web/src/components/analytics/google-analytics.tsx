@@ -16,7 +16,7 @@ import { useEffect, useRef, useState } from "react";
 // - config는 gtag.js가 불러와진 뒤(onReady)에만 넣음. 미리 dataLayer에 쌓으면 gtag.js가 늦게 불러와질 때 그 시점의
 //   document.location(그사이 /search/?q=로 옮겨 간 주소)을 읽어 검색어가 나갈 수 있음. 불러온 뒤에는 넣는 즉시 처리됨
 // - page_referrer: 첫 조회는 document.referrer(경로까지만), 화면 이동 뒤에는 직전 경로. document.referrer는 화면 이동으로 바뀌지 않음
-// - 이벤트는 page_view만. 기기 위치·검색어·문의 내용·자유 입력은 어떤 이벤트에도 넣지 않음
+// - 이벤트는 page_view와 lib/analytics/events.ts의 허용된 기능 이용 이벤트만 전송함. 기기 위치·검색어 원문·문의 내용·자유 입력·해변 판단 상태는 어떤 이벤트에도 넣지 않음
 // - CSP: script-src·img-src·connect-src의 GA 출처는 infra/lib/site/security-headers.ts·e2e/static-server.mjs·scripts/csp-meta.mts
 
 declare global {

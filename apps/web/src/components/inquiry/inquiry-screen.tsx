@@ -28,12 +28,14 @@ import {
   saveInquiryDraft,
   useInquiryDraft,
 } from "@/lib/inquiry/draft";
+import { trackEvent } from "@/lib/analytics/events";
 import {
   buildRequest,
   EMAIL_MAX,
   firstErrorField,
   INQUIRY_CONTACT_ENABLED,
   INQUIRY_KINDS,
+  KIND_TO_TYPE,
   MESSAGE_INPUT_MAX,
   MESSAGE_MIN,
   PHOTO_MAX_COUNT,
@@ -301,6 +303,11 @@ export function InquiryScreen({
     if (result.ok) {
       const photos = result.response.photos;
       clearSentInquiryDraft(sentSavedAt); // 접수 성공 → 보낸 초안만 즉시 삭제
+      trackEvent("inquiry_sent", {
+        inquiry_type: KIND_TO_TYPE[kind],
+        has_beach_context: beach !== null,
+        ...(sendActivity === null ? {} : { activity: sendActivity }),
+      });
       resetSensitive();
       setPhase({
         kind: "done",

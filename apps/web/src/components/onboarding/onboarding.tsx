@@ -15,9 +15,11 @@ import { useEffect, useRef, type ReactNode } from "react";
 
 import { RegionSheet } from "@/components/region/region-sheet";
 import { Button } from "@/components/ui/button";
+import { trackEvent } from "@/lib/analytics/events";
 import { cn } from "@/lib/cn";
 import { localizedPath, type Locale } from "@/lib/i18n";
 import { requestLocation, useUserLocation } from "@/lib/location";
+import { NOTICE_VERSION } from "@/lib/notice-version";
 import {
   acknowledgeNotice,
   finishLocationStep,
@@ -135,11 +137,21 @@ function LocationGate({
       <LocationStep
         onUse={() => {
           finishLocationStep();
+          trackEvent("respond_location_prompt", {
+            choice: "allow",
+            surface: "onboarding",
+          });
           // 전에 고른 지역이 있으면 지움 → 홈이 가까운 바다로 돌아감(홈 '내 주변'과 같음)
           setRegion(null);
           requestLocation(); // 여기서 처음으로 브라우저가 위치를 물음
         }}
-        onPick={onPick}
+        onPick={() => {
+          trackEvent("respond_location_prompt", {
+            choice: "skip",
+            surface: "onboarding",
+          });
+          onPick();
+        }}
       />
     </OnboardingDialog>
   );
@@ -341,7 +353,16 @@ function NoticeStep({ locale }: { locale: Locale }) {
           >
             {t("onboarding.notice.privacy")}
           </Link>
-          <Button className="w-full" onClick={acknowledgeNotice}>
+          <Button
+            className="w-full"
+            onClick={() => {
+              acknowledgeNotice();
+              trackEvent("complete_onboarding_notice", {
+                notice_version: NOTICE_VERSION,
+                locale,
+              });
+            }}
+          >
             {t("onboarding.notice.confirm")}
           </Button>
           {/* 링크 글자 14/20.3 굵게, 누르는 영역 44 (Figma 185:305) */}
