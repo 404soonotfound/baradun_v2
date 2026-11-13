@@ -672,6 +672,7 @@ export const CI_JOB_PATHS: Readonly<Record<string, readonly string[]>> = {
     "infra/",
     ".github/workflows/",
     ".github/scripts/",
+    ".github/site-deploy-paths.json",
     ".github/dependabot.yml",
     "tools/map-tiles/",
     ".github/ci-filters.yml", // ci.yml filter_config
@@ -679,6 +680,7 @@ export const CI_JOB_PATHS: Readonly<Record<string, readonly string[]>> = {
   services: [
     ...CI_SHARED,
     "services/",
+    ".github/site-deploy-paths.json",
     "packages/contracts/",
     "data/photo-sources.json",
     "data/rip-current-beaches.json",

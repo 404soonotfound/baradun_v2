@@ -1,0 +1,27 @@
+{
+  "site": [
+    "package.json",
+    "package-lock.json",
+    "tsconfig.base.json",
+    ".nvmrc",
+    "apps/web",
+    "packages/contracts",
+    "packages/design-tokens",
+    "data/beaches",
+    "data/beach-meta.json",
+    ".github/workflows/deploy.yml"
+  ],
+  "admin": [
+    "package.json",
+    "package-lock.json",
+    "tsconfig.base.json",
+    ".nvmrc",
+    "apps/admin",
+    "packages/contracts",
+    "packages/design-tokens",
+    "data/beaches",
+    "data/beach-meta.json",
+    "data/beach-coverage.csv",
+    ".github/workflows/deploy.yml"
+  ]
+}

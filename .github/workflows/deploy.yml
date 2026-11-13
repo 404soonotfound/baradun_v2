@@ -227,19 +227,11 @@ jobs:
           MANUAL: ${{ github.event_name == 'workflow_dispatch' }}
           URL: ${{ vars.SITE_URL }}
           CI_JOB: e2e-build # 이 앱을 빌드하는 ci.yml 작업
-        # 경로는 이 앱 빌드가 읽는 파일(ci.yml 바뀐 영역 필터에서 ci.yml 제외, workflows.test.ts가 확인)
+        # 앱 경로는 운영 API와 같은 생성물(.github/site-deploy-paths.json)을 읽음
         run: |
-          .github/scripts/deploy-plan.sh "$URL" \
-            package.json \
-            package-lock.json \
-            tsconfig.base.json \
-            .nvmrc \
-            apps/web \
-            packages/contracts \
-            packages/design-tokens \
-            data/beaches \
-            data/beach-meta.json \
-            .github/workflows/deploy.yml
+          paths=$(jq -er '.site[]' .github/site-deploy-paths.json)
+          mapfile -t app_paths <<< "$paths"
+          .github/scripts/deploy-plan.sh "$URL" "${app_paths[@]}"
       - if: steps.decide.outputs.deploy == 'true'
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -337,20 +329,11 @@ jobs:
           MANUAL: ${{ github.event_name == 'workflow_dispatch' }}
           URL: ${{ vars.ADMIN_SITE_URL }}
           CI_JOB: admin-build # 이 앱을 빌드하는 ci.yml 작업
-        # 경로는 이 앱 빌드가 읽는 파일(ci.yml 바뀐 영역 필터에서 ci.yml 제외, workflows.test.ts가 확인)
+        # 앱 경로는 운영 API와 같은 생성물(.github/site-deploy-paths.json)을 읽음
         run: |
-          .github/scripts/deploy-plan.sh "$URL" \
-            package.json \
-            package-lock.json \
-            tsconfig.base.json \
-            .nvmrc \
-            apps/admin \
-            packages/contracts \
-            packages/design-tokens \
-            data/beaches \
-            data/beach-meta.json \
-            data/beach-coverage.csv \
-            .github/workflows/deploy.yml
+          paths=$(jq -er '.admin[]' .github/site-deploy-paths.json)
+          mapfile -t app_paths <<< "$paths"
+          .github/scripts/deploy-plan.sh "$URL" "${app_paths[@]}"
       - if: steps.decide.outputs.deploy == 'true'
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
