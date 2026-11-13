@@ -72,6 +72,9 @@ const CARD =
 const LABEL = "text-label-s font-medium text-text-body";
 const VALUE = "text-title-l font-semibold text-text-default tabular-nums";
 const HINT = "text-label-s text-text-muted";
+// 할 일 안내 한 줄(0건·확인 못 함): 자리표시 한 행 상자(행 44 + 위아래 테두리 2)와 같은 최소 높이 → 응답 뒤 밀리지 않음
+const TODO_LINE =
+  "flex min-h-[calc(var(--spacing-touch)+2px)] items-center text-body-s text-text-body";
 
 interface Me {
   readonly kind: "operator" | "sample";
@@ -402,7 +405,7 @@ function Todos({ parts }: { parts: Parts }) {
         </ul>
       )}
       {loading ? (
-        // 할 일 한 행 상자와 같은 높이(할 일이 없으면 응답 뒤 한 줄 안내로 줄어듦)
+        // 할 일 한 행 상자와 같은 높이(0건·확인 못 함 안내 줄도 같은 최소 높이, TODO_LINE)
         <ul
           aria-hidden="true"
           className={`flex flex-col rounded-admin-box border border-border-default bg-bg-surface ${slot.cls}`}
@@ -412,14 +415,12 @@ function Todos({ parts }: { parts: Parts }) {
           </li>
         </ul>
       ) : list.incomplete ? (
-        <p role="status" className={`text-body-s text-text-body ${slot.cls}`}>
+        <p role="status" className={`${TODO_LINE} ${slot.cls}`}>
           {h.todoIncomplete}
         </p>
       ) : (
         list.items.length === 0 && (
-          <p className={`text-body-s text-text-body ${slot.cls}`}>
-            {h.todoNone}
-          </p>
+          <p className={`${TODO_LINE} ${slot.cls}`}>{h.todoNone}</p>
         )
       )}
       <div className="flex flex-col gap-0.5">
