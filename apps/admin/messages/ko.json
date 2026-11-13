@@ -193,6 +193,7 @@
     "undeterminedPage": "판단불가 해변 페이지",
     "usageTitle": "이용",
     "usageRange": "최근 28일 · 오늘 포함",
+    "usageAsOf": "{time} 기준 · 5분마다 다시 읽어요",
     "usageUsers": "사용자",
     "usageViews": "화면 조회",
     "usageLive": "지금 사용 중 {count}명 · 최근 30분",
