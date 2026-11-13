@@ -15,6 +15,7 @@
     "pretest": "npm run tokens",
     "test": "vitest run",
     "test:e2e": "playwright test",
+    "test:e2e:smoke": "playwright test --grep @smoke",
     "test:e2e:engines": "E2E_ENGINES=1 playwright test --project=desktop-firefox --project=desktop-webkit"
   },
   "dependencies": {

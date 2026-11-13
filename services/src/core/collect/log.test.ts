@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { createLogger, maskRequestKeys, maskSecrets } from "./log";
+import {
+  createLogger,
+  maskRequestKeys,
+  maskSecrets,
+  normalizeResultCode,
+  sanitizeResultMessage,
+} from "./log";
 
 // 로그 키 마스킹 (BRD-56)
 describe("maskSecrets", () => {
@@ -40,5 +46,24 @@ describe("createLogger", () => {
       event: "source_failed",
       detail: "key *** failed",
     });
+  });
+});
+
+describe("sanitizeResultMessage · normalizeResultCode", () => {
+  it("200자·64자 길이 제한과 제어문자만 있는 입력을 정리함", () => {
+    expect(sanitizeResultMessage("x".repeat(300))).toBe("x".repeat(200));
+    expect(sanitizeResultMessage(`${"a".repeat(199)} bbb`)).toBe(
+      "a".repeat(199),
+    );
+    expect(sanitizeResultMessage("\n\t\u0000  ")).toBeUndefined();
+    expect(sanitizeResultMessage(123)).toBeUndefined();
+  });
+
+  it("resultCode는 문자열·숫자만 허용하고 64자로 제한함", () => {
+    expect(normalizeResultCode("c".repeat(100))).toBe("c".repeat(64));
+    expect(normalizeResultCode(3)).toBe("3");
+    expect(normalizeResultCode(true)).toBeUndefined();
+    expect(normalizeResultCode({})).toBeUndefined();
+    expect(normalizeResultCode(null)).toBeUndefined();
   });
 });

@@ -21,6 +21,7 @@
     "prebuild-storybook": "npm run tokens && npm run map:worker",
     "build-storybook": "storybook build",
     "test:e2e": "playwright test",
+    "test:e2e:smoke": "playwright test --grep @smoke",
     "tokens": "baradun-tokens src/styles/tokens.css",
     "icons": "node scripts/build-icons.mts",
     "map:worker": "node scripts/copy-map-worker.mjs",

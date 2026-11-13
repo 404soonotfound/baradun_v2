@@ -51,7 +51,24 @@ describe("응답 껍데기", () => {
       parseEnvelope(
         JSON.stringify({ response: { header: { resultCode: "03" } } }),
       ),
-    ).toEqual({ status: "failed", reason: "result:03" });
+    ).toEqual({ status: "failed", reason: "result:03", code: "03" });
+    expect(
+      parseEnvelope(
+        JSON.stringify({
+          response: {
+            header: {
+              resultCode: "99",
+              resultMsg: "UNKNOWN_ERROR\nserviceKey=MY_SECRET",
+            },
+          },
+        }),
+      ),
+    ).toEqual({
+      status: "failed",
+      reason: "result:99",
+      code: "99",
+      message: "UNKNOWN_ERROR serviceKey=***",
+    });
   });
 
   it("행이 없거나 totalCount보다 적게 받으면 실패(빈 배열을 정상으로 읽지 않음)", () => {

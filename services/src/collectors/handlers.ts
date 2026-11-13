@@ -96,15 +96,18 @@ interface LambdaContext {
 
 const lambda = new LambdaClient({});
 
-// 사유·message에 키가 섞여 들어와도 기록에 남기지 않게 가림(로그와 같은 규칙)
+// 사유·code·message에 키가 섞여 들어와도 기록에 남기지 않게 가림(로그와 같은 규칙)
 function maskFailure(failure: RunFailure): RunFailure {
-  const masked = {
+  return {
     ...failure,
     reason: maskSecrets(failure.reason, loadedKeys),
+    ...(failure.code !== undefined
+      ? { code: maskSecrets(failure.code, loadedKeys) }
+      : {}),
+    ...(failure.message !== undefined
+      ? { message: maskSecrets(failure.message, loadedKeys) }
+      : {}),
   };
-  return failure.message === undefined
-    ? masked
-    : { ...masked, message: maskSecrets(failure.message, loadedKeys) };
 }
 
 // 수집 함수가 예외로 끝나도 실행 기록에 실패로 남김(trigger.ts runCollector)

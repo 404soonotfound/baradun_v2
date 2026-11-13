@@ -79,6 +79,15 @@
       "Resource": "arn:aws:cloudwatch:ap-northeast-2:717304679248:alarm:BaradunV2-*"
     },
     {
+      "Sid": "OperatorMfaReset",
+      "Effect": "Allow",
+      "Action": [
+        "cognito-idp:AdminDeleteSoftwareToken",
+        "cognito-idp:AdminGetUser"
+      ],
+      "Resource": "arn:aws:cognito-idp:ap-northeast-2:717304679248:userpool/*"
+    },
+    {
       "Sid": "SiteBucketObjects",
       "Effect": "Allow",
       "Action": ["s3:DeleteObject", "s3:GetObject", "s3:PutObject"],

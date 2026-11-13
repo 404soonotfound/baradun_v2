@@ -304,7 +304,12 @@ export async function collectRip(deps: RipDeps): Promise<CollectRunResult> {
     failures.push({ source: "storage", reason: "readings_not_saved" });
   for (const result of results.values()) {
     if (result.status === "failed")
-      failures.push({ source: "rip", reason: result.reason });
+      failures.push({
+        source: "rip",
+        reason: result.reason,
+        ...(result.code !== undefined ? { code: result.code } : {}),
+        ...(result.message !== undefined ? { message: result.message } : {}),
+      });
     else if (result.status === "none" && inSeason)
       failures.push({ source: "rip", reason: "no_data" });
   }

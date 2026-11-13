@@ -287,6 +287,29 @@ describe("DynamoDB 권한 (BRD-55)", () => {
     expect(resources[0]).toMatch(/:alarm:.*-\*$/);
   });
 
+  it("운영 API 역할의 Cognito 권한은 운영자 풀 하나의 계정 확인·인증 앱 지우기뿐이다(#335, D16-A9)", () => {
+    const statements = allIamPolicies()
+      .filter((p) => p.roles.includes(roleId("OpsApiRole")))
+      .flatMap((p) => p.statements)
+      .filter((s) =>
+        toList(s.Action).some((a) => String(a).startsWith("cognito-idp:")),
+      );
+    expect(statements).toHaveLength(1);
+    expect(statements[0]!.Effect).toBe("Allow");
+    expect(toList(statements[0]!.Action).sort()).toEqual([
+      "cognito-idp:AdminDeleteSoftwareToken",
+      "cognito-idp:AdminGetUser",
+    ]);
+    const pools = Object.keys(template.findResources("AWS::Cognito::UserPool"));
+    const operatorPool = pools.filter((id) =>
+      id.startsWith("OperatorAuthUserPool"),
+    );
+    expect(operatorPool).toHaveLength(1);
+    expect(toList(statements[0]!.Resource).map(resourceText)).toEqual([
+      `${operatorPool[0]}.Arn`,
+    ]);
+  });
+
   it("운영 API 역할은 수집 API 키 2개의 태그만 읽고, GA4 서비스 계정 키 파라미터 1개만 값(GetParameter)을 읽는다(ADM-SRC·ADM-STATS)", () => {
     const statements = allIamPolicies()
       .filter((p) => p.roles.includes(roleId("OpsApiRole")))
@@ -480,6 +503,8 @@ describe("함수·역할별 최소 권한 범위 (BRD-67)", () => {
     expect([...actions.keys()].sort()).toEqual([
       "cloudwatch:DescribeAlarmHistory",
       "cloudwatch:DescribeAlarms",
+      "cognito-idp:AdminDeleteSoftwareToken",
+      "cognito-idp:AdminGetUser",
       "dynamodb:GetItem",
       "dynamodb:PutItem",
       "dynamodb:Query",

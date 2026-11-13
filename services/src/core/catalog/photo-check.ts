@@ -2,6 +2,7 @@
 // TourAPI 응답(JSON.parse 결과)에서 그 사진의 유형만 읽음. 1유형(Type1)만 허용
 // 사진을 찾지 못하면 missing(관광지 대표 이미지가 바뀌었거나 사진이 빠짐). 응답이 정상이 아니면 failed(확인 결과 아님)
 
+import { normalizeResultCode, sanitizeResultMessage } from "../collect/log";
 import { responseItems } from "../warnings/response-items";
 
 // first = 관광지 대표 이미지(detailCommon2), detail = 상세 이미지 목록(detailImage2)
@@ -9,7 +10,7 @@ export type PhotoImage = "first" | "detail";
 
 export type PhotoCheck =
   | { status: "type1" | "not_type1" | "missing" }
-  | { status: "failed"; reason: string };
+  | { status: "failed"; reason: string; code?: string; message?: string };
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -38,9 +39,13 @@ export function checkPhoto(
   if (!isObject(header)) return { status: "failed", reason: "format:header" };
   // TourAPI 정상은 "0000"
   if (header.resultCode !== "0000") {
+    const code = normalizeResultCode(header.resultCode);
+    const message = sanitizeResultMessage(header.resultMsg);
     return {
       status: "failed",
-      reason: `resultCode:${String(header.resultCode ?? "")}`,
+      reason: `resultCode:${code ?? "missing"}`,
+      ...(code !== undefined ? { code } : {}),
+      ...(message !== undefined ? { message } : {}),
     };
   }
   const body = isObject(response) ? response.body : undefined;

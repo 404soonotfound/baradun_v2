@@ -42,6 +42,8 @@
     "cloudwatch:PutMetricAlarm",
     "cloudwatch:TagResource",
     "cloudwatch:UntagResource",
+    "cognito-idp:AdminDeleteSoftwareToken",
+    "cognito-idp:AdminGetUser",
     "cognito-idp:CreateGroup",
     "cognito-idp:CreateUserPool",
     "cognito-idp:CreateUserPoolClient",

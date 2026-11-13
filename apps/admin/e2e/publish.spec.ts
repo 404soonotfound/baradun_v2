@@ -258,7 +258,7 @@ test("게시 현황: 현재 게시본·다음 자동 게시·대기 공지·되�
   await expectNoA11yViolations(page);
 });
 
-test("지금 게시: 확인 창(취소에 먼저 포커스) → 작업 ID → 게시 완료와 앱 반영을 나눠 보여 준다", async ({
+test("지금 게시: 확인 창(취소에 먼저 포커스) → 작업 ID → 게시 완료와 앱 반영을 나눠 보여 준다 @smoke", async ({
   page,
 }) => {
   await signIn(page);
@@ -402,25 +402,31 @@ test("진행 중인 작업이 있으면 지금 게시·되돌리기를 잠그고
   ).toBeVisible();
 });
 
-test("편집 권한은 지금 게시·되돌리기·다시 적용을 비활성으로 두고 노출 변경 권한이 필요하다고 알린다", async ({
-  page,
-}) => {
-  await signIn(page, ["editor"]);
-  await mockPublish(page);
-  await openPublish(page);
-  await expect(page.getByRole("button", { name: "지금 게시" })).toBeDisabled();
-  await expect(page.getByRole("button", { name: "다시 적용" })).toBeDisabled();
-  await expect(
-    history(page)
-      .nth(2)
-      .getByRole("button", { name: /되돌리기/ }),
-  ).toBeDisabled();
-  await expect(
-    page.getByText(
-      '"노출 변경" 권한이 필요해요. 운영 책임자에게 요청해 주세요.',
-    ),
-  ).toBeVisible();
-});
+test(
+  "편집 권한은 지금 게시·되돌리기·다시 적용을 비활성으로 두고 노출 변경 권한이 필요하다고 알린다",
+  { tag: "@smoke" },
+  async ({ page }) => {
+    await signIn(page, ["editor"]);
+    await mockPublish(page);
+    await openPublish(page);
+    await expect(
+      page.getByRole("button", { name: "지금 게시" }),
+    ).toBeDisabled();
+    await expect(
+      page.getByRole("button", { name: "다시 적용" }),
+    ).toBeDisabled();
+    await expect(
+      history(page)
+        .nth(2)
+        .getByRole("button", { name: /되돌리기/ }),
+    ).toBeDisabled();
+    await expect(
+      page.getByText(
+        '"노출 변경" 권한이 필요해요. 운영 책임자에게 요청해 주세요.',
+      ),
+    ).toBeVisible();
+  },
+);
 
 test("다시 적용: 되돌림 포인터 version을 보내고 다음 게시 때 반영된다고 알린다", async ({
   page,
@@ -515,31 +521,33 @@ test("칸을 읽지 못하면 '확인 못 함'으로 알리고 빈 목록처럼 
   await expect(page.getByText("아직 게시 기록이 없어요")).toHaveCount(0);
 });
 
-test("데모 계정은 데이터 게시를 볼 수 없다고 알리고 운영 API를 부르지 않는다", async ({
-  page,
-}) => {
-  await mockCognito(
-    page,
-    srpScript({ email: OPS, after: "tokens", groups: ["sample"] }),
-  );
-  await mockOps(page, {
-    status: 200,
-    body: {
-      kind: "sample",
-      role: "sample",
-      authTime: "",
-      sessionExpiresAt: "",
-    },
-  });
-  const calls = await mockPublish(page);
-  await signInWithPassword(page, "/login/demo/", OPS);
-  await expect(page.getByRole("heading", { name: "운영 홈" })).toBeVisible();
-  await openPublish(page);
-  await expect(
-    page.getByText("데모 계정은 데이터 게시 화면을 볼 수 없어요."),
-  ).toBeVisible();
-  expect(calls.overviews).toBe(0);
-});
+test(
+  "데모 계정은 데이터 게시를 볼 수 없다고 알리고 운영 API를 부르지 않는다",
+  { tag: "@smoke" },
+  async ({ page }) => {
+    await mockCognito(
+      page,
+      srpScript({ email: OPS, after: "tokens", groups: ["sample"] }),
+    );
+    await mockOps(page, {
+      status: 200,
+      body: {
+        kind: "sample",
+        role: "sample",
+        authTime: "",
+        sessionExpiresAt: "",
+      },
+    });
+    const calls = await mockPublish(page);
+    await signInWithPassword(page, "/login/demo/", OPS);
+    await expect(page.getByRole("heading", { name: "운영 홈" })).toBeVisible();
+    await openPublish(page);
+    await expect(
+      page.getByText("데모 계정은 데이터 게시 화면을 볼 수 없어요."),
+    ).toBeVisible();
+    expect(calls.overviews).toBe(0);
+  },
+);
 
 test("다른 운영자가 연 진행 중 작업은 이 탭의 끝난 작업보다 먼저 보여 주고 버튼을 잠근다", async ({
   page,

@@ -226,6 +226,33 @@ describe("collectCatalog", () => {
     await collectCatalog(deps());
     expect(lines.join("\n")).not.toContain(KEY);
   });
+
+  // BRD-166(D16-E7): 출처 오류 code와 정제한 message를 RunFailure까지 전달함
+  it("출처 오류 응답의 code와 정제한 message를 failures에 남김", async () => {
+    const { deps } = setup(() =>
+      JSON.stringify({
+        response: {
+          header: {
+            resultCode: "22",
+            resultMsg: `LIMITED serviceKey=${KEY}\n`,
+          },
+        },
+      }),
+    );
+    expect(await collectCatalog(deps())).toEqual({
+      status: "failed",
+      slotId: expect.any(String),
+      failures: [
+        {
+          source: "photo",
+          reason: "resultCode:22",
+          code: "22",
+          message: "LIMITED serviceKey=***",
+          count: 2,
+        },
+      ],
+    });
+  });
 });
 
 describe("staleFirst", () => {
