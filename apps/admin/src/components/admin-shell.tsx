@@ -44,7 +44,6 @@ import {
   SearchIcon,
   SourcesIcon,
   StatsIcon,
-  UpDownIcon,
   type NavIcon,
 } from "./nav-icons";
 import { SessionGuard, SessionNotices } from "./session-guard";
@@ -198,11 +197,13 @@ function NavList({
                 aria-current={current ? "page" : undefined}
                 aria-label={compact || badge !== null ? label : undefined}
                 {...(tip ? tip(label) : {})}
-                className={`relative flex min-h-touch items-center gap-2.5 rounded-admin-control px-2 text-body font-medium whitespace-nowrap hover:bg-bg-page lg:min-h-0 lg:py-1.5 lg:leading-normal ${
+                className={`relative flex min-h-touch items-center gap-2.5 rounded-admin-control px-2 text-body whitespace-nowrap hover:bg-bg-page ${SIDE.item} ${
                   compact ? "justify-center" : ""
                 } ${
-                  // 지금 화면: 시안처럼 배경·굵기 없이 파란 글자·아이콘만(GH-450). 화면 읽기는 aria-current로 앎
-                  current ? "text-brand-default" : "text-text-body"
+                  // 지금 화면: 배경 없이 파란 글자·아이콘 + 굵기 600(색만으로 구분하지 않음, GH-450 결정 3). aria-current도 둠
+                  current
+                    ? "font-semibold text-brand-default"
+                    : "font-medium text-text-body"
                 }`}
               >
                 <Icon
@@ -324,7 +325,22 @@ function BrandLink({ compact }: { compact: boolean }) {
 
 // ---- PC 왼쪽 메뉴(1024px 이상, 시안 4차 V1 aside) ----
 
-// 작업 공간 상자: 서비스 이름 + '운영 · 권한' + 시안의 위아래 화살표(장식). 바꿀 작업 공간이 없어 누르면 운영 홈으로 감
+// 출처 보드 Admin_V1 aside의 크기 중 맞는 토큰이 없는 값(새 토큰은 만들지 않음, GH-450 결정 5)
+// 폭 220은 기존 토큰 spacing.admin-sidebar 값을 시안대로 고쳐 씀(태블릿 레일 펼침과 같은 값)
+const SIDE = {
+  // .w-ws: 두 줄 모두 14px · 줄 높이 1.35 → 상자 195×56
+  wsLines: "leading-[1.35]",
+  // .w-in: 찾기 칸 높이 34 · 돋보기 15
+  search: "h-[34px]",
+  searchIcon: "size-[15px]",
+  // .w-ni: 항목 높이 33 = 위아래 6 + 14px · 줄 높이 1.5(Tailwind 기본 눈금)
+  item: "lg:min-h-0 lg:py-1.5 lg:leading-normal",
+} as const;
+
+// 출처 보드 Admin_V1 .w-main h1: 20px/600(화면의 text-title-l·font-semibold) · 줄 높이 1.4 · 자간 -0.01em
+const PAGE_TITLE = "[&_h1]:leading-[1.4] [&_h1]:tracking-[-0.01em]";
+
+// 작업 공간 상자: 서비스 이름 + '운영 · 권한'. 바꿀 작업 공간이 없어 전환 화살표는 두지 않고, 상자 전체가 운영 홈 링크
 function Workspace() {
   const snapshot = useSessionSnapshot();
   const role =
@@ -342,8 +358,10 @@ function Workspace() {
       >
         {messages.brand.mark}
       </span>
-      {/* 시안: 14px · 줄 높이 1.35(맞는 토큰 없음) 두 줄. 둘째 줄 12px 글자도 14px 줄 높이를 따름(상자 높이 56) */}
-      <span className="flex min-w-0 flex-1 flex-col text-body leading-[1.35]">
+      {/* 둘째 줄 12px 글자도 바깥 14px 줄 높이를 따라 시안 높이 56이 됨 */}
+      <span
+        className={`flex min-w-0 flex-1 flex-col text-body ${SIDE.wsLines}`}
+      >
         <span className="font-medium text-text-default">
           {messages.brand.name}
         </span>
@@ -355,7 +373,6 @@ function Workspace() {
           </span>
         </span>
       </span>
-      <UpDownIcon className="size-[18px] shrink-0 text-text-muted" />
     </Link>
   );
 }
@@ -368,9 +385,9 @@ function SearchButton({ onOpen }: { onOpen: () => void }) {
       onClick={onOpen}
       aria-haspopup="dialog"
       aria-keyshortcuts="Meta+K Control+K"
-      className="flex h-segment w-full items-center gap-2 rounded-admin-control border border-border-strong bg-bg-surface px-2.5 text-body-s text-text-muted shadow-card hover:bg-bg-page"
+      className={`flex ${SIDE.search} w-full items-center gap-2 rounded-admin-control border border-border-strong bg-bg-surface px-2.5 text-body-s text-text-muted shadow-card hover:bg-bg-page`}
     >
-      <SearchIcon className="size-[15px] shrink-0" />
+      <SearchIcon className={`${SIDE.searchIcon} shrink-0`} />
       <span className="flex-1 text-left">{t.search}</span>
       <span aria-hidden="true" className="text-caption">
         {t.searchShortcut}
@@ -480,7 +497,7 @@ function UserRow() {
             href="/account/"
             onClick={() => setOpen(false)}
             aria-current={accountCurrent ? "page" : undefined}
-            className={`${item} ${accountCurrent ? "text-brand-default" : "text-text-body"}`}
+            className={`${item} ${accountCurrent ? "font-semibold text-brand-default" : "text-text-body"}`}
           >
             <UserRound
               aria-hidden="true"
@@ -697,8 +714,7 @@ export function AdminShell({
           <RailTip tip={railOpen ? null : rail.tip} />
         </aside>
 
-        {/* 본문 바탕은 시안처럼 면 색(흰색, 다크는 면 색). 화면 제목(h1)은 시안 20px/600 · 줄 높이 1.4 · 자간 -0.01em
-            크기·굵기는 화면의 text-title-l·font-semibold, 줄 높이·자간은 맞는 토큰이 없어 여기서 한 번에 맞춤 */}
+        {/* 본문 바탕은 시안처럼 면 색(흰색, 다크는 면 색). 화면 제목(h1) 줄 높이·자간은 PAGE_TITLE로 여기서 한 번에 맞춤 */}
         <div className="flex min-w-0 flex-1 flex-col bg-bg-surface">
           {/* 모바일 앱 바 */}
           <header className="sticky top-0 z-10 flex h-topbar items-center gap-1 border-b border-border-default bg-bg-surface px-2 md:hidden">
@@ -728,7 +744,7 @@ export function AdminShell({
           <main
             id="main"
             tabIndex={-1}
-            className="flex-1 outline-none [&_h1]:leading-[1.4] [&_h1]:tracking-[-0.01em]"
+            className={`flex-1 outline-none ${PAGE_TITLE}`}
           >
             <SessionNotices />
             {children}

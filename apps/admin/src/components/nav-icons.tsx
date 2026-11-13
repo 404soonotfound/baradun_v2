@@ -68,7 +68,6 @@ export const SearchIcon = icon(
     <path d="m20 20-3.5-3.5" />
   </>,
 );
-export const UpDownIcon = icon(<path d="m8 9 4-4 4 4M8 15l4 4 4-4" />);
 export const MoreIcon = icon(
   <>
     <circle cx="5" cy="12" r="1" />
