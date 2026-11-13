@@ -1,6 +1,7 @@
 import { INQUIRY_STATUSES, type InquiryStatus } from "../inquiry/policy";
 import type { InquiryDetail, InquiryPage, InquirySummary } from "./inquiries";
 import type { NoticeView } from "./notices";
+import { STATS_EVENTS, type StatsRange, type StatsResponse } from "./stats";
 
 // 샘플 계정 전용 예시 문의 (결정 기록 D15-3·D16-A8, 화면 설계서 6장 ADM-INQ '샘플 계정: 실제 문의 대신 예시 문의')
 // 실제 문의 테이블을 읽지 않음. 실제 사람의 글·연락처를 넣지 않음
@@ -163,5 +164,52 @@ export function sampleNotices(now: Date): { items: NoticeView[] } {
         hidden: false,
       },
     ],
+  };
+}
+
+const SAMPLE_MULTIPLIER: Record<StatsRange, number> = {
+  today: 1,
+  "7d": 6,
+  "28d": 22,
+  "60d": 44,
+};
+
+export function sampleStats(range: StatsRange, now: Date): StatsResponse {
+  const m = SAMPLE_MULTIPLIER[range];
+  return {
+    configured: true,
+    fetchedAt: now.toISOString(),
+    cached: false,
+    range,
+    realtime: {
+      status: "ok",
+      activeUsers: 14,
+      pageViews: 32,
+    },
+    period: {
+      status: "ok",
+      activeUsers: 180 * m,
+      pageViews: 420 * m,
+      topBeaches: [
+        { path: "/spots/haeundae", slug: "haeundae", pageViews: 85 * m },
+        { path: "/spots/gwangalli", slug: "gwangalli", pageViews: 64 * m },
+        { path: "/spots/gyeongpo", slug: "gyeongpo", pageViews: 47 * m },
+      ],
+      devices: [
+        { category: "mobile", activeUsers: 132 * m },
+        { category: "desktop", activeUsers: 43 * m },
+        { category: "tablet", activeUsers: 5 * m },
+      ],
+      languages: [
+        { language: "ko", activeUsers: 162 * m },
+        { language: "en", activeUsers: 18 * m },
+      ],
+      metadata: {
+        thresholding: false,
+        sampling: false,
+        otherRowLoss: false,
+      },
+    },
+    events: STATS_EVENTS,
   };
 }
