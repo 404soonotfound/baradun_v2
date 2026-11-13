@@ -128,7 +128,7 @@ test("모바일 서랍: 메뉴 버튼으로 열고 Esc·바깥 누르기로 닫�
 test.describe("PC 왼쪽 메뉴 (GH-450, 시안 V1 aside)", () => {
   test("폭·항목 높이가 시안 값, 사용자 칸은 이메일과 '…' 메뉴(내 계정·로그아웃), Esc로 닫으면 포커스가 돌아온다 @smoke", async ({
     page,
-  }) => {
+  }, info) => {
     test.skip(!isDesktop(page), "PC(1024px 이상)만");
     const aside = page.locator("aside");
     expect((await aside.boundingBox())?.width).toBe(220);
@@ -166,6 +166,21 @@ test.describe("PC 왼쪽 메뉴 (GH-450, 시안 V1 aside)", () => {
     await page.keyboard.press("Escape");
     await expect(more).toHaveAttribute("aria-expanded", "false");
     await expect(more).toBeFocused();
+
+    // 키보드로 열면 Tab으로 바로 메뉴 항목에 닿고, 메뉴 밖으로 나가면 닫힘
+    // (WebKit은 Safari 기본 설정처럼 Tab이 링크로 가지 않아 Chromium·Firefox에서만 봄)
+    if (info.project.name !== "desktop-webkit") {
+      await page.keyboard.press("Enter");
+      await expect(more).toHaveAttribute("aria-expanded", "true");
+      await page.keyboard.press("Tab");
+      await expect(aside.getByRole("link", { name: "내 계정" })).toBeFocused();
+      await page.keyboard.press("Tab");
+      await expect(
+        aside.getByRole("button", { name: "로그아웃" }),
+      ).toBeFocused();
+      await page.keyboard.press("Tab");
+      await expect(more).toHaveAttribute("aria-expanded", "false");
+    }
 
     await more.click();
     await aside.getByRole("link", { name: "내 계정" }).click();
