@@ -1746,6 +1746,7 @@
     "devicesTitle": "기기",
     "languagesTitle": "화면 언어",
     "donutTotal": "사용자",
+    "donutOther": "기타",
     "shareNote": "상위 10개 합계 기준",
     "percentUnit": "{percent}%",
     "deviceLabels": {

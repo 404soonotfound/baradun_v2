@@ -330,10 +330,24 @@ function Donut({
   rows: readonly { key: string; label: string; value: number | null }[] | null;
   total: number | null;
 }) {
+  // 색이 4개라 5개 이상이면 앞 3개 + '기타'(나머지 합, 하나라도 비면 합도 비움). 고리와 범례가 같은 줄을 씀
+  const shown =
+    rows && rows.length > DONUT_FILLS.length
+      ? [
+          ...rows.slice(0, DONUT_FILLS.length - 1),
+          {
+            key: "other",
+            label: t.donutOther,
+            value: sumMetric(
+              rows.slice(DONUT_FILLS.length - 1).map((r) => r.value),
+            ),
+          },
+        ]
+      : rows;
   let offset = 0;
   const arcs =
-    rows && total !== null && total > 0
-      ? rows.slice(0, DONUT_FILLS.length).map((row, i) => {
+    shown && total !== null && total > 0
+      ? shown.map((row, i) => {
           const pct = row.value === null ? 0 : (row.value / total) * 100;
           const arc = { key: row.key, pct, at: offset, i };
           offset += pct;
@@ -382,15 +396,15 @@ function Donut({
           </div>
         </div>
         <div className="min-w-0 flex-1">
-          {rows === null ? (
+          {shown === null ? (
             <p className="text-body-s text-text-body">
               {t.subReportUnavailable}
             </p>
-          ) : rows.length === 0 ? (
+          ) : shown.length === 0 ? (
             <p className="text-body-s text-text-muted">{t.listEmpty}</p>
           ) : (
             <ul>
-              {rows.map((row, i) => {
+              {shown.map((row, i) => {
                 const pct = sharePercent(row.value, total);
                 return (
                   <li
@@ -402,9 +416,7 @@ function Donut({
                         width="100%"
                         height="100%"
                         rx="2"
-                        className={
-                          DONUT_SWATCH[i] ?? "fill-border-default"
-                        }
+                        className={DONUT_SWATCH[i]}
                       />
                     </svg>
                     <span className="flex-1 text-text-body">{row.label}</span>
@@ -418,7 +430,7 @@ function Donut({
               })}
             </ul>
           )}
-          {rows !== null && rows.length > 0 && (
+          {shown !== null && shown.length > 0 && (
             <p className="mt-1.5 text-caption text-text-muted">{t.shareNote}</p>
           )}
         </div>
