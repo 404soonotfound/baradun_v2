@@ -141,6 +141,62 @@ describe("지금 표시 상태", () => {
     });
   });
 
+  it("게시본이 점검 중이면 '점검 중'으로 보이고 마지막 게시 분류는 바꾸지 않고 함께 둔다(D23-11)", () => {
+    const until = "2026-11-11T05:00:00Z";
+    const maint = parsePublished({
+      ...PUBLISHED,
+      maintenance: { active: true, until },
+    });
+    expect(maint?.available).toBe(true);
+    for (const id of ["b0001", "b0002", "b0004", "b0005"]) {
+      const shown = displayOf(maint, id, NOW);
+      expect(shown).toMatchObject({ kind: "maintenance", until });
+      if (shown.kind !== "maintenance") continue;
+      expect(shown.last).toEqual(displayOf(view, id, NOW));
+    }
+    // 게시본에 없는 해변도 점검 중이 먼저, 마지막 분류는 '게시본에 없음'
+    expect(displayOf(maint, "b9999", NOW)).toEqual({
+      kind: "maintenance",
+      until,
+      last: { kind: "unconfirmed", why: "missing" },
+    });
+    // 끝나는 시각을 정하지 않은 점검
+    const noUntil = parsePublished({
+      ...PUBLISHED,
+      maintenance: { active: true, until: null },
+    });
+    expect(displayOf(noUntil, "b0001", NOW)).toMatchObject({
+      kind: "maintenance",
+      until: null,
+    });
+    // 게시본을 못 받으면 점검인지 모르므로 '확인 못 함' 그대로
+    expect(displayOf(null, "b0001", NOW)).toEqual({
+      kind: "unconfirmed",
+      why: "unavailable",
+    });
+  });
+
+  it("점검 칸이 없거나 모양이 틀리면 전체를 못 읽은 것으로 봄(점검 아님으로 채우지 않음)", () => {
+    const { maintenance: _drop, ...noMaintenance } = PUBLISHED;
+    void _drop;
+    expect(parsePublished(noMaintenance)).toBeNull();
+    expect(
+      parsePublished({
+        ...PUBLISHED,
+        maintenance: { active: "yes", until: null },
+      }),
+    ).toBeNull();
+    expect(
+      parsePublished({
+        ...PUBLISHED,
+        maintenance: { active: true, until: "곧" },
+      }),
+    ).toBeNull();
+    expect(
+      parsePublished({ ...PUBLISHED, maintenance: { active: true } }),
+    ).toBeNull();
+  });
+
   it("모양이 틀린 응답은 해변 하나만 빼지 않고 전체를 못 읽은 것으로 봄", () => {
     const bad = structuredClone(PUBLISHED) as {
       beaches: Record<string, { category: string }>;

@@ -180,6 +180,7 @@ test("모두 정상: 판단 출처 정상 한 줄, 요약 카드, 할 일 없음
       "유효 시각이 지난 해변 3곳이 있어요. 해변 관리에서 확인해 주세요.",
     ),
   ).toBeVisible();
+  await expect(cards.getByText(/앱이 점검 중이라/)).toHaveCount(0);
   // 이용 통계 연결 전: 숫자를 지어내지 않음
   await expect(cards.getByText("연결 전")).toBeVisible();
 
@@ -198,6 +199,25 @@ test("모두 정상: 판단 출처 정상 한 줄, 요약 카드, 할 일 없음
   await expect(recent.getByText("새 공지")).toBeVisible();
   await expect(recent.getByRole("listitem")).toHaveCount(1);
   await expect(recent.getByText(/sample\.read|조회/)).toHaveCount(0);
+  await expectNoA11yViolations(page);
+});
+
+test("게시본이 점검 중이면 판단불가 해변 카드에 점검 안내를 더하고 개수는 마지막 게시본 그대로(D23-11)", async ({
+  page,
+}) => {
+  await signIn(page, {
+    published: ok({
+      ...PUBLISHED,
+      maintenance: { active: true, until: null },
+    }),
+  });
+  const cards = cardsOf(page);
+  await expect(cards.getByText("2곳", { exact: true })).toBeVisible();
+  await expect(
+    cards.getByText(
+      "앱이 점검 중이라 해변 상태를 보여 주지 않아요. 개수는 마지막 게시본 기준이에요.",
+    ),
+  ).toBeVisible();
   await expectNoA11yViolations(page);
 });
 
