@@ -4,6 +4,8 @@ import { usePathname } from "next/navigation";
 import Script from "next/script";
 import { useEffect, useRef, useState } from "react";
 
+import { flushPendingAnalyticsEvents } from "@/lib/analytics/events";
+
 // Google Analytics(gtag.js) 페이지 조회 (BRD-143). 운영 빌드에서만 root-document가 그림(lib/site-env.ts isProductionSite)
 // - 인라인 초기화 스크립트를 두지 않음: dataLayer·gtag 정의와 config를 effect에서 함(번들 코드라 CSP 'self', 해시 불필요)
 // - config: 자동 page_view 끔(send_page_view: false), Google 신호·광고 개인화 끔
@@ -86,6 +88,7 @@ export function GoogleAnalytics({ measurementId }: { measurementId: string }) {
       gtag("set", page);
     }
     gtag("event", "page_view", page);
+    flushPendingAnalyticsEvents();
     previousPath.current = pathname;
   }, [loaded, measurementId, pathname]);
 

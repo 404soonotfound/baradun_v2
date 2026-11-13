@@ -97,17 +97,59 @@ function stripUndefined<T extends Record<string, unknown>>(
   return clean;
 }
 
+type PendingEvent = {
+  name: AnalyticsEventName;
+  params: Record<string, unknown>;
+};
+
+const MAX_PENDING_EVENTS = 50;
+const pendingEvents: PendingEvent[] = [];
+
+function getGtag(): ((...args: unknown[]) => void) | null {
+  if (typeof window === "undefined") return null;
+  const gtag = (window as Window & { gtag?: (...args: unknown[]) => void })
+    .gtag;
+  return typeof gtag === "function" ? gtag : null;
+}
+
+function dispatchEvent(
+  gtag: (...args: unknown[]) => void,
+  name: AnalyticsEventName,
+  params: Record<string, unknown>,
+): void {
+  try {
+    gtag("event", name, params);
+  } catch {
+    // 분석 전송 실패가 화면 동작을 막지 않음
+  }
+}
+
+// GA 초기화(config) 전(예: /search/?q=… 직접 진입 직후) 발생한 이벤트를 안전하게 초기화한 뒤 일괄 전송함
+export function flushPendingAnalyticsEvents(): void {
+  const gtag = getGtag();
+  if (!gtag || pendingEvents.length === 0) return;
+  const queued = pendingEvents.splice(0, pendingEvents.length);
+  for (const item of queued) {
+    dispatchEvent(gtag, item.name, item.params);
+  }
+}
+
+export function clearPendingAnalyticsEvents(): void {
+  pendingEvents.length = 0;
+}
+
 export function trackEvent<K extends AnalyticsEventName>(
   name: K,
   params: AnalyticsEventMap[K],
 ): void {
   if (typeof window === "undefined") return;
-  const gtag = (window as Window & { gtag?: (...args: unknown[]) => void })
-    .gtag;
-  if (typeof gtag !== "function") return;
-  try {
-    gtag("event", name, stripUndefined(params));
-  } catch {
-    // 분석 전송 실패가 화면 동작을 막지 않음
+  const cleanParams = stripUndefined(params);
+  const gtag = getGtag();
+  if (!gtag) {
+    if (pendingEvents.length < MAX_PENDING_EVENTS) {
+      pendingEvents.push({ name, params: cleanParams });
+    }
+    return;
   }
+  dispatchEvent(gtag, name, cleanParams);
 }
