@@ -1,4 +1,5 @@
 import type { Page } from "@playwright/test";
+import { localStatsView } from "../src/lib/auth/local-stats";
 import { VIEW } from "./collection-data";
 import {
   ME_OK,
@@ -42,12 +43,26 @@ const PUBLISHED = {
     },
     b0002: {
       category: "undetermined",
-      reasons: [],
+      reasons: [
+        {
+          code: "warning_unknown",
+          scope: "강원중부앞바다",
+          source: "기상청",
+          at: "2026-11-11T02:30:00Z", // KST 11:30
+        },
+      ],
       validUntil: "2026-11-11T04:00:00Z",
     },
     b0003: {
       category: "undetermined",
-      reasons: [],
+      reasons: [
+        {
+          code: "observation_delayed",
+          scope: "삼척 파고부이",
+          source: "기상청",
+          at: "2026-11-11T00:38:00Z", // KST 09:38
+        },
+      ],
       validUntil: "2026-11-11T04:00:00Z",
     },
   },
@@ -105,6 +120,7 @@ async function mockHome(
     inquiries?: Reply;
     notices?: Reply;
     audit?: Reply;
+    stats?: Reply;
   } = {},
 ) {
   const routes: [RegExp, Reply][] = [
@@ -127,6 +143,11 @@ async function mockHome(
       /\/ops\/audit(\?.*)?$/,
       replies.audit ??
         ok({ filter: {}, items: [SAMPLE_READ, AUDIT_ITEM], nextCursor: null }),
+    ],
+    [
+      /\/ops\/stats(\?.*)?$/,
+      replies.stats ??
+        ok(localStatsView("28d", Date.parse("2026-11-11T03:00:00Z"))),
     ],
   ];
   for (const [pattern, reply] of routes) {
@@ -157,7 +178,9 @@ async function signIn(
   ).toBeVisible();
 }
 
-const cardsOf = (page: Page) => page.locator("dl[aria-label='운영 요약']");
+// 시안 V1 세 칸·판단불가 표·할 일·이용(GH-453)
+const block = (page: Page, name: string) =>
+  page.getByRole("region", { name, exact: true });
 
 // PC 왼쪽 메뉴 아래 상태 칸(GH-450, 시안 V1·V6). 홈과 같은 수집 현황 응답으로 판단 출처를 봄
 const sideStatus = (page: Page) =>
@@ -179,7 +202,7 @@ test("수집 현황은 홈이 한 번 읽고, PC가 아니면 숨은 왼쪽 상�
   expect(calls).toHaveLength(isDesktop(page) ? 2 : 1);
 });
 
-test("모두 정상: 판단 출처 정상 한 줄, 요약 카드, 할 일 없음, 최근 변경", async ({
+test("모두 정상: 판단 출처 정상 한 줄, 세 칸·판단불가 표·이용, 할 일 없음, 최근 변경", async ({
   page,
 }) => {
   await signIn(page);
@@ -193,23 +216,57 @@ test("모두 정상: 판단 출처 정상 한 줄, 요약 카드, 할 일 없음
     await expect(sideStatus(page).getByText("판단 출처 정상")).toBeVisible();
     await expect(sideStatus(page).getByText(/^앱 게시본 \d/)).toBeVisible();
   }
-
-  const cards = cardsOf(page);
-  await expect(cards.getByText("0건", { exact: true })).toBeVisible();
-  await expect(cards.getByText("2곳", { exact: true })).toBeVisible();
-  await expect(cards.getByText("11/11 12:00")).toBeVisible();
+  // 머리: 기준 시각 + 세션 안내(D17-11 문구)
+  await expect(page.getByText(/기준 · 화면이 보이는 동안 1분마다/)).toBeVisible();
   await expect(
-    cards.getByText("예약 공지 0건 · 수정 대기 공지 0건"),
+    page.getByText(/^새로고침해도 로그인이 이어지고, 새 탭은/),
+  ).toBeVisible();
+  await expect(page.getByText(/새로고침하면 다시 로그인/)).toHaveCount(0);
+
+  const beaches = block(page, "앱에 보이는 해변");
+  await expect(beaches.getByText("3곳", { exact: true })).toBeVisible();
+  await expect(beaches.getByText("게시본 11/11 12:00 기준")).toBeVisible();
+  await expect(beaches.getByText("1곳", { exact: true })).toBeVisible();
+  await expect(beaches.getByText("2곳", { exact: true })).toBeVisible();
+  await expect(
+    beaches.getByText("판단불가 2곳은 경포해수욕장·사근진해수욕장이에요."),
   ).toBeVisible();
   // 가짜 게시본의 유효 시각은 모두 지남: 분류는 그대로 두고 따로 알림
   await expect(
-    cards.getByText(
+    beaches.getByText(
       "유효 시각이 지난 해변 3곳이 있어요. 해변 관리에서 확인해 주세요.",
     ),
   ).toBeVisible();
-  await expect(cards.getByText(/앱이 점검 중이라/)).toHaveCount(0);
-  // 이용 통계 연결 전: 숫자를 지어내지 않음
-  await expect(cards.getByText("연결 전")).toBeVisible();
+  await expect(beaches.getByText(/앱이 점검 중이라/)).toHaveCount(0);
+
+  const collection = block(page, "수집");
+  // 배지는 모든 출처 기준(가짜 수집 현황은 참고 출처에 기록 없음이 있어 '문제 N')
+  await expect(collection.getByText(/^(정상|문제 \d)$/)).toBeVisible();
+  await expect(collection.getByText("최근 24시간 성공")).toBeVisible();
+  await expect(collection.getByText("국립해양조사원 이안류")).toBeVisible();
+
+  const inquiries = block(page, "문의");
+  // 상태별 수 0·1·3·0 → 합 4건, 새 문의 0건이면 '새' 배지 없음
+  await expect(inquiries.getByText("4건", { exact: true })).toBeVisible();
+  await expect(inquiries.getByText(/^새 \d/)).toHaveCount(0);
+
+  // 판단불가 해변 표: 이름·사유 먼저 배지·범위·시각(PC 표, 모바일 카드)
+  const table = block(page, "판단불가 해변");
+  const shown = table.locator(isDesktop(page) ? "table" : "ul");
+  await expect(shown.getByText("경포해수욕장")).toBeVisible();
+  await expect(shown.getByText("특보 확인 못 함")).toBeVisible();
+  await expect(shown.getByText(/강원중부앞바다 · 기상청/)).toBeVisible();
+  await expect(shown.getByText(/11:30 마지막 확인/)).toBeVisible();
+  await expect(shown.getByText("관측 지연")).toBeVisible();
+  await expect(shown.getByText(/09:38 측정/)).toBeVisible();
+  await expect(table.getByText("b0002")).toHaveCount(0);
+
+  // 이용: GA 28일 합계·지금 사용 중. 응답에 없는 일별 추이는 그리지 않음
+  const usage = block(page, "이용");
+  await expect(usage.getByText("지금 사용 중 14명 · 최근 30분")).toBeVisible();
+  await expect(usage.getByText("3,960", { exact: true })).toBeVisible();
+  await expect(usage.getByText("9,240", { exact: true })).toBeVisible();
+  await expect(usage.getByText("일별 추이 확인 못 함")).toHaveCount(2);
 
   await expect(page.getByText("지금 할 일이 없어요")).toBeVisible();
   const prs = page.getByRole("link", { name: /해변 정보 변경 PR 보기/ });
@@ -229,7 +286,36 @@ test("모두 정상: 판단 출처 정상 한 줄, 요약 카드, 할 일 없음
   await expectNoA11yViolations(page);
 });
 
-test("게시본이 점검 중이면 판단불가 해변 카드에 점검 안내를 더하고 개수는 마지막 게시본 그대로(D23-11)", async ({
+test("이름표에 없는 판단불가 해변은 ID가 아니라 '이름 확인 못 함', 6곳부터는 판단불가 표를 쪽으로 나눈다", async ({
+  page,
+}) => {
+  const beaches: Record<string, unknown> = {
+    b9999: {
+      category: "undetermined",
+      reasons: [],
+      validUntil: "2026-11-11T04:00:00Z",
+    },
+  };
+  for (const id of ["b0002", "b0003", "b0004", "b0005", "b0006"]) {
+    beaches[id] = PUBLISHED.beaches.b0002;
+  }
+  await signIn(page, { published: ok({ ...PUBLISHED, beaches }) });
+  const table = block(page, "판단불가 해변");
+  await expect(
+    table.getByRole("navigation", { name: "판단불가 해변 페이지" }),
+  ).toBeVisible();
+  await expect(table.getByText("6건 중 1–5")).toBeVisible();
+  await table.getByRole("button", { name: /다음/ }).click();
+  const shown = table.locator(isDesktop(page) ? "table" : "ul");
+  await expect(shown.getByText("이름 확인 못 함")).toBeVisible();
+  await expect(shown.getByText("사유 확인 못 함")).toBeVisible();
+  await expect(table.getByText("b9999")).toHaveCount(0);
+  await expect(
+    block(page, "앱에 보이는 해변").getByText(/외 3곳이에요/),
+  ).toBeVisible();
+});
+
+test("게시본이 점검 중이면 앱에 보이는 해변 칸에 점검 안내를 더하고 개수는 마지막 게시본 그대로(D23-11)", async ({
   page,
 }) => {
   await signIn(page, {
@@ -238,10 +324,10 @@ test("게시본이 점검 중이면 판단불가 해변 카드에 점검 안내�
       maintenance: { active: true, until: null },
     }),
   });
-  const cards = cardsOf(page);
-  await expect(cards.getByText("2곳", { exact: true })).toBeVisible();
+  const beaches = block(page, "앱에 보이는 해변");
+  await expect(beaches.getByText("3곳", { exact: true })).toBeVisible();
   await expect(
-    cards.getByText(
+    beaches.getByText(
       "앱이 점검 중이라 해변 상태를 보여 주지 않아요. 개수는 마지막 게시본 기준이에요.",
     ),
   ).toBeVisible();
@@ -282,31 +368,41 @@ test("판단 출처 문제·새 문의·수정 대기 공지가 있으면 문제
   await expect(
     alert.getByRole("link", { name: "수집 현황 보기" }),
   ).toHaveAttribute("href", "/collection/");
-
   await expect(
-    page.getByText("예약 공지 1건 · 수정 대기 공지 1건"),
+    block(page, "수집").getByText(/^문제 \d/),
+  ).toBeVisible();
+  await expect(block(page, "문의").getByText("새 2")).toBeVisible();
+
+  const todo = block(page, "할 일");
+  await expect(
+    todo.getByText("판단 출처 2곳에 문제가 있어요", { exact: true }),
   ).toBeVisible();
   await expect(
-    page.getByRole("link", { name: "판단 출처 2곳 확인하기" }),
+    todo.getByText("기상청 해상 특보 지연 · 기상청 해양 관측 일부 실패"),
+  ).toBeVisible();
+  await expect(
+    todo.getByRole("link", { name: "수집 현황 · 판단 출처 2곳에 문제가 있어요" }),
   ).toHaveAttribute("href", "/collection/");
   await expect(
-    page.getByRole("link", { name: "새 문의 2건 확인하기" }),
+    todo.getByRole("link", { name: "열기 · 접수 문의 2건이 기다려요" }),
   ).toHaveAttribute("href", "/inquiries/");
   await expect(
-    page.getByRole("link", { name: "수정 대기 공지 1건 확인하기" }),
-  ).toHaveAttribute("href", "/notices/");
+    todo.getByRole("link", { name: "게시 · 공지 1건이 게시 대기 중이에요" }),
+  ).toHaveAttribute("href", "/publish/");
   await expect(page.getByText("지금 할 일이 없어요")).toHaveCount(0);
   await expectNoA11yViolations(page);
 
   // 화면 안 이동(로그인 유지)
-  await page.getByRole("link", { name: "새 문의 2건 확인하기" }).click();
+  await todo
+    .getByRole("link", { name: "열기 · 접수 문의 2건이 기다려요" })
+    .click();
   await expect(page).toHaveURL(/\/inquiries\/$/);
   await expect(
     page.getByRole("heading", { name: "문의", level: 1 }),
   ).toBeVisible();
 });
 
-test("불러오지 못한 값은 0·정상·'할 일 없음'으로 바꾸지 않고, 변경 이력을 못 보는 계정은 그렇게 알린다", async ({
+test("불러오지 못한 값은 0·정상·'할 일 없음'으로 바꾸지 않고, 칸마다 같은 자리에서 다시 시도한다", async ({
   page,
 }) => {
   await signIn(page, {
@@ -314,6 +410,7 @@ test("불러오지 못한 값은 0·정상·'할 일 없음'으로 바꾸지 않
     published: ok({ available: false, reason: "read_failed" }),
     inquiries: fail,
     notices: fail,
+    stats: fail,
     audit: {
       status: 403,
       body: { error: { code: "forbidden", requestId: "req-2" } },
@@ -336,12 +433,23 @@ test("불러오지 못한 값은 0·정상·'할 일 없음'으로 바꾸지 않
     page.getByText("판단에 쓰는 출처가 모두 정상이에요"),
   ).toHaveCount(0);
 
-  const cards = cardsOf(page);
-  // 새 문의·판단불가 해변·지금 게시본 모두 '확인 못 함'(0건·0곳이 아님)
-  await expect(cards.getByText("확인 못 함", { exact: true })).toHaveCount(3);
-  await expect(cards.getByText("0건", { exact: true })).toHaveCount(0);
-  await expect(cards.getByText("0곳", { exact: true })).toHaveCount(0);
-  await expect(cards.getByText("공지 상태는 확인 못 함")).toBeVisible();
+  // 세 칸·이용 모두 '확인 못 함'(0건·0곳·정상이 아님) + 칸 안의 다시 시도
+  for (const name of ["앱에 보이는 해변", "수집", "문의"]) {
+    const b = block(page, name);
+    await expect(b.getByText("확인 못 함", { exact: true })).toBeVisible();
+    await expect(b.getByText(/^0(건|곳)$/)).toHaveCount(0);
+    await expect(
+      b.getByText("이 칸을 불러오지 못했어요. 앱 사용자 화면에는 영향이 없어요."),
+    ).toBeVisible();
+    await expect(b.getByRole("button", { name: "다시 시도" })).toBeVisible();
+  }
+  await expect(block(page, "수집").getByText("정상", { exact: true })).toHaveCount(0);
+  await expect(
+    block(page, "판단불가 해변").getByText("지금 판단불가 해변이 없어요"),
+  ).toHaveCount(0);
+  await expect(
+    block(page, "이용").getByText("지금 사용 중 확인 못 함 · 최근 30분"),
+  ).toBeVisible();
 
   await expect(
     page.getByText(
@@ -356,6 +464,25 @@ test("불러오지 못한 값은 0·정상·'할 일 없음'으로 바꾸지 않
     page.getByRole("link", { name: "변경 이력 전체 보기" }),
   ).toHaveCount(0);
   await expectNoA11yViolations(page);
+
+  // 문의 칸의 다시 시도: 그 칸만 다시 읽어 값으로 바뀜
+  await page.unroute(/\/ops\/inquiries(\?.*)?$/);
+  await page.route(/\/ops\/inquiries(\?.*)?$/, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        items: [],
+        nextCursor: null,
+        counts: { received: 1, in_progress: 0, resolved: 0, rejected: 0 },
+      }),
+    }),
+  );
+  await block(page, "문의").getByRole("button", { name: "다시 시도" }).click();
+  await expect(block(page, "문의").getByText("새 1")).toBeVisible();
+  await expect(
+    block(page, "문의").getByText("1건", { exact: true }),
+  ).toBeVisible();
 });
 
 test("한 칸의 응답이 오지 않아도 판단 출처 줄과 다른 칸은 먼저 보이고, 그 칸만 자리표시로 남는다", async ({
@@ -386,7 +513,7 @@ test("한 칸의 응답이 오지 않아도 판단 출처 줄과 다른 칸은 �
 // ---- 로딩 (GH-462, 캔버스 로딩 보드 L0·LS·LP) ----
 
 const HOME_PART_URLS =
-  /\/ops\/(collection|beaches\/published|inquiries(\?.*)?|notices|audit(\?.*)?)$/;
+  /\/ops\/(collection|beaches\/published|inquiries(\?.*)?|notices|audit(\?.*)?|stats(\?.*)?)$/;
 
 // 운영 홈 칸 응답을 gate가 풀릴 때까지 붙잡음(풀리면 앞서 건 가짜 응답으로 넘김)
 async function holdHome(page: Page, gate: Promise<void>) {
@@ -444,7 +571,8 @@ test("다시 읽기가 실패하면 판단 출처 줄은 불러오지 못함으�
     page.getByText("판단에 쓰는 출처가 모두 정상이에요"),
   ).toHaveCount(0);
   // 문의 칸은 앞 값을 두고 그 칸에 표시(화면을 비우지 않음)
-  const inquiries = page.getByRole("definition").filter({ hasText: /^0건/ });
+  const inquiries = block(page, "문의");
+  await expect(inquiries.getByText("4건", { exact: true })).toBeVisible();
   await expect(inquiries).toContainText("마지막으로 받은 값");
 });
 
@@ -499,11 +627,16 @@ test("운영 홈으로 이동하면 제목·칸 이름·목록 틀이 먼저 보
   await expect(
     page.getByRole("heading", { name: "운영 홈", level: 1 }),
   ).toBeVisible();
-  for (const name of ["할 일", "최근 변경"]) {
+  for (const name of [
+    "앱에 보이는 해변",
+    "수집",
+    "문의",
+    "판단불가 해변",
+    "할 일",
+    "이용",
+    "최근 변경",
+  ]) {
     await expect(page.getByRole("heading", { name, level: 2 })).toBeVisible();
-  }
-  for (const label of ["새 문의", "판단불가 해변", "지금 게시본"]) {
-    await expect(page.getByText(label, { exact: true })).toBeVisible();
   }
   const body = page.locator("#main main");
   await expect(body).toHaveAttribute("aria-busy", "true");
