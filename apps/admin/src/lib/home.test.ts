@@ -15,10 +15,8 @@ import {
   PART_TIMEOUT_MS,
   staleSince,
   partOf,
-  receivedCount,
   settle,
   todos,
-  undeterminedCount,
 } from "./home";
 import type { NoticeView } from "./notices";
 
@@ -97,26 +95,6 @@ describe("판단 출처 상태 한 줄", () => {
 });
 
 describe("요약 값", () => {
-  it("판단불가 해변 수는 게시본의 undetermined만 센다. 게시본을 못 읽으면 null", () => {
-    const view: PublishedView = {
-      available: true,
-      snapshotVersion: "20261112T000000Z",
-      generatedAt: "2026-11-12T00:00:00Z",
-      maintenance: { active: false, until: null },
-      beaches: {
-        b0001: { category: "clear", reasons: [], validUntil: "" },
-        b0002: { category: "undetermined", reasons: [], validUntil: "" },
-        b0003: { category: "unavailable", reasons: [], validUntil: "" },
-        b0004: { category: "undetermined", reasons: [], validUntil: "" },
-      },
-    };
-    expect(undeterminedCount(view)).toBe(2);
-    expect(
-      undeterminedCount({ available: false, reason: "read_failed" }),
-    ).toBeNull();
-    expect(undeterminedCount(null)).toBeNull();
-  });
-
   it("유효 시각이 지난 해변 수는 분류와 따로 센다(시각을 못 읽으면 지난 것). 게시본을 못 읽으면 null", () => {
     const now = Date.parse("2026-11-12T01:00:00Z");
     const view: PublishedView = {
@@ -157,18 +135,6 @@ describe("요약 값", () => {
     ).toEqual({ scheduled: 1, pendingEdit: 1 });
     expect(noticeCounts(null)).toBeNull();
   });
-
-  it("새 문의 수는 첫 쪽 상태별 수의 접수. 수가 없으면 null(0이 아님)", () => {
-    expect(
-      receivedCount({
-        items: [],
-        nextCursor: null,
-        counts: { received: 3, in_progress: 1, resolved: 0, rejected: 0 },
-      }),
-    ).toBe(3);
-    expect(receivedCount({ items: [], nextCursor: null })).toBeNull();
-    expect(receivedCount(null)).toBeNull();
-  });
 });
 
 describe("할 일", () => {
@@ -188,7 +154,7 @@ describe("할 일", () => {
       items: [
         { key: "sources", count: 1, href: "/collection/" },
         { key: "inquiries", count: 2, href: "/inquiries/" },
-        { key: "notices", count: 1, href: "/notices/" },
+        { key: "notices", count: 1, href: "/publish/" },
       ],
       incomplete: false,
     });

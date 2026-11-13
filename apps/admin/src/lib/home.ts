@@ -47,14 +47,6 @@ export function judgmentLine(view: CollectionView | null): JudgmentLine | null {
   return { sources, problems: sources.filter((s) => s.state !== "ok") };
 }
 
-// 판단불가 해변 수. 게시본을 읽지 못하면 null
-export function undeterminedCount(view: PublishedView | null): number | null {
-  if (!view || !view.available) return null;
-  return Object.values(view.beaches).filter(
-    (b) => b.category === "undetermined",
-  ).length;
-}
-
 // 앱에 보이는 해변 칸(보드 V1 '앱에 보이는 해변'): 게시본의 분류별 해변 수. 게시본을 읽지 못하면 null
 // 분류는 게시본 값 그대로 셈(화면에서 다시 분류하지 않음, G1)
 export interface BeachCounts {
@@ -225,12 +217,6 @@ export function noticeCounts(
   };
 }
 
-// 새 문의(접수) 수. 첫 쪽의 상태별 수가 없으면 null
-export function receivedCount(page: InquiryPage | null): number | null {
-  const count = page?.counts?.received;
-  return typeof count === "number" && Number.isFinite(count) ? count : null;
-}
-
 export type TodoKey = "sources" | "inquiries" | "notices";
 
 export interface Todo {
@@ -269,7 +255,8 @@ export function todos(input: {
     items.push({
       key: "notices",
       count: input.notices.pendingEdit,
-      href: "/notices/",
+      // 보드 V1 '게시' 버튼: 게시 화면으로
+      href: "/publish/",
     });
   }
   return {

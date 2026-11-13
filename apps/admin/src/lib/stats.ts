@@ -240,13 +240,6 @@ export function missingItems(shape: StatsShape): readonly MissingItem[] {
   return out;
 }
 
-// 받침이 있으면 '은', 없으면 '는'(한글이 아니면 '는')
-export function topicParticle(word: string): "은" | "는" {
-  const code = word.charCodeAt(word.length - 1) - 0xac00;
-  if (code < 0 || code > 11171) return "는";
-  return code % 28 === 0 ? "는" : "은";
-}
-
 // 앞 기간 대비 변화(%, 소수 1자리). 둘 중 하나라도 없거나 앞 기간이 0이면 null(비교하지 않음)
 export function changePercent(
   current: number | null,

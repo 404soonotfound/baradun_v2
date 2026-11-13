@@ -6,6 +6,7 @@ import { useAuthSession, useSessionSnapshot } from "@/lib/auth/provider";
 import type { BeachSlugName } from "@/lib/beach-names";
 import { kstDateTime } from "@/lib/inquiries";
 import { LOADING_TIMES } from "@/lib/loading-timing";
+import { topicParticle } from "@/lib/korean";
 import { fill, messages } from "@/lib/messages";
 import {
   beachLabel,
@@ -18,11 +19,11 @@ import {
   STATS_RANGES,
   statsShape,
   sumMetric,
-  topicParticle,
   type StatsRange,
   type StatsResponse,
 } from "@/lib/stats";
 import { AdminShell } from "./admin-shell";
+import { BarChart, shortDate, type ChartRow } from "./bar-chart";
 import {
   loadClass,
   LoadingStatus,
@@ -105,73 +106,6 @@ function ChartMessage({ text, muted }: { text: string; muted?: boolean }) {
   );
 }
 
-type ChartRow = { key: string; label: string; value: number | null };
-
-// 세로 막대 그래프(일별·시간대별). 막대 높이는 SVG 속성(CSP). 값이 없는 날·시각은 막대를 그리지 않음(0으로 그리지 않음)
-// 화면 읽기용으로 같은 값을 숨은 표로 둠
-function BarChart({
-  rows,
-  bars,
-  head,
-  valueHead,
-}: {
-  rows: readonly ChartRow[];
-  // 막대 영역 높이(아래 날짜 줄 24px은 따로)
-  bars: string;
-  head: string;
-  valueHead: string;
-}) {
-  const max = Math.max(0, ...rows.map((r) => r.value ?? 0));
-  return (
-    <>
-      <svg
-        aria-hidden="true"
-        viewBox={`0 0 ${rows.length} 100`}
-        preserveAspectRatio="none"
-        className={`block w-full border-b border-border-default ${bars}`}
-      >
-        {rows.map((row, i) => {
-          if (row.value === null || max <= 0) return null;
-          const h = (row.value / max) * 100;
-          return (
-            <rect
-              key={row.key}
-              x={i + 0.15}
-              width={0.7}
-              y={100 - h}
-              height={h}
-              className="fill-chart"
-            />
-          );
-        })}
-      </svg>
-      <div
-        aria-hidden="true"
-        className="flex h-6 items-end justify-between text-caption text-text-muted tabular-nums"
-      >
-        <span>{rows[0]?.label}</span>
-        <span>{rows.at(-1)?.label}</span>
-      </div>
-      <table className="sr-only">
-        <thead>
-          <tr>
-            <th scope="col">{head}</th>
-            <th scope="col">{valueHead}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => (
-            <tr key={row.key}>
-              <td>{row.label}</td>
-              <td>{formatNumber(row.value)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </>
-  );
-}
-
 // 차트 칸 하나: 제목 + 같은 높이 틀(자리표시 · 실패 · 빈 결과 · 그래프)
 function ChartBlock({
   id,
@@ -214,10 +148,6 @@ function ChartBlock({
     </section>
   );
 }
-
-// 날짜 YYYY-MM-DD → '11/13'
-const shortDate = (date: string): string =>
-  `${Number(date.slice(5, 7))}/${Number(date.slice(8, 10))}`;
 
 const channelLabel = (channel: string): string =>
   (t.channelLabels as Record<string, string>)[channel] ?? channel;

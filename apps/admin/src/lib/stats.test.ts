@@ -9,7 +9,6 @@ import {
   validStats,
   statsShape,
   missingItems,
-  topicParticle,
   changePercent,
   SHAPE_NONE,
 } from "./stats";
@@ -184,13 +183,6 @@ describe("응답 칸 유무와 '아직 보여 드릴 수 없어요' 줄", () => 
         referrers: true,
       }),
     ).toEqual([]);
-  });
-
-  it("주제 조사: 받침 있으면 '은', 없으면 '는'", () => {
-    expect(topicParticle("들어온 경로")).toBe("는");
-    expect(topicParticle("많이 본 화면")).toBe("은");
-    expect(topicParticle("앞 기간 비교")).toBe("는");
-    expect(topicParticle("abc")).toBe("는");
   });
 
   it("앞 기간 대비 변화: 두 값이 있고 앞 기간이 0보다 클 때만", () => {
