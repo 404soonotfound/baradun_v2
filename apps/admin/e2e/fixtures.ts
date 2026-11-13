@@ -308,6 +308,17 @@ export async function logout(page: Page) {
 }
 
 export async function expectNoA11yViolations(page: Page) {
+  // 값 교체 페이드(0.18초, GH-462) 도중이면 글자가 반투명이라 대비를 잘못 잼 → 끝나는 애니메이션이 멈출 때까지 기다림
+  // 반짝임·회전처럼 끝없이 도는 애니메이션은 기다리지 않음
+  await page.waitForFunction(() =>
+    document
+      .getAnimations()
+      .every(
+        (a) =>
+          a.playState !== "running" ||
+          a.effect?.getTiming().iterations === Infinity,
+      ),
+  );
   const result = await new AxeBuilder({ page })
     .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
     .analyze();
