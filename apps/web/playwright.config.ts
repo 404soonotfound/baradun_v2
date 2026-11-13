@@ -21,7 +21,8 @@ export default defineConfig({
     timezoneId: "Asia/Seoul",
     // 서비스 워커가 요청을 가로채면 page.route 가짜 응답이 안 먹어서 막음(오프라인 홈은 BRD-42 단위 테스트)
     serviceWorkers: "block",
-    trace: "retain-on-failure",
+    // CI는 trace를 올리지 않아 실패해도 볼 수 없으므로 기록하지 않음(기록은 통과한 테스트에도 시간이 듦). 로컬은 실패한 것만 남김
+    trace: process.env.CI ? "off" : "retain-on-failure",
   },
   projects: [
     {
