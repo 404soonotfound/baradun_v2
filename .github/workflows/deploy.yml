@@ -18,8 +18,9 @@ permissions:
   contents: read
 jobs:
   # 인프라 자동 배포(#418, 사용자 결정 2026-11-13 A안): main push CI가 성공한 커밋으로 변경 세트를 만들고 판정함
-  # - 삭제·교체(!!)가 없으면 바로 실행, 있으면 infra-approve가 GitHub 승인을 기다림, boundary가 다르면 멈춤(로컬 deploy:infra)
-  # - 사이트 작업보다 먼저 돎: 판단 정책을 바꾼 PR은 publisher가 먼저 배포돼야 함(D20-6·7)
+  # - 삭제·교체(!!)·모르는 변경이 없으면 바로 실행, 있으면 infra-approve가 GitHub 승인을 기다림
+  # - boundary·실행 정책이 저장소와 맞지 않으면 멈춤(로컬 deploy:infra). 이 트리의 인프라 영역을 main CI가 검사하지 않았으면 건너뜀
+  # - 사이트 작업과 따로 돎(서로 기다리지 않음). 판단 정책 순서(D20-6·7)는 사이트 작업의 '판단 정책 버전 확인'이 막음
   # - CI 역할(vars.INFRA_DEPLOY_ROLE_ARN, BaradunGitHubInfraDeploy)은 스택 밖. infra·infra-approval environment에서만 맡음
   # - 수동 실행(workflow_dispatch)은 사이트만 올림. 인프라를 손으로 배포할 때는 로컬 npm run deploy:infra
   infra:
@@ -35,7 +36,7 @@ jobs:
     concurrency:
       group: deploy-infra
       cancel-in-progress: false # 배포 도중 끊지 않음
-    timeout-minutes: 120 # 다른 배포 대기 최대 30분 + 자기 배포 대기 최대 60분 + 변경 세트 만들기
+    timeout-minutes: 120 # 다른 배포·앞 CI 대기 합계 최대 30분 + 자기 배포 대기 최대 60분 + 변경 세트 만들기
     permissions:
       contents: read
       checks: read # ci-ok 확인
@@ -67,7 +68,7 @@ jobs:
         with:
           role-to-assume: ${{ vars.INFRA_DEPLOY_ROLE_ARN }}
           aws-region: ap-northeast-2
-          # 기다림(다른 배포 30분 + 자기 배포 60분)이 1시간을 넘을 수 있어 2시간(역할 최대 세션 7200초)
+          # 기다림(다른 배포·앞 CI 합계 30분 + 자기 배포 60분)이 1시간을 넘을 수 있어 2시간(역할 최대 세션 7200초)
           role-duration-seconds: 7200
       - id: run
         working-directory: infra
@@ -85,10 +86,9 @@ jobs:
     concurrency:
       group: deploy-infra-approve
       cancel-in-progress: false
-    timeout-minutes: 120 # 다른 배포 대기 최대 30분 + 자기 배포 대기 최대 60분 + 변경 세트 만들기
+    timeout-minutes: 120 # 다른 배포 대기 합계 최대 30분 + 자기 배포 대기 최대 60분
     permissions:
       contents: read
-      checks: read # ci-ok 확인
       issues: write # 결과 댓글(연결 이슈)
       pull-requests: write # 결과 댓글(연결 이슈가 없으면 PR)
       id-token: write # OIDC 토큰은 인프라 작업만 받음
@@ -116,7 +116,7 @@ jobs:
         with:
           role-to-assume: ${{ vars.INFRA_DEPLOY_ROLE_ARN }}
           aws-region: ap-northeast-2
-          # 기다림(다른 배포 30분 + 자기 배포 60분)이 1시간을 넘을 수 있어 2시간(역할 최대 세션 7200초)
+          # 기다림(다른 배포 합계 30분 + 자기 배포 60분)이 1시간을 넘을 수 있어 2시간(역할 최대 세션 7200초)
           role-duration-seconds: 7200
       - id: run
         working-directory: infra
@@ -132,10 +132,9 @@ jobs:
       (needs.infra-approve.outputs.deployed_at != '' || needs.infra.outputs.deployed_at != '')
     runs-on: ubuntu-latest
     environment: infra
-    timeout-minutes: 40
+    timeout-minutes: 40 # 로그 점검 16분 + 지도 판 확인·댓글
     permissions:
       contents: read
-      checks: read # ci-ok 확인
       issues: write # 결과 댓글(연결 이슈)
       pull-requests: write # 결과 댓글(연결 이슈가 없으면 PR)
       id-token: write # OIDC 토큰은 인프라 작업만 받음
@@ -162,8 +161,7 @@ jobs:
         with:
           role-to-assume: ${{ vars.INFRA_DEPLOY_ROLE_ARN }}
           aws-region: ap-northeast-2
-          # 기다림(다른 배포 30분 + 자기 배포 60분)이 1시간을 넘을 수 있어 2시간(역할 최대 세션 7200초)
-          role-duration-seconds: 7200
+          # 기다림 없이 40분 안에 끝나므로 기본 1시간 키
       - id: run
         working-directory: infra
         env:
@@ -171,13 +169,13 @@ jobs:
         run: node --import tsx scripts/deploy-ci.mjs watch
 
   site:
-    # 인프라 작업 뒤에 돎(결과와 상관없이. 판단 정책 순서는 아래 '판단 정책 버전 확인'이 막음). 인프라 작업이 건너뛰어져도 돎(!cancelled)
-    needs: infra
+    # 인프라 작업을 기다리지 않음. publisher를 배포해도 게시본 정책은 다음 게시에서 바뀌므로 같은 실행에서 순서를 맞출 수 없음
+    # 판단 정책을 바꾼 PR은 아래 '판단 정책 버전 확인'에서 멈추고, 새 정책으로 게시된 뒤 다시 실행함(infra/README '판단 정책 바꾸기')
     # 첫 인프라 배포 전(변수가 비어 있음)에는 건너뜀
     # 자동 배포는 main push CI가 성공했을 때만. 정기 실행·PR CI는 배포하지 않음
     # 저장소 변수 DEPLOY_PAUSED=true면 자동 배포를 멈춤(인프라와 순서를 맞출 때, infra/README)
     if: >-
-      !cancelled() && vars.DEPLOY_ROLE_ARN != '' && (
+      vars.DEPLOY_ROLE_ARN != '' && (
         github.event_name == 'workflow_dispatch' || (
           github.event.workflow_run.event == 'push' &&
           github.event.workflow_run.head_repository.full_name == github.repository &&
@@ -251,7 +249,7 @@ jobs:
           NEXT_PUBLIC_SITE_URL: ${{ vars.SITE_URL }}
           NEXT_PUBLIC_INQUIRY_PHOTO_BUCKET: ${{ vars.INQUIRY_PHOTO_BUCKET }}
       # 판단 정책 버전 확인(결정 기록 D20-6·7): 웹은 지금 판단 정책 하나만 읽음 → 정책을 바꾼 PR은 publisher(deploy:infra)를 먼저 배포
-      # 운영 게시본의 policyVersion을 이 빌드가 읽지 못하면(게시본을 못 읽어도) 올리지 않고 멈춤. publisher 배포 뒤 이 워크플로를 다시 실행
+      # 운영 게시본의 policyVersion을 이 빌드가 읽지 못하면(게시본을 못 읽어도) 올리지 않고 멈춤. publisher 배포·새 정책 게시 뒤 이 워크플로를 다시 실행
       - if: steps.decide.outputs.deploy == 'true'
         name: 판단 정책 버전 확인
         working-directory: apps/web
@@ -282,11 +280,10 @@ jobs:
         run: printf '%s\n' "$SHA" | aws s3 cp - "s3://$BUCKET/deploy-version.txt" --content-type "text/plain; charset=utf-8" --cache-control "public, max-age=0, must-revalidate"
 
   # 운영자 사이트(BRD-147): 사용자 사이트와 따로 버킷·CloudFront에 올림. 화면 파일만 있음(데이터는 /ops/*)
-  # 인프라 배포 전(변수가 비어 있음)에는 건너뜀. 조건·권한·CI 확인은 site 작업과 같음
+  # 인프라 배포 전(변수가 비어 있음)에는 건너뜀. 조건·권한·CI 확인은 site 작업과 같음(인프라 작업을 기다리지 않음)
   admin:
-    needs: infra
     if: >-
-      !cancelled() && vars.DEPLOY_ROLE_ARN != '' && vars.ADMIN_SITE_BUCKET != '' && (
+      vars.DEPLOY_ROLE_ARN != '' && vars.ADMIN_SITE_BUCKET != '' && (
         github.event_name == 'workflow_dispatch' || (
           github.event.workflow_run.event == 'push' &&
           github.event.workflow_run.head_repository.full_name == github.repository &&
