@@ -6,7 +6,7 @@
 #   CI_JOB(이 앱을 빌드하는 ci.yml 작업 이름. 바뀐 영역 검사로 건너뛰면 그 실행은 이 앱을 검사하지 않은 것)
 # 전제: main을 전체 이력으로 체크아웃한 상태(HEAD = main 최신). 끝에 고른 커밋으로 바꿈
 #
-# 자동 배포
+# 정기 배포(하루 한 번, GH-424. 예전 이름: 자동 배포)
 # - 올린 커밋 표시(운영 주소의 deploy-version.txt) 뒤로, main push CI가 성공하고 그 실행에서 이 앱 빌드 작업까지
 #   성공한 가장 새 커밋을 올림. 검사는 push 단위라(여러 커밋 머지는 맨 위 커밋만 실행) 커밋별 변경이 아닌 실행 결과로 봄.
 #   CI가 실패한 커밋의 변경은 그 앱을 다시 검사한 실행을 거친 뒤에만 나감. 그런 커밋이 없거나 표시와 앱 파일이
@@ -65,7 +65,7 @@ else
       echo "$deployed 뒤로 main CI가 이 앱($CI_JOB)까지 검사해 성공한 커밋이 없음: 건너뜀"
       # 앱 파일은 바뀌었는데 검사한 실행이 없으면(CI 실패 뒤 다른 영역만 고침 등) 다음 앱 변경까지 남으므로 알림
       if ! git diff --quiet "$deployed" HEAD -- "${paths[@]}"; then
-        echo "::warning::$deployed 뒤 앱 파일 변경이 아직 main CI($CI_JOB) 검사를 거치지 않았어요. 검사가 진행 중이면 끝난 뒤 올라가고, 실패했으면 그 CI를 다시 실행하거나 npm run deploy:prod로 올려 주세요."
+        echo "::warning::$deployed 뒤 앱 파일 변경이 아직 main CI($CI_JOB) 검사를 거치지 않았어요. 검사가 진행 중이면 끝난 뒤 다음 정기 배포 때 올라가고, 실패했으면 그 CI를 다시 실행한 뒤 npm run deploy:prod로 올려 주세요."
       fi
       deploy=false
       target=$deployed
