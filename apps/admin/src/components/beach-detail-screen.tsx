@@ -162,12 +162,18 @@ function StatusSection({
         <ExpiredNotice display={display} />
         {state.published !== "loading" && state.published?.available && (
           <p className="text-label-s text-text-muted">
-            {fill(t.statusAsOf, {
-              time: kstDateTime(state.published.generatedAt),
-            })}
+            {fill(
+              state.published.maintenance.active
+                ? t.statusAsOfMaintenance
+                : t.statusAsOf,
+              { time: kstDateTime(state.published.generatedAt) },
+            )}
           </p>
         )}
-        <p className="text-body-s text-text-body">{t.detailStatusNote}</p>
+        {/* 점검 중에는 앱에 상태가 안 보여 '앱과 같은 판단 결과'라고 하지 않음(위 점검 알림이 대신함) */}
+        {display.kind !== "maintenance" && (
+          <p className="text-body-s text-text-body">{t.detailStatusNote}</p>
+        )}
       </div>
     </Section>
   );

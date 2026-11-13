@@ -255,6 +255,12 @@ function Summary({ parts, nowMs }: { parts: Parts; nowMs: number }) {
             {fill(h.kpiExpired, { count: expired })}
           </dd>
         )}
+        {/* 점검 중이면 앱이 해변 상태를 숨김. 개수는 마지막 게시본 그대로(D23-11) */}
+        {published?.maintenance.active && (
+          <dd className="text-label-s font-medium text-text-default">
+            {h.kpiMaintenance}
+          </dd>
+        )}
       </div>
       <div className={CARD}>
         <dt className={LABEL}>{h.kpiPublish}</dt>

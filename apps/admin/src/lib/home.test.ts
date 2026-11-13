@@ -95,6 +95,7 @@ describe("요약 값", () => {
       available: true,
       snapshotVersion: "20261112T000000Z",
       generatedAt: "2026-11-12T00:00:00Z",
+      maintenance: { active: false, until: null },
       beaches: {
         b0001: { category: "clear", reasons: [], validUntil: "" },
         b0002: { category: "undetermined", reasons: [], validUntil: "" },
@@ -115,6 +116,7 @@ describe("요약 값", () => {
       available: true,
       snapshotVersion: "20261112T000000Z",
       generatedAt: "2026-11-12T00:00:00Z",
+      maintenance: { active: false, until: null },
       beaches: {
         b0001: {
           category: "clear",

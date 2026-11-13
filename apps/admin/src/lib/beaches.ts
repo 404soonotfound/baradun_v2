@@ -162,11 +162,19 @@ export interface PublishedEntry {
   readonly validUntil: string;
 }
 
+// 게시본 manifest의 점검. 점검 중이면 앱은 해변 상태를 숨기고 점검 화면을 보여 줌(D23-11)
+export interface PublishedMaintenance {
+  readonly active: boolean;
+  // 끝나는 예정 시각(UTC). 정하지 않았으면 null
+  readonly until: string | null;
+}
+
 export type PublishedView =
   | {
       readonly available: true;
       readonly snapshotVersion: string;
       readonly generatedAt: string;
+      readonly maintenance: PublishedMaintenance;
       readonly beaches: Readonly<Record<string, PublishedEntry>>;
     }
   | { readonly available: false; readonly reason: string };
@@ -202,12 +210,19 @@ export function parsePublished(value: unknown): PublishedView | null {
       reason: typeof value.reason === "string" ? value.reason : "unknown",
     };
   }
-  const { snapshotVersion, generatedAt, beaches } = value;
+  const { snapshotVersion, generatedAt, maintenance, beaches } = value;
   if (
     value.available !== true ||
     typeof snapshotVersion !== "string" ||
     typeof generatedAt !== "string" ||
     Number.isNaN(Date.parse(generatedAt)) ||
+    !isRecord(maintenance) ||
+    typeof maintenance.active !== "boolean" ||
+    !(
+      maintenance.until === null ||
+      (typeof maintenance.until === "string" &&
+        !Number.isNaN(Date.parse(maintenance.until)))
+    ) ||
     !isRecord(beaches)
   ) {
     return null;
@@ -230,7 +245,16 @@ export function parsePublished(value: unknown): PublishedView | null {
       validUntil: entry.validUntil,
     };
   }
-  return { available: true, snapshotVersion, generatedAt, beaches: out };
+  return {
+    available: true,
+    snapshotVersion,
+    generatedAt,
+    maintenance: {
+      active: maintenance.active,
+      until: maintenance.until as string | null,
+    },
+    beaches: out,
+  };
 }
 
 // 배지 글자(사유 먼저). 사용자 화면 배지와 같은 규칙(apps/web/src/lib/snapshot/view.ts reasonLabel)
@@ -310,19 +334,32 @@ export function badgeTone(label: BadgeLabel): BadgeTone {
 // - unconfirmed: 게시본을 못 받음·모양이 틀림·게시본에 해변이 없음 → 판단불가 계열 '확인 못 함'
 // - published: 게시본 분류·사유 그대로(G1, 화면에서 다시 계산하지 않음)
 //   validUntil이 지났으면 expired만 켜고 분류는 그대로 둠. 화면은 분류와 따로 '유효 시각 지남'을 알림
+// - maintenance: 게시본이 점검 중. 앱은 해변 상태를 숨기므로 지금 표시 상태는 '점검 중 · 앱에 표시 안 함'
+//   마지막 게시 분류(last)는 바꾸지 않고 보조로 보여 줌(D23-11, G1)
+export type PublishedDisplay = {
+  readonly kind: "published";
+  readonly category: Category;
+  readonly labels: [BadgeLabel, ...BadgeLabel[]];
+  readonly reasons: readonly Partial<Reason>[];
+  readonly validUntil: string;
+  readonly expired: boolean;
+};
+
+// 점검 중에 함께 보여 주는 마지막 게시 분류(게시본에 해변이 없으면 '게시본에 없음')
+export type LastDisplay =
+  PublishedDisplay | { readonly kind: "unconfirmed"; readonly why: "missing" };
+
 export type BeachDisplay =
   | { readonly kind: "loading" }
   | {
       readonly kind: "unconfirmed";
       readonly why: "unavailable" | "missing";
     }
+  | PublishedDisplay
   | {
-      readonly kind: "published";
-      readonly category: Category;
-      readonly labels: [BadgeLabel, ...BadgeLabel[]];
-      readonly reasons: readonly Partial<Reason>[];
-      readonly validUntil: string;
-      readonly expired: boolean;
+      readonly kind: "maintenance";
+      readonly until: string | null;
+      readonly last: LastDisplay;
     };
 
 export function displayOf(
@@ -334,7 +371,17 @@ export function displayOf(
   if (!published || !published.available) {
     return { kind: "unconfirmed", why: "unavailable" };
   }
-  const entry = published.beaches[id];
+  const last = publishedDisplay(published.beaches[id], nowMs);
+  if (published.maintenance.active) {
+    return { kind: "maintenance", until: published.maintenance.until, last };
+  }
+  return last;
+}
+
+function publishedDisplay(
+  entry: PublishedEntry | undefined,
+  nowMs: number,
+): LastDisplay {
   if (!entry) return { kind: "unconfirmed", why: "missing" };
   return {
     kind: "published",

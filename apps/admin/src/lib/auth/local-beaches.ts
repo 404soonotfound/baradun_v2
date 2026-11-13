@@ -13,6 +13,7 @@ export function localPublishedView() {
     available: true,
     snapshotVersion: "20261111T030000Z",
     generatedAt: at(-4),
+    maintenance: { active: false, until: null },
     beaches: {
       b0001: { category: "clear", reasons: [], validUntil },
       b0002: {
