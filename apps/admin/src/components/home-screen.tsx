@@ -1239,6 +1239,18 @@ function Usage({
       </div>
       <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-border-default pb-4 text-body-s">
         <span className="text-text-body">{h.usageRange}</span>
+        {/* 이용 칸 자기 기준 시각: GA 집계를 받은 시각(서버 5분 저장 포함). 머리의 1분 주기와 따로 5분마다 */}
+        {placeholder ? (
+          <span>
+            <SkLine className="w-[176px] h-[8px]" />
+          </span>
+        ) : (
+          data && (
+            <span className="text-text-muted">
+              {fill(h.usageAsOf, { time: hourMinute(data.fetchedAt) })}
+            </span>
+          )
+        )}
         <TextLink
           href="/stats/"
           className="inline-flex min-h-touch items-center lg:min-h-0"
