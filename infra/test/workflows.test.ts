@@ -649,3 +649,137 @@ describe("PR 필수 웹 검사 (BRD-102 결정 41·42)", () => {
     );
   });
 });
+
+describe("인프라 자동 배포 (#418)", () => {
+  const text = deploy?.text ?? "";
+  const bootstrap = (file: string) =>
+    JSON.parse(
+      readFileSync(resolve(__dirname, "../bootstrap", file), "utf8"),
+    ) as {
+      Statement: {
+        Effect: string;
+        Action: string | string[];
+        Resource?: string | string[];
+        Condition?: Record<string, Record<string, string | string[]>>;
+      }[];
+    };
+  const list = (v: string | string[] | undefined) =>
+    v === undefined ? [] : Array.isArray(v) ? v : [v];
+
+  it("infra 작업은 이 저장소 main push CI 성공 뒤에만, infra environment에서 CI 역할로 변경 세트를 판정한다(수동 실행 제외)", () => {
+    const infra = jobLines(text, "infra").join("\n");
+    for (const cond of [
+      "vars.INFRA_DEPLOY_ROLE_ARN != ''",
+      "github.event_name == 'workflow_run'",
+      "github.event.workflow_run.event == 'push'",
+      "github.event.workflow_run.head_repository.full_name == github.repository",
+      "github.event.workflow_run.conclusion == 'success'",
+      "vars.DEPLOY_PAUSED != 'true'",
+    ]) {
+      expect(infra).toContain(cond);
+    }
+    expect(infra).toMatch(/environment:\s*infra\s*$/m);
+    expect(infra).toMatch(/group:\s*deploy-infra\s*$/m);
+    expect(infra).toMatch(/cancel-in-progress:\s*false/);
+    expect(infra).toContain("ref: ${{ github.event.workflow_run.head_sha }}");
+    expect(infra).toContain(
+      "role-to-assume: ${{ vars.INFRA_DEPLOY_ROLE_ARN }}",
+    );
+    expect(infra).toContain("node --import tsx scripts/deploy-ci.mjs plan");
+    // OIDC 토큰을 받는 작업은 캐시를 복원하지 않음
+    expect(infra).not.toMatch(/cache:/);
+  });
+
+  it("삭제·교체가 있을 때만 infra-approval environment 승인 뒤 같은 변경 세트를 실행하고, 로그 점검은 따로 돈다", () => {
+    const approve = jobLines(text, "infra-approve").join("\n");
+    expect(approve).toMatch(/needs:\s*infra\s*$/m);
+    expect(approve).toContain("if: needs.infra.outputs.kind == 'hold'");
+    expect(approve).toMatch(/environment:\s*infra-approval\s*$/m);
+    expect(approve).toContain(
+      "CHANGE_SET: ${{ needs.infra.outputs.change_set }}",
+    );
+    expect(approve).toContain(
+      "node --import tsx scripts/deploy-ci.mjs execute",
+    );
+    // 승인 대기가 다음 자동 배포를 막지 않게 다른 그룹
+    expect(approve).not.toMatch(/group:\s*deploy-infra\s*$/m);
+    const watch = jobLines(text, "infra-watch").join("\n");
+    expect(watch).toMatch(/needs:\s*\[infra, infra-approve\]/);
+    expect(watch).toContain("!cancelled()");
+    expect(watch).toContain("node --import tsx scripts/deploy-ci.mjs watch");
+  });
+
+  it("사이트·운영자 사이트 작업은 인프라 작업 뒤에, 인프라 결과와 상관없이(건너뛰어도) 돈다", () => {
+    for (const job of ["site", "admin"]) {
+      const lines = jobLines(text, job).join("\n");
+      expect(lines, job).toMatch(/needs:\s*infra\s*$/m);
+      expect(lines, job).toMatch(
+        /if: >-\s*\n\s*!cancelled\(\) && vars\.DEPLOY_ROLE_ARN/,
+      );
+    }
+  });
+
+  it("CI 역할 신뢰는 이 저장소 infra·infra-approval environment의 OIDC 토큰만 받는다", () => {
+    const trust = bootstrap("github-infra-deploy-trust.json").Statement;
+    expect(trust).toHaveLength(1);
+    const cond = trust[0]!.Condition?.StringEquals ?? {};
+    expect(cond["token.actions.githubusercontent.com:aud"]).toBe(
+      "sts.amazonaws.com",
+    );
+    const subs = list(cond["token.actions.githubusercontent.com:sub"]);
+    const prefix =
+      "repo:404soonotfound@202301114/baradun_v2@1423369390:environment:";
+    expect(subs).toEqual([`${prefix}infra`, `${prefix}infra-approval`]);
+    // 와일드카드 비교(StringLike)를 쓰지 않음
+    expect(trust[0]!.Condition?.StringLike).toBeUndefined();
+  });
+
+  it("CI 역할 권한은 CDK 부트스트랩 역할 맡기와 읽기만 있고, IAM 쓰기·와일드카드 리소스가 없다", () => {
+    const statements = bootstrap("github-infra-deploy-policy.json").Statement;
+    const actions = statements.flatMap((s) => list(s.Action));
+    const allowed = new Set([
+      "sts:AssumeRole",
+      "iam:GetPolicy",
+      "iam:GetPolicyVersion",
+      "cloudformation:DescribeChangeSet",
+      "cloudformation:DescribeStackEvents",
+      "cloudformation:DescribeStackResource",
+      "cloudformation:DescribeStacks",
+      "lambda:GetFunctionConfiguration",
+      "logs:FilterLogEvents",
+    ]);
+    for (const a of actions) expect(allowed.has(a), a).toBe(true);
+    for (const s of statements) {
+      expect(s.Effect).toBe("Allow");
+      for (const r of list(s.Resource)) expect(r).not.toBe("*");
+    }
+    // 맡을 수 있는 역할은 CDK 부트스트랩 배포·파일 올리기·조회 역할뿐
+    const assumable = statements
+      .filter((s) => list(s.Action).includes("sts:AssumeRole"))
+      .flatMap((s) => list(s.Resource));
+    expect(assumable).toHaveLength(3);
+    for (const r of assumable) {
+      expect(r).toMatch(
+        /^arn:aws:iam::717304679248:role\/cdk-hnb659fds-(deploy|file-publishing|lookup)-role-717304679248-ap-northeast-2$/,
+      );
+    }
+  });
+
+  it("CI 스크립트는 변경 세트 실행·지우기를 CDK 배포 역할로 하고, 판정은 autoDeployDecision을 쓴다", () => {
+    const script = readFileSync(
+      resolve(__dirname, "../scripts/deploy-ci.mjs"),
+      "utf8",
+    );
+    expect(script).toContain("autoDeployDecision(");
+    expect(script).toMatch(
+      /deployAws\(\[\s*"cloudformation",\s*"execute-change-set"/,
+    );
+    expect(script).not.toMatch(
+      /(?<!deployAws)\(\[\s*"cloudformation",\s*"execute-change-set"/,
+    );
+    // boundary를 고치는 명령이 없음
+    expect(script).not.toMatch(
+      /create-policy-version|set-default-policy-version/,
+    );
+  });
+});
