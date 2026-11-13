@@ -23,18 +23,16 @@ export type CloudWatchAlarmEvent = EventBridgeEvent<
 >;
 
 // 경보 ID는 infra/lib/ops/alarms.ts와 같아야 함(infra alarms.test.ts가 확인)
+// 특보·관측·이안류 수집은 오류 경보와 실행 없음 경보를 '성공 없음' 경보 하나로 합침(GH-424). 게시는 둘로 둠(D16-C2)
+// 로그인 반복 요청(LoginAbuse) 경보는 GH-424에서 뺌
 export const ALARM_LABELS = [
-  ["WarningsErrors", "특보 수집 실패"],
-  ["OceanErrors", "바다 관측 수집 실패"],
+  ["WarningsFailing", "특보 수집 실패·중단"],
+  ["OceanFailing", "바다 관측 수집 실패·중단"],
+  ["RipFailing", "이안류 수집 실패·중단"],
   ["CatalogErrors", "사진 확인 수집 실패"],
-  ["RipErrors", "이안류 수집 실패"],
   ["PublishErrors", "데이터 게시 실패"],
-  ["WarningsStopped", "특보 수집 중단"],
-  ["OceanStopped", "바다 관측 수집 중단"],
-  ["RipStopped", "이안류 수집 중단"],
   ["PublishStopped", "데이터 게시 중단"],
   ["NotificationFailed", "운영 알림 발송 실패"],
-  ["LoginAbuse", "운영자 로그인 반복 요청"],
   ["WeatherFailing", "날씨 수집 계속 실패"],
   ["OpsApiErrors", "운영 API 오류 급증"],
   ["InquiryEmailOverdue", "문의 이메일 보관 기한 초과"],
@@ -92,11 +90,11 @@ function reasonLabel(alarmName: string): string {
   if (id.endsWith("Stopped")) {
     return "정해진 평가 구간 동안 실행 기록이 확인되지 않았습니다.";
   }
-  if (id === "LoginAbuse") {
-    return "5분 동안 로그인 실패 또는 비밀번호 찾기·변경 요청이 기준을 넘었습니다. 차단은 Cognito 잠금·요청 제한이 하고 있습니다.";
-  }
   if (id === "WeatherFailing") {
     return "1시간 구간에 오류가 있거나 실행이 없는 구간이 3번 이어졌습니다.";
+  }
+  if (id.endsWith("Failing")) {
+    return "정해진 평가 구간 동안 성공한 실행이 없었습니다. 실행이 실패했거나 돌지 않았습니다.";
   }
   if (id === "NotificationFailed") {
     return "재시도 뒤에도 알림을 보내지 못해 실패 대기열에 기록되었습니다.";
