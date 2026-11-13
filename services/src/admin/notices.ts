@@ -26,7 +26,7 @@ export const NOTICE_KINDS: readonly NoticeKind[] = [
   "general",
 ];
 
-// 글자 수 상한(D16-D2)·표현 검사 목록(D17-8)은 운영자 화면과 같은 값을 쓰도록
+// 글자 수 상한(D16-D2·D20-20)·표현 검사 목록(D17-8)은 운영자 화면과 같은 값을 쓰도록
 // 계약 패키지(@baradun/contracts/notice-rules) 한 곳에 둠
 
 export interface NoticeRecord {

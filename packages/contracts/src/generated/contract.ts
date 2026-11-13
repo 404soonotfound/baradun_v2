@@ -252,7 +252,7 @@ export interface ManifestFile {
    */
   minWebBuild: number;
   /**
-   * 공지(BRD-151, D15-6·D16-B3·D4). 선택 칸: 없으면 공지 없음. schemaVersion 1에 더한 칸이라 이 칸을 모르는 화면은 무시함(구현 제안 I06). 예약 시각 전 공지는 넣지 않음. 판단 상태·maintenance를 바꾸지 않음.
+   * 공지(BRD-151, D15-6·D16-B3·D4). 선택 칸: 없으면 공지 없음. schemaVersion 1에 더한 칸이라 이 칸을 모르는 화면은 무시함(D20-19, 구현 제안 I06 채택). 예약 시각 전 공지는 넣지 않음. 판단 상태·maintenance를 바꾸지 않음.
    */
   notices?: Notice[];
   files: {
@@ -272,7 +272,7 @@ export interface Maintenance {
   until: NullableDateTime;
 }
 /**
- * 공지 하나. 한·영 제목·본문이 모두 있어야 함. 글자 수 상한(제목 한 40/영 60, 본문 한 120/영 200, grapheme)은 게시 전 서버 검사(D16-D2, 미확정). 노출은 startsAt 포함·endsAt 제외(UTC), 화면이 끝 시각부터 숨김. endsAt이 null이면 끝을 정하지 않은 공지(운영자가 노출을 끝내면 다음 게시에서 빠짐)(D16-D4, 구현 제안 I09).
+ * 공지 하나. 한·영 제목·본문이 모두 있어야 함. 글자 수 상한(제목 한 40/영 60, 본문 한 120/영 200, grapheme)은 게시 전 서버 검사(D16-D2·D20-20 확정). 노출은 startsAt 포함·endsAt 제외(UTC), 화면이 끝 시각부터 숨김. endsAt이 null이면 끝을 정하지 않은 공지(운영자가 노출을 끝내면 다음 게시에서 빠짐)(D16-D4, 구현 제안 I09).
  *
  * This interface was referenced by `Contract`'s JSON-Schema
  * via the `definition` "Notice".
