@@ -29,6 +29,7 @@ import {
 } from "@/lib/home";
 import { badgeOwner, setReceivedCount } from "@/lib/inquiry-badge";
 import { fetchInquiries, kstDateTime } from "@/lib/inquiries";
+import { LOADING_TIMES } from "@/lib/loading-timing";
 import { fill, messages } from "@/lib/messages";
 import { fetchNotices, type NoticeView } from "@/lib/notices";
 import { roleLabel } from "@/lib/roles";
@@ -603,11 +604,25 @@ function HomeBody({ beaches }: { beaches: Beaches }) {
   useEffect(() => {
     if (!signedIn) return;
     let live = true;
-    void opsFetch<Me>("/ops/me", () => session.accessToken()).then((result) => {
+    // 15초(D26-4) 안에 답이 없으면 운영 서버 오류로 보임(자리표시가 끝없이 남지 않게, 다시 시도 가능)
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timedOut = new Promise<OpsResult<Me>>((resolve) => {
+      timer = setTimeout(
+        () =>
+          resolve({ ok: false, status: 0, code: "timeout", requestId: null }),
+        LOADING_TIMES.timeout,
+      );
+    });
+    void Promise.race([
+      opsFetch<Me>("/ops/me", () => session.accessToken()),
+      timedOut,
+    ]).then((result) => {
+      clearTimeout(timer);
       if (live) setMe(result);
     });
     return () => {
       live = false;
+      clearTimeout(timer);
     };
   }, [session, signedIn, attempt]);
 
@@ -705,10 +720,12 @@ function HomeBody({ beaches }: { beaches: Beaches }) {
     setRound((n) => n + 1);
   };
 
+  // 서버 세션 확인이 실패하면 칸을 읽지 않으므로 로딩도 끝(알림만 남음)
   const anyLoading =
     !signedIn ||
     me === null ||
-    Object.values(parts).some((p: Slot<unknown>) => p.state === "loading");
+    (me.ok &&
+      Object.values(parts).some((p: Slot<unknown>) => p.state === "loading"));
   // 5초 넘게 받는 칸이 있으면 제목 줄 오른쪽에 느림 안내(칸 높이를 바꾸지 않게 한 자리에서)
   const page = useLoadTiming(anyLoading);
   const role = signedIn ? roleLabel(snapshot.pool, snapshot.groups) : null;
