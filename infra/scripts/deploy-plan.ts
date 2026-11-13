@@ -435,6 +435,36 @@ export function deployComment(report: DeployReport): string {
   return redactAccount(`${lines.join("\n")}\n`);
 }
 
+// 배포 실패 댓글(로컬·CI 공통). 실패 이벤트를 읽지 못했으면(null) '실패 없음'이 아니라 '읽지 못함'으로 적음
+export function deployFailureComment(input: {
+  readonly via?: string;
+  readonly subject: string;
+  readonly changeSet: string;
+  readonly boundary: string;
+  readonly failed: readonly StackEvent[] | null;
+  readonly extra?: readonly string[];
+}): string {
+  const lines = [
+    `## 인프라 배포 실패 (${input.via ?? "`npm run deploy:infra`"})`,
+    "",
+    `- 커밋: ${input.subject}`,
+    `- 변경 세트: \`${input.changeSet}\``,
+    `- boundary: ${input.boundary}`,
+    ...(input.failed === null
+      ? ["- 실패 이벤트: 읽지 못함(자격 증명 만료일 수 있음)"]
+      : input.failed
+          .slice(0, 5)
+          .map(
+            (e) =>
+              `- ${e.LogicalResourceId}: ${e.ResourceStatus} ${e.ResourceStatusReason ?? ""}`,
+          )),
+    ...(input.extra ?? []),
+    "",
+    "스택 상태를 콘솔에서 확인해 주세요. 진행 중이면 다시 배포하지 않아요.",
+  ];
+  return redactAccount(`${lines.join("\n")}\n`);
+}
+
 // ── main 머지 뒤 자동 배포 (#418) ──
 
 // none: 바뀐 것 없음 · auto: 바로 실행 · hold: GitHub 승인 뒤 실행 · local: CI가 할 수 없어 로컬 deploy:infra 필요

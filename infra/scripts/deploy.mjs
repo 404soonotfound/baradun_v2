@@ -23,24 +23,28 @@ import {
   ciConclusion,
   ciStateWithRuns,
   deployComment,
-  failedEventsSince,
+  deployFailureComment,
   formatPolicyDiff,
   formatTable,
   isEmptyChangeSet,
   isStackReady,
   policyDiff,
-  redactAccount,
   REGION,
-  scanLogLines,
   STACK_NAME,
   summarizeChanges,
   versionToPrune,
 } from "./deploy-plan.ts";
+import {
+  checkFunctionLogs,
+  failedEventsOrNull,
+  readChangeSetPages,
+  readRemotePolicy,
+} from "./deploy-aws.ts";
 
 // 실행을 시작할 때의 스크립트 내용. 배포용 폴더에서 실행하면 2단계 체크아웃 뒤 디스크 파일이 새 버전으로 바뀜
 // → 디스크끼리 비교하면 늘 같아서 예전 절차(메모리에 올라온 것)로 그대로 배포됨. 그래서 이 내용과 비교함
 const here = path.dirname(fileURLToPath(import.meta.url));
-const SCRIPT_FILES = ["deploy.mjs", "deploy-plan.ts"];
+const SCRIPT_FILES = ["deploy.mjs", "deploy-plan.ts", "deploy-aws.ts"];
 const startedScripts = Object.fromEntries(
   SCRIPT_FILES.map((file) => [
     file,
@@ -306,34 +310,21 @@ if (adminProfile !== profile) {
 const BOOTSTRAP = path.join(deployDir, "infra", "bootstrap");
 const policyArn = (policy) => `arn:aws:iam::${account}:policy/${policy}`;
 
+// 공유 조회(deploy-aws.ts)에 넘기는 실행기. 실패해도 결과를 돌려줌(판단은 그쪽 결과 종류로)
+const iamRunner = (args) => iam(args, { allowFail: true });
+const awsRunner = (args) => aws(args, { allowFail: true });
+
 // AWS 기본 버전 문서. 없으면(NoSuchEntity) null, 그 밖의 실패는 멈춤(권한·네트워크 오류를 '같음'으로 보지 않음)
 function remotePolicy(policy) {
-  const got = iam(["iam", "get-policy", "--policy-arn", policyArn(policy)], {
-    allowFail: true,
-  });
-  if (got.status !== 0) {
-    if (/NoSuchEntity/.test(got.stderr ?? "")) return null;
-    process.stderr.write(got.stderr ?? "");
+  const got = readRemotePolicy(iamRunner, policyArn(policy));
+  if (got.kind === "missing") return null;
+  if (got.kind === "error") {
+    process.stderr.write(got.stderr);
     fail(
       `${policy} 정책을 읽지 못했어요. IAM 정책을 읽을 수 있는 프로필을 --admin-profile로 지정해 주세요.`,
     );
   }
-  const version = JSON.parse(got.stdout).Policy.DefaultVersionId;
-  const doc = JSON.parse(
-    iam([
-      "iam",
-      "get-policy-version",
-      "--policy-arn",
-      policyArn(policy),
-      "--version-id",
-      version,
-    ]).stdout,
-  ).PolicyVersion.Document;
-  // CLI는 보통 풀어서 주지만, 문자열(URL 인코딩)로 오면 직접 풂
-  return {
-    version,
-    doc: typeof doc === "string" ? JSON.parse(decodeURIComponent(doc)) : doc,
-  };
+  return { version: got.version, doc: got.doc };
 }
 
 const localPolicy = (file) =>
@@ -420,30 +411,20 @@ run(
   { cwd: path.join(deployDir, "infra"), env: cdkEnv },
 );
 
-const described = aws(
-  [
-    "cloudformation",
-    "describe-change-set",
-    "--stack-name",
-    STACK_NAME,
-    "--change-set-name",
-    name,
-  ],
-  { allowFail: true },
-);
+const described = readChangeSetPages(awsRunner, STACK_NAME, name);
 // 바뀐 리소스가 없어도 boundary가 다르면 boundary만 반영할 수 있게 이어 감
 let hasChangeSet = true;
 let rows = [];
-if (described.status !== 0) {
+if (described.kind === "error") {
+  // 권한·네트워크 등 실패를 '바뀐 것 없음'으로 넘기지 않음
+  process.stderr.write(described.stderr);
+  fail("변경 세트를 읽지 못했어요. 위 오류를 확인해 주세요.");
+}
+if (described.kind === "missing") {
   // cdk는 바뀐 것이 없으면 변경 세트를 지우고 끝냄 → 없음(ChangeSetNotFound)만 '바뀐 것 없음'으로 봄
-  // 권한·네트워크 등 다른 실패를 '바뀐 것 없음'으로 넘기지 않음
-  if (!/ChangeSetNotFound/.test(described.stderr ?? "")) {
-    process.stderr.write(described.stderr ?? "");
-    fail("변경 세트를 읽지 못했어요. 위 오류를 확인해 주세요.");
-  }
   hasChangeSet = false;
 } else {
-  let changeSet = JSON.parse(described.stdout);
+  const { changeSet, changes } = described;
   if (isEmptyChangeSet(changeSet)) {
     aws([
       "cloudformation",
@@ -459,22 +440,6 @@ if (described.status !== 0) {
       fail(
         `변경 세트를 만들지 못했어요: ${changeSet.Status} ${changeSet.StatusReason ?? ""}`,
       );
-    }
-    const changes = [...(changeSet.Changes ?? [])];
-    while (changeSet.NextToken) {
-      changeSet = JSON.parse(
-        aws([
-          "cloudformation",
-          "describe-change-set",
-          "--stack-name",
-          STACK_NAME,
-          "--change-set-name",
-          name,
-          "--next-token",
-          changeSet.NextToken,
-        ]).stdout,
-      );
-      changes.push(...(changeSet.Changes ?? []));
     }
     rows = summarizeChanges(changes);
   }
@@ -647,22 +612,17 @@ if (hasChangeSet) {
     { env: awsEnv, allowFail: true },
   );
   if (waited.status !== 0) {
-    const events = JSON.parse(
-      aws([
-        "cloudformation",
-        "describe-stack-events",
-        "--stack-name",
-        STACK_NAME,
-        "--max-items",
-        "30",
-      ]).stdout,
-    ).StackEvents;
-    const failed = failedEventsSince(events, startedAt);
-    if (failed.length === 0)
+    // 자격 증명이 만료됐으면 이벤트도 못 읽음 → '실패 없음'이 아니라 '읽지 못함'으로 알림
+    const failed = failedEventsOrNull(awsRunner, STACK_NAME, startedAt);
+    if (failed === null)
+      console.error(
+        "   실패 이벤트를 읽지 못했어요(자격 증명 만료일 수 있음).",
+      );
+    else if (failed.length === 0)
       console.error(
         "   이번 실행의 실패 이벤트는 아직 없어요(진행 중일 수 있음).",
       );
-    for (const e of failed.slice(0, 5)) {
+    for (const e of (failed ?? []).slice(0, 5)) {
       console.error(
         `   ${e.LogicalResourceId}: ${e.ResourceStatus} ${e.ResourceStatusReason ?? ""}`,
       );
@@ -674,23 +634,12 @@ if (hasChangeSet) {
       );
     }
     postIssueComment(
-      redactAccount(
-        [
-          "## 인프라 배포 실패 (`npm run deploy:infra`)",
-          "",
-          `- 커밋: ${subject}`,
-          `- 변경 세트: \`${name}\``,
-          `- boundary: ${boundaryResult}`,
-          ...failed
-            .slice(0, 5)
-            .map(
-              (e) =>
-                `- ${e.LogicalResourceId}: ${e.ResourceStatus} ${e.ResourceStatusReason ?? ""}`,
-            ),
-          "",
-          "스택 상태를 콘솔에서 확인해 주세요. 진행 중이면 다시 배포하지 않아요.",
-        ].join("\n") + "\n",
-      ),
+      deployFailureComment({
+        subject,
+        changeSet: name,
+        boundary: boundaryResult,
+        failed,
+      }),
     );
     fail(
       "배포가 끝났는지 확인하지 못했어요(실패·롤백, 1시간 넘게 진행 중, 또는 자격 증명 만료). 위 이유와 콘솔의 스택 상태를 확인하고, 진행 중이면 다시 배포하지 마세요.",
@@ -717,71 +666,15 @@ if (watchMinutes > 0 && functions.length > 0) {
     await new Promise((resolve) => setTimeout(resolve, 60_000));
   }
   process.stdout.write("\n");
-  for (const fn of functions) {
-    const firstLine = (text) => (text ?? "").trim().split("\n")[0] ?? "";
-    const resource = aws(
-      [
-        "cloudformation",
-        "describe-stack-resource",
-        "--stack-name",
-        STACK_NAME,
-        "--logical-resource-id",
-        fn.logicalId,
-      ],
-      { allowFail: true },
-    );
-    if (resource.status !== 0) {
-      logChecks.push({
-        logicalId: fn.logicalId,
-        error: firstLine(resource.stderr),
-      });
-      continue;
-    }
-    const functionName = JSON.parse(resource.stdout).StackResourceDetail
-      .PhysicalResourceId;
-    const config = aws(
-      ["lambda", "get-function-configuration", "--function-name", functionName],
-      { allowFail: true },
-    );
-    if (config.status !== 0) {
-      logChecks.push({
-        logicalId: fn.logicalId,
-        error: firstLine(config.stderr),
-      });
-      continue;
-    }
-    const logGroup =
-      JSON.parse(config.stdout).LoggingConfig?.LogGroup ??
-      `/aws/lambda/${functionName}`;
-    const logs = aws(
-      [
-        "logs",
-        "filter-log-events",
-        "--log-group-name",
-        logGroup,
-        "--start-time",
-        String(deployedAt.getTime()),
-        // 오류를 반복해 로그가 아주 많아도 멈추지 않게 앞부분만 셈
-        "--max-items",
-        String(LOG_MAX_EVENTS),
-      ],
-      { allowFail: true },
-    );
-    if (logs.status !== 0) {
-      logChecks.push({
-        logicalId: fn.logicalId,
-        error: firstLine(logs.stderr),
-      });
-      continue;
-    }
-    const parsed = JSON.parse(logs.stdout);
-    const lines = (parsed.events ?? []).map((e) => e.message ?? "");
-    logChecks.push({
-      logicalId: fn.logicalId,
-      scan: scanLogLines(lines),
-      truncated: Boolean(parsed.NextToken),
-    });
-  }
+  logChecks.push(
+    ...checkFunctionLogs(
+      awsRunner,
+      STACK_NAME,
+      functions.map((fn) => fn.logicalId),
+      deployedAt.getTime(),
+      LOG_MAX_EVENTS,
+    ),
+  );
   for (const check of logChecks) console.log(`   ${checkLine(check)}`);
 } else {
   step(
