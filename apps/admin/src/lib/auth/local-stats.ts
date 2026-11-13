@@ -47,23 +47,6 @@ export function localStatsView(
         otherRowLoss: false,
       },
     },
-    events: [
-      { name: "page_view", status: "collecting" },
-      { name: "select_activity", status: "collecting" },
-      { name: "search_no_result", status: "collecting" },
-      { name: "select_search_result", status: "collecting" },
-      { name: "inquiry_sent", status: "collecting" },
-      { name: "toggle_explore_view", status: "collecting" },
-      { name: "toggle_favorite", status: "collecting" },
-      { name: "share_spot", status: "collecting" },
-      { name: "complete_onboarding_notice", status: "collecting" },
-      { name: "respond_location_prompt", status: "collecting" },
-      { name: "change_setting", status: "collecting" },
-      { name: "open_warning_sheet", status: "not_collecting" },
-      { name: "open_weather_detail", status: "not_collecting" },
-      { name: "select_alternative_beach", status: "not_collecting" },
-      { name: "open_offline_fallback", status: "not_collecting" },
-    ],
   };
 }
 

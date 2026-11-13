@@ -1760,12 +1760,6 @@
     "subReportUnavailable": "이 항목을 불러오지 못했어요. 다른 칸은 그대로예요. 잠시 뒤 다시 시도해 주세요.",
     "topBeachesEmpty": "집계된 해변 방문 기록이 없어요.",
     "listEmpty": "집계된 항목이 없어요.",
-    "foot": "검색어·위치·문의 내용은 보내지 않아요. 해변 상태와 묶은 지표는 만들지 않아요. 숫자 제한 안내는 GA 응답 metadata 기준이에요.",
-    "eventsTitle": "수집 이벤트",
-    "eventsNote": "개인정보와 해변 판단 상태를 제외한 비식별 이용 이벤트를 수집해요.",
-    "eventStatus": {
-      "collecting": "수집 중",
-      "not_collecting": "수집 안 함(후속)"
-    }
+    "foot": "검색어·위치·문의 내용은 보내지 않아요. 해변 상태와 묶은 지표는 만들지 않아요. 숫자 제한 안내는 GA 응답 metadata 기준이에요."
   }
 }

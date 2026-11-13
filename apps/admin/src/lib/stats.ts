@@ -42,11 +42,6 @@ export interface StatsPeriod {
   readonly metadata: StatsMetadata;
 }
 
-export interface StatsEventStatus {
-  readonly name: string;
-  readonly status: "collecting" | "not_collecting";
-}
-
 export interface StatsResponse {
   readonly configured: boolean;
   readonly sample?: boolean;
@@ -55,7 +50,6 @@ export interface StatsResponse {
   readonly range: StatsRange;
   readonly realtime: StatsRealtime;
   readonly period: StatsPeriod;
-  readonly events: readonly StatsEventStatus[];
 }
 
 // 응답 모양이 틀리면 불러오기 실패로 봄(빈 칸·0으로 채우지 않음). 세부 리포트 null(일부 실패)은 그대로 둠
@@ -91,7 +85,7 @@ const isRows = (v: unknown, key: string, metric: string) =>
 // 화면이 읽는 칸만 검사(서버 계약 services/src/admin/stats.ts StatsResponse)
 export function validStats(v: unknown): v is StatsResponse {
   if (!isRecord(v)) return false;
-  const { realtime, period, events } = v;
+  const { realtime, period } = v;
   if (
     typeof v.configured !== "boolean" ||
     typeof v.fetchedAt !== "string" ||
@@ -99,8 +93,7 @@ export function validStats(v: unknown): v is StatsResponse {
     typeof v.cached !== "boolean" ||
     !(STATS_RANGES as readonly unknown[]).includes(v.range) ||
     !isRecord(realtime) ||
-    !isRecord(period) ||
-    !Array.isArray(events)
+    !isRecord(period)
   ) {
     return false;
   }
@@ -118,13 +111,7 @@ export function validStats(v: unknown): v is StatsResponse {
     isRecord(metadata) &&
     typeof metadata.thresholding === "boolean" &&
     typeof metadata.sampling === "boolean" &&
-    typeof metadata.otherRowLoss === "boolean" &&
-    events.every(
-      (e) =>
-        isRecord(e) &&
-        typeof e.name === "string" &&
-        (e.status === "collecting" || e.status === "not_collecting"),
-    )
+    typeof metadata.otherRowLoss === "boolean"
   );
 }
 

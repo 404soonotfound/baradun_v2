@@ -27,7 +27,7 @@ import {
   Spinner,
   useLoadTiming,
 } from "./loading";
-import { Button, Notice, SUCCESS_BADGE } from "./ui";
+import { Button, Notice } from "./ui";
 
 // 이용 통계 (BRD-154·GH-333, 화면 설계서 6장 ADM-STATS · 시안 4차 보드 V8 · 로딩 L7, GH-453)
 // - GA Data API 집계만(운영 API /ops/stats). 해변 상태(특보 없음·이용불가·판단불가)와 묶은 지표는 만들지 않음
@@ -37,7 +37,6 @@ import { Button, Notice, SUCCESS_BADGE } from "./ui";
 // - 응답에 없는 값(앞 기간 비교·새 사용자 비율·일별·시간대별 추이·많이 본 화면·들어온 경로)은 지어내지 않고
 //   시안 자리 크기 그대로 '확인 못 함'. 차트 자리는 로딩 중에도 같은 크기로 고정(L7)
 // - 많이 본 해변은 /spots/[slug]를 공개 해변 데이터 이름으로. 못 찾으면 '이름 확인 못 함'(slug·경로를 이름으로 쓰지 않음)
-// - 수집 이벤트 목록(시안에 없음, 11/13 결정은 '두지 않음')은 기존 칸이라 지우지 않고 맨 아래 둠
 // - 로딩(GH-462 부품): 150ms 뒤 자리표시 · 최소 400ms · 5초 느림 · 15초 같은 자리 실패 + 다시 시도
 //   새로 고침은 받은 값을 두고 회전 표시. 기간을 바꾸면 다른 기간 값이라 자리표시로 바꿈
 // - 막대·도넛 길이는 SVG 속성으로(CSP style-src 'self', style 속성 0개)
@@ -777,43 +776,6 @@ function StatsBody({
 
           <p className="mt-6 text-caption text-text-muted">{t.foot}</p>
 
-          {/* 수집 이벤트 목록(시안에 없음 · 11/13 결정 '두지 않음'. 기존 칸이라 지우지 않고 보고) */}
-          {data && data.configured && (
-            <section
-              aria-labelledby="stats-events"
-              className="mt-8 border-t border-border-default pt-6"
-            >
-              <div className="flex flex-wrap items-baseline justify-between gap-2">
-                <h2 id="stats-events" className={SECTION_TITLE}>
-                  {t.eventsTitle}
-                </h2>
-                <p className="text-caption text-text-muted">{t.eventsNote}</p>
-              </div>
-              <ul className="mt-3 divide-y divide-border-default">
-                {data.events.map((ev) => (
-                  <li
-                    key={ev.name}
-                    className="flex items-center justify-between gap-3 py-2.5 text-body-s"
-                  >
-                    <code className="font-mono text-caption text-text-default">
-                      {ev.name}
-                    </code>
-                    {ev.status === "collecting" ? (
-                      <span className={`${BADGE} ${SUCCESS_BADGE}`}>
-                        {t.eventStatus.collecting}
-                      </span>
-                    ) : (
-                      <span
-                        className={`${BADGE} bg-bg-surface text-text-muted ring-1 ring-border-strong ring-inset`}
-                      >
-                        {t.eventStatus.not_collecting}
-                      </span>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            </section>
-          )}
         </div>
       </div>
     </>
