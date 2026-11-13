@@ -48,6 +48,8 @@ export const AUDIT_PAGE_SIZE = 20;
 export interface AuditView {
   readonly at: string;
   readonly actorSub: string;
+  // 응답에 이메일이 있으면 이니셜 아바타와 함께 표시함
+  readonly actorEmail?: string;
   readonly actorKind: "operator" | "sample";
   // 서버가 새 값을 더해도 숨기지 않게 넓게 받음
   readonly role: string;
