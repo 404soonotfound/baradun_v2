@@ -151,4 +151,40 @@ test.describe("당겨서 새로고침(L16)", () => {
     expect(prevented).toBe(false);
     await expect(page.getByText("이미 최신이에요")).toBeHidden();
   });
+
+  test("지도 영역 안에서 당겨도 새로고침되지 않는다", async ({ page }) => {
+    await page.goto("/explore/");
+    await expect(page.getByText("특보 없음").first()).toBeVisible();
+
+    const prevented = await page.evaluate(() => {
+      const target = document.querySelector("[data-pull-ignore]");
+      if (!target) return true;
+      const touchStart = new TouchEvent("touchstart", {
+        bubbles: true,
+        touches: [
+          new Touch({ identifier: 3, target, clientX: 160, clientY: 160 }),
+        ],
+      });
+      const touchMove = new TouchEvent("touchmove", {
+        bubbles: true,
+        cancelable: true,
+        touches: [
+          new Touch({ identifier: 3, target, clientX: 160, clientY: 320 }),
+        ],
+      });
+      const touchEnd = new TouchEvent("touchend", {
+        bubbles: true,
+        changedTouches: [
+          new Touch({ identifier: 3, target, clientX: 160, clientY: 320 }),
+        ],
+      });
+      target.dispatchEvent(touchStart);
+      const notCanceled = target.dispatchEvent(touchMove);
+      target.dispatchEvent(touchEnd);
+      return !notCanceled;
+    });
+
+    expect(prevented).toBe(false);
+    await expect(page.getByText("이미 최신이에요")).toBeHidden();
+  });
 });
