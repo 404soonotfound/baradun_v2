@@ -19,6 +19,69 @@ import {
 
 // 명령이 apps/admin에서 실행되므로 저장소 맨 위는 두 칸 위(beach-names.ts와 같음)
 const DATA = path.join(process.cwd(), "../../data");
+const ANNEX = path.join(process.cwd(), "../../tools/beaches/annex-tables.json");
+
+export interface ZoneNames {
+  readonly sea: Readonly<Record<string, string>>;
+  readonly land: Readonly<Record<string, string>>;
+}
+
+interface RawAnnexTables {
+  readonly annex5?: {
+    readonly zones?: Record<string, { readonly name?: unknown }>;
+  };
+  readonly annex9?: {
+    readonly sigungu?: Record<
+      string,
+      { readonly rows?: readonly { readonly code?: unknown; readonly name?: unknown }[] }
+    >;
+  };
+}
+
+const zoneCache = new Map<string, ZoneNames>();
+
+// 특보 구역 공식 이름표(annex5.zones · annex9.sigungu[].rows)를 빌드 때 읽음
+export function loadZoneNames(file = ANNEX): ZoneNames {
+  if (process.env.NODE_ENV === "production") {
+    const hit = zoneCache.get(file);
+    if (hit) return hit;
+  }
+  const raw = JSON.parse(readFileSync(file, "utf8")) as RawAnnexTables;
+  const zones5 = raw.annex5?.zones;
+  const sigungu9 = raw.annex9?.sigungu;
+  if (!zones5 || !sigungu9) {
+    throw new Error("annex-tables.json: annex5.zones 또는 annex9.sigungu가 없음");
+  }
+  const sea: Record<string, string> = {};
+  for (const [code, entry] of Object.entries(zones5)) {
+    if (typeof entry?.name !== "string" || entry.name === "") {
+      throw new Error(`annex-tables.json annex5 구역 이름 모양이 틀림: ${code}`);
+    }
+    sea[code] = entry.name;
+  }
+  const land: Record<string, string> = {};
+  for (const group of Object.values(sigungu9)) {
+    if (!Array.isArray(group?.rows)) {
+      throw new Error("annex-tables.json annex9.sigungu[].rows 모양이 틀림");
+    }
+    for (const row of group.rows) {
+      if (
+        typeof row?.code !== "string" ||
+        typeof row?.name !== "string" ||
+        row.name === ""
+      ) {
+        throw new Error("annex-tables.json annex9 행 모양이 틀림");
+      }
+      if (land[row.code] !== undefined && land[row.code] !== row.name) {
+        throw new Error(`annex-tables.json 육상 구역 이름이 둘: ${row.code}`);
+      }
+      land[row.code] = row.name;
+    }
+  }
+  const result = { sea, land };
+  if (process.env.NODE_ENV === "production") zoneCache.set(file, result);
+  return result;
+}
 
 // 따옴표 칸(쉼표·줄바꿈·"" 포함)을 읽는 CSV 해석. 첫 줄은 칸 이름
 export function parseCsv(text: string): Record<string, string>[] {
@@ -158,18 +221,29 @@ const COVERAGE_COLUMNS = [
 // 목록·상세(해변마다 한 페이지) 빌드가 같은 파일을 해변 수만큼 다시 읽지 않게 폴더별로 한 번만 읽음
 const cache = new Map<string, BeachRecord[]>();
 
-export function loadBeaches(dir = DATA, year = SEASON_YEAR): BeachRecord[] {
+export function loadBeaches(
+  dir = DATA,
+  year = SEASON_YEAR,
+  annexFile = ANNEX,
+): BeachRecord[] {
   // 개발 서버에서는 파일을 고치면 바로 보이게 매번 읽음
-  if (process.env.NODE_ENV !== "production") return readBeaches(dir, year);
-  const key = `${dir}|${year}`;
+  if (process.env.NODE_ENV !== "production") {
+    return readBeaches(dir, year, annexFile);
+  }
+  const key = `${dir}|${year}|${annexFile}`;
   const hit = cache.get(key);
   if (hit) return hit;
-  const records = readBeaches(dir, year);
+  const records = readBeaches(dir, year, annexFile);
   cache.set(key, records);
   return records;
 }
 
-function readBeaches(dir: string, year: string): BeachRecord[] {
+function readBeaches(
+  dir: string,
+  year: string,
+  annexFile: string,
+): BeachRecord[] {
+  const zoneNames = loadZoneNames(annexFile);
   const meta = JSON.parse(
     readFileSync(path.join(dir, "beach-meta.json"), "utf8"),
   ) as { beaches?: Record<string, MetaEntry> };
@@ -229,7 +303,11 @@ function readBeaches(dir: string, year: string): BeachRecord[] {
         inMeta: entry !== undefined,
         zones: {
           sea: beach.warningZones.sea,
+          seaName: zoneNames.sea[beach.warningZones.sea] ?? null,
           land: beach.warningZones.land ?? null,
+          landName: beach.warningZones.land
+            ? (zoneNames.land[beach.warningZones.land] ?? null)
+            : null,
         },
         stations: Object.fromEntries(
           METRIC_KEYS.map((key) => {
@@ -268,10 +346,12 @@ export function summaryOf(beach: BeachRecord): BeachSummary {
     aliases: beach.aliases,
     inMeta: beach.inMeta,
     seaZone: beach.zones.sea,
+    seaZoneName: beach.zones.seaName,
     seaStatus: beach.check?.sea.status ?? null,
     landStatus: beach.check?.land.status ?? null,
     stations: METRIC_KEYS.filter((key) => beach.stations[key] !== null).length,
     waveHeight: beach.stations.waveHeight !== null,
+    wavePeriod: beach.stations.wavePeriod !== null,
     season: beach.season,
     hasPhoto: beach.photo !== null,
     hasCheck: beach.check !== null,

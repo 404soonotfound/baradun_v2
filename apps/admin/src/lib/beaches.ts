@@ -65,7 +65,12 @@ export interface BeachRecord {
   readonly aliases: readonly string[];
   // beach-meta.json에 해변 칸이 있는지(없으면 별칭·운영 기간을 '연결 안 됨'으로)
   readonly inMeta: boolean;
-  readonly zones: { readonly sea: string; readonly land: string | null };
+  readonly zones: {
+    readonly sea: string;
+    readonly seaName: string | null;
+    readonly land: string | null;
+    readonly landName: string | null;
+  };
   readonly stations: Readonly<Record<MetricKey, BeachStation | null>>;
   readonly photo: {
     readonly url: string;
@@ -90,11 +95,13 @@ export interface BeachSummary {
   // beach-meta.json에 해변 칸이 있는지(없으면 별칭·운영 기간을 '없음'이 아니라 '연결 안 됨'으로)
   readonly inMeta: boolean;
   readonly seaZone: string;
+  readonly seaZoneName: string | null;
   readonly seaStatus: string | null;
   readonly landStatus: string | null;
-  // 배정된 관측 지표 수(5개 중)와 파고 측정소가 있는지
+  // 배정된 관측 지표 수(5개 중)와 파고·파주기 측정소가 있는지
   readonly stations: number;
   readonly waveHeight: boolean;
+  readonly wavePeriod: boolean;
   readonly season: BeachSeason | null;
   readonly hasPhoto: boolean;
   readonly hasCheck: boolean;
@@ -125,12 +132,94 @@ export function historyUrl(file: BeachFile, id: string): string {
   return `${REPO_URL}/commits/main/${filePath(file, id)}`;
 }
 
-// ---- 찾기·거르기 ----
+// 목록 헤더 'GitHub에서 고치기' 링크: 저장소 해변 정의 폴더
+export const BEACHES_TREE_URL = `${REPO_URL}/tree/main/data/beaches`;
 
-export function sidoList(beaches: readonly BeachSummary[]): string[] {
-  return [...new Set(beaches.map((b) => b.sido))].sort((a, b) =>
-    a.localeCompare(b, "ko"),
+// ---- 찾기·거르기·정렬·페이징 ----
+
+// 시·도 지리 순서(동해안 위→아래, 남해 동→서, 서해 남→북, 제주)
+export const SIDO_ORDER = [
+  "강원",
+  "경북",
+  "울산",
+  "부산",
+  "경남",
+  "전남",
+  "전북",
+  "충남",
+  "인천",
+  "제주",
+] as const;
+
+export const BEACH_PAGE_SIZE = 11;
+
+export const BEACH_TABS = [
+  "all",
+  "undetermined",
+  "unavailable",
+  "hidden",
+  "no_station",
+  "unverified",
+] as const;
+export type BeachTab = (typeof BEACH_TABS)[number];
+
+export const BEACH_SORTS = ["status", "region"] as const;
+export type BeachSort = (typeof BEACH_SORTS)[number];
+
+export interface BeachListQuery {
+  readonly tab: BeachTab;
+  readonly q: string;
+  readonly sido: string | null;
+  readonly zone: string | null;
+  readonly sort: BeachSort;
+  // 0부터 시작
+  readonly page: number;
+}
+
+function compareSido(a: string, b: string): number {
+  const ia = (SIDO_ORDER as readonly string[]).indexOf(a);
+  const ib = (SIDO_ORDER as readonly string[]).indexOf(b);
+  if (ia !== -1 && ib !== -1) return ia - ib;
+  if (ia !== -1) return -1;
+  if (ib !== -1) return 1;
+  return a.localeCompare(b, "ko");
+}
+
+export function sidoList(beaches: readonly Pick<BeachSummary, "sido">[]): string[] {
+  return [...new Set(beaches.map((b) => b.sido))].sort(compareSido);
+}
+
+export interface ZoneOption {
+  readonly code: string;
+  readonly name: string | null;
+}
+
+export function zoneList(
+  beaches: readonly Pick<BeachSummary, "seaZone" | "seaZoneName">[],
+): ZoneOption[] {
+  const byCode = new Map<string, string | null>();
+  for (const b of beaches) {
+    if (!byCode.has(b.seaZone)) byCode.set(b.seaZone, b.seaZoneName);
+  }
+  return [...byCode.entries()]
+    .map(([code, name]) => ({ code, name }))
+    .sort((a, b) => (a.name ?? a.code).localeCompare(b.name ?? b.code, "ko"));
+}
+
+export function isZoneVerified(
+  beach: Pick<BeachSummary, "hasCheck" | "seaStatus" | "landStatus">,
+): boolean {
+  return (
+    beach.hasCheck && beach.seaStatus === "검증" && beach.landStatus === "검증"
   );
+}
+
+export function zoneDisplayName(
+  code: string,
+  name: string | null,
+  unknownLabel: string,
+): string {
+  return name ?? `${code} · ${unknownLabel}`;
 }
 
 // 이름·별칭·slug·ID·시군에서 찾음(띄어쓰기·대소문자 무시)
@@ -138,16 +227,27 @@ export function filterBeaches(
   beaches: readonly BeachSummary[],
   query: string,
   sido: string | null,
+  zone: string | null = null,
 ): BeachSummary[] {
   const norm = (s: string) => s.replace(/\s+/g, "").toLowerCase();
   const q = norm(query);
   return beaches.filter(
     (b) =>
       (!sido || b.sido === sido) &&
+      (!zone || b.seaZone === zone) &&
       (q === "" ||
         [b.nameKo, b.slug, b.id, b.sigungu, ...b.aliases].some((v) =>
           norm(v).includes(q),
         )),
+  );
+}
+
+function compareByRegion(a: BeachSummary, b: BeachSummary): number {
+  return (
+    compareSido(a.sido, b.sido) ||
+    a.sigungu.localeCompare(b.sigungu, "ko") ||
+    a.nameKo.localeCompare(b.nameKo, "ko") ||
+    a.id.localeCompare(b.id)
   );
 }
 
@@ -398,6 +498,184 @@ export function fetchPublished(
   accessToken: () => Promise<string | null>,
 ): Promise<OpsResult<unknown>> {
   return opsFetch("/ops/beaches/published", accessToken);
+}
+
+// ---- 목록 탭·정렬·주소 쿼리 ----
+
+function effectiveDisplay(
+  display: BeachDisplay,
+): PublishedDisplay | { readonly kind: "unconfirmed"; readonly why: "unavailable" | "missing" } | null {
+  if (display.kind === "loading") return null;
+  return display.kind === "maintenance" ? display.last : display;
+}
+
+export function delayedObservedAt(display: BeachDisplay): string | null {
+  const eff = effectiveDisplay(display);
+  if (!eff || eff.kind !== "published") return null;
+  for (const reason of eff.reasons) {
+    if (
+      reason.code === "observation_delayed" &&
+      typeof reason.at === "string" &&
+      !Number.isNaN(Date.parse(reason.at))
+    ) {
+      return reason.at;
+    }
+  }
+  return null;
+}
+
+// 비노출 해변은 게시본 status.json에 원래 없으므로 게시본에 빠진 이유만으로 판단불가로 치지 않음
+// 단, 게시본 자체를 못 받은 경우(why === "unavailable")는 확인할 수 없어 판단불가로 봄
+export function effectiveCategory(
+  beach: Pick<BeachSummary, "hidden">,
+  display: BeachDisplay,
+): Category | "hidden" | null {
+  const eff = effectiveDisplay(display);
+  if (!eff) return null;
+  if (eff.kind === "unconfirmed") {
+    if (beach.hidden && eff.why === "missing") return "hidden";
+    return "undetermined";
+  }
+  return eff.category;
+}
+
+export function matchesTab(
+  beach: BeachSummary,
+  tab: BeachTab,
+  display: BeachDisplay,
+): boolean {
+  switch (tab) {
+    case "all":
+      return true;
+    case "undetermined":
+      return effectiveCategory(beach, display) === "undetermined";
+    case "unavailable":
+      return effectiveCategory(beach, display) === "unavailable";
+    case "hidden":
+      return beach.hidden;
+    case "no_station":
+      return !beach.waveHeight;
+    case "unverified":
+      return !isZoneVerified(beach);
+  }
+}
+
+export function tabCounts(
+  beaches: readonly BeachSummary[],
+  published: PublishedView | null | "loading",
+  nowMs: number = Date.now(),
+): Record<BeachTab, number | null> {
+  const ready = published !== "loading";
+  const counts: Record<BeachTab, number | null> = {
+    all: beaches.length,
+    undetermined: ready ? 0 : null,
+    unavailable: ready ? 0 : null,
+    hidden: 0,
+    no_station: 0,
+    unverified: 0,
+  };
+  for (const b of beaches) {
+    if (b.hidden) counts.hidden = (counts.hidden ?? 0) + 1;
+    if (!b.waveHeight) counts.no_station = (counts.no_station ?? 0) + 1;
+    if (!isZoneVerified(b)) counts.unverified = (counts.unverified ?? 0) + 1;
+    if (ready) {
+      const cat = effectiveCategory(b, displayOf(published, b.id, nowMs));
+      if (cat === "undetermined") {
+        counts.undetermined = (counts.undetermined ?? 0) + 1;
+      } else if (cat === "unavailable") {
+        counts.unavailable = (counts.unavailable ?? 0) + 1;
+      }
+    }
+  }
+  return counts;
+}
+
+// 앱 표시 순: 게시본 이상(판단불가 → 이용불가) → 미확인 → 비노출 → 특보 없음, 같은 묶음은 지리 순서
+function statusRank(
+  beach: BeachSummary,
+  display: BeachDisplay,
+): number {
+  const eff = effectiveDisplay(display);
+  if (!eff) return beach.hidden ? 3 : 2;
+  if (eff.kind === "published") {
+    if (eff.category === "undetermined") return 0;
+    if (eff.category === "unavailable") return 1;
+    return beach.hidden ? 3 : 4;
+  }
+  if (beach.hidden && eff.why === "missing") return 3;
+  return 2;
+}
+
+export function sortBeaches(
+  beaches: readonly BeachSummary[],
+  sort: BeachSort,
+  published: PublishedView | null | "loading",
+  nowMs: number = Date.now(),
+): BeachSummary[] {
+  const copy = [...beaches];
+  if (sort === "region") return copy.sort(compareByRegion);
+  const rankOf = new Map(
+    copy.map((b) => [b.id, statusRank(b, displayOf(published, b.id, nowMs))]),
+  );
+  return copy.sort((a, b) => {
+    const diff = (rankOf.get(a.id) ?? 4) - (rankOf.get(b.id) ?? 4);
+    return diff !== 0 ? diff : compareByRegion(a, b);
+  });
+}
+
+export function queryBeaches(
+  beaches: readonly BeachSummary[],
+  options: Pick<BeachListQuery, "tab" | "q" | "sido" | "zone" | "sort">,
+  published: PublishedView | null | "loading",
+  nowMs: number = Date.now(),
+): BeachSummary[] {
+  const filtered = filterBeaches(
+    beaches,
+    options.q,
+    options.sido,
+    options.zone,
+  ).filter((b) =>
+    matchesTab(b, options.tab, displayOf(published, b.id, nowMs)),
+  );
+  return sortBeaches(filtered, options.sort, published, nowMs);
+}
+
+export function parseBeachQuery(params: {
+  get(key: string): string | null;
+}): BeachListQuery {
+  const rawTab = params.get("tab");
+  const tab: BeachTab = (BEACH_TABS as readonly string[]).includes(
+    rawTab ?? "",
+  )
+    ? (rawTab as BeachTab)
+    : "all";
+  const q = params.get("q") ?? "";
+  const rawSido = params.get("sido")?.trim() ?? "";
+  const rawZone = params.get("zone")?.trim() ?? "";
+  const rawSort = params.get("sort");
+  const sort: BeachSort = rawSort === "region" ? "region" : "status";
+  const rawPage = params.get("page")?.trim() ?? "";
+  const page = /^[1-9]\d*$/.test(rawPage) ? Number(rawPage) - 1 : 0;
+  return {
+    tab,
+    q,
+    sido: rawSido !== "" ? rawSido : null,
+    zone: rawZone !== "" ? rawZone : null,
+    sort,
+    page,
+  };
+}
+
+export function beachListHref(query: BeachListQuery): string {
+  const sp = new URLSearchParams();
+  if (query.tab !== "all") sp.set("tab", query.tab);
+  if (query.q !== "") sp.set("q", query.q);
+  if (query.sido !== null) sp.set("sido", query.sido);
+  if (query.zone !== null) sp.set("zone", query.zone);
+  if (query.sort !== "status") sp.set("sort", query.sort);
+  if (query.page > 0) sp.set("page", String(query.page + 1));
+  const qs = sp.toString();
+  return qs ? `/beaches/?${qs}` : "/beaches/";
 }
 
 // ---- 운영 메모 ----
