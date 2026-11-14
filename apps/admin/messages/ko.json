@@ -537,6 +537,7 @@
       "unknown": "GitHub 상태를 확인하지 못했어요"
     },
     "readinessAt": "{time} 조회 기준",
+    "readinessStale": "지금 배포 상태를 확인하지 못했어요",
     "pausedNote": "정지를 풀기 전에는 수동 배포도 새로 시작하지 않아요",
     "readyNoChanges": "두 사이트 모두 main 최신 커밋과 같아요 · 배포해도 바뀌는 것이 없어요",
     "runLink": "실행 보기",
@@ -570,6 +571,7 @@
     "commitsTitle": "아직 안 나간 커밋",
     "commitsCount": "{count}개",
     "commitsShow": "커밋 {count}개 보기",
+    "commitsShowPartial": "확인한 커밋 {count}개 보기",
     "commitsNone": "아직 안 나간 커밋이 없어요",
     "commitsMore": "최근 {shown}개만 보여요 · GitHub에서 전체 보기",
     "commitsPartial": "변경을 확인하지 못한 사이트가 있어 목록이 전부가 아닐 수 있어요",
@@ -591,7 +593,8 @@
       "tomorrow": "내일 {time}",
       "date": "{date} {time}",
       "passed": "{date} {time} 지남 · 다시 불러와 확인해 주세요",
-      "paused": "정기 배포 멈춤"
+      "paused": "정기 배포 멈춤",
+      "unconfigured": "배포 설정이 끝나면 정기 배포가 나가요"
     },
     "manualTitle": "수동 배포 요청",
     "manual": "오늘 수동 배포 요청 {count}회 · 1회 약 US$0.017",
