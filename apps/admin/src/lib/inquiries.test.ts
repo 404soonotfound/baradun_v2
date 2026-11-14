@@ -8,7 +8,9 @@ import {
   EMPTY_INQUIRY_FILTER,
   filterInquiries,
   hasActiveInquiryFilter,
+  INQUIRY_PAGE_MAX,
   isKstToday,
+  isReceivedRangeInvalid,
   kstDateTime,
   linesNormalized,
   PAGE_SIZE,
@@ -262,6 +264,7 @@ describe("문의 거르기와 페이징", () => {
       isKstToday("2026-11-01T14:59:00Z", new Date("2026-11-02T06:00:00Z")),
     ).toBe(false);
     expect(PAGE_SIZE).toBe(6);
+    expect(INQUIRY_PAGE_MAX).toBe(50);
 
     const eleven = Array.from({ length: 11 }, (_, i) => sample(i + 1));
     expect(pageWindow(eleven.length, 0, PAGE_SIZE)).toEqual({
@@ -274,5 +277,37 @@ describe("문의 거르기와 페이징", () => {
     });
     expect(pageRows(eleven, 0, PAGE_SIZE)).toHaveLength(6);
     expect(pageRows(eleven, 1, PAGE_SIZE)).toHaveLength(5);
+  });
+
+  it("직접 입력 받은 시각이 비어 있으면 거르지 않고, 시작이 끝보다 늦으면 오류로 판정한다", () => {
+    const emptyCustom = {
+      ...EMPTY_INQUIRY_FILTER,
+      received: { preset: "custom" as const, from: "", to: "   " },
+    };
+    expect(hasActiveInquiryFilter(emptyCustom)).toBe(false);
+    expect(filterInquiries(rows, emptyCustom, opts)).toEqual(rows);
+    expect(isReceivedRangeInvalid(emptyCustom.received)).toBe(false);
+
+    expect(
+      isReceivedRangeInvalid({
+        preset: "custom",
+        from: "2026-11-02T14:00",
+        to: "2026-11-02T13:00",
+      }),
+    ).toBe(true);
+    expect(
+      isReceivedRangeInvalid({
+        preset: "custom",
+        from: "2026-11-02T13:00",
+        to: "2026-11-02T14:00",
+      }),
+    ).toBe(false);
+    expect(
+      isReceivedRangeInvalid({
+        preset: "custom",
+        from: "2026-11-02T13:00",
+        to: "",
+      }),
+    ).toBe(false);
   });
 });
