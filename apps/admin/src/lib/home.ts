@@ -11,7 +11,7 @@ import {
   type SourceState,
 } from "./collection";
 import type { InquiryPage } from "./inquiries";
-import { LOADING_TIMES } from "./loading-timing";
+import { LOADING_TIMES, withTimeout } from "./loading-timing";
 import type { NoticeView } from "./notices";
 
 // 운영 홈 (BRD-149, 화면 설계서 6장 ADM-HOME). 이미 있는 운영 API 응답을 모아 요약만 계산함
@@ -367,14 +367,7 @@ export function settle<T>(
   load: () => Promise<Part<T>>,
   timeoutMs: number = PART_TIMEOUT_MS,
 ): Promise<Part<T>> {
-  const failed: Part<T> = { state: "failed", requestId: null };
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  return Promise.race([
-    load().catch(() => failed),
-    new Promise<Part<T>>((resolve) => {
-      timer = setTimeout(() => resolve(failed), timeoutMs);
-    }),
-  ]).finally(() => clearTimeout(timer));
+  return withTimeout(load, { state: "failed", requestId: null }, timeoutMs);
 }
 
 // 칸 하나: 응답을 기다리는 중이거나 결과(Part). 다시 읽는 동안은 앞 결과를 그대로 둠
