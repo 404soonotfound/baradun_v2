@@ -18,6 +18,7 @@ import {
 // - billingMode PROVISIONED + 고정 용량. autoScale*을 부르지 않음 → Auto Scaling 없음
 // - encryption DEFAULT = AWS 소유 키(무료). 템플릿에는 SSEEnabled: false로 나옴
 // - 지정 시점 복구(PITR)는 끔(백업 요금). 명시해서 기본값이 바뀌어도 그대로 유지
+// - 테이블 삭제 보호를 켜서 직접 삭제를 막음
 // - removalPolicy는 CDK 기본값(RETAIN) → 스택을 지우거나 테이블이 교체돼도 데이터는 남음
 export class StorageTables extends Construct {
   readonly state: dynamodb.Table;
@@ -30,6 +31,7 @@ export class StorageTables extends Construct {
     const common = {
       partitionKey: { name: "pk", type: dynamodb.AttributeType.STRING },
       billingMode: dynamodb.BillingMode.PROVISIONED,
+      deletionProtection: true,
       encryption: dynamodb.TableEncryption.DEFAULT,
       pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: false },
     } as const;

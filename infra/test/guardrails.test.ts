@@ -26,12 +26,17 @@ import {
 import {
   allIamPolicies,
   siteDistribution,
+  stack,
   template,
   toList,
 } from "./stack-template";
 
 // 아키텍처 11장 '과금·보안 가드레일'을 템플릿으로 검사함.
 // 지금은 검사 대상이 0개인 항목도 있음. 다음 묶음에서 리소스가 생기면 바로 거름.
+
+it("BaradunStack의 종료 보호를 켠다", () => {
+  expect(stack.terminationProtection).toBe(true);
+});
 
 describe("KMS", () => {
   it("고객 관리형 KMS 키를 만들지 않는다 (키 하나당 월 요금)", () => {
