@@ -20,8 +20,10 @@ import {
   collectionSummary,
   expiredCount,
   inquirySummary,
+  inquiryWindow,
   judgmentLine,
   mergePart,
+  nextCollection,
   noticeCounts,
   partOf,
   ratioPercent,
@@ -83,7 +85,8 @@ import { Button, Notice, SUCCESS_BADGE, TextLink } from "./ui";
 //   사용자 화면 배너 문구(12장 결정 1 '확인된 판단 없음')는 여기서 바꾸지 않음
 // - 세 칸(앱에 보이는 해변 · 수집 · 문의), 판단불가 해변 표, 할 일, 이용(GA 28일 합계)
 // - 못 읽은 값은 0·정상·'할 일 없음'으로 바꾸지 않고 '확인 못 함'. 다시 읽는 동안은 앞 값을 그대로 둠
-// - 응답에 없는 값(앞 기간 비교·일별 추이·다음 수집 시각·가장 오래된 문의)은 지어내지 않음
+// - 서버가 준 값만 씀: 이용 칸 일별·앞 기간(trends, GH-477), 문의 최근 7일·가장 오래된 미처리(GH-478), 다음 수집(GH-478)
+//   칸이 응답에 없으면(이전 서버·데모) 지어내지 않고 지금 표시를 유지, null이면 '확인 못 함'
 // - 화면이 보이는 동안 60초마다 다시 읽음(D16-E1 운영 홈 60초)
 // - 로딩(GH-462, 보드 L0·LS·LP·L1): 칸마다 값과 같은 크기 자리표시(150ms 뒤 · 최소 400ms · 0.18초 페이드)
 //   다시 읽는 동안은 값을 두고 기준 시각 옆에 회전 표시. 다시 읽기가 실패한 칸은 앞 값을 두고 '마지막으로 받은 값' 줄
@@ -628,8 +631,14 @@ function CollectionBlock({
   const placeholder = slot.placeholder || part.state === "loading";
   const view = placeholder ? null : valueOf(part);
   const summary = collectionSummary(view);
-  const rate = (value: number | null) =>
-    value === null ? h.rateNone : fill(h.rateValue, { rate: value });
+  const next = nextCollection(view);
+  // 응답에 빠진 출처는 '확인 못 함'(실행 없음이라고 단정하지 않음)
+  const rate = (value: number | null, known = true) =>
+    !known
+      ? h.unknown
+      : value === null
+        ? h.rateNone
+        : fill(h.rateValue, { rate: value });
   const widths = ["w-[96px]", "w-[96px]", "w-[136px]"] as const;
   return (
     <section
@@ -699,9 +708,12 @@ function CollectionBlock({
             <SkLine className="w-[200px] max-w-full h-[8px]" />
           </span>
         </p>
-      ) : summary ? (
+      ) : summary && view ? (
         <p className={FOOT}>
-          {h.collectionFoot}{" "}
+          {/* 판단 출처의 가장 이른 다음 수집(보드 '다음 수집 14:48이에요'). 없으면 고정 안내 */}
+          {next
+            ? fill(h.collectionNext, { time: kstClock(next, view.generatedAt) })
+            : h.collectionFoot}{" "}
           <TextLink
             href="/collection/"
             className="inline-flex min-h-touch items-center text-caption lg:min-h-0"
@@ -727,12 +739,18 @@ function InquiriesBlock({
 }) {
   const slot = useSlot(part);
   const placeholder = slot.placeholder || part.state === "loading";
-  const summary = inquirySummary(placeholder ? null : valueOf(part));
+  const page = placeholder ? null : valueOf(part);
+  const summary = inquirySummary(page);
+  // 최근 7일 값(GH-478). 칸이 없으면(undefined) 지금 표시(보관 중 합계·완료)를 유지
+  const recent = inquiryWindow(page);
+  const received7d = recent?.receivedLast7d;
+  const resolved7d = recent?.resolvedLast7d;
   const rows = [
     { name: h.inquiryReceived, width: "w-[24px]", key: "received" },
     { name: h.inquiryInProgress, width: "w-[40px]", key: "inProgress" },
-    { name: h.inquiryResolved, width: "w-[32px]", key: "resolved" },
   ] as const;
+  const count = (value: number | null) =>
+    value === null ? h.unknown : fill(h.inquiriesValue, { count: value });
   return (
     <section
       aria-labelledby="home-inquiries"
@@ -758,9 +776,18 @@ function InquiriesBlock({
         hintWidth="w-[72px]"
         stale={stale}
         value={
-          summary ? fill(h.inquiriesValue, { count: summary.total }) : null
+          summary
+            ? received7d === undefined
+              ? fill(h.inquiriesValue, { count: summary.total })
+              : count(received7d)
+            : null
         }
-        hint={h.inquiriesHint}
+        hint={
+          // 보드 '11건 최근 7일 접수'. 아래 줄의 /N(보관 중 합계)이 무엇인지 같은 줄에 붙임
+          received7d === undefined || !summary
+            ? h.inquiriesHint
+            : `${h.inquiriesHint7d} · ${fill(h.inquiriesRetained, { count: summary.total })}`
+        }
       />
       <ul className="mt-4 flex flex-col gap-5">
         {rows.map((row) => (
@@ -787,6 +814,40 @@ function InquiriesBlock({
             }
           />
         ))}
+        {resolved7d === undefined ? (
+          <BarRow
+            placeholder={placeholder}
+            name={h.inquiryResolved}
+            nameWidth="w-[32px]"
+            rightWidth="w-[32px]"
+            percent={
+              summary ? ratioPercent(summary.resolved, summary.total) : null
+            }
+            right={
+              summary ? (
+                <>
+                  {summary.resolved}
+                  <span className="font-normal text-text-muted">
+                    /{summary.total}
+                  </span>
+                </>
+              ) : (
+                t.stats.emptyValue
+              )
+            }
+          />
+        ) : (
+          // 최근 7일 완료 수. 보드의 '6/11'(÷ 최근 7일 접수)은 완료가 7일 전에 받은 문의를 포함해 묶음이 달라
+          // 비율·막대를 만들지 않음(막대는 값 없음 표시)
+          <BarRow
+            placeholder={placeholder}
+            name={h.inquiryResolved7d}
+            nameWidth="w-[72px]"
+            rightWidth="w-[32px]"
+            percent={null}
+            right={count(resolved7d)}
+          />
+        )}
       </ul>
       {placeholder ? (
         <p className={FOOT}>
@@ -796,8 +857,15 @@ function InquiriesBlock({
         </p>
       ) : summary ? (
         <p className={FOOT}>
-          {summary.rejected > 0 &&
-            `${fill(h.inquiriesFoot, { count: summary.rejected })} `}
+          {recent && recent.oldest.state !== "absent"
+            ? // 보드 '가장 오래된 접수 문의는 …'. 미처리가 없으면(0건) 줄을 두지 않음
+              recent.oldest.state === "at"
+              ? `${fill(h.inquiryOldest, { time: kstDateTime(recent.oldest.at) })} `
+              : recent.oldest.state === "unknown"
+                ? `${h.inquiryOldestUnknown} `
+                : null
+            : summary.rejected > 0 &&
+              `${fill(h.inquiriesFoot, { count: summary.rejected })} `}
           <TextLink
             href="/inquiries/"
             className="inline-flex min-h-touch items-center text-caption lg:min-h-0"
@@ -1038,8 +1106,21 @@ function Todos({ parts }: { parts: Parts }) {
   const timing = useLoadTiming(pending);
   const cls = loadClass(timing);
   const loading = pending || timing.phase !== "content";
-  // 줄 아래 보조 글: 판단 출처 문제는 출처·상태, 공지는 반영 안내. 문의는 응답에 가장 오래된 접수 시각이 없어 생략
+  const oldest = inquiryWindow(valueOf(parts.inquiries))?.oldest;
+  const inProgress = inquirySummary(valueOf(parts.inquiries))?.inProgress ?? 0;
+  // 줄 아래 보조 글: 판단 출처 문제는 출처·상태, 문의는 가장 오래된 미처리 접수 시각(응답에 있을 때만), 공지는 반영 안내
   const sub = (key: (typeof list.items)[number]["key"]): string | null => {
+    if (key === "inquiries") {
+      // 서버 값은 접수·확인 중을 함께 본 가장 오래된 미처리. 확인 중이 있으면 그 범위를 글로 밝힘
+      return oldest?.state === "at"
+        ? fill(
+            inProgress > 0
+              ? h.todoSub.inquiriesWithInProgress
+              : h.todoSub.inquiries,
+            { time: kstDateTime(oldest.at) },
+          )
+        : null;
+    }
     if (key === "sources" && judgment) {
       return judgment.problems
         .map((p) =>

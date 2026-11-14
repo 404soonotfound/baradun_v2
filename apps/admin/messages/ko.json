@@ -170,6 +170,7 @@
     "rateValue": "{rate}%",
     "rateNone": "실행 없음",
     "collectionFoot": "출처별 지연·장애 기록은 수집 현황에서 봐요.",
+    "collectionNext": "다음 수집 {time}이에요.",
     "inquiriesTitle": "문의",
     "inquiriesNew": "새 {count}",
     "inquiriesValue": "{count}건",
@@ -178,6 +179,11 @@
     "inquiryInProgress": "확인 중",
     "inquiryResolved": "완료",
     "inquiriesFoot": "합계에는 반려 {count}건이 들어 있어요.",
+    "inquiriesHint7d": "최근 7일 접수",
+    "inquiriesRetained": "보관 중 {count}건",
+    "inquiryResolved7d": "최근 7일 완료",
+    "inquiryOldest": "가장 오래된 미처리 접수 {time}",
+    "inquiryOldestUnknown": "가장 오래된 미처리 접수 확인 못 함",
     "inquiriesOpen": "문의 열기",
     "undeterminedTitle": "판단불가 해변",
     "colBeach": "해변",
@@ -208,6 +214,8 @@
       "notices": "게시"
     },
     "todoSub": {
+      "inquiries": "가장 오래된 것 {time}",
+      "inquiriesWithInProgress": "확인 중 포함 가장 오래된 것 {time}",
       "notices": "저장한 문구가 아직 앱에 나가지 않았어요"
     },
     "sourcesOk": "판단에 쓰는 출처가 모두 정상이에요",
