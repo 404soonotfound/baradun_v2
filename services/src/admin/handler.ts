@@ -52,6 +52,7 @@ import {
 import {
   applyRedactions,
   countInquiries,
+  inquiryCountDetails,
   decodeCursor,
   getInquiry,
   INQUIRY_PAGE_DEFAULT,
@@ -178,7 +179,14 @@ async function listRoute(
   const counts = cursor
     ? undefined
     : await countInquiries(data.client, data.inquiryTable, now);
-  return json(200, counts ? { ...page, counts } : page, ids);
+  if (!counts) return json(200, page, ids);
+  const details = await inquiryCountDetails(
+    data.client,
+    data.inquiryTable,
+    data.opsTable,
+    now,
+  );
+  return json(200, { ...page, counts: { ...counts, ...details } }, ids);
 }
 
 // GET /ops/inquiries/{id}

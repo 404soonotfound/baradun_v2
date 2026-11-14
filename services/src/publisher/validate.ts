@@ -25,10 +25,19 @@ export type ContractFile =
 
 // 통과하면 빈 배열. 아니면 "파일: 경로 메시지" 목록(로그용, 값 원문은 넣지 않음)
 export function contractErrors(file: ContractFile, value: unknown): string[] {
+  return contractInspection(file, value).errors;
+}
+
+// 한 번의 계약 검사 결과에서 필수 칸 누락 여부도 함께 읽음
+export function contractInspection(file: ContractFile, value: unknown) {
   const check = ajv.getSchema(`${schema.$id}#/$defs/${file}`);
   if (!check) throw new Error(`계약 정의 없음: ${file}`);
-  if (check(value)) return [];
-  return (check.errors ?? []).map((e) =>
-    `${file}: ${e.instancePath || "/"} ${e.message ?? ""}`.trim(),
-  );
+  if (check(value)) return { errors: [], requiredMissing: false };
+  const errors = check.errors ?? [];
+  return {
+    errors: errors.map((e) =>
+      `${file}: ${e.instancePath || "/"} ${e.message ?? ""}`.trim(),
+    ),
+    requiredMissing: errors.some((error) => error.keyword === "required"),
+  };
 }

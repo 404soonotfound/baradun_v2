@@ -1,7 +1,8 @@
+import { lookupActorEmails, type OperatorEmailLookup } from "./actor-emails";
 import { GetCommand, QueryCommand } from "@aws-sdk/lib-dynamodb";
 import type { ManifestFile, Notice } from "@baradun/contracts";
 import { COLLECT_POLICY } from "../collectors/policy";
-import { slotStart } from "../collectors/schedule";
+import { nextSlot } from "../collectors/schedule";
 import {
   PUBLISH_JOB_RUN_LIMIT_MS,
   PUBLISH_JOB_START_LIMIT_MS,
@@ -13,10 +14,12 @@ import {
   canonicalJson as canonical,
   PUBLISH_CATEGORIES,
   PUBLISH_RUN_LAST_SK,
+  PUBLISH_RUN_HISTORY_PREFIX,
   PUBLISH_RUN_PK,
   PUBLISH_SUMMARY_PK,
   type CategoryCounts,
   type PublishSource,
+  type PublishRunDetails,
 } from "../core/collect/publish-summary";
 import type { SnapshotStore } from "../core/snapshots/types";
 import {
@@ -64,6 +67,8 @@ export interface PublishChanges {
 }
 
 export interface HistoryItem {
+  readonly checks?: PublishRunDetails["checks"];
+  readonly operator?: string;
   // published: 이 버전이 게시됨 · failed: 시도한 버전(게시되지 않음, 앞 게시본 유지)
   readonly result: "published" | "failed";
   readonly version: string;
@@ -90,6 +95,8 @@ export interface RunView {
 
 export interface PendingNotice {
   readonly id: string;
+  readonly before?: Notice;
+  readonly updatedBy?: string;
   // add: 새로 실림 · update: 바뀐 문구·시각으로 실림 · remove: 빠짐(끝남·노출 끝내기·되돌림)
   readonly change: "add" | "update" | "remove";
   readonly kind: string;
@@ -114,6 +121,19 @@ export interface JobView extends Omit<PublishJob, "createdAtMs"> {
 }
 
 export interface PublishOverview {
+  readonly settings: {
+    readonly maintenance: {
+      readonly active: boolean;
+      readonly until: string | null;
+    };
+    readonly minWebBuild: number;
+  };
+  readonly last24h: Section<{
+    readonly runs: number;
+    readonly succeeded: number;
+    readonly failed: number;
+    readonly skipped: number;
+  }>;
   readonly current: Section<{
     // null: 아직 게시본이 없음(첫 게시 전)
     readonly version: string | null;
@@ -140,7 +160,8 @@ export interface PublishOverview {
 }
 
 const SUMMARY_PROJECTION = {
-  ProjectionExpression: "#v, #p, #at, #n, #d, #src, #tg, #cc, #nd, #job",
+  ProjectionExpression:
+    "#v, #p, #at, #n, #d, #src, #tg, #cc, #nd, #job, #checks, #operator",
   ExpressionAttributeNames: {
     "#v": "version",
     "#p": "previous",
@@ -152,6 +173,8 @@ const SUMMARY_PROJECTION = {
     "#cc": "categoryCounts",
     "#nd": "noticeDigest",
     "#job": "jobId",
+    "#checks": "checks",
+    "#operator": "operatorSub",
   },
 } as const;
 
@@ -162,7 +185,7 @@ const SOURCES: readonly PublishSource[] = [
   "republish",
 ];
 
-interface SummaryRow {
+interface SummaryRow extends PublishRunDetails {
   readonly version: string;
   readonly previous: string | null;
   readonly publishedAt: string;
@@ -189,6 +212,26 @@ function toCounts(value: unknown): CategoryCounts | null {
     clear: record.clear as number,
     unavailable: record.unavailable as number,
     undetermined: record.undetermined as number,
+  };
+}
+
+function runDetails(item: Record<string, unknown>): PublishRunDetails {
+  const raw = item.checks;
+  const fields = ["format", "required", "beachIds"] as const;
+  const checks =
+    raw && typeof raw === "object"
+      ? Object.fromEntries(
+          fields.flatMap((field) => {
+            const value = (raw as Record<string, unknown>)[field];
+            return typeof value === "boolean" ? [[field, value]] : [];
+          }),
+        )
+      : {};
+  return {
+    ...(Object.keys(checks).length ? { checks } : {}),
+    ...(typeof item.operatorSub === "string" && item.source === "operator"
+      ? { operatorSub: item.operatorSub }
+      : {}),
   };
 }
 
@@ -219,6 +262,7 @@ function toSummaryRow(item: Record<string, unknown>): SummaryRow {
     throw new Error("게시 요약 모양이 틀림");
   }
   return {
+    ...runDetails(item),
     version,
     previous,
     publishedAt,
@@ -283,7 +327,7 @@ function changesOf(row: SummaryRow, prev: SummaryRow | undefined) {
 // summaries는 최근 HISTORY_LIMIT + 1건(한 건 더 읽어 목록 끝 게시도 앞 게시와 견줌). 합친 뒤 HISTORY_LIMIT건만 돌려줌
 export function buildHistory(
   summaries: readonly SummaryRow[],
-  failedRuns: readonly (RunView & { jobId?: string })[],
+  failedRuns: readonly (RunView & PublishRunDetails & { jobId?: string })[],
 ): HistoryItem[] {
   const byVersion = new Map(summaries.map((row) => [row.version, row]));
   const oldest = summaries.at(-1)?.version;
@@ -299,6 +343,7 @@ export function buildHistory(
       ...(row.jobId !== undefined ? { jobId: row.jobId } : {}),
       beachCount: row.beachCount,
       changes: changesOf(row, prev),
+      ...(row.checks ? { checks: row.checks } : {}),
       // 앞 요약이 목록 범위 안(가장 오래된 것보다 새로움)인데 없으면 빠진 것
       gapBefore:
         row.previous !== null &&
@@ -314,6 +359,7 @@ export function buildHistory(
     source: run.source,
     ...(run.target !== undefined ? { target: run.target } : {}),
     ...(run.reason !== undefined ? { reason: run.reason } : {}),
+    ...(run.checks ? { checks: run.checks } : {}),
     ...(run.jobId !== undefined ? { jobId: run.jobId } : {}),
   }));
   return [...published, ...failed]
@@ -350,7 +396,7 @@ export function pendingNoticesOf(
     const was = nowById.get(notice.id);
     if (!was) items.push(view(notice, "add"));
     else if (canonical(was) !== canonical(notice)) {
-      items.push(view(notice, "update"));
+      items.push({ ...view(notice, "update"), before: was });
     }
   }
   for (const notice of published) {
@@ -399,9 +445,7 @@ export function jobViewOf(job: PublishJob, nowMs: number): JobView {
 // 수집 일정의 다음 시각. 자동 게시는 수집을 마친 뒤 깨어나므로 실제 게시는 이보다 조금 뒤(아키텍처 6.2)
 export function nextAutoOf(nowMs: number): PublishOverview["nextAuto"] {
   const next = (schedule: { periodMinutes: number; offsetMinutes: number }) =>
-    new Date(
-      slotStart(nowMs, schedule) + schedule.periodMinutes * 60 * 1000,
-    ).toISOString();
+    new Date(nextSlot(nowMs, schedule)).toISOString();
   return {
     warnings: next(COLLECT_POLICY.warningsSchedule),
     observations: next(COLLECT_POLICY.oceanSchedule),
@@ -447,7 +491,7 @@ export async function readFailedRuns(
   opsTable: string,
   limit: number,
   range: { from?: string; forward?: boolean } = {},
-): Promise<(RunView & { jobId?: string })[]> {
+): Promise<(RunView & PublishRunDetails & { jobId?: string })[]> {
   const result = await client.send(
     new QueryCommand({
       TableName: opsTable,
@@ -463,6 +507,7 @@ export async function readFailedRuns(
   );
   return ((result.Items ?? []) as Record<string, unknown>[]).map((item) => ({
     ...toRunView(item),
+    ...runDetails(item),
     ...(typeof item.jobId === "string" ? { jobId: item.jobId } : {}),
   }));
 }
@@ -551,11 +596,90 @@ async function readManifest(
   return manifest;
 }
 
+// 대기 게시본을 실제로 확정·끝내거나 지운 작업의 수정자만 씀
+function pendingActor(
+  item: PendingNotice,
+  record: NoticeRecord | undefined,
+  held: boolean,
+): string | undefined {
+  if (!record || held) return undefined;
+  const liveEdited =
+    record.updatedAt === record.exposedAt ||
+    record.updatedAt === record.live?.endsAt;
+  if (item.change === "remove") {
+    if (record.updatedAt === record.deletedAt || liveEdited)
+      return record.updatedBySub;
+    return undefined;
+  }
+  return liveEdited ? record.updatedBySub : undefined;
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+const MAX_RUN_PAGES = 4;
+
+// 새 실행 기록이 24시간 경계에 닿기 전에는 옛 건너뜀을 셀 수 없음
+export async function readPublishLast24h(
+  client: Sender,
+  opsTable: string,
+  now: Date,
+) {
+  const from = new Date(now.getTime() - DAY_MS).toISOString();
+  const to = now.toISOString();
+  const query = (start: string, end: string) => ({
+    TableName: opsTable,
+    KeyConditionExpression: "pk = :pk AND sk BETWEEN :from AND :to",
+    ExpressionAttributeValues: {
+      ":pk": PUBLISH_RUN_PK,
+      ":from": PUBLISH_RUN_HISTORY_PREFIX + start,
+      ":to": PUBLISH_RUN_HISTORY_PREFIX + end,
+    },
+    ConsistentRead: true,
+  });
+  const baseline = await client.send(
+    new QueryCommand({
+      ...query("", from),
+      ScanIndexForward: false,
+      Limit: 1,
+    }),
+  );
+  if (!baseline.Items?.length) throw new Error("24시간 실행 기록 없음");
+  const counts = { runs: 0, succeeded: 0, failed: 0, skipped: 0 };
+  let startKey: Record<string, unknown> | undefined;
+  for (let page = 0; page < MAX_RUN_PAGES; page += 1) {
+    const result = await client.send(
+      new QueryCommand({
+        ...query(from, to),
+        ...(startKey ? { ExclusiveStartKey: startKey } : {}),
+      }),
+    );
+    for (const item of result.Items ?? []) {
+      if (
+        typeof item.at !== "string" ||
+        item.at < from ||
+        item.at > to ||
+        item.sk !== PUBLISH_RUN_HISTORY_PREFIX + item.at
+      ) {
+        throw new Error("게시 실행 시각 모양이 틀림");
+      }
+      if (item.at === from) continue;
+      if (item.result === "published") counts.succeeded += 1;
+      else if (item.result === "failed") counts.failed += 1;
+      else if (item.result === "unchanged") counts.skipped += 1;
+      else throw new Error("게시 실행 결과 모양이 틀림");
+      counts.runs += 1;
+    }
+    startKey = result.LastEvaluatedKey;
+    if (!startKey) return counts;
+  }
+  throw new Error("게시 실행 기록 조회 상한");
+}
+
 export async function readPublishOverview(
   client: Sender,
   opsTable: string,
   snapshots: SnapshotStore | null,
   now: Date,
+  actorEmails?: OperatorEmailLookup | null,
 ): Promise<PublishOverview> {
   const nowMs = now.getTime();
   // 실패해도 다른 칸은 보여 줌. 공지·포인터·manifest는 두 칸이 같이 씀
@@ -564,7 +688,7 @@ export async function readPublishOverview(
       (value) => ({ ok: true as const, value }),
       () => ({ ok: false as const }),
     );
-  const [manifest, records, hold, history, lastRun, latestJob] =
+  const [manifest, records, hold, history, lastRun, latestJob, last24h] =
     await Promise.all([
       settle(readManifest(snapshots)),
       settle(queryNotices(client, opsTable)),
@@ -574,7 +698,12 @@ export async function readPublishOverview(
           readSummaries(client, opsTable, HISTORY_LIMIT + 1),
           readFailedRuns(client, opsTable, HISTORY_LIMIT),
         ]);
-        return { items: buildHistory(summaries, failed) };
+        const actors = new Map(
+          [...summaries, ...failed].flatMap((row) =>
+            row.jobId && row.operatorSub ? [[row.jobId, row.operatorSub]] : [],
+          ),
+        );
+        return { items: buildHistory(summaries, failed), actors };
       }),
       section(async () => {
         const run = await readLastRun(client, opsTable);
@@ -587,7 +716,34 @@ export async function readPublishOverview(
         const job = slot ? await readJob(client, opsTable, slot.jobId) : null;
         return { job: job ? jobViewOf(job, nowMs) : null };
       }),
+      section(() => readPublishLast24h(client, opsTable, now)),
     ]);
+  const pending =
+    manifest.ok && records.ok && hold.ok
+      ? pendingNoticesOf(
+          records.value,
+          hold.value,
+          manifest.value?.notices ?? [],
+          nowMs,
+        )
+      : null;
+  const noticesById = new Map(
+    records.ok ? records.value.map((record) => [record.id, record]) : [],
+  );
+  const noticeActors = new Map(
+    (pending ?? []).flatMap((item) => {
+      const sub = pendingActor(
+        item,
+        noticesById.get(item.id),
+        hold.ok && Object.hasOwn(hold.value?.notices ?? {}, item.id),
+      );
+      return sub ? [[item.id, sub]] : [];
+    }),
+  );
+  const emails = await lookupActorEmails(
+    [...(history.ok ? history.actors.values() : []), ...noticeActors.values()],
+    actorEmails,
+  );
   return {
     current: manifest.ok
       ? {
@@ -596,19 +752,32 @@ export async function readPublishOverview(
           generatedAt: manifest.value?.generatedAt ?? null,
         }
       : { ok: false },
-    history,
+    settings: {
+      maintenance: MANIFEST_SETTINGS.maintenance,
+      minWebBuild: MANIFEST_SETTINGS.minWebBuild,
+    },
+    last24h,
+    history: history.ok
+      ? {
+          ok: true,
+          items: history.items.map((item) => {
+            const sub = item.jobId ? history.actors.get(item.jobId) : undefined;
+            const operator = sub ? emails.get(sub) : undefined;
+            return operator ? { ...item, operator } : item;
+          }),
+        }
+      : history,
     lastRun,
     nextAuto: nextAutoOf(nowMs),
     pendingNotices:
-      manifest.ok && records.ok && hold.ok
+      manifest.ok && pending
         ? {
             ok: true,
-            items: pendingNoticesOf(
-              records.value,
-              hold.value,
-              manifest.value?.notices ?? [],
-              nowMs,
-            ),
+            items: pending.map((item) => {
+              const sub = noticeActors.get(item.id);
+              const updatedBy = sub ? emails.get(sub) : undefined;
+              return updatedBy ? { ...item, updatedBy } : item;
+            }),
             maintenancePending: manifest.value
               ? canonical(manifest.value.maintenance) !==
                 canonical(MANIFEST_SETTINGS.maintenance)

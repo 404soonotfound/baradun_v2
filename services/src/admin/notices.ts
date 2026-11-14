@@ -37,14 +37,19 @@ export interface NoticeRecord {
   // 마지막으로 노출을 확정한 시각(UTC). 게시 시각이 아님
   readonly exposedAt: string | null;
   readonly updatedAt: string;
+  readonly updatedBySub?: string;
   readonly deletedAt: string | null;
 }
 
 // draft: 노출본 없음 · scheduled: 노출본 시작 전 · live: 노출 구간 안 · ended: 노출본 끝남
 export type NoticeState = "draft" | "scheduled" | "live" | "ended";
 
-export interface NoticeView extends Omit<NoticeRecord, "deletedAt"> {
+export interface NoticeView extends Omit<
+  NoticeRecord,
+  "deletedAt" | "updatedBySub"
+> {
   readonly state: NoticeState;
+  readonly updatedBy?: string;
   // 저장한 문구가 노출본과 다름(D16-D4 '수정 대기')
   readonly pendingEdit: boolean;
   // 노출 구간 안이지만 한 자리 규칙에서 밀림(D16-D4 '가려짐')
@@ -237,6 +242,9 @@ export function toRecord(item: Record<string, unknown>): NoticeRecord {
     live: item.live === null ? null : toContent(item.live),
     exposedAt: item.exposedAt as string | null,
     updatedAt: item.updatedAt,
+    ...(typeof item.updatedBy === "string"
+      ? { updatedBySub: item.updatedBy }
+      : {}),
     deletedAt: item.deletedAt as string | null,
   };
 }
@@ -327,8 +335,8 @@ export function noticeViews(
     .sort(compareForSlot);
   const selected = showing[0]?.id;
   return alive
-    .map(({ deletedAt: _, ...record }) => {
-      const state = noticeState(record as NoticeRecord, now);
+    .map(({ deletedAt, updatedBySub: _, ...record }) => {
+      const state = noticeState({ ...record, deletedAt }, now);
       return {
         ...record,
         state,

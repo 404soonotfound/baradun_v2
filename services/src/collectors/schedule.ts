@@ -29,3 +29,11 @@ export function formatKst(ms: number, unit: "minute" | "day"): string {
 export function kstDaysBefore(nowMs: number, days: number): string {
   return formatKst(nowMs - days * DAY_MS, "day");
 }
+
+// 지금 시각 뒤 첫 일정 슬롯
+export function nextSlot(
+  nowMs: number,
+  schedule: Parameters<typeof slotStart>[1],
+): number {
+  return slotStart(nowMs, schedule) + schedule.periodMinutes * 60_000;
+}

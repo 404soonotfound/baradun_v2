@@ -14,6 +14,7 @@ import {
 import {
   PUBLISH_NOTICES_PK,
   PUBLISH_RUN_LAST_SK,
+  PUBLISH_RUN_HISTORY_PREFIX,
   PUBLISH_RUN_PK,
   PUBLISH_SUMMARY_PK,
   publishSummaryTtl,
@@ -472,6 +473,18 @@ export class DynamoOpsStore implements OpsStore {
         ConditionExpression: "attribute_not_exists(#at) OR #at <= :at",
         ExpressionAttributeNames: { "#at": "at" },
         ExpressionAttributeValues: { ":at": run.at },
+      }),
+    );
+    await this.client.send(
+      new PutCommand({
+        TableName: this.tableName,
+        Item: {
+          pk: PUBLISH_RUN_PK,
+          sk: `${PUBLISH_RUN_HISTORY_PREFIX}${new Date(nowMs).toISOString()}`,
+          at: new Date(nowMs).toISOString(),
+          result: run.result,
+          [TTL]: publishSummaryTtl(nowMs),
+        },
       }),
     );
   }

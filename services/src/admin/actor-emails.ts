@@ -71,10 +71,7 @@ export function createCachedOperatorEmailLookup(
   };
 }
 
-function withDeadline<T>(
-  promise: Promise<T>,
-  signal: AbortSignal,
-): Promise<T> {
+function withDeadline<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
   if (signal.aborted) {
     return Promise.reject(new Error("ActorEmailTimeout"));
   }
@@ -94,31 +91,23 @@ function withDeadline<T>(
   });
 }
 
-// 한 페이지 안의 운영자 sub를 중복 없이 모아 이메일로 채움
-export async function enrichAuditActors(
-  items: readonly AuditView[],
+// 한 요청의 운영자 sub를 중복 없이 모아 이메일을 읽음
+export async function lookupActorEmails(
+  subs: readonly string[],
   lookup: OperatorEmailLookup | null | undefined,
   ids?: Pick<RequestIds, "traceId">,
   timeoutMs = ACTOR_EMAIL_TIMEOUT_MS,
-): Promise<readonly AuditView[]> {
-  if (!lookup || items.length === 0) return items;
-  const subs = [
-    ...new Set(
-      items
-        .filter((item) => item.actorKind === "operator")
-        .map((item) => item.actorSub),
-    ),
-  ];
-  if (subs.length === 0) return items;
+): Promise<ReadonlyMap<string, string>> {
+  const emails = new Map<string, string>();
+  if (!lookup || subs.length === 0) return emails;
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   timer.unref?.();
 
-  const emails = new Map<string, string>();
   try {
     await Promise.all(
-      subs.map(async (sub) => {
+      [...new Set(subs)].map(async (sub) => {
         try {
           const email = await withDeadline(
             lookup.findEmailBySub(sub, controller.signal),
@@ -138,6 +127,23 @@ export async function enrichAuditActors(
     clearTimeout(timer);
   }
 
+  return emails;
+}
+
+export async function enrichAuditActors(
+  items: readonly AuditView[],
+  lookup: OperatorEmailLookup | null | undefined,
+  ids?: Pick<RequestIds, "traceId">,
+  timeoutMs = ACTOR_EMAIL_TIMEOUT_MS,
+): Promise<readonly AuditView[]> {
+  const emails = await lookupActorEmails(
+    items
+      .filter((item) => item.actorKind === "operator")
+      .map((item) => item.actorSub),
+    lookup,
+    ids,
+    timeoutMs,
+  );
   if (emails.size === 0) return items;
   return items.map((item) => {
     if (item.actorKind !== "operator") return item;

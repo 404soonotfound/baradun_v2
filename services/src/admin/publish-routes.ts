@@ -75,6 +75,7 @@ export async function publishOverviewRoute(
     data.opsTable,
     data.snapshots ?? null,
     data.now(),
+    data.actorEmails,
   );
   return json(200, view, ids);
 }
@@ -327,6 +328,7 @@ export async function createPublishJobRoute(
           item: {
             kind: "publish-job",
             ...job,
+            ...(action === "publish" ? { operatorSub: principal.sub } : {}),
             ttl: Math.floor((nowMs + PUBLISH_JOB_RETENTION_MS) / 1000),
           },
         },
