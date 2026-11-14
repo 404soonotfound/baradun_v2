@@ -5,7 +5,9 @@ import {
   expect,
   expectHomeLoaded,
   expectNoA11yViolations,
+  isDesktop,
   isMobile,
+  logout,
   mockCognito,
   mockOps,
   openMenu,
@@ -1551,6 +1553,57 @@ test("사이트 배포: 로딩 자리표시와 값이 들어온 뒤 칸 높이�
   );
   const loaded = (await region.boundingBox())!.height;
   expect(Math.abs(loaded - loading)).toBeLessThanOrEqual(2);
+});
+
+test("사이트 배포: 로그아웃하면 로그인 화면으로 가는 동안에도 받아 둔 배포 정보를 그리지 않고 다시 요청하지 않는다", async ({
+  page,
+}) => {
+  test.skip(
+    !isDesktop(page),
+    "로그아웃 상태 틀(왼쪽 사용자 칸 자리표시)은 PC 메뉴에서 봄",
+  );
+  await signIn(page);
+  const calls = await mockPublish(page);
+  await openPublish(page);
+  const region = siteDeploy(page);
+  await expect(
+    region.getByText("main 최신 커밋을 배포할 수 있어요"),
+  ).toBeVisible();
+  const before = calls.siteDeploys;
+  // 공통 틀이 로그아웃 상태로 그려진 순간(사용자 칸 자리표시)에 배포 정보가 남아 있으면 기록
+  await page.evaluate(() => {
+    const w = window as unknown as { leaked: string[]; seen: number };
+    w.leaked = [];
+    w.seen = 0;
+    new MutationObserver(() => {
+      if (!document.querySelector("aside .sk.rounded-full")) return;
+      w.seen += 1;
+      const text = document.querySelector("#main")?.textContent ?? "";
+      for (const value of [
+        "main 최신 커밋을 배포할 수 있어요",
+        "바뀐 파일 4개",
+        "오늘 수동 배포 요청",
+        "GitHub 조회 토큰",
+      ]) {
+        if (text.includes(value)) w.leaked.push(value);
+      }
+    }).observe(document.body, {
+      subtree: true,
+      childList: true,
+      characterData: true,
+    });
+  });
+  await logout(page);
+  await expect(page).toHaveURL(/\/login\/$/);
+  const seen = await page.evaluate(() => {
+    const w = window as unknown as { leaked: string[]; seen: number };
+    return { leaked: w.leaked, seen: w.seen };
+  });
+  // 로그아웃 상태 틀을 실제로 보았고(아무것도 보지 않고 통과하지 않게), 그때 배포 정보가 없었음
+  expect(seen.seen).toBeGreaterThan(0);
+  expect(seen.leaked).toEqual([]);
+  // 로그아웃 상태에서는 사이트 배포를 다시 요청하지 않음
+  expect(calls.siteDeploys).toBe(before);
 });
 
 test("사이트 배포: 다시 로그인으로 세션 세대가 바뀌면 앞 세션에서 받은 배포 정보를 그리지 않고 새로 읽는다", async ({
