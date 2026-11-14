@@ -667,7 +667,7 @@ function CollectionBlock({
         width="w-[64px]"
         hintWidth="w-[88px]"
         stale={stale}
-        value={summary ? rate(summary.rate) : null}
+        value={summary ? rate(summary.rate, summary.complete) : null}
         hint={h.collectionRate}
       />
       <ul className="mt-4 flex flex-col gap-5">
@@ -684,7 +684,7 @@ function CollectionBlock({
               right={
                 row && view ? (
                   <>
-                    {rate(row.rate)}
+                    {rate(row.rate, row.found)}
                     {row.state !== "ok" &&
                       ` · ${t.collection.state[row.state]}`}
                     {row.lastSuccessAt && (

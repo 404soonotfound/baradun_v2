@@ -124,6 +124,8 @@ export const HOME_COLLECTION_JOBS: readonly CollectionJobId[] = [
 
 export interface CollectionRow {
   readonly job: CollectionJobId;
+  // 응답에 이 출처가 있음. 없으면 성공률을 '실행 없음'이 아니라 '확인 못 함'으로 보임
+  readonly found: boolean;
   readonly state: SourceState;
   // 최근 24시간 성공률(%). 실행이 없거나 출처가 응답에 없으면 null
   readonly rate: number | null;
@@ -133,6 +135,8 @@ export interface CollectionRow {
 export interface CollectionSummary {
   // 수집 현황의 모든 출처(SOURCE_ROWS) 중 정상이 아닌 출처 수. 보이지 않는 줄의 문제도 셈
   readonly problems: number;
+  // 응답에 모든 출처가 있음. false면 합친 성공률은 '확인 못 함'(실행 없음이 아님)
+  readonly complete: boolean;
   // 모든 출처를 더한 최근 24시간 성공률. 실행이 없거나 응답에 빠진 출처가 있으면 null(남은 출처만으로 셈하지 않음)
   readonly rate: number | null;
   readonly rows: readonly CollectionRow[];
@@ -144,15 +148,16 @@ export function collectionSummary(
   if (!view) return null;
   const find = (job: CollectionJobId) => view.jobs.find((j) => j.job === job);
   const all = SOURCE_ROWS.map((row) => find(row.job));
+  const complete = all.every((j) => j !== undefined);
   return {
     problems: all.filter((job) => sourceState(job) !== "ok").length,
-    rate: all.every((j) => j !== undefined)
-      ? successRate(sumCounts(all.map((j) => j.day)))
-      : null,
+    complete,
+    rate: complete ? successRate(sumCounts(all.map((j) => j!.day))) : null,
     rows: HOME_COLLECTION_JOBS.map((job) => {
       const found = find(job);
       return {
         job,
+        found: found !== undefined,
         state: sourceState(found),
         rate: found ? successRate(found.day) : null,
         lastSuccessAt: found?.lastSuccessAt ?? null,
