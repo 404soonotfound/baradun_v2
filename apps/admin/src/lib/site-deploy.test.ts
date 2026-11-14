@@ -278,7 +278,7 @@ describe("reason → 문구", () => {
 
   it("조회 한도는 다시 확인할 KST 시각을 함께 보인다", () => {
     expect(reasonText("rate_limit", NOW, "2026-11-14T03:12:00Z")).toBe(
-      "GitHub 조회 한도에 걸렸어요 · 12:12 뒤 다시 확인해요",
+      "GitHub 조회 한도에 걸렸어요 · 12:12 이후 다시 확인해요",
     );
     expect(reasonText("rate_limit", NOW)).toBe(
       "GitHub 조회 한도에 걸렸어요 · 잠시 뒤 다시 확인해요",
@@ -349,7 +349,7 @@ describe("다음 정기 배포(KST)", () => {
   });
   it("이미 지난 시각(앞 값을 들고 있을 때)은 오늘이라 하지 않고 날짜와 함께", () => {
     expect(next("2026-11-13T20:17:00.000Z", "2026-11-13T21:00:00Z")).toEqual({
-      kind: "date",
+      kind: "passed",
       date: "11/14",
       time: "05:17",
     });
@@ -411,8 +411,15 @@ describe("날짜가 다른 시각", () => {
     const now = Date.parse("2026-11-14T15:10:00Z"); // KST 11-15 00:10
     expect(kstTime("2026-11-14T14:40:00Z", now)).toBe("11/14 23:40");
     expect(kstTime("2026-11-14T15:05:00Z", now)).toBe("00:05");
-    expect(reasonText("rate_limit", now, "2026-11-14T14:50:00Z")).toBe(
-      "GitHub 조회 한도에 걸렸어요 · 11/14 23:50 뒤 다시 확인해요",
+    // 자정 직전에 받은 다시 확인 시각이 다음 날이면 날짜와 함께
+    const before = Date.parse("2026-11-14T14:50:00Z"); // KST 11-14 23:50
+    expect(reasonText("rate_limit", before, "2026-11-14T15:05:00Z")).toBe(
+      "GitHub 조회 한도에 걸렸어요 · 11/15 00:05 이후 다시 확인해요",
+    );
+  });
+  it("조회 한도의 다시 확인 시각이 이미 지났으면 시각 없이", () => {
+    expect(reasonText("rate_limit", NOW, "2026-11-14T02:59:00Z")).toBe(
+      "GitHub 조회 한도에 걸렸어요 · 잠시 뒤 다시 확인해요",
     );
   });
   it("수동 배포 요청 수의 기준 날이 오늘이 아니면 그 날짜", () => {

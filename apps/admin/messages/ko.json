@@ -538,6 +538,7 @@
     },
     "readinessAt": "{time} 조회 기준",
     "pausedNote": "정지를 풀기 전에는 수동 배포도 새로 시작하지 않아요",
+    "readyNoChanges": "두 사이트 모두 main 최신 커밋과 같아요 · 배포해도 바뀌는 것이 없어요",
     "runLink": "실행 보기",
     "approvalLink": "GitHub에서 확인",
     "sites": {
@@ -588,6 +589,7 @@
       "today": "오늘 {time}",
       "tomorrow": "내일 {time}",
       "date": "{date} {time}",
+      "passed": "{date} {time} 지남 · 다시 불러와 확인해 주세요",
       "paused": "정기 배포 멈춤"
     },
     "manualTitle": "수동 배포 요청",
@@ -613,7 +615,7 @@
       "credentials": "GitHub 조회 토큰을 확인해 주세요",
       "unauthorized": "GitHub 토큰 인증에 실패했어요",
       "rate_limit": "GitHub 조회 한도에 걸렸어요 · 잠시 뒤 다시 확인해요",
-      "rateLimitAt": "GitHub 조회 한도에 걸렸어요 · {time} 뒤 다시 확인해요",
+      "rateLimitAt": "GitHub 조회 한도에 걸렸어요 · {time} 이후 다시 확인해요",
       "truncated": "변경이 많아 다 확인하지 못했어요 · GitHub에서 확인하세요",
       "not_ancestor": "배포된 커밋이 main 기록에 없어요",
       "other": "확인하지 못했어요"
