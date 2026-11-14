@@ -38,6 +38,7 @@ export interface NoticeRecord {
   readonly exposedAt: string | null;
   readonly updatedAt: string;
   readonly updatedBySub?: string;
+  readonly liveUpdatedBySub?: string;
   readonly deletedAt: string | null;
 }
 
@@ -46,7 +47,7 @@ export type NoticeState = "draft" | "scheduled" | "live" | "ended";
 
 export interface NoticeView extends Omit<
   NoticeRecord,
-  "deletedAt" | "updatedBySub"
+  "deletedAt" | "updatedBySub" | "liveUpdatedBySub"
 > {
   readonly state: NoticeState;
   readonly updatedBy?: string;
@@ -245,6 +246,9 @@ export function toRecord(item: Record<string, unknown>): NoticeRecord {
     ...(typeof item.updatedBy === "string"
       ? { updatedBySub: item.updatedBy }
       : {}),
+    ...(typeof item.liveUpdatedBySub === "string"
+      ? { liveUpdatedBySub: item.liveUpdatedBySub }
+      : {}),
     deletedAt: item.deletedAt as string | null,
   };
 }
@@ -335,16 +339,23 @@ export function noticeViews(
     .sort(compareForSlot);
   const selected = showing[0]?.id;
   return alive
-    .map(({ deletedAt, updatedBySub: _, ...record }) => {
-      const state = noticeState({ ...record, deletedAt }, now);
-      return {
-        ...record,
-        state,
-        pendingEdit:
-          record.live !== null && !sameContent(record.draft, record.live),
-        hidden: state === "live" && record.id !== selected,
-      };
-    })
+    .map(
+      ({
+        deletedAt,
+        updatedBySub: _,
+        liveUpdatedBySub: _liveActor,
+        ...record
+      }) => {
+        const state = noticeState({ ...record, deletedAt }, now);
+        return {
+          ...record,
+          state,
+          pendingEdit:
+            record.live !== null && !sameContent(record.draft, record.live),
+          hidden: state === "live" && record.id !== selected,
+        };
+      },
+    )
     .sort(
       (a, b) =>
         Date.parse(b.draft.startsAt) - Date.parse(a.draft.startsAt) ||

@@ -93,6 +93,21 @@ describe("운영 화면 보강 필드", () => {
     });
   });
 
+  it("마지막 실행은 저장됐지만 해당 집계 행이 없으면 24시간 집계를 숨김", async () => {
+    const send = vi
+      .fn()
+      .mockResolvedValueOnce({ Items: [{ at: FROM }] })
+      .mockResolvedValueOnce({ Items: [] });
+    await expect(
+      readPublishLast24h({ send }, "Ops", NOW, {
+        at: "2026-11-14T14:59:00Z",
+        result: "published",
+        version: "20261114T145900Z",
+        source: "auto",
+      }),
+    ).rejects.toThrow("마지막 게시 실행의 집계 기록 없음");
+  });
+
   it("24시간 이전 기록이 없거나 결과가 잘리면 정상 건수로 표시하지 않음", async () => {
     await expect(
       readPublishLast24h(
