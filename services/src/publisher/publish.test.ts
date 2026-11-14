@@ -1129,6 +1129,37 @@ describe("되돌리기 (D20-1~3)", () => {
     expect(manifest()!.notices!.map((n) => n.id)).toEqual(["n-a", "n-new"]);
   });
 
+  it("게시 후 실행 기록과 요약이 모두 실패해도 되돌린 게시본과 공지 포인터를 유지함", async () => {
+    const { ops, snapshots, deps, advance, manifest, events } =
+      await twoPublishes();
+    const v3 = advance(60_000);
+    ops.putPublishRun = async () => {
+      throw new Error("run history unavailable");
+    };
+    ops.putPublishSummary = async () => {
+      throw new Error("publish summary unavailable");
+    };
+
+    expect(await publishSnapshot(deps(), { rollbackTo: V1 })).toMatchObject({
+      status: "published",
+      version: v3,
+    });
+    expect(manifest()?.snapshotVersion).toBe(v3);
+    expect(await snapshots.listVersions()).toContain(v3);
+    expect(ops.noticeHold?.notices["n-a"]?.live).toEqual(notice("n-a"));
+    expect(events().map((entry) => entry.event)).toEqual(
+      expect.arrayContaining([
+        "publish_run_not_recorded",
+        "publish_summary_not_recorded",
+      ]),
+    );
+    expect(
+      events()
+        .filter((entry) => entry.version === v3)
+        .map((entry) => entry.event),
+    ).not.toContain("publish_failed");
+  });
+
   // DynamoDB는 맵의 칸 순서를 지키지 않음. 읽어 온 포인터의 칸 순서를 뒤집어 그 상황을 만듦
   const reordered = <T>(value: T): T =>
     typeof value === "object" && value !== null && !Array.isArray(value)
@@ -1609,15 +1640,30 @@ describe("publishSnapshot 게시 요약", () => {
   });
 
   it("요약을 남기지 못해도 게시는 끝난 것으로 두고 경고만 남긴다", async () => {
-    const { ops, deps, events } = await setup();
-    ops.putPublishSummary = async () => {
+    const { ops, deps, events, manifest, snapshots } = await setup();
+    let attempted: Parameters<typeof ops.putPublishSummary>[0] | undefined;
+    ops.putPublishSummary = async (summary) => {
+      attempted = summary;
       throw new Error("ProvisionedThroughputExceededException");
     };
-    expect(await publishSnapshot(deps())).toMatchObject({
+    expect(
+      await publishSnapshot({
+        ...deps(),
+        source: "operator",
+        operatorSub: "operator-sub",
+      }),
+    ).toMatchObject({
       status: "published",
       version: V1,
     });
+    expect(attempted).toMatchObject({
+      operatorSub: "operator-sub",
+      checks: { beachIds: true, format: true, required: true },
+    });
     expect(await ops.getPublishedVersion()).toBe(V1);
+    expect(manifest()?.snapshotVersion).toBe(V1);
+    expect(await snapshots.listVersions()).toContain(V1);
+    expect(ops.noticeHold).toBeNull();
     expect(events()).toContainEqual(
       expect.objectContaining({
         event: "publish_summary_not_recorded",
