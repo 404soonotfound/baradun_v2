@@ -308,10 +308,15 @@ export async function inquiryCountDetails(
         );
         if (result.Items?.length) {
           const at = result.Items[0]?.receivedAt;
-          if (typeof at !== "string" || !Number.isFinite(Date.parse(at))) {
+          if (
+            typeof at !== "string" ||
+            !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/.test(at) ||
+            !Number.isFinite(Date.parse(at))
+          ) {
             throw new Error("가장 오래된 문의 시각 모양이 틀림");
           }
-          if (oldest === null || at < oldest) oldest = at;
+          const normalized = new Date(at).toISOString();
+          if (oldest === null || normalized < oldest) oldest = normalized;
           startKey = undefined;
           break;
         }
@@ -338,6 +343,12 @@ export async function inquiryCountDetails(
         now,
       );
       for (const entry of result.items) {
+        if (
+          entry.target.kind === "inquiry" &&
+          entry.statusTo === "resolved" &&
+          entry.statusFrom === undefined
+        )
+          return null;
         if (
           entry.target.kind === "inquiry" &&
           entry.statusTo === "resolved" &&

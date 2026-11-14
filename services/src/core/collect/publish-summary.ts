@@ -116,7 +116,8 @@ export function noticeDigestOf(notices: readonly NoticeSnapshot[]): string {
 export const PUBLISH_NOTICES_PK = "publish#notices";
 
 // 게시 실행 한 번의 결과(D16-C2). 변경이 없어 생략한 것(unchanged)과 실패(failed)를 나눠 남김
-// 키: publish#run / last(마지막 실행, 덮어씀) · publish#run / {시도한 버전}(실패한 실행만, 보존 기간 뒤 지움)
+// 키: publish#run / last(마지막 실행, 덮어씀) · publish#run / {시도한 버전}(실패한 실행만)
+// publish#run / run#{시작 시각}(24시간 집계). 버전별 기록과 집계 기록은 보존 기간 뒤 지움
 // 다른 실행이 게시 중이라 물러난 실행(busy)은 남기지 않음
 export const PUBLISH_RUN_PK = "publish#run";
 export const PUBLISH_RUN_LAST_SK = "last";

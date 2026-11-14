@@ -603,6 +603,7 @@ function pendingActor(
   held: boolean,
 ): string | undefined {
   if (!record || held) return undefined;
+  if (record.liveUpdatedBySub) return record.liveUpdatedBySub;
   const liveEdited =
     record.updatedAt === record.exposedAt ||
     record.updatedAt === record.live?.endsAt;
@@ -622,6 +623,7 @@ export async function readPublishLast24h(
   client: Sender,
   opsTable: string,
   now: Date,
+  latestRun?: RunView | null,
 ) {
   const from = new Date(now.getTime() - DAY_MS).toISOString();
   const to = now.toISOString();
@@ -644,6 +646,8 @@ export async function readPublishLast24h(
   );
   if (!baseline.Items?.length) throw new Error("24시간 실행 기록 없음");
   const counts = { runs: 0, succeeded: 0, failed: 0, skipped: 0 };
+  const latestAt = latestRun ? Date.parse(latestRun.at) : Number.NaN;
+  let foundLatest = !(latestAt > Date.parse(from) && latestAt <= now.getTime());
   let startKey: Record<string, unknown> | undefined;
   for (let page = 0; page < MAX_RUN_PAGES; page += 1) {
     const result = await client.send(
@@ -662,6 +666,13 @@ export async function readPublishLast24h(
         throw new Error("게시 실행 시각 모양이 틀림");
       }
       if (item.at === from) continue;
+      if (
+        latestRun &&
+        Math.floor(Date.parse(item.at) / 1000) ===
+          Math.floor(latestAt / 1000) &&
+        item.result === latestRun.result
+      )
+        foundLatest = true;
       if (item.result === "published") counts.succeeded += 1;
       else if (item.result === "failed") counts.failed += 1;
       else if (item.result === "unchanged") counts.skipped += 1;
@@ -669,7 +680,10 @@ export async function readPublishLast24h(
       counts.runs += 1;
     }
     startKey = result.LastEvaluatedKey;
-    if (!startKey) return counts;
+    if (!startKey) {
+      if (!foundLatest) throw new Error("마지막 게시 실행의 집계 기록 없음");
+      return counts;
+    }
   }
   throw new Error("게시 실행 기록 조회 상한");
 }
@@ -688,7 +702,7 @@ export async function readPublishOverview(
       (value) => ({ ok: true as const, value }),
       () => ({ ok: false as const }),
     );
-  const [manifest, records, hold, history, lastRun, latestJob, last24h] =
+  const [manifest, records, hold, history, lastRun, latestJob] =
     await Promise.all([
       settle(readManifest(snapshots)),
       settle(queryNotices(client, opsTable)),
@@ -716,7 +730,6 @@ export async function readPublishOverview(
         const job = slot ? await readJob(client, opsTable, slot.jobId) : null;
         return { job: job ? jobViewOf(job, nowMs) : null };
       }),
-      section(() => readPublishLast24h(client, opsTable, now)),
     ]);
   const pending =
     manifest.ok && records.ok && hold.ok
@@ -740,10 +753,18 @@ export async function readPublishOverview(
       return sub ? [[item.id, sub]] : [];
     }),
   );
-  const emails = await lookupActorEmails(
-    [...(history.ok ? history.actors.values() : []), ...noticeActors.values()],
-    actorEmails,
-  );
+  const [last24h, emails] = await Promise.all([
+    lastRun.ok
+      ? section(() => readPublishLast24h(client, opsTable, now, lastRun.run))
+      : Promise.resolve({ ok: false as const }),
+    lookupActorEmails(
+      [
+        ...(history.ok ? history.actors.values() : []),
+        ...noticeActors.values(),
+      ],
+      actorEmails,
+    ),
+  ]);
   return {
     current: manifest.ok
       ? {
