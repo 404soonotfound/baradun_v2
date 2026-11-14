@@ -504,6 +504,7 @@ describe("수집 칸 (collectionSummary)", () => {
     );
     expect(summary?.rows[1]).toEqual({
       job: "collect-ocean",
+      found: false,
       state: "none",
       rate: null,
       lastSuccessAt: null,
@@ -518,6 +519,24 @@ describe("수집 칸 (collectionSummary)", () => {
       collectionSummary(collection([runJob("collect-warnings", 0, 0)]))?.rate,
     ).toBeNull();
     expect(collectionSummary(null)).toBeNull();
+  });
+});
+
+describe("수집 칸 빠진 출처 (collectionSummary.complete·found)", () => {
+  it("응답에 빠진 출처가 있으면 complete false, 그 줄은 found false(실행 없음으로 보지 않음)", () => {
+    const summary = collectionSummary(
+      collection([
+        job("collect-warnings", "complete"),
+        job("collect-ocean", "complete"),
+      ]),
+    );
+    expect(summary?.complete).toBe(false);
+    expect(summary?.rate).toBeNull();
+    expect(summary?.rows.map((r) => [r.job, r.found])).toEqual([
+      ["collect-warnings", true],
+      ["collect-ocean", true],
+      ["collect-rip", false],
+    ]);
   });
 });
 
