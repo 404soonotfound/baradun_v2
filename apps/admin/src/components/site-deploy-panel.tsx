@@ -10,7 +10,6 @@ import {
 } from "react";
 import type { OpsResult } from "@/lib/auth/ops-fetch";
 import { useAuthSession, useSessionSnapshot } from "@/lib/auth/provider";
-import { kstDateTime } from "@/lib/inquiries";
 import { fill, messages } from "@/lib/messages";
 import {
   actionRunUrl,
@@ -43,6 +42,7 @@ import {
   loadClass,
   useLoadTiming,
 } from "./loading";
+import { LOADING_TIMES } from "@/lib/loading-timing";
 import { Button, Notice } from "./ui";
 
 // 사이트 배포 칸 (#472, 결정 기록 D27-1~8 · 화면 설계서 6장 ADM-PUB '사이트 배포')
@@ -312,7 +312,7 @@ function SiteCard({ site, repo }: { site: SiteView; repo: string | null }) {
                   {" · "}
                   {fill(run.completedAt ? t.runAt : t.runNoTime, {
                     event: t.runEvent[run.event],
-                    time: run.completedAt ? kstDateTime(run.completedAt) : "",
+                    time: run.completedAt ? kstTime(run.completedAt, now) : "",
                   })}{" "}
                   · <ExternalLink href={run.url}>{t.runLink}</ExternalLink>
                 </>
@@ -420,6 +420,13 @@ function ReadinessLine({ view }: { view: SiteDeployView }) {
       {view.readiness === "paused" && (
         <p className="text-caption text-text-body">{t.pausedNote}</p>
       )}
+      {view.readiness === "ready" &&
+        view.sites.every(
+          (s) =>
+            s.changes.status === "known" &&
+            s.changes.value.files.length === 0 &&
+            s.changes.value.commits.length === 0,
+        ) && <p className="text-caption text-text-body">{t.readyNoChanges}</p>}
     </div>
   );
 }
@@ -503,7 +510,10 @@ function Summary({
               ? t.schedule.paused
               : fill(t.schedule[schedule.kind], {
                   time: schedule.time,
-                  date: schedule.kind === "date" ? schedule.date : "",
+                  date:
+                    schedule.kind === "date" || schedule.kind === "passed"
+                      ? schedule.date
+                      : "",
                 })}
           </span>
         )}
@@ -738,12 +748,23 @@ function useSiteDeploy(enabled: boolean) {
     let live = true;
     let seq = 0;
     let lastStart = 0;
+    let limit = 0;
     const refresh = () => {
       const id = ++seq;
       lastStart = Date.now();
       setReading(true);
+      // 15초 안에 응답이 없으면 이 요청을 버리고 실패로 둠(D26-4). 늦게 온 응답은 무시하고 다시 불러오기를 막지 않음
+      window.clearTimeout(limit);
+      limit = window.setTimeout(() => {
+        if (!live || id !== seq) return;
+        seq++;
+        setReading(false);
+        setNow(Date.now());
+        setFailure({ ok: false, status: 0, code: "network" });
+      }, LOADING_TIMES.timeout);
       void fetchSiteDeploy(() => session.accessToken()).then((result) => {
         if (!live || id !== seq) return;
+        window.clearTimeout(limit);
         setReading(false);
         const at = Date.now();
         setNow(at);
@@ -782,6 +803,7 @@ function useSiteDeploy(enabled: boolean) {
     document.addEventListener("visibilitychange", onVisible);
     return () => {
       live = false;
+      window.clearTimeout(limit);
       window.clearInterval(timer);
       document.removeEventListener("visibilitychange", onVisible);
     };

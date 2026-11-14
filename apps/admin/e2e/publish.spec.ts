@@ -1147,7 +1147,7 @@ test("사이트 배포: 일부를 확인하지 못하면 0건·정상이 아니�
   await expect(admin.getByText("배포 커밋 확인 못 함")).toBeVisible();
   await expect(
     admin
-      .getByText(/GitHub 조회 한도에 걸렸어요 · \d{2}:\d{2} 뒤 다시 확인해요/)
+      .getByText(/GitHub 조회 한도에 걸렸어요 · \d{2}:\d{2} 이후 다시 확인해요/)
       .first(),
   ).toBeVisible();
   await expect(
@@ -1322,7 +1322,7 @@ test("사이트 배포: 응답이 15초 넘게 없으면 자리표시 대신 같
 }) => {
   await page.clock.install();
   await signIn(page);
-  await mockPublish(page, { siteDeploy: () => "hold" });
+  const calls = await mockPublish(page, { siteDeploy: () => "hold" });
   await openPublish(page);
   const region = siteDeploy(page);
   await expect(
@@ -1335,6 +1335,11 @@ test("사이트 배포: 응답이 15초 넘게 없으면 자리표시 대신 같
     "배포 정보를 불러오지 못했어요",
   );
   await expect(region.getByText(READY_TEXT)).toHaveCount(0);
+  // 응답 없는 요청에 묶이지 않고 바로 다시 불러올 수 있음
+  const reload = region.getByRole("button", { name: "다시 불러오기" });
+  await expect(reload).not.toHaveAttribute("aria-disabled", "true");
+  await reload.click();
+  await expect.poll(() => calls.siteDeploys).toBe(2);
 });
 
 test("사이트 배포: 화면이 보이는 동안만 1분마다(진행 중이면 30초) 다시 읽고 숨은 탭은 쉰다", async ({
@@ -1450,4 +1455,34 @@ test("사이트 배포: 데모 계정은 '실제 운영자만 볼 수 있어요'
   ).toHaveCount(0);
   expect(calls.siteDeploys).toBe(0);
   await expectNoA11yViolations(page);
+});
+
+test("사이트 배포: 배포할 수 있어도 두 사이트가 이미 main 최신이면 바뀌는 것이 없다고 함께 알린다", async ({
+  page,
+}) => {
+  await signIn(page);
+  await mockPublish(page, {
+    siteDeploy: () => {
+      const body = localSiteDeployView("ready", Date.now());
+      for (const site of body.sites as {
+        changes: { value: { files: unknown[]; commits: unknown[] } };
+      }[]) {
+        site.changes.value.files = [];
+        site.changes.value.commits = [];
+      }
+      return { status: 200, body };
+    },
+  });
+  await openPublish(page);
+  const region = siteDeploy(page);
+  await expect(
+    region.getByText("main 최신 커밋을 배포할 수 있어요"),
+  ).toBeVisible();
+  await expect(
+    region.getByText(
+      "두 사이트 모두 main 최신 커밋과 같아요 · 배포해도 바뀌는 것이 없어요",
+    ),
+  ).toBeVisible();
+  await expect(region.getByText("아직 안 나간 커밋이 없어요")).toBeVisible();
+  await expect(region.getByText("바뀐 파일 없음")).toHaveCount(2);
 });

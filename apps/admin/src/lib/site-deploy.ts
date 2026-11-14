@@ -1,5 +1,5 @@
 import { opsFetch, type OpsResult } from "./auth/ops-fetch";
-import { kstClock } from "./collection";
+import { kstClock, sameKstDay } from "./collection";
 import { fill, messages } from "./messages";
 
 // 사이트 배포 칸(#472, 결정 기록 D27-1~8 · 화면 설계서 6장 ADM-PUB '사이트 배포')이 쓰는 운영 API 모양
@@ -249,8 +249,7 @@ const expiry: Check<string | null> = (value) =>
     : typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)
       ? value
       : undefined;
-const anything: Check<unknown> = (value) =>
-  value === undefined ? undefined : value;
+const present: Check<unknown> = (value) => value;
 
 function confirmed<T>(raw: unknown, check: Check<T>): Confirmed<T> | undefined {
   const item = obj(raw);
@@ -302,13 +301,13 @@ function matchedRun(value: unknown): MatchedRun | null {
   };
 }
 
-function site(app: SiteApp, raw: unknown, at: string): SiteView {
+function site(app: SiteApp, raw: unknown, generatedAt: string): SiteView {
   const item = obj(raw) ?? {};
   return {
     app,
-    deployed: field(item.deployed, sha, at),
-    detail: field(item.detail, commit, at),
-    changes: field(item.changes, changes, at),
+    deployed: field(item.deployed, sha, generatedAt),
+    detail: field(item.detail, commit, generatedAt),
+    changes: field(item.changes, changes, generatedAt),
     // 표시와 실행이 맞을 때만 서버가 줌. 모양이 틀리면 숨김(단정하지 않음)
     matchedRun: matchedRun(item.matchedRun),
   };
@@ -332,7 +331,6 @@ function readyConfirmed(view: Omit<SiteDeployView, "readiness">): boolean {
     view.approvals.status === "known" &&
     view.approvals.value.length === 0 &&
     known(view.recentJobs) &&
-    view.sites.length === SITE_APPS.length &&
     view.sites.every(
       (s) => known(s.deployed) && known(s.detail) && known(s.changes),
     )
@@ -344,13 +342,12 @@ export function parseSiteDeploy(raw: unknown): SiteDeployView | null {
   const body = obj(raw);
   if (!body || !isIso(body.generatedAt)) return null;
   const generatedAt = body.generatedAt;
-  const at = generatedAt;
   const rawSites = Array.isArray(body.sites) ? body.sites : [];
   const sites = SITE_APPS.map((app) =>
     site(
       app,
       rawSites.find((entry) => obj(entry)?.app === app),
-      at,
+      generatedAt,
     ),
   );
   const workflowUrl =
@@ -362,15 +359,15 @@ export function parseSiteDeploy(raw: unknown): SiteDeployView | null {
     readinessCheckedAt: isIso(body.readinessCheckedAt)
       ? body.readinessCheckedAt
       : generatedAt,
-    main: field(body.main, commit, at),
-    ci: field(body.ci, oneOf(CI_STATES), at),
-    settings: field(body.settings, settings, at),
-    workflowActive: field(body.workflowActive, bool, at),
-    deployments: field(body.deployments, deployments, at),
-    approvals: field(body.approvals, listOf(count), at),
-    recentJobs: field(body.recentJobs, anything, at),
-    manualCount: field(body.manualCount, manualCount, at),
-    tokenExpiry: field(body.tokenExpiry, expiry, at),
+    main: field(body.main, commit, generatedAt),
+    ci: field(body.ci, oneOf(CI_STATES), generatedAt),
+    settings: field(body.settings, settings, generatedAt),
+    workflowActive: field(body.workflowActive, bool, generatedAt),
+    deployments: field(body.deployments, deployments, generatedAt),
+    approvals: field(body.approvals, listOf(count), generatedAt),
+    recentJobs: field(body.recentJobs, present, generatedAt),
+    manualCount: field(body.manualCount, manualCount, generatedAt),
+    tokenExpiry: field(body.tokenExpiry, expiry, generatedAt),
     sites,
     nextScheduledAt: isIso(body.nextScheduledAt) ? body.nextScheduledAt : null,
     workflowUrl,
@@ -382,7 +379,7 @@ export function parseSiteDeploy(raw: unknown): SiteDeployView | null {
 
 // ---- 화면 계산 ----
 
-export const KST_OFFSET_MS = 9 * 60 * 60_000;
+const KST_OFFSET_MS = 9 * 60 * 60_000;
 const DAY_MS = 24 * 60 * 60_000;
 
 const kstDay = (ms: number) => Math.floor((ms + KST_OFFSET_MS) / DAY_MS);
@@ -407,7 +404,7 @@ export type ScheduleLabel =
   | { kind: "paused" }
   | { kind: "unknown"; reason: SiteDeployReason }
   | { kind: "today" | "tomorrow"; time: string }
-  | { kind: "date"; date: string; time: string };
+  | { kind: "date" | "passed"; date: string; time: string };
 
 export function scheduleLabel(
   view: Pick<SiteDeployView, "nextScheduledAt" | "settings" | "workflowActive">,
@@ -418,8 +415,10 @@ export function scheduleLabel(
     const at = Date.parse(view.nextScheduledAt);
     const diff = kstDay(at) - kstDay(now);
     const { date, time } = kstHm(at);
-    if (at > now && diff === 0) return { kind: "today", time };
-    if (at > now && diff === 1) return { kind: "tomorrow", time };
+    // 이미 지난 시각: 앞 값을 들고 있는 동안(다시 읽기 실패) 그 실행이 돌았는지 모름 → 지났다고만 알림
+    if (at <= now) return { kind: "passed", date, time };
+    if (diff === 0) return { kind: "today", time };
+    if (diff === 1) return { kind: "tomorrow", time };
     return { kind: "date", date, time };
   }
   if (
@@ -438,8 +437,9 @@ export function scheduleLabel(
 
 // 수동 배포 요청 수의 기준 날(KST 자정부터). now와 같은 날이면 null(오늘), 아니면 M/D
 export function manualDay(since: string, now: number): string | null {
-  const at = Date.parse(since);
-  return kstDay(at) === kstDay(now) ? null : kstHm(at).date;
+  return sameKstDay(since, new Date(now).toISOString())
+    ? null
+    : kstHm(Date.parse(since)).date;
 }
 
 // 토큰 만료: 날짜 태그가 없으면 숨김, 확인 못 하면 unknown, 30일 안(또는 지남)이면 경고
@@ -575,8 +575,9 @@ export function reasonText(
   retryAt?: string | undefined,
 ): string {
   const r = messages.siteDeploy.reason;
+  // 다시 확인할 시각이 이미 지났으면 시각 없이(지난 시각 '이후'로 보이지 않게)
   if (reason === "rate_limit")
-    return retryAt
+    return retryAt && Date.parse(retryAt) > now
       ? fill(r.rateLimitAt, { time: kstTime(retryAt, now) })
       : r.rate_limit;
   if (reason === "credential_missing" || reason === "credentials")

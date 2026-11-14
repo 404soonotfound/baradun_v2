@@ -40,8 +40,12 @@ const TITLES = [
 
 const iso = (ms: number) => new Date(ms).toISOString();
 
+// 서버처럼 KST 자정(수동 배포 요청 수의 기준)
+const kstMidnight = (now: number) =>
+  Math.floor((now + KST_MS) / DAY_MS) * DAY_MS - KST_MS;
+
 function nextSchedule(now: number): string {
-  const midnight = Math.floor((now + KST_MS) / DAY_MS) * DAY_MS - KST_MS;
+  const midnight = kstMidnight(now);
   const today = midnight + (5 * 60 + 17) * MINUTE;
   return iso(today > now ? today : today + DAY_MS);
 }
@@ -161,7 +165,7 @@ export function localSiteDeployView(
     deployments: known({ recent: active[0] ?? manualRun, active }, at),
     approvals: known([], at),
     recentJobs: known({ run: manualRun, apps: {} }, at),
-    manualCount: known({ since: iso(now - 60 * MINUTE), requests: 2 }, at),
+    manualCount: known({ since: iso(kstMidnight(now)), requests: 2 }, at),
     tokenExpiry: known(
       new Date(now + KST_MS + 90 * DAY_MS).toISOString().slice(0, 10),
       at,
@@ -225,7 +229,7 @@ export function localSiteDeployView(
       reason: "rate_limit",
       checkedAt: at,
       retryAt,
-      last: known({ since: iso(now - 60 * MINUTE), requests: 1 }, earlier),
+      last: known({ since: iso(kstMidnight(now)), requests: 1 }, earlier),
     };
     view.tokenExpiry = known(
       new Date(now + KST_MS + 20 * DAY_MS).toISOString().slice(0, 10),
