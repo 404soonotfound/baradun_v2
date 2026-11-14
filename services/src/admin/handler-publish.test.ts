@@ -752,6 +752,8 @@ describe("게시 현황 (GET /ops/publish)", () => {
       ok: true,
       version: "20261112T054500Z",
       generatedAt: "2026-11-12T05:45:00Z",
+      maintenance: MANIFEST_SETTINGS.maintenance,
+      minWebBuild: MANIFEST_SETTINGS.minWebBuild,
     });
     expect(view.history.ok).toBe(true);
     expect(view.history.items.map((i: Item) => [i.result, i.version])).toEqual([
@@ -837,6 +839,34 @@ describe("게시 현황 (GET /ops/publish)", () => {
     expect(view.pendingNotices).toEqual({ ok: false });
     expect(view.history).toEqual({ ok: true, items: [] });
     expect(view.heldNotices).toEqual({ ok: true, version: 0, items: [] });
+  });
+
+  it("다음 게시 설정과 현재 manifest 반영값을 따로 돌려줌", async () => {
+    const table = new FakeTable();
+    const maintenance = {
+      active: !MANIFEST_SETTINGS.maintenance.active,
+      until: null,
+    };
+    const minWebBuild = MANIFEST_SETTINGS.minWebBuild + 1;
+    const body = JSON.stringify({
+      ...JSON.parse(manifest()),
+      maintenance,
+      minWebBuild,
+    });
+    const view = parse(
+      await handleOps(
+        event("GET", "/ops/publish"),
+        deps("viewer", table, {
+          snapshots: fakeSnapshots({ "data/manifest.json": body }),
+        }),
+      ),
+    );
+    expect(view.settings).toEqual({
+      maintenance: MANIFEST_SETTINGS.maintenance,
+      minWebBuild: MANIFEST_SETTINGS.minWebBuild,
+    });
+    expect(view.current).toMatchObject({ ok: true, maintenance, minWebBuild });
+    expect(view.pendingNotices).toMatchObject({ maintenancePending: true });
   });
 
   it("게시본이 아직 없으면(첫 게시 전) version null로 구분한다", async () => {

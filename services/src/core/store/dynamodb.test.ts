@@ -156,6 +156,33 @@ describe("DynamoOpsStore 잠금", () => {
     });
   });
 
+  it("잠금 획득과 순번 증가가 한 쓰기이고 잠금 해제 시 순번을 보존함", async () => {
+    const { client, sent } = fakeClient(
+      { Attributes: { sequence: 7 } },
+      {},
+      conditionFailed(),
+    );
+    const ops = new DynamoOpsStore(client, OPS);
+    await expect(
+      ops.acquireLock("publish", "run-a", NOW, LEASE, true),
+    ).resolves.toBe(7);
+    await expect(ops.releaseLock("publish", "run-a", true)).resolves.toBe(true);
+    await expect(
+      ops.acquireLock("publish", "run-b", NOW, LEASE, true),
+    ).resolves.toBe(false);
+    expect(sent[0]).toBeInstanceOf(UpdateCommand);
+    expect(sent[0]!.input).toMatchObject({
+      UpdateExpression:
+        "SET #owner = :owner, #expiresAt = :expires, #startedAt = :now ADD #sequence :one",
+      ConditionExpression: "attribute_not_exists(#owner) OR #expiresAt < :now",
+      ReturnValues: "UPDATED_NEW",
+    });
+    expect(sent[1]!.input).toMatchObject({
+      UpdateExpression: "REMOVE #owner, #expiresAt",
+      ConditionExpression: "#owner = :owner",
+    });
+  });
+
   it("조건 실패가 아닌 오류는 그대로 던진다", async () => {
     const { client } = fakeClient(throttled, throttled);
     const ops = new DynamoOpsStore(client, OPS);

@@ -462,6 +462,7 @@ export async function withPublishLock(
     deps.owner,
     startedMs,
     PUBLISH_POLICY.lockTtlMs,
+    true,
   );
   if (!locked) {
     log("info", "publish_busy", { version });
@@ -476,6 +477,7 @@ export async function withPublishLock(
         deps,
         {
           at: now,
+          ...(typeof locked === "number" ? { sequence: locked } : {}),
           source,
           result: result.status,
           version: result.version,
@@ -491,7 +493,7 @@ export async function withPublishLock(
     return result;
   } finally {
     await ops
-      .releaseLock(PUBLISH_POLICY.lockName, deps.owner)
+      .releaseLock(PUBLISH_POLICY.lockName, deps.owner, true)
       .catch(() => false);
   }
 }

@@ -1,3 +1,4 @@
+import { inquiryCountDetails, INQUIRY_METRICS_TIMEOUT_MS } from "./inquiries";
 import { describe, expect, it, vi } from "vitest";
 import { lookupActorEmails } from "./actor-emails";
 import { nextCollectionAt } from "./collection";
@@ -69,22 +70,60 @@ describe("운영 화면 보강 필드", () => {
     ]);
   });
 
+  it("문의 집계 조회가 멈추면 제한 시간에 응답하고 실패 결과를 캐시하지 않음", async () => {
+    vi.useFakeTimers();
+    try {
+      const send = vi
+        .fn()
+        .mockImplementation(() => new Promise(() => undefined));
+      const client = { send };
+      const pending = inquiryCountDetails(client, "Inquiry", "Ops", NOW);
+      await vi.advanceTimersByTimeAsync(INQUIRY_METRICS_TIMEOUT_MS);
+      await expect(pending).resolves.toEqual({
+        receivedLast7d: null,
+        resolvedLast7d: null,
+        oldestUnprocessedAt: null,
+      });
+      expect(
+        send.mock.calls.every(([, options]) => options.abortSignal.aborted),
+      ).toBe(true);
+      send.mockResolvedValue({ Count: 0, Items: [] });
+      const next = await inquiryCountDetails(client, "Inquiry", "Ops", NOW);
+      expect(next).toMatchObject({ receivedLast7d: 0, resolvedLast7d: 0 });
+      const calls = send.mock.calls.length;
+      expect(await inquiryCountDetails(client, "Inquiry", "Ops", NOW)).toEqual(
+        next,
+      );
+      expect(send).toHaveBeenCalledTimes(calls);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  const head = (sequence: number) => ({
+    Item: { sequence, startedAtMs: NOW.getTime() },
+  });
+  const run = (sequence: number, at: string, result: string) => ({
+    at,
+    sk: "run#" + at,
+    result,
+    sequence,
+  });
+
   it("24시간 창은 시작 경계를 제외하고 끝 경계를 포함함", async () => {
-    const run = (at: string, result: string) => ({
-      at,
-      sk: "run#" + at,
-      result,
-    });
+    const boundary = run(1, FROM, "published");
     const send = vi
       .fn()
-      .mockResolvedValueOnce({ Items: [run(FROM, "published")] })
+      .mockResolvedValueOnce(head(3))
+      .mockResolvedValueOnce({ Items: [boundary] })
       .mockResolvedValueOnce({
         Items: [
-          run(FROM, "published"),
-          run("2026-11-13T15:00:00.001Z", "failed"),
-          run(NOW.toISOString(), "unchanged"),
+          boundary,
+          run(2, "2026-11-13T15:00:00.001Z", "failed"),
+          run(3, NOW.toISOString(), "unchanged"),
         ],
-      });
+      })
+      .mockResolvedValueOnce(head(3));
     expect(await readPublishLast24h({ send }, "Ops", NOW)).toEqual({
       runs: 2,
       succeeded: 0,
@@ -93,32 +132,32 @@ describe("운영 화면 보강 필드", () => {
     });
   });
 
-  it("마지막 실행은 저장됐지만 해당 집계 행이 없으면 24시간 집계를 숨김", async () => {
-    const send = vi
-      .fn()
-      .mockResolvedValueOnce({ Items: [{ at: FROM }] })
-      .mockResolvedValueOnce({ Items: [] });
-    await expect(
-      readPublishLast24h({ send }, "Ops", NOW, {
-        at: "2026-11-14T14:59:00Z",
-        result: "published",
-        version: "20261114T145900Z",
-        source: "auto",
-      }),
-    ).rejects.toThrow("마지막 게시 실행의 집계 기록 없음");
-  });
+  it.each([{ items: [] }, { items: [run(3, NOW.toISOString(), "published")] }])(
+    "마지막 또는 중간 실행이 빠지면 24시간 집계를 숨김 (%j)",
+    ({ items }) => {
+      const send = vi
+        .fn()
+        .mockResolvedValueOnce(head(3))
+        .mockResolvedValueOnce({ Items: [run(1, FROM, "published")] })
+        .mockResolvedValueOnce({ Items: items });
+      return expect(readPublishLast24h({ send }, "Ops", NOW)).rejects.toThrow(
+        "게시 실행 집계 순번 누락",
+      );
+    },
+  );
 
   it("24시간 이전 기록이 없거나 결과가 잘리면 정상 건수로 표시하지 않음", async () => {
+    const noBaseline = vi
+      .fn()
+      .mockResolvedValueOnce(head(3))
+      .mockResolvedValue({ Items: [] });
     await expect(
-      readPublishLast24h(
-        { send: vi.fn().mockResolvedValue({ Items: [] }) },
-        "Ops",
-        NOW,
-      ),
+      readPublishLast24h({ send: noBaseline }, "Ops", NOW),
     ).rejects.toThrow("24시간 실행 기록 없음");
     const send = vi
       .fn()
-      .mockResolvedValueOnce({ Items: [{ at: FROM }] })
+      .mockResolvedValueOnce(head(3))
+      .mockResolvedValueOnce({ Items: [run(1, FROM, "published")] })
       .mockResolvedValue({ Items: [], LastEvaluatedKey: { sk: "x" } });
     await expect(readPublishLast24h({ send }, "Ops", NOW)).rejects.toThrow(
       "조회 상한",

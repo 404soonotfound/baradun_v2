@@ -87,7 +87,7 @@ const slotKey = (job: string, slotId: string) => ({
   pk: `slot#${job}`,
   sk: slotId,
 });
-const lockKey = (name: string) => ({ pk: `lock#${name}`, sk: "lock" });
+export const lockKey = (name: string) => ({ pk: `lock#${name}`, sk: "lock" });
 
 // 조건 실패만 골라냄. 이름으로 비교 → 패키지가 둘로 깔려도 instanceof가 틀리지 않음
 function isConditionFailed(
@@ -285,7 +285,42 @@ export class DynamoOpsStore implements OpsStore {
     owner: string,
     now: number,
     ttlMs: number,
-  ): Promise<boolean> {
+    trackSequence = false,
+  ): Promise<boolean | number> {
+    if (trackSequence) {
+      try {
+        const result = await this.client.send(
+          new UpdateCommand({
+            TableName: this.tableName,
+            Key: lockKey(name),
+            UpdateExpression:
+              "SET #owner = :owner, #expiresAt = :expires, #startedAt = :now ADD #sequence :one",
+            ConditionExpression:
+              "attribute_not_exists(#owner) OR #expiresAt < :now",
+            ExpressionAttributeNames: {
+              "#owner": "owner",
+              "#expiresAt": "expiresAt",
+              "#startedAt": "startedAtMs",
+              "#sequence": "sequence",
+            },
+            ExpressionAttributeValues: {
+              ":owner": owner,
+              ":expires": now + ttlMs,
+              ":now": now,
+              ":one": 1,
+            },
+            ReturnValues: "UPDATED_NEW",
+          }),
+        );
+        const sequence = result.Attributes?.sequence;
+        return typeof sequence === "number" && Number.isSafeInteger(sequence)
+          ? sequence
+          : true;
+      } catch (error) {
+        if (isConditionFailed(error)) return false;
+        throw error;
+      }
+    }
     // 기록 없음, 또는 만료(expiresAt < now) → 덮어써서 가져감
     // expiresAt은 잠금 판단용 ms 시각. TTL 속성(ttl)과 따로 둠 → TTL 삭제 지연에 기대지 않음
     return sendConditional(
@@ -300,7 +335,27 @@ export class DynamoOpsStore implements OpsStore {
     );
   }
 
-  async releaseLock(name: string, owner: string): Promise<boolean> {
+  async releaseLock(
+    name: string,
+    owner: string,
+    preserveSequence = false,
+  ): Promise<boolean> {
+    if (preserveSequence) {
+      return sendConditional(
+        this.client,
+        new UpdateCommand({
+          TableName: this.tableName,
+          Key: lockKey(name),
+          UpdateExpression: "REMOVE #owner, #expiresAt",
+          ConditionExpression: "#owner = :owner",
+          ExpressionAttributeNames: {
+            "#owner": "owner",
+            "#expiresAt": "expiresAt",
+          },
+          ExpressionAttributeValues: { ":owner": owner },
+        }),
+      );
+    }
     // 내 잠금일 때만 지움. 만료 뒤 다른 실행이 가져갔으면 owner가 달라 실패
     return sendConditional(
       this.client,
@@ -483,6 +538,7 @@ export class DynamoOpsStore implements OpsStore {
           sk: `${PUBLISH_RUN_HISTORY_PREFIX}${new Date(nowMs).toISOString()}`,
           at: new Date(nowMs).toISOString(),
           result: run.result,
+          ...(run.sequence === undefined ? {} : { sequence: run.sequence }),
           [TTL]: publishSummaryTtl(nowMs),
         },
       }),

@@ -124,6 +124,7 @@ export const PUBLISH_RUN_LAST_SK = "last";
 export const PUBLISH_RUN_HISTORY_PREFIX = "run#";
 
 export interface PublishRun extends PublishRunDetails {
+  readonly sequence?: number;
   readonly at: string; // 실행 시작(UTC ISO)
   readonly source: PublishSource;
   readonly result: "published" | "unchanged" | "failed";

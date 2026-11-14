@@ -233,17 +233,106 @@ export async function countInquiries(
 const INQUIRY_METRIC_PAGE_LIMIT = 4;
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 
+type InquiryCountDetails = Pick<
+  InquiryCounts,
+  "receivedLast7d" | "resolvedLast7d" | "oldestUnprocessedAt"
+>;
+const UNKNOWN_INQUIRY_COUNTS = {
+  receivedLast7d: null,
+  resolvedLast7d: null,
+  oldestUnprocessedAt: null,
+} satisfies InquiryCountDetails;
+const inquiryMetrics = new WeakMap<
+  Sender,
+  {
+    inquiryTable: string;
+    opsTable: string;
+    expiresAt: number;
+    pending: Promise<InquiryCountDetails>;
+  }
+>();
+export const INQUIRY_METRICS_TIMEOUT_MS = 1_500;
+const INQUIRY_METRICS_CACHE_MS = 60_000;
+
 export async function inquiryCountDetails(
   client: Sender,
   tableName: string,
   opsTable: string,
   now: Date,
-): Promise<
-  Pick<
-    InquiryCounts,
-    "receivedLast7d" | "resolvedLast7d" | "oldestUnprocessedAt"
-  >
-> {
+): Promise<InquiryCountDetails> {
+  const cached = inquiryMetrics.get(client);
+  const time = now.getTime();
+  if (
+    cached &&
+    cached.inquiryTable === tableName &&
+    cached.opsTable === opsTable &&
+    time < cached.expiresAt
+  ) {
+    const details = await cached.pending;
+    return {
+      ...details,
+      oldestUnprocessedAt: details.oldestUnprocessedAt ?? null,
+    };
+  }
+
+  const controller = new AbortController();
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<InquiryCountDetails>((resolve) => {
+    timeout = setTimeout(() => {
+      controller.abort();
+      resolve(UNKNOWN_INQUIRY_COUNTS);
+    }, INQUIRY_METRICS_TIMEOUT_MS);
+  });
+  const pending = Promise.race([
+    readInquiryCountDetails(
+      client,
+      tableName,
+      opsTable,
+      now,
+      controller.signal,
+    ),
+    deadline,
+  ]).finally(() => clearTimeout(timeout));
+  const entry = {
+    inquiryTable: tableName,
+    opsTable,
+    expiresAt: time + INQUIRY_METRICS_CACHE_MS,
+    pending,
+  };
+  inquiryMetrics.set(client, entry);
+  try {
+    const details = await pending;
+    if (
+      (controller.signal.aborted ||
+        details.receivedLast7d === null ||
+        details.resolvedLast7d === null ||
+        details.oldestUnprocessedAt === undefined) &&
+      inquiryMetrics.get(client) === entry
+    )
+      inquiryMetrics.delete(client);
+    return {
+      ...details,
+      oldestUnprocessedAt: details.oldestUnprocessedAt ?? null,
+    };
+  } catch {
+    if (inquiryMetrics.get(client) === entry) inquiryMetrics.delete(client);
+    return UNKNOWN_INQUIRY_COUNTS;
+  }
+}
+
+async function readInquiryCountDetails(
+  client: Sender,
+  tableName: string,
+  opsTable: string,
+  now: Date,
+  signal: AbortSignal,
+): Promise<InquiryCountDetails> {
+  const bounded: Sender = {
+    send: ((command: QueryCommand) => {
+      signal.throwIfAborted();
+      return client.send(command, { abortSignal: signal });
+    }) as Sender["send"],
+  };
   const from = new Date(now.getTime() - SEVEN_DAYS_MS).toISOString();
   const to = now.toISOString();
   const nowSec = Math.floor(now.getTime() / 1000);
@@ -253,7 +342,7 @@ export async function inquiryCountDetails(
     for (const status of INQUIRY_STATUSES) {
       let startKey: Record<string, unknown> | undefined;
       for (let page = 0; page < INQUIRY_METRIC_PAGE_LIMIT; page += 1) {
-        const result = await client.send(
+        const result = await bounded.send(
           new QueryCommand({
             TableName: tableName,
             IndexName: INQUIRY_STATUS_INDEX_NAME,
@@ -292,7 +381,7 @@ export async function inquiryCountDetails(
     for (const status of ["received", "in_progress"] as const) {
       let startKey: Record<string, unknown> | undefined;
       for (let page = 0; page < INQUIRY_METRIC_PAGE_LIMIT; page += 1) {
-        const result = await client.send(
+        const result = await bounded.send(
           new QueryCommand({
             TableName: tableName,
             IndexName: INQUIRY_STATUS_INDEX_NAME,
@@ -323,7 +412,7 @@ export async function inquiryCountDetails(
         startKey = result.LastEvaluatedKey;
         if (!startKey) break;
       }
-      if (startKey) return null;
+      if (startKey) return undefined;
     }
     return oldest;
   }
@@ -333,7 +422,7 @@ export async function inquiryCountDetails(
     let cursor: Parameters<typeof listAudit>[2]["cursor"];
     for (let page = 0; page < INQUIRY_METRIC_PAGE_LIMIT; page += 1) {
       const result = await listAudit(
-        client,
+        bounded,
         opsTable,
         {
           filter: { from, to, action: "inquiry.update" },
@@ -367,11 +456,11 @@ export async function inquiryCountDetails(
   // 문의 GSI 읽기 용량에 맞춰 같은 인덱스 조회는 순서대로 수행함
   const completion = resolvedLast7d().catch(() => null);
   const received = await receivedLast7d().catch(() => null);
-  const oldest = await oldestUnprocessedAt().catch(() => null);
+  const oldest = await oldestUnprocessedAt().catch(() => undefined);
   return {
     receivedLast7d: received,
     resolvedLast7d: await completion,
-    oldestUnprocessedAt: oldest,
+    ...(oldest !== undefined ? { oldestUnprocessedAt: oldest } : {}),
   };
 }
 
