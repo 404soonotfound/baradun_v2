@@ -23879,6 +23879,398 @@
         }
       ]
     },
+    "ecr": {
+      "Actions": [
+        {
+          "Name": "BatchCheckLayerAvailability",
+          "Resources": [
+            {
+              "Name": "repository"
+            }
+          ]
+        },
+        {
+          "Name": "BatchDeleteImage",
+          "Resources": [
+            {
+              "Name": "repository"
+            }
+          ]
+        },
+        {
+          "Name": "BatchGetImage",
+          "Resources": [
+            {
+              "Name": "repository"
+            }
+          ]
+        },
+        {
+          "Name": "BatchGetRepositoryScanningConfiguration",
+          "Resources": [
+            {
+              "Name": "repository"
+            }
+          ]
+        },
+        {
+          "Name": "BatchImportUpstreamImage",
+          "Resources": [
+            {
+              "Name": "repository"
+            }
+          ]
+        },
+        {
+          "Name": "CompleteLayerUpload",
+          "Resources": [
+            {
+              "Name": "repository"
+            }
+          ]
+        },
+        {
+          "Name": "CreatePullThroughCacheRule"
+        },
+        {
+          "Name": "CreateRepository",
+          "Resources": [
+            {
+              "Name": "repository"
+            }
+          ]
+        },
+        {
+          "Name": "CreateRepositoryCreationTemplate"
+        },
+        {
+          "Name": "DeleteLifecyclePolicy",
+          "Resources": [
+            {
+              "Name": "repository"
+            }
+          ]
+        },
+        {
+          "Name": "DeletePullThroughCacheRule"
+        },
+        {
+          "Name": "DeleteRegistryPolicy"
+        },
+        {
+          "Name": "DeleteRepository",
+          "Resources": [
+            {
+              "Name": "repository"
+            }
+          ]
+        },
+        {
+          "Name": "DeleteRepositoryCreationTemplate"
+        },
+        {
+          "Name": "DeleteRepositoryPolicy",
+          "Resources": [
+            {
+              "Name": "repository"
+            }
+          ]
+        },
+        {
+          "Name": "DeleteSigningConfiguration"
+        },
+        {
+          "Name": "DeregisterPullTimeUpdateExclusion"
+        },
+        {
+          "Name": "DescribeImageReplicationStatus",
+          "Resources": [
+            {
+              "Name": "repository"
+            }
+          ]
+        },
+        {
+          "Name": "DescribeImageScanFindings",
+          "Resources": [
+            {
+              "Name": "repository"
+            }
+          ]
+        },
+        {
+          "Name": "DescribeImageSigningStatus",
+          "Resources": [
+            {
+              "Name": "repository"
+            }
+          ]
+        },
+        {
+          "Name": "DescribeImages",
+          "Resources": [
+            {
+              "Name": "repository"
+            }
+          ]
+        },
+        {
+          "Name": "DescribePullThroughCacheRules"
+        },
+        {
+          "Name": "DescribeRegistry"
+        },
+        {
+          "Name": "DescribeReplicationBackfillResults"
+        },
+        {
+          "Name": "DescribeRepositories",
+          "Resources": [
+            {
+              "Name": "repository"
+            }
+          ]
+        },
+        {
+          "Name": "DescribeRepositoryCreationTemplates"
+        },
+        {
+          "Name": "GetAccountSetting"
+        },
+        {
+          "Name": "GetAuthorizationToken"
+        },
+        {
+          "Name": "GetDownloadUrlForLayer",
+          "Resources": [
+            {
+              "Name": "repository"
+            }
+          ]
+        },
+        {
+          "Name": "GetImageCopyStatus",
+          "Resources": [
+            {
+              "Name": "repository"
+            }
+          ]
+        },
+        {
+          "Name": "GetLifecyclePolicy",
+          "Resources": [
+            {
+              "Name": "repository"
+            }
+          ]
+        },
+        {
+          "Name": "GetLifecyclePolicyPreview",
+          "Resources": [
+            {
+              "Name": "repository"
+            }
+          ]
+        },
+        {
+          "Name": "GetRegistryPolicy"
+        },
+        {
+          "Name": "GetRegistryScanningConfiguration"
+        },
+        {
+          "Name": "GetRepositoryPolicy",
+          "Resources": [
+            {
+              "Name": "repository"
+            }
+          ]
+        },
+        {
+          "Name": "GetSigningConfiguration"
+        },
+        {
+          "Name": "InitiateLayerUpload",
+          "Resources": [
+            {
+              "Name": "repository"
+            }
+          ]
+        },
+        {
+          "Name": "ListImages",
+          "Resources": [
+            {
+              "Name": "repository"
+            }
+          ]
+        },
+        {
+          "Name": "ListPullTimeUpdateExclusions"
+        },
+        {
+          "Name": "ListReplicationBackfills"
+        },
+        {
+          "Name": "ListTagsForResource",
+          "Resources": [
+            {
+              "Name": "repository"
+            }
+          ]
+        },
+        {
+          "Name": "PutAccountSetting"
+        },
+        {
+          "Name": "PutImage",
+          "Resources": [
+            {
+              "Name": "repository"
+            }
+          ]
+        },
+        {
+          "Name": "PutImageScanningConfiguration",
+          "Resources": [
+            {
+              "Name": "repository"
+            }
+          ]
+        },
+        {
+          "Name": "PutImageTagMutability",
+          "Resources": [
+            {
+              "Name": "repository"
+            }
+          ]
+        },
+        {
+          "Name": "PutLifecyclePolicy",
+          "Resources": [
+            {
+              "Name": "repository"
+            }
+          ]
+        },
+        {
+          "Name": "PutRegistryPolicy"
+        },
+        {
+          "Name": "PutRegistryScanningConfiguration"
+        },
+        {
+          "Name": "PutReplicationConfiguration"
+        },
+        {
+          "Name": "PutSigningConfiguration"
+        },
+        {
+          "Name": "RegisterPullTimeUpdateExclusion"
+        },
+        {
+          "Name": "ReplicateImage",
+          "Resources": [
+            {
+              "Name": "repository"
+            }
+          ]
+        },
+        {
+          "Name": "ReplicateImageDelete",
+          "Resources": [
+            {
+              "Name": "repository"
+            }
+          ]
+        },
+        {
+          "Name": "SetRepositoryPolicy",
+          "Resources": [
+            {
+              "Name": "repository"
+            }
+          ]
+        },
+        {
+          "Name": "StartImageScan",
+          "Resources": [
+            {
+              "Name": "repository"
+            }
+          ]
+        },
+        {
+          "Name": "StartLifecyclePolicyPreview",
+          "Resources": [
+            {
+              "Name": "repository"
+            }
+          ]
+        },
+        {
+          "Name": "StartReplicationBackfill"
+        },
+        {
+          "Name": "StopReplicationBackfill"
+        },
+        {
+          "Name": "TagResource",
+          "Resources": [
+            {
+              "Name": "repository"
+            }
+          ]
+        },
+        {
+          "Name": "UntagResource",
+          "Resources": [
+            {
+              "Name": "repository"
+            }
+          ]
+        },
+        {
+          "Name": "UpdateImageStorageClass",
+          "Resources": [
+            {
+              "Name": "repository"
+            }
+          ]
+        },
+        {
+          "Name": "UpdatePullThroughCacheRule"
+        },
+        {
+          "Name": "UpdateRepositoryCreationTemplate"
+        },
+        {
+          "Name": "UploadLayerPart",
+          "Resources": [
+            {
+              "Name": "repository"
+            }
+          ]
+        },
+        {
+          "Name": "ValidatePullThroughCacheRule"
+        }
+      ],
+      "Operations": [],
+      "Resources": [
+        {
+          "Name": "repository",
+          "ARNFormats": [
+            "arn:${Partition}:ecr:${Region}:${Account}:repository/${RepositoryName}"
+          ],
+          "ConditionKeys": [
+            "aws:ResourceTag/${TagKey}",
+            "ecr:ResourceTag/${TagKey}"
+          ]
+        }
+      ]
+    },
     "elasticfilesystem": {
       "Actions": [
         {
@@ -36852,6 +37244,7 @@
     "https://servicereference.us-east-1.amazonaws.com/v1/cognito-idp/cognito-idp.json": "484d0f04cf62747375d43d1d672ecd6ffbd9dc1e7a98a3e226960db1f85d9bff",
     "https://servicereference.us-east-1.amazonaws.com/v1/dynamodb/dynamodb.json": "b0e865d3107e77c9e71faffaf7969fffba2fc841a3463c972f77495aeec94bac",
     "https://servicereference.us-east-1.amazonaws.com/v1/ec2/ec2.json": "ef963b053ec7bf132a7b2d04a7498d056eb4ce18ad428a7ff0082d0c9118c41c",
+    "https://servicereference.us-east-1.amazonaws.com/v1/ecr/ecr.json": "bd92badabf8462ee76fa92f8914d8957a148747e35475e822efaba178651a064",
     "https://servicereference.us-east-1.amazonaws.com/v1/elasticfilesystem/elasticfilesystem.json": "d9b274d8b9856c2df28d41086e27985cb29e73ff46883dfecb9d5dcedd8fbed4",
     "https://servicereference.us-east-1.amazonaws.com/v1/events/events.json": "fade9b3dd9076195a11eb4fcd065477dcf83c135effe2d32b24647fd88484f6d",
     "https://servicereference.us-east-1.amazonaws.com/v1/firehose/firehose.json": "51442837b434b49384d263663b17cbb7b618fefb2dfc0c9062aeeeac66bd060c",
