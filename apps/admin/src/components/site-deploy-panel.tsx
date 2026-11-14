@@ -635,11 +635,9 @@ function CommitList({
                       </li>
                     ))}
                   </ul>
-                  {list.total > list.commits.length && repo && list.compare && (
+                  {list.total > list.commits.length && list.compareUrl && (
                     <p className="text-body-s">
-                      <ExternalLink
-                        href={`${repo}/compare/${list.compare.from}...${list.compare.to}`}
-                      >
+                      <ExternalLink href={list.compareUrl}>
                         {fill(t.commitsMore, { shown: list.commits.length })}
                       </ExternalLink>
                     </p>

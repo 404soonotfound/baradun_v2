@@ -2,7 +2,7 @@ import type { OpsResult } from "./ops-fetch";
 
 // 로컬 개발 서버의 사이트 배포 칸 예시 응답(#472). 실제 GitHub·운영 API를 부르지 않음
 // - 화면 주소 ?deploy=<상황>으로 고름(없으면 ready). E2E도 같은 응답을 가짜 응답으로 씀
-// - 모양은 services/src/admin/site-deploy.ts 응답과 같음. 커밋·주소는 예시 값
+// - 모양은 packages/contracts의 SiteDeployView와 같음. 커밋·주소는 예시 값
 
 export const LOCAL_DEPLOY_SCENARIOS = [
   "ready",
@@ -164,7 +164,10 @@ export function localSiteDeployView(
     workflowActive: known(true, at),
     deployments: known({ recent: active[0] ?? manualRun, active }, at),
     approvals: known([], at),
-    recentJobs: known({ run: manualRun, apps: {} }, at),
+    recentJobs: known(
+      { run: manualRun, apps: { site: null, admin: null } },
+      at,
+    ),
     manualCount: known({ since: iso(kstMidnight(now)), requests: 2 }, at),
     tokenExpiry: known(
       new Date(now + KST_MS + 90 * DAY_MS).toISOString().slice(0, 10),
@@ -173,6 +176,7 @@ export function localSiteDeployView(
     sites: [
       {
         app: "site",
+        compareUrl: `${REPO}/compare/${siteBase}...main`,
         deployed: known(siteBase, at),
         detail: known(
           { sha: siteBase, title: "GH-449 feat(web): 대안 해변 안내 추가" },
@@ -187,6 +191,7 @@ export function localSiteDeployView(
       },
       {
         app: "admin",
+        compareUrl: `${REPO}/compare/${adminBase}...main`,
         deployed: known(adminBase, at),
         detail: known(commit(5), at),
         changes: known(adminChanges, at),
@@ -194,6 +199,7 @@ export function localSiteDeployView(
       },
     ],
     nextScheduledAt: paused ? null : nextSchedule(now),
+    ...(paused ? { nextScheduledAtReason: { kind: "paused" } } : {}),
     workflowUrl: `${REPO}/actions/workflows/deploy.yml`,
   };
   const sites = view.sites as Record<string, unknown>[];
@@ -205,6 +211,7 @@ export function localSiteDeployView(
       reason: "truncated",
       checkedAt: at,
     };
+    delete sites[1]!.compareUrl;
     sites[1]!.deployed = {
       status: "unknown",
       reason: "rate_limit",
@@ -237,6 +244,7 @@ export function localSiteDeployView(
     );
   }
   if (scenario === "admin_unconfigured") {
+    delete sites[1]!.compareUrl;
     for (const key of ["deployed", "detail", "changes"]) {
       sites[1]![key] = {
         status: "unknown",

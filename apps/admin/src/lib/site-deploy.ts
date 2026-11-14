@@ -1,128 +1,58 @@
+import type {
+  SiteDeployApp as SiteApp,
+  SiteDeployCiState as CiState,
+  SiteDeployChangeFile as ChangeFile,
+  SiteDeployCommit as DeployCommit,
+  SiteDeployChanges as DeployChanges,
+  SiteDeployDeployments as Deployments,
+  SiteDeployFileCategory as FileCategory,
+  SiteDeployMatchedRun as MatchedRun,
+  SiteDeployReadiness as Readiness,
+  SiteDeployReason,
+  SiteDeployRun as DeployRun,
+  SiteDeployScheduleReason,
+  SiteDeploySite as SiteView,
+  SiteDeployView as SiteDeployResponse,
+  SiteDeployField as Field,
+  SiteDeployKnown as Confirmed,
+} from "@baradun/contracts";
+import {
+  CI_STATES,
+  DEPLOY_EVENTS,
+  FILE_CATEGORIES,
+  READINESS,
+  SCHEDULE_UNAVAILABLE,
+  SITE_APPS,
+  SITE_DEPLOY_REASONS,
+} from "@baradun/contracts/site-deploy";
 import { opsFetch, type OpsResult } from "./auth/ops-fetch";
 import { kstClock, sameKstDay } from "./collection";
 import { fill, messages } from "./messages";
 
-// 사이트 배포 칸(#472, 결정 기록 D27-1~8 · 화면 설계서 6장 ADM-PUB '사이트 배포')이 쓰는 운영 API 모양
-// - 서버(services/src/admin/site-deploy.ts·site-deploy-github.ts)가 원본. 앱끼리 가져오지 않으므로 필드 이름을 그대로 옮김
-//   모양이 서버와 같은지는 site-deploy.test.ts가 서버 소스의 사유·readiness·응답 키와 대조함
-// - 칸마다 known(확인한 값) / unknown(사유·확인 시각·앞 값). 빠지거나 틀린 칸은 unknown(invalid)으로 바꿈
-//   결측·잘림·조회 실패를 0건이나 정상으로 보이지 않게 함(D27-3)
-// - '배포할 수 있어요'(ready)는 필요한 칸이 모두 확인됐을 때만. 서버가 ready라도 여기서 읽지 못한 칸이 있으면 unknown
-
+// 칸마다 known / unknown 검사. 응답에서 확인 못 한 값은 invalid로 바꿈(D27-3).
 type Token = () => Promise<string | null>;
 
-export const SITE_DEPLOY_REASONS = [
-  "unconfigured",
-  "credential_missing",
-  "credentials",
-  "unauthorized",
-  "forbidden",
-  "not_found",
-  "timeout",
-  "rate_limit",
-  "unavailable",
-  "invalid",
-  "truncated",
-  "not_ancestor",
-] as const;
-export type SiteDeployReason = (typeof SITE_DEPLOY_REASONS)[number];
+export type {
+  ChangeFile,
+  CiState,
+  DeployChanges,
+  DeployCommit,
+  DeployRun,
+  Field,
+  FileCategory,
+  Readiness,
+  SiteDeployReason,
+  SiteView,
+};
 
-export const READINESS = [
-  "ready",
-  "paused",
-  "deploying",
-  "approval_pending",
-  "ci_pending",
-  "ci_failed",
-  "ci_missing",
-  "unconfigured",
-  "unknown",
-] as const;
-export type Readiness = (typeof READINESS)[number];
-
-export const CI_STATES = ["success", "pending", "failure", "missing"] as const;
-export type CiState = (typeof CI_STATES)[number];
-
-export const SITE_APPS = ["site", "admin"] as const;
-export type SiteApp = (typeof SITE_APPS)[number];
-
-export const FILE_CATEGORIES = ["beach", "site", "admin", "shared"] as const;
-export type FileCategory = (typeof FILE_CATEGORIES)[number];
-
-export interface Confirmed<T> {
-  readonly status: "known";
-  readonly value: T;
-  readonly checkedAt: string;
-}
-export interface Unconfirmed<T> {
-  readonly status: "unknown";
-  readonly reason: SiteDeployReason;
-  readonly checkedAt: string;
-  readonly last?: Confirmed<T>;
-  readonly retryAt?: string;
-}
-export type Field<T> = Confirmed<T> | Unconfirmed<T>;
-
-export interface DeployCommit {
-  readonly sha: string;
-  readonly title: string;
-}
-export interface ChangeFile {
-  readonly path: string;
-  readonly previous: string | null;
-  readonly category: FileCategory;
-}
-export interface DeployChanges {
-  readonly from: string;
-  readonly to: string;
-  readonly files: readonly ChangeFile[];
-  readonly commits: readonly DeployCommit[];
-}
-export interface DeployRun {
-  readonly id: number;
-  readonly event: "schedule" | "workflow_dispatch";
-  readonly status: string;
-  readonly attempt: number;
-  readonly conclusion: string | null;
-  readonly sha: string;
-  readonly createdAt: string;
-  readonly url: string;
-}
-export interface MatchedRun {
-  readonly event: "workflow_dispatch";
-  readonly url: string;
-  readonly completedAt: string | null;
-}
-export interface Deployments {
-  readonly recent: DeployRun | null;
-  readonly active: readonly DeployRun[];
-}
-export interface SiteView {
-  readonly app: SiteApp;
-  readonly deployed: Field<string>;
-  readonly detail: Field<DeployCommit>;
-  readonly changes: Field<DeployChanges>;
-  readonly matchedRun: MatchedRun | null;
-}
-export interface SiteDeployView {
-  readonly generatedAt: string;
-  readonly readiness: Readiness;
-  readonly readinessCheckedAt: string;
-  readonly main: Field<DeployCommit>;
-  readonly ci: Field<CiState>;
-  readonly settings: Field<{ paused: boolean; configured: boolean }>;
-  readonly workflowActive: Field<boolean>;
-  readonly deployments: Field<Deployments>;
-  readonly approvals: Field<readonly number[]>;
-  // 화면은 작업 내용을 쓰지 않고 확인 여부만 봄(ready 판정)
+// 화면은 최근 작업의 확인 여부만 사용하고 형식이 맞지 않는 워크플로 링크는 숨김.
+export type SiteDeployView = Omit<
+  SiteDeployResponse,
+  "recentJobs" | "workflowUrl"
+> & {
   readonly recentJobs: Field<unknown>;
-  readonly manualCount: Field<{ since: string; requests: number }>;
-  readonly tokenExpiry: Field<string | null>;
-  readonly sites: readonly SiteView[];
-  readonly nextScheduledAt: string | null;
-  // 서버 주소가 https://github.com/<저장소>/actions/workflows/deploy.yml 모양일 때만. 아니면 null(링크 숨김)
   readonly workflowUrl: string | null;
-}
+};
 
 export function fetchSiteDeploy(
   accessToken: Token,
@@ -192,7 +122,7 @@ const changes: Check<DeployChanges> = (value) => {
 const run: Check<DeployRun> = (value) => {
   const item = obj(value);
   if (!item) return undefined;
-  const event = oneOf(["schedule", "workflow_dispatch"] as const)(item.event);
+  const event = oneOf(DEPLOY_EVENTS)(item.event);
   const id = sha(item.sha);
   if (
     !event ||
@@ -305,15 +235,29 @@ function matchedRun(value: unknown): MatchedRun | null {
   };
 }
 
-function site(app: SiteApp, raw: unknown, generatedAt: string): SiteView {
+function site(
+  app: SiteApp,
+  raw: unknown,
+  generatedAt: string,
+  repo: string | undefined,
+): SiteView {
   const item = obj(raw) ?? {};
+  const deployed = field(item.deployed, sha, generatedAt);
+  const compareUrl =
+    repo &&
+    deployed.status === "known" &&
+    item.compareUrl ===
+      `https://github.com/${repo}/compare/${deployed.value}...main`
+      ? item.compareUrl
+      : undefined;
   return {
     app,
-    deployed: field(item.deployed, sha, generatedAt),
+    deployed,
     detail: field(item.detail, commit, generatedAt),
     changes: field(item.changes, changes, generatedAt),
     // 표시와 실행이 맞을 때만 서버가 줌. 모양이 틀리면 숨김(단정하지 않음)
     matchedRun: matchedRun(item.matchedRun),
+    ...(compareUrl ? { compareUrl } : {}),
   };
 }
 
@@ -347,17 +291,31 @@ export function parseSiteDeploy(raw: unknown): SiteDeployView | null {
   if (!body || !isIso(body.generatedAt)) return null;
   const generatedAt = body.generatedAt;
   const rawSites = Array.isArray(body.sites) ? body.sites : [];
+  const workflowMatch =
+    typeof body.workflowUrl === "string"
+      ? WORKFLOW_URL.exec(body.workflowUrl)
+      : null;
+  const workflowUrl = workflowMatch?.[0] ?? null;
   const sites = SITE_APPS.map((app) =>
     site(
       app,
       rawSites.find((entry) => obj(entry)?.app === app),
       generatedAt,
+      workflowMatch?.[1],
     ),
   );
-  const workflowUrl =
-    typeof body.workflowUrl === "string" && WORKFLOW_URL.test(body.workflowUrl)
-      ? body.workflowUrl
+  const nextScheduledAt =
+    body.nextScheduledAtReason === undefined && isIso(body.nextScheduledAt)
+      ? body.nextScheduledAt
       : null;
+  const nextScheduledAtReason: SiteDeployScheduleReason | undefined =
+    body.nextScheduledAt === null
+      ? body.nextScheduledAtReason === undefined
+        ? undefined
+        : scheduleReason(body.nextScheduledAtReason)
+      : nextScheduledAt === null
+        ? { kind: "unknown", reason: "invalid" }
+        : undefined;
   const rest: Omit<SiteDeployView, "readiness"> = {
     generatedAt,
     readinessCheckedAt: isIso(body.readinessCheckedAt)
@@ -373,7 +331,8 @@ export function parseSiteDeploy(raw: unknown): SiteDeployView | null {
     manualCount: field(body.manualCount, manualCount, generatedAt),
     tokenExpiry: field(body.tokenExpiry, expiry, generatedAt),
     sites,
-    nextScheduledAt: isIso(body.nextScheduledAt) ? body.nextScheduledAt : null,
+    nextScheduledAt,
+    ...(nextScheduledAtReason ? { nextScheduledAtReason } : {}),
     workflowUrl,
   };
   let readiness = oneOf(READINESS)(body.readiness) ?? "unknown";
@@ -412,11 +371,37 @@ export type ScheduleLabel =
   | { kind: "today" | "tomorrow"; time: string }
   | { kind: "date" | "passed"; date: string; time: string };
 
+function scheduleReason(raw: unknown): SiteDeployScheduleReason {
+  const item = obj(raw);
+  const kind = oneOf(SCHEDULE_UNAVAILABLE)(item?.kind);
+  if (kind) return { kind };
+  const reason = oneOf(SITE_DEPLOY_REASONS)(item?.reason);
+  if (item?.kind === "unknown" && reason) {
+    return {
+      kind: "unknown",
+      reason,
+      ...(isIso(item.retryAt) ? { retryAt: item.retryAt } : {}),
+    };
+  }
+  return { kind: "unknown", reason: "invalid" };
+}
+
 export function scheduleLabel(
-  view: Pick<SiteDeployView, "nextScheduledAt" | "settings" | "workflowActive">,
+  view: Pick<
+    SiteDeployView,
+    "nextScheduledAt" | "nextScheduledAtReason" | "settings" | "workflowActive"
+  >,
   now: number,
 ): ScheduleLabel {
-  const { settings, workflowActive } = view;
+  const { settings, workflowActive, nextScheduledAtReason } = view;
+  if (!view.nextScheduledAt && nextScheduledAtReason) {
+    // 문구는 기존과 같은 정지 상태 사용.
+    if (nextScheduledAtReason.kind === "workflow_disabled")
+      return { kind: "paused" };
+    if (nextScheduledAtReason.kind === "unknown") return nextScheduledAtReason;
+    return { kind: nextScheduledAtReason.kind };
+  }
+  // 이전 운영 API 응답의 호환 경로.
   if (
     settings.status === "known" &&
     !settings.value.paused &&
@@ -515,37 +500,36 @@ export function pendingCommits(sites: readonly SiteView[]): {
   commits: DeployCommit[];
   total: number;
   complete: boolean;
-  compare: { from: string; to: string } | null;
+  compareUrl: string | null;
 } {
   const seen = new Map<string, DeployCommit>();
   const known = sites.flatMap((s) =>
-    s.changes.status === "known" ? [s.changes.value] : [],
+    s.changes.status === "known"
+      ? [{ changes: s.changes.value, compareUrl: s.compareUrl }]
+      : [],
   );
   const complete = known.length === sites.length;
   // 긴 범위(더 뒤처진 사이트)의 순서를 기준으로 합침. 두 범위 모두 main 최신에서 끝나 짧은 쪽이 긴 쪽 안에 듦
   // 긴 쪽에 없는 커밋(기록이 갈라진 경우)은 맨 아래(가장 오래된 쪽)에 둠 → 최신 커밋이 잘리지 않음
   const ordered = [...known].sort(
-    (a, b) => b.commits.length - a.commits.length,
+    (a, b) => b.changes.commits.length - a.changes.commits.length,
   );
   const widest = ordered[0] ?? null;
-  for (const c of widest?.commits ?? []) seen.set(c.sha, c);
+  for (const c of widest?.changes.commits ?? []) seen.set(c.sha, c);
   const extra: DeployCommit[] = [];
   for (const value of ordered.slice(1))
-    for (const c of value.commits)
+    for (const c of value.changes.commits)
       if (!seen.has(c.sha)) {
         seen.set(c.sha, c);
         extra.push(c);
       }
   // GitHub Compare는 오래된 커밋부터 줌 → 최신 먼저
-  const all = [...extra, ...(widest?.commits ?? [])].reverse();
+  const all = [...extra, ...(widest?.changes.commits ?? [])].reverse();
   return {
     commits: all.slice(0, COMMIT_LIMIT),
     total: all.length,
     complete,
-    compare:
-      widest && widest.commits.length > 0
-        ? { from: widest.from, to: widest.to }
-        : null,
+    compareUrl: widest?.compareUrl ?? null,
   };
 }
 
