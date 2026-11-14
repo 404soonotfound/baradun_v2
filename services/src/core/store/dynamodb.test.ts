@@ -341,7 +341,7 @@ describe("DynamoOpsStore 게시 때의 공지 상태·되돌림 포인터·게�
     });
   });
 
-  it("게시 실행 결과: 마지막 실행은 시작 시각이 더 늦을 때만 덮어쓰고, 실패한 실행만 버전별로도 남긴다", async () => {
+  it("게시 실행 결과: 마지막 실행·시간별 결과를 남기고 실패는 버전으로도 찾는다", async () => {
     const { client, sent } = fakeClient();
     const ops = new DynamoOpsStore(client, OPS);
     const run = {
@@ -357,12 +357,22 @@ describe("DynamoOpsStore 게시 때의 공지 상태·되돌림 포인터·게�
       ExpressionAttributeNames: { "#at": "at" },
       ExpressionAttributeValues: { ":at": run.at },
     });
+    const receipt = (result: string) => ({
+      TableName: OPS,
+      Item: {
+        pk: "publish#run",
+        sk: `run#${new Date(NOW).toISOString()}`,
+        at: new Date(NOW).toISOString(),
+        result,
+        ttl: Math.floor((NOW + 8 * 24 * 60 * 60 * 1000) / 1000),
+      },
+    });
     await ops.putPublishRun(run, NOW);
-    expect(sent.map((c) => c.input)).toEqual([last(run)]);
+    expect(sent.map((c) => c.input)).toEqual([last(run), receipt("unchanged")]);
 
     const failed = { ...run, result: "failed", reason: "beach_ids" } as const;
     await ops.putPublishRun(failed, NOW);
-    expect(sent.slice(1).map((c) => c.input)).toEqual([
+    expect(sent.slice(2).map((c) => c.input)).toEqual([
       {
         TableName: OPS,
         Item: {
@@ -373,6 +383,7 @@ describe("DynamoOpsStore 게시 때의 공지 상태·되돌림 포인터·게�
         },
       },
       last(failed),
+      receipt("failed"),
     ]);
   });
 

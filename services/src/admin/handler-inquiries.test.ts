@@ -147,6 +147,9 @@ describe("문의 목록·상세", () => {
       in_progress: 0,
       resolved: 0,
       rejected: 0,
+      receivedLast7d: 1,
+      resolvedLast7d: 0,
+      oldestUnprocessedAt: "2026-11-02T00:00:00.000Z",
     });
     const next = await handleOps(
       event("GET", "/ops/inquiries", {

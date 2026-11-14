@@ -560,13 +560,18 @@ describe("목록", () => {
     );
     expect(result.statusCode).toBe(200);
     expect(result.body).not.toContain("11월 4일 새벽 갱신이 늦어요");
-    const items = parse(result).items as { id: string; state: string }[];
+    const items = parse(result).items as {
+      id: string;
+      state: string;
+      updatedBy?: string;
+    }[];
     expect(items.map((i) => i.state).sort()).toEqual([
       "draft",
       "live",
       "scheduled",
     ]);
     expect(items.every((i) => i.id.startsWith("sample-"))).toBe(true);
+    expect(items.every((i) => i.updatedBy === "데모 계정")).toBe(true);
   });
 
   it("잘못된 공지 ID는 404", async () => {
