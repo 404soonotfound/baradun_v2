@@ -452,6 +452,8 @@ export interface AppSettingsComparison {
   readonly currentMaintenance: AppSettingsView["maintenance"] | null;
   readonly currentMinWebBuild: number | null;
   readonly maintenancePending: boolean;
+  readonly maintenanceActiveChanged: boolean;
+  readonly maintenanceUntilChanged: boolean;
   readonly nextMaintenance: AppSettingsView["maintenance"] | null;
   readonly minWebBuildPending: boolean;
   readonly nextMinWebBuild: number | null;
@@ -466,12 +468,16 @@ export function compareAppSettings(
   const cur = parseCurrentSettings(current);
   const next = parseAppSettings(settingsRaw);
   const nextVal = next.kind === "ok" ? next.value : null;
-  const maintenanceDiff =
+  const activeChanged =
     cur.maintenance !== null &&
     nextVal !== null &&
-    (cur.maintenance.active !== nextVal.maintenance.active ||
-      cur.maintenance.until !== nextVal.maintenance.until);
-  const maintenancePending = maintenancePendingFlag === true || maintenanceDiff;
+    cur.maintenance.active !== nextVal.maintenance.active;
+  const untilChanged =
+    cur.maintenance !== null &&
+    nextVal !== null &&
+    cur.maintenance.until !== nextVal.maintenance.until;
+  const maintenancePending =
+    maintenancePendingFlag === true || activeChanged || untilChanged;
   const minWebBuildPending =
     cur.minWebBuild !== null &&
     nextVal !== null &&
@@ -480,6 +486,8 @@ export function compareAppSettings(
     currentMaintenance: cur.maintenance,
     currentMinWebBuild: cur.minWebBuild,
     maintenancePending,
+    maintenanceActiveChanged: activeChanged,
+    maintenanceUntilChanged: untilChanged,
     nextMaintenance: maintenancePending && nextVal ? nextVal.maintenance : null,
     minWebBuildPending,
     nextMinWebBuild:
@@ -571,7 +579,21 @@ export interface DiffLine {
   readonly text: string;
 }
 
-// 대기 중인 공지의 줄 단위 비교(update + before가 있으면 이전/이후 줄 비교, 없으면 추가/삭제 줄만)
+// 공지 before 모양 검사: title.ko·startsAt이 문자열이고 endsAt이 문자열 또는 null일 때만 유효
+function isValidNoticeBefore(raw: unknown): raw is NoticeSnapshot {
+  if (!raw || typeof raw !== "object") return false;
+  const b = raw as Record<string, unknown>;
+  const title = b.title;
+  return (
+    title !== null &&
+    typeof title === "object" &&
+    typeof (title as Record<string, unknown>).ko === "string" &&
+    typeof b.startsAt === "string" &&
+    (b.endsAt === null || typeof b.endsAt === "string")
+  );
+}
+
+// 대기 중인 공지의 줄 단위 비교(update + 유효한 before가 있으면 이전/이후 줄 비교, 없으면 추가/삭제 줄만)
 export function pendingNoticeDiff(
   notice: PendingNotice,
   kindLabel: string,
@@ -585,7 +607,7 @@ export function pendingNoticeDiff(
     `startsAt: ${formatTime(notice.startsAt)}`,
     `endsAt: ${notice.endsAt ? formatTime(notice.endsAt) : openEndLabel}`,
   ];
-  if (notice.change === "update" && notice.before) {
+  if (notice.change === "update" && isValidNoticeBefore(notice.before)) {
     const b = notice.before;
     const beforeRaw = [
       `kind: ${beforeKindLabel ?? kindLabel}`,

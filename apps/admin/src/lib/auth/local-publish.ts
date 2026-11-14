@@ -99,7 +99,7 @@ function overview(): PublishOverview {
           at: iso(base - 20 * MINUTE),
           source: "auto",
           reason: "beach_ids",
-          checks: { format: true, required: true, beachIds: false },
+          checks: { beachIds: false },
         },
         {
           result: "published",
