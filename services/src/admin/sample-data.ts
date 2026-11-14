@@ -2,6 +2,7 @@ import { INQUIRY_STATUSES, type InquiryStatus } from "../inquiry/policy";
 import type { InquiryDetail, InquiryPage, InquirySummary } from "./inquiries";
 import type { NoticeView } from "./notices";
 import { STATS_EVENTS, type StatsRange, type StatsResponse } from "./stats";
+import { STATS_TIME_ZONE, statsDates, type StatsTrends } from "./stats-trends";
 
 // 샘플 계정 전용 예시 문의 (결정 기록 D15-3·D16-A8, 화면 설계서 6장 ADM-INQ '샘플 계정: 실제 문의 대신 예시 문의')
 // 실제 문의 테이블을 읽지 않음. 실제 사람의 글·연락처를 넣지 않음
@@ -50,6 +51,7 @@ const EXAMPLES: ReadonlyArray<{
 ];
 
 const SAMPLE_IDS = new Set(EXAMPLES.map((e) => e.id));
+const SAMPLE_WEEK_HOURS = 7 * 24;
 
 function summaryOf(
   example: (typeof EXAMPLES)[number],
@@ -86,7 +88,24 @@ export function sampleInquiryPage(
       EXAMPLES.filter((e) => e.status === s).length,
     ]),
   ) as Record<InquiryStatus, number>;
-  return { items, nextCursor: null, counts };
+  // 운영 홈 문의 칸 지표(#479)도 예시 문의로 셈. 예시에는 완료 전환 기록이 없어 최근 7일 완료는 0
+  const recent = EXAMPLES.filter((e) => e.hoursAgo < SAMPLE_WEEK_HOURS);
+  const unprocessed = EXAMPLES.filter(
+    (e) => e.status === "received" || e.status === "in_progress",
+  );
+  const oldestHours = Math.max(...unprocessed.map((e) => e.hoursAgo));
+  return {
+    items,
+    nextCursor: null,
+    counts: {
+      ...counts,
+      receivedLast7d: recent.length,
+      resolvedLast7d: 0,
+      oldestUnprocessedAt: unprocessed.length
+        ? new Date(now.getTime() - oldestHours * 3_600_000).toISOString()
+        : null,
+    },
+  };
 }
 
 export function sampleInquiry(id: string, now: Date): InquiryDetail | null {
@@ -212,5 +231,83 @@ export function sampleStats(range: StatsRange, now: Date): StatsResponse {
       },
     },
     events: STATS_EVENTS,
+    trends: sampleTrends(range, now, m),
+  };
+}
+
+const NO_LOSS = { thresholding: false, sampling: false, otherRowLoss: false };
+const DAY_MS = 86_400_000;
+// 하루 안 시간대별 예시 사용자 비율(합 1). 밤에 적고 낮·저녁에 많음
+const HOUR_WEIGHTS = [
+  1, 1, 0, 0, 0, 1, 2, 3, 4, 5, 6, 6, 7, 7, 7, 6, 6, 6, 7, 6, 5, 4, 3, 2,
+].map((w, _, all) => w / all.reduce((sum, v) => sum + v, 0));
+
+// 예시 기간 추이(#480 응답과 같은 모양). 실제 GA4를 부르지 않고 범위·요청 시각으로 만듦
+function sampleTrends(range: StatsRange, now: Date, m: number): StatsTrends {
+  const dates = statsDates(range, now);
+  const days: string[] = [];
+  for (
+    let day = Date.parse(dates.current.startDate);
+    day <= Date.parse(dates.current.endDate);
+    day += DAY_MS
+  ) {
+    days.push(new Date(day).toISOString().slice(0, 10));
+  }
+  const dailyUsers = (index: number) => 150 + ((index * 37) % 60);
+  return {
+    ...dates.current,
+    ga4TimeZone: STATS_TIME_ZONE,
+    timeZoneMismatch: false,
+    daily: {
+      rows: days.map((date, index) => ({
+        date,
+        activeUsers: dailyUsers(index),
+        pageViews: dailyUsers(index) * 2 + 40,
+      })),
+      metadata: NO_LOSS,
+    },
+    hourly: {
+      rows: HOUR_WEIGHTS.map((weight, hour) => {
+        const reportedDays =
+          hour < dates.currentHour ? days.length : days.length - 1;
+        return {
+          hour,
+          averageActiveUsers: reportedDays
+            ? Math.round(weight * 180 * 10) / 10
+            : null,
+          reportedDays,
+        };
+      }),
+      metadata: NO_LOSS,
+    },
+    previous: dates.previous
+      ? {
+          ...dates.previous,
+          activeUsers: 152 * m,
+          pageViews: 371 * m,
+          metadata: NO_LOSS,
+        }
+      : null,
+    newUsers: 61 * m,
+    newUsersMetadata: NO_LOSS,
+    topScreens: {
+      rows: [
+        { path: "/", pageViews: 140 * m, other: false },
+        { path: "/spots/haeundae", pageViews: 85 * m, other: false },
+        { path: "/explore", pageViews: 72 * m, other: false },
+        { path: "/spots/gwangan-ri", pageViews: 64 * m, other: false },
+        { path: "/en/spots/gyeongpo", pageViews: 9 * m, other: false },
+      ],
+      metadata: NO_LOSS,
+    },
+    referrers: {
+      rows: [
+        { channel: "Organic Search", sessions: 96 * m, other: false },
+        { channel: "Direct", sessions: 70 * m, other: false },
+        { channel: "Organic Social", sessions: 21 * m, other: false },
+        { channel: "Referral", sessions: 8 * m, other: false },
+      ],
+      metadata: NO_LOSS,
+    },
   };
 }
