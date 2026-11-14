@@ -41,11 +41,19 @@ import { LOADING_TIMES } from "@/lib/loading-timing";
 import { copula } from "@/lib/korean";
 import { fill, messages } from "@/lib/messages";
 import { fetchNotices, type NoticeView } from "@/lib/notices";
-import { fetchStats, statsShape, type StatsResponse } from "@/lib/stats";
+import {
+  changePercent,
+  fetchStats,
+  SHAPE_ALL,
+  statsShape,
+  trendRangeText,
+  trendUnavailable,
+  type StatsResponse,
+} from "@/lib/stats";
 import { pageWindow } from "@/lib/paging";
 import { AdminShell } from "./admin-shell";
 import type { Beaches } from "./audit-screen";
-import { BarChart, shortDate, type ChartRow } from "./bar-chart";
+import { BarChart, hasNull, shortDate, type ChartRow } from "./bar-chart";
 import { Badge } from "./beach-status";
 import {
   CELL_END,
@@ -1132,8 +1140,9 @@ function Todos({ parts }: { parts: Parts }) {
   );
 }
 
-// 이용 칸 지표 하나(보드 V1 '사용자'·'화면 조회'). 앞 기간 비교는 응답에 없어 그리지 않음
+// 이용 칸 지표 하나(보드 V1 '사용자'·'화면 조회'): 제목 + 앞 기간 대비 배지, 값 + 오른쪽 '앞 28일 N'
 // 일별 그래프(보드: 그래프 128 + 날짜 줄 24)는 응답에 일별 칸이 있을 때만(이용 통계 화면과 같은 기준)
+// 앞 기간이 null(조회 실패)이거나 앞 값이 0이면 배지를 숨김. 좋고 나쁨 색은 쓰지 않음
 function UsageMetric({
   part,
   placeholder,
@@ -1143,6 +1152,9 @@ function UsageMetric({
   width,
   showDaily,
   daily,
+  unavailable,
+  change,
+  previousText,
 }: {
   part: Parts["usage"];
   placeholder: boolean;
@@ -1153,6 +1165,10 @@ function UsageMetric({
   showDaily: boolean;
   // 일별 값. null이면 리포트를 못 받음
   daily: readonly ChartRow[] | null;
+  unavailable: string;
+  change: number | null;
+  // '앞 28일 4,147'. 앞 기간이 없으면 null
+  previousText: string | null;
 }) {
   const data = valueOf(part);
   const known =
@@ -1162,17 +1178,42 @@ function UsageMetric({
     value !== null;
   return (
     <div className="min-w-0">
-      <h3 className="text-body font-bold text-text-default">{label}</h3>
-      <p className="mt-2 text-num-s font-normal text-text-default tabular-nums">
-        {placeholder ? (
-          <SkLine className={width} />
-        ) : known ? (
-          <>
-            {value.toLocaleString("ko-KR")}
-            {stale && <StaleMark />}
-          </>
-        ) : (
-          h.unknown
+      <div className="flex flex-wrap items-center gap-x-2">
+        <h3 className="text-body font-bold text-text-default">{label}</h3>
+        {!placeholder && known && change !== null && (
+          <span
+            className={`${BADGE} bg-bg-page font-medium text-text-body ring-1 ring-border-default ring-inset`}
+          >
+            <span className="sr-only">{t.stats.changeLabel} </span>
+            {fill(t.stats.changeValue, {
+              sign: change > 0 ? "+" : "",
+              percent: change,
+            })}
+          </span>
+        )}
+        {showDaily && !placeholder && hasNull(daily) && (
+          <span className="text-caption text-text-muted">
+            {t.stats.nullLegend}
+          </span>
+        )}
+      </div>
+      <p className="mt-2 flex flex-wrap items-baseline justify-between gap-x-3">
+        <span className="text-num-s font-normal text-text-default tabular-nums">
+          {placeholder ? (
+            <SkLine className={width} />
+          ) : known ? (
+            <>
+              {value.toLocaleString("ko-KR")}
+              {stale && <StaleMark />}
+            </>
+          ) : (
+            h.unknown
+          )}
+        </span>
+        {!placeholder && previousText && (
+          <span className="text-label-s text-text-muted tabular-nums">
+            {previousText}
+          </span>
         )}
       </p>
       {showDaily && (
@@ -1181,7 +1222,7 @@ function UsageMetric({
             <SkChart className="h-full" />
           ) : daily === null ? (
             <p className="flex h-full items-center justify-center rounded-admin-box border border-dashed border-border-strong px-4 text-center text-body-s text-text-body">
-              {t.stats.subReportUnavailable}
+              {unavailable}
             </p>
           ) : (
             <BarChart
@@ -1209,15 +1250,32 @@ function Usage({
   const slot = useSlot(part);
   const placeholder = slot.placeholder || part.state === "loading";
   const data = placeholder ? null : valueOf(part);
-  // 받는 중에는 마지막으로 받은 응답 기준(첫 읽기 전에는 지금 서버가 주는 칸만)
+  // 칸 유무는 마지막으로 받은 응답 기준. 받은 응답이 없으면 받는 중에만 지금 서버가 주는 칸 모두(자리표시 크기),
+  // 불러오지 못했으면 그래프 칸을 두지 않음(칸 실패 줄 하나로 알림)
   const last = valueOf(part);
   const period =
     data?.configured && data.period.status === "ok" ? data.period : null;
-  const shape = statsShape(
-    period ??
-      (last?.configured && last.period.status === "ok" ? last.period : null),
-  );
-  const daily = period?.daily ?? null;
+  // 기간 추이(GH-477). 기간 통계와 따로 옴
+  const trends = data?.configured ? (data.trends ?? null) : null;
+  const shape = last
+    ? statsShape(last.configured ? last.trends : undefined)
+    : part.state === "loading"
+      ? SHAPE_ALL
+      : statsShape(undefined);
+  const daily = trends?.daily?.rows ?? null;
+  const previous = trends?.previous ?? null;
+  const unavailable = trendUnavailable(trends);
+  const previousText = (v: number | null) =>
+    previous
+      ? fill(t.stats.previousValue, {
+          label: t.stats.previousLabel[USAGE_RANGE],
+          value: v === null ? t.stats.emptyValue : v.toLocaleString("ko-KR"),
+        })
+      : null;
+  // 기간 표시(보드 '10월 6일 – 11월 2일 · 앞 28일과 비교'): 응답의 KST 날짜. 추이가 없으면 고정 문구
+  const rangeText =
+    trendRangeText(trends, USAGE_RANGE, t.stats.subtitleSeparator) ??
+    h.usageRange;
   const live =
     data && data.realtime.status === "ok" && data.realtime.activeUsers !== null
       ? fill(h.usageLive, {
@@ -1238,7 +1296,9 @@ function Usage({
         </span>
       </div>
       <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-border-default pb-4 text-body-s">
-        <span className="text-text-body">{h.usageRange}</span>
+        <span className="text-text-body">
+          {placeholder ? <SkLine className="w-[232px] h-[8px]" /> : rangeText}
+        </span>
         {/* 이용 칸 자기 기준 시각: GA 집계를 받은 시각(서버 5분 저장 포함). 머리의 1분 주기와 따로 5분마다 */}
         {placeholder ? (
           <span>
@@ -1264,7 +1324,7 @@ function Usage({
               <SkLine className="w-[220px] max-w-full h-[8px]" />
             </span>
           ) : (
-            period && (
+            data?.configured && (
               <span className="basis-full text-text-body">
                 {h.usageDailyMissing}
               </span>
@@ -1308,6 +1368,12 @@ function Usage({
               value: d.activeUsers,
             })) ?? null
           }
+          unavailable={unavailable}
+          change={changePercent(
+            period?.activeUsers ?? null,
+            previous?.activeUsers ?? null,
+          )}
+          previousText={previousText(previous?.activeUsers ?? null)}
         />
         <UsageMetric
           part={part}
@@ -1324,6 +1390,12 @@ function Usage({
               value: d.pageViews,
             })) ?? null
           }
+          unavailable={unavailable}
+          change={changePercent(
+            period?.pageViews ?? null,
+            previous?.pageViews ?? null,
+          )}
+          previousText={previousText(previous?.pageViews ?? null)}
         />
       </div>
     </section>
