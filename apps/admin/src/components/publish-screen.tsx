@@ -309,11 +309,34 @@ function AppSettingsBar({
     : "bg-text-muted";
   const nextItems: string[] = [];
   if (cmp.nextMaintenance !== null) {
-    nextItems.push(
-      cmp.nextMaintenance.active
-        ? t.settings.nextMaintenanceOn
-        : t.settings.nextMaintenanceOff,
-    );
+    if (cmp.maintenanceActiveChanged || cmp.currentMaintenance === null) {
+      nextItems.push(
+        cmp.nextMaintenance.active
+          ? t.settings.nextMaintenanceOn
+          : t.settings.nextMaintenanceOff,
+      );
+      if (cmp.maintenanceUntilChanged && cmp.nextMaintenance.until) {
+        nextItems.push(
+          fill(t.settings.nextMaintenanceUntil, {
+            time: timeOf(cmp.nextMaintenance.until),
+          }),
+        );
+      }
+    } else if (cmp.maintenanceUntilChanged) {
+      nextItems.push(
+        cmp.nextMaintenance.until
+          ? fill(t.settings.nextMaintenanceUntil, {
+              time: timeOf(cmp.nextMaintenance.until),
+            })
+          : t.settings.nextMaintenanceNoUntil,
+      );
+    } else {
+      nextItems.push(
+        cmp.nextMaintenance.active
+          ? t.settings.nextMaintenanceOn
+          : t.settings.nextMaintenanceOff,
+      );
+    }
   }
   if (cmp.nextMinWebBuild !== null) {
     nextItems.push(
@@ -442,6 +465,14 @@ function NoticeDiffBox({
           {t.pendingUpdateNote}
         </p>
       )}
+      {notice.change === "update" &&
+        diff.hasBefore &&
+        diff.added === 0 &&
+        diff.removed === 0 && (
+          <p className="border-t border-border-default bg-bg-page px-3 py-1 font-sans text-caption text-text-muted">
+            {t.pendingUpdateBodyOrEnNote}
+          </p>
+        )}
     </div>
   );
 }
@@ -1255,30 +1286,7 @@ function ChecksSection({ item }: { item: HistoryItem | null }) {
       ) : (
         <>
           <div className="divide-y divide-border-default border-t border-border-default">
-            {decomposed ? (
-              decomposed.map((row) => (
-                <div
-                  key={row.key}
-                  className="flex items-center justify-between gap-3 py-2.5 text-body-s"
-                >
-                  <div>
-                    <p className="font-medium text-text-default">
-                      {t.checksItems[row.key]}
-                    </p>
-                    <p className="text-caption text-text-muted">
-                      {t.checksResult[row.status]}
-                    </p>
-                  </div>
-                  {row.status === "pass" ? (
-                    <PassIcon />
-                  ) : row.status === "fail" ? (
-                    <FailIcon />
-                  ) : (
-                    <UnknownIcon />
-                  )}
-                </div>
-              ))
-            ) : item.result === "failed" ? (
+            {item.result === "failed" ? (
               <>
                 <div className="flex items-center justify-between gap-3 py-2.5 text-body-s">
                   <div>
@@ -1331,6 +1339,28 @@ function ChecksSection({ item }: { item: HistoryItem | null }) {
                 )}
               </>
             )}
+            {decomposed?.map((row) => (
+              <div
+                key={row.key}
+                className="flex items-center justify-between gap-3 py-2.5 text-body-s"
+              >
+                <div>
+                  <p className="font-medium text-text-default">
+                    {t.checksItems[row.key]}
+                  </p>
+                  <p className="text-caption text-text-muted">
+                    {t.checksResult[row.status]}
+                  </p>
+                </div>
+                {row.status === "pass" ? (
+                  <PassIcon />
+                ) : row.status === "fail" ? (
+                  <FailIcon />
+                ) : (
+                  <UnknownIcon />
+                )}
+              </div>
+            ))}
           </div>
           {item.result === "failed" && (
             <p className="text-caption text-text-muted">{t.checksFailFoot}</p>
@@ -1738,7 +1768,7 @@ export function PublishScreen({
             <SummaryCell
               label={t.last24h.label}
               value={t.last24h.unknown}
-              hint={t.last24h.unknownHint}
+              hint={fill(t.unread, { what: t.unreadWhat.last24h })}
             />
           )}
         </dl>
