@@ -1201,7 +1201,11 @@ test("사이트 배포: 응답 모양이 틀리면 칸마다 확인 못 함으�
   await mockPublish(page, {
     siteDeploy: () => ({
       status: 200,
-      body: { readiness: "ready", workflowUrl: "javascript:alert(1)" },
+      body: {
+        generatedAt: new Date().toISOString(),
+        readiness: "ready",
+        workflowUrl: "javascript:alert(1)",
+      },
     }),
   });
   await openPublish(page);
@@ -1217,6 +1221,9 @@ test("사이트 배포: 응답 모양이 틀리면 칸마다 확인 못 함으�
   await expect(
     region.getByText("GitHub 배포 화면 주소를 확인하지 못했어요"),
   ).toBeVisible();
+  // 정기 배포 시각이 없어도 설정을 확인하지 못했으면 '멈춤'이 아니라 확인 못 함
+  await expect(region.getByText("다음 정기 배포 확인 못 함")).toBeVisible();
+  await expect(region.getByText("정기 배포 멈춤")).toHaveCount(0);
   await expect(
     region.getByRole("link", { name: /GitHub에서 배포 열기/ }),
   ).toHaveCount(0);
@@ -1239,6 +1246,7 @@ test("사이트 배포: 불러오지 못하면 무슨 일·영향·다음 행동
   await expect(alert).toContainText(
     "잠시 뒤 다시 불러오거나 GitHub에서 확인해 주세요",
   );
+  await expect(alert).toContainText("req-site-deploy");
   await expect(region.getByText(READY_TEXT)).toHaveCount(0);
   await region.getByRole("button", { name: "다시 불러오기" }).click();
   await expect(
@@ -1246,6 +1254,46 @@ test("사이트 배포: 불러오지 못하면 무슨 일·영향·다음 행동
   ).toBeVisible();
   await expect(alert).toHaveCount(0);
   expect(calls.siteDeploys).toBe(2);
+});
+
+test("사이트 배포: 200이어도 본문을 읽을 수 없으면(생성 시각 없음) 확인 시각을 지어내지 않고 실패 문구", async ({
+  page,
+}) => {
+  await signIn(page);
+  await mockPublish(page, {
+    siteDeploy: () => ({ status: 200, body: null }),
+  });
+  await openPublish(page);
+  const region = siteDeploy(page);
+  await expect(region.getByRole("alert")).toContainText(
+    "배포 정보를 불러오지 못했어요",
+  );
+  await expect(region.getByText(/조회 기준/)).toHaveCount(0);
+  await expect(region.getByText(READY_TEXT)).toHaveCount(0);
+});
+
+test("사이트 배포: 배포 커밋은 확인했고 커밋 제목만 못 읽으면 확인한 SHA는 그대로 보인다", async ({
+  page,
+}) => {
+  await signIn(page);
+  await mockPublish(page, {
+    siteDeploy: () => {
+      const body = localSiteDeployView("ready", Date.now());
+      const site = (body.sites as Record<string, unknown>[])[0]!;
+      site.detail = {
+        status: "unknown",
+        reason: "timeout",
+        checkedAt: new Date().toISOString(),
+      };
+      return { status: 200, body };
+    },
+  });
+  await openPublish(page);
+  const site = siteDeploy(page).getByRole("region", { name: "사용자 사이트" });
+  await expect(site.getByRole("link", { name: /^0000000/ })).toBeVisible();
+  await expect(site.getByText("커밋 제목 확인 못 함")).toBeVisible();
+  await expect(site.getByText("배포 커밋 확인 못 함")).toHaveCount(0);
+  await expect(siteDeploy(page).getByText(READY_TEXT)).toHaveCount(0);
 });
 
 test("사이트 배포: 다시 읽기가 실패해도 앞 값을 그대로 두고 언제 받은 값인지 알린다", async ({

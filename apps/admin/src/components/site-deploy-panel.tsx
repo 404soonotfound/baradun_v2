@@ -1,6 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import type { OpsResult } from "@/lib/auth/ops-fetch";
 import { useAuthSession, useSessionSnapshot } from "@/lib/auth/provider";
 import { kstDateTime } from "@/lib/inquiries";
@@ -9,10 +16,11 @@ import {
   actionRunUrl,
   authFailed,
   fetchSiteDeploy,
-  issueNumber,
+  issuePrefix,
   kstTime,
   parseSiteDeploy,
   lastText,
+  manualDay,
   pendingCommits,
   reasonText,
   refreshInterval,
@@ -52,6 +60,10 @@ const tl = messages.loading;
 const TICK_MS = 5_000;
 
 type Failed = Extract<OpsResult<unknown>, { ok: false }>;
+
+// 화면 시각의 기준(마지막 응답을 받은 시각, ms). 오늘·내일·남은 날·날짜 붙이기를 이 시각으로 셈
+// 렌더 중에 시계를 읽지 않으려고 응답 때 정한 값을 넘김
+const NowContext = createContext(0);
 type Tone = "success" | "warn" | "fail" | "neutral";
 
 const TONE_TEXT: Record<Tone, string> = {
@@ -161,6 +173,7 @@ function Unknown<T>({
   field: Extract<Field<T>, { status: "unknown" }>;
   render?: (value: T) => ReactNode;
 }) {
+  const now = useContext(NowContext);
   return (
     <div className="flex flex-col gap-1">
       <p className="flex items-start gap-1.5 text-body-s">
@@ -171,13 +184,13 @@ function Unknown<T>({
           <span className="font-semibold text-text-default">{label}</span>
           <span className="text-text-body">
             {" "}
-            · {reasonText(field.reason, field.retryAt)}
+            · {reasonText(field.reason, now, field.retryAt)}
           </span>
         </span>
       </p>
       {field.last && render && (
         <div className="flex flex-col gap-0.5 border-l-2 border-border-default pl-2.5">
-          <p className="text-caption text-text-muted">{lastText(field)}</p>
+          <p className="text-caption text-text-muted">{lastText(field, now)}</p>
           <div className="text-text-muted">{render(field.last.value)}</div>
         </div>
       )}
@@ -193,9 +206,8 @@ function CommitLine({
   repo: string | null;
 }) {
   const short = commit.sha.slice(0, 7);
-  const issue = issueNumber(commit.title);
-  const rest =
-    issue === null ? commit.title : commit.title.slice(`GH-${issue}`.length);
+  const prefix = issuePrefix(commit.title);
+  const rest = prefix ? prefix.rest : commit.title;
   return (
     <span className="min-w-0 text-body-s break-words text-text-default">
       {repo ? (
@@ -208,13 +220,13 @@ function CommitLine({
       ) : (
         <code className="font-mono">{short}</code>
       )}{" "}
-      {issue !== null &&
+      {prefix &&
         (repo ? (
-          <ExternalLink href={`${repo}/issues/${issue}`}>
-            GH-{issue}
+          <ExternalLink href={`${repo}/issues/${prefix.issue}`}>
+            {prefix.label}
           </ExternalLink>
         ) : (
-          <span>GH-{issue}</span>
+          <span>{prefix.label}</span>
         ))}
       <span>{rest}</span>
     </span>
@@ -272,6 +284,7 @@ function SiteCard({ site, repo }: { site: SiteView; repo: string | null }) {
     <CommitLine commit={commit} repo={repo} />
   );
   const run = site.matchedRun;
+  const now = useContext(NowContext);
   return (
     <section
       aria-labelledby={`site-deploy-${site.app}`}
@@ -291,7 +304,9 @@ function SiteCard({ site, repo }: { site: SiteView; repo: string | null }) {
           <>
             {deployedCommit(site.detail.value)}
             <p className="text-caption text-text-muted">
-              {fill(t.checkedAt, { time: kstTime(site.deployed.checkedAt) })}
+              {fill(t.checkedAt, {
+                time: kstTime(site.deployed.checkedAt, now),
+              })}
               {run && (
                 <>
                   {" · "}
@@ -313,12 +328,34 @@ function SiteCard({ site, repo }: { site: SiteView; repo: string | null }) {
             )}
           />
         ) : (
+          // 배포 커밋(표지)은 확인했고 커밋 제목 조회만 못 함 → 확인한 SHA는 그대로 보임
           site.detail.status === "unknown" && (
-            <Unknown
-              label={t.deployedUnknown}
-              field={site.detail}
-              render={deployedCommit}
-            />
+            <>
+              <span className="text-body-s text-text-default">
+                {repo ? (
+                  <ExternalLink
+                    href={`${repo}/commit/${site.deployed.value}`}
+                    className="font-mono"
+                  >
+                    {site.deployed.value.slice(0, 7)}
+                  </ExternalLink>
+                ) : (
+                  <code className="font-mono">
+                    {site.deployed.value.slice(0, 7)}
+                  </code>
+                )}
+              </span>
+              <p className="text-caption text-text-muted">
+                {fill(t.checkedAt, {
+                  time: kstTime(site.deployed.checkedAt, now),
+                })}
+              </p>
+              <Unknown
+                label={t.detailUnknown}
+                field={site.detail}
+                render={deployedCommit}
+              />
+            </>
           )
         )}
       </div>
@@ -347,6 +384,7 @@ function SiteCard({ site, repo }: { site: SiteView; repo: string | null }) {
 }
 
 function ReadinessLine({ view }: { view: SiteDeployView }) {
+  const now = useContext(NowContext);
   const tone = READINESS_TONE[view.readiness];
   const runUrl =
     view.readiness === "deploying" || view.readiness === "approval_pending"
@@ -376,7 +414,7 @@ function ReadinessLine({ view }: { view: SiteDeployView }) {
           </ExternalLink>
         )}
         <span className="text-caption text-text-muted">
-          {fill(t.readinessAt, { time: kstTime(view.readinessCheckedAt) })}
+          {fill(t.readinessAt, { time: kstTime(view.readinessCheckedAt, now) })}
         </span>
       </p>
       {view.readiness === "paused" && (
@@ -410,10 +448,14 @@ function Summary({
 }) {
   const ciState: CiState | "unknown" =
     view.ci.status === "known" ? view.ci.value : "unknown";
-  const schedule = scheduleLabel(
-    view.nextScheduledAt,
-    Date.parse(view.generatedAt),
-  );
+  const now = useContext(NowContext);
+  const schedule = scheduleLabel(view, now);
+  const manualText = (value: { since: string; requests: number }) => {
+    const day = manualDay(value.since, now);
+    return day
+      ? fill(t.manualOn, { date: day, count: value.requests })
+      : fill(t.manual, { count: value.requests });
+  };
   return (
     <dl className="grid grid-cols-1 overflow-hidden rounded-admin-box border border-border-default bg-bg-surface lg:grid-cols-3">
       <SummaryItem label={t.mainTitle}>
@@ -434,34 +476,49 @@ function Summary({
           </span>
           {view.ci.status === "unknown" && (
             <span className="text-caption text-text-muted">
-              · {reasonText(view.ci.reason, view.ci.retryAt)}
+              · {reasonText(view.ci.reason, now, view.ci.retryAt)}
             </span>
           )}
         </span>
       </SummaryItem>
       <SummaryItem label={t.scheduleTitle}>
-        <span className="text-title-s font-normal text-text-default tabular-nums">
-          {schedule.kind === "paused"
-            ? t.schedule.paused
-            : fill(t.schedule[schedule.kind], {
-                time: schedule.time,
-                date: schedule.kind === "later" ? schedule.date : "",
-              })}
-        </span>
+        {schedule.kind === "unknown" ? (
+          <p className="flex items-start gap-1.5 text-body-s">
+            <span className="mt-0.5">
+              <ToneIcon tone="neutral" />
+            </span>
+            <span>
+              <span className="font-semibold text-text-default">
+                {t.scheduleUnknown}
+              </span>
+              <span className="text-text-body">
+                {" "}
+                · {reasonText(schedule.reason, now)}
+              </span>
+            </span>
+          </p>
+        ) : (
+          <span className="text-title-s font-normal text-text-default tabular-nums">
+            {schedule.kind === "paused"
+              ? t.schedule.paused
+              : fill(t.schedule[schedule.kind], {
+                  time: schedule.time,
+                  date: schedule.kind === "date" ? schedule.date : "",
+                })}
+          </span>
+        )}
       </SummaryItem>
       <SummaryItem label={t.manualTitle}>
         {view.manualCount.status === "known" ? (
           <span className="text-body-s text-text-default tabular-nums">
-            {fill(t.manual, { count: view.manualCount.value.requests })}
+            {manualText(view.manualCount.value)}
           </span>
         ) : (
           <Unknown
             label={t.manualUnknown}
             field={view.manualCount}
             render={(value) => (
-              <span className="text-body-s">
-                {fill(t.manual, { count: value.requests })}
-              </span>
+              <span className="text-body-s">{manualText(value)}</span>
             )}
           />
         )}
@@ -540,10 +597,8 @@ function CommitList({
 }
 
 function TokenLine({ view }: { view: SiteDeployView }) {
-  const state = tokenExpiryState(
-    view.tokenExpiry,
-    Date.parse(view.generatedAt),
-  );
+  const now = useContext(NowContext);
+  const state = tokenExpiryState(view.tokenExpiry, now);
   const auth = authFailed(view);
   if (state.kind === "hidden" && !auth) return null;
   return (
@@ -551,7 +606,7 @@ function TokenLine({ view }: { view: SiteDeployView }) {
       {state.kind === "unknown" && (
         <p className="flex items-center gap-1.5 text-text-body">
           <ToneIcon tone="neutral" />
-          {t.tokenUnknown} · {reasonText(state.reason)}
+          {t.tokenUnknown} · {reasonText(state.reason, now)}
         </p>
       )}
       {(state.kind === "ok" ||
@@ -671,6 +726,8 @@ function useSiteDeploy(enabled: boolean) {
     at: string;
   } | null>(null);
   const [failure, setFailure] = useState<Failed | null>(null);
+  // 마지막 응답(성공·실패)을 받은 시각. 화면 시각 계산의 기준
+  const [now, setNow] = useState(0);
   const [reading, setReading] = useState(false);
   const [round, setRound] = useState(0);
   // 다음 다시 읽기 간격(받은 readiness로 정함). 바뀌어도 바로 다시 읽지 않게 ref로 둠
@@ -688,14 +745,25 @@ function useSiteDeploy(enabled: boolean) {
       void fetchSiteDeploy(() => session.accessToken()).then((result) => {
         if (!live || id !== seq) return;
         setReading(false);
-        if (result.ok) {
-          const view = parseSiteDeploy(result.body);
+        const at = Date.now();
+        setNow(at);
+        const view = result.ok ? parseSiteDeploy(result.body) : null;
+        if (view) {
           interval.current = refreshInterval(view.readiness);
-          setGood({ view, at: new Date().toISOString() });
+          setGood({ view, at: new Date(at).toISOString() });
           setFailure(null);
         } else {
-          // 실패해도 앞 값은 그대로 둠(값 유지)
-          setFailure(result);
+          // 실패·읽을 수 없는 본문도 앞 값은 그대로 둠(값 유지)
+          setFailure(
+            result.ok
+              ? {
+                  ok: false,
+                  status: result.status,
+                  code: "invalid",
+                  requestId: null,
+                }
+              : result,
+          );
         }
       });
     };
@@ -722,6 +790,7 @@ function useSiteDeploy(enabled: boolean) {
   return {
     data: good,
     failure,
+    now,
     reading,
     reload: () => setRound((n) => n + 1),
   };
@@ -765,20 +834,40 @@ export function SiteDeployPanel({ demo }: { demo: boolean }) {
       ) : (
         <>
           <LoadingStatus busy={firstPending} label={t.loading} />
-          {failed && (
-            <Notice tone="fail" title={t.failTitle} role="alert">
-              <p>{t.failImpact}</p>
-              <p>{t.failNext}</p>
-              {state.data && (
-                <p className="mt-1 text-text-muted">
-                  {fill(t.failStale, { time: kstTime(state.data.at) })}
-                </p>
-              )}
-            </Notice>
-          )}
+          {failed &&
+            (state.failure?.code === "reauth" ? (
+              <Notice
+                tone="warn"
+                title={messages.inquiries.reauth}
+                role="alert"
+              />
+            ) : (
+              <Notice tone="fail" title={t.failTitle} role="alert">
+                <p>{t.failImpact}</p>
+                <p>{t.failNext}</p>
+                {state.failure &&
+                  "requestId" in state.failure &&
+                  state.failure.requestId && (
+                    <p>
+                      {fill(messages.inquiries.requestId, {
+                        id: state.failure.requestId,
+                      })}
+                    </p>
+                  )}
+                {state.data && (
+                  <p className="mt-1 text-text-muted">
+                    {fill(t.failStale, {
+                      time: kstTime(state.data.at, state.now),
+                    })}
+                  </p>
+                )}
+              </Notice>
+            ))}
           {state.data ? (
             <div className={loadClass(timing)}>
-              <Content view={state.data.view} />
+              <NowContext.Provider value={state.now}>
+                <Content view={state.data.view} />
+              </NowContext.Provider>
               <p className="mt-3 text-caption text-text-muted">
                 {refreshInterval(state.data.view.readiness) === 30_000
                   ? t.autoHalf

@@ -546,6 +546,7 @@
     },
     "deployedCommit": "마지막으로 확인한 배포 커밋",
     "deployedUnknown": "배포 커밋 확인 못 함",
+    "detailUnknown": "커밋 제목 확인 못 함",
     "checkedAt": "{time} 확인",
     "runEvent": {
       "workflow_dispatch": "수동 배포",
@@ -582,14 +583,16 @@
     },
     "mainUnknown": "main 최신 커밋 확인 못 함",
     "scheduleTitle": "다음 정기 배포",
+    "scheduleUnknown": "다음 정기 배포 확인 못 함",
     "schedule": {
       "today": "오늘 {time}",
       "tomorrow": "내일 {time}",
-      "later": "{date} {time}",
+      "date": "{date} {time}",
       "paused": "정기 배포 멈춤"
     },
     "manualTitle": "수동 배포 요청",
     "manual": "오늘 수동 배포 요청 {count}회 · 1회 약 US$0.017",
+    "manualOn": "{date} 수동 배포 요청 {count}회 · 1회 약 US$0.017",
     "manualUnknown": "오늘 수동 배포 요청 확인 못 함",
     "manualNote": "한국 시각 자정부터 · 실패·취소한 요청도 세요 · 횟수를 막지 않아요",
     "open": "GitHub에서 배포 열기",
