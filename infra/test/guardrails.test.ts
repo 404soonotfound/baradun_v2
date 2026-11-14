@@ -1115,16 +1115,102 @@ describe("CDK bootstrap 실행 정책 (11장, BRD-121)", () => {
       "arn:aws:iam::aws:policy/ReadOnlyAccess",
       "arn:aws:iam::aws:policy/AWSCloudFormationReadOnlyAccess",
     ]);
+  });
+
+  const setupBucket = `arn:aws:s3:::cdk-hnb659fds-assets-${ACCOUNT}-ap-northeast-2`;
+  const setupRepository = `arn:aws:ecr:ap-northeast-2:${ACCOUNT}:repository/cdk-hnb659fds-container-assets-${ACCOUNT}-ap-northeast-2`;
+
+  // 조건부 Allow도 잠재 허용으로 셈. NotAction·NotResource도 검사해 우회하는 회귀를 막음
+  const couldAllow = (
+    statement: BootstrapStatement,
+    action: string,
+    arn: string,
+  ) => {
+    const actionMatches = (candidate: string) =>
+      arnMatches(candidate.toLowerCase(), action.toLowerCase());
+    const resourceMatches = (candidate: string) =>
+      arnMatches(candidate.replaceAll("${aws:PrincipalAccount}", ACCOUNT), arn);
+    return (
+      statement.Effect === "Allow" &&
+      (statement.NotAction !== undefined
+        ? !toList(statement.NotAction as string | string[]).some(actionMatches)
+        : toList(statement.Action).some(actionMatches)) &&
+      (statement.NotResource !== undefined
+        ? !toList(statement.NotResource as string | string[]).some(
+            resourceMatches,
+          )
+        : toList(statement.Resource).some(resourceMatches))
+    );
+  };
+
+  it("CDK 2.1145 기본 자산의 서울 핸들러 갱신·복구 범위만 초기 설정에 허용함", () => {
+    const { policy } = loadBootstrapPolicy("cdk-toolkit-setup-policy.json");
+    const allows = (action: string, arn: string) =>
+      policy.Statement.some((statement) => couldAllow(statement, action, arn));
+    // 표준 템플릿의 Private ACL, 암호화, 수명 주기, IMMUTABLE 태그를 갱신·복구함
+    // DeleteBucketEncryption·DeleteBucketLifecycle API는 각각 PutEncryptionConfiguration·PutLifecycleConfiguration으로 인가함
+    for (const action of [
+      "s3:PutBucketAcl",
+      "s3:PutEncryptionConfiguration",
+      "s3:PutLifecycleConfiguration",
+      "s3:PutBucketVersioning",
+    ]) {
+      expect(allows(action, setupBucket), action).toBe(true);
+    }
+    expect(allows("ecr:PutImageTagMutability", setupRepository)).toBe(true);
+    // 표준 템플릿은 저장소 검사 옵션, 버킷 복제와 고객 관리 키를 설정하지 않음
+    expect(allows("ecr:PutImageScanningConfiguration", setupRepository)).toBe(
+      false,
+    );
+    expect(allows("s3:PutReplicationConfiguration", setupBucket)).toBe(false);
+    expect(
+      policy.Statement.flatMap((s) => toList(s.Action)).some((a) =>
+        a.startsWith("kms:"),
+      ),
+    ).toBe(false);
+  });
+
+  it("런타임 경계와 일상 배포 정책은 CDKToolkit 관리 동작을 허용하지 않음", () => {
+    const operations = [
+      [
+        "cloudformation:CreateChangeSet",
+        `arn:aws:cloudformation:ap-northeast-2:${ACCOUNT}:stack/CDKToolkit/example`,
+      ],
+      ["s3:PutBucketPolicy", setupBucket],
+      ["ecr:PutImageTagMutability", setupRepository],
+      [
+        "iam:PutRolePolicy",
+        `arn:aws:iam::${ACCOUNT}:role/cdk-hnb659fds-cfn-exec-role-${ACCOUNT}-ap-northeast-2`,
+      ],
+      [
+        "ssm:PutParameter",
+        `arn:aws:ssm:ap-northeast-2:${ACCOUNT}:parameter/cdk-bootstrap/hnb659fds/version`,
+      ],
+    ] as const;
+    const { policy: setup } = loadBootstrapPolicy(
+      "cdk-toolkit-setup-policy.json",
+    );
     const daily = [
       ...executionPolicies,
       loadBootstrapPolicy("role-boundary-policy.json"),
       loadBootstrapPolicy("github-infra-deploy-policy.json"),
     ];
+    for (const [action, arn] of operations) {
+      expect(
+        setup.Statement.some((statement) => couldAllow(statement, action, arn)),
+        action,
+      ).toBe(true);
+      for (const { fileName, policy } of daily) {
+        expect(
+          policy.Statement.some((statement) =>
+            couldAllow(statement, action, arn),
+          ),
+          `${fileName}: ${action}`,
+        ).toBe(false);
+      }
+    }
     for (const { policy } of daily) {
       expect(JSON.stringify(policy)).not.toContain("BaradunCdkToolkitSetup");
-      expect(policy.Statement.flatMap((s) => toList(s.Action))).not.toContain(
-        "ssm:PutParameter",
-      );
     }
   });
 
