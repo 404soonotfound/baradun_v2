@@ -2,14 +2,17 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useId, useState } from "react";
 import type { OpsResult } from "@/lib/auth/ops-fetch";
 import { useAuthSession, useSessionSnapshot } from "@/lib/auth/provider";
 import {
   barCounts,
   barState,
+  cloudWatchUrl,
   fetchCollection,
+  kstClock as collectionClock,
   reasonText,
+  successRate,
   type BarState,
   type CollectionView,
   type JobCollection,
@@ -38,7 +41,7 @@ import { Button, Notice, SUCCESS_BADGE } from "./ui";
 
 // 데이터 출처 목록·상세 (BRD-149·GH-328, 화면 설계서 6장 ADM-SRC, 시안 4차 V12·V13·VM13)
 // - 읽기 전용(6장 '조작 없음'). 시안의 '지금 한 번 받아오기'는 6장·S1에 API가 없어 두지 않음
-// - 인증키는 등록 여부·만료일만. 원본 응답은 저장하지 않으므로 응답 예시도 보여 주지 않음(6장·아키텍처 10장)
+// - 인증키는 등록 여부·만료일만 표시함. 응답 예시 JSON은 생략함(D26-5).
 // - 만료 요약은 확인한 인증키 메타데이터에 한정함(시안 V12).
 // - 상세는 정적 내보내기라 /sources/?id= 로 엶(공지·문의와 같음)
 
@@ -689,6 +692,86 @@ function issuedText(call: SourceCall): string {
     : fill(t.callIssued, { hours: hoursKst.join("·"), delay: delayMinutes });
 }
 
+function WarningRequest({ call }: { call: SourceCall }) {
+  if (call.operation !== "getPwnCd" && call.operation !== "getTsunamiMsg")
+    return null;
+  const tsunami = call.operation === "getTsunamiMsg";
+  const parameters = [
+    ["ServiceKey", t.maskedKey, t.paramSecret],
+    ["pageNo", "1", t.paramFirstPage],
+    ["numOfRows", call.rowLimit ?? t.runState.unknown, t.paramRows],
+    ["dataType", "JSON", t.paramType],
+    ["fromTmFc", t.paramFrom, t.paramRange],
+    ["toTmFc", t.paramTo, t.paramRange],
+  ];
+  const query = parameters.map(([name, value]) => `${name}=${value}`).join("&");
+  const results = [
+    [tsunami ? "00 / 0" : "00", t.codeSuccess],
+    ["03", tsunami ? t.codeTsunamiNone : t.codeWarningsFailure],
+    [t.codeOther, t.codeFailure],
+  ];
+  return (
+    <div className="mt-3 flex flex-col gap-3">
+      <table className="w-full text-left text-body-s">
+        <caption className="mb-1 text-left font-semibold">
+          {t.paramsTitle}
+        </caption>
+        <thead>
+          <tr>
+            {[t.paramName, t.paramValue, t.paramHelp].map((label) => (
+              <th key={label} scope="col" className="p-1">
+                {label}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {parameters.map(([name, value, hint]) => (
+            <tr key={name} className="border-t border-border-default">
+              <th scope="row" className="p-1 font-mono font-normal">
+                {name}
+              </th>
+              <td className="p-1">{value}</td>
+              <td className="p-1">{hint}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <div>
+        <h3 className="text-body-s font-semibold">{t.requestTitle}</h3>
+        <code className="mt-1 block rounded-admin-control bg-bg-page p-2 text-label-s break-all">
+          {fill(t.callLine, { url: `${call.url}?${query}` })}
+        </code>
+      </div>
+      <table className="w-full text-left text-body-s">
+        <caption className="mb-1 text-left font-semibold">
+          {t.codesTitle}
+        </caption>
+        <thead>
+          <tr>
+            <th scope="col" className="p-1">
+              resultCode
+            </th>
+            <th scope="col" className="p-1">
+              {t.codeHandling}
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {results.map(([code, label]) => (
+            <tr key={code} className="border-t border-border-default">
+              <th scope="row" className="p-1 font-mono font-normal">
+                {code}
+              </th>
+              <td className="p-1">{label}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 function Calls({ source }: { source: SourceView }) {
   return (
     <section aria-labelledby="source-calls" className="flex flex-col gap-2">
@@ -716,6 +799,7 @@ function Calls({ source }: { source: SourceView }) {
               <li>{issuedText(call)}</li>
               <li>{fill(t.callKey, { key: source.key })}</li>
             </ul>
+            <WarningRequest call={call} />
           </li>
         ))}
       </ol>
@@ -723,18 +807,27 @@ function Calls({ source }: { source: SourceView }) {
   );
 }
 
-function Runs({ source }: { source: SourceView }) {
+function Runs({
+  source,
+  compact = false,
+}: {
+  source: SourceView;
+  compact?: boolean;
+}) {
   const runs = source.recentRuns;
   return (
-    <section aria-labelledby="source-runs" className="flex flex-col gap-2">
+    <section
+      aria-labelledby={compact ? "source-runs-summary" : "source-runs"}
+      className="flex flex-col gap-2"
+    >
       <div>
         <h2
-          id="source-runs"
+          id={compact ? "source-runs-summary" : "source-runs"}
           className="text-title-s font-semibold text-text-default"
         >
-          {t.runsTitle}
+          {compact ? t.runsTitle : t.detailTabs.runs}
         </h2>
-        {runs && runs.length > 0 && (
+        {!compact && runs && runs.length > 0 && (
           <p className={HINT}>{fill(t.runsHint, { count: runs.length })}</p>
         )}
       </div>
@@ -751,8 +844,12 @@ function Runs({ source }: { source: SourceView }) {
         <Notice tone="neutral" title={t.runsNone} />
       ) : (
         <ol className={`divide-y divide-border-default ${CARD} py-0`}>
-          {runs.map((run) => (
-            <RunRow key={`${run.startedAt}|${run.finishedAt}`} run={run} />
+          {(compact ? runs.slice(0, 3) : runs).map((run) => (
+            <RunRow
+              key={`${run.startedAt}|${run.finishedAt}`}
+              run={run}
+              compact={compact}
+            />
           ))}
         </ol>
       )}
@@ -760,7 +857,7 @@ function Runs({ source }: { source: SourceView }) {
   );
 }
 
-function RunRow({ run }: { run: RunView }) {
+function RunRow({ run, compact }: { run: RunView; compact: boolean }) {
   const ms = Date.parse(run.finishedAt) - Date.parse(run.startedAt);
   const missing = run.missingStationsTotal ?? run.missingStations?.length ?? 0;
   return (
@@ -772,7 +869,9 @@ function RunRow({ run }: { run: RunView }) {
         <RunBadge state={run.status} />
         {Number.isFinite(ms) && ms >= 0 && (
           <span className="text-text-muted tabular-nums">
-            {fill(t.runDuration, { seconds: (ms / 1000).toFixed(1) })}
+            {compact
+              ? fill(t.runMilliseconds, { ms })
+              : fill(t.runDuration, { seconds: (ms / 1000).toFixed(1) })}
           </span>
         )}
       </div>
@@ -798,13 +897,38 @@ function RunRow({ run }: { run: RunView }) {
   );
 }
 
+const DETAIL_SECTIONS = ["calls", "runs", "fields", "beaches"] as const;
+
 function SourceDetail({
   view,
   source,
+  collection,
 }: {
   view: SourcesView;
   source: SourceView;
+  collection: CollectionView | null;
 }) {
+  const sectionId = useId();
+  const [section, setSection] =
+    useState<(typeof DETAIL_SECTIONS)[number]>("calls");
+  const job = collection?.jobs.find((entry) => entry.job === source.id);
+  const started = job?.lastSuccessAt;
+  const rate =
+    job &&
+    !job.truncated &&
+    Number.isFinite(job.week.runs) &&
+    Number.isFinite(job.week.ok) &&
+    job.week.ok >= 0 &&
+    job.week.ok <= job.week.runs
+      ? successRate(job.week)
+      : null;
+  const displayTime = (at: string | null | undefined) =>
+    at &&
+    collection &&
+    Number.isFinite(Date.parse(at)) &&
+    Number.isFinite(Date.parse(collection.generatedAt))
+      ? collectionClock(at, collection.generatedAt, true)
+      : t.runState.unknown;
   const state = keyState(view, source.key);
   const key = keyOf(view, source.key);
   const metric = `flex flex-col gap-1 ${CARD}`;
@@ -819,7 +943,7 @@ function SourceDetail({
             days: daysText(key.daysLeft),
           })
         : t.keyState[state];
-  const info: readonly [string, React.ReactNode][] = [
+  const info: readonly (readonly [string, React.ReactNode])[] = [
     [t.infoProvider, t.provider[source.id]],
     [t.infoKey, <KeyBadge key="k" state={state} />],
     [t.infoExpires, expires],
@@ -829,18 +953,45 @@ function SourceDetail({
         {source.id}
       </span>,
     ],
-    [t.fieldValues, t.values[source.id]],
-    [t.fieldApp, t.app[source.id]],
-    [t.fieldFailure, failureText(source)],
+    [
+      t.metricTimeout,
+      fill(t.metricTimeoutValue, {
+        seconds: seconds(view.http.timeoutMs),
+        retries: view.http.retries,
+      }),
+    ],
+    [
+      t.metricLate,
+      source.lateAfterMinutes === null
+        ? t.metricLateNone
+        : fill(t.metricLateValue, { minutes: source.lateAfterMinutes }),
+    ],
+    [
+      t.metricBudget,
+      source.budgetMs === null
+        ? t.metricBudgetNone
+        : fill(t.metricBudgetValue, { seconds: seconds(source.budgetMs) }),
+    ],
+    ...(source.extraRetryMax === null
+      ? []
+      : ([
+          [
+            t.metricBudgetRetryLabel,
+            fill(t.metricBudgetRetry, { count: source.extraRetryMax }),
+          ],
+        ] as const)),
+    ...(source.id === "collect-warnings"
+      ? ([[t.detailStorage, t.detailWarningsStorage]] as const)
+      : []),
     [t.infoTerms, termsText(source)],
   ];
   return (
     <>
       <div className="flex flex-col gap-1">
         <div className="flex flex-wrap items-center gap-2">
-          <h2 className="text-title-l font-semibold text-text-default">
+          <h1 className="text-title-l font-semibold text-text-default">
             {t.name[source.id]}
-          </h2>
+          </h1>
           <RunBadge state={latestState(source)} />
         </div>
         <p className="text-body-s text-text-muted">
@@ -852,68 +1003,129 @@ function SourceDetail({
         </p>
       </div>
       <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <div className={metric}>
-          <dt className={LABEL}>{t.metricCycle}</dt>
-          <dd className={value}>{cycleText(source.schedule)}</dd>
-        </div>
-        <div className={metric}>
-          <dt className={LABEL}>{t.metricTimeout}</dt>
-          <dd className={value}>
-            {fill(t.metricTimeoutValue, {
-              seconds: seconds(view.http.timeoutMs),
-              retries: view.http.retries,
-            })}
-          </dd>
-        </div>
-        <div className={metric}>
-          <dt className={LABEL}>{t.metricBudget}</dt>
-          <dd className={value}>
-            {source.budgetMs === null
-              ? t.metricBudgetNone
-              : fill(t.metricBudgetValue, {
-                  seconds: seconds(source.budgetMs),
-                })}
-          </dd>
-          {source.extraRetryMax !== null && (
-            <dd className={HINT}>
-              {fill(t.metricBudgetRetry, { count: source.extraRetryMax })}
-            </dd>
-          )}
-        </div>
-        <div className={metric}>
-          <dt className={LABEL}>{t.metricLate}</dt>
-          <dd className={value}>
-            {source.lateAfterMinutes === null
-              ? t.metricLateNone
-              : fill(t.metricLateValue, { minutes: source.lateAfterMinutes })}
-          </dd>
-        </div>
+        {[
+          [t.detailLastSuccess, displayTime(started)],
+          [t.detailNext, displayTime(job?.nextScheduledAt)],
+          [
+            t.detailWeek,
+            rate === null
+              ? t.runState.unknown
+              : fill(t.detailWeekValue, { rate }),
+          ],
+          [t.detailReceived, t.detailReceivedUnknown],
+        ].map(([label, content]) => (
+          <div className={metric} key={label}>
+            <dt className={LABEL}>{label}</dt>
+            <dd className={value}>{content}</dd>
+          </div>
+        ))}
       </dl>
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[3fr_2fr]">
         <div className="flex min-w-0 flex-col gap-4">
-          <Calls source={source} />
-          <Runs source={source} />
-        </div>
-        <section aria-labelledby="source-info" className="flex flex-col gap-2">
-          <h2
-            id="source-info"
-            className="text-title-s font-semibold text-text-default"
+          <div
+            role="tablist"
+            aria-label={t.detailSections}
+            className="flex flex-wrap gap-1 border-b border-border-default"
           >
-            {t.infoTitle}
-          </h2>
-          <dl className={`divide-y divide-border-default ${CARD} py-0`}>
-            {info.map(([label, content]) => (
-              <div
-                key={label}
-                className="grid grid-cols-[6rem_1fr] gap-2 py-2 text-body-s"
+            {DETAIL_SECTIONS.map((item, index) => (
+              <button
+                key={item}
+                type="button"
+                role="tab"
+                id={`${sectionId}-${item}`}
+                aria-selected={section === item}
+                aria-controls={`${sectionId}-panel`}
+                tabIndex={section === item ? 0 : -1}
+                className="min-h-touch rounded-admin-control px-2 text-body-s aria-selected:bg-brand-weak aria-selected:font-semibold"
+                onClick={() => setSection(item)}
+                onKeyDown={(event) => {
+                  const count = DETAIL_SECTIONS.length;
+                  const next =
+                    event.key === "ArrowRight"
+                      ? (index + 1) % count
+                      : event.key === "ArrowLeft"
+                        ? (index + count - 1) % count
+                        : event.key === "Home"
+                          ? 0
+                          : event.key === "End"
+                            ? count - 1
+                            : null;
+                  if (next === null) return;
+                  event.preventDefault();
+                  setSection(DETAIL_SECTIONS[next]!);
+                  event.currentTarget.parentElement
+                    ?.querySelectorAll("button")
+                    [next]?.focus();
+                }}
               >
-                <dt className="text-text-muted">{label}</dt>
-                <dd className="text-text-default">{content}</dd>
-              </div>
+                {t.detailTabs[item]}
+              </button>
             ))}
-          </dl>
-          <KeyHint state={state} />
-        </section>
+          </div>
+          <div
+            role="tabpanel"
+            id={`${sectionId}-panel`}
+            aria-labelledby={`${sectionId}-${section}`}
+            tabIndex={0}
+          >
+            {section === "calls" && (
+              <>
+                <Calls source={source} />
+                <p className={HINT}>{t.detailRecordsHint}</p>
+              </>
+            )}
+            {section === "runs" && <Runs source={source} />}
+            {section === "fields" && (
+              <section className={CARD} aria-label={t.detailTabs.fields}>
+                <dl className="grid grid-cols-[7rem_1fr] gap-2 text-body-s">
+                  <dt>{t.fieldValues}</dt>
+                  <dd>{t.values[source.id]}</dd>
+                  <dt>{t.fieldApp}</dt>
+                  <dd>{t.app[source.id]}</dd>
+                  <dt>{t.fieldFailure}</dt>
+                  <dd>{failureText(source)}</dd>
+                </dl>
+              </section>
+            )}
+            {section === "beaches" && (
+              <section className={CARD} aria-label={t.detailTabs.beaches}>
+                <p className="text-body-s">{t.detailBeachesUnknown}</p>
+                <Link
+                  className="text-body-s text-brand-default underline"
+                  href="/beaches/"
+                >
+                  {t.detailBeachesLink}
+                </Link>
+              </section>
+            )}
+          </div>
+        </div>
+        <div className="flex min-w-0 flex-col gap-4">
+          <section
+            aria-labelledby="source-info"
+            className="flex flex-col gap-2"
+          >
+            <h2
+              id="source-info"
+              className="text-title-s font-semibold text-text-default"
+            >
+              {t.infoTitle}
+            </h2>
+            <dl className={`divide-y divide-border-default ${CARD} py-0`}>
+              {info.map(([label, content]) => (
+                <div
+                  key={label}
+                  className="grid grid-cols-[6rem_1fr] gap-2 py-2 text-body-s"
+                >
+                  <dt className="text-text-muted">{label}</dt>
+                  <dd className="text-text-default">{content}</dd>
+                </div>
+              ))}
+            </dl>
+            <KeyHint state={state} />
+          </section>
+          <Runs source={source} compact />
+        </div>
       </div>
     </>
   );
@@ -952,6 +1164,7 @@ function SourcesBody() {
   const key = `${attempt}|${generation}`;
   const [loaded, setLoaded] = useState<{
     key: string;
+    generation: number;
     result: OpsResult<SourcesView>;
   } | null>(null);
 
@@ -960,7 +1173,6 @@ function SourcesBody() {
     view: CollectionView;
   } | null>(null);
   useEffect(() => {
-    if (id !== null) return;
     let live = true;
     void fetchCollection(() => session.accessToken()).then((result) => {
       if (live) setCollection(result.ok ? { key, view: result.body } : null);
@@ -968,20 +1180,20 @@ function SourcesBody() {
     return () => {
       live = false;
     };
-  }, [id, key, session]);
+  }, [key, session]);
 
   useEffect(() => {
     let live = true;
     void fetchSources(() => session.accessToken()).then((result) => {
-      if (live) setLoaded({ key, result });
+      if (live) setLoaded({ key, generation, result });
     });
     return () => {
       live = false;
     };
-  }, [session, key]);
+  }, [session, key, generation]);
 
   // 다시 불러오는 동안 앞 값을 그대로 보여 줌(D16-E1)
-  const result = loaded?.result ?? null;
+  const result = loaded?.generation === generation ? loaded.result : null;
   const view = result?.ok ? result.body : null;
   const source = id && view ? view.sources.find((s) => s.id === id) : null;
   const reload = () => setAttempt((n) => n + 1);
@@ -998,9 +1210,11 @@ function SourcesBody() {
       )}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-title-l font-semibold text-text-default">
-            {t.title}
-          </h1>
+          {!source && (
+            <h1 className="text-title-l font-semibold text-text-default">
+              {t.title}
+            </h1>
+          )}
           <p className="mt-1 text-body-s text-text-muted">
             {[
               t.intro,
@@ -1012,6 +1226,11 @@ function SourcesBody() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
+          {source && (
+            <ExternalLink href={cloudWatchUrl(null)}>
+              {t.detailCloudWatch}
+            </ExternalLink>
+          )}
           <Link
             href="/collection/"
             className="text-body-s font-medium text-brand-default underline underline-offset-2"
@@ -1060,7 +1279,12 @@ function SourcesBody() {
         />
       )}
       {view && id !== null && source && (
-        <SourceDetail view={view} source={source} />
+        <SourceDetail
+          key={source.id}
+          view={view}
+          source={source}
+          collection={collection?.key === key ? collection.view : null}
+        />
       )}
       {view && id !== null && !source && (
         <Notice tone="warn" title={t.notFound} role="status">
