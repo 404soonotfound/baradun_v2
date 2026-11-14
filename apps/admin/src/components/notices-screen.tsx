@@ -2,7 +2,14 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  Suspense,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+  type RefObject,
+} from "react";
 import type { OpsResult } from "@/lib/auth/ops-fetch";
 import { useAuthSession, useSessionSnapshot } from "@/lib/auth/provider";
 import { kstDateTime } from "@/lib/inquiries";
@@ -319,17 +326,13 @@ function BannerOrderStrip({ hasLive }: { hasLive: boolean }) {
   );
 }
 
-// '+ 종류' 칩: 누르면 고를 목록이 아래에 열림(Esc·바깥 누르기로 닫음)
-function KindFilterMenu({
-  value,
-  onChange,
-}: {
-  value: NoticeKind | null;
-  onChange: (next: NoticeKind | null) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const box = useRef<HTMLDivElement>(null);
-  const trigger = useRef<HTMLButtonElement>(null);
+// 열린 목록을 바깥 누르기·Esc로 닫음(Esc는 여는 버튼으로 포커스를 돌림)
+function useDismiss(
+  open: boolean,
+  setOpen: (next: boolean) => void,
+  box: RefObject<HTMLElement | null>,
+  trigger: RefObject<HTMLElement | null>,
+) {
   useEffect(() => {
     if (!open) return;
     const outside = (e: MouseEvent) => {
@@ -347,7 +350,21 @@ function KindFilterMenu({
       document.removeEventListener("mousedown", outside);
       document.removeEventListener("keydown", esc);
     };
-  }, [open]);
+  }, [open, setOpen, box, trigger]);
+}
+
+// '+ 종류' 칩: 누르면 고를 목록이 아래에 열림(Esc·바깥 누르기로 닫음)
+function KindFilterMenu({
+  value,
+  onChange,
+}: {
+  value: NoticeKind | null;
+  onChange: (next: NoticeKind | null) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
+  useDismiss(open, setOpen, box, trigger);
 
   const active = value !== null;
   return (
@@ -426,6 +443,7 @@ function RowMenu({
   now,
   editBlocked,
   publishBlocked,
+  busy,
   onEdit,
   onAction,
 }: {
@@ -434,6 +452,8 @@ function RowMenu({
   now: number;
   editBlocked: string | null;
   publishBlocked: string | null;
+  // 다른 행 작업 요청 중이면 확정·노출 종료·삭제를 막음(응답이 새 확인 상자를 닫지 않게)
+  busy: boolean;
   onEdit: () => void;
   onAction: (
     action: "expose" | "end" | "delete",
@@ -443,33 +463,19 @@ function RowMenu({
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
-  useEffect(() => {
-    if (!open) return;
-    const outside = (e: MouseEvent) => {
-      if (!box.current?.contains(e.target as Node)) setOpen(false);
-    };
-    const esc = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        setOpen(false);
-        trigger.current?.focus();
-      }
-    };
-    document.addEventListener("mousedown", outside);
-    document.addEventListener("keydown", esc);
-    return () => {
-      document.removeEventListener("mousedown", outside);
-      document.removeEventListener("keydown", esc);
-    };
-  }, [open]);
+  useDismiss(open, setOpen, box, trigger);
 
   const canExpose =
+    !busy &&
     publishBlocked === null &&
     (notice.live === null || notice.pendingEdit) &&
     exposeProblems(notice.draft, now).length === 0;
   const canEnd =
+    !busy &&
     publishBlocked === null &&
     (notice.state === "live" || notice.state === "scheduled");
   const canDelete =
+    !busy &&
     notice.state !== "live" &&
     (notice.state === "scheduled"
       ? publishBlocked === null
@@ -597,7 +603,14 @@ function NoticeList({
 
   const runRowAction = () => {
     if (!pendingAction || actionBusy) return;
+    // 확인 상자가 사라지며 포커스를 잃지 않게, 끝나면 그 행의 작업 메뉴 버튼으로 돌림
+    const target = pendingTrigger.current;
     pendingTrigger.current = null;
+    const finish = () => {
+      setActionBusy(false);
+      setPendingAction(null);
+      if (target?.isConnected) target.focus();
+    };
     const { notice, action } = pendingAction;
     const reqBody = JSON.stringify({
       id: notice.id,
@@ -610,6 +623,7 @@ function NoticeList({
     const key = actionAttempt.current.key;
     setActionBusy(true);
     setActionError(null);
+    setActionFlash(null);
     void noticeAction(
       () => session.accessToken(),
       notice.id,
@@ -618,8 +632,7 @@ function NoticeList({
       key,
     ).then(
       (res) => {
-        setActionBusy(false);
-        setPendingAction(null);
+        finish();
         if (res.ok) {
           actionAttempt.current = null;
           setActionFlash(
@@ -635,8 +648,7 @@ function NoticeList({
         setActionError(writeError(res, true));
       },
       () => {
-        setActionBusy(false);
-        setPendingAction(null);
+        finish();
         setActionError({ kind: "failed", action: true, requestId: null });
       },
     );
@@ -812,6 +824,8 @@ function NoticeList({
         {pendingAction && (
           <div className="mt-4">
             <ConfirmBox
+              // 다른 행·작업을 고르면 새로 열어 포커스를 확인 버튼으로 옮김
+              key={`${pendingAction.notice.id}:${pendingAction.action}`}
               title={
                 pendingAction.action === "expose"
                   ? t.exposeConfirm
@@ -953,9 +967,11 @@ function NoticeList({
                             now={now}
                             editBlocked={edit}
                             publishBlocked={publish}
+                            busy={actionBusy}
                             onEdit={() => router.push(editHref(n.id))}
                             onAction={(action, triggerEl) => {
                               pendingTrigger.current = triggerEl;
+                              setActionFlash(null);
                               setPendingAction({ notice: n, action });
                             }}
                           />
@@ -2255,7 +2271,7 @@ function NoticesBody() {
               </p>
               <p className="text-body-s text-text-body">{t.notFoundBody}</p>
               <Button variant="secondary" size="small" onClick={toList}>
-                {t.backToList}
+                {t.backToListAria}
               </Button>
             </div>
           )}
