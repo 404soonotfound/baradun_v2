@@ -2,7 +2,14 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  Suspense,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+  type RefObject,
+} from "react";
 import type { OpsResult } from "@/lib/auth/ops-fetch";
 import { useAuthSession, useSessionSnapshot } from "@/lib/auth/provider";
 import { kstDateTime } from "@/lib/inquiries";
@@ -319,17 +326,13 @@ function BannerOrderStrip({ hasLive }: { hasLive: boolean }) {
   );
 }
 
-// '+ 종류' 칩: 누르면 고를 목록이 아래에 열림(Esc·바깥 누르기로 닫음)
-function KindFilterMenu({
-  value,
-  onChange,
-}: {
-  value: NoticeKind | null;
-  onChange: (next: NoticeKind | null) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const box = useRef<HTMLDivElement>(null);
-  const trigger = useRef<HTMLButtonElement>(null);
+// 열린 목록을 바깥 누르기·Esc로 닫음(Esc는 여는 버튼으로 포커스를 돌림)
+function useDismiss(
+  open: boolean,
+  setOpen: (next: boolean) => void,
+  box: RefObject<HTMLElement | null>,
+  trigger: RefObject<HTMLElement | null>,
+) {
   useEffect(() => {
     if (!open) return;
     const outside = (e: MouseEvent) => {
@@ -347,7 +350,21 @@ function KindFilterMenu({
       document.removeEventListener("mousedown", outside);
       document.removeEventListener("keydown", esc);
     };
-  }, [open]);
+  }, [open, setOpen, box, trigger]);
+}
+
+// '+ 종류' 칩: 누르면 고를 목록이 아래에 열림(Esc·바깥 누르기로 닫음)
+function KindFilterMenu({
+  value,
+  onChange,
+}: {
+  value: NoticeKind | null;
+  onChange: (next: NoticeKind | null) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
+  useDismiss(open, setOpen, box, trigger);
 
   const active = value !== null;
   return (
@@ -443,24 +460,7 @@ function RowMenu({
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
-  useEffect(() => {
-    if (!open) return;
-    const outside = (e: MouseEvent) => {
-      if (!box.current?.contains(e.target as Node)) setOpen(false);
-    };
-    const esc = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        setOpen(false);
-        trigger.current?.focus();
-      }
-    };
-    document.addEventListener("mousedown", outside);
-    document.addEventListener("keydown", esc);
-    return () => {
-      document.removeEventListener("mousedown", outside);
-      document.removeEventListener("keydown", esc);
-    };
-  }, [open]);
+  useDismiss(open, setOpen, box, trigger);
 
   const canExpose =
     publishBlocked === null &&
