@@ -10,17 +10,20 @@ import { fill, messages } from "@/lib/messages";
 import {
   PUBLISH_POLICY_URL,
   canRollBackTo,
+  compareAppSettings,
   createJob,
+  decomposeChecks,
   fetchJob,
   fetchPublishOverview,
   fetchPublishPreview,
   fetchRollbackPreview,
+  formatOperatorSource,
   hasHeldNotices,
   isRunSkipped,
   jobInFlight,
   jobPhase,
   nonZeroCategoryDeltas,
-  parseAppSettings,
+  parseLast24h,
   pendingNoticeDiff,
   reapplyNotice,
   reasonKey,
@@ -244,6 +247,26 @@ function FailIcon() {
   );
 }
 
+function UnknownIcon() {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      className="shrink-0 text-text-muted"
+    >
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 11v6M12 7.5v.5" />
+    </svg>
+  );
+}
+
 function RollbackIcon() {
   return (
     <svg
@@ -264,56 +287,62 @@ function RollbackIcon() {
   );
 }
 
-// 앱 설정 줄(V16): 서비스 점검·최소 화면 버전·GitHub 링크. 응답에 없으면 '확인 못 함' 표시
+// 앱 설정 줄(V16): 앱에 반영된 값(current) 기본 표시 + 다음 게시 설정(settings)이 다르면 변경 예정 안내
 function AppSettingsBar({
+  current,
   settings,
   maintenancePending,
 }: {
+  current: PublishOverview["current"];
   settings: unknown;
   maintenancePending: boolean | null;
 }) {
-  const state = parseAppSettings(settings);
+  const cmp = compareAppSettings(current, settings, maintenancePending);
   const maintenanceLabel =
-    state.kind === "ok"
-      ? state.value.maintenance.active
+    cmp.currentMaintenance !== null
+      ? cmp.currentMaintenance.active
         ? t.settings.maintenanceOn
         : t.settings.maintenanceOff
       : t.settings.maintenanceUnknown;
-  const dotColor =
-    state.kind === "ok" && state.value.maintenance.active
-      ? "bg-status-stale-fg"
-      : "bg-text-muted";
+  const dotColor = cmp.currentMaintenance?.active
+    ? "bg-status-stale-fg"
+    : "bg-text-muted";
+  const nextItems: string[] = [];
+  if (cmp.nextMaintenance !== null) {
+    nextItems.push(
+      cmp.nextMaintenance.active
+        ? t.settings.nextMaintenanceOn
+        : t.settings.nextMaintenanceOff,
+    );
+  }
+  if (cmp.nextMinWebBuild !== null) {
+    nextItems.push(
+      fill(t.settings.nextMinWebBuild, { version: cmp.nextMinWebBuild }),
+    );
+  }
+  const pendingNote =
+    nextItems.length > 0
+      ? fill(t.settings.nextPublishPrefix, { items: nextItems.join(" · ") })
+      : cmp.maintenancePending
+        ? t.settings.maintenancePending
+        : null;
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-admin-box border border-border-default bg-bg-surface px-3 py-2 text-body-s text-text-body">
       <b className="font-semibold text-text-default">{t.settings.title}</b>
-      {state.kind !== "absent" ? (
-        <>
-          <span className="inline-flex items-center gap-1.5">
-            <span
-              aria-hidden="true"
-              className={`size-2 shrink-0 rounded-full ${dotColor}`}
-            />
-            <span>{maintenanceLabel}</span>
-            {maintenancePending === true && (
-              <span className="text-status-stale-fg">
-                · {t.settings.maintenancePending}
-              </span>
-            )}
-          </span>
-          <span>
-            {state.kind === "ok"
-              ? fill(t.settings.minWebBuild, {
-                  version: state.value.minWebBuild,
-                })
-              : t.settings.minWebBuildUnknown}
-          </span>
-        </>
-      ) : (
-        maintenancePending === true && (
-          <span className="text-status-stale-fg">
-            {t.settings.maintenancePending}
-          </span>
-        )
+      <span className="inline-flex items-center gap-1.5">
+        <span
+          aria-hidden="true"
+          className={`size-2 shrink-0 rounded-full ${dotColor}`}
+        />
+        <span>{maintenanceLabel}</span>
+      </span>
+      <span>
+        {cmp.currentMinWebBuild !== null
+          ? fill(t.settings.minWebBuild, { version: cmp.currentMinWebBuild })
+          : t.settings.minWebBuildUnknown}
+      </span>
+      {pendingNote && (
+        <span className="font-medium text-status-stale-fg">{pendingNote}</span>
       )}
       <span className="text-text-muted">{t.settings.note}</span>
       <a
@@ -349,14 +378,17 @@ function NoticeDiffBox({
   notice: PendingNotice;
   showKindBadge?: boolean;
 }) {
-  const kindLabel =
-    (messages.notices.kind as Record<string, string>)[notice.kind] ??
-    notice.kind;
+  const kindLabels = messages.notices.kind as Record<string, string>;
+  const kindLabel = kindLabels[notice.kind] ?? notice.kind;
+  const beforeKindLabel = notice.before
+    ? (kindLabels[notice.before.kind] ?? notice.before.kind)
+    : undefined;
   const diff = pendingNoticeDiff(
     notice,
     kindLabel,
     timeOf,
     messages.notices.openEnd,
+    beforeKindLabel,
   );
   const changeLabel =
     (t.noticeChange as Record<string, string>)[notice.change] ?? notice.change;
@@ -385,7 +417,9 @@ function NoticeDiffBox({
             className={`grid grid-cols-[28px_28px_16px_1fr] leading-[22px] ${
               line.kind === "del"
                 ? "bg-status-blocked-bg text-danger-fg"
-                : "bg-success-bg text-success-fg"
+                : line.kind === "add"
+                  ? "bg-success-bg text-success-fg"
+                  : "text-text-body"
             }`}
           >
             <span className="px-1 text-right text-text-muted select-none">
@@ -395,7 +429,7 @@ function NoticeDiffBox({
               {line.afterLine ?? ""}
             </span>
             <span className="text-center select-none">
-              {line.kind === "del" ? "-" : "+"}
+              {line.kind === "del" ? "-" : line.kind === "add" ? "+" : ""}
             </span>
             <code className="min-w-0 pr-2.5 font-mono break-all whitespace-pre-wrap">
               {line.text}
@@ -403,7 +437,7 @@ function NoticeDiffBox({
           </div>
         ))}
       </div>
-      {notice.change === "update" && (
+      {notice.change === "update" && !diff.hasBefore && (
         <p className="border-t border-border-default bg-bg-page px-3 py-1 font-sans text-caption text-text-muted">
           {t.pendingUpdateNote}
         </p>
@@ -419,9 +453,18 @@ function reasonText(reason: string | undefined): string {
     : fill(t.reason.unknown, { code: reason ?? "" });
 }
 
-function sourceText(item: { source: string; target?: string }): string {
+function sourceText(item: {
+  source: string;
+  target?: string;
+  operator?: string;
+}): string {
   if (item.source === "rollback" && item.target) {
     return fill(t.source.rollback, { time: versionTime(item.target) });
+  }
+  if (item.source === "operator") {
+    return formatOperatorSource(item.operator, t.source.operator, (email) =>
+      fill(t.source.operatorEmail, { email }),
+    );
   }
   const known = (t.source as Record<string, string>)[item.source];
   return item.source !== "unknown" && known
@@ -1198,6 +1241,7 @@ function ChecksSection({ item }: { item: HistoryItem | null }) {
   const title = item
     ? fill(t.checksTitle, { time: timeOf(item.at) })
     : t.checksTitleLatest;
+  const decomposed = item ? decomposeChecks(item.checks) : null;
   return (
     <section aria-labelledby="publish-checks" className="flex flex-col gap-3">
       <h2
@@ -1211,7 +1255,30 @@ function ChecksSection({ item }: { item: HistoryItem | null }) {
       ) : (
         <>
           <div className="divide-y divide-border-default border-t border-border-default">
-            {item.result === "failed" ? (
+            {decomposed ? (
+              decomposed.map((row) => (
+                <div
+                  key={row.key}
+                  className="flex items-center justify-between gap-3 py-2.5 text-body-s"
+                >
+                  <div>
+                    <p className="font-medium text-text-default">
+                      {t.checksItems[row.key]}
+                    </p>
+                    <p className="text-caption text-text-muted">
+                      {t.checksResult[row.status]}
+                    </p>
+                  </div>
+                  {row.status === "pass" ? (
+                    <PassIcon />
+                  ) : row.status === "fail" ? (
+                    <FailIcon />
+                  ) : (
+                    <UnknownIcon />
+                  )}
+                </div>
+              ))
+            ) : item.result === "failed" ? (
               <>
                 <div className="flex items-center justify-between gap-3 py-2.5 text-body-s">
                   <div>
@@ -1574,6 +1641,7 @@ export function PublishScreen({
       : undefined;
     const lastRun = view.lastRun.ok ? view.lastRun.run : null;
     const skipped = isRunSkipped(lastRun);
+    const last24h = parseLast24h(view.last24h);
     const nextTime = timeOf(
       Date.parse(next.warnings) <= Date.parse(next.observations)
         ? next.warnings
@@ -1656,32 +1724,27 @@ export function PublishScreen({
               hint={fill(t.unread, { what: t.unreadWhat.pending })}
             />
           )}
-          {view.lastRun.ok ? (
+          {last24h.ok ? (
             <SummaryCell
-              label={t.lastRun}
-              value={
-                view.lastRun.run ? timeOf(view.lastRun.run.at) : t.lastRunNone
-              }
-              hint={
-                view.lastRun.run
-                  ? skipped
-                    ? t.lastRunUnchanged
-                    : view.lastRun.run.result === "published"
-                      ? t.lastRunPublished
-                      : `${t.lastRunFailed} · ${reasonText(view.lastRun.run.reason)}`
-                  : undefined
-              }
+              label={t.last24h.label}
+              value={fill(t.last24h.runs, { count: last24h.runs })}
+              hint={fill(t.last24h.breakdown, {
+                succeeded: last24h.succeeded,
+                failed: last24h.failed,
+                skipped: last24h.skipped,
+              })}
             />
           ) : (
             <SummaryCell
-              label={t.lastRun}
-              value="—"
-              hint={fill(t.unread, { what: t.unreadWhat.lastRun })}
+              label={t.last24h.label}
+              value={t.last24h.unknown}
+              hint={t.last24h.unknownHint}
             />
           )}
         </dl>
 
         <AppSettingsBar
+          current={view.current}
           settings={view.settings}
           maintenancePending={
             view.pendingNotices.ok
@@ -1799,6 +1862,7 @@ export function PublishScreen({
                         </span>
                       </div>
                       <p className="text-caption text-text-muted">
+                        {notice.updatedBy ? `${notice.updatedBy} · ` : ""}
                         {noticeLine(notice)} · {t.pendingStatusDraft} ·{" "}
                         {fill(t.pendingStatusStart, {
                           time: timeOf(notice.startsAt),
