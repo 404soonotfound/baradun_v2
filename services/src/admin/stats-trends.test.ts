@@ -52,7 +52,7 @@ describe("기간 이용 통계", () => {
     expect(trends.hourly?.rows[9]).toEqual({
       hour: 9,
       reportedDays: 1,
-      averageActiveUsers: null,
+      averageActiveUsers: 7,
     });
     expect(trends.hourly?.rows[10]?.averageActiveUsers).toBeNull();
     expect(trends.topScreens).toMatchObject({
@@ -89,6 +89,47 @@ describe("기간 이용 통계", () => {
       hour: 9,
       reportedDays: 2,
       averageActiveUsers: 8.5,
+    });
+  });
+
+  it("배치 안의 잘못된 리포트만 격리함", async () => {
+    vi.spyOn(GoogleAuth.prototype, "getClient").mockResolvedValue({
+      getAccessToken: async () => ({ token: "stub" }),
+    } as Awaited<ReturnType<GoogleAuth["getClient"]>>);
+    const report = { metadata, rows: [row("value", "12", "24")] };
+    const fetchFn = vi.fn<typeof fetch>(async (_url, options) => {
+      const body = JSON.parse(String(options?.body));
+      if (body.requests?.length === 5) {
+        return Response.json({
+          reports: [
+            report,
+            { metadata, rows: [null] },
+            { metadata, rows: {} },
+            report,
+            report,
+          ],
+        });
+      }
+      if (body.requests)
+        return Response.json({
+          reports: [report, report, { rows: [row("x", "1"), null] }, report],
+        });
+      return Response.json(report);
+    });
+    const response = await createGa4StatsReader({
+      propertyId: "1",
+      serviceAccountParam: "/stats",
+      region: "test",
+      loadKeyJson: async () => "{}",
+      fetchFn,
+      now: () => now,
+    }).read("7d");
+    expect(response.realtime.activeUsers).toBe(12);
+    expect(response.period).toMatchObject({ activeUsers: 12, devices: null });
+    expect(response.trends).toMatchObject({
+      daily: null,
+      hourly: null,
+      topScreens: { rows: [{ pageViews: 12 }] },
     });
   });
 

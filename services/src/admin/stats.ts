@@ -147,6 +147,53 @@ export interface Ga4ReportBody {
   };
 }
 
+// HTTP 200이어도 모양이 틀린 리포트 하나만 조회 실패로 처리함
+function validReport(value: unknown, realtime = false): value is Ga4ReportBody {
+  if (!value || typeof value !== "object") return false;
+  const report = value as Ga4ReportBody & { readonly rowCount?: unknown };
+  const validValues = (values: unknown) =>
+    values === undefined ||
+    (Array.isArray(values) &&
+      values.every(
+        (entry: unknown) =>
+          !!entry &&
+          typeof entry === "object" &&
+          (!("value" in entry) || typeof entry.value === "string"),
+      ));
+  if (
+    report.rows !== undefined &&
+    (!Array.isArray(report.rows) ||
+      !report.rows.every(
+        (row) =>
+          row &&
+          typeof row === "object" &&
+          validValues(row.dimensionValues) &&
+          validValues(row.metricValues),
+      ))
+  )
+    return false;
+  if (
+    report.metadata !== undefined &&
+    (!report.metadata ||
+      typeof report.metadata !== "object" ||
+      Array.isArray(report.metadata))
+  )
+    return false;
+  return (
+    report.rows !== undefined ||
+    report.rowCount === 0 ||
+    report.metadata !== undefined ||
+    (realtime && "metricHeaders" in report)
+  );
+}
+
+function reportBatch(value: unknown, expectedLength: number) {
+  if (!Array.isArray(value) || value.length !== expectedLength) return [];
+  return value.map((report: unknown) =>
+    validReport(report) ? report : undefined,
+  );
+}
+
 export function extractMetadataFlags(
   metadata: Ga4ReportBody["metadata"] | undefined,
 ): StatsMetadata {
@@ -275,22 +322,6 @@ export function parseLanguagesReport(body: Ga4ReportBody): {
     .sort((a, b) => compareMetricDesc(a.activeUsers, b.activeUsers))
     .slice(0, TOP_LIST_LIMIT);
   return { rows, metadata: extractMetadataFlags(body.metadata) };
-}
-
-export function dateRangeFor(range: StatsRange): {
-  startDate: string;
-  endDate: string;
-} {
-  switch (range) {
-    case "today":
-      return { startDate: "today", endDate: "today" };
-    case "7d":
-      return { startDate: "6daysAgo", endDate: "today" };
-    case "28d":
-      return { startDate: "27daysAgo", endDate: "today" };
-    case "60d":
-      return { startDate: "59daysAgo", endDate: "today" };
-  }
 }
 
 export function unconfiguredStats(range: StatsRange, now: Date): StatsResponse {
@@ -457,8 +488,8 @@ export function createGa4StatsReader(config: Ga4StatsConfig): StatsReader {
         return { ...unconfiguredStats(range, now), configured: true };
       }
 
-      const dateRange = dateRangeFor(range);
       const dates = statsDates(range, now);
+      const dateRange = dates.current;
       const [realtimeRes, legacyRes, trendsRes] = await Promise.allSettled([
         postGa4("runRealtimeReport", token, {
           metrics: [{ name: "activeUsers" }, { name: "screenPageViews" }],
@@ -508,14 +539,17 @@ export function createGa4StatsReader(config: Ga4StatsConfig): StatsReader {
       const legacy =
         legacyRes.status === "fulfilled" ? legacyRes.value?.reports : undefined;
       const [summaryReport, beachesReport, devicesReport, languagesReport] =
-        Array.isArray(legacy) && legacy.length === 4 ? legacy : [];
+        reportBatch(legacy, 4);
 
       let realtime: StatsRealtime = {
         status: "unavailable",
         activeUsers: null,
         pageViews: null,
       };
-      if (realtimeRes.status === "fulfilled" && realtimeRes.value) {
+      if (
+        realtimeRes.status === "fulfilled" &&
+        validReport(realtimeRes.value, true)
+      ) {
         realtime = parseRealtimeReport(realtimeRes.value);
       } else {
         safeLog("warn", "stats_realtime_failed", {
@@ -579,7 +613,7 @@ export function createGa4StatsReader(config: Ga4StatsConfig): StatsReader {
         trendsRes.status === "fulfilled" ? trendsRes.value?.reports : undefined;
       const trends = parseTrends(
         dates,
-        Array.isArray(reports) && reports.length === 5 ? reports : [],
+        reportBatch(reports, 5),
         summaryReport?.metadata?.timeZone,
       );
 

@@ -148,7 +148,11 @@ export function parseTrends(
   const hours = list(hourly, (row) => {
     const label = dimension(row);
     if (!/^\d{8}(?:[01]\d|2[0-3])$/.test(label)) return null;
-    return { hour: Number(label.slice(8)), users: metric(row) };
+    return {
+      date: label.slice(0, 8),
+      hour: Number(label.slice(8)),
+      users: metric(row),
+    };
   });
   return {
     ...dates.current,
@@ -165,19 +169,16 @@ export function parseTrends(
       metadata: hours.metadata,
       rows: Array.from({ length: 24 }, (_, hour) => {
         const reported = hours.rows.filter((row) => row.hour === hour);
-        const values = reported.flatMap((row) =>
-          row.users === null ? [] : [row.users],
-        );
+        const byDate = new Map<string, number | null>();
+        for (const row of reported) {
+          byDate.set(row.date, byDate.has(row.date) ? null : row.users);
+        }
+        const values = [...byDate.values()].filter((users) => users !== null);
         return {
           hour,
-          averageActiveUsers:
-            !hours.metadata.thresholding &&
-            !hours.metadata.otherRowLoss &&
-            values.length &&
-            values.length === reported.length
-              ? values.reduce((total, users) => total + users, 0) /
-                values.length
-              : null,
+          averageActiveUsers: values.length
+            ? values.reduce((total, users) => total + users, 0) / values.length
+            : null,
           reportedDays: values.length,
         };
       }),
