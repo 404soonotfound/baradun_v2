@@ -1,17 +1,5 @@
 // 조회 전용 GitHub REST API. 인증값과 오류 응답 본문을 밖으로 내보내지 않음.
-export type SiteDeployReason =
-  | "unconfigured"
-  | "credential_missing"
-  | "credentials"
-  | "unauthorized"
-  | "forbidden"
-  | "not_found"
-  | "timeout"
-  | "rate_limit"
-  | "unavailable"
-  | "invalid"
-  | "truncated"
-  | "not_ancestor";
+import type { SiteDeployReason } from "@baradun/contracts";
 
 export class SiteDeployError extends Error {
   constructor(

@@ -1,3 +1,18 @@
+import type {
+  SiteDeployApp as App,
+  SiteDeployEvent as Event,
+  SiteDeployCiState as CiState,
+  SiteDeployFileCategory,
+  SiteDeployReadiness as Readiness,
+  SiteDeployRun as DeployRun,
+  SiteDeployScheduleReason,
+  SiteDeploySettings,
+  SiteDeployView,
+  SiteDeployWorkflowActiveField,
+  SiteDeployField as Field,
+  SiteDeployKnown as Confirmed,
+} from "@baradun/contracts";
+import { DEPLOY_EVENTS, SITE_APPS } from "@baradun/contracts/site-deploy";
 import { SSMClient } from "@aws-sdk/client-ssm";
 import appPaths from "../../../.github/site-deploy-paths.json";
 import { parseUtcIso } from "../core/warnings/time";
@@ -7,25 +22,10 @@ import {
   record,
   rows,
   SiteDeployError,
-  type SiteDeployReason,
 } from "./site-deploy-github";
 
-type App = keyof typeof appPaths;
-type Event = "schedule" | "workflow_dispatch";
-type CiState = "success" | "pending" | "failure" | "missing";
 type GitHub = ReturnType<typeof createSiteDeployGitHub>;
 type Read = (path: string) => ReturnType<GitHub>;
-
-type Confirmed<T> = { status: "known"; value: T; checkedAt: string };
-type Field<T> =
-  | Confirmed<T>
-  | {
-      status: "unknown";
-      reason: SiteDeployReason;
-      checkedAt: string;
-      last?: Confirmed<T>;
-      retryAt?: string;
-    };
 
 const SHA = /^[a-f\d]{40}$/;
 const ACTIVE = ["queued", "in_progress", "waiting", "pending", "requested"];
@@ -40,9 +40,8 @@ const CONCLUSIONS = [
   "stale",
   "startup_failure",
 ];
-export const SITE_DEPLOY_JOBS = ["site", "admin"] as const;
+export const SITE_DEPLOY_JOBS = SITE_APPS;
 export const SITE_DEPLOY_MARKER_STEP = "올린 커밋 표시";
-const EVENTS = ["schedule", "workflow_dispatch"] as const;
 const CACHE_MS = 30_000;
 const KST_MS = 9 * 60 * 60_000;
 const DAY_MS = 24 * 60 * 60_000;
@@ -152,9 +151,7 @@ async function marker(
   }
 }
 
-export function classifyDeployPath(
-  path: string,
-): "beach" | "site" | "admin" | "shared" {
+export function classifyDeployPath(path: string): SiteDeployFileCategory {
   if (/^data\/(?:beaches\/|beach-meta\.json$|beach-coverage\.csv$)/.test(path))
     return "beach";
   if (path.startsWith("apps/web/")) return "site";
@@ -272,7 +269,7 @@ function deployRun(
   event: Event,
   repo: string,
   mainOnly = true,
-) {
+): DeployRun {
   const item = record(value);
   if (item.event !== event || (mainOnly && item.head_branch !== "main")) {
     throw new SiteDeployError("invalid");
@@ -291,15 +288,13 @@ function deployRun(
   };
 }
 
-type DeployRun = ReturnType<typeof deployRun>;
-
 async function runPages(
   read: Read,
   repo: string,
   event: Event,
   query: string,
   mainOnly = true,
-) {
+): Promise<DeployRun[]> {
   const runs = new Map<number, DeployRun>();
   for (let page = 1; ; page++) {
     const branch = mainOnly ? "&branch=main" : "";
@@ -404,16 +399,29 @@ async function jobs(read: Read, run: DeployRun | null) {
   return { site: appJob(site), admin: appJob(admin) };
 }
 
-type Readiness =
-  | "ready"
-  | "paused"
-  | "deploying"
-  | "approval_pending"
-  | "ci_pending"
-  | "ci_failed"
-  | "ci_missing"
-  | "unconfigured"
-  | "unknown";
+function scheduleUnavailable(
+  settings: Field<SiteDeploySettings>,
+  workflow: SiteDeployWorkflowActiveField,
+): SiteDeployScheduleReason | undefined {
+  if (settings.status === "known" && settings.value.paused)
+    return { kind: "paused" };
+  if (settings.status === "known" && !settings.value.configured)
+    return { kind: "unconfigured" };
+  if (workflow.status === "known" && !workflow.value)
+    return { kind: "workflow_disabled" };
+  const missing =
+    settings.status === "unknown"
+      ? settings
+      : workflow.status === "unknown"
+        ? workflow
+        : null;
+  if (!missing) return undefined;
+  return {
+    kind: "unknown",
+    reason: missing.reason,
+    ...(missing.retryAt ? { retryAt: missing.retryAt } : {}),
+  };
+}
 
 interface Config {
   readonly repo: string;
@@ -433,7 +441,7 @@ export function createSiteDeployReader(
   type Cell = { start: number; scope: string; data: Confirmed<unknown> };
   const cache = new Map<string, Cell>();
 
-  async function collect() {
+  async function collect(): Promise<SiteDeployView> {
     const started = now();
     const budget = AbortSignal.timeout(budgetMs);
     let timedOut: () => void;
@@ -530,7 +538,7 @@ export function createSiteDeployReader(
       });
       const deployments = observe("deployments", async () => {
         const entries = await Promise.all(
-          EVENTS.map((event) => latest(read, config.repo, event)),
+          DEPLOY_EVENTS.map((event) => latest(read, config.repo, event)),
         );
         const recent =
           entries
@@ -664,7 +672,15 @@ export function createSiteDeployReader(
           site.deployed.value === run.sha
             ? { event: run.event, url: run.url, completedAt: job.completedAt }
             : null;
-        return { ...site, matchedRun };
+        return {
+          ...site,
+          matchedRun,
+          ...(site.deployed.status === "known" && mainResult.status === "known"
+            ? {
+                compareUrl: `https://github.com/${config.repo}/compare/${site.deployed.value}...main`,
+              }
+            : {}),
+        };
       });
       let readiness: Readiness = "unknown";
       if (settingsResult.status === "known" && settingsResult.value.paused)
@@ -706,6 +722,10 @@ export function createSiteDeployReader(
       ) {
         readiness = "ready";
       }
+      const scheduleReason = scheduleUnavailable(
+        settingsResult,
+        workflowResult,
+      );
       return {
         generatedAt: started.toISOString(),
         readiness,
@@ -735,20 +755,14 @@ export function createSiteDeployReader(
         manualCount: countResult,
         tokenExpiry: expiryResult,
         sites: siteResults,
-        nextScheduledAt:
-          settingsResult.status === "known" &&
-          !settingsResult.value.paused &&
-          workflowResult.status === "known" &&
-          workflowResult.value
-            ? nextSchedule(started)
-            : null,
+        nextScheduledAt: scheduleReason ? null : nextSchedule(started),
+        ...(scheduleReason ? { nextScheduledAtReason: scheduleReason } : {}),
         workflowUrl: `https://github.com/${config.repo}/actions/workflows/deploy.yml`,
       };
     } finally {
       budget.removeEventListener("abort", timedOut!);
     }
   }
-  type SiteDeployView = Awaited<ReturnType<typeof collect>>;
   return () => {
     collectPromise ??= collect().finally(() => {
       collectPromise = undefined;
