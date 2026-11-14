@@ -43,7 +43,12 @@ export interface InquiryDetail extends InquirySummary {
   readonly photosCollected: false;
 }
 
-export type InquiryCounts = Readonly<Record<InquiryStatus, number>>;
+// 최근 7일 값은 첫 쪽에만, 데모·이전 서버에는 없음. null은 조회 실패(oldestUnprocessedAt은 미처리 없음도 null)
+export type InquiryCounts = Readonly<Record<InquiryStatus, number>> & {
+  readonly receivedLast7d?: number | null;
+  readonly resolvedLast7d?: number | null;
+  readonly oldestUnprocessedAt?: string | null;
+};
 
 export interface InquiryPage {
   readonly items: readonly InquirySummary[];

@@ -120,6 +120,8 @@ export interface Incident {
 
 export interface JobCollection {
   readonly job: string;
+  // 다음 수집 예정 UTC ISO(GH-478). 이전 서버 응답에는 없음
+  readonly nextScheduledAt?: string;
   readonly lastRun: RunView | null;
   readonly lastSuccessAt: string | null;
   readonly day: RunCounts;

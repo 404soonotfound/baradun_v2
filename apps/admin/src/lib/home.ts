@@ -186,6 +186,61 @@ export function inquirySummary(page: InquiryPage | null): InquirySummary | null 
   };
 }
 
+// 문의 칸 최근 7일 값(서버 GH-478 counts.receivedLast7d·resolvedLast7d·oldestUnprocessedAt)
+// - 칸이 없으면(undefined: 이전 서버·데모·첫 쪽 아님) 화면은 지금 표시(보관 중 합계)를 유지
+// - null이면 조회 실패 → '확인 못 함'(0으로 바꾸지 않음)
+// - oldestUnprocessedAt null은 '미처리 없음'과 '조회 실패'가 섞임. 상태별 수로 미처리가 0건이면 없음(줄 생략),
+//   1건 이상이면 '확인 못 함'
+export interface InquiryWindow {
+  readonly receivedLast7d: number | null | undefined;
+  readonly resolvedLast7d: number | null | undefined;
+  readonly oldest:
+    | { readonly state: "absent" }
+    | { readonly state: "none" }
+    | { readonly state: "unknown" }
+    | { readonly state: "at"; readonly at: string };
+}
+
+const windowCount = (v: unknown): number | null | undefined =>
+  v === undefined
+    ? undefined
+    : typeof v === "number" && Number.isFinite(v) && v >= 0
+      ? v
+      : null;
+
+export function inquiryWindow(page: InquiryPage | null): InquiryWindow | null {
+  const summary = inquirySummary(page);
+  const c = page?.counts;
+  if (!summary || !c) return null;
+  const raw = c.oldestUnprocessedAt;
+  const unprocessed = summary.received + summary.inProgress;
+  return {
+    receivedLast7d: windowCount(c.receivedLast7d),
+    resolvedLast7d: windowCount(c.resolvedLast7d),
+    oldest:
+      raw === undefined
+        ? { state: "absent" }
+        : typeof raw === "string" && !Number.isNaN(Date.parse(raw))
+          ? { state: "at", at: raw }
+          : raw === null && unprocessed === 0
+            ? { state: "none" }
+            : { state: "unknown" },
+  };
+}
+
+// 수집 칸 아래 줄 '다음 수집 HH:MM'(서버 GH-478 jobs[].nextScheduledAt): 판단 출처 중 가장 이른 예정 시각
+// 판단 출처 하나라도 응답에 없거나 시각이 없거나 읽을 수 없으면 null(남은 출처만으로 고르지 않음 → 고정 안내 유지)
+export function nextCollection(view: CollectionView | null): string | null {
+  if (!view) return null;
+  let earliest: string | null = null;
+  for (const id of JUDGMENT_JOBS) {
+    const at = view.jobs.find((j) => j.job === id)?.nextScheduledAt;
+    if (typeof at !== "string" || Number.isNaN(Date.parse(at))) return null;
+    if (earliest === null || Date.parse(at) < Date.parse(earliest)) earliest = at;
+  }
+  return earliest;
+}
+
 // 막대 길이(%). 전체가 0이면 0(빈 막대). 소수 첫째 자리까지
 export function ratioPercent(count: number, total: number): number {
   if (!(total > 0)) return 0;
