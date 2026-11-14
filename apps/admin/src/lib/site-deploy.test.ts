@@ -1,14 +1,10 @@
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+import example from "../../../../packages/contracts/examples/valid/site-deploy.json";
+import { READINESS, SITE_DEPLOY_REASONS } from "@baradun/contracts/site-deploy";
 import { describe, expect, it } from "vitest";
 import { localSiteDeployView, sampleSha } from "./auth/local-site-deploy";
 import { messages } from "./messages";
 import {
-  CI_STATES,
   COMMIT_LIMIT,
-  FILE_CATEGORIES,
-  READINESS,
-  SITE_DEPLOY_REASONS,
   field,
   issuePrefix,
   kstTime,
@@ -34,63 +30,56 @@ const parse = (raw: unknown) => {
 const NOW = Date.parse("2026-11-14T03:00:00Z");
 const AT = "2026-11-14T02:59:56.000Z";
 
-const server = (file: string) =>
-  readFileSync(
-    fileURLToPath(
-      new URL(`../../../../services/src/admin/${file}`, import.meta.url),
-    ),
-    "utf8",
-  );
-const literals = (source: string, start: RegExp) => {
-  const from = source.search(start);
-  const body = source.slice(from, source.indexOf(";", from));
-  return [...body.matchAll(/"([a-z_]+)"/g)].map((m) => m[1]);
-};
-
-describe("서버 응답 모양과 맞춤(services/src/admin/site-deploy*.ts)", () => {
-  it("사유·readiness·CI 상태·파일 분류 목록이 서버 타입과 같다", () => {
-    const github = server("site-deploy-github.ts");
-    const deploy = server("site-deploy.ts");
-    expect(literals(github, /export type SiteDeployReason =/)).toEqual([
-      ...SITE_DEPLOY_REASONS,
-    ]);
-    expect(literals(deploy, /type Readiness =/)).toEqual([...READINESS]);
-    expect(literals(deploy, /type CiState =/)).toEqual([...CI_STATES]);
-    const classify = deploy.slice(
-      deploy.indexOf("export function classifyDeployPath"),
-      deploy.indexOf("{", deploy.indexOf("export function classifyDeployPath")),
-    );
-    expect([...classify.matchAll(/"([a-z]+)"/g)].map((m) => m[1])).toEqual([
-      ...FILE_CATEGORIES,
-    ]);
+describe("공유 계약 예시", () => {
+  it("확인한 칸과 확인 못 한 칸, 일정 사유와 비교 주소를 읽는다", () => {
+    const view = parse(example);
+    expect(view).toEqual(example);
+    expect(scheduleLabel(view, NOW)).toEqual(example.nextScheduledAtReason);
   });
 
-  it("응답 최상위 키가 서버 collect()의 반환 키와 같다", () => {
-    const deploy = server("site-deploy.ts");
-    const from = deploy.lastIndexOf(
-      "return {",
-      deploy.indexOf("generatedAt: started.toISOString()"),
-    );
-    const body = deploy.slice(from, deploy.indexOf("} finally", from));
-    const keys = [...body.matchAll(/^ {8}(\w+)[:,]/gm)].map((m) => m[1]);
-    const parsed = parse(localSiteDeployView("ready", NOW));
-    expect(keys.sort()).toEqual(Object.keys(parsed).sort());
-  });
-
-  it("사이트 항목 키(app·deployed·detail·changes·matchedRun)가 서버와 같다", () => {
-    const deploy = server("site-deploy.ts");
-    for (const key of [
-      "deployed: await deployed",
-      "detail: await detail",
-      "changes: await changes",
-      "matchedRun",
+  it("다른 저장소나 현재 배포 SHA와 다른 비교 주소를 숨긴다", () => {
+    for (const compareUrl of [
+      example.sites[0]!.compareUrl!.replace("/example/", "/other/"),
+      example.sites[0]!.compareUrl!.replace(/b{40}/, "c".repeat(40)),
+      "https://github.com.evil.example/example/project/compare/b...main",
     ]) {
-      expect(deploy).toContain(key);
+      const raw = structuredClone(example);
+      raw.sites[0]!.compareUrl = compareUrl;
+      expect(parse(raw).sites[0]?.compareUrl).toBeUndefined();
     }
-    const parsed = parse(localSiteDeployView("ready", NOW));
-    expect(Object.keys(parsed.sites[0]!).sort()).toEqual(
-      ["app", "changes", "deployed", "detail", "matchedRun"].sort(),
-    );
+  });
+
+  it("배포 SHA를 확인하지 못하면 앞 값의 비교 링크도 숨긴다", () => {
+    const raw = structuredClone(example);
+    raw.sites[1]!.compareUrl = raw.sites[0]!.compareUrl!;
+    expect(parse(raw).sites[1]?.compareUrl).toBeUndefined();
+  });
+
+  it("정기 배포 사유의 형식이 틀리면 확인 못 함으로 표시한다", () => {
+    const view = parse({
+      ...example,
+      nextScheduledAtReason: { kind: "unknown", reason: "bad_value" },
+    });
+    expect(scheduleLabel(view, NOW)).toEqual({
+      kind: "unknown",
+      reason: "invalid",
+    });
+  });
+
+  it("날짜와 중단 사유를 함께 받으면 일정을 확인 못 함으로 표시한다", () => {
+    const view = parse({ ...example, nextScheduledAt: AT });
+    expect(scheduleLabel(view, NOW)).toEqual({
+      kind: "unknown",
+      reason: "invalid",
+    });
+  });
+
+  it("워크플로 비활성화에 기존 정지 문구를 쓴다", () => {
+    const view = parse({
+      ...example,
+      nextScheduledAtReason: { kind: "workflow_disabled" },
+    });
+    expect(scheduleLabel(view, NOW)).toEqual({ kind: "paused" });
   });
 });
 
@@ -537,7 +526,9 @@ describe("커밋 목록·링크·주기", () => {
     expect(list.commits).toHaveLength(COMMIT_LIMIT);
     expect(list.commits[0]!.sha).toBe(sampleSha(12));
     expect(list.complete).toBe(true);
-    expect(list.compare).toEqual({ from: sampleSha(0), to: sampleSha(12) });
+    expect(list.compareUrl).toBe(
+      `https://github.com/404soonotfound/baradun_v2/compare/${sampleSha(0)}...main`,
+    );
   });
 
   it("변경을 확인 못 한 사이트가 있으면 complete=false", () => {
@@ -566,7 +557,7 @@ describe("커밋 목록·링크·주기", () => {
     expect(pendingCommits(sites)).toMatchObject({
       total: 0,
       complete: true,
-      compare: null,
+      compareUrl: null,
     });
   });
 
@@ -591,6 +582,7 @@ describe("커밋 목록·링크·주기", () => {
       Array.from({ length: 12 - from }, (_, i) => commit(from + i + 1));
     const site = (app: "site" | "admin", from: number): SiteView => ({
       app,
+      compareUrl: `https://github.com/404soonotfound/baradun_v2/compare/${sampleSha(from)}...main`,
       deployed: { status: "known", value: sampleSha(from), checkedAt: AT },
       detail: { status: "known", value: commit(from), checkedAt: AT },
       changes: {
@@ -620,7 +612,9 @@ describe("커밋 목록·링크·주기", () => {
       "c4",
       "c3",
     ]);
-    expect(list.compare).toEqual({ from: sampleSha(0), to: sampleSha(12) });
+    expect(list.compareUrl).toBe(
+      `https://github.com/404soonotfound/baradun_v2/compare/${sampleSha(0)}...main`,
+    );
   });
 
   it("진행 중·승인 대기는 30초, 그 밖은 1분", () => {

@@ -27,6 +27,7 @@ const DEF: Record<string, string> = {
   history: "HistoryFile",
   "nationwide-warnings": "NationwideWarningsFile",
   weather: "WeatherFile",
+  "site-deploy": "SiteDeployView",
 };
 
 // 예시 파일 하나 검사 → { ok, errors }
