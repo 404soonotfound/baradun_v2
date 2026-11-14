@@ -77,7 +77,15 @@ export interface ImpactView {
 
 export type AlarmState = "OK" | "ALARM" | "INSUFFICIENT_DATA" | "unknown";
 
+export type AlarmKind = "stopped" | "errors" | "failing" | "other";
+type AlarmSource = CollectionJobId | "publish" | null;
+interface AlarmClassification {
+  readonly kind: AlarmKind;
+  readonly source: AlarmSource;
+}
+
 export interface AlarmEvent {
+  readonly classification?: AlarmClassification;
   readonly id: string;
   readonly name: string;
   readonly at: string;
@@ -86,6 +94,7 @@ export interface AlarmEvent {
 }
 
 export interface AlarmView {
+  readonly classification?: AlarmClassification;
   readonly id: string;
   readonly name: string;
   readonly state: AlarmState;
@@ -129,7 +138,7 @@ export interface JobCollection {
   readonly hourly: readonly HourBucket[];
   readonly incidents: readonly Incident[];
   readonly truncated: boolean;
-  readonly lateAfterMinutes: number | null;
+  readonly lateAfterMinutes?: number | null;
   // null: 예전 응답이라 지연을 판정하지 못함(정상으로 보지 않음)
   readonly overdue: boolean | null;
 }
@@ -367,7 +376,7 @@ function toStations(value: unknown): StationsView {
 type Loose<T> = { -readonly [K in keyof T]?: unknown };
 
 // 운영 API가 GH-375 전 응답(지연·게시 요약·경보·장애 종류 없음)을 보내도 화면이 깨지지 않게 채움
-// 모르는 값은 '확인 못 함' 쪽으로: 게시 요약 null, 경보 unavailable, 지연 기준 null(지연 표시 안 함)
+// 모르는 값은 '확인 못 함' 쪽으로: 게시 요약 null, 경보 unavailable, 지연 기준 누락(확인 못 함)
 // legacy: 새 필드가 하나라도 빠진 응답. 화면이 '예전 응답' 안내를 띄워 지연이 없다고 읽지 않게 함
 // jobs·hourly·incidents가 배열인지는 fetchCollection(validJob)이 먼저 확인함 → 여기서 빈 배열로 채우지 않음
 export function normalizeCollection(raw: unknown): CollectionView & {
@@ -378,10 +387,15 @@ export function normalizeCollection(raw: unknown): CollectionView & {
   const jobs = (view.jobs as readonly unknown[]).map((item) => {
     const job = item as Loose<JobCollection> & JobCollection;
     if (typeof job.overdue !== "boolean") legacy = true;
+    const { lateAfterMinutes, nextScheduledAt, ...rest } = job;
+    const late =
+      typeof lateAfterMinutes === "number" &&
+      Number.isFinite(lateAfterMinutes) &&
+      lateAfterMinutes > 0;
     return {
-      ...job,
-      lateAfterMinutes:
-        typeof job.lateAfterMinutes === "number" ? job.lateAfterMinutes : null,
+      ...rest,
+      ...(timeOrNull(nextScheduledAt) ? { nextScheduledAt } : {}),
+      ...(late || lateAfterMinutes === null ? { lateAfterMinutes } : {}),
       overdue: typeof job.overdue === "boolean" ? job.overdue : null,
       hourly: job.hourly.map((bucket) => ({
         ...bucket,
@@ -576,6 +590,35 @@ export function reasonOf(failure: RunFailure): {
   return { key: "other", value: reason };
 }
 
+// 수집기가 기록한 알려진 출처 결과 코드 및 HTTP 상태의 제목.
+const INCIDENT_CODE_TITLE = {
+  "resultCode:22": "rateLimit",
+  "result:22": "rateLimit",
+  "http:429": "rateLimit",
+} as const;
+
+export function incidentErrorTitle(failure: RunFailure | undefined): string {
+  const t = messages.collection;
+  if (!failure) return t.incidentError.unknown;
+  const { reason } = failure;
+  if (Object.hasOwn(INCIDENT_CODE_TITLE, reason)) {
+    return t.incidentError[
+      INCIDENT_CODE_TITLE[reason as keyof typeof INCIDENT_CODE_TITLE]
+    ];
+  }
+  const { key } = reasonOf(failure);
+  return t.incidentError[key];
+}
+
+export function cycleDelayText(minutes: number | null | undefined): string {
+  const t = messages.collection;
+  return minutes === undefined
+    ? t.cycleLateUnknown
+    : minutes === null
+      ? t.cycleNoLate
+      : fill(t.cycleLate, { minutes });
+}
+
 // 실패 사유 화면 문구(같은 사유가 여러 번이면 횟수를 붙임). 수집 현황·데이터 출처가 같이 씀
 export function reasonText(failure: RunFailure): string {
   const t = messages.collection;
@@ -669,31 +712,27 @@ export function incidentTimeline(
     : [...events, { type: "ongoing", at: nowIso }];
 }
 
-// 경보 이름(접두어 뺀 것) → 묶음과 출처. 모르는 경보는 other(이름을 그대로 보여 줌)
-export type AlarmKind = "stopped" | "errors" | "failing" | "other";
-export type AlarmSource = CollectionJobId | "publish" | null;
-
-const ALARM_SOURCES: readonly [string, AlarmSource][] = [
-  ["Warnings", "collect-warnings"],
-  ["Ocean", "collect-ocean"],
-  ["Rip", "collect-rip"],
-  ["Weather", "collect-weather"],
-  ["Catalog", "collect-catalog"],
-  ["Publish", "publish"],
+// 서버가 확정한 경보 분류의 표시 순서.
+const ALARM_KINDS: readonly AlarmKind[] = [
+  "stopped",
+  "errors",
+  "failing",
+  "other",
 ];
 
-export function alarmInfo(id: string): {
-  kind: AlarmKind;
-  source: AlarmSource;
-} {
-  const entry = ALARM_SOURCES.find(([head]) => id.startsWith(head));
-  if (!entry) return { kind: "other", source: null };
-  const [head, source] = entry;
-  const rest = id.slice(head.length);
-  if (rest === "Stopped") return { kind: "stopped", source };
-  if (rest === "Errors") return { kind: "errors", source };
-  if (rest === "Failing") return { kind: "failing", source };
-  return { kind: "other", source };
+export function alarmInfo(
+  alarm: Pick<AlarmView, "classification">,
+): AlarmClassification {
+  const value = alarm.classification;
+  if (
+    value &&
+    ALARM_KINDS.includes(value.kind) &&
+    (value.source === "publish" ||
+      value.source === null ||
+      SOURCE_ROWS.some(({ job }) => job === value.source))
+  )
+    return value;
+  return { kind: "other", source: null };
 }
 
 // 울리는 경보를 먼저, 그다음 이름순
@@ -749,14 +788,13 @@ export function matchesFilter(
 export function groupedAlarms(
   list: readonly AlarmView[],
 ): { kind: AlarmKind; alarms: AlarmView[] }[] {
-  const order: readonly AlarmKind[] = ["stopped", "errors", "failing", "other"];
   const byKind = new Map<AlarmKind, AlarmView[]>();
   for (const alarm of list) {
-    const { kind } = alarmInfo(alarm.id);
+    const { kind } = alarmInfo(alarm);
     byKind.set(kind, [...(byKind.get(kind) ?? []), alarm]);
   }
-  return order.flatMap((kind) => {
-    const alarms = byKind.get(kind);
-    return alarms ? [{ kind, alarms: sortedAlarms(alarms) }] : [];
-  });
+  return ALARM_KINDS.map((kind) => ({
+    kind,
+    alarms: sortedAlarms(byKind.get(kind) ?? []),
+  }));
 }

@@ -1340,6 +1340,23 @@
     "incidentResolved": "해결",
     "incidentMeta": "{time} · {minutes}분 · {runs}회",
     "incidentMore": "외 {count}건",
+    "incidentError": {
+      "rateLimit": "호출 한도 초과",
+      "timeout": "응답 시간 초과",
+      "http": "출처 요청 실패",
+      "apiKey": "인증키를 읽지 못함",
+      "format": "응답 형식이 다름",
+      "resultCode": "알 수 없는 오류",
+      "truncated": "받은 행이 한도에 닿음",
+      "empty": "빈 응답",
+      "noData": "자료 없음",
+      "unchecked": "시간 안에 확인하지 못함",
+      "storage": "저장하지 못함",
+      "exception": "처리 중 오류",
+      "unknownStatus": "알 수 없는 오류",
+      "other": "알 수 없는 오류",
+      "unknown": "알 수 없는 오류"
+    },
     "reason": {
       "timeout": "응답 시간 초과",
       "http": "HTTP {value} 응답",
@@ -1367,6 +1384,8 @@
     "newTab": "(새 탭)",
     "cycleLate": "{minutes}분 넘으면 지연",
     "cycleNoLate": "지연 표시 안 함",
+    "cycleLateUnknown": "지연 기준 확인 못 함",
+    "nextCollection": "다음 수집 {time} 예정",
     "legendTitle": "막대 범례",
     "bar": {
       "ok": "정상",
@@ -1458,6 +1477,9 @@
       "NotificationFailed": "경보 메일 보내기 실패",
       "OpsApiErrors": "운영 API 오류 급증"
     },
+    "alarmGroupCount": "{count}개",
+    "alarmGroupRinging": "{count}개 울림",
+    "alarmGroupUnknown": "{count}개 상태 확인 못 함",
     "alarmWindow": "{minutes}분 기준",
     "alarmWindowUnknown": "기준 시간 모름",
     "alarmSince": "{time}부터",
