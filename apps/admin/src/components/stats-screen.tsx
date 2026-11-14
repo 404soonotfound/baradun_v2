@@ -448,9 +448,19 @@ function Donut({
                     </svg>
                     <span className="flex-1 text-text-body">{row.label}</span>
                     <b className="font-medium tabular-nums">
-                      {pct === null
-                        ? t.emptyValue
-                        : fill(t.percentUnit, { percent: pct })}
+                      {/* 합계를 알면 비율. 합계를 모르면(한 행이라도 결측) 비율을 추정하지 않고
+                          받은 행은 사용자 수, 결측인 행만 '확인 못 함' */}
+                      {pct !== null ? (
+                        fill(t.percentUnit, { percent: pct })
+                      ) : row.value === null ? (
+                        <span className="text-caption font-normal text-text-muted">
+                          {t.notProvided}
+                        </span>
+                      ) : total === null ? (
+                        fill(t.userCount, { count: formatNumber(row.value) })
+                      ) : (
+                        t.emptyValue
+                      )}
                     </b>
                   </li>
                 );
@@ -458,7 +468,9 @@ function Donut({
             </ul>
           )}
           {shown !== null && shown.length > 0 && (
-            <p className="mt-1.5 text-caption text-text-muted">{t.shareNote}</p>
+            <p className="mt-1.5 text-caption text-text-muted">
+              {total === null ? t.shareUnknownNote : t.shareNote}
+            </p>
           )}
         </div>
       </div>
