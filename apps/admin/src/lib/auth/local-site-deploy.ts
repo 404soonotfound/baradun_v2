@@ -176,7 +176,7 @@ export function localSiteDeployView(
     sites: [
       {
         app: "site",
-        compareUrl: `${REPO}/compare/${siteBase}...main`,
+        compareUrl: `${REPO}/compare/${siteBase}...${sampleSha(head)}`,
         deployed: known(siteBase, at),
         detail: known(
           { sha: siteBase, title: "GH-449 feat(web): 대안 해변 안내 추가" },
@@ -191,7 +191,7 @@ export function localSiteDeployView(
       },
       {
         app: "admin",
-        compareUrl: `${REPO}/compare/${adminBase}...main`,
+        compareUrl: `${REPO}/compare/${adminBase}...${sampleSha(head)}`,
         deployed: known(adminBase, at),
         detail: known(commit(5), at),
         changes: known(adminChanges, at),

@@ -1034,7 +1034,7 @@ test(
       commits.getByRole("link", {
         name: /최근 10개만 보여요 · GitHub에서 전체 보기/,
       }),
-    ).toHaveAttribute("href", /\/compare\/0000000c+\.\.\.main$/);
+    ).toHaveAttribute("href", /\/compare\/0000000c+\.\.\.000000cc+$/);
 
     await expect(region.getByText("통과", { exact: true })).toBeVisible();
     await expect(region.getByText(/^(오늘|내일) 05:17$/)).toBeVisible();

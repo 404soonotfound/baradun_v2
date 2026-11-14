@@ -37,11 +37,16 @@ describe("공유 계약 예시", () => {
     expect(scheduleLabel(view, NOW)).toEqual(example.nextScheduledAtReason);
   });
 
-  it("다른 저장소나 현재 배포 SHA와 다른 비교 주소를 숨긴다", () => {
+  it("다른 저장소나 현재 배포·main SHA와 다른 비교 주소를 숨긴다", () => {
     for (const compareUrl of [
       example.sites[0]!.compareUrl!.replace("/example/", "/other/"),
       example.sites[0]!.compareUrl!.replace(/b{40}/, "c".repeat(40)),
-      "https://github.com.evil.example/example/project/compare/b...main",
+      example.sites[0]!.compareUrl!.replace(/a{40}$/, "c".repeat(40)),
+      example.sites[0]!.compareUrl!.replace(/a{40}$/, "main"),
+      example.sites[0]!.compareUrl!.replace(
+        "github.com",
+        "github.com.evil.example",
+      ),
     ]) {
       const raw = structuredClone(example);
       raw.sites[0]!.compareUrl = compareUrl;
@@ -53,6 +58,14 @@ describe("공유 계약 예시", () => {
     const raw = structuredClone(example);
     raw.sites[1]!.compareUrl = raw.sites[0]!.compareUrl!;
     expect(parse(raw).sites[1]?.compareUrl).toBeUndefined();
+  });
+
+  it("main SHA를 확인하지 못하면 비교 링크를 숨긴다", () => {
+    const view = parse({
+      ...example,
+      main: { status: "unknown", reason: "timeout", checkedAt: AT },
+    });
+    expect(view.sites[0]?.compareUrl).toBeUndefined();
   });
 
   it("정기 배포 사유의 형식이 틀리면 확인 못 함으로 표시한다", () => {
@@ -527,7 +540,7 @@ describe("커밋 목록·링크·주기", () => {
     expect(list.commits[0]!.sha).toBe(sampleSha(12));
     expect(list.complete).toBe(true);
     expect(list.compareUrl).toBe(
-      `https://github.com/404soonotfound/baradun_v2/compare/${sampleSha(0)}...main`,
+      `https://github.com/404soonotfound/baradun_v2/compare/${sampleSha(0)}...${sampleSha(12)}`,
     );
   });
 
@@ -582,7 +595,7 @@ describe("커밋 목록·링크·주기", () => {
       Array.from({ length: 12 - from }, (_, i) => commit(from + i + 1));
     const site = (app: "site" | "admin", from: number): SiteView => ({
       app,
-      compareUrl: `https://github.com/404soonotfound/baradun_v2/compare/${sampleSha(from)}...main`,
+      compareUrl: `https://github.com/404soonotfound/baradun_v2/compare/${sampleSha(from)}...${sampleSha(12)}`,
       deployed: { status: "known", value: sampleSha(from), checkedAt: AT },
       detail: { status: "known", value: commit(from), checkedAt: AT },
       changes: {
@@ -613,7 +626,7 @@ describe("커밋 목록·링크·주기", () => {
       "c3",
     ]);
     expect(list.compareUrl).toBe(
-      `https://github.com/404soonotfound/baradun_v2/compare/${sampleSha(0)}...main`,
+      `https://github.com/404soonotfound/baradun_v2/compare/${sampleSha(0)}...${sampleSha(12)}`,
     );
   });
 

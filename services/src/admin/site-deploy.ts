@@ -676,7 +676,7 @@ export function createSiteDeployReader(
           matchedRun,
           ...(site.deployed.status === "known" && mainResult.status === "known"
             ? {
-                compareUrl: `https://github.com/${config.repo}/compare/${site.deployed.value}...main`,
+                compareUrl: `https://github.com/${config.repo}/compare/${site.deployed.value}...${mainResult.value.sha}`,
               }
             : {}),
         };

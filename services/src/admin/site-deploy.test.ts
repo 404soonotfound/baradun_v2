@@ -133,7 +133,7 @@ describe("사이트 배포 상태 조회(D27-3·5)", () => {
     expect(result.readiness).toBe("ready");
     expect(result.nextScheduledAtReason).toBeUndefined();
     expect(result.sites.map((site) => site.compareUrl)).toEqual(
-      Array(2).fill(`https://github.com/${REPO}/compare/${DEPLOYED}...main`),
+      Array(2).fill(`https://github.com/${REPO}/compare/${DEPLOYED}...${HEAD}`),
     );
     expect(result.ci).toMatchObject({ value: "success" });
     expect(result.nextScheduledAt).toBe("2026-11-14T20:17:00.000Z");
