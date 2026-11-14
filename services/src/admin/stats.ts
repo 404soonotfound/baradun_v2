@@ -138,6 +138,7 @@ export interface Ga4Row {
 }
 
 export interface Ga4ReportBody {
+  readonly rowCount?: number;
   readonly rows?: readonly Ga4Row[];
   readonly metadata?: {
     readonly timeZone?: string;
@@ -150,7 +151,12 @@ export interface Ga4ReportBody {
 // HTTP 200이어도 모양이 틀린 리포트 하나만 조회 실패로 처리함
 function validReport(value: unknown, realtime = false): value is Ga4ReportBody {
   if (!value || typeof value !== "object") return false;
-  const report = value as Ga4ReportBody & { readonly rowCount?: unknown };
+  const report = value as Ga4ReportBody;
+  if (
+    report.rowCount !== undefined &&
+    (!Number.isSafeInteger(report.rowCount) || report.rowCount < 0)
+  )
+    return false;
   const validValues = (values: unknown) =>
     values === undefined ||
     (Array.isArray(values) &&
