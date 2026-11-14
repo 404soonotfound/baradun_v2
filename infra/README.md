@@ -316,12 +316,11 @@ BRD121_ACCOUNT_ID="<계정>"
 
 ## 관리자 권한 운영 (상시 AdministratorAccess 제거, BRD-121)
 
-일상 사용하는 IAM 사용자에 `AdministratorAccess`를 상시 붙여 두지 않습니다. 평소 IAM 사용자는 권한 없이 `sts:AssumeRole`만 허용하고, 인프라 배포나 콘솔 운영 조회가 필요할 때만 **MFA 조건이 걸린 임시 관리자 역할(`BaradunOperatorAdmin`, 최대 세션 1시간)**을 맡아 작업합니다.
+일상 사용하는 IAM 사용자에 `AdministratorAccess`를 상시 붙여 두지 않습니다. 이 계정은 2026-11-13에 AWS Paid 플랜으로 전환했고, AWS Organizations와 IAM Identity Center를 이미 설정했습니다. 일상 운영에는 기존 Identity Center의 MFA와 권한 세트로 발급한 임시 세션을 우선합니다. 전환 순서와 권한 분리 전 확인 항목은 [GH-300 절차서](iam-transition.md#관리자-접근-전환)를 따릅니다.
+
+아래 IAM 임시 관리자 역할 절차는 Identity Center 계정 접근을 사용할 수 없을 때의 대안입니다. 관리자 세션은 최대 1시간입니다.
 
 관리자 역할 이름에는 `BaradunV2-` 접두어를 쓰지 않습니다. 이 접두어는 CDK 실행 정책의 역할 관리·신뢰 정책 수정·PassRole 대상이며, 스택 밖에서 만든 관리자 역할에는 스택의 boundary가 붙지 않습니다. 관리자 역할을 이 범위에 넣으면 실행 역할이 관리자 역할을 Lambda에 넘기는 권한 상승 경로가 생깁니다. 이미 이전 이름으로 역할을 만들었다면 새 이름의 역할을 생성·검증한 뒤 기존 관리자 역할을 분리·정리합니다. 기존 관리자 경로는 새 경로의 검증이 끝날 때까지 유지합니다.
-
-> **IAM Identity Center(구 AWS SSO) 전환 시점**:
-> IAM Identity Center 자체는 추가 요금이 없지만, AWS 계정 접근(Permission Set)을 쓰려면 AWS Organizations 기반의 조직 인스턴스가 필요합니다(단독 계정의 계정 인스턴스는 Permission Set과 AWS 계정 접근을 지원하지 않음 — [AWS 공식 문서](https://docs.aws.amazon.com/singlesignon/latest/userguide/account-instances-identity-center.html)). 그런데 지금 계정은 **AWS Free 플랜**이라 AWS Organizations를 켜면 즉시 Paid 플랜(종량제)으로 자동 전환됩니다([AWS Free Tier 공식 문서](https://docs.aws.amazon.com/awsaccountbilling/latest/aboutv2/free-tier-plans.html)). 따라서 Free 플랜 기간에는 아래 임시 관리자 역할을 쓰고, Paid 플랜으로 전환할 때 IAM Identity Center 도입을 검토합니다.
 
 ### MFA 조건 임시 관리자 역할 전환 절차
 
