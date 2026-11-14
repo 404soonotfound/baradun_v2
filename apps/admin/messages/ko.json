@@ -569,6 +569,7 @@
     },
     "commitsTitle": "아직 안 나간 커밋",
     "commitsCount": "{count}개",
+    "commitsShow": "커밋 {count}개 보기",
     "commitsNone": "아직 안 나간 커밋이 없어요",
     "commitsMore": "최근 {shown}개만 보여요 · GitHub에서 전체 보기",
     "commitsPartial": "변경을 확인하지 못한 사이트가 있어 목록이 전부가 아닐 수 있어요",
