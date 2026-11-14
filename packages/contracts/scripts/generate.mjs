@@ -1,9 +1,10 @@
 // 스키마 → TypeScript 타입 생성 (결과: src/generated/contract.ts)
 // 실행: npm run generate -w packages/contracts
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { compileFromFile } from "json-schema-to-typescript";
 
-const ts = await compileFromFile("schemas/contract.schema.json", {
+const schemaPath = "schemas/contract.schema.json";
+const ts = await compileFromFile(schemaPath, {
   // 생성 파일 맨 위 경고 문구
   bannerComment:
     "// 자동 생성 파일: 직접 고치지 말고 schemas/를 고친 뒤 `npm run generate`",
@@ -19,3 +20,25 @@ const ts = await compileFromFile("schemas/contract.schema.json", {
 await mkdir("src/generated", { recursive: true });
 await writeFile("src/generated/contract.ts", ts);
 console.log("src/generated/contract.ts 생성 완료");
+
+// 실행 중 검증하는 열거값의 스키마와 화면 번들 일치
+const { $defs } = JSON.parse(await readFile(schemaPath, "utf8"));
+const enums = {
+  SITE_DEPLOY_REASONS: "SiteDeployReason",
+  READINESS: "SiteDeployReadiness",
+  CI_STATES: "SiteDeployCiState",
+  SITE_APPS: "SiteDeployApp",
+  FILE_CATEGORIES: "SiteDeployFileCategory",
+  DEPLOY_EVENTS: "SiteDeployEvent",
+  SCHEDULE_UNAVAILABLE: "SiteDeployScheduleUnavailable",
+};
+const labels = Object.entries(enums).map(([name, def]) => {
+  const values = $defs[def].enum.map((value) => `  ${JSON.stringify(value)},`);
+  return `export const ${name} = [\n${values.join("\n")}\n] as const;`;
+});
+await writeFile(
+  "src/generated/site-deploy.ts",
+  "// 자동 생성 파일: 직접 고치지 말고 schemas/를 고친 뒤 `npm run generate`\n" +
+    labels.join("\n\n") +
+    "\n",
+);

@@ -219,6 +219,316 @@ export type InquiryPhotoResult =
       status: 'rejected';
       reason: 'location_metadata' | 'invalid_file' | 'not_found';
     };
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "SiteDeployReason".
+ */
+export type SiteDeployReason =
+  | 'unconfigured'
+  | 'credential_missing'
+  | 'credentials'
+  | 'unauthorized'
+  | 'forbidden'
+  | 'not_found'
+  | 'timeout'
+  | 'rate_limit'
+  | 'unavailable'
+  | 'invalid'
+  | 'truncated'
+  | 'not_ancestor';
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "SiteDeployReadiness".
+ */
+export type SiteDeployReadiness =
+  | 'ready'
+  | 'paused'
+  | 'deploying'
+  | 'approval_pending'
+  | 'ci_pending'
+  | 'ci_failed'
+  | 'ci_missing'
+  | 'unconfigured'
+  | 'unknown';
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "SiteDeployCiState".
+ */
+export type SiteDeployCiState = 'success' | 'pending' | 'failure' | 'missing';
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "SiteDeployApp".
+ */
+export type SiteDeployApp = 'site' | 'admin';
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "SiteDeployFileCategory".
+ */
+export type SiteDeployFileCategory = 'beach' | 'site' | 'admin' | 'shared';
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "SiteDeployEvent".
+ */
+export type SiteDeployEvent = 'schedule' | 'workflow_dispatch';
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "SiteDeploySha".
+ */
+export type SiteDeploySha = string;
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "SiteDeployRunUrl".
+ */
+export type SiteDeployRunUrl = string;
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "SiteDeployScheduleUnavailable".
+ */
+export type SiteDeployScheduleUnavailable = 'paused' | 'workflow_disabled' | 'unconfigured';
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "SiteDeployScheduleReason".
+ */
+export type SiteDeployScheduleReason =
+  | {
+      kind: SiteDeployScheduleUnavailable;
+    }
+  | {
+      kind: 'unknown';
+      reason: SiteDeployReason;
+      retryAt?: UtcDateTime;
+    };
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "SiteDeployCommitField".
+ */
+export type SiteDeployCommitField =
+  | {
+      status: 'known';
+      value: SiteDeployCommit;
+      checkedAt: UtcDateTime;
+    }
+  | {
+      status: 'unknown';
+      reason: SiteDeployReason;
+      checkedAt: UtcDateTime;
+      last?: {
+        status: 'known';
+        value: SiteDeployCommit;
+        checkedAt: UtcDateTime;
+      };
+      retryAt?: UtcDateTime;
+    };
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "SiteDeployShaField".
+ */
+export type SiteDeployShaField =
+  | {
+      status: 'known';
+      value: SiteDeploySha;
+      checkedAt: UtcDateTime;
+    }
+  | {
+      status: 'unknown';
+      reason: SiteDeployReason;
+      checkedAt: UtcDateTime;
+      last?: {
+        status: 'known';
+        value: SiteDeploySha;
+        checkedAt: UtcDateTime;
+      };
+      retryAt?: UtcDateTime;
+    };
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "SiteDeployChangesField".
+ */
+export type SiteDeployChangesField =
+  | {
+      status: 'known';
+      value: SiteDeployChanges;
+      checkedAt: UtcDateTime;
+    }
+  | {
+      status: 'unknown';
+      reason: SiteDeployReason;
+      checkedAt: UtcDateTime;
+      last?: {
+        status: 'known';
+        value: SiteDeployChanges;
+        checkedAt: UtcDateTime;
+      };
+      retryAt?: UtcDateTime;
+    };
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "SiteDeployCiField".
+ */
+export type SiteDeployCiField =
+  | {
+      status: 'known';
+      value: SiteDeployCiState;
+      checkedAt: UtcDateTime;
+    }
+  | {
+      status: 'unknown';
+      reason: SiteDeployReason;
+      checkedAt: UtcDateTime;
+      last?: {
+        status: 'known';
+        value: SiteDeployCiState;
+        checkedAt: UtcDateTime;
+      };
+      retryAt?: UtcDateTime;
+    };
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "SiteDeploySettingsField".
+ */
+export type SiteDeploySettingsField =
+  | {
+      status: 'known';
+      value: SiteDeploySettings;
+      checkedAt: UtcDateTime;
+    }
+  | {
+      status: 'unknown';
+      reason: SiteDeployReason;
+      checkedAt: UtcDateTime;
+      last?: {
+        status: 'known';
+        value: SiteDeploySettings;
+        checkedAt: UtcDateTime;
+      };
+      retryAt?: UtcDateTime;
+    };
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "SiteDeployWorkflowActiveField".
+ */
+export type SiteDeployWorkflowActiveField =
+  | {
+      status: 'known';
+      value: boolean;
+      checkedAt: UtcDateTime;
+    }
+  | {
+      status: 'unknown';
+      reason: SiteDeployReason;
+      checkedAt: UtcDateTime;
+      last?: {
+        status: 'known';
+        value: boolean;
+        checkedAt: UtcDateTime;
+      };
+      retryAt?: UtcDateTime;
+    };
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "SiteDeployDeploymentsField".
+ */
+export type SiteDeployDeploymentsField =
+  | {
+      status: 'known';
+      value: SiteDeployDeployments;
+      checkedAt: UtcDateTime;
+    }
+  | {
+      status: 'unknown';
+      reason: SiteDeployReason;
+      checkedAt: UtcDateTime;
+      last?: {
+        status: 'known';
+        value: SiteDeployDeployments;
+        checkedAt: UtcDateTime;
+      };
+      retryAt?: UtcDateTime;
+    };
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "SiteDeployApprovalsField".
+ */
+export type SiteDeployApprovalsField =
+  | {
+      status: 'known';
+      value: number[];
+      checkedAt: UtcDateTime;
+    }
+  | {
+      status: 'unknown';
+      reason: SiteDeployReason;
+      checkedAt: UtcDateTime;
+      last?: {
+        status: 'known';
+        value: number[];
+        checkedAt: UtcDateTime;
+      };
+      retryAt?: UtcDateTime;
+    };
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "SiteDeployRecentJobsField".
+ */
+export type SiteDeployRecentJobsField =
+  | {
+      status: 'known';
+      value: SiteDeployRecentJobs;
+      checkedAt: UtcDateTime;
+    }
+  | {
+      status: 'unknown';
+      reason: SiteDeployReason;
+      checkedAt: UtcDateTime;
+      last?: {
+        status: 'known';
+        value: SiteDeployRecentJobs;
+        checkedAt: UtcDateTime;
+      };
+      retryAt?: UtcDateTime;
+    };
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "SiteDeployManualCountField".
+ */
+export type SiteDeployManualCountField =
+  | {
+      status: 'known';
+      value: SiteDeployManualCount;
+      checkedAt: UtcDateTime;
+    }
+  | {
+      status: 'unknown';
+      reason: SiteDeployReason;
+      checkedAt: UtcDateTime;
+      last?: {
+        status: 'known';
+        value: SiteDeployManualCount;
+        checkedAt: UtcDateTime;
+      };
+      retryAt?: UtcDateTime;
+    };
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "SiteDeployTokenExpiryField".
+ */
+export type SiteDeployTokenExpiryField =
+  | {
+      status: 'known';
+      value: string | null;
+      checkedAt: UtcDateTime;
+    }
+  | {
+      status: 'unknown';
+      reason: SiteDeployReason;
+      checkedAt: UtcDateTime;
+      last?: {
+        status: 'known';
+        value: string | null;
+        checkedAt: UtcDateTime;
+      };
+      retryAt?: UtcDateTime;
+    };
 
 /**
  * 바라던 바다 V2 공개 데이터 계약 v1 (아키텍처 6.3, 결정 기록 11장 B2). 파일마다 $defs의 *File 정의를 따름.
@@ -918,4 +1228,133 @@ export interface InquiryErrorResponse {
     code: 'invalid_request' | 'idempotency_conflict' | 'rate_limited' | 'service_unavailable';
     message: string;
   };
+}
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "SiteDeployCommit".
+ */
+export interface SiteDeployCommit {
+  sha: SiteDeploySha;
+  title: string;
+}
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "SiteDeployChangeFile".
+ */
+export interface SiteDeployChangeFile {
+  path: string;
+  previous: string | null;
+  category: SiteDeployFileCategory;
+}
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "SiteDeployChanges".
+ */
+export interface SiteDeployChanges {
+  from: SiteDeploySha;
+  to: SiteDeploySha;
+  files: SiteDeployChangeFile[];
+  commits: SiteDeployCommit[];
+}
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "SiteDeployRun".
+ */
+export interface SiteDeployRun {
+  id: number;
+  event: SiteDeployEvent;
+  status: string;
+  attempt: number;
+  conclusion: string | null;
+  sha: SiteDeploySha;
+  createdAt: UtcDateTime;
+  url: SiteDeployRunUrl;
+}
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "SiteDeployMatchedRun".
+ */
+export interface SiteDeployMatchedRun {
+  event: 'workflow_dispatch';
+  url: SiteDeployRunUrl;
+  completedAt: UtcDateTime | null;
+}
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "SiteDeployJob".
+ */
+export interface SiteDeployJob {
+  status: string;
+  conclusion: string | null;
+  wroteMarker: boolean;
+  completedAt: UtcDateTime | null;
+}
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "SiteDeployDeployments".
+ */
+export interface SiteDeployDeployments {
+  recent: SiteDeployRun | null;
+  active: SiteDeployRun[];
+}
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "SiteDeploySettings".
+ */
+export interface SiteDeploySettings {
+  paused: boolean;
+  configured: boolean;
+}
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "SiteDeployRecentJobs".
+ */
+export interface SiteDeployRecentJobs {
+  run: SiteDeployRun | null;
+  apps: {
+    site: SiteDeployJob | null;
+    admin: SiteDeployJob | null;
+  };
+}
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "SiteDeployManualCount".
+ */
+export interface SiteDeployManualCount {
+  since: UtcDateTime;
+  requests: number;
+}
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "SiteDeploySite".
+ */
+export interface SiteDeploySite {
+  app: SiteDeployApp;
+  deployed: SiteDeployShaField;
+  detail: SiteDeployCommitField;
+  changes: SiteDeployChangesField;
+  matchedRun: SiteDeployMatchedRun | null;
+  compareUrl?: string;
+}
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "SiteDeployView".
+ */
+export interface SiteDeployView {
+  generatedAt: UtcDateTime;
+  readiness: SiteDeployReadiness;
+  readinessCheckedAt: UtcDateTime;
+  main: SiteDeployCommitField;
+  ci: SiteDeployCiField;
+  settings: SiteDeploySettingsField;
+  workflowActive: SiteDeployWorkflowActiveField;
+  deployments: SiteDeployDeploymentsField;
+  approvals: SiteDeployApprovalsField;
+  recentJobs: SiteDeployRecentJobsField;
+  manualCount: SiteDeployManualCountField;
+  tokenExpiry: SiteDeployTokenExpiryField;
+  sites: SiteDeploySite[];
+  nextScheduledAt: UtcDateTime | null;
+  nextScheduledAtReason?: SiteDeployScheduleReason;
+  workflowUrl: string;
 }
