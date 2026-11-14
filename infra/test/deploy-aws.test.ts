@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   checkFunctionLogs,
   compareOutOfStackPolicies,
+  compareToolkitSetupPolicy,
   failedEventsOrNull,
   readChangeSetPages,
   readRemotePolicy,
@@ -97,6 +98,35 @@ describe("스택 밖 정책 비교 (로컬·CI 공용)", () => {
   const policy = (version: string, body: unknown) => ({
     head: ok({ Policy: { DefaultVersionId: version } }),
     body: ok({ PolicyVersion: { Document: body } }),
+  });
+
+  it("초기 정책은 미설치·조회 실패·문서 차이를 별도 알림으로 표시함", () => {
+    const desired = doc("ssm:PutParameter");
+    const remote = policy("v1", doc("ssm:GetParameter"));
+    const { runner, calls } = fake({
+      "iam get-policy": [
+        err("NoSuchEntity"),
+        err("AccessDenied example"),
+        remote.head,
+      ],
+      "iam get-policy-version": [remote.body],
+    });
+    expect(
+      compareToolkitSetupPolicy(runner, "111122223333", desired).line,
+    ).toContain("미설치");
+    expect(
+      compareToolkitSetupPolicy(runner, "111122223333", desired).line,
+    ).toContain("확인 못 함");
+    const changed = compareToolkitSetupPolicy(runner, "111122223333", desired);
+    expect(changed.diff?.same).toBe(false);
+    expect(changed.line).not.toContain("ssm:");
+    expect(
+      calls.every((call) =>
+        call.includes(
+          "arn:aws:iam::111122223333:policy/BaradunCdkToolkitSetup",
+        ),
+      ),
+    ).toBe(true);
   });
 
   it("boundary·실행 정책 두 개를 계정 ARN으로 읽고, 실행 정책이 허용하지 않는 저장소 동작을 고른다", () => {

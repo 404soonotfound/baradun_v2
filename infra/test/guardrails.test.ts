@@ -1047,6 +1047,7 @@ describe("CDK bootstrap 실행 정책 (11장, BRD-121)", () => {
         "role-boundary-policy.json",
         "github-infra-deploy-policy.json",
         "github-infra-deploy-trust.json",
+        "cdk-toolkit-setup-policy.json",
       ].sort(),
     );
 
@@ -1054,12 +1055,71 @@ describe("CDK bootstrap 실행 정책 (11장, BRD-121)", () => {
       ...executionPolicies,
       loadBootstrapPolicy("role-boundary-policy.json"),
       loadBootstrapPolicy("github-infra-deploy-policy.json"),
+      loadBootstrapPolicy("cdk-toolkit-setup-policy.json"),
     ]) {
       const nonWhitespaceLength = managedPolicyChars(raw);
       expect(
         nonWhitespaceLength,
         `${fileName}: ${nonWhitespaceLength}자`,
       ).toBeLessThanOrEqual(MAX_MANAGED_POLICY_CHARS);
+    }
+  });
+
+  it("CDKToolkit 초기 정책은 스택·자산·역할에만 한정하고 일상 역할에 부착하지 않음", () => {
+    const { policy } = loadBootstrapPolicy("cdk-toolkit-setup-policy.json");
+    const allowedScopes = [
+      `arn:aws:cloudformation:ap-northeast-2:${ACCOUNT}:stack/CDKToolkit/*`,
+      `arn:aws:s3:::cdk-hnb659fds-assets-${ACCOUNT}-ap-northeast-2`,
+      `arn:aws:ecr:ap-northeast-2:${ACCOUNT}:repository/cdk-hnb659fds-container-assets-${ACCOUNT}-ap-northeast-2`,
+      `arn:aws:ssm:ap-northeast-2:${ACCOUNT}:parameter/cdk-bootstrap/hnb659fds/version`,
+      ...[
+        "cfn-exec",
+        "deploy",
+        "file-publishing",
+        "image-publishing",
+        "lookup",
+      ].map(
+        (kind) =>
+          `arn:aws:iam::${ACCOUNT}:role/cdk-hnb659fds-${kind}-role-${ACCOUNT}-ap-northeast-2`,
+      ),
+    ];
+    const snapshot = JSON.parse(
+      readFileSync(
+        resolve(__dirname, "fixtures/aws-permission-reference.json"),
+        "utf8",
+      ),
+    ) as { references: Record<string, { Actions: { Name: string }[] }> };
+    for (const statement of policy.Statement) {
+      expect(statement.Effect).toBe("Allow");
+      for (const resource of toList(statement.Resource))
+        expect(allowedScopes).toContain(resource);
+      for (const action of toList(statement.Action)) {
+        const [service, name] = action.split(":");
+        expect(
+          snapshot.references[service!]!.Actions.some((a) => a.Name === name),
+          action,
+        ).toBe(true);
+      }
+    }
+    const managed = policy.Statement.find(
+      (s) => s.Sid === "ToolkitManagedPolicies",
+    );
+    expect(managed?.Condition?.ArnEquals?.["iam:PolicyARN"]).toEqual([
+      `arn:aws:iam::${ACCOUNT}:policy/BaradunCdkExecution`,
+      `arn:aws:iam::${ACCOUNT}:policy/BaradunCdkExecutionWorkload`,
+      "arn:aws:iam::aws:policy/ReadOnlyAccess",
+      "arn:aws:iam::aws:policy/AWSCloudFormationReadOnlyAccess",
+    ]);
+    const daily = [
+      ...executionPolicies,
+      loadBootstrapPolicy("role-boundary-policy.json"),
+      loadBootstrapPolicy("github-infra-deploy-policy.json"),
+    ];
+    for (const { policy } of daily) {
+      expect(JSON.stringify(policy)).not.toContain("BaradunCdkToolkitSetup");
+      expect(policy.Statement.flatMap((s) => toList(s.Action))).not.toContain(
+        "ssm:PutParameter",
+      );
     }
   });
 
@@ -1436,8 +1496,7 @@ describe("역할 권한 상한 (BRD-89)", () => {
       Resource: `arn:aws:ssm:ap-northeast-2:${ACCOUNT}:parameter/baradun/v2/ops/github-read-token`,
       Condition: {
         ArnLike: {
-          "lambda:SourceFunctionArn":
-            `arn:aws:lambda:ap-northeast-2:${ACCOUNT}:function:BaradunV2-OpsApiFunction*`,
+          "lambda:SourceFunctionArn": `arn:aws:lambda:ap-northeast-2:${ACCOUNT}:function:BaradunV2-OpsApiFunction*`,
         },
       },
     });
