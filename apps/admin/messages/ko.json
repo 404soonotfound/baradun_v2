@@ -704,7 +704,6 @@
     "colBeach": "해변 · 활동",
     "colReceived": "받은 시각",
     "colReceivedShort": "접수",
-    "previewOnOpen": "눌러서 내용 보기",
     "searchPlaceholder": "내용·해변",
     "searchLabel": "내용·해변 찾기",
     "typeFilter": "유형",
@@ -818,13 +817,7 @@
     "redactConfirmButton": "가리고 저장",
     "redacted": "개인정보를 가렸어요. 변경 이력에는 가렸다는 사실만 남고 가린 글은 남지 않아요.",
     "redactChanged": "문의 내용이 그사이 바뀌어 가리지 않았어요. 새 내용을 불러온 뒤 다시 골라 주세요.",
-    "redactFailed": "가리지 못했어요. 문의 내용은 그대로예요. 다시 시도해 주세요.",
-    "deleteButton": "지우기",
-    "deleteConfirmTitle": "문의를 지울까요?",
-    "deleteConfirmBody": "이 문의를 지우면 되돌릴 수 없어요. 변경 이력에는 ‘문의 지움’과 ID만 남아요.",
-    "deleteUnsupported": "서버에 문의 지우기 API(DELETE /ops/inquiries/{id})가 아직 없어 지금 지울 수 없어요.",
-    "deleteConfirmAction": "문의 지우기",
-    "deleteCancel": "취소"
+    "redactFailed": "가리지 못했어요. 문의 내용은 그대로예요. 다시 시도해 주세요."
   },
   "notices": {
     "title": "공지",
