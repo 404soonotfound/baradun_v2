@@ -1322,10 +1322,13 @@ function UsageMetric({
 function Usage({
   part,
   stale,
+  periodic,
   onRetry,
 }: {
   part: Parts["usage"];
   stale: boolean;
+  // 5분마다 다시 읽는지(데모 계정은 한 번만 읽음)
+  periodic: boolean;
   onRetry: () => void;
 }) {
   const slot = useSlot(part);
@@ -1388,7 +1391,9 @@ function Usage({
         ) : (
           data && (
             <span className="text-text-muted">
-              {fill(h.usageAsOf, { time: hourMinute(data.fetchedAt) })}
+              {fill(periodic ? h.usageAsOf : h.usageAsOfOnce, {
+                time: hourMinute(data.fetchedAt),
+              })}
             </span>
           )
         )}
@@ -1504,9 +1509,12 @@ function HeadNote({
   slow,
   pending,
   stale,
+  periodic,
   onRetry,
 }: {
   at: string | null;
+  // 1분마다 다시 읽는지(데모 계정은 한 번만 읽어 주기 안내를 빼고 기준 시각만)
+  periodic: boolean;
   // 아직 받는 중(첫 줄 자리표시)
   pending: boolean;
   refreshing: boolean;
@@ -1529,7 +1537,9 @@ function HeadNote({
           )
         ) : (
           <>
-            <span>{fill(h.asOf, { time: kstDateTime(at) })}</span>
+            <span>
+              {fill(periodic ? h.asOf : h.asOfOnce, { time: kstDateTime(at) })}
+            </span>
             {refreshing && (
               <span className="inline-flex items-center gap-1 text-brand-default">
                 <Spinner />
@@ -1759,6 +1769,7 @@ function HomeBody({ beaches }: { beaches: Beaches }) {
             </h1>
           </div>
           <HeadNote
+            periodic={!demo}
             at={showParts ? view.at : null}
             refreshing={reading && view.at !== null}
             slow={page.slow}
@@ -1841,6 +1852,7 @@ function HomeBody({ beaches }: { beaches: Beaches }) {
               <Usage
                 part={view.parts.usage}
                 stale={view.stale.has("usage")}
+                periodic={!demo}
                 onRetry={reload}
               />
             </div>
