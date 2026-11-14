@@ -24,11 +24,12 @@ import {
 import type { SnapshotStore } from "../core/snapshots/types";
 import {
   DynamoOpsStore,
+  lockKey,
   NOTICE_HOLD_KEY,
   toNoticeHold,
 } from "../core/store/dynamodb";
 import type { NoticeHold } from "../core/store/types";
-import { MANIFEST_SETTINGS } from "../publisher/policy";
+import { MANIFEST_SETTINGS, PUBLISH_POLICY } from "../publisher/policy";
 import {
   applyNoticeHold,
   currentNotices,
@@ -121,6 +122,7 @@ export interface JobView extends Omit<PublishJob, "createdAtMs"> {
 }
 
 export interface PublishOverview {
+  // 다음 게시에 쓰는 정책 설정값
   readonly settings: {
     readonly maintenance: {
       readonly active: boolean;
@@ -138,6 +140,8 @@ export interface PublishOverview {
     // null: 아직 게시본이 없음(첫 게시 전)
     readonly version: string | null;
     readonly generatedAt: string | null;
+    readonly maintenance?: ManifestFile["maintenance"];
+    readonly minWebBuild?: number;
   }>;
   readonly history: Section<{ readonly items: readonly HistoryItem[] }>;
   readonly lastRun: Section<{ readonly run: RunView | null }>;
@@ -604,6 +608,7 @@ function pendingActor(
 ): string | undefined {
   if (!record || held) return undefined;
   if (record.liveUpdatedBySub) return record.liveUpdatedBySub;
+  // 노출 변경자를 따로 남기기 전 기록에만 적용함
   const liveEdited =
     record.updatedAt === record.exposedAt ||
     record.updatedAt === record.live?.endsAt;
@@ -623,7 +628,6 @@ export async function readPublishLast24h(
   client: Sender,
   opsTable: string,
   now: Date,
-  latestRun?: RunView | null,
 ) {
   const from = new Date(now.getTime() - DAY_MS).toISOString();
   const to = now.toISOString();
@@ -637,6 +641,25 @@ export async function readPublishLast24h(
     },
     ConsistentRead: true,
   });
+  // 잠금 획득과 함께 증가한 번호를 결과와 대조함. 실행이 죽거나 기록 쓰기에 실패해도 번호는 남음
+  const readHead = () =>
+    client.send(
+      new GetCommand({
+        TableName: opsTable,
+        Key: lockKey(PUBLISH_POLICY.lockName),
+        ConsistentRead: true,
+      }),
+    );
+  const head = await readHead();
+  const sequence = head.Item?.sequence;
+  if (
+    typeof sequence !== "number" ||
+    !Number.isSafeInteger(sequence) ||
+    typeof head.Item?.startedAtMs !== "number" ||
+    head.Item.startedAtMs > now.getTime()
+  ) {
+    throw new Error("게시 실행 순번 확인 못 함");
+  }
   const baseline = await client.send(
     new QueryCommand({
       ...query("", from),
@@ -644,10 +667,16 @@ export async function readPublishLast24h(
       Limit: 1,
     }),
   );
-  if (!baseline.Items?.length) throw new Error("24시간 실행 기록 없음");
+  const previous = baseline.Items?.[0]?.sequence;
+  if (
+    typeof previous !== "number" ||
+    !Number.isSafeInteger(previous) ||
+    previous > sequence
+  ) {
+    throw new Error("24시간 실행 기록 없음");
+  }
+  let expected = previous + 1;
   const counts = { runs: 0, succeeded: 0, failed: 0, skipped: 0 };
-  const latestAt = latestRun ? Date.parse(latestRun.at) : Number.NaN;
-  let foundLatest = !(latestAt > Date.parse(from) && latestAt <= now.getTime());
   let startKey: Record<string, unknown> | undefined;
   for (let page = 0; page < MAX_RUN_PAGES; page += 1) {
     const result = await client.send(
@@ -666,13 +695,10 @@ export async function readPublishLast24h(
         throw new Error("게시 실행 시각 모양이 틀림");
       }
       if (item.at === from) continue;
-      if (
-        latestRun &&
-        Math.floor(Date.parse(item.at) / 1000) ===
-          Math.floor(latestAt / 1000) &&
-        item.result === latestRun.result
-      )
-        foundLatest = true;
+      if (item.sequence !== expected || expected > sequence) {
+        throw new Error("게시 실행 집계 순번 누락");
+      }
+      expected += 1;
       if (item.result === "published") counts.succeeded += 1;
       else if (item.result === "failed") counts.failed += 1;
       else if (item.result === "unchanged") counts.skipped += 1;
@@ -681,7 +707,10 @@ export async function readPublishLast24h(
     }
     startKey = result.LastEvaluatedKey;
     if (!startKey) {
-      if (!foundLatest) throw new Error("마지막 게시 실행의 집계 기록 없음");
+      if (expected !== sequence + 1)
+        throw new Error("게시 실행 집계 순번 누락");
+      if ((await readHead()).Item?.sequence !== sequence)
+        throw new Error("게시 실행 조회 중 순번 변경");
       return counts;
     }
   }
@@ -754,9 +783,7 @@ export async function readPublishOverview(
     }),
   );
   const [last24h, emails] = await Promise.all([
-    lastRun.ok
-      ? section(() => readPublishLast24h(client, opsTable, now, lastRun.run))
-      : Promise.resolve({ ok: false as const }),
+    section(() => readPublishLast24h(client, opsTable, now)),
     lookupActorEmails(
       [
         ...(history.ok ? history.actors.values() : []),
@@ -771,6 +798,12 @@ export async function readPublishOverview(
           ok: true,
           version: manifest.value?.snapshotVersion ?? null,
           generatedAt: manifest.value?.generatedAt ?? null,
+          ...(manifest.value
+            ? {
+                maintenance: manifest.value.maintenance,
+                minWebBuild: manifest.value.minWebBuild,
+              }
+            : {}),
         }
       : { ok: false },
     settings: {

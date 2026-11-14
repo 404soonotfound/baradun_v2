@@ -1479,6 +1479,7 @@ describe("게시 실행 결과 (D16-C2)", () => {
     await publishSnapshot(deps());
     expect(ops.lastRun).toEqual({
       at: NOW,
+      sequence: 1,
       source: "auto",
       result: "published",
       version: V1,

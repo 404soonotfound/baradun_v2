@@ -276,7 +276,13 @@ export async function publishHandler(
                 ConsistentRead: true,
               }),
             )
-            .catch(() => undefined)
+            .catch((error: unknown) => {
+              log("warn", "publish_job_actor_unread", {
+                jobId,
+                error: error instanceof Error ? error.name : typeof error,
+              });
+              return undefined;
+            })
         : undefined;
     const operatorSub = job?.Item?.operatorSub;
     return publishSnapshot(

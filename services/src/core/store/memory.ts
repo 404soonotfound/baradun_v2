@@ -135,16 +135,22 @@ export class MemoryOpsStore implements OpsStore {
     return true;
   }
 
+  private readonly lockSequences = new Map<string, number>();
+
   async acquireLock(
     name: string,
     owner: string,
     now: number,
     ttlMs: number,
-  ): Promise<boolean> {
+    trackSequence = false,
+  ): Promise<boolean | number> {
     const current = this.locks.get(name);
     if (current && current.expiresAt >= now) return false;
     this.locks.set(name, { owner, expiresAt: now + ttlMs });
-    return true;
+    if (!trackSequence) return true;
+    const sequence = (this.lockSequences.get(name) ?? 0) + 1;
+    this.lockSequences.set(name, sequence);
+    return sequence;
   }
 
   async releaseLock(name: string, owner: string): Promise<boolean> {

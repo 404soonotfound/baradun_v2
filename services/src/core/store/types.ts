@@ -90,9 +90,14 @@ export interface OpsStore {
     owner: string,
     now: number,
     ttlMs: number,
-  ): Promise<boolean>;
+    trackSequence?: boolean,
+  ): Promise<boolean | number>;
   // 잠금 해제. owner가 같을 때만 지우고 true
-  releaseLock(name: string, owner: string): Promise<boolean>;
+  releaseLock(
+    name: string,
+    owner: string,
+    preserveSequence?: boolean,
+  ): Promise<boolean>;
 
   getPublishedVersion(): Promise<string | null>;
   // 지금보다 큰 버전일 때만 바꾸고 true. 같거나 작으면 false(버전 역행 없음)
