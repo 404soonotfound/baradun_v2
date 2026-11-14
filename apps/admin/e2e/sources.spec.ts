@@ -123,6 +123,25 @@ test("목록(시안 V12·VM13): 판단 출처 카드·참고 출처·인증키�
 test("상세(시안 V13): 호출·연결 정보·최근 수집을 보여 주고 목록으로 돌아간다", async ({
   page,
 }) => {
+  await page.route(/\/ops\/collection$/, (route) =>
+    route.fulfill({
+      json: {
+        generatedAt: "2026-11-15T00:00:00Z",
+        jobs: [
+          {
+            job: "collect-warnings",
+            lastSuccessAt: "2026-11-15T00:03:00Z",
+            nextScheduledAt: "2026-11-15T00:18:00Z",
+            day: { runs: 1, ok: 1 },
+            week: { runs: 10, ok: 9 },
+            hourly: [],
+            incidents: [],
+            overdue: false,
+          },
+        ],
+      },
+    }),
+  );
   await mockSources(page);
   await openSources(page);
   await page
@@ -131,7 +150,7 @@ test("상세(시안 V13): 호출·연결 정보·최근 수집을 보여 주고 
     .click();
   await expect(page).toHaveURL(/\/sources\/\?id=collect-warnings$/);
   await expect(
-    page.getByRole("heading", { name: "기상특보 조회", level: 2 }),
+    page.getByRole("heading", { name: "기상특보 조회", level: 1 }),
   ).toBeVisible();
   const calls = page.getByRole("region", { name: "호출 2" });
   await expect(calls).toContainText("getPwnCd");
@@ -141,7 +160,19 @@ test("상세(시안 V13): 호출·연결 정보·최근 수집을 보여 주고 
   await expect(calls).toContainText("받는 행 수 10,000");
   await expect(page.getByText("10초 · 다시 1회")).toBeVisible();
   await expect(page.getByText("마지막 성공 뒤 20분")).toBeVisible();
-  const runs = page.getByRole("region", { name: "최근 수집" });
+  await expect(page.getByText("09:18:00")).toBeVisible();
+  await expect(page.getByText("90%", { exact: true })).toBeVisible();
+  await expect(page.getByText("받은 행 수 확인 못 함")).toBeVisible();
+  await expect(
+    calls.getByRole("table", { name: "결과 코드 처리" }),
+  ).toHaveCount(2);
+  await expect(calls).toContainText("발표 없음 확인");
+  await expect(calls).toContainText("실패 · 특보 없음으로 표시하지 않음");
+  const callsTab = page.getByRole("tab", { name: "호출", exact: true });
+  await callsTab.focus();
+  await callsTab.press("ArrowRight");
+  await expect(page.getByRole("tab", { name: "수집 기록" })).toBeFocused();
+  const runs = page.getByRole("region", { name: "수집 기록" });
   await expect(
     runs.locator("ol > li").filter({ hasText: "응답 시간 초과" }),
   ).toContainText("실패");
@@ -149,6 +180,14 @@ test("상세(시안 V13): 호출·연결 정보·최근 수집을 보여 주고 
   const info = page.getByRole("region", { name: "연결 정보" });
   await expect(info).toContainText("2027-03-31");
   await expect(info).toContainText("확인 필요");
+  await page.getByRole("tab", { name: "필드 → 앱" }).click();
+  await expect(page.getByRole("tabpanel")).toContainText(
+    "특보 배지 · 특보 시트",
+  );
+  await page.getByRole("tab", { name: "쓰는 해변" }).click();
+  await expect(page.getByRole("tabpanel")).toContainText(
+    "구역별 수를 확인하지 못했어요",
+  );
   await expectNoA11yViolations(page);
   await page.getByRole("link", { name: /데이터 출처 목록/ }).click();
   await expect(page).toHaveURL(/\/sources\/$/);
@@ -203,7 +242,7 @@ test("기록 null·읽지 못한 기록·키 확인 못 함은 정상·등록 �
     .click();
   await expect(page.getByText(/읽지 못한 기록이 2건/)).toBeVisible();
   await expect(
-    page.getByRole("heading", { name: "해양 관측", level: 2 }),
+    page.getByRole("heading", { name: "해양 관측", level: 1 }),
   ).toBeVisible();
 });
 
