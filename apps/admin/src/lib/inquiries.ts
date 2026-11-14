@@ -18,7 +18,8 @@ export function isInquiryStatus(value: unknown): value is InquiryStatus {
 
 // 받은 날부터 90일 보관(D15-7, services/src/inquiry/policy.ts INQUIRY_BODY_RETENTION_DAYS)
 export const RETENTION_DAYS = 90;
-export const PAGE_SIZE = 20;
+// 시안 4차 V20 기준 한 쪽 6행
+export const PAGE_SIZE = 6;
 
 export interface InquirySummary {
   readonly inquiryId: string;
@@ -175,4 +176,149 @@ export function retentionDate(receivedAt: string): string {
 // 접수 ID 줄임(시안 '3f2a…9c'). 전체 ID는 화면 읽기·복사용으로 따로 둠
 export function shortId(id: string): string {
   return id.length > 8 ? `${id.slice(0, 4)}…${id.slice(-2)}` : id;
+}
+
+// 목록 행 내용 미리보기 줄: 줄바꿈·연속 공백을 한 칸으로 줄이고 코드 포인트 단위로 자름
+export function previewText(
+  message: string | undefined | null,
+  maxChars = 42,
+): string | null {
+  if (!message) return null;
+  const normalized = message.replace(/\s+/g, " ").trim();
+  if (normalized === "") return null;
+  const chars = [...normalized];
+  if (chars.length <= maxChars) return normalized;
+  return `${chars.slice(0, maxChars).join("").trimEnd()}…`;
+}
+
+export const BEACH_NONE = "__none__" as const;
+
+export type ReceivedPreset = "today" | "7d" | "30d" | "custom";
+
+export interface ReceivedFilter {
+  readonly preset: ReceivedPreset;
+  // KST 입력값(YYYY-MM-DDTHH:mm)
+  readonly from?: string;
+  readonly to?: string;
+}
+
+export interface InquiryFilter {
+  readonly query: string;
+  readonly type: string | null;
+  readonly beach: string | null;
+  readonly received: ReceivedFilter | null;
+}
+
+export const EMPTY_INQUIRY_FILTER: InquiryFilter = {
+  query: "",
+  type: null,
+  beach: null,
+  received: null,
+};
+
+export function hasActiveInquiryFilter(filter: InquiryFilter): boolean {
+  return (
+    filter.query.trim() !== "" ||
+    filter.type !== null ||
+    filter.beach !== null ||
+    filter.received !== null
+  );
+}
+
+// KST(UTC+9) 날짜(YYYY-MM-DD) 문자열
+export function kstDateKey(date: Date): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: KST,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
+  return `${get("year")}-${get("month")}-${get("day")}`;
+}
+
+export function isKstToday(iso: string, now: Date = new Date()): boolean {
+  const ms = Date.parse(iso);
+  if (!Number.isFinite(ms)) return false;
+  return kstDateKey(new Date(ms)) === kstDateKey(now);
+}
+
+function parseKstInputMs(value: string | undefined): number | null {
+  if (!value || value.trim() === "") return null;
+  const trimmed = value.trim();
+  const normalized = /^\d{4}-\d{2}-\d{2}$/.test(trimmed)
+    ? `${trimmed}T00:00:00+09:00`
+    : /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(trimmed)
+      ? `${trimmed}:00+09:00`
+      : trimmed;
+  const ms = Date.parse(normalized);
+  return Number.isFinite(ms) ? ms : null;
+}
+
+function matchesReceived(
+  receivedAt: string,
+  filter: ReceivedFilter,
+  now: Date,
+): boolean {
+  const ms = Date.parse(receivedAt);
+  if (!Number.isFinite(ms)) return false;
+  if (filter.preset === "today") {
+    return kstDateKey(new Date(ms)) === kstDateKey(now);
+  }
+  if (filter.preset === "7d") {
+    return ms >= now.getTime() - 7 * 86_400_000 && ms <= now.getTime();
+  }
+  if (filter.preset === "30d") {
+    return ms >= now.getTime() - 30 * 86_400_000 && ms <= now.getTime();
+  }
+  const fromMs = parseKstInputMs(filter.from);
+  const toMs = parseKstInputMs(filter.to);
+  if (fromMs !== null && ms < fromMs) return false;
+  if (toMs !== null && ms > toMs) return false;
+  return fromMs !== null || toMs !== null;
+}
+
+// 받은 목록을 화면 조건(내용·해변 검색, 유형, 해변, 받은 시각)으로 거름
+// 서버 요약(GET /ops/inquiries)에 없는 본문은 이미 열어 본 상세 캐시(messages)가 있을 때만 함께 찾음
+export function filterInquiries<T extends InquirySummary>(
+  items: readonly T[],
+  filter: InquiryFilter,
+  options: {
+    readonly beachName: (beachId: string) => string;
+    readonly typeLabel: (type: string) => string;
+    readonly activityLabel?: (activity: string) => string;
+    readonly messages?: Readonly<Record<string, string>>;
+    readonly now?: Date;
+  },
+): T[] {
+  const q = filter.query.trim().toLowerCase();
+  const now = options.now ?? new Date();
+  return items.filter((item) => {
+    if (filter.type !== null && item.type !== filter.type) return false;
+    if (filter.beach !== null) {
+      if (filter.beach === BEACH_NONE) {
+        if (item.beachId) return false;
+      } else if (item.beachId !== filter.beach) {
+        return false;
+      }
+    }
+    if (filter.received !== null && !matchesReceived(item.receivedAt, filter.received, now)) {
+      return false;
+    }
+    if (q !== "") {
+      const candidates = [
+        options.typeLabel(item.type),
+        item.beachId ?? "",
+        item.beachId ? options.beachName(item.beachId) : "",
+        item.activity && options.activityLabel
+          ? options.activityLabel(item.activity)
+          : (item.activity ?? ""),
+        item.inquiryId,
+        shortId(item.inquiryId),
+        options.messages?.[item.inquiryId] ?? "",
+      ];
+      if (!candidates.some((c) => c.toLowerCase().includes(q))) return false;
+    }
+    return true;
+  });
 }
