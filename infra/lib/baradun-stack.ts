@@ -29,7 +29,7 @@ import { StorageTables } from "./storage/tables";
 // 바라던 바다 V2 인프라 스택. 기능 묶음(사이트 전달, 수집, 게시…)을 여기에 하나씩 붙임.
 export class BaradunStack extends Stack {
   constructor(scope: Construct, id: string, props?: StackProps) {
-    super(scope, id, props);
+    super(scope, id, { ...props, terminationProtection: true });
 
     // 이 스택이 만드는 모든 역할(CDK가 자동으로 만드는 역할 포함)에 권한 상한을 붙임 (BRD-89).
     // 실행 정책은 이 boundary가 없는 역할의 생성·정책 변경을 거부하므로 빠뜨리면 배포가 실패함

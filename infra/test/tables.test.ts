@@ -168,10 +168,11 @@ describe("DynamoDB 테이블", () => {
     }
   });
 
-  it("이름을 지정하지 않고, 스택을 지워도 테이블은 남긴다", () => {
+  it("세 테이블의 직접 삭제를 막고 스택 삭제·교체 때 보존한다", () => {
     for (const name of ["State", "Ops", "Inquiry"] as const) {
       const t = table(name);
       expect(t.Properties.TableName).toBeUndefined();
+      expect(t.Properties.DeletionProtectionEnabled).toBe(true);
       expect(t.DeletionPolicy).toBe("Retain");
       expect(t.UpdateReplacePolicy).toBe("Retain");
     }
