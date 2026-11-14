@@ -18,6 +18,7 @@ describe("기간 이용 통계", () => {
       statsDates("today", new Date(now.getTime() - 1)).current.endDate,
     ).toBe("2026-11-14");
     expect(statsDates("7d", now)).toEqual({
+      currentHour: 0,
       current: { startDate: "2026-11-09", endDate: "2026-11-15" },
       previous: { startDate: "2026-11-02", endDate: "2026-11-08" },
     });
@@ -46,13 +47,21 @@ describe("기간 이용 통계", () => {
       ],
       undefined,
     );
-    expect(trends.daily?.rows).toEqual([
-      { date: "2026-11-14", activeUsers: null, pageViews: 12 },
-    ]);
+    expect(trends.daily?.rows).toHaveLength(7);
+    expect(trends.daily?.rows[0]).toEqual({
+      date: "2026-11-09",
+      activeUsers: null,
+      pageViews: null,
+    });
+    expect(trends.daily?.rows[5]).toEqual({
+      date: "2026-11-14",
+      activeUsers: null,
+      pageViews: 12,
+    });
     expect(trends.hourly?.rows[9]).toEqual({
       hour: 9,
-      reportedDays: 1,
-      averageActiveUsers: 7,
+      reportedDays: 6,
+      averageActiveUsers: null,
     });
     expect(trends.hourly?.rows[10]?.averageActiveUsers).toBeNull();
     expect(trends.topScreens).toMatchObject({
@@ -69,7 +78,7 @@ describe("기간 이용 통계", () => {
     ]);
   });
 
-  it("받은 시간별 행만 평균에 쓰고 다른 시간대의 값은 빼 둠", () => {
+  it("오늘의 미래 시간은 빼고 기간 내 누락된 시간은 0으로 셈", () => {
     const dates = statsDates("7d", now);
     const trends = parseTrends(
       dates,
@@ -87,8 +96,38 @@ describe("기간 이용 통계", () => {
     expect(trends.daily).toBeNull();
     expect(trends.hourly?.rows[9]).toEqual({
       hour: 9,
-      reportedDays: 2,
-      averageActiveUsers: 8.5,
+      reportedDays: 6,
+      averageActiveUsers: 7 / 6,
+    });
+  });
+
+  it("오늘은 완료된 KST 시간만 계산하고 어제 전체와 비교하지 않음", () => {
+    const dates = statsDates("today", new Date("2026-11-15T00:30:00Z"));
+    const result = parseTrends(
+      dates,
+      [
+        { metadata, rows: [row("", "9", "12", "5")] },
+        { metadata },
+        { metadata, rows: [row("2026111503", "2"), row("2026111509", "7")] },
+      ],
+      undefined,
+    );
+    expect(result.previous).toBeNull();
+    expect(result.newUsers).toBe(5);
+    expect(result.daily?.rows).toEqual([
+      { date: "2026-11-15", activeUsers: 0, pageViews: 0 },
+    ]);
+    expect(result.hourly?.rows[3]).toMatchObject({
+      reportedDays: 1,
+      averageActiveUsers: 2,
+    });
+    expect(result.hourly?.rows[8]).toMatchObject({
+      reportedDays: 1,
+      averageActiveUsers: 0,
+    });
+    expect(result.hourly?.rows[9]).toMatchObject({
+      reportedDays: 0,
+      averageActiveUsers: null,
     });
   });
 

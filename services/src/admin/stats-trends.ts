@@ -59,8 +59,12 @@ export function statsDates(range: StatsRange, now: Date) {
   const date = (daysAgo: number) =>
     new Date(end - daysAgo * DAY_MS).toISOString().slice(0, 10);
   return {
+    currentHour: new Date(now.getTime() + KST_OFFSET_MS).getUTCHours(),
     current: { startDate: date(days - 1), endDate: date(0) },
-    previous: { startDate: date(days * 2 - 1), endDate: date(days) },
+    previous:
+      range === "today"
+        ? null
+        : { startDate: date(days * 2 - 1), endDate: date(days) },
   };
 }
 
@@ -82,7 +86,7 @@ export function trendRequests(
     {
       dateRanges: [
         { ...dates.current, name: "current" },
-        { ...dates.previous, name: "previous" },
+        ...(dates.previous ? [{ ...dates.previous, name: "previous" }] : []),
       ],
       metrics: [...usageMetrics, { name: "newUsers" }],
     },
@@ -143,7 +147,9 @@ export function parseTrends(
   const comparison =
     totals?.metadata?.timeZone === STATS_TIME_ZONE ? totals : undefined;
   const comparisonRows = comparison?.rows ?? [];
-  const current = comparisonRows.find((row) => dimension(row) === "current");
+  const current = dates.previous
+    ? comparisonRows.find((row) => dimension(row) === "current")
+    : comparisonRows[0];
   const previous = comparisonRows.find((row) => dimension(row) === "previous");
   const hours = list(hourly, (row) => {
     const label = dimension(row);
@@ -154,37 +160,83 @@ export function parseTrends(
       users: metric(row),
     };
   });
+  const days: string[] = [];
+  for (
+    let day = Date.parse(dates.current.startDate);
+    day <= Date.parse(dates.current.endDate);
+    day += DAY_MS
+  ) {
+    days.push(new Date(day).toISOString().slice(0, 10));
+  }
+  // GA4 keepEmptyRows 기본값은 0인 행을 생략함. 제한·표본·잘림이 없을 때만 빈 날짜·시간을 0으로 계산함
+  const canFill = (report: Ga4ReportBody | undefined, flags: StatsMetadata) =>
+    !flags.thresholding &&
+    !flags.sampling &&
+    !flags.otherRowLoss &&
+    (report?.rowCount === undefined ||
+      report.rowCount === (report.rows?.length ?? 0));
+  const dailyRows = list(daily, (row) => {
+    const label = dimension(row);
+    if (!/^\d{8}$/.test(label)) return null;
+    return {
+      date: `${label.slice(0, 4)}-${label.slice(4, 6)}-${label.slice(6)}`,
+      ...counts(row),
+    };
+  });
+  const dayByDate = new Map(dailyRows?.rows.map((row) => [row.date, row]));
+  const fillDays =
+    dailyRows &&
+    dailyRows.rows.length === (daily?.rows?.length ?? 0) &&
+    canFill(daily, dailyRows.metadata);
+  const fillHours =
+    hours &&
+    hours.rows.length === (hourly?.rows?.length ?? 0) &&
+    canFill(hourly, hours.metadata);
   return {
     ...dates.current,
     ga4TimeZone,
     timeZoneMismatch:
       ga4TimeZone === null ? null : ga4TimeZone !== STATS_TIME_ZONE,
-    daily: list(daily, (row) => {
-      const label = dimension(row);
-      if (!/^\d{8}$/.test(label)) return null;
-      const date = `${label.slice(0, 4)}-${label.slice(4, 6)}-${label.slice(6)}`;
-      return { date, ...counts(row) };
-    }),
+    daily: dailyRows && {
+      metadata: dailyRows.metadata,
+      rows: days.map(
+        (date) =>
+          dayByDate.get(date) ?? {
+            date,
+            activeUsers: fillDays ? 0 : null,
+            pageViews: fillDays ? 0 : null,
+          },
+      ),
+    },
     hourly: hours && {
       metadata: hours.metadata,
       rows: Array.from({ length: 24 }, (_, hour) => {
-        const reported = hours.rows.filter((row) => row.hour === hour);
         const byDate = new Map<string, number | null>();
-        for (const row of reported) {
+        for (const row of hours.rows.filter((row) => row.hour === hour)) {
           byDate.set(row.date, byDate.has(row.date) ? null : row.users);
         }
-        const values = [...byDate.values()].filter((users) => users !== null);
+        const eligible = hour < dates.currentHour ? days : days.slice(0, -1);
+        const values = eligible.map((date) => {
+          const label = date.replaceAll("-", "");
+          return byDate.has(label)
+            ? (byDate.get(label) ?? null)
+            : fillHours
+              ? 0
+              : null;
+        });
         return {
           hour,
-          averageActiveUsers: values.length
-            ? values.reduce((total, users) => total + users, 0) / values.length
-            : null,
+          averageActiveUsers:
+            values.length && values.every((value) => value !== null)
+              ? values.reduce((total, users) => total + users, 0) /
+                values.length
+              : null,
           reportedDays: values.length,
         };
       }),
     },
     previous:
-      comparison && previous
+      comparison && previous && dates.previous
         ? {
             ...dates.previous,
             ...counts(previous),
