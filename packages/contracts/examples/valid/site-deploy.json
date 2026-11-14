@@ -1,0 +1,141 @@
+{
+  "generatedAt": "2026-11-14T03:02:00.000Z",
+  "readiness": "unknown",
+  "readinessCheckedAt": "2026-11-14T03:00:00.000Z",
+  "main": {
+    "status": "known",
+    "value": {
+      "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "title": "변경 사항"
+    },
+    "checkedAt": "2026-11-14T03:00:00.000Z"
+  },
+  "ci": {
+    "status": "known",
+    "value": "success",
+    "checkedAt": "2026-11-14T03:00:00.000Z"
+  },
+  "settings": {
+    "status": "unknown",
+    "reason": "rate_limit",
+    "checkedAt": "2026-11-14T03:02:00.000Z",
+    "retryAt": "2026-11-14T03:12:00.000Z",
+    "last": {
+      "status": "known",
+      "value": {
+        "paused": false,
+        "configured": true
+      },
+      "checkedAt": "2026-11-14T03:00:00.000Z"
+    }
+  },
+  "workflowActive": {
+    "status": "known",
+    "value": true,
+    "checkedAt": "2026-11-14T03:00:00.000Z"
+  },
+  "deployments": {
+    "status": "known",
+    "value": {
+      "recent": null,
+      "active": []
+    },
+    "checkedAt": "2026-11-14T03:00:00.000Z"
+  },
+  "approvals": {
+    "status": "known",
+    "value": [],
+    "checkedAt": "2026-11-14T03:00:00.000Z"
+  },
+  "recentJobs": {
+    "status": "known",
+    "value": {
+      "run": null,
+      "apps": {
+        "site": null,
+        "admin": null
+      }
+    },
+    "checkedAt": "2026-11-14T03:00:00.000Z"
+  },
+  "manualCount": {
+    "status": "known",
+    "value": {
+      "since": "2026-11-13T15:00:00.000Z",
+      "requests": 0
+    },
+    "checkedAt": "2026-11-14T03:00:00.000Z"
+  },
+  "tokenExpiry": {
+    "status": "known",
+    "value": null,
+    "checkedAt": "2026-11-14T03:00:00.000Z"
+  },
+  "sites": [
+    {
+      "app": "site",
+      "deployed": {
+        "status": "known",
+        "value": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "checkedAt": "2026-11-14T03:00:00.000Z"
+      },
+      "detail": {
+        "status": "known",
+        "value": {
+          "sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "title": "배포한 변경"
+        },
+        "checkedAt": "2026-11-14T03:00:00.000Z"
+      },
+      "changes": {
+        "status": "known",
+        "value": {
+          "from": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "to": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "files": [
+            {
+              "path": "apps/web/app/page.tsx",
+              "previous": null,
+              "category": "site"
+            }
+          ],
+          "commits": [
+            {
+              "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "title": "변경 사항"
+            }
+          ]
+        },
+        "checkedAt": "2026-11-14T03:00:00.000Z"
+      },
+      "matchedRun": null,
+      "compareUrl": "https://github.com/example/project/compare/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb...main"
+    },
+    {
+      "app": "admin",
+      "deployed": {
+        "status": "unknown",
+        "reason": "not_found",
+        "checkedAt": "2026-11-14T03:02:00.000Z"
+      },
+      "detail": {
+        "status": "unknown",
+        "reason": "not_found",
+        "checkedAt": "2026-11-14T03:02:00.000Z"
+      },
+      "changes": {
+        "status": "unknown",
+        "reason": "not_found",
+        "checkedAt": "2026-11-14T03:02:00.000Z"
+      },
+      "matchedRun": null
+    }
+  ],
+  "nextScheduledAt": null,
+  "nextScheduledAtReason": {
+    "kind": "unknown",
+    "reason": "rate_limit",
+    "retryAt": "2026-11-14T03:12:00.000Z"
+  },
+  "workflowUrl": "https://github.com/example/project/actions/workflows/deploy.yml"
+}

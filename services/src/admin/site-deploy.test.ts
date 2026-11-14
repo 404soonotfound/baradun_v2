@@ -1,6 +1,18 @@
+import schema from "@baradun/contracts/schema.json";
+import Ajv2020 from "ajv/dist/2020.js";
+import addFormats from "ajv-formats";
 import { describe, expect, it, vi } from "vitest";
 import { createSiteDeployReader } from "./site-deploy";
 import { createSiteDeployGitHub } from "./site-deploy-github";
+
+const ajv = new Ajv2020({
+  allErrors: true,
+  allowUnionTypes: true,
+  strictTypes: false,
+});
+addFormats(ajv);
+ajv.addSchema(schema);
+const validate = ajv.getSchema(`${schema.$id}#/$defs/SiteDeployView`)!;
 
 const HEAD = "a".repeat(40);
 const DEPLOYED = "b".repeat(40);
@@ -117,7 +129,12 @@ describe("사이트 배포 상태 조회(D27-3·5)", () => {
   it("같은 main SHA로 비교하고 앱 경로와 이름이 바뀐 파일을 구분한다", async () => {
     const { read, request } = setup();
     const result = await read();
+    expect(validate(result), JSON.stringify(validate.errors)).toBe(true);
     expect(result.readiness).toBe("ready");
+    expect(result.nextScheduledAtReason).toBeUndefined();
+    expect(result.sites.map((site) => site.compareUrl)).toEqual(
+      Array(2).fill(`https://github.com/${REPO}/compare/${DEPLOYED}...main`),
+    );
     expect(result.ci).toMatchObject({ value: "success" });
     expect(result.nextScheduledAt).toBe("2026-11-14T20:17:00.000Z");
     expect(result.sites[0]?.changes).toMatchObject({
@@ -197,7 +214,10 @@ describe("사이트 배포 상태 조회(D27-3·5)", () => {
       const result = await read();
       expect(result.settings).toMatchObject({ value: { paused } });
       expect(result.readiness).toBe(expected);
-      if (paused) expect(result.nextScheduledAt).toBeNull();
+      if (paused) {
+        expect(result.nextScheduledAt).toBeNull();
+        expect(result.nextScheduledAtReason).toEqual({ kind: "paused" });
+      }
     },
   );
 
@@ -216,6 +236,10 @@ describe("사이트 배포 상태 조회(D27-3·5)", () => {
       const result = await read();
       expect(result.readiness).toBe("unknown");
       expect(result.settings).toMatchObject({ status: "unknown", reason });
+      expect(result.nextScheduledAtReason).toMatchObject({
+        kind: "unknown",
+        reason,
+      });
       expect(result.nextScheduledAt).toBeNull();
     },
   );
@@ -228,7 +252,11 @@ describe("사이트 배포 상태 조회(D27-3·5)", () => {
       );
       return Response.json({ total_count: variables.length, variables });
     });
-    expect((await withoutBucket.read()).readiness).toBe("unconfigured");
+    expect(await withoutBucket.read()).toMatchObject({
+      readiness: "unconfigured",
+      nextScheduledAt: null,
+      nextScheduledAtReason: { kind: "unconfigured" },
+    });
 
     const disabled = setup((url) =>
       url.pathname.endsWith("/deploy.yml")
@@ -239,7 +267,38 @@ describe("사이트 배포 상태 조회(D27-3·5)", () => {
       readiness: "unconfigured",
       nextScheduledAt: null,
       workflowActive: { status: "known", value: false },
+      nextScheduledAtReason: { kind: "workflow_disabled" },
     });
+  });
+
+  it("워크플로 또는 배포 표지를 읽지 못한 응답도 계약을 통과한다", async () => {
+    const { read } = setup((url) => {
+      if (url.pathname.endsWith("/deploy.yml"))
+        return new Response(null, { status: 403 });
+      if (url.hostname === "ops.example")
+        return new Response(null, { status: 404 });
+      return undefined;
+    });
+    const result = await read();
+    expect(validate(result), JSON.stringify(validate.errors)).toBe(true);
+    expect(result.nextScheduledAt).toBeNull();
+    expect(result.nextScheduledAtReason).toEqual({
+      kind: "unknown",
+      reason: "forbidden",
+    });
+    expect(result.sites[0]?.compareUrl).toBeDefined();
+    expect(result.sites[1]?.compareUrl).toBeUndefined();
+  });
+
+  it("main을 확인 못 하면 배포 표지를 읽어도 비교 주소를 넣지 않는다", async () => {
+    const { read } = setup((url) =>
+      url.pathname.endsWith("/commits/main")
+        ? new Response(null, { status: 503 })
+        : undefined,
+    );
+    const result = await read();
+    expect(result.sites[0]?.deployed.status).toBe("known");
+    expect(result.sites[0]?.compareUrl).toBeUndefined();
   });
 
   it.each([
