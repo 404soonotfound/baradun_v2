@@ -197,6 +197,18 @@ function Unknown<T>({
   );
 }
 
+// 짧은 SHA(앞 7자리). 저장소 주소를 알면 커밋 링크
+function ShaLink({ sha, repo }: { sha: string; repo: string | null }) {
+  const short = sha.slice(0, 7);
+  return repo ? (
+    <ExternalLink href={`${repo}/commit/${sha}`} className="font-mono">
+      {short}
+    </ExternalLink>
+  ) : (
+    <code className="font-mono">{short}</code>
+  );
+}
+
 function CommitLine({
   commit,
   repo,
@@ -204,21 +216,11 @@ function CommitLine({
   commit: DeployCommit;
   repo: string | null;
 }) {
-  const short = commit.sha.slice(0, 7);
   const prefix = issuePrefix(commit.title);
   const rest = prefix ? prefix.rest : commit.title;
   return (
     <span className="min-w-0 text-body-s break-words text-text-default">
-      {repo ? (
-        <ExternalLink
-          href={`${repo}/commit/${commit.sha}`}
-          className="font-mono"
-        >
-          {short}
-        </ExternalLink>
-      ) : (
-        <code className="font-mono">{short}</code>
-      )}{" "}
+      <ShaLink sha={commit.sha} repo={repo} />{" "}
       {prefix &&
         (repo ? (
           <ExternalLink href={`${repo}/issues/${prefix.issue}`}>
@@ -340,18 +342,7 @@ function SiteCard({ site, repo }: { site: SiteView; repo: string | null }) {
           site.detail.status === "unknown" && (
             <>
               <span className="text-body-s text-text-default">
-                {repo ? (
-                  <ExternalLink
-                    href={`${repo}/commit/${site.deployed.value}`}
-                    className="font-mono"
-                  >
-                    {site.deployed.value.slice(0, 7)}
-                  </ExternalLink>
-                ) : (
-                  <code className="font-mono">
-                    {site.deployed.value.slice(0, 7)}
-                  </code>
-                )}
+                <ShaLink sha={site.deployed.value} repo={repo} />
               </span>
               <p className="text-caption text-text-muted">
                 {fill(t.checkedAt, {
@@ -391,8 +382,34 @@ function SiteCard({ site, repo }: { site: SiteView; repo: string | null }) {
   );
 }
 
-function ReadinessLine({ view }: { view: SiteDeployView }) {
+// stale: 다시 읽기가 실패해 앞 값을 들고 있음 → 지금 상태로 단정하지 않음(D27-3)
+// 앞 readiness(특히 '배포할 수 있어요')를 띄우지 않고 중립 표시와 마지막 조회 시각만
+function ReadinessLine({
+  view,
+  stale,
+}: {
+  view: SiteDeployView;
+  stale: boolean;
+}) {
   const now = useContext(NowContext);
+  if (stale) {
+    return (
+      <div className="flex flex-col gap-1 rounded-admin-box border border-border-default bg-bg-page px-3.5 py-3">
+        <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-body-s">
+          <span className="sr-only">{t.readinessTitle}: </span>
+          <ToneIcon tone="neutral" />
+          <span className="font-semibold text-text-default">
+            {t.readinessStale}
+          </span>
+          <span className="text-caption text-text-muted">
+            {fill(t.readinessAt, {
+              time: kstTime(view.readinessCheckedAt, now),
+            })}
+          </span>
+        </p>
+      </div>
+    );
+  }
   const tone = READINESS_TONE[view.readiness];
   const runUrl =
     view.readiness === "deploying" || view.readiness === "approval_pending"
@@ -508,14 +525,14 @@ function Summary({
               </span>
               <span className="text-text-body">
                 {" "}
-                · {reasonText(schedule.reason, now)}
+                · {reasonText(schedule.reason, now, schedule.retryAt)}
               </span>
             </span>
           </p>
         ) : (
           <span className="text-title-s font-normal text-text-default tabular-nums">
-            {schedule.kind === "paused"
-              ? t.schedule.paused
+            {schedule.kind === "paused" || schedule.kind === "unconfigured"
+              ? t.schedule[schedule.kind]
               : fill(t.schedule[schedule.kind], {
                   time: schedule.time,
                   date:
@@ -602,7 +619,9 @@ function CommitList({
                 className="inline-flex min-h-touch w-fit cursor-pointer items-center gap-1 text-body-s font-medium text-text-default lg:min-h-0"
               >
                 <Chevron open={open} />
-                {fill(t.commitsShow, { count: list.total })}
+                {fill(list.complete ? t.commitsShow : t.commitsShowPartial, {
+                  count: list.total,
+                })}
               </button>
               {open && (
                 <div
@@ -645,7 +664,7 @@ function TokenLine({ view }: { view: SiteDeployView }) {
       {state.kind === "unknown" && (
         <p className="flex items-center gap-1.5 text-text-body">
           <ToneIcon tone="neutral" />
-          {t.tokenUnknown} · {reasonText(state.reason, now)}
+          {t.tokenUnknown} · {reasonText(state.reason, now, state.retryAt)}
         </p>
       )}
       {(state.kind === "ok" ||
@@ -687,11 +706,11 @@ function TokenLine({ view }: { view: SiteDeployView }) {
   );
 }
 
-function Content({ view }: { view: SiteDeployView }) {
+function Content({ view, stale }: { view: SiteDeployView; stale: boolean }) {
   const repo = repoUrl(view);
   return (
     <div className="flex flex-col gap-3">
-      <ReadinessLine view={view} />
+      <ReadinessLine view={view} stale={stale} />
       <Summary view={view} repo={repo} />
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
         {view.sites.map((site) => (
@@ -967,7 +986,15 @@ export function SiteDeployPanel({ demo }: { demo: boolean }) {
                 tone="warn"
                 title={messages.inquiries.reauth}
                 role="alert"
-              />
+              >
+                {state.data && (
+                  <p className="text-text-muted">
+                    {fill(t.failStale, {
+                      time: kstTime(state.data.at, state.now),
+                    })}
+                  </p>
+                )}
+              </Notice>
             ) : (
               <Notice tone="fail" title={t.failTitle} role="alert">
                 <p>{t.failImpact}</p>
@@ -993,7 +1020,10 @@ export function SiteDeployPanel({ demo }: { demo: boolean }) {
           {state.data ? (
             <div className={loadClass(timing)}>
               <NowContext.Provider value={state.now}>
-                <Content view={state.data.view} />
+                <Content
+                  view={state.data.view}
+                  stale={state.failure !== null}
+                />
               </NowContext.Provider>
               <p className="mt-3 text-caption text-text-muted">
                 {refreshInterval(state.data.view.readiness) === 30_000

@@ -1198,6 +1198,10 @@ test("사이트 배포: 운영자 사이트 주소가 설정되지 않으면 그
       .getByRole("region", { name: "아직 안 나간 커밋" })
       .getByText("12개", { exact: true }),
   ).toHaveCount(0);
+  // 단추도 전부인 것처럼 보이지 않게 '확인한 커밋'으로
+  await expect(
+    region.getByRole("button", { name: "확인한 커밋 12개 보기" }),
+  ).toBeVisible();
   await expect(region.getByText(READY_TEXT)).toHaveCount(0);
 });
 
@@ -1319,8 +1323,15 @@ test("사이트 배포: 다시 읽기가 실패해도 앞 값을 그대로 두�
   await expect(region.getByRole("alert")).toContainText(
     /아래는 \d{2}:\d{2}에 마지막으로 받은 값이에요/,
   );
+  // 앞 값(커밋·파일)은 남기되, 지금 상태로 단정하는 '배포할 수 있어요'는 내림(D27-3)
   await expect(
-    region.getByText("main 최신 커밋을 배포할 수 있어요"),
+    region.getByText("지금 배포 상태를 확인하지 못했어요"),
+  ).toBeVisible();
+  await expect(region.getByText(READY_TEXT)).toHaveCount(0);
+  await expect(
+    region
+      .getByRole("region", { name: "사용자 사이트" })
+      .getByText("바뀐 파일 4개 · 파일 목록"),
   ).toBeVisible();
 });
 
@@ -1504,4 +1515,39 @@ test("사이트 배포: 배포할 수 있어도 두 사이트가 이미 main 최
   ).toBeVisible();
   await expect(region.getByText("아직 안 나간 커밋이 없어요")).toBeVisible();
   await expect(region.getByText("바뀐 파일 없음")).toHaveCount(2);
+});
+
+test("사이트 배포: 로딩 자리표시와 값이 들어온 뒤 칸 높이가 같다(차이 2px 이하)", async ({
+  page,
+}) => {
+  await signIn(page);
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => (release = resolve));
+  await mockPublish(page, { siteDeploy: () => "hold" });
+  // 위 가짜 응답보다 나중에 건 경로가 먼저 받음: 문을 열 때까지 응답을 미룸
+  await page.route(/\/ops\/site-deploy$/, async (route) => {
+    await gate;
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(localSiteDeployView("ready", Date.now())),
+    });
+  });
+  await openPublish(page);
+  const region = siteDeploy(page);
+  await expect(region.locator(".sk").first()).toBeVisible();
+  const loading = (await region.boundingBox())!.height;
+  release();
+  await expect(region.getByText(/조회 기준/)).toBeVisible();
+  await page.waitForFunction(() =>
+    document
+      .getAnimations()
+      .every(
+        (a) =>
+          a.playState !== "running" ||
+          a.effect?.getTiming().iterations === Infinity,
+      ),
+  );
+  const loaded = (await region.boundingBox())!.height;
+  expect(Math.abs(loaded - loading)).toBeLessThanOrEqual(2);
 });

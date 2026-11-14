@@ -243,12 +243,16 @@ const manualCount: Check<{ since: string; requests: number }> = (value) => {
   if (!item || !isIso(item.since) || !isCount(item.requests)) return undefined;
   return { since: item.since, requests: item.requests };
 };
-const expiry: Check<string | null> = (value) =>
-  value === null
-    ? null
-    : typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)
-      ? value
-      : undefined;
+// 만료일 태그(YYYY-MM-DD). 형식만 맞고 없는 날짜(2026-13-40 등)는 틀린 값
+const expiry: Check<string | null> = (value) => {
+  if (value === null) return null;
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value))
+    return undefined;
+  const at = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(at.getTime()) && at.toISOString().slice(0, 10) === value
+    ? value
+    : undefined;
+};
 const present: Check<unknown> = (value) => value;
 
 function confirmed<T>(raw: unknown, check: Check<T>): Confirmed<T> | undefined {
@@ -400,9 +404,11 @@ const kstHm = (ms: number) => {
 
 // 다음 정기 배포(KST 오늘·내일). 서버는 일시 정지·워크플로 꺼짐뿐 아니라 그 조회를 못 했을 때도 null을 줌
 // → 멈춤은 확인한 때만, 조회 실패는 확인 못 함. 이미 지난 시각(앞 값을 들고 있을 때)은 날짜와 함께
+// 배포 설정(저장소 변수)이 끝나지 않았으면 정기 실행이 돌아도 배포 작업은 건너뜀 → 시각 대신 설정 안내
 export type ScheduleLabel =
   | { kind: "paused" }
-  | { kind: "unknown"; reason: SiteDeployReason }
+  | { kind: "unconfigured" }
+  | { kind: "unknown"; reason: SiteDeployReason; retryAt?: string }
   | { kind: "today" | "tomorrow"; time: string }
   | { kind: "date" | "passed"; date: string; time: string };
 
@@ -411,6 +417,12 @@ export function scheduleLabel(
   now: number,
 ): ScheduleLabel {
   const { settings, workflowActive } = view;
+  if (
+    settings.status === "known" &&
+    !settings.value.paused &&
+    !settings.value.configured
+  )
+    return { kind: "unconfigured" };
   if (view.nextScheduledAt) {
     const at = Date.parse(view.nextScheduledAt);
     const diff = kstDay(at) - kstDay(now);
@@ -432,7 +444,11 @@ export function scheduleLabel(
       : workflowActive.status === "unknown"
         ? workflowActive
         : null;
-  return { kind: "unknown", reason: failed?.reason ?? "invalid" };
+  return {
+    kind: "unknown",
+    reason: failed?.reason ?? "invalid",
+    ...(failed?.retryAt ? { retryAt: failed.retryAt } : {}),
+  };
 }
 
 // 수동 배포 요청 수의 기준 날(KST 자정부터). now와 같은 날이면 null(오늘), 아니면 M/D
@@ -446,7 +462,7 @@ export function manualDay(since: string, now: number): string | null {
 export const TOKEN_WARN_DAYS = 30;
 export type TokenExpiryState =
   | { kind: "hidden" }
-  | { kind: "unknown"; reason: SiteDeployReason }
+  | { kind: "unknown"; reason: SiteDeployReason; retryAt?: string }
   | { kind: "ok"; date: string; days: number }
   | { kind: "soon"; date: string; days: number }
   | { kind: "expired"; date: string };
@@ -455,7 +471,12 @@ export function tokenExpiryState(
   f: Field<string | null>,
   now: number,
 ): TokenExpiryState {
-  if (f.status === "unknown") return { kind: "unknown", reason: f.reason };
+  if (f.status === "unknown")
+    return {
+      kind: "unknown",
+      reason: f.reason,
+      ...(f.retryAt ? { retryAt: f.retryAt } : {}),
+    };
   if (f.value === null) return { kind: "hidden" };
   // 만료일(YYYY-MM-DD)은 그날 끝까지 쓸 수 있다고 보고 KST 날짜 차이로 셈
   const days =

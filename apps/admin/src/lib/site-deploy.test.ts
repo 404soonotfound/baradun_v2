@@ -154,6 +154,19 @@ describe("parseSiteDeploy: 응답 모양 검사", () => {
     expect(view.nextScheduledAt).toBeNull();
   });
 
+  it("만료일이 형식만 맞고 없는 날짜면 확인 못 함(invalid)", () => {
+    const raw = localSiteDeployView("ready", NOW);
+    raw.tokenExpiry = { status: "known", value: "2026-13-40", checkedAt: AT };
+    expect(parse(raw).tokenExpiry).toMatchObject({
+      status: "unknown",
+      reason: "invalid",
+    });
+    raw.tokenExpiry = { status: "known", value: "2026-02-30", checkedAt: AT };
+    expect(parse(raw).tokenExpiry.status).toBe("unknown");
+    raw.tokenExpiry = { status: "known", value: "2028-02-29", checkedAt: AT };
+    expect(parse(raw).tokenExpiry.status).toBe("known");
+  });
+
   it("모르는 readiness는 unknown", () => {
     const raw = localSiteDeployView("ready", NOW);
     raw.readiness = "safe";
@@ -373,6 +386,19 @@ describe("다음 정기 배포(KST)", () => {
       ),
     ).toEqual({ kind: "paused" });
   });
+  it("배포 설정이 끝나지 않았으면 시각이 있어도 설정 안내(배포 작업이 건너뛰어짐)", () => {
+    expect(
+      scheduleLabel(
+        {
+          nextScheduledAt: "2026-11-13T20:17:00.000Z",
+          settings: known({ paused: false, configured: false }),
+          workflowActive,
+        },
+        Date.parse("2026-11-13T15:00:00Z"),
+      ),
+    ).toEqual({ kind: "unconfigured" });
+  });
+
   it("null인데 설정·워크플로 조회를 못 했으면 멈춤이 아니라 확인 못 함(사유 함께)", () => {
     const at = Date.parse("2026-11-13T15:00:00Z");
     expect(
@@ -385,6 +411,26 @@ describe("다음 정기 배포(KST)", () => {
         at,
       ),
     ).toEqual({ kind: "unknown", reason: "rate_limit" });
+    // 다시 확인 시각도 함께 넘김
+    expect(
+      scheduleLabel(
+        {
+          nextScheduledAt: null,
+          settings: {
+            status: "unknown",
+            reason: "rate_limit",
+            checkedAt: AT,
+            retryAt: "2026-11-13T15:12:00Z",
+          },
+          workflowActive,
+        },
+        at,
+      ),
+    ).toEqual({
+      kind: "unknown",
+      reason: "rate_limit",
+      retryAt: "2026-11-13T15:12:00Z",
+    });
     expect(
       scheduleLabel(
         {
@@ -465,6 +511,21 @@ describe("토큰 만료 30일", () => {
         now,
       ),
     ).toEqual({ kind: "unknown", reason: "credentials" });
+    expect(
+      tokenExpiryState(
+        {
+          status: "unknown",
+          reason: "rate_limit",
+          checkedAt: AT,
+          retryAt: "2026-11-14T03:12:00Z",
+        },
+        now,
+      ),
+    ).toEqual({
+      kind: "unknown",
+      reason: "rate_limit",
+      retryAt: "2026-11-14T03:12:00Z",
+    });
   });
 });
 
