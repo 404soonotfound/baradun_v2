@@ -129,6 +129,50 @@ describe("스택 밖 정책 비교 (로컬·CI 공용)", () => {
     ).toBe(true);
   });
 
+  it.each([
+    { label: "깨진 JSON", head: { ...ok({}), stdout: "{" }, body: undefined },
+    { label: "기본 버전 없음", head: ok({ Policy: {} }), body: ok({}) },
+    {
+      label: "문서 없음",
+      head: policy("v1", {}).head,
+      body: ok({ PolicyVersion: {} }),
+    },
+    {
+      label: "잘못된 문장",
+      head: policy("v1", {}).head,
+      body: policy("v1", { Version: "2012-10-17", Statement: [null] }).body,
+    },
+    {
+      label: "동작 없는 문장",
+      head: policy("v1", {}).head,
+      body: policy("v1", {
+        Version: "2012-10-17",
+        Statement: [{ Effect: "Allow", Resource: "*" }],
+      }).body,
+    },
+    {
+      label: "인코딩 오류",
+      head: policy("v1", {}).head,
+      body: policy("v1", "%").body,
+    },
+  ])("초기 정책의 잘못된 성공 응답은 확인 못 함 ($label)", ({ head, body }) => {
+    const { runner } = fake({
+      "iam get-policy": [head],
+      "iam get-policy-version": body ? [body] : [],
+    });
+    expect(
+      compareToolkitSetupPolicy(
+        runner,
+        "111122223333",
+        doc("ssm:PutParameter"),
+      ),
+    ).toMatchObject({
+      remote: { kind: "error" },
+      diff: null,
+      line: expect.stringContaining("확인 못 함"),
+    });
+  });
+
   it("boundary·실행 정책 두 개를 계정 ARN으로 읽고, 실행 정책이 허용하지 않는 저장소 동작을 고른다", () => {
     const b = policy("v3", doc("lambda:*"));
     const e1 = policy("v2", doc("lambda:CreateFunction"));
