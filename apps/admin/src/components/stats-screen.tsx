@@ -5,7 +5,7 @@ import type { OpsResult } from "@/lib/auth/ops-fetch";
 import { useAuthSession, useSessionSnapshot } from "@/lib/auth/provider";
 import type { BeachSlugName } from "@/lib/beach-names";
 import { kstDateTime } from "@/lib/inquiries";
-import { LOADING_TIMES } from "@/lib/loading-timing";
+import { withTimeout } from "@/lib/loading-timing";
 import { topicParticle } from "@/lib/korean";
 import { fill, messages } from "@/lib/messages";
 import {
@@ -81,19 +81,6 @@ const TIMEOUT: OpsResult<never> = {
   code: "timeout",
   requestId: null,
 };
-
-// 15초(D26-4) 안에 답이 없으면 같은 자리에서 실패(opsFetch에 취소가 없어 요청 자체는 남음)
-function withTimeout(
-  load: Promise<OpsResult<StatsResponse>>,
-): Promise<OpsResult<StatsResponse>> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  return Promise.race([
-    load.catch(() => TIMEOUT),
-    new Promise<OpsResult<StatsResponse>>((resolve) => {
-      timer = setTimeout(() => resolve(TIMEOUT), LOADING_TIMES.timeout);
-    }),
-  ]).finally(() => clearTimeout(timer));
-}
 
 const formatNumber = (n: number | null): string =>
   n === null ? t.emptyValue : n.toLocaleString("ko-KR");
@@ -524,7 +511,11 @@ function StatsBody({
   useEffect(() => {
     if (!signedIn) return;
     let live = true;
-    void withTimeout(fetchStats(range, () => session.accessToken())).then(
+    // 15초(D26-4) 안에 답이 없으면 같은 자리에서 실패
+    void withTimeout(
+      () => fetchStats(range, () => session.accessToken()),
+      TIMEOUT,
+    ).then(
       (result) => {
         if (live) setLoaded({ key, result });
       },

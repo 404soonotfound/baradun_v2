@@ -99,3 +99,19 @@ export function createLoadTimer(
     dispose: clear,
   };
 }
+
+// 시간 제한(D26-4 15초): 넘거나 예외가 나면 fallback으로 끝냄(운영 홈 칸·이용 통계 화면 공통)
+// opsFetch에 취소가 없어 요청 자체는 남지만, 화면이 '불러오는 중'에 머물지 않게 함
+export function withTimeout<R>(
+  load: () => Promise<R>,
+  fallback: R,
+  timeoutMs: number = LOADING_TIMES.timeout,
+): Promise<R> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  return Promise.race([
+    load().catch(() => fallback),
+    new Promise<R>((resolve) => {
+      timer = setTimeout(() => resolve(fallback), timeoutMs);
+    }),
+  ]).finally(() => clearTimeout(timer));
+}
