@@ -10,9 +10,17 @@ import {
   statsShape,
   missingItems,
   changePercent,
+  channelName,
+  roundAverage,
+  screenLabel,
+  SCREEN_PATHS,
   SHAPE_ALL,
   SHAPE_NONE,
+  trendMetadata,
+  trendRangeText,
+  trendUnavailable,
 } from "./stats";
+import { messages } from "./messages";
 
 // 응답에서 칸을 뺀 사본(이전 서버 응답처럼 칸이 없음)
 const without = <T extends object>(value: T, ...keys: (keyof T)[]) => {
@@ -238,5 +246,155 @@ describe("응답 칸 유무와 '아직 보여 드릴 수 없어요' 줄", () => 
     expect(changePercent(10, 0)).toBeNull();
     // 오늘 범위: 서버가 previous를 null로 줌
     expect(localStatsView("today").trends!.previous).toBeNull();
+  });
+});
+
+describe("숫자 숨김 안내 사유 합치기", () => {
+  const good = localStatsView("28d", Date.parse("2026-11-13T05:00:00Z"));
+  const off = { thresholding: false, sampling: false, otherRowLoss: false };
+
+  it("기간 통계와 추이 목록 metadata 중 하나라도 있으면 그 사유", () => {
+    expect(trendMetadata(good.period, good.trends)).toEqual(off);
+    expect(
+      trendMetadata(good.period, {
+        ...good.trends!,
+        topScreens: { rows: [], metadata: { ...off, otherRowLoss: true } },
+        hourly: { rows: [], metadata: { ...off, sampling: true } },
+      }),
+    ).toEqual({ thresholding: false, sampling: true, otherRowLoss: true });
+    expect(
+      trendMetadata(null, {
+        ...good.trends!,
+        newUsersMetadata: { ...off, thresholding: true },
+      }).thresholding,
+    ).toBe(true);
+    // 목록 null(못 받음)은 사유에 넣지 않음
+    expect(
+      trendMetadata(good.period, { ...good.trends!, daily: null, referrers: null }),
+    ).toEqual(off);
+  });
+});
+
+describe("많이 본 화면 경로 → 이름", () => {
+  const bySlug = {
+    haeundae: {
+      id: "b0091",
+      name: "해운대해수욕장",
+      region: "부산 해운대구",
+      hidden: false,
+    },
+  };
+  const label = (path: string, other = false) =>
+    screenLabel({ path, other }, bySlug);
+
+  it("/spots/<slug>는 해변 이름, 못 찾으면 이름 없음(slug를 이름처럼 쓰지 않음)", () => {
+    expect(label("/spots/haeundae/")).toEqual({
+      kind: "beach",
+      name: "해운대해수욕장",
+      english: false,
+    });
+    expect(label("/spots/haeundae")).toEqual({
+      kind: "beach",
+      name: "해운대해수욕장",
+      english: false,
+    });
+    expect(label("/en/spots/haeundae/?from=share")).toEqual({
+      kind: "beach",
+      name: "해운대해수욕장",
+      english: true,
+    });
+    expect(label("/spots/gwangalli/")).toEqual({
+      kind: "beach",
+      name: null,
+      english: false,
+    });
+    expect(label("/spots/constructor/")).toEqual({
+      kind: "beach",
+      name: null,
+      english: false,
+    });
+  });
+
+  it("화면 경로는 이름표 키, /en/ 경로도 같은 키(영어 표시만 덧붙임)", () => {
+    expect(label("/")).toEqual({ kind: "screen", key: "home", english: false });
+    expect(label("/en/")).toEqual({ kind: "screen", key: "home", english: true });
+    expect(label("/en")).toEqual({ kind: "screen", key: "home", english: true });
+    expect(label("/explore")).toEqual({
+      kind: "screen",
+      key: "explore",
+      english: false,
+    });
+    expect(label("/en/settings/inquiry/")).toEqual({
+      kind: "screen",
+      key: "inquiry",
+      english: true,
+    });
+    expect(label("/about/data/")).toMatchObject({ key: "dataSources" });
+    expect(label("/guide/#tide")).toMatchObject({ key: "guide" });
+  });
+
+  it("모르는 경로는 경로 그대로, GA (other) 행은 기타", () => {
+    expect(label("/admin-test/")).toEqual({
+      kind: "unknown",
+      path: "/admin-test/",
+    });
+    expect(label("/spots/")).toEqual({ kind: "unknown", path: "/spots/" });
+    expect(label("/english/")).toEqual({ kind: "unknown", path: "/english/" });
+    expect(label("(other)", true)).toEqual({ kind: "other" });
+    // 이름표 키마다 화면 이름 문구가 있음
+    for (const key of Object.values(SCREEN_PATHS)) {
+      expect(messages.stats.screenNames[key]).toBeTruthy();
+    }
+  });
+});
+
+describe("들어온 경로 채널 표시표", () => {
+  const table = messages.stats.channelLabels;
+
+  it("GA4 기본 채널 이름을 우리말로, 표에 없는 값은 원문", () => {
+    expect(channelName("Organic Search", table)).toBe("검색");
+    expect(channelName("Direct", table)).toBe("직접 방문");
+    expect(channelName("Referral", table)).toBe("다른 사이트");
+    expect(channelName("Organic Social", table)).toBe("소셜");
+    expect(channelName("(other)", table)).toBe("기타");
+    expect(channelName("Paid Search", table)).toBe("검색 광고");
+    expect(channelName("New Channel", table)).toBe("New Channel");
+    // 객체 기본 속성 이름을 채널로 집지 않음
+    expect(channelName("constructor", table)).toBe("constructor");
+  });
+
+  it("시간대별 평균은 소수 첫째 자리, null은 그대로", () => {
+    expect(roundAverage(3.571428)).toBe(3.6);
+    expect(roundAverage(0)).toBe(0);
+    expect(roundAverage(null)).toBeNull();
+  });
+});
+
+describe("기간 표시·못 받은 목록 문구(두 화면 공통)", () => {
+  const good = localStatsView("28d", Date.parse("2026-11-13T05:00:00Z"));
+
+  it("KST 날짜 그대로 'M월 D일 – M월 D일', 앞 기간이 있을 때만 비교 글", () => {
+    expect(trendRangeText(good.trends!, "28d", ", ")).toBe(
+      "10월 17일 – 11월 13일, 앞 28일과 비교",
+    );
+    expect(
+      trendRangeText({ ...good.trends!, previous: null }, "28d", " · "),
+    ).toBe("10월 17일 – 11월 13일");
+    expect(trendRangeText(null, "28d", ", ")).toBeNull();
+  });
+
+  it("시간대가 달라 목록을 못 받으면 그 사유, 아니면 일반 실패 문구", () => {
+    expect(
+      trendUnavailable({ ...good.trends!, timeZoneMismatch: true }),
+    ).toMatch(/GA4 속성 시간대가 서울과 달라/);
+    expect(trendUnavailable(good.trends!)).toMatch(/불러오지 못했어요/);
+    expect(trendUnavailable(null)).toMatch(/불러오지 못했어요/);
+  });
+
+  it("오늘 범위 예시: 지나지 않은 시간은 셀 날 0·평균 null(결측과 구분)", () => {
+    const today = localStatsView("today", Date.parse("2026-11-13T01:30:00Z")); // KST 10:30
+    const rows = today.trends!.hourly!.rows;
+    expect(rows[9]).toMatchObject({ reportedDays: 1 });
+    expect(rows[10]).toEqual({ hour: 10, averageActiveUsers: null, reportedDays: 0 });
   });
 });

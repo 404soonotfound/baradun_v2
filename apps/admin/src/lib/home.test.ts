@@ -6,6 +6,8 @@ import {
   collectionSummary,
   expiredCount,
   inquirySummary,
+  inquiryWindow,
+  nextCollection,
   ratioPercent,
   reasonTime,
   undeterminedRows,
@@ -571,6 +573,116 @@ describe("문의 칸 (inquirySummary)", () => {
           rejected: 0,
         },
       }),
+    ).toBeNull();
+  });
+});
+
+describe("문의 칸 최근 7일 값 (inquiryWindow, GH-478)", () => {
+  const base = { received: 2, in_progress: 1, resolved: 6, rejected: 1 };
+  const page = (counts: Record<string, unknown>) => ({
+    items: [],
+    nextCursor: null,
+    counts: counts as never,
+  });
+
+  it("칸이 없으면(이전 서버·데모) undefined·absent → 화면은 지금 표시 유지", () => {
+    expect(inquiryWindow(page(base))).toEqual({
+      receivedLast7d: undefined,
+      resolvedLast7d: undefined,
+      oldest: { state: "absent" },
+    });
+  });
+
+  it("값이 있으면 그대로, 가장 오래된 미처리 시각은 읽을 수 있을 때만", () => {
+    expect(
+      inquiryWindow(
+        page({
+          ...base,
+          receivedLast7d: 11,
+          resolvedLast7d: 0,
+          oldestUnprocessedAt: "2026-10-31T04:27:00.000Z",
+        }),
+      ),
+    ).toEqual({
+      receivedLast7d: 11,
+      resolvedLast7d: 0,
+      oldest: { state: "at", at: "2026-10-31T04:27:00.000Z" },
+    });
+  });
+
+  it("null(조회 실패)은 0으로 바꾸지 않고 null, 숫자가 아니면 null", () => {
+    const w = inquiryWindow(
+      page({
+        ...base,
+        receivedLast7d: null,
+        resolvedLast7d: "3",
+        oldestUnprocessedAt: "not-a-date",
+      }),
+    );
+    expect(w?.receivedLast7d).toBeNull();
+    expect(w?.resolvedLast7d).toBeNull();
+    expect(w?.oldest).toEqual({ state: "unknown" });
+  });
+
+  it("oldestUnprocessedAt null: 미처리 0건이면 없음, 1건 이상이면 확인 못 함", () => {
+    expect(
+      inquiryWindow(
+        page({ ...base, received: 0, in_progress: 0, oldestUnprocessedAt: null }),
+      )?.oldest,
+    ).toEqual({ state: "none" });
+    expect(
+      inquiryWindow(page({ ...base, oldestUnprocessedAt: null }))?.oldest,
+    ).toEqual({ state: "unknown" });
+  });
+
+  it("상태별 수가 틀리면(문의 칸 실패) null", () => {
+    expect(inquiryWindow(null)).toBeNull();
+    expect(
+      inquiryWindow(page({ ...base, received: "2", receivedLast7d: 3 })),
+    ).toBeNull();
+  });
+});
+
+describe("수집 칸 다음 수집 (nextCollection, GH-478)", () => {
+  const at = (j: JobCollection, nextScheduledAt: unknown) =>
+    ({ ...j, nextScheduledAt }) as JobCollection;
+
+  it("판단 출처(특보·해양 관측) 중 가장 이른 예정 시각. 참고 출처는 보지 않음", () => {
+    expect(
+      nextCollection(
+        collection([
+          at(job("collect-warnings", "complete"), "2026-11-14T05:48:00.000Z"),
+          at(job("collect-ocean", "complete"), "2026-11-14T05:40:00.000Z"),
+          at(job("collect-rip", "complete"), "2026-11-14T05:00:00.000Z"),
+        ]),
+      ),
+    ).toBe("2026-11-14T05:40:00.000Z");
+  });
+
+  it("판단 출처 하나라도 시각이 없거나 읽을 수 없거나 응답에 없으면 null(고정 안내 유지)", () => {
+    expect(nextCollection(null)).toBeNull();
+    expect(
+      nextCollection(
+        collection([
+          job("collect-warnings", "complete"),
+          job("collect-ocean", "complete"),
+        ]),
+      ),
+    ).toBeNull();
+    expect(
+      nextCollection(
+        collection([
+          at(job("collect-warnings", "complete"), "2026-11-14T05:48:00.000Z"),
+          at(job("collect-ocean", "complete"), "soon"),
+        ]),
+      ),
+    ).toBeNull();
+    expect(
+      nextCollection(
+        collection([
+          at(job("collect-warnings", "complete"), "2026-11-14T05:48:00.000Z"),
+        ]),
+      ),
     ).toBeNull();
   });
 });
