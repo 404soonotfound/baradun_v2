@@ -1018,10 +1018,15 @@ test(
       ),
     ).toBeVisible();
 
-    // 커밋 목록은 하나로(최대 10개, 넘치면 GitHub에서 전체 보기)
+    // 커밋 목록은 하나로, 기본은 접힘 → '커밋 N개 보기'로 펼침(최대 10개, 넘치면 GitHub에서 전체 보기)
     const commits = region.getByRole("region", { name: "아직 안 나간 커밋" });
+    await expect(commits.getByText("12개", { exact: true })).toBeVisible();
+    const showCommits = commits.getByRole("button", { name: "커밋 12개 보기" });
+    await expect(showCommits).toHaveAttribute("aria-expanded", "false");
+    await expect(commits.locator("li")).toHaveCount(0);
+    await showCommits.click();
+    await expect(showCommits).toHaveAttribute("aria-expanded", "true");
     await expect(commits.locator("li")).toHaveCount(10);
-    await expect(commits.getByText("12개")).toBeVisible();
     await expect(
       commits.getByRole("link", {
         name: /최근 10개만 보여요 · GitHub에서 전체 보기/,
@@ -1189,7 +1194,9 @@ test("사이트 배포: 운영자 사이트 주소가 설정되지 않으면 그
     ),
   ).toBeVisible();
   await expect(
-    region.getByRole("region", { name: "아직 안 나간 커밋" }).getByText("12개"),
+    region
+      .getByRole("region", { name: "아직 안 나간 커밋" })
+      .getByText("12개", { exact: true }),
   ).toHaveCount(0);
   await expect(region.getByText(READY_TEXT)).toHaveCount(0);
 });
@@ -1411,6 +1418,18 @@ test("사이트 배포: 키보드로 다시 불러오기·파일 목록 펼치�
   await expect(site.getByText("data/beaches/b0001.json")).toBeVisible();
   await page.keyboard.press("Space");
   await expect(site.getByText("data/beaches/b0001.json")).toBeHidden();
+
+  // 커밋 목록 펼치기 단추: Enter·Space로 펼치고 접으며 aria-expanded가 따라감
+  const showCommits = region.getByRole("button", { name: "커밋 12개 보기" });
+  await showCommits.focus();
+  await page.keyboard.press("Enter");
+  await expect(showCommits).toHaveAttribute("aria-expanded", "true");
+  await expect(
+    region.getByRole("region", { name: "아직 안 나간 커밋" }).locator("li"),
+  ).toHaveCount(10);
+  await page.keyboard.press("Space");
+  await expect(showCommits).toHaveAttribute("aria-expanded", "false");
+  await expect(showCommits).toBeFocused();
 
   const open = region.getByRole("link", { name: /GitHub에서 배포 열기/ });
   await open.focus();

@@ -233,26 +233,35 @@ function CommitLine({
   );
 }
 
+// 펼치기 표시(접힘 → 오른쪽, 펼침 → 아래). 동작 줄이기면 돌지 않고 바로 바뀜
+function Chevron({ open }: { open?: boolean }) {
+  return (
+    <svg
+      width="12"
+      height="12"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      className={`shrink-0 transition-transform group-open:rotate-90 motion-reduce:transition-none ${
+        open ? "rotate-90" : ""
+      }`}
+    >
+      <path d="m9 6 6 6-6 6" />
+    </svg>
+  );
+}
+
 function ChangedFiles({ changes }: { changes: DeployChanges }) {
   if (changes.files.length === 0)
     return <p className="text-body-s text-text-body">{t.filesNone}</p>;
   return (
     <details className="group text-body-s">
       <summary className="inline-flex min-h-touch cursor-pointer items-center gap-1 font-medium text-text-default lg:min-h-0">
-        <svg
-          width="12"
-          height="12"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2.2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          aria-hidden="true"
-          className="shrink-0 transition-transform group-open:rotate-90 motion-reduce:transition-none"
-        >
-          <path d="m9 6 6 6-6 6" />
-        </svg>
+        <Chevron />
         {fill(t.files, { count: changes.files.length })} · {t.filesList}
       </summary>
       <ul className="mt-2 flex flex-col gap-1.5">
@@ -547,6 +556,8 @@ function CommitList({
 }) {
   const list = pendingCommits(view.sites);
   const anyKnown = view.sites.some((s) => s.changes.status === "known");
+  // 기본은 접음(칸 높이를 커밋 수와 상관없이 고정). 다시 읽어도 펼친 상태는 유지
+  const [open, setOpen] = useState(false);
   return (
     <section
       aria-labelledby="site-deploy-commits"
@@ -583,22 +594,41 @@ function CommitList({
               <p className="text-body-s text-text-body">{t.commitsNone}</p>
             )
           ) : (
-            <ul className="flex flex-col divide-y divide-border-default border-t border-border-default">
-              {list.commits.map((commit) => (
-                <li key={commit.sha} className="py-2">
-                  <CommitLine commit={commit} repo={repo} />
-                </li>
-              ))}
-            </ul>
-          )}
-          {list.total > list.commits.length && repo && list.compare && (
-            <p className="text-body-s">
-              <ExternalLink
-                href={`${repo}/compare/${list.compare.from}...${list.compare.to}`}
+            <>
+              <button
+                type="button"
+                aria-expanded={open}
+                aria-controls="site-deploy-commit-list"
+                onClick={() => setOpen((v) => !v)}
+                className="inline-flex min-h-touch w-fit cursor-pointer items-center gap-1 text-body-s font-medium text-text-default lg:min-h-0"
               >
-                {fill(t.commitsMore, { shown: list.commits.length })}
-              </ExternalLink>
-            </p>
+                <Chevron open={open} />
+                {fill(t.commitsShow, { count: list.total })}
+              </button>
+              {open && (
+                <div
+                  id="site-deploy-commit-list"
+                  className="flex flex-col gap-2"
+                >
+                  <ul className="flex flex-col divide-y divide-border-default border-t border-border-default">
+                    {list.commits.map((commit) => (
+                      <li key={commit.sha} className="py-2">
+                        <CommitLine commit={commit} repo={repo} />
+                      </li>
+                    ))}
+                  </ul>
+                  {list.total > list.commits.length && repo && list.compare && (
+                    <p className="text-body-s">
+                      <ExternalLink
+                        href={`${repo}/compare/${list.compare.from}...${list.compare.to}`}
+                      >
+                        {fill(t.commitsMore, { shown: list.commits.length })}
+                      </ExternalLink>
+                    </p>
+                  )}
+                </div>
+              )}
+            </>
           )}
         </>
       )}
