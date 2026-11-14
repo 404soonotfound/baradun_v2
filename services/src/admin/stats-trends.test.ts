@@ -92,40 +92,42 @@ describe("기간 이용 통계", () => {
     });
   });
 
-  it("추이 배치가 실패하면 기존 통계를 유지하고 실패한 결과를 캐시하지 않음", async () => {
-    vi.spyOn(GoogleAuth.prototype, "getClient").mockResolvedValue({
-      getAccessToken: async () => ({ token: "stub" }),
-    } as Awaited<ReturnType<GoogleAuth["getClient"]>>);
-    const fetchFn = vi.fn<typeof fetch>(async (_url, options) => {
-      const body = JSON.parse(String(options?.body));
-      if (body.requests?.length === 5)
-        return new Response(null, { status: 503 });
-      const report = { metadata, rows: [row("value", "12", "24")] };
-      return Response.json(
-        body.requests ? { reports: Array(4).fill(report) } : report,
-      );
-    });
-    const reader = createCachedStatsReader(
-      createGa4StatsReader({
-        propertyId: "1",
-        serviceAccountParam: "/stats",
-        region: "test",
-        loadKeyJson: async () => "{}",
-        fetchFn,
-        now: () => now,
-      }),
-      () => now,
-    );
-    for (let i = 0; i < 2; i += 1) {
-      const response = await reader.read("7d");
-      expect(response.period.activeUsers).toBe(12);
-      expect(response.trends).toMatchObject({
-        daily: null,
-        hourly: null,
-        previous: null,
+  it.each([503, 200])(
+    "추이 배치가 실패하면 기존 통계를 유지하고 실패한 결과를 캐시하지 않음 (%i)",
+    async (status) => {
+      vi.spyOn(GoogleAuth.prototype, "getClient").mockResolvedValue({
+        getAccessToken: async () => ({ token: "stub" }),
+      } as Awaited<ReturnType<GoogleAuth["getClient"]>>);
+      const fetchFn = vi.fn<typeof fetch>(async (_url, options) => {
+        const body = JSON.parse(String(options?.body));
+        if (body.requests?.length === 5) return Response.json(null, { status });
+        const report = { metadata, rows: [row("value", "12", "24")] };
+        return Response.json(
+          body.requests ? { reports: Array(4).fill(report) } : report,
+        );
       });
-      expect(response.cached).toBe(false);
-    }
-    expect(fetchFn).toHaveBeenCalledTimes(6);
-  });
+      const reader = createCachedStatsReader(
+        createGa4StatsReader({
+          propertyId: "1",
+          serviceAccountParam: "/stats",
+          region: "test",
+          loadKeyJson: async () => "{}",
+          fetchFn,
+          now: () => now,
+        }),
+        () => now,
+      );
+      for (let i = 0; i < 2; i += 1) {
+        const response = await reader.read("7d");
+        expect(response.period.activeUsers).toBe(12);
+        expect(response.trends).toMatchObject({
+          daily: null,
+          hourly: null,
+          previous: null,
+        });
+        expect(response.cached).toBe(false);
+      }
+      expect(fetchFn).toHaveBeenCalledTimes(6);
+    },
+  );
 });
