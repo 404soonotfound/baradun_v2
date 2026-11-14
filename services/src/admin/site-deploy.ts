@@ -395,8 +395,7 @@ async function jobs(read: Read, run: DeployRun | null) {
       completedAt: item.completed_at === null ? null : date(item.completed_at),
     };
   };
-  const [site, admin] = SITE_DEPLOY_JOBS;
-  return { site: appJob(site), admin: appJob(admin) };
+  return { site: appJob("site"), admin: appJob("admin") };
 }
 
 function scheduleUnavailable(

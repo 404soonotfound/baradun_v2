@@ -2,7 +2,7 @@ import schema from "@baradun/contracts/schema.json";
 import Ajv2020 from "ajv/dist/2020.js";
 import addFormats from "ajv-formats";
 import { describe, expect, it, vi } from "vitest";
-import { createSiteDeployReader } from "./site-deploy";
+import { createSiteDeployReader, SITE_DEPLOY_JOBS } from "./site-deploy";
 import { createSiteDeployGitHub } from "./site-deploy-github";
 
 const ajv = new Ajv2020({
@@ -389,50 +389,61 @@ describe("사이트 배포 상태 조회(D27-3·5)", () => {
     });
   });
 
-  it("최근 수동 실행의 전체 실패와 사이트별 성공을 구분한다", async () => {
-    const { read } = setup((url) => {
-      if (url.pathname.endsWith("/jobs")) {
-        return Response.json({
-          total_count: 2,
-          jobs: [
-            {
-              name: "site",
-              status: "completed",
-              conclusion: "success",
-              completed_at: START,
-              steps: [{ name: "올린 커밋 표시", conclusion: "success" }],
-            },
-            {
-              name: "admin",
-              status: "completed",
-              conclusion: "failure",
-              completed_at: START,
-              steps: [{ name: "올린 커밋 표시", conclusion: "skipped" }],
-            },
-          ],
-        });
-      }
-      if (
-        url.pathname.includes("/deploy.yml/runs") &&
-        url.searchParams.get("event") === "workflow_dispatch"
-      ) {
-        return Response.json(runs(run({ conclusion: "failure" })));
-      }
-      return undefined;
-    });
-    const result = await read();
-    expect(result.recentJobs).toMatchObject({
-      value: {
-        run: { conclusion: "failure" },
-        apps: { site: { wroteMarker: true }, admin: { wroteMarker: false } },
-      },
-    });
-    expect(result.sites[0]?.matchedRun).toMatchObject({
-      event: "workflow_dispatch",
-      completedAt: START,
-    });
-    expect(result.sites[1]?.matchedRun).toBeNull();
-  });
+  it.each([false, true])(
+    "앱 목록 순서 역전(%s)과 관계없이 최근 수동 실행 결과를 이름으로 연결한다",
+    async (reverseApps) => {
+      const { read } = setup((url) => {
+        if (url.pathname.endsWith("/jobs")) {
+          return Response.json({
+            total_count: 2,
+            jobs: [
+              {
+                name: "site",
+                status: "completed",
+                conclusion: "success",
+                completed_at: START,
+                steps: [{ name: "올린 커밋 표시", conclusion: "success" }],
+              },
+              {
+                name: "admin",
+                status: "completed",
+                conclusion: "failure",
+                completed_at: START,
+                steps: [{ name: "올린 커밋 표시", conclusion: "skipped" }],
+              },
+            ],
+          });
+        }
+        if (
+          url.pathname.includes("/deploy.yml/runs") &&
+          url.searchParams.get("event") === "workflow_dispatch"
+        ) {
+          return Response.json(runs(run({ conclusion: "failure" })));
+        }
+        return undefined;
+      });
+      const reverse = () => Array.prototype.reverse.call(SITE_DEPLOY_JOBS);
+      if (reverseApps) reverse();
+      const result = await read().finally(() => {
+        if (reverseApps) reverse();
+      });
+      expect(result.recentJobs).toMatchObject({
+        value: {
+          run: { conclusion: "failure" },
+          apps: { site: { wroteMarker: true }, admin: { wroteMarker: false } },
+        },
+      });
+      expect(
+        result.sites.find(({ app }) => app === "site")?.matchedRun,
+      ).toMatchObject({
+        event: "workflow_dispatch",
+        completedAt: START,
+      });
+      expect(
+        result.sites.find(({ app }) => app === "admin")?.matchedRun,
+      ).toBeNull();
+    },
+  );
 
   it("새 main의 CI가 확인되지 않으면 이전 SHA의 성공을 재사용하지 않는다", async () => {
     const next = "c".repeat(40);
