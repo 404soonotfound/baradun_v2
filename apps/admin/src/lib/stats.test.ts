@@ -10,8 +10,16 @@ import {
   statsShape,
   missingItems,
   changePercent,
+  SHAPE_ALL,
   SHAPE_NONE,
 } from "./stats";
+
+// 응답에서 칸을 뺀 사본(이전 서버 응답처럼 칸이 없음)
+const without = <T extends object>(value: T, ...keys: (keyof T)[]) => {
+  const copy: Partial<T> = { ...value };
+  for (const key of keys) delete copy[key];
+  return copy;
+};
 
 describe("이용 통계 계산 도우미 (#333)", () => {
   it("빈 값(null)과 합계 0은 0%로 추정하지 않고 null을 유지함", () => {
@@ -113,33 +121,75 @@ describe("이용 통계 계산 도우미 (#333)", () => {
     expect(validStats({ ...good, range: "90d" })).toBe(false);
   });
 
-  it("없을 수 있는 칸: 없으면 통과, null은 통과, 모양이 틀리면 실패", () => {
+  it("기간 추이(trends) 모양: 없음·목록 null·행 수치 null은 통과, 모양이 틀리면 실패", () => {
     const good = localStatsView("28d", Date.parse("2026-11-13T05:00:00Z"));
-    const withPeriod = (extra: Record<string, unknown>) =>
-      validStats({ ...good, period: { ...good.period, ...extra } });
+    const trends = good.trends!;
+    const withTrends = (extra: Record<string, unknown>) =>
+      validStats({ ...good, trends: { ...trends, ...extra } });
+    // trends 자체가 없음(이전 서버·GA4 미연결)
+    expect(validStats(without(good, "trends"))).toBe(true);
+    // 목록 칸이 응답에 없음(undefined)·null(리포트 못 받음)
     expect(
-      withPeriod({
-        daily: [{ date: "2026-11-13", activeUsers: 3, pageViews: null }],
-        hourly: [{ hour: 0, activeUsers: 1 }],
-        newUsers: 12,
-        previous: { activeUsers: 10, pageViews: null },
-        topScreens: [{ path: "/", title: null, pageViews: 4 }],
-        referrers: [{ channel: "Direct", sessions: 9 }],
+      validStats({ ...good, trends: without(trends, "topScreens", "referrers") }),
+    ).toBe(true);
+    expect(
+      withTrends({
+        daily: null,
+        hourly: null,
+        previous: null,
+        topScreens: null,
+        referrers: null,
+        newUsers: null,
+        newUsersMetadata: null,
+        ga4TimeZone: null,
+        timeZoneMismatch: null,
       }),
     ).toBe(true);
-    expect(withPeriod({ daily: null, topScreens: null, previous: null })).toBe(
-      true,
-    );
+    // 행 안의 수치 null
     expect(
-      withPeriod({ daily: [{ date: "11/13", activeUsers: 1, pageViews: 1 }] }),
+      withTrends({
+        daily: {
+          rows: [{ date: "2026-11-13", activeUsers: null, pageViews: null }],
+          metadata: trends.daily!.metadata,
+        },
+        hourly: {
+          rows: [{ hour: 3, averageActiveUsers: null, reportedDays: 27 }],
+          metadata: trends.hourly!.metadata,
+        },
+      }),
+    ).toBe(true);
+    // 모양이 틀림: 배열로 옴(예전 가정)·날짜 형식·시각 범위·other 없음·metadata 없음
+    expect(
+      withTrends({
+        daily: [{ date: "2026-11-13", activeUsers: 1, pageViews: 1 }],
+      }),
     ).toBe(false);
-    expect(withPeriod({ hourly: [{ hour: 24, activeUsers: 1 }] })).toBe(false);
-    expect(withPeriod({ newUsers: "12" })).toBe(false);
     expect(
-      withPeriod({ topScreens: [{ path: "/", title: 3, pageViews: 1 }] }),
+      withTrends({
+        daily: {
+          rows: [{ date: "11/13", activeUsers: 1, pageViews: 1 }],
+          metadata: trends.daily!.metadata,
+        },
+      }),
     ).toBe(false);
     expect(
-      withPeriod({ referrers: [{ channel: "Direct", sessions: "9" }] }),
+      withTrends({
+        hourly: {
+          rows: [{ hour: 24, averageActiveUsers: 1, reportedDays: 1 }],
+          metadata: trends.hourly!.metadata,
+        },
+      }),
+    ).toBe(false);
+    expect(
+      withTrends({
+        topScreens: { rows: [{ path: "/", pageViews: 1 }], metadata: trends.topScreens!.metadata },
+      }),
+    ).toBe(false);
+    expect(withTrends({ referrers: { rows: [] } })).toBe(false);
+    expect(withTrends({ newUsers: "12" })).toBe(false);
+    expect(withTrends({ startDate: "2026/11/13" })).toBe(false);
+    expect(
+      withTrends({ previous: { activeUsers: 1, pageViews: 1 } }),
     ).toBe(false);
   });
 });
@@ -147,8 +197,8 @@ describe("이용 통계 계산 도우미 (#333)", () => {
 describe("응답 칸 유무와 '아직 보여 드릴 수 없어요' 줄", () => {
   const good = localStatsView("28d", Date.parse("2026-11-13T05:00:00Z"));
 
-  it("지금 서버 응답은 새 칸이 모두 없음 → 네 항목 모두 줄에", () => {
-    expect(statsShape(good.period)).toEqual(SHAPE_NONE);
+  it("trends가 없으면 추이 칸 모두 숨김 → 네 항목 모두 줄에", () => {
+    expect(statsShape(undefined)).toEqual(SHAPE_NONE);
     expect(statsShape(null)).toEqual(SHAPE_NONE);
     expect(missingItems(SHAPE_NONE)).toEqual([
       "dailyHourly",
@@ -156,13 +206,17 @@ describe("응답 칸 유무와 '아직 보여 드릴 수 없어요' 줄", () => 
       "topScreens",
       "referrers",
     ]);
+    // 지금 서버 모양(목록 모두 있음)은 줄 없음, 첫 응답 전 자리표시도 같은 칸
+    expect(statsShape(good.trends)).toEqual(SHAPE_ALL);
+    expect(missingItems(SHAPE_ALL)).toEqual([]);
   });
 
-  it("칸이 생기면(null 포함) 줄에서 빠지고, 일별·시간대별은 하나만 있으면 없는 쪽만", () => {
+  it("목록이 null이어도 칸은 있음(줄에서 빠짐), 응답에 없는 목록만 줄에", () => {
+    const rest = without(good.trends!, "hourly", "previous", "topScreens");
     const shape = statsShape({
-      ...good.period,
+      ...(rest as typeof good.trends & object),
       daily: null,
-      referrers: [],
+      referrers: null,
     });
     expect(shape.daily).toBe(true);
     expect(shape.referrers).toBe(true);
@@ -173,24 +227,16 @@ describe("응답 칸 유무와 '아직 보여 드릴 수 없어요' 줄", () => 
       "topScreens",
       "referrers",
     ]);
-    expect(
-      missingItems({
-        daily: true,
-        hourly: true,
-        newUsers: true,
-        previous: true,
-        topScreens: true,
-        referrers: true,
-      }),
-    ).toEqual([]);
   });
 
-  it("앞 기간 대비 변화: 두 값이 있고 앞 기간이 0보다 클 때만", () => {
+  it("앞 기간 대비 변화: 두 값이 있고 앞 기간이 0보다 클 때만(앞 기간 null·0이면 배지 없음)", () => {
     expect(changePercent(118, 100)).toBe(18);
     expect(changePercent(4910, 4147)).toBe(18.4);
     expect(changePercent(90, 100)).toBe(-10);
     expect(changePercent(null, 100)).toBeNull();
     expect(changePercent(10, null)).toBeNull();
     expect(changePercent(10, 0)).toBeNull();
+    // 오늘 범위: 서버가 previous를 null로 줌
+    expect(localStatsView("today").trends!.previous).toBeNull();
   });
 });

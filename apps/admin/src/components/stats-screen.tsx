@@ -11,19 +11,26 @@ import { fill, messages } from "@/lib/messages";
 import {
   beachLabel,
   changePercent,
+  channelName,
   fetchStats,
   metadataReasons,
   missingItems,
   perUser,
+  roundAverage,
+  screenLabel,
+  SHAPE_ALL,
   sharePercent,
   STATS_RANGES,
   statsShape,
   sumMetric,
+  trendMetadata,
+  trendRangeText,
+  trendUnavailable,
   type StatsRange,
   type StatsResponse,
 } from "@/lib/stats";
 import { AdminShell } from "./admin-shell";
-import { BarChart, shortDate, type ChartRow } from "./bar-chart";
+import { BarChart, hasNull, shortDate, type ChartRow } from "./bar-chart";
 import {
   loadClass,
   LoadingStatus,
@@ -40,10 +47,14 @@ import { Button, Notice } from "./ui";
 // - 머리: 제목 옆 '지금 사용 중 N명 · 최근 30분'(GA 실시간 30분), 기간 단추(오늘·7일·28일·60일)
 // - 숫자 숨김 안내는 GA 응답 metadata(thresholding·sampling·otherRowLoss)가 있을 때만, 응답을 받은 뒤에만(E8 · L7)
 //   숨긴 숫자는 추정하지 않고 '–'(0으로 바꾸지 않음)
-// - 응답에 칸이 없는 값(앞 기간 비교·새 사용자·일별·시간대별 추이·많이 본 화면·들어온 경로)은 지어내지 않고 칸을 숨김
-//   기간 표시 아래 한 줄로 '… 아직 보여 드릴 수 없어요'. 응답에 칸이 생기면(null 포함) 칸이 다시 보임
-//   자리표시도 보이는 칸에만(받은 응답이 없으면 지금 서버가 주는 칸만). 차트 자리는 로딩 중에도 같은 크기(L7)
-// - 많이 본 해변은 /spots/[slug]를 공개 해변 데이터 이름으로. 못 찾으면 '이름 확인 못 함'(slug·경로를 이름으로 쓰지 않음)
+// - 기간 추이(trends, GH-477): 일별·시간대별·앞 기간·새 사용자·많이 본 화면·들어온 경로
+//   trends가 없거나 그 목록이 응답에 없으면 지어내지 않고 칸을 숨김 + 기간 표시 아래 한 줄 '… 아직 보여 드릴 수 없어요'
+//   목록이 null이면 칸은 두고 '불러오지 못했어요'(GA4 속성 시간대가 다르면 그 사유). 행 안의 수치 null은 그 값만 '확인 못 함'
+//   자리표시도 보이는 칸에만(첫 응답 전에는 지금 서버가 주는 칸 모두). 차트 자리는 로딩 중에도 같은 크기(L7)
+// - 기간 표시는 trends의 KST 날짜(양 끝 포함). timeZoneMismatch면 옆에 '통계 기준 시간대가 달라요'(GA4 속성 시간대)
+// - 앞 기간 비교 배지: 화면에서 비율 계산. previous가 null(오늘 범위 포함)이거나 앞 값이 0이면 배지 숨김
+// - 많이 본 해변·화면의 /spots/[slug]는 공개 해변 데이터 이름으로. 못 찾으면 '이름 확인 못 함'(slug·경로를 이름으로 쓰지 않음)
+//   다른 경로는 화면 이름표(/en/도 같은 이름), 모르는 경로는 경로 그대로 작은 글씨. 들어온 경로는 GA 기본 채널 이름을 우리말로
 // - 로딩(GH-462 부품): 150ms 뒤 자리표시 · 최소 400ms · 5초 느림 · 15초 같은 자리 실패 + 다시 시도
 //   새로 고침은 받은 값을 두고 회전 표시. 기간을 바꾸면 다른 기간 값이라 자리표시로 바꿈
 // - 막대·도넛 길이는 SVG 속성으로(CSP style-src 'self', style 속성 0개)
@@ -87,6 +98,10 @@ function withTimeout(
 const formatNumber = (n: number | null): string =>
   n === null ? t.emptyValue : n.toLocaleString("ko-KR");
 
+// 시간대별 평균(소수 첫째 자리)
+const formatAverage = (n: number): string =>
+  n.toLocaleString("ko-KR", { maximumFractionDigits: 1 });
+
 const deviceLabel = (category: string): string =>
   (t.deviceLabels as Record<string, string>)[category] ?? category;
 
@@ -117,6 +132,9 @@ function ChartBlock({
   rows,
   head,
   valueHead,
+  note,
+  unavailable = t.subReportUnavailable,
+  format,
 }: {
   id: string;
   title: string;
@@ -128,29 +146,43 @@ function ChartBlock({
   rows: readonly ChartRow[] | null;
   head: string;
   valueHead: string;
+  // 제목 옆 옅은 설명(보드 '평균 · 28일')
+  note?: string;
+  // 목록을 못 받았을 때 문구(GA4 속성 시간대가 다르면 그 사유)
+  unavailable?: string;
+  format?: (n: number) => string;
 }) {
+  // 값이 없는 칸이 있으면 제목 줄 끝에 범례(같은 줄이라 높이 그대로)
+  const legend = !placeholder && hasNull(rows);
   return (
     <section aria-labelledby={id} className="min-w-0">
-      <h2 id={id} className={SECTION_TITLE}>
-        {title}
-      </h2>
+      <div className="flex flex-wrap items-baseline gap-x-2">
+        <h2 id={id} className={SECTION_TITLE}>
+          {title}
+        </h2>
+        {note && <span className={SECTION_NOTE}>{note}</span>}
+        {legend && <span className={SECTION_NOTE}>· {t.nullLegend}</span>}
+      </div>
       <div className={`${top} ${frame}`}>
         {placeholder ? (
           <SkChart className="h-full" />
         ) : rows === null ? (
-          <ChartMessage text={t.subReportUnavailable} />
+          <ChartMessage text={unavailable} />
         ) : rows.length === 0 ? (
           <ChartMessage text={t.listEmpty} muted />
         ) : (
-          <BarChart rows={rows} bars={bars} head={head} valueHead={valueHead} />
+          <BarChart
+            rows={rows}
+            bars={bars}
+            head={head}
+            valueHead={valueHead}
+            format={format}
+          />
         )}
       </div>
     </section>
   );
 }
-
-const channelLabel = (channel: string): string =>
-  (t.channelLabels as Record<string, string>)[channel] ?? channel;
 
 // KPI 하나(보드 V8 머리 아래 4칸). 앞 기간 비교 배지는 응답에 앞 기간 값이 있을 때만. 작은 추이선은 그리지 않음
 function Kpi({
@@ -230,8 +262,14 @@ function BarList({
                 {row.name}
               </span>
             </div>
-            <span className="w-13 shrink-0 text-right text-label font-medium tabular-nums">
-              {formatNumber(row.value)}
+            <span className="min-w-13 shrink-0 text-right text-label font-medium tabular-nums">
+              {row.value === null ? (
+                <span className="text-caption font-normal text-text-muted">
+                  {t.notProvided}
+                </span>
+              ) : (
+                formatNumber(row.value)
+              )}
             </span>
           </li>
         );
@@ -292,13 +330,15 @@ function BarListSkeleton() {
 function ListBody({
   placeholder,
   rows,
+  unavailable,
 }: {
   placeholder: boolean;
   rows: readonly { key: string; name: ReactNode; value: number | null }[] | null;
+  unavailable: string;
 }) {
   if (placeholder) return <BarListSkeleton />;
   if (rows === null)
-    return <p className="text-body-s text-text-body">{t.subReportUnavailable}</p>;
+    return <p className="text-body-s text-text-body">{unavailable}</p>;
   if (rows.length === 0)
     return <p className="text-body-s text-text-muted">{t.listEmpty}</p>;
   return <BarList rows={rows} />;
@@ -512,9 +552,13 @@ function StatsBody({
   const isSample =
     (snapshot.status === "signed_in" && snapshot.pool === "demo") ||
     data?.sample === true;
-  const reasons = data ? metadataReasons(data.period.metadata) : [];
   const periodOk = data?.configured === true && data.period.status === "ok";
   const period = periodOk ? data.period : null;
+  // 기간 추이는 기간 통계와 따로 옴(기간 통계가 실패해도 추이는 있을 수 있음)
+  const trends = data?.configured ? (data.trends ?? null) : null;
+  const reasons = data
+    ? metadataReasons(trendMetadata(data.period, trends))
+    : [];
   const deviceTotal =
     period?.devices
       ? sumMetric(period.devices.map((d) => d.activeUsers))
@@ -526,29 +570,60 @@ function StatsBody({
   const live =
     data && data.realtime.status === "ok" ? data.realtime.activeUsers : null;
   const ratio = perUser(period?.pageViews ?? null, period?.activeUsers ?? null);
-  // 칸 유무: 받은 응답 기준. 받는 중에는 마지막으로 받은 응답(다른 기간이어도) 기준, 없으면 지금 서버가 주는 칸만
+  // 칸 유무: 마지막으로 받은 응답(받는 중이면 다른 기간이어도) 기준
+  // 받은 응답이 없으면 받는 중에만 지금 서버가 주는 칸 모두(자리표시 크기), 불러오지 못했으면 추이 칸을 두지 않음
+  // (응답 전체 실패를 칸마다 '다른 칸은 그대로예요'로 보이지 않게)
   const lastBody = loaded?.result.ok ? loaded.result.body : null;
-  const shape = statsShape(
-    period ??
-      (lastBody?.configured && lastBody.period.status === "ok"
-        ? lastBody.period
-        : null),
-  );
+  const shape = lastBody
+    ? statsShape(lastBody.configured ? lastBody.trends : undefined)
+    : pending
+      ? SHAPE_ALL
+      : statsShape(undefined);
   const missing = missingItems(shape);
   const missingText = missing.map((m) => t.missingItems[m]).join(", ");
   const newRatio =
-    period?.newUsers !== undefined
-      ? sharePercent(period.newUsers, period.activeUsers)
+    trends?.newUsers !== undefined
+      ? sharePercent(trends.newUsers, period?.activeUsers ?? null)
       : null;
+  // 앞 기간: null(오늘 범위·조회 실패)이면 비교 배지·앞 값 줄 모두 숨김
+  const previous = trends?.previous ?? null;
   const usersChange = changePercent(
     period?.activeUsers ?? null,
-    period?.previous?.activeUsers ?? null,
+    previous?.activeUsers ?? null,
   );
   const viewsChange = changePercent(
     period?.pageViews ?? null,
-    period?.previous?.pageViews ?? null,
+    previous?.pageViews ?? null,
   );
-  const daily = period?.daily ?? null;
+  const previousNote = (value: number | null) =>
+    previous
+      ? fill(t.previousValue, {
+          label: t.previousLabel[range],
+          value: formatNumber(value),
+        })
+      : t.rangeLabel[range];
+  const unavailable = trendUnavailable(trends);
+  const daily = trends?.daily?.rows ?? null;
+  const dailyRows = (pick: "activeUsers" | "pageViews") =>
+    daily?.map((d) => ({
+      key: d.date,
+      label: shortDate(d.date),
+      value: d[pick],
+    })) ?? null;
+  const hourlyRows =
+    trends?.hourly?.rows.map((r) => ({
+      key: String(r.hour),
+      label: fill(t.hourLabel, { hour: r.hour }),
+      value: roundAverage(r.averageActiveUsers),
+      // 오늘 범위의 아직 지나지 않은 시간(셀 날이 0): 결측(옅은 빈칸)이 아니라 비워 둠
+      notYet: r.reportedDays === 0,
+    })) ?? null;
+  // 기간 표시: 응답의 KST 날짜(양 끝 포함), 앞 기간이 있으면 '앞 N일과 비교'. 추이가 없으면 기간 이름
+  const rangeText = trendRangeText(trends, range, ", ") ?? t.rangeLabel[range];
+  const englishTag = (english: boolean) =>
+    english && (
+      <span className="ml-1.5 text-caption text-text-muted">{t.englishTag}</span>
+    );
   const listCount = 1 + Number(shape.topScreens) + Number(shape.referrers);
 
   return (
@@ -604,16 +679,40 @@ function StatsBody({
                 </span>
               )}
             </div>
+            {/* 기간 표시: PC는 설명 뒤 같은 줄, 좁은 화면은 다음 줄(날짜 글이 길어 값 뒤 줄바꿈이 달라지지 않게)
+                받는 중에는 같은 줄 높이 자리표시 */}
             <p className="mt-0.5 text-label-s text-text-muted">
-              {fill(t.subtitle, { range: t.rangeLabel[range] })}
+              {t.subtitle}
+              <span className="block lg:inline">
+                <span className="hidden lg:inline">{t.subtitleSeparator}</span>
+                {placeholder ? (
+                  <SkLine className="w-[200px] h-[8px]" />
+                ) : (
+                  rangeText
+                )}
+              </span>
+              {!placeholder && trends?.timeZoneMismatch === true && (
+                <>
+                  {" "}
+                  <span
+                    className={`${BADGE} ml-1 bg-status-stale-bg text-status-stale-fg`}
+                  >
+                    {t.timeZoneMismatch}
+                  </span>{" "}
+                  {trends.ga4TimeZone &&
+                    fill(t.timeZoneProperty, { zone: trends.ga4TimeZone })}
+                </>
+              )}
             </p>
-            {/* 응답에 칸이 없는 항목 한 줄. 받는 중에는 같은 줄 높이 자리표시(값 뒤 높이 차이 없게) */}
+            {/* 응답에 칸이 없는 항목 한 줄. 받는 중에는 줄이 생길 때만(앞 응답 기준, 첫 응답 전에는 없음) 같은 줄 높이 자리표시 */}
             {placeholder ? (
-              <p className="mt-0.5 text-label-s">
-                <SkLine className="w-[360px] max-w-full h-[8px]" />
-              </p>
+              missing.length > 0 && (
+                <p className="mt-0.5 text-label-s">
+                  <SkLine className="w-[360px] max-w-full h-[8px]" />
+                </p>
+              )
             ) : (
-              period &&
+              data?.configured === true &&
               missing.length > 0 && (
                 <p className="mt-0.5 text-label-s text-text-body">
                   {fill(t.missingLine, {
@@ -750,7 +849,7 @@ function StatsBody({
               placeholder={placeholder}
               width="w-[64px]"
               value={period ? formatNumber(period.activeUsers) : null}
-              note={t.rangeLabel[range]}
+              note={previousNote(previous?.activeUsers ?? null)}
               change={usersChange}
             />
             <Kpi
@@ -758,7 +857,7 @@ function StatsBody({
               placeholder={placeholder}
               width="w-[80px]"
               value={period ? formatNumber(period.pageViews) : null}
-              note={t.rangeLabel[range]}
+              note={previousNote(previous?.pageViews ?? null)}
               change={viewsChange}
             />
             {shape.newUsers && (
@@ -795,15 +894,10 @@ function StatsBody({
                 frame="h-[224px]"
                 bars="h-[200px]"
                 placeholder={placeholder}
-                rows={
-                  daily?.map((d) => ({
-                    key: d.date,
-                    label: shortDate(d.date),
-                    value: d.activeUsers,
-                  })) ?? null
-                }
+                rows={dailyRows("activeUsers")}
                 head={t.chartTableDate}
                 valueHead={t.kpiUsers}
+                unavailable={unavailable}
               />
             </div>
           )}
@@ -819,15 +913,12 @@ function StatsBody({
                   frame="h-[144px]"
                   bars="h-[120px]"
                   placeholder={placeholder}
-                  rows={
-                    period?.hourly?.map((r) => ({
-                      key: String(r.hour),
-                      label: fill(t.hourLabel, { hour: r.hour }),
-                      value: r.activeUsers,
-                    })) ?? null
-                  }
+                  rows={hourlyRows}
                   head={t.chartTableHour}
-                  valueHead={t.kpiUsers}
+                  valueHead={t.averageUsers}
+                  note={fill(t.hourlyNote, { range: t.range[range] })}
+                  unavailable={unavailable}
+                  format={formatAverage}
                 />
               )}
               {shape.daily && (
@@ -838,15 +929,10 @@ function StatsBody({
                   frame="h-[152px]"
                   bars="h-[128px]"
                   placeholder={placeholder}
-                  rows={
-                    daily?.map((d) => ({
-                      key: d.date,
-                      label: shortDate(d.date),
-                      value: d.pageViews,
-                    })) ?? null
-                  }
+                  rows={dailyRows("pageViews")}
                   head={t.chartTableDate}
                   valueHead={t.kpiViews}
+                  unavailable={unavailable}
                 />
               )}
             </div>
@@ -943,14 +1029,38 @@ function StatsBody({
                 />
                 <ListBody
                   placeholder={placeholder}
+                  unavailable={unavailable}
                   rows={
-                    period?.topScreens?.map((row) => ({
-                      key: row.path,
-                      value: row.pageViews,
-                      name: row.title ?? (
-                        <span className="text-text-muted">{t.nameUnknown}</span>
-                      ),
-                    })) ?? null
+                    trends?.topScreens?.rows.map((row, i) => {
+                      const label = screenLabel(row, beachesBySlug);
+                      return {
+                        key: `${i}:${row.path}`,
+                        value: row.pageViews,
+                        name:
+                          label.kind === "other" ? (
+                            t.otherRow
+                          ) : label.kind === "unknown" ? (
+                            // 모르는 경로: 이름처럼 크게 보이지 않게 경로 그대로 작은 글씨
+                            <span className="text-caption text-text-muted">
+                              {label.path}
+                            </span>
+                          ) : label.kind === "screen" ? (
+                            <>
+                              {t.screenNames[label.key]}
+                              {englishTag(label.english)}
+                            </>
+                          ) : (
+                            <>
+                              {label.name ?? (
+                                <span className="text-text-muted">
+                                  {t.nameUnknown}
+                                </span>
+                              )}
+                              {englishTag(label.english)}
+                            </>
+                          ),
+                      };
+                    }) ?? null
                   }
                 />
               </section>
@@ -965,11 +1075,14 @@ function StatsBody({
                 />
                 <ListBody
                   placeholder={placeholder}
+                  unavailable={unavailable}
                   rows={
-                    period?.referrers?.map((row) => ({
-                      key: row.channel,
+                    trends?.referrers?.rows.map((row, i) => ({
+                      key: `${i}:${row.channel}`,
                       value: row.sessions,
-                      name: channelLabel(row.channel),
+                      name: row.other
+                        ? t.otherRow
+                        : channelName(row.channel, t.channelLabels),
                     })) ?? null
                   }
                 />
