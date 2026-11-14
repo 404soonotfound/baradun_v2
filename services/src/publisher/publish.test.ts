@@ -1451,6 +1451,7 @@ describe("게시 실행 결과 (D16-C2)", () => {
       source: "auto",
       result: "published",
       version: V1,
+      checks: { beachIds: true, format: true, required: true },
     });
 
     advance(60_000);
@@ -1498,12 +1499,16 @@ describe("게시 실행 결과 (D16-C2)", () => {
       ...deps(),
       source: "operator",
       jobId: "j-0123456789ab",
+      operatorSub: "operator-sub",
     });
     expect(ops.lastRun).toMatchObject({
       source: "operator",
       jobId: "j-0123456789ab",
     });
-    expect(ops.summaries.get(V1)).toMatchObject({ jobId: "j-0123456789ab" });
+    expect(ops.summaries.get(V1)).toMatchObject({
+      jobId: "j-0123456789ab",
+      operatorSub: "operator-sub",
+    });
   });
 
   it("게시 요약에 분류별 해변 수와 공지 요약값을 남긴다(운영 화면 '바뀐 것', #331)", async () => {
