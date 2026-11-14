@@ -837,11 +837,7 @@ function Hourly({ view }: { view: CollectionView }) {
     e.preventDefault();
     setActive(Math.min(n - 1, Math.max(0, next)));
   };
-  const ticks = hourly
-    .map((bucket, i) => ({ bucket, i }))
-    .filter(({ i }) => i % 6 === 0 || i === n - 1);
   const tickLabel = (bucket: HourCounts, i: number) => {
-    if (i === n - 1) return t.axisNow;
     const hour = pad2(kstHour(bucket.hour));
     // 첫 칸이 기준 시각과 다른 날(어제)이면 '어제'를 붙임(시안 V9 '어제 15시 · 21시 · …')
     const other = i === 0 && !sameKstDay(bucket.hour, view.generatedAt);
@@ -968,13 +964,22 @@ function Hourly({ view }: { view: CollectionView }) {
           </div>
           <div
             aria-hidden="true"
-            className="mt-2 flex justify-between gap-1 text-[12px] text-text-muted tabular-nums"
+            className="relative mt-2 flex h-4 text-[12px] text-text-muted tabular-nums"
           >
-            {ticks.map(({ bucket, i }) => (
-              <span key={bucket.hour} className="whitespace-nowrap">
-                {tickLabel(bucket, i)}
+            {hourly.slice(0, -1).map((bucket, i) => (
+              <span key={bucket.hour} className="relative flex-1">
+                {i % 6 === 0 && (
+                  <span
+                    className={`absolute left-0 whitespace-nowrap ${i ? "-translate-x-1/2" : ""}`}
+                  >
+                    {tickLabel(bucket, i)}
+                  </span>
+                )}
               </span>
             ))}
+            <span className="absolute right-0 whitespace-nowrap">
+              {t.axisNow}
+            </span>
           </div>
           {/* 키보드로 고른 칸의 값(말풍선과 같은 글)을 화면 읽기 프로그램에 알림 */}
           <p className="sr-only" aria-live="polite">

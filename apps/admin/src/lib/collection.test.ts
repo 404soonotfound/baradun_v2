@@ -694,6 +694,15 @@ describe("kstClock", () => {
 });
 
 describe("수집 현황 표시", () => {
+  it("예정 시각 누락과 형식 오류를 구분한다", () => {
+    const job = { overdue: false, hourly: [], incidents: [] };
+    const view = normalizeCollection({
+      jobs: [job, { ...job, nextScheduledAt: "invalid" }],
+    });
+    expect(view.jobs[0]).not.toHaveProperty("nextScheduledAt");
+    expect(view.jobs[1]).toHaveProperty("nextScheduledAt", null);
+  });
+
   it.each([
     [20, "20분 넘으면 지연"],
     [35, "35분 넘으면 지연"],
