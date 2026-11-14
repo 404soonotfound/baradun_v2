@@ -372,11 +372,19 @@
     "lastRunPublished": "게시됨",
     "lastRunFailed": "게시 안 함",
     "lastRunNone": "아직 실행 기록이 없어요",
+    "last24h": {
+      "label": "최근 24시간",
+      "runs": "실행 {count}",
+      "breakdown": "성공 {succeeded} · 실패 {failed} · 건너뜀 {skipped} · 기록된 실행 기준",
+      "unknown": "확인 못 함",
+      "unknownHint": "기록된 실행 기준 · 빠진 실행은 셀 수 없음"
+    },
     "unread": "{what}을 불러오지 못했어요 · 앱 사용자 화면에는 영향이 없어요",
     "unreadWhat": {
       "current": "현재 게시본",
       "history": "게시 기록",
       "lastRun": "마지막 실행",
+      "last24h": "최근 24시간",
       "pending": "대기 중인 변경",
       "heldTitle": "되돌림 상태",
     "held": "되돌림 상태 공지",
@@ -414,6 +422,10 @@
       "maintenanceOff": "서비스 점검 꺼짐",
       "maintenanceUnknown": "서비스 점검 확인 못 함",
       "maintenancePending": "점검 설정 변경 대기 중",
+      "nextPublishPrefix": "다음 게시에 반영: {items}",
+      "nextMaintenanceOn": "점검 켜짐",
+      "nextMaintenanceOff": "점검 꺼짐",
+      "nextMinWebBuild": "최소 화면 버전 {version}",
       "minWebBuild": "최소 화면 버전 {version} · 강제 업데이트 없음",
       "minWebBuildUnknown": "최소 화면 버전 확인 못 함",
       "note": "저장소 설정 · 바꾸면 배포 뒤 반영",
@@ -433,12 +445,23 @@
     "checksFailStatusDetail": "게시 안 함 · 앞 게시본 유지",
     "checksFailFoot": "앱은 앞 게시본을 계속 유지했어요.",
     "checksEmpty": "표시할 검증 기록이 없어요.",
+    "checksItems": {
+      "format": "형식",
+      "required": "필수 칸",
+      "beachIds": "해변 ID 대조"
+    },
+    "checksResult": {
+      "pass": "통과",
+      "fail": "실패",
+      "unknown": "확인 못 함"
+    },
     "confirmReapplyTitle": "\"{title}\" 공지를 다시 적용할까요?",
     "confirmReapplyBody": "되돌림 상태를 풀고 다음 게시 때 다시 실리게 해요.",
     "confirmReapplyNote": "바로 앱에 나가지 않고, 다음 자동 게시나 '지금 게시' 때 반영돼요.",
     "source": {
       "auto": "자동 수집",
       "operator": "지금 게시 · 운영자",
+      "operatorEmail": "지금 게시 · {email}",
       "rollback": "되돌리기({time})",
       "republish": "다시 내보내기(명령줄)",
       "unknown": "알 수 없음({source})"

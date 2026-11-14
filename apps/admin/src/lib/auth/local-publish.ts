@@ -45,7 +45,18 @@ function overview(): PublishOverview {
   };
   const counts = { clear: 180, unavailable: 23, undetermined: 3 };
   return {
-    current: { ok: true, version: versions[0]!, generatedAt: iso(base) },
+    current: {
+      ok: true,
+      version: versions[0]!,
+      generatedAt: iso(base),
+      maintenance: { active: false, until: null },
+      minWebBuild: 1,
+    },
+    settings: {
+      maintenance: { active: false, until: null },
+      minWebBuild: 1,
+    },
+    last24h: { ok: true, runs: 144, succeeded: 136, failed: 1, skipped: 7 },
     history: {
       ok: true,
       items: [
@@ -55,6 +66,7 @@ function overview(): PublishOverview {
           at: iso(base),
           source: "auto",
           beachCount: 206,
+          checks: { format: true, required: true, beachIds: true },
           changes: {
             notices: false,
             categoryCounts: counts,
@@ -69,7 +81,9 @@ function overview(): PublishOverview {
           version: versions[1]!,
           at: iso(base - 10 * MINUTE),
           source: "operator",
+          operator: "ops@example.test",
           beachCount: 206,
+          checks: { format: true, required: true, beachIds: true },
           changes: {
             notices: true,
             categoryCounts: { clear: 183, unavailable: 20, undetermined: 3 },
@@ -85,6 +99,7 @@ function overview(): PublishOverview {
           at: iso(base - 20 * MINUTE),
           source: "auto",
           reason: "beach_ids",
+          checks: { format: true, required: true, beachIds: false },
         },
         {
           result: "published",
@@ -115,9 +130,18 @@ function overview(): PublishOverview {
           id: "n-local-maint",
           change: "update",
           kind: "maintenance_notice",
-          title: "(로컬 예시) 새벽 점검 예고",
+          title: "(로컬 예시) 새벽 점검 예고 (연장)",
           startsAt: iso(base - 3 * 60 * MINUTE),
           endsAt: iso(base + 20 * 60 * MINUTE),
+          updatedBy: "ops@example.test",
+          before: {
+            id: "n-local-maint",
+            kind: "maintenance_notice",
+            title: { ko: "(로컬 예시) 새벽 점검 예고", en: "Maintenance" },
+            body: { ko: "점검합니다", en: "Maintenance" },
+            startsAt: iso(base - 3 * 60 * MINUTE),
+            endsAt: iso(base + 20 * 60 * MINUTE),
+          },
         },
         {
           id: "n-local-new",
