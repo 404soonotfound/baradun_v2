@@ -443,6 +443,7 @@ function RowMenu({
   now,
   editBlocked,
   publishBlocked,
+  busy,
   onEdit,
   onAction,
 }: {
@@ -451,6 +452,8 @@ function RowMenu({
   now: number;
   editBlocked: string | null;
   publishBlocked: string | null;
+  // 다른 행 작업 요청 중이면 확정·노출 종료·삭제를 막음(응답이 새 확인 상자를 닫지 않게)
+  busy: boolean;
   onEdit: () => void;
   onAction: (
     action: "expose" | "end" | "delete",
@@ -463,13 +466,16 @@ function RowMenu({
   useDismiss(open, setOpen, box, trigger);
 
   const canExpose =
+    !busy &&
     publishBlocked === null &&
     (notice.live === null || notice.pendingEdit) &&
     exposeProblems(notice.draft, now).length === 0;
   const canEnd =
+    !busy &&
     publishBlocked === null &&
     (notice.state === "live" || notice.state === "scheduled");
   const canDelete =
+    !busy &&
     notice.state !== "live" &&
     (notice.state === "scheduled"
       ? publishBlocked === null
@@ -597,7 +603,14 @@ function NoticeList({
 
   const runRowAction = () => {
     if (!pendingAction || actionBusy) return;
+    // 확인 상자가 사라지며 포커스를 잃지 않게, 끝나면 그 행의 작업 메뉴 버튼으로 돌림
+    const target = pendingTrigger.current;
     pendingTrigger.current = null;
+    const finish = () => {
+      setActionBusy(false);
+      setPendingAction(null);
+      if (target?.isConnected) target.focus();
+    };
     const { notice, action } = pendingAction;
     const reqBody = JSON.stringify({
       id: notice.id,
@@ -610,6 +623,7 @@ function NoticeList({
     const key = actionAttempt.current.key;
     setActionBusy(true);
     setActionError(null);
+    setActionFlash(null);
     void noticeAction(
       () => session.accessToken(),
       notice.id,
@@ -618,8 +632,7 @@ function NoticeList({
       key,
     ).then(
       (res) => {
-        setActionBusy(false);
-        setPendingAction(null);
+        finish();
         if (res.ok) {
           actionAttempt.current = null;
           setActionFlash(
@@ -635,8 +648,7 @@ function NoticeList({
         setActionError(writeError(res, true));
       },
       () => {
-        setActionBusy(false);
-        setPendingAction(null);
+        finish();
         setActionError({ kind: "failed", action: true, requestId: null });
       },
     );
@@ -812,6 +824,8 @@ function NoticeList({
         {pendingAction && (
           <div className="mt-4">
             <ConfirmBox
+              // 다른 행·작업을 고르면 새로 열어 포커스를 확인 버튼으로 옮김
+              key={`${pendingAction.notice.id}:${pendingAction.action}`}
               title={
                 pendingAction.action === "expose"
                   ? t.exposeConfirm
@@ -953,9 +967,11 @@ function NoticeList({
                             now={now}
                             editBlocked={edit}
                             publishBlocked={publish}
+                            busy={actionBusy}
                             onEdit={() => router.push(editHref(n.id))}
                             onAction={(action, triggerEl) => {
                               pendingTrigger.current = triggerEl;
+                              setActionFlash(null);
                               setPendingAction({ notice: n, action });
                             }}
                           />
@@ -2255,7 +2271,7 @@ function NoticesBody() {
               </p>
               <p className="text-body-s text-text-body">{t.notFoundBody}</p>
               <Button variant="secondary" size="small" onClick={toList}>
-                {t.backToList}
+                {t.backToListAria}
               </Button>
             </div>
           )}
