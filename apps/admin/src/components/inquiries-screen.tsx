@@ -54,7 +54,6 @@ import {
 import { fill, messages } from "@/lib/messages";
 import { pageRows, pageWindow } from "@/lib/paging";
 import { AdminShell } from "./admin-shell";
-import { ConfirmDialog } from "./confirm-dialog";
 import {
   CELL_END,
   CELL_NAME,
@@ -1049,8 +1048,11 @@ function InquiryList({
                       >
                         {typeLabel(item.type)}
                       </Link>
-                      <span className="block max-w-[320px] truncate text-caption text-text-muted">
-                        {preview ?? t.previewOnOpen}
+                      <span
+                        className="block max-w-[320px] truncate text-caption text-text-muted"
+                        aria-hidden={preview === null ? "true" : undefined}
+                      >
+                        {preview ?? "\u00a0"}
                       </span>
                     </td>
                     <td className={TD}>
@@ -1086,8 +1088,11 @@ function InquiryList({
                     <span className="text-body font-medium text-text-default">
                       {typeLabel(item.type)}
                     </span>
-                    <span className="truncate text-caption text-text-muted">
-                      {preview ?? t.previewOnOpen}
+                    <span
+                      className="truncate text-caption text-text-muted"
+                      aria-hidden={preview === null ? "true" : undefined}
+                    >
+                      {preview ?? "\u00a0"}
                     </span>
                     <span className="text-body-s text-text-body">
                       <BeachActivity item={item} beaches={beaches} />
@@ -1542,7 +1547,7 @@ function InquiryActions({
         </Notice>
       )}
 
-      {/* 시트 바닥 바(시안 V20 .w-df): 왼쪽 가리기·지우기, 오른쪽 바뀐 내용·저장 */}
+      {/* 시트 바닥 바(시안 V20 .w-df): 왼쪽 가리기(삭제 API 전까지 지우기 숨김), 오른쪽 바뀐 내용·저장 */}
       <div className="sticky bottom-0 -mx-6 -mb-5 flex flex-wrap items-center gap-2 border-t border-border-default bg-bg-surface px-6 py-3.5 pb-[max(0.875rem,env(safe-area-inset-bottom))]">
         {leftFooter}
         <span className="flex-1" />
@@ -1852,8 +1857,6 @@ function InquiryDetailView({
   const [redactMode, setRedactMode] = useState<"view" | "select" | "confirm">(
     "view",
   );
-  const [deleteOpen, setDeleteOpen] = useState(false);
-  const deleteTriggerRef = useRef<HTMLButtonElement>(null);
   // 다시 로그인하면(generation이 늚) 'reauth'로 끝난 읽기를 저절로 다시 함
   const owner = badgeOwner(snapshot);
   const generation = snapshot.status === "signed_out" ? 0 : snapshot.generation;
@@ -1942,30 +1945,19 @@ function InquiryDetailView({
   const messageText = item.message ?? "";
 
   const leftFooter = (
-    <>
-      <Button
-        variant="secondary"
-        size="small"
-        disabled={
-          block !== null ||
-          item.restricted ||
-          messageText === "" ||
-          redactMode !== "view"
-        }
-        onClick={() => setRedactMode("select")}
-      >
-        {t.redactOpen}
-      </Button>
-      <button
-        ref={deleteTriggerRef}
-        type="button"
-        disabled={block !== null}
-        onClick={() => setDeleteOpen(true)}
-        className="inline-flex min-h-touch items-center justify-center rounded-admin-control px-2.5 text-body-s font-medium whitespace-nowrap text-danger-text hover:bg-bg-page disabled:cursor-not-allowed disabled:opacity-45 lg:h-8 lg:min-h-0"
-      >
-        {t.deleteButton}
-      </button>
-    </>
+    <Button
+      variant="secondary"
+      size="small"
+      disabled={
+        block !== null ||
+        item.restricted ||
+        messageText === "" ||
+        redactMode !== "view"
+      }
+      onClick={() => setRedactMode("select")}
+    >
+      {t.redactOpen}
+    </Button>
   );
 
   return (
@@ -2107,26 +2099,6 @@ function InquiryDetailView({
           />
         )}
       </div>
-
-      {deleteOpen && (
-        <ConfirmDialog
-          titleId="inquiry-delete-confirm-title"
-          title={t.deleteConfirmTitle}
-          confirmLabel={t.deleteConfirmAction}
-          cancelLabel={t.deleteCancel}
-          confirmDisabled={true}
-          busy={false}
-          tone="danger"
-          onConfirm={() => {}}
-          onClose={() => {
-            setDeleteOpen(false);
-            deleteTriggerRef.current?.focus();
-          }}
-        >
-          <p>{t.deleteConfirmBody}</p>
-          <Notice tone="neutral" title={t.deleteUnsupported} />
-        </ConfirmDialog>
-      )}
     </article>
   );
 }
