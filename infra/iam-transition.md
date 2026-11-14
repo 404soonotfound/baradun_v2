@@ -48,7 +48,20 @@
 
 초기 정책 후보 `BaradunCdkToolkitSetup`은 CDKToolkit 변경 세트, 자산 버킷·저장소, CDK 역할, 부트스트랩 버전 파라미터에 한정합니다. 이 정책은 CloudFormation 서비스 실행 정책 목록과 GitHub OIDC 역할에 추가하지 않습니다. `deploy.mjs`의 비교 결과는 안내용입니다. 미설치나 조회 불가 상태에서도 일상 배포의 기존 판정은 유지합니다.
 
-설정 세션을 열기 전 `cloudformation describe-stacks --stack-name CDKToolkit`으로 bootstrap variant·qualifier·신뢰 계정·자산 설정을 대조합니다. 기존 설정과 다르거나, 고객 관리 KMS 키 또는 별도 경계를 추가하는 환경에는 이 후보를 그대로 사용하지 않습니다. 설정 뒤에는 CDKToolkit의 스택 상태, 서비스 실행 역할에 연결된 두 정책, 자산과 버전 파라미터를 확인합니다. 설정 역할의 일상 사용은 종료합니다.
+### 초기 설정 역할 점검표
+
+- [ ] 설정 역할은 관리자에 준해 관리합니다. 승인된 사람만 MFA를 거쳐 맡고, 세션은 최대 1시간으로 제한합니다. 호출 전에 `aws sts get-caller-identity --profile "$setup_profile"`로 대상 계정과 역할을 확인합니다.
+- [ ] `aws cloudformation describe-stacks --stack-name CDKToolkit`으로 variant·qualifier·신뢰 계정·자산 설정을 확인합니다. 다른 옵션, 고객 관리 KMS 키, 별도 권한 경계를 쓰는 환경은 그 구성에 맞는 정책을 따로 검토합니다.
+- [ ] 초기 설정 후 CDKToolkit 상태, 실행 역할에 연결된 두 정책, 자산, 버전 파라미터를 확인합니다. 배포·파일 게시·이미지 게시·조회·CloudFormation 실행 역할 **5개 모두**에 대해 `iam get-role`의 `AssumeRolePolicyDocument`와 `iam list-role-policies`·`iam get-role-policy`의 인라인 정책을 비교합니다. 사용한 CDK 버전의 `cdk bootstrap --show-template`에 실제로 승인한 부트스트랩 파라미터를 대입한 결과가 기준입니다. 다르면 다음 배포로 넘어가기 전에 차이를 확인합니다.
+- [ ] 설정이 끝나면 별도 승인된 관리자 세션에서 초기 정책을 분리하거나 전용 설정 역할을 삭제합니다. 정책을 분리했으면 `list-attached-role-policies`에서 해당 정책이 없는지 확인합니다. 역할을 삭제했으면 `get-role`에서 `NoSuchEntity`인지 확인합니다. 조회 권한 오류는 삭제 확인으로 보지 않습니다.
+
+정책을 분리하고 확인할 때는 전용 설정 역할 세션을 종료한 뒤 별도 관리자 프로필을 사용합니다. 아래 변수에는 승인된 역할 이름과 초기 설정 정책 ARN을 넣습니다.
+
+```bash
+aws iam detach-role-policy --role-name "$setup_role" --policy-arn "$setup_policy_arn"
+aws iam list-attached-role-policies --role-name "$setup_role" \
+  --query "AttachedPolicies[?PolicyArn=='$setup_policy_arn'].PolicyArn"
+```
 
 | 검증 항목      | 확인 범위                                                                                                                                                                                                          |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
