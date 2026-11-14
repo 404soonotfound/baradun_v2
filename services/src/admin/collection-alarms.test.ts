@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Incident } from "./collection";
 import {
   alarmJob,
+  classifyAlarm,
   incidentAlarms,
   readAlarms,
   toAlarmEvent,
@@ -75,10 +76,24 @@ function reader(
   };
 }
 
+describe("경보 분류", () => {
+  it.each([
+    ["PublishStopped", "stopped", "publish"],
+    ["CatalogErrors", "errors", "collect-catalog"],
+    ["WeatherFailing", "failing", "collect-weather"],
+    ["OpsApiErrors", "other", null],
+    ["OceanNewError", "other", null],
+    ["UnknownFailure", "other", null],
+  ])("%s 경보의 묶음과 출처", (id, kind, source) => {
+    expect(classifyAlarm(id)).toEqual({ kind, source });
+  });
+});
+
 describe("toAlarmView", () => {
   it("오류 경보의 창(구간 × 구간 수)과 대상 함수를 읽는다", () => {
     expect(toAlarmView(OCEAN_ERRORS, PREFIX)).toEqual({
       id: "OceanErrors",
+      classification: { kind: "errors", source: "collect-ocean" },
       name: "BaradunV2-OceanErrors",
       state: "OK",
       stateUpdatedAt: "2026-11-02T03:05:00.000Z",
@@ -117,6 +132,7 @@ describe("toAlarmEvent", () => {
       ),
     ).toEqual({
       id: "OceanErrors",
+      classification: { kind: "errors", source: "collect-ocean" },
       name: "BaradunV2-OceanErrors",
       at: "2026-11-02T02:15:00.000Z",
       from: "OK",

@@ -21,7 +21,15 @@ export const ALARM_READ_TIMEOUT_MS = 3_000;
 
 export type AlarmState = "OK" | "ALARM" | "INSUFFICIENT_DATA" | "unknown";
 
+export type AlarmKind = "stopped" | "errors" | "failing" | "other";
+
+interface AlarmClassification {
+  readonly kind: AlarmKind;
+  readonly source: CollectionJob | "publish" | null;
+}
+
 export interface AlarmView {
+  readonly classification: AlarmClassification;
   readonly id: string; // 접두어를 뺀 이름(예: OceanErrors). 화면 문구 키로 씀
   readonly name: string; // 전체 이름(CloudWatch 콘솔 링크)
   readonly state: AlarmState;
@@ -33,6 +41,7 @@ export interface AlarmView {
 }
 
 export interface AlarmEvent {
+  readonly classification: AlarmClassification;
   readonly id: string;
   readonly name: string;
   readonly at: string; // UTC ISO
@@ -104,6 +113,7 @@ export function toAlarmView(raw: unknown, prefix: string): AlarmView | null {
       : null;
   return {
     id: name.slice(prefix.length),
+    classification: classifyAlarm(name.slice(prefix.length)),
     name,
     state: toState(alarm.StateValue),
     stateUpdatedAt: toIso(alarm.StateUpdatedTimestamp),
@@ -138,6 +148,7 @@ export function toAlarmEvent(raw: unknown, prefix: string): AlarmEvent | null {
   }
   return {
     id: name.slice(prefix.length),
+    classification: classifyAlarm(name.slice(prefix.length)),
     name,
     at,
     from: toState(data.oldState?.stateValue),
@@ -192,6 +203,24 @@ const ALARM_JOBS: readonly [string, CollectionJob][] = [
   ["Catalog", "collect-catalog"],
   ["Weather", "collect-weather"],
 ];
+
+export function classifyAlarm(id: string): AlarmClassification {
+  const entry = id.startsWith("Publish")
+    ? (["Publish", "publish"] as const)
+    : ALARM_JOBS.find(([prefix]) => id.startsWith(prefix));
+  if (!entry) return { kind: "other", source: null };
+  const [prefix, source] = entry;
+  switch (id.slice(prefix.length)) {
+    case "Stopped":
+      return { kind: "stopped", source };
+    case "Errors":
+      return { kind: "errors", source };
+    case "Failing":
+      return { kind: "failing", source };
+    default:
+      return { kind: "other", source: null };
+  }
+}
 
 export function alarmJob(id: string): CollectionJob | null {
   return ALARM_JOBS.find(([head]) => id.startsWith(head))?.[1] ?? null;
