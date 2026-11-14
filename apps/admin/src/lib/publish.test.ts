@@ -2,12 +2,17 @@ import { describe, expect, it } from "vitest";
 import { pageRows, pageWindow } from "./paging";
 import {
   canRollBackTo,
+  compareAppSettings,
+  decomposeChecks,
+  formatOperatorSource,
   hasHeldNotices,
   isRunSkipped,
   jobInFlight,
   jobPhase,
   nonZeroCategoryDeltas,
   parseAppSettings,
+  parseCurrentSettings,
+  parseLast24h,
   pendingNoticeDiff,
   reasonKey,
   signed,
@@ -197,7 +202,60 @@ describe("pendingNoticeDiff", () => {
     );
     expect(removed.added).toBe(0);
     expect(removed.removed).toBe(4);
+    expect(removed.hasBefore).toBe(false);
     expect(removed.lines[3]?.kind).toBe("del");
+  });
+
+  it("update에서 before가 있으면 줄 단위 −/+ 비교를 만들고, 없으면 바뀔 내용만 보여 준다", () => {
+    const withBefore = pendingNoticeDiff(
+      {
+        id: "n-3",
+        change: "update",
+        kind: "maintenance_notice",
+        title: "점검 02:00~04:30",
+        startsAt: "2026-11-12T06:00:00Z",
+        endsAt: null,
+        before: {
+          id: "n-3",
+          kind: "maintenance_notice",
+          title: { ko: "점검 02:00~04:00", en: "Maint" },
+          body: { ko: "안내", en: "Notice" },
+          startsAt: "2026-11-12T06:00:00Z",
+          endsAt: null,
+        },
+      },
+      "점검 예고",
+      (iso) => iso,
+      "종료 없음",
+      "점검 예고",
+    );
+    expect(withBefore.hasBefore).toBe(true);
+    expect(withBefore.added).toBe(1);
+    expect(withBefore.removed).toBe(1);
+    expect(withBefore.lines).toEqual([
+      { beforeLine: 1, afterLine: 1, kind: "same", text: "kind: 점검 예고" },
+      { beforeLine: 2, afterLine: null, kind: "del", text: "title.ko: 점검 02:00~04:00" },
+      { beforeLine: null, afterLine: 2, kind: "add", text: "title.ko: 점검 02:00~04:30" },
+      { beforeLine: 3, afterLine: 3, kind: "same", text: "startsAt: 2026-11-12T06:00:00Z" },
+      { beforeLine: 4, afterLine: 4, kind: "same", text: "endsAt: 종료 없음" },
+    ]);
+
+    const withoutBefore = pendingNoticeDiff(
+      {
+        id: "n-3",
+        change: "update",
+        kind: "maintenance_notice",
+        title: "점검 02:00~04:30",
+        startsAt: "2026-11-12T06:00:00Z",
+        endsAt: null,
+      },
+      "점검 예고",
+      (iso) => iso,
+      "종료 없음",
+    );
+    expect(withoutBefore.hasBefore).toBe(false);
+    expect(withoutBefore.added).toBe(4);
+    expect(withoutBefore.removed).toBe(0);
   });
 });
 
@@ -243,5 +301,111 @@ describe("parseAppSettings", () => {
         minWebBuild: 1,
       },
     });
+  });
+});
+
+describe("parseCurrentSettings · compareAppSettings", () => {
+  it("current 반영값과 settings 다음 게시 설정값을 비교한다", () => {
+    const same = compareAppSettings(
+      {
+        ok: true,
+        version: "20261112T060000Z",
+        generatedAt: "2026-11-12T06:00:00Z",
+        maintenance: { active: false, until: null },
+        minWebBuild: 1,
+      },
+      { maintenance: { active: false, until: null }, minWebBuild: 1 },
+      false,
+    );
+    expect(same).toEqual({
+      currentMaintenance: { active: false, until: null },
+      currentMinWebBuild: 1,
+      maintenancePending: false,
+      nextMaintenance: null,
+      minWebBuildPending: false,
+      nextMinWebBuild: null,
+    });
+
+    const changed = compareAppSettings(
+      {
+        ok: true,
+        version: "20261112T060000Z",
+        generatedAt: "2026-11-12T06:00:00Z",
+        maintenance: { active: false, until: null },
+        minWebBuild: 1,
+      },
+      { maintenance: { active: true, until: null }, minWebBuild: 2 },
+      true,
+    );
+    expect(changed).toEqual({
+      currentMaintenance: { active: false, until: null },
+      currentMinWebBuild: 1,
+      maintenancePending: true,
+      nextMaintenance: { active: true, until: null },
+      minWebBuildPending: true,
+      nextMinWebBuild: 2,
+    });
+  });
+
+  it("current 조회 실패·미게시 상태에서는 반영값을 null('확인 못 함')로 둔다", () => {
+    expect(parseCurrentSettings({ ok: false })).toEqual({
+      maintenance: null,
+      minWebBuild: null,
+    });
+    const failed = compareAppSettings(
+      { ok: false },
+      { maintenance: { active: true, until: null }, minWebBuild: 2 },
+      null,
+    );
+    expect(failed.currentMaintenance).toBeNull();
+    expect(failed.currentMinWebBuild).toBeNull();
+    expect(failed.maintenancePending).toBe(false);
+    expect(failed.minWebBuildPending).toBe(false);
+  });
+});
+
+describe("parseLast24h", () => {
+  it("ok가 true이고 음수 아닌 정수면 집계값을, ok:false나 누락이면 ok:false를 돌려준다", () => {
+    expect(
+      parseLast24h({ ok: true, runs: 12, succeeded: 4, failed: 1, skipped: 7 }),
+    ).toEqual({ ok: true, runs: 12, succeeded: 4, failed: 1, skipped: 7 });
+    expect(parseLast24h({ ok: false })).toEqual({ ok: false });
+    expect(parseLast24h(undefined)).toEqual({ ok: false });
+    expect(parseLast24h({ ok: true, runs: -1, succeeded: 0, failed: 0, skipped: 0 })).toEqual({
+      ok: false,
+    });
+  });
+});
+
+describe("decomposeChecks", () => {
+  it("checks가 있으면 3항목으로 분해하고, 빠진 항목은 unknown, checks 자체가 없으면 null", () => {
+    expect(decomposeChecks(undefined)).toBeNull();
+    expect(decomposeChecks({})).toBeNull();
+    expect(
+      decomposeChecks({ format: true, required: false, beachIds: true }),
+    ).toEqual([
+      { key: "format", status: "pass" },
+      { key: "required", status: "fail" },
+      { key: "beachIds", status: "pass" },
+    ]);
+    expect(decomposeChecks({ format: true, required: false })).toEqual([
+      { key: "format", status: "pass" },
+      { key: "required", status: "fail" },
+      { key: "beachIds", status: "unknown" },
+    ]);
+  });
+});
+
+describe("formatOperatorSource", () => {
+  it("operator 이메일이 있으면 이메일을 넣고, 없으면 기본 운영자 문구를 쓴다", () => {
+    expect(
+      formatOperatorSource("ops@example.test", "지금 게시 · 운영자", (e) => `지금 게시 · ${e}`),
+    ).toBe("지금 게시 · ops@example.test");
+    expect(
+      formatOperatorSource(undefined, "지금 게시 · 운영자", (e) => `지금 게시 · ${e}`),
+    ).toBe("지금 게시 · 운영자");
+    expect(
+      formatOperatorSource("  ", "지금 게시 · 운영자", (e) => `지금 게시 · ${e}`),
+    ).toBe("지금 게시 · 운영자");
   });
 });

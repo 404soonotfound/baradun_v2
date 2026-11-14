@@ -264,8 +264,10 @@ test("게시 현황: 현재 게시본·다음 자동 게시·대기 공지·되�
     page.getByText("확정한 공지 1 · 다음 게시 때 함께"),
   ).toBeVisible();
   await expect(
-    page.getByText("새로 게시할 변경이 없어 건너뛰었어요"),
+    page.getByText("실행은 바뀐 게 없어 건너뜀"),
   ).toBeVisible();
+  await expect(page.getByText("최근 24시간")).toBeVisible();
+  await expect(page.getByText("확인 못 함").first()).toBeVisible();
   await expect(
     page
       .getByRole("region", { name: "대기 중인 변경" })
@@ -286,12 +288,15 @@ test("게시 현황: 현재 게시본·다음 자동 게시·대기 공지·되�
   await expect(history(page).nth(2)).toContainText("확인 못 함(이전 기록)");
   await expect(history(page).nth(2)).toContainText("지금 게시 · 운영자");
   await expect(page.getByText("앱 설정")).toBeVisible();
-  await expect(page.getByText("서비스 점검 확인 못 함")).toHaveCount(0);
+  await expect(page.getByText("서비스 점검 확인 못 함")).toBeVisible();
+  await expect(page.getByText("최소 화면 버전 확인 못 함")).toBeVisible();
   await expect(
     page.getByRole("link", { name: "GitHub에서 보기" }),
   ).toBeVisible();
   const pendingRegion = page.getByRole("region", { name: "대기 중인 변경" });
-  await expect(pendingRegion.getByText("title.ko: 새벽 점검 예고")).toBeVisible();
+  await expect(
+    pendingRegion.getByText("title.ko: 새벽 점검 예고", { exact: true }),
+  ).toBeVisible();
   await expect(
     pendingRegion.getByText(
       "이전 값은 아직 보여 드릴 수 없어요 · 바뀔 내용만 보여요",
@@ -915,6 +920,143 @@ test("같은 version을 가진 성공·실패 기록이 있어도 실패 행 선
     "해변 ID 대조 불일치(누락·추가·중복)",
   );
   await expect(checksRegion).not.toContainText("검증 통과");
+});
+
+test("#479 응답 필드: 앱 설정 비교·last24h·공지 before/updatedBy·checks 3항목·operator를 표시한다", async ({
+  page,
+}) => {
+  await signIn(page);
+  await mockPublish(page, {
+    overview: () =>
+      overview({
+        current: {
+          ok: true,
+          version: V0,
+          generatedAt: iso(base),
+          maintenance: { active: false, until: null },
+          minWebBuild: 1,
+        },
+        settings: {
+          maintenance: { active: true, until: null },
+          minWebBuild: 2,
+        },
+        last24h: { ok: true, runs: 144, succeeded: 136, failed: 1, skipped: 7 },
+        pendingNotices: {
+          ok: true,
+          maintenancePending: true,
+          items: [
+            {
+              id: "n-maint",
+              change: "update",
+              kind: "maintenance_notice",
+              title: "새벽 점검 예고 (연장)",
+              startsAt: iso(base - 60 * MINUTE),
+              endsAt: null,
+              updatedBy: OPS,
+              before: {
+                id: "n-maint",
+                kind: "maintenance_notice",
+                title: { ko: "새벽 점검 예고", en: "Maintenance" },
+                body: { ko: "점검 안내", en: "Notice" },
+                startsAt: iso(base - 60 * MINUTE),
+                endsAt: null,
+              },
+            },
+          ],
+        },
+        history: {
+          ok: true,
+          items: [
+            {
+              result: "published",
+              version: V0,
+              at: iso(base),
+              source: "operator",
+              operator: OPS,
+              beachCount: 206,
+              checks: { format: true, required: true, beachIds: true },
+              changes: {
+                notices: true,
+                categoryCounts: counts,
+                categoryDelta: { clear: 0, unavailable: 0, undetermined: 0 },
+                delayedBeaches: 0,
+                delayedDelta: 0,
+              },
+            },
+            {
+              result: "failed",
+              version: V1,
+              at: iso(base - 5 * MINUTE),
+              source: "auto",
+              reason: "beach_ids",
+              checks: { format: true, required: false },
+            },
+          ],
+        },
+      }),
+  });
+  await openPublish(page);
+
+  await expect(page.getByText("실행 144")).toBeVisible();
+  await expect(
+    page.getByText("성공 136 · 실패 1 · 건너뜀 7 · 기록된 실행 기준"),
+  ).toBeVisible();
+
+  await expect(page.getByText("서비스 점검 꺼짐")).toBeVisible();
+  await expect(
+    page.getByText("최소 화면 버전 1 · 강제 업데이트 없음"),
+  ).toBeVisible();
+  await expect(
+    page.getByText("다음 게시에 반영: 점검 켜짐 · 최소 화면 버전 2"),
+  ).toBeVisible();
+
+  const pendingRegion = page.getByRole("region", { name: "대기 중인 변경" });
+  await expect(pendingRegion).toContainText(OPS);
+  await expect(
+    pendingRegion.getByText("title.ko: 새벽 점검 예고", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    pendingRegion.getByText("title.ko: 새벽 점검 예고 (연장)"),
+  ).toBeVisible();
+  await expect(
+    pendingRegion.getByText("이전 값은 아직 보여 드릴 수 없어요"),
+  ).toHaveCount(0);
+
+  await expect(history(page).nth(0)).toContainText(`지금 게시 · ${OPS}`);
+
+  const checksRegion = page.getByRole("region", { name: /검증 결과/ });
+  await expect(checksRegion).toContainText("형식");
+  await expect(checksRegion).toContainText("필수 칸");
+  await expect(checksRegion).toContainText("해변 ID 대조");
+  await expect(checksRegion).toContainText("통과");
+  await expect(checksRegion).toContainText("실패");
+  await expect(checksRegion).toContainText("확인 못 함");
+  await expectNoA11yViolations(page);
+});
+
+test("current·last24h 조회 실패(ok:false) 시 '확인 못 함'을 표시한다", async ({
+  page,
+}) => {
+  await signIn(page);
+  await mockPublish(page, {
+    overview: () =>
+      overview({
+        current: { ok: false },
+        last24h: { ok: false },
+        settings: {
+          maintenance: { active: false, until: null },
+          minWebBuild: 1,
+        },
+      }),
+  });
+  await openPublish(page);
+
+  await expect(page.getByText("서비스 점검 확인 못 함")).toBeVisible();
+  await expect(page.getByText("최소 화면 버전 확인 못 함")).toBeVisible();
+  await expect(
+    page.getByText("기록된 실행 기준 · 빠진 실행은 셀 수 없음"),
+  ).toBeVisible();
+  await expectNoA11yViolations(page);
 });
 
 test("미리보기에서 게시 확인 창으로 이동했다가 취소하면 변경 미리보기 버튼으로 포커스가 돌아간다", async ({
