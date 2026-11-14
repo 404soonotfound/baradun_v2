@@ -9,6 +9,7 @@ import { localBeaches } from "./local-beaches";
 import { localCollection } from "./local-collection";
 import { localNotices } from "./local-notices";
 import { localPublish } from "./local-publish";
+import { localSiteDeploy } from "./local-site-deploy";
 import { localSources } from "./local-sources";
 import { localStats } from "./local-stats";
 import { SESSION } from "./policy";
@@ -186,6 +187,13 @@ export function localOps<T>(
     }
     const publish = localPublish<T>(url.pathname, url.searchParams, request);
     if (publish) return publish;
+  }
+  // 사이트 배포 칸(#472). 데모 계정은 서버처럼 받지 않음(허용표 sample: false). 상황은 화면 주소 ?deploy=
+  if (method === "GET" && url.pathname === "/ops/site-deploy") {
+    if (pool === "demo") {
+      return { ok: false, status: 403, code: "forbidden", requestId: null };
+    }
+    return localSiteDeploy<T>();
   }
   // 2단계 인증 초기화(#335). 로컬에서는 Cognito를 부르지 않고 결과만 흉내 냄
   // 'none@'으로 시작하면 이미 없음, 'missing@'이면 없는 계정, 그 밖은 초기화함

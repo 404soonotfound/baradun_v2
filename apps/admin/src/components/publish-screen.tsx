@@ -41,6 +41,7 @@ import { pageRows } from "@/lib/paging";
 import { AdminShell } from "./admin-shell";
 import { labelText } from "./beach-status";
 import { ConfirmDialog } from "./confirm-dialog";
+import { SiteDeployPanel } from "./site-deploy-panel";
 import {
   CELL_END,
   CELL_NAME,
@@ -60,6 +61,7 @@ import { Button, Notice, SUCCESS_BADGE } from "./ui";
 // - '게시 완료'와 '앱 반영'을 나눔. 반영 시각은 약속하지 않음(공개 웹 5분 갱신, D16-C5)
 // - 쓰기는 자동으로 다시 보내지 않음(D16-E1). 작업 상태 조회만 저절로 다시 함
 // - 분류는 publisher가 계산한 그대로 보여 줌. 이 화면은 판단 상태를 바꾸지 않음(G1)
+// - 아래 '사이트 배포' 칸(#472, D27)은 코드·해변 정보 배포 상태 조회. 데이터 게시 흐름과 따로 읽음(site-deploy-panel)
 
 const t = messages.publish;
 const tb = messages.beaches;
@@ -1867,6 +1869,7 @@ export function PublishScreen({
           />
         )}
         {content}
+        <SiteDeployPanel demo={permission.demo} />
       </div>
 
       {dialog?.kind === "publish" && (
