@@ -1134,6 +1134,8 @@
     "kpiKeysHidden": "보여 주지 않음",
     "kpiExpiryHintHidden": "샘플 계정의 인증키 정보는 숨겨요",
     "history24h": "최근 24시간",
+    "historyDetails": "시간별 상태 보기",
+    "historyEntry": "{time} · {state}",
     "historyUnavailable": "최근 24시간 수집 기록 확인 못 함",
     "historyCounts": "최근 24시간 · 성공 {ok}시간 · 실패 {failed}시간 · 지연 {late}시간 · 기록 없음 {none}시간",
     "colKey": "키",

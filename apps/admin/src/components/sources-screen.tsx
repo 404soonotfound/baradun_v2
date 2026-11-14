@@ -290,9 +290,17 @@ const BAR_CLASSES: Record<BarState, string> = {
   none: "bg-border-default",
 };
 
-function SourceBars({ job }: { job: JobCollection | undefined }) {
+function SourceBars({
+  job,
+  generatedAt,
+}: {
+  job: JobCollection | undefined;
+  generatedAt: string | undefined;
+}) {
   const hourly = job?.hourly;
   if (
+    !generatedAt ||
+    !Number.isFinite(Date.parse(generatedAt)) ||
     job?.overdue == null ||
     !hourly ||
     hourly.length !== 24 ||
@@ -326,6 +334,21 @@ function SourceBars({ job }: { job: JobCollection | undefined }) {
           />
         ))}
       </span>
+      <details>
+        <summary className="w-fit cursor-pointer text-body-s text-text-body underline underline-offset-2">
+          {t.historyDetails}
+        </summary>
+        <ul className="mt-1 grid grid-cols-2 gap-x-2 text-label-s text-text-body">
+          {hourly.map((bucket) => (
+            <li key={bucket.hour}>
+              {fill(t.historyEntry, {
+                time: kstDateTime(bucket.hour),
+                state: messages.collection.bar[barState(bucket)],
+              })}
+            </li>
+          ))}
+        </ul>
+      </details>
     </div>
   );
 }
@@ -333,9 +356,11 @@ function SourceBars({ job }: { job: JobCollection | undefined }) {
 function JudgmentCard({
   source,
   job,
+  generatedAt,
 }: {
   source: SourceView;
   job: JobCollection | undefined;
+  generatedAt: string | undefined;
 }) {
   const name = t.name[source.id];
   const row = "grid grid-cols-[6rem_1fr] gap-2 py-1.5 text-body-s";
@@ -383,7 +408,7 @@ function JudgmentCard({
           </dd>
         </div>
       </dl>
-      <SourceBars job={job} />
+      <SourceBars job={job} generatedAt={generatedAt} />
     </article>
   );
 }
@@ -628,6 +653,7 @@ function SourcesList({
             <JudgmentCard
               key={s.id}
               source={s}
+              generatedAt={collection?.generatedAt}
               job={collection?.jobs.find(({ job }) => job === s.id)}
             />
           ))}
