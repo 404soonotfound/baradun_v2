@@ -1,4 +1,5 @@
 import type { Page, Route } from "@playwright/test";
+import { VIEW as COLLECTION } from "./collection-data";
 import { localSourcesView } from "../src/lib/auth/local-sources";
 import {
   ME_OK,
@@ -58,7 +59,7 @@ async function openSources(page: Page) {
 const referenceRow = (page: Page, name: string) =>
   (isMobile(page)
     ? page.getByRole("region", { name: /참고 출처/ }).locator("ul > li")
-    : page.locator("tbody tr")
+    : page.getByRole("region", { name: /참고 출처/ }).getByRole("row")
   )
     .filter({ visible: true })
     .filter({ hasText: name });
@@ -66,6 +67,9 @@ const referenceRow = (page: Page, name: string) =>
 test("목록(시안 V12·VM13): 판단 출처 카드·참고 출처·인증키를 글자로 나누고 키 값·원본 응답은 없다", async ({
   page,
 }) => {
+  await page.route(/\/ops\/collection$/, (route) =>
+    route.fulfill({ json: COLLECTION }),
+  );
   await mockSources(page);
   await openSources(page);
   const judgment = page.getByRole("region", { name: /판단에 쓰는 출처/ });
@@ -92,14 +96,25 @@ test("목록(시안 V12·VM13): 판단 출처 카드·참고 출처·인증키�
 
   const keys = page.getByRole("region", { name: "인증키" });
   await expect(
-    keys.getByRole("listitem").filter({ hasText: "data-go-kr" }),
+    keys.getByRole("row").filter({ hasText: "data-go-kr" }),
   ).toContainText("2027-03-31");
   await expect(
-    keys.getByRole("listitem").filter({ hasText: "kma-apihub" }),
+    keys.getByRole("row").filter({ hasText: "kma-apihub" }),
   ).toContainText("등록됨 · 만료일 없음");
   await expect(page.getByText("판단 2 · 참고 3")).toBeVisible();
   await expect(page.getByText("1/2 성공")).toBeVisible();
-  await expect(page.getByText("2/2 등록·만료 전")).toBeVisible();
+  await expect(page.getByText("참고 출처 최근 실행")).toBeVisible();
+  await expect(page.getByText("인증키 만료 30일 안")).toBeVisible();
+  await expect(page.getByText("만료일을 확인한 키 중 0건")).toBeVisible();
+  await expect(judgment.getByRole("img", { name: /^최근 24시간/ })).toHaveCount(
+    2,
+  );
+  await expect(keys.getByRole("columnheader")).toHaveCount(5);
+  await warnings.getByText("시간별 상태 보기").click();
+  await expect(warnings.getByRole("listitem")).toHaveCount(24);
+  await expect(
+    warnings.getByRole("listitem").filter({ hasText: / · 실패$/ }),
+  ).toHaveCount(1);
   // 읽기 전용: 받아오기 같은 조작 없음
   await expect(page.getByRole("button", { name: /받아오기/ })).toHaveCount(0);
   await expectNoA11yViolations(page);
@@ -166,14 +181,17 @@ test("기록 null·읽지 못한 기록·키 확인 못 함은 정상·등록 �
   await expect(
     judgment.getByRole("article").filter({ hasText: "해양 관측" }),
   ).toContainText("확인 못 함");
-  await expect(page.getByText("0/2 성공")).toBeVisible();
+  await expect(page.getByText("0/2 성공")).toHaveCount(0);
+  await expect(
+    judgment.getByText("최근 24시간 수집 기록 확인 못 함"),
+  ).toHaveCount(2);
   const keys = page.getByRole("region", { name: "인증키" });
   await expect(
-    keys.getByRole("listitem").filter({ hasText: "data-go-kr" }),
+    keys.getByRole("row").filter({ hasText: "data-go-kr" }),
   ).toContainText("등록 안 됐다는 뜻이 아니에요");
   // 응답에 빠진 kma-apihub도 '등록 안 됨'이 아니라 확인 못 함
   await expect(
-    keys.getByRole("listitem").filter({ hasText: "kma-apihub" }),
+    keys.getByRole("row").filter({ hasText: "kma-apihub" }),
   ).toContainText("확인 못 함");
   await expect(keys).not.toContainText("등록 안 됨");
   // 요약도 수 대신 '확인 못 함'(미등록 키가 있는 것처럼 '0/2'로 보이지 않게)
@@ -212,8 +230,11 @@ test("성공한 실행의 빠진 관측소는 숨기지 않고, 만료된 키는
     ),
   });
   await openSources(page);
-  await expect(page.getByText("1/2 등록·만료 전")).toBeVisible();
-  await expect(page.getByText(/만료 지남 1/)).toBeVisible();
+  await expect(
+    page
+      .getByRole("region", { name: "인증키" })
+      .getByRole("row", { name: /data-go-kr/ }),
+  ).toContainText("만료일 지남");
   await page
     .getByRole("link", { name: "해양 관측 상세 보기" })
     .filter({ visible: true })
@@ -265,4 +286,21 @@ test("200이어도 본문 모양이 틀리면 빈 화면이 아니라 불러오�
       .filter({ hasText: "데이터 출처를 불러오지 못했어요" }),
   ).toBeVisible();
   await expect(page.getByRole("region", { name: "인증키" })).toHaveCount(0);
+});
+
+test("확인한 인증키의 만료 요약은 오늘과 30일 뒤까지 센다", async ({
+  page,
+}) => {
+  await mockSources(page, 200, {
+    ...VIEW,
+    keys: [
+      { ...VIEW.keys[0], expiresOn: "2027-01-01", daysLeft: 0 },
+      { ...VIEW.keys[1], expiresOn: "2027-01-31", daysLeft: 30 },
+    ],
+  });
+  await openSources(page);
+  const expiry = page.locator("dl > div").filter({
+    has: page.getByText("인증키 만료 30일 안", { exact: true }),
+  });
+  await expect(expiry).toContainText("2건");
 });

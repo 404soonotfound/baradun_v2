@@ -5,7 +5,16 @@ import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import type { OpsResult } from "@/lib/auth/ops-fetch";
 import { useAuthSession, useSessionSnapshot } from "@/lib/auth/provider";
-import { reasonText, type RunView } from "@/lib/collection";
+import {
+  barCounts,
+  barState,
+  fetchCollection,
+  reasonText,
+  type BarState,
+  type CollectionView,
+  type JobCollection,
+  type RunView,
+} from "@/lib/collection";
 import { kstDateTime } from "@/lib/inquiries";
 import { fill, messages } from "@/lib/messages";
 import {
@@ -30,7 +39,7 @@ import { Button, Notice, SUCCESS_BADGE } from "./ui";
 // 데이터 출처 목록·상세 (BRD-149·GH-328, 화면 설계서 6장 ADM-SRC, 시안 4차 V12·V13·VM13)
 // - 읽기 전용(6장 '조작 없음'). 시안의 '지금 한 번 받아오기'는 6장·S1에 API가 없어 두지 않음
 // - 인증키는 등록 여부·만료일만. 원본 응답은 저장하지 않으므로 응답 예시도 보여 주지 않음(6장·아키텍처 10장)
-// - 시안의 '만료 30일 안'·'호출 한도'는 노션에 기준·자료가 없어 두지 않음. 남은 날과 만료 지남만 보여 줌
+// - 만료 요약은 확인한 인증키 메타데이터에 한정함(시안 V12).
 // - 상세는 정적 내보내기라 /sources/?id= 로 엶(공지·문의와 같음)
 
 const t = messages.sources;
@@ -182,67 +191,177 @@ const HINT = "text-label-s text-text-muted";
 
 // ── 목록 ──
 
+const EXPIRY_WINDOW_DAYS = 30;
+
+function SourceKpi({
+  label,
+  value,
+  hint,
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+}) {
+  return (
+    <div className={`flex flex-col gap-1 ${CARD}`}>
+      <dt className={LABEL}>{label}</dt>
+      <dd className="text-title-l font-semibold text-text-default tabular-nums">
+        {value}
+      </dd>
+      {hint && <dd className={HINT}>{hint}</dd>}
+    </div>
+  );
+}
+
 function Summary({ view }: { view: SourcesView }) {
   const judgment = view.sources.filter((s) => s.judgment);
-  const judgmentOk = judgment.filter(
-    (s) => latestState(s) === "complete",
-  ).length;
+  const reference = view.sources.filter((s) => !s.judgment);
   const names = keyNames(view);
-  const states = names.map((name) => keyState(view, name));
-  const count = (state: KeyState) => states.filter((s) => s === state).length;
-  // 만료일이 지나지 않은 등록 키만 셈. 하나라도 확인 못 하면 수 대신 '확인 못 함'(미등록처럼 보이지 않게)
-  const usable = count("registered") + count("noExpiry") + count("invalid");
-  const value = "text-title-l font-semibold text-text-default tabular-nums";
+  const expiry = names.map((name) => ({
+    state: keyState(view, name),
+    days: keyOf(view, name)?.daysLeft,
+  }));
+  const incomplete = expiry.some(
+    ({ state }) =>
+      state === "unknown" || state === "invalid" || state === "noExpiry",
+  );
+  const expiring = expiry.filter(
+    ({ state, days }) =>
+      state === "registered" &&
+      typeof days === "number" &&
+      days >= 0 &&
+      days <= EXPIRY_WINDOW_DAYS,
+  ).length;
+  const runTotal = (sources: readonly SourceView[]) =>
+    sources.length === 0 ||
+    sources.some(
+      (s) => latestState(s) === "unknown" || latestState(s) === "none",
+    )
+      ? t.runState.unknown
+      : fill(t.kpiRunValue, {
+          ok: sources.filter((s) => latestState(s) === "complete").length,
+          total: sources.length,
+        });
   return (
-    <dl className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-      <div className={`flex flex-col gap-1 ${CARD}`}>
-        <dt className={LABEL}>{t.kpiSources}</dt>
-        <dd className={value}>
-          {fill(t.kpiSourcesValue, { count: view.sources.length })}
-        </dd>
-        <dd className={HINT}>
-          {fill(t.kpiSourcesHint, {
-            judgment: judgment.length,
-            reference: view.sources.length - judgment.length,
-          })}
-        </dd>
-      </div>
-      <div className={`flex flex-col gap-1 ${CARD}`}>
-        <dt className={LABEL}>{t.kpiJudgment}</dt>
-        <dd className={value}>
-          {fill(t.kpiJudgmentValue, {
-            ok: judgmentOk,
-            total: judgment.length,
-          })}
-        </dd>
-        <dd className={HINT}>{t.kpiJudgmentHint}</dd>
-      </div>
-      <div className={`flex flex-col gap-1 ${CARD}`}>
-        <dt className={LABEL}>{t.kpiKeys}</dt>
-        {view.keysHidden ? (
-          <dd className={`${value} text-title-s`}>{t.kpiKeysHidden}</dd>
-        ) : (
-          <>
-            <dd className={value}>
-              {count("unknown") > 0
-                ? t.keyState.unknown
-                : fill(t.kpiKeysValue, { ok: usable, total: names.length })}
-            </dd>
-            <dd className={HINT}>
-              {fill(t.kpiKeysHint, {
-                expired: count("expired"),
-                missing: count("missing"),
-                unknown: count("unknown"),
-              })}
-            </dd>
-          </>
-        )}
-      </div>
+    <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <SourceKpi
+        label={t.kpiSources}
+        value={fill(t.kpiSourcesValue, { count: view.sources.length })}
+        hint={fill(t.kpiSourcesHint, {
+          judgment: judgment.length,
+          reference: reference.length,
+        })}
+      />
+      <SourceKpi
+        label={t.kpiJudgment}
+        value={runTotal(judgment)}
+        hint={t.kpiJudgmentHint}
+      />
+      <SourceKpi
+        label={fill(t.kpiExpiry, { days: EXPIRY_WINDOW_DAYS })}
+        value={
+          view.keysHidden
+            ? t.kpiKeysHidden
+            : incomplete
+              ? t.keyState.unknown
+              : fill(t.kpiExpiryValue, { count: expiring })
+        }
+        hint={
+          view.keysHidden
+            ? t.kpiExpiryHintHidden
+            : incomplete
+              ? fill(t.kpiExpiryIncomplete, { count: expiring })
+              : fill(t.kpiExpiryHint, { count: names.length })
+        }
+      />
+      <SourceKpi
+        label={t.kpiReference}
+        value={runTotal(reference)}
+        hint={reference.map((source) => t.name[source.id]).join(t.listJoin)}
+      />
     </dl>
   );
 }
 
-function JudgmentCard({ source }: { source: SourceView }) {
+const BAR_CLASSES: Record<BarState, string> = {
+  ok: "bg-success-icon",
+  late: "bg-status-stale-border",
+  failed: "bg-status-blocked-fg",
+  none: "bg-border-default",
+};
+
+function SourceBars({
+  job,
+  generatedAt,
+}: {
+  job: JobCollection | undefined;
+  generatedAt: string | undefined;
+}) {
+  const hourly = job?.hourly;
+  if (
+    !generatedAt ||
+    !Number.isFinite(Date.parse(generatedAt)) ||
+    job?.overdue == null ||
+    !hourly ||
+    hourly.length !== 24 ||
+    !hourly.every(
+      (bucket) =>
+        bucket &&
+        typeof bucket.hour === "string" &&
+        Number.isFinite(Date.parse(bucket.hour)) &&
+        Number.isSafeInteger(bucket.runs) &&
+        Number.isSafeInteger(bucket.ok) &&
+        bucket.runs >= 0 &&
+        bucket.ok >= 0 &&
+        bucket.ok <= bucket.runs,
+    )
+  )
+    return <p className={HINT}>{t.historyUnavailable}</p>;
+  const counts = barCounts(hourly);
+  return (
+    <div className="flex flex-col gap-1">
+      <span className={HINT}>{t.history24h}</span>
+      <span
+        role="img"
+        aria-label={fill(t.historyCounts, counts)}
+        className="flex gap-0.5"
+      >
+        {hourly.map((bucket) => (
+          <span
+            key={bucket.hour}
+            aria-hidden="true"
+            className={`h-4 flex-1 rounded-[2px] ${BAR_CLASSES[barState(bucket)]}`}
+          />
+        ))}
+      </span>
+      <details>
+        <summary className="w-fit cursor-pointer text-body-s text-text-body underline underline-offset-2">
+          {t.historyDetails}
+        </summary>
+        <ul className="mt-1 grid grid-cols-2 gap-x-2 text-label-s text-text-body">
+          {hourly.map((bucket) => (
+            <li key={bucket.hour}>
+              {fill(t.historyEntry, {
+                time: kstDateTime(bucket.hour),
+                state: messages.collection.bar[barState(bucket)],
+              })}
+            </li>
+          ))}
+        </ul>
+      </details>
+    </div>
+  );
+}
+
+function JudgmentCard({
+  source,
+  job,
+  generatedAt,
+}: {
+  source: SourceView;
+  job: JobCollection | undefined;
+  generatedAt: string | undefined;
+}) {
   const name = t.name[source.id];
   const row = "grid grid-cols-[6rem_1fr] gap-2 py-1.5 text-body-s";
   return (
@@ -289,6 +408,7 @@ function JudgmentCard({ source }: { source: SourceView }) {
           </dd>
         </div>
       </dl>
+      <SourceBars job={job} generatedAt={generatedAt} />
     </article>
   );
 }
@@ -435,48 +555,81 @@ function Keys({ view }: { view: SourcesView }) {
         >
           {t.keysTitle}
         </h2>
-        <p className={HINT}>{t.keysHint}</p>
+        <p id="sources-keys-hint" className={HINT}>
+          {t.keysHint}
+        </p>
       </div>
       {view.keysHidden ? (
         <Notice tone="neutral" title={t.keysHidden} />
       ) : (
-        <ul className="grid grid-cols-1 gap-2 md:grid-cols-2">
-          {names.map((name) => {
-            const state = keyState(view, name);
-            const key = keyOf(view, name);
-            const usedBy = view.sources
-              .filter((s) => s.key === name)
-              .map((s) => t.name[s.id])
-              .join(t.listJoin);
-            return (
-              <li key={name} className={CARD}>
-                <div className="flex items-start justify-between gap-2">
-                  <span className="font-mono text-body-s font-medium text-text-default">
-                    {name}
-                  </span>
-                  <KeyBadge state={state} />
-                </div>
-                <KeyHint state={state} />
-                <dl className="mt-2 grid grid-cols-[5rem_1fr] gap-x-2 gap-y-1 text-body-s">
-                  <dt className="text-text-muted">{t.colExpires}</dt>
-                  <dd className="tabular-nums">{key?.expiresOn ?? t.none}</dd>
-                  <dt className="text-text-muted">{t.colDaysLeft}</dt>
-                  <dd className="tabular-nums">
-                    {daysText(key?.daysLeft ?? null)}
-                  </dd>
-                  <dt className="text-text-muted">{t.colUsedBy}</dt>
-                  <dd>{usedBy}</dd>
-                </dl>
-              </li>
-            );
-          })}
-        </ul>
+        <div
+          role="group"
+          aria-labelledby="sources-keys"
+          aria-describedby="sources-keys-hint"
+          tabIndex={0}
+          className="overflow-x-auto rounded-admin-box border border-border-default bg-bg-surface"
+        >
+          <table className="w-full min-w-[32rem] text-left text-body-s">
+            <thead className="border-b border-border-default bg-bg-page text-text-muted">
+              <tr>
+                {[
+                  t.colKey,
+                  t.colKeyState,
+                  t.colExpires,
+                  t.colDaysLeft,
+                  t.colUsedBy,
+                ].map((label) => (
+                  <th key={label} scope="col" className="px-3 py-2 font-medium">
+                    {label}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border-default">
+              {names.map((name) => {
+                const state = keyState(view, name);
+                const key = keyOf(view, name);
+                const usedBy = view.sources
+                  .filter((source) => source.key === name)
+                  .map((source) => t.name[source.id])
+                  .join(t.listJoin);
+                return (
+                  <tr key={name}>
+                    <th
+                      scope="row"
+                      className="px-3 py-2 align-top font-mono font-medium"
+                    >
+                      {name}
+                    </th>
+                    <td className="px-3 py-2 align-top">
+                      <KeyBadge state={state} />
+                      <KeyHint state={state} />
+                    </td>
+                    <td className="px-3 py-2 align-top tabular-nums">
+                      {key?.expiresOn ?? t.none}
+                    </td>
+                    <td className="px-3 py-2 align-top tabular-nums">
+                      {daysText(key?.daysLeft ?? null)}
+                    </td>
+                    <td className="px-3 py-2 align-top">{usedBy}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       )}
     </section>
   );
 }
 
-function SourcesList({ view }: { view: SourcesView }) {
+function SourcesList({
+  view,
+  collection,
+}: {
+  view: SourcesView;
+  collection: CollectionView | null;
+}) {
   const judgment = view.sources.filter((s) => s.judgment);
   const reference = view.sources.filter((s) => !s.judgment);
   return (
@@ -497,7 +650,12 @@ function SourcesList({ view }: { view: SourcesView }) {
         </div>
         <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
           {judgment.map((s) => (
-            <JudgmentCard key={s.id} source={s} />
+            <JudgmentCard
+              key={s.id}
+              source={s}
+              generatedAt={collection?.generatedAt}
+              job={collection?.jobs.find(({ job }) => job === s.id)}
+            />
           ))}
         </div>
       </section>
@@ -797,6 +955,21 @@ function SourcesBody() {
     result: OpsResult<SourcesView>;
   } | null>(null);
 
+  const [collection, setCollection] = useState<{
+    key: string;
+    view: CollectionView;
+  } | null>(null);
+  useEffect(() => {
+    if (id !== null) return;
+    let live = true;
+    void fetchCollection(() => session.accessToken()).then((result) => {
+      if (live) setCollection(result.ok ? { key, view: result.body } : null);
+    });
+    return () => {
+      live = false;
+    };
+  }, [id, key, session]);
+
   useEffect(() => {
     let live = true;
     void fetchSources(() => session.accessToken()).then((result) => {
@@ -880,7 +1053,12 @@ function SourcesBody() {
             </Button>
           </Notice>
         ))}
-      {view && id === null && <SourcesList view={view} />}
+      {view && id === null && (
+        <SourcesList
+          view={view}
+          collection={collection?.key === key ? collection.view : null}
+        />
+      )}
       {view && id !== null && source && (
         <SourceDetail view={view} source={source} />
       )}
