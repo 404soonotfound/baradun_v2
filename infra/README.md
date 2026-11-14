@@ -161,6 +161,8 @@ GitHub 저장소 설정 → Environments에서 `infra`(배포 브랜치 `main`�
 
 ## CDK 실행 정책과 역할 권한 상한
 
+CDKToolkit의 초기 설정·관리자 전환·정책 적용 확인은 [GH-300 절차서](iam-transition.md)를 따릅니다. 초기 설정 정책은 일상 배포 경로와 분리합니다.
+
 CloudFormation 실행 역할(`cdk-hnb659fds-cfn-exec-role-<계정>-ap-northeast-2`)에는 `AdministratorAccess` 대신 최소 권한 고객 관리형 정책 두 개를 상시 부착합니다(BRD-121). IAM 고객 관리형 정책 한도(공백 제외 6,144자, 증액 불가) 안에 들도록 서비스 묶음별로 파일을 나누어 둘 다 붙여 둡니다.
 
 - `bootstrap/cfn-execution-policy.json` (`BaradunCdkExecution`): 사이트 전달·보안(`s3`, `cloudfront`, `wafv2`), IAM 역할·권한 상한·GitHub OIDC(`iam`), CDK 부트스트랩 자산·버전 파라미터 읽기(`s3:GetObject`, `ssm:GetParameter`·`GetParameters`)
