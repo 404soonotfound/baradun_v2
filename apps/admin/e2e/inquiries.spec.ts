@@ -220,7 +220,7 @@ test("상세: 내용·보관 기한·받지 않는 연락처를 보여 주고, P
   ).toBeVisible();
   await expect(detail.getByText("받지 않아요")).toBeVisible();
   // 받은 시각 + 90일(KST) = 1/31
-  await expect(detail.getByText("1/31에 자동 삭제")).toBeVisible();
+  await expect(detail.getByText("1/31 자동 삭제")).toBeVisible();
   await expect(detail.getByText("강원 강릉시")).toBeVisible();
   await expectNoA11yViolations(page);
 
@@ -331,7 +331,7 @@ test("보기 권한은 내용·메모를 받지 않음을 알리고, 이전 문�
   const detail = detailOf(page);
   await expect(detail.getByText(/보기 권한으로는 문의 내용/)).toBeVisible();
   await expect(detail.getByText("이전 문의 · 처리 이력 없음")).toBeVisible();
-  await expect(detail.getByText("처리 메모(내부용)")).toHaveCount(0);
+  await expect(detail.getByText("처리 메모")).toHaveCount(0);
 });
 
 test("주소로 연 문의가 없으면(90일 지남) 찾는 문의가 없다고 알린다", async ({
@@ -468,7 +468,7 @@ test("처리: 반려는 이유가 있어야 저장되고, 저장하면 안내·�
   expect(calls.patches).toHaveLength(0);
 
   await detail.getByLabel("반려 이유").fill("  내용을 알아볼 수 없어요.  ");
-  await detail.getByLabel("처리 메모(내부용)").fill("스팸으로 보임");
+  await detail.getByLabel(/처리 메모/).fill("스팸으로 보임");
   await expect(detail.getByText("바뀐 내용 3")).toBeVisible();
   await expectNoA11yViolations(page);
   await detail.getByRole("button", { name: "저장" }).click();
@@ -512,7 +512,7 @@ test("처리 충돌(409): 다른 운영자가 먼저 바꿨으면 덮어쓰지 �
   await openInquiries(page);
   await rows(page).first().getByRole("link").click();
   const detail = detailOf(page);
-  await detail.getByLabel("처리 메모(내부용)").fill("내가 쓴 메모");
+  await detail.getByLabel(/처리 메모/).fill("내가 쓴 메모");
   await detail.getByRole("button", { name: "저장" }).click();
   const alert = detail.getByRole("alert");
   await expect(alert).toContainText("다른 운영자가 먼저 이 문의를 바꿨어요");
@@ -606,7 +606,7 @@ test("충돌 뒤 '새 내용 불러오기'는 서버의 새 내용으로 바꾼�
   await openInquiries(page);
   await rows(page).first().getByRole("link").click();
   const detail = detailOf(page);
-  const memo = detail.getByLabel("처리 메모(내부용)");
+  const memo = detail.getByLabel(/처리 메모/);
   await memo.fill("내가 쓴 메모");
   await detail.getByRole("button", { name: "저장" }).click();
   await detail.getByRole("button", { name: "새 내용 불러오기" }).click();
@@ -649,7 +649,7 @@ test("저장 뒤 다시 읽기가 실패해도 내용과 처리 칸을 지우지
   await openInquiries(page);
   await rows(page).first().getByRole("link").click();
   const detail = detailOf(page);
-  const memo = detail.getByLabel("처리 메모(내부용)");
+  const memo = detail.getByLabel(/처리 메모/);
   await memo.fill("저장한 메모");
   await detail.getByRole("button", { name: "저장" }).click();
 
@@ -734,7 +734,7 @@ test("개인정보 가리기: 선택한 부분을 확인 뒤 가리고, 쓰던 �
   await openInquiries(page);
   await rows(page).first().getByRole("link").click();
   const detail = detailOf(page);
-  await detail.getByLabel("처리 메모(내부용)").fill("쓰던 메모");
+  await detail.getByLabel(/처리 메모/).fill("쓰던 메모");
   await detail.getByRole("button", { name: "개인정보 가리기" }).click();
   const apply = detail.getByRole("button", { name: "가리기", exact: true });
   await expect(apply).toBeDisabled();
@@ -757,7 +757,7 @@ test("개인정보 가리기: 선택한 부분을 확인 뒤 가리고, 쓰던 �
   });
   await expect(detail.getByText("제 번호는 [가림]이에요.")).toBeVisible();
   // 가리기는 상태·메모를 바꾸지 않으므로 쓰던 메모를 '그사이 바뀜'으로 막지 않음
-  await expect(detail.getByLabel("처리 메모(내부용)")).toHaveValue("쓰던 메모");
+  await expect(detail.getByLabel(/처리 메모/)).toHaveValue("쓰던 메모");
   await expect(detail.getByText("이 문의가 그사이 바뀌었어요")).toHaveCount(0);
 });
 
@@ -842,7 +842,7 @@ test("개인정보 가리기: 처리 초안이 이미 낡았으면 가린 뒤에
   await openInquiries(page);
   await rows(page).first().getByRole("link").click();
   const detail = detailOf(page);
-  const memo = detail.getByLabel("처리 메모(내부용)");
+  const memo = detail.getByLabel(/처리 메모/);
   await memo.fill("쓰던 메모");
   version = 2; // 그사이 다른 운영자가 저장함
   const redact = async () => {
@@ -868,4 +868,90 @@ test("개인정보 가리기: 처리 초안이 이미 낡았으면 가린 뒤에
   // 초안은 v1 기준이라 v3로 옮기지 않음 → 저장해도 서버가 409로 막음(남의 메모를 덮어쓰지 않음)
   await expect(stale).toBeVisible();
   await expect(memo).toHaveValue("쓰던 메모");
+});
+
+test("필터(검색·유형·해변·받은 시각), 미리보기, 행 클릭·키보드 이동·지우기 확인 창·접근성", async ({
+  page,
+}) => {
+  await signIn(page);
+  await mockInquiries(page);
+  await openInquiries(page);
+
+  // 초기에는 요약 응답에 본문이 없으므로 자리표시 문구를 보여 줌
+  if (!isMobile(page)) {
+    await expect(rows(page).first()).toContainText("눌러서 내용 보기");
+    // 행 전체 클릭(상태 배지 셀 클릭)으로 시트 열기
+    await rows(page).first().locator("td").first().click();
+  } else {
+    await rows(page).first().getByRole("link").click();
+  }
+
+  const detail = detailOf(page);
+  await expect(
+    detail.getByText("현장에 입수 금지 깃발이 걸려 있어요."),
+  ).toBeVisible();
+
+  if (!isMobile(page)) {
+    // PC 시트: ↑↓ 로 다음/이전 문의 이동, Esc로 닫고 누른 줄에 포커스 복원
+    await page.keyboard.press("ArrowDown");
+    await expect(page).toHaveURL(new RegExp(`\\?id=${id(2)}$`));
+    await page.keyboard.press("ArrowUp");
+    await expect(page).toHaveURL(new RegExp(`\\?id=${id(1)}$`));
+
+    // '지우기' 버튼 → V30 확인 창, 취소 포커스, Esc 닫기 후 '지우기' 버튼 포커스 복원
+    const delBtn = detail.getByRole("button", { name: "지우기" });
+    await delBtn.click();
+    const confirm = page.getByRole("dialog", { name: "문의를 지울까요?" });
+    await expect(confirm).toBeVisible();
+    await expect(
+      confirm.getByRole("button", { name: "취소" }),
+    ).toBeFocused();
+    await expect(
+      confirm.getByRole("button", { name: "문의 지우기" }),
+    ).toBeDisabled();
+    await expectNoA11yViolations(page);
+    await page.keyboard.press("Escape");
+    await expect(confirm).toBeHidden();
+    await expect(delBtn).toBeFocused();
+
+    await page.keyboard.press("Escape");
+    await expect(detail).toBeHidden();
+    await expect(rows(page).first().getByRole("link")).toBeFocused();
+    // 상세를 한 번 연 뒤에는 목록 미리보기 줄에 본문 일부가 표시됨
+    await expect(rows(page).first()).toContainText(
+      "현장에 입수 금지 깃발이 걸려 있어요.",
+    );
+  } else {
+    await detail.getByRole("link", { name: /문의 목록으로/ }).click();
+  }
+
+  // 필터 조합: 유형 + 검색어
+  await page.getByRole("button", { name: "유형", exact: true }).click();
+  await page
+    .getByRole("group", { name: "유형으로 거르기" })
+    .getByRole("button", { name: "해변을 추가해 주세요" })
+    .click();
+  await expect(rows(page)).toHaveCount(1);
+  await expect(page.getByText("1건", { exact: true })).toBeVisible();
+
+  // 미수신 데이터(nextCursor)가 있는데 거르기 결과가 0건이면 '아직 불러오지 않았어요' + '다음 목록 더 불러오기'
+  await page.getByLabel("내용·해변 찾기").fill("존재하지않는검색어");
+  await expect(page.getByText("아직 불러오지 않았어요")).toBeVisible();
+  await page.getByRole("button", { name: "다음 목록 더 불러오기" }).click();
+  await expect(page.getByRole("button", { name: "거르기 초기화" })).toBeVisible();
+  await page.getByRole("button", { name: "거르기 초기화" }).click();
+  await expect(rows(page)).toHaveCount(4);
+  await expectNoA11yViolations(page);
+});
+
+test("보기 권한에서는 지우기 버튼도 비활성으로 둔다", async ({ page }) => {
+  await signIn(page, ["viewer"]);
+  await mockInquiries(page);
+  await openInquiries(page);
+  await rows(page).first().getByRole("link").click();
+  const detail = detailOf(page);
+  await expect(detail.getByRole("button", { name: "지우기" })).toBeDisabled();
+  await expect(
+    detail.getByRole("button", { name: "개인정보 가리기" }),
+  ).toBeDisabled();
 });
