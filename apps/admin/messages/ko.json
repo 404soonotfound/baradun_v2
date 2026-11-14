@@ -756,7 +756,6 @@
     "bannerStatusFirstOnFailure": "장애 나면 먼저",
     "bannerStatusLive": "● 노출 중",
     "listTitle": "공지 목록",
-    "order": "앱 배너는 한 번에 하나만 보여요. 오프라인·불러오기 실패·확인된 판단 없음 배너가 있으면 공지는 그 뒤에 기다려요. 공지는 판단 상태를 바꾸지 않아요.",
     "tabsLabel": "공지 상태로 거르기",
     "all": "전체",
     "state": {
