@@ -1137,8 +1137,16 @@ test("사이트 배포: CI가 끝나지 않았으면 그 상태와 CI '진행 �
 test("사이트 배포: 일부를 확인하지 못하면 0건·정상이 아니라 사유와 마지막으로 확인한 값을 보인다", async ({
   page,
 }) => {
+  // 확인 시각과 재시도 시각이 같은 한국 날짜에 있도록 고정.
+  const now = new Date("2026-11-14T03:00:00Z");
+  await page.clock.setFixedTime(now);
   await signIn(page);
-  await mockPublish(page, { siteDeploy: deployReply("partial") });
+  await mockPublish(page, {
+    siteDeploy: () => ({
+      status: 200,
+      body: localSiteDeployView("partial", now.getTime()),
+    }),
+  });
   await openPublish(page);
   const region = siteDeploy(page);
   await expect(
