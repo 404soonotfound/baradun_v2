@@ -12,6 +12,10 @@ import {
   srpScript,
   test,
 } from "./fixtures";
+import {
+  localSiteDeployView,
+  type LocalDeployScenario,
+} from "../src/lib/auth/local-site-deploy";
 
 // 데이터 게시 (#331, 화면 설계서 6장 ADM-PUB · 시안 V16·VM8·VM9·V30·N2·E2·E4·E10). 운영 API는 가짜 응답
 // 지금 게시·되돌리기는 작업 ID → 상태 조회, 응답 시간 초과는 같은 멱등 키로 결과만 확인(D16-C4)
@@ -139,9 +143,30 @@ async function mockPublish(
     preview?: () => unknown;
     rollbackPreview?: (version: string) => unknown;
     reapply?: (w: Write) => { status: number; body: unknown };
+    // 사이트 배포 칸(#472). 기본은 로컬 예시 ready. n은 몇 번째 조회인지(1부터)
+    siteDeploy?: (n: number) => { status: number; body: unknown } | "hold";
   } = {},
 ) {
-  const calls = { writes: [] as Write[], overviews: 0, previews: 0 };
+  const calls = {
+    writes: [] as Write[],
+    overviews: 0,
+    previews: 0,
+    siteDeploys: 0,
+  };
+  await page.route(/\/ops\/site-deploy$/, async (route: Route) => {
+    calls.siteDeploys += 1;
+    const reply = options.siteDeploy?.(calls.siteDeploys) ?? {
+      status: 200,
+      body: localSiteDeployView("ready", Date.now()),
+    };
+    // 응답을 보내지 않음(로딩·시간 제한 시험)
+    if (reply === "hold") return;
+    await route.fulfill({
+      status: reply.status,
+      contentType: "application/json",
+      body: JSON.stringify(reply.body),
+    });
+  });
   await page.route(/\/ops\/publish(\/.*)?(\?.*)?$/, async (route: Route) => {
     const request = route.request();
     const url = new URL(request.url());
@@ -920,4 +945,461 @@ test("미리보기에서 게시 확인 창으로 이동했다가 취소하면 �
   await confirmDialog.getByRole("button", { name: "취소" }).click();
 
   await expect(previewTrigger).toBeFocused();
+});
+
+// ---- 사이트 배포 칸 (#472, 결정 기록 D27 · 화면 설계서 ADM-PUB '사이트 배포') ----
+// 응답은 로컬 예시(src/lib/auth/local-site-deploy)와 같은 모양. 상황별로 고름
+
+const deployReply = (scenario: LocalDeployScenario) => () => ({
+  status: 200,
+  body: localSiteDeployView(scenario, Date.now()),
+});
+const deployFail = {
+  status: 500,
+  body: { error: { code: "internal", requestId: "req-site-deploy" } },
+};
+const siteDeploy = (page: Page) =>
+  page.getByRole("region", { name: "사이트 배포" });
+const READY_TEXT = /배포할 수 있어요/;
+
+test(
+  "사이트 배포: 배포 가능 상태·사이트별 배포 커밋·바뀐 파일·커밋 목록·CI·다음 정기 배포·수동 요청 수·GitHub 링크·토큰 만료를 보여 준다",
+  { tag: "@smoke" },
+  async ({ page }) => {
+    await signIn(page);
+    await mockPublish(page);
+    await openPublish(page);
+    const region = siteDeploy(page);
+    await expect(
+      region.getByText(
+        "데이터 게시는 특보·공지(수집 뒤 게시), 사이트 배포는 코드·해변 정보(하루 1번)",
+      ),
+    ).toBeVisible();
+    await expect(
+      region.getByText("main 최신 커밋을 배포할 수 있어요"),
+    ).toBeVisible();
+    await expect(region.getByText(/^\d{2}:\d{2} 조회 기준$/)).toBeVisible();
+
+    const site = region.getByRole("region", { name: "사용자 사이트" });
+    await expect(site.getByRole("link", { name: /^0000000/ })).toHaveAttribute(
+      "href",
+      /\/commit\/0000000c+$/,
+    );
+    await expect(site.getByRole("link", { name: /^GH-449/ })).toHaveAttribute(
+      "href",
+      /\/issues\/449$/,
+    );
+    await expect(
+      site.getByText(/^\d{2}:\d{2} 확인 · 수동 배포 · /),
+    ).toBeVisible();
+    await expect(
+      site.getByRole("link", { name: /^실행 보기/ }),
+    ).toHaveAttribute("href", /\/actions\/runs\/9001$/);
+    // 운영자 사이트는 실행과 표지가 맞지 않아 실행 방식·시각을 숨김
+    const admin = region.getByRole("region", { name: "운영자 사이트" });
+    await expect(admin.getByText(/^\d{2}:\d{2} 확인$/)).toBeVisible();
+    await expect(admin.getByRole("link", { name: /^실행 보기/ })).toHaveCount(
+      0,
+    );
+
+    // 바뀐 파일: 접힌 목록을 펼치면 분류 칩과 경로
+    const files = site.getByText("바뀐 파일 4개 · 파일 목록");
+    await expect(site.getByText("data/beaches/b0001.json")).toBeHidden();
+    await files.click();
+    await expect(site.getByText("data/beaches/b0001.json")).toBeVisible();
+    for (const chip of ["해변 정보", "사용자 화면", "공통"]) {
+      await expect(site.getByText(chip, { exact: true }).first()).toBeVisible();
+    }
+    await admin.getByText("바뀐 파일 2개 · 파일 목록").click();
+    await expect(admin.getByText("운영 화면", { exact: true })).toBeVisible();
+    await expect(
+      admin.getByText(
+        "apps/admin/src/components/notice-list.tsx에서 이름 바뀜",
+      ),
+    ).toBeVisible();
+
+    // 커밋 목록은 하나로(최대 10개, 넘치면 GitHub에서 전체 보기)
+    const commits = region.getByRole("region", { name: "아직 안 나간 커밋" });
+    await expect(commits.locator("li")).toHaveCount(10);
+    await expect(commits.getByText("12개")).toBeVisible();
+    await expect(
+      commits.getByRole("link", {
+        name: /최근 10개만 보여요 · GitHub에서 전체 보기/,
+      }),
+    ).toHaveAttribute("href", /\/compare\/0000000c+\.\.\.000000cc+$/);
+
+    await expect(region.getByText("통과", { exact: true })).toBeVisible();
+    await expect(region.getByText(/^(오늘|내일) 05:17$/)).toBeVisible();
+    await expect(
+      region.getByText("오늘 수동 배포 요청 2회 · 1회 약 US$0.017"),
+    ).toBeVisible();
+    await expect(region.getByText(/실패·취소한 요청도 세요/)).toBeVisible();
+
+    const open = region.getByRole("link", { name: /GitHub에서 배포 열기/ });
+    await expect(open).toHaveAttribute("target", "_blank");
+    await expect(open).toHaveAttribute("rel", /noopener/);
+    await expect(open).toHaveAttribute(
+      "href",
+      "https://github.com/404soonotfound/baradun_v2/actions/workflows/deploy.yml",
+    );
+    await expect(
+      region.getByText(
+        "Run workflow → 브랜치 main으로 실행해요. 실행 전에 대상 커밋이 위 SHA와 같은지 확인하세요. 그사이 새 변경이 머지됐으면 그 커밋이 배포돼요.",
+      ),
+    ).toBeVisible();
+    await expect(
+      region.getByText(/^GitHub 조회 토큰 · 만료 \d{4}-\d{2}-\d{2}$/),
+    ).toBeVisible();
+    await expect(region.getByText(/만료 임박/)).toHaveCount(0);
+    await expect(
+      region.getByText("화면이 보이는 동안 1분마다 다시 읽어요"),
+    ).toBeVisible();
+    await expectNoA11yViolations(page);
+  },
+);
+
+test("사이트 배포: 'GitHub에서 배포 열기'는 새 탭으로 열리고 지금 화면은 그대로다", async ({
+  page,
+}) => {
+  await page.context().route("https://github.com/**", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "text/html",
+      body: "<p>ok</p>",
+    }),
+  );
+  await signIn(page);
+  await mockPublish(page);
+  await openPublish(page);
+  const popup = page.waitForEvent("popup");
+  await siteDeploy(page)
+    .getByRole("link", { name: /GitHub에서 배포 열기/ })
+    .click();
+  const tab = await popup;
+  expect(tab.url()).toContain("/actions/workflows/deploy.yml");
+  expect(await tab.evaluate(() => window.opener)).toBeNull();
+  await expect(
+    page.getByRole("heading", { name: "데이터 게시", level: 1 }),
+  ).toBeVisible();
+});
+
+test("사이트 배포: 배포 진행 중이면 실행 링크와 30초 다시 읽기를 보이고 '배포할 수 있어요'는 띄우지 않는다", async ({
+  page,
+}) => {
+  await signIn(page);
+  await mockPublish(page, { siteDeploy: deployReply("deploying") });
+  await openPublish(page);
+  const region = siteDeploy(page);
+  await expect(region.getByText("배포가 진행 중이에요")).toBeVisible();
+  await expect(
+    region.getByRole("link", { name: /^실행 보기/ }).first(),
+  ).toHaveAttribute("href", /\/actions\/runs\/9002$/);
+  await expect(region.getByText(/30초마다 다시 읽어요/)).toBeVisible();
+  await expect(region.getByText(READY_TEXT)).toHaveCount(0);
+  await expectNoA11yViolations(page);
+});
+
+test("사이트 배포: 일시 정지면 수동 배포도 새로 시작하지 않는다고 알리고 정기 배포 멈춤을 보인다", async ({
+  page,
+}) => {
+  await signIn(page);
+  await mockPublish(page, { siteDeploy: deployReply("paused") });
+  await openPublish(page);
+  const region = siteDeploy(page);
+  await expect(region.getByText("배포가 멈춰 있어요(일시 정지)")).toBeVisible();
+  await expect(
+    region.getByText("정지를 풀기 전에는 수동 배포도 새로 시작하지 않아요"),
+  ).toBeVisible();
+  await expect(region.getByText("정기 배포 멈춤")).toBeVisible();
+  await expect(region.getByText(READY_TEXT)).toHaveCount(0);
+});
+
+test("사이트 배포: CI가 끝나지 않았으면 그 상태와 CI '진행 중'을 보인다", async ({
+  page,
+}) => {
+  await signIn(page);
+  await mockPublish(page, { siteDeploy: deployReply("ci_pending") });
+  await openPublish(page);
+  const region = siteDeploy(page);
+  await expect(region.getByText("CI가 끝나지 않았어요")).toBeVisible();
+  await expect(region.getByText("진행 중", { exact: true })).toBeVisible();
+  await expect(region.getByText(READY_TEXT)).toHaveCount(0);
+});
+
+test("사이트 배포: 일부를 확인하지 못하면 0건·정상이 아니라 사유와 마지막으로 확인한 값을 보인다", async ({
+  page,
+}) => {
+  await signIn(page);
+  await mockPublish(page, { siteDeploy: deployReply("partial") });
+  await openPublish(page);
+  const region = siteDeploy(page);
+  await expect(
+    region.getByText("GitHub 상태를 확인하지 못했어요"),
+  ).toBeVisible();
+  await expect(region.getByText(READY_TEXT)).toHaveCount(0);
+  const site = region.getByRole("region", { name: "사용자 사이트" });
+  await expect(site.getByText("변경 확인 못 함")).toBeVisible();
+  await expect(
+    site.getByText(/변경이 많아 다 확인하지 못했어요 · GitHub에서 확인하세요/),
+  ).toBeVisible();
+  await expect(site.getByText(/바뀐 파일 없음/)).toHaveCount(0);
+  const admin = region.getByRole("region", { name: "운영자 사이트" });
+  await expect(admin.getByText("배포 커밋 확인 못 함")).toBeVisible();
+  await expect(
+    admin
+      .getByText(/GitHub 조회 한도에 걸렸어요 · \d{2}:\d{2} 뒤 다시 확인해요/)
+      .first(),
+  ).toBeVisible();
+  await expect(
+    admin.getByText(/^마지막으로 확인한 값 · \d{2}:\d{2} 기준$/),
+  ).toBeVisible();
+  await expect(admin.getByText("0000005")).toBeVisible();
+  await expect(
+    region.getByText("오늘 수동 배포 요청 확인 못 함"),
+  ).toBeVisible();
+  await expect(
+    region.getByText("오늘 수동 배포 요청 1회 · 1회 약 US$0.017"),
+  ).toBeVisible();
+  // 두 사이트 모두 변경을 확인하지 못함 → 커밋 목록도 빈 목록이 아니라 확인 못 함
+  await expect(region.getByText("커밋 목록 확인 못 함")).toBeVisible();
+  await expect(region.getByText("아직 안 나간 커밋이 없어요")).toHaveCount(0);
+  await expect(region.getByText("만료 임박 · 20일 남음")).toBeVisible();
+  await expectNoA11yViolations(page);
+});
+
+test("사이트 배포: 운영자 사이트 주소가 설정되지 않으면 그 사이트만 '설정이 필요해요'", async ({
+  page,
+}) => {
+  await signIn(page);
+  await mockPublish(page, { siteDeploy: deployReply("admin_unconfigured") });
+  await openPublish(page);
+  const region = siteDeploy(page);
+  const admin = region.getByRole("region", { name: "운영자 사이트" });
+  await expect(admin.getByText("배포 커밋 확인 못 함")).toBeVisible();
+  await expect(admin.getByText(/설정이 필요해요/).first()).toBeVisible();
+  await expect(
+    region
+      .getByRole("region", { name: "사용자 사이트" })
+      .getByText("바뀐 파일 4개 · 파일 목록"),
+  ).toBeVisible();
+  // 한 사이트만 확인함 → 커밋 목록은 보이되 전부가 아닐 수 있다고 알리고 개수는 숨김
+  await expect(
+    region.getByText(
+      "변경을 확인하지 못한 사이트가 있어 목록이 전부가 아닐 수 있어요",
+    ),
+  ).toBeVisible();
+  await expect(
+    region.getByRole("region", { name: "아직 안 나간 커밋" }).getByText("12개"),
+  ).toHaveCount(0);
+  await expect(region.getByText(READY_TEXT)).toHaveCount(0);
+});
+
+test("사이트 배포: 응답 모양이 틀리면 칸마다 확인 못 함으로 보이고 GitHub 링크를 숨긴다", async ({
+  page,
+}) => {
+  await signIn(page);
+  await mockPublish(page, {
+    siteDeploy: () => ({
+      status: 200,
+      body: { readiness: "ready", workflowUrl: "javascript:alert(1)" },
+    }),
+  });
+  await openPublish(page);
+  const region = siteDeploy(page);
+  await expect(
+    region.getByText("GitHub 상태를 확인하지 못했어요"),
+  ).toBeVisible();
+  await expect(region.getByText(READY_TEXT)).toHaveCount(0);
+  await expect(region.getByText("배포 커밋 확인 못 함")).toHaveCount(2);
+  await expect(region.getByText("변경 확인 못 함")).toHaveCount(2);
+  await expect(region.getByText("커밋 목록 확인 못 함")).toBeVisible();
+  await expect(region.getByText("확인 못 함", { exact: true })).toBeVisible();
+  await expect(
+    region.getByText("GitHub 배포 화면 주소를 확인하지 못했어요"),
+  ).toBeVisible();
+  await expect(
+    region.getByRole("link", { name: /GitHub에서 배포 열기/ }),
+  ).toHaveCount(0);
+});
+
+test("사이트 배포: 불러오지 못하면 무슨 일·영향·다음 행동을 알리고 '다시 불러오기'로 다시 읽는다", async ({
+  page,
+}) => {
+  await signIn(page);
+  const calls = await mockPublish(page, {
+    siteDeploy: (n) => (n === 1 ? deployFail : deployReply("ready")()),
+  });
+  await openPublish(page);
+  const region = siteDeploy(page);
+  const alert = region.getByRole("alert");
+  await expect(alert).toContainText("배포 정보를 불러오지 못했어요");
+  await expect(alert).toContainText(
+    "지금 사이트 반영 상태는 확인하지 못했어요",
+  );
+  await expect(alert).toContainText(
+    "잠시 뒤 다시 불러오거나 GitHub에서 확인해 주세요",
+  );
+  await expect(region.getByText(READY_TEXT)).toHaveCount(0);
+  await region.getByRole("button", { name: "다시 불러오기" }).click();
+  await expect(
+    region.getByText("main 최신 커밋을 배포할 수 있어요"),
+  ).toBeVisible();
+  await expect(alert).toHaveCount(0);
+  expect(calls.siteDeploys).toBe(2);
+});
+
+test("사이트 배포: 다시 읽기가 실패해도 앞 값을 그대로 두고 언제 받은 값인지 알린다", async ({
+  page,
+}) => {
+  await signIn(page);
+  await mockPublish(page, {
+    siteDeploy: (n) => (n === 1 ? deployReply("ready")() : deployFail),
+  });
+  await openPublish(page);
+  const region = siteDeploy(page);
+  await expect(
+    region.getByText("main 최신 커밋을 배포할 수 있어요"),
+  ).toBeVisible();
+  await region.getByRole("button", { name: "다시 불러오기" }).click();
+  await expect(region.getByRole("alert")).toContainText(
+    /아래는 \d{2}:\d{2}에 마지막으로 받은 값이에요/,
+  );
+  await expect(
+    region.getByText("main 최신 커밋을 배포할 수 있어요"),
+  ).toBeVisible();
+});
+
+test("사이트 배포: 응답이 15초 넘게 없으면 자리표시 대신 같은 칸 안에서 실패 문구", async ({
+  page,
+}) => {
+  await page.clock.install();
+  await signIn(page);
+  await mockPublish(page, { siteDeploy: () => "hold" });
+  await openPublish(page);
+  const region = siteDeploy(page);
+  await expect(
+    region.getByRole("status").filter({ hasText: "사이트 배포 불러오는 중" }),
+  ).toHaveCount(1);
+  await page.clock.fastForward(5_100);
+  await expect(region.getByText(/평소보다 오래 걸려요/)).toBeVisible();
+  await page.clock.fastForward(10_000);
+  await expect(region.getByRole("alert")).toContainText(
+    "배포 정보를 불러오지 못했어요",
+  );
+  await expect(region.getByText(READY_TEXT)).toHaveCount(0);
+});
+
+test("사이트 배포: 화면이 보이는 동안만 1분마다(진행 중이면 30초) 다시 읽고 숨은 탭은 쉰다", async ({
+  page,
+}) => {
+  await page.clock.install();
+  await signIn(page);
+  let scenario: LocalDeployScenario = "ready";
+  const calls = await mockPublish(page, {
+    siteDeploy: () => deployReply(scenario)(),
+  });
+  await openPublish(page);
+  await expect(
+    siteDeploy(page).getByText("main 최신 커밋을 배포할 수 있어요"),
+  ).toBeVisible();
+  expect(calls.siteDeploys).toBe(1);
+
+  await page.clock.fastForward(30_000);
+  expect(calls.siteDeploys).toBe(1);
+  await page.clock.fastForward(31_000);
+  await expect.poll(() => calls.siteDeploys).toBe(2);
+
+  // 진행 중으로 바뀌면 다음부터 30초
+  scenario = "deploying";
+  await page.clock.fastForward(61_000);
+  await expect.poll(() => calls.siteDeploys).toBe(3);
+  await expect(
+    siteDeploy(page).getByText("배포가 진행 중이에요"),
+  ).toBeVisible();
+  await page.clock.fastForward(31_000);
+  await expect.poll(() => calls.siteDeploys).toBe(4);
+
+  // 숨은 탭은 쉼 → 다시 보이면 바로 읽음
+  const setVisibility = (state: "hidden" | "visible") =>
+    page.evaluate((value) => {
+      Object.defineProperty(document, "visibilityState", {
+        configurable: true,
+        get: () => value,
+      });
+      document.dispatchEvent(new Event("visibilitychange"));
+    }, state);
+  await setVisibility("hidden");
+  await page.clock.fastForward(5 * 60_000);
+  expect(calls.siteDeploys).toBe(4);
+  await setVisibility("visible");
+  await expect.poll(() => calls.siteDeploys).toBe(5);
+});
+
+test("사이트 배포: 키보드로 다시 불러오기·파일 목록 펼치기·링크에 닿는다", async ({
+  page,
+}) => {
+  await signIn(page);
+  const calls = await mockPublish(page);
+  await openPublish(page);
+  const region = siteDeploy(page);
+  await expect(
+    region.getByText("main 최신 커밋을 배포할 수 있어요"),
+  ).toBeVisible();
+  const reload = region.getByRole("button", { name: "다시 불러오기" });
+  await reload.focus();
+  await page.keyboard.press("Enter");
+  await expect.poll(() => calls.siteDeploys).toBe(2);
+
+  const site = region.getByRole("region", { name: "사용자 사이트" });
+  const summary = site.locator("summary");
+  await summary.focus();
+  await expect(summary).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(site.getByText("data/beaches/b0001.json")).toBeVisible();
+  await page.keyboard.press("Space");
+  await expect(site.getByText("data/beaches/b0001.json")).toBeHidden();
+
+  const open = region.getByRole("link", { name: /GitHub에서 배포 열기/ });
+  await open.focus();
+  await expect(open).toBeFocused();
+  // 새 탭임을 접근 가능한 이름으로 알림
+  await expect(open).toHaveAccessibleName(/새 탭에서 열림/);
+});
+
+test("사이트 배포: 보기 권한(viewer)도 볼 수 있다", async ({ page }) => {
+  await signIn(page, ["viewer"]);
+  await mockPublish(page);
+  await openPublish(page);
+  await expect(
+    siteDeploy(page).getByText("main 최신 커밋을 배포할 수 있어요"),
+  ).toBeVisible();
+});
+
+test("사이트 배포: 데모 계정은 '실제 운영자만 볼 수 있어요' 한 줄만 보이고 요청하지 않는다", async ({
+  page,
+}) => {
+  await mockCognito(
+    page,
+    srpScript({ email: OPS, after: "tokens", groups: ["sample"] }),
+  );
+  await mockOps(page, {
+    status: 200,
+    body: {
+      kind: "sample",
+      role: "sample",
+      authTime: "",
+      sessionExpiresAt: "",
+    },
+  });
+  const calls = await mockPublish(page);
+  await signInWithPassword(page, "/login/demo/", OPS);
+  await expect(page.getByRole("heading", { name: "운영 홈" })).toBeVisible();
+  await openPublish(page);
+  const region = siteDeploy(page);
+  await expect(region.getByText("실제 운영자만 볼 수 있어요")).toBeVisible();
+  await expect(
+    region.getByRole("button", { name: "다시 불러오기" }),
+  ).toHaveCount(0);
+  expect(calls.siteDeploys).toBe(0);
+  await expectNoA11yViolations(page);
 });
