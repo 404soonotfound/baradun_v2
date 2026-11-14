@@ -99,10 +99,43 @@ export function compareToolkitSetupPolicy(
   local: PolicyDocument,
 ): PolicyComparison {
   const policy = TOOLKIT_SETUP_POLICY;
-  const remote = readRemotePolicy(
-    aws,
-    `arn:aws:iam::${account}:policy/${policy.name}`,
-  );
+  let remote: RemotePolicy;
+  try {
+    remote = readRemotePolicy(
+      aws,
+      `arn:aws:iam::${account}:policy/${policy.name}`,
+    );
+    if (remote.kind === "ok") {
+      const document = remote.doc;
+      const isStringList = (value: unknown) =>
+        typeof value === "string"
+          ? value.length > 0
+          : Array.isArray(value) &&
+            value.length > 0 &&
+            value.every((item) => typeof item === "string" && item.length > 0);
+      const statements = Array.isArray(document?.Statement)
+        ? document.Statement
+        : [document?.Statement];
+      if (
+        !/^v[1-9][0-9]*$/.test(remote.version) ||
+        typeof document?.Version !== "string" ||
+        !statements.length ||
+        statements.some(
+          (statement) =>
+            !statement ||
+            typeof statement !== "object" ||
+            !["Allow", "Deny"].includes(statement.Effect) ||
+            !isStringList(statement.Action ?? statement.NotAction) ||
+            !isStringList(statement.Resource ?? statement.NotResource),
+        )
+      ) {
+        remote = { kind: "error", stderr: "초기 설정 정책 응답 형식 오류" };
+      }
+    }
+  } catch {
+    // 선택 조회의 형식 오류가 일상 배포를 중단하지 않게 함
+    remote = { kind: "error", stderr: "초기 설정 정책 응답 형식 오류" };
+  }
   if (remote.kind !== "ok") {
     const status =
       remote.kind === "missing" ? "미설치(일상 배포에 불필요)" : "확인 못 함";
