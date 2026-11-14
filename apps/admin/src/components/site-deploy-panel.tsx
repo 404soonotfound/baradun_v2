@@ -36,7 +36,6 @@ import {
 } from "@/lib/site-deploy";
 import {
   LoadingStatus,
-  SkBox,
   SkLine,
   SlowNote,
   loadClass,
@@ -723,34 +722,110 @@ function Content({ view }: { view: SiteDeployView }) {
   );
 }
 
-// 값이 들어올 칸과 같은 자리(배포 상태 · 요약 3칸 · 사이트 2칸 · 커밋 목록 5줄 · GitHub 안내 · 토큰 줄 · 다시 읽기 안내)
-// 커밋 수는 응답마다 달라(0~10줄) 가운데쯤인 5줄로 잡음
+// 커밋 줄은 고정폭 글꼴 SHA가 섞여 줄 상자가 조금 큼 → 같은 글꼴의 폭 없는 글자로 같은 줄 높이를 만듦
+function MonoStrut() {
+  return <span className="font-mono">{"\u200b"}</span>;
+}
+
+// 값이 들어올 칸과 같은 틀(배포 상태 · 요약 3칸 · 사이트 2칸 · 접힌 커밋 목록 · GitHub 안내 · 토큰 줄 · 다시 읽기 안내)
+// 라벨·고정 안내는 그대로, 값 자리만 회색 줄(홈 화면과 같은 방식). 테두리·여백·글자 크기가 같아 높이가 같음
 function Placeholder() {
   return (
-    <div aria-hidden="true" className="flex flex-col gap-3">
-      <SkBox className="h-[46px]" />
-      <SkBox className="h-[280px] lg:h-[104px]" />
-      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-        <SkBox className="h-[232px] lg:h-[190px]" />
-        <SkBox className="h-[232px] lg:h-[190px]" />
-      </div>
-      <div className="flex flex-col gap-2">
-        <p className="text-body">
-          <SkLine className="w-28" />
-        </p>
-        <ul className="flex flex-col divide-y divide-border-default border-t border-border-default">
-          {[0, 1, 2, 3, 4].map((n) => (
-            <li key={n} className="py-2 text-body-s">
-              <SkLine className="w-3/5" />
-            </li>
+    <div aria-hidden="true">
+      <div className="flex flex-col gap-3">
+        <div className="rounded-admin-box border border-border-default bg-bg-page px-3.5 py-3">
+          <p className="text-body-s">
+            <SkLine className="w-[260px] max-w-full" />
+          </p>
+        </div>
+        <dl className="grid grid-cols-1 overflow-hidden rounded-admin-box border border-border-default bg-bg-surface lg:grid-cols-3">
+          <SummaryItem label={t.mainTitle}>
+            <p className="text-body-s">
+              <MonoStrut />
+              <SkLine className="w-[220px] max-w-full" />
+            </p>
+            <p className="text-body-s">
+              <SkLine className="w-14" />
+            </p>
+          </SummaryItem>
+          <SummaryItem label={t.scheduleTitle}>
+            <p className="text-title-s">
+              <SkLine className="w-24" />
+            </p>
+          </SummaryItem>
+          <SummaryItem label={t.manualTitle}>
+            <p className="text-body-s">
+              <SkLine className="w-[240px] max-w-full" />
+            </p>
+            <span className="text-caption text-text-muted">{t.manualNote}</span>
+          </SummaryItem>
+        </dl>
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+          {(["site", "admin"] as const).map((app) => (
+            <div
+              key={app}
+              className="flex min-w-0 flex-col gap-3 rounded-admin-box border border-border-default bg-bg-surface px-4 py-3.5"
+            >
+              <p className="text-body font-semibold text-text-default">
+                {t.sites[app]}
+              </p>
+              <div className="flex flex-col gap-1">
+                <p className="text-caption font-semibold text-text-body">
+                  {t.deployedCommit}
+                </p>
+                <p className="text-body-s">
+                  <MonoStrut />
+                  <SkLine className="w-[220px] max-w-full" />
+                </p>
+                <p className="text-caption">
+                  <SkLine className="w-[180px] max-w-full" />
+                </p>
+              </div>
+              <div className="flex flex-col gap-1 border-t border-border-default pt-3">
+                <p className="text-caption font-semibold text-text-body">
+                  {t.pendingTitle}
+                </p>
+                {/* 바뀐 파일 줄: details 안 inline-flex summary와 같은 구조 */}
+                <div className="text-body-s">
+                  <span className="inline-flex min-h-touch items-center gap-1 lg:min-h-0">
+                    {/* 펼치기 아이콘(12px) 자리. 첫 항목이 아이콘이라 기준선이 달라지는 것까지 같게 */}
+                    <span className="size-3 shrink-0" />
+                    <span>
+                      <SkLine className="w-32" />
+                    </span>
+                  </span>
+                </div>
+              </div>
+            </div>
           ))}
-        </ul>
+        </div>
+        <div className="flex flex-col gap-2">
+          <div className="flex items-baseline gap-2">
+            <p className="text-body font-semibold text-text-default">
+              {t.commitsTitle}
+            </p>
+            <span className="text-body-s">
+              <SkLine className="w-6" />
+            </span>
+          </div>
+          <p className="flex min-h-touch items-center text-body-s lg:min-h-0">
+            <span>
+              <SkLine className="w-28" />
+            </span>
+          </p>
+        </div>
+        <div className="flex flex-col gap-1 rounded-admin-box border border-border-default bg-bg-page px-3.5 py-3 text-body-s">
+          <p>
+            <SkLine className="w-36" />
+          </p>
+          <p className="text-text-body">{t.openNote}</p>
+          <p className="text-caption text-text-muted">{t.openPermission}</p>
+        </div>
+        <p className="text-caption">
+          <SkLine className="w-48" />
+        </p>
       </div>
-      <SkBox className="h-[124px] lg:h-[88px]" />
-      <p className="text-caption">
-        <SkLine className="w-48" />
-      </p>
-      <p className="text-caption">
+      <p className="mt-3 text-caption">
         <SkLine className="w-56" />
       </p>
     </div>
