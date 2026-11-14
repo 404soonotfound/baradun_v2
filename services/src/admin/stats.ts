@@ -1,6 +1,13 @@
 import { GetParameterCommand, SSMClient } from "@aws-sdk/client-ssm";
 import { GoogleAuth } from "google-auth-library";
 import { errorName, safeLog } from "./http";
+import {
+  kstDate,
+  parseTrends,
+  statsDates,
+  trendRequests,
+  type StatsTrends,
+} from "./stats-trends";
 
 // 이용 통계 (BRD-154, ADM-STATS, 결정 기록 D15-8 · D13-7 · D16-E8, 아키텍처 18.5)
 // - 출시 수집은 page_view만. 다른 이벤트는 '수집 안 함(후속)'으로 표시
@@ -72,6 +79,7 @@ export interface StatsResponse {
   readonly range: StatsRange;
   readonly realtime: StatsRealtime;
   readonly period: StatsPeriod;
+  readonly trends?: StatsTrends;
   readonly events: readonly StatsEventStatus[];
 }
 
@@ -132,6 +140,7 @@ export interface Ga4Row {
 export interface Ga4ReportBody {
   readonly rows?: readonly Ga4Row[];
   readonly metadata?: {
+    readonly timeZone?: string;
     readonly subjectToThresholding?: boolean;
     readonly dataLossFromOtherRow?: boolean;
     readonly samplingMetadatas?: readonly unknown[];
@@ -284,10 +293,7 @@ export function dateRangeFor(range: StatsRange): {
   }
 }
 
-export function unconfiguredStats(
-  range: StatsRange,
-  now: Date,
-): StatsResponse {
+export function unconfiguredStats(range: StatsRange, now: Date): StatsResponse {
   return {
     configured: false,
     fetchedAt: now.toISOString(),
@@ -320,7 +326,12 @@ export function createCachedStatsReader(
     async read(range) {
       const currentMs = now().getTime();
       const hit = cache.get(range);
-      if (hit && currentMs < hit.expiresAtMs) {
+      if (
+        hit &&
+        currentMs < hit.expiresAtMs &&
+        (!hit.value.trends ||
+          hit.value.trends.endDate === kstDate(new Date(currentMs)))
+      ) {
         return { ...hit.value, cached: true };
       }
       const fresh = await inner.read(range);
@@ -331,7 +342,14 @@ export function createCachedStatsReader(
         fresh.period.status === "ok" &&
         fresh.period.topBeaches !== null &&
         fresh.period.devices !== null &&
-        fresh.period.languages !== null
+        fresh.period.languages !== null &&
+        (!fresh.trends ||
+          (fresh.trends.timeZoneMismatch !== null &&
+            fresh.trends.daily !== null &&
+            fresh.trends.hourly !== null &&
+            fresh.trends.topScreens !== null &&
+            fresh.trends.referrers !== null &&
+            fresh.trends.newUsersMetadata !== null))
       ) {
         cache.set(range, { expiresAtMs: currentMs + ttlMs, value: fresh });
       }
@@ -407,11 +425,11 @@ export function createGa4StatsReader(config: Ga4StatsConfig): StatsReader {
     return token.token;
   }
 
-  async function postGa4(
-    endpoint: "runRealtimeReport" | "runReport",
+  async function postGa4<T = Ga4ReportBody>(
+    endpoint: "runRealtimeReport" | "batchRunReports",
     token: string,
     payload: unknown,
-  ): Promise<Ga4ReportBody> {
+  ): Promise<T> {
     const url = `https://analyticsdata.googleapis.com/v1beta/properties/${encodeURIComponent(config.propertyId)}:${endpoint}`;
     const res = await fetchImpl(url, {
       method: "POST",
@@ -425,7 +443,7 @@ export function createGa4StatsReader(config: Ga4StatsConfig): StatsReader {
     if (!res.ok) {
       throw new Error(`GA4 ${endpoint} HTTP ${res.status}`);
     }
-    return (await res.json()) as Ga4ReportBody;
+    return (await res.json()) as T;
   }
 
   return {
@@ -440,44 +458,57 @@ export function createGa4StatsReader(config: Ga4StatsConfig): StatsReader {
       }
 
       const dateRange = dateRangeFor(range);
-      const [realtimeRes, summaryRes, beachesRes, devicesRes, languagesRes] =
-        await Promise.allSettled([
-          postGa4("runRealtimeReport", token, {
-            metrics: [{ name: "activeUsers" }, { name: "screenPageViews" }],
-            minuteRanges: [{ startMinutesAgo: 29, endMinutesAgo: 0 }],
-          }),
-          postGa4("runReport", token, {
-            dateRanges: [dateRange],
-            metrics: [{ name: "activeUsers" }, { name: "screenPageViews" }],
-          }),
-          postGa4("runReport", token, {
-            dateRanges: [dateRange],
-            dimensions: [{ name: "pagePath" }],
-            metrics: [{ name: "screenPageViews" }],
-            dimensionFilter: {
-              filter: {
-                fieldName: "pagePath",
-                stringFilter: { matchType: "CONTAINS", value: "/spots/" },
-              },
+      const dates = statsDates(range, now);
+      const [realtimeRes, legacyRes, trendsRes] = await Promise.allSettled([
+        postGa4("runRealtimeReport", token, {
+          metrics: [{ name: "activeUsers" }, { name: "screenPageViews" }],
+          minuteRanges: [{ startMinutesAgo: 29, endMinutesAgo: 0 }],
+        }),
+        postGa4<{ reports?: Ga4ReportBody[] }>("batchRunReports", token, {
+          requests: [
+            {
+              dateRanges: [dateRange],
+              metrics: [{ name: "activeUsers" }, { name: "screenPageViews" }],
             },
-            orderBys: [{ metric: { metricName: "screenPageViews" }, desc: true }],
-            limit: GA4_TOP_BEACHES_FETCH_LIMIT,
-          }),
-          postGa4("runReport", token, {
-            dateRanges: [dateRange],
-            dimensions: [{ name: "deviceCategory" }],
-            metrics: [{ name: "activeUsers" }],
-            orderBys: [{ metric: { metricName: "activeUsers" }, desc: true }],
-            limit: TOP_LIST_LIMIT,
-          }),
-          postGa4("runReport", token, {
-            dateRanges: [dateRange],
-            dimensions: [{ name: "languageCode" }],
-            metrics: [{ name: "activeUsers" }],
-            orderBys: [{ metric: { metricName: "activeUsers" }, desc: true }],
-            limit: GA4_LANGUAGES_FETCH_LIMIT,
-          }),
-        ]);
+            {
+              dateRanges: [dateRange],
+              dimensions: [{ name: "pagePath" }],
+              metrics: [{ name: "screenPageViews" }],
+              dimensionFilter: {
+                filter: {
+                  fieldName: "pagePath",
+                  stringFilter: { matchType: "CONTAINS", value: "/spots/" },
+                },
+              },
+              orderBys: [
+                { metric: { metricName: "screenPageViews" }, desc: true },
+              ],
+              limit: GA4_TOP_BEACHES_FETCH_LIMIT,
+            },
+            {
+              dateRanges: [dateRange],
+              dimensions: [{ name: "deviceCategory" }],
+              metrics: [{ name: "activeUsers" }],
+              orderBys: [{ metric: { metricName: "activeUsers" }, desc: true }],
+              limit: TOP_LIST_LIMIT,
+            },
+            {
+              dateRanges: [dateRange],
+              dimensions: [{ name: "languageCode" }],
+              metrics: [{ name: "activeUsers" }],
+              orderBys: [{ metric: { metricName: "activeUsers" }, desc: true }],
+              limit: GA4_LANGUAGES_FETCH_LIMIT,
+            },
+          ],
+        }),
+        postGa4<{ reports?: Ga4ReportBody[] }>("batchRunReports", token, {
+          requests: trendRequests(dates, TOP_LIST_LIMIT),
+        }),
+      ]);
+      const legacy =
+        legacyRes.status === "fulfilled" ? legacyRes.value.reports : undefined;
+      const [summaryReport, beachesReport, devicesReport, languagesReport] =
+        Array.isArray(legacy) && legacy.length === 4 ? legacy : [];
 
       let realtime: StatsRealtime = {
         status: "unavailable",
@@ -502,35 +533,17 @@ export function createGa4StatsReader(config: Ga4StatsConfig): StatsReader {
         metadata: { thresholding: false, sampling: false, otherRowLoss: false },
       };
 
-      if (summaryRes.status === "fulfilled") {
-        const summary = parseSummaryReport(summaryRes.value);
-        const beaches =
-          beachesRes.status === "fulfilled"
-            ? parseTopBeachesReport(beachesRes.value)
-            : null;
-        if (!beaches && beachesRes.status === "rejected") {
-          safeLog("warn", "stats_beaches_failed", {
-            error: errorName(beachesRes.reason),
-          });
-        }
-        const devices =
-          devicesRes.status === "fulfilled"
-            ? parseDevicesReport(devicesRes.value)
-            : null;
-        if (!devices && devicesRes.status === "rejected") {
-          safeLog("warn", "stats_devices_failed", {
-            error: errorName(devicesRes.reason),
-          });
-        }
-        const languages =
-          languagesRes.status === "fulfilled"
-            ? parseLanguagesReport(languagesRes.value)
-            : null;
-        if (!languages && languagesRes.status === "rejected") {
-          safeLog("warn", "stats_languages_failed", {
-            error: errorName(languagesRes.reason),
-          });
-        }
+      if (summaryReport) {
+        const summary = parseSummaryReport(summaryReport);
+        const beaches = beachesReport
+          ? parseTopBeachesReport(beachesReport)
+          : null;
+        const devices = devicesReport
+          ? parseDevicesReport(devicesReport)
+          : null;
+        const languages = languagesReport
+          ? parseLanguagesReport(languagesReport)
+          : null;
         period = {
           status: "ok",
           activeUsers: summary.activeUsers,
@@ -547,9 +560,25 @@ export function createGa4StatsReader(config: Ga4StatsConfig): StatsReader {
         };
       } else {
         safeLog("warn", "stats_period_failed", {
-          error: errorName(summaryRes.reason),
+          error:
+            legacyRes.status === "rejected"
+              ? errorName(legacyRes.reason)
+              : "InvalidReport",
         });
       }
+
+      if (trendsRes.status === "rejected") {
+        safeLog("warn", "stats_trends_failed", {
+          error: errorName(trendsRes.reason),
+        });
+      }
+      const reports =
+        trendsRes.status === "fulfilled" ? trendsRes.value.reports : undefined;
+      const trends = parseTrends(
+        dates,
+        Array.isArray(reports) && reports.length === 5 ? reports : [],
+        summaryReport?.metadata?.timeZone,
+      );
 
       return {
         configured: true,
@@ -558,6 +587,7 @@ export function createGa4StatsReader(config: Ga4StatsConfig): StatsReader {
         range,
         realtime,
         period,
+        trends,
         events: STATS_EVENTS,
       };
     },
