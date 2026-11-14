@@ -528,6 +528,27 @@ test("데모 계정은 한 번만 읽으므로 머리·이용 칸에 다시 읽�
   await expect(usage.getByText(/5분마다/)).toHaveCount(0);
 });
 
+test("다음 수집 시각이 null(못 읽음)이면 고정 안내로 숨기지 않고 확인 못 함", async ({
+  page,
+}) => {
+  await signIn(page, {
+    collection: ok({
+      ...VIEW_OK,
+      jobs: VIEW_OK.jobs.map((job) => ({
+        ...job,
+        nextScheduledAt:
+          job.job === "collect-ocean" ? null : "2026-11-11T05:48:00.000Z",
+      })),
+    }),
+  });
+  const collection = block(page, "수집");
+  await expect(
+    collection.getByText(/^다음 수집 시각을 확인하지 못했어요\./),
+  ).toBeVisible();
+  await expect(collection.getByText(/출처별 지연·장애 기록은/)).toHaveCount(0);
+  await expect(collection.getByText(/^다음 수집 \d/)).toHaveCount(0);
+});
+
 test("판단 출처 문제·새 문의·수정 대기 공지가 있으면 문제 줄과 할 일 줄이 생긴다", async ({
   page,
 }) => {

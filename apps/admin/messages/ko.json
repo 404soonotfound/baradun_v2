@@ -172,6 +172,7 @@
     "rateNone": "실행 없음",
     "collectionFoot": "출처별 지연·장애 기록은 수집 현황에서 봐요.",
     "collectionNext": "다음 수집 {time}이에요.",
+    "collectionNextUnknown": "다음 수집 시각을 확인하지 못했어요.",
     "inquiriesTitle": "문의",
     "inquiriesNew": "새 {count}",
     "inquiriesValue": "{count}건",
