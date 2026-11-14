@@ -8,12 +8,14 @@ import {
   alarmInfo,
   allIncidents,
   incidentKey,
+  incidentErrorTitle,
   groupedAlarms,
   logsUrl,
   matchesFilter,
   barCounts,
   barState,
   cloudWatchUrl,
+  cycleDelayText,
   fetchCollection,
   incidentMinutes,
   incidentTimeline,
@@ -302,16 +304,13 @@ function barTip(bucket: HourBucket): { time: string; detail: string } {
 function Tooltip({
   children,
   className = "",
-  style,
 }: {
   children: React.ReactNode;
   className?: string;
-  style?: React.CSSProperties;
 }) {
   return (
     <span
       aria-hidden="true"
-      style={style}
       className={`pointer-events-none absolute z-10 rounded-admin-control border border-border-default bg-bg-surface px-2.5 py-2 text-left text-[12px] leading-normal font-normal whitespace-nowrap text-text-default shadow-floating ${className}`}
     >
       {children}
@@ -356,12 +355,10 @@ function DayBars({
           : "middle";
   const align =
     edge === "start"
-      ? "translate-x-0"
+      ? "left-0"
       : edge === "end"
-        ? "-translate-x-full"
-        : "-translate-x-1/2";
-  const offset = edge === "start" ? 0 : edge === "end" ? 1 : 0.5;
-  const left = hover === null ? 0 : ((hover + offset) / hourly.length) * 100;
+        ? "right-0"
+        : "left-1/2 -translate-x-1/2";
   return (
     <span
       role="img"
@@ -374,17 +371,15 @@ function DayBars({
           key={bucket.hour}
           aria-hidden="true"
           onMouseEnter={() => setHover(i)}
-          className={`block h-4 flex-1 rounded-[2px] ${BAR[barState(bucket)]} ${hover === i ? "outline-2 outline-offset-1 outline-text-default" : ""}`}
-        />
-      ))}
-      {tip && (
-        <Tooltip
-          className={`bottom-full mb-2 ${align}`}
-          style={{ left: `${left}%` }}
+          className={`relative block h-4 flex-1 rounded-[2px] ${BAR[barState(bucket)]} ${hover === i ? "outline-2 outline-offset-1 outline-text-default" : ""}`}
         >
-          <b className="font-semibold">{tip.time}</b> · {tip.detail}
-        </Tooltip>
-      )}
+          {hover === i && tip && (
+            <Tooltip className={`bottom-full mb-2 ${align}`}>
+              <b className="font-semibold">{tip.time}</b> · {tip.detail}
+            </Tooltip>
+          )}
+        </span>
+      ))}
     </span>
   );
 }
@@ -425,25 +420,19 @@ function LastRun({
   );
 }
 
-// 예전 응답(legacy)은 지연 기준을 모르니 기준 줄을 빼 '지연 표시 안 함'으로 읽지 않게 함
 function Cycle({
   row,
   job,
-  legacy,
 }: {
   row: SourceRow;
   job: JobCollection | undefined;
-  legacy: boolean;
 }) {
-  const late = job?.lateAfterMinutes;
   return (
     <span className="flex flex-col">
       <span>{t.cycle[row.job]}</span>
-      {job && !legacy && (
-        <span className="text-[12px] text-text-muted">
-          {late == null ? t.cycleNoLate : fill(t.cycleLate, { minutes: late })}
-        </span>
-      )}
+      <span className="text-[12px] text-text-muted">
+        {cycleDelayText(job?.lateAfterMinutes)}
+      </span>
     </span>
   );
 }
@@ -522,12 +511,10 @@ function SourceName({ row }: { row: SourceRow }) {
 
 function SourceTable({
   view,
-  legacy,
   selected,
   onOpen,
 }: {
   view: CollectionView;
-  legacy: boolean;
   // 출처 시트가 열린 줄(시안 V10: 고른 줄 강조)
   selected: string | null;
   onOpen: (job: SourceRow["job"], from: HTMLElement) => void;
@@ -653,7 +640,7 @@ function SourceTable({
                   <td
                     className={`${td} min-w-28 text-right whitespace-normal!`}
                   >
-                    <Cycle row={row} job={job} legacy={legacy} />
+                    <Cycle row={row} job={job} />
                   </td>
                   <td className={`${td} text-right tabular-nums`}>
                     {rateText(job ? successRate(job.week) : null)}
@@ -722,7 +709,7 @@ function SourceTable({
                       {t.colCycle}
                     </dt>
                     <dd className="text-text-default">
-                      <Cycle row={row} job={job} legacy={legacy} />
+                      <Cycle row={row} job={job} />
                     </dd>
                   </div>
                   <div>
@@ -807,17 +794,17 @@ function Hourly({ view }: { view: CollectionView }) {
       .join(" ");
   const pct = (i: number) => (n > 1 ? (i / (n - 1)) * 100 : 0);
   const lastIndex = hourly.findLastIndex((b) => b.runs > 0);
-  const dot = (i: number) => {
-    const b = hourly[i]!;
-    return (
-      <span
-        key={`dot-${i}`}
-        aria-hidden="true"
-        className="absolute -mt-[4.5px] -ml-[4.5px] block size-[9px] rounded-full border-2 border-chart bg-bg-surface"
-        style={{ left: `${pct(i)}%`, top: `${(yOf(b) / CHART_H) * 100}%` }}
-      />
-    );
-  };
+  const dot = (i: number) => (
+    <circle
+      key={`dot-${i}`}
+      cx={xOf(i)}
+      cy={yOf(hourly[i]!)}
+      r="3"
+      className="fill-bg-surface stroke-chart"
+      strokeWidth="2"
+      vectorEffect="non-scaling-stroke"
+    />
+  );
   const activeBucket = active === null ? undefined : hourly[active];
   const tipText = activeBucket
     ? activeBucket.runs === 0
@@ -895,14 +882,13 @@ function Hourly({ view }: { view: CollectionView }) {
                 <linearGradient id={gradient} x1="0" y1="0" x2="0" y2="1">
                   <stop
                     offset="0"
-                    style={{
-                      stopColor: "var(--color-chart)",
-                      stopOpacity: 0.22,
-                    }}
+                    stopColor="var(--color-chart)"
+                    stopOpacity="0.22"
                   />
                   <stop
                     offset="1"
-                    style={{ stopColor: "var(--color-chart)", stopOpacity: 0 }}
+                    stopColor="var(--color-chart)"
+                    stopOpacity="0"
                   />
                 </linearGradient>
               </defs>
@@ -958,47 +944,34 @@ function Hourly({ view }: { view: CollectionView }) {
                   vectorEffect="non-scaling-stroke"
                 />
               )}
+              {lastIndex >= 0 && dot(lastIndex)}
+              {lowIndex >= 0 && lowIndex !== lastIndex && dot(lowIndex)}
+              {activeBucket &&
+                activeBucket.runs > 0 &&
+                active !== lastIndex &&
+                active !== lowIndex &&
+                dot(active!)}
             </svg>
-            {lastIndex >= 0 && dot(lastIndex)}
-            {lowIndex >= 0 && lowIndex !== lastIndex && dot(lowIndex)}
-            {activeBucket &&
-              activeBucket.runs > 0 &&
-              active !== lastIndex &&
-              active !== lowIndex &&
-              dot(active!)}
-            {[0, 25, 50, 75, 100].map((rate) => (
-              <span
-                key={rate}
-                aria-hidden="true"
-                className="absolute right-[calc(100%+8px)] -translate-y-1/2 text-[11px] whitespace-nowrap text-text-muted tabular-nums"
-                style={{ top: `${100 - rate}%` }}
-              >
-                {fill(t.axisPercent, { rate })}
-              </span>
-            ))}
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-y-0 right-full mr-2 flex flex-col justify-between text-[11px] whitespace-nowrap text-text-muted tabular-nums"
+            >
+              {[100, 75, 50, 25, 0].map((rate) => (
+                <span key={rate}>{fill(t.axisPercent, { rate })}</span>
+              ))}
+            </div>
             {activeBucket && (
-              <Tooltip
-                className="-top-1.5"
-                style={
-                  flip
-                    ? { right: `calc(${100 - pct(active!)}% + 10px)` }
-                    : { left: `calc(${pct(active!)}% + 10px)` }
-                }
-              >
+              <Tooltip className={`-top-1.5 ${flip ? "right-2" : "left-2"}`}>
                 {tipText}
               </Tooltip>
             )}
           </div>
           <div
             aria-hidden="true"
-            className="relative mt-2 h-4 text-[12px] text-text-muted tabular-nums"
+            className="mt-2 flex justify-between gap-1 text-[12px] text-text-muted tabular-nums"
           >
             {ticks.map(({ bucket, i }) => (
-              <span
-                key={bucket.hour}
-                className={`absolute whitespace-nowrap ${i === 0 ? "" : i === n - 1 ? "-translate-x-full" : "-translate-x-1/2"}`}
-                style={{ left: `${pct(i)}%` }}
-              >
+              <span key={bucket.hour} className="whitespace-nowrap">
                 {tickLabel(bucket, i)}
               </span>
             ))}
@@ -1028,11 +1001,10 @@ function incidentHeadline(incident: JobIncident): string {
       count: incident.stations.length,
     })}`;
   }
-  const first = incident.failures[0];
   const more = incident.failures.length - 1;
   return [
     sourceName(incident.job),
-    first && ` · ${reasonText(first)}`,
+    ` · ${incidentErrorTitle(incident.failures[0])}`,
     more > 0 && ` ${fill(t.incidentMore, { count: more })}`,
   ]
     .filter(Boolean)
@@ -1059,7 +1031,7 @@ function impactSummary(incident: JobIncident): string | null {
   });
 }
 
-// 장애 한 줄(시안 w-li): 제목 · 출처 메시지 · 시각·걸린 시간 · 상태 배지 · 화살표
+// 장애 한 줄(시안 w-li): 제목 · 시각·걸린 시간 · 상태 배지 · 화살표.
 function IncidentRow({
   incident,
   nowMs,
@@ -1069,7 +1041,6 @@ function IncidentRow({
   nowMs: number;
   onOpen: (from: HTMLElement) => void;
 }) {
-  const first = incident.failures[0];
   const impact = impactSummary(incident);
   return (
     <button
@@ -1082,11 +1053,6 @@ function IncidentRow({
         <span className="text-[14px] font-medium text-text-default">
           {incidentHeadline(incident)}
         </span>
-        {first?.message && (
-          <span className="text-[12px] break-words text-text-muted">
-            {first.message}
-          </span>
-        )}
         <span className="text-[12px] text-text-muted tabular-nums">
           {t.incidentKind[incident.kind]} ·{" "}
           {fill(t.incidentMeta, {
@@ -1213,10 +1179,10 @@ function Incidents({
   );
 }
 
-function alarmTitle(alarm: Pick<AlarmView, "id">): string {
-  const { kind, source } = alarmInfo(alarm.id);
+function alarmTitle(alarm: Pick<AlarmView, "id" | "classification">): string {
+  const { kind, source } = alarmInfo(alarm);
   if (kind === "other" && source === null) {
-    return alarm.id in t.alarmOther
+    return Object.hasOwn(t.alarmOther, alarm.id)
       ? t.alarmOther[alarm.id as keyof typeof t.alarmOther]
       : alarm.id;
   }
@@ -1254,56 +1220,74 @@ function Alerts({ view }: { view: CollectionView }) {
         <p className="mt-3 text-[13px] text-text-muted">{t.alertsEmpty}</p>
       ) : (
         <div className="mt-3 flex flex-col gap-4">
-          {groupedAlarms(alarms.list).map((group) => (
-            <section
-              key={group.kind}
-              aria-labelledby={`alert-group-${group.kind}`}
-            >
-              <h3
-                id={`alert-group-${group.kind}`}
-                className="text-[12px] leading-6 font-medium text-text-muted"
+          {groupedAlarms(alarms.list).map((group) => {
+            const ringing = group.alarms.filter(
+              ({ state }) => state === "ALARM",
+            ).length;
+            const unknown = group.alarms.filter(
+              ({ state }) => state !== "ALARM" && state !== "OK",
+            ).length;
+            return (
+              <details
+                key={group.kind}
+                open={ringing > 0}
+                className="group rounded-admin-box border border-border-default bg-bg-surface px-3"
               >
-                {t.alertGroup[group.kind]}
-                <span className="sr-only">
-                  {" "}
-                  · {t.alertGroupHint[group.kind]}
-                </span>
-              </h3>
-              <ul className="flex flex-col border-t border-border-default">
-                {group.alarms.map((alarm) => (
-                  <li
-                    key={alarm.id}
-                    className="flex items-center gap-3 border-b border-border-default py-2.5"
-                  >
-                    <span className="flex min-w-0 flex-1 flex-col">
-                      <span className="text-[14px] font-medium text-text-default">
-                        {alarmTitle(alarm)}
-                      </span>
-                      <span className="text-[12px] text-text-muted tabular-nums">
-                        {alarm.windowMinutes === null
-                          ? t.alarmWindowUnknown
-                          : fill(t.alarmWindow, {
-                              minutes: alarm.windowMinutes,
-                            })}
-                        {alarm.state === "ALARM" &&
-                          alarm.stateUpdatedAt &&
-                          ` · ${fill(t.alarmSince, { time: kstDateTime(alarm.stateUpdatedAt) })}`}
-                      </span>
-                    </span>
-                    <Badge tone={ALARM_TONE[alarm.state]}>
-                      {t.alarmState[alarm.state]}
+                <summary className="flex min-h-touch cursor-pointer list-none flex-wrap items-center gap-x-2 gap-y-1 py-2 text-body-s font-medium text-text-default [&::-webkit-details-marker]:hidden">
+                  <span className="text-text-muted transition-transform group-open:rotate-90 motion-reduce:transition-none">
+                    <ChevronIcon />
+                  </span>
+                  {t.alertGroup[group.kind]}
+                  <span className="font-normal text-text-muted tabular-nums">
+                    {fill(t.alarmGroupCount, { count: group.alarms.length })}
+                  </span>
+                  {ringing > 0 && (
+                    <Badge tone="error">
+                      {fill(t.alarmGroupRinging, { count: ringing })}
                     </Badge>
-                    <ExternalLink
-                      href={cloudWatchUrl(alarms.region, alarm.name)}
-                      className="inline-flex min-h-touch items-center gap-0.5 text-[12px] font-medium text-brand-default underline underline-offset-2 lg:min-h-0"
+                  )}
+                  {unknown > 0 && (
+                    <Badge tone="unknown">
+                      {fill(t.alarmGroupUnknown, { count: unknown })}
+                    </Badge>
+                  )}
+                </summary>
+                <ul className="flex flex-col border-t border-border-default">
+                  {group.alarms.map((alarm) => (
+                    <li
+                      key={alarm.id}
+                      className="flex items-center gap-3 border-b border-border-default py-2.5"
                     >
-                      {t.alarmLink}
-                    </ExternalLink>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          ))}
+                      <span className="flex min-w-0 flex-1 flex-col">
+                        <span className="text-[14px] font-medium text-text-default">
+                          {alarmTitle(alarm)}
+                        </span>
+                        <span className="text-[12px] text-text-muted tabular-nums">
+                          {alarm.windowMinutes === null
+                            ? t.alarmWindowUnknown
+                            : fill(t.alarmWindow, {
+                                minutes: alarm.windowMinutes,
+                              })}
+                          {alarm.state === "ALARM" &&
+                            alarm.stateUpdatedAt &&
+                            ` · ${fill(t.alarmSince, { time: kstDateTime(alarm.stateUpdatedAt) })}`}
+                        </span>
+                      </span>
+                      <Badge tone={ALARM_TONE[alarm.state]}>
+                        {t.alarmState[alarm.state]}
+                      </Badge>
+                      <ExternalLink
+                        href={cloudWatchUrl(alarms.region, alarm.name)}
+                        className="inline-flex min-h-touch items-center gap-0.5 text-[12px] font-medium text-brand-default underline underline-offset-2 lg:min-h-0"
+                      >
+                        {t.alarmLink}
+                      </ExternalLink>
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            );
+          })}
         </div>
       )}
     </section>
@@ -2024,7 +2008,11 @@ function SourceSheet({
     {
       label: t.colLastSuccess,
       value: job?.lastSuccessAt ? kstClock(job.lastSuccessAt, nowIso) : t.never,
-      hint: fill(t.sheetCycle, { cycle: t.cycle[row.job] }),
+      hint: job?.nextScheduledAt
+        ? fill(t.nextCollection, {
+            time: kstClock(job.nextScheduledAt, nowIso),
+          })
+        : fill(t.sheetCycle, { cycle: t.cycle[row.job] }),
     },
     rate === null
       ? { label: t.colWeek, value: t.never }
@@ -2344,7 +2332,6 @@ function CollectionBody({ beaches }: { beaches: Beaches }) {
           </section>
           <SourceTable
             view={view}
-            legacy={view.legacy}
             selected={source?.job ?? null}
             onOpen={openSource}
           />

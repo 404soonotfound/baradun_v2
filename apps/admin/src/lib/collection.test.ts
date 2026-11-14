@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   alarmInfo,
+  cycleDelayText,
+  incidentErrorTitle,
   allIncidents,
   barCounts,
   barState,
@@ -282,27 +284,12 @@ describe("장애 경과", () => {
 
 describe("경보", () => {
   it("경보 이름에서 묶음·출처를 읽고, 모르는 경보는 other(이름을 숨기지 않음)", () => {
-    expect(alarmInfo("OceanStopped")).toEqual({
+    const classification = {
       kind: "stopped",
       source: "collect-ocean",
-    });
-    expect(alarmInfo("WarningsErrors")).toEqual({
-      kind: "errors",
-      source: "collect-warnings",
-    });
-    expect(alarmInfo("WeatherFailing")).toEqual({
-      kind: "failing",
-      source: "collect-weather",
-    });
-    expect(alarmInfo("PublishStopped")).toEqual({
-      kind: "stopped",
-      source: "publish",
-    });
-    expect(alarmInfo("OceanSomethingNew")).toEqual({
-      kind: "other",
-      source: "collect-ocean",
-    });
-    expect(alarmInfo("LoginAbuse")).toEqual({ kind: "other", source: null });
+    } as const;
+    expect(alarmInfo({ classification })).toEqual(classification);
+    expect(alarmInfo({})).toEqual({ kind: "other", source: null });
   });
 
   it("울리는 경보를 먼저, 같은 상태는 이름순", () => {
@@ -339,7 +326,7 @@ describe("경보", () => {
 });
 
 describe("normalizeCollection", () => {
-  it("GH-375 전 응답은 게시 요약 null·경보 unavailable·지연 기준 null로 채우고 legacy로 표시", () => {
+  it("GH-375 전 응답은 게시 요약 null·경보 unavailable·지연 기준을 모름으로 두고 legacy로 표시", () => {
     const view = normalizeCollection({
       generatedAt: "2026-11-04T05:10:00.000Z",
       publishedVersion: "20261104T051000Z",
@@ -367,7 +354,6 @@ describe("normalizeCollection", () => {
     expect(view.publish).toBeNull();
     expect(view.alarms).toEqual({ status: "unavailable" });
     expect(view.jobs[0]).toMatchObject({
-      lateAfterMinutes: null,
       overdue: null,
     });
     expect(view.jobs[0]!.hourly[0]!.late).toBe(false);
@@ -436,16 +422,26 @@ describe("경보 묶음", () => {
     windowMinutes: 5,
     functionName: null,
   });
-  it("응답 없음 → 실행 오류 → 실패 이어짐 → 그 밖, 빈 묶음은 뺌", () => {
+  it("서버 분류를 따르고 분류가 빠진 경보도 그 밖에 포함", () => {
     const groups = groupedAlarms([
       alarm("LoginAbuse"),
-      alarm("OceanErrors"),
-      alarm("WarningsStopped"),
-      alarm("OceanStopped", "ALARM"),
+      {
+        ...alarm("OceanErrors"),
+        classification: { kind: "errors", source: "collect-ocean" },
+      },
+      {
+        ...alarm("WarningsStopped"),
+        classification: { kind: "stopped", source: "collect-warnings" },
+      },
+      {
+        ...alarm("OceanStopped", "ALARM"),
+        classification: { kind: "stopped", source: "collect-ocean" },
+      },
     ]);
     expect(groups.map((g) => [g.kind, g.alarms.map((a) => a.id)])).toEqual([
       ["stopped", ["OceanStopped", "WarningsStopped"]],
       ["errors", ["OceanErrors"]],
+      ["failing", []],
       ["other", ["LoginAbuse"]],
     ]);
   });
@@ -694,5 +690,28 @@ describe("kstClock", () => {
   it("다른 날이면 초 없이 날짜를 붙임(어제 값을 오늘로 읽지 않게)", () => {
     // UTC로는 같은 날이지만 KST로는 11/9
     expect(kstClock("2026-11-09T14:59:00.000Z", now, true)).toBe("11/9 23:59");
+  });
+});
+
+describe("수집 현황 표시", () => {
+  it.each([
+    [20, "20분 넘으면 지연"],
+    [35, "35분 넘으면 지연"],
+    [180, "180분 넘으면 지연"],
+    [null, "지연 표시 안 함"],
+    [undefined, "지연 기준 확인 못 함"],
+  ])("서버 기준 %s의 주기 줄", (minutes, text) => {
+    expect(cycleDelayText(minutes)).toBe(text);
+  });
+
+  it.each([
+    ["resultCode:22", "호출 한도 초과"],
+    ["result:22", "호출 한도 초과"],
+    ["http:429", "호출 한도 초과"],
+    ["timeout", "응답 시간 초과"],
+    ["resultCode:123456", "알 수 없는 오류"],
+    ["new-code", "알 수 없는 오류"],
+  ])("장애 사유 %s의 제목", (reason, title) => {
+    expect(incidentErrorTitle({ source: "pwncd", reason })).toBe(title);
   });
 });

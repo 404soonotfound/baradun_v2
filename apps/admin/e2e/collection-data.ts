@@ -1,6 +1,6 @@
 // 수집 현황 E2E 가짜 응답 (BRD-149·GH-376)
 // 해상 특보 정상(새벽 장애 1건 해결·경보 1건), 해양 관측 일부 실패 중 + 관측소 빠짐 1건 해결(해변 2곳 관측 지연),
-// 이안류 기록 없음, 날씨 예보는 응답에 없음
+// 이안류 기록 없음, 날씨 예보 일부 실패
 
 const HOUR = 3_600_000;
 
@@ -25,6 +25,7 @@ const REGION = "ap-northeast-2";
 
 const warningsAlarm = {
   id: "WarningsErrors",
+  classification: { kind: "errors", source: "collect-warnings" },
   name: "BaradunV2-WarningsErrors",
   at: ago(195),
   from: "OK",
@@ -34,11 +35,13 @@ const warningsAlarm = {
 const alarm = (
   id: string,
   windowMinutes: number | null,
+  classification: object,
   state = "OK",
   functionName: string | null = null,
 ) => ({
   id,
   name: `BaradunV2-${id}`,
+  classification,
   state,
   stateUpdatedAt: state === "ALARM" ? ago(15) : ago(600),
   description: "",
@@ -92,11 +95,31 @@ export const VIEW = {
     status: "ok",
     region: REGION,
     list: [
-      alarm("WarningsStopped", 25),
-      alarm("OceanStopped", 60, "ALARM", "BaradunV2-Ocean"),
-      alarm("WarningsErrors", 5, "OK", "BaradunV2-Warnings"),
-      alarm("WeatherFailing", 180, "INSUFFICIENT_DATA"),
-      alarm("SomethingNew", null),
+      alarm("WarningsStopped", 25, {
+        kind: "stopped",
+        source: "collect-warnings",
+      }),
+      alarm(
+        "OceanStopped",
+        60,
+        { kind: "stopped", source: "collect-ocean" },
+        "ALARM",
+        "BaradunV2-Ocean",
+      ),
+      alarm(
+        "WarningsErrors",
+        5,
+        { kind: "errors", source: "collect-warnings" },
+        "OK",
+        "BaradunV2-Warnings",
+      ),
+      alarm(
+        "WeatherFailing",
+        180,
+        { kind: "failing", source: "collect-weather" },
+        "INSUFFICIENT_DATA",
+      ),
+      alarm("SomethingNew", null, { kind: "other", source: null }, "unknown"),
     ],
     history: [warningsAlarm],
   },
@@ -208,6 +231,23 @@ export const VIEW = {
       truncated: false,
       lateAfterMinutes: 35,
       overdue: true,
+    },
+    {
+      job: "collect-weather",
+      lastRun: {
+        startedAt: ago(90),
+        finishedAt: ago(90),
+        status: "partial",
+        failures: [],
+      },
+      lastSuccessAt: ago(90),
+      day: { runs: 1, ok: 1 },
+      week: { runs: 7, ok: 7 },
+      hourly: hourly([], 0),
+      incidents: [],
+      truncated: false,
+      lateAfterMinutes: 180,
+      overdue: false,
     },
     {
       job: "collect-catalog",

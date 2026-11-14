@@ -62,12 +62,14 @@ function job(
 function alarm(
   id: string,
   windowMinutes: number | null,
+  classification: AlarmView["classification"],
   state: AlarmView["state"] = "OK",
   stateUpdatedAt: string | null = null,
 ): AlarmView {
   return {
     id,
     name: `BaradunV2-${id}`,
+    ...(classification ? { classification } : {}),
     state,
     stateUpdatedAt,
     description: "",
@@ -146,6 +148,7 @@ export function localCollection<T>(): OpsResult<T> {
   });
   const pwncdAlarm = {
     id: "WarningsErrors",
+    classification: { kind: "errors", source: "collect-warnings" } as const,
     name: "BaradunV2-WarningsErrors",
     at: at(9 * 60 + 5),
     from: "OK" as const,
@@ -167,17 +170,32 @@ export function localCollection<T>(): OpsResult<T> {
       status: "ok",
       region: REGION,
       list: [
-        alarm("WarningsStopped", 25),
-        alarm("OceanStopped", 60),
-        alarm("RipStopped", 60),
-        alarm("PublishStopped", 25),
-        alarm("WarningsErrors", 5, "OK", at(9 * 60 - 20)),
-        alarm("OceanErrors", 5),
-        alarm("RipErrors", 5),
-        alarm("CatalogErrors", 5),
-        alarm("PublishErrors", 5),
-        alarm("WeatherFailing", 180),
-        alarm("LoginAbuse", 5),
+        alarm("WarningsStopped", 25, {
+          kind: "stopped",
+          source: "collect-warnings",
+        }),
+        alarm("OceanStopped", 60, { kind: "stopped", source: "collect-ocean" }),
+        alarm("RipStopped", 60, { kind: "stopped", source: "collect-rip" }),
+        alarm("PublishStopped", 25, { kind: "stopped", source: "publish" }),
+        alarm(
+          "WarningsErrors",
+          5,
+          { kind: "errors", source: "collect-warnings" },
+          "OK",
+          at(9 * 60 - 20),
+        ),
+        alarm("OceanErrors", 5, { kind: "errors", source: "collect-ocean" }),
+        alarm("RipErrors", 5, { kind: "errors", source: "collect-rip" }),
+        alarm("CatalogErrors", 5, {
+          kind: "errors",
+          source: "collect-catalog",
+        }),
+        alarm("PublishErrors", 5, { kind: "errors", source: "publish" }),
+        alarm("WeatherFailing", 180, {
+          kind: "failing",
+          source: "collect-weather",
+        }),
+        alarm("LoginAbuse", 5, { kind: "other", source: null }),
       ],
       history: [pwncdAlarm],
     },

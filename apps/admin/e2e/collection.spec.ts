@@ -78,8 +78,16 @@ test("출처별 상태(시안 V9·VM2): 정상·일부 실패·기록 없음을 
   await expect(sourceRow(page, "국립해양조사원 이안류")).toContainText(
     "기록 없음",
   );
-  // 날씨 예보(BRD-181)도 기록이 없으면 '기록 없음'(정상으로 보지 않음)
-  await expect(sourceRow(page, "기상청 날씨 예보")).toContainText("기록 없음");
+  await expect(sourceRow(page, "기상청 날씨 예보")).toContainText("일부 실패");
+  await expect(sourceRow(page, "기상청 날씨 예보")).toContainText(
+    "180분 넘으면 지연",
+  );
+  await expect(sourceRow(page, "기상청 해양 관측")).toContainText(
+    "35분 넘으면 지연",
+  );
+  await expect(sourceRow(page, "한국관광공사 사진")).toContainText(
+    "지연 표시 안 함",
+  );
   await expect(sourceRow(page, "해양수산부 운영 기간")).toContainText(
     "수집하지 않음",
   );
@@ -112,14 +120,15 @@ test("장애 기록: 최신 먼저, 이어지는 장애·해결, 출처 code와 
     .getByRole("listitem");
   await expect(incidents).toHaveCount(3);
   await expect(incidents.first()).toContainText(
-    "기상청 해양 관측 · 기타 사유(새로운 사유)",
+    "기상청 해양 관측 · 알 수 없는 오류",
   );
   await expect(incidents.first()).toContainText("이어지는 중");
   await expect(incidents.nth(1)).toContainText(
     "기상청 해양 관측 · 관측소 1곳 값이 빠짐",
   );
-  await expect(incidents.nth(2)).toContainText("출처 오류 코드 22");
-  await expect(incidents.nth(2)).toContainText("LIMITED NUMBER");
+  await expect(incidents.nth(2)).toContainText("호출 한도 초과");
+  await expect(incidents.nth(2)).not.toContainText("LIMITED NUMBER");
+  await expect(incidents.first()).not.toContainText("새로운 사유");
   await expect(incidents.nth(2)).toContainText("해결");
 });
 
@@ -152,15 +161,23 @@ test("요약 4칸과 알림: 관측 지연 해변·검증 통과 게시본, 울�
   await expect(kpi("관측 지연 해변")).toContainText("게시본 214곳 중");
   await expect(kpi("마지막 게시")).toContainText("검증 통과 · 해변 214곳");
 
-  const alerts = page
-    .getByRole("region", { name: "알림" })
-    .getByRole("listitem");
-  await expect(alerts.first()).toContainText("기상청 해양 관측 응답 없음");
-  await expect(alerts.first()).toContainText("울림");
-  await expect(alerts.first()).toContainText("60분 기준");
-  await expect(alerts.filter({ hasText: "SomethingNew" })).toContainText(
-    "기준 시간 모름",
+  const alerts = page.getByRole("region", { name: "알림" });
+  await expect(alerts.locator("summary")).toHaveCount(4);
+  await expect(alerts.locator("details[open] > summary")).toHaveCount(1);
+  await expect(alerts.locator("details[open] > summary")).toContainText(
+    "출처 응답 없음",
   );
+  const ringing = alerts.getByRole("listitem").first();
+  await expect(ringing).toContainText("기상청 해양 관측 응답 없음");
+  await expect(ringing).toContainText("울림");
+  await expect(ringing).toContainText("60분 기준");
+  const other = alerts.locator("summary").filter({ hasText: "그 밖의 경보" });
+  await expect(other).toContainText("1개 상태 확인 못 함");
+  await expect(alerts.getByText("SomethingNew")).toBeHidden();
+  await other.click();
+  await expect(
+    alerts.getByRole("listitem").filter({ hasText: "SomethingNew" }),
+  ).toContainText("기준 시간 모름");
   await expect(
     page.getByRole("link", { name: /^CloudWatch/ }).first(),
   ).toHaveAttribute(
@@ -195,7 +212,7 @@ test("장애 상세 시트: 원인·해변 영향·경과·경보를 보여 주�
 
   // 위: 이어지는 해양 관측 실패. 어느 관측소인지 모르면 영향 '확인 못 함'
   await page.keyboard.press("ArrowUp");
-  const first = page.getByRole("dialog", { name: /기타 사유\(새로운 사유\)/ });
+  const first = page.getByRole("dialog", { name: /알 수 없는 오류/ });
   await expect(first).toContainText("1/3");
   await expect(first).toContainText("해변 영향을 확인하지 못했어요");
   await expect(first).toContainText("실행 기록 kma_buoy · 새로운 사유");
@@ -203,7 +220,7 @@ test("장애 상세 시트: 원인·해변 영향·경과·경보를 보여 주�
   // 아래 두 번: 해상 특보 장애. 출처 응답 code·메시지와 경보·Lambda 링크
   await page.keyboard.press("ArrowDown");
   await page.keyboard.press("ArrowDown");
-  const last = page.getByRole("dialog", { name: /출처 오류 코드 22/ });
+  const last = page.getByRole("dialog", { name: /호출 한도 초과/ });
   await expect(last).toContainText("3/3");
   await expect(last).toContainText("22 · LIMITED NUMBER");
   await expect(last).toContainText("경보 울림 · 기상청 해상 특보 실행 오류");
@@ -487,9 +504,9 @@ test("연 장애가 다시 불러온 목록에 없으면 시트를 닫고, 다�
   await reloadBehindSheet(page);
   await expect(region.getByRole("listitem")).toHaveCount(2);
   await expect(page.getByRole("dialog")).toHaveCount(0);
-  await region.getByRole("button", { name: /출처 오류 코드 22/ }).click();
+  await region.getByRole("button", { name: /호출 한도 초과/ }).click();
   await expect(
-    page.getByRole("dialog", { name: /출처 오류 코드 22/ }),
+    page.getByRole("dialog", { name: /호출 한도 초과/ }),
   ).toBeVisible();
 });
 
@@ -504,8 +521,8 @@ test("시트가 닫히는 동안 다른 장애를 눌러도 그 장애 시트가
   await expect(page.getByRole("dialog")).toBeVisible();
   await page.keyboard.press("Escape");
   // 닫힘 동작(0.2초)이 끝나기 전에 바로 다른 장애를 누름
-  await region.getByRole("button", { name: /출처 오류 코드 22/ }).click();
-  const sheet = page.getByRole("dialog", { name: /출처 오류 코드 22/ });
+  await region.getByRole("button", { name: /호출 한도 초과/ }).click();
+  const sheet = page.getByRole("dialog", { name: /호출 한도 초과/ });
   await expect(sheet).toBeVisible();
   await page.waitForTimeout(400);
   await expect(sheet).toBeVisible();
@@ -633,9 +650,9 @@ test("출처 시트의 장애 줄을 누르면 장애 상세 시트로 바뀌고
   const sheet = page.getByRole("dialog", { name: "기상청 해상 특보" });
   // 해양 관측이 아니면 관측소 대신 장애 수
   await expect(sheet).not.toContainText("관측소 쪽 이동");
-  await sheet.getByRole("button", { name: /출처 오류 코드 22/ }).click();
+  await sheet.getByRole("button", { name: /호출 한도 초과/ }).click();
   await expect(
-    page.getByRole("dialog", { name: /출처 오류 코드 22/ }),
+    page.getByRole("dialog", { name: /호출 한도 초과/ }),
   ).toBeVisible();
   await expect(page.getByRole("dialog")).toHaveCount(1);
   await page.keyboard.press("Escape");
