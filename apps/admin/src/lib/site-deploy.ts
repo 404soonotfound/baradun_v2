@@ -1,4 +1,5 @@
 import { opsFetch, type OpsResult } from "./auth/ops-fetch";
+import { kstClock } from "./collection";
 import { fill, messages } from "./messages";
 
 // 사이트 배포 칸(#472, 결정 기록 D27-1~8 · 화면 설계서 6장 ADM-PUB '사이트 배포')이 쓰는 운영 API 모양
@@ -338,11 +339,11 @@ function readyConfirmed(view: Omit<SiteDeployView, "readiness">): boolean {
   );
 }
 
-export function parseSiteDeploy(raw: unknown): SiteDeployView {
-  const body = obj(raw) ?? {};
-  const generatedAt = isIso(body.generatedAt)
-    ? body.generatedAt
-    : new Date().toISOString();
+// 본문이 객체가 아니거나 생성 시각이 없으면 null(응답을 읽지 못함 → 실패 문구). 화면 시계로 확인 시각을 지어내지 않음
+export function parseSiteDeploy(raw: unknown): SiteDeployView | null {
+  const body = obj(raw);
+  if (!body || !isIso(body.generatedAt)) return null;
+  const generatedAt = body.generatedAt;
   const at = generatedAt;
   const rawSites = Array.isArray(body.sites) ? body.sites : [];
   const sites = SITE_APPS.map((app) =>
@@ -386,33 +387,59 @@ const DAY_MS = 24 * 60 * 60_000;
 
 const kstDay = (ms: number) => Math.floor((ms + KST_OFFSET_MS) / DAY_MS);
 
-// KST HH:MM
-export function kstTime(iso: string): string {
-  const d = new Date(Date.parse(iso) + KST_OFFSET_MS);
-  return `${String(d.getUTCHours()).padStart(2, "0")}:${String(
-    d.getUTCMinutes(),
-  ).padStart(2, "0")}`;
+// KST 시각. now와 날짜가 다르면 M/D를 붙임(전날 값을 오늘 값처럼 보이지 않게)
+export function kstTime(iso: string, now: number): string {
+  return kstClock(iso, new Date(now).toISOString());
 }
 
-// 다음 정기 배포: null이면 멈춤. 오늘·내일(KST 날짜 기준), 그 밖은 날짜
+const kstHm = (ms: number) => {
+  const d = new Date(ms + KST_OFFSET_MS);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return {
+    date: `${d.getUTCMonth() + 1}/${d.getUTCDate()}`,
+    time: `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`,
+  };
+};
+
+// 다음 정기 배포(KST 오늘·내일). 서버는 일시 정지·워크플로 꺼짐뿐 아니라 그 조회를 못 했을 때도 null을 줌
+// → 멈춤은 확인한 때만, 조회 실패는 확인 못 함. 이미 지난 시각(앞 값을 들고 있을 때)은 날짜와 함께
 export type ScheduleLabel =
   | { kind: "paused" }
+  | { kind: "unknown"; reason: SiteDeployReason }
   | { kind: "today" | "tomorrow"; time: string }
-  | { kind: "later"; date: string; time: string };
+  | { kind: "date"; date: string; time: string };
 
-export function scheduleLabel(iso: string | null, now: number): ScheduleLabel {
-  if (!iso) return { kind: "paused" };
-  const at = Date.parse(iso);
-  const diff = kstDay(at) - kstDay(now);
-  const time = kstTime(iso);
-  if (diff <= 0) return { kind: "today", time };
-  if (diff === 1) return { kind: "tomorrow", time };
-  const d = new Date(at + KST_OFFSET_MS);
-  return {
-    kind: "later",
-    date: `${d.getUTCMonth() + 1}/${d.getUTCDate()}`,
-    time,
-  };
+export function scheduleLabel(
+  view: Pick<SiteDeployView, "nextScheduledAt" | "settings" | "workflowActive">,
+  now: number,
+): ScheduleLabel {
+  const { settings, workflowActive } = view;
+  if (view.nextScheduledAt) {
+    const at = Date.parse(view.nextScheduledAt);
+    const diff = kstDay(at) - kstDay(now);
+    const { date, time } = kstHm(at);
+    if (at > now && diff === 0) return { kind: "today", time };
+    if (at > now && diff === 1) return { kind: "tomorrow", time };
+    return { kind: "date", date, time };
+  }
+  if (
+    (settings.status === "known" && settings.value.paused) ||
+    (workflowActive.status === "known" && !workflowActive.value)
+  )
+    return { kind: "paused" };
+  const failed =
+    settings.status === "unknown"
+      ? settings
+      : workflowActive.status === "unknown"
+        ? workflowActive
+        : null;
+  return { kind: "unknown", reason: failed?.reason ?? "invalid" };
+}
+
+// 수동 배포 요청 수의 기준 날(KST 자정부터). now와 같은 날이면 null(오늘), 아니면 M/D
+export function manualDay(since: string, now: number): string | null {
+  const at = Date.parse(since);
+  return kstDay(at) === kstDay(now) ? null : kstHm(at).date;
 }
 
 // 토큰 만료: 날짜 태그가 없으면 숨김, 확인 못 하면 unknown, 30일 안(또는 지남)이면 경고
@@ -446,10 +473,18 @@ export function repoUrl(
   return match ? `https://github.com/${match[1]}` : null;
 }
 
-// 커밋 제목 앞 GH-번호(이슈 링크)
-export function issueNumber(title: string): number | null {
+// 커밋 제목 앞 GH-번호(이슈 링크). 제목에 쓰인 글자 그대로 잘라 나머지 제목을 돌려줌
+export function issuePrefix(
+  title: string,
+): { issue: number; label: string; rest: string } | null {
   const match = /^GH-(\d+)\b/.exec(title);
-  return match ? Number(match[1]) : null;
+  return match
+    ? {
+        issue: Number(match[1]),
+        label: match[0],
+        rest: title.slice(match[0].length),
+      }
+    : null;
 }
 
 export const COMMIT_LIMIT = 10;
@@ -462,19 +497,26 @@ export function pendingCommits(sites: readonly SiteView[]): {
   compare: { from: string; to: string } | null;
 } {
   const seen = new Map<string, DeployCommit>();
-  let widest: DeployChanges | null = null;
-  let complete = true;
-  for (const s of sites) {
-    if (s.changes.status !== "known") {
-      complete = false;
-      continue;
-    }
-    const value = s.changes.value;
-    if (!widest || value.commits.length > widest.commits.length) widest = value;
-    for (const c of value.commits) if (!seen.has(c.sha)) seen.set(c.sha, c);
-  }
+  const known = sites.flatMap((s) =>
+    s.changes.status === "known" ? [s.changes.value] : [],
+  );
+  const complete = known.length === sites.length;
+  // 긴 범위(더 뒤처진 사이트)의 순서를 기준으로 합침. 두 범위 모두 main 최신에서 끝나 짧은 쪽이 긴 쪽 안에 듦
+  // 긴 쪽에 없는 커밋(기록이 갈라진 경우)은 맨 아래(가장 오래된 쪽)에 둠 → 최신 커밋이 잘리지 않음
+  const ordered = [...known].sort(
+    (a, b) => b.commits.length - a.commits.length,
+  );
+  const widest = ordered[0] ?? null;
+  for (const c of widest?.commits ?? []) seen.set(c.sha, c);
+  const extra: DeployCommit[] = [];
+  for (const value of ordered.slice(1))
+    for (const c of value.commits)
+      if (!seen.has(c.sha)) {
+        seen.set(c.sha, c);
+        extra.push(c);
+      }
   // GitHub Compare는 오래된 커밋부터 줌 → 최신 먼저
-  const all = [...seen.values()].reverse();
+  const all = [...extra, ...(widest?.commits ?? [])].reverse();
   return {
     commits: all.slice(0, COMMIT_LIMIT),
     total: all.length,
@@ -529,12 +571,13 @@ export function authFailed(view: SiteDeployView): boolean {
 // 확인 못 한 사유 → 사람 말(내부 코드를 보이지 않음). 조회 한도는 다시 확인할 시각(KST)과 함께
 export function reasonText(
   reason: SiteDeployReason,
+  now: number,
   retryAt?: string | undefined,
 ): string {
   const r = messages.siteDeploy.reason;
   if (reason === "rate_limit")
     return retryAt
-      ? fill(r.rateLimitAt, { time: kstTime(retryAt) })
+      ? fill(r.rateLimitAt, { time: kstTime(retryAt, now) })
       : r.rate_limit;
   if (reason === "credential_missing" || reason === "credentials")
     return r.credentials;
@@ -549,9 +592,9 @@ export function reasonText(
 }
 
 // 확인 못 한 칸에 앞 값이 있으면 '마지막으로 확인한 값 · HH:MM 기준'. 없으면 null
-export function lastText(field: Field<unknown>): string | null {
+export function lastText(field: Field<unknown>, now: number): string | null {
   if (field.status !== "unknown" || !field.last) return null;
   return fill(messages.siteDeploy.last, {
-    time: kstTime(field.last.checkedAt),
+    time: kstTime(field.last.checkedAt, now),
   });
 }
