@@ -5,6 +5,7 @@ import { handleOps, type OpsDependencies } from "./handler";
 import { ACCESS_TOKEN_HEADER, IDEMPOTENCY_KEY_HEADER } from "./policy";
 import { AUDIT_PREFIX } from "./keys";
 import { encodeCursor } from "./inquiries";
+import { INQUIRY_STATUSES } from "../inquiry/policy";
 import { FakeTable, type Item } from "./test-dynamo";
 import { TEST_CONFIG } from "./test-tokens";
 
@@ -181,8 +182,11 @@ describe("문의 목록·상세", () => {
     expect(ids).not.toContain(ID);
     expect(ids.length).toBeGreaterThan(0);
     // 예시 문의 수도 예시 목록에서 셈(실제 테이블을 세지 않음)
+    // 상태별 수만 더함(최근 7일 지표 칸은 따로 셈, #483)
     const counts = body(list).counts as Record<string, number>;
-    expect(Object.values(counts).reduce((x, y) => x + y, 0)).toBe(ids.length);
+    expect(
+      INQUIRY_STATUSES.reduce((sum, status) => sum + counts[status]!, 0),
+    ).toBe(ids.length);
     const real = await handleOps(
       event("GET", `/ops/inquiries/${ID}`),
       deps("sample", table),
