@@ -110,6 +110,11 @@ test("목록(시안 V12·VM13): 판단 출처 카드·참고 출처·인증키�
     2,
   );
   await expect(keys.getByRole("columnheader")).toHaveCount(5);
+  await warnings.getByText("시간별 상태 보기").click();
+  await expect(warnings.getByRole("listitem")).toHaveCount(24);
+  await expect(
+    warnings.getByRole("listitem").filter({ hasText: / · 실패$/ }),
+  ).toHaveCount(1);
   // 읽기 전용: 받아오기 같은 조작 없음
   await expect(page.getByRole("button", { name: /받아오기/ })).toHaveCount(0);
   await expectNoA11yViolations(page);
