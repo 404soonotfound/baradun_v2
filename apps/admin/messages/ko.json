@@ -1777,6 +1777,8 @@
     "donutTotal": "사용자",
     "donutOther": "기타",
     "shareNote": "상위 10개 합계 기준",
+    "shareUnknownNote": "합계를 확인하지 못해 비율 대신 사용자 수예요",
+    "userCount": "{count}명",
     "percentUnit": "{percent}%",
     "deviceLabels": {
       "mobile": "모바일",

@@ -371,9 +371,20 @@ test("숫자 숨김 안내는 응답을 받은 뒤 metadata가 있을 때만, �
   await expect(notice.getByText(/'기타'로 묶였어요/)).toBeVisible();
   // 지금 사용 중 숫자가 비면 확인 못 함
   await expect(page.getByText("확인 못 함", { exact: true }).first()).toBeVisible();
-  await expect(page.getByText("0명")).toHaveCount(0);
-  // 기기 합을 알 수 없으면 비율·합계를 추정하지 않음
-  await expect(section(page, "기기").getByText("–").first()).toBeVisible();
+  await expect(page.getByText("0명", { exact: true })).toHaveCount(0);
+  // 기기 합을 알 수 없으면 비율·합계를 추정하지 않음. 받은 행(PC 40명)은 남기고 결측 행만 확인 못 함
+  const devices = section(page, "기기");
+  await expect(devices.getByText("–").first()).toBeVisible();
+  await expect(
+    devices.getByRole("listitem").filter({ hasText: "PC" }),
+  ).toContainText("40명");
+  await expect(
+    devices.getByRole("listitem").filter({ hasText: "모바일" }),
+  ).toContainText("확인 못 함");
+  await expect(devices.getByText(/%$/)).toHaveCount(0);
+  await expect(
+    devices.getByText("합계를 확인하지 못해 비율 대신 사용자 수예요"),
+  ).toBeVisible();
   await expectNoA11yViolations(page);
 });
 
