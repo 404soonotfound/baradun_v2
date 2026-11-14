@@ -132,14 +132,47 @@ describe("운영 화면 보강 필드", () => {
     });
   });
 
-  it.each([{ items: [] }, { items: [run(3, NOW.toISOString(), "published")] }])(
-    "마지막 또는 중간 실행이 빠지면 24시간 집계를 숨김 (%j)",
-    ({ items }) => {
+  const runningHead = (expiresAt = NOW.getTime() + 1) => ({
+    Item: { ...head(3).Item, owner: "running-owner", expiresAt },
+  });
+
+  it("진행 중인 마지막 실행의 결과를 기다리는 동안 완료 건수를 표시함", async () => {
+    const send = vi
+      .fn()
+      .mockResolvedValueOnce(runningHead())
+      .mockResolvedValueOnce({ Items: [run(1, FROM, "published")] })
+      .mockResolvedValueOnce({
+        Items: [run(2, "2026-11-14T14:59:00.000Z", "failed")],
+      })
+      .mockResolvedValueOnce(runningHead());
+    await expect(readPublishLast24h({ send }, "Ops", NOW)).resolves.toEqual({
+      runs: 1,
+      succeeded: 0,
+      failed: 1,
+      skipped: 0,
+    });
+  });
+
+  it.each([
+    {
+      latest: head(3),
+      items: [run(2, "2026-11-14T14:59:00.000Z", "published")],
+    },
+    {
+      latest: runningHead(NOW.getTime()),
+      items: [run(2, "2026-11-14T14:59:00.000Z", "published")],
+    },
+    { latest: runningHead(), items: [] },
+    { latest: runningHead(), items: [run(3, NOW.toISOString(), "published")] },
+  ])(
+    "유효한 잠금이 없거나 중간 순번이 빠지면 집계를 숨김",
+    ({ latest, items }) => {
       const send = vi
         .fn()
-        .mockResolvedValueOnce(head(3))
+        .mockResolvedValueOnce(runningHead())
         .mockResolvedValueOnce({ Items: [run(1, FROM, "published")] })
-        .mockResolvedValueOnce({ Items: items });
+        .mockResolvedValueOnce({ Items: items })
+        .mockResolvedValueOnce(latest);
       return expect(readPublishLast24h({ send }, "Ops", NOW)).rejects.toThrow(
         "게시 실행 집계 순번 누락",
       );

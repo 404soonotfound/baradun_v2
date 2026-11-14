@@ -707,10 +707,18 @@ export async function readPublishLast24h(
     }
     startKey = result.LastEvaluatedKey;
     if (!startKey) {
-      if (expected !== sequence + 1)
-        throw new Error("게시 실행 집계 순번 누락");
-      if ((await readHead()).Item?.sequence !== sequence)
+      const latest = (await readHead()).Item;
+      if (latest?.sequence !== sequence)
         throw new Error("게시 실행 조회 중 순번 변경");
+      // 유효한 잠금을 가진 마지막 실행은 아직 결과 행을 쓰기 전일 수 있음
+      const running =
+        typeof latest.owner === "string" &&
+        latest.owner.length > 0 &&
+        typeof latest.expiresAt === "number" &&
+        Number.isFinite(latest.expiresAt) &&
+        latest.expiresAt > now.getTime();
+      if (expected !== sequence + 1 && !(expected === sequence && running))
+        throw new Error("게시 실행 집계 순번 누락");
       return counts;
     }
   }
