@@ -711,9 +711,11 @@ function CollectionBlock({
       ) : summary && view ? (
         <p className={FOOT}>
           {/* 판단 출처의 가장 이른 다음 수집(보드 '다음 수집 14:48이에요'). 없으면 고정 안내 */}
-          {next
-            ? fill(h.collectionNext, { time: kstClock(next, view.generatedAt) })
-            : h.collectionFoot}{" "}
+          {next?.state === "at"
+            ? fill(h.collectionNext, { time: kstClock(next.at, view.generatedAt) })
+            : next?.state === "unknown"
+              ? h.collectionNextUnknown
+              : h.collectionFoot}{" "}
           <TextLink
             href="/collection/"
             className="inline-flex min-h-touch items-center text-caption lg:min-h-0"

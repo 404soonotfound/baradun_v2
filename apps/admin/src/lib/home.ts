@@ -234,16 +234,29 @@ export function inquiryWindow(page: InquiryPage | null): InquiryWindow | null {
 }
 
 // 수집 칸 아래 줄 '다음 수집 HH:MM'(서버 GH-478 jobs[].nextScheduledAt): 판단 출처 중 가장 이른 예정 시각
-// 판단 출처 하나라도 응답에 없거나 시각이 없거나 읽을 수 없으면 null(남은 출처만으로 고르지 않음 → 고정 안내 유지)
-export function nextCollection(view: CollectionView | null): string | null {
+// - absent: 판단 출처 모두 칸이 없음(이전 서버) → 고정 안내 유지
+// - unknown: 칸은 있는데 null·읽을 수 없는 값이거나 판단 출처가 응답에 빠짐 → '확인 못 함'(남은 출처만으로 고르지 않음)
+export type NextCollection =
+  | { readonly state: "absent" }
+  | { readonly state: "unknown" }
+  | { readonly state: "at"; readonly at: string };
+
+export function nextCollection(view: CollectionView | null): NextCollection | null {
   if (!view) return null;
+  const jobs = JUDGMENT_JOBS.map((id) => view.jobs.find((j) => j.job === id));
+  // 칸이 아예 없는 응답(이전 서버). 출처가 빠진 응답도 남은 출처에 칸이 없으면 이전 서버로 봄
+  if (jobs.every((j) => j === undefined || !("nextScheduledAt" in j))) {
+    return { state: "absent" };
+  }
   let earliest: string | null = null;
-  for (const id of JUDGMENT_JOBS) {
-    const at = view.jobs.find((j) => j.job === id)?.nextScheduledAt;
-    if (typeof at !== "string" || Number.isNaN(Date.parse(at))) return null;
+  for (const job of jobs) {
+    const at: unknown = job?.nextScheduledAt;
+    if (typeof at !== "string" || Number.isNaN(Date.parse(at))) {
+      return { state: "unknown" };
+    }
     if (earliest === null || Date.parse(at) < Date.parse(earliest)) earliest = at;
   }
-  return earliest;
+  return earliest === null ? { state: "unknown" } : { state: "at", at: earliest };
 }
 
 // 막대 길이(%). 전체가 0이면 0(빈 막대). 소수 첫째 자리까지

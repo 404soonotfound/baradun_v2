@@ -656,10 +656,10 @@ describe("수집 칸 다음 수집 (nextCollection, GH-478)", () => {
           at(job("collect-rip", "complete"), "2026-11-14T05:00:00.000Z"),
         ]),
       ),
-    ).toBe("2026-11-14T05:40:00.000Z");
+    ).toEqual({ state: "at", at: "2026-11-14T05:40:00.000Z" });
   });
 
-  it("판단 출처 하나라도 시각이 없거나 읽을 수 없거나 응답에 없으면 null(고정 안내 유지)", () => {
+  it("판단 출처 모두 칸이 없으면(이전 서버) absent → 고정 안내 유지", () => {
     expect(nextCollection(null)).toBeNull();
     expect(
       nextCollection(
@@ -668,22 +668,37 @@ describe("수집 칸 다음 수집 (nextCollection, GH-478)", () => {
           job("collect-ocean", "complete"),
         ]),
       ),
-    ).toBeNull();
+    ).toEqual({ state: "absent" });
+  });
+
+  it("칸은 있는데 null·읽을 수 없는 값·판단 출처가 빠지면 unknown(남은 출처로 고르지 않음, 고정 안내로 숨기지 않음)", () => {
+    for (const ocean of [null, "soon"]) {
+      expect(
+        nextCollection(
+          collection([
+            at(job("collect-warnings", "complete"), "2026-11-14T05:48:00.000Z"),
+            at(job("collect-ocean", "complete"), ocean),
+          ]),
+        ),
+      ).toEqual({ state: "unknown" });
+    }
+    // 한 출처만 칸이 없음(값 하나 결측)
     expect(
       nextCollection(
         collection([
           at(job("collect-warnings", "complete"), "2026-11-14T05:48:00.000Z"),
-          at(job("collect-ocean", "complete"), "soon"),
+          job("collect-ocean", "complete"),
         ]),
       ),
-    ).toBeNull();
+    ).toEqual({ state: "unknown" });
+    // 판단 출처가 응답에 빠짐
     expect(
       nextCollection(
         collection([
           at(job("collect-warnings", "complete"), "2026-11-14T05:48:00.000Z"),
         ]),
       ),
-    ).toBeNull();
+    ).toEqual({ state: "unknown" });
   });
 });
 
