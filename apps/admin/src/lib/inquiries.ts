@@ -20,6 +20,8 @@ export function isInquiryStatus(value: unknown): value is InquiryStatus {
 export const RETENTION_DAYS = 90;
 // 시안 4차 V20 기준 한 쪽 6행
 export const PAGE_SIZE = 6;
+// 서버 한 번 요청 최대 수(services/src/admin/inquiries.ts INQUIRY_PAGE_MAX)
+export const INQUIRY_PAGE_MAX = 50;
 
 export interface InquirySummary {
   readonly inquiryId: string;
@@ -216,12 +218,30 @@ export const EMPTY_INQUIRY_FILTER: InquiryFilter = {
   received: null,
 };
 
+export function isReceivedFilterActive(received: ReceivedFilter | null): boolean {
+  if (received === null) return false;
+  if (received.preset !== "custom") return true;
+  return (
+    parseKstInputMs(received.from) !== null ||
+    parseKstInputMs(received.to) !== null
+  );
+}
+
+export function isReceivedRangeInvalid(
+  received: Pick<ReceivedFilter, "preset" | "from" | "to"> | null,
+): boolean {
+  if (received === null || received.preset !== "custom") return false;
+  const fromMs = parseKstInputMs(received.from);
+  const toMs = parseKstInputMs(received.to);
+  return fromMs !== null && toMs !== null && fromMs > toMs;
+}
+
 export function hasActiveInquiryFilter(filter: InquiryFilter): boolean {
   return (
     filter.query.trim() !== "" ||
     filter.type !== null ||
     filter.beach !== null ||
-    filter.received !== null
+    isReceivedFilterActive(filter.received)
   );
 }
 
@@ -273,9 +293,10 @@ function matchesReceived(
   }
   const fromMs = parseKstInputMs(filter.from);
   const toMs = parseKstInputMs(filter.to);
+  if (fromMs === null && toMs === null) return true;
   if (fromMs !== null && ms < fromMs) return false;
   if (toMs !== null && ms > toMs) return false;
-  return fromMs !== null || toMs !== null;
+  return true;
 }
 
 // 받은 목록을 화면 조건(내용·해변 검색, 유형, 해변, 받은 시각)으로 거름

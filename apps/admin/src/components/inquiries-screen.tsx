@@ -28,7 +28,9 @@ import {
   fetchInquiry,
   filterInquiries,
   hasActiveInquiryFilter,
+  INQUIRY_PAGE_MAX,
   isKstToday,
+  isReceivedRangeInvalid,
   MEMO_MAX,
   previewText,
   REJECT_REASON_MAX,
@@ -603,9 +605,17 @@ function ReceivedFilterMenu({
                 className="h-8 rounded-admin-control border border-border-strong bg-bg-surface px-2 text-body-s text-text-default"
               />
             </label>
+            {isReceivedRangeInvalid({ preset: "custom", from, to }) && (
+              <p role="alert" className="px-1 text-caption text-danger-text">
+                {t.receivedInvalidRange}
+              </p>
+            )}
             <Button
               size="small"
-              disabled={from.trim() === "" && to.trim() === ""}
+              disabled={
+                (from.trim() === "" && to.trim() === "") ||
+                isReceivedRangeInvalid({ preset: "custom", from, to })
+              }
               onClick={() => {
                 onChange({ preset: "custom", from, to });
                 setOpen(false);
@@ -717,9 +727,11 @@ function InquiryList({
   const cursor = cursors.at(-1) ?? null;
   // 받은 응답을 요청 조건과 함께 둠. 조건이 바뀌면 응답이 올 때까지 '불러오는 중'
   // 다시 로그인하면(generation이 늚) 'reauth'로 끝난 읽기를 저절로 다시 함
+  const isFiltered = hasActiveInquiryFilter(filter);
+  const requestLimit = isFiltered ? INQUIRY_PAGE_MAX : PAGE_SIZE;
   const generation = snapshot.status === "signed_out" ? 0 : snapshot.generation;
   const owner = badgeOwner(snapshot);
-  const key = `${status ?? "all"}|${cursor ?? ""}|${attempt}|${generation}`;
+  const key = `${status ?? "all"}|${cursor ?? ""}|${requestLimit}|${attempt}|${generation}`;
   const [loaded, setLoaded] = useState<{
     key: string;
     result: OpsResult<InquiryPage>;
@@ -731,6 +743,7 @@ function InquiryList({
     void fetchInquiries(() => session.accessToken(), {
       ...(status ? { status } : {}),
       ...(cursor ? { cursor } : {}),
+      limit: requestLimit,
     }).then((next) => {
       if (!live) return;
       setLoaded({ key, result: next });
@@ -742,7 +755,7 @@ function InquiryList({
     return () => {
       live = false;
     };
-  }, [session, status, cursor, key, owner]);
+  }, [session, status, cursor, requestLimit, key, owner]);
 
   const changeStatus = (next: InquiryStatus | null) => {
     setStatus(next);
@@ -752,6 +765,11 @@ function InquiryList({
   };
 
   const updateFilter = (next: InquiryFilter) => {
+    const nextFiltered = hasActiveInquiryFilter(next);
+    if (nextFiltered !== isFiltered) {
+      setCursors([null]);
+      setExtra(null);
+    }
     setFilter(next);
     setFilterPage(0);
   };
@@ -778,8 +796,6 @@ function InquiryList({
     : result?.ok
       ? result.body.nextCursor
       : null;
-
-  const isFiltered = hasActiveInquiryFilter(filter);
 
   const filteredItems = useMemo(() => {
     if (!isFiltered) return loadedItems;
@@ -830,6 +846,7 @@ function InquiryList({
     void fetchInquiries(() => session.accessToken(), {
       ...(status ? { status } : {}),
       cursor: lastNextCursor,
+      limit: INQUIRY_PAGE_MAX,
     })
       .then((next) => {
         if (!next.ok) return;
@@ -1115,11 +1132,11 @@ function InquiryList({
             size={PAGE_SIZE}
             onPage={setFilterPage}
           />
-          {lastNextCursor && (
-            <div className="flex flex-wrap items-center gap-2 text-caption text-text-muted">
-              <span>
-                {fill(t.loadedFilterHint, { loaded: loadedItems.length })}
-              </span>
+          <div className="flex flex-wrap items-center gap-2 text-caption text-text-muted">
+            <span>
+              {fill(t.loadedFilterHint, { loaded: loadedItems.length })}
+            </span>
+            {lastNextCursor && (
               <Button
                 variant="secondary"
                 size="small"
@@ -1128,8 +1145,8 @@ function InquiryList({
               >
                 {loadingMore ? t.loadingMore : t.loadMore}
               </Button>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       )}
       {result?.ok && !isFiltered && (items.length > 0 || pageIndex > 0) && (
