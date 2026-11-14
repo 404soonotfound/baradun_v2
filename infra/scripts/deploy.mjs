@@ -37,8 +37,10 @@ import {
   BOUNDARY_POLICY,
   checkFunctionLogs,
   compareOutOfStackPolicies,
+  compareToolkitSetupPolicy,
   failedEventsOrNull,
   readChangeSetPages,
+  TOOLKIT_SETUP_POLICY,
 } from "./deploy-aws.ts";
 
 // 실행을 시작할 때의 스크립트 내용. 배포용 폴더에서 실행하면 2단계 체크아웃 뒤 디스크 파일이 새 버전으로 바뀜
@@ -118,7 +120,10 @@ const watchMinutes = intArg("--watch", 16);
 const issue = intArg("--issue", null);
 if (issue === 0) fail("--issue 뒤에 이슈 번호를 써 주세요");
 const adminSiteDeployUrl = arg("--admin-site-deploy-url");
-if (adminSiteDeployUrl && !/^https:\/\/[a-zA-Z0-9.-]+\/?$/.test(adminSiteDeployUrl)) {
+if (
+  adminSiteDeployUrl &&
+  !/^https:\/\/[a-zA-Z0-9.-]+\/?$/.test(adminSiteDeployUrl)
+) {
   fail("--admin-site-deploy-url에 경로 없이 HTTPS 주소를 써 주세요");
 }
 const commonDir = path.resolve(
@@ -346,6 +351,12 @@ const executionChecks = policies.executions.map((c) => ({
 const executionLines = executionChecks.map((c) => c.line);
 console.log(boundaryLine);
 for (const line of executionLines) console.log(line);
+const toolkitSetup = compareToolkitSetupPolicy(
+  iamRunner,
+  account,
+  localPolicy(TOOLKIT_SETUP_POLICY.file),
+);
+console.log(toolkitSetup.line);
 
 // 6. 변경 세트. cdk는 aws login 프로필을 직접 못 읽는 경우가 있어 지금 키를 내보내 cdk에만 넘김
 const exported = aws(

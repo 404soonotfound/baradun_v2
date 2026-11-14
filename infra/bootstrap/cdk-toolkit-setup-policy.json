@@ -1,0 +1,139 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ToolkitStack",
+      "Effect": "Allow",
+      "Action": [
+        "cloudformation:CreateChangeSet",
+        "cloudformation:CreateStack",
+        "cloudformation:DeleteChangeSet",
+        "cloudformation:DescribeChangeSet",
+        "cloudformation:DescribeStackEvents",
+        "cloudformation:DescribeStackResources",
+        "cloudformation:DescribeStacks",
+        "cloudformation:ExecuteChangeSet",
+        "cloudformation:GetStackPolicy",
+        "cloudformation:GetTemplate",
+        "cloudformation:GetTemplateSummary",
+        "cloudformation:UpdateStack"
+      ],
+      "Resource": "arn:aws:cloudformation:ap-northeast-2:717304679248:stack/CDKToolkit/*"
+    },
+    {
+      "Sid": "ToolkitAssetBucket",
+      "Effect": "Allow",
+      "Action": [
+        "s3:CreateBucket",
+        "s3:DeleteBucket",
+        "s3:DeleteBucketPolicy",
+        "s3:GetBucketAcl",
+        "s3:GetBucketCORS",
+        "s3:GetBucketLocation",
+        "s3:GetBucketNotification",
+        "s3:GetBucketOwnershipControls",
+        "s3:GetBucketPolicy",
+        "s3:GetBucketPublicAccessBlock",
+        "s3:GetBucketTagging",
+        "s3:GetBucketVersioning",
+        "s3:GetBucketWebsite",
+        "s3:GetEncryptionConfiguration",
+        "s3:GetLifecycleConfiguration",
+        "s3:ListBucket",
+        "s3:ListTagsForResource",
+        "s3:PutBucketOwnershipControls",
+        "s3:PutBucketPolicy",
+        "s3:PutBucketPublicAccessBlock",
+        "s3:PutBucketTagging",
+        "s3:PutBucketVersioning",
+        "s3:PutEncryptionConfiguration",
+        "s3:PutLifecycleConfiguration",
+        "s3:TagResource",
+        "s3:UntagResource"
+      ],
+      "Resource": "arn:aws:s3:::cdk-hnb659fds-assets-717304679248-ap-northeast-2"
+    },
+    {
+      "Sid": "ToolkitRepository",
+      "Effect": "Allow",
+      "Action": [
+        "ecr:CreateRepository",
+        "ecr:DeleteLifecyclePolicy",
+        "ecr:DeleteRepository",
+        "ecr:DeleteRepositoryPolicy",
+        "ecr:DescribeRepositories",
+        "ecr:GetLifecyclePolicy",
+        "ecr:GetRepositoryPolicy",
+        "ecr:ListTagsForResource",
+        "ecr:PutLifecyclePolicy",
+        "ecr:SetRepositoryPolicy",
+        "ecr:TagResource",
+        "ecr:UntagResource"
+      ],
+      "Resource": "arn:aws:ecr:ap-northeast-2:717304679248:repository/cdk-hnb659fds-container-assets-717304679248-ap-northeast-2"
+    },
+    {
+      "Sid": "ToolkitRoles",
+      "Effect": "Allow",
+      "Action": [
+        "iam:CreateRole",
+        "iam:DeleteRole",
+        "iam:DeleteRolePolicy",
+        "iam:GetRole",
+        "iam:GetRolePolicy",
+        "iam:ListAttachedRolePolicies",
+        "iam:ListRolePolicies",
+        "iam:ListRoleTags",
+        "iam:PutRolePolicy",
+        "iam:TagRole",
+        "iam:UntagRole",
+        "iam:UpdateAssumeRolePolicy",
+        "iam:UpdateRole",
+        "iam:UpdateRoleDescription"
+      ],
+      "Resource": [
+        "arn:aws:iam::717304679248:role/cdk-hnb659fds-cfn-exec-role-717304679248-ap-northeast-2",
+        "arn:aws:iam::717304679248:role/cdk-hnb659fds-deploy-role-717304679248-ap-northeast-2",
+        "arn:aws:iam::717304679248:role/cdk-hnb659fds-file-publishing-role-717304679248-ap-northeast-2",
+        "arn:aws:iam::717304679248:role/cdk-hnb659fds-image-publishing-role-717304679248-ap-northeast-2",
+        "arn:aws:iam::717304679248:role/cdk-hnb659fds-lookup-role-717304679248-ap-northeast-2"
+      ]
+    },
+    {
+      "Sid": "ToolkitManagedPolicies",
+      "Effect": "Allow",
+      "Action": ["iam:AttachRolePolicy", "iam:DetachRolePolicy"],
+      "Resource": [
+        "arn:aws:iam::717304679248:role/cdk-hnb659fds-cfn-exec-role-717304679248-ap-northeast-2",
+        "arn:aws:iam::717304679248:role/cdk-hnb659fds-deploy-role-717304679248-ap-northeast-2",
+        "arn:aws:iam::717304679248:role/cdk-hnb659fds-file-publishing-role-717304679248-ap-northeast-2",
+        "arn:aws:iam::717304679248:role/cdk-hnb659fds-image-publishing-role-717304679248-ap-northeast-2",
+        "arn:aws:iam::717304679248:role/cdk-hnb659fds-lookup-role-717304679248-ap-northeast-2"
+      ],
+      "Condition": {
+        "ArnEquals": {
+          "iam:PolicyARN": [
+            "arn:aws:iam::717304679248:policy/BaradunCdkExecution",
+            "arn:aws:iam::717304679248:policy/BaradunCdkExecutionWorkload",
+            "arn:aws:iam::aws:policy/ReadOnlyAccess",
+            "arn:aws:iam::aws:policy/AWSCloudFormationReadOnlyAccess"
+          ]
+        }
+      }
+    },
+    {
+      "Sid": "ToolkitVersion",
+      "Effect": "Allow",
+      "Action": [
+        "ssm:AddTagsToResource",
+        "ssm:DeleteParameter",
+        "ssm:GetParameter",
+        "ssm:GetParameters",
+        "ssm:ListTagsForResource",
+        "ssm:PutParameter",
+        "ssm:RemoveTagsFromResource"
+      ],
+      "Resource": "arn:aws:ssm:ap-northeast-2:717304679248:parameter/cdk-bootstrap/hnb659fds/version"
+    }
+  ]
+}

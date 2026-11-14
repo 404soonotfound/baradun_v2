@@ -71,6 +71,11 @@ export const BOUNDARY_POLICY = {
   name: "BaradunV2-RoleBoundary",
   file: "role-boundary-policy.json",
 } as const;
+export const TOOLKIT_SETUP_POLICY = {
+  name: "BaradunCdkToolkitSetup",
+  file: "cdk-toolkit-setup-policy.json",
+} as const;
+
 export const EXECUTION_POLICIES = [
   { name: "BaradunCdkExecution", file: "cfn-execution-policy.json" },
   {
@@ -85,6 +90,36 @@ export interface PolicyComparison {
   readonly remote: RemotePolicy;
   readonly diff: PolicyDiff | null; // 읽지 못했거나 없으면 null
   readonly line: string; // 화면·댓글 한 줄
+}
+
+// 임시 초기 설정 정책은 로컬에서만 알림 대상으로 비교함
+export function compareToolkitSetupPolicy(
+  aws: AwsRunner,
+  account: string,
+  local: PolicyDocument,
+): PolicyComparison {
+  const policy = TOOLKIT_SETUP_POLICY;
+  const remote = readRemotePolicy(
+    aws,
+    `arn:aws:iam::${account}:policy/${policy.name}`,
+  );
+  if (remote.kind !== "ok") {
+    const status =
+      remote.kind === "missing" ? "미설치(일상 배포에 불필요)" : "확인 못 함";
+    return {
+      ...policy,
+      remote,
+      diff: null,
+      line: `   ${policy.name}: ${status}`,
+    };
+  }
+  const diff = policyDiff(local, remote.doc as PolicyDocument);
+  return {
+    ...policy,
+    remote,
+    diff,
+    line: `   ${policy.name}: ${diff.same ? "저장소와 같음" : "저장소와 다름(부트스트랩 전에 확인)"}`,
+  };
 }
 
 export interface OutOfStackPolicies {
