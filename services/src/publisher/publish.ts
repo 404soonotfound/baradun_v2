@@ -3,6 +3,8 @@ import {
   buildStationTable,
   canonicalJson,
   type PublishRun,
+  type PublishChecks,
+  type PublishRunDetails,
   type PublishSource,
 } from "../core/collect/publish-summary";
 import type { Beach, ManifestFile, Notice } from "@baradun/contracts";
@@ -25,7 +27,11 @@ import {
 import { MANIFEST_SETTINGS, PUBLISH_POLICY } from "./policy";
 import { BeachSnapshotError, buildSnapshot, type Snapshot } from "./snapshot";
 import type { SeasonTable } from "./season";
-import { contractErrors, type ContractFile } from "./validate";
+import {
+  contractErrors,
+  contractInspection,
+  type ContractFile,
+} from "./validate";
 import { buildWeather, type WeatherAreaTable } from "./weather";
 
 // publish-snapshot (아키텍처 6.2, BRD-61)
@@ -45,6 +51,8 @@ export {
   parseManifest,
   publishableNotices,
 };
+
+type MutableChecks = { -readonly [K in keyof PublishChecks]: PublishChecks[K] };
 
 export interface PublishDeps {
   readonly state: StateStore;
@@ -66,6 +74,7 @@ export interface PublishDeps {
   readonly source?: "auto" | "operator";
   // 운영 API가 연 게시 작업 ID(#331). 실행 기록·게시 요약에 함께 남겨 작업 기록이 빠져도 결과를 찾게 함
   readonly jobId?: string;
+  readonly operatorSub?: string;
 }
 
 export interface PublishOptions {
@@ -361,7 +370,7 @@ const writtenStationTables = new WeakMap<OpsStore, string>();
 // - 운영 화면용 게시 요약(BRD-187, 빠진 요약은 previous 사슬로 드러남)과 관측소 표
 export async function recordPublished(
   deps: Pick<PublishDeps, "ops" | "log"> & { beaches?: readonly Beach[] },
-  published: {
+  published: PublishRunDetails & {
     version: string;
     previous: string | null;
     now: string;
@@ -402,6 +411,10 @@ export async function recordPublished(
             ? { target: published.target }
             : {}),
           notices: published.notices,
+          ...(published.checks ? { checks: published.checks } : {}),
+          ...(published.operatorSub
+            ? { operatorSub: published.operatorSub }
+            : {}),
           ...(published.jobId !== undefined ? { jobId: published.jobId } : {}),
         }),
         startedMs,
@@ -426,13 +439,17 @@ const LOGGED_IDS = 20;
 // 자동 게시·'지금 게시'·되돌리기(publishSnapshot)와 다시 내보내기(republish.ts)가 같이 씀(같은 잠금, D20-1·D16-C4)
 // 다른 실행이 게시 중이면 아무것도 하지 않고 busy(실행 결과도 남기지 않음)
 export async function withPublishLock(
-  deps: Pick<PublishDeps, "ops" | "log" | "clock" | "owner" | "jobId">,
+  deps: Pick<
+    PublishDeps,
+    "ops" | "log" | "clock" | "owner" | "jobId" | "operatorSub"
+  >,
   source: PublishSource,
   target: string | undefined,
   body: (run: {
     startedMs: number;
     version: string;
     now: string;
+    checks: MutableChecks;
   }) => Promise<PublishResult>,
 ): Promise<PublishResult> {
   const { ops, log } = deps;
@@ -452,7 +469,8 @@ export async function withPublishLock(
   }
 
   try {
-    const result = await body({ startedMs, version, now });
+    const checks: MutableChecks = {};
+    const result = await body({ startedMs, version, now, checks });
     if (result.status !== "busy") {
       await recordPublishRun(
         deps,
@@ -464,6 +482,8 @@ export async function withPublishLock(
           ...(result.status === "failed" ? { reason: result.reason } : {}),
           ...(target !== undefined ? { target } : {}),
           ...(deps.jobId !== undefined ? { jobId: deps.jobId } : {}),
+          ...(Object.keys(checks).length ? { checks } : {}),
+          ...(deps.operatorSub ? { operatorSub: deps.operatorSub } : {}),
         },
         startedMs,
       );
@@ -496,10 +516,11 @@ async function runPublish(
     version: string;
     now: string;
     source: PublishSource;
+    checks: MutableChecks;
   },
 ): Promise<PublishResult> {
   const { ops, snapshots, log } = deps;
-  const { startedMs, version, now, source } = run;
+  const { startedMs, version, now, source, checks } = run;
   const rollbackTo = options.rollbackTo;
 
   const fail = (reason: string, fields: Record<string, unknown> = {}) => {
@@ -509,8 +530,9 @@ async function runPublish(
   const failBeachIds = (
     where: "source" | "beaches" | "status",
     problem: BeachIdProblem,
-  ) =>
-    fail("beach_ids", {
+  ) => {
+    checks.beachIds = false;
+    return fail("beach_ids", {
       where,
       missing: problem.missing.slice(0, LOGGED_IDS),
       extra: problem.extra.slice(0, LOGGED_IDS),
@@ -518,6 +540,7 @@ async function runPublish(
       missingCount: problem.missing.length,
       extraCount: problem.extra.length,
     });
+  };
 
   let uploaded = false;
   // 되돌리기가 포인터를 바꾼 뒤 manifest 교체에 실패하면 되돌려 놓을 앞 포인터
@@ -576,6 +599,7 @@ async function runPublish(
       Object.keys(snapshot.status.beaches),
     );
     if (statusProblem) return failBeachIds("status", statusProblem);
+    checks.beachIds = true;
 
     // 공지. noticeState: 이 게시 때의 공지 상태(끝나지 않은 노출본 전부, Ops에 남김). null이면 모름
     let notices: Notice[];
@@ -636,12 +660,17 @@ async function runPublish(
     }
 
     const manifest = manifestFor(version, now, notices, weatherBody !== null);
-    const errors = [
-      ...KEYS.flatMap((key) =>
-        contractErrors(FILES[key].contract, snapshot[key]),
+    const inspections = [
+      ...KEYS.map((key) =>
+        contractInspection(FILES[key].contract, snapshot[key]),
       ),
-      ...contractErrors("ManifestFile", manifest),
+      contractInspection("ManifestFile", manifest),
     ];
+    const errors = inspections.flatMap((inspection) => inspection.errors);
+    checks.format = errors.length === 0;
+    checks.required = !inspections.some(
+      (inspection) => inspection.requiredMissing,
+    );
     if (errors.length > 0) {
       return fail("contract", { errors: errors.slice(0, 20) });
     }
@@ -753,6 +782,8 @@ async function runPublish(
       noticeState,
       notices,
       jobId: deps.jobId,
+      checks,
+      ...(deps.operatorSub ? { operatorSub: deps.operatorSub } : {}),
     });
     const removed = await removeOldVersions(snapshots, version, log);
     log("info", "publish_finished", {

@@ -42,7 +42,18 @@ export interface NoticeSnapshot {
   readonly endsAt: string | null;
 }
 
-export interface PublishSummary {
+export interface PublishChecks {
+  readonly format?: boolean;
+  readonly required?: boolean;
+  readonly beachIds?: boolean;
+}
+
+export interface PublishRunDetails {
+  readonly checks?: PublishChecks;
+  readonly operatorSub?: string;
+}
+
+export interface PublishSummary extends PublishRunDetails {
   readonly version: string;
   // 이 게시 직전에 앱에 보이던 버전. 없으면 null(첫 게시)
   readonly previous: string | null;
@@ -109,8 +120,9 @@ export const PUBLISH_NOTICES_PK = "publish#notices";
 // 다른 실행이 게시 중이라 물러난 실행(busy)은 남기지 않음
 export const PUBLISH_RUN_PK = "publish#run";
 export const PUBLISH_RUN_LAST_SK = "last";
+export const PUBLISH_RUN_HISTORY_PREFIX = "run#";
 
-export interface PublishRun {
+export interface PublishRun extends PublishRunDetails {
   readonly at: string; // 실행 시작(UTC ISO)
   readonly source: PublishSource;
   readonly result: "published" | "unchanged" | "failed";
@@ -161,18 +173,20 @@ export function categoryCountsOf(
   return counts;
 }
 
-export function buildPublishSummary(input: {
-  readonly version: string;
-  readonly previous: string | null;
-  readonly publishedAt: string;
-  readonly beachCount: number;
-  readonly status: Readonly<Record<string, StatusReasons>>;
-  readonly source?: PublishSource;
-  readonly target?: string;
-  // 게시본에 실은 공지. 주면 요약값을 남김
-  readonly notices?: readonly NoticeSnapshot[];
-  readonly jobId?: string;
-}): PublishSummary {
+export function buildPublishSummary(
+  input: PublishRunDetails & {
+    readonly version: string;
+    readonly previous: string | null;
+    readonly publishedAt: string;
+    readonly beachCount: number;
+    readonly status: Readonly<Record<string, StatusReasons>>;
+    readonly source?: PublishSource;
+    readonly target?: string;
+    // 게시본에 실은 공지. 주면 요약값을 남김
+    readonly notices?: readonly NoticeSnapshot[];
+    readonly jobId?: string;
+  },
+): PublishSummary {
   const delayedBeachIds = Object.entries(input.status)
     .filter(([, status]) =>
       status.reasons.some((reason) => reason.code === "observation_delayed"),
@@ -192,6 +206,8 @@ export function buildPublishSummary(input: {
     ...(counts ? { categoryCounts: counts } : {}),
     ...(input.notices ? { noticeDigest: noticeDigestOf(input.notices) } : {}),
     ...(input.jobId ? { jobId: input.jobId } : {}),
+    ...(input.checks ? { checks: input.checks } : {}),
+    ...(input.operatorSub ? { operatorSub: input.operatorSub } : {}),
   };
 }
 

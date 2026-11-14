@@ -1,3 +1,5 @@
+import { COLLECT_POLICY } from "../collectors/policy";
+import { nextSlot } from "../collectors/schedule";
 import { GetCommand, QueryCommand } from "@aws-sdk/lib-dynamodb";
 import {
   runLogPk,
@@ -123,6 +125,7 @@ export interface Incident {
 
 export interface JobCollection {
   readonly job: CollectionJob;
+  readonly nextScheduledAt?: string;
   readonly lastRun: RunView | null;
   readonly lastSuccessAt: string | null;
   readonly day: RunCounts;
@@ -364,6 +367,40 @@ function ripLateCountFrom(ms: number): number {
   return Date.UTC(year, firstMonth - 1, 1) - KST_OFFSET_MS;
 }
 
+const collectionSchedules = {
+  "collect-warnings": COLLECT_POLICY.warningsSchedule,
+  "collect-ocean": COLLECT_POLICY.oceanSchedule,
+  "collect-rip": COLLECT_POLICY.ripSchedule,
+  "collect-weather": COLLECT_POLICY.weatherSchedule,
+  "collect-catalog": COLLECT_POLICY.catalogSchedule,
+} satisfies Record<
+  CollectionJob,
+  { periodMinutes: number; offsetMinutes: number }
+>;
+
+export function nextCollectionAt(job: CollectionJob, nowMs: number): string {
+  const scheduled = nextSlot(nowMs, collectionSchedules[job]);
+  if (job !== "collect-rip" || inRipSeason(scheduled)) {
+    return new Date(scheduled).toISOString();
+  }
+  const offSeason = nextSlot(nowMs, {
+    periodMinutes: 24 * 60,
+    offsetMinutes: COLLECT_POLICY.ripOffSeasonSlotUtcMinutes,
+  });
+  const month = new Date(nowMs + KST_OFFSET_MS);
+  const firstSeasonMonth = RIP_SEASON_MONTHS[0] - 1;
+  const firstInSeason =
+    Date.UTC(
+      month.getUTCFullYear() +
+        (month.getUTCMonth() >= firstSeasonMonth ? 1 : 0),
+      firstSeasonMonth,
+      1,
+    ) - KST_OFFSET_MS;
+  return new Date(
+    Math.min(offSeason, nextSlot(firstInSeason, COLLECT_POLICY.ripSchedule)),
+  ).toISOString();
+}
+
 // runs: 시작 시각 오름차순
 export function summarizeJob(
   job: CollectionJob,
@@ -402,6 +439,7 @@ export function summarizeJob(
   const lastSuccess = [...runs].reverse().find((r) => r.status === "complete");
   return {
     job,
+    nextScheduledAt: nextCollectionAt(job, nowMs),
     lastRun: runs.at(-1) ?? null,
     lastSuccessAt: lastSuccess?.startedAt ?? null,
     day: count(day),

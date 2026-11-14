@@ -1,6 +1,6 @@
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { S3Client } from "@aws-sdk/client-s3";
-import { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
+import { DynamoDBDocumentClient, GetCommand } from "@aws-sdk/lib-dynamodb";
 import type { Beach } from "@baradun/contracts";
 import path from "node:path";
 import beachMeta from "../../../data/beach-meta.json";
@@ -9,6 +9,7 @@ import annexTables from "../../../tools/beaches/annex-tables.json";
 import { liveNotices, queryNotices } from "../admin/notices";
 import {
   PUBLISH_JOB_ID,
+  publishJobKey,
   type PublishJobOutcome,
 } from "../core/collect/publish-job";
 import { loadBeaches } from "../core/beaches/load";
@@ -263,8 +264,22 @@ export async function publishHandler(
   }
 
   const jobId = manual?.jobId;
-  const publish = () =>
-    publishSnapshot(
+  const publish = async () => {
+    // 작업을 맡은 뒤 운영 API가 기록한 sub만 읽음
+    const job =
+      jobId && manual?.action === "publish"
+        ? await documents
+            .send(
+              new GetCommand({
+                TableName: opsTable,
+                Key: publishJobKey(jobId),
+                ConsistentRead: true,
+              }),
+            )
+            .catch(() => undefined)
+        : undefined;
+    const operatorSub = job?.Item?.operatorSub;
+    return publishSnapshot(
       {
         state: new DynamoStateStore(documents, requiredEnv("STATE_TABLE_NAME")),
         ops,
@@ -280,9 +295,11 @@ export async function publishHandler(
         owner,
         ...(manual?.action === "publish" ? { source: "operator" } : {}),
         ...(jobId !== undefined ? { jobId } : {}),
+        ...(typeof operatorSub === "string" ? { operatorSub } : {}),
       },
       manual?.action === "rollback" ? { rollbackTo: manual.version } : {},
     );
+  };
   const result =
     jobId === undefined
       ? await publish()

@@ -1,3 +1,4 @@
+import { listAudit, parseAuditQuery } from "./audit";
 import { GetCommand, QueryCommand } from "@aws-sdk/lib-dynamodb";
 import {
   INQUIRY_STATUSES,
@@ -51,7 +52,11 @@ export interface InquiryDetail extends InquirySummary {
   readonly photosCollected: false;
 }
 
-export type InquiryCounts = Readonly<Record<InquiryStatus, number>>;
+export type InquiryCounts = Readonly<Record<InquiryStatus, number>> & {
+  readonly receivedLast7d?: number | null;
+  readonly resolvedLast7d?: number | null;
+  readonly oldestUnprocessedAt?: string | null;
+};
 
 export interface InquiryPage {
   readonly items: readonly InquirySummary[];
@@ -223,6 +228,140 @@ export async function countInquiries(
     counts[status] = count;
   }
   return counts;
+}
+
+const INQUIRY_METRIC_PAGE_LIMIT = 4;
+const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+
+export async function inquiryCountDetails(
+  client: Sender,
+  tableName: string,
+  opsTable: string,
+  now: Date,
+): Promise<
+  Pick<
+    InquiryCounts,
+    "receivedLast7d" | "resolvedLast7d" | "oldestUnprocessedAt"
+  >
+> {
+  const from = new Date(now.getTime() - SEVEN_DAYS_MS).toISOString();
+  const to = now.toISOString();
+  const nowSec = Math.floor(now.getTime() / 1000);
+
+  async function receivedLast7d() {
+    let count = 0;
+    for (const status of INQUIRY_STATUSES) {
+      let startKey: Record<string, unknown> | undefined;
+      for (let page = 0; page < INQUIRY_METRIC_PAGE_LIMIT; page += 1) {
+        const result = await client.send(
+          new QueryCommand({
+            TableName: tableName,
+            IndexName: INQUIRY_STATUS_INDEX_NAME,
+            KeyConditionExpression:
+              "#s = :s AND receivedAt BETWEEN :from AND :to",
+            FilterExpression: "#t > :now",
+            ExpressionAttributeNames: { "#s": "inquiryStatus", "#t": "ttl" },
+            ExpressionAttributeValues: {
+              ":s": status,
+              ":from": from,
+              ":to": to,
+              ":now": nowSec,
+            },
+            Select: "COUNT",
+            ...(startKey ? { ExclusiveStartKey: startKey } : {}),
+          }),
+        );
+        if (
+          typeof result.Count !== "number" ||
+          !Number.isSafeInteger(result.Count) ||
+          result.Count < 0
+        ) {
+          throw new Error("최근 접수 수 응답 모양이 틀림");
+        }
+        count += result.Count;
+        startKey = result.LastEvaluatedKey;
+        if (!startKey) break;
+      }
+      if (startKey) return null;
+    }
+    return count;
+  }
+
+  async function oldestUnprocessedAt() {
+    let oldest: string | null = null;
+    for (const status of ["received", "in_progress"] as const) {
+      let startKey: Record<string, unknown> | undefined;
+      for (let page = 0; page < INQUIRY_METRIC_PAGE_LIMIT; page += 1) {
+        const result = await client.send(
+          new QueryCommand({
+            TableName: tableName,
+            IndexName: INQUIRY_STATUS_INDEX_NAME,
+            KeyConditionExpression: "#s = :s",
+            FilterExpression: "#t > :now",
+            ProjectionExpression: "receivedAt",
+            ExpressionAttributeNames: { "#s": "inquiryStatus", "#t": "ttl" },
+            ExpressionAttributeValues: { ":s": status, ":now": nowSec },
+            ScanIndexForward: true,
+            Limit: 20,
+            ...(startKey ? { ExclusiveStartKey: startKey } : {}),
+          }),
+        );
+        if (result.Items?.length) {
+          const at = result.Items[0]?.receivedAt;
+          if (typeof at !== "string" || !Number.isFinite(Date.parse(at))) {
+            throw new Error("가장 오래된 문의 시각 모양이 틀림");
+          }
+          if (oldest === null || at < oldest) oldest = at;
+          startKey = undefined;
+          break;
+        }
+        startKey = result.LastEvaluatedKey;
+        if (!startKey) break;
+      }
+      if (startKey) return null;
+    }
+    return oldest;
+  }
+
+  async function resolvedLast7d() {
+    const resolved = new Set<string>();
+    let cursor: Parameters<typeof listAudit>[2]["cursor"];
+    for (let page = 0; page < INQUIRY_METRIC_PAGE_LIMIT; page += 1) {
+      const result = await listAudit(
+        client,
+        opsTable,
+        {
+          filter: { from, to, action: "inquiry.update" },
+          limit: 100,
+          ...(cursor ? { cursor } : {}),
+        },
+        now,
+      );
+      for (const entry of result.items) {
+        if (
+          entry.target.kind === "inquiry" &&
+          entry.statusTo === "resolved" &&
+          entry.statusFrom !== "resolved"
+        )
+          resolved.add(entry.target.id);
+      }
+      if (!result.nextCursor) return resolved.size;
+      const next = parseAuditQuery({ cursor: result.nextCursor }, now);
+      if (!next.ok || !next.query.cursor) return null;
+      cursor = next.query.cursor;
+    }
+    return null;
+  }
+
+  // 문의 GSI 읽기 용량에 맞춰 같은 인덱스 조회는 순서대로 수행함
+  const completion = resolvedLast7d().catch(() => null);
+  const received = await receivedLast7d().catch(() => null);
+  const oldest = await oldestUnprocessedAt().catch(() => null);
+  return {
+    receivedLast7d: received,
+    resolvedLast7d: await completion,
+    oldestUnprocessedAt: oldest,
+  };
 }
 
 export async function getInquiry(

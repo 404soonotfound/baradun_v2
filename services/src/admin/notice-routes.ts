@@ -1,3 +1,4 @@
+import { lookupActorEmails } from "./actor-emails";
 import type {
   APIGatewayProxyEventV2,
   APIGatewayProxyStructuredResultV2,
@@ -52,10 +53,35 @@ export async function listNoticesRoute(
   ids: RequestIds,
 ): Promise<Result> {
   if (principal.kind === "sample") {
-    return json(200, sampleNotices(data.now()), ids);
+    const page = sampleNotices(data.now());
+    return json(
+      200,
+      {
+        ...page,
+        items: page.items.map((item) => ({ ...item, updatedBy: "데모 계정" })),
+      },
+      ids,
+    );
   }
   const records = await queryNotices(data.client, data.opsTable);
-  return json(200, { items: noticeViews(records, data.now()) }, ids);
+  const subs = new Map(
+    records.flatMap((record) =>
+      record.deletedAt === null && record.updatedBySub
+        ? [[record.id, record.updatedBySub]]
+        : [],
+    ),
+  );
+  const emails = await lookupActorEmails(
+    [...subs.values()],
+    data.actorEmails,
+    ids,
+  );
+  const items = noticeViews(records, data.now()).map((item) => {
+    const sub = subs.get(item.id);
+    const updatedBy = sub ? emails.get(sub) : undefined;
+    return updatedBy ? { ...item, updatedBy } : item;
+  });
+  return json(200, { items }, ids);
 }
 
 export interface WriteRequest {
