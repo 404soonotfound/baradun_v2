@@ -1311,6 +1311,749 @@
       "type": "string",
       "pattern": "^/data/[0-9]{8}T[0-9]{6}Z/[a-z-]+\\.json$"
     },
+    "SiteDeployReason": {
+      "enum": [
+        "unconfigured",
+        "credential_missing",
+        "credentials",
+        "unauthorized",
+        "forbidden",
+        "not_found",
+        "timeout",
+        "rate_limit",
+        "unavailable",
+        "invalid",
+        "truncated",
+        "not_ancestor"
+      ],
+      "title": "SiteDeployReason"
+    },
+    "SiteDeployReadiness": {
+      "enum": [
+        "ready",
+        "paused",
+        "deploying",
+        "approval_pending",
+        "ci_pending",
+        "ci_failed",
+        "ci_missing",
+        "unconfigured",
+        "unknown"
+      ],
+      "title": "SiteDeployReadiness"
+    },
+    "SiteDeployCiState": {
+      "enum": ["success", "pending", "failure", "missing"],
+      "title": "SiteDeployCiState"
+    },
+    "SiteDeployApp": {
+      "enum": ["site", "admin"],
+      "title": "SiteDeployApp"
+    },
+    "SiteDeployFileCategory": {
+      "enum": ["beach", "site", "admin", "shared"],
+      "title": "SiteDeployFileCategory"
+    },
+    "SiteDeployEvent": {
+      "enum": ["schedule", "workflow_dispatch"],
+      "title": "SiteDeployEvent"
+    },
+    "SiteDeploySha": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{40}$",
+      "title": "SiteDeploySha"
+    },
+    "SiteDeployRunUrl": {
+      "type": "string",
+      "pattern": "^https://github\\.com/[\\w.-]+/[\\w.-]+/actions/runs/\\d+$",
+      "title": "SiteDeployRunUrl"
+    },
+    "SiteDeployCommit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sha", "title"],
+      "properties": {
+        "sha": { "$ref": "#/$defs/SiteDeploySha" },
+        "title": { "type": "string" }
+      },
+      "title": "SiteDeployCommit"
+    },
+    "SiteDeployChangeFile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "previous", "category"],
+      "properties": {
+        "path": { "type": "string" },
+        "previous": {
+          "oneOf": [{ "type": "string" }, { "type": "null" }]
+        },
+        "category": { "$ref": "#/$defs/SiteDeployFileCategory" }
+      },
+      "title": "SiteDeployChangeFile"
+    },
+    "SiteDeployChanges": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["from", "to", "files", "commits"],
+      "properties": {
+        "from": { "$ref": "#/$defs/SiteDeploySha" },
+        "to": { "$ref": "#/$defs/SiteDeploySha" },
+        "files": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/SiteDeployChangeFile" }
+        },
+        "commits": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/SiteDeployCommit" }
+        }
+      },
+      "title": "SiteDeployChanges"
+    },
+    "SiteDeployRun": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "event",
+        "status",
+        "attempt",
+        "conclusion",
+        "sha",
+        "createdAt",
+        "url"
+      ],
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "event": { "$ref": "#/$defs/SiteDeployEvent" },
+        "status": { "type": "string" },
+        "attempt": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "conclusion": {
+          "oneOf": [{ "type": "string" }, { "type": "null" }]
+        },
+        "sha": { "$ref": "#/$defs/SiteDeploySha" },
+        "createdAt": { "$ref": "#/$defs/UtcDateTime" },
+        "url": { "$ref": "#/$defs/SiteDeployRunUrl" }
+      },
+      "title": "SiteDeployRun"
+    },
+    "SiteDeployMatchedRun": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["event", "url", "completedAt"],
+      "properties": {
+        "event": { "const": "workflow_dispatch" },
+        "url": { "$ref": "#/$defs/SiteDeployRunUrl" },
+        "completedAt": {
+          "oneOf": [{ "$ref": "#/$defs/UtcDateTime" }, { "type": "null" }]
+        }
+      },
+      "title": "SiteDeployMatchedRun"
+    },
+    "SiteDeployJob": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "conclusion", "wroteMarker", "completedAt"],
+      "properties": {
+        "status": { "type": "string" },
+        "conclusion": {
+          "oneOf": [{ "type": "string" }, { "type": "null" }]
+        },
+        "wroteMarker": { "type": "boolean" },
+        "completedAt": {
+          "oneOf": [{ "$ref": "#/$defs/UtcDateTime" }, { "type": "null" }]
+        }
+      },
+      "title": "SiteDeployJob"
+    },
+    "SiteDeployDeployments": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["recent", "active"],
+      "properties": {
+        "recent": {
+          "oneOf": [{ "$ref": "#/$defs/SiteDeployRun" }, { "type": "null" }]
+        },
+        "active": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/SiteDeployRun" }
+        }
+      },
+      "title": "SiteDeployDeployments"
+    },
+    "SiteDeploySettings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["paused", "configured"],
+      "properties": {
+        "paused": { "type": "boolean" },
+        "configured": { "type": "boolean" }
+      },
+      "title": "SiteDeploySettings"
+    },
+    "SiteDeployRecentJobs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["run", "apps"],
+      "properties": {
+        "run": {
+          "oneOf": [{ "$ref": "#/$defs/SiteDeployRun" }, { "type": "null" }]
+        },
+        "apps": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["site", "admin"],
+          "properties": {
+            "site": {
+              "oneOf": [{ "$ref": "#/$defs/SiteDeployJob" }, { "type": "null" }]
+            },
+            "admin": {
+              "oneOf": [{ "$ref": "#/$defs/SiteDeployJob" }, { "type": "null" }]
+            }
+          }
+        }
+      },
+      "title": "SiteDeployRecentJobs"
+    },
+    "SiteDeployManualCount": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["since", "requests"],
+      "properties": {
+        "since": { "$ref": "#/$defs/UtcDateTime" },
+        "requests": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "title": "SiteDeployManualCount"
+    },
+    "SiteDeployScheduleUnavailable": {
+      "enum": ["paused", "workflow_disabled", "unconfigured"],
+      "title": "SiteDeployScheduleUnavailable"
+    },
+    "SiteDeployScheduleReason": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind"],
+          "properties": {
+            "kind": { "$ref": "#/$defs/SiteDeployScheduleUnavailable" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "reason"],
+          "properties": {
+            "kind": { "const": "unknown" },
+            "reason": { "$ref": "#/$defs/SiteDeployReason" },
+            "retryAt": { "$ref": "#/$defs/UtcDateTime" }
+          }
+        }
+      ],
+      "title": "SiteDeployScheduleReason"
+    },
+    "SiteDeployCommitField": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "value", "checkedAt"],
+          "properties": {
+            "status": { "const": "known" },
+            "value": { "$ref": "#/$defs/SiteDeployCommit" },
+            "checkedAt": { "$ref": "#/$defs/UtcDateTime" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "reason", "checkedAt"],
+          "properties": {
+            "status": { "const": "unknown" },
+            "reason": { "$ref": "#/$defs/SiteDeployReason" },
+            "checkedAt": { "$ref": "#/$defs/UtcDateTime" },
+            "last": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["status", "value", "checkedAt"],
+              "properties": {
+                "status": { "const": "known" },
+                "value": { "$ref": "#/$defs/SiteDeployCommit" },
+                "checkedAt": { "$ref": "#/$defs/UtcDateTime" }
+              }
+            },
+            "retryAt": { "$ref": "#/$defs/UtcDateTime" }
+          }
+        }
+      ],
+      "title": "SiteDeployCommitField"
+    },
+    "SiteDeployShaField": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "value", "checkedAt"],
+          "properties": {
+            "status": { "const": "known" },
+            "value": { "$ref": "#/$defs/SiteDeploySha" },
+            "checkedAt": { "$ref": "#/$defs/UtcDateTime" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "reason", "checkedAt"],
+          "properties": {
+            "status": { "const": "unknown" },
+            "reason": { "$ref": "#/$defs/SiteDeployReason" },
+            "checkedAt": { "$ref": "#/$defs/UtcDateTime" },
+            "last": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["status", "value", "checkedAt"],
+              "properties": {
+                "status": { "const": "known" },
+                "value": { "$ref": "#/$defs/SiteDeploySha" },
+                "checkedAt": { "$ref": "#/$defs/UtcDateTime" }
+              }
+            },
+            "retryAt": { "$ref": "#/$defs/UtcDateTime" }
+          }
+        }
+      ],
+      "title": "SiteDeployShaField"
+    },
+    "SiteDeployChangesField": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "value", "checkedAt"],
+          "properties": {
+            "status": { "const": "known" },
+            "value": { "$ref": "#/$defs/SiteDeployChanges" },
+            "checkedAt": { "$ref": "#/$defs/UtcDateTime" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "reason", "checkedAt"],
+          "properties": {
+            "status": { "const": "unknown" },
+            "reason": { "$ref": "#/$defs/SiteDeployReason" },
+            "checkedAt": { "$ref": "#/$defs/UtcDateTime" },
+            "last": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["status", "value", "checkedAt"],
+              "properties": {
+                "status": { "const": "known" },
+                "value": { "$ref": "#/$defs/SiteDeployChanges" },
+                "checkedAt": { "$ref": "#/$defs/UtcDateTime" }
+              }
+            },
+            "retryAt": { "$ref": "#/$defs/UtcDateTime" }
+          }
+        }
+      ],
+      "title": "SiteDeployChangesField"
+    },
+    "SiteDeployCiField": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "value", "checkedAt"],
+          "properties": {
+            "status": { "const": "known" },
+            "value": { "$ref": "#/$defs/SiteDeployCiState" },
+            "checkedAt": { "$ref": "#/$defs/UtcDateTime" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "reason", "checkedAt"],
+          "properties": {
+            "status": { "const": "unknown" },
+            "reason": { "$ref": "#/$defs/SiteDeployReason" },
+            "checkedAt": { "$ref": "#/$defs/UtcDateTime" },
+            "last": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["status", "value", "checkedAt"],
+              "properties": {
+                "status": { "const": "known" },
+                "value": { "$ref": "#/$defs/SiteDeployCiState" },
+                "checkedAt": { "$ref": "#/$defs/UtcDateTime" }
+              }
+            },
+            "retryAt": { "$ref": "#/$defs/UtcDateTime" }
+          }
+        }
+      ],
+      "title": "SiteDeployCiField"
+    },
+    "SiteDeploySettingsField": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "value", "checkedAt"],
+          "properties": {
+            "status": { "const": "known" },
+            "value": { "$ref": "#/$defs/SiteDeploySettings" },
+            "checkedAt": { "$ref": "#/$defs/UtcDateTime" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "reason", "checkedAt"],
+          "properties": {
+            "status": { "const": "unknown" },
+            "reason": { "$ref": "#/$defs/SiteDeployReason" },
+            "checkedAt": { "$ref": "#/$defs/UtcDateTime" },
+            "last": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["status", "value", "checkedAt"],
+              "properties": {
+                "status": { "const": "known" },
+                "value": { "$ref": "#/$defs/SiteDeploySettings" },
+                "checkedAt": { "$ref": "#/$defs/UtcDateTime" }
+              }
+            },
+            "retryAt": { "$ref": "#/$defs/UtcDateTime" }
+          }
+        }
+      ],
+      "title": "SiteDeploySettingsField"
+    },
+    "SiteDeployWorkflowActiveField": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "value", "checkedAt"],
+          "properties": {
+            "status": { "const": "known" },
+            "value": { "type": "boolean" },
+            "checkedAt": { "$ref": "#/$defs/UtcDateTime" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "reason", "checkedAt"],
+          "properties": {
+            "status": { "const": "unknown" },
+            "reason": { "$ref": "#/$defs/SiteDeployReason" },
+            "checkedAt": { "$ref": "#/$defs/UtcDateTime" },
+            "last": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["status", "value", "checkedAt"],
+              "properties": {
+                "status": { "const": "known" },
+                "value": { "type": "boolean" },
+                "checkedAt": { "$ref": "#/$defs/UtcDateTime" }
+              }
+            },
+            "retryAt": { "$ref": "#/$defs/UtcDateTime" }
+          }
+        }
+      ],
+      "title": "SiteDeployWorkflowActiveField"
+    },
+    "SiteDeployDeploymentsField": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "value", "checkedAt"],
+          "properties": {
+            "status": { "const": "known" },
+            "value": { "$ref": "#/$defs/SiteDeployDeployments" },
+            "checkedAt": { "$ref": "#/$defs/UtcDateTime" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "reason", "checkedAt"],
+          "properties": {
+            "status": { "const": "unknown" },
+            "reason": { "$ref": "#/$defs/SiteDeployReason" },
+            "checkedAt": { "$ref": "#/$defs/UtcDateTime" },
+            "last": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["status", "value", "checkedAt"],
+              "properties": {
+                "status": { "const": "known" },
+                "value": { "$ref": "#/$defs/SiteDeployDeployments" },
+                "checkedAt": { "$ref": "#/$defs/UtcDateTime" }
+              }
+            },
+            "retryAt": { "$ref": "#/$defs/UtcDateTime" }
+          }
+        }
+      ],
+      "title": "SiteDeployDeploymentsField"
+    },
+    "SiteDeployApprovalsField": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "value", "checkedAt"],
+          "properties": {
+            "status": { "const": "known" },
+            "value": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "checkedAt": { "$ref": "#/$defs/UtcDateTime" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "reason", "checkedAt"],
+          "properties": {
+            "status": { "const": "unknown" },
+            "reason": { "$ref": "#/$defs/SiteDeployReason" },
+            "checkedAt": { "$ref": "#/$defs/UtcDateTime" },
+            "last": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["status", "value", "checkedAt"],
+              "properties": {
+                "status": { "const": "known" },
+                "value": {
+                  "type": "array",
+                  "items": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "checkedAt": { "$ref": "#/$defs/UtcDateTime" }
+              }
+            },
+            "retryAt": { "$ref": "#/$defs/UtcDateTime" }
+          }
+        }
+      ],
+      "title": "SiteDeployApprovalsField"
+    },
+    "SiteDeployRecentJobsField": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "value", "checkedAt"],
+          "properties": {
+            "status": { "const": "known" },
+            "value": { "$ref": "#/$defs/SiteDeployRecentJobs" },
+            "checkedAt": { "$ref": "#/$defs/UtcDateTime" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "reason", "checkedAt"],
+          "properties": {
+            "status": { "const": "unknown" },
+            "reason": { "$ref": "#/$defs/SiteDeployReason" },
+            "checkedAt": { "$ref": "#/$defs/UtcDateTime" },
+            "last": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["status", "value", "checkedAt"],
+              "properties": {
+                "status": { "const": "known" },
+                "value": { "$ref": "#/$defs/SiteDeployRecentJobs" },
+                "checkedAt": { "$ref": "#/$defs/UtcDateTime" }
+              }
+            },
+            "retryAt": { "$ref": "#/$defs/UtcDateTime" }
+          }
+        }
+      ],
+      "title": "SiteDeployRecentJobsField"
+    },
+    "SiteDeployManualCountField": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "value", "checkedAt"],
+          "properties": {
+            "status": { "const": "known" },
+            "value": { "$ref": "#/$defs/SiteDeployManualCount" },
+            "checkedAt": { "$ref": "#/$defs/UtcDateTime" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "reason", "checkedAt"],
+          "properties": {
+            "status": { "const": "unknown" },
+            "reason": { "$ref": "#/$defs/SiteDeployReason" },
+            "checkedAt": { "$ref": "#/$defs/UtcDateTime" },
+            "last": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["status", "value", "checkedAt"],
+              "properties": {
+                "status": { "const": "known" },
+                "value": { "$ref": "#/$defs/SiteDeployManualCount" },
+                "checkedAt": { "$ref": "#/$defs/UtcDateTime" }
+              }
+            },
+            "retryAt": { "$ref": "#/$defs/UtcDateTime" }
+          }
+        }
+      ],
+      "title": "SiteDeployManualCountField"
+    },
+    "SiteDeployTokenExpiryField": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "value", "checkedAt"],
+          "properties": {
+            "status": { "const": "known" },
+            "value": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                { "type": "null" }
+              ]
+            },
+            "checkedAt": { "$ref": "#/$defs/UtcDateTime" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "reason", "checkedAt"],
+          "properties": {
+            "status": { "const": "unknown" },
+            "reason": { "$ref": "#/$defs/SiteDeployReason" },
+            "checkedAt": { "$ref": "#/$defs/UtcDateTime" },
+            "last": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["status", "value", "checkedAt"],
+              "properties": {
+                "status": { "const": "known" },
+                "value": {
+                  "oneOf": [
+                    {
+                      "type": "string",
+                      "format": "date"
+                    },
+                    { "type": "null" }
+                  ]
+                },
+                "checkedAt": { "$ref": "#/$defs/UtcDateTime" }
+              }
+            },
+            "retryAt": { "$ref": "#/$defs/UtcDateTime" }
+          }
+        }
+      ],
+      "title": "SiteDeployTokenExpiryField"
+    },
+    "SiteDeploySite": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["app", "deployed", "detail", "changes", "matchedRun"],
+      "properties": {
+        "app": { "$ref": "#/$defs/SiteDeployApp" },
+        "deployed": { "$ref": "#/$defs/SiteDeployShaField" },
+        "detail": { "$ref": "#/$defs/SiteDeployCommitField" },
+        "changes": { "$ref": "#/$defs/SiteDeployChangesField" },
+        "matchedRun": {
+          "oneOf": [
+            { "$ref": "#/$defs/SiteDeployMatchedRun" },
+            { "type": "null" }
+          ]
+        },
+        "compareUrl": {
+          "type": "string",
+          "pattern": "^https://github\\.com/[\\w.-]+/[\\w.-]+/compare/[a-f0-9]{40}\\.\\.\\.main$"
+        }
+      },
+      "title": "SiteDeploySite"
+    },
+    "SiteDeployView": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "generatedAt",
+        "readiness",
+        "readinessCheckedAt",
+        "main",
+        "ci",
+        "settings",
+        "workflowActive",
+        "deployments",
+        "approvals",
+        "recentJobs",
+        "manualCount",
+        "tokenExpiry",
+        "sites",
+        "nextScheduledAt",
+        "workflowUrl"
+      ],
+      "properties": {
+        "generatedAt": { "$ref": "#/$defs/UtcDateTime" },
+        "readiness": { "$ref": "#/$defs/SiteDeployReadiness" },
+        "readinessCheckedAt": { "$ref": "#/$defs/UtcDateTime" },
+        "main": { "$ref": "#/$defs/SiteDeployCommitField" },
+        "ci": { "$ref": "#/$defs/SiteDeployCiField" },
+        "settings": { "$ref": "#/$defs/SiteDeploySettingsField" },
+        "workflowActive": { "$ref": "#/$defs/SiteDeployWorkflowActiveField" },
+        "deployments": { "$ref": "#/$defs/SiteDeployDeploymentsField" },
+        "approvals": { "$ref": "#/$defs/SiteDeployApprovalsField" },
+        "recentJobs": { "$ref": "#/$defs/SiteDeployRecentJobsField" },
+        "manualCount": { "$ref": "#/$defs/SiteDeployManualCountField" },
+        "tokenExpiry": { "$ref": "#/$defs/SiteDeployTokenExpiryField" },
+        "sites": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/SiteDeploySite" }
+        },
+        "nextScheduledAt": {
+          "oneOf": [{ "$ref": "#/$defs/UtcDateTime" }, { "type": "null" }]
+        },
+        "nextScheduledAtReason": { "$ref": "#/$defs/SiteDeployScheduleReason" },
+        "workflowUrl": {
+          "type": "string",
+          "pattern": "^https://github\\.com/[\\w.-]+/[\\w.-]+/actions/workflows/deploy\\.yml$"
+        }
+      },
+      "title": "SiteDeployView"
+    },
     "DateTime": {
       "title": "DateTime",
       "type": "string",

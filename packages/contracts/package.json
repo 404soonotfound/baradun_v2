@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./site-deploy": "./src/generated/site-deploy.ts",
     "./notice-rules": "./src/notice-rules.ts",
     "./judgment-policy": "./src/judgment-policy.ts",
     "./schema.json": "./schemas/contract.schema.json"
