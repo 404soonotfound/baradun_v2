@@ -506,7 +506,7 @@ export function createGa4StatsReader(config: Ga4StatsConfig): StatsReader {
         }),
       ]);
       const legacy =
-        legacyRes.status === "fulfilled" ? legacyRes.value.reports : undefined;
+        legacyRes.status === "fulfilled" ? legacyRes.value?.reports : undefined;
       const [summaryReport, beachesReport, devicesReport, languagesReport] =
         Array.isArray(legacy) && legacy.length === 4 ? legacy : [];
 
@@ -515,11 +515,14 @@ export function createGa4StatsReader(config: Ga4StatsConfig): StatsReader {
         activeUsers: null,
         pageViews: null,
       };
-      if (realtimeRes.status === "fulfilled") {
+      if (realtimeRes.status === "fulfilled" && realtimeRes.value) {
         realtime = parseRealtimeReport(realtimeRes.value);
       } else {
         safeLog("warn", "stats_realtime_failed", {
-          error: errorName(realtimeRes.reason),
+          error:
+            realtimeRes.status === "rejected"
+              ? errorName(realtimeRes.reason)
+              : "InvalidReport",
         });
       }
 
@@ -573,7 +576,7 @@ export function createGa4StatsReader(config: Ga4StatsConfig): StatsReader {
         });
       }
       const reports =
-        trendsRes.status === "fulfilled" ? trendsRes.value.reports : undefined;
+        trendsRes.status === "fulfilled" ? trendsRes.value?.reports : undefined;
       const trends = parseTrends(
         dates,
         Array.isArray(reports) && reports.length === 5 ? reports : [],
