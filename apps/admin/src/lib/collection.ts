@@ -394,7 +394,13 @@ export function normalizeCollection(raw: unknown): CollectionView & {
       lateAfterMinutes > 0;
     return {
       ...rest,
-      ...(timeOrNull(nextScheduledAt) ? { nextScheduledAt } : {}),
+      ...("nextScheduledAt" in job
+        ? {
+            nextScheduledAt: timeOrNull(nextScheduledAt)
+              ? nextScheduledAt
+              : null,
+          }
+        : {}),
       ...(late || lateAfterMinutes === null ? { lateAfterMinutes } : {}),
       overdue: typeof job.overdue === "boolean" ? job.overdue : null,
       hourly: job.hourly.map((bucket) => ({
