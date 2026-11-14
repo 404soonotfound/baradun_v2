@@ -851,24 +851,34 @@ function Placeholder() {
   );
 }
 
+// 받은 값(성공 값·실패·마지막 응답 시각)을 받은 세션 세대와 함께 둠
+interface Received {
+  readonly gen: number;
+  readonly good: { view: SiteDeployView; at: string } | null;
+  readonly failure: Failed | null;
+  // 마지막 응답(성공·실패)을 받은 시각. 화면 시각 계산의 기준
+  readonly now: number;
+}
+const NOTHING = { good: null, failure: null, now: 0 } as const;
+
 function useSiteDeploy(enabled: boolean) {
+  // session은 AuthProvider가 useState(createSession)로 탭에서 한 번만 만든 객체라 렌더마다 바뀌지 않음
+  // → 아래 효과 의존성에 넣어도 요청이 되풀이되지 않음(운영 홈·데이터 게시와 같은 가정)
   const session = useAuthSession();
   const snapshot = useSessionSnapshot();
-  const generation = snapshot.status === "signed_out" ? 0 : snapshot.generation;
-  const [good, setGood] = useState<{
-    view: SiteDeployView;
-    at: string;
-  } | null>(null);
-  const [failure, setFailure] = useState<Failed | null>(null);
-  // 마지막 응답(성공·실패)을 받은 시각. 화면 시각 계산의 기준
-  const [now, setNow] = useState(0);
-  const [reading, setReading] = useState(false);
+  const signedIn = snapshot.status !== "signed_out";
+  const generation = signedIn ? snapshot.generation : 0;
+  const [received, setReceived] = useState<Received>({ gen: -1, ...NOTHING });
+  // 읽는 중인 요청의 세대(없으면 null)
+  const [readingGen, setReadingGen] = useState<number | null>(null);
   const [round, setRound] = useState(0);
   // 다음 다시 읽기 간격(받은 readiness로 정함). 바뀌어도 바로 다시 읽지 않게 ref로 둠
   const interval = useRef(refreshInterval(null));
 
+  // 로그아웃 상태에서는 요청하지 않음(#462 운영 홈과 같음). 세대가 바뀌면 효과가 새로 돌고 앞 세대 응답은 버림
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled || !signedIn) return;
+    const gen = generation;
     let live = true;
     let seq = 0;
     let lastStart = 0;
@@ -876,39 +886,50 @@ function useSiteDeploy(enabled: boolean) {
     const refresh = () => {
       const id = ++seq;
       lastStart = Date.now();
-      setReading(true);
+      setReadingGen(gen);
       // 15초 안에 응답이 없으면 이 요청을 버리고 실패로 둠(D26-4). 늦게 온 응답은 무시하고 다시 불러오기를 막지 않음
       window.clearTimeout(limit);
       limit = window.setTimeout(() => {
         if (!live || id !== seq) return;
         seq++;
-        setReading(false);
-        setNow(Date.now());
-        setFailure({ ok: false, status: 0, code: "network" });
+        setReadingGen(null);
+        setReceived((prev) => ({
+          gen,
+          good: prev.gen === gen ? prev.good : null,
+          failure: { ok: false, status: 0, code: "network" },
+          now: Date.now(),
+        }));
       }, LOADING_TIMES.timeout);
       void fetchSiteDeploy(() => session.accessToken()).then((result) => {
         if (!live || id !== seq) return;
         window.clearTimeout(limit);
-        setReading(false);
+        setReadingGen(null);
         const at = Date.now();
-        setNow(at);
         const view = result.ok ? parseSiteDeploy(result.body) : null;
         if (view) {
           interval.current = refreshInterval(view.readiness);
-          setGood({ view, at: new Date(at).toISOString() });
-          setFailure(null);
+          setReceived({
+            gen,
+            good: { view, at: new Date(at).toISOString() },
+            failure: null,
+            now: at,
+          });
         } else {
-          // 실패·읽을 수 없는 본문도 앞 값은 그대로 둠(값 유지)
-          setFailure(
-            result.ok
-              ? {
-                  ok: false,
-                  status: result.status,
-                  code: "invalid",
-                  requestId: null,
-                }
-              : result,
-          );
+          // 실패·읽을 수 없는 본문도 같은 세대의 앞 값은 그대로 둠(값 유지)
+          const failure: Failed = result.ok
+            ? {
+                ok: false,
+                status: result.status,
+                code: "invalid",
+                requestId: null,
+              }
+            : result;
+          setReceived((prev) => ({
+            gen,
+            good: prev.gen === gen ? prev.good : null,
+            failure,
+            now: at,
+          }));
         }
       });
     };
@@ -931,13 +952,18 @@ function useSiteDeploy(enabled: boolean) {
       window.clearInterval(timer);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [enabled, session, generation, round]);
+  }, [enabled, signedIn, session, generation, round]);
 
+  // 로그아웃·세션 만료 뒤(로그인 화면으로 가는 중)와 세대가 바뀐 뒤에는 앞 세션에서 받은 배포 정보를 그리지 않음
+  // 상태를 지우는 대신 세대로 걸러, 바뀐 순간의 렌더에서도 앞 값이 보이지 않게 함
+  const current = signedIn && received.gen === generation;
+  const shown = current ? received : NOTHING;
   return {
-    data: good,
-    failure,
-    now,
-    reading,
+    signedIn,
+    data: shown.good,
+    failure: shown.failure,
+    now: shown.now,
+    reading: signedIn && readingGen === generation,
     reload: () => setRound((n) => n + 1),
   };
 }
@@ -946,8 +972,10 @@ export function SiteDeployPanel({ demo }: { demo: boolean }) {
   const state = useSiteDeploy(!demo);
   const firstPending = !demo && state.data === null && state.failure === null;
   const timing = useLoadTiming(firstPending);
+  // 로그아웃 상태(로그인 화면으로 가는 중)는 요청하지 않으므로 자리표시만 두고 시간 제한 실패로 바꾸지 않음
   const failed =
-    state.failure !== null || (timing.timedOut && state.data === null);
+    state.failure !== null ||
+    (state.signedIn && timing.timedOut && state.data === null);
   return (
     <section
       aria-labelledby="site-deploy-title"

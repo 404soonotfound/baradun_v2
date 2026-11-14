@@ -1,5 +1,6 @@
 import type { Page, Route } from "@playwright/test";
 import {
+  COGNITO_ERRORS,
   ME_OK,
   expect,
   expectHomeLoaded,
@@ -1550,4 +1551,69 @@ test("사이트 배포: 로딩 자리표시와 값이 들어온 뒤 칸 높이�
   );
   const loaded = (await region.boundingBox())!.height;
   expect(Math.abs(loaded - loading)).toBeLessThanOrEqual(2);
+});
+
+test("사이트 배포: 다시 로그인으로 세션 세대가 바뀌면 앞 세션에서 받은 배포 정보를 그리지 않고 새로 읽는다", async ({
+  page,
+}) => {
+  await page.clock.install();
+  // 처음 토큰은 15분(14분에 갱신 시도 → 실패 → 다시 로그인 창), 다시 로그인한 토큰은 넉넉하게
+  let issued = 0;
+  await mockCognito(
+    page,
+    srpScript({
+      email: OPS,
+      after: "tokens",
+      groups: ["publisher"],
+      expIn: () => (issued++ === 0 ? 900 : 7200),
+    }),
+    (target) =>
+      target === "GetTokensFromRefreshToken"
+        ? COGNITO_ERRORS.error(
+            "NotAuthorizedException",
+            "Refresh Token has expired",
+          )
+        : undefined,
+  );
+  await mockOps(page, ME_OK);
+  // 다시 로그인한 뒤의 첫 응답은 붙잡아 둠(그동안 앞 세대 값이 보이는지 봄)
+  let holdNew = false;
+  const calls = await mockPublish(page, {
+    siteDeploy: () =>
+      holdNew
+        ? "hold"
+        : { status: 200, body: localSiteDeployView("ready", Date.now()) },
+  });
+  await signInWithPassword(page, "/login/", OPS);
+  await expectHomeLoaded(page);
+  await openPublish(page);
+  const region = siteDeploy(page);
+  const filesLine = region
+    .getByRole("region", { name: "사용자 사이트" })
+    .getByText("바뀐 파일 4개 · 파일 목록");
+  await expect(filesLine).toBeVisible();
+
+  await page.clock.runFor("10:00");
+  await page.mouse.move(10, 10);
+  await page.keyboard.press("Shift");
+  await page.clock.runFor("04:30");
+  const dialog = page.getByRole("dialog", {
+    name: "로그인을 이어가지 못했어요",
+  });
+  await expect(dialog).toBeVisible();
+  // 다시 로그인 전에는 같은 세대에서 받은 값이 그대로(앞 값 유지)
+  await expect(filesLine).toBeVisible();
+
+  holdNew = true;
+  const before = calls.siteDeploys;
+  await dialog.getByLabel("비밀번호", { exact: true }).fill("test-password-1");
+  await dialog.getByRole("button", { name: "로그인" }).click();
+  await expect(dialog).toHaveCount(0);
+  // 새 세대로 다시 요청하고, 응답 전에는 앞 세대 값 대신 자리표시
+  await expect.poll(() => calls.siteDeploys).toBeGreaterThan(before);
+  await expect(filesLine).toHaveCount(0);
+  await expect(region.getByText(READY_TEXT)).toHaveCount(0);
+  await expect(
+    region.getByRole("status").filter({ hasText: "사이트 배포 불러오는 중" }),
+  ).toHaveCount(1);
 });
