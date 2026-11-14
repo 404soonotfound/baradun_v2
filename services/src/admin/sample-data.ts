@@ -193,7 +193,7 @@ export function sampleStats(range: StatsRange, now: Date): StatsResponse {
       pageViews: 420 * m,
       topBeaches: [
         { path: "/spots/haeundae", slug: "haeundae", pageViews: 85 * m },
-        { path: "/spots/gwangalli", slug: "gwangalli", pageViews: 64 * m },
+        { path: "/spots/gwangan-ri", slug: "gwangan-ri", pageViews: 64 * m },
         { path: "/spots/gyeongpo", slug: "gyeongpo", pageViews: 47 * m },
       ],
       devices: [
