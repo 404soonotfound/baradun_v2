@@ -870,18 +870,20 @@ test("개인정보 가리기: 처리 초안이 이미 낡았으면 가린 뒤에
   await expect(memo).toHaveValue("쓰던 메모");
 });
 
-test("필터(검색·유형·해변·받은 시각), 미리보기, 행 클릭·키보드 이동·지우기 확인 창·접근성", async ({
+test("필터(검색·유형·해변·받은 시각), 미리보기, 행 클릭·키보드 이동·접근성", async ({
   page,
 }) => {
   await signIn(page);
   await mockInquiries(page);
   await openInquiries(page);
 
-  // 초기에는 요약 응답에 본문이 없으므로 자리표시 문구를 보여 줌
+  let initialRowHeight: number | undefined;
   if (!isMobile(page)) {
-    await expect(rows(page).first()).toContainText("눌러서 내용 보기");
+    const firstRow = rows(page).first();
+    await expect(firstRow).not.toContainText("눌러서 내용 보기");
+    initialRowHeight = (await firstRow.boundingBox())?.height;
     // 행 전체 클릭(상태 배지 셀 클릭)으로 시트 열기
-    await rows(page).first().locator("td").first().click();
+    await firstRow.locator("td").first().click();
   } else {
     await rows(page).first().getByRole("link").click();
   }
@@ -890,6 +892,8 @@ test("필터(검색·유형·해변·받은 시각), 미리보기, 행 클릭·�
   await expect(
     detail.getByText("현장에 입수 금지 깃발이 걸려 있어요."),
   ).toBeVisible();
+  // 삭제 API 지원 전까지 시트의 '지우기' 버튼 숨김
+  await expect(detail.getByRole("button", { name: "지우기" })).toHaveCount(0);
 
   if (!isMobile(page)) {
     // PC 시트: ↑↓ 로 다음/이전 문의 이동, Esc로 닫고 누른 줄에 포커스 복원
@@ -898,29 +902,16 @@ test("필터(검색·유형·해변·받은 시각), 미리보기, 행 클릭·�
     await page.keyboard.press("ArrowUp");
     await expect(page).toHaveURL(new RegExp(`\\?id=${id(1)}$`));
 
-    // '지우기' 버튼 → V30 확인 창, 취소 포커스, Esc 닫기 후 '지우기' 버튼 포커스 복원
-    const delBtn = detail.getByRole("button", { name: "지우기" });
-    await delBtn.click();
-    const confirm = page.getByRole("dialog", { name: "문의를 지울까요?" });
-    await expect(confirm).toBeVisible();
-    await expect(
-      confirm.getByRole("button", { name: "취소" }),
-    ).toBeFocused();
-    await expect(
-      confirm.getByRole("button", { name: "문의 지우기" }),
-    ).toBeDisabled();
     await expectNoA11yViolations(page);
-    await page.keyboard.press("Escape");
-    await expect(confirm).toBeHidden();
-    await expect(delBtn).toBeFocused();
-
     await page.keyboard.press("Escape");
     await expect(detail).toBeHidden();
     await expect(rows(page).first().getByRole("link")).toBeFocused();
-    // 상세를 한 번 연 뒤에는 목록 미리보기 줄에 본문 일부가 표시됨
+    // 상세를 한 번 연 뒤에는 목록 미리보기 줄에 본문 일부가 표시되고 행 높이는 유지됨
     await expect(rows(page).first()).toContainText(
       "현장에 입수 금지 깃발이 걸려 있어요.",
     );
+    const afterRowHeight = (await rows(page).first().boundingBox())?.height;
+    expect(afterRowHeight).toBe(initialRowHeight);
   } else {
     await detail.getByRole("link", { name: /문의 목록으로/ }).click();
   }
@@ -942,16 +933,4 @@ test("필터(검색·유형·해변·받은 시각), 미리보기, 행 클릭·�
   await page.getByRole("button", { name: "거르기 초기화" }).click();
   await expect(rows(page)).toHaveCount(4);
   await expectNoA11yViolations(page);
-});
-
-test("보기 권한에서는 지우기 버튼도 비활성으로 둔다", async ({ page }) => {
-  await signIn(page, ["viewer"]);
-  await mockInquiries(page);
-  await openInquiries(page);
-  await rows(page).first().getByRole("link").click();
-  const detail = detailOf(page);
-  await expect(detail.getByRole("button", { name: "지우기" })).toBeDisabled();
-  await expect(
-    detail.getByRole("button", { name: "개인정보 가리기" }),
-  ).toBeDisabled();
 });
