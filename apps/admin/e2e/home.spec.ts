@@ -240,19 +240,27 @@ test("모두 정상: 판단 출처 정상 한 줄(모바일만), 세 칸·판단
   await expect(shown.getByText(/09:38 측정/)).toBeVisible();
   await expect(table.getByText("b0002")).toHaveCount(0);
 
-  // 이용: GA 28일 합계·지금 사용 중. 응답에 일별 칸이 없으면 그래프 대신 한 줄
+  // 이용: GA 28일 합계·지금 사용 중·기간 추이(trends) 일별 그래프·앞 기간 비교
   const usage = block(page, "이용");
   await expect(usage.getByText("지금 사용 중 14명 · 최근 30분")).toBeVisible();
+  // 기간 표시는 응답의 KST 날짜(양 끝 포함)
+  await expect(
+    usage.getByText("10월 15일 – 11월 11일 · 앞 28일과 비교", { exact: true }),
+  ).toBeVisible();
   // 이용 칸 자기 기준 시각(GA 집계 받은 시각, 머리의 1분 주기와 따로 5분마다)
   await expect(
     usage.getByText("12:00 기준 · 5분마다 다시 읽어요", { exact: true }),
   ).toBeVisible();
   await expect(usage.getByText("3,960", { exact: true })).toBeVisible();
   await expect(usage.getByText("9,240", { exact: true })).toBeVisible();
-  await expect(
-    usage.getByText("일별 추이는 아직 보여 드릴 수 없어요", { exact: true }),
-  ).toBeVisible();
-  await expect(usage.locator("svg rect")).toHaveCount(0);
+  // 앞 28일 3,344·7,634 → +18.4%·+21%(화면에서 계산)
+  await expect(usage.getByText("앞 28일 3,344")).toBeVisible();
+  await expect(usage.getByText("앞 28일 7,634")).toBeVisible();
+  await expect(usage.getByText("+18.4%")).toBeVisible();
+  await expect(usage.getByText("+21%")).toBeVisible();
+  await expect(usage.getByText("일별 추이는 아직 보여 드릴 수 없어요")).toHaveCount(0);
+  // 일별 28일 × 사용자·화면 조회
+  await expect(usage.locator("svg rect")).toHaveCount(56);
 
   await expect(page.getByText("지금 할 일이 없어요")).toBeVisible();
   const prs = page.getByRole("link", { name: /해변 정보 변경 PR 보기/ });
@@ -313,7 +321,9 @@ test("게시본이 점검 중이면 앱에 보이는 해변 칸에 점검 안내
 test("판단불가 사유가 여럿이면 배지를 모두 보이고, 이용 칸은 기간 통계 실패와 일별 그래프를 응답대로 보인다", async ({
   page,
 }) => {
-  const stats = localStatsView("28d", Date.parse("2026-11-11T03:00:00Z"));
+  const full = localStatsView("28d", Date.parse("2026-11-11T03:00:00Z"));
+  // 기간 추이가 없는 응답(이전 서버): 일별 그래프 대신 한 줄
+  const { trends, ...stats } = full;
   await signIn(page, {
     published: ok({
       ...PUBLISHED,
@@ -353,8 +363,13 @@ test("판단불가 사유가 여럿이면 배지를 모두 보이고, 이용 칸
   ).toBeVisible();
   await expect(usage.getByRole("button", { name: "다시 시도" })).toBeVisible();
   await expect(usage.getByText("확인 못 함", { exact: true })).toHaveCount(2);
+  await expect(
+    usage.getByText("일별 추이는 아직 보여 드릴 수 없어요", { exact: true }),
+  ).toBeVisible();
+  await expect(usage.getByText("최근 28일 · 오늘 포함")).toBeVisible();
+  await expect(usage.locator("svg rect")).toHaveCount(0);
 
-  // 다시 시도: 일별 칸이 생긴 응답이면 그래프(값이 없는 날은 막대 없음)
+  // 다시 시도: 일별 칸이 생긴 응답이면 그래프(값이 없는 날은 막대 대신 옅은 빈칸), 앞 기간 null이면 배지 없음
   await page.unroute(/\/ops\/stats(\?.*)?$/);
   await page.route(/\/ops\/stats(\?.*)?$/, (route) =>
     route.fulfill({
@@ -362,21 +377,155 @@ test("판단불가 사유가 여럿이면 배지를 모두 보이고, 이용 칸
       contentType: "application/json",
       body: JSON.stringify({
         ...stats,
-        period: {
-          ...stats.period,
-          daily: [
-            { date: "2026-11-10", activeUsers: 120, pageViews: 300 },
-            { date: "2026-11-11", activeUsers: null, pageViews: 280 },
-          ],
+        trends: {
+          ...trends,
+          startDate: "2026-11-10",
+          previous: null,
+          daily: {
+            rows: [
+              { date: "2026-11-10", activeUsers: 120, pageViews: 300 },
+              { date: "2026-11-11", activeUsers: null, pageViews: 280 },
+            ],
+            metadata: trends!.daily!.metadata,
+          },
         },
       }),
     }),
   );
   await usage.getByRole("button", { name: "다시 시도" }).click();
   await expect(usage.getByText("3,960", { exact: true })).toBeVisible();
-  await expect(usage.locator("svg rect")).toHaveCount(3);
+  await expect(usage.getByText("11월 10일 – 11월 11일", { exact: true })).toBeVisible();
+  // 사용자 막대 1 + 빈칸 1, 화면 조회 막대 2
+  await expect(usage.locator("svg rect")).toHaveCount(4);
+  await expect(usage.locator("svg rect[data-empty]")).toHaveCount(1);
+  await expect(usage.getByText("옅은 칸은 확인 못 한 값이에요")).toBeVisible();
+  await expect(usage.getByText("앞 기간 대비")).toHaveCount(0);
+  await expect(usage.getByText(/^앞 28일/)).toHaveCount(0);
   await expect(usage.getByText("일별 추이는 아직 보여 드릴 수 없어요")).toHaveCount(0);
   await expectNoA11yViolations(page);
+});
+
+test("문의 칸 최근 7일 접수·완료와 가장 오래된 미처리 접수, 수집 칸 다음 수집 시각(GH-478)", async ({
+  page,
+}) => {
+  const generatedAt = "2026-11-11T03:00:00.000Z";
+  await signIn(page, {
+    collection: ok({
+      ...VIEW_OK,
+      generatedAt,
+      jobs: VIEW_OK.jobs.map((job) => ({
+        ...job,
+        nextScheduledAt:
+          job.job === "collect-warnings"
+            ? "2026-11-11T05:48:00.000Z" // KST 14:48
+            : job.job === "collect-ocean"
+              ? "2026-11-11T05:40:00.000Z" // KST 14:40
+              : "2026-11-11T05:00:00.000Z", // 참고 출처는 보지 않음
+      })),
+    }),
+    inquiries: ok({
+      items: [],
+      nextCursor: null,
+      counts: {
+        received: 2,
+        in_progress: 1,
+        resolved: 9,
+        rejected: 1,
+        receivedLast7d: 11,
+        resolvedLast7d: 6,
+        oldestUnprocessedAt: "2026-10-31T04:27:00.000Z", // KST 10/31 13:27
+      },
+    }),
+  });
+  const collection = block(page, "수집");
+  await expect(collection.getByText(/^다음 수집 14:40이에요\./)).toBeVisible();
+  await expect(collection.getByText(/출처별 지연·장애 기록은/)).toHaveCount(0);
+
+  const inquiries = block(page, "문의");
+  await expect(inquiries.getByText("11건", { exact: true })).toBeVisible();
+  await expect(
+    inquiries.getByText("최근 7일 접수 · 보관 중 13건", { exact: true }),
+  ).toBeVisible();
+  await expect(inquiries.getByText("최근 7일 완료")).toBeVisible();
+  // 최근 7일 완료는 수만(완료에 7일 전 접수가 섞여 ÷ 최근 7일 접수 비율을 만들지 않음)
+  await expect(
+    inquiries.getByRole("listitem").filter({ hasText: "최근 7일 완료" }),
+  ).toContainText("6건");
+  await expect(
+    inquiries.getByRole("listitem").filter({ hasText: "최근 7일 완료" }),
+  ).not.toContainText("/");
+  await expect(
+    inquiries.getByRole("listitem").filter({ hasText: "접수" }).first(),
+  ).toContainText("2/13");
+  await expect(
+    inquiries.getByText(/^가장 오래된 미처리 접수 10\/31 13:27/),
+  ).toBeVisible();
+  await expect(inquiries.getByText(/반려/)).toHaveCount(0);
+
+  const todo = block(page, "할 일");
+  await expect(
+    todo.getByText("접수 문의 2건이 기다려요", { exact: true }),
+  ).toBeVisible();
+  // 서버 값은 접수·확인 중을 함께 본 가장 오래된 미처리 → 확인 중이 있으면 범위를 밝힘
+  await expect(
+    todo.getByText("확인 중 포함 가장 오래된 것 10/31 13:27", { exact: true }),
+  ).toBeVisible();
+  await expectNoA11yViolations(page);
+});
+
+test("문의 최근 7일 값이 null(조회 실패)이면 0이 아니라 확인 못 함, 다음 수집 시각이 없으면 고정 안내", async ({
+  page,
+}) => {
+  await signIn(page, {
+    inquiries: ok({
+      items: [],
+      nextCursor: null,
+      counts: {
+        received: 1,
+        in_progress: 0,
+        resolved: 3,
+        rejected: 0,
+        receivedLast7d: null,
+        resolvedLast7d: null,
+        oldestUnprocessedAt: null,
+      },
+    }),
+  });
+  await expect(
+    block(page, "수집").getByText(/^출처별 지연·장애 기록은 수집 현황에서 봐요\./),
+  ).toBeVisible();
+  const inquiries = block(page, "문의");
+  await expect(
+    inquiries.getByText("최근 7일 접수 · 보관 중 4건", { exact: true }),
+  ).toBeVisible();
+  await expect(inquiries.getByText("확인 못 함", { exact: true })).toHaveCount(2);
+  await expect(inquiries.getByText("0건", { exact: true })).toHaveCount(0);
+  // 미처리 1건이 있는데 시각이 null: 없음이 아니라 확인 못 함
+  await expect(
+    inquiries.getByText(/^가장 오래된 미처리 접수 확인 못 함/),
+  ).toBeVisible();
+  await expect(block(page, "할 일").getByText(/가장 오래된 것/)).toHaveCount(0);
+  await expectNoA11yViolations(page);
+});
+
+test("데모 계정은 한 번만 읽으므로 머리·이용 칸에 다시 읽기 주기 안내를 붙이지 않는다", async ({
+  page,
+}) => {
+  await mockCognito(
+    page,
+    srpScript({ email: "demo@example.test", groups: ["sample"], after: "tokens" }),
+  );
+  await mockOps(page, ME_OK);
+  await mockHome(page);
+  await signInWithPassword(page, "/login/demo/", "demo@example.test");
+  await expect(
+    page.getByRole("heading", { name: "운영 홈", level: 1 }),
+  ).toBeVisible();
+  await expect(page.getByText(/^\d+\/\d+ \d{2}:\d{2} 기준$/)).toBeVisible();
+  await expect(page.getByText(/1분마다 다시 읽어요/)).toHaveCount(0);
+  const usage = block(page, "이용");
+  await expect(usage.getByText("12:00 기준", { exact: true })).toBeVisible();
+  await expect(usage.getByText(/5분마다/)).toHaveCount(0);
 });
 
 test("판단 출처 문제·새 문의·수정 대기 공지가 있으면 문제 줄과 할 일 줄이 생긴다", async ({
@@ -497,6 +646,10 @@ test("불러오지 못한 값은 0·정상·'할 일 없음'으로 바꾸지 않
   await expect(
     block(page, "이용").getByText("지금 사용 중 확인 못 함 · 최근 30분"),
   ).toBeVisible();
+  // 응답 전체 실패: 그래프 칸마다 '다른 칸은 그대로예요'를 두지 않고 칸 실패 줄 하나
+  await expect(
+    block(page, "이용").getByText(/이 항목을 불러오지 못했어요/),
+  ).toHaveCount(0);
 
   await expect(
     page.getByText(
