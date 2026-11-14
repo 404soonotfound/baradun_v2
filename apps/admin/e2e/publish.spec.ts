@@ -266,7 +266,7 @@ test("게시 현황: 현재 게시본·다음 자동 게시·대기 공지·되�
   await expect(
     page.getByText("실행은 바뀐 게 없어 건너뜀"),
   ).toBeVisible();
-  await expect(page.getByText("최근 24시간")).toBeVisible();
+  await expect(page.getByText("최근 24시간", { exact: true })).toBeVisible();
   await expect(page.getByText("확인 못 함").first()).toBeVisible();
   await expect(
     page
@@ -988,8 +988,8 @@ test("#479 응답 필드: 앱 설정 비교·last24h·공지 before/updatedBy·c
               version: V1,
               at: iso(base - 5 * MINUTE),
               source: "auto",
-              reason: "beach_ids",
-              checks: { format: true, required: false },
+              reason: "contract",
+              checks: { beachIds: true, format: true, required: false },
             },
           ],
         },
@@ -1025,12 +1025,46 @@ test("#479 응답 필드: 앱 설정 비교·last24h·공지 before/updatedBy·c
   await expect(history(page).nth(0)).toContainText(`지금 게시 · ${OPS}`);
 
   const checksRegion = page.getByRole("region", { name: /검증 결과/ });
+  await expect(checksRegion).toContainText("실패 사유");
+  await expect(checksRegion).toContainText("데이터 형식 검사 실패");
+  await expect(checksRegion).toContainText("게시 안 함 · 앞 게시본 유지");
   await expect(checksRegion).toContainText("형식");
   await expect(checksRegion).toContainText("필수 칸");
   await expect(checksRegion).toContainText("해변 ID 대조");
   await expect(checksRegion).toContainText("통과");
   await expect(checksRegion).toContainText("실패");
-  await expect(checksRegion).toContainText("확인 못 함");
+  await expectNoA11yViolations(page);
+});
+
+test("검사 3개를 모두 통과한 뒤 다른 사유(manifest_conflict)로 실패하면 실패 사유와 3줄을 함께 보여 준다", async ({
+  page,
+}) => {
+  await signIn(page);
+  await mockPublish(page, {
+    overview: () =>
+      overview({
+        history: {
+          ok: true,
+          items: [
+            {
+              result: "failed",
+              version: V0,
+              at: iso(base),
+              source: "auto",
+              reason: "manifest_conflict",
+              checks: { format: true, required: true, beachIds: true },
+            },
+          ],
+        },
+      }),
+  });
+  await openPublish(page);
+
+  const checksRegion = page.getByRole("region", { name: /검증 결과/ });
+  await expect(checksRegion).toContainText("실패 사유");
+  await expect(checksRegion).toContainText("다른 게시와 겹침");
+  await expect(checksRegion).toContainText("게시 안 함 · 앞 게시본 유지");
+  await expect(checksRegion.getByText("통과")).toHaveCount(3);
   await expectNoA11yViolations(page);
 });
 
@@ -1054,7 +1088,7 @@ test("current·last24h 조회 실패(ok:false) 시 '확인 못 함'을 표시한
   await expect(page.getByText("서비스 점검 확인 못 함")).toBeVisible();
   await expect(page.getByText("최소 화면 버전 확인 못 함")).toBeVisible();
   await expect(
-    page.getByText("기록된 실행 기준 · 빠진 실행은 셀 수 없음"),
+    page.getByText("최근 24시간을 불러오지 못했어요 · 앱 사용자 화면에는 영향이 없어요"),
   ).toBeVisible();
   await expectNoA11yViolations(page);
 });

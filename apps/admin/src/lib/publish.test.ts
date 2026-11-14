@@ -256,6 +256,49 @@ describe("pendingNoticeDiff", () => {
     expect(withoutBefore.hasBefore).toBe(false);
     expect(withoutBefore.added).toBe(4);
     expect(withoutBefore.removed).toBe(0);
+
+    const malformedBefore = pendingNoticeDiff(
+      {
+        id: "n-4",
+        change: "update",
+        kind: "general",
+        title: "안내",
+        startsAt: "2026-11-12T06:00:00Z",
+        endsAt: null,
+        before: { id: "n-4", kind: "general" } as never,
+      },
+      "일반 공지",
+      (iso) => iso,
+      "종료 없음",
+    );
+    expect(malformedBefore.hasBefore).toBe(false);
+    expect(malformedBefore.added).toBe(4);
+
+    const sameFourLines = pendingNoticeDiff(
+      {
+        id: "n-5",
+        change: "update",
+        kind: "general",
+        title: "안내",
+        startsAt: "2026-11-12T06:00:00Z",
+        endsAt: null,
+        before: {
+          id: "n-5",
+          kind: "general",
+          title: { ko: "안내", en: "Updated EN" },
+          body: { ko: "바뀐 본문", en: "Updated body" },
+          startsAt: "2026-11-12T06:00:00Z",
+          endsAt: null,
+        },
+      },
+      "일반 공지",
+      (iso) => iso,
+      "종료 없음",
+      "일반 공지",
+    );
+    expect(sameFourLines.hasBefore).toBe(true);
+    expect(sameFourLines.added).toBe(0);
+    expect(sameFourLines.removed).toBe(0);
   });
 });
 
@@ -321,6 +364,8 @@ describe("parseCurrentSettings · compareAppSettings", () => {
       currentMaintenance: { active: false, until: null },
       currentMinWebBuild: 1,
       maintenancePending: false,
+      maintenanceActiveChanged: false,
+      maintenanceUntilChanged: false,
       nextMaintenance: null,
       minWebBuildPending: false,
       nextMinWebBuild: null,
@@ -341,9 +386,36 @@ describe("parseCurrentSettings · compareAppSettings", () => {
       currentMaintenance: { active: false, until: null },
       currentMinWebBuild: 1,
       maintenancePending: true,
+      maintenanceActiveChanged: true,
+      maintenanceUntilChanged: false,
       nextMaintenance: { active: true, until: null },
       minWebBuildPending: true,
       nextMinWebBuild: 2,
+    });
+
+    const untilOnly = compareAppSettings(
+      {
+        ok: true,
+        version: "20261112T060000Z",
+        generatedAt: "2026-11-12T06:00:00Z",
+        maintenance: { active: true, until: "2026-11-14T05:00:00Z" },
+        minWebBuild: 1,
+      },
+      {
+        maintenance: { active: true, until: "2026-11-14T06:00:00Z" },
+        minWebBuild: 1,
+      },
+      true,
+    );
+    expect(untilOnly).toEqual({
+      currentMaintenance: { active: true, until: "2026-11-14T05:00:00Z" },
+      currentMinWebBuild: 1,
+      maintenancePending: true,
+      maintenanceActiveChanged: false,
+      maintenanceUntilChanged: true,
+      nextMaintenance: { active: true, until: "2026-11-14T06:00:00Z" },
+      minWebBuildPending: false,
+      nextMinWebBuild: null,
     });
   });
 
