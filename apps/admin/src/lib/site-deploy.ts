@@ -240,14 +240,16 @@ function site(
   raw: unknown,
   generatedAt: string,
   repo: string | undefined,
+  mainSha: string | undefined,
 ): SiteView {
   const item = obj(raw) ?? {};
   const deployed = field(item.deployed, sha, generatedAt);
   const compareUrl =
     repo &&
+    mainSha &&
     deployed.status === "known" &&
     item.compareUrl ===
-      `https://github.com/${repo}/compare/${deployed.value}...main`
+      `https://github.com/${repo}/compare/${deployed.value}...${mainSha}`
       ? item.compareUrl
       : undefined;
   return {
@@ -296,12 +298,14 @@ export function parseSiteDeploy(raw: unknown): SiteDeployView | null {
       ? WORKFLOW_URL.exec(body.workflowUrl)
       : null;
   const workflowUrl = workflowMatch?.[0] ?? null;
+  const main = field(body.main, commit, generatedAt);
   const sites = SITE_APPS.map((app) =>
     site(
       app,
       rawSites.find((entry) => obj(entry)?.app === app),
       generatedAt,
       workflowMatch?.[1],
+      main.status === "known" ? main.value.sha : undefined,
     ),
   );
   const nextScheduledAt =
@@ -321,7 +325,7 @@ export function parseSiteDeploy(raw: unknown): SiteDeployView | null {
     readinessCheckedAt: isIso(body.readinessCheckedAt)
       ? body.readinessCheckedAt
       : generatedAt,
-    main: field(body.main, commit, generatedAt),
+    main,
     ci: field(body.ci, oneOf(CI_STATES), generatedAt),
     settings: field(body.settings, settings, generatedAt),
     workflowActive: field(body.workflowActive, bool, generatedAt),

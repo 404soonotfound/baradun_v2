@@ -2001,7 +2001,7 @@
         },
         "compareUrl": {
           "type": "string",
-          "pattern": "^https://github\\.com/[\\w.-]+/[\\w.-]+/compare/[a-f0-9]{40}\\.\\.\\.main$"
+          "pattern": "^https://github\\.com/[\\w.-]+/[\\w.-]+/compare/[a-f0-9]{40}\\.\\.\\.[a-f0-9]{40}$"
         }
       },
       "title": "SiteDeploySite"
