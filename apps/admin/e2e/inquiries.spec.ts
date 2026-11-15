@@ -82,6 +82,55 @@ async function mockInquiries(
         activity: undefined,
       }),
     ];
+    // 서버 필터(#491)처럼: 조건·미리보기가 있으면 서버가 거르고, 한 쪽에 적은 후보만 읽어 cursor로 이어짐. 집계 없음
+    const params = url.searchParams;
+    if (
+      ["q", "type", "beachId", "from", "to", "preview"].some((k) =>
+        params.has(k),
+      )
+    ) {
+      const q = params.get("q");
+      // 끝없이 이어지는 검색(자동 이어 읽기 상한·'더 불러오기' 확인용)
+      if (q === "끝없는검색") {
+        await route.fulfill({
+          contentType: "application/json",
+          body: JSON.stringify({ items: [], nextCursor: "f-loop" }),
+        });
+        return;
+      }
+      const message = (n: number) =>
+        n === 3 ? "" : `현장에 입수 금지 깃발이 걸려 있어요. (예시 ${n})`;
+      const pool = cursor
+        ? [summary(4, { type: "data_suggestion" })]
+        : all.filter((i) => !status || i.status === status);
+      const items = pool
+        .filter(
+          (i) =>
+            (!params.get("type") || i.type === params.get("type")) &&
+            (!params.get("beachId") ||
+              (params.get("beachId") === "__none__"
+                ? !i.beachId
+                : i.beachId === params.get("beachId"))) &&
+            (!q ||
+              (i.beachId ?? "").includes(q) ||
+              message(Number(i.inquiryId.slice(-2))).includes(q)),
+        )
+        .map((i) => {
+          if (!params.has("preview")) return i;
+          const text = message(Number(i.inquiryId.slice(-2)));
+          return text
+            ? { ...i, messagePreview: text }
+            : { ...i, messagePreviewUnavailableReason: "empty" };
+        });
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({
+          items,
+          nextCursor: cursor || status ? null : "f1",
+        }),
+      });
+      return;
+    }
     const items = cursor
       ? [summary(4, { type: "data_suggestion" })]
       : all.filter((i) => !status || i.status === status);
@@ -928,8 +977,19 @@ test("필터(검색·유형·해변·받은 시각), 미리보기, 행 클릭·�
     .click();
   await expect(rows(page)).toHaveCount(1);
   await expect(page.getByText("1건", { exact: true })).toBeVisible();
-  await expect(page.getByText(/내용은 열어 본 문의만 찾아요/)).toBeVisible();
-  expect(calls.list.some((q) => q.get("limit") === "50")).toBe(true);
+  // 서버가 거름(#491): 유형 조건과 미리보기를 보내고, 첫 쪽이 6행에 못 미쳐 cursor를 이어 읽은 뒤 끝을 알림
+  await expect(
+    page.getByText("보관 중인 문의에서 조건에 맞는 문의를 모두 찾았어요."),
+  ).toBeVisible();
+  expect(
+    calls.list.some(
+      (q) =>
+        q.get("type") === "beach_request" &&
+        q.get("preview") === "true" &&
+        q.get("limit") === "50",
+    ),
+  ).toBe(true);
+  expect(calls.list.some((q) => q.get("cursor") === "f1")).toBe(true);
 
   // 받은 시각 직접 입력: 시작 > 끝이면 입력 오류 안내 + 적용 비활성
   await page.getByRole("button", { name: "받은 시각", exact: true }).click();
@@ -959,16 +1019,92 @@ test("필터(검색·유형·해변·받은 시각), 미리보기, 행 클릭·�
   await expectNoA11yViolations(page);
   await page.keyboard.press("Escape");
 
-  // 미수신 데이터(nextCursor)가 있는데 거르기 결과가 0건이면 '아직 불러오지 않았어요' + '다음 목록 더 불러오기'
-  await page.getByLabel("내용·해변 찾기").fill("존재하지않는검색어");
-  await expect(page.getByText("아직 불러오지 않았어요")).toBeVisible();
+  // 끝까지 찾았는데 없으면 '조건에 맞는 문의가 없어요'(아직 안 읽은 문의가 남았다고 하지 않음)
+  await page
+    .getByLabel("내용·해변 찾기")
+    .pressSequentially("존재하지않는검색어", { delay: 30 });
+  await expect(
+    page.getByText("보관 중인 문의 가운데 조건에 맞는 문의가 없어요."),
+  ).toBeVisible();
+  // 검색어는 서버로 보냄(치는 동안이 아니라 다 친 뒤 한 번)
+  expect(
+    calls.list.filter((q) => q.get("q") === "존재하지않는검색어").length,
+  ).toBeGreaterThan(0);
+  expect(calls.list.some((q) => q.get("q") === "존재하지않는검")).toBe(false);
+
+  // 이어 읽어도 계속 남으면 몇 번만 읽고 멈춘 뒤 '아직 찾아보지 않았어요' + '다음 목록 더 불러오기'
+  await page.getByLabel("내용·해변 찾기").fill("끝없는검색");
+  await expect(
+    page.getByText(/나머지 문의는 아직 찾아보지 않았어요/),
+  ).toBeVisible();
+  const loops = () =>
+    calls.list.filter((q) => q.get("q") === "끝없는검색").length;
+  await expect.poll(loops).toBe(5);
   await page.getByRole("button", { name: "다음 목록 더 불러오기" }).click();
+  await expect.poll(loops).toBe(9);
   await expect(
     page.getByRole("button", { name: "거르기 초기화" }),
   ).toBeVisible();
   await page.getByRole("button", { name: "거르기 초기화" }).click();
   // 거르기를 끄면 서버 커서 기준 첫 쪽(limit=6)으로 복귀함
   await expect(rows(page)).toHaveCount(3);
+  await expectNoA11yViolations(page);
+});
+
+test("거르기 결과는 서버 미리보기를 행에 보이고, 본문이 비면 '본문 없음'(#502)", async ({
+  page,
+}) => {
+  await signIn(page);
+  await mockInquiries(page);
+  await openInquiries(page);
+  await page.getByLabel("내용·해변 찾기").fill("입수 금지");
+  await expect(rows(page).first()).toContainText(
+    "현장에 입수 금지 깃발이 걸려 있어요. (예시 1)",
+  );
+  // 해변 없음 거르기: 본문이 빈 문의는 '본문 없음'으로 보이고 빈 미리보기를 정상 본문처럼 보이지 않음
+  await page.getByLabel("내용·해변 찾기").fill("");
+  await page.getByRole("button", { name: "해변", exact: true }).click();
+  await page
+    .getByRole("group", { name: "해변으로 거르기" })
+    .getByRole("button", { name: "해변 없음" })
+    .click();
+  await expect(rows(page)).toHaveCount(1);
+  await expect(rows(page).first()).toContainText("본문 없음");
+  await expectNoA11yViolations(page);
+});
+
+test("보기 권한은 내용으로 찾지 않는다고 알리고, 이어 읽기에 실패하면 지금까지 찾은 것만 보인다고 알린다(#502)", async ({
+  page,
+}) => {
+  await signIn(page, ["viewer"]);
+  await mockInquiries(page);
+  let failMore = true;
+  await page.route(/\/ops\/inquiries\?.*cursor=f1/, async (route: Route) => {
+    if (!failMore) return route.fallback();
+    await route.fulfill({
+      status: 503,
+      contentType: "application/json",
+      body: JSON.stringify({
+        error: { code: "internal", requestId: "req-1a2b3c4d" },
+      }),
+    });
+  });
+  await openInquiries(page);
+  await page.getByLabel("내용·해변 찾기").fill("b0001");
+  await expect(
+    page.getByText("보기 권한은 내용은 찾지 않고 해변 이름·별칭으로만 찾아요."),
+  ).toBeVisible();
+  const failed = page
+    .getByRole("alert")
+    .filter({ hasText: "다음 목록을 불러오지 못했어요" });
+  await expect(failed).toContainText("지금까지 찾은 문의만 보여요");
+  await expect(rows(page)).toHaveCount(1);
+  failMore = false;
+  await page.getByRole("button", { name: "다음 목록 더 불러오기" }).click();
+  await expect(failed).toHaveCount(0);
+  await expect(
+    page.getByText("보관 중인 문의에서 조건에 맞는 문의를 모두 찾았어요."),
+  ).toBeVisible();
   await expectNoA11yViolations(page);
 });
 
