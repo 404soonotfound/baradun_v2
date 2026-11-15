@@ -1693,6 +1693,7 @@
     "waveValueS": "{value}초",
     "waveDelayedNote": "관측 지연 중 마지막 값",
     "waveUnknown": "확인 못 함",
+    "delayedNoTime": "관측 지연 · 시각 확인 못 함",
     "zoneVerified": "해상·육상 구역 검증됨",
     "zoneUnverified": "검증 안 됨",
     "zoneNameUnknown": "이름 확인 못 함",

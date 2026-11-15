@@ -639,9 +639,10 @@ export function waveCellOf(
 
 // 목록의 측정 칸: 판단에 쓰는 파고의 관측 시각. 지연이면 시각과 지연 표시를 같이 보여 줌
 // 파고 관측 시각이 없으면 지연 사유의 시각(observation_delayed.at)을 씀
+// delayedUnknown: 지연인데 어느 시각도 없음(지연 표시는 남기고 시각만 모른다고 알림)
 export type ObservedCell =
   | { readonly kind: "time"; readonly at: string; readonly delayed: boolean }
-  | { readonly kind: "none" | "unknown" | "loading" };
+  | { readonly kind: "none" | "unknown" | "delayedUnknown" | "loading" };
 
 export function observedCellOf(
   published: PublishedView | null | "loading",
@@ -657,7 +658,8 @@ export function observedCellOf(
   if (wave.state === "none") return { kind: "none" };
   const delayed = wave.state === "delayed";
   const at = wave.observedAt ?? (delayed ? delayedObservedAt(display) : null);
-  return at === null ? { kind: "unknown" } : { kind: "time", at, delayed };
+  if (at === null) return { kind: delayed ? "delayedUnknown" : "unknown" };
+  return { kind: "time", at, delayed };
 }
 
 // 비노출 해변은 게시본 status.json에 원래 없으므로 게시본에 빠진 이유만으로 판단불가로 치지 않음
