@@ -50,6 +50,7 @@ import {
   LoadFailed,
   LoadingStatus,
   SkBox,
+  SkButton,
   SkLine,
   SkPill,
   SlowNote,
@@ -678,21 +679,60 @@ function NoticeEditorSkeleton({ cls, slow }: { cls: string; slow: boolean }) {
   return (
     <div aria-busy="true" className={`flex flex-col gap-4 ${cls}`}>
       {slow && <SlowNote />}
-      <div className="flex items-center justify-between gap-2">
-        <SkLine className="h-5 w-44" />
-        <div className="flex gap-2">
-          <SkLine className="h-8 w-16" />
-          <SkLine className="h-8 w-20" />
+      <div className="flex flex-col gap-1.5">
+        <SkLine className="h-5 w-24" />
+        <div className="flex flex-wrap items-center gap-2.5">
+          <SkLine className="h-6 w-48" />
+          <SkPill className="h-5 w-14" />
+        </div>
+        <SkLine className="w-36" />
+      </div>
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] lg:gap-8">
+        <div className="flex min-w-0 flex-col gap-4">
+          <div className="flex flex-col gap-2.5 rounded-admin-box border border-border-default bg-bg-surface p-4">
+            <SkLine className="w-20" />
+            <SkLine className="h-9 w-56" />
+            <SkLine className="w-48 max-w-full" />
+          </div>
+          {[0, 1].map((lang) => (
+            <div
+              key={lang}
+              className="flex flex-col gap-3 rounded-admin-box border border-border-default bg-bg-surface p-4"
+            >
+              <SkPill className="h-5 w-14" />
+              <SkLine className="w-24" />
+              <SkLine className="h-10 w-full rounded-admin-control" />
+              <SkLine className="w-24" />
+              <SkBox className="h-24 w-full" />
+            </div>
+          ))}
+          <div className="flex flex-col gap-3 rounded-admin-box border border-border-default bg-bg-surface p-4">
+            <SkLine className="w-24" />
+            <div className="grid gap-3 sm:grid-cols-2">
+              <SkLine className="h-10 w-full rounded-admin-control" />
+              <SkLine className="h-10 w-full rounded-admin-control" />
+            </div>
+            <SkLine className="w-32" />
+          </div>
+        </div>
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-2 rounded-admin-box border border-border-default bg-bg-surface p-4">
+            <SkLine className="h-5 w-24" />
+            {[0, 1, 2, 3].map((i) => (
+              <SkLine key={i} className="w-44 max-w-full" />
+            ))}
+          </div>
+          <div className="flex flex-col items-center gap-3">
+            <SkLine className="h-5 w-24 self-start" />
+            <SkLine className="h-8 w-36 rounded-admin-control" />
+            <SkBox className="h-[360px] w-full max-w-[260px] rounded-[30px]" />
+          </div>
         </div>
       </div>
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
-        <div className="flex flex-col gap-4 rounded-admin-box border border-border-default bg-bg-surface p-5">
-          <SkLine className="h-9 w-full" />
-          <SkBox className="h-24 w-full" />
-          <SkLine className="h-9 w-full" />
-          <SkBox className="h-24 w-full" />
-        </div>
-        <SkBox className="h-64 w-full" />
+      <div className="flex flex-wrap items-center justify-end gap-3 border-t border-border-default bg-bg-surface px-1 py-3">
+        <SkLine className="mr-auto w-28" />
+        <SkButton className="w-16" />
+        <SkButton className="w-16" />
       </div>
     </div>
   );
