@@ -591,6 +591,75 @@ export function delayedObservedAt(display: BeachDisplay): string | null {
   return null;
 }
 
+// 목록의 파고·파주기 칸(#502). 게시값 그대로 보여 주고 다시 판단하지 않음
+// value: 값(delayed면 관측 지연 중 마지막 값) · none: 가까운 관측 없음 · missing: 지연인데 값 없음
+// unknown: 게시본·해변 칸을 못 받았거나 모양이 틀림(확인 못 함) · loading: 게시본을 받는 중
+export type WaveCell =
+  | {
+      readonly kind: "value";
+      readonly value: number;
+      readonly unit: "m" | "s";
+      readonly delayed: boolean;
+    }
+  | { readonly kind: "none" | "missing" | "unknown" | "loading" };
+
+function publishedEntry(
+  published: PublishedView | null | "loading",
+  id: string,
+): PublishedEntry | null | "loading" {
+  if (published === "loading") return "loading";
+  if (!published || !published.available) return null;
+  return published.beaches[id] ?? null;
+}
+
+// hasStation: 저장소에 그 지표의 측정소가 배정됐는지(BeachSummary.waveHeight·wavePeriod)
+// 게시값이 있으면 게시값이 우선. 게시값이 없을 때 저장소에 측정소가 없으면 '가까운 관측 없음'(정해진 사실이라 결측이 아님)
+export function waveCellOf(
+  published: PublishedView | null | "loading",
+  id: string,
+  metric: "waveHeight" | "wavePeriod",
+  hasStation: boolean,
+): WaveCell {
+  const entry = publishedEntry(published, id);
+  if (entry === "loading") return { kind: "loading" };
+  const wave = entry?.[metric];
+  // 모양이 틀린 칸(null)은 측정소 배정과 상관없이 확인 못 함('가까운 관측 없음'으로 바꾸지 않음)
+  if (wave === null) return { kind: "unknown" };
+  // 게시본에 해변이 없거나·서버가 관측을 주지 않음(undefined): 값을 지어내지 않음
+  if (!wave) return hasStation ? { kind: "unknown" } : { kind: "none" };
+  if (wave.state === "none") return { kind: "none" };
+  if (wave.value === null) return { kind: "missing" };
+  return {
+    kind: "value",
+    value: wave.value,
+    unit: wave.unit,
+    delayed: wave.state === "delayed",
+  };
+}
+
+// 목록의 측정 칸: 판단에 쓰는 파고의 관측 시각. 지연이면 시각과 지연 표시를 같이 보여 줌
+// 파고 관측 시각이 없으면 지연 사유의 시각(observation_delayed.at)을 씀
+export type ObservedCell =
+  | { readonly kind: "time"; readonly at: string; readonly delayed: boolean }
+  | { readonly kind: "none" | "unknown" | "loading" };
+
+export function observedCellOf(
+  published: PublishedView | null | "loading",
+  id: string,
+  display: BeachDisplay,
+  hasWaveStation: boolean,
+): ObservedCell {
+  const entry = publishedEntry(published, id);
+  if (entry === "loading") return { kind: "loading" };
+  const wave = entry?.waveHeight;
+  if (wave === null) return { kind: "unknown" };
+  if (!wave) return hasWaveStation ? { kind: "unknown" } : { kind: "none" };
+  if (wave.state === "none") return { kind: "none" };
+  const delayed = wave.state === "delayed";
+  const at = wave.observedAt ?? (delayed ? delayedObservedAt(display) : null);
+  return at === null ? { kind: "unknown" } : { kind: "time", at, delayed };
+}
+
 // 비노출 해변은 게시본 status.json에 원래 없으므로 게시본에 빠진 이유만으로 판단불가로 치지 않음
 // 단, 게시본 자체를 못 받은 경우(why === "unavailable")는 확인할 수 없어 판단불가로 봄
 export function effectiveCategory(
