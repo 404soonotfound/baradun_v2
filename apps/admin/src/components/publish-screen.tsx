@@ -2200,7 +2200,11 @@ function PublishBody({
               <Button
                 size="small"
                 disabled={!view || placeholder || locked !== null}
-                aria-describedby={locked ? "publish-locked" : undefined}
+                aria-describedby={
+                  permission.signedIn && !permission.demo && locked
+                    ? "publish-locked"
+                    : undefined
+                }
                 onClick={(e) => openPublish(e.currentTarget)}
               >
                 {t.publishButton}

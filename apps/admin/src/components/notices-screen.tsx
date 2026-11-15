@@ -819,7 +819,11 @@ function NoticeList({
           <Button
             size="small"
             disabled={edit !== null}
-            aria-describedby={edit ? "notice-new-block" : undefined}
+            aria-describedby={
+              snapshot.status !== "signed_out" && edit
+                ? "notice-new-block"
+                : undefined
+            }
             className="gap-1.5"
             onClick={() => router.push("/notices/?new=1")}
           >
@@ -2367,17 +2371,21 @@ function NoticesBody() {
   const [created, setCreated] = useState<string | null>(null);
   const toList = () => router.push("/notices/");
 
+  const signedIn = snapshot.status !== "signed_out";
   const editing = id !== null || creating;
   const notice =
     id && result?.ok
       ? (result.body.items.find((n) => n.id === id) ?? null)
       : null;
+  const creatingWaiting = creating && !signedIn;
   const editWaiting = Boolean(
-    id && (waiting || (result?.ok && !notice && id === created)),
+    (id && (waiting || (result?.ok && !notice && id === created))) ||
+      creatingWaiting,
   );
   const editTiming = useLoadTiming(editWaiting);
   const editPlaceholder =
-    Boolean(id) && (editWaiting || editTiming.phase !== "content");
+    (Boolean(id) || creatingWaiting) &&
+    (editWaiting || editTiming.phase !== "content");
 
   return (
     <div className="px-4 py-5 md:px-10 md:pt-6 md:pb-10">
@@ -2448,7 +2456,7 @@ function NoticesBody() {
                 </Button>
               </div>
             )}
-          {(creating || (notice && !editPlaceholder)) && (
+          {!editPlaceholder && (creating || notice) && (
             <NoticeEditor
               key={id ?? "new"}
               notice={notice}
