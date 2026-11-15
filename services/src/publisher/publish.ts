@@ -3,6 +3,7 @@ import {
   buildStationTable,
   canonicalJson,
   type PublishRun,
+  type PublishFailureDetails,
   type PublishChecks,
   type PublishRunDetails,
   type PublishSource,
@@ -29,6 +30,7 @@ import { BeachSnapshotError, buildSnapshot, type Snapshot } from "./snapshot";
 import type { SeasonTable } from "./season";
 import {
   contractErrors,
+  contractFailureDetails,
   contractInspection,
   type ContractFile,
 } from "./validate";
@@ -411,6 +413,9 @@ export async function recordPublished(
             ? { target: published.target }
             : {}),
           notices: published.notices,
+          ...(published.sequence !== undefined
+            ? { sequence: published.sequence }
+            : {}),
           ...(published.checks ? { checks: published.checks } : {}),
           ...(published.operatorSub
             ? { operatorSub: published.operatorSub }
@@ -438,6 +443,15 @@ const LOGGED_IDS = 20;
 // 게시 잠금을 잡고 body를 한 번 돌린 뒤 실행 결과를 남기고 잠금을 풂
 // 자동 게시·'지금 게시'·되돌리기(publishSnapshot)와 다시 내보내기(republish.ts)가 같이 씀(같은 잠금, D20-1·D16-C4)
 // 다른 실행이 게시 중이면 아무것도 하지 않고 busy(실행 결과도 남기지 않음)
+export interface PublishRunContext {
+  readonly startedMs: number;
+  readonly version: string;
+  readonly now: string;
+  readonly sequence?: number;
+  readonly checks: MutableChecks;
+  readonly diagnostics: { failureDetails?: PublishFailureDetails };
+}
+
 export async function withPublishLock(
   deps: Pick<
     PublishDeps,
@@ -445,12 +459,7 @@ export async function withPublishLock(
   >,
   source: PublishSource,
   target: string | undefined,
-  body: (run: {
-    startedMs: number;
-    version: string;
-    now: string;
-    checks: MutableChecks;
-  }) => Promise<PublishResult>,
+  body: (run: PublishRunContext) => Promise<PublishResult>,
 ): Promise<PublishResult> {
   const { ops, log } = deps;
   const startedMs = deps.clock();
@@ -471,13 +480,24 @@ export async function withPublishLock(
 
   try {
     const checks: MutableChecks = {};
-    const result = await body({ startedMs, version, now, checks });
+    const run: PublishRunContext = {
+      startedMs,
+      version,
+      now,
+      checks,
+      diagnostics: {},
+      ...(typeof locked === "number" ? { sequence: locked } : {}),
+    };
+    const result = await body(run);
     if (result.status !== "busy") {
       await recordPublishRun(
         deps,
         {
           at: now,
-          ...(typeof locked === "number" ? { sequence: locked } : {}),
+          ...(run.sequence !== undefined ? { sequence: run.sequence } : {}),
+          ...(result.status === "failed" && run.diagnostics.failureDetails
+            ? { failureDetails: run.diagnostics.failureDetails }
+            : {}),
           source,
           result: result.status,
           version: result.version,
@@ -505,7 +525,7 @@ export async function publishSnapshot(
   const source: PublishSource =
     options.rollbackTo !== undefined ? "rollback" : (deps.source ?? "auto");
   return withPublishLock(deps, source, options.rollbackTo, (run) =>
-    runPublish(deps, options, { ...run, source }),
+    runPublish(deps, options, source, run),
   );
 }
 
@@ -513,16 +533,11 @@ export async function publishSnapshot(
 async function runPublish(
   deps: PublishDeps,
   options: PublishOptions,
-  run: {
-    startedMs: number;
-    version: string;
-    now: string;
-    source: PublishSource;
-    checks: MutableChecks;
-  },
+  source: PublishSource,
+  run: PublishRunContext,
 ): Promise<PublishResult> {
   const { ops, snapshots, log } = deps;
-  const { startedMs, version, now, source, checks } = run;
+  const { startedMs, version, now, checks } = run;
   const rollbackTo = options.rollbackTo;
 
   const fail = (reason: string, fields: Record<string, unknown> = {}) => {
@@ -534,6 +549,13 @@ async function runPublish(
     problem: BeachIdProblem,
   ) => {
     checks.beachIds = false;
+    run.diagnostics.failureDetails = {
+      kind: "beach_ids",
+      where,
+      missingCount: problem.missing.length,
+      extraCount: problem.extra.length,
+      duplicateCount: problem.duplicate.length,
+    };
     return fail("beach_ids", {
       where,
       missing: problem.missing.slice(0, LOGGED_IDS),
@@ -581,6 +603,12 @@ async function runPublish(
       });
     } catch (error) {
       if (error instanceof BeachSnapshotError) {
+        if (/^b\d{4}$/.test(error.beachId)) {
+          run.diagnostics.failureDetails = {
+            kind: "classify",
+            beachId: error.beachId,
+          };
+        }
         return fail("classify", {
           beachId: error.beachId,
           slug: error.slug,
@@ -674,6 +702,7 @@ async function runPublish(
       (inspection) => inspection.requiredMissing,
     );
     if (errors.length > 0) {
+      run.diagnostics.failureDetails = contractFailureDetails(inspections);
       return fail("contract", { errors: errors.slice(0, 20) });
     }
 
@@ -784,6 +813,7 @@ async function runPublish(
       noticeState,
       notices,
       jobId: deps.jobId,
+      ...(run.sequence !== undefined ? { sequence: run.sequence } : {}),
       checks,
       ...(deps.operatorSub ? { operatorSub: deps.operatorSub } : {}),
     });

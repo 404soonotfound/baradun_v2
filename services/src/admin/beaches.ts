@@ -1,5 +1,10 @@
 import { GetCommand } from "@aws-sdk/lib-dynamodb";
-import type { ManifestFile, Reason, StatusFile } from "@baradun/contracts";
+import type {
+  ManifestFile,
+  Metric,
+  Reason,
+  StatusFile,
+} from "@baradun/contracts";
 import type {
   APIGatewayProxyEventV2,
   APIGatewayProxyStructuredResultV2,
@@ -51,7 +56,15 @@ export type StatusUnavailableReason =
   | "status_invalid"
   | "read_failed";
 
+type PublishedWave = Pick<Metric, "value" | "unit" | "observedAt" | "state">;
+
 export interface BeachStatusEntry {
+  readonly observation: {
+    readonly metrics: {
+      readonly waveHeight: PublishedWave;
+      readonly wavePeriod: PublishedWave;
+    };
+  };
   readonly category: StatusFile["beaches"][string]["category"];
   readonly reasons: readonly Reason[];
   // 게시 분류를 믿을 수 있는 마지막 시각. 지나면 앱은 이용불가 외를 '특보 확인 못 함'으로 보여 줌(B5)
@@ -83,6 +96,10 @@ function parseJson(body: string): unknown {
   }
 }
 
+function waveView({ value, unit, observedAt, state }: Metric): PublishedWave {
+  return { value, unit, observedAt, state };
+}
+
 // 게시본 읽기: manifest → status.json. 둘 다 계약 검사를 통과해야 함(해변 하나라도 틀리면 전체를 못 읽은 것으로 봄)
 export async function readBeachStatus(
   store: SnapshotStore | null,
@@ -111,7 +128,15 @@ export async function readBeachStatus(
     }
     const beaches: Record<string, BeachStatusEntry> = {};
     for (const [id, beach] of Object.entries((status as StatusFile).beaches)) {
+      // 계약상 파고·파주기는 늘 있음(측정소 없음·지연도 state로 옴). 게시값을 그대로 옮기고 다시 계산하지 않음
+      const { waveHeight, wavePeriod } = beach.observation.metrics;
       beaches[id] = {
+        observation: {
+          metrics: {
+            waveHeight: waveView(waveHeight),
+            wavePeriod: waveView(wavePeriod),
+          },
+        },
         category: beach.category,
         reasons: beach.reasons,
         validUntil: beach.validUntil,

@@ -48,7 +48,29 @@ export interface PublishChecks {
   readonly beachIds?: boolean;
 }
 
+// 계약 실패 위치 형식(publisher가 쓰고 운영 API가 다시 검사). 예: StatusFile:/beaches/b0001/observation:required:metrics
+export const FAILURE_PATH =
+  /^(?:(?:Manifest|Beaches|Status|History|NationwideWarnings|Weather)File|Notice):(?:\/|(?:\/[\w.-]+)+):[A-Za-z]+(?::[\w.-]+)?$/;
+export const FAILURE_PATH_MAX = 128;
+export const FAILURE_PATH_LIMIT = 5;
+
+export type PublishFailureDetails =
+  | {
+      readonly kind: "beach_ids";
+      readonly where: "source" | "beaches" | "status";
+      readonly missingCount: number;
+      readonly extraCount: number;
+      readonly duplicateCount: number;
+    }
+  | {
+      readonly kind: "contract";
+      readonly errorCount: number;
+      readonly paths: readonly string[];
+    }
+  | { readonly kind: "classify"; readonly beachId: string };
+
 export interface PublishRunDetails {
+  readonly sequence?: number;
   readonly checks?: PublishChecks;
   readonly operatorSub?: string;
 }
@@ -124,7 +146,7 @@ export const PUBLISH_RUN_LAST_SK = "last";
 export const PUBLISH_RUN_HISTORY_PREFIX = "run#";
 
 export interface PublishRun extends PublishRunDetails {
-  readonly sequence?: number;
+  readonly failureDetails?: PublishFailureDetails;
   readonly at: string; // 실행 시작(UTC ISO)
   readonly source: PublishSource;
   readonly result: "published" | "unchanged" | "failed";
@@ -208,6 +230,7 @@ export function buildPublishSummary(
     ...(counts ? { categoryCounts: counts } : {}),
     ...(input.notices ? { noticeDigest: noticeDigestOf(input.notices) } : {}),
     ...(input.jobId ? { jobId: input.jobId } : {}),
+    ...(input.sequence !== undefined ? { sequence: input.sequence } : {}),
     ...(input.checks ? { checks: input.checks } : {}),
     ...(input.operatorSub ? { operatorSub: input.operatorSub } : {}),
   };
