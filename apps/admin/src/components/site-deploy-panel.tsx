@@ -1005,7 +1005,10 @@ export function SiteDeployPanel({ demo }: { demo: boolean }) {
         <p className="text-body-s text-text-body">{t.demo}</p>
       ) : (
         <>
-          <LoadingStatus busy={firstPending} label={t.loading} />
+          <LoadingStatus
+            busy={state.signedIn && firstPending}
+            label={t.loading}
+          />
           {failed &&
             (state.failure?.code === "reauth" ? (
               <Notice
