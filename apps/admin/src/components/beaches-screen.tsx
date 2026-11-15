@@ -26,13 +26,14 @@ import {
   BEACH_PAGE_SIZE,
   BEACH_TABS,
   beachListHref,
-  delayedObservedAt,
   displayOf,
   isZoneVerified,
+  observedCellOf,
   parseBeachQuery,
   queryBeaches,
   sidoList,
   tabCounts,
+  waveCellOf,
   zoneDisplayName,
   zoneList,
   type BeachDisplay,
@@ -40,6 +41,8 @@ import {
   type BeachSeason,
   type BeachSummary,
   type BeachTab,
+  type ObservedCell,
+  type WaveCell,
 } from "@/lib/beaches";
 import { kstClock } from "@/lib/collection";
 import { kstDateTime } from "@/lib/inquiries";
@@ -70,9 +73,96 @@ import { Button, Notice } from "./ui";
 // - 읽기 전용: 편집 칸·노출 토글·일괄 변경·출입 통제 열 없음(D15-4 · G2)
 // - 한 줄 표(11행/쪽) + 6개 상태·연결 탭 + 이름·별칭 찾기 + 지역·특보 구역 거르기 + 주소 쿼리 유지
 // - 지금 표시 상태는 게시본 그대로(G1), 못 받으면 '확인 못 함'
-// - 파고·파주기·측정 시각은 현재 응답에 실측값이 없어 값을 만들지 않고 관측소 연결 여부만 표시함
+// - 파고·파주기·측정 시각은 게시본 값 그대로(#502). 못 받거나 모양이 틀리면 '확인 못 함', 측정소 없음은 '가까운 관측 없음'
 
 const t = messages.beaches;
+
+// 파고·파주기 칸 글자(값은 단위와 함께, 지연이면 마지막 값임을 글로도 알림)
+function waveText(cell: WaveCell): string {
+  switch (cell.kind) {
+    case "value":
+      return fill(cell.unit === "m" ? t.waveValueM : t.waveValueS, {
+        value: String(cell.value),
+      });
+    case "none":
+      return t.stationNone;
+    case "missing":
+      return t.noneDash;
+    case "unknown":
+      return t.waveUnknown;
+    case "loading":
+      return t.statusLoading;
+  }
+}
+
+function WaveValue({
+  cell,
+  dashForNone,
+}: {
+  cell: WaveCell;
+  dashForNone?: boolean;
+}) {
+  if (cell.kind === "loading") return <SkLine className="ml-auto w-10" />;
+  if (cell.kind === "value") {
+    return (
+      <span
+        className={`tabular-nums ${cell.delayed ? "text-status-stale-fg" : ""}`}
+      >
+        {waveText(cell)}
+        {cell.delayed && (
+          <span className="sr-only"> · {t.waveDelayedNote}</span>
+        )}
+      </span>
+    );
+  }
+  // 파주기의 가까운 관측 없음은 좁은 칸이라 '—'로 보이고 읽을 때는 이름으로 읽힘
+  if (cell.kind === "none" && dashForNone) {
+    return (
+      <span className="text-text-muted" aria-label={t.stationNone}>
+        {t.noneDash}
+      </span>
+    );
+  }
+  return <span className="text-caption text-text-muted">{waveText(cell)}</span>;
+}
+
+// 모바일 카드 한 줄 요약: '파고 0.6m', 지연이면 '· 지연'까지 글로 보임
+// 모바일에는 측정 칸이 없어 지연인데 값 없음(missing)도 '파고 — · 지연'으로 지연을 알림
+function mobileWaveText(cell: WaveCell): string {
+  if (cell.kind === "none") return t.stationNone;
+  const text = fill(t.mobileWave, { value: waveText(cell) });
+  const delayed =
+    (cell.kind === "value" && cell.delayed) || cell.kind === "missing";
+  return delayed ? `${text} · ${t.mobileWaveDelayed}` : text;
+}
+
+function ObservedValue({
+  cell,
+  nowIso,
+}: {
+  cell: ObservedCell;
+  nowIso: string;
+}) {
+  if (cell.kind === "loading") return <SkLine className="w-12" />;
+  if (cell.kind === "time") {
+    const time = kstClock(cell.at, nowIso);
+    return cell.delayed ? (
+      <span className="font-medium text-status-stale-fg tabular-nums">
+        {fill(t.delayedObserved, { time })}
+      </span>
+    ) : (
+      <span className="tabular-nums">{time}</span>
+    );
+  }
+  if (cell.kind === "none") {
+    return (
+      <span className="text-text-muted" aria-label={t.stationNone}>
+        {t.noneDash}
+      </span>
+    );
+  }
+  return <span className="text-caption text-text-muted">{t.waveUnknown}</span>;
+}
 
 type Published = ReturnType<typeof usePublished>["published"];
 
@@ -518,7 +608,6 @@ function BeachTable({
             b.seaZoneName,
             t.zoneNameUnknown,
           );
-          const delayedAt = delayedObservedAt(display);
           return (
             <tr
               key={b.id}
@@ -543,36 +632,21 @@ function BeachTable({
                 <StatusCell beach={b} display={display} published={published} />
               </td>
               <td className={`${TD} ${CELL_END}`}>
-                {b.waveHeight ? (
-                  t.stationConnected
-                ) : (
-                  <span className="text-caption text-text-muted">
-                    {t.stationNone}
-                  </span>
-                )}
+                <WaveValue
+                  cell={waveCellOf(published, b.id, "waveHeight", b.waveHeight)}
+                />
               </td>
               <td className={`${TD} ${CELL_END}`}>
-                {b.wavePeriod ? (
-                  t.stationConnected
-                ) : (
-                  <span className="text-text-muted">{t.noneDash}</span>
-                )}
+                <WaveValue
+                  cell={waveCellOf(published, b.id, "wavePeriod", b.wavePeriod)}
+                  dashForNone
+                />
               </td>
               <td className={TD}>
-                {delayedAt ? (
-                  <span className="font-medium text-status-stale-fg tabular-nums">
-                    {fill(t.delayedObserved, {
-                      time: kstClock(delayedAt, nowIso),
-                    })}
-                  </span>
-                ) : (
-                  <span
-                    className="text-text-muted"
-                    aria-label={t.observedUnavailable}
-                  >
-                    {t.noneDash}
-                  </span>
-                )}
+                <ObservedValue
+                  cell={observedCellOf(published, b.id, display, b.waveHeight)}
+                  nowIso={nowIso}
+                />
               </td>
               <td className={TD}>
                 <span className="inline-flex items-center gap-1.5">
@@ -626,7 +700,9 @@ function BeachCards({
         );
         const metaParts = [
           `${b.sido} ${b.sigungu}`,
-          b.waveHeight ? t.mobileWaveConnected : t.stationNone,
+          mobileWaveText(
+            waveCellOf(published, b.id, "waveHeight", b.waveHeight),
+          ),
           verified ? zoneText : `${zoneText} · ${t.zoneUnverified}`,
         ];
         return (
