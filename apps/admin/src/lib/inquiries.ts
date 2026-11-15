@@ -368,12 +368,10 @@ export function receivedRangeMs(
 
 function matchesReceived(
   receivedAt: string,
-  filter: ReceivedFilter,
-  now: Date,
+  range: ReturnType<typeof receivedRangeMs>,
 ): boolean {
   const ms = Date.parse(receivedAt);
   if (!Number.isFinite(ms)) return false;
-  const range = receivedRangeMs(filter, now);
   // 형식이 틀린 조건은 아무것도 맞지 않음(조건 없이 전체를 보여 주지 않음)
   if (range === null) return false;
   const { fromMs, toMs } = range;
@@ -420,15 +418,15 @@ export function inquiryServerQuery(
       : receivedRangeMs(filter.received, now);
   if (range === null) return { ok: false, invalid: "received" };
   // 서버는 4자리 연도 UTC 시각만 받음(utcInstant). 연도를 5자리로 잘못 넣은 값 등은 보내지 않음
-  const iso = (ms: number | null | undefined): string | undefined | null => {
-    if (ms === null || ms === undefined) return undefined;
+  const iso = (ms: number | null): string | undefined | null => {
+    if (ms === null) return undefined;
     const date = new Date(ms);
     if (!Number.isFinite(date.getTime())) return null;
     const text = date.toISOString();
     return SERVER_UTC_INSTANT.test(text) ? text : null;
   };
-  const from = iso(range?.fromMs);
-  const to = iso(range?.toMs);
+  const from = iso(range.fromMs);
+  const to = iso(range.toMs);
   if (from === null || to === null) return { ok: false, invalid: "received" };
   return {
     ok: true,
@@ -456,7 +454,11 @@ export function filterInquiries<T extends InquirySummary>(
   },
 ): T[] {
   const q = filter.query.trim().toLowerCase();
-  const now = options.now ?? new Date();
+  // 받은 시각 경계는 행마다 다시 계산하지 않고 한 번만 구함
+  const receivedRange =
+    filter.received === null
+      ? undefined
+      : receivedRangeMs(filter.received, options.now ?? new Date());
   return items.filter((item) => {
     if (filter.type !== null && item.type !== filter.type) return false;
     if (filter.beach !== null) {
@@ -467,8 +469,8 @@ export function filterInquiries<T extends InquirySummary>(
       }
     }
     if (
-      filter.received !== null &&
-      !matchesReceived(item.receivedAt, filter.received, now)
+      receivedRange !== undefined &&
+      !matchesReceived(item.receivedAt, receivedRange)
     ) {
       return false;
     }
