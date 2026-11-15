@@ -226,7 +226,7 @@ export type ReceivedPreset = "today" | "7d" | "30d" | "custom";
 
 export interface ReceivedFilter {
   readonly preset: ReceivedPreset;
-  // KST 입력값(YYYY-MM-DDTHH:mm)
+  // KST 입력값(YYYY-MM-DD · YYYY-MM-DDTHH:mm · YYYY-MM-DDTHH:mm:ss). 다른 형식은 틀린 조건으로 봄
   readonly from?: string;
   readonly to?: string;
 }
@@ -250,19 +250,31 @@ export function isReceivedFilterActive(
 ): boolean {
   if (received === null) return false;
   if (received.preset !== "custom") return true;
+  // 형식이 틀린 입력도 켜진 조건으로 봄(틀렸다는 안내가 보이게, 조용히 조건 없음이 되지 않게)
   return (
-    parseKstInputMs(received.from) !== null ||
-    parseKstInputMs(received.to) !== null
+    parseKstInput(received.from).kind !== "empty" ||
+    parseKstInput(received.to).kind !== "empty"
   );
 }
 
+// 직접 입력한 받은 시각의 문제: format은 형식이 틀림, order는 시작이 끝보다 늦음, null은 문제 없음
+// 화면이 이유에 맞는 안내를 고를 수 있게 둘을 나눠 돌려줌
+export function receivedRangeProblem(
+  received: Pick<ReceivedFilter, "preset" | "from" | "to"> | null,
+): "format" | "order" | null {
+  if (received === null || received.preset !== "custom") return null;
+  // 실제로 거르는 경계(날짜만 입력한 끝은 그날 끝까지)와 같은 값으로 비교함
+  const range = receivedRangeMs(received, new Date());
+  if (range === null) return "format";
+  const { fromMs, toMs } = range;
+  return fromMs !== null && toMs !== null && fromMs > toMs ? "order" : null;
+}
+
+// 형식이 틀렸거나 시작이 끝보다 늦으면 true
 export function isReceivedRangeInvalid(
   received: Pick<ReceivedFilter, "preset" | "from" | "to"> | null,
 ): boolean {
-  if (received === null || received.preset !== "custom") return false;
-  // 실제로 거르는 경계(날짜만 입력한 끝은 그날 끝까지)와 같은 값으로 비교함
-  const { fromMs, toMs } = receivedRangeMs(received, new Date());
-  return fromMs !== null && toMs !== null && fromMs > toMs;
+  return receivedRangeProblem(received) !== null;
 }
 
 export function hasActiveInquiryFilter(filter: InquiryFilter): boolean {
@@ -292,33 +304,72 @@ export function isKstToday(iso: string, now: Date = new Date()): boolean {
   return kstDateKey(new Date(ms)) === kstDateKey(now);
 }
 
-function parseKstInputMs(value: string | undefined): number | null {
-  if (!value || value.trim() === "") return null;
-  const trimmed = value.trim();
-  const normalized = /^\d{4}-\d{2}-\d{2}$/.test(trimmed)
-    ? `${trimmed}T00:00:00+09:00`
-    : /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(trimmed)
-      ? `${trimmed}:00+09:00`
-      : trimmed;
-  const ms = Date.parse(normalized);
-  return Number.isFinite(ms) ? ms : null;
-}
-
 const DAY_MS = 86_400_000;
 const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
+
+type KstInput =
+  | { readonly kind: "empty" }
+  | { readonly kind: "invalid" }
+  // ms: 입력한 시각(UTC ms) · span: 입력 단위 길이(날짜 하루·분 1분·초 1초·밀리초 1ms). 끝 경계는 ms + span - 1
+  | { readonly kind: "ok"; readonly ms: number; readonly span: number };
+
+// 받는 가장 이른 연도. 1000년 미만은 Date.UTC가 0~99년을 1900년대로 바꾸고, UTC로 옮기면
+// 서버가 받는 4자리 연도(utcInstant)를 벗어날 수 있어 받지 않음(입력 도중의 '0002-…'도 형식 오류로 안내)
+const MIN_INPUT_YEAR = 1000;
+
+// KST 입력값(YYYY-MM-DD · YYYY-MM-DDTHH:mm · YYYY-MM-DDTHH:mm:ss[.sss], datetime-local 값 형식)만 받음
+// 다른 형식은 실행 환경 시간대로 해석될 수 있어 받지 않고, 달력에 없는 날짜(2월 31일 등)도 넘기지 않음
+function parseKstInput(value: string | undefined): KstInput {
+  const text = value?.trim() ?? "";
+  if (text === "") return { kind: "empty" };
+  const m =
+    /^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?)?$/.exec(
+      text,
+    );
+  if (!m) return { kind: "invalid" };
+  const [y, mo, d, h = 0, mi = 0, s = 0] = m
+    .slice(1, 7)
+    .map((part) => (part === undefined ? undefined : Number(part)));
+  if (y! < MIN_INPUT_YEAR) return { kind: "invalid" };
+  const fraction = m[7];
+  const msPart = fraction === undefined ? 0 : Number(fraction.padEnd(3, "0"));
+  const local = Date.UTC(y!, mo! - 1, d!, h, mi, s, msPart);
+  const back = new Date(local);
+  if (
+    back.getUTCFullYear() !== y ||
+    back.getUTCMonth() !== mo! - 1 ||
+    back.getUTCDate() !== d ||
+    back.getUTCHours() !== h ||
+    back.getUTCMinutes() !== mi ||
+    back.getUTCSeconds() !== s
+  ) {
+    return { kind: "invalid" };
+  }
+  // 소수 초 입력은 밀리초 단위로 봄(09:00:00.5 → 그 밀리초까지)
+  const span =
+    m[4] === undefined
+      ? DAY_MS
+      : m[6] === undefined
+        ? 60_000
+        : fraction === undefined
+          ? 1_000
+          : 1;
+  return { kind: "ok", ms: local - KST_OFFSET_MS, span };
+}
 
 // 그 시각이 속한 KST 날의 자정(UTC ms)
 function kstDayStartMs(ms: number): number {
   return Math.floor((ms + KST_OFFSET_MS) / DAY_MS) * DAY_MS - KST_OFFSET_MS;
 }
 
-// 받은 시각 조건의 포함 경계(UTC ms). null은 그쪽 경계 없음
+// 받은 시각 조건의 포함 경계(UTC ms). fromMs·toMs의 null은 그쪽 경계 없음
+// 함수 결과 null은 직접 입력한 값이 형식에 맞지 않음(경계를 조용히 버리지 않고 틀린 조건으로 봄)
 // 오늘은 KST 자정부터 다음 날 자정 직전까지. 끝은 입력한 단위의 끝까지 포함:
 // 날짜만이면 그날 자정 직전, 분까지(datetime-local)면 그 분의 59.999초(09:00까지 → 09:00:30 포함)
 export function receivedRangeMs(
   filter: ReceivedFilter,
   now: Date,
-): { readonly fromMs: number | null; readonly toMs: number | null } {
+): { readonly fromMs: number | null; readonly toMs: number | null } | null {
   const nowMs = now.getTime();
   if (filter.preset === "today") {
     const start = kstDayStartMs(nowMs);
@@ -329,27 +380,24 @@ export function receivedRangeMs(
   if (filter.preset === "30d") {
     return { fromMs: nowMs - 30 * DAY_MS, toMs: nowMs };
   }
-  const toMs = parseKstInputMs(filter.to);
-  const toText = filter.to?.trim() ?? "";
-  const toEnd = /^\d{4}-\d{2}-\d{2}$/.test(toText)
-    ? DAY_MS - 1
-    : /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(toText)
-      ? 60_000 - 1
-      : 0;
+  const from = parseKstInput(filter.from);
+  const to = parseKstInput(filter.to);
+  if (from.kind === "invalid" || to.kind === "invalid") return null;
   return {
-    fromMs: parseKstInputMs(filter.from),
-    toMs: toMs === null ? null : toMs + toEnd,
+    fromMs: from.kind === "ok" ? from.ms : null,
+    toMs: to.kind === "ok" ? to.ms + to.span - 1 : null,
   };
 }
 
 function matchesReceived(
   receivedAt: string,
-  filter: ReceivedFilter,
-  now: Date,
+  range: ReturnType<typeof receivedRangeMs>,
 ): boolean {
   const ms = Date.parse(receivedAt);
   if (!Number.isFinite(ms)) return false;
-  const { fromMs, toMs } = receivedRangeMs(filter, now);
+  // 형식이 틀린 조건은 아무것도 맞지 않음(조건 없이 전체를 보여 주지 않음)
+  if (range === null) return false;
+  const { fromMs, toMs } = range;
   if (fromMs !== null && ms < fromMs) return false;
   if (toMs !== null && ms > toMs) return false;
   return true;
@@ -388,17 +436,20 @@ export function inquiryServerQuery(
     return { ok: false, invalid: "received" };
   }
   const range =
-    filter.received === null ? null : receivedRangeMs(filter.received, now);
+    filter.received === null
+      ? { fromMs: null, toMs: null }
+      : receivedRangeMs(filter.received, now);
+  if (range === null) return { ok: false, invalid: "received" };
   // 서버는 4자리 연도 UTC 시각만 받음(utcInstant). 연도를 5자리로 잘못 넣은 값 등은 보내지 않음
-  const iso = (ms: number | null | undefined): string | undefined | null => {
-    if (ms === null || ms === undefined) return undefined;
+  const iso = (ms: number | null): string | undefined | null => {
+    if (ms === null) return undefined;
     const date = new Date(ms);
     if (!Number.isFinite(date.getTime())) return null;
     const text = date.toISOString();
     return SERVER_UTC_INSTANT.test(text) ? text : null;
   };
-  const from = iso(range?.fromMs);
-  const to = iso(range?.toMs);
+  const from = iso(range.fromMs);
+  const to = iso(range.toMs);
   if (from === null || to === null) return { ok: false, invalid: "received" };
   return {
     ok: true,
@@ -426,7 +477,11 @@ export function filterInquiries<T extends InquirySummary>(
   },
 ): T[] {
   const q = filter.query.trim().toLowerCase();
-  const now = options.now ?? new Date();
+  // 받은 시각 경계는 행마다 다시 계산하지 않고 한 번만 구함
+  const receivedRange =
+    filter.received === null
+      ? undefined
+      : receivedRangeMs(filter.received, options.now ?? new Date());
   return items.filter((item) => {
     if (filter.type !== null && item.type !== filter.type) return false;
     if (filter.beach !== null) {
@@ -437,8 +492,8 @@ export function filterInquiries<T extends InquirySummary>(
       }
     }
     if (
-      filter.received !== null &&
-      !matchesReceived(item.receivedAt, filter.received, now)
+      receivedRange !== undefined &&
+      !matchesReceived(item.receivedAt, receivedRange)
     ) {
       return false;
     }

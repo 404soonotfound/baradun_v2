@@ -30,7 +30,7 @@ import {
   hasActiveInquiryFilter,
   INQUIRY_PAGE_MAX,
   isKstToday,
-  isReceivedRangeInvalid,
+  receivedRangeProblem,
   MEMO_MAX,
   previewText,
   REJECT_REASON_MAX,
@@ -531,6 +531,7 @@ function ReceivedFilterMenu({
   const box = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
   useDismiss(open, setOpen, box, trigger);
+  const rangeProblem = receivedRangeProblem({ preset: "custom", from, to });
 
   const presets: readonly {
     readonly key: "today" | "7d" | "30d";
@@ -616,16 +617,18 @@ function ReceivedFilterMenu({
                 className="h-8 rounded-admin-control border border-border-strong bg-bg-surface px-2 text-body-s text-text-default"
               />
             </label>
-            {isReceivedRangeInvalid({ preset: "custom", from, to }) && (
+            {rangeProblem !== null && (
               <p role="alert" className="px-1 text-caption text-danger-text">
-                {t.receivedInvalidRange}
+                {rangeProblem === "format"
+                  ? t.receivedInvalidFormat
+                  : t.receivedInvalidRange}
               </p>
             )}
             <Button
               size="small"
               disabled={
                 (from.trim() === "" && to.trim() === "") ||
-                isReceivedRangeInvalid({ preset: "custom", from, to })
+                rangeProblem !== null
               }
               onClick={() => {
                 onChange({ preset: "custom", from, to });

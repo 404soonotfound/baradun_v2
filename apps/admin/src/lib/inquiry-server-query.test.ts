@@ -3,10 +3,13 @@ import { localOps } from "./auth/local-dev";
 import {
   BEACH_NONE,
   EMPTY_INQUIRY_FILTER,
+  filterInquiries,
   INQUIRY_SEARCH_MAX,
   inquiryServerQuery,
+  isReceivedFilterActive,
   isReceivedRangeInvalid,
   receivedRangeMs,
+  receivedRangeProblem,
 } from "./inquiries";
 
 // 문의 화면 조건 → 서버 필터 요청 (#502, 서버 #491)
@@ -15,7 +18,7 @@ const NOW = new Date("2026-11-15T08:30:00.000Z");
 
 describe("receivedRangeMs", () => {
   it("오늘은 KST 자정부터 다음 날 자정 직전까지", () => {
-    const { fromMs, toMs } = receivedRangeMs({ preset: "today" }, NOW);
+    const { fromMs, toMs } = receivedRangeMs({ preset: "today" }, NOW)!;
     expect(new Date(fromMs!).toISOString()).toBe("2026-11-14T15:00:00.000Z");
     expect(new Date(toMs!).toISOString()).toBe("2026-11-15T14:59:59.999Z");
   });
@@ -25,7 +28,7 @@ describe("receivedRangeMs", () => {
     const { fromMs } = receivedRangeMs(
       { preset: "today" },
       new Date("2026-11-15T15:10:00.000Z"),
-    );
+    )!;
     expect(new Date(fromMs!).toISOString()).toBe("2026-11-15T15:00:00.000Z");
   });
 
@@ -37,7 +40,7 @@ describe("receivedRangeMs", () => {
     const custom = receivedRangeMs(
       { preset: "custom", from: "2026-11-02T13:00", to: "2026-11-03" },
       NOW,
-    );
+    )!;
     expect(new Date(custom.fromMs!).toISOString()).toBe(
       "2026-11-02T04:00:00.000Z",
     );
@@ -45,10 +48,95 @@ describe("receivedRangeMs", () => {
     expect(new Date(custom.toMs!).toISOString()).toBe(
       "2026-11-03T14:59:59.999Z",
     );
+    expect(
+      receivedRangeProblem({
+        preset: "custom",
+        from: "2026-11-03T10:00",
+        to: "2026-11-03T09:00",
+      }),
+    ).toBe("order");
     expect(receivedRangeMs({ preset: "custom", from: " " }, NOW)).toEqual({
       fromMs: null,
       toMs: null,
     });
+    // 초까지 입력한 끝은 그 초 끝까지
+    expect(
+      receivedRangeMs({ preset: "custom", to: "2026-11-03T09:00:30" }, NOW)!
+        .toMs,
+    ).toBe(Date.parse("2026-11-03T00:00:30.999Z"));
+    // 소수 초(datetime-local 값 형식)는 그 밀리초까지
+    expect(
+      receivedRangeMs(
+        {
+          preset: "custom",
+          from: "2026-11-03T09:00:00.5",
+          to: "2026-11-03T09:00:00.250",
+        },
+        NOW,
+      ),
+    ).toEqual({
+      fromMs: Date.parse("2026-11-03T00:00:00.500Z"),
+      toMs: Date.parse("2026-11-03T00:00:00.250Z"),
+    });
+  });
+
+  it.each([
+    ["5자리 연도", "20260-11-03T10:00"],
+    ["1000년 미만(입력 도중 값)", "0002-11-15T10:00"],
+    ["소수 초 4자리", "2026-11-03T09:00:00.1234"],
+    ["없는 달", "2026-13-01"],
+    ["달력에 없는 날(다음 달로 넘기지 않음)", "2026-02-31"],
+    ["없는 시각", "2026-11-03T24:00"],
+    ["시간대가 붙은 형식(실행 환경 시간대 해석 방지)", "2026-11-03T09:00:00Z"],
+    ["날짜가 아닌 글", "어제"],
+  ])(
+    "형식이 틀린 직접 입력은 경계를 버리지 않고 틀린 조건(null): %s",
+    (_, bad) => {
+      expect(receivedRangeMs({ preset: "custom", from: bad }, NOW)).toBeNull();
+      expect(
+        receivedRangeMs({ preset: "custom", from: "2026-11-01", to: bad }, NOW),
+      ).toBeNull();
+      expect(isReceivedRangeInvalid({ preset: "custom", from: bad })).toBe(
+        true,
+      );
+      // 화면이 '시작이 끝보다 늦음'이 아닌 형식 안내를 고를 수 있게 이유를 나눔
+      expect(receivedRangeProblem({ preset: "custom", from: bad })).toBe(
+        "format",
+      );
+      // 조건 없음이 되지 않고 켜진 조건으로 남아 안내가 보임
+      expect(isReceivedFilterActive({ preset: "custom", from: bad })).toBe(
+        true,
+      );
+      expect(
+        inquiryServerQuery(
+          { ...EMPTY_INQUIRY_FILTER, received: { preset: "custom", to: bad } },
+          NOW,
+        ),
+      ).toEqual({ ok: false, invalid: "received" });
+    },
+  );
+
+  it("형식이 틀린 조건으로 받은 목록을 거르면 아무것도 맞지 않음(전체를 보여 주지 않음)", () => {
+    const rows = [
+      {
+        inquiryId: "00000000-0000-4000-8000-000000000001",
+        type: "data_error",
+        receivedAt: "2026-11-15T08:00:00.000Z",
+        status: "received",
+        version: 1,
+        legacy: false,
+      },
+    ];
+    expect(
+      filterInquiries(
+        rows,
+        {
+          ...EMPTY_INQUIRY_FILTER,
+          received: { preset: "custom", from: "2026-02-31" },
+        },
+        { beachName: (id) => id, typeLabel: (t) => t, now: NOW },
+      ),
+    ).toEqual([]);
   });
 });
 
