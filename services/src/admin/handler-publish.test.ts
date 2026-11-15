@@ -943,7 +943,13 @@ describe("게시 현황 (GET /ops/publish)", () => {
       id: "n-eeeeeeeeeeee",
       title: { ko: "지운 공지", en: "Deleted" },
     };
-    put(table, noticeItem(E, { deletedAt: "2026-11-12T05:50:00Z" }));
+    put(
+      table,
+      noticeItem(E, {
+        deletedAt: "2026-11-12T05:50:00Z",
+        updatedAt: "2026-11-12T05:50:00Z",
+      }),
+    );
     const published = [{ id: NOTICE_A.id, ...contentA }, { ...E }];
     const view = parse(
       await handleOps(
@@ -974,7 +980,7 @@ describe("게시 현황 (GET /ops/publish)", () => {
           change: "remove",
           kind: "general",
           title: "지운 공지",
-          updatedAt: "2026-11-11T00:00:00Z",
+          updatedAt: "2026-11-12T05:50:00Z",
           startsAt: NOTICE_A.startsAt,
           endsAt: NOTICE_A.endsAt,
         },
@@ -1038,6 +1044,73 @@ describe("게시 현황 (GET /ops/publish)", () => {
       after: edited,
     });
     expect(view.pendingNotices.items[0]).not.toHaveProperty("updatedAt");
+  });
+
+  it("빠지는 공지의 변경 시각은 지우기·노출 끝내기·시작 미루기일 때만 주고 노출 확정 시각을 대신 쓰지 않는다", async () => {
+    const table = new FakeTable();
+    const notice = (id: string, extra: Partial<typeof NOTICE_A> = {}) => ({
+      ...NOTICE_A,
+      id,
+      ...extra,
+    });
+    // 지우기 전에 쓴 예전 기록(마지막 쓰기가 노출 확정) → 시각 모름
+    const oldDeleted = notice("n-ffffffffffff");
+    put(table, noticeItem(oldDeleted, { deletedAt: "2026-11-12T05:50:00Z" }));
+    // 노출 끝내기(끝 시각을 그 순간으로) → 그 시각
+    const ended = notice("n-gggggggggggg", {
+      endsAt: "2026-11-12T05:40:00Z",
+    });
+    put(table, noticeItem(ended, { updatedAt: "2026-11-12T05:40:00Z" }));
+    // 예정된 끝 시각이 지나 저절로 빠짐 → 운영자 변경이 아니므로 시각 없음
+    const expired = notice("n-hhhhhhhhhhhh", {
+      endsAt: "2026-11-12T03:00:00Z",
+    });
+    put(table, noticeItem(expired));
+    // 시작 시각을 뒤로 미뤄 다시 노출 확정 → 노출 확정 시각
+    const later = notice("n-iiiiiiiiiiii", {
+      startsAt: "2026-11-13T00:00:00Z",
+    });
+    put(
+      table,
+      noticeItem(later, {
+        exposedAt: "2026-11-12T05:30:00Z",
+        updatedAt: "2026-11-12T05:30:00Z",
+      }),
+    );
+    const published = [oldDeleted, ended, expired, later].map((n) => ({
+      ...n,
+      startsAt: NOTICE_A.startsAt,
+      endsAt: NOTICE_A.endsAt,
+    }));
+    const view = parse(
+      await handleOps(
+        event("GET", "/ops/publish"),
+        deps("viewer", table, {
+          snapshots: fakeSnapshots({
+            "data/manifest.json": manifest(published),
+          }),
+        }),
+      ),
+    );
+    const byId = Object.fromEntries(
+      (view.pendingNotices.items as { id: string; change: string }[]).map(
+        (item) => [item.id, item],
+      ),
+    );
+    expect(Object.values(byId).map((item) => item.change)).toEqual([
+      "remove",
+      "remove",
+      "remove",
+      "remove",
+    ]);
+    expect(byId["n-ffffffffffff"]).not.toHaveProperty("updatedAt");
+    expect(byId["n-gggggggggggg"]).toMatchObject({
+      updatedAt: "2026-11-12T05:40:00Z",
+    });
+    expect(byId["n-hhhhhhhhhhhh"]).not.toHaveProperty("updatedAt");
+    expect(byId["n-iiiiiiiiiiii"]).toMatchObject({
+      updatedAt: "2026-11-12T05:30:00Z",
+    });
   });
 
   it("게시 기록은 계약 실패 경로의 상한과 허용 형식을 검사한다", async () => {

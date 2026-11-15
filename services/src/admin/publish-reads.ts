@@ -453,19 +453,27 @@ export function buildHistory(
     .slice(0, HISTORY_LIMIT);
 }
 
-// 대기 변경을 만든 노출 확정·끝내기·지우기의 시각만 씀(pendingActor와 같은 기준)
-// 그 뒤 문구만 저장한 수정이나 되돌림 대기는 이 변경의 시각이 아니므로 넣지 않음
+// 대기 변경을 만든 운영자 조작(노출 확정·끝내기·지우기)의 시각만 씀. 마지막 쓰기가 그 조작일 때만 알 수 있음
+// 그 뒤 문구만 저장한 수정, 되돌림 대기, 예정된 끝 시각이 지나 저절로 빠지는 공지는 시각을 주지 않음
 function pendingChangedAt(
   record: NoticeRecord | undefined,
   held: boolean,
+  change: PendingNotice["change"],
+  nowMs: number,
 ): string | undefined {
   if (!record || held) return undefined;
   const { updatedAt } = record;
-  return updatedAt === record.exposedAt ||
-    updatedAt === record.live?.endsAt ||
-    updatedAt === record.deletedAt
-    ? updatedAt
-    : undefined;
+  const exposed = record.deletedAt === null && updatedAt === record.exposedAt;
+  if (change !== "remove") return exposed ? updatedAt : undefined;
+  if (record.deletedAt !== null) {
+    return updatedAt === record.deletedAt ? updatedAt : undefined;
+  }
+  // 노출 끝내기는 끝 시각을 그 순간으로 바꿈
+  if (updatedAt === record.live?.endsAt) return updatedAt;
+  // 시작 시각을 뒤로 미뤄 다시 노출 확정해 지금 게시본에서 빠지는 경우
+  const startsLater =
+    record.live !== null && Date.parse(record.live.startsAt) > nowMs;
+  return exposed && startsLater ? updatedAt : undefined;
 }
 
 // 다음 게시에 실릴 공지와 지금 게시본 공지의 차이. publisher와 같은 함수로 계산함(다시 판단하지 않음)
@@ -487,6 +495,8 @@ export function pendingNoticesOf(
     const updatedAt = pendingChangedAt(
       recordsById.get(n.id),
       Object.hasOwn(hold?.notices ?? {}, n.id),
+      change,
+      nowMs,
     );
     return {
       id: n.id,
