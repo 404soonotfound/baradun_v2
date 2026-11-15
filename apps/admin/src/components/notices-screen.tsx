@@ -145,8 +145,10 @@ function useNoticeList(): {
   const current = signedIn && loaded?.key === key ? loaded : null;
   const kept = signedIn && good?.generation === generation ? good.result : null;
   return {
-    result: current?.result.ok ? current.result : (kept ?? current?.result ?? null),
-    waiting: signedIn && current === null && kept === null,
+    result: current?.result.ok
+      ? current.result
+      : (kept ?? current?.result ?? null),
+    waiting: !signedIn || (current === null && kept === null),
     timedOut: current !== null && current.timedOut && kept === null,
     refreshFailure:
       kept && current && !current.result.ok ? current.result : null,
@@ -848,7 +850,7 @@ function NoticeList({
             </svg>
             {t.new}
           </Button>
-          {edit && (
+          {snapshot.status !== "signed_out" && edit && (
             <p id="notice-new-block" className="text-label-s text-text-muted">
               {edit}
             </p>
@@ -1013,7 +1015,10 @@ function NoticeList({
         )}
 
         <div className="mt-3">
-          <LoadingStatus busy={waiting} label={t.loading} />
+          <LoadingStatus
+            busy={snapshot.status !== "signed_out" && waiting}
+            label={t.loading}
+          />
           <span role="status" className="sr-only">
             {timing.slow ? messages.loading.slow : ""}
           </span>
@@ -2363,6 +2368,7 @@ function ReloadCopy({
 function NoticesBody() {
   const router = useRouter();
   const params = useSearchParams();
+  const snapshot = useSessionSnapshot();
   const id = params.get("id");
   const creating = params.get("new") === "1";
   const { result, waiting, timedOut, refreshFailure, reload } = useNoticeList();
@@ -2420,7 +2426,10 @@ function NoticesBody() {
           )}
           {editPlaceholder && (
             <>
-              <LoadingStatus busy={editWaiting} label={t.loading} />
+              <LoadingStatus
+                busy={snapshot.status !== "signed_out" && editWaiting}
+                label={t.loading}
+              />
               <span role="status" className="sr-only">
                 {editTiming.slow ? messages.loading.slow : ""}
               </span>

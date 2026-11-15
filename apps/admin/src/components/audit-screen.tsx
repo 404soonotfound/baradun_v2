@@ -661,7 +661,7 @@ function AuditBody({ beaches }: { beaches: Beaches }) {
   }, [typed, q]);
 
   const current = signedIn && loaded?.key === key ? loaded : null;
-  const pending = signedIn && !demo && current === null;
+  const pending = !demo && (!signedIn || current === null);
   const timing = useLoadTiming(pending);
   const placeholder = !demo && (pending || timing.phase !== "content");
   const result = placeholder ? null : (current?.result ?? null);
@@ -841,14 +841,16 @@ function AuditBody({ beaches }: { beaches: Beaches }) {
           </div>
 
           <div className="mt-3 flex flex-col gap-3">
-            <LoadingStatus busy={pending} label={t.loading} />
+            <LoadingStatus busy={signedIn && pending} label={t.loading} />
             <span role="status" className="sr-only">
               {timing.slow ? messages.loading.slow : ""}
             </span>
             {placeholder && (
               <AuditSkeleton cls={loadClass(timing)} slow={timing.slow} />
             )}
-            {timedOut && <LoadFailed onRetry={() => setAttempt((n) => n + 1)} />}
+            {timedOut && (
+              <LoadFailed onRetry={() => setAttempt((n) => n + 1)} />
+            )}
             {!timedOut && result && !result.ok && (
               <Failure
                 title={t.error}
