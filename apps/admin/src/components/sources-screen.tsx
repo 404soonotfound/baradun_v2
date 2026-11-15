@@ -1742,7 +1742,11 @@ function SourcesBody() {
     >
       <LoadingStatus busy={signedIn && pending} label={t.loading} />
       <LoadingStatus
-        busy={!placeholder && collectionLoad.pending}
+        busy={
+          view !== null &&
+          (id === null || source !== null) &&
+          collectionLoad.pending
+        }
         label={fill(messages.loading.screen, { name: t.history24h })}
       />
       <span role="status" className="sr-only">
