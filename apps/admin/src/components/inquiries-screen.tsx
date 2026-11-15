@@ -870,7 +870,6 @@ function InquiryList({
     at: number;
   } | null>(null);
   const [attempt, setAttempt] = useState(0);
-  const cursor = cursors.at(-1) ?? null;
   // 받은 응답을 요청 조건과 함께 둠. 조건이 바뀌면 응답이 올 때까지 '불러오는 중'
   // 다시 로그인하면(generation이 늚) 'reauth'로 끝난 읽기를 저절로 다시 함
   // 거르기는 서버가 함(#491). 검색어만 새로 치면 다 친 뒤(SEARCH_DEBOUNCE_MS) 보내고, 그 밖의 조건·검색어 지우기는 바로 보냄
@@ -892,12 +891,15 @@ function InquiryList({
     () => ({ ...filter, query: sent.query }),
     [filter, sent.query],
   );
-  const isFiltered = hasActiveInquiryFilter(sentFilter);
-  const requestLimit = isFiltered ? INQUIRY_PAGE_MAX : PAGE_SIZE;
+  // 보낸 조건 기준 거르기 여부(요청에 씀). 화면 모드(isFiltered)는 아래에서 보여 줄 응답 기준으로 정함
+  const sentFiltered = hasActiveInquiryFilter(sentFilter);
+  const requestLimit = sentFiltered ? INQUIRY_PAGE_MAX : PAGE_SIZE;
+  // 거르기 중에는 비필터 쪽 cursor를 쓰지 않음(검색어를 치는 중 1쪽 요청이 먼저 나가지 않게)
+  const cursor = sentFiltered ? null : (cursors.at(-1) ?? null);
   const serverQuery = useMemo(
     () =>
-      isFiltered ? inquiryServerQuery(sentFilter, new Date(sent.at)) : null,
-    [isFiltered, sentFilter, sent.at],
+      sentFiltered ? inquiryServerQuery(sentFilter, new Date(sent.at)) : null,
+    [sentFiltered, sentFilter, sent.at],
   );
   const filters = serverQuery?.ok ? serverQuery.query : undefined;
   // 서버가 거절할 조건(형식 밖 값)은 보내지 않고 안내만 함
@@ -914,11 +916,15 @@ function InquiryList({
   const key = `${status ?? "all"}|${cursor ?? ""}|${requestLimit}|${filtersKey}|${attempt}|${generation}`;
   const [loaded, setLoaded] = useState<{
     key: string;
+    filtered: boolean;
     timedOut: boolean;
     result: OpsResult<InquiryPage>;
   } | null>(null);
-  const current = signedIn && loaded?.key === key ? loaded : null;
-  const loadingMore = loadingMoreKey === key;
+  // 서버가 거절할 조건이면 보내지 않고 마지막으로 받은 목록을 그대로 보여 줌('목록이 바뀌지 않았어요')
+  const viewKey = blocked && loaded ? loaded.key : key;
+  const isFiltered = blocked && loaded ? loaded.filtered : sentFiltered;
+  const current = signedIn && loaded?.key === viewKey ? loaded : null;
+  const loadingMore = loadingMoreKey === viewKey;
   const pending = !signedIn || (!blocked && current === null);
   const timing = useLoadTiming(pending);
   const placeholder = pending || timing.phase !== "content";
@@ -997,7 +1003,10 @@ function InquiryList({
       LOADING_TIMES.timeout,
     ).then(async ({ timedOut, result: next }) => {
       if (!live) return;
-      setLoaded({ key, timedOut, result: next });
+      setLoaded({ key, filtered: sentFiltered, timedOut, result: next });
+      // 같은 조건의 첫 쪽을 새로 받았으면 그 조건으로 이어 읽어 둔 목록·실패 표시는 비우고 다시 채움(중복 방지)
+      setExtra((prev) => (prev?.key === key ? null : prev));
+      setMoreFailedKey((prev) => (prev === key ? null : prev));
       if (next.ok && next.body.counts) {
         setReceived({ counts: next.body.counts, at: Date.now() });
         if (owner) setReceivedCount(owner, next.body.counts.received);
@@ -1028,10 +1037,8 @@ function InquiryList({
   };
 
   const updateFilter = (next: InquiryFilter) => {
-    if (hasActiveInquiryFilter(next) !== hasActiveInquiryFilter(filter)) {
-      setCursors([null]);
-      setExtra(null);
-    }
+    // 비필터 쪽 위치는 거르기를 끄면 첫 쪽으로(거르기 중에는 cursor를 쓰지 않음)
+    if (!hasActiveInquiryFilter(next)) setCursors([null]);
     setFilter(next);
     setFilterPage(0);
     // 검색어만 새로 쳤으면 위 debounce가 보냄. 그 밖의 조건 변경·검색어 지우기는 바로 보냄
@@ -1045,7 +1052,7 @@ function InquiryList({
   };
 
   const pageIndex = cursors.length - 1;
-  const activeExtra = extra?.key === key ? extra : null;
+  const activeExtra = extra?.key === viewKey ? extra : null;
   const rawLoadedItems = useMemo(() => {
     if (!result?.ok) return [];
     const base = result.body.items;
@@ -1101,7 +1108,8 @@ function InquiryList({
   // '다음 목록 더 불러오기': 지금 수보다 한 쪽(6행) 더 찰 때까지 몇 번만 이어 읽음
   // 읽는 사이 조건이 바뀌면 멈춤(바뀐 조건의 결과에 이전 조건의 쪽을 붙이거나 덮지 않게)
   const loadMoreForFilter = () => {
-    if (!lastNextCursor || loadingMore) return;
+    // 조건이 형식 밖이면(보내지 않은 상태) 이전 조건의 cursor로 이어 읽지 않음
+    if (!lastNextCursor || loadingMore || blocked) return;
     const targetKey = key;
     void continueReading(
       targetKey,
@@ -1112,7 +1120,7 @@ function InquiryList({
     );
   };
 
-  const moreFailed = moreFailedKey === key;
+  const moreFailed = moreFailedKey === viewKey;
 
   const counts = received
     ? adjustCounts(received.counts, received.at, saved)
@@ -1240,7 +1248,7 @@ function InquiryList({
               <Button
                 variant="secondary"
                 size="small"
-                disabled={loadingMore}
+                disabled={loadingMore || blocked}
                 onClick={loadMoreForFilter}
               >
                 {loadingMore ? (
@@ -1423,7 +1431,7 @@ function InquiryList({
               <Button
                 variant="secondary"
                 size="small"
-                disabled={loadingMore}
+                disabled={loadingMore || blocked}
                 onClick={loadMoreForFilter}
               >
                 {loadingMore ? (
