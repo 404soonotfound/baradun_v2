@@ -31,8 +31,28 @@ export interface PublishChecks {
   readonly beachIds?: boolean;
 }
 
+// 게시 실패 요약(#499). 원문 메시지 없이 개수·데이터 위치만 옴. 모양이 틀린 기록은 서버가 뺌
+export type PublishFailureDetails =
+  | {
+      readonly kind: "beach_ids";
+      readonly where: "source" | "beaches" | "status";
+      readonly missingCount: number;
+      readonly extraCount: number;
+      readonly duplicateCount: number;
+    }
+  | {
+      readonly kind: "contract";
+      readonly errorCount: number;
+      // 예: StatusFile:/beaches/b0001/observation:required:metrics (최대 5개)
+      readonly paths: readonly string[];
+    }
+  | { readonly kind: "classify"; readonly beachId: string };
+
 // 서버가 새 값을 더해도 숨기지 않게 원인·결과는 넓게 받음
 export interface HistoryItem {
+  // 게시 잠금 실행 순번. 예전 기록에는 없음
+  readonly sequence?: number;
+  readonly failureDetails?: PublishFailureDetails;
   readonly checks?: PublishChecks;
   readonly operator?: string;
   readonly result: "published" | "failed" | string;
@@ -54,6 +74,8 @@ export interface RunView {
   readonly version: string;
   readonly reason?: string;
   readonly target?: string;
+  readonly sequence?: number;
+  readonly failureDetails?: PublishFailureDetails;
 }
 
 export interface NoticeSnapshot {
@@ -68,6 +90,10 @@ export interface NoticeSnapshot {
 export interface PendingNotice {
   readonly id: string;
   readonly before?: NoticeSnapshot;
+  // 다음 게시에 실릴 모양(add·update). remove에는 없음
+  readonly after?: NoticeSnapshot;
+  // 대기 중인 변경(노출 확정·끝내기·지우기)을 한 시각. 모르면 없음
+  readonly updatedAt?: string;
   readonly updatedBy?: string;
   readonly change: "add" | "update" | "remove" | string;
   readonly kind: string;
@@ -392,7 +418,11 @@ export function parseAppSettings(raw: unknown): AppSettingsState {
     return { kind: "invalid" };
   }
   const untilRaw = (maint as Record<string, unknown>).until;
-  if (untilRaw !== undefined && untilRaw !== null && typeof untilRaw !== "string") {
+  if (
+    untilRaw !== undefined &&
+    untilRaw !== null &&
+    typeof untilRaw !== "string"
+  ) {
     return { kind: "invalid" };
   }
   return {
@@ -440,9 +470,7 @@ export function parseCurrentSettings(
   }
   const rawBuild = current.minWebBuild as unknown;
   const minWebBuild =
-    typeof rawBuild === "number" &&
-    Number.isInteger(rawBuild) &&
-    rawBuild >= 1
+    typeof rawBuild === "number" && Number.isInteger(rawBuild) && rawBuild >= 1
       ? rawBuild
       : null;
   return { maintenance, minWebBuild };
@@ -490,8 +518,7 @@ export function compareAppSettings(
     maintenanceUntilChanged: untilChanged,
     nextMaintenance: maintenancePending && nextVal ? nextVal.maintenance : null,
     minWebBuildPending,
-    nextMinWebBuild:
-      minWebBuildPending && nextVal ? nextVal.minWebBuild : null,
+    nextMinWebBuild: minWebBuildPending && nextVal ? nextVal.minWebBuild : null,
   };
 }
 

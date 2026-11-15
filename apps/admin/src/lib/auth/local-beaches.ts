@@ -7,6 +7,27 @@ import type { OpsRequest, OpsResult } from "./ops-fetch";
 const at = (minutes: number) =>
   new Date(Date.now() + minutes * 60_000).toISOString();
 
+// 게시본 파고·파주기 한 칸(서버 응답처럼 값·단위·관측 시각·상태만). 측정소 없음은 값·시각이 null
+const wave = (
+  unit: "m" | "s",
+  value: number | null,
+  minutesAgo: number | null,
+  state: "fresh" | "delayed" | "none",
+) => ({
+  value,
+  unit,
+  observedAt: minutesAgo === null ? null : at(-minutesAgo),
+  state,
+});
+const observation = (
+  height: ReturnType<typeof wave>,
+  period: ReturnType<typeof wave>,
+) => ({ metrics: { waveHeight: height, wavePeriod: period } });
+const fresh = observation(
+  wave("m", 0.6, 20, "fresh"),
+  wave("s", 8, 20, "fresh"),
+);
+
 export function localPublishedView() {
   const validUntil = at(41);
   return {
@@ -15,10 +36,14 @@ export function localPublishedView() {
     generatedAt: at(-4),
     maintenance: { active: false, until: null },
     beaches: {
-      b0001: { category: "clear", reasons: [], validUntil },
+      b0001: { category: "clear", reasons: [], validUntil, observation: fresh },
       b0002: {
         category: "unavailable",
         validUntil,
+        observation: observation(
+          wave("m", 2.4, 15, "fresh"),
+          wave("s", 6, 15, "fresh"),
+        ),
         reasons: [
           {
             code: "warning",
@@ -33,6 +58,7 @@ export function localPublishedView() {
       b0003: {
         category: "undetermined",
         validUntil,
+        observation: fresh,
         reasons: [
           {
             code: "warning_unknown",
@@ -43,6 +69,10 @@ export function localPublishedView() {
         ],
       },
       b0004: {
+        observation: observation(
+          wave("m", 1.2, 130, "delayed"),
+          wave("s", null, null, "none"),
+        ),
         category: "undetermined",
         validUntil,
         reasons: [
@@ -54,7 +84,15 @@ export function localPublishedView() {
           },
         ],
       },
-      b0005: { category: "clear", reasons: [], validUntil },
+      b0005: {
+        category: "clear",
+        reasons: [],
+        validUntil,
+        observation: observation(
+          wave("m", null, null, "none"),
+          wave("s", null, null, "none"),
+        ),
+      },
     },
   };
 }
