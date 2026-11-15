@@ -34,6 +34,10 @@ export interface InquirySummary {
   readonly status: InquiryStatus | string;
   readonly version: number;
   readonly legacy: boolean;
+  // preview=true로 요청했을 때만 옴(#491). 공백을 줄여 42자까지, 잘렸으면 '…'
+  readonly messagePreview?: string;
+  // 미리보기를 뺀 이유: restricted(보기 권한) · empty(본문 없음). 모르는 값도 숨기지 않고 받음
+  readonly messagePreviewUnavailableReason?: "restricted" | "empty" | string;
 }
 
 export interface InquiryDetail extends InquirySummary {
@@ -62,12 +66,35 @@ export interface InquiryPage {
 
 type Token = () => Promise<string | null>;
 
+// 서버 필터 조건(#491, services/src/admin/inquiry-list.ts). from·to는 포함 경계인 UTC ISO 시각
+// 조건이 있으면 서버가 쪽마다 정해진 후보만 읽어 거르므로 항목이 0개여도 nextCursor가 있으면 이어 읽음
+// 다음 쪽에도 같은 값을 보냄(cursor가 조건에 묶여 있어 다르면 서버가 400)
+export interface InquiryServerQuery {
+  readonly q?: string;
+  readonly type?: string;
+  readonly beachId?: string;
+  readonly from?: string;
+  readonly to?: string;
+}
+
 export function fetchInquiries(
   accessToken: Token,
-  query: { status?: InquiryStatus; cursor?: string; limit?: number },
+  query: {
+    status?: InquiryStatus;
+    cursor?: string;
+    limit?: number;
+    filters?: InquiryServerQuery;
+    // 본문 미리보기 요청(보기 권한은 서버가 restricted로 뺌)
+    preview?: boolean;
+  },
 ): Promise<OpsResult<InquiryPage>> {
   const params = new URLSearchParams();
   if (query.status) params.set("status", query.status);
+  for (const key of ["q", "type", "beachId", "from", "to"] as const) {
+    const value = query.filters?.[key];
+    if (value !== undefined) params.set(key, value);
+  }
+  if (query.preview) params.set("preview", "true");
   if (query.cursor) params.set("cursor", query.cursor);
   params.set("limit", String(query.limit ?? PAGE_SIZE));
   return opsFetch<InquiryPage>(`/ops/inquiries?${params}`, accessToken);
@@ -233,8 +260,8 @@ export function isReceivedRangeInvalid(
   received: Pick<ReceivedFilter, "preset" | "from" | "to"> | null,
 ): boolean {
   if (received === null || received.preset !== "custom") return false;
-  const fromMs = parseKstInputMs(received.from);
-  const toMs = parseKstInputMs(received.to);
+  // 실제로 거르는 경계(날짜만 입력한 끝은 그날 끝까지)와 같은 값으로 비교함
+  const { fromMs, toMs } = receivedRangeMs(received, new Date());
   return fromMs !== null && toMs !== null && fromMs > toMs;
 }
 
@@ -277,6 +304,44 @@ function parseKstInputMs(value: string | undefined): number | null {
   return Number.isFinite(ms) ? ms : null;
 }
 
+const DAY_MS = 86_400_000;
+const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
+
+// 그 시각이 속한 KST 날의 자정(UTC ms)
+function kstDayStartMs(ms: number): number {
+  return Math.floor((ms + KST_OFFSET_MS) / DAY_MS) * DAY_MS - KST_OFFSET_MS;
+}
+
+// 받은 시각 조건의 포함 경계(UTC ms). null은 그쪽 경계 없음
+// 오늘은 KST 자정부터 다음 날 자정 직전까지. 끝은 입력한 단위의 끝까지 포함:
+// 날짜만이면 그날 자정 직전, 분까지(datetime-local)면 그 분의 59.999초(09:00까지 → 09:00:30 포함)
+export function receivedRangeMs(
+  filter: ReceivedFilter,
+  now: Date,
+): { readonly fromMs: number | null; readonly toMs: number | null } {
+  const nowMs = now.getTime();
+  if (filter.preset === "today") {
+    const start = kstDayStartMs(nowMs);
+    return { fromMs: start, toMs: start + DAY_MS - 1 };
+  }
+  if (filter.preset === "7d")
+    return { fromMs: nowMs - 7 * DAY_MS, toMs: nowMs };
+  if (filter.preset === "30d") {
+    return { fromMs: nowMs - 30 * DAY_MS, toMs: nowMs };
+  }
+  const toMs = parseKstInputMs(filter.to);
+  const toText = filter.to?.trim() ?? "";
+  const toEnd = /^\d{4}-\d{2}-\d{2}$/.test(toText)
+    ? DAY_MS - 1
+    : /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(toText)
+      ? 60_000 - 1
+      : 0;
+  return {
+    fromMs: parseKstInputMs(filter.from),
+    toMs: toMs === null ? null : toMs + toEnd,
+  };
+}
+
 function matchesReceived(
   receivedAt: string,
   filter: ReceivedFilter,
@@ -284,21 +349,67 @@ function matchesReceived(
 ): boolean {
   const ms = Date.parse(receivedAt);
   if (!Number.isFinite(ms)) return false;
-  if (filter.preset === "today") {
-    return kstDateKey(new Date(ms)) === kstDateKey(now);
-  }
-  if (filter.preset === "7d") {
-    return ms >= now.getTime() - 7 * 86_400_000 && ms <= now.getTime();
-  }
-  if (filter.preset === "30d") {
-    return ms >= now.getTime() - 30 * 86_400_000 && ms <= now.getTime();
-  }
-  const fromMs = parseKstInputMs(filter.from);
-  const toMs = parseKstInputMs(filter.to);
-  if (fromMs === null && toMs === null) return true;
+  const { fromMs, toMs } = receivedRangeMs(filter, now);
   if (fromMs !== null && ms < fromMs) return false;
   if (toMs !== null && ms > toMs) return false;
   return true;
+}
+
+// 서버 검색어 상한(services/src/admin/inquiry-list.ts MAX_SEARCH_LENGTH, 코드 포인트 기준)
+export const INQUIRY_SEARCH_MAX = 100;
+const SERVER_UTC_INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
+
+// 화면 조건 → 서버 요청 조건. 넘기면 서버가 400을 주는 값은 보내지 않고 이유를 돌려줌(잘라서 보내지 않음)
+// now는 조건을 바꾼 시각으로 고정해 다음 쪽에도 같은 값을 보냄(7일·30일은 now 기준)
+export function inquiryServerQuery(
+  filter: InquiryFilter,
+  now: Date,
+):
+  | { readonly ok: true; readonly query: InquiryServerQuery }
+  | {
+      readonly ok: false;
+      readonly invalid: "query" | "type" | "beach" | "received";
+    } {
+  const q = filter.query.trim();
+  if ([...q].length > INQUIRY_SEARCH_MAX)
+    return { ok: false, invalid: "query" };
+  // 서버 형식(services/src/admin/inquiry-list.ts parseInquiryFilters)과 같은 값만 보냄
+  if (filter.type !== null && !/^[a-z][a-z0-9_]{0,63}$/.test(filter.type)) {
+    return { ok: false, invalid: "type" };
+  }
+  if (
+    filter.beach !== null &&
+    filter.beach !== BEACH_NONE &&
+    !/^b\d{4}$/.test(filter.beach)
+  ) {
+    return { ok: false, invalid: "beach" };
+  }
+  if (isReceivedRangeInvalid(filter.received)) {
+    return { ok: false, invalid: "received" };
+  }
+  const range =
+    filter.received === null ? null : receivedRangeMs(filter.received, now);
+  // 서버는 4자리 연도 UTC 시각만 받음(utcInstant). 연도를 5자리로 잘못 넣은 값 등은 보내지 않음
+  const iso = (ms: number | null | undefined): string | undefined | null => {
+    if (ms === null || ms === undefined) return undefined;
+    const date = new Date(ms);
+    if (!Number.isFinite(date.getTime())) return null;
+    const text = date.toISOString();
+    return SERVER_UTC_INSTANT.test(text) ? text : null;
+  };
+  const from = iso(range?.fromMs);
+  const to = iso(range?.toMs);
+  if (from === null || to === null) return { ok: false, invalid: "received" };
+  return {
+    ok: true,
+    query: {
+      ...(q !== "" ? { q } : {}),
+      ...(filter.type !== null ? { type: filter.type } : {}),
+      ...(filter.beach !== null ? { beachId: filter.beach } : {}),
+      ...(from !== undefined ? { from } : {}),
+      ...(to !== undefined ? { to } : {}),
+    },
+  };
 }
 
 // 받은 목록을 화면 조건(내용·해변 검색, 유형, 해변, 받은 시각)으로 거름
