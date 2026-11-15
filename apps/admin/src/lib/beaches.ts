@@ -257,11 +257,24 @@ function compareByRegion(a: BeachSummary, b: BeachSummary): number {
 
 export type Category = "clear" | "unavailable" | "undetermined";
 
+// 게시본 파고·파주기 한 칸(#499). 게시값 그대로이고 화면에서 다시 판단하지 않음
+// fresh: 값·관측 시각 있음 · delayed: 관측 지연(마지막 값이 있을 수 있음) · none: 가까운 관측 없음(값·시각 null)
+export interface PublishedWave {
+  readonly value: number | null;
+  readonly unit: "m" | "s";
+  readonly observedAt: string | null;
+  readonly state: "fresh" | "delayed" | "none";
+}
+
 export interface PublishedEntry {
   readonly category: Category;
   readonly reasons: readonly Partial<Reason>[];
   // 게시 분류를 믿을 수 있는 마지막 시각(status.json validUntil)
   readonly validUntil: string;
+  // 없음(undefined): 서버가 주지 않음(예전 서버) · null: 모양이 틀려 확인 못 함
+  // 둘 다 '가까운 관측 없음'이나 정상 값으로 보여 주지 않음
+  readonly waveHeight?: PublishedWave | null;
+  readonly wavePeriod?: PublishedWave | null;
 }
 
 // 게시본 manifest의 점검. 점검 중이면 앱은 해변 상태를 숨기고 점검 화면을 보여 줌(D23-11)
@@ -301,6 +314,54 @@ const CATEGORIES: readonly Category[] = [
 
 const isRecord = (v: unknown): v is Record<string, unknown> =>
   typeof v === "object" && v !== null && !Array.isArray(v);
+
+const WAVE_STATES: readonly PublishedWave["state"][] = [
+  "fresh",
+  "delayed",
+  "none",
+];
+
+// 계약 Metric 규칙(fresh는 값·시각 필수, none은 값·시각 null)을 그대로 검사. 틀리면 null(확인 못 함)
+function parseWave(
+  raw: unknown,
+  unit: PublishedWave["unit"],
+): PublishedWave | null {
+  if (!isRecord(raw)) return null;
+  const { value, observedAt, state } = raw;
+  const validValue =
+    value === null || (typeof value === "number" && Number.isFinite(value));
+  const validTime =
+    observedAt === null ||
+    (typeof observedAt === "string" && !Number.isNaN(Date.parse(observedAt)));
+  if (
+    raw.unit !== unit ||
+    !(WAVE_STATES as readonly unknown[]).includes(state) ||
+    !validValue ||
+    !validTime ||
+    (state === "fresh" && (value === null || observedAt === null)) ||
+    (state === "none" && (value !== null || observedAt !== null))
+  ) {
+    return null;
+  }
+  return {
+    value: value as number | null,
+    unit,
+    observedAt: observedAt as string | null,
+    state: state as PublishedWave["state"],
+  };
+}
+
+// 관측 칸은 해변 하나의 값이 틀려도 목록 전체를 막지 않고 그 칸만 '확인 못 함'(null)으로 둠
+function parseObservation(
+  raw: unknown,
+): Pick<PublishedEntry, "waveHeight" | "wavePeriod"> {
+  if (raw === undefined) return {};
+  const metrics = isRecord(raw) && isRecord(raw.metrics) ? raw.metrics : null;
+  return {
+    waveHeight: metrics ? parseWave(metrics.waveHeight, "m") : null,
+    wavePeriod: metrics ? parseWave(metrics.wavePeriod, "s") : null,
+  };
+}
 
 // 응답 모양 검사. 틀리면 null → 화면은 '불러오지 못함'과 같게 판단불가 계열로 보여 줌
 // 해변 하나의 분류 값이 틀려도 그 해변만 빼지 않고 전체를 못 읽은 것으로 봄(서버도 계약 검사를 함)
@@ -345,6 +406,7 @@ export function parsePublished(value: unknown): PublishedView | null {
       category: entry.category as Category,
       reasons: entry.reasons as Partial<Reason>[],
       validUntil: entry.validUntil,
+      ...parseObservation(entry.observation),
     };
   }
   return {
