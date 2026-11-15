@@ -1,5 +1,18 @@
 import { INQUIRY_STATUSES, type InquiryStatus } from "../inquiry/policy";
-import type { InquiryDetail, InquiryPage, InquirySummary } from "./inquiries";
+import {
+  encodeCursor,
+  type InquiryDetail,
+  type InquiryPage,
+  type InquirySummary,
+  type ListQuery,
+} from "./inquiries";
+import {
+  matchesInquiryBeach,
+  matchesInquiryMessage,
+  matchesInquiryMetadata,
+  withInquiryPreview,
+  type InquiryFilters,
+} from "./inquiry-list";
 import type { NoticeView } from "./notices";
 import { STATS_EVENTS, type StatsRange, type StatsResponse } from "./stats";
 import { STATS_TIME_ZONE, statsDates, type StatsTrends } from "./stats-trends";
@@ -74,14 +87,58 @@ function summaryOf(
 export function sampleInquiryPage(
   status: InquiryStatus | undefined,
   now: Date,
+  options?: {
+    query: ListQuery;
+    filters: InquiryFilters;
+    scope: string | undefined;
+    beachSearch?: typeof matchesInquiryBeach;
+  },
 ): InquiryPage {
-  const items = EXAMPLES.filter((e) => !status || e.status === status)
-    .sort(
-      (a, b) =>
-        INQUIRY_STATUSES.indexOf(a.status) -
-          INQUIRY_STATUSES.indexOf(b.status) || a.hoursAgo - b.hoursAgo,
+  const examples = EXAMPLES.filter((e) => !status || e.status === status).sort(
+    (a, b) =>
+      INQUIRY_STATUSES.indexOf(a.status) - INQUIRY_STATUSES.indexOf(b.status) ||
+      a.hoursAgo - b.hoursAgo,
+  );
+  const cursor = options?.query.cursor;
+  const offset = cursor?.k
+    ? examples.findIndex((e) => `INQUIRY#${e.id}` === cursor.k?.pk)
+    : -1;
+  const previous = offset >= 0 ? examples[offset] : undefined;
+  const anchor =
+    previous && cursor?.k
+      ? new Date(
+          Date.parse(cursor.k.receivedAt!) + previous.hoursAgo * 3_600_000,
+        )
+      : now;
+  const reference = Number.isFinite(anchor.getTime()) ? anchor : now;
+  const filters = options?.filters ?? {};
+  const beachSearch = options?.beachSearch ?? matchesInquiryBeach;
+  const matched = examples.slice(offset + 1).flatMap((example) => {
+    const item = summaryOf(example, reference);
+    if (!matchesInquiryMetadata(item, filters)) return [];
+    if (
+      filters.q !== undefined &&
+      !matchesInquiryMessage(example.message, filters.q) &&
+      !(item.beachId && beachSearch(item.beachId, filters.q))
     )
-    .map((e) => summaryOf(e, now));
+      return [];
+    return [filters.preview ? withInquiryPreview(item, example.message) : item];
+  });
+  const items = matched.slice(0, options?.query.limit ?? matched.length);
+  const last = items.at(-1);
+  const nextCursor =
+    last && items.length < matched.length
+      ? encodeCursor({
+          s: last.status,
+          k: {
+            pk: `INQUIRY#${last.inquiryId}`,
+            inquiryStatus: last.status,
+            receivedAt: last.receivedAt,
+          },
+          ...(options?.scope ? { f: options.scope } : {}),
+        })
+      : null;
+  if (options?.scope || cursor) return { items, nextCursor };
   const counts = Object.fromEntries(
     INQUIRY_STATUSES.map((s) => [
       s,
@@ -96,7 +153,7 @@ export function sampleInquiryPage(
   const oldestHours = Math.max(...unprocessed.map((e) => e.hoursAgo));
   return {
     items,
-    nextCursor: null,
+    nextCursor,
     counts: {
       ...counts,
       receivedLast7d: recent.length,
