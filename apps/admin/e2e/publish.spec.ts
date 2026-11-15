@@ -2335,3 +2335,38 @@ test("변경 미리보기 서랍 로딩·실패 때는 '지금 게시'를 잠그
   await expect(rollbackDialog.getByRole("button", { name: "취소" })).toBeFocused();
   await expect(rollbackDialog).toContainText('공지 "새벽 점검 예고" 그때 문구로');
 });
+
+test("변경 미리보기: status가 blocked이면 서랍 안 '지금 게시' 버튼이 비활성화된다", async ({
+  page,
+}) => {
+  await signIn(page);
+  await mockPublish(page);
+  await openPublish(page);
+
+  await page.route(/\/ops\/publish\/preview$/, async (route: Route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        ok: true,
+        preview: {
+          status: "blocked",
+          at: "2026-11-11T03:00:00Z",
+          reason: "beach_ids",
+          checks: {
+            beachIds: { missing: 1, extra: 0, duplicate: 0 },
+            expected: 222,
+            contractErrors: 0,
+          },
+        },
+      }),
+    });
+  });
+
+  await page.getByRole("button", { name: "변경 미리보기" }).click();
+  const drawer = page.getByRole("dialog", { name: "변경 미리보기" });
+  await expect(
+    drawer.getByText(/이대로 게시하면 검증에 걸려 게시하지 않아요/),
+  ).toBeVisible();
+  await expect(drawer.getByRole("button", { name: "지금 게시" })).toBeDisabled();
+});

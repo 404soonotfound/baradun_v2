@@ -400,7 +400,7 @@ test("GA4 미연결(configured: false)과 조회 실패(500) 뒤 같은 자리�
   ).toBeVisible();
   for (const name of ["기기", "화면 언어", "많이 본 해변"]) {
     const area = section(page, name);
-    await expect(area).toContainText("확인 못 함");
+    await expect(area).toContainText("GA4 연동 전이에요");
     await expect(
       area.getByText(/이 항목을 불러오지 못했어요/),
     ).toHaveCount(0);
