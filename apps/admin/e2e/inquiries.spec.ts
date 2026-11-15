@@ -944,6 +944,19 @@ test("필터(검색·유형·해변·받은 시각), 미리보기, 행 클릭·�
   await expect(
     receivedGroup.getByRole("button", { name: "적용" }),
   ).toBeDisabled();
+  // 형식이 틀린 입력(연도를 고치는 도중의 0002년 등)은 순서 오류가 아니라 형식 안내 + 적용 비활성
+  await receivedGroup.getByLabel("끝(KST)").fill("");
+  await receivedGroup.getByLabel("시작(KST)").fill("0002-11-02T14:00");
+  await expect(
+    receivedGroup.getByText(/날짜·시각 형식이 맞지 않아 적용할 수 없어요/),
+  ).toBeVisible();
+  await expect(
+    receivedGroup.getByText("시작 시각이 끝 시각보다 늦어요."),
+  ).toHaveCount(0);
+  await expect(
+    receivedGroup.getByRole("button", { name: "적용" }),
+  ).toBeDisabled();
+  await expectNoA11yViolations(page);
   await page.keyboard.press("Escape");
 
   // 미수신 데이터(nextCursor)가 있는데 거르기 결과가 0건이면 '아직 불러오지 않았어요' + '다음 목록 더 불러오기'
