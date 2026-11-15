@@ -21,6 +21,7 @@ import {
   type ZoneCheck,
 } from "@/lib/beaches";
 import { kstDateTime } from "@/lib/inquiries";
+import { LOADING_TIMES, withTimeout } from "@/lib/loading-timing";
 import { fill, messages } from "@/lib/messages";
 import { AdminShell } from "./admin-shell";
 import { seasonText } from "./beaches-screen";
@@ -31,6 +32,16 @@ import {
   ReasonList,
   usePublished,
 } from "./beach-status";
+import {
+  LoadFailed,
+  LoadingStatus,
+  SkBox,
+  SkButton,
+  SkLine,
+  SlowNote,
+  loadClass,
+  useLoadTiming,
+} from "./loading";
 import { Button, Notice } from "./ui";
 
 // 해변 관리 상세 (BRD-150, 화면 설계서 6장 ADM-BCH, 시안 4차 V3·VM5·E7·F6)
@@ -427,20 +438,29 @@ type SaveError =
   | { kind: "replay" }
   | { kind: "failed"; requestId: string | null };
 
+const MEMO_TIMEOUT: OpsResult<unknown> = {
+  ok: false,
+  status: 504,
+  code: "timeout",
+  requestId: null,
+};
+
 // 운영 메모: 편집 권한만 저장. 보기 권한은 읽기만(비활성 + 안내), 데모 계정은 요청하지 않음
 function MemoSection({ beachId }: { beachId: string }) {
   const session = useAuthSession();
   const snapshot = useSessionSnapshot();
-  const demo = snapshot.status !== "signed_out" && snapshot.pool === "demo";
+  const signedIn = snapshot.status !== "signed_out";
+  const demo = signedIn && snapshot.pool === "demo";
   const canEdit =
-    snapshot.status !== "signed_out" &&
+    signedIn &&
     !demo &&
     snapshot.groups.some((g) => g === "editor" || g === "publisher");
-  const generation = snapshot.status === "signed_out" ? 0 : snapshot.generation;
+  const generation = signedIn ? snapshot.generation : 0;
   const [attempt, setAttempt] = useState(0);
   const key = `${attempt}|${generation}`;
   const [loaded, setLoaded] = useState<{
     key: string;
+    timedOut: boolean;
     result: OpsResult<unknown>;
   } | null>(null);
   // 쓰는 중인 값과 그 기준이 된 메모. 다시 읽어도 쓰던 내용을 조용히 지우지 않음
@@ -455,17 +475,32 @@ function MemoSection({ beachId }: { beachId: string }) {
   const sent = useRef<{ body: string; key: string } | null>(null);
 
   useEffect(() => {
-    if (demo) return;
+    if (!signedIn || demo) return;
     let live = true;
-    void fetchBeachMemo(() => session.accessToken(), beachId).then((result) => {
-      if (live) setLoaded({ key, result });
+    void withTimeout<{
+      readonly timedOut: boolean;
+      readonly result: OpsResult<unknown>;
+    }>(
+      async () => ({
+        timedOut: false,
+        result: await fetchBeachMemo(() => session.accessToken(), beachId),
+      }),
+      { timedOut: true, result: MEMO_TIMEOUT },
+      LOADING_TIMES.timeout,
+    ).then(({ timedOut, result }) => {
+      if (live) setLoaded({ key, timedOut, result });
     });
     return () => {
       live = false;
     };
-  }, [session, beachId, key, demo]);
+  }, [session, signedIn, beachId, key, demo]);
 
-  const result = loaded?.key === key ? loaded.result : null;
+  const current = signedIn && loaded?.key === key ? loaded : null;
+  const pending = !demo && (!signedIn || (current === null && base === null));
+  const timing = useLoadTiming(pending);
+  const placeholder = !demo && base === null && (pending || timing.phase !== "content");
+  const result = placeholder ? null : current?.result ?? null;
+  const timedOut = !placeholder && current !== null && current.timedOut;
   const memo = result?.ok ? parseBeachMemo(result.body, beachId) : null;
   const draftValue = draft.trim() === "" ? null : draft;
   const changed = base !== null && draftValue !== base.memo;
@@ -548,15 +583,38 @@ function MemoSection({ beachId }: { beachId: string }) {
 
   return (
     <Section id="beach-memo" title={t.memoTitle}>
-      {result === null && base === null && (
-        <p role="status" className="text-body-s text-text-muted">
-          {t.memoLoading}
-        </p>
+      <LoadingStatus busy={pending} label={t.memoLoading} />
+      {placeholder && (
+        <div
+          aria-busy="true"
+          className={`flex flex-col gap-3 ${loadClass(timing)}`}
+        >
+          <div className="flex flex-col gap-1.5">
+            <span className="flex h-[21px] items-center">
+              <SkLine className="w-20" />
+            </span>
+            <SkBox className="h-[99px] w-full" />
+            <span className="flex h-[18px] items-center">
+              <SkLine className="w-48 max-w-full" />
+            </span>
+            <span className="flex h-[18px] items-center">
+              <SkLine className="w-36" />
+            </span>
+          </div>
+          {timing.slow && <SlowNote />}
+          <div className="sticky bottom-0 -mx-1 flex items-center justify-end gap-3 border-t border-border-default bg-bg-surface px-1 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+            <SkLine className="w-16" />
+            <SkButton className="w-20" />
+          </div>
+        </div>
       )}
-      {result && !result.ok && result.code === "reauth" && (
+      {timedOut && <LoadFailed onRetry={() => setAttempt((n) => n + 1)} />}
+      {!timedOut && result && !result.ok && result.code === "reauth" && (
         <Notice tone="warn" title={t.reauth} role="alert" />
       )}
-      {result && (!result.ok ? result.code !== "reauth" : memo === null) && (
+      {!timedOut &&
+        result &&
+        (!result.ok ? result.code !== "reauth" : memo === null) && (
         <Notice tone="fail" title={t.memoError} role="alert">
           {/* 응답이 없거나 서버 오류일 때만 '응답하지 않아요'. 그 밖(403·404·모양이 틀림)은 읽지 못했다고 씀 */}
           <p>
@@ -724,9 +782,10 @@ function DetailBody({ beach }: { beach: BeachRecord }) {
 }
 
 export function BeachDetailScreen({ beach }: { beach: BeachRecord }) {
+  const body = <DetailBody beach={beach} />;
   return (
-    <AdminShell title={t.title}>
-      <DetailBody beach={beach} />
+    <AdminShell title={t.title} loading={body}>
+      {body}
     </AdminShell>
   );
 }

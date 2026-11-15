@@ -4,7 +4,6 @@ import {
   CircleCheck,
   CircleQuestionMark,
   Clock,
-  LoaderCircle,
   TriangleAlert,
   Wrench,
 } from "lucide-react";
@@ -21,7 +20,9 @@ import {
   type PublishedView,
 } from "@/lib/beaches";
 import { kstDateTime } from "@/lib/inquiries";
+import { LOADING_TIMES, withTimeout } from "@/lib/loading-timing";
 import { fill, messages } from "@/lib/messages";
+import { LoadFailed, SkPill } from "./loading";
 import { Button, Notice } from "./ui";
 
 // 해변 관리의 지금 표시 상태 (BRD-150, 화면 ADM-BCH)
@@ -94,13 +95,8 @@ export function DisplayBadge({
 }) {
   if (display.kind === "loading") {
     return (
-      <span className="inline-flex items-center gap-1 text-label-s text-text-muted">
-        <LoaderCircle
-          size={14}
-          aria-hidden="true"
-          className="motion-safe:animate-spin"
-        />
-        {t.statusLoading}
+      <span className="inline-flex h-6 items-center">
+        <SkPill className="h-5 w-[72px]" />
       </span>
     );
   }
@@ -220,10 +216,18 @@ export function ReasonList({ display: shown }: { display: BeachDisplay }) {
 // 유효 시각 지남을 다시 그리지 않아도 알아채게 지금 시각을 주기적으로 새로 받음
 const CLOCK_MS = 30_000;
 
+const PUBLISHED_TIMEOUT: OpsResult<unknown> = {
+  ok: false,
+  status: 504,
+  code: "timeout",
+  requestId: null,
+};
+
 // 게시본 상태 읽기. 다시 로그인하면(generation이 늚) 저절로 다시 읽음
 // 결과: "loading" · PublishedView · null(모양이 틀림) · 실패 응답 · 지금 시각(유효 시각 지남 판정용)
 export function usePublished(): {
   readonly published: PublishedView | null | "loading";
+  readonly timedOut: boolean;
   readonly failure: Extract<OpsResult<unknown>, { ok: false }> | null;
   readonly retry: () => void;
   readonly nowMs: number;
@@ -235,25 +239,39 @@ export function usePublished(): {
   }, []);
   const session = useAuthSession();
   const snapshot = useSessionSnapshot();
-  const generation = snapshot.status === "signed_out" ? 0 : snapshot.generation;
+  const signedIn = snapshot.status !== "signed_out";
+  const generation = signedIn ? snapshot.generation : 0;
   const [attempt, setAttempt] = useState(0);
   const key = `${attempt}|${generation}`;
   const [loaded, setLoaded] = useState<{
     key: string;
+    timedOut: boolean;
     result: OpsResult<unknown>;
   } | null>(null);
 
   useEffect(() => {
+    if (!signedIn) return;
     let live = true;
-    void fetchPublished(() => session.accessToken()).then((result) => {
-      if (live) setLoaded({ key, result });
+    void withTimeout<{
+      readonly timedOut: boolean;
+      readonly result: OpsResult<unknown>;
+    }>(
+      async () => ({
+        timedOut: false,
+        result: await fetchPublished(() => session.accessToken()),
+      }),
+      { timedOut: true, result: PUBLISHED_TIMEOUT },
+      LOADING_TIMES.timeout,
+    ).then(({ timedOut, result }) => {
+      if (live) setLoaded({ key, timedOut, result });
     });
     return () => {
       live = false;
     };
-  }, [session, key]);
+  }, [session, signedIn, key]);
 
-  const result = loaded?.key === key ? loaded.result : null;
+  const current = signedIn && loaded?.key === key ? loaded : null;
+  const result = current?.result ?? null;
   return {
     published:
       result === null
@@ -261,6 +279,7 @@ export function usePublished(): {
         : result.ok
           ? parsePublished(result.body)
           : null,
+    timedOut: current !== null && current.timedOut,
     failure: result && !result.ok ? result : null,
     retry: () => setAttempt((n) => n + 1),
     nowMs,
@@ -287,8 +306,11 @@ export function PublishedAlert({
 }: {
   state: ReturnType<typeof usePublished>;
 }) {
-  const { published, failure, retry } = state;
+  const { published, timedOut, failure, retry } = state;
   if (published === "loading") return null;
+  if (timedOut) {
+    return <LoadFailed onRetry={retry} />;
+  }
   if (published?.available) {
     return published.maintenance.active ? (
       <MaintenanceNotice until={published.maintenance.until} />

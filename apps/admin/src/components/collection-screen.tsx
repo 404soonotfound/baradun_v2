@@ -46,8 +46,20 @@ import {
   type TimelineEvent,
 } from "@/lib/collection";
 import { kstDateTime } from "@/lib/inquiries";
+import { LOADING_TIMES, withTimeout } from "@/lib/loading-timing";
 import { fill, messages } from "@/lib/messages";
 import { AdminShell } from "./admin-shell";
+import {
+  LoadFailed,
+  LoadingStatus,
+  SkChart,
+  SkLine,
+  SkPill,
+  SlowNote,
+  Spinner,
+  loadClass,
+  useLoadTiming,
+} from "./loading";
 import { Notice, SUCCESS_BADGE } from "./ui";
 
 // 데이터 수집 현황 (BRD-149·GH-376·GH-380, 화면 설계서 6장 ADM-COLLECT, 시안 4차 V9·V10·VM2)
@@ -2132,33 +2144,297 @@ function SourceSheet({
   );
 }
 
-function LoadingPlaceholder() {
+const SK_SOURCE_WIDTHS = ["w-24", "w-20", "w-28", "w-24", "w-20"] as const;
+const SK_ALERT_WIDTHS = ["w-40", "w-32", "w-28"] as const;
+const SK_FILTERS: readonly SourceFilter[] = [
+  "all",
+  "judgment",
+  "reference",
+  "problem",
+];
+
+function BarTracksSkeleton() {
   return (
-    <div role="status" className="mt-6 flex flex-col gap-3">
-      <span className="text-[13px] text-text-muted">{t.loading}</span>
-      <span
-        aria-hidden="true"
-        className="h-[96px] rounded-admin-box border border-border-default bg-bg-page"
-      />
-      <span
-        aria-hidden="true"
-        className="h-64 rounded-admin-box border border-border-default bg-bg-page"
-      />
+    <span aria-hidden="true" className="flex min-w-28 gap-0.5">
+      {Array.from({ length: 24 }, (_, i) => (
+        <span key={i} className="sk block h-4 flex-1 rounded-[2px]" />
+      ))}
+    </span>
+  );
+}
+
+function CollectionSkeleton({
+  cls,
+  slow,
+}: {
+  cls: string;
+  slow: boolean;
+}) {
+  const kpiLabels = [t.kpiSources, t.kpiWeek, t.kpiDelayed, t.kpiPublish];
+  return (
+    <div aria-busy="true" className={cls}>
+      <section aria-label={t.kpiTitle} className="mt-6">
+        <dl className="grid grid-cols-1 overflow-hidden rounded-admin-box border border-border-default bg-bg-surface shadow-card sm:grid-cols-2 xl:grid-cols-4">
+          {kpiLabels.map((label) => (
+            <div
+              key={label}
+              className="-mt-px -ml-px border-t border-l border-border-default px-4 py-3.5"
+            >
+              <dt className="text-[13px] font-semibold text-text-body">
+                {label}
+              </dt>
+              <dd className="mt-1 flex items-baseline gap-1.5">
+                <span className="inline-flex h-[30px] items-center">
+                  <SkLine className="h-[18px] w-14" />
+                </span>
+              </dd>
+              <dd className="mt-0.5 text-[12px]">
+                <SkLine className="w-28" />
+              </dd>
+            </div>
+          ))}
+        </dl>
+      </section>
+
+      <section aria-labelledby="collection-sources-sk" className="mt-7">
+        <h2 id="collection-sources-sk" className={SECTION_TITLE}>
+          {t.tableTitle}
+        </h2>
+        <div
+          role="group"
+          aria-label={t.filterLabel}
+          className="mt-3 flex gap-6 overflow-x-auto border-b border-border-default"
+        >
+          {SK_FILTERS.map((f) => (
+            <button
+              key={f}
+              type="button"
+              disabled
+              aria-pressed={f === "all"}
+              className="-mb-px inline-flex min-h-touch shrink-0 items-center gap-1 border-b-2 border-transparent px-0.5 py-2 text-[14px] font-medium whitespace-nowrap text-text-muted aria-pressed:border-brand-default aria-pressed:text-brand-default lg:min-h-0"
+            >
+              {t.filter[f]}
+              <span className="font-normal text-text-muted tabular-nums">
+                <SkLine className="w-3" />
+              </span>
+            </button>
+          ))}
+        </div>
+        <div className="mt-3.5 mb-0.5 flex justify-end">
+          <BarLegend />
+        </div>
+        <table className={`hidden md:table ${TABLE}`}>
+          <thead>
+            <tr>
+              <th scope="col" className={TH}>
+                {t.colSource}
+              </th>
+              <th scope="col" className={TH}>
+                {t.colState}
+              </th>
+              <th scope="col" className={TH}>
+                {t.colDay}
+              </th>
+              <th scope="col" className={`${TH} text-right!`}>
+                {t.colLastSuccess}
+              </th>
+              <th scope="col" className={`${TH} text-right!`}>
+                {t.colCycle}
+              </th>
+              <th scope="col" className={`${TH} text-right!`}>
+                {t.colWeek}
+              </th>
+              <th scope="col" className={TH}>
+                <span className="sr-only">{t.colOpen}</span>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {SK_SOURCE_WIDTHS.map((w, i) => (
+              <tr key={i}>
+                <th scope="row" className={`${TD} text-left font-normal`}>
+                  <span className="flex flex-col gap-1">
+                    <SkLine className={w} />
+                    <SkLine className="w-12" />
+                  </span>
+                </th>
+                <td className={TD}>
+                  <span className="flex flex-col gap-1">
+                    <SkLine className="w-16" />
+                    <SkLine className="w-20" />
+                  </span>
+                </td>
+                <td className={TD}>
+                  <BarTracksSkeleton />
+                </td>
+                <td className={`${TD} text-right`}>
+                  <SkLine className="w-12" />
+                </td>
+                <td className={`${TD} min-w-28 text-right`}>
+                  <span className="inline-flex flex-col items-end gap-1">
+                    <SkLine className="w-16" />
+                    <SkLine className="w-14" />
+                  </span>
+                </td>
+                <td className={`${TD} text-right`}>
+                  <SkLine className="w-10" />
+                </td>
+                <td className={TD}>
+                  <span className="inline-flex size-7 items-center justify-center text-text-muted opacity-40">
+                    <ChevronIcon />
+                  </span>
+                </td>
+              </tr>
+            ))}
+            <tr>
+              <th scope="row" className={`${TD} text-left font-normal`}>
+                <span className="flex flex-col">
+                  <span className="font-medium text-text-default">
+                    {t.season}
+                  </span>
+                  <span className="text-[12px] text-text-muted">
+                    {t.reference}
+                  </span>
+                </span>
+              </th>
+              <td className={TD}>
+                <Badge tone="neutral">{t.seasonState}</Badge>
+              </td>
+              <td className={TD} colSpan={5}>
+                <span className="text-[13px] text-text-body">
+                  {t.seasonHint}{" "}
+                  <ExternalLink href={SEASON_FILE}>{t.seasonLink}</ExternalLink>
+                </span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <ul className="mt-3 flex flex-col gap-2.5 md:hidden">
+          {SK_SOURCE_WIDTHS.map((w, i) => (
+            <li
+              key={i}
+              className="flex flex-col gap-2.5 rounded-admin-box border border-border-default bg-bg-surface p-3.5"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex flex-col gap-1">
+                  <SkLine className={w} />
+                  <SkLine className="w-12" />
+                </div>
+                <SkLine className="w-16" />
+              </div>
+              <BarTracksSkeleton />
+              <div className="flex justify-between gap-2">
+                <SkLine className="w-20" />
+                <SkLine className="w-14" />
+                <SkLine className="w-12" />
+              </div>
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      <div className="mt-7 grid grid-cols-1 gap-8 lg:grid-cols-[1.4fr_1fr]">
+        <section aria-labelledby="collection-hourly-sk">
+          <h2 id="collection-hourly-sk" className={SECTION_TITLE}>
+            {t.hourlyTitle}
+          </h2>
+          <p className="text-[12px] text-text-muted">{t.hourlyAll}</p>
+          <div className="mt-3 mr-1.5 ml-9">
+            <SkChart className="h-[130px] w-full" />
+            <div className="mt-2 flex h-4 items-center justify-between">
+              <SkLine className="w-8" />
+              <SkLine className="w-8" />
+              <SkLine className="w-8" />
+            </div>
+          </div>
+          <p className="mt-3 text-[12px]">
+            <SkLine className="w-56 max-w-full" />
+          </p>
+          {slow && <SlowNote className="mt-3" />}
+        </section>
+
+        <div className="min-w-0">
+          <section aria-labelledby="collection-incidents-sk">
+            <h2 id="collection-incidents-sk" className={SECTION_TITLE}>
+              {t.incidentsTitle}
+            </h2>
+            <ul className="mt-3 flex flex-col border-t border-border-default">
+              {[0, 1, 2].map((i) => (
+                <li
+                  key={i}
+                  className="flex items-center gap-3 border-b border-border-default py-2.5 pr-2"
+                >
+                  <span className="flex min-w-0 flex-1 flex-col gap-1.5">
+                    <SkLine className="w-48 max-w-full" />
+                    <SkLine className="w-36 max-w-full" />
+                  </span>
+                  <SkPill className="h-5 w-12" />
+                  <span className="text-border-note opacity-40">
+                    <ChevronIcon size={16} />
+                  </span>
+                </li>
+              ))}
+            </ul>
+            <div className="mt-3 flex items-center gap-2 text-[12.5px] text-text-muted">
+              <SkLine className="w-24" />
+              <span className="flex-1" />
+              <button type="button" disabled className={BTN_S}>
+                {t.prev}
+              </button>
+              <button type="button" disabled className={BTN_S}>
+                {t.next}
+              </button>
+            </div>
+          </section>
+
+          <section aria-labelledby="collection-alerts-sk" className="mt-8">
+            <h2 id="collection-alerts-sk" className={SECTION_TITLE}>
+              {t.alertsTitle}
+            </h2>
+            <p className="text-[12px] text-text-muted">{t.alertsHint}</p>
+            <div className="mt-3 flex flex-col gap-4">
+              {SK_ALERT_WIDTHS.map((w, i) => (
+                <div
+                  key={i}
+                  className="flex min-h-touch items-center gap-2 rounded-admin-box border border-border-default bg-bg-surface px-3 py-2"
+                >
+                  <span className="text-text-muted opacity-40">
+                    <ChevronIcon />
+                  </span>
+                  <SkLine className={w} />
+                </div>
+              ))}
+            </div>
+          </section>
+        </div>
+      </div>
     </div>
   );
 }
 
+type CollectionLoaded = {
+  readonly key: string;
+  readonly timedOut: boolean;
+  readonly result: OpsResult<CollectionView & { readonly legacy: boolean }>;
+};
+
+const TIMEOUT_RESULT: OpsResult<CollectionView & { readonly legacy: boolean }> =
+  {
+    ok: false,
+    status: 504,
+    code: "timeout",
+    requestId: null,
+  };
+
 function CollectionBody({ beaches }: { beaches: Beaches }) {
   const session = useAuthSession();
   const snapshot = useSessionSnapshot();
-  const demo = snapshot.status !== "signed_out" && snapshot.pool === "demo";
-  const generation = snapshot.status === "signed_out" ? 0 : snapshot.generation;
+  const signedIn = snapshot.status !== "signed_out";
+  const demo = signedIn && snapshot.pool === "demo";
+  const generation = signedIn ? snapshot.generation : 0;
   const [attempt, setAttempt] = useState(0);
   const key = `${attempt}|${generation}`;
-  const [loaded, setLoaded] = useState<{
-    key: string;
-    result: OpsResult<CollectionView & { readonly legacy: boolean }>;
-  } | null>(null);
+  const [loaded, setLoaded] = useState<CollectionLoaded | null>(null);
   // 시트는 장애 번호가 아니라 장애 키로 듦(다시 불러와 목록이 바뀌어도 다른 장애로 바뀌지 않게)
   const [sheet, setSheet] = useState<{ key: string; nonce: number } | null>(
     null,
@@ -2193,10 +2469,21 @@ function CollectionBody({ beaches }: { beaches: Beaches }) {
   });
 
   useEffect(() => {
+    if (!signedIn) return;
     let live = true;
-    void fetchCollection(() => session.accessToken()).then((result) => {
+    void withTimeout<{
+      readonly timedOut: boolean;
+      readonly result: OpsResult<CollectionView & { readonly legacy: boolean }>;
+    }>(
+      async () => ({
+        timedOut: false,
+        result: await fetchCollection(() => session.accessToken()),
+      }),
+      { timedOut: true, result: TIMEOUT_RESULT },
+      LOADING_TIMES.timeout,
+    ).then(({ timedOut, result }) => {
       if (!live) return;
-      setLoaded({ key, result });
+      setLoaded({ key, timedOut, result });
       // 새 결과에 연 장애가 없으면(불러오기 실패 포함) 시트를 닫음. 남겨 두면 나중에 저절로 다시 열림
       const keys = result.ok
         ? new Set(allIncidents(result.body.jobs).map(incidentKey))
@@ -2217,10 +2504,21 @@ function CollectionBody({ beaches }: { beaches: Beaches }) {
     return () => {
       live = false;
     };
-  }, [session, key]);
+  }, [session, signedIn, key]);
 
   // 다시 불러오는 동안 앞 값을 그대로 보여 줌(D16-E1 '갱신 중엔 기존 값 유지')
-  const result = loaded?.result ?? null;
+  const [, loadedGeneration] = loaded?.key.split("|") ?? [];
+  const sameGeneration = loadedGeneration === String(generation);
+  const current = signedIn && loaded && sameGeneration ? loaded : null;
+  const fetching = signedIn && loaded?.key !== key;
+  const pending = !signedIn || current === null;
+  const timing = useLoadTiming(pending);
+  const placeholder = pending || timing.phase !== "content";
+  const refreshing = fetching && !pending;
+  const refreshTiming = useLoadTiming(refreshing);
+
+  const result = placeholder ? null : current.result;
+  const timedOut = !placeholder && current.timedOut;
   const view = result?.ok ? result.body : null;
   const nowMs = view ? Date.parse(view.generatedAt) : 0;
   const incidents = useMemo(
@@ -2263,24 +2561,46 @@ function CollectionBody({ beaches }: { beaches: Beaches }) {
     : undefined;
 
   return (
-    <div className="flex w-full flex-col px-4 py-5 md:px-10 md:pt-6 md:pb-10">
+    <div
+      aria-busy={placeholder || undefined}
+      className="flex w-full flex-col px-4 py-5 md:px-10 md:pt-6 md:pb-10"
+    >
+      <LoadingStatus busy={signedIn && pending} label={t.loading} />
+      <span role="status" className="sr-only">
+        {(placeholder ? timing.slow : refreshTiming.slow)
+          ? messages.loading.slow
+          : ""}
+      </span>
       <div className="flex flex-wrap items-end gap-3">
         <div className="w-full min-w-0 sm:w-auto sm:flex-1">
           <h1 className="text-[20px] leading-[1.4] font-semibold tracking-[-0.01em] text-text-default">
             {t.title}
           </h1>
-          {view && (
+          {placeholder ? (
+            <p className="mt-0.5 text-[12.5px] text-text-muted">
+              <SkLine className="w-44" />
+            </p>
+          ) : view ? (
             <p className="mt-0.5 text-[12.5px] text-text-muted">
               {fill(t.asOf, { time: kstDateTime(view.generatedAt) })}
               {demo && ` · ${t.demoNote}`}
             </p>
-          )}
+          ) : null}
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {refreshing && (
+            <span
+              role="status"
+              className="inline-flex items-center gap-1.5 text-[12.5px] text-brand-default"
+            >
+              <Spinner size={12} />
+              {messages.loading.refreshing}
+            </span>
+          )}
           <button
             type="button"
             className={BTN}
-            disabled={loaded !== null && loaded.key !== key}
+            disabled={placeholder || refreshing}
             onClick={() => setAttempt((n) => n + 1)}
           >
             {t.refresh}
@@ -2294,9 +2614,18 @@ function CollectionBody({ beaches }: { beaches: Beaches }) {
           </ExternalLink>
         </div>
       </div>
+      {refreshing && refreshTiming.slow && <SlowNote className="mt-2" />}
 
-      {result === null && <LoadingPlaceholder />}
-      {result && !result.ok && (
+      {placeholder && (
+        <CollectionSkeleton cls={loadClass(timing)} slow={timing.slow} />
+      )}
+      {timedOut && (
+        <LoadFailed
+          className="mt-6"
+          onRetry={() => setAttempt((n) => n + 1)}
+        />
+      )}
+      {!timedOut && result && !result.ok && (
         <div className="mt-6">
           {result.code === "reauth" ? (
             <Notice
@@ -2388,9 +2717,10 @@ function CollectionBody({ beaches }: { beaches: Beaches }) {
 }
 
 export function CollectionScreen({ beaches }: { beaches: Beaches }) {
+  const body = <CollectionBody beaches={beaches} />;
   return (
-    <AdminShell title={t.title}>
-      <CollectionBody beaches={beaches} />
+    <AdminShell title={t.title} loading={body}>
+      {body}
     </AdminShell>
   );
 }

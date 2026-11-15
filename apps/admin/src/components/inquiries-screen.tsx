@@ -54,6 +54,7 @@ import {
   type Redaction,
 } from "@/lib/inquiries";
 import { fill, messages } from "@/lib/messages";
+import { LOADING_TIMES, withTimeout } from "@/lib/loading-timing";
 import { pageRows, pageWindow } from "@/lib/paging";
 import { AdminShell } from "./admin-shell";
 import {
@@ -65,6 +66,16 @@ import {
   TH,
   TR,
 } from "./data-table";
+import {
+  LoadFailed,
+  LoadingStatus,
+  SkLine,
+  SkPill,
+  SlowNote,
+  Spinner,
+  loadClass,
+  useLoadTiming,
+} from "./loading";
 import { Button, Notice } from "./ui";
 
 // 운영자 문의 목록·상세 (BRD-153, 화면 설계서 6장 ADM-INQ, 시안 4차 V20·VM6·VM7·E6·E11·VE6)
@@ -689,6 +700,89 @@ function StatusTabs({
   );
 }
 
+const INQUIRY_LIST_TIMEOUT: OpsResult<InquiryPage> = {
+  ok: false,
+  status: 504,
+  code: "timeout",
+  requestId: null,
+};
+
+const INQUIRY_DETAIL_TIMEOUT: OpsResult<InquiryDetail> = {
+  ok: false,
+  status: 504,
+  code: "timeout",
+  requestId: null,
+};
+
+function InquiryListSkeleton({
+  cls,
+  slow,
+}: {
+  cls: string;
+  slow: boolean;
+}) {
+  const rows = ["w-28", "w-36", "w-24", "w-32", "w-28", "w-32"];
+  return (
+    <div aria-busy="true" className={`flex flex-col gap-3 ${cls}`}>
+      {slow && <SlowNote />}
+      <div className="hidden md:block">
+        <DataTable
+          caption={t.title}
+          head={
+            <>
+              <th scope="col" className={TH}>
+                {t.colStatus}
+              </th>
+              <th scope="col" className={TH}>
+                {t.colTypeContent}
+              </th>
+              <th scope="col" className={TH}>
+                {t.colBeach}
+              </th>
+              <th scope="col" className={`${TH} ${CELL_END}`}>
+                {t.colReceivedShort}
+              </th>
+            </>
+          }
+        >
+          {Array.from({ length: Math.min(PAGE_SIZE, 8) }, (_, i) => (
+            <tr key={i} className={TR}>
+              <td className={TD}>
+                <SkPill className="h-5 w-11" />
+              </td>
+              <td className={`${TD} max-w-md whitespace-normal`}>
+                <span className="flex flex-col gap-1">
+                  <SkLine className={rows[i % rows.length]!} />
+                  <SkLine className="w-48 max-w-full" />
+                </span>
+              </td>
+              <td className={TD}>
+                <SkLine className="w-24" />
+              </td>
+              <td className={`${TD} ${CELL_END}`}>
+                <SkLine className="w-20" />
+              </td>
+            </tr>
+          ))}
+        </DataTable>
+      </div>
+      <ul className="flex flex-col divide-y divide-border-default rounded-admin-box border border-border-default bg-bg-surface md:hidden">
+        {Array.from({ length: Math.min(PAGE_SIZE, 6) }, (_, i) => (
+          <li key={i} className="flex flex-col gap-1.5 px-4 py-3">
+            <span className="flex items-center gap-2">
+              <SkPill className="h-5 w-11" />
+              <SkLine className="w-24" />
+            </span>
+            <SkLine className={rows[i % rows.length]!} />
+            <SkLine className="w-48 max-w-full" />
+            <SkLine className="w-28" />
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 function InquiryList({
   beaches,
   selectedId,
@@ -729,24 +823,43 @@ function InquiryList({
   // 다시 로그인하면(generation이 늚) 'reauth'로 끝난 읽기를 저절로 다시 함
   const isFiltered = hasActiveInquiryFilter(filter);
   const requestLimit = isFiltered ? INQUIRY_PAGE_MAX : PAGE_SIZE;
-  const generation = snapshot.status === "signed_out" ? 0 : snapshot.generation;
+
+  const signedIn = snapshot.status !== "signed_out";
+  const generation = signedIn ? snapshot.generation : 0;
   const owner = badgeOwner(snapshot);
   const key = `${status ?? "all"}|${cursor ?? ""}|${requestLimit}|${attempt}|${generation}`;
   const [loaded, setLoaded] = useState<{
     key: string;
+    timedOut: boolean;
     result: OpsResult<InquiryPage>;
   } | null>(null);
-  const result = loaded?.key === key ? loaded.result : null;
+  const current = signedIn && loaded?.key === key ? loaded : null;
+  const pending = !signedIn || current === null;
+  const timing = useLoadTiming(pending);
+  const placeholder = pending || timing.phase !== "content";
+  const result = placeholder ? null : current.result;
+  const timedOut = !placeholder && current.timedOut;
 
   useEffect(() => {
+    if (!signedIn) return;
     let live = true;
-    void fetchInquiries(() => session.accessToken(), {
-      ...(status ? { status } : {}),
-      ...(cursor ? { cursor } : {}),
-      limit: requestLimit,
-    }).then((next) => {
+    void withTimeout<{
+      readonly timedOut: boolean;
+      readonly result: OpsResult<InquiryPage>;
+    }>(
+      async () => ({
+        timedOut: false,
+        result: await fetchInquiries(() => session.accessToken(), {
+          ...(status ? { status } : {}),
+          ...(cursor ? { cursor } : {}),
+          limit: requestLimit,
+        }),
+      }),
+      { timedOut: true, result: INQUIRY_LIST_TIMEOUT },
+      LOADING_TIMES.timeout,
+    ).then(({ timedOut, result: next }) => {
       if (!live) return;
-      setLoaded({ key, result: next });
+      setLoaded({ key, timedOut, result: next });
       if (next.ok && next.body.counts) {
         setReceived({ counts: next.body.counts, at: Date.now() });
         if (owner) setReceivedCount(owner, next.body.counts.received);
@@ -755,7 +868,7 @@ function InquiryList({
     return () => {
       live = false;
     };
-  }, [session, status, cursor, requestLimit, key, owner]);
+  }, [session, signedIn, status, cursor, requestLimit, key, owner]);
 
   const changeStatus = (next: InquiryStatus | null) => {
     setStatus(next);
@@ -944,12 +1057,15 @@ function InquiryList({
         )}
       </div>
 
-      {result === null && (
-        <p role="status" className="text-body-s text-text-muted">
-          {t.loading}
-        </p>
+      <LoadingStatus busy={signedIn && pending} label={t.loading} />
+      <span role="status" className="sr-only">
+        {timing.slow ? messages.loading.slow : ""}
+      </span>
+      {placeholder && (
+        <InquiryListSkeleton cls={loadClass(timing)} slow={timing.slow} />
       )}
-      {result && !result.ok && (
+      {timedOut && <LoadFailed onRetry={() => setAttempt((n) => n + 1)} />}
+      {!timedOut && result && !result.ok && (
         <Failure
           title={t.listError}
           result={result}
@@ -975,7 +1091,14 @@ function InquiryList({
                 disabled={loadingMore}
                 onClick={loadMoreForFilter}
               >
-                {loadingMore ? t.loadingMore : t.loadMore}
+                {loadingMore ? (
+                  <>
+                    <Spinner size={12} className="mr-1.5" />
+                    {t.loadingMore}
+                  </>
+                ) : (
+                  t.loadMore
+                )}
               </Button>
             )}
             <Button
@@ -1143,7 +1266,14 @@ function InquiryList({
                 disabled={loadingMore}
                 onClick={loadMoreForFilter}
               >
-                {loadingMore ? t.loadingMore : t.loadMore}
+                {loadingMore ? (
+                  <>
+                    <Spinner size={12} className="mr-1.5" />
+                    {t.loadingMore}
+                  </>
+                ) : (
+                  t.loadMore
+                )}
               </Button>
             )}
           </div>
@@ -1789,37 +1919,54 @@ function InquiryMessage({
   );
 }
 
+// 로딩·불러온 뒤 같은 자리·닫기 버튼 DOM을 유지해 포커스가 빠지지 않게 함
 function SheetHeader({
+  loading,
   status,
   inquiryId,
   type,
   showClose,
   onClose,
 }: {
-  status: string;
-  inquiryId: string;
-  type: string;
+  loading?: boolean;
+  status?: string;
+  inquiryId?: string;
+  type?: string;
   showClose: boolean;
   onClose: () => void;
 }) {
   return (
     <div className="flex items-start gap-3 border-b border-border-default px-6 pt-5 pb-4">
       <div className="min-w-0 flex-1">
-        <p className="flex items-center gap-2 text-caption text-text-muted">
-          <StatusBadge status={status} />
-          <span>
-            {t.id}{" "}
-            <span title={inquiryId} className="font-mono">
-              {shortId(inquiryId)}
-            </span>
-          </span>
-        </p>
-        <h2
-          id="inquiry-type"
-          className="mt-1.5 text-title-m font-semibold text-text-default"
-        >
-          {typeLabel(type)}
-        </h2>
+        {loading ? (
+          <>
+            <p className="flex items-center gap-2 text-caption text-text-muted">
+              <SkPill className="h-5 w-11" />
+              <SkLine className="w-16" />
+            </p>
+            <div className="mt-1.5 flex h-[28px] items-center">
+              <SkLine className="h-5 w-36" />
+            </div>
+          </>
+        ) : (
+          <>
+            <p className="flex items-center gap-2 text-caption text-text-muted">
+              <StatusBadge status={status ?? ""} />
+              <span>
+                {t.id}{" "}
+                <span title={inquiryId} className="font-mono">
+                  {shortId(inquiryId ?? "")}
+                </span>
+              </span>
+            </p>
+            <h2
+              id="inquiry-type"
+              className="mt-1.5 text-title-m font-semibold text-text-default"
+            >
+              {typeLabel(type ?? "")}
+            </h2>
+          </>
+        )}
       </div>
       {showClose && (
         <>
@@ -1852,6 +1999,73 @@ function SheetHeader({
   );
 }
 
+function InquiryDetailSkeletonBody({ slow }: { slow: boolean }) {
+  const rows: readonly (readonly [string, string])[] = [
+    [t.beachActivity, "w-28"],
+    [t.received, "w-32"],
+    [t.retention, "w-24"],
+    [t.contact, "w-32"],
+  ];
+  return (
+    <div className="flex flex-1 flex-col gap-6 overflow-y-auto px-6 py-5">
+      {slow && <SlowNote />}
+      <div className="flex flex-col gap-2">
+        <SkLine className="w-full" />
+        <SkLine className="w-4/5" />
+      </div>
+
+        <dl className="divide-y divide-border-default border-t border-border-default">
+          {rows.map(([label, w]) => (
+            <Row key={label} label={label}>
+              <SkLine className={w} />
+            </Row>
+          ))}
+        </dl>
+
+        <fieldset disabled className="flex flex-col gap-2">
+          <legend className="mb-1.5 text-body font-medium text-text-default">
+            {t.statusLegend}
+          </legend>
+          <div className="grid grid-cols-4 divide-x divide-border-strong overflow-hidden rounded-admin-control border border-border-strong opacity-60 shadow-card">
+            {INQUIRY_STATUSES.map((s) => (
+              <span
+                key={s}
+                className="flex min-h-touch items-center justify-center bg-bg-surface text-body-s font-medium text-text-muted lg:h-[34px] lg:min-h-0"
+              >
+                {t.status[s]}
+              </span>
+            ))}
+          </div>
+        </fieldset>
+
+        <div className="flex flex-col gap-1.5">
+          <span className="flex items-center gap-1.5 text-body font-medium text-text-default">
+            <span>{t.memo}</span>
+            <span className="text-body-s font-normal text-text-muted">
+              {t.memoInternal}
+            </span>
+          </span>
+          <div className="min-h-[104px] rounded-admin-control border border-border-strong bg-bg-page px-2.5 py-2">
+            <SkLine className="w-2/3" />
+          </div>
+          <p className="text-label-s text-text-muted">
+            <SkLine className="w-44" />
+          </p>
+        </div>
+
+        <div className="sticky bottom-0 -mx-6 -mb-5 flex flex-wrap items-center gap-2 border-t border-border-default bg-bg-surface px-6 py-3.5 pb-[max(0.875rem,env(safe-area-inset-bottom))]">
+          <Button variant="secondary" size="small" disabled>
+            {t.redactOpen}
+          </Button>
+          <span className="flex-1" />
+          <Button size="small" disabled>
+            {t.save}
+          </Button>
+        </div>
+    </div>
+  );
+}
+
 function InquiryDetailView({
   id,
   beaches,
@@ -1875,11 +2089,13 @@ function InquiryDetailView({
     "view",
   );
   // 다시 로그인하면(generation이 늚) 'reauth'로 끝난 읽기를 저절로 다시 함
+  const signedIn = snapshot.status !== "signed_out";
   const owner = badgeOwner(snapshot);
-  const generation = snapshot.status === "signed_out" ? 0 : snapshot.generation;
+  const generation = signedIn ? snapshot.generation : 0;
   const key = `${id}|${attempt}|${generation}`;
   const [loaded, setLoaded] = useState<{
     key: string;
+    timedOut: boolean;
     result: OpsResult<InquiryDetail>;
   } | null>(null);
   // 마지막으로 성공한 상세. 다시 읽는 중이거나 다시 읽기가 실패해도 이 내용과 쓰던 처리 칸을 그대로 둠
@@ -1887,13 +2103,21 @@ function InquiryDetailView({
     id: string;
     detail: InquiryDetail;
   } | null>(null);
-  const current = loaded?.key === key ? loaded.result : null;
+  const loadedCurrent = signedIn && loaded?.key === key ? loaded : null;
+  const current = loadedCurrent?.result ?? null;
   const kept = good?.id === id ? good.detail : null;
-  const result: OpsResult<InquiryDetail> | null = current?.ok
-    ? current
-    : kept
-      ? { ok: true, status: 200, body: kept }
-      : current;
+  const pending = kept === null && loadedCurrent === null;
+  const timing = useLoadTiming(pending);
+  const placeholder = kept === null && (pending || timing.phase !== "content");
+  const timedOut =
+    !placeholder && kept === null && loadedCurrent !== null && loadedCurrent.timedOut;
+  const result: OpsResult<InquiryDetail> | null = placeholder
+    ? null
+    : current?.ok
+      ? current
+      : kept
+        ? { ok: true, status: 200, body: kept }
+        : current;
   // 앞서 받은 내용을 보이는 채로 다시 읽기만 실패함 → 내용 위에 실패만 알림
   const refreshFailure = kept && current && !current.ok ? current : null;
   // 저장 성공 안내. 다시 읽은 뒤에도 남김(다른 문의를 열면 사라짐)
@@ -1908,10 +2132,21 @@ function InquiryDetailView({
   } | null>(null);
 
   useEffect(() => {
+    if (!signedIn) return;
     let live = true;
-    void fetchInquiry(() => session.accessToken(), id).then((next) => {
+    void withTimeout<{
+      readonly timedOut: boolean;
+      readonly result: OpsResult<InquiryDetail>;
+    }>(
+      async () => ({
+        timedOut: false,
+        result: await fetchInquiry(() => session.accessToken(), id),
+      }),
+      { timedOut: true, result: INQUIRY_DETAIL_TIMEOUT },
+      LOADING_TIMES.timeout,
+    ).then(({ timedOut, result: next }) => {
       if (!live) return;
-      setLoaded({ key, result: next });
+      setLoaded({ key, timedOut, result: next });
       if (next.ok) {
         setGood({ id, detail: next.body });
         if (!next.body.restricted && next.body.message !== undefined) {
@@ -1922,11 +2157,34 @@ function InquiryDetailView({
     return () => {
       live = false;
     };
-  }, [session, id, key, onMessageLoaded]);
+  }, [session, signedIn, id, key, onMessageLoaded]);
 
-  // 주소로 열었는데 없음(지워졌거나 90일 지남): 404
-  if (result && !result.ok && result.status === 404) {
-    return (
+  let body: ReactNode = null;
+  if (placeholder) {
+    body = (
+      <article
+        aria-busy="true"
+        aria-label={t.loading}
+        className={`flex min-h-0 flex-1 flex-col ${loadClass(timing)}`}
+      >
+        <SheetHeader loading showClose={showClose} onClose={onClose} />
+        <InquiryDetailSkeletonBody slow={timing.slow} />
+      </article>
+    );
+  } else if (timedOut) {
+    body = (
+      <div className="flex flex-col gap-4 px-6 py-6">
+        <LoadFailed onRetry={() => setAttempt((n) => n + 1)} />
+        {showClose && (
+          <Button variant="secondary" size="small" onClick={onClose}>
+            {t.close}
+          </Button>
+        )}
+      </div>
+    );
+  } else if (result && !result.ok && result.status === 404) {
+    // 주소로 열었는데 없음(지워졌거나 90일 지남): 404
+    body = (
       <div className="flex flex-col items-start gap-2 px-6 py-6">
         <p className="text-title-s font-semibold text-text-default">
           {t.notFoundTitle}
@@ -1937,9 +2195,8 @@ function InquiryDetailView({
         </Button>
       </div>
     );
-  }
-  if (result && !result.ok) {
-    return (
+  } else if (result && !result.ok) {
+    body = (
       <div className="px-6 py-6">
         <Failure
           title={t.detailError}
@@ -1948,49 +2205,41 @@ function InquiryDetailView({
         />
       </div>
     );
-  }
-  if (!result) {
-    return (
-      <p role="status" className="px-6 py-6 text-body-s text-text-muted">
-        {t.loading}
-      </p>
+  } else if (result) {
+    const item = result.body;
+    const beach = item.beachId ? beaches[item.beachId] : undefined;
+    const messageText = item.message ?? "";
+
+    const leftFooter = (
+      <Button
+        variant="secondary"
+        size="small"
+        disabled={
+          block !== null ||
+          item.restricted ||
+          messageText === "" ||
+          redactMode !== "view"
+        }
+        onClick={() => setRedactMode("select")}
+      >
+        {t.redactOpen}
+      </Button>
     );
-  }
 
-  const item = result.body;
-  const beach = item.beachId ? beaches[item.beachId] : undefined;
-  const messageText = item.message ?? "";
+    body = (
+      <article
+        aria-labelledby="inquiry-type"
+        className="flex min-h-0 flex-1 flex-col"
+      >
+        <SheetHeader
+          status={item.status}
+          inquiryId={item.inquiryId}
+          type={item.type}
+          showClose={showClose}
+          onClose={onClose}
+        />
 
-  const leftFooter = (
-    <Button
-      variant="secondary"
-      size="small"
-      disabled={
-        block !== null ||
-        item.restricted ||
-        messageText === "" ||
-        redactMode !== "view"
-      }
-      onClick={() => setRedactMode("select")}
-    >
-      {t.redactOpen}
-    </Button>
-  );
-
-  return (
-    <article
-      aria-labelledby="inquiry-type"
-      className="flex min-h-0 flex-1 flex-col"
-    >
-      <SheetHeader
-        status={item.status}
-        inquiryId={item.inquiryId}
-        type={item.type}
-        showClose={showClose}
-        onClose={onClose}
-      />
-
-      <div className="flex flex-1 flex-col gap-6 overflow-y-auto px-6 py-5">
+        <div className="flex flex-1 flex-col gap-6 overflow-y-auto px-6 py-5">
         {refreshFailure &&
           (refreshFailure.status === 404 ? (
             <Notice tone="warn" title={t.notFoundTitle} role="alert">
@@ -2117,6 +2366,16 @@ function InquiryDetailView({
         )}
       </div>
     </article>
+    );
+  }
+  return (
+    <>
+      <LoadingStatus busy={signedIn && pending} label={t.loading} />
+      <span role="status" className="sr-only">
+        {placeholder && timing.slow ? messages.loading.slow : ""}
+      </span>
+      {body}
+    </>
   );
 }
 
@@ -2289,12 +2548,15 @@ function InquiriesBody({ beaches }: { beaches: Beaches }) {
 }
 
 export function InquiriesScreen({ beaches }: { beaches: Beaches }) {
+  const body = (
+    <Suspense fallback={null}>
+      <InquiriesBody beaches={beaches} />
+    </Suspense>
+  );
   return (
-    <AdminShell title={t.title}>
+    <AdminShell title={t.title} loading={body}>
       {/* 정적 내보내기라 주소 ?id= 는 브라우저에서 읽음(useSearchParams는 Suspense 안) */}
-      <Suspense fallback={null}>
-        <InquiriesBody beaches={beaches} />
-      </Suspense>
+      {body}
     </AdminShell>
   );
 }
