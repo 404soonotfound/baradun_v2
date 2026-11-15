@@ -720,12 +720,12 @@ test("로딩(L2·L8): 첫 진입 자리표시·5초 안내·15초 실패 재시�
   page,
 }) => {
   await page.clock.install();
-  let resolveCollection!: () => void;
+  const waiters: (() => void)[] = [];
   let hold = true;
   await page.route(/\/ops\/collection$/, async (route: Route) => {
     if (hold) {
       await new Promise<void>((r) => {
-        resolveCollection = r;
+        waiters.push(r);
       });
     }
     await route.fulfill({
@@ -751,9 +751,11 @@ test("로딩(L2·L8): 첫 진입 자리표시·5초 안내·15초 실패 재시�
 
   // L8 새로 고침: 기존 값을 유지하고 '다시 읽는 중' + 비활성
   hold = true;
+  const refreshReq = page.waitForRequest(/\/ops\/collection$/);
   await page.getByRole("button", { name: "다시 불러오기" }).click();
+  await refreshReq;
   await expect(page.getByText("다시 읽는 중")).toBeVisible();
   await expect(sourceRow(page, "기상청 해상 특보")).toContainText("정상");
-  resolveCollection();
+  waiters.at(-1)?.();
   await expect(page.getByText("다시 읽는 중")).toHaveCount(0);
 });

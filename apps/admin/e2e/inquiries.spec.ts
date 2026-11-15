@@ -997,11 +997,18 @@ test("로딩(L5): 목록·상세 패널 자리표시(닫기 활성·저장 비�
   await listAlert.getByRole("button", { name: "다시 시도" }).click();
   await expect(rows(page)).toHaveCount(2);
 
-  // L5 상세 패널 로딩: 저장·개인정보 가리기 비활성, 닫기는 바로 작동
+  // L5 상세 패널 로딩: 저장·개인정보 가리기 비활성, 닫기는 바로 활성
   await rows(page).first().getByRole("link").click();
   await page.clock.fastForward(200);
   const detail = detailOf(page);
   await expect(detail.locator("[aria-busy='true']")).toBeVisible();
+  if (isMobile(page)) {
+    await expect(
+      detail.getByRole("link", { name: /문의 목록으로/ }),
+    ).toBeVisible();
+  } else {
+    await expect(detail.getByRole("button", { name: "닫기" })).toBeEnabled();
+  }
   await expect(detail.getByRole("button", { name: "저장" })).toBeDisabled();
   await expect(
     detail.getByRole("button", { name: "개인정보 가리기" }),
@@ -1017,4 +1024,15 @@ test("로딩(L5): 목록·상세 패널 자리표시(닫기 활성·저장 비�
   holdDetail = false;
   await detailAlert.getByRole("button", { name: "다시 시도" }).click();
   await expect(detail.getByText("문의 상세 본문입니다.")).toBeVisible();
+
+  // PC: 닫기 버튼에 포커스를 둔 채 ArrowDown으로 다음 문의를 열어도 포커스가 유지됨
+  if (!isMobile(page)) {
+    const closeBtn = detail.getByRole("button", { name: "닫기" });
+    await closeBtn.focus();
+    holdDetail = true;
+    await page.keyboard.press("ArrowDown");
+    await page.clock.fastForward(200);
+    await expect(detail.locator("[aria-busy='true']")).toBeVisible();
+    await expect(closeBtn).toBeFocused();
+  }
 });
