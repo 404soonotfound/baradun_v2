@@ -185,7 +185,9 @@ function compareSido(a: string, b: string): number {
   return a.localeCompare(b, "ko");
 }
 
-export function sidoList(beaches: readonly Pick<BeachSummary, "sido">[]): string[] {
+export function sidoList(
+  beaches: readonly Pick<BeachSummary, "sido">[],
+): string[] {
   return [...new Set(beaches.map((b) => b.sido))].sort(compareSido);
 }
 
@@ -504,7 +506,10 @@ export function fetchPublished(
 
 function effectiveDisplay(
   display: BeachDisplay,
-): PublishedDisplay | { readonly kind: "unconfirmed"; readonly why: "unavailable" | "missing" } | null {
+):
+  | PublishedDisplay
+  | { readonly kind: "unconfirmed"; readonly why: "unavailable" | "missing" }
+  | null {
   if (display.kind === "loading") return null;
   return display.kind === "maintenance" ? display.last : display;
 }
@@ -591,10 +596,7 @@ export function tabCounts(
 }
 
 // 앱 표시 순: 게시본 이상(판단불가 → 이용불가) → 미확인 → 비노출 → 특보 없음, 같은 묶음은 지리 순서
-function statusRank(
-  beach: BeachSummary,
-  display: BeachDisplay,
-): number {
+function statusRank(beach: BeachSummary, display: BeachDisplay): number {
   const eff = effectiveDisplay(display);
   if (!eff) return beach.hidden ? 3 : 2;
   if (eff.kind === "published") {
@@ -644,9 +646,7 @@ export function parseBeachQuery(params: {
   get(key: string): string | null;
 }): BeachListQuery {
   const rawTab = params.get("tab");
-  const tab: BeachTab = (BEACH_TABS as readonly string[]).includes(
-    rawTab ?? "",
-  )
+  const tab: BeachTab = (BEACH_TABS as readonly string[]).includes(rawTab ?? "")
     ? (rawTab as BeachTab)
     : "all";
   const q = params.get("q") ?? "";
