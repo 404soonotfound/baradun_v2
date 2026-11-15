@@ -15,14 +15,16 @@
 이 계정은 2026-11-13에 AWS Organizations를 구성하면서 Paid 플랜으로 전환했습니다. 기존 **IAM Identity Center 조직 인스턴스**의 AWS 계정 접근을 우선 사용합니다. Identity Center 자체에는 추가 요금이 없으며, Paid 플랜의 실제 사용량 청구와 D25의 월 US$1 미만 운영 기준은 계속 적용합니다. MFA 필수 임시 IAM 관리자 역할은 기존 Identity Center 경로를 쓸 수 없을 때의 대안입니다. [계정 플랜 이력](README.md#비용-방어-범위) · [Identity Center 요금](https://aws.amazon.com/iam/identity-center/faqs/)
 
 1. 기존 IAM 사용자 정책·그룹·경계와 장기 키를 쓰는 자동화를 목록화합니다. 독립 비상 접근과 계정 복구 정보에 접근 가능한지 확인합니다.
-2. 기존 조직 인스턴스에서 이 AWS 계정에 대한 할당, MFA 설정, 권한 세트를 확인합니다. 일상 조회·배포와 관리자 작업의 권한을 구분하고, 관리자 권한 세트의 최대 세션은 1시간으로 둡니다. 할당이나 정책을 바꿔야 하면 별도 승인을 받습니다.
+2. 기존 조직 인스턴스에서 이 AWS 계정에 대한 할당, MFA 설정, 권한 세트를 확인합니다. 일상 조회·배포와 관리자 작업의 권한을 구분합니다. 관리자 권한 세트 `AdministratorAccess`의 세션 길이는 1시간(`PT1H`, AWS 기본값)으로 둡니다(2026-11-15 12시간에서 변경). 이 값은 콘솔 세션과 역할 임시 키의 유효 시간입니다. MFA로 다시 로그인하는 주기는 액세스 포털 세션 길이(AWS 기본 8시간, 이 계정 값 **[확인]**)가 따로 정하고, 포털 세션이 살아 있는 동안 CLI는 역할 키를 다시 받습니다. 지금은 로컬 배포 프로필 `baradun-sso`도 이 관리자 권한 세트를 씁니다. 일상용 권한 세트는 따로 두지 않았습니다. 할당·정책·세션 길이를 바꿔야 하면 별도 승인을 받습니다. [권한 세트 세션 길이](https://docs.aws.amazon.com/singlesignon/latest/userguide/howtosessionduration.html) · [CLI 세션 고려 사항](https://docs.aws.amazon.com/singlesignon/latest/userguide/user-session-duration-prereqs-considerations.html)
 3. 기존 관리자 세션을 유지한 채 별도 브라우저에서 AWS 액세스 포털을 확인합니다. CLI에서는 `aws sso login --profile baradun-sso` 후 `aws sts get-caller-identity --profile baradun-sso`로 대상 계정과 역할을 확인합니다. 읽기 전용 검증으로 스택·정책 접근을 확인하고, 독립 비상 접근도 별도로 점검합니다.
 4. 검증 후 별도 승인으로 상시 관리자 정책을 분리합니다. 기존 자동화는 단기 세션 또는 OIDC 경로를 사용하며, 장기 키는 의존성을 확인한 뒤 정리합니다. 실패하면 독립 비상 접근으로 직전 정책 연결을 복원합니다. [IAM 임시 역할 대안](README.md#mfa-조건-임시-관리자-역할-전환-절차)
 
 비상용 접근은 일상 세션과 별도로 보관합니다. 계정 복구 연락처와 MFA 복구 경로를 점검하고 복구 수단을 접근 통제된 오프라인 또는 별도 보관소에 둡니다. 복구 코드, 키, 비밀번호는 이 저장소와 작업 로그에 남기지 않습니다.
 
+사용자를 비활성화하거나 액세스 포털 세션을 끝내도 이미 발급된 계정 세션은 권한 세트 세션 길이(지금 1시간) 동안 유효합니다. 그 전에 끊어야 하면 관리자 권한 세트에 `identitystore:userId` 조건으로 해당 사용자를 막는 Deny 인라인 정책을 넣고 계정에 다시 적용합니다. 이 계정은 Organizations 관리 계정이라 SCP로는 막을 수 없습니다. 운영자가 한 명이라 이 Deny는 본인 세션도 막으므로, 정리 작업은 루트 계정으로 합니다. [세션 종료 시점](https://docs.aws.amazon.com/singlesignon/latest/userguide/authconcept.html) · [활성 세션 차단](https://docs.aws.amazon.com/singlesignon/latest/userguide/prereqs-revoking-user-permissions.html)
+
 - [ ] 기존 관리자, Identity Center 권한 세트, 독립 복구 수단의 접근 확인
-- [ ] 별도 세션에서 MFA와 관리자 권한 세트의 세션 제한 확인
+- [ ] 별도 세션에서 MFA, 관리자 권한 세트의 세션 길이(1시간), 액세스 포털 세션 길이 확인
 - [ ] 대상 계정·리전·역할 및 기존 정책 기본 버전 확인
 - [ ] CI·로컬 배포의 사용 주체와 다른 자동화 의존성 확인
 - [ ] 정책 전환과 관리자 권한 분리에 각각 승인 확보
