@@ -62,6 +62,7 @@ import {
   SkLine,
   SkPill,
   SlowNote,
+  Spinner,
   loadClass,
   useLoadTiming,
 } from "./loading";
@@ -827,13 +828,16 @@ function PreviewDrawer({
       </div>
     );
   } else if (failure) {
-    body = (
-      <FailureNotice
-        title={t.preview.failed}
-        failure={failure}
-        onRetry={onRetry}
-      />
-    );
+    body =
+      failure.code === "timeout" ? (
+        <LoadFailed onRetry={onRetry} />
+      ) : (
+        <FailureNotice
+          title={t.preview.failed}
+          failure={failure}
+          onRetry={onRetry}
+        />
+      );
   } else if (answer && !answer.ok) {
     body = (
       <Notice
@@ -1626,6 +1630,95 @@ function PublishSkeleton({ cls, slow }: { cls: string; slow: boolean }) {
   );
 }
 
+const ROLLBACK_TIMEOUT: OpsResult<RollbackPreview> = {
+  ok: false,
+  status: 504,
+  code: "timeout",
+  requestId: null,
+};
+
+const PREVIEW_TIMEOUT: OpsResult<PreviewAnswer> = {
+  ok: false,
+  status: 504,
+  code: "timeout",
+  requestId: null,
+};
+
+function RollbackPreviewSection({
+  status,
+  rollbackVersion,
+  onRetry,
+}: {
+  status: OpsResult<RollbackPreview> | "loading" | null;
+  rollbackVersion: string;
+  onRetry: () => void;
+}) {
+  const loading = status === "loading";
+  const timing = useLoadTiming(loading);
+  const rbResult = status && status !== "loading" ? status : null;
+  const rbReady =
+    rbResult?.ok && rbResult.body.available ? rbResult.body : null;
+
+  return (
+    <>
+      {loading && (
+        <div aria-busy="true" className="flex flex-col gap-1.5">
+          <LoadingStatus busy label={t.rollbackPreviewLoading} />
+          <span role="status" className="sr-only">
+            {timing.slow ? messages.loading.slow : ""}
+          </span>
+          <SkLine className="w-60 max-w-full" />
+          <SkLine className="w-40" />
+          {timing.slow && <SlowNote />}
+        </div>
+      )}
+      {rbResult && !rbResult.ok && rbResult.code === "timeout" && (
+        <LoadFailed onRetry={onRetry} />
+      )}
+      {rbResult && !rbResult.ok && rbResult.code !== "timeout" && (
+        <p role="alert" className="text-danger-fg">
+          {t.rollbackPreviewFailed}
+        </p>
+      )}
+      {rbResult?.ok && !rbResult.body.available && (
+        <p role="alert" className="text-danger-fg">
+          {t.rollbackUnavailable}
+        </p>
+      )}
+      {rbReady && (
+        <>
+          <p>
+            {fill(
+              rbReady.items.length > 0
+                ? t.confirmRollbackNotices
+                : t.confirmRollbackNoNotices,
+              {
+                time: versionTime(rollbackVersion),
+                count: rbReady.items.length,
+              },
+            )}
+          </p>
+          {rbReady.items.length > 0 && (
+            <ul className="list-disc pl-5">
+              {rbReady.items.map((item) => (
+                <li key={item.id}>
+                  {fill(t.noticeLine, {
+                    title: item.title ?? t.untitled,
+                    change:
+                      (t.rollbackChange as Record<string, string>)[
+                        item.change
+                      ] ?? item.change,
+                  })}
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
+      )}
+    </>
+  );
+}
+
 function PublishBody({
   beaches,
 }: {
@@ -1637,6 +1730,9 @@ function PublishBody({
   const view = overview.view;
   const waitingOverview = !permission.demo && overview.waiting && view === null;
   const timing = useLoadTiming(waitingOverview);
+  const refreshingOverview =
+    !permission.demo && overview.waiting && view !== null;
+  const refreshTiming = useLoadTiming(refreshingOverview);
   const placeholder =
     !permission.demo &&
     view === null &&
@@ -1670,6 +1766,8 @@ function PublishBody({
   >(undefined);
   const dialogTrigger = useRef<HTMLButtonElement | null>(null);
   const previewTrigger = useRef<HTMLButtonElement | null>(null);
+  const rollbackSeq = useRef(0);
+  const previewSeq = useRef(0);
   const attempt = useRef<{ body: string; key: string } | null>(null);
   // 다시 적용의 멱등 키(공지·포인터 version이 같으면 같은 키 → 응답을 못 받고 다시 눌러도 결과만 확인)
   const reapplyAttempt = useRef<{ id: string; key: string } | null>(null);
@@ -1771,6 +1869,7 @@ function PublishBody({
   };
 
   const closeDialog = (restoreFocus: boolean) => {
+    rollbackSeq.current += 1;
     setDialog(null);
     setRollbackPreview(null);
     const target = dialogTrigger.current;
@@ -1811,6 +1910,19 @@ function PublishBody({
     setDialog({ kind: "publish" });
   };
 
+  const loadRollbackPreview = (version: string) => {
+    rollbackSeq.current += 1;
+    const seq = rollbackSeq.current;
+    setRollbackPreview("loading");
+    void withTimeout(
+      () => fetchRollbackPreview(() => session.accessToken(), version),
+      ROLLBACK_TIMEOUT,
+      LOADING_TIMES.timeout,
+    ).then((result) => {
+      if (rollbackSeq.current === seq) setRollbackPreview(result);
+    });
+  };
+
   const openRollback = (
     version: string,
     triggerEl: HTMLButtonElement | null,
@@ -1818,10 +1930,7 @@ function PublishBody({
     dialogTrigger.current = triggerEl;
     setWord("");
     setDialog({ kind: "rollback", version });
-    setRollbackPreview("loading");
-    void fetchRollbackPreview(() => session.accessToken(), version).then(
-      setRollbackPreview,
-    );
+    loadRollbackPreview(version);
   };
 
   const openReapply = (
@@ -1834,8 +1943,15 @@ function PublishBody({
 
   const loadPreview = (triggerEl?: HTMLButtonElement | null) => {
     if (triggerEl) previewTrigger.current = triggerEl;
+    previewSeq.current += 1;
+    const seq = previewSeq.current;
     setPreview({ open: true, waiting: true, answer: null, failure: null });
-    void fetchPublishPreview(() => session.accessToken()).then((result) => {
+    void withTimeout(
+      () => fetchPublishPreview(() => session.accessToken()),
+      PREVIEW_TIMEOUT,
+      LOADING_TIMES.timeout,
+    ).then((result) => {
+      if (previewSeq.current !== seq) return;
       setPreview({
         open: true,
         waiting: false,
@@ -1846,6 +1962,7 @@ function PublishBody({
   };
 
   const closePreview = (restoreFocus = true) => {
+    previewSeq.current += 1;
     setPreview({
       open: false,
       waiting: false,
@@ -2174,7 +2291,9 @@ function PublishBody({
         label={fill(messages.loading.screen, { name: messages.nav.publish })}
       />
       <span role="status" className="sr-only">
-        {timing.slow ? messages.loading.slow : ""}
+        {(placeholder ? timing.slow : refreshTiming.slow)
+          ? messages.loading.slow
+          : ""}
       </span>
       <div
         aria-busy={placeholder || undefined}
@@ -2188,7 +2307,16 @@ function PublishBody({
             <p className="mt-1 text-label-s text-text-muted">{t.description}</p>
           </div>
           {!permission.demo && (
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              {refreshingOverview && (
+                <span
+                  role="status"
+                  className="inline-flex items-center gap-1.5 text-label-s text-brand-default"
+                >
+                  <Spinner size={12} />
+                  {messages.loading.refreshing}
+                </span>
+              )}
               <Button
                 variant="secondary"
                 size="small"
@@ -2224,6 +2352,7 @@ function PublishBody({
             role={message.tone === "fail" ? "alert" : "status"}
           />
         )}
+        {refreshingOverview && refreshTiming.slow && <SlowNote />}
         {content}
         <SiteDeployPanel demo={permission.demo} />
       </div>
@@ -2293,53 +2422,11 @@ function PublishBody({
           onClose={() => closeDialog(true)}
         >
           <p>{t.confirmRollbackBody}</p>
-          {rollbackPreview === "loading" && (
-            <div aria-busy="true" className="flex flex-col gap-1.5">
-              <LoadingStatus busy label={t.rollbackPreviewLoading} />
-              <SkLine className="w-60 max-w-full" />
-              <SkLine className="w-40" />
-            </div>
-          )}
-          {rbResult && !rbResult.ok && (
-            <p role="alert" className="text-danger-fg">
-              {t.rollbackPreviewFailed}
-            </p>
-          )}
-          {rbResult?.ok && !rbResult.body.available && (
-            <p role="alert" className="text-danger-fg">
-              {t.rollbackUnavailable}
-            </p>
-          )}
-          {rbReady && (
-            <>
-              <p>
-                {fill(
-                  rbReady.items.length > 0
-                    ? t.confirmRollbackNotices
-                    : t.confirmRollbackNoNotices,
-                  {
-                    time: versionTime(rollbackVersion),
-                    count: rbReady.items.length,
-                  },
-                )}
-              </p>
-              {rbReady.items.length > 0 && (
-                <ul className="list-disc pl-5">
-                  {rbReady.items.map((item) => (
-                    <li key={item.id}>
-                      {fill(t.noticeLine, {
-                        title: item.title ?? t.untitled,
-                        change:
-                          (t.rollbackChange as Record<string, string>)[
-                            item.change
-                          ] ?? item.change,
-                      })}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </>
-          )}
+          <RollbackPreviewSection
+            status={rollbackPreview}
+            rollbackVersion={rollbackVersion}
+            onRetry={() => loadRollbackPreview(rollbackVersion)}
+          />
           <p>{t.confirmRollbackData}</p>
           <p>{t.confirmRollbackHold}</p>
           <label className="mt-1 flex flex-col gap-1">

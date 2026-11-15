@@ -1478,13 +1478,48 @@ function SourceDetailSkeleton({
               <SkLine className="w-64 max-w-full" />
               <SkLine className="mt-1 w-48 max-w-full" />
               <SkLine className="w-36" />
-              {knownId === "collect-warnings" && (
-                <SkBox className="mt-2 h-[86px] w-full" />
+              <SkLine className="w-28" />
+              {(knownId === "collect-warnings" || knownId === null) && (
+                <div className="mt-2 flex flex-col gap-3">
+                  <div className="flex flex-col gap-2">
+                    <SkLine className="h-[14px] w-24" />
+                    {[0, 1, 2, 3, 4, 5].map((r) => (
+                      <div
+                        key={r}
+                        className="grid grid-cols-3 gap-2 border-t border-border-default pt-1.5"
+                      >
+                        <SkLine className="w-20" />
+                        <SkLine className="w-24" />
+                        <SkLine className="w-28" />
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <SkLine className="h-[14px] w-16" />
+                    <SkBox className="h-[54px] w-full" />
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <SkLine className="h-[14px] w-28" />
+                    {[0, 1, 2].map((r) => (
+                      <div
+                        key={r}
+                        className="grid grid-cols-[6rem_1fr] gap-2 border-t border-border-default pt-1.5"
+                      >
+                        <SkLine className="w-12" />
+                        <SkLine className="w-36" />
+                      </div>
+                    ))}
+                  </div>
+                </div>
               )}
             </div>
             <div className={`flex flex-col gap-2 ${CARD}`}>
               <SkLine className="w-36" />
               <SkLine className="w-56 max-w-full" />
+              <SkLine className="w-40" />
+              {knownId === "collect-warnings" && (
+                <SkBox className="mt-2 h-[180px] w-full" />
+              )}
             </div>
             {slow && <SlowNote className="mt-1" />}
           </div>

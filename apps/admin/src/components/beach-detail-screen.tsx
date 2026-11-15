@@ -597,6 +597,9 @@ function MemoSection({ beachId }: { beachId: string }) {
             <span className="flex h-[18px] items-center">
               <SkLine className="w-48 max-w-full" />
             </span>
+            <span className="flex h-[18px] items-center sm:hidden">
+              <SkLine className="w-28" />
+            </span>
             <span className="flex h-[18px] items-center">
               <SkLine className="w-36" />
             </span>

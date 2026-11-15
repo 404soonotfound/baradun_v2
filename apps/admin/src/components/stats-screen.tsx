@@ -37,6 +37,7 @@ import {
   SkChart,
   SkDonut,
   SkLine,
+  SlowNote,
   Spinner,
   useLoadTiming,
 } from "./loading";
@@ -551,6 +552,7 @@ function StatsBody({
   const result = placeholder ? null : current!.result;
   const data = result && result.ok ? result.body : null;
   const refreshing = fetching && !pending;
+  const refreshTiming = useLoadTiming(refreshing);
 
   const isSample =
     (snapshot.status === "signed_in" && snapshot.pool === "demo") ||
@@ -636,7 +638,9 @@ function StatsBody({
         label={fill(messages.loading.screen, { name: t.title })}
       />
       <span role="status" className="sr-only">
-        {timing.slow ? messages.loading.slow : ""}
+        {(placeholder ? timing.slow : refreshTiming.slow)
+          ? messages.loading.slow
+          : ""}
       </span>
       <div
         aria-busy={pending || undefined}
@@ -726,13 +730,13 @@ function StatsBody({
             )}
             {/* 기준 시각·잠시 저장된 응답·새로 고침(시안에 없음, 기존 줄이라 남김) */}
             <div className="mt-1 flex min-h-touch flex-wrap items-center gap-x-2 gap-y-1 text-caption text-text-muted lg:min-h-0">
-              {data ? (
+              {placeholder ? (
+                <SkLine className="w-[120px] h-[8px]" />
+              ) : data ? (
                 <span>
                   {fill(t.fetchedAt, { time: kstDateTime(data.fetchedAt) })}
                 </span>
-              ) : (
-                <SkLine className="w-[120px] h-[8px]" />
-              )}
+              ) : null}
               {data?.cached && (
                 <span
                   className={`${BADGE} bg-bg-surface font-medium text-text-body ring-1 ring-border-default ring-inset`}
@@ -805,6 +809,11 @@ function StatsBody({
           </div>
         </div>
 
+        {((placeholder && timing.slow) ||
+          (!placeholder && refreshing && refreshTiming.slow)) && (
+          <SlowNote className="mt-2" />
+        )}
+
         {!placeholder && result && !result.ok && (
           <div className="mt-6">
             <Notice tone="fail" title={t.loadError} role="alert">
@@ -840,7 +849,8 @@ function StatsBody({
           </div>
         )}
 
-        <div className={cls}>
+        {(placeholder || data !== null) && (
+          <div className={cls}>
           {/* KPI(보드 V8: 사용자 · 화면 조회 · 새 사용자 비율 · 사용자당 화면). 새 사용자 비율은 응답에 칸이 있을 때만 */}
           <dl
             className={`mt-7 grid grid-cols-2 gap-x-8 gap-y-5 ${
@@ -1094,8 +1104,8 @@ function StatsBody({
           </div>
 
           <p className="mt-6 text-caption text-text-muted">{t.foot}</p>
-
         </div>
+        )}
       </div>
     </>
   );

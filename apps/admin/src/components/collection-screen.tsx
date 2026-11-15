@@ -2303,13 +2303,10 @@ function CollectionSkeleton({ cls, slow }: { cls: string; slow: boolean }) {
             </tr>
           </tbody>
         </table>
-        <ul className="mt-3 flex flex-col gap-2.5 md:hidden">
+        <ul className="mt-3 flex flex-col divide-y divide-border-default rounded-admin-box border border-border-default bg-bg-surface shadow-card md:hidden">
           {SK_SOURCE_WIDTHS.map((w, i) => (
-            <li
-              key={i}
-              className="flex flex-col gap-2.5 rounded-admin-box border border-border-default bg-bg-surface p-3.5"
-            >
-              <div className="flex items-start justify-between gap-2">
+            <li key={i} className="flex flex-col gap-2 px-4 py-3">
+              <div className="flex items-start justify-between gap-3">
                 <div className="flex flex-col gap-1">
                   <SkLine className={w} />
                   <SkLine className="w-12" />
@@ -2324,6 +2321,18 @@ function CollectionSkeleton({ cls, slow }: { cls: string; slow: boolean }) {
               </div>
             </li>
           ))}
+          <li className="flex flex-col gap-1 px-4 py-3">
+            <span className="flex items-start justify-between gap-3">
+              <span className="font-medium text-text-default">
+                {t.season}
+              </span>
+              <Badge tone="neutral">{t.seasonState}</Badge>
+            </span>
+            <span className="text-[13px] text-text-body">
+              {t.seasonHint}{" "}
+              <ExternalLink href={SEASON_FILE}>{t.seasonLink}</ExternalLink>
+            </span>
+          </li>
         </ul>
       </section>
 
@@ -2429,6 +2438,10 @@ function CollectionBody({ beaches }: { beaches: Beaches }) {
   const [attempt, setAttempt] = useState(0);
   const key = `${attempt}|${generation}`;
   const [loaded, setLoaded] = useState<CollectionLoaded | null>(null);
+  const [lastGood, setLastGood] = useState<{
+    readonly generation: number;
+    readonly view: CollectionView & { readonly legacy: boolean };
+  } | null>(null);
   // 시트는 장애 번호가 아니라 장애 키로 듦(다시 불러와 목록이 바뀌어도 다른 장애로 바뀌지 않게)
   const [sheet, setSheet] = useState<{ key: string; nonce: number } | null>(
     null,
@@ -2478,6 +2491,7 @@ function CollectionBody({ beaches }: { beaches: Beaches }) {
     ).then(({ timedOut, result }) => {
       if (!live) return;
       setLoaded({ key, timedOut, result });
+      if (result.ok) setLastGood({ generation, view: result.body });
       // 새 결과에 연 장애가 없으면(불러오기 실패 포함) 시트를 닫음. 남겨 두면 나중에 저절로 다시 열림
       const keys = result.ok
         ? new Set(allIncidents(result.body.jobs).map(incidentKey))
@@ -2498,7 +2512,7 @@ function CollectionBody({ beaches }: { beaches: Beaches }) {
     return () => {
       live = false;
     };
-  }, [session, signedIn, key]);
+  }, [session, signedIn, key, generation]);
 
   // 다시 불러오는 동안 앞 값을 그대로 보여 줌(D16-E1 '갱신 중엔 기존 값 유지')
   const [, loadedGeneration] = loaded?.key.split("|") ?? [];
@@ -2513,7 +2527,16 @@ function CollectionBody({ beaches }: { beaches: Beaches }) {
 
   const result = placeholder ? null : current.result;
   const timedOut = !placeholder && current.timedOut;
-  const view = result?.ok ? result.body : null;
+  const fallbackView =
+    signedIn && lastGood?.generation === generation ? lastGood.view : null;
+  // 다시 불러오기 실패(재로그인 필요 제외)에도 마지막으로 받은 값을 유지(L0)
+  const stale =
+    !placeholder &&
+    result !== null &&
+    !result.ok &&
+    result.code !== "reauth" &&
+    fallbackView !== null;
+  const view = result?.ok ? result.body : stale ? fallbackView : null;
   const nowMs = view ? Date.parse(view.generatedAt) : 0;
   const incidents = useMemo(
     () => (view ? allIncidents(view.jobs) : []),
@@ -2653,6 +2676,16 @@ function CollectionBody({ beaches }: { beaches: Beaches }) {
       )}
       {view && (
         <>
+          {stale && (
+            <p
+              role="status"
+              className="mt-3 text-[12.5px] font-medium text-text-default"
+            >
+              {fill(messages.loading.stale, {
+                time: kstDateTime(view.generatedAt),
+              })}
+            </p>
+          )}
           {view.legacy && (
             <div className="mt-4">
               <Notice tone="warn" title={t.oldResponse} role="status" />
