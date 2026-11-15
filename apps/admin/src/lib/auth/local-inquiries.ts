@@ -1,3 +1,4 @@
+import { BEACH_NONE, previewText } from "../inquiries";
 import type { OpsResult } from "./ops-fetch";
 
 // 로컬 테스트 로그인용 예시 문의 (BRD-153). local-dev.ts가 불러와 개발 서버에서만 씀(배포 빌드에서 빠짐)
@@ -56,7 +57,11 @@ const EXAMPLES: Example[] = Array.from({ length: 26 }, (_, i) => {
     version: 1,
     legacy: i === 20,
     // 개인정보 가리기를 해 볼 수 있게 몇 개에는 예시 이름·번호를 넣음(실제 사람 아님)
-    message: `(로컬 예시 ${i + 1}) 현장에 입수 금지 깃발이 걸려 있어요. 15:10에 봤어요.${i % 4 === 0 ? "\n제 이름은 김바다, 번호는 010-0000-0000이에요." : ""}`,
+    // 마지막 예시는 본문이 비어 있음(미리보기 '본문 없음' 확인용)
+    message:
+      i === 25
+        ? ""
+        : `(로컬 예시 ${i + 1}) 현장에 입수 금지 깃발이 걸려 있어요. 15:10에 봤어요.${i % 4 === 0 ? "\n제 이름은 김바다, 번호는 010-0000-0000이에요." : ""}`,
     memo: i % 3 === 0 ? "출입 통제는 출시에 판단하지 않음(G2)." : null,
     rejectReason: status === "rejected" ? "내용을 알아볼 수 없어요." : null,
   };
@@ -75,24 +80,56 @@ function summary(e: Example, now: number) {
   };
 }
 
+// 서버(services/src/admin/inquiry-list.ts withInquiryPreview)와 같은 미리보기 규칙(previewText와 같음)
+function withPreview(item: ReturnType<typeof summary>, message: string) {
+  const preview = previewText(message);
+  return preview === null
+    ? { ...item, messagePreviewUnavailableReason: "empty" }
+    : { ...item, messagePreview: preview };
+}
+
+// 서버 필터(q·type·beachId·from·to·preview)를 흉내 냄. 로컬은 해변 이름표가 없어 검색은 해변 ID·본문만 봄
 // cursor는 '몇 번째부터'만 담음(로컬 예시라 서버 cursor 모양을 흉내 내지 않음)
 export function localInquiryPage<T>(query: URLSearchParams): OpsResult<T> {
   const now = Date.now();
   const status = query.get("status");
   const limit = Number(query.get("limit") ?? 20);
   const start = Number(query.get("cursor") ?? 0);
-  const rows = EXAMPLES.filter((e) => !status || e.status === status);
+  const q = query.get("q")?.trim().normalize("NFC").toLowerCase() ?? "";
+  const type = query.get("type");
+  const beachId = query.get("beachId");
+  const from = query.get("from");
+  const to = query.get("to");
+  const preview = query.get("preview") === "true";
+  const rows = EXAMPLES.filter((e) => {
+    const receivedAt = new Date(now - e.hoursAgo * 3_600_000).toISOString();
+    return (
+      (!status || e.status === status) &&
+      (!type || e.type === type) &&
+      (!beachId ||
+        (beachId === BEACH_NONE ? !e.beachId : e.beachId === beachId)) &&
+      (!from || receivedAt >= from) &&
+      (!to || receivedAt <= to) &&
+      (q === "" ||
+        (e.beachId ?? "").toLowerCase().includes(q) ||
+        e.message.normalize("NFC").toLowerCase().includes(q))
+    );
+  });
   const page = rows.slice(start, start + limit);
   const counts = Object.fromEntries(
     STATUSES.map((s) => [s, EXAMPLES.filter((e) => e.status === s).length]),
   );
+  // 서버처럼 검색·필터·미리보기가 없는 첫 쪽에만 상태별 집계를 줌
+  const filtered = [q, type, beachId, from, to].some(Boolean) || preview;
   return {
     ok: true,
     status: 200,
     body: {
-      items: page.map((e) => summary(e, now)),
+      items: page.map((e) =>
+        preview ? withPreview(summary(e, now), e.message) : summary(e, now),
+      ),
       nextCursor: start + limit < rows.length ? String(start + limit) : null,
-      ...(query.get("cursor") ? {} : { counts }),
+      ...(query.get("cursor") || filtered ? {} : { counts }),
     } as T,
   };
 }
