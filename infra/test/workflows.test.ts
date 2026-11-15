@@ -856,7 +856,8 @@ describe("PR 필수 웹 검사 (BRD-102 결정 41·42)", () => {
   it("워크플로는 secrets.*나 API 키 환경 변수를 쓰지 않고, 웹 빌드에는 공개 변수만 넘긴다 (BRD-67)", () => {
     for (const w of workflows) {
       const text = codeLines(w.text).join("\n");
-      expect(text, w.name).not.toMatch(/\bsecrets\./);
+      // secrets.NAME뿐 아니라 secrets['NAME']·secrets: inherit·toJSON(secrets)도 막음
+      expect(text, w.name).not.toMatch(/\bsecrets\b/);
       expect(text, w.name).not.toMatch(
         /\b(KMA_APIHUB_AUTH_KEY|DATA_GO_KR_SERVICE_KEY)\b/,
       );
