@@ -35,6 +35,7 @@ admin: &admin
   - "data/beaches/**" # 문의 해변 이름표(빌드 때 읽음, apps/admin/src/lib/beach-names.ts)
   - "data/beach-meta.json" # 해변 관리 별칭·운영 기간(빌드 때 읽음, apps/admin/src/lib/beach-data.ts)
   - "data/beach-coverage.csv" # 해변 관리 검증 결과(빌드 때 읽음, apps/admin/src/lib/beach-data.ts)
+  - "tools/beaches/annex-tables.json" # 해변 관리 특보 구역 공식 이름(빌드 때 읽음, apps/admin/src/lib/beach-data.ts)
   - ".github/workflows/deploy.yml" # 배포 빌드 방법이 바뀌면 다시 검사·배포(BRD-178)
 admin_e2e:
   - *admin

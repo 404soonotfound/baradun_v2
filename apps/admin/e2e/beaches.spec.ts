@@ -11,6 +11,7 @@ import {
   signInWithPassword,
   srpScript,
   test,
+  tokensFor,
 } from "./fixtures";
 
 // 해변 관리 목록·상세 (BRD-150·GH-329, 화면 설계서 6장 ADM-BCH). 운영 API는 가짜 응답
@@ -131,7 +132,19 @@ async function mockMemo(
 
 async function signIn(page: Page, groups: string[]) {
   const sample = groups.includes("sample");
-  await mockCognito(page, srpScript({ email: OPS, after: "tokens", groups }));
+  const authTime = Math.floor(Date.now() / 1000) - 60;
+  await mockCognito(
+    page,
+    srpScript({ email: OPS, after: "tokens", groups, authTime }),
+    (target) =>
+      target === "GetTokensFromRefreshToken"
+        ? {
+            body: {
+              AuthenticationResult: tokensFor(OPS, groups, 900, authTime),
+            },
+          }
+        : undefined,
+  );
   await mockOps(
     page,
     sample
@@ -159,7 +172,7 @@ async function openBeaches(page: Page) {
     .getByRole("link", { name: "해변", exact: true })
     .click();
   await expect(
-    page.getByRole("heading", { name: "해변 관리", level: 1 }),
+    page.getByRole("heading", { name: "해변", level: 1 }),
   ).toBeVisible();
 }
 
@@ -169,74 +182,218 @@ const beachRow = (page: Page, name: string) =>
     .filter({ visible: true })
     .filter({ hasText: name });
 
-// 모바일 카드 222장 전체에 axe를 돌리면 CI 러너에서 30초를 넘김 → 같은 부품을 몇 곳으로 줄여 검사
+const allBeachRows = (page: Page) =>
+  (isMobile(page) ? page.locator("main ul > li") : page.locator("tbody tr"))
+    .filter({ visible: true });
+
+const tabButton = (page: Page, label: string) =>
+  page
+    .getByRole("group", { name: "해변 분류" })
+    .filter({ visible: true })
+    .getByRole("button", { name: new RegExp(`^${label}(?:\\s|\\d|—|$)`) });
+
+// 모바일 카드·표에 axe를 돌릴 때 한 줄로 좁혀 빠르게 검사
 async function narrowForAxe(page: Page) {
   await page.getByLabel("해변 찾기").fill("강릉");
-  await expect(page.getByText(/^222곳 중 \d+곳$/)).not.toHaveText(
-    "222곳 중 222곳",
+  await expect(page.getByText(/^\d+건 중 \d+–\d+$/)).not.toHaveText(
+    "222건 중 1–11",
   );
 }
 
 async function openDetail(page: Page, name: string) {
-  // 모바일 카드 링크 이름에는 지역·ID도 들어감. 첫 링크가 상세 링크(커밋 기록 링크는 뒤)
-  await beachRow(page, name).getByRole("link", { name }).first().click();
+  const row = beachRow(page, name);
+  if ((await row.count()) === 0) {
+    await page.getByLabel("해변 찾기").fill(name);
+    await expect(row.first()).toBeVisible();
+  }
+  await row.getByRole("link", { name }).first().click();
   await expect(page.getByRole("heading", { name, level: 1 })).toBeVisible();
 }
 
-test("목록: 저장소의 222곳을 읽기 전용으로 보여 주고 지금 표시 상태는 사유 먼저", async ({
+test("목록: 저장소의 222곳을 한 줄 표(11행/쪽)·공식 특보 구역 이름으로 보여 주고 지금 표시 상태는 사유 먼저", async ({
   page,
 }) => {
   await mockPublished(page);
   await signIn(page, ["viewer"]);
   await openBeaches(page);
-  await expect(page.getByText("222곳 중 222곳")).toBeVisible();
+
+  await expect(page.getByText("222건 중 1–11")).toBeVisible();
+  await expect(page.getByText("1 / 21")).toBeVisible();
+  await expect(allBeachRows(page)).toHaveCount(11);
   await expect(
     page.getByText(
       "해변 정보는 저장소가 원본이에요. 고치면 PR 머지 뒤 사이트가 다시 배포되면서 반영돼요.",
     ),
   ).toBeVisible();
-  // 편집 칸·노출 토글·일괄 변경 없음
+  await expect(
+    page.getByRole("link", { name: /GitHub에서 고치기/ }),
+  ).toHaveAttribute(
+    "href",
+    "https://github.com/404soonotfound/baradun_v2/tree/main/data/beaches",
+  );
+  // 편집 칸·노출 토글·일괄 변경·출입 통제·style 속성 없음
   await expect(page.getByRole("checkbox")).toHaveCount(0);
   await expect(page.getByRole("switch")).toHaveCount(0);
+  await expect(page.getByText("출입 통제")).toHaveCount(0);
+  expect(await page.locator("main [style]").count()).toBe(0);
 
+  // 탭별 개수 확인(판단불가 220, 이용불가 1, 비노출 0, 가까운 관측 없음 71, 구역 검증 안 됨 0)
+  await expect(tabButton(page, "전체")).toContainText("222");
+  await expect(tabButton(page, "판단불가")).toContainText("220");
+  await expect(tabButton(page, "이용불가")).toContainText("1");
+  await expect(tabButton(page, "비노출")).toContainText("0");
+  await expect(tabButton(page, "가까운 관측 없음")).toContainText("71");
+  await expect(tabButton(page, "구역 검증 안 됨")).toContainText("0");
+
+  // 첫 쪽에 판단불가(관측 지연)·이용불가(풍랑주의보)·미확인 해변이 사유 먼저로 보임
   const blocked = beachRow(page, "경포해수욕장");
   await expect(blocked).toContainText("풍랑주의보");
   await expect(blocked).toContainText("이용불가");
-  await expect(beachRow(page, "강문해수욕장")).toContainText("특보 없음");
+  await expect(blocked).toContainText("강원중부앞바다");
+  await expect(blocked).not.toContainText("S1151200");
+
+  const delayed = beachRow(page, "사천진해수욕장");
+  await expect(delayed).toContainText("관측 지연");
+  await expect(delayed).toContainText("판단불가");
+
   // 게시본에 없는 해변은 '확인 못 함'(특보 없음으로 채우지 않음)
-  const missing = beachRow(page, "정동진해수욕장");
+  const missing = beachRow(page, "금진해수욕장");
   await expect(missing).toContainText("확인 못 함");
   await expect(missing).not.toContainText("특보 없음");
-  // 데이터 연결은 특보·관측·운영 기간만(출입 통제 없음)
-  await expect(beachRow(page, "강문해수욕장")).toContainText(
-    "2026 개장 7.10~8.23",
-  );
-  await expect(page.getByText("출입 통제")).toHaveCount(0);
-  // 마지막 수정은 저장소 커밋 기록 링크
-  await expect(
-    beachRow(page, "강문해수욕장").getByRole("link", {
-      name: "강문해수욕장 커밋 기록(GitHub, 새 탭)",
-    }),
-  ).toHaveAttribute(
-    "href",
-    "https://github.com/404soonotfound/baradun_v2/commits/main/data/beaches/b0001.json",
-  );
+
+  // PC(1280×800): 222곳 목록에서도 한 화면 안팎 높이·가로 넘침 없음
+  if (!isMobile(page)) {
+    const metrics = await page.evaluate(() => ({
+      scrollHeight: document.documentElement.scrollHeight,
+      scrollWidth: document.documentElement.scrollWidth,
+      clientWidth: document.documentElement.clientWidth,
+    }));
+    expect(metrics.scrollWidth).toBeLessThanOrEqual(metrics.clientWidth);
+    expect(metrics.scrollHeight).toBeLessThanOrEqual(1050);
+  }
+
   await narrowForAxe(page);
   await expectNoA11yViolations(page);
 });
 
-test("목록: 이름·별칭으로 찾고 지역으로 거르며, 없으면 빈 목록 안내", async ({
+test("목록: 탭·별칭 찾기·지역(지리순)·특보 구역·페이징·주소 쿼리 유지·키보드 행 열기·빈 목록", async ({
   page,
 }) => {
   await mockPublished(page);
+  await mockMemo(page);
   await signIn(page, ["viewer"]);
   await openBeaches(page);
-  await page.getByLabel("해변 찾기").fill("송도");
-  await expect(beachRow(page, "송도해수욕장")).toHaveCount(1);
-  await page.getByLabel("지역").selectOption("강원");
-  await expect(page.getByText("찾는 해변이 없어요")).toBeVisible();
-  await page.getByLabel("해변 찾기").fill("");
-  await expect(page.getByText("222곳 중 91곳")).toBeVisible();
+
+  // 탭 거르기: '가까운 관측 없음'은 표시 필터일 뿐 앱 표시를 바꾸지 않음
+  await tabButton(page, "가까운 관측 없음").click();
+  await expect(page).toHaveURL(/\btab=no_station\b/);
+  await expect(page.getByText("71건 중 1–11")).toBeVisible();
+  await expect(allBeachRows(page).first()).toContainText("가까운 관측 없음");
+  await expect(allBeachRows(page).first()).toContainText("확인 못 함");
+
+  await tabButton(page, "이용불가").click();
+  await expect(page).toHaveURL(/\btab=unavailable\b/);
+  await expect(page.getByText("1건 중 1–1")).toBeVisible();
+  await expect(beachRow(page, "경포해수욕장")).toBeVisible();
+
+  await tabButton(page, "전체").click();
+  await expect(page.getByText("222건 중 1–11")).toBeVisible();
+
+  // 페이징 + 새로 고침·뒤로 가기 쿼리 유지
+  await page.getByRole("button", { name: "다음 해변 목록 페이지" }).click();
+  await expect(page).toHaveURL(/\bpage=2\b/);
+  await expect(page.getByText("222건 중 12–22")).toBeVisible();
+  await page.reload();
+  await expect(page).toHaveURL(/\bpage=2\b/);
+  await expect(page.getByText("222건 중 12–22")).toBeVisible();
+  await page.goBack();
+  await expect(page.getByText("222건 중 1–11")).toBeVisible();
+
+  // 지역 필터(지리 순서) + 특보 구역 필터 + 새로 고침 유지
+  await page.getByRole("button", { name: "지역", exact: true }).click();
+  const regionMenu = page.getByRole("group", { name: "지역 고르기" });
+  const regionLabels = await regionMenu.getByRole("button").allTextContents();
+  expect(regionLabels.slice(1)).toEqual([
+    "강원",
+    "경북",
+    "울산",
+    "부산",
+    "경남",
+    "전남",
+    "전북",
+    "충남",
+    "인천",
+    "제주",
+  ]);
+  await regionMenu.getByRole("button", { name: "강원", exact: true }).press("Enter");
+  await expect(page).toHaveURL(/\bsido=%EA%B0%95%EC%9B%90\b/);
+  await expect(page.getByText("91건 중 1–11")).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "지역: 강원", exact: true }),
+  ).toBeFocused();
+
+  await page.getByRole("button", { name: "특보 구역", exact: true }).click();
+  const zoneMenu = page.getByRole("group", { name: "특보 구역 고르기" });
+  await zoneMenu
+    .getByRole("button", { name: "강원중부앞바다", exact: true })
+    .click();
+  await expect(page).toHaveURL(/\bzone=S1151200\b/);
+  await page.reload();
+  await expect(
+    page.getByRole("button", { name: "지역: 강원", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "특보 구역: 강원중부앞바다", exact: true }),
+  ).toBeVisible();
+
+  // 키보드로 행 열기 → 뒤로 가기 시 필터·탭 쿼리 복원
+  const rowLink = beachRow(page, "경포해수욕장")
+    .getByRole("link", { name: /경포해수욕장/ })
+    .first();
+  await rowLink.focus();
+  await rowLink.press("Enter");
+  await expect(
+    page.getByRole("heading", { name: "경포해수욕장", level: 1 }),
+  ).toBeVisible();
+  await page.goBack();
+  await expect(page).toHaveURL(/\bzone=S1151200\b/);
+
+  // 조건 지우기 후 별칭 찾기('승공' → 상맹방해수욕장)
+  await page.getByRole("button", { name: "지역 거르기 지우기" }).press("Enter");
+  await expect(page).not.toHaveURL(/\bsido=/);
+  await expect(
+    page.getByRole("button", { name: "지역", exact: true }),
+  ).toBeFocused();
+  await page.getByRole("button", { name: "특보 구역 거르기 지우기" }).click();
+  await page.getByLabel("해변 찾기").fill("승공");
+  await expect(beachRow(page, "상맹방해수욕장")).toHaveCount(1);
+
+  // 빈 검색 안내 + 조건 지우기(시안 E7)
+  await page.getByLabel("해변 찾기").fill("없는해변xyz");
+  await expect(
+    page.getByText('"없는해변xyz"는 해변 목록에 없어요'),
+  ).toBeVisible();
+  await expect(
+    page.getByText("출시에서 빠진 해변일 수 있어요. 새 해변은 저장소 PR로 넣어요."),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "조건 지우기" }).click();
+  await expect(page.getByText("222건 중 1–11")).toBeVisible();
+
+  // 필터 선택 뒤 검색한 상태에서 뒤로 가면 남은 검색 초안도 함께 지워짐
+  await page.getByRole("button", { name: "지역", exact: true }).click();
+  await page
+    .getByRole("group", { name: "지역 고르기" })
+    .getByRole("button", { name: "강원", exact: true })
+    .click();
+  await expect(page).toHaveURL(/\bsido=%EA%B0%95%EC%9B%90\b/);
+  await page.getByLabel("해변 찾기").fill("경포");
+  await expect(page).toHaveURL(/\bq=%EA%B2%BD%ED%8F%AC\b/);
+  await expect(beachRow(page, "경포해수욕장")).toHaveCount(1);
+  await page.goBack();
+  await expect(page).not.toHaveURL(/\bq=/);
+  await expect(page.getByLabel("해변 찾기")).toHaveValue("");
+  await expect(page.getByText("222건 중 1–11")).toBeVisible();
+  await expectNoA11yViolations(page);
 });
 
 test("상태를 못 받으면 모든 해변이 판단불가 계열 '확인 못 함'이고 무슨 일·영향·다음 행동을 알린다", async ({
@@ -254,12 +411,13 @@ test("상태를 못 받으면 모든 해변이 판단불가 계열 '확인 못 �
     "앱 화면에 영향이 있는지는 여기서 알 수 없어요",
   );
   await expect(alert).toContainText("req-7f3a2c91");
+  await expect(tabButton(page, "판단불가")).toContainText("222");
+  await page.getByLabel("해변 찾기").fill("강문");
   await expect(beachRow(page, "강문해수욕장")).toContainText("확인 못 함");
   await expect(beachRow(page, "강문해수욕장")).not.toContainText("특보 없음");
   await expect(page.getByText("특보 없음", { exact: true })).toHaveCount(0);
   await alert.getByRole("button", { name: "다시 시도" }).click();
   await expect.poll(calls).toBe(2);
-  await narrowForAxe(page);
   await expectNoA11yViolations(page);
 });
 
@@ -280,12 +438,14 @@ test("유효 시각이 지난 게시 상태는 분류를 그대로 두고 지남
   await mockMemo(page);
   await signIn(page, ["viewer"]);
   await openBeaches(page);
-  const row = beachRow(page, "강문해수욕장");
-  await expect(row).toContainText("특보 없음");
-  await expect(row).toContainText("유효 시각 지남");
+  await page.getByLabel("해변 찾기").fill("경포");
   await expect(beachRow(page, "경포해수욕장")).not.toContainText(
     "유효 시각 지남",
   );
+  await page.getByLabel("해변 찾기").fill("강문");
+  const row = beachRow(page, "강문해수욕장");
+  await expect(row).toContainText("특보 없음");
+  await expect(row).toContainText("유효 시각 지남");
   await openDetail(page, "강문해수욕장");
   const status = page.getByRole("region", { name: "지금 표시 상태" });
   await expect(status).toContainText("특보 없음");
@@ -317,13 +477,13 @@ test("게시본이 점검 중이면 상태 칸은 '점검 중 · 앱에 표시 �
   await expect(
     page.getByText(/점검 중이라 앱에는 보이지 않아요/),
   ).toBeVisible();
+  await page.getByLabel("해변 찾기").fill("강문");
   const row = beachRow(page, "강문해수욕장");
   await expect(row).toContainText("점검 중");
   await expect(row).toContainText("앱에 표시 안 함");
   await expect(row).toContainText("마지막 게시 분류");
   // 마지막 게시 분류는 바꾸지 않음(G1)
   await expect(row).toContainText("특보 없음");
-  await narrowForAxe(page);
   await expectNoA11yViolations(page);
 
   await openDetail(page, "강문해수욕장");

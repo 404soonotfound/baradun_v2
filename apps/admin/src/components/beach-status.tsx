@@ -85,7 +85,13 @@ function MaintenanceBadge() {
 }
 
 // 배지 한 줄: 첫 사유 배지 + 분류 이름(+ 나머지 사유 수)
-export function DisplayBadge({ display }: { display: BeachDisplay }) {
+export function DisplayBadge({
+  display,
+  compact = false,
+}: {
+  display: BeachDisplay;
+  compact?: boolean;
+}) {
   if (display.kind === "loading") {
     return (
       <span className="inline-flex items-center gap-1 text-label-s text-text-muted">
@@ -107,27 +113,33 @@ export function DisplayBadge({ display }: { display: BeachDisplay }) {
         </span>
         <span className="inline-flex flex-wrap items-center gap-x-1.5 gap-y-1 text-label-s text-text-muted">
           {t.maintenanceLast}
-          <DisplayBadge display={display.last} />
+          <DisplayBadge display={display.last} compact={compact} />
         </span>
       </span>
     );
   }
   if (display.kind === "unconfirmed") {
+    const whyText =
+      display.why === "missing" ? t.statusMissing : t.statusNotLoaded;
     return (
       <span className="inline-flex flex-wrap items-center gap-x-1.5 gap-y-1">
         <Badge label={UNCONFIRMED} />
-        <span className="text-label-s text-text-muted">
-          {display.why === "missing" ? t.statusMissing : t.statusNotLoaded}
-        </span>
+        {compact ? (
+          <span className="sr-only">{whyText}</span>
+        ) : (
+          <span className="text-label-s text-text-muted">{whyText}</span>
+        )}
       </span>
     );
   }
   const [first, ...rest] = display.labels;
   return (
-    <span className="inline-flex flex-wrap items-center gap-x-1.5 gap-y-1">
+    <span
+      className={`inline-flex items-center gap-x-1.5 gap-y-1 ${compact ? "flex-nowrap" : "flex-wrap"}`}
+    >
       <Badge label={first} />
       {display.category !== "clear" && (
-        <span className="text-label-s text-text-muted">
+        <span className="text-label-s whitespace-nowrap text-text-muted">
           {t.category[display.category]}
           {rest.length > 0 &&
             ` · ${fill(t.moreReasons, { count: rest.length })}`}
@@ -135,7 +147,7 @@ export function DisplayBadge({ display }: { display: BeachDisplay }) {
       )}
       {/* 분류는 그대로 두고 유효 시각이 지났다는 사실만 따로 알림(G1) */}
       {display.expired && (
-        <span className="inline-flex items-center gap-1 text-label-s font-semibold text-status-stale-fg">
+        <span className="inline-flex items-center gap-1 text-label-s font-semibold whitespace-nowrap text-status-stale-fg">
           <Clock size={14} aria-hidden="true" />
           {t.expired}
         </span>
