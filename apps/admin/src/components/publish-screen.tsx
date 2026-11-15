@@ -794,6 +794,11 @@ function PreviewDrawer({
         : fill(t.preview.hintNoCurrent, { at: timeOf(p.at) });
   }
 
+  const retryWithFocus = () => {
+    closeRef.current?.focus();
+    onRetry();
+  };
+
   let body: ReactNode;
   if (waiting) {
     body = (
@@ -830,12 +835,12 @@ function PreviewDrawer({
   } else if (failure) {
     body =
       failure.code === "timeout" ? (
-        <LoadFailed onRetry={onRetry} />
+        <LoadFailed onRetry={retryWithFocus} />
       ) : (
         <FailureNotice
           title={t.preview.failed}
           failure={failure}
-          onRetry={onRetry}
+          onRetry={retryWithFocus}
         />
       );
   } else if (answer && !answer.ok) {
@@ -851,7 +856,7 @@ function PreviewDrawer({
           variant="secondary"
           size="small"
           className="mt-1"
-          onClick={onRetry}
+          onClick={retryWithFocus}
         >
           {t.retry}
         </Button>
@@ -1653,14 +1658,23 @@ function RollbackPreviewSection({
   rollbackVersion: string;
   onRetry: () => void;
 }) {
+  const rootRef = useRef<HTMLDivElement>(null);
   const loading = status === "loading";
   const timing = useLoadTiming(loading);
   const rbResult = status && status !== "loading" ? status : null;
   const rbReady =
     rbResult?.ok && rbResult.body.available ? rbResult.body : null;
+  // 다시 시도 누르면 버튼이 사라지므로 포커스를 대화상자 취소 버튼으로 옮김
+  const retryWithFocus = () => {
+    rootRef.current
+      ?.closest("dialog")
+      ?.querySelector<HTMLButtonElement>("[data-cancel]")
+      ?.focus();
+    onRetry();
+  };
 
   return (
-    <>
+    <div ref={rootRef} className="contents">
       {loading && (
         <div aria-busy="true" className="flex flex-col gap-1.5">
           <LoadingStatus busy label={t.rollbackPreviewLoading} />
@@ -1673,7 +1687,7 @@ function RollbackPreviewSection({
         </div>
       )}
       {rbResult && !rbResult.ok && rbResult.code === "timeout" && (
-        <LoadFailed onRetry={onRetry} />
+        <LoadFailed onRetry={retryWithFocus} />
       )}
       {rbResult && !rbResult.ok && rbResult.code !== "timeout" && (
         <p role="alert" className="text-danger-fg">
@@ -1715,7 +1729,7 @@ function RollbackPreviewSection({
           )}
         </>
       )}
-    </>
+    </div>
   );
 }
 
@@ -2308,15 +2322,21 @@ function PublishBody({
           </div>
           {!permission.demo && (
             <div className="flex flex-wrap items-center gap-2">
-              {refreshingOverview && (
-                <span
-                  role="status"
-                  className="inline-flex items-center gap-1.5 text-label-s text-brand-default"
-                >
-                  <Spinner size={12} />
-                  {messages.loading.refreshing}
-                </span>
-              )}
+              <span
+                role="status"
+                className={
+                  refreshingOverview
+                    ? "inline-flex items-center gap-1.5 text-label-s text-brand-default"
+                    : "sr-only"
+                }
+              >
+                {refreshingOverview ? (
+                  <>
+                    <Spinner size={12} />
+                    {messages.loading.refreshing}
+                  </>
+                ) : null}
+              </span>
               <Button
                 variant="secondary"
                 size="small"

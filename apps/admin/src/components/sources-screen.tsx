@@ -1479,7 +1479,7 @@ function SourceDetailSkeleton({
               <SkLine className="mt-1 w-48 max-w-full" />
               <SkLine className="w-36" />
               <SkLine className="w-28" />
-              {(knownId === "collect-warnings" || knownId === null) && (
+              {knownId === "collect-warnings" && (
                 <div className="mt-2 flex flex-col gap-3">
                   <div className="flex flex-col gap-2">
                     <SkLine className="h-[14px] w-24" />

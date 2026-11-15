@@ -2306,19 +2306,31 @@ function CollectionSkeleton({ cls, slow }: { cls: string; slow: boolean }) {
         <ul className="mt-3 flex flex-col divide-y divide-border-default rounded-admin-box border border-border-default bg-bg-surface shadow-card md:hidden">
           {SK_SOURCE_WIDTHS.map((w, i) => (
             <li key={i} className="flex flex-col gap-2 px-4 py-3">
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex flex-col gap-1">
+              <span className="flex items-start justify-between gap-3">
+                <span className="flex flex-col gap-1">
                   <SkLine className={w} />
                   <SkLine className="w-12" />
-                </div>
+                </span>
                 <SkLine className="w-16" />
-              </div>
+              </span>
+              <SkLine className="w-40" />
               <BarTracksSkeleton />
-              <div className="flex justify-between gap-2">
-                <SkLine className="w-20" />
-                <SkLine className="w-14" />
-                <SkLine className="w-12" />
-              </div>
+              <dl className="grid grid-cols-3 gap-2 text-[13px]">
+                {[
+                  { dt: "w-14", dd: "w-20" },
+                  { dt: "w-8", dd: "w-14" },
+                  { dt: "w-12", dd: "w-12" },
+                ].map((col, j) => (
+                  <div key={j} className="flex flex-col gap-1">
+                    <dt>
+                      <SkLine className={`${col.dt} h-[8px]`} />
+                    </dt>
+                    <dd>
+                      <SkLine className={col.dd} />
+                    </dd>
+                  </div>
+                ))}
+              </dl>
             </li>
           ))}
           <li className="flex flex-col gap-1 px-4 py-3">

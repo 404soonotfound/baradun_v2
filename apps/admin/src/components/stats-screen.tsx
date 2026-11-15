@@ -520,6 +520,11 @@ function StatsBody({
   const [reloadTick, setReloadTick] = useState(0);
   const key = `${range}|${reloadTick}|${generation}`;
   const [loaded, setLoaded] = useState<Loaded | null>(null);
+  const [lastGood, setLastGood] = useState<{
+    readonly range: StatsRange;
+    readonly generation: number;
+    readonly data: StatsResponse;
+  } | null>(null);
 
   useEffect(() => {
     if (!signedIn) return;
@@ -528,15 +533,15 @@ function StatsBody({
     void withTimeout(
       () => fetchStats(range, () => session.accessToken()),
       TIMEOUT,
-    ).then(
-      (result) => {
-        if (live) setLoaded({ key, result });
-      },
-    );
+    ).then((result) => {
+      if (!live) return;
+      setLoaded({ key, result });
+      if (result.ok) setLastGood({ range, generation, data: result.body });
+    });
     return () => {
       live = false;
     };
-  }, [session, signedIn, key, range]);
+  }, [session, signedIn, key, range, generation]);
 
   // 같은 기간을 다시 읽는 중이면 받은 값을 둠(보드 L0 '다시 읽기 값 유지')
   // 기간이 바뀌면 앞 값은 다른 기간, 다시 로그인했으면 앞 세션 값이라 버림
@@ -550,7 +555,20 @@ function StatsBody({
   const placeholder = pending || timing.phase !== "content";
   const cls = loadClass(timing);
   const result = placeholder ? null : current!.result;
-  const data = result && result.ok ? result.body : null;
+  const fallbackData =
+    signedIn &&
+    lastGood?.range === range &&
+    lastGood?.generation === generation
+      ? lastGood.data
+      : null;
+  // 새로 고침 실패(재로그인 필요 제외)에도 마지막으로 받은 값을 유지(L0)
+  const stale =
+    !placeholder &&
+    result !== null &&
+    !result.ok &&
+    result.code !== "reauth" &&
+    fallbackData !== null;
+  const data = result && result.ok ? result.body : stale ? fallbackData : null;
   const refreshing = fetching && !pending;
   const refreshTiming = useLoadTiming(refreshing);
 
@@ -578,7 +596,7 @@ function StatsBody({
   // 칸 유무: 마지막으로 받은 응답(받는 중이면 다른 기간이어도) 기준
   // 받은 응답이 없으면 받는 중에만 지금 서버가 주는 칸 모두(자리표시 크기), 불러오지 못했으면 추이 칸을 두지 않음
   // (응답 전체 실패를 칸마다 '다른 칸은 그대로예요'로 보이지 않게)
-  const lastBody = loaded?.result.ok ? loaded.result.body : null;
+  const lastBody = data ?? (loaded?.result.ok ? loaded.result.body : null);
   const shape = lastBody
     ? statsShape(lastBody.configured ? lastBody.trends : undefined)
     : pending
@@ -830,6 +848,16 @@ function StatsBody({
                 {t.retry}
               </Button>
             </Notice>
+            {stale && data && (
+              <p
+                role="status"
+                className="mt-3 text-[12.5px] font-medium text-text-default"
+              >
+                {fill(messages.loading.stale, {
+                  time: kstDateTime(data.fetchedAt),
+                })}
+              </p>
+            )}
           </div>
         )}
 
