@@ -1,3 +1,4 @@
+import { fileURLToPath } from "node:url";
 import type { APIGatewayProxyEventV2 } from "aws-lambda";
 import { describe, expect, it } from "vitest";
 import type { AuthDependencies } from "./auth";
@@ -5,6 +6,7 @@ import { handleOps, type OpsDependencies } from "./handler";
 import { ACCESS_TOKEN_HEADER, IDEMPOTENCY_KEY_HEADER } from "./policy";
 import { AUDIT_PREFIX } from "./keys";
 import { encodeCursor } from "./inquiries";
+import { createInquiryBeachSearch } from "./inquiry-list";
 import { INQUIRY_STATUSES } from "../inquiry/policy";
 import { FakeTable, type Item } from "./test-dynamo";
 import { TEST_CONFIG } from "./test-tokens";
@@ -137,6 +139,105 @@ describe("문의 목록·상세", () => {
     expect(body(detail)).toMatchObject({ message: "본문", restricted: false });
   });
 
+  it.each(["editor", "publisher"])(
+    "%s 본문 검색에만 미리보기를 싣는다",
+    async (role) => {
+      const table = seeded({ message: "첫 줄\n둘째 줄", memo: "내부 메모" });
+      const request = event("GET", "/ops/inquiries", {
+        query: { status: "received", q: "둘째", preview: "true" },
+      });
+      const full = await handleOps(request, deps(role, table));
+      expect(full.statusCode).toBe(200);
+      expect(body(full).items[0]).toMatchObject({
+        messagePreview: "첫 줄 둘째 줄",
+      });
+      expect(body(full).items[0]).not.toHaveProperty("message");
+      expect(body(full).items[0]).not.toHaveProperty("memo");
+      expect(body(full)).not.toHaveProperty("counts");
+      const restricted = await handleOps(request, deps("viewer", table));
+      expect(restricted.statusCode).toBe(200);
+      expect(body(restricted).items).toEqual([]);
+    },
+  );
+
+  it("보기 권한도 실제 해변 이름으로 검색할 수 있고 미리보기는 받지 않는다", async () => {
+    const base = deps("viewer", seeded({ beachId: "b0001" }));
+    const res = await handleOps(
+      event("GET", "/ops/inquiries", {
+        query: { status: "received", q: "GANGMUN", preview: "true" },
+      }),
+      {
+        ...base,
+        data: {
+          ...base.data,
+          inquiryBeachSearch: createInquiryBeachSearch(
+            fileURLToPath(new URL("../../../data/beaches/", import.meta.url)),
+          ),
+        },
+      },
+    );
+    expect(res.statusCode).toBe(200);
+    expect(body(res).items).toHaveLength(1);
+    expect(body(res).items[0]).toMatchObject({ inquiryId: ID });
+    expect(body(res).items[0]).not.toHaveProperty("messagePreview");
+  });
+
+  it("필터 cursor는 조건이 달라지거나 권한이 다르면 거절한다", async () => {
+    const prefs = { type: "data_error", preview: "true" };
+    const table = seeded();
+    const first = await handleOps(
+      event("GET", "/ops/inquiries", {
+        query: prefs,
+      }),
+      deps("editor", table),
+    );
+    const cursor: string = body(first).nextCursor;
+    expect(cursor).toBeTruthy();
+    const changingFilter = await handleOps(
+      event("GET", "/ops/inquiries", {
+        query: { ...prefs, type: "beach_request", cursor },
+      }),
+      deps("editor", table),
+    );
+    const changingRole = await handleOps(
+      event("GET", "/ops/inquiries", {
+        query: { ...prefs, cursor },
+      }),
+      deps("viewer", table),
+    );
+    for (const response of [changingFilter, changingRole]) {
+      expect(response.statusCode).toBe(400);
+      expect(body(response).error).toMatchObject({ field: "cursor" });
+    }
+  });
+
+  it("데모 검색과 커서가 예시 문의 본문과 접수 시각만 사용한다", async () => {
+    const base = deps("sample", seeded());
+    const query = { q: "(예시)", preview: "true", limit: "1" };
+    const first = await handleOps(
+      event("GET", "/ops/inquiries", { query }),
+      base,
+    );
+    expect(first.statusCode).toBe(200);
+    expect(body(first).items[0]).toMatchObject({
+      messagePreview: "(예시) 앱의 파고 값이 현장과 달라 보여요.",
+    });
+    const next = await handleOps(
+      event("GET", "/ops/inquiries", {
+        query: { ...query, cursor: body(first).nextCursor },
+      }),
+      {
+        ...base,
+        data: { ...base.data, now: () => new Date(NOW.getTime() + 1000) },
+      },
+    );
+    expect(next.statusCode).toBe(200);
+    expect(body(next).items[0]).toMatchObject({
+      messagePreview: "(예시) 서핑하는 해변을 더 넣어 주세요.",
+      receivedAt: new Date(NOW.getTime() - 30 * 3_600_000).toISOString(),
+    });
+  });
+
   it("첫 쪽에는 상태별 문의 수를 싣고, 다음 쪽(cursor)에는 싣지 않는다", async () => {
     const table = seeded();
     const first = await handleOps(
@@ -200,6 +301,15 @@ describe("문의 목록·상세", () => {
     ["limit 범위 밖", { limit: "0" }, "limit"],
     ["limit이 숫자가 아님", { limit: "ten" }, "limit"],
     ["깨진 cursor", { cursor: "!!" }, "cursor"],
+    ["없는 날짜", { from: "2026-02-30T09:00:00Z" }, "from"],
+    ["시간대 없는 날짜", { from: "2026-11-03T09:00:00" }, "from"],
+    [
+      "거꾸로 된 접수 날짜",
+      { from: "2026-11-03T00:00:00Z", to: "2026-11-02T00:00:00Z" },
+      "to",
+    ],
+    ["해변 ID 오류", { beachId: "강문" }, "beachId"],
+    ["유형 오류", { type: "문의 유형" }, "type"],
   ])("목록 요청이 %s이면 400", async (_, query, field) => {
     const res = await handleOps(
       event("GET", "/ops/inquiries", { query }),

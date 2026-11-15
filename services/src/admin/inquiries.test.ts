@@ -6,6 +6,7 @@ import {
   getInquiry,
   applyRedactions,
   inquiryPatchFields,
+  listFilteredInquiries,
   listInquiries,
   MEMO_MAX,
   parseInquiryPatch,
@@ -39,6 +40,7 @@ function inquiry(n: number, status: string, overrides: Item = {}): Item {
 // GSI Query를 흉내 냄: 상태가 같은 항목을 접수 시각 내림차순으로, Limit·ExclusiveStartKey 적용
 class FakeIndex {
   readonly queries: Item[] = [];
+  readonly gets: Item[] = [];
   constructor(
     private readonly items: Item[],
     private readonly pageSize = 100,
@@ -47,6 +49,7 @@ class FakeIndex {
   async send(command: { constructor: { name: string }; input: any }) {
     const input = command.input;
     if (command.constructor.name === "GetCommand") {
+      this.gets.push(input);
       return { Item: this.items.find((i) => i.pk === input.Key.pk) };
     }
     this.queries.push(input);
@@ -66,7 +69,14 @@ class FakeIndex {
       };
     }
     const sorted = this.items
-      .filter((i) => i.inquiryStatus === status)
+      .filter((i) => {
+        const { ":from": from, ":to": to } = input.ExpressionAttributeValues;
+        return (
+          i.inquiryStatus === status &&
+          (!from || String(i.receivedAt) >= from) &&
+          (!to || String(i.receivedAt) <= to)
+        );
+      })
       .sort((a, b) => String(b.receivedAt).localeCompare(String(a.receivedAt)));
     const start = input.ExclusiveStartKey
       ? sorted.findIndex((i) => i.pk === input.ExclusiveStartKey.pk) + 1
@@ -75,7 +85,7 @@ class FakeIndex {
     const more = start + input.Limit < sorted.length;
     const last = page.at(-1);
     return {
-      Items: page,
+      Items: page.map(({ message: _message, ...projection }) => projection),
       ...(more && last
         ? {
             LastEvaluatedKey: {
@@ -157,6 +167,141 @@ describe("문의 목록", () => {
     await expect(
       listInquiries(index as never, "Inquiry", { limit: 20 }, NOW),
     ).rejects.toThrow("모양");
+  });
+});
+
+describe("문의 서버 필터", () => {
+  const scope = "a".repeat(64);
+
+  it("유형·해변·접수 경계·본문 검색을 모두 적용하고 본문 앞부분만 반환한다", async () => {
+    const from = "2026-11-03T05:55:00.000Z";
+    const to = "2026-11-03T05:59:00.000Z";
+    const message = `  검색
+  ${"🌊".repeat(45)} 끝  `;
+    const index = new FakeIndex([
+      inquiry(1, "received", { beachId: "b0001", message }),
+      inquiry(2, "received", { beachId: "b0002", message }),
+      inquiry(3, "received", {
+        beachId: "b0001",
+        inquiryType: "beach_request",
+        message,
+      }),
+      inquiry(4, "received", { beachId: "b0001" }),
+      inquiry(5, "received", { beachId: "b0001", message }),
+      inquiry(6, "received", { beachId: "b0001", message }),
+    ]);
+    const page = await listFilteredInquiries(
+      index as never,
+      "Inquiry",
+      { status: "received", limit: 50 },
+      {
+        q: "검색",
+        type: "data_error",
+        beachId: "b0001",
+        from,
+        to,
+        preview: true,
+      },
+      scope,
+      "editor",
+      NOW,
+      () => false,
+    );
+    expect(index.queries).toHaveLength(1);
+    expect(index.queries[0]).toMatchObject({
+      KeyConditionExpression: "#s = :s AND #received BETWEEN :from AND :to",
+      ExpressionAttributeValues: { ":from": from, ":to": to },
+      Limit: 4,
+    });
+    expect(index.gets).toHaveLength(2);
+    expect(index.gets.every((get) => get.ConsistentRead === true)).toBe(true);
+    expect(page.items).toHaveLength(1);
+    expect(page.items[0]).toMatchObject({
+      messagePreview: `검색 ${"🌊".repeat(39)}…`,
+    });
+    expect(page.items[0]).not.toHaveProperty("message");
+    const next = await listFilteredInquiries(
+      index as never,
+      "Inquiry",
+      {
+        status: "received",
+        limit: 50,
+        cursor: decodeCursor(page.nextCursor!)!,
+      },
+      {
+        q: "검색",
+        type: "data_error",
+        beachId: "b0001",
+        from,
+        to,
+        preview: true,
+      },
+      scope,
+      "editor",
+      NOW,
+      () => false,
+    );
+    expect(next.items.map((item) => item.receivedAt)).toEqual([from]);
+    expect(next.nextCursor).toBeNull();
+  });
+
+  it("빈 페이지를 건너뛰어 인덱스 및 상태 cursor를 순서대로 끝까지 잇는다", async () => {
+    const index = new FakeIndex([
+      ...Array.from({ length: 8 }, (_, n) => inquiry(n + 1, "received")),
+      inquiry(9, "received", { beachId: "b0001" }),
+      inquiry(10, "in_progress", { beachId: "b0001", ttl: NOW_SEC }),
+      inquiry(11, "resolved", { beachId: "b0001" }),
+      inquiry(12, "rejected", { beachId: "b0001" }),
+    ]);
+    const seen: string[] = [];
+    let cursor: string | null = null;
+    for (let i = 0; i < 5; i++) {
+      const page = await listFilteredInquiries(
+        index as never,
+        "Inquiry",
+        { limit: 50, ...(cursor ? { cursor: decodeCursor(cursor)! } : {}) },
+        { q: "해변", preview: true },
+        scope,
+        "viewer",
+        NOW,
+        () => true,
+      );
+      if (i === 0) {
+        expect(page.items).toEqual([]);
+        expect(page.nextCursor).not.toBeNull();
+      }
+      for (const item of page.items) {
+        expect(item).not.toHaveProperty("messagePreview");
+        seen.push(item.status);
+      }
+      cursor = page.nextCursor;
+    }
+    expect(seen).toEqual(["received", "resolved", "rejected"]);
+    expect(cursor).toBeNull();
+    expect(index.gets).toHaveLength(0);
+    expect(index.queries).toHaveLength(5);
+  });
+
+  it("본문 조회 실패는 검색 결과 없음으로 처리하지 않는다", async () => {
+    const index = new FakeIndex([inquiry(1, "received")]);
+    const client = {
+      send: (command: Parameters<FakeIndex["send"]>[0]) => {
+        if (command.constructor.name === "GetCommand")
+          throw new Error("read failed");
+        return index.send(command);
+      },
+    };
+    await expect(
+      listFilteredInquiries(
+        client as never,
+        "Inquiry",
+        { status: "received", limit: 50 },
+        { q: "본문" },
+        scope,
+        "publisher",
+        NOW,
+      ),
+    ).rejects.toThrow("read failed");
   });
 });
 
