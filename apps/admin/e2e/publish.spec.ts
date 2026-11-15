@@ -2079,7 +2079,7 @@ test("로딩(L6): 목록 재조회·변경 미리보기·되돌리기 미리보�
   await expect(rollbackDialog).toBeVisible();
   await page.clock.fastForward(5_200);
   await expect(
-    rollbackDialog.getByText(/평소보다 오래 걸려요/).first(),
+    rollbackDialog.locator("p", { hasText: /평소보다 오래 걸려요/ }),
   ).toBeVisible();
   await page.clock.fastForward(10_500);
   await expect(rollbackDialog.getByRole("alert")).toContainText(
@@ -2101,5 +2101,7 @@ test("로딩(L6): 목록 재조회·변경 미리보기·되돌리기 미리보�
     page.getByRole("status").filter({ hasText: "다시 읽는 중" }),
   ).toBeVisible();
   await page.clock.fastForward(5_200);
-  await expect(page.getByText(/평소보다 오래 걸려요/).first()).toBeVisible();
+  await expect(
+    page.locator("p", { hasText: /평소보다 오래 걸려요/ }),
+  ).toBeVisible();
 });

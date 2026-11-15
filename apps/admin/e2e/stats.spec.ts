@@ -477,9 +477,12 @@ test("로딩(L7): 5초 느림 안내가 화면에 보이고 전체 실패(500) �
 }) => {
   await page.clock.install();
   let mode: "hold" | "ok" | "fail" = "hold";
+  const waiters: (() => void)[] = [];
   await page.route(/\/ops\/stats(\?.*)?$/, async (route: Route) => {
     if (mode === "hold") {
-      await new Promise<void>(() => {});
+      await new Promise<void>((r) => {
+        waiters.push(r);
+      });
     }
     if (mode === "fail") {
       await route.fulfill({
@@ -500,26 +503,46 @@ test("로딩(L7): 5초 느림 안내가 화면에 보이고 전체 실패(500) �
   await page.clock.fastForward(200);
   await expect(page.locator("main .sk").first()).toBeVisible();
   await page.clock.fastForward(5_200);
-  await expect(page.getByText(/평소보다 오래 걸려요/).first()).toBeVisible();
-
-  // 전체 조회가 500으로 실패하면 자리표시(.sk)와 칸별 부분 실패 카드가 남지 않는다
-  mode = "fail";
-  await page.getByRole("button", { name: "새로 고침" }).click();
   await expect(
-    page.getByRole("alert").filter({ hasText: "이용 통계를 불러오지 못했어요." }),
+    page.locator("p", { hasText: /평소보다 오래 걸려요/ }),
   ).toBeVisible();
+
+  // 첫 요청이 15초 초과로 실패하면 자리표시(.sk)와 칸별 부분 실패 카드가 남지 않음
+  await page.clock.fastForward(10_500);
+  const timeoutAlert = page
+    .getByRole("alert")
+    .filter({ hasText: "이용 통계를 불러오지 못했어요." });
+  await expect(timeoutAlert).toBeVisible();
   await expect(page.locator("main .sk")).toHaveCount(0);
   await expect(
     page.getByText("이 항목을 불러오지 못했어요. 다른 칸은 그대로예요."),
   ).toHaveCount(0);
 
-  // 다시 시도 성공 뒤 새로 고침 5초 지연에도 느림 안내가 화면에 보인다
+  // 다시 시도 성공 → 값 표시 → 새로 고침 500 실패 시 req-err와 마지막 받은 값 유지
   mode = "ok";
-  await page.getByRole("button", { name: "다시 시도" }).click();
+  while (waiters.length > 0) waiters.pop()?.();
+  await timeoutAlert.getByRole("button", { name: "다시 시도" }).click();
   await expect(page.getByText("14명", { exact: true })).toBeVisible();
+
+  mode = "fail";
+  await page.getByRole("button", { name: "새로 고침" }).click();
+  const failAlert = page
+    .getByRole("alert")
+    .filter({ hasText: "이용 통계를 불러오지 못했어요." });
+  await expect(failAlert).toBeVisible();
+  await expect(failAlert.getByText("오류 번호 req-err")).toBeVisible();
+  await expect(page.getByText(/마지막으로 받은 값이에요/)).toBeVisible();
+  await expect(page.getByText("14명", { exact: true })).toBeVisible();
+
+  // 복구 뒤 새로 고침 5초 지연에도 가시 영역 느림 안내(<p>)가 보임
+  mode = "ok";
+  await failAlert.getByRole("button", { name: "다시 시도" }).click();
+  await expect(failAlert).toHaveCount(0);
   mode = "hold";
   await page.getByRole("button", { name: "새로 고침" }).click();
   await expect(page.getByText("다시 읽는 중")).toBeVisible();
   await page.clock.fastForward(5_200);
-  await expect(page.getByText(/평소보다 오래 걸려요/).first()).toBeVisible();
+  await expect(
+    page.locator("p", { hasText: /평소보다 오래 걸려요/ }),
+  ).toBeVisible();
 });
