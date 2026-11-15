@@ -103,15 +103,18 @@ function WaveValue({
   dashForNone?: boolean;
 }) {
   if (cell.kind === "loading") return <SkLine className="ml-auto w-10" />;
-  if (cell.kind === "value") {
+  // 지연은 색만으로 알리지 않고 '· 지연'을 글로 붙임(파주기는 파고와 따로 지연될 수 있어 칸마다 표시)
+  // 지연인데 값이 없으면(missing) '— · 지연'으로 측정소 없음('—')과 구분함
+  if (cell.kind === "value" || cell.kind === "missing") {
+    const delayed =
+      cell.kind === "missing" || (cell.kind === "value" && cell.delayed);
     return (
       <span
-        className={`tabular-nums ${cell.delayed ? "text-status-stale-fg" : ""}`}
+        className={`tabular-nums ${delayed ? "text-status-stale-fg" : ""}`}
+        {...(delayed ? { title: t.waveDelayedNote } : {})}
       >
         {waveText(cell)}
-        {cell.delayed && (
-          <span className="sr-only"> · {t.waveDelayedNote}</span>
-        )}
+        {delayed && ` · ${t.mobileWaveDelayed}`}
       </span>
     );
   }
@@ -158,6 +161,14 @@ function ObservedValue({
     return (
       <span className="text-text-muted" aria-label={t.stationNone}>
         {t.noneDash}
+      </span>
+    );
+  }
+  // 파고 지연인데 관측 시각을 모름: 지연임은 글로 남기고 시각만 모른다고 알림
+  if (cell.kind === "delayedUnknown") {
+    return (
+      <span className="font-medium text-status-stale-fg">
+        {t.delayedNoTime}
       </span>
     );
   }
