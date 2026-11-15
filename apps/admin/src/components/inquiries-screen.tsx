@@ -26,9 +26,10 @@ import {
   EMPTY_INQUIRY_FILTER,
   fetchInquiries,
   fetchInquiry,
-  filterInquiries,
   hasActiveInquiryFilter,
   INQUIRY_PAGE_MAX,
+  INQUIRY_SEARCH_MAX,
+  inquiryServerQuery,
   isKstToday,
   receivedRangeProblem,
   MEMO_MAX,
@@ -85,6 +86,57 @@ import { Button, Notice } from "./ui";
 // - 판단 상태는 바꾸지 않음(G1). 이메일·사진은 받지 않으므로 '받지 않아요' 고정(D13-1)
 
 const t = messages.inquiries;
+
+// 검색어를 다 친 뒤 서버에 보낼 때까지 기다리는 시간
+const SEARCH_DEBOUNCE_MS = 300;
+// 거르기 중 한 쪽(6행)을 채우려고 저절로 이어 읽는 최대 횟수. 넘으면 '다음 목록 더 불러오기'
+const AUTO_READS = 4;
+
+// 거르기 결과를 cursor로 이어 읽음. need건이 차거나·cursor가 끝나거나·maxReads번을 넘거나·조건이 바뀌면(isLive) 멈춤
+// 한 번이라도 실패하면 onFail 뒤 멈춤(읽기 제한 등. 지금까지 받은 것만 보이게 하고 다시 누르게 함)
+async function readUntil(options: {
+  readonly startCursor: string;
+  readonly have: number;
+  readonly need: number;
+  readonly maxReads: number;
+  readonly isLive: () => boolean;
+  readonly fetchPage: (cursor: string) => Promise<OpsResult<InquiryPage>>;
+  readonly onPage: (page: InquiryPage) => void;
+  readonly onFail: () => void;
+}): Promise<void> {
+  let nextCursor: string | null = options.startCursor;
+  let have = options.have;
+  for (
+    let reads = 0;
+    nextCursor && have < options.need && reads < options.maxReads;
+    reads += 1
+  ) {
+    const page = await options.fetchPage(nextCursor);
+    if (!options.isLive()) return;
+    if (!page.ok) {
+      options.onFail();
+      return;
+    }
+    options.onPage(page.body);
+    have += page.body.items.length;
+    nextCursor = page.body.nextCursor;
+  }
+}
+
+// 목록 행의 본문 미리보기 줄: 열어 본 상세(가리기 반영)가 먼저, 없으면 서버 미리보기(#491)
+// 본문이 비면 '본문 없음'. 보기 권한(restricted)·미요청은 빈 줄로 높이만 유지
+function rowPreview(
+  item: InquirySummary,
+  detailMessages: Readonly<Record<string, string>>,
+): string | null {
+  const opened = previewText(detailMessages[item.inquiryId]);
+  if (opened !== null) return opened;
+  // 서버 미리보기도 열어 본 상세와 같은 규칙(공백 정리·길이)으로 줄임
+  const served = previewText(item.messagePreview);
+  if (served !== null) return served;
+  if (item.messagePreviewUnavailableReason === "empty") return t.previewEmpty;
+  return null;
+}
 
 type Beaches = Readonly<Record<string, BeachName>>;
 
@@ -808,7 +860,10 @@ function InquiryList({
     items: InquirySummary[];
     nextCursor: string | null;
   } | null>(null);
-  const [loadingMore, setLoadingMore] = useState(false);
+  // 이어 읽는 중인 조건 키(조건이 바뀌면 이전 읽기는 진행 중으로 보이지 않음)
+  const [loadingMoreKey, setLoadingMoreKey] = useState<string | null>(null);
+  // 이어 읽기에 실패한 조건(읽기 제한 등). 조용히 멈추지 않고 다시 누르게 알림
+  const [moreFailedKey, setMoreFailedKey] = useState<string | null>(null);
   // 상태별 수와 받은 시각(이 시각 뒤의 저장만 탭 수에 더함. 그 전 저장은 서버 수에 이미 들었을 수 있음)
   const [received, setReceived] = useState<{
     counts: InquiryCounts;
@@ -818,27 +873,111 @@ function InquiryList({
   const cursor = cursors.at(-1) ?? null;
   // 받은 응답을 요청 조건과 함께 둠. 조건이 바뀌면 응답이 올 때까지 '불러오는 중'
   // 다시 로그인하면(generation이 늚) 'reauth'로 끝난 읽기를 저절로 다시 함
-  const isFiltered = hasActiveInquiryFilter(filter);
+  // 거르기는 서버가 함(#491). 검색어만 새로 치면 다 친 뒤(SEARCH_DEBOUNCE_MS) 보내고, 그 밖의 조건·검색어 지우기는 바로 보냄
+  // 7일·30일·오늘 경계(at)도 보낼 때 한 번 고정해 다음 쪽에도 같은 값을 보냄(cursor가 조건에 묶임)
+  // 치는 동안에는 이전 검색어·경계를 그대로 써서 글자마다 요청하지 않음
+  const [sent, setSent] = useState(() => ({
+    query: filter.query,
+    at: Date.now(),
+  }));
+  useEffect(() => {
+    if (filter.query === sent.query) return;
+    const timer = window.setTimeout(
+      () => setSent({ query: filter.query, at: Date.now() }),
+      SEARCH_DEBOUNCE_MS,
+    );
+    return () => window.clearTimeout(timer);
+  }, [filter.query, sent.query]);
+  const sentFilter = useMemo(
+    () => ({ ...filter, query: sent.query }),
+    [filter, sent.query],
+  );
+  const isFiltered = hasActiveInquiryFilter(sentFilter);
   const requestLimit = isFiltered ? INQUIRY_PAGE_MAX : PAGE_SIZE;
+  const serverQuery = useMemo(
+    () =>
+      isFiltered ? inquiryServerQuery(sentFilter, new Date(sent.at)) : null,
+    [isFiltered, sentFilter, sent.at],
+  );
+  const filters = serverQuery?.ok ? serverQuery.query : undefined;
+  // 서버가 거절할 조건(형식 밖 값)은 보내지 않고 안내만 함
+  const blocked = serverQuery !== null && !serverQuery.ok;
+  const filtersKey = filters ? JSON.stringify(filters) : "";
+  const viewerOnly =
+    snapshot.status !== "signed_out" &&
+    snapshot.pool !== "demo" &&
+    !snapshot.groups.some((g) => g === "editor" || g === "publisher");
 
   const signedIn = snapshot.status !== "signed_out";
   const generation = signedIn ? snapshot.generation : 0;
   const owner = badgeOwner(snapshot);
-  const key = `${status ?? "all"}|${cursor ?? ""}|${requestLimit}|${attempt}|${generation}`;
+  const key = `${status ?? "all"}|${cursor ?? ""}|${requestLimit}|${filtersKey}|${attempt}|${generation}`;
   const [loaded, setLoaded] = useState<{
     key: string;
     timedOut: boolean;
     result: OpsResult<InquiryPage>;
   } | null>(null);
   const current = signedIn && loaded?.key === key ? loaded : null;
-  const pending = !signedIn || current === null;
+  const loadingMore = loadingMoreKey === key;
+  const pending = !signedIn || (!blocked && current === null);
   const timing = useLoadTiming(pending);
   const placeholder = pending || timing.phase !== "content";
-  const result = placeholder ? null : current.result;
-  const timedOut = !placeholder && current.timedOut;
+  const result = placeholder || current === null ? null : current.result;
+  const timedOut = !placeholder && current !== null && current.timedOut;
+  // 지금 조건 키. '다음 목록 더 불러오기'가 끝나기 전에 조건이 바뀌면 그 읽기를 멈춤(새 조건의 extra를 덮지 않게)
+  const keyRef = useRef(key);
+  useEffect(() => {
+    keyRef.current = key;
+  }, [key]);
+
+  // 거르기 결과를 cursor로 이어 읽어 extra에 붙임(첫 쪽 자동 채우기와 '다음 목록 더 불러오기'가 함께 씀)
+  // 실패·시간 초과면 그 조건에 '불러오지 못함'을 남기고 멈춤
+  // 진행 중 표시는 조건 키에 묶어 조건이 바뀐 뒤 끝난 이전 읽기가 지우지 않게 함
+  const continueReading = async (
+    targetKey: string,
+    startCursor: string,
+    have: number,
+    need: number,
+    isLive: () => boolean,
+  ) => {
+    setLoadingMoreKey(targetKey);
+    setMoreFailedKey(null);
+    await readUntil({
+      startCursor,
+      have,
+      need,
+      maxReads: AUTO_READS,
+      isLive,
+      // 이어 읽기도 첫 쪽처럼 시간 제한을 둠(응답이 없으면 '불러오는 중'에 멈추지 않고 실패로 알림)
+      fetchPage: (pageCursor) =>
+        withTimeout(
+          () =>
+            fetchInquiries(() => session.accessToken(), {
+              ...(status ? { status } : {}),
+              cursor: pageCursor,
+              limit: INQUIRY_PAGE_MAX,
+              // 다음 쪽에도 같은 조건을 보냄(cursor가 조건에 묶임)
+              ...(filters ? { filters, preview: true } : {}),
+            }),
+          INQUIRY_LIST_TIMEOUT,
+          LOADING_TIMES.timeout,
+        ),
+      onPage: (page) =>
+        setExtra((prev) => ({
+          key: targetKey,
+          items: [
+            ...(prev?.key === targetKey ? prev.items : []),
+            ...page.items,
+          ],
+          nextCursor: page.nextCursor,
+        })),
+      onFail: () => setMoreFailedKey(targetKey),
+    });
+    setLoadingMoreKey((prev) => (prev === targetKey ? null : prev));
+  };
 
   useEffect(() => {
-    if (!signedIn) return;
+    if (!signedIn || blocked) return;
     let live = true;
     void withTimeout<{
       readonly timedOut: boolean;
@@ -850,22 +989,36 @@ function InquiryList({
           ...(status ? { status } : {}),
           ...(cursor ? { cursor } : {}),
           limit: requestLimit,
+          // 거르기 중에는 서버가 거르고 본문 미리보기를 줌(보기 권한은 서버가 restricted로 뺌)
+          ...(filters ? { filters, preview: true } : {}),
         }),
       }),
       { timedOut: true, result: INQUIRY_LIST_TIMEOUT },
       LOADING_TIMES.timeout,
-    ).then(({ timedOut, result: next }) => {
+    ).then(async ({ timedOut, result: next }) => {
       if (!live) return;
       setLoaded({ key, timedOut, result: next });
       if (next.ok && next.body.counts) {
         setReceived({ counts: next.body.counts, at: Date.now() });
         if (owner) setReceivedCount(owner, next.body.counts.received);
       }
+      // 거르기 중 첫 쪽이 6행에 못 미치면(서버는 한 번에 적은 후보만 읽음) 몇 번만 이어 읽어 채움
+      if (!filters || timedOut || !next.ok || !next.body.nextCursor) return;
+      if (next.body.items.length >= PAGE_SIZE) return;
+      await continueReading(
+        key,
+        next.body.nextCursor,
+        next.body.items.length,
+        PAGE_SIZE,
+        () => live,
+      );
     });
     return () => {
       live = false;
     };
-  }, [session, signedIn, status, cursor, requestLimit, key, owner]);
+    // filters·continueReading은 filtersKey(key 안)로 바뀜을 알아봄
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session, signedIn, blocked, status, cursor, requestLimit, key, owner]);
 
   const changeStatus = (next: InquiryStatus | null) => {
     setStatus(next);
@@ -875,13 +1028,20 @@ function InquiryList({
   };
 
   const updateFilter = (next: InquiryFilter) => {
-    const nextFiltered = hasActiveInquiryFilter(next);
-    if (nextFiltered !== isFiltered) {
+    if (hasActiveInquiryFilter(next) !== hasActiveInquiryFilter(filter)) {
       setCursors([null]);
       setExtra(null);
     }
     setFilter(next);
     setFilterPage(0);
+    // 검색어만 새로 쳤으면 위 debounce가 보냄. 그 밖의 조건 변경·검색어 지우기는 바로 보냄
+    const typingOnly =
+      next.query !== filter.query &&
+      next.query.trim() !== "" &&
+      next.type === filter.type &&
+      next.beach === filter.beach &&
+      next.received === filter.received;
+    if (!typingOnly) setSent({ query: next.query, at: Date.now() });
   };
 
   const pageIndex = cursors.length - 1;
@@ -907,20 +1067,11 @@ function InquiryList({
       ? result.body.nextCursor
       : null;
 
-  const filteredItems = useMemo(() => {
-    if (!isFiltered) return loadedItems;
-    return filterInquiries(loadedItems, filter, {
-      beachName: (id) => beachText(id, beaches),
-      typeLabel,
-      activityLabel,
-      messages: detailMessages,
-    });
-  }, [isFiltered, loadedItems, filter, beaches, detailMessages]);
-
+  // 거르기 결과는 서버가 거른 그대로(#491). 화면에서 다시 거르면 서버가 본문으로 찾은 문의가 빠짐
   const items = useMemo(
     () =>
-      isFiltered ? pageRows(filteredItems, filterPage, PAGE_SIZE) : loadedItems,
-    [isFiltered, filteredItems, filterPage, loadedItems],
+      isFiltered ? pageRows(loadedItems, filterPage, PAGE_SIZE) : loadedItems,
+    [isFiltered, filterPage, loadedItems],
   );
 
   useEffect(() => {
@@ -947,28 +1098,21 @@ function InquiryList({
       .sort((a, b) => a.label.localeCompare(b.label, "ko"));
   }, [loadedItems, beaches]);
 
+  // '다음 목록 더 불러오기': 지금 수보다 한 쪽(6행) 더 찰 때까지 몇 번만 이어 읽음
+  // 읽는 사이 조건이 바뀌면 멈춤(바뀐 조건의 결과에 이전 조건의 쪽을 붙이거나 덮지 않게)
   const loadMoreForFilter = () => {
     if (!lastNextCursor || loadingMore) return;
-    setLoadingMore(true);
     const targetKey = key;
-    void fetchInquiries(() => session.accessToken(), {
-      ...(status ? { status } : {}),
-      cursor: lastNextCursor,
-      limit: INQUIRY_PAGE_MAX,
-    })
-      .then((next) => {
-        if (!next.ok) return;
-        setExtra((prev) => {
-          const prevItems = prev?.key === targetKey ? prev.items : [];
-          return {
-            key: targetKey,
-            items: [...prevItems, ...next.body.items],
-            nextCursor: next.body.nextCursor,
-          };
-        });
-      })
-      .finally(() => setLoadingMore(false));
+    void continueReading(
+      targetKey,
+      lastNextCursor,
+      loadedItems.length,
+      loadedItems.length + PAGE_SIZE,
+      () => keyRef.current === targetKey,
+    );
   };
+
+  const moreFailed = moreFailedKey === key;
 
   const counts = received
     ? adjustCounts(received.counts, received.at, saved)
@@ -982,7 +1126,7 @@ function InquiryList({
   const to = pageIndex * PAGE_SIZE + items.length;
   const totalPages =
     total !== null ? Math.max(1, Math.ceil(total / PAGE_SIZE)) : null;
-  const filterWin = pageWindow(filteredItems.length, filterPage, PAGE_SIZE);
+  const filterWin = pageWindow(loadedItems.length, filterPage, PAGE_SIZE);
 
   return (
     <section aria-labelledby="inquiries-title" className="flex flex-col gap-3">
@@ -1026,6 +1170,7 @@ function InquiryList({
             onChange={(e) => updateFilter({ ...filter, query: e.target.value })}
             placeholder={t.searchPlaceholder}
             aria-label={t.searchLabel}
+            maxLength={INQUIRY_SEARCH_MAX}
             className="h-touch w-full rounded-admin-control border border-border-strong bg-bg-surface pr-3 pl-8 text-body text-text-default shadow-card outline-none placeholder:text-text-muted focus:border-brand-default focus:ring-[3px] focus:ring-brand-border lg:h-9"
           />
         </div>
@@ -1047,10 +1192,19 @@ function InquiryList({
         />
         {isFiltered && result?.ok && (
           <span className="ml-auto text-body-s text-text-muted tabular-nums">
-            {fill(t.filteredCount, { count: filteredItems.length })}
+            {fill(t.filteredCount, { count: loadedItems.length })}
           </span>
         )}
       </div>
+      {/* 보기 권한은 서버가 본문을 찾지 않음(해변 이름·별칭으로만 찾음) */}
+      {viewerOnly && filter.query.trim() !== "" && (
+        <p className="text-caption text-text-muted">{t.viewerSearchHint}</p>
+      )}
+      {blocked && (
+        <p role="alert" className="text-body-s text-danger-text">
+          {t.filterBlocked}
+        </p>
+      )}
 
       <LoadingStatus busy={signedIn && pending} label={t.loading} />
       <span role="status" className="sr-only">
@@ -1068,16 +1222,19 @@ function InquiryList({
         />
       )}
       {/* 거르기 결과가 비었을 때: 아직 불러오지 않은 목록이 있으면 '문의 없음'으로 보이지 않게 안내 */}
-      {result?.ok && isFiltered && filteredItems.length === 0 && (
+      {result?.ok && isFiltered && loadedItems.length === 0 && (
         <div className="rounded-admin-box border border-border-default bg-bg-surface px-4 py-6 text-center">
           <p className="text-title-s font-semibold text-text-default">
             {t.emptyTitle}
           </p>
           <p className="mt-1 text-body-s text-text-muted">
-            {lastNextCursor
-              ? fill(t.emptyFilteredMore, { loaded: loadedItems.length })
-              : t.emptyFiltered}
+            {lastNextCursor ? t.emptyFilteredMore : t.emptyFiltered}
           </p>
+          {moreFailed && (
+            <p role="alert" className="mt-1 text-body-s text-danger-text">
+              {t.loadMoreFailed}
+            </p>
+          )}
           <div className="mt-3 flex flex-wrap justify-center gap-2">
             {lastNextCursor && (
               <Button
@@ -1147,7 +1304,7 @@ function InquiryList({
             >
               {items.map((item) => {
                 const on = item.inquiryId === selectedId;
-                const preview = previewText(detailMessages[item.inquiryId]);
+                const preview = rowPreview(item, detailMessages);
                 return (
                   <tr
                     key={item.inquiryId}
@@ -1208,7 +1365,7 @@ function InquiryList({
           {/* 모바일: 카드 목록(값은 빼지 않음) */}
           <ul className="flex flex-col divide-y divide-border-default rounded-admin-box border border-border-default bg-bg-surface md:hidden">
             {items.map((item) => {
-              const preview = previewText(detailMessages[item.inquiryId]);
+              const preview = rowPreview(item, detailMessages);
               return (
                 <li key={item.inquiryId}>
                   <Link
@@ -1242,19 +1399,26 @@ function InquiryList({
           <p className="text-caption text-text-muted">{t.n1FooterHint}</p>
         </>
       )}
-      {result?.ok && isFiltered && filteredItems.length > 0 && (
+      {result?.ok && isFiltered && loadedItems.length > 0 && (
         <div className="flex flex-col gap-2">
           <Pager
             label={t.pagination}
-            total={filteredItems.length}
+            total={loadedItems.length}
             page={filterWin.page}
             size={PAGE_SIZE}
             onPage={setFilterPage}
           />
           <div className="flex flex-wrap items-center gap-2 text-caption text-text-muted">
             <span>
-              {fill(t.loadedFilterHint, { loaded: loadedItems.length })}
+              {lastNextCursor
+                ? fill(t.loadedFilterHint, { loaded: loadedItems.length })
+                : t.loadedFilterAll}
             </span>
+            {moreFailed && (
+              <span role="alert" className="text-danger-text">
+                {t.loadMoreFailed}
+              </span>
+            )}
             {lastNextCursor && (
               <Button
                 variant="secondary"
