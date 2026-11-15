@@ -97,7 +97,8 @@ function run(
 }
 
 // cdk에 넘기는 임시 키의 최소 남은 시간. 변경 세트 만들기(몇 분)만 쓰고, 실행·대기는 프로필로 함
-// aws login 프로필은 15분짜리 키를 받아 aws CLI가 스스로 갱신하므로 긴 시간을 요구하면 늘 멈춤
+// Identity Center(SSO) 프로필은 aws CLI가 남은 시간 15분 아래에서 키를 새로 받으므로 내보낸 키는 보통 10분 넘게 남음.
+// 이보다 긴 시간을 요구하면 갱신 전 구간(15분~요구 시간)에서 늘 멈춤
 const MIN_CREDENTIAL_MINUTES = 5;
 
 // 배포 뒤 로그 점검에서 함수마다 읽는 최대 줄 수
@@ -113,7 +114,8 @@ function intArg(name, fallback) {
   return Number(value);
 }
 
-const profile = arg("--profile") ?? process.env.AWS_PROFILE ?? "soo-login";
+// 2026-11-15부터 관리자 작업은 Identity Center 권한 세트로 함(결정 기록 D21-10, IAM 사용자의 관리자 권한은 뗌)
+const profile = arg("--profile") ?? process.env.AWS_PROFILE ?? "baradun-sso";
 const adminProfile = arg("--admin-profile") ?? profile;
 // 배포 뒤 로그를 볼 시간(분). 해상 특보 수집 주기(15분)를 한 번은 지나게 기본 16분. 0이면 보지 않음
 const watchMinutes = intArg("--watch", 16);
@@ -249,7 +251,7 @@ run("npm", ["ci", "--no-audit", "--no-fund", "--loglevel=error"], {
   cwd: deployDir,
 });
 
-// 4. 자격 증명: aws 명령은 프로필을 그대로 씀(aws CLI가 aws login 키를 스스로 갱신 → 1시간 대기도 끊기지 않음)
+// 4. 자격 증명: aws 명령은 프로필을 그대로 씀(포털 세션이 살아 있는 동안 aws CLI가 역할 키를 스스로 갱신 → 1시간 대기도 끊기지 않음)
 // 셸에 남은 예전 키(AWS_ACCESS_KEY_ID 등)는 프로필보다 앞서므로 지움
 step(4, `AWS 자격 증명을 확인해요 (프로필 ${profile})`);
 const STATIC_KEYS = [
@@ -271,12 +273,15 @@ const aws = (args, options = {}) =>
     capture: true,
     ...options,
   });
+// 로그인 안내. 기본 프로필은 Identity Center지만 --profile·AWS_PROFILE로 다른 종류(역할 맡기·aws login 등)를 줄 수 있음
+const loginHint = (p) =>
+  `aws sso login --profile ${p} (Identity Center 프로필이 아니면 그 프로필의 방식으로 로그인)`;
 const identity = aws(["sts", "get-caller-identity"], { allowFail: true });
 if (identity.status !== 0) {
   // 실제 이유(프로필 이름 오타·네트워크 등)를 함께 보여 줌. 키 값은 이 출력에 없음
   process.stderr.write(identity.stderr ?? "");
   fail(
-    `자격 증명을 쓰지 못했어요. 먼저 로그인해 주세요: aws login --profile ${profile}`,
+    `자격 증명을 쓰지 못했어요. 먼저 로그인해 주세요: ${loginHint(profile)}`,
   );
 }
 const account = JSON.parse(identity.stdout).Account;
@@ -307,7 +312,7 @@ if (adminProfile !== profile) {
   if (adminIdentity.status !== 0) {
     process.stderr.write(adminIdentity.stderr ?? "");
     fail(
-      `--admin-profile 자격 증명을 쓰지 못했어요. 먼저 로그인해 주세요: aws login --profile ${adminProfile}`,
+      `--admin-profile 자격 증명을 쓰지 못했어요. 먼저 로그인해 주세요: ${loginHint(adminProfile)}`,
     );
   }
   const adminAccount = JSON.parse(adminIdentity.stdout).Account;
@@ -358,7 +363,7 @@ const toolkitSetup = compareToolkitSetupPolicy(
 );
 console.log(toolkitSetup.line);
 
-// 6. 변경 세트. cdk는 aws login 프로필을 직접 못 읽는 경우가 있어 지금 키를 내보내 cdk에만 넘김
+// 6. 변경 세트. 프로필 종류(aws login 등)에 따라 cdk가 직접 못 읽는 경우가 있어 지금 키를 내보내 cdk에만 넘김
 const exported = aws(
   [
     "configure",
@@ -372,7 +377,7 @@ const exported = aws(
 );
 if (exported.status !== 0) {
   fail(
-    `자격 증명을 가져오지 못했어요. 먼저 로그인해 주세요: aws login --profile ${profile}`,
+    `자격 증명을 가져오지 못했어요. 먼저 로그인해 주세요: ${loginHint(profile)}`,
   );
 }
 const creds = JSON.parse(exported.stdout);
@@ -381,7 +386,7 @@ const remainingMin = creds.Expiration
   : Infinity;
 if (remainingMin < MIN_CREDENTIAL_MINUTES) {
   fail(
-    `자격 증명이 ${Math.max(0, Math.floor(remainingMin))}분 뒤 만료돼요. 다시 로그인한 뒤 실행해 주세요: aws login --profile ${profile}`,
+    `자격 증명이 ${Math.max(0, Math.floor(remainingMin))}분 뒤 만료돼요. 다시 로그인한 뒤 실행해 주세요: ${loginHint(profile)}`,
   );
 }
 const cdkEnv = { ...awsEnv };
@@ -617,7 +622,7 @@ if (hasChangeSet) {
     const failed = failedEventsOrNull(awsRunner, STACK_NAME, startedAt);
     if (failed === null)
       console.error(
-        "   실패 이벤트를 읽지 못했어요(자격 증명 만료일 수 있음).",
+        `   실패 이벤트를 읽지 못했어요(자격 증명 만료일 수 있음). 다시 로그인한 뒤 스택 상태를 확인해 주세요: ${loginHint(profile)}`,
       );
     else if (failed.length === 0)
       console.error(
