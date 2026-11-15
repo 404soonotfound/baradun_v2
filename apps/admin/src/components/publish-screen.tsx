@@ -760,6 +760,7 @@ function PreviewDrawer({
   currentVersion,
   beaches,
   publishLocked,
+  publishLockedId,
   onRetry,
   onClose,
   onPublish,
@@ -771,6 +772,7 @@ function PreviewDrawer({
   currentVersion: string | null;
   beaches: Readonly<Record<string, BeachName>>;
   publishLocked: string | null;
+  publishLockedId: string | undefined;
   onRetry: () => void;
   onClose: () => void;
   onPublish: () => void;
@@ -1055,7 +1057,7 @@ function PreviewDrawer({
             !answer?.ok ||
             answer.preview.status === "blocked"
           }
-          aria-describedby={publishLocked ? "publish-locked" : undefined}
+          aria-describedby={publishLockedId}
           onClick={() => onPublish()}
         >
           {t.publishButton}
@@ -1884,6 +1886,10 @@ function PublishBody({
   const inFlight = jobInFlight(shownJob) || writing;
   const currentVersion = view?.current.ok ? view.current.version : null;
   const locked = permission.publish ?? (inFlight ? t.busyLocked : null);
+  const publishLockedId =
+    permission.signedIn && !permission.demo && locked
+      ? "publish-locked"
+      : undefined;
 
   // 진행 중 작업은 상태를 다시 읽음. 끝나면 게시 현황도 다시 읽음
   const trackedId = jobInFlight(shownJob) ? shownJob!.jobId : null;
@@ -2281,6 +2287,7 @@ function PublishBody({
             currentVersion={currentVersion}
             beaches={beaches}
             publishLocked={locked}
+            publishLockedId={publishLockedId}
             onRetry={() => loadPreview()}
             onClose={() => closePreview()}
             onPublish={() => {
@@ -2437,11 +2444,7 @@ function PublishBody({
               <Button
                 size="small"
                 disabled={!view || placeholder || locked !== null}
-                aria-describedby={
-                  permission.signedIn && !permission.demo && locked
-                    ? "publish-locked"
-                    : undefined
-                }
+                aria-describedby={publishLockedId}
                 onClick={(e) => openPublish(e.currentTarget)}
               >
                 {t.publishButton}

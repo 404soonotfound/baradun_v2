@@ -1,5 +1,10 @@
 import { opsFetch, type OpsResult } from "./auth/ops-fetch";
-import { validFailure, type CollectionJobId, type RunView } from "./collection";
+import {
+  validFailure,
+  type CollectionJobId,
+  type CollectionView,
+  type RunView,
+} from "./collection";
 
 // 데이터 출처 (BRD-149·GH-328, 화면 설계서 6장 ADM-SRC, 시안 4차 V12·V13·VM13)
 // 운영 API GET /ops/sources 응답 모양과 화면용 계산. 서버(services/src/admin/sources.ts)가 원본이라 모양만 맞춤
@@ -274,4 +279,29 @@ export function keyState(view: SourcesView, name: KeyName): KeyState {
   if (key.expiresInvalid) return "invalid";
   if (key.daysLeft === null) return "noExpiry";
   return key.daysLeft < 0 ? "expired" : "registered";
+}
+
+// /ops/sources와 함께 불러오는 수집 현황(collection) 상태.
+// 다시 읽는 동안 직전 성공 값을 유지하고, 실패·시간 초과로 끝나면 null로 확정해 '확인 못 함'을 노출함
+export interface CollectionSlot {
+  readonly key: string;
+  readonly generation: number;
+  readonly view: CollectionView | null;
+}
+
+export function resolveCollectionState(
+  slot: CollectionSlot | null,
+  params: {
+    readonly signedIn: boolean;
+    readonly generation: number;
+    readonly key: string;
+  },
+): {
+  readonly view: CollectionView | null;
+  readonly pending: boolean;
+} {
+  if (!params.signedIn) return { view: null, pending: false };
+  const view = slot?.generation === params.generation ? slot.view : null;
+  const pending = slot?.key !== params.key && view === null;
+  return { view, pending };
 }
