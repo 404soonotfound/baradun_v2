@@ -688,10 +688,6 @@ function SourcesList({
   const reference = view.sources.filter((s) => !s.judgment);
   return (
     <>
-      <LoadingStatus
-        busy={collectionLoad.pending}
-        label={fill(messages.loading.screen, { name: t.history24h })}
-      />
       <Summary view={view} />
       <section
         aria-labelledby="sources-judgment"
@@ -1061,10 +1057,6 @@ function SourceDetail({
           })}
         </p>
       </div>
-      <LoadingStatus
-        busy={collectionLoad.pending}
-        label={fill(messages.loading.screen, { name: t.history24h })}
-      />
       <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {[
           {
@@ -1749,6 +1741,10 @@ function SourcesBody() {
       className="flex w-full flex-col gap-4 px-4 py-5 md:px-10 md:pt-6 md:pb-10"
     >
       <LoadingStatus busy={signedIn && pending} label={t.loading} />
+      <LoadingStatus
+        busy={!placeholder && collectionLoad.pending}
+        label={fill(messages.loading.screen, { name: t.history24h })}
+      />
       <span role="status" className="sr-only">
         {(
           placeholder
