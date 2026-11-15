@@ -2588,15 +2588,21 @@ function CollectionBody({ beaches }: { beaches: Beaches }) {
           ) : null}
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {refreshing && (
-            <span
-              role="status"
-              className="inline-flex items-center gap-1.5 text-[12.5px] text-brand-default"
-            >
-              <Spinner size={12} />
-              {messages.loading.refreshing}
-            </span>
-          )}
+          <span
+            role="status"
+            className={
+              refreshing
+                ? "inline-flex items-center gap-1.5 text-[12.5px] text-brand-default"
+                : "sr-only"
+            }
+          >
+            {refreshing ? (
+              <>
+                <Spinner size={12} />
+                {messages.loading.refreshing}
+              </>
+            ) : null}
+          </span>
           <button
             type="button"
             className={BTN}

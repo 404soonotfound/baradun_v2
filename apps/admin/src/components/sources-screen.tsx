@@ -1586,8 +1586,7 @@ function SourcesBody() {
   }, [session, signedIn, key, generation]);
 
   // 다시 불러오는 동안 앞 값을 그대로 보여 줌(D16-E1)
-  const current =
-    signedIn && loaded?.generation === generation ? loaded : null;
+  const current = signedIn && loaded?.generation === generation ? loaded : null;
   const fetching = signedIn && loaded?.key !== key;
   const pending = !signedIn || current === null;
   const timing = useLoadTiming(pending);
@@ -1658,15 +1657,21 @@ function SourcesBody() {
           >
             {t.collectionLink}
           </Link>
-          {refreshing && (
-            <span
-              role="status"
-              className="inline-flex items-center gap-1.5 text-body-s text-brand-default"
-            >
-              <Spinner size={12} />
-              {messages.loading.refreshing}
-            </span>
-          )}
+          <span
+            role="status"
+            className={
+              refreshing
+                ? "inline-flex items-center gap-1.5 text-body-s text-brand-default"
+                : "sr-only"
+            }
+          >
+            {refreshing ? (
+              <>
+                <Spinner size={12} />
+                {messages.loading.refreshing}
+              </>
+            ) : null}
+          </span>
           <Button
             variant="secondary"
             size="small"

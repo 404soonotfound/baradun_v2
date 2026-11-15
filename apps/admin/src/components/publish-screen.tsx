@@ -94,14 +94,17 @@ const versionTime = (version: string) => {
 };
 
 function usePermission(): {
+  signedIn: boolean;
   demo: boolean;
   publish: string | null;
 } {
   const snapshot = useSessionSnapshot();
   if (snapshot.status === "signed_out")
-    return { demo: false, publish: t.needPublisher };
-  if (snapshot.pool === "demo") return { demo: true, publish: t.demo };
+    return { signedIn: false, demo: false, publish: t.needPublisher };
+  if (snapshot.pool === "demo")
+    return { signedIn: true, demo: true, publish: t.demo };
   return {
+    signedIn: true,
     demo: false,
     publish: snapshot.groups.includes("publisher") ? null : t.needPublisher,
   };
@@ -155,8 +158,9 @@ function useOverview(enabled: boolean) {
   const current = signedIn && loaded?.key === key ? loaded : null;
   const kept = signedIn && good?.generation === generation ? good.body : null;
   return {
+    signedIn,
     view: kept,
-    waiting: enabled && signedIn && current === null,
+    waiting: enabled && (!signedIn || current === null),
     timedOut: current !== null && current.timedOut,
     failure:
       current && !current.timedOut && !current.result.ok
@@ -1926,6 +1930,7 @@ function PublishBody({
 
     content = (
       <div className="flex flex-col gap-3">
+        {overview.timedOut && <LoadFailed onRetry={overview.reload} />}
         {overview.failure && (
           <FailureNotice
             title={fill(t.unread, { what: t.unreadWhat.current })}
@@ -2157,7 +2162,7 @@ function PublishBody({
   return (
     <>
       <LoadingStatus
-        busy={waitingOverview}
+        busy={overview.signedIn && waitingOverview}
         label={fill(messages.loading.screen, { name: messages.nav.publish })}
       />
       <span role="status" className="sr-only">
@@ -2195,7 +2200,7 @@ function PublishBody({
             </div>
           )}
         </div>
-        {!permission.demo && locked && (
+        {permission.signedIn && !permission.demo && locked && (
           <p id="publish-locked" className="text-label-s text-text-body">
             {locked}
           </p>
