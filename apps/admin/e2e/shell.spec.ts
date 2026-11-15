@@ -121,7 +121,7 @@ test("모바일 서랍: 메뉴 버튼으로 열고 Esc·바깥 누르기로 닫�
   await go(page, "해변");
   await expect(drawer).toBeHidden();
   await expect(
-    page.getByRole("heading", { name: "해변 관리", level: 1 }),
+    page.getByRole("heading", { name: "해변", level: 1 }),
   ).toBeVisible();
   await expect.poll(lock).toBe("");
 });
