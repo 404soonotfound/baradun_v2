@@ -163,12 +163,30 @@ function StatusSection({
   beach: BeachRecord;
   state: ReturnType<typeof usePublished>;
 }) {
+  const signedIn = useSessionSnapshot().status !== "signed_out";
   const display = displayOf(state.published, beach.id, state.nowMs);
   return (
     <Section id="beach-status" title={t.detailStatus}>
+      <LoadingStatus
+        busy={signedIn && display.kind === "loading"}
+        label={fill(messages.loading.screen, { name: t.detailStatus })}
+      />
       <PublishedAlert state={state} />
-      <div className="flex flex-col gap-2">
+      <div
+        aria-busy={display.kind === "loading" || undefined}
+        className="flex flex-col gap-2"
+      >
         <DisplayBadge display={display} />
+        {display.kind === "loading" && (
+          <>
+            <div aria-hidden="true" className="flex min-h-[24px] items-center">
+              <SkLine className="w-56 max-w-full" />
+            </div>
+            <div aria-hidden="true" className="flex min-h-[18px] items-center">
+              <SkLine className="w-40" />
+            </div>
+          </>
+        )}
         <ReasonList display={display} />
         <ExpiredNotice display={display} />
         {state.published !== "loading" && state.published?.available && (
