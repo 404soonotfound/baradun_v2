@@ -205,11 +205,19 @@ describe("문의 거르기와 페이징", () => {
     expect(filterInquiries(rows, EMPTY_INQUIRY_FILTER, opts)).toHaveLength(3);
 
     expect(
-      filterInquiries(rows, { ...EMPTY_INQUIRY_FILTER, type: "data_error" }, opts),
+      filterInquiries(
+        rows,
+        { ...EMPTY_INQUIRY_FILTER, type: "data_error" },
+        opts,
+      ),
     ).toEqual([rows[0]]);
 
     expect(
-      filterInquiries(rows, { ...EMPTY_INQUIRY_FILTER, beach: BEACH_NONE }, opts),
+      filterInquiries(
+        rows,
+        { ...EMPTY_INQUIRY_FILTER, beach: BEACH_NONE },
+        opts,
+      ),
     ).toEqual([rows[1]]);
 
     expect(
@@ -244,7 +252,11 @@ describe("문의 거르기와 페이징", () => {
     ).toEqual([rows[0]]);
 
     expect(
-      filterInquiries(rows, { ...EMPTY_INQUIRY_FILTER, query: "입수 금지" }, opts),
+      filterInquiries(
+        rows,
+        { ...EMPTY_INQUIRY_FILTER, query: "입수 금지" },
+        opts,
+      ),
     ).toEqual([rows[0]]);
 
     expect(
