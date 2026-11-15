@@ -1927,8 +1927,13 @@ test("로딩(L6): 게시 화면 자리표시 중 버튼 비활성·5초 안내·
   await expect(reloadAlert).toBeVisible();
   await expect(page.getByText("현재 게시본").first()).toBeVisible();
   holdOverview = false;
+  const retryRes = page.waitForResponse(
+    (res) => res.url().endsWith("/ops/publish") && res.status() === 200,
+  );
   await reloadAlert.getByRole("button", { name: "다시 시도" }).click();
+  await retryRes;
   await expect(reloadAlert).toHaveCount(0);
+  await expect(page.getByText("현재 게시본").first()).toBeVisible();
 });
 
 test("로딩(L6): 세션 확인 중(로그인 전)에는 자리표시가 보이고 권한 필요 문구는 잠깐도 보이지 않는다", async ({
