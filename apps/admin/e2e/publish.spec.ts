@@ -1037,6 +1037,110 @@ test("#479 응답 필드: 앱 설정 비교·last24h·공지 before/updatedBy·c
   await expectNoA11yViolations(page);
 });
 
+test("#499 응답 필드: 게시 기록 순번·실패 요약(원문 없이)·대기 공지 변경 시각과 본문까지 비교를 표시한다(#502)", async ({
+  page,
+}) => {
+  const before = {
+    id: "n-maint",
+    kind: "maintenance_notice",
+    title: { ko: "새벽 점검 예고", en: "Maintenance" },
+    body: { ko: "점검 안내", en: "Notice" },
+    startsAt: iso(base - 60 * MINUTE),
+    endsAt: null,
+  };
+  await signIn(page);
+  await mockPublish(page, {
+    overview: () =>
+      overview({
+        pendingNotices: {
+          ok: true,
+          maintenancePending: false,
+          items: [
+            {
+              id: "n-maint",
+              change: "update",
+              kind: "maintenance_notice",
+              title: "새벽 점검 예고",
+              startsAt: before.startsAt,
+              endsAt: null,
+              updatedBy: OPS,
+              updatedAt: iso(base - 3 * MINUTE),
+              before,
+              after: {
+                ...before,
+                body: { ko: "점검 안내\n시간이 늘어났어요", en: "Notice" },
+              },
+            },
+          ],
+        },
+        history: {
+          ok: true,
+          items: [
+            {
+              result: "published",
+              version: V0,
+              at: iso(base),
+              source: "auto",
+              sequence: 1440,
+              beachCount: 206,
+              changes: null,
+            },
+            {
+              result: "failed",
+              version: V1,
+              at: iso(base - 5 * MINUTE),
+              source: "auto",
+              reason: "contract",
+              sequence: 1439,
+              failureDetails: {
+                kind: "contract",
+                errorCount: 3,
+                paths: [
+                  "StatusFile:/beaches/b0001/observation:required:metrics",
+                ],
+              },
+            },
+            // 순번·요약이 없는 예전 기록은 아무것도 지어내지 않음
+            {
+              result: "failed",
+              version: V2,
+              at: iso(base - 10 * MINUTE),
+              source: "auto",
+              reason: "beach_ids",
+            },
+          ],
+        },
+      }),
+  });
+  await openPublish(page);
+
+  await expect(history(page).nth(0)).toContainText("#1440");
+  await expect(
+    page.getByLabel("실행 순번 1440").filter({ visible: true }),
+  ).toHaveCount(1);
+  await expect(history(page).nth(1)).toContainText("#1439");
+  await expect(history(page).nth(2)).not.toContainText("#");
+
+  const checksRegion = page.getByRole("region", { name: /검증 결과/ });
+  await expect(checksRegion).toContainText("실패 요약");
+  await expect(checksRegion).toContainText(
+    "계약 검사 오류 3건 · 앞 1건의 데이터 위치",
+  );
+  await expect(checksRegion).toContainText(
+    "StatusFile:/beaches/b0001/observation:required:metrics",
+  );
+
+  const pendingRegion = page.getByRole("region", { name: "대기 중인 변경" });
+  await expect(pendingRegion).toContainText(/\d{2}:\d{2} 변경/);
+  await expect(
+    pendingRegion.getByText("body.ko: 시간이 늘어났어요", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    pendingRegion.getByText("본문이나 영어 제목이 바뀌었어요"),
+  ).toHaveCount(0);
+  await expectNoA11yViolations(page);
+});
+
 test("검사 3개를 모두 통과한 뒤 다른 사유(manifest_conflict)로 실패하면 실패 사유와 3줄을 함께 보여 준다", async ({
   page,
 }) => {

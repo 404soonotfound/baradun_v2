@@ -140,6 +140,7 @@ describe("pendingNoticeDiff 전체 비교", () => {
       "끝 없음",
     );
     expect(diff.hasBefore).toBe(true);
+    expect(diff.full).toBe(true);
     expect(diff.added).toBe(2);
     expect(diff.removed).toBe(2);
     expect(
@@ -149,6 +150,7 @@ describe("pendingNoticeDiff 전체 비교", () => {
 
   it("after가 없으면(예전 서버) 4줄 비교 그대로", () => {
     const diff = pendingNoticeDiff({ ...base, before }, "일반", fmt, "끝 없음");
+    expect(diff.full).toBe(false);
     expect(diff.lines.filter((l) => l.kind === "same")).toHaveLength(4);
     expect(diff.added).toBe(0);
   });
