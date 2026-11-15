@@ -919,9 +919,13 @@ test("로딩: 공지 편집 직접 진입 자리표시와 15초 실패 재시도
 
   await signInWithPassword(page, "/login/", OPS);
   await expect(page.getByRole("heading", { name: "운영 홈" })).toBeVisible();
+  const refreshDone = page.waitForResponse(/cognito-idp\./);
   await page.goto("/notices/?id=n-live");
+  await refreshDone;
+  const editorReq = page.waitForRequest(/\/ops\/notices(\/.*)?$/);
   await page.clock.fastForward(200);
   await expect(page.locator("main [aria-busy='true']")).toBeVisible();
+  await editorReq;
   await page.clock.fastForward(15_500);
   const editorAlert = page
     .getByRole("alert")

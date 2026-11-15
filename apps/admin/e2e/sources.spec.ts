@@ -12,6 +12,7 @@ import {
   signInWithPassword,
   srpScript,
   test,
+  tokensFor,
 } from "./fixtures";
 
 // 데이터 출처 목록·상세 (BRD-149·GH-328, 화면 설계서 6장 ADM-SRC). 운영 API는 가짜 응답
@@ -38,9 +39,18 @@ async function mockSources(page: Page, status = 200, view: object = VIEW) {
 }
 
 async function openSources(page: Page) {
+  const authTime = Math.floor(Date.now() / 1000) - 60;
   await mockCognito(
     page,
-    srpScript({ email: OPS, after: "tokens", groups: ["viewer"] }),
+    srpScript({ email: OPS, after: "tokens", groups: ["viewer"], authTime }),
+    (target) =>
+      target === "GetTokensFromRefreshToken"
+        ? {
+            body: {
+              AuthenticationResult: tokensFor(OPS, ["viewer"], 900, authTime),
+            },
+          }
+        : undefined,
   );
   await mockOps(page, ME_OK);
   await signInWithPassword(page, "/login/", OPS);
@@ -349,7 +359,7 @@ test("로딩(L9·L4): 목록·상세(탭 아래만 자리표시)·15초 실패 �
 }) => {
   await page.clock.install();
   let holdSources = true;
-  let resolveSources!: () => void;
+  const waiters: (() => void)[] = [];
   await page.route(/\/ops\/collection$/, (route) =>
     route.fulfill({
       status: 200,
@@ -360,7 +370,7 @@ test("로딩(L9·L4): 목록·상세(탭 아래만 자리표시)·15초 실패 �
   await page.route(/\/ops\/sources$/, async (route: Route) => {
     if (holdSources) {
       await new Promise<void>((r) => {
-        resolveSources = r;
+        waiters.push(r);
       });
     }
     await route.fulfill({
@@ -385,21 +395,25 @@ test("로딩(L9·L4): 목록·상세(탭 아래만 자리표시)·15초 실패 �
 
   // L8 새로 고침: 값 유지 + 다시 읽는 중
   holdSources = true;
+  const refreshReq = page.waitForRequest(/\/ops\/sources$/);
   await page.getByRole("button", { name: "다시 불러오기" }).click();
+  await refreshReq;
   await expect(page.getByText("다시 읽는 중")).toBeVisible();
   await expect(page.getByText("기상특보 조회").first()).toBeVisible();
-  resolveSources();
+  waiters.at(-1)?.();
   await expect(page.getByText("다시 읽는 중")).toHaveCount(0);
 
-  // L4 상세 직접 진입: 출처 탭과 이름은 먼저 보이고 탭 아래만 자리표시
+  // L4 상세 직접 진입: 실제 요청이 붙잡힌 상태에서 출처 제목은 보이고 아래만 자리표시
   holdSources = true;
+  const detailReq = page.waitForRequest(/\/ops\/sources$/);
   await page.goto("/sources/?id=collect-warnings");
+  await detailReq;
   await page.clock.fastForward(200);
   await expect(
     page.getByRole("heading", { name: "기상특보 조회", level: 1 }),
   ).toBeVisible();
   await expect(page.locator("main [aria-busy='true']").first()).toBeVisible();
   holdSources = false;
-  resolveSources();
+  waiters.at(-1)?.();
   await expect(page.locator("main [aria-busy='true']")).toHaveCount(0);
 });

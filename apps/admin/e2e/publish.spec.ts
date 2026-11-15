@@ -14,6 +14,7 @@ import {
   signInWithPassword,
   srpScript,
   test,
+  tokensFor,
 } from "./fixtures";
 import {
   localSiteDeployView,
@@ -1904,4 +1905,83 @@ test("로딩(L6): 게시 화면 자리표시 중 버튼 비활성·5초 안내·
   await expect(dialog).toBeVisible();
   await dialog.getByRole("button", { name: "닫기" }).first().click();
   await expect(dialog).toHaveCount(0);
+
+  // 값이 있는 상태에서 게시 뒤 다시 읽기가 15초를 넘기면 옛 값만 남기지 않고 시간 초과 알림을 띄움
+  holdOverview = true;
+  const firstReload = page.waitForRequest(/\/ops\/publish$/);
+  await page.getByRole("button", { name: "지금 게시" }).click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "지금 게시" })
+    .click();
+  await firstReload;
+  const finalReload = page.waitForRequest(/\/ops\/publish$/);
+  await page.clock.fastForward(3_500);
+  await finalReload;
+  await page.clock.fastForward(15_500);
+  const reloadAlert = page
+    .getByRole("alert")
+    .filter({ hasText: "응답이 15초 넘게 오지 않았어요" });
+  await expect(reloadAlert).toBeVisible();
+  await expect(page.getByText("현재 게시본").first()).toBeVisible();
+  holdOverview = false;
+  await reloadAlert.getByRole("button", { name: "다시 시도" }).click();
+  await expect(reloadAlert).toHaveCount(0);
+});
+
+test("로딩(L6): 세션 확인 중(로그인 전)에는 자리표시가 보이고 권한 필요 문구는 잠깐도 보이지 않는다", async ({
+  page,
+}) => {
+  const authTime = Math.floor(Date.now() / 1000) - 60;
+  let releaseRefresh!: () => void;
+  const refreshHeld = new Promise<void>((r) => {
+    releaseRefresh = r;
+  });
+  await mockCognito(
+    page,
+    srpScript({
+      email: OPS,
+      after: "tokens",
+      groups: ["publisher"],
+      authTime,
+    }),
+    (target) =>
+      target === "GetTokensFromRefreshToken"
+        ? {
+            body: {
+              AuthenticationResult: tokensFor(
+                OPS,
+                ["publisher"],
+                900,
+                authTime,
+              ),
+            },
+          }
+        : undefined,
+  );
+  await mockOps(page, ME_OK);
+  await mockPublish(page);
+
+  await signInWithPassword(page, "/login/", OPS);
+  await expectHomeLoaded(page);
+
+  // 새로고침 진입에서 Cognito 토큰 복구를 붙잡아 signed_out 대기 상태를 만듦
+  await page.route(/cognito-idp\./, async (route: Route) => {
+    const target = route.request().headers()["x-amz-target"] ?? "";
+    if (target.endsWith("GetTokensFromRefreshToken")) {
+      await refreshHeld;
+    }
+    await route.fallback();
+  });
+
+  await page.goto("/publish/", { waitUntil: "domcontentloaded" });
+  await expect(page.locator("main [aria-busy='true']").first()).toBeVisible();
+  await expect(
+    page.getByText(
+      '"노출 변경" 권한이 필요해요. 운영 책임자에게 요청해 주세요.',
+    ),
+  ).toHaveCount(0);
+
+  releaseRefresh();
+  await expect(page.getByText("현재 게시본").first()).toBeVisible();
 });
