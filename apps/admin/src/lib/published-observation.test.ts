@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { localPublishedView } from "./auth/local-beaches";
-import { parsePublished } from "./beaches";
+import { observedCellOf, parsePublished, waveCellOf } from "./beaches";
 
 // 해변 게시 상태의 파고·파주기 (#502, 서버 #499)
 const wave = (over: Record<string, unknown> = {}) => ({
@@ -100,5 +100,91 @@ describe("parsePublished 관측값", () => {
       expect(e.wavePeriod).not.toBeNull();
       expect(e.waveHeight).toBeDefined();
     }
+  });
+});
+
+describe("목록 칸 판정 waveCellOf · observedCellOf", () => {
+  const published = (observation?: unknown) =>
+    parsePublished(view(observation))!;
+  const display = { kind: "loading" } as const;
+
+  it("게시값을 칸으로 옮김(지연은 지연 표시, 지연인데 값 없음은 missing)", () => {
+    const p = published({
+      metrics: {
+        waveHeight: wave({
+          state: "delayed",
+          observedAt: "2026-11-15T05:00:00Z",
+        }),
+        wavePeriod: period({ state: "delayed", value: null, observedAt: null }),
+      },
+    });
+    expect(waveCellOf(p, "b0001", "waveHeight", true)).toEqual({
+      kind: "value",
+      value: 0.6,
+      unit: "m",
+      delayed: true,
+    });
+    expect(waveCellOf(p, "b0001", "wavePeriod", true)).toEqual({
+      kind: "missing",
+    });
+    expect(observedCellOf(p, "b0001", display, true)).toEqual({
+      kind: "time",
+      at: "2026-11-15T05:00:00Z",
+      delayed: true,
+    });
+  });
+
+  it("가까운 관측 없음은 none, 게시본을 받는 중은 loading", () => {
+    const p = published({
+      metrics: {
+        waveHeight: wave({ state: "none", value: null, observedAt: null }),
+        wavePeriod: period(),
+      },
+    });
+    expect(waveCellOf(p, "b0001", "waveHeight", true)).toEqual({
+      kind: "none",
+    });
+    expect(observedCellOf(p, "b0001", display, true)).toEqual({ kind: "none" });
+    expect(waveCellOf("loading", "b0001", "waveHeight", true)).toEqual({
+      kind: "loading",
+    });
+  });
+
+  it("게시값이 없으면 측정소가 배정된 지표는 확인 못 함, 배정되지 않은 지표만 가까운 관측 없음(틀린 칸은 확인 못 함)", () => {
+    for (const p of [published(), null]) {
+      expect(waveCellOf(p, "b0001", "waveHeight", true)).toEqual({
+        kind: "unknown",
+      });
+      expect(waveCellOf(p, "b0001", "waveHeight", false)).toEqual({
+        kind: "none",
+      });
+      expect(observedCellOf(p, "b0001", display, true)).toEqual({
+        kind: "unknown",
+      });
+    }
+    // 모양이 틀린 칸(null)은 측정소가 배정되지 않았어도 '가까운 관측 없음'으로 바꾸지 않음
+    const malformed = published({});
+    for (const hasStation of [true, false]) {
+      expect(waveCellOf(malformed, "b0001", "waveHeight", hasStation)).toEqual({
+        kind: "unknown",
+      });
+      expect(observedCellOf(malformed, "b0001", display, hasStation)).toEqual({
+        kind: "unknown",
+      });
+    }
+    // 게시본에 해변 자체가 없음
+    expect(waveCellOf(published(), "b0999", "wavePeriod", true)).toEqual({
+      kind: "unknown",
+    });
+  });
+
+  it("게시값이 있으면 저장소 측정소 정보보다 우선", () => {
+    const p = published({
+      metrics: { waveHeight: wave(), wavePeriod: period() },
+    });
+    expect(waveCellOf(p, "b0001", "waveHeight", false)).toMatchObject({
+      kind: "value",
+      value: 0.6,
+    });
   });
 });

@@ -23,16 +23,43 @@ const OPS = "ops@example.test";
 // 게시 분류를 믿을 수 있는 시각. 시험 중 지나지 않게 지금보다 뒤로 둠
 const VALID_UNTIL = new Date(Date.now() + 24 * 60 * 60_000).toISOString();
 
+// 게시본 파고·파주기(#502). 측정 칸이 오늘 시각(HH:MM)으로 보이게 지금 기준으로 둠
+const minutesAgo = (m: number) =>
+  new Date(Date.now() - m * 60_000).toISOString();
+const wave = (
+  unit: "m" | "s",
+  value: number | null,
+  observedAt: string | null,
+  state: "fresh" | "delayed" | "none",
+) => ({ value, unit, observedAt, state });
+
 const PUBLISHED = {
   available: true,
   snapshotVersion: "20261111T030000Z",
   generatedAt: "2026-11-11T03:00:12Z",
   maintenance: { active: false, until: null },
   beaches: {
-    b0001: { category: "clear", reasons: [], validUntil: VALID_UNTIL },
+    b0001: {
+      category: "clear",
+      reasons: [],
+      validUntil: VALID_UNTIL,
+      observation: {
+        metrics: {
+          waveHeight: wave("m", 0.6, minutesAgo(1), "fresh"),
+          wavePeriod: wave("s", 8, minutesAgo(1), "fresh"),
+        },
+      },
+    },
     b0002: {
       category: "unavailable",
       validUntil: VALID_UNTIL,
+      observation: {
+        metrics: {
+          waveHeight: wave("m", 1.8, minutesAgo(1), "fresh"),
+          // 모양이 틀린 칸은 그 칸만 '확인 못 함'
+          wavePeriod: wave("s", null, minutesAgo(1), "fresh"),
+        },
+      },
       reasons: [
         {
           code: "warning",
@@ -55,6 +82,12 @@ const PUBLISHED = {
           at: "2026-11-11T01:00:00Z",
         },
       ],
+      observation: {
+        metrics: {
+          waveHeight: wave("m", 1.2, minutesAgo(2), "delayed"),
+          wavePeriod: wave("s", null, null, "none"),
+        },
+      },
     },
   },
 };
@@ -402,6 +435,47 @@ test("목록: 탭·별칭 찾기·지역(지리순)·특보 구역·페이징·�
   await expect(page).not.toHaveURL(/\bq=/);
   await expect(page.getByLabel("해변 찾기")).toHaveValue("");
   await expect(page.getByText("222건 중 1–11")).toBeVisible();
+  await expectNoA11yViolations(page);
+});
+
+test("파고·파주기·측정은 게시값 그대로이고, 지연은 글로도 알리며 측정소 없음·틀린 칸은 값을 지어내지 않는다(#502)", async ({
+  page,
+}) => {
+  await mockPublished(page);
+  await signIn(page, ["viewer"]);
+  await openBeaches(page);
+  const search = page.getByLabel("해변 찾기");
+
+  await search.fill("강문");
+  const fresh = beachRow(page, "강문해수욕장");
+  await expect(fresh).toContainText("0.6m");
+  await expect(fresh).not.toContainText("연결됨");
+  if (isMobile(page)) {
+    await expect(fresh).toContainText("파고 0.6m");
+  } else {
+    await expect(fresh).toContainText("8초");
+    await expect(fresh).toContainText(/\d{2}:\d{2}/);
+  }
+
+  await search.fill("사천진");
+  const delayed = beachRow(page, "사천진해수욕장");
+  if (isMobile(page)) {
+    await expect(delayed).toContainText("파고 1.2m · 지연");
+  } else {
+    await expect(delayed).toContainText("1.2m");
+    await expect(delayed).toContainText(/\d{2}:\d{2} · 지연/);
+    // 파주기 측정소 없음은 '—'로 보이고 이름으로 읽힘
+    await expect(delayed.getByLabel("가까운 관측 없음")).toHaveCount(1);
+  }
+
+  await search.fill("경포");
+  const blocked = beachRow(page, "경포해수욕장");
+  await expect(blocked).toContainText("1.8m");
+  if (!isMobile(page)) {
+    // 파주기 칸 모양이 틀림 → 그 칸만 '확인 못 함'
+    await expect(blocked).toContainText("확인 못 함");
+  }
+  await narrowForAxe(page);
   await expectNoA11yViolations(page);
 });
 
