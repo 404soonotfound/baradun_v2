@@ -178,8 +178,10 @@ export class OpsAlarms extends Construct {
       evaluationPeriods: WEATHER_ALARM.periods,
       datapointsToAlarm: WEATHER_ALARM.periods,
       treatMissingData: cloudwatch.TreatMissingData.BREACHING,
-      alarmDescription:
-        "날씨 수집이 3시간 넘게 실패하거나 돌지 않음. 사유는 CloudWatch 로그의 reason. 단기예보는 발표 12시간 뒤 화면에서 '확인하지 못했어요'가 됨(특보·분류에는 영향 없음)",
+      // 시간은 경보 조건(주기 × 횟수)에서 계산함. 조건을 바꾸면 이 설명만 같이 바뀜
+      // 직접 적은 곳은 손으로 고침: 알림 메일 판정 문구(services/src/ops/alarm-notification.ts),
+      //   운영자 화면 지연 기준(services/src/admin/collection.ts LATE_AFTER_MINUTES), infra/README.md
+      alarmDescription: `날씨 수집이 ${(WEATHER_ALARM.periodMinutes * WEATHER_ALARM.periods) / 60}시간 넘게 실패하거나 돌지 않음. 사유는 CloudWatch 로그의 reason. 단기예보는 발표 12시간 뒤 화면에서 '확인하지 못했어요'가 됨(특보·분류에는 영향 없음)`,
     });
     this.alarms.push(alarm);
   }
