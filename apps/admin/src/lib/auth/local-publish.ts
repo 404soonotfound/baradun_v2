@@ -174,6 +174,21 @@ function overview(): PublishOverview {
           title: "(로컬 예시) 데이터 출처 안내",
           startsAt: iso(base - 60 * MINUTE),
           endsAt: null,
+          updatedAt: iso(base - 15 * MINUTE),
+          after: {
+            id: "n-local-new",
+            kind: "general",
+            title: {
+              ko: "(로컬 예시) 데이터 출처 안내",
+              en: "Data source notice",
+            },
+            body: {
+              ko: "데이터 출처 화면에서 제공처를 확인할 수 있어요",
+              en: "See the data sources page for providers.",
+            },
+            startsAt: iso(base - 60 * MINUTE),
+            endsAt: null,
+          },
         },
       ],
     },
