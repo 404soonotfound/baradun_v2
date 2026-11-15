@@ -14,7 +14,7 @@ function fail(message) {
 
 const args = process.argv.slice(2);
 const profileAt = args.indexOf("--profile");
-let profile = process.env.AWS_PROFILE ?? "soo-login";
+let profile = process.env.AWS_PROFILE ?? "baradun-sso";
 if (profileAt >= 0) {
   profile = args[profileAt + 1];
   if (!profile || profile.startsWith("--"))
@@ -62,7 +62,7 @@ const aws = (cmdArgs) => {
   if (result.status !== 0) {
     process.stderr.write(result.stderr ?? "");
     fail(
-      `aws ${cmdArgs.slice(0, 2).join(" ")} 실패. 로그인이 필요하면: aws login --profile ${profile}`,
+      `aws ${cmdArgs.slice(0, 2).join(" ")} 실패. 로그인이 필요하면: aws sso login --profile ${profile} (Identity Center 프로필이 아니면 그 프로필의 방식으로 로그인)`,
     );
   }
   return result.stdout;
