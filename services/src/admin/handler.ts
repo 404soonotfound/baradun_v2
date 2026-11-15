@@ -59,9 +59,11 @@ import {
   INQUIRY_PAGE_MAX,
   inquiryAuditChanges,
   inquiryPatchFields,
+  listFilteredInquiries,
   listInquiries,
   parseInquiryPatch,
 } from "./inquiries";
+import { inquiryFilterScope, parseInquiryFilters } from "./inquiry-list";
 import {
   createNoticeRoute,
   deleteNoticeRoute,
@@ -128,6 +130,7 @@ export interface DataDependencies {
   // GA4 이용 통계 읽기(#333 ADM-STATS). 없으면 configured: false 안내
   readonly stats?: StatsReader | null;
   readonly siteDeploy?: SiteDeployReader | null;
+  readonly inquiryBeachSearch?: (id: string, query: string) => boolean;
 }
 
 export interface OpsDependencies {
@@ -138,7 +141,7 @@ export interface OpsDependencies {
 
 type Result = APIGatewayProxyStructuredResultV2;
 
-// GET /ops/inquiries?status=&cursor=&limit=
+// GET /ops/inquiries?status=&cursor=&limit=&q=&type=&beachId=&from=&to=&preview=
 async function listRoute(
   event: APIGatewayProxyEventV2,
   principal: Principal,
@@ -155,26 +158,63 @@ async function listRoute(
   if (!Number.isInteger(limit) || limit < 1 || limit > INQUIRY_PAGE_MAX) {
     return errorJson(400, "invalid_request", ids, { field: "limit" });
   }
+  const parsed = parseInquiryFilters(params);
+  if ("invalid" in parsed) {
+    return errorJson(400, "invalid_request", ids, { field: parsed.invalid });
+  }
+  const { filters } = parsed;
+  const audience =
+    principal.kind === "sample"
+      ? "sample"
+      : principal.role === "viewer"
+        ? "viewer"
+        : "operator";
+  const scope = inquiryFilterScope(filters, status, audience);
   const cursor =
     params.cursor === undefined ? undefined : decodeCursor(params.cursor);
   // 다른 상태 목록의 cursor를 섞어 쓰지 않게 함
   // 상태를 고른 목록은 키가 있는 cursor만 받음(전체 목록의 '다음 상태부터' cursor는 처음부터 다시 읽게 되어 중복)
   if (
     cursor === null ||
+    (cursor && cursor.f !== scope) ||
     (cursor && status && (cursor.s !== status || !cursor.k))
   ) {
     return errorJson(400, "invalid_request", ids, { field: "cursor" });
   }
-  if (principal.kind === "sample") {
-    return json(200, sampleInquiryPage(status, data.now()), ids);
-  }
   const now = data.now();
-  const page = await listInquiries(
-    data.client,
-    data.inquiryTable,
-    { ...(status ? { status } : {}), ...(cursor ? { cursor } : {}), limit },
-    now,
-  );
+  const query = {
+    limit,
+    ...(status ? { status } : {}),
+    ...(cursor ? { cursor } : {}),
+  };
+  if (principal.kind === "sample") {
+    return json(
+      200,
+      sampleInquiryPage(status, now, {
+        query,
+        filters,
+        scope,
+        ...(data.inquiryBeachSearch
+          ? { beachSearch: data.inquiryBeachSearch }
+          : {}),
+      }),
+      ids,
+    );
+  }
+  if (scope) {
+    const page = await listFilteredInquiries(
+      data.client,
+      data.inquiryTable,
+      query,
+      filters,
+      scope,
+      principal.role,
+      now,
+      data.inquiryBeachSearch,
+    );
+    return json(200, page, ids);
+  }
+  const page = await listInquiries(data.client, data.inquiryTable, query, now);
   // 상태 탭의 문의 수는 첫 쪽에만 실음(다음 쪽마다 다시 세지 않음). 상태 GSI 읽기 용량이 작아 목록 뒤에 차례로 읽음
   const counts = cursor
     ? undefined
@@ -561,6 +601,20 @@ async function dispatchOps(
     // 허용표에는 있지만 처리가 없는 경로(표와 코드가 어긋남)
     return errorJson(404, "not_found", ids);
   } catch (error) {
+    const name = error instanceof Error ? error.name : "unknown";
+    const inquiryReadThrottled =
+      method === "GET" &&
+      path === "/ops/inquiries" &&
+      (name === "ProvisionedThroughputExceededException" ||
+        name === "ThrottlingException" ||
+        name === "RequestLimitExceeded");
+    if (inquiryReadThrottled) {
+      safeLog("warn", "ops_inquiry_read_throttled", {
+        traceId: ids.traceId,
+        error: name,
+      });
+      return errorJson(503, "internal", ids);
+    }
     safeLog("error", "ops_failed", {
       path,
       method,
