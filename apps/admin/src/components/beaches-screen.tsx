@@ -182,41 +182,43 @@ function OptionFilterMenu({
 
   return (
     <div ref={box} className="relative">
-      {value === null ? (
+      {/* 선택·해제 뒤에도 트리거 button DOM을 유지해 키보드 포커스가 빠지지 않게 함 */}
+      <div className={value === null ? "inline-flex" : CHIP_ACTIVE_BOX}>
         <button
           ref={trigger}
           type="button"
           aria-expanded={open}
           onClick={() => setOpen((v) => !v)}
-          className={CHIP_IDLE}
+          className={
+            value === null
+              ? CHIP_IDLE
+              : "flex h-full items-center px-2.5 hover:bg-brand-border/20"
+          }
         >
-          <Plus size={14} aria-hidden="true" />
-          {filterLabel}
+          {value === null ? (
+            <>
+              <Plus size={14} aria-hidden="true" />
+              {filterLabel}
+            </>
+          ) : (
+            activeLabel
+          )}
         </button>
-      ) : (
-        <div className={CHIP_ACTIVE_BOX}>
-          <button
-            ref={trigger}
-            type="button"
-            aria-expanded={open}
-            onClick={() => setOpen((v) => !v)}
-            className="flex h-full items-center px-2.5 hover:bg-brand-border/20"
-          >
-            {activeLabel}
-          </button>
+        {value !== null && (
           <button
             type="button"
             aria-label={fill(t.clearFilter, { label: filterLabel })}
             onClick={() => {
               onChange(null);
               setOpen(false);
+              trigger.current?.focus();
             }}
             className="flex h-full items-center border-l border-brand-border px-2 hover:bg-brand-border/20"
           >
             <X size={13} aria-hidden="true" />
           </button>
-        </div>
-      )}
+        )}
+      </div>
       {open && (
         <div
           role="group"
@@ -544,13 +546,16 @@ function BeachesBody({ beaches }: { beaches: readonly BeachSummary[] }) {
     () => parseBeachQuery(searchParams),
     [searchParams],
   );
-  // 빠른 입력에서 키 입력이 빠지지 않게 URL 반영 전 입력값을 잠시 유지함
-  const [editingQ, setEditingQ] = useState<{
-    base: string;
-    value: string;
-  } | null>(null);
-  const activeQ =
-    editingQ && editingQ.base === queryState.q ? editingQ.value : queryState.q;
+  // 빠른 입력에서 키 입력이 빠지지 않게 URL 반영 전 입력값만 잠시 유지하고, URL이 따라오거나 뒤로 가기 시 비움
+  const [prevQ, setPrevQ] = useState(queryState.q);
+  const [draftQ, setDraftQ] = useState<string | null>(null);
+  if (prevQ !== queryState.q) {
+    setPrevQ(queryState.q);
+    if (draftQ !== null && queryState.q === draftQ) {
+      setDraftQ(null);
+    }
+  }
+  const activeQ = draftQ ?? queryState.q;
 
   // 연속 클릭 때 Next 라우터 반영 전 queryState로 덮어쓰지 않게 마지막 요청 상태를 함께 봄
   const pendingQueryRef = useRef<{
@@ -568,6 +573,7 @@ function BeachesBody({ beaches }: { beaches: readonly BeachSummary[] }) {
   useEffect(() => {
     const onPopState = () => {
       pendingQueryRef.current = null;
+      setDraftQ(null);
     };
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
@@ -652,7 +658,7 @@ function BeachesBody({ beaches }: { beaches: readonly BeachSummary[] }) {
     queryState.zone !== null;
 
   const resetFilters = () => {
-    setEditingQ(null);
+    setDraftQ(null);
     pushState((prev) => ({
       tab: "all",
       q: "",
@@ -733,7 +739,7 @@ function BeachesBody({ beaches }: { beaches: readonly BeachSummary[] }) {
             placeholder={t.searchPlaceholder}
             onChange={(e) => {
               const nextQ = e.target.value;
-              setEditingQ({ base: queryState.q, value: nextQ });
+              setDraftQ(nextQ);
               pushState(
                 (prev) => ({ ...prev, q: nextQ, page: 0 }),
                 true,
