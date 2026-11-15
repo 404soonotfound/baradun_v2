@@ -170,6 +170,12 @@ describe("운영 경보 (BRD-62)", () => {
     expect(WEATHER_ALARM.periodMinutes).toBe(
       COLLECT_POLICY.weatherSchedule.periodMinutes,
     );
+    // 설명의 시간은 경보 조건에서 계산함. 시간 단위로 떨어지지 않으면 소수가 설명에 나감
+    const minutes = WEATHER_ALARM.periodMinutes * WEATHER_ALARM.periods;
+    expect(minutes % 60).toBe(0);
+    expect(a.Properties.AlarmDescription).toContain(
+      `날씨 수집이 ${minutes / 60}시간 넘게`,
+    );
   });
 
   it("심장박동은 빈 구간을 0으로 채워 지난 실행이 최근 빈 구간을 대신하지 않는다", () => {
