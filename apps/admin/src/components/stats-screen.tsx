@@ -627,7 +627,9 @@ function StatsBody({
       : t.rangeLabel[range];
   const unconfigured = data?.configured === false;
   const unavailable = trendUnavailable(trends);
-  const periodMissingText = unconfigured ? t.notProvided : t.subReportUnavailable;
+  const periodMissingText = unconfigured
+    ? t.unconfiguredCard
+    : t.subReportUnavailable;
   const daily = trends?.daily?.rows ?? null;
   const dailyRows = (pick: "activeUsers" | "pageViews") =>
     daily?.map((d) => ({
