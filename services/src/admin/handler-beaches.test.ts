@@ -164,13 +164,76 @@ describe("지금 표시 상태 GET /ops/beaches/published", () => {
       Object.keys(source).sort(),
     );
     for (const [id, beach] of Object.entries(source)) {
-      const { category, reasons, validUntil } = beach as {
+      const { category, reasons, validUntil, observation } = beach as {
         category: string;
         reasons: unknown;
         validUntil: string;
+        observation: { metrics: Record<string, Record<string, unknown>> };
       };
-      expect(body.beaches[id]).toEqual({ category, reasons, validUntil });
+      const metrics = Object.fromEntries(
+        ["waveHeight", "wavePeriod"].map((name) => {
+          const { value, state, observedAt, unit } = observation.metrics[name]!;
+          return [name, { value, state, observedAt, unit }];
+        }),
+      );
+      expect(body.beaches[id]).toEqual({
+        category,
+        reasons,
+        validUntil,
+        observation: { metrics },
+      });
     }
+  });
+
+  it("지연·측정소 없음 관측은 게시값 그대로 두고, 관측이 빠지거나 틀리면 읽지 않는다", async () => {
+    const read = (status: unknown) =>
+      readBeachStatus(
+        snapshots({
+          "data/manifest.json": MANIFEST,
+          [STATUS_PATH]: JSON.stringify(status),
+        }),
+      );
+    const status = JSON.parse(STATUS);
+    status.beaches.b0001.observation.metrics.waveHeight.state = "delayed";
+    status.beaches.b0002.observation.metrics.wavePeriod = {
+      value: null,
+      unit: "s",
+      observedAt: null,
+      state: "none",
+      nextExpectedAt: null,
+      expiresAt: null,
+    };
+    const view = await read(status);
+    if (!view.available) throw new Error(view.reason);
+    expect(view.beaches.b0001!.observation.metrics.waveHeight).toMatchObject({
+      state: "delayed",
+    });
+    expect(view.beaches.b0002!.observation.metrics.wavePeriod).toEqual({
+      value: null,
+      unit: "s",
+      observedAt: null,
+      state: "none",
+    });
+
+    // 관측 결측을 '값 없음'으로 넘기지 않음: 계약을 어긴 게시본으로 봄
+    const missing = JSON.parse(STATUS);
+    delete missing.beaches.b0001.observation.metrics.wavePeriod;
+    expect(await read(missing)).toEqual({
+      available: false,
+      reason: "status_invalid",
+    });
+    const noObservation = JSON.parse(STATUS);
+    delete noObservation.beaches.b0094.observation;
+    expect(await read(noObservation)).toEqual({
+      available: false,
+      reason: "status_invalid",
+    });
+    const wrong = JSON.parse(STATUS);
+    wrong.beaches.b0001.observation.metrics.waveHeight.value = "0.6";
+    expect(await read(wrong)).toEqual({
+      available: false,
+      reason: "status_invalid",
+    });
   });
 
   it("manifest가 점검 중이면 점검·끝나는 시각을 같이 돌려주고 분류는 그대로 둔다", async () => {

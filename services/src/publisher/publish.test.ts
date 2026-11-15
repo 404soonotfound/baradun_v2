@@ -1,6 +1,7 @@
 import type { Beach, ManifestFile, StatusFile } from "@baradun/contracts";
 import { describe, expect, it } from "vitest";
 import { createLogger } from "../core/collect/log";
+import { FAILURE_PATH } from "../core/collect/publish-summary";
 import { MemorySnapshotStore } from "../core/snapshots/memory";
 import { MemoryOpsStore, MemoryStateStore } from "../core/store/memory";
 import {
@@ -278,7 +279,9 @@ describe("publishSnapshot", () => {
   });
 
   it("계약을 통과하지 못하면 아무 파일도 쓰지 않음", async () => {
-    const { state, snapshots, deps, events } = await setup({ seed: false });
+    const { state, snapshots, deps, ops, events } = await setup({
+      seed: false,
+    });
     await seedWarnings(state, [HEAVY_RAIN_ROW]);
     await seedReadings(state, "0.5"); // 측정값이 글자 → 계약 위반
     expect(await publishSnapshot(deps())).toEqual({
@@ -288,6 +291,26 @@ describe("publishSnapshot", () => {
     });
     expect(snapshots.files.size).toBe(0);
     expect(events().at(-1)).toMatchObject({ reason: "contract" });
+    const details = ops.lastRun!.failureDetails;
+    expect(details).toMatchObject({
+      kind: "contract",
+      errorCount: expect.any(Number),
+    });
+    if (details?.kind !== "contract") throw new Error("검증 경로 없음");
+    expect(details.paths.length).toBeGreaterThan(0);
+    expect(details.paths.length).toBeLessThanOrEqual(5);
+    expect(
+      details.paths.every(
+        (path) => FAILURE_PATH.test(path) && path.length <= 128,
+      ),
+    ).toBe(true);
+    // 어느 해변의 어느 칸이 틀렸는지 데이터 위치로 남김(값은 넣지 않음)
+    expect(details.paths).toContainEqual(
+      expect.stringMatching(
+        /^StatusFile:\/beaches\/b\d{4}\/observation\/metrics\/waveHeight\/value:type$/,
+      ),
+    );
+    expect(details.paths.join()).not.toContain("0.5");
   });
 
   it("해변 분류가 멈추면 게시하지 않고 로그에 해변 id와 slug를 함께 남김", async () => {
@@ -1427,6 +1450,15 @@ describe("해변 ID 대조 (D16-C1)", () => {
       expect(first.snapshots.files.get(MANIFEST_PATH)!.body).toBe(before);
       expect(await first.snapshots.listVersions()).toEqual([V1]);
       expect(await first.ops.getPublishedVersion()).toBe(V1);
+      expect(first.ops.lastRun).toMatchObject({
+        failureDetails: {
+          kind: "beach_ids",
+          where: "source",
+          missingCount: "missing" in problem ? problem.missing.length : 0,
+          extraCount: "extra" in problem ? problem.extra.length : 0,
+          duplicateCount: "duplicate" in problem ? problem.duplicate.length : 0,
+        },
+      });
       expect(second.events().at(-1)).toMatchObject({
         event: "publish_failed",
         reason: "beach_ids",
@@ -1477,6 +1509,7 @@ describe("게시 실행 결과 (D16-C2)", () => {
       failOn: (path) => failing && path === MANIFEST_PATH,
     });
     await publishSnapshot(deps());
+    expect(ops.summaries.get(V1)).toMatchObject({ sequence: 1 });
     expect(ops.lastRun).toEqual({
       at: NOW,
       sequence: 1,
