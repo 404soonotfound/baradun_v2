@@ -762,7 +762,14 @@ export function pendingNoticeDiff(
   formatTime: (iso: string) => string,
   openEndLabel: string,
   beforeKindLabel?: string,
-): { lines: DiffLine[]; added: number; removed: number; hasBefore: boolean } {
+): {
+  lines: DiffLine[];
+  added: number;
+  removed: number;
+  hasBefore: boolean;
+  // 제목 영어·본문까지 견줬는지(false면 예전 서버의 4줄 비교)
+  full: boolean;
+} {
   const after = isFullNotice(notice.after) ? notice.after : null;
   const full =
     after !== null &&
@@ -801,7 +808,7 @@ export function pendingNoticeDiff(
         });
   if (notice.change === "update" && isValidNoticeBefore(notice.before)) {
     const beforeRows = rowsOf(beforeKindLabel ?? kindLabel, notice.before);
-    return { ...diffRows(beforeRows, afterRows), hasBefore: true };
+    return { ...diffRows(beforeRows, afterRows), hasBefore: true, full };
   }
   const afterRaw = afterRows.map((row) => row.text);
   const isRemove = notice.change === "remove";
@@ -816,5 +823,6 @@ export function pendingNoticeDiff(
     added: isRemove ? 0 : lines.length,
     removed: isRemove ? lines.length : 0,
     hasBefore: false,
+    full,
   };
 }
