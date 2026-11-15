@@ -9,6 +9,7 @@ import {
   isReceivedFilterActive,
   isReceivedRangeInvalid,
   receivedRangeMs,
+  receivedRangeProblem,
 } from "./inquiries";
 
 // 문의 화면 조건 → 서버 필터 요청 (#502, 서버 #491)
@@ -47,6 +48,13 @@ describe("receivedRangeMs", () => {
     expect(new Date(custom.toMs!).toISOString()).toBe(
       "2026-11-03T14:59:59.999Z",
     );
+    expect(
+      receivedRangeProblem({
+        preset: "custom",
+        from: "2026-11-03T10:00",
+        to: "2026-11-03T09:00",
+      }),
+    ).toBe("order");
     expect(receivedRangeMs({ preset: "custom", from: " " }, NOW)).toEqual({
       fromMs: null,
       toMs: null,
@@ -56,10 +64,26 @@ describe("receivedRangeMs", () => {
       receivedRangeMs({ preset: "custom", to: "2026-11-03T09:00:30" }, NOW)!
         .toMs,
     ).toBe(Date.parse("2026-11-03T00:00:30.999Z"));
+    // 소수 초(datetime-local 값 형식)는 그 밀리초까지
+    expect(
+      receivedRangeMs(
+        {
+          preset: "custom",
+          from: "2026-11-03T09:00:00.5",
+          to: "2026-11-03T09:00:00.250",
+        },
+        NOW,
+      ),
+    ).toEqual({
+      fromMs: Date.parse("2026-11-03T00:00:00.500Z"),
+      toMs: Date.parse("2026-11-03T00:00:00.250Z"),
+    });
   });
 
   it.each([
     ["5자리 연도", "20260-11-03T10:00"],
+    ["1000년 미만(입력 도중 값)", "0002-11-15T10:00"],
+    ["소수 초 4자리", "2026-11-03T09:00:00.1234"],
     ["없는 달", "2026-13-01"],
     ["달력에 없는 날(다음 달로 넘기지 않음)", "2026-02-31"],
     ["없는 시각", "2026-11-03T24:00"],
@@ -74,6 +98,10 @@ describe("receivedRangeMs", () => {
       ).toBeNull();
       expect(isReceivedRangeInvalid({ preset: "custom", from: bad })).toBe(
         true,
+      );
+      // 화면이 '시작이 끝보다 늦음'이 아닌 형식 안내를 고를 수 있게 이유를 나눔
+      expect(receivedRangeProblem({ preset: "custom", from: bad })).toBe(
+        "format",
       );
       // 조건 없음이 되지 않고 켜진 조건으로 남아 안내가 보임
       expect(isReceivedFilterActive({ preset: "custom", from: bad })).toBe(
