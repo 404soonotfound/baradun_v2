@@ -1277,6 +1277,7 @@
     "paramRange": "호출마다 정하는 한국 날짜",
     "requestTitle": "요청 형식",
     "codesTitle": "결과 코드 처리",
+    "codeColumn": "resultCode",
     "codeHandling": "처리",
     "codeSuccess": "응답 형식과 행 수를 확인해 정상 처리",
     "codeTsunamiNone": "발표 없음 확인",

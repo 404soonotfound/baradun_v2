@@ -750,7 +750,7 @@ function WarningRequest({ call }: { call: SourceCall }) {
         <thead>
           <tr>
             <th scope="col" className="p-1">
-              resultCode
+              {t.codeColumn}
             </th>
             <th scope="col" className="p-1">
               {t.codeHandling}
