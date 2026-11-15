@@ -1,13 +1,16 @@
 import { describe, expect, it } from "vitest";
 import { localSourcesView } from "./auth/local-sources";
+import type { CollectionView } from "./collection";
 import {
   keyNames,
   keyState,
   kstClock,
   latestState,
   monthRanges,
+  resolveCollectionState,
   scheduleSlots,
   validSources,
+  type CollectionSlot,
   type SourcesView,
   type SourceView,
 } from "./sources";
@@ -190,5 +193,88 @@ describe("keyState", () => {
   });
   it("샘플 계정은 보여 주지 않음", () => {
     expect(keyState(withKey({}, true), "data-go-kr")).toBe("hidden");
+  });
+});
+
+describe("resolveCollectionState", () => {
+  const sampleView = {
+    generatedAt: "2026-11-10T06:00:00Z",
+  } as unknown as CollectionView;
+
+  it("로그아웃 상태면 값도 자리표시도 비움", () => {
+    const slot: CollectionSlot = {
+      key: "0|1",
+      generation: 1,
+      view: sampleView,
+    };
+    expect(
+      resolveCollectionState(slot, {
+        signedIn: false,
+        generation: 1,
+        key: "0|1",
+      }),
+    ).toEqual({ view: null, pending: false });
+  });
+
+  it("첫 읽기와 다시 읽기·실패 뒤 재시도 분기를 구분함", () => {
+    expect(
+      resolveCollectionState(null, {
+        signedIn: true,
+        generation: 1,
+        key: "0|1",
+      }),
+    ).toEqual({ view: null, pending: true });
+
+    const okSlot: CollectionSlot = {
+      key: "0|1",
+      generation: 1,
+      view: sampleView,
+    };
+    expect(
+      resolveCollectionState(okSlot, {
+        signedIn: true,
+        generation: 1,
+        key: "0|1",
+      }),
+    ).toEqual({ view: sampleView, pending: false });
+
+    // 성공 뒤 새로 고침 중에는 직전 값을 유지하고 자리표시로 덮지 않음(D16-E1)
+    expect(
+      resolveCollectionState(okSlot, {
+        signedIn: true,
+        generation: 1,
+        key: "1|1",
+      }),
+    ).toEqual({ view: sampleView, pending: false });
+
+    // 실패로 끝난 뒤(null) 다시 새로 고침하면 자리표시로 전환
+    const failedSlot: CollectionSlot = {
+      key: "1|1",
+      generation: 1,
+      view: null,
+    };
+    expect(
+      resolveCollectionState(failedSlot, {
+        signedIn: true,
+        generation: 1,
+        key: "1|1",
+      }),
+    ).toEqual({ view: null, pending: false });
+    expect(
+      resolveCollectionState(failedSlot, {
+        signedIn: true,
+        generation: 1,
+        key: "2|1",
+      }),
+    ).toEqual({ view: null, pending: true });
+
+    // 세션 generation이 바뀌면 이전 세션 값을 지우고 다시 읽음
+    expect(
+      resolveCollectionState(okSlot, {
+        signedIn: true,
+        generation: 2,
+        key: "0|2",
+      }),
+    ).toEqual({ view: null, pending: true });
   });
 });
