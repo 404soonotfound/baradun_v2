@@ -1992,3 +1992,114 @@ test("로딩(L6): 세션 확인 중(로그인 전)에는 자리표시가 보이�
   releaseRefresh();
   await expect(page.getByText("현재 게시본").first()).toBeVisible();
 });
+
+test("로딩(L6): 목록 재조회·변경 미리보기·되돌리기 미리보기 5초 느림 안내와 15초 시간 초과 재시도", async ({
+  page,
+}) => {
+  await page.clock.install();
+  let holdOverview = false;
+  let holdPreview = true;
+  let holdRollback = true;
+  await signIn(page);
+  await mockPublish(page);
+  await page.route(/\/ops\/publish$/, async (route: Route) => {
+    if (holdOverview) {
+      await new Promise<void>(() => {});
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(overview()),
+    });
+  });
+  await page.route(/\/ops\/publish\/preview$/, async (route: Route) => {
+    if (holdPreview) {
+      await new Promise<void>(() => {});
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        ok: true,
+        preview: {
+          status: "ready",
+          at: iso(base + 4 * MINUTE),
+          current: { version: V0, counts, readable: true, missing: false },
+          next: { counts },
+          changed: [],
+          changedCount: 0,
+          checks: { beachIds: null, expected: 206, contractErrors: 0 },
+        },
+      }),
+    });
+  });
+  await page.route(
+    /\/ops\/publish\/rollback-preview(\?.*)?$/,
+    async (route: Route) => {
+      if (holdRollback) {
+        await new Promise<void>(() => {});
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          available: true,
+          version: V1,
+          items: [
+            { id: "n-maint", change: "restore", title: "새벽 점검 예고" },
+          ],
+        }),
+      });
+    },
+  );
+
+  await openPublish(page);
+
+  // 변경 미리보기 15초 시간 초과 뒤 다시 시도
+  await page.getByRole("button", { name: "변경 미리보기" }).click();
+  const drawer = page.getByRole("dialog", { name: "변경 미리보기" });
+  await expect(drawer).toBeVisible();
+  await page.clock.fastForward(15_500);
+  await expect(drawer.getByRole("alert")).toContainText(
+    "응답이 15초 넘게 오지 않았어요",
+  );
+  holdPreview = false;
+  await drawer.getByRole("button", { name: "다시 시도" }).click();
+  await expect(drawer).toContainText("해변 앱 표시는 그대로예요");
+  await drawer.getByRole("button", { name: "닫기" }).first().click();
+
+  // 되돌리기 미리보기 5초 느림 안내와 15초 시간 초과 재시도
+  await history(page)
+    .nth(2)
+    .getByRole("button", { name: /되돌리기/ })
+    .click();
+  const rollbackDialog = page.getByRole("dialog", {
+    name: /게시본으로 되돌릴까요\?/,
+  });
+  await expect(rollbackDialog).toBeVisible();
+  await page.clock.fastForward(5_200);
+  await expect(
+    rollbackDialog.getByText(/평소보다 오래 걸려요/).first(),
+  ).toBeVisible();
+  await page.clock.fastForward(10_500);
+  await expect(rollbackDialog.getByRole("alert")).toContainText(
+    "응답이 15초 넘게 오지 않았어요",
+  );
+  holdRollback = false;
+  await rollbackDialog.getByRole("button", { name: "다시 시도" }).click();
+  await expect(rollbackDialog).toContainText('공지 "새벽 점검 예고" 그때 문구로');
+  await rollbackDialog.getByRole("button", { name: "취소" }).click();
+
+  // 다시 적용 뒤 게시 현황 재조회 5초 느림 안내
+  holdOverview = true;
+  await page.getByRole("button", { name: "다시 적용" }).click();
+  await page
+    .getByRole("dialog", { name: /다시 적용할까요\?/ })
+    .getByRole("button", { name: "다시 적용" })
+    .click();
+  await expect(
+    page.getByRole("status").filter({ hasText: "다시 읽는 중" }),
+  ).toBeVisible();
+  await page.clock.fastForward(5_200);
+  await expect(page.getByText(/평소보다 오래 걸려요/).first()).toBeVisible();
+});

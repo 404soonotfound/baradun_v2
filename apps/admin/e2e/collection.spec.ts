@@ -759,3 +759,62 @@ test("로딩(L2·L8): 첫 진입 자리표시·5초 안내·15초 실패 재시�
   waiters.at(-1)?.();
   await expect(page.getByText("다시 읽는 중")).toHaveCount(0);
 });
+
+test("로딩(L8): 새로 고침 500·15초 시간 초과 시 열려 있던 시트는 닫되 마지막 받은 값을 유지한다", async ({
+  page,
+}) => {
+  await page.clock.install();
+  let mode: "ok" | "fail" | "hold" = "ok";
+  await page.route(/\/ops\/collection$/, async (route: Route) => {
+    if (mode === "hold") {
+      await new Promise<void>(() => {});
+    }
+    if (mode === "fail") {
+      await route.fulfill({
+        status: 500,
+        contentType: "application/json",
+        body: JSON.stringify({ error: { code: "internal", requestId: "req-col" } }),
+      });
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(VIEW),
+    });
+  });
+
+  await openCollection(page);
+  await expect(sourceRow(page, "기상청 해상 특보")).toContainText("정상");
+
+  // 장애 시트가 열린 상태에서 새로 고침이 500 실패
+  await page
+    .getByRole("region", { name: /장애 기록/ })
+    .getByRole("button", { name: /관측소 1곳 값이 빠짐/ })
+    .click();
+  await expect(page.getByRole("dialog")).toBeVisible();
+  mode = "fail";
+  await reloadBehindSheet(page);
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(
+    page.getByRole("alert").filter({ hasText: "수집 현황을 불러오지 못했어요" }),
+  ).toBeVisible();
+  await expect(page.getByText(/마지막으로 받은 값이에요/)).toBeVisible();
+  await expect(sourceRow(page, "기상청 해상 특보")).toContainText("정상");
+
+  // 15초 시간 초과에서도 마지막 받은 값을 유지하고 다시 시도로 복구
+  mode = "hold";
+  await page.getByRole("button", { name: "다시 시도" }).click();
+  await page.clock.fastForward(15_500);
+  const timeoutAlert = page
+    .getByRole("alert")
+    .filter({ hasText: "응답이 15초 넘게 오지 않았어요" });
+  await expect(timeoutAlert).toBeVisible();
+  await expect(page.getByText(/마지막으로 받은 값이에요/)).toBeVisible();
+  await expect(sourceRow(page, "기상청 해상 특보")).toContainText("정상");
+
+  mode = "ok";
+  await timeoutAlert.getByRole("button", { name: "다시 시도" }).click();
+  await expect(timeoutAlert).toHaveCount(0);
+  await expect(page.getByText(/마지막으로 받은 값이에요/)).toHaveCount(0);
+});
