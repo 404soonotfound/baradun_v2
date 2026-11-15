@@ -940,3 +940,62 @@ test("로딩: 공지 편집 직접 진입 자리표시와 15초 실패 재시도
     page.getByRole("heading", { name: "새벽 점검 예고", level: 1 }),
   ).toBeVisible();
 });
+
+test("로딩: 새 공지(?new=1) 새로고침 세션 확인 중에는 자리표시가 보이고 권한 필요 문구가 보이지 않는다", async ({
+  page,
+}) => {
+  const authTime = Math.floor(Date.now() / 1000) - 60;
+  let releaseRefresh!: () => void;
+  const refreshHeld = new Promise<void>((r) => {
+    releaseRefresh = r;
+  });
+  await mockCognito(
+    page,
+    srpScript({
+      email: OPS,
+      after: "tokens",
+      groups: ["publisher"],
+      authTime,
+    }),
+    (target) =>
+      target === "GetTokensFromRefreshToken"
+        ? {
+            body: {
+              AuthenticationResult: tokensFor(
+                OPS,
+                ["publisher"],
+                900,
+                authTime,
+              ),
+            },
+          }
+        : undefined,
+  );
+  await mockOps(page, ME_OK);
+  await page.route(/\/ops\/notices(\/.*)?$/, (route: Route) =>
+    route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({ items: ITEMS() }),
+    }),
+  );
+
+  await signInWithPassword(page, "/login/", OPS);
+  await expect(page.getByRole("heading", { name: "운영 홈" })).toBeVisible();
+
+  await page.route(/cognito-idp\./, async (route: Route) => {
+    const target = route.request().headers()["x-amz-target"] ?? "";
+    if (target.endsWith("GetTokensFromRefreshToken")) {
+      await refreshHeld;
+    }
+    await route.fallback();
+  });
+
+  await page.goto("/notices/?new=1", { waitUntil: "domcontentloaded" });
+  await expect(page.locator("main [aria-busy='true']").first()).toBeVisible();
+  await expect(page.getByText('"내용 편집" 권한이 필요해요')).toHaveCount(0);
+
+  releaseRefresh();
+  await expect(
+    page.getByRole("heading", { name: "새 공지", level: 1 }),
+  ).toBeVisible();
+});
