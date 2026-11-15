@@ -6,6 +6,13 @@ import {
   isInquiryStatus,
   type InquiryStatus,
 } from "../inquiry/policy";
+import {
+  matchesInquiryBeach,
+  matchesInquiryMessage,
+  matchesInquiryMetadata,
+  withInquiryPreview,
+  type InquiryFilters,
+} from "./inquiry-list";
 import type { OperatorRole } from "./policy";
 import type { Sender } from "./writes";
 
@@ -33,6 +40,8 @@ export interface InquirySummary {
   readonly type: string;
   readonly beachId?: string;
   readonly activity?: string;
+  readonly messagePreview?: string;
+  readonly messagePreviewUnavailableReason?: "restricted" | "empty";
   readonly receivedAt: string;
   readonly status: InquiryStatus;
   readonly version: number;
@@ -98,6 +107,7 @@ function toSummary(item: Raw): InquirySummary {
 interface CursorState {
   readonly s: InquiryStatus;
   readonly k?: Record<string, string>;
+  readonly f?: string;
 }
 
 export function encodeCursor(state: CursorState): string {
@@ -110,9 +120,15 @@ export function decodeCursor(cursor: string): CursorState | null {
       Buffer.from(cursor, "base64url").toString("utf8"),
     ) as unknown;
     if (typeof value !== "object" || value === null) return null;
-    const { s, k } = value as { s?: unknown; k?: unknown };
-    if (!isInquiryStatus(s)) return null;
-    if (k === undefined) return { s };
+    const { s, k, f } = value as { s?: unknown; k?: unknown; f?: unknown };
+    if (
+      !isInquiryStatus(s) ||
+      (f !== undefined && (typeof f !== "string" || !/^[a-f0-9]{64}$/.test(f)))
+    ) {
+      return null;
+    }
+    const state = { s, ...(f === undefined ? {} : { f }) };
+    if (k === undefined) return state;
     if (
       typeof k !== "object" ||
       k === null ||
@@ -124,7 +140,7 @@ export function decodeCursor(cursor: string): CursorState | null {
     ) {
       return null;
     }
-    return { s, k: k as Record<string, string> };
+    return { ...state, k: k as Record<string, string> };
   } catch {
     return null;
   }
@@ -135,6 +151,103 @@ export interface ListQuery {
   readonly status?: InquiryStatus;
   readonly cursor?: CursorState;
   readonly limit: number;
+}
+
+// 상태 GSI의 요약 후보 8개 또는 본문이 필요한 후보 4개를 한 쪽에서 조회함.
+// 찾은 행이 적어도 다음 cursor에서 이어 읽음. GSI는 1 RCU이며 기존 목록과 공유함.
+const FILTER_PAGE_MAX = 8;
+const BODY_PAGE_MAX = 4;
+
+export async function listFilteredInquiries(
+  client: Sender,
+  tableName: string,
+  query: ListQuery,
+  filters: InquiryFilters,
+  scope: string,
+  role: OperatorRole,
+  now: Date,
+  beachSearch = matchesInquiryBeach,
+): Promise<InquiryPage> {
+  const status = query.status ?? query.cursor?.s ?? INQUIRY_STATUSES[0];
+  const { from, to, q, preview } = filters;
+  const readBody = role !== "viewer" && (q !== undefined || preview === true);
+  const dateCondition =
+    from && to ? " BETWEEN :from AND :to" : from ? " >= :from" : " <= :to";
+  const result = await client.send(
+    new QueryCommand({
+      TableName: tableName,
+      IndexName: INQUIRY_STATUS_INDEX_NAME,
+      KeyConditionExpression:
+        "#s = :s" + (from || to ? ` AND #received${dateCondition}` : ""),
+      ExpressionAttributeNames: {
+        "#s": "inquiryStatus",
+        ...(from || to ? { "#received": "receivedAt" } : {}),
+      },
+      ExpressionAttributeValues: {
+        ":s": status,
+        ...(from ? { ":from": from } : {}),
+        ...(to ? { ":to": to } : {}),
+      },
+      ScanIndexForward: false,
+      Limit: Math.min(query.limit, readBody ? BODY_PAGE_MAX : FILTER_PAGE_MAX),
+      ...(query.cursor?.k ? { ExclusiveStartKey: query.cursor.k } : {}),
+    }),
+  );
+  const nowSec = Math.floor(now.getTime() / 1000);
+  const items: InquirySummary[] = [];
+  for (const raw of (result.Items ?? []) as Raw[]) {
+    if (!alive(raw, nowSec)) continue;
+    const item = toSummary(raw);
+    if (!matchesInquiryMetadata(item, filters)) continue;
+    const beachMatch =
+      q !== undefined &&
+      item.beachId !== undefined &&
+      beachSearch(item.beachId, q);
+    if (q !== undefined && !beachMatch && !readBody) continue;
+    if (readBody && (preview || !beachMatch)) {
+      const detail = await getInquiry(
+        client,
+        tableName,
+        item.inquiryId,
+        role,
+        now,
+      );
+      // GSI 반영 전 만료·상태 변경 또는 가림 처리 이전의 본문을 읽지 않음.
+      if (!detail || detail.status !== status) continue;
+      if (detail.restricted) {
+        if (q === undefined || beachMatch) {
+          items.push(
+            preview
+              ? { ...item, messagePreviewUnavailableReason: "restricted" }
+              : item,
+          );
+        }
+        continue;
+      }
+      const message = detail.message ?? "";
+      if (q !== undefined && !beachMatch && !matchesInquiryMessage(message, q))
+        continue;
+      items.push(preview ? withInquiryPreview(item, message) : item);
+    } else {
+      items.push(
+        preview && role === "viewer"
+          ? { ...item, messagePreviewUnavailableReason: "restricted" }
+          : item,
+      );
+    }
+  }
+  const lastKey = result.LastEvaluatedKey as Record<string, string> | undefined;
+  const nextStatus = query.status
+    ? undefined
+    : INQUIRY_STATUSES[INQUIRY_STATUSES.indexOf(status) + 1];
+  return {
+    items,
+    nextCursor: lastKey
+      ? encodeCursor({ s: status, k: lastKey, f: scope })
+      : nextStatus
+        ? encodeCursor({ s: nextStatus, f: scope })
+        : null,
+  };
 }
 
 export async function listInquiries(
