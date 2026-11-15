@@ -445,6 +445,7 @@ test("collection 응답이 늦는 동안 상세 KPI와 24시간 막대는 자리
   });
 
   await openSources(page);
+  await expect(page.getByText("최근 24시간 불러오는 중")).toBeAttached();
   // 목록의 판단 출처 24시간 막대는 collection 대기 중 자리표시를 쓰고 '확인 못 함'을 미리 노출하지 않음
   const judgment = page.getByRole("region", { name: /판단에 쓰는 출처/ });
   await expect(judgment.locator(".sk").first()).toBeVisible();
