@@ -1166,13 +1166,7 @@ const TIMEOUT_RESULT: OpsResult<SourcesView> = {
   requestId: null,
 };
 
-function SourcesListSkeleton({
-  cls,
-  slow,
-}: {
-  cls: string;
-  slow: boolean;
-}) {
+function SourcesListSkeleton({ cls, slow }: { cls: string; slow: boolean }) {
   const kpis = [
     t.kpiSources,
     t.kpiJudgment,
@@ -1205,7 +1199,10 @@ function SourcesListSkeleton({
         ))}
       </dl>
 
-      <section aria-labelledby="sources-judgment-sk" className="flex flex-col gap-2">
+      <section
+        aria-labelledby="sources-judgment-sk"
+        className="flex flex-col gap-2"
+      >
         <div>
           <h2 id="sources-judgment-sk" className="flex h-[22px] items-center">
             <SkLine className="h-[14px] w-36" />
@@ -1247,7 +1244,10 @@ function SourcesListSkeleton({
         {slow && <SlowNote className="mt-1" />}
       </section>
 
-      <section aria-labelledby="sources-reference-sk" className="flex flex-col gap-2">
+      <section
+        aria-labelledby="sources-reference-sk"
+        className="flex flex-col gap-2"
+      >
         <div>
           <h2 id="sources-reference-sk" className="flex h-[22px] items-center">
             <SkLine className="h-[14px] w-32" />
@@ -1321,7 +1321,10 @@ function SourcesListSkeleton({
         </ul>
       </section>
 
-      <section aria-labelledby="sources-keys-sk" className="flex flex-col gap-2">
+      <section
+        aria-labelledby="sources-keys-sk"
+        className="flex flex-col gap-2"
+      >
         <div>
           <h2
             id="sources-keys-sk"

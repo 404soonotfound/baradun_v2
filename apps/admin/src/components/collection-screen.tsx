@@ -2163,13 +2163,7 @@ function BarTracksSkeleton() {
   );
 }
 
-function CollectionSkeleton({
-  cls,
-  slow,
-}: {
-  cls: string;
-  slow: boolean;
-}) {
+function CollectionSkeleton({ cls, slow }: { cls: string; slow: boolean }) {
   const kpiLabels = [t.kpiSources, t.kpiWeek, t.kpiDelayed, t.kpiPublish];
   return (
     <div aria-busy="true" className={cls}>
@@ -2626,10 +2620,7 @@ function CollectionBody({ beaches }: { beaches: Beaches }) {
         <CollectionSkeleton cls={loadClass(timing)} slow={timing.slow} />
       )}
       {timedOut && (
-        <LoadFailed
-          className="mt-6"
-          onRetry={() => setAttempt((n) => n + 1)}
-        />
+        <LoadFailed className="mt-6" onRetry={() => setAttempt((n) => n + 1)} />
       )}
       {!timedOut && result && !result.ok && (
         <div className="mt-6">

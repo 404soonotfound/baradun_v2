@@ -602,13 +602,7 @@ function RowMenu({
   );
 }
 
-function NoticeListSkeleton({
-  cls,
-  slow,
-}: {
-  cls: string;
-  slow: boolean;
-}) {
+function NoticeListSkeleton({ cls, slow }: { cls: string; slow: boolean }) {
   const rows = ["w-36", "w-28", "w-40", "w-32", "w-36", "w-28"];
   return (
     <div aria-busy="true" className={`flex flex-col gap-3 ${cls}`}>
@@ -680,13 +674,7 @@ function NoticeListSkeleton({
   );
 }
 
-function NoticeEditorSkeleton({
-  cls,
-  slow,
-}: {
-  cls: string;
-  slow: boolean;
-}) {
+function NoticeEditorSkeleton({ cls, slow }: { cls: string; slow: boolean }) {
   return (
     <div aria-busy="true" className={`flex flex-col gap-4 ${cls}`}>
       {slow && <SlowNote />}
@@ -2439,21 +2427,27 @@ function NoticesBody() {
               />
             </>
           )}
-          {!editPlaceholder && id && timedOut && <LoadFailed onRetry={reload} />}
+          {!editPlaceholder && id && timedOut && (
+            <LoadFailed onRetry={reload} />
+          )}
           {!editPlaceholder && id && !timedOut && result && !result.ok && (
             <Failure title={t.listError} result={result} onRetry={reload} />
           )}
-          {!editPlaceholder && id && result?.ok && !notice && id !== created && (
-            <div className="flex flex-col items-start gap-2 py-6">
-              <p className="text-title-s font-semibold text-text-default">
-                {t.notFoundTitle}
-              </p>
-              <p className="text-body-s text-text-body">{t.notFoundBody}</p>
-              <Button variant="secondary" size="small" onClick={toList}>
-                {t.backToListAria}
-              </Button>
-            </div>
-          )}
+          {!editPlaceholder &&
+            id &&
+            result?.ok &&
+            !notice &&
+            id !== created && (
+              <div className="flex flex-col items-start gap-2 py-6">
+                <p className="text-title-s font-semibold text-text-default">
+                  {t.notFoundTitle}
+                </p>
+                <p className="text-body-s text-text-body">{t.notFoundBody}</p>
+                <Button variant="secondary" size="small" onClick={toList}>
+                  {t.backToListAria}
+                </Button>
+              </div>
+            )}
           {(creating || (notice && !editPlaceholder)) && (
             <NoticeEditor
               key={id ?? "new"}

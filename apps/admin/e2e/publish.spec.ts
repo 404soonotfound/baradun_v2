@@ -264,9 +264,7 @@ test("게시 현황: 현재 게시본·다음 자동 게시·대기 공지·되�
   await expect(
     page.getByText("확정한 공지 1 · 다음 게시 때 함께"),
   ).toBeVisible();
-  await expect(
-    page.getByText("실행은 바뀐 게 없어 건너뜀"),
-  ).toBeVisible();
+  await expect(page.getByText("실행은 바뀐 게 없어 건너뜀")).toBeVisible();
   await expect(page.getByText("최근 24시간", { exact: true })).toBeVisible();
   await expect(page.getByText("확인 못 함").first()).toBeVisible();
   await expect(
@@ -852,7 +850,9 @@ test("편집 권한(editor)은 데이터 게시를 볼 수 있지만 지금 게�
   await expect(page.getByRole("button", { name: "지금 게시" })).toBeDisabled();
   await expect(page.getByRole("button", { name: "다시 적용" })).toBeDisabled();
   await expect(
-    history(page).nth(2).getByRole("button", { name: /되돌리기/ }),
+    history(page)
+      .nth(2)
+      .getByRole("button", { name: /되돌리기/ }),
   ).toBeDisabled();
   await expect(
     page.getByText(
@@ -1089,7 +1089,9 @@ test("current·last24h 조회 실패(ok:false) 시 '확인 못 함'을 표시한
   await expect(page.getByText("서비스 점검 확인 못 함")).toBeVisible();
   await expect(page.getByText("최소 화면 버전 확인 못 함")).toBeVisible();
   await expect(
-    page.getByText("최근 24시간을 불러오지 못했어요 · 앱 사용자 화면에는 영향이 없어요"),
+    page.getByText(
+      "최근 24시간을 불러오지 못했어요 · 앱 사용자 화면에는 영향이 없어요",
+    ),
   ).toBeVisible();
   await expectNoA11yViolations(page);
 });
