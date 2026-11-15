@@ -48,6 +48,66 @@ export type PublishFailureDetails =
     }
   | { readonly kind: "classify"; readonly beachId: string };
 
+const isCount = (v: unknown): v is number =>
+  typeof v === "number" && Number.isSafeInteger(v) && v >= 0;
+
+// 화면에 보일 실패 요약. 실패한 실행이 아니거나, 사유(reason)와 종류가 다르거나, 모양이 틀리면 null
+// null이면 화면은 요약 없이 사유만 보여 줌(요약이 없다고 '문제 없음'으로 보이지 않게)
+// 경로 형식·개수·길이 상한은 서버(publish-reads.ts failureDetailsOf)가 검사해 틀린 요약을 빼므로 여기서 다시 두지 않음
+// (서버가 형식을 바꿔도 화면이 정상 요약을 버리지 않게 구조만 확인)
+export function failureDetailsOf(
+  run: Pick<HistoryItem, "result" | "reason" | "failureDetails">,
+): PublishFailureDetails | null {
+  const raw = run.failureDetails as unknown;
+  if (run.result !== "failed" || !raw || typeof raw !== "object") return null;
+  const d = raw as Record<string, unknown>;
+  if (d.kind !== run.reason) return null;
+  if (
+    d.kind === "beach_ids" &&
+    (d.where === "source" || d.where === "beaches" || d.where === "status") &&
+    isCount(d.missingCount) &&
+    isCount(d.extraCount) &&
+    isCount(d.duplicateCount)
+  ) {
+    const { where, missingCount, extraCount, duplicateCount } = d;
+    return {
+      kind: "beach_ids",
+      where,
+      missingCount,
+      extraCount,
+      duplicateCount,
+    };
+  }
+  if (
+    d.kind === "classify" &&
+    typeof d.beachId === "string" &&
+    /^b\d{4}$/.test(d.beachId)
+  ) {
+    return { kind: "classify", beachId: d.beachId };
+  }
+  if (
+    d.kind === "contract" &&
+    isCount(d.errorCount) &&
+    d.errorCount > 0 &&
+    Array.isArray(d.paths) &&
+    d.paths.length <= d.errorCount &&
+    d.paths.every((p) => typeof p === "string" && p !== "")
+  ) {
+    return {
+      kind: "contract",
+      errorCount: d.errorCount,
+      paths: d.paths as string[],
+    };
+  }
+  return null;
+}
+
+// 화면에 보일 게시 잠금 실행 순번(서버 runDetails와 같은 규칙: 1 이상 정수). 없거나 틀리면 null(순번 칸 비움)
+export function sequenceOf(run: Pick<HistoryItem, "sequence">): number | null {
+  const raw = run.sequence as unknown;
+  return isCount(raw) && raw > 0 ? raw : null;
+}
+
 // 서버가 새 값을 더해도 숨기지 않게 원인·결과는 넓게 받음
 export interface HistoryItem {
   // 게시 잠금 실행 순번. 예전 기록에는 없음
@@ -620,7 +680,82 @@ function isValidNoticeBefore(raw: unknown): raw is NoticeSnapshot {
   );
 }
 
+// 공지 전체 모양 검사(#499 after·before): 위 조건 + 제목 영어·본문 한·영이 문자열
+function isFullNotice(raw: unknown): raw is NoticeSnapshot {
+  if (!isValidNoticeBefore(raw)) return false;
+  const { title, body } = raw as unknown as {
+    title: Record<string, unknown>;
+    body: unknown;
+  };
+  return (
+    typeof title.en === "string" &&
+    body !== null &&
+    typeof body === "object" &&
+    typeof (body as Record<string, unknown>).ko === "string" &&
+    typeof (body as Record<string, unknown>).en === "string"
+  );
+}
+
+interface NoticeRow {
+  readonly group: number;
+  readonly line: number;
+  readonly text: string;
+}
+
+// 여러 줄 본문은 줄마다 한 줄로 나눔(한 문단만 바뀌면 그 줄만 바뀜으로 보임)
+function bodyRows(group: number, label: string, body: string): NoticeRow[] {
+  return body
+    .trim()
+    .split(/\r?\n/)
+    .map((line, i) => ({
+      group,
+      line: i,
+      text: `${label}: ${line.trimEnd()}`,
+    }));
+}
+
+// 같은 자리끼리 견줌: 같으면 same, 다르면 del+add, 한쪽에만 있으면 del 또는 add. 줄 번호는 전후 따로 셈
+function diffRows(
+  before: readonly NoticeRow[],
+  after: readonly NoticeRow[],
+): { lines: DiffLine[]; added: number; removed: number } {
+  const keyOf = (row: NoticeRow) => `${row.group}:${row.line}`;
+  const beforeByKey = new Map(before.map((row) => [keyOf(row), row]));
+  const afterByKey = new Map(after.map((row) => [keyOf(row), row]));
+  const keys = [...new Map([...before, ...after].map((r) => [keyOf(r), r]))]
+    .map(([, row]) => row)
+    .sort((a, b) => a.group - b.group || a.line - b.line)
+    .map(keyOf);
+  const lines: DiffLine[] = [];
+  let beforeLine = 0;
+  let afterLine = 0;
+  let added = 0;
+  let removed = 0;
+  for (const key of keys) {
+    const prev = beforeByKey.get(key);
+    const next = afterByKey.get(key);
+    if (prev && next && prev.text === next.text) {
+      beforeLine += 1;
+      afterLine += 1;
+      lines.push({ beforeLine, afterLine, kind: "same", text: next.text });
+      continue;
+    }
+    if (prev) {
+      beforeLine += 1;
+      removed += 1;
+      lines.push({ beforeLine, afterLine: null, kind: "del", text: prev.text });
+    }
+    if (next) {
+      afterLine += 1;
+      added += 1;
+      lines.push({ beforeLine: null, afterLine, kind: "add", text: next.text });
+    }
+  }
+  return { lines, added, removed };
+}
+
 // 대기 중인 공지의 줄 단위 비교(update + 유효한 before가 있으면 이전/이후 줄 비교, 없으면 추가/삭제 줄만)
+// 서버가 after를 주고(add·update) before도 전체 모양이면 제목 영어·본문 한·영까지 비교함. 아니면 4줄(예전 서버)
 export function pendingNoticeDiff(
   notice: PendingNotice,
   kindLabel: string,
@@ -628,52 +763,47 @@ export function pendingNoticeDiff(
   openEndLabel: string,
   beforeKindLabel?: string,
 ): { lines: DiffLine[]; added: number; removed: number; hasBefore: boolean } {
-  const afterRaw = [
-    `kind: ${kindLabel}`,
-    `title.ko: ${notice.title.trim()}`,
-    `startsAt: ${formatTime(notice.startsAt)}`,
-    `endsAt: ${notice.endsAt ? formatTime(notice.endsAt) : openEndLabel}`,
+  const after = isFullNotice(notice.after) ? notice.after : null;
+  const full =
+    after !== null &&
+    (notice.change !== "update" || isFullNotice(notice.before));
+  // 줄마다 자리 열쇠(칸 순서, 본문은 몇째 줄인지)를 두어 본문 줄 수가 달라도 같은 자리끼리 견줌
+  const rowsOf = (
+    kind: string,
+    n: Pick<NoticeSnapshot, "startsAt" | "endsAt"> & {
+      title: { ko: string; en?: string };
+      body?: { ko: string; en: string };
+    },
+  ): NoticeRow[] => [
+    { group: 0, line: 0, text: `kind: ${kind}` },
+    { group: 1, line: 0, text: `title.ko: ${n.title.ko.trim()}` },
+    ...(full
+      ? [
+          { group: 2, line: 0, text: `title.en: ${(n.title.en ?? "").trim()}` },
+          ...bodyRows(3, "body.ko", n.body?.ko ?? ""),
+          ...bodyRows(4, "body.en", n.body?.en ?? ""),
+        ]
+      : []),
+    { group: 5, line: 0, text: `startsAt: ${formatTime(n.startsAt)}` },
+    {
+      group: 6,
+      line: 0,
+      text: `endsAt: ${n.endsAt ? formatTime(n.endsAt) : openEndLabel}`,
+    },
   ];
+  const afterRows =
+    full && after
+      ? rowsOf(kindLabel, after)
+      : rowsOf(kindLabel, {
+          title: { ko: notice.title },
+          startsAt: notice.startsAt,
+          endsAt: notice.endsAt,
+        });
   if (notice.change === "update" && isValidNoticeBefore(notice.before)) {
-    const b = notice.before;
-    const beforeRaw = [
-      `kind: ${beforeKindLabel ?? kindLabel}`,
-      `title.ko: ${b.title.ko.trim()}`,
-      `startsAt: ${formatTime(b.startsAt)}`,
-      `endsAt: ${b.endsAt ? formatTime(b.endsAt) : openEndLabel}`,
-    ];
-    const lines: DiffLine[] = [];
-    let added = 0;
-    let removed = 0;
-    for (let i = 0; i < afterRaw.length; i++) {
-      const prev = beforeRaw[i]!;
-      const next = afterRaw[i]!;
-      if (prev === next) {
-        lines.push({
-          beforeLine: i + 1,
-          afterLine: i + 1,
-          kind: "same",
-          text: next,
-        });
-      } else {
-        lines.push({
-          beforeLine: i + 1,
-          afterLine: null,
-          kind: "del",
-          text: prev,
-        });
-        lines.push({
-          beforeLine: null,
-          afterLine: i + 1,
-          kind: "add",
-          text: next,
-        });
-        removed += 1;
-        added += 1;
-      }
-    }
-    return { lines, added, removed, hasBefore: true };
+    const beforeRows = rowsOf(beforeKindLabel ?? kindLabel, notice.before);
+    return { ...diffRows(beforeRows, afterRows), hasBefore: true };
   }
+  const afterRaw = afterRows.map((row) => row.text);
   const isRemove = notice.change === "remove";
   const lines: DiffLine[] = afterRaw.map((text, idx) => ({
     beforeLine: isRemove ? idx + 1 : null,
