@@ -436,7 +436,7 @@ function BeachFilterMenu({
   const selectedLabel =
     value === BEACH_NONE
       ? t.beachNoneOption
-      : options.find((o) => o.id === value)?.label ?? value ?? "";
+      : (options.find((o) => o.id === value)?.label ?? value ?? "");
 
   return (
     <div ref={box} className="relative">
@@ -717,13 +717,7 @@ const INQUIRY_DETAIL_TIMEOUT: OpsResult<InquiryDetail> = {
   requestId: null,
 };
 
-function InquiryListSkeleton({
-  cls,
-  slow,
-}: {
-  cls: string;
-  slow: boolean;
-}) {
+function InquiryListSkeleton({ cls, slow }: { cls: string; slow: boolean }) {
   const rows = ["w-28", "w-36", "w-24", "w-32", "w-28", "w-32"];
   return (
     <div aria-busy="true" className={`flex flex-col gap-3 ${cls}`}>
@@ -925,9 +919,7 @@ function InquiryList({
 
   const items = useMemo(
     () =>
-      isFiltered
-        ? pageRows(filteredItems, filterPage, PAGE_SIZE)
-        : loadedItems,
+      isFiltered ? pageRows(filteredItems, filterPage, PAGE_SIZE) : loadedItems,
     [isFiltered, filteredItems, filterPage, loadedItems],
   );
 
@@ -1160,7 +1152,8 @@ function InquiryList({
                   <tr
                     key={item.inquiryId}
                     onClick={(e) => {
-                      if ((e.target as HTMLElement).closest("a, button")) return;
+                      if ((e.target as HTMLElement).closest("a, button"))
+                        return;
                       onOpen(item.inquiryId);
                     }}
                     className={`${TR} cursor-pointer ${
@@ -1299,9 +1292,7 @@ function InquiryList({
             type="button"
             aria-disabled={pageIndex === 0}
             aria-label={fill(messages.table.prevLabel, { label: t.pagination })}
-            onClick={() =>
-              pageIndex > 0 && setCursors((c) => c.slice(0, -1))
-            }
+            onClick={() => pageIndex > 0 && setCursors((c) => c.slice(0, -1))}
             className="inline-flex min-h-touch items-center justify-center rounded-admin-control border border-border-strong bg-bg-surface px-2.5 text-body-s font-medium whitespace-nowrap text-text-default shadow-card hover:bg-bg-page aria-disabled:cursor-not-allowed aria-disabled:opacity-45 lg:h-8 lg:min-h-0"
           >
             {t.prev}
@@ -1506,10 +1497,7 @@ function InquiryActions({
     "w-full rounded-admin-control border border-border-strong bg-bg-surface px-2.5 py-2 text-body text-text-default outline-none placeholder:text-text-muted focus:border-brand-default focus:ring-[3px] focus:ring-brand-border disabled:bg-bg-page disabled:text-text-muted";
 
   return (
-    <section
-      aria-labelledby="inquiry-actions"
-      className="flex flex-col gap-5"
-    >
+    <section aria-labelledby="inquiry-actions" className="flex flex-col gap-5">
       <h3 id="inquiry-actions" className="sr-only">
         {t.editTitle}
       </h3>
@@ -2017,54 +2005,54 @@ function InquiryDetailSkeletonBody({ slow }: { slow: boolean }) {
         <SkLine className="w-4/5" />
       </div>
 
-        <dl className="divide-y divide-border-default border-t border-border-default">
-          {rows.map(([label, w]) => (
-            <Row key={label} label={label}>
-              <SkLine className={w} />
-            </Row>
-          ))}
-        </dl>
+      <dl className="divide-y divide-border-default border-t border-border-default">
+        {rows.map(([label, w]) => (
+          <Row key={label} label={label}>
+            <SkLine className={w} />
+          </Row>
+        ))}
+      </dl>
 
-        <fieldset disabled className="flex flex-col gap-2">
-          <legend className="mb-1.5 text-body font-medium text-text-default">
-            {t.statusLegend}
-          </legend>
-          <div className="grid grid-cols-4 divide-x divide-border-strong overflow-hidden rounded-admin-control border border-border-strong opacity-60 shadow-card">
-            {INQUIRY_STATUSES.map((s) => (
-              <span
-                key={s}
-                className="flex min-h-touch items-center justify-center bg-bg-surface text-body-s font-medium text-text-muted lg:h-[34px] lg:min-h-0"
-              >
-                {t.status[s]}
-              </span>
-            ))}
-          </div>
-        </fieldset>
-
-        <div className="flex flex-col gap-1.5">
-          <span className="flex items-center gap-1.5 text-body font-medium text-text-default">
-            <span>{t.memo}</span>
-            <span className="text-body-s font-normal text-text-muted">
-              {t.memoInternal}
+      <fieldset disabled className="flex flex-col gap-2">
+        <legend className="mb-1.5 text-body font-medium text-text-default">
+          {t.statusLegend}
+        </legend>
+        <div className="grid grid-cols-4 divide-x divide-border-strong overflow-hidden rounded-admin-control border border-border-strong opacity-60 shadow-card">
+          {INQUIRY_STATUSES.map((s) => (
+            <span
+              key={s}
+              className="flex min-h-touch items-center justify-center bg-bg-surface text-body-s font-medium text-text-muted lg:h-[34px] lg:min-h-0"
+            >
+              {t.status[s]}
             </span>
-          </span>
-          <div className="min-h-[104px] rounded-admin-control border border-border-strong bg-bg-page px-2.5 py-2">
-            <SkLine className="w-2/3" />
-          </div>
-          <p className="text-label-s text-text-muted">
-            <SkLine className="w-44" />
-          </p>
+          ))}
         </div>
+      </fieldset>
 
-        <div className="sticky bottom-0 -mx-6 -mb-5 flex flex-wrap items-center gap-2 border-t border-border-default bg-bg-surface px-6 py-3.5 pb-[max(0.875rem,env(safe-area-inset-bottom))]">
-          <Button variant="secondary" size="small" disabled>
-            {t.redactOpen}
-          </Button>
-          <span className="flex-1" />
-          <Button size="small" disabled>
-            {t.save}
-          </Button>
+      <div className="flex flex-col gap-1.5">
+        <span className="flex items-center gap-1.5 text-body font-medium text-text-default">
+          <span>{t.memo}</span>
+          <span className="text-body-s font-normal text-text-muted">
+            {t.memoInternal}
+          </span>
+        </span>
+        <div className="min-h-[104px] rounded-admin-control border border-border-strong bg-bg-page px-2.5 py-2">
+          <SkLine className="w-2/3" />
         </div>
+        <p className="text-label-s text-text-muted">
+          <SkLine className="w-44" />
+        </p>
+      </div>
+
+      <div className="sticky bottom-0 -mx-6 -mb-5 flex flex-wrap items-center gap-2 border-t border-border-default bg-bg-surface px-6 py-3.5 pb-[max(0.875rem,env(safe-area-inset-bottom))]">
+        <Button variant="secondary" size="small" disabled>
+          {t.redactOpen}
+        </Button>
+        <span className="flex-1" />
+        <Button size="small" disabled>
+          {t.save}
+        </Button>
+      </div>
     </div>
   );
 }
@@ -2113,7 +2101,10 @@ function InquiryDetailView({
   const timing = useLoadTiming(pending);
   const placeholder = kept === null && (pending || timing.phase !== "content");
   const timedOut =
-    !placeholder && kept === null && loadedCurrent !== null && loadedCurrent.timedOut;
+    !placeholder &&
+    kept === null &&
+    loadedCurrent !== null &&
+    loadedCurrent.timedOut;
   const result: OpsResult<InquiryDetail> | null = placeholder
     ? null
     : current?.ok
@@ -2243,132 +2234,132 @@ function InquiryDetailView({
         />
 
         <div className="flex flex-1 flex-col gap-6 overflow-y-auto px-6 py-5">
-        {refreshFailure &&
-          (refreshFailure.status === 404 ? (
-            <Notice tone="warn" title={t.notFoundTitle} role="alert">
-              {t.notFoundBody}
+          {refreshFailure &&
+            (refreshFailure.status === 404 ? (
+              <Notice tone="warn" title={t.notFoundTitle} role="alert">
+                {t.notFoundBody}
+              </Notice>
+            ) : (
+              <Failure
+                title={t.detailError}
+                result={refreshFailure}
+                onRetry={() => setAttempt((n) => n + 1)}
+              />
+            ))}
+
+          {item.legacy && (
+            <Notice tone="neutral" title={t.legacyTitle}>
+              {t.legacyBody}
             </Notice>
+          )}
+
+          {item.restricted ? (
+            <Notice tone="neutral" title={t.restricted} />
           ) : (
-            <Failure
-              title={t.detailError}
-              result={refreshFailure}
-              onRetry={() => setAttempt((n) => n + 1)}
+            <InquiryMessage
+              key={`${item.inquiryId}|${item.version}`}
+              item={item}
+              mode={redactMode}
+              onModeChange={setRedactMode}
+              onReload={() => {
+                setNotice(null);
+                setRedactMode("view");
+                setAttempt((n) => n + 1);
+              }}
+              onRedacted={(from, to) => {
+                setRedacted({ id, from, to });
+                setRedactMode("view");
+                setNotice({ id, text: t.redacted });
+                setAttempt((n) => n + 1);
+              }}
             />
-          ))}
+          )}
 
-        {item.legacy && (
-          <Notice tone="neutral" title={t.legacyTitle}>
-            {t.legacyBody}
-          </Notice>
-        )}
-
-        {item.restricted ? (
-          <Notice tone="neutral" title={t.restricted} />
-        ) : (
-          <InquiryMessage
-            key={`${item.inquiryId}|${item.version}`}
-            item={item}
-            mode={redactMode}
-            onModeChange={setRedactMode}
-            onReload={() => {
-              setNotice(null);
-              setRedactMode("view");
-              setAttempt((n) => n + 1);
-            }}
-            onRedacted={(from, to) => {
-              setRedacted({ id, from, to });
-              setRedactMode("view");
-              setNotice({ id, text: t.redacted });
-              setAttempt((n) => n + 1);
-            }}
-          />
-        )}
-
-        <dl className="divide-y divide-border-default border-t border-border-default">
-          <Row label={t.beachActivity}>
-            <BeachActivity item={item} beaches={beaches} />
-            {beach && (
-              <span className="ml-1 text-body-s text-text-muted">
-                ({beach.region})
-              </span>
-            )}
-            {item.type === "data_error" &&
-              beach &&
-              refreshFailure?.status !== 404 && (
-                <Link
-                  href={`/beaches/${item.beachId}/`}
-                  aria-label={t.openBeach}
-                  className="ml-1.5 font-medium text-brand-default underline underline-offset-2"
-                >
-                  {t.beachDetailShort}
-                </Link>
-              )}
-          </Row>
-          <Row label={t.received}>
-            <span className="tabular-nums">
-              {kstDateTime(item.receivedAt)}
-              {isKstToday(item.receivedAt) ? ` · ${t.today}` : ""}
-            </span>
-          </Row>
-          <Row label={t.retention}>
-            {fill(t.retentionValue, { date: retentionDate(item.receivedAt) })}
-          </Row>
-          <Row label={t.contact}>{t.contactValue}</Row>
-          {(item.restricted || item.updatedAt) && (
-            <Row label={t.currentStatus}>
-              <StatusBadge status={item.status} />
-              {item.updatedAt && (
-                <span className="ml-2 text-body-s text-text-muted">
-                  {fill(t.updatedAt, { time: kstDateTime(item.updatedAt) })}
+          <dl className="divide-y divide-border-default border-t border-border-default">
+            <Row label={t.beachActivity}>
+              <BeachActivity item={item} beaches={beaches} />
+              {beach && (
+                <span className="ml-1 text-body-s text-text-muted">
+                  ({beach.region})
                 </span>
               )}
+              {item.type === "data_error" &&
+                beach &&
+                refreshFailure?.status !== 404 && (
+                  <Link
+                    href={`/beaches/${item.beachId}/`}
+                    aria-label={t.openBeach}
+                    className="ml-1.5 font-medium text-brand-default underline underline-offset-2"
+                  >
+                    {t.beachDetailShort}
+                  </Link>
+                )}
             </Row>
+            <Row label={t.received}>
+              <span className="tabular-nums">
+                {kstDateTime(item.receivedAt)}
+                {isKstToday(item.receivedAt) ? ` · ${t.today}` : ""}
+              </span>
+            </Row>
+            <Row label={t.retention}>
+              {fill(t.retentionValue, { date: retentionDate(item.receivedAt) })}
+            </Row>
+            <Row label={t.contact}>{t.contactValue}</Row>
+            {(item.restricted || item.updatedAt) && (
+              <Row label={t.currentStatus}>
+                <StatusBadge status={item.status} />
+                {item.updatedAt && (
+                  <span className="ml-2 text-body-s text-text-muted">
+                    {fill(t.updatedAt, { time: kstDateTime(item.updatedAt) })}
+                  </span>
+                )}
+              </Row>
+            )}
+          </dl>
+
+          {notice?.id === id && (
+            <Notice tone="success" title={notice.text} role="status" />
           )}
-        </dl>
 
-        {notice?.id === id && (
-          <Notice tone="success" title={notice.text} role="status" />
-        )}
-
-        {/* 보기 권한은 메모·반려 이유를 받지 않으므로 처리 칸을 그리지 않음(빈 칸을 실제 값처럼 보이지 않게) */}
-        {item.restricted ? (
-          <div className="sticky bottom-0 -mx-6 -mb-5 flex flex-wrap items-center gap-2 border-t border-border-default bg-bg-surface px-6 py-3.5 pb-[max(0.875rem,env(safe-area-inset-bottom))]">
-            {leftFooter}
-          </div>
-        ) : (
-          <InquiryActions
-            key={item.inquiryId}
-            item={item}
-            rebase={
-              redacted?.id === id
-                ? { from: redacted.from, to: redacted.to }
-                : null
-            }
-            leftFooter={leftFooter}
-            onReload={() => {
-              setNotice(null);
-              setAttempt((n) => n + 1);
-            }}
-            onSaved={(saved, from) => {
-              onSaved(item.inquiryId, { ...saved, from, at: Date.now() });
-              if (from === "received" && saved.status !== "received") {
-                if (owner) adjustReceivedCount(owner, -1);
-              } else if (from !== "received" && saved.status === "received") {
-                if (owner) adjustReceivedCount(owner, 1);
+          {/* 보기 권한은 메모·반려 이유를 받지 않으므로 처리 칸을 그리지 않음(빈 칸을 실제 값처럼 보이지 않게) */}
+          {item.restricted ? (
+            <div className="sticky bottom-0 -mx-6 -mb-5 flex flex-wrap items-center gap-2 border-t border-border-default bg-bg-surface px-6 py-3.5 pb-[max(0.875rem,env(safe-area-inset-bottom))]">
+              {leftFooter}
+            </div>
+          ) : (
+            <InquiryActions
+              key={item.inquiryId}
+              item={item}
+              rebase={
+                redacted?.id === id
+                  ? { from: redacted.from, to: redacted.to }
+                  : null
               }
-              setNotice({
-                id,
-                text:
-                  saved.status !== from
-                    ? fill(t.savedStatus, { status: t.status[saved.status] })
-                    : t.savedMemo,
-              });
-              setAttempt((n) => n + 1);
-            }}
-          />
-        )}
-      </div>
-    </article>
+              leftFooter={leftFooter}
+              onReload={() => {
+                setNotice(null);
+                setAttempt((n) => n + 1);
+              }}
+              onSaved={(saved, from) => {
+                onSaved(item.inquiryId, { ...saved, from, at: Date.now() });
+                if (from === "received" && saved.status !== "received") {
+                  if (owner) adjustReceivedCount(owner, -1);
+                } else if (from !== "received" && saved.status === "received") {
+                  if (owner) adjustReceivedCount(owner, 1);
+                }
+                setNotice({
+                  id,
+                  text:
+                    saved.status !== from
+                      ? fill(t.savedStatus, { status: t.status[saved.status] })
+                      : t.savedMemo,
+                });
+                setAttempt((n) => n + 1);
+              }}
+            />
+          )}
+        </div>
+      </article>
     );
   }
   return (

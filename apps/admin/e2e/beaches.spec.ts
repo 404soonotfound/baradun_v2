@@ -183,8 +183,10 @@ const beachRow = (page: Page, name: string) =>
     .filter({ hasText: name });
 
 const allBeachRows = (page: Page) =>
-  (isMobile(page) ? page.locator("main ul > li") : page.locator("tbody tr"))
-    .filter({ visible: true });
+  (isMobile(page)
+    ? page.locator("main ul > li")
+    : page.locator("tbody tr")
+  ).filter({ visible: true });
 
 const tabButton = (page: Page, label: string) =>
   page
@@ -325,7 +327,9 @@ test("목록: 탭·별칭 찾기·지역(지리순)·특보 구역·페이징·�
     "인천",
     "제주",
   ]);
-  await regionMenu.getByRole("button", { name: "강원", exact: true }).press("Enter");
+  await regionMenu
+    .getByRole("button", { name: "강원", exact: true })
+    .press("Enter");
   await expect(page).toHaveURL(/\bsido=%EA%B0%95%EC%9B%90\b/);
   await expect(page.getByText("91건 중 1–11")).toBeVisible();
   await expect(
@@ -343,7 +347,10 @@ test("목록: 탭·별칭 찾기·지역(지리순)·특보 구역·페이징·�
     page.getByRole("button", { name: "지역: 강원", exact: true }),
   ).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "특보 구역: 강원중부앞바다", exact: true }),
+    page.getByRole("button", {
+      name: "특보 구역: 강원중부앞바다",
+      exact: true,
+    }),
   ).toBeVisible();
 
   // 키보드로 행 열기 → 뒤로 가기 시 필터·탭 쿼리 복원
@@ -374,7 +381,9 @@ test("목록: 탭·별칭 찾기·지역(지리순)·특보 구역·페이징·�
     page.getByText('"없는해변xyz"는 해변 목록에 없어요'),
   ).toBeVisible();
   await expect(
-    page.getByText("출시에서 빠진 해변일 수 있어요. 새 해변은 저장소 PR로 넣어요."),
+    page.getByText(
+      "출시에서 빠진 해변일 수 있어요. 새 해변은 저장소 PR로 넣어요.",
+    ),
   ).toBeVisible();
   await page.getByRole("button", { name: "조건 지우기" }).click();
   await expect(page.getByText("222건 중 1–11")).toBeVisible();
@@ -700,7 +709,9 @@ test("로딩(해변 상세 메모): 15초 넘으면 메모 영역에 다시 시�
 
   await page.clock.fastForward(200);
   await expect(
-    page.getByRole("region", { name: "운영 메모" }).locator("[aria-busy='true']"),
+    page
+      .getByRole("region", { name: "운영 메모" })
+      .locator("[aria-busy='true']"),
   ).toBeVisible();
   await page.clock.fastForward(15_500);
   const memoAlert = page

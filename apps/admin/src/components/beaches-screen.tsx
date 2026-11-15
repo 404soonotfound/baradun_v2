@@ -47,7 +47,15 @@ import { fill, messages } from "@/lib/messages";
 import { pageRows, pageWindow } from "@/lib/paging";
 import { AdminShell } from "./admin-shell";
 import { DisplayBadge, PublishedAlert, usePublished } from "./beach-status";
-import { CELL_END, CELL_NAME, DataTable, Pager, TD, TH, TR } from "./data-table";
+import {
+  CELL_END,
+  CELL_NAME,
+  DataTable,
+  Pager,
+  TD,
+  TH,
+  TR,
+} from "./data-table";
 import {
   LoadingStatus,
   SkLine,
@@ -532,11 +540,7 @@ function BeachTable({
                 {b.sido} {b.sigungu}
               </td>
               <td className={TD}>
-                <StatusCell
-                  beach={b}
-                  display={display}
-                  published={published}
-                />
+                <StatusCell beach={b} display={display} published={published} />
               </td>
               <td className={`${TD} ${CELL_END}`}>
                 {b.waveHeight ? (
@@ -641,11 +645,7 @@ function BeachCards({
                 </span>
               </span>
               <span className="shrink-0">
-                <StatusCell
-                  beach={b}
-                  display={display}
-                  published={published}
-                />
+                <StatusCell beach={b} display={display} published={published} />
               </span>
             </Link>
           </li>
@@ -767,8 +767,7 @@ function BeachesBody({ beaches }: { beaches: readonly BeachSummary[] }) {
       ? null
       : (zoneOptions.find((o) => o.value === queryState.zone)?.label ??
         zoneDisplayName(queryState.zone, null, t.zoneNameUnknown));
-  const sortLabel =
-    queryState.sort === "region" ? t.sortRegion : t.sortStatus;
+  const sortLabel = queryState.sort === "region" ? t.sortRegion : t.sortStatus;
   const hasResettable =
     queryState.tab !== "all" ||
     activeQ !== "" ||
@@ -877,10 +876,7 @@ function BeachesBody({ beaches }: { beaches: readonly BeachSummary[] }) {
             onChange={(e) => {
               const nextQ = e.target.value;
               setDraftQ(nextQ);
-              pushState(
-                (prev) => ({ ...prev, q: nextQ, page: 0 }),
-                true,
-              );
+              pushState((prev) => ({ ...prev, q: nextQ, page: 0 }), true);
             }}
             className="h-touch w-full rounded-admin-control border border-border-strong bg-bg-surface pr-3 pl-8 text-body text-text-default shadow-card outline-none placeholder:text-text-muted focus:border-brand-default focus:ring-[3px] focus:ring-brand-border md:h-9"
           />
@@ -903,9 +899,7 @@ function BeachesBody({ beaches }: { beaches: readonly BeachSummary[] }) {
         <OptionFilterMenu
           filterLabel={t.zoneFilter}
           activeLabel={
-            activeZoneLabel
-              ? fill(t.zoneChip, { zone: activeZoneLabel })
-              : null
+            activeZoneLabel ? fill(t.zoneChip, { zone: activeZoneLabel }) : null
           }
           menuLabel={t.zoneMenu}
           allLabel={t.zoneAll}
@@ -953,9 +947,7 @@ function BeachesBody({ beaches }: { beaches: readonly BeachSummary[] }) {
               : t.emptyFilteredTitle}
           </p>
           <p className="max-w-sm text-body-s text-text-muted">
-            {activeQ.trim() !== ""
-              ? t.emptyQueryBody
-              : t.emptyFilteredBody}
+            {activeQ.trim() !== "" ? t.emptyQueryBody : t.emptyFilteredBody}
           </p>
           {hasResettable && (
             <Button
