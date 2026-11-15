@@ -1,6 +1,12 @@
 import schema from "@baradun/contracts/schema.json";
-import Ajv2020 from "ajv/dist/2020.js";
+import Ajv2020, { type ErrorObject } from "ajv/dist/2020.js";
 import addFormats from "ajv-formats";
+import {
+  FAILURE_PATH,
+  FAILURE_PATH_LIMIT,
+  FAILURE_PATH_MAX,
+  type PublishFailureDetails,
+} from "../core/collect/publish-summary";
 
 // 게시 전 계약 검사 (아키텍처 1장 '게시 전 검사'·17.3, BRD-61)
 // 파일마다 packages/contracts 스키마의 *File 정의를 통과해야 manifest를 바꿈
@@ -28,16 +34,51 @@ export function contractErrors(file: ContractFile, value: unknown): string[] {
   return contractInspection(file, value).errors;
 }
 
-// 한 번의 계약 검사 결과에서 필수 칸 누락 여부도 함께 읽음
-export function contractInspection(file: ContractFile, value: unknown) {
+function validationErrors(
+  file: ContractFile,
+  value: unknown,
+): readonly ErrorObject[] {
   const check = ajv.getSchema(`${schema.$id}#/$defs/${file}`);
   if (!check) throw new Error(`계약 정의 없음: ${file}`);
-  if (check(value)) return { errors: [], requiredMissing: false };
-  const errors = check.errors ?? [];
+  return check(value) ? [] : (check.errors ?? []);
+}
+
+// 실패 위치 한 줄: `계약:데이터 위치:검사 종류[:빠진 칸]`. 형식·길이를 벗어나면 버림(값·원문 메시지는 넣지 않음)
+function failurePathOf(file: ContractFile, error: ErrorObject): string | null {
+  const missing: unknown =
+    error.keyword === "required" ? error.params.missingProperty : undefined;
+  const path = `${file}:${error.instancePath || "/"}:${error.keyword}${
+    typeof missing === "string" ? `:${missing}` : ""
+  }`;
+  return path.length <= FAILURE_PATH_MAX && FAILURE_PATH.test(path)
+    ? path
+    : null;
+}
+
+// 한 번의 계약 검사 결과에서 필수 칸 누락 여부와 실패 위치(앞 5개)를 함께 읽음
+export function contractInspection(file: ContractFile, value: unknown) {
+  const errors = validationErrors(file, value);
   return {
     errors: errors.map((e) =>
       `${file}: ${e.instancePath || "/"} ${e.message ?? ""}`.trim(),
     ),
+    failurePaths: errors
+      .map((e) => failurePathOf(file, e))
+      .filter((path): path is string => path !== null)
+      .slice(0, FAILURE_PATH_LIMIT),
     requiredMissing: errors.some((error) => error.keyword === "required"),
+  };
+}
+
+// 게시 실행 기록에 남기는 계약 실패 요약. 오류 수와 앞 5개 실패 위치만 둠
+export function contractFailureDetails(
+  inspections: readonly ReturnType<typeof contractInspection>[],
+): Extract<PublishFailureDetails, { kind: "contract" }> {
+  return {
+    kind: "contract",
+    errorCount: inspections.reduce((n, i) => n + i.errors.length, 0),
+    paths: inspections
+      .flatMap((i) => i.failurePaths)
+      .slice(0, FAILURE_PATH_LIMIT),
   };
 }
