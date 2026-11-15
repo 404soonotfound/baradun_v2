@@ -188,3 +188,19 @@ describe("목록 칸 판정 waveCellOf · observedCellOf", () => {
     });
   });
 });
+
+describe("측정 칸: 지연인데 관측 시각을 모름", () => {
+  it("지연 표시는 남기고(delayedUnknown) 확인 못 함으로 낮추지 않음", () => {
+    const p = parsePublished(
+      view({
+        metrics: {
+          waveHeight: wave({ state: "delayed", value: null, observedAt: null }),
+          wavePeriod: period(),
+        },
+      }),
+    )!;
+    expect(observedCellOf(p, "b0001", { kind: "loading" }, true)).toEqual({
+      kind: "delayedUnknown",
+    });
+  });
+});

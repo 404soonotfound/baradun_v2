@@ -462,7 +462,7 @@ test("파고·파주기·측정은 게시값 그대로이고, 지연은 글로�
   if (isMobile(page)) {
     await expect(delayed).toContainText("파고 1.2m · 지연");
   } else {
-    await expect(delayed).toContainText("1.2m");
+    await expect(delayed).toContainText("1.2m · 지연");
     await expect(delayed).toContainText(/\d{2}:\d{2} · 지연/);
     // 파주기 측정소 없음은 '—'로 보이고 이름으로 읽힘
     await expect(delayed.getByLabel("가까운 관측 없음")).toHaveCount(1);
