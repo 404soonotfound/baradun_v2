@@ -65,6 +65,7 @@ function overview(): PublishOverview {
           version: versions[0]!,
           at: iso(base),
           source: "auto",
+          sequence: 1440,
           beachCount: 206,
           checks: { format: true, required: true, beachIds: true },
           changes: {
@@ -99,6 +100,14 @@ function overview(): PublishOverview {
           at: iso(base - 20 * MINUTE),
           source: "auto",
           reason: "beach_ids",
+          sequence: 1438,
+          failureDetails: {
+            kind: "beach_ids",
+            where: "status",
+            missingCount: 1,
+            extraCount: 0,
+            duplicateCount: 0,
+          },
           checks: { beachIds: false },
         },
         {
@@ -134,6 +143,21 @@ function overview(): PublishOverview {
           startsAt: iso(base - 3 * 60 * MINUTE),
           endsAt: iso(base + 20 * 60 * MINUTE),
           updatedBy: "ops@example.test",
+          updatedAt: iso(base - 5 * MINUTE),
+          after: {
+            id: "n-local-maint",
+            kind: "maintenance_notice",
+            title: {
+              ko: "(로컬 예시) 새벽 점검 예고 (연장)",
+              en: "Extended maintenance",
+            },
+            body: {
+              ko: "점검 시간이 늘어났어요",
+              en: "Maintenance has been extended.",
+            },
+            startsAt: iso(base - 3 * 60 * MINUTE),
+            endsAt: iso(base + 20 * 60 * MINUTE),
+          },
           before: {
             id: "n-local-maint",
             kind: "maintenance_notice",
