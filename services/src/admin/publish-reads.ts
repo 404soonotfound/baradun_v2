@@ -12,6 +12,9 @@ import {
 } from "../core/collect/publish-job";
 import {
   canonicalJson as canonical,
+  FAILURE_PATH,
+  FAILURE_PATH_LIMIT,
+  FAILURE_PATH_MAX,
   PUBLISH_CATEGORIES,
   PUBLISH_RUN_LAST_SK,
   PUBLISH_RUN_HISTORY_PREFIX,
@@ -20,6 +23,7 @@ import {
   type CategoryCounts,
   type PublishSource,
   type PublishRunDetails,
+  type PublishFailureDetails,
 } from "../core/collect/publish-summary";
 import type { SnapshotStore } from "../core/snapshots/types";
 import {
@@ -38,6 +42,7 @@ import {
   parseManifest,
   publishableNotices,
 } from "../publisher/notice-select";
+import { BEACH_ID } from "./beaches";
 import { PUBLISH_JOB_SLOT_KEY } from "./keys";
 import { liveNotices, queryNotices, type NoticeRecord } from "./notices";
 import type { RelatedWrite, Sender } from "./writes";
@@ -68,6 +73,8 @@ export interface PublishChanges {
 }
 
 export interface HistoryItem {
+  readonly sequence?: number;
+  readonly failureDetails?: PublishFailureDetails;
   readonly checks?: PublishRunDetails["checks"];
   readonly operator?: string;
   // published: 이 버전이 게시됨 · failed: 시도한 버전(게시되지 않음, 앞 게시본 유지)
@@ -94,9 +101,17 @@ export interface RunView {
   readonly target?: string;
 }
 
+// 마지막 실행 칸. 실패면 게시 기록과 같은 실패 요약을 같이 줌(값이 있을 때만)
+export interface LastRunView extends RunView {
+  readonly sequence?: number;
+  readonly failureDetails?: PublishFailureDetails;
+}
+
 export interface PendingNotice {
   readonly id: string;
   readonly before?: Notice;
+  readonly after?: Notice;
+  readonly updatedAt?: string;
   readonly updatedBy?: string;
   // add: 새로 실림 · update: 바뀐 문구·시각으로 실림 · remove: 빠짐(끝남·노출 끝내기·되돌림)
   readonly change: "add" | "update" | "remove";
@@ -144,7 +159,7 @@ export interface PublishOverview {
     readonly minWebBuild?: number;
   }>;
   readonly history: Section<{ readonly items: readonly HistoryItem[] }>;
-  readonly lastRun: Section<{ readonly run: RunView | null }>;
+  readonly lastRun: Section<{ readonly run: LastRunView | null }>;
   readonly nextAuto: {
     readonly warnings: string; // 다음 특보 수집 시각(UTC ISO)
     readonly observations: string; // 다음 관측 수집 시각
@@ -165,7 +180,7 @@ export interface PublishOverview {
 
 const SUMMARY_PROJECTION = {
   ProjectionExpression:
-    "#v, #p, #at, #n, #d, #src, #tg, #cc, #nd, #job, #checks, #operator",
+    "#v, #p, #at, #n, #d, #src, #tg, #cc, #nd, #job, #checks, #operator, #sequence",
   ExpressionAttributeNames: {
     "#v": "version",
     "#p": "previous",
@@ -179,6 +194,7 @@ const SUMMARY_PROJECTION = {
     "#job": "jobId",
     "#checks": "checks",
     "#operator": "operatorSub",
+    "#sequence": "sequence",
   },
 } as const;
 
@@ -219,6 +235,60 @@ function toCounts(value: unknown): CategoryCounts | null {
   };
 }
 
+function isCount(value: unknown): value is number {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
+}
+
+// 저장된 예전 기록이나 모양이 틀린 부가 정보는 생략하고 허용한 칸만 응답함.
+function failureDetailsOf(
+  item: Record<string, unknown>,
+): PublishFailureDetails | undefined {
+  const raw = item.failureDetails;
+  if (!raw || typeof raw !== "object" || item.result !== "failed")
+    return undefined;
+  const {
+    kind,
+    where,
+    missingCount,
+    extraCount,
+    duplicateCount,
+    paths,
+    errorCount,
+    beachId,
+  } = raw as Record<string, unknown>;
+  if (kind !== item.reason) return undefined;
+  if (
+    kind === "beach_ids" &&
+    (where === "source" || where === "beaches" || where === "status") &&
+    isCount(missingCount) &&
+    isCount(extraCount) &&
+    isCount(duplicateCount)
+  )
+    return { kind, where, missingCount, extraCount, duplicateCount };
+  if (
+    kind === "classify" &&
+    typeof beachId === "string" &&
+    BEACH_ID.test(beachId)
+  ) {
+    return { kind, beachId };
+  }
+  if (
+    kind === "contract" &&
+    isCount(errorCount) &&
+    errorCount > 0 &&
+    Array.isArray(paths) &&
+    paths.length <= Math.min(FAILURE_PATH_LIMIT, errorCount) &&
+    paths.every(
+      (path) =>
+        typeof path === "string" &&
+        path.length <= FAILURE_PATH_MAX &&
+        FAILURE_PATH.test(path),
+    )
+  )
+    return { kind, errorCount, paths };
+  return undefined;
+}
+
 function runDetails(item: Record<string, unknown>): PublishRunDetails {
   const raw = item.checks;
   const fields = ["format", "required", "beachIds"] as const;
@@ -232,6 +302,9 @@ function runDetails(item: Record<string, unknown>): PublishRunDetails {
         )
       : {};
   return {
+    ...(isCount(item.sequence) && item.sequence > 0
+      ? { sequence: item.sequence }
+      : {}),
     ...(Object.keys(checks).length ? { checks } : {}),
     ...(typeof item.operatorSub === "string" && item.source === "operator"
       ? { operatorSub: item.operatorSub }
@@ -331,7 +404,11 @@ function changesOf(row: SummaryRow, prev: SummaryRow | undefined) {
 // summaries는 최근 HISTORY_LIMIT + 1건(한 건 더 읽어 목록 끝 게시도 앞 게시와 견줌). 합친 뒤 HISTORY_LIMIT건만 돌려줌
 export function buildHistory(
   summaries: readonly SummaryRow[],
-  failedRuns: readonly (RunView & PublishRunDetails & { jobId?: string })[],
+  failedRuns: readonly (RunView &
+    PublishRunDetails & {
+      jobId?: string;
+      failureDetails?: PublishFailureDetails;
+    })[],
 ): HistoryItem[] {
   const byVersion = new Map(summaries.map((row) => [row.version, row]));
   const oldest = summaries.at(-1)?.version;
@@ -347,6 +424,7 @@ export function buildHistory(
       ...(row.jobId !== undefined ? { jobId: row.jobId } : {}),
       beachCount: row.beachCount,
       changes: changesOf(row, prev),
+      ...(row.sequence !== undefined ? { sequence: row.sequence } : {}),
       ...(row.checks ? { checks: row.checks } : {}),
       // 앞 요약이 목록 범위 안(가장 오래된 것보다 새로움)인데 없으면 빠진 것
       gapBefore:
@@ -363,6 +441,8 @@ export function buildHistory(
     source: run.source,
     ...(run.target !== undefined ? { target: run.target } : {}),
     ...(run.reason !== undefined ? { reason: run.reason } : {}),
+    ...(run.sequence !== undefined ? { sequence: run.sequence } : {}),
+    ...(run.failureDetails ? { failureDetails: run.failureDetails } : {}),
     ...(run.checks ? { checks: run.checks } : {}),
     ...(run.jobId !== undefined ? { jobId: run.jobId } : {}),
   }));
@@ -371,6 +451,21 @@ export function buildHistory(
       a.version < b.version ? 1 : a.version > b.version ? -1 : 0,
     )
     .slice(0, HISTORY_LIMIT);
+}
+
+// 대기 변경을 만든 노출 확정·끝내기·지우기의 시각만 씀(pendingActor와 같은 기준)
+// 그 뒤 문구만 저장한 수정이나 되돌림 대기는 이 변경의 시각이 아니므로 넣지 않음
+function pendingChangedAt(
+  record: NoticeRecord | undefined,
+  held: boolean,
+): string | undefined {
+  if (!record || held) return undefined;
+  const { updatedAt } = record;
+  return updatedAt === record.exposedAt ||
+    updatedAt === record.live?.endsAt ||
+    updatedAt === record.deletedAt
+    ? updatedAt
+    : undefined;
 }
 
 // 다음 게시에 실릴 공지와 지금 게시본 공지의 차이. publisher와 같은 함수로 계산함(다시 판단하지 않음)
@@ -387,14 +482,23 @@ export function pendingNoticesOf(
   );
   const nextById = new Map(next.map((n) => [n.id, n]));
   const nowById = new Map(published.map((n) => [n.id, n]));
-  const view = (n: Notice, change: PendingNotice["change"]): PendingNotice => ({
-    id: n.id,
-    change,
-    kind: n.kind,
-    title: n.title.ko,
-    startsAt: n.startsAt,
-    endsAt: n.endsAt,
-  });
+  const recordsById = new Map(records.map((record) => [record.id, record]));
+  const view = (n: Notice, change: PendingNotice["change"]): PendingNotice => {
+    const updatedAt = pendingChangedAt(
+      recordsById.get(n.id),
+      Object.hasOwn(hold?.notices ?? {}, n.id),
+    );
+    return {
+      id: n.id,
+      change,
+      kind: n.kind,
+      title: n.title.ko,
+      startsAt: n.startsAt,
+      endsAt: n.endsAt,
+      ...(updatedAt !== undefined ? { updatedAt } : {}),
+      ...(change !== "remove" ? { after: n } : {}),
+    };
+  };
   const items: PendingNotice[] = [];
   for (const notice of next) {
     const was = nowById.get(notice.id);
@@ -495,7 +599,13 @@ export async function readFailedRuns(
   opsTable: string,
   limit: number,
   range: { from?: string; forward?: boolean } = {},
-): Promise<(RunView & PublishRunDetails & { jobId?: string })[]> {
+): Promise<
+  (RunView &
+    PublishRunDetails & {
+      jobId?: string;
+      failureDetails?: PublishFailureDetails;
+    })[]
+> {
   const result = await client.send(
     new QueryCommand({
       TableName: opsTable,
@@ -509,17 +619,21 @@ export async function readFailedRuns(
       Limit: limit,
     }),
   );
-  return ((result.Items ?? []) as Record<string, unknown>[]).map((item) => ({
-    ...toRunView(item),
-    ...runDetails(item),
-    ...(typeof item.jobId === "string" ? { jobId: item.jobId } : {}),
-  }));
+  return ((result.Items ?? []) as Record<string, unknown>[]).map((item) => {
+    const failureDetails = failureDetailsOf(item);
+    return {
+      ...toRunView(item),
+      ...runDetails(item),
+      ...(failureDetails ? { failureDetails } : {}),
+      ...(typeof item.jobId === "string" ? { jobId: item.jobId } : {}),
+    };
+  });
 }
 
 export async function readLastRun(
   client: Sender,
   opsTable: string,
-): Promise<(RunView & { jobId?: string }) | null> {
+): Promise<(LastRunView & { jobId?: string }) | null> {
   const result = await client.send(
     new GetCommand({
       TableName: opsTable,
@@ -527,8 +641,12 @@ export async function readLastRun(
     }),
   );
   if (!result.Item) return null;
+  const { sequence } = runDetails(result.Item);
+  const failureDetails = failureDetailsOf(result.Item);
   return {
     ...toRunView(result.Item),
+    ...(sequence !== undefined ? { sequence } : {}),
+    ...(failureDetails ? { failureDetails } : {}),
     ...(typeof result.Item.jobId === "string"
       ? { jobId: result.Item.jobId }
       : {}),

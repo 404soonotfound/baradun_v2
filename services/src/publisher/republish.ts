@@ -18,7 +18,11 @@ import {
   type PublishDeps,
   type PublishResult,
 } from "./publish";
-import { contractInspection, type ContractFile } from "./validate";
+import {
+  contractFailureDetails,
+  contractInspection,
+  type ContractFile,
+} from "./validate";
 
 // 옛 게시 파일 다시 내보내기 (결정 기록 D20-4, 급할 때만 쓰는 도구. 쓰는 법은 infra/README)
 // 게시 코드 오류는 git revert로 배포하는 것이 기준. 배포를 기다릴 수 없을 때 사람이 직접 부름(tools/republish)
@@ -48,7 +52,7 @@ export async function republishVersion(
     deps,
     "republish",
     from,
-    async ({ startedMs, version, now, checks }) => {
+    async ({ startedMs, version, now, checks, sequence, diagnostics }) => {
       const fail = (reason: string, fields: Record<string, unknown> = {}) => {
         log("error", "publish_failed", {
           version,
@@ -147,6 +151,7 @@ export async function republishVersion(
           );
         }
         if (errors.length > 0) {
+          diagnostics.failureDetails = contractFailureDetails(inspections);
           return fail("contract", { errors: errors.slice(0, 20) });
         }
 
@@ -197,6 +202,7 @@ export async function republishVersion(
           noticeState: read.state,
           notices: read.notices,
           jobId: undefined,
+          ...(sequence !== undefined ? { sequence } : {}),
           checks,
         });
         const removed = await removeOldVersions(snapshots, version, log);
