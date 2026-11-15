@@ -601,6 +601,20 @@ async function dispatchOps(
     // 허용표에는 있지만 처리가 없는 경로(표와 코드가 어긋남)
     return errorJson(404, "not_found", ids);
   } catch (error) {
+    const name = error instanceof Error ? error.name : "unknown";
+    const inquiryReadThrottled =
+      method === "GET" &&
+      path === "/ops/inquiries" &&
+      (name === "ProvisionedThroughputExceededException" ||
+        name === "ThrottlingException" ||
+        name === "RequestLimitExceeded");
+    if (inquiryReadThrottled) {
+      safeLog("warn", "ops_inquiry_read_throttled", {
+        traceId: ids.traceId,
+        error: name,
+      });
+      return errorJson(503, "internal", ids);
+    }
     safeLog("error", "ops_failed", {
       path,
       method,

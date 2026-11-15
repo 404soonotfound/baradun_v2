@@ -182,6 +182,81 @@ describe("문의 목록·상세", () => {
     expect(body(res).items[0]).not.toHaveProperty("messagePreview");
   });
 
+  it.each([
+    "ProvisionedThroughputExceededException",
+    "ThrottlingException",
+    "RequestLimitExceeded",
+  ])(
+    "두 번째 본문을 읽다가 %s이면 전체 쪽을 재시도 가능 오류로 반환한다",
+    async (name) => {
+      const table = seeded();
+      const another = "123e4567-e89b-42d3-a456-426614174001";
+      const current = table.items.get(
+        table.id("Inquiry", { pk: `INQUIRY#${ID}` }),
+      )!;
+      const pk = `INQUIRY#${another}`;
+      table.items.set(table.id("Inquiry", { pk }), {
+        ...current,
+        pk,
+        inquiryId: another,
+        receivedAt: "2026-11-01T00:00:00.000Z",
+      });
+      const base = deps("editor", table);
+      const request = event("GET", "/ops/inquiries", {
+        query: { status: "received", preview: "true" },
+      });
+      let bodyReads = 0;
+      const res = await handleOps(request, {
+        ...base,
+        data: {
+          ...base.data,
+          client: {
+            send: async (command: Parameters<FakeTable["send"]>[0]) => {
+              if (
+                command.constructor.name === "GetCommand" &&
+                ++bodyReads === 2
+              ) {
+                throw Object.assign(new Error("검사 오류"), { name });
+              }
+              return table.send(command);
+            },
+          } as never,
+        },
+      });
+      expect(bodyReads).toBe(2);
+      expect(res.statusCode).toBe(503);
+      expect(body(res)).toEqual({
+        error: {
+          code: "internal",
+          requestId: expect.any(String),
+          traceId: expect.any(String),
+        },
+      });
+      const retry = await handleOps(request, base);
+      expect(body(retry).items).toHaveLength(2);
+    },
+  );
+
+  it("미리보기 미요청·권한 제한·빈 본문을 구분한다", async () => {
+    const table = seeded({ message: "  \n " });
+    for (const [role, preview, reason] of [
+      ["editor", undefined, undefined],
+      ["viewer", "true", "restricted"],
+      ["editor", "true", "empty"],
+    ] as const) {
+      const res = await handleOps(
+        event("GET", "/ops/inquiries", {
+          query: { status: "received", ...(preview ? { preview } : {}) },
+        }),
+        deps(role, table),
+      );
+      expect(res.statusCode).toBe(200);
+      const [item] = body(res).items;
+      expect(item.messagePreviewUnavailableReason).toBe(reason);
+      expect(item).not.toHaveProperty("messagePreview");
+    }
+  });
+
   it("필터 cursor는 조건이 달라지거나 권한이 다르면 거절한다", async () => {
     const prefs = { type: "data_error", preview: "true" };
     const table = seeded();

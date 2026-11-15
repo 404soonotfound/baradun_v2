@@ -41,6 +41,7 @@ export interface InquirySummary {
   readonly beachId?: string;
   readonly activity?: string;
   readonly messagePreview?: string;
+  readonly messagePreviewUnavailableReason?: "restricted" | "empty";
   readonly receivedAt: string;
   readonly status: InquiryStatus;
   readonly version: number;
@@ -213,12 +214,26 @@ export async function listFilteredInquiries(
       );
       // GSI 반영 전 만료·상태 변경 또는 가림 처리 이전의 본문을 읽지 않음.
       if (!detail || detail.status !== status) continue;
+      if (detail.restricted) {
+        if (q === undefined || beachMatch) {
+          items.push(
+            preview
+              ? { ...item, messagePreviewUnavailableReason: "restricted" }
+              : item,
+          );
+        }
+        continue;
+      }
       const message = detail.message ?? "";
       if (q !== undefined && !beachMatch && !matchesInquiryMessage(message, q))
         continue;
       items.push(preview ? withInquiryPreview(item, message) : item);
     } else {
-      items.push(item);
+      items.push(
+        preview && role === "viewer"
+          ? { ...item, messagePreviewUnavailableReason: "restricted" }
+          : item,
+      );
     }
   }
   const lastKey = result.LastEvaluatedKey as Record<string, string> | undefined;
