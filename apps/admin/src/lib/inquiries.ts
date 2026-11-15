@@ -218,7 +218,9 @@ export const EMPTY_INQUIRY_FILTER: InquiryFilter = {
   received: null,
 };
 
-export function isReceivedFilterActive(received: ReceivedFilter | null): boolean {
+export function isReceivedFilterActive(
+  received: ReceivedFilter | null,
+): boolean {
   if (received === null) return false;
   if (received.preset !== "custom") return true;
   return (
@@ -323,7 +325,10 @@ export function filterInquiries<T extends InquirySummary>(
         return false;
       }
     }
-    if (filter.received !== null && !matchesReceived(item.receivedAt, filter.received, now)) {
+    if (
+      filter.received !== null &&
+      !matchesReceived(item.receivedAt, filter.received, now)
+    ) {
       return false;
     }
     if (q !== "") {
