@@ -4,9 +4,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { loadBeachNames } from "./beach-names";
 import {
-  BEACH_NONE,
   EMPTY_INQUIRY_FILTER,
-  filterInquiries,
   hasActiveInquiryFilter,
   INQUIRY_PAGE_MAX,
   isKstToday,
@@ -168,106 +166,6 @@ describe("문의 거르기와 페이징", () => {
     };
   };
 
-  const rows: InquirySummary[] = [
-    sample(1),
-    sample(2, {
-      type: "beach_request",
-      beachId: undefined,
-      activity: undefined,
-      receivedAt: "2026-11-01T09:40:00Z", // KST 2026-11-01 18:40
-    }),
-    sample(3, {
-      type: "data_question",
-      beachId: "b0002",
-      activity: "surfing",
-      receivedAt: "2026-10-20T01:00:00Z", // KST 2026-10-20 10:00
-    }),
-  ];
-
-  const opts = {
-    beachName: (id: string) =>
-      id === "b0001" ? "강문해수욕장" : id === "b0002" ? "경포해변" : id,
-    typeLabel: (type: string) =>
-      type === "data_error"
-        ? "정보가 실제와 달라요"
-        : type === "beach_request"
-          ? "해변을 추가해 주세요"
-          : "판단 기준이 궁금해요",
-    activityLabel: (a: string) => (a === "swimming" ? "수영" : "서핑"),
-    messages: {
-      [rows[0]!.inquiryId]: "현장에 입수 금지 깃발이 걸려 있어요.",
-    },
-    now: new Date("2026-11-02T06:00:00Z"), // KST 2026-11-02 15:00
-  };
-
-  it("유형·해변·받은 시각·검색어 조합으로 거른다", () => {
-    expect(hasActiveInquiryFilter(EMPTY_INQUIRY_FILTER)).toBe(false);
-    expect(filterInquiries(rows, EMPTY_INQUIRY_FILTER, opts)).toHaveLength(3);
-
-    expect(
-      filterInquiries(
-        rows,
-        { ...EMPTY_INQUIRY_FILTER, type: "data_error" },
-        opts,
-      ),
-    ).toEqual([rows[0]]);
-
-    expect(
-      filterInquiries(
-        rows,
-        { ...EMPTY_INQUIRY_FILTER, beach: BEACH_NONE },
-        opts,
-      ),
-    ).toEqual([rows[1]]);
-
-    expect(
-      filterInquiries(
-        rows,
-        { ...EMPTY_INQUIRY_FILTER, received: { preset: "today" } },
-        opts,
-      ),
-    ).toEqual([rows[0]]);
-
-    expect(
-      filterInquiries(
-        rows,
-        { ...EMPTY_INQUIRY_FILTER, received: { preset: "7d" } },
-        opts,
-      ),
-    ).toEqual([rows[0], rows[1]]);
-
-    expect(
-      filterInquiries(
-        rows,
-        {
-          ...EMPTY_INQUIRY_FILTER,
-          received: {
-            preset: "custom",
-            from: "2026-11-02T13:00",
-            to: "2026-11-02T13:30",
-          },
-        },
-        opts,
-      ),
-    ).toEqual([rows[0]]);
-
-    expect(
-      filterInquiries(
-        rows,
-        { ...EMPTY_INQUIRY_FILTER, query: "입수 금지" },
-        opts,
-      ),
-    ).toEqual([rows[0]]);
-
-    expect(
-      filterInquiries(
-        rows,
-        { ...EMPTY_INQUIRY_FILTER, query: "경포", type: "data_question" },
-        opts,
-      ),
-    ).toEqual([rows[2]]);
-  });
-
   it("KST 오늘 여부와 시안 V20 기준 6행 페이징을 계산한다", () => {
     expect(
       isKstToday("2026-11-02T04:12:00Z", new Date("2026-11-02T14:59:00Z")),
@@ -297,7 +195,6 @@ describe("문의 거르기와 페이징", () => {
       received: { preset: "custom" as const, from: "", to: "   " },
     };
     expect(hasActiveInquiryFilter(emptyCustom)).toBe(false);
-    expect(filterInquiries(rows, emptyCustom, opts)).toEqual(rows);
     expect(isReceivedRangeInvalid(emptyCustom.received)).toBe(false);
 
     expect(

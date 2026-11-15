@@ -389,20 +389,6 @@ export function receivedRangeMs(
   };
 }
 
-function matchesReceived(
-  receivedAt: string,
-  range: ReturnType<typeof receivedRangeMs>,
-): boolean {
-  const ms = Date.parse(receivedAt);
-  if (!Number.isFinite(ms)) return false;
-  // 형식이 틀린 조건은 아무것도 맞지 않음(조건 없이 전체를 보여 주지 않음)
-  if (range === null) return false;
-  const { fromMs, toMs } = range;
-  if (fromMs !== null && ms < fromMs) return false;
-  if (toMs !== null && ms > toMs) return false;
-  return true;
-}
-
 // 서버 검색어 상한(services/src/admin/inquiry-list.ts MAX_SEARCH_LENGTH, 코드 포인트 기준)
 export const INQUIRY_SEARCH_MAX = 100;
 const SERVER_UTC_INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
@@ -461,56 +447,4 @@ export function inquiryServerQuery(
       ...(to !== undefined ? { to } : {}),
     },
   };
-}
-
-// 받은 목록을 화면 조건(내용·해변 검색, 유형, 해변, 받은 시각)으로 거름
-// 서버 요약(GET /ops/inquiries)에 없는 본문은 이미 열어 본 상세 캐시(messages)가 있을 때만 함께 찾음
-export function filterInquiries<T extends InquirySummary>(
-  items: readonly T[],
-  filter: InquiryFilter,
-  options: {
-    readonly beachName: (beachId: string) => string;
-    readonly typeLabel: (type: string) => string;
-    readonly activityLabel?: (activity: string) => string;
-    readonly messages?: Readonly<Record<string, string>>;
-    readonly now?: Date;
-  },
-): T[] {
-  const q = filter.query.trim().toLowerCase();
-  // 받은 시각 경계는 행마다 다시 계산하지 않고 한 번만 구함
-  const receivedRange =
-    filter.received === null
-      ? undefined
-      : receivedRangeMs(filter.received, options.now ?? new Date());
-  return items.filter((item) => {
-    if (filter.type !== null && item.type !== filter.type) return false;
-    if (filter.beach !== null) {
-      if (filter.beach === BEACH_NONE) {
-        if (item.beachId) return false;
-      } else if (item.beachId !== filter.beach) {
-        return false;
-      }
-    }
-    if (
-      receivedRange !== undefined &&
-      !matchesReceived(item.receivedAt, receivedRange)
-    ) {
-      return false;
-    }
-    if (q !== "") {
-      const candidates = [
-        options.typeLabel(item.type),
-        item.beachId ?? "",
-        item.beachId ? options.beachName(item.beachId) : "",
-        item.activity && options.activityLabel
-          ? options.activityLabel(item.activity)
-          : (item.activity ?? ""),
-        item.inquiryId,
-        shortId(item.inquiryId),
-        options.messages?.[item.inquiryId] ?? "",
-      ];
-      if (!candidates.some((c) => c.toLowerCase().includes(q))) return false;
-    }
-    return true;
-  });
 }

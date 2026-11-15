@@ -3,7 +3,6 @@ import { localOps } from "./auth/local-dev";
 import {
   BEACH_NONE,
   EMPTY_INQUIRY_FILTER,
-  filterInquiries,
   INQUIRY_SEARCH_MAX,
   inquiryServerQuery,
   isReceivedFilterActive,
@@ -115,29 +114,6 @@ describe("receivedRangeMs", () => {
       ).toEqual({ ok: false, invalid: "received" });
     },
   );
-
-  it("형식이 틀린 조건으로 받은 목록을 거르면 아무것도 맞지 않음(전체를 보여 주지 않음)", () => {
-    const rows = [
-      {
-        inquiryId: "00000000-0000-4000-8000-000000000001",
-        type: "data_error",
-        receivedAt: "2026-11-15T08:00:00.000Z",
-        status: "received",
-        version: 1,
-        legacy: false,
-      },
-    ];
-    expect(
-      filterInquiries(
-        rows,
-        {
-          ...EMPTY_INQUIRY_FILTER,
-          received: { preset: "custom", from: "2026-02-31" },
-        },
-        { beachName: (id) => id, typeLabel: (t) => t, now: NOW },
-      ),
-    ).toEqual([]);
-  });
 });
 
 describe("inquiryServerQuery", () => {
