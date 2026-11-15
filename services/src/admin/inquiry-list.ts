@@ -130,7 +130,8 @@ export function withInquiryPreview(
   message: string,
 ): InquirySummary {
   const clean = message.replace(/\s+/g, " ").trim();
-  if (clean === "") return item;
+  if (clean === "")
+    return { ...item, messagePreviewUnavailableReason: "empty" };
   const chars = [...clean];
   return {
     ...item,
