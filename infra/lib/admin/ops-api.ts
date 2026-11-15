@@ -251,7 +251,19 @@ export class OpsApi extends Construct {
       description: "baradun v2 operator console API",
       projectRoot: REPO_ROOT,
       depsLockFilePath: path.join(REPO_ROOT, "package-lock.json"),
-      bundling: { externalModules: [], target: "node22" },
+      bundling: {
+        externalModules: [],
+        target: "node22",
+        // 문의 해변 검색에 쓰는 기존 해변 파일을 번들에 포함함.
+        commandHooks: {
+          beforeBundling: () => [],
+          beforeInstall: () => [],
+          afterBundling: (inputDir: string, outputDir: string) => [
+            `mkdir -p "${outputDir}/beaches"`,
+            `cp "${inputDir}"/data/beaches/b*.json "${outputDir}/beaches/"`,
+          ],
+        },
+      },
       environment: {
         OPS_TABLE_NAME: props.opsTable.tableName,
         INQUIRY_TABLE_NAME: props.inquiryTable.tableName,
