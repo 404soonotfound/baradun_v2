@@ -715,3 +715,45 @@ test("말풍선은 마우스를 올리거나 키보드로 고를 때만: 24시�
   );
   await expectNoA11yViolations(page);
 });
+
+test("로딩(L2·L8): 첫 진입 자리표시·5초 안내·15초 실패 재시도와 새로 고침 값 유지", async ({
+  page,
+}) => {
+  await page.clock.install();
+  let resolveCollection!: () => void;
+  let hold = true;
+  await page.route(/\/ops\/collection$/, async (route: Route) => {
+    if (hold) {
+      await new Promise<void>((r) => {
+        resolveCollection = r;
+      });
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(VIEW),
+    });
+  });
+  await openCollection(page);
+  await page.clock.fastForward(200);
+  await expect(page.locator("main [aria-busy='true']").first()).toBeVisible();
+  await page.clock.fastForward(5_000);
+  await expect(page.getByText(/평소보다 오래 걸려요/).first()).toBeVisible();
+  await page.clock.fastForward(10_500);
+  const timeoutAlert = page
+    .getByRole("alert")
+    .filter({ hasText: "응답이 15초 넘게 오지 않았어요" });
+  await expect(timeoutAlert).toBeVisible();
+
+  hold = false;
+  await timeoutAlert.getByRole("button", { name: "다시 시도" }).click();
+  await expect(sourceRow(page, "기상청 해상 특보")).toContainText("정상");
+
+  // L8 새로 고침: 기존 값을 유지하고 '다시 읽는 중' + 비활성
+  hold = true;
+  await page.getByRole("button", { name: "다시 불러오기" }).click();
+  await expect(page.getByText("다시 읽는 중")).toBeVisible();
+  await expect(sourceRow(page, "기상청 해상 특보")).toContainText("정상");
+  resolveCollection();
+  await expect(page.getByText("다시 읽는 중")).toHaveCount(0);
+});
