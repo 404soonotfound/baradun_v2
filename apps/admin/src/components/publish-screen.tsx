@@ -6,6 +6,7 @@ import { useAuthSession, useSessionSnapshot } from "@/lib/auth/provider";
 import type { BeachName } from "@/lib/beach-names";
 import { reasonLabels, type Category } from "@/lib/beaches";
 import { kstDateTime } from "@/lib/inquiries";
+import { LOADING_TIMES, withTimeout } from "@/lib/loading-timing";
 import { fill, messages } from "@/lib/messages";
 import {
   PUBLISH_POLICY_URL,
@@ -54,7 +55,16 @@ import {
   TH,
   TR,
 } from "./data-table";
-import { useSlow } from "./use-slow";
+import {
+  LoadFailed,
+  LoadingStatus,
+  SkBox,
+  SkLine,
+  SkPill,
+  SlowNote,
+  loadClass,
+  useLoadTiming,
+} from "./loading";
 import { Button, Notice, SUCCESS_BADGE } from "./ui";
 
 // 데이터 게시 (#331, 화면 설계서 6장 ADM-PUB, 시안 4차 V16·VM8·VM9·V30·N2·F4·E2·E4·E10·VE2)
@@ -97,34 +107,61 @@ function usePermission(): {
   };
 }
 
+const OVERVIEW_TIMEOUT: OpsResult<PublishOverview> = {
+  ok: false,
+  status: 504,
+  code: "timeout",
+  requestId: null,
+};
+
 function useOverview(enabled: boolean) {
   const session = useAuthSession();
   const snapshot = useSessionSnapshot();
-  const generation = snapshot.status === "signed_out" ? 0 : snapshot.generation;
+  const signedIn = snapshot.status !== "signed_out";
+  const generation = signedIn ? snapshot.generation : 0;
   const [attempt, setAttempt] = useState(0);
   const key = `${attempt}|${generation}`;
   const [loaded, setLoaded] = useState<{
     key: string;
+    timedOut: boolean;
     result: OpsResult<PublishOverview>;
   } | null>(null);
-  const [good, setGood] = useState<PublishOverview | null>(null);
+  const [good, setGood] = useState<{
+    generation: number;
+    body: PublishOverview;
+  } | null>(null);
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled || !signedIn) return;
     let live = true;
-    void fetchPublishOverview(() => session.accessToken()).then((next) => {
+    void withTimeout<{
+      readonly timedOut: boolean;
+      readonly result: OpsResult<PublishOverview>;
+    }>(
+      async () => ({
+        timedOut: false,
+        result: await fetchPublishOverview(() => session.accessToken()),
+      }),
+      { timedOut: true, result: OVERVIEW_TIMEOUT },
+      LOADING_TIMES.timeout,
+    ).then(({ timedOut, result: next }) => {
       if (!live) return;
-      setLoaded({ key, result: next });
-      if (next.ok) setGood(next.body);
+      setLoaded({ key, timedOut, result: next });
+      if (next.ok) setGood({ generation, body: next.body });
     });
     return () => {
       live = false;
     };
-  }, [session, key, enabled]);
-  const current = loaded?.key === key ? loaded.result : null;
+  }, [session, key, enabled, signedIn, generation]);
+  const current = signedIn && loaded?.key === key ? loaded : null;
+  const kept = signedIn && good?.generation === generation ? good.body : null;
   return {
-    view: good,
-    waiting: enabled && current === null,
-    failure: current && !current.ok ? current : null,
+    view: kept,
+    waiting: enabled && signedIn && current === null,
+    timedOut: current !== null && current.timedOut,
+    failure:
+      current && !current.timedOut && !current.result.ok
+        ? current.result
+        : null,
     reload: () => setAttempt((n) => n + 1),
   };
 }
@@ -730,7 +767,8 @@ function PreviewDrawer({
   onClose: () => void;
   onPublish: () => void;
 }) {
-  const slow = useSlow(waiting);
+  const timing = useLoadTiming(waiting);
+  const slow = timing.slow;
   const dialogRef = useRef<HTMLDialogElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
@@ -754,9 +792,35 @@ function PreviewDrawer({
   let body: ReactNode;
   if (waiting) {
     body = (
-      <p role="status" className="text-body-s text-text-muted">
-        {slow ? t.slow : t.preview.loading}
-      </p>
+      <div
+        aria-busy="true"
+        className={`flex flex-col gap-5 ${loadClass(timing)}`}
+      >
+        <LoadingStatus busy label={t.preview.loading} />
+        <span role="status" className="sr-only">
+          {slow ? messages.loading.slow : ""}
+        </span>
+        <div className="grid grid-cols-2 gap-3 rounded-admin-box border border-border-default bg-bg-page p-3.5 sm:grid-cols-4">
+          {[0, 1, 2, 3].map((i) => (
+            <div key={i} className="flex flex-col gap-1.5">
+              <SkLine className="w-12" />
+              <SkLine className="h-[18px] w-10" />
+            </div>
+          ))}
+        </div>
+        <div className="flex flex-col gap-2">
+          <SkLine className="h-[16px] w-28" />
+          <SkLine className="w-64 max-w-full" />
+          <SkLine className="w-56 max-w-full" />
+          <SkLine className="w-60 max-w-full" />
+        </div>
+        <div className="flex flex-col gap-2">
+          <SkLine className="h-[16px] w-24" />
+          <SkLine className="w-52 max-w-full" />
+          <SkLine className="w-44 max-w-full" />
+        </div>
+        {slow && <SlowNote />}
+      </div>
     );
   } else if (failure) {
     body = (
@@ -1378,7 +1442,181 @@ type Dialog =
 
 type Message = { tone: "success" | "warn" | "fail"; text: string };
 
-export function PublishScreen({
+function PublishSkeleton({
+  cls,
+  slow,
+}: {
+  cls: string;
+  slow: boolean;
+}) {
+  const kpiLabels = [t.current, t.nextAuto, t.pending, t.last24h.label];
+  return (
+    <div aria-busy="true" className={`flex flex-col gap-3 ${cls}`}>
+      <dl className="mt-2 grid grid-cols-2 overflow-hidden rounded-admin-box border border-border-default bg-bg-surface shadow-card lg:grid-cols-4">
+        {kpiLabels.map((label) => (
+          <div
+            key={label}
+            className="border-b border-border-default px-4 py-3.5 odd:border-r lg:border-r lg:border-b-0 lg:last:border-r-0 [&:nth-child(n+3)]:border-b-0"
+          >
+            <dt className="text-body-s font-semibold text-text-body">{label}</dt>
+            <dd className="mt-1 flex h-[28px] items-center">
+              <SkLine className="h-[18px] w-20" />
+            </dd>
+            <dd className="mt-0.5 flex h-[18px] items-center">
+              <SkLine className="w-28 max-w-full" />
+            </dd>
+          </div>
+        ))}
+      </dl>
+
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-admin-box border border-border-default bg-bg-surface px-3 py-2 text-body-s text-text-body">
+        <b className="font-semibold text-text-default">{t.settings.title}</b>
+        <SkLine className="w-64 max-w-full" />
+      </div>
+      {slow && <SlowNote />}
+
+      <div className="mt-4 grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_300px] lg:items-start">
+        <section
+          aria-labelledby="publish-history-sk"
+          className="flex min-w-0 flex-col gap-3"
+        >
+          <h2
+            id="publish-history-sk"
+            className="text-title-s font-semibold text-text-default"
+          >
+            {t.history}
+          </h2>
+          <div className="hidden overflow-x-auto md:block">
+            <DataTable
+              caption={t.history}
+              className="[&_th]:px-2.5 [&_td]:px-2.5 [&_th:first-child]:pl-3.5 [&_td:first-child]:pl-3.5 [&_th:last-child]:pr-3.5 [&_td:last-child]:pr-3.5"
+              head={
+                <>
+                  <th scope="col" className={TH}>
+                    {t.col.at}
+                  </th>
+                  <th scope="col" className={TH}>
+                    {t.col.changes}
+                  </th>
+                  <th scope="col" className={TH}>
+                    {t.col.verify}
+                  </th>
+                  <th scope="col" className={TH}>
+                    {t.col.result}
+                  </th>
+                  <th scope="col" className={`${TH} ${CELL_END}`}>
+                    <span className="sr-only">{t.col.actions}</span>
+                  </th>
+                </>
+              }
+            >
+              {Array.from({ length: 6 }, (_, i) => (
+                <tr key={i} className={TR}>
+                  <td className={TD}>
+                    <SkLine className="w-20" />
+                  </td>
+                  <td className={TD}>
+                    <span className="flex flex-col gap-1">
+                      <SkLine className="w-28" />
+                      <SkLine className="w-16" />
+                    </span>
+                  </td>
+                  <td className={TD}>
+                    <SkLine className="w-16" />
+                  </td>
+                  <td className={TD}>
+                    <SkPill className="h-5 w-14" />
+                  </td>
+                  <td className={`${TD} ${CELL_END}`}>
+                    <SkLine className="w-12" />
+                  </td>
+                </tr>
+              ))}
+            </DataTable>
+          </div>
+          <ul className="flex flex-col divide-y divide-border-default rounded-admin-box border border-border-default bg-bg-surface md:hidden">
+            {Array.from({ length: 6 }, (_, i) => (
+              <li key={i} className="flex flex-col gap-1.5 px-3 py-2.5">
+                <div className="flex items-center justify-between gap-2">
+                  <SkLine className="w-28" />
+                  <SkPill className="h-5 w-14" />
+                </div>
+                <SkLine className="w-40" />
+                <SkLine className="w-24" />
+              </li>
+            ))}
+          </ul>
+          <div className="flex items-center justify-between gap-2 text-body-s text-text-muted">
+            <SkLine className="w-16" />
+            <div className="flex items-center gap-1.5">
+              <SkLine className="h-7 w-12" />
+              <SkLine className="h-7 w-12" />
+            </div>
+          </div>
+        </section>
+
+        <div className="flex flex-col gap-8">
+          <section
+            aria-labelledby="publish-pending-sk"
+            className="flex flex-col gap-3"
+          >
+            <h2
+              id="publish-pending-sk"
+              className="text-title-s font-semibold text-text-default"
+            >
+              {t.pending}
+            </h2>
+            <ul className="flex flex-col divide-y divide-border-default border-t border-border-default">
+              <li className="flex flex-col gap-2 py-3">
+                <div className="flex items-center gap-2">
+                  <SkPill className="h-5 w-9" />
+                  <SkLine className="w-32" />
+                </div>
+                <SkLine className="w-48 max-w-full" />
+                <SkBox className="h-[112px] w-full" />
+              </li>
+              <li className="flex flex-col gap-2 py-3">
+                <div className="flex items-center gap-2">
+                  <SkPill className="h-5 w-9" />
+                  <SkLine className="w-28" />
+                </div>
+                <SkLine className="w-40 max-w-full" />
+              </li>
+            </ul>
+          </section>
+
+          <section
+            aria-labelledby="publish-checks-sk"
+            className="flex flex-col gap-3"
+          >
+            <h2
+              id="publish-checks-sk"
+              className="text-title-s font-semibold text-text-default"
+            >
+              {t.checksTitleLatest}
+            </h2>
+            <div className="divide-y divide-border-default border-t border-border-default">
+              {[0, 1, 2].map((i) => (
+                <div
+                  key={i}
+                  className="flex items-center justify-between gap-3 py-2.5"
+                >
+                  <div className="flex flex-col gap-1">
+                    <SkLine className="w-28" />
+                    <SkLine className="w-36" />
+                  </div>
+                  <SkLine className="size-3.5" />
+                </div>
+              ))}
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PublishBody({
   beaches,
 }: {
   beaches: Readonly<Record<string, BeachName>>;
@@ -1387,7 +1625,12 @@ export function PublishScreen({
   const permission = usePermission();
   const overview = useOverview(!permission.demo);
   const view = overview.view;
-  const firstSlow = useSlow(overview.waiting && view === null);
+  const waitingOverview = !permission.demo && overview.waiting && view === null;
+  const timing = useLoadTiming(waitingOverview);
+  const placeholder =
+    !permission.demo &&
+    view === null &&
+    (overview.waiting || timing.phase !== "content");
 
   // 이 탭에서 보는 작업. 없으면 서버의 마지막 작업 중 진행 중인 것
   const [job, setJob] = useState<JobView | null>(null);
@@ -1642,25 +1885,17 @@ export function PublishScreen({
   if (permission.demo) {
     content = <Notice tone="neutral" title={t.demo} />;
   } else if (!view) {
-    content = overview.failure ? (
+    content = placeholder ? (
+      <PublishSkeleton cls={loadClass(timing)} slow={timing.slow} />
+    ) : overview.timedOut ? (
+      <LoadFailed onRetry={overview.reload} />
+    ) : overview.failure ? (
       <FailureNotice
         title={fill(t.unread, { what: t.unreadWhat.current })}
         failure={overview.failure}
         onRetry={overview.reload}
       />
-    ) : (
-      <div role="status" aria-busy="true" className="flex flex-col gap-3">
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          {[0, 1, 2, 3].map((n) => (
-            <div
-              key={n}
-              className="h-20 rounded-admin-box bg-bg-page motion-safe:animate-pulse"
-            />
-          ))}
-        </div>
-        {firstSlow && <p className="text-body-s text-text-muted">{t.slow}</p>}
-      </div>
-    );
+    ) : null;
   } else {
     const next = view.nextAuto;
     const historyItems = view.history.ok ? view.history.items : [];
@@ -1920,8 +2155,18 @@ export function PublishScreen({
     rbResult?.ok && rbResult.body.available ? rbResult.body : null;
 
   return (
-    <AdminShell title={messages.nav.publish}>
-      <div className="flex w-full flex-col gap-4 px-4 py-5 md:px-10 md:pt-6 md:pb-10">
+    <>
+      <LoadingStatus
+        busy={waitingOverview}
+        label={fill(messages.loading.screen, { name: messages.nav.publish })}
+      />
+      <span role="status" className="sr-only">
+        {timing.slow ? messages.loading.slow : ""}
+      </span>
+      <div
+        aria-busy={placeholder || undefined}
+        className="flex w-full flex-col gap-4 px-4 py-5 md:px-10 md:pt-6 md:pb-10"
+      >
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h1 className="text-title-l font-semibold text-text-default">
@@ -1934,14 +2179,14 @@ export function PublishScreen({
               <Button
                 variant="secondary"
                 size="small"
-                disabled={!view || preview.waiting}
+                disabled={!view || placeholder || preview.waiting}
                 onClick={(e) => loadPreview(e.currentTarget)}
               >
                 {t.previewButton}
               </Button>
               <Button
                 size="small"
-                disabled={!view || locked !== null}
+                disabled={!view || placeholder || locked !== null}
                 aria-describedby={locked ? "publish-locked" : undefined}
                 onClick={(e) => openPublish(e.currentTarget)}
               >
@@ -2032,7 +2277,11 @@ export function PublishScreen({
         >
           <p>{t.confirmRollbackBody}</p>
           {rollbackPreview === "loading" && (
-            <p role="status">{t.rollbackPreviewLoading}</p>
+            <div aria-busy="true" className="flex flex-col gap-1.5">
+              <LoadingStatus busy label={t.rollbackPreviewLoading} />
+              <SkLine className="w-60 max-w-full" />
+              <SkLine className="w-40" />
+            </div>
           )}
           {rbResult && !rbResult.ok && (
             <p role="alert" className="text-danger-fg">
@@ -2089,6 +2338,19 @@ export function PublishScreen({
           </label>
         </ConfirmDialog>
       )}
+    </>
+  );
+}
+
+export function PublishScreen({
+  beaches,
+}: {
+  beaches: Readonly<Record<string, BeachName>>;
+}) {
+  const body = <PublishBody beaches={beaches} />;
+  return (
+    <AdminShell title={messages.nav.publish} loading={body}>
+      {body}
     </AdminShell>
   );
 }

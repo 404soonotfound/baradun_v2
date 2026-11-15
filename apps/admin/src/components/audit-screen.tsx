@@ -25,9 +25,19 @@ import type { OpsResult } from "@/lib/auth/ops-fetch";
 import { useAuthSession, useSessionSnapshot } from "@/lib/auth/provider";
 import type { BeachName } from "@/lib/beach-names";
 import { isInquiryStatus, kstDateTime, shortId } from "@/lib/inquiries";
+import { LOADING_TIMES, withTimeout } from "@/lib/loading-timing";
 import { fill, messages } from "@/lib/messages";
 import { kstRange } from "@/lib/notices";
 import { AdminShell } from "./admin-shell";
+import {
+  LoadFailed,
+  LoadingStatus,
+  SkLine,
+  SkPill,
+  SlowNote,
+  loadClass,
+  useLoadTiming,
+} from "./loading";
 import { Button, Notice } from "./ui";
 
 // 운영자 변경 이력 (BRD-155·#460, 화면 설계서 6장 ADM-AUD, 시안 4차 V23·VM14)
@@ -461,11 +471,102 @@ function currentTime(): number {
   return Date.now();
 }
 
+const AUDIT_TIMEOUT: OpsResult<AuditPage> = {
+  ok: false,
+  status: 504,
+  code: "timeout",
+  requestId: null,
+};
+
+function AuditSkeleton({
+  cls,
+  slow,
+}: {
+  cls: string;
+  slow: boolean;
+}) {
+  const cols = [
+    t.colAt,
+    t.colActor,
+    t.colKind,
+    t.colTarget,
+    t.colSummary,
+    t.colWhere,
+  ];
+  const rows = ["w-24", "w-32", "w-20", "w-28", "w-24", "w-32"];
+  return (
+    <div aria-busy="true" className={`flex flex-col gap-3 ${cls}`}>
+      {slow && <SlowNote />}
+      <table className="hidden w-full border-separate border-spacing-0 overflow-hidden rounded-admin-box border border-border-default bg-bg-surface text-body md:table">
+        <thead>
+          <tr className="bg-bg-page text-left text-label-s font-semibold text-text-body">
+            {cols.map((label) => (
+              <th
+                key={label}
+                scope="col"
+                className="border-b border-border-default px-3 py-2 first:pl-4"
+              >
+                {label}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {Array.from({ length: Math.min(AUDIT_PAGE_SIZE, 8) }, (_, i) => (
+            <tr key={i}>
+              <td className="border-b border-border-default px-3 py-2.5 pl-4">
+                <SkLine className="w-24" />
+              </td>
+              <td className="border-b border-border-default px-3 py-2.5">
+                <span className="inline-flex items-center gap-2">
+                  <SkLine className="size-6 rounded-full" />
+                  <SkLine className="w-24" />
+                </span>
+              </td>
+              <td className="border-b border-border-default px-3 py-2.5">
+                <SkPill className="h-5 w-12" />
+              </td>
+              <td className="border-b border-border-default px-3 py-2.5">
+                <SkLine className="w-20" />
+              </td>
+              <td className="border-b border-border-default px-3 py-2.5">
+                <SkLine className={rows[i % rows.length]!} />
+              </td>
+              <td className="border-b border-border-default px-3 py-2.5">
+                <SkLine className="w-12" />
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <div className="flex flex-col gap-4 md:hidden">
+        {[0, 1].map((g) => (
+          <div key={g} className="flex flex-col gap-1.5">
+            <SkLine className="w-20" />
+            <ul className="flex flex-col divide-y divide-border-default rounded-admin-box border border-border-default bg-bg-surface">
+              {[0, 1, 2].map((r) => (
+                <li key={r} className="flex flex-col gap-1.5 px-4 py-3">
+                  <span className="flex items-center gap-2">
+                    <SkPill className="h-5 w-12" />
+                    <SkLine className="w-24" />
+                  </span>
+                  <SkLine className="w-48 max-w-full" />
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function AuditBody({ beaches }: { beaches: Beaches }) {
   const session = useAuthSession();
   const snapshot = useSessionSnapshot();
-  const demo = snapshot.status !== "signed_out" && snapshot.pool === "demo";
-  const generation = snapshot.status === "signed_out" ? 0 : snapshot.generation;
+  const signedIn = snapshot.status !== "signed_out";
+  const demo = signedIn && snapshot.pool === "demo";
+  const generation = signedIn ? snapshot.generation : 0;
   // 시안 V23: 기본 기간 최근 7일
   const [days, setDays] = useState<AuditPeriod>(7);
   const [category, setCategory] = useState<AuditCategory | null>(null);
@@ -493,23 +594,34 @@ function AuditBody({ beaches }: { beaches: Beaches }) {
   const [seen, setSeen] = useState<string[]>([]);
   const [loaded, setLoaded] = useState<{
     key: string;
+    timedOut: boolean;
     result: OpsResult<AuditPage>;
   } | null>(null);
 
   useEffect(() => {
-    if (demo) return;
+    if (!signedIn || demo) return;
     let live = true;
     const asked = JSON.parse(filterText) as AuditFilter;
     // 같은 거르기(분류 제외)의 탭 수를 이미 가졌으면 서버가 다시 세지 않게 함(분류 탭만 바꿈)
     const haveCounts = countsKey.current === countKey;
-    void fetchAudit(
-      () => session.accessToken(),
-      asked,
-      cursor,
-      !haveCounts,
-    ).then((next) => {
+    void withTimeout<{
+      readonly timedOut: boolean;
+      readonly result: OpsResult<AuditPage>;
+    }>(
+      async () => ({
+        timedOut: false,
+        result: await fetchAudit(
+          () => session.accessToken(),
+          asked,
+          cursor,
+          !haveCounts,
+        ),
+      }),
+      { timedOut: true, result: AUDIT_TIMEOUT },
+      LOADING_TIMES.timeout,
+    ).then(({ timedOut, result: next }) => {
       if (!live) return;
-      setLoaded({ key, result: next });
+      setLoaded({ key, timedOut, result: next });
       if (!next.ok) return;
       if (next.body.counts) {
         countsKey.current = countKey;
@@ -526,7 +638,7 @@ function AuditBody({ beaches }: { beaches: Beaches }) {
     return () => {
       live = false;
     };
-  }, [session, key, filterText, countKey, cursor, demo]);
+  }, [session, signedIn, key, filterText, countKey, cursor, demo]);
 
   const refilter = (change: () => void) => {
     change();
@@ -548,7 +660,12 @@ function AuditBody({ beaches }: { beaches: Beaches }) {
     return () => clearTimeout(timer);
   }, [typed, q]);
 
-  const result = loaded?.key === key ? loaded.result : null;
+  const current = signedIn && loaded?.key === key ? loaded : null;
+  const pending = signedIn && !demo && current === null;
+  const timing = useLoadTiming(pending);
+  const placeholder = !demo && (pending || timing.phase !== "content");
+  const result = placeholder ? null : (current?.result ?? null);
+  const timedOut = !placeholder && current !== null && current.timedOut;
   const items = result?.ok ? result.body.items : [];
   const nextCursor = result?.ok ? result.body.nextCursor : null;
   const tabCounts = counts?.key === countKey ? counts.counts : null;
@@ -724,12 +841,15 @@ function AuditBody({ beaches }: { beaches: Beaches }) {
           </div>
 
           <div className="mt-3 flex flex-col gap-3">
-            {result === null && (
-              <p role="status" className="text-body-s text-text-muted">
-                {t.loading}
-              </p>
+            <LoadingStatus busy={pending} label={t.loading} />
+            <span role="status" className="sr-only">
+              {timing.slow ? messages.loading.slow : ""}
+            </span>
+            {placeholder && (
+              <AuditSkeleton cls={loadClass(timing)} slow={timing.slow} />
             )}
-            {result && !result.ok && (
+            {timedOut && <LoadFailed onRetry={() => setAttempt((n) => n + 1)} />}
+            {!timedOut && result && !result.ok && (
               <Failure
                 title={t.error}
                 result={result}
@@ -929,9 +1049,10 @@ function AuditBody({ beaches }: { beaches: Beaches }) {
 }
 
 export function AuditScreen({ beaches }: { beaches: Beaches }) {
+  const body = <AuditBody beaches={beaches} />;
   return (
-    <AdminShell title={t.title}>
-      <AuditBody beaches={beaches} />
+    <AdminShell title={t.title} loading={body}>
+      {body}
     </AdminShell>
   );
 }

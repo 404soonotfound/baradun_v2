@@ -13,6 +13,7 @@ import {
 import type { OpsResult } from "@/lib/auth/ops-fetch";
 import { useAuthSession, useSessionSnapshot } from "@/lib/auth/provider";
 import { kstDateTime } from "@/lib/inquiries";
+import { LOADING_TIMES, withTimeout } from "@/lib/loading-timing";
 import { fill, messages } from "@/lib/messages";
 import {
   createNotice,
@@ -45,6 +46,16 @@ import {
 } from "@baradun/contracts/notice-rules";
 import { AdminShell } from "./admin-shell";
 import { CELL_END, CELL_NAME, DataTable, TD, TH, TR } from "./data-table";
+import {
+  LoadFailed,
+  LoadingStatus,
+  SkBox,
+  SkLine,
+  SkPill,
+  SlowNote,
+  loadClass,
+  useLoadTiming,
+} from "./loading";
 import { Button, Notice, SUCCESS_BADGE } from "./ui";
 
 // 운영자 공지 목록·편집 (BRD-151, 화면 설계서 6장 ADM-NTC, 시안 4차 V18·V19·VM10·VM11·E5·E10·F5)
@@ -77,41 +88,68 @@ function usePermissions(): { edit: string | null; publish: string | null } {
   };
 }
 
+const NOTICES_TIMEOUT: OpsResult<{ items: NoticeView[] }> = {
+  ok: false,
+  status: 504,
+  code: "timeout",
+  requestId: null,
+};
+
 // 목록 읽기. 다시 로그인하면(generation이 늚) 'reauth'로 끝난 읽기를 저절로 다시 함
 function useNoticeList(): {
   result: OpsResult<{ items: NoticeView[] }> | null;
+  waiting: boolean;
+  timedOut: boolean;
   // 앞서 받은 목록을 보이는 채로 다시 읽기만 실패함(편집 중 쓰던 내용을 지우지 않게 위에 실패만 알림)
   refreshFailure: Failed | null;
   reload: () => void;
 } {
   const session = useAuthSession();
   const snapshot = useSessionSnapshot();
-  const generation = snapshot.status === "signed_out" ? 0 : snapshot.generation;
+  const signedIn = snapshot.status !== "signed_out";
+  const generation = signedIn ? snapshot.generation : 0;
   const [attempt, setAttempt] = useState(0);
   const key = `${attempt}|${generation}`;
   const [loaded, setLoaded] = useState<{
     key: string;
+    timedOut: boolean;
     result: OpsResult<{ items: NoticeView[] }>;
   } | null>(null);
   // 마지막으로 성공한 목록. 다시 읽는 중에는 이것을 그대로 보여 줌(편집 중 내용이 깜빡이지 않게)
-  const [good, setGood] = useState<OpsResult<{ items: NoticeView[] }> | null>(
-    null,
-  );
+  const [good, setGood] = useState<{
+    generation: number;
+    result: OpsResult<{ items: NoticeView[] }>;
+  } | null>(null);
   useEffect(() => {
+    if (!signedIn) return;
     let live = true;
-    void fetchNotices(() => session.accessToken()).then((next) => {
+    void withTimeout<{
+      readonly timedOut: boolean;
+      readonly result: OpsResult<{ items: NoticeView[] }>;
+    }>(
+      async () => ({
+        timedOut: false,
+        result: await fetchNotices(() => session.accessToken()),
+      }),
+      { timedOut: true, result: NOTICES_TIMEOUT },
+      LOADING_TIMES.timeout,
+    ).then(({ timedOut, result: next }) => {
       if (!live) return;
-      setLoaded({ key, result: next });
-      if (next.ok) setGood(next);
+      setLoaded({ key, timedOut, result: next });
+      if (next.ok) setGood({ generation, result: next });
     });
     return () => {
       live = false;
     };
-  }, [session, key]);
-  const current = loaded?.key === key ? loaded.result : null;
+  }, [session, signedIn, key, generation]);
+  const current = signedIn && loaded?.key === key ? loaded : null;
+  const kept = signedIn && good?.generation === generation ? good.result : null;
   return {
-    result: current?.ok ? current : (good ?? current),
-    refreshFailure: good && current && !current.ok ? current : null,
+    result: current?.result.ok ? current.result : (kept ?? current?.result ?? null),
+    waiting: signedIn && current === null && kept === null,
+    timedOut: current !== null && current.timedOut && kept === null,
+    refreshFailure:
+      kept && current && !current.result.ok ? current.result : null,
     reload: () => setAttempt((n) => n + 1),
   };
 }
@@ -562,17 +600,131 @@ function RowMenu({
   );
 }
 
+function NoticeListSkeleton({
+  cls,
+  slow,
+}: {
+  cls: string;
+  slow: boolean;
+}) {
+  const rows = ["w-36", "w-28", "w-40", "w-32", "w-36", "w-28"];
+  return (
+    <div aria-busy="true" className={`flex flex-col gap-3 ${cls}`}>
+      {slow && <SlowNote />}
+      <div className="hidden md:block">
+        <DataTable
+          caption={t.listTitle}
+          head={
+            <>
+              <th scope="col" className={TH}>
+                {t.colTitle}
+              </th>
+              <th scope="col" className={TH}>
+                {t.colPeriod}
+              </th>
+              <th scope="col" className={TH}>
+                {t.colText}
+              </th>
+              <th scope="col" className={TH}>
+                {t.colState}
+              </th>
+              <th scope="col" className={TH}>
+                {t.colUpdated}
+              </th>
+              <th scope="col" className={`${TH} ${CELL_END}`}>
+                <span className="sr-only">{t.colActions}</span>
+              </th>
+            </>
+          }
+        >
+          {rows.map((w, i) => (
+            <tr key={i} className={TR}>
+              <td className={TD}>
+                <span className="flex flex-col gap-1">
+                  <SkLine className={w} />
+                  <SkLine className="w-24" />
+                </span>
+              </td>
+              <td className={TD}>
+                <SkLine className="w-28" />
+              </td>
+              <td className={TD}>
+                <SkLine className="w-16" />
+              </td>
+              <td className={TD}>
+                <SkPill className="h-5 w-11" />
+              </td>
+              <td className={TD}>
+                <SkLine className="w-20" />
+              </td>
+              <td className={`${TD} ${CELL_END}`}>
+                <SkLine className="w-8" />
+              </td>
+            </tr>
+          ))}
+        </DataTable>
+      </div>
+      <ul className="flex flex-col divide-y divide-border-default rounded-admin-box border border-border-default bg-bg-surface md:hidden">
+        {rows.map((w, i) => (
+          <li key={i} className="flex flex-col gap-1.5 px-4 py-3">
+            <SkPill className="h-5 w-11" />
+            <SkLine className={w} />
+            <SkLine className="w-48 max-w-full" />
+            <SkLine className="w-32" />
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function NoticeEditorSkeleton({
+  cls,
+  slow,
+}: {
+  cls: string;
+  slow: boolean;
+}) {
+  return (
+    <div aria-busy="true" className={`flex flex-col gap-4 ${cls}`}>
+      {slow && <SlowNote />}
+      <div className="flex items-center justify-between gap-2">
+        <SkLine className="h-5 w-44" />
+        <div className="flex gap-2">
+          <SkLine className="h-8 w-16" />
+          <SkLine className="h-8 w-20" />
+        </div>
+      </div>
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="flex flex-col gap-4 rounded-admin-box border border-border-default bg-bg-surface p-5">
+          <SkLine className="h-9 w-full" />
+          <SkBox className="h-24 w-full" />
+          <SkLine className="h-9 w-full" />
+          <SkBox className="h-24 w-full" />
+        </div>
+        <SkBox className="h-64 w-full" />
+      </div>
+    </div>
+  );
+}
+
 function NoticeList({
   result,
+  waiting,
+  timedOut,
   onRetry,
   onReload,
   flash,
 }: {
   result: OpsResult<{ items: NoticeView[] }> | null;
+  waiting: boolean;
+  timedOut: boolean;
   onRetry: () => void;
   onReload: () => void;
   flash: string | null;
 }) {
+  const timing = useLoadTiming(waiting);
+  const placeholder = waiting || timing.phase !== "content";
   const router = useRouter();
   const session = useAuthSession();
   const snapshot = useSessionSnapshot();
@@ -861,15 +1013,18 @@ function NoticeList({
         )}
 
         <div className="mt-3">
-          {result === null && (
-            <p role="status" className="text-body-s text-text-muted">
-              {t.loading}
-            </p>
+          <LoadingStatus busy={waiting} label={t.loading} />
+          <span role="status" className="sr-only">
+            {timing.slow ? messages.loading.slow : ""}
+          </span>
+          {placeholder && (
+            <NoticeListSkeleton cls={loadClass(timing)} slow={timing.slow} />
           )}
-          {result && !result.ok && (
+          {!placeholder && timedOut && <LoadFailed onRetry={onRetry} />}
+          {!placeholder && !timedOut && result && !result.ok && (
             <Failure title={t.listError} result={result} onRetry={onRetry} />
           )}
-          {result?.ok && items.length === 0 && (
+          {!placeholder && !timedOut && result?.ok && items.length === 0 && (
             <div className="rounded-admin-box border border-border-default bg-bg-surface px-4 py-6 text-center">
               <p className="text-title-s font-semibold text-text-default">
                 {t.emptyTitle}
@@ -896,7 +1051,7 @@ function NoticeList({
               )}
             </div>
           )}
-          {result?.ok && items.length > 0 && (
+          {!placeholder && !timedOut && result?.ok && items.length > 0 && (
             <>
               {/* 태블릿·PC: 공통 표 */}
               <div className="hidden md:block">
@@ -2210,7 +2365,7 @@ function NoticesBody() {
   const params = useSearchParams();
   const id = params.get("id");
   const creating = params.get("new") === "1";
-  const { result, refreshFailure, reload } = useNoticeList();
+  const { result, waiting, timedOut, refreshFailure, reload } = useNoticeList();
   // 저장·확정 안내. 화면(목록·편집)이 바뀌어도 이 값으로 한 번 보여 줌
   const [flash, setFlash] = useState<{ at: string; text: string } | null>(null);
   const here = id ?? (creating ? "new" : "list");
@@ -2223,6 +2378,12 @@ function NoticesBody() {
     id && result?.ok
       ? (result.body.items.find((n) => n.id === id) ?? null)
       : null;
+  const editWaiting = Boolean(
+    id && (waiting || (result?.ok && !notice && id === created)),
+  );
+  const editTiming = useLoadTiming(editWaiting);
+  const editPlaceholder =
+    Boolean(id) && (editWaiting || editTiming.phase !== "content");
 
   return (
     <div className="px-4 py-5 md:px-10 md:pt-6 md:pb-10">
@@ -2238,6 +2399,8 @@ function NoticesBody() {
       {!editing && (
         <NoticeList
           result={result}
+          waiting={waiting}
+          timedOut={timedOut}
           onRetry={reload}
           onReload={reload}
           flash={flash?.at === "list" ? flash.text : null}
@@ -2255,16 +2418,23 @@ function NoticesBody() {
               onRetry={reload}
             />
           )}
-          {id &&
-            (result === null || (result.ok && !notice && id === created)) && (
-              <p role="status" className="text-body-s text-text-muted">
-                {t.loading}
-              </p>
-            )}
-          {id && result && !result.ok && (
+          {editPlaceholder && (
+            <>
+              <LoadingStatus busy={editWaiting} label={t.loading} />
+              <span role="status" className="sr-only">
+                {editTiming.slow ? messages.loading.slow : ""}
+              </span>
+              <NoticeEditorSkeleton
+                cls={loadClass(editTiming)}
+                slow={editTiming.slow}
+              />
+            </>
+          )}
+          {!editPlaceholder && id && timedOut && <LoadFailed onRetry={reload} />}
+          {!editPlaceholder && id && !timedOut && result && !result.ok && (
             <Failure title={t.listError} result={result} onRetry={reload} />
           )}
-          {id && result?.ok && !notice && id !== created && (
+          {!editPlaceholder && id && result?.ok && !notice && id !== created && (
             <div className="flex flex-col items-start gap-2 py-6">
               <p className="text-title-s font-semibold text-text-default">
                 {t.notFoundTitle}
@@ -2275,7 +2445,7 @@ function NoticesBody() {
               </Button>
             </div>
           )}
-          {(creating || notice) && (
+          {(creating || (notice && !editPlaceholder)) && (
             <NoticeEditor
               key={id ?? "new"}
               notice={notice}
@@ -2305,12 +2475,15 @@ function NoticesBody() {
 }
 
 export function NoticesScreen() {
+  const body = (
+    <Suspense fallback={null}>
+      <NoticesBody />
+    </Suspense>
+  );
   return (
-    <AdminShell title={t.title}>
+    <AdminShell title={t.title} loading={body}>
       {/* 정적 내보내기라 주소 ?id= 는 브라우저에서 읽음(useSearchParams는 Suspense 안) */}
-      <Suspense fallback={null}>
-        <NoticesBody />
-      </Suspense>
+      {body}
     </AdminShell>
   );
 }

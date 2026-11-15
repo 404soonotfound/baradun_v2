@@ -14,11 +14,13 @@ import {
   reasonText,
   successRate,
   type BarState,
+  type CollectionJobId,
   type CollectionView,
   type JobCollection,
   type RunView,
 } from "@/lib/collection";
 import { kstDateTime } from "@/lib/inquiries";
+import { LOADING_TIMES, withTimeout } from "@/lib/loading-timing";
 import { fill, messages } from "@/lib/messages";
 import {
   fetchSources,
@@ -37,6 +39,17 @@ import {
   type SourceView,
 } from "@/lib/sources";
 import { AdminShell } from "./admin-shell";
+import {
+  LoadFailed,
+  LoadingStatus,
+  SkBox,
+  SkLine,
+  SkPill,
+  SlowNote,
+  Spinner,
+  loadClass,
+  useLoadTiming,
+} from "./loading";
 import { Button, Notice, SUCCESS_BADGE } from "./ui";
 
 // 데이터 출처 목록·상세 (BRD-149·GH-328, 화면 설계서 6장 ADM-SRC, 시안 4차 V12·V13·VM13)
@@ -1133,46 +1146,415 @@ function SourceDetail({
 
 // ── 불러오기 ──
 
-function LoadingPlaceholder() {
+const KNOWN_SOURCE_IDS: readonly CollectionJobId[] = [
+  "collect-warnings",
+  "collect-ocean",
+  "collect-rip",
+  "collect-weather",
+  "collect-catalog",
+];
+
+function knownSourceId(id: string | null): CollectionJobId | null {
+  if (!id) return null;
+  return KNOWN_SOURCE_IDS.find((entry) => entry === id) ?? null;
+}
+
+const TIMEOUT_RESULT: OpsResult<SourcesView> = {
+  ok: false,
+  status: 504,
+  code: "timeout",
+  requestId: null,
+};
+
+function SourcesListSkeleton({
+  cls,
+  slow,
+}: {
+  cls: string;
+  slow: boolean;
+}) {
+  const kpis = [
+    t.kpiSources,
+    t.kpiJudgment,
+    fill(t.kpiExpiry, { days: EXPIRY_WINDOW_DAYS }),
+    t.kpiReference,
+  ];
+  const cell = "border-b border-border-default px-3 py-2.5 align-top";
+  const head = `${cell} text-left text-label-s font-medium text-text-muted`;
+  const rowClass = "grid grid-cols-[6rem_1fr] gap-2 py-1.5 text-body-s";
+  const judgmentLabels = [
+    t.fieldValues,
+    t.fieldCycle,
+    t.fieldApp,
+    t.fieldFailure,
+    t.fieldLastRun,
+  ];
   return (
-    <div role="status" className="flex flex-col gap-3">
-      <span className="text-body-s text-text-muted">{t.loading}</span>
-      <div aria-hidden="true" className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        {[0, 1, 2].map((i) => (
-          <span
-            key={i}
-            className="h-[88px] rounded-admin-box border border-border-default bg-bg-page"
-          />
+    <div aria-busy="true" className={`flex flex-col gap-4 ${cls}`}>
+      <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {kpis.map((label) => (
+          <div key={label} className={`flex flex-col gap-1 ${CARD}`}>
+            <dt className={LABEL}>{label}</dt>
+            <dd className="flex h-[28px] items-center">
+              <SkLine className="h-[18px] w-16" />
+            </dd>
+            <dd className={HINT}>
+              <SkLine className="w-24" />
+            </dd>
+          </div>
         ))}
-      </div>
-      <span
-        aria-hidden="true"
-        className="h-64 rounded-admin-box border border-border-default bg-bg-page"
-      />
+      </dl>
+
+      <section aria-labelledby="sources-judgment-sk" className="flex flex-col gap-2">
+        <div>
+          <h2 id="sources-judgment-sk" className="flex h-[22px] items-center">
+            <SkLine className="h-[14px] w-36" />
+          </h2>
+          <p className={HINT}>{t.judgmentHint}</p>
+        </div>
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+          {[0, 1].map((cardIndex) => (
+            <article key={cardIndex} className={`flex flex-col gap-2 ${CARD}`}>
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex min-w-0 flex-col gap-1">
+                  <SkLine className="w-20" />
+                  <SkLine className="h-[14px] w-32" />
+                  <SkLine className="w-24" />
+                </div>
+                <SkPill className="h-6 w-14" />
+              </div>
+              <dl className="divide-y divide-border-default">
+                {judgmentLabels.map((label) => (
+                  <div key={label} className={rowClass}>
+                    <dt className="text-text-muted">{label}</dt>
+                    <dd className="flex items-center">
+                      <SkLine className="w-36 max-w-full" />
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+              <div className="flex flex-col gap-1">
+                <span className={HINT}>{t.history24h}</span>
+                <span aria-hidden="true" className="flex gap-0.5">
+                  {Array.from({ length: 24 }, (_, i) => (
+                    <span key={i} className="sk h-4 flex-1 rounded-[2px]" />
+                  ))}
+                </span>
+              </div>
+            </article>
+          ))}
+        </div>
+        {slow && <SlowNote className="mt-1" />}
+      </section>
+
+      <section aria-labelledby="sources-reference-sk" className="flex flex-col gap-2">
+        <div>
+          <h2 id="sources-reference-sk" className="flex h-[22px] items-center">
+            <SkLine className="h-[14px] w-32" />
+          </h2>
+          <p className={HINT}>{t.referenceHint}</p>
+        </div>
+        <div className="hidden overflow-x-auto rounded-admin-box border border-border-default bg-bg-surface lg:block">
+          <table className="w-full text-body-s">
+            <thead>
+              <tr>
+                {[
+                  t.colSource,
+                  t.colCalls,
+                  t.colValues,
+                  t.colCycle,
+                  t.colApp,
+                  t.colState,
+                  t.colLastRun,
+                ].map((label) => (
+                  <th key={label} scope="col" className={head}>
+                    {label}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {["w-24", "w-20", "w-28"].map((w, i) => (
+                <tr key={i}>
+                  <th scope="row" className={`${cell} text-left font-normal`}>
+                    <span className="flex flex-col gap-1">
+                      <SkLine className={w} />
+                      <SkLine className="w-14" />
+                    </span>
+                  </th>
+                  <td className={cell}>
+                    <SkLine className="w-24" />
+                  </td>
+                  <td className={cell}>
+                    <SkLine className="w-28" />
+                  </td>
+                  <td className={cell}>
+                    <SkLine className="w-20" />
+                  </td>
+                  <td className={cell}>
+                    <SkLine className="w-20" />
+                  </td>
+                  <td className={cell}>
+                    <SkPill className="h-6 w-14" />
+                  </td>
+                  <td className={cell}>
+                    <SkLine className="w-20" />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <ul className="flex flex-col gap-2 lg:hidden">
+          {[0, 1, 2].map((i) => (
+            <li key={i} className={`flex flex-col gap-2 ${CARD}`}>
+              <div className="flex items-start justify-between gap-2">
+                <span className="flex flex-col gap-1">
+                  <SkLine className="w-24" />
+                  <SkLine className="w-16" />
+                </span>
+                <SkPill className="h-6 w-14" />
+              </div>
+              <SkLine className="w-40" />
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      <section aria-labelledby="sources-keys-sk" className="flex flex-col gap-2">
+        <div>
+          <h2
+            id="sources-keys-sk"
+            className="text-title-s font-semibold text-text-default"
+          >
+            {t.keysTitle}
+          </h2>
+          <p className={HINT}>{t.keysHint}</p>
+        </div>
+        <div
+          role="group"
+          aria-labelledby="sources-keys-sk"
+          tabIndex={0}
+          className="overflow-x-auto rounded-admin-box border border-border-default bg-bg-surface"
+        >
+          <table className="w-full min-w-[32rem] text-left text-body-s">
+            <thead className="border-b border-border-default bg-bg-page text-text-muted">
+              <tr>
+                {[
+                  t.colKey,
+                  t.colKeyState,
+                  t.colExpires,
+                  t.colDaysLeft,
+                  t.colUsedBy,
+                ].map((label) => (
+                  <th key={label} scope="col" className="px-3 py-2 font-medium">
+                    {label}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border-default">
+              {[0, 1].map((i) => (
+                <tr key={i}>
+                  <th scope="row" className="px-3 py-2 font-normal">
+                    <SkLine className="w-24" />
+                  </th>
+                  <td className="px-3 py-2">
+                    <SkPill className="h-5 w-14" />
+                  </td>
+                  <td className="px-3 py-2">
+                    <SkLine className="w-20" />
+                  </td>
+                  <td className="px-3 py-2">
+                    <SkLine className="w-12" />
+                  </td>
+                  <td className="px-3 py-2">
+                    <SkLine className="w-28" />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
     </div>
   );
 }
 
+function SourceDetailSkeleton({
+  knownId,
+  cls,
+  slow,
+}: {
+  knownId: CollectionJobId | null;
+  cls: string;
+  slow: boolean;
+}) {
+  const isJudgment =
+    knownId === "collect-warnings" || knownId === "collect-ocean";
+  const metricLabels = [
+    t.detailLastSuccess,
+    t.detailNext,
+    t.detailWeek,
+    t.detailReceived,
+  ];
+  const infoLabels = [
+    t.infoProvider,
+    t.infoKey,
+    t.infoExpires,
+    t.infoCollector,
+    t.metricTimeout,
+    t.metricLate,
+    t.metricBudget,
+    t.infoTerms,
+  ];
+  return (
+    <div aria-busy="true" className={`flex flex-col gap-4 ${cls}`}>
+      <div className="flex flex-col gap-1">
+        <div className="flex flex-wrap items-center gap-2">
+          {knownId ? (
+            <h1 className="text-title-l font-semibold text-text-default">
+              {t.name[knownId]}
+            </h1>
+          ) : (
+            <SkLine className="h-[24px] w-44" />
+          )}
+          <SkPill className="h-6 w-14" />
+        </div>
+        {knownId ? (
+          <p className="text-body-s text-text-muted">
+            {fill(t.detailMeta, {
+              provider: t.provider[knownId],
+              use: isJudgment ? t.judgment : t.reference,
+              id: knownId,
+            })}
+          </p>
+        ) : (
+          <p className="text-body-s">
+            <SkLine className="w-60 max-w-full" />
+          </p>
+        )}
+      </div>
+
+      <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {metricLabels.map((label) => (
+          <div className={`flex flex-col gap-1 ${CARD}`} key={label}>
+            <dt className={LABEL}>{label}</dt>
+            <dd className="flex h-[24px] items-center">
+              <SkLine className="w-20" />
+            </dd>
+          </div>
+        ))}
+      </dl>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[3fr_2fr]">
+        <div className="flex min-w-0 flex-col gap-4">
+          <div
+            role="tablist"
+            aria-label={t.detailSections}
+            className="flex flex-wrap gap-1 border-b border-border-default"
+          >
+            {DETAIL_SECTIONS.map((item) => (
+              <button
+                key={item}
+                type="button"
+                role="tab"
+                disabled
+                aria-selected={item === "calls"}
+                tabIndex={item === "calls" ? 0 : -1}
+                className="min-h-touch rounded-admin-control px-2 text-body-s aria-selected:bg-brand-weak aria-selected:font-semibold"
+              >
+                {t.detailTabs[item]}
+              </button>
+            ))}
+          </div>
+          <div className="flex flex-col gap-2">
+            <SkLine className="h-[16px] w-28" />
+            <div className={`flex flex-col gap-2 ${CARD}`}>
+              <SkLine className="w-40" />
+              <SkLine className="w-64 max-w-full" />
+              <SkLine className="mt-1 w-48 max-w-full" />
+              <SkLine className="w-36" />
+              {knownId === "collect-warnings" && (
+                <SkBox className="mt-2 h-[86px] w-full" />
+              )}
+            </div>
+            <div className={`flex flex-col gap-2 ${CARD}`}>
+              <SkLine className="w-36" />
+              <SkLine className="w-56 max-w-full" />
+            </div>
+            {slow && <SlowNote className="mt-1" />}
+          </div>
+        </div>
+
+        <div className="flex min-w-0 flex-col gap-4">
+          <section
+            aria-labelledby="source-info-sk"
+            className="flex flex-col gap-2"
+          >
+            <h2
+              id="source-info-sk"
+              className="text-title-s font-semibold text-text-default"
+            >
+              {t.infoTitle}
+            </h2>
+            <dl className={`divide-y divide-border-default ${CARD} py-0`}>
+              {infoLabels.map((label) => (
+                <div
+                  key={label}
+                  className="grid grid-cols-[6rem_1fr] gap-2 py-2 text-body-s"
+                >
+                  <dt className="text-text-muted">{label}</dt>
+                  <dd className="flex items-center">
+                    <SkLine className="w-28 max-w-full" />
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          </section>
+          <section className="flex flex-col gap-2">
+            <SkLine className="h-[16px] w-24" />
+            <ul className={`divide-y divide-border-default ${CARD} py-0`}>
+              {[0, 1, 2].map((i) => (
+                <li key={i} className="flex items-center justify-between py-2">
+                  <SkLine className="w-28" />
+                  <SkPill className="h-5 w-12" />
+                </li>
+              ))}
+            </ul>
+          </section>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+type SourcesLoaded = {
+  readonly key: string;
+  readonly generation: number;
+  readonly timedOut: boolean;
+  readonly result: OpsResult<SourcesView>;
+};
+
 function SourcesBody() {
   const params = useSearchParams();
   const id = params.get("id");
+  const knownId = knownSourceId(id);
   const session = useAuthSession();
   const snapshot = useSessionSnapshot();
-  const demo = snapshot.status !== "signed_out" && snapshot.pool === "demo";
-  const generation = snapshot.status === "signed_out" ? 0 : snapshot.generation;
+  const signedIn = snapshot.status !== "signed_out";
+  const demo = signedIn && snapshot.pool === "demo";
+  const generation = signedIn ? snapshot.generation : 0;
   const [attempt, setAttempt] = useState(0);
   const key = `${attempt}|${generation}`;
-  const [loaded, setLoaded] = useState<{
-    key: string;
-    generation: number;
-    result: OpsResult<SourcesView>;
-  } | null>(null);
+  const [loaded, setLoaded] = useState<SourcesLoaded | null>(null);
 
   const [collection, setCollection] = useState<{
     key: string;
     view: CollectionView;
   } | null>(null);
   useEffect(() => {
+    if (!signedIn) return;
     let live = true;
     void fetchCollection(() => session.accessToken()).then((result) => {
       if (live) setCollection(result.ok ? { key, view: result.body } : null);
@@ -1180,26 +1562,57 @@ function SourcesBody() {
     return () => {
       live = false;
     };
-  }, [key, session]);
+  }, [key, session, signedIn]);
 
   useEffect(() => {
+    if (!signedIn) return;
     let live = true;
-    void fetchSources(() => session.accessToken()).then((result) => {
-      if (live) setLoaded({ key, generation, result });
+    void withTimeout<{
+      readonly timedOut: boolean;
+      readonly result: OpsResult<SourcesView>;
+    }>(
+      async () => ({
+        timedOut: false,
+        result: await fetchSources(() => session.accessToken()),
+      }),
+      { timedOut: true, result: TIMEOUT_RESULT },
+      LOADING_TIMES.timeout,
+    ).then(({ timedOut, result }) => {
+      if (live) setLoaded({ key, generation, timedOut, result });
     });
     return () => {
       live = false;
     };
-  }, [session, key, generation]);
+  }, [session, signedIn, key, generation]);
 
   // 다시 불러오는 동안 앞 값을 그대로 보여 줌(D16-E1)
-  const result = loaded?.generation === generation ? loaded.result : null;
+  const current =
+    signedIn && loaded?.generation === generation ? loaded : null;
+  const fetching = signedIn && loaded?.key !== key;
+  const pending = !signedIn || current === null;
+  const timing = useLoadTiming(pending);
+  const placeholder = pending || timing.phase !== "content";
+  const refreshing = fetching && !pending;
+  const refreshTiming = useLoadTiming(refreshing);
+
+  const result = placeholder ? null : current.result;
+  const timedOut = !placeholder && current.timedOut;
   const view = result?.ok ? result.body : null;
   const source = id && view ? view.sources.find((s) => s.id === id) : null;
   const reload = () => setAttempt((n) => n + 1);
+  const showOuterHeading = !source && !(id !== null && knownId && placeholder);
 
   return (
-    <div className="flex w-full flex-col gap-4 px-4 py-5 md:px-10 md:pt-6 md:pb-10">
+    <div
+      aria-busy={placeholder || undefined}
+      className="flex w-full flex-col gap-4 px-4 py-5 md:px-10 md:pt-6 md:pb-10"
+    >
+      <LoadingStatus busy={signedIn && pending} label={t.loading} />
+      <span role="status" className="sr-only">
+        {(placeholder ? timing.slow : refreshTiming.slow)
+          ? messages.loading.slow
+          : ""}
+      </span>
       {id !== null && (
         <Link
           href="/sources/"
@@ -1210,19 +1623,27 @@ function SourcesBody() {
       )}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          {!source && (
+          {showOuterHeading && (
             <h1 className="text-title-l font-semibold text-text-default">
               {t.title}
             </h1>
           )}
           <p className="mt-1 text-body-s text-text-muted">
-            {[
-              t.intro,
-              view && fill(t.asOf, { time: kstDateTime(view.generatedAt) }),
-              demo && t.demoNote,
-            ]
-              .filter(Boolean)
-              .join(t.listJoin)}
+            {placeholder ? (
+              <>
+                {t.intro}
+                {t.listJoin}
+                <SkLine className="w-28" />
+              </>
+            ) : (
+              [
+                t.intro,
+                view && fill(t.asOf, { time: kstDateTime(view.generatedAt) }),
+                demo && t.demoNote,
+              ]
+                .filter(Boolean)
+                .join(t.listJoin)
+            )}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
@@ -1237,20 +1658,41 @@ function SourcesBody() {
           >
             {t.collectionLink}
           </Link>
+          {refreshing && (
+            <span
+              role="status"
+              className="inline-flex items-center gap-1.5 text-body-s text-brand-default"
+            >
+              <Spinner size={12} />
+              {messages.loading.refreshing}
+            </span>
+          )}
           <Button
             variant="secondary"
             size="small"
             // 첫 불러오기 중에도 막음(누를 때마다 요청이 새로 나가지 않게)
-            disabled={loaded === null || loaded.key !== key}
+            disabled={placeholder || refreshing}
             onClick={reload}
           >
             {t.refresh}
           </Button>
         </div>
       </div>
+      {refreshing && refreshTiming.slow && <SlowNote />}
 
-      {result === null && <LoadingPlaceholder />}
-      {result &&
+      {placeholder &&
+        (id !== null ? (
+          <SourceDetailSkeleton
+            knownId={knownId}
+            cls={loadClass(timing)}
+            slow={timing.slow}
+          />
+        ) : (
+          <SourcesListSkeleton cls={loadClass(timing)} slow={timing.slow} />
+        ))}
+      {timedOut && <LoadFailed onRetry={reload} />}
+      {!timedOut &&
+        result &&
         !result.ok &&
         (result.code === "reauth" ? (
           <Notice tone="warn" title={messages.inquiries.reauth} role="alert" />
@@ -1297,12 +1739,15 @@ function SourcesBody() {
 }
 
 export function SourcesScreen() {
+  const body = (
+    <Suspense fallback={null}>
+      <SourcesBody />
+    </Suspense>
+  );
   return (
-    <AdminShell title={t.title}>
+    <AdminShell title={t.title} loading={body}>
       {/* 정적 내보내기라 주소 ?id= 는 브라우저에서 읽음(useSearchParams는 Suspense 안) */}
-      <Suspense fallback={null}>
-        <SourcesBody />
-      </Suspense>
+      {body}
     </AdminShell>
   );
 }

@@ -48,6 +48,14 @@ import { pageRows, pageWindow } from "@/lib/paging";
 import { AdminShell } from "./admin-shell";
 import { DisplayBadge, PublishedAlert, usePublished } from "./beach-status";
 import { CELL_END, CELL_NAME, DataTable, Pager, TD, TH, TR } from "./data-table";
+import {
+  LoadingStatus,
+  SkLine,
+  SkPill,
+  SlowNote,
+  loadClass,
+  useLoadTiming,
+} from "./loading";
 import { Button, Notice } from "./ui";
 
 // 해변 관리 목록 (GH-454 · BRD-150, 화면 설계서 6장 ADM-BCH, 시안 4차 V2·VM4·E7)
@@ -261,10 +269,12 @@ function OptionFilterMenu({
 function TabStrip({
   current,
   counts,
+  loading,
   onChange,
 }: {
   current: BeachTab;
   counts: Record<BeachTab, number | null>;
+  loading: boolean;
   onChange: (next: BeachTab) => void;
 }) {
   return (
@@ -292,7 +302,13 @@ function TabStrip({
             >
               {t.tabs[tab]}
               <span className="font-normal text-text-muted tabular-nums">
-                {count !== null ? count : t.noneDash}
+                {count !== null ? (
+                  count
+                ) : loading ? (
+                  <SkLine className="w-4" />
+                ) : (
+                  t.noneDash
+                )}
               </span>
             </button>
           );
@@ -326,13 +342,148 @@ function TabStrip({
                   on ? "text-brand-default" : "text-text-muted"
                 }`}
               >
-                {count !== null ? count : t.noneDash}
+                {count !== null ? (
+                  count
+                ) : loading ? (
+                  <SkLine className="w-4" />
+                ) : (
+                  t.noneDash
+                )}
               </span>
             </button>
           );
         })}
       </div>
     </>
+  );
+}
+
+function BeachTableHead() {
+  return (
+    <>
+      <th scope="col" className={TH}>
+        {t.colBeach}
+      </th>
+      <th scope="col" className={TH}>
+        {t.colRegion}
+      </th>
+      <th scope="col" className={TH}>
+        {t.colStatus}
+      </th>
+      <th scope="col" className={`${TH} ${CELL_END}`}>
+        {t.colWaveHeight}
+      </th>
+      <th scope="col" className={`${TH} ${CELL_END}`}>
+        {t.colWavePeriod}
+      </th>
+      <th scope="col" className={TH}>
+        {t.colObservedAt}
+      </th>
+      <th scope="col" className={TH}>
+        {t.colWarningZone}{" "}
+        <span className="font-normal text-text-muted">· {t.colVerified}</span>
+      </th>
+      <th scope="col" className={TH}>
+        <span className="sr-only">{t.colDetail}</span>
+      </th>
+    </>
+  );
+}
+
+function BeachesSkeleton({
+  rows,
+  cls,
+  slow,
+}: {
+  rows: number;
+  cls: string;
+  slow: boolean;
+}) {
+  const widths = [
+    "w-14",
+    "w-16",
+    "w-12",
+    "w-14",
+    "w-20",
+    "w-12",
+    "w-16",
+    "w-14",
+    "w-12",
+    "w-16",
+    "w-14",
+  ];
+  return (
+    <div aria-busy="true" className={`flex flex-col gap-4 ${cls}`}>
+      {slow && <SlowNote />}
+      <div className="hidden overflow-x-auto rounded-admin-box md:block">
+        <DataTable caption={t.tableCaption} head={<BeachTableHead />}>
+          {Array.from({ length: rows }, (_, i) => (
+            <tr key={i} className={TR}>
+              <td className={TD}>
+                <SkLine className={widths[i % widths.length]!} />
+              </td>
+              <td className={TD}>
+                <SkLine className="w-20" />
+              </td>
+              <td className={TD}>
+                <span className="inline-flex h-6 items-center gap-1.5">
+                  <SkPill className="h-5 w-[72px]" />
+                  <SkLine className="w-10" />
+                </span>
+              </td>
+              <td className={`${TD} ${CELL_END}`}>
+                <SkLine className="w-6" />
+              </td>
+              <td className={`${TD} ${CELL_END}`}>
+                <SkLine className="w-6" />
+              </td>
+              <td className={TD}>
+                <SkLine className="w-8" />
+              </td>
+              <td className={TD}>
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="inline-flex shrink-0 text-text-muted opacity-40">
+                    <Check size={14} aria-hidden="true" />
+                  </span>
+                  <SkLine className="w-16" />
+                </span>
+              </td>
+              <td className={`${TD} ${CELL_END} text-text-muted opacity-40`}>
+                <ChevronRight size={16} aria-hidden="true" />
+              </td>
+            </tr>
+          ))}
+        </DataTable>
+      </div>
+      <ul className="flex flex-col divide-y divide-border-default rounded-admin-box border border-border-default bg-bg-surface md:hidden">
+        {Array.from({ length: rows }, (_, i) => (
+          <li
+            key={i}
+            className="flex min-h-touch items-center justify-between gap-3 px-4 py-2.5"
+          >
+            <span className="flex min-w-0 flex-1 flex-col gap-1.5">
+              <SkLine className={widths[i % widths.length]!} />
+              <SkLine className="w-36" />
+            </span>
+            <span className="flex shrink-0 items-center gap-2">
+              <SkPill className="h-5 w-[72px]" />
+              <ChevronRight
+                size={16}
+                aria-hidden="true"
+                className="text-text-muted opacity-40"
+              />
+            </span>
+          </li>
+        ))}
+      </ul>
+      <div className="flex items-center justify-between gap-2 text-body-s text-text-muted">
+        <SkLine className="w-20" />
+        <div className="flex items-center gap-1.5">
+          <SkLine className="h-7 w-14" />
+          <SkLine className="h-7 w-14" />
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -350,40 +501,7 @@ function BeachTable({
   const nowIso = new Date(nowMs).toISOString();
   return (
     <div className="hidden overflow-x-auto rounded-admin-box md:block">
-      <DataTable
-        caption={t.tableCaption}
-        head={
-          <>
-            <th scope="col" className={TH}>
-              {t.colBeach}
-            </th>
-            <th scope="col" className={TH}>
-              {t.colRegion}
-            </th>
-            <th scope="col" className={TH}>
-              {t.colStatus}
-            </th>
-            <th scope="col" className={`${TH} ${CELL_END}`}>
-              {t.colWaveHeight}
-            </th>
-            <th scope="col" className={`${TH} ${CELL_END}`}>
-              {t.colWavePeriod}
-            </th>
-            <th scope="col" className={TH}>
-              {t.colObservedAt}
-            </th>
-            <th scope="col" className={TH}>
-              {t.colWarningZone}{" "}
-              <span className="font-normal text-text-muted">
-                · {t.colVerified}
-              </span>
-            </th>
-            <th scope="col" className={TH}>
-              <span className="sr-only">{t.colDetail}</span>
-            </th>
-          </>
-        }
-      >
+      <DataTable caption={t.tableCaption} head={<BeachTableHead />}>
         {items.map((b) => {
           const display = displayOf(published, b.id, nowMs);
           const verified = isZoneVerified(b);
@@ -669,11 +787,23 @@ function BeachesBody({ beaches }: { beaches: readonly BeachSummary[] }) {
     }));
   };
 
+  const signedIn = snapshot.status !== "signed_out";
+  const pending = state.published === "loading";
+  const timing = useLoadTiming(pending);
+  const placeholder = pending || timing.phase !== "content";
+  const skeletonRows = tabWaitingPublished
+    ? BEACH_PAGE_SIZE
+    : Math.min(visible.length || BEACH_PAGE_SIZE, BEACH_PAGE_SIZE);
+
   return (
     <section
       aria-labelledby="beaches-title"
       className="flex flex-col gap-4 px-4 py-5 md:px-10 md:pt-6 md:pb-10"
     >
+      <LoadingStatus busy={signedIn && pending} label={t.statusLoading} />
+      <span role="status" className="sr-only">
+        {timing.slow ? messages.loading.slow : ""}
+      </span>
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
@@ -705,21 +835,28 @@ function BeachesBody({ beaches }: { beaches: readonly BeachSummary[] }) {
       </div>
 
       <Notice tone="neutral" title={t.sourceNote} />
-      <PublishedAlert state={state} />
-      {state.published !== "loading" && state.published?.available && (
+      {!placeholder && <PublishedAlert state={state} />}
+      {placeholder ? (
         <p className="text-label-s text-text-muted">
-          {fill(
-            state.published.maintenance.active
-              ? t.statusAsOfMaintenance
-              : t.statusAsOf,
-            { time: kstDateTime(state.published.generatedAt) },
-          )}
+          <SkLine className="w-44" />
         </p>
+      ) : (
+        state.published?.available && (
+          <p className="text-label-s text-text-muted">
+            {fill(
+              state.published.maintenance.active
+                ? t.statusAsOfMaintenance
+                : t.statusAsOf,
+              { time: kstDateTime(state.published.generatedAt) },
+            )}
+          </p>
+        )
       )}
 
       <TabStrip
         current={queryState.tab}
         counts={counts}
+        loading={pending}
         onChange={(tab) =>
           pushState((prev) => ({ ...prev, q: activeQ, tab, page: 0 }))
         }
@@ -796,11 +933,13 @@ function BeachesBody({ beaches }: { beaches: readonly BeachSummary[] }) {
         </button>
       </div>
 
-      {tabWaitingPublished ? (
-        <p role="status" className="text-body-s text-text-muted">
-          {t.statusLoading}
-        </p>
-      ) : items.length === 0 ? (
+      {placeholder && (tabWaitingPublished || items.length > 0) ? (
+        <BeachesSkeleton
+          rows={skeletonRows}
+          cls={loadClass(timing)}
+          slow={timing.slow}
+        />
+      ) : tabWaitingPublished ? null : items.length === 0 ? (
         <div className="flex flex-col items-center gap-2 rounded-admin-box border border-border-default bg-bg-surface px-4 py-10 text-center">
           <span
             aria-hidden="true"
@@ -862,12 +1001,15 @@ export function BeachesScreen({
 }: {
   beaches: readonly BeachSummary[];
 }) {
+  const body = (
+    <Suspense fallback={null}>
+      <BeachesBody beaches={beaches} />
+    </Suspense>
+  );
   return (
-    <AdminShell title={t.title}>
+    <AdminShell title={t.title} loading={body}>
       {/* 정적 내보내기라 주소 쿼리는 브라우저에서 읽음(useSearchParams는 Suspense 안) */}
-      <Suspense fallback={null}>
-        <BeachesBody beaches={beaches} />
-      </Suspense>
+      {body}
     </AdminShell>
   );
 }
