@@ -226,7 +226,7 @@ export type ReceivedPreset = "today" | "7d" | "30d" | "custom";
 
 export interface ReceivedFilter {
   readonly preset: ReceivedPreset;
-  // KST 입력값(YYYY-MM-DDTHH:mm)
+  // KST 입력값(YYYY-MM-DD · YYYY-MM-DDTHH:mm · YYYY-MM-DDTHH:mm:ss). 다른 형식은 틀린 조건으로 봄
   readonly from?: string;
   readonly to?: string;
 }
@@ -257,16 +257,24 @@ export function isReceivedFilterActive(
   );
 }
 
+// 직접 입력한 받은 시각의 문제: format은 형식이 틀림, order는 시작이 끝보다 늦음, null은 문제 없음
+// 화면이 이유에 맞는 안내를 고를 수 있게 둘을 나눠 돌려줌
+export function receivedRangeProblem(
+  received: Pick<ReceivedFilter, "preset" | "from" | "to"> | null,
+): "format" | "order" | null {
+  if (received === null || received.preset !== "custom") return null;
+  // 실제로 거르는 경계(날짜만 입력한 끝은 그날 끝까지)와 같은 값으로 비교함
+  const range = receivedRangeMs(received, new Date());
+  if (range === null) return "format";
+  const { fromMs, toMs } = range;
+  return fromMs !== null && toMs !== null && fromMs > toMs ? "order" : null;
+}
+
 // 형식이 틀렸거나 시작이 끝보다 늦으면 true
 export function isReceivedRangeInvalid(
   received: Pick<ReceivedFilter, "preset" | "from" | "to"> | null,
 ): boolean {
-  if (received === null || received.preset !== "custom") return false;
-  // 실제로 거르는 경계(날짜만 입력한 끝은 그날 끝까지)와 같은 값으로 비교함
-  const range = receivedRangeMs(received, new Date());
-  if (range === null) return true;
-  const { fromMs, toMs } = range;
-  return fromMs !== null && toMs !== null && fromMs > toMs;
+  return receivedRangeProblem(received) !== null;
 }
 
 export function hasActiveInquiryFilter(filter: InquiryFilter): boolean {
@@ -302,22 +310,30 @@ const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
 type KstInput =
   | { readonly kind: "empty" }
   | { readonly kind: "invalid" }
-  // ms: 입력한 시각(UTC ms) · span: 입력 단위 길이(날짜 하루·분 1분·초 1초). 끝 경계는 ms + span - 1
+  // ms: 입력한 시각(UTC ms) · span: 입력 단위 길이(날짜 하루·분 1분·초 1초·밀리초 1ms). 끝 경계는 ms + span - 1
   | { readonly kind: "ok"; readonly ms: number; readonly span: number };
 
-// KST 입력값(YYYY-MM-DD · YYYY-MM-DDTHH:mm · YYYY-MM-DDTHH:mm:ss)만 받음
+// 받는 가장 이른 연도. 1000년 미만은 Date.UTC가 0~99년을 1900년대로 바꾸고, UTC로 옮기면
+// 서버가 받는 4자리 연도(utcInstant)를 벗어날 수 있어 받지 않음(입력 도중의 '0002-…'도 형식 오류로 안내)
+const MIN_INPUT_YEAR = 1000;
+
+// KST 입력값(YYYY-MM-DD · YYYY-MM-DDTHH:mm · YYYY-MM-DDTHH:mm:ss[.sss], datetime-local 값 형식)만 받음
 // 다른 형식은 실행 환경 시간대로 해석될 수 있어 받지 않고, 달력에 없는 날짜(2월 31일 등)도 넘기지 않음
 function parseKstInput(value: string | undefined): KstInput {
   const text = value?.trim() ?? "";
   if (text === "") return { kind: "empty" };
-  const m = /^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2})(?::(\d{2}))?)?$/.exec(
-    text,
-  );
+  const m =
+    /^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?)?$/.exec(
+      text,
+    );
   if (!m) return { kind: "invalid" };
   const [y, mo, d, h = 0, mi = 0, s = 0] = m
-    .slice(1)
+    .slice(1, 7)
     .map((part) => (part === undefined ? undefined : Number(part)));
-  const local = Date.UTC(y!, mo! - 1, d!, h, mi, s);
+  if (y! < MIN_INPUT_YEAR) return { kind: "invalid" };
+  const fraction = m[7];
+  const msPart = fraction === undefined ? 0 : Number(fraction.padEnd(3, "0"));
+  const local = Date.UTC(y!, mo! - 1, d!, h, mi, s, msPart);
   const back = new Date(local);
   if (
     back.getUTCFullYear() !== y ||
@@ -329,8 +345,15 @@ function parseKstInput(value: string | undefined): KstInput {
   ) {
     return { kind: "invalid" };
   }
+  // 소수 초 입력은 밀리초 단위로 봄(09:00:00.5 → 그 밀리초까지)
   const span =
-    m[4] === undefined ? DAY_MS : m[6] === undefined ? 60_000 : 1_000;
+    m[4] === undefined
+      ? DAY_MS
+      : m[6] === undefined
+        ? 60_000
+        : fraction === undefined
+          ? 1_000
+          : 1;
   return { kind: "ok", ms: local - KST_OFFSET_MS, span };
 }
 
