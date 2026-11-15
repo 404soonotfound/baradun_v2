@@ -27,12 +27,15 @@ import {
   parseLast24h,
   pendingNoticeDiff,
   reapplyNotice,
+  failureDetailsOf,
   reasonKey,
+  sequenceOf,
   signed,
   versionIso,
   type CategoryCounts,
   type HeldNoticeView,
   type HistoryItem,
+  type PublishFailureDetails,
   type JobRequest,
   type JobView,
   type PendingNotice,
@@ -509,6 +512,7 @@ function NoticeDiffBox({
       )}
       {notice.change === "update" &&
         diff.hasBefore &&
+        !diff.full &&
         diff.added === 0 &&
         diff.removed === 0 && (
           <p className="border-t border-border-default bg-bg-page px-3 py-1 font-sans text-caption text-text-muted">
@@ -1162,6 +1166,7 @@ function HistoryList({
                   }`}
                 >
                   <span className={CELL_NAME}>{timeOf(item.at)}</span>
+                  <SequenceMark item={item} />
                   {item.gapBefore && (
                     <p className="text-caption whitespace-normal text-status-stale-fg">
                       {t.gapBefore}
@@ -1245,6 +1250,7 @@ function HistoryList({
               <div className="flex items-center justify-between gap-2">
                 <p className="font-medium text-text-default tabular-nums">
                   {timeOf(item.at)} · {sourceText(item)}
+                  <SequenceMark item={item} />
                 </p>
                 {item.result === "published" ? (
                   item.version === currentVersion ? (
@@ -1354,6 +1360,76 @@ function HeldList({
   );
 }
 
+// 게시 잠금 실행 순번(#502). 순번이 없는 예전 기록은 아무것도 보이지 않음
+function SequenceMark({ item }: { item: HistoryItem }) {
+  const sequence = sequenceOf(item);
+  if (sequence === null) return null;
+  return (
+    <span
+      aria-label={fill(t.sequenceLabel, { n: sequence })}
+      className="ml-1.5 text-caption font-normal text-text-muted tabular-nums"
+    >
+      {fill(t.sequence, { n: sequence })}
+    </span>
+  );
+}
+
+// 실패 요약 줄(#502). 원문 메시지 없이 개수·해변 ID·데이터 위치만 보여 줌
+function failureLines(details: PublishFailureDetails): string[] {
+  switch (details.kind) {
+    case "beach_ids":
+      return [
+        fill(t.failureBeachIds, {
+          where: t.failureWhere[details.where],
+          missing: details.missingCount,
+          extra: details.extraCount,
+          duplicate: details.duplicateCount,
+        }),
+      ];
+    case "classify":
+      return [fill(t.failureClassify, { beach: details.beachId })];
+    case "contract":
+      // 위치는 서버가 앞 몇 건만 줌(0건일 수 있음). 받은 수만큼만 '앞 n건'으로 적음
+      return details.paths.length > 0
+        ? [
+            fill(t.failureContract, {
+              count: details.errorCount,
+              shown: details.paths.length,
+            }),
+            ...details.paths,
+          ]
+        : [fill(t.failureContractCount, { count: details.errorCount })];
+  }
+}
+
+// 요약이 없거나 모양이 틀리면 줄을 그리지 않음(위 사유 줄은 그대로라 '문제 없음'으로 보이지 않음)
+function FailureSummary({ item }: { item: HistoryItem }) {
+  const details = failureDetailsOf(item);
+  if (details === null) return null;
+  const [first, ...rest] = failureLines(details);
+  return (
+    <div className="flex items-center justify-between gap-3 py-2.5 text-body-s">
+      <div className="min-w-0">
+        <p className="font-medium text-text-default">{t.failureTitle}</p>
+        <p className="text-caption text-text-muted">{first}</p>
+        {rest.length > 0 && (
+          <ul className="mt-1 flex flex-col gap-0.5">
+            {rest.map((line, i) => (
+              <li
+                key={`${i}-${line}`}
+                className="font-mono text-caption [overflow-wrap:anywhere] text-text-muted"
+              >
+                {line}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+      <FailIcon />
+    </div>
+  );
+}
+
 // 선택하거나 최근 실패/게시된 기록의 검증 결과 요약(V16 오른쪽 아래)
 function ChecksSection({ item }: { item: HistoryItem | null }) {
   const title = item
@@ -1386,6 +1462,7 @@ function ChecksSection({ item }: { item: HistoryItem | null }) {
                   </div>
                   <FailIcon />
                 </div>
+                <FailureSummary item={item} />
                 <div className="flex items-center justify-between gap-3 py-2.5 text-body-s">
                   <div>
                     <p className="font-medium text-text-default">
@@ -2272,6 +2349,11 @@ function PublishBody({
                       </div>
                       <p className="text-caption text-text-muted">
                         {notice.updatedBy ? `${notice.updatedBy} · ` : ""}
+                        {/* 읽을 수 없는 시각은 그리지 않음(Intl이 Invalid Date에서 RangeError를 던져 화면 전체가 깨지지 않게) */}
+                        {notice.updatedAt &&
+                        !Number.isNaN(Date.parse(notice.updatedAt))
+                          ? `${fill(t.pendingChangedAt, { time: timeOf(notice.updatedAt) })} · `
+                          : ""}
                         {noticeLine(notice)} · {t.pendingStatusDraft} ·{" "}
                         {fill(t.pendingStatusStart, {
                           time: timeOf(notice.startsAt),
