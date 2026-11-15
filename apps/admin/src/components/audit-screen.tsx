@@ -478,13 +478,7 @@ const AUDIT_TIMEOUT: OpsResult<AuditPage> = {
   requestId: null,
 };
 
-function AuditSkeleton({
-  cls,
-  slow,
-}: {
-  cls: string;
-  slow: boolean;
-}) {
+function AuditSkeleton({ cls, slow }: { cls: string; slow: boolean }) {
   const cols = [
     t.colAt,
     t.colActor,

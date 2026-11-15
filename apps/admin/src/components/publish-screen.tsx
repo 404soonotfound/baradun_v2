@@ -1159,7 +1159,12 @@ function HistoryList({
                     </p>
                   )}
                 </td>
-                <td className={TD.replace("whitespace-nowrap", "whitespace-normal")}>
+                <td
+                  className={TD.replace(
+                    "whitespace-nowrap",
+                    "whitespace-normal",
+                  )}
+                >
                   <span className={CELL_NAME}>
                     {item.result === "published" ? changesText(item) : "—"}
                   </span>
@@ -1167,7 +1172,12 @@ function HistoryList({
                     {sourceText(item)}
                   </p>
                 </td>
-                <td className={TD.replace("whitespace-nowrap", "whitespace-normal")}>
+                <td
+                  className={TD.replace(
+                    "whitespace-nowrap",
+                    "whitespace-normal",
+                  )}
+                >
                   {item.result === "published" ? (
                     <span className="inline-flex items-center gap-1.5 text-body-s text-text-body">
                       <PassIcon />
@@ -1446,13 +1456,7 @@ type Dialog =
 
 type Message = { tone: "success" | "warn" | "fail"; text: string };
 
-function PublishSkeleton({
-  cls,
-  slow,
-}: {
-  cls: string;
-  slow: boolean;
-}) {
+function PublishSkeleton({ cls, slow }: { cls: string; slow: boolean }) {
   const kpiLabels = [t.current, t.nextAuto, t.pending, t.last24h.label];
   return (
     <div aria-busy="true" className={`flex flex-col gap-3 ${cls}`}>
@@ -1462,7 +1466,9 @@ function PublishSkeleton({
             key={label}
             className="border-b border-border-default px-4 py-3.5 odd:border-r lg:border-r lg:border-b-0 lg:last:border-r-0 [&:nth-child(n+3)]:border-b-0"
           >
-            <dt className="text-body-s font-semibold text-text-body">{label}</dt>
+            <dt className="text-body-s font-semibold text-text-body">
+              {label}
+            </dt>
             <dd className="mt-1 flex h-[28px] items-center">
               <SkLine className="h-[18px] w-20" />
             </dd>
@@ -1919,7 +1925,9 @@ function PublishBody({
     const firstFailed = historyItems.find((i) => i.result !== "published");
     const activeSelectedKey =
       selectedVersion === undefined
-        ? (firstFailed ? historyRowKey(firstFailed) : null)
+        ? firstFailed
+          ? historyRowKey(firstFailed)
+          : null
         : selectedVersion;
     const inspectedItem =
       (activeSelectedKey

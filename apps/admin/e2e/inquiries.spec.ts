@@ -930,20 +930,26 @@ test("필터(검색·유형·해변·받은 시각), 미리보기, 행 클릭·�
 
   // 받은 시각 직접 입력: 시작 > 끝이면 입력 오류 안내 + 적용 비활성
   await page.getByRole("button", { name: "받은 시각", exact: true }).click();
-  const receivedGroup = page.getByRole("group", { name: "받은 시각으로 거르기" });
+  const receivedGroup = page.getByRole("group", {
+    name: "받은 시각으로 거르기",
+  });
   await receivedGroup.getByLabel("시작(KST)").fill("2026-11-02T14:00");
   await receivedGroup.getByLabel("끝(KST)").fill("2026-11-02T13:00");
   await expect(
     receivedGroup.getByText("시작 시각이 끝 시각보다 늦어요."),
   ).toBeVisible();
-  await expect(receivedGroup.getByRole("button", { name: "적용" })).toBeDisabled();
+  await expect(
+    receivedGroup.getByRole("button", { name: "적용" }),
+  ).toBeDisabled();
   await page.keyboard.press("Escape");
 
   // 미수신 데이터(nextCursor)가 있는데 거르기 결과가 0건이면 '아직 불러오지 않았어요' + '다음 목록 더 불러오기'
   await page.getByLabel("내용·해변 찾기").fill("존재하지않는검색어");
   await expect(page.getByText("아직 불러오지 않았어요")).toBeVisible();
   await page.getByRole("button", { name: "다음 목록 더 불러오기" }).click();
-  await expect(page.getByRole("button", { name: "거르기 초기화" })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "거르기 초기화" }),
+  ).toBeVisible();
   await page.getByRole("button", { name: "거르기 초기화" }).click();
   // 거르기를 끄면 서버 커서 기준 첫 쪽(limit=6)으로 복귀함
   await expect(rows(page)).toHaveCount(3);

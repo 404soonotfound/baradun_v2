@@ -833,7 +833,9 @@ test("목록: 행 작업 확인을 취소하면 원래 행의 작업 메뉴 버�
   await mockNotices(page, { items: () => ITEMS() });
   await openNotices(page);
   if (isMobile(page)) return;
-  const trigger = page.getByRole("button", { name: "새벽 점검 예고 작업 메뉴" });
+  const trigger = page.getByRole("button", {
+    name: "새벽 점검 예고 작업 메뉴",
+  });
   await trigger.click();
   await page
     .getByRole("group", { name: "새벽 점검 예고 작업 메뉴" })
