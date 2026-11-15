@@ -278,7 +278,7 @@ describe("republishVersion (D20-4)", () => {
   });
 
   it("계약에 맞지 않는 옛 파일은 다시 내보내지 않는다", async () => {
-    const { snapshots, base, advance, body } = await setup();
+    const { ops, snapshots, base, advance, body } = await setup();
     const before = body(MANIFEST_PATH);
     await snapshots.putFile(`data/${V1}/status.json`, '{"beaches":[]}', "x");
     advance(60_000);
@@ -287,6 +287,10 @@ describe("republishVersion (D20-4)", () => {
       reason: "contract",
     });
     expect(body(MANIFEST_PATH)).toBe(before);
+    expect(ops.lastRun).toMatchObject({
+      sequence: 3,
+      failureDetails: { kind: "contract", errorCount: 1 },
+    });
   });
 
   it("다른 실행이 게시 중이면(같은 잠금) 아무것도 하지 않는다", async () => {

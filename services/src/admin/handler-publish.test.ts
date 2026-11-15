@@ -720,6 +720,7 @@ describe("게시 현황 (GET /ops/publish)", () => {
       delayedBeachIds: [],
       source: "operator",
       jobId: "j-0123456789ab",
+      sequence: 1440,
       categoryCounts: { clear: 1, unavailable: 2, undetermined: 0 },
       noticeDigest: "bbbbbbbbbbbbbbbb",
     });
@@ -731,6 +732,15 @@ describe("게시 현황 (GET /ops/publish)", () => {
       result: "failed",
       version: "20261112T053000Z",
       reason: "beach_ids",
+      sequence: 1439,
+      failureDetails: {
+        kind: "beach_ids",
+        where: "source",
+        missingCount: 1,
+        extraCount: 0,
+        duplicateCount: 2,
+        raw: "원문 오류",
+      },
     });
     put(table, {
       pk: PUBLISH_RUN_PK,
@@ -764,6 +774,7 @@ describe("게시 현황 (GET /ops/publish)", () => {
     expect(view.history.items[0]).toMatchObject({
       source: "operator",
       jobId: "j-0123456789ab",
+      sequence: 1440,
       gapBefore: false,
       changes: {
         notices: true,
@@ -773,7 +784,19 @@ describe("게시 현황 (GET /ops/publish)", () => {
         delayedDelta: -1,
       },
     });
-    expect(view.history.items[1]).toMatchObject({ reason: "beach_ids" });
+    expect(view.history.items[1]).toMatchObject({
+      reason: "beach_ids",
+      sequence: 1439,
+    });
+    expect(view.history.items[1].failureDetails).toEqual({
+      kind: "beach_ids",
+      where: "source",
+      missingCount: 1,
+      extraCount: 0,
+      duplicateCount: 2,
+    });
+    expect(view.history.items[2]).not.toHaveProperty("sequence");
+    expect(view.history.items[2]).not.toHaveProperty("failureDetails");
     // 첫 게시는 견줄 앞 게시가 없음
     expect(view.history.items[2].changes).toBeNull();
     expect(view.lastRun).toEqual({
@@ -941,6 +964,8 @@ describe("게시 현황 (GET /ops/publish)", () => {
           change: "add",
           kind: "general",
           title: "새 공지",
+          after: B,
+          updatedAt: "2026-11-11T00:00:00Z",
           startsAt: NOTICE_A.startsAt,
           endsAt: NOTICE_A.endsAt,
         },
@@ -949,11 +974,129 @@ describe("게시 현황 (GET /ops/publish)", () => {
           change: "remove",
           kind: "general",
           title: "지운 공지",
+          updatedAt: "2026-11-11T00:00:00Z",
           startsAt: NOTICE_A.startsAt,
           endsAt: NOTICE_A.endsAt,
         },
       ],
     });
+  });
+
+  it("대기 공지 변경은 게시 전후의 번역과 본문을 같은 모양으로 준다", async () => {
+    const table = new FakeTable();
+    const edited = {
+      ...NOTICE_A,
+      title: { ko: "바뀐 공지", en: "Changed notice" },
+      body: { ko: "바뀐 본문", en: "Changed body" },
+    };
+    put(table, noticeItem(edited));
+    const view = parse(
+      await handleOps(
+        event("GET", "/ops/publish"),
+        deps("viewer", table, {
+          snapshots: fakeSnapshots({
+            "data/manifest.json": manifest([NOTICE_A]),
+          }),
+        }),
+      ),
+    );
+    expect(view.pendingNotices.items[0]).toMatchObject({
+      change: "update",
+      title: "바뀐 공지",
+      before: NOTICE_A,
+      after: edited,
+      updatedAt: "2026-11-11T00:00:00Z",
+    });
+  });
+
+  it("노출 확정 뒤 문구만 저장한 수정 시각은 대기 공지 변경 시각으로 주지 않는다", async () => {
+    const table = new FakeTable();
+    const edited = {
+      ...NOTICE_A,
+      title: { ko: "바뀐 공지", en: "Changed notice" },
+    };
+    const { id: _id, ...live } = edited;
+    put(
+      table,
+      noticeItem(edited, {
+        draft: { ...live, title: { ko: "다음 문구", en: "Next" } },
+        updatedAt: "2026-11-12T05:00:00Z",
+      }),
+    );
+    const view = parse(
+      await handleOps(
+        event("GET", "/ops/publish"),
+        deps("viewer", table, {
+          snapshots: fakeSnapshots({
+            "data/manifest.json": manifest([NOTICE_A]),
+          }),
+        }),
+      ),
+    );
+    expect(view.pendingNotices.items[0]).toMatchObject({
+      change: "update",
+      after: edited,
+    });
+    expect(view.pendingNotices.items[0]).not.toHaveProperty("updatedAt");
+  });
+
+  it("게시 기록은 계약 실패 경로의 상한과 허용 형식을 검사한다", async () => {
+    const table = new FakeTable();
+    const version = "20261112T053000Z";
+    const key = { pk: PUBLISH_RUN_PK, sk: version };
+    const record = {
+      ...key,
+      at: "2026-11-12T05:30:00Z",
+      source: "auto",
+      result: "failed",
+      version,
+      reason: "contract",
+    };
+    const details = {
+      kind: "contract",
+      errorCount: 25,
+      paths: [
+        "StatusFile:/beaches/b0001/observation:required:metrics",
+        "ManifestFile:/:required:files",
+      ],
+    };
+    put(table, { ...record, failureDetails: details });
+    put(table, {
+      ...record,
+      sk: PUBLISH_RUN_LAST_SK,
+      sequence: 7,
+      failureDetails: details,
+    });
+    const overview = async () =>
+      parse(
+        await handleOps(event("GET", "/ops/publish"), deps("viewer", table)),
+      );
+    const read = async () => (await overview()).history.items[0];
+    expect((await read()).failureDetails).toEqual(details);
+    // 마지막 실행 칸도 같은 실패 요약과 순번을 줌
+    expect((await overview()).lastRun.run).toMatchObject({
+      result: "failed",
+      sequence: 7,
+      failureDetails: details,
+    });
+    put(table, {
+      ...record,
+      failureDetails: { ...details, paths: ["StatusFile:#/required"] },
+    });
+    expect(await read()).not.toHaveProperty("failureDetails");
+    put(table, {
+      ...record,
+      failureDetails: {
+        ...details,
+        paths: Array.from({ length: 6 }, () => details.paths[0]),
+      },
+    });
+    expect(await read()).not.toHaveProperty("failureDetails");
+    put(table, {
+      ...record,
+      failureDetails: { ...details, paths: ["원문 오류 메시지"] },
+    });
+    expect(await read()).not.toHaveProperty("failureDetails");
   });
 
   it("되돌림 상태인 공지와 포인터 version을 주고, 대기 공지는 되돌림을 반영해 계산한다", async () => {
