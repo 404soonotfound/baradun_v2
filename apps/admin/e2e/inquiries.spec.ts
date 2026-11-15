@@ -210,6 +210,8 @@ test("상세: 내용·보관 기한·받지 않는 연락처를 보여 주고, P
   await signIn(page);
   await mockInquiries(page);
   await openInquiries(page);
+  // 자리표시 표가 실제 표로 바뀐 뒤 크기·위치를 잼
+  await expect(rows(page).first().getByRole("link")).toBeVisible();
   const table = page.locator("table");
   const before = isMobile(page) ? null : await table.boundingBox();
   await rows(page).first().getByRole("link").click();
@@ -876,6 +878,7 @@ test("필터(검색·유형·해변·받은 시각), 미리보기, 행 클릭·�
   await signIn(page);
   const calls = await mockInquiries(page);
   await openInquiries(page);
+  await expect(rows(page).first().getByRole("link")).toBeVisible();
   expect(calls.list.some((q) => q.get("limit") === "6")).toBe(true);
 
   let initialRowHeight: number | undefined;
