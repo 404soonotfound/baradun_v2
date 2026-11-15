@@ -189,7 +189,6 @@ function FailureNotice({
   }
   return (
     <Notice tone="fail" title={title} role="alert">
-      <p>{i.serverHint}</p>
       {"requestId" in failure && failure.requestId && (
         <p>{fill(i.requestId, { id: failure.requestId })}</p>
       )}
@@ -1049,7 +1048,13 @@ function PreviewDrawer({
         </Button>
         <Button
           size="small"
-          disabled={publishLocked !== null}
+          disabled={
+            publishLocked !== null ||
+            waiting ||
+            failure !== null ||
+            !answer?.ok ||
+            answer.preview.status === "blocked"
+          }
           aria-describedby={publishLocked ? "publish-locked" : undefined}
           onClick={() => onPublish()}
         >
@@ -1767,9 +1772,11 @@ function RollbackPreviewSection({
         <LoadFailed onRetry={retryWithFocus} />
       )}
       {rbResult && !rbResult.ok && rbResult.code !== "timeout" && (
-        <p role="alert" className="text-danger-fg">
-          {t.rollbackPreviewFailed}
-        </p>
+        <FailureNotice
+          title={t.rollbackPreviewFailed}
+          failure={rbResult}
+          onRetry={retryWithFocus}
+        />
       )}
       {rbResult?.ok && !rbResult.body.available && (
         <p role="alert" className="text-danger-fg">
@@ -2536,6 +2543,8 @@ function PublishBody({
               {fill(t.confirmRollbackWordLabel, { word: ROLLBACK_WORD })}
             </span>
             <input
+              id="rollback-confirm-word"
+              name="rollbackConfirmWord"
               value={word}
               onChange={(e) => setWord(e.target.value)}
               autoComplete="off"

@@ -309,10 +309,26 @@ const BAR_CLASSES: Record<BarState, string> = {
 function SourceBars({
   job,
   generatedAt,
+  pending,
 }: {
   job: JobCollection | undefined;
   generatedAt: string | undefined;
+  pending: boolean;
 }) {
+  if (pending)
+    return (
+      <div aria-busy="true" className="flex flex-col gap-1">
+        <span className={HINT}>{t.history24h}</span>
+        <span className="sr-only">
+          {fill(messages.loading.screen, { name: t.history24h })}
+        </span>
+        <span aria-hidden="true" className="flex gap-0.5">
+          {Array.from({ length: 24 }, (_, i) => (
+            <span key={i} className="sk h-4 flex-1 rounded-[2px]" />
+          ))}
+        </span>
+      </div>
+    );
   const hourly = job?.hourly;
   if (
     !generatedAt ||
@@ -373,10 +389,12 @@ function JudgmentCard({
   source,
   job,
   generatedAt,
+  pending,
 }: {
   source: SourceView;
   job: JobCollection | undefined;
   generatedAt: string | undefined;
+  pending: boolean;
 }) {
   const name = t.name[source.id];
   const row = "grid grid-cols-[6rem_1fr] gap-2 py-1.5 text-body-s";
@@ -424,7 +442,7 @@ function JudgmentCard({
           </dd>
         </div>
       </dl>
-      <SourceBars job={job} generatedAt={generatedAt} />
+      <SourceBars job={job} generatedAt={generatedAt} pending={pending} />
     </article>
   );
 }
@@ -642,9 +660,11 @@ function Keys({ view }: { view: SourcesView }) {
 function SourcesList({
   view,
   collection,
+  collectionPending,
 }: {
   view: SourcesView;
   collection: CollectionView | null;
+  collectionPending: boolean;
 }) {
   const judgment = view.sources.filter((s) => s.judgment);
   const reference = view.sources.filter((s) => !s.judgment);
@@ -671,6 +691,7 @@ function SourcesList({
               source={s}
               generatedAt={collection?.generatedAt}
               job={collection?.jobs.find(({ job }) => job === s.id)}
+              pending={collectionPending}
             />
           ))}
         </div>
@@ -916,10 +937,12 @@ function SourceDetail({
   view,
   source,
   collection,
+  collectionPending,
 }: {
   view: SourcesView;
   source: SourceView;
   collection: CollectionView | null;
+  collectionPending: boolean;
 }) {
   const sectionId = useId();
   const [section, setSection] =
@@ -1017,19 +1040,44 @@ function SourceDetail({
       </div>
       <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {[
-          [t.detailLastSuccess, displayTime(started)],
-          [t.detailNext, displayTime(job?.nextScheduledAt)],
-          [
-            t.detailWeek,
-            rate === null
-              ? t.runState.unknown
-              : fill(t.detailWeekValue, { rate }),
-          ],
-          [t.detailReceived, t.detailReceivedUnknown],
-        ].map(([label, content]) => (
+          {
+            label: t.detailLastSuccess,
+            pending: collectionPending,
+            content: displayTime(started),
+          },
+          {
+            label: t.detailNext,
+            pending: collectionPending,
+            content: displayTime(job?.nextScheduledAt),
+          },
+          {
+            label: t.detailWeek,
+            pending: collectionPending,
+            content:
+              rate === null
+                ? t.runState.unknown
+                : fill(t.detailWeekValue, { rate }),
+          },
+          {
+            label: t.detailReceived,
+            pending: false,
+            content: t.detailReceivedUnknown,
+          },
+        ].map(({ label, pending, content }) => (
           <div className={metric} key={label}>
             <dt className={LABEL}>{label}</dt>
-            <dd className={value}>{content}</dd>
+            <dd className={value} aria-busy={pending || undefined}>
+              {pending ? (
+                <span className="flex h-[24px] items-center">
+                  <SkLine className="w-20" />
+                  <span className="sr-only">
+                    {fill(messages.loading.screen, { name: label })}
+                  </span>
+                </span>
+              ) : (
+                content
+              )}
+            </dd>
           </div>
         ))}
       </dl>
@@ -1589,18 +1637,33 @@ function SourcesBody() {
 
   const [collection, setCollection] = useState<{
     key: string;
-    view: CollectionView;
+    generation: number;
+    view: CollectionView | null;
   } | null>(null);
   useEffect(() => {
     if (!signedIn) return;
     let live = true;
-    void fetchCollection(() => session.accessToken()).then((result) => {
-      if (live) setCollection(result.ok ? { key, view: result.body } : null);
+    void withTimeout<CollectionView | null>(
+      async () => {
+        const result = await fetchCollection(() => session.accessToken());
+        return result.ok ? result.body : null;
+      },
+      null,
+      LOADING_TIMES.timeout,
+    ).then((nextView) => {
+      if (live) {
+        // 다시 읽는 중에는 직전 값을 유지하고, 실패·시간 초과로 끝나면 null로 확정해 '확인 못 함'을 노출함
+        setCollection({ key, generation, view: nextView });
+      }
     });
     return () => {
       live = false;
     };
-  }, [key, session, signedIn]);
+  }, [generation, key, session, signedIn]);
+  const collectionView =
+    signedIn && collection?.generation === generation ? collection.view : null;
+  const collectionPending =
+    signedIn && collection?.key !== key && collectionView === null;
 
   useEffect(() => {
     if (!signedIn) return;
@@ -1760,7 +1823,8 @@ function SourcesBody() {
       {view && id === null && (
         <SourcesList
           view={view}
-          collection={collection?.key === key ? collection.view : null}
+          collection={collectionView}
+          collectionPending={collectionPending}
         />
       )}
       {view && id !== null && source && (
@@ -1768,7 +1832,8 @@ function SourcesBody() {
           key={source.id}
           view={view}
           source={source}
-          collection={collection?.key === key ? collection.view : null}
+          collection={collectionView}
+          collectionPending={collectionPending}
         />
       )}
       {view && id !== null && !source && (
