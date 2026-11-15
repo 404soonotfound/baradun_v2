@@ -11,6 +11,7 @@ import {
   signInWithPassword,
   srpScript,
   test,
+  tokensFor,
 } from "./fixtures";
 
 // 운영자 공지 목록·편집 (BRD-151, 화면 설계서 6장 ADM-NTC). 운영 API는 가짜 응답
@@ -845,4 +846,91 @@ test("목록: 행 작업 확인을 취소하면 원래 행의 작업 메뉴 버�
   await confirm.getByRole("button", { name: "취소" }).click();
   await expect(confirm).toBeHidden();
   await expect(trigger).toBeFocused();
+});
+
+test("로딩: 공지 목록·편집 화면 자리표시와 15초 실패 재시도", async ({
+  page,
+}) => {
+  await page.clock.install();
+  let hold = true;
+  await signIn(page);
+  await page.route(/\/ops\/notices(\/.*)?$/, async (route: Route) => {
+    if (hold) {
+      await new Promise<void>(() => {});
+    }
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({ items: ITEMS() }),
+    });
+  });
+
+  await openNotices(page);
+  await page.clock.fastForward(200);
+  await expect(page.locator("main [aria-busy='true']")).toBeVisible();
+  await page.clock.fastForward(15_500);
+  const listAlert = page
+    .getByRole("alert")
+    .filter({ hasText: "응답이 15초 넘게 오지 않았어요" });
+  await expect(listAlert).toBeVisible();
+
+  hold = false;
+  await listAlert.getByRole("button", { name: "다시 시도" }).click();
+  await expect(rows(page).first()).toContainText("새벽 점검 예고");
+});
+
+test("로딩: 공지 편집 직접 진입 자리표시와 15초 실패 재시도", async ({
+  page,
+}) => {
+  await page.clock.install();
+  const authTime = Math.floor(Date.now() / 1000) - 60;
+  let hold = true;
+  await mockCognito(
+    page,
+    srpScript({
+      email: OPS,
+      after: "tokens",
+      groups: ["publisher"],
+      authTime,
+    }),
+    (target) =>
+      target === "GetTokensFromRefreshToken"
+        ? {
+            body: {
+              AuthenticationResult: tokensFor(
+                OPS,
+                ["publisher"],
+                900,
+                authTime,
+              ),
+            },
+          }
+        : undefined,
+  );
+  await mockOps(page, ME_OK);
+  await page.route(/\/ops\/notices(\/.*)?$/, async (route: Route) => {
+    if (hold) {
+      await new Promise<void>(() => {});
+    }
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({ items: ITEMS() }),
+    });
+  });
+
+  await signInWithPassword(page, "/login/", OPS);
+  await expect(page.getByRole("heading", { name: "운영 홈" })).toBeVisible();
+  await page.goto("/notices/?id=n-live");
+  await page.clock.fastForward(200);
+  await expect(page.locator("main [aria-busy='true']")).toBeVisible();
+  await page.clock.fastForward(15_500);
+  const editorAlert = page
+    .getByRole("alert")
+    .filter({ hasText: "응답이 15초 넘게 오지 않았어요" });
+  await expect(editorAlert).toBeVisible();
+
+  hold = false;
+  await editorAlert.getByRole("button", { name: "다시 시도" }).click();
+  await expect(
+    page.getByRole("heading", { name: "새벽 점검 예고", level: 1 }),
+  ).toBeVisible();
 });

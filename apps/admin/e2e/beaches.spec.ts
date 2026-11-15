@@ -635,3 +635,83 @@ test("데모 계정: 상태는 보이고 운영 메모는 요청하지 않는다
   expect(memo.gets()).toBe(0);
   expect(memo.puts).toHaveLength(0);
 });
+
+test("로딩(L3·상세 메모): 해변 목록·'이용불가' 탭은 틀과 찾기를 유지하고 15초 실패 재시도", async ({
+  page,
+}) => {
+  await page.clock.install();
+  let holdPublished = true;
+  await page.route(/\/ops\/beaches\/published$/, async (route: Route) => {
+    if (holdPublished) {
+      await new Promise<void>(() => {});
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(PUBLISHED),
+    });
+  });
+  await mockMemo(page, { memo: "강문 메모", version: 1, updatedAt: null });
+  await signIn(page, ["editor"]);
+  await openBeaches(page);
+
+  await page.clock.fastForward(200);
+  await expect(page.locator("main [aria-busy='true']")).toBeVisible();
+  // 이용불가 탭(게시 대기 중) 전환 시에도 안내 문구 대신 표/카드 자리표시가 보임
+  await tabButton(page, "이용불가").click();
+  await expect(page.locator("main [aria-busy='true']")).toBeVisible();
+
+  await page.clock.fastForward(15_500);
+  const listAlert = page
+    .getByRole("alert")
+    .filter({ hasText: "응답이 15초 넘게 오지 않았어요" });
+  await expect(listAlert).toBeVisible();
+
+  holdPublished = false;
+  await listAlert.getByRole("button", { name: "다시 시도" }).click();
+  await expect(tabButton(page, "이용불가")).toContainText("1");
+  await expect(allBeachRows(page)).toHaveCount(1);
+});
+
+test("로딩(해변 상세 메모): 15초 넘으면 메모 영역에 다시 시도를 보여 준다", async ({
+  page,
+}) => {
+  await page.clock.install();
+  let holdMemo = true;
+  await mockPublished(page);
+  await page.route(/\/ops\/beaches\/[^/]+\/memo$/, async (route: Route) => {
+    if (holdMemo) {
+      await new Promise<void>(() => {});
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        beachId: "b0001",
+        memo: "현장 점검 메모",
+        version: 1,
+        updatedAt: null,
+      }),
+    });
+  });
+  await signIn(page, ["editor"]);
+  await openBeaches(page);
+  await openDetail(page, "강문해수욕장");
+
+  await page.clock.fastForward(200);
+  await expect(
+    page.getByRole("region", { name: "운영 메모" }).locator("[aria-busy='true']"),
+  ).toBeVisible();
+  await page.clock.fastForward(15_500);
+  const memoAlert = page
+    .getByRole("region", { name: "운영 메모" })
+    .getByRole("alert")
+    .filter({ hasText: "응답이 15초 넘게 오지 않았어요" });
+  await expect(memoAlert).toBeVisible();
+
+  holdMemo = false;
+  await memoAlert.getByRole("button", { name: "다시 시도" }).click();
+  await expect(page.getByRole("textbox", { name: "운영 메모" })).toHaveValue(
+    "현장 점검 메모",
+  );
+});

@@ -1854,3 +1854,54 @@ test("사이트 배포: 다시 로그인으로 세션 세대가 바뀌면 앞 �
     region.getByRole("status").filter({ hasText: "사이트 배포 불러오는 중" }),
   ).toHaveCount(1);
 });
+
+test("로딩(L6): 게시 화면 자리표시 중 버튼 비활성·5초 안내·15초 실패 재시도와 미리보기 닫기", async ({
+  page,
+}) => {
+  await page.clock.install();
+  let holdOverview = true;
+  await signIn(page);
+  await mockPublish(page);
+  await page.route(/\/ops\/publish$/, async (route: Route) => {
+    if (holdOverview) {
+      await new Promise<void>(() => {});
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(overview()),
+    });
+  });
+  await page.route(/\/ops\/publish\/preview$/, async () => {
+    await new Promise<void>(() => {});
+  });
+
+  await openPublish(page);
+  await page.clock.fastForward(200);
+  await expect(page.locator("main [aria-busy='true']").first()).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "변경 미리보기" }),
+  ).toBeDisabled();
+  await expect(page.getByRole("button", { name: "지금 게시" })).toBeDisabled();
+  await page.clock.fastForward(5_000);
+  await expect(page.getByText(/평소보다 오래 걸려요/).first()).toBeVisible();
+  await page.clock.fastForward(10_500);
+  const timeoutAlert = page
+    .getByRole("alert")
+    .filter({ hasText: "응답이 15초 넘게 오지 않았어요" });
+  await expect(timeoutAlert).toBeVisible();
+
+  holdOverview = false;
+  await timeoutAlert.getByRole("button", { name: "다시 시도" }).click();
+  await expect(page.getByText("현재 게시본").first()).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "변경 미리보기" }),
+  ).toBeEnabled();
+
+  // 미리보기 서랍을 열면 응답 전에도 바로 닫을 수 있음
+  await page.getByRole("button", { name: "변경 미리보기" }).click();
+  const dialog = page.getByRole("dialog", { name: "변경 미리보기" });
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("button", { name: "닫기" }).first().click();
+  await expect(dialog).toHaveCount(0);
+});

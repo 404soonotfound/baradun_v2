@@ -949,3 +949,72 @@ test("필터(검색·유형·해변·받은 시각), 미리보기, 행 클릭·�
   await expect(rows(page)).toHaveCount(3);
   await expectNoA11yViolations(page);
 });
+
+test("로딩(L5): 목록·상세 패널 자리표시(닫기 활성·저장 비활성)·15초 실패 재시도", async ({
+  page,
+}) => {
+  await page.clock.install();
+  let holdList = true;
+  let holdDetail = true;
+  await signIn(page);
+  await mockInquiries(page);
+  await page.route(/\/ops\/inquiries(\?.*)?$/, async (route: Route) => {
+    if (holdList) {
+      await new Promise<void>(() => {});
+    }
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        items: [summary(1), summary(2)],
+        nextCursor: null,
+        counts: COUNTS,
+      }),
+    });
+  });
+  await page.route(/\/ops\/inquiries\/00000000-/, async (route: Route) => {
+    if (holdDetail) {
+      await new Promise<void>(() => {});
+    }
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        ...summary(1),
+        message: "문의 상세 본문입니다.",
+      }),
+    });
+  });
+
+  await openInquiries(page);
+  await page.clock.fastForward(200);
+  await expect(page.locator("main [aria-busy='true']")).toBeVisible();
+  await page.clock.fastForward(15_500);
+  const listAlert = page
+    .getByRole("alert")
+    .filter({ hasText: "응답이 15초 넘게 오지 않았어요" });
+  await expect(listAlert).toBeVisible();
+
+  holdList = false;
+  await listAlert.getByRole("button", { name: "다시 시도" }).click();
+  await expect(rows(page)).toHaveCount(2);
+
+  // L5 상세 패널 로딩: 저장·개인정보 가리기 비활성, 닫기는 바로 작동
+  await rows(page).first().getByRole("link").click();
+  await page.clock.fastForward(200);
+  const detail = detailOf(page);
+  await expect(detail.locator("[aria-busy='true']")).toBeVisible();
+  await expect(detail.getByRole("button", { name: "저장" })).toBeDisabled();
+  await expect(
+    detail.getByRole("button", { name: "개인정보 가리기" }),
+  ).toBeDisabled();
+
+  // 15초 실패 후 다시 시도
+  await page.clock.fastForward(15_500);
+  const detailAlert = detail
+    .getByRole("alert")
+    .filter({ hasText: "응답이 15초 넘게 오지 않았어요" });
+  await expect(detailAlert).toBeVisible();
+
+  holdDetail = false;
+  await detailAlert.getByRole("button", { name: "다시 시도" }).click();
+  await expect(detail.getByText("문의 상세 본문입니다.")).toBeVisible();
+});

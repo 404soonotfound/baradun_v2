@@ -380,3 +380,41 @@ test("누가 칸은 이메일·임시 표시·데모 계정을 구분해 보여 
     page.getByText("데모 계정").locator("visible=true").first(),
   ).toBeVisible();
 });
+
+test("로딩: 변경 이력 자리표시·5초 안내·15초 실패 재시도", async ({
+  page,
+}) => {
+  await page.clock.install();
+  let hold = true;
+  await signIn(page);
+  await page.route(/\/ops\/audit(\?.*)?$/, async (route: Route) => {
+    if (hold) {
+      await new Promise<void>(() => {});
+    }
+    const params = new URL(route.request().url()).searchParams;
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        filter: { from: params.get("from"), to: params.get("to") },
+        items: PAGE_1,
+        nextCursor: null,
+        counts: COUNTS,
+      }),
+    });
+  });
+
+  await openAudit(page);
+  await page.clock.fastForward(200);
+  await expect(page.locator("main [aria-busy='true']")).toBeVisible();
+  await page.clock.fastForward(5_000);
+  await expect(page.getByText(/평소보다 오래 걸려요/).first()).toBeVisible();
+  await page.clock.fastForward(10_500);
+  const timeoutAlert = page
+    .getByRole("alert")
+    .filter({ hasText: "응답이 15초 넘게 오지 않았어요" });
+  await expect(timeoutAlert).toBeVisible();
+
+  hold = false;
+  await timeoutAlert.getByRole("button", { name: "다시 시도" }).click();
+  await expect(records(page).first()).toContainText("11/5 점검 예고");
+});

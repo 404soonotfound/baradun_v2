@@ -343,3 +343,63 @@ test("확인한 인증키의 만료 요약은 오늘과 30일 뒤까지 센다",
   });
   await expect(expiry).toContainText("2건");
 });
+
+test("로딩(L9·L4): 목록·상세(탭 아래만 자리표시)·15초 실패 재시도·새로 고침 값 유지", async ({
+  page,
+}) => {
+  await page.clock.install();
+  let holdSources = true;
+  let resolveSources!: () => void;
+  await page.route(/\/ops\/collection$/, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(COLLECTION),
+    }),
+  );
+  await page.route(/\/ops\/sources$/, async (route: Route) => {
+    if (holdSources) {
+      await new Promise<void>((r) => {
+        resolveSources = r;
+      });
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(VIEW),
+    });
+  });
+
+  await openSources(page);
+  await page.clock.fastForward(200);
+  await expect(page.locator("main [aria-busy='true']").first()).toBeVisible();
+  await page.clock.fastForward(15_500);
+  const timeoutAlert = page
+    .getByRole("alert")
+    .filter({ hasText: "응답이 15초 넘게 오지 않았어요" });
+  await expect(timeoutAlert).toBeVisible();
+
+  holdSources = false;
+  await timeoutAlert.getByRole("button", { name: "다시 시도" }).click();
+  await expect(page.getByText("기상특보 조회").first()).toBeVisible();
+
+  // L8 새로 고침: 값 유지 + 다시 읽는 중
+  holdSources = true;
+  await page.getByRole("button", { name: "다시 불러오기" }).click();
+  await expect(page.getByText("다시 읽는 중")).toBeVisible();
+  await expect(page.getByText("기상특보 조회").first()).toBeVisible();
+  resolveSources();
+  await expect(page.getByText("다시 읽는 중")).toHaveCount(0);
+
+  // L4 상세 직접 진입: 출처 탭과 이름은 먼저 보이고 탭 아래만 자리표시
+  holdSources = true;
+  await page.goto("/sources/?id=collect-warnings");
+  await page.clock.fastForward(200);
+  await expect(
+    page.getByRole("heading", { name: "기상특보 조회", level: 1 }),
+  ).toBeVisible();
+  await expect(page.locator("main [aria-busy='true']").first()).toBeVisible();
+  holdSources = false;
+  resolveSources();
+  await expect(page.locator("main [aria-busy='true']")).toHaveCount(0);
+});
