@@ -325,9 +325,12 @@ test("목록: 탭·별칭 찾기·지역(지리순)·특보 구역·페이징·�
     "인천",
     "제주",
   ]);
-  await regionMenu.getByRole("button", { name: "강원", exact: true }).click();
+  await regionMenu.getByRole("button", { name: "강원", exact: true }).press("Enter");
   await expect(page).toHaveURL(/\bsido=%EA%B0%95%EC%9B%90\b/);
   await expect(page.getByText("91건 중 1–11")).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "지역: 강원", exact: true }),
+  ).toBeFocused();
 
   await page.getByRole("button", { name: "특보 구역", exact: true }).click();
   const zoneMenu = page.getByRole("group", { name: "특보 구역 고르기" });
@@ -356,7 +359,11 @@ test("목록: 탭·별칭 찾기·지역(지리순)·특보 구역·페이징·�
   await expect(page).toHaveURL(/\bzone=S1151200\b/);
 
   // 조건 지우기 후 별칭 찾기('승공' → 상맹방해수욕장)
-  await page.getByRole("button", { name: "지역 거르기 지우기" }).click();
+  await page.getByRole("button", { name: "지역 거르기 지우기" }).press("Enter");
+  await expect(page).not.toHaveURL(/\bsido=/);
+  await expect(
+    page.getByRole("button", { name: "지역", exact: true }),
+  ).toBeFocused();
   await page.getByRole("button", { name: "특보 구역 거르기 지우기" }).click();
   await page.getByLabel("해변 찾기").fill("승공");
   await expect(beachRow(page, "상맹방해수욕장")).toHaveCount(1);
@@ -370,6 +377,21 @@ test("목록: 탭·별칭 찾기·지역(지리순)·특보 구역·페이징·�
     page.getByText("출시에서 빠진 해변일 수 있어요. 새 해변은 저장소 PR로 넣어요."),
   ).toBeVisible();
   await page.getByRole("button", { name: "조건 지우기" }).click();
+  await expect(page.getByText("222건 중 1–11")).toBeVisible();
+
+  // 필터 선택 뒤 검색한 상태에서 뒤로 가면 남은 검색 초안도 함께 지워짐
+  await page.getByRole("button", { name: "지역", exact: true }).click();
+  await page
+    .getByRole("group", { name: "지역 고르기" })
+    .getByRole("button", { name: "강원", exact: true })
+    .click();
+  await expect(page).toHaveURL(/\bsido=%EA%B0%95%EC%9B%90\b/);
+  await page.getByLabel("해변 찾기").fill("경포");
+  await expect(page).toHaveURL(/\bq=%EA%B2%BD%ED%8F%AC\b/);
+  await expect(beachRow(page, "경포해수욕장")).toHaveCount(1);
+  await page.goBack();
+  await expect(page).not.toHaveURL(/\bq=/);
+  await expect(page.getByLabel("해변 찾기")).toHaveValue("");
   await expect(page.getByText("222건 중 1–11")).toBeVisible();
   await expectNoA11yViolations(page);
 });
