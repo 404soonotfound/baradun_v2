@@ -1108,6 +1108,82 @@ test("보기 권한은 내용으로 찾지 않는다고 알리고, 이어 읽기
   await expectNoA11yViolations(page);
 });
 
+test("거르기 조건 전환: 2쪽에서 검색어를 쳐도 1쪽 요청을 먼저 보내지 않고, 조건을 오가도 중복 행이 없으며, 형식 밖 조건은 목록을 그대로 둔다(#502)", async ({
+  page,
+}) => {
+  await signIn(page);
+  const calls = await mockInquiries(page);
+  // 서버 형식(소문자·숫자·밑줄) 밖의 유형이 목록에 섞여 옴(유형 메뉴에 그대로 보임)
+  await page.route(
+    /\/ops\/inquiries\?(?!.*(q|type|beachId|from|to|preview)=)/,
+    async (route: Route) => {
+      const params = new URL(route.request().url()).searchParams;
+      if (params.get("cursor") || params.get("status")) return route.fallback();
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({
+          items: [summary(1), summary(2, { type: "Weird-Type" })],
+          nextCursor: "c1",
+          counts: COUNTS,
+        }),
+      });
+    },
+  );
+  await openInquiries(page);
+  await expect(rows(page)).toHaveCount(2);
+
+  const typeMenu = page.getByRole("group", { name: "유형으로 거르기" });
+  const pickType = async (label: string) => {
+    await page.getByRole("button", { name: /^유형/ }).first().click();
+    await typeMenu.getByRole("button", { name: label }).click();
+  };
+
+  // 형식 밖 유형을 고르면 보내지 않고 안내하며, 직전 목록은 그대로 남음
+  const sentBefore = calls.list.length;
+  await pickType("Weird-Type");
+  await expect(
+    page
+      .getByRole("alert")
+      .filter({ hasText: "조건 형식이 맞지 않아 찾을 수 없어요" }),
+  ).toBeVisible();
+  await expect(rows(page)).toHaveCount(2);
+  expect(
+    calls.list.slice(sentBefore).some((q) => q.get("type") === "Weird-Type"),
+  ).toBe(false);
+  await page.getByRole("button", { name: "유형 거르기 지우기" }).click();
+  await expect(
+    page.getByRole("alert").filter({ hasText: "조건 형식이 맞지 않아" }),
+  ).toHaveCount(0);
+
+  // 2쪽에서 검색어를 치기 시작해도(다 치기 전) cursor 없는 비필터 1쪽 요청이 나가지 않음
+  await page.getByRole("button", { name: "다음" }).click();
+  await expect.poll(() => calls.list.at(-1)?.get("cursor")).toBe("c1");
+  const before = calls.list.length;
+  await page
+    .getByLabel("내용·해변 찾기")
+    .pressSequentially("입수", { delay: 30 });
+  await expect
+    .poll(() => calls.list.some((q) => q.get("q") === "입수"))
+    .toBe(true);
+  const between = calls.list.slice(before).filter((q) => !q.get("q"));
+  expect(between.filter((q) => !q.get("cursor"))).toHaveLength(0);
+  await page.getByLabel("내용·해변 찾기").fill("");
+  await expect(rows(page)).toHaveCount(2);
+
+  // 유형 A → B → A: 다시 A로 와도 이어 읽은 행이 겹쳐 보이지 않음
+  await pickType("해변을 추가해 주세요");
+  await expect(rows(page)).toHaveCount(1);
+  await pickType("정보가 실제와 달라요");
+  await expect(rows(page)).toHaveCount(1);
+  await pickType("해변을 추가해 주세요");
+  await expect(
+    page.getByText("보관 중인 문의에서 조건에 맞는 문의를 모두 찾았어요."),
+  ).toBeVisible();
+  await expect(rows(page)).toHaveCount(1);
+
+  await expectNoA11yViolations(page);
+});
+
 test("로딩(L5): 목록·상세 패널 자리표시(닫기 활성·저장 비활성)·15초 실패 재시도", async ({
   page,
 }) => {
