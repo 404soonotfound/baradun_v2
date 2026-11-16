@@ -1,0 +1,111 @@
+import vm from "node:vm";
+
+import { describe, expect, it } from "vitest";
+
+import { DEVICE_KEYS } from "./device-keys";
+import {
+  LANGUAGE_STORAGE_KEY,
+  LAYOUT_HINT_SCRIPT,
+  LOCATION_HINT_KEY,
+  LOCATION_SWITCH_KEY,
+  REGION_STORAGE_KEY,
+} from "./layout-hints";
+
+// 그리기 전 자리 잡기 힌트 스크립트를 가짜 document·localStorage·navigator 위에서 돌려 봄 (BRD-39)
+
+function run({
+  lang = "ko",
+  storage = {},
+  languages = ["ko-KR"],
+  blocked = false,
+}: {
+  lang?: string;
+  storage?: Record<string, string>;
+  languages?: string[];
+  blocked?: boolean; // localStorage 접근이 오류(사생활 보호 모드 등)
+}) {
+  const attributes = new Map<string, string>([["lang", lang]]);
+  const html = {
+    getAttribute: (name: string) => attributes.get(name) ?? null,
+    setAttribute: (name: string, value: string) => attributes.set(name, value),
+  };
+  const context: Record<string, unknown> = {
+    document: { documentElement: html },
+    navigator: { languages, language: languages[0] },
+  };
+  Object.defineProperty(context, "localStorage", {
+    get() {
+      if (blocked) throw new Error("blocked");
+      return { getItem: (key: string) => storage[key] ?? null };
+    },
+  });
+  vm.runInNewContext(LAYOUT_HINT_SCRIPT, context);
+  attributes.delete("lang");
+  return Object.fromEntries(attributes);
+}
+
+describe("LAYOUT_HINT_SCRIPT", () => {
+  it("첫 방문은 위치를 못 쓴 것으로(off) 보고 다른 힌트는 붙이지 않음", () => {
+    expect(run({})).toEqual({ "data-location-hint": "off" });
+  });
+
+  it("지난 방문에 위치를 썼으면 on, 스위치를 꺼 두었으면 off", () => {
+    expect(run({ storage: { [LOCATION_HINT_KEY]: "on" } })).toMatchObject({
+      "data-location-hint": "on",
+    });
+    expect(
+      run({
+        storage: { [LOCATION_HINT_KEY]: "on", [LOCATION_SWITCH_KEY]: "off" },
+      }),
+    ).toMatchObject({ "data-location-hint": "off" });
+  });
+
+  it("최근 본 해변 수는 1곳·2곳 이상으로만 나누고, 깨진 값은 없는 것으로 봄", () => {
+    const recent = (raw: string) =>
+      run({ storage: { [DEVICE_KEYS.recent]: raw } })["data-recent"];
+    expect(recent('["b0001"]')).toBe("1");
+    expect(recent('["b0001","b0002","b0003"]')).toBe("2");
+    expect(recent("[]")).toBeUndefined();
+    expect(recent("[1,2]")).toBeUndefined();
+    // 깨진 JSON은 최근 본 힌트만 건너뜀
+    expect(run({ storage: { [DEVICE_KEYS.recent]: "{" } })).toEqual({
+      "data-location-hint": "off",
+    });
+  });
+
+  it("기본 지역(전국 포함)을 고르면 표시", () => {
+    expect(
+      run({ storage: { [REGION_STORAGE_KEY]: '{"kind":"nationwide"}' } }),
+    ).toHaveProperty("data-region-chosen", "");
+  });
+
+  it("언어 안내는 noticeTarget과 같은 규칙: 기기 첫 언어가 주소 언어와 다르고 고른 언어가 없을 때만", () => {
+    expect(run({ lang: "en", languages: ["ko-KR", "en"] })).toHaveProperty(
+      "data-language-notice",
+      "ko",
+    );
+    expect(run({ lang: "ko", languages: ["en-US"] })).toHaveProperty(
+      "data-language-notice",
+      "en",
+    );
+    expect(run({ lang: "ko", languages: ["ko-KR"] })).not.toHaveProperty(
+      "data-language-notice",
+    );
+    expect(run({ lang: "ko", languages: ["ja-JP", "en"] })).not.toHaveProperty(
+      "data-language-notice",
+    );
+    expect(
+      run({
+        lang: "en",
+        languages: ["ko-KR"],
+        storage: { [LANGUAGE_STORAGE_KEY]: "en" },
+      }),
+    ).not.toHaveProperty("data-language-notice");
+  });
+
+  it("저장소를 못 읽어도 오류 없이 언어 안내만 판단", () => {
+    expect(run({ lang: "en", languages: ["ko"], blocked: true })).toEqual({
+      "data-language-notice": "ko",
+    });
+  });
+});

@@ -161,6 +161,8 @@ export function HomeScreen({
 
   // [5] 지역·전국이면 위치와 관계없이 그 범위를 이름 순으로 보여줌 (10/27 결정 · BRD-127)
   const byList = scope.kind !== "nearby";
+  // 권한 확인 중(정적 HTML·수화 직후). 이 동안은 그리기 전 힌트(lib/layout-hints.ts)로 바뀔 자리를 잡아 둠
+  const locationPending = location.status === "checking";
   // '위치 없이 보고 있어요'는 지역·전국으로 보는데 위치도 없을 때만(권한 확인 중·받는 중은 아직 모름)
   const locationOff =
     byList &&
@@ -432,12 +434,13 @@ export function HomeScreen({
     );
 
   return (
-    // PC 바다 띠를 상단 내비 바로 아래에 붙임(본문 위 여백 상쇄). 언어 안내가 위에 있으면(첫 칸이 아님) 덮지 않게 그대로 둠
+    // PC 바다 띠를 상단 내비 바로 아래에 붙임(본문 위 여백 상쇄). 언어 안내가 위에 있거나 들어올 자리면(힌트) 덮지 않게 그대로 둠
+    // 언어 안내 자리(app-shell [data-language-slot])는 늘 바로 앞 칸이라 그 칸에 안내(section)가 있는지로 고름
     // 모바일 바다 배경은 이 묶음이 아니라 본문(main) 기준이라 relative를 두지 않음(언어 안내 아래에서 잘려 시작하지 않게)
     <PullToRefresh
       refreshing={refreshing}
       onRefresh={triggerRefresh}
-      className="lg:first:-mt-8"
+      className="lg:[html:not([data-language-notice])_[data-language-slot]:not(:has(>section))+&]:-mt-8"
     >
       <div className="isolate flex flex-col gap-6 lg:gap-2">
       {/* 모바일 바다 배경(꾸밈) */}
@@ -483,6 +486,8 @@ export function HomeScreen({
             {/* 상황 배너 자리(노션 HOME 3). 예시 값이 실제 확인 결과처럼 보이지 않게 카드들 위에 둠 */}
             {sampleSnapshot && <SampleNote />}
             {!bannerInInfo && banner}
+            {/* '위치 없이 보고 있어요'가 들어올 자리. 권한 확인 중에만 두고 지난 방문에 위치를 못 썼으면 globals.css가 높이를 잡음 */}
+            {locationPending && <div data-location-slot aria-hidden="true" />}
             {/* 연결이 없어 다른 화면을 열지 못하고 홈으로 왔을 때만(서비스 워커 표식, BRD-106) */}
             <PageUnavailableNote />
             <div className="lg:mt-3">
@@ -511,7 +516,12 @@ export function HomeScreen({
             모바일은 가까운 바다(위치)로 볼 때만 '처음 오셨네요'(Figma 171:563). 지역·전국으로 볼 때는 없음(171:818)
             빈 칸도 간격을 차지해 그릴 것이 없으면 칸째 뺌 */}
         {(recent.length > 0 || desktop || !byList) && (
-          <div className="lg:order-3 lg:pt-8">
+          <div
+            className="lg:order-3 lg:pt-8"
+            // 권한 확인 중: 최근 본·지역 목록 힌트로 globals.css가 '처음 오셨네요'를 숨기거나 최근 본 자리를 잡음
+            data-first-slot=""
+            data-pending={locationPending ? "" : undefined}
+          >
             {recent.length > 0 ? (
               <RecentBeaches locale={locale} beaches={recent} />
             ) : desktop ? (
@@ -753,6 +763,8 @@ function NearContent({
     return (
       <div
         role="status"
+        // 모바일은 globals.css가 바뀔 내용 높이만큼 자리를 잡음: 가까운 바다 카드, 지역 목록이 될 것 같으면(힌트) 카드 + 개수 카드
+        data-near-pending=""
         className="flex flex-col gap-2 rounded-card bg-bg-surface p-4 shadow-card"
       >
         <Skeleton className="h-5 w-[50%]" />

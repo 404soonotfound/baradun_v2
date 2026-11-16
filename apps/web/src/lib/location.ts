@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from "react";
 
 import type { LatLng } from "@/lib/geo";
+import { LOCATION_HINT_KEY, LOCATION_SWITCH_KEY } from "@/lib/layout-hints";
 
 // 지금 위치 (BRD-25·26·27). 기기 메모리에만 두고 저장·전송하지 않음
 // 위치를 서버로 보내는 구조로 바뀌면 위치기반서비스·개인정보 검토를 다시 해야 함
@@ -28,7 +29,8 @@ const OFF: LocationState = { status: "off", coords: null };
 
 // '위치 사용' 스위치 저장 키. 값 "off"만 저장(없으면 켜짐 = 기본값)
 // 기기 데이터 초기화로 지우지 않음: 지우면 꺼 둔 위치가 다시 켜짐(사용자가 고른 보호 설정을 되돌리지 않음)
-export const LOCATION_SWITCH_KEY = "baradun:location-switch";
+// 키는 그리기 전 힌트(lib/layout-hints.ts)도 읽음
+export { LOCATION_SWITCH_KEY };
 
 // 스위치 저장소. 테스트에서 바꿔 끼움. 못 쓰면 null
 export type SwitchStorage = Pick<Storage, "getItem" | "setItem" | "removeItem">;
@@ -126,7 +128,22 @@ export function createLocationStore(
 
   function setState(next: LocationState) {
     state = next;
+    rememberHint(next.status);
     listeners.forEach((listener) => listener());
+  }
+
+  // 다음 방문의 그리기 전 자리 잡기 힌트(lib/layout-hints.ts): 위치를 썼는지(on)·못 썼는지(off)만. 좌표는 저장하지 않음
+  // 확인 중은 아직 몰라 쓰지 않음. 받는 중·받음은 홈이 가까운 바다로, 그 밖은 '위치 없이 보고 있어요'로 보임
+  function rememberHint(status: LocationState["status"]) {
+    if (status === "checking") return;
+    const hint = status === "locating" || status === "ready" ? "on" : "off";
+    try {
+      const storage = getStorage();
+      if (storage && storage.getItem(LOCATION_HINT_KEY) !== hint)
+        storage.setItem(LOCATION_HINT_KEY, hint);
+    } catch {
+      // 힌트는 자리 잡기에만 씀. 못 쓰면 다음 방문에 한 번 밀릴 뿐
+    }
   }
 
   // 권한 확인이 끝나지 않았으면 아직 묻지 않은 것으로(버튼으로만 요청)

@@ -6,6 +6,7 @@ import {
   type RegionChoice,
   type SavedRegion,
 } from "@/lib/region-list";
+import { REGION_STORAGE_KEY } from "@/lib/layout-hints";
 
 // 기본 지역 (BRD-11 결정: 위치 권한이 없을 때 홈에서 고르는 지역, 기기 저장) (BRD-26·27)
 // 칩은 출시된 해변이 있는 시·도만. 고른 뒤 지역 선택 창에서 시·군까지 고름
@@ -13,7 +14,8 @@ import {
 // 기기 저장만 여기. 순수 계산(지리 순서·칩·지역 묶음·저장 글자 읽기)은 lib/region-list.ts (BRD-27에서 나눔)
 
 // [6] ── 기기 저장 (lib/activity.ts와 같은 틀) ──
-const STORAGE_KEY = "baradun:region";
+// 키는 그리기 전 힌트(lib/layout-hints.ts)도 읽음
+const STORAGE_KEY = REGION_STORAGE_KEY;
 let memory: RegionChoice | null = null; // 저장소를 못 쓰는 환경 대비
 let lastRaw: string | null = null; // 같은 글자면 같은 객체를 돌려주기 위한 기억
 let lastValue: RegionChoice | null = null;

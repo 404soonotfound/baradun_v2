@@ -3,7 +3,7 @@
 import { Languages } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { Suspense } from "react";
+import { Suspense, useEffect } from "react";
 
 import { Banner } from "@/components/ui/banner";
 import { type Locale } from "@/lib/i18n";
@@ -12,6 +12,7 @@ import {
   setLanguageChoice,
   useLanguageNotice,
 } from "@/lib/language-choice";
+import { clearLanguageNoticeHint } from "@/lib/layout-hints";
 
 // 첫 방문 언어 안내 (디자인 시스템 8절 10/16 결정 · BRD-48)
 // 기기 언어가 주소 언어와 다를 때 한 번만, 기기 언어로 씀(이 화면 언어를 못 읽는 사람도 알아보게)
@@ -43,6 +44,11 @@ function Notice({ locale, texts }: Props) {
   // 언어를 바꿔도 검색어(?q=)·문의 맥락(?beach=) 같은 지금 주소의 매개변수는 그대로 넘김
   const search = useSearchParams().toString();
   const text = target ? texts[target] : undefined;
+  const shown = Boolean(target && text);
+  // 안내가 없거나(고름·같은 언어) 사라지면 그리기 전 힌트를 뗌. 남아 있으면 비어 있는 자리가 높이를 잡은 채 남음
+  useEffect(() => {
+    if (!shown) clearLanguageNoticeHint();
+  }, [shown]);
   if (!target || !text) return null;
   return (
     // 홈 바다 배경(본문 맨 위부터 깔림) 위에 보이게 앞으로 올림

@@ -2,6 +2,7 @@ import { NextIntlClientProvider } from "next-intl";
 import type { Locale } from "@/lib/i18n";
 import "@fontsource-variable/noto-sans-kr";
 import { DISPLAY_INIT_SCRIPT } from "@/lib/display-init";
+import { LAYOUT_HINT_SCRIPT } from "@/lib/layout-hints";
 import { getMessages } from "next-intl/server";
 import { ServiceWorkerSetup } from "@/components/service-worker";
 import { LegacyStorageCleanup } from "@/components/legacy-storage-cleanup";
@@ -26,7 +27,8 @@ export async function RootDocument({
             페이지 라우터용 경고를 냄. 메타데이터는 metadata API가 <head>에 넣어 줌. */}
         <script
           dangerouslySetInnerHTML={{
-            __html: DISPLAY_INIT_SCRIPT,
+            // 화면 설정 + 자리 잡기 힌트(lib/layout-hints.ts). 한 태그에 둬서 CSP 해시도 하나
+            __html: DISPLAY_INIT_SCRIPT + LAYOUT_HINT_SCRIPT,
           }}
         />
         <ServiceWorkerSetup />
