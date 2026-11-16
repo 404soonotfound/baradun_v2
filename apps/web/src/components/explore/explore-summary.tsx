@@ -38,7 +38,9 @@ export function ExploreSummary({
     <span className="max-lg:sr-only">{chunks}</span>
   );
   return (
-    <div className="flex min-h-touch items-center gap-x-3 gap-y-1 max-lg:justify-between lg:min-h-0">
+    // 모바일은 세 줄 높이(58px)를 미리 잡음(GH-218 CLS): 재방문 때 지난 값이 '이후 확인 못 함'과 함께 세 줄로 먼저 보이고
+    // 새 값이 오면 두 줄로 줄어 아래 목록이 14px 오르내리던 것을 막음
+    <div className="flex min-h-touch items-center gap-x-3 gap-y-1 max-lg:min-h-[58px] max-lg:justify-between lg:min-h-0">
       <p className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-caption text-text-muted">
         {total !== null && (
           <span className="text-body-s font-bold text-text-default lg:text-body">

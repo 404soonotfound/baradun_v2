@@ -54,9 +54,11 @@ export async function AppShell({
       </a>
       <TopNav beachIds={beaches.map((beach) => beach.id)} />
 
+      {/* 모바일은 본문을 화면 높이 이상으로 잡아 바닥글이 첫 화면에 들어오지 않게 함(GH-218 CLS)
+          짧은 대기 화면(Suspense)이나 빈 상태 뒤에 내용이 그려져도 바닥글이 첫 화면에서 밀리지 않음 */}
       <main
         id="main"
-        className="relative mx-auto w-full max-w-[1280px] px-gutter pt-5 pb-8 standalone:pt-[calc(20px+env(safe-area-inset-top))] lg:px-10 lg:pt-8 lg:pb-16"
+        className="relative mx-auto w-full max-w-[1280px] px-gutter pt-5 pb-8 max-lg:min-h-svh standalone:pt-[calc(20px+env(safe-area-inset-top))] lg:px-10 lg:pt-8 lg:pb-16"
       >
         {/* 언어 안내 자리. 그리기 전 힌트가 안내할 언어를 알면 globals.css가 안내가 그려지기 전까지 높이를 잡음 */}
         <div data-language-slot="">

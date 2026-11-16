@@ -124,4 +124,63 @@ test.describe("화면 밀림", () => {
       expect(await cls(page)).toBeLessThan(LIMIT);
     });
   }
+
+  // 주소(?tab·?q·?beach)를 읽는 화면은 정적 HTML에 짧은 대기 화면만 그려짐. 바닥글이 첫 화면에 보였다가 밀리지 않아야 함
+  // (본문 최소 높이 app-shell. 탐색은 요약 줄 세 줄 높이. 고치기 전 탐색 0.76·즐겨찾기 0.27로 실패 확인)
+  test.describe("탐색 목록", () => {
+    test.use({ exploreView: "list" });
+    test("요약 줄·목록이 들어와도 밀리지 않음", async ({ page }) => {
+      await slowDown(page);
+      await page.goto("/explore/");
+      await expect(page.getByText(/업데이트/).first()).toBeVisible({
+        timeout: 10_000,
+      });
+      await page.waitForTimeout(1500);
+      expect(await cls(page)).toBeLessThan(LIMIT);
+    });
+  });
+
+  test("즐겨찾기 · 해변 3곳", async ({ page }) => {
+    await page.addInitScript(
+      (ids) => localStorage.setItem("baradun:favorites", JSON.stringify(ids)),
+      [WARNING_ID, CLEAR_ID, DELAYED_ID],
+    );
+    await slowDown(page);
+    await page.goto("/favorites/");
+    await expect(
+      page.getByRole("button", { name: /즐겨찾기에서 빼기/ }).first(),
+    ).toBeVisible({ timeout: 10_000 });
+    await page.waitForTimeout(1500);
+    expect(await cls(page)).toBeLessThan(LIMIT);
+  });
+
+  // 검색·문의는 모바일 기기 흉내(isMobile)를 켜면 Chromium이 이 밀림을 layout-shift로 기록하지 않음(같은 빌드에서 0건)
+  // 같은 390×844 창에서 기기 흉내만 끄고 잼(고치기 전 검색 0.26·문의 0.50으로 실패 확인)
+  test.describe("주소를 읽는 화면", () => {
+    test.use({ isMobile: false, hasTouch: false });
+
+    test("검색 · 입력 전(최근 본 해변 있음)", async ({ page }) => {
+      await page.addInitScript(
+        (ids) => localStorage.setItem("baradun:recent", JSON.stringify(ids)),
+        [WARNING_ID, CLEAR_ID],
+      );
+      await slowDown(page);
+      await page.goto("/search/");
+      await expect(page.getByRole("combobox").first()).toBeVisible({
+        timeout: 10_000,
+      });
+      await page.waitForTimeout(1500);
+      expect(await cls(page)).toBeLessThan(LIMIT);
+    });
+
+    test("데이터 문의 · 해변 자동 채움", async ({ page }) => {
+      await slowDown(page);
+      await page.goto(`/settings/inquiry/?beach=${slugOf(WARNING_ID)}`);
+      await expect(page.getByRole("button", { name: "보내기" })).toBeVisible({
+        timeout: 10_000,
+      });
+      await page.waitForTimeout(1500);
+      expect(await cls(page)).toBeLessThan(LIMIT);
+    });
+  });
 });
