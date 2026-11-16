@@ -34,6 +34,9 @@ const NO_STATIONS = {
   waterTemp: null,
   wind: null,
 };
+const SAMPLE_PHOTO = `data:image/svg+xml,${encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 4"><rect width="8" height="2" fill="#9cc7e8"/><rect y="2" width="8" height="1" fill="#2c7fb8"/><rect y="3" width="8" height="1" fill="#e2cfa5"/></svg>',
+)}`;
 const SACHEONJIN: ExploreItem = {
   id: "b0004",
   slug: "sacheonjin",
@@ -58,7 +61,8 @@ const GYEONGPO: ExploreItem = {
   slug: "gyeongpo",
   name: "경포해수욕장",
   photo: {
-    url: "https://tong.visitkorea.or.kr/cms/resource/25/4075925_image2_1.jpg",
+    // 바깥 주소 대신 스토리 안 그림(네트워크가 막혀도 '사진 있음'으로 보이게). 실제 사진 아님
+    url: SAMPLE_PHOTO,
     source: "한국관광공사",
     license: "kogl-type1",
     title: "경포해수욕장",
