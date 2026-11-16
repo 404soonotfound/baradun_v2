@@ -7,7 +7,7 @@ npm run build -w @baradun/infra             # 타입 검사(tsc)
 npm run test -w @baradun/infra              # Vitest (스택 템플릿·권한·가드레일)
 npm run check:iam-actions -w @baradun/infra # synth 뒤 고정 IAM·서울 CFN 스키마 대조 (오프라인)
 npx cdk synth                               # CloudFormation 템플릿 생성 (infra/에서)
-npx cdk diff --method=change-set            # 배포된 스택과 변경 세트 비교
+npx cdk diff --method=template              # 배포된 스택과 템플릿 비교(변경 세트 확인은 아래 '배포')
 ```
 
 사이트 배포(`.github/workflows/deploy.yml`)는 하루 한 번 정기 실행(매일 05:17 KST)과 수동 실행(`npm run deploy:prod`)에서만 돕니다(GH-424). main에 머지할 때마다 올리면 배포마다 파일을 전부 다시 올려 S3 쓰기 요청 요금이 쌓이기 때문입니다(2026-11-01~13 청구액 US$1.08 중 약 90%, 앱 배포 1회에 PutObject 약 1,850건). 머지한 변경을 바로 보려면 `npm run deploy:prod`를 씁니다. `DEPLOY_PAUSED=true`면 정기 실행과 새 수동 배포(CLI·Actions 탭)를 막습니다(D27-6). 수동 실행은 정지 사유를 실행 요약에 남기고 실패로 끝납니다. 이미 시작한 동기화는 그대로 끝납니다. 정지를 켠 뒤 GitHub Actions의 `deploy` 실행 목록에서 이미 대기 중인 수동 실행은 취소합니다. 긴급 배포는 정지를 해제한 뒤 실행합니다. 배포는 GitHub OIDC로 사이트 전용 역할(`DeployRole`)을 맡아 S3 파일 동기화와 CloudFront 캐시 무효화만 수행하며, CloudFormation이나 CDK 실행 정책을 거치지 않습니다. 정기 배포는 앱(사용자 사이트·운영자 사이트)마다 마지막으로 올린 커밋(운영 주소의 `deploy-version.txt`, 저장소 변수 `SITE_URL`·`ADMIN_SITE_URL`로 읽음) 뒤로 main push CI가 성공하고 그 실행에서 그 앱 빌드 작업(`e2e-build`·`admin-build`)까지 성공한 가장 새 커밋을 올립니다(`.github/scripts/deploy-plan.sh`). CI는 push 단위로 돌아 여러 커밋을 머지하면 맨 위 커밋에서만 실행되므로, 커밋별 변경이 아니라 실행 결과로 고릅니다. 그런 커밋이 없거나 올린 커밋과 앱 파일이 같으면 건너뛰므로(이때는 S3에 쓰지 않음), CI가 늦게 끝난 옛 커밋이 새 배포를 덮지 않고 CI가 실패한 커밋의 변경은 그 앱을 다시 검사한 뒤 커밋으로만 나갑니다(검사를 거치지 않은 앱 변경이 남으면 경고를 남김). 표시를 못 읽으면 경고를 남기고 최근 이력에서 고른 커밋을 올리며, `npm run deploy:prod`(수동 실행)는 두 앱을 모두 올립니다(BRD-178). 사이트 동기화는 `data/`(publisher 구역)와 `map/`(한국 지도 파일 구역, 결정 기록 D19-1)을 건드리지 않습니다. `map/<판>/`은 수동 워크플로 `map-tiles.yml`이 같은 배포 역할로 올립니다(`tools/map-tiles/README.md`). 저장소 변수(사이트 주소·버킷·로그인 풀 값 등 빌드 값)만 바꾼 경우는 파일 변경이 아니라 정기 배포가 건너뛰므로 `npm run deploy:prod`로 다시 올립니다. main push CI는 push마다 따로 돌고 취소하지 않으며, main 규칙은 최신 브랜치만 머지할 수 있게 합니다.
@@ -20,6 +20,8 @@ npm run deploy:infra -- --profile <프로필>        # 다른 프로필
 npm run deploy:infra -- --issue 328               # 결과를 이슈 #328에 댓글로(GH-382)
 npm run deploy:infra -- --watch 0                 # 배포 뒤 로그 점검 건너뛰기(기본 16분)
 npm run deploy:infra -- --admin-profile <프로필>  # boundary를 고칠 프로필(기본: --profile)
+npm run deploy:infra -- --site-domain <호스트> --site-certificate-arn <ARN>  # 운영 도메인 설정(GH-341, '출시일 전환 순서')
+npm run deploy:infra -- --clear-site-domain       # 운영 도메인 비우기('되돌리기')
 ```
 
 배포용 폴더에서 실행합니다. 처음 한 번은 폴더를 만들거나 이 명령이 있는 커밋으로 맞춥니다: `git fetch origin && git worktree add --detach ../baradun_v2-deploy origin/main && cd ../baradun_v2-deploy && npm ci`(이미 있으면 `git checkout --detach origin/main && npm ci`). 실행 중인 명령이 배포할 커밋의 명령과 다르면 멈추고, 배포용 폴더라면 한 번 더 실행하라고 안내합니다(예전 절차로 배포하지 않게).
@@ -177,46 +179,28 @@ GitHub 저장소 설정 → Environments에서 `infra`(배포 브랜치 `main`�
 ### 출시일 전환 순서
 
 1. **사이트 배포 멈춤**: 저장소 변수 `DEPLOY_PAUSED=true`.
-2. **스택 배포**: 최신 `origin/main` 작업 트리(`infra` 폴더)에서 도메인·인증서 값을 넣은 변경 세트를 만들어 내용을 확인한 뒤 실행합니다. 먼저 '미리 할 일' 2단계 ③의 `ARN=` 줄을 실행하고, 3단계 상태 확인이 `ISSUED`인지 봅니다.
-   - `npm run deploy:infra`는 이 두 값을 넘기지 못해서 손으로 합니다. main에 아직 배포되지 않은 인프라 변경이 없을 때(자동 배포가 끝난 뒤) 합니다.
+2. **스택 배포**: 맨 위 배포 명령(`npm run deploy:infra`)에 도메인·인증서 값을 넘깁니다. 배포용 작업 트리를 `origin/main`으로 맞추고 `ci-ok`·boundary를 확인한 뒤 변경 세트를 표로 보여 주고, `yes`를 입력해야 실행합니다. 먼저 '미리 할 일' 2단계 ③의 `ARN=` 줄을 실행하고, 3단계 상태 확인이 `ISSUED`인지 봅니다. 명령은 `origin/main` 맨 위 커밋을 배포하므로, main에 아직 배포되지 않은 인프라 변경이 없을 때(자동 배포가 끝난 뒤) 합니다.
+
+   ```bash
+   npm run deploy:infra -- --issue 341 \
+     --site-domain www.baradun.app --site-certificate-arn "$ARN"
+   ```
+
    - `cdk diff`로는 확인하지 않습니다. `--method=change-set`은 `AlertEmail` 값 없음(`MissingParameters`)으로 실패하고(아래 '배포'), `--method=template`은 두 값이 템플릿 조건으로만 쓰여 '차이 없음'으로 나옵니다(2026-11-16 확인).
+   - `yes`를 입력하기 전에 표가 아래와 맞는지 봅니다(2026-11-16 템플릿 기준). 아래 10개(와 `AWS::CDK::Metadata`) 말고 다른 줄이 있거나 `Add`·`Remove` 줄, `!!` 줄이 있으면 `yes`를 입력하지 않습니다. 이때 명령이 남은 변경 세트를 지우는 명령을 보여 줍니다.
+     - 값이 직접 바뀌는 3개: `Modify`, 교체 없음. 공식 문서상 셋 다 교체 없이 바뀝니다([배포 설정](https://docs.aws.amazon.com/AWSCloudFormation/latest/TemplateReference/aws-properties-cloudfront-distribution-distributionconfig.html)·[CloudFront 함수](https://docs.aws.amazon.com/AWSCloudFormation/latest/TemplateReference/aws-resource-cloudfront-function.html)).
 
-   ① 변경 세트를 만들고(실행하지 않음) 바뀌는 리소스를 봅니다.
+       | 논리 ID                    | 바뀌는 것                                     |
+       | -------------------------- | --------------------------------------------- |
+       | `SiteDistribution390DED28` | 대체 도메인 www, 인증서(SNI, `TLSv1.2_2021`)  |
+       | `SiteRewriteIndexC4002154` | 다른 호스트로 온 페이지 요청을 www로 301 이동 |
+       | `OpsApiFunction484C2E8D`   | 환경 변수 `SITE_URL`이 www로 바뀜             |
 
-   ```bash
-   NAME=site-domain-$(date -u +%Y%m%d%H%M); echo "NAME=$NAME"
-   AWS_PROFILE=baradun-sso npx --no-install cdk deploy BaradunV2 --no-execute \
-     --change-set-name "$NAME" --require-approval never \
-     --parameters SiteDomainName=www.baradun.app \
-     --parameters SiteCertificateArn="$ARN"
-   AWS_PROFILE=baradun-sso aws cloudformation describe-change-set --region ap-northeast-2 \
-     --stack-name BaradunV2 --change-set-name "$NAME" \
-     --query 'Changes[].ResourceChange.[Action,LogicalResourceId,ResourceType,Replacement]' --output table
-   ```
-
-   ② 아래 3줄만 `Modify`이고 `Replacement`가 모두 `False`인지 확인합니다(2026-11-16 템플릿 기준). 공식 문서상 셋 다 교체 없이 바뀝니다([배포 설정](https://docs.aws.amazon.com/AWSCloudFormation/latest/TemplateReference/aws-properties-cloudfront-distribution-distributionconfig.html)·[CloudFront 함수](https://docs.aws.amazon.com/AWSCloudFormation/latest/TemplateReference/aws-resource-cloudfront-function.html)).
-
-   | 논리 ID                    | 바뀌는 것                                                              |
-   | -------------------------- | ---------------------------------------------------------------------- |
-   | `SiteDistribution390DED28` | 대체 도메인 www, 인증서(SNI, `TLSv1.2_2021`)                           |
-   | `SiteRewriteIndexC4002154` | 다른 호스트로 온 페이지 요청을 www로 301 이동                          |
-   | `OpsApiFunction484C2E8D`   | 환경 변수 `SITE_URL`(운영자 사이트의 앱 게시본 확인에 씀)이 www로 바뀜 |
-
-   다른 줄이 있거나 `Replacement`가 `True`·`Conditional`이면 실행하지 않고 변경 세트를 지운 뒤 원인을 봅니다.
-
-   ```bash
-   AWS_PROFILE=baradun-sso aws cloudformation delete-change-set --region ap-northeast-2 \
-     --stack-name BaradunV2 --change-set-name "$NAME"
-   ```
-
-   ③ 맞으면 실행하고 끝날 때까지 기다립니다(CloudFront 반영에 몇 분 걸리며, 그동안 기존 응답은 계속 나감).
-
-   ```bash
-   AWS_PROFILE=baradun-sso aws cloudformation execute-change-set --region ap-northeast-2 \
-     --stack-name BaradunV2 --change-set-name "$NAME"
-   AWS_PROFILE=baradun-sso aws cloudformation wait stack-update-complete --region ap-northeast-2 \
-     --stack-name BaradunV2
-   ```
+     - 위 3개를 참조해서 함께 나올 수 있는 7개: `SiteBucketPolicy45F6EBA1`, `SiteDistributionOrigin2…` Lambda 권한 2개, `OpsApiFunctionEventInvokeConfig2BC51B05`, `OpsApiFunctionFunctionUrl79ADB6FB`, `OpsOpsApiErrors18A7019C`, `DeployRoleDefaultPolicy9A3389B6`. 참조 값이 배포 때 다시 계산되기 때문이며 `~`(교체될 수도 있음)·`**`(권한)·`*~`(둘 다) 표시는 괜찮습니다. 실제 값(배포 ID·함수 ARN)은 바뀌지 않습니다.
+   - 실행이 끝나면 명령이 바뀐 함수(운영 API) 로그를 16분 동안 봅니다. 그동안 기본 주소 방문자는 V1을 보므로, 기다리지 않고 다른 터미널에서 3단계를 진행합니다.
+   - 실행하면 CloudFront 함수는 바로 바뀌고(`AutoPublish`), 배포 설정은 몇 분에 걸쳐 퍼집니다. 함수가 먼저 바뀌므로 그때부터 기본 주소의 페이지 요청은 www(아직 V1)로 이동합니다.
+   - 운영 API의 `SITE_URL`도 www로 바뀌어, 운영자 사이트의 '앱 게시본' 확인(`deploy-version.txt`)이 3단계 DNS가 퍼질 때까지 V1을 읽어 '확인 못 함'으로 보일 수 있습니다. 장애가 아닙니다.
+   - 실행이 실패하면(롤백 등) 명령이 #341에 실패 댓글을 남기고 멈춥니다. CloudFormation이 이전 상태로 되돌리므로 3단계로 넘어가지 않고 원인을 봅니다.
 
    다음 배포부터는 CloudFormation이 이 값을 그대로 씁니다. 이때부터 CloudFront 기본 주소의 페이지는 www로 이동합니다. www는 아직 Vercel을 가리키므로, 기본 주소로 온 사람은 3단계 전까지 V1 점검 화면을 봅니다.
 
@@ -242,12 +226,13 @@ GitHub 저장소 설정 → Environments에서 `infra`(배포 브랜치 `main`�
    - V1 프로젝트 도메인 목록에 `www.baradun.app`을 다시 추가합니다.
    - `vercel.json`에서 `https://www.baradun.app/`으로 보내는 리디렉션을 빼고(전환 전 설정) 다시 배포합니다. 남겨 두면 www가 자기 자신으로 계속 이동합니다.
 2. **가비아 www 복구**: `www`를 전환 전 값인 A 레코드 `216.198.79.1`(Vercel IP)로 되돌립니다. Vercel CNAME(`2e9e02c1d516eeff.vercel-dns-017.com.`)으로 되돌려도 V1은 보이지만, Vercel CAA 때문에 ACM 인증서 자동 갱신이 실패하므로 쓰지 않습니다.
-3. **CloudFront 복구**: 두 매개변수를 비워 다시 배포합니다.
+3. **CloudFront 복구**: 두 매개변수를 비워 다시 배포합니다. 표에는 2단계와 같은 리소스가 나옵니다.
 
    ```bash
-   AWS_PROFILE=baradun-sso npx cdk deploy \
-     --parameters SiteDomainName= --parameters SiteCertificateArn=
+   npm run deploy:infra -- --issue 341 --clear-site-domain
    ```
+
+   이 명령은 `origin/main` 맨 위 커밋의 `ci-ok`가 성공이어야 돌고 그 커밋을 배포합니다. main CI가 도는 중·실패이거나 배포되지 않은 인프라 변경이 섞이면, 배포용 작업 트리(마지막으로 배포한 커밋)의 `infra`에서 아래 '배포'의 손 명령 첫 줄에 `--parameters SiteDomainName= --parameters SiteCertificateArn=`을 붙여 변경 세트를 만들고, 같은 표인지 확인한 뒤 실행합니다.
 
 4. **사이트 재배포**: `SITE_URL`을 CloudFront 기본 주소로 되돌리고 `npm run deploy:prod` 합니다.
 
@@ -327,12 +312,14 @@ BRD121_ACCOUNT_ID="<계정>"
    npm run check:iam-actions -w @baradun/infra
    ```
 
-3. **기존 정책 상태에서 변경 세트 비교 (`--method=change-set`)**:
-   `cdk diff` 기본값(`--method=auto`)은 권한이 부족할 때 템플릿 비교로 조용히 폴백합니다. 반드시 `--method=change-set`을 붙여 CloudFormation 변경 세트가 정상으로 만들어지는지 먼저 확인합니다.
+3. **기존 정책 상태에서 변경 세트 만들기**:
+   `cdk diff` 기본값(`--method=auto`)은 권한이 부족할 때 템플릿 비교로 조용히 폴백합니다. `--method=change-set`은 이 스택에서 `AlertEmail` 값 없음(`MissingParameters`)으로 실패하므로(아래 '배포'), 실행하지 않는 변경 세트를 직접 만들어 CloudFormation 변경 세트가 정상으로 만들어지는지 먼저 확인합니다.
 
    ```bash
-   cd infra && npx cdk diff --method=change-set
+   cd infra && npx --no-install cdk deploy BaradunV2 --no-execute --change-set-name <이름>
    ```
+
+   만든 변경 세트는 '배포'의 `describe-change-set`으로 내용을 보고, 아래 태그 선반영에 쓰지 않으면 `aws cloudformation delete-change-set --region ap-northeast-2 --stack-name BaradunV2 --change-set-name <이름>`으로 지웁니다.
 
    **기존 CloudFront 배포에 태그 선반영**: 현재 정상 실행 정책으로 `SiteDelivery`의 사용자 태그 추가만 배포합니다. 실제 변경 세트에 다른 변경이 섞이면 중단하고 태그만 있는 변경을 따로 준비합니다. 배포가 완료되고 운영 배포에 `baradun:stack = BaradunV2`가 있음을 콘솔 또는 `list-tags-for-resource`로 확인한 뒤 4단계로 진행합니다. 함수에는 태그 전환이 필요 없습니다. 이 선행 배포를 수행·확인하지 않은 상태에서는 축소 정책을 적용하지 않습니다. 축소 정책 적용 이후 태그가 없는 이전 템플릿으로 롤백하려면 **실행 정책부터 직전 정상 버전으로 복구**해야 합니다. 태그를 지운 뒤 제한 정책으로 Read·rollback하려 해서는 안 됩니다. 이 저장소 작업에서는 선행 배포나 AWS 조회를 실행하지 않았습니다.
 
@@ -374,7 +361,7 @@ BRD121_ACCOUNT_ID="<계정>"
    공통으로 두 정책의 `DefaultVersionId`와 문서, 실행 역할의 연결 목록을 확인합니다. 두 새 문서가 기본이며 기존 `AdministratorAccess`나 다른 광범위 정책이 추가로 붙어 있지 않아야 축소가 완료된 것입니다. IAM 변경 전파가 끝난 뒤 5단계로 진행합니다.
 
 5. **실제 Update 핸들러를 타는 작은 canary 변경으로 배포 검증**:
-   변경 없는(no-op) 배포나 드리프트 감지는 CloudFormation이 리소스 Update 핸들러를 호출하지 않아 실행 정책 권한을 증명하지 못합니다. 실제 Update 핸들러를 타는 무해한 작은 변경(예: 경보 `alarmDescription` 한 줄 수정)으로 `npx cdk diff --method=change-set`과 `npx cdk deploy`가 끝까지 통과하는지 확인한 뒤 설명을 원래대로 되돌려 다시 배포합니다. 경보 canary는 경보 핸들러만 검증합니다. S3·Lambda 등 다른 핸들러와 Create/Delete·롤백까지 검증했다고 기록하지 않으며, 아직 실행하지 않은 경로는 미확인으로 남깁니다.
+   변경 없는(no-op) 배포나 드리프트 감지는 CloudFormation이 리소스 Update 핸들러를 호출하지 않아 실행 정책 권한을 증명하지 못합니다. 실제 Update 핸들러를 타는 무해한 작은 변경(예: 경보 `alarmDescription` 한 줄 수정)으로 변경 세트(`npx cdk deploy --no-execute`, 아래 '배포')와 실행이 끝까지 통과하는지 확인한 뒤 설명을 원래대로 되돌려 다시 배포합니다. 경보 canary는 경보 핸들러만 검증합니다. S3·Lambda 등 다른 핸들러와 Create/Delete·롤백까지 검증했다고 기록하지 않으며, 아직 실행하지 않은 경로는 미확인으로 남깁니다.
 
 6. **실패 시 되돌리기 (정책 버전 먼저 복구 → 스택 롤백)**:
    배포 중 권한 부족(`AccessDenied`)이 발생하면 CloudFormation 롤백도 같은 실행 정책을 사용합니다. 따라서 **먼저 실행 정책을 1단계에서 기록한 직전 정상 버전으로 되돌린 뒤** 롤백이 진행되게 합니다.
