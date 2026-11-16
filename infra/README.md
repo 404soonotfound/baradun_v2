@@ -177,15 +177,45 @@ GitHub 저장소 설정 → Environments에서 `infra`(배포 브랜치 `main`�
 ### 출시일 전환 순서
 
 1. **사이트 배포 멈춤**: 저장소 변수 `DEPLOY_PAUSED=true`.
-2. **스택 배포**: 최신 `origin/main` 작업 트리에서 도메인·인증서 값을 넣어 배포합니다(맨 위 배포 절차). 먼저 '미리 할 일' 2단계 ③의 `ARN=` 줄을 실행하고, 3단계 상태 확인이 `ISSUED`인지 봅니다.
+2. **스택 배포**: 최신 `origin/main` 작업 트리(`infra` 폴더)에서 도메인·인증서 값을 넣은 변경 세트를 만들어 내용을 확인한 뒤 실행합니다. 먼저 '미리 할 일' 2단계 ③의 `ARN=` 줄을 실행하고, 3단계 상태 확인이 `ISSUED`인지 봅니다.
+   - `npm run deploy:infra`는 이 두 값을 넘기지 못해서 손으로 합니다. main에 아직 배포되지 않은 인프라 변경이 없을 때(자동 배포가 끝난 뒤) 합니다.
+   - `cdk diff`로는 확인하지 않습니다. `--method=change-set`은 `AlertEmail` 값 없음(`MissingParameters`)으로 실패하고(아래 '배포'), `--method=template`은 두 값이 템플릿 조건으로만 쓰여 '차이 없음'으로 나옵니다(2026-11-16 확인).
+
+   ① 변경 세트를 만들고(실행하지 않음) 바뀌는 리소스를 봅니다.
 
    ```bash
-   AWS_PROFILE=baradun-sso npx cdk diff --method=change-set \
+   NAME=site-domain-$(date -u +%Y%m%d%H%M); echo "NAME=$NAME"
+   AWS_PROFILE=baradun-sso npx --no-install cdk deploy BaradunV2 --no-execute \
+     --change-set-name "$NAME" --require-approval never \
      --parameters SiteDomainName=www.baradun.app \
      --parameters SiteCertificateArn="$ARN"
-   AWS_PROFILE=baradun-sso npx cdk deploy \
-     --parameters SiteDomainName=www.baradun.app \
-     --parameters SiteCertificateArn="$ARN"
+   AWS_PROFILE=baradun-sso aws cloudformation describe-change-set --region ap-northeast-2 \
+     --stack-name BaradunV2 --change-set-name "$NAME" \
+     --query 'Changes[].ResourceChange.[Action,LogicalResourceId,ResourceType,Replacement]' --output table
+   ```
+
+   ② 아래 3줄만 `Modify`이고 `Replacement`가 모두 `False`인지 확인합니다(2026-11-16 템플릿 기준). 공식 문서상 셋 다 교체 없이 바뀝니다([배포 설정](https://docs.aws.amazon.com/AWSCloudFormation/latest/TemplateReference/aws-properties-cloudfront-distribution-distributionconfig.html)·[CloudFront 함수](https://docs.aws.amazon.com/AWSCloudFormation/latest/TemplateReference/aws-resource-cloudfront-function.html)).
+
+   | 논리 ID                    | 바뀌는 것                                                              |
+   | -------------------------- | ---------------------------------------------------------------------- |
+   | `SiteDistribution390DED28` | 대체 도메인 www, 인증서(SNI, `TLSv1.2_2021`)                           |
+   | `SiteRewriteIndexC4002154` | 다른 호스트로 온 페이지 요청을 www로 301 이동                          |
+   | `OpsApiFunction484C2E8D`   | 환경 변수 `SITE_URL`(운영자 사이트의 앱 게시본 확인에 씀)이 www로 바뀜 |
+
+   다른 줄이 있거나 `Replacement`가 `True`·`Conditional`이면 실행하지 않고 변경 세트를 지운 뒤 원인을 봅니다.
+
+   ```bash
+   AWS_PROFILE=baradun-sso aws cloudformation delete-change-set --region ap-northeast-2 \
+     --stack-name BaradunV2 --change-set-name "$NAME"
+   ```
+
+   ③ 맞으면 실행하고 끝날 때까지 기다립니다(CloudFront 반영에 몇 분 걸리며, 그동안 기존 응답은 계속 나감).
+
+   ```bash
+   AWS_PROFILE=baradun-sso aws cloudformation execute-change-set --region ap-northeast-2 \
+     --stack-name BaradunV2 --change-set-name "$NAME"
+   AWS_PROFILE=baradun-sso aws cloudformation wait stack-update-complete --region ap-northeast-2 \
+     --stack-name BaradunV2
    ```
 
    다음 배포부터는 CloudFormation이 이 값을 그대로 씁니다. 이때부터 CloudFront 기본 주소의 페이지는 www로 이동합니다. www는 아직 Vercel을 가리키므로, 기본 주소로 온 사람은 3단계 전까지 V1 점검 화면을 봅니다.
