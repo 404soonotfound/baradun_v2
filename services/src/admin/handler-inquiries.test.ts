@@ -882,7 +882,7 @@ describe("모르는 처리 상태 (#521, 아키텍처 18.3)", () => {
   const stored = (table: FakeTable) =>
     table.items.get(table.id("Inquiry", { pk: `INQUIRY#${ID}` }));
 
-  it("Scan 한 번으로 모르는 상태 목록(맨 위)과 수를 함께 내려 주고, 상태를 고른 첫 쪽은 수만, 다음 쪽은 읽지 않는다", async () => {
+  it("Scan 한 번으로 모르는 상태 목록(맨 위)과 수를 함께 내려 주고, 상태를 고른 첫 쪽은 수만, 다음 쪽은 읽지 않으며, 60초 안에는 Scan 결과를 다시 씀", async () => {
     const table = seeded({ inquiryStatus: "archived" });
     table.items.set(table.id("Inquiry", { pk: "INQUIRY#k" }), {
       ...table.items.get(table.id("Inquiry", { pk: `INQUIRY#${ID}` })),
@@ -906,7 +906,8 @@ describe("모르는 처리 상태 (#521, 아키텍처 18.3)", () => {
       event("GET", "/ops/inquiries", { query: { status: "received" } }),
       deps("editor", table),
     );
-    expect(table.scans).toBe(2);
+    // 60초 안: 앞 Scan 결과를 다시 씀
+    expect(table.scans).toBe(1);
     expect(body(picked).items.map((i: { status: string }) => i.status)).toEqual(
       ["received"],
     );
@@ -918,7 +919,67 @@ describe("모르는 처리 상태 (#521, 아키텍처 18.3)", () => {
       }),
       deps("editor", table),
     );
+    expect(table.scans).toBe(1);
+
+    const base = deps("editor", table);
+    const later = await handleOps(event("GET", "/ops/inquiries"), {
+      ...base,
+      data: { ...base.data, now: () => new Date(NOW.getTime() + 60_000) },
+    });
+    expect(later.statusCode).toBe(200);
     expect(table.scans).toBe(2);
+  });
+
+  it("모르는 상태 문의를 고치면 다시 쓰던 Scan 결과를 버려, 바로 다음 목록에 이전 값이 맨 위에 남지 않는다", async () => {
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    const table = seeded({ inquiryStatus: "archived" });
+    const before = await handleOps(
+      event("GET", "/ops/inquiries"),
+      deps("editor", table),
+    );
+    expect(body(before).counts).toMatchObject({ unknown: 1 });
+    const res = await handleOps(
+      event("PATCH", `/ops/inquiries/${ID}`, {
+        body: { version: 1, status: "in_progress" },
+        idempotencyKey: KEY_A,
+      }),
+      deps("editor", table),
+    );
+    expect(res.statusCode).toBe(200);
+    const after = await handleOps(
+      event("GET", "/ops/inquiries"),
+      deps("editor", table),
+    );
+    expect(table.scans).toBe(2);
+    expect(body(after).items.map((i: { status: string }) => i.status)).toEqual([
+      "in_progress",
+    ]);
+    expect(body(after).counts).toMatchObject({ in_progress: 1, unknown: 0 });
+  });
+
+  it("목록에는 모르는 상태 문의를 50건까지만 싣고, 수는 전체 건수를 내려 준다", async () => {
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    const table = seeded();
+    const base = table.items.get(table.id("Inquiry", { pk: `INQUIRY#${ID}` }));
+    for (let n = 0; n < 55; n += 1) {
+      const inquiryId = `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
+      table.items.set(table.id("Inquiry", { pk: `INQUIRY#${inquiryId}` }), {
+        ...base,
+        pk: `INQUIRY#${inquiryId}`,
+        inquiryId,
+        inquiryStatus: "archived",
+        receivedAt: new Date(NOW.getTime() - (n + 10) * 60_000).toISOString(),
+      });
+    }
+    const res = await handleOps(
+      event("GET", "/ops/inquiries", { query: { limit: "1" } }),
+      deps("editor", table),
+    );
+    expect(res.statusCode).toBe(200);
+    const statuses = body(res).items.map((i: { status: string }) => i.status);
+    expect(statuses.filter((s: string) => s === "archived")).toHaveLength(50);
+    expect(statuses.at(-1)).toBe("received");
+    expect(body(res).counts).toMatchObject({ received: 1, unknown: 55 });
   });
 
   it.each([
@@ -1053,7 +1114,7 @@ describe("모르는 처리 상태 (#521, 아키텍처 18.3)", () => {
     ]);
   });
 
-  it("쓰기 조건은 DB의 원래 상태 값과 비교한다: 읽은 뒤 version 없이 상태만 바뀌었으면 409로 덮어쓰지 않는다", async () => {
+  it("쓰기 조건은 서버가 방금 읽은 원래 상태 값과 비교한다: 서버가 읽은 뒤 쓰기 전에 version 없이 상태만 바뀌었으면 409로 덮어쓰지 않는다", async () => {
     const table = seeded({ inquiryStatus: "archived" });
     const conditions: {
       expression: string;
@@ -1107,6 +1168,127 @@ describe("모르는 처리 상태 (#521, 아키텍처 18.3)", () => {
       inquiryStatus: "received",
       legacy: true,
       version: 1,
+    });
+  });
+
+  it("version 없는 이전 문의에 모르는 상태가 있으면 메모만 저장해도 '접수'로 덮지 않고 원래 상태와 비교해 쓴다", async () => {
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    const table = seeded({
+      inquiryStatus: "archived",
+      version: undefined,
+      legacy: true,
+    });
+    const conditions: Record<string, unknown>[] = [];
+    const client = {
+      send: (command: { constructor: { name: string }; input: any }) => {
+        if (command.constructor.name === "TransactWriteCommand") {
+          conditions.push(
+            command.input.TransactItems.find((entry: any) => entry.Update)
+              .Update.ExpressionAttributeValues,
+          );
+        }
+        return table.send(command);
+      },
+    };
+    const base = deps("editor", table);
+    const res = await handleOps(
+      event("PATCH", `/ops/inquiries/${ID}`, {
+        body: { version: 0, memo: "메모" },
+        idempotencyKey: KEY_A,
+      }),
+      { ...base, data: { ...base.data, client: client as never } },
+    );
+    expect(res.statusCode).toBe(200);
+    expect(conditions[0]![":expectedStatus"]).toBe("archived");
+    expect(stored(table)).toMatchObject({
+      inquiryStatus: "archived",
+      legacy: true,
+      memo: "메모",
+      version: 1,
+    });
+    expect(audits(table)[0]).not.toHaveProperty("statusFrom");
+  });
+
+  it("version 없는 이전 문의에 4종 상태가 저장돼 있어도 메모만 저장할 때 '접수'로 되돌리지 않는다", async () => {
+    const table = seeded({
+      inquiryStatus: "in_progress",
+      version: undefined,
+      legacy: true,
+    });
+    const res = await handleOps(
+      event("PATCH", `/ops/inquiries/${ID}`, {
+        body: { version: 0, memo: "메모" },
+        idempotencyKey: KEY_A,
+      }),
+      deps("editor", table),
+    );
+    expect(res.statusCode).toBe(200);
+    expect(stored(table)).toMatchObject({
+      inquiryStatus: "in_progress",
+      version: 1,
+    });
+  });
+
+  it("상태 속성이 없는 문의(version 1)는 상세가 채운 '접수'와 비교하지 않아 메모 저장이 409로 막히지 않는다", async () => {
+    const table = seeded({ inquiryStatus: undefined, version: 1 });
+    const res = await handleOps(
+      event("PATCH", `/ops/inquiries/${ID}`, {
+        body: { version: 1, memo: "메모" },
+        idempotencyKey: KEY_A,
+      }),
+      deps("editor", table),
+    );
+    expect(res.statusCode).toBe(200);
+    expect(stored(table)).toMatchObject({ memo: "메모", version: 2 });
+    expect(stored(table)!.inquiryStatus).toBeUndefined();
+  });
+
+  it("최근 7일 접수에 모르는 상태 문의도 더하고, 모르는 상태를 읽지 못하면 확인 못 함(null)으로 둔다", async () => {
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    const table = seeded();
+    table.items.set(table.id("Inquiry", { pk: "INQUIRY#k" }), {
+      ...stored(table),
+      pk: "INQUIRY#k",
+      inquiryId: "223e4567-e89b-42d3-a456-426614174000",
+      inquiryStatus: "archived",
+    });
+    table.items.set(table.id("Inquiry", { pk: "INQUIRY#old" }), {
+      ...stored(table),
+      pk: "INQUIRY#old",
+      inquiryId: "323e4567-e89b-42d3-a456-426614174000",
+      inquiryStatus: "on_hold",
+      receivedAt: "2026-10-20T00:00:00.000Z",
+    });
+    const res = await handleOps(
+      event("GET", "/ops/inquiries", { query: { limit: "1" } }),
+      deps("viewer", table),
+    );
+    expect(body(res).counts).toMatchObject({
+      received: 1,
+      unknown: 2,
+      receivedLast7d: 2,
+    });
+
+    const failing = seeded();
+    const client = {
+      send: (command: { constructor: { name: string }; input: any }) => {
+        if (command.constructor.name === "ScanCommand") {
+          throw Object.assign(new Error("denied"), {
+            name: "AccessDeniedException",
+          });
+        }
+        return failing.send(command);
+      },
+    };
+    const base = deps("viewer", failing);
+    const unavailable = await handleOps(
+      event("GET", "/ops/inquiries", { query: { limit: "1" } }),
+      { ...base, data: { ...base.data, client: client as never } },
+    );
+    expect(body(unavailable).counts).toMatchObject({
+      received: 1,
+      unknown: null,
+      receivedLast7d: null,
     });
   });
 });
