@@ -102,6 +102,15 @@ GitHub 저장소 설정 → Environments에서 `infra`(배포 브랜치 `main`�
 1. **웹 운영 주소 상수**: `apps/web/src/lib/site-env.ts`의 `PRODUCTION_SITE_ORIGIN`을 `https://www.baradun.app`으로 바꾼 PR이 main에 있어야 합니다(BRD-144). 이 값과 저장소 변수 `SITE_URL`이 같아야 운영 빌드(GA·색인·robots·sitemap)가 됩니다.
 2. **인증서 요청**: ACM 인증서를 **us-east-1**에 요청합니다. CloudFront는 이 리전 인증서만 받습니다. ACM 공개 인증서(내보내기 불가)는 무료입니다([ACM 요금](https://aws.amazon.com/certificate-manager/pricing/)). 아래 블록은 순서대로 하나씩 실행합니다(한 번에 붙여 넣지 않음).
 
+   ⓪ CAA를 먼저 확인합니다. CAA 조회는 CNAME을 따라가므로, `www`가 Vercel CNAME이면 Vercel의 CAA(Let's Encrypt 등만 허용)가 Amazon을 막아 인증서가 `FAILED`(`CAA_ERROR`)가 됩니다(2026-11-16 실제로 겪음).
+
+   ```bash
+   dig +noall +answer www.baradun.app CAA
+   ```
+
+   - CAA가 나오는데 `amazon.com`·`amazontrust.com`·`awstrust.com`·`amazonaws.com`이 없으면, ①로 가기 전에 가비아 `www`를 루트와 같은 Vercel IP의 A 레코드(`216.198.79.1`)로 바꿉니다. Vercel은 V1을 그대로 보여 주고, CAA 조회는 `baradun.app`(CAA 없음)에서 끝납니다.
+   - CNAME만 나오고 CAA가 없으면 그대로 진행합니다.
+
    ① 로그인하고 이 도메인의 인증서를 모든 상태로 봅니다.
 
    ```bash
@@ -159,6 +168,7 @@ GitHub 저장소 설정 → Environments에서 `infra`(배포 브랜치 `main`�
    ```
 
    - 72시간 안에 검증되지 않으면 `VALIDATION_TIMED_OUT`이 됩니다. 그 인증서를 지우고 2단계 ①부터 다시 합니다.
+   - `FAILED`가 되면 ①의 목록에서 그 ARN을 찾아 `describe-certificate --query 'Certificate.FailureReason'`으로 사유를 봅니다. `CAA_ERROR`면 2단계 ⓪의 CAA 조치를 한 뒤, 그 인증서를 지우고 ①부터 다시 합니다.
 
 4. **TTL 확인**: 가비아에서 `www` CNAME의 TTL을 확인합니다. 가비아는 600초보다 낮은 값을 고를 수 없어서(2026-11-16 확인) 600초가 가장 짧습니다.
    - 600초보다 크면 600초로 낮추고, 낮추기 전 TTL만큼 지난 뒤에 전환합니다.
@@ -180,7 +190,7 @@ GitHub 저장소 설정 → Environments에서 `infra`(배포 브랜치 `main`�
 
    다음 배포부터는 CloudFormation이 이 값을 그대로 씁니다. 이때부터 CloudFront 기본 주소의 페이지는 www로 이동합니다. www는 아직 Vercel을 가리키므로, 기본 주소로 온 사람은 3단계 전까지 V1 점검 화면을 봅니다.
 
-3. **가비아 www CNAME 변경**: `www` CNAME을 Vercel 주소에서 CloudFront 배포 도메인(`d1gam1q4z69v8c.cloudfront.net`, 출력값 `DistributionDomainName`)으로 바꿉니다.
+3. **가비아 www 변경**: `www` A 레코드(`216.198.79.1`, '미리 할 일' 2단계 ⓪)를 지우고, 같은 저장에서 CNAME으로 CloudFront 배포 도메인(`d1gam1q4z69v8c.cloudfront.net`, 출력값 `DistributionDomainName`)을 넣습니다. CloudFront 배포 주소에는 CAA가 없어 인증서 자동 갱신도 막히지 않습니다(2026-11-16 확인).
 4. **저장소 변수 변경**: `gh variable set SITE_URL --body https://www.baradun.app` 하고 `DEPLOY_PAUSED`를 지운 뒤 `npm run deploy:prod`로 사이트를 다시 배포합니다. 이 빌드부터 GA·색인·robots·sitemap이 켜집니다.
 5. **V1 Vercel 프로젝트 정리**
    - 도메인 목록에서 `www.baradun.app`을 빼고 `baradun.app`만 남깁니다.
@@ -201,7 +211,7 @@ GitHub 저장소 설정 → Environments에서 `infra`(배포 브랜치 `main`�
 1. **Vercel 복구 (5단계를 했을 때만)**
    - V1 프로젝트 도메인 목록에 `www.baradun.app`을 다시 추가합니다.
    - `vercel.json`에서 `https://www.baradun.app/`으로 보내는 리디렉션을 빼고(전환 전 설정) 다시 배포합니다. 남겨 두면 www가 자기 자신으로 계속 이동합니다.
-2. **가비아 www CNAME 복구**: `www` CNAME을 Vercel이 도메인 화면에서 안내하는 주소로 되돌립니다(전환 전 값은 `2e9e02c1d516eeff.vercel-dns-017.com.`, 다시 추가하면 바뀔 수 있음).
+2. **가비아 www 복구**: `www`를 전환 전 값인 A 레코드 `216.198.79.1`(Vercel IP)로 되돌립니다. Vercel CNAME(`2e9e02c1d516eeff.vercel-dns-017.com.`)으로 되돌려도 V1은 보이지만, Vercel CAA 때문에 ACM 인증서 자동 갱신이 실패하므로 쓰지 않습니다.
 3. **CloudFront 복구**: 두 매개변수를 비워 다시 배포합니다.
 
    ```bash
