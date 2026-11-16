@@ -11,11 +11,15 @@ import { cn } from "@/lib/cn";
 export function BeachThumb({
   photo,
   className,
+  state,
 }: {
   photo: BeachSummary["photo"];
   className: string; // 크기·모서리(예: 72×56 "h-14 w-[72px] rounded-[12px]")
+  // 부르는 쪽이 같은 사진의 출처 줄을 둘 때 넘기는 useShownPhoto 결과(받지 못한 사진이면 출처 줄도 같이 숨게)
+  state?: ReturnType<typeof useShownPhoto>;
 }) {
-  const { shown, onError, checkBroken } = useShownPhoto(photo);
+  const own = useShownPhoto(state ? null : photo);
+  const { shown, onError, checkBroken } = state ?? own;
   if (shown === null) {
     return (
       <BeachIllustration decorative className={cn("shrink-0", className)} />
