@@ -171,11 +171,14 @@ export function SeaCard({
   // 카드 이름은 모바일·PC 모두 '지금 바다'(D18-3)
   const title = t("detail.sea.title");
 
+  // 불러오는 동안 자리(BRD-39 CLS): 받은 뒤 카드(값이 있으면 약 560px)에 가깝게 잡아
+  // 아래 날씨·119·정보 출처가 첫 화면에서 밀려 움직이지 않게 함. key로 받은 뒤 카드는 새로 그림
   if (view.kind !== "ready") {
     return (
       <section
+        key="sea-loading"
         aria-busy="true"
-        className="flex flex-col gap-3 rounded-card bg-bg-surface p-4 shadow-card lg:px-5"
+        className="flex min-h-[560px] flex-col gap-3 rounded-card bg-bg-surface p-4 shadow-card lg:px-5"
       >
         <h2 className="text-title-s text-text-default lg:text-title-m">
           {title}
