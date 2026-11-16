@@ -97,34 +97,85 @@ GitHub 저장소 설정 → Environments에서 `infra`(배포 브랜치 `main`�
 - 두 값은 함께 넣거나 함께 비워야 합니다. 하나만 넣으면 CloudFormation 규칙(`SiteDomainNeedsCertificate`)이 배포 시작 전에 거부합니다.
 - 실행 정책은 바꾸지 않아도 됩니다. ACM 인증서를 API로 붙이는 데 CloudFront 권한만 필요합니다([CloudFront 권한 예시](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/security_iam_id-based-policy-examples.html)). 공식 스키마의 배포 Update 핸들러 권한에도 ACM은 없습니다.
 
-### 미리 할 일 (출시 하루 전까지)
+### 미리 할 일 (출시 3일 전까지)
 
 1. **웹 운영 주소 상수**: `apps/web/src/lib/site-env.ts`의 `PRODUCTION_SITE_ORIGIN`을 `https://www.baradun.app`으로 바꾼 PR이 main에 있어야 합니다(BRD-144). 이 값과 저장소 변수 `SITE_URL`이 같아야 운영 빌드(GA·색인·robots·sitemap)가 됩니다.
-2. **인증서 요청**: ACM 인증서를 **us-east-1**에 요청합니다. CloudFront는 이 리전 인증서만 받습니다.
+2. **인증서 요청**: ACM 인증서를 **us-east-1**에 요청합니다. CloudFront는 이 리전 인증서만 받습니다. ACM 공개 인증서(내보내기 불가)는 무료입니다([ACM 요금](https://aws.amazon.com/certificate-manager/pricing/)). 아래 블록은 순서대로 하나씩 실행합니다(한 번에 붙여 넣지 않음).
+
+   ① 로그인하고 이 도메인의 인증서를 모든 상태로 봅니다.
+
+   ```bash
+   aws sso login --profile baradun-sso
+   AWS_PROFILE=baradun-sso aws acm list-certificates --region us-east-1 \
+     --certificate-statuses PENDING_VALIDATION ISSUED FAILED VALIDATION_TIMED_OUT \
+     --query "CertificateSummaryList[?DomainName=='www.baradun.app'].[CertificateArn,Status]" --output text
+   ```
+
+   - `ISSUED`나 `PENDING_VALIDATION`이 하나뿐이면 그것을 쓰고 ②를 건너뜁니다.
+   - 둘 이상이면 `ISSUED`를 하나 남기고(없으면 `PENDING_VALIDATION` 하나), 나머지와 `FAILED`·`VALIDATION_TIMED_OUT`은 지웁니다. CloudFront에 붙지 않은 인증서만 지울 수 있습니다.
+
+     ```bash
+     AWS_PROFILE=baradun-sso aws acm delete-certificate --region us-east-1 --certificate-arn <지울 ARN>
+     ```
+
+   ② 쓸 인증서가 없을 때만 요청합니다. 같은 `--idempotency-token`으로 1시간 안에 다시 실행하면 새로 만들지 않고 같은 인증서를 돌려줍니다.
 
    ```bash
    AWS_PROFILE=baradun-sso aws acm request-certificate --region us-east-1 \
-     --domain-name www.baradun.app --validation-method DNS
-   AWS_PROFILE=baradun-sso aws acm describe-certificate --region us-east-1 \
-     --certificate-arn <위 결과의 CertificateArn> \
+     --domain-name www.baradun.app --validation-method DNS \
+     --idempotency-token baradunwww --query CertificateArn --output text
+   ```
+
+   ③ `ARN`을 읽고 검증 레코드를 봅니다. 이 `ARN=` 줄은 아래 단계와 출시일 전환에서도 씁니다. 새 터미널에서는 이 줄부터 다시 실행합니다(터미널 출력을 손으로 옮기다 ARN이 잘리는 일을 막음).
+
+   ```bash
+   ARN=$(AWS_PROFILE=baradun-sso aws acm list-certificates --region us-east-1 \
+     --certificate-statuses PENDING_VALIDATION ISSUED \
+     --query "CertificateSummaryList[?DomainName=='www.baradun.app'].CertificateArn" --output text); echo "ARN=$ARN"
+   AWS_PROFILE=baradun-sso aws acm describe-certificate --region us-east-1 --certificate-arn "$ARN" \
      --query 'Certificate.DomainValidationOptions[0].ResourceRecord'
    ```
 
-3. **검증 CNAME 추가**: 가비아 DNS 관리에 위 결과의 검증 CNAME(`_xxxx.www` → `_yyyy.acm-validations.aws.`)을 추가합니다. 상태가 `ISSUED`가 될 때까지 기다립니다. 이 레코드는 지우지 않습니다(자동 갱신에 씀).
-4. **TTL 낮추기**: 가비아에서 `www` CNAME의 TTL을 300초로 낮춰 둡니다(지금 600초). 전환과 되돌리기가 빨리 퍼집니다.
+   - `ARN=`이 비어 있으면 방금 요청한 인증서가 아직 목록에 없는 것입니다. 이때 두 번째 명령은 매개변수 오류를 냅니다. 10초쯤 뒤 다시 실행합니다.
+   - ARN이 두 개 보이면 ①로 돌아가 하나만 남깁니다.
+   - 결과가 `null`이면 검증 레코드가 아직 만들어지지 않은 것이니 다시 실행합니다.
+
+3. **검증 CNAME 추가**: 가비아 **DNS 관리 › baradun.app 설정**에서 **레코드 추가**로 위 결과의 검증 CNAME을 넣습니다.
+   - 넣기 전에는 그 이름을 `dig`로 조회하지 않습니다. 가비아 SOA의 '없음' 응답 캐시 시간이 86400초여서, 리졸버가 '없음'을 최대 24시간 기억할 수 있습니다. 인증서를 출시 3일 전까지 요청하는 까닭입니다.
+   - 호스트 칸에는 결과 `Name`에서 `.baradun.app.`을 뺀 앞부분(`_xxxx.www`)만 넣습니다. 가비아가 도메인을 뒤에 붙입니다.
+   - 값 칸에는 결과 `Value`(`_yyyy.xxxx.acm-validations.aws.`)를 그대로 넣습니다.
+   - 다른 줄이 수정 중(확인·취소 버튼이 보이는 상태)이면 저장이 반영되지 않습니다. 새 줄만 넣고 **저장**한 뒤, 화면 위 '레코드 개수'와 '최근 업데이트'가 바뀌었는지 확인합니다.
+   - 반영 확인: 저장한 뒤 가비아 네임서버 3대가 모두 `Value`를 돌려줘야 합니다.
+
+     ```bash
+     for ns in ns.gabia.co.kr ns.gabia.net ns1.gabia.co.kr; do dig +short @$ns <Name> CNAME; done
+     ```
+
+   상태가 `ISSUED`가 될 때까지 기다립니다(2단계 ③의 `ARN=` 줄을 먼저 실행한 셸에서). 이 레코드는 지우지 않습니다(자동 갱신에 씀).
+
+   ```bash
+   AWS_PROFILE=baradun-sso aws acm describe-certificate --region us-east-1 --certificate-arn "$ARN" \
+     --query 'Certificate.Status' --output text
+   ```
+
+   - 72시간 안에 검증되지 않으면 `VALIDATION_TIMED_OUT`이 됩니다. 그 인증서를 지우고 2단계 ①부터 다시 합니다.
+
+4. **TTL 확인**: 가비아에서 `www` CNAME의 TTL을 확인합니다. 가비아는 600초보다 낮은 값을 고를 수 없어서(2026-11-16 확인) 600초가 가장 짧습니다.
+   - 600초보다 크면 600초로 낮추고, 낮추기 전 TTL만큼 지난 뒤에 전환합니다.
+   - 레코드를 바꾸면 가비아 저장 반영(몇 분)에 TTL(600초)만큼 더 걸려 퍼집니다. 전환·되돌리기 뒤에는 '미리 할 일' 3단계의 `dig` 반복문을 `www.baradun.app`으로 바꿔 3대를 확인하고, 공용 DNS(`dig +short @8.8.8.8 www.baradun.app`)도 봅니다.
 
 ### 출시일 전환 순서
 
 1. **사이트 배포 멈춤**: 저장소 변수 `DEPLOY_PAUSED=true`.
-2. **스택 배포**: 최신 `origin/main` 작업 트리에서 도메인·인증서 값을 넣어 배포합니다(맨 위 배포 절차).
+2. **스택 배포**: 최신 `origin/main` 작업 트리에서 도메인·인증서 값을 넣어 배포합니다(맨 위 배포 절차). 먼저 '미리 할 일' 2단계 ③의 `ARN=` 줄을 실행하고, 3단계 상태 확인이 `ISSUED`인지 봅니다.
 
    ```bash
    AWS_PROFILE=baradun-sso npx cdk diff --method=change-set \
      --parameters SiteDomainName=www.baradun.app \
-     --parameters SiteCertificateArn=<인증서 ARN>
+     --parameters SiteCertificateArn="$ARN"
    AWS_PROFILE=baradun-sso npx cdk deploy \
      --parameters SiteDomainName=www.baradun.app \
-     --parameters SiteCertificateArn=<인증서 ARN>
+     --parameters SiteCertificateArn="$ARN"
    ```
 
    다음 배포부터는 CloudFormation이 이 값을 그대로 씁니다. 이때부터 CloudFront 기본 주소의 페이지는 www로 이동합니다. www는 아직 Vercel을 가리키므로, 기본 주소로 온 사람은 3단계 전까지 V1 점검 화면을 봅니다.
