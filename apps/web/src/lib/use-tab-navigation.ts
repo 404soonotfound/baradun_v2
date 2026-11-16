@@ -21,6 +21,10 @@ import {
 // 모바일 하단 탭과 PC 상단 내비가 같은 규칙을 쓰도록 한 곳에 모음
 const currentUrl = () => window.location.pathname + window.location.search;
 
+export function pathnameOf(url: string): string {
+  return url.split(/[?#]/)[0] || "/";
+}
+
 type PendingTab = {
   tab: TabKey;
   fromPathname: string;
@@ -94,11 +98,12 @@ export function useTabNavigation() {
     const onPopState = () => {
       if (transition.onPopState(pathname, window.location.pathname)) {
         clearScrollRestore();
+        if (current) rememberOwnerTab(current);
       }
     };
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
-  }, [pathname]);
+  }, [pathname, current]);
 
   // 주소가 바뀔 때마다: 진행 중이던 탭 목표를 비우고, 앱 안 이동 표시 + 소속 탭·저장 위치 복원
   // (하단 탭과 상단 내비가 둘 다 이 훅을 써도, 복원 예약은 한 번 꺼내면 지워져서 한 번만 실행)
@@ -145,11 +150,12 @@ export function useTabNavigation() {
 
     const here = currentUrl();
     const target = hrefFor(tab);
-    // 전환 중 아직 주소가 바뀌기 전에 현재 화면으로 되돌아가면
-    // useEffect([pathname])가 다시 돌지 않으므로 pending과 복원 예약을 함께 정리함
-    if (target === here && window.location.pathname === pathname) {
+    // 목표 경로가 이미 커밋된 pathname과 같으면(pushState 선반영 중 복귀·쿼리스트링만 다른 탭 복귀 포함)
+    // useEffect([pathname])가 다시 돌지 않으므로 복원 예약·pending·소속 탭을 여기서 바로 정리함
+    if (pathnameOf(target) === pathname) {
       clearScrollRestore();
       transition.clear();
+      if (current) rememberOwnerTab(current);
       return;
     }
 
