@@ -17,6 +17,7 @@ import {
   SourceList,
 } from "@/components/detail/detail-sections";
 import { SeaCard, StatGrid } from "@/components/detail/sea-card";
+import { PhotoCover } from "@/components/detail/photo-cover";
 import { ShareButton } from "@/components/detail/share-button";
 import { DetailSheet } from "@/components/detail/detail-sheet";
 import { VerdictCard } from "@/components/detail/verdict-card";
@@ -280,74 +281,78 @@ export function DetailScreen({
         <div className="flex flex-col gap-3.5 lg:col-start-2 lg:row-start-1">
           {/* 판단 묶음: 칸 사이 구분선, 바탕·그림자는 묶음이 그림(시안 D안) */}
           <div className="flex flex-col divide-y divide-border-default overflow-hidden rounded-card bg-bg-surface shadow-card lg:shadow-raised">
-            <VerdictCard
-              beachId={beach.id}
-              view={view}
-              detail={detail}
-              stations={beach.stations}
-              warningZones={beach.warningZones}
-              nowMs={snapshot.nowMs}
-              kmaSource={kmaSource}
-              embedded
-              checkedId={checkedId}
-              expanded={expanded}
-              toggle={
-                view.kind === "ready" && (
-                  <button
-                    type="button"
-                    aria-expanded={expanded}
-                    aria-controls={
-                      nearbyFolds ? `${checkedId} ${nearbyId}` : checkedId
-                    }
-                    onClick={() => setExpanded((open) => !open)}
-                    // 보이는 줄은 18px, 누르는 영역은 위아래·옆으로 넓혀 44px(BRD-39)
-                    className="relative inline-flex items-center gap-0.5 text-label-s font-bold text-text-body before:absolute before:-inset-x-2 before:-inset-y-[13px] before:content-['']"
-                  >
-                    {/* 접힌 이름('주변 특보 n건'·'확인한 것')은 펼친 뒤에도 화면 읽기에 남겨 무엇을 접는지 알림.
-                        보이는 글자는 시안 D안대로 '접기'(접근 가능한 이름이 보이는 글자를 포함) */}
-                    {expanded ? (
-                      <>
-                        <span className="sr-only">{toggleLabel} </span>
-                        {t("detail.verdict.collapse")}
-                      </>
-                    ) : (
-                      toggleLabel
-                    )}
-                    <Chevron aria-hidden="true" size={14} strokeWidth={2.4} />
-                  </button>
-                )
-              }
-              onOpenWarning={(item) => {
-                setWarningItem(item);
-                warningSheet.show();
-              }}
-              more={
-                // 불러온 뒤에만 '자세히'(확인한 것이 있어야 보여줄 수 있음)
-                view.kind === "ready" && (
-                  <button
-                    type="button"
-                    aria-haspopup="dialog"
-                    onClick={detailSheet.show}
-                    // 보이는 줄은 17px, 누르는 영역은 위아래로 넓혀 44px(BRD-39)
-                    className="relative inline-flex items-center gap-0.5 text-caption font-bold text-brand-default before:absolute before:inset-x-0 before:-inset-y-[14px] before:content-['']"
-                  >
-                    {t("detailSheet.more")}
-                    <ChevronRight
-                      aria-hidden="true"
-                      size={12}
-                      strokeWidth={2.6}
-                    />
-                  </button>
-                )
-              }
-            >
-              {/* PC: 길찾기는 판단 카드 안 맨 아래(Figma 183:1032). 모바일은 하단 고정 줄 */}
-              <DirectionsLink
-                beach={beach}
+            {/* 사진 커버 + 판단 카드는 한 칸(사이 구분선 없음, D29-1). 사진이 없으면 판단 카드만 */}
+            <div>
+              <PhotoCover photo={beach.photo} name={beach.name[locale]} />
+              <VerdictCard
+                beachId={beach.id}
                 view={view}
-                className="hidden lg:flex"
-              />
-            </VerdictCard>
+                detail={detail}
+                stations={beach.stations}
+                warningZones={beach.warningZones}
+                nowMs={snapshot.nowMs}
+                kmaSource={kmaSource}
+                embedded
+                checkedId={checkedId}
+                expanded={expanded}
+                toggle={
+                  view.kind === "ready" && (
+                    <button
+                      type="button"
+                      aria-expanded={expanded}
+                      aria-controls={
+                        nearbyFolds ? `${checkedId} ${nearbyId}` : checkedId
+                      }
+                      onClick={() => setExpanded((open) => !open)}
+                      // 보이는 줄은 18px, 누르는 영역은 위아래·옆으로 넓혀 44px(BRD-39)
+                      className="relative inline-flex items-center gap-0.5 text-label-s font-bold text-text-body before:absolute before:-inset-x-2 before:-inset-y-[13px] before:content-['']"
+                    >
+                      {/* 접힌 이름('주변 특보 n건'·'확인한 것')은 펼친 뒤에도 화면 읽기에 남겨 무엇을 접는지 알림.
+                        보이는 글자는 시안 D안대로 '접기'(접근 가능한 이름이 보이는 글자를 포함) */}
+                      {expanded ? (
+                        <>
+                          <span className="sr-only">{toggleLabel} </span>
+                          {t("detail.verdict.collapse")}
+                        </>
+                      ) : (
+                        toggleLabel
+                      )}
+                      <Chevron aria-hidden="true" size={14} strokeWidth={2.4} />
+                    </button>
+                  )
+                }
+                onOpenWarning={(item) => {
+                  setWarningItem(item);
+                  warningSheet.show();
+                }}
+                more={
+                  // 불러온 뒤에만 '자세히'(확인한 것이 있어야 보여줄 수 있음)
+                  view.kind === "ready" && (
+                    <button
+                      type="button"
+                      aria-haspopup="dialog"
+                      onClick={detailSheet.show}
+                      // 보이는 줄은 17px, 누르는 영역은 위아래로 넓혀 44px(BRD-39)
+                      className="relative inline-flex items-center gap-0.5 text-caption font-bold text-brand-default before:absolute before:inset-x-0 before:-inset-y-[14px] before:content-['']"
+                    >
+                      {t("detailSheet.more")}
+                      <ChevronRight
+                        aria-hidden="true"
+                        size={12}
+                        strokeWidth={2.6}
+                      />
+                    </button>
+                  )
+                }
+              >
+                {/* PC: 길찾기는 판단 카드 안 맨 아래(Figma 183:1032). 모바일은 하단 고정 줄 */}
+                <DirectionsLink
+                  beach={beach}
+                  view={view}
+                  className="hidden lg:flex"
+                />
+              </VerdictCard>
+            </div>
             {/* 모바일은 열었을 때만, PC는 늘 */}
             <NearbyWarnings
               embedded
