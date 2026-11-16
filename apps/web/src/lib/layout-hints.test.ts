@@ -20,12 +20,14 @@ import { onboardingStep, parseRecord } from "./onboarding";
 function run({
   lang = "ko",
   pathname = "/",
+  search = "",
   storage = {},
   languages = ["ko-KR"],
   blocked = false,
 }: {
   lang?: string;
   pathname?: string;
+  search?: string;
   storage?: Record<string, string>;
   languages?: string[];
   blocked?: boolean; // localStorage 접근이 오류(사생활 보호 모드 등)
@@ -37,7 +39,7 @@ function run({
   };
   const context: Record<string, unknown> = {
     document: { documentElement: html },
-    location: { pathname },
+    location: { pathname, search },
     navigator: { languages, language: languages[0] },
   };
   Object.defineProperty(context, "localStorage", {
@@ -52,6 +54,62 @@ function run({
 }
 
 describe("LAYOUT_HINT_SCRIPT", () => {
+  // GH-218 CLS: 즐겨찾기 목록 자리 · 검색 결과 자리
+  it("즐겨찾기 해변 수(문자열 id만, 4곳 이상은 4)", () => {
+    const fav = (value: unknown) =>
+      run({ storage: { [DEVICE_KEYS.favorites]: JSON.stringify(value) } })[
+        "data-favorites"
+      ];
+    expect(fav(["b0001"])).toBe("1");
+    expect(fav(["b0001", "b0002", "b0003"])).toBe("3");
+    expect(fav(["a", "b", "c", "d", "e", "f"])).toBe("4");
+    expect(fav(["b0001", 3, null])).toBe("1");
+    expect(fav([])).toBeUndefined();
+    expect(fav({ not: "list" })).toBeUndefined();
+    expect(
+      run({ storage: { [DEVICE_KEYS.favorites]: "{broken" } })[
+        "data-favorites"
+      ],
+    ).toBeUndefined();
+    // 최근 본 칸으로 열면 즐겨찾기 수로 자리를 잡지 않음
+    const withTab = (pathname: string, search: string) =>
+      run({
+        pathname,
+        search,
+        storage: { [DEVICE_KEYS.favorites]: JSON.stringify(["b0001"]) },
+      })["data-favorites"];
+    expect(withTab("/favorites/", "?tab=recent")).toBeUndefined();
+    expect(withTab("/en/favorites", "?x=1&tab=recent")).toBeUndefined();
+    expect(withTab("/favorites/", "")).toBe("1");
+    expect(withTab("/favorites/", "?tab=recently")).toBe("1");
+  });
+
+  it("탐색 보기를 '목록'으로 저장했을 때만 data-explore-view", () => {
+    const view = (value: string | undefined) =>
+      run({
+        storage:
+          value === undefined ? {} : { [DEVICE_KEYS.exploreView]: value },
+      })["data-explore-view"];
+    expect(view("list")).toBe("list");
+    expect(view("map")).toBeUndefined();
+    expect(view("<x>")).toBeUndefined();
+    expect(view(undefined)).toBeUndefined();
+  });
+
+  it("검색 화면 주소에 검색어가 있을 때만 data-search-query", () => {
+    const q = (pathname: string, search: string) =>
+      "data-search-query" in run({ pathname, search });
+    expect(q("/search/", "?q=%EC%96%91%EC%96%91")).toBe(true);
+    expect(q("/en/search", "?tab=x&q=yang")).toBe(true);
+    expect(q("/search/", "")).toBe(false);
+    expect(q("/search/", "?q=")).toBe(false);
+    // 공백만인 검색어는 화면이 입력 전으로 보므로 결과 자리를 잡지 않음
+    expect(q("/search/", "?q=+")).toBe(false);
+    expect(q("/search/", "?q=%20%20")).toBe(false);
+    expect(q("/search/", "?q=%E0%A4%A")).toBe(false);
+    expect(q("/explore/", "?q=yang")).toBe(false);
+  });
+
   it("첫 방문은 위치를 못 쓴 것으로(off) 보고 다른 힌트는 붙이지 않음", () => {
     expect(run({})).toEqual({ "data-location-hint": "off" });
   });

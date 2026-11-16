@@ -124,4 +124,65 @@ test.describe("화면 밀림", () => {
       expect(await cls(page)).toBeLessThan(LIMIT);
     });
   }
+
+  // 재설계 화면(GH-218 · #529~#532): 정적 HTML의 자리 표시가 실제 내용으로 바뀌어도 밀리지 않음
+  test.describe("탐색 · 목록 보기", () => {
+    test.use({ exploreView: "list" });
+    test("상태별 묶음이 들어와도 밀리지 않음", async ({ page }) => {
+      await slowDown(page);
+      await page.goto("/explore/");
+      await expect(
+        page.getByRole("region", { name: /^특보 없음 \d+곳$/ }),
+      ).toBeVisible({ timeout: 15_000 });
+      await page.waitForTimeout(1500);
+      expect(await cls(page)).toBeLessThan(LIMIT);
+    });
+  });
+
+  test("검색 · 입력 전", async ({ page }) => {
+    await slowDown(page);
+    await page.goto("/search/");
+    await expect(
+      page.getByRole("heading", { name: "지역으로 찾기" }),
+    ).toBeVisible({ timeout: 15_000 });
+    await page.waitForTimeout(1500);
+    expect(await cls(page)).toBeLessThan(LIMIT);
+  });
+
+  test.describe("검색 · 결과(전국)", () => {
+    test.use({ deviceRegion: null });
+    test("주소의 검색어로 결과가 들어와도 밀리지 않음", async ({ page }) => {
+      await slowDown(page);
+      await page.goto("/search/?q=%EC%96%91%EC%96%91");
+      await expect(
+        page.getByRole("heading", { name: /‘양양’ 결과 \d+곳/ }),
+      ).toBeVisible({ timeout: 15_000 });
+      await page.waitForTimeout(1500);
+      expect(await cls(page)).toBeLessThan(LIMIT);
+    });
+  });
+
+  test("즐겨찾기 · 해변 4곳", async ({ page }) => {
+    await page.addInitScript(() =>
+      localStorage.setItem(
+        "baradun:favorites",
+        JSON.stringify(["b0001", "b0002", "b0003", "b0004"]),
+      ),
+    );
+    await slowDown(page);
+    await page.goto("/favorites/");
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+    await page.waitForTimeout(3000);
+    expect(await cls(page)).toBeLessThan(LIMIT);
+  });
+
+  test("데이터 문의 · 해변에서 들어옴", async ({ page }) => {
+    await slowDown(page);
+    await page.goto(`/settings/inquiry/?beach=${slugOf(CLEAR_ID)}`);
+    await expect(page.getByRole("region", { name: "문의할 해변" })).toBeVisible(
+      { timeout: 15_000 },
+    );
+    await page.waitForTimeout(1500);
+    expect(await cls(page)).toBeLessThan(LIMIT);
+  });
 });
