@@ -271,7 +271,10 @@ export function ExploreScreen({
     const view = item.view;
     if (view.kind !== "ready") return null;
     return (
-      <li key={item.id}>
+      <li
+        key={item.id}
+        className="[content-visibility:auto] [contain-intrinsic-size:auto_76px]"
+      >
         <BeachRow
           href={localizedPath(locale, `/spots/${item.slug}/`)}
           name={item.name}
