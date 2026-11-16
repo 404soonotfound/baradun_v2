@@ -8,6 +8,7 @@ import { cn } from "@/lib/cn";
 // 사진 없는 해변 그림 (GH-527 · 결정 기록 29장 D29-4, 12장 결정 15 고침)
 // 사진이 없거나 받지 못한 해변 자리에 씀. 프로젝트가 직접 그린 자산(원본 assets/illustration/beach-no-photo.svg)
 // 하늘 · 해 · 구름 · 바다 · 잔물결 · 모래만 그림(날씨·파도 세기로 읽히지 않게). 정지 그림이라 동작 줄이기와 무관
+// 해는 가운데 위, 구름은 왼쪽 위 '사진 없음 · 그림' 표시와 오른쪽 위 닫기 버튼(지도 카드) 자리를 피함(GH-541 · D29-10)
 // 색은 토큰 color.illust.*만 씀(라이트·다크는 토큰이 바꿈)
 //
 // 쓰는 법: 크기·모서리는 className으로 줌. 그림은 칸을 채우고 넘치는 쪽을 가운데 기준으로 자름(slice)
@@ -48,11 +49,11 @@ export function BeachIllustration({
         </linearGradient>
       </defs>
       <rect width="320" height="132" fill={`url(#${sky})`} />
-      <circle cx="246" cy="34" r="15" className="fill-illust-sun" />
+      <circle cx="160" cy="34" r="15" className="fill-illust-sun" />
       <g className="fill-illust-cloud">
-        <rect x="118" y="22" width="54" height="12" rx="6" />
-        <rect x="132" y="15" width="28" height="12" rx="6" />
-        <rect x="196" y="42" width="38" height="9" rx="4.5" />
+        <rect x="196" y="22" width="54" height="12" rx="6" />
+        <rect x="210" y="15" width="28" height="12" rx="6" />
+        <rect x="70" y="44" width="38" height="9" rx="4.5" />
       </g>
       <rect y="61" width="320" height="40" fill={`url(#${sea})`} />
       <g
