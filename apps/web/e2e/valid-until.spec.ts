@@ -281,8 +281,9 @@ for (const scheme of ["light", "dark"] as const) {
       });
       await expect(clearRowBefore).toBeVisible();
       await expect(clearRowBefore).toContainText(CLEAR_TITLE);
-      await expect(clearRowBefore).toContainText(
-        clearScopeText(times.clearConfirmedAt, times.nowMs),
+      // 범위·기관·확인 시각은 줄마다가 아니라 묶음 머리에 한 번(탐색 시안 C · GH-529, 결정 기록 29장 D29-2)
+      await expect(clearGroup).toContainText(
+        countScopeText(times.clearConfirmedAt, times.nowMs),
       );
 
       const warningRowBefore = blockedGroup.getByRole("link", {
