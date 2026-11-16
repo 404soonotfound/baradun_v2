@@ -564,6 +564,80 @@ test("모르는 처리 상태를 서버가 확인하지 못하면(#521) 목록 �
   await expectNoA11yViolations(page);
 });
 
+test("모르는 처리 상태 문의가 50건보다 많으면(#521) 안내에 50건까지 보인다고 알리고, 다음 쪽 범위는 실제로 실은 50건만큼 민다", async ({
+  page,
+}) => {
+  await signIn(page);
+  await mockInquiries(page);
+  const unknownItems = Array.from({ length: 50 }, (_, n) =>
+    summary(10 + n, { status: "archived" }),
+  );
+  const known = Array.from({ length: 6 }, (_, n) => summary(70 + n));
+  const next = Array.from({ length: 6 }, (_, n) => summary(80 + n));
+  // 나중에 건 route가 먼저 받음
+  await page.route(/\/ops\/inquiries(\?.*)?$/, (route) => {
+    const cursor = new URL(route.request().url()).searchParams.get("cursor");
+    return route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify(
+        cursor
+          ? { items: next, nextCursor: null }
+          : {
+              items: [...unknownItems, ...known],
+              nextCursor: "c2",
+              counts: {
+                received: 20,
+                in_progress: 0,
+                resolved: 0,
+                rejected: 0,
+                unknown: 55,
+              },
+            },
+      ),
+    });
+  });
+  await openInquiries(page);
+  await expect(
+    page.getByText("처리 상태를 알 수 없는 문의가 55건 있어요"),
+  ).toBeVisible();
+  await expect(
+    page.getByText("전체 목록 맨 위에 최근 접수 순으로 50건까지 보여 줘요"),
+  ).toBeVisible();
+  await expect(page.getByText("75건 중 1–56")).toBeVisible();
+  await page.getByRole("button", { name: "다음" }).click();
+  await expect(page.getByText("75건 중 57–62")).toBeVisible();
+});
+
+test("거르기 첫 쪽에서 서버가 모르는 상태 문의 본문을 확인하지 못했으면(#521) 빼지 않고 '본문 확인 못 함'을 행에 보인다", async ({
+  page,
+}) => {
+  await signIn(page);
+  await mockInquiries(page);
+  await page.route(/\/ops\/inquiries\?.*preview=true/, (route) =>
+    route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        items: [
+          summary(9, {
+            status: "archived",
+            messagePreviewUnavailableReason: "unchecked",
+          }),
+          summary(1, { messagePreview: "현장에 입수 금지 깃발" }),
+        ],
+        nextCursor: null,
+      }),
+    }),
+  );
+  await openInquiries(page);
+  await page.getByLabel("내용·해변 찾기").fill("입수 금지");
+  await expect(rows(page)).toHaveCount(2);
+  await expect(rows(page).first()).toContainText("알 수 없는 상태(archived)");
+  await expect(rows(page).first()).toContainText(
+    "본문을 확인하지 못했어요 · 조건에 맞지 않을 수도 있어요 · 열어서 확인해 주세요",
+  );
+  await expectNoA11yViolations(page);
+});
+
 test("토큰 갱신에 실패해 다시 로그인하면 문의 목록을 저절로 다시 읽는다", async ({
   page,
 }) => {
