@@ -8,18 +8,22 @@ import {
   LAYOUT_HINT_SCRIPT,
   LOCATION_HINT_KEY,
   LOCATION_SWITCH_KEY,
+  ONBOARDING_STORAGE_KEY,
   REGION_STORAGE_KEY,
 } from "./layout-hints";
+import { NOTICE_VERSION } from "./notice-version";
 
 // 그리기 전 자리 잡기 힌트 스크립트를 가짜 document·localStorage·navigator 위에서 돌려 봄 (BRD-39)
 
 function run({
   lang = "ko",
+  pathname = "/",
   storage = {},
   languages = ["ko-KR"],
   blocked = false,
 }: {
   lang?: string;
+  pathname?: string;
   storage?: Record<string, string>;
   languages?: string[];
   blocked?: boolean; // localStorage 접근이 오류(사생활 보호 모드 등)
@@ -31,6 +35,7 @@ function run({
   };
   const context: Record<string, unknown> = {
     document: { documentElement: html },
+    location: { pathname },
     navigator: { languages, language: languages[0] },
   };
   Object.defineProperty(context, "localStorage", {
@@ -107,5 +112,38 @@ describe("LAYOUT_HINT_SCRIPT", () => {
     expect(run({ lang: "en", languages: ["ko"], blocked: true })).toEqual({
       "data-language-notice": "ko",
     });
+  });
+
+  it("현재 고지 버전을 확인한 기기와 /guide·/terms 경로는 data-onboarded를 붙인다", () => {
+    const valid = JSON.stringify({
+      noticeVersion: NOTICE_VERSION,
+      acknowledgedAt: "2026-11-16T00:00:00Z",
+      locationStepDone: true,
+    });
+    expect(
+      run({ storage: { [ONBOARDING_STORAGE_KEY]: valid } }),
+    ).toHaveProperty("data-onboarded", "");
+    expect(
+      run({
+        storage: {
+          [ONBOARDING_STORAGE_KEY]: JSON.stringify({
+            noticeVersion: NOTICE_VERSION - 1,
+            acknowledgedAt: "2026-11-16T00:00:00Z",
+            locationStepDone: true,
+          }),
+        },
+      }),
+    ).not.toHaveProperty("data-onboarded");
+    expect(
+      run({ storage: { [ONBOARDING_STORAGE_KEY]: "{" } }),
+    ).not.toHaveProperty("data-onboarded");
+    expect(run({ pathname: "/guide/" })).toHaveProperty("data-onboarded", "");
+    expect(run({ pathname: "/en/terms/" })).toHaveProperty(
+      "data-onboarded",
+      "",
+    );
+    expect(run({ pathname: "/spots/gangmun/" })).not.toHaveProperty(
+      "data-onboarded",
+    );
   });
 });
