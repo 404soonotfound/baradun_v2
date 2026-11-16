@@ -226,7 +226,7 @@ GitHub 저장소 설정 → Environments에서 `infra`(배포 브랜치 `main`�
    - V1 프로젝트 도메인 목록에 `www.baradun.app`을 다시 추가합니다.
    - `vercel.json`에서 `https://www.baradun.app/`으로 보내는 리디렉션을 빼고(전환 전 설정) 다시 배포합니다. 남겨 두면 www가 자기 자신으로 계속 이동합니다.
 2. **가비아 www 복구**: `www`를 전환 전 값인 A 레코드 `216.198.79.1`(Vercel IP)로 되돌립니다. Vercel CNAME(`2e9e02c1d516eeff.vercel-dns-017.com.`)으로 되돌려도 V1은 보이지만, Vercel CAA 때문에 ACM 인증서 자동 갱신이 실패하므로 쓰지 않습니다.
-3. **CloudFront 복구**: 두 매개변수를 비워 다시 배포합니다. 표에는 2단계와 같은 리소스가 나옵니다.
+3. **CloudFront 복구**: 먼저 저장소 변수 `SITE_URL`을 CloudFront 기본 주소로 되돌립니다(`gh variable set SITE_URL --body https://d1gam1q4z69v8c.cloudfront.net`). 배포 명령 끝의 지도 판 확인이 `SITE_URL`을 읽는데, www는 2단계에서 V1으로 돌아가 있어 그대로 두면 확인이 실패로 기록됩니다. 그다음 두 매개변수를 비워 다시 배포합니다. 표에는 2단계와 같은 리소스가 나옵니다.
 
    ```bash
    npm run deploy:infra -- --issue 341 --clear-site-domain
@@ -234,7 +234,7 @@ GitHub 저장소 설정 → Environments에서 `infra`(배포 브랜치 `main`�
 
    이 명령은 `origin/main` 맨 위 커밋의 `ci-ok`가 성공이어야 돌고 그 커밋을 배포합니다. main CI가 도는 중·실패이거나 배포되지 않은 인프라 변경이 섞이면, 배포용 작업 트리(마지막으로 배포한 커밋)의 `infra`에서 아래 '배포'의 손 명령 첫 줄에 `--parameters SiteDomainName= --parameters SiteCertificateArn=`을 붙여 변경 세트를 만들고, 같은 표인지 확인한 뒤 실행합니다.
 
-4. **사이트 재배포**: `SITE_URL`을 CloudFront 기본 주소로 되돌리고 `npm run deploy:prod` 합니다.
+4. **사이트 재배포**: 3단계에서 되돌린 `SITE_URL`로 `npm run deploy:prod` 합니다.
 
 ## CDK 실행 정책과 역할 권한 상한
 
