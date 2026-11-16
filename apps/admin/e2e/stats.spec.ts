@@ -79,7 +79,9 @@ test("정상 조회: 머리 '지금 사용 중', 기본 28일, 기간 날짜·�
   }));
   await openStats(page);
 
-  await expect(page.getByText(/^지금 사용 중\s*14명\s*· 최근 30분$/)).toBeVisible();
+  await expect(
+    page.getByText(/^지금 사용 중\s*14명\s*· 최근 30분$/),
+  ).toBeVisible();
   await expect(page.getByRole("button", { name: "28일" })).toHaveAttribute(
     "aria-pressed",
     "true",
@@ -108,15 +110,23 @@ test("정상 조회: 머리 '지금 사용 중', 기본 28일, 기간 날짜·�
   await expect(beaches.getByText("해운대해수욕장")).toBeVisible();
   await expect(beaches.getByText("광안리해수욕장")).toBeVisible();
   await expect(beaches.getByText("경포해수욕장")).toBeVisible();
-  await expect(beaches.getByText(/\/spots\/|haeundae|gwangan-ri/)).toHaveCount(0);
+  await expect(beaches.getByText(/\/spots\/|haeundae|gwangan-ri/)).toHaveCount(
+    0,
+  );
 
   // 추이 칸: 응답 목록대로(한 줄 안내 없음)
   await expect(page.getByText(/아직 보여 드릴 수 없어요/)).toHaveCount(0);
-  await expect(section(page, "일별 사용자").locator("svg rect")).toHaveCount(28);
-  await expect(section(page, "일별 화면 조회").locator("svg rect")).toHaveCount(28);
+  await expect(section(page, "일별 사용자").locator("svg rect")).toHaveCount(
+    28,
+  );
+  await expect(section(page, "일별 화면 조회").locator("svg rect")).toHaveCount(
+    28,
+  );
   const hourly = section(page, "시간대별 사용자");
   await expect(hourly.getByText("평균 · 28일")).toBeVisible();
-  await expect(hourly.getByRole("columnheader", { name: "평균 사용자" })).toBeAttached();
+  await expect(
+    hourly.getByRole("columnheader", { name: "평균 사용자" }),
+  ).toBeAttached();
   await expect(hourly.locator("svg rect")).toHaveCount(24);
 
   // 많이 본 화면: 경로를 화면 이름표·해변 이름으로, /en/도 같은 이름(+ English)
@@ -170,7 +180,9 @@ test("기간 추이가 없거나 목록이 응답에 없으면 칸을 숨기고 
   // trends 없음: 추이 칸 모두 숨김 + 기간 표시 아래 한 줄(기간 표시는 기간 이름)
   await expect(page.getByText(MISSING_ALL, { exact: true })).toBeVisible();
   await expect(
-    page.getByText("Google Analytics · 비식별 이용 이벤트만 수집해요 · 최근 28일"),
+    page.getByText(
+      "Google Analytics · 비식별 이용 이벤트만 수집해요 · 최근 28일",
+    ),
   ).toBeVisible();
   for (const name of [
     "일별 사용자",
@@ -233,8 +245,12 @@ test("기간 추이가 없거나 목록이 응답에 없으면 칸을 숨기고 
   await expect(daily.locator("svg rect")).toHaveCount(2);
   await expect(daily.locator("svg rect[data-empty]")).toHaveCount(1);
   await expect(daily.getByRole("cell", { name: "–" })).toBeAttached();
-  await expect(daily.getByText("· 옅은 칸은 확인 못 한 값이에요")).toBeVisible();
-  await expect(section(page, "일별 화면 조회").locator("svg rect[data-empty]")).toHaveCount(0);
+  await expect(
+    daily.getByText("· 옅은 칸은 확인 못 한 값이에요"),
+  ).toBeVisible();
+  await expect(
+    section(page, "일별 화면 조회").locator("svg rect[data-empty]"),
+  ).toHaveCount(0);
   await expect(
     section(page, "시간대별 사용자").getByText(/이 항목을 불러오지 못했어요/),
   ).toBeVisible();
@@ -255,7 +271,9 @@ test("기간 추이가 없거나 목록이 응답에 없으면 칸을 숨기고 
   ).toContainText("확인 못 함");
   await expect(screens.getByText("이름 확인 못 함")).toBeVisible();
   await expect(screens.getByText(/gwangalli/)).toHaveCount(0);
-  await expect(screens.getByText("/admin-preview/", { exact: true })).toBeVisible();
+  await expect(
+    screens.getByText("/admin-preview/", { exact: true }),
+  ).toBeVisible();
   await expect(screens.getByText("기타", { exact: true })).toBeVisible();
   await expect(screens.getByText("(other)")).toHaveCount(0);
   await expectNoA11yViolations(page);
@@ -284,8 +302,15 @@ test("GA4 속성 시간대가 서울과 다르면 기간 표시 옆에 알리고
   }));
   await openStats(page);
   await expect(page.getByText("통계 기준 시간대가 달라요")).toBeVisible();
-  await expect(page.getByText(/GA4 속성 시간대 America\/Los_Angeles/)).toBeVisible();
-  for (const name of ["일별 사용자", "시간대별 사용자", "많이 본 화면", "들어온 경로"]) {
+  await expect(
+    page.getByText(/GA4 속성 시간대 America\/Los_Angeles/),
+  ).toBeVisible();
+  for (const name of [
+    "일별 사용자",
+    "시간대별 사용자",
+    "많이 본 화면",
+    "들어온 경로",
+  ]) {
     await expect(
       section(page, name).getByText(/GA4 속성 시간대가 서울과 달라/),
     ).toBeVisible();
@@ -318,6 +343,28 @@ test("이름표에 없는 해변은 slug·경로가 아니라 '이름 확인 못
   await expect(beaches.getByText(/gwangalli|\/spots/)).toHaveCount(0);
 });
 
+test("최근 30분 방문 기록이 없으면(GA4 행 없음) 0명·확인 못 함이 아닌 방문 기록 없음", async ({
+  page,
+}) => {
+  const base = localStatsView("28d");
+  await mockStats(page, () => ({
+    body: {
+      ...base,
+      realtime: {
+        status: "ok",
+        activeUsers: null,
+        pageViews: null,
+        noActivity: true,
+      },
+    },
+  }));
+  await openStats(page);
+  await expect(page.getByText("방문 기록 없음", { exact: true })).toBeVisible();
+  await expect(page.getByText("0명", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("확인 못 함", { exact: true })).toHaveCount(0);
+  await expectNoA11yViolations(page);
+});
+
 test("숫자 숨김 안내는 응답을 받은 뒤 metadata가 있을 때만, 빈 값(null)은 0이 아닌 확인 못 함·–", async ({
   page,
 }) => {
@@ -346,7 +393,11 @@ test("숫자 숨김 안내는 응답을 받은 뒤 metadata가 있을 때만, �
           ...base.trends!,
           referrers: {
             ...base.trends!.referrers!,
-            metadata: { thresholding: false, sampling: false, otherRowLoss: true },
+            metadata: {
+              thresholding: false,
+              sampling: false,
+              otherRowLoss: true,
+            },
           },
         },
       }),
@@ -357,8 +408,12 @@ test("숫자 숨김 안내는 응답을 받은 뒤 metadata가 있을 때만, �
   await expect(page.locator("#main .sk").first()).toBeVisible();
   await expect(page.getByText(/일부 숫자 숨김이 있어요/)).toHaveCount(0);
   await expect(page.getByText(MISSING_ALL)).toHaveCount(0);
-  await expect(section(page, "일별 사용자").locator(".sk").first()).toBeVisible();
-  await expect(section(page, "많이 본 화면").locator(".sk").first()).toBeAttached();
+  await expect(
+    section(page, "일별 사용자").locator(".sk").first(),
+  ).toBeVisible();
+  await expect(
+    section(page, "많이 본 화면").locator(".sk").first(),
+  ).toBeAttached();
   release();
 
   await expect(page.getByText("잠시 저장된 응답")).toBeVisible();
@@ -370,7 +425,9 @@ test("숫자 숨김 안내는 응답을 받은 뒤 metadata가 있을 때만, �
   await expect(notice.getByText(/표본으로 계산/)).toBeVisible();
   await expect(notice.getByText(/'기타'로 묶였어요/)).toBeVisible();
   // 지금 사용 중 숫자가 비면 확인 못 함
-  await expect(page.getByText("확인 못 함", { exact: true }).first()).toBeVisible();
+  await expect(
+    page.getByText("확인 못 함", { exact: true }).first(),
+  ).toBeVisible();
   await expect(page.getByText("0명", { exact: true })).toHaveCount(0);
   // 기기 합을 알 수 없으면 비율·합계를 추정하지 않음. 받은 행(PC 40명)은 남기고 결측 행만 확인 못 함
   const devices = section(page, "기기");
@@ -401,9 +458,7 @@ test("GA4 미연결(configured: false)과 조회 실패(500) 뒤 같은 자리�
   for (const name of ["기기", "화면 언어", "많이 본 해변"]) {
     const area = section(page, name);
     await expect(area).toContainText("GA4 연동 전이에요");
-    await expect(
-      area.getByText(/이 항목을 불러오지 못했어요/),
-    ).toHaveCount(0);
+    await expect(area.getByText(/이 항목을 불러오지 못했어요/)).toHaveCount(0);
   }
   await expectNoA11yViolations(page);
 
@@ -440,14 +495,18 @@ test("새로 고침하는 동안 받은 값을 두고 회전 표시, 응답이 1
   await expect(page.getByText("다시 읽는 중")).toBeVisible();
   // 값 유지(자리표시로 바꾸지 않음)
   await expect(page.getByText("14명", { exact: true })).toBeVisible();
-  await expect(section(page, "많이 본 해변").getByText("해운대해수욕장")).toBeVisible();
+  await expect(
+    section(page, "많이 본 해변").getByText("해운대해수욕장"),
+  ).toBeVisible();
 
   // 기간을 바꾸면 다른 기간 값이라 자리표시, 15초 뒤 같은 자리 실패
   await page.getByRole("button", { name: "7일" }).click();
   await expect(page.getByText("14명", { exact: true })).toHaveCount(0);
   await page.clock.fastForward(16_000);
   await expect(
-    page.getByRole("alert").filter({ hasText: "이용 통계를 불러오지 못했어요." }),
+    page
+      .getByRole("alert")
+      .filter({ hasText: "이용 통계를 불러오지 못했어요." }),
   ).toBeVisible();
 });
 
@@ -473,9 +532,9 @@ test("예시 데이터 배지와 세부 리포트 일부 실패(null) 구분 표
       "이 항목을 불러오지 못했어요. 다른 칸은 그대로예요. 잠시 뒤 다시 시도해 주세요.",
     ),
   ).toBeVisible();
-  await expect(
-    page.getByText("집계된 해변 방문 기록이 없어요."),
-  ).toHaveCount(0);
+  await expect(page.getByText("집계된 해변 방문 기록이 없어요.")).toHaveCount(
+    0,
+  );
   await expectNoA11yViolations(page);
 });
 
@@ -495,7 +554,9 @@ test("로딩(L7): 5초 느림 안내가 화면에 보이고 전체 실패(500) �
       await route.fulfill({
         status: 500,
         contentType: "application/json",
-        body: JSON.stringify({ error: { code: "internal", requestId: "req-err" } }),
+        body: JSON.stringify({
+          error: { code: "internal", requestId: "req-err" },
+        }),
       });
       return;
     }
