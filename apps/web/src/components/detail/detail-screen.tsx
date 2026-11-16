@@ -365,7 +365,12 @@ export function DetailScreen({
         </div>
 
         {/* 본문(PC 왼쪽) · 사이 18(Figma 183:815) */}
-        <div className="flex flex-col gap-3.5 lg:col-start-1 lg:row-start-1 lg:gap-[18px]">
+        {/* key: 받기 전(자리 상자)과 받은 뒤를 다른 칸으로 그림. 판단 카드가 커지며 자리 상자가 아래로 옮겨진 것이
+            보이던 내용이 밀린 것으로 잡히지 않게 함(BRD-39 CLS). 받기 전 날씨·119·출처는 자리 상자에 밀려 첫 화면 밖에 있음 */}
+        <div
+          key={view.kind === "ready" ? "ready" : "loading"}
+          className="flex flex-col gap-3.5 lg:col-start-1 lg:row-start-1 lg:gap-[18px]"
+        >
           <SeaCard
             view={view}
             stations={beach.stations}

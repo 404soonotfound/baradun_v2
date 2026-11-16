@@ -103,9 +103,15 @@ export function VerdictCard({
     ? "flex flex-col gap-3 p-4 max-lg:gap-1.5 max-lg:py-3.5"
     : "flex flex-col gap-3 rounded-card bg-bg-surface p-4 shadow-raised";
 
+  // 불러오는 동안 자리(BRD-39 CLS): 받은 뒤 카드 높이(특보 없음 약 160px ~ 판단불가·이용불가 230~320px)에 가깝게 잡아
+  // 아래 칸이 덜 밀리게 함. key로 받은 뒤 카드는 새로 그림(자리 상자가 내용처럼 움직인 것으로 잡히지 않게)
   if (view.kind !== "ready") {
     return (
-      <section aria-busy="true" className={sectionClass}>
+      <section
+        key="verdict-loading"
+        aria-busy="true"
+        className={cn(sectionClass, "min-h-[200px]")}
+      >
         <Skeleton className="h-badge w-24 rounded-badge" />
         <Skeleton className="h-7 w-3/4" />
         <Skeleton className="h-4 w-1/2" />
