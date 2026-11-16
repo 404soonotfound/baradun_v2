@@ -21,6 +21,10 @@ import { useMetaText } from "@/lib/snapshot/use-meta-text";
 
 type Photo = NonNullable<BeachSummary["photo"]>;
 
+// 사진·그림 위 왼쪽 표시('참고 사진 · 지금 바다 모습 아님' / '사진 없음 · 그림'). 바탕은 흰 글자 대비 4.5:1(check-tokens)
+const LABEL_CLASS =
+  "absolute top-2 left-2 flex h-6 items-center rounded-full bg-illust-label-bg px-[9px] text-caption font-bold text-illust-label-fg";
+
 // 보여줄 사진 고르기. 사진이 없거나 받지 못한 주소면 null(→ 그림). 다른 주소면 다시 보여줌
 export function pickShownPhoto(
   photo: BeachSummary["photo"],
@@ -83,6 +87,7 @@ export function PhotoFigure({
   checkBroken,
   credit,
   empty = "illustration",
+  overlay = false,
 }: {
   shown: Photo | null;
   name: string;
@@ -91,6 +96,8 @@ export function PhotoFigure({
   checkBroken?: (img: HTMLImageElement | null) => void; // useShownPhoto의 checkBroken
   credit: boolean;
   empty?: "illustration" | "icon";
+  // 지도 카드(GH-529 시안 C): '참고 사진' 표시를 사진 아래 줄 대신 사진 위 왼쪽에 얹음(그림의 '사진 없음 · 그림'과 같은 자리·모양)
+  overlay?: boolean;
 }) {
   const t = useTranslations("photo");
 
@@ -100,9 +107,7 @@ export function PhotoFigure({
         <BeachIllustration className={cn("w-full rounded-[12px]", className)} />
         {/* 사진의 '참고 사진' 표시와 같은 자리·모양(시안 S_EXPPCN)
             보이는 글자라 링크 안에서도 접근 가능한 이름에 그대로 둠(WCAG 2.5.3, 사진의 alt + 안내와 같은 구조) */}
-        <figcaption className="absolute top-2 left-2 flex h-6 items-center rounded-full bg-illust-label-bg px-[9px] text-caption font-bold text-illust-label-fg">
-          {t("noneLabel")}
-        </figcaption>
+        <figcaption className={LABEL_CLASS}>{t("noneLabel")}</figcaption>
       </figure>
     );
   }
@@ -126,22 +131,36 @@ export function PhotoFigure({
     );
   }
 
+  // 바깥 사진 주소를 그대로 씀(정적 내보내기라 이미지 최적화 서버가 없음)
+  // block: 표시를 얹는 틀(relative figure)에서 글줄 아래 틈이 생기지 않게
+  const image = (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      ref={checkBroken}
+      src={shown.url}
+      alt={t("alt", { name })}
+      loading="lazy"
+      onError={onError}
+      // photo-dim: 다크에서 밝기 90%(D29-8, globals.css)
+      className={cn(
+        "photo-dim block w-full rounded-[12px] object-cover",
+        className,
+      )}
+    />
+  );
+
+  if (overlay) {
+    return (
+      <figure className="relative">
+        {image}
+        <figcaption className={LABEL_CLASS}>{t("reference")}</figcaption>
+      </figure>
+    );
+  }
+
   return (
     <figure className="flex flex-col gap-1">
-      {/* 바깥 사진 주소를 그대로 씀(정적 내보내기라 이미지 최적화 서버가 없음) */}
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        ref={checkBroken}
-        src={shown.url}
-        alt={t("alt", { name })}
-        loading="lazy"
-        onError={onError}
-        // photo-dim: 다크에서 밝기 90%(D29-8, globals.css)
-        className={cn(
-          "photo-dim w-full rounded-[12px] object-cover",
-          className,
-        )}
-      />
+      {image}
       <figcaption className="text-caption text-text-muted">
         {t("reference")}
         {credit && (
