@@ -6,6 +6,7 @@ import { type Locale, localizedPath } from "@/lib/i18n";
 import { prefersReducedMotion } from "@/lib/motion";
 import { TABS, type TabKey, tabOf } from "@/lib/nav";
 import {
+  clearScrollRestore,
   lastUrlOf,
   markInAppNavigation,
   rememberOwnerTab,
@@ -66,6 +67,16 @@ export function createTabTransition() {
       pending = null;
       return true;
     },
+    // 뒤로 가기 등으로 진행 중이던 전환이 중단됐을 때 호출.
+    // usePathname()이 그대로 머물 예정(browserPathname === committedPathname)이면 남은 복원 예약까지 정리하도록 true 반환
+    onPopState(committedPathname: string, browserPathname: string): boolean {
+      if (pending === null) return false;
+      pending = null;
+      return browserPathname === committedPathname;
+    },
+    clear() {
+      pending = null;
+    },
   };
 }
 
@@ -79,21 +90,28 @@ export function useTabNavigation() {
   const owner = current ?? memory.owner; // 상세·검색은 들어오기 전 탭 소속
   const isFirstRender = useRef(true);
 
-  // 탭 화면에 들어오면 "지금 탭"으로 기억
   useEffect(() => {
-    if (current) rememberOwnerTab(current);
-  }, [current]);
+    const onPopState = () => {
+      if (transition.onPopState(pathname, window.location.pathname)) {
+        clearScrollRestore();
+      }
+    };
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, [pathname]);
 
-  // 주소가 바뀔 때마다: 진행 중이던 탭 목표를 비우고, 앱 안 이동 표시 + 저장 위치 복원
+  // 주소가 바뀔 때마다: 진행 중이던 탭 목표를 비우고, 앱 안 이동 표시 + 소속 탭·저장 위치 복원
   // (하단 탭과 상단 내비가 둘 다 이 훅을 써도, 복원 예약은 한 번 꺼내면 지워져서 한 번만 실행)
   useEffect(() => {
     const shouldRestore = transition.onPathnameChange(pathname);
     if (isFirstRender.current) isFirstRender.current = false;
     else markInAppNavigation();
     if (!shouldRestore) return;
+    // 중간 과도기 커밋에서는 owner를 덮어쓰지 않고 확정된 경로에서만 소속 탭을 기억
+    if (current) rememberOwnerTab(current);
     const y = takeScrollRestore(currentUrl());
     if (y !== null) window.scrollTo(0, y);
-  }, [pathname]);
+  }, [pathname, current]);
 
   // 탭의 링크 주소: 지금 속한 탭은 첫 화면(상세에서 누르면 탭 처음으로), 다른 탭은 마지막으로 보던 주소
   function hrefFor(tab: TabKey): string {
@@ -125,11 +143,19 @@ export function useTabNavigation() {
       return;
     }
 
+    const here = currentUrl();
     const target = hrefFor(tab);
+    // 전환 중 아직 주소가 바뀌기 전에 현재 화면으로 되돌아가면
+    // useEffect([pathname])가 다시 돌지 않으므로 pending과 복원 예약을 함께 정리함
+    if (target === here && window.location.pathname === pathname) {
+      clearScrollRestore();
+      transition.clear();
+      return;
+    }
+
     if (
       transition.shouldSaveOrigin(current, pathname, window.location.pathname)
     ) {
-      const here = currentUrl();
       if (owner) rememberTabUrl(owner, here);
       rememberScroll(here, window.scrollY);
     }
