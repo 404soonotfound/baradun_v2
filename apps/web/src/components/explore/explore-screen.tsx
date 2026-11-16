@@ -86,6 +86,10 @@ import { useSheet } from "@/lib/use-sheet";
 //   마커(상태 아이콘 + 짧은 이름) → 아래 카드가 그 해변으로 바뀜 → 카드를 누르면 상세. PC 목록 행을 가리키면 마커 강조
 //   지도 없이도 같은 해변·상태를 목록에서 키보드로 모두 볼 수 있음(마커는 Tab에서 뺌)
 
+// 지도 → 목록 전환 클릭 프레임에 먼저 그릴 행 수(모바일 첫 화면을 넉넉히 채움).
+// content-visibility 대신 클릭 프레임만 나눠 그려 탭 마지막 위치·뒤로 가기 스크롤 복원의 실제 행 높이를 유지함
+const LIST_INITIAL_BATCH = 24;
+
 export function ExploreScreen({
   locale,
   beaches,
@@ -119,6 +123,26 @@ export function ExploreScreen({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
   const mobileCardRef = useRef<HTMLDivElement>(null);
+  // 지도 → 목록 전환 직후 1프레임만 첫 화면 묶음을 먼저 그려 4배 감속 INP를 줄임(탭 복귀·뒤로 가기는 false라 전체 높이를 바로 잡음)
+  const [listBatched, setListBatched] = useState(false);
+
+  useEffect(() => {
+    if (!listBatched) return;
+    let frame2 = 0;
+    const frame1 = requestAnimationFrame(() => {
+      frame2 = requestAnimationFrame(() => setListBatched(false));
+    });
+    return () => {
+      cancelAnimationFrame(frame1);
+      cancelAnimationFrame(frame2);
+    };
+  }, [listBatched]);
+
+  function selectExploreView(next: ExploreView) {
+    if (next === "list" && view === "map") setListBatched(true);
+    setExploreView(next);
+    trackEvent("toggle_explore_view", { view: next });
+  }
 
   // 지역은 홈 기본 지역과 같은 저장 값(10/27 결정). 저장값 없음·목록에 없어진 지역·고른 전국은 전국으로 봄
   const saved = useRegion();
@@ -271,10 +295,7 @@ export function ExploreScreen({
     const view = item.view;
     if (view.kind !== "ready") return null;
     return (
-      <li
-        key={item.id}
-        className="[content-visibility:auto] [contain-intrinsic-size:auto_76px]"
-      >
+      <li key={item.id}>
         <BeachRow
           href={localizedPath(locale, `/spots/${item.slug}/`)}
           name={item.name}
@@ -295,7 +316,7 @@ export function ExploreScreen({
     );
   }
 
-  function renderGroup(group: ExploreGroup) {
+  function renderGroup(group: ExploreGroup, rows: ExploreItem[] = group.items) {
     const tone =
       group.category === "clear"
         ? "clear"
@@ -322,9 +343,20 @@ export function ExploreScreen({
         }
         notes={group.category === "clear" ? [t("safety.finalCall")] : []}
       >
-        {group.items.map(renderRow)}
+        {rows.map(renderRow)}
       </StatusGroup>
     );
+  }
+
+  function renderStatusGroups() {
+    if (!listBatched) return statusGroups.map((group) => renderGroup(group));
+    let remaining = LIST_INITIAL_BATCH;
+    return statusGroups.flatMap((group) => {
+      if (remaining <= 0) return [];
+      const slice = group.items.slice(0, remaining);
+      remaining -= slice.length;
+      return slice.length > 0 ? [renderGroup(group, slice)] : [];
+    });
   }
 
   // 한 목록(가까운 순·이름 순)에 특보 없음이 있으면 범위 줄, 늘 현장 우선 문구
@@ -475,10 +507,7 @@ export function ExploreScreen({
               { value: "map", label: t("explore.view.map") },
             ]}
             value={view}
-            onChange={(next) => {
-              setExploreView(next);
-              trackEvent("toggle_explore_view", { view: next });
-            }}
+            onChange={selectExploreView}
           />
         </div>
 
@@ -497,7 +526,7 @@ export function ExploreScreen({
             />
           ) : mode === "status" ? (
             <div className="flex flex-col gap-5">
-              {statusGroups.map(renderGroup)}
+              {renderStatusGroups()}
               {/* 특보 없음 묶음이 없으면(이용불가·판단불가만, 오프라인 포함) 묶음 안내가 없으니 목록 아래에 한 번 둠 */}
               {!statusGroups.some((group) => group.category === "clear") && (
                 <p className="text-caption text-text-muted">
@@ -509,7 +538,10 @@ export function ExploreScreen({
           ) : (
             <div className="flex flex-col gap-2">
               <ul className="divide-y divide-border-default overflow-hidden rounded-card bg-bg-surface shadow-card">
-                {flatItems.map(renderRow)}
+                {(listBatched
+                  ? flatItems.slice(0, LIST_INITIAL_BATCH)
+                  : flatItems
+                ).map(renderRow)}
               </ul>
               <div className="flex flex-col gap-0.5 text-caption text-text-muted">
                 {flatHasClear && (
@@ -564,10 +596,7 @@ export function ExploreScreen({
             hasKmaData && markers.length > 0 ? t("source.kmaStatus") : null
           }
           className="h-[62dvh] min-h-[380px] lg:h-[calc(100dvh-112px)]"
-          onShowList={() => {
-            setExploreView("list");
-            trackEvent("toggle_explore_view", { view: "list" });
-          }}
+          onShowList={() => selectExploreView("list")}
           // 지도가 실패하면 고른 해변을 놓음(지도 밖에 있는 모바일 카드도 닫힘, PC 카드와 같게)
           onFailed={() => setSelectedId(null)}
           overlay={(api) => (
