@@ -3,4 +3,6 @@
 // 2: 처리방침에 '이용 통계와 쿠키'(Google Analytics) 절 추가 (BRD-143, 2026-11-02)
 // 3: 이용 안내·개인정보 처리방침 전문과 첫 실행 고지 갱신 (BRD-64). 2는 이미 배포돼 2로 확인한 기기도 다시 봄
 // 4: 처리방침 '7. 쿠키와 분석 도구'에 확장 이용 통계 이벤트(기능 이용 기록) 안내 반영 (BRD-68)
-export const NOTICE_VERSION = 4;
+// 5: 처리방침 안전조치·권리·기기 저장 문구 정정 (BRD-64)
+export const NOTICE_VERSION = 5;
+export const NOTICE_EFFECTIVE_DATE = "2026-11-16";
