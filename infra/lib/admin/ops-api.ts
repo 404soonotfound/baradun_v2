@@ -56,7 +56,7 @@ export interface OpsApiProps {
   readonly publisher: lambda.IFunction;
   // 게시 변경 미리보기 함수(#331, 읽기 전용). 동기 호출
   readonly preview: lambda.IFunction;
-  // GA4 속성 ID(#333 ADM-STATS). 비어 있으면 미연결로 동작
+  // GA4 속성 ID(#333 ADM-STATS, settings.ts 상수). 빈 값이면 미연결, 값이 있는데 SSM 인증 구성이 없으면 조회 실패로 보임
   readonly ga4PropertyId: string;
   readonly siteUrl: string;
   readonly adminSiteUrl: string;
@@ -152,7 +152,7 @@ export class OpsApi extends Construct {
         ),
       }),
     );
-    // 이용 통계 GA4 서비스 계정 키 읽기(#333 ADM-STATS). 해당 파라미터 1개로만 좁힘
+    // 이용 통계 GA4 Google 인증 구성 읽기(#333 ADM-STATS, 키 없는 external_account). 해당 파라미터 1개로만 좁힘
     this.role.addToPolicy(
       new iam.PolicyStatement({
         actions: ["ssm:GetParameter"],
