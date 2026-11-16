@@ -198,7 +198,12 @@ export function MapView({
         className="relative min-h-0 flex-1 bg-bg-subtle"
       >
         {/* MapLibre가 그리는 자리. 실패하면 숨김. MapLibre가 자기 틀에 position: relative를 붙여서 한 겹 감쌈 */}
-        <div className={cn("absolute inset-0", failed && "hidden")}>
+        {/* 다 그리기 전에는 inert: MapLibre 캔버스는 만들 때부터 Tab 순서(tabindex=0)라, 불러오는 중 덮개 뒤에서
+            보이지 않는 포커스를 받지 않게 함(WCAG 2.4.11) */}
+        <div
+          inert={!ready}
+          className={cn("absolute inset-0", failed && "hidden")}
+        >
           <div ref={canvasRef} className="size-full" />
         </div>
 
