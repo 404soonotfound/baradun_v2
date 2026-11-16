@@ -438,6 +438,126 @@ test("모르는 처리 상태·유형은 숨기지 않고 그 값을 그대로 �
   await expect(rows(page).first()).toContainText("알 수 없는 유형(new_kind)");
 });
 
+test("모르는 처리 상태 문의(#521): 전체 목록 맨 위·상세에 원래 값으로 보이고, 4개 탭 수에 섞이지 않으며, 4종으로 바꾸면 그 탭으로 옮긴다", async ({
+  page,
+}) => {
+  await signIn(page);
+  // 서버 상태를 흉내 냄: 저장(PATCH) 전에는 archived, 뒤에는 확인 중(version 2)
+  let saved = false;
+  const unknownItem = () =>
+    summary(
+      9,
+      saved ? { status: "in_progress", version: 2 } : { status: "archived" },
+    );
+  const calls = await mockInquiries(page, {
+    detail: () => ({
+      status: 200,
+      body: {
+        ...unknownItem(),
+        restricted: false,
+        message: "옛 문의",
+        memo: null,
+        rejectReason: null,
+        emailCollected: false,
+        photosCollected: false,
+      },
+    }),
+    patch: () => {
+      saved = true;
+      return { status: 200, body: { inquiryId: id(9), version: 2 } };
+    },
+  });
+  // 나중에 건 route가 먼저 받음
+  await page.route(/\/ops\/inquiries(\?.*)?$/, (route) => {
+    const status = new URL(route.request().url()).searchParams.get("status");
+    const all = [
+      unknownItem(),
+      summary(1),
+      summary(2),
+      summary(3, { status: "in_progress" }),
+    ];
+    return route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        items: all.filter((i) => !status || i.status === status),
+        nextCursor: null,
+        counts: saved
+          ? {
+              received: 2,
+              in_progress: 2,
+              resolved: 0,
+              rejected: 0,
+              unknown: 0,
+            }
+          : { ...COUNTS, unknown: 1 },
+      }),
+    });
+  });
+  await openInquiries(page);
+
+  const tabs = page.getByRole("group", { name: "처리 상태로 거르기" });
+  await expect(
+    page.getByText("처리 상태를 알 수 없는 문의가 1건 있어요"),
+  ).toBeVisible();
+  // 4개 탭 수는 서버 수 그대로, '전체'만 모르는 상태를 더함
+  await expect(tabs.getByRole("button", { name: "접수 2" })).toBeVisible();
+  await expect(tabs.getByRole("button", { name: "확인 중 1" })).toBeVisible();
+  await expect(tabs.getByRole("button", { name: "전체 4" })).toBeVisible();
+  await expect(rows(page)).toHaveCount(4);
+  await expect(rows(page).first()).toContainText("알 수 없는 상태(archived)");
+  await expect(page.getByText("4건 중 1–4")).toBeVisible();
+  await expectNoA11yViolations(page);
+
+  await rows(page).first().getByRole("link").click();
+  const detail = detailOf(page);
+  await expect(detail.getByText("옛 문의")).toBeVisible();
+  await expect(detail.getByText("알 수 없는 상태(archived)")).toBeVisible();
+  await detail.getByText("확인 중", { exact: true }).click();
+  await detail.getByRole("button", { name: "저장" }).click();
+  await expect(
+    detail.getByRole("status").filter({ hasText: "‘확인 중’(으)로 바꿨어요" }),
+  ).toBeVisible();
+  expect(calls.patches[0]?.body).toEqual({ version: 1, status: "in_progress" });
+
+  if (isMobile(page)) {
+    await detail.getByRole("link", { name: /문의 목록으로/ }).click();
+  } else {
+    await page.keyboard.press("Escape");
+  }
+  await expect(tabs.getByRole("button", { name: "확인 중 2" })).toBeVisible();
+  await expect(tabs.getByRole("button", { name: "전체 4" })).toBeVisible();
+  await expect(
+    page.getByText("처리 상태를 알 수 없는 문의가 1건 있어요"),
+  ).toBeHidden();
+});
+
+test("모르는 처리 상태를 서버가 확인하지 못하면(#521) 목록 위 같은 자리에 알리고, 4종 목록·수는 그대로 보여 준다", async ({
+  page,
+}) => {
+  await signIn(page);
+  await mockInquiries(page);
+  await page.route(/\/ops\/inquiries(\?.*)?$/, (route) =>
+    route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        items: [summary(1), summary(2), summary(3, { status: "in_progress" })],
+        nextCursor: null,
+        counts: { ...COUNTS, unknown: null },
+        unknownStatusUnavailable: true,
+      }),
+    }),
+  );
+  await openInquiries(page);
+  await expect(
+    page.getByText("처리 상태를 알 수 없는 문의가 있는지 확인하지 못했어요"),
+  ).toBeVisible();
+  const tabs = page.getByRole("group", { name: "처리 상태로 거르기" });
+  await expect(tabs.getByRole("button", { name: "접수 2" })).toBeVisible();
+  await expect(tabs.getByRole("button", { name: "전체 3" })).toBeVisible();
+  await expect(rows(page)).toHaveCount(3);
+  await expectNoA11yViolations(page);
+});
+
 test("토큰 갱신에 실패해 다시 로그인하면 문의 목록을 저절로 다시 읽는다", async ({
   page,
 }) => {
