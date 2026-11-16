@@ -86,5 +86,48 @@ export function useRowText() {
     return joinMeta(lines);
   }
 
-  return { rowMeta, rowBasis, rowDetail };
+  // --- 세 줄 목록 줄(탐색 시안 C · GH-529, 결정 기록 29장 D29-2) ---
+  // 2줄째: "강원 강릉시 · 6.2km · 수온 21.4°C · 34분 전 측정". 수온 자리는 세 가지를 섞지 않음:
+  //   값 + 그 값의 측정 시각 · '가까운 관측 없음'(측정소 없음) · '수온 · 측정이 늦어지고 있어요'(늦어짐). 일시 결측은 값 자리를 비움(0·정상으로 보이지 않게)
+  function listMeta(
+    region: string,
+    distanceKm: number | null,
+    view: BeachView,
+    nowMs: number,
+  ): string | null {
+    const km = distanceKm === null ? null : formatKm(distanceKm);
+    const temp = view.kind === "ready" ? view.metrics.waterTemp : null;
+    return joinMeta([
+      region,
+      km && `${km}km`,
+      temp?.kind === "none"
+        ? t("observation.none")
+        : temp && metricText("waterTemp", temp),
+      temp?.kind === "value" ? measuredAgoText(temp.observedAt, nowMs) : null,
+    ]);
+  }
+
+  // 넷째 줄(있을 때만): 칩이 말하지 못한 것. 구역·기관·확인 시각은 묶음 머리에 한 번만 두므로 여기에 넣지 않음
+  //   오래된 정보: "HH:MM 확인 · 이후 확인 못 함" / 남은 사유(칩으로 쓴 첫 사유 뒤) / 판단불가: 파고 값·지연(+ 파주기)
+  //   파고 값을 보이면 그 값의 측정 시각을 바로 뒤에 붙임(2줄째 'n분 전 측정'은 수온의 시각이라 파고 시각으로 읽히지 않게)
+  function listNote(view: BeachView, nowMs: number): string | null {
+    if (view.kind !== "ready") return null;
+    const lines: (string | null)[] = [
+      view.stale ? confirmedUntilText(view.confirmedAt, nowMs) : null,
+      ...view.reasons.slice(1).map(badgeText),
+    ];
+    if (view.category === "undetermined") {
+      const wave = view.metrics.waveHeight;
+      lines.push(
+        metricText("waveHeight", wave),
+        wave.kind === "value" ? measuredAgoText(wave.observedAt, nowMs) : null,
+        view.metrics.wavePeriod.kind === "value"
+          ? metricText("wavePeriod", view.metrics.wavePeriod)
+          : null,
+      );
+    }
+    return joinMeta(lines);
+  }
+
+  return { rowMeta, rowBasis, rowDetail, listMeta, listNote };
 }
