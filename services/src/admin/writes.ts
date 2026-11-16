@@ -41,7 +41,13 @@ export type WriteTarget =
       // create: 아직 없어야 함(expectedVersion 0), update: 있어야 함
       readonly mode: "create" | "update";
     }
-  | { readonly kind: "inquiry"; readonly inquiryId: string };
+  | {
+      readonly kind: "inquiry";
+      readonly inquiryId: string;
+      // 읽을 때 본 처리 상태(모르는 값 포함). 있으면 DB 값이 그대로일 때만 씀(#521)
+      // version을 올리지 않고 상태만 손으로 고친 경우에도 이력의 '바꾸기 전 상태'가 틀리지 않게 함
+      readonly expectedStatus?: string;
+    };
 
 export interface VersionedWrite {
   readonly target: WriteTarget;
@@ -159,15 +165,19 @@ function resolveTarget(
     throw new Error("문의 ID는 UUID v4");
   }
   // TTL 삭제는 늦을 수 있으므로 기한이 지난 문의는 지워지기 전이라도 바꾸지 않음(구현 제안 I07)
+  const statusCheck = target.expectedStatus !== undefined;
   return {
     tableName: tables.inquiry,
     key: { pk: `INQUIRY#${target.inquiryId}` },
     label: targetLabel(target),
-    condition: `attribute_exists(pk) AND #kind = :inquiryKind AND #ttl > :nowSec AND ${versionCondition}`,
+    condition:
+      `attribute_exists(pk) AND #kind = :inquiryKind AND #ttl > :nowSec AND ${versionCondition}` +
+      (statusCheck ? " AND #status = :expectedStatus" : ""),
     values: {
       ...versionValues,
       ":inquiryKind": "inquiry",
       ":nowSec": Math.floor(now.getTime() / 1000),
+      ...(statusCheck ? { ":expectedStatus": target.expectedStatus } : {}),
     },
   };
 }
@@ -223,6 +233,9 @@ export async function versionedWrite(
   if (write.target.kind === "inquiry") {
     names["#kind"] = "kind";
     names["#ttl"] = "ttl";
+    if (write.target.expectedStatus !== undefined) {
+      names["#status"] = "inquiryStatus";
+    }
   }
   const values: Record<string, unknown> = {
     ":next": nextVersion,
