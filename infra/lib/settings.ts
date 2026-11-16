@@ -32,6 +32,9 @@ export const API_KEY_NAMES = ["data-go-kr", "kma-apihub"] as const;
 export type ApiKeyName = (typeof API_KEY_NAMES)[number];
 // GA4 Data API 서비스 계정 키 파라미터(#333 ADM-STATS). RoleBoundary(/baradun/v2/api-keys/*) 범위 안에 둠
 export const GA4_SERVICE_ACCOUNT_PARAM = `${API_KEY_PARAMETER_PREFIX}ga4-service-account`;
+// GA4 속성 ID(#333). 비밀값 아님(GA 관리 화면 주소의 p 뒤 숫자, 속성 '바라던바다'·측정 ID G-1JV7N1JSHP)
+// 스택 매개변수로 두면 값이 로컬 배포 기록에만 남아 저장소에서 보이지 않아 상수로 둠
+export const GA4_PROPERTY_ID = "547508796";
 
 // 운영 API가 GitHub 배포 정보를 읽는 자격증명(D27-5).
 export const SITE_DEPLOY_TOKEN_PARAMETER = "/baradun/v2/ops/github-read-token";
