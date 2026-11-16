@@ -32,11 +32,11 @@ describe("PhotoCover", () => {
     expect(out).toContain(`src="${photo.url}"`);
     expect(out).toContain('alt="경포해수욕장 참고 사진"');
     expect(out).toContain("참고 사진 · 지금 바다 모습 아님");
-    // '사진 한국관광공사 · 공공누리 제1유형': 출처 이름은 새 창 링크
+    // '사진 한국관광공사': 출처 이름은 새 창 링크. 공공누리 유형 이름은 사진 옆에 두지 않음(GH-541 · D29-10)
     expect(out).toMatch(
       /사진 <a href="[^"]+" target="_blank" rel="noopener noreferrer"[^>]*>한국관광공사/,
     );
-    expect(out).toContain(" · 공공누리 제1유형");
+    expect(out).not.toContain("공공누리");
     expect(out).not.toContain("사진 출처:");
     // 다크 밝기 공통 규칙 · 가운데 위쪽 고정
     expect(out).toContain("photo-dim");
@@ -47,14 +47,16 @@ describe("PhotoCover", () => {
     const out = html(
       <PhotoCover photo={{ ...photo, title: "경포해변" }} name="경포" />,
     );
-    expect(out).toContain("「경포해변」 · 공공누리 제1유형");
+    expect(out).toContain("「경포해변」");
+    expect(out).not.toContain("공공누리");
   });
 
   it("모르는 출처는 링크 없이 이름만", () => {
     const out = html(
       <PhotoCover photo={{ ...photo, source: "어느 기관" }} name="경포" />,
     );
-    expect(out).toContain("사진 어느 기관 · 공공누리 제1유형");
+    expect(out).toContain("사진 어느 기관");
+    expect(out).not.toContain("공공누리");
     expect(out).not.toContain("<a ");
   });
 });
