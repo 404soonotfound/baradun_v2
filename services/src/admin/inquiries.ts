@@ -1,11 +1,12 @@
 import { listAudit, parseAuditQuery } from "./audit";
-import { GetCommand, QueryCommand } from "@aws-sdk/lib-dynamodb";
+import { GetCommand, QueryCommand, ScanCommand } from "@aws-sdk/lib-dynamodb";
 import {
   INQUIRY_STATUSES,
   INQUIRY_STATUS_INDEX_NAME,
   isInquiryStatus,
   type InquiryStatus,
 } from "../inquiry/policy";
+import { safeLog } from "./http";
 import {
   matchesInquiryBeach,
   matchesInquiryMessage,
@@ -19,6 +20,9 @@ import type { Sender } from "./writes";
 // 운영자 화면 문의 (BRD-153, 결정 기록 D16-B4·D5·D6·D7, 화면 설계서 6장 ADM-INQ)
 // - 목록: 상태 + 접수 시각 GSI(요약만 projection). 접수 먼저, 같은 상태 안에서는 최근 접수 순
 //   상태를 고르지 않으면 4개 상태를 이 순서로 이어 붙여 한 목록으로 보여 줌(구현 제안 I08)
+// - 모르는 처리 상태(4종 밖)는 원래 값 그대로 내려 줌(아키텍처 18.3, #521). 상태 변경·필터는 4종만 받음
+//   GSI 파티션이 상태라 4종 Query로는 안 잡힘 → 첫 쪽에서 GSI를 4종 밖만 걸러 Scan 한 번으로 읽어
+//   '전체' 목록 맨 위(마지막 쪽까지 넘겨야 보이면 사실상 숨김)와 수(counts.unknown)에 함께 씀. 4개 탭 수에는 넣지 않음
 // - 보관 기한(ttl)이 지난 문의는 TTL로 지워지기 전이라도 목록·상세·수정에서 뺌(구현 제안 I07)
 // - GSI는 최종적 일관성이라 저장 직후 목록이 잠시 이전 값일 수 있음. 상세는 강한 일관성으로 읽음
 // - 보기 권한은 본문·메모·반려 이유를 받지 않음(민감 필드 제한, 캔버스 S1 권한표)
@@ -43,7 +47,8 @@ export interface InquirySummary {
   readonly messagePreview?: string;
   readonly messagePreviewUnavailableReason?: "restricted" | "empty";
   readonly receivedAt: string;
-  readonly status: InquiryStatus;
+  // 4종(InquiryStatus) 또는 모르는 원래 값(4종으로 바꾸거나 숨기지 않음, #521)
+  readonly status: string;
   readonly version: number;
   // 상태 기록 전에 들어온 문의(이전 도구가 '접수'로 채움) → 화면 '이전 문의·처리 이력 없음'
   readonly legacy: boolean;
@@ -62,6 +67,9 @@ export interface InquiryDetail extends InquirySummary {
 }
 
 export type InquiryCounts = Readonly<Record<InquiryStatus, number>> & {
+  // 4종 밖 상태 수(#521, 모르는 상태 목록 길이와 같음). 4개 탭 수에는 넣지 않고 '전체' 수와 목록 위 안내에만 씀
+  // null은 확인 못 함(Scan 실패)
+  readonly unknown?: number | null;
   readonly receivedLast7d?: number | null;
   readonly resolvedLast7d?: number | null;
   readonly oldestUnprocessedAt?: string | null;
@@ -72,6 +80,8 @@ export interface InquiryPage {
   readonly nextCursor: string | null;
   // 첫 쪽(cursor 없음)에만 실음: 상태 탭의 문의 수(보관 기한이 지난 문의 제외)
   readonly counts?: InquiryCounts;
+  // 첫 쪽에서 모르는 처리 상태 문의를 읽지 못함(#521). 목록·4종 수는 그대로이고 화면이 '확인 못 함'을 알림
+  readonly unknownStatusUnavailable?: true;
 }
 
 type Raw = Record<string, unknown>;
@@ -80,16 +90,28 @@ function alive(item: Raw, nowSec: number): boolean {
   return typeof item.ttl === "number" && item.ttl > nowSec;
 }
 
+// 로그에 남기는 모르는 상태 값 길이 상한(손으로 고친 값이 길어도 로그 한 줄을 키우지 않게)
+const UNKNOWN_STATUS_LOG_MAX = 40;
+
 // 저장된 모양이 틀리면 목록에서 조용히 빼지 않고 던짐(500) → 데이터 문제를 숨기지 않음
+// 상태는 빈 값이 아닌 글자면 받음. 4종 밖이면 원래 값 그대로 내려 주고 warn 로그를 남김
+// (500이 나지 않아 5xx 경보에 잡히지 않으므로 로그로 찾음. 새 경보는 두지 않음, #521)
 function toSummary(item: Raw): InquirySummary {
   if (
     typeof item.inquiryId !== "string" ||
     typeof item.inquiryType !== "string" ||
     typeof item.receivedAt !== "string" ||
-    !isInquiryStatus(item.inquiryStatus) ||
+    typeof item.inquiryStatus !== "string" ||
+    item.inquiryStatus === "" ||
     typeof item.version !== "number"
   ) {
     throw new Error("문의 항목 모양이 틀림");
+  }
+  if (!isInquiryStatus(item.inquiryStatus)) {
+    safeLog("warn", "ops_inquiry_unknown_status", {
+      inquiryId: item.inquiryId,
+      status: item.inquiryStatus.slice(0, UNKNOWN_STATUS_LOG_MAX),
+    });
   }
   return {
     inquiryId: item.inquiryId,
@@ -153,11 +175,88 @@ export interface ListQuery {
   readonly limit: number;
 }
 
+// 4종 밖 상태 문의(#521). 첫 쪽에서 한 번 읽어 '전체' 목록 맨 위와 수(unknown = items 길이)에 함께 씀
+// ok: false는 읽지 못함(권한·쓰로틀 등) → 목록·4종 수는 그대로 내려 주고 '확인 못 함'만 알림
+export type UnknownStatuses =
+  | { readonly ok: true; readonly items: readonly InquirySummary[] }
+  | { readonly ok: false };
+
+// 모르는 상태 Scan 시간 상한. 넘으면 '확인 못 함'으로 두고 목록·4종 수는 기다리지 않음(운영 홈 지표와 같은 1.5초)
+export const UNKNOWN_STATUS_TIMEOUT_MS = 1_500;
+
+// 상태 GSI를 4종 밖·보관 기한 안만 걸러 Scan으로 끝까지 읽음(#521). GSI에는 상태가 있는 문의만 들어 있음
+// - GSI 파티션이 상태라 4종 Query로는 안 잡힘. 걸러 읽기라 쪽마다 0건일 수 있어 LastEvaluatedKey가 있으면 이어 읽음
+// - Limit을 두지 않아 한 번에 1MB까지 읽음(작은 Limit으로 여러 번 부르면 왕복마다 읽기 용량이 듦)
+// - 읽기 실패·시간 초과는 던지지 않고 warn 로그 + ok: false. 저장된 모양이 틀린 문의는 지금처럼 던짐(데이터 문제를 숨기지 않음)
+export async function readUnknownStatuses(
+  client: Sender,
+  tableName: string,
+  now: Date,
+  timeoutMs = UNKNOWN_STATUS_TIMEOUT_MS,
+): Promise<UnknownStatuses> {
+  const nowSec = Math.floor(now.getTime() / 1000);
+  const raws: Raw[] = [];
+  const controller = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      controller.abort();
+      const error = new Error("모르는 상태 Scan 시간 초과");
+      error.name = "TimeoutError";
+      reject(error);
+    }, timeoutMs);
+  });
+  const scanAll = async () => {
+    let key: Record<string, unknown> | undefined;
+    do {
+      controller.signal.throwIfAborted();
+      const result = await client.send(
+        new ScanCommand({
+          TableName: tableName,
+          IndexName: INQUIRY_STATUS_INDEX_NAME,
+          FilterExpression:
+            `NOT (#s IN (${INQUIRY_STATUSES.map((_, i) => `:k${i}`).join(", ")}))` +
+            " AND #t > :now",
+          ExpressionAttributeNames: { "#s": "inquiryStatus", "#t": "ttl" },
+          ExpressionAttributeValues: {
+            ...Object.fromEntries(
+              INQUIRY_STATUSES.map((s, i) => [`:k${i}`, s]),
+            ),
+            ":now": nowSec,
+          },
+          ...(key ? { ExclusiveStartKey: key } : {}),
+        }),
+        { abortSignal: controller.signal },
+      );
+      raws.push(...((result.Items ?? []) as Raw[]));
+      key = result.LastEvaluatedKey;
+    } while (key);
+  };
+  try {
+    await Promise.race([scanAll(), deadline]);
+  } catch (error) {
+    safeLog("warn", "ops_inquiry_unknown_status_unavailable", {
+      error: error instanceof Error ? error.name : "unknown",
+    });
+    return { ok: false };
+  } finally {
+    clearTimeout(timer);
+  }
+  // 최근 접수 먼저(Scan은 접수 순서를 지키지 않음)
+  const items = raws
+    .filter((raw) => alive(raw, nowSec))
+    .map(toSummary)
+    .sort((a, b) => b.receivedAt.localeCompare(a.receivedAt));
+  return { ok: true, items };
+}
+
 // 상태 GSI의 요약 후보 8개 또는 본문이 필요한 후보 4개를 한 쪽에서 조회함.
 // 찾은 행이 적어도 다음 cursor에서 이어 읽음. GSI는 1 RCU이며 기존 목록과 공유함.
 const FILTER_PAGE_MAX = 8;
 const BODY_PAGE_MAX = 4;
 
+// unknown: 상태를 고르지 않은 첫 쪽(cursor 없음)이면 4종 밖 상태 문의 전부를 같은 조건으로 걸러 맨 앞에 붙이고(#521)
+// 이어서 '접수' 첫 묶음을 지금처럼 읽음(모르는 상태만 담은 빈 쪽을 따로 돌려주지 않음)
 export async function listFilteredInquiries(
   client: Sender,
   tableName: string,
@@ -167,10 +266,60 @@ export async function listFilteredInquiries(
   role: OperatorRole,
   now: Date,
   beachSearch = matchesInquiryBeach,
+  unknown?: UnknownStatuses,
 ): Promise<InquiryPage> {
   const status = query.status ?? query.cursor?.s ?? INQUIRY_STATUSES[0];
   const { from, to, q, preview } = filters;
   const readBody = role !== "viewer" && (q !== undefined || preview === true);
+  const nowSec = Math.floor(now.getTime() / 1000);
+  const items: InquirySummary[] = [];
+  // 거르기·본문 검색. 모르는 상태 문의는 보통 0건이라 개수를 묶지 않음(묶으면 검색에서 빠져 숨겨짐)
+  const pick = async (candidates: readonly InquirySummary[]) => {
+    for (const item of candidates) {
+      if (!matchesInquiryMetadata(item, filters)) continue;
+      const beachMatch =
+        q !== undefined &&
+        item.beachId !== undefined &&
+        beachSearch(item.beachId, q);
+      if (q !== undefined && !beachMatch && !readBody) continue;
+      if (readBody && (preview || !beachMatch)) {
+        const detail = await getInquiry(
+          client,
+          tableName,
+          item.inquiryId,
+          role,
+          now,
+        );
+        // GSI 반영 전 만료·상태 변경 또는 가림 처리 이전의 본문을 읽지 않음.
+        if (!detail || detail.status !== item.status) continue;
+        if (detail.restricted) {
+          if (q === undefined || beachMatch) {
+            items.push(
+              preview
+                ? { ...item, messagePreviewUnavailableReason: "restricted" }
+                : item,
+            );
+          }
+          continue;
+        }
+        const message = detail.message ?? "";
+        if (
+          q !== undefined &&
+          !beachMatch &&
+          !matchesInquiryMessage(message, q)
+        )
+          continue;
+        items.push(preview ? withInquiryPreview(item, message) : item);
+      } else {
+        items.push(
+          preview && role === "viewer"
+            ? { ...item, messagePreviewUnavailableReason: "restricted" }
+            : item,
+        );
+      }
+    }
+  };
+  if (!query.status && !query.cursor && unknown?.ok) await pick(unknown.items);
   const dateCondition =
     from && to ? " BETWEEN :from AND :to" : from ? " >= :from" : " <= :to";
   const result = await client.send(
@@ -193,49 +342,11 @@ export async function listFilteredInquiries(
       ...(query.cursor?.k ? { ExclusiveStartKey: query.cursor.k } : {}),
     }),
   );
-  const nowSec = Math.floor(now.getTime() / 1000);
-  const items: InquirySummary[] = [];
-  for (const raw of (result.Items ?? []) as Raw[]) {
-    if (!alive(raw, nowSec)) continue;
-    const item = toSummary(raw);
-    if (!matchesInquiryMetadata(item, filters)) continue;
-    const beachMatch =
-      q !== undefined &&
-      item.beachId !== undefined &&
-      beachSearch(item.beachId, q);
-    if (q !== undefined && !beachMatch && !readBody) continue;
-    if (readBody && (preview || !beachMatch)) {
-      const detail = await getInquiry(
-        client,
-        tableName,
-        item.inquiryId,
-        role,
-        now,
-      );
-      // GSI 반영 전 만료·상태 변경 또는 가림 처리 이전의 본문을 읽지 않음.
-      if (!detail || detail.status !== status) continue;
-      if (detail.restricted) {
-        if (q === undefined || beachMatch) {
-          items.push(
-            preview
-              ? { ...item, messagePreviewUnavailableReason: "restricted" }
-              : item,
-          );
-        }
-        continue;
-      }
-      const message = detail.message ?? "";
-      if (q !== undefined && !beachMatch && !matchesInquiryMessage(message, q))
-        continue;
-      items.push(preview ? withInquiryPreview(item, message) : item);
-    } else {
-      items.push(
-        preview && role === "viewer"
-          ? { ...item, messagePreviewUnavailableReason: "restricted" }
-          : item,
-      );
-    }
-  }
+  await pick(
+    ((result.Items ?? []) as Raw[])
+      .filter((raw) => alive(raw, nowSec))
+      .map(toSummary),
+  );
   const lastKey = result.LastEvaluatedKey as Record<string, string> | undefined;
   const nextStatus = query.status
     ? undefined
@@ -250,7 +361,23 @@ export async function listFilteredInquiries(
   };
 }
 
+// unknown: 상태를 고르지 않은 첫 쪽(cursor 없음)이면 맨 위에 모르는 상태 문의를 모두 놓음(#521)
+// 마지막 쪽까지 넘겨야 보이면 사실상 숨김이라 맨 위에 둠. limit에 세지 않음 → 첫 쪽은 '모르는 상태 전부 + 4종 한 쪽'
+// (4종 cursor는 지금 그대로라 빈 다음 쪽이 생기지 않음)
 export async function listInquiries(
+  client: Sender,
+  tableName: string,
+  query: ListQuery,
+  now: Date,
+  unknown?: UnknownStatuses,
+): Promise<InquiryPage> {
+  const page = await listKnownInquiries(client, tableName, query, now);
+  return !query.status && !query.cursor && unknown?.ok
+    ? { ...page, items: [...unknown.items, ...page.items] }
+    : page;
+}
+
+async function listKnownInquiries(
   client: Sender,
   tableName: string,
   query: ListQuery,

@@ -61,6 +61,7 @@ import {
   inquiryPatchFields,
   listFilteredInquiries,
   listInquiries,
+  readUnknownStatuses,
   parseInquiryPatch,
 } from "./inquiries";
 import { inquiryFilterScope, parseInquiryFilters } from "./inquiry-list";
@@ -201,6 +202,14 @@ async function listRoute(
       ids,
     );
   }
+  // 모르는 처리 상태 문의(#521): 첫 쪽에서 Scan 한 번으로 읽어 '전체' 목록 맨 위와 수에 함께 씀
+  // 필터 목록은 상태를 고르지 않았을 때만 필요(필터 목록에는 수가 없음). 읽지 못해도 목록은 그대로 내려 줌
+  const unknown =
+    !cursor && (!scope || !status)
+      ? await readUnknownStatuses(data.client, data.inquiryTable, now)
+      : undefined;
+  const unavailable =
+    unknown?.ok === false ? { unknownStatusUnavailable: true as const } : {};
   if (scope) {
     const page = await listFilteredInquiries(
       data.client,
@@ -211,22 +220,42 @@ async function listRoute(
       principal.role,
       now,
       data.inquiryBeachSearch,
+      unknown,
     );
-    return json(200, page, ids);
+    return json(200, { ...page, ...unavailable }, ids);
   }
-  const page = await listInquiries(data.client, data.inquiryTable, query, now);
+  const page = await listInquiries(
+    data.client,
+    data.inquiryTable,
+    query,
+    now,
+    unknown,
+  );
   // 상태 탭의 문의 수는 첫 쪽에만 실음(다음 쪽마다 다시 세지 않음). 상태 GSI 읽기 용량이 작아 목록 뒤에 차례로 읽음
-  const counts = cursor
-    ? undefined
-    : await countInquiries(data.client, data.inquiryTable, now);
-  if (!counts) return json(200, page, ids);
+  // 필터 없는 목록에서 unknown은 첫 쪽(cursor 없음)일 때만 있음 → 없으면 다음 쪽
+  // 4종 수는 모르는 상태 Scan과 따로 셈(Scan이 실패해도 4종 수는 그대로 내려 주려고)
+  if (!unknown) return json(200, page, ids);
+  const counts = await countInquiries(data.client, data.inquiryTable, now);
   const details = await inquiryCountDetails(
     data.client,
     data.inquiryTable,
     data.opsTable,
     now,
   );
-  return json(200, { ...page, counts: { ...counts, ...details } }, ids);
+  return json(
+    200,
+    {
+      ...page,
+      counts: {
+        ...counts,
+        // 모르는 상태 수 = 모르는 상태 목록 길이(같은 Scan). 읽지 못했으면 null(0으로 세지 않음)
+        unknown: unknown.ok ? unknown.items.length : null,
+        ...details,
+      },
+      ...unavailable,
+    },
+    ids,
+  );
 }
 
 // GET /ops/inquiries/{id}
@@ -296,7 +325,8 @@ async function patchRoute(
   }
   // 이전 도구를 돌리기 전 문의(상태·version 없음)는 메모만 바꿔도 목록(GSI)에 들어가게 상태를 '접수'로 함께 채움
   // 이미 상태가 있는 이전 문의(version 1 이상)는 상태를 건드리지 않음(메모만 바꿀 때 '확인 중'이 되돌아가지 않게)
-  if (current.legacy && current.version === 0) {
+  const beforeBackfill = current.legacy && current.version === 0;
+  if (beforeBackfill) {
     fields.legacy = true;
     fields.inquiryStatus ??= "received";
   }
@@ -304,7 +334,13 @@ async function patchRoute(
     data.client,
     { ops: data.opsTable, inquiry: data.inquiryTable },
     {
-      target: { kind: "inquiry", inquiryId: id },
+      // 읽은 상태(모르는 값 포함)가 DB에 그대로일 때만 씀(#521). 이전 도구 전 문의는 상태가 없을 수 있어
+      // 화면이 본 '접수'와 비교하지 않고 version 없음 조건만 씀
+      target: {
+        kind: "inquiry",
+        inquiryId: id,
+        ...(beforeBackfill ? {} : { expectedStatus: current.status }),
+      },
       expectedVersion: check.patch.version,
       set: fields,
       idempotencyKey: key,
