@@ -16,7 +16,7 @@ const favorites = createDeviceList(
 );
 
 // [3] 최근 본 해변 상한. 화면 설계서에 값이 없어 임시로 둔 제안값(결정 후 노션 반영)
-const RECENT_MAX = 20;
+export const RECENT_MAX = 20;
 const recent = createDeviceList(DEVICE_KEYS.recent, RECENT_MAX);
 
 // [4] 빌드 때(정적 HTML)는 기기 저장값을 모르니 빈 목록. 브라우저에서 바로 저장값으로 바뀜
@@ -35,6 +35,13 @@ export function useFavorites(): readonly string[] {
 export function toggleFavorite(id: string) {
   if (favorites.getSnapshot().includes(id)) favorites.remove(id);
   else favorites.add(id);
+}
+
+// 즐겨찾기에서 빼기(즐겨찾기 화면). 되돌리기용으로 빼기 전 순서를 복구하는 함수를 돌려줌
+export function removeFavorite(id: string): () => void {
+  const before = favorites.getSnapshot();
+  favorites.remove(id);
+  return () => favorites.replace(before);
 }
 
 // [7] 최근 본 목록 읽기

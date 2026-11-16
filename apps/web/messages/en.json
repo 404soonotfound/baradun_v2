@@ -760,21 +760,65 @@
     "tabRecent": "Recently viewed",
     "loading": "Loading beach information",
     "deviceNote": "Favorites and recently viewed beaches are saved only on this device",
+    "deviceNoteEmpty": "Favorites and recently viewed beaches are saved only on this device · Add them separately on other devices or browsers",
+    "deviceNoteSort": "Favorites and recently viewed beaches are saved only on this device · Sort by Status first (warnings and unconfirmed first) or Order added",
+    "deviceNoteRecent": "Up to {max} recently viewed beaches are saved only on this device · Tap an empty star to add to Favorites",
+    "tableOrderNote": "Columns go from status (verdict · zone · time) → measurements → measurement time · station",
+    "clearIsNotSafe": "No warnings doesn't mean it's safe",
+    "photoNote": "Photos are for reference only (not the sea right now) · Photo: <link>{source}</link> · {license} · Beaches without photos show an illustration",
+    "photoNoteNoPhoto": "Beaches without photos show an illustration",
+    "summary": {
+      "count": "{count, plural, one {# beach} other {# beaches}}",
+      "recentCount": "{count} recently viewed",
+      "recentOrder": "Most recent first"
+    },
+    "sort": {
+      "button": "<label>Sort: </label>{value}",
+      "label": "Sort order",
+      "status": "Status first",
+      "added": "Order added"
+    },
+    "table": {
+      "captionFavorites": "Favorite beaches status comparison table",
+      "captionRecent": "Recently viewed beaches status comparison table",
+      "beach": "Beach",
+      "status": "Status now",
+      "warning": "Warning zone · agency · time",
+      "waveHeight": "Wave height",
+      "wavePeriod": "Wave period",
+      "waterTemp": "Water temp",
+      "measurement": "Measured",
+      "favorite": "Favorite"
+    },
+    "warning": {
+      "checked": "{source} · checked {time}",
+      "checkedNoTime": "{source} · check time unknown",
+      "issued": "{source} · issued {time}"
+    },
+    "add": "Add {name} to favorites",
+    "remove": "Remove {name} from favorites",
+    "removed": "Removed from favorites",
+    "undo": "Undo",
     "empty": {
       "title": "No favorite beaches yet",
-      "body": "Tap Favorite on a beach page to collect it here",
-      "action": "Browse beaches"
+      "body": "Tap ☆ Favorite on a beach page to compare warnings, wave height, wave period, and water temperature for your go-to beaches in one table.",
+      "action": "Find beaches in Explore",
+      "recentAction": "View <b>{count}</b> recently viewed"
     },
     "recentEmpty": {
       "title": "No recently viewed beaches yet",
       "body": "Beaches you open will appear here in order"
     },
     "recent": {
-      "clear": "Clear all recently viewed",
+      "clear": "Clear all",
+      "clearLabel": "Clear all recently viewed",
       "cleared": "Cleared recently viewed",
       "remove": "Remove {name} from recently viewed",
       "removed": "Removed from recently viewed",
-      "undo": "Undo"
+      "undo": "Undo",
+      "viewedToday": "Viewed today {time}",
+      "viewedYesterday": "Viewed yesterday {time}",
+      "viewedOn": "Viewed {month}/{date} {time}"
     }
   },
   "settings": {
@@ -834,7 +878,7 @@
     },
     "reset": {
       "title": "Clear device data?",
-      "body": "This clears favorites, recently viewed beaches, recent searches, default region, chosen activity, explore view, explore sort, each tab's last position, first-run records and unsent feedback. This can't be undone.",
+      "body": "This clears favorites, recently viewed beaches, recent searches, default region, chosen activity, explore view, explore sort, each tab's last position, favorites sort, first-run records and unsent feedback. This can't be undone.",
       "keep": "Theme, motion, language and location settings, and the last sea information received, stay as they are.",
       "permission": "This site can't clear your browser's location permission. To change it, use your browser settings.",
       "confirm": "Clear",
