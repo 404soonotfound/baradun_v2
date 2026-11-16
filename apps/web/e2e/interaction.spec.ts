@@ -27,6 +27,20 @@ async function focusInsideOpenDialog(page: Page) {
   });
 }
 
+// ON-1이 inline open일 때 배경 main·nav·footer가 모두 inert(또는 inert 부모 아래)인지
+async function backgroundInertStates(page: Page) {
+  return page.evaluate(() => ({
+    main: Boolean(document.querySelector("main")?.closest("[inert]")),
+    navAll: [...document.querySelectorAll("nav")].every((el) =>
+      Boolean(el.closest("[inert]")),
+    ),
+    navAny: [...document.querySelectorAll("nav")].some((el) =>
+      Boolean(el.closest("[inert]")),
+    ),
+    footer: Boolean(document.querySelector("footer")?.closest("[inert]")),
+  }));
+}
+
 // 포커스가 대화상자 뒤 화면으로 새지 않는지. 기본 <dialog>는 마지막 요소 다음에 브라우저 주소창으로
 // 나갔다 돌아오므로(그동안 activeElement = body) body도 허용함
 async function focusNotBehindDialog(page: Page) {
@@ -125,7 +139,7 @@ test.describe("대화상자", () => {
       await page.goto("/");
       const confirm = page.getByRole("button", { name: "확인했어요" });
       await expect(confirm).toBeVisible();
-      expect(await focusInsideOpenDialog(page)).toBe(true);
+      await expect.poll(() => focusInsideOpenDialog(page)).toBe(true);
       await page.keyboard.press("Escape");
       await expect(confirm).toBeVisible();
       await expectNoA11yViolations(page);
@@ -184,6 +198,58 @@ test.describe("대화상자", () => {
         ),
       ).toBeVisible();
     });
+
+    for (const { url, navLabel, homeName, confirmName, homeUrl } of [
+      {
+        url: "/terms/",
+        navLabel: "주요 메뉴",
+        homeName: "홈",
+        confirmName: "확인했어요",
+        homeUrl: /\/$/,
+      },
+      {
+        url: "/en/guide/",
+        navLabel: "Main menu",
+        homeName: "Home",
+        confirmName: "I understand",
+        homeUrl: /\/en\/$/,
+      },
+    ]) {
+      test(`${url}로 들어온 첫 방문자가 홈으로 이동해도 ON-1이 보이고 확인 뒤 inert가 풀림`, async ({
+        page,
+      }) => {
+        await page.goto(url);
+        await expect(page.locator("html")).toHaveAttribute(
+          "data-onboarded",
+          "",
+        );
+        await expect(page.locator("dialog[open]")).toHaveCount(0);
+
+        await page
+          .getByRole("navigation", { name: navLabel })
+          .getByRole("link", { name: homeName, exact: true })
+          .click();
+        await expect(page).toHaveURL(homeUrl);
+
+        const confirm = page.getByRole("button", { name: confirmName });
+        await expect(confirm).toBeVisible();
+        await expect.poll(() => focusInsideOpenDialog(page)).toBe(true);
+        expect(await backgroundInertStates(page)).toMatchObject({
+          main: true,
+          navAll: true,
+          footer: true,
+        });
+
+        await confirm.click();
+        await expect
+          .poll(() => backgroundInertStates(page))
+          .toMatchObject({
+            main: false,
+            navAny: false,
+            footer: false,
+          });
+      });
+    }
   });
 
   test("기기 데이터 초기화 확인 창에 탐색 정렬·탭별 마지막 위치 안내가 보임", async ({
@@ -200,6 +266,55 @@ test.describe("대화상자", () => {
     });
     await expect(dialog).toBeVisible();
     await expect(dialog).toContainText("탐색 정렬, 탭별 마지막 위치");
+  });
+
+  test("고지를 확인한 기기에서 초기화하면 data-onboarded가 있어도 ON-1·결과 안내가 보이고 확인 뒤 inert가 풀림", async ({
+    page,
+  }, testInfo) => {
+    await page.goto("/settings/");
+    await expect(page.locator("html")).toHaveAttribute("data-onboarded", "");
+    await page.getByRole("button", { name: "기기 데이터 관리" }).click();
+    if (testInfo.project.name === "desktop") {
+      await page.getByRole("button", { name: "기기 데이터 초기화" }).click();
+    }
+    const resetDialog = page.getByRole("dialog", {
+      name: "기기 데이터를 지울까요?",
+    });
+    await expect(resetDialog).toBeVisible();
+    await resetDialog.getByRole("button", { name: "지우기" }).click();
+
+    const confirm = page.getByRole("button", { name: "확인했어요" });
+    await expect(confirm).toBeVisible();
+    await expect(page.getByText("기기 데이터를 지웠어요")).toBeVisible();
+    await expect.poll(() => focusInsideOpenDialog(page)).toBe(true);
+    expect(await backgroundInertStates(page)).toMatchObject({
+      main: true,
+      navAll: true,
+      footer: true,
+    });
+
+    await confirm.click();
+    await expect
+      .poll(() => backgroundInertStates(page))
+      .toMatchObject({
+        main: false,
+        navAny: false,
+        footer: false,
+      });
+
+    // 이어서 열린 ON-2(위치 안내)도 닫아 스크롤 잠금이 풀리는지 확인
+    const pick = page.getByRole("button", { name: "지역 직접 고르기" });
+    if (await pick.isVisible()) {
+      await pick.click();
+      await page
+        .getByRole("dialog", { name: "지역 고르기" })
+        .getByRole("button", { name: /전국/ })
+        .click();
+    }
+    await expect(page.locator("dialog[open]")).toHaveCount(0);
+    await expect
+      .poll(() => page.evaluate(() => document.documentElement.style.overflow))
+      .toBe("");
   });
 });
 
