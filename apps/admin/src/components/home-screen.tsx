@@ -712,7 +712,9 @@ function CollectionBlock({
         <p className={FOOT}>
           {/* 판단 출처의 가장 이른 다음 수집(보드 '다음 수집 14:48이에요'). 없으면 고정 안내 */}
           {next?.state === "at"
-            ? fill(h.collectionNext, { time: kstClock(next.at, view.generatedAt) })
+            ? fill(h.collectionNext, {
+                time: kstClock(next.at, view.generatedAt),
+              })
             : next?.state === "unknown"
               ? h.collectionNextUnknown
               : h.collectionFoot}{" "}
@@ -1060,7 +1062,10 @@ function UndeterminedTable({
           {/* 모바일: 표 대신 카드(값은 빼지 않음, 화면 설계서 6장 모바일 규칙) */}
           <ul className="mt-3 flex flex-col divide-y divide-border-default rounded-admin-box border border-border-default bg-bg-surface md:hidden">
             {shown.map((row) => (
-              <li key={row.id} className="flex flex-col items-start gap-1 px-4 py-3">
+              <li
+                key={row.id}
+                className="flex flex-col items-start gap-1 px-4 py-3"
+              >
                 <p className="flex flex-wrap items-baseline gap-x-2">
                   <span className={CELL_NAME}>{rowName(row)}</span>
                   {row.region && (
@@ -1368,12 +1373,15 @@ function Usage({
   const rangeText =
     trendRangeText(trends, USAGE_RANGE, t.stats.subtitleSeparator) ??
     h.usageRange;
+  // 방문 기록 없음(GA4 행 없음)은 실패 문구와 나눔. 0명으로 그리지 않음
   const live =
     data && data.realtime.status === "ok" && data.realtime.activeUsers !== null
       ? fill(h.usageLive, {
           count: data.realtime.activeUsers.toLocaleString("ko-KR"),
         })
-      : h.usageLiveUnknown;
+      : data?.realtime.status === "ok" && data.realtime.noActivity === true
+        ? h.usageLiveNone
+        : h.usageLiveUnknown;
   return (
     <section
       aria-labelledby="home-usage"
