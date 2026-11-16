@@ -60,6 +60,8 @@ export function WaveFigure({
   const period = rawPeriod !== null && rawPeriod > 0 ? rawPeriod : null;
   const reduce = useReducedMotion();
   const [paused, setPaused] = useState(false);
+  const [visible, setVisible] = useState(true);
+  const figureRef = useRef<HTMLElement>(null);
   const front = useRef<SVGPathElement>(null);
   const frontArea = useRef<SVGPathElement>(null);
   const backs = useRef<(SVGPathElement | null)[]>([]);
@@ -67,10 +69,25 @@ export function WaveFigure({
   const clipId = useId();
   const fillId = useId();
 
+  const hasHeight = height !== null;
+
+  // 화면 밖에 있을 때는 60fps SVG rAF 루프를 멈춰 모바일 CPU·입력 지연을 줄임 (BRD-39 CWV)
+  useEffect(() => {
+    const el = figureRef.current;
+    if (!el || typeof IntersectionObserver === "undefined") return;
+    const observer = new IntersectionObserver((entries) => {
+      const entry = entries.at(-1);
+      if (entry) setVisible(entry.isIntersecting);
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [hasHeight]);
+
   const shown = height === null ? 0 : Math.min(height, TOP_M);
   const amp = (shown * PX_PER_M) / 2;
   const mid = ZERO_Y - amp;
-  const moving = height !== null && period !== null && !reduce && !paused;
+  const moving =
+    height !== null && period !== null && !reduce && !paused && visible;
 
   // 한 장면 그리기. t = 경과 초
   useEffect(() => {
@@ -135,7 +152,7 @@ export function WaveFigure({
 
   return (
     // 모바일은 그림과 설명 사이 12(카드 간격), PC는 6(Figma 183:838)
-    <figure className="flex flex-col gap-3 lg:gap-1.5">
+    <figure ref={figureRef} className="flex flex-col gap-3 lg:gap-1.5">
       {/* Figma wf: 옅은 면 · 반경 14 · 안쪽 위 8 · 옆 6 · 아래 4 */}
       <div className="relative w-full rounded-[14px] bg-bg-subtle px-1.5 pt-2 pb-1">
         <svg
