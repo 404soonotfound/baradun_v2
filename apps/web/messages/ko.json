@@ -612,8 +612,6 @@
       "status": "상태별",
       "near": "가까운 순"
     },
-    "count": "전체 {count}곳",
-    "updatedAt": "{time} 업데이트",
     "loading": "해변 정보를 불러오고 있어요",
     "group": {
       "clear": "특보 없음 {count}곳",
@@ -622,7 +620,8 @@
       "nearest": "가장 가까운 곳 {km}km"
     },
     "row": {
-      "clearScopeNoTime": "{zones} · 기상청 · 확인 시각 모름"
+      "clearScopeNoTime": "{zones} · 기상청 · 확인 시각 모름",
+      "activities": "확인된 활동 {list}"
     },
     "noClear": {
       "title": "지금 '특보 없음'으로 확인된 해변이 없어요",
@@ -641,6 +640,12 @@
       "label": "목록·지도 보기",
       "list": "목록",
       "map": "지도"
+    },
+    "regionLabel": "지역",
+    "distanceFromMe": "거리는 내 위치 기준",
+    "summary": {
+      "count": "<wide>전체 </wide>{count}곳",
+      "updated": "{time} 업데이트"
     }
   },
   "search": {
