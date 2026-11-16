@@ -13,15 +13,17 @@ import { cn } from "@/lib/cn";
 // 쓰는 법: 크기·모서리는 className으로 줌. 그림은 칸을 채우고 넘치는 쪽을 가운데 기준으로 자름(slice)
 //   넓은 카드   <BeachIllustration className="h-[132px] w-full rounded-[12px]" /> + '사진 없음 · 그림' 표시(PhotoFigure가 붙임)
 //   작은 썸네일 <BeachIllustration className="size-12 shrink-0 rounded-[10px]" /> (48~56px, 표시 문구 없이 그림만)
-// 접근 가능한 이름은 '사진 없는 해변 그림'
+// 접근 가능한 이름은 '사진 없는 해변 그림'. 옆 글자가 같은 뜻을 이미 알리는 곳(목록 줄 썸네일 등)은 decorative로 이름을 뺌
 export function BeachIllustration({
   className,
+  decorative = false,
 }: {
   className?: string | undefined;
+  decorative?: boolean;
 }) {
   const t = useTranslations("photo");
-  // 한 화면에 여러 장이 있어도 그라데이션 id가 겹치지 않게 함(url(#…)에 쓸 수 있는 글자만 남김)
-  const id = useId().replace(/[^a-zA-Z0-9_-]/g, "");
+  // 한 화면에 여러 장이 있어도 그라데이션 id가 겹치지 않게 함(wave-figure와 같은 방식)
+  const id = useId();
   const sky = `illust-sky-${id}`;
   const sea = `illust-sea-${id}`;
   return (
@@ -29,8 +31,9 @@ export function BeachIllustration({
       viewBox="0 0 320 132"
       preserveAspectRatio="xMidYMid slice"
       className={cn("block", className)}
-      role="img"
-      aria-label={t("illustration")}
+      {...(decorative
+        ? { "aria-hidden": true }
+        : { role: "img", "aria-label": t("illustration") })}
     >
       <defs>
         <linearGradient id={sky} x1="0" y1="0" x2="0" y2="1">

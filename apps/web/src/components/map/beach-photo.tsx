@@ -84,11 +84,9 @@ export function PhotoFigure({
     return (
       <figure className="relative">
         <BeachIllustration className={cn("w-full rounded-[12px]", className)} />
-        {/* 사진의 '참고 사진' 표시와 같은 자리·모양(시안 S_EXPPCN). 그림의 이름('사진 없는 해변 그림')과 같은 뜻이라 화면 읽기에는 한 번만 */}
-        <figcaption
-          aria-hidden="true"
-          className="absolute top-2 left-2 flex h-6 items-center rounded-full bg-illust-label-bg px-[9px] text-caption font-bold text-illust-label-fg"
-        >
+        {/* 사진의 '참고 사진' 표시와 같은 자리·모양(시안 S_EXPPCN)
+            보이는 글자라 링크 안에서도 접근 가능한 이름에 그대로 둠(WCAG 2.5.3, 사진의 alt + 안내와 같은 구조) */}
+        <figcaption className="absolute top-2 left-2 flex h-6 items-center rounded-full bg-illust-label-bg px-[9px] text-caption font-bold text-illust-label-fg">
           {t("noneLabel")}
         </figcaption>
       </figure>
