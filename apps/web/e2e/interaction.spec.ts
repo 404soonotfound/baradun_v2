@@ -603,8 +603,13 @@ test.describe("PC·모바일 같은 기능", () => {
       .first()
       .click();
     await expect(page).toHaveURL(/\/search\/$/);
+    // 검색 칸은 입력 중 제안이 있는 콤보박스(GH-531)
     await expect(
-      page.getByRole("searchbox").or(page.getByRole("textbox")).first(),
+      page
+        .getByRole("combobox")
+        .or(page.getByRole("searchbox"))
+        .or(page.getByRole("textbox"))
+        .first(),
     ).toBeVisible();
   });
 

@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 
 import {
   matchRange,
+  matchRegions,
   normalize,
   searchBeaches,
+  withParticle,
   withTopicParticle,
 } from "@/lib/search";
 
@@ -122,5 +124,56 @@ describe("matchRange · withTopicParticle · normalize", () => {
   it("공백 제거·소문자·한글 조합 통일", () => {
     expect(normalize(" A b\tC ")).toBe("abc");
     expect(normalize("가")).toBe("가");
+  });
+});
+
+// 검색 v5(GH-531): 결과 없음·결과 머리 문구의 조사, 입력 중 제안의 지역 줄
+describe("withParticle", () => {
+  it("으로/로: ㄹ 받침과 받침 없음은 '로'", () => {
+    expect(withParticle("강원 양양군", "direction")).toBe("강원 양양군으로");
+    expect(withParticle("강원 강릉시", "direction")).toBe("강원 강릉시로");
+    expect(withParticle("제주 서귀포시", "direction")).toBe("제주 서귀포시로");
+    expect(withParticle("강원 고성군(고성)", "direction")).toBe(
+      "강원 고성군(고성)으로",
+    );
+  });
+  it("과/와", () => {
+    expect(withParticle("강원 양양군", "with")).toBe("강원 양양군과");
+    expect(withParticle("강원 강릉시", "with")).toBe("강원 강릉시와");
+  });
+  it("은/는(주제)은 지금 규칙 그대로", () => {
+    expect(withParticle("경포대", "topic")).toBe(withTopicParticle("경포대"));
+    expect(withParticle("송정해변", "topic")).toBe("송정해변은");
+  });
+});
+
+describe("matchRegions", () => {
+  const r = (sido: string, sigungu: string, en: string) => ({
+    sido: { key: sido, label: sido },
+    sigungu: { key: sigungu, label: sigungu },
+    region: `${sido} ${sigungu}`,
+    regionNames: [`${sido} ${sigungu}`, en],
+  });
+  const YANGYANG_1 = r("강원", "양양군", "Gangwon Yangyang");
+  const YANGYANG_2 = r("강원", "양양군", "Gangwon Yangyang");
+  const GANGNEUNG = r("강원", "강릉시", "Gangwon Gangneung");
+  it("검색어가 지역 이름에 든 시·군을 해변이 많은 순으로", () => {
+    const found = matchRegions(
+      [GANGNEUNG, YANGYANG_1, YANGYANG_2],
+      "양양",
+      "ko",
+    );
+    expect(found).toHaveLength(1);
+    expect(found[0]?.label).toBe("강원 양양군");
+    expect(found[0]?.beaches).toHaveLength(2);
+    expect(
+      matchRegions([GANGNEUNG, YANGYANG_1], "강원", "ko").map(
+        (item) => item.label,
+      ),
+    ).toEqual(["강원 강릉시", "강원 양양군"]);
+  });
+  it("영어 지역 이름으로도, 빈 검색어는 없음", () => {
+    expect(matchRegions([YANGYANG_1], "yangyang", "en")).toHaveLength(1);
+    expect(matchRegions([YANGYANG_1], " ", "ko")).toEqual([]);
   });
 });
