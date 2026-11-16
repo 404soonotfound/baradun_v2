@@ -47,11 +47,16 @@ describe("이용 통계 기간·경로·숫자 파싱 (#333)", () => {
 
 describe("GA4 응답 및 metadata 제한 파싱 (E8)", () => {
   it("실시간·기간 리포트에서 빈 칸은 null로 두고, metadata 제한 플래그만 정확히 추출함", () => {
+    // 행이 없으면 방문 기록 없음(noActivity), 행은 있는데 값이 비면 결측(null만)
     expect(parseRealtimeReport({})).toEqual({
       status: "ok",
       activeUsers: null,
       pageViews: null,
+      noActivity: true,
     });
+    expect(
+      parseRealtimeReport({ rows: [{ metricValues: [{ value: "" }] }] }),
+    ).toEqual({ status: "ok", activeUsers: null, pageViews: null });
 
     const summary = parseSummaryReport({
       rows: [{ metricValues: [{ value: "120" }, { value: "" }] }],
@@ -101,17 +106,34 @@ describe("GA4 응답 및 metadata 제한 파싱 (E8)", () => {
     });
 
     const devices = parseDevicesReport({
-      rows: [{ dimensionValues: [{ value: "mobile" }], metricValues: [{ value: "90" }] }],
+      rows: [
+        {
+          dimensionValues: [{ value: "mobile" }],
+          metricValues: [{ value: "90" }],
+        },
+      ],
       metadata: { dataLossFromOtherRow: true },
     });
     expect(devices.metadata.otherRowLoss).toBe(true);
 
     const languages = parseLanguagesReport({
       rows: [
-        { dimensionValues: [{ value: "ko-kr" }], metricValues: [{ value: "100" }] },
-        { dimensionValues: [{ value: "en-us" }], metricValues: [{ value: "20" }] },
-        { dimensionValues: [{ value: "en-gb" }], metricValues: [{ value: "5" }] },
-        { dimensionValues: [{ value: "(not set)" }], metricValues: [{ value: "3" }] },
+        {
+          dimensionValues: [{ value: "ko-kr" }],
+          metricValues: [{ value: "100" }],
+        },
+        {
+          dimensionValues: [{ value: "en-us" }],
+          metricValues: [{ value: "20" }],
+        },
+        {
+          dimensionValues: [{ value: "en-gb" }],
+          metricValues: [{ value: "5" }],
+        },
+        {
+          dimensionValues: [{ value: "(not set)" }],
+          metricValues: [{ value: "3" }],
+        },
       ],
     });
     expect(languages.rows).toEqual([
@@ -204,9 +226,9 @@ describe("캐시 및 실패 경로", () => {
   });
 
   it("해변·언어 11번째 이후 변형 행도 합산·정렬한 뒤 상위 10개만 남기고, 단계별 시간 예산 합은 7초 이하임", () => {
-    expect(SSM_TIMEOUT_MS + TOKEN_TIMEOUT_MS + GA4_TIMEOUT_MS).toBeLessThanOrEqual(
-      7_000,
-    );
+    expect(
+      SSM_TIMEOUT_MS + TOKEN_TIMEOUT_MS + GA4_TIMEOUT_MS,
+    ).toBeLessThanOrEqual(7_000);
 
     const beachRows = Array.from({ length: 10 }, (_, i) => ({
       dimensionValues: [{ value: `/spots/b${i + 1}` }],
@@ -239,9 +261,9 @@ describe("캐시 및 실패 경로", () => {
 
   it("STATS_EVENTS는 D22-1·D22-2에 따라 수집 중 11종과 미연동 스키마 4종을 구분한다", async () => {
     const { STATS_EVENTS } = await import("./stats");
-    const collecting = STATS_EVENTS.filter((e) => e.status === "collecting").map(
-      (e) => e.name,
-    );
+    const collecting = STATS_EVENTS.filter(
+      (e) => e.status === "collecting",
+    ).map((e) => e.name);
     const notCollecting = STATS_EVENTS.filter(
       (e) => e.status === "not_collecting",
     ).map((e) => e.name);
