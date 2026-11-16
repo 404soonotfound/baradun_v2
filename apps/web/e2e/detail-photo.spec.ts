@@ -90,5 +90,23 @@ test.describe("상세 사진 커버", () => {
       await expect(cover(page)).toHaveCount(0);
       await expect(page.getByText("특보 없음").first()).toBeVisible();
     });
+
+    // 사진 응답 기본값이 '받음'이라 받기 실패 화면은 여기서 봄: 공유 시트 미리보기는 파도 아이콘 + 안내(SHARE, GH-527)
+    test("공유 시트 미리보기는 사진 대신 안내", async ({ page }) => {
+      await page.goto(`/spots/${slugOf(CLEAR_ID)}/`);
+      await page.getByRole("button", { name: "공유" }).click();
+      const sheet = page.getByRole("dialog", { name: "공유하기" });
+      await expect(
+        sheet.getByText("사진이 없어 일러스트로 보여드려요"),
+      ).toBeVisible();
+      await expect(sheet.getByRole("img")).toHaveCount(0);
+      // 시트가 다 열린 뒤 검사(열리는 동안은 반투명이라 대비가 낮게 잡힘)
+      await sheet.evaluate((el) =>
+        Promise.all(
+          el.getAnimations({ subtree: true }).map((item) => item.finished),
+        ),
+      );
+      await expectNoA11yViolations(page);
+    });
   });
 });
