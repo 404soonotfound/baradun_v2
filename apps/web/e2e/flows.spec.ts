@@ -1,7 +1,7 @@
 import type { Page } from "@playwright/test";
 
 import { INQUIRY_CONTACT_ENABLED } from "../src/lib/inquiry/form";
-import { expect, test } from "./fixtures";
+import { expect, expectNoA11yViolations, test } from "./fixtures";
 
 // 지도 실패 안내·데이터 문의 흐름 (BRD-39 · 리뷰 지적: 실패 경로 E2E 공백)
 // 다른 출처(지도 타일·글꼴)는 fixtures가 막으므로 지도는 늘 실패 경로로 감
@@ -45,7 +45,14 @@ test.describe("지도 실패", () => {
   });
 });
 
-// 유형 칩: 라디오는 보이지 않게 두고 칩(label)을 누름
+// 내용 칸: 칸 제목이 고른 유형에 맞게 바뀜(GH-532 · D29-9). 고르기 전 '내용'
+const MESSAGE_LABEL =
+  /^(내용|무엇이 달랐나요\?|어떤 해변을 추가할까요\?|어떤 판단이 궁금한가요\?|어떤 정보를 더 보고 싶나요\?)$/;
+function messageBox(page: Page) {
+  return page.getByRole("textbox", { name: MESSAGE_LABEL });
+}
+
+// 유형 카드: 라디오는 보이지 않게 두고 카드(label)를 누름
 async function pickKind(page: Page, name: string) {
   await page.locator("label").filter({ hasText: name }).click();
   await expect(page.getByRole("radio", { name })).toBeChecked();
@@ -81,7 +88,7 @@ test.describe("데이터 문의", () => {
     });
     await page.goto(INQUIRY);
     await pickKind(page, "정보가 실제와 달라요");
-    await page.getByRole("textbox", { name: /내용/ }).fill("파고가 달라요");
+    await messageBox(page).fill("파고가 달라요");
     await page.getByRole("textbox", { name: /이메일/ }).fill("name@example");
     await page.getByRole("button", { name: "보내기" }).click();
     await expect(page.getByText(/이메일 형식이 맞지 않아요/)).toBeVisible();
@@ -104,7 +111,7 @@ test.describe("데이터 문의", () => {
     await page.goto(INQUIRY);
     await pickKind(page, "판단 기준이 궁금해요");
     await page
-      .getByRole("textbox", { name: /내용/ })
+      .getByRole("textbox", { name: MESSAGE_LABEL })
       .fill("파주기 기준이 궁금해요");
     if (INQUIRY_CONTACT_ENABLED) {
       await page
@@ -125,9 +132,7 @@ test.describe("데이터 문의", () => {
         "이 화면에서 내용을 바꾸지 않고 '다시 보내기'를 누르면 같은 문의가 두 번 접수되지 않아요.",
       ),
     ).toBeVisible();
-    await expect(page.getByRole("textbox", { name: /내용/ })).toHaveValue(
-      "파주기 기준이 궁금해요",
-    );
+    await expect(messageBox(page)).toHaveValue("파주기 기준이 궁금해요");
     await expect(
       page.getByRole("button", { name: "다시 보내기" }),
     ).toBeVisible();
@@ -176,7 +181,7 @@ test.describe("데이터 문의", () => {
     ).toBeVisible();
 
     await pickKind(page, "정보가 실제와 달라요");
-    await page.getByRole("textbox", { name: /내용/ }).fill("파고가 달라요");
+    await messageBox(page).fill("파고가 달라요");
     await page.getByRole("button", { name: "보내기" }).click();
     await expect(
       page.getByRole("heading", { name: "접수됐어요" }),
@@ -207,13 +212,20 @@ test.describe("데이터 문의", () => {
       });
     });
     await page.goto(`${INQUIRY}?beach=gangmun`);
-    // '해변 · 활동' 칸: "해변 이름 · 활동"(Figma 179:371)
+    // '문의할 해변' 카드(GH-532 · D29-9): 해변명 · 지역 · 확인된 활동 + 함께 보내는 활동 안내
+    const context = page.getByRole("region", { name: "문의할 해변" });
     await expect(
-      page.getByText("강문해수욕장 · 수영", { exact: true }),
+      context.getByText("강문해수욕장", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      context.getByText(/^강원 강릉시 · 확인된 활동 /),
+    ).toBeVisible();
+    await expect(
+      context.getByText(/고른 활동\(수영\)도 함께 보내요/),
     ).toBeVisible();
     await pickKind(page, "해변을 추가해 주세요");
     await page
-      .getByRole("textbox", { name: /내용/ })
+      .getByRole("textbox", { name: MESSAGE_LABEL })
       .fill("근처 해변도 넣어 주세요");
     await page.getByRole("button", { name: "보내기" }).click();
     await expect(
@@ -250,9 +262,11 @@ test.describe("데이터 문의", () => {
     // 강문해변은 수영만 → 서핑을 골라 둬도 활동은 보내지 않고 화면에도 쓰지 않음
     await page.goto(`${INQUIRY}?beach=gangmun`);
     await expect(page.getByText("강문해수욕장", { exact: true })).toBeVisible();
-    await expect(page.getByText(/^강문해수욕장 · /)).toHaveCount(0);
+    await expect(page.getByText(/고른 활동\(.+\)도 함께 보내요/)).toHaveCount(
+      0,
+    );
     await pickKind(page, "정보가 실제와 달라요");
-    await page.getByRole("textbox", { name: /내용/ }).fill("파고가 달라요");
+    await messageBox(page).fill("파고가 달라요");
     await page.getByRole("button", { name: "보내기" }).click();
     await expect(
       page.getByRole("heading", { name: "접수됐어요" }),
@@ -263,10 +277,10 @@ test.describe("데이터 문의", () => {
     // 경포해변은 서핑 지원 → 서핑을 함께 보냄
     await page.goto(`${INQUIRY}?beach=gyeongpo`);
     await expect(
-      page.getByText("경포해수욕장 · 서핑", { exact: true }),
+      page.getByText(/고른 활동\(서핑\)도 함께 보내요/),
     ).toBeVisible();
     await pickKind(page, "정보가 실제와 달라요");
-    await page.getByRole("textbox", { name: /내용/ }).fill("파고가 달라요");
+    await messageBox(page).fill("파고가 달라요");
     await page.getByRole("button", { name: "보내기" }).click();
     await expect(
       page.getByRole("heading", { name: "접수됐어요" }),
@@ -289,9 +303,9 @@ test.describe("데이터 문의", () => {
       });
     });
     await page.goto(`${INQUIRY}?beach=gangmun`);
-    await page.getByRole("button", { name: "해변·활동 빼기" }).click();
+    await page.getByRole("button", { name: "문의할 해변 빼기" }).click();
     await pickKind(page, "정보가 실제와 달라요");
-    await page.getByRole("textbox", { name: /내용/ }).fill("파고가 달라요");
+    await messageBox(page).fill("파고가 달라요");
     await page.getByRole("button", { name: "보내기" }).click();
     await expect(
       page.getByRole("heading", { name: "접수됐어요" }),
@@ -314,7 +328,7 @@ test.describe("데이터 문의", () => {
     );
     await page.goto(INQUIRY);
     await pickKind(page, "정보가 실제와 달라요");
-    await page.getByRole("textbox", { name: /내용/ }).fill("파고가 달라요");
+    await messageBox(page).fill("파고가 달라요");
     await expect
       .poll(() =>
         page.evaluate(() => localStorage.getItem("baradun:inquiry-draft")),
@@ -351,7 +365,7 @@ test.describe("데이터 문의", () => {
     });
     await page.goto(INQUIRY);
     await pickKind(page, "정보가 실제와 달라요");
-    await page.getByRole("textbox", { name: /내용/ }).fill("파고가 달라요");
+    await messageBox(page).fill("파고가 달라요");
     await page.getByRole("button", { name: "보내기" }).click();
     await expect(page.getByText("서버 응답이 오지 않았어요.")).toBeVisible();
     await page.getByRole("button", { name: "다시 보내기" }).click();
@@ -399,7 +413,7 @@ test.describe("데이터 문의", () => {
     });
     await page.goto(INQUIRY);
     await pickKind(page, "정보가 실제와 달라요");
-    await page.getByRole("textbox", { name: /내용/ }).fill("파고가 달라요");
+    await messageBox(page).fill("파고가 달라요");
     // 1×1 PNG. 기기에서 JPEG로 다시 그려 보냄
     await page.locator('input[type="file"]').setInputFiles({
       name: "shot.png",
@@ -427,7 +441,7 @@ test.describe("데이터 문의", () => {
       title: "해변에서 들어오면 '해변으로 돌아가기' → 그 해변",
       path: `${INQUIRY}?beach=gangmun`,
       kind: "정보가 실제와 달라요",
-      message: /내용/,
+      message: /^무엇이 달랐나요\?$/,
       send: "보내기",
       done: "접수됐어요",
       back: "해변으로 돌아가기",
@@ -437,7 +451,7 @@ test.describe("데이터 문의", () => {
       title: "모르는 해변 id면 '설정으로'",
       path: `${INQUIRY}?beach=no-such-beach`,
       kind: "정보가 실제와 달라요",
-      message: /내용/,
+      message: /^무엇이 달랐나요\?$/,
       send: "보내기",
       done: "접수됐어요",
       back: "설정으로",
@@ -447,7 +461,7 @@ test.describe("데이터 문의", () => {
       title: "빈 값이면 '설정으로'",
       path: `${INQUIRY}?beach=`,
       kind: "정보가 실제와 달라요",
-      message: /내용/,
+      message: /^무엇이 달랐나요\?$/,
       send: "보내기",
       done: "접수됐어요",
       back: "설정으로",
@@ -457,7 +471,7 @@ test.describe("데이터 문의", () => {
       title: "영어 화면은 영어 해변 주소로",
       path: "/en/settings/inquiry/?beach=gangmun",
       kind: "The info doesn't match reality",
-      message: /Message/,
+      message: /^What was different\?$/,
       send: "Send",
       done: "Received",
       back: "Back to the beach",
@@ -492,4 +506,100 @@ test.describe("데이터 문의", () => {
       await expect(page).toHaveURL(new RegExp(`${item.href}$`));
     });
   }
+});
+
+// 데이터 문의 유형 카드·유형별 칸 제목 (GH-532 · 결정 기록 29장 D29-9)
+test.describe("데이터 문의 유형 카드", () => {
+  const INQUIRY = "/settings/inquiry/";
+
+  test("카드 4개는 라디오 묶음: 화살표 키로 고르고, 이름 + 설명이 접근 가능한 이름, 칸 제목이 유형에 맞게 바뀜", async ({
+    page,
+  }) => {
+    await page.goto(INQUIRY);
+    await expect(
+      page.getByText(
+        "앱 정보가 현장과 다르거나 바라는 점이 있으면 알려 주세요. 운영자가 확인하고 정보에 반영해요.",
+      ),
+    ).toBeVisible();
+    const group = page.getByRole("group", { name: "무엇을 알려 주시겠어요?" });
+    const radios = group.getByRole("radio");
+    await expect(radios).toHaveCount(4);
+    // 접근 가능한 이름 = 이름 + 설명 한 줄
+    await expect(
+      group.getByRole("radio", {
+        name: "정보가 실제와 달라요 특보·파고 등 앱 값이 현장과 다를 때",
+      }),
+    ).toBeVisible();
+    await expect(page.getByRole("textbox", { name: "내용" })).toBeVisible();
+
+    await pickKind(page, "정보가 실제와 달라요");
+    await expect(
+      page.getByRole("textbox", { name: "무엇이 달랐나요?" }),
+    ).toBeVisible();
+    // 화살표 키: 같은 이름의 라디오 사이를 옮겨 고름
+    await page.keyboard.press("ArrowRight");
+    await expect(
+      group.getByRole("radio", { name: /^해변을 추가해 주세요/ }),
+    ).toBeChecked();
+    await expect(
+      page.getByRole("textbox", { name: "어떤 해변을 추가할까요?" }),
+    ).toBeVisible();
+    await page.keyboard.press("ArrowRight");
+    await expect(
+      page.getByRole("textbox", { name: "어떤 판단이 궁금한가요?" }),
+    ).toBeVisible();
+    await page.keyboard.press("ArrowRight");
+    await expect(
+      page.getByRole("textbox", { name: "어떤 정보를 더 보고 싶나요?" }),
+    ).toBeVisible();
+    await expectNoA11yViolations(page);
+  });
+
+  test("임시 저장: 고른 유형·내용은 다시 열어도 남고, 칸 제목도 그 유형으로", async ({
+    page,
+  }) => {
+    await page.goto(INQUIRY);
+    await pickKind(page, "판단 기준이 궁금해요");
+    await messageBox(page).fill("왜 판단불가인지 궁금해요");
+    await page.reload();
+    await expect(
+      page.getByRole("radio", { name: /^판단 기준이 궁금해요/ }),
+    ).toBeChecked();
+    await expect(
+      page.getByRole("textbox", { name: "어떤 판단이 궁금한가요?" }),
+    ).toHaveValue("왜 판단불가인지 궁금해요");
+    // 이메일·기기 정보·동의 상태·해변은 임시 저장에 없음(유형·내용 + 저장 시각만)
+    const saved = await page.evaluate(() =>
+      Object.keys(localStorage)
+        .filter((key) => key.includes("inquiry"))
+        .map((key) => [key, localStorage.getItem(key) ?? ""] as const),
+    );
+    expect(saved.map(([key]) => key)).toEqual(["baradun:inquiry-draft"]);
+    expect(Object.keys(JSON.parse(saved[0]![1])).sort()).toEqual([
+      "kind",
+      "message",
+      "savedAt",
+    ]);
+  });
+
+  test("문의할 해변: 상세에서 들어오면 채워지고(사진 없으면 그림), 빼면 카드가 사라짐 · 다크 axe", async ({
+    page,
+  }) => {
+    await page.addInitScript(() =>
+      document.documentElement.setAttribute("data-theme", "dark"),
+    );
+    await page.goto(`${INQUIRY}?beach=sacheonjin`);
+    const context = page.getByRole("region", { name: "문의할 해변" });
+    await expect(
+      context.getByText("사천진해수욕장", { exact: true }),
+    ).toBeVisible();
+    // 사진 없는 해변: 사진 대신 해변 그림(옆에 이름이 있어 화면 읽기에서는 숨김)
+    await expect(context.locator("img")).toHaveCount(0);
+    await expect(context.locator('svg[viewBox="0 0 320 132"]')).toBeVisible();
+    await expectNoA11yViolations(page);
+    await page.getByRole("button", { name: "문의할 해변 빼기" }).click();
+    await expect(context).toHaveCount(0);
+    // 누른 버튼이 사라져도 포커스는 다음 칸(유형 첫 카드)으로
+    await expect(page.getByRole("radio").first()).toBeFocused();
+  });
 });
