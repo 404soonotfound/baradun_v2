@@ -236,6 +236,8 @@ async function narrowForAxe(page: Page) {
 }
 
 async function openDetail(page: Page, name: string) {
+  // 목록이 스켈레톤(tbody tr / ul li 포함)에서 실제 해변 행(링크)으로 바뀐 뒤에 count()를 봄
+  await expect(allBeachRows(page).getByRole("link").first()).toBeVisible();
   const row = beachRow(page, name);
   if ((await row.count()) === 0) {
     await page.getByLabel("해변 찾기").fill(name);
@@ -807,12 +809,12 @@ test("로딩(해변 상세 지금 표시 상태): 자리표시와 5초 늦음 �
   await page.clock.install();
   let holdPublished = false;
   let releasePublished!: () => void;
+  // 풀어 줄 약속을 미리 만들어 둠. 상세 요청이 늦게 도착해도 releasePublished가 먼저 불릴 수 있음
+  const published = new Promise<void>((resolve) => {
+    releasePublished = resolve;
+  });
   await page.route(/\/ops\/beaches\/published$/, async (route: Route) => {
-    if (holdPublished) {
-      await new Promise<void>((resolve) => {
-        releasePublished = resolve;
-      });
-    }
+    if (holdPublished) await published;
     await route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -821,6 +823,8 @@ test("로딩(해변 상세 지금 표시 상태): 자리표시와 5초 늦음 �
   });
   await signIn(page, ["viewer"]);
   await openBeaches(page);
+  // 목록 화면의 /ops/beaches/published 응답과 실제 행 렌더가 끝난 뒤 holdPublished를 켜야 상세 요청만 붙잡힘
+  await expect(allBeachRows(page).getByRole("link").first()).toBeVisible();
 
   holdPublished = true;
   await openDetail(page, "강문해수욕장");
