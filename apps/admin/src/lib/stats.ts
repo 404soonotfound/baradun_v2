@@ -15,6 +15,8 @@ export interface StatsRealtime {
   readonly status: "ok" | "unavailable";
   readonly activeUsers: number | null;
   readonly pageViews: number | null;
+  // GA4가 행 없이 응답함(최근 30분 방문 기록 없음). 0명으로 그리지 않고 '방문 기록 없음'으로 보임
+  readonly noActivity?: true;
 }
 
 export interface StatsBeachRow {
@@ -123,7 +125,12 @@ export async function fetchStats(
   );
   if (!result.ok) return result;
   if (!validStats(result.body)) {
-    return { ok: false, status: result.status, code: "format", requestId: null };
+    return {
+      ok: false,
+      status: result.status,
+      code: "format",
+      requestId: null,
+    };
   }
   return { ...result, body: result.body };
 }
@@ -233,6 +240,7 @@ export function validStats(v: unknown): v is StatsResponse {
     (realtime.status === "ok" || realtime.status === "unavailable") &&
     isCount(realtime.activeUsers) &&
     isCount(realtime.pageViews) &&
+    (realtime.noActivity === undefined || realtime.noActivity === true) &&
     (period.status === "ok" || period.status === "unavailable") &&
     isCount(period.activeUsers) &&
     isCount(period.pageViews) &&
@@ -286,7 +294,8 @@ export function statsShape(trends: StatsTrends | null | undefined): StatsShape {
   };
 }
 
-export type MissingItem = "dailyHourly" | "daily" | "hourly" | "previous" | "topScreens" | "referrers";
+export type MissingItem =
+  "dailyHourly" | "daily" | "hourly" | "previous" | "topScreens" | "referrers";
 
 // 기간 표시 아래 한 줄에 넣을 '아직 보여 드릴 수 없는' 항목(순서 고정). 새 사용자 비율 칸은 줄에 넣지 않음
 export function missingItems(shape: StatsShape): readonly MissingItem[] {
@@ -327,9 +336,7 @@ export function sharePercent(
   return Math.round((count / total) * 100);
 }
 
-export function sumMetric(
-  values: readonly (number | null)[],
-): number | null {
+export function sumMetric(values: readonly (number | null)[]): number | null {
   if (values.length === 0) return null;
   let sum = 0;
   for (const v of values) {
@@ -406,8 +413,16 @@ export type ScreenKey = (typeof SCREEN_PATHS)[keyof typeof SCREEN_PATHS];
 
 export type ScreenLabel =
   // /spots/<slug>: 공개 해변 데이터 이름. 이름표에 없으면 name null('이름 확인 못 함', slug를 이름처럼 쓰지 않음)
-  | { readonly kind: "beach"; readonly name: string | null; readonly english: boolean }
-  | { readonly kind: "screen"; readonly key: ScreenKey; readonly english: boolean }
+  | {
+      readonly kind: "beach";
+      readonly name: string | null;
+      readonly english: boolean;
+    }
+  | {
+      readonly kind: "screen";
+      readonly key: ScreenKey;
+      readonly english: boolean;
+    }
   // GA (other) 행: '기타'
   | { readonly kind: "other" }
   // 모르는 경로: 화면은 경로 그대로 작은 글씨
@@ -460,7 +475,10 @@ export function roundAverage(value: number | null): number | null {
 export function dateRangeParts(
   startDate: string,
   endDate: string,
-): { start: { month: number; day: number }; end: { month: number; day: number } } {
+): {
+  start: { month: number; day: number };
+  end: { month: number; day: number };
+} {
   const part = (d: string) => ({
     month: Number(d.slice(5, 7)),
     day: Number(d.slice(8, 10)),

@@ -238,7 +238,10 @@ function BarList({
         return (
           <li key={row.key} className="flex items-center gap-3">
             <div className="relative h-8 min-w-0 flex-1 overflow-hidden rounded-admin-badge">
-              <svg aria-hidden="true" className="absolute inset-0 h-full w-full">
+              <svg
+                aria-hidden="true"
+                className="absolute inset-0 h-full w-full"
+              >
                 <rect
                   width={`${pct}%`}
                   height="100%"
@@ -321,7 +324,8 @@ function ListBody({
   unavailable,
 }: {
   placeholder: boolean;
-  rows: readonly { key: string; name: ReactNode; value: number | null }[] | null;
+  rows:
+    readonly { key: string; name: ReactNode; value: number | null }[] | null;
   unavailable: string;
 }) {
   if (placeholder) return <BarListSkeleton />;
@@ -556,9 +560,7 @@ function StatsBody({
   const cls = loadClass(timing);
   const result = placeholder ? null : current!.result;
   const fallbackData =
-    signedIn &&
-    lastGood?.range === range &&
-    lastGood?.generation === generation
+    signedIn && lastGood?.range === range && lastGood?.generation === generation
       ? lastGood.data
       : null;
   // 새로 고침 실패(재로그인 필요 제외)에도 마지막으로 받은 값을 유지(L0)
@@ -582,16 +584,17 @@ function StatsBody({
   const reasons = data
     ? metadataReasons(trendMetadata(data.period, trends))
     : [];
-  const deviceTotal =
-    period?.devices
-      ? sumMetric(period.devices.map((d) => d.activeUsers))
-      : null;
-  const languageTotal =
-    period?.languages
-      ? sumMetric(period.languages.map((l) => l.activeUsers))
-      : null;
+  const deviceTotal = period?.devices
+    ? sumMetric(period.devices.map((d) => d.activeUsers))
+    : null;
+  const languageTotal = period?.languages
+    ? sumMetric(period.languages.map((l) => l.activeUsers))
+    : null;
   const live =
     data && data.realtime.status === "ok" ? data.realtime.activeUsers : null;
+  // 조회는 됐고 GA4가 행 없이 응답함(방문 기록 없음). 실패 문구 '확인 못 함'과 나눔
+  const liveNone =
+    data?.realtime.status === "ok" && data.realtime.noActivity === true;
   const ratio = perUser(period?.pageViews ?? null, period?.activeUsers ?? null);
   // 칸 유무: 마지막으로 받은 응답(받는 중이면 다른 기간이어도) 기준
   // 받은 응답이 없으면 받는 중에만 지금 서버가 주는 칸 모두(자리표시 크기), 불러오지 못했으면 추이 칸을 두지 않음
@@ -649,7 +652,9 @@ function StatsBody({
   const rangeText = trendRangeText(trends, range, ", ") ?? t.rangeLabel[range];
   const englishTag = (english: boolean) =>
     english && (
-      <span className="ml-1.5 text-caption text-text-muted">{t.englishTag}</span>
+      <span className="ml-1.5 text-caption text-text-muted">
+        {t.englishTag}
+      </span>
     );
   const listCount = 1 + Number(shape.topScreens) + Number(shape.referrers);
 
@@ -694,6 +699,8 @@ function StatsBody({
                     <SkLine className="w-[24px] h-[8px]" />
                   ) : live !== null ? (
                     fill(t.liveCount, { count: formatNumber(live) })
+                  ) : liveNone ? (
+                    t.liveNone
                   ) : (
                     t.liveUnknown
                   )}
@@ -734,22 +741,20 @@ function StatsBody({
               )}
             </p>
             {/* 응답에 칸이 없는 항목 한 줄. 받는 중에는 줄이 생길 때만(앞 응답 기준, 첫 응답 전에는 없음) 같은 줄 높이 자리표시 */}
-            {placeholder ? (
-              missing.length > 0 && (
-                <p className="mt-0.5 text-label-s">
-                  <SkLine className="w-[360px] max-w-full h-[8px]" />
-                </p>
-              )
-            ) : (
-              data?.configured === true &&
-              missing.length > 0 && (
-                <p className="mt-0.5 text-label-s text-text-body">
-                  {fill(t.missingLine, {
-                    items: `${missingText}${topicParticle(missingText)}`,
-                  })}
-                </p>
-              )
-            )}
+            {placeholder
+              ? missing.length > 0 && (
+                  <p className="mt-0.5 text-label-s">
+                    <SkLine className="w-[360px] max-w-full h-[8px]" />
+                  </p>
+                )
+              : data?.configured === true &&
+                missing.length > 0 && (
+                  <p className="mt-0.5 text-label-s text-text-body">
+                    {fill(t.missingLine, {
+                      items: `${missingText}${topicParticle(missingText)}`,
+                    })}
+                  </p>
+                )}
             {/* 기준 시각·잠시 저장된 응답·새로 고침(시안에 없음, 기존 줄이라 남김) */}
             <div className="mt-1 flex min-h-touch flex-wrap items-center gap-x-2 gap-y-1 text-caption text-text-muted lg:min-h-0">
               {placeholder ? (
@@ -883,262 +888,270 @@ function StatsBody({
 
         {(placeholder || data !== null) && (
           <div className={cls}>
-          {/* KPI(보드 V8: 사용자 · 화면 조회 · 새 사용자 비율 · 사용자당 화면). 새 사용자 비율은 응답에 칸이 있을 때만 */}
-          <dl
-            className={`mt-7 grid grid-cols-2 gap-x-8 gap-y-5 ${
-              shape.newUsers ? "lg:grid-cols-4" : "lg:grid-cols-3"
-            }`}
-          >
-            <Kpi
-              label={t.kpiUsers}
-              placeholder={placeholder}
-              width="w-[64px]"
-              value={period ? formatNumber(period.activeUsers) : null}
-              note={previousNote(previous?.activeUsers ?? null)}
-              change={usersChange}
-            />
-            <Kpi
-              label={t.kpiViews}
-              placeholder={placeholder}
-              width="w-[80px]"
-              value={period ? formatNumber(period.pageViews) : null}
-              note={previousNote(previous?.pageViews ?? null)}
-              change={viewsChange}
-            />
-            {shape.newUsers && (
+            {/* KPI(보드 V8: 사용자 · 화면 조회 · 새 사용자 비율 · 사용자당 화면). 새 사용자 비율은 응답에 칸이 있을 때만 */}
+            <dl
+              className={`mt-7 grid grid-cols-2 gap-x-8 gap-y-5 ${
+                shape.newUsers ? "lg:grid-cols-4" : "lg:grid-cols-3"
+              }`}
+            >
               <Kpi
-                label={t.kpiNewRatio}
+                label={t.kpiUsers}
+                placeholder={placeholder}
+                width="w-[64px]"
+                value={period ? formatNumber(period.activeUsers) : null}
+                note={previousNote(previous?.activeUsers ?? null)}
+                change={usersChange}
+              />
+              <Kpi
+                label={t.kpiViews}
+                placeholder={placeholder}
+                width="w-[80px]"
+                value={period ? formatNumber(period.pageViews) : null}
+                note={previousNote(previous?.pageViews ?? null)}
+                change={viewsChange}
+              />
+              {shape.newUsers && (
+                <Kpi
+                  label={t.kpiNewRatio}
+                  placeholder={placeholder}
+                  width="w-[32px]"
+                  value={
+                    newRatio === null
+                      ? period
+                        ? t.emptyValue
+                        : null
+                      : fill(t.percentUnit, { percent: newRatio })
+                  }
+                  note={t.rangeLabel[range]}
+                />
+              )}
+              <Kpi
+                label={t.kpiPerUser}
                 placeholder={placeholder}
                 width="w-[32px]"
                 value={
-                  newRatio === null
+                  ratio === null
                     ? period
                       ? t.emptyValue
                       : null
-                    : fill(t.percentUnit, { percent: newRatio })
+                    : ratio.toFixed(1)
                 }
-                note={t.rangeLabel[range]}
+                note={t.perUserHint}
               />
-            )}
-            <Kpi
-              label={t.kpiPerUser}
-              placeholder={placeholder}
-              width="w-[32px]"
-              value={ratio === null ? (period ? t.emptyValue : null) : ratio.toFixed(1)}
-              note={t.perUserHint}
-            />
-          </dl>
+            </dl>
 
-          {/* 일별 사용자(보드: 그래프 200 + 날짜 줄 24). 응답에 일별 칸이 있을 때만 */}
-          {shape.daily && (
-            <div className="mt-7">
-              <ChartBlock
-                id="stats-daily-users"
-                title={t.dailyUsers}
-                top="mt-5"
-                frame="h-[224px]"
-                bars="h-[200px]"
-                placeholder={placeholder}
-                rows={dailyRows("activeUsers")}
-                head={t.chartTableDate}
-                valueHead={t.kpiUsers}
-                unavailable={unavailable}
-              />
-            </div>
-          )}
-
-          {(shape.hourly || shape.daily) && (
-            <div className="mt-7 grid gap-8 lg:grid-cols-2">
-              {shape.hourly && (
-                // 보드: 위 여백 36 + 막대 120 + 시각 줄 24
+            {/* 일별 사용자(보드: 그래프 200 + 날짜 줄 24). 응답에 일별 칸이 있을 때만 */}
+            {shape.daily && (
+              <div className="mt-7">
                 <ChartBlock
-                  id="stats-hourly"
-                  title={t.hourlyUsers}
-                  top="mt-9"
-                  frame="h-[144px]"
-                  bars="h-[120px]"
-                  placeholder={placeholder}
-                  rows={hourlyRows}
-                  head={t.chartTableHour}
-                  valueHead={t.averageUsers}
-                  note={fill(t.hourlyNote, { range: t.range[range] })}
-                  unavailable={unavailable}
-                  format={formatAverage}
-                />
-              )}
-              {shape.daily && (
-                <ChartBlock
-                  id="stats-daily-views"
-                  title={t.dailyViews}
+                  id="stats-daily-users"
+                  title={t.dailyUsers}
                   top="mt-5"
-                  frame="h-[152px]"
-                  bars="h-[128px]"
+                  frame="h-[224px]"
+                  bars="h-[200px]"
                   placeholder={placeholder}
-                  rows={dailyRows("pageViews")}
+                  rows={dailyRows("activeUsers")}
                   head={t.chartTableDate}
-                  valueHead={t.kpiViews}
+                  valueHead={t.kpiUsers}
                   unavailable={unavailable}
                 />
+              </div>
+            )}
+
+            {(shape.hourly || shape.daily) && (
+              <div className="mt-7 grid gap-8 lg:grid-cols-2">
+                {shape.hourly && (
+                  // 보드: 위 여백 36 + 막대 120 + 시각 줄 24
+                  <ChartBlock
+                    id="stats-hourly"
+                    title={t.hourlyUsers}
+                    top="mt-9"
+                    frame="h-[144px]"
+                    bars="h-[120px]"
+                    placeholder={placeholder}
+                    rows={hourlyRows}
+                    head={t.chartTableHour}
+                    valueHead={t.averageUsers}
+                    note={fill(t.hourlyNote, { range: t.range[range] })}
+                    unavailable={unavailable}
+                    format={formatAverage}
+                  />
+                )}
+                {shape.daily && (
+                  <ChartBlock
+                    id="stats-daily-views"
+                    title={t.dailyViews}
+                    top="mt-5"
+                    frame="h-[152px]"
+                    bars="h-[128px]"
+                    placeholder={placeholder}
+                    rows={dailyRows("pageViews")}
+                    head={t.chartTableDate}
+                    valueHead={t.kpiViews}
+                    unavailable={unavailable}
+                  />
+                )}
+              </div>
+            )}
+
+            <div className="mt-7 grid gap-8 lg:grid-cols-2">
+              {placeholder ? (
+                <>
+                  <DonutSkeleton id="stats-devices" title={t.devicesTitle} />
+                  <DonutSkeleton
+                    id="stats-languages"
+                    title={t.languagesTitle}
+                  />
+                </>
+              ) : (
+                <>
+                  <Donut
+                    id="stats-devices"
+                    title={t.devicesTitle}
+                    rows={
+                      period
+                        ? (period.devices?.map((d) => ({
+                            key: d.category,
+                            label: deviceLabel(d.category),
+                            value: d.activeUsers,
+                          })) ?? null)
+                        : null
+                    }
+                    total={deviceTotal}
+                    unavailable={periodMissingText}
+                  />
+                  <Donut
+                    id="stats-languages"
+                    title={t.languagesTitle}
+                    rows={
+                      period
+                        ? (period.languages?.map((l) => ({
+                            key: l.language,
+                            label: languageLabel(l.language),
+                            value: l.activeUsers,
+                          })) ?? null)
+                        : null
+                    }
+                    total={languageTotal}
+                    unavailable={periodMissingText}
+                  />
+                </>
               )}
             </div>
-          )}
 
-          <div className="mt-7 grid gap-8 lg:grid-cols-2">
-            {placeholder ? (
-              <>
-                <DonutSkeleton id="stats-devices" title={t.devicesTitle} />
-                <DonutSkeleton id="stats-languages" title={t.languagesTitle} />
-              </>
-            ) : (
-              <>
-                <Donut
-                  id="stats-devices"
-                  title={t.devicesTitle}
-                  rows={
-                    period
-                      ? (period.devices?.map((d) => ({
-                          key: d.category,
-                          label: deviceLabel(d.category),
-                          value: d.activeUsers,
-                        })) ?? null)
-                      : null
-                  }
-                  total={deviceTotal}
-                  unavailable={periodMissingText}
+            {/* 목록: 많이 본 해변 + 응답에 칸이 있는 목록(화면·들어온 경로). 하나뿐이면 도넛과 같은 반 폭 */}
+            <div
+              className={`mt-7 grid gap-7 ${
+                listCount === 3 ? "lg:grid-cols-3" : "lg:grid-cols-2"
+              }`}
+            >
+              <section aria-labelledby="stats-beaches" className="min-w-0">
+                <ListHead
+                  id="stats-beaches"
+                  title={t.topBeachesTitle}
+                  note={t.topBeachesNote}
+                  valueName={t.colViews}
                 />
-                <Donut
-                  id="stats-languages"
-                  title={t.languagesTitle}
-                  rows={
-                    period
-                      ? (period.languages?.map((l) => ({
-                          key: l.language,
-                          label: languageLabel(l.language),
-                          value: l.activeUsers,
-                        })) ?? null)
-                      : null
-                  }
-                  total={languageTotal}
-                  unavailable={periodMissingText}
-                />
-              </>
-            )}
-          </div>
-
-          {/* 목록: 많이 본 해변 + 응답에 칸이 있는 목록(화면·들어온 경로). 하나뿐이면 도넛과 같은 반 폭 */}
-          <div
-            className={`mt-7 grid gap-7 ${
-              listCount === 3 ? "lg:grid-cols-3" : "lg:grid-cols-2"
-            }`}
-          >
-            <section aria-labelledby="stats-beaches" className="min-w-0">
-              <ListHead
-                id="stats-beaches"
-                title={t.topBeachesTitle}
-                note={t.topBeachesNote}
-                valueName={t.colViews}
-              />
-              {placeholder ? (
-                <BarListSkeleton />
-              ) : !period || period.topBeaches === null ? (
-                <p className="text-body-s text-text-body">
-                  {periodMissingText}
-                </p>
-              ) : period.topBeaches.length === 0 ? (
-                <p className="text-body-s text-text-muted">
-                  {t.topBeachesEmpty}
-                </p>
-              ) : (
-                <BarList
-                  rows={period.topBeaches.map((row) => {
-                    const label = beachLabel(row, beachesBySlug);
-                    return {
-                      key: row.path,
-                      value: row.pageViews,
-                      name:
-                        label.name ?? (
+                {placeholder ? (
+                  <BarListSkeleton />
+                ) : !period || period.topBeaches === null ? (
+                  <p className="text-body-s text-text-body">
+                    {periodMissingText}
+                  </p>
+                ) : period.topBeaches.length === 0 ? (
+                  <p className="text-body-s text-text-muted">
+                    {t.topBeachesEmpty}
+                  </p>
+                ) : (
+                  <BarList
+                    rows={period.topBeaches.map((row) => {
+                      const label = beachLabel(row, beachesBySlug);
+                      return {
+                        key: row.path,
+                        value: row.pageViews,
+                        name: label.name ?? (
                           <span className="text-text-muted">
                             {t.nameUnknown}
                           </span>
                         ),
-                    };
-                  })}
-                />
-              )}
-            </section>
-            {shape.topScreens && (
-              <section aria-labelledby="stats-screens" className="min-w-0">
-                <ListHead
-                  id="stats-screens"
-                  title={t.topScreensTitle}
-                  note={t.topScreensNote}
-                  valueName={t.colViews}
-                />
-                <ListBody
-                  placeholder={placeholder}
-                  unavailable={unavailable}
-                  rows={
-                    trends?.topScreens?.rows.map((row, i) => {
-                      const label = screenLabel(row, beachesBySlug);
-                      return {
-                        key: `${i}:${row.path}`,
-                        value: row.pageViews,
-                        name:
-                          label.kind === "other" ? (
-                            t.otherRow
-                          ) : label.kind === "unknown" ? (
-                            // 모르는 경로: 이름처럼 크게 보이지 않게 경로 그대로 작은 글씨
-                            <span className="text-caption text-text-muted">
-                              {label.path}
-                            </span>
-                          ) : label.kind === "screen" ? (
-                            <>
-                              {t.screenNames[label.key]}
-                              {englishTag(label.english)}
-                            </>
-                          ) : (
-                            <>
-                              {label.name ?? (
-                                <span className="text-text-muted">
-                                  {t.nameUnknown}
-                                </span>
-                              )}
-                              {englishTag(label.english)}
-                            </>
-                          ),
                       };
-                    }) ?? null
-                  }
-                />
+                    })}
+                  />
+                )}
               </section>
-            )}
-            {shape.referrers && (
-              <section aria-labelledby="stats-referrers" className="min-w-0">
-                <ListHead
-                  id="stats-referrers"
-                  title={t.referrersTitle}
-                  note={t.referrersNote}
-                  valueName={t.colSessions}
-                />
-                <ListBody
-                  placeholder={placeholder}
-                  unavailable={unavailable}
-                  rows={
-                    trends?.referrers?.rows.map((row, i) => ({
-                      key: `${i}:${row.channel}`,
-                      value: row.sessions,
-                      name: row.other
-                        ? t.otherRow
-                        : channelName(row.channel, t.channelLabels),
-                    })) ?? null
-                  }
-                />
-              </section>
-            )}
-          </div>
+              {shape.topScreens && (
+                <section aria-labelledby="stats-screens" className="min-w-0">
+                  <ListHead
+                    id="stats-screens"
+                    title={t.topScreensTitle}
+                    note={t.topScreensNote}
+                    valueName={t.colViews}
+                  />
+                  <ListBody
+                    placeholder={placeholder}
+                    unavailable={unavailable}
+                    rows={
+                      trends?.topScreens?.rows.map((row, i) => {
+                        const label = screenLabel(row, beachesBySlug);
+                        return {
+                          key: `${i}:${row.path}`,
+                          value: row.pageViews,
+                          name:
+                            label.kind === "other" ? (
+                              t.otherRow
+                            ) : label.kind === "unknown" ? (
+                              // 모르는 경로: 이름처럼 크게 보이지 않게 경로 그대로 작은 글씨
+                              <span className="text-caption text-text-muted">
+                                {label.path}
+                              </span>
+                            ) : label.kind === "screen" ? (
+                              <>
+                                {t.screenNames[label.key]}
+                                {englishTag(label.english)}
+                              </>
+                            ) : (
+                              <>
+                                {label.name ?? (
+                                  <span className="text-text-muted">
+                                    {t.nameUnknown}
+                                  </span>
+                                )}
+                                {englishTag(label.english)}
+                              </>
+                            ),
+                        };
+                      }) ?? null
+                    }
+                  />
+                </section>
+              )}
+              {shape.referrers && (
+                <section aria-labelledby="stats-referrers" className="min-w-0">
+                  <ListHead
+                    id="stats-referrers"
+                    title={t.referrersTitle}
+                    note={t.referrersNote}
+                    valueName={t.colSessions}
+                  />
+                  <ListBody
+                    placeholder={placeholder}
+                    unavailable={unavailable}
+                    rows={
+                      trends?.referrers?.rows.map((row, i) => ({
+                        key: `${i}:${row.channel}`,
+                        value: row.sessions,
+                        name: row.other
+                          ? t.otherRow
+                          : channelName(row.channel, t.channelLabels),
+                      })) ?? null
+                    }
+                  />
+                </section>
+              )}
+            </div>
 
-          <p className="mt-6 text-caption text-text-muted">{t.foot}</p>
-        </div>
+            <p className="mt-6 text-caption text-text-muted">{t.foot}</p>
+          </div>
         )}
       </div>
     </>
