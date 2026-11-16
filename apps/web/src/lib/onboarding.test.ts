@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
+import { NOTICE_EFFECTIVE_DATE } from "./notice-version";
 import {
   acknowledgeNotice,
   clearOnboarding,
@@ -22,7 +23,8 @@ const done: OnboardingRecord = {
 
 describe("onboardingStep", () => {
   it("기록이 없거나 고지 버전이 다르면 고지(ON-1)부터", () => {
-    expect(NOTICE_VERSION).toBe(4);
+    expect(NOTICE_VERSION).toBe(5);
+    expect(NOTICE_EFFECTIVE_DATE).toBe("2026-11-16");
     expect(onboardingStep(null, "idle")).toBe("notice");
     expect(onboardingStep({ ...done, noticeVersion: 1 }, "ready")).toBe(
       "notice",
@@ -32,16 +34,16 @@ describe("onboardingStep", () => {
     ).toBe("notice");
   });
 
-  // 처리방침에 '이용 통계와 쿠키' 절을 더하며 2로(BRD-143), 처리방침 전문·첫 실행 고지를 바꾸며 3으로(BRD-64), 확장 이벤트 반영으로 4로 올림(BRD-68)
-  // 이미 배포된 1·2·3으로 확인한 기기는 ON-1을 다시 봄
-  it("고지 버전 1·2·3으로 확인한 기기는 버전 4 고지를 다시 봄 (BRD-143·64·68)", () => {
-    expect(NOTICE_VERSION).toBe(4);
-    for (const noticeVersion of [1, 2, 3]) {
+  // 처리방침에 '이용 통계와 쿠키' 절을 더하며 2로(BRD-143), 처리방침 전문·첫 실행 고지를 바꾸며 3으로(BRD-64), 확장 이벤트 반영으로 4로(BRD-68), 처리방침 정정으로 5로 올림
+  // 이미 배포된 1·2·3·4로 확인한 기기는 ON-1을 다시 봄
+  it("고지 버전 1·2·3·4로 확인한 기기는 버전 5 고지를 다시 봄 (BRD-143·64·68)", () => {
+    expect(NOTICE_VERSION).toBe(5);
+    for (const noticeVersion of [1, 2, 3, 4]) {
       const acknowledged: OnboardingRecord = { ...done, noticeVersion };
       expect(onboardingStep(acknowledged, "ready")).toBe("notice");
       expect(onboardingStep(acknowledged, "idle")).toBe("notice");
     }
-    expect(onboardingStep({ ...done, noticeVersion: 4 }, "ready")).toBeNull();
+    expect(onboardingStep({ ...done, noticeVersion: 5 }, "ready")).toBeNull();
   });
 
   it("고지를 확인했고 위치를 아직 묻지 않았으면 위치 안내(ON-2)", () => {

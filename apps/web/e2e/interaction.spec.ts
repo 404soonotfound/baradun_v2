@@ -2,6 +2,10 @@ import type { Page } from "@playwright/test";
 
 import en from "../messages/en.json";
 import ko from "../messages/ko.json";
+import {
+  NOTICE_EFFECTIVE_DATE,
+  NOTICE_VERSION,
+} from "../src/lib/notice-version";
 
 import {
   CLEAR_ID,
@@ -147,6 +151,55 @@ test.describe("대화상자", () => {
         page.getByRole("button", { name: "확인했어요" }),
       ).toBeVisible();
     });
+
+    test("바로 전 고지 버전을 확인한 기기에서도 지금 고지 안내가 다시 뜨고, 약관에 새 시행일이 보임", async ({
+      page,
+    }) => {
+      await page.addInitScript((previousVersion) => {
+        if (sessionStorage.getItem("e2e:prev-notice")) return;
+        sessionStorage.setItem("e2e:prev-notice", "1");
+        localStorage.setItem("baradun:language", "ko");
+        localStorage.setItem(
+          "baradun:onboarding",
+          JSON.stringify({
+            noticeVersion: previousVersion,
+            acknowledgedAt: "2026-11-02T00:00:00.000Z",
+            locationStepDone: true,
+          }),
+        );
+      }, NOTICE_VERSION - 1);
+      await page.goto("/");
+      const confirm = page.getByRole("button", { name: "확인했어요" });
+      await expect(confirm).toBeVisible();
+      await confirm.click();
+      await expect(page.locator("dialog[open]")).toHaveCount(0);
+
+      await page.goto("/terms/");
+      await expect(
+        page.getByText(`시행일: ${NOTICE_EFFECTIVE_DATE}`),
+      ).toBeVisible();
+      await expect(
+        page.getByText(
+          `고지 버전 ${NOTICE_VERSION} · 시행일 ${NOTICE_EFFECTIVE_DATE}`,
+        ),
+      ).toBeVisible();
+    });
+  });
+
+  test("기기 데이터 초기화 확인 창에 탐색 정렬·탭별 마지막 위치 안내가 보임", async ({
+    page,
+  }, testInfo) => {
+    await page.goto("/settings/");
+    // 모바일은 '기기 데이터 관리' 줄이 바로 시트를 열고, PC는 오른쪽 묶음의 '기기 데이터 초기화'로 엶
+    await page.getByRole("button", { name: "기기 데이터 관리" }).click();
+    if (testInfo.project.name === "desktop") {
+      await page.getByRole("button", { name: "기기 데이터 초기화" }).click();
+    }
+    const dialog = page.getByRole("dialog", {
+      name: "기기 데이터를 지울까요?",
+    });
+    await expect(dialog).toBeVisible();
+    await expect(dialog).toContainText("탐색 정렬, 탭별 마지막 위치");
   });
 });
 
