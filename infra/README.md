@@ -901,7 +901,9 @@ aws dynamodb delete-item --region ap-northeast-2 --table-name <OpsTableName> \
 - **경로:** `GET /ops/inquiries?status=&cursor=&limit=`(목록), `GET /ops/inquiries/{id}`(상세), `PATCH /ops/inquiries/{id}`(처리 상태·반려 이유·내부 메모, 편집·노출 변경 권한). 쓰기에는 `x-idempotency-key`(UUID v4) 헤더와 읽을 때 받은 `version`을 함께 보냅니다.
 - **상태:** 접수(received)·확인 중(in_progress)·완료(resolved)·반려(rejected). 반려는 이유가 필수이고 공백만은 거부합니다. 반려가 아닌 상태로 바꾸면 반려 이유를 지웁니다.
 - **목록:** `inquiryStatus-receivedAt` GSI(요약만, 본문·이메일·사진 키 없음)를 최근 접수 순으로 읽습니다. 상태를 고르지 않으면 접수 → 확인 중 → 완료 → 반려 순으로 이어 붙이고, `cursor`로 다음 쪽을 이어 갑니다. GSI는 최종적 일관성이라 저장 직후 목록이 잠시 이전 값일 수 있습니다. 그래서 처리(PATCH)에는 목록이 아니라 상세(강한 일관성)에서 받은 `version`을 씁니다. 상태를 고른 목록에는 같은 상태 목록에서 받은 `cursor`만 넣습니다.
+- **모르는 처리 상태(#521, 아키텍처 18.3):** 4종 밖 상태 값은 원래 값 그대로 내려 주고, 상태 변경·필터는 4종만 받습니다. GSI 파티션이 상태라 Query로는 4종 밖 값을 찾을 수 없어, 첫 쪽에서 같은 GSI를 4종 밖만 걸러 `Scan` 한 번으로 읽습니다. 상태를 고르지 않은 목록의 맨 위와 `counts.unknown`(4개 탭 수와 따로)에 함께 씁니다. Scan이 실패하면(권한·쓰로틀) 목록·4종 수는 그대로 내려 주고 `counts.unknown: null`·`unknownStatusUnavailable: true`와 warn 로그 `ops_inquiry_unknown_status_unavailable`을 남깁니다. 모르는 상태를 읽을 때마다 warn 로그 `ops_inquiry_unknown_status`를 남깁니다(새 경보 없음).
 - **보관:** 받은 날부터 90일(TTL) 그대로입니다. TTL로 지워지기 전이라도 기한이 지난 문의는 목록·상세·수정에서 뺍니다. 처리 상태·메모는 같은 항목에 붙어 함께 만료됩니다.
+- **역할 권한:** 운영 API 역할은 문의 테이블 `GetItem`·`UpdateItem`과 상태 GSI `Query`·`Scan`만 가집니다. `Scan`은 인덱스 ARN(`…/index/inquiryStatus-receivedAt`)에만 있고 테이블 ARN에는 없습니다. boundary도 `InquiryStatusIndexScan` 문장으로 같은 인덱스만 허락합니다(#521, 바꾸면 '로컬 배포 필요').
 - **권한:** 보기 권한은 본문·메모·반려 이유를 받지 않습니다. 샘플 계정은 실제 테이블을 읽지 않고 예시 문의만 받습니다. 개인정보 가리기·문의 지우기·같은 해변 묶음(D16-D7)은 이 범위가 아닙니다.
 - **용량:** GSI 읽기·쓰기 1/1을 더해 테이블·GSI 합계 12/12(상한 25)입니다.
 
