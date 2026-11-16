@@ -2,7 +2,7 @@
 
 import { Waves } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 import { BeachIllustration } from "@/components/beach-illustration";
 import type { BeachSummary } from "@/lib/beach-summary";
@@ -32,11 +32,22 @@ export function pickShownPhoto(
 // 보여줄 사진. 받지 못한 사진 주소는 기억해 그림으로 바꾸고, 다른 해변(다른 주소)으로 바뀌면 다시 시도함
 export function useShownPhoto(photo: BeachSummary["photo"]) {
   const [brokenUrl, setBrokenUrl] = useState<string | null>(null);
+  // 망이 끊겨 받지 못한 사진은 다시 연결되면 한 번 더 시도함(새로 고치지 않아도 사진이 돌아오게)
+  useEffect(() => {
+    const retry = () => setBrokenUrl(null);
+    window.addEventListener("online", retry);
+    return () => window.removeEventListener("online", retry);
+  }, []);
   const shown = pickShownPhoto(photo, brokenUrl);
   const onError = () => {
     if (shown) setBrokenUrl(shown.url);
   };
-  return { shown, onError };
+  // img의 ref로 붙임. 오류 이벤트를 놓친 사진(정적 HTML의 사진이 화면 코드보다 먼저 실패, 같은 주소가 이미 실패해
+  // 브라우저가 이벤트 없이 깨진 그림으로 둔 경우)을 붙을 때 한 번 확인함
+  const checkBroken = (img: HTMLImageElement | null) => {
+    if (img?.complete && img.naturalWidth === 0) onError();
+  };
+  return { shown, onError, checkBroken };
 }
 
 export function BeachPhoto({
@@ -48,13 +59,14 @@ export function BeachPhoto({
   name: string;
   className?: string; // 사진 높이(모바일 104px, PC 150px)
 }) {
-  const { shown, onError } = useShownPhoto(photo);
+  const { shown, onError, checkBroken } = useShownPhoto(photo);
   return (
     <PhotoFigure
       shown={shown}
       name={name}
       className={className}
       onError={onError}
+      checkBroken={checkBroken}
       credit
       empty="icon"
     />
@@ -68,6 +80,7 @@ export function PhotoFigure({
   name,
   className,
   onError,
+  checkBroken,
   credit,
   empty = "illustration",
 }: {
@@ -75,6 +88,7 @@ export function PhotoFigure({
   name: string;
   className?: string | undefined;
   onError: () => void;
+  checkBroken?: (img: HTMLImageElement | null) => void; // useShownPhoto의 checkBroken
   credit: boolean;
   empty?: "illustration" | "icon";
 }) {
@@ -117,6 +131,7 @@ export function PhotoFigure({
       {/* 바깥 사진 주소를 그대로 씀(정적 내보내기라 이미지 최적화 서버가 없음) */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
+        ref={checkBroken}
         src={shown.url}
         alt={t("alt", { name })}
         loading="lazy"
