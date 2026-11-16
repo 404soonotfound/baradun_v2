@@ -163,26 +163,52 @@ function StatusSection({
   beach: BeachRecord;
   state: ReturnType<typeof usePublished>;
 }) {
+  const signedIn = useSessionSnapshot().status !== "signed_out";
   const display = displayOf(state.published, beach.id, state.nowMs);
+  const loading = display.kind === "loading";
+  const timing = useLoadTiming(signedIn && loading);
+  const placeholder = loading || timing.phase !== "content";
   return (
     <Section id="beach-status" title={t.detailStatus}>
-      <PublishedAlert state={state} />
-      <div className="flex flex-col gap-2">
-        <DisplayBadge display={display} />
-        <ReasonList display={display} />
-        <ExpiredNotice display={display} />
-        {state.published !== "loading" && state.published?.available && (
-          <p className="text-label-s text-text-muted">
-            {fill(
-              state.published.maintenance.active
-                ? t.statusAsOfMaintenance
-                : t.statusAsOf,
-              { time: kstDateTime(state.published.generatedAt) },
+      <LoadingStatus
+        busy={signedIn && loading}
+        label={fill(messages.loading.screen, { name: t.detailStatus })}
+      />
+      <span role="status" className="sr-only">
+        {placeholder && timing.slow ? messages.loading.slow : ""}
+      </span>
+      {!placeholder && <PublishedAlert state={state} />}
+      <div
+        aria-busy={placeholder || undefined}
+        className={`flex flex-col gap-2 ${loadClass(timing)}`}
+      >
+        {placeholder ? (
+          <>
+            <DisplayBadge display={{ kind: "loading" }} />
+            <div aria-hidden="true" className="flex min-h-[18px] items-center">
+              <SkLine className="w-40" />
+            </div>
+            {timing.slow && <SlowNote />}
+          </>
+        ) : (
+          <>
+            <DisplayBadge display={display} />
+            <ReasonList display={display} />
+            <ExpiredNotice display={display} />
+            {state.published !== "loading" && state.published?.available && (
+              <p className="text-label-s text-text-muted">
+                {fill(
+                  state.published.maintenance.active
+                    ? t.statusAsOfMaintenance
+                    : t.statusAsOf,
+                  { time: kstDateTime(state.published.generatedAt) },
+                )}
+              </p>
             )}
-          </p>
+          </>
         )}
         {/* 점검 중에는 앱에 상태가 안 보여 '앱과 같은 판단 결과'라고 하지 않음(위 점검 알림이 대신함) */}
-        {display.kind !== "maintenance" && (
+        {(placeholder || display.kind !== "maintenance") && (
           <p className="text-body-s text-text-body">{t.detailStatusNote}</p>
         )}
       </div>

@@ -30,7 +30,9 @@ import {
   kstClock,
   latestState,
   monthRanges,
+  resolveCollectionState,
   scheduleSlots,
+  type CollectionSlot,
   type KeyState,
   type RunState,
   type SourceCall,
@@ -306,13 +308,33 @@ const BAR_CLASSES: Record<BarState, string> = {
   none: "bg-border-default",
 };
 
+interface CollectionLoad {
+  readonly pending: boolean;
+  readonly placeholder: boolean;
+  readonly cls: string;
+  readonly slow: boolean;
+}
+
 function SourceBars({
   job,
   generatedAt,
+  collection,
 }: {
   job: JobCollection | undefined;
   generatedAt: string | undefined;
+  collection: CollectionLoad;
 }) {
+  if (collection.placeholder)
+    return (
+      <div aria-busy="true" className={`flex flex-col gap-1 ${collection.cls}`}>
+        <span className={HINT}>{t.history24h}</span>
+        <span aria-hidden="true" className="flex gap-0.5">
+          {Array.from({ length: 24 }, (_, i) => (
+            <span key={i} className="sk h-4 flex-1 rounded-[2px]" />
+          ))}
+        </span>
+      </div>
+    );
   const hourly = job?.hourly;
   if (
     !generatedAt ||
@@ -332,10 +354,22 @@ function SourceBars({
         bucket.ok <= bucket.runs,
     )
   )
-    return <p className={HINT}>{t.historyUnavailable}</p>;
+    return (
+      <p
+        className={
+          collection.cls ? `${HINT} ${collection.cls}` : HINT
+        }
+      >
+        {t.historyUnavailable}
+      </p>
+    );
   const counts = barCounts(hourly);
   return (
-    <div className="flex flex-col gap-1">
+    <div
+      className={
+        collection.cls ? `flex flex-col gap-1 ${collection.cls}` : "flex flex-col gap-1"
+      }
+    >
       <span className={HINT}>{t.history24h}</span>
       <span
         role="img"
@@ -373,10 +407,12 @@ function JudgmentCard({
   source,
   job,
   generatedAt,
+  collection,
 }: {
   source: SourceView;
   job: JobCollection | undefined;
   generatedAt: string | undefined;
+  collection: CollectionLoad;
 }) {
   const name = t.name[source.id];
   const row = "grid grid-cols-[6rem_1fr] gap-2 py-1.5 text-body-s";
@@ -424,7 +460,7 @@ function JudgmentCard({
           </dd>
         </div>
       </dl>
-      <SourceBars job={job} generatedAt={generatedAt} />
+      <SourceBars job={job} generatedAt={generatedAt} collection={collection} />
     </article>
   );
 }
@@ -642,9 +678,11 @@ function Keys({ view }: { view: SourcesView }) {
 function SourcesList({
   view,
   collection,
+  collectionLoad,
 }: {
   view: SourcesView;
   collection: CollectionView | null;
+  collectionLoad: CollectionLoad;
 }) {
   const judgment = view.sources.filter((s) => s.judgment);
   const reference = view.sources.filter((s) => !s.judgment);
@@ -664,6 +702,7 @@ function SourcesList({
           </h2>
           <p className={HINT}>{t.judgmentHint}</p>
         </div>
+        {collectionLoad.placeholder && collectionLoad.slow && <SlowNote />}
         <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
           {judgment.map((s) => (
             <JudgmentCard
@@ -671,6 +710,7 @@ function SourcesList({
               source={s}
               generatedAt={collection?.generatedAt}
               job={collection?.jobs.find(({ job }) => job === s.id)}
+              collection={collectionLoad}
             />
           ))}
         </div>
@@ -916,10 +956,12 @@ function SourceDetail({
   view,
   source,
   collection,
+  collectionLoad,
 }: {
   view: SourcesView;
   source: SourceView;
   collection: CollectionView | null;
+  collectionLoad: CollectionLoad;
 }) {
   const sectionId = useId();
   const [section, setSection] =
@@ -1017,22 +1059,58 @@ function SourceDetail({
       </div>
       <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {[
-          [t.detailLastSuccess, displayTime(started)],
-          [t.detailNext, displayTime(job?.nextScheduledAt)],
-          [
-            t.detailWeek,
-            rate === null
-              ? t.runState.unknown
-              : fill(t.detailWeekValue, { rate }),
-          ],
-          [t.detailReceived, t.detailReceivedUnknown],
-        ].map(([label, content]) => (
-          <div className={metric} key={label}>
-            <dt className={LABEL}>{label}</dt>
-            <dd className={value}>{content}</dd>
-          </div>
-        ))}
+          {
+            label: t.detailLastSuccess,
+            usesCollection: true,
+            content: displayTime(started),
+          },
+          {
+            label: t.detailNext,
+            usesCollection: true,
+            content: displayTime(job?.nextScheduledAt),
+          },
+          {
+            label: t.detailWeek,
+            usesCollection: true,
+            content:
+              rate === null
+                ? t.runState.unknown
+                : fill(t.detailWeekValue, { rate }),
+          },
+          {
+            label: t.detailReceived,
+            usesCollection: false,
+            content: t.detailReceivedUnknown,
+          },
+        ].map(({ label, usesCollection, content }) => {
+          const itemPending = usesCollection && collectionLoad.placeholder;
+          const itemClass = usesCollection ? collectionLoad.cls : "";
+          return (
+            <div className={metric} key={label}>
+              <dt className={LABEL}>{label}</dt>
+              <dd className={value} aria-busy={itemPending || undefined}>
+                {itemPending ? (
+                  <span
+                    className={
+                      itemClass
+                        ? `flex h-[24px] items-center ${itemClass}`
+                        : "flex h-[24px] items-center"
+                    }
+                  >
+                    <SkLine className="w-20" />
+                    <span className="sr-only">{messages.loading.busy}</span>
+                  </span>
+                ) : itemClass ? (
+                  <span className={itemClass}>{content}</span>
+                ) : (
+                  content
+                )}
+              </dd>
+            </div>
+          );
+        })}
       </dl>
+      {collectionLoad.placeholder && collectionLoad.slow && <SlowNote />}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[3fr_2fr]">
         <div className="flex min-w-0 flex-col gap-4">
           <div
@@ -1587,20 +1665,38 @@ function SourcesBody() {
   const key = `${attempt}|${generation}`;
   const [loaded, setLoaded] = useState<SourcesLoaded | null>(null);
 
-  const [collection, setCollection] = useState<{
-    key: string;
-    view: CollectionView;
-  } | null>(null);
+  const [collection, setCollection] = useState<CollectionSlot | null>(null);
   useEffect(() => {
     if (!signedIn) return;
     let live = true;
-    void fetchCollection(() => session.accessToken()).then((result) => {
-      if (live) setCollection(result.ok ? { key, view: result.body } : null);
+    void withTimeout<CollectionView | null>(
+      async () => {
+        const result = await fetchCollection(() => session.accessToken());
+        return result.ok ? result.body : null;
+      },
+      null,
+      LOADING_TIMES.timeout,
+    ).then((nextView) => {
+      if (live) {
+        // 다시 읽는 중에는 직전 값을 유지하고, 실패·시간 초과로 끝나면 null로 확정해 '확인 못 함'을 노출함
+        setCollection({ key, generation, view: nextView });
+      }
     });
     return () => {
       live = false;
     };
-  }, [key, session, signedIn]);
+  }, [generation, key, session, signedIn]);
+  const { view: collectionView, pending: collectionPending } =
+    resolveCollectionState(collection, { signedIn, generation, key });
+  const collectionTiming = useLoadTiming(collectionPending);
+  const collectionPlaceholder =
+    collectionPending || collectionTiming.phase !== "content";
+  const collectionLoad: CollectionLoad = {
+    pending: collectionPending,
+    placeholder: collectionPlaceholder,
+    cls: loadClass(collectionTiming),
+    slow: collectionTiming.slow,
+  };
 
   useEffect(() => {
     if (!signedIn) return;
@@ -1645,8 +1741,21 @@ function SourcesBody() {
       className="flex w-full flex-col gap-4 px-4 py-5 md:px-10 md:pt-6 md:pb-10"
     >
       <LoadingStatus busy={signedIn && pending} label={t.loading} />
+      <LoadingStatus
+        busy={
+          view !== null &&
+          (id === null || source !== null) &&
+          collectionLoad.pending
+        }
+        label={fill(messages.loading.screen, { name: t.history24h })}
+      />
       <span role="status" className="sr-only">
-        {(placeholder ? timing.slow : refreshTiming.slow)
+        {(
+          placeholder
+            ? timing.slow
+            : refreshTiming.slow ||
+              (collectionLoad.placeholder && collectionLoad.slow)
+        )
           ? messages.loading.slow
           : ""}
       </span>
@@ -1760,7 +1869,8 @@ function SourcesBody() {
       {view && id === null && (
         <SourcesList
           view={view}
-          collection={collection?.key === key ? collection.view : null}
+          collection={collectionView}
+          collectionLoad={collectionLoad}
         />
       )}
       {view && id !== null && source && (
@@ -1768,7 +1878,8 @@ function SourcesBody() {
           key={source.id}
           view={view}
           source={source}
-          collection={collection?.key === key ? collection.view : null}
+          collection={collectionView}
+          collectionLoad={collectionLoad}
         />
       )}
       {view && id !== null && !source && (

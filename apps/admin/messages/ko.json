@@ -24,6 +24,7 @@
     "opening": "운영 화면 여는 중",
     "page": "화면 불러오는 중",
     "screen": "{name} 불러오는 중",
+    "busy": "불러오는 중",
     "slow": "평소보다 오래 걸려요 · 출처 응답이 늦어요",
     "timeoutTitle": "응답이 15초 넘게 오지 않았어요",
     "timeoutBody": "이 칸의 값을 확인하지 못했어요. 앱 사용자 화면에는 영향이 없어요. 다시 시도해 주세요.",
@@ -1932,6 +1933,7 @@
     "requestId": "오류 번호 {id}",
     "unconfiguredTitle": "GA4 연동이 아직 설정되지 않았어요",
     "unconfiguredBody": "운영 API에 GA4 속성 ID와 서비스 계정 키(SSM Parameter Store)를 연결하면 실제 지표를 보여 줘요.",
+    "unconfiguredCard": "GA4 연동 전이에요",
     "rangeGroupLabel": "기간 선택",
     "range": {
       "today": "오늘",

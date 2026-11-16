@@ -417,3 +417,162 @@ test("로딩(L9·L4): 목록·상세(탭 아래만 자리표시)·15초 실패 �
   waiters.at(-1)?.();
   await expect(page.locator("main [aria-busy='true']")).toHaveCount(0);
 });
+
+test("collection 응답이 늦는 동안 상세 KPI와 24시간 막대는 자리표시를 보여 주고 실패 때만 '확인 못 함'을 쓴다", async ({
+  page,
+}) => {
+  await page.route(/\/ops\/sources$/, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(VIEW),
+    }),
+  );
+  let releaseCollection!: (fail: boolean) => void;
+  await page.route(/\/ops\/collection$/, async (route: Route) => {
+    const fail = await new Promise<boolean>((resolve) => {
+      releaseCollection = resolve;
+    });
+    await route.fulfill({
+      status: fail ? 500 : 200,
+      contentType: "application/json",
+      body: JSON.stringify(
+        fail
+          ? { error: { code: "internal", requestId: "req-col-500" } }
+          : COLLECTION,
+      ),
+    });
+  });
+
+  await openSources(page);
+  await expect(page.getByText("최근 24시간 불러오는 중")).toBeAttached();
+  // 목록의 판단 출처 24시간 막대는 collection 대기 중 자리표시를 쓰고 '확인 못 함'을 미리 노출하지 않음
+  const judgment = page.getByRole("region", { name: /판단에 쓰는 출처/ });
+  await expect(judgment.locator(".sk").first()).toBeVisible();
+  await expect(
+    judgment.getByText("최근 24시간 수집 기록 확인 못 함"),
+  ).toHaveCount(0);
+
+  await page
+    .getByRole("link", { name: "기상특보 조회 상세 보기" })
+    .filter({ visible: true })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "기상특보 조회", level: 1 }),
+  ).toBeVisible();
+  const detailMetrics = page.locator("main dl").first();
+  await expect(detailMetrics.locator(".sk")).toHaveCount(3);
+  await expect(
+    detailMetrics.locator("[aria-busy='true']"),
+  ).toHaveCount(3);
+  await expect(
+    detailMetrics.getByText("확인 못 함", { exact: true }),
+  ).toHaveCount(0);
+
+  releaseCollection(true);
+  await expect(detailMetrics.locator(".sk")).toHaveCount(0);
+  await expect(
+    detailMetrics.getByText("확인 못 함", { exact: true }),
+  ).toHaveCount(3);
+});
+
+test("collection 응답이 15초 넘게 오지 않으면 자리표시를 끝내고 '확인 못 함'으로 전환한다", async ({
+  page,
+}) => {
+  await page.clock.install();
+  await page.route(/\/ops\/sources$/, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(VIEW),
+    }),
+  );
+  await page.route(/\/ops\/collection$/, () => new Promise<void>(() => {}));
+
+  await openSources(page);
+  await page
+    .getByRole("link", { name: "기상특보 조회 상세 보기" })
+    .filter({ visible: true })
+    .click();
+  await page.clock.fastForward(200);
+  const detailMetrics = page.locator("main dl").first();
+  await expect(detailMetrics.locator(".sk")).toHaveCount(3);
+
+  await page.clock.fastForward(5_000);
+  await expect(
+    page.locator("p", { hasText: /평소보다 오래 걸려요/ }),
+  ).toBeVisible();
+
+  await page.clock.fastForward(11_000);
+  await expect(detailMetrics.locator(".sk")).toHaveCount(0);
+  await expect(
+    detailMetrics.getByText("확인 못 함", { exact: true }),
+  ).toHaveCount(3);
+});
+
+test("collection 새로 고침은 직전 값을 유지하고, 실패 뒤 새로 고침하면 다시 자리표시로 전환한다", async ({
+  page,
+}) => {
+  await page.route(/\/ops\/sources$/, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(VIEW),
+    }),
+  );
+  let mode: "ok" | "hold-fail" | "hold-ok" = "ok";
+  let releaseHold!: () => void;
+  await page.route(/\/ops\/collection$/, async (route: Route) => {
+    if (mode === "hold-fail" || mode === "hold-ok") {
+      const fail = mode === "hold-fail";
+      await new Promise<void>((resolve) => {
+        releaseHold = resolve;
+      });
+      await route.fulfill({
+        status: fail ? 500 : 200,
+        contentType: "application/json",
+        body: JSON.stringify(
+          fail
+            ? { error: { code: "internal", requestId: "req-col-refresh" } }
+            : COLLECTION,
+        ),
+      });
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(COLLECTION),
+    });
+  });
+
+  await openSources(page);
+  await page
+    .getByRole("link", { name: "기상특보 조회 상세 보기" })
+    .filter({ visible: true })
+    .click();
+  const detailMetrics = page.locator("main dl").first();
+  const weekCard = detailMetrics.locator("div", { hasText: "7일 성공" });
+  await expect(detailMetrics.locator(".sk")).toHaveCount(0);
+  await expect(weekCard).toContainText("99.8%");
+
+  // 1) 성공 상태에서 새로 고침 중: 직전 값 유지(자리표시 없음)
+  mode = "hold-fail";
+  const refreshCollectionReq = page.waitForRequest(/\/ops\/collection$/);
+  await page.getByRole("button", { name: "다시 불러오기" }).click();
+  await refreshCollectionReq;
+  await expect(detailMetrics.locator(".sk")).toHaveCount(0);
+  await expect(weekCard).toContainText("99.8%");
+
+  // 2) 새로 고침 실패 -> '확인 못 함' 확정
+  releaseHold();
+  await expect(weekCard).toContainText("확인 못 함");
+
+  // 3) 실패 상태 뒤 다시 새로 고침 -> 자리표시로 돌아간 뒤 복구
+  mode = "hold-ok";
+  await page.getByRole("button", { name: "다시 불러오기" }).click();
+  await expect(detailMetrics.locator(".sk")).toHaveCount(3);
+  releaseHold();
+  await expect(detailMetrics.locator(".sk")).toHaveCount(0);
+  await expect(weekCard).toContainText("99.8%");
+});

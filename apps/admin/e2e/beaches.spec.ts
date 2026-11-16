@@ -800,3 +800,47 @@ test("로딩(해변 상세 메모): 15초 넘으면 메모 영역에 다시 시�
     "현장 점검 메모",
   );
 });
+
+test("로딩(해변 상세 지금 표시 상태): 자리표시와 5초 늦음 안내 뒤 실제 값을 보여 준다", async ({
+  page,
+}) => {
+  await page.clock.install();
+  let holdPublished = false;
+  let releasePublished!: () => void;
+  await page.route(/\/ops\/beaches\/published$/, async (route: Route) => {
+    if (holdPublished) {
+      await new Promise<void>((resolve) => {
+        releasePublished = resolve;
+      });
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(PUBLISHED),
+    });
+  });
+  await signIn(page, ["viewer"]);
+  await openBeaches(page);
+
+  holdPublished = true;
+  await openDetail(page, "강문해수욕장");
+
+  const statusSection = page.getByRole("region", { name: "지금 표시 상태" });
+  await expect(
+    statusSection.getByText("지금 표시 상태 불러오는 중"),
+  ).toBeAttached();
+  await page.clock.fastForward(200);
+  await expect(statusSection.locator("[aria-busy='true']")).toBeVisible();
+  await expect(statusSection.locator(".sk").first()).toBeVisible();
+
+  await page.clock.fastForward(5_000);
+  await expect(
+    statusSection.locator("p", { hasText: /평소보다 오래 걸려요/ }),
+  ).toBeVisible();
+
+  holdPublished = false;
+  releasePublished();
+  await page.clock.fastForward(500);
+  await expect(statusSection.locator("[aria-busy='true']")).toHaveCount(0);
+  await expect(statusSection.getByText("특보 없음")).toBeVisible();
+});

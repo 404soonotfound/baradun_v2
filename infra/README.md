@@ -15,11 +15,11 @@ npx cdk diff --method=change-set            # 배포된 스택과 변경 세트 
 인프라 스택은 main 머지 뒤 CI가 자동으로 배포합니다(아래 'main 머지 뒤 자동 배포'). 첫 설정·boundary 반영·비상 배포처럼 손으로 할 때는 최신 `origin/main`을 꺼낸 배포용 작업 트리에서 합니다. 작업 중인 브랜치에서 배포하면 머지되지 않은 코드가 실환경에 올라갑니다. 아래 명령 하나가 그 순서를 모두 합니다(BRD-169, `infra/scripts/deploy.mjs`).
 
 ```bash
-cd ../baradun_v2-deploy && npm run deploy:infra   # 프로필 기본값: AWS_PROFILE, 없으면 soo-login
-npm run deploy:infra -- --profile baradun-admin   # 다른 프로필
+cd ../baradun_v2-deploy && npm run deploy:infra   # 프로필 기본값: AWS_PROFILE, 없으면 baradun-sso
+npm run deploy:infra -- --profile <프로필>        # 다른 프로필
 npm run deploy:infra -- --issue 328               # 결과를 이슈 #328에 댓글로(GH-382)
 npm run deploy:infra -- --watch 0                 # 배포 뒤 로그 점검 건너뛰기(기본 16분)
-npm run deploy:infra -- --admin-profile baradun-admin  # boundary를 고칠 프로필(기본: --profile)
+npm run deploy:infra -- --admin-profile <프로필>  # boundary를 고칠 프로필(기본: --profile)
 ```
 
 배포용 폴더에서 실행합니다. 처음 한 번은 폴더를 만들거나 이 명령이 있는 커밋으로 맞춥니다: `git fetch origin && git worktree add --detach ../baradun_v2-deploy origin/main && cd ../baradun_v2-deploy && npm ci`(이미 있으면 `git checkout --detach origin/main && npm ci`). 실행 중인 명령이 배포할 커밋의 명령과 다르면 멈추고, 배포용 폴더라면 한 번 더 실행하라고 안내합니다(예전 절차로 배포하지 않게).
@@ -27,7 +27,7 @@ npm run deploy:infra -- --admin-profile baradun-admin  # boundary를 고칠 프�
 1. `origin/main` 최신 커밋의 `ci-ok`가 성공인지 확인합니다(GitHub CLI 로그인 필요). 도는 중·실패·결과 없음이면 배포용 폴더를 옮기지 않고 멈춥니다. `ci-ok`는 다른 검사가 모두 끝나야 생기므로, 아직 없더라도 그 커밋의 CI가 돌고 있으면 '도는 중'으로 안내합니다.
 2. 배포용 작업 트리(저장소 옆 `{저장소}-deploy`, `BARADUN_DEPLOY_DIR`로 바꿀 수 있음)를 그 커밋으로 맞춥니다. 없으면 만들고, 고친 파일이 있으면 멈춥니다.
 3. `npm ci`
-4. aws 명령(조회·실행·대기)은 프로필을 그대로 써서 `aws login` 키가 스스로 갱신됩니다(셸에 남은 예전 키 환경 변수는 지움). cdk에만 변경 세트를 만들기 직전에 내보낸 임시 키를 넘기고, 5분 안에 만료되면 멈춥니다. 로그인이 안 돼 있으면 `aws login --profile <프로필>` 안내를 띄우고 멈춥니다. 스택이 진행 중·실패 상태여도 멈춥니다.
+4. aws 명령(조회·실행·대기)은 프로필을 그대로 써서, 액세스 포털 세션이 살아 있는 동안 Identity Center 역할 키가 스스로 갱신됩니다(셸에 남은 예전 키 환경 변수는 지움). 실행·대기(최대 1시간)와 로그 점검(기본 16분) 도중 포털 세션이 끝나면 확인하지 못하고 멈추므로, 포털 세션이 얼마 남지 않았으면 먼저 `aws sso login`으로 다시 로그인합니다. cdk에만 변경 세트를 만들기 직전에 내보낸 임시 키를 넘기고, 5분 안에 만료되면 멈춥니다. 로그인이 안 돼 있으면 `aws sso login --profile <프로필>` 안내를 띄우고 멈춥니다. 스택이 진행 중·실패 상태여도 멈춥니다.
 5. 스택 밖 IAM 정책(boundary `BaradunV2-RoleBoundary`, 실행 정책 `BaradunCdkExecution`·`BaradunCdkExecutionWorkload`)의 AWS 기본 버전을 배포할 커밋의 `bootstrap/*.json`과 문장(Sid) 단위로 비교합니다(GH-382). 정책을 읽지 못하면 '같음'으로 넘기지 않고 멈춥니다(`--admin-profile`로 읽을 수 있는 프로필 지정).
 6. `cdk deploy --no-execute`로 변경 세트 `deploy-{커밋 7자}-{UTC 시각}`만 만들고, 바뀌는 리소스를 표로 보여 줍니다. 줄 앞 표시는 `!!` 삭제·교체(테이블·버킷·사용자 풀·로그 그룹·대기열·KMS 키처럼 데이터를 담는 리소스는 '교체될 수도 있음'도 포함, 빨간 경고), `**` 권한 리소스, `~` 그 밖의 '교체될 수도 있음'(속성 값이 배포 때 정해져 미리 모른다는 뜻, 대개 교체되지 않음), `*~` 교체될 수도 있는 권한 리소스입니다. 함수 URL(`AWS::Lambda::Url`)은 함수가 바뀔 때마다 '교체될 수도 있음'으로 나와 `~`로 두지만, 운영 API 함수 URL은 운영자 사이트 `/ops/*`의 원본이라(BRD-147) 배포 뒤 주소가 그대로인지 확인합니다. 바뀌었더라도 CloudFront 원본은 같은 배포에서 함께 갱신됩니다. 배포마다 바뀌는 `AWS::CDK::Metadata`는 표시하지 않습니다. 표 아래에 5의 비교 결과를 함께 보여 줍니다. 바뀐 리소스도 없고 boundary도 같으면 그렇게 알리고 끝냅니다.
    변경 세트를 준비할 때 스택 종료 보호만 먼저 켜질 수 있습니다.
@@ -103,9 +103,9 @@ GitHub 저장소 설정 → Environments에서 `infra`(배포 브랜치 `main`�
 2. **인증서 요청**: ACM 인증서를 **us-east-1**에 요청합니다. CloudFront는 이 리전 인증서만 받습니다.
 
    ```bash
-   AWS_PROFILE=baradun-admin aws acm request-certificate --region us-east-1 \
+   AWS_PROFILE=baradun-sso aws acm request-certificate --region us-east-1 \
      --domain-name www.baradun.app --validation-method DNS
-   AWS_PROFILE=baradun-admin aws acm describe-certificate --region us-east-1 \
+   AWS_PROFILE=baradun-sso aws acm describe-certificate --region us-east-1 \
      --certificate-arn <위 결과의 CertificateArn> \
      --query 'Certificate.DomainValidationOptions[0].ResourceRecord'
    ```
@@ -119,10 +119,10 @@ GitHub 저장소 설정 → Environments에서 `infra`(배포 브랜치 `main`�
 2. **스택 배포**: 최신 `origin/main` 작업 트리에서 도메인·인증서 값을 넣어 배포합니다(맨 위 배포 절차).
 
    ```bash
-   AWS_PROFILE=baradun-admin npx cdk diff --method=change-set \
+   AWS_PROFILE=baradun-sso npx cdk diff --method=change-set \
      --parameters SiteDomainName=www.baradun.app \
      --parameters SiteCertificateArn=<인증서 ARN>
-   AWS_PROFILE=baradun-admin npx cdk deploy \
+   AWS_PROFILE=baradun-sso npx cdk deploy \
      --parameters SiteDomainName=www.baradun.app \
      --parameters SiteCertificateArn=<인증서 ARN>
    ```
@@ -154,7 +154,7 @@ GitHub 저장소 설정 → Environments에서 `infra`(배포 브랜치 `main`�
 3. **CloudFront 복구**: 두 매개변수를 비워 다시 배포합니다.
 
    ```bash
-   AWS_PROFILE=baradun-admin npx cdk deploy \
+   AWS_PROFILE=baradun-sso npx cdk deploy \
      --parameters SiteDomainName= --parameters SiteCertificateArn=
    ```
 
@@ -193,10 +193,10 @@ API 키 읽기(`ssm:GetParameter`)는 boundary에서 스택의 Lambda 함수가 
 
 ### 정책 적용과 되돌리기 절차
 
-boundary 정책과 실행 정책은 스택 밖에서 관리자 권한으로 관리합니다. 아래 절차는 저장소 루트에서 시작하고 같은 셸을 유지합니다. 먼저 기존 정상 관리자 프로필이나 아래에서 검증한 `baradun-admin` 프로필을 선택합니다. 새 관리자 역할 전환과 실행 정책 변경은 각각 검증한 뒤 진행합니다.
+boundary 정책과 실행 정책은 스택 밖에서 관리자 권한으로 관리합니다. 아래 절차는 저장소 루트에서 시작하고 같은 셸을 유지합니다. 관리자 프로필은 Identity Center 관리자 권한 세트(`baradun-sso`, 결정 기록 D21-10)입니다. 아래 'MFA 조건 임시 관리자 역할'(`baradun-admin`)은 Identity Center를 쓸 수 없을 때의 대안 절차이고, 이 계정에는 만들어 두지 않았습니다.
 
 ```bash
-export AWS_PROFILE=baradun-admin
+export AWS_PROFILE=baradun-sso
 BRD121_ACCOUNT_ID="<계정>"
 ```
 
@@ -319,7 +319,7 @@ BRD121_ACCOUNT_ID="<계정>"
 
 일상 사용하는 IAM 사용자에 `AdministratorAccess`를 상시 붙여 두지 않습니다. 이 계정은 2026-11-13에 AWS Paid 플랜으로 전환했고, AWS Organizations와 IAM Identity Center를 이미 설정했습니다. 일상 운영에는 기존 Identity Center의 MFA와 권한 세트로 발급한 임시 세션을 우선합니다. 전환 순서와 권한 분리 전 확인 항목은 [GH-300 절차서](iam-transition.md#관리자-접근-전환)를 따릅니다.
 
-아래 IAM 임시 관리자 역할 절차는 Identity Center 계정 접근을 사용할 수 없을 때의 대안입니다. 관리자 세션은 최대 1시간입니다.
+아래 IAM 임시 관리자 역할 절차는 Identity Center 계정 접근을 사용할 수 없을 때의 대안입니다. 이 대안 역할의 세션은 최대 1시간입니다. Identity Center 관리자 권한 세트의 세션 길이는 [GH-300 절차서](iam-transition.md#관리자-접근-전환)에 적은 값을 따릅니다.
 
 관리자 역할 이름에는 `BaradunV2-` 접두어를 쓰지 않습니다. 이 접두어는 CDK 실행 정책의 역할 관리·신뢰 정책 수정·PassRole 대상이며, 스택 밖에서 만든 관리자 역할에는 스택의 boundary가 붙지 않습니다. 관리자 역할을 이 범위에 넣으면 실행 역할이 관리자 역할을 Lambda에 넘기는 권한 상승 경로가 생깁니다. 이미 이전 이름으로 역할을 만들었다면 새 이름의 역할을 생성·검증한 뒤 기존 관리자 역할을 분리·정리합니다. 기존 관리자 경로는 새 경로의 검증이 끝날 때까지 유지합니다.
 

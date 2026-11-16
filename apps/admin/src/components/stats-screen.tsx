@@ -352,11 +352,13 @@ function Donut({
   title,
   rows,
   total,
+  unavailable = t.subReportUnavailable,
 }: {
   id: string;
   title: string;
   rows: readonly { key: string; label: string; value: number | null }[] | null;
   total: number | null;
+  unavailable?: string;
 }) {
   // 색이 4개라 5개 이상이면 앞 3개 + '기타'(나머지 합, 하나라도 비면 합도 비움). 고리와 범례가 같은 줄을 씀
   const shown =
@@ -425,9 +427,7 @@ function Donut({
         </div>
         <div className="min-w-0 flex-1">
           {shown === null ? (
-            <p className="text-body-s text-text-body">
-              {t.subReportUnavailable}
-            </p>
+            <p className="text-body-s text-text-body">{unavailable}</p>
           ) : shown.length === 0 ? (
             <p className="text-body-s text-text-muted">{t.listEmpty}</p>
           ) : (
@@ -625,7 +625,11 @@ function StatsBody({
           value: formatNumber(value),
         })
       : t.rangeLabel[range];
+  const unconfigured = data?.configured === false;
   const unavailable = trendUnavailable(trends);
+  const periodMissingText = unconfigured
+    ? t.unconfiguredCard
+    : t.subReportUnavailable;
   const daily = trends?.daily?.rows ?? null;
   const dailyRows = (pick: "activeUsers" | "pageViews") =>
     daily?.map((d) => ({
@@ -1000,6 +1004,7 @@ function StatsBody({
                       : null
                   }
                   total={deviceTotal}
+                  unavailable={periodMissingText}
                 />
                 <Donut
                   id="stats-languages"
@@ -1014,6 +1019,7 @@ function StatsBody({
                       : null
                   }
                   total={languageTotal}
+                  unavailable={periodMissingText}
                 />
               </>
             )}
@@ -1036,7 +1042,7 @@ function StatsBody({
                 <BarListSkeleton />
               ) : !period || period.topBeaches === null ? (
                 <p className="text-body-s text-text-body">
-                  {t.subReportUnavailable}
+                  {periodMissingText}
                 </p>
               ) : period.topBeaches.length === 0 ? (
                 <p className="text-body-s text-text-muted">

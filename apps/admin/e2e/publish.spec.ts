@@ -1206,13 +1206,15 @@ test("미리보기에서 게시 확인 창으로 이동했다가 취소하면 �
   await signIn(page);
   await mockPublish(page, {
     preview: () => ({
-      status: 200,
-      body: {
-        generatedAt: "2026-11-13T10:30:00.000Z",
-        sourceAt: "2026-11-13T10:25:00.000Z",
-        counts,
-        nextCounts: { clear: 180, unavailable: 24, undetermined: 2 },
-        changes: [],
+      ok: true,
+      preview: {
+        status: "ready",
+        at: iso(base + 4 * MINUTE),
+        current: { version: V0, counts, readable: true, missing: false },
+        next: {
+          counts: { clear: 180, unavailable: 24, undetermined: 2 },
+        },
+        changed: [],
         changedCount: 0,
         checks: { beachIds: null, expected: 206, contractErrors: 0 },
       },
@@ -2208,4 +2210,163 @@ test("로딩(L6): 목록 재조회·변경 미리보기·되돌리기 미리보�
   await expect(
     page.locator("p", { hasText: /평소보다 오래 걸려요/ }),
   ).toBeVisible();
+});
+
+test("변경 미리보기 서랍 로딩·실패 때는 '지금 게시'를 잠그고, 되돌리기 미리보기 일반 실패도 다시 시도와 확인 입력 속성을 제공한다", async ({
+  page,
+}) => {
+  await signIn(page);
+  await mockPublish(page);
+  await openPublish(page);
+
+  let holdPreview = true;
+  let releasePreview!: (status: number) => void;
+  await page.route(/\/ops\/publish\/preview(\?.*)?$/, async (route: Route) => {
+    if (holdPreview) {
+      const status = await new Promise<number>((resolve) => {
+        releasePreview = resolve;
+      });
+      if (status !== 200) {
+        await route.fulfill({
+          status,
+          contentType: "application/json",
+          body: JSON.stringify({
+            error: { code: "internal", requestId: "req-prev-500" },
+          }),
+        });
+        return;
+      }
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        ok: true,
+        preview: {
+          status: "ready",
+          at: "2026-11-15T11:00:00.000Z",
+          current: {
+            version: V2,
+            readable: true,
+            missing: false,
+            counts: { clear: 180, unavailable: 24, undetermined: 2 },
+          },
+          next: {
+            counts: { clear: 180, unavailable: 24, undetermined: 2 },
+          },
+          changed: [],
+          changedCount: 0,
+          checks: { beachIds: null, expected: 206, contractErrors: 0 },
+        },
+      }),
+    });
+  });
+
+  // 변경 미리보기 로딩 중과 500 실패 상태에서는 서랍의 '지금 게시'가 비활성화됨
+  const previewTrigger = page.getByRole("button", { name: "변경 미리보기" });
+  await previewTrigger.click();
+  const drawer = page.getByRole("dialog", { name: "변경 미리보기" });
+  const drawerPublish = drawer.getByRole("button", { name: "지금 게시" });
+  await expect(drawerPublish).toBeDisabled();
+
+  releasePreview(500);
+  await expect(drawer.getByRole("alert")).toContainText("req-prev-500");
+  await expect(drawerPublish).toBeDisabled();
+
+  holdPreview = false;
+  await drawer.getByRole("button", { name: "다시 시도" }).click();
+  await expect(drawerPublish).toBeEnabled();
+  await drawer.getByRole("button", { name: "미리보기 닫기" }).click();
+
+  // 되돌리기 미리보기 HTTP 500 실패에서도 '다시 시도' 제공 + 포커스 복원 + 입력 필드 id/name 속성 확인
+  let rollbackStatus = 500;
+  await page.route(
+    /\/ops\/publish\/rollback-preview(\?.*)?$/,
+    async (route: Route) => {
+      if (rollbackStatus !== 200) {
+        await route.fulfill({
+          status: rollbackStatus,
+          contentType: "application/json",
+          body: JSON.stringify({
+            error: { code: "internal", requestId: "req-rb-500" },
+          }),
+        });
+        return;
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          available: true,
+          version: V1,
+          items: [
+            { id: "n-maint", change: "restore", title: "새벽 점검 예고" },
+          ],
+        }),
+      });
+    },
+  );
+
+  await history(page)
+    .nth(2)
+    .getByRole("button", { name: /되돌리기/ })
+    .click();
+  const rollbackDialog = page.getByRole("dialog", {
+    name: /게시본으로 되돌릴까요\?/,
+  });
+  await expect(rollbackDialog.getByRole("alert")).toContainText(
+    "바뀌는 공지를 확인하지 못했어요",
+  );
+  await expect(rollbackDialog.getByRole("alert")).toContainText("req-rb-500");
+  await expect(
+    rollbackDialog.getByRole("alert").getByText("운영 서버가 응답하지 않아요"),
+  ).toHaveCount(0);
+  const confirmInput = rollbackDialog.getByLabel(
+    '확인을 위해 "되돌리기"를 입력해 주세요',
+  );
+  await expect(confirmInput).toHaveAttribute("id", "rollback-confirm-word");
+  await expect(confirmInput).toHaveAttribute("name", "rollbackConfirmWord");
+  await expect(
+    rollbackDialog.getByRole("button", { name: "되돌리기" }),
+  ).toBeDisabled();
+
+  rollbackStatus = 200;
+  await rollbackDialog.getByRole("button", { name: "다시 시도" }).click();
+  await expect(rollbackDialog.getByRole("button", { name: "취소" })).toBeFocused();
+  await expect(rollbackDialog).toContainText('공지 "새벽 점검 예고" 그때 문구로');
+});
+
+test("변경 미리보기: status가 blocked이면 서랍 안 '지금 게시' 버튼이 비활성화된다", async ({
+  page,
+}) => {
+  await signIn(page);
+  await mockPublish(page);
+  await openPublish(page);
+
+  await page.route(/\/ops\/publish\/preview$/, async (route: Route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        ok: true,
+        preview: {
+          status: "blocked",
+          at: "2026-11-11T03:00:00Z",
+          reason: "beach_ids",
+          checks: {
+            beachIds: { missing: 1, extra: 0, duplicate: 0 },
+            expected: 222,
+            contractErrors: 0,
+          },
+        },
+      }),
+    });
+  });
+
+  await page.getByRole("button", { name: "변경 미리보기" }).click();
+  const drawer = page.getByRole("dialog", { name: "변경 미리보기" });
+  await expect(
+    drawer.getByText(/이대로 게시하면 검증에 걸려 게시하지 않아요/),
+  ).toBeVisible();
+  await expect(drawer.getByRole("button", { name: "지금 게시" })).toBeDisabled();
 });
