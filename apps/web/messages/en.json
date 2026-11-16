@@ -457,9 +457,11 @@
     }
   },
   "photo": {
-    "alt": "Photo of {name}",
+    "alt": "Reference photo of {name}",
     "credit": "Photo: <link>{source}</link> · {license}",
     "creditWithTitle": "Photo: <link>{source}</link>, “{title}” · {license}",
+    "coverCredit": "Photo <link>{source}</link> · {license}",
+    "coverCreditWithTitle": "Photo <link>{source}</link>, “{title}” · {license}",
     "license": {
       "kogl-type1": "KOGL Type 1"
     },
