@@ -1,4 +1,6 @@
 import { NextIntlClientProvider } from "next-intl";
+import { parseFragment } from "parse5";
+import type { DefaultTreeAdapterMap } from "parse5";
 import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
@@ -11,6 +13,9 @@ import { useRowText } from "@/lib/snapshot/use-row-text";
 import type { BeachView, MetricView } from "@/lib/snapshot/view";
 
 import { ExploreSummary } from "./explore-summary";
+
+type ChildNode = DefaultTreeAdapterMap["childNode"];
+type TextNode = DefaultTreeAdapterMap["textNode"];
 
 // 탐색 시안 C(GH-529 · 결정 기록 29장 D29-2·D29-6): 세 줄 목록 줄 문구와 요약 한 줄
 
@@ -104,7 +109,7 @@ describe("세 줄 목록 줄 문구", () => {
       metrics: { ...METRICS, waveHeight: { kind: "delayed" } },
     };
     expect(lines(delayed)).toContain(
-      "<p>파고 · 측정이 늦어지고 있어요 · 파주기 6.2s</p>",
+      "<p>파고 · 측정이 늦어지고 있어요 · 파주기 6.2s · 20분 전 측정</p>",
     );
   });
   it("판단불가에서 파고 값을 보이면 그 값의 측정 시각을 바로 뒤에 붙임", () => {
@@ -128,7 +133,9 @@ describe("세 줄 목록 줄 문구", () => {
     expect(out).toContain(
       "<p>강원 강릉시 · 6.2km · 수온 21.4°C · 20분 전 측정</p>",
     );
-    expect(out).toContain("<p>파고 0.6m · 70분 전 측정 · 파주기 6.2s</p>");
+    expect(out).toContain(
+      "<p>파고 0.6m · 70분 전 측정 · 파주기 6.2s · 20분 전 측정</p>",
+    );
   });
   it("오래된 정보는 'HH:MM 확인 · 이후 확인 못 함'을 남김", () => {
     const stale: Ready = {
@@ -235,6 +242,17 @@ describe("MapCard", () => {
     });
     expect(out.split("이후 확인 못 함").length - 1).toBe(1);
   });
+  it("판단불가 카드에 측정소 없는 파고·파주기 값을 넣지 않음(상세에서 봄)", () => {
+    const out = card({
+      ...CLEAR,
+      category: "undetermined",
+      badge: { kind: "warning_unknown" },
+      reasons: [{ kind: "warning_unknown" }],
+    });
+    expect(out).toContain("특보 확인 못 함");
+    expect(out).not.toContain("파고");
+    expect(out).not.toContain("파주기");
+  });
 });
 
 describe("ExploreSummary", () => {
@@ -246,10 +264,16 @@ describe("ExploreSummary", () => {
       count: 2,
     },
   ] as const;
-  const text = (node: ReactNode) =>
-    html(node)
-      .replace(/<svg[\s\S]*?<\/svg>/g, "")
-      .replace(/<[^>]+>/g, "");
+  // 보이는 글자만 이어 붙임(아이콘 svg 제외). 정규식으로 태그를 지우지 않고 HTML을 나무로 읽음
+  const text = (node: ReactNode) => {
+    const walk = (item: ChildNode): string =>
+      item.nodeName === "#text"
+        ? (item as TextNode).value
+        : item.nodeName === "svg" || !("childNodes" in item)
+          ? ""
+          : item.childNodes.map(walk).join("");
+    return parseFragment(html(node)).childNodes.map(walk).join("");
+  };
   it("전체 n곳 · 사유별 개수 · HH:MM 업데이트 + 새로고침", () => {
     const out = text(
       <ExploreSummary
