@@ -203,7 +203,9 @@ export class OpsApi extends Construct {
         resources: [props.publisher.functionArn, props.preview.functionArn],
       }),
     );
-    // 문의: 상세 읽기·처리 상태 바꾸기(트랜잭션 Update)·목록 GSI 조회. 만들기·지우기·Scan은 없음
+    // 문의: 상세 읽기·처리 상태 바꾸기(트랜잭션 Update)·목록 GSI 조회. 만들기·지우기·테이블 Scan은 없음
+    // 상태 GSI Scan은 4종 밖 처리 상태 문의를 찾는 데만 씀(#521, 아키텍처 18.3). GSI 파티션이 상태라 Query로는
+    // 4종 밖 값을 찾을 수 없음. 같은 GSI를 이미 Query로 읽어 새로 보이는 값은 없음(요약 projection만)
     this.role.addToPolicy(
       new iam.PolicyStatement({
         actions: ["dynamodb:GetItem", "dynamodb:UpdateItem"],
@@ -212,7 +214,7 @@ export class OpsApi extends Construct {
     );
     this.role.addToPolicy(
       new iam.PolicyStatement({
-        actions: ["dynamodb:Query"],
+        actions: ["dynamodb:Query", "dynamodb:Scan"],
         resources: [
           `${props.inquiryTable.tableArn}/index/${INQUIRY_STATUS_INDEX.name}`,
         ],
