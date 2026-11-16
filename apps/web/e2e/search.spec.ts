@@ -162,7 +162,10 @@ test.describe("검색 v5", () => {
     await expect(
       list
         .locator("xpath=..")
-        .getByText(/^특보 없음 \d+곳 · .+ · 기상청 \d{2}:\d{2} 확인$/),
+        // 확인 시각이 어제면 'M/D HH:MM'(kstStamp). 자정 직후 실행에도 맞게 날짜 앞자리를 허용
+        .getByText(
+          /^특보 없음 \d+곳 · .+ · 기상청 (?:\d{1,2}\/\d{1,2} )?\d{2}:\d{2} 확인$/,
+        ),
     ).toBeVisible();
     await expectNoA11yViolations(page);
 
