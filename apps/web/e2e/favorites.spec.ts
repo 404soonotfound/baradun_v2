@@ -254,6 +254,12 @@ test.describe("별로 빼기·넣기·최근 본 지우기", () => {
     await expect
       .poll(() => visibleBeachNames(page, desktop))
       .toEqual(["경포해수욕장", "사근진해수욕장"]);
+    // 토스트 버튼이 사라져도 포커스는 되돌린 해변의 별로
+    await expect(
+      page
+        .getByRole("button", { name: "경포해수욕장 즐겨찾기에서 빼기" })
+        .filter({ visible: true }),
+    ).toBeFocused();
 
     // 마지막 항목까지 빼면 포커스가 제목으로 옮겨지고 빈 상태가 됨
     await page
@@ -333,6 +339,9 @@ test.describe("별로 빼기·넣기·최근 본 지우기", () => {
     await expect
       .poll(() => visibleBeachNames(page, desktop))
       .toEqual(["경포해수욕장", "강문해수욕장"]);
+    await expect(
+      page.getByRole("heading", { level: 1, name: "즐겨찾기" }),
+    ).toBeFocused();
   });
 });
 

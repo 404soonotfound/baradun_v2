@@ -37,11 +37,18 @@ export function toggleFavorite(id: string) {
   else favorites.add(id);
 }
 
-// 즐겨찾기에서 빼기(즐겨찾기 화면). 되돌리기용으로 빼기 전 순서를 복구하는 함수를 돌려줌
+// 즐겨찾기에서 빼기(즐겨찾기 화면). 되돌리기는 뺀 해변만 원래 자리에 다시 넣음
+// 빼기 전 목록 전체로 덮지 않음: 토스트가 떠 있는 동안 넣거나 뺀 다른 해변을 지키기 위함
 export function removeFavorite(id: string): () => void {
-  const before = favorites.getSnapshot();
+  const index = favorites.getSnapshot().indexOf(id);
+  if (index === -1) return () => {};
   favorites.remove(id);
-  return () => favorites.replace(before);
+  return () => {
+    const current = favorites.getSnapshot();
+    if (current.includes(id)) return;
+    const at = Math.min(index, current.length);
+    favorites.replace([...current.slice(0, at), id, ...current.slice(at)]);
+  };
 }
 
 // [7] 최근 본 목록 읽기

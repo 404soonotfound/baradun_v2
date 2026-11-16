@@ -213,7 +213,14 @@ export function FavoritesScreen({
       const undo = removeFavorite(id);
       toast.show({
         text: t("favorites.removed"),
-        action: { label: t("favorites.undo"), onClick: undo },
+        action: {
+          label: t("favorites.undo"),
+          // 토스트 버튼이 사라지므로 되돌린 해변의 별로 포커스를 옮김
+          onClick: () => {
+            pendingFocusRef.current = { type: "star", id };
+            undo();
+          },
+        },
       });
       return;
     }
@@ -225,7 +232,14 @@ export function FavoritesScreen({
     const undo = clearRecent();
     toast.show({
       text: t("favorites.recent.cleared"),
-      action: { label: t("favorites.recent.undo"), onClick: undo },
+      action: {
+        label: t("favorites.recent.undo"),
+        // 토스트 버튼이 사라지므로 목록 머리(화면 제목)로 포커스를 옮김
+        onClick: () => {
+          pendingFocusRef.current = { type: "title" };
+          undo();
+        },
+      },
     });
   }
 
