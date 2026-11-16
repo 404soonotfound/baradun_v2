@@ -68,18 +68,19 @@ export function Onboarding({
     localizedPath(locale, "/guide"),
     localizedPath(locale, "/terms"),
   ].includes(currentPath);
-  // [2] 기기 기록을 읽기 전(undefined, 서버 HTML·첫 그리기)에는 덮지 않음
-  // 위치 권한 상태는 ON-2가 남은 기기만 LocationGate에서 확인(다른 기기는 화면마다 위치를 받지 않게).
-  // 여기서는 권한을 아직 묻지 않은 것으로 보고 단계만 정함
-  const step =
-    record === undefined || onOnboardingReference
-      ? null
+  // [2] 기기 기록을 읽기 전(undefined, 서버 HTML·첫 그리기)에는 ON-1을 미리 그려 첫 방문 LCP를 줄임.
+  // 이미 확인한 기기(/guide·/terms 포함)는 그리기 전 스크립트(lib/layout-hints.ts)가 data-onboarded를 붙여 숨김
+  const preloading = record === undefined;
+  const step = onOnboardingReference
+    ? null
+    : preloading
+      ? "notice"
       : onboardingStep(record, "idle");
 
   return (
     <>
       {step === "notice" && (
-        <OnboardingDialog step="notice">
+        <OnboardingDialog step="notice" preloading={preloading}>
           <NoticeStep locale={locale} />
         </OnboardingDialog>
       )}
@@ -157,47 +158,88 @@ function LocationGate({
   );
 }
 
-// [3] 덮는 틀. 브라우저 기본 <dialog>의 showModal(): 뒤 화면을 막고(inert) 포커스를 안에 가둠
+// [3] 덮는 틀. ON-1은 정적 HTML에서 inline open으로 먼저 그리고 배경 형제에 inert를 검(첫 방문 LCP 단축).
+// ON-2는 <dialog> showModal()로 뒤 화면을 막고 포커스를 가둠.
 // 열리면 그 단계 제목으로 포커스(화면 읽기가 고지를 처음부터 읽음. 첫 버튼으로 바로 가면 고지를 건너뛰고 읽게 됨)
 function OnboardingDialog({
   step,
+  preloading = false,
   children,
 }: {
   step: "notice" | "location";
+  preloading?: boolean;
   children: ReactNode;
 }) {
   const t = useTranslations("onboarding");
   // Vue: ref="dialog" → this.$refs.dialog
   const dialogRef = useRef<HTMLDialogElement>(null);
   const titleId = TITLE_IDS[step];
+  // ON-1은 정적 HTML에서 open으로 먼저 그려 첫 방문 LCP를 단축함(showModal()은 Top Layer 재그리기를 유발).
+  // 대신 수화 뒤 배경 형제 요소에 inert를 걸어 모달 포커스·화면 읽기 차단을 유지함
+  const inlineModal = step === "notice";
 
   // Vue: mounted + watch(step)
   useEffect(() => {
+    if (preloading) return;
     const dialog = dialogRef.current;
     if (!dialog) return;
-    if (!dialog.open) dialog.showModal();
-    (
-      document.getElementById(RESET_NOTICE_ID) ??
-      document.getElementById(titleId)
-    )?.focus();
-  }, [titleId]);
+    if (!inlineModal && !dialog.open) dialog.showModal();
+    const focusNotice = () => {
+      if (!dialog.contains(document.activeElement)) {
+        (
+          document.getElementById(RESET_NOTICE_ID) ??
+          document.getElementById(titleId)
+        )?.focus();
+      }
+    };
+    focusNotice();
+    if (!inlineModal) return;
+    const siblings = Array.from(dialog.parentElement?.children ?? []).filter(
+      (el): el is HTMLElement =>
+        el instanceof HTMLElement &&
+        el !== dialog &&
+        el.tagName !== "DIALOG" &&
+        el.tagName !== "SCRIPT",
+    );
+    const prev = siblings.map((el) => el.inert);
+    siblings.forEach((el) => {
+      el.inert = true;
+    });
+    // 기기 데이터 초기화 시트 등 다른 modal <dialog>가 뒤늦게(popstate) 닫히면 top layer 해제 뒤 ON-1로 포커스를 옮김
+    const onDialogClose = (event: Event) => {
+      if (event.target !== dialog) focusNotice();
+    };
+    document.addEventListener("close", onDialogClose, true);
+    return () => {
+      document.removeEventListener("close", onDialogClose, true);
+      siblings.forEach((el, index) => {
+        el.inert = prev[index] ?? false;
+      });
+    };
+  }, [inlineModal, preloading, titleId]);
 
   // 덮는 동안 뒤 페이지 스크롤 막기(Sheet·SystemDialog와 잠금 수를 나눠 셈)
-  useScrollLock();
+  useScrollLock(!preloading);
 
   return (
     <dialog
       ref={dialogRef}
+      open={inlineModal || undefined}
+      // preloading 동안만 붙여 이미 확인한 기기·안내 경로의 첫 그리기를 숨김. 초기화 뒤·클라이언트 이동으로 ON-1이 다시 열릴 때는 data-onboarded에 가려지지 않게 뗌
+      data-onboarding-preload={inlineModal && preloading ? "" : undefined}
+      aria-modal="true"
       aria-labelledby={titleId}
       // Esc로 닫지 않음(건너뛰기 없음)
       onCancel={(event) => event.preventDefault()}
       // 브라우저가 그래도 닫으면(Esc를 빠르게 두 번 등) 다시 엶. 화면에서 빠진 뒤에는 열지 않음
       onClose={(event) => {
         const dialog = event.currentTarget;
-        if (dialog.isConnected && !dialog.open) dialog.showModal();
+        if (!inlineModal && dialog.isConnected && !dialog.open) {
+          dialog.showModal();
+        }
       }}
       // 맨 위 그림이 100vw라 세로 스크롤 막대만큼 가로로 넘칠 수 있어 가로 넘침은 자름
-      className="m-0 h-dvh max-h-none w-full max-w-none overflow-x-hidden bg-bg-page p-0 text-text-default backdrop:bg-bg-page"
+      className="fixed inset-0 z-50 m-0 h-dvh max-h-none w-full max-w-none overflow-x-hidden overflow-y-auto border-0 bg-bg-page p-0 text-text-default backdrop:bg-bg-page"
     >
       {/* 좌우 16 (Figma pad.stack 185:265). ON-1은 맨 위 그림이 화면 끝까지, ON-2는 위 76(머리 줄 자리) + 24 띄움 */}
       <div

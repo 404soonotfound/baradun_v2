@@ -166,7 +166,7 @@ export function clearOnboarding(options: { afterReset?: boolean } = {}) {
 }
 
 // [9] 화면에서: const record = useOnboarding();
-// undefined = 아직 모름(서버 HTML·첫 그리기). 이때는 덮지 않고 기기 기록을 읽은 뒤 정함
+// undefined = 아직 모름(서버 HTML·첫 그리기). 첫 방문 LCP 단축을 위해 ON-1을 미리 그린 뒤 기기 기록을 읽어 유지·숨김을 정함
 export function useOnboarding(): OnboardingRecord | null | undefined {
   return useSyncExternalStore(store.subscribe, store.read, () => undefined);
 }

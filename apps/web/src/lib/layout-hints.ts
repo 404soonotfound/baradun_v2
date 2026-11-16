@@ -1,6 +1,7 @@
 import { DEVICE_KEYS } from "@/lib/device-keys";
 import { serializeInlineScriptValue } from "@/lib/display-init";
 import { LOCALES } from "@/lib/i18n";
+import { NOTICE_VERSION } from "@/lib/notice-version";
 
 // 그리기 전 자리 잡기 힌트 (BRD-39 · Core Web Vitals CLS)
 // 정적 HTML은 기기 저장값을 모르는 상태(위치 확인 중·최근 본 없음·언어 안내 없음)로 그려지고, 수화 뒤 실제 값으로 바뀌며 화면이 밀림.
@@ -16,8 +17,11 @@ export const LANGUAGE_STORAGE_KEY = "baradun:language";
 export const LOCATION_SWITCH_KEY = "baradun:location-switch";
 // 지난 방문에서 위치를 썼는지(lib/location.ts가 상태가 정해질 때 씀). "on"·"off"만. 좌표·권한 원문은 저장하지 않음
 export const LOCATION_HINT_KEY = "baradun:location-hint";
+// 첫 실행 고지 확인 기록(lib/onboarding.ts). noticeVersion이 같으면 이미 확인한 기기
+export const ONBOARDING_STORAGE_KEY = "baradun:onboarding";
 
 // <html>에 붙이는 힌트
+//   data-onboarded: 현재 고지 버전을 이미 확인했거나(/guide·/terms 포함) 첫 실행 안내를 미리 그리지 않음
 //   data-location-hint="off|on": 지난 방문에 위치를 못 썼으면(첫 방문 포함) off → 홈 '위치 없이 보고 있어요' 자리·지역 목록 자리
 //   data-region-chosen: 기본 지역(전국 포함)을 고름 → 홈이 위치와 관계없이 지역 목록
 //   data-recent="1|2": 최근 본 해변 1곳·2곳 이상 → 홈 최근 본 자리
@@ -25,7 +29,11 @@ export const LOCATION_HINT_KEY = "baradun:location-hint";
 // 저장소를 못 읽으면 저장 힌트는 붙이지 않음(자리를 잡지 않을 뿐 화면은 그대로). 언어 안내는 기기 언어만으로도 판단
 export const LAYOUT_HINT_SCRIPT = `(function(){var h=document.documentElement,L=${serializeInlineScriptValue(
   LOCALES,
-)},c=null;try{var s=localStorage;try{var r=JSON.parse(s.getItem(${serializeInlineScriptValue(
+)},V=${serializeInlineScriptValue(
+  NOTICE_VERSION,
+)},c=null;try{if(typeof location!=="undefined"&&/\\/(guide|terms)\\/?$/.test(location.pathname)){h.setAttribute("data-onboarded","")}}catch(e){}try{var s=localStorage;try{var b=JSON.parse(s.getItem(${serializeInlineScriptValue(
+  ONBOARDING_STORAGE_KEY,
+)})||"null");if(b&&typeof b==="object"&&b.noticeVersion===V&&typeof b.acknowledgedAt==="string"&&typeof b.locationStepDone==="boolean"){h.setAttribute("data-onboarded","")}}catch(e){}try{var r=JSON.parse(s.getItem(${serializeInlineScriptValue(
   DEVICE_KEYS.recent,
 )})||"[]"),n=0;if(Array.isArray(r)){for(var i=0;i<r.length;i++){if(typeof r[i]==="string")n++}}if(n){h.setAttribute("data-recent",n>1?"2":"1")}}catch(e){}h.setAttribute("data-location-hint",s.getItem(${serializeInlineScriptValue(
   LOCATION_SWITCH_KEY,
