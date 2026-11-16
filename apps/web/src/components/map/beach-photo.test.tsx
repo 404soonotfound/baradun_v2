@@ -82,22 +82,28 @@ describe("BeachIllustration", () => {
   const source = readFileSync(
     new URL("../../../assets/illustration/beach-no-photo.svg", import.meta.url),
     "utf8",
-  ).replace(/<!--[\s\S]*?-->/, "");
+  );
   const rendered = html(<BeachIllustration />);
   const shapes = (svg: string) =>
-    [...svg.matchAll(/<(g|rect|circle|path)\b([^>]*?)\/?>/g)].map(
+    [...svg.matchAll(/<(svg|g|rect|circle|path)\b([^>]*?)\/?>/g)].map(
       ([, tag, attrs]) =>
         `${tag} ${[
           ...attrs!.matchAll(
-            /\b(stroke-width|stroke-linecap|opacity|d|x|y|cx|cy|r|rx|width|height)="([^"]*)"/g,
+            /\b(viewBox|preserveAspectRatio|stroke-width|stroke-linecap|opacity|d|x|y|cx|cy|r|rx|width|height)="([^"]*)"/g,
           ),
+          // 칠 없음(fill="none")과 그라데이션 연결(하늘·바다). 그라데이션 id는 화면마다 달라 이름만 봄
+          ...attrs!.matchAll(/\b(fill)="(none|url\(#[^)]*\))"/g),
         ]
-          .map(([, key, value]) => `${key}=${value}`)
+          .filter(([, key]) => tag !== "svg" || !/^(width|height)$/.test(key!))
+          .map(
+            ([, key, value]) =>
+              `${key}=${value!.replace(/url\(#.*?(sky|sea).*\)/, "url($1)")}`,
+          )
           .sort()
           .join(" ")}`,
     );
   it("원본 assets/illustration/beach-no-photo.svg와 도형이 같음", () => {
-    expect(shapes(rendered)).toHaveLength(15);
+    expect(shapes(rendered)).toHaveLength(16);
     expect(shapes(rendered)).toEqual(shapes(source));
   });
   it("원본 색이 화면 부품이 쓰는 color.illust.* 라이트 값과 같음(같은 순서)", () => {
