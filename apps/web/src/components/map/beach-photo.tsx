@@ -12,7 +12,7 @@ import { photoSourceUrl } from "@/lib/photo-credit";
 import { useMetaText } from "@/lib/snapshot/use-meta-text";
 
 // 해변 참고 사진 (BRD-30 · 노션 3장 BeachPhoto, 결정 기록 11장 10/21 공공누리 1유형만)
-// 사진 아래에 "참고 사진 · 지금 바다 모습 아님" + 출처(링크)·공공누리 유형. 사진을 자르거나 거르지 않음(object-cover만)
+// 사진 아래에 "참고 사진 · 지금 바다 모습 아님" + 출처(링크)·작품명(공공누리 유형 이름은 /about/data에만, GH-541). 사진을 자르거나 거르지 않음(object-cover만)
 // 사진이 없거나 받지 못하면 자체 해변 그림 + 왼쪽 위 '사진 없음 · 그림' 표시(GH-527 · 결정 기록 29장 D29-4)
 // 그림이 실제 바다 상태로 읽히지 않게 넓은 카드에서는 표시를 빼지 않음. 작은 썸네일은 BeachIllustration만 씀
 // 공유 시트 미리보기(BeachPhoto)는 바꾸지 않아 파도 아이콘 + 안내 그대로(SHARE 명세, empty="icon")
@@ -150,7 +150,7 @@ export function PhotoFigure({
   );
 
   if (overlay) {
-    // credit이면 출처를 사진 아래 줄에 둠(공공누리 제1유형 출처를 빼지 않게, BRD-113)
+    // credit이면 출처를 사진 아래 줄에 둠(공공누리 제1유형 출처 표시를 빼지 않게, BRD-113)
     return (
       <figure className="relative flex flex-col gap-1">
         {image}
@@ -181,7 +181,7 @@ export function PhotoFigure({
 }
 
 // 사진 출처 한 줄(링크 밖에 따로 둘 때). 사진을 보여줄 때만 부름
-// short: 상세 커버처럼 사진 위 좁은 자리에 얹는 짧은 표기('사진 한국관광공사 · 공공누리 제1유형', D29-1). 링크·작품명 규칙은 같음
+// short: 상세 커버처럼 사진 위 좁은 자리에 얹는 짧은 표기('사진 한국관광공사', D29-1 · D29-10). 링크·작품명 규칙은 같음
 export function PhotoCredit({
   photo,
   className,
@@ -198,7 +198,7 @@ export function PhotoCredit({
   );
 }
 
-// "사진 출처: 한국관광공사(링크), 「제목」 · 공공누리 제1유형"
+// "사진 출처: 한국관광공사(링크), 「제목」". 공공누리 유형 이름은 사진 옆에 두지 않음(GH-541 · D29-10, /about/data에만)
 function CreditText({
   photo,
   short = false,
@@ -209,7 +209,6 @@ function CreditText({
   const t = useTranslations("photo");
   const tc = useTranslations("common");
   const { agencyText } = useMetaText();
-  const license = t(`license.${photo.license}`);
   // 출처 기관: 아는 기관만 문구 키로, 모르는 기관은 원문 그대로(lib/agencies 표)
   const source = agencyText(photo.source);
   // 출처 이름에 출처 웹사이트 링크(공공누리 제1유형, BRD-113). 새 창이라고 화면 읽기에 알림. 주소를 모르면 글자만
@@ -232,8 +231,7 @@ function CreditText({
     ? t.rich(short ? "coverCreditWithTitle" : "creditWithTitle", {
         source,
         title: photo.title,
-        license,
         link,
       })
-    : t.rich(short ? "coverCredit" : "credit", { source, license, link });
+    : t.rich(short ? "coverCredit" : "credit", { source, link });
 }

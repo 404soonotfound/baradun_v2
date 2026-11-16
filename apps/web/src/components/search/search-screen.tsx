@@ -419,12 +419,12 @@ export function SearchScreen({
     );
   }, [beaches, recentViewed, coords, snapshot]);
 
-  // 화면 아래 사진 출처: 지금 보이는 줄의 사진 출처를 출처·유형마다 한 번씩(지어내지 않음). 사진이 없으면 줄 없음
+  // 화면 아래 사진 출처: 지금 보이는 줄의 사진 출처를 기관마다 한 번씩(지어내지 않음). 사진이 없으면 줄 없음
   const shownPhotos = [
     ...new Map(
       (searching ? shown : viewedItems)
         .flatMap((item) => (item.photo ? [item.photo] : []))
-        .map((photo) => [`${photo.source}|${photo.license}`, photo]),
+        .map((photo) => [photo.source, photo]),
     ).values(),
   ];
   const kmaSource = showsKmaSource(snapshot, sampleSnapshot);
@@ -476,10 +476,9 @@ export function SearchScreen({
         {shownPhotos.map((photo) => {
           const href = photoSourceUrl(photo);
           return (
-            <p key={`${photo.source}|${photo.license}`}>
+            <p key={photo.source}>
               {tSearch.rich("notes.photo", {
                 source: agencyText(photo.source),
-                license: t(`photo.license.${photo.license}`),
                 link: (chunks) =>
                   href ? (
                     <a

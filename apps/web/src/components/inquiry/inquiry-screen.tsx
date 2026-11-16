@@ -558,8 +558,8 @@ export function InquiryScreen({
                 {sendActivity !== null &&
                   ` ${t("context.activity", { activity: ta(sendActivity) })}`}
               </p>
-              {/* 공공누리 제1유형 출처(BRD-113). 사진을 보일 때만(없거나 받지 못하면 그림이라 줄 없음) */}
-              {/* 사진이 보일 때: 지금 바다 모습이 아니라는 안내 + 출처(공공누리 제1유형, BRD-113) */}
+              {/* 사진 출처(BRD-113 · 유형 이름은 두지 않음 GH-541). 사진을 보일 때만(없거나 받지 못하면 그림이라 줄 없음) */}
+              {/* 사진이 보일 때: 지금 바다 모습이 아니라는 안내 + 출처(기관 링크·작품명, BRD-113) */}
               {contextPhoto.shown && (
                 <div className="text-caption text-text-muted">
                   {tPhoto("reference")}

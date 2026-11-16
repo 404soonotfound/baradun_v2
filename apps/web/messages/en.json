@@ -458,13 +458,10 @@
   },
   "photo": {
     "alt": "Reference photo of {name}",
-    "credit": "Photo: <link>{source}</link> · {license}",
-    "creditWithTitle": "Photo: <link>{source}</link>, “{title}” · {license}",
-    "coverCredit": "Photo <link>{source}</link> · {license}",
-    "coverCreditWithTitle": "Photo <link>{source}</link>, “{title}” · {license}",
-    "license": {
-      "kogl-type1": "KOGL Type 1"
-    },
+    "credit": "Photo: <link>{source}</link>",
+    "creditWithTitle": "Photo: <link>{source}</link>, “{title}”",
+    "coverCredit": "Photo <link>{source}</link>",
+    "coverCreditWithTitle": "Photo <link>{source}</link>, “{title}”",
     "reference": "Reference photo · not the sea right now",
     "none": "No photo, so we're showing an illustration",
     "illustration": "Illustration of a beach with no photo",
@@ -709,7 +706,7 @@
     },
     "notes": {
       "safety": "No warnings does not mean it is safe · On-site control and lifeguard guidance come first",
-      "photo": "Photos are for reference (not the sea right now) · Photo: <link>{source}</link> · {license}",
+      "photo": "Photos are for reference (not the sea right now) · Photo: <link>{source}</link>",
       "storage": "Recent searches and recently viewed beaches are saved only on this device"
     }
   },
@@ -765,7 +762,7 @@
     "deviceNoteRecent": "Up to {max} recently viewed beaches are saved only on this device · Tap an empty star to add to Favorites",
     "tableOrderNote": "Columns go from status (verdict · zone · time) → measurements → measurement time · station",
     "clearIsNotSafe": "No warnings doesn't mean it's safe",
-    "photoNote": "Photos are for reference only (not the sea right now) · Photo: <link>{source}</link> · {license} · Beaches without photos show an illustration",
+    "photoNote": "Photos are for reference only (not the sea right now) · Photo: <link>{source}</link> · Beaches without photos show an illustration",
     "photoNoteNoPhoto": "Beaches without photos show an illustration",
     "summary": {
       "count": "{count, plural, one {# beach} other {# beaches}}",

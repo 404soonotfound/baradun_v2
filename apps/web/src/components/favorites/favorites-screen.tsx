@@ -423,7 +423,6 @@ export function FavoritesScreen({
               {hasAnyPhoto
                 ? t.rich("favorites.photoNote", {
                     source: t("observation.agency.kto"),
-                    license: t("photo.license.kogl-type1"),
                     link: (chunks) => (
                       <a
                         href={SOURCE_URL.tourApi}
