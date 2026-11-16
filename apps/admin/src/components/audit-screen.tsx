@@ -24,7 +24,7 @@ import {
 import type { OpsResult } from "@/lib/auth/ops-fetch";
 import { useAuthSession, useSessionSnapshot } from "@/lib/auth/provider";
 import type { BeachName } from "@/lib/beach-names";
-import { isInquiryStatus, kstDateTime, shortId } from "@/lib/inquiries";
+import { inquiryStatusLabel, kstDateTime, shortId } from "@/lib/inquiries";
 import { LOADING_TIMES, withTimeout } from "@/lib/loading-timing";
 import { fill, messages } from "@/lib/messages";
 import { kstRange } from "@/lib/notices";
@@ -87,7 +87,8 @@ export function kindBadge(item: AuditView): string {
   return item.actorKind === "sample" ? t.demoBadge : t.unknownBadge;
 }
 
-const statusLabel = (s: string) => (isInquiryStatus(s) ? i.status[s] : s);
+// 모르는 상태(바꾸기 전 원래 값, #521)는 문의 화면과 같은 '알 수 없는 상태(값)'로 보여 줌
+const statusLabel = inquiryStatusLabel;
 
 // 바뀐 내용 한 줄 요약(시안 '문구 수정 · 영어 문구 추가', '접수 → 확인 중')
 export function summaryOf(item: AuditView): string {

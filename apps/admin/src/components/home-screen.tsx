@@ -859,6 +859,12 @@ function InquiriesBlock({
         </p>
       ) : summary ? (
         <p className={FOOT}>
+          {/* 모르는 처리 상태 문의(#521): 합계에 들어 있음을 알리고, 서버가 읽지 못했으면 '확인 못 함' */}
+          {summary.unknown === null
+            ? `${h.inquiriesUnknownUnavailable} `
+            : summary.unknown
+              ? `${fill(h.inquiriesUnknown, { count: summary.unknown })} `
+              : null}
           {recent && recent.oldest.state !== "absent"
             ? // 보드 '가장 오래된 접수 문의는 …'. 미처리가 없으면(0건) 줄을 두지 않음
               recent.oldest.state === "at"

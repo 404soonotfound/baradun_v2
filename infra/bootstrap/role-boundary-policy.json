@@ -24,6 +24,12 @@
       "Resource": "arn:aws:dynamodb:ap-northeast-2:717304679248:table/BaradunV2-*"
     },
     {
+      "Sid": "InquiryStatusIndexScan",
+      "Effect": "Allow",
+      "Action": "dynamodb:Scan",
+      "Resource": "arn:aws:dynamodb:ap-northeast-2:717304679248:table/BaradunV2-*/index/inquiryStatus-receivedAt"
+    },
+    {
       "Sid": "ApiKeys",
       "Effect": "Allow",
       "Action": "ssm:GetParameter",

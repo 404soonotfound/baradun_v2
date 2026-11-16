@@ -54,13 +54,17 @@ import {
   countInquiries,
   inquiryCountDetails,
   decodeCursor,
+  forgetUnknownStatuses,
   getInquiry,
+  getInquiryForWrite,
   INQUIRY_PAGE_DEFAULT,
   INQUIRY_PAGE_MAX,
   inquiryAuditChanges,
   inquiryPatchFields,
   listFilteredInquiries,
   listInquiries,
+  readUnknownStatuses,
+  receivedLast7dWithUnknown,
   parseInquiryPatch,
 } from "./inquiries";
 import { inquiryFilterScope, parseInquiryFilters } from "./inquiry-list";
@@ -201,6 +205,14 @@ async function listRoute(
       ids,
     );
   }
+  // 모르는 처리 상태 문의(#521): 첫 쪽에서 Scan 한 번(60초 재사용)으로 읽어 '전체' 목록 맨 위와 수에 함께 씀
+  // 필터 목록은 상태를 고르지 않았을 때만 필요(필터 목록에는 수가 없음). 읽지 못해도 목록은 그대로 내려 줌
+  const unknown =
+    !cursor && (!scope || !status)
+      ? await readUnknownStatuses(data.client, data.inquiryTable, now)
+      : undefined;
+  const unavailable =
+    unknown?.ok === false ? { unknownStatusUnavailable: true as const } : {};
   if (scope) {
     const page = await listFilteredInquiries(
       data.client,
@@ -211,22 +223,47 @@ async function listRoute(
       principal.role,
       now,
       data.inquiryBeachSearch,
+      unknown,
     );
-    return json(200, page, ids);
+    return json(200, { ...page, ...unavailable }, ids);
   }
-  const page = await listInquiries(data.client, data.inquiryTable, query, now);
+  const page = await listInquiries(
+    data.client,
+    data.inquiryTable,
+    query,
+    now,
+    unknown,
+  );
   // 상태 탭의 문의 수는 첫 쪽에만 실음(다음 쪽마다 다시 세지 않음). 상태 GSI 읽기 용량이 작아 목록 뒤에 차례로 읽음
-  const counts = cursor
-    ? undefined
-    : await countInquiries(data.client, data.inquiryTable, now);
-  if (!counts) return json(200, page, ids);
+  // 필터 없는 목록에서 unknown은 첫 쪽(cursor 없음)일 때만 있음 → 없으면 다음 쪽
+  // 4종 수는 모르는 상태 Scan과 따로 셈(Scan이 실패해도 4종 수는 그대로 내려 주려고)
+  if (!unknown) return json(200, page, ids);
+  const counts = await countInquiries(data.client, data.inquiryTable, now);
   const details = await inquiryCountDetails(
     data.client,
     data.inquiryTable,
     data.opsTable,
     now,
   );
-  return json(200, { ...page, counts: { ...counts, ...details } }, ids);
+  return json(
+    200,
+    {
+      ...page,
+      counts: {
+        ...counts,
+        // 모르는 상태 수 = 모르는 상태 목록 길이(같은 Scan). 읽지 못했으면 null(0으로 세지 않음)
+        unknown: unknown.ok ? unknown.items.length : null,
+        ...details,
+        receivedLast7d: receivedLast7dWithUnknown(
+          details.receivedLast7d,
+          unknown,
+          now,
+        ),
+      },
+      ...unavailable,
+    },
+    ids,
+  );
 }
 
 // GET /ops/inquiries/{id}
@@ -272,14 +309,15 @@ async function patchRoute(
 
   // 없거나 보관 기한이 지난 문의는 404(쓰기 조건에서도 다시 막음)
   const now = data.now();
-  const current = await getInquiry(
+  const read = await getInquiryForWrite(
     data.client,
     data.inquiryTable,
     id,
     principal.role,
     now,
   );
-  if (!current) return errorJson(404, "not_found", ids);
+  if (!read) return errorJson(404, "not_found", ids);
+  const current = read.detail;
 
   const fields = inquiryPatchFields(check.patch);
   // 개인정보 가리기: 화면이 본 version의 본문에서만 계산함. version이 다르면 지금 본문을 그대로 넣어
@@ -296,15 +334,27 @@ async function patchRoute(
   }
   // 이전 도구를 돌리기 전 문의(상태·version 없음)는 메모만 바꿔도 목록(GSI)에 들어가게 상태를 '접수'로 함께 채움
   // 이미 상태가 있는 이전 문의(version 1 이상)는 상태를 건드리지 않음(메모만 바꿀 때 '확인 중'이 되돌아가지 않게)
-  if (current.legacy && current.version === 0) {
-    fields.legacy = true;
+  // DB에 상태가 저장돼 있으면(모르는 값 포함) version이 없어도 '접수'로 덮지 않음(#521, 이력 없이 원래 값이 사라지지 않게)
+  const unknownStatus = !isInquiryStatus(current.status);
+  const beforeBackfill = current.legacy && current.version === 0;
+  if (beforeBackfill) fields.legacy = true;
+  if (beforeBackfill && read.storedStatus === undefined) {
     fields.inquiryStatus ??= "received";
   }
   const result = await versionedWrite(
     data.client,
     { ops: data.opsTable, inquiry: data.inquiryTable },
     {
-      target: { kind: "inquiry", inquiryId: id },
+      // 서버가 방금 읽은 저장된 상태(모르는 값 포함)가 쓰는 순간에도 DB에 그대로일 때만 씀(#521)
+      // 화면이 본 상태와의 비교는 화면이 보낸 version 조건이 맡음
+      // 상태가 저장되지 않은 문의는 상세가 보여 주는 '접수'(채운 값)와 비교하지 않고 version 조건만 씀
+      target: {
+        kind: "inquiry",
+        inquiryId: id,
+        ...(read.storedStatus !== undefined
+          ? { expectedStatus: read.storedStatus }
+          : {}),
+      },
       expectedVersion: check.patch.version,
       set: fields,
       idempotencyKey: key,
@@ -327,6 +377,8 @@ async function patchRoute(
   if (result.status === "conflict") {
     return errorJson(409, "conflict", ids, { reason: result.reason });
   }
+  // 재사용 중인 모르는 상태 목록에 고친 문의가 이전 값으로 남지 않게 버림(#521)
+  if (unknownStatus) forgetUnknownStatuses(data.client);
   safeLog("info", "ops_inquiry_updated", {
     inquiryId: id,
     version: result.version,

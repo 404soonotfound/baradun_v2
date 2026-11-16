@@ -1,8 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   countInquiries,
   decodeCursor,
   encodeCursor,
+  forgetUnknownStatuses,
   getInquiry,
   applyRedactions,
   inquiryPatchFields,
@@ -10,9 +11,12 @@ import {
   listInquiries,
   MEMO_MAX,
   parseInquiryPatch,
+  readUnknownStatuses,
   REJECT_REASON_MAX,
+  UNKNOWN_STATUS_TIMEOUT_MS,
 } from "./inquiries";
 import { INQUIRY_STATUS_INDEX_NAME } from "../inquiry/policy";
+import { matchesUnknownStatusScan } from "./test-dynamo";
 
 // 운영자 화면 문의 (BRD-153, D16-B4·D5·D6, 구현 제안 I07·I08)
 
@@ -38,12 +42,16 @@ function inquiry(n: number, status: string, overrides: Item = {}): Item {
 }
 
 // GSI Query를 흉내 냄: 상태가 같은 항목을 접수 시각 내림차순으로, Limit·ExclusiveStartKey 적용
+// Scan(4종 밖 상태 찾기, #521)은 GSI 항목(상태가 글자)을 넣은 순서대로 scanPageSize개씩 평가한 뒤
+// 거름 → 거른 결과가 0건이어도 LastEvaluatedKey가 이어질 수 있음(실제 Scan의 1MB 쪽과 같은 모양)
 class FakeIndex {
   readonly queries: Item[] = [];
+  readonly scans: Item[] = [];
   readonly gets: Item[] = [];
   constructor(
     private readonly items: Item[],
     private readonly pageSize = 100,
+    private readonly scanPageSize = 100,
   ) {}
 
   async send(command: { constructor: { name: string }; input: any }) {
@@ -51,6 +59,34 @@ class FakeIndex {
     if (command.constructor.name === "GetCommand") {
       this.gets.push(input);
       return { Item: this.items.find((i) => i.pk === input.Key.pk) };
+    }
+    if (command.constructor.name === "ScanCommand") {
+      this.scans.push(input);
+      const indexed = this.items.filter(
+        (i) => typeof i.inquiryStatus === "string",
+      );
+      const start = input.ExclusiveStartKey
+        ? indexed.findIndex((i) => i.pk === input.ExclusiveStartKey.pk) + 1
+        : 0;
+      const evaluated = indexed.slice(start, start + this.scanPageSize);
+      const last = evaluated.at(-1);
+      const more = start + this.scanPageSize < indexed.length;
+      return {
+        Items: evaluated
+          .filter((i) =>
+            matchesUnknownStatusScan(i, input.ExpressionAttributeValues),
+          )
+          .map(({ message: _message, ...projection }) => projection),
+        ...(more && last
+          ? {
+              LastEvaluatedKey: {
+                pk: last.pk,
+                inquiryStatus: last.inquiryStatus,
+                receivedAt: last.receivedAt,
+              },
+            }
+          : {}),
+      };
     }
     this.queries.push(input);
     const status = input.ExpressionAttributeValues[":s"];
@@ -602,5 +638,546 @@ describe("개인정보 가리기", () => {
     expect(applyRedactions("a😀b", [{ start: 1, end: 3, text: "😀" }])).toBe(
       "a[가림]b",
     );
+  });
+});
+
+describe("모르는 처리 상태 (#521, 아키텍처 18.3)", () => {
+  const scope = "a".repeat(64);
+  afterEach(() => vi.restoreAllMocks());
+
+  function logged(
+    log: { mock: { calls: unknown[][] } },
+    event: string,
+  ): Item[] {
+    return log.mock.calls
+      .map(([line]) => JSON.parse(String(line)) as Item)
+      .filter((entry) => entry.event === event);
+  }
+
+  it("Scan 한 번으로 4종 밖·보관 기한 안의 문의를 최근 접수 순으로 모두 읽는다", async () => {
+    const index = new FakeIndex([
+      inquiry(1, "received"),
+      inquiry(5, "archived"),
+      inquiry(3, "on_hold", { ttl: NOW_SEC }),
+      inquiry(2, "on_hold"),
+    ]);
+    const unknown = await readUnknownStatuses(index as never, "Inquiry", NOW);
+    expect(unknown.ok).toBe(true);
+    expect(
+      unknown.ok &&
+        unknown.items.map((i) => `${i.status}:${i.inquiryId.slice(-1)}`),
+    ).toEqual(["on_hold:2", "archived:5"]);
+    expect(index.scans).toHaveLength(1);
+    expect(index.scans[0]).toMatchObject({
+      IndexName: INQUIRY_STATUS_INDEX_NAME,
+    });
+    expect(index.scans[0]).not.toHaveProperty("Limit");
+    expect(index.queries).toHaveLength(0);
+  });
+
+  it("걸러 읽기 Scan이 0건인 쪽을 돌려줘도 LastEvaluatedKey가 이어지면 끝까지 읽는다", async () => {
+    const index = new FakeIndex(
+      [
+        ...Array.from({ length: 5 }, (_, n) => inquiry(n + 1, "received")),
+        inquiry(6, "archived"),
+      ],
+      100,
+      2,
+    );
+    const unknown = await readUnknownStatuses(index as never, "Inquiry", NOW);
+    expect(unknown.ok && unknown.items.map((i) => i.status)).toEqual([
+      "archived",
+    ]);
+    // 2개씩 평가: [1,2](0건) → [3,4](0건) → [5,6](1건)
+    expect(index.scans).toHaveLength(3);
+    expect(index.scans[1]!.ExclusiveStartKey).toMatchObject({
+      pk: inquiry(2, "received").pk,
+    });
+  });
+
+  it.each([
+    ["권한 없음", "AccessDeniedException"],
+    ["쓰로틀", "ProvisionedThroughputExceededException"],
+  ])(
+    "Scan 실패(%s)는 던지지 않고 warn 로그와 '확인 못 함'으로 돌려준다",
+    async (_, name) => {
+      const log = vi.spyOn(console, "log").mockImplementation(() => {});
+      const client = {
+        send: async () => {
+          const error = new Error("denied");
+          error.name = name;
+          throw error;
+        },
+      };
+      expect(
+        await readUnknownStatuses(client as never, "Inquiry", NOW),
+      ).toEqual({
+        ok: false,
+      });
+      expect(logged(log, "ops_inquiry_unknown_status_unavailable")).toEqual([
+        {
+          level: "warn",
+          event: "ops_inquiry_unknown_status_unavailable",
+          error: name,
+        },
+      ]);
+    },
+  );
+
+  it("저장된 모양이 틀린 모르는 상태 문의는 '확인 못 함'으로 바꾸지 않고 던진다", async () => {
+    const index = new FakeIndex([inquiry(1, "archived", { version: "1" })]);
+    await expect(
+      readUnknownStatuses(index as never, "Inquiry", NOW),
+    ).rejects.toThrow("모양");
+  });
+
+  it("전체 목록 첫 쪽은 맨 위에 모르는 상태 문의를 원래 값 그대로 두고 4종을 이어 붙인다", async () => {
+    const index = new FakeIndex([
+      inquiry(1, "received"),
+      inquiry(2, "archived"),
+      inquiry(4, "resolved"),
+    ]);
+    const unknown = await readUnknownStatuses(index as never, "Inquiry", NOW);
+    const page = await listInquiries(
+      index as never,
+      "Inquiry",
+      { limit: 20 },
+      NOW,
+      unknown,
+    );
+    expect(
+      page.items.map((i) => `${i.status}:${i.inquiryId.slice(-1)}`),
+    ).toEqual(["archived:2", "received:1", "resolved:4"]);
+    expect(page.nextCursor).toBeNull();
+    // 4개 탭 수에는 섞이지 않음
+    expect(await countInquiries(index as never, "Inquiry", NOW)).toEqual({
+      received: 1,
+      in_progress: 0,
+      resolved: 1,
+      rejected: 0,
+    });
+  });
+
+  it("모르는 상태는 limit에 세지 않아 첫 쪽은 '모르는 상태 전부 + 4종 한 쪽'이고, 4종이 더 없으면 다음 쪽이 없다", async () => {
+    const index = new FakeIndex([
+      inquiry(1, "received"),
+      inquiry(2, "archived"),
+      inquiry(3, "on_hold"),
+      inquiry(5, "archived"),
+    ]);
+    const unknown = await readUnknownStatuses(index as never, "Inquiry", NOW);
+    const page = await listInquiries(
+      index as never,
+      "Inquiry",
+      { limit: 2 },
+      NOW,
+      unknown,
+    );
+    expect(page.items.map((i) => i.status)).toEqual([
+      "archived",
+      "on_hold",
+      "archived",
+      "received",
+    ]);
+    expect(page.nextCursor).toBeNull();
+  });
+
+  it("4종이 한 쪽보다 많으면 4종 cursor는 지금처럼 이어 가고 다음 쪽에는 모르는 상태를 다시 넣지 않는다", async () => {
+    const index = new FakeIndex([
+      inquiry(1, "received"),
+      inquiry(2, "received"),
+      inquiry(3, "received"),
+      inquiry(4, "archived"),
+    ]);
+    const unknown = await readUnknownStatuses(index as never, "Inquiry", NOW);
+    const first = await listInquiries(
+      index as never,
+      "Inquiry",
+      { limit: 2 },
+      NOW,
+      unknown,
+    );
+    expect(
+      first.items.map((i) => `${i.status}:${i.inquiryId.slice(-1)}`),
+    ).toEqual(["archived:4", "received:1", "received:2"]);
+    const second = await listInquiries(
+      index as never,
+      "Inquiry",
+      { limit: 2, cursor: decodeCursor(first.nextCursor!)! },
+      NOW,
+      unknown,
+    );
+    expect(
+      second.items.map((i) => `${i.status}:${i.inquiryId.slice(-1)}`),
+    ).toEqual(["received:3"]);
+  });
+
+  it("상태를 고른 목록·다음 쪽·읽지 못한 경우에는 모르는 상태를 넣지 않는다", async () => {
+    const index = new FakeIndex([
+      inquiry(1, "received"),
+      inquiry(2, "archived"),
+    ]);
+    const unknown = await readUnknownStatuses(index as never, "Inquiry", NOW);
+    const picked = await listInquiries(
+      index as never,
+      "Inquiry",
+      { status: "received", limit: 20 },
+      NOW,
+      unknown,
+    );
+    expect(picked.items.map((i) => i.status)).toEqual(["received"]);
+    const next = await listInquiries(
+      index as never,
+      "Inquiry",
+      { limit: 20, cursor: { s: "received" } },
+      NOW,
+      unknown,
+    );
+    expect(next.items.map((i) => i.status)).toEqual(["received"]);
+    const failed = await listInquiries(
+      index as never,
+      "Inquiry",
+      { limit: 20 },
+      NOW,
+      { ok: false },
+    );
+    expect(failed.items.map((i) => i.status)).toEqual(["received"]);
+  });
+
+  it("서버 필터 전체 목록의 첫 쪽은 모르는 상태 문의를 같은 조건으로 걸러(본문은 상세에서 상태가 그대로일 때만) 맨 앞에 두고 '접수' 첫 묶음을 이어 붙인다", async () => {
+    const index = new FakeIndex([
+      inquiry(1, "received"),
+      inquiry(3, "archived"),
+      inquiry(9, "archived"),
+    ]);
+    const unknown = await readUnknownStatuses(index as never, "Inquiry", NOW);
+    const from = "2026-11-03T05:56:00.000Z";
+    const page = await listFilteredInquiries(
+      index as never,
+      "Inquiry",
+      { limit: 50 },
+      { from, q: "본문" },
+      scope,
+      "editor",
+      NOW,
+      () => false,
+      unknown,
+    );
+    // 9번은 접수 경계 밖
+    expect(
+      page.items.map((i) => `${i.status}:${i.inquiryId.slice(-1)}`),
+    ).toEqual(["archived:3", "received:1"]);
+    expect(index.gets.map((g) => (g.Key as Item).pk)).toEqual([
+      inquiry(3, "archived").pk,
+      inquiry(1, "received").pk,
+    ]);
+    expect(index.queries).toHaveLength(1);
+    expect(decodeCursor(page.nextCursor!)).toEqual({
+      s: "in_progress",
+      f: scope,
+    });
+    // 읽지 못했으면 4종만 그대로
+    const failed = await listFilteredInquiries(
+      index as never,
+      "Inquiry",
+      { limit: 50 },
+      { from, q: "본문" },
+      scope,
+      "editor",
+      NOW,
+      () => false,
+      { ok: false },
+    );
+    expect(failed.items.map((i) => i.status)).toEqual(["received"]);
+  });
+
+  it("Scan이 시간 상한을 넘으면 기다리지 않고 '확인 못 함'으로 돌려준다", async () => {
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    let aborted = false;
+    const client = {
+      send: (_: unknown, options?: { abortSignal?: AbortSignal }) =>
+        new Promise(() => {
+          options?.abortSignal?.addEventListener("abort", () => {
+            aborted = true;
+          });
+        }),
+    };
+    expect(
+      await readUnknownStatuses(client as never, "Inquiry", NOW, 10),
+    ).toEqual({ ok: false });
+    expect(aborted).toBe(true);
+    expect(logged(log, "ops_inquiry_unknown_status_unavailable")).toEqual([
+      {
+        level: "warn",
+        event: "ops_inquiry_unknown_status_unavailable",
+        error: "TimeoutError",
+      },
+    ]);
+  });
+
+  it("상세는 원래 값 그대로 내려 주고, 읽을 때마다 warn 로그를 남긴다", async () => {
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    const index = new FakeIndex([inquiry(1, "archived")]);
+    const detail = await getInquiry(
+      index as never,
+      "Inquiry",
+      inquiry(1, "archived").inquiryId as string,
+      "editor",
+      NOW,
+    );
+    expect(detail).toMatchObject({ status: "archived", restricted: false });
+    await readUnknownStatuses(index as never, "Inquiry", NOW);
+    const warn = {
+      level: "warn",
+      event: "ops_inquiry_unknown_status",
+      inquiryId: inquiry(1, "archived").inquiryId,
+      status: "archived",
+    };
+    expect(logged(log, "ops_inquiry_unknown_status")).toEqual([warn, warn]);
+  });
+
+  it("로그의 상태 값은 40자까지만 남기고, 4종은 로그를 남기지 않는다", async () => {
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    const index = new FakeIndex([
+      inquiry(1, "x".repeat(100)),
+      inquiry(2, "received"),
+    ]);
+    const unknown = await readUnknownStatuses(index as never, "Inquiry", NOW);
+    await listInquiries(index as never, "Inquiry", { limit: 20 }, NOW, unknown);
+    expect(
+      logged(log, "ops_inquiry_unknown_status").map((w) => w.status),
+    ).toEqual(["x".repeat(40)]);
+  });
+
+  it("빈 상태 값은 모양이 틀린 문의로 보고 던진다", async () => {
+    const index = new FakeIndex([inquiry(1, "")]);
+    await expect(
+      getInquiry(
+        index as never,
+        "Inquiry",
+        inquiry(1, "").inquiryId as string,
+        "editor",
+        NOW,
+      ),
+    ).rejects.toThrow("모양");
+  });
+
+  it("Scan 결과는 60초 동안 다시 쓰고, 지나거나 버리면 다시 읽는다", async () => {
+    const index = new FakeIndex([inquiry(1, "archived")]);
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    const first = await readUnknownStatuses(index as never, "Inquiry", NOW);
+    const again = await readUnknownStatuses(
+      index as never,
+      "Inquiry",
+      new Date(NOW.getTime() + 59_999),
+    );
+    expect(again).toEqual(first);
+    expect(index.scans).toHaveLength(1);
+    await readUnknownStatuses(
+      index as never,
+      "Inquiry",
+      new Date(NOW.getTime() + 60_000),
+    );
+    expect(index.scans).toHaveLength(2);
+    forgetUnknownStatuses(index as never);
+    await readUnknownStatuses(
+      index as never,
+      "Inquiry",
+      new Date(NOW.getTime() + 60_001),
+    );
+    expect(index.scans).toHaveLength(3);
+  });
+
+  it("읽은 문의의 보관 기한이 60초 안에 끝나면 그 시각까지만 Scan 결과를 다시 쓴다", async () => {
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    const index = new FakeIndex([
+      inquiry(1, "archived", { ttl: NOW_SEC + 10 }),
+    ]);
+    await readUnknownStatuses(index as never, "Inquiry", NOW);
+    await readUnknownStatuses(
+      index as never,
+      "Inquiry",
+      new Date((NOW_SEC + 9) * 1000),
+    );
+    expect(index.scans).toHaveLength(1);
+    const later = await readUnknownStatuses(
+      index as never,
+      "Inquiry",
+      new Date((NOW_SEC + 10) * 1000),
+    );
+    expect(index.scans).toHaveLength(2);
+    expect(later).toEqual({ ok: true, items: [] });
+  });
+
+  it("다시 쓰는 Scan 결과가 4종으로 바뀐 문의를 아직 모르면 같은 문의를 두 번 싣지 않고 4종 쪽만 남긴다", async () => {
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    const before = new FakeIndex([inquiry(1, "archived")]);
+    const unknown = await readUnknownStatuses(before as never, "Inquiry", NOW);
+    // 다른 인스턴스가 '접수'로 바꾼 뒤(이 인스턴스의 Scan 결과는 이전 값)
+    const after = new FakeIndex([inquiry(1, "received")]);
+    const page = await listInquiries(
+      after as never,
+      "Inquiry",
+      { limit: 6 },
+      NOW,
+      unknown,
+    );
+    expect(page.items.map((i) => i.status)).toEqual(["received"]);
+    const filtered = await listFilteredInquiries(
+      after as never,
+      "Inquiry",
+      { limit: 6 },
+      {},
+      scope,
+      "editor",
+      NOW,
+      undefined,
+      unknown,
+    );
+    expect(filtered.items.map((i) => i.status)).toEqual(["received"]);
+  });
+
+  it("읽지 못한 결과는 다시 쓰지 않아 다음 요청이 바로 다시 읽는다", async () => {
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    let calls = 0;
+    const client = {
+      send: async () => {
+        calls += 1;
+        if (calls === 1) {
+          const error = new Error("throttled");
+          error.name = "ProvisionedThroughputExceededException";
+          throw error;
+        }
+        return { Items: [] };
+      },
+    };
+    expect(await readUnknownStatuses(client as never, "Inquiry", NOW)).toEqual({
+      ok: false,
+    });
+    expect(await readUnknownStatuses(client as never, "Inquiry", NOW)).toEqual({
+      ok: true,
+      items: [],
+    });
+    expect(calls).toBe(2);
+  });
+
+  it("version이 없는 모르는 상태 문의는 상세와 같게 version 0으로 보여 주고 목록을 500으로 만들지 않는다", async () => {
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    const index = new FakeIndex([
+      inquiry(1, "archived", { version: undefined }),
+      inquiry(2, "received"),
+    ]);
+    const unknown = await readUnknownStatuses(index as never, "Inquiry", NOW);
+    expect(unknown.ok && unknown.items).toEqual([
+      expect.objectContaining({
+        status: "archived",
+        version: 0,
+        legacy: false,
+      }),
+    ]);
+    const detail = await getInquiry(
+      index as never,
+      "Inquiry",
+      inquiry(1, "archived").inquiryId as string,
+      "editor",
+      NOW,
+    );
+    expect(detail).toMatchObject({ version: 0, legacy: false });
+  });
+
+  it("목록에는 모르는 상태 문의를 최근 접수 순 50건까지만 싣는다(서버 필터 첫 쪽도 같음)", async () => {
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    const index = new FakeIndex([
+      ...Array.from({ length: 55 }, (_, n) => inquiry(n + 1, "archived")),
+      inquiry(100, "received"),
+    ]);
+    const unknown = await readUnknownStatuses(index as never, "Inquiry", NOW);
+    expect(unknown.ok && unknown.items).toHaveLength(55);
+    const page = await listInquiries(
+      index as never,
+      "Inquiry",
+      { limit: 1 },
+      NOW,
+      unknown,
+    );
+    expect(page.items).toHaveLength(51);
+    expect(page.items[0]!.inquiryId).toBe(inquiry(1, "archived").inquiryId);
+    expect(page.items[49]!.inquiryId).toBe(inquiry(50, "archived").inquiryId);
+    expect(page.items[50]!.status).toBe("received");
+    const filtered = await listFilteredInquiries(
+      index as never,
+      "Inquiry",
+      { limit: 50 },
+      { type: "data_error" },
+      scope,
+      "editor",
+      NOW,
+      () => false,
+      unknown,
+    );
+    expect(filtered.items.filter((i) => i.status === "archived")).toHaveLength(
+      50,
+    );
+  });
+
+  it("서버 필터 첫 쪽에서 모르는 상태 문의의 본문 확인이 시간 상한을 넘으면 빼지 않고 '본문 확인 못 함'으로 둔다", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.spyOn(console, "log").mockImplementation(() => {});
+      const index = new FakeIndex([
+        inquiry(1, "archived"),
+        inquiry(2, "archived"),
+        inquiry(3, "archived", { message: "다른 글" }),
+        inquiry(4, "received"),
+      ]);
+      const unknown = await readUnknownStatuses(index as never, "Inquiry", NOW);
+      const slow = inquiry(2, "archived").pk;
+      let aborted = false;
+      const client = {
+        send: (
+          command: { constructor: { name: string }; input: any },
+          options?: { abortSignal?: AbortSignal },
+        ) => {
+          if (
+            command.constructor.name === "GetCommand" &&
+            command.input.Key.pk === slow
+          ) {
+            options?.abortSignal?.addEventListener("abort", () => {
+              aborted = true;
+            });
+            return new Promise(() => {});
+          }
+          return index.send(command);
+        },
+      };
+      const pending = listFilteredInquiries(
+        client as never,
+        "Inquiry",
+        { limit: 50 },
+        { q: "본문", preview: true },
+        scope,
+        "editor",
+        NOW,
+        () => false,
+        unknown,
+      );
+      await vi.advanceTimersByTimeAsync(UNKNOWN_STATUS_TIMEOUT_MS);
+      const page = await pending;
+      expect(aborted).toBe(true);
+      // 1: 확인함(맞음) · 2: 시간 초과 · 3: 상한 뒤라 확인 못 함(다른 글이어도 빼지 않음) · 4: 4종(상한 없음)
+      expect(
+        page.items.map((i) => [
+          i.inquiryId.slice(-1),
+          i.messagePreviewUnavailableReason ?? i.messagePreview,
+        ]),
+      ).toEqual([
+        ["1", "본문"],
+        ["2", "unchecked"],
+        ["3", "unchecked"],
+        ["4", "본문"],
+      ]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

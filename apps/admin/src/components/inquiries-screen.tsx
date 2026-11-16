@@ -44,6 +44,8 @@ import {
   redactionOf,
   retentionDate,
   shortId,
+  inquiryStatusLabel as statusLabel,
+  UNKNOWN_STATUS_LIST_MAX,
   type InquiryCounts,
   type InquiryDetail,
   type InquiryFilter,
@@ -124,7 +126,8 @@ async function readUntil(options: {
 }
 
 // 목록 행의 본문 미리보기 줄: 열어 본 상세(가리기 반영)가 먼저, 없으면 서버 미리보기(#491)
-// 본문이 비면 '본문 없음'. 보기 권한(restricted)·미요청은 빈 줄로 높이만 유지
+// 본문이 비면 '본문 없음', 서버가 본문을 시간 안에 확인 못 했으면(모르는 상태 문의, #521) '본문 확인 못 함'
+// 보기 권한(restricted)·미요청은 빈 줄로 높이만 유지
 function rowPreview(
   item: InquirySummary,
   detailMessages: Readonly<Record<string, string>>,
@@ -135,6 +138,9 @@ function rowPreview(
   const served = previewText(item.messagePreview);
   if (served !== null) return served;
   if (item.messagePreviewUnavailableReason === "empty") return t.previewEmpty;
+  if (item.messagePreviewUnavailableReason === "unchecked") {
+    return t.previewUnchecked;
+  }
   return null;
 }
 
@@ -157,14 +163,26 @@ function adjustCounts(
   countedAt: number,
   saved: SavedMap,
 ): InquiryCounts {
-  const next = { ...counts };
+  let next = { ...counts };
   for (const mine of Object.values(saved)) {
     if (mine.at <= countedAt || mine.from === mine.status) continue;
-    if (!isInquiryStatus(mine.from)) continue;
-    next[mine.from] = Math.max(0, next[mine.from] - 1);
+    // 모르는 상태는 4개 탭 수가 아니라 unknown에 들어 있음 → 거기서 빼고 바꾼 상태에 더함(#521)
+    if (isInquiryStatus(mine.from)) {
+      next[mine.from] = Math.max(0, next[mine.from] - 1);
+    } else if (typeof next.unknown === "number") {
+      next = { ...next, unknown: Math.max(0, next.unknown - 1) };
+    }
     next[mine.status] += 1;
   }
   return next;
+}
+
+// '전체' 수: 4종 + 모르는 상태(#521). 4개 탭 수에는 모르는 상태를 섞지 않음
+function allCount(counts: InquiryCounts): number {
+  return (
+    INQUIRY_STATUSES.reduce((sum, s) => sum + counts[s], 0) +
+    (counts.unknown ?? 0)
+  );
 }
 
 function withSaved(item: InquirySummary, saved: SavedMap): InquirySummary {
@@ -195,7 +213,7 @@ function StatusBadge({ status }: { status: string }) {
           : "bg-bg-surface text-text-muted outline-1 outline-border-strong outline-dashed -outline-offset-1"
       }`}
     >
-      {known ? t.status[status] : fill(t.unknownStatus, { status })}
+      {statusLabel(status)}
     </span>
   );
 }
@@ -707,9 +725,7 @@ function StatusTabs({
   counts: InquiryCounts | null;
   onChange: (next: InquiryStatus | null) => void;
 }) {
-  const total = counts
-    ? INQUIRY_STATUSES.reduce((sum, s) => sum + counts[s], 0)
-    : null;
+  const total = counts ? allCount(counts) : null;
   const tabs: {
     key: InquiryStatus | null;
     label: string;
@@ -1125,15 +1141,30 @@ function InquiryList({
   const counts = received
     ? adjustCounts(received.counts, received.at, saved)
     : null;
-  const total = counts
-    ? status
-      ? counts[status]
-      : INQUIRY_STATUSES.reduce((sum, s) => sum + counts[s], 0)
-    : null;
-  const from = pageIndex * PAGE_SIZE + 1;
-  const to = pageIndex * PAGE_SIZE + items.length;
+  const total = counts ? (status ? counts[status] : allCount(counts)) : null;
+  // 지금 보는 첫 쪽 응답이 읽지 못했다고 하면 알림. 거르기 없는 목록은 첫 쪽의 수(unknown: null)로도 봄
+  // (거르기 중에는 예전에 받은 상태 목록 수가 아니라 거르기 첫 쪽 응답만 봄)
+  const unknownUnavailable =
+    (!isFiltered && counts?.unknown === null) ||
+    (result?.ok === true && result.body.unknownStatusUnavailable === true);
+  // 전체 목록 첫 쪽은 '모르는 상태 문의(50건까지) + 4종 한 쪽(6행)'(서버가 모르는 상태를 limit에 세지 않음, #521)
+  // → 다음 쪽 범위·쪽 수를 첫 쪽 길이만큼 밀어 셈(첫 쪽을 만든 서버 수 그대로 씀)
+  // 쪽 수는 '전체' 수에서 첫 쪽(4종 6행 + 모르는 상태 전부 몫)을 뺀 나머지로 셈(50건 밖 모르는 상태는 어느 쪽에도 없음)
+  const firstUnknown = Math.min(
+    received?.counts.unknown ?? 0,
+    UNKNOWN_STATUS_LIST_MAX,
+  );
+  const firstPageSize = status ? PAGE_SIZE : PAGE_SIZE + firstUnknown;
+  const unlisted = status ? 0 : (received?.counts.unknown ?? 0) - firstUnknown;
+  const before =
+    pageIndex === 0 ? 0 : firstPageSize + (pageIndex - 1) * PAGE_SIZE;
+  const from = before + 1;
+  const to = before + items.length;
   const totalPages =
-    total !== null ? Math.max(1, Math.ceil(total / PAGE_SIZE)) : null;
+    total !== null
+      ? 1 +
+        Math.max(0, Math.ceil((total - unlisted - firstPageSize) / PAGE_SIZE))
+      : null;
   const filterWin = pageWindow(loadedItems.length, filterPage, PAGE_SIZE);
 
   return (
@@ -1154,6 +1185,21 @@ function InquiryList({
       </div>
 
       <StatusTabs status={status} counts={counts} onChange={changeStatus} />
+
+      {/* 모르는 처리 상태는 상태 탭에 안 보여 따로 알림(#521). 전체 목록은 맨 위에 둠
+          서버가 읽지 못했으면 0건으로 보이지 않게 '확인 못 함'을 같은 자리에 알림 */}
+      {unknownUnavailable ? (
+        <Notice tone="warn" title={t.unknownStatusUnavailableTitle}>
+          {t.unknownStatusUnavailableBody}
+        </Notice>
+      ) : counts?.unknown ? (
+        <Notice
+          tone="warn"
+          title={fill(t.unknownStatusNoticeTitle, { count: counts.unknown })}
+        >
+          {fill(t.unknownStatusNoticeBody, { max: UNKNOWN_STATUS_LIST_MAX })}
+        </Notice>
+      ) : null}
 
       <div className="mt-2 flex flex-wrap items-center gap-2">
         <div className="relative w-full sm:w-[260px]">
@@ -1340,9 +1386,7 @@ function InquiryList({
                         aria-current={on ? "true" : undefined}
                         aria-label={fill(t.open, {
                           type: typeLabel(item.type),
-                          status: isInquiryStatus(item.status)
-                            ? t.status[item.status]
-                            : item.status,
+                          status: statusLabel(item.status),
                           received: kstDateTime(item.receivedAt),
                         })}
                         className={`${CELL_NAME} block underline-offset-2 hover:underline`}
@@ -1811,11 +1855,7 @@ function InquiryActions({
                 ? t.conflictReplay
                 : error.kind === "expired"
                   ? t.expired
-                  : fill(t.saveFailed, {
-                      status: known
-                        ? t.status[base.status as InquiryStatus]
-                        : base.status,
-                    })
+                  : fill(t.saveFailed, { status: statusLabel(base.status) })
           }
           role="alert"
         >

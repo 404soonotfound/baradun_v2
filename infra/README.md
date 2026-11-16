@@ -84,6 +84,22 @@ GitHub 저장소 설정 → Environments에서 `infra`(배포 브랜치 `main`�
 - 운영자 사이트 주소를 설정하지 않았으면 운영자 사이트 표지의 `unconfigured` 사유를 화면에서 주소 설정 필요로 표시합니다.
 - 사이트 빌드 경로를 바꾸면 `.github/ci-filters.yml`을 갱신하고 `node .github/scripts/site-deploy-paths.mjs`를 실행합니다. 생성된 `.github/site-deploy-paths.json`을 워크플로와 운영 API가 함께 사용합니다.
 
+## 운영자 사이트 이용 통계 연결 (#333, D15-8)
+
+운영 API는 GA4 속성 ID(`lib/settings.ts`의 `GA4_PROPERTY_ID`, 비밀값 아님)와 SSM의 Google 외부 계정 구성으로 GA4 Data API를 읽습니다. 서비스 계정 키는 만들지 않습니다(키 없는 워크로드 아이덴티티 제휴). 운영 API 함수 역할 `BaradunV2-OpsApiRole`의 AWS 자격 증명을 Google 단기 토큰으로 바꿔 서비스 계정을 가장합니다. 코드는 SSM 값을 그대로 `GoogleAuth`의 `credentials`로 넘기고, 라이브러리가 Lambda의 `AWS_*` 환경 변수를 읽습니다.
+
+GA 계정·속성과 Google Cloud 프로젝트는 운영자 Google Workspace 조직의 운영 계정이 소유합니다. 실제 계정·프로젝트 식별자는 노션 운영 문서에만 둡니다.
+
+1. Google Cloud 프로젝트에서 Google Analytics Data API, IAM Service Account Credentials API, Security Token Service API를 켭니다. 결제 계정은 연결하지 않습니다.
+2. 서비스 계정을 만듭니다(`baradun-ga4-reader`). 프로젝트 역할과 키는 주지 않습니다.
+3. IAM 및 관리자 → 워크로드 아이덴티티 제휴에서 풀(`baradun-aws`)과 AWS 공급업체(`baradun-ops-api`, AWS 계정 ID)를 만듭니다. 속성 매핑은 기본값을 씁니다.
+4. 풀의 액세스 권한 부여 → 서비스 계정 가장으로 서비스 계정을 고르고, 주 구성원을 `aws_role` = `arn:aws:sts::<계정>:assumed-role/BaradunV2-OpsApiRole`로 제한합니다. GA4 속성에는 이메일 계정만 추가할 수 있어 제휴 ID 직접 부여 방식은 쓰지 않습니다.
+5. GA4 관리 → 속성 액세스 관리에서 서비스 계정 이메일을 뷰어로 추가합니다.
+6. AWS 서울 리전 Parameter Store `/baradun/v2/api-keys/ga4-service-account`에 Standard SecureString(기본 `aws/ssm`)으로 외부 계정 구성 JSON을 넣습니다. 비밀값은 없지만 다른 키와 같은 경로·권한을 쓰려고 SecureString으로 둡니다. 형식은 `type: external_account`, `audience: //iam.googleapis.com/projects/<프로젝트 번호>/locations/global/workloadIdentityPools/<풀>/providers/<공급업체>`, `subject_token_type: urn:ietf:params:aws:token-type:aws4_request`, `service_account_impersonation_url`, `token_url: https://sts.googleapis.com/v1/token`, `credential_source`(`environment_id: aws1`, `regional_cred_verification_url`)입니다. 콘솔의 구성 다운로드 결과와 같습니다.
+7. SSM 값을 넣은 뒤 스택을 배포합니다. 값보다 먼저 배포되면 이용 통계는 연동 전 안내 대신 조회 실패로 보입니다.
+
+배포 뒤 운영자 사이트 이용 통계에서 'GA4 연동이 아직 설정되지 않았어요' 안내가 사라지고 오류 없이 응답하는지 확인합니다. 운영 주소로 배포되기 전에는 수집이 없어 값이 비어 있는 것이 정상입니다. Google Cloud 풀 화면의 '워크로드 아이덴티티 제휴 사용량'에서 토큰 교환 성공도 볼 수 있습니다. 구성을 바꾸면 SSM 값을 고치고, 기존 실행 환경이 옛 값을 쓰지 않도록 운영 API를 다시 배포합니다.
+
 ## 운영 도메인 연결 (BRD-162)
 
 대표 주소는 `https://www.baradun.app`입니다(2026-11-02 사용자 결정).
@@ -901,7 +917,9 @@ aws dynamodb delete-item --region ap-northeast-2 --table-name <OpsTableName> \
 - **경로:** `GET /ops/inquiries?status=&cursor=&limit=`(목록), `GET /ops/inquiries/{id}`(상세), `PATCH /ops/inquiries/{id}`(처리 상태·반려 이유·내부 메모, 편집·노출 변경 권한). 쓰기에는 `x-idempotency-key`(UUID v4) 헤더와 읽을 때 받은 `version`을 함께 보냅니다.
 - **상태:** 접수(received)·확인 중(in_progress)·완료(resolved)·반려(rejected). 반려는 이유가 필수이고 공백만은 거부합니다. 반려가 아닌 상태로 바꾸면 반려 이유를 지웁니다.
 - **목록:** `inquiryStatus-receivedAt` GSI(요약만, 본문·이메일·사진 키 없음)를 최근 접수 순으로 읽습니다. 상태를 고르지 않으면 접수 → 확인 중 → 완료 → 반려 순으로 이어 붙이고, `cursor`로 다음 쪽을 이어 갑니다. GSI는 최종적 일관성이라 저장 직후 목록이 잠시 이전 값일 수 있습니다. 그래서 처리(PATCH)에는 목록이 아니라 상세(강한 일관성)에서 받은 `version`을 씁니다. 상태를 고른 목록에는 같은 상태 목록에서 받은 `cursor`만 넣습니다.
+- **모르는 처리 상태(#521, 아키텍처 18.3):** 4종 밖 상태 값은 원래 값 그대로 내려 주고, 상태 변경·필터는 4종만 받습니다. GSI 파티션이 상태라 Query로는 4종 밖 값을 찾을 수 없어, 첫 쪽에서 같은 GSI를 4종 밖만 걸러 `Scan` 한 번으로 읽습니다. 상태를 고르지 않은 목록의 맨 위와 `counts.unknown`(4개 탭 수와 따로)에 함께 씁니다. Scan이 실패하면(권한·쓰로틀) 목록·4종 수는 그대로 내려 주고 `counts.unknown: null`·`unknownStatusUnavailable: true`와 warn 로그 `ops_inquiry_unknown_status_unavailable`을 남깁니다. 모르는 상태를 읽을 때마다 warn 로그 `ops_inquiry_unknown_status`를 남깁니다(새 경보 없음).
 - **보관:** 받은 날부터 90일(TTL) 그대로입니다. TTL로 지워지기 전이라도 기한이 지난 문의는 목록·상세·수정에서 뺍니다. 처리 상태·메모는 같은 항목에 붙어 함께 만료됩니다.
+- **역할 권한:** 운영 API 역할은 문의 테이블 `GetItem`·`UpdateItem`과 상태 GSI `Query`·`Scan`만 가집니다. `Scan`은 인덱스 ARN(`…/index/inquiryStatus-receivedAt`)에만 있고 테이블 ARN에는 없습니다. boundary도 `InquiryStatusIndexScan` 문장으로 같은 인덱스만 허락합니다(#521, 바꾸면 '로컬 배포 필요').
 - **권한:** 보기 권한은 본문·메모·반려 이유를 받지 않습니다. 샘플 계정은 실제 테이블을 읽지 않고 예시 문의만 받습니다. 개인정보 가리기·문의 지우기·같은 해변 묶음(D16-D7)은 이 범위가 아닙니다.
 - **용량:** GSI 읽기·쓰기 1/1을 더해 테이블·GSI 합계 12/12(상한 25)입니다.
 

@@ -11,7 +11,8 @@ import {
 
 // 이용 통계 (BRD-154, ADM-STATS, 결정 기록 D15-8 · D13-7 · D16-E8, 아키텍처 18.5)
 // - 출시 수집은 page_view만. 다른 이벤트는 '수집 안 함(후속)'으로 표시
-// - GA Data API 호출은 운영 API만. 서비스 계정 키는 SSM Parameter Store SecureString에서 읽음
+// - GA Data API 호출은 운영 API만. Google 인증 구성은 SSM Parameter Store SecureString에서 읽음
+//   (키 없는 워크로드 아이덴티티 제휴 external_account 구성, 서비스 계정 키 JSON도 그대로 받음)
 // - 응답은 인메모리 TTL 캐시로 잠시 저장해 호출량 절약
 // - 숫자 제한 안내는 GA 응답의 thresholding·sampling·other-row 손실 metadata가 있을 때만 표시(E8)
 // - 숨긴 숫자는 추정하지 않으며 빈칸·미수신은 null(0으로 바꾸지 않음)
@@ -445,7 +446,7 @@ export function createGa4StatsReader(config: Ga4StatsConfig): StatsReader {
             "SSM",
           )
         : await defaultLoadKeyJson(config.region, config.serviceAccountParam);
-      if (!raw) throw new Error("GA4 서비스 계정 키 파라미터 비어 있음");
+      if (!raw) throw new Error("GA4 인증 구성 파라미터 비어 있음");
       const credentials = JSON.parse(raw) as Record<string, unknown>;
       const auth = new GoogleAuth({
         credentials,

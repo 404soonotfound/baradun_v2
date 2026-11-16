@@ -221,9 +221,23 @@ describe("목록", () => {
     expect(page.items.map((i) => i.at)).toEqual(["2026-11-02T00:00:00.000Z"]);
   });
 
+  it("바꾸기 전 상태가 모르는 값이면 원래 값 그대로 돌려준다(#521)", async () => {
+    const table = await seed(["2026-11-01T00:00:00Z"]);
+    const [id, item] = [...table.items.entries()][0]!;
+    table.items.set(id, { ...item, statusFrom: "archived" });
+    const page = await listAudit(table as never, "Ops", query({}), NOW);
+    expect(page.items[0]).toMatchObject({
+      statusFrom: "archived",
+      statusTo: "in_progress",
+    });
+  });
+
   it.each([
     ["모르는 종류", { action: "unknown" }],
     ["모르는 역할", { role: "admin" }],
+    ["모르는 바꾼 뒤 상태", { statusTo: "archived" }],
+    ["빈 바꾸기 전 상태", { statusFrom: "" }],
+    ["글자가 아닌 바꾸기 전 상태", { statusFrom: 1 }],
   ])(
     "저장된 모양이 틀린 기록(%s)은 조용히 빼지 않고 던진다",
     async (_, broken) => {

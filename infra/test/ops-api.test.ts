@@ -38,9 +38,9 @@ describe("운영 API", () => {
       "SITE_URL",
       "SNAPSHOT_BUCKET",
     ]);
-    expect(fn.Properties.Environment.Variables.GA4_PROPERTY_ID).toEqual({
-      Ref: "Ga4PropertyId",
-    });
+    expect(fn.Properties.Environment.Variables.GA4_PROPERTY_ID).toBe(
+      "547508796",
+    );
     expect(fn.Properties.Environment.Variables.GA4_SERVICE_ACCOUNT_PARAM).toBe(
       "/baradun/v2/api-keys/ga4-service-account",
     );

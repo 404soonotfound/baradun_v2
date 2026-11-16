@@ -556,7 +556,26 @@ describe("문의 칸 (inquirySummary)", () => {
       inProgress: 2,
       resolved: 6,
       rejected: 1,
+      unknown: undefined,
     });
+  });
+
+  it("모르는 처리 상태 수(#521)는 합계에 더하고, 서버가 확인 못 했으면(null) 0으로 세지 않고 null로 둔다", () => {
+    const base = { received: 3, in_progress: 2, resolved: 6, rejected: 1 };
+    expect(
+      inquirySummary({
+        items: [],
+        nextCursor: null,
+        counts: { ...base, unknown: 2 },
+      }),
+    ).toMatchObject({ total: 14, unknown: 2 });
+    expect(
+      inquirySummary({
+        items: [],
+        nextCursor: null,
+        counts: { ...base, unknown: null },
+      }),
+    ).toMatchObject({ total: 12, unknown: null });
   });
 
   it("상태별 수가 없거나 하나라도 숫자가 아니면 0건이 아니라 null", () => {

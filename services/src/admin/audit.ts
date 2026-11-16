@@ -107,7 +107,8 @@ export interface AuditEntry {
   };
   // 바뀐 항목 이름(status·memo·rejectReason 등). 값은 넣지 않음
   readonly changes: readonly string[];
-  readonly statusFrom?: InquiryStatus;
+  // 바꾸기 전 상태는 모르는 원래 값 그대로 남김(#521). 바꾼 뒤 상태는 4종만
+  readonly statusFrom?: string;
   readonly statusTo?: InquiryStatus;
   readonly ids: RequestIds;
 }
@@ -207,7 +208,8 @@ export interface AuditView {
   readonly target: AuditTarget;
   readonly targetLabel?: string;
   readonly changes: readonly string[];
-  readonly statusFrom?: InquiryStatus;
+  // 바꾸기 전 상태는 모르는 원래 값일 수 있음(#521). 바꾼 뒤 상태는 처리 API가 4종만 받음
+  readonly statusFrom?: string;
   readonly statusTo?: InquiryStatus;
   readonly notice?: {
     readonly before: NoticeContent | null;
@@ -438,7 +440,8 @@ function toView(item: Record<string, unknown>): AuditView {
     typeof targetId !== "string" ||
     !Array.isArray(changes) ||
     !changes.every((c) => typeof c === "string") ||
-    (statusFrom !== undefined && !isInquiryStatus(statusFrom)) ||
+    (statusFrom !== undefined &&
+      (typeof statusFrom !== "string" || statusFrom === "")) ||
     (statusTo !== undefined && !isInquiryStatus(statusTo)) ||
     typeof requestId !== "string" ||
     (targetLabel !== undefined && typeof targetLabel !== "string") ||

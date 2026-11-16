@@ -129,7 +129,8 @@ export function sampleInquiryPage(
   const nextCursor =
     last && items.length < matched.length
       ? encodeCursor({
-          s: last.status,
+          // 예시 문의(EXAMPLES)는 4종 상태만 씀
+          s: last.status as InquiryStatus,
           k: {
             pk: `INQUIRY#${last.inquiryId}`,
             inquiryStatus: last.status,
@@ -156,6 +157,8 @@ export function sampleInquiryPage(
     nextCursor,
     counts: {
       ...counts,
+      // 예시 문의는 4종 상태만 씀
+      unknown: 0,
       receivedLast7d: recent.length,
       resolvedLast7d: 0,
       oldestUnprocessedAt: unprocessed.length

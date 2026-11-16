@@ -1,6 +1,6 @@
 import { fileURLToPath } from "node:url";
 import type { APIGatewayProxyEventV2 } from "aws-lambda";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AuthDependencies } from "./auth";
 import { handleOps, type OpsDependencies } from "./handler";
 import { ACCESS_TOKEN_HEADER, IDEMPOTENCY_KEY_HEADER } from "./policy";
@@ -324,6 +324,7 @@ describe("문의 목록·상세", () => {
       in_progress: 0,
       resolved: 0,
       rejected: 0,
+      unknown: 0,
       receivedLast7d: 1,
       resolvedLast7d: 0,
       oldestUnprocessedAt: "2026-11-02T00:00:00.000Z",
@@ -873,5 +874,421 @@ describe("변경 이력 목록 GET /ops/audit", () => {
     );
     expect(res.statusCode).toBe(400);
     expect(body(res).error).toMatchObject({ code: "invalid_request", field });
+  });
+});
+
+describe("모르는 처리 상태 (#521, 아키텍처 18.3)", () => {
+  afterEach(() => vi.restoreAllMocks());
+  const stored = (table: FakeTable) =>
+    table.items.get(table.id("Inquiry", { pk: `INQUIRY#${ID}` }));
+
+  it("Scan 한 번으로 모르는 상태 목록(맨 위)과 수를 함께 내려 주고, 상태를 고른 첫 쪽은 수만, 다음 쪽은 읽지 않으며, 60초 안에는 Scan 결과를 다시 씀", async () => {
+    const table = seeded({ inquiryStatus: "archived" });
+    table.items.set(table.id("Inquiry", { pk: "INQUIRY#k" }), {
+      ...table.items.get(table.id("Inquiry", { pk: `INQUIRY#${ID}` })),
+      pk: "INQUIRY#k",
+      inquiryId: "223e4567-e89b-42d3-a456-426614174000",
+      inquiryStatus: "received",
+    });
+    const all = await handleOps(
+      event("GET", "/ops/inquiries"),
+      deps("editor", table),
+    );
+    expect(table.scans).toBe(1);
+    expect(body(all).items.map((i: { status: string }) => i.status)).toEqual([
+      "archived",
+      "received",
+    ]);
+    expect(body(all).counts).toMatchObject({ received: 1, unknown: 1 });
+    expect(body(all)).not.toHaveProperty("unknownStatusUnavailable");
+
+    const picked = await handleOps(
+      event("GET", "/ops/inquiries", { query: { status: "received" } }),
+      deps("editor", table),
+    );
+    // 60초 안: 앞 Scan 결과를 다시 씀
+    expect(table.scans).toBe(1);
+    expect(body(picked).items.map((i: { status: string }) => i.status)).toEqual(
+      ["received"],
+    );
+    expect(body(picked).counts).toMatchObject({ unknown: 1 });
+
+    await handleOps(
+      event("GET", "/ops/inquiries", {
+        query: { cursor: encodeCursor({ s: "in_progress" }) },
+      }),
+      deps("editor", table),
+    );
+    expect(table.scans).toBe(1);
+
+    const base = deps("editor", table);
+    const later = await handleOps(event("GET", "/ops/inquiries"), {
+      ...base,
+      data: { ...base.data, now: () => new Date(NOW.getTime() + 60_000) },
+    });
+    expect(later.statusCode).toBe(200);
+    expect(table.scans).toBe(2);
+  });
+
+  it("모르는 상태 문의를 고치면 다시 쓰던 Scan 결과를 버려, 바로 다음 목록에 이전 값이 맨 위에 남지 않는다", async () => {
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    const table = seeded({ inquiryStatus: "archived" });
+    const before = await handleOps(
+      event("GET", "/ops/inquiries"),
+      deps("editor", table),
+    );
+    expect(body(before).counts).toMatchObject({ unknown: 1 });
+    const res = await handleOps(
+      event("PATCH", `/ops/inquiries/${ID}`, {
+        body: { version: 1, status: "in_progress" },
+        idempotencyKey: KEY_A,
+      }),
+      deps("editor", table),
+    );
+    expect(res.statusCode).toBe(200);
+    const after = await handleOps(
+      event("GET", "/ops/inquiries"),
+      deps("editor", table),
+    );
+    expect(table.scans).toBe(2);
+    expect(body(after).items.map((i: { status: string }) => i.status)).toEqual([
+      "in_progress",
+    ]);
+    expect(body(after).counts).toMatchObject({ in_progress: 1, unknown: 0 });
+  });
+
+  it("목록에는 모르는 상태 문의를 50건까지만 싣고, 수는 전체 건수를 내려 준다", async () => {
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    const table = seeded();
+    const base = table.items.get(table.id("Inquiry", { pk: `INQUIRY#${ID}` }));
+    for (let n = 0; n < 55; n += 1) {
+      const inquiryId = `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
+      table.items.set(table.id("Inquiry", { pk: `INQUIRY#${inquiryId}` }), {
+        ...base,
+        pk: `INQUIRY#${inquiryId}`,
+        inquiryId,
+        inquiryStatus: "archived",
+        receivedAt: new Date(NOW.getTime() - (n + 10) * 60_000).toISOString(),
+      });
+    }
+    const res = await handleOps(
+      event("GET", "/ops/inquiries", { query: { limit: "1" } }),
+      deps("editor", table),
+    );
+    expect(res.statusCode).toBe(200);
+    const statuses = body(res).items.map((i: { status: string }) => i.status);
+    expect(statuses.filter((s: string) => s === "archived")).toHaveLength(50);
+    expect(statuses.at(-1)).toBe("received");
+    expect(body(res).counts).toMatchObject({ received: 1, unknown: 55 });
+  });
+
+  it.each([
+    ["권한 없음", "AccessDeniedException"],
+    ["쓰로틀", "ProvisionedThroughputExceededException"],
+  ])(
+    "모르는 상태 Scan이 실패해도(%s) 500이 아니라 4종 목록·수를 그대로 내려 주고 '확인 못 함'을 알린다",
+    async (_, name) => {
+      const log = vi.spyOn(console, "log").mockImplementation(() => {});
+      const table = seeded();
+      const client = {
+        send: (command: { constructor: { name: string }; input: any }) => {
+          if (command.constructor.name === "ScanCommand") {
+            const error = new Error("scan failed");
+            error.name = name;
+            throw error;
+          }
+          return table.send(command);
+        },
+      };
+      const base = deps("editor", table);
+      const withClient = {
+        ...base,
+        data: { ...base.data, client: client as never },
+      };
+      const res = await handleOps(event("GET", "/ops/inquiries"), withClient);
+      expect(res.statusCode).toBe(200);
+      expect(body(res).items.map((i: { status: string }) => i.status)).toEqual([
+        "received",
+      ]);
+      expect(body(res).counts).toMatchObject({
+        received: 1,
+        in_progress: 0,
+        resolved: 0,
+        rejected: 0,
+        unknown: null,
+      });
+      expect(body(res).unknownStatusUnavailable).toBe(true);
+      const filtered = await handleOps(
+        event("GET", "/ops/inquiries", { query: { type: "data_error" } }),
+        withClient,
+      );
+      expect(filtered.statusCode).toBe(200);
+      expect(body(filtered).unknownStatusUnavailable).toBe(true);
+      expect(
+        body(filtered).items.map((i: { status: string }) => i.status),
+      ).toEqual(["received"]);
+      const warns = log.mock.calls
+        .map(([line]) => JSON.parse(String(line)))
+        .filter(
+          (entry: { event?: string }) =>
+            entry.event === "ops_inquiry_unknown_status_unavailable",
+        );
+      expect(warns).toHaveLength(2);
+      expect(warns[0]).toMatchObject({ level: "warn", error: name });
+    },
+  );
+
+  it("목록·상세는 원래 값 그대로 200으로 내려 주고, 탭 수에는 넣지 않는다", async () => {
+    const table = seeded({ inquiryStatus: "archived" });
+    const list = await handleOps(
+      event("GET", "/ops/inquiries"),
+      deps("editor", table),
+    );
+    expect(list.statusCode).toBe(200);
+    expect(body(list).items).toEqual([
+      expect.objectContaining({ inquiryId: ID, status: "archived" }),
+    ]);
+    expect(body(list).counts).toMatchObject({
+      received: 0,
+      in_progress: 0,
+      resolved: 0,
+      rejected: 0,
+      unknown: 1,
+    });
+    expect(body(list).counts).not.toHaveProperty("archived");
+    const detail = await handleOps(
+      event("GET", `/ops/inquiries/${ID}`),
+      deps("editor", table),
+    );
+    expect(detail.statusCode).toBe(200);
+    expect(body(detail)).toMatchObject({ status: "archived", message: "본문" });
+  });
+
+  it("상태 필터와 상태 변경은 지금처럼 4종만 받는다", async () => {
+    const table = seeded({ inquiryStatus: "archived" });
+    const filter = await handleOps(
+      event("GET", "/ops/inquiries", { query: { status: "archived" } }),
+      deps("editor", table),
+    );
+    expect(filter.statusCode).toBe(400);
+    expect(body(filter).error).toMatchObject({ field: "status" });
+    const change = await handleOps(
+      event("PATCH", `/ops/inquiries/${ID}`, {
+        body: { version: 1, status: "archived" },
+        idempotencyKey: KEY_A,
+      }),
+      deps("editor", table),
+    );
+    expect(change.statusCode).toBe(400);
+    expect(body(change).error).toMatchObject({ field: "status" });
+  });
+
+  it("모르는 상태의 문의를 4종으로 바꾸면 이력에 원래 값을 남기고, 이력 목록도 그 값을 돌려준다", async () => {
+    const table = seeded({ inquiryStatus: "archived" });
+    const res = await handleOps(
+      event("PATCH", `/ops/inquiries/${ID}`, {
+        body: { version: 1, status: "in_progress" },
+        idempotencyKey: KEY_A,
+      }),
+      deps("editor", table),
+    );
+    expect(res.statusCode).toBe(200);
+    expect(stored(table)).toMatchObject({
+      inquiryStatus: "in_progress",
+      version: 2,
+    });
+    expect(audits(table)[0]).toMatchObject({
+      statusFrom: "archived",
+      statusTo: "in_progress",
+    });
+    const history = await handleOps(
+      event("GET", "/ops/audit", { query: { action: "inquiry.update" } }),
+      deps("viewer", table),
+    );
+    expect(history.statusCode).toBe(200);
+    expect(body(history).items).toEqual([
+      expect.objectContaining({
+        statusFrom: "archived",
+        statusTo: "in_progress",
+      }),
+    ]);
+  });
+
+  it("쓰기 조건은 서버가 방금 읽은 원래 상태 값과 비교한다: 서버가 읽은 뒤 쓰기 전에 version 없이 상태만 바뀌었으면 409로 덮어쓰지 않는다", async () => {
+    const table = seeded({ inquiryStatus: "archived" });
+    const conditions: {
+      expression: string;
+      values: Record<string, unknown>;
+    }[] = [];
+    const client = {
+      send: (command: { constructor: { name: string }; input: any }) => {
+        if (command.constructor.name === "TransactWriteCommand") {
+          const update = command.input.TransactItems.find(
+            (entry: any) => entry.Update,
+          ).Update;
+          conditions.push({
+            expression: update.ConditionExpression,
+            values: update.ExpressionAttributeValues,
+          });
+          // 상세를 읽은 뒤 누군가 version을 올리지 않고 상태만 고침
+          stored(table)!.inquiryStatus = "on_hold";
+        }
+        return table.send(command);
+      },
+    };
+    const base = deps("editor", table);
+    const res = await handleOps(
+      event("PATCH", `/ops/inquiries/${ID}`, {
+        body: { version: 1, status: "resolved" },
+        idempotencyKey: KEY_A,
+      }),
+      { ...base, data: { ...base.data, client: client as never } },
+    );
+    expect(conditions[0]!.expression).toContain("#status = :expectedStatus");
+    expect(conditions[0]!.values[":expectedStatus"]).toBe("archived");
+    expect(res.statusCode).toBe(409);
+    expect(stored(table)).toMatchObject({
+      inquiryStatus: "on_hold",
+      version: 1,
+    });
+    expect(audits(table)).toHaveLength(0);
+  });
+
+  it("상태 기록 전 문의(version 없음)는 상태가 없을 수 있어 상태 비교 없이 version 없음 조건만 쓴다", async () => {
+    const table = seeded({ inquiryStatus: undefined, version: undefined });
+    const res = await handleOps(
+      event("PATCH", `/ops/inquiries/${ID}`, {
+        body: { version: 0, memo: "메모" },
+        idempotencyKey: KEY_A,
+      }),
+      deps("editor", table),
+    );
+    expect(res.statusCode).toBe(200);
+    expect(stored(table)).toMatchObject({
+      inquiryStatus: "received",
+      legacy: true,
+      version: 1,
+    });
+  });
+
+  it("version 없는 이전 문의에 모르는 상태가 있으면 메모만 저장해도 '접수'로 덮지 않고 원래 상태와 비교해 쓴다", async () => {
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    const table = seeded({
+      inquiryStatus: "archived",
+      version: undefined,
+      legacy: true,
+    });
+    const conditions: Record<string, unknown>[] = [];
+    const client = {
+      send: (command: { constructor: { name: string }; input: any }) => {
+        if (command.constructor.name === "TransactWriteCommand") {
+          conditions.push(
+            command.input.TransactItems.find((entry: any) => entry.Update)
+              .Update.ExpressionAttributeValues,
+          );
+        }
+        return table.send(command);
+      },
+    };
+    const base = deps("editor", table);
+    const res = await handleOps(
+      event("PATCH", `/ops/inquiries/${ID}`, {
+        body: { version: 0, memo: "메모" },
+        idempotencyKey: KEY_A,
+      }),
+      { ...base, data: { ...base.data, client: client as never } },
+    );
+    expect(res.statusCode).toBe(200);
+    expect(conditions[0]![":expectedStatus"]).toBe("archived");
+    expect(stored(table)).toMatchObject({
+      inquiryStatus: "archived",
+      legacy: true,
+      memo: "메모",
+      version: 1,
+    });
+    expect(audits(table)[0]).not.toHaveProperty("statusFrom");
+  });
+
+  it("version 없는 이전 문의에 4종 상태가 저장돼 있어도 메모만 저장할 때 '접수'로 되돌리지 않는다", async () => {
+    const table = seeded({
+      inquiryStatus: "in_progress",
+      version: undefined,
+      legacy: true,
+    });
+    const res = await handleOps(
+      event("PATCH", `/ops/inquiries/${ID}`, {
+        body: { version: 0, memo: "메모" },
+        idempotencyKey: KEY_A,
+      }),
+      deps("editor", table),
+    );
+    expect(res.statusCode).toBe(200);
+    expect(stored(table)).toMatchObject({
+      inquiryStatus: "in_progress",
+      version: 1,
+    });
+  });
+
+  it("상태 속성이 없는 문의(version 1)는 상세가 채운 '접수'와 비교하지 않아 메모 저장이 409로 막히지 않는다", async () => {
+    const table = seeded({ inquiryStatus: undefined, version: 1 });
+    const res = await handleOps(
+      event("PATCH", `/ops/inquiries/${ID}`, {
+        body: { version: 1, memo: "메모" },
+        idempotencyKey: KEY_A,
+      }),
+      deps("editor", table),
+    );
+    expect(res.statusCode).toBe(200);
+    expect(stored(table)).toMatchObject({ memo: "메모", version: 2 });
+    expect(stored(table)!.inquiryStatus).toBeUndefined();
+  });
+
+  it("최근 7일 접수에 모르는 상태 문의도 더하고, 모르는 상태를 읽지 못하면 확인 못 함(null)으로 둔다", async () => {
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    const table = seeded();
+    table.items.set(table.id("Inquiry", { pk: "INQUIRY#k" }), {
+      ...stored(table),
+      pk: "INQUIRY#k",
+      inquiryId: "223e4567-e89b-42d3-a456-426614174000",
+      inquiryStatus: "archived",
+    });
+    table.items.set(table.id("Inquiry", { pk: "INQUIRY#old" }), {
+      ...stored(table),
+      pk: "INQUIRY#old",
+      inquiryId: "323e4567-e89b-42d3-a456-426614174000",
+      inquiryStatus: "on_hold",
+      receivedAt: "2026-10-20T00:00:00.000Z",
+    });
+    const res = await handleOps(
+      event("GET", "/ops/inquiries", { query: { limit: "1" } }),
+      deps("viewer", table),
+    );
+    expect(body(res).counts).toMatchObject({
+      received: 1,
+      unknown: 2,
+      receivedLast7d: 2,
+    });
+
+    const failing = seeded();
+    const client = {
+      send: (command: { constructor: { name: string }; input: any }) => {
+        if (command.constructor.name === "ScanCommand") {
+          throw Object.assign(new Error("denied"), {
+            name: "AccessDeniedException",
+          });
+        }
+        return failing.send(command);
+      },
+    };
+    const base = deps("viewer", failing);
+    const unavailable = await handleOps(
+      event("GET", "/ops/inquiries", { query: { limit: "1" } }),
+      { ...base, data: { ...base.data, client: client as never } },
+    );
+    expect(body(unavailable).counts).toMatchObject({
+      received: 1,
+      unknown: null,
+      receivedLast7d: null,
+    });
   });
 });

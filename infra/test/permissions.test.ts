@@ -237,7 +237,7 @@ describe("DynamoDB 권한 (BRD-55)", () => {
 
   it("운영 API 역할은 Ops 읽기·쓰기·감사 조회, 문의 읽기·상태 바꾸기·목록 GSI 조회만 하고 State 권한은 없다(G1)", () => {
     const byResource = dynamoActionsByResource([roleId("OpsApiRole")]);
-    // 트랜잭션 Put·Update는 품목별 동작으로 판정됨. Scan·Delete·문의 만들기(Put)는 없음
+    // 트랜잭션 Put·Update는 품목별 동작으로 판정됨. 테이블 Scan·Delete·문의 만들기(Put)는 없음
     expect(Object.fromEntries(byResource)).toEqual({
       [`${tableId("Ops")}.Arn`]: new Set([
         "dynamodb:GetItem",
@@ -249,9 +249,9 @@ describe("DynamoDB 권한 (BRD-55)", () => {
         "dynamodb:GetItem",
         "dynamodb:UpdateItem",
       ]),
-      // 목록은 상태 GSI 하나에만 Query(테이블 전체 Query·Scan 없음)
+      // 목록은 상태 GSI 하나에만 Query·Scan(테이블 전체 Query·Scan 없음). Scan은 4종 밖 처리 상태 찾기(#521)
       [`${tableId("Inquiry")}.Arn/index/${INQUIRY_STATUS_INDEX.name}`]: new Set(
-        ["dynamodb:Query"],
+        ["dynamodb:Query", "dynamodb:Scan"],
       ),
     });
   });
@@ -458,7 +458,7 @@ describe("DynamoDB 권한 (BRD-55)", () => {
     });
   });
 
-  it("어떤 역할도 Scan·테이블 관리·와일드카드 DynamoDB 동작을 갖지 않는다", () => {
+  it("어떤 역할도 테이블 관리·와일드카드 DynamoDB 동작을 갖지 않는다", () => {
     const actions = [...dynamoActionsByResource().values()].flatMap((s) => [
       ...s,
     ]);
@@ -466,8 +466,32 @@ describe("DynamoDB 권한 (BRD-55)", () => {
     for (const a of actions) {
       expect(a).not.toContain("*");
       expect(a).not.toMatch(
-        /^dynamodb:(Scan|PartiQL|(Create|Delete|Update|Describe)Table|UpdateTimeToLive|.*Backup|Restore)/i,
+        /^dynamodb:(PartiQL|(Create|Delete|Update|Describe)Table|UpdateTimeToLive|.*Backup|Restore)/i,
       );
+    }
+  });
+
+  // #521: 4종 밖 처리 상태 문의는 상태 GSI Scan으로만 찾음. 테이블 ARN·다른 역할에는 Scan이 없어야 함
+  it("Scan은 운영 API 역할의 문의 상태 GSI 인덱스 ARN에만 있고, 테이블 ARN·다른 역할에는 없다", () => {
+    const index = `${tableId("Inquiry")}.Arn/index/${INQUIRY_STATUS_INDEX.name}`;
+    const scanned = (roles?: string[]) =>
+      [...dynamoActionsByResource(roles)]
+        .filter(([, actions]) => actions.has("dynamodb:Scan"))
+        .map(([resource]) => resource);
+    expect(scanned()).toEqual([index]);
+    expect(scanned([roleId("OpsApiRole")])).toEqual([index]);
+    const others = Object.keys(template.findResources("AWS::IAM::Role")).filter(
+      (id) => id !== roleId("OpsApiRole"),
+    );
+    expect(others.length).toBeGreaterThan(0);
+    expect(scanned(others)).toEqual([]);
+    // 같은 동작 이름이 테이블 ARN 문장에 섞이지 않음(인덱스만 따로 둠)
+    for (const table of ["Inquiry", "Ops", "State"] as const) {
+      expect(
+        dynamoActionsByResource()
+          .get(`${tableId(table)}.Arn`)
+          ?.has("dynamodb:Scan") ?? false,
+      ).toBe(false);
     }
   });
 });
@@ -527,6 +551,7 @@ describe("함수·역할별 최소 권한 범위 (BRD-67)", () => {
       "dynamodb:GetItem",
       "dynamodb:PutItem",
       "dynamodb:Query",
+      "dynamodb:Scan",
       "dynamodb:UpdateItem",
       "lambda:InvokeFunction",
       "logs:CreateLogStream",
