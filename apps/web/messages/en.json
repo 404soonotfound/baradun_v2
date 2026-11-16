@@ -612,8 +612,6 @@
       "status": "By status",
       "near": "Nearest"
     },
-    "count": "{count, plural, one {# beach} other {# beaches}}",
-    "updatedAt": "Updated {time}",
     "loading": "Loading beach info",
     "group": {
       "clear": "No warnings · {count}",
@@ -622,7 +620,8 @@
       "nearest": "Nearest {km}km"
     },
     "row": {
-      "clearScopeNoTime": "{zones} · KMA · check time unknown"
+      "clearScopeNoTime": "{zones} · KMA · check time unknown",
+      "activities": "Confirmed activities: {list}"
     },
     "noClear": {
       "title": "No beach is confirmed as 'No warnings' right now",
@@ -641,6 +640,12 @@
       "label": "List or map view",
       "list": "List",
       "map": "Map"
+    },
+    "regionLabel": "Region",
+    "distanceFromMe": "Distances are from your location",
+    "summary": {
+      "count": "<wide>All </wide>{count, plural, one {# beach} other {# beaches}}",
+      "updated": "Updated {time}"
     }
   },
   "search": {

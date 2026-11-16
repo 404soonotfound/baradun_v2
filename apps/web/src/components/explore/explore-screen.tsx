@@ -5,7 +5,8 @@ import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 
-import { BeachRow } from "@/components/beach-row";
+import { BeachListRow } from "@/components/beach-row";
+import { ExploreSummary } from "@/components/explore/explore-summary";
 import { LocationOffBanner } from "@/components/home/location-off-banner";
 import { BeachMarkers, type MapMarker } from "@/components/map/beach-markers";
 import { MapCard } from "@/components/map/map-card";
@@ -19,7 +20,7 @@ import { KmaSourceNote } from "@/components/source-note";
 import { Banner } from "@/components/ui/banner";
 import { Chip } from "@/components/ui/chip";
 import { EmptyState } from "@/components/ui/empty-state";
-import { PullToRefresh, RefreshButton } from "@/components/ui/pull-to-refresh";
+import { PullToRefresh } from "@/components/ui/pull-to-refresh";
 import { BeachRowSkeleton } from "@/components/ui/skeleton";
 import { StatusGroup } from "@/components/ui/status-group";
 import { Toast } from "@/components/ui/toast";
@@ -53,7 +54,7 @@ import type { LatLng } from "@/lib/geo";
 import { requestLocation, useUserLocation } from "@/lib/location";
 import { boundsOf } from "@/lib/map/bounds";
 import { NEARBY_MAX_ZOOM, nearbyPlan } from "@/lib/map/nearby";
-import { formatKm } from "@/lib/meta-join";
+import { formatKm, joinMeta } from "@/lib/meta-join";
 import { setRegion, useRegion } from "@/lib/region";
 import { useManualRefresh } from "@/lib/snapshot/use-manual-refresh";
 import {
@@ -72,12 +73,17 @@ import { useSnapshot } from "@/lib/snapshot/use-snapshot";
 import { useBadgeText } from "@/lib/snapshot/use-badge-text";
 import { useRowText } from "@/lib/snapshot/use-row-text";
 import { deriveBeachView, hidesLastValues } from "@/lib/snapshot/view";
-import { clearCheckedAt } from "@/lib/status-count";
+import { ACTIVITIES, activityNameKey } from "@/lib/activity";
+import {
+  clearCheckedAt,
+  countByStatus,
+  staleCheckedAt,
+} from "@/lib/status-count";
 import { useOnline } from "@/lib/use-online";
 import { useSheet } from "@/lib/use-sheet";
 
 // 탐색 목록 (BRD-29 · 노션 2장 EXP-L·D-EXP, Figma S_M02_01~07)
-// 위에서 아래: 제목 → 검색 입구 → 지역 버튼 → 상황 배너(하나) → 보기 전환 → "전체 n곳 · 시각" → 목록
+// 위에서 아래(GH-529 시안 C · D29-6): 제목 + 지역 버튼 → 검색 입구(모바일) → 요약 한 줄 + 새로고침 → 상황 배너(하나) → 보기 전환 → 목록
 // 활동으로 거르지 않음(BRD-128 · 10/30 결정): 고른 지역의 모든 해변. 판단은 활동과 무관(G1)
 // 지역: 버튼 하나("강원 ⌄") → 홈과 같은 지역 시트(전국 · 시·도 → 시·군). 저장 값은 홈 기본 지역과 같은 칸
 // 목록: 상태별(특보 없음 → 이용불가 → 판단불가 묶음) 또는 가까운 순 한 목록(위치가 없으면 이름 순). 순위·점수·추천 표시 없음
@@ -107,7 +113,7 @@ export function ExploreScreen({
   const sortChoice = useSortChoice();
   const view = useExploreView();
   const { badgeText } = useBadgeText();
-  const { rowMeta, rowDetail } = useRowText();
+  const { listMeta, listNote } = useRowText();
   const titleRef = useRef<HTMLHeadingElement>(null);
   const regionSheet = useSheet("region");
   const {
@@ -291,20 +297,30 @@ export function ExploreScreen({
     return km === null ? null : t("explore.group.nearest", { km });
   }
 
+  // 3줄째 "확인된 활동 수영 · 서핑". 보여주기만 하고 거르지 않음(D14-15). 확인된 활동이 없으면 줄을 두지 않음
+  function activitiesText(activities: ExploreItem["activities"]) {
+    const list = joinMeta(
+      ACTIVITIES.filter((item) => activities.includes(item)).map((item) =>
+        t(activityNameKey(item)),
+      ),
+    );
+    return list ? t("explore.row.activities", { list }) : null;
+  }
+
   function renderRow(item: ExploreItem) {
     const view = item.view;
     if (view.kind !== "ready") return null;
     return (
       <li key={item.id}>
-        <BeachRow
+        <BeachListRow
           href={localizedPath(locale, `/spots/${item.slug}/`)}
           name={item.name}
-          meta={rowMeta(item.region, item.distanceKm, view, nowMs)}
-          wave={view.metrics.waveHeight}
-          status={view.badge}
-          detail={rowDetail(view, nowMs, item.warningZones)}
+          badge={view.badge}
+          meta={listMeta(item.region, item.distanceKm, view, nowMs)}
+          activities={activitiesText(item.activities)}
+          note={listNote(view, nowMs)}
           changedFrom={changedFromById.get(item.id) ?? null}
-          // PC 지도에서 고른 해변은 행도 강조(파란 줄 + 연한 바탕)
+          // PC 지도에서 고른 해변은 줄도 강조(옅은 파란 바탕 + 왼쪽 띠)
           highlight={item.id === selectedId}
           onHighlight={(on) =>
             setHighlightedId((current) =>
@@ -381,279 +397,280 @@ export function ExploreScreen({
   // 불러오는 중·처음부터 못 받음·개발용 예시는 숨김(showsKmaSource). 결과 없음은 목록 자리째 빈 화면이라 붙지 않음
   const hasKmaData = showsKmaSource(snapshot, sampleSnapshot);
 
-  // "전체 n곳 · 14:30 업데이트"(Figma 173:558: 개수 14 굵게 + 시각 12 보조색). 결과가 없으면 아래 빈 화면이 말함
+  // 요약 한 줄(D29-6): "전체 n곳 · 사유별 개수 · HH:MM 업데이트". 결과가 없으면 아래 빈 화면이 말함
+  // 사유별 개수는 게시된 화면 상태를 세기만 함(정렬·보기와 상관없이 같은 값). 불러오는 중이면 null
   const showCount = !loading && items.length > 0;
-  const updated = dataTime ? t("explore.updatedAt", { time: dataTime }) : null;
-  // map = 모바일 지도 보기 줄(Figma 174:906: 12 보조색 한 줄). PC는 목록 줄과 같은 모양
-  function countLine(variant: "list" | "map", className?: string) {
-    return (
-      <p className={cn("text-caption text-text-muted", className)}>
-        <span
-          className={
-            variant === "list"
-              ? "text-body font-bold text-text-default"
-              : "lg:text-body lg:font-bold lg:text-text-default"
-          }
-        >
-          {t("explore.count", { count: items.length })}
-        </span>
-        {updated && ` · ${updated}`}
-      </p>
-    );
-  }
+  const reasonCounts = useMemo(
+    () => countByStatus(items.map((item) => item.view)) ?? [],
+    [items],
+  );
+  // 거리 기준 안내: 받은 위치로 잰 거리가 줄에 보일 때만(위치는 기기 안 계산에만 씀)
+  const distanceNote = coords ? t("explore.distanceFromMe") : null;
 
   return (
     <PullToRefresh refreshing={refreshing} onRefresh={triggerRefresh}>
-      <div className="lg:grid lg:grid-cols-[448px_minmax(0,1fr)] lg:items-start lg:gap-6">
-        {/* 묶음 간격: 모바일 12(Figma pad.stack), 머리(제목·검색·지역)는 11. PC는 16 그대로 */}
-        <div className="flex flex-col gap-3 lg:gap-4">
-          <div className="flex flex-col gap-[11px] lg:gap-4">
-            <div className="flex items-center justify-between gap-2">
-              <h1
-                ref={titleRef}
-                tabIndex={-1}
-                className="text-title-xl text-text-default outline-none"
-              >
-                {t("pages.explore")}
-              </h1>
-              <RefreshButton refreshing={refreshing} onRefresh={triggerRefresh} />
-            </div>
-
-          {/* 검색 입구(누르면 검색 화면). PC는 상단 내비에 검색이 있어 숨김. 모바일 지도 보기도 숨김(Figma 174:894) */}
-          <Link
-            href={localizedPath(locale, "/search/")}
-            className={cn(
-              "flex h-search items-center gap-2.5 rounded-input border border-border-strong bg-bg-surface px-[15px] text-[15px] text-text-muted lg:hidden",
-              view === "map" && "hidden",
-            )}
-          >
-            <Search aria-hidden="true" size={17} className="shrink-0" />
-            {t("home.top.search")}
-          </Link>
-
-          {/* 지역 버튼(Figma 173:529 '칩 · 선택값'). 누르면 홈과 같은 지역 시트, 고르기 전에는 저장하지 않음 */}
-          <Chip
-            variant="sel"
-            aria-haspopup="dialog"
-            aria-label={t("home.top.changeRegion", { region: regionLabel })}
-            onClick={regionSheet.show}
-            className="self-start"
-          >
-            {regionLabel}
-          </Chip>
-        </div>
-
-        {sampleSnapshot && <SampleNote />}
-
-        {/* 상황 배너 자리(하나만) */}
-        <SituationBanner
-          locale={locale}
-          situation={situation}
-          snapshot={snapshot}
-          onRetrySucceeded={() => titleRef.current?.focus()}
-        />
-        {noClear && (
-          <Banner
-            tone="gray"
-            icon={<SearchX size={16} />}
-            title={t("explore.noClear.title")}
-          >
-            {t("explore.noClear.body")}
-          </Banner>
-        )}
-        {locationOff && (
-          <LocationOffBanner
-            locale={locale}
-            location={location}
-            onClose={() => setOffBannerClosed(true)}
-            title={noticeTitle}
-            body={t("explore.locationOff.body")}
-            // 다시 시도로 안내가 사라지면 포커스를 화면 제목으로(상황 배너 다시 시도 성공과 같은 자리). 모바일 지도 보기에서는 정렬 줄이 숨어 있어 제목을 씀
-            focusAfterRetry={() => titleRef.current?.focus()}
-          />
-        )}
-
-        {/* 보기 줄. 모바일 목록: [상태별 | 가까운 순] + [목록 | 지도] (Figma 173:549)
-            모바일 지도: 개수·시각 + [목록 | 지도] (174:905) · PC: 개수·시각 + [상태별 | 가까운 순] (181:1027) */}
+      {/* 머리(D29-6): 제목 + 오른쪽 지역 버튼 → (모바일) 검색 입구 → 요약 한 줄 + 글자 버튼 '새로고침'. PC는 목록·지도 위 전체 폭 */}
+      <div className="mb-3 flex flex-col gap-[11px] lg:mb-5 lg:gap-3">
         <div className="flex items-center justify-between gap-2">
-          {showCount &&
-            countLine(
-              view === "map" ? "map" : "list",
-              cn("min-w-0", view === "list" && "hidden lg:block"),
-            )}
-          {/* 정렬은 목록에만. 모바일 지도 보기에서는 숨김(PC는 목록이 늘 보임) */}
-          <ViewToggle<SortChoice>
-            label={t("explore.sortLabel")}
-            className={cn(
-              "w-[176px] shrink-0",
-              view === "map" && "hidden lg:flex",
-            )}
-            options={[
-              { value: "status", label: t("explore.sort.status") },
-              { value: "second", label: t("explore.sort.near") },
-            ]}
-            value={sortChoice}
-            onChange={pickSort}
-          />
-          {/* [목록 | 지도]는 모바일만(PC는 둘 다 보임). 지도 보기 120 → 130(Figma 174:907) */}
-          <ViewToggle<ExploreView>
-            label={t("explore.view.label")}
-            className={cn(
-              "ml-auto shrink-0 lg:hidden",
-              view === "map" ? "w-[130px]" : "w-[120px]",
-            )}
-            options={[
-              { value: "list", label: t("explore.view.list") },
-              { value: "map", label: t("explore.view.map") },
-            ]}
-            value={view}
-            onChange={selectExploreView}
-          />
+          <h1
+            ref={titleRef}
+            tabIndex={-1}
+            className="text-title-xl text-text-default outline-none lg:text-[30px] lg:leading-[43.5px] lg:font-bold lg:tracking-[-0.6px]"
+          >
+            {t("pages.explore")}
+          </h1>
+          <div className="flex shrink-0 items-center gap-2">
+            <span
+              aria-hidden="true"
+              className="hidden text-caption text-text-muted lg:inline"
+            >
+              {t("explore.regionLabel")}
+            </span>
+            {/* 지역 버튼(Figma 173:529 '칩 · 선택값'). 누르면 홈과 같은 지역 시트, 고르기 전에는 저장하지 않음 */}
+            <Chip
+              variant="sel"
+              aria-haspopup="dialog"
+              aria-label={t("home.top.changeRegion", { region: regionLabel })}
+              onClick={regionSheet.show}
+            >
+              {regionLabel}
+            </Chip>
+          </div>
         </div>
 
-        {/* 모바일 목록 보기의 개수 줄(보기 줄 아래). PC·지도 보기는 보기 줄 안 */}
-        {showCount && view === "list" && countLine("list", "lg:hidden")}
-
-        {/* 모바일 지도 보기에서는 목록을 숨김(PC는 늘 보임) */}
-        <div className={cn(view === "map" && "hidden lg:block")}>
-          {loading ? (
-            <BeachRowSkeleton label={t("explore.loading")} />
-          ) : items.length === 0 ? (
-            // 활동으로 거르지 않고 고른 지역은 해변이 있는 곳만이라(validRegion) 공개 해변이 하나도 없을 때만
-            <EmptyState
-              icon={<SearchX size={26} />}
-              title={t("explore.empty.title")}
-            />
-          ) : mode === "status" ? (
-            <div className="flex flex-col gap-5">
-              {renderStatusGroups()}
-              {/* 특보 없음 묶음이 없으면(이용불가·판단불가만, 오프라인 포함) 묶음 안내가 없으니 목록 아래에 한 번 둠 */}
-              {!statusGroups.some((group) => group.category === "clear") && (
-                <p className="text-caption text-text-muted">
-                  {t("safety.finalCall")}
-                </p>
-              )}
-              {hasKmaData && <KmaSourceNote variant="status" />}
-            </div>
-          ) : (
-            <div className="flex flex-col gap-2">
-              <ul className="divide-y divide-border-default overflow-hidden rounded-card bg-bg-surface shadow-card">
-                {(listBatched
-                  ? flatItems.slice(0, LIST_INITIAL_BATCH)
-                  : flatItems
-                ).map(renderRow)}
-              </ul>
-              <div className="flex flex-col gap-0.5 text-caption text-text-muted">
-                {flatHasClear && (
-                  <p>{clearScope(clearCheckedAt(flatClearViews))}</p>
-                )}
-                <p>{t("safety.finalCall")}</p>
-                {hasKmaData && <KmaSourceNote variant="status" />}
-              </div>
-            </div>
+        {/* 검색 입구(누르면 검색 화면). PC는 상단 내비에 검색이 있어 숨김. 모바일 지도 보기도 숨김(Figma 174:894) */}
+        <Link
+          href={localizedPath(locale, "/search/")}
+          className={cn(
+            "flex h-search items-center gap-2.5 rounded-input border border-border-strong bg-bg-surface px-[15px] text-[15px] text-text-muted lg:hidden",
+            view === "map" && "hidden",
           )}
-        </div>
+        >
+          <Search aria-hidden="true" size={17} className="shrink-0" />
+          {t("home.top.search")}
+        </Link>
 
-        {/* 지역 고르기 시트(홈과 같은 부품). 고르면 기기에 저장하고 닫음
-            '내 주변'은 두지 않음: 탐색에서 가까운 해변은 정렬 '가까운 순'이 보여 줌(홈 '내 주변'은 지역을 지우는 동작이라 탐색에선 전국과 같아짐) */}
-        <RegionSheet
-          open={regionSheet.open}
-          onClose={regionSheet.close}
-          groups={groups}
-          value={region}
-          onSelect={(next) => {
-            setRegion(next);
-            setNearbyIds([]);
-            regionSheet.close();
-          }}
-          // '전국'(맨 앞): 전국을 고른 것으로 저장(BRD-127 · 10/29 결정 B). 저장값 없는 기본 전국도 선택으로 보임
-          nationwide={{
-            selected: region === null,
-            onSelect: () => {
-              setRegion(NATIONWIDE);
-              setNearbyIds([]);
-              regionSheet.close();
-            },
-          }}
+        <ExploreSummary
+          total={showCount ? items.length : null}
+          counts={showCount ? reasonCounts : []}
+          time={dataTime}
+          stale={showCount ? staleCheckedAt(readyViews) : null}
+          nowMs={nowMs}
+          refreshing={refreshing}
+          onRefresh={triggerRefresh}
         />
       </div>
 
-      {/* 지도(EXP-M·D-EXP). 모바일은 지도 보기에서만 보이고, 숨긴 동안은 불러오지 않음(MapView가 보일 때 시작)
-          PC는 오른쪽 열에 늘 보임. 지도가 실패해도 목록은 그대로 */}
-      <div
-        className={cn(
-          view === "map" ? "mt-3 flex flex-col gap-3" : "hidden",
-          "lg:sticky lg:top-[88px] lg:mt-0 lg:block",
-        )}
-      >
-        <p className="sr-only">{t("map.listNote")}</p>
-        <MapView
-          locale={locale}
-          bounds={mapBounds}
-          focus={mapFocus}
-          // 마커(해변 상태)를 그릴 때만 지도 아래 출처 줄에 기상청 출처
-          dataSource={
-            hasKmaData && markers.length > 0 ? t("source.kmaStatus") : null
-          }
-          className="h-[62dvh] min-h-[380px] lg:h-[calc(100dvh-112px)]"
-          onShowList={() => selectExploreView("list")}
-          // 지도가 실패하면 고른 해변을 놓음(지도 밖에 있는 모바일 카드도 닫힘, PC 카드와 같게)
-          onFailed={() => setSelectedId(null)}
-          overlay={(api) => (
-            <>
-              <BeachMarkers
-                api={api}
-                markers={markers}
-                selectedId={selectedId}
-                highlightedId={highlightedId}
-                pinnedIds={nearbyIds}
-                onSelect={setSelectedId}
-              />
-              {/* PC는 범례를 지도 왼쪽 위에, 모바일은 지도를 덜 가리게 지도 아래에 */}
-              <MapLegend
-                clearScope={mapClearScope}
-                className="absolute top-3 left-3 hidden max-w-[360px] lg:flex"
-              />
-              {/* 내 주변 보기(결정 5): 확대·축소 버튼(오른쪽 위, 44×2) 바로 아래. PC 지도 카드(왼쪽 아래 380)와 좁은 PC에서도 겹치지 않게 */}
-              {beaches.length > 0 && (
-                <NearbyButton
-                  api={api}
-                  onLocated={showNearby}
-                  className="absolute top-[112px] right-3"
-                />
-              )}
-              {/* PC는 지도 왼쪽 아래 380. 모바일 카드는 지도 밖(아래) */}
-              {selectedItem && (
-                <MapCard
-                  locale={locale}
-                  item={selectedItem}
-                  nowMs={nowMs}
-                  onClose={() => setSelectedId(null)}
-                  className="absolute bottom-3 left-3 hidden w-[380px] lg:flex"
-                />
-              )}
-            </>
+      <div className="lg:grid lg:grid-cols-[448px_minmax(0,1fr)] lg:items-start lg:gap-6">
+        {/* 묶음 간격: 모바일 12(Figma pad.stack), PC 16 */}
+        <div className="flex flex-col gap-3 lg:gap-4">
+          {sampleSnapshot && <SampleNote />}
+
+          {/* 상황 배너 자리(하나만) */}
+          <SituationBanner
+            locale={locale}
+            situation={situation}
+            snapshot={snapshot}
+            onRetrySucceeded={() => titleRef.current?.focus()}
+          />
+          {noClear && (
+            <Banner
+              tone="gray"
+              icon={<SearchX size={16} />}
+              title={t("explore.noClear.title")}
+            >
+              {t("explore.noClear.body")}
+            </Banner>
           )}
-        />
-        {/* 모바일 카드는 지도 안에 두면 지도를 거의 다 가려서 지도 아래 흐름에 두고 하단 탭 바로 위에 붙임(BRD-177)
-            fixed로 띄우면 끝까지 스크롤해도 지도 출처 링크·범례가 가려져서 sticky로 둠: 끝에 닿으면 제자리로 돌아와 아래 내용이 보임
-            붙어 있는 동안 키보드 포커스(묶음·출처 링크)가 카드 뒤로 숨지 않게 카드 높이를 페이지 스크롤 여백에 더함(WCAG 2.4.11) */}
-        {selectedItem && (
-          <div
-            ref={mobileCardRef}
-            className="sticky bottom-[calc(var(--spacing-tabbar)+max(14px,env(safe-area-inset-bottom))+8px)] z-30 lg:hidden"
-          >
-            <MapCard
+          {locationOff && (
+            <LocationOffBanner
               locale={locale}
-              item={selectedItem}
-              nowMs={nowMs}
-              onClose={() => setSelectedId(null)}
+              location={location}
+              onClose={() => setOffBannerClosed(true)}
+              title={noticeTitle}
+              body={t("explore.locationOff.body")}
+              // 다시 시도로 안내가 사라지면 포커스를 화면 제목으로(상황 배너 다시 시도 성공과 같은 자리). 모바일 지도 보기에서는 정렬 줄이 숨어 있어 제목을 씀
+              focusAfterRetry={() => titleRef.current?.focus()}
+            />
+          )}
+
+          {/* 보기 줄. 모바일: [상태별 | 가까운 순](목록 보기만) + [목록 | 지도] 한 줄 · PC: '거리는 … 기준' + [상태별 | 가까운 순](목록 칸 맨 위) */}
+          <div className="flex items-center justify-between gap-2">
+            {distanceNote && (
+              <p className="hidden min-w-0 text-caption text-text-muted lg:block">
+                {distanceNote}
+              </p>
+            )}
+            {/* 정렬은 목록에만. 모바일 지도 보기에서는 숨김(PC는 목록이 늘 보임) */}
+            <ViewToggle<SortChoice>
+              label={t("explore.sortLabel")}
+              className={cn(
+                "w-[176px] shrink-0 lg:ml-auto lg:w-[240px]",
+                view === "map" && "hidden lg:flex",
+              )}
+              options={[
+                { value: "status", label: t("explore.sort.status") },
+                { value: "second", label: t("explore.sort.near") },
+              ]}
+              value={sortChoice}
+              onChange={pickSort}
+            />
+            {/* [목록 | 지도]는 모바일만(PC는 둘 다 보임) */}
+            <ViewToggle<ExploreView>
+              label={t("explore.view.label")}
+              className="ml-auto w-[120px] shrink-0 lg:hidden"
+              options={[
+                { value: "list", label: t("explore.view.list") },
+                { value: "map", label: t("explore.view.map") },
+              ]}
+              value={view}
+              onChange={selectExploreView}
             />
           </div>
-        )}
-        <MapLegend clearScope={mapClearScope} className="lg:hidden" />
+
+          {/* 모바일 지도 보기에서는 목록을 숨김(PC는 늘 보임) */}
+          <div className={cn(view === "map" && "hidden lg:block")}>
+            {loading ? (
+              <BeachRowSkeleton label={t("explore.loading")} />
+            ) : items.length === 0 ? (
+              // 활동으로 거르지 않고 고른 지역은 해변이 있는 곳만이라(validRegion) 공개 해변이 하나도 없을 때만
+              <EmptyState
+                icon={<SearchX size={26} />}
+                title={t("explore.empty.title")}
+              />
+            ) : mode === "status" ? (
+              <div className="flex flex-col gap-5">
+                {renderStatusGroups()}
+                {/* 특보 없음 묶음이 없으면(이용불가·판단불가만, 오프라인 포함) 묶음 안내가 없으니 목록 아래에 한 번 둠 */}
+                {!statusGroups.some((group) => group.category === "clear") && (
+                  <p className="text-caption text-text-muted">
+                    {t("safety.finalCall")}
+                  </p>
+                )}
+                {hasKmaData && <KmaSourceNote variant="status" />}
+              </div>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {/* 구역·기관·확인 시각은 목록 머리에 한 번(D29-2) */}
+                {flatHasClear && (
+                  <p className="text-caption text-text-muted">
+                    {clearScope(clearCheckedAt(flatClearViews))}
+                  </p>
+                )}
+                <ul className="divide-y divide-border-default overflow-hidden rounded-card bg-bg-surface shadow-card">
+                  {(listBatched
+                    ? flatItems.slice(0, LIST_INITIAL_BATCH)
+                    : flatItems
+                  ).map(renderRow)}
+                </ul>
+                <div className="flex flex-col gap-0.5 text-caption text-text-muted">
+                  <p>{t("safety.finalCall")}</p>
+                  {hasKmaData && <KmaSourceNote variant="status" />}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* 지역 고르기 시트(홈과 같은 부품). 고르면 기기에 저장하고 닫음
+            '내 주변'은 두지 않음: 탐색에서 가까운 해변은 정렬 '가까운 순'이 보여 줌(홈 '내 주변'은 지역을 지우는 동작이라 탐색에선 전국과 같아짐) */}
+          <RegionSheet
+            open={regionSheet.open}
+            onClose={regionSheet.close}
+            groups={groups}
+            value={region}
+            onSelect={(next) => {
+              setRegion(next);
+              setNearbyIds([]);
+              regionSheet.close();
+            }}
+            // '전국'(맨 앞): 전국을 고른 것으로 저장(BRD-127 · 10/29 결정 B). 저장값 없는 기본 전국도 선택으로 보임
+            nationwide={{
+              selected: region === null,
+              onSelect: () => {
+                setRegion(NATIONWIDE);
+                setNearbyIds([]);
+                regionSheet.close();
+              },
+            }}
+          />
+        </div>
+
+        {/* 지도(EXP-M·D-EXP). 모바일은 지도 보기에서만 보이고, 숨긴 동안은 불러오지 않음(MapView가 보일 때 시작)
+          PC는 오른쪽 열에 늘 보임. 지도가 실패해도 목록은 그대로 */}
+        <div
+          className={cn(
+            view === "map" ? "mt-3 flex flex-col gap-3" : "hidden",
+            "lg:sticky lg:top-[88px] lg:mt-0 lg:block",
+          )}
+        >
+          <p className="sr-only">{t("map.listNote")}</p>
+          <MapView
+            locale={locale}
+            bounds={mapBounds}
+            focus={mapFocus}
+            // 마커(해변 상태)를 그릴 때만 지도 아래 출처 줄에 기상청 출처
+            dataSource={
+              hasKmaData && markers.length > 0 ? t("source.kmaStatus") : null
+            }
+            className="h-[62dvh] min-h-[380px] lg:h-[calc(100dvh-112px)]"
+            onShowList={() => selectExploreView("list")}
+            // 지도가 실패하면 고른 해변을 놓음(지도 밖에 있는 모바일 카드도 닫힘, PC 카드와 같게)
+            onFailed={() => setSelectedId(null)}
+            overlay={(api) => (
+              <>
+                <BeachMarkers
+                  api={api}
+                  markers={markers}
+                  selectedId={selectedId}
+                  highlightedId={highlightedId}
+                  pinnedIds={nearbyIds}
+                  onSelect={setSelectedId}
+                />
+                {/* PC는 범례를 지도 왼쪽 위에, 모바일은 지도를 덜 가리게 지도 아래에 */}
+                <MapLegend
+                  clearScope={mapClearScope}
+                  className="absolute top-3 left-3 hidden max-w-[360px] lg:flex"
+                />
+                {/* 내 주변 보기(결정 5): 확대·축소 버튼(오른쪽 위, 44×2) 바로 아래. PC 지도 카드(왼쪽 아래 380)와 좁은 PC에서도 겹치지 않게 */}
+                {beaches.length > 0 && (
+                  <NearbyButton
+                    api={api}
+                    onLocated={showNearby}
+                    className="absolute top-[112px] right-3"
+                  />
+                )}
+                {/* PC는 지도 왼쪽 아래 380. 모바일 카드는 지도 밖(아래) */}
+                {selectedItem && (
+                  <MapCard
+                    locale={locale}
+                    item={selectedItem}
+                    nowMs={nowMs}
+                    onClose={() => setSelectedId(null)}
+                    className="absolute bottom-3 left-3 hidden w-[380px] lg:flex"
+                  />
+                )}
+              </>
+            )}
+          />
+          {/* 모바일 카드는 지도 안에 두면 지도를 거의 다 가려서 지도 아래 흐름에 두고 하단 탭 바로 위에 붙임(BRD-177)
+            fixed로 띄우면 끝까지 스크롤해도 지도 출처 링크·범례가 가려져서 sticky로 둠: 끝에 닿으면 제자리로 돌아와 아래 내용이 보임
+            붙어 있는 동안 키보드 포커스(묶음·출처 링크)가 카드 뒤로 숨지 않게 카드 높이를 페이지 스크롤 여백에 더함(WCAG 2.4.11) */}
+          {selectedItem && (
+            <div
+              ref={mobileCardRef}
+              className="sticky bottom-[calc(var(--spacing-tabbar)+max(14px,env(safe-area-inset-bottom))+8px)] z-30 lg:hidden"
+            >
+              <MapCard
+                locale={locale}
+                item={selectedItem}
+                nowMs={nowMs}
+                onClose={() => setSelectedId(null)}
+              />
+            </div>
+          )}
+          <MapLegend clearScope={mapClearScope} className="lg:hidden" />
+        </div>
       </div>
-    </div>
       <Toast message={toastMessage} onHold={holdToast} />
     </PullToRefresh>
   );

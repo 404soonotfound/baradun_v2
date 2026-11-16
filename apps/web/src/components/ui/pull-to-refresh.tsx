@@ -37,7 +37,8 @@ export function PullToRefresh({
     const el = containerRef.current;
     if (!el) return;
     function onNativeTouchMove(e: TouchEvent) {
-      if (startYRef.current === null || refreshing || window.scrollY > 0) return;
+      if (startYRef.current === null || refreshing || window.scrollY > 0)
+        return;
       const y = e.touches[0]?.clientY;
       if (y !== undefined && y > startYRef.current && e.cancelable) {
         e.preventDefault();
@@ -173,6 +174,8 @@ export interface RefreshButtonProps {
   refreshing: boolean;
   onRefresh: () => void;
   className?: string;
+  // text: 요약 줄 오른쪽 글자 버튼(탐색, 결정 기록 29장 D29-6). 기본은 테두리 알약
+  variant?: "pill" | "text";
 }
 
 // 키보드·스크린 리더·데스크톱 사용자용 새로고침 버튼(L16, BRD-137)
@@ -180,6 +183,7 @@ export function RefreshButton({
   refreshing,
   onRefresh,
   className,
+  variant = "pill",
 }: RefreshButtonProps) {
   const t = useTranslations();
   const reducedMotion = useReducedMotion();
@@ -193,13 +197,17 @@ export function RefreshButton({
         if (!refreshing) onRefresh();
       }}
       className={cn(
-        "inline-flex min-h-touch items-center gap-1.5 rounded-full border border-border-default bg-bg-surface px-3 text-caption font-medium text-text-default hover:bg-bg-subtle focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus",
+        "inline-flex min-h-touch items-center gap-1.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus",
+        variant === "pill"
+          ? "rounded-full border border-border-default bg-bg-surface px-3 text-caption font-medium text-text-default hover:bg-bg-subtle"
+          : "rounded-[8px] px-1 text-caption font-bold text-brand-default hover:underline",
         className,
       )}
     >
       <RefreshCw
         className={cn(
-          "size-4 shrink-0 text-text-muted",
+          "size-4 shrink-0",
+          variant === "pill" && "text-text-muted",
           refreshing && !reducedMotion && "animate-spin",
         )}
         aria-hidden="true"
