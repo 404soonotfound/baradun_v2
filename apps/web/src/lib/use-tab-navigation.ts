@@ -152,7 +152,7 @@ export function useTabNavigation() {
     const target = hrefFor(tab);
     // 목표 경로가 이미 커밋된 pathname과 같으면(pushState 선반영 중 복귀·쿼리스트링만 다른 이동 포함)
     // useEffect([pathname])가 다시 돌지 않으므로 복원 예약·pending·소속 탭을 여기서 정리함
-    // (검색처럼 current === null에서 쿼리스트링만 바뀌는 탭 전환은 떠나는 상태 저장·복원도 함께 처리)
+    // (검색처럼 current === null에서 쿼리스트링만 바뀌는 이동은 떠나는 상태 저장 + 복원 예약 정리만 하며 스크롤 복원은 안 함)
     if (pathnameOf(target) === pathname) {
       if (
         current === null &&
