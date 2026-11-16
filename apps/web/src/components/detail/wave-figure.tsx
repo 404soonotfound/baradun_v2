@@ -61,6 +61,7 @@ export function WaveFigure({
   const reduce = useReducedMotion();
   const [paused, setPaused] = useState(false);
   const [visible, setVisible] = useState(true);
+  const elapsedSec = useRef(0);
   const figureRef = useRef<HTMLElement>(null);
   const front = useRef<SVGPathElement>(null);
   const frontArea = useRef<SVGPathElement>(null);
@@ -121,14 +122,18 @@ export function WaveFigure({
         `translate(${BUOY_X} ${y.toFixed(2)}) rotate(${angle.toFixed(1)})`,
       );
     };
+    // 멈춤(화면 밖·일시정지·동작 줄이기) 시 마지막 경과 시간을 기억해 돌아왔을 때 이어 그림
     if (!moving) {
-      draw(0);
+      draw(elapsedSec.current);
       return;
     }
     let frame = 0;
+    const base = elapsedSec.current;
     const start = performance.now();
     const tick = (now: number) => {
-      draw((now - start) / 1000);
+      const next = base + (now - start) / 1000;
+      elapsedSec.current = next;
+      draw(next);
       frame = requestAnimationFrame(tick);
     };
     frame = requestAnimationFrame(tick);
