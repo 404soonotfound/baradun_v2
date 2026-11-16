@@ -6,7 +6,7 @@ import { listBeachSummaries } from "@/lib/beaches";
 import { alternatesFor } from "@/lib/i18n";
 import { SettingsLayout } from "@/components/settings/settings-nav";
 
-// 데이터 문의 /settings/inquiry/ (BRD-37). 해변 id·이름·지원 활동(?beach=slug 자동 입력용)만 빌드 때 넘김
+// 데이터 문의 /settings/inquiry/ (BRD-37). 해변 id·이름·지원 활동·지역·사진(?beach=slug 자동 입력용)만 빌드 때 넘김
 const PATH = "/settings/inquiry/";
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -17,11 +17,14 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function Page() {
   const t = await getTranslations({ locale: "en", namespace: "pages" });
   const beaches = listBeachSummaries("en").map(
-    ({ id, slug, name, activities }) => ({
+    // 문의할 해변 카드(GH-532 · D29-9): 사진 · 지역 · 확인된 활동까지
+    ({ id, slug, name, activities, region, photo }) => ({
       id,
       slug,
       name,
       activities,
+      region,
+      photo,
     }),
   );
   // PC는 설정과 같은 좌우 배치(왼쪽 설정 목록). 목록은 Suspense 밖이라 정적 HTML에도 그림

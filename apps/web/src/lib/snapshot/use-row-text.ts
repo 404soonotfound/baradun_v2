@@ -1,7 +1,7 @@
 import type { Beach } from "@baradun/contracts";
 import { useTranslations } from "next-intl";
 
-import { ACTIVITIES, activityNameKey } from "@/lib/activity";
+import { ACTIVITIES, activityNameKey, type Activity } from "@/lib/activity";
 import { formatKm, joinMeta } from "@/lib/meta-join";
 import { kstStamp } from "@/lib/snapshot/clock";
 import { useBadgeText } from "@/lib/snapshot/use-badge-text";
@@ -138,7 +138,7 @@ export function useRowText() {
   }
 
   // 3줄째 "확인된 활동 수영 · 서핑". 보여주기만 하고 거르지 않음(D14-15). 확인된 활동이 없으면 null
-  function activitiesText(activities: Beach["activities"]): string | null {
+  function activitiesText(activities: readonly Activity[]): string | null {
     const names = joinMeta(
       ACTIVITIES.filter((item) => activities.includes(item)).map((item) =>
         t(activityNameKey(item)),
