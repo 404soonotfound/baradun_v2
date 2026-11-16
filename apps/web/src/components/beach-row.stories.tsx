@@ -4,7 +4,7 @@ import { NextIntlClientProvider } from "next-intl";
 import en from "../../messages/en.json";
 import ko from "../../messages/ko.json";
 import type { MetricView } from "@/lib/snapshot/view";
-import { BeachRow } from "./beach-row";
+import { BeachListRow, BeachRow } from "./beach-row";
 
 // 해변 행 확인용 (BRD-81 · 개발 전용 Storybook). Figma lrow(173:570)·즐겨찾기 행(178:111)·최근 본 행(178:197)
 const WAVE: MetricView = {
@@ -157,3 +157,69 @@ type Story = StoryObj<typeof meta>;
 
 export const Korean: Story = { args: { locale: "ko" } };
 export const English: Story = { args: { locale: "en" } };
+
+// 세 줄 목록 줄(탐색 시안 C · GH-529): 특보 없음 · 지도에서 고름 · 가까운 관측 없음 · 관측 지연(넷째 줄) · 방금 바뀜
+function ListRows() {
+  return (
+    <NextIntlClientProvider locale="ko" messages={ko} timeZone="Asia/Seoul">
+      <ul
+        style={{ maxWidth: 448, margin: 16, listStyle: "none", padding: 0 }}
+        className="divide-y divide-border-default overflow-hidden rounded-card bg-bg-surface shadow-card"
+      >
+        <li>
+          <BeachListRow
+            href="#"
+            name="강문해수욕장"
+            badge={{ kind: "clear" }}
+            meta="강원 강릉시 · 6.2km · 수온 21.4°C · 34분 전 측정"
+            activities="확인된 활동 수영"
+            note={null}
+          />
+        </li>
+        <li>
+          <BeachListRow
+            href="#"
+            name="경포해수욕장"
+            badge={{ kind: "clear" }}
+            meta="강원 강릉시 · 6.5km · 수온 21.4°C · 34분 전 측정"
+            activities="확인된 활동 수영 · 서핑"
+            note={null}
+            highlight
+          />
+        </li>
+        <li>
+          <BeachListRow
+            href="#"
+            name="도직해수욕장"
+            badge={{ kind: "clear" }}
+            meta="강원 강릉시 · 23.2km · 가까운 관측 없음"
+            activities="확인된 활동 수영"
+            note={null}
+          />
+        </li>
+        <li>
+          <BeachListRow
+            href="#"
+            name="등명해수욕장"
+            badge={{ kind: "observation_delayed" }}
+            meta="강원 강릉시 · 13.4km · 수온 20.8°C · 34분 전 측정"
+            activities="확인된 활동 수영"
+            note="파고 · 측정이 늦어지고 있어요 · 파주기 8.1s"
+          />
+        </li>
+        <li>
+          <BeachListRow
+            href="#"
+            name="망상해수욕장"
+            badge={{ kind: "warning", type: "wind_wave", level: "advisory" }}
+            meta="강원 동해시 · 9.8km · 수온 20.8°C · 34분 전 측정"
+            activities="확인된 활동 수영"
+            note={null}
+            changedFrom="특보 없음"
+          />
+        </li>
+      </ul>
+    </NextIntlClientProvider>
+  );
+}
+export const 세줄목록: StoryObj = { render: () => <ListRows /> };
