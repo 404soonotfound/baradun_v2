@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // 인프라 배포 명령 하나 (BRD-169·GH-382):
 //   npm run deploy:infra [-- --profile <AWS 프로필>] [--admin-profile <IAM 정책을 고칠 프로필>] [--watch <분>] [--issue <번호>] [--admin-site-deploy-url <HTTPS 주소>]
+//     [--site-domain <호스트> --site-certificate-arn <us-east-1 ACM ARN> | --clear-site-domain]
 // tsx로 실행함(판정 부분 deploy-plan.ts를 바로 가져옴)
 // 순서: 배포용 작업 트리를 origin/main으로 → ci-ok 확인 → npm ci → 자격 증명 → 스택 밖 IAM 정책 비교
 //   → 변경 세트 → 표 → yes일 때만 (boundary 반영) → 실행·대기 → 바뀐 함수 로그 점검 → 지도 판 확인 → (이슈 댓글)
@@ -9,7 +10,7 @@
 // - 실행 정책(BaradunCdkExecution·Workload)은 다르면 경고만 함. 바꾸는 순서가 따로 있어 자동 반영하지 않음(infra/README)
 // - 정책을 읽지 못하면 '같음'으로 넘기지 않고 멈춤
 // - 사람이 실행함. yes를 입력하지 않으면 변경 세트만 남기고 끝냄
-// - 스택 파라미터는 기존 값을 유지함. 운영자 사이트 조회 주소는 전용 인자를 준 경우만 설정함
+// - 스택 파라미터는 기존 값을 유지함. 운영자 사이트 조회 주소·운영 도메인은 전용 인자를 준 경우만 설정함
 // - 자격 증명은 이 프로세스의 하위 명령 환경 변수로만 넘김. 파일·화면에 남기지 않음
 // - 배포용 작업 트리 기본 위치: 저장소 옆 {저장소}-deploy. BARADUN_DEPLOY_DIR로 바꿀 수 있음
 import { spawnSync } from "node:child_process";
@@ -128,6 +129,51 @@ if (
 ) {
   fail("--admin-site-deploy-url에 경로 없이 HTTPS 주소를 써 주세요");
 }
+// 운영 도메인(GH-341): 두 값을 함께 넣거나 --clear-site-domain으로 함께 비움. 둘 다 안 주면 기존 값 유지
+const siteDomain = arg("--site-domain");
+const siteCertificateArn = arg("--site-certificate-arn");
+const clearSiteDomain = process.argv.includes("--clear-site-domain");
+if (clearSiteDomain && (siteDomain || siteCertificateArn)) {
+  fail(
+    "--clear-site-domain은 --site-domain·--site-certificate-arn과 함께 쓸 수 없어요",
+  );
+}
+if (Boolean(siteDomain) !== Boolean(siteCertificateArn)) {
+  fail("--site-domain과 --site-certificate-arn은 함께 써 주세요");
+}
+if (
+  siteDomain &&
+  !/^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/.test(
+    siteDomain,
+  )
+) {
+  fail("--site-domain에 소문자 호스트 이름만 써 주세요(예: www.baradun.app)");
+}
+// CloudFront는 us-east-1 인증서만 받음
+if (
+  siteCertificateArn &&
+  !/^arn:aws:acm:us-east-1:\d{12}:certificate\/[0-9a-f-]{36}$/.test(
+    siteCertificateArn,
+  )
+) {
+  fail("--site-certificate-arn에 us-east-1 ACM 인증서 ARN을 써 주세요");
+}
+const siteDomainParameters = siteDomain
+  ? [
+      "--parameters",
+      `SiteDomainName=${siteDomain}`,
+      "--parameters",
+      `SiteCertificateArn=${siteCertificateArn}`,
+    ]
+  : clearSiteDomain
+    ? ["--parameters", "SiteDomainName=", "--parameters", "SiteCertificateArn="]
+    : [];
+// 이슈 댓글에 남길 도메인 변경. 인증서 ARN에는 계정 번호가 있어 넣지 않음
+const siteDomainLines = siteDomain
+  ? [`- 운영 도메인: ${siteDomain}로 설정`]
+  : clearSiteDomain
+    ? ["- 운영 도메인: 비움"]
+    : [];
 const commonDir = path.resolve(
   run("git", ["rev-parse", "--path-format=absolute", "--git-common-dir"], {
     capture: true,
@@ -398,6 +444,8 @@ Object.assign(cdkEnv, {
 });
 const name = changeSetName(sha, new Date());
 step(6, `변경 세트를 만들어요 (${name}, 아직 실행하지 않음)`);
+if (siteDomain) console.log(`   운영 도메인 ${siteDomain}과 인증서를 넣어요`);
+if (clearSiteDomain) console.log("   운영 도메인·인증서를 비워요");
 run(
   "npx",
   [
@@ -413,6 +461,7 @@ run(
     ...(adminSiteDeployUrl
       ? ["--parameters", `AdminSiteDeployUrl=${adminSiteDeployUrl}`]
       : []),
+    ...siteDomainParameters,
   ],
   { cwd: path.join(deployDir, "infra"), env: cdkEnv },
 );
@@ -645,6 +694,7 @@ if (hasChangeSet) {
         changeSet: name,
         boundary: boundaryResult,
         failed,
+        extra: siteDomainLines,
       }),
     );
     fail(
@@ -726,5 +776,7 @@ postIssueComment(
     executionPolicies: executionLines,
     watchMinutes,
     checks: logChecks,
-  }) + `\n- 지도 판 확인: ${mapCheck}\n`,
+  }) +
+    [`\n- 지도 판 확인: ${mapCheck}`, ...siteDomainLines].join("\n") +
+    "\n",
 );
