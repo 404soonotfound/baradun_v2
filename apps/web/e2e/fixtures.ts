@@ -567,6 +567,19 @@ async function blockExternal(context: BrowserContext, baseURL: string) {
   );
 }
 
+// 해변 참고 사진(한국관광공사 주소)은 바깥 서버 대신 1×1 그림으로 답함(GH-528 상세 사진 커버).
+// 막아 두면 사진 있는 해변이 모두 '받기 실패'로만 그려져 사진 있는 화면(커버 자리·밀림)을 볼 수 없음
+// "fail"이면 막힌 채로 둠(받기 실패 → 커버 없음). 나중에 건 경로가 먼저 쓰여 blockExternal 뒤에 불러야 함
+const PHOTO_PIXEL = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNgYPj/HwADAgH/eL9GtQAAAABJRU5ErkJggg==",
+  "base64",
+);
+async function servePhotos(context: BrowserContext) {
+  await context.route("https://tong.visitkorea.or.kr/**", (route) =>
+    route.fulfill({ contentType: "image/png", body: PHOTO_PIXEL }),
+  );
+}
+
 // 첫 실행 안내·언어 안내를 이미 지난 기기. 기본 지역은 강원 강릉시(시험용 지역 선택, 사용자 위치 아님)
 // region: null이면 기본 지역을 넣지 않음(저장값 없음 → 홈 기본값, BRD-127)
 async function seedDevice(
@@ -614,6 +627,8 @@ type Fixtures = {
   deviceRegion: string | null;
   // 탐색 [목록 | 지도] 저장값. null = 저장값 없음(모바일 처음 보기 = 지도, BRD-128). 목록을 보는 시험만 "list"
   exploreView: "list" | "map" | null;
+  // 해변 참고 사진 받기. "ok" = 받음(1×1 그림), "fail" = 받지 못함
+  photos: "ok" | "fail";
   data: DataControl;
 };
 
@@ -623,6 +638,7 @@ export const test = base.extend<Fixtures>({
   deviceLanguage: ["ko", { option: true }],
   deviceRegion: [GANGNEUNG_REGION, { option: true }],
   exploreView: [null, { option: true }],
+  photos: ["ok", { option: true }],
   data: async (
     {
       context,
@@ -631,11 +647,13 @@ export const test = base.extend<Fixtures>({
       deviceLanguage,
       deviceRegion,
       exploreView,
+      photos,
       baseURL,
     },
     provide,
   ) => {
     await blockExternal(context, baseURL ?? "http://127.0.0.1:3109");
+    if (photos === "ok") await servePhotos(context);
     if (seeded)
       await seedDevice(context, {
         language: deviceLanguage,

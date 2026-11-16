@@ -29,17 +29,6 @@ function visibleText(page: Page, text: string) {
   return page.getByText(text, { exact: true }).filter({ visible: true });
 }
 
-// 해변 사진은 바깥 주소라 fixtures가 막음. 이 파일에서만 1×1 PNG로 대신 줘서 사진·출처 줄이 보이게 함
-const PNG = Buffer.from(
-  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=",
-  "base64",
-);
-async function servePhotos(page: Page) {
-  await page.route("https://tong.visitkorea.or.kr/**", (route) =>
-    route.fulfill({ status: 200, contentType: "image/png", body: PNG }),
-  );
-}
-
 test.describe("기상청 출처 한 줄", () => {
   // 탐색은 목록 아래 출처 줄을 봄(모바일 처음 보기는 지도라 목록을 골라 둔 기기로 시작, BRD-128)
   test.use({ exploreView: "list" });
@@ -186,7 +175,7 @@ test.describe("사진 출처 링크", () => {
     test(`공유 미리보기 사진의 출처 이름이 TourAPI 링크 (${locale})`, async ({
       page,
     }) => {
-      await servePhotos(page);
+      // 해변 사진은 fixtures가 1×1 그림으로 답함(photos 기본값 "ok") → 사진·출처 줄이 보임
       const prefix = locale === "en" ? "/en" : "";
       await page.goto(`${prefix}/spots/${slugOf(CLEAR_ID)}/`);
       await page
