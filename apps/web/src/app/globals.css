@@ -289,6 +289,47 @@ html[data-location-hint="off"] [data-location-slot] {
     [data-first-slot][data-pending] {
     display: none;
   }
+  /* 즐겨찾기(GH-218 CLS): 정적 HTML·상태를 받는 동안 해변 수만큼 자리(해변별 덩어리, 390 기준 실측보다 조금 작게).
+     3곳 이상은 바닥글이 첫 화면 밖이면 충분 */
+  html[data-favorites="1"] [data-favorites-slot][data-pending] {
+    min-height: 530px;
+  }
+  html[data-favorites="2"] [data-favorites-slot][data-pending] {
+    min-height: 700px;
+  }
+  html[data-favorites="3"] [data-favorites-slot][data-pending] {
+    min-height: 870px;
+  }
+  html[data-favorites="4"] [data-favorites-slot][data-pending] {
+    min-height: 1000px;
+  }
+  /* 검색 입력 전(GH-218 CLS): 정적 자리 표시(제목·검색 칸)를 입력 전 화면 높이로. 최근 본 해변(data-recent)이 있으면 그 목록만큼 더 */
+  /* (바닥글이 450px라 내용이 짧으면 화면 아래에 붙어 있음: 실제 입력 전 내용 높이 409px · 최근 본 1곳 601px · 2곳 이상 691px) */
+  [data-search-slot] {
+    min-height: 409px;
+  }
+  html[data-recent="1"] [data-search-slot] {
+    min-height: 601px;
+  }
+  html[data-recent="2"] [data-search-slot] {
+    min-height: 691px;
+  }
+  /* 탐색 보기(GH-218 CLS): 정적 HTML은 기본(지도) 보기로 그려짐. '목록'을 저장한 기기는 수화 전까지 목록 보기 자리를 보임
+     (data-view-pending은 수화 뒤 사라져 그다음은 React 클래스만 따름) */
+  html[data-explore-view="list"] [data-view-pending][data-view-part="search"],
+  html[data-explore-view="list"] [data-view-pending][data-view-part="sort"] {
+    display: flex !important;
+  }
+  html[data-explore-view="list"] [data-view-pending][data-view-part="list"] {
+    display: block !important;
+  }
+  html[data-explore-view="list"] [data-view-pending][data-view-part="map"] {
+    display: none !important;
+  }
+  /* 주소에 검색어가 있으면 결과(또는 결과 없음 + 지역 칩)가 한 화면을 채움 */
+  html[data-search-query] [data-search-slot] {
+    min-height: 100dvh;
+  }
   /* 가까운 바다 자리 표시 → 가까운 바다 카드(343px) 또는 지역 목록(카드 343px + 개수 카드 10 + 127px) */
   [data-near-pending] {
     min-height: 343px;

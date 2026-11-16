@@ -1,12 +1,14 @@
 import { useSyncExternalStore } from "react";
 
+import { DEVICE_KEYS } from "@/lib/device-keys";
+
 // 탐색의 마지막 보기 [목록 | 지도] (BRD-30 · 노션 2장 EXP-M, 아키텍처 9장 '화면 상태 유지')
 // 모바일에서만 고름(PC는 목록과 지도를 함께 보여 줌). 기기 저장(localStorage)
 // 처음(저장값 없음)은 지도(BRD-128 · 10/30 결정). 지도를 못 쓰면 지도 실패 안내의 '목록으로 보기'
 // 못 쓰는 환경이면 이번 방문 동안은 메모리 값(explore-sort.ts와 같은 틀)
 export type ExploreView = "list" | "map";
 
-const STORAGE_KEY = "baradun:explore-view";
+const STORAGE_KEY = DEVICE_KEYS.exploreView;
 const DEFAULT_VIEW: ExploreView = "map";
 
 let memory: ExploreView = DEFAULT_VIEW;

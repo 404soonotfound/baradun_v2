@@ -3,7 +3,14 @@
 import { Search, SearchX } from "lucide-react";
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
-import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type RefObject,
+} from "react";
 
 import { BeachListRow } from "@/components/beach-row";
 import { ExploreSummary } from "@/components/explore/explore-summary";
@@ -112,6 +119,17 @@ export function ExploreScreen({
   const online = useOnline();
   const sortChoice = useSortChoice();
   const view = useExploreView();
+  // 수화가 끝나기 전(정적 HTML·첫 수화)은 보기가 기본(지도)으로 그려짐. 그동안만 그리기 전 힌트(data-explore-view)로
+  // 저장된 보기의 자리를 CSS가 보여 줌(globals.css [data-view-part], GH-218 CLS). 수화 뒤에는 React 클래스만 따름
+  const hydrated = useSyncExternalStore(
+    noopSubscribe,
+    () => true,
+    () => false,
+  );
+  const viewPart = (part: "search" | "sort" | "list" | "map") => ({
+    "data-view-part": part,
+    "data-view-pending": hydrated ? undefined : "",
+  });
   const { badgeText } = useBadgeText();
   const { listMeta, listNote, activitiesText } = useRowText();
   const titleRef = useRef<HTMLHeadingElement>(null);
@@ -431,6 +449,7 @@ export function ExploreScreen({
         {/* 검색 입구(누르면 검색 화면). PC는 상단 내비에 검색이 있어 숨김. 모바일 지도 보기도 숨김(Figma 174:894) */}
         <Link
           href={localizedPath(locale, "/search/")}
+          {...viewPart("search")}
           className={cn(
             "flex h-search items-center gap-2.5 rounded-input border border-border-strong bg-bg-surface px-[15px] text-[15px] text-text-muted lg:hidden",
             view === "map" && "hidden",
@@ -498,6 +517,7 @@ export function ExploreScreen({
                 "w-[176px] shrink-0 lg:ml-auto lg:w-[240px]",
                 view === "map" && "hidden lg:flex",
               )}
+              dataAttrs={viewPart("sort")}
               options={[
                 { value: "status", label: t("explore.sort.status") },
                 { value: "second", label: t("explore.sort.near") },
@@ -519,9 +539,17 @@ export function ExploreScreen({
           </div>
 
           {/* 모바일 지도 보기에서는 목록을 숨김(PC는 늘 보임) */}
-          <div className={cn(view === "map" && "hidden lg:block")}>
+          <div
+            {...viewPart("list")}
+            className={cn(view === "map" && "hidden lg:block")}
+          >
             {loading ? (
-              <BeachRowSkeleton variant="list" label={t("explore.loading")} />
+              <BeachRowSkeleton
+                // 받는 동안에도 바닥글이 첫 화면(390×844) 밖에 있게 8줄(바닥글이 보였다가 밀리지 않게, GH-218 CLS)
+                rows={8}
+                variant="list"
+                label={t("explore.loading")}
+              />
             ) : items.length === 0 ? (
               // 활동으로 거르지 않고 고른 지역은 해변이 있는 곳만이라(validRegion) 공개 해변이 하나도 없을 때만
               <EmptyState
@@ -588,6 +616,7 @@ export function ExploreScreen({
         {/* 지도(EXP-M·D-EXP). 모바일은 지도 보기에서만 보이고, 숨긴 동안은 불러오지 않음(MapView가 보일 때 시작)
           PC는 오른쪽 열에 늘 보임. 지도가 실패해도 목록은 그대로 */}
         <div
+          {...viewPart("map")}
           className={cn(
             view === "map" ? "mt-3 flex flex-col gap-3" : "hidden",
             "lg:sticky lg:top-[88px] lg:mt-0 lg:block",
@@ -665,6 +694,11 @@ export function ExploreScreen({
       <Toast message={toastMessage} onHold={holdToast} />
     </PullToRefresh>
   );
+}
+
+// useSyncExternalStore로 수화 여부만 읽을 때 쓰는 빈 구독
+function noopSubscribe() {
+  return () => {};
 }
 
 // 아래에 붙는 요소(모바일 지도 카드)의 높이를 페이지 스크롤 여백(globals.css --sticky-space)에 더함

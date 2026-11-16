@@ -13,16 +13,20 @@ export function ViewToggle<T extends string>({
   value,
   onChange,
   className,
+  dataAttrs,
 }: {
   label: string; // 묶음 이름(화면에는 안 보임, 예: "목록 보기 방식")
   options: readonly { value: T; label: string }[];
   value: T;
   onChange: (next: T) => void; // () => onChange(option.value) — 누를 때 그 칸 값을 밖으로 알림. 실제 바꾸기는 쓰는 쪽 상태(useState)가 처리.
   className?: string;
+  // 그리기 전 힌트용 data-* 속성(탐색 보기 자리, GH-218 CLS)
+  dataAttrs?: Record<`data-${string}`, string | undefined>;
 }) {
   return (
     // role="group" + aria-label = 버튼 묶음에 이름을 붙임. 각 버튼은 눌림 상태(aria-pressed)로 읽힘
     <div
+      {...dataAttrs}
       role="group"
       aria-label={label}
       className={cn("flex h-10 rounded-[10px] bg-bg-subtle p-[3px]", className)}

@@ -277,6 +277,12 @@ export function FavoritesScreen({
   return (
     <div
       ref={containerRef}
+      // 그리기 전 힌트(data-favorites)로 목록 자리를 잡는 칸. 상태를 받는 동안만(data-pending) 자리를 잡음(GH-218 CLS)
+      // 힌트는 즐겨찾기 수라 최근 본 칸에서는 자리를 잡지 않음(즐겨찾기 4곳·최근 본 1곳이면 1000px를 잡았다 줄어듦)
+      data-favorites-slot=""
+      data-pending={
+        tab === "favorites" && loading && rawItems.length > 0 ? "" : undefined
+      }
       className="flex flex-col gap-3.5 pt-4 lg:mx-auto lg:w-full lg:max-w-[1036px] lg:pt-0"
     >
       {/* 머리(D29-6): 제목 + 오른쪽 [즐겨찾기 n | 최근 본](260px) */}
@@ -462,7 +468,11 @@ export function FavoritesScreen({
 export function FavoritesFallback() {
   const t = useTranslations();
   return (
-    <div className="flex flex-col gap-3.5 pt-4 lg:mx-auto lg:w-full lg:max-w-[1036px] lg:pt-0">
+    <div
+      data-favorites-slot=""
+      data-pending=""
+      className="flex flex-col gap-3.5 pt-4 lg:mx-auto lg:w-full lg:max-w-[1036px] lg:pt-0"
+    >
       <h1 className={SCREEN_TITLE_CLASS}>{t("pages.favorites")}</h1>
       <BeachRowSkeleton label={t("favorites.loading")} />
     </div>

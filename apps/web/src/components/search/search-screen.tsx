@@ -931,7 +931,11 @@ export function SearchScreen({
 export function SearchFallback() {
   const t = useTranslations("pages");
   return (
-    <div className="flex flex-col gap-4 pt-4 lg:mx-auto lg:w-full lg:max-w-[1036px] lg:pt-0">
+    // 정적 HTML 자리: 입력 전 화면 높이를 미리 잡아 바닥글이 밀리지 않게(globals.css [data-search-slot], GH-218 CLS)
+    <div
+      data-search-slot=""
+      className="flex flex-col gap-4 pt-4 lg:mx-auto lg:w-full lg:max-w-[1036px] lg:pt-0"
+    >
       <h1 className={SCREEN_TITLE_CLASS}>{t("search")}</h1>
       <div
         aria-hidden="true"

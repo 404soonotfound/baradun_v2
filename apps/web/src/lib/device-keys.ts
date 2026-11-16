@@ -6,4 +6,5 @@ export const DEVICE_KEYS = {
   recent: "baradun:recent", // 최근 본 해변 id
   recentVisits: "baradun:recent-visits", // 최근 본 해변을 본 시각·그때 고른 활동(BRD-129)
   recentSearch: "baradun:recent-search", // 최근 검색어
+  exploreView: "baradun:explore-view", // 탐색 [목록 | 지도] 마지막 보기(그리기 전 힌트도 읽음)
 } as const;

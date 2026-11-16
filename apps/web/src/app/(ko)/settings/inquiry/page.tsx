@@ -33,9 +33,12 @@ export default async function Page() {
     <SettingsLayout locale="ko">
       <Suspense
         fallback={
-          <h1 className="mx-auto flex h-14 max-w-[640px] items-center justify-center text-body font-bold text-text-default lg:mb-4 lg:h-auto lg:justify-start lg:text-title-xl">
-            {t("inquiry")}
-          </h1>
+          // 문의 칸들은 모바일 한 화면보다 길어 자리 표시도 한 화면을 잡음(바닥글이 보였다가 밀리지 않게, GH-218 CLS)
+          <div className="max-lg:min-h-dvh">
+            <h1 className="mx-auto flex h-14 max-w-[640px] items-center justify-center text-body font-bold text-text-default lg:mb-4 lg:h-auto lg:justify-start lg:text-title-xl">
+              {t("inquiry")}
+            </h1>
+          </div>
         }
       >
         <InquiryScreen locale="ko" beaches={beaches} />

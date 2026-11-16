@@ -645,7 +645,8 @@
     "distanceFromMe": "거리는 내 위치 기준",
     "summary": {
       "count": "<wide>전체 </wide>{count}곳",
-      "updated": "{time} 업데이트"
+      "updated": "{time} 업데이트",
+      "label": "요약"
     }
   },
   "search": {

@@ -37,7 +37,10 @@ export const ONBOARDING_STORAGE_KEY = "baradun:onboarding";
 //   data-onboarded: 현재 고지 버전을 이미 확인했거나(/guide·/terms 포함) 첫 실행 안내를 미리 그리지 않음
 //   data-location-hint="off|on": 지난 방문에 위치를 못 썼으면(첫 방문 포함) off → 홈 '위치 없이 보고 있어요' 자리·지역 목록 자리
 //   data-region-chosen: 기본 지역(전국 포함)을 고름 → 홈이 위치와 관계없이 지역 목록
-//   data-recent="1|2": 최근 본 해변 1곳·2곳 이상 → 홈 최근 본 자리
+//   data-recent="1|2": 최근 본 해변 1곳·2곳 이상 → 홈 최근 본 자리 · 검색 입력 전 최근 본 자리
+//   data-favorites="1|2|3|4": 즐겨찾기 해변 수(4는 4곳 이상) → 즐겨찾기 목록 자리(GH-218 CLS). 최근 본 칸(?tab=recent)으로 열면 붙이지 않음
+//   data-search-query: 검색 화면 주소에 공백이 아닌 검색어(?q=)가 있음 → 결과가 한 화면을 채울 자리(GH-218 CLS)
+//   data-explore-view="list": 탐색 보기를 '목록'으로 저장한 기기 → 정적 HTML(지도 보기) 대신 목록 보기 자리(GH-218 CLS)
 //   data-language-notice="ko|en": 첫 방문 언어 안내를 띄울 언어(lib/language-choice.ts noticeTarget과 같은 규칙)
 // 저장소를 못 읽으면 저장 힌트는 붙이지 않음(자리를 잡지 않을 뿐 화면은 그대로). 언어 안내는 기기 언어만으로도 판단
 export const LAYOUT_HINT_SCRIPT = `(function(){var h=document.documentElement,L=${serializeInlineScriptValue(
@@ -46,11 +49,15 @@ export const LAYOUT_HINT_SCRIPT = `(function(){var h=document.documentElement,L=
   NOTICE_VERSION,
 )},R=${serializeInlineScriptValue(
   ONBOARDING_REFERENCE_PATHS,
-)},c=null;try{if(typeof location!=="undefined"){var p=location.pathname.replace(/\\/+$/,"");for(var j=0;j<R.length;j++){if(R[j]===p){h.setAttribute("data-onboarded","");break}}}}catch(e){}try{var s=localStorage;try{var b=JSON.parse(s.getItem(${serializeInlineScriptValue(
+)},c=null,rt=false;try{if(typeof location!=="undefined"){var p=location.pathname.replace(/\\/+$/,""),qm=/[?&]q=([^&]*)/.exec(location.search);rt=/\\/favorites$/.test(p)&&/[?&]tab=recent(?:&|$)/.test(location.search);for(var j=0;j<R.length;j++){if(R[j]===p){h.setAttribute("data-onboarded","");break}}if(/\\/search$/.test(p)&&qm&&decodeURIComponent(qm[1].replace(/\\+/g," ")).trim()){h.setAttribute("data-search-query","")}}}catch(e){}try{var s=localStorage;try{var b=JSON.parse(s.getItem(${serializeInlineScriptValue(
   ONBOARDING_STORAGE_KEY,
 )})||"null");if(b&&typeof b==="object"&&b.noticeVersion===V&&typeof b.acknowledgedAt==="string"&&typeof b.locationStepDone==="boolean"){var tm=/^(\\d{4})-(\\d{2})-(\\d{2})T(\\d{2}):(\\d{2}):(\\d{2})(?:\\.\\d+)?(?:Z|([+-])(\\d{2}):(\\d{2}))$/.exec(b.acknowledgedAt);if(tm){var y=+tm[1],mo=+tm[2],d=+tm[3],hh=+tm[4],mi=+tm[5],se=+tm[6],oh=tm[8]?+tm[8]:0,om=tm[9]?+tm[9]:0,dt=new Date(0);dt.setUTCFullYear(y,mo,0);if(mo>=1&&mo<=12&&d>=1&&d<=dt.getUTCDate()&&hh<=23&&mi<=59&&se<=59&&oh<=23&&om<=59&&isFinite(Date.parse(b.acknowledgedAt)))h.setAttribute("data-onboarded","")}}}catch(e){}try{var r=JSON.parse(s.getItem(${serializeInlineScriptValue(
   DEVICE_KEYS.recent,
-)})||"[]"),n=0;if(Array.isArray(r)){for(var i=0;i<r.length;i++){if(typeof r[i]==="string")n++}}if(n){h.setAttribute("data-recent",n>1?"2":"1")}}catch(e){}h.setAttribute("data-location-hint",s.getItem(${serializeInlineScriptValue(
+)})||"[]"),n=0;if(Array.isArray(r)){for(var i=0;i<r.length;i++){if(typeof r[i]==="string")n++}}if(n){h.setAttribute("data-recent",n>1?"2":"1")}}catch(e){}try{var fv=JSON.parse(s.getItem(${serializeInlineScriptValue(
+  DEVICE_KEYS.favorites,
+)})||"[]"),fn=0;if(Array.isArray(fv)){for(var k=0;k<fv.length;k++){if(typeof fv[k]==="string")fn++}}if(fn&&!rt){h.setAttribute("data-favorites",String(Math.min(fn,4)))}}catch(e){}if(s.getItem(${serializeInlineScriptValue(
+  DEVICE_KEYS.exploreView,
+)})==="list"){h.setAttribute("data-explore-view","list")}h.setAttribute("data-location-hint",s.getItem(${serializeInlineScriptValue(
   LOCATION_SWITCH_KEY,
 )})!=="off"&&s.getItem(${serializeInlineScriptValue(
   LOCATION_HINT_KEY,

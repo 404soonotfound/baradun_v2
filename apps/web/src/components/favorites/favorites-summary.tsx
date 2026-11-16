@@ -7,6 +7,10 @@ import { useEffect, useId, useRef, useState } from "react";
 import { STATUS } from "@/components/beach-row";
 import { badgeTone } from "@/lib/badge-tone";
 import { cn } from "@/lib/cn";
+import {
+  OVERFLOW_LINE_CLASS,
+  useOverflowFocus,
+} from "@/lib/use-overflow-focus";
 import type { FavoritesSort } from "@/lib/favorites-sort";
 import { useBadgeText } from "@/lib/snapshot/use-badge-text";
 import type { StatusCount } from "@/lib/status-count";
@@ -43,10 +47,22 @@ export function FavoritesSummary({
 }) {
   const t = useTranslations();
   const { badgeText, confirmedUntilText } = useBadgeText();
+  const lineRef = useOverflowFocus<HTMLParagraphElement>();
 
   return (
     <div className="flex min-h-touch items-center justify-between gap-x-3 gap-y-1">
-      <p className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-caption text-text-muted">
+      {/* 모바일은 한 줄이고 길면 옆으로 넘김: 오래된 정보 문구·사유 수로 줄 수가 바뀌어 아래 목록이 밀리지 않게(GH-218 CLS)
+          넘칠 때만 Tab으로 닿음(useOverflowFocus). 오래된 정보('이후 확인 못 함')가 있으면 가려지지 않게 한 줄로 묶지 않음
+          <p>는 이름을 붙일 수 없는 역할이라 묶음(group)으로 이름을 붙임 */}
+      <p
+        ref={lineRef}
+        role="group"
+        aria-label={t("explore.summary.label")}
+        className={cn(
+          "flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-caption text-text-muted",
+          !stale && OVERFLOW_LINE_CLASS,
+        )}
+      >
         <span className="text-body-s font-bold text-text-default lg:text-body">
           {tab === "favorites"
             ? t("favorites.summary.count", { count: total })

@@ -645,7 +645,8 @@
     "distanceFromMe": "Distances are from your location",
     "summary": {
       "count": "<wide>All </wide>{count, plural, one {# beach} other {# beaches}}",
-      "updated": "Updated {time}"
+      "updated": "Updated {time}",
+      "label": "Summary"
     }
   },
   "search": {
