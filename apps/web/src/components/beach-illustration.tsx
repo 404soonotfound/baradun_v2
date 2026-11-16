@@ -28,6 +28,8 @@ export function BeachIllustration({
   const sea = `illust-sea-${id}`;
   return (
     <svg
+      // 시험·스타일이 그림 자리를 찾는 표시(모양 값에 기대지 않게)
+      data-beach-illustration=""
       viewBox="0 0 320 132"
       preserveAspectRatio="xMidYMid slice"
       className={cn("block", className)}

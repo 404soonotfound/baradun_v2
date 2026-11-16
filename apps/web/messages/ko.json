@@ -1141,7 +1141,7 @@
     "errors": {
       "summary": "입력을 확인해 주세요 · {count}곳",
       "kindMissing": "문의 유형을 골라 주세요.",
-      "messageShort": "내용을 5자 이상 써 주세요.",
+      "messageShort": "5자 이상 써 주세요.",
       "emailFormat": "이메일 형식이 맞지 않아요. 예: name@example.com",
       "consentMissing": "이메일을 남기려면 동의가 필요해요. 동의하거나 이메일을 지워 주세요."
     },
