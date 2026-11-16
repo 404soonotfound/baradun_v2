@@ -39,6 +39,7 @@ import { showsKmaSource } from "@/lib/kma-source";
 import { distanceKm } from "@/lib/geo";
 import type { Locale } from "@/lib/i18n";
 import { useUserLocation } from "@/lib/location";
+import { useKeepFocus } from "@/lib/keep-focus";
 import { formatKm } from "@/lib/meta-join";
 import { pickSituation, noConfirmedVerdict } from "@/lib/situation";
 import { deriveDetail, warningSourceOf } from "@/lib/snapshot/detail";
@@ -100,6 +101,10 @@ export function DetailScreen({
   }, [beach.id]);
 
   const view = deriveBeachView(beach, snapshot);
+  // 받기 전(자리 상자)·받은 뒤를 다른 칸으로 그림(BRD-39 CLS). 새로 그려도 본문 안 포커스는 같은 항목으로 옮김
+  const bodyKey = view.kind === "ready" ? "ready" : "loading";
+  const bodyRef = useRef<HTMLDivElement>(null);
+  useKeepFocus(bodyRef, bodyKey);
   const detail = deriveDetail(beach.id, view, snapshot);
   // 기상청 출처(줄·기관 이름)는 받은 실제 상태가 있을 때만(BRD-113, 개발용 예시 제외)
   const kmaSource = showsKmaSource(snapshot, sampleSnapshot);
@@ -267,7 +272,10 @@ export function DetailScreen({
       </div>
 
       {/* 본문. 모바일 사이 14(Figma pad.stack), PC 두 열 740 | 384 · 사이 28(Figma 183:814) */}
-      <div className="flex flex-col gap-3.5 lg:mt-[18px] lg:grid lg:grid-cols-[minmax(0,1fr)_384px] lg:items-start lg:gap-7">
+      <div
+        ref={bodyRef}
+        className="flex flex-col gap-3.5 lg:mt-[18px] lg:grid lg:grid-cols-[minmax(0,1fr)_384px] lg:items-start lg:gap-7"
+      >
         {/* 오른쪽 열(PC) · 위쪽(모바일) */}
         <div className="flex flex-col gap-3.5 lg:col-start-2 lg:row-start-1">
           {/* 판단 묶음: 칸 사이 구분선, 바탕·그림자는 묶음이 그림(시안 D안) */}
@@ -368,7 +376,7 @@ export function DetailScreen({
         {/* key: 받기 전(자리 상자)과 받은 뒤를 다른 칸으로 그림. 판단 카드가 커지며 자리 상자가 아래로 옮겨진 것이
             보이던 내용이 밀린 것으로 잡히지 않게 함(BRD-39 CLS). 받기 전 날씨·119·출처는 자리 상자에 밀려 첫 화면 밖에 있음 */}
         <div
-          key={view.kind === "ready" ? "ready" : "loading"}
+          key={bodyKey}
           className="flex flex-col gap-3.5 lg:col-start-1 lg:row-start-1 lg:gap-[18px]"
         >
           <SeaCard
