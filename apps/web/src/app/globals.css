@@ -286,3 +286,9 @@ html[data-location-hint="off"] [data-location-slot] {
     min-height: 480px;
   }
 }
+
+/* 이미 고지 버전을 확인했거나(/guide·/terms 포함) 기록이 있으면 정적 HTML의 첫 실행 안내(ON-1)를
+   첫 그리기부터 숨김 (BRD-39 CWV) */
+html[data-onboarded] dialog[data-onboarding-preload] {
+  display: none;
+}
