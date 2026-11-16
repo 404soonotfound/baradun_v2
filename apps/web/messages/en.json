@@ -464,7 +464,9 @@
       "kogl-type1": "KOGL Type 1"
     },
     "reference": "Reference photo · not the sea right now",
-    "none": "No photo, so we're showing an illustration"
+    "none": "No photo, so we're showing an illustration",
+    "illustration": "Illustration of a beach with no photo",
+    "noneLabel": "No photo · illustration"
   },
   "share": {
     "button": "Share",
