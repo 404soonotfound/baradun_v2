@@ -458,13 +458,10 @@
   },
   "photo": {
     "alt": "{name} 참고 사진",
-    "credit": "사진 출처: <link>{source}</link> · {license}",
-    "creditWithTitle": "사진 출처: <link>{source}</link>, 「{title}」 · {license}",
-    "coverCredit": "사진 <link>{source}</link> · {license}",
-    "coverCreditWithTitle": "사진 <link>{source}</link>, 「{title}」 · {license}",
-    "license": {
-      "kogl-type1": "공공누리 제1유형"
-    },
+    "credit": "사진 출처: <link>{source}</link>",
+    "creditWithTitle": "사진 출처: <link>{source}</link>, 「{title}」",
+    "coverCredit": "사진 <link>{source}</link>",
+    "coverCreditWithTitle": "사진 <link>{source}</link>, 「{title}」",
     "reference": "참고 사진 · 지금 바다 모습 아님",
     "none": "사진이 없어 일러스트로 보여드려요",
     "illustration": "사진 없는 해변 그림",
@@ -709,7 +706,7 @@
     },
     "notes": {
       "safety": "특보 없음은 안전하다는 뜻이 아니에요 · 최종 판단은 현장 통제와 안전요원 안내가 우선이에요",
-      "photo": "사진은 참고 사진이에요(지금 바다 모습 아님) · 사진 출처: <link>{source}</link> · {license}",
+      "photo": "사진은 참고 사진이에요(지금 바다 모습 아님) · 사진 출처: <link>{source}</link>",
       "storage": "최근 검색과 최근 본 해변은 이 기기에만 저장돼요"
     }
   },
@@ -765,7 +762,7 @@
     "deviceNoteRecent": "최근 본 해변은 최대 {max}곳까지, 이 기기에만 저장돼요 · 빈 별을 누르면 즐겨찾기에 넣어요",
     "tableOrderNote": "표 칸 순서는 판단(상태 · 구역 · 시각) → 측정값 → 측정 시각 · 측정소예요",
     "clearIsNotSafe": "특보 없음은 안전하다는 뜻이 아니에요",
-    "photoNote": "사진은 참고 사진이에요(지금 바다 모습 아님) · 사진 출처: <link>{source}</link> · {license} · 사진이 없는 해변은 해변 그림",
+    "photoNote": "사진은 참고 사진이에요(지금 바다 모습 아님) · 사진 출처: <link>{source}</link> · 사진이 없는 해변은 해변 그림",
     "photoNoteNoPhoto": "사진이 없는 해변은 해변 그림이에요",
     "summary": {
       "count": "{count}곳",

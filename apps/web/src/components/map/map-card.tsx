@@ -93,7 +93,7 @@ export function MapCard({
           </span>
         </span>
       </Link>
-      {/* 사진 출처(공공누리 제1유형 링크, BRD-113). 탭 순서: 상세 링크(사진·이름) → 사진 출처 → 즐겨찾기·상세 보기 */}
+      {/* 사진 출처(기관 링크·작품명, BRD-113 · 유형 이름은 두지 않음 GH-541). 탭 순서: 상세 링크(사진·이름) → 사진 출처 → 즐겨찾기·상세 보기 */}
       {photo.shown && (
         <PhotoCredit photo={photo.shown} className="px-3.5 pt-1.5" />
       )}
