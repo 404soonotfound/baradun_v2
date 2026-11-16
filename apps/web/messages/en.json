@@ -1085,7 +1085,7 @@
       "desc": {
         "mismatch": "When warnings, wave height or other values differ from the site",
         "addBeach": "When a beach is missing from the list",
-        "criteria": "Why 'No warnings' or 'Can't determine' was shown",
+        "criteria": "Why 'No warnings' or 'Cannot determine' was shown",
         "newData": "When you want to see more official information"
       }
     },
@@ -1110,7 +1110,7 @@
       "placeholderFor": {
         "mismatch": "e.g. Around 14:30 the waves looked higher than the app's wave height",
         "addBeach": "e.g. Beach name, city or county, and any official info you know",
-        "criteria": "e.g. Why was Gyeongpo Beach shown as 'Can't determine' today?",
+        "criteria": "e.g. Why was Gyeongpo Beach shown as 'Cannot determine' today?",
         "newData": "e.g. Official data you want to see and why"
       }
     },

@@ -19,14 +19,14 @@ import { useEffect, useId, useRef, useState } from "react";
 
 import { BackButton } from "@/components/detail/back-button";
 import { PhotoCredit, useShownPhoto } from "@/components/map/beach-photo";
-import { BeachThumb } from "@/components/search/beach-thumb";
+import { BeachThumbView } from "@/components/search/beach-thumb";
 import { Button } from "@/components/ui/button";
 import { Toast, useToast } from "@/components/ui/toast";
 import { useActivity, type Activity } from "@/lib/activity";
 import type { BeachSummary } from "@/lib/beach-summary";
 import { cn } from "@/lib/cn";
 import { localizedPath, type Locale } from "@/lib/i18n";
-import { joinMeta } from "@/lib/meta-join";
+import { joinMeta, META_SEPARATOR } from "@/lib/meta-join";
 import { useRowText } from "@/lib/snapshot/use-row-text";
 import type { BeachId } from "@baradun/contracts";
 import {
@@ -126,6 +126,7 @@ export function InquiryScreen({
 }) {
   const t = useTranslations("inquiry");
   const tp = useTranslations("pages");
+  const tPhoto = useTranslations("photo");
   const ta = useTranslations("activity");
   const params = useSearchParams();
   const activity = useActivity();
@@ -521,8 +522,7 @@ export function InquiryScreen({
                 {t("context.legend")}
               </h2>
               <div className="flex items-center gap-3 rounded-card bg-bg-surface py-3 pr-1.5 pl-3 shadow-card">
-                <BeachThumb
-                  photo={beach.photo}
+                <BeachThumbView
                   state={contextPhoto}
                   className="size-11 rounded-[10px]"
                 />
@@ -559,7 +559,14 @@ export function InquiryScreen({
                   ` ${t("context.activity", { activity: ta(sendActivity) })}`}
               </p>
               {/* 공공누리 제1유형 출처(BRD-113). 사진을 보일 때만(없거나 받지 못하면 그림이라 줄 없음) */}
-              {contextPhoto.shown && <PhotoCredit photo={contextPhoto.shown} />}
+              {/* 사진이 보일 때: 지금 바다 모습이 아니라는 안내 + 출처(공공누리 제1유형, BRD-113) */}
+              {contextPhoto.shown && (
+                <div className="text-caption text-text-muted">
+                  {tPhoto("reference")}
+                  {META_SEPARATOR}
+                  <PhotoCredit photo={contextPhoto.shown} className="inline" />
+                </div>
+              )}
             </section>
           )}
 
@@ -583,7 +590,8 @@ export function InquiryScreen({
                     className={cn(
                       "relative flex min-h-touch cursor-pointer items-center gap-3 rounded-card border bg-bg-surface py-3 pr-10 pl-3 has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-brand-default",
                       selected
-                        ? "border-2 border-brand-default bg-brand-weak"
+                        ? // 굵기 대신 같은 색 고리를 더해 2px처럼(고를 때 안쪽 글자가 밀리지 않게)
+                          "border-brand-default bg-brand-weak ring-1 ring-brand-default"
                         : errors.kind
                           ? "border-danger-text"
                           : "border-border-default",
