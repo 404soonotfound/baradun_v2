@@ -120,6 +120,18 @@
   mask-image: linear-gradient(to bottom, #000 40%, transparent);
 }
 
+/* 관광공사 참고 사진: 다크에서 밝기 90%, 라이트는 원본 (결정 기록 29장 D29-8, GH-528)
+   사진 img에 photo-dim 클래스를 붙임(상세 커버 PhotoCover · 지도 카드·공유 시트 미리보기 PhotoFigure). 사진을 새로 두는 곳도 같은 클래스를 붙임
+   해변 그림은 다크 색이 따로 있어 붙이지 않음 */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .photo-dim {
+    filter: brightness(0.9);
+  }
+}
+:root[data-theme="dark"] .photo-dim {
+  filter: brightness(0.9);
+}
+
 /* 스켈레톤 흐름 (토큰 animate.skeleton = skeleton 1.1s linear infinite) */
 @keyframes skeleton {
   from {

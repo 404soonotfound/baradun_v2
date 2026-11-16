@@ -121,7 +121,11 @@ export function PhotoFigure({
         alt={t("alt", { name })}
         loading="lazy"
         onError={onError}
-        className={cn("w-full rounded-[12px] object-cover", className)}
+        // photo-dim: 다크에서 밝기 90%(D29-8, globals.css)
+        className={cn(
+          "photo-dim w-full rounded-[12px] object-cover",
+          className,
+        )}
       />
       <figcaption className="text-caption text-text-muted">
         {t("reference")}
@@ -137,22 +141,31 @@ export function PhotoFigure({
 }
 
 // 사진 출처 한 줄(링크 밖에 따로 둘 때). 사진을 보여줄 때만 부름
+// short: 상세 커버처럼 사진 위 좁은 자리에 얹는 짧은 표기('사진 한국관광공사 · 공공누리 제1유형', D29-1). 링크·작품명 규칙은 같음
 export function PhotoCredit({
   photo,
   className,
+  short = false,
 }: {
   photo: Photo;
   className?: string;
+  short?: boolean;
 }) {
   return (
     <p className={cn("text-caption text-text-muted", className)}>
-      <CreditText photo={photo} />
+      <CreditText photo={photo} short={short} />
     </p>
   );
 }
 
 // "사진 출처: 한국관광공사(링크), 「제목」 · 공공누리 제1유형"
-function CreditText({ photo }: { photo: Photo }) {
+function CreditText({
+  photo,
+  short = false,
+}: {
+  photo: Photo;
+  short?: boolean;
+}) {
   const t = useTranslations("photo");
   const tc = useTranslations("common");
   const { agencyText } = useMetaText();
@@ -176,11 +189,11 @@ function CreditText({ photo }: { photo: Photo }) {
       chunks
     );
   return photo.title
-    ? t.rich("creditWithTitle", {
+    ? t.rich(short ? "coverCreditWithTitle" : "creditWithTitle", {
         source,
         title: photo.title,
         license,
         link,
       })
-    : t.rich("credit", { source, license, link });
+    : t.rich(short ? "coverCredit" : "credit", { source, license, link });
 }

@@ -457,9 +457,11 @@
     }
   },
   "photo": {
-    "alt": "{name} 사진",
+    "alt": "{name} 참고 사진",
     "credit": "사진 출처: <link>{source}</link> · {license}",
     "creditWithTitle": "사진 출처: <link>{source}</link>, 「{title}」 · {license}",
+    "coverCredit": "사진 <link>{source}</link> · {license}",
+    "coverCreditWithTitle": "사진 <link>{source}</link>, 「{title}」 · {license}",
     "license": {
       "kogl-type1": "공공누리 제1유형"
     },
