@@ -109,20 +109,27 @@ export function useRowText() {
 
   // 넷째 줄(있을 때만): 칩이 말하지 못한 것. 구역·기관·확인 시각은 묶음 머리에 한 번만 두므로 여기에 넣지 않음
   //   오래된 정보: "HH:MM 확인 · 이후 확인 못 함" / 남은 사유(칩으로 쓴 첫 사유 뒤) / 판단불가: 파고 값·지연(+ 파주기)
-  //   파고 값을 보이면 그 값의 측정 시각을 바로 뒤에 붙임(2줄째 'n분 전 측정'은 수온의 시각이라 파고 시각으로 읽히지 않게)
-  function listNote(view: BeachView, nowMs: number): string | null {
+  //   값을 보이면 그 값의 측정 시각을 바로 뒤에 붙임(2줄째 'n분 전 측정'은 수온의 시각이라 파고·파주기 시각으로 읽히지 않게)
+  //   values: false면 값은 빼고 사유·확인 시각만(지도 카드: 측정소 줄을 두지 않으므로 출처 없는 값을 보이지 않음)
+  function listNote(
+    view: BeachView,
+    nowMs: number,
+    { values = true }: { values?: boolean } = {},
+  ): string | null {
     if (view.kind !== "ready") return null;
     const lines: (string | null)[] = [
       view.stale ? confirmedUntilText(view.confirmedAt, nowMs) : null,
       ...view.reasons.slice(1).map(badgeText),
     ];
-    if (view.category === "undetermined") {
+    if (values && view.category === "undetermined") {
       const wave = view.metrics.waveHeight;
+      const period = view.metrics.wavePeriod;
       lines.push(
         metricText("waveHeight", wave),
         wave.kind === "value" ? measuredAgoText(wave.observedAt, nowMs) : null,
-        view.metrics.wavePeriod.kind === "value"
-          ? metricText("wavePeriod", view.metrics.wavePeriod)
+        period.kind === "value" ? metricText("wavePeriod", period) : null,
+        period.kind === "value"
+          ? measuredAgoText(period.observedAt, nowMs)
           : null,
       );
     }

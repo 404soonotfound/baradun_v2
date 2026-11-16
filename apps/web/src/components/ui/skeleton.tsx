@@ -21,8 +21,11 @@ export function Skeleton({ className }: { className?: string }) {
 export function BeachRowSkeleton({
   rows = 4,
   label,
+  variant = "glyph",
 }: {
   rows?: number;
+  // glyph: 왼쪽 파고 칸이 있는 줄(BeachRow) · list: 세 줄 목록 줄(BeachListRow, 오른쪽 칩)
+  variant?: "glyph" | "list";
   // 아래 한 줄 문구(예: "해변 정보를 불러오고 있어요"). 화면 읽기 프로그램에도 이 글자만 읽힘
   label: string;
 }) {
@@ -40,12 +43,26 @@ export function BeachRowSkeleton({
             key={i}
             className="flex items-center gap-3 border-t border-border-default py-[13px] pr-3 pl-3.5 first:border-t-0"
           >
-            <Skeleton className="size-[54px] rounded-[12px]" />
-            <span className="flex flex-1 flex-col gap-[3px]">
-              <Skeleton className="h-3.5 w-[60%]" />
-              <Skeleton className="h-[11px] w-[85%]" />
-              <Skeleton className="h-5 w-[42%]" />
-            </span>
+            {variant === "glyph" ? (
+              <>
+                <Skeleton className="size-[54px] rounded-[12px]" />
+                <span className="flex flex-1 flex-col gap-[3px]">
+                  <Skeleton className="h-3.5 w-[60%]" />
+                  <Skeleton className="h-[11px] w-[85%]" />
+                  <Skeleton className="h-5 w-[42%]" />
+                </span>
+              </>
+            ) : (
+              // 받은 뒤 줄(87~88px)과 같은 높이: 이름 + 칩 · 지역 줄 · 활동 줄
+              <span className="flex min-h-[63px] flex-1 flex-col justify-center gap-[7px]">
+                <span className="flex items-center justify-between gap-2">
+                  <Skeleton className="h-4 w-[45%]" />
+                  <Skeleton className="h-badge w-[72px] rounded-badge" />
+                </span>
+                <Skeleton className="h-3 w-[70%]" />
+                <Skeleton className="h-3 w-[35%]" />
+              </span>
+            )}
           </li>
         ))}
       </ul>

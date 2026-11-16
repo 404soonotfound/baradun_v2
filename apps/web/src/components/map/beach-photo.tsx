@@ -150,10 +150,16 @@ export function PhotoFigure({
   );
 
   if (overlay) {
+    // credit이면 출처를 사진 아래 줄에 둠(공공누리 제1유형 출처를 빼지 않게, BRD-113)
     return (
-      <figure className="relative">
+      <figure className="relative flex flex-col gap-1">
         {image}
         <figcaption className={LABEL_CLASS}>{t("reference")}</figcaption>
+        {credit && (
+          <p className="text-caption text-text-muted">
+            <CreditText photo={shown} />
+          </p>
+        )}
       </figure>
     );
   }
