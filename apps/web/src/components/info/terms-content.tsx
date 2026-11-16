@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 import { InfoSection } from "@/components/info/info-blocks";
 import { localizedPath, type Locale } from "@/lib/i18n";
 import { INQUIRY_CONTACT_ENABLED } from "@/lib/inquiry/form";
-import { NOTICE_VERSION } from "@/lib/notice-version";
+import { NOTICE_EFFECTIVE_DATE, NOTICE_VERSION } from "@/lib/notice-version";
 
 // 서비스 정보·약관 /terms/ (BRD-36·64)
 // 이용 안내·면책 → 개인정보 처리방침 → 고지 버전·시행일 순서의 문서형 화면
@@ -57,7 +57,7 @@ export async function TermsContent({ locale }: { locale: Locale }) {
 
       <InfoSection id="terms-privacy" title={t("privacy.title")}>
         <p className="text-body-s font-bold text-text-default">
-          {t("privacy.effectiveDate")}
+          {t("privacy.effectiveDate", { date: NOTICE_EFFECTIVE_DATE })}
         </p>
         <p className="text-body-s text-text-body">{t("privacy.intro")}</p>
 
@@ -118,7 +118,7 @@ export async function TermsContent({ locale }: { locale: Locale }) {
       </InfoSection>
 
       <p className="text-caption text-text-muted">
-        {t("notice", { version: NOTICE_VERSION })}
+        {t("notice", { version: NOTICE_VERSION, date: NOTICE_EFFECTIVE_DATE })}
       </p>
     </div>
   );
