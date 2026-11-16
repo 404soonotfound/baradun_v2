@@ -44,6 +44,7 @@ import {
   redactionOf,
   retentionDate,
   shortId,
+  inquiryStatusLabel as statusLabel,
   type InquiryCounts,
   type InquiryDetail,
   type InquiryFilter,
@@ -195,13 +196,6 @@ const BADGE: Record<InquiryStatus, string> = {
   resolved: "bg-success-bg text-success-fg ring-1 ring-success-border",
   rejected: "bg-info-bg text-info-fg ring-1 ring-border-default",
 };
-
-// 상태 문구: 모르는 상태 값은 숨기지 않고 '알 수 없는 상태(값)'(#521). 배지·행 링크 이름·안내가 같은 문구를 씀
-function statusLabel(status: string): string {
-  return isInquiryStatus(status)
-    ? t.status[status]
-    : fill(t.unknownStatus, { status });
-}
 
 // 모르는 상태 값은 숨기지 않고 그 값을 그대로 보여 줌(점선·흐린 글자)
 function StatusBadge({ status }: { status: string }) {

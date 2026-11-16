@@ -1,5 +1,6 @@
 import type { Activity, InquiryType } from "@baradun/contracts";
 import { opsFetch, type OpsResult } from "./auth/ops-fetch";
+import { fill, messages } from "./messages";
 
 // 운영자 문의 화면이 쓰는 운영 API 모양 (BRD-153). services/src/admin/inquiries.ts 응답과 같음
 // 판단 상태는 여기서도 바꾸지 않음(G1)
@@ -14,6 +15,14 @@ export type InquiryStatus = (typeof INQUIRY_STATUSES)[number];
 
 export function isInquiryStatus(value: unknown): value is InquiryStatus {
   return (INQUIRY_STATUSES as readonly unknown[]).includes(value);
+}
+
+// 상태 문구: 모르는 상태 값은 숨기지 않고 '알 수 없는 상태(값)'(#521). 문의 배지·행 링크 이름·안내와 변경 이력이 같은 문구를 씀
+export function inquiryStatusLabel(status: string): string {
+  const t = messages.inquiries;
+  return isInquiryStatus(status)
+    ? t.status[status]
+    : fill(t.unknownStatus, { status });
 }
 
 // 받은 날부터 90일 보관(D15-7, services/src/inquiry/policy.ts INQUIRY_BODY_RETENTION_DAYS)
