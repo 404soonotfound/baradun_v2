@@ -6,6 +6,7 @@ import { type Locale, localizedPath } from "@/lib/i18n";
 import { prefersReducedMotion } from "@/lib/motion";
 import { TABS, type TabKey, tabOf } from "@/lib/nav";
 import {
+  clearScrollRestore,
   lastUrlOf,
   markInAppNavigation,
   rememberOwnerTab,
@@ -20,6 +21,71 @@ import {
 // 모바일 하단 탭과 PC 상단 내비가 같은 규칙을 쓰도록 한 곳에 모음
 const currentUrl = () => window.location.pathname + window.location.search;
 
+export function pathnameOf(url: string): string {
+  return url.split(/[?#]/)[0] || "/";
+}
+
+type PendingTab = {
+  tab: TabKey;
+  fromPathname: string;
+};
+
+// 전환 중 목표 탭을 추적하는 상태기(모바일 하단 탭·PC 상단 내비가 모듈 단위로 공유)
+// usePathname()은 Next.js 새 경로 커밋 뒤에야 바뀌므로, 전환 중에 목표 탭을 기억해
+// 같은 탭 분기 오작동과 떠나는 탭 상태 덮어쓰기를 막음
+export function createTabTransition() {
+  let pending: PendingTab | null = null;
+  let effectPathname: string | null = null;
+
+  return {
+    // 같은 탭 판정 기준: 전환 중이면 가는 중인 탭, 아니면 현재 커밋된 탭
+    activeTab(current: TabKey | null): TabKey | null {
+      return pending?.tab ?? current;
+    },
+    // 떠나는 탭의 마지막 주소·스크롤을 저장해도 되는지:
+    // - 전환 중이거나 pushState로 주소만 먼저 바뀐 상태면 첫 클릭 저장값을 유지
+    // - 새 경로 DOM이 커밋됐지만 passive effect(useEffect)가 아직 돌기 전 틈에도
+    //   잘린 scrollY(예: 짧은 홈)로 저장 위치를 덮어쓰지 않음
+    shouldSaveOrigin(
+      current: TabKey | null,
+      committedPathname: string,
+      browserPathname: string,
+    ): boolean {
+      if (effectPathname !== null && effectPathname !== committedPathname) {
+        return false;
+      }
+      if (pending === null) return true;
+      return pending.tab === current && browserPathname === committedPathname;
+    },
+    start(tab: TabKey, fromPathname: string) {
+      pending = { tab, fromPathname };
+    },
+    // 반환값: 이 경로에서 복원 예약을 꺼내도 되는지
+    // pending.fromPathname과 같으면 앞선 전환의 passive effect가 재클릭 뒤에 늦게 돈
+    // 중간 경로이므로, 복원 예약을 지우지 않고 목적지 도착 때까지 pending을 유지함
+    onPathnameChange(pathname: string): boolean {
+      effectPathname = pathname;
+      if (pending !== null && pathname === pending.fromPathname) {
+        return false;
+      }
+      pending = null;
+      return true;
+    },
+    // 뒤로 가기 등으로 진행 중이던 전환이 중단됐을 때 호출.
+    // usePathname()이 그대로 머물 예정(browserPathname === committedPathname)이면 남은 복원 예약까지 정리하도록 true 반환
+    onPopState(committedPathname: string, browserPathname: string): boolean {
+      if (pending === null) return false;
+      pending = null;
+      return browserPathname === committedPathname;
+    },
+    clear() {
+      pending = null;
+    },
+  };
+}
+
+const transition = createTabTransition();
+
 export function useTabNavigation() {
   const pathname = usePathname();
   const locale = useLocale() as Locale;
@@ -28,19 +94,29 @@ export function useTabNavigation() {
   const owner = current ?? memory.owner; // 상세·검색은 들어오기 전 탭 소속
   const isFirstRender = useRef(true);
 
-  // 탭 화면에 들어오면 "지금 탭"으로 기억
   useEffect(() => {
-    if (current) rememberOwnerTab(current);
-  }, [current]);
+    const onPopState = () => {
+      if (transition.onPopState(pathname, window.location.pathname)) {
+        clearScrollRestore();
+        if (current) rememberOwnerTab(current);
+      }
+    };
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, [pathname, current]);
 
-  // 주소가 바뀔 때마다: 앱 안 이동 표시 + 탭을 눌러 왔으면 그 탭에서 보던 위치로 이동
+  // 주소가 바뀔 때마다: 진행 중이던 탭 목표를 비우고, 앱 안 이동 표시 + 소속 탭·저장 위치 복원
   // (하단 탭과 상단 내비가 둘 다 이 훅을 써도, 복원 예약은 한 번 꺼내면 지워져서 한 번만 실행)
   useEffect(() => {
+    const shouldRestore = transition.onPathnameChange(pathname);
     if (isFirstRender.current) isFirstRender.current = false;
     else markInAppNavigation();
+    if (!shouldRestore) return;
+    // 중간 과도기 커밋에서는 owner를 덮어쓰지 않고 확정된 경로에서만 소속 탭을 기억
+    if (current) rememberOwnerTab(current);
     const y = takeScrollRestore(currentUrl());
     if (y !== null) window.scrollTo(0, y);
-  }, [pathname]);
+  }, [pathname, current]);
 
   // 탭의 링크 주소: 지금 속한 탭은 첫 화면(상세에서 누르면 탭 처음으로), 다른 탭은 마지막으로 보던 주소
   function hrefFor(tab: TabKey): string {
@@ -62,8 +138,7 @@ export function useTabNavigation() {
     )
       return;
 
-    const here = currentUrl();
-    if (tab === current) {
+    if (tab === transition.activeTab(current)) {
       // 같은 탭을 다시 누름 → 이동하지 않고 맨 위로 (동작 줄이기면 바로)
       event.preventDefault();
       window.scrollTo({
@@ -72,10 +147,35 @@ export function useTabNavigation() {
       });
       return;
     }
-    // 떠나는 탭의 마지막 상태(주소·스크롤) 저장, 가는 탭은 저장된 위치로 돌아가도록 예약
-    if (owner) rememberTabUrl(owner, here);
-    rememberScroll(here, window.scrollY);
-    requestScrollRestore(hrefFor(tab));
+
+    const here = currentUrl();
+    const target = hrefFor(tab);
+    // 목표 경로가 이미 커밋된 pathname과 같으면(pushState 선반영 중 복귀·쿼리스트링만 다른 이동 포함)
+    // useEffect([pathname])가 다시 돌지 않으므로 복원 예약·pending·소속 탭을 여기서 정리함
+    // (검색처럼 current === null에서 쿼리스트링만 바뀌는 이동은 떠나는 상태 저장 + 복원 예약 정리만 하며 스크롤 복원은 안 함)
+    if (pathnameOf(target) === pathname) {
+      if (
+        current === null &&
+        target !== here &&
+        transition.shouldSaveOrigin(current, pathname, window.location.pathname)
+      ) {
+        if (owner) rememberTabUrl(owner, here);
+        rememberScroll(here, window.scrollY);
+      }
+      clearScrollRestore();
+      transition.clear();
+      if (current) rememberOwnerTab(current);
+      return;
+    }
+
+    if (
+      transition.shouldSaveOrigin(current, pathname, window.location.pathname)
+    ) {
+      if (owner) rememberTabUrl(owner, here);
+      rememberScroll(here, window.scrollY);
+    }
+    requestScrollRestore(target);
+    transition.start(tab, pathname);
   }
 
   return { pathname, locale, current, hrefFor, onTabClick };

@@ -1,4 +1,4 @@
-import type { Page } from "@playwright/test";
+import type { Page, Route } from "@playwright/test";
 
 import en from "../messages/en.json";
 import ko from "../messages/ko.json";
@@ -374,11 +374,23 @@ test.describe("대화상자", () => {
 
   test.describe("전국 목록 탭 위치 복원", () => {
     test.use({ deviceRegion: null });
-    test("탐색 목록에서 다른 탭을 다녀와도 보던 해변 위치로 정확히 돌아옴", async ({
-      page,
-    }, testInfo) => {
+
+    async function clickNavTab(page: Page, name: "홈" | "탐색") {
+      // Playwright locator.click()은 sticky 상단 내비에서도 scrollIntoViewIfNeeded로 스크롤을 당길 수 있어 보이는 위치 그대로 클릭
+      const link = page
+        .getByRole("navigation", { name: "주요 메뉴" })
+        .getByRole("link", { name, exact: true });
+      const box = await link.boundingBox();
+      expect(box).not.toBeNull();
+      await page.mouse.click(box!.x + box!.width / 2, box!.y + box!.height / 2);
+    }
+
+    async function prepareExploreRow(
+      page: Page,
+      projectName: string,
+    ): Promise<{ href: string | null; top: number; scrollY: number }> {
       await page.goto("/explore/");
-      if (testInfo.project.name !== "desktop") {
+      if (projectName !== "desktop") {
         await page.getByRole("button", { name: "목록", exact: true }).click();
       }
       const targetRow = page.locator("main li a[href*='/spots/']").nth(80);
@@ -394,18 +406,22 @@ test.describe("대화상자", () => {
         };
       });
       expect(saved.scrollY).toBeGreaterThan(1000);
+      return saved;
+    }
 
-      // Playwright locator.click()은 sticky 상단 내비에서도 scrollIntoViewIfNeeded로 스크롤을 당길 수 있어 보이는 위치 그대로 클릭
-      const homeLink = page
-        .getByRole("navigation", { name: "주요 메뉴" })
-        .getByRole("link", { name: "홈", exact: true });
-      const homeBox = await homeLink.boundingBox();
-      expect(homeBox).not.toBeNull();
-      await page.mouse.click(
-        homeBox!.x + homeBox!.width / 2,
-        homeBox!.y + homeBox!.height / 2,
-      );
+    test("탐색 목록에서 다른 탭을 다녀와도 보던 해변 위치로 정확히 돌아옴", async ({
+      page,
+    }, testInfo) => {
+      const saved = await prepareExploreRow(page, testInfo.project.name);
+
+      await clickNavTab(page, "홈");
       await expect(page).toHaveURL(/\/$/);
+      await expect(
+        page.getByRole("heading", {
+          level: 1,
+          name: "오늘은 어떤 바다로 갈까요?",
+        }),
+      ).toBeVisible();
 
       await page
         .getByRole("navigation", { name: "주요 메뉴" })
@@ -426,6 +442,74 @@ test.describe("대화상자", () => {
         Math.round(el.getBoundingClientRect().top),
       );
       expect(Math.abs(afterTop - saved.top)).toBeLessThanOrEqual(8);
+    });
+
+    test("홈 전환이 끝나기 전에 탐색을 다시 누르면 탐색으로 가고, 보던 위치로 돌아옴", async ({
+      page,
+    }, testInfo) => {
+      let holdHome = true;
+      const held: Route[] = [];
+      // /explore/ 진입 전에 가로채 두어 홈 프리패치·전환 RSC 응답을 결정적으로 붙잡아 둠
+      await page.route("**/*.txt*", async (route) => {
+        const pathname = new URL(route.request().url()).pathname;
+        if (
+          holdHome &&
+          (pathname === "/index.txt" || pathname.startsWith("/__next."))
+        ) {
+          held.push(route);
+          return;
+        }
+        await route.continue();
+      });
+
+      const saved = await prepareExploreRow(page, testInfo.project.name);
+
+      await clickNavTab(page, "홈");
+      await expect.poll(() => held.length).toBeGreaterThan(0);
+
+      // 홈 전환이 아직 커밋되지 않은 상태에서 탐색을 다시 클릭
+      await clickNavTab(page, "탐색");
+
+      // 붙잡아 둔 홈 RSC 응답을 마저 풀어 줘도 홈으로 끌려가지 않고 탐색에 남음
+      holdHome = false;
+      await Promise.all(held.splice(0).map((route) => route.continue()));
+
+      await expect(page).toHaveURL(/\/explore\/$/);
+      await expect(
+        page.getByRole("heading", { level: 1, name: "탐색" }),
+      ).toBeVisible();
+      // 풀어 준 홈 전환이 늦게 탐색을 덮어쓰지 않는지 한 박자 더 확인
+      await page.waitForTimeout(300);
+      await expect(page).toHaveURL(/\/explore\/$/);
+
+      const restoredRow = page.locator(`main li a[href="${saved.href}"]`);
+      await expect(restoredRow).toBeVisible();
+      const afterTop = await restoredRow.evaluate((el) =>
+        Math.round(el.getBoundingClientRect().top),
+      );
+      expect(Math.abs(afterTop - saved.top)).toBeLessThanOrEqual(8);
+
+      // 전환 취소 뒤에도 다시 정상 왕복 시 새 스크롤 위치 저장이 살아 있는지 확인
+      await clickNavTab(page, "홈");
+      await expect(page).toHaveURL(/\/$/);
+      await expect(
+        page.getByRole("heading", {
+          level: 1,
+          name: "오늘은 어떤 바다로 갈까요?",
+        }),
+      ).toBeVisible();
+      await clickNavTab(page, "탐색");
+      await expect(page).toHaveURL(/\/explore\/$/);
+      await expect(restoredRow).toBeVisible();
+      await expect
+        .poll(async () =>
+          Math.abs(
+            (await restoredRow.evaluate((el) =>
+              Math.round(el.getBoundingClientRect().top),
+            )) - saved.top,
+          ),
+        )
+        .toBeLessThanOrEqual(8);
     });
   });
 });

@@ -97,6 +97,9 @@ export function rememberScroll(url: string, y: number) {
 export function requestScrollRestore(url: string) {
   save(RESTORE_KEY, url);
 }
+export function clearScrollRestore() {
+  save(RESTORE_KEY, null);
+}
 // 탭을 눌러 이 주소로 왔으면 돌아갈 위치(처음이면 0), 아니면 null
 export function takeScrollRestore(url: string): number | null {
   const wanted = load(RESTORE_KEY);
