@@ -4,11 +4,28 @@
 
 export type Item = Record<string, unknown>;
 
+// 상태 GSI Scan 거르기 흉내(#521): GSI에 들어가는 항목(상태가 글자) 중 :k0…(4종) 밖, ttl이 :now 뒤
+export function matchesUnknownStatusScan(
+  item: Item,
+  values: Record<string, unknown>,
+): boolean {
+  const known = Object.entries(values)
+    .filter(([name]) => /^:k\d+$/.test(name))
+    .map(([, value]) => value);
+  return (
+    typeof item.inquiryStatus === "string" &&
+    !known.includes(item.inquiryStatus) &&
+    typeof item.ttl === "number" &&
+    item.ttl > (values[":now"] as number)
+  );
+}
+
 // 두 테이블(Ops·Inquiry)을 메모리에 두고, 조건식은 " AND "로 나눈 칸을 하나씩 평가함
 export class FakeTable {
   readonly items = new Map<string, Item>();
   transactions = 0;
   puts = 0;
+  scans = 0;
 
   id(table: string, key: { pk: unknown; sk?: unknown }) {
     return `${table}|${key.pk}|${key.sk ?? ""}`;
@@ -142,6 +159,20 @@ export class FakeTable {
           String(b.receivedAt).localeCompare(String(a.receivedAt)),
         );
       return { Items: items.slice(0, input.Limit) };
+    }
+    // 상태 GSI Scan(4종 밖 상태 찾기, #521): 한 쪽으로 모두 돌려줌
+    if (name === "ScanCommand") {
+      const input = command.input;
+      this.scans++;
+      return {
+        Items: [...this.items.entries()]
+          .filter(
+            ([id, item]) =>
+              id.startsWith(`${input.TableName}|`) &&
+              matchesUnknownStatusScan(item, input.ExpressionAttributeValues),
+          )
+          .map(([, item]) => item),
+      };
     }
     if (name !== "TransactWriteCommand") throw new Error(name);
     this.transactions++;
