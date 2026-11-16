@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import { DEVICE_KEYS } from "./device-keys";
 import {
+  isOnboardingReferencePath,
   LANGUAGE_STORAGE_KEY,
   LAYOUT_HINT_SCRIPT,
   LOCATION_HINT_KEY,
@@ -12,6 +13,7 @@ import {
   REGION_STORAGE_KEY,
 } from "./layout-hints";
 import { NOTICE_VERSION } from "./notice-version";
+import { onboardingStep, parseRecord } from "./onboarding";
 
 // 그리기 전 자리 잡기 힌트 스크립트를 가짜 document·localStorage·navigator 위에서 돌려 봄 (BRD-39)
 
@@ -114,7 +116,7 @@ describe("LAYOUT_HINT_SCRIPT", () => {
     });
   });
 
-  it("현재 고지 버전을 확인한 기기와 /guide·/terms 경로는 data-onboarded를 붙인다", () => {
+  it("현재 고지 버전을 확인한 기기와 /guide·/terms 경로 판정이 onboarding 모듈과 같다", () => {
     const valid = JSON.stringify({
       noticeVersion: NOTICE_VERSION,
       acknowledgedAt: "2026-11-16T00:00:00Z",
@@ -123,27 +125,65 @@ describe("LAYOUT_HINT_SCRIPT", () => {
     expect(
       run({ storage: { [ONBOARDING_STORAGE_KEY]: valid } }),
     ).toHaveProperty("data-onboarded", "");
-    expect(
-      run({
-        storage: {
-          [ONBOARDING_STORAGE_KEY]: JSON.stringify({
-            noticeVersion: NOTICE_VERSION - 1,
-            acknowledgedAt: "2026-11-16T00:00:00Z",
-            locationStepDone: true,
-          }),
-        },
+
+    // parseRecord(isTime·버전·타입) 결과와 LAYOUT_HINT_SCRIPT 판정이 모든 경계 입력에서 일치해야 함
+    const storageCases = [
+      valid,
+      JSON.stringify({
+        noticeVersion: NOTICE_VERSION,
+        acknowledgedAt: "2026-11-16T09:00:00+09:00",
+        locationStepDone: false,
       }),
-    ).not.toHaveProperty("data-onboarded");
-    expect(
-      run({ storage: { [ONBOARDING_STORAGE_KEY]: "{" } }),
-    ).not.toHaveProperty("data-onboarded");
-    expect(run({ pathname: "/guide/" })).toHaveProperty("data-onboarded", "");
-    expect(run({ pathname: "/en/terms/" })).toHaveProperty(
-      "data-onboarded",
-      "",
-    );
-    expect(run({ pathname: "/spots/gangmun/" })).not.toHaveProperty(
-      "data-onboarded",
-    );
+      JSON.stringify({
+        noticeVersion: NOTICE_VERSION,
+        acknowledgedAt: "not-a-time",
+        locationStepDone: true,
+      }),
+      JSON.stringify({
+        noticeVersion: NOTICE_VERSION,
+        acknowledgedAt: "2026-02-30T00:00:00Z",
+        locationStepDone: true,
+      }),
+      JSON.stringify({
+        noticeVersion: NOTICE_VERSION,
+        acknowledgedAt: "2026-11-16T00:00:00",
+        locationStepDone: true,
+      }),
+      JSON.stringify({
+        noticeVersion: NOTICE_VERSION,
+        acknowledgedAt: "2026-11-16T00:00:00Z",
+        locationStepDone: "yes",
+      }),
+      JSON.stringify({
+        noticeVersion: NOTICE_VERSION - 1,
+        acknowledgedAt: "2026-11-16T00:00:00Z",
+        locationStepDone: true,
+      }),
+      "{",
+    ];
+    for (const raw of storageCases) {
+      const expectedHidden =
+        onboardingStep(parseRecord(raw), "idle") !== "notice";
+      const attrs = run({ storage: { [ONBOARDING_STORAGE_KEY]: raw } });
+      expect("data-onboarded" in attrs).toBe(expectedHidden);
+    }
+
+    // 안내 경로 판정도 React(isOnboardingReferencePath)와 정확히 같아야 함
+    for (const pathname of [
+      "/guide/",
+      "/guide",
+      "/terms/",
+      "/en/guide/",
+      "/en/terms/",
+      "/other/guide/",
+      "/guide/sub/",
+      "/spots/gangmun/",
+      "/",
+    ]) {
+      const attrs = run({ pathname });
+      expect("data-onboarded" in attrs).toBe(
+        isOnboardingReferencePath(pathname),
+      );
+    }
   });
 });
