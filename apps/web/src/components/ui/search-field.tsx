@@ -1,5 +1,10 @@
 import { Search } from "lucide-react";
-import { useId, type InputHTMLAttributes } from "react";
+import {
+  useId,
+  type InputHTMLAttributes,
+  type ReactNode,
+  type Ref,
+} from "react";
 
 import { cn } from "@/lib/cn";
 
@@ -9,11 +14,16 @@ export function SearchField({
   label,
   className,
   id: idProp,
+  trailing,
   ...props
 }: {
   // 접근 가능한 이름(예: "해변·지역 검색"). 안내 문구(placeholder)와 같아도 따로 꼭 줌
   label: string;
   className?: string;
+  // 입력칸 오른쪽 끝(검색 화면의 검색어 지우기 버튼 등)
+  trailing?: ReactNode;
+  // 입력칸 자체(React 19: 함수 부품도 ref를 prop으로 받음). 지우기 뒤 포커스를 되돌릴 때 씀
+  ref?: Ref<HTMLInputElement>;
 } & Omit<InputHTMLAttributes<HTMLInputElement>, "type" | "className">) {
   // label과 input을 잇는 id. 화면에 검색창이 둘 있어도 겹치지 않음. 쓰는 쪽이 id를 주면 그 값으로 label도 이음
   const generatedId = useId();
@@ -40,9 +50,15 @@ export function SearchField({
         type="search"
         // 바깥 상자가 포커스 테두리를 그리므로 input 자체 바깥선은 숨김. outline-hidden은 고대비 모드에서는 바깥선을 살려 둠(그림자가 안 그려져서)
         // self-stretch: 입력칸이 틀 높이만큼 차서 틀 어디를 눌러도 입력됨(누르는 영역 44px, BRD-39)
-        className="min-w-0 flex-1 self-stretch bg-transparent text-[15px] text-text-default outline-hidden placeholder:text-text-muted"
+        // trailing(지우기 버튼)이 있으면 브라우저 기본 지우기(✕)를 숨김(✕가 둘 보이지 않게)
+        className={cn(
+          "min-w-0 flex-1 self-stretch bg-transparent text-[15px] text-text-default outline-hidden placeholder:text-text-muted",
+          trailing !== undefined &&
+            "[&::-webkit-search-cancel-button]:appearance-none",
+        )}
         {...props}
       />
+      {trailing}
     </div>
   );
 }

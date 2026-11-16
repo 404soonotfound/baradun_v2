@@ -649,20 +649,68 @@
     }
   },
   "search": {
-    "scopeRemove": "Remove {scope} filter",
+    "scopeRemove": "Remove {scope} scope",
+    "placeholder": "Search by beach name, region (Yangyang) or other name",
+    "clearQuery": "Clear search",
+    "scope": {
+      "label": "Searching in",
+      "nationwide": "Nationwide",
+      "pick": "Set scope"
+    },
     "recent": {
       "title": "Recent searches",
       "clear": "Clear all",
       "remove": "Remove {query} from recent searches"
     },
-    "byRegion": "Find by region",
-    "count": "{count, plural, one {# beach} other {# beaches}}",
+    "viewed": {
+      "title": "Recently viewed beaches"
+    },
+    "byRegion": "Search by region",
+    "byRegionNote": "{count} beaches · numbers are beach counts",
+    "regionChip": "{region}, {count, plural, one {# beach} other {# beaches}}",
     "aliasNote": "{alias} is another name for {name}",
+    "suggest": {
+      "label": "Search suggestions",
+      "regionHeading": "Region",
+      "regionLine": "{count, plural, one {# beach} other {# beaches}} · {zones}",
+      "regionAction": "See region results",
+      "beachHeading": "Beaches · {shown} of {total}",
+      "beachHeadingNear": "Beaches · nearest {shown} of {total}",
+      "all": "See all {count, plural, one {# result} other {# results}} for ‘{query}’",
+      "keys": "↑↓ choose · Enter open · Esc close"
+    },
+    "results": {
+      "title": "{count, plural, one {# result} other {# results}} for ‘{query}’",
+      "regionMatch": "matches region {region}",
+      "clearLine": "No warnings at {count} · {zone} · checked by KMA {time}",
+      "clearLineNoTime": "No warnings at {count} · {zone} · KMA · check time unknown",
+      "more": "Show {count} more"
+    },
+    "sort": {
+      "label": "Result order",
+      "near": "Nearest",
+      "name": "By name"
+    },
+    "filter": {
+      "label": "Filter results",
+      "all": "All {count}",
+      "observed": "Nearby observations {count}",
+      "none": "No beaches have nearby observations · Choose ‘All’ to see every result"
+    },
     "empty": {
-      "scoped": "Couldn't find ‘{query}’ in {scope}",
-      "all": "Couldn't find ‘{query}’ anywhere in Korea",
-      "body": "Try another name or a region",
-      "widen": "Search all Korea"
+      "scopedTitle": "No beaches match ‘{query}’ in {scope}",
+      "scopedBody": "Your search is limited to {scopeTo}, so beaches in other regions are left out. Removing the limit gives {count, plural, one {# match} other {# matches}}",
+      "scopedNoneBody": "Your search is limited to {scopeTo}. Try searching nationwide or by region below",
+      "allTitle": "No beaches match ‘{query}’",
+      "allBody": "We searched beach names, regions and other names. Try part of the name or a city or county (e.g. Yangyang), or search by region below",
+      "widen": "Search nationwide",
+      "narrowTo": "Set scope to {region}",
+      "inquiry": "Can't find a beach? <link>Tell us in Data inquiry so we can add it</link>"
+    },
+    "notes": {
+      "safety": "No warnings does not mean it is safe · On-site control and lifeguard guidance come first",
+      "photo": "Photos are for reference (not the sea right now) · Photo: <link>{source}</link> · {license}",
+      "storage": "Recent searches and recently viewed beaches are saved only on this device"
     }
   },
   "map": {

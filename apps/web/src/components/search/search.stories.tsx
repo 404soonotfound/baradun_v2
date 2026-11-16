@@ -7,7 +7,8 @@ import type { BeachView } from "@/lib/snapshot/view";
 import { RecentSearches } from "./recent-searches";
 import { SearchResultRow } from "./search-result-row";
 
-// 검색 결과 행·최근 검색 확인용 (BRD-31 · 개발 전용 Storybook). 노션 2장 SRCH
+// 검색 결과 행·최근 검색 확인용 (BRD-31 · GH-531 · 개발 전용 Storybook). 노션 2장 SRCH
+// 사진 없음(해변 그림) · 이용불가 · 별칭 + 오래된 정보 · 불러오는 중
 const METRICS: Extract<BeachView, { kind: "ready" }>["metrics"] = {
   waveHeight: { kind: "hidden" },
   wavePeriod: { kind: "hidden" },
@@ -39,7 +40,7 @@ const SAMPLE = {
     regionSamcheok: "강원 삼척시",
     q: "경포",
     alias: "승공",
-    clearBasis: "이 해변 특보구역 · 기상청 14:30 확인",
+    clearBasis: "강원중부앞바다, 강릉평지 · 기상청 14:30 확인",
     stale: "14:05 확인 · 이후 확인 못 함",
     recent: ["경포", "광안리", "제주"],
   },
@@ -51,7 +52,7 @@ const SAMPLE = {
     regionSamcheok: "Gangwon Samcheok",
     q: "Gyeong",
     alias: "Seunggong",
-    clearBasis: "This beach's warning zone · KMA · checked 14:30",
+    clearBasis: "Gangwon central coast · KMA · checked 14:30",
     stale: "Checked 14:05 · not confirmed since",
     recent: ["Gyeongpo", "Gwangalli", "Jeju"],
   },
@@ -74,17 +75,20 @@ function Gallery({ locale }: { locale: "ko" | "en" }) {
           <SearchResultRow
             href="#"
             name={s.gyeongpo}
-            region={s.region}
+            photo={null}
+            meta={s.region}
             query={s.q}
             match={{ kind: "name" }}
             view={ready("clear", { kind: "clear" })}
-            basis={s.clearBasis}
+            detail={s.clearBasis}
+            note={null}
             onOpen={() => {}}
           />
           <SearchResultRow
             href="#"
             name={s.gangmun}
-            region={s.region}
+            photo={null}
+            meta={s.region}
             query={s.q}
             match={{ kind: "region" }}
             view={ready("unavailable", {
@@ -92,27 +96,32 @@ function Gallery({ locale }: { locale: "ko" | "en" }) {
               type: "wind_wave",
               level: "advisory",
             })}
-            basis={null}
+            detail={null}
+            note={null}
             onOpen={() => {}}
           />
           <SearchResultRow
             href="#"
             name={s.sangmaengbang}
-            region={s.regionSamcheok}
+            photo={null}
+            meta={s.regionSamcheok}
             query={s.alias}
             match={{ kind: "alias", alias: s.alias }}
             view={ready("undetermined", { kind: "warning_unknown" }, true)}
-            basis={s.stale}
+            detail={s.stale}
+            note={null}
             onOpen={() => {}}
           />
           <SearchResultRow
             href="#"
             name={s.gangmun}
-            region={s.region}
+            photo={null}
+            meta={s.region}
             query={s.q}
             match={{ kind: "name" }}
             view={{ kind: "loading" }}
-            basis={null}
+            detail={null}
+            note={null}
             onOpen={() => {}}
           />
         </ul>
