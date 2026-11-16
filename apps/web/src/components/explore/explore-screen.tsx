@@ -55,7 +55,7 @@ import type { LatLng } from "@/lib/geo";
 import { requestLocation, useUserLocation } from "@/lib/location";
 import { boundsOf } from "@/lib/map/bounds";
 import { NEARBY_MAX_ZOOM, nearbyPlan } from "@/lib/map/nearby";
-import { formatKm, joinMeta } from "@/lib/meta-join";
+import { formatKm } from "@/lib/meta-join";
 import { setRegion, useRegion } from "@/lib/region";
 import { useManualRefresh } from "@/lib/snapshot/use-manual-refresh";
 import {
@@ -74,7 +74,6 @@ import { useSnapshot } from "@/lib/snapshot/use-snapshot";
 import { useBadgeText } from "@/lib/snapshot/use-badge-text";
 import { useRowText } from "@/lib/snapshot/use-row-text";
 import { deriveBeachView, hidesLastValues } from "@/lib/snapshot/view";
-import { ACTIVITIES, activityNameKey } from "@/lib/activity";
 import {
   clearCheckedAt,
   countByStatus,
@@ -114,7 +113,7 @@ export function ExploreScreen({
   const sortChoice = useSortChoice();
   const view = useExploreView();
   const { badgeText } = useBadgeText();
-  const { listMeta, listNote } = useRowText();
+  const { listMeta, listNote, activitiesText } = useRowText();
   const titleRef = useRef<HTMLHeadingElement>(null);
   const regionSheet = useSheet("region");
   const {
@@ -296,16 +295,6 @@ export function ExploreScreen({
   function nearestText(nearestKm: number | null): string | null {
     const km = nearestKm === null ? null : formatKm(nearestKm);
     return km === null ? null : t("explore.group.nearest", { km });
-  }
-
-  // 3줄째 "확인된 활동 수영 · 서핑". 보여주기만 하고 거르지 않음(D14-15). 확인된 활동이 없으면 줄을 두지 않음
-  function activitiesText(activities: ExploreItem["activities"]) {
-    const list = joinMeta(
-      ACTIVITIES.filter((item) => activities.includes(item)).map((item) =>
-        t(activityNameKey(item)),
-      ),
-    );
-    return list ? t("explore.row.activities", { list }) : null;
   }
 
   function renderRow(item: ExploreItem) {
