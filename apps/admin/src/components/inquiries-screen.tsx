@@ -157,14 +157,26 @@ function adjustCounts(
   countedAt: number,
   saved: SavedMap,
 ): InquiryCounts {
-  const next = { ...counts };
+  let next = { ...counts };
   for (const mine of Object.values(saved)) {
     if (mine.at <= countedAt || mine.from === mine.status) continue;
-    if (!isInquiryStatus(mine.from)) continue;
-    next[mine.from] = Math.max(0, next[mine.from] - 1);
+    // 모르는 상태는 4개 탭 수가 아니라 unknown에 들어 있음 → 거기서 빼고 바꾼 상태에 더함(#521)
+    if (isInquiryStatus(mine.from)) {
+      next[mine.from] = Math.max(0, next[mine.from] - 1);
+    } else if (typeof next.unknown === "number") {
+      next = { ...next, unknown: Math.max(0, next.unknown - 1) };
+    }
     next[mine.status] += 1;
   }
   return next;
+}
+
+// '전체' 수: 4종 + 모르는 상태(#521). 4개 탭 수에는 모르는 상태를 섞지 않음
+function allCount(counts: InquiryCounts): number {
+  return (
+    INQUIRY_STATUSES.reduce((sum, s) => sum + counts[s], 0) +
+    (counts.unknown ?? 0)
+  );
 }
 
 function withSaved(item: InquirySummary, saved: SavedMap): InquirySummary {
@@ -707,9 +719,7 @@ function StatusTabs({
   counts: InquiryCounts | null;
   onChange: (next: InquiryStatus | null) => void;
 }) {
-  const total = counts
-    ? INQUIRY_STATUSES.reduce((sum, s) => sum + counts[s], 0)
-    : null;
+  const total = counts ? allCount(counts) : null;
   const tabs: {
     key: InquiryStatus | null;
     label: string;
@@ -1125,15 +1135,24 @@ function InquiryList({
   const counts = received
     ? adjustCounts(received.counts, received.at, saved)
     : null;
-  const total = counts
-    ? status
-      ? counts[status]
-      : INQUIRY_STATUSES.reduce((sum, s) => sum + counts[s], 0)
-    : null;
-  const from = pageIndex * PAGE_SIZE + 1;
-  const to = pageIndex * PAGE_SIZE + items.length;
+  const total = counts ? (status ? counts[status] : allCount(counts)) : null;
+  // 수(상태 목록 첫 쪽)나 거르기 첫 쪽 응답 어느 쪽이든 서버가 읽지 못했다고 하면 알림
+  const unknownUnavailable =
+    counts?.unknown === null ||
+    (result?.ok === true && result.body.unknownStatusUnavailable === true);
+  // 전체 목록 첫 쪽은 '모르는 상태 문의 전부 + 4종 한 쪽(6행)'(서버가 모르는 상태를 limit에 세지 않음, #521)
+  // → 다음 쪽 범위·쪽 수를 첫 쪽 길이만큼 밀어 셈(첫 쪽을 만든 서버 수 그대로 씀)
+  const firstPageSize = status
+    ? PAGE_SIZE
+    : PAGE_SIZE + (received?.counts.unknown ?? 0);
+  const before =
+    pageIndex === 0 ? 0 : firstPageSize + (pageIndex - 1) * PAGE_SIZE;
+  const from = before + 1;
+  const to = before + items.length;
   const totalPages =
-    total !== null ? Math.max(1, Math.ceil(total / PAGE_SIZE)) : null;
+    total !== null
+      ? 1 + Math.max(0, Math.ceil((total - firstPageSize) / PAGE_SIZE))
+      : null;
   const filterWin = pageWindow(loadedItems.length, filterPage, PAGE_SIZE);
 
   return (
@@ -1154,6 +1173,21 @@ function InquiryList({
       </div>
 
       <StatusTabs status={status} counts={counts} onChange={changeStatus} />
+
+      {/* 모르는 처리 상태는 상태 탭에 안 보여 따로 알림(#521). 전체 목록은 맨 위에 둠
+          서버가 읽지 못했으면 0건으로 보이지 않게 '확인 못 함'을 같은 자리에 알림 */}
+      {unknownUnavailable ? (
+        <Notice tone="warn" title={t.unknownStatusUnavailableTitle}>
+          {t.unknownStatusUnavailableBody}
+        </Notice>
+      ) : counts?.unknown ? (
+        <Notice
+          tone="warn"
+          title={fill(t.unknownStatusNoticeTitle, { count: counts.unknown })}
+        >
+          {t.unknownStatusNoticeBody}
+        </Notice>
+      ) : null}
 
       <div className="mt-2 flex flex-wrap items-center gap-2">
         <div className="relative w-full sm:w-[260px]">

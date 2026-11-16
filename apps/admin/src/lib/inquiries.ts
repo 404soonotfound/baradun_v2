@@ -52,6 +52,9 @@ export interface InquiryDetail extends InquirySummary {
 
 // 최근 7일 값은 첫 쪽에만, 데모·이전 서버에는 없음. null은 조회 실패(oldestUnprocessedAt은 미처리 없음도 null)
 export type InquiryCounts = Readonly<Record<InquiryStatus, number>> & {
+  // 4종 밖 상태 수(#521). 4개 탭 수에는 넣지 않고 '전체' 수와 목록 위 안내에만 씀
+  // null은 확인 못 함(서버가 읽지 못함), 없으면 이전 서버·데모
+  readonly unknown?: number | null;
   readonly receivedLast7d?: number | null;
   readonly resolvedLast7d?: number | null;
   readonly oldestUnprocessedAt?: string | null;
@@ -62,6 +65,8 @@ export interface InquiryPage {
   readonly nextCursor: string | null;
   // 첫 쪽에만 옴
   readonly counts?: InquiryCounts;
+  // 첫 쪽에서 서버가 모르는 처리 상태 문의를 읽지 못함(#521). 목록·4종 수는 그대로
+  readonly unknownStatusUnavailable?: boolean;
 }
 
 type Token = () => Promise<string | null>;
