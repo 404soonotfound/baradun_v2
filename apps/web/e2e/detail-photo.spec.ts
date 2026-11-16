@@ -30,7 +30,8 @@ test.describe("상세 사진 커버", () => {
     await expect(
       figure.getByText("참고 사진 · 지금 바다 모습 아님"),
     ).toBeVisible();
-    await expect(figure.getByText(/공공누리 제1유형/)).toBeVisible();
+    // 공공누리 유형 이름은 사진 옆에 두지 않음(GH-541 · D29-10, /about/data에만)
+    await expect(figure.getByText(/공공누리/)).toHaveCount(0);
     // 출처 링크(새 창). 링크 안 링크가 아님
     const link = figure.getByRole("link", { name: /한국관광공사/ });
     await expect(link).toHaveAttribute("target", "_blank");

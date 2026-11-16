@@ -75,6 +75,15 @@ describe("PhotoFigure 사진 없음", () => {
     expect(out).toContain("참고 사진 · 지금 바다 모습 아님");
     expect(out).not.toContain("사진 없음 · 그림");
   });
+  // 지도 카드·문의 해변 카드·공유 시트가 같이 쓰는 출처 줄. 공공누리 유형 이름은 두지 않음(GH-541 · D29-10)
+  it("사진 출처는 기관 링크와 작품명만", () => {
+    const out = html(
+      <PhotoFigure shown={photo} name="경포" onError={() => {}} credit />,
+    );
+    expect(out).toMatch(/사진 출처: <a [^>]*>한국관광공사/);
+    expect(out).toContain("「경포해변」");
+    expect(out).not.toContain("공공누리");
+  });
 });
 
 // 원본 SVG와 화면 부품이 같은 그림인지(한쪽만 고쳐 어긋나지 않게): 도형·선 굵기·투명도, 색(토큰 라이트 값)
