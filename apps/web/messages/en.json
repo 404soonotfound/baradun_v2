@@ -1081,19 +1081,38 @@
       "mismatch": "The info doesn't match reality",
       "addBeach": "Please add a beach",
       "criteria": "Question about how we decide",
-      "newData": "Suggest new data"
+      "newData": "Suggest new data",
+      "desc": {
+        "mismatch": "When warnings, wave height or other values differ from the site",
+        "addBeach": "When a beach is missing from the list",
+        "criteria": "Why 'No warnings' or 'Can't determine' was shown",
+        "newData": "When you want to see more official information"
+      }
     },
     "context": {
-      "legend": "Beach · activity",
-      "value": "{name} · {activity}",
-      "note": "Added automatically because you came from a beach page. Your location isn't sent.",
-      "remove": "Remove beach and activity"
+      "legend": "Beach for this inquiry",
+      "note": "Filled in when you come from 'Info doesn't match reality' on a beach page. Remove it to send without a beach. Your location is not sent.",
+      "activity": "Your selected activity ({activity}) is sent too.",
+      "remove": "Remove beach from this inquiry",
+      "removeShort": "Remove"
     },
     "message": {
       "label": "Message",
       "placeholder": "Describe what you saw on site and when…",
-      "hint": "At least 5 characters. Please don't include personal information.",
-      "count": "{count}/{max}"
+      "hint": "Including when and where you saw it helps us check faster · At least 5 characters · Don't include personal information such as names or phone numbers.",
+      "count": "{count}/{max}",
+      "labelFor": {
+        "mismatch": "What was different?",
+        "addBeach": "Which beach should we add?",
+        "criteria": "Which result do you want to understand?",
+        "newData": "What information would you like to see?"
+      },
+      "placeholderFor": {
+        "mismatch": "e.g. Around 14:30 the waves looked higher than the app's wave height",
+        "addBeach": "e.g. Beach name, city or county, and any official info you know",
+        "criteria": "e.g. Why was Gyeongpo Beach shown as 'Can't determine' today?",
+        "newData": "e.g. Official data you want to see and why"
+      }
     },
     "photos": {
       "label": "Photos",
@@ -1182,7 +1201,8 @@
       },
       "rateLimitedRetry": "Your retry wasn't accepted because we're receiving a lot of feedback right now.",
       "refused": "The request wasn't accepted."
-    }
+    },
+    "intro": "If what the app shows differs from the site, or you have a request, let us know. The operator checks it and updates the information."
   },
   "languageNotice": {
     "label": "Language",
