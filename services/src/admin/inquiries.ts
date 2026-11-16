@@ -175,6 +175,46 @@ export interface ListQuery {
   readonly limit: number;
 }
 
+// 시간 상한이 있는 읽기(운영 홈 지표·모르는 상태 문의, #521)
+// 상한이 지나면 요청을 끊고, 이 sender로 보낸 요청은 응답을 기다리지 않고 TimeoutError로 실패함
+// (SDK가 끊김 신호를 늦게 받아도 기다리지 않게 경주시킴). 다 쓰면 done()으로 타이머를 정리함
+interface BoundedReads {
+  readonly sender: Sender;
+  readonly signal: AbortSignal;
+  readonly done: () => void;
+}
+
+function boundedReads(client: Sender, timeoutMs: number): BoundedReads {
+  const controller = new AbortController();
+  const timedOut = new Promise<never>((_, reject) => {
+    controller.signal.addEventListener(
+      "abort",
+      () => reject(controller.signal.reason),
+      { once: true },
+    );
+  });
+  // 기다리는 요청이 없을 때 처리 안 된 거부로 남지 않게 함
+  timedOut.catch(() => {});
+  const timer = setTimeout(() => {
+    const error = new Error("시간 상한 초과");
+    error.name = "TimeoutError";
+    controller.abort(error);
+  }, timeoutMs);
+  return {
+    sender: {
+      send: ((command: QueryCommand) => {
+        controller.signal.throwIfAborted();
+        return Promise.race([
+          client.send(command, { abortSignal: controller.signal }),
+          timedOut,
+        ]);
+      }) as Sender["send"],
+    },
+    signal: controller.signal,
+    done: () => clearTimeout(timer),
+  };
+}
+
 // 4종 밖 상태 문의(#521). 첫 쪽에서 한 번 읽어 '전체' 목록 맨 위와 수(unknown = items 길이)에 함께 씀
 // ok: false는 읽지 못함(권한·쓰로틀 등) → 목록·4종 수는 그대로 내려 주고 '확인 못 함'만 알림
 export type UnknownStatuses =
@@ -196,21 +236,11 @@ export async function readUnknownStatuses(
 ): Promise<UnknownStatuses> {
   const nowSec = Math.floor(now.getTime() / 1000);
   const raws: Raw[] = [];
-  const controller = new AbortController();
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const deadline = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => {
-      controller.abort();
-      const error = new Error("모르는 상태 Scan 시간 초과");
-      error.name = "TimeoutError";
-      reject(error);
-    }, timeoutMs);
-  });
-  const scanAll = async () => {
+  const reads = boundedReads(client, timeoutMs);
+  try {
     let key: Record<string, unknown> | undefined;
     do {
-      controller.signal.throwIfAborted();
-      const result = await client.send(
+      const result = await reads.sender.send(
         new ScanCommand({
           TableName: tableName,
           IndexName: INQUIRY_STATUS_INDEX_NAME,
@@ -226,21 +256,17 @@ export async function readUnknownStatuses(
           },
           ...(key ? { ExclusiveStartKey: key } : {}),
         }),
-        { abortSignal: controller.signal },
       );
       raws.push(...((result.Items ?? []) as Raw[]));
       key = result.LastEvaluatedKey;
     } while (key);
-  };
-  try {
-    await Promise.race([scanAll(), deadline]);
   } catch (error) {
     safeLog("warn", "ops_inquiry_unknown_status_unavailable", {
       error: error instanceof Error ? error.name : "unknown",
     });
     return { ok: false };
   } finally {
-    clearTimeout(timer);
+    reads.done();
   }
   // 최근 접수 먼저(Scan은 접수 순서를 지키지 않음)
   const items = raws
@@ -515,24 +541,16 @@ export async function inquiryCountDetails(
     };
   }
 
-  const controller = new AbortController();
-  let timeout: ReturnType<typeof setTimeout> | undefined;
-  const deadline = new Promise<InquiryCountDetails>((resolve) => {
-    timeout = setTimeout(() => {
-      controller.abort();
-      resolve(UNKNOWN_INQUIRY_COUNTS);
-    }, INQUIRY_METRICS_TIMEOUT_MS);
-  });
-  const pending = Promise.race([
-    readInquiryCountDetails(
-      client,
-      tableName,
-      opsTable,
-      now,
-      controller.signal,
-    ),
-    deadline,
-  ]).finally(() => clearTimeout(timeout));
+  // 상한이 지나면 진행 중인 읽기가 바로 실패해 각 지표가 null(확인 못 함)이 됨
+  const reads = boundedReads(client, INQUIRY_METRICS_TIMEOUT_MS);
+  const pending = readInquiryCountDetails(
+    reads.sender,
+    tableName,
+    opsTable,
+    now,
+  )
+    .catch(() => UNKNOWN_INQUIRY_COUNTS)
+    .finally(reads.done);
   const entry = {
     inquiryTable: tableName,
     opsTable,
@@ -540,39 +558,28 @@ export async function inquiryCountDetails(
     pending,
   };
   inquiryMetrics.set(client, entry);
-  try {
-    const details = await pending;
-    if (
-      (controller.signal.aborted ||
-        details.receivedLast7d === null ||
-        details.resolvedLast7d === null ||
-        details.oldestUnprocessedAt === undefined) &&
-      inquiryMetrics.get(client) === entry
-    )
-      inquiryMetrics.delete(client);
-    return {
-      ...details,
-      oldestUnprocessedAt: details.oldestUnprocessedAt ?? null,
-    };
-  } catch {
-    if (inquiryMetrics.get(client) === entry) inquiryMetrics.delete(client);
-    return UNKNOWN_INQUIRY_COUNTS;
-  }
+  const details = await pending;
+  if (
+    (reads.signal.aborted ||
+      details.receivedLast7d === null ||
+      details.resolvedLast7d === null ||
+      details.oldestUnprocessedAt === undefined) &&
+    inquiryMetrics.get(client) === entry
+  )
+    inquiryMetrics.delete(client);
+  return {
+    ...details,
+    oldestUnprocessedAt: details.oldestUnprocessedAt ?? null,
+  };
 }
 
+// bounded: 시간 상한이 걸린 sender(boundedReads)
 async function readInquiryCountDetails(
-  client: Sender,
+  bounded: Sender,
   tableName: string,
   opsTable: string,
   now: Date,
-  signal: AbortSignal,
 ): Promise<InquiryCountDetails> {
-  const bounded: Sender = {
-    send: ((command: QueryCommand) => {
-      signal.throwIfAborted();
-      return client.send(command, { abortSignal: signal });
-    }) as Sender["send"],
-  };
   const from = new Date(now.getTime() - SEVEN_DAYS_MS).toISOString();
   const to = now.toISOString();
   const nowSec = Math.floor(now.getTime() / 1000);
