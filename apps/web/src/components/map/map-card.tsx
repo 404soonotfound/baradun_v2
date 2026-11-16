@@ -43,14 +43,14 @@ export function MapCard({
   const view = item.view;
   const href = localizedPath(locale, `/spots/${item.slug}/`);
 
-  // '지역 · 구역 · 기관 시각'(특보 없음) / 지역 + 칩이 말하지 못한 사유·값(그 외)
+  // '지역 · 구역 · 기관 시각'(특보 없음) / 지역 + 칩이 말하지 못한 사유(그 외). 값은 측정소 줄이 없어 넣지 않음(상세에서 봄)
   // 오래된 정보는 listNote가 'HH:MM 확인 · 이후 확인 못 함' + 남은 사유(둘째 특보 등)를 함께 만듦
   // rowBasis도 오래된 정보 문구를 돌려주므로 그때는 부르지 않음(남은 사유가 가려지지 않게)
   const basis =
     view.kind === "ready"
       ? joinMeta([
           view.stale ? null : rowBasis(view, nowMs, item.warningZones),
-          listNote(view, nowMs),
+          listNote(view, nowMs, { values: false }),
         ])
       : null;
   const place = joinMeta([item.region, basis]);

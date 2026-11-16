@@ -20,6 +20,7 @@ import { KmaSourceNote } from "@/components/source-note";
 import { Banner } from "@/components/ui/banner";
 import { Chip } from "@/components/ui/chip";
 import { EmptyState } from "@/components/ui/empty-state";
+import { SCREEN_TITLE_CLASS } from "@/components/ui/screen-title";
 import { PullToRefresh } from "@/components/ui/pull-to-refresh";
 import { BeachRowSkeleton } from "@/components/ui/skeleton";
 import { StatusGroup } from "@/components/ui/status-group";
@@ -415,7 +416,7 @@ export function ExploreScreen({
           <h1
             ref={titleRef}
             tabIndex={-1}
-            className="text-title-xl text-text-default outline-none lg:text-[30px] lg:leading-[43.5px] lg:font-bold lg:tracking-[-0.6px]"
+            className={cn(SCREEN_TITLE_CLASS, "outline-none")}
           >
             {t("pages.explore")}
           </h1>
@@ -531,7 +532,7 @@ export function ExploreScreen({
           {/* 모바일 지도 보기에서는 목록을 숨김(PC는 늘 보임) */}
           <div className={cn(view === "map" && "hidden lg:block")}>
             {loading ? (
-              <BeachRowSkeleton label={t("explore.loading")} />
+              <BeachRowSkeleton variant="list" label={t("explore.loading")} />
             ) : items.length === 0 ? (
               // 활동으로 거르지 않고 고른 지역은 해변이 있는 곳만이라(validRegion) 공개 해변이 하나도 없을 때만
               <EmptyState
@@ -612,7 +613,8 @@ export function ExploreScreen({
             dataSource={
               hasKmaData && markers.length > 0 ? t("source.kmaStatus") : null
             }
-            className="h-[62dvh] min-h-[380px] lg:h-[calc(100dvh-112px)]"
+            // PC: 머리(제목·요약 줄)가 지도 위에 생겨 지도 위 끝이 216px. 첫 화면에서 지도 카드 버튼·출처 줄이 잘리지 않게 그만큼 줄임
+            className="h-[62dvh] min-h-[380px] lg:h-[calc(100dvh-240px)] lg:min-h-[480px]"
             onShowList={() => selectExploreView("list")}
             // 지도가 실패하면 고른 해변을 놓음(지도 밖에 있는 모바일 카드도 닫힘, PC 카드와 같게)
             onFailed={() => setSelectedId(null)}

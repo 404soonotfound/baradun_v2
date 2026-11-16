@@ -231,11 +231,8 @@ export function BeachListRow({
           {activities && (
             <span className="text-caption text-text-body">{activities}</span>
           )}
-          {note && (
-            <span className="line-clamp-2 text-body-s text-text-body">
-              {note}
-            </span>
-          )}
+          {/* 자르지 않음: 칩 뒤에 남은 특보 이름이 말줄임으로 가려지지 않게 */}
+          {note && <span className="text-body-s text-text-body">{note}</span>}
           {changedFrom && (
             <span className="text-caption font-bold text-brand-default">
               {t("row.changed", { previous: changedFrom })}
