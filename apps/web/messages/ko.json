@@ -650,19 +650,67 @@
   },
   "search": {
     "scopeRemove": "{scope} 범위 빼기",
+    "placeholder": "해변 이름, 지역(양양), 다른 이름(망상리조트)으로 찾아요",
+    "clearQuery": "검색어 지우기",
+    "scope": {
+      "label": "찾는 범위",
+      "nationwide": "전국",
+      "pick": "범위 정하기"
+    },
     "recent": {
       "title": "최근 검색",
-      "clear": "전체 지우기",
+      "clear": "모두 지우기",
       "remove": "{query} 최근 검색에서 지우기"
     },
+    "viewed": {
+      "title": "최근 본 해변"
+    },
     "byRegion": "지역으로 찾기",
-    "count": "{count}곳",
+    "byRegionNote": "해변 {count}곳 · 숫자는 해변 수",
+    "regionChip": "{region} 해변 {count}곳",
     "aliasNote": "{alias} {name}의 다른 이름이에요",
+    "suggest": {
+      "label": "검색 제안",
+      "regionHeading": "지역",
+      "regionLine": "해변 {count}곳 · {zones}",
+      "regionAction": "지역 결과 보기",
+      "beachHeading": "해변 · {shown}곳 / {total}곳",
+      "beachHeadingNear": "해변 · 가까운 순 {shown}곳 / {total}곳",
+      "all": "‘{query}’ 결과 {count}곳 모두 보기",
+      "keys": "↑↓ 고르기 · Enter 열기 · Esc 닫기"
+    },
+    "results": {
+      "title": "‘{query}’ 결과 {count}곳",
+      "regionMatch": "지역 {region} 맞음",
+      "clearLine": "특보 없음 {count}곳 · {zone} · 기상청 {time} 확인",
+      "clearLineNoTime": "특보 없음 {count}곳 · {zone} · 기상청 · 확인 시각 모름",
+      "more": "{count}곳 더 보기"
+    },
+    "sort": {
+      "label": "결과 보기 방식",
+      "near": "가까운 순",
+      "name": "이름 순"
+    },
+    "filter": {
+      "label": "결과 거르기",
+      "all": "전체 {count}",
+      "observed": "가까운 관측 있음 {count}",
+      "none": "가까운 관측이 있는 해변이 없어요 · '전체'를 누르면 모두 보여요"
+    },
     "empty": {
-      "scoped": "{scope}에서 ‘{query}’를 찾지 못했어요",
-      "all": "전국에서 ‘{query}’를 찾지 못했어요",
-      "body": "다른 이름이나 지역으로 찾아보세요",
-      "widen": "전국에서 찾기"
+      "scopedTitle": "{scope}에서는 ‘{query}’에 맞는 해변이 없어요",
+      "scopedBody": "찾는 범위가 {scopeTo} 정해져 있어서 다른 지역 해변은 빠졌어요. 범위를 풀면 {count}곳이 맞아요",
+      "scopedNoneBody": "찾는 범위가 {scopeTo} 정해져 있어요. 전국에서도 찾아보거나 아래 지역으로 찾아보세요",
+      "allTitle": "‘{query}’에 맞는 해변이 없어요",
+      "allBody": "해변 이름·지역·다른 이름에서 찾아봤어요. 이름 일부나 시·군 이름(예: 양양)으로 다시 찾거나 아래 지역으로 찾아보세요",
+      "widen": "전국에서 찾기",
+      "narrowTo": "범위를 {region}",
+      "inquiry": "찾는 해변이 목록에 없나요? <link>데이터 문의에서 해변 추가를 알려 주세요</link>"
+    },
+    "notes": {
+      "safety": "특보 없음은 안전하다는 뜻이 아니에요 · 최종 판단은 현장 통제와 안전요원 안내가 우선이에요",
+      "photo": "사진은 참고 사진이에요(지금 바다 모습 아님) · 사진 출처: <link>{source}</link> · {license}",
+      "storage": "최근 검색과 최근 본 해변은 이 기기에만 저장돼요"
     }
   },
   "map": {

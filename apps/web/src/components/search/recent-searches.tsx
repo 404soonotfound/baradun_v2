@@ -5,10 +5,9 @@ import { useTranslations } from "next-intl";
 
 import type { RecentSearch } from "@/lib/recent-search";
 
-// 최근 검색 (BRD-31 · 노션 2장 SRCH '입력 전: 최근 검색(개별·전체 지우기)')
-// 항목을 누르면 그 검색어로 다시 찾음. ✕는 항목 옆(누르는 영역 44px)
-// Figma L08 186:508: 제목 17·굵게 + '전체 지우기' 12.5 메타 → 흰 카드(기본 테두리·모서리 16) 안 행,
-// 행은 좌우 14·높이 44, 시계 16 + 14.5/21 검색어 + ✕ 14, 행 사이 옅은 구분선 (BRD-129)
+// 최근 검색 (BRD-31 · GH-531 결정 기록 29장 D29-5, 시안 S_SRC0P2)
+// 제목 + 오른쪽 '모두 지우기' → 42px 칩(시계 + 검색어). 칩을 누르면 그 검색어로 다시 찾음
+// 하나씩 지우기(✕)는 지금 동작이라 남김(칩 안 오른쪽, 누르는 영역 44px). 저장 규칙(최대 10개 · 기기 저장)은 그대로
 export function RecentSearches({
   items,
   onPick,
@@ -23,7 +22,7 @@ export function RecentSearches({
   const t = useTranslations("search.recent");
   if (items.length === 0) return null;
   return (
-    <section aria-labelledby="search-recent" className="flex flex-col gap-2.5">
+    <section aria-labelledby="search-recent" className="flex flex-col gap-3">
       <div className="flex items-center justify-between">
         <h2 id="search-recent" className="text-title-m text-text-default">
           {t("title")}
@@ -32,33 +31,36 @@ export function RecentSearches({
         <button
           type="button"
           onClick={onClear}
-          className="-my-2.5 -mr-2 flex min-h-touch items-center px-2 text-label-s text-text-muted hover:text-text-default"
+          className="-my-2.5 -mr-2 flex min-h-touch items-center px-2 text-label-s text-text-muted underline underline-offset-2 hover:text-text-default"
         >
           {t("clear")}
         </button>
       </div>
-      <ul className="flex flex-col divide-y divide-border-subtle rounded-tile border border-border-default bg-bg-surface">
+      <ul className="flex flex-wrap gap-2">
         {items.map((item) => (
-          <li key={item.q} className="flex items-center">
+          <li
+            key={item.q}
+            className="flex h-[42px] items-center rounded-full border border-border-strong bg-bg-surface"
+          >
             <button
               type="button"
               onClick={() => onPick(item.q)}
-              className="flex min-h-touch min-w-0 flex-1 items-center gap-3 pl-3.5 text-left text-[14.5px]/[21px] text-text-default"
+              className="flex h-full min-w-0 items-center gap-1.5 rounded-l-full pl-4 text-[13.5px] text-text-body hover:text-text-default"
             >
               <Clock
                 aria-hidden="true"
-                size={16}
+                size={14}
                 className="shrink-0 text-text-muted"
               />
-              <span className="truncate">{item.q}</span>
+              <span className="max-w-[12rem] truncate">{item.q}</span>
             </button>
             <button
               type="button"
               aria-label={t("remove", { query: item.q })}
               onClick={() => onRemove(item.q)}
-              className="flex size-touch shrink-0 items-center justify-center rounded-full text-text-muted hover:bg-bg-subtle"
+              className="relative mr-1 flex size-8 shrink-0 items-center justify-center rounded-full text-text-muted before:absolute before:-inset-1.5 before:content-[''] hover:bg-bg-subtle"
             >
-              <X aria-hidden="true" size={14} />
+              <X aria-hidden="true" size={13} />
             </button>
           </li>
         ))}
