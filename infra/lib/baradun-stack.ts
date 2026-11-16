@@ -20,7 +20,7 @@ import { OpsAlarms } from "./ops/alarms";
 import { Publisher } from "./publish/publisher";
 import { PublisherRole } from "./publish/publisher-role";
 import { PublishPreview } from "./publish/publish-preview";
-import { ROLE_BOUNDARY_POLICY_NAME } from "./settings";
+import { GA4_PROPERTY_ID, ROLE_BOUNDARY_POLICY_NAME } from "./settings";
 import { createSecurityHeadersPolicy } from "./site/security-headers";
 import { AdminSite } from "./admin/admin-site";
 import { SiteDelivery } from "./site/site-delivery";
@@ -84,14 +84,8 @@ export class BaradunStack extends Stack {
       type: "String",
       default: "",
       allowedPattern: "^$|^https://[a-zA-Z0-9.-]+/?$",
-      description: "Public operator site origin used to read deploy-version.txt",
-    });
-    const ga4PropertyId = new CfnParameter(this, "Ga4PropertyId", {
-      type: "String",
-      default: "",
-      allowedPattern: "^$|^[0-9]+$",
       description:
-        "GA4 property ID for /ops/stats (empty keeps stats unconfigured)",
+        "Public operator site origin used to read deploy-version.txt",
     });
     const domainEmpty = Fn.conditionEquals(siteDomainName.valueAsString, "");
     const certificateEmpty = Fn.conditionEquals(
@@ -204,7 +198,7 @@ export class BaradunStack extends Stack {
         ).toString(),
       ]),
       adminSiteUrl: adminSiteDeployUrl.valueAsString,
-      ga4PropertyId: ga4PropertyId.valueAsString, // 이용 통계(#333): 비어 있으면 미연결
+      ga4PropertyId: GA4_PROPERTY_ID, // 이용 통계(#333). Google 인증 구성은 SSM(GA4_SERVICE_ACCOUNT_PARAM)
     });
 
     // 운영자 사이트: 사용자 사이트와 따로 버킷·CloudFront, /ops/*는 운영 API (BRD-147)
