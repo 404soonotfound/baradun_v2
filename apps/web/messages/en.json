@@ -667,7 +667,7 @@
     },
     "byRegion": "Search by region",
     "byRegionNote": "{count} beaches · numbers are beach counts",
-    "regionChip": "{region}, {count, plural, one {# beach} other {# beaches}}",
+    "regionChip": "{region} {count, plural, one {# beach} other {# beaches}}",
     "aliasNote": "{alias} is another name for {name}",
     "suggest": {
       "label": "Search suggestions",

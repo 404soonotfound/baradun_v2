@@ -199,9 +199,9 @@ export function SearchScreen({
   // 결과 없음 화면에서만 씀(결과가 있을 때 전체 해변을 한 번 더 찾지 않게)
   const widens = scoped && searching && hits.length === 0;
   const wideHits = widens ? searchBeaches(beaches, query, intlLocale) : hits;
-  const wideRegion = widens
-    ? matchRegions(beaches, query, intlLocale)[0]
-    : undefined;
+  // 맞는 시·군이 하나일 때만 범위를 옮김(시·도처럼 여러 시·군에 걸치면 하나로 좁히지 않음)
+  const wideRegions = widens ? matchRegions(beaches, query, intlLocale) : [];
+  const wideRegion = wideRegions.length === 1 ? wideRegions[0] : undefined;
 
   const lastNoResultKeyRef = useRef<string | null>(null);
   useEffect(() => {
@@ -228,6 +228,7 @@ export function SearchScreen({
   const dataTime = shownDataTime(snapshot.manifest?.generatedAt, nowMs);
 
   // 정렬: 가까운 순은 위치가 있을 때 거리순, 없으면 찾은 순(자동으로 묻지 않음, 누르면 그때 물음 D14-17). 이름 순은 이름
+  const nearItems = coords ? sortItems(items, "near", intlLocale) : items;
   const sorted =
     sort === "name"
       ? sortItems(items, "name", intlLocale)
@@ -235,7 +236,12 @@ export function SearchScreen({
         ? sortItems(items, "near", intlLocale)
         : items;
   // 거르기 '가까운 관측 있음' = 2줄째 수온이 '가까운 관측 없음'이 아닌 해변(같은 측정소 기준이라 줄과 어긋나지 않음)
-  const observed = sorted.filter((item) => item.stations.waterTemp !== null);
+  // 게시값 기준(받기 전에는 측정소 자료): 2줄째가 '가까운 관측 없음'이면 빠짐
+  const observed = sorted.filter((item) =>
+    item.view.kind === "ready"
+      ? item.view.metrics.waterTemp.kind !== "none"
+      : item.stations.waterTemp !== null,
+  );
   const filtered = filter === "observed" ? observed : sorted;
   const pageKey = `${query}|${sort}|${filter}|${scoped ? scopeLabel : ""}`;
   const expanded = expandedFor === pageKey;
@@ -323,34 +329,30 @@ export function SearchScreen({
         }),
       },
     })),
-    ...(coords ? sortItems(items, "near", intlLocale) : items)
-      .slice(0, SUGGEST_BEACHES)
-      .map((item) => ({
-        kind: "beach" as const,
-        beach: {
-          id: item.id,
-          name: item.name,
-          photo: item.photo,
-          meta:
-            joinMeta([
-              item.region,
-              item.distanceKm === null
-                ? null
-                : `${formatKm(item.distanceKm)}km`,
-            ]) ?? item.region,
-          view: item.view,
-        },
-      })),
+    ...nearItems.slice(0, SUGGEST_BEACHES).map((item) => ({
+      kind: "beach" as const,
+      beach: {
+        id: item.id,
+        name: item.name,
+        photo: item.photo,
+        region: item.region,
+        meta:
+          joinMeta([
+            item.region,
+            item.distanceKm === null ? null : `${formatKm(item.distanceKm)}km`,
+          ]) ?? item.region,
+        view: item.view,
+      },
+    })),
     ...(hits.length > 0 ? [{ kind: "all" as const }] : []),
   ];
   const listOpen = suggestOpen && searching && options.length > 0;
-  // 제안의 해변 줄에 '특보 없음' 칩이 있으면 범위·기관·확인 시각을 제안 안에 한 번(뒤 결과 머리는 흐려져 있음)
-  const suggestedItems = items.filter((item) =>
-    options.some(
-      (option) => option.kind === "beach" && option.beach.id === item.id,
-    ),
-  );
-  const suggestClearNote = scopeLine(suggestedItems, { distance: false });
+  // 줄 수가 줄어들면(다른 탭에서 범위가 바뀌는 등) 없는 줄을 가리키지 않게
+  const activeIndex = active < options.length ? active : -1;
+  // 제안의 해변 줄에 '특보 없음' 칩이 있으면 범위·기관·확인 시각을 제안 안에 한 번(뒤 결과 머리는 흐려져 있음). 열렸을 때만 만듦
+  const suggestClearNote = listOpen
+    ? scopeLine(nearItems.slice(0, SUGGEST_BEACHES), { distance: false })
+    : null;
 
   function pick(option: SuggestOption) {
     if (option.kind === "region") {
@@ -372,7 +374,8 @@ export function SearchScreen({
 
   function onKeyDown(event: KeyboardEvent<HTMLInputElement>) {
     // 한글 조합 중 Enter·화살표는 조합을 끝내는 키라 줄 고르기·이동으로 쓰지 않음(두 번 움직이거나 조합 중 열리지 않게)
-    if (event.nativeEvent.isComposing) return;
+    // Safari는 조합을 끝내는 keydown에 isComposing=false · keyCode 229를 줌
+    if (event.nativeEvent.isComposing || event.keyCode === 229) return;
     if (event.key === "Escape") {
       if (listOpen) {
         event.preventDefault();
@@ -392,9 +395,9 @@ export function SearchScreen({
       );
       return;
     }
-    if (event.key === "Enter" && listOpen && active >= 0) {
+    if (event.key === "Enter" && listOpen && activeIndex >= 0) {
       event.preventDefault();
-      pick(options[active]!);
+      pick(options[activeIndex]!);
     }
   }
 
@@ -416,10 +419,14 @@ export function SearchScreen({
     );
   }, [beaches, recentViewed, coords, snapshot]);
 
-  // 화면 아래 사진 출처: 지금 보이는 사진의 출처(지어내지 않음). 사진이 없으면 줄 없음
-  const shownPhoto = (searching ? shown : viewedItems).find(
-    (item) => item.photo !== null,
-  )?.photo;
+  // 화면 아래 사진 출처: 지금 보이는 줄의 사진 출처를 출처·유형마다 한 번씩(지어내지 않음). 사진이 없으면 줄 없음
+  const shownPhotos = [
+    ...new Map(
+      (searching ? shown : viewedItems)
+        .flatMap((item) => (item.photo ? [item.photo] : []))
+        .map((photo) => [`${photo.source}|${photo.license}`, photo]),
+    ).values(),
+  ];
   const kmaSource = showsKmaSource(snapshot, sampleSnapshot);
 
   function regionChipList() {
@@ -463,39 +470,45 @@ export function SearchScreen({
 
   // 화면 아래 안내(D29-5): 특보 없음은 안전 보장 아님 · 현장 우선 · 사진 출처(사진을 보일 때) · 이 기기에만 저장
   function footNotes(withStorage: boolean) {
-    const href = shownPhoto ? photoSourceUrl(shownPhoto) : null;
     return (
       <div className="flex flex-col gap-1 text-caption text-text-muted">
         <p>{tSearch("notes.safety")}</p>
-        {shownPhoto && (
-          <p>
-            {tSearch.rich("notes.photo", {
-              source: agencyText(shownPhoto.source),
-              license: t(`photo.license.${shownPhoto.license}`),
-              link: (chunks) =>
-                href ? (
-                  <a
-                    href={href}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="underline underline-offset-2"
-                  >
-                    {chunks}
-                    <span className="sr-only"> ({t("common.newWindow")})</span>
-                  </a>
-                ) : (
-                  chunks
-                ),
-            })}
-          </p>
-        )}
+        {shownPhotos.map((photo) => {
+          const href = photoSourceUrl(photo);
+          return (
+            <p key={`${photo.source}|${photo.license}`}>
+              {tSearch.rich("notes.photo", {
+                source: agencyText(photo.source),
+                license: t(`photo.license.${photo.license}`),
+                link: (chunks) =>
+                  href ? (
+                    <a
+                      href={href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="underline underline-offset-2"
+                    >
+                      {chunks}
+                      <span className="sr-only">
+                        {" "}
+                        ({t("common.newWindow")})
+                      </span>
+                    </a>
+                  ) : (
+                    chunks
+                  ),
+              })}
+            </p>
+          );
+        })}
         {withStorage && <p>{tSearch("notes.storage")}</p>}
         {kmaSource && <KmaSourceNote variant="status" />}
       </div>
     );
   }
 
-  const regionMatch = regionHits[0];
+  // '지역 ○○과 맞음'은 맞는 시·군이 하나일 때만(시·도 검색에 한 시·군 이름을 대지 않음)
+  const regionMatch = regionHits.length === 1 ? regionHits[0] : undefined;
   const scopeTo =
     scopeLabel === null
       ? ""
@@ -563,7 +576,9 @@ export function SearchScreen({
             aria-expanded={listOpen}
             aria-controls={listOpen ? listId : undefined}
             aria-activedescendant={
-              listOpen && active >= 0 ? optionId(listId, active) : undefined
+              listOpen && activeIndex >= 0
+                ? optionId(listId, activeIndex)
+                : undefined
             }
             onChange={(event) => type(event.target.value)}
             onKeyDown={onKeyDown}
@@ -592,7 +607,7 @@ export function SearchScreen({
               total={hits.length}
               located={coords !== null}
               clearNote={suggestClearNote}
-              active={active}
+              active={activeIndex}
               onPick={pick}
               onHover={setActive}
             />
@@ -665,6 +680,7 @@ export function SearchScreen({
                         href={localizedPath(locale, `/spots/${item.slug}/`)}
                         name={item.name}
                         photo={item.photo}
+                        region={item.region}
                         query=""
                         match={null}
                         view={view}
@@ -847,6 +863,7 @@ export function SearchScreen({
                     href={localizedPath(locale, `/spots/${item.slug}/`)}
                     name={item.name}
                     photo={item.photo}
+                    region={item.region}
                     query={query}
                     match={matchById.get(item.id) ?? null}
                     view={item.view}

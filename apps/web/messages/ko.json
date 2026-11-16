@@ -667,7 +667,7 @@
     },
     "byRegion": "지역으로 찾기",
     "byRegionNote": "해변 {count}곳 · 숫자는 해변 수",
-    "regionChip": "{region} 해변 {count}곳",
+    "regionChip": "{region} {count}곳",
     "aliasNote": "{alias} {name}의 다른 이름이에요",
     "suggest": {
       "label": "검색 제안",
