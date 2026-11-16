@@ -22,7 +22,8 @@ import type { Sender } from "./writes";
 //   상태를 고르지 않으면 4개 상태를 이 순서로 이어 붙여 한 목록으로 보여 줌(구현 제안 I08)
 // - 모르는 처리 상태(4종 밖)는 원래 값 그대로 내려 줌(아키텍처 18.3, #521). 상태 변경·필터는 4종만 받음
 //   GSI 파티션이 상태라 4종 Query로는 안 잡힘 → 첫 쪽에서 GSI를 4종 밖만 걸러 Scan 한 번으로 읽어
-//   '전체' 목록 맨 위(마지막 쪽까지 넘겨야 보이면 사실상 숨김)와 수(counts.unknown)에 함께 씀. 4개 탭 수에는 넣지 않음
+//   '전체' 목록 맨 위(마지막 쪽까지 넘겨야 보이면 사실상 숨김, 최근 접수 순 50건까지)와 수(counts.unknown, 전체 건수)에 씀
+//   4개 탭 수에는 넣지 않음. Scan 결과는 함수 인스턴스 안에서 60초 재사용(운영 홈 지표와 같음)
 // - 보관 기한(ttl)이 지난 문의는 TTL로 지워지기 전이라도 목록·상세·수정에서 뺌(구현 제안 I07)
 // - GSI는 최종적 일관성이라 저장 직후 목록이 잠시 이전 값일 수 있음. 상세는 강한 일관성으로 읽음
 // - 보기 권한은 본문·메모·반려 이유를 받지 않음(민감 필드 제한, 캔버스 S1 권한표)
@@ -45,7 +46,9 @@ export interface InquirySummary {
   readonly beachId?: string;
   readonly activity?: string;
   readonly messagePreview?: string;
-  readonly messagePreviewUnavailableReason?: "restricted" | "empty";
+  // unchecked: 모르는 상태 문의의 본문을 시간 상한 안에 확인하지 못함(#521). 빼지 않고 내려 주며 내용 검색에 맞는지도 모름
+  readonly messagePreviewUnavailableReason?:
+    "restricted" | "empty" | "unchecked";
   readonly receivedAt: string;
   // 4종(InquiryStatus) 또는 모르는 원래 값(4종으로 바꾸거나 숨기지 않음, #521)
   readonly status: string;
@@ -67,7 +70,7 @@ export interface InquiryDetail extends InquirySummary {
 }
 
 export type InquiryCounts = Readonly<Record<InquiryStatus, number>> & {
-  // 4종 밖 상태 수(#521, 모르는 상태 목록 길이와 같음). 4개 탭 수에는 넣지 않고 '전체' 수와 목록 위 안내에만 씀
+  // 4종 밖 상태 수(#521, 목록과 같은 Scan의 전체 건수. 목록에는 50건까지만 실음). 4개 탭 수에는 넣지 않고 '전체' 수와 목록 위 안내에만 씀
   // null은 확인 못 함(Scan 실패)
   readonly unknown?: number | null;
   readonly receivedLast7d?: number | null;
@@ -215,14 +218,38 @@ function boundedReads(client: Sender, timeoutMs: number): BoundedReads {
   };
 }
 
-// 4종 밖 상태 문의(#521). 첫 쪽에서 한 번 읽어 '전체' 목록 맨 위와 수(unknown = items 길이)에 함께 씀
+// 4종 밖 상태 문의(#521). 첫 쪽에서 읽어 '전체' 목록 맨 위(50건까지)와 수(unknown = items 길이)에 씀
 // ok: false는 읽지 못함(권한·쓰로틀 등) → 목록·4종 수는 그대로 내려 주고 '확인 못 함'만 알림
 export type UnknownStatuses =
   | { readonly ok: true; readonly items: readonly InquirySummary[] }
   | { readonly ok: false };
 
-// 모르는 상태 Scan 시간 상한. 넘으면 '확인 못 함'으로 두고 목록·4종 수는 기다리지 않음(운영 홈 지표와 같은 1.5초)
+// 모르는 상태 Scan·본문 확인 시간 상한. 넘으면 '확인 못 함'으로 두고 목록·4종 수는 기다리지 않음(운영 홈 지표와 같은 1.5초)
 export const UNKNOWN_STATUS_TIMEOUT_MS = 1_500;
+// 목록에 싣는 모르는 상태 문의 수 상한(쪽 크기 상한과 같음). 수(counts.unknown)는 전체 건수 그대로
+// 운영 홈(limit 1)처럼 작은 목록에도 모르는 상태가 모두 실려 응답이 커지지 않게 함
+export const UNKNOWN_STATUS_LIST_MAX = INQUIRY_PAGE_MAX;
+// 모르는 상태 Scan 결과 재사용 시간. 첫 쪽마다 GSI(읽기 용량 1, 4종 목록·수와 공유)를 다 읽지 않게 함
+// 읽지 못한 결과는 재사용하지 않음. 이 인스턴스에서 문의를 고치면 바로 버림(다른 인스턴스는 60초까지 이전 값일 수 있음)
+// 읽은 문의 중 보관 기한이 60초 안에 끝나는 것이 있으면 그 시각까지만 재사용(기한 지난 문의를 목록에 남기지 않게, 구현 제안 I07)
+const UNKNOWN_STATUS_CACHE_MS = 60_000;
+interface UnknownScan {
+  readonly statuses: UnknownStatuses;
+  // 읽은 문의 중 가장 이른 보관 기한(ttl, 초). 없으면 undefined
+  readonly firstTtlSec?: number;
+}
+const unknownStatusCache = new WeakMap<
+  Sender,
+  {
+    readonly tableName: string;
+    readonly expiresAt: number;
+    readonly pending: Promise<UnknownScan>;
+  }
+>();
+
+export function forgetUnknownStatuses(client: Sender): void {
+  unknownStatusCache.delete(client);
+}
 
 // 상태 GSI를 4종 밖·보관 기한 안만 걸러 Scan으로 끝까지 읽음(#521). GSI에는 상태가 있는 문의만 들어 있음
 // - GSI 파티션이 상태라 4종 Query로는 안 잡힘. 걸러 읽기라 쪽마다 0건일 수 있어 LastEvaluatedKey가 있으면 이어 읽음
@@ -234,6 +261,49 @@ export async function readUnknownStatuses(
   now: Date,
   timeoutMs = UNKNOWN_STATUS_TIMEOUT_MS,
 ): Promise<UnknownStatuses> {
+  const time = now.getTime();
+  const cached = unknownStatusCache.get(client);
+  if (cached && cached.tableName === tableName && time < cached.expiresAt) {
+    return (await cached.pending).statuses;
+  }
+  const entry = {
+    tableName,
+    expiresAt: time + UNKNOWN_STATUS_CACHE_MS,
+    pending: scanUnknownStatuses(client, tableName, now, timeoutMs),
+  };
+  unknownStatusCache.set(client, entry);
+  const forget = () => {
+    if (unknownStatusCache.get(client) === entry) {
+      unknownStatusCache.delete(client);
+    }
+  };
+  try {
+    const { statuses, firstTtlSec } = await entry.pending;
+    if (!statuses.ok) {
+      forget();
+    } else if (
+      firstTtlSec !== undefined &&
+      firstTtlSec * 1000 < entry.expiresAt &&
+      unknownStatusCache.get(client) === entry
+    ) {
+      unknownStatusCache.set(client, {
+        ...entry,
+        expiresAt: firstTtlSec * 1000,
+      });
+    }
+    return statuses;
+  } catch (error) {
+    forget();
+    throw error;
+  }
+}
+
+async function scanUnknownStatuses(
+  client: Sender,
+  tableName: string,
+  now: Date,
+  timeoutMs: number,
+): Promise<UnknownScan> {
   const nowSec = Math.floor(now.getTime() / 1000);
   const raws: Raw[] = [];
   const reads = boundedReads(client, timeoutMs);
@@ -264,16 +334,32 @@ export async function readUnknownStatuses(
     safeLog("warn", "ops_inquiry_unknown_status_unavailable", {
       error: error instanceof Error ? error.name : "unknown",
     });
-    return { ok: false };
+    return { statuses: { ok: false } };
   } finally {
     reads.done();
   }
   // 최근 접수 먼저(Scan은 접수 순서를 지키지 않음)
-  const items = raws
-    .filter((raw) => alive(raw, nowSec))
-    .map(toSummary)
+  // version이 없는 문의는 상세와 같게 0(이전 도구 전 문의)으로 봄: 전에는 목록에서 빠져 드러나지 않던 문의라
+  // version 하나로 목록 전체를 500으로 만들지 않음. ID·유형·접수 시각이 없는 등 정말 틀린 모양은 지금처럼 던짐
+  const living = raws.filter((raw) => alive(raw, nowSec));
+  const items = living
+    .map((raw) => toSummary({ ...raw, version: raw.version ?? 0 }))
     .sort((a, b) => b.receivedAt.localeCompare(a.receivedAt));
-  return { ok: true, items };
+  const ttls = living.map((raw) => raw.ttl as number);
+  return {
+    statuses: { ok: true, items },
+    ...(ttls.length ? { firstTtlSec: Math.min(...ttls) } : {}),
+  };
+}
+
+// 재사용 중인 모르는 상태 목록이 다른 인스턴스의 변경을 아직 모르면(60초 재사용) 4종 목록과 같은 문의가 두 번 실림
+// → 4종 목록(방금 읽음)에 있는 문의는 모르는 상태 목록에서 뺌(같은 행이 두 번 보이지 않게)
+function withoutKnown(
+  unknownItems: readonly InquirySummary[],
+  knownItems: readonly InquirySummary[],
+): InquirySummary[] {
+  const known = new Set(knownItems.map((item) => item.inquiryId));
+  return unknownItems.filter((item) => !known.has(item.inquiryId));
 }
 
 // 상태 GSI의 요약 후보 8개 또는 본문이 필요한 후보 4개를 한 쪽에서 조회함.
@@ -281,8 +367,9 @@ export async function readUnknownStatuses(
 const FILTER_PAGE_MAX = 8;
 const BODY_PAGE_MAX = 4;
 
-// unknown: 상태를 고르지 않은 첫 쪽(cursor 없음)이면 4종 밖 상태 문의 전부를 같은 조건으로 걸러 맨 앞에 붙이고(#521)
+// unknown: 상태를 고르지 않은 첫 쪽(cursor 없음)이면 4종 밖 상태 문의를 같은 조건으로 걸러 맨 앞에 50건까지 붙이고(#521)
 // 이어서 '접수' 첫 묶음을 지금처럼 읽음(모르는 상태만 담은 빈 쪽을 따로 돌려주지 않음)
+// 모르는 상태 문의의 본문 확인은 1.5초 상한. 넘으면 남은 문의를 빼지 않고 'unchecked'(본문 확인 못 함)로 둠
 export async function listFilteredInquiries(
   client: Sender,
   tableName: string,
@@ -299,9 +386,15 @@ export async function listFilteredInquiries(
   const readBody = role !== "viewer" && (q !== undefined || preview === true);
   const nowSec = Math.floor(now.getTime() / 1000);
   const items: InquirySummary[] = [];
-  // 거르기·본문 검색. 모르는 상태 문의는 보통 0건이라 개수를 묶지 않음(묶으면 검색에서 빠져 숨겨짐)
-  const pick = async (candidates: readonly InquirySummary[]) => {
+  // 거르기·본문 검색. bounded가 있으면 모르는 상태 문의(#521): 맞는 문의를 50건까지 담고,
+  // 본문 확인이 시간 상한에 걸리면 빼지 않고 '본문 확인 못 함'으로 담음(빼면 검색에서 숨겨짐)
+  const pick = async (
+    candidates: readonly InquirySummary[],
+    bounded?: BoundedReads,
+  ) => {
+    const start = items.length;
     for (const item of candidates) {
+      if (bounded && items.length - start >= UNKNOWN_STATUS_LIST_MAX) break;
       if (!matchesInquiryMetadata(item, filters)) continue;
       const beachMatch =
         q !== undefined &&
@@ -309,13 +402,20 @@ export async function listFilteredInquiries(
         beachSearch(item.beachId, q);
       if (q !== undefined && !beachMatch && !readBody) continue;
       if (readBody && (preview || !beachMatch)) {
-        const detail = await getInquiry(
-          client,
-          tableName,
-          item.inquiryId,
-          role,
-          now,
-        );
+        let detail: InquiryDetail | null;
+        try {
+          detail = await getInquiry(
+            bounded?.sender ?? client,
+            tableName,
+            item.inquiryId,
+            role,
+            now,
+          );
+        } catch (error) {
+          if (!bounded?.signal.aborted) throw error;
+          items.push({ ...item, messagePreviewUnavailableReason: "unchecked" });
+          continue;
+        }
         // GSI 반영 전 만료·상태 변경 또는 가림 처리 이전의 본문을 읽지 않음.
         if (!detail || detail.status !== item.status) continue;
         if (detail.restricted) {
@@ -345,7 +445,14 @@ export async function listFilteredInquiries(
       }
     }
   };
-  if (!query.status && !query.cursor && unknown?.ok) await pick(unknown.items);
+  if (!query.status && !query.cursor && unknown?.ok && unknown.items.length) {
+    const bounded = boundedReads(client, UNKNOWN_STATUS_TIMEOUT_MS);
+    try {
+      await pick(unknown.items, bounded);
+    } finally {
+      bounded.done();
+    }
+  }
   const dateCondition =
     from && to ? " BETWEEN :from AND :to" : from ? " >= :from" : " <= :to";
   const result = await client.send(
@@ -368,17 +475,23 @@ export async function listFilteredInquiries(
       ...(query.cursor?.k ? { ExclusiveStartKey: query.cursor.k } : {}),
     }),
   );
+  const unknownCount = items.length;
   await pick(
     ((result.Items ?? []) as Raw[])
       .filter((raw) => alive(raw, nowSec))
       .map(toSummary),
   );
+  const knownItems = items.slice(unknownCount);
+  const pageItems = [
+    ...withoutKnown(items.slice(0, unknownCount), knownItems),
+    ...knownItems,
+  ];
   const lastKey = result.LastEvaluatedKey as Record<string, string> | undefined;
   const nextStatus = query.status
     ? undefined
     : INQUIRY_STATUSES[INQUIRY_STATUSES.indexOf(status) + 1];
   return {
-    items,
+    items: pageItems,
     nextCursor: lastKey
       ? encodeCursor({ s: status, k: lastKey, f: scope })
       : nextStatus
@@ -387,9 +500,9 @@ export async function listFilteredInquiries(
   };
 }
 
-// unknown: 상태를 고르지 않은 첫 쪽(cursor 없음)이면 맨 위에 모르는 상태 문의를 모두 놓음(#521)
-// 마지막 쪽까지 넘겨야 보이면 사실상 숨김이라 맨 위에 둠. limit에 세지 않음 → 첫 쪽은 '모르는 상태 전부 + 4종 한 쪽'
-// (4종 cursor는 지금 그대로라 빈 다음 쪽이 생기지 않음)
+// unknown: 상태를 고르지 않은 첫 쪽(cursor 없음)이면 맨 위에 모르는 상태 문의를 최근 접수 순 50건까지 놓음(#521)
+// 마지막 쪽까지 넘겨야 보이면 사실상 숨김이라 맨 위에 둠. limit에 세지 않음 → 첫 쪽은 '모르는 상태(50건까지) + 4종 한 쪽'
+// (4종 cursor는 지금 그대로라 빈 다음 쪽이 생기지 않음). 50건 밖은 앞의 문의를 4종으로 바꾸면 올라옴
 export async function listInquiries(
   client: Sender,
   tableName: string,
@@ -399,7 +512,16 @@ export async function listInquiries(
 ): Promise<InquiryPage> {
   const page = await listKnownInquiries(client, tableName, query, now);
   return !query.status && !query.cursor && unknown?.ok
-    ? { ...page, items: [...unknown.items, ...page.items] }
+    ? {
+        ...page,
+        items: [
+          ...withoutKnown(unknown.items, page.items).slice(
+            0,
+            UNKNOWN_STATUS_LIST_MAX,
+          ),
+          ...page.items,
+        ],
+      }
     : page;
 }
 
@@ -718,6 +840,24 @@ export async function getInquiry(
   role: OperatorRole,
   now: Date,
 ): Promise<InquiryDetail | null> {
+  return (
+    (await getInquiryForWrite(client, tableName, inquiryId, role, now))
+      ?.detail ?? null
+  );
+}
+
+// 처리(PATCH)용 상세: DB에 저장된 상태 원래 값(없으면 undefined)을 함께 돌려줌(#521)
+// 상세의 status는 상태가 없을 때 '접수'로 채운 값이라, 쓰기 조건·'접수' 채우기는 저장된 값으로 판단함
+export async function getInquiryForWrite(
+  client: Sender,
+  tableName: string,
+  inquiryId: string,
+  role: OperatorRole,
+  now: Date,
+): Promise<{
+  readonly detail: InquiryDetail;
+  readonly storedStatus?: string;
+} | null> {
   const result = await client.send(
     new GetCommand({
       TableName: tableName,
@@ -743,15 +883,43 @@ export async function getInquiry(
     emailCollected: false as const,
     photosCollected: false as const,
   };
-  if (role === "viewer") return { ...base, restricted: true };
+  const stored =
+    typeof item.inquiryStatus === "string"
+      ? { storedStatus: item.inquiryStatus }
+      : {};
+  if (role === "viewer") {
+    return { detail: { ...base, restricted: true }, ...stored };
+  }
   return {
-    ...base,
-    restricted: false,
-    message: typeof item.message === "string" ? item.message : "",
-    memo: typeof item.memo === "string" ? item.memo : null,
-    rejectReason:
-      typeof item.rejectReason === "string" ? item.rejectReason : null,
+    detail: {
+      ...base,
+      restricted: false,
+      message: typeof item.message === "string" ? item.message : "",
+      memo: typeof item.memo === "string" ? item.memo : null,
+      rejectReason:
+        typeof item.rejectReason === "string" ? item.rejectReason : null,
+    },
+    ...stored,
   };
+}
+
+// 최근 7일 접수에 모르는 상태 문의도 더함(#521): 운영 홈 합계에는 들어가는데 7일 접수에서만 빠지지 않게
+// 4종 쪽이 확인 못 함(null)·없음이면 그대로, 모르는 상태를 읽지 못했으면 null(빠진 채로 세지 않음)
+// 가장 오래된 미처리는 4종(접수·확인 중) 기준 그대로 둠(모르는 상태는 처리 여부를 알 수 없음)
+export function receivedLast7dWithUnknown(
+  received: number | null | undefined,
+  unknown: UnknownStatuses,
+  now: Date,
+): number | null | undefined {
+  if (received === null || received === undefined) return received;
+  if (!unknown.ok) return null;
+  const from = new Date(now.getTime() - SEVEN_DAYS_MS).toISOString();
+  const to = now.toISOString();
+  return (
+    received +
+    unknown.items.filter((i) => i.receivedAt >= from && i.receivedAt <= to)
+      .length
+  );
 }
 
 export interface InquiryPatch {
