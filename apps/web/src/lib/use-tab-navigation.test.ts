@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { createTabTransition } from "./use-tab-navigation";
+import { createTabTransition, pathnameOf } from "./use-tab-navigation";
 
 describe("createTabTransition", () => {
   it("전환 전에는 커밋된 탭을 기준으로 보고 떠나는 탭 저장을 허용한다", () => {
@@ -126,5 +126,13 @@ describe("createTabTransition", () => {
     expect(transition.onPopState("/explore/", "/explore/")).toBe(true);
     expect(transition.activeTab("explore")).toBe("explore");
     expect(transition.onPopState("/explore/", "/explore/")).toBe(false);
+  });
+});
+
+describe("pathnameOf", () => {
+  it("쿼리스트링과 해시를 떼어 커밋된 pathname과 비교할 수 있게 정규화한다", () => {
+    expect(pathnameOf("/favorites/?tab=recent")).toBe("/favorites/");
+    expect(pathnameOf("/explore/#top")).toBe("/explore/");
+    expect(pathnameOf("/")).toBe("/");
   });
 });
