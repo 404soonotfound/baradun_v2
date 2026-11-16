@@ -196,6 +196,13 @@ const BADGE: Record<InquiryStatus, string> = {
   rejected: "bg-info-bg text-info-fg ring-1 ring-border-default",
 };
 
+// 상태 문구: 모르는 상태 값은 숨기지 않고 '알 수 없는 상태(값)'(#521). 배지·행 링크 이름·안내가 같은 문구를 씀
+function statusLabel(status: string): string {
+  return isInquiryStatus(status)
+    ? t.status[status]
+    : fill(t.unknownStatus, { status });
+}
+
 // 모르는 상태 값은 숨기지 않고 그 값을 그대로 보여 줌(점선·흐린 글자)
 function StatusBadge({ status }: { status: string }) {
   const known = isInquiryStatus(status);
@@ -207,7 +214,7 @@ function StatusBadge({ status }: { status: string }) {
           : "bg-bg-surface text-text-muted outline-1 outline-border-strong outline-dashed -outline-offset-1"
       }`}
     >
-      {known ? t.status[status] : fill(t.unknownStatus, { status })}
+      {statusLabel(status)}
     </span>
   );
 }
@@ -1374,9 +1381,7 @@ function InquiryList({
                         aria-current={on ? "true" : undefined}
                         aria-label={fill(t.open, {
                           type: typeLabel(item.type),
-                          status: isInquiryStatus(item.status)
-                            ? t.status[item.status]
-                            : item.status,
+                          status: statusLabel(item.status),
                           received: kstDateTime(item.receivedAt),
                         })}
                         className={`${CELL_NAME} block underline-offset-2 hover:underline`}
@@ -1845,11 +1850,7 @@ function InquiryActions({
                 ? t.conflictReplay
                 : error.kind === "expired"
                   ? t.expired
-                  : fill(t.saveFailed, {
-                      status: known
-                        ? t.status[base.status as InquiryStatus]
-                        : base.status,
-                    })
+                  : fill(t.saveFailed, { status: statusLabel(base.status) })
           }
           role="alert"
         >
