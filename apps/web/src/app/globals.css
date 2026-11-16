@@ -5,6 +5,35 @@
 /* 홈 화면 추가(standalone)로 열었을 때만 적용: standalone:pt-… (BRD-24) */
 @custom-variant standalone (@media (display-mode: standalone));
 
+/* Noto Sans KR을 받기 전 대체 글꼴(BRD-39 CLS). 한글 조각을 늦게 받아 글꼴이 바뀔 때 줄바꿈이 달라져 화면이 밀리지 않게
+   iOS·macOS 기본 한글 글꼴(Apple SD Gothic Neo)의 한글 폭을 Noto에 맞춤: 같은 크기에서 한글 폭 Noto 925.3 : Apple 886.9
+   (400·500·700·800 모두 같은 비율, Chromium에서 잼) → 104.4%. 영문·숫자는 조금 다름. 없는 기기(안드로이드·윈도)는 건너뜀
+   안드로이드 기본 한글 글꼴은 Noto Sans CJK라 폭이 이미 같음. 토큰 --font-sans에서 Noto 바로 다음 */
+@font-face {
+  font-family: "Noto Sans KR Fallback";
+  font-weight: 400;
+  src: local("AppleSDGothicNeo-Regular"), local("Apple SD Gothic Neo");
+  size-adjust: 104.4%;
+}
+@font-face {
+  font-family: "Noto Sans KR Fallback";
+  font-weight: 500;
+  src: local("AppleSDGothicNeo-Medium");
+  size-adjust: 104.4%;
+}
+@font-face {
+  font-family: "Noto Sans KR Fallback";
+  font-weight: 700;
+  src: local("AppleSDGothicNeo-Bold");
+  size-adjust: 104.4%;
+}
+@font-face {
+  font-family: "Noto Sans KR Fallback";
+  font-weight: 800;
+  src: local("AppleSDGothicNeo-ExtraBold");
+  size-adjust: 104.4%;
+}
+
 @layer base {
   html {
     background: var(--color-bg-page);
