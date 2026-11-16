@@ -199,6 +199,62 @@ test.describe("대화상자", () => {
       ).toBeVisible();
     });
 
+    test("수화 전에는 '불러오는 중' 비활성 버튼과 CSS 숨김으로 Tab이 ON-1 밖에 닿지 않고 수화 뒤 확인·해제됨", async ({
+      page,
+    }) => {
+      let jsReleased = false;
+      const pendingJs: Array<() => void> = [];
+      await page.route("**/_next/static/**/*.js", async (route) => {
+        if (!jsReleased) {
+          await new Promise<void>((resolve) => {
+            pendingJs.push(resolve);
+          });
+        }
+        await route.continue();
+      });
+
+      await page.goto("/", { waitUntil: "domcontentloaded" });
+      const loadingButton = page.getByRole("button", { name: "불러오는 중" });
+      await expect(loadingButton).toBeVisible();
+      await expect(loadingButton).toHaveAttribute("aria-disabled", "true");
+      await expect(
+        page.getByRole("button", { name: "확인했어요" }),
+      ).toHaveCount(0);
+      expect(
+        await page.evaluate(
+          () => getComputedStyle(document.querySelector("main")!).visibility,
+        ),
+      ).toBe("hidden");
+
+      // 수화 전에도 Tab이 ON-1 밖(main·nav·footer·건너뛰기 링크)으로 나가지 않는지 확인
+      for (let step = 0; step < 8; step += 1) {
+        await page.keyboard.press("Tab");
+        expect(await focusNotBehindDialog(page)).toBe(true);
+      }
+
+      jsReleased = true;
+      pendingJs.splice(0).forEach((resolve) => resolve());
+
+      const confirm = page.getByRole("button", { name: "확인했어요" });
+      await expect(confirm).toBeVisible();
+      await expect(confirm).not.toHaveAttribute("aria-disabled", "true");
+      await expect.poll(() => focusInsideOpenDialog(page)).toBe(true);
+      expect(await backgroundInertStates(page)).toMatchObject({
+        main: true,
+        navAll: true,
+        footer: true,
+      });
+
+      await confirm.click();
+      await expect
+        .poll(() => backgroundInertStates(page))
+        .toMatchObject({
+          main: false,
+          navAny: false,
+          footer: false,
+        });
+    });
+
     for (const { url, navLabel, homeName, confirmName, homeUrl } of [
       {
         url: "/terms/",
@@ -304,17 +360,73 @@ test.describe("대화상자", () => {
 
     // 이어서 열린 ON-2(위치 안내)도 닫아 스크롤 잠금이 풀리는지 확인
     const pick = page.getByRole("button", { name: "지역 직접 고르기" });
-    if (await pick.isVisible()) {
-      await pick.click();
-      await page
-        .getByRole("dialog", { name: "지역 고르기" })
-        .getByRole("button", { name: /전국/ })
-        .click();
-    }
+    await expect(pick).toBeVisible();
+    await pick.click();
+    await page
+      .getByRole("dialog", { name: "지역 고르기" })
+      .getByRole("button", { name: /전국/ })
+      .click();
     await expect(page.locator("dialog[open]")).toHaveCount(0);
     await expect
       .poll(() => page.evaluate(() => document.documentElement.style.overflow))
       .toBe("");
+  });
+
+  test.describe("전국 목록 탭 위치 복원", () => {
+    test.use({ deviceRegion: null });
+    test("탐색 목록에서 다른 탭을 다녀와도 보던 해변 위치로 정확히 돌아옴", async ({
+      page,
+    }, testInfo) => {
+      await page.goto("/explore/");
+      if (testInfo.project.name !== "desktop") {
+        await page.getByRole("button", { name: "목록", exact: true }).click();
+      }
+      const targetRow = page.locator("main li a[href*='/spots/']").nth(80);
+      await expect(targetRow).toBeVisible();
+
+      const saved = await targetRow.evaluate((el) => {
+        const targetY = window.scrollY + el.getBoundingClientRect().top - 160;
+        window.scrollTo(0, targetY);
+        return {
+          href: el.getAttribute("href"),
+          top: Math.round(el.getBoundingClientRect().top),
+          scrollY: Math.round(window.scrollY),
+        };
+      });
+      expect(saved.scrollY).toBeGreaterThan(1000);
+
+      // Playwright locator.click()은 sticky 상단 내비에서도 scrollIntoViewIfNeeded로 스크롤을 당길 수 있어 보이는 위치 그대로 클릭
+      const homeLink = page
+        .getByRole("navigation", { name: "주요 메뉴" })
+        .getByRole("link", { name: "홈", exact: true });
+      const homeBox = await homeLink.boundingBox();
+      expect(homeBox).not.toBeNull();
+      await page.mouse.click(
+        homeBox!.x + homeBox!.width / 2,
+        homeBox!.y + homeBox!.height / 2,
+      );
+      await expect(page).toHaveURL(/\/$/);
+
+      await page
+        .getByRole("navigation", { name: "주요 메뉴" })
+        .getByRole("link", { name: "탐색", exact: true })
+        .click();
+      await expect(page).toHaveURL(/\/explore\/$/);
+
+      const restoredRow = page.locator(`main li a[href="${saved.href}"]`);
+      await expect(restoredRow).toBeVisible();
+      await expect
+        .poll(async () =>
+          restoredRow.evaluate((el) =>
+            Math.round(el.getBoundingClientRect().top),
+          ),
+        )
+        .toBeLessThanOrEqual(saved.top + 8);
+      const afterTop = await restoredRow.evaluate((el) =>
+        Math.round(el.getBoundingClientRect().top),
+      );
+      expect(Math.abs(afterTop - saved.top)).toBeLessThanOrEqual(8);
+    });
   });
 });
 
