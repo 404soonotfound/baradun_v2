@@ -486,8 +486,11 @@ export function HomeScreen({
             {/* 상황 배너 자리(노션 HOME 3). 예시 값이 실제 확인 결과처럼 보이지 않게 카드들 위에 둠 */}
             {sampleSnapshot && <SampleNote />}
             {!bannerInInfo && banner}
-            {/* '위치 없이 보고 있어요'가 들어올 자리. 권한 확인 중에만 두고 지난 방문에 위치를 못 썼으면 globals.css가 높이를 잡음 */}
-            {locationPending && <div data-location-slot aria-hidden="true" />}
+            {/* '위치 없이 보고 있어요'가 들어올 자리. 권한 확인 중에만 두고 지난 방문에 위치를 못 썼으면 globals.css가 높이를 잡음
+                이 배너는 상황 배너 중 맨 뒤 차례라 다른 배너(오프라인·실패·공지·지연)가 보이면 자리를 잡지 않음 */}
+            {locationPending && situation === null && (
+              <div data-location-slot aria-hidden="true" />
+            )}
             {/* 연결이 없어 다른 화면을 열지 못하고 홈으로 왔을 때만(서비스 워커 표식, BRD-106) */}
             <PageUnavailableNote />
             <div className="lg:mt-3">
