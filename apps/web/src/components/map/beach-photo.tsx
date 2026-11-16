@@ -4,6 +4,7 @@ import { Waves } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useState, type ReactNode } from "react";
 
+import { BeachIllustration } from "@/components/beach-illustration";
 import type { BeachSummary } from "@/lib/beach-summary";
 import { cn } from "@/lib/cn";
 import { META_SEPARATOR } from "@/lib/meta-join";
@@ -12,16 +13,26 @@ import { useMetaText } from "@/lib/snapshot/use-meta-text";
 
 // 해변 참고 사진 (BRD-30 · 노션 3장 BeachPhoto, 결정 기록 11장 10/21 공공누리 1유형만)
 // 사진 아래에 "참고 사진 · 지금 바다 모습 아님" + 출처(링크)·공공누리 유형. 사진을 자르거나 거르지 않음(object-cover만)
-// 사진이 없거나 받지 못하면 일러스트 자리(lucide Waves 파도 아이콘 = V1 정식 자산, 2026-10-28 확정 결정 15) + 안내
+// 사진이 없거나 받지 못하면 자체 해변 그림 + 왼쪽 위 '사진 없음 · 그림' 표시(GH-527 · 결정 기록 29장 D29-4)
+// 그림이 실제 바다 상태로 읽히지 않게 넓은 카드에서는 표시를 빼지 않음. 작은 썸네일은 BeachIllustration만 씀
+// 공유 시트 미리보기(BeachPhoto)는 바꾸지 않아 파도 아이콘 + 안내 그대로(SHARE 명세, empty="icon")
 // 출처는 링크라 다른 링크 안에 넣지 않음. 사진을 링크 안에 두는 곳(지도 카드)은 PhotoFigure(credit 없음) +
 // 링크 밖 PhotoCredit으로 나눠 씀(받지 못한 사진 상태는 useShownPhoto 하나로 같이 봄)
 
 type Photo = NonNullable<BeachSummary["photo"]>;
 
-// 보여줄 사진. 받지 못한 사진 주소는 기억해 일러스트로 바꾸고, 다른 해변(다른 주소)으로 바뀌면 다시 시도함
+// 보여줄 사진 고르기. 사진이 없거나 받지 못한 주소면 null(→ 그림). 다른 주소면 다시 보여줌
+export function pickShownPhoto(
+  photo: BeachSummary["photo"],
+  brokenUrl: string | null,
+): Photo | null {
+  return photo !== null && photo.url !== brokenUrl ? photo : null;
+}
+
+// 보여줄 사진. 받지 못한 사진 주소는 기억해 그림으로 바꾸고, 다른 해변(다른 주소)으로 바뀌면 다시 시도함
 export function useShownPhoto(photo: BeachSummary["photo"]) {
   const [brokenUrl, setBrokenUrl] = useState<string | null>(null);
-  const shown = photo !== null && photo.url !== brokenUrl ? photo : null;
+  const shown = pickShownPhoto(photo, brokenUrl);
   const onError = () => {
     if (shown) setBrokenUrl(shown.url);
   };
@@ -45,25 +56,42 @@ export function BeachPhoto({
       className={className}
       onError={onError}
       credit
+      empty="icon"
     />
   );
 }
 
-// 사진(또는 일러스트) + 캡션. credit이 false면 캡션은 '참고 사진 · 지금 바다 모습 아님'만(출처는 부르는 쪽이 PhotoCredit으로)
+// 사진(또는 그림) + 캡션. credit이 false면 캡션은 '참고 사진 · 지금 바다 모습 아님'만(출처는 부르는 쪽이 PhotoCredit으로)
+// empty: 사진 없음(없음·받기 실패 모두) 자리. 기본은 해변 그림, "icon"은 공유 시트 미리보기의 파도 아이콘
 export function PhotoFigure({
   shown,
   name,
   className,
   onError,
   credit,
+  empty = "illustration",
 }: {
   shown: Photo | null;
   name: string;
   className?: string | undefined;
   onError: () => void;
   credit: boolean;
+  empty?: "illustration" | "icon";
 }) {
   const t = useTranslations("photo");
+
+  if (shown === null && empty === "illustration") {
+    return (
+      <figure className="relative">
+        <BeachIllustration className={cn("w-full rounded-[12px]", className)} />
+        {/* 사진의 '참고 사진' 표시와 같은 자리·모양(시안 S_EXPPCN)
+            보이는 글자라 링크 안에서도 접근 가능한 이름에 그대로 둠(WCAG 2.5.3, 사진의 alt + 안내와 같은 구조) */}
+        <figcaption className="absolute top-2 left-2 flex h-6 items-center rounded-full bg-illust-label-bg px-[9px] text-caption font-bold text-illust-label-fg">
+          {t("noneLabel")}
+        </figcaption>
+      </figure>
+    );
+  }
 
   if (shown === null) {
     return (

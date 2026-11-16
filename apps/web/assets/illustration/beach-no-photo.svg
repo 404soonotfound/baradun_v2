@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="320" height="132" viewBox="0 0 320 132" preserveAspectRatio="xMidYMid slice">
+  <!--
+    사진 없는 해변 그림 원본 (GH-527 · 결정 기록 29장 D29-4, 12장 결정 15 고침)
+    프로젝트가 직접 그린 자체 소유 자산. 외부 사진·그림을 쓰지 않아 출처 표기가 필요 없음
+    하늘 · 해 · 구름 · 바다 · 잔물결 · 모래만 그림. 날씨·파도 세기·사람·시설은 그리지 않음(실제 바다 상태로 읽히지 않게)
+    색: 토큰 color.illust.*(packages/design-tokens/tokens.json)의 라이트 값. 다크 값은 토큰 파일에만 둠
+    화면은 src/components/beach-illustration.tsx가 같은 도형을 토큰 색으로 그림(도형이 같은지 단위 테스트로 확인)
+  -->
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#CFE6FA" />
+      <stop offset="1" stop-color="#EEF6FD" />
+    </linearGradient>
+    <linearGradient id="sea" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3D86CF" />
+      <stop offset="1" stop-color="#5FA6E3" />
+    </linearGradient>
+  </defs>
+  <rect width="320" height="132" fill="url(#sky)" />
+  <circle cx="246" cy="34" r="15" fill="#FFE7A8" />
+  <g fill="#FFFFFFCC">
+    <rect x="118" y="22" width="54" height="12" rx="6" />
+    <rect x="132" y="15" width="28" height="12" rx="6" />
+    <rect x="196" y="42" width="38" height="9" rx="4.5" />
+  </g>
+  <rect y="61" width="320" height="40" fill="url(#sea)" />
+  <g fill="none" stroke="#FFFFFF" stroke-linecap="round" opacity=".55">
+    <path d="M30 74 q14 -4 28 0 t28 0" stroke-width="1.6" />
+    <path d="M150 70 q12 -3 24 0 t24 0" stroke-width="1.4" />
+    <path d="M226 82 q14 -4 28 0 t28 0" stroke-width="1.6" />
+    <path d="M90 86 q14 -4 28 0 t28 0" stroke-width="1.6" />
+  </g>
+  <path d="M0 98 C60 90 110 104 170 97 S280 90 320 96 V132 H0Z" fill="#F3E5C8" />
+  <path d="M0 98 C60 90 110 104 170 97 S280 90 320 96" fill="none" stroke="#FFFFFF" stroke-width="2.4" opacity=".9" />
+  <path d="M0 118 C70 112 140 124 220 116 S300 112 320 116 V132 H0Z" fill="#E7D3AE" />
+</svg>

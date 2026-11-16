@@ -165,6 +165,37 @@ for (const mode of ["light", "dark"]) {
   }
 }
 
+// 그림 위 표시(사진 없음 · 그림, GH-527): 바탕 color.illust.label-bg가 반투명이라 아래 그림 색과 겹친 색으로 대비를 봄
+// (luminance는 투명도를 무시하므로 PAIRS에 넣으면 불투명 색으로 잘못 통과함). 표시가 놓이는 자리 = 하늘·구름
+function over(top, base) {
+  const n = top.replace("#", "");
+  const alpha = n.length === 8 ? parseInt(n.slice(6, 8), 16) / 255 : 1;
+  const mixed = [0, 2, 4].map((i) => {
+    const t = parseInt(n.slice(i, i + 2), 16);
+    const b = parseInt(base.replace("#", "").slice(i, i + 2), 16);
+    return Math.round(alpha * t + (1 - alpha) * b)
+      .toString(16)
+      .padStart(2, "0");
+  });
+  return `#${mixed.join("")}`;
+}
+for (const mode of ["light", "dark"]) {
+  const sky = ["color.illust.sky-1", "color.illust.sky-2"].map((p) =>
+    get(p, mode),
+  );
+  const cloud = get("color.illust.cloud", mode);
+  for (const under of [...sky, ...sky.map((color) => over(cloud, color))]) {
+    const bg = over(get("color.illust.label-bg", mode), under);
+    const r = ratio(get("color.illust.label-fg", mode), bg);
+    if (r < 4.5) {
+      failed += 1;
+      console.log(
+        `실패  ${r.toFixed(2)} (기준 4.5)  [${mode}] 그림 위 표시 글자(바탕 ${under} 위)`,
+      );
+    }
+  }
+}
+
 // 금지 색: 초록 계열(색상각 90~170°, 채도 있는 색)을 쓰지 않음 (노션 4장)
 // 예외: 운영자 사이트 전용 작업 성공색 color.success(결정 E6·BRD-165). 사용자 사이트 CSS에는 나가지 않음
 // (build-tokens가 --admin일 때만 내보냄)
