@@ -505,6 +505,12 @@ test("모르는 처리 상태 문의(#521): 전체 목록 맨 위·상세에 원
   await expect(tabs.getByRole("button", { name: "전체 4" })).toBeVisible();
   await expect(rows(page)).toHaveCount(4);
   await expect(rows(page).first()).toContainText("알 수 없는 상태(archived)");
+  if (!isMobile(page)) {
+    // 행 열기 링크의 접근 가능한 이름도 배지와 같은 문구(원래 코드 값만 읽히지 않게)
+    await expect(rows(page).first().getByRole("link")).toHaveAccessibleName(
+      /알 수 없는 상태\(archived\)/,
+    );
+  }
   await expect(page.getByText("4건 중 1–4")).toBeVisible();
   await expectNoA11yViolations(page);
 
