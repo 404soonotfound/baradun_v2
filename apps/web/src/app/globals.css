@@ -292,3 +292,15 @@ html[data-location-hint="off"] [data-location-slot] {
 html[data-onboarded] dialog[data-onboarding-preload] {
   display: none;
 }
+
+/* 수화 전 정적 HTML의 ON-1이 화면을 덮는 동안 뒤 화면이 Tab·스크린 리더·스크롤에 노출되지 않게 숨김 (BRD-39 CWV) */
+html:not([data-onboarded])
+  :has(> dialog[data-onboarding-preload])
+  > :not(dialog) {
+  visibility: hidden;
+}
+
+html:not([data-onboarded]):has(dialog[data-onboarding-preload]),
+html:not([data-onboarded]):has(dialog[data-onboarding-preload]) body {
+  overflow: hidden;
+}
