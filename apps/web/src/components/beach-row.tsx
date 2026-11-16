@@ -10,6 +10,7 @@ import Link from "next/link";
 import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 
+import { ReasonBadge } from "@/components/reason-badge";
 import { badgeTone, type VerdictTone } from "@/lib/badge-tone";
 import { cn } from "@/lib/cn";
 import { useBadgeText } from "@/lib/snapshot/use-badge-text";
@@ -21,7 +22,8 @@ import type { BadgeLabel, MetricView } from "@/lib/snapshot/view";
 // 24시간 미니 선은 파고 이력(history.json)이 필요해 상세 차트(BRD-32)와 함께 붙임
 
 // 상태 글자 줄(withStatus)의 색·아이콘. 배지와 같은 4가지 색 이름(badgeTone)을 씀
-const STATUS: Record<
+// 탐색 요약 줄(ExploreSummary)의 사유별 개수도 같은 글자색·아이콘을 씀
+export const STATUS: Record<
   VerdictTone,
   { text: string; bar: string; icon: ReactNode }
 > = {
@@ -171,6 +173,81 @@ export function BeachRow({
           <X aria-hidden="true" size={16} />
         </button>
       )}
+    </div>
+  );
+}
+
+// 세 줄 목록 줄 (GH-529 · 탐색 시안 C, 결정 기록 29장 D29-2 · 시안 S_EXPPC·S_EXPMC)
+// ① 해변명 + 오른쪽 상태 칩(사유 먼저) ② 지역 · 거리 · 수온 · 측정 시각 ③ 확인된 활동(보여주기만) (④ 칩이 말하지 못한 사유·값)
+// 파고 칸·줄마다 구역/확인 시각·왼쪽 상태색 띠 없음. 왼쪽 띠는 지도에서 고른 해변(highlight)과 방금 바뀜(changedFrom)에만
+// BeachRow(파고 글리프 줄)는 즐겨찾기가 쓰고 있어 그대로 둠
+export function BeachListRow({
+  href,
+  name,
+  badge,
+  meta,
+  activities,
+  note,
+  highlight = false,
+  changedFrom = null,
+  onHighlight,
+}: {
+  href: string;
+  name: string;
+  badge: BadgeLabel; // 게시된 사유 그대로(G1)
+  meta: string | null; // 2줄째(useRowText.listMeta)
+  activities: string | null; // 3줄째 "확인된 활동 수영 · 서핑". 확인된 활동이 없으면 null
+  note: string | null; // 넷째 줄(useRowText.listNote)
+  highlight?: boolean; // PC 지도에서 고른 해변: 옅은 파란 바탕 + 왼쪽 띠
+  changedFrom?: string | null; // "방금 바뀜 · 이전: ○○"의 ○○
+  onHighlight?: (on: boolean) => void; // PC: 마우스·포커스가 오면 지도 마커 강조
+}) {
+  const t = useTranslations();
+  return (
+    <div
+      onMouseEnter={onHighlight && (() => onHighlight(true))}
+      onMouseLeave={onHighlight && (() => onHighlight(false))}
+      onFocus={onHighlight && (() => onHighlight(true))}
+      onBlur={onHighlight && (() => onHighlight(false))}
+      className={cn(
+        changedFrom && "shadow-[inset_4px_0_0_var(--color-brand-default)]",
+        highlight &&
+          "bg-brand-weak shadow-[inset_3px_0_0_var(--color-brand-default)]",
+      )}
+    >
+      {/* 포커스 바깥선을 안쪽으로 그림: 목록 카드(overflow-hidden)에 바깥쪽 선이 잘리지 않게 */}
+      <Link
+        href={href}
+        className="flex min-h-touch items-center gap-2 py-3 pr-3 pl-3.5 focus-visible:-outline-offset-2"
+      >
+        <span className="flex min-w-0 flex-1 flex-col gap-[3px]">
+          <span className="flex items-center justify-between gap-2">
+            <span className="truncate text-title-s text-text-default">
+              {name}
+            </span>
+            <ReasonBadge label={badge} size="sm" />
+          </span>
+          {meta && <span className="text-caption text-text-muted">{meta}</span>}
+          {activities && (
+            <span className="text-caption text-text-body">{activities}</span>
+          )}
+          {note && (
+            <span className="line-clamp-2 text-body-s text-text-body">
+              {note}
+            </span>
+          )}
+          {changedFrom && (
+            <span className="text-caption font-bold text-brand-default">
+              {t("row.changed", { previous: changedFrom })}
+            </span>
+          )}
+        </span>
+        <ChevronRight
+          aria-hidden="true"
+          size={16}
+          className="shrink-0 text-text-muted"
+        />
+      </Link>
     </div>
   );
 }
