@@ -76,6 +76,7 @@ function Gallery({ locale }: { locale: "ko" | "en" }) {
             href="#"
             name={s.gyeongpo}
             photo={null}
+            region={s.region}
             meta={s.region}
             query={s.q}
             match={{ kind: "name" }}
@@ -88,6 +89,7 @@ function Gallery({ locale }: { locale: "ko" | "en" }) {
             href="#"
             name={s.gangmun}
             photo={null}
+            region={s.region}
             meta={s.region}
             query={s.q}
             match={{ kind: "region" }}
@@ -104,6 +106,7 @@ function Gallery({ locale }: { locale: "ko" | "en" }) {
             href="#"
             name={s.sangmaengbang}
             photo={null}
+            region={s.regionSamcheok}
             meta={s.regionSamcheok}
             query={s.alias}
             match={{ kind: "alias", alias: s.alias }}
@@ -116,6 +119,7 @@ function Gallery({ locale }: { locale: "ko" | "en" }) {
             href="#"
             name={s.gangmun}
             photo={null}
+            region={s.region}
             meta={s.region}
             query={s.q}
             match={{ kind: "name" }}

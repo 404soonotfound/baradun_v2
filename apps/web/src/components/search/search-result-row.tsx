@@ -38,6 +38,7 @@ export function SearchResultRow({
   href,
   name,
   photo,
+  region,
   query,
   match,
   view,
@@ -49,6 +50,7 @@ export function SearchResultRow({
   href: string;
   name: string;
   photo: BeachSummary["photo"];
+  region: string; // 2줄째 앞의 지역 이름(일치 부분 굵게는 여기에만: 수온·거리 숫자를 굵게 하지 않음)
   query: string; // 일치 부분을 굵게(입력 전 최근 본 해변은 "")
   match: SearchMatch | null; // 별칭으로 찾았으면 '다른 이름이에요' 안내
   view: BeachView;
@@ -89,7 +91,14 @@ export function SearchResultRow({
           {/* 지역으로 찾았을 때도 일치 부분이 보이게 2줄째도 굵게(지금 동작 유지) */}
           {meta && (
             <span className="text-caption text-text-muted">
-              <Highlighted text={meta} query={query} />
+              {meta.startsWith(region) ? (
+                <>
+                  <Highlighted text={region} query={query} />
+                  {meta.slice(region.length)}
+                </>
+              ) : (
+                meta
+              )}
             </span>
           )}
           {detail && (

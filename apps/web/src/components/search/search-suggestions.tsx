@@ -25,6 +25,7 @@ export type SuggestBeach = {
   id: string;
   name: string;
   photo: BeachSummary["photo"];
+  region: string; // "강원 양양군"(일치 부분 굵게는 지역 글자에만)
   meta: string; // "강원 양양군 · 20.3km"
   view: BeachView;
 };
@@ -61,6 +62,7 @@ export function SearchSuggestions({
   onHover: (index: number) => void;
 }) {
   const t = useTranslations("search.suggest");
+  const tSafety = useTranslations("safety");
   const row = (index: number, extra?: string) => ({
     id: optionId(id, index),
     role: "option" as const,
@@ -151,7 +153,8 @@ export function SearchSuggestions({
                     <Highlighted text={option.beach.name} query={query} />
                   </span>
                   <span className="truncate text-caption text-text-muted">
-                    <Highlighted text={option.beach.meta} query={query} />
+                    <Highlighted text={option.beach.region} query={query} />
+                    {option.beach.meta.slice(option.beach.region.length)}
                   </span>
                 </span>
                 {option.beach.view.kind === "ready" ? (
@@ -175,10 +178,12 @@ export function SearchSuggestions({
           </div>
         )}
       </div>
+      {/* '특보 없음' 칩 가까이에 근거와 현장 우선 문구(AGENTS.md: 판단·주요 행동 가까이) */}
       {clearNote && (
-        <p className="border-t border-border-default px-4 py-2 text-caption text-text-muted">
-          {clearNote}
-        </p>
+        <div className="flex flex-col gap-0.5 border-t border-border-default px-4 py-2 text-caption text-text-muted">
+          <p>{clearNote}</p>
+          <p>{tSafety("finalCall")}</p>
+        </div>
       )}
       <p
         aria-hidden="true"
