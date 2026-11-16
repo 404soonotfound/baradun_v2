@@ -1,6 +1,7 @@
 import type { Beach } from "@baradun/contracts";
 import { useTranslations } from "next-intl";
 
+import { ACTIVITIES, activityNameKey } from "@/lib/activity";
 import { formatKm, joinMeta } from "@/lib/meta-join";
 import { kstStamp } from "@/lib/snapshot/clock";
 import { useBadgeText } from "@/lib/snapshot/use-badge-text";
@@ -136,5 +137,43 @@ export function useRowText() {
     return joinMeta(lines);
   }
 
-  return { rowMeta, rowBasis, rowDetail, listMeta, listNote };
+  // 3줄째 "확인된 활동 수영 · 서핑". 보여주기만 하고 거르지 않음(D14-15). 확인된 활동이 없으면 null
+  function activitiesText(activities: Beach["activities"]): string | null {
+    const names = joinMeta(
+      ACTIVITIES.filter((item) => activities.includes(item)).map((item) =>
+        t(activityNameKey(item)),
+      ),
+    );
+    return names === null ? null : t("explore.row.activities", { list: names });
+  }
+
+  // '구역 · 기관 시각' 줄(검색 최근 본 해변, D29-5): 특보 없음·특보 발효는 "강원중부앞바다, 강릉평지 · 기상청 17:01 확인"
+  // (목록 상태에는 특보 발표 시각이 없어 마지막 확인 시각을 씀)
+  // 그 밖(오래된 정보·관측 지연·특보 확인 못 함 등)은 확인 시각을 '확인'으로 내세우지 않고 칩이 말하지 못한 것(listNote)
+  // 오래된 정보는 listNote가 'HH:MM 확인 · 이후 확인 못 함'으로 시작하므로 그대로 씀(넷째 줄에 같은 문구를 다시 두지 않게)
+  function zoneLine(
+    view: BeachView,
+    nowMs: number,
+    zones: Beach["warningZones"],
+  ): string | null {
+    if (view.kind !== "ready") return null;
+    if (view.stale) return listNote(view, nowMs);
+    if (view.badge.kind === "clear") return rowBasis(view, nowMs, zones);
+    if (view.badge.kind !== "warning") return listNote(view, nowMs);
+    const time = kstStamp(view.confirmedAt, nowMs);
+    const scope = zonesText(zones);
+    return time
+      ? t("home.near.clearScope", { zones: scope, time })
+      : t("explore.row.clearScopeNoTime", { zones: scope });
+  }
+
+  return {
+    rowMeta,
+    rowBasis,
+    rowDetail,
+    listMeta,
+    listNote,
+    activitiesText,
+    zoneLine,
+  };
 }

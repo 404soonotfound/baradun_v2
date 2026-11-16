@@ -95,14 +95,53 @@ export function matchRange(
   return null;
 }
 
-// 한국어 주제 조사: "경포대는" / "경포해변은". 마지막 글자가 한글이고 받침이 있으면 은, 아니면 는
-export function withTopicParticle(word: string): string {
-  // 끝의 괄호·기호는 건너뛰고 마지막 글자(한글·영문·숫자)로 정함: "상맹방(승공)" → 공
+// 한국어 조사. 마지막 글자(끝의 괄호·기호는 건너뜀: "상맹방(승공)" → 공)의 받침으로 고름
+//   topic: 은/는("경포대는") · direction: 으로/로("강원 양양군으로", ㄹ 받침은 "강릉시로") · with: 과/와("양양군과")
+// 마지막 글자가 한글이 아니면 받침 없는 쪽
+const PARTICLES = {
+  topic: ["은", "는"],
+  direction: ["으로", "로"],
+  with: ["과", "와"],
+} as const;
+export function withParticle(
+  word: string,
+  kind: keyof typeof PARTICLES,
+): string {
   const last = [...word.trim()]
     .reverse()
     .find((ch) => /[\p{L}\p{N}]/u.test(ch));
-  if (last === undefined) return word;
-  const code = last.charCodeAt(0);
-  const isHangul = code >= 0xac00 && code <= 0xd7a3;
-  return `${word}${isHangul && (code - 0xac00) % 28 !== 0 ? "은" : "는"}`;
+  const code = last === undefined ? 0 : last.charCodeAt(0);
+  const final = code >= 0xac00 && code <= 0xd7a3 ? (code - 0xac00) % 28 : 0; // 0 = 받침 없음, 8 = ㄹ
+  const [batchim, plain] = PARTICLES[kind];
+  const useBatchim = final !== 0 && !(kind === "direction" && final === 8);
+  return `${word}${useBatchim ? batchim : plain}`;
+}
+
+// 한국어 주제 조사: "경포대는" / "경포해변은"
+export function withTopicParticle(word: string): string {
+  return withParticle(word, "topic");
+}
+
+// 검색어에 맞는 시·군(입력 중 제안의 '지역' 줄, 결과 머리 '지역 ○○와 맞음', D29-7)
+// 해변의 지역 이름(한국어·영어) 중 하나에 검색어가 들어 있는 시·군. 해변이 많은 순, 같으면 이름 순
+export type RegionMatch<T> = { key: string; label: string; beaches: T[] };
+export function matchRegions<
+  T extends Pick<BeachSummary, "sido" | "sigungu" | "region" | "regionNames">,
+>(beaches: readonly T[], query: string, locale: string): RegionMatch<T>[] {
+  const needle = normalize(query);
+  if (needle === "") return [];
+  const groups = new Map<string, RegionMatch<T>>();
+  for (const beach of beaches) {
+    if (!beach.regionNames.some((name) => normalize(name).includes(needle)))
+      continue;
+    const key = `${beach.sido.key}|${beach.sigungu.key}`;
+    const group = groups.get(key);
+    if (group) group.beaches.push(beach);
+    else groups.set(key, { key, label: beach.region, beaches: [beach] });
+  }
+  return [...groups.values()].sort(
+    (a, b) =>
+      b.beaches.length - a.beaches.length ||
+      a.label.localeCompare(b.label, locale),
+  );
 }
