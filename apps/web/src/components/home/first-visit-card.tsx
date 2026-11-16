@@ -6,6 +6,7 @@ export function FirstVisitCard() {
   return (
     <section
       aria-labelledby="home-first"
+      data-first-visit=""
       className="flex flex-col gap-2.5 rounded-card bg-bg-surface p-[18px] shadow-card"
     >
       <h2 id="home-first" className="text-title-m text-text-default">

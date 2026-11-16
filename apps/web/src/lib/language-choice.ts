@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from "react";
 
 import { LOCALES, localizedPath, type Locale } from "@/lib/i18n";
+import { LANGUAGE_STORAGE_KEY } from "@/lib/layout-hints";
 
 // 첫 방문 언어 안내 (디자인 시스템 8절 10/16 결정 · BRD-48)
 // 기기 언어로 자동 이동하지 않음. 기기 언어와 주소 언어가 다르면 첫 방문에 안내를 한 번 보여주고, 고른 언어는 기기에 저장
@@ -46,7 +47,8 @@ export function languageSwitchHref(
 }
 
 // [4] 기기 저장 (lib/region.ts와 같은 틀). 저장소를 못 쓰면 이번 방문 동안 memory로 유지
-const STORAGE_KEY = "baradun:language";
+// 키는 그리기 전 힌트(lib/layout-hints.ts)도 읽음
+const STORAGE_KEY = LANGUAGE_STORAGE_KEY;
 let memory: Locale | null = null;
 let writeFailed = false;
 const listeners = new Set<() => void>();

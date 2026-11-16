@@ -9,6 +9,7 @@ import {
   permissionAction,
   type SwitchStorage,
 } from "./location";
+import { LOCATION_HINT_KEY, LOCATION_SWITCH_KEY } from "./layout-hints";
 
 // 위치 권한 상태 (BRD-25·26)
 
@@ -44,23 +45,29 @@ function fakeNavigator(options: {
 }
 
 // 스위치 저장소(메모리). throws면 모든 접근이 오류
+// 키별로 저장(스위치·그리기 전 힌트가 같은 저장소를 씀)
 function fakeSwitch(initial: string | null = null, throws = false) {
-  let value = initial;
+  const values = new Map<string, string>();
+  if (initial !== null) values.set(LOCATION_SWITCH_KEY, initial);
   const storage: SwitchStorage = {
-    getItem: () => {
+    getItem: (key) => {
       if (throws) throw new Error("blocked");
-      return value;
+      return values.get(key) ?? null;
     },
-    setItem: (_key, next) => {
+    setItem: (key, next) => {
       if (throws) throw new Error("blocked");
-      value = next;
+      values.set(key, next);
     },
-    removeItem: () => {
+    removeItem: (key) => {
       if (throws) throw new Error("blocked");
-      value = null;
+      values.delete(key);
     },
   };
-  return { storage, get: () => value };
+  return {
+    storage,
+    get: () => values.get(LOCATION_SWITCH_KEY) ?? null,
+    hint: () => values.get(LOCATION_HINT_KEY) ?? null,
+  };
 }
 
 // 끝나지 않은 Promise 처리를 모두 돌림
@@ -176,6 +183,48 @@ describe("createLocationStore", () => {
       const store = createLocationStore();
       store.subscribe(() => {});
       expect(store.getState().status).toBe("idle");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});
+
+describe("그리기 전 자리 잡기 힌트 (BRD-39)", () => {
+  it("위치를 받으면 on, 아직 안 물었으면 off만 저장하고 좌표는 저장하지 않음", async () => {
+    for (const [state, hint] of [
+      ["granted", "on"],
+      ["prompt", "off"],
+      ["denied", "off"],
+    ] as const) {
+      const fake = fakeNavigator({
+        query: () => Promise.resolve({ state, onchange: null }),
+        position: { latitude: 35.1, longitude: 129.1 },
+      });
+      vi.stubGlobal("navigator", fake.navigator);
+      try {
+        const sw = fakeSwitch();
+        const store = createLocationStore(() => sw.storage);
+        store.subscribe(() => {});
+        await flush();
+        expect(sw.hint()).toBe(hint);
+        expect(sw.get()).toBeNull(); // 스위치 값은 건드리지 않음
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    }
+  });
+
+  it("저장소를 못 써도 위치 상태는 그대로 정해짐", async () => {
+    const fake = fakeNavigator({
+      query: () =>
+        Promise.resolve({ state: "denied" as PermissionState, onchange: null }),
+    });
+    vi.stubGlobal("navigator", fake.navigator);
+    try {
+      const store = createLocationStore(() => fakeSwitch(null, true).storage);
+      store.subscribe(() => {});
+      await flush();
+      expect(store.getState().status).toBe("denied");
     } finally {
       vi.unstubAllGlobals();
     }
