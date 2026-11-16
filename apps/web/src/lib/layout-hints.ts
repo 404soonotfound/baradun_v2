@@ -1,7 +1,20 @@
 import { DEVICE_KEYS } from "@/lib/device-keys";
 import { serializeInlineScriptValue } from "@/lib/display-init";
-import { LOCALES } from "@/lib/i18n";
+import { LOCALES, localizedPath } from "@/lib/i18n";
 import { NOTICE_VERSION } from "@/lib/notice-version";
+
+// ON-1(안전 안내·처리방침 링크로 간 화면)에서 덮개를 열지 않는 경로(끝 / 제외).
+// 그리기 전 인라인 스크립트와 React Onboarding 컴포넌트가 같은 기준을 써서 수화 전·후 판정이 어긋나지 않음
+export const ONBOARDING_REFERENCE_PATHS: readonly string[] = LOCALES.flatMap(
+  (locale) => [
+    localizedPath(locale, "/guide"),
+    localizedPath(locale, "/terms"),
+  ],
+);
+
+export function isOnboardingReferencePath(pathname: string): boolean {
+  return ONBOARDING_REFERENCE_PATHS.includes(pathname.replace(/\/+$/, ""));
+}
 
 // 그리기 전 자리 잡기 힌트 (BRD-39 · Core Web Vitals CLS)
 // 정적 HTML은 기기 저장값을 모르는 상태(위치 확인 중·최근 본 없음·언어 안내 없음)로 그려지고, 수화 뒤 실제 값으로 바뀌며 화면이 밀림.
@@ -31,9 +44,11 @@ export const LAYOUT_HINT_SCRIPT = `(function(){var h=document.documentElement,L=
   LOCALES,
 )},V=${serializeInlineScriptValue(
   NOTICE_VERSION,
-)},c=null;try{if(typeof location!=="undefined"&&/\\/(guide|terms)\\/?$/.test(location.pathname)){h.setAttribute("data-onboarded","")}}catch(e){}try{var s=localStorage;try{var b=JSON.parse(s.getItem(${serializeInlineScriptValue(
+)},R=${serializeInlineScriptValue(
+  ONBOARDING_REFERENCE_PATHS,
+)},c=null;try{if(typeof location!=="undefined"){var p=location.pathname.replace(/\\/+$/,"");for(var j=0;j<R.length;j++){if(R[j]===p){h.setAttribute("data-onboarded","");break}}}}catch(e){}try{var s=localStorage;try{var b=JSON.parse(s.getItem(${serializeInlineScriptValue(
   ONBOARDING_STORAGE_KEY,
-)})||"null");if(b&&typeof b==="object"&&b.noticeVersion===V&&typeof b.acknowledgedAt==="string"&&typeof b.locationStepDone==="boolean"){h.setAttribute("data-onboarded","")}}catch(e){}try{var r=JSON.parse(s.getItem(${serializeInlineScriptValue(
+)})||"null");if(b&&typeof b==="object"&&b.noticeVersion===V&&typeof b.acknowledgedAt==="string"&&typeof b.locationStepDone==="boolean"){var tm=/^(\\d{4})-(\\d{2})-(\\d{2})T(\\d{2}):(\\d{2}):(\\d{2})(?:\\.\\d+)?(?:Z|([+-])(\\d{2}):(\\d{2}))$/.exec(b.acknowledgedAt);if(tm){var y=+tm[1],mo=+tm[2],d=+tm[3],hh=+tm[4],mi=+tm[5],se=+tm[6],oh=tm[8]?+tm[8]:0,om=tm[9]?+tm[9]:0,dt=new Date(0);dt.setUTCFullYear(y,mo,0);if(mo>=1&&mo<=12&&d>=1&&d<=dt.getUTCDate()&&hh<=23&&mi<=59&&se<=59&&oh<=23&&om<=59&&isFinite(Date.parse(b.acknowledgedAt)))h.setAttribute("data-onboarded","")}}}catch(e){}try{var r=JSON.parse(s.getItem(${serializeInlineScriptValue(
   DEVICE_KEYS.recent,
 )})||"[]"),n=0;if(Array.isArray(r)){for(var i=0;i<r.length;i++){if(typeof r[i]==="string")n++}}if(n){h.setAttribute("data-recent",n>1?"2":"1")}}catch(e){}h.setAttribute("data-location-hint",s.getItem(${serializeInlineScriptValue(
   LOCATION_SWITCH_KEY,

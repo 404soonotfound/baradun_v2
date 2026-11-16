@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { trackEvent } from "@/lib/analytics/events";
 import { cn } from "@/lib/cn";
 import { localizedPath, type Locale } from "@/lib/i18n";
+import { isOnboardingReferencePath } from "@/lib/layout-hints";
 import { requestLocation, useUserLocation } from "@/lib/location";
 import { NOTICE_VERSION } from "@/lib/notice-version";
 import {
@@ -62,12 +63,7 @@ export function Onboarding({
   const regionSheet = useSheet("onboarding-region");
 
   // [1] 안전 안내와 처리방침 링크로 간 화면은 덮지 않음. 다른 화면으로 가면 다시 덮음
-  // trailingSlash 설정이라 끝의 /를 떼고 비교
-  const currentPath = pathname.replace(/\/+$/, "");
-  const onOnboardingReference = [
-    localizedPath(locale, "/guide"),
-    localizedPath(locale, "/terms"),
-  ].includes(currentPath);
+  const onOnboardingReference = isOnboardingReferencePath(pathname);
   // [2] 기기 기록을 읽기 전(undefined, 서버 HTML·첫 그리기)에는 ON-1을 미리 그려 첫 방문 LCP를 줄임.
   // 이미 확인한 기기(/guide·/terms 포함)는 그리기 전 스크립트(lib/layout-hints.ts)가 data-onboarded를 붙여 숨김
   const preloading = record === undefined;
@@ -81,7 +77,7 @@ export function Onboarding({
     <>
       {step === "notice" && (
         <OnboardingDialog step="notice" preloading={preloading}>
-          <NoticeStep locale={locale} />
+          <NoticeStep locale={locale} preloading={preloading} />
         </OnboardingDialog>
       )}
       {step === "location" && record && (
@@ -194,26 +190,53 @@ function OnboardingDialog({
     };
     focusNotice();
     if (!inlineModal) return;
-    const siblings = Array.from(dialog.parentElement?.children ?? []).filter(
-      (el): el is HTMLElement =>
-        el instanceof HTMLElement &&
-        el !== dialog &&
-        el.tagName !== "DIALOG" &&
-        el.tagName !== "SCRIPT",
-    );
-    const prev = siblings.map((el) => el.inert);
-    siblings.forEach((el) => {
+    const prevInert = new Map<HTMLElement, boolean>();
+    const markSibling = (el: Element) => {
+      if (
+        !(el instanceof HTMLElement) ||
+        el === dialog ||
+        el.contains(dialog) ||
+        el.tagName === "DIALOG" ||
+        el.tagName === "SCRIPT" ||
+        prevInert.has(el)
+      ) {
+        return;
+      }
+      prevInert.set(el, el.inert);
       el.inert = true;
-    });
+    };
+    // close()+showModal()은 수화 뒤 Top Layer 재그리기를 일으켜 첫 방문 LCP가 4.2s로 악화됨(기준 2.5s 초과).
+    // 대신 inline open을 유지하고, body까지 조상 형제와 동적 추가 노드에 inert를 걸어 구조 변경·포털도 모두 막음
+    const observers: MutationObserver[] = [];
+    for (
+      let node: HTMLElement | null = dialog;
+      node && node !== document.body && node.parentElement;
+      node = node.parentElement
+    ) {
+      const parent = node.parentElement;
+      Array.from(parent.children).forEach(markSibling);
+      if (typeof MutationObserver !== "undefined") {
+        const observer = new MutationObserver((records) => {
+          records.forEach((record) => {
+            record.addedNodes.forEach((added) => {
+              if (added instanceof Element) markSibling(added);
+            });
+          });
+        });
+        observer.observe(parent, { childList: true });
+        observers.push(observer);
+      }
+    }
     // 기기 데이터 초기화 시트 등 다른 modal <dialog>가 뒤늦게(popstate) 닫히면 top layer 해제 뒤 ON-1로 포커스를 옮김
     const onDialogClose = (event: Event) => {
       if (event.target !== dialog) focusNotice();
     };
     document.addEventListener("close", onDialogClose, true);
     return () => {
+      observers.forEach((observer) => observer.disconnect());
       document.removeEventListener("close", onDialogClose, true);
-      siblings.forEach((el, index) => {
-        el.inert = prev[index] ?? false;
+      prevInert.forEach((wasInert, el) => {
+        el.inert = wasInert;
       });
     };
   }, [inlineModal, preloading, titleId]);
@@ -322,7 +345,13 @@ function NoticeSky() {
 }
 
 // [4] ON-1 서비스 안내·면책 고지. 확인하는 두 가지(특보·측정 시각) → 확인하지 않는 것(출입 통제) → 면책
-function NoticeStep({ locale }: { locale: Locale }) {
+function NoticeStep({
+  locale,
+  preloading,
+}: {
+  locale: Locale;
+  preloading: boolean;
+}) {
   const t = useTranslations();
   // 블록 사이 18, 제목·소개 사이 8 (Figma 185:265·185:266)
   return (
@@ -396,8 +425,10 @@ function NoticeStep({ locale }: { locale: Locale }) {
             {t("onboarding.notice.privacy")}
           </Link>
           <Button
-            className="w-full"
+            className="w-full whitespace-nowrap"
+            aria-disabled={preloading || undefined}
             onClick={() => {
+              if (preloading) return;
               acknowledgeNotice();
               trackEvent("complete_onboarding_notice", {
                 notice_version: NOTICE_VERSION,
@@ -405,7 +436,9 @@ function NoticeStep({ locale }: { locale: Locale }) {
               });
             }}
           >
-            {t("onboarding.notice.confirm")}
+            {preloading
+              ? t("onboarding.notice.loading")
+              : t("onboarding.notice.confirm")}
           </Button>
           {/* 링크 글자 14/20.3 굵게, 누르는 영역 44 (Figma 185:305) */}
           <Link
