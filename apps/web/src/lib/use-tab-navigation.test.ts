@@ -74,18 +74,15 @@ describe("createTabTransition", () => {
     expect(transition.activeTab(null)).toBeNull();
   });
 
-  it("전환 중 탐색으로 되돌아와 경로 변경 없이 머문 뒤에는 새 스크롤·이탈을 다시 저장할 수 있다", () => {
+  it("전환 중 탐색으로 되돌아와 clear()로 정리한 뒤에는 새 스크롤·이탈을 다시 저장할 수 있다", () => {
     const transition = createTabTransition();
     transition.onPathnameChange("/explore/");
 
     transition.start("home", "/explore/");
-    // 홈 커밋 전 탐색 재클릭 → 목표가 다시 "explore"가 됨
-    transition.start("explore", "/explore/");
+    // 홈 커밋 전 탐색 재클릭 시 실제 onTabClick의 pathnameOf(target) === pathname 분기는 clear()를 호출함
+    transition.clear();
 
-    // 아직 pushState가 "/"에 잠깐 걸려 있으면 덮어쓰지 않음
-    expect(transition.shouldSaveOrigin("explore", "/explore/", "/")).toBe(
-      false,
-    );
+    expect(transition.activeTab("explore")).toBe("explore");
     // 경로가 "/explore/"로 제자리에 있으면 이후 탐색 스크롤 뒤 다시 떠날 때 저장 허용
     expect(
       transition.shouldSaveOrigin("explore", "/explore/", "/explore/"),
