@@ -167,12 +167,14 @@ export function collectionSummary(
 }
 
 // 문의 칸(보드 V1 '문의'): 처리 상태별 수(보관 중인 문의 전체, 서버 counts). 하나라도 숫자가 아니면 null
+// unknown: 4종 밖 처리 상태 수(#521). 숫자면 합계에 더하고, null은 서버가 확인 못 함, undefined는 이전 서버·데모
 export interface InquirySummary {
   readonly total: number;
   readonly received: number;
   readonly inProgress: number;
   readonly resolved: number;
   readonly rejected: number;
+  readonly unknown: number | null | undefined;
 }
 
 export function inquirySummary(page: InquiryPage | null): InquirySummary | null {
@@ -182,12 +184,14 @@ export function inquirySummary(page: InquiryPage | null): InquirySummary | null 
   if (!values.every((v) => typeof v === "number" && Number.isFinite(v) && v >= 0)) {
     return null;
   }
+  const unknown = windowCount(c.unknown);
   return {
-    total: values.reduce((a, b) => a + b, 0),
+    total: values.reduce((a, b) => a + b, 0) + (unknown ?? 0),
     received: c.received,
     inProgress: c.in_progress,
     resolved: c.resolved,
     rejected: c.rejected,
+    unknown,
   };
 }
 
