@@ -116,4 +116,15 @@ describe("createTabTransition", () => {
       transition.shouldSaveOrigin("explore", "/explore/", "/explore/"),
     ).toBe(true);
   });
+
+  it("뒤로 가기(popstate)로 원래 경로에 머물러 전환이 중단되면 pending과 복원 예약을 정리한다", () => {
+    const transition = createTabTransition();
+    transition.onPathnameChange("/explore/");
+
+    transition.start("home", "/explore/");
+
+    expect(transition.onPopState("/explore/", "/explore/")).toBe(true);
+    expect(transition.activeTab("explore")).toBe("explore");
+    expect(transition.onPopState("/explore/", "/explore/")).toBe(false);
+  });
 });
