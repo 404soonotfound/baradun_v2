@@ -39,6 +39,8 @@ export interface StatsRealtime {
   readonly status: "ok" | "unavailable";
   readonly activeUsers: number | null;
   readonly pageViews: number | null;
+  // GA4가 행 없이 응답함(최근 30분 방문 기록 없음). 0으로 만들지 않고 화면이 '기록 없음'으로 보임
+  readonly noActivity?: true;
 }
 
 export interface StatsBeachRow {
@@ -147,7 +149,13 @@ export interface Ga4ReportBody {
     readonly dataLossFromOtherRow?: boolean;
     readonly samplingMetadatas?: readonly unknown[];
   };
+  // 응답 종류 고정 문자열(예: 실시간은 "analyticsData#runRealtimeReport")
+  readonly kind?: string;
 }
+
+// 실시간 리포트의 kind 고정값. 최근 30분 방문이 없으면 GA4가 rows·metricHeaders 없이 이것만 돌려주는 것으로 추정함
+// (2026-11-16 운영 로그 InvalidReport 4회와 검증 조건으로 추정. 응답 모양은 실패 로그의 keys로 확인)
+const REALTIME_REPORT_KIND = "analyticsData#runRealtimeReport";
 
 // HTTP 200이어도 모양이 틀린 리포트 하나만 조회 실패로 처리함
 function validReport(value: unknown, realtime = false): value is Ga4ReportBody {
@@ -190,8 +198,21 @@ function validReport(value: unknown, realtime = false): value is Ga4ReportBody {
     report.rows !== undefined ||
     report.rowCount === 0 ||
     report.metadata !== undefined ||
-    (realtime && "metricHeaders" in report)
+    // 실시간 빈 응답은 행·rowCount가 없거나 0일 때만 받음(rowCount가 있는데 행이 빠진 응답은 깨진 응답)
+    (realtime &&
+      (report.rowCount ?? 0) === 0 &&
+      ("metricHeaders" in report || report.kind === REALTIME_REPORT_KIND))
   );
+}
+
+// 실패 로그용 최상위 키 이름(값은 남기지 않음). 영문 키만 8개까지
+function topLevelKeys(value: unknown): string {
+  if (!value || typeof value !== "object" || Array.isArray(value))
+    return typeof value;
+  return Object.keys(value)
+    .filter((k) => /^[A-Za-z]{1,40}$/.test(k))
+    .slice(0, 8)
+    .join(",");
 }
 
 function reportBatch(value: unknown, expectedLength: number) {
@@ -224,7 +245,16 @@ export function mergeMetadataFlags(
 }
 
 export function parseRealtimeReport(body: Ga4ReportBody): StatsRealtime {
-  const row = body.rows?.[0];
+  // 행이 없으면 방문 기록 없음으로 구분함(행은 있는데 값이 빠진 결측과 나눔)
+  if (body.rows === undefined || body.rows.length === 0) {
+    return {
+      status: "ok",
+      activeUsers: null,
+      pageViews: null,
+      noActivity: true,
+    };
+  }
+  const row = body.rows[0];
   return {
     status: "ok",
     activeUsers: parseMetricInt(row?.metricValues?.[0]?.value),
@@ -559,12 +589,13 @@ export function createGa4StatsReader(config: Ga4StatsConfig): StatsReader {
       ) {
         realtime = parseRealtimeReport(realtimeRes.value);
       } else {
-        safeLog("warn", "stats_realtime_failed", {
-          error:
-            realtimeRes.status === "rejected"
-              ? errorName(realtimeRes.reason)
-              : "InvalidReport",
-        });
+        safeLog(
+          "warn",
+          "stats_realtime_failed",
+          realtimeRes.status === "rejected"
+            ? { error: errorName(realtimeRes.reason) }
+            : { error: "InvalidReport", keys: topLevelKeys(realtimeRes.value) },
+        );
       }
 
       let period: StatsPeriod = {

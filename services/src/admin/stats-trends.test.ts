@@ -172,6 +172,75 @@ describe("기간 이용 통계", () => {
     });
   });
 
+  const realtimeKind = "analyticsData#runRealtimeReport";
+  it.each([
+    [{ kind: realtimeKind }, true],
+    [{ kind: realtimeKind, rowCount: 0 }, true],
+    [{ metricHeaders: [{ name: "activeUsers" }] }, true],
+    [{ kind: realtimeKind, rowCount: 3 }, false],
+    [{ kind: realtimeKind, rows: "x" }, false],
+    [{ kind: "analyticsData#runReport" }, false],
+    [{}, false],
+  ] as const)(
+    "실시간 행 없음은 방문 기록 없음으로 받아 캐시하고, 깨진 모양은 실패 로그(키 이름만)와 함께 실패로 둠 (%j)",
+    async (realtimeBody, accepted) => {
+      vi.spyOn(GoogleAuth.prototype, "getClient").mockResolvedValue({
+        getAccessToken: async () => ({ token: "stub" }),
+      } as Awaited<ReturnType<GoogleAuth["getClient"]>>);
+      const log = vi.spyOn(console, "log").mockImplementation(() => {});
+      const report = { metadata, rows: [row("value", "12", "24")] };
+      const fetchFn = vi.fn<typeof fetch>(async (url, options) => {
+        if (String(url).endsWith(":runRealtimeReport"))
+          return Response.json(realtimeBody);
+        const body = JSON.parse(String(options?.body));
+        return Response.json({
+          reports: Array(body.requests.length).fill(report),
+        });
+      });
+      const reader = createCachedStatsReader(
+        createGa4StatsReader({
+          propertyId: "1",
+          serviceAccountParam: "/stats",
+          region: "test",
+          loadKeyJson: async () => "{}",
+          fetchFn,
+          now: () => now,
+        }),
+        () => now,
+      );
+      const response = await reader.read("7d");
+      // 행이 없어도 0으로 만들지 않음
+      expect(response.realtime).toEqual(
+        accepted
+          ? {
+              status: "ok",
+              activeUsers: null,
+              pageViews: null,
+              noActivity: true,
+            }
+          : { status: "unavailable", activeUsers: null, pageViews: null },
+      );
+      expect(response.period.status).toBe("ok");
+      const failed = log.mock.calls
+        .map(([line]) => JSON.parse(String(line)))
+        .filter((entry) => entry.event === "stats_realtime_failed");
+      if (accepted) {
+        expect(failed).toEqual([]);
+        expect((await reader.read("7d")).cached).toBe(true);
+      } else {
+        expect(failed).toEqual([
+          {
+            level: "warn",
+            event: "stats_realtime_failed",
+            error: "InvalidReport",
+            keys: Object.keys(realtimeBody).join(","),
+          },
+        ]);
+        expect((await reader.read("7d")).cached).toBe(false);
+      }
+    },
+  );
+
   it.each([503, 200])(
     "추이 배치가 실패하면 기존 통계를 유지하고 실패한 결과를 캐시하지 않음 (%i)",
     async (status) => {
