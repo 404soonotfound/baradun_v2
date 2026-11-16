@@ -760,21 +760,63 @@
     "tabRecent": "최근 본",
     "loading": "해변 정보를 불러오고 있어요",
     "deviceNote": "즐겨찾기와 최근 본 해변은 이 기기에만 저장돼요",
+    "deviceNoteEmpty": "즐겨찾기와 최근 본 해변은 이 기기에만 저장돼요 · 다른 기기나 브라우저에서는 따로 넣어야 해요",
+    "deviceNoteSort": "즐겨찾기와 최근 본 해변은 이 기기에만 저장돼요 · 정렬은 상태 먼저(특보가 있는 해변 위로) · 넣은 순서 중에서 골라요",
+    "deviceNoteRecent": "최근 본 해변은 최대 {max}곳까지, 이 기기에만 저장돼요 · 빈 별을 누르면 즐겨찾기에 넣어요",
+    "tableOrderNote": "표 칸 순서는 판단(상태 · 구역 · 시각) → 측정값 → 측정 시각 · 측정소예요",
+    "clearIsNotSafe": "특보 없음은 안전하다는 뜻이 아니에요",
+    "photoNote": "사진은 참고 사진이에요(지금 바다 모습 아님) · 사진 출처: <link>{source}</link> · {license} · 사진이 없는 해변은 해변 그림",
+    "photoNoteNoPhoto": "사진이 없는 해변은 해변 그림이에요",
+    "summary": {
+      "count": "{count}곳",
+      "recentCount": "최근 본 {count}곳",
+      "recentOrder": "최근에 본 순"
+    },
+    "sort": {
+      "button": "<label>정렬 </label>{value}",
+      "label": "정렬 방식",
+      "status": "상태 먼저",
+      "added": "넣은 순서"
+    },
+    "table": {
+      "captionFavorites": "즐겨찾기 해변 상태 비교 표",
+      "captionRecent": "최근 본 해변 상태 비교 표",
+      "beach": "해변",
+      "status": "지금 상태",
+      "warning": "특보 구역 · 기관 · 시각",
+      "waveHeight": "파고",
+      "wavePeriod": "파주기",
+      "waterTemp": "수온",
+      "measurement": "측정",
+      "favorite": "즐겨찾기"
+    },
+    "warning": {
+      "checked": "{source} {time} 확인",
+      "checkedNoTime": "{source} · 확인 시각 모름",
+      "issued": "{source} {time} 발표"
+    },
+    "add": "{name} 즐겨찾기에 넣기",
+    "remove": "{name} 즐겨찾기에서 빼기",
+    "removed": "즐겨찾기에서 뺐어요",
+    "undo": "되돌리기",
     "empty": {
-      "title": "아직 즐겨찾기한 바다가 없어요",
-      "body": "해변 상세에서 즐겨찾기를 누르면 여기에 모아 보여드려요",
-      "action": "바다 둘러보기"
+      "title": "아직 즐겨찾기한 해변이 없어요",
+      "body": "해변 상세에서 즐겨찾기를 누르면, 자주 가는 해변의 특보와 파고·파주기·수온을 여기에서 한 표로 비교할 수 있어요.",
+      "action": "탐색에서 해변 찾기",
+      "recentAction": "최근 본 해변 <b>{count}곳</b> 보기"
     },
     "recentEmpty": {
-      "title": "아직 본 바다가 없어요",
+      "title": "아직 본 해변이 없어요",
       "body": "해변 상세를 열어 보면 여기에 차례로 남아요"
     },
     "recent": {
-      "clear": "최근 본 기록 모두 지우기",
+      "clear": "모두 지우기",
+      "clearLabel": "최근 본 기록 모두 지우기",
       "cleared": "최근 본 목록을 지웠어요",
-      "remove": "{name} 최근 본 목록에서 지우기",
-      "removed": "최근 본 목록에서 지웠어요",
-      "undo": "되돌리기"
+      "undo": "되돌리기",
+      "viewedToday": "오늘 {time} 봄",
+      "viewedYesterday": "어제 {time} 봄",
+      "viewedOn": "{month}/{date} {time} 봄"
     }
   },
   "settings": {
@@ -834,7 +876,7 @@
     },
     "reset": {
       "title": "기기 데이터를 지울까요?",
-      "body": "즐겨찾기, 최근 본 해변, 최근 검색, 기본 지역, 고른 활동, 탐색 보기, 탐색 정렬, 탭별 마지막 위치, 첫 실행 기록, 작성 중인 문의를 지워요. 지운 뒤에는 되돌릴 수 없어요.",
+      "body": "즐겨찾기, 최근 본 해변, 최근 검색, 기본 지역, 고른 활동, 탐색 보기, 탐색 정렬, 탭별 마지막 위치, 즐겨찾기 정렬, 첫 실행 기록, 작성 중인 문의를 지워요. 지운 뒤에는 되돌릴 수 없어요.",
       "keep": "테마·화면 움직임·언어·위치 사용 설정과 마지막으로 받은 바다 정보는 그대로 둬요.",
       "permission": "브라우저의 위치 권한은 이 사이트가 지울 수 없어요. 바꾸려면 브라우저 설정을 이용해 주세요.",
       "confirm": "지우기",

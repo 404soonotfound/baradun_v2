@@ -1,64 +1,99 @@
-"use client"; // 기기 저장(즐겨찾기·최근 본)·바다 정보를 쓰므로 브라우저 부품
+"use client"; // 기기 저장(즐겨찾기·최근 본·정렬)·위치·바다 정보를 쓰므로 브라우저 부품
 
-import { Clock, Star, Trash2, X } from "lucide-react";
+import { Clock, Star } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { useMemo, useRef } from "react";
+import { useLayoutEffect, useMemo, useRef } from "react";
 
-import { BeachRow, WaveGlyph } from "@/components/beach-row";
-import { ReasonBadge } from "@/components/reason-badge";
+import type { FavoriteItem } from "@/components/favorites/favorite-parts";
+import { FavoritesList } from "@/components/favorites/favorites-list";
+import { FavoritesSummary } from "@/components/favorites/favorites-summary";
+import { FavoritesTable } from "@/components/favorites/favorites-table";
 import { SampleNote } from "@/components/sample-note";
 import { SituationBanner } from "@/components/situation-banner";
 import { KmaSourceNote } from "@/components/source-note";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
+import { SCREEN_TITLE_CLASS } from "@/components/ui/screen-title";
 import { BeachRowSkeleton } from "@/components/ui/skeleton";
 import { Toast, useToast } from "@/components/ui/toast";
 import { ViewToggle } from "@/components/ui/view-toggle";
+import { SOURCE_URL } from "@/lib/agencies";
 import type { BeachSummary } from "@/lib/beach-summary";
 import { cn } from "@/lib/cn";
 import {
   clearRecent,
-  removeRecent,
+  RECENT_MAX,
+  removeFavorite,
+  toggleFavorite,
   useFavorites,
   useRecent,
 } from "@/lib/favorites";
+import {
+  FAVORITES_CATEGORY_ORDER,
+  setFavoritesSort,
+  sortFavoriteItems,
+  useFavoritesSort,
+} from "@/lib/favorites-sort";
+import { distanceKm, type LatLng } from "@/lib/geo";
 import { localizedPath, type Locale } from "@/lib/i18n";
 import { showsKmaSource } from "@/lib/kma-source";
-import { pickSituation, noConfirmedVerdict } from "@/lib/situation";
+import { useUserLocation } from "@/lib/location";
+import { useRecentVisits, type Visits } from "@/lib/recent-visits";
+import {
+  noConfirmedVerdict,
+  pickSituation,
+  shownDataTime,
+} from "@/lib/situation";
 import { kstStamp } from "@/lib/snapshot/clock";
-import { useRowText } from "@/lib/snapshot/use-row-text";
 import { useSnapshot } from "@/lib/snapshot/use-snapshot";
 import {
   deriveBeachView,
-  type BadgeLabel,
   type BeachView,
-  type MetricView,
   type ViewSource,
 } from "@/lib/snapshot/view";
-import { clearCheckedAt } from "@/lib/status-count";
+import {
+  clearCheckedAt,
+  countByStatus,
+  staleCheckedAt,
+} from "@/lib/status-count";
 import { useOnline } from "@/lib/use-online";
 
-// 즐겨찾기 (BRD-35 · 노션 2장 FAV·D-FAV, Figma S_M05_01~03)
-// [즐겨찾기 n | 최근 본] 전환 → 해변 행(상태 줄 포함, 묶지 않음). PC(lg)는 3열 카드
+// 즐겨찾기 (BRD-35 · GH-530 · 결정 기록 29장 D29-3·D29-6·D29-8, 노션 2장 FAV·D-FAV)
+// [즐겨찾기 n | 최근 본] 전환 → 요약 한 줄(개수·사유별 개수·시각 + 정렬/모두 지우기) → PC 비교 표 / 모바일 해변별 덩어리
 // 즐겨찾기·최근 본은 기기에만 저장(로그인 없음, D1). 노출 끈 해변은 목록에서 빼고 기기 기록은 지우지 않음(9장)
-// 상태는 게시된 분류 그대로(G1). 지난 방문과 비교하는 변경 표시는 V2 출시에서 뺌(BRD-101)
+// 상태는 게시된 분류 그대로(G1). 지난 방문과 비교하는 변경 표시는 V2 출시에서 뺌(12장 결정 11, BRD-101)
 
 type Tab = "favorites" | "recent";
 
-type Item = { beach: BeachSummary; view: BeachView };
+type RawItem = {
+  beach: BeachSummary;
+  view: BeachView;
+  distanceKm: number | null;
+  visitedAt: string | null;
+};
+
+type PendingFocus = { type: "star"; id: string } | { type: "title" } | null;
 
 function toItems(
   ids: readonly string[],
   byId: ReadonlyMap<string, BeachSummary>,
   source: ViewSource,
-): Item[] {
+  coords: LatLng | null,
+  visits: Visits | null,
+): RawItem[] {
   return ids.flatMap((id) => {
     const beach = byId.get(id);
-    return beach
-      ? [{ beach, view: deriveBeachView({ id, hidden: false }, source) }]
-      : [];
+    if (!beach) return [];
+    return [
+      {
+        beach,
+        view: deriveBeachView({ id, hidden: false }, source),
+        distanceKm: coords ? distanceKm(coords, beach.coords) : null,
+        visitedAt: visits?.[id]?.at ?? null,
+      },
+    ];
   });
 }
 
@@ -75,15 +110,19 @@ export function FavoritesScreen({
   const params = useSearchParams();
   const snapshot = useSnapshot();
   const online = useOnline();
+  const location = useUserLocation();
   const favoriteIds = useFavorites();
   const recentIds = useRecent();
-  const { rowMeta, rowDetail } = useRowText();
+  const visits = useRecentVisits();
+  const sort = useFavoritesSort();
   const toast = useToast();
   const titleRef = useRef<HTMLHeadingElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const pendingFocusRef = useRef<PendingFocus>(null);
+
   // 보는 칸은 주소(?tab=recent)를 따름: 홈 '최근 본 해변 · 전체 보기'로 들어오고, 탭 이동 뒤 돌아와도 그대로
   const tab: Tab = params.get("tab") === "recent" ? "recent" : "favorites";
   function setTab(next: Tab) {
-    // 주소만 바꿈(기록 칸을 늘리지 않음). Next.js 라우터가 이 변경을 알아차림(검색 화면과 같은 방식)
     const path = window.location.pathname;
     window.history.replaceState(
       null,
@@ -92,18 +131,22 @@ export function FavoritesScreen({
     );
   }
 
+  // 거리는 위치 권한이 허용돼 기기가 받은 좌표가 있을 때만 계산(서버로 보내지 않음)
+  const coords = location.status === "ready" ? location.coords : null;
+
   const byId = useMemo(
     () => new Map(beaches.map((beach) => [beach.id, beach])),
     [beaches],
   );
-  // 저장 순서 그대로. 목록에 없는 id(노출 끈 해변)는 건너뜀(기기 기록은 지우지 않음)
+  const favoriteSet = useMemo(() => new Set(favoriteIds), [favoriteIds]);
+
   const favorites = useMemo(
-    () => toItems(favoriteIds, byId, snapshot),
-    [favoriteIds, byId, snapshot],
+    () => toItems(favoriteIds, byId, snapshot, coords, null),
+    [favoriteIds, byId, snapshot, coords],
   );
   const recent = useMemo(
-    () => toItems(recentIds, byId, snapshot),
-    [recentIds, byId, snapshot],
+    () => toItems(recentIds, byId, snapshot, coords, visits),
+    [recentIds, byId, snapshot, coords, visits],
   );
   const loading = snapshot.phase === "loading";
 
@@ -127,68 +170,103 @@ export function FavoritesScreen({
     delayed: [],
     locationOff: false,
     noConfirmed,
-    // 공지는 홈 상단에만(화면 설계서 6장 ADM-NTC, BRD-151)
     notice: null,
   });
 
-  function removeOne(beach: BeachSummary) {
-    const undo = removeRecent(beach.id);
-    toast.show({
-      text: t("favorites.recent.removed"),
-      action: { label: t("favorites.recent.undo"), onClick: undo },
-    });
+  const rawItems = tab === "favorites" ? favorites : recent;
+  const readyItems = useMemo<FavoriteItem[]>(() => {
+    const ready = rawItems.flatMap((item) =>
+      item.view.kind === "ready"
+        ? [{ ...item, view: item.view } satisfies FavoriteItem]
+        : [],
+    );
+    return tab === "favorites" ? sortFavoriteItems(ready, sort) : ready;
+  }, [rawItems, tab, sort]);
+
+  // 별 빼기·전체 지우기·빈 상태 전환 뒤 포커스가 사라지지 않게 다음 보이는 별 버튼 또는 목록 머리로 옮김
+  useLayoutEffect(() => {
+    const pending = pendingFocusRef.current;
+    if (!pending) return;
+    pendingFocusRef.current = null;
+    if (pending.type === "title") {
+      titleRef.current?.focus();
+      return;
+    }
+    const buttons = containerRef.current?.querySelectorAll<HTMLButtonElement>(
+      `[data-favorite-star="${CSS.escape(pending.id)}"]`,
+    );
+    const visible = buttons
+      ? [...buttons].find((button) => button.getClientRects().length > 0)
+      : null;
+    (visible ?? titleRef.current)?.focus();
+  });
+
+  function handleStar(item: FavoriteItem, index: number) {
+    const id = item.beach.id;
+    if (favoriteSet.has(id)) {
+      if (tab === "favorites") {
+        const nextItem = readyItems[index + 1];
+        pendingFocusRef.current = nextItem
+          ? { type: "star", id: nextItem.beach.id }
+          : { type: "title" };
+      }
+      const undo = removeFavorite(id);
+      toast.show({
+        text: t("favorites.removed"),
+        action: {
+          label: t("favorites.undo"),
+          // 토스트 버튼이 사라지므로 되돌린 해변의 별로 포커스를 옮김
+          onClick: () => {
+            pendingFocusRef.current = { type: "star", id };
+            undo();
+          },
+        },
+      });
+      return;
+    }
+    toggleFavorite(id);
   }
 
   function removeAll() {
+    pendingFocusRef.current = { type: "title" };
     const undo = clearRecent();
     toast.show({
       text: t("favorites.recent.cleared"),
-      action: { label: t("favorites.recent.undo"), onClick: undo },
+      action: {
+        label: t("favorites.recent.undo"),
+        // 토스트 버튼이 사라지므로 목록 머리(화면 제목)로 포커스를 옮김
+        onClick: () => {
+          pendingFocusRef.current = { type: "title" };
+          undo();
+        },
+      },
     });
   }
 
-  const items = tab === "favorites" ? favorites : recent;
   const nowMs = snapshot.nowMs;
-
-  function renderRow({ beach, view }: Item) {
-    if (view.kind !== "ready") return null;
-    const common = {
-      href: localizedPath(locale, `/spots/${beach.slug}/`),
-      name: beach.name,
-      meta: rowMeta(beach.region, null, view, nowMs),
-      wave: view.metrics.waveHeight,
-      status: view.badge,
-      detail: rowDetail(view, nowMs, beach.warningZones),
-    };
-    const remove =
-      tab === "recent"
-        ? {
-            onRemove: () => removeOne(beach),
-            removeLabel: t("favorites.recent.remove", { name: beach.name }),
-          }
-        : {};
-    // 모바일은 한 카드 안 행(Figma 178:111), PC는 3열 카드(Figma 184:1012). 보이지 않는 쪽은 display:none이라 한 번만 읽힘
-    return (
-      <li key={beach.id} className="lg:flex">
-        <div className="lg:hidden">
-          <BeachRow {...common} {...remove} />
-        </div>
-        <FavoriteCard {...common} {...remove} />
-      </li>
-    );
-  }
-
-  // '특보 없음'이 보이는 목록이면 범위·기관·가장 이른 확인 시각 + 현장 우선 문구(늘)
-  const readyViews = items.flatMap((item) =>
-    item.view.kind === "ready" ? [item.view] : [],
+  const readyViews = useMemo(
+    () => readyItems.map((item) => item.view),
+    [readyItems],
   );
+  // 요약 줄 개수도 상태 먼저 순서(이용불가 → 판단불가 → 특보 없음). 같은 분류 안은 먼저 나온 사유가 앞
+  const reasonCounts = useMemo(
+    () =>
+      (countByStatus(readyViews) ?? []).sort(
+        (a, b) =>
+          FAVORITES_CATEGORY_ORDER.indexOf(a.category) -
+          FAVORITES_CATEGORY_ORDER.indexOf(b.category),
+      ),
+    [readyViews],
+  );
+  const dataTime = shownDataTime(snapshot.manifest?.generatedAt, nowMs);
   const hasClear = readyViews.some(
     (view) => !view.stale && view.badge.kind === "clear",
   );
   const checkedAt = clearCheckedAt(readyViews);
   const clearTime = kstStamp(checkedAt, nowMs);
+  const hasAnyPhoto = readyItems.some((item) => item.beach.photo !== null);
 
-  const explore = (
+  const exploreButton = (
     <Button asChild className="h-[46px]">
       <Link href={localizedPath(locale, "/explore/")}>
         {t("favorites.empty.action")}
@@ -197,13 +275,16 @@ export function FavoritesScreen({
   );
 
   return (
-    <div className="flex flex-col gap-3.5 pt-4 lg:mx-auto lg:w-full lg:max-w-[1036px] lg:pt-0">
-      {/* PC는 제목 줄 오른쪽에 [즐겨찾기 | 최근 본](260px, Figma 184:1005) */}
+    <div
+      ref={containerRef}
+      className="flex flex-col gap-3.5 pt-4 lg:mx-auto lg:w-full lg:max-w-[1036px] lg:pt-0"
+    >
+      {/* 머리(D29-6): 제목 + 오른쪽 [즐겨찾기 n | 최근 본](260px) */}
       <div className="flex flex-col gap-3.5 lg:flex-row lg:items-center lg:justify-between">
         <h1
           ref={titleRef}
           tabIndex={-1}
-          className="text-title-xl text-text-default outline-none lg:text-[30px] lg:leading-[43.5px] lg:font-bold lg:tracking-[-0.6px]"
+          className={cn(SCREEN_TITLE_CLASS, "outline-none")}
         >
           {t("pages.favorites")}
         </h1>
@@ -231,48 +312,99 @@ export function FavoritesScreen({
         onRetrySucceeded={() => titleRef.current?.focus()}
       />
 
-      {items.length === 0 ? (
-        tab === "favorites" ? (
-          <EmptyState
-            icon={<Star size={26} />}
-            title={t("favorites.empty.title")}
-            description={t("favorites.empty.body")}
-            action={explore}
-          />
-        ) : (
-          <EmptyState
-            icon={<Clock size={26} />}
-            title={t("favorites.recentEmpty.title")}
-            description={t("favorites.recentEmpty.body")}
-            action={explore}
-          />
-        )
+      {rawItems.length === 0 ? (
+        <>
+          <div className="rounded-card border border-border-default bg-bg-surface shadow-card">
+            {tab === "favorites" ? (
+              <EmptyState
+                icon={<Star size={26} />}
+                title={t("favorites.empty.title")}
+                description={t("favorites.empty.body")}
+                action={
+                  <div className="flex flex-wrap items-center justify-center gap-2.5">
+                    {exploreButton}
+                    {recent.length > 0 && (
+                      <Button
+                        variant="secondary"
+                        className="h-[46px]"
+                        onClick={() => {
+                          pendingFocusRef.current = { type: "title" };
+                          setTab("recent");
+                        }}
+                      >
+                        {/* Button의 gap이 문구 조각 사이에 끼지 않게 한 덩어리로 묶음 */}
+                        <span>
+                          {t.rich("favorites.empty.recentAction", {
+                            count: recent.length,
+                            b: (chunks) => (
+                              <strong className="font-bold">{chunks}</strong>
+                            ),
+                          })}
+                        </span>
+                      </Button>
+                    )}
+                  </div>
+                }
+              />
+            ) : (
+              <EmptyState
+                icon={<Clock size={26} />}
+                title={t("favorites.recentEmpty.title")}
+                description={t("favorites.recentEmpty.body")}
+                action={exploreButton}
+              />
+            )}
+          </div>
+          <p className="text-caption text-text-muted">
+            {tab === "favorites"
+              ? t("favorites.deviceNoteEmpty")
+              : t("favorites.deviceNote")}
+          </p>
+        </>
       ) : loading ? (
-        <BeachRowSkeleton
-          rows={Math.min(items.length, 4)}
-          label={t("favorites.loading")}
-        />
+        <>
+          <BeachRowSkeleton
+            rows={Math.min(rawItems.length, 4)}
+            label={t("favorites.loading")}
+          />
+          <p className="text-caption text-text-muted">
+            {t("favorites.deviceNote")}
+          </p>
+        </>
       ) : (
         <div className="flex flex-col gap-3.5">
-          <ul
-            className={cn(
-              "divide-y divide-border-default overflow-hidden rounded-card bg-bg-surface shadow-card",
-              "lg:grid lg:grid-cols-3 lg:gap-[18px] lg:divide-y-0 lg:overflow-visible lg:rounded-none lg:bg-transparent lg:shadow-none",
-            )}
-          >
-            {items.map(renderRow)}
-          </ul>
-          {/* 최근 본 전체 지우기(Figma 178:252). 확인 없이 지우고 토스트로 되돌리기 */}
-          {tab === "recent" && (
-            <Button
-              variant="secondary"
-              onClick={removeAll}
-              className="h-11 w-full lg:w-auto lg:self-start"
-            >
-              <Trash2 aria-hidden="true" size={16} />
-              {t("favorites.recent.clear")}
-            </Button>
-          )}
+          <FavoritesSummary
+            tab={tab}
+            total={readyItems.length}
+            counts={reasonCounts}
+            time={dataTime}
+            stale={staleCheckedAt(readyViews)}
+            nowMs={nowMs}
+            hasDistance={coords !== null}
+            sort={sort}
+            onSortChange={setFavoritesSort}
+            onClearRecent={removeAll}
+          />
+
+          <FavoritesTable
+            locale={locale}
+            tab={tab}
+            items={readyItems}
+            favoriteIds={favoriteSet}
+            snapshot={snapshot}
+            nowMs={nowMs}
+            onStar={handleStar}
+          />
+
+          <FavoritesList
+            locale={locale}
+            items={readyItems}
+            favoriteIds={favoriteSet}
+            snapshot={snapshot}
+            nowMs={nowMs}
+            onStar={handleStar}
+          />
+
           <div className="flex flex-col gap-0.5 text-caption text-text-muted">
             {hasClear && (
               <p>
@@ -281,86 +413,47 @@ export function FavoritesScreen({
                   : t("home.region.countScopeNoTime")}
               </p>
             )}
-            <p>{t("safety.finalCall")}</p>
-            {/* 기상청 출처(BRD-113 · 기상법). 받은 실제 상태가 있을 때만(개발용 예시 제외) */}
+            <p>
+              {t("favorites.clearIsNotSafe")} · {t("safety.finalCall")}
+            </p>
             {showsKmaSource(snapshot, sampleSnapshot) && (
               <KmaSourceNote variant="status" />
+            )}
+            <p>
+              {hasAnyPhoto
+                ? t.rich("favorites.photoNote", {
+                    source: t("observation.agency.kto"),
+                    license: t("photo.license.kogl-type1"),
+                    link: (chunks) => (
+                      <a
+                        href={SOURCE_URL.tourApi}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="underline underline-offset-2"
+                      >
+                        {chunks}
+                        <span className="sr-only">
+                          {" "}
+                          ({t("common.newWindow")})
+                        </span>
+                      </a>
+                    ),
+                  })
+                : t("favorites.photoNoteNoPhoto")}
+            </p>
+            <p>
+              {tab === "favorites"
+                ? t("favorites.deviceNoteSort")
+                : t("favorites.deviceNoteRecent", { max: RECENT_MAX })}
+            </p>
+            {tab === "favorites" && (
+              <p className="hidden lg:block">{t("favorites.tableOrderNote")}</p>
             )}
           </div>
         </div>
       )}
 
-      <p className="text-caption text-text-muted">
-        {t("favorites.deviceNote")}
-      </p>
-
       <Toast message={toast.message} onHold={toast.hold} />
-    </div>
-  );
-}
-
-// PC 카드(Figma card 184:1012): 파고 글리프 + 이름·지역 줄 → 사유 배지 → 값 줄. 카드 전체가 링크
-// 최근 본이면 오른쪽 위 ✕(링크 밖, 행과 같은 이유)
-function FavoriteCard({
-  href,
-  name,
-  meta,
-  wave,
-  status,
-  detail,
-  onRemove,
-  removeLabel,
-}: {
-  href: string;
-  name: string;
-  meta: string | null;
-  wave: MetricView;
-  status: BadgeLabel;
-  detail: string | null;
-  onRemove?: (() => void) | undefined;
-  removeLabel?: string | undefined;
-}) {
-  const t = useTranslations();
-  return (
-    <div className="relative hidden w-full rounded-card bg-bg-surface shadow-card lg:flex">
-      <Link
-        href={href}
-        className="flex w-full flex-col items-start gap-2.5 rounded-card p-4"
-      >
-        <span className={cn("flex items-center gap-3", onRemove && "pr-8")}>
-          <WaveGlyph
-            wave={wave}
-            metric={t("observation.metric.waveHeight")}
-            label={
-              wave.kind === "none"
-                ? t("observation.none")
-                : wave.kind === "delayed"
-                  ? t("observation.delayed")
-                  : t("row.noValue")
-            }
-          />
-          <span className="flex min-w-0 flex-col">
-            <span className="text-title-card text-text-default">{name}</span>
-            {meta && (
-              <span className="text-caption text-text-muted">{meta}</span>
-            )}
-          </span>
-        </span>
-        <ReasonBadge label={status} />
-        {detail && (
-          <span className="text-label-s text-text-body">{detail}</span>
-        )}
-      </Link>
-      {onRemove && (
-        <button
-          type="button"
-          aria-label={removeLabel}
-          onClick={onRemove}
-          className="absolute top-1.5 right-1.5 flex size-touch items-center justify-center rounded-full text-text-muted hover:bg-bg-subtle"
-        >
-          <X aria-hidden="true" size={16} />
-        </button>
-      )}
     </div>
   );
 }
@@ -370,9 +463,7 @@ export function FavoritesFallback() {
   const t = useTranslations();
   return (
     <div className="flex flex-col gap-3.5 pt-4 lg:mx-auto lg:w-full lg:max-w-[1036px] lg:pt-0">
-      <h1 className="text-title-xl text-text-default lg:text-[30px] lg:leading-[43.5px] lg:font-bold lg:tracking-[-0.6px]">
-        {t("pages.favorites")}
-      </h1>
+      <h1 className={SCREEN_TITLE_CLASS}>{t("pages.favorites")}</h1>
       <BeachRowSkeleton label={t("favorites.loading")} />
     </div>
   );
