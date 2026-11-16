@@ -1,17 +1,33 @@
 "use client"; // 입력·임시 저장(기기)·사진 준비(canvas)·보내기(fetch)를 하므로 브라우저 부품
 
-import { Camera, Check, CircleAlert, WifiOff, X } from "lucide-react";
+import {
+  Camera,
+  ChartColumn,
+  Check,
+  CircleAlert,
+  CircleQuestionMark,
+  MapPinPlus,
+  Waves,
+  WifiOff,
+  X,
+  type LucideIcon,
+} from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useEffect, useId, useRef, useState } from "react";
 
 import { BackButton } from "@/components/detail/back-button";
+import { PhotoCredit, useShownPhoto } from "@/components/map/beach-photo";
+import { BeachThumb } from "@/components/search/beach-thumb";
 import { Button } from "@/components/ui/button";
 import { Toast, useToast } from "@/components/ui/toast";
 import { useActivity, type Activity } from "@/lib/activity";
+import type { BeachSummary } from "@/lib/beach-summary";
 import { cn } from "@/lib/cn";
 import { localizedPath, type Locale } from "@/lib/i18n";
+import { joinMeta } from "@/lib/meta-join";
+import { useRowText } from "@/lib/snapshot/use-row-text";
 import type { BeachId } from "@baradun/contracts";
 import {
   sendInquiry,
@@ -60,6 +76,14 @@ import { inquiryReturn } from "@/lib/inquiry/return-path";
 
 type Shot = { id: number; photo: PhotoToSend; url: string };
 
+// 유형 카드 아이콘(D29-9, 시안 S_INQP4). 뜻은 카드 글자가 알리고 아이콘은 꾸밈
+const KIND_ICON: Record<InquiryKind, LucideIcon> = {
+  mismatch: Waves,
+  addBeach: MapPinPlus,
+  criteria: CircleQuestionMark,
+  newData: ChartColumn,
+};
+
 // aria-describedby용 id 잇기(빈 값 빼고)
 const idList = (...list: (string | false | null | undefined)[]) =>
   list.filter(Boolean).join(" ") || undefined;
@@ -94,6 +118,8 @@ export function InquiryScreen({
     slug: string;
     name: string;
     activities: readonly Activity[];
+    region: string; // "강원 강릉시"(문의할 해변 카드)
+    photo: BeachSummary["photo"]; // 썸네일(없거나 받지 못하면 해변 그림)
   }[];
   // 이메일·사진 받기. 페이지는 넘기지 않아 기본값(저장소 상수)을 씀. 스토리·테스트가 켜짐 상태를 그릴 때만 넘김
   contactEnabled?: boolean;
@@ -104,6 +130,7 @@ export function InquiryScreen({
   const params = useSearchParams();
   const activity = useActivity();
   const toast = useToast();
+  const { activitiesText } = useRowText();
 
   // 유형·내용은 임시 저장이 원본(입력할 때마다 저장). 서버 HTML은 빈 칸
   const draft = useInquiryDraft();
@@ -156,7 +183,9 @@ export function InquiryScreen({
     contextRemoved || beachSlug === null
       ? null
       : (beaches.find((item) => item.slug === beachSlug) ?? null);
-  // 접수 뒤 돌아갈 곳: 들어온 해변(공개 목록에 있을 때만) 또는 설정. '해변·활동 빼기'와 관계없이 들어온 곳 기준
+  // 문의할 해변 카드 사진. 썸네일과 출처 줄이 같은 상태를 봄(받지 못한 사진이면 그림 + 출처 줄 없음)
+  const contextPhoto = useShownPhoto(beach?.photo ?? null);
+  // 접수 뒤 돌아갈 곳: 들어온 해변(공개 목록에 있을 때만) 또는 설정. '문의할 해변 빼기'와 관계없이 들어온 곳 기준
   const returnTo = inquiryReturn(beachSlug, beaches);
   // 보내지 못한 뒤에는 처음 보낸 활동을 그대로 씀(다른 탭에서 활동을 바꿔도 다시 보내기가 같은 내용·같은 키로 가게)
   const [sentActivity, setSentActivity] = useState<Activity | null>(null);
@@ -429,6 +458,8 @@ export function InquiryScreen({
     <div className="mx-auto flex w-full max-w-[640px] flex-col gap-4 pb-6">
       {/* Figma는 머리 바로 아래부터 칸이 시작(사이 0) */}
       <div className="-mb-4">{header}</div>
+      {/* 제목 아래 안내 한 줄(D29-9). 응답 기한은 약속하지 않음 */}
+      <p className="-mt-1 text-body-s text-text-body lg:-mt-3">{t("intro")}</p>
 
       {copy && (
         // 보내지 못함 배너(Figma 알림 배너 · 위험 170:374). 무슨 일(제목·원인) → 영향(멈춘 단계·접수 여부) → 다음 행동
@@ -480,48 +511,7 @@ export function InquiryScreen({
         className="flex flex-col gap-4"
       >
         <fieldset disabled={sending} className="flex flex-col gap-4">
-          {/* 유형(Figma field 179:358): 칩 4개 2열, 고르면 파랑 채움 */}
-          <fieldset
-            ref={kindRef}
-            aria-describedby={errors.kind ? ids.kindError : undefined}
-            className="flex flex-col gap-1.5"
-          >
-            <legend className={cn("float-left", fieldLabel)}>
-              {t("kind.legend")}
-            </legend>
-            <div className="clear-left grid grid-cols-2 gap-2">
-              {INQUIRY_KINDS.map((value) => (
-                <label
-                  key={value}
-                  className={cn(
-                    "flex min-h-chip cursor-pointer items-center rounded-full border px-[13px] py-1 text-[13.5px] leading-[19.6px] has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-brand-default",
-                    kind === value
-                      ? "border-brand-default bg-brand-default font-bold text-brand-on"
-                      : errors.kind
-                        ? "border-danger-text font-medium text-text-body"
-                        : "border-border-strong bg-bg-surface font-medium text-text-body",
-                  )}
-                >
-                  <input
-                    type="radio"
-                    name="inquiry-kind"
-                    value={value}
-                    checked={kind === value}
-                    onChange={() => setKind(value)}
-                    className="sr-only"
-                  />
-                  {t(`kind.${value}`)}
-                </label>
-              ))}
-            </div>
-            {errors.kind && (
-              <p id={ids.kindError} className="text-caption text-danger-text">
-                {t(`errors.${errors.kind}`)}
-              </p>
-            )}
-          </fieldset>
-
-          {/* 해변 · 활동(Figma field 179:371): 상세에서 들어왔을 때 자동으로 넣은 값. ✕로 뺌 */}
+          {/* 문의할 해변(D29-9): 상세 '정보가 실제와 달라요'에서 들어오면 자동으로 채움. '빼기'로 해변 없이 보냄 */}
           {beach && (
             <section
               aria-labelledby={`${ids.kind}-context`}
@@ -530,34 +520,127 @@ export function InquiryScreen({
               <h2 id={`${ids.kind}-context`} className={fieldLabel}>
                 {t("context.legend")}
               </h2>
-              <div className="flex h-input items-center justify-between gap-2 rounded-input border border-border-strong bg-bg-surface pl-[15px]">
-                <p className="truncate text-body text-text-default">
-                  {sendActivity === null
-                    ? beach.name
-                    : t("context.value", {
-                        name: beach.name,
-                        activity: ta(sendActivity),
-                      })}
-                </p>
+              <div className="flex items-center gap-3 rounded-card bg-bg-surface py-3 pr-1.5 pl-3 shadow-card">
+                <BeachThumb
+                  photo={beach.photo}
+                  state={contextPhoto}
+                  className="size-11 rounded-[10px]"
+                />
+                <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                  <p className="truncate text-body text-text-default">
+                    {beach.name}
+                  </p>
+                  <p className="text-caption text-text-muted">
+                    {joinMeta([beach.region, activitiesText(beach.activities)])}
+                  </p>
+                </div>
                 <button
                   type="button"
                   aria-label={t("context.remove")}
-                  onClick={() => setContextRemoved(true)}
-                  className="flex size-touch shrink-0 items-center justify-center rounded-full text-text-muted hover:bg-bg-subtle"
+                  onClick={() => {
+                    setContextRemoved(true);
+                    // 누른 버튼이 카드와 함께 사라지므로 포커스를 다음 칸(유형: 고른 것 또는 첫 카드)으로 옮김
+                    const radios = kindRef.current;
+                    (
+                      radios?.querySelector<HTMLInputElement>(
+                        "input:checked",
+                      ) ?? radios?.querySelector<HTMLInputElement>("input")
+                    )?.focus();
+                  }}
+                  className="flex min-h-touch shrink-0 items-center gap-1 rounded-button px-2.5 text-caption text-text-muted hover:bg-bg-subtle"
                 >
-                  <X aria-hidden="true" size={16} />
+                  <X aria-hidden="true" size={14} />
+                  <span aria-hidden="true">{t("context.removeShort")}</span>
                 </button>
               </div>
               <p className="text-caption text-text-muted">
                 {t("context.note")}
+                {sendActivity !== null &&
+                  ` ${t("context.activity", { activity: ta(sendActivity) })}`}
               </p>
+              {/* 공공누리 제1유형 출처(BRD-113). 사진을 보일 때만(없거나 받지 못하면 그림이라 줄 없음) */}
+              {contextPhoto.shown && <PhotoCredit photo={contextPhoto.shown} />}
             </section>
           )}
 
+          {/* 유형 카드 2×2(D29-9): 아이콘 · 이름 · 설명 한 줄, 고르면 파란 테두리와 체크
+              라디오 묶음 그대로(화살표 키로 고르기). 접근 가능한 이름 = 이름 + 설명(label 안 글자) */}
+          <fieldset
+            ref={kindRef}
+            aria-describedby={errors.kind ? ids.kindError : undefined}
+            className="flex flex-col gap-2"
+          >
+            <legend className={cn("float-left", fieldLabel)}>
+              {t("kind.legend")}
+            </legend>
+            <div className="clear-left grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+              {INQUIRY_KINDS.map((value) => {
+                const Icon = KIND_ICON[value];
+                const selected = kind === value;
+                return (
+                  <label
+                    key={value}
+                    className={cn(
+                      "relative flex min-h-touch cursor-pointer items-center gap-3 rounded-card border bg-bg-surface py-3 pr-10 pl-3 has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-brand-default",
+                      selected
+                        ? "border-2 border-brand-default bg-brand-weak"
+                        : errors.kind
+                          ? "border-danger-text"
+                          : "border-border-default",
+                    )}
+                  >
+                    <input
+                      type="radio"
+                      name="inquiry-kind"
+                      value={value}
+                      checked={selected}
+                      onChange={() => setKind(value)}
+                      className="sr-only"
+                    />
+                    <span
+                      aria-hidden="true"
+                      className="flex size-9 shrink-0 items-center justify-center rounded-[10px] bg-bg-subtle text-brand-default"
+                    >
+                      <Icon size={18} />
+                    </span>
+                    <span className="flex min-w-0 flex-col gap-0.5">
+                      <span className="text-body-s text-text-default">
+                        {t(`kind.${value}`)}
+                      </span>
+                      <span className="text-caption text-text-muted">
+                        {t(`kind.desc.${value}`)}
+                      </span>
+                    </span>
+                    {/* 고름 표시: 색만이 아니라 체크 모양으로도(테두리 굵기 + 체크) */}
+                    <span
+                      aria-hidden="true"
+                      className={cn(
+                        "absolute top-3 right-3 flex size-5 items-center justify-center rounded-full border",
+                        selected
+                          ? "border-brand-default bg-brand-default text-brand-on"
+                          : "border-border-strong bg-bg-surface",
+                      )}
+                    >
+                      {selected && <Check size={13} strokeWidth={3} />}
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+            {errors.kind && (
+              <p id={ids.kindError} className="text-caption text-danger-text">
+                {t(`errors.${errors.kind}`)}
+              </p>
+            )}
+          </fieldset>
+
           {/* 내용(Figma field 179:378): 96px 입력 → 안내·글자 수 */}
           <div className="flex flex-col gap-1.5">
+            {/* 칸 제목은 고른 유형에 맞춤(D29-9). 유형을 고르기 전에는 '내용' */}
             <label htmlFor={ids.message} className={fieldLabel}>
-              {t("message.label")}
+              {kind === null
+                ? t("message.label")
+                : t(`message.labelFor.${kind}`)}
             </label>
             <textarea
               ref={messageRef}
@@ -566,7 +649,11 @@ export function InquiryScreen({
               onChange={(event) => setMessage(event.target.value)}
               maxLength={MESSAGE_INPUT_MAX}
               rows={3}
-              placeholder={t("message.placeholder")}
+              placeholder={
+                kind === null
+                  ? t("message.placeholder")
+                  : t(`message.placeholderFor.${kind}`)
+              }
               aria-invalid={errors.message ? true : undefined}
               aria-describedby={idList(
                 ids.messageHint,
