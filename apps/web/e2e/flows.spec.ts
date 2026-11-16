@@ -72,7 +72,7 @@ test.describe("데이터 문의", () => {
     await page.goto(INQUIRY);
     await page.getByRole("button", { name: "보내기" }).click();
     await expect(page.getByText("문의 유형을 골라 주세요.")).toBeVisible();
-    await expect(page.getByText("내용을 5자 이상 써 주세요.")).toBeVisible();
+    await expect(page.getByText("5자 이상 써 주세요.")).toBeVisible();
     await expect(
       page.getByRole("radio", { name: "정보가 실제와 달라요" }),
     ).toBeFocused();
@@ -595,7 +595,7 @@ test.describe("데이터 문의 유형 카드", () => {
     ).toBeVisible();
     // 사진 없는 해변: 사진 대신 해변 그림(옆에 이름이 있어 화면 읽기에서는 숨김)
     await expect(context.locator("img")).toHaveCount(0);
-    await expect(context.locator('svg[viewBox="0 0 320 132"]')).toBeVisible();
+    await expect(context.locator("[data-beach-illustration]")).toBeVisible();
     await expectNoA11yViolations(page);
     await page.getByRole("button", { name: "문의할 해변 빼기" }).click();
     await expect(context).toHaveCount(0);
