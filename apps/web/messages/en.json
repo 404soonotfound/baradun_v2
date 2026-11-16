@@ -801,7 +801,7 @@
     "undo": "Undo",
     "empty": {
       "title": "No favorite beaches yet",
-      "body": "Tap ☆ Favorite on a beach page to compare warnings, wave height, wave period, and water temperature for your go-to beaches in one table.",
+      "body": "Tap Favorite on a beach page to compare warnings, wave height, wave period, and water temperature for your go-to beaches in one table.",
       "action": "Find beaches in Explore",
       "recentAction": "View <b>{count}</b> recently viewed"
     },
@@ -813,8 +813,6 @@
       "clear": "Clear all",
       "clearLabel": "Clear all recently viewed",
       "cleared": "Cleared recently viewed",
-      "remove": "Remove {name} from recently viewed",
-      "removed": "Removed from recently viewed",
       "undo": "Undo",
       "viewedToday": "Viewed today {time}",
       "viewedYesterday": "Viewed yesterday {time}",
