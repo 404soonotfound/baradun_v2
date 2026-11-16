@@ -196,6 +196,19 @@ for (const mode of ["light", "dark"]) {
   }
 }
 
+// 사진 위 표시(참고 사진, GH-528): 바탕 color.photo.scrim도 반투명. 사진 색은 알 수 없어 가장 밝은 흰 바탕 위로 봄
+// (출처 줄은 그라데이션·그림자에 기대는 글자라 여기서 재지 않음)
+for (const mode of ["light", "dark"]) {
+  const bg = over(get("color.photo.scrim", mode), "#FFFFFF");
+  const r = ratio(get("color.photo.on", mode), bg);
+  if (r < 4.5) {
+    failed += 1;
+    console.log(
+      `실패  ${r.toFixed(2)} (기준 4.5)  [${mode}] 사진 위 '참고 사진' 표시 글자(흰 사진 위)`,
+    );
+  }
+}
+
 // 금지 색: 초록 계열(색상각 90~170°, 채도 있는 색)을 쓰지 않음 (노션 4장)
 // 예외: 운영자 사이트 전용 작업 성공색 color.success(결정 E6·BRD-165). 사용자 사이트 CSS에는 나가지 않음
 // (build-tokens가 --admin일 때만 내보냄)
