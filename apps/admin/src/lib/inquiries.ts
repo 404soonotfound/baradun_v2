@@ -31,6 +31,8 @@ export const RETENTION_DAYS = 90;
 export const PAGE_SIZE = 6;
 // 서버 한 번 요청 최대 수(services/src/admin/inquiries.ts INQUIRY_PAGE_MAX)
 export const INQUIRY_PAGE_MAX = 50;
+// 전체 목록 첫 쪽 맨 위에 서버가 싣는 모르는 처리 상태 문의 수 상한(services/src/admin/inquiries.ts UNKNOWN_STATUS_LIST_MAX, #521)
+export const UNKNOWN_STATUS_LIST_MAX = INQUIRY_PAGE_MAX;
 
 export interface InquirySummary {
   readonly inquiryId: string;
@@ -45,7 +47,8 @@ export interface InquirySummary {
   readonly legacy: boolean;
   // preview=true로 요청했을 때만 옴(#491). 공백을 줄여 42자까지, 잘렸으면 '…'
   readonly messagePreview?: string;
-  // 미리보기를 뺀 이유: restricted(보기 권한) · empty(본문 없음). 모르는 값도 숨기지 않고 받음
+  // 미리보기를 뺀 이유: restricted(보기 권한) · empty(본문 없음)
+  // · unchecked(모르는 상태 문의의 본문을 서버가 시간 안에 확인 못 함, #521. 조건에 맞는지도 모름). 모르는 값도 숨기지 않고 받음
   readonly messagePreviewUnavailableReason?: "restricted" | "empty" | string;
 }
 
@@ -61,7 +64,7 @@ export interface InquiryDetail extends InquirySummary {
 
 // 최근 7일 값은 첫 쪽에만, 데모·이전 서버에는 없음. null은 조회 실패(oldestUnprocessedAt은 미처리 없음도 null)
 export type InquiryCounts = Readonly<Record<InquiryStatus, number>> & {
-  // 4종 밖 상태 수(#521). 4개 탭 수에는 넣지 않고 '전체' 수와 목록 위 안내에만 씀
+  // 4종 밖 상태 수(#521, 전체 건수. 목록에는 50건까지만 옴). 4개 탭 수에는 넣지 않고 '전체' 수와 목록 위 안내에만 씀
   // null은 확인 못 함(서버가 읽지 못함), 없으면 이전 서버·데모
   readonly unknown?: number | null;
   readonly receivedLast7d?: number | null;
