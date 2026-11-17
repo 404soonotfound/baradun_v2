@@ -175,7 +175,8 @@ export interface RefreshButtonProps {
   onRefresh: () => void;
   className?: string;
   // text: 요약 줄 오른쪽 글자 버튼(탐색, 결정 기록 29장 D29-6). 기본은 테두리 알약
-  variant?: "pill" | "text";
+  // icon: 글자 없는 회전 아이콘 버튼(홈 해변 묶음 제목 오른쪽, GH-218). 이름은 aria-label, 마우스는 title로 같은 말을 보임
+  variant?: "pill" | "text" | "icon";
 }
 
 // 키보드·스크린 리더·데스크톱 사용자용 새로고침 버튼(L16, BRD-137)
@@ -193,26 +194,31 @@ export function RefreshButton({
       type="button"
       aria-busy={refreshing}
       aria-label={refreshing ? t("refresh.refreshing") : t("refresh.button")}
+      title={variant === "icon" ? t("refresh.button") : undefined}
       onClick={() => {
         if (!refreshing) onRefresh();
       }}
       className={cn(
-        "inline-flex min-h-touch items-center gap-1.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus",
-        variant === "pill"
-          ? "rounded-full border border-border-default bg-bg-surface px-3 text-caption font-medium text-text-default hover:bg-bg-subtle"
-          : "rounded-[8px] px-1 text-caption font-bold text-brand-default hover:underline",
+        "inline-flex items-center gap-1.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus",
+        variant === "pill" &&
+          "min-h-touch rounded-full border border-border-default bg-bg-surface px-3 text-caption font-medium text-text-default hover:bg-bg-subtle",
+        variant === "text" &&
+          "min-h-touch rounded-[8px] px-1 text-caption font-bold text-brand-default hover:underline",
+        // 보이는 원은 32px, 누르는 영역은 ::before로 사방 6px 넓혀 44px(칩·보기 전환과 같은 방식). 제목 줄 높이를 늘리지 않음
+        variant === "icon" &&
+          "relative size-8 shrink-0 justify-center rounded-full text-text-muted hover:bg-bg-subtle hover:text-text-default before:absolute before:-inset-1.5 before:content-['']",
         className,
       )}
     >
       <RefreshCw
         className={cn(
-          "size-4 shrink-0",
+          variant === "icon" ? "size-5 shrink-0" : "size-4 shrink-0",
           variant === "pill" && "text-text-muted",
           refreshing && !reducedMotion && "animate-spin",
         )}
         aria-hidden="true"
       />
-      <span>{t("refresh.button")}</span>
+      {variant !== "icon" && <span>{t("refresh.button")}</span>}
     </button>
   );
 }
