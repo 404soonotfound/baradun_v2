@@ -93,6 +93,11 @@ agy_review: # 대체 리뷰 도구 판정 규칙이 바뀌면(agy는 부르지 �
 ops_policy: # 운영 정책 원본 가져오기 도구가 바뀌면(노션은 부르지 않음, CI에 노션 토큰 없음 D20-11)
   - *shared
   - "tools/ops-policy/**"
+copy_lint: # 한국어 문체 검사 도구·규칙이 바뀌면 시험(GH-546). 금지 표현 목록은 contracts에 있음
+  - *shared
+  - "tools/copy-lint/**"
+  - ".githooks/**"
+  - "packages/contracts/src/notice-rules.ts"
 map: # 지도 판·스타일·지도 파일 도구가 바뀌면 실제 지도 파일 확인(D19-1 · #392)
   - "apps/web/src/lib/map/style.ts" # 지도 판 이름
   - "apps/web/src/lib/map/style-*.json" # 부르는 글꼴
