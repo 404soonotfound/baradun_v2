@@ -32,8 +32,8 @@ export const VERSION_DIR = /^\d{8}T\d{6}Z$/;
 
 export const DEV_DATA_REFRESH_INTERVAL_MS = 20 * 60_000;
 export const DEV_DATA_MODE_FILE = ".dev-data-mode";
-// public/data를 만든 출처. sample=계약 예시 더미, live=운영 snapshot 미러(dev-live.mts)
-export type DevDataMode = "sample" | "live";
+// public/data를 만든 출처. sample=계약 예시 더미, live=운영 snapshot 미러(dev-live.mts), scenario=상태별 시나리오(dev-scenario.mts, #550)
+export type DevDataMode = "sample" | "live" | "scenario";
 // 갱신 시각을 확인하는 간격. 잠자기로 타이머가 밀려도 깨어난 뒤 1분 안에 따라잡음
 const REFRESH_CHECK_MS = 60_000;
 // 탐색기·Finder가 폴더를 열면 저절로 만드는 파일. 사용자 데이터가 아니라 예시 폴더 판단에서 뺌
@@ -53,6 +53,8 @@ interface WriteDevDataOptions extends DevDataPaths {
 
 interface RefreshOptions extends DevDataPaths {
   now?: () => number;
+  // 게시 함수. 없으면 계약 예시(writeDevData). 시나리오는 자기 게시 함수를 넘김(#550)
+  write?: (nowMs: number) => string;
   intervalMs?: number;
   onPublished?: (version: string) => void;
   onError?: (error: unknown) => void;
@@ -303,7 +305,7 @@ export function writeDevData({
 
 /**
  * 지난 개발 데이터를 지움. off로 띄우거나 다른 모드로 바꿀 때 씀.
- * 표지가 sample·live이고 이 스크립트가 만든 이름만 있는 폴더만 지움.
+ * 표지가 sample·live·scenario이고 이 스크립트가 만든 이름만 있는 폴더만 지움.
  * 그 밖의 폴더는 출처를 모르므로 남기고 알림(화면은 manifest가 있으면 예시로 표시함).
  */
 export function clearDevData(
@@ -312,7 +314,7 @@ export function clearDevData(
   if (!existsSync(outDir)) return "none";
   const mode = readDevDataMode(outDir);
   if (foreignEntries(outDir).length > 0) return "foreign";
-  if (mode === "sample" || mode === "live") {
+  if (mode === "sample" || mode === "live" || mode === "scenario") {
     rmSync(outDir, { recursive: true, force: true });
     return "removed";
   }
@@ -328,6 +330,7 @@ export function startDevDataRefresh({
   examplesDir = DEFAULT_EXAMPLES,
   now = Date.now,
   intervalMs = DEV_DATA_REFRESH_INTERVAL_MS,
+  write = (nowMs) => writeDevData({ outDir, examplesDir, nowMs }),
   onPublished,
   onError = (error) => {
     throw error;
@@ -337,7 +340,7 @@ export function startDevDataRefresh({
   const publish = () => {
     try {
       const nowMs = now();
-      const version = writeDevData({ outDir, examplesDir, nowMs });
+      const version = write(nowMs);
       // 실패하면 시각을 넘기지 않아 다음 확인(1분 뒤)에 다시 시도함
       lastPublishedMs = nowMs;
       onPublished?.(version);
@@ -346,11 +349,7 @@ export function startDevDataRefresh({
     }
   };
   // 첫 생성 실패는 개발 서버를 시작하기 전에 호출자에게 그대로 알림.
-  const firstVersion = writeDevData({
-    outDir,
-    examplesDir,
-    nowMs: lastPublishedMs,
-  });
+  const firstVersion = write(lastPublishedMs);
   onPublished?.(firstVersion);
   const timer = setInterval(
     () => {
