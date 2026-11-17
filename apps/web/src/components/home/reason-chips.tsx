@@ -34,8 +34,10 @@ export function ReasonChips({
   const { badgeText, confirmedUntilText } = useBadgeText();
   if (counts === null) {
     return (
-      <div role="status" className="flex flex-col items-end gap-1">
-        <Skeleton className="h-7 w-56 rounded-[10px]" />
+      <div role="status" className="flex flex-col items-end">
+        <div className="flex min-h-touch items-center">
+          <Skeleton className="h-7 w-56 rounded-[10px]" />
+        </div>
         <span className="text-caption text-text-muted">
           {t("home.region.countLoading")}
         </span>
@@ -45,8 +47,9 @@ export function ReasonChips({
   const hasClear = counts.some((item) => item.label.kind === "clear");
   const time = kstStamp(clearCheckedAt, nowMs);
   return (
-    <div className="flex flex-col items-end gap-1">
-      <ul className="flex flex-wrap justify-end gap-1.5">
+    // 칩 줄은 새로고침 버튼과 같은 높이(min-h-touch)로 잡고 칩을 가운데에 둠: 홈 머리 줄이 위쪽 맞춤이라 버튼과 칩의 세로 가운데가 같아짐
+    <div className="flex flex-col items-end">
+      <ul className="flex min-h-touch flex-wrap content-center items-center justify-end gap-1.5">
         {counts.map((item) => {
           const text = badgeText(item.label);
           return (

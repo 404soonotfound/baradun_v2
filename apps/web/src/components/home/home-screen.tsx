@@ -555,7 +555,8 @@ export function HomeScreen({
                 <p className="text-caption text-text-muted">{showingText}</p>
               )}
             </div>
-            <div className="flex flex-wrap items-center gap-2">
+            {/* PC는 위쪽 맞춤: 칩 줄(ReasonChips)이 버튼 높이라 버튼과 칩의 세로 가운데가 같음. 가운데 맞춤이면 칩 아래 안내 글까지 합친 높이의 가운데로 버튼이 내려감 */}
+            <div className="flex flex-wrap items-center gap-2 lg:items-start">
               <RefreshButton refreshing={refreshing} onRefresh={triggerRefresh} />
               {/* 모바일: 제목 줄 오른쪽 '전체 보기'(펼칠 수 있으면 그 자리 펼침, 아니면 탐색) */}
               {!desktop &&
