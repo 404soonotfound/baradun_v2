@@ -168,7 +168,7 @@ test("상세(시안 V13): 호출·연결 정보·최근 수집을 보여 주고 
     "GET https://apis.data.go.kr/1360000/WthrWrnInfoService/getPwnCd",
   );
   await expect(calls).toContainText("받는 행 수 10,000");
-  await expect(page.getByText("10초 · 다시 1회")).toBeVisible();
+  await expect(page.getByText("10초 · 재시도 1회")).toBeVisible();
   await expect(page.getByText("마지막 성공 뒤 20분")).toBeVisible();
   await expect(page.getByText("09:18:00")).toBeVisible();
   await expect(page.getByText("90%", { exact: true })).toBeVisible();
@@ -196,7 +196,7 @@ test("상세(시안 V13): 호출·연결 정보·최근 수집을 보여 주고 
   );
   await page.getByRole("tab", { name: "쓰는 해변" }).click();
   await expect(page.getByRole("tabpanel")).toContainText(
-    "구역별 수를 확인하지 못했어요",
+    "구역별 해변 수를 확인하지 못했어요",
   );
   await expectNoA11yViolations(page);
   await page.getByRole("link", { name: /데이터 출처 목록/ }).click();
@@ -302,7 +302,7 @@ test("샘플 계정 응답(keysHidden)은 키 상태를 '확인 못 함'이 아�
   await mockSources(page, 200, { ...VIEW, keys: [], keysHidden: true });
   await openSources(page);
   await expect(
-    page.getByText("샘플(시연) 계정에는 운영 인증키 상태를 보여 주지 않아요."),
+    page.getByText("데모 계정에는 운영 인증키 상태를 보여 주지 않아요."),
   ).toBeVisible();
   await expect(page.getByRole("region", { name: "인증키" })).not.toContainText(
     "확인 못 함",
@@ -393,15 +393,15 @@ test("로딩(L9·L4): 목록·상세(탭 아래만 자리표시)·15초 실패 �
   await timeoutAlert.getByRole("button", { name: "다시 시도" }).click();
   await expect(page.getByText("기상특보 조회").first()).toBeVisible();
 
-  // L8 새로 고침: 값 유지 + 다시 읽는 중
+  // L8 새로 고침: 값 유지 + 새로 불러오는 중
   holdSources = true;
   const refreshReq = page.waitForRequest(/\/ops\/sources$/);
   await page.getByRole("button", { name: "다시 불러오기" }).click();
   await refreshReq;
-  await expect(page.getByText("다시 읽는 중")).toBeVisible();
+  await expect(page.getByText("새로 불러오는 중")).toBeVisible();
   await expect(page.getByText("기상특보 조회").first()).toBeVisible();
   waiters.at(-1)?.();
-  await expect(page.getByText("다시 읽는 중")).toHaveCount(0);
+  await expect(page.getByText("새로 불러오는 중")).toHaveCount(0);
 
   // L4 상세 직접 진입: 실제 요청이 붙잡힌 상태에서 출처 제목은 보이고 아래만 자리표시
   holdSources = true;

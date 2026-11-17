@@ -54,7 +54,7 @@ describe("로그인 설정 상태 (V26E)", () => {
     expect(html).toContain('role="alert"');
     expect(html).toContain("로그인 설정을 불러오지 못했어요.");
     expect(html).toContain(
-      "이 화면에서는 로그인할 수 없어요. 운영 책임자에게 배포 설정을 확인해 달라고 해 주세요.",
+      "이 화면에서는 로그인할 수 없어요. 운영 책임자에게 배포 설정 확인을 요청해 주세요.",
     );
     expect(html).toContain("다시 불러오기");
     expect(html).not.toContain('type="email"');

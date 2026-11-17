@@ -200,7 +200,7 @@ test("모두 정상: 판단 출처 정상 한 줄(모바일만), 세 칸·판단
     page.getByText(/기준 · 화면이 보이는 동안 1분마다/),
   ).toBeVisible();
   await expect(
-    page.getByText(/^새로고침해도 로그인이 이어지고, 새 탭은/),
+    page.getByText(/^새로고침해도 로그인이 이어져요. 새 탭은/),
   ).toBeVisible();
   await expect(page.getByText(/새로고침하면 다시 로그인/)).toHaveCount(0);
 
@@ -215,7 +215,7 @@ test("모두 정상: 판단 출처 정상 한 줄(모바일만), 세 칸·판단
   // 가짜 게시본의 유효 시각은 모두 지남: 분류는 그대로 두고 따로 알림
   await expect(
     beaches.getByText(
-      "유효 시각이 지난 해변 3곳이 있어요. 해변 관리에서 확인해 주세요.",
+      "표시 기한이 지난 해변 3곳이 있어요. 해변 관리에서 확인해 주세요.",
     ),
   ).toBeVisible();
   await expect(beaches.getByText(/앱이 점검 중이라/)).toHaveCount(0);
@@ -223,7 +223,7 @@ test("모두 정상: 판단 출처 정상 한 줄(모바일만), 세 칸·판단
   const collection = block(page, "수집");
   // 배지는 모든 출처 기준(가짜 수집 현황은 참고 출처에 기록 없음이 있어 '문제 N')
   await expect(collection.getByText(/^(정상|문제 \d)$/)).toBeVisible();
-  await expect(collection.getByText("최근 24시간 성공")).toBeVisible();
+  await expect(collection.getByText("최근 24시간 성공률")).toBeVisible();
   await expect(collection.getByText("국립해양조사원 이안류")).toBeVisible();
 
   const inquiries = block(page, "문의");
@@ -247,22 +247,22 @@ test("모두 정상: 판단 출처 정상 한 줄(모바일만), 세 칸·판단
   await expect(usage.getByText("지금 사용 중 14명 · 최근 30분")).toBeVisible();
   // 기간 표시는 응답의 KST 날짜(양 끝 포함)
   await expect(
-    usage.getByText("10월 15일 – 11월 11일 · 앞 28일과 비교", { exact: true }),
+    usage.getByText("10월 15일 – 11월 11일 · 이전 28일과 비교", {
+      exact: true,
+    }),
   ).toBeVisible();
   // 이용 칸 자기 기준 시각(GA 집계 받은 시각, 머리의 1분 주기와 따로 5분마다)
   await expect(
-    usage.getByText("12:00 기준 · 5분마다 다시 읽어요", { exact: true }),
+    usage.getByText("12:00 기준 · 5분마다 새로 불러와요", { exact: true }),
   ).toBeVisible();
   await expect(usage.getByText("3,960", { exact: true })).toBeVisible();
   await expect(usage.getByText("9,240", { exact: true })).toBeVisible();
-  // 앞 28일 3,344·7,634 → +18.4%·+21%(화면에서 계산)
-  await expect(usage.getByText("앞 28일 3,344")).toBeVisible();
-  await expect(usage.getByText("앞 28일 7,634")).toBeVisible();
+  // 이전 28일 3,344·7,634 → +18.4%·+21%(화면에서 계산)
+  await expect(usage.getByText("이전 28일 3,344")).toBeVisible();
+  await expect(usage.getByText("이전 28일 7,634")).toBeVisible();
   await expect(usage.getByText("+18.4%")).toBeVisible();
   await expect(usage.getByText("+21%")).toBeVisible();
-  await expect(
-    usage.getByText("일별 추이는 아직 보여 드릴 수 없어요"),
-  ).toHaveCount(0);
+  await expect(usage.getByText("일별 추이는 아직 볼 수 없어요")).toHaveCount(0);
   // 일별 28일 × 사용자·화면 조회
   await expect(usage.locator("svg rect")).toHaveCount(56);
 
@@ -339,7 +339,7 @@ test("이용 칸: 최근 30분 방문 기록이 없으면(GA4 행 없음) 0명·
   });
   const usage = block(page, "이용");
   await expect(
-    usage.getByText("지금 사용 중 방문 기록 없음 · 최근 30분"),
+    usage.getByText("지금 사용 중 · 최근 30분 방문 기록 없음"),
   ).toBeVisible();
   await expect(usage.getByText(/지금 사용 중 (0명|확인 못 함)/)).toHaveCount(0);
 });
@@ -392,7 +392,7 @@ test("판단불가 사유가 여럿이면 배지를 모두 보이고, 이용 칸
   await expect(usage.getByRole("button", { name: "다시 시도" })).toBeVisible();
   await expect(usage.getByText("확인 못 함", { exact: true })).toHaveCount(2);
   await expect(
-    usage.getByText("일별 추이는 아직 보여 드릴 수 없어요", { exact: true }),
+    usage.getByText("일별 추이는 아직 볼 수 없어요", { exact: true }),
   ).toBeVisible();
   await expect(usage.getByText("최근 28일 · 오늘 포함")).toBeVisible();
   await expect(usage.locator("svg rect")).toHaveCount(0);
@@ -429,11 +429,9 @@ test("판단불가 사유가 여럿이면 배지를 모두 보이고, 이용 칸
   await expect(usage.locator("svg rect")).toHaveCount(4);
   await expect(usage.locator("svg rect[data-empty]")).toHaveCount(1);
   await expect(usage.getByText("옅은 칸은 확인 못 한 값이에요")).toBeVisible();
-  await expect(usage.getByText("앞 기간 대비")).toHaveCount(0);
-  await expect(usage.getByText(/^앞 28일/)).toHaveCount(0);
-  await expect(
-    usage.getByText("일별 추이는 아직 보여 드릴 수 없어요"),
-  ).toHaveCount(0);
+  await expect(usage.getByText("이전 기간 대비")).toHaveCount(0);
+  await expect(usage.getByText(/^이전 28일/)).toHaveCount(0);
+  await expect(usage.getByText("일별 추이는 아직 볼 수 없어요")).toHaveCount(0);
   await expectNoA11yViolations(page);
 });
 
@@ -805,7 +803,7 @@ test("다시 읽기가 실패하면 판단 출처 줄은 불러오지 못함으�
     });
   });
   await page.clock.fastForward(61_000);
-  await expect(page.getByText("다시 읽는 중")).toBeVisible();
+  await expect(page.getByText("새로 불러오는 중")).toBeVisible();
   // 다시 읽는 동안 값은 그대로(자리표시로 바꾸지 않음)
   await expectSourcesLine(page, "판단에 쓰는 출처가 모두 정상이에요");
   release();
@@ -814,7 +812,7 @@ test("다시 읽기가 실패하면 판단 출처 줄은 불러오지 못함으�
       .getByRole("status")
       .filter({ hasText: /^마지막으로 받은 값이에요 · \d{2}:\d{2} 기준/ }),
   ).toBeVisible();
-  await expect(page.getByText("다시 읽는 중")).toHaveCount(0);
+  await expect(page.getByText("새로 불러오는 중")).toHaveCount(0);
   // 판단 출처는 앞의 '정상'을 두지 않음(조회 실패를 정상으로 보이지 않게)
   await expectSourcesLine(page, "판단에 쓰는 출처 상태를 불러오지 못했어요");
   await expect(

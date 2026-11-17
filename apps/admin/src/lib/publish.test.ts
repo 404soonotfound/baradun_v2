@@ -124,7 +124,7 @@ describe("nonZeroCategoryDeltas", () => {
 });
 
 describe("isRunSkipped · hasHeldNotices", () => {
-  it("바뀐 게 없어 건너뛴 실행과 되돌림 상태 공지 유무를 판정한다", () => {
+  it("바뀐 게 없어 건너뛴 실행과 되돌린 공지 유무를 판정한다", () => {
     expect(
       isRunSkipped({
         at: "2026-11-12T06:00:00Z",

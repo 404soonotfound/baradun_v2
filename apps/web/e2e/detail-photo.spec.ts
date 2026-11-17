@@ -98,7 +98,7 @@ test.describe("상세 사진 커버", () => {
       await page.getByRole("button", { name: "공유" }).click();
       const sheet = page.getByRole("dialog", { name: "공유하기" });
       await expect(
-        sheet.getByText("사진이 없어 일러스트로 보여드려요"),
+        sheet.getByText("사진이 없어 그림으로 보여드려요"),
       ).toBeVisible();
       await expect(sheet.getByRole("img")).toHaveCount(0);
       // 시트가 다 열린 뒤 검사(열리는 동안은 반투명이라 대비가 낮게 잡힘)

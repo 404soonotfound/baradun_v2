@@ -22,12 +22,12 @@ const TEXT = {
     nationwideSea: "전국 바다",
     nationwideCount: `전국 해변 ${PUBLIC_BEACH_COUNT}곳 지금 상태`,
     // PC는 개수 카드 대신 히어로 요약 줄(BRD-129, Figma 181:789)
-    nationwideSummary: `전국 바다 ${PUBLIC_BEACH_COUNT}곳의 특보·측정 상태예요`,
+    nationwideSummary: `전국 해변 ${PUBLIC_BEACH_COUNT}곳의 특보와 측정값이에요`,
     offTitle: "위치 없이 보고 있어요",
     offDefault:
-      "전국 해변을 이름 순으로 보여드려요. 위치를 켜면 가까운 바다를 보여드려요.",
+      "전국 해변을 이름순으로 보여드려요. 위치를 켜면 가까운 바다를 볼 수 있어요.",
     offChosen:
-      "전국 해변을 이름 순으로 보여드려요. 위치를 켜면 거리도 함께 보여드려요.",
+      "전국 해변을 이름순으로 보여드려요. 위치를 켜면 거리도 함께 볼 수 있어요.",
     offRegion:
       "고른 지역 해변을 보여드려요. 위치를 켜면 거리도 함께 보여드려요.",
     gangwon: "강원",
