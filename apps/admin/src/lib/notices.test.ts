@@ -1,9 +1,10 @@
 import { graphemeLength } from "@baradun/contracts/notice-rules";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   exposeProblems,
   filterNotices,
   fromKstInput,
+  noticeAction,
   sameContent,
   saveProblems,
   textChecks,
@@ -182,5 +183,49 @@ describe("공지 목록 거르기", () => {
         query: "MAINTENANCE",
       }).map((n) => n.id),
     ).toEqual(["1"]);
+  });
+});
+
+describe("noticeAction 요청 모양", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  const sent = async (action: "expose" | "end" | "delete") => {
+    const fetcher = vi.fn(async () =>
+      Response.json({ noticeId: "n-1", version: 4 }),
+    );
+    vi.stubGlobal("fetch", fetcher);
+    await noticeAction(
+      async () => "token",
+      "n 1",
+      action,
+      3,
+      crypto.randomUUID(),
+    );
+    const [path, init] = fetcher.mock.calls[0] as unknown as [
+      string,
+      RequestInit,
+    ];
+    return { path, init, headers: init.headers as Record<string, string> };
+  };
+
+  // CloudFront OAC가 본문 있는 DELETE의 서명을 통과시키지 못함(GH-549 QA 라운드 1)
+  it("삭제는 본문·본문 해시 없이 version을 주소 뒤에 싣는다", async () => {
+    const { path, init, headers } = await sent("delete");
+    expect(path).toBe("/ops/notices/n%201?version=3");
+    expect(init.method).toBe("DELETE");
+    expect(init.body).toBeUndefined();
+    expect(headers["x-amz-content-sha256"]).toBeUndefined();
+    expect(headers["x-idempotency-key"]).toBeDefined();
+  });
+
+  it("확정·노출 종료는 본문 { version }과 본문 해시를 보낸다", async () => {
+    for (const action of ["expose", "end"] as const) {
+      const { path, init, headers } = await sent(action);
+      expect(path).toBe(`/ops/notices/n%201/${action}`);
+      expect(init.method).toBe("POST");
+      expect(init.body).toBe(JSON.stringify({ version: 3 }));
+      expect(headers["x-amz-content-sha256"]).toMatch(/^[0-9a-f]{64}$/);
+      vi.unstubAllGlobals();
+    }
   });
 });
