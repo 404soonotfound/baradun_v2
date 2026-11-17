@@ -475,6 +475,44 @@ describe("개발 서버 실행", { timeout: 20_000 }, () => {
   });
 });
 
+describe("시나리오로 개발 서버 실행 (#550)", { timeout: 20_000 }, () => {
+  it("--scenario=이름이면 시나리오를 게시하고 이 인자는 next에 넘기지 않음", async () => {
+    const { outDir } = fixture();
+    const root = path.dirname(outDir);
+    const { child, ready } = startDevCommand({
+      root,
+      outDir,
+      args: ["--scenario=warning"],
+    });
+
+    await waitForFile(ready);
+    expect(readFileSync(path.join(outDir, DEV_DATA_MODE_FILE), "utf8")).toBe(
+      "scenario\n",
+    );
+    expect(existsSync(path.join(outDir, "manifest.json"))).toBe(true);
+    expect(readFileSync(ready, "utf8")).toBe("dev");
+
+    await stopChild(child);
+  });
+
+  it("시나리오 이름이 틀리면 개발 서버를 띄우지 않고 실패함", async () => {
+    const { outDir } = fixture();
+    const root = path.dirname(outDir);
+    const { child, ready } = startDevCommand({
+      root,
+      outDir,
+      args: ["--scenario=nope"],
+    });
+    const code = await new Promise<number | null>((resolve) =>
+      child.once("exit", resolve),
+    );
+
+    expect(code).not.toBe(0);
+    expect(existsSync(ready)).toBe(false);
+    expect(existsSync(outDir)).toBe(false);
+  });
+});
+
 describe("운영 snapshot 미러로 개발 서버 실행", { timeout: 20_000 }, () => {
   it("운영 주소가 없으면 개발 서버를 띄우지 않고 실패함", async () => {
     const { outDir } = fixture();
