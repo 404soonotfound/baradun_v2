@@ -2,7 +2,8 @@
 // 기본값(sample)은 계약 예시로 만든 더미 데이터를 먼저 게시하고 20분마다 갱신함.
 // live는 BARADUN_DEV_DATA_ORIGIN(운영 CloudFront)의 snapshot을 읽기 전용으로 미러함(npm run live, BRD-109).
 // off는 데이터를 만들지 않고 지난 개발 데이터를 지움(데이터 없음 상태 확인용).
-// 모드는 --data=off|sample|live 인자(운영체제 무관) 또는 BARADUN_DEV_DATA로 정함. 인자가 우선함.
+// scenario는 상태별 시나리오(특보 발효·관측 지연·점검 등)를 게시하고 20분마다 시각을 옮겨 다시 게시함(#550, --scenario=<이름>).
+// 모드는 --data=off|sample|live 인자(운영체제 무관) 또는 BARADUN_DEV_DATA로 정함. 인자가 우선함. --scenario=를 주면 scenario 모드.
 import { spawn, type ChildProcess } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -20,18 +21,44 @@ import {
   parseLiveOrigin,
   startLiveMirror,
 } from "./dev-live.mts";
+import {
+  describeScenario,
+  NO_DATA_VERSION,
+  parseScenarioName,
+  publishedMessage,
+  readScenarioInputs,
+  writeScenarioData,
+} from "./dev-scenario.mts";
 
 const DATA_FLAG = "--data=";
+const SCENARIO_FLAG = "--scenario=";
 const args = process.argv.slice(2);
 const flag = args.find((arg) => arg.startsWith(DATA_FLAG));
-const nextArgs = args.filter((arg) => !arg.startsWith(DATA_FLAG));
+const scenarioFlag = args.find((arg) => arg.startsWith(SCENARIO_FLAG));
+const nextArgs = args.filter(
+  (arg) => !arg.startsWith(DATA_FLAG) && !arg.startsWith(SCENARIO_FLAG),
+);
 // `BARADUN_DEV_DATA= npm run dev`처럼 빈 값으로 지운 환경 변수는 지정하지 않은 것으로 봄(기본 sample)
 const dataMode =
-  flag?.slice(DATA_FLAG.length) ?? (process.env.BARADUN_DEV_DATA || "sample");
-if (dataMode !== "off" && dataMode !== "sample" && dataMode !== "live") {
+  flag?.slice(DATA_FLAG.length) ??
+  (scenarioFlag ? "scenario" : process.env.BARADUN_DEV_DATA || "sample");
+if (
+  dataMode !== "off" &&
+  dataMode !== "sample" &&
+  dataMode !== "live" &&
+  dataMode !== "scenario"
+) {
   throw new Error(
-    `BARADUN_DEV_DATA는 off·sample·live 중 하나여야 해요: ${dataMode}`,
+    `BARADUN_DEV_DATA는 off·sample·live·scenario 중 하나여야 해요: ${dataMode}`,
   );
+}
+// 시나리오 이름이 없거나 틀리면 개발 서버를 띄우기 전에 멈춤(고를 수 있는 이름을 알려 줌)
+const scenarioName =
+  dataMode === "scenario"
+    ? parseScenarioName(scenarioFlag?.slice(SCENARIO_FLAG.length))
+    : null;
+if (scenarioFlag && dataMode !== "scenario") {
+  throw new Error("--scenario=는 --data=scenario와만 함께 쓸 수 있어요");
 }
 // live 주소는 셸 환경변수, 없으면 apps/web/.env.local(git 제외)에서 찾음. 빈 값은 지정하지 않은 것으로 봄.
 // 파일에서는 이 값만 꺼내고 process.env에 넣지 않음(Next가 .env.* 파일을 자기 순서대로 읽게 둠).
@@ -88,6 +115,38 @@ if (dataMode === "sample") {
     onError: (error) =>
       console.error(
         "[dev:data] 예시 갱신에 실패했어요. 1분 뒤 다시 시도해요.",
+        error,
+      ),
+  });
+} else if (scenarioName) {
+  clearOtherMode();
+  const inputs = readScenarioInputs();
+  const write = (nowMs: number) =>
+    writeScenarioData({ outDir, name: scenarioName, inputs, nowMs }) ??
+    NO_DATA_VERSION;
+  // next dev 주소 안내용 포트(-p·--port를 넘기지 않으면 3000)
+  const portIndex = nextArgs.findIndex(
+    (arg) => arg === "-p" || arg === "--port",
+  );
+  const port =
+    nextArgs.find((arg) => arg.startsWith("--port="))?.slice(7) ??
+    (portIndex >= 0 ? nextArgs[portIndex + 1] : undefined) ??
+    "3000";
+  for (const line of describeScenario(
+    scenarioName,
+    inputs,
+    `http://localhost:${port}`,
+  )) {
+    console.log(line);
+  }
+  stopRefresh = startDevDataRefresh({
+    outDir,
+    write,
+    onPublished: (version) =>
+      console.log(publishedMessage(scenarioName, version)),
+    onError: (error) =>
+      console.error(
+        "[scenario] 시나리오 갱신에 실패했어요. 1분 뒤 다시 시도해요.",
         error,
       ),
   });
