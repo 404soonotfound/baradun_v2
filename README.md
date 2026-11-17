@@ -122,6 +122,12 @@ echo 'BARADUN_DEV_DATA_ORIGIN=https://<운영 CloudFront>' >> apps/web/.env.loca
   - `npx cdk diff` (`infra/` 경로): 배포된 스택과 로컬 변경 사항 비교
 - **`tools/beaches`**:
   - `npm run test:beaches`: 해변 데이터 생성 도구 단위 테스트
+- **`tools/copy-lint`** (GH-546):
+  - 커밋 메시지와 바뀐 화면 문구(`apps/web`·`apps/admin`의 `messages/ko.json`)·문서(`*.md`) 줄을 한국어 문체 규칙으로 검사합니다. 규칙은 [im-not-ai](https://github.com/epoko77-ai/im-not-ai)(MIT, `tools/copy-lint/LICENSE-im-not-ai`)가 공개한 번역투·AI 문체 규칙과 공지 금지 표현(D17-8)입니다.
+  - 로컬 훅 켜기(저장소마다 한 번): `git config core.hooksPath .githooks`. 켜면 커밋할 때 걸린 곳을 보여 주고 커밋을 멈춥니다.
+  - PR에서는 CI `copy-lint` 작업이 같은 검사를 하며 `ci-ok`에 들어갑니다.
+  - 꼭 필요한 예외는 커밋 메시지에 `[skip-copy-lint]`를 넣고 PR 설명에 이유를 적습니다.
+  - `npm run test:copy-lint`: 규칙·어휘 사전 원본 시험 문장·훅·범위 검사 단위 테스트
 
 ## 운영 배포
 

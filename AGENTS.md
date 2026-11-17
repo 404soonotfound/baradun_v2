@@ -51,6 +51,7 @@
     - `deps`: `chore(deps)`로만 쓴다.
   - 제목: 한국어, 50자 안팎, 마침표 없음
   - 나눈 커밋 하나하나가 타입 검사·린트를 통과해야 한다.
+  - 커밋 메시지와 바뀐 화면 문구(`messages/ko.json`)·문서(`*.md`) 줄은 한국어 문체 검사(`tools/copy-lint`, GH-546)를 통과해야 한다. 로컬 훅은 `git config core.hooksPath .githooks`로 켜고 PR에서는 CI `copy-lint`가 검사한다. 걸린 곳은 고쳐서 다시 커밋한다. `[skip-copy-lint]`는 규칙이 문맥을 잘못 잡은 경우에만 쓰고 PR 설명에 이유를 적는다.
   - 커밋 전에 나눌 계획(커밋별 메시지와 파일)을 먼저 보여주고, 한 파일에 성격이 섞이면 `git add -p`로 나눈다.
   - 이슈와 연결되지 않는 변경(오타·서식·설정 한두 줄 수준)만 이슈 번호를 생략할 수 있다: `docs: README 오타 수정`. 그 밖의 변경은 먼저 이슈를 만든 뒤(Project에는 자동으로 들어감) 번호를 붙인다.
 - Dependabot이 만든 PR(npm 보안 갱신, `.github/dependabot.yml`의 Action 버전 갱신)은 이 절의 브랜치·커밋·PR 제목·연결 문구 규칙의 예외다.
