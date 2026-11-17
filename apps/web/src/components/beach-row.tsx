@@ -6,7 +6,7 @@ import {
   TriangleAlert,
   X,
 } from "lucide-react";
-import Link from "next/link";
+import { IntentLink } from "@/components/intent-link";
 import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 
@@ -107,7 +107,7 @@ export function BeachRow({
       )}
     >
       {/* 포커스 바깥선을 안쪽으로 그림: 목록 카드(overflow-hidden)에 바깥쪽 선이 잘리지 않게 */}
-      <Link
+      <IntentLink
         href={href}
         className="flex min-h-touch min-w-0 flex-1 items-center gap-3 py-[13px] pr-3 pl-3.5 focus-visible:-outline-offset-2"
       >
@@ -161,7 +161,7 @@ export function BeachRow({
             className="shrink-0 text-text-muted"
           />
         )}
-      </Link>
+      </IntentLink>
       {/* ✕는 링크 밖에 둠: 링크 안에 버튼이 있으면 누를 때 둘 다 반응하고 화면 읽기도 꼬임 */}
       {removable && (
         <button
@@ -216,7 +216,7 @@ export function BeachListRow({
       )}
     >
       {/* 포커스 바깥선을 안쪽으로 그림: 목록 카드(overflow-hidden)에 바깥쪽 선이 잘리지 않게 */}
-      <Link
+      <IntentLink
         href={href}
         className="flex min-h-touch items-center gap-2 py-3 pr-3 pl-3.5 focus-visible:-outline-offset-2"
       >
@@ -244,7 +244,7 @@ export function BeachListRow({
           size={16}
           className="shrink-0 text-text-muted"
         />
-      </Link>
+      </IntentLink>
     </div>
   );
 }

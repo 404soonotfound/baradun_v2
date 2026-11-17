@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { IntentLink } from "@/components/intent-link";
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 
@@ -160,7 +160,7 @@ export function RecentBeaches({
         href={localizedPath(locale, "/favorites/?tab=recent")}
         linkText={t("all")}
       />
-      <Link
+      <IntentLink
         href={localizedPath(locale, `/spots/${first.slug}/`)}
         className="flex items-center justify-between gap-3 rounded-card bg-bg-surface px-3.5 py-[13px] shadow-card"
       >
@@ -178,7 +178,7 @@ export function RecentBeaches({
         ) : (
           <Skeleton className="h-badge w-20 rounded-badge" />
         )}
-      </Link>
+      </IntentLink>
       {rest.length > 0 && (
         <ul
           id={listId}
@@ -194,9 +194,11 @@ export function RecentBeaches({
                 onRemove={() => remove(beach)}
                 tone="plain"
               >
-                <Link href={localizedPath(locale, `/spots/${beach.slug}/`)}>
+                <IntentLink
+                  href={localizedPath(locale, `/spots/${beach.slug}/`)}
+                >
                   {beach.name}
-                </Link>
+                </IntentLink>
               </RemovableChip>
             </li>
           ))}

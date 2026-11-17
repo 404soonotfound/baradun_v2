@@ -1,7 +1,7 @@
 "use client";
 
 import { ChevronRight, Star, X } from "lucide-react";
-import Link from "next/link";
+import { IntentLink } from "@/components/intent-link";
 import { useTranslations } from "next-intl";
 
 import { ReasonBadge } from "@/components/reason-badge";
@@ -62,7 +62,7 @@ export function MapCard({
         className,
       )}
     >
-      <Link
+      <IntentLink
         href={href}
         className="flex flex-col focus-visible:-outline-offset-2"
       >
@@ -92,7 +92,7 @@ export function MapCard({
             {t("safety.finalCall")}
           </span>
         </span>
-      </Link>
+      </IntentLink>
       {/* 사진 출처(기관 링크·작품명, BRD-113 · 유형 이름은 두지 않음 GH-541). 탭 순서: 상세 링크(사진·이름) → 사진 출처 → 즐겨찾기·상세 보기 */}
       {photo.shown && (
         <PhotoCredit photo={photo.shown} className="px-3.5 pt-1.5" />
@@ -113,13 +113,13 @@ export function MapCard({
           />
           {t("detail.cta.favorite")}
         </button>
-        <Link
+        <IntentLink
           href={href}
           className="flex h-touch min-w-0 flex-1 items-center justify-center gap-1 rounded-button bg-brand-default px-3.5 text-body-s font-bold text-brand-on hover:bg-brand-hover"
         >
           {t("map.card.detail")}
           <ChevronRight aria-hidden="true" size={16} />
-        </Link>
+        </IntentLink>
       </div>
 
       {/* 사진 위 오른쪽 닫기. 링크 밖에 둠(누를 때 상세로 가지 않게) */}
