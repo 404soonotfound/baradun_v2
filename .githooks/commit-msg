@@ -1,0 +1,5 @@
+#!/bin/sh
+# 커밋 메시지·스테이징된 화면 문구·문서를 한국어 문체 규칙으로 검사 (GH-546)
+# 켜기(저장소마다 1회): git config core.hooksPath .githooks
+# 꼭 필요한 예외: 커밋 메시지에 [skip-copy-lint]
+exec node "$(git rev-parse --show-toplevel)/tools/copy-lint/lint.mjs" --commit-msg "$1"
