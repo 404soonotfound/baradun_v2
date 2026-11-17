@@ -97,7 +97,7 @@ describe("판단 출처 상태 한 줄", () => {
 });
 
 describe("요약 값", () => {
-  it("유효 시각이 지난 해변 수는 분류와 따로 센다(시각을 못 읽으면 지난 것). 게시본을 못 읽으면 null", () => {
+  it("표시 기한이 지난 해변 수는 분류와 따로 센다(시각을 못 읽으면 지난 것). 게시본을 못 읽으면 null", () => {
     const now = Date.parse("2026-11-12T01:00:00Z");
     const view: PublishedView = {
       available: true,

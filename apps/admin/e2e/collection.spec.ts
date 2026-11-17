@@ -95,13 +95,13 @@ test("출처별 상태(시안 V9·VM2): 정상·일부 실패·기록 없음을 
   await expect(page.getByText("2/5", { exact: true })).toBeVisible();
   await expect(
     page.getByRole("img", {
-      name: /^최근 24시간 96회 중 95회 성공 · 실패 1시간/,
+      name: /^최근 24시간 실행 96회 중 95회 성공 · 시간대별 실패 1시간/,
     }),
   ).toHaveCount(1);
   // 해양 관측: 지연 1시간을 막대 요약에서도 읽음(색만으로 나누지 않음)
   await expect(
     page.getByRole("img", {
-      name: /^최근 24시간 48회 중 47회 성공 · 실패 1시간 · 지연 1시간/,
+      name: /^최근 24시간 실행 48회 중 47회 성공 · 시간대별 실패 1시간 · 지연 1시간/,
     }),
   ).toHaveCount(1);
   await expect(page.getByRole("list", { name: "막대 범례" })).toContainText(
@@ -161,7 +161,7 @@ test("요약 4칸과 알림: 관측 지연 해변·검증 통과 게시본, 울�
   await expect(kpi("관측 지연 해변")).toContainText("게시본 214곳 중");
   await expect(kpi("마지막 게시")).toContainText("검증 통과 · 해변 214곳");
 
-  const alerts = page.getByRole("region", { name: "알림" });
+  const alerts = page.getByRole("region", { name: "알람" });
   await expect(alerts.locator("summary")).toHaveCount(4);
   await expect(alerts.locator("details[open] > summary")).toHaveCount(1);
   await expect(alerts.locator("details[open] > summary")).toContainText(
@@ -171,13 +171,13 @@ test("요약 4칸과 알림: 관측 지연 해변·검증 통과 게시본, 울�
   await expect(ringing).toContainText("기상청 해양 관측 응답 없음");
   await expect(ringing).toContainText("울림");
   await expect(ringing).toContainText("60분 기준");
-  const other = alerts.locator("summary").filter({ hasText: "그 밖의 경보" });
+  const other = alerts.locator("summary").filter({ hasText: "그 밖의 알람" });
   await expect(other).toContainText("1개 상태 확인 못 함");
   await expect(alerts.getByText("SomethingNew")).toBeHidden();
   await other.click();
   await expect(
     alerts.getByRole("listitem").filter({ hasText: "SomethingNew" }),
-  ).toContainText("기준 시간 모름");
+  ).toContainText("기준 시간 확인 못 함");
   await expect(
     page.getByRole("link", { name: /^CloudWatch/ }).first(),
   ).toHaveAttribute(
@@ -203,11 +203,11 @@ test("장애 상세 시트: 원인·해변 영향·경과·경보를 보여 주�
   await expect(sheet).toContainText("강문해수욕장");
   await expect(sheet).toContainText("경포해수욕장");
   await expect(sheet).toContainText("강릉 부이 (22105)");
-  await expect(sheet).toContainText("쓰는 해변 3곳 · 파고로 2곳");
+  await expect(sheet).toContainText("관측값을 쓰는 해변 3곳 · 그중 파고를 쓰는 해변 2곳");
   await expect(sheet).toContainText("관측소 22105 값 돌아옴");
   // 빠진 관측소 장애는 경보가 붙지 않음 → '확인 못 함'이 아니라 울리지 않는다고 안내
-  await expect(sheet).toContainText("경보가 울리지 않아요");
-  await expect(sheet).not.toContainText("경보 기록을 확인하지 못했어요");
+  await expect(sheet).toContainText("알람이 울리지 않아요");
+  await expect(sheet).not.toContainText("알람 기록을 확인하지 못했어요");
   await expectNoA11yViolations(page);
 
   // 위: 이어지는 해양 관측 실패. 어느 관측소인지 모르면 영향 '확인 못 함'
@@ -223,7 +223,7 @@ test("장애 상세 시트: 원인·해변 영향·경과·경보를 보여 주�
   const last = page.getByRole("dialog", { name: /호출 한도 초과/ });
   await expect(last).toContainText("3/3");
   await expect(last).toContainText("22 · LIMITED NUMBER");
-  await expect(last).toContainText("경보 울림 · 기상청 해상 특보 실행 오류");
+  await expect(last).toContainText("알람 울림 · 기상청 해상 특보 실행 오류");
   await expect(last.getByRole("link", { name: /^Lambda/ })).toHaveAttribute(
     "href",
     /lambda\/home\?region=ap-northeast-2#\/functions\/BaradunV2-Warnings/,
@@ -250,8 +250,8 @@ test("게시 요약·경보를 읽지 못하면 '확인 못 함'으로 두고 �
       .locator("dl > div")
       .filter({ has: page.getByText("마지막 게시", { exact: true }) }),
   ).toContainText("요약 없음");
-  await expect(page.getByRole("region", { name: "알림" })).toContainText(
-    "경보 상태를 불러오지 못했어요",
+  await expect(page.getByRole("region", { name: "알람" })).toContainText(
+    "알람 상태를 불러오지 못했어요",
   );
   await page
     .getByRole("region", { name: /장애 기록/ })
@@ -262,8 +262,8 @@ test("게시 요약·경보를 읽지 못하면 '확인 못 함'으로 두고 �
   // 실패 장애(위)로 옮겨 경보 '확인 못 함'을 봄
   await page.keyboard.press("ArrowUp");
   await expect(sheet).toContainText("1/3");
-  await expect(sheet).toContainText("경보 기록을 확인하지 못했어요");
-  await expect(sheet).not.toContainText("울린 경보가 없어요");
+  await expect(sheet).toContainText("알람 기록을 확인하지 못했어요");
+  await expect(sheet).not.toContainText("울린 알람이 없어요");
   await expectNoA11yViolations(page);
 });
 
@@ -296,12 +296,12 @@ test("처음 불러오는 동안 자리 표시와 안내를 보여 준다", asyn
   await expect(page.getByText("2/5", { exact: true })).toBeVisible();
 });
 
-test("출처 거르기(시안 V9): 판단에 씀·참고·문제 있음으로 줄을 거르고 수를 함께 보여 준다", async ({
+test("출처 필터(시안 V9): 판단에 씀·참고·문제 있음으로 줄을 거르고 수를 함께 보여 준다", async ({
   page,
 }) => {
   await mockCollection(page);
   await openCollection(page);
-  const filters = page.getByRole("group", { name: "출처 거르기" });
+  const filters = page.getByRole("group", { name: "출처 필터" });
   await expect(filters.getByRole("button", { name: /^전체/ })).toHaveAttribute(
     "aria-pressed",
     "true",
@@ -328,7 +328,7 @@ test("장애 목록: 해변 영향 요약을 줄에 보여 주고 5건씩 쪽을
   await expect(items).toHaveCount(5);
   await expect(items.first()).toContainText("해변 영향 확인 못 함");
   await expect(items.nth(1)).toContainText("새 관측 지연 해변 2곳");
-  const pager = region.getByRole("navigation", { name: "장애 기록 쪽 이동" });
+  const pager = region.getByRole("navigation", { name: "장애 기록 페이지 이동" });
   await expect(pager).toContainText("7건 중 1–5 · 5건씩");
   await pager.getByRole("button", { name: "다음" }).click();
   await expect(items).toHaveCount(2);
@@ -342,15 +342,15 @@ test("운영 API가 예전 응답을 보내도 화면이 깨지지 않고 확인
   await mockCollection(page, 200, VIEW_LEGACY);
   await openCollection(page);
   await expect(
-    page.getByText("운영 API가 아직 예전 응답을 보내고 있어요."),
+    page.getByText("운영 API가 아직 이전 형식으로 응답하고 있어요."),
   ).toBeVisible();
   await expect(
     page
       .locator("dl > div")
       .filter({ has: page.getByText("관측 지연 해변", { exact: true }) }),
   ).toContainText("확인 못 함");
-  await expect(page.getByRole("region", { name: "알림" })).toContainText(
-    "경보 상태를 불러오지 못했어요",
+  await expect(page.getByRole("region", { name: "알람" })).toContainText(
+    "알람 상태를 불러오지 못했어요",
   );
   // 마지막 실행이 성공이어도 지연을 판정하지 못했으니 정상으로 세지 않음
   await expect(sourceRow(page, "기상청 해상 특보")).toContainText(
@@ -624,9 +624,9 @@ test("출처 시트(시안 V10): 해양 관측은 관측소 목록을 빠짐 먼
   await expect(rows.nth(1)).toContainText("확인 못 함");
   // 마지막 측정 시각은 보여 주지 않는다고 알림(D19-5)
   await expect(sheet).toContainText(
-    "마지막 측정 시각은 운영 화면에서 보지 않아요",
+    "마지막 측정 시각은 운영 화면에 보여 주지 않아요",
   );
-  const pager = sheet.getByRole("navigation", { name: "관측소 쪽 이동" });
+  const pager = sheet.getByRole("navigation", { name: "관측소 페이지 이동" });
   await expect(pager).toContainText("8곳 중 1–6");
   await pager.getByRole("button", { name: "다음" }).click();
   await expect(pager).toContainText("8곳 중 7–8");
@@ -649,7 +649,7 @@ test("출처 시트의 장애 줄을 누르면 장애 상세 시트로 바뀌고
   await opener.click();
   const sheet = page.getByRole("dialog", { name: "기상청 해상 특보" });
   // 해양 관측이 아니면 관측소 대신 장애 수
-  await expect(sheet).not.toContainText("관측소 쪽 이동");
+  await expect(sheet).not.toContainText("관측소 페이지 이동");
   await sheet.getByRole("button", { name: /호출 한도 초과/ }).click();
   await expect(
     page.getByRole("dialog", { name: /호출 한도 초과/ }),
@@ -749,15 +749,15 @@ test("로딩(L2·L8): 첫 진입 자리표시·5초 안내·15초 실패 재시�
   await timeoutAlert.getByRole("button", { name: "다시 시도" }).click();
   await expect(sourceRow(page, "기상청 해상 특보")).toContainText("정상");
 
-  // L8 새로 고침: 기존 값을 유지하고 '다시 읽는 중' + 비활성
+  // L8 새로 고침: 기존 값을 유지하고 '새로 불러오는 중' + 비활성
   hold = true;
   const refreshReq = page.waitForRequest(/\/ops\/collection$/);
   await page.getByRole("button", { name: "다시 불러오기" }).click();
   await refreshReq;
-  await expect(page.getByText("다시 읽는 중")).toBeVisible();
+  await expect(page.getByText("새로 불러오는 중")).toBeVisible();
   await expect(sourceRow(page, "기상청 해상 특보")).toContainText("정상");
   waiters.at(-1)?.();
-  await expect(page.getByText("다시 읽는 중")).toHaveCount(0);
+  await expect(page.getByText("새로 불러오는 중")).toHaveCount(0);
 });
 
 test("로딩(L8): 새로 고침 500·15초 시간 초과 시 열려 있던 시트는 닫되 마지막 받은 값을 유지한다", async ({

@@ -161,7 +161,7 @@ test("목록: 상태 탭에 수, 수정 대기·가려짐·영어 없음을 숨�
   await signIn(page);
   await mockNotices(page);
   await openNotices(page);
-  const tabs = page.getByRole("group", { name: "공지 상태로 거르기" });
+  const tabs = page.getByRole("group", { name: "공지 상태 필터" });
   await expect(tabs.getByRole("button", { name: "전체 5" })).toBeVisible();
   await expect(tabs.getByRole("button", { name: "노출 2" })).toBeVisible();
   await expect(rows(page)).toHaveCount(5);
@@ -224,8 +224,8 @@ test("새 공지: 한국 시간으로 쓴 기간을 UTC로 보내고, 저장은 
   await page.getByLabel("내용", { exact: true }).fill("새 안내 내용");
   await page.getByLabel("Title").fill("New");
   await page.getByLabel("Body").fill("New body");
-  await page.getByLabel("노출 시작(한국 시간)").fill("2030-01-02T09:00");
-  await page.getByLabel("노출 종료(한국 시간)").fill("2030-01-03T09:00");
+  await page.getByLabel("노출 시작(KST)").fill("2030-01-02T09:00");
+  await page.getByLabel("노출 종료(KST)").fill("2030-01-03T09:00");
   await expectNoA11yViolations(page);
   await page.getByRole("button", { name: "저장" }).click();
   await expect(
@@ -256,17 +256,19 @@ test("확정 전 확인: 영어 없음·글자 수 넘침은 저장은 되지만
   const expose = page.getByRole("button", { name: "게시 대상으로 확정" });
   await expect(expose).toBeDisabled();
   await expect(
-    page.getByText("English Title을(를) 써 주세요.").first(),
+    page.getByText("English Title 칸을 채워 주세요.").first(),
   ).toBeVisible();
   const title = page.getByLabel("제목", { exact: true });
   await title.fill("가".repeat(41));
   await expect(page.getByText("41/40")).toBeVisible();
   await expect(title).toHaveAttribute("aria-invalid", "true");
   await expect(page.getByRole("button", { name: "저장" })).toBeEnabled();
-  await page.getByLabel("노출 종료(한국 시간)").fill("2020-01-01T00:00");
+  await page.getByLabel("노출 종료(KST)").fill("2020-01-01T00:00");
   await expect(page.getByRole("button", { name: "저장" })).toBeDisabled();
   await expect(
-    page.getByText("노출 종료는 시작 뒤, 지금보다 뒤로 정해 주세요.").first(),
+    page
+      .getByText("노출 종료는 시작 시각과 지금보다 뒤로 정해 주세요.")
+      .first(),
   ).toBeVisible();
 });
 
@@ -299,7 +301,7 @@ test("표현 검사(D17-8): 차단 표현은 저장은 되지만 확정을 막�
   await expect(
     page
       .getByText(
-        "한국어 내용의 ‘안 전 해 요’은(는) 안전 보장 표현이라 게시 대상으로 확정할 수 없어요.",
+        "한국어 내용의 ‘안 전 해 요’ 부분이 안전 보장 표현에 해당해 게시 대상으로 확정할 수 없어요.",
         { exact: false },
       )
       .first(),
@@ -347,13 +349,12 @@ test("표현 검사: 서버가 차단 표현으로 확정을 거절하면 칸 �
   await page.getByRole("button", { name: "게시 대상으로 확정" }).click();
   await page
     .getByRole("alert")
-    .filter({ hasText: "게시 대상으로 확정해요" })
+    .filter({ hasText: "게시 대상으로 확정할까요?" })
     .getByRole("button", { name: "게시 대상으로 확정" })
     .click();
   await expect(
     page.getByRole("alert").filter({
-      hasText:
-        "서버가 ‘English Body’에서 게시할 수 없는 표현을 찾아 확정하지 않았어요.",
+      hasText: "‘English Body’에 게시할 수 없는 표현이 있어 확정하지 못했어요.",
     }),
   ).toContainText("고쳐 저장한 뒤 다시 확정해 주세요.");
 });
@@ -377,7 +378,7 @@ test("게시 대상 확정: 노출 변경 권한은 확인 뒤 확정하고, 편
   await page.getByRole("button", { name: "게시 대상으로 확정" }).click();
   const confirm = page
     .getByRole("alert")
-    .filter({ hasText: "게시 대상으로 확정해요" });
+    .filter({ hasText: "게시 대상으로 확정할까요?" });
   await expect(confirm).toContainText("지금 바로 보이지 않아요");
   await expect(
     confirm.getByRole("button", { name: "게시 대상으로 확정" }),
@@ -418,12 +419,14 @@ test("노출 중: 바로 지울 수 없고, 노출 종료는 확인 뒤 보낸�
   await openNotice(page, "새벽 점검 예고");
   await expect(page.getByRole("button", { name: "삭제" })).toBeDisabled();
   await expect(
-    page.getByText("노출 중인 공지는 바로 지울 수 없어요.").first(),
+    page.getByText("노출 중인 공지는 바로 삭제할 수 없어요.").first(),
   ).toBeVisible();
   // 저장한 문구가 노출본과 다름(수정 대기): 앱에 나간 문구를 함께 보여 줌
   await expect(page.getByText("저장한 문구가 노출본과 달라요")).toBeVisible();
   await page.getByRole("button", { name: "노출 종료" }).click();
-  const confirm = page.getByRole("alert").filter({ hasText: "노출을 끝내요" });
+  const confirm = page
+    .getByRole("alert")
+    .filter({ hasText: "노출을 끝낼까요?" });
   await confirm.getByRole("button", { name: "노출 종료" }).click();
   await expect(
     page.getByRole("status").filter({ hasText: "노출을 끝냈어요" }),
@@ -442,14 +445,14 @@ test("종료된 공지는 확인 뒤 지우고 목록으로 돌아간다", async
   await page.getByRole("button", { name: "삭제" }).click();
   await page
     .getByRole("alert")
-    .filter({ hasText: "이 공지를 지워요" })
+    .filter({ hasText: "이 공지를 삭제할까요?" })
     .getByRole("button", { name: "삭제" })
     .click();
   await expect(
     page.getByRole("heading", { name: "공지", level: 1 }),
   ).toBeVisible();
   await expect(
-    page.getByRole("status").filter({ hasText: "공지를 지웠어요" }),
+    page.getByRole("status").filter({ hasText: "공지를 삭제했어요" }),
   ).toBeVisible();
   expect(calls.writes.at(-1)).toMatchObject({
     method: "DELETE",
@@ -563,7 +566,7 @@ test("열어 둔 사이 끝나 노출 종료가 거절되면(not_live) 새 내�
   await page.getByRole("button", { name: "노출 종료" }).click();
   await page
     .getByRole("alert")
-    .filter({ hasText: "노출을 끝내요" })
+    .filter({ hasText: "노출을 끝낼까요?" })
     .getByRole("button", { name: "노출 종료" })
     .click();
   const alert = page
@@ -843,7 +846,7 @@ test("목록: 행 작업 확인을 취소하면 원래 행의 작업 메뉴 버�
     .click();
   const confirm = page
     .getByRole("alert")
-    .filter({ hasText: "이 공지의 노출을 끝내요" });
+    .filter({ hasText: "이 공지의 노출을 끝낼까요?" });
   await expect(confirm).toBeVisible();
   await confirm.getByRole("button", { name: "취소" }).click();
   await expect(confirm).toBeHidden();

@@ -311,7 +311,7 @@ test("내 계정 화면 구성(V24)과 비밀번호 변경 토스트가 기준�
     }
     await route.fallback();
   });
-  await page.getByLabel("지금 비밀번호").fill("CurrentPass123!");
+  await page.getByLabel("현재 비밀번호").fill("CurrentPass123!");
   await page.getByLabel("새 비밀번호").fill("NextPassword123!");
   await page.getByLabel("한 번 더").fill("NextPassword123!");
   await page.getByRole("button", { name: "비밀번호 바꾸기" }).click();

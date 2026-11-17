@@ -150,7 +150,7 @@ test("목록(시안 V23): 분류 탭 수, 종류 배지·대상·바뀐 내용 �
   await signIn(page);
   const calls = await mockAudit(page);
   await openAudit(page);
-  const tabs = page.getByRole("group", { name: "분류로 거르기" });
+  const tabs = page.getByRole("group", { name: "분류 필터" });
   for (const name of [
     "전체 4",
     "공지 1",
@@ -240,7 +240,7 @@ test("거르기: 탭은 분류, 찾기는 대상·내용, +운영자·+기간 �
   const calls = await mockAudit(page);
   await openAudit(page);
   await expect(records(page)).toHaveCount(3);
-  const tabs = page.getByRole("group", { name: "분류로 거르기" });
+  const tabs = page.getByRole("group", { name: "분류 필터" });
   await tabs.getByRole("button", { name: /^문의/ }).click();
   await expect.poll(() => calls.at(-1)?.get("category")).toBe("inquiry");
   // 분류만 바꾸면 기간은 그대로, 탭 수는 다시 세지 않고(counts=0) 계속 보임
