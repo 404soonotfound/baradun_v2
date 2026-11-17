@@ -9,6 +9,7 @@
     "live": "npm run dev -- --data=live",
     "prebuild": "npm run tokens && npm run map:worker && node scripts/dev-data.mts --check",
     "dev:data": "node scripts/dev-data.mts",
+    "scenario:preview": "node scripts/scenario-preview.mts",
     "build": "next build",
     "postbuild": "node scripts/build-sw.mts && node scripts/csp-meta.mts",
     "check:csp": "node scripts/csp-meta.mts --check",
