@@ -151,7 +151,7 @@ describe("정액 요금제 web ACL (BRD-51)", () => {
 });
 
 describe("대표 주소 (BRD-162)", () => {
-  // 대표 주소는 사용자 사이트 배포에만 붙음. 운영자 사이트 도메인은 미정(D16-E3)
+  // 대표 주소는 사용자 사이트 배포에 붙음. 운영자 사이트 도메인은 아래 '운영자 사이트 도메인'에서 따로 봄
   const distributions = () => [siteDistribution()];
 
   it("도메인·인증서 매개변수는 기본이 비어 있다(출시일 전까지 지금과 같은 배포)", () => {
@@ -213,6 +213,62 @@ describe("대표 주소 (BRD-162)", () => {
     expect(JSON.stringify(rewrite[0]?.Properties.FunctionCode)).toContain(
       '{"Ref":"SiteDomainName"}',
     );
+  });
+});
+
+describe("운영자 사이트 도메인 (GH-341)", () => {
+  const adminDistribution = () => {
+    const found = Object.entries(
+      template.findResources("AWS::CloudFront::Distribution"),
+    ).filter(([id]) => id.startsWith("AdminSiteDistribution"));
+    expect(found).toHaveLength(1);
+    return found[0]![1];
+  };
+
+  it("도메인·인증서 매개변수는 기본이 비어 있고 인증서는 us-east-1만 받는다", () => {
+    const params = template.findParameters("*");
+    expect(params.AdminSiteDomainName.Default).toBe("");
+    expect(params.AdminSiteCertificateArn.Default).toBe("");
+    expect(params.AdminSiteCertificateArn.AllowedPattern).toContain(
+      "arn:aws:acm:us-east-1:",
+    );
+  });
+
+  it("대체 도메인·인증서는 운영자 도메인 값이 있을 때만 운영자 배포에 붙는다", () => {
+    const config = adminDistribution().Properties.DistributionConfig;
+    expect(config.Aliases).toEqual({
+      "Fn::If": [
+        "HasAdminSiteDomain",
+        [{ Ref: "AdminSiteDomainName" }],
+        { Ref: "AWS::NoValue" },
+      ],
+    });
+    expect(config.ViewerCertificate).toEqual({
+      "Fn::If": [
+        "HasAdminSiteDomain",
+        {
+          AcmCertificateArn: { Ref: "AdminSiteCertificateArn" },
+          SslSupportMethod: "sni-only",
+          MinimumProtocolVersion: "TLSv1.2_2021",
+        },
+        { Ref: "AWS::NoValue" },
+      ],
+    });
+    // 사용자 사이트 도메인 값과 섞이지 않음
+    expect(JSON.stringify(config)).not.toContain('"Ref":"SiteDomainName"');
+  });
+
+  it("운영자 도메인과 인증서는 함께 넣거나 함께 비워야 배포된다", () => {
+    const rules = template.toJSON().Rules as Record<
+      string,
+      { Assertions: { Assert: unknown }[] }
+    >;
+    const assertion = JSON.stringify(
+      rules.AdminSiteDomainNeedsCertificate?.Assertions,
+    );
+    expect(assertion).toContain('"Ref":"AdminSiteDomainName"');
+    expect(assertion).toContain('"Ref":"AdminSiteCertificateArn"');
+    expect(assertion).toContain("Fn::Or");
   });
 });
 

@@ -2,6 +2,7 @@
 // 인프라 배포 명령 하나 (BRD-169·GH-382):
 //   npm run deploy:infra [-- --profile <AWS 프로필>] [--admin-profile <IAM 정책을 고칠 프로필>] [--watch <분>] [--issue <번호>] [--admin-site-deploy-url <HTTPS 주소>]
 //     [--site-domain <호스트> --site-certificate-arn <us-east-1 ACM ARN> | --clear-site-domain]
+//     [--admin-domain <호스트> --admin-certificate-arn <us-east-1 ACM ARN> | --clear-admin-domain]
 // tsx로 실행함(판정 부분 deploy-plan.ts를 바로 가져옴)
 // 순서: 배포용 작업 트리를 origin/main으로 → ci-ok 확인 → npm ci → 자격 증명 → 스택 밖 IAM 정책 비교
 //   → 변경 세트 → 표 → yes일 때만 (boundary 반영) → 실행·대기 → 바뀐 함수 로그 점검 → 지도 판 확인 → (이슈 댓글)
@@ -174,6 +175,56 @@ const siteDomainLines = siteDomain
   : clearSiteDomain
     ? ["- 운영 도메인: 비움"]
     : [];
+// 운영자 사이트 도메인(GH-341, admin.baradun.app): 운영 도메인과 같은 규칙. 둘 다 안 주면 기존 값 유지
+const adminDomain = arg("--admin-domain");
+const adminCertificateArn = arg("--admin-certificate-arn");
+const clearAdminDomain = process.argv.includes("--clear-admin-domain");
+if (clearAdminDomain && (adminDomain || adminCertificateArn)) {
+  fail(
+    "--clear-admin-domain은 --admin-domain·--admin-certificate-arn과 함께 쓸 수 없어요",
+  );
+}
+if (Boolean(adminDomain) !== Boolean(adminCertificateArn)) {
+  fail("--admin-domain과 --admin-certificate-arn은 함께 써 주세요");
+}
+if (
+  adminDomain &&
+  !/^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/.test(
+    adminDomain,
+  )
+) {
+  fail(
+    "--admin-domain에 소문자 호스트 이름만 써 주세요(예: admin.baradun.app)",
+  );
+}
+if (
+  adminCertificateArn &&
+  !/^arn:aws:acm:us-east-1:\d{12}:certificate\/[0-9a-f-]{36}$/.test(
+    adminCertificateArn,
+  )
+) {
+  fail("--admin-certificate-arn에 us-east-1 ACM 인증서 ARN을 써 주세요");
+}
+const adminDomainParameters = adminDomain
+  ? [
+      "--parameters",
+      `AdminSiteDomainName=${adminDomain}`,
+      "--parameters",
+      `AdminSiteCertificateArn=${adminCertificateArn}`,
+    ]
+  : clearAdminDomain
+    ? [
+        "--parameters",
+        "AdminSiteDomainName=",
+        "--parameters",
+        "AdminSiteCertificateArn=",
+      ]
+    : [];
+if (adminDomain) {
+  siteDomainLines.push(`- 운영자 사이트 도메인: ${adminDomain}로 설정`);
+} else if (clearAdminDomain) {
+  siteDomainLines.push("- 운영자 사이트 도메인: 비움");
+}
 const commonDir = path.resolve(
   run("git", ["rev-parse", "--path-format=absolute", "--git-common-dir"], {
     capture: true,
@@ -446,6 +497,9 @@ const name = changeSetName(sha, new Date());
 step(6, `변경 세트를 만들어요 (${name}, 아직 실행하지 않음)`);
 if (siteDomain) console.log(`   운영 도메인 ${siteDomain}과 인증서를 넣어요`);
 if (clearSiteDomain) console.log("   운영 도메인·인증서를 비워요");
+if (adminDomain)
+  console.log(`   운영자 사이트 도메인 ${adminDomain}과 인증서를 넣어요`);
+if (clearAdminDomain) console.log("   운영자 사이트 도메인·인증서를 비워요");
 run(
   "npx",
   [
@@ -462,6 +516,7 @@ run(
       ? ["--parameters", `AdminSiteDeployUrl=${adminSiteDeployUrl}`]
       : []),
     ...siteDomainParameters,
+    ...adminDomainParameters,
   ],
   { cwd: path.join(deployDir, "infra"), env: cdkEnv },
 );

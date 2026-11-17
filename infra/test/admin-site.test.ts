@@ -46,8 +46,14 @@ describe("운영자 사이트 배포", () => {
     expect(
       template.findResources("AWS::S3::Bucket")[bucketId]?.DeletionPolicy,
     ).toBe("Retain");
-    // 대체 도메인은 아직 없음(D16-E3) → CloudFront 기본 주소
-    expect(config.Aliases).toBeUndefined();
+    // 대체 도메인은 운영자 도메인 매개변수가 있을 때만(GH-341). 사용자 사이트 대표 주소와 섞이지 않음
+    expect(config.Aliases).toEqual({
+      "Fn::If": [
+        "HasAdminSiteDomain",
+        [{ Ref: "AdminSiteDomainName" }],
+        { Ref: "AWS::NoValue" },
+      ],
+    });
   });
 
   it("화면은 S3(OAC), /ops/*는 운영 API 함수 URL(OAC)로 보내고 캐시하지 않는다", () => {
