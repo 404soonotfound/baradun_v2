@@ -61,8 +61,8 @@ next-env.d.ts
 
 # docs: ADR·조사 기록·프롬프트는 Notion이 원본이라 로컬 전용 (제품 규칙은 AGENTS.md에 있음)
 # 예외: 문서 작성 규칙은 AGENTS.md가 가리키는 저장소 규칙이라 커밋함
-docs/*
-!docs/technical-writing.md
+**/docs/*
+!/docs/technical-writing.md
 
 # tools: 다시 실행 가능한 스크립트·규칙 표만 커밋한다. 원자료·수집본·중간 산출물은 저장소 밖
 # ($BARADUN_DATA_DIR, 기본 ~/data). 아래는 실수로 넣지 않도록 막는 줄

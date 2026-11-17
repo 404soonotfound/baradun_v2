@@ -62,7 +62,7 @@ npm run build      # 워크스페이스 전체 빌드
 
 ## 시스템 구성
 
-수집기가 공공 API를 불러 사실을 저장합니다. 게시 함수는 해변 상태를 계산해 정적 파일로 올립니다. 사용자 사이트는 그 파일을 읽어 보여 줍니다. 해변 상태를 보여 주는 데에는 요청마다 도는 서버가 없습니다. 요청마다 도는 Lambda는 문의 접수(`/api/inquiries`)와 운영 API(`/ops/*`)뿐입니다.
+수집기가 공공 API를 불러 사실을 저장합니다. 게시 함수는 해변 상태를 계산해 정적 파일로 올립니다. 사용자 사이트는 그 파일을 읽어 보여 줍니다. 해변 상태를 보여 주는 데에는 요청마다 도는 서버가 없습니다. 요청마다 도는 Lambda는 문의 접수(`/api/inquiries`)와 운영 API(`/ops/*`)이고 운영 API는 게시 미리보기 함수를 함께 부릅니다.
 
 ```mermaid
 flowchart LR
@@ -186,21 +186,26 @@ CI(`.github/workflows/ci.yml`)는 바뀐 영역만 골라 검사하고 모든 �
 
 - **사용자·운영자 사이트**: 하루 한 번(05:17 KST) 정기 실행과 수동 실행으로 배포합니다. 지금 바로 배포하려면 `npm run deploy:prod`를 씁니다(gh 로그인 필요). 배포는 GitHub Actions가 OIDC 임시 키로 합니다.
 - **인프라**: main에 머지하면 CI가 자동으로 배포합니다. 손으로 배포할 때는 최신 `origin/main` 작업 트리에서 `npm run deploy:infra`를 씁니다.
-- **배포 멈추기**: 저장소 변수 `DEPLOY_PAUSED`를 `true`로 두면 정기 배포와 인프라 자동 배포가 멈춥니다.
+- **배포 멈추기**: 저장소 변수 `DEPLOY_PAUSED`를 `true`로 두면 정기 배포와 인프라 자동 배포가 멈추고 수동 배포(`npm run deploy:prod`)도 실패로 끝납니다.
 
 운영 절차는 아래 문서에 있습니다.
 
-| 작업                                      | 문서                                                                                       |
-| ----------------------------------------- | ------------------------------------------------------------------------------------------ |
-| 점검 화면 켜기·끄기, 강제 업데이트        | [infra/README.md '점검·강제 업데이트'](infra/README.md#점검강제-업데이트)                  |
-| 잘못 나간 게시 되돌리기                   | [infra/README.md '데이터 게시와 롤백'](infra/README.md#데이터-게시publish-snapshot와-롤백) |
-| 해변 추가·숨기기, 해수욕장 개장 기간 갱신 | [data/beaches/README.md](data/beaches/README.md)                                           |
-| 문의 접수와 확인                          | [infra/README.md '데이터 문의 접수'](infra/README.md#데이터-문의-접수brd-63)               |
-| 운영 경보                                 | [infra/README.md '운영 경보'](infra/README.md#운영-경보brd-62)                             |
+| 작업                                    | 문서                                                                                       |
+| --------------------------------------- | ------------------------------------------------------------------------------------------ |
+| 점검 화면 켜기·끄기, 강제 업데이트      | [infra/README.md '점검·강제 업데이트'](infra/README.md#점검강제-업데이트)                  |
+| 잘못 나간 게시 되돌리기                 | [infra/README.md '데이터 게시와 롤백'](infra/README.md#데이터-게시publish-snapshot와-롤백) |
+| 해변 데이터 생성·숨기기, 개장 기간 출처 | [data/beaches/README.md](data/beaches/README.md)                                           |
+| 문의 접수와 확인                        | [infra/README.md '데이터 문의 접수'](infra/README.md#데이터-문의-접수brd-63)               |
+| 운영 경보                               | [infra/README.md '운영 경보'](infra/README.md#운영-경보brd-62)                             |
 
 ## 개인정보와 보안
 
-- **문의 연락처 받기는 꺼져 있습니다.** `INQUIRY_CONTACT_ENABLED`가 `false`라서 화면은 이메일·사진 입력란을 숨기고 서버는 이메일이나 사진이 담긴 문의를 거절하며 CSP는 사진 버킷 주소를 허용하지 않습니다. 값은 화면·서버·인프라 세 곳에서 같아야 합니다. 다시 켜기 전에 개인정보 처리방침에 항목을 더하고 고지 버전을 올리며 선행 이슈(BRD-116·117·119)를 마쳐야 합니다([services/src/inquiry/policy.ts](services/src/inquiry/policy.ts) 주석, 결정 기록 D13-3).
+- **문의 연락처 받기는 꺼져 있습니다.** `INQUIRY_CONTACT_ENABLED`가 `false`라서 화면은 이메일·사진 입력란을 숨기고 서버는 이메일이나 사진이 담긴 문의를 거절하며 CSP는 사진 버킷 주소를 허용하지 않습니다. 값은 화면·서버·인프라 세 곳에서 같아야 합니다. 다시 켜기 전에 아래 일을 마쳐야 합니다([services/src/inquiry/policy.ts](services/src/inquiry/policy.ts) 주석, 결정 기록 D13-3).
+  - 문의 사진을 서버에서 다시 인코딩하기(BRD-116)
+  - 익명 사진 업로드 비용 상한 두기(BRD-117, 2026-11-17 기준 열린 이슈)
+  - 문의 이메일 삭제 자동화(BRD-119)
+  - 개인정보 처리방침에 항목 추가
+  - 고지 버전 올리기
 - **문의 알림 메일에는 본문을 넣지 않습니다.** 메일에는 문의 ID, 유형, 접수 시각, 이메일 제공 여부만 들어갑니다.
 - **분석 도구는 운영 빌드에만 들어갑니다.** Google Analytics는 쿼리·해시를 뺀 페이지 경로와 [정해 둔 기능 이용 이벤트](apps/web/src/lib/analytics/events.ts)만 보냅니다. 위치, 검색어 원문, 문의 본문, 해변 상태는 보내지 않습니다.
 - **보안 응답 헤더**: HSTS(1년), `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Permissions-Policy`를 CloudFront에서 보냅니다.
