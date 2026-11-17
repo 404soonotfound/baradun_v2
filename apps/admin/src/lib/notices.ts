@@ -83,7 +83,9 @@ export function updateNotice(
   });
 }
 
-// 확정(expose)·노출 종료(end)·삭제는 본문 { version }만
+// 확정(expose)·노출 종료(end)는 본문 { version }만
+// 삭제는 본문 없이 ?version=N으로 보냄. CloudFront OAC가 본문 있는 DELETE의 서명을
+// 통과시키지 못함(본문 해시 요구는 PUT·POST만, GH-549 QA 라운드 1에서 403 확인)
 export function noticeAction(
   accessToken: Token,
   id: string,
@@ -92,15 +94,17 @@ export function noticeAction(
   idempotencyKey: string,
 ): Promise<OpsResult<Written>> {
   const path = `/ops/notices/${encodeURIComponent(id)}` as const;
-  return opsFetch(
-    action === "delete" ? path : `${path}/${action}`,
-    accessToken,
-    {
-      method: action === "delete" ? "DELETE" : "POST",
-      body: { version },
+  if (action === "delete") {
+    return opsFetch(`${path}?version=${version}`, accessToken, {
+      method: "DELETE",
       idempotencyKey,
-    },
-  );
+    });
+  }
+  return opsFetch(`${path}/${action}`, accessToken, {
+    method: "POST",
+    body: { version },
+    idempotencyKey,
+  });
 }
 
 // ---- 시각: 화면은 KST, 저장은 UTC(Z) (구현 제안 I09) ----

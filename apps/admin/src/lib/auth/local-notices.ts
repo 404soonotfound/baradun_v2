@@ -171,6 +171,7 @@ const done = <T>(e: Example, status = 200): OpsResult<T> => ({
 export function localNotices<T>(
   path: string,
   request: OpsRequest,
+  search: URLSearchParams = new URLSearchParams(),
 ): OpsResult<T> | null {
   const method = request.method ?? "GET";
   const now = Date.now();
@@ -198,7 +199,12 @@ export function localNotices<T>(
     (x) => x.id === decodeURIComponent(match[1]!) && x.deletedAt === null,
   );
   if (!e) return fail(404, "not_found");
-  const body = request.body as { version: number } & Partial<NoticeContent>;
+  // 삭제는 운영 API처럼 본문 없이 ?version=N으로 받음
+  const body = (
+    method === "DELETE"
+      ? { version: Number(search.get("version")) }
+      : request.body
+  ) as { version: number } & Partial<NoticeContent>;
   if (body.version !== e.version) {
     return fail(409, "conflict", { reason: "version" });
   }
