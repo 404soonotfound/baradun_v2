@@ -6,12 +6,14 @@ import { expect, test } from "./fixtures";
 // 보이기만 해서는 받지 않고(긴 목록을 내려도 CloudFront 요청이 늘지 않게), 마우스 올림·포커스 때만 받음.
 // 미리 받기는 운영 빌드에서만 돌아서 정적 빌드(out/)를 쓰는 이 스위트에서 확인함
 
-// 해변 상세의 미리 받기 요청(__next.*.txt)만 모음. 눌러서 이동할 때의 요청과 섞이지 않게 이동은 하지 않음
+// 해변 상세로 가는 미리 받기 요청을 모두 모음: __next.*.txt와 페이지 주소(/spots/x/) fetch.
+// 운영 측정(2026-11-17)에서 미리 받기는 둘 다 보냈음. 문서 이동 요청은 fetch가 아니라 빠지고,
+// 눌러서 이동할 때의 요청과 섞이지 않게 이 시험은 이동하지 않음
 function watchSpotPrefetch(page: Page): string[] {
   const seen: string[] = [];
   page.on("request", (request) => {
     const { pathname } = new URL(request.url());
-    if (pathname.startsWith("/spots/") && pathname.endsWith(".txt")) {
+    if (pathname.startsWith("/spots/") && request.resourceType() === "fetch") {
       seen.push(pathname);
     }
   });
