@@ -124,13 +124,11 @@ describe("DynamoDB 테이블", () => {
       join(__dirname, "../../services/src/inquiry/policy.ts"),
       "utf8",
     );
-    const statusMatch = /export const INQUIRY_STATUS_INDEX_NAME = "([^"]+)";/.exec(
-      text,
-    );
+    const statusMatch =
+      /export const INQUIRY_STATUS_INDEX_NAME = "([^"]+)";/.exec(text);
     expect(statusMatch?.[1]).toBe(INQUIRY_STATUS_INDEX.name);
-    const emailMatch = /export const INQUIRY_EMAIL_INDEX_NAME = "([^"]+)";/.exec(
-      text,
-    );
+    const emailMatch =
+      /export const INQUIRY_EMAIL_INDEX_NAME = "([^"]+)";/.exec(text);
     expect(emailMatch?.[1]).toBe(INQUIRY_EMAIL_INDEX.name);
   });
 

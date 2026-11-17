@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // 인프라 배포 명령 하나 (BRD-169·GH-382):
 //   npm run deploy:infra [-- --profile <AWS 프로필>] [--admin-profile <IAM 정책을 고칠 프로필>] [--watch <분>] [--issue <번호>] [--admin-site-deploy-url <HTTPS 주소>]
-//     [--site-domain <호스트> --site-certificate-arn <us-east-1 ACM ARN> | --clear-site-domain]
+//     [--site-domain <호스트> --site-certificate-arn <us-east-1 ACM ARN> [--site-redirect-domain <호스트>] | --clear-site-domain]
 //     [--admin-domain <호스트> --admin-certificate-arn <us-east-1 ACM ARN> | --clear-admin-domain]
 // tsx로 실행함(판정 부분 deploy-plan.ts를 바로 가져옴)
 // 순서: 배포용 작업 트리를 origin/main으로 → ci-ok 확인 → npm ci → 자격 증명 → 스택 밖 IAM 정책 비교
@@ -148,7 +148,7 @@ if (
     siteDomain,
   )
 ) {
-  fail("--site-domain에 소문자 호스트 이름만 써 주세요(예: www.baradun.app)");
+  fail("--site-domain에 소문자 호스트 이름만 써 주세요(예: baradun.app)");
 }
 // CloudFront는 us-east-1 인증서만 받음
 if (
@@ -159,19 +159,49 @@ if (
 ) {
   fail("--site-certificate-arn에 us-east-1 ACM 인증서 ARN을 써 주세요");
 }
+// 대표 주소로 301 이동시킬 추가 별칭(예: www.baradun.app). --site-domain과 함께만 씀. 인증서가 이 이름도 담아야 함
+const siteRedirectDomain = arg("--site-redirect-domain");
+if (siteRedirectDomain && !siteDomain) {
+  fail(
+    "--site-redirect-domain은 --site-domain·--site-certificate-arn과 함께 써 주세요",
+  );
+}
+if (
+  siteRedirectDomain &&
+  (siteRedirectDomain === siteDomain ||
+    !/^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/.test(
+      siteRedirectDomain,
+    ))
+) {
+  fail(
+    "--site-redirect-domain에 대표 주소와 다른 소문자 호스트 이름을 써 주세요(예: www.baradun.app)",
+  );
+}
 const siteDomainParameters = siteDomain
   ? [
       "--parameters",
       `SiteDomainName=${siteDomain}`,
       "--parameters",
       `SiteCertificateArn=${siteCertificateArn}`,
+      // 넘기지 않으면 비움(대표 주소를 바꿀 때 예전 별칭이 남지 않게)
+      "--parameters",
+      `SiteRedirectDomainName=${siteRedirectDomain ?? ""}`,
     ]
   : clearSiteDomain
-    ? ["--parameters", "SiteDomainName=", "--parameters", "SiteCertificateArn="]
+    ? [
+        "--parameters",
+        "SiteDomainName=",
+        "--parameters",
+        "SiteCertificateArn=",
+        "--parameters",
+        "SiteRedirectDomainName=",
+      ]
     : [];
 // 이슈 댓글에 남길 도메인 변경. 인증서 ARN에는 계정 번호가 있어 넣지 않음
 const siteDomainLines = siteDomain
-  ? [`- 운영 도메인: ${siteDomain}로 설정`]
+  ? [
+      `- 운영 도메인: ${siteDomain}로 설정${siteRedirectDomain ? ` (${siteRedirectDomain}는 이동)` : ""}`,
+    ]
   : clearSiteDomain
     ? ["- 운영 도메인: 비움"]
     : [];
@@ -496,6 +526,10 @@ Object.assign(cdkEnv, {
 const name = changeSetName(sha, new Date());
 step(6, `변경 세트를 만들어요 (${name}, 아직 실행하지 않음)`);
 if (siteDomain) console.log(`   운영 도메인 ${siteDomain}과 인증서를 넣어요`);
+if (siteRedirectDomain)
+  console.log(
+    `   ${siteRedirectDomain}는 ${siteDomain}로 이동하는 별칭으로 붙여요`,
+  );
 if (clearSiteDomain) console.log("   운영 도메인·인증서를 비워요");
 if (adminDomain)
   console.log(`   운영자 사이트 도메인 ${adminDomain}과 인증서를 넣어요`);
