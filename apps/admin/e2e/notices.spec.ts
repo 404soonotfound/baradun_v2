@@ -82,6 +82,7 @@ const ITEMS = () => [
 interface Write {
   method: string;
   path: string;
+  search: string;
   body: Record<string, unknown>;
   key: string | undefined;
 }
@@ -96,7 +97,7 @@ async function mockNotices(
   const calls = { writes: [] as Write[], lists: 0 };
   await page.route(/\/ops\/notices(\/.*)?$/, async (route: Route) => {
     const request = route.request();
-    const path = new URL(request.url()).pathname;
+    const { pathname: path, search } = new URL(request.url());
     if (request.method() === "GET") {
       calls.lists += 1;
       await route.fulfill({
@@ -108,6 +109,7 @@ async function mockNotices(
     const w: Write = {
       method: request.method(),
       path,
+      search,
       body: JSON.parse(request.postData() ?? "{}"),
       key: request.headers()["x-idempotency-key"],
     };
@@ -454,10 +456,15 @@ test("종료된 공지는 확인 뒤 지우고 목록으로 돌아간다", async
   await expect(
     page.getByRole("status").filter({ hasText: "공지를 삭제했어요" }),
   ).toBeVisible();
-  expect(calls.writes.at(-1)).toMatchObject({
-    method: "DELETE",
-    path: "/ops/notices/n-ended",
-  });
+  // CloudFront OAC가 본문 있는 DELETE를 막아 version은 주소 뒤에 싣고 본문은 보내지 않음
+  expect(calls.writes.at(-1)).toEqual(
+    expect.objectContaining({
+      method: "DELETE",
+      path: "/ops/notices/n-ended",
+      search: expect.stringMatching(/^\?version=\d+$/),
+      body: {},
+    }),
+  );
 });
 
 test("저장 충돌(409): 덮어쓰지 않고 새 내용 불러오기·쓰던 문구 복사를 주고, 다시 보내면 같은 요청 번호", async ({

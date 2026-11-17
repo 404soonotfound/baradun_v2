@@ -177,7 +177,7 @@ export function localOps<T>(
     if (beaches) return beaches;
   }
   if (url.pathname.startsWith("/ops/notices")) {
-    const notices = localNotices<T>(url.pathname, request);
+    const notices = localNotices<T>(url.pathname, request, url.searchParams);
     if (notices) return notices;
   }
   if (url.pathname.startsWith("/ops/publish")) {

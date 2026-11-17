@@ -2,7 +2,7 @@ import { ACCESS_TOKEN_HEADER } from "./policy";
 
 // 운영 API 부르기 (BRD-148). 같은 주소의 /ops/* (CloudFront → OAC → 운영 API 함수 URL, BRD-147)
 // - access token은 Authorization이 아닌 전용 헤더로 보냄(Authorization은 OAC 서명이 씀)
-// - 본문이 있는 요청은 본문 SHA-256(x-amz-content-sha256)을 함께 보내야 OAC 서명이 통과함
+// - 본문이 있는 요청은 본문 SHA-256(x-amz-content-sha256)을 함께 보내야 OAC 서명이 통과함(DELETE는 본문 없이)
 // - 토큰이 없으면(다시 로그인 필요) 요청하지 않고 'reauth'로 돌려줌. 쓰기를 자동으로 다시 보내지 않음(D16-E1)
 
 export type OpsResult<T> =
@@ -32,12 +32,20 @@ async function sha256Hex(text: string): Promise<string> {
     .join("");
 }
 
-export interface OpsRequest {
-  readonly method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
-  readonly body?: unknown;
-  // 쓰기 멱등 키(UUID v4). 화면이 쓰기마다 새로 만들어 넘김
-  readonly idempotencyKey?: string;
-}
+// DELETE는 본문을 싣지 않음. CloudFront OAC가 본문 있는 DELETE의 서명을 통과시키지 못해
+// 403이 남(본문 해시 요구는 PUT·POST만, GH-549 QA 라운드 1). 필요한 값은 쿼리로 넘김
+export type OpsRequest =
+  | {
+      readonly method?: "GET" | "POST" | "PUT" | "PATCH";
+      readonly body?: unknown;
+      // 쓰기 멱등 키(UUID v4). 화면이 쓰기마다 새로 만들어 넘김
+      readonly idempotencyKey?: string;
+    }
+  | {
+      readonly method: "DELETE";
+      readonly body?: never;
+      readonly idempotencyKey?: string;
+    };
 
 export async function opsFetch<T>(
   path: `/ops/${string}`,
