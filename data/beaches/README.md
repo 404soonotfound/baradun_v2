@@ -74,6 +74,7 @@ CI는 PR마다 main과 비교해서 slug 변경, 해변 삭제, slug 재사용�
 
 - `data/beach-coverage.csv`: BeachCoverageMatrix 공개본. 해변마다 단계(공개·보류·자동 제외), 좌표 출처, 특보구역(S1·L1)·관측소 배정 근거, 실응답 확인, 제외 사유만 둬요. 별표 원문·주소 연결 과정까지 담은 전체 매트릭스는 생성 때 저장소 밖 `$BARADUN_DATA_DIR/baradun-coverage/coverage-national.csv`로 나와요
 - `data/beach-meta.json`: 계약 밖 부가 정보(검색 별칭, 2026 운영 기간). 해변 id로 연결
+  - 운영 기간(`season`)은 생성기가 원자료에서 채워요. 검사(`packages/contracts/scripts/coverage-rules.mjs`)가 `2026` 칸만 보므로 다음 해 기간을 넣으려면 생성기와 검사를 함께 고쳐야 해요. 해마다 갱신하는 절차는 아직 없어요
 - 생성: `node tools/beaches/build.mjs --region 전국 --publish` (원자료·수집본·실응답 저장본은 저장소 밖 `$BARADUN_DATA_DIR`(기본 `~/data`)와 그 아래 `baradun-coverage/`, `tools/beaches/data-sources.json` 참고)
 - 매트릭스의 `sea_rule_url`·`land_rule_url` 코드:
   - `훈령1185-별표5`: 예보업무규정(기상청훈령 제1185호) 별표5, <https://www.law.go.kr/LSW/flDownload.do?flSeq=166843467&bylClsCd=200201>
