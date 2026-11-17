@@ -129,7 +129,7 @@ test.describe("데이터 문의", () => {
     ).toBeVisible();
     await expect(
       page.getByText(
-        "이 화면에서 내용을 바꾸지 않고 '다시 보내기'를 누르면 같은 문의가 두 번 접수되지 않아요.",
+        "이 화면에서 내용을 바꾸지 않고 '다시 보내기'를 눌러 주세요. 이미 접수됐어도 두 번 접수되지 않아요.",
       ),
     ).toBeVisible();
     await expect(messageBox(page)).toHaveValue("파주기 기준이 궁금해요");
@@ -518,7 +518,7 @@ test.describe("데이터 문의 유형 카드", () => {
     await page.goto(INQUIRY);
     await expect(
       page.getByText(
-        "앱 정보가 현장과 다르거나 바라는 점이 있으면 알려 주세요. 운영자가 확인하고 정보에 반영해요.",
+        "화면의 정보가 현장과 다르거나 바라는 점이 있으면 알려 주세요. 운영자가 확인하고 정보에 반영해요.",
       ),
     ).toBeVisible();
     const group = page.getByRole("group", { name: "무엇을 알려 주시겠어요?" });
@@ -527,7 +527,7 @@ test.describe("데이터 문의 유형 카드", () => {
     // 접근 가능한 이름 = 이름 + 설명 한 줄
     await expect(
       group.getByRole("radio", {
-        name: "정보가 실제와 달라요 특보·파고 등 앱 값이 현장과 다를 때",
+        name: "정보가 실제와 달라요 특보·파고 등 화면의 값이 현장과 다를 때",
       }),
     ).toBeVisible();
     await expect(page.getByRole("textbox", { name: "내용" })).toBeVisible();

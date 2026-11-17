@@ -127,7 +127,7 @@ test.describe("theme-color", () => {
 // 결정 29: 끊긴 동안 상세·검색 등을 열면 서비스 워커가 ?unavailable=1을 붙여 같은 언어 홈으로 보냄(워커 동작은 단위 테스트)
 test.describe("열지 못한 화면 안내", () => {
   for (const [home, title] of [
-    ["/", "그 화면을 열지 못해 홈으로 왔어요"],
+    ["/", "요청한 화면을 열지 못해 홈을 보여드려요"],
     ["/en/", "Couldn't open that page, so you're on Home"],
   ] as const) {
     test(`표식이 있으면 무슨 일·영향·다음 행동을 알리고 주소에서 표식을 지움 ${home}`, async ({
@@ -155,7 +155,7 @@ test.describe("열지 못한 화면 안내", () => {
     await page.goto("/");
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
     await expect(
-      page.getByText("그 화면을 열지 못해 홈으로 왔어요"),
+      page.getByText("요청한 화면을 열지 못해 홈을 보여드려요"),
     ).toHaveCount(0);
   });
 });

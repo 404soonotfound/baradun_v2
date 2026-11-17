@@ -49,7 +49,7 @@ test.describe("검색 v5", () => {
       page.getByRole("heading", { name: "지역으로 찾기" }),
     ).toBeVisible();
     await expect(
-      page.getByText(`해변 ${BEACHES.length}곳 · 숫자는 해변 수`),
+      page.getByText(`해변 ${BEACHES.length}곳 · 지역 옆 숫자는 해변 수`),
     ).toBeVisible();
     await expect(
       page.getByText("최근 검색과 최근 본 해변은 이 기기에만 저장돼요"),
@@ -74,7 +74,7 @@ test.describe("검색 v5", () => {
     ).toBeVisible();
     await expect(
       page.getByText(
-        `찾는 범위가 강원 강릉시로 정해져 있어서 다른 지역 해변은 빠졌어요. 범위를 풀면 ${YANGYANG.length}곳이 맞아요`,
+        `찾는 범위가 강원 강릉시로 정해져 있어서 다른 지역 해변은 빠졌어요. 범위를 풀면 ${YANGYANG.length}곳이 나와요`,
       ),
     ).toBeVisible();
     await expect(
@@ -82,7 +82,7 @@ test.describe("검색 v5", () => {
     ).toBeVisible();
     await expect(
       page.getByRole("link", {
-        name: "데이터 문의에서 해변 추가를 알려 주세요",
+        name: "데이터 문의로 해변 추가를 요청해 주세요",
       }),
     ).toHaveAttribute("href", "/settings/inquiry/");
     await expectNoA11yViolations(page);
@@ -134,7 +134,7 @@ test.describe("검색 v5", () => {
 
     await page
       .getByRole("group", { name: "결과 보기 방식" })
-      .getByRole("button", { name: "이름 순" })
+      .getByRole("button", { name: "이름순" })
       .click();
     const names = await rows.locator(".text-title-s").allTextContents();
     expect(names).toEqual([...names].sort((a, b) => a.localeCompare(b, "ko")));

@@ -26,8 +26,8 @@ const beach = {
   photo,
 } satisfies Pick<Beach, "slug" | "name" | "region" | "photo">;
 
-const text = { siteName: "바라던 바다", illustrationAlt: "바다 일러스트" };
-const illustration = [{ ...SHARE_ILLUSTRATION, alt: "바다 일러스트" }];
+const text = { siteName: "바라던 바다", illustrationAlt: "바다 그림" };
+const illustration = [{ ...SHARE_ILLUSTRATION, alt: "바다 그림" }];
 
 describe("beachShareMetadata", () => {
   it("이름·지역과 공통 일러스트만 넣음", () => {

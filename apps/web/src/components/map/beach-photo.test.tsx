@@ -59,7 +59,7 @@ describe("PhotoFigure 사진 없음", () => {
         empty="icon"
       />,
     );
-    expect(out).toContain("사진이 없어 일러스트로 보여드려요");
+    expect(out).toContain("사진이 없어 그림으로 보여드려요");
     expect(out).not.toContain("사진 없는 해변 그림");
   });
   it("사진이 있으면 사진 + 참고 사진 안내", () => {
