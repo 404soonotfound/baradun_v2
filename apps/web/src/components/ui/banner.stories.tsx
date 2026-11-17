@@ -56,7 +56,7 @@ export const AllTones: Story = {
           </button>
         }
       >
-        거리 없이 이름 순으로 보여드려요
+        거리 없이 이름순으로 보여드려요
       </Banner>
       <Banner tone="red" icon={<WifiOff size={18} />} title="보내지 못했어요">
         인터넷 연결을 확인하고 다시 보내 주세요. 유형과 내용은 남겨 두었어요.

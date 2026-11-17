@@ -174,7 +174,7 @@ test.describe("가까운 순", () => {
       await expect(near).toHaveAttribute("aria-pressed", "true");
       await expect(page.getByText(title)).toBeVisible();
       await expect(
-        page.getByText("거리 없이 이름 순으로 보여드려요"),
+        page.getByText("거리 없이 이름순으로 보여드려요"),
       ).toBeVisible();
       await expect(
         page.locator("main li").filter({ hasText: /km/ }),

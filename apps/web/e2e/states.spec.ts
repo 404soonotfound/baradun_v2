@@ -212,7 +212,7 @@ test.describe("확인된 판단 없음", () => {
     for (const url of ["/", "/explore/", `/spots/${slugOf(CLEAR_ID)}/`]) {
       await page.goto(url);
       await expect(
-        page.getByText("현재 확인 가능한 판단 정보가 없어요").first(),
+        page.getByText("지금 확인된 해변 상태 정보가 없어요").first(),
       ).toBeVisible();
       await expect(clearBadges(page)).toHaveCount(0);
     }
