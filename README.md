@@ -123,10 +123,10 @@ echo 'BARADUN_DEV_DATA_ORIGIN=https://<운영 CloudFront>' >> apps/web/.env.loca
 - **`tools/beaches`**:
   - `npm run test:beaches`: 해변 데이터 생성 도구 단위 테스트
 - **`tools/copy-lint`** (GH-546):
-  - 커밋 메시지와 바뀐 화면 문구(`apps/web`·`apps/admin`의 `messages/ko.json`)·문서(`*.md`) 줄을 한국어 문체 규칙으로 검사합니다. 규칙은 [im-not-ai](https://github.com/epoko77-ai/im-not-ai)(MIT, `tools/copy-lint/LICENSE-im-not-ai`)가 공개한 번역투·AI 문체 규칙과 공지 금지 표현(D17-8)입니다.
+  - 커밋 메시지와 바뀐 화면 문구(`apps/web`·`apps/admin`의 `messages/ko.json`)·문서(`*.md`) 줄을 한국어 문체 규칙으로 검사합니다. `messages/en.json`은 영어 금지 표현만 봅니다. 운영자 사이트 문구에서 따옴표로 감싼 예시 인용은 막지 않습니다. 규칙은 [im-not-ai](https://github.com/epoko77-ai/im-not-ai)(MIT, `tools/copy-lint/LICENSE-im-not-ai`)가 공개한 번역투·AI 문체 규칙과 공지 금지 표현(D17-8)입니다.
   - 로컬 훅 켜기(저장소마다 한 번): `git config core.hooksPath .githooks`. 켜면 커밋할 때 걸린 곳을 보여 주고 커밋을 멈춥니다.
   - PR에서는 CI `copy-lint` 작업이 같은 검사를 하며 `ci-ok`에 들어갑니다.
-  - 꼭 필요한 예외는 커밋 메시지에 `[skip-copy-lint]`를 넣고 PR 설명에 이유를 적습니다.
+  - 꼭 필요한 예외는 커밋 메시지에 `[skip-copy-lint]`를 넣고 PR 설명에 이유를 적습니다. CI는 그 커밋이 넣은 줄만 건너뜁니다.
   - `npm run test:copy-lint`: 규칙·어휘 사전 원본 시험 문장·훅·범위 검사 단위 테스트
 
 ## 운영 배포
