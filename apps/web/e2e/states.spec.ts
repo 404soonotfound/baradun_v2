@@ -1,8 +1,5 @@
 import type { Page } from "@playwright/test";
 
-import ko from "../messages/ko.json";
-import { ZONE_NAMES_KO } from "../src/lib/zone-names-ko";
-
 import {
   CLEAR_ID,
   DELAYED_ID,
@@ -12,71 +9,16 @@ import {
   test,
   WARNING_ID,
 } from "./fixtures";
+import {
+  clearBadges,
+  clearPlacesWithoutBasis,
+  CONFIRMED,
+  FINAL_CALL,
+  notSummaryLabel,
+} from "./support/clear-basis";
 
 // 상태별 핵심 흐름 (BRD-39 · 노션 9.1 '실패 경로', 리뷰 점검표 3·4·5)
-const FINAL_CALL = "최종 판단은 현장 통제와 안전요원 안내가 우선이에요";
-// 자정 직후에는 확인 시각이 전날이라 날짜가 붙음(kstStamp: "11/05 23:59")
-const CONFIRMED = /기상청 (?:\d{2}\/\d{2} )?\d{1,2}:\d{2} 확인/;
-// 범위: 예보업무규정 별표 구역 이름 1~2개('강원중부앞바다, 강릉평지') 또는 이름을 모를 때의 '해변 특보구역'(D18-11)
-const ZONE = `(?:${Object.values(ZONE_NAMES_KO)
-  // 정규식 특수 문자를 모두 이스케이프(백슬래시 포함, CodeQL js/incomplete-sanitization)
-  .map((name) => name.replace(/[\\^$.*+?()[\]{}|]/g, "\\$&"))
-  .join("|")})`;
-const SCOPE = `(?:${ZONE}(?:, ${ZONE})?|${ko.warning.beachZones})`;
-
-// 화면에 보이는 '특보 없음' 배지 개수
-// PC 홈 전국 지도 카드의 묶음 이름('특보 없음 0곳')은 판단 배지가 아니라 빼고 셈(data-summary-category)
-function notSummaryLabel(page: Page) {
-  return page.locator(":not([data-summary-category])");
-}
-function clearBadges(page: Page) {
-  return page
-    .getByText("특보 없음", { exact: true })
-    .filter({ visible: true })
-    .and(notSummaryLabel(page));
-}
-
-// '특보 없음'이 보이는 모든 자리에 범위·기상청·확인 시각과 현장 우선 문구가 붙는지(점검표 5)
-// 배지에서 바깥으로 올라가며 '기상청 HH:MM 확인'이 든 가장 가까운 묶음을 찾고, 그 묶음이 든 구역에 현장 우선 문구가 있는지 봄
-async function clearPlacesWithoutBasis(page: Page) {
-  return page.evaluate(
-    ({ finalCall, confirmed, scope }) => {
-      const pattern = new RegExp(confirmed);
-      const missing: string[] = [];
-      const badges = [...document.querySelectorAll("main *")].filter(
-        // 글자가 '특보 없음'인 가장 안쪽 요소(아이콘이 든 배지 포함)
-        (element) =>
-          element.textContent?.trim() === "특보 없음" &&
-          !element.hasAttribute("data-summary-category") &&
-          ![...element.children].some(
-            (child) => child.textContent?.trim() === "특보 없음",
-          ) &&
-          (element as HTMLElement).offsetParent !== null,
-      );
-      for (const badge of badges) {
-        let box: Element | null = badge;
-        let depth = 0;
-        while (box && depth < 8 && !pattern.test(box.textContent ?? "")) {
-          box = box.parentElement;
-          depth += 1;
-        }
-        const scopeOk =
-          box !== null &&
-          depth < 8 &&
-          new RegExp(`${scope} · ${confirmed}`).test(box.textContent ?? "");
-        const section = box?.closest("section, [role='region'], main");
-        const finalOk = (section?.textContent ?? "").includes(finalCall);
-        if (!scopeOk || !finalOk) {
-          missing.push(
-            (box ?? badge).textContent?.trim().slice(0, 80) ?? "(빈 자리)",
-          );
-        }
-      }
-      return { count: badges.length, missing };
-    },
-    { finalCall: FINAL_CALL, confirmed: CONFIRMED.source, scope: SCOPE },
-  );
-}
+// '특보 없음' 근거 검사는 운영 주소 스모크(e2e-live)와 같이 쓰려고 support/clear-basis.ts에 둠
 
 // 판단과 상관없는 상세 동작(길찾기·즐겨찾기·공유·119)은 상태를 못 받는 동안에도 보여야 함
 // PC 길찾기는 판단 카드 안(Figma 183:1032)이라 카드가 불러오는 중·실패 모양일 때 빠지지 않는지 봄(Codex P2, BRD-129)
