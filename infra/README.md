@@ -642,9 +642,9 @@ await fetch("/api/inquiries", {
 
 새 문의 알림은 배포 파라미터 `AlertEmail`로 만든 SNS 이메일 구독을 사용하므로 첫 배포 뒤 구독 확인이 필요합니다. 알림에는 문의 ID·유형·접수 시각(UTC)·이메일 제공 여부만 들어가며, 메일함에 개인정보가 남지 않도록 본문(요약 포함)·실제 이메일 주소·사진 정보는 넣지 않습니다(BRD-120).
 
-### 문의 내용 확인(운영자 콘솔 BRD-97 도입 전)
+### 문의 내용 확인
 
-알림 이메일에는 개인정보 보호를 위해 본문 요약이 들어가지 않으므로, 운영자 콘솔(BRD-97) 도입 전까지는 AWS 관리 콘솔에서 해당 항목만 조회해 확인합니다.
+알림 이메일에는 개인정보 보호를 위해 본문 요약이 들어가지 않습니다. 본문·유형·접수 시각·처리 상태는 운영자 사이트 문의 화면에서 확인합니다(편집 권한 필요, 아래 '문의 처리(BRD-153)'). 운영자 화면과 운영 API는 회신 이메일을 보여 주지 않으므로, 이메일과 첨부 사진 키처럼 화면에 없는 값만 AWS 관리 콘솔에서 해당 항목을 조회해 확인합니다.
 
 1. AWS 콘솔 → DynamoDB → 테이블 → `InquiryTable`(스택 출력 `InquiryTableName`, 예: `BaradunV2-InquiryTable...`) 선택
 2. '항목 탐색' 화면에서 항목 조회(Get item) 또는 쿼리(Query) 실행
@@ -655,7 +655,7 @@ await fetch("/api/inquiries", {
 
 ## 데이터 게시(publish-snapshot)와 롤백
 
-수집기 3개가 수집을 마칠 때마다 `publish-snapshot`을 비동기로 깨웁니다(아키텍처 6.2). 게시 함수는 State를 읽어 해변 상태를 계산하고 `data/{버전}/`에 파일 네 개를 올린 뒤 `data/manifest.json`을 조건부 쓰기(If-Match)로 바꿉니다. 실패하면 manifest는 이전 버전 그대로이고, 함수는 오류로 끝나 Lambda 오류 지표에 남습니다.
+수집기가 수집을 마칠 때마다 `publish-snapshot`을 비동기로 깨웁니다(아키텍처 6.2). 게시 함수는 State를 읽어 해변 상태를 계산하고 `data/{버전}/`에 파일 네 개를 올린 뒤 `data/manifest.json`을 조건부 쓰기(If-Match)로 바꿉니다. 실패하면 manifest는 이전 버전 그대로이고 함수는 오류로 끝나 Lambda 오류 지표에 남습니다.
 
 게시 전에 해변 ID를 집합으로 대조합니다(결정 기록 D16-C1). 저장소 원본 목록(`data/beach-meta.json`의 해변 칸, 함수에 JSON으로 묶임)과 읽은 해변 파일(`beaches/`로 복사됨), 게시 결과(해변 목록·해변 상태)가 하나라도 다르면(누락·추가·중복) 게시하지 않고 앞 게시본을 둡니다. 비율 기준은 없습니다. 로그는 `publish_failed`의 `reason: beach_ids`와 어긋난 ID입니다. 관측을 받지 못한 해변은 빠지지 않고 분류만 판단불가가 됩니다.
 
@@ -978,7 +978,7 @@ npx --no-install tsx services/scripts/inquiry-status-backfill.ts --table <Inquir
 ### 점검 켜기·끄기
 
 1. `MANIFEST_SETTINGS.maintenance`를 `{ active: true, until: "2026-11-06T09:00:00Z" }`처럼 바꿔 PR로 머지합니다. 끌 때는 `{ active: false, until: null }`.
-2. 최신 `origin/main` 작업 트리에서 `npx cdk deploy`합니다(맨 위 배포 절차). services 코드는 Lambda 번들로 들어가서 사이트 배포(`deploy.yml`)로는 반영되지 않습니다.
+2. 머지하면 main CI가 성공한 뒤 인프라를 자동 배포합니다(위 'main 머지 뒤 자동 배포'). 결과는 연결 이슈 댓글로 확인합니다. 승인 대기면 `infra-approve`를 승인하고 로컬 배포 필요면 최신 `origin/main` 작업 트리에서 `npm run deploy:infra`로 배포합니다. services 코드는 Lambda 번들로 들어가서 사이트 배포로는 반영되지 않습니다.
 3. 다음 게시에 반영됩니다. 수집기가 15분 안에 게시를 깨우고, 바로 반영하려면 게시 함수를 직접 부릅니다.
 
    ```bash
@@ -993,8 +993,8 @@ npx --no-install tsx services/scripts/inquiry-status-backfill.ts --table <Inquir
 
 순서가 중요합니다. **새 화면을 먼저 배포하고, 그 뒤에 `minWebBuild`를 올립니다.** 반대로 하면 사용자가 새로고침해도 이전 화면 파일만 받아 강제 업데이트 화면에서 벗어나지 못합니다.
 
-1. 이전 화면이 새 데이터를 잘못 읽을 수 있는 변경일 때만 합니다. `WEB_BUILD`를 1 올린 PR을 main에 머지하면 `deploy.yml`이 사이트를 배포합니다. 배포가 끝났는지 확인합니다.
-2. `MANIFEST_SETTINGS.minWebBuild`를 같은 값으로 올린 PR을 머지하고 `npx cdk deploy`합니다. `minWebBuild`는 배포된 `WEB_BUILD`보다 크게 두지 않습니다(infra 테스트가 막음).
+1. 이전 화면이 새 데이터를 잘못 읽을 수 있는 변경일 때만 합니다. `WEB_BUILD`를 1 올린 PR을 main에 머지하고 다음 정기 배포(매일 05:17 KST)를 기다리거나 `npm run deploy:prod`로 사이트를 배포합니다. 배포가 끝났는지 확인합니다.
+2. `MANIFEST_SETTINGS.minWebBuild`를 같은 값으로 올린 PR을 머지합니다. 인프라 배포는 점검 켜기 2단계와 같습니다. `minWebBuild`는 배포된 `WEB_BUILD`보다 크게 두지 않습니다(infra 테스트가 막음).
 3. 점검과 같은 방법(3·4단계)으로 반영을 확인합니다.
 
 서비스 워커(오프라인)가 생기면 새로고침이 이전 화면 파일을 내주지 않는지 그 작업에서 다시 확인합니다.
