@@ -58,7 +58,7 @@ const section = (page: Page, name: string) =>
   page.getByRole("region", { name, exact: true });
 
 const MISSING_ALL =
-  "일별·시간대별 추이, 앞 기간 비교, 많이 본 화면, 들어온 경로는 아직 보여 드릴 수 없어요";
+  "일별·시간대별 추이, 이전 기간 비교, 많이 본 화면, 들어온 경로는 아직 보여 드릴 수 없어요";
 
 // 기간 추이가 없는 응답(이전 서버): 칸을 숨기고 한 줄 안내
 const withoutTrends = (body: ReturnType<typeof localStatsView>) => {
@@ -89,7 +89,7 @@ test("정상 조회: 머리 '지금 사용 중', 기본 28일, 기간 날짜·�
   // 기간 표시: 응답의 KST 날짜(양 끝 포함) + 앞 기간 비교
   await expect(
     page.getByText(
-      /^Google Analytics · 비식별 이용 이벤트만 수집해요 · \d+월 \d+일 – \d+월 \d+일, 앞 28일과 비교$/,
+      /^Google Analytics · 비식별 이용 이벤트만 수집해요 · \d+월 \d+일 – \d+월 \d+일, 이전 28일과 비교$/,
     ),
   ).toBeVisible();
   await expect(page.getByText("통계 기준 시간대가 달라요")).toHaveCount(0);
@@ -99,12 +99,12 @@ test("정상 조회: 머리 '지금 사용 중', 기본 28일, 기간 날짜·�
   await expect(kpi.getByText("9,240", { exact: true })).toBeVisible();
   await expect(kpi.getByText("2.3", { exact: true })).toBeVisible();
   await expect(kpi.getByText("62%", { exact: true })).toBeVisible();
-  // 앞 28일 3,344·7,634 → 화면에서 계산한 +18.4%·+21%
+  // 이전 28일 3,344·7,634 → 화면에서 계산한 +18.4%·+21%
   await expect(kpi.getByText("+18.4%")).toBeVisible();
   await expect(kpi.getByText("+21%")).toBeVisible();
-  await expect(kpi.getByText("앞 28일 3,344")).toBeVisible();
-  await expect(kpi.getByText("앞 28일 7,634")).toBeVisible();
-  await expect(kpi.getByText("앞 기간 대비")).toHaveCount(2);
+  await expect(kpi.getByText("이전 28일 3,344")).toBeVisible();
+  await expect(kpi.getByText("이전 28일 7,634")).toBeVisible();
+  await expect(kpi.getByText("이전 기간 대비")).toHaveCount(2);
 
   const beaches = section(page, "많이 본 해변");
   await expect(beaches.getByText("해운대해수욕장")).toBeVisible();
@@ -160,7 +160,7 @@ test("정상 조회: 머리 '지금 사용 중', 기본 28일, 기간 날짜·�
     ),
   ).toBeVisible();
   await expect(kpi.getByText("180", { exact: true })).toBeVisible();
-  await expect(kpi.getByText("앞 기간 대비")).toHaveCount(0);
+  await expect(kpi.getByText("이전 기간 대비")).toHaveCount(0);
   await expect(kpi.getByText(/^앞 /)).toHaveCount(0);
   await expect(hourly.getByText("평균 · 오늘")).toBeVisible();
   // 아직 지나지 않은 시간은 결측(옅은 빈칸)이 아니라 비움
@@ -254,10 +254,10 @@ test("기간 추이가 없거나 목록이 응답에 없으면 칸을 숨기고 
   await expect(
     section(page, "시간대별 사용자").getByText(/이 항목을 불러오지 못했어요/),
   ).toBeVisible();
-  // 앞 기간 화면 조회 null: 사용자만 배지, 화면 조회는 '앞 28일 –'
+  // 앞 기간 화면 조회 null: 사용자만 배지, 화면 조회는 '이전 28일 –'
   const kpi = page.locator("dl");
   await expect(kpi.getByText("+18.4%")).toHaveCount(1);
-  await expect(kpi.getByText("앞 28일 –")).toBeVisible();
+  await expect(kpi.getByText("이전 28일 –")).toBeVisible();
   const languages = section(page, "화면 언어");
   await expect(languages.getByRole("listitem")).toHaveCount(4);
   // 기타 = zh 10 + fr 10 → 20 / 180 = 11%
@@ -317,7 +317,7 @@ test("GA4 속성 시간대가 서울과 다르면 기간 표시 옆에 알리고
   }
   // 목록이 null이면 칸은 남음(한 줄 안내 없음), 새 사용자 비율은 –
   await expect(page.getByText(/아직 보여 드릴 수 없어요/)).toHaveCount(0);
-  await expect(page.locator("dl").getByText("앞 기간 대비")).toHaveCount(0);
+  await expect(page.locator("dl").getByText("이전 기간 대비")).toHaveCount(0);
   await expectNoA11yViolations(page);
 });
 
@@ -416,10 +416,10 @@ test("숫자 숨김 안내는 응답을 받은 뒤 metadata가 있을 때만, �
   ).toBeAttached();
   release();
 
-  await expect(page.getByText("잠시 저장된 응답")).toBeVisible();
+  await expect(page.getByText("캐시된 값")).toBeVisible();
   const notice = page
     .getByRole("status")
-    .filter({ hasText: "이 기간 결과에 일부 숫자 숨김이 있어요." });
+    .filter({ hasText: "이 기간 결과에서 일부 숫자가 가려졌어요." });
   await expect(notice).toBeVisible();
   await expect(notice.getByText(/GA가 가렸어요/)).toBeVisible();
   await expect(notice.getByText(/표본으로 계산/)).toBeVisible();
@@ -452,12 +452,10 @@ test("GA4 미연결(configured: false)과 조회 실패(500) 뒤 같은 자리�
     body: { ...localStatsView("28d"), configured: false },
   }));
   await openStats(page);
-  await expect(
-    page.getByText("GA4 연동이 아직 설정되지 않았어요"),
-  ).toBeVisible();
+  await expect(page.getByText("GA4를 아직 연결하지 않았어요")).toBeVisible();
   for (const name of ["기기", "화면 언어", "많이 본 해변"]) {
     const area = section(page, name);
-    await expect(area).toContainText("GA4 연동 전이에요");
+    await expect(area).toContainText("GA4 연결 전이에요");
     await expect(area.getByText(/이 항목을 불러오지 못했어요/)).toHaveCount(0);
   }
   await expectNoA11yViolations(page);
@@ -492,7 +490,7 @@ test("새로 고침하는 동안 받은 값을 두고 회전 표시, 응답이 1
   await page.unroute(/\/ops\/stats(\?.*)?$/);
   await page.route(/\/ops\/stats(\?.*)?$/, () => new Promise<void>(() => {}));
   await page.getByRole("button", { name: "새로 고침" }).click();
-  await expect(page.getByText("다시 읽는 중")).toBeVisible();
+  await expect(page.getByText("새로 불러오는 중")).toBeVisible();
   // 값 유지(자리표시로 바꾸지 않음)
   await expect(page.getByText("14명", { exact: true })).toBeVisible();
   await expect(
@@ -608,7 +606,7 @@ test("로딩(L7): 5초 느림 안내가 화면에 보이고 전체 실패(500) �
   await expect(failAlert).toHaveCount(0);
   mode = "hold";
   await page.getByRole("button", { name: "새로 고침" }).click();
-  await expect(page.getByText("다시 읽는 중")).toBeVisible();
+  await expect(page.getByText("새로 불러오는 중")).toBeVisible();
   await page.clock.fastForward(5_200);
   await expect(
     page.locator("p", { hasText: /평소보다 오래 걸려요/ }),

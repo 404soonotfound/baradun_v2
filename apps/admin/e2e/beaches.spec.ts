@@ -263,7 +263,7 @@ test("목록: 저장소의 222곳을 한 줄 표(11행/쪽)·공식 특보 구�
     ),
   ).toBeVisible();
   await expect(
-    page.getByRole("link", { name: /GitHub에서 고치기/ }),
+    page.getByRole("link", { name: /GitHub에서 수정/ }),
   ).toHaveAttribute(
     "href",
     "https://github.com/404soonotfound/baradun_v2/tree/main/data/beaches",
@@ -278,7 +278,7 @@ test("목록: 저장소의 222곳을 한 줄 표(11행/쪽)·공식 특보 구�
   await expect(tabButton(page, "전체")).toContainText("222");
   await expect(tabButton(page, "판단불가")).toContainText("220");
   await expect(tabButton(page, "이용불가")).toContainText("1");
-  await expect(tabButton(page, "비노출")).toContainText("0");
+  await expect(tabButton(page, "숨김")).toContainText("0");
   await expect(tabButton(page, "가까운 관측 없음")).toContainText("71");
   await expect(tabButton(page, "구역 검증 안 됨")).toContainText("0");
 
@@ -371,8 +371,8 @@ test("목록: 탭·별칭 찾기·지역(지리순)·특보 구역·페이징·�
     page.getByRole("button", { name: "지역: 강원", exact: true }),
   ).toBeFocused();
 
-  await page.getByRole("button", { name: "특보 구역", exact: true }).click();
-  const zoneMenu = page.getByRole("group", { name: "특보 구역 고르기" });
+  await page.getByRole("button", { name: "특보구역", exact: true }).click();
+  const zoneMenu = page.getByRole("group", { name: "특보구역 고르기" });
   await zoneMenu
     .getByRole("button", { name: "강원중부앞바다", exact: true })
     .click();
@@ -383,7 +383,7 @@ test("목록: 탭·별칭 찾기·지역(지리순)·특보 구역·페이징·�
   ).toBeVisible();
   await expect(
     page.getByRole("button", {
-      name: "특보 구역: 강원중부앞바다",
+      name: "특보구역: 강원중부앞바다",
       exact: true,
     }),
   ).toBeVisible();
@@ -401,12 +401,12 @@ test("목록: 탭·별칭 찾기·지역(지리순)·특보 구역·페이징·�
   await expect(page).toHaveURL(/\bzone=S1151200\b/);
 
   // 조건 지우기 후 별칭 찾기('승공' → 상맹방해수욕장)
-  await page.getByRole("button", { name: "지역 거르기 지우기" }).press("Enter");
+  await page.getByRole("button", { name: "지역 필터 지우기" }).press("Enter");
   await expect(page).not.toHaveURL(/\bsido=/);
   await expect(
     page.getByRole("button", { name: "지역", exact: true }),
   ).toBeFocused();
-  await page.getByRole("button", { name: "특보 구역 거르기 지우기" }).click();
+  await page.getByRole("button", { name: "특보구역 필터 지우기" }).click();
   await page.getByLabel("해변 찾기").fill("승공");
   await expect(beachRow(page, "상맹방해수욕장")).toHaveCount(1);
 
@@ -525,16 +525,16 @@ test("유효 시각이 지난 게시 상태는 분류를 그대로 두고 지남
   await openBeaches(page);
   await page.getByLabel("해변 찾기").fill("경포");
   await expect(beachRow(page, "경포해수욕장")).not.toContainText(
-    "유효 시각 지남",
+    "표시 기한 지남",
   );
   await page.getByLabel("해변 찾기").fill("강문");
   const row = beachRow(page, "강문해수욕장");
   await expect(row).toContainText("특보 없음");
-  await expect(row).toContainText("유효 시각 지남");
+  await expect(row).toContainText("표시 기한 지남");
   await openDetail(page, "강문해수욕장");
   const status = page.getByRole("region", { name: "지금 표시 상태" });
   await expect(status).toContainText("특보 없음");
-  await expect(status).toContainText("게시 상태의 유효 시각이 지났어요");
+  await expect(status).toContainText("게시 상태의 표시 기한이 지났어요");
   // 배지는 게시 분류 그대로(안내 문장 속 앱 설명과 구분해 배지 글자만 봄)
   await expect(
     status.getByText("특보 확인 못 함", { exact: true }),
@@ -627,7 +627,7 @@ test("상세: 칸마다 GitHub에서 수정(해당 파일), 데이터 연결 출
     0,
   );
   await expect(links).toContainText(
-    "출입 통제·CCTV는 수집하지 않아 줄이 없어요.",
+    "출입 통제·CCTV는 수집하지 않아 표에 없어요.",
   );
 
   const edit = (section: string) =>

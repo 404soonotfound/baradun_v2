@@ -505,7 +505,7 @@ test.describe("세션 시간 (D16-A3·E1, 캔버스 V31·E11)", () => {
     await page.getByRole("button", { name: "로그인", exact: true }).click();
     await openAccountMenu(page);
     await page.getByRole("link", { name: "내 계정" }).click();
-    await page.getByLabel("지금 비밀번호").fill("draft-kept");
+    await page.getByLabel("현재 비밀번호").fill("draft-kept");
 
     // 14분: 갱신 시도 → 실패. 활동은 이어서 하는 중(유휴 아님)
     await page.clock.runFor("10:00");
@@ -513,7 +513,7 @@ test.describe("세션 시간 (D16-A3·E1, 캔버스 V31·E11)", () => {
     await page.keyboard.press("Shift");
     await page.clock.runFor("04:30");
     const dialog = page.getByRole("dialog", {
-      name: "로그인을 이어가지 못했어요",
+      name: "로그인을 이어 가지 못했어요",
     });
     await expect(dialog).toBeVisible();
     await expect(dialog.getByLabel("이메일")).toHaveValue(OPS);
@@ -527,6 +527,6 @@ test.describe("세션 시간 (D16-A3·E1, 캔버스 V31·E11)", () => {
     await dialog.getByRole("button", { name: "로그인" }).click();
     await expect(dialog).toHaveCount(0);
     // 쓰던 입력이 그대로 남음
-    await expect(page.getByLabel("지금 비밀번호")).toHaveValue("draft-kept");
+    await expect(page.getByLabel("현재 비밀번호")).toHaveValue("draft-kept");
   });
 });

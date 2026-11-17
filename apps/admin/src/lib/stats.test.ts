@@ -237,7 +237,7 @@ describe("응답 칸 유무와 '아직 보여 드릴 수 없어요' 줄", () => 
     ]);
   });
 
-  it("앞 기간 대비 변화: 두 값이 있고 앞 기간이 0보다 클 때만(앞 기간 null·0이면 배지 없음)", () => {
+  it("이전 기간 대비 변화: 두 값이 있고 앞 기간이 0보다 클 때만(앞 기간 null·0이면 배지 없음)", () => {
     expect(changePercent(118, 100)).toBe(18);
     expect(changePercent(4910, 4147)).toBe(18.4);
     expect(changePercent(90, 100)).toBe(-10);
@@ -375,7 +375,7 @@ describe("기간 표시·못 받은 목록 문구(두 화면 공통)", () => {
 
   it("KST 날짜 그대로 'M월 D일 – M월 D일', 앞 기간이 있을 때만 비교 글", () => {
     expect(trendRangeText(good.trends!, "28d", ", ")).toBe(
-      "10월 17일 – 11월 13일, 앞 28일과 비교",
+      "10월 17일 – 11월 13일, 이전 28일과 비교",
     );
     expect(
       trendRangeText({ ...good.trends!, previous: null }, "28d", " · "),

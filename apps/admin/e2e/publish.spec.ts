@@ -272,7 +272,7 @@ test("게시 현황: 현재 게시본·다음 자동 게시·대기 공지·되�
       .getByRole("region", { name: "대기 중인 변경" })
       .getByText('공지 "새벽 점검 예고" 문구 수정'),
   ).toBeVisible();
-  const held = page.getByRole("region", { name: "되돌림 상태 공지" });
+  const held = page.getByRole("region", { name: "되돌린 공지" });
   await expect(held).toContainText("주차장 공사 안내");
   await expect(held).toContainText("자동 게시에는 다시 실리지 않아요");
   await expect(history(page)).toHaveCount(3);
@@ -298,7 +298,7 @@ test("게시 현황: 현재 게시본·다음 자동 게시·대기 공지·되�
   ).toBeVisible();
   await expect(
     pendingRegion.getByText(
-      "이전 값은 아직 보여 드릴 수 없어요 · 바뀔 내용만 보여요",
+      "이전 값은 아직 볼 수 없어요 · 바뀔 내용만 보여요",
     ),
   ).toBeVisible();
   await expectNoA11yViolations(page);
@@ -737,7 +737,7 @@ test("대기 공지를 읽지 못하면 지금 게시 확인 창에 그 사실�
   await openPublish(page);
   await page.getByRole("button", { name: "지금 게시" }).click();
   await expect(page.getByRole("dialog")).toContainText(
-    "대기 중인 변경을 불러오지 못해 무엇이 함께 나가는지 보여 드리지 못해요.",
+    "대기 중인 변경을 불러오지 못해 함께 게시될 내용을 보여 줄 수 없어요.",
   );
 });
 
@@ -1028,7 +1028,7 @@ test("#479 응답 필드: 앱 설정 비교·last24h·공지 before/updatedBy·c
   const checksRegion = page.getByRole("region", { name: /검증 결과/ });
   await expect(checksRegion).toContainText("실패 사유");
   await expect(checksRegion).toContainText("데이터 형식 검사 실패");
-  await expect(checksRegion).toContainText("게시 안 함 · 앞 게시본 유지");
+  await expect(checksRegion).toContainText("게시 안 함 · 이전 게시본 유지");
   await expect(checksRegion).toContainText("형식");
   await expect(checksRegion).toContainText("필수 칸");
   await expect(checksRegion).toContainText("해변 ID 대조");
@@ -1124,7 +1124,7 @@ test("#499 응답 필드: 게시 기록 순번·실패 요약(원문 없이)·�
   const checksRegion = page.getByRole("region", { name: /검증 결과/ });
   await expect(checksRegion).toContainText("실패 요약");
   await expect(checksRegion).toContainText(
-    "계약 검사 오류 3건 · 앞 1건의 데이터 위치",
+    "데이터 형식 검사 오류 3건 · 처음 1건의 데이터 위치",
   );
   await expect(checksRegion).toContainText(
     "StatusFile:/beaches/b0001/observation:required:metrics",
@@ -1168,7 +1168,7 @@ test("검사 3개를 모두 통과한 뒤 다른 사유(manifest_conflict)로 �
   const checksRegion = page.getByRole("region", { name: /검증 결과/ });
   await expect(checksRegion).toContainText("실패 사유");
   await expect(checksRegion).toContainText("다른 게시와 겹침");
-  await expect(checksRegion).toContainText("게시 안 함 · 앞 게시본 유지");
+  await expect(checksRegion).toContainText("게시 안 함 · 이전 게시본 유지");
   await expect(checksRegion.getByText("통과")).toHaveCount(3);
   await expectNoA11yViolations(page);
 });
@@ -1326,7 +1326,7 @@ test(
     await expect(
       region.getByText("오늘 수동 배포 요청 2회 · 1회 약 US$0.017"),
     ).toBeVisible();
-    await expect(region.getByText(/실패·취소한 요청도 세요/)).toBeVisible();
+    await expect(region.getByText(/실패·취소한 요청도 횟수에 넣어요/)).toBeVisible();
 
     const open = region.getByRole("link", { name: /GitHub에서 배포 열기/ });
     await expect(open).toHaveAttribute("target", "_blank");
@@ -1345,7 +1345,7 @@ test(
     ).toBeVisible();
     await expect(region.getByText(/만료 임박/)).toHaveCount(0);
     await expect(
-      region.getByText("화면이 보이는 동안 1분마다 다시 읽어요"),
+      region.getByText("화면이 보이는 동안 1분마다 새로 불러와요"),
     ).toBeVisible();
     await expectNoA11yViolations(page);
   },
@@ -1387,7 +1387,7 @@ test("사이트 배포: 배포 진행 중이면 실행 링크와 30초 다시 �
   await expect(
     region.getByRole("link", { name: /^실행 보기/ }).first(),
   ).toHaveAttribute("href", /\/actions\/runs\/9002$/);
-  await expect(region.getByText(/30초마다 다시 읽어요/)).toBeVisible();
+  await expect(region.getByText(/30초마다 새로 불러와요/)).toBeVisible();
   await expect(region.getByText(READY_TEXT)).toHaveCount(0);
   await expectNoA11yViolations(page);
 });
@@ -1944,7 +1944,7 @@ test("사이트 배포: 다시 로그인으로 세션 세대가 바뀌면 앞 �
   await page.keyboard.press("Shift");
   await page.clock.runFor("04:30");
   const dialog = page.getByRole("dialog", {
-    name: "로그인을 이어가지 못했어요",
+    name: "로그인을 이어 가지 못했어요",
   });
   await expect(dialog).toBeVisible();
   // 다시 로그인 전에는 같은 세대에서 받은 값이 그대로(앞 값 유지)
@@ -2171,7 +2171,7 @@ test("로딩(L6): 목록 재조회·변경 미리보기·되돌리기 미리보�
   );
   holdPreview = false;
   await drawer.getByRole("button", { name: "다시 시도" }).click();
-  await expect(drawer).toContainText("해변 앱 표시는 그대로예요");
+  await expect(drawer).toContainText("앱 표시가 바뀌는 해변이 없어요");
   await drawer.getByRole("button", { name: "닫기" }).first().click();
 
   // 되돌리기 미리보기 5초 느림 안내와 15초 시간 초과 재시도
@@ -2204,7 +2204,7 @@ test("로딩(L6): 목록 재조회·변경 미리보기·되돌리기 미리보�
     .getByRole("button", { name: "다시 적용" })
     .click();
   await expect(
-    page.getByRole("status").filter({ hasText: "다시 읽는 중" }),
+    page.getByRole("status").filter({ hasText: "새로 불러오는 중" }),
   ).toBeVisible();
   await page.clock.fastForward(5_200);
   await expect(

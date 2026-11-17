@@ -224,7 +224,7 @@ test("목록: 상태 탭에 수, 해변 이름·활동, 없는 해변 ID도 숨�
   const calls = await mockInquiries(page);
   await openInquiries(page);
 
-  const tabs = page.getByRole("group", { name: "처리 상태로 거르기" });
+  const tabs = page.getByRole("group", { name: "처리 상태 필터" });
   await expect(tabs.getByRole("button", { name: "접수 2" })).toBeVisible();
   await expect(tabs.getByRole("button", { name: "전체 3" })).toHaveAttribute(
     "aria-pressed",
@@ -495,7 +495,7 @@ test("모르는 처리 상태 문의(#521): 전체 목록 맨 위·상세에 원
   });
   await openInquiries(page);
 
-  const tabs = page.getByRole("group", { name: "처리 상태로 거르기" });
+  const tabs = page.getByRole("group", { name: "처리 상태 필터" });
   await expect(
     page.getByText("처리 상태를 알 수 없는 문의가 1건 있어요"),
   ).toBeVisible();
@@ -521,7 +521,7 @@ test("모르는 처리 상태 문의(#521): 전체 목록 맨 위·상세에 원
   await detail.getByText("확인 중", { exact: true }).click();
   await detail.getByRole("button", { name: "저장" }).click();
   await expect(
-    detail.getByRole("status").filter({ hasText: "‘확인 중’(으)로 바꿨어요" }),
+    detail.getByRole("status").filter({ hasText: "‘확인 중’ 상태로 바꿨어요" }),
   ).toBeVisible();
   expect(calls.patches[0]?.body).toEqual({ version: 1, status: "in_progress" });
 
@@ -557,7 +557,7 @@ test("모르는 처리 상태를 서버가 확인하지 못하면(#521) 목록 �
   await expect(
     page.getByText("처리 상태를 알 수 없는 문의가 있는지 확인하지 못했어요"),
   ).toBeVisible();
-  const tabs = page.getByRole("group", { name: "처리 상태로 거르기" });
+  const tabs = page.getByRole("group", { name: "처리 상태 필터" });
   await expect(tabs.getByRole("button", { name: "접수 2" })).toBeVisible();
   await expect(tabs.getByRole("button", { name: "전체 3" })).toBeVisible();
   await expect(rows(page)).toHaveCount(3);
@@ -661,16 +661,16 @@ test("토큰 갱신에 실패해 다시 로그인하면 문의 목록을 저절�
   await page.getByLabel("비밀번호", { exact: true }).fill("test-password-1");
   await page.getByRole("button", { name: "다음" }).click();
   await expect(page).toHaveURL(/\/inquiries\/$/);
-  await expect(page.getByText(/로그인을 다시 확인해야 해요/)).toBeVisible();
+  await expect(page.getByText(/로그인을 확인하지 못했어요/)).toBeVisible();
 
   const dialog = page.getByRole("dialog", {
-    name: "로그인을 이어가지 못했어요",
+    name: "로그인을 이어 가지 못했어요",
   });
   await dialog.getByLabel("비밀번호", { exact: true }).fill("test-password-1");
   await dialog.getByRole("button", { name: "로그인" }).click();
   await expect(dialog).toBeHidden();
   await expect(rows(page)).toHaveCount(3);
-  await expect(page.getByText(/로그인을 다시 확인해야 해요/)).toHaveCount(0);
+  await expect(page.getByText(/로그인을 확인하지 못했어요/)).toHaveCount(0);
 });
 
 test("다음 쪽이 비어도(그사이 지워짐) 이전 쪽으로 돌아갈 수 있고 '문의가 없어요'로 보이지 않는다", async ({
@@ -687,7 +687,7 @@ test("다음 쪽이 비어도(그사이 지워짐) 이전 쪽으로 돌아갈 �
   );
   await openInquiries(page);
   await page.getByRole("button", { name: "다음" }).click();
-  await expect(page.getByText(/이 쪽에는 문의가 없어요/)).toBeVisible();
+  await expect(page.getByText(/이 페이지에는 문의가 없어요/)).toBeVisible();
   await expect(page.getByText("문의가 없어요", { exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "이전" }).click();
   await expect(rows(page)).toHaveCount(3);
@@ -724,7 +724,7 @@ test("처리: 반려는 이유가 있어야 저장되고, 저장하면 안내·�
   await expectNoA11yViolations(page);
   await detail.getByRole("button", { name: "저장" }).click();
   await expect(
-    detail.getByRole("status").filter({ hasText: "‘반려’(으)로 바꿨어요" }),
+    detail.getByRole("status").filter({ hasText: "‘반려’ 상태로 바꿨어요" }),
   ).toBeVisible();
   expect(calls.patches[0]?.body).toEqual({
     version: 1,
@@ -800,7 +800,7 @@ test("저장 실패: 화면 상태를 먼저 바꾸지 않고, 다시 보내면 
   fail = false;
   await detail.getByRole("button", { name: "저장" }).click();
   await expect(
-    detail.getByRole("status").filter({ hasText: "‘확인 중’(으)로 바꿨어요" }),
+    detail.getByRole("status").filter({ hasText: "‘확인 중’ 상태로 바꿨어요" }),
   ).toBeVisible();
   expect(calls.patches).toHaveLength(2);
   expect(calls.patches[1]?.key).toBe(calls.patches[0]?.key);
@@ -821,7 +821,7 @@ test("반려 이유 길이는 반려일 때만 보고, 다른 상태로 바꾸�
   await detail.getByText("완료", { exact: true }).click();
   await detail.getByRole("button", { name: "저장" }).click();
   await expect(
-    detail.getByRole("status").filter({ hasText: "‘완료’(으)로 바꿨어요" }),
+    detail.getByRole("status").filter({ hasText: "‘완료’ 상태로 바꿨어요" }),
   ).toBeVisible();
   expect(calls.patches[0]?.body).toEqual({ version: 1, status: "resolved" });
 });
@@ -924,7 +924,7 @@ test("접수 탭에서 완료로 저장하면 그 문의는 탭에서 빠지고 
   await signIn(page);
   await mockInquiries(page);
   await openInquiries(page);
-  const tabs = page.getByRole("group", { name: "처리 상태로 거르기" });
+  const tabs = page.getByRole("group", { name: "처리 상태 필터" });
   await tabs.getByRole("button", { name: "접수 2" }).click();
   await expect(rows(page)).toHaveCount(2);
   await rows(page).first().getByRole("link").click();
@@ -932,7 +932,7 @@ test("접수 탭에서 완료로 저장하면 그 문의는 탭에서 빠지고 
   await detail.getByText("완료", { exact: true }).click();
   await detail.getByRole("button", { name: "저장" }).click();
   await expect(
-    detail.getByRole("status").filter({ hasText: "‘완료’(으)로 바꿨어요" }),
+    detail.getByRole("status").filter({ hasText: "‘완료’ 상태로 바꿨어요" }),
   ).toBeVisible();
   if (isMobile(page)) {
     await detail.getByRole("link", { name: /문의 목록으로/ }).click();
@@ -1172,7 +1172,7 @@ test("필터(검색·유형·해변·받은 시각), 미리보기, 행 클릭·�
   // 필터 조합: 유형 + 검색어
   await page.getByRole("button", { name: "유형", exact: true }).click();
   await page
-    .getByRole("group", { name: "유형으로 거르기" })
+    .getByRole("group", { name: "유형 필터" })
     .getByRole("button", { name: "해변을 추가해 주세요" })
     .click();
   await expect(rows(page)).toHaveCount(1);
@@ -1194,7 +1194,7 @@ test("필터(검색·유형·해변·받은 시각), 미리보기, 행 클릭·�
   // 받은 시각 직접 입력: 시작 > 끝이면 입력 오류 안내 + 적용 비활성
   await page.getByRole("button", { name: "받은 시각", exact: true }).click();
   const receivedGroup = page.getByRole("group", {
-    name: "받은 시각으로 거르기",
+    name: "받은 시각 필터",
   });
   await receivedGroup.getByLabel("시작(KST)").fill("2026-11-02T14:00");
   await receivedGroup.getByLabel("끝(KST)").fill("2026-11-02T13:00");
@@ -1224,7 +1224,7 @@ test("필터(검색·유형·해변·받은 시각), 미리보기, 행 클릭·�
     .getByLabel("내용·해변 찾기")
     .pressSequentially("존재하지않는검색어", { delay: 30 });
   await expect(
-    page.getByText("보관 중인 문의 가운데 조건에 맞는 문의가 없어요."),
+    page.getByText("보관 중인 문의 중에 조건에 맞는 것이 없어요."),
   ).toBeVisible();
   // 검색어는 서버로 보냄(치는 동안이 아니라 다 친 뒤 한 번)
   expect(
@@ -1235,17 +1235,15 @@ test("필터(검색·유형·해변·받은 시각), 미리보기, 행 클릭·�
   // 이어 읽어도 계속 남으면 몇 번만 읽고 멈춘 뒤 '아직 찾아보지 않았어요' + '다음 목록 더 불러오기'
   await page.getByLabel("내용·해변 찾기").fill("끝없는검색");
   await expect(
-    page.getByText(/나머지 문의는 아직 찾아보지 않았어요/),
+    page.getByText(/남은 목록을 더 불러와 이어서 찾아 주세요/),
   ).toBeVisible();
   const loops = () =>
     calls.list.filter((q) => q.get("q") === "끝없는검색").length;
   await expect.poll(loops).toBe(5);
   await page.getByRole("button", { name: "다음 목록 더 불러오기" }).click();
   await expect.poll(loops).toBe(9);
-  await expect(
-    page.getByRole("button", { name: "거르기 초기화" }),
-  ).toBeVisible();
-  await page.getByRole("button", { name: "거르기 초기화" }).click();
+  await expect(page.getByRole("button", { name: "필터 초기화" })).toBeVisible();
+  await page.getByRole("button", { name: "필터 초기화" }).click();
   // 거르기를 끄면 서버 커서 기준 첫 쪽(limit=6)으로 복귀함
   await expect(rows(page)).toHaveCount(3);
   await expectNoA11yViolations(page);
@@ -1265,7 +1263,7 @@ test("거르기 결과는 서버 미리보기를 행에 보이고, 본문이 비
   await page.getByLabel("내용·해변 찾기").fill("");
   await page.getByRole("button", { name: "해변", exact: true }).click();
   await page
-    .getByRole("group", { name: "해변으로 거르기" })
+    .getByRole("group", { name: "해변 필터" })
     .getByRole("button", { name: "해변 없음" })
     .click();
   await expect(rows(page)).toHaveCount(1);
@@ -1292,7 +1290,9 @@ test("보기 권한은 내용으로 찾지 않는다고 알리고, 이어 읽기
   await openInquiries(page);
   await page.getByLabel("내용·해변 찾기").fill("b0001");
   await expect(
-    page.getByText("보기 권한은 내용은 찾지 않고 해변 이름·별칭으로만 찾아요."),
+    page.getByText(
+      "보기 권한으로는 내용을 찾을 수 없고 해변 이름·별칭으로만 찾아요.",
+    ),
   ).toBeVisible();
   const failed = page
     .getByRole("alert")
@@ -1332,7 +1332,7 @@ test("거르기 조건 전환: 2쪽에서 검색어를 쳐도 1쪽 요청을 먼
   await openInquiries(page);
   await expect(rows(page)).toHaveCount(2);
 
-  const typeMenu = page.getByRole("group", { name: "유형으로 거르기" });
+  const typeMenu = page.getByRole("group", { name: "유형 필터" });
   const pickType = async (label: string) => {
     await page.getByRole("button", { name: /^유형/ }).first().click();
     await typeMenu.getByRole("button", { name: label }).click();
@@ -1350,7 +1350,7 @@ test("거르기 조건 전환: 2쪽에서 검색어를 쳐도 1쪽 요청을 먼
   expect(
     calls.list.slice(sentBefore).some((q) => q.get("type") === "Weird-Type"),
   ).toBe(false);
-  await page.getByRole("button", { name: "유형 거르기 지우기" }).click();
+  await page.getByRole("button", { name: "유형 필터 지우기" }).click();
   await expect(
     page.getByRole("alert").filter({ hasText: "조건 형식이 맞지 않아" }),
   ).toHaveCount(0);
