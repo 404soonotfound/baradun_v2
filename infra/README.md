@@ -873,7 +873,7 @@ OPERATOR_USER_POOL_ID=<SampleUserPoolId> OPERATOR_CLIENT_ID=<SampleAdminWebClien
 
 `AdminSite`가 운영자 사이트 전용 S3 버킷과 CloudFront 배포를 만듭니다. 사용자 사이트와 주소·캐시·헤더를 나눕니다. 기준은 아키텍처 18.7, 결정 기록 D16-A2·E3, 10/20 결정 2안(별도 사이트)입니다.
 
-- **경로:** 기본 동작은 S3(OAC)의 화면 파일(`apps/admin/out`)이고, 폴더 주소를 `index.html`로 바꾸는 CloudFront Function을 붙입니다. `/ops/*`는 운영 API 함수 URL(OAC)로 보내고 캐시하지 않습니다(모든 method, Host만 빼고 뷰어 헤더 전달). 쓰기 요청은 화면이 본문 해시(`x-amz-content-sha256`)를 함께 보내야 OAC 서명이 통과합니다(문의 API와 같음).
+- **경로:** 기본 동작은 S3(OAC)의 화면 파일(`apps/admin/out`)이고 폴더 주소를 `index.html`로 바꾸는 CloudFront Function을 붙입니다. `/ops/*`는 운영 API 함수 URL(OAC)로 보내고 캐시하지 않습니다(모든 method, Host만 빼고 뷰어 헤더 전달). 쓰기 요청은 화면이 본문 해시(`x-amz-content-sha256`)를 함께 보내야 OAC 서명이 통과합니다(문의 API와 같음). 본문을 실은 `DELETE`는 본문 해시를 보내도 OAC 서명이 통과하지 않아 403이 나므로(AWS 문서의 본문 해시 요구도 PUT·POST만, #549 QA 라운드 1에서 확인), `DELETE`는 본문 없이 보내고 필요한 값은 쿼리로 넘깁니다.
 - **오류 응답:** 사용자 사이트처럼 403을 404 페이지로 바꾸지 않습니다. 이 설정은 배포 전체에 걸려 운영 API의 401·403·404 JSON까지 HTML로 바꾸기 때문입니다. 없는 화면 주소는 S3의 403이 그대로 보입니다.
 - **헤더:** CSP(외부 스크립트·분석 도구 없음, 연결은 자기 주소와 Cognito `cognito-idp.ap-northeast-2`만, `frame-ancestors 'none'`), HSTS 1년, nosniff, X-Frame-Options DENY, `Referrer-Policy: no-referrer`, `X-Robots-Tag: noindex, nofollow, noarchive`, 카메라·마이크·위치를 막는 Permissions-Policy입니다. 인라인 스크립트는 페이지 meta CSP의 해시만 실행됩니다(`apps/admin/scripts/check-out.mts`).
 - **주소:** 대체 도메인은 아직 없습니다(D16-E3, BRD-144와 대조해 정함). 스택 출력 `AdminDistributionDomainName`(CloudFront 기본 주소)으로 엽니다. WAF·IP 제한은 쓰지 않습니다(18.7).
@@ -979,7 +979,7 @@ npx --no-install tsx services/scripts/inquiry-status-backfill.ts --table <Inquir
 운영자가 쓰는 점검 예고·일반 공지입니다. 기준은 결정 기록 D16-B3·D1~D4, 아키텍처 18.4, 화면 설계서 6장 ADM-NTC입니다. 코드는 `services/src/admin/notices.ts`·`notice-routes.ts`입니다.
 
 - **저장:** Ops 테이블 `admin#notice` / `{공지 ID}`. 공지마다 저장한 문구(`draft`, 화면 말 '대기')와 노출본(`live`)을 따로 둡니다. 둘이 다르면 '수정 대기'입니다. 지우면 `deletedAt`만 남기고 항목은 지우지 않습니다.
-- **경로:** `GET /ops/notices`(보기 이상, 운영자 sub는 주지 않음. 샘플은 예시 공지) · `POST /ops/notices`·`PUT /ops/notices/{id}`(편집: 문구 저장) · `POST /ops/notices/{id}/expose`·`/end`(노출 변경: 노출·노출 끝내기) · `DELETE /ops/notices/{id}`(노출 중이면 409, 예약된 노출본이 있으면 노출 변경만). 쓰기는 모두 version·멱등 키·감사 기록을 함께 씁니다. 같은 키·같은 본문의 재전송은 version·상태를 보기 전에 앞 결과를 돌려줍니다.
+- **경로:** `GET /ops/notices`(보기 이상, 운영자 sub는 주지 않음. 샘플은 예시 공지) · `POST /ops/notices`·`PUT /ops/notices/{id}`(편집: 문구 저장) · `POST /ops/notices/{id}/expose`·`/end`(노출 변경: 노출·노출 끝내기) · `DELETE /ops/notices/{id}?version=N`(본문 없음. 노출 중이면 409, 예약된 노출본이 있으면 노출 변경만. 쿼리가 없으면 예전 본문 `{ version }`도 받음). 쓰기는 모두 version·멱등 키·감사 기록을 함께 씁니다. 같은 키·같은 본문의 재전송은 version·상태를 보기 전에 앞 결과를 돌려줍니다.
 - **노출 검사:** 한·영 제목·본문이 모두 있어야 하고, 글자 수는 grapheme으로 제목 한 40/영 60·본문 한 120/영 200(D16-D2·D20-20 확정) 안이어야 합니다. 넘으면 잘라 내지 않고 거부합니다. 끝 시각은 시작 뒤이고 아직 지나지 않아야 합니다. 표현 검사(D16-D1·D17-8)에서 차단 표현은 노출을 막고 경고 표현은 알리기만 합니다.
 - **게시:** publisher가 게시할 때 노출본 중 시작 시각이 지났고 끝나지 않은 공지만 manifest `notices`에 ID 순으로 싣습니다(예약 전 문구는 공개 게시본에 없음). 저장 모양이 틀리거나 계약에 맞지 않는 공지는 그것만 빼고 `publish_notice_invalid`를 남깁니다. 운영 DB를 읽지 못하면 지금 manifest의 공지를 이어서 싣고 `publish_notices_unread`를 남깁니다(특보·관측 게시는 멈추지 않음). 공지만 바뀌어도 새 버전으로 게시합니다.
 - **권한:** publisher 역할의 Ops `Query`는 `dynamodb:LeadingKeys`가 `admin#notice`일 때만 됩니다.
