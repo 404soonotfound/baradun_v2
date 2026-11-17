@@ -69,7 +69,7 @@ export class BaradunStack extends Stack {
       default: "",
       allowedPattern: "^$|^([a-z0-9]([a-z0-9-]*[a-z0-9])?\\.)+[a-z]{2,}$",
       description:
-        "Canonical site domain such as www.baradun.app (empty keeps the CloudFront default domain only)",
+        "Canonical site domain such as baradun.app (empty keeps the CloudFront default domain only)",
     });
     const siteCertificateArn = new CfnParameter(this, "SiteCertificateArn", {
       type: "String",
@@ -79,6 +79,39 @@ export class BaradunStack extends Stack {
       description:
         "ACM certificate ARN in us-east-1 covering SiteDomainName (empty when SiteDomainName is empty)",
     });
+    // 대표 주소로 301 이동시킬 추가 별칭(GH-341, www.baradun.app). 대표 주소가 있을 때만 쓰고, 인증서가 이 이름도 담아야 함
+    const siteRedirectDomainName = new CfnParameter(
+      this,
+      "SiteRedirectDomainName",
+      {
+        type: "String",
+        default: "",
+        allowedPattern: "^$|^([a-z0-9]([a-z0-9-]*[a-z0-9])?\\.)+[a-z]{2,}$",
+        description:
+          "Extra site domain such as www.baradun.app that redirects to SiteDomainName (empty for none)",
+      },
+    );
+    // 운영자 사이트 도메인(GH-341, admin.baradun.app). 사용자 사이트 대표 주소와 같은 방식
+    // 비워 두면 CloudFront 기본 주소만 씀. 값을 넣으면 대체 도메인·인증서만 붙이고 기본 주소도 그대로 열어 둠
+    const adminSiteDomainName = new CfnParameter(this, "AdminSiteDomainName", {
+      type: "String",
+      default: "",
+      allowedPattern: "^$|^([a-z0-9]([a-z0-9-]*[a-z0-9])?\\.)+[a-z]{2,}$",
+      description:
+        "Operator site domain such as admin.baradun.app (empty keeps the CloudFront default domain only)",
+    });
+    const adminSiteCertificateArn = new CfnParameter(
+      this,
+      "AdminSiteCertificateArn",
+      {
+        type: "String",
+        default: "",
+        allowedPattern:
+          "^$|^arn:aws:acm:us-east-1:[0-9]{12}:certificate/[0-9a-f-]+$",
+        description:
+          "ACM certificate ARN in us-east-1 covering AdminSiteDomainName (empty when AdminSiteDomainName is empty)",
+      },
+    );
     // AdminSite는 운영 API 함수 URL에 의존함. 역방향 참조를 피하려고 운영자 배포 주소를 매개변수로 받음.
     const adminSiteDeployUrl = new CfnParameter(this, "AdminSiteDeployUrl", {
       type: "String",
@@ -108,6 +141,55 @@ export class BaradunStack extends Stack {
           ),
           assertDescription:
             "SiteDomainName and SiteCertificateArn must be set together or both left empty",
+        },
+      ],
+    });
+
+    const hasSiteRedirectDomain = new CfnCondition(
+      this,
+      "HasSiteRedirectDomain",
+      {
+        expression: Fn.conditionNot(
+          Fn.conditionEquals(siteRedirectDomainName.valueAsString, ""),
+        ),
+      },
+    );
+    // 추가 별칭은 대표 주소가 있을 때만. 대표 주소 없이 넣으면 배포를 시작하기 전에 거부함
+    new CfnRule(this, "SiteRedirectDomainNeedsSiteDomain", {
+      assertions: [
+        {
+          assert: Fn.conditionOr(
+            Fn.conditionEquals(siteRedirectDomainName.valueAsString, ""),
+            Fn.conditionNot(domainEmpty),
+          ),
+          assertDescription:
+            "SiteRedirectDomainName needs SiteDomainName and SiteCertificateArn",
+        },
+      ],
+    });
+    const adminDomainEmpty = Fn.conditionEquals(
+      adminSiteDomainName.valueAsString,
+      "",
+    );
+    const adminCertificateEmpty = Fn.conditionEquals(
+      adminSiteCertificateArn.valueAsString,
+      "",
+    );
+    const hasAdminSiteDomain = new CfnCondition(this, "HasAdminSiteDomain", {
+      expression: Fn.conditionNot(adminDomainEmpty),
+    });
+    new CfnRule(this, "AdminSiteDomainNeedsCertificate", {
+      assertions: [
+        {
+          assert: Fn.conditionOr(
+            Fn.conditionAnd(adminDomainEmpty, adminCertificateEmpty),
+            Fn.conditionAnd(
+              Fn.conditionNot(adminDomainEmpty),
+              Fn.conditionNot(adminCertificateEmpty),
+            ),
+          ),
+          assertDescription:
+            "AdminSiteDomainName and AdminSiteCertificateArn must be set together or both left empty",
         },
       ],
     });
@@ -143,6 +225,10 @@ export class BaradunStack extends Stack {
         name: siteDomainName.valueAsString,
         certificateArn: siteCertificateArn.valueAsString,
         condition: hasSiteDomain,
+        redirect: {
+          name: siteRedirectDomainName.valueAsString,
+          condition: hasSiteRedirectDomain,
+        },
       },
     });
 
@@ -204,6 +290,11 @@ export class BaradunStack extends Stack {
     // 운영자 사이트: 사용자 사이트와 따로 버킷·CloudFront, /ops/*는 운영 API (BRD-147)
     const adminSite = new AdminSite(this, "AdminSite", {
       opsFunctionUrl: opsApi.functionUrl,
+      domain: {
+        name: adminSiteDomainName.valueAsString,
+        certificateArn: adminSiteCertificateArn.valueAsString,
+        condition: hasAdminSiteDomain,
+      },
     });
 
     // 사이트 경로 쓰기 전용 역할 (GitHub Actions OIDC)

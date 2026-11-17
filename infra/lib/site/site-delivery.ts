@@ -20,11 +20,16 @@ export interface SiteDeliveryProps {
   // CloudFront 보안 응답 헤더 정책 (CSP·HSTS·nosniff 등, BRD-118)
   readonly responseHeadersPolicy?: cloudfront.IResponseHeadersPolicy;
   // 대표 주소(BRD-162). 배포 때 넘기는 매개변수라 값이 비어 있을 수 있음 → condition이 참일 때만 붙임
-  // name: 대체 도메인(예: www.baradun.app), certificateArn: us-east-1 ACM 인증서
+  // name: 대체 도메인(예: baradun.app), certificateArn: us-east-1 ACM 인증서
+  // redirect: 대표 주소로 301 이동시킬 추가 별칭(예: www.baradun.app). 인증서가 이 이름도 담아야 함
   readonly siteDomain?: {
     readonly name: string;
     readonly certificateArn: string;
     readonly condition: CfnCondition;
+    readonly redirect?: {
+      readonly name: string;
+      readonly condition: CfnCondition;
+    };
   };
 }
 
@@ -119,12 +124,20 @@ export class SiteDelivery extends Construct {
     // 대표 주소: 도메인 값이 있을 때만 대체 도메인·인증서를 붙이고, 없으면 두 속성을 빼서 지금과 같게 둠
     // SNI(전용 IP 요금 없음) · TLS 1.2 이상(TLSv1.2_2021, CloudFront 권장 정책)
     if (props.siteDomain) {
-      const { name, certificateArn, condition } = props.siteDomain;
+      const { name, certificateArn, condition, redirect } = props.siteDomain;
       const cfn = this.distribution.node
         .defaultChild as cloudfront.CfnDistribution;
+      // 추가 별칭(www)은 같은 배포로 받고, 주소 변환 함수가 대표 주소가 아닌 호스트를 대표 주소로 301 이동시킴
+      const aliases = redirect
+        ? Fn.conditionIf(
+            redirect.condition.logicalId,
+            [name, redirect.name],
+            [name],
+          )
+        : [name];
       cfn.addPropertyOverride(
         "DistributionConfig.Aliases",
-        Fn.conditionIf(condition.logicalId, [name], Aws.NO_VALUE),
+        Fn.conditionIf(condition.logicalId, aliases, Aws.NO_VALUE),
       );
       cfn.addPropertyOverride(
         "DistributionConfig.ViewerCertificate",

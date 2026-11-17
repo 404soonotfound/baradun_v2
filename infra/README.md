@@ -119,10 +119,12 @@ GA 계정·속성과 Google Cloud 프로젝트는 운영자 Google Workspace 조
 
 ## 운영 도메인 연결 (BRD-162)
 
-대표 주소는 `https://www.baradun.app`입니다(2026-11-02 사용자 결정).
+대표 주소는 `https://baradun.app`입니다(2026-11-17 사용자 결정. 처음에는 2026-11-02 결정으로 `www.baradun.app`이었음).
 
-- 가비아 DNS는 루트 주소에 CNAME을 걸 수 없어서 www만 CloudFront로 보냅니다.
-- 루트 주소(`baradun.app`)는 지금처럼 Vercel(V1 프로젝트)이 www로 넘깁니다. 비용은 0원입니다.
+- 가비아 DNS는 루트 주소를 CloudFront에 연결할 수 없어서(CNAME·ALIAS 미지원), 네임서버를 Vercel DNS(`ns1.vercel-dns.com`·`ns2.vercel-dns.com`, 무료)로 옮기고 루트를 ALIAS로 CloudFront에 연결합니다. 도메인 등록은 가비아에 그대로 둡니다.
+- `www.baradun.app`은 같은 CloudFront 배포의 추가 별칭(스택 매개변수 `SiteRedirectDomainName`)으로 받습니다. 주소 변환 함수가 루트로 301 이동시킵니다. 인증서는 `baradun.app`과 `www.baradun.app`을 함께 담아야 합니다.
+- 배포 명령: `npm run deploy:infra -- --issue 341 --site-domain baradun.app --site-certificate-arn "$ARN" --site-redirect-domain www.baradun.app`. `--site-redirect-domain`을 빼고 `--site-domain`만 넘기면 추가 별칭을 비웁니다.
+- 아래 '미리 할 일'·'출시일 전환 순서'는 2026-11-17 www로 1차 전환할 때의 기록입니다. 루트로 옮길 때는 같은 순서에서 DNS 작업만 Vercel DNS에서 하고(루트 `ALIAS` → `d1gam1q4z69v8c.cloudfront.net`, `www` CNAME 같은 값), Vercel 프로젝트에서 `baradun.app`·`www.baradun.app` 도메인을 뺍니다. 저장소 변수 `SITE_URL`은 `https://baradun.app`입니다.
 - 전환은 **출시일**에 합니다. 그 전까지 스택 매개변수 `SiteDomainName`·`SiteCertificateArn`은 비워 둡니다. 비어 있으면 대체 도메인·인증서를 붙이지 않고, 주소 변환 함수도 이동하지 않습니다(지금과 같은 동작).
 
 값을 넣으면 다음처럼 동작합니다.
@@ -876,7 +878,9 @@ OPERATOR_USER_POOL_ID=<SampleUserPoolId> OPERATOR_CLIENT_ID=<SampleAdminWebClien
 - **경로:** 기본 동작은 S3(OAC)의 화면 파일(`apps/admin/out`)이고 폴더 주소를 `index.html`로 바꾸는 CloudFront Function을 붙입니다. `/ops/*`는 운영 API 함수 URL(OAC)로 보내고 캐시하지 않습니다(모든 method, Host만 빼고 뷰어 헤더 전달). 쓰기 요청은 화면이 본문 해시(`x-amz-content-sha256`)를 함께 보내야 OAC 서명이 통과합니다(문의 API와 같음). 본문을 실은 `DELETE`는 본문 해시를 보내도 OAC 서명이 통과하지 않아 403이 나므로(AWS 문서의 본문 해시 요구도 PUT·POST만, #549 QA 라운드 1에서 확인), `DELETE`는 본문 없이 보내고 필요한 값은 쿼리로 넘깁니다.
 - **오류 응답:** 사용자 사이트처럼 403을 404 페이지로 바꾸지 않습니다. 이 설정은 배포 전체에 걸려 운영 API의 401·403·404 JSON까지 HTML로 바꾸기 때문입니다. 없는 화면 주소는 S3의 403이 그대로 보입니다.
 - **헤더:** CSP(외부 스크립트·분석 도구 없음, 연결은 자기 주소와 Cognito `cognito-idp.ap-northeast-2`만, `frame-ancestors 'none'`), HSTS 1년, nosniff, X-Frame-Options DENY, `Referrer-Policy: no-referrer`, `X-Robots-Tag: noindex, nofollow, noarchive`, 카메라·마이크·위치를 막는 Permissions-Policy입니다. 인라인 스크립트는 페이지 meta CSP의 해시만 실행됩니다(`apps/admin/scripts/check-out.mts`).
-- **주소:** 대체 도메인은 아직 없습니다(D16-E3, BRD-144와 대조해 정함). 스택 출력 `AdminDistributionDomainName`(CloudFront 기본 주소)으로 엽니다. WAF·IP 제한은 쓰지 않습니다(18.7).
+- **주소:** 대체 도메인은 `admin.baradun.app`입니다(GH-341). 스택 매개변수 `AdminSiteDomainName`·`AdminSiteCertificateArn`으로 붙입니다. 비우면 스택 출력 `AdminDistributionDomainName`(CloudFront 기본 주소)으로만 엽니다. 두 값은 함께 넣거나 함께 비워야 합니다(`AdminSiteDomainNeedsCertificate` 규칙). 도메인을 붙여도 기본 주소는 이동 없이 그대로 열립니다(검색 노출을 막는 사이트라 주소를 하나로 모으지 않음). WAF·IP 제한은 쓰지 않습니다(18.7).
+  - 연결 순서: ① us-east-1에 `admin.baradun.app` 인증서를 요청하고 가비아에 검증 CNAME을 넣어 `ISSUED`를 확인합니다('운영 도메인 연결 › 미리 할 일' 2·3단계와 같음, 도메인만 `admin.baradun.app`). ② 배포용 작업 트리에서 `npm run deploy:infra -- --issue 341 --admin-domain admin.baradun.app --admin-certificate-arn "$ADMIN_ARN" --admin-site-deploy-url https://admin.baradun.app`을 실행합니다. ③ 가비아에 CNAME `admin` → `AdminDistributionDomainName` 출력 값을 넣습니다. ④ `gh variable set ADMIN_SITE_URL --body https://admin.baradun.app` 뒤 `npm run deploy:prod`로 다시 올립니다.
+  - 되돌리기: `ADMIN_SITE_URL`을 CloudFront 기본 주소로 되돌리고 `npm run deploy:infra -- --issue 341 --clear-admin-domain --admin-site-deploy-url https://<AdminDistributionDomainName 출력 값>`을 실행합니다. 가비아 `admin` CNAME은 지웁니다.
 - **배포:** GitHub Actions `deploy.yml`의 `admin` 작업이 main CI 성공 뒤 `apps/admin`을 빌드해 올립니다. 인프라 배포 뒤 스택 출력 두 개를 GitHub 저장소 변수로 넣어야 이 작업이 돕니다. 비어 있으면 작업을 건너뜁니다.
 
   ```bash

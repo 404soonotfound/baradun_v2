@@ -11,7 +11,9 @@ const REPO_ROOT = path.join(__dirname, "../../..");
 export function readInquiryContactEnabled(): boolean {
   const policyFile = path.join(REPO_ROOT, "services/src/inquiry/policy.ts");
   const text = readFileSync(policyFile, "utf8");
-  const match = /export const INQUIRY_CONTACT_ENABLED = (true|false);/.exec(text);
+  const match = /export const INQUIRY_CONTACT_ENABLED = (true|false);/.exec(
+    text,
+  );
   if (!match) {
     throw new Error(`${policyFile}에서 INQUIRY_CONTACT_ENABLED를 찾지 못함`);
   }
@@ -44,11 +46,9 @@ export interface CspOptions {
 // CSP 지시어 문자열 생성 (BRD-118, GA 출처 BRD-143)
 // apps/web/e2e/static-server.mjs의 buildCspHeader와 글자까지 같아야 함(security-headers.test.ts가 비교)
 export function buildContentSecurityPolicy(options: CspOptions = {}): string {
-  const photoEnabled = options.photoUploadEnabled ?? readInquiryContactEnabled();
-  const connectSources = [
-    "'self'",
-    ...GA_CONNECT_SOURCES,
-  ];
+  const photoEnabled =
+    options.photoUploadEnabled ?? readInquiryContactEnabled();
+  const connectSources = ["'self'", ...GA_CONNECT_SOURCES];
 
   // 결정 2: 사진 받기 설정이 켜져 있고 버킷 이름이 있을 때만 버킷 origin 추가(GA 출처 뒤)
   if (photoEnabled && options.photoBucketName) {

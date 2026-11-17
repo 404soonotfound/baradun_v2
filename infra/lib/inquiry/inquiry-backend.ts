@@ -94,9 +94,7 @@ export class InquiryBackend extends Construct {
       enforceSSL: true,
       encryption: s3.BucketEncryption.S3_MANAGED,
       removalPolicy: RemovalPolicy.RETAIN,
-      lifecycleRules: [
-        { expiration: Duration.days(30) },
-      ],
+      lifecycleRules: [{ expiration: Duration.days(30) }],
       cors: [
         {
           allowedMethods: [s3.HttpMethods.POST],
@@ -183,7 +181,8 @@ export class InquiryBackend extends Construct {
         retryAttempts: RETRY_LIMITS.scheduleMaxRetries,
         maxEventAge: Duration.seconds(RETRY_LIMITS.scheduleMaxEventAgeSeconds),
       }),
-      description: "Delete expired inquiry email items daily (88-day retention)",
+      description:
+        "Delete expired inquiry email items daily (88-day retention)",
     });
 
     this.functionUrl = this.function.addFunctionUrl({

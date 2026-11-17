@@ -64,7 +64,11 @@ esac
         [resolve(__dirname, "../../scripts/deploy-prod.mjs")],
         {
           encoding: "utf8",
-          env: { ...process.env, PATH: bin + ":" + process.env.PATH, DEPLOY_TEST_RESULT: outcome },
+          env: {
+            ...process.env,
+            PATH: bin + ":" + process.env.PATH,
+            DEPLOY_TEST_RESULT: outcome,
+          },
         },
       );
       expect(result.status).toBe(status);
