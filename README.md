@@ -4,6 +4,9 @@
 
 > 최종 판단은 현장 통제와 안전요원 안내가 우선입니다.
 
+- **사이트**: <https://www.baradun.app>
+- **운영자 사이트 시연**: <https://admin.baradun.app/login/demo/> (예시 데이터만 보이는 시연 계정은 요청하면 드립니다.)
+- 두 주소는 V2 운영 전환을 준비하고 있습니다. 전환 전에는 열리지 않거나 이전 버전이 보일 수 있습니다.
 - **주요 스택**: TypeScript, Next.js 16 정적 내보내기, AWS Lambda·DynamoDB·S3·CloudFront(AWS CDK), Vitest, Playwright
 - **해변 수**: 223곳(`data/beaches/`의 해변 파일 수)
 
