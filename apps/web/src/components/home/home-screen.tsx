@@ -544,20 +544,26 @@ export function HomeScreen({
         >
           <div className="flex flex-wrap items-end justify-between gap-3 lg:gap-6">
             <div className="flex min-w-0 flex-col gap-0.5">
-              <h2
-                id="home-near"
-                tabIndex={-1}
-                className="text-title-m text-text-default outline-none [word-break:keep-all] lg:text-title-l"
-              >
-                {listTitle}
-              </h2>
+              {/* 새로고침은 글자 없는 아이콘 버튼으로 제목('전국 바다'·지역 이름·활동 묶음) 바로 오른쪽에 둠(GH-218) */}
+              <div className="flex min-w-0 items-center gap-1">
+                <h2
+                  id="home-near"
+                  tabIndex={-1}
+                  className="min-w-0 text-title-m text-text-default outline-none [word-break:keep-all] lg:text-title-l"
+                >
+                  {listTitle}
+                </h2>
+                <RefreshButton
+                  variant="icon"
+                  refreshing={refreshing}
+                  onRefresh={triggerRefresh}
+                />
+              </div>
               {showingText && (
                 <p className="text-caption text-text-muted">{showingText}</p>
               )}
             </div>
-            {/* PC는 위쪽 맞춤: 칩 줄(ReasonChips)이 버튼 높이라 버튼과 칩의 세로 가운데가 같음. 가운데 맞춤이면 칩 아래 안내 글까지 합친 높이의 가운데로 버튼이 내려감 */}
-            <div className="flex flex-wrap items-center gap-2 lg:items-start">
-              <RefreshButton refreshing={refreshing} onRefresh={triggerRefresh} />
+            <div className="flex flex-wrap items-center gap-2">
               {/* 모바일: 제목 줄 오른쪽 '전체 보기'(펼칠 수 있으면 그 자리 펼침, 아니면 탐색) */}
               {!desktop &&
                 (canExpand ? (
