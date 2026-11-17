@@ -3,8 +3,9 @@
 // 사용:
 //   node tools/copy-lint/lint.mjs --commit-msg <파일>   git commit-msg 훅: 메시지 + 스테이징된 변경 줄
 //   node tools/copy-lint/lint.mjs --range <base> <head> CI: base..head 커밋 메시지 + base...head 변경 줄
-// - 검사 대상 줄: apps/web·apps/admin messages/ko.json의 추가·수정된 문자열 값, 추가·수정된 *.md 줄(코드 블록·인라인 코드 제외)
-// - 건너뛰기: 커밋 메시지에 [skip-copy-lint]. --range에서는 그 커밋 메시지만, 그리고 범위 안 한 커밋이라도 있으면 변경 줄 검사도 건너뜀
+// - 검사 대상 줄: apps/web·apps/admin messages/ko.json의 추가·수정된 문자열 값, 추가·수정된 *.md 줄(코드 블록·인라인 코드 제외),
+//   messages/en.json 값은 공지 금지 표현(영어)만 봄. 운영자 사이트 문구는 따옴표 안 금지 표현을 예시 인용으로 보고 막지 않음
+// - 건너뛰기: 커밋 메시지에 [skip-copy-lint]. --range에서는 그 커밋의 메시지와 그 커밋이 마지막으로 바꾼 줄만 건너뜀(git blame)
 // - Merge·Revert·fixup!·squash! 커밋과 Dependabot 커밋 메시지는 검사하지 않음(영어 자동 제목)
 // 종료 코드: 0 통과 / 1 규칙에 걸림 / 2 사용법·git 오류(CI는 실패로 봄)
 import { execFileSync } from "node:child_process";
@@ -18,6 +19,11 @@ export const COPY_FILES = [
   "apps/web/messages/ko.json",
   "apps/admin/messages/ko.json",
 ];
+export const COPY_EN_FILES = [
+  "apps/web/messages/en.json",
+  "apps/admin/messages/en.json",
+];
+const QUOTED_EXAMPLES_OK = (file) => file.startsWith("apps/admin/");
 // 다른 저작물 라이선스 문서는 손대지 않으므로 뺌
 const DOC_EXCLUDE = [/(^|\/)LICENSE[^/]*\.md$/u, /(^|\/)node_modules\//u];
 
@@ -54,11 +60,23 @@ export function shouldSkipMessage(message, author = "") {
   return AUTO_SKIP_PREFIXES.some((p) => first.startsWith(p));
 }
 
+// 메시지 끝 트레일러 블록(빈 줄 뒤 'Key: value' 줄만 이어짐)의 시작 줄 번호(0부터). 없으면 줄 수
+export function trailerStart(lines) {
+  let i = lines.length;
+  while (i > 0 && /^[A-Za-z][A-Za-z0-9-]*: \S/u.test(lines[i - 1])) i--;
+  // 제목 줄 하나뿐이거나 바로 앞이 빈 줄이 아니면 트레일러로 보지 않음
+  return i < lines.length && i > 1 && lines[i - 1].trim() === ""
+    ? i
+    : lines.length;
+}
+
 export function checkMessage(message, label) {
   const findings = [];
-  message.split("\n").forEach((line, i) => {
-    // Co-Authored-By 같은 트레일러는 검사하지 않음
-    if (/^[A-Za-z-]+: /u.test(line)) return;
+  const lines = message.split("\n");
+  const end = trailerStart(lines);
+  lines.forEach((line, i) => {
+    // Co-Authored-By 같은 끝 트레일러만 검사하지 않음(본문 'Note: …' 줄은 검사)
+    if (i >= end) return;
     for (const hit of checkText(line, "commit"))
       findings.push({ where: `${label}:${i + 1}`, text: line, ...hit });
   });
@@ -143,20 +161,25 @@ export function docLines(content) {
   return out;
 }
 
-export function checkChangedFiles(added, readFile) {
+// skipLine(file, n): 건너뛸 줄([skip-copy-lint] 커밋이 넣은 줄)
+export function checkChangedFiles(added, readFile, skipLine = () => false) {
   const findings = [];
   for (const [file, lines] of added) {
     const isCopy = COPY_FILES.includes(file);
+    const isCopyEn = COPY_EN_FILES.includes(file);
     const isDoc =
       file.endsWith(".md") && !DOC_EXCLUDE.some((r) => r.test(file));
-    if ((!isCopy && !isDoc) || lines.size === 0) continue;
+    if ((!isCopy && !isCopyEn && !isDoc) || lines.size === 0) continue;
+    const kind = isCopy ? "copy" : isCopyEn ? "copy-en" : "doc";
     const content = readFile(file);
     const rows = content.split("\n");
     const docs = isDoc ? docLines(content) : null;
     for (const n of [...lines].sort((a, b) => a - b)) {
-      const text = isCopy ? jsonLineValue(rows[n - 1] ?? "") : docs.get(n);
+      if (skipLine(file, n)) continue;
+      const text = isDoc ? docs.get(n) : jsonLineValue(rows[n - 1] ?? "");
       if (!text) continue;
-      for (const hit of checkText(text, isCopy ? "copy" : "doc"))
+      const opts = { quotedExamples: QUOTED_EXAMPLES_OK(file) };
+      for (const hit of checkText(text, kind, opts))
         findings.push({ where: `${file}:${n}`, text: text.trim(), ...hit });
     }
   }
@@ -177,6 +200,7 @@ function diffArgs(...range) {
     ...range,
     "--",
     ...COPY_FILES,
+    ...COPY_EN_FILES,
     "*.md",
   ];
 }
@@ -199,24 +223,44 @@ export function runRange(base, head, cwd) {
     cwd,
   );
   const findings = [];
-  let skipFiles = false;
+  const skipCommits = new Set();
   for (const entry of log.split("\x1e")) {
     const [sha, author, body] = entry.replace(/^\n/u, "").split("\x00");
     if (!sha) continue;
     const message = (body ?? "").trim();
-    if (message.includes(SKIP_MARKER)) skipFiles = true;
+    if (message.includes(SKIP_MARKER)) skipCommits.add(sha);
     if (shouldSkipMessage(message, author)) continue;
     findings.push(...checkMessage(message, `커밋 ${sha.slice(0, 8)}`));
   }
-  if (!skipFiles) {
-    const diff = git(diffArgs(`${base}...${head}`), cwd);
-    findings.push(
-      ...checkChangedFiles(parseAddedLines(diff), (f) =>
-        git(["show", `${head}:${f}`], cwd),
-      ),
-    );
-  }
+  const diff = git(diffArgs(`${base}...${head}`), cwd);
+  const blames = new Map();
+  const skipLine = (file, n) => {
+    if (skipCommits.size === 0) return false;
+    if (!blames.has(file)) blames.set(file, blameLines(head, file, cwd));
+    return skipCommits.has(blames.get(file).get(n));
+  };
+  findings.push(
+    ...checkChangedFiles(
+      parseAddedLines(diff),
+      (f) => git(["show", `${head}:${f}`], cwd),
+      skipLine,
+    ),
+  );
   return findings;
+}
+
+// head 기준 각 줄을 마지막으로 바꾼 커밋 → Map(줄 번호 → 커밋 SHA)
+export function parseBlame(porcelain) {
+  const out = new Map();
+  for (const l of porcelain.split("\n")) {
+    const m = /^([0-9a-f]{40}) \d+ (\d+)/u.exec(l);
+    if (m) out.set(Number(m[2]), m[1]);
+  }
+  return out;
+}
+
+function blameLines(head, file, cwd) {
+  return parseBlame(git(["blame", "--porcelain", head, "--", file], cwd));
 }
 
 export function format(findings) {
