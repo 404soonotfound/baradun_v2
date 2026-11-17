@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl";
 import { useId } from "react";
 
 import { MiniWaveChart } from "@/components/home/mini-wave-chart";
+import { IntentLink } from "@/components/intent-link";
 import { ReasonBadge } from "@/components/reason-badge";
 import { type Activity, activityNameKey } from "@/lib/activity";
 import { ALT_MAX_KM } from "@/lib/alternatives";
@@ -88,7 +89,7 @@ export function AltBeaches({
             const km = formatKm(beach.distanceKm);
             return (
               <li key={beach.id}>
-                <Link
+                <IntentLink
                   href={localizedPath(locale, `/spots/${beach.slug}/`)}
                   className="flex min-h-20 items-center gap-3 rounded-tile border border-brand-border bg-bg-surface px-[15px] py-[13px] hover:bg-bg-subtle"
                 >
@@ -122,7 +123,7 @@ export function AltBeaches({
                     </span>
                   </span>
                   <ReasonBadge label={view.badge} />
-                </Link>
+                </IntentLink>
               </li>
             );
           })}

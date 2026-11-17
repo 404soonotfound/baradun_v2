@@ -1,7 +1,7 @@
 "use client";
 
 import { ChevronRight } from "lucide-react";
-import Link from "next/link";
+import { IntentLink } from "@/components/intent-link";
 import { useTranslations } from "next-intl";
 
 import { SkyGlyph } from "@/components/detail/weather-card";
@@ -176,7 +176,7 @@ export function NearCard({
   });
 
   return (
-    <Link
+    <IntentLink
       href={localizedPath(locale, `/spots/${beach.slug}/`)}
       className={cn(
         "group flex h-full flex-col gap-3 rounded-[16px] border border-border-default bg-bg-surface px-4 pt-3.5 pb-4 shadow-card transition-colors hover:border-border-strong",
@@ -259,7 +259,7 @@ export function NearCard({
           {t("safety.finalCall")}
         </span>
       </span>
-    </Link>
+    </IntentLink>
   );
 }
 

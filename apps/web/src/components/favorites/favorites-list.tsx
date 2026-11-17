@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { IntentLink } from "@/components/intent-link";
 import { useTranslations } from "next-intl";
 
 import {
@@ -83,7 +83,7 @@ function FavoriteBlock({
 
   return (
     <li className="relative">
-      <Link
+      <IntentLink
         href={href}
         className="flex flex-col gap-2.5 p-3.5 focus-visible:-outline-offset-2"
       >
@@ -142,7 +142,7 @@ function FavoriteBlock({
         {measuredLine && (
           <span className="text-caption text-text-muted">{measuredLine}</span>
         )}
-      </Link>
+      </IntentLink>
 
       {/* 링크 밖에 두어 누를 때 상세로 이동하지 않고 화면 읽기도 꼬이지 않음 */}
       <FavoriteStarButton

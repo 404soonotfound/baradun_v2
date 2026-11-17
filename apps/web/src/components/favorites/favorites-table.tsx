@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { IntentLink } from "@/components/intent-link";
 import { useTranslations } from "next-intl";
 
 import {
@@ -129,7 +129,7 @@ function FavoriteTableRow({
         scope="row"
         className="py-3.5 pr-3 pl-4 text-left align-middle font-normal"
       >
-        <Link
+        <IntentLink
           href={href}
           className="flex min-h-touch items-center gap-3 rounded-[10px] focus-visible:outline-offset-2"
         >
@@ -144,7 +144,7 @@ function FavoriteTableRow({
               </span>
             )}
           </span>
-        </Link>
+        </IntentLink>
       </th>
 
       <td className="px-3 py-3.5 align-middle">

@@ -1,5 +1,5 @@
 import { ChevronRight } from "lucide-react";
-import Link from "next/link";
+import { IntentLink } from "@/components/intent-link";
 import { useLocale, useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 
@@ -71,7 +71,7 @@ export function SearchResultRow({
 
   return (
     <li>
-      <Link
+      <IntentLink
         href={href}
         {...(onOpen ? { onClick: onOpen } : {})}
         className="flex min-h-touch items-center gap-3.5 py-[13px] pr-3 pl-3.5 focus-visible:-outline-offset-2"
@@ -116,7 +116,7 @@ export function SearchResultRow({
           size={16}
           className="shrink-0 text-text-muted"
         />
-      </Link>
+      </IntentLink>
     </li>
   );
 }
