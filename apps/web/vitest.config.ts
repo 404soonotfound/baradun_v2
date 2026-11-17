@@ -7,6 +7,6 @@ export default defineConfig({
   resolve: {
     alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) },
   },
-  // e2e/는 Playwright 스위트(npm run test:e2e)라 Vitest에서 뺌 (BRD-39)
-  test: { exclude: [...configDefaults.exclude, "e2e/**"] },
+  // e2e/·e2e-live/는 Playwright 스위트(npm run test:e2e·test:smoke:live)라 Vitest에서 뺌 (BRD-39, #551)
+  test: { exclude: [...configDefaults.exclude, "e2e/**", "e2e-live/**"] },
 });

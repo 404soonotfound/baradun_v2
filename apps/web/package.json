@@ -23,6 +23,7 @@
     "build-storybook": "storybook build",
     "test:e2e": "playwright test",
     "test:e2e:smoke": "playwright test --grep @smoke",
+    "test:smoke:live": "node scripts/smoke-live.mjs",
     "tokens": "baradun-tokens src/styles/tokens.css",
     "icons": "node scripts/build-icons.mts",
     "map:worker": "node scripts/copy-map-worker.mjs",
