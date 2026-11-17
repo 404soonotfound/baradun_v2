@@ -506,6 +506,66 @@ describe("지우기 (D16-D3)", () => {
     expect(byPublisher.statusCode).toBe(200);
   });
 
+  // CloudFront OAC가 본문 있는 DELETE 서명을 통과시키지 못해 운영자 사이트는 ?version=N으로 보냄
+  const deleteByQuery = (
+    noticeId: string,
+    version: string,
+    key: string | null = newKey(),
+    body?: unknown,
+  ): APIGatewayProxyEventV2 => ({
+    ...event("DELETE", `/ops/notices/${noticeId}`, body, key),
+    queryStringParameters: { version },
+  });
+
+  it("본문 없이 ?version=N으로 보낸 지우기도 받는다", async () => {
+    const table = new FakeTable();
+    const { noticeId } = await create(table);
+    const key = newKey();
+    const deleted = await handleOps(
+      deleteByQuery(noticeId, "1", key),
+      deps("editor", table),
+    );
+    expect(deleted.statusCode).toBe(200);
+    expect(stored(table, noticeId)?.deletedAt).toBe(NOW.toISOString());
+    expect(audits(table).at(-1)).toMatchObject({ action: "notice.delete" });
+    // 같은 멱등 키로 다시 보내면 같은 결과를 돌려주고 다시 쓰지 않음
+    const again = await handleOps(
+      deleteByQuery(noticeId, "1", key),
+      deps("editor", table),
+    );
+    expect(again.statusCode).toBe(200);
+    expect(parse(again)).toEqual(parse(deleted));
+    // 같은 키로 다른 version을 보내면 다른 요청으로 봄
+    const other = await handleOps(
+      deleteByQuery(noticeId, "2", key),
+      deps("editor", table),
+    );
+    expect(parse(other).error.reason).toBe("idempotency_mismatch");
+  });
+
+  it("?version=N이 틀렸거나 본문과 함께 오면 400이고 지우지 않는다", async () => {
+    const table = new FakeTable();
+    const { noticeId } = await create(table);
+    for (const [request, field] of [
+      [deleteByQuery(noticeId, "0"), "version"],
+      [deleteByQuery(noticeId, "1.0"), "version"],
+      [deleteByQuery(noticeId, ""), "version"],
+      [deleteByQuery(noticeId, "99999999999999999"), "version"],
+      [deleteByQuery(noticeId, "1", null), "idempotencyKey"],
+      [deleteByQuery(noticeId, "1", newKey(), { version: 1 }), "body"],
+    ] as const) {
+      const result = await handleOps(request, deps("editor", table));
+      expect(result.statusCode).toBe(400);
+      expect(parse(result).error.field).toBe(field);
+    }
+    const stale = await handleOps(
+      deleteByQuery(noticeId, "2"),
+      deps("editor", table),
+    );
+    expect(stale.statusCode).toBe(409);
+    expect(stored(table, noticeId)?.deletedAt ?? null).toBeNull();
+  });
+
   it("지운 공지는 항목과 이력이 남고 목록·고치기에서는 없다", async () => {
     const table = new FakeTable();
     const { noticeId } = await create(table);

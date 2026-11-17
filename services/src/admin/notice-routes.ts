@@ -90,11 +90,11 @@ export interface WriteRequest {
   readonly value: unknown;
 }
 
-// 쓰기 요청 공통: 멱등 키 헤더(UUID v4)와 JSON 본문
-export function readWrite(
+// 멱등 키 헤더(UUID v4). 없거나 틀리면 400
+function readIdempotencyKey(
   event: APIGatewayProxyEventV2,
   ids: RequestIds,
-): { request: WriteRequest } | { error: Result } {
+): { key: string } | { error: Result } {
   const key = header(event, IDEMPOTENCY_KEY_HEADER);
   if (!key || !IDEMPOTENCY_KEY.test(key)) {
     return {
@@ -103,11 +103,50 @@ export function readWrite(
       }),
     };
   }
+  return { key };
+}
+
+// 쓰기 요청 공통: 멱등 키 헤더(UUID v4)와 JSON 본문
+export function readWrite(
+  event: APIGatewayProxyEventV2,
+  ids: RequestIds,
+): { request: WriteRequest } | { error: Result } {
+  const read = readIdempotencyKey(event, ids);
+  if ("error" in read) return read;
+  const { key } = read;
   const body = readJsonBody(event);
   if (!body) {
     return { error: errorJson(400, "invalid_request", ids, { field: "body" }) };
   }
   return { request: { key, ...body } };
+}
+
+// 지우기(DELETE): version은 주소 뒤 ?version=N으로 받음. CloudFront OAC가 본문 있는 DELETE의
+// 서명을 통과시키지 못해(본문 해시 요구는 PUT·POST만) 본문 없이 보냄(GH-549 QA 라운드 1)
+// 이 쿼리가 없으면 예전처럼 본문 { version }을 읽음(운영자 사이트·운영 API 배포 순서와 무관하게 동작)
+const VERSION_QUERY = /^[1-9][0-9]{0,15}$/;
+export function readDeleteWrite(
+  event: APIGatewayProxyEventV2,
+  ids: RequestIds,
+): { request: WriteRequest } | { error: Result } {
+  const query = event.queryStringParameters?.version;
+  if (query === undefined) return readWrite(event, ids);
+  const read = readIdempotencyKey(event, ids);
+  if ("error" in read) return read;
+  const { key } = read;
+  // 쿼리와 본문을 함께 보내면 어느 쪽이 기준인지 모호해 받지 않음
+  if (event.body !== undefined && event.body.length > 0) {
+    return { error: errorJson(400, "invalid_request", ids, { field: "body" }) };
+  }
+  const version = Number(query);
+  if (!VERSION_QUERY.test(query) || !Number.isSafeInteger(version)) {
+    return {
+      error: errorJson(400, "invalid_request", ids, { field: "version" }),
+    };
+  }
+  const value = { version };
+  // 멱등 비교용 원문은 본문으로 보냈을 때와 같은 모양으로 맞춤
+  return { request: { key, raw: JSON.stringify(value), value } };
 }
 
 async function write(
@@ -237,11 +276,12 @@ async function begin(
   principal: Operator,
   data: DataDependencies,
   ids: RequestIds,
+  reader: typeof readWrite = readWrite,
 ): Promise<
   { request: WriteRequest; record: NoticeRecord } | { result: Result }
 > {
   if (!isNoticeId(id)) return { result: errorJson(404, "not_found", ids) };
-  const read = readWrite(event, ids);
+  const read = reader(event, ids);
   if ("error" in read) return { result: read.error };
   const { request } = read;
   const previous = await previousWrite(
@@ -414,7 +454,7 @@ export async function deleteNoticeRoute(
   data: DataDependencies,
   ids: RequestIds,
 ): Promise<Result> {
-  const started = await begin(event, id, principal, data, ids);
+  const started = await begin(event, id, principal, data, ids, readDeleteWrite);
   if ("result" in started) return started.result;
   const { request, record } = started;
   const check = parseVersionBody(request.value);
