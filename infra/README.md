@@ -119,10 +119,12 @@ GA 계정·속성과 Google Cloud 프로젝트는 운영자 Google Workspace 조
 
 ## 운영 도메인 연결 (BRD-162)
 
-대표 주소는 `https://www.baradun.app`입니다(2026-11-02 사용자 결정).
+대표 주소는 `https://baradun.app`입니다(2026-11-17 사용자 결정. 처음에는 2026-11-02 결정으로 `www.baradun.app`이었음).
 
-- 가비아 DNS는 루트 주소에 CNAME을 걸 수 없어서 www만 CloudFront로 보냅니다.
-- 루트 주소(`baradun.app`)는 지금처럼 Vercel(V1 프로젝트)이 www로 넘깁니다. 비용은 0원입니다.
+- 가비아 DNS는 루트 주소를 CloudFront에 연결할 수 없어서(CNAME·ALIAS 미지원), 네임서버를 Vercel DNS(`ns1.vercel-dns.com`·`ns2.vercel-dns.com`, 무료)로 옮기고 루트를 ALIAS로 CloudFront에 연결합니다. 도메인 등록은 가비아에 그대로 둡니다.
+- `www.baradun.app`은 같은 CloudFront 배포의 추가 별칭(스택 매개변수 `SiteRedirectDomainName`)으로 받습니다. 주소 변환 함수가 루트로 301 이동시킵니다. 인증서는 `baradun.app`과 `www.baradun.app`을 함께 담아야 합니다.
+- 배포 명령: `npm run deploy:infra -- --issue 341 --site-domain baradun.app --site-certificate-arn "$ARN" --site-redirect-domain www.baradun.app`. `--site-redirect-domain`을 빼고 `--site-domain`만 넘기면 추가 별칭을 비웁니다.
+- 아래 '미리 할 일'·'출시일 전환 순서'는 2026-11-17 www로 1차 전환할 때의 기록입니다. 루트로 옮길 때는 같은 순서에서 DNS 작업만 Vercel DNS에서 하고(루트 `ALIAS` → `d1gam1q4z69v8c.cloudfront.net`, `www` CNAME 같은 값), Vercel 프로젝트에서 `baradun.app`·`www.baradun.app` 도메인을 뺍니다. 저장소 변수 `SITE_URL`은 `https://baradun.app`입니다.
 - 전환은 **출시일**에 합니다. 그 전까지 스택 매개변수 `SiteDomainName`·`SiteCertificateArn`은 비워 둡니다. 비어 있으면 대체 도메인·인증서를 붙이지 않고, 주소 변환 함수도 이동하지 않습니다(지금과 같은 동작).
 
 값을 넣으면 다음처럼 동작합니다.
