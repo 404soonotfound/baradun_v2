@@ -1,6 +1,7 @@
 // E2E용 정적 서버 (BRD-39). 빌드 결과(apps/web/out)만 내보냄. 의존성 없이 Node 내장 http만 씀
 // 정적 배포(CloudFront + S3, G3)와 같게: 폴더 주소는 index.html, 없는 주소는 404.html(상태 404)
 // /data/**는 내보내지 않음(테스트가 page.route 가짜 응답으로 채움). 라우트가 빠지면 404가 나서 실패 경로로 보임
+// 시나리오 미리보기(scripts/scenario-preview.mts, #550)만 dataDir을 넘겨 /data/**를 out 밖 임시 폴더에서 내보냄
 import { createServer } from "node:http";
 import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
@@ -59,10 +60,10 @@ const SECURITY_HEADERS = {
   "permissions-policy": "camera=(), microphone=(), geolocation=(self)",
 };
 
-async function resolveFile(pathname) {
-  const file = path.join(OUT, pathname);
-  // out 밖으로 나가는 주소(../, 이름이 out으로 시작하는 형제 폴더 out2/ 등)는 막음
-  if (file !== OUT && !file.startsWith(OUT + path.sep)) return null;
+async function resolveFile(pathname, root = OUT) {
+  const file = path.join(root, pathname);
+  // 루트 밖으로 나가는 주소(../, 이름이 out으로 시작하는 형제 폴더 out2/ 등)는 막음
+  if (file !== root && !file.startsWith(root + path.sep)) return null;
   try {
     const info = await stat(file);
     if (info.isDirectory()) {
@@ -85,13 +86,20 @@ function decodePath(url) {
   }
 }
 
-function startServer() {
+// dataDir: /data/**를 내보낼 폴더(없으면 404). host: 기본 127.0.0.1, 같은 Wi-Fi 기기에서 보려면 0.0.0.0
+/** @param {{ port?: number, host?: string, dataDir?: string | null }} [options] */
+function startServer({ port = PORT, host = "127.0.0.1", dataDir = null } = {}) {
   return createServer(async (req, res) => {
     const pathname = decodePath(req.url);
+    const isData = pathname !== null && pathname.startsWith("/data/");
     const file =
-      pathname === null || pathname.startsWith("/data/")
+      pathname === null
         ? null
-        : await resolveFile(pathname);
+        : isData
+          ? dataDir
+            ? await resolveFile(pathname.slice("/data".length), dataDir)
+            : null
+          : await resolveFile(pathname);
     const status = file ? 200 : 404;
     const target = file ?? path.join(OUT, "404.html");
     try {
@@ -111,8 +119,8 @@ function startServer() {
       res.writeHead(500);
       res.end();
     }
-  }).listen(PORT, "127.0.0.1", () => {
-    console.log(`e2e static server: http://127.0.0.1:${PORT}`);
+  }).listen(port, host, () => {
+    console.log(`e2e static server: http://${host}:${port}`);
   });
 }
 
