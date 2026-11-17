@@ -15,6 +15,7 @@ import {
   CONFIRMED,
   notSummaryLabel,
 } from "../e2e/support/clear-basis";
+import { KMA_STATUS_KO } from "../e2e/support/sources";
 
 // 운영 주소 읽기 전용 스모크 (#551, 노션 결정 기록 D30-6)
 // QA 라운드·출시일 전환 직후·출시 뒤 배포마다 '운영 주소가 제대로 떴는지'를 1~2분 안에 봄
@@ -23,7 +24,6 @@ import {
 
 const EXPECT_COMMIT = process.env.LIVE_EXPECT_COMMIT ?? "";
 const ADMIN_URL = process.env.LIVE_ADMIN_URL ?? "";
-const KMA_STATUS_KO = "출처: 기상청 (특보·해양 관측 자료를 가공)";
 
 const PAGES = [
   "/",
@@ -61,9 +61,15 @@ async function readJson(request: APIRequestContext, path: string) {
 }
 
 // 작업자(worker)마다 한 번만 받아 여러 시험이 같은 게시본을 봄(5분마다 바뀌는 판이 시험마다 달라지지 않게)
+// 받기에 실패하면 남기지 않음(한 번의 실패로 같은 작업자의 다른 시험까지 실패하지 않게)
 let liveData: Promise<LiveData> | undefined;
 function readLiveData(request: APIRequestContext): Promise<LiveData> {
-  liveData ??= fetchLiveData(request);
+  if (liveData === undefined) {
+    liveData = fetchLiveData(request);
+    liveData.catch(() => {
+      liveData = undefined;
+    });
+  }
   return liveData;
 }
 
@@ -112,16 +118,9 @@ async function seedDevice(context: BrowserContext) {
   );
 }
 
-// 콘솔 CSP 위반 모음. 브라우저 이벤트(securitypolicyviolation)와 콘솔 오류 둘 다 봄
-async function watchCsp(page: Page) {
+// 콘솔 CSP 위반 모음. Chromium이 위반마다 콘솔 오류로 남기는 것을 봄(csp.spec과 같은 방식)
+function watchCsp(page: Page) {
   const violations: string[] = [];
-  await page.addInitScript(() => {
-    document.addEventListener("securitypolicyviolation", (event) => {
-      console.error(
-        `Content Security Policy violation: ${event.violatedDirective} ${event.blockedURI}`,
-      );
-    });
-  });
   page.on("console", (message) => {
     if (
       message.type() === "error" &&
@@ -137,13 +136,18 @@ async function watchCsp(page: Page) {
 // status.json 응답을 받은 뒤, 확인 시각 근거('기상청 HH:MM 확인')나 판단 배지의 '확인 못 함'이 보이면 그린 것
 // PC 홈 전국 지도 카드의 묶음 이름('확인 못 함 n곳')은 받기 전에도 있어서 빼고 봄(data-summary-category)
 async function gotoWithStatus(page: Page, path: string) {
-  const status = page.waitForResponse(
-    (response) =>
-      new URL(response.url()).pathname.endsWith("/status.json") &&
-      response.ok(),
-  );
+  const status = page
+    .waitForResponse(
+      (response) => new URL(response.url()).pathname.endsWith("/status.json"),
+      { timeout: 20_000 },
+    )
+    .catch(() => null);
   await page.goto(path);
-  await status;
+  const response = await status;
+  if (response === null) {
+    throw new Error(`${path}에서 20초 안에 status.json을 요청하지 않음`);
+  }
+  expect(response.status(), `${path}의 ${response.url()} 응답 코드`).toBe(200);
   await expect(
     page
       .getByText(CONFIRMED)
@@ -168,14 +172,17 @@ test.describe("운영 게시본·응답 (모바일 프로젝트에서 한 번)",
   test("주요 경로(한·영)는 200, 없는 경로는 404", async ({ request }) => {
     const { anySlug } = await readLiveData(request);
     const paths = [...PAGES, `/spots/${anySlug}/`];
-    const failures: string[] = [];
-    for (const path of [...paths, ...paths.map((item) => `/en${item}`)]) {
-      const response = await request.get(path, { maxRedirects: 0 });
-      if (response.status() !== 200) {
-        failures.push(`${path} → ${response.status()}`);
-      }
-    }
-    expect(failures, "200이 아닌 경로").toEqual([]);
+    const all = [...paths, ...paths.map((item) => `/en${item}`)];
+    const statuses = await Promise.all(
+      all.map(async (path) => {
+        const response = await request.get(path, { maxRedirects: 0 });
+        return `${path} → ${response.status()}`;
+      }),
+    );
+    expect(
+      statuses.filter((line) => !line.endsWith("→ 200")),
+      "200이 아닌 경로",
+    ).toEqual([]);
     const missing = await request.get("/qa-smoke-missing-page/", {
       maxRedirects: 0,
     });
@@ -271,13 +278,18 @@ test.describe("화면 (모바일·PC)", () => {
     await gotoWithStatus(page, "/");
     await expect(page.getByText(KMA_STATUS_KO).first()).toBeVisible();
     const result = await clearPlacesWithoutBasis(page);
+    expect(result.missing, "/ 근거·현장 우선 문구가 빠진 '특보 없음'").toEqual(
+      [],
+    );
+    // 홈 기본 지역에 '특보 없음'이 없으면 근거를 볼 자리가 없음. 통과로 숨기지 않고 건너뜀으로 남김(탐색 목록 시험이 대신 봄)
+    test.skip(
+      result.count === 0,
+      "홈에 '특보 없음'이 없어 근거 검사를 하지 못함(탐색 목록 시험이 대신 봄)",
+    );
     test.info().annotations.push({
       type: "clear",
       description: `/ '특보 없음' ${result.count}곳 확인`,
     });
-    expect(result.missing, "/ 근거·현장 우선 문구가 빠진 '특보 없음'").toEqual(
-      [],
-    );
   });
 
   test("탐색 목록: 게시본에 '특보 없음'이 있으면 화면에도 있고 근거가 붙음", async ({
@@ -328,7 +340,7 @@ test.describe("화면 (모바일·PC)", () => {
     request,
   }) => {
     const { anySlug } = await readLiveData(request);
-    const violations = await watchCsp(page);
+    const violations = watchCsp(page);
     for (const path of [
       "/",
       "/explore/",

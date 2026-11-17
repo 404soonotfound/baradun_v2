@@ -8,10 +8,10 @@ import {
   test,
   WARNING_ID,
 } from "./fixtures";
+import { KMA_STATUS_KO } from "./support/sources";
 
 // 화면 출처 표시 (BRD-113 · 기상법 2026-09-18 시행 출처 표시 의무, 결정 19·20)
 // 기상청 자료가 보이는 화면마다 그 화면 안에 글자로 '출처: 기상청'. 링크만으로는 출처 표시로 보지 않음
-const KMA_STATUS_KO = "출처: 기상청 (특보·해양 관측 자료를 가공)";
 const KMA_STATUS_EN =
   "Source: KMA (warnings and ocean observations, processed)";
 const KMA_BUOY_KO = "출처: 기상청 (해양기상부이·파고부이 관측)";
