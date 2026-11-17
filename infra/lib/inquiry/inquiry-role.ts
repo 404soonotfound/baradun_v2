@@ -42,7 +42,9 @@ export class InquiryRole extends Construct {
     this.role.addToPolicy(
       new iam.PolicyStatement({
         actions: ["dynamodb:Query"],
-        resources: [`${props.table.tableArn}/index/${INQUIRY_EMAIL_INDEX.name}`],
+        resources: [
+          `${props.table.tableArn}/index/${INQUIRY_EMAIL_INDEX.name}`,
+        ],
       }),
     );
     this.role.addToPolicy(

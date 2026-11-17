@@ -538,7 +538,10 @@ describe("PR 필수 웹 검사 (BRD-102 결정 41·42)", () => {
   // 옛 커밋이 새 배포를 덮지 않고, CI가 실패한 커밋의 변경은 그 앱을 다시 검사한 뒤 커밋으로만 나감
   it("배포 비교 경로 생성물은 CI 경로 필터와 같고 두 앱 작업이 읽는다", () => {
     const root = resolve(dir, "../..");
-    const saved = readFileSync(resolve(root, ".github/site-deploy-paths.json"), "utf8");
+    const saved = readFileSync(
+      resolve(root, ".github/site-deploy-paths.json"),
+      "utf8",
+    );
     const generated = execFileSync(
       process.execPath,
       [
@@ -552,8 +555,12 @@ describe("PR 필수 웹 검사 (BRD-102 결정 41·42)", () => {
     const paths = JSON.parse(saved) as Record<"site" | "admin", string[]>;
     for (const job of ["site", "admin"]) {
       const text = jobLines(deploy?.text ?? "", job).join("\n");
-      expect(text).toContain(`jq -er '.${job}[]' .github/site-deploy-paths.json`);
-      expect(text).toContain('.github/scripts/deploy-plan.sh "$URL" "${app_paths[@]}"');
+      expect(text).toContain(
+        `jq -er '.${job}[]' .github/site-deploy-paths.json`,
+      );
+      expect(text).toContain(
+        '.github/scripts/deploy-plan.sh "$URL" "${app_paths[@]}"',
+      );
     }
     const shared = ciFilterPaths("shared").filter(
       (p) => p !== ".github/workflows/ci.yml",
@@ -573,9 +580,11 @@ describe("PR 필수 웹 검사 (BRD-102 결정 41·42)", () => {
 
   it("운영 API가 조회하는 사이트 작업·표지 단계·필수 변수는 배포 워크플로와 같다", () => {
     const workflow = deploy?.text ?? "";
-    const apps = Object.keys(JSON.parse(
-      readFileSync(resolve(dir, "../site-deploy-paths.json"), "utf8"),
-    ));
+    const apps = Object.keys(
+      JSON.parse(
+        readFileSync(resolve(dir, "../site-deploy-paths.json"), "utf8"),
+      ),
+    );
     expect([...SITE_DEPLOY_JOBS].sort()).toEqual(apps.sort());
     const variables = new Set<string>();
     for (const job of SITE_DEPLOY_JOBS) {
@@ -588,7 +597,7 @@ describe("PR 필수 웹 검사 (BRD-102 결정 41·42)", () => {
     expect([...variables].sort()).toEqual(
       [...DEPLOY_VARIABLES, "ADMIN_SITE_URL", "DEPLOY_PAUSED"].sort(),
     );
-    expect(plan).toContain('head_sha=${HEAD_SHA:?');
+    expect(plan).toContain("head_sha=${HEAD_SHA:?");
   });
 
   it("배포는 정한 결과를 따르고, 표시는 동기화·캐시 비우기가 끝난 뒤 마지막에 올리며, 빌드 캐시를 복원하지 않는다", () => {

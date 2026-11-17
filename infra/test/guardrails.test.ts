@@ -167,10 +167,17 @@ describe("대표 주소 (BRD-162)", () => {
   it("대체 도메인·인증서는 도메인 값이 있을 때만 붙는다(SNI·TLS 1.2 이상)", () => {
     for (const dist of distributions()) {
       const config = dist.Properties.DistributionConfig;
+      // 추가 별칭(www)이 있으면 대표 주소와 함께 붙임. 주소 변환 함수가 대표 주소로 301 이동시킴
       expect(config.Aliases).toEqual({
         "Fn::If": [
           "HasSiteDomain",
-          [{ Ref: "SiteDomainName" }],
+          {
+            "Fn::If": [
+              "HasSiteRedirectDomain",
+              [{ Ref: "SiteDomainName" }, { Ref: "SiteRedirectDomainName" }],
+              [{ Ref: "SiteDomainName" }],
+            ],
+          },
           { Ref: "AWS::NoValue" },
         ],
       });
@@ -199,6 +206,20 @@ describe("대표 주소 (BRD-162)", () => {
     expect(assertion).toContain('"Ref":"SiteDomainName"');
     expect(assertion).toContain('"Ref":"SiteCertificateArn"');
     expect(assertion).toContain("Fn::Or");
+  });
+
+  it("추가 별칭은 기본이 비어 있고, 대표 주소 없이는 배포되지 않는다", () => {
+    const params = template.findParameters("*");
+    expect(params.SiteRedirectDomainName.Default).toBe("");
+    const rules = template.toJSON().Rules as Record<
+      string,
+      { Assertions: { Assert: unknown }[] }
+    >;
+    const assertion = JSON.stringify(
+      rules.SiteRedirectDomainNeedsSiteDomain?.Assertions,
+    );
+    expect(assertion).toContain('"Ref":"SiteRedirectDomainName"');
+    expect(assertion).toContain('"Ref":"SiteDomainName"');
   });
 
   it("주소 변환 함수 코드에 도메인 매개변수가 들어간다(다른 호스트는 대표 주소로 이동)", () => {
