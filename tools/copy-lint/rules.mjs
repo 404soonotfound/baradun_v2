@@ -80,7 +80,9 @@ export const TEXT_RULES = [
   {
     id: "C-11",
     name: "연결어미 뒤 쉼표",
-    regex: /(?:고|며|지만|면서|는데|아서|어서|여서|해서|져서),\s/u,
+    // '참고·경고·광고' 같은 명사 나열은 연결어미가 아니라서 뺌(GH-546 리뷰)
+    regex:
+      /(?:(?<!참|경|광|최|창|원|신|공|투|사|재)고|며|지만|면서|는데|아서|어서|여서|해서|져서),\s/u,
     hint: "연결어미 바로 뒤 쉼표를 빼요",
   },
   {
@@ -109,18 +111,31 @@ function match(rule, text) {
   return m[0];
 }
 
-// kind: "commit" | "copy"(화면 문구 값) | "doc"(*.md 줄)
-export function checkText(text, kind) {
+// 따옴표로 감싼 예시 인용('안전해요' 같은 표현은 못 써요)
+const QUOTED = /'[^']*'|"[^"]*"|‘[^’]*’|“[^”]*”|「[^」]*」|『[^』]*』/gu;
+
+// 공공데이터 이용 허락 문장('… license: … has no restrictions')의 'no restrictions'는 해변 통제가 아니라 이용 조건이라 뺌
+const LICENSE_SENTENCE = /[^.]*\blicen[cs]e\b[^.]*(?:\.|$)/giu;
+
+// kind: "commit" | "copy"(한국어 화면 문구 값) | "copy-en"(영어 화면 문구 값, 금지 표현만) | "doc"(*.md 줄)
+// quotedExamples: 따옴표 안 금지 표현은 예시 인용으로 보고 막지 않음(운영자 사이트 안내 문구)
+export function checkText(text, kind, { quotedExamples = false } = {}) {
   const rules =
-    kind === "commit" ? COMMIT_RULES : [...TEXT_RULES, ...LEXICON_RULES];
+    kind === "commit"
+      ? COMMIT_RULES
+      : kind === "copy-en"
+        ? []
+        : [...TEXT_RULES, ...LEXICON_RULES];
   const hits = [];
   for (const rule of rules) {
     const matched = match(rule, text);
     if (matched)
       hits.push({ id: rule.id, name: rule.name, matched, hint: rule.hint });
   }
-  if (kind === "copy") {
-    for (const b of checkNoticePhrases(text).blocked) {
+  if (kind === "copy" || kind === "copy-en") {
+    let target = quotedExamples ? text.replace(QUOTED, " ") : text;
+    if (kind === "copy-en") target = target.replace(LICENSE_SENTENCE, " ");
+    for (const b of checkNoticePhrases(target).blocked) {
       hits.push({
         id: `notice:${b.category}`,
         name: "금지 표현",

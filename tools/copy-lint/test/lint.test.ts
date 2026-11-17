@@ -18,6 +18,8 @@ import {
   runCommitMsg,
   runRange,
   shouldSkipMessage,
+  checkMessage,
+  parseBlame,
 } from "../lint.mjs";
 
 let dir: string;
@@ -81,6 +83,28 @@ describe("도우미", () => {
       true,
     );
     expect(shouldSkipMessage("GH-1 fix: 수정")).toBe(false);
+  });
+
+  it("메시지 끝 트레일러만 건너뛰고 본문 'Note:' 줄은 검사함", () => {
+    const found = checkMessage(
+      "GH-2 fix: 수정\n\nNote: 재시도 작업을 완료함\n\nCo-Authored-By: 진행함 <x@y>",
+      "m",
+    );
+    expect(found.map((f: { where: string }) => f.where)).toEqual(["m:3"]);
+  });
+
+  it("git blame porcelain에서 줄별 커밋을 읽음", () => {
+    const sha = "a".repeat(40);
+    const other = "b".repeat(40);
+    expect([
+      ...parseBlame(
+        `${sha} 1 1 2\nauthor x\n\tx\n${sha} 2 2\n\ty\n${other} 5 3 1\n\tz\n`,
+      ),
+    ]).toEqual([
+      [1, sha],
+      [2, sha],
+      [3, other],
+    ]);
   });
 
   it("diff -U0에서 추가·수정된 새 줄 번호를 찾음", () => {
@@ -170,6 +194,23 @@ describe("커밋 훅(--commit-msg)", () => {
     ).toEqual([]);
   });
 
+  it("영어 문구 파일은 금지 표현만 검사함", () => {
+    write("apps/web/messages/en.json", '{\n  "a": "Safe to swim, enjoy"\n}\n');
+    git("add", "-A");
+    expect(ids(runCommitMsg(msg("GH-2 fix: 문구\n"), dir))).toEqual([
+      "notice:guarantee",
+    ]);
+  });
+
+  it("운영자 문구의 따옴표 예시 인용은 통과", () => {
+    write(
+      "apps/admin/messages/ko.json",
+      '{\n  "h": "\'안전해요\' 같은 표현은 쓸 수 없어요"\n}\n',
+    );
+    git("add", "-A");
+    expect(runCommitMsg(msg("GH-2 fix: 도움말\n"), dir)).toEqual([]);
+  });
+
   it("영어 문구 파일·코드 파일은 검사하지 않음", () => {
     write("apps/web/messages/en.json", '{ "a": "x" }\n');
     write("src/a.ts", "// 저장되어집니다\n");
@@ -212,6 +253,25 @@ describe("CI(--range)", () => {
       "T2",
       "commit:over_polite_ending",
     ]);
+  });
+
+  it("표지 커밋이 넣은 줄만 건너뛰고 같은 범위 다른 커밋의 줄은 검사함", () => {
+    const base = git("rev-parse", "HEAD");
+    write(
+      "README.md",
+      "# 제목\n\n예전에 쓰고, 그대로 둔 줄\n예외로 쓰고, 둔 줄\n",
+    );
+    commit("GH-5 docs: 예외 문장 [skip-copy-lint]");
+    write(
+      "README.md",
+      "# 제목\n\n예전에 쓰고, 그대로 둔 줄\n예외로 쓰고, 둔 줄\n관리자에 의해 삭제된 줄\n",
+    );
+    const head = commit("GH-5 docs: 줄 추가");
+    expect(
+      runRange(base, head, dir).map(
+        (f: { where: string; id: string }) => `${f.where} ${f.id}`,
+      ),
+    ).toEqual(["README.md:5 T2"]);
   });
 
   it("Dependabot 커밋 메시지는 건너뛰고, 표지 커밋이 있으면 변경 줄 검사도 건너뜀", () => {

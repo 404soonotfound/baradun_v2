@@ -2,8 +2,9 @@
 import { describe, expect, it } from "vitest";
 import { checkText, LEXICON_RULES } from "../rules.mjs";
 
-const ids = (text: string, kind: "commit" | "copy" | "doc") =>
-  checkText(text, kind).map((h: { id: string }) => h.id);
+const ids2 = (hits: { id: string }[]) => hits.map((h) => h.id);
+const ids = (text: string, kind: "commit" | "copy" | "copy-en" | "doc") =>
+  ids2(checkText(text, kind));
 
 describe("커밋 메시지 규칙", () => {
   it.each([
@@ -61,6 +62,39 @@ describe("화면 문구·문서 규칙", () => {
     expect(
       ids("최종 판단은 현장 통제와 안전요원 안내가 우선이에요", "copy"),
     ).toEqual([]);
+  });
+});
+
+describe("리뷰 반영(GH-546)", () => {
+  it("'참고·경고' 같은 명사 나열 뒤 쉼표는 연결어미로 보지 않음", () => {
+    expect(ids("참고, 자세한 내용은 안내를 봐요", "copy")).toEqual([]);
+    expect(ids("경고, 오류, 정보 순으로 보여요", "copy")).toEqual([]);
+    expect(ids("피하고, 따르세요", "copy")).toContain("C-11");
+  });
+
+  it("영어 화면 문구는 금지 표현만 봄", () => {
+    expect(ids("Safe to swim today", "copy-en")).toContain("notice:guarantee");
+    expect(ids("It is recommended", "copy-en")).toContain("notice:recommend");
+    expect(ids("Check the lifeguard, then go", "copy-en")).toEqual([]);
+    // 공공데이터 이용 허락 문장은 해변 통제가 아님(en.json terms 문구)
+    expect(
+      ids(
+        "Public Data Portal license: Beach Information Service has no restrictions.",
+        "copy-en",
+      ),
+    ).toEqual([]);
+    expect(ids("This beach has no restrictions.", "copy-en")).toContain(
+      "notice:judgment",
+    );
+  });
+
+  it("운영자 문구의 따옴표 예시 인용은 막지 않음(따옴표 밖은 그대로 막음)", () => {
+    const quoted = "'안전해요' 같은 표현은 공지에 쓸 수 없어요";
+    expect(ids(quoted, "copy")).toContain("notice:guarantee");
+    expect(checkText(quoted, "copy", { quotedExamples: true })).toEqual([]);
+    expect(
+      ids2(checkText("지금은 안전해요", "copy", { quotedExamples: true })),
+    ).toContain("notice:guarantee");
   });
 });
 
