@@ -35,7 +35,7 @@ export const PUBLISH_POLICY = {
 export const MANIFEST_SETTINGS = {
   schemaVersion: 1,
   // 점검 중이면 active: true, until: 종료 예정(UTC ISO, 모르면 null)
-  maintenance: { active: true, until: "2026-11-17T09:00:00Z" },
+  maintenance: { active: false, until: null },
   // 이보다 낮은 화면 버전은 강제 업데이트(BRD-43)
   minWebBuild: 1,
 } as const;
