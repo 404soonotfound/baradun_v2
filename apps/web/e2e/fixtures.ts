@@ -6,6 +6,21 @@ import type { Beach } from "@baradun/contracts";
 import { NOTICE_VERSION } from "../src/lib/notice-version";
 import { beachZonesText } from "../src/lib/zone-name";
 import {
+  historyFile,
+  iso,
+  manifestFile,
+  MIN,
+  nationwideFile,
+  noStationBeachId,
+  noticesOf,
+  SAMPLE_IDS,
+  statusFile,
+  weatherFile,
+  type StatusMarks,
+  type WeatherAreas,
+  type WeatherMode,
+} from "../scripts/scenario-data.mts";
+import {
   test as base,
   expect,
   type BrowserContext,
@@ -32,20 +47,13 @@ const BEACHES: Beach[] = readdirSync(BEACH_DIR)
 // 날씨 대응표(BRD-185). 해변 → 격자·중기 구역·기온 지점은 빌드에 들어간 대응표 그대로, 예보 값은 가짜
 const WEATHER_AREAS = JSON.parse(
   readFileSync(path.join(REPO, "data/weather-areas.json"), "utf8"),
-).beaches as Record<
-  string,
-  {
-    grid: { nx: number; ny: number };
-    midLand: { regId: string };
-    midTa: { regId: string };
-  }
->;
+).beaches as WeatherAreas;
 
 // 상태를 따로 정한 해변(강릉시 4곳). 나머지는 '특보 없음'
-export const CLEAR_ID = "b0001";
-export const WARNING_ID = "b0002";
-export const DELAYED_ID = "b0003";
-export const UNKNOWN_ID = "b0004";
+export const CLEAR_ID = SAMPLE_IDS.clear;
+export const WARNING_ID = SAMPLE_IDS.warning;
+export const DELAYED_ID = SAMPLE_IDS.delayed;
+export const UNKNOWN_ID = SAMPLE_IDS.unknown;
 export const slugOf = (id: string) =>
   BEACHES.find((beach) => beach.id === id)?.slug ?? id;
 // '특보 없음' 근거 줄의 해변 특보구역 이름(한국어, D18-11): "강원중부앞바다, 강릉평지"
@@ -58,16 +66,7 @@ export const zonesOf = (id: string): string => {
 export const coordsOf = (id: string) =>
   BEACHES.find((beach) => beach.id === id)?.coords ?? null;
 // 측정소가 하나도 없고 날씨 대응표에는 있는 노출 해변(BRD-185). 데이터를 다시 만들어도 조건으로 고름
-export const NO_STATION_ID = (() => {
-  const found = BEACHES.find(
-    (beach) =>
-      !beach.hidden &&
-      Object.values(beach.stations).every((station) => !station) &&
-      beach.id in WEATHER_AREAS,
-  );
-  if (!found) throw new Error("측정소 없는 노출 해변이 데이터에 없음");
-  return found.id;
-})();
+export const NO_STATION_ID = noStationBeachId(BEACHES, WEATHER_AREAS);
 // 노출 중인 해변 수(홈 '전국' 개수 카드 확인용, BRD-127)
 export const PUBLIC_BEACH_COUNT = BEACHES.filter(
   (beach) => !beach.hidden,
@@ -79,382 +78,13 @@ export const GANGNEUNG_REGION = JSON.stringify({
   sigungu: "강릉시",
 });
 
-const MIN = 60_000;
-const iso = (ms: number) => new Date(ms).toISOString().replace(/\.\d+Z$/, "Z");
-const versionOf = (ms: number) => iso(ms).replace(/[-:]/g, "");
-
-type MetricKey = keyof Beach["stations"];
-const UNITS: Record<MetricKey, string> = {
-  waveHeight: "m",
-  wavePeriod: "s",
-  waveDirection: "deg",
-  waterTemp: "°C",
-  wind: "m/s",
+// E2E 정상 상태: 강릉 4곳에 상태를 나눠 줌. 나머지는 '특보 없음'
+const MARKS: StatusMarks = {
+  warning: [WARNING_ID],
+  delayed: [DELAYED_ID],
+  unknown: [UNKNOWN_ID],
+  ripCurrent: CLEAR_ID,
 };
-// 지표별 유효시간(분). 파주기·파향 60분, 나머지 90분(view.ts METRIC_VALID_MS와 같음)
-const VALID_MIN: Record<MetricKey, number> = {
-  waveHeight: 90,
-  wavePeriod: 60,
-  waveDirection: 60,
-  waterTemp: 90,
-  wind: 90,
-};
-const VALUES: Record<MetricKey, number> = {
-  waveHeight: 0.6,
-  wavePeriod: 6.2,
-  waveDirection: 90,
-  waterTemp: 18.4,
-  wind: 3.1,
-};
-
-function metric(key: MetricKey, beach: Beach, now: number, delayed = false) {
-  const none = {
-    value: null,
-    unit: UNITS[key],
-    observedAt: null,
-    state: "none",
-    nextExpectedAt: null,
-    expiresAt: null,
-  };
-  if (!beach.stations[key]) return none;
-  if (delayed) {
-    // 파고 측정 지연(90분 초과, B4): 값은 게시돼도 화면은 숨겨야 함
-    return {
-      value: 0.9,
-      unit: UNITS[key],
-      observedAt: iso(now - 120 * MIN),
-      state: "delayed",
-      nextExpectedAt: iso(now + 30 * MIN),
-      expiresAt: iso(now - 30 * MIN),
-    };
-  }
-  return {
-    value: VALUES[key],
-    unit: UNITS[key],
-    observedAt: iso(now - 20 * MIN),
-    state: "fresh",
-    nextExpectedAt: iso(now + 40 * MIN),
-    expiresAt: iso(now + (VALID_MIN[key] - 20) * MIN),
-  };
-}
-
-function metrics(beach: Beach, now: number, delayedWave = false) {
-  return Object.fromEntries(
-    (Object.keys(UNITS) as MetricKey[]).map((key) => [
-      key,
-      metric(key, beach, now, delayedWave && key === "waveHeight"),
-    ]),
-  );
-}
-
-interface StatusOptions {
-  // 특보 마지막 확인 시각(지금 기준 분). 기본 10분 전
-  confirmedAgoMin?: number;
-  // 모든 해변을 '특보 확인 못 함'으로(확인된 판단 없음)
-  allUnknown?: boolean;
-}
-
-function beachStatus(beach: Beach, now: number, options: StatusOptions) {
-  const confirmedAt = iso(now - (options.confirmedAgoMin ?? 10) * MIN);
-  // 이안류(정보만)는 '특보 없음' 해변 하나에만 가짜 값(정보 출처의 국립해양조사원 출처 줄 확인용, BRD-113)
-  const ripCurrent =
-    beach.id === CLEAR_ID
-      ? {
-          label: "시험 관심",
-          publishedAt: iso(now - 30 * MIN),
-          source: "국립해양조사원",
-        }
-      : null;
-  const common = {
-    control: { state: "not_provided" },
-    info: { season: null, ripCurrent, nearbyWarnings: [] },
-    validUntil: iso(now + 30 * MIN),
-  };
-  const unknown = {
-    ...common,
-    category: "undetermined",
-    reasons: [
-      {
-        code: "warning_unknown",
-        scope: "특보구역",
-        source: "기상청",
-        at: null,
-      },
-    ],
-    warning: {
-      state: "unknown",
-      items: [],
-      source: "기상청",
-      lastConfirmedAt: iso(now - 80 * MIN),
-    },
-    observation: { metrics: metrics(beach, now) },
-  };
-  if (options.allUnknown || beach.id === UNKNOWN_ID) return unknown;
-  if (beach.id === WARNING_ID) {
-    const item = {
-      type: "wind_wave",
-      level: "advisory",
-      zoneCode: beach.warningZones.sea,
-      zoneName: "시험 앞바다",
-      publishedAt: iso(now - 60 * MIN),
-      effectiveFrom: iso(now - 60 * MIN),
-    };
-    return {
-      ...common,
-      category: "unavailable",
-      reasons: [
-        {
-          code: "warning",
-          type: "wind_wave",
-          level: "advisory",
-          scope: "시험 앞바다",
-          source: "기상청",
-          at: item.effectiveFrom,
-        },
-      ],
-      warning: {
-        state: "active",
-        items: [item],
-        source: "기상청",
-        lastConfirmedAt: confirmedAt,
-      },
-      observation: { metrics: metrics(beach, now) },
-    };
-  }
-  const warningNone = {
-    state: "none",
-    items: [],
-    source: "기상청",
-    lastConfirmedAt: confirmedAt,
-  };
-  if (beach.id === DELAYED_ID) {
-    return {
-      ...common,
-      category: "undetermined",
-      reasons: [
-        {
-          code: "observation_delayed",
-          scope: beach.stations.waveHeight?.name.ko ?? "파고 측정소",
-          source: "기상청",
-          at: iso(now - 120 * MIN),
-        },
-      ],
-      warning: warningNone,
-      observation: { metrics: metrics(beach, now, true) },
-    };
-  }
-  return {
-    ...common,
-    category: "clear",
-    reasons: [],
-    warning: warningNone,
-    observation: { metrics: metrics(beach, now) },
-  };
-}
-
-function statusFile(now: number, options: StatusOptions = {}) {
-  return {
-    beaches: Object.fromEntries(
-      BEACHES.map((beach) => [beach.id, beachStatus(beach, now, options)]),
-    ),
-  };
-}
-
-function manifestFile(now: number, extra: Record<string, unknown> = {}) {
-  const version = versionOf(now - 5 * MIN);
-  return {
-    schemaVersion: 1,
-    snapshotVersion: version,
-    policyVersion: "warnings-1+observations-1",
-    generatedAt: iso(now - 5 * MIN),
-    maintenance: { active: false, until: null },
-    minWebBuild: 1,
-    files: {
-      beaches: `/data/${version}/beaches.json`,
-      status: `/data/${version}/status.json`,
-      history: `/data/${version}/history.json`,
-      nationwideWarnings: `/data/${version}/nationwide-warnings.json`,
-      weather: `/data/${version}/weather.json`,
-    },
-    ...extra,
-  };
-}
-
-// 공지 칸(BRD-151). 지금 보일 공지는 점검 예고(시작이 이른 것)와 일반 공지 → 점검 예고 하나만 보여야 함
-function noticesOf(now: number) {
-  const text = (ko: string, en: string) => ({ ko, en });
-  const notice = (
-    id: string,
-    kind: string,
-    title: [string, string],
-    startsAt: number,
-    endsAt: number | null,
-  ) => ({
-    id,
-    kind,
-    title: text(...title),
-    body: text(
-      "새벽 2시부터 3시까지 정보가 늦게 바뀔 수 있어요.",
-      "Information may update late from 2 to 3 a.m.",
-    ),
-    startsAt: iso(startsAt),
-    endsAt: endsAt === null ? null : iso(endsAt),
-  });
-  return [
-    notice(
-      "n-general",
-      "general",
-      ["새 해변을 더했어요", "New beaches added"],
-      now - 10 * MIN,
-      null,
-    ),
-    notice(
-      "n-maint",
-      "maintenance_notice",
-      ["데이터 점검 예고", "Planned data maintenance"],
-      now - 60 * MIN,
-      now + 120 * MIN,
-    ),
-    notice(
-      "n-ended",
-      "maintenance_notice",
-      ["끝난 점검 예고", "Ended maintenance"],
-      now - 120 * MIN,
-      now - MIN,
-    ),
-    notice(
-      "n-later",
-      "maintenance_notice",
-      ["시작 전 점검 예고", "Upcoming maintenance"],
-      now + 60 * MIN,
-      null,
-    ),
-    notice(
-      "n-broken",
-      "urgent",
-      ["모르는 종류 공지", "Unknown notice"],
-      now - 5 * MIN,
-      null,
-    ),
-  ];
-}
-
-function historyFile(now: number) {
-  const ids = new Set(
-    BEACHES.flatMap((beach) =>
-      beach.stations.waveHeight ? [beach.stations.waveHeight.id] : [],
-    ),
-  );
-  return {
-    stations: Object.fromEntries(
-      [...ids].map((id) => [
-        id,
-        {
-          unit: "m",
-          points: [3, 2, 1].map((hours, index) => ({
-            t: iso(now - hours * 60 * MIN),
-            v: [0.5, 0.6, 0.6][index],
-          })),
-        },
-      ]),
-    ),
-  };
-}
-
-// 날씨 파일(계약 WeatherFile). midFailed: 중기 구역 값 없음 / failed: 파일 자체를 못 받음(경로가 404)
-type WeatherMode = "ok" | "midFailed" | "failed";
-const KST = 9 * 60 * MIN;
-const kstDate = (ms: number) => new Date(ms + KST).toISOString().slice(0, 10);
-function weatherFile(now: number, mode: WeatherMode) {
-  // 오늘(KST) 00시부터 모레 21시까지 3시간 간격. 발표 시각은 지금 2시간 전
-  const todayKst = Date.parse(`${kstDate(now)}T00:00:00Z`) - KST;
-  const points = Array.from({ length: 24 }, (_, i) => ({
-    at: iso(todayKst + i * 3 * 60 * MIN),
-    sky: (["clear", "mostlyCloudy", "cloudy"] as const)[i % 3],
-    precip: i % 8 === 5 ? "rain" : "none",
-    temperature: 10 + (i % 6),
-    pop: i % 8 === 5 ? 70 : (i % 4) * 10,
-    windFrom: (i * 45) % 360,
-    windSpeed: 2 + (i % 5),
-  }));
-  const day = (offset: number) => kstDate(now + offset * 24 * 60 * MIN);
-  const grids: Record<string, unknown> = {};
-  const beaches: Record<string, unknown> = {};
-  const land = new Set<string>();
-  const ta = new Set<string>();
-  for (const [id, area] of Object.entries(WEATHER_AREAS)) {
-    const grid = `${area.grid.nx},${area.grid.ny}`;
-    beaches[id] = {
-      grid,
-      midLand: area.midLand.regId,
-      midTa: area.midTa.regId,
-    };
-    land.add(area.midLand.regId);
-    ta.add(area.midTa.regId);
-    grids[grid] = {
-      short: {
-        issuedAt: iso(now - 2 * 60 * MIN),
-        points,
-        days: [
-          {
-            date: day(3),
-            pop: 30,
-            popAt: iso(Date.parse(`${day(3)}T06:00:00Z`) - KST),
-            sky: "cloudy",
-            precip: "none",
-            min: 6,
-            max: 13,
-          },
-        ],
-      },
-      today: {
-        date: day(0),
-        min: 9,
-        minIssuedAt: iso(now - 9 * 60 * MIN),
-        max: 16,
-        maxIssuedAt: iso(now - 9 * 60 * MIN),
-      },
-      now: { observedAt: iso(now - 40 * MIN), temperature: 14.2 },
-    };
-  }
-  const midDays = [4, 5, 6].map(day);
-  return {
-    beaches,
-    grids,
-    midLand:
-      mode === "midFailed"
-        ? {}
-        : Object.fromEntries(
-            [...land].map((regId) => [
-              regId,
-              {
-                name: "시험 구역",
-                days: midDays.map((date, i) => ({
-                  date,
-                  issuedAt: iso(now - 6 * 60 * MIN),
-                  pop: [10, 0, 20][i],
-                  sky: (["mostlyCloudy", "clear", "mostlyCloudy"] as const)[i],
-                  precip: "none",
-                })),
-              },
-            ]),
-          ),
-    midTa: Object.fromEntries(
-      [...ta].map((regId) => [
-        regId,
-        {
-          name: "시험 지점",
-          days: midDays.map((date, i) => ({
-            date,
-            issuedAt: iso(now - 6 * 60 * MIN),
-            min: 7 + i,
-            max: 15 + i,
-          })),
-        },
-      ]),
-    ),
-  };
-}
 
 type Scenario =
   | "normal" // 정상(특보 없음·이용불가·관측 지연·특보 확인 못 함이 섞임)
@@ -515,34 +145,45 @@ async function mockData(
           return json(route, manifestFile(now, { minWebBuild: 9999 }));
         }
         if (scenario === "notice") {
-          return json(route, manifestFile(now, { notices: noticesOf(now) }));
+          return json(
+            route,
+            manifestFile(now, {
+              notices: noticesOf(now, { withInvalid: true }),
+            }),
+          );
         }
         return json(route, manifestFile(now));
       }
       if (pathname.endsWith("/status.json")) {
         if (scenario === "noConfirmed") {
-          return json(route, statusFile(now, { allUnknown: true }));
+          return json(
+            route,
+            statusFile(BEACHES, now, MARKS, { allUnknown: true }),
+          );
         }
         if (scenario === "futureConfirm") {
-          return json(route, statusFile(now, { confirmedAgoMin: -10 }));
+          return json(
+            route,
+            statusFile(BEACHES, now, MARKS, { confirmedAgoMin: -10 }),
+          );
         }
         if (scenario === "missingWarning") {
-          const file = statusFile(now);
+          const file = statusFile(BEACHES, now, MARKS);
           for (const status of Object.values(file.beaches)) {
             delete (status as Record<string, unknown>).warning;
           }
           return json(route, file);
         }
-        return json(route, statusFile(now));
+        return json(route, statusFile(BEACHES, now, MARKS));
       }
       if (pathname.endsWith("/nationwide-warnings.json")) {
-        return json(route, { lastConfirmedAt: iso(now - 10 * MIN), items: [] });
+        return json(route, nationwideFile(now));
       }
       if (pathname.endsWith("/history.json")) {
-        return json(route, historyFile(now));
+        return json(route, historyFile(BEACHES, now));
       }
       if (pathname.endsWith("/weather.json") && weather !== "failed") {
-        return json(route, weatherFile(now, weather));
+        return json(route, weatherFile(WEATHER_AREAS, now, weather));
       }
       return route.fulfill({ status: 404, body: "" });
     },
