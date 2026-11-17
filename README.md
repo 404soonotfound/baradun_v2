@@ -1,234 +1,227 @@
 # 바라던 바다 V2
 
-해변별 기상특보와 해양 관측값이 지금 확인되는지를 보여 주는 서비스입니다. 서비스는 확인 가능한 사실(바다 관련 특보 5종: 풍랑·강풍·태풍·폭풍해일·지진해일, 파고 측정 신선도)만 판단하며, 바다에 들어갈지는 사용자가 현장 안내와 함께 판단합니다. 공식 출입 통제는 판단하지 않으며, 안전한 해변을 추천하거나 입수 적합도를 판정하지 않습니다(원칙 G1·G2).
+해변마다 바다 기상특보가 발효됐는지, 파고 측정이 제때 들어오고 있는지를 보여 주는 웹 서비스입니다. 바다에 가기 전에 공식 특보와 관측 상태를 한 화면에서 확인하려는 사람을 위해 만들었습니다.
 
 > 최종 판단은 현장 통제와 안전요원 안내가 우선입니다.
 
-## 시스템 구성도
+- **사이트**: <https://www.baradun.app>
+- **운영자 사이트 시연**: <https://admin.baradun.app/login/demo/> (예시 데이터만 보이는 시연 계정은 요청하면 드립니다.)
+- 두 주소는 V2 운영 전환을 준비하고 있습니다. 전환 전에는 열리지 않거나 이전 버전이 보일 수 있습니다.
+- **주요 스택**: TypeScript, Next.js 16 정적 내보내기, AWS Lambda·DynamoDB·S3·CloudFront(AWS CDK), Vitest, Playwright
+- **해변 수**: 222곳(2026-11-17 기준 `data/beaches/`의 해변 파일 수)
 
-시스템은 **수집(Collector) → 정규화 및 상태 저장(Core/State) → 스냅샷 게시(Publisher) → 정적 사이트 배포(Web/CDN)** 단계로 동작합니다.
+## 하는 일과 하지 않는 일
+
+서비스는 공식 출처로 확인할 수 있는 사실만 보여 줍니다. 바다에 들어갈지는 사용자가 현장 안내와 함께 판단합니다.
+
+| 하는 일                                                                                                      | 하지 않는 일                                 |
+| ------------------------------------------------------------------------------------------------------------ | -------------------------------------------- |
+| 바다 관련 특보 5종(풍랑·강풍·태풍·폭풍해일·지진해일)의 발효 여부 확인                                        | 안전한 해변 추천, 입수 적합도·점수·레벨 산정 |
+| 파고 측정이 90분 안에 들어왔는지 확인                                                                        | 공식 출입 통제 판단(현장 안내 확인을 권함)   |
+| 해변을 `특보 없음`·`이용불가`·`판단불가` 중 하나로 분류하고 실제 사유(예: 풍랑주의보, 관측 지연)를 먼저 표시 | 확인하지 못한 상태를 `특보 없음`으로 표시    |
+| 데이터 출처·관측 시각·단위 함께 표시                                                                         | 근거 없는 수치 기준이나 산식 만들기          |
+
+`특보 없음`은 안전하다는 뜻이 아닙니다. 확인한 범위에서 특보가 없다는 뜻입니다.
+
+## 빠르게 실행하기
+
+비밀값이나 AWS 계정 없이 로컬에서 바로 실행할 수 있습니다. 개발 서버가 계약 예시 데이터로 더미 데이터를 만들고 화면에 '개발용 예시' 안내를 띄웁니다.
+
+1. Node.js는 [.nvmrc](.nvmrc)의 버전을 씁니다.
+
+   ```bash
+   nvm use
+   ```
+
+2. 의존성을 설치하고 사용자 사이트 개발 서버를 실행합니다.
+
+   ```bash
+   npm install
+   npm run dev
+   ```
+
+3. 브라우저에서 `http://localhost:3000`을 엽니다. 더미 데이터는 20분마다 새로 만들어집니다.
+
+다른 데이터로 확인하려면 아래 명령을 씁니다.
+
+| 명령                                  | 데이터                                                                                                                                                            |
+| ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm run dev`                         | 계약 예시로 만든 더미 데이터                                                                                                                                      |
+| `npm run live`                        | 운영 게시본을 1분마다 확인해 새 버전만 내려받음. 공개 정적 파일만 읽음. `apps/web/.env.local`에 `BARADUN_DEV_DATA_ORIGIN=https://<운영 CloudFront 주소>`가 필요함 |
+| `npm run dev:no-data -w @baradun/web` | 데이터 없음(로딩·오류 화면 확인용)                                                                                                                                |
+| `npm run dev -w @baradun/admin`       | 운영자 사이트(`http://localhost:3100`). 로그인 화면의 '로컬 테스트 계정으로 들어가기'로 샘플 응답만 씀                                                            |
+
+검사 명령은 루트에서 실행합니다.
+
+```bash
+npm run lint       # 전체 린트
+npm run typecheck  # 전체 타입 검사
+npm run test       # 워크스페이스 단위 테스트와 도구 테스트
+npm run build      # 워크스페이스 전체 빌드
+```
+
+## 시스템 구성
+
+수집기가 공공 API를 불러 사실을 저장합니다. 게시 함수는 해변 상태를 계산해 정적 파일로 올립니다. 사용자 사이트는 그 파일을 읽어 보여 줍니다. 해변 상태를 보여 주는 데에는 요청마다 도는 서버가 없습니다. 요청마다 도는 Lambda는 문의 접수(`/api/inquiries`)와 운영 API(`/ops/*`)이고 운영 API는 게시 미리보기 함수를 함께 부릅니다.
 
 ```mermaid
 flowchart LR
-    subgraph Sources["외부 데이터 출처"]
-        KMA["기상청 기상특보 API"]
-        KHOA_OBS["국립해양조사원 조석·관측 API"]
-        KHOA_RIP["국립해양조사원 이안류 API"]
+    subgraph Sources["공공 데이터 출처"]
+        KMA_W["기상청 기상특보·지진해일 통보"]
+        KMA_O["기상청 API허브 해양 관측"]
+        KHOA["국립해양조사원 이안류 지수"]
+        KMA_F["기상청 단기·중기예보"]
+        TOUR["한국관광공사 TourAPI"]
     end
 
-    subgraph Collection["수집 및 정규화 (services/collectors)"]
-        CW["collect-warnings<br/>(특보 5종)"]
-        CO["collect-ocean<br/>(파고·수온 등 관측)"]
-        CR["collect-rip<br/>(이안류 위험 지수)"]
-        NORM["core/warnings & store<br/>(특보구역 매핑 및 정규화)"]
+    subgraph Collect["수집기 (services/src/collectors)"]
+        CW["collect-warnings"]
+        CO["collect-ocean"]
+        CR["collect-rip"]
+        CF["collect-weather"]
+        CC["collect-catalog"]
     end
 
-    subgraph Storage["상태 저장소"]
-        StateDB[("DynamoDB<br/>StateTable")]
-    end
+    State[("DynamoDB<br/>StateTable")]
+    Ops[("DynamoDB<br/>OpsTable<br/>(공지 등)")]
 
-    subgraph Publishing["게시 (services/publisher)"]
-        PUB["publish-snapshot<br/>(1회 분류 계산 & 스냅샷 생성)"]
-        S3Data[("S3 SiteBucket<br/>data/{version}/<br/>data/manifest.json")]
-    end
+    PUB["게시 함수<br/>publish-snapshot<br/>(분류를 한 번 계산)"]
+    Data[("S3<br/>data/{버전}/<br/>data/manifest.json")]
+    CDN["CloudFront"]
+    Web["사용자 사이트<br/>apps/web"]
+    Admin["운영자 사이트<br/>apps/admin → 운영 API /ops/*"]
 
-    subgraph Serving["정적 사이트 및 전송 (apps/web & infra)"]
-        S3Site[("S3 SiteBucket<br/>정적 HTML/JS/CSS")]
-        CF["CloudFront CDN<br/>(Strict 보안 응답 헤더)"]
-        Client["사용자 브라우저<br/>(apps/web: Next.js 정적 사이트)"]
-    end
-
-    KMA --> CW
-    KHOA_OBS --> CO
-    KHOA_RIP --> CR
-    CW & CO & CR --> NORM
-    NORM --> StateDB
-    StateDB --> PUB
-    PUB --> S3Data
-    S3Data --> CF
-    S3Site --> CF
-    CF --> Client
+    KMA_W --> CW
+    KMA_O --> CO
+    KHOA --> CR
+    KMA_F --> CF
+    TOUR --> CC
+    CW & CO & CR & CF & CC --> State
+    CW & CO & CR & CF & CC -. 수집 뒤 깨움 .-> PUB
+    State --> PUB
+    Ops --> PUB
+    PUB --> Data --> CDN --> Web
+    Admin --> Ops
 ```
 
-- **수집**: EventBridge Scheduler 일정에 따라 `collect-warnings`(기상특보 5종), `collect-ocean`(해양 관측), `collect-rip`(이안류 지수)이 주기적으로 실행됩니다.
-- **정규화 및 상태 저장**: 수집된 원시 데이터는 `core`에서 검증 및 구역 매핑(해상 S1, 육상 L1)을 거쳐 DynamoDB `StateTable`에 저장됩니다.
-- **게시**: 수집 완료 후 `publish-snapshot`이 비동기로 실행되어 해변 상태 분류(특보 없음 / 이용불가 / 판단불가)를 1회 계산하고(G1·G4), `data/{version}/` 및 `data/manifest.json`으로 S3에 원자적으로 게시합니다.
-- **정적 웹**: Next.js 정적 내보내기(`output: 'export'`) 결과물과 스냅샷 데이터는 CloudFront CDN을 통해 사용자에게 서비스됩니다. 브라우저는 `manifest.json`과 해당 버전 스냅샷을 비동기로 읽어 렌더링하며 화면에서 분류를 재계산하지 않습니다.
+| 수집기             | 출처                                | 일정(KST)                                       |
+| ------------------ | ----------------------------------- | ----------------------------------------------- |
+| `collect-warnings` | 기상청 기상특보·지진해일 통보       | 매시 3·18·33·48분                               |
+| `collect-ocean`    | 기상청 API허브 해양 관측            | 매시 10·40분                                    |
+| `collect-rip`      | 국립해양조사원 이안류 지수          | 매시 12·42분(비수기에는 하루 1회)               |
+| `collect-weather`  | 기상청 초단기실황·단기예보·중기예보 | 매시 15분(새 발표가 있을 때만 단기·중기를 부름) |
+| `collect-catalog`  | 한국관광공사 TourAPI                | 하루 1회                                        |
+
+일정은 [infra/lib/settings.ts](infra/lib/settings.ts)에 있습니다. 수집기는 수집을 마치면 게시 함수를 비동기로 깨웁니다. 게시 함수는 해변 상태를 계산해 `data/{버전}/`에 올린 뒤 `data/manifest.json`을 조건부 쓰기로 바꿉니다. 게시가 실패하면 manifest는 앞 버전을 그대로 가리킵니다.
 
 ## 저장소 구조
 
-모노레포(`npm workspaces`)로 구성되어 있으며, 구조와 경계는 Notion 아키텍처 기준 문서 17장(ADR 0001)을 따릅니다.
+npm workspaces 모노레포입니다.
 
-| 경로 | 내용 |
-|---|---|
-| `apps/web` | Next.js 정적 사이트 (`output: 'export'`). 디자인 토큰, 다국어 문구 키, Playwright E2E, Storybook 포함 |
-| `services` | 수집·게시·문의 처리 AWS Lambda (TypeScript). `core`(특보 정규화·스토어), `collectors`, `publisher`, `inquiry` |
-| `packages/contracts` | 프론트엔드와 백엔드가 공유하는 단일 계약 (JSON Schema, TypeScript 생성 타입, 계약 검증 도구) |
-| `infra` | AWS CDK (TypeScript) — S3, CloudFront, DynamoDB, EventBridge Scheduler, SNS, IAM 가드레일 (문서는 [infra/README.md](infra/README.md)) |
-| `data/beaches` | 해변 목록 원본 (해변 하나당 파일 하나 `bXXXX.json`, 규칙은 [data/beaches/README.md](data/beaches/README.md)) |
-| `data` | 해변 부가 정보(`beach-meta.json`), 커버리지 매트릭스(`beach-coverage.csv`), 이안류 대응 목록 등 |
-| `tools/beaches` | 해변 데이터 생성·검증 도구 (공간 판정, 관측소 배정, 엑셀 파서) |
-| `tools/map-tiles` | 한국 지도 파일(PMTiles)·지도 글꼴·sprite 만들기와 올리기 (`map-tiles.yml`이 실행) |
-| `.github/workflows` | CI 워크플로(`ci.yml`), 프로덕션 사이트 배포(`deploy.yml`), 한국 지도 파일 만들기(`map-tiles.yml`, 수동 실행) — 배포 두 가지는 GitHub Actions OIDC |
+| 경로                     | 내용                                                                                                                                                                                  |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/web`               | 사용자 사이트. Next.js 정적 내보내기, 한국어·영어 문구 키, Storybook, Playwright E2E                                                                                                  |
+| `apps/admin`             | 운영자 사이트. 정적 Next.js, Cognito 로그인, 운영 API로 문의·공지·게시·수집 상태 관리                                                                                                 |
+| `services`               | Lambda 코드. `collectors`(수집), `core`(특보·관측 정규화와 저장), `publisher`(분류·게시), `inquiry`(문의 접수), `admin`(운영 API), `ops`(경보 알림)                                   |
+| `packages/contracts`     | 화면과 서버가 함께 쓰는 JSON Schema, 생성된 TypeScript 타입, 계약 검사 도구                                                                                                           |
+| `packages/design-tokens` | 두 앱이 함께 쓰는 디자인 토큰 값과 생성·검사 도구                                                                                                                                     |
+| `infra`                  | AWS CDK 스택(S3, CloudFront, DynamoDB, EventBridge Scheduler, Cognito, IAM 권한 상한, 예산 알림)                                                                                      |
+| `data`                   | 해변 원본(`data/beaches/` 해변 하나당 파일 하나), 부가 정보(`beach-meta.json`), 관측 대응표(`beach-coverage.csv`)                                                                     |
+| `tools`                  | 해변 데이터 생성(`beaches`), 지도 파일 만들기(`map-tiles`), 게시 되돌리기(`republish`), 운영 정책 가져오기(`ops-policy`), 대체 코드 리뷰(`agy-review`), 한국어 문체 검사(`copy-lint`) |
 
-## 로컬 실행 및 테스트
+경계는 이렇게 정했습니다.
 
-Node.js 버전은 [.nvmrc](.nvmrc)를 따릅니다(npm 포함). 루트 디렉터리에서 실행합니다.
+- **`apps/web`·`apps/admin`·`services`는 서로를 가져오지 않습니다.** 공유는 `packages/contracts`로만 합니다. 화면과 서버가 같은 스키마를 기준으로 삼아야 해변 상태를 서로 다르게 해석하는 일이 생기지 않기 때문입니다. 예외는 디자인 토큰(`packages/design-tokens`) 하나입니다.
+- **판단 규칙은 `services`에만 둡니다.** 특보 확인 45분과 관측 신선도(파고 90분)는 `services/src/core`(`warnings`·`observations`)가, 분류는 `services/src/publisher`가 계산합니다. 기준 시간 값은 `packages/contracts/src/judgment-policy.ts` 한 곳에 둡니다. 화면은 게시된 분류와 사유 코드를 문구로 바꾸기만 합니다.
 
-```bash
-npm install
-npm run dev        # 개발 서버 (apps/web), 계약 예시 더미 데이터를 만들고 20분마다 갱신
-npm run live       # 개발 서버 + 운영 snapshot 읽기 전용 미러 (apps/web/.env.local에 운영 주소 필요)
-npm run build      # 워크스페이스 전체 빌드
-npm run lint       # 전체 린트 검사
-npm run typecheck  # 전체 TypeScript 타입 검사
-npm run test       # 워크스페이스 전체 단위 테스트 + 해변 도구 테스트
-```
+## 설계 결정
 
-### 개발 데이터 모드 (`apps/web`)
+### 확인하지 못한 상태를 판단불가로 분류
 
-| 명령 | 데이터 소스 |
-|---|---|
-| `npm run dev` | 계약 예시 더미 데이터(`packages/contracts/examples`, 화면에 '개발용 예시' 안내 표시) |
-| `npm run live` | 운영 snapshot을 1분마다 확인해 새 버전만 내려받음. 공개 정적 파일만 읽고 인증·비밀값 불필요 |
-| `npm run dev:no-data -w @baradun/web` | 데이터 없음(로딩/오류 상태 화면 점검용) |
+- **문제**: 특보 API가 응답하지 않거나 파고 측정이 늦게 들어오는데도 화면에 특보가 없는 것처럼 보이면, 사용자는 확인되지 않은 바다를 문제없다고 받아들일 수 있습니다.
+- **선택**: 특보가 발효되면 `이용불가`, 특보 확인에 실패했거나 파고 측정이 90분을 넘기면 `판단불가`, 둘 다 아니면 `특보 없음`으로 분류합니다. 결측은 0이나 정상으로 바꾸지 않습니다. 가까운 측정소가 없으면 분류에는 영향을 주지 않고 값 자리에 '가까운 관측 없음'을 표시합니다.
+- **결과**: 특보를 확인하지 못했거나 관측이 늦은 해변은 실제 사유(예: 관측 지연)와 함께 `판단불가`로 게시됩니다. 판정 코드는 [services/src/publisher/classify.ts](services/src/publisher/classify.ts)(분류), [services/src/core/warnings/confirmation.ts](services/src/core/warnings/confirmation.ts)(특보 확인 45분), [services/src/core/observations/freshness.ts](services/src/core/observations/freshness.ts)(파고 90분)와 각 폴더의 테스트. 기준은 Notion 결정 기록 11장(측정소 없음 B3·B4)입니다.
 
-`npm run live` 사용 시 운영 CloudFront 주소를 `apps/web/.env.local`에 설정합니다:
+### 분류를 게시할 때 한 번만 계산
 
-```bash
-echo 'BARADUN_DEV_DATA_ORIGIN=https://<운영 CloudFront>' >> apps/web/.env.local
-```
+- **문제**: 화면과 서버가 각자 분류를 계산하면 같은 해변이 화면마다 다른 상태로 보일 수 있습니다.
+- **선택**: 게시 함수가 게시할 때 한 번 계산하고 화면은 다시 계산하지 않습니다. 게시 파일의 모양은 `packages/contracts`의 JSON Schema로 정하고 TypeScript 타입을 스키마에서 생성합니다.
+- **결과**: CI의 `npm run check:generated -w @baradun/contracts`가 생성된 타입이 스키마와 다르면 실패합니다. 해변 상태는 요청마다 계산하지 않으므로 사용자 사이트의 해변 화면은 CDN 캐시만으로 동작합니다.
 
-### 워크스페이스별 주요 명령
+### 정적 내보내기에서 CSP 지키기
 
-각 패키지 디렉터리로 이동하거나 루트에서 `-w` 플래그로 실행합니다.
+- **문제**: Next.js 정적 내보내기는 요청마다 nonce를 만들 수 없습니다. 그래서 인라인 스크립트를 막는 CSP(Content Security Policy)를 그대로 쓸 수 없습니다.
+- **선택**: 빌드 뒤 각 HTML의 인라인 스크립트 sha256 해시를 계산해 `<meta http-equiv="Content-Security-Policy">`로 넣습니다([apps/web/scripts/csp-meta.mts](apps/web/scripts/csp-meta.mts)). CloudFront 응답 헤더 CSP와 함께 걸려서 두 정책을 모두 통과한 스크립트만 실행됩니다.
+- **결과**: `npm run check:csp -w @baradun/web`이 해시가 맞는지 검사합니다. 외부 스크립트 출처를 더할 때는 헤더 CSP([infra/lib/site/security-headers.ts](infra/lib/site/security-headers.ts)), E2E 정적 서버([apps/web/e2e/static-server.mjs](apps/web/e2e/static-server.mjs)), meta CSP를 함께 고쳐야 합니다.
 
-- **`apps/web`**:
-  - `npm run storybook -w @baradun/web`: Storybook 컴포넌트 개발 서버 실행
-  - `npm run check:tokens -w @baradun/web`: 디자인 토큰 대비 및 금지 색 검사
-  - `npm run check:messages -w @baradun/web`: 한국어·영어 문구 키 짝 검사
-  - `npm run check:csp -w @baradun/web`: 정적 HTML의 meta CSP 인라인 스크립트 sha256 해시 일치 검사 (BRD-118)
-  - `npm run test:e2e -w @baradun/web`: Playwright E2E 및 axe-core 접근성 테스트 (빌드 산출물 필요)
-- **`packages/contracts`**:
-  - `npm run generate -w @baradun/contracts`: JSON Schema로부터 TypeScript 타입 생성
-  - `npm run check:generated -w @baradun/contracts`: 생성된 타입 파일이 스키마와 일치하는지 CI 검증
-  - `npm run check:beaches -w @baradun/contracts`: `data/beaches/*.json` 계약 모양 및 slug 규칙 검증
-  - `npm run check:coverage -w @baradun/contracts`: `data/beach-coverage.csv` 매트릭스 정합성 검증
-- **`services`**:
-  - `npm run test -w @baradun/services`: 특보 정규화, 스냅샷 게시, 문의 처리 로직 Vitest 단위 테스트
-- **`infra`**:
-  - `npm run test -w @baradun/infra`: 스택 템플릿, IAM 권한 상한(Permissions Boundary), 가드레일 Vitest 테스트
-  - `npx cdk synth` (`infra/` 경로): CloudFormation 템플릿 생성
-  - `npx cdk diff` (`infra/` 경로): 배포된 스택과 로컬 변경 사항 비교
-- **`tools/beaches`**:
-  - `npm run test:beaches`: 해변 데이터 생성 도구 단위 테스트
-- **`tools/copy-lint`** (GH-546):
-  - 커밋 메시지와 바뀐 화면 문구(`apps/web`·`apps/admin`의 `messages/ko.json`)·문서(`*.md`) 줄을 한국어 문체 규칙으로 검사합니다. `messages/en.json`은 영어 금지 표현만 봅니다. 운영자 사이트 문구에서 따옴표로 감싼 예시 인용은 막지 않습니다. 규칙은 [im-not-ai](https://github.com/epoko77-ai/im-not-ai)(MIT, `tools/copy-lint/LICENSE-im-not-ai`)가 공개한 번역투·AI 문체 규칙과 공지 금지 표현(D17-8)입니다.
-  - 로컬 훅 켜기(저장소마다 한 번): `git config core.hooksPath .githooks`. 켜면 커밋할 때 걸린 곳을 보여 주고 커밋을 멈춥니다.
-  - PR에서는 CI `copy-lint` 작업이 같은 검사를 하며 `ci-ok`에 들어갑니다.
-  - 꼭 필요한 예외는 커밋 메시지에 `[skip-copy-lint]`를 넣고 PR 설명에 이유를 적습니다. CI는 그 커밋이 넣은 줄만 건너뜁니다.
-  - `npm run test:copy-lint`: 규칙·어휘 사전 원본 시험 문장·훅·범위 검사 단위 테스트
+### 월 US$1 예산 알림 안에서 운영
 
-## 운영 배포
+- **문제**: 개인 프로젝트라서 운영비가 월 예산 알림 기준(US$1)을 넘지 않아야 합니다. 2026-11-13 청구 내역을 보니 상시 무료 한도 밖에서 청구되는 항목은 S3 요청·저장과 CloudWatch 경보 지표 초과분이었습니다.
+- **선택**: 사이트 배포 한 번에 앱마다 S3 PutObject 요청이 약 1,850건(약 US$0.008) 나갑니다. 그래서 main에 머지할 때마다 배포하지 않고 하루 한 번(05:17 KST) 정기 배포와 수동 배포만 합니다. CloudFront는 종량제를 유지합니다. 정액 Free 요금제는 직접 만든 응답 헤더 정책을 쓸 수 없어서 지금 보안 헤더를 유지할 수 없습니다.
+- **결과**: 지금 구성의 추정 비용은 월 약 US$0.4~0.9입니다(Notion 결정 기록 D25-3 추정, 실제 청구액으로는 확인하지 않음). 자세한 내용은 [infra/README.md](infra/README.md#비용-방어-범위)의 '비용 방어 범위'에 있습니다.
 
-사이트 배포(`deploy.yml`)는 하루 한 번(매일 05:17 KST) 정기 실행과 수동 실행에서만 돕니다. main에 머지해도 바로 올라가지 않습니다(배포마다 S3 쓰기 요청 요금이 들어서, GH-424). CI(`ci.yml`)가 실패한 커밋은 배포하지 않고, CI가 검사한 커밋을 그대로 올립니다. 로컬에는 AWS 키를 두지 않으며, 배포는 GitHub Actions가 OIDC 임시 키로 합니다.
+### 인프라 자동 배포와 권한 상한
 
-```bash
-npm run deploy:prod   # main 최신 커밋을 지금 배포 (gh 로그인 필요, 진행을 터미널에 보여 줌)
-```
+- **문제**: 인프라 배포를 손으로 하면 머지하지 않은 코드가 운영에 올라갈 수 있습니다. 반대로 CI에 넓은 권한을 주면 CI 역할을 탈취당했을 때 피해가 커집니다.
+- **선택**: main CI가 성공하면 `deploy.yml`이 변경 세트를 만들어 판정합니다. 삭제나 교체가 없으면 바로 실행합니다. 삭제나 교체가 있으면 GitHub 승인을 기다립니다. 권한 상한(IAM Permissions Boundary)이 저장소와 다르면 멈추고 로컬 배포를 요구합니다. CI 역할은 스택 밖에 두고 IAM 쓰기 권한을 주지 않습니다. 그래서 스택 배포로 CI 역할의 권한을 넓힐 수 없습니다.
+- **결과**: 머지한 코드만 운영에 올라갑니다. 판정과 배포 결과는 그 PR의 연결 이슈에 댓글로 남습니다. 자세한 판정 기준은 [infra/README.md](infra/README.md#main-머지-뒤-자동-배포-418)의 'main 머지 뒤 자동 배포'에 있습니다.
 
-수동 배포도 그 커밋의 `ci-ok`가 성공일 때만 올립니다. 인프라 변경과 순서를 맞춰야 할 때는 저장소 변수 `DEPLOY_PAUSED`를 `true`로 두면 정기 배포가 멈춥니다(절차는 [infra/README.md](infra/README.md)). 개발용 배포 사이트는 따로 두지 않고, 운영 데이터로 미리 보려면 `npm run live`를 씁니다.
+## 품질 관리
 
-## 운영 방법
+CI(`.github/workflows/ci.yml`)는 바뀐 영역만 골라 검사하고 모든 검사 결과를 `ci-ok` 하나로 모읍니다. `ci-ok`가 실패한 커밋은 배포하지 않습니다.
 
-> **주의**: 인프라 배포(`cdk deploy`)나 스케줄 변경, 롤백 등 실제 운영 환경 명령은 배포 권한과 승인이 있을 때만 수행하며, 로컬 작업 브랜치가 아닌 최신 `origin/main` 작업 트리에서 실행해야 합니다.
+| 검사        | 내용                                                                                                                             |
+| ----------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| 린트·타입   | 워크스페이스마다 ESLint와 `tsc`                                                                                                  |
+| 단위 테스트 | Vitest(판단 규칙, 게시, 수집, 운영 API, 인프라 스택 템플릿과 권한 상한)                                                          |
+| E2E·접근성  | 두 앱 모두 Playwright 스모크 테스트와 `@axe-core/playwright` 접근성 검사                                                         |
+| 계약·데이터 | 생성 타입과 스키마 일치, 해변 파일 모양과 slug 규칙, 관측 대응표 정합성                                                          |
+| 화면 규칙   | 디자인 토큰 대비·금지 색(`check:tokens`), 한국어·영어 문구 키 짝(`check:messages`), CSP 해시(`check:csp`)                        |
+| 보안        | gitleaks 비밀값 검사, `npm audit`                                                                                                |
+| 문체        | 커밋 메시지와 바뀐 화면 문구·문서 줄의 한국어 문체 검사(`tools/copy-lint`). 로컬 훅은 `git config core.hooksPath .githooks`로 켬 |
 
-### 1. 점검 전환 (Maintenance Mode)
+작업은 GitHub 이슈 하나에 브랜치 하나, PR 하나를 기본으로 합니다. 커밋은 성격(feat·fix·test·style 등)별로 나누고 `Rebase and merge`로 머지해 커밋 단위 이력을 main에 남깁니다. PR을 만들기 전에 코드 리뷰를 거칩니다. 자세한 규칙은 [AGENTS.md](AGENTS.md)에 있습니다.
 
-긴급 점검이나 서비스 중단이 필요할 때 사이트 화면 전체를 점검 안내로 전환합니다.
+## 배포와 운영
 
-1. `services/src/publisher/policy.ts`의 `MANIFEST_SETTINGS.maintenance`를 `{ active: true, until: "<예정 시각 UTC ISO>" }`로 수정하여 main에 머지합니다.
-2. 최신 `origin/main` 작업 트리에서 `npx cdk deploy`를 실행합니다 (Lambda 코드가 포함되므로 사이트 정적 배포로는 반영되지 않음).
-3. 즉시 반영하려면 게시 함수(`PublisherFunctionName`)를 직접 호출하거나 다음 수집(15분 이내)을 기다립니다.
-4. 상세 절차 및 점검 해제 방법: [infra/README.md#점검-켜기끄기](infra/README.md#점검-켜기끄기)
+- **사용자·운영자 사이트**: 하루 한 번(05:17 KST) 정기 실행과 수동 실행으로 배포합니다. 지금 바로 배포하려면 `npm run deploy:prod`를 씁니다(gh 로그인 필요). 배포는 GitHub Actions가 OIDC 임시 키로 합니다.
+- **인프라**: main에 머지하면 CI가 자동으로 배포합니다. 손으로 배포할 때는 최신 `origin/main` 작업 트리에서 `npm run deploy:infra`를 씁니다.
+- **배포 멈추기**: 저장소 변수 `DEPLOY_PAUSED`를 `true`로 두면 정기 배포와 인프라 자동 배포가 멈추고 수동 배포(`npm run deploy:prod`)도 실패로 끝납니다.
 
-### 2. 데이터 게시 되돌리기 (Rollback)
+운영 절차는 아래 문서에 있습니다.
 
-잘못 나간 공지를 앞 게시본 때 상태로 되돌립니다. 옛 manifest를 되살리지 않고 더 큰 새 버전으로 다시 게시하며, 특보·관측은 늘 지금 수집 사실을 씁니다(결정 기록 D20-1~3).
+| 작업                                    | 문서                                                                                       |
+| --------------------------------------- | ------------------------------------------------------------------------------------------ |
+| 점검 화면 켜기·끄기, 강제 업데이트      | [infra/README.md '점검·강제 업데이트'](infra/README.md#점검강제-업데이트)                  |
+| 잘못 나간 게시 되돌리기                 | [infra/README.md '데이터 게시와 롤백'](infra/README.md#데이터-게시publish-snapshot와-롤백) |
+| 해변 데이터 생성·숨기기, 개장 기간 출처 | [data/beaches/README.md](data/beaches/README.md)                                           |
+| 문의 접수와 확인                        | [infra/README.md '데이터 문의 접수'](infra/README.md#데이터-문의-접수brd-63)               |
+| 운영 경보                               | [infra/README.md '운영 경보'](infra/README.md#운영-경보brd-62)                             |
 
-1. 되돌릴 게시본(버전)을 정합니다. 게시 때의 공지 상태가 남아 있는 버전(최근 8일)만 고를 수 있습니다.
-2. 게시 Lambda를 되돌리기 이벤트로 부릅니다(`--yes`를 빼면 부를 명령만 보여 줌):
-   ```bash
-   node tools/republish/republish.mjs --function <PublisherFunctionName> \
-     --version <되돌릴_게시_버전> --action rollback --yes
-   ```
-3. 사이트의 `data/manifest.json`이 새 버전으로 바뀌었는지 확인합니다. 되돌린 공지는 다시 적용하기 전까지 자동 게시에 실리지 않습니다.
-4. 게시 코드 오류는 `git revert`로 배포합니다. 급할 때만 옛 게시 파일을 새 버전 번호로 다시 내보냅니다(같은 도구, `--action` 생략).
-5. 상세 절차: [infra/README.md#데이터-게시publish-snapshot와-롤백](infra/README.md#데이터-게시publish-snapshot와-롤백)
+## 개인정보와 보안
 
-### 3. 해변 추가 및 노출 숨김
+- **문의 연락처 받기는 꺼져 있습니다.** `INQUIRY_CONTACT_ENABLED`가 `false`라서 화면은 이메일·사진 입력란을 숨기고 서버는 이메일이나 사진이 담긴 문의를 거절하며 CSP는 사진 버킷 주소를 허용하지 않습니다. 값은 화면·서버·인프라 세 곳에서 같아야 합니다. 다시 켜기 전에 아래 일을 마쳐야 합니다([services/src/inquiry/policy.ts](services/src/inquiry/policy.ts) 주석, 결정 기록 D13-3).
+  - 문의 사진을 서버에서 다시 인코딩하기(BRD-116)
+  - 익명 사진 업로드 비용 상한 두기(BRD-117, 2026-11-17 기준 열린 이슈)
+  - 문의 이메일 삭제 자동화(BRD-119)
+  - 개인정보 처리방침에 항목 추가
+  - 고지 버전 올리기
+- **문의 알림 메일에는 본문을 넣지 않습니다.** 메일에는 문의 ID, 유형, 접수 시각, 이메일 제공 여부만 들어갑니다.
+- **분석 도구는 운영 빌드에만 들어갑니다.** Google Analytics는 쿼리·해시를 뺀 페이지 경로와 [정해 둔 기능 이용 이벤트](apps/web/src/lib/analytics/events.ts)만 보냅니다. 위치, 검색어 원문, 문의 본문, 해변 상태는 보내지 않습니다.
+- **보안 응답 헤더**: HSTS(1년), `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Permissions-Policy`를 CloudFront에서 보냅니다.
 
-해변 목록과 상세 페이지는 `data/beaches/`의 JSON 파일로 관리됩니다.
+## 문서
 
-- **해변 추가**: `data/beaches/bXXXX.json` 파일을 생성하고 Beach 스키마와 slug 규칙을 준수하여 작성합니다. `data/beach-meta.json`에 메타(검색 별칭 및 운영 기간)를 추가하고, `npm run check:beaches -w @baradun/contracts` 및 `npm run check:coverage -w @baradun/contracts`로 검증한 뒤 PR로 머지합니다.
-- **해변 노출 숨김**: 파일을 삭제하지 않고 JSON 안의 `"hidden": true`로 변경합니다. 목록·검색·즐겨찾기에서 숨겨지고 상세 페이지는 404가 됩니다.
-- 상세 규칙 및 slug 작성법: [data/beaches/README.md](data/beaches/README.md)
+| 문서                                                   | 내용                              |
+| ------------------------------------------------------ | --------------------------------- |
+| [AGENTS.md](AGENTS.md)                                 | 제품 규칙, 작업·커밋·PR·리뷰 규칙 |
+| [docs/technical-writing.md](docs/technical-writing.md) | 문서 작성 규칙                    |
+| [infra/README.md](infra/README.md)                     | 인프라 구성, 배포, 운영 절차      |
+| [data/beaches/README.md](data/beaches/README.md)       | 해변 데이터 규칙                  |
+| `apps/web/AGENTS.md`, `apps/admin/AGENTS.md`           | 앱별 규칙                         |
 
-### 4. 시즌 운영 기간 갱신
+제품 요구사항과 결정 기록의 원본은 Notion입니다.
 
-해수욕장 개폐장 기간 정보는 `info.season`을 통해 화면에 정보 배지로 표시되며(판단 분류에는 영향 없음), 매년 해수부 공식 발표 일정에 맞춰 갱신합니다.
-
-1. `data/beach-meta.json`의 각 해변 `season` 항목 아래 해당 연도(예: `"2026"`)의 일정(`status`, `openDate`, `closeDate` 또는 미개장/미연결 시 `null`)을 갱신합니다. 지난 연도 일정으로 임의 추정하지 않습니다.
-2. `npm run check:coverage -w @baradun/contracts`를 실행해 누락되거나 잘못된 형식이 없는지 검사합니다.
-3. 게시 Lambda(`publish-snapshot`)가 `beach-meta.json`을 읽어 스냅샷 생성 시 반영합니다.
-4. 상세 규칙: [data/beaches/README.md#함께-두는-파일-brd-59](data/beaches/README.md#함께-두는-파일-brd-59)
-
-## 최근 보안 및 운영 주의 사항
-
-origin/main 코드베이스에 적용된 보안 정책 및 운영 제약 사항입니다.
-
-### 보안 응답 헤더 및 CSP meta 구조 (BRD-118)
-- **헤더와 메타의 이중 보호**: CloudFront ResponseHeadersPolicy에서 엄격한 응답 헤더(`Strict-Transport-Security` 1년, `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Permissions-Policy`)와 헤더 CSP(`script-src 'self' 'unsafe-inline'`)를 내보냅니다.
-- **페이지별 인라인 스크립트 해시 주입**: Next.js 정적 내보내기는 요청 시점 Nonce를 쓸 수 없으므로, 빌드 후(`postbuild`) 각 HTML 내 인라인 `<script>` 내용의 sha256 해시를 계산해 `<meta http-equiv="Content-Security-Policy">`를 `<head>` 첫머리에 자동 주입합니다(`apps/web/scripts/csp-meta.mts`). 브라우저는 두 CSP를 모두 통과하는 스크립트만 실행합니다. 검증은 `npm run check:csp -w @baradun/web`으로 수행합니다.
-- ⚠️ **외부 도메인 추가 주의**: 새 이미지 CDN이나 지도 타일 등 외부 도메인을 연동할 경우, `infra/lib/site/security-headers.ts`의 CSP 지시어(`img-src`, `connect-src` 등)를 함께 수정하고 `npm test -w @baradun/infra`를 통과해야 정상 동작합니다. 외부 **스크립트** 출처는 세 곳이 함께 바뀌어야 합니다: 헤더 CSP(`infra/lib/site/security-headers.ts`), E2E 정적 서버의 같은 문자열(`apps/web/e2e/static-server.mjs`), 페이지 meta CSP의 `script-src`(`apps/web/scripts/csp-meta.mts`). meta에 없으면 헤더가 허용해도 브라우저가 막습니다.
-- **Google Analytics(BRD-143 · BRD-68)**: gtag.js 출처(`https://www.googletagmanager.com`, `https://*.google-analytics.com`, `https://*.google.com`)를 `script-src`·`img-src`·`connect-src`에만 허용합니다. GA 스크립트는 운영 빌드(`NEXT_PUBLIC_SITE_URL`이 `apps/web/src/lib/site-env.ts`의 운영 주소와 같을 때)에만 들어가며, 쿼리·해시 없는 경로의 `page_view`와 `apps/web/src/lib/analytics/events.ts`에 정의된 비식별 기능 이용 이벤트(`select_activity`, `search_no_result`, `inquiry_sent` 등)만 전송합니다(위치·검색어 원문·문의 본문·해변 판단 상태 제외).
-
-### 문의 이메일·사진 받기 단일 설정 (BRD-130)
-- 문의 기능에서 개인정보(이메일) 및 사진 첨부를 허용할지 여부는 단일 설정 상수 `INQUIRY_CONTACT_ENABLED`(`services/src/inquiry/policy.ts`, `apps/web/src/lib/inquiry/form.ts`, `infra/lib/site/security-headers.ts`)로 일치시킵니다.
-- **출시 기본값은 꺼짐(`false`)**:
-  - 화면(`apps/web`)에서 이메일·개인정보 동의·사진 첨부 입력란이 숨겨집니다.
-  - 서버(`services/inquiry`)에서 사진 업로드 양식 발급(`/api/inquiries/uploads`)을 차단하고, 이메일이나 사진이 포함된 문의 요청을 400으로 거절합니다.
-  - 인프라(`infra`) CSP의 `connect-src`에서 사진 S3 버킷 origin이 제외됩니다.
-- ⚠️ **다시 켜기 전 필수 선행 작업**: 개인정보 처리방침 항목 반영(BRD-116), 고지 버전 상향 및 운영 절차 점검(BRD-117, BRD-119)이 완료되기 전에는 켜지 않습니다.
-
-### 문의 알림 및 본문 확인 절차 (BRD-120)
-- 문의가 접수되면 운영자 SNS 알림 메일이 발송되지만, 메일함에 개인정보가 남지 않도록 **본문 요약, 이메일 주소, 사진 정보는 메일에 일체 포함되지 않습니다** (문의 ID, 유형, 접수 시각, 이메일 제공 여부 플래그만 전송).
-- 운영자 콘솔(BRD-97) 도입 전까지 문의 상세 내용은 AWS 관리 콘솔 DynamoDB `InquiryTable`에서 파티션 키 `INQUIRY#<문의 ID>`(이메일은 `INQUIRY_EMAIL#<문의 ID>`)로 직접 조회하여 확인합니다. 상세 조회 방법은 [infra/README.md#문의-내용-확인운영자-콘솔-brd-97-도입-전](infra/README.md#문의-내용-확인운영자-콘솔-brd-97-도입-전)을 참고하세요.
-
-## V1 대비 개선 근거
-
-V1(404soonotfound/baradun) 대비 V2(baradun_v2)의 주요 아키텍처 및 제품 판단 개선 근거는 다음과 같습니다 (Notion Rev.2.2 사실 기반).
-
-| 비교 항목 | V1 (baradun) | V2 (baradun_v2) | 사실 기반 개선 근거 및 기준 |
-|---|---|---|---|
-| **판단 범위** | 날씨·수온·파고 종합 점수 산출 및 입수 적합도/추천 지수 제공 시도 | 확인 가능한 사실(해상 특보 5종 발효 여부, 파고 측정 신선도 90분)만 판단. 적합도·추천·별점 산출 없음 | **원칙 G1·G2**: 서비스는 안전을 보장하지 않으며 통제 여부를 단정하지 않음. 복합 산식 배제 및 "현장 통제와 안전요원 안내 우선" 원칙 준수. |
-| **관측 신선도** | 결측·지연 데이터를 0이나 정상으로 처리하거나 지연 상태를 명시하지 않음 | 파고 관측 시각이 90분을 초과하면 `판단불가` 처리 및 '관측 지연' 사유 배지 노출 | **결정 기록 11장 B3·B4**: 결측과 지연을 정상으로 왜곡하지 않음. 데이터 출처, 관측 시각, 단위를 화면에 투명하게 제공. |
-| **분류 계산 시점** | 클라이언트 렌더링 시점 또는 API 요청마다 런타임 계산 | 게시 Lambda(Publisher)가 스냅샷을 생성할 때 1회만 계산 | **원칙 G4, ADR 0001**: 화면과 서버의 판단 불일치를 원천 차단하고 정적 CDN 캐싱 극대화. 화면은 사유 코드 문구 매핑만 수행. |
-| **데이터 계약 (Contract)** | 비공식 인터페이스, 스키마 검증 없는 런타임 JSON 통신 | `packages/contracts`의 JSON Schema를 단일 진실 공급원(SSOT)으로 사용 | **ADR 0001**: 프론트/백엔드 경계 분리. TypeScript 타입 자동 생성 및 CI 단계 스키마 검증으로 불일치 방지. |
-| **품질 및 검증 체계** | 단위 테스트 부재 또는 수동 확인 위주 | 전 워크스페이스 Vitest 단위 테스트 + Playwright E2E + axe-core 접근성 검사 + 보안/토큰 정적 검사 자동화 | 변경 시 CI(`ci.yml`)에서 단위 테스트, E2E, 접근성, CSP 해시, 토큰 대비, 다국어 문구 짝 검사를 필수 통과하도록 강제. |
-| **인프라 및 비용 방어** | 동적 서버 인스턴스 의존, 세부 권한 경계 미흡 | Next.js 정적 내보내기(S3 + CloudFront) + IAM Permissions Boundary + 월 $1 예산 알림 | **원칙 G3, 아키텍처 11장**: 정적 호스팅으로 서버 유지 비용 및 장애 위험 최소화. 배포 역할 탈취 시에도 권한 상한 강제. |
-
-## ADR 및 기준 문서
-
-아키텍처 결정 기록(ADR)과 제품 요구사항의 유일한 원본은 Notion입니다. 작업 규칙은 [AGENTS.md](AGENTS.md)에 있습니다.
-
-- **[Notion 결정 기록 (ADR / 결정 목록)](https://app.notion.com/p/3fa587f5074781529f6beb28440c39a8)**: 제품 판단 모델(Rev.2.2), 데이터 스키마, 화면 원칙, 보안 가드레일 등 전체 결정 목록
-- **[Notion V2 아키텍처 기준 문서](https://app.notion.com/p/3fb587f5074781ed9fc0d52770e747e7)**: 시스템 구조, 수집·게시 주기, 캐시 정책, 에러 처리 기준
-- **[Notion AWS 운영 점검표](https://app.notion.com/p/402587f5074781438476fd8c816513b9)**: 계정 설정, 롤백 리허설 기록, 배포 점검 절차
-
-### 핵심 ADR 요약
-
-| ADR | 제목 | 상태 | 핵심 내용 및 기준 Notion |
-|---|---|---|---|
-| ADR 0001 | 모노레포 폴더 구조와 경계 | 승인 | `apps/web`과 `services`는 서로 참조하지 않고 `packages/contracts`로만 소통. 분류 계산은 Publisher 1회 계산 (아키텍처 17장, E7) |
-| ADR 0002 | TypeScript 및 Vitest 단일화 | 승인 | 백엔드 런타임 및 단위 테스트 도구를 TypeScript와 Vitest로 통일 (아키텍처 17장, ADR 0001에 통합 반영) |
+- [결정 기록](https://app.notion.com/p/3fa587f5074781529f6beb28440c39a8): 판단 모델(Rev.2.2), 데이터, 화면 원칙, 보안 가드레일
+- [V2 아키텍처 기준 문서](https://app.notion.com/p/3fb587f5074781ed9fc0d52770e747e7): 시스템 구조, 모노레포 경계(17장, ADR 0001), 수집·게시 주기, 캐시, 오류 처리
+- [AWS 운영 점검표](https://app.notion.com/p/402587f5074781438476fd8c816513b9): 계정 설정, 롤백 리허설 기록, 배포 점검
