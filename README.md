@@ -8,7 +8,7 @@
 - **운영자 사이트 시연**: <https://admin.baradun.app/login/demo/> (예시 데이터만 보이는 시연 계정은 요청하면 드립니다.)
 - 두 주소는 V2 운영 전환을 준비하고 있습니다. 전환 전에는 열리지 않거나 이전 버전이 보일 수 있습니다.
 - **주요 스택**: TypeScript, Next.js 16 정적 내보내기, AWS Lambda·DynamoDB·S3·CloudFront(AWS CDK), Vitest, Playwright
-- **해변 수**: 223곳(`data/beaches/`의 해변 파일 수)
+- **해변 수**: 222곳(2026-11-17 기준 `data/beaches/`의 해변 파일 수)
 
 ## 하는 일과 하지 않는 일
 
@@ -62,7 +62,7 @@ npm run build      # 워크스페이스 전체 빌드
 
 ## 시스템 구성
 
-수집기가 공공 API를 부르고 게시 함수가 해변 상태를 계산해 정적 파일로 올리고 사용자 사이트가 그 파일을 읽어 보여 줍니다. 요청마다 도는 서버는 없습니다.
+수집기가 공공 API를 불러 사실을 저장합니다. 게시 함수는 해변 상태를 계산해 정적 파일로 올립니다. 사용자 사이트는 그 파일을 읽어 보여 줍니다. 해변 상태를 보여 주는 데에는 요청마다 도는 서버가 없습니다. 요청마다 도는 Lambda는 문의 접수(`/api/inquiries`)와 운영 API(`/ops/*`)뿐입니다.
 
 ```mermaid
 flowchart LR
@@ -132,7 +132,7 @@ npm workspaces 모노레포입니다.
 경계는 이렇게 정했습니다.
 
 - **`apps/web`·`apps/admin`·`services`는 서로를 가져오지 않습니다.** 공유는 `packages/contracts`로만 합니다. 화면과 서버가 같은 스키마를 기준으로 삼아야 해변 상태를 서로 다르게 해석하는 일이 생기지 않기 때문입니다. 예외는 디자인 토큰(`packages/design-tokens`) 하나입니다.
-- **판단 규칙은 `services/src/publisher`에만 둡니다.** 화면은 게시된 분류와 사유 코드를 문구로 바꾸기만 합니다.
+- **판단 규칙은 `services`에만 둡니다.** 특보 확인 45분과 관측 신선도(파고 90분)는 `services/src/core`(`warnings`·`observations`)가, 분류는 `services/src/publisher`가 계산합니다. 기준 시간 값은 `packages/contracts/src/judgment-policy.ts` 한 곳에 둡니다. 화면은 게시된 분류와 사유 코드를 문구로 바꾸기만 합니다.
 
 ## 설계 결정
 
@@ -140,13 +140,13 @@ npm workspaces 모노레포입니다.
 
 - **문제**: 특보 API가 응답하지 않거나 파고 측정이 늦게 들어오는데도 화면에 특보가 없는 것처럼 보이면, 사용자는 확인되지 않은 바다를 문제없다고 받아들일 수 있습니다.
 - **선택**: 특보가 발효되면 `이용불가`, 특보 확인에 실패했거나 파고 측정이 90분을 넘기면 `판단불가`, 둘 다 아니면 `특보 없음`으로 분류합니다. 결측은 0이나 정상으로 바꾸지 않습니다. 가까운 측정소가 없으면 분류에는 영향을 주지 않고 값 자리에 '가까운 관측 없음'을 표시합니다.
-- **근거**: [services/src/publisher/classify.ts](services/src/publisher/classify.ts)와 같은 폴더의 테스트. 기준은 Notion 결정 기록 11장(측정소 없음 B3·B4)입니다.
+- **결과**: 특보를 확인하지 못했거나 관측이 늦은 해변은 실제 사유(예: 관측 지연)와 함께 `판단불가`로 게시됩니다. 판정 코드는 [services/src/publisher/classify.ts](services/src/publisher/classify.ts)(분류), [services/src/core/warnings/confirmation.ts](services/src/core/warnings/confirmation.ts)(특보 확인 45분), [services/src/core/observations/freshness.ts](services/src/core/observations/freshness.ts)(파고 90분)와 각 폴더의 테스트. 기준은 Notion 결정 기록 11장(측정소 없음 B3·B4)입니다.
 
 ### 분류를 게시할 때 한 번만 계산
 
 - **문제**: 화면과 서버가 각자 분류를 계산하면 같은 해변이 화면마다 다른 상태로 보일 수 있습니다.
 - **선택**: 게시 함수가 게시할 때 한 번 계산하고 화면은 다시 계산하지 않습니다. 게시 파일의 모양은 `packages/contracts`의 JSON Schema로 정하고 TypeScript 타입을 스키마에서 생성합니다.
-- **결과**: CI의 `npm run check:generated -w @baradun/contracts`가 생성된 타입이 스키마와 다르면 실패합니다. 요청마다 도는 서버가 없어서 사용자 사이트는 CDN 캐시만으로 동작합니다.
+- **결과**: CI의 `npm run check:generated -w @baradun/contracts`가 생성된 타입이 스키마와 다르면 실패합니다. 해변 상태는 요청마다 계산하지 않으므로 사용자 사이트의 해변 화면은 CDN 캐시만으로 동작합니다.
 
 ### 정적 내보내기에서 CSP 지키기
 
@@ -164,7 +164,7 @@ npm workspaces 모노레포입니다.
 
 - **문제**: 인프라 배포를 손으로 하면 머지하지 않은 코드가 운영에 올라갈 수 있습니다. 반대로 CI에 넓은 권한을 주면 CI 역할을 탈취당했을 때 피해가 커집니다.
 - **선택**: main CI가 성공하면 `deploy.yml`이 변경 세트를 만들어 판정합니다. 삭제나 교체가 없으면 바로 실행합니다. 삭제나 교체가 있으면 GitHub 승인을 기다립니다. 권한 상한(IAM Permissions Boundary)이 저장소와 다르면 멈추고 로컬 배포를 요구합니다. CI 역할은 스택 밖에 두고 IAM 쓰기 권한을 주지 않습니다. 그래서 스택 배포로 CI 역할의 권한을 넓힐 수 없습니다.
-- **근거**: [infra/README.md](infra/README.md#main-머지-뒤-자동-배포-418)의 'main 머지 뒤 자동 배포'.
+- **결과**: 머지한 코드만 운영에 올라갑니다. 판정과 배포 결과는 그 PR의 연결 이슈에 댓글로 남습니다. 자세한 판정 기준은 [infra/README.md](infra/README.md#main-머지-뒤-자동-배포-418)의 'main 머지 뒤 자동 배포'에 있습니다.
 
 ## 품질 관리
 
@@ -200,7 +200,7 @@ CI(`.github/workflows/ci.yml`)는 바뀐 영역만 골라 검사하고 모든 �
 
 ## 개인정보와 보안
 
-- **문의 연락처 받기는 꺼져 있습니다.** `INQUIRY_CONTACT_ENABLED`가 `false`라서 화면은 이메일·사진 입력란을 숨기고 서버는 이메일이나 사진이 담긴 문의를 거절하며 CSP는 사진 버킷 주소를 허용하지 않습니다. 값은 화면·서버·인프라 세 곳에서 같아야 합니다.
+- **문의 연락처 받기는 꺼져 있습니다.** `INQUIRY_CONTACT_ENABLED`가 `false`라서 화면은 이메일·사진 입력란을 숨기고 서버는 이메일이나 사진이 담긴 문의를 거절하며 CSP는 사진 버킷 주소를 허용하지 않습니다. 값은 화면·서버·인프라 세 곳에서 같아야 합니다. 다시 켜기 전에 개인정보 처리방침에 항목을 더하고 고지 버전을 올리며 선행 이슈(BRD-116·117·119)를 마쳐야 합니다([services/src/inquiry/policy.ts](services/src/inquiry/policy.ts) 주석, 결정 기록 D13-3).
 - **문의 알림 메일에는 본문을 넣지 않습니다.** 메일에는 문의 ID, 유형, 접수 시각, 이메일 제공 여부만 들어갑니다.
 - **분석 도구는 운영 빌드에만 들어갑니다.** Google Analytics는 쿼리·해시를 뺀 페이지 경로와 [정해 둔 기능 이용 이벤트](apps/web/src/lib/analytics/events.ts)만 보냅니다. 위치, 검색어 원문, 문의 본문, 해변 상태는 보내지 않습니다.
 - **보안 응답 헤더**: HSTS(1년), `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Permissions-Policy`를 CloudFront에서 보냅니다.
