@@ -71,11 +71,17 @@ test.describe("SEO · 메타 · 크롤링 제어 (BRD-144)", () => {
       expect(title).not.toMatch(STATUS_WORDS);
 
       // 색인 대상 페이지: 비운영 빌드는 noindex로 막고, 운영 빌드는 막지 않음
-      const robotsMeta = await page
+      // 운영 빌드에는 robots 메타가 아예 없을 수 있어 getAttribute로 기다리지 않고 지금 있는 태그만 읽음
+      const robotsMetas = await page
         .locator('meta[name="robots"]')
-        .getAttribute("content");
-      if (PRODUCTION_BUILD) expect(robotsMeta ?? "").not.toContain("noindex");
-      else expect(robotsMeta).toContain("noindex");
+        .evaluateAll((nodes) =>
+          nodes.map((node) => node.getAttribute("content") ?? ""),
+        );
+      if (PRODUCTION_BUILD) {
+        expect(robotsMetas.join(" ")).not.toContain("noindex");
+      } else {
+        expect(robotsMetas.join(" ")).toContain("noindex");
+      }
 
       const description = await page
         .locator('meta[name="description"]')
