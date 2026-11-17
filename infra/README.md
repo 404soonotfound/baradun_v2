@@ -12,6 +12,23 @@ npx cdk diff --method=template              # 배포된 스택과 템플릿 비�
 
 사이트 배포(`.github/workflows/deploy.yml`)는 하루 한 번 정기 실행(매일 05:17 KST)과 수동 실행(`npm run deploy:prod`)에서만 돕니다(GH-424). main에 머지할 때마다 올리면 배포마다 파일을 전부 다시 올려 S3 쓰기 요청 요금이 쌓이기 때문입니다(2026-11-01~13 청구액 US$1.08 중 약 90%, 앱 배포 1회에 PutObject 약 1,850건). 머지한 변경을 바로 보려면 `npm run deploy:prod`를 씁니다. `DEPLOY_PAUSED=true`면 정기 실행과 새 수동 배포(CLI·Actions 탭)를 막습니다(D27-6). 수동 실행은 정지 사유를 실행 요약에 남기고 실패로 끝납니다. 이미 시작한 동기화는 그대로 끝납니다. 정지를 켠 뒤 GitHub Actions의 `deploy` 실행 목록에서 이미 대기 중인 수동 실행은 취소합니다. 긴급 배포는 정지를 해제한 뒤 실행합니다. 배포는 GitHub OIDC로 사이트 전용 역할(`DeployRole`)을 맡아 S3 파일 동기화와 CloudFront 캐시 무효화만 수행하며, CloudFormation이나 CDK 실행 정책을 거치지 않습니다. 정기 배포는 앱(사용자 사이트·운영자 사이트)마다 마지막으로 올린 커밋(운영 주소의 `deploy-version.txt`, 저장소 변수 `SITE_URL`·`ADMIN_SITE_URL`로 읽음) 뒤로 main push CI가 성공하고 그 실행에서 그 앱 빌드 작업(`e2e-build`·`admin-build`)까지 성공한 가장 새 커밋을 올립니다(`.github/scripts/deploy-plan.sh`). CI는 push 단위로 돌아 여러 커밋을 머지하면 맨 위 커밋에서만 실행되므로, 커밋별 변경이 아니라 실행 결과로 고릅니다. 그런 커밋이 없거나 올린 커밋과 앱 파일이 같으면 건너뛰므로(이때는 S3에 쓰지 않음), CI가 늦게 끝난 옛 커밋이 새 배포를 덮지 않고 CI가 실패한 커밋의 변경은 그 앱을 다시 검사한 뒤 커밋으로만 나갑니다(검사를 거치지 않은 앱 변경이 남으면 경고를 남김). 표시를 못 읽으면 경고를 남기고 최근 이력에서 고른 커밋을 올리며, `npm run deploy:prod`(수동 실행)는 두 앱을 모두 올립니다(BRD-178). 사이트 동기화는 `data/`(publisher 구역)와 `map/`(한국 지도 파일 구역, 결정 기록 D19-1)을 건드리지 않습니다. `map/<판>/`은 수동 워크플로 `map-tiles.yml`이 같은 배포 역할로 올립니다(`tools/map-tiles/README.md`). 저장소 변수(사이트 주소·버킷·로그인 풀 값 등 빌드 값)만 바꾼 경우는 파일 변경이 아니라 정기 배포가 건너뛰므로 `npm run deploy:prod`로 다시 올립니다. main push CI는 push마다 따로 돌고 취소하지 않으며, main 규칙은 최신 브랜치만 머지할 수 있게 합니다.
 
+## 배포 뒤 운영 주소 스모크 점검 (#551)
+
+사이트를 배포한 뒤에는 운영 주소가 제대로 떴는지 아래 명령으로 확인합니다. 운영 주소를 읽기만 하며 로그인·쓰기를 하지 않습니다. 실패해도 되돌리지 않고 결과만 보여 줍니다. 2026-11-17 CloudFront 기본 주소에서 약 10초 걸렸습니다.
+
+```bash
+npm run test:smoke:live -w apps/web -- \
+  --base-url https://d1gam1q4z69v8c.cloudfront.net \
+  --admin-url https://d397dp5vuhn4qm.cloudfront.net \
+  --expect-commit <배포한 커밋>
+```
+
+- `--base-url`(필수)은 사용자 사이트, `--admin-url`(선택)은 운영자 사이트 주소입니다. 둘 다 https만 받습니다. 출시일 전환 뒤에는 `--base-url https://www.baradun.app`을 씁니다.
+- `--expect-commit`(선택)을 주면 `deploy-version.txt`가 그 커밋인지도 봅니다. 나머지 옵션(예: `--project desktop`)은 Playwright에 그대로 넘어갑니다.
+- 보는 것: 주요 경로(한·영) 200과 없는 경로 404, 게시본이 45분 안에 만들어졌고 점검 중이 아님, 보안 응답 헤더 6종, 홈·탐색·상세의 '특보 없음'마다 범위·기상청·확인 시각과 현장 우선 문구, 콘솔 CSP 위반 0건, 운영자 로그인 화면 200·noindex입니다.
+- 실데이터라 특정 해변의 상태 값은 보지 않습니다. 지금 게시본에 '특보 없음' 해변이 없으면 상세 검사는 건너뜁니다.
+- CI 필수 검사가 아닙니다. 운영 상태 때문에 PR이 막히지 않게 하려는 것입니다.
+
 인프라 스택은 main 머지 뒤 CI가 자동으로 배포합니다(아래 'main 머지 뒤 자동 배포'). 첫 설정·boundary 반영·비상 배포처럼 손으로 할 때는 최신 `origin/main`을 꺼낸 배포용 작업 트리에서 합니다. 작업 중인 브랜치에서 배포하면 머지되지 않은 코드가 실환경에 올라갑니다. 아래 명령 하나가 그 순서를 모두 합니다(BRD-169, `infra/scripts/deploy.mjs`).
 
 ```bash
@@ -226,6 +243,7 @@ GA 계정·속성과 Google Cloud 프로젝트는 운영자 Google Workspace 조
    - 도메인 목록에서 `www.baradun.app`을 빼고 `baradun.app`만 남깁니다.
    - `vercel.json`에 `{"redirects":[{"source":"/(.*)","destination":"https://www.baradun.app/","permanent":false}]}`를 넣어 다시 배포합니다. V1 경로는 V2에 없어서 모두 첫 화면으로 보냅니다. 안정되면 `permanent: true`로 바꿉니다(BRD-98).
 6. **확인**
+   - 위 '배포 뒤 운영 주소 스모크 점검'을 `--base-url https://www.baradun.app`과 4단계에서 배포한 커밋(`--expect-commit`)으로 돌려 모두 통과
    - `curl -sI https://www.baradun.app/`: 200, 보안 헤더 6종
    - `curl -sI https://d1gam1q4z69v8c.cloudfront.net/spots/gangmun/`: 301, `location: https://www.baradun.app/spots/gangmun/`
    - `curl -sI https://baradun.app/`: www로 이동

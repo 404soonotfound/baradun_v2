@@ -16,3 +16,4 @@ This version has breaking changes — APIs, conventions, and file structure may 
   - 이름: `mixed`·`warning`·`unknown`·`delayed`·`no-nearby`·`partial-fail`·`all-fail`·`empty`·`maintenance`·`force-update`·`notice`. 실행하면 무엇을 보는지와 먼저 열 해변 주소를 출력한다.
   - 시나리오나 픽스처를 고치면 `scripts/dev-scenario.test.ts`(계약 스키마 통과)와 E2E 전체를 돌린다.
 - 화면·동작 관련 PR과 main CI는 `npm run test:e2e:smoke -w apps/web`으로 Chromium 모바일·PC의 핵심 안전 상태·접근성·문의 흐름을 확인한다. PR에서 바뀐 E2E spec은 비핵심 테스트도 실행하고, 공통 픽스처·설정이 바뀌면 전체 스위트를 실행한다. 테스트·개발 지침만 바뀐 PR은 E2E를 건너뛰며 정적 빌드·CSP 검사는 유지한다. 실제 사이트를 올릴 때는 빌드 뒤 전체 Chromium 스위트(`npm run test:e2e -w apps/web`)를 통과해야 한다.
+- 운영 주소 스모크(`npm run test:smoke:live -w apps/web -- --base-url <주소>`, `e2e-live/`·`playwright.live.config.ts`, #551)는 배포 뒤 실제 운영 주소를 읽기만 하는 수동 점검이다. CI 필수 검사에 넣지 않는다. 실데이터라 값이 아니라 지켜야 할 조건만 검사한다. 사용법은 `infra/README.md` '배포 뒤 운영 주소 스모크 점검'.
