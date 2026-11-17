@@ -642,9 +642,9 @@ await fetch("/api/inquiries", {
 
 새 문의 알림은 배포 파라미터 `AlertEmail`로 만든 SNS 이메일 구독을 사용하므로 첫 배포 뒤 구독 확인이 필요합니다. 알림에는 문의 ID·유형·접수 시각(UTC)·이메일 제공 여부만 들어가며, 메일함에 개인정보가 남지 않도록 본문(요약 포함)·실제 이메일 주소·사진 정보는 넣지 않습니다(BRD-120).
 
-### 문의 내용 확인(운영자 콘솔 BRD-97 도입 전)
+### 문의 내용 확인
 
-알림 이메일에는 개인정보 보호를 위해 본문 요약이 들어가지 않으므로, 운영자 콘솔(BRD-97) 도입 전까지는 AWS 관리 콘솔에서 해당 항목만 조회해 확인합니다.
+알림 이메일에는 개인정보 보호를 위해 본문 요약이 들어가지 않습니다. 유형·접수 시각·처리 상태는 운영자 사이트 문의 화면에서 확인합니다. 본문은 편집 권한 이상에서만 보입니다(보기 권한은 본문을 받지 않음, 아래 '문의 처리(BRD-153)'). 운영자 화면과 운영 API는 회신 이메일과 첨부 사진 키를 보여 주지 않습니다. 이 값만 AWS 관리 콘솔에서 해당 항목을 조회해 확인합니다.
 
 1. AWS 콘솔 → DynamoDB → 테이블 → `InquiryTable`(스택 출력 `InquiryTableName`, 예: `BaradunV2-InquiryTable...`) 선택
 2. '항목 탐색' 화면에서 항목 조회(Get item) 또는 쿼리(Query) 실행
@@ -655,7 +655,7 @@ await fetch("/api/inquiries", {
 
 ## 데이터 게시(publish-snapshot)와 롤백
 
-수집기 3개가 수집을 마칠 때마다 `publish-snapshot`을 비동기로 깨웁니다(아키텍처 6.2). 게시 함수는 State를 읽어 해변 상태를 계산하고 `data/{버전}/`에 파일 네 개를 올린 뒤 `data/manifest.json`을 조건부 쓰기(If-Match)로 바꿉니다. 실패하면 manifest는 이전 버전 그대로이고, 함수는 오류로 끝나 Lambda 오류 지표에 남습니다.
+수집기가 수집을 마칠 때마다 `publish-snapshot`을 비동기로 깨웁니다(아키텍처 6.2). 게시 함수는 State를 읽어 해변 상태를 계산하고 `data/{버전}/`에 파일 네 개를 올린 뒤 `data/manifest.json`을 조건부 쓰기(If-Match)로 바꿉니다. 실패하면 manifest는 이전 버전 그대로이고 함수는 오류로 끝나 Lambda 오류 지표에 남습니다.
 
 게시 전에 해변 ID를 집합으로 대조합니다(결정 기록 D16-C1). 저장소 원본 목록(`data/beach-meta.json`의 해변 칸, 함수에 JSON으로 묶임)과 읽은 해변 파일(`beaches/`로 복사됨), 게시 결과(해변 목록·해변 상태)가 하나라도 다르면(누락·추가·중복) 게시하지 않고 앞 게시본을 둡니다. 비율 기준은 없습니다. 로그는 `publish_failed`의 `reason: beach_ids`와 어긋난 ID입니다. 관측을 받지 못한 해변은 빠지지 않고 분류만 판단불가가 됩니다.
 
@@ -914,13 +914,14 @@ aws dynamodb delete-item --region ap-northeast-2 --table-name <OpsTableName> \
 
 운영자 화면 문의 목록·상세·처리 상태 API입니다. 기준은 결정 기록 D16-B4·D5·D6, 화면 설계서 6장 ADM-INQ, 구현 제안 I07·I08입니다.
 
-- **경로:** `GET /ops/inquiries?status=&cursor=&limit=`(목록), `GET /ops/inquiries/{id}`(상세), `PATCH /ops/inquiries/{id}`(처리 상태·반려 이유·내부 메모, 편집·노출 변경 권한). 쓰기에는 `x-idempotency-key`(UUID v4) 헤더와 읽을 때 받은 `version`을 함께 보냅니다.
+- **경로:** `GET /ops/inquiries?status=&cursor=&limit=&q=&type=&beachId=&from=&to=&preview=`(목록), `GET /ops/inquiries/{id}`(상세), `PATCH /ops/inquiries/{id}`(처리 상태·반려 이유·내부 메모, 편집·노출 변경 권한). 쓰기에는 `x-idempotency-key`(UUID v4) 헤더와 읽을 때 받은 `version`을 함께 보냅니다.
 - **상태:** 접수(received)·확인 중(in_progress)·완료(resolved)·반려(rejected). 반려는 이유가 필수이고 공백만은 거부합니다. 반려가 아닌 상태로 바꾸면 반려 이유를 지웁니다.
 - **목록:** `inquiryStatus-receivedAt` GSI(요약만, 본문·이메일·사진 키 없음)를 최근 접수 순으로 읽습니다. 상태를 고르지 않으면 접수 → 확인 중 → 완료 → 반려 순으로 이어 붙이고, `cursor`로 다음 쪽을 이어 갑니다. GSI는 최종적 일관성이라 저장 직후 목록이 잠시 이전 값일 수 있습니다. 그래서 처리(PATCH)에는 목록이 아니라 상세(강한 일관성)에서 받은 `version`을 씁니다. 상태를 고른 목록에는 같은 상태 목록에서 받은 `cursor`만 넣습니다.
+- **본문 미리보기·검색:** GSI에는 본문이 없습니다. 편집 권한 이상이 `preview=true`나 검색어 `q`를 보내면 문의마다 상세를 읽어 본문 미리보기(`messagePreview`)를 붙이거나 본문에서 검색합니다(`services/src/admin/inquiries.ts`). 보기 권한에는 미리보기 대신 `messagePreviewUnavailableReason: "restricted"`를 줍니다. 보기 권한의 검색은 해변으로만 맞춥니다.
 - **모르는 처리 상태(#521, 아키텍처 18.3):** 4종 밖 상태 값은 원래 값 그대로 내려 주고, 상태 변경·필터는 4종만 받습니다. GSI 파티션이 상태라 Query로는 4종 밖 값을 찾을 수 없어, 첫 쪽에서 같은 GSI를 4종 밖만 걸러 `Scan` 한 번으로 읽습니다. 상태를 고르지 않은 목록의 맨 위와 `counts.unknown`(4개 탭 수와 따로)에 함께 씁니다. Scan이 실패하면(권한·쓰로틀) 목록·4종 수는 그대로 내려 주고 `counts.unknown: null`·`unknownStatusUnavailable: true`와 warn 로그 `ops_inquiry_unknown_status_unavailable`을 남깁니다. 모르는 상태를 읽을 때마다 warn 로그 `ops_inquiry_unknown_status`를 남깁니다(새 경보 없음).
 - **보관:** 받은 날부터 90일(TTL) 그대로입니다. TTL로 지워지기 전이라도 기한이 지난 문의는 목록·상세·수정에서 뺍니다. 처리 상태·메모는 같은 항목에 붙어 함께 만료됩니다.
 - **역할 권한:** 운영 API 역할은 문의 테이블 `GetItem`·`UpdateItem`과 상태 GSI `Query`·`Scan`만 가집니다. `Scan`은 인덱스 ARN(`…/index/inquiryStatus-receivedAt`)에만 있고 테이블 ARN에는 없습니다. boundary도 `InquiryStatusIndexScan` 문장으로 같은 인덱스만 허락합니다(#521, 바꾸면 '로컬 배포 필요').
-- **권한:** 보기 권한은 본문·메모·반려 이유를 받지 않습니다. 샘플 계정은 실제 테이블을 읽지 않고 예시 문의만 받습니다. 개인정보 가리기·문의 지우기·같은 해변 묶음(D16-D7)은 이 범위가 아닙니다.
+- **권한:** 보기 권한은 본문·메모·반려 이유를 받지 않습니다. 샘플 계정은 실제 테이블을 읽지 않고 예시 문의만 받습니다. 개인정보 가리기는 `PATCH`의 `redactions`로 본문 일부를 지웁니다. 화면이 본 `version`의 본문에서만 계산합니다. version이 다르면 본문을 바꾸지 않습니다(`services/src/admin/handler.ts`). 문의 지우기·같은 해변 묶음(D16-D7)은 이 범위가 아닙니다.
 - **용량:** GSI 읽기·쓰기 1/1을 더해 테이블·GSI 합계 12/12(상한 25)입니다.
 
 #### 배포와 기존 문의 이전(구현 제안 I07 순서)
@@ -978,7 +979,7 @@ npx --no-install tsx services/scripts/inquiry-status-backfill.ts --table <Inquir
 ### 점검 켜기·끄기
 
 1. `MANIFEST_SETTINGS.maintenance`를 `{ active: true, until: "2026-11-06T09:00:00Z" }`처럼 바꿔 PR로 머지합니다. 끌 때는 `{ active: false, until: null }`.
-2. 최신 `origin/main` 작업 트리에서 `npx cdk deploy`합니다(맨 위 배포 절차). services 코드는 Lambda 번들로 들어가서 사이트 배포(`deploy.yml`)로는 반영되지 않습니다.
+2. 머지하면 main CI가 성공한 뒤 인프라를 자동 배포합니다(위 'main 머지 뒤 자동 배포'). 결과는 연결 이슈 댓글로 확인합니다. 승인 대기면 `infra-approve`를 승인하고 로컬 배포 필요면 최신 `origin/main` 작업 트리에서 `npm run deploy:infra`로 배포합니다. services 코드는 Lambda 번들로 들어가서 사이트 배포로는 반영되지 않습니다.
 3. 다음 게시에 반영됩니다. 수집기가 15분 안에 게시를 깨우고, 바로 반영하려면 게시 함수를 직접 부릅니다.
 
    ```bash
@@ -993,8 +994,8 @@ npx --no-install tsx services/scripts/inquiry-status-backfill.ts --table <Inquir
 
 순서가 중요합니다. **새 화면을 먼저 배포하고, 그 뒤에 `minWebBuild`를 올립니다.** 반대로 하면 사용자가 새로고침해도 이전 화면 파일만 받아 강제 업데이트 화면에서 벗어나지 못합니다.
 
-1. 이전 화면이 새 데이터를 잘못 읽을 수 있는 변경일 때만 합니다. `WEB_BUILD`를 1 올린 PR을 main에 머지하면 `deploy.yml`이 사이트를 배포합니다. 배포가 끝났는지 확인합니다.
-2. `MANIFEST_SETTINGS.minWebBuild`를 같은 값으로 올린 PR을 머지하고 `npx cdk deploy`합니다. `minWebBuild`는 배포된 `WEB_BUILD`보다 크게 두지 않습니다(infra 테스트가 막음).
+1. 이전 화면이 새 데이터를 잘못 읽을 수 있는 변경일 때만 합니다. `WEB_BUILD`를 1 올린 PR을 main에 머지하고 다음 정기 배포(매일 05:17 KST)를 기다리거나 `npm run deploy:prod`로 사이트를 배포합니다. 배포가 끝났는지 확인합니다.
+2. `MANIFEST_SETTINGS.minWebBuild`를 같은 값으로 올린 PR을 머지합니다. 인프라 배포는 점검 켜기 2단계와 같습니다. `minWebBuild`는 배포된 `WEB_BUILD`보다 크게 두지 않습니다(infra 테스트가 막음).
 3. 점검과 같은 방법(3·4단계)으로 반영을 확인합니다.
 
 서비스 워커(오프라인)가 생기면 새로고침이 이전 화면 파일을 내주지 않는지 그 작업에서 다시 확인합니다.
