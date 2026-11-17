@@ -3,6 +3,8 @@
 // 사용: npm run test:smoke:live -w apps/web -- --base-url <사용자 사이트 주소> [--admin-url <운영자 사이트 주소>] [--expect-commit <커밋>]
 // Playwright는 모르는 옵션을 받지 않아서, 주소는 환경 변수로 바꿔 playwright.live.config.ts에 넘김
 import { spawnSync } from "node:child_process";
+import { createRequire } from "node:module";
+import { fileURLToPath } from "node:url";
 
 const USAGE =
   "사용: npm run test:smoke:live -w apps/web -- --base-url <주소> [--admin-url <주소>] [--expect-commit <커밋>] [Playwright 옵션]";
@@ -61,10 +63,22 @@ if (expectCommit && !/^[0-9a-f]{7,40}$/.test(expectCommit)) {
 console.log(
   `운영 주소 스모크: ${baseUrl}${adminUrl ? ` · 운영자 ${adminUrl}` : ""}${expectCommit ? ` · 기준 커밋 ${expectCommit}` : ""}`,
 );
+// 어느 폴더에서 실행해도 같게: Playwright CLI는 설치 위치에서 찾고, 설정은 apps/web 기준으로 읽음
+const webDir = fileURLToPath(new URL("..", import.meta.url));
+const playwrightCli = createRequire(import.meta.url).resolve(
+  "@playwright/test/cli",
+);
 const result = spawnSync(
-  "playwright",
-  ["test", "--config", "playwright.live.config.ts", ...passThrough],
+  process.execPath,
+  [
+    playwrightCli,
+    "test",
+    "--config",
+    "playwright.live.config.ts",
+    ...passThrough,
+  ],
   {
+    cwd: webDir,
     stdio: "inherit",
     env: {
       ...process.env,

@@ -4,7 +4,8 @@ import ko from "../../messages/ko.json";
 import { ZONE_NAMES_KO } from "../../src/lib/zone-names-ko";
 
 // '특보 없음' 근거 검사 (리뷰 점검표 5). 가짜 데이터 스위트(states.spec)와 운영 주소 스모크(e2e-live)가 같이 씀
-export const FINAL_CALL = ko.safety.finalCall;
+// 제품 규칙이 정한 문장 그대로 고정(문구 키를 읽으면 키를 고쳐도 시험이 따라가 못 잡음)
+export const FINAL_CALL = "최종 판단은 현장 통제와 안전요원 안내가 우선이에요";
 // 자정 직후에는 확인 시각이 전날이라 날짜가 붙음(kstStamp: "11/05 23:59")
 export const CONFIRMED = /기상청 (?:\d{2}\/\d{2} )?\d{1,2}:\d{2} 확인/;
 // 범위: 예보업무규정 별표 구역 이름 1~2개('강원중부앞바다, 강릉평지') 또는 이름을 모를 때의 '해변 특보구역'(D18-11)

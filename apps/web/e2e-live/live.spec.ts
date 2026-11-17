@@ -8,10 +8,12 @@ import {
 } from "@playwright/test";
 
 import { NOTICE_VERSION } from "../src/lib/notice-version";
+import { CLOCK_TOLERANCE_MS } from "../src/lib/snapshot/clock";
 import {
   clearBadges,
   clearPlacesWithoutBasis,
   CONFIRMED,
+  notSummaryLabel,
 } from "../e2e/support/clear-basis";
 
 // 운영 주소 읽기 전용 스모크 (#551, 노션 결정 기록 D30-6)
@@ -22,8 +24,6 @@ import {
 const EXPECT_COMMIT = process.env.LIVE_EXPECT_COMMIT ?? "";
 const ADMIN_URL = process.env.LIVE_ADMIN_URL ?? "";
 const KMA_STATUS_KO = "출처: 기상청 (특보·해양 관측 자료를 가공)";
-// 미래 시각 여유(view.ts CLOCK_TOLERANCE와 같은 2분)
-const CLOCK_TOLERANCE_MS = 2 * 60 * 1000;
 
 const PAGES = [
   "/",
@@ -60,7 +60,14 @@ async function readJson(request: APIRequestContext, path: string) {
   return (await response.json()) as unknown;
 }
 
-async function readLiveData(request: APIRequestContext): Promise<LiveData> {
+// 작업자(worker)마다 한 번만 받아 여러 시험이 같은 게시본을 봄(5분마다 바뀌는 판이 시험마다 달라지지 않게)
+let liveData: Promise<LiveData> | undefined;
+function readLiveData(request: APIRequestContext): Promise<LiveData> {
+  liveData ??= fetchLiveData(request);
+  return liveData;
+}
+
+async function fetchLiveData(request: APIRequestContext): Promise<LiveData> {
   const manifest = (await readJson(request, "/data/manifest.json")) as Manifest;
   const beachesPath = manifest.files?.beaches;
   const statusPath = manifest.files?.status;
@@ -126,15 +133,25 @@ async function watchCsp(page: Page) {
   return violations;
 }
 
-// 판단 상태를 받아 그릴 때까지 기다림: 확인 시각 근거('기상청 HH:MM 확인') 또는 '확인 못 함'이 보이면 받은 것
-async function waitForStatus(page: Page) {
+// 화면을 열고 판단 상태를 받아 그릴 때까지 기다림
+// status.json 응답을 받은 뒤, 확인 시각 근거('기상청 HH:MM 확인')나 판단 배지의 '확인 못 함'이 보이면 그린 것
+// PC 홈 전국 지도 카드의 묶음 이름('확인 못 함 n곳')은 받기 전에도 있어서 빼고 봄(data-summary-category)
+async function gotoWithStatus(page: Page, path: string) {
+  const status = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname.endsWith("/status.json") &&
+      response.ok(),
+  );
+  await page.goto(path);
+  await status;
   await expect(
     page
       .getByText(CONFIRMED)
-      .or(page.getByText("확인 못 함"))
+      .or(page.getByText("확인 못 함", { exact: true }))
       .filter({ visible: true })
+      .and(notSummaryLabel(page))
       .first(),
-    `${page.url()}에서 판단 상태가 그려지지 않음`,
+    `${path}에서 판단 상태가 그려지지 않음`,
   ).toBeVisible();
 }
 
@@ -233,6 +250,9 @@ test.describe("운영 게시본·응답 (모바일 프로젝트에서 한 번)",
     const url = new URL("/login/", ADMIN_URL).toString();
     const response = await request.get(url, { maxRedirects: 0 });
     expect(response.status(), `${url} 응답 코드`).toBe(200);
+    expect(response.headers()["x-robots-tag"], `${url} X-Robots-Tag`).toContain(
+      "noindex",
+    );
     const html = await response.text();
     expect(html, `${url} robots meta noindex`).toMatch(
       /<meta name="robots" content="[^"]*noindex/,
@@ -248,8 +268,7 @@ test.describe("화면 (모바일·PC)", () => {
   test("홈: 판단 상태가 그려지고 '특보 없음'마다 범위·기상청·확인 시각과 현장 우선 문구", async ({
     page,
   }) => {
-    await page.goto("/");
-    await waitForStatus(page);
+    await gotoWithStatus(page, "/");
     await expect(page.getByText(KMA_STATUS_KO).first()).toBeVisible();
     const result = await clearPlacesWithoutBasis(page);
     test.info().annotations.push({
@@ -266,8 +285,7 @@ test.describe("화면 (모바일·PC)", () => {
     request,
   }) => {
     const { clearSlugs } = await readLiveData(request);
-    await page.goto("/explore/");
-    await waitForStatus(page);
+    await gotoWithStatus(page, "/explore/");
     if (clearSlugs.length > 0) {
       await expect(
         clearBadges(page).first(),
