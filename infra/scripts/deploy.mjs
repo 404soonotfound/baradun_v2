@@ -317,7 +317,7 @@ if (ci !== "success") {
   fail(
     {
       missing:
-        "이 커밋의 CI 기록이 없어요. main CI가 돌았는지 Actions 탭에서 확인해 주세요.",
+        "이 커밋의 ci-ok 결과가 없어요(정기 CI의 건너뜀은 결과로 보지 않음). main push CI가 돌았는지 Actions 탭에서 확인해 주세요.",
       pending:
         "CI가 아직 도는 중이에요(보통 10분 안팎). 끝난 뒤 같은 명령을 다시 실행해 주세요.",
       failure: "ci-ok가 실패했어요. 고친 뒤 다시 실행해 주세요.",
