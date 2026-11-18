@@ -133,7 +133,47 @@ describe("ci-ok 확인", () => {
       "missing",
     );
     expect(ciConclusion([run({ conclusion: "cancelled" })])).toBe("failure");
-    expect(ciConclusion([run({ conclusion: "skipped" })])).toBe("failure");
+    expect(ciConclusion([run({ conclusion: null })])).toBe("failure");
+  });
+
+  // GH-566: 정기 CI는 ci-ok 작업을 건너뛰어 같은 커밋에 skipped를 남김
+  describe("정기 CI가 남긴 건너뛴 ci-ok", () => {
+    const skipped = run({
+      conclusion: "skipped",
+      completed_at: "2026-11-17T00:20:00Z",
+    });
+
+    it("push CI가 성공이면 뒤에 남은 건너뜀과 상관없이 성공", () => {
+      expect(ciConclusion([run({}), skipped])).toBe("success");
+      expect(
+        ciConclusion([
+          run({}),
+          run({ conclusion: "neutral", completed_at: "2026-11-17T00:20:00Z" }),
+        ]),
+      ).toBe("success");
+    });
+
+    it("push CI가 실패면 건너뜀이 뒤에 있어도 실패", () => {
+      expect(ciConclusion([run({ conclusion: "failure" }), skipped])).toBe(
+        "failure",
+      );
+    });
+
+    it("push CI가 아직 도는 중이면 기다린다", () => {
+      expect(
+        ciConclusion([
+          run({ status: "in_progress", completed_at: null }),
+          skipped,
+        ]),
+      ).toBe("pending");
+    });
+
+    it("건너뜀만 있으면 통과로 보지 않는다", () => {
+      expect(ciConclusion([skipped])).toBe("missing");
+      expect(ciStateWithRuns(ciConclusion([skipped]), ["completed"])).toBe(
+        "missing",
+      );
+    });
   });
 });
 

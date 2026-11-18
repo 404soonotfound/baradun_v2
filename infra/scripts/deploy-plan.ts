@@ -23,13 +23,20 @@ export interface CheckRun {
 
 export type CiState = "success" | "pending" | "failure" | "missing";
 
-// 그 커밋의 ci-ok 결과. GitHub Actions가 남긴 것 중 가장 늦게 끝난 실행을 봄(deploy.yml 수동 실행과 같은 기준)
+// 검사하지 않고 끝난 결과. 정기 CI(schedule)는 ci-ok 작업을 건너뛰어 같은 커밋에 skipped를 남김(GH-566)
+const NOT_CHECKED = new Set(["skipped", "neutral"]);
+
+// 그 커밋의 ci-ok 결과. GitHub Actions가 남긴 것 중 실제로 검사한 실행만 보고, 가장 늦게 끝난 결과를 씀
+// 건너뜀(skipped·neutral)만 있으면 결과 없음(missing)으로 봄 → 통과로 보지 않음
 // 아직 도는 실행(완료 전)이 있으면 그 결과를 기다림
 export function ciConclusion(
   checkRuns: readonly CheckRun[] | undefined,
 ): CiState {
   const runs = (checkRuns ?? []).filter(
-    (r) => r.name === "ci-ok" && r.app?.slug === "github-actions",
+    (r) =>
+      r.name === "ci-ok" &&
+      r.app?.slug === "github-actions" &&
+      !(r.status === "completed" && NOT_CHECKED.has(r.conclusion ?? "")),
   );
   if (runs.length === 0) return "missing";
   if (runs.some((r) => r.status !== "completed")) return "pending";
