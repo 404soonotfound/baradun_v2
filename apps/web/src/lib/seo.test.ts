@@ -5,8 +5,12 @@ import {
   INDEXABLE_STATIC_PATHS,
   NOINDEX_ROBOTS,
   rootRobotsMetadata,
+  rootVerificationMetadata,
 } from "@/lib/seo";
-import { PRODUCTION_SITE_ORIGIN } from "@/lib/site-env";
+import {
+  NAVER_SITE_VERIFICATION,
+  PRODUCTION_SITE_ORIGIN,
+} from "@/lib/site-env";
 
 const ORIGINAL_SITE_URL = process.env.NEXT_PUBLIC_SITE_URL;
 
@@ -23,6 +27,21 @@ describe("seo", () => {
       rules: [{ userAgent: "*", disallow: "/" }],
     });
     expect(buildSitemap(["gangmun"])).toEqual([]);
+    expect(rootVerificationMetadata()).toBeUndefined();
+  });
+
+  it("소유 확인 태그는 운영 주소에서만 네이버 값을 넣음", () => {
+    process.env.NEXT_PUBLIC_SITE_URL = PRODUCTION_SITE_ORIGIN;
+    expect(rootVerificationMetadata()).toEqual({
+      other: { "naver-site-verification": NAVER_SITE_VERIFICATION },
+    });
+    expect(NAVER_SITE_VERIFICATION).toMatch(/^[0-9a-f]{40}$/);
+
+    for (const raw of [undefined, "", "https://example.test"]) {
+      if (raw === undefined) delete process.env.NEXT_PUBLIC_SITE_URL;
+      else process.env.NEXT_PUBLIC_SITE_URL = raw;
+      expect(rootVerificationMetadata()).toBeUndefined();
+    }
   });
 
   it("운영 주소면 루트 noindex를 떼고 /search만 막으며 sitemap을 채움", () => {

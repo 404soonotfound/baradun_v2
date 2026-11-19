@@ -1,4 +1,7 @@
-import { isProductionSiteUrl } from "../src/lib/site-env";
+import {
+  isProductionSiteUrl,
+  NAVER_SITE_VERIFICATION,
+} from "../src/lib/site-env";
 import { expect, test, CLEAR_ID, slugOf } from "./fixtures";
 
 // 배포 워크플로는 실제로 올릴 빌드에 E2E를 돌리고 E2E_SITE_URL로 빌드에 넣은 주소를 알려 줌(analytics.spec과 같음)
@@ -82,6 +85,16 @@ test.describe("SEO · 메타 · 크롤링 제어 (BRD-144)", () => {
       } else {
         expect(robotsMetas.join(" ")).toContain("noindex");
       }
+
+      // 네이버 소유 확인 태그(GH-323): 운영 빌드에만 있고 비운영 빌드에는 없음
+      const naverVerification = await page
+        .locator('meta[name="naver-site-verification"]')
+        .evaluateAll((nodes) =>
+          nodes.map((node) => node.getAttribute("content") ?? ""),
+        );
+      expect(naverVerification).toEqual(
+        PRODUCTION_BUILD ? [NAVER_SITE_VERIFICATION] : [],
+      );
 
       const description = await page
         .locator('meta[name="description"]')
