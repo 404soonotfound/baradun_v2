@@ -13,6 +13,11 @@ export const PRODUCTION_SITE_ORIGIN = "https://baradun.app";
 // Google Analytics 측정 ID(G-로 시작, GTM- 컨테이너 아님). 운영 빌드에서만 쓰임(components/analytics)
 export const GA_MEASUREMENT_ID = "G-1JV7N1JSHP";
 
+// 네이버 서치어드바이저 소유 확인 값(GH-323). 운영 빌드의 메타 태그에만 쓰임(lib/seo.ts). 운영 HTML에 공개되는 값이라 비밀값 아님
+// Google Search Console은 도메인 속성(DNS TXT)으로 확인해서 태그를 두지 않음
+export const NAVER_SITE_VERIFICATION =
+  "5f58c5a46481ec43796287b5e611bfd49c53b173";
+
 // 사이트 주소 값이 운영 주소인지. 비었거나 틀린 값은 운영이 아님(빌드 자체는 siteUrl()이 멈춤)
 export function isProductionSiteUrl(raw: string | undefined): boolean {
   try {
