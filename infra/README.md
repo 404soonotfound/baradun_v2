@@ -23,7 +23,7 @@ npm run test:smoke:live -w apps/web -- \
   --expect-commit <배포한 커밋>
 ```
 
-- `--base-url`(필수)은 사용자 사이트, `--admin-url`(선택)은 운영자 사이트 주소입니다. 둘 다 https만 받습니다. 출시일 전환 뒤에는 `--base-url https://www.baradun.app`을 씁니다.
+- `--base-url`(필수)은 사용자 사이트, `--admin-url`(선택)은 운영자 사이트 주소입니다. 둘 다 https만 받습니다. 대표 주소 전환(2026-11-17) 뒤에는 `--base-url https://baradun.app --admin-url https://admin.baradun.app`을 씁니다.
 - `--expect-commit`(선택)을 주면 `deploy-version.txt`가 그 커밋인지도 봅니다. 나머지 옵션(예: `--project desktop`)은 Playwright에 그대로 넘어갑니다.
 - 보는 것: 주요 경로(한·영) 200과 없는 경로 404, 게시본이 45분 안에 만들어졌고 점검 중이 아님, 보안 응답 헤더 6종, 홈·탐색·상세의 '특보 없음'마다 범위·기상청·확인 시각과 현장 우선 문구, 콘솔 CSP 위반 0건, 운영자 로그인 화면 200·noindex입니다.
 - 실데이터라 특정 해변의 상태 값은 보지 않습니다. 지금 게시본에 '특보 없음' 해변이 없으면 상세 검사는 건너뜁니다.

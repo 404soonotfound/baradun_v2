@@ -4,7 +4,7 @@
 // 새 NEXT_PUBLIC_* 변수를 만들지 않음(워크플로가 웹 빌드에 넘기는 공개 변수는 두 개로 고정, infra/test/workflows.test.ts)
 import { parseSiteUrl } from "@/lib/site-url";
 
-// 운영 대표 주소(GH-341, 2026-11-17 사용자 결정: www 없는 루트 주소). DNS를 Cloudflare로 옮겨 루트를 CloudFront에 연결하고
+// 운영 대표 주소(GH-341, 2026-11-17 사용자 결정: www 없는 루트 주소). DNS를 Vercel DNS로 옮겨 루트를 CloudFront에 연결하고(ALIAS)
 // www는 같은 CloudFront의 추가 별칭으로 받아 루트로 301 이동함(infra SiteRedirectDomainName)
 // 저장소 변수 SITE_URL(deploy.yml)도 같은 값이어야 운영 빌드가 됨. 전환 전 SITE_URL은 CloudFront 기본 주소라 계속 비운영
 // 인프라 스택 매개변수 SiteDomainName(CloudFront 대표 주소 이동)도 이 호스트와 같아야 함. 자동 대조는 없음(infra/README '운영 도메인 연결')
