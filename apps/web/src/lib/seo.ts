@@ -1,7 +1,7 @@
 import type { Metadata, MetadataRoute } from "next";
 import { EMPTY_SLUG } from "@/lib/beaches";
 import { localizedPath } from "@/lib/i18n";
-import { isProductionSite } from "@/lib/site-env";
+import { isProductionSite, NAVER_SITE_VERIFICATION } from "@/lib/site-env";
 import { siteUrl } from "@/lib/site-url";
 
 // 검색 결과·404·비운영 빌드는 색인을 막음 (BRD-144)
@@ -12,6 +12,13 @@ export const NOINDEX_ROBOTS: NonNullable<Metadata["robots"]> = {
 
 export function rootRobotsMetadata(): Metadata["robots"] | undefined {
   return isProductionSite() ? undefined : NOINDEX_ROBOTS;
+}
+
+// 소유 확인 태그는 운영 빌드에만 넣음. 비운영(로컬·CI·E2E)에는 두지 않음(#323 완료 조건)
+export function rootVerificationMetadata():
+  Metadata["verification"] | undefined {
+  if (!isProductionSite()) return undefined;
+  return { other: { "naver-site-verification": NAVER_SITE_VERIFICATION } };
 }
 
 export const INDEXABLE_STATIC_PATHS = [
