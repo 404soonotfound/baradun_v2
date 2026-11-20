@@ -187,6 +187,53 @@ describe("createLocationStore", () => {
       vi.unstubAllGlobals();
     }
   });
+
+  // 하이드레이션 전에 누른 버튼은 React가 하이드레이션 중에 다시 보내서, 화면이 구독하기 전에 request가 먼저 불릴 수 있음
+  it("구독 전에 눌러 거부되면 늦게 시작한 권한 확인이 거부를 덮지 않음", async () => {
+    const getCurrentPosition = vi.fn(
+      // 실제 GeolocationPositionError처럼 상수를 함께 둠(코드는 error.PERMISSION_DENIED와 비교)
+      (
+        _ok: unknown,
+        fail: (error: { code: number; PERMISSION_DENIED: number }) => void,
+      ) => fail({ code: 1, PERMISSION_DENIED: 1 }),
+    );
+    vi.stubGlobal("navigator", {
+      permissions: {
+        query: () =>
+          Promise.resolve({
+            state: "prompt" as PermissionState,
+            onchange: null,
+          }),
+      },
+      geolocation: { getCurrentPosition, PERMISSION_DENIED: 1 },
+    });
+    try {
+      const store = createLocationStore(() => fakeSwitch().storage);
+      store.request();
+      store.subscribe(() => {});
+      await flush();
+      expect(getCurrentPosition).toHaveBeenCalledTimes(1);
+      expect(store.getState()).toEqual({ status: "denied", coords: null });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("구독 전에 눌러도 꺼 둔 스위치를 먼저 읽어 묻지 않음", async () => {
+    const fake = fakeNavigator({
+      query: () => Promise.resolve({ state: "prompt", onchange: null }),
+      position: { latitude: 1, longitude: 2 },
+    });
+    vi.stubGlobal("navigator", fake.navigator);
+    try {
+      const store = createLocationStore(() => fakeSwitch("off").storage);
+      store.request();
+      expect(fake.getCurrentPosition).not.toHaveBeenCalled();
+      expect(store.getState().status).toBe("off");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
 });
 
 describe("그리기 전 자리 잡기 힌트 (BRD-39)", () => {
