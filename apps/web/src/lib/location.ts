@@ -285,7 +285,10 @@ export function createLocationStore(
   }
 
   // 위치 버튼·첫 실행 위치 안내(ON-2)의 허용 버튼에서만 호출. 거부·꺼짐이면 묻지 않음
+  // 구독 전에 불려도(하이드레이션 전에 누른 버튼을 React가 다시 보낸 경우) 스위치·권한 확인을 먼저 시작함
+  // 시작하지 않고 물으면 꺼 둔 스위치를 읽기 전에 묻고, 뒤늦게 시작한 권한 확인 답('prompt')이 거부를 idle로 덮음
   function request() {
+    start();
     if (state.status === "locating" || locationBlocked(state.status)) return;
     locate();
   }
